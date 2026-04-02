@@ -1,0 +1,11 @@
+{
+  "recorded_at": "2026-04-02T06:29:25.451579+00:00",
+  "environment": "analytics",
+  "endpoint": "/v3/historical-candle/NSE_EQ%7CINE490G01038/days/1/2026-04-02/2026-03-01",
+  "request_params": {},
+  "response": {
+    "status": "error",
+    "http_status": 400,
+    "body": "{\"status\":\"error\",\"errors\":[{\"errorCode\":\"UDAPI100011\",\"message\":\"Invalid Instrument key\",\"propertyPath\":null,\"invalidValue\":null,\"error_code\":\"UDAPI100011\",\"property_path\":null,\"invalid_value\":null}]}"
+  }
+}

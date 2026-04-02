@@ -1,0 +1,20 @@
+{
+  "recorded_at": "2026-04-02T06:34:53.943665+00:00",
+  "environment": "analytics",
+  "endpoint": "/v3/market-quote/ltp",
+  "request_params": {
+    "instrument_key": "NSE_EQ|INF204KB14I2"
+  },
+  "response": {
+    "status": "success",
+    "data": {
+      "NSE_EQ:NIFTYBEES": {
+        "last_price": 252.75,
+        "instrument_token": "NSE_EQ|INF204KB14I2",
+        "ltq": 50,
+        "volume": 13451763,
+        "cp": 257.45
+      }
+    }
+  }
+}

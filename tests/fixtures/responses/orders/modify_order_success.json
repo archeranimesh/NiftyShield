@@ -1,0 +1,22 @@
+{
+  "recorded_at": "2026-04-02T06:12:33.808340+00:00",
+  "environment": "sandbox",
+  "request": {
+    "quantity": 1,
+    "validity": "DAY",
+    "price": 1.5,
+    "order_id": "260402114232799",
+    "order_type": "LIMIT",
+    "disclosed_quantity": 0,
+    "trigger_price": 0.0
+  },
+  "response": {
+    "status": "success",
+    "data": {
+      "order_id": "260402114232799"
+    },
+    "metadata": {
+      "latency": 3
+    }
+  }
+}

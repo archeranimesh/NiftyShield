@@ -1,0 +1,29 @@
+{
+  "recorded_at": "2026-04-02T06:12:32.692350+00:00",
+  "environment": "sandbox",
+  "request": {
+    "quantity": 1,
+    "product": "D",
+    "validity": "DAY",
+    "price": 1.0,
+    "tag": "niftyshield-sandbox-test",
+    "instrument_token": "NSE_EQ|INE669E01016",
+    "order_type": "LIMIT",
+    "transaction_type": "BUY",
+    "disclosed_quantity": 0,
+    "trigger_price": 0.0,
+    "is_amo": false,
+    "slice": false
+  },
+  "response": {
+    "status": "success",
+    "data": {
+      "order_ids": [
+        "260402114232799"
+      ]
+    },
+    "metadata": {
+      "latency": 1
+    }
+  }
+}

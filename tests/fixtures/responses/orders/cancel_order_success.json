@@ -1,0 +1,16 @@
+{
+  "recorded_at": "2026-04-02T06:12:34.879596+00:00",
+  "environment": "sandbox",
+  "request": {
+    "order_id": "260402114232799"
+  },
+  "response": {
+    "status": "success",
+    "data": {
+      "order_id": "260402114232799"
+    },
+    "metadata": {
+      "latency": 3
+    }
+  }
+}
