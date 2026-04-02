@@ -139,7 +139,23 @@ python -m src.auth.verify
 
 Confirms API connectivity by fetching your account profile.
 
+### ✅ Step 3: Run Daily Snapshot
+
+```
+python -m scripts.daily_snapshot 
+```
+
+This will:
+
+* Fetch latest market prices (LTP)
+* Compute P&L for each leg
+* Aggregate strategy-level P&L
+* Store results in SQLite (`daily_snapshots` table)
+
+
 ---
+
+
 
 ## Testing Philosophy
 
