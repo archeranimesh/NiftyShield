@@ -78,6 +78,8 @@ def main() -> int:
         return 1
 
     # ── Collect all unique instrument keys across strategies ──────
+    NIFTY_INDEX_KEY = "NSE_INDEX|Nifty 50"
+
     all_keys = set()
     for strategy in strategies:
         for leg in strategy.legs:
@@ -85,11 +87,17 @@ def main() -> int:
 
     print(f"  Strategies: {len(strategies)}, Instruments: {len(all_keys)}")
 
-    # ── Fetch all LTPs in one batch ──────────────────────────────
-    prices = client.get_ltp_sync(list(all_keys))
+    # ── Fetch all LTPs in one batch (Nifty spot piggybacked) ─────
+    prices = client.get_ltp_sync(list(all_keys | {NIFTY_INDEX_KEY}))
     if not prices:
         print("  ERROR: No prices returned from Upstox API.")
         return 1
+
+    underlying_price = prices.get(NIFTY_INDEX_KEY)
+    if underlying_price:
+        print(f"  Nifty spot: {underlying_price:,.2f}")
+    else:
+        print("  WARNING: Could not fetch Nifty spot price.")
 
     missing = all_keys - set(prices.keys())
     if missing:
@@ -98,7 +106,10 @@ def main() -> int:
     # ── Record snapshots via tracker ─────────────────────────────
     tracker = PortfolioTracker(store, client)
     results = asyncio.run(
-        tracker.record_all_strategies(snapshot_date=snap_date)
+        tracker.record_all_strategies(
+            snapshot_date=snap_date,
+            underlying_price=underlying_price,
+        )
     )
 
     # ── Print summary ────────────────────────────────────────────
