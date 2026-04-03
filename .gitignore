@@ -4,3 +4,4 @@ data/
 __pycache__/
 *.pyc
 tests/fixtures/responses/.DS_Store
+.DS_Store
