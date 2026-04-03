@@ -23,6 +23,7 @@ import argparse
 import asyncio
 import sys
 from datetime import date, datetime
+from decimal import Decimal
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -32,8 +33,99 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from src.client.upstox_market import UpstoxMarketClient
+from src.mf.store import MFStore
+from src.mf.tracker import MFTracker, PortfolioPnL
 from src.portfolio.store import PortfolioStore
 from src.portfolio.tracker import PortfolioTracker
+
+
+def _etf_current_value(strategies: list, prices: dict[str, float]) -> Decimal:
+    """Mark-to-market value of all NSE_EQ legs across strategies.
+
+    ETF legs are assets — value is qty × current LTP.
+    Falls back to entry price if LTP is missing (e.g. market closed).
+
+    Args:
+        strategies: All loaded Strategy objects.
+        prices: instrument_key → LTP from the batch fetch.
+
+    Returns:
+        Total ETF value as Decimal.
+    """
+    total = Decimal("0")
+    for strategy in strategies:
+        for leg in strategy.legs:
+            if leg.instrument_key.startswith("NSE_EQ|"):
+                ltp = prices.get(leg.instrument_key, leg.entry_price)
+                total += Decimal(str(ltp)) * Decimal(str(leg.quantity))
+    return total
+
+
+def _etf_cost_basis(strategies: list) -> Decimal:
+    """Total entry cost of all NSE_EQ legs (qty × entry_price).
+
+    Args:
+        strategies: All loaded Strategy objects.
+
+    Returns:
+        Sum of entry costs as Decimal.
+    """
+    return sum(
+        Decimal(str(leg.entry_price)) * Decimal(str(leg.quantity))
+        for strategy in strategies
+        for leg in strategy.legs
+        if leg.instrument_key.startswith("NSE_EQ|")
+    )
+
+
+def _print_combined_summary(
+    strategies: list,
+    prices: dict[str, float],
+    strategy_pnls: dict[str, object],
+    mf_pnl: PortfolioPnL | None,
+) -> None:
+    """Print the combined portfolio value across MF, ETF, and options.
+
+    Args:
+        strategies: All loaded Strategy objects.
+        prices: instrument_key → LTP.
+        strategy_pnls: strategy name → P&L object (from compute_pnl).
+        mf_pnl: Completed MF PortfolioPnL, or None if the MF fetch failed.
+    """
+    etf_value = _etf_current_value(strategies, prices)
+    etf_basis = _etf_cost_basis(strategies)
+
+    # Options net P&L — sign already correct for short legs in compute_pnl
+    options_pnl = sum(
+        (Decimal(str(p.total_pnl)) for p in strategy_pnls.values() if p),
+        Decimal("0"),
+    )
+
+    mf_value    = mf_pnl.total_current_value if mf_pnl else Decimal("0")
+    mf_invested = mf_pnl.total_invested      if mf_pnl else Decimal("0")
+    mf_pnl_amt  = mf_pnl.total_pnl           if mf_pnl else Decimal("0")
+
+    total_value    = mf_value + etf_value + options_pnl
+    total_invested = mf_invested + etf_basis
+    total_pnl      = mf_pnl_amt + (etf_value - etf_basis) + options_pnl
+    total_pnl_pct  = (
+        (total_pnl / total_invested * 100).quantize(Decimal("0.01"))
+        if total_invested
+        else Decimal("0")
+    )
+
+    mf_label = f"₹{mf_value:>14,.0f}" if mf_pnl else "         [failed]"
+    print()
+    print("  ── Combined Portfolio ─────────────────────────────────")
+    print(f"  MF current value    : {mf_label}")
+    print(f"  ETF current value   : ₹{etf_value:>14,.0f}  (basis ₹{etf_basis:,.0f})")
+    print(f"  Options net P&L     : ₹{options_pnl:>+14,.0f}")
+    print("  ───────────────────────────────────────────────────────")
+    print(f"  Total value         : ₹{total_value:>14,.0f}")
+    print(f"  Total invested      : ₹{total_invested:>14,.0f}")
+    print(f"  Total P&L           : ₹{total_pnl:>+14,.0f}  ({total_pnl_pct:+}%)")
+    if not mf_pnl:
+        print("  NOTE: MF fetch failed — MF value excluded from total")
 
 
 def main() -> int:
@@ -112,13 +204,15 @@ def main() -> int:
         )
     )
 
-    # ── Print summary ────────────────────────────────────────────
+    # ── Print strategy-level summary, collect P&L objects ────────
     total_snaps = sum(results.values())
     print(f"  Recorded {total_snaps} snapshots:")
 
+    strategy_pnls: dict[str, object] = {}
     for strategy in strategies:
         count = results.get(strategy.name, 0)
         pnl = asyncio.run(tracker.compute_pnl(strategy.name))
+        strategy_pnls[strategy.name] = pnl
         if pnl:
             print(
                 f"    {strategy.name}: {count} legs, "
@@ -127,7 +221,26 @@ def main() -> int:
         else:
             print(f"    {strategy.name}: {count} legs")
 
-    print(f"  Done.")
+    # ── MF portfolio snapshot ─────────────────────────────────────
+    mf_pnl: PortfolioPnL | None = None
+    try:
+        mf_store = MFStore(args.db_path)
+        mf_pnl = MFTracker(mf_store).record_snapshot(snap_date)
+        if mf_pnl.schemes:
+            print(
+                f"  MF portfolio ({len(mf_pnl.schemes)} schemes): "
+                f"₹{mf_pnl.total_current_value:,.0f}  "
+                f"P&L {mf_pnl.total_pnl:+,.0f} ({mf_pnl.total_pnl_pct:+}%)"
+            )
+        else:
+            print("  MF portfolio: no holdings — skipped (run seed_mf_holdings.py first)")
+    except Exception as e:  # noqa: BLE001
+        print(f"  WARNING: MF snapshot failed — {e}")
+
+    # ── Combined portfolio summary ────────────────────────────────
+    _print_combined_summary(strategies, prices, strategy_pnls, mf_pnl)
+
+    print(f"\n  Done.")
     return 0
 
 

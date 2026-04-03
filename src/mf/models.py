@@ -8,6 +8,7 @@ Current holdings and P&L are derived at query time from these records —
 nothing is pre-computed or stored redundantly.
 """
 
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from enum import Enum
@@ -68,3 +69,22 @@ class MFNavSnapshot(BaseModel):
         if not self.nav.is_finite():
             raise ValueError(f"nav must be a finite number, got {self.nav}")
         return self
+
+
+@dataclass(frozen=True)
+class MFHolding:
+    """Net holding for a single scheme, derived from the transaction ledger.
+
+    Returned by MFStore.get_holdings(). Units and invested amount are already
+    aggregated (INITIAL/SIP add, REDEMPTION subtracts). scheme_name is carried
+    through so MFTracker can populate MFNavSnapshot without a separate lookup.
+
+    This is a computed type — not persisted. It lives here (rather than
+    tracker.py) to break the circular import: store returns it, tracker
+    consumes it, both import from models.
+    """
+
+    amfi_code: str
+    scheme_name: str
+    total_units: Decimal
+    total_invested: Decimal

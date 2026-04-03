@@ -16,7 +16,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Generator
 
-from src.mf.models import MFNavSnapshot, MFTransaction, TransactionType
+from src.mf.models import MFHolding, MFNavSnapshot, MFTransaction, TransactionType
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS mf_transactions (
@@ -184,23 +184,40 @@ class MFStore:
             rows = conn.execute(query, params).fetchall()
             return [self._row_to_transaction(r) for r in rows]
 
-    def get_holdings(self) -> dict[str, Decimal]:
-        """Net units held per scheme, derived from the transaction ledger.
+    def get_holdings(self) -> dict[str, MFHolding]:
+        """Net holdings per scheme, derived from the transaction ledger.
 
-        INITIAL and SIP transactions add units; REDEMPTIONs subtract.
+        INITIAL and SIP transactions add units and amount; REDEMPTIONs subtract.
         Aggregation is done in Python to preserve exact Decimal arithmetic.
+        scheme_name is taken from the most recent transaction for each scheme
+        (all transactions for a scheme carry the same name in practice).
 
         Returns:
-            {amfi_code: net_units} for schemes with a positive net holding.
+            {amfi_code: MFHolding} for schemes with a positive net unit balance.
         """
-        holdings: dict[str, Decimal] = {}
+        _units: dict[str, Decimal] = {}
+        _invested: dict[str, Decimal] = {}
+        _names: dict[str, str] = {}
+
         for tx in self.get_transactions():
-            holding = holdings.setdefault(tx.amfi_code, Decimal(0))
+            _names[tx.amfi_code] = tx.scheme_name
             if tx.transaction_type in (TransactionType.INITIAL, TransactionType.SIP):
-                holdings[tx.amfi_code] = holding + tx.units
+                _units[tx.amfi_code] = _units.get(tx.amfi_code, Decimal(0)) + tx.units
+                _invested[tx.amfi_code] = _invested.get(tx.amfi_code, Decimal(0)) + tx.amount
             else:  # REDEMPTION
-                holdings[tx.amfi_code] = holding - tx.units
-        return {code: units for code, units in holdings.items() if units > 0}
+                _units[tx.amfi_code] = _units.get(tx.amfi_code, Decimal(0)) - tx.units
+                _invested[tx.amfi_code] = _invested.get(tx.amfi_code, Decimal(0)) - tx.amount
+
+        return {
+            code: MFHolding(
+                amfi_code=code,
+                scheme_name=_names[code],
+                total_units=units,
+                total_invested=_invested[code],
+            )
+            for code, units in _units.items()
+            if units > 0
+        }
 
     # ── NAV Snapshots ─────────────────────────────────────────────
 

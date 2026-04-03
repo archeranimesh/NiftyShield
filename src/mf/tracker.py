@@ -25,7 +25,7 @@ from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Callable
 
-from src.mf.models import MFNavSnapshot
+from src.mf.models import MFHolding, MFNavSnapshot
 from src.mf.nav_fetcher import fetch_navs
 from src.mf.store import MFStore
 
@@ -40,21 +40,7 @@ NavFetcherFn = Callable[[set[str]], dict[str, Decimal]]
 # Data containers
 # ---------------------------------------------------------------------------
 
-
-@dataclass(frozen=True)
-class MFHolding:
-    """Net holding for a single scheme, derived from the transaction ledger.
-
-    MFStore.get_holdings() returns dict[str, MFHolding].  Units and invested
-    amount are already aggregated (INITIAL/SIP add, REDEMPTION subtracts).
-    scheme_name is carried through so the tracker can populate MFNavSnapshot
-    without a separate lookup.
-    """
-
-    amfi_code: str
-    scheme_name: str
-    total_units: Decimal
-    total_invested: Decimal
+# MFHolding is defined in src.mf.models — imported above.
 
 
 @dataclass(frozen=True)

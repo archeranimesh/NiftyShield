@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from src.mf.models import MFNavSnapshot, MFTransaction, TransactionType
+from src.mf.models import MFHolding, MFNavSnapshot, MFTransaction, TransactionType
 from src.mf.store import MFStore
 from src.portfolio.store import PortfolioStore
 
@@ -253,7 +253,7 @@ def test_get_transactions_empty(store: MFStore) -> None:
 
 
 def test_get_holdings_initial_and_sip(store: MFStore) -> None:
-    """INITIAL + SIP units for the same scheme are summed."""
+    """INITIAL + SIP units and amounts for the same scheme are summed."""
     store.insert_transaction(make_tx(
         amfi_code="122639", units="1000.000", transaction_type=TransactionType.INITIAL
     ))
@@ -262,10 +262,16 @@ def test_get_holdings_initial_and_sip(store: MFStore) -> None:
         transaction_date=date(2024, 2, 1), transaction_type=TransactionType.SIP
     ))
     holdings = store.get_holdings()
-    assert holdings["122639"] == Decimal("1200.000")
+    h = holdings["122639"]
+    assert isinstance(h, MFHolding)
+    assert h.amfi_code == "122639"
+    assert h.scheme_name == "Parag Parikh Flexi Cap Fund - Reg Gr"
+    assert h.total_units == Decimal("1200.000")
+    assert h.total_invested == Decimal("60000.00")  # 50000 (INITIAL) + 10000 (SIP)
 
 
 def test_get_holdings_redemption_reduces_units(store: MFStore) -> None:
+    """REDEMPTION subtracts units and amount from the running total."""
     store.insert_transaction(make_tx(
         amfi_code="122639", units="500.000", transaction_type=TransactionType.INITIAL
     ))
@@ -274,7 +280,9 @@ def test_get_holdings_redemption_reduces_units(store: MFStore) -> None:
         transaction_date=date(2024, 3, 1), transaction_type=TransactionType.REDEMPTION
     ))
     holdings = store.get_holdings()
-    assert holdings["122639"] == Decimal("400.000")
+    h = holdings["122639"]
+    assert h.total_units == Decimal("400.000")
+    assert h.total_invested == Decimal("42000.00")  # 50000 − 8000
 
 
 def test_get_holdings_full_redemption_excluded(store: MFStore) -> None:
@@ -296,8 +304,10 @@ def test_get_holdings_multiple_schemes(store: MFStore) -> None:
     ))
     holdings = store.get_holdings()
     assert len(holdings) == 2
-    assert holdings["111111"] == Decimal("100.000")
-    assert holdings["222222"] == Decimal("200.000")
+    assert holdings["111111"].total_units == Decimal("100.000")
+    assert holdings["222222"].total_units == Decimal("200.000")
+    assert holdings["111111"].scheme_name == "Parag Parikh Flexi Cap Fund - Reg Gr"
+    assert holdings["222222"].scheme_name == "DSP Midcap Fund - Reg Gr"
 
 
 def test_get_holdings_empty(store: MFStore) -> None:
