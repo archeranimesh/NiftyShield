@@ -101,14 +101,14 @@ def _print_combined_summary(
         Decimal("0"),
     )
 
-    mf_value    = mf_pnl.total_current_value if mf_pnl else Decimal("0")
-    mf_invested = mf_pnl.total_invested      if mf_pnl else Decimal("0")
-    mf_pnl_amt  = mf_pnl.total_pnl           if mf_pnl else Decimal("0")
+    mf_value = mf_pnl.total_current_value if mf_pnl else Decimal("0")
+    mf_invested = mf_pnl.total_invested if mf_pnl else Decimal("0")
+    mf_pnl_amt = mf_pnl.total_pnl if mf_pnl else Decimal("0")
 
-    total_value    = mf_value + etf_value + options_pnl
+    total_value = mf_value + etf_value + options_pnl
     total_invested = mf_invested + etf_basis
-    total_pnl      = mf_pnl_amt + (etf_value - etf_basis) + options_pnl
-    total_pnl_pct  = (
+    total_pnl = mf_pnl_amt + (etf_value - etf_basis) + options_pnl
+    total_pnl_pct = (
         (total_pnl / total_invested * 100).quantize(Decimal("0.01"))
         if total_invested
         else Decimal("0")
@@ -233,7 +233,9 @@ def main() -> int:
                 f"P&L {mf_pnl.total_pnl:+,.0f} ({mf_pnl.total_pnl_pct:+}%)"
             )
         else:
-            print("  MF portfolio: no holdings — skipped (run seed_mf_holdings.py first)")
+            print(
+                "  MF portfolio: no holdings — skipped (run seed_mf_holdings.py first)"
+            )
     except Exception as e:  # noqa: BLE001
         print(f"  WARNING: MF snapshot failed — {e}")
 
