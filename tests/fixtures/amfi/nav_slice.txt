@@ -1,0 +1,29 @@
+Open Ended Schemes(Equity Scheme - Large Cap Fund)
+
+Scheme Code;ISIN Div Payout/ ISIN Growth;ISIN Div Reinvestment;Scheme Name;Net Asset Value;Date
+119551;INF740K01EV5;INF740K01EW3;DSP Midcap Fund - Regular Plan - Growth;123.4560;03-Apr-2026
+120503;INF754K01HH7;INF754K01HI5;Edelweiss Small Cap Fund - Regular Plan - Growth;45.6780;03-Apr-2026
+122639;INF179KB1HT2;INF179KB1HU0;HDFC BSE Sensex Index Fund - Regular Growth;64.2310;03-Apr-2026
+119823;INF179K01BC2;INF179K01BD0;HDFC Focused Fund - Growth;187.9430;03-Apr-2026
+
+Open Ended Schemes(Equity Scheme - Flexi Cap Fund)
+
+Scheme Code;ISIN Div Payout/ ISIN Growth;ISIN Div Reinvestment;Scheme Name;Net Asset Value;Date
+120841;INF174KA1AB2;INF174KA1AC0;Kotak Flexicap Fund - Growth;89.1120;03-Apr-2026
+120483;INF174K01LH2;INF174K01LI0;Mahindra Manulife Mid Cap Fund - Growth;35.2240;03-Apr-2026
+118834;INF879O01019;INF879O01027;Parag Parikh Flexi Cap Fund - Regular Growth;78.4560;03-Apr-2026
+
+Open Ended Schemes(Equity Scheme - Small Cap Fund)
+
+Scheme Code;ISIN Div Payout/ ISIN Growth;ISIN Div Reinvestment;Scheme Name;Net Asset Value;Date
+120828;INF966L01131;INF966L01149;Quant Small Cap Fund - Growth;189.7650;03-Apr-2026
+148495;INF277K01021;INF277K01039;Tata Nifty 50 Index Fund - Regular Plan - Growth;38.1230;03-Apr-2026
+120560;INF277K01BA1;INF277K01BB9;Tata Value Fund - Growth;62.3450;03-Apr-2026
+148707;INF03VK01015;INF03VK01023;WhiteOak Capital Large Cap Fund - Growth;18.7320;03-Apr-2026
+
+Open Ended Schemes(Debt Scheme - Liquid Fund)
+
+Scheme Code;ISIN Div Payout/ ISIN Growth;ISIN Div Reinvestment;Scheme Name;Net Asset Value;Date
+119293;INF209K01R12;-;Some Liquid Fund - Daily IDCW;N.A.;03-Apr-2026
+BADLINE;malformed data without enough fields
+119999;INF000X00001;INF000X00002;Scheme With Normal Data;55.1230;03-Apr-2026
