@@ -35,13 +35,13 @@ TODAY = date(2026, 4, 3)
 
 # Two schemes with known numbers for deterministic P&L assertions
 HOLDING_A = MFHolding(
-    amfi_code="119551",
+    amfi_code="104481",
     scheme_name="DSP Midcap Fund - Regular Plan - Growth",
     total_units=Decimal("4020.602"),
     total_invested=Decimal("439978.00"),
 )
 HOLDING_B = MFHolding(
-    amfi_code="120503",
+    amfi_code="146193",
     scheme_name="Edelweiss Small Cap Fund - Regular Plan - Growth",
     total_units=Decimal("8962.544"),
     total_invested=Decimal("379981.00"),
@@ -108,7 +108,9 @@ class TestSchemePnL:
 
     def test_loss_scenario_pnl_is_negative(self) -> None:
         # NAV well below cost
-        holding = MFHolding("000001", "Test Scheme", Decimal("100"), Decimal("10000.00"))
+        holding = MFHolding(
+            "000001", "Test Scheme", Decimal("100"), Decimal("10000.00")
+        )
         result = _scheme_pnl(holding, Decimal("50.00"))
         assert result.pnl < Decimal("0")
         assert result.pnl_pct < Decimal("0")
@@ -168,7 +170,9 @@ class TestMFTracker:
 
     def test_fetches_navs_for_all_held_codes(self) -> None:
         holdings = {HOLDING_A.amfi_code: HOLDING_A, HOLDING_B.amfi_code: HOLDING_B}
-        nav_fetcher = MagicMock(return_value={HOLDING_A.amfi_code: NAV_A, HOLDING_B.amfi_code: NAV_B})
+        nav_fetcher = MagicMock(
+            return_value={HOLDING_A.amfi_code: NAV_A, HOLDING_B.amfi_code: NAV_B}
+        )
         store = _mock_store(holdings)
         MFTracker(store, nav_fetcher).record_snapshot(TODAY)
         nav_fetcher.assert_called_once_with({HOLDING_A.amfi_code, HOLDING_B.amfi_code})
@@ -176,7 +180,9 @@ class TestMFTracker:
     def test_upserts_nav_snapshot_per_scheme(self) -> None:
         holdings = {HOLDING_A.amfi_code: HOLDING_A, HOLDING_B.amfi_code: HOLDING_B}
         store = _mock_store(holdings)
-        fetcher = _mock_fetcher({HOLDING_A.amfi_code: NAV_A, HOLDING_B.amfi_code: NAV_B})
+        fetcher = _mock_fetcher(
+            {HOLDING_A.amfi_code: NAV_A, HOLDING_B.amfi_code: NAV_B}
+        )
         MFTracker(store, fetcher).record_snapshot(TODAY)
         assert store.upsert_nav_snapshot.call_count == 2
 
@@ -245,6 +251,7 @@ class TestMFTracker:
 
     def test_missing_nav_logs_warning(self, caplog: pytest.LogCaptureFixture) -> None:
         import logging
+
         holdings = {HOLDING_B.amfi_code: HOLDING_B}
         store = _mock_store(holdings)
         fetcher = _mock_fetcher({})  # nothing returned
@@ -255,7 +262,9 @@ class TestMFTracker:
     def test_two_schemes_total_invested_is_summed(self) -> None:
         holdings = {HOLDING_A.amfi_code: HOLDING_A, HOLDING_B.amfi_code: HOLDING_B}
         store = _mock_store(holdings)
-        fetcher = _mock_fetcher({HOLDING_A.amfi_code: NAV_A, HOLDING_B.amfi_code: NAV_B})
+        fetcher = _mock_fetcher(
+            {HOLDING_A.amfi_code: NAV_A, HOLDING_B.amfi_code: NAV_B}
+        )
         result = MFTracker(store, fetcher).record_snapshot(TODAY)
         expected = HOLDING_A.total_invested + HOLDING_B.total_invested
         assert result.total_invested == expected

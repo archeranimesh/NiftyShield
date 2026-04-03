@@ -73,17 +73,17 @@ def test_build_transactions_amfi_codes_are_verified_set() -> None:
     """All 11 AMFI codes must be present — matches nav_slice.txt fixture."""
     # Codes verified against AMFI flat file and nav_slice.txt on 2026-04-01
     expected = {
-        "119551",  # DSP Midcap Fund
-        "120503",  # Edelweiss Small Cap Fund
-        "122639",  # HDFC BSE Sensex Index Fund
-        "119823",  # HDFC Focused Fund
-        "120841",  # Kotak Flexicap Fund
-        "120483",  # Mahindra Manulife Mid Cap Fund
-        "118834",  # Parag Parikh Flexi Cap Fund
-        "120828",  # Quant Small Cap Fund
-        "148495",  # Tata Nifty 50 Index Fund
-        "120560",  # Tata Value Fund
-        "148707",  # WhiteOak Capital Large Cap Fund
+        "104481",  # DSP Midcap Fund
+        "146193",  # Edelweiss Small Cap Fund
+        "101281",  # HDFC BSE Sensex Index Fund
+        "102760",  # HDFC Focused Fund
+        "112090",  # Kotak Flexicap Fund
+        "142109",  # Mahindra Manulife Mid Cap Fund
+        "122640",  # Parag Parikh Flexi Cap Fund
+        "100177",  # Quant Small Cap Fund
+        "101659",  # Tata Nifty 50 Index Fund
+        "101672",  # Tata Value Fund
+        "150799",  # WhiteOak Capital Large Cap Fund
     }
     assert {tx.amfi_code for tx in build_transactions()} == expected
 
@@ -149,7 +149,7 @@ def test_get_holdings_parag_parikh_units(store: MFStore) -> None:
     """Spot-check: Parag Parikh units must match the seeded value."""
     seed_holdings(store)
     holdings = store.get_holdings()
-    h = holdings["118834"]
+    h = holdings["122640"]
     assert h.total_units == Decimal("32424.322")
     assert h.scheme_name == "Parag Parikh Flexi Cap Fund - Regular Growth"
 
@@ -157,13 +157,13 @@ def test_get_holdings_parag_parikh_units(store: MFStore) -> None:
 def test_get_holdings_parag_parikh_invested(store: MFStore) -> None:
     """Spot-check: Parag Parikh invested amount must match the seeded value."""
     seed_holdings(store)
-    assert store.get_holdings()["118834"].total_invested == Decimal("1719925.75")
+    assert store.get_holdings()["122640"].total_invested == Decimal("1719925.75")
 
 
 def test_get_holdings_whiteoak_units(store: MFStore) -> None:
     """Spot-check: WhiteOak units match (largest unit count in portfolio)."""
     seed_holdings(store)
-    h = store.get_holdings()["148707"]
+    h = store.get_holdings()["150799"]
     assert h.total_units == Decimal("20681.514")
     assert h.total_invested == Decimal("299985.00")
 
@@ -171,7 +171,7 @@ def test_get_holdings_whiteoak_units(store: MFStore) -> None:
 def test_get_holdings_hdfc_sensex_precision(store: MFStore) -> None:
     """Decimal precision must survive the TEXT round-trip for fractional units."""
     seed_holdings(store)
-    h = store.get_holdings()["122639"]
+    h = store.get_holdings()["101281"]
     assert h.total_units == Decimal("291.628")
     assert h.total_invested == Decimal("187371.53")
 

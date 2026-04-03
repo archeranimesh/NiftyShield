@@ -19,6 +19,7 @@ from decimal import Decimal
 # ── Stub every module daily_snapshot.py imports at the top level ─────────
 # Must happen before `from scripts.daily_snapshot import ...`
 
+
 def _stub(name: str, **attrs) -> types.ModuleType:
     m = types.ModuleType(name)
     for k, v in attrs.items():
@@ -26,13 +27,17 @@ def _stub(name: str, **attrs) -> types.ModuleType:
     sys.modules[name] = m
     return m
 
+
 _stub("dotenv", load_dotenv=lambda: None)
 _stub("src.client", UpstoxMarketClient=object)
 _stub("src.client.upstox_market", UpstoxMarketClient=object)
 _stub("src.portfolio.tracker", PortfolioTracker=object)
 
 from scripts.daily_snapshot import _etf_cost_basis, _etf_current_value  # noqa: E402
+import importlib
 
+del sys.modules["src.portfolio.tracker"]
+importlib.import_module("src.portfolio.tracker")
 
 # ── Minimal fakes ────────────────────────────────────────────────
 
@@ -55,7 +60,7 @@ def _strats(*legs_spec: tuple) -> list[_Strategy]:
 
 
 ETF_KEY = "NSE_EQ|INF754K01LE1"
-FO_KEY  = "NSE_FO|37810"
+FO_KEY = "NSE_FO|37810"
 
 
 # ── _etf_cost_basis ───────────────────────────────────────────────
@@ -92,7 +97,10 @@ def test_etf_cost_basis_decimal_precision() -> None:
 
 def test_etf_current_value_uses_ltp_when_present() -> None:
     prices = {ETF_KEY: 1450.00}
-    assert _etf_current_value(_strats((ETF_KEY, 1388.12, 438)), prices) == Decimal("1450.00") * 438
+    assert (
+        _etf_current_value(_strats((ETF_KEY, 1388.12, 438)), prices)
+        == Decimal("1450.00") * 438
+    )
 
 
 def test_etf_current_value_falls_back_to_entry_price() -> None:
@@ -108,7 +116,9 @@ def test_etf_current_value_excludes_fo_legs() -> None:
 
 
 def test_etf_current_value_no_etf_legs_returns_zero() -> None:
-    assert _etf_current_value(_strats((FO_KEY, 975.00, 65)), {FO_KEY: 900.00}) == Decimal("0")
+    assert _etf_current_value(
+        _strats((FO_KEY, 975.00, 65)), {FO_KEY: 900.00}
+    ) == Decimal("0")
 
 
 def test_etf_current_value_ltp_higher_than_basis() -> None:

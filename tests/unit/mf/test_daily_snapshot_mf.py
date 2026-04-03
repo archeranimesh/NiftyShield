@@ -42,7 +42,7 @@ def db_path(tmp_path: Path) -> Path:
 @pytest.fixture
 def seeded_mf_store(db_path: Path) -> MFStore:
     """MFStore initialised on a DB that PortfolioStore already created."""
-    PortfolioStore(db_path)   # portfolio init first — matches real cron ordering
+    PortfolioStore(db_path)  # portfolio init first — matches real cron ordering
     store = MFStore(db_path)
     seed_holdings(store)
     return store
@@ -104,7 +104,7 @@ def test_record_snapshot_persists_nav_snapshots(seeded_mf_store: MFStore) -> Non
     tracker = MFTracker(seeded_mf_store, nav_fetcher=_nav_fetcher_for_all_11)
     tracker.record_snapshot(snap_date)
     # Verify by reading back one known scheme
-    snaps = seeded_mf_store.get_nav_snapshots("118834", from_date=snap_date)
+    snaps = seeded_mf_store.get_nav_snapshots("122640", from_date=snap_date)
     assert len(snaps) == 1
     assert snaps[0].nav == Decimal("100.00")
 
@@ -112,6 +112,7 @@ def test_record_snapshot_persists_nav_snapshots(seeded_mf_store: MFStore) -> Non
 def test_record_snapshot_total_invested_matches_seed(seeded_mf_store: MFStore) -> None:
     """Total invested in PortfolioPnL must equal the sum of all seeded amounts."""
     from scripts.seed_mf_holdings import _HOLDINGS
+
     expected = sum(Decimal(row[3]) for row in _HOLDINGS)
     tracker = MFTracker(seeded_mf_store, nav_fetcher=_nav_fetcher_for_all_11)
     result = tracker.record_snapshot(date(2026, 4, 3))
@@ -131,7 +132,7 @@ def test_record_snapshot_idempotent(seeded_mf_store: MFStore) -> None:
     tracker = MFTracker(seeded_mf_store, nav_fetcher=_nav_fetcher_for_all_11)
     tracker.record_snapshot(snap_date)
     tracker.record_snapshot(snap_date)
-    snaps = seeded_mf_store.get_nav_snapshots("118834")
+    snaps = seeded_mf_store.get_nav_snapshots("122640")
     assert len(snaps) == 1  # upsert — not doubled
 
 
@@ -162,7 +163,9 @@ def test_record_snapshot_empty_holdings_returns_zero_totals(db_path: Path) -> No
 # ── record_snapshot — AMFI fetch failure (non-fatal path) ────────
 
 
-def test_record_snapshot_nav_fetcher_raises_returns_empty(seeded_mf_store: MFStore) -> None:
+def test_record_snapshot_nav_fetcher_raises_returns_empty(
+    seeded_mf_store: MFStore,
+) -> None:
     """A raising nav_fetcher propagates the exception — caller (daily_snapshot.py)
     wraps it in try/except.  The tracker itself does not swallow it."""
     tracker = MFTracker(seeded_mf_store, nav_fetcher=_nav_fetcher_raises)

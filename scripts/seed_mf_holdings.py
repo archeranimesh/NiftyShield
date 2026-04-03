@@ -34,32 +34,32 @@ from src.mf.store import MFStore
 
 #: (amfi_code, scheme_name, units, invested_amount_inr)
 _HOLDINGS: list[tuple[str, str, str, str]] = [
-    ("119551", "DSP Midcap Fund - Regular Plan - Growth", "4020.602", "439978.00"),
+    ("104481", "DSP Midcap Fund - Regular Plan - Growth", "4020.602", "439978.00"),
     (
-        "120503",
+        "146193",
         "Edelweiss Small Cap Fund - Regular Plan - Growth",
         "8962.544",
         "379981.00",
     ),
-    ("122639", "HDFC BSE Sensex Index Fund - Regular Growth", "291.628", "187371.53"),
-    ("119823", "HDFC Focused Fund - Growth", "3511.563", "789960.50"),
-    ("120841", "Kotak Flexicap Fund - Growth", "5766.492", "235105.58"),
-    ("120483", "Mahindra Manulife Mid Cap Fund - Growth", "13962.132", "449977.50"),
+    ("101281", "HDFC BSE Sensex Index Fund - Regular Growth", "291.628", "187371.53"),
+    ("102760", "HDFC Focused Fund - Growth", "3511.563", "789960.50"),
+    ("112090", "Kotak Flexicap Fund - Growth", "5766.492", "235105.58"),
+    ("142109", "Mahindra Manulife Mid Cap Fund - Growth", "13962.132", "449977.50"),
     (
-        "118834",
+        "122640",
         "Parag Parikh Flexi Cap Fund - Regular Growth",
         "32424.322",
         "1719925.75",
     ),
-    ("120828", "Quant Small Cap Fund - Growth", "714.722", "116321.50"),
+    ("100177", "Quant Small Cap Fund - Growth", "714.722", "116321.50"),
     (
         "101659",
         "Tata Nifty 50 Index Fund - Regular Plan - Growth",
         "4506.202",
         "587002.67",
     ),
-    ("120560", "Tata Value Fund - Growth", "3726.583", "959956.25"),
-    ("148707", "WhiteOak Capital Large Cap Fund - Growth", "20681.514", "299985.00"),
+    ("101672", "Tata Value Fund - Growth", "3726.583", "959956.25"),
+    ("150799", "WhiteOak Capital Large Cap Fund - Growth", "20681.514", "299985.00"),
 ]
 
 ENTRY_DATE = date(2026, 4, 1)
