@@ -32,6 +32,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from src.client.exceptions import LTPFetchError
 from src.client.upstox_market import UpstoxMarketClient
 from src.mf.store import MFStore
 from src.mf.tracker import MFTracker, PortfolioPnL
@@ -172,9 +173,11 @@ async def _async_main(
     print(f"  Strategies: {len(strategies)}, Instruments: {len(all_keys)}")
 
     # ── Fetch all LTPs in one batch (Nifty spot piggybacked) ─────
-    prices = client.get_ltp_sync(list(all_keys | {NIFTY_INDEX_KEY}))
-    if not prices:
-        print("  ERROR: No prices returned from Upstox API.")
+    try:
+        prices = client.get_ltp_sync(list(all_keys | {NIFTY_INDEX_KEY}))
+    except LTPFetchError as e:
+        print(f"  ERROR: LTP fetch failed — {e}")
+        print("  Aborting: cannot record snapshots with stale/zero prices.")
         return 1
 
     underlying_price = prices.get(NIFTY_INDEX_KEY)

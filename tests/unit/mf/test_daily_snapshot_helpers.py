@@ -33,12 +33,26 @@ def _stub(name: str, **attrs) -> types.ModuleType:
 
 _stub("dotenv", load_dotenv=lambda: None)
 _stub("src.client", UpstoxMarketClient=object)
+_stub("src.client.exceptions", LTPFetchError=Exception, DataFetchError=Exception, BrokerError=Exception)
 _stub("src.client.upstox_market", UpstoxMarketClient=object)
 _stub("src.portfolio.tracker", PortfolioTracker=object)
 
 from scripts.daily_snapshot import _etf_cost_basis, _etf_current_value  # noqa: E402
 
-del sys.modules["src.portfolio.tracker"]
+# ── Restore all stubbed modules so they don't leak into other test files ──
+# Order: restore leaf modules before their parents.
+_STUBBED = [
+    "src.client.exceptions",
+    "src.client.upstox_market",
+    "src.client",
+    "src.portfolio.tracker",
+]
+for _mod in _STUBBED:
+    if _mod in sys.modules:
+        del sys.modules[_mod]
+
+importlib.import_module("src.client.exceptions")
+importlib.import_module("src.client.upstox_market")
 importlib.import_module("src.portfolio.tracker")
 
 # ── Minimal fakes ────────────────────────────────────────────────

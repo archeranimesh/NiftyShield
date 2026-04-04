@@ -6,6 +6,12 @@ Implements the MarketDataProvider protocol expected by PortfolioTracker.
 Key mapping: We send pipe-format keys (NSE_EQ|INF754K01LE1) but the
 response uses colon-format keys (NSE_EQ:EBBETF0431). The response's
 instrument_token field gives back the pipe-format key for mapping.
+
+Error policy:
+- A total HTTP failure or empty response raises LTPFetchError — callers
+  must not proceed with zero/stale prices.
+- Partial failures (some instruments resolve, others don't) are logged at
+  WARNING and the partial result is returned. Callers check for missing keys.
 """
 
 from __future__ import annotations
@@ -15,6 +21,8 @@ import os
 from typing import Any
 
 import requests
+
+from src.client.exceptions import LTPFetchError
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +95,12 @@ class UpstoxMarketClient:
 
         Returns:
             Dict mapping instrument_key -> OHLC data dict.
+
+        Raises:
+            DataFetchError: If the HTTP request fails.
         """
+        from src.client.exceptions import DataFetchError
+
         if not instruments:
             return {}
 
@@ -102,8 +115,7 @@ class UpstoxMarketClient:
             data = resp.json().get("data", {})
             return self._remap_response(data)
         except requests.RequestException as e:
-            logger.error("OHLC fetch failed: %s", e)
-            return {}
+            raise DataFetchError(f"OHLC fetch failed: {e}") from e
 
     def get_option_chain_sync(
         self, instrument: str, expiry: str
@@ -116,7 +128,12 @@ class UpstoxMarketClient:
 
         Returns:
             Raw option chain response dict.
+
+        Raises:
+            DataFetchError: If the HTTP request fails.
         """
+        from src.client.exceptions import DataFetchError
+
         try:
             resp = self._session.get(
                 V2_OPTION_CHAIN_URL,
@@ -126,8 +143,7 @@ class UpstoxMarketClient:
             resp.raise_for_status()
             return resp.json().get("data", {})
         except requests.RequestException as e:
-            logger.error("Option chain fetch failed: %s", e)
-            return {}
+            raise DataFetchError(f"Option chain fetch failed: {e}") from e
 
     # ── Async wrappers (satisfy MarketDataProvider protocol) ─────
 
@@ -148,7 +164,12 @@ class UpstoxMarketClient:
     # ── Internal helpers ─────────────────────────────────────────
 
     def _fetch_ltp_batch(self, instruments: list[str]) -> dict[str, float]:
-        """Fetch LTP for a single batch of up to 500 instruments."""
+        """Fetch LTP for a single batch of up to 500 instruments.
+
+        Raises:
+            LTPFetchError: If the HTTP request fails or the response contains
+                no usable price data. Callers must not proceed with zero prices.
+        """
         keys_param = ",".join(instruments)
         try:
             resp = self._session.get(
@@ -157,20 +178,28 @@ class UpstoxMarketClient:
                 timeout=10,
             )
             resp.raise_for_status()
-            data = resp.json().get("data", {})
-
-            results: dict[str, float] = {}
-            for _resp_key, quote in data.items():
-                pipe_key = quote.get("instrument_token", "")
-                price = quote.get("last_price")
-                if pipe_key and price is not None:
-                    results[pipe_key] = float(price)
-
-            return results
-
         except requests.RequestException as e:
-            logger.error("LTP fetch failed for batch: %s", e)
-            return {}
+            raise LTPFetchError(f"LTP batch request failed: {e}") from e
+
+        data = resp.json().get("data", {})
+        if not data:
+            raise LTPFetchError(
+                f"LTP batch returned empty data for {len(instruments)} instruments"
+            )
+
+        results: dict[str, float] = {}
+        for _resp_key, quote in data.items():
+            pipe_key = quote.get("instrument_token", "")
+            price = quote.get("last_price")
+            if pipe_key and price is not None:
+                results[pipe_key] = float(price)
+
+        if not results:
+            raise LTPFetchError(
+                "LTP batch response had data but no resolvable instrument_token fields"
+            )
+
+        return results
 
     @staticmethod
     def _remap_response(data: dict[str, Any]) -> dict[str, Any]:
