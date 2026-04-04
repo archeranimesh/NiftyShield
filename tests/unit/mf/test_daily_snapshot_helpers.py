@@ -1,59 +1,20 @@
 """Tests for the pure helper functions in scripts/daily_snapshot.py.
 
 _etf_current_value and _etf_cost_basis have no I/O — they only need
-the strategies list and a prices dict.  Isolated here so they can be
-imported without pulling in UpstoxMarketClient (which requires a live
-.env).  All external modules that daily_snapshot imports at load time
-are stubbed in sys.modules before the import.
+the strategies list and a prices dict.  No sys.modules patching required:
+daily_snapshot.py only imports stdlib and src.portfolio.models at the
+module level, so these helpers are importable cleanly in any test context.
 
 No network, no DB, no .env required.
 """
 
 from __future__ import annotations
 
-import importlib
-import sys
-import types
 from dataclasses import dataclass
 from decimal import Decimal
 
+from scripts.daily_snapshot import _etf_cost_basis, _etf_current_value
 from src.portfolio.models import AssetType
-
-# ── Stub every module daily_snapshot.py imports at the top level ─────────
-# Must happen before `from scripts.daily_snapshot import ...`
-
-
-def _stub(name: str, **attrs) -> types.ModuleType:
-    m = types.ModuleType(name)
-    for k, v in attrs.items():
-        setattr(m, k, v)
-    sys.modules[name] = m
-    return m
-
-
-_stub("dotenv", load_dotenv=lambda: None)
-_stub("src.client", UpstoxMarketClient=object)
-_stub("src.client.exceptions", LTPFetchError=Exception, DataFetchError=Exception, BrokerError=Exception)
-_stub("src.client.upstox_market", UpstoxMarketClient=object)
-_stub("src.portfolio.tracker", PortfolioTracker=object)
-
-from scripts.daily_snapshot import _etf_cost_basis, _etf_current_value  # noqa: E402
-
-# ── Restore all stubbed modules so they don't leak into other test files ──
-# Order: restore leaf modules before their parents.
-_STUBBED = [
-    "src.client.exceptions",
-    "src.client.upstox_market",
-    "src.client",
-    "src.portfolio.tracker",
-]
-for _mod in _STUBBED:
-    if _mod in sys.modules:
-        del sys.modules[_mod]
-
-importlib.import_module("src.client.exceptions")
-importlib.import_module("src.client.upstox_market")
-importlib.import_module("src.portfolio.tracker")
 
 # ── Minimal fakes ────────────────────────────────────────────────
 

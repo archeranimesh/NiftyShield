@@ -3,6 +3,13 @@
 Fetches live LTPs from Upstox V3 API, records to SQLite, exits.
 Designed for cron — no interactive prompts, returns exit code 0/1.
 
+Import design:
+    Only stdlib and the pure-computation helpers' types are imported at module
+    level (Decimal, Path, Strategy, AssetType). All I/O-triggering imports
+    (dotenv, UpstoxMarketClient, stores, tracker) are deferred to _async_main()
+    so that the pure helper functions are importable in tests with no side
+    effects — no .env required, no network, no DB.
+
 Usage:
     # Record today's snapshot
     python -m scripts.daily_snapshot
@@ -28,17 +35,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from dotenv import load_dotenv
+# Pure-computation helpers only need these types at import time — no I/O.
+from src.portfolio.models import AssetType, Strategy  # noqa: E402
 
-load_dotenv()
 
-from src.client.exceptions import LTPFetchError
-from src.client.upstox_market import UpstoxMarketClient
-from src.mf.store import MFStore
-from src.mf.tracker import MFTracker, PortfolioPnL
-from src.portfolio.models import AssetType, Strategy
-from src.portfolio.store import PortfolioStore
-from src.portfolio.tracker import PortfolioTracker
+# ── Pure helper functions — no I/O, no side effects ──────────────
+# Importable without .env, DB, or network. Tests use these directly.
 
 
 def _etf_current_value(strategies: list[Strategy], prices: dict[str, float]) -> Decimal:
@@ -81,17 +83,17 @@ def _etf_cost_basis(strategies: list[Strategy]) -> Decimal:
 
 
 def _print_combined_summary(
-    strategies: list,
+    strategies: list[Strategy],
     prices: dict[str, float],
     strategy_pnls: dict[str, object],
-    mf_pnl: PortfolioPnL | None,
+    mf_pnl: object | None,
 ) -> None:
     """Print the combined portfolio value across MF, ETF, and options.
 
     Args:
         strategies: All loaded Strategy objects.
         prices: instrument_key → LTP.
-        strategy_pnls: strategy name → P&L object (from compute_pnl).
+        strategy_pnls: strategy name → StrategyPnL (from compute_pnl).
         mf_pnl: Completed MF PortfolioPnL, or None if the MF fetch failed.
     """
     etf_value = _etf_current_value(strategies, prices)
@@ -103,9 +105,9 @@ def _print_combined_summary(
         Decimal("0"),
     )
 
-    mf_value = mf_pnl.total_current_value if mf_pnl else Decimal("0")
-    mf_invested = mf_pnl.total_invested if mf_pnl else Decimal("0")
-    mf_pnl_amt = mf_pnl.total_pnl if mf_pnl else Decimal("0")
+    mf_value = mf_pnl.total_current_value if mf_pnl else Decimal("0")  # type: ignore[union-attr]
+    mf_invested = mf_pnl.total_invested if mf_pnl else Decimal("0")  # type: ignore[union-attr]
+    mf_pnl_amt = mf_pnl.total_pnl if mf_pnl else Decimal("0")  # type: ignore[union-attr]
 
     total_value = mf_value + etf_value + options_pnl
     total_invested = mf_invested + etf_basis
@@ -130,14 +132,15 @@ def _print_combined_summary(
         print("  NOTE: MF fetch failed — MF value excluded from total")
 
 
-async def _async_main(
-    snap_date: date,
-    db_path: Path,
-) -> int:
+# ── I/O-heavy entrypoint — all network/DB imports are local ──────
+
+
+async def _async_main(snap_date: date, db_path: Path) -> int:
     """All async I/O for the daily snapshot run.
 
-    Separated from main() so the entire async workflow runs in a single
-    event loop — no repeated asyncio.run() calls.
+    All imports that trigger I/O (dotenv, stores, clients, tracker) are
+    deferred to this function so the module-level helpers stay importable
+    without a live .env or network connection.
 
     Args:
         snap_date: Date to record snapshots for.
@@ -146,6 +149,17 @@ async def _async_main(
     Returns:
         Exit code: 0 for success, 1 for any fatal error.
     """
+    from dotenv import load_dotenv
+
+    load_dotenv()
+
+    from src.client.exceptions import LTPFetchError
+    from src.client.upstox_market import UpstoxMarketClient
+    from src.mf.store import MFStore
+    from src.mf.tracker import MFTracker
+    from src.portfolio.store import PortfolioStore
+    from src.portfolio.tracker import PortfolioTracker
+
     # ── Validate DB exists ───────────────────────────────────────
     if not db_path.exists():
         print(f"  ERROR: DB not found at {db_path}")
@@ -214,7 +228,7 @@ async def _async_main(
             print(f"    {strategy.name}: {count} legs")
 
     # ── MF portfolio snapshot (non-fatal) ─────────────────────────
-    mf_pnl: PortfolioPnL | None = None
+    mf_pnl = None
     try:
         mf_store = MFStore(db_path)
         mf_pnl = MFTracker(mf_store).record_snapshot(snap_date)
