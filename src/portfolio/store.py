@@ -7,11 +7,10 @@ All writes are explicit — no ORM magic. Reads return Pydantic models.
 from __future__ import annotations
 
 import sqlite3
-from contextlib import contextmanager
 from datetime import date, datetime
 from pathlib import Path
-from typing import Generator
 
+from src.db import connect as _connect
 from src.portfolio.models import (
     AssetType,
     DailySnapshot,
@@ -84,30 +83,14 @@ class PortfolioStore:
         """
         self.db_path = db_path
         db_path.parent.mkdir(parents=True, exist_ok=True)
-        with self._connect() as conn:
+        with _connect(self.db_path) as conn:
             conn.executescript(_SCHEMA)
-
-    @contextmanager
-    def _connect(self) -> Generator[sqlite3.Connection, None, None]:
-        """Context manager for DB connections with row factory."""
-        conn = sqlite3.connect(str(self.db_path))
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA foreign_keys=ON")
-        try:
-            yield conn
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
 
     # ── Strategy CRUD ────────────────────────────────────────────
 
     def upsert_strategy(self, strategy: Strategy) -> int:
         """Insert or update a strategy. Returns the strategy ID."""
-        with self._connect() as conn:
+        with _connect(self.db_path) as conn:
             cursor = conn.execute(
                 """INSERT INTO strategies (name, description)
                    VALUES (?, ?)
@@ -159,7 +142,7 @@ class PortfolioStore:
 
     def get_strategy(self, name: str) -> Strategy | None:
         """Load a strategy with all its legs by name."""
-        with self._connect() as conn:
+        with _connect(self.db_path) as conn:
             row = conn.execute(
                 "SELECT * FROM strategies WHERE name = ?", (name,)
             ).fetchone()
@@ -177,7 +160,7 @@ class PortfolioStore:
 
     def get_all_strategies(self) -> list[Strategy]:
         """Load all strategies with their legs."""
-        with self._connect() as conn:
+        with _connect(self.db_path) as conn:
             rows = conn.execute("SELECT * FROM strategies ORDER BY name").fetchall()
             strategies = []
             for row in rows:
@@ -225,7 +208,7 @@ class PortfolioStore:
         Uses UPSERT on (leg_id, snapshot_date) — safe to call multiple
         times on the same day (last write wins).
         """
-        with self._connect() as conn:
+        with _connect(self.db_path) as conn:
             cursor = conn.execute(
                 """INSERT INTO daily_snapshots
                    (leg_id, snapshot_date, ltp, close, iv, delta, theta,
@@ -261,7 +244,7 @@ class PortfolioStore:
 
     def record_snapshots_bulk(self, snapshots: list[DailySnapshot]) -> int:
         """Bulk insert/replace snapshots. Returns count of rows affected."""
-        with self._connect() as conn:
+        with _connect(self.db_path) as conn:
             conn.executemany(
                 """INSERT INTO daily_snapshots
                    (leg_id, snapshot_date, ltp, close, iv, delta, theta,
@@ -308,7 +291,7 @@ class PortfolioStore:
 
         query += " ORDER BY snapshot_date"
 
-        with self._connect() as conn:
+        with _connect(self.db_path) as conn:
             rows = conn.execute(query, params).fetchall()
             return [self._row_to_snapshot(r) for r in rows]
 
@@ -330,7 +313,7 @@ class PortfolioStore:
 
     def get_latest_snapshot_date(self) -> date | None:
         """Return the most recent snapshot date across all legs."""
-        with self._connect() as conn:
+        with _connect(self.db_path) as conn:
             row = conn.execute(
                 "SELECT MAX(snapshot_date) as max_date FROM daily_snapshots"
             ).fetchone()

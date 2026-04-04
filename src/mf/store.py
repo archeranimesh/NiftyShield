@@ -10,12 +10,11 @@ Holdings and P&L are derived at query time — nothing is pre-computed.
 from __future__ import annotations
 
 import sqlite3
-from contextlib import contextmanager
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
-from typing import Generator
 
+from src.db import connect as _connect
 from src.mf.models import MFHolding, MFNavSnapshot, MFTransaction, TransactionType
 
 _SCHEMA = """
@@ -62,24 +61,8 @@ class MFStore:
         """
         self.db_path = db_path
         db_path.parent.mkdir(parents=True, exist_ok=True)
-        with self._connect() as conn:
+        with _connect(self.db_path) as conn:
             conn.executescript(_SCHEMA)
-
-    @contextmanager
-    def _connect(self) -> Generator[sqlite3.Connection, None, None]:
-        """Context manager yielding a WAL-mode connection with row factory."""
-        conn = sqlite3.connect(str(self.db_path))
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA foreign_keys=ON")
-        try:
-            yield conn
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
 
     # ── Transactions ──────────────────────────────────────────────
 
@@ -95,7 +78,7 @@ class MFStore:
         Returns:
             Row id of the inserted or pre-existing row.
         """
-        with self._connect() as conn:
+        with _connect(self.db_path) as conn:
             cursor = conn.execute(
                 """INSERT INTO mf_transactions
                    (scheme_name, amfi_code, transaction_date, units, amount, transaction_type)
@@ -129,7 +112,7 @@ class MFStore:
         Returns:
             Number of rows attempted (mirrors PortfolioStore.record_snapshots_bulk).
         """
-        with self._connect() as conn:
+        with _connect(self.db_path) as conn:
             conn.executemany(
                 """INSERT INTO mf_transactions
                    (scheme_name, amfi_code, transaction_date, units, amount, transaction_type)
@@ -180,7 +163,7 @@ class MFStore:
 
         query += " ORDER BY transaction_date, id"
 
-        with self._connect() as conn:
+        with _connect(self.db_path) as conn:
             rows = conn.execute(query, params).fetchall()
             return [self._row_to_transaction(r) for r in rows]
 
@@ -230,7 +213,7 @@ class MFStore:
         Returns:
             Row id of the upserted row.
         """
-        with self._connect() as conn:
+        with _connect(self.db_path) as conn:
             cursor = conn.execute(
                 """INSERT INTO mf_nav_snapshots (snapshot_date, amfi_code, scheme_name, nav)
                    VALUES (?, ?, ?, ?)
@@ -255,7 +238,7 @@ class MFStore:
         Returns:
             Number of rows processed.
         """
-        with self._connect() as conn:
+        with _connect(self.db_path) as conn:
             conn.executemany(
                 """INSERT INTO mf_nav_snapshots (snapshot_date, amfi_code, scheme_name, nav)
                    VALUES (?, ?, ?, ?)
@@ -302,7 +285,7 @@ class MFStore:
 
         query += " ORDER BY snapshot_date"
 
-        with self._connect() as conn:
+        with _connect(self.db_path) as conn:
             rows = conn.execute(query, params).fetchall()
             return [self._row_to_nav_snapshot(r) for r in rows]
 
@@ -315,7 +298,7 @@ class MFStore:
         Returns:
             Latest MFNavSnapshot, or None if the scheme has no snapshots.
         """
-        with self._connect() as conn:
+        with _connect(self.db_path) as conn:
             row = conn.execute(
                 """SELECT * FROM mf_nav_snapshots
                    WHERE amfi_code = ?
