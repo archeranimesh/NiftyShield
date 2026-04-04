@@ -7,23 +7,23 @@ All timestamps are UTC internally; IST conversion happens at display layer only.
 from __future__ import annotations
 
 from datetime import date, datetime
-from enum import StrEnum
+from enum import Enum
 
 from pydantic import BaseModel, Field, computed_field
 
 
-class Direction(StrEnum):
+class Direction(str, Enum):
     BUY = "BUY"
     SELL = "SELL"
 
 
-class ProductType(StrEnum):
+class ProductType(str, Enum):
     CNC = "CNC"
     NRML = "NRML"
     MIS = "MIS"
 
 
-class AssetType(StrEnum):
+class AssetType(str, Enum):
     EQUITY = "EQUITY"
     CE = "CE"
     PE = "PE"
