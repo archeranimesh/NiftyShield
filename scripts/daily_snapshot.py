@@ -35,12 +35,13 @@ load_dotenv()
 from src.client.upstox_market import UpstoxMarketClient
 from src.mf.store import MFStore
 from src.mf.tracker import MFTracker, PortfolioPnL
+from src.portfolio.models import AssetType, Strategy
 from src.portfolio.store import PortfolioStore
 from src.portfolio.tracker import PortfolioTracker
 
 
-def _etf_current_value(strategies: list, prices: dict[str, float]) -> Decimal:
-    """Mark-to-market value of all NSE_EQ legs across strategies.
+def _etf_current_value(strategies: list[Strategy], prices: dict[str, float]) -> Decimal:
+    """Mark-to-market value of all EQUITY legs across strategies.
 
     ETF legs are assets — value is qty × current LTP.
     Falls back to entry price if LTP is missing (e.g. market closed).
@@ -55,14 +56,14 @@ def _etf_current_value(strategies: list, prices: dict[str, float]) -> Decimal:
     total = Decimal("0")
     for strategy in strategies:
         for leg in strategy.legs:
-            if leg.instrument_key.startswith("NSE_EQ|"):
+            if leg.asset_type == AssetType.EQUITY:
                 ltp = prices.get(leg.instrument_key, leg.entry_price)
                 total += Decimal(str(ltp)) * Decimal(str(leg.quantity))
     return total
 
 
-def _etf_cost_basis(strategies: list) -> Decimal:
-    """Total entry cost of all NSE_EQ legs (qty × entry_price).
+def _etf_cost_basis(strategies: list[Strategy]) -> Decimal:
+    """Total entry cost of all EQUITY legs (qty × entry_price).
 
     Args:
         strategies: All loaded Strategy objects.
@@ -74,7 +75,7 @@ def _etf_cost_basis(strategies: list) -> Decimal:
         Decimal(str(leg.entry_price)) * Decimal(str(leg.quantity))
         for strategy in strategies
         for leg in strategy.legs
-        if leg.instrument_key.startswith("NSE_EQ|")
+        if leg.asset_type == AssetType.EQUITY
     )
 
 
