@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import date
+from decimal import Decimal
 from typing import Protocol, runtime_checkable
 
 from src.portfolio.models import (
@@ -43,9 +44,9 @@ class LegPnL:
     """P&L summary for a single leg."""
 
     leg: Leg
-    current_price: float
-    pnl: float
-    pnl_percent: float
+    current_price: Decimal
+    pnl: Decimal
+    pnl_percent: Decimal
 
 
 @dataclass(frozen=True)
@@ -56,12 +57,12 @@ class StrategyPnL:
     legs: list[LegPnL]
 
     @property
-    def total_pnl(self) -> float:
-        return sum(lp.pnl for lp in self.legs)
+    def total_pnl(self) -> Decimal:
+        return sum((lp.pnl for lp in self.legs), Decimal("0"))
 
     @property
-    def total_entry_value(self) -> float:
-        total = 0.0
+    def total_entry_value(self) -> Decimal:
+        total = Decimal("0")
         for lp in self.legs:
             if lp.leg.direction == Direction.BUY:
                 total += lp.leg.entry_value
@@ -70,9 +71,9 @@ class StrategyPnL:
         return total
 
     @property
-    def total_pnl_percent(self) -> float:
+    def total_pnl_percent(self) -> Decimal:
         entry = abs(self.total_entry_value)
-        return (self.total_pnl / entry * 100) if entry > 0 else 0.0
+        return (self.total_pnl / entry * 100) if entry > 0 else Decimal("0")
 
 
 class PortfolioTracker:
@@ -97,14 +98,16 @@ class PortfolioTracker:
 
         leg_pnls = []
         for leg in strategy.legs:
-            ltp = prices.get(leg.instrument_key, 0.0)
-            if ltp == 0.0:
+            raw_ltp = prices.get(leg.instrument_key, 0.0)
+            if not raw_ltp:
                 logger.warning(
                     "No LTP for %s (%s) — using entry price as fallback",
                     leg.display_name,
                     leg.instrument_key,
                 )
-                ltp = leg.entry_price
+                ltp: Decimal = leg.entry_price
+            else:
+                ltp = Decimal(str(raw_ltp))
 
             leg_pnls.append(
                 LegPnL(
@@ -150,7 +153,7 @@ class PortfolioTracker:
             if leg.id is None:
                 continue
 
-            ltp = prices.get(leg.instrument_key, 0.0)
+            ltp = Decimal(str(prices.get(leg.instrument_key, 0.0)))
             greeks = greeks_map.get(leg.instrument_key, {})
 
             snapshots.append(

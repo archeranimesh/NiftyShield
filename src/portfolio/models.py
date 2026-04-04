@@ -2,11 +2,15 @@
 
 Covers strategy definitions, individual legs, and daily price/greeks snapshots.
 All timestamps are UTC internally; IST conversion happens at display layer only.
+
+Monetary fields (entry_price, ltp, close, underlying_price) use Decimal to
+preserve sub-rupee precision through P&L calculations and SQLite round-trips.
 """
 
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal
 from enum import Enum
 
 from pydantic import BaseModel, Field, computed_field
@@ -41,7 +45,7 @@ class Leg(BaseModel):
     direction: Direction
     quantity: int
     lot_size: int = Field(default=1, description="Lot size — 1 for ETFs, 75 for Nifty options")
-    entry_price: float
+    entry_price: Decimal
     entry_date: date
     expiry: date | None = Field(default=None, description="Expiry date for F&O legs, None for equity")
     strike: float | None = Field(default=None, description="Strike price for options")
@@ -55,24 +59,28 @@ class Leg(BaseModel):
 
     @computed_field
     @property
-    def entry_value(self) -> float:
+    def entry_value(self) -> Decimal:
         """Total capital deployed at entry."""
         return self.entry_price * self.quantity
 
-    def pnl(self, current_price: float) -> float:
+    def pnl(self, current_price: float | Decimal) -> Decimal:
         """Compute unrealized P&L for this leg at a given price.
+
+        Accepts float (from broker API) or Decimal. Float inputs are
+        converted via str() to avoid binary representation errors.
 
         For BUY legs:  (current - entry) * quantity
         For SELL legs: (entry - current) * quantity
         """
+        cp = current_price if isinstance(current_price, Decimal) else Decimal(str(current_price))
         if self.direction == Direction.BUY:
-            return (current_price - self.entry_price) * self.quantity
-        return (self.entry_price - current_price) * self.quantity
+            return (cp - self.entry_price) * self.quantity
+        return (self.entry_price - cp) * self.quantity
 
-    def pnl_percent(self, current_price: float) -> float:
+    def pnl_percent(self, current_price: float | Decimal) -> Decimal:
         """P&L as percentage of entry value."""
         if self.entry_value == 0:
-            return 0.0
+            return Decimal("0")
         return (self.pnl(current_price) / abs(self.entry_value)) * 100
 
 
@@ -87,9 +95,9 @@ class Strategy(BaseModel):
 
     @computed_field
     @property
-    def total_entry_value(self) -> float:
+    def total_entry_value(self) -> Decimal:
         """Net capital deployed across all legs (buys positive, sells negative)."""
-        total = 0.0
+        total = Decimal("0")
         for leg in self.legs:
             if leg.direction == Direction.BUY:
                 total += leg.entry_value
@@ -97,16 +105,17 @@ class Strategy(BaseModel):
                 total -= leg.entry_value
         return total
 
-    def total_pnl(self, prices: dict[int, float]) -> float:
+    def total_pnl(self, prices: dict[int, float | Decimal]) -> Decimal:
         """Compute strategy-level P&L given current prices keyed by leg ID.
 
         Args:
-            prices: Mapping of leg.id -> current LTP.
+            prices: Mapping of leg.id -> current LTP (float or Decimal).
         """
         return sum(
-            leg.pnl(prices[leg.id])
-            for leg in self.legs
-            if leg.id is not None and leg.id in prices
+            (leg.pnl(prices[leg.id])
+             for leg in self.legs
+             if leg.id is not None and leg.id in prices),
+            Decimal("0"),
         )
 
 
@@ -116,8 +125,8 @@ class DailySnapshot(BaseModel):
     id: int | None = None
     leg_id: int
     snapshot_date: date
-    ltp: float
-    close: float | None = None
+    ltp: Decimal
+    close: Decimal | None = None
     iv: float | None = Field(default=None, description="Implied volatility")
     delta: float | None = None
     theta: float | None = None
@@ -125,11 +134,11 @@ class DailySnapshot(BaseModel):
     vega: float | None = None
     oi: int | None = Field(default=None, description="Open interest")
     volume: int | None = None
-    underlying_price: float | None = Field(
+    underlying_price: Decimal | None = Field(
         default=None, description="Nifty spot at snapshot time"
     )
 
-    def leg_pnl(self, entry_price: float, quantity: int, direction: Direction) -> float:
+    def leg_pnl(self, entry_price: Decimal, quantity: int, direction: Direction) -> Decimal:
         """Compute P&L using this snapshot's LTP."""
         if direction == Direction.BUY:
             return (self.ltp - entry_price) * quantity

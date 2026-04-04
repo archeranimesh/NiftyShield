@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import sqlite3
 from datetime import date, datetime
+from decimal import Decimal
 from pathlib import Path
 
 from src.db import connect as _connect
@@ -37,7 +38,7 @@ CREATE TABLE IF NOT EXISTS legs (
     direction TEXT NOT NULL,
     quantity INTEGER NOT NULL,
     lot_size INTEGER NOT NULL DEFAULT 1,
-    entry_price REAL NOT NULL,
+    entry_price TEXT NOT NULL,
     entry_date TEXT NOT NULL,
     expiry TEXT,
     strike REAL,
@@ -48,8 +49,8 @@ CREATE TABLE IF NOT EXISTS daily_snapshots (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     leg_id INTEGER NOT NULL REFERENCES legs(id),
     snapshot_date TEXT NOT NULL,
-    ltp REAL NOT NULL,
-    close REAL,
+    ltp TEXT NOT NULL,
+    close TEXT,
     iv REAL,
     delta REAL,
     theta REAL,
@@ -57,7 +58,7 @@ CREATE TABLE IF NOT EXISTS daily_snapshots (
     vega REAL,
     oi INTEGER,
     volume INTEGER,
-    underlying_price REAL,
+    underlying_price TEXT,
     UNIQUE(leg_id, snapshot_date)
 );
 
@@ -112,7 +113,7 @@ class PortfolioStore:
             """SELECT id FROM legs
                WHERE strategy_id = ? AND instrument_key = ? AND direction = ?
                      AND entry_price = ?""",
-            (leg.strategy_id, leg.instrument_key, leg.direction.value, leg.entry_price),
+            (leg.strategy_id, leg.instrument_key, leg.direction.value, str(leg.entry_price)),
         ).fetchone()
 
         if existing:
@@ -131,7 +132,7 @@ class PortfolioStore:
                 leg.direction.value,
                 leg.quantity,
                 leg.lot_size,
-                leg.entry_price,
+                str(leg.entry_price),
                 leg.entry_date.isoformat(),
                 leg.expiry.isoformat() if leg.expiry else None,
                 leg.strike,
@@ -191,7 +192,7 @@ class PortfolioStore:
                 direction=Direction(r["direction"]),
                 quantity=r["quantity"],
                 lot_size=r["lot_size"],
-                entry_price=r["entry_price"],
+                entry_price=Decimal(r["entry_price"]),
                 entry_date=date.fromisoformat(r["entry_date"]),
                 expiry=date.fromisoformat(r["expiry"]) if r["expiry"] else None,
                 strike=r["strike"],
@@ -228,8 +229,8 @@ class PortfolioStore:
                 (
                     snapshot.leg_id,
                     snapshot.snapshot_date.isoformat(),
-                    snapshot.ltp,
-                    snapshot.close,
+                    str(snapshot.ltp),
+                    str(snapshot.close) if snapshot.close is not None else None,
                     snapshot.iv,
                     snapshot.delta,
                     snapshot.theta,
@@ -237,7 +238,7 @@ class PortfolioStore:
                     snapshot.vega,
                     snapshot.oi,
                     snapshot.volume,
-                    snapshot.underlying_price,
+                    str(snapshot.underlying_price) if snapshot.underlying_price is not None else None,
                 ),
             )
             return cursor.lastrowid  # type: ignore[return-value]
@@ -263,9 +264,12 @@ class PortfolioStore:
                        underlying_price = excluded.underlying_price""",
                 [
                     (
-                        s.leg_id, s.snapshot_date.isoformat(), s.ltp, s.close,
+                        s.leg_id, s.snapshot_date.isoformat(),
+                        str(s.ltp),
+                        str(s.close) if s.close is not None else None,
                         s.iv, s.delta, s.theta, s.gamma, s.vega,
-                        s.oi, s.volume, s.underlying_price,
+                        s.oi, s.volume,
+                        str(s.underlying_price) if s.underlying_price is not None else None,
                     )
                     for s in snapshots
                 ],
@@ -327,8 +331,8 @@ class PortfolioStore:
             id=row["id"],
             leg_id=row["leg_id"],
             snapshot_date=date.fromisoformat(row["snapshot_date"]),
-            ltp=row["ltp"],
-            close=row["close"],
+            ltp=Decimal(row["ltp"]),
+            close=Decimal(row["close"]) if row["close"] is not None else None,
             iv=row["iv"],
             delta=row["delta"],
             theta=row["theta"],
@@ -336,5 +340,5 @@ class PortfolioStore:
             vega=row["vega"],
             oi=row["oi"],
             volume=row["volume"],
-            underlying_price=row["underlying_price"],
+            underlying_price=Decimal(row["underlying_price"]) if row["underlying_price"] is not None else None,
         )

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import tempfile
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -73,26 +74,27 @@ def tmp_store() -> PortfolioStore:
 
 class TestLegPnL:
     def test_buy_profit(self):
-        assert _make_leg(Direction.BUY, 100.0, 10).pnl(110.0) == 100.0
+        assert _make_leg(Direction.BUY, 100.0, 10).pnl(110.0) == Decimal("100")
 
     def test_buy_loss(self):
-        assert _make_leg(Direction.BUY, 100.0, 10).pnl(90.0) == -100.0
+        assert _make_leg(Direction.BUY, 100.0, 10).pnl(90.0) == Decimal("-100")
 
     def test_sell_profit(self):
-        assert _make_leg(Direction.SELL, 100.0, 10).pnl(90.0) == 100.0
+        assert _make_leg(Direction.SELL, 100.0, 10).pnl(90.0) == Decimal("100")
 
     def test_sell_loss(self):
-        assert _make_leg(Direction.SELL, 100.0, 10).pnl(110.0) == -100.0
+        assert _make_leg(Direction.SELL, 100.0, 10).pnl(110.0) == Decimal("-100")
 
     def test_pnl_percent(self):
-        leg = _make_leg(Direction.BUY, 1000.0, 1)
-        assert leg.pnl_percent(1100.0) == pytest.approx(10.0)
+        leg = _make_leg(Direction.BUY, "1000.00", 1)
+        assert leg.pnl_percent(1100.0) == Decimal("10")
 
     def test_zero_at_entry(self):
-        assert _make_leg(Direction.BUY, 500.0, 65).pnl(500.0) == 0.0
+        assert _make_leg(Direction.BUY, 500.0, 65).pnl(500.0) == Decimal("0")
 
     def test_entry_value(self):
-        assert _make_leg(Direction.BUY, 1388.12, 438).entry_value == pytest.approx(607996.56)
+        leg = _make_leg(Direction.BUY, "1388.12", 438)
+        assert leg.entry_value == Decimal("1388.12") * 438
 
     def test_total_lots(self):
         leg = _make_leg(Direction.BUY, 975.0, 65, lot_size=65)
@@ -114,8 +116,8 @@ class TestStrategyPnL:
             ],
         )
         prices = {1: 1400.0, 2: 950.0, 3: 1150.0, 4: 800.0}
-        expected = (12 * 438) + (-25 * 65) + (68 * 65) + (40 * 65)
-        assert strategy.total_pnl(prices) == pytest.approx(expected)
+        expected = Decimal((12 * 438) + (-25 * 65) + (68 * 65) + (40 * 65))
+        assert strategy.total_pnl(prices) == expected
 
     def test_total_entry_value(self):
         strategy = Strategy(
@@ -125,7 +127,7 @@ class TestStrategyPnL:
                 _make_leg(Direction.SELL, 200.0, 50),
             ],
         )
-        assert strategy.total_entry_value == pytest.approx(40000.0)
+        assert strategy.total_entry_value == Decimal("40000")
 
 
 # ── Store tests ──────────────────────────────────────────────────
@@ -140,7 +142,7 @@ class TestPortfolioStore:
         loaded = tmp_store.get_strategy("s1")
         assert loaded is not None
         assert len(loaded.legs) == 1
-        assert loaded.legs[0].entry_price == 100.0
+        assert loaded.legs[0].entry_price == Decimal("100.0")
 
     def test_upsert_idempotent(self, tmp_store):
         s = Strategy(name="idem", legs=[_make_leg(Direction.SELL, 200.0, 5)])
@@ -161,7 +163,7 @@ class TestPortfolioStore:
         )
         snaps = tmp_store.get_snapshots(leg_id)
         assert len(snaps) == 1
-        assert snaps[0].ltp == 60.0
+        assert snaps[0].ltp == Decimal("60.0")
 
     def test_bulk_insert(self, tmp_store):
         s = Strategy(name="bulk", legs=[_make_leg(Direction.BUY, 50.0, 1)])
@@ -232,7 +234,7 @@ class TestPortfolioTracker:
         pnl = asyncio.run(tracker.compute_pnl("tracker_test"))
         assert pnl is not None
         # BUY: (510-500)*100=1000, SELL: (840-800)*65=2600
-        assert pnl.total_pnl == pytest.approx(3600.0)
+        assert pnl.total_pnl == Decimal("3600")
 
     def test_record_snapshot(self, tmp_store):
         s = Strategy(
@@ -258,7 +260,7 @@ class TestPortfolioTracker:
         leg_id = tmp_store.get_strategy("record_test").legs[0].id
         snaps = tmp_store.get_snapshots(leg_id)
         assert len(snaps) == 1
-        assert snaps[0].ltp == 105.0
+        assert snaps[0].ltp == Decimal("105.0")
 
     def test_nonexistent_strategy(self, tmp_store):
         market = FakeMarket({})

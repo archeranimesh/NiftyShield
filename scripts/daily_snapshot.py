@@ -101,7 +101,7 @@ def _print_combined_summary(
 
     # Options net P&L — sign already correct for short legs in compute_pnl
     options_pnl = sum(
-        (Decimal(str(p.total_pnl)) for p in strategy_pnls.values() if p),
+        (p.total_pnl for p in strategy_pnls.values() if p),
         Decimal("0"),
     )
 
