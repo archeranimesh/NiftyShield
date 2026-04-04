@@ -129,34 +129,29 @@ def _print_combined_summary(
         print("  NOTE: MF fetch failed — MF value excluded from total")
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Record daily portfolio snapshots")
-    parser.add_argument(
-        "--db-path",
-        type=Path,
-        default=Path("data/portfolio/portfolio.sqlite"),
-        help="Path to portfolio SQLite DB",
-    )
-    parser.add_argument(
-        "--date",
-        type=str,
-        default=None,
-        help="Snapshot date as YYYY-MM-DD (defaults to today)",
-    )
-    args = parser.parse_args()
+async def _async_main(
+    snap_date: date,
+    db_path: Path,
+) -> int:
+    """All async I/O for the daily snapshot run.
 
-    snap_date = date.fromisoformat(args.date) if args.date else date.today()
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    Separated from main() so the entire async workflow runs in a single
+    event loop — no repeated asyncio.run() calls.
 
-    print(f"[{now}] Daily snapshot for {snap_date.isoformat()}")
+    Args:
+        snap_date: Date to record snapshots for.
+        db_path: Path to the SQLite database.
 
+    Returns:
+        Exit code: 0 for success, 1 for any fatal error.
+    """
     # ── Validate DB exists ───────────────────────────────────────
-    if not args.db_path.exists():
-        print(f"  ERROR: DB not found at {args.db_path}")
+    if not db_path.exists():
+        print(f"  ERROR: DB not found at {db_path}")
         print("  Run 'python -m scripts.seed_portfolio' first.")
         return 1
 
-    store = PortfolioStore(args.db_path)
+    store = PortfolioStore(db_path)
     strategies = store.get_all_strategies()
 
     if not strategies:
@@ -173,11 +168,7 @@ def main() -> int:
     # ── Collect all unique instrument keys across strategies ──────
     NIFTY_INDEX_KEY = "NSE_INDEX|Nifty 50"
 
-    all_keys = set()
-    for strategy in strategies:
-        for leg in strategy.legs:
-            all_keys.add(leg.instrument_key)
-
+    all_keys = {leg.instrument_key for strategy in strategies for leg in strategy.legs}
     print(f"  Strategies: {len(strategies)}, Instruments: {len(all_keys)}")
 
     # ── Fetch all LTPs in one batch (Nifty spot piggybacked) ─────
@@ -196,23 +187,20 @@ def main() -> int:
     if missing:
         print(f"  WARNING: No LTP for {len(missing)} instruments: {missing}")
 
-    # ── Record snapshots via tracker ─────────────────────────────
+    # ── Record snapshots and collect P&L — single event loop ─────
     tracker = PortfolioTracker(store, client)
-    results = asyncio.run(
-        tracker.record_all_strategies(
-            snapshot_date=snap_date,
-            underlying_price=underlying_price,
-        )
+    results = await tracker.record_all_strategies(
+        snapshot_date=snap_date,
+        underlying_price=underlying_price,
     )
 
-    # ── Print strategy-level summary, collect P&L objects ────────
     total_snaps = sum(results.values())
     print(f"  Recorded {total_snaps} snapshots:")
 
     strategy_pnls: dict[str, object] = {}
     for strategy in strategies:
         count = results.get(strategy.name, 0)
-        pnl = asyncio.run(tracker.compute_pnl(strategy.name))
+        pnl = await tracker.compute_pnl(strategy.name)
         strategy_pnls[strategy.name] = pnl
         if pnl:
             print(
@@ -222,10 +210,10 @@ def main() -> int:
         else:
             print(f"    {strategy.name}: {count} legs")
 
-    # ── MF portfolio snapshot ─────────────────────────────────────
+    # ── MF portfolio snapshot (non-fatal) ─────────────────────────
     mf_pnl: PortfolioPnL | None = None
     try:
-        mf_store = MFStore(args.db_path)
+        mf_store = MFStore(db_path)
         mf_pnl = MFTracker(mf_store).record_snapshot(snap_date)
         if mf_pnl.schemes:
             print(
@@ -243,8 +231,31 @@ def main() -> int:
     # ── Combined portfolio summary ────────────────────────────────
     _print_combined_summary(strategies, prices, strategy_pnls, mf_pnl)
 
-    print(f"\n  Done.")
+    print("\n  Done.")
     return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Record daily portfolio snapshots")
+    parser.add_argument(
+        "--db-path",
+        type=Path,
+        default=Path("data/portfolio/portfolio.sqlite"),
+        help="Path to portfolio SQLite DB",
+    )
+    parser.add_argument(
+        "--date",
+        type=str,
+        default=None,
+        help="Snapshot date as YYYY-MM-DD (defaults to today)",
+    )
+    args = parser.parse_args()
+
+    snap_date = date.fromisoformat(args.date) if args.date else date.today()
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{now}] Daily snapshot for {snap_date.isoformat()}")
+
+    return asyncio.run(_async_main(snap_date, args.db_path))
 
 
 if __name__ == "__main__":
