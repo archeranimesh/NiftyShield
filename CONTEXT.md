@@ -77,7 +77,7 @@ tests/
 - `scripts/roll_leg.py` — CLI to close an old leg and open a replacement in one atomic transaction (not written)
 - Trade history model — `Trade`, `TradeAction` not yet defined; no audit trail for rolls/adjustments
 - `PortfolioSummary` type — combined MF + ETF + options totals computed inline in `daily_snapshot.py`; should migrate to a frozen dataclass in `src/portfolio/models.py` before the visualization commit
-- Day-change P&L in combined summary — today vs yesterday delta from `mf_nav_snapshots` not yet surfaced in output. Data accumulates automatically via cron; display enhancement deferred until 2+ clean snapshots exist (from 2026-04-07 onwards).
+- ~~Day-change P&L in combined summary~~ — **DONE (2026-04-07)**: `PortfolioStore.get_prev_snapshots()`, `MFStore.get_prev_nav_snapshots()`, `_build_prev_prices()`, `_compute_prev_mf_pnl()` helpers added. Combined summary now shows `Δday` for MF, ETF, and options when prev data exists; column omitted silently on first run.
 
 ### Live Data
 
@@ -168,7 +168,7 @@ Every code was replaced by grepping the live AMFI flat file.
 - **MF snapshot is non-fatal in cron:** the MF block in `daily_snapshot.py` is wrapped in `try/except Exception`. AMFI unreachable at 3:45 PM does not abort the portfolio snapshot — it logs a WARNING and the combined summary prints `[failed]` for the MF line.
 - `seed_mf_holdings.py` separates `build_transactions()` (pure, no I/O) from `seed_holdings()` (calls store) — `build_transactions()` is independently testable with no DB.
 - **daily_snapshot.py import design:** module-level imports are stdlib + `src.portfolio.models` only. All I/O-triggering imports (`dotenv`, `UpstoxMarketClient`, `PortfolioStore`, `PortfolioTracker`, `MFStore`, `MFTracker`) are deferred inside `_async_main()`. This makes the pure helpers importable in tests with zero side effects — no `.env`, no DB, no network.
-- **Combined P&L has two distinct metrics:** (1) inception P&L — current value minus total invested, permanent fixture of the summary; (2) day-change P&L — today's value minus previous snapshot in `mf_nav_snapshots`. Both should be displayed. Day-change requires 2+ clean snapshots — will be meaningful from 2026-04-07 onwards.
+- **Combined P&L has two distinct metrics:** (1) inception P&L — current value minus total invested, permanent fixture of the summary; (2) day-change P&L — today's value minus previous snapshot via `get_prev_snapshots()` / `get_prev_nav_snapshots()` (MAX date < today, calendar-agnostic). Δday column is silently omitted on first run when no prior snapshot exists.
 - **Shared SQLite connection factory** in `src/db.py`: single `connect()` context manager used by both `PortfolioStore` and `MFStore`. WAL mode, `sqlite3.Row` factory, foreign key enforcement, auto commit/rollback. Any PRAGMA change applies everywhere from one place.
 - **Error hierarchy in `src/client/exceptions.py`:** `BrokerError → DataFetchError → LTPFetchError`. `UpstoxMarketClient` raises `LTPFetchError` on HTTP errors, empty API response, and missing instrument tokens. `get_ohlc_sync` and `get_option_chain_sync` raise `DataFetchError` rather than returning empty dicts silently. Callers distinguish retryable vs terminal errors by catching at the appropriate level.
 - **Monetary field types:** `Leg.entry_price`, `DailySnapshot.ltp`, `.close`, `.underlying_price` are `Decimal`. SQLite stores them as `TEXT` columns to preserve precision through round-trips. `Leg.pnl()` and `pnl_percent()` accept `float | Decimal` — float inputs go through `Decimal(str())` inside the method. Float LTPs from the broker API are converted via `Decimal(str(ltp))` at the tracker boundary before entering any model or P&L calculation.
@@ -191,7 +191,7 @@ Every code was replaced by grepping the live AMFI flat file.
 | `underlying_price` null for pre-2026-04-06 snapshots | DB wiped; clean baseline starts Monday |
 | Upstox has no MF API | AMFI flat file as sole NAV source; MF holdings managed via seed script + monthly SIP inserts |
 | MF NAV at 3:45 PM cron is T-1 | Expected for MFs — AMFI publishes after market close. Combined summary shows mixed-timestamp data by design. |
-| Day-change P&L not yet displayed | Need 2+ clean snapshots; first delta visible 2026-04-07 after Tuesday cron |
+| Day-change P&L | **Implemented** — Δday shown in combined summary from 2026-04-07 |
 
 ---
 
@@ -201,8 +201,8 @@ Before writing any code: read `CONTEXT.md`, state `CONTEXT.md ✓`, confirm file
 
 ## Immediate TODOs (in priority order)
 
-1. **daily_snapshot.py enhancements** — two remaining changes (date parameter done):
-   - **Day-change delta in output**: query the most recent prior row from `daily_snapshots` + `mf_nav_snapshots` (use DB max date < today, not calendar arithmetic — handles weekends/holidays automatically). Display format: `current | Δday | inception` for both MF funds and options legs.
+1. **daily_snapshot.py enhancements** — one remaining change:
+   - ~~**Day-change delta in output**~~ — **DONE (2026-04-07)**
    - **Extract `PortfolioSummary`** frozen dataclass from inline computation in `daily_snapshot.py` into `src/portfolio/models.py` — prerequisite for visualization commit.
    - ~~**Date parameter** (`--date YYYY-MM-DD`)~~ — **DONE** (2026-04-07): `_historical_main()` + `_compute_strategy_pnl_from_prices()` added. `PortfolioStore.get_snapshots_for_date()` + `MFStore.get_nav_snapshots_for_date()` added. 23 new tests.
 
@@ -266,7 +266,8 @@ All 11 codes verified against live AMFI flat file on 2026-04-04.
 - 23 unit tests in `tests/unit/test_daily_snapshot_historical.py` — `_compute_strategy_pnl_from_prices` pure helper (6 tests) + `_historical_main` DB-only path (9 tests): success/error exits, output content, MF absent/present paths.
 - 4 tests added to `tests/unit/test_portfolio.py` — `PortfolioStore.get_snapshots_for_date`: returns correct snapshots, excludes other dates, empty dict when no data, underlying_price preserved.
 - 4 tests added to `tests/unit/mf/test_store.py` — `MFStore.get_nav_snapshots_for_date`: all schemes returned, other dates excluded, empty list, ordered by amfi_code.
-- **Total: 199 tests** — all offline, no API dependency
+- 12 new tests (2026-04-07): `PortfolioStore.get_prev_snapshots` (4 tests in test_portfolio.py), `MFStore.get_prev_nav_snapshots` (4 tests in mf/test_store.py), day-change delta in summary output (2 tests), `_build_prev_prices` helper (2 tests) — both in test_daily_snapshot_historical.py.
+- **Total: 211 tests** — all offline, no API dependency
 - `python -m pytest` is the confirmed invocation convention (adds CWD to sys.path automatically)
 - `python -m pytest tests/unit/` = full offline suite
 
@@ -277,4 +278,4 @@ All 11 codes verified against live AMFI flat file on 2026-04-04.
 | Date | What Changed |
 |---|---|
 | 2026-04-01 — 2026-04-04 | **Foundation sprint.** Auth, portfolio module, full MF stack (models/store/nav_fetcher/tracker), daily snapshot cron, seed scripts. All key decisions now in Architecture Decisions above. All 11 AMFI codes corrected against live AMFI flat file. 8-point code review applied (Decimal migration, shared db.py, enum compat, exception hierarchy, deferred I/O imports). 176 offline tests green. DB wiped and re-seeded; clean baseline from 2026-04-06. |
-| 2026-04-07 | Reviewed project state and next priorities. Day-change P&L identified as immediately unblocked (2+ snapshots now exist: April 6 + April 7). Scoped 3 new requirements: (1) daily_snapshot.py enhancements — day-change delta + date parameter + PortfolioSummary extraction; (2) Telegram bot notification via raw requests, non-fatal, injected optionally; (3) trade history + roll workflow before JUN expiry. Established CONTEXT.md session log hygiene: collapse absorbed entries, keep only recent 2–3 sessions verbatim. **--date YYYY-MM-DD historical query mode implemented**: `_historical_main()`, `_compute_strategy_pnl_from_prices()`, `PortfolioStore.get_snapshots_for_date()`, `MFStore.get_nav_snapshots_for_date()`. 23 new tests (199 total, all green). |
+| 2026-04-07 | Reviewed project state and next priorities. Day-change P&L identified as immediately unblocked (2+ snapshots now exist: April 6 + April 7). Scoped 3 new requirements: (1) daily_snapshot.py enhancements — day-change delta + date parameter + PortfolioSummary extraction; (2) Telegram bot notification via raw requests, non-fatal, injected optionally; (3) trade history + roll workflow before JUN expiry. Established CONTEXT.md session log hygiene: collapse absorbed entries, keep only recent 2–3 sessions verbatim. **--date YYYY-MM-DD historical query mode implemented**: `_historical_main()`, `_compute_strategy_pnl_from_prices()`, `PortfolioStore.get_snapshots_for_date()`, `MFStore.get_nav_snapshots_for_date()`. 23 new tests (199 total, all green). **Day-change delta implemented**: `PortfolioStore.get_prev_snapshots()`, `MFStore.get_prev_nav_snapshots()`, `_build_prev_prices()`, `_compute_prev_mf_pnl()` added. `_print_combined_summary()` extended with optional `prev_snapshots`/`prev_mf_pnl` kwargs; shows MF P&L (inception) + Δday, ETF Δday, Options Δday, Total Δday when prior data exists; column silently omitted on first run. Both live and historical paths wired. 12 new tests (211 total, all green). |

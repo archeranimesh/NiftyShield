@@ -43,7 +43,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 # Pure-computation helpers only need these types at import time — no I/O.
-from src.portfolio.models import AssetType, Strategy  # noqa: E402
+from src.portfolio.models import AssetType, DailySnapshot, Strategy  # noqa: E402
 
 
 # ── Pure helper functions — no I/O, no side effects ──────────────
@@ -89,32 +89,104 @@ def _etf_cost_basis(strategies: list[Strategy]) -> Decimal:
     )
 
 
+def _build_prev_prices(
+    strategies: list[Strategy],
+    prev_snapshots: dict[int, DailySnapshot],
+) -> dict[str, float]:
+    """Build instrument_key → LTP dict from previous-day snapshots.
+
+    Uses the leg_id → instrument_key mapping derived from strategy legs to
+    translate the prev_snapshots keyed by leg_id into a prices dict keyed by
+    instrument_key — the same format used by _etf_current_value and
+    _compute_strategy_pnl_from_prices.
+
+    Args:
+        strategies: Strategy objects with DB-assigned leg IDs.
+        prev_snapshots: {leg_id: DailySnapshot} from get_prev_snapshots().
+
+    Returns:
+        {instrument_key: float(ltp)} for all legs that have a prev-day row.
+    """
+    leg_id_to_key: dict[int, str] = {
+        leg.id: leg.instrument_key
+        for strategy in strategies
+        for leg in strategy.legs
+        if leg.id is not None
+    }
+    return {
+        leg_id_to_key[leg_id]: float(snap.ltp)
+        for leg_id, snap in prev_snapshots.items()
+        if leg_id in leg_id_to_key
+    }
+
+
+def _compute_prev_mf_pnl(
+    prev_nav_snaps: list,  # list[MFNavSnapshot]
+    holdings: dict,        # dict[str, MFHolding]
+) -> object | None:
+    """Reconstruct a PortfolioPnL from stored NAV snapshots and current holdings.
+
+    Used by both live and historical paths to compute the previous day's MF
+    value for day-change delta. Imports are deferred (consistent with the
+    rest of the module).
+
+    Args:
+        prev_nav_snaps: NAV snapshots from the prior date.
+        holdings: Current net holdings from MFStore.get_holdings().
+
+    Returns:
+        PortfolioPnL for the prior date, or None if no matching schemes.
+    """
+    from src.mf.tracker import _aggregate, _scheme_pnl  # noqa: PLC2701
+
+    if not prev_nav_snaps or not holdings:
+        return None
+    schemes = [
+        _scheme_pnl(holdings[s.amfi_code], s.nav)
+        for s in prev_nav_snaps
+        if s.amfi_code in holdings
+    ]
+    if not schemes:
+        return None
+    return _aggregate(prev_nav_snaps[0].snapshot_date, schemes)
+
+
 def _print_combined_summary(
     strategies: list[Strategy],
     prices: dict[str, float],
     strategy_pnls: dict[str, object],
     mf_pnl: object | None,
+    prev_snapshots: dict[int, DailySnapshot] | None = None,
+    prev_mf_pnl: object | None = None,
 ) -> None:
     """Print the combined portfolio value across MF, ETF, and options.
 
+    When prev_snapshots / prev_mf_pnl are supplied (non-empty), a Δday column
+    is appended to the MF, ETF, and Options lines showing the change vs the
+    most recent prior snapshot.  If no prev data is available the Δday column
+    is omitted entirely — no zeros, no dashes.
+
     Args:
         strategies: All loaded Strategy objects.
-        prices: instrument_key → LTP.
+        prices: instrument_key → LTP (current day).
         strategy_pnls: strategy name → StrategyPnL (from compute_pnl).
         mf_pnl: Completed MF PortfolioPnL, or None if the MF fetch failed.
+        prev_snapshots: {leg_id: DailySnapshot} from get_prev_snapshots(), or None.
+        prev_mf_pnl: PortfolioPnL for the prior date, or None.
     """
     etf_value = _etf_current_value(strategies, prices)
     etf_basis = _etf_cost_basis(strategies)
 
     # Options net P&L — sign already correct for short legs in compute_pnl
     options_pnl = sum(
-        (p.total_pnl for p in strategy_pnls.values() if p),
+        (p.total_pnl for p in strategy_pnls.values() if p),  # type: ignore[union-attr]
         Decimal("0"),
     )
 
     mf_value = mf_pnl.total_current_value if mf_pnl else Decimal("0")  # type: ignore[union-attr]
     mf_invested = mf_pnl.total_invested if mf_pnl else Decimal("0")  # type: ignore[union-attr]
     mf_pnl_amt = mf_pnl.total_pnl if mf_pnl else Decimal("0")  # type: ignore[union-attr]
+    mf_pnl_pct = mf_pnl.total_pnl_pct if mf_pnl else None  # type: ignore[union-attr]
 
     total_value = mf_value + etf_value + options_pnl
     total_invested = mf_invested + etf_basis
@@ -125,16 +197,56 @@ def _print_combined_summary(
         else Decimal("0")
     )
 
-    mf_label = f"₹{mf_value:>14,.0f}" if mf_pnl else "         [failed]"
+    # ── Day-change deltas (omitted entirely when prev data unavailable) ──
+    etf_day_delta: Decimal | None = None
+    options_day_delta: Decimal | None = None
+    mf_day_delta: Decimal | None = None
+
+    if prev_snapshots:
+        prev_prices = _build_prev_prices(strategies, prev_snapshots)
+        prev_etf_value = _etf_current_value(strategies, prev_prices)
+        prev_prices_dec = {k: Decimal(str(v)) for k, v in prev_prices.items()}
+        prev_options_pnl = sum(
+            (_compute_strategy_pnl_from_prices(s, prev_prices_dec).total_pnl
+             for s in strategies),
+            Decimal("0"),
+        )
+        etf_day_delta = etf_value - prev_etf_value
+        options_day_delta = options_pnl - prev_options_pnl
+
+    if prev_mf_pnl is not None and mf_pnl is not None:
+        mf_day_delta = mf_value - prev_mf_pnl.total_current_value  # type: ignore[union-attr]
+
+    # Total day delta: sum all non-None components; omit line if nothing available
+    any_delta = etf_day_delta is not None or mf_day_delta is not None
+    total_day_delta: Decimal | None = None
+    if any_delta:
+        total_day_delta = (
+            (mf_day_delta or Decimal("0"))
+            + (etf_day_delta or Decimal("0"))
+            + (options_day_delta or Decimal("0"))
+        )
+
+    # ── Format helpers ────────────────────────────────────────────
+    def _delta(d: Decimal | None) -> str:
+        return f"  Δday: {d:>+12,.0f}" if d is not None else ""
+
+    # ── Output ────────────────────────────────────────────────────
     print()
     print("  ── Combined Portfolio ─────────────────────────────────")
-    print(f"  MF current value    : {mf_label}")
-    print(f"  ETF current value   : ₹{etf_value:>14,.0f}  (basis ₹{etf_basis:,.0f})")
-    print(f"  Options net P&L     : ₹{options_pnl:>+14,.0f}")
+
+    if mf_pnl:
+        mf_pnl_str = f"  P&L: {mf_pnl_amt:>+11,.0f} ({mf_pnl_pct:+}%)"
+        print(f"  MF current value    : ₹{mf_value:>14,.0f}{_delta(mf_day_delta)}{mf_pnl_str}")
+    else:
+        print(f"  MF current value    :          [failed]{_delta(mf_day_delta)}")
+
+    print(f"  ETF current value   : ₹{etf_value:>14,.0f}{_delta(etf_day_delta)}  (basis ₹{etf_basis:,.0f})")
+    print(f"  Options net P&L     : {options_pnl:>+15,.0f}{_delta(options_day_delta)}")
     print("  ───────────────────────────────────────────────────────")
-    print(f"  Total value         : ₹{total_value:>14,.0f}")
+    print(f"  Total value         : ₹{total_value:>14,.0f}{_delta(total_day_delta)}")
     print(f"  Total invested      : ₹{total_invested:>14,.0f}")
-    print(f"  Total P&L           : ₹{total_pnl:>+14,.0f}  ({total_pnl_pct:+}%)")
+    print(f"  Total P&L           : {total_pnl:>+15,.0f}  ({total_pnl_pct:+}%)")
     if not mf_pnl:
         print("  NOTE: MF fetch failed — MF value excluded from total")
 
@@ -211,6 +323,8 @@ def _historical_main(snap_date: date, db_path: Path) -> int:
         print("  Run without --date to record a live snapshot first.")
         return 1
 
+    prev_snapshots = store.get_prev_snapshots(snap_date)
+
     # Build instrument_key → LTP from stored snapshots
     leg_id_to_key: dict[int, str] = {
         leg.id: leg.instrument_key  # type: ignore[misc]
@@ -247,6 +361,7 @@ def _historical_main(snap_date: date, db_path: Path) -> int:
 
     # MF P&L from stored NAV snapshots
     mf_pnl: PortfolioPnL | None = None
+    prev_mf_pnl: object | None = None
     mf_store = MFStore(db_path)
     nav_snaps = mf_store.get_nav_snapshots_for_date(snap_date)
     if nav_snaps:
@@ -263,10 +378,17 @@ def _historical_main(snap_date: date, db_path: Path) -> int:
                 f"₹{mf_pnl.total_current_value:,.0f}  "
                 f"P&L {mf_pnl.total_pnl:+,.0f} ({mf_pnl.total_pnl_pct:+}%)"
             )
+        # Previous day's MF value for day-change delta
+        prev_nav_snaps = mf_store.get_prev_nav_snapshots(snap_date)
+        prev_mf_pnl = _compute_prev_mf_pnl(prev_nav_snaps, holdings)
     else:
         print(f"  No MF NAV snapshots found for {snap_date.isoformat()}.")
 
-    _print_combined_summary(strategies, prices, strategy_pnls, mf_pnl)
+    _print_combined_summary(
+        strategies, prices, strategy_pnls, mf_pnl,
+        prev_snapshots=prev_snapshots,
+        prev_mf_pnl=prev_mf_pnl,
+    )
     print("\n  Done.")
     return 0
 
@@ -311,6 +433,9 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
     if not strategies:
         print("  ERROR: No strategies found in DB. Run seed_portfolio first.")
         return 1
+
+    # Fetch prev-day snapshots early (before LTP fetch) — pure DB read, no network
+    prev_snapshots = store.get_prev_snapshots(snap_date)
 
     # ── Initialize market client ─────────────────────────────────
     try:
@@ -368,6 +493,7 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
 
     # ── MF portfolio snapshot (non-fatal) ─────────────────────────
     mf_pnl = None
+    prev_mf_pnl: object | None = None
     try:
         mf_store = MFStore(db_path)
         mf_pnl = MFTracker(mf_store).record_snapshot(snap_date)
@@ -381,11 +507,19 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
             print(
                 "  MF portfolio: no holdings — skipped (run seed_mf_holdings.py first)"
             )
+        # Previous day's MF value for day-change delta (non-fatal)
+        prev_nav_snaps = mf_store.get_prev_nav_snapshots(snap_date)
+        holdings = mf_store.get_holdings()
+        prev_mf_pnl = _compute_prev_mf_pnl(prev_nav_snaps, holdings)
     except Exception as e:  # noqa: BLE001
         print(f"  WARNING: MF snapshot failed — {e}")
 
     # ── Combined portfolio summary ────────────────────────────────
-    _print_combined_summary(strategies, prices, strategy_pnls, mf_pnl)
+    _print_combined_summary(
+        strategies, prices, strategy_pnls, mf_pnl,
+        prev_snapshots=prev_snapshots,
+        prev_mf_pnl=prev_mf_pnl,
+    )
 
     print("\n  Done.")
     return 0

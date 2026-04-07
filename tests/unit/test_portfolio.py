@@ -264,6 +264,55 @@ class TestPortfolioStore:
         result = tmp_store.get_snapshots_for_date(date(2026, 4, 7))
         assert result[leg_id].underlying_price == Decimal("23500.50")
 
+    # ── get_prev_snapshots ───────────────────────────────────────
+
+    def test_get_prev_snapshots_returns_most_recent_prior_date(self, tmp_store):
+        """Returns the nearest prior day's snapshots, not the queried date."""
+        s = Strategy(name="prev", legs=[_make_leg(Direction.BUY, 100.0, 1)])
+        tmp_store.upsert_strategy(s)
+        leg_id = tmp_store.get_strategy("prev").legs[0].id
+
+        tmp_store.record_snapshots_bulk([
+            DailySnapshot(leg_id=leg_id, snapshot_date=date(2026, 4, 6), ltp=Decimal("95")),
+            DailySnapshot(leg_id=leg_id, snapshot_date=date(2026, 4, 7), ltp=Decimal("100")),
+        ])
+
+        result = tmp_store.get_prev_snapshots(date(2026, 4, 7))
+        assert set(result.keys()) == {leg_id}
+        assert result[leg_id].ltp == Decimal("95")
+
+    def test_get_prev_snapshots_skips_gap_handles_weekend(self, tmp_store):
+        """Calendar gaps (weekend / holiday) are handled — returns Friday when queried on Monday."""
+        s = Strategy(name="gap", legs=[_make_leg(Direction.SELL, 200.0, 5)])
+        tmp_store.upsert_strategy(s)
+        leg_id = tmp_store.get_strategy("gap").legs[0].id
+
+        # Friday snapshot only — simulates Monday query with no Saturday/Sunday rows
+        tmp_store.record_snapshot(
+            DailySnapshot(leg_id=leg_id, snapshot_date=date(2026, 4, 3), ltp=Decimal("190"))
+        )
+
+        result = tmp_store.get_prev_snapshots(date(2026, 4, 6))  # Monday
+        assert result[leg_id].ltp == Decimal("190")
+
+    def test_get_prev_snapshots_excludes_same_date(self, tmp_store):
+        """The reference date itself must not appear in the result."""
+        s = Strategy(name="same", legs=[_make_leg(Direction.BUY, 50.0, 1)])
+        tmp_store.upsert_strategy(s)
+        leg_id = tmp_store.get_strategy("same").legs[0].id
+
+        tmp_store.record_snapshot(
+            DailySnapshot(leg_id=leg_id, snapshot_date=date(2026, 4, 7), ltp=Decimal("55"))
+        )
+
+        result = tmp_store.get_prev_snapshots(date(2026, 4, 7))
+        assert result == {}
+
+    def test_get_prev_snapshots_empty_when_no_prior_data(self, tmp_store):
+        """Returns empty dict when no snapshots exist before the reference date."""
+        result = tmp_store.get_prev_snapshots(date(2026, 4, 6))
+        assert result == {}
+
 
 # ── Tracker tests ────────────────────────────────────────────────
 

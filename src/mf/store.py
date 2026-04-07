@@ -309,6 +309,34 @@ class MFStore:
             ).fetchall()
             return [self._row_to_nav_snapshot(r) for r in rows]
 
+    def get_prev_nav_snapshots(self, d: date) -> list[MFNavSnapshot]:
+        """Return all NAV snapshots for the most recent date strictly before d.
+
+        Uses MAX(snapshot_date) < d — calendar-agnostic, handles weekends and
+        holidays identically to PortfolioStore.get_prev_snapshots.
+
+        Args:
+            d: Reference date (usually today). Looks for the nearest prior date.
+
+        Returns:
+            All MFNavSnapshot rows for the prior date, ordered by amfi_code.
+            Empty list if no prior snapshots exist.
+        """
+        with _connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT MAX(snapshot_date) AS prev_date FROM mf_nav_snapshots"
+                " WHERE snapshot_date < ?",
+                (d.isoformat(),),
+            ).fetchone()
+            if not row or not row["prev_date"]:
+                return []
+            rows = conn.execute(
+                "SELECT * FROM mf_nav_snapshots WHERE snapshot_date = ?"
+                " ORDER BY amfi_code",
+                (row["prev_date"],),
+            ).fetchall()
+            return [self._row_to_nav_snapshot(r) for r in rows]
+
     def get_latest_nav(self, amfi_code: str) -> MFNavSnapshot | None:
         """Return the most recent NAV snapshot for a scheme.
 

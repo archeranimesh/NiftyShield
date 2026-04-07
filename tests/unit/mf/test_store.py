@@ -525,3 +525,38 @@ def test_get_nav_snapshots_for_date_ordered_by_amfi_code(store: MFStore) -> None
     results = store.get_nav_snapshots_for_date(target)
     assert results[0].amfi_code == "100000"
     assert results[1].amfi_code == "200000"
+
+
+# ── get_prev_nav_snapshots ────────────────────────────────────────
+
+
+def test_get_prev_nav_snapshots_returns_nearest_prior_date(store: MFStore) -> None:
+    """Returns snapshots for the most recent date strictly before d."""
+    store.upsert_nav_snapshot(make_nav(snapshot_date=date(2026, 4, 6), nav="80.00"))
+    store.upsert_nav_snapshot(make_nav(snapshot_date=date(2026, 4, 7), nav="81.00"))
+
+    results = store.get_prev_nav_snapshots(date(2026, 4, 7))
+    assert len(results) == 1
+    assert results[0].nav == Decimal("80.00")
+    assert results[0].snapshot_date == date(2026, 4, 6)
+
+
+def test_get_prev_nav_snapshots_skips_gap_weekend(store: MFStore) -> None:
+    """Friday snapshot is returned when queried on Monday (no Sat/Sun rows)."""
+    store.upsert_nav_snapshot(make_nav(snapshot_date=date(2026, 4, 3), nav="79.50"))  # Fri
+
+    results = store.get_prev_nav_snapshots(date(2026, 4, 6))  # Mon
+    assert len(results) == 1
+    assert results[0].nav == Decimal("79.50")
+
+
+def test_get_prev_nav_snapshots_excludes_same_date(store: MFStore) -> None:
+    """The reference date itself must not appear in the result."""
+    store.upsert_nav_snapshot(make_nav(snapshot_date=date(2026, 4, 7), nav="82.00"))
+
+    assert store.get_prev_nav_snapshots(date(2026, 4, 7)) == []
+
+
+def test_get_prev_nav_snapshots_empty_when_no_prior_data(store: MFStore) -> None:
+    """Returns empty list when no snapshots exist before the reference date."""
+    assert store.get_prev_nav_snapshots(date(2026, 4, 6)) == []

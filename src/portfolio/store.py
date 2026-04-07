@@ -335,6 +335,34 @@ class PortfolioStore:
             ).fetchall()
             return {r["leg_id"]: self._row_to_snapshot(r) for r in rows}
 
+    def get_prev_snapshots(self, d: date) -> dict[int, DailySnapshot]:
+        """Return all leg snapshots for the most recent date strictly before d.
+
+        Uses MAX(snapshot_date) < d — calendar-agnostic and handles weekends
+        or holidays without any date arithmetic. If today is Monday, this
+        returns Friday's snapshots automatically.
+
+        Args:
+            d: Reference date (usually today). Looks for the nearest prior date.
+
+        Returns:
+            {leg_id: DailySnapshot} for the prior date, or empty dict if no
+            prior snapshots exist.
+        """
+        with _connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT MAX(snapshot_date) AS prev_date FROM daily_snapshots"
+                " WHERE snapshot_date < ?",
+                (d.isoformat(),),
+            ).fetchone()
+            if not row or not row["prev_date"]:
+                return {}
+            rows = conn.execute(
+                "SELECT * FROM daily_snapshots WHERE snapshot_date = ?",
+                (row["prev_date"],),
+            ).fetchall()
+            return {r["leg_id"]: self._row_to_snapshot(r) for r in rows}
+
     def get_latest_snapshot_date(self) -> date | None:
         """Return the most recent snapshot date across all legs."""
         with _connect(self.db_path) as conn:

@@ -16,7 +16,11 @@ from pathlib import Path
 
 import pytest
 
-from scripts.daily_snapshot import _compute_strategy_pnl_from_prices, _historical_main
+from scripts.daily_snapshot import (
+    _build_prev_prices,
+    _compute_strategy_pnl_from_prices,
+    _historical_main,
+)
 from src.mf.models import MFNavSnapshot
 from src.mf.store import MFStore
 from src.portfolio.models import (
@@ -225,3 +229,55 @@ class TestHistoricalMain:
     ) -> None:
         _historical_main(date(2026, 4, 6), db_path)
         assert "Done" in capsys.readouterr().out
+
+    def test_day_change_delta_shown_when_prev_snapshot_exists(
+        self, seeded_store: PortfolioStore, db_path: Path, capsys: pytest.CaptureFixture
+    ) -> None:
+        """When a prior-date snapshot exists, Δday appears in the combined summary."""
+        legs = seeded_store.get_strategy("ILTS").legs  # type: ignore[union-attr]
+        seeded_store.record_snapshot(
+            DailySnapshot(
+                leg_id=legs[0].id,
+                snapshot_date=date(2026, 4, 7),
+                ltp=Decimal("820.00"),
+                underlying_price=Decimal("23100.00"),
+            )
+        )
+        _historical_main(date(2026, 4, 7), db_path)
+        out = capsys.readouterr().out
+        assert "Δday" in out
+
+    def test_day_change_delta_omitted_when_no_prior_snapshot(
+        self, seeded_store: PortfolioStore, db_path: Path, capsys: pytest.CaptureFixture
+    ) -> None:
+        """When no prior date exists (first ever run), Δday must NOT appear."""
+        _historical_main(date(2026, 4, 6), db_path)
+        assert "Δday" not in capsys.readouterr().out
+
+
+# ── _build_prev_prices ────────────────────────────────────────────
+
+
+class TestBuildPrevPrices:
+    def test_maps_leg_id_to_instrument_key(self, db_path: Path) -> None:
+        """Leg IDs from prev_snapshots are translated to instrument keys."""
+        store = PortfolioStore(db_path)
+        legs = _seed_strategy(
+            store, "bp_test", [_make_leg("NSE_FO|999", Direction.SELL, "500.00", 65)]
+        )
+        leg_id = legs[0].id
+
+        prev = {leg_id: DailySnapshot(leg_id=leg_id, snapshot_date=date(2026, 4, 6), ltp=Decimal("490"))}
+        strategies = store.get_all_strategies()
+        result = _build_prev_prices(strategies, prev)
+        assert result == {"NSE_FO|999": 490.0}
+
+    def test_ignores_leg_ids_not_in_strategies(self, db_path: Path) -> None:
+        """Snapshot leg_ids with no matching strategy leg are silently dropped."""
+        store = PortfolioStore(db_path)
+        _seed_strategy(store, "bp_ignore", [_make_leg("NSE_FO|1", Direction.BUY, "100.00", 10)])
+        orphan_id = 9999  # not a real leg in the DB
+        prev = {orphan_id: DailySnapshot(leg_id=orphan_id, snapshot_date=date(2026, 4, 6), ltp=Decimal("50"))}
+        strategies = store.get_all_strategies()
+        result = _build_prev_prices(strategies, prev)
+        assert result == {}
