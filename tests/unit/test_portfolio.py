@@ -205,6 +205,65 @@ class TestPortfolioStore:
         )
         assert tmp_store.get_latest_snapshot_date() == date(2026, 4, 5)
 
+    # ── get_snapshots_for_date ───────────────────────────────────
+
+    def test_get_snapshots_for_date_returns_correct_leg_ids(self, tmp_store):
+        """Snapshots for the queried date are returned keyed by leg_id."""
+        s = Strategy(name="hist", legs=[
+            _make_leg(Direction.BUY, 100.0, 10),
+            _make_leg(Direction.SELL, 200.0, 5),
+        ])
+        tmp_store.upsert_strategy(s)
+        legs = tmp_store.get_strategy("hist").legs
+        leg_a, leg_b = legs[0].id, legs[1].id
+
+        tmp_store.record_snapshots_bulk([
+            DailySnapshot(leg_id=leg_a, snapshot_date=date(2026, 4, 6), ltp=Decimal("110")),
+            DailySnapshot(leg_id=leg_b, snapshot_date=date(2026, 4, 6), ltp=Decimal("190")),
+        ])
+
+        result = tmp_store.get_snapshots_for_date(date(2026, 4, 6))
+        assert set(result.keys()) == {leg_a, leg_b}
+        assert result[leg_a].ltp == Decimal("110")
+        assert result[leg_b].ltp == Decimal("190")
+
+    def test_get_snapshots_for_date_excludes_other_dates(self, tmp_store):
+        """Snapshots from other dates must not appear in the result."""
+        s = Strategy(name="excl", legs=[_make_leg(Direction.BUY, 50.0, 1)])
+        tmp_store.upsert_strategy(s)
+        leg_id = tmp_store.get_strategy("excl").legs[0].id
+
+        tmp_store.record_snapshots_bulk([
+            DailySnapshot(leg_id=leg_id, snapshot_date=date(2026, 4, 6), ltp=Decimal("55")),
+            DailySnapshot(leg_id=leg_id, snapshot_date=date(2026, 4, 7), ltp=Decimal("60")),
+        ])
+
+        result = tmp_store.get_snapshots_for_date(date(2026, 4, 6))
+        assert len(result) == 1
+        assert result[leg_id].ltp == Decimal("55")
+
+    def test_get_snapshots_for_date_empty_when_no_data(self, tmp_store):
+        """Returns an empty dict when no snapshots exist for the requested date."""
+        result = tmp_store.get_snapshots_for_date(date(2026, 4, 6))
+        assert result == {}
+
+    def test_get_snapshots_for_date_preserves_underlying_price(self, tmp_store):
+        """underlying_price stored in the snapshot is returned faithfully."""
+        s = Strategy(name="up", legs=[_make_leg(Direction.BUY, 100.0, 1)])
+        tmp_store.upsert_strategy(s)
+        leg_id = tmp_store.get_strategy("up").legs[0].id
+
+        tmp_store.record_snapshot(
+            DailySnapshot(
+                leg_id=leg_id,
+                snapshot_date=date(2026, 4, 7),
+                ltp=Decimal("105"),
+                underlying_price=Decimal("23500.50"),
+            )
+        )
+        result = tmp_store.get_snapshots_for_date(date(2026, 4, 7))
+        assert result[leg_id].underlying_price == Decimal("23500.50")
+
 
 # ── Tracker tests ────────────────────────────────────────────────
 

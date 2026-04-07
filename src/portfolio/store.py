@@ -315,6 +315,26 @@ class PortfolioStore:
             if leg.id is not None
         }
 
+    def get_snapshots_for_date(self, d: date) -> dict[int, DailySnapshot]:
+        """Return all leg snapshots recorded on a specific date, keyed by leg_id.
+
+        Used by the historical query path in daily_snapshot.py to reconstruct
+        P&L from stored LTPs without any live API call.
+
+        Args:
+            d: The snapshot date to query.
+
+        Returns:
+            {leg_id: DailySnapshot} for every leg that has a row on that date.
+            Empty dict if no snapshots exist for the date.
+        """
+        with _connect(self.db_path) as conn:
+            rows = conn.execute(
+                "SELECT * FROM daily_snapshots WHERE snapshot_date = ?",
+                (d.isoformat(),),
+            ).fetchall()
+            return {r["leg_id"]: self._row_to_snapshot(r) for r in rows}
+
     def get_latest_snapshot_date(self) -> date | None:
         """Return the most recent snapshot date across all legs."""
         with _connect(self.db_path) as conn:

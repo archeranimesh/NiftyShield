@@ -1,21 +1,28 @@
 """Record daily price snapshots for all portfolio strategies.
 
-Fetches live LTPs from Upstox V3 API, records to SQLite, exits.
-Designed for cron — no interactive prompts, returns exit code 0/1.
+Two modes of operation:
+  Live mode (default, no --date):
+    Fetches live LTPs from Upstox V3 API, records to SQLite, exits.
+    Designed for cron — no interactive prompts, returns exit code 0/1.
+
+  Historical mode (--date YYYY-MM-DD):
+    Reads already-recorded daily_snapshots and mf_nav_snapshots rows for that
+    date from the local SQLite DB and prints the P&L summary. No API calls,
+    no network, no .env required. Useful for reviewing past snapshots.
 
 Import design:
     Only stdlib and the pure-computation helpers' types are imported at module
     level (Decimal, Path, Strategy, AssetType). All I/O-triggering imports
-    (dotenv, UpstoxMarketClient, stores, tracker) are deferred to _async_main()
-    so that the pure helper functions are importable in tests with no side
-    effects — no .env required, no network, no DB.
+    (dotenv, UpstoxMarketClient, stores, tracker) are deferred into the
+    _async_main() / _historical_main() functions so that the pure helper
+    functions are importable in tests with no side effects.
 
 Usage:
-    # Record today's snapshot
+    # Record today's snapshot (live fetch)
     python -m scripts.daily_snapshot
 
-    # Record for a specific date (backfill)
-    python -m scripts.daily_snapshot --date 2026-04-01
+    # Query stored P&L for a past date (no API call)
+    python -m scripts.daily_snapshot --date 2026-04-06
 
     # Custom DB path
     python -m scripts.daily_snapshot --db-path data/portfolio/portfolio.sqlite
@@ -130,6 +137,138 @@ def _print_combined_summary(
     print(f"  Total P&L           : ₹{total_pnl:>+14,.0f}  ({total_pnl_pct:+}%)")
     if not mf_pnl:
         print("  NOTE: MF fetch failed — MF value excluded from total")
+
+
+# ── Pure helper — no I/O, importable in tests ────────────────────
+
+
+def _compute_strategy_pnl_from_prices(
+    strategy: "Strategy", prices: "dict[str, Decimal]"
+) -> "StrategyPnL":
+    """Compute StrategyPnL from a pre-built prices dict (no live fetch).
+
+    Used by the historical query path to reconstruct P&L from stored LTPs
+    without touching the market client.
+
+    Args:
+        strategy: Strategy object with legs already loaded.
+        prices: instrument_key → Decimal LTP. Falls back to leg.entry_price
+            when a key is absent (same fallback as PortfolioTracker.compute_pnl).
+
+    Returns:
+        StrategyPnL with per-leg breakdown.
+    """
+    from src.portfolio.tracker import LegPnL, StrategyPnL
+
+    leg_pnls = []
+    for leg in strategy.legs:
+        ltp = prices.get(leg.instrument_key, leg.entry_price)
+        leg_pnls.append(
+            LegPnL(
+                leg=leg,
+                current_price=ltp,
+                pnl=leg.pnl(ltp),
+                pnl_percent=leg.pnl_percent(ltp),
+            )
+        )
+    return StrategyPnL(strategy_name=strategy.name, legs=leg_pnls)
+
+
+# ── Historical query path — reads from DB, no API calls ──────────
+
+
+def _historical_main(snap_date: date, db_path: Path) -> int:
+    """Query stored snapshots for a past date and print the P&L summary.
+
+    Reads daily_snapshots and mf_nav_snapshots rows that were already written
+    by a previous live run. No network, no .env, no API token required.
+
+    Args:
+        snap_date: The date to query stored snapshots for.
+        db_path: Path to the SQLite database.
+
+    Returns:
+        Exit code: 0 for success, 1 for any fatal error.
+    """
+    from src.mf.store import MFStore
+    from src.mf.tracker import PortfolioPnL, _aggregate, _scheme_pnl  # noqa: PLC2701
+    from src.portfolio.store import PortfolioStore
+
+    if not db_path.exists():
+        print(f"  ERROR: DB not found at {db_path}")
+        print("  Run 'python -m scripts.seed_portfolio' first.")
+        return 1
+
+    store = PortfolioStore(db_path)
+    strategies = store.get_all_strategies()
+    if not strategies:
+        print("  ERROR: No strategies found in DB. Run seed_portfolio first.")
+        return 1
+
+    snapshots_by_leg = store.get_snapshots_for_date(snap_date)
+    if not snapshots_by_leg:
+        print(f"  ERROR: No snapshots found for {snap_date.isoformat()}.")
+        print("  Run without --date to record a live snapshot first.")
+        return 1
+
+    # Build instrument_key → LTP from stored snapshots
+    leg_id_to_key: dict[int, str] = {
+        leg.id: leg.instrument_key  # type: ignore[misc]
+        for strategy in strategies
+        for leg in strategy.legs
+        if leg.id is not None
+    }
+    prices: dict[str, float] = {
+        leg_id_to_key[leg_id]: float(snap.ltp)
+        for leg_id, snap in snapshots_by_leg.items()
+        if leg_id in leg_id_to_key
+    }
+
+    # Nifty spot — pick from any snapshot that stored it
+    underlying_price = next(
+        (float(s.underlying_price) for s in snapshots_by_leg.values() if s.underlying_price),
+        None,
+    )
+    if underlying_price:
+        print(f"  Nifty spot (stored): {underlying_price:,.2f}")
+    else:
+        print("  Nifty spot: not recorded for this date.")
+
+    # Compute P&L for each strategy from stored prices
+    decimal_prices = {k: Decimal(str(v)) for k, v in prices.items()}
+    strategy_pnls: dict[str, object] = {}
+    for strategy in strategies:
+        pnl = _compute_strategy_pnl_from_prices(strategy, decimal_prices)
+        strategy_pnls[strategy.name] = pnl
+        print(
+            f"    {strategy.name}: "
+            f"P&L: {pnl.total_pnl:+,.0f} ({pnl.total_pnl_percent:+.2f}%)"
+        )
+
+    # MF P&L from stored NAV snapshots
+    mf_pnl: PortfolioPnL | None = None
+    mf_store = MFStore(db_path)
+    nav_snaps = mf_store.get_nav_snapshots_for_date(snap_date)
+    if nav_snaps:
+        holdings = mf_store.get_holdings()
+        schemes = [
+            _scheme_pnl(holdings[s.amfi_code], s.nav)
+            for s in nav_snaps
+            if s.amfi_code in holdings
+        ]
+        mf_pnl = _aggregate(snap_date, schemes) if schemes else None
+        if mf_pnl and mf_pnl.schemes:
+            print(
+                f"  MF portfolio ({len(mf_pnl.schemes)} schemes): "
+                f"₹{mf_pnl.total_current_value:,.0f}  "
+                f"P&L {mf_pnl.total_pnl:+,.0f} ({mf_pnl.total_pnl_pct:+}%)"
+            )
+    else:
+        print(f"  No MF NAV snapshots found for {snap_date.isoformat()}.")
+
+    _print_combined_summary(strategies, prices, strategy_pnls, mf_pnl)
+    print("\n  Done.")
+    return 0
 
 
 # ── I/O-heavy entrypoint — all network/DB imports are local ──────
@@ -253,7 +392,9 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Record daily portfolio snapshots")
+    parser = argparse.ArgumentParser(
+        description="Record daily portfolio snapshots or query historical P&L"
+    )
     parser.add_argument(
         "--db-path",
         type=Path,
@@ -264,14 +405,22 @@ def main() -> int:
         "--date",
         type=str,
         default=None,
-        help="Snapshot date as YYYY-MM-DD (defaults to today)",
+        help=(
+            "YYYY-MM-DD: query stored P&L for that date (no API call). "
+            "Omit to run a live snapshot for today."
+        ),
     )
     args = parser.parse_args()
 
-    snap_date = date.fromisoformat(args.date) if args.date else date.today()
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{now}] Daily snapshot for {snap_date.isoformat()}")
 
+    if args.date:
+        snap_date = date.fromisoformat(args.date)
+        print(f"[{now}] Historical P&L query for {snap_date.isoformat()}")
+        return _historical_main(snap_date, args.db_path)
+
+    snap_date = date.today()
+    print(f"[{now}] Daily snapshot for {snap_date.isoformat()}")
     return asyncio.run(_async_main(snap_date, args.db_path))
 
 

@@ -478,3 +478,50 @@ def test_nav_decimal_precision_preserved(store: MFStore) -> None:
     result = store.get_latest_nav("122640")
     assert result is not None
     assert result.nav == Decimal(precise_nav)
+
+
+# ── get_nav_snapshots_for_date ────────────────────────────────────
+
+
+def test_get_nav_snapshots_for_date_returns_all_schemes(store: MFStore) -> None:
+    """All schemes that have a snapshot on the queried date are returned."""
+    target = date(2026, 4, 6)
+    store.upsert_nav_snapshot(make_nav(amfi_code="122640", snapshot_date=target, nav="80.00"))
+    store.upsert_nav_snapshot(
+        make_nav(
+            amfi_code="104481",
+            scheme_name="DSP Midcap Fund - Reg Gr",
+            snapshot_date=target,
+            nav="92.50",
+        )
+    )
+    results = store.get_nav_snapshots_for_date(target)
+    assert len(results) == 2
+    codes = {s.amfi_code for s in results}
+    assert codes == {"122640", "104481"}
+
+
+def test_get_nav_snapshots_for_date_excludes_other_dates(store: MFStore) -> None:
+    """Snapshots from other dates must not appear."""
+    store.upsert_nav_snapshot(make_nav(snapshot_date=date(2026, 4, 5), nav="79.00"))
+    store.upsert_nav_snapshot(make_nav(snapshot_date=date(2026, 4, 6), nav="80.00"))
+    results = store.get_nav_snapshots_for_date(date(2026, 4, 6))
+    assert len(results) == 1
+    assert results[0].nav == Decimal("80.00")
+
+
+def test_get_nav_snapshots_for_date_empty_when_no_data(store: MFStore) -> None:
+    """Returns empty list when no snapshots exist for the date."""
+    assert store.get_nav_snapshots_for_date(date(2026, 4, 6)) == []
+
+
+def test_get_nav_snapshots_for_date_ordered_by_amfi_code(store: MFStore) -> None:
+    """Results are ordered by amfi_code ascending."""
+    target = date(2026, 4, 6)
+    store.upsert_nav_snapshot(
+        make_nav(amfi_code="200000", scheme_name="Z Fund", snapshot_date=target, nav="50.00")
+    )
+    store.upsert_nav_snapshot(make_nav(amfi_code="100000", snapshot_date=target, nav="60.00"))
+    results = store.get_nav_snapshots_for_date(target)
+    assert results[0].amfi_code == "100000"
+    assert results[1].amfi_code == "200000"

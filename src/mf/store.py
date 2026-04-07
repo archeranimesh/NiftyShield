@@ -289,6 +289,26 @@ class MFStore:
             rows = conn.execute(query, params).fetchall()
             return [self._row_to_nav_snapshot(r) for r in rows]
 
+    def get_nav_snapshots_for_date(self, d: date) -> list[MFNavSnapshot]:
+        """Return all NAV snapshots recorded on a specific date.
+
+        Used by the historical query path in daily_snapshot.py to reconstruct
+        MF P&L from stored NAVs without fetching from AMFI.
+
+        Args:
+            d: The snapshot date to query.
+
+        Returns:
+            All MFNavSnapshot rows for that date, ordered by amfi_code.
+            Empty list if no snapshots exist for the date.
+        """
+        with _connect(self.db_path) as conn:
+            rows = conn.execute(
+                "SELECT * FROM mf_nav_snapshots WHERE snapshot_date = ? ORDER BY amfi_code",
+                (d.isoformat(),),
+            ).fetchall()
+            return [self._row_to_nav_snapshot(r) for r in rows]
+
     def get_latest_nav(self, amfi_code: str) -> MFNavSnapshot | None:
         """Return the most recent NAV snapshot for a scheme.
 

@@ -43,7 +43,7 @@ src/
     └── upstox_market.py      # Sync requests client. V3 LTP endpoint. Pipe→colon key remap. Raises LTPFetchError on HTTP error / empty data.
 
 scripts/
-├── daily_snapshot.py         # Cron-ready CLI. Module-level imports are stdlib + portfolio.models only (no side effects). All I/O deferred into _async_main(). Fetches LTPs + Nifty spot, records snapshots, MF snapshot, prints combined P&L summary.
+├── daily_snapshot.py         # Two-mode CLI. Live mode (no --date): fetches LTPs + Nifty spot, records snapshots, prints P&L. Historical mode (--date YYYY-MM-DD): reads stored daily_snapshots + mf_nav_snapshots, computes P&L offline — no API call. Module-level imports stay stdlib + portfolio.models only; all I/O deferred.
 └── seed_mf_holdings.py       # One-time CLI. Inserts 11 INITIAL MF transactions. Idempotent. --dry-run flag.
 
 tests/
@@ -201,10 +201,10 @@ Before writing any code: read `CONTEXT.md`, state `CONTEXT.md ✓`, confirm file
 
 ## Immediate TODOs (in priority order)
 
-1. **daily_snapshot.py enhancements** — three changes in one commit:
+1. **daily_snapshot.py enhancements** — two remaining changes (date parameter done):
    - **Day-change delta in output**: query the most recent prior row from `daily_snapshots` + `mf_nav_snapshots` (use DB max date < today, not calendar arithmetic — handles weekends/holidays automatically). Display format: `current | Δday | inception` for both MF funds and options legs.
-   - **Date parameter** (`--date YYYY-MM-DD`): when provided, read from existing `daily_snapshots` + `mf_nav_snapshots` rows for that date and compute P&L from stored data — no live API fetch. Needs `PortfolioStore.get_snapshots_for_date(date)` and `MFStore.get_nav_snapshots_for_date(date)` read methods. When absent, current live-fetch behaviour is unchanged.
    - **Extract `PortfolioSummary`** frozen dataclass from inline computation in `daily_snapshot.py` into `src/portfolio/models.py` — prerequisite for visualization commit.
+   - ~~**Date parameter** (`--date YYYY-MM-DD`)~~ — **DONE** (2026-04-07): `_historical_main()` + `_compute_strategy_pnl_from_prices()` added. `PortfolioStore.get_snapshots_for_date()` + `MFStore.get_nav_snapshots_for_date()` added. 23 new tests.
 
 2. **Telegram bot notifications** — send formatted P&L summary to Telegram after each cron run. New module `src/notifications/telegram.py` using raw `requests` to the Bot API (no SDK dependency). Two new env vars: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`. Non-fatal: wrapped in `try/except`, Telegram failure logs a WARNING but does not abort the snapshot. Injected into `daily_snapshot.py` as an optional notifier (skipped if env vars absent). Message content: same formatted summary printed to stdout, not raw log lines.
 
@@ -263,7 +263,10 @@ All 11 codes verified against live AMFI flat file on 2026-04-04.
 - 12 unit tests in `tests/unit/mf/test_daily_snapshot_mf.py` — MF wire-up: schema coexistence, full seed→snapshot→aggregate path, empty holdings graceful return, nav_fetcher raise propagation, upsert idempotency
 - 8 unit tests in `tests/unit/test_client.py` — UpstoxMarketClient error propagation: LTPFetchError on connection error, timeout, HTTP 500, empty data, missing instrument_token; empty input returns {}; correct price mapping; LTPFetchError isinstance DataFetchError.
 - 11 unit tests in `tests/unit/mf/test_daily_snapshot_helpers.py` — `_etf_current_value` and `_etf_cost_basis` pure helpers; no sys.modules stubs needed — clean direct import since daily_snapshot.py defers all I/O imports.
-- **Total: 176 tests** — all offline, no API dependency
+- 23 unit tests in `tests/unit/test_daily_snapshot_historical.py` — `_compute_strategy_pnl_from_prices` pure helper (6 tests) + `_historical_main` DB-only path (9 tests): success/error exits, output content, MF absent/present paths.
+- 4 tests added to `tests/unit/test_portfolio.py` — `PortfolioStore.get_snapshots_for_date`: returns correct snapshots, excludes other dates, empty dict when no data, underlying_price preserved.
+- 4 tests added to `tests/unit/mf/test_store.py` — `MFStore.get_nav_snapshots_for_date`: all schemes returned, other dates excluded, empty list, ordered by amfi_code.
+- **Total: 199 tests** — all offline, no API dependency
 - `python -m pytest` is the confirmed invocation convention (adds CWD to sys.path automatically)
 - `python -m pytest tests/unit/` = full offline suite
 
@@ -274,4 +277,4 @@ All 11 codes verified against live AMFI flat file on 2026-04-04.
 | Date | What Changed |
 |---|---|
 | 2026-04-01 — 2026-04-04 | **Foundation sprint.** Auth, portfolio module, full MF stack (models/store/nav_fetcher/tracker), daily snapshot cron, seed scripts. All key decisions now in Architecture Decisions above. All 11 AMFI codes corrected against live AMFI flat file. 8-point code review applied (Decimal migration, shared db.py, enum compat, exception hierarchy, deferred I/O imports). 176 offline tests green. DB wiped and re-seeded; clean baseline from 2026-04-06. |
-| 2026-04-07 | Reviewed project state and next priorities. Day-change P&L identified as immediately unblocked (2+ snapshots now exist: April 6 + April 7). Scoped 3 new requirements: (1) daily_snapshot.py enhancements — day-change delta + date parameter + PortfolioSummary extraction; (2) Telegram bot notification via raw requests, non-fatal, injected optionally; (3) trade history + roll workflow before JUN expiry. Established CONTEXT.md session log hygiene: collapse absorbed entries, keep only recent 2–3 sessions verbatim. |
+| 2026-04-07 | Reviewed project state and next priorities. Day-change P&L identified as immediately unblocked (2+ snapshots now exist: April 6 + April 7). Scoped 3 new requirements: (1) daily_snapshot.py enhancements — day-change delta + date parameter + PortfolioSummary extraction; (2) Telegram bot notification via raw requests, non-fatal, injected optionally; (3) trade history + roll workflow before JUN expiry. Established CONTEXT.md session log hygiene: collapse absorbed entries, keep only recent 2–3 sessions verbatim. **--date YYYY-MM-DD historical query mode implemented**: `_historical_main()`, `_compute_strategy_pnl_from_prices()`, `PortfolioStore.get_snapshots_for_date()`, `MFStore.get_nav_snapshots_for_date()`. 23 new tests (199 total, all green). |
