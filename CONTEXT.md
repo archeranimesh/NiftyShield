@@ -6,7 +6,7 @@
 
 ---
 
-## Current State (as of 2026-04-04)
+## Current State (as of 2026-04-07)
 
 ### What Exists (committed and working)
 
@@ -195,13 +195,26 @@ Every code was replaced by grepping the live AMFI flat file.
 
 ---
 
+## Pre-Task Protocol (for AI assistants)
+
+Before writing any code: read `CONTEXT.md`, state `CONTEXT.md ✓`, confirm file scope, state a one-sentence plan. See `CLAUDE.md` for the full protocol.
+
 ## Immediate TODOs (in priority order)
 
-1. **Trade history + roll workflow** — `Trade` model, `TradeAction` enum, `trades` table in store, `scripts/roll_leg.py` CLI. Backfill OPEN trades for existing legs as baseline.
-2. **Greeks capture** — fix option chain call (`NSE_INDEX|Nifty 50`), define OptionChain Pydantic model, implement `_extract_greeks_from_chain()`
-3. **BrokerClient protocol layer** — `protocol.py`, `UpstoxLiveClient`, `MockBrokerClient`, factory — required before any new feature module
-4. **Day-change P&L in combined summary** — query `mf_nav_snapshots` for prior date, compute delta, display alongside inception P&L. Unblock after 2026-04-07.
-5. **P&L visualization** — matplotlib script or React dashboard from snapshot time series. `PortfolioSummary` frozen dataclass should be extracted from `daily_snapshot.py` into `src/portfolio/models.py` as part of this commit.
+1. **daily_snapshot.py enhancements** — three changes in one commit:
+   - **Day-change delta in output**: query the most recent prior row from `daily_snapshots` + `mf_nav_snapshots` (use DB max date < today, not calendar arithmetic — handles weekends/holidays automatically). Display format: `current | Δday | inception` for both MF funds and options legs.
+   - **Date parameter** (`--date YYYY-MM-DD`): when provided, read from existing `daily_snapshots` + `mf_nav_snapshots` rows for that date and compute P&L from stored data — no live API fetch. Needs `PortfolioStore.get_snapshots_for_date(date)` and `MFStore.get_nav_snapshots_for_date(date)` read methods. When absent, current live-fetch behaviour is unchanged.
+   - **Extract `PortfolioSummary`** frozen dataclass from inline computation in `daily_snapshot.py` into `src/portfolio/models.py` — prerequisite for visualization commit.
+
+2. **Telegram bot notifications** — send formatted P&L summary to Telegram after each cron run. New module `src/notifications/telegram.py` using raw `requests` to the Bot API (no SDK dependency). Two new env vars: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`. Non-fatal: wrapped in `try/except`, Telegram failure logs a WARNING but does not abort the snapshot. Injected into `daily_snapshot.py` as an optional notifier (skipped if env vars absent). Message content: same formatted summary printed to stdout, not raw log lines.
+
+3. **Trade history + roll workflow** — `Trade` model, `TradeAction` enum, `trades` table in store, `scripts/roll_leg.py` CLI. Backfill OPEN trades for existing legs as baseline. Required before JUN 2026 expiry roll (2026-06-30).
+
+4. **Greeks capture** — fix option chain call (`NSE_INDEX|Nifty 50`), define `OptionChain` Pydantic model, implement `_extract_greeks_from_chain()`. Fixture `nifty_chain_2026-04-07.json` already recorded — use it to drive the model definition.
+
+5. **BrokerClient protocol layer** — `protocol.py`, `UpstoxLiveClient` (wrapping current `upstox_market.py`), `MockBrokerClient`, `factory.py`. Required before any new feature module is added. Current `upstox_market.py` is an acknowledged violation of dependency inversion — do not add further modules against it directly.
+
+6. **P&L visualization** — matplotlib script or React dashboard from snapshot time series. Deferred until several weeks of snapshot history exist and `PortfolioSummary` dataclass is extracted (TODO 1).
 
 ---
 
@@ -260,14 +273,5 @@ All 11 codes verified against live AMFI flat file on 2026-04-04.
 
 | Date | What Changed |
 |---|---|
-| 2026-04-01 | Project setup, OAuth flow, API verified, README, project instructions |
-| 2026-04-02 | Upstox ecosystem mapped, sandbox scripts, Analytics Token verified, 7 fixtures recorded, instrument keys discovered |
-| 2026-04-02 | `src/portfolio/` built end-to-end. 20 tests. First live snapshot run. |
-| 2026-04-03 | Added Nifty spot price to batch LTP fetch in `daily_snapshot.py`; `underlying_price` now populated in snapshots; cron job configured; trade history model and roll workflow scoped as next priority. |
-| 2026-04-03 | Started `src/mf/` module: MFTransaction, MFNavSnapshot, TransactionType models with 25 unit tests (Commit 1). Established AMFI flat file as NAV source, transaction ledger design for SIP support, shared SQLite DB decision. Confirmed Upstox has no MF API. |
-| 2026-04-03 | `src/mf/store.py` (Commit 2): MFStore with mf_transactions + mf_nav_snapshots tables, upsert semantics, get_holdings. 33 tests. DB path confirmed as `data/portfolio/portfolio.sqlite`. MF tables manually initialised in live DB; becomes automatic in Commit 6. |
-| 2026-04-03 | `src/mf/nav_fetcher.py` (Commit 3): AMFI flat file fetch + semicolon parse, injectable source for offline tests, missing-code WARNING. 20 tests. Corrected AMFI format: semicolon-delimited, not pipe. |
-| 2026-04-03 | `src/mf/tracker.py` (Commit 4): MFTracker, MFHolding (with scheme_name), SchemePnL, PortfolioPnL. Injected nav_fetcher. Discovered MFNavSnapshot requires scheme_name — MFHolding updated accordingly. 27 tests. Total offline suite now 125 tests. |
-| 2026-04-03 | Interface fix: MFHolding moved to `models.py` (circular import fix); `store.get_holdings()` rewritten to return `dict[str, MFHolding]` with `total_invested` aggregated alongside units. `seed_mf_holdings.py` (Commit 5, 20 tests) and `daily_snapshot.py` MF wire-up + combined portfolio summary (Commit 6, 23 tests) built and verified on live DB. First live combined snapshot run: 10 of 11 schemes (Tata Nifty 50 AMFI code 148495 unverified). Total offline suite: 168 tests. |
-| 2026-04-04 | Discovered all 11 AMFI codes in `seed_mf_holdings.py` were wrong (resolving to completely unrelated schemes). Verified correct codes against live AMFI flat file, updated `_HOLDINGS`, wiped and re-seeded DB. Fixed `sys.modules` stub leak in `test_daily_snapshot_helpers.py` that poisoned `PortfolioTracker` across the full pytest session. Updated `test_nav_fetcher.py` and `test_store.py` to use correct codes. All 168 tests green. DB clean; first correct baseline snapshot Monday 2026-04-06. |
-| 2026-04-04 | Code review (8 fixes): (1) StrEnum → (str, Enum) for Python 3.10 compat; (2) Extracted shared `src/db.py` connection factory; (3) Emptied `portfolio/__init__.py` (circular import hazard); (4) Decimal migration for all monetary fields — models, store schema (REAL→TEXT), tracker boundary conversion; (5) AssetType.EQUITY replaces string prefix check for ETF leg identification; (6) Single asyncio.run() in daily_snapshot main(); (7) All I/O imports deferred into _async_main() — sys.modules stubs eliminated from tests; (8) Custom exception hierarchy (BrokerError→DataFetchError→LTPFetchError), UpstoxMarketClient raises instead of silently returning {}. 176 tests green. |
+| 2026-04-01 — 2026-04-04 | **Foundation sprint.** Auth, portfolio module, full MF stack (models/store/nav_fetcher/tracker), daily snapshot cron, seed scripts. All key decisions now in Architecture Decisions above. All 11 AMFI codes corrected against live AMFI flat file. 8-point code review applied (Decimal migration, shared db.py, enum compat, exception hierarchy, deferred I/O imports). 176 offline tests green. DB wiped and re-seeded; clean baseline from 2026-04-06. |
+| 2026-04-07 | Reviewed project state and next priorities. Day-change P&L identified as immediately unblocked (2+ snapshots now exist: April 6 + April 7). Scoped 3 new requirements: (1) daily_snapshot.py enhancements — day-change delta + date parameter + PortfolioSummary extraction; (2) Telegram bot notification via raw requests, non-fatal, injected optionally; (3) trade history + roll workflow before JUN expiry. Established CONTEXT.md session log hygiene: collapse absorbed entries, keep only recent 2–3 sessions verbatim. |
