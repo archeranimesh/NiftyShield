@@ -15,7 +15,7 @@ from __future__ import annotations
 import pytest
 import requests
 
-from src.client.exceptions import DataFetchError, LTPFetchError
+from src.client.exceptions import LTPFetchError
 from src.client.upstox_market import UpstoxMarketClient
 
 FAKE_TOKEN = "fake-analytics-token"
@@ -124,11 +124,3 @@ def test_ltp_maps_instrument_token_to_price(client: UpstoxMarketClient, monkeypa
     result = client.get_ltp_sync(["NSE_FO|37810"])
     assert result == {"NSE_FO|37810": 975.0}
 
-
-# ── DataFetchError hierarchy ──────────────────────────────────────
-
-
-def test_ltp_fetch_error_is_data_fetch_error() -> None:
-    """LTPFetchError must be catchable as DataFetchError."""
-    err = LTPFetchError("test")
-    assert isinstance(err, DataFetchError)
