@@ -151,15 +151,15 @@ def _compute_prev_mf_pnl(
     return _aggregate(prev_nav_snaps[0].snapshot_date, schemes)
 
 
-def _print_combined_summary(
+def _format_combined_summary(
     strategies: list[Strategy],
     prices: dict[str, float],
     strategy_pnls: dict[str, object],
     mf_pnl: object | None,
     prev_snapshots: dict[int, DailySnapshot] | None = None,
     prev_mf_pnl: object | None = None,
-) -> None:
-    """Print the combined portfolio value across MF, ETF, and options.
+) -> str:
+    """Build the combined portfolio summary as a formatted string.
 
     When prev_snapshots / prev_mf_pnl are supplied (non-empty), a Δday column
     is appended to the MF, ETF, and Options lines showing the change vs the
@@ -173,6 +173,9 @@ def _print_combined_summary(
         mf_pnl: Completed MF PortfolioPnL, or None if the MF fetch failed.
         prev_snapshots: {leg_id: DailySnapshot} from get_prev_snapshots(), or None.
         prev_mf_pnl: PortfolioPnL for the prior date, or None.
+
+    Returns:
+        Multi-line formatted summary string (no trailing newline).
     """
     etf_value = _etf_current_value(strategies, prices)
     etf_basis = _etf_cost_basis(strategies)
@@ -231,24 +234,51 @@ def _print_combined_summary(
     def _delta(d: Decimal | None) -> str:
         return f"  Δday: {d:>+12,.0f}" if d is not None else ""
 
-    # ── Output ────────────────────────────────────────────────────
-    print()
-    print("  ── Combined Portfolio ─────────────────────────────────")
+    # ── Build lines ───────────────────────────────────────────────
+    lines: list[str] = ["", "  ── Combined Portfolio ─────────────────────────────────"]
 
     if mf_pnl:
         mf_pnl_str = f"  P&L: {mf_pnl_amt:>+11,.0f} ({mf_pnl_pct:+}%)"
-        print(f"  MF current value    : ₹{mf_value:>14,.0f}{_delta(mf_day_delta)}{mf_pnl_str}")
+        lines.append(f"  MF current value    : ₹{mf_value:>14,.0f}{_delta(mf_day_delta)}{mf_pnl_str}")
     else:
-        print(f"  MF current value    :          [failed]{_delta(mf_day_delta)}")
+        lines.append(f"  MF current value    :          [failed]{_delta(mf_day_delta)}")
 
-    print(f"  ETF current value   : ₹{etf_value:>14,.0f}{_delta(etf_day_delta)}  (basis ₹{etf_basis:,.0f})")
-    print(f"  Options net P&L     : {options_pnl:>+15,.0f}{_delta(options_day_delta)}")
-    print("  ───────────────────────────────────────────────────────")
-    print(f"  Total value         : ₹{total_value:>14,.0f}{_delta(total_day_delta)}")
-    print(f"  Total invested      : ₹{total_invested:>14,.0f}")
-    print(f"  Total P&L           : {total_pnl:>+15,.0f}  ({total_pnl_pct:+}%)")
+    lines.append(f"  ETF current value   : ₹{etf_value:>14,.0f}{_delta(etf_day_delta)}  (basis ₹{etf_basis:,.0f})")
+    lines.append(f"  Options net P&L     : {options_pnl:>+15,.0f}{_delta(options_day_delta)}")
+    lines.append("  ───────────────────────────────────────────────────────")
+    lines.append(f"  Total value         : ₹{total_value:>14,.0f}{_delta(total_day_delta)}")
+    lines.append(f"  Total invested      : ₹{total_invested:>14,.0f}")
+    lines.append(f"  Total P&L           : {total_pnl:>+15,.0f}  ({total_pnl_pct:+}%)")
     if not mf_pnl:
-        print("  NOTE: MF fetch failed — MF value excluded from total")
+        lines.append("  NOTE: MF fetch failed — MF value excluded from total")
+
+    return "\n".join(lines)
+
+
+def _print_combined_summary(
+    strategies: list[Strategy],
+    prices: dict[str, float],
+    strategy_pnls: dict[str, object],
+    mf_pnl: object | None,
+    prev_snapshots: dict[int, DailySnapshot] | None = None,
+    prev_mf_pnl: object | None = None,
+) -> None:
+    """Print the combined portfolio value across MF, ETF, and options.
+
+    Delegates to _format_combined_summary and prints the result.
+    Signature is preserved for backward compatibility.
+
+    Args:
+        strategies: All loaded Strategy objects.
+        prices: instrument_key → LTP (current day).
+        strategy_pnls: strategy name → StrategyPnL (from compute_pnl).
+        mf_pnl: Completed MF PortfolioPnL, or None if the MF fetch failed.
+        prev_snapshots: {leg_id: DailySnapshot} from get_prev_snapshots(), or None.
+        prev_mf_pnl: PortfolioPnL for the prior date, or None.
+    """
+    print(_format_combined_summary(
+        strategies, prices, strategy_pnls, mf_pnl, prev_snapshots, prev_mf_pnl
+    ))
 
 
 # ── Pure helper — no I/O, importable in tests ────────────────────
@@ -515,11 +545,27 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
         print(f"  WARNING: MF snapshot failed — {e}")
 
     # ── Combined portfolio summary ────────────────────────────────
-    _print_combined_summary(
+    summary_text = _format_combined_summary(
         strategies, prices, strategy_pnls, mf_pnl,
         prev_snapshots=prev_snapshots,
         prev_mf_pnl=prev_mf_pnl,
     )
+    print(summary_text)
+
+    # ── Telegram notification (non-fatal, skipped if env vars absent) ─
+    from src.notifications.telegram import build_notifier
+
+    notifier = build_notifier()
+    if notifier:
+        date_str = snap_date.strftime("%Y-%m-%d")
+        message = f"NiftyShield snapshot {date_str}\n{summary_text}"
+        if not notifier.send(message):
+            print("  WARNING: Telegram notification failed (see logs).")
+    else:
+        import logging as _logging
+        _logging.getLogger(__name__).debug(
+            "Telegram notifier not configured — skipping (set TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID)"
+        )
 
     print("\n  Done.")
     return 0
