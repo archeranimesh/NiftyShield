@@ -13,7 +13,7 @@ Two modes of operation:
 Import design:
     Only stdlib and the pure-computation helpers' types are imported at module
     level (Decimal, Path, Strategy, AssetType). All I/O-triggering imports
-    (dotenv, UpstoxMarketClient, stores, tracker) are deferred into the
+    (dotenv, create_client, stores, tracker) are deferred into the
     _async_main() / _historical_main() functions so that the pure helper
     functions are importable in tests with no side effects.
 
@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 import sys
 from datetime import date, datetime
 from decimal import Decimal
@@ -520,7 +521,7 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
     load_dotenv()
 
     from src.client.exceptions import LTPFetchError
-    from src.client.upstox_market import UpstoxMarketClient
+    from src.client.factory import create_client
     from src.mf.store import MFStore
     from src.mf.tracker import MFTracker
     from src.portfolio.store import PortfolioStore
@@ -544,7 +545,8 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
 
     # ── Initialize market client ─────────────────────────────────
     try:
-        client = UpstoxMarketClient()
+        env = os.getenv("UPSTOX_ENV", "prod")
+        client = create_client(env)
     except ValueError as e:
         print(f"  ERROR: {e}")
         return 1
