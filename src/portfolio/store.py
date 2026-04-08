@@ -19,6 +19,8 @@ from src.portfolio.models import (
     Leg,
     ProductType,
     Strategy,
+    Trade,
+    TradeAction,
 )
 
 _SCHEMA = """
@@ -70,6 +72,22 @@ CREATE INDEX IF NOT EXISTS idx_snapshots_date
 
 CREATE INDEX IF NOT EXISTS idx_legs_strategy
     ON legs(strategy_id);
+
+CREATE TABLE IF NOT EXISTS trades (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    strategy_name  TEXT NOT NULL,
+    leg_role       TEXT NOT NULL,
+    instrument_key TEXT NOT NULL,
+    trade_date     TEXT NOT NULL,
+    action         TEXT NOT NULL,
+    quantity       INTEGER NOT NULL,
+    price          TEXT NOT NULL,
+    notes          TEXT NOT NULL DEFAULT '',
+    UNIQUE(strategy_name, leg_role, trade_date, action)
+);
+
+CREATE INDEX IF NOT EXISTS idx_trades_strategy_leg
+    ON trades(strategy_name, leg_role, trade_date);
 """
 
 
@@ -372,6 +390,114 @@ class PortfolioStore:
             if row and row["max_date"]:
                 return date.fromisoformat(row["max_date"])
             return None
+
+    # ── Trades ledger ────────────────────────────────────────────
+
+    def record_trade(self, trade: Trade) -> None:
+        """Insert a trade into the ledger. Silently skips exact duplicates.
+
+        Uniqueness is on (strategy_name, leg_role, trade_date, action) so
+        re-running seed or record scripts is always idempotent.
+
+        Args:
+            trade: The trade to persist.
+        """
+        with _connect(self.db_path) as conn:
+            conn.execute(
+                """INSERT INTO trades
+                   (strategy_name, leg_role, instrument_key, trade_date,
+                    action, quantity, price, notes)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(strategy_name, leg_role, trade_date, action)
+                   DO NOTHING""",
+                (
+                    trade.strategy_name,
+                    trade.leg_role,
+                    trade.instrument_key,
+                    trade.trade_date.isoformat(),
+                    trade.action.value,
+                    trade.quantity,
+                    str(trade.price),
+                    trade.notes,
+                ),
+            )
+
+    def get_trades(
+        self,
+        strategy_name: str,
+        leg_role: str | None = None,
+    ) -> list[Trade]:
+        """Return all trades for a strategy, optionally filtered by leg_role.
+
+        Args:
+            strategy_name: Strategy to query (e.g. "ILTS").
+            leg_role: If provided, restrict to this leg (e.g. "EBBETF0431").
+
+        Returns:
+            Trades ordered by trade_date ASC, then id ASC.
+        """
+        query = "SELECT * FROM trades WHERE strategy_name = ?"
+        params: list = [strategy_name]
+
+        if leg_role is not None:
+            query += " AND leg_role = ?"
+            params.append(leg_role)
+
+        query += " ORDER BY trade_date, id"
+
+        with _connect(self.db_path) as conn:
+            rows = conn.execute(query, params).fetchall()
+            return [self._row_to_trade(r) for r in rows]
+
+    def get_position(
+        self, strategy_name: str, leg_role: str
+    ) -> tuple[int, Decimal]:
+        """Derive net quantity and weighted average buy price from the ledger.
+
+        Net quantity = SUM(qty for BUY) - SUM(qty for SELL).
+        Avg buy price = weighted average of BUY trades only; SELL prices are
+        not used (same rationale as get_holdings() in MFStore — Python Decimal
+        arithmetic, not SQL CAST).
+
+        Args:
+            strategy_name: Strategy to query.
+            leg_role: Leg within that strategy.
+
+        Returns:
+            (net_quantity, avg_buy_price). Returns (0, Decimal("0")) when no
+            trades exist for the given strategy/leg combination.
+        """
+        trades = self.get_trades(strategy_name, leg_role)
+        if not trades:
+            return (0, Decimal("0"))
+
+        buy_qty = Decimal("0")
+        buy_value = Decimal("0")
+        sell_qty = Decimal("0")
+
+        for t in trades:
+            if t.action == TradeAction.BUY:
+                buy_qty += t.quantity
+                buy_value += Decimal(t.quantity) * t.price
+            else:
+                sell_qty += t.quantity
+
+        net_qty = int(buy_qty - sell_qty)
+        avg_price = (buy_value / buy_qty) if buy_qty > 0 else Decimal("0")
+        return (net_qty, avg_price)
+
+    @staticmethod
+    def _row_to_trade(row: sqlite3.Row) -> Trade:
+        return Trade(
+            strategy_name=row["strategy_name"],
+            leg_role=row["leg_role"],
+            instrument_key=row["instrument_key"],
+            trade_date=date.fromisoformat(row["trade_date"]),
+            action=TradeAction(row["action"]),
+            quantity=row["quantity"],
+            price=Decimal(row["price"]),
+            notes=row["notes"],
+        )
 
     @staticmethod
     def _row_to_snapshot(row: sqlite3.Row) -> DailySnapshot:

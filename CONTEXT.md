@@ -6,7 +6,7 @@
 
 ---
 
-## Current State (as of 2026-04-07)
+## Current State (as of 2026-04-08)
 
 ### What Exists (committed and working)
 
@@ -20,8 +20,8 @@ src/
 ├── sandbox/                  # Exploratory scripts
 │   └── order_lifecycle.py    # Place → Modify → Cancel via V3 Order API (sandbox=True)
 ├── portfolio/
-│   ├── models.py             # Pydantic: Leg, Strategy, DailySnapshot. Monetary fields (entry_price, ltp, close, underlying_price) are Decimal. P&L methods accept float|Decimal, return Decimal.
-│   ├── store.py              # SQLite: strategies, legs, daily_snapshots. entry_price/ltp/close/underlying_price stored as TEXT for Decimal precision. WAL + upsert semantics.
+│   ├── models.py             # Pydantic: Leg, Strategy, DailySnapshot, Trade, TradeAction. Monetary fields (entry_price, ltp, close, underlying_price, price) are Decimal. P&L methods accept float|Decimal, return Decimal. Trade is frozen=True with qty > 0 and price > 0 validators.
+│   ├── store.py              # SQLite: strategies, legs, daily_snapshots, trades. Trades methods: record_trade (idempotent), get_trades (strategy/leg filter, date ASC), get_position (net qty + weighted avg buy price). entry_price/ltp/close/underlying_price/price stored as TEXT for Decimal precision. WAL + upsert semantics.
 │   ├── tracker.py            # PortfolioTracker: loads strategies, fetches LTPs, records snapshots. compute_pnl() returns StrategyPnL with Decimal total_pnl. Float LTPs from API converted via Decimal(str()) at boundary.
 │   └── strategies/
 │       ├── __init__.py       # ALL_STRATEGIES registry
@@ -51,11 +51,17 @@ src/
 scripts/
 ├── daily_snapshot.py         # Two-mode CLI. Live mode: fetches LTPs + Nifty spot, records snapshots, prints P&L, sends Telegram notification (non-fatal). Historical mode (--date YYYY-MM-DD): reads stored snapshots, computes P&L offline — no API call. _format_combined_summary() returns the formatted string; _print_combined_summary() wraps it with print(). Module-level imports stay stdlib + portfolio.models only; all I/O deferred. Live mode uses create_client(os.getenv("UPSTOX_ENV", "prod")) — UPSTOX_ENV=test runs against MockBrokerClient for local smoke-testing without a real token.
 ├── send_test_telegram.py     # Smoke-test script. Reads TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID from .env, sends a sample P&L message. Exit code 0/1. Run before first cron to verify credentials.
-└── seed_mf_holdings.py       # One-time CLI. Inserts 11 INITIAL MF transactions. Idempotent. --dry-run flag.
+├── seed_mf_holdings.py       # One-time CLI. Inserts 11 INITIAL MF transactions. Idempotent. --dry-run flag.
+├── seed_trades.py            # Idempotent backfill of all ILTS + FinRakshak executions as Trade rows. build_trades() (pure) + seed_trades() (I/O). --dry-run flag. 7 trades total.
+└── record_trade.py           # CLI for recording future trades. Validates via Trade model; inserts; prints updated net position + avg price. --dry-run prints without touching DB.
 
 tests/
 ├── unit/
-│   ├── portfolio/            # 20 tests: Leg P&L, strategy aggregation, store CRUD, upsert, tracker
+│   ├── portfolio/
+│   │   ├── __init__.py
+│   │   ├── test_trade_models.py    # 20 tests: TradeAction enum, Trade valid/invalid construction, qty/price validators, frozen=True, Decimal precision
+│   │   ├── test_trade_store.py     # 25 tests: record_trade CRUD, idempotency, get_trades filters + ordering, get_position (BUY-only, SELL-only, mixed, weighted avg, ignores SELL price, schema coexistence)
+│   │   └── test_seed_trades.py     # 13 tests: build_trades shape, strategy/leg/key correctness, BUY+SELL actions, idempotency (3×), EBBETF0431 weighted avg, NIFTY_JUN_PE short position
 │   └── mf/
 │       ├── __init__.py       # Package marker
 │       ├── test_models.py    # 25 tests: MFTransaction + MFNavSnapshot valid/invalid/edge cases
@@ -82,7 +88,7 @@ tests/
 - OptionChain Pydantic model — not defined
 - Greeks capture — `_fetch_greeks()` returns `{}` immediately (explicit TODO)
 - `scripts/roll_leg.py` — CLI to close an old leg and open a replacement in one atomic transaction (not written)
-- Trade history model — `Trade`, `TradeAction` not yet defined; no audit trail for rolls/adjustments
+- ~~Trade history model~~ — **DONE (2026-04-08)**: `Trade` + `TradeAction` in `src/portfolio/models.py`. `trades` table in `PortfolioStore` with `record_trade`, `get_trades`, `get_position`. `scripts/seed_trades.py` (backfill) + `scripts/record_trade.py` (ongoing capture). Live DB seeded with 7 trades. 58 new tests.
 - ~~`PortfolioSummary` type~~ — **DONE (2026-04-08)**: `PortfolioSummary` frozen dataclass added to `src/portfolio/models.py`. `_build_portfolio_summary()` extracted from `_format_combined_summary()` in `daily_snapshot.py`. Both callers (`_async_main`, `_historical_main`) thread `snap_date` through. 10 new tests, 246 total.
 - ~~Day-change P&L in combined summary~~ — **DONE (2026-04-07)**: `PortfolioStore.get_prev_snapshots()`, `MFStore.get_prev_nav_snapshots()`, `_build_prev_prices()`, `_compute_prev_mf_pnl()` helpers added. Combined summary now shows `Δday` for MF, ETF, and options when prev data exists; column omitted silently on first run.
 
@@ -95,6 +101,7 @@ tests/
 - `daily_snapshots` empty — first clean baseline on Monday 2026-04-06 (pre-market run)
 - `underlying_price` will populate from 2026-04-06 onwards
 - Greeks columns are null across all snapshots
+- `trades` table seeded 2026-04-08 — 7 rows: ILTS (6 legs including LIQUIDBEES) + FinRakshak (1). EBBETF0431 net=465 @ avg ₹1388.01.
 - Cron job set up: `45 15 * * 1-5` — snapshots accumulate automatically from Monday
 
 ---
@@ -110,6 +117,7 @@ tests/
 | Instrument | Key | Notes |
 |---|---|---|
 | EBBETF0431 (ETF) | `NSE_EQ\|INF754K01LE1` | ISIN starts with INF (ETF), not INE |
+| LIQUIDBEES ETF | `NSE_EQ\|INF732E01037` | Verified 2026-04-08 via InstrumentLookup.search_equity('LIQUIDBEES') on NSE.json.gz BOD file |
 | NiftyBees ETF | `NSE_EQ\|INF204KB14I2` | Discovered Day 1 |
 | NIFTY DEC 23000 PE | `NSE_FO\|37810` | Monthly expiry: 2026-12-29 (Tue) |
 | NIFTY JUN 23000 CE | `NSE_FO\|37799` | Monthly expiry: 2026-06-30 (Tue) |
@@ -190,6 +198,12 @@ Every code was replaced by grepping the live AMFI flat file.
 - **Monetary field types:** `Leg.entry_price`, `DailySnapshot.ltp`, `.close`, `.underlying_price` are `Decimal`. SQLite stores them as `TEXT` columns to preserve precision through round-trips. `Leg.pnl()` and `pnl_percent()` accept `float | Decimal` — float inputs go through `Decimal(str())` inside the method. Float LTPs from the broker API are converted via `Decimal(str(ltp))` at the tracker boundary before entering any model or P&L calculation.
 - **Enum compatibility:** `Direction`, `ProductType`, `AssetType` use `(str, Enum)` pattern (not `StrEnum`) — `StrEnum` was introduced in Python 3.11; the project targets Python 3.10+.
 
+- **Trade ledger design:** `Leg` (in `ilts.py` / `finrakshak.py`) is a conceptual role — instrument + direction + entry price as a strategy definition. `Trade` (in the `trades` table) is a physical execution — what actually transacted, when, at what price. The two coexist permanently: `Leg` drives `daily_snapshot.py` P&L; `Trade` drives cost-basis tracking and audit trail. The switch where `daily_snapshot.py` uses trade-derived cost basis is a future, explicit decision.
+- **`trades` UNIQUE constraint is `(strategy_name, leg_role, trade_date, action)`** — allows one BUY and one SELL for the same leg on the same date (e.g., a same-day roll), but prevents double-seeding or duplicate CLI calls. Idempotent via `ON CONFLICT DO NOTHING`.
+- **`get_position` aggregates in Python, not SQL** — same rationale as `get_holdings()` in `MFStore`. `Decimal(row["price"])` read back from TEXT column; all arithmetic in Python preserves exact precision. SELL price is deliberately excluded from the average — it is premium received, not capital deployed.
+- **LIQUIDBEES is tracked in `trades` but NOT added as a `Leg` to `ilts.py`** — it is a cash-management position within the ILTS strategy, not a strategy leg in the Finideas sense. Its P&L does not feed into `daily_snapshot.py` until an explicit switch.
+- **`seed_trades.py` separates `build_trades()` (pure) from `seed_trades()` (I/O)** — mirrors `seed_mf_holdings.py` pattern. Tests call `build_trades()` directly with no DB. Dates marked `2026-01-15` are placeholders pending contract note verification.
+
 ### Deferred
 - Greeks fetch: option chain call was failing during portfolio build; deferred until `OptionChain` Pydantic model is defined.
 - Expired instruments API: blocked (paid subscription not active). Backtesting uses NSE CSV dumps as interim.
@@ -224,7 +238,7 @@ Before writing any code: read `CONTEXT.md`, state `CONTEXT.md ✓`, confirm file
 
 2. ~~**Telegram bot notifications**~~ — **DONE (2026-04-08)**: `src/notifications/telegram.py` with `TelegramNotifier` + `build_notifier()`. Raw `requests`, HTML parse_mode, `<pre>` block for monospace alignment. Non-fatal (`Exception` caught broadly, WARNING logged). Injected in `_async_main` — skipped silently when env vars absent. `_format_combined_summary()` extracted from `_print_combined_summary()` so both the terminal and Telegram share the same formatted text. Smoke-test script: `scripts/send_test_telegram.py`. 25 new offline tests. 236 total, all green.
 
-3. **Trade history + roll workflow** — `Trade` model, `TradeAction` enum, `trades` table in store, `scripts/roll_leg.py` CLI. Backfill OPEN trades for existing legs as baseline. Required before JUN 2026 expiry roll (2026-06-30).
+3. ~~**Trade history + roll workflow**~~ — **DONE (2026-04-08)**: `Trade` + `TradeAction` models, `trades` table in `PortfolioStore`, `seed_trades.py`, `record_trade.py`. Live DB seeded. `scripts/roll_leg.py` (atomic close + open) still outstanding — required before JUN 2026 expiry roll (2026-06-30).
 
 4. **Greeks capture** — fix option chain call (`NSE_INDEX|Nifty 50`), define `OptionChain` Pydantic model, implement `_extract_greeks_from_chain()`. Fixture `nifty_chain_2026-04-07.json` already recorded — use it to drive the model definition.
 
@@ -293,7 +307,10 @@ All 11 codes verified against live AMFI flat file on 2026-04-04.
 - 12 new tests (2026-04-07): `PortfolioStore.get_prev_snapshots` (4 tests in test_portfolio.py), `MFStore.get_prev_nav_snapshots` (4 tests in mf/test_store.py), day-change delta in summary output (2 tests), `_build_prev_prices` helper (2 tests) — both in test_daily_snapshot_historical.py.
 - 25 new tests (2026-04-08): `tests/unit/test_notifications.py` — `_html_escape` (5), `escape_mdv2` (3), `TelegramNotifier.send` happy path (6) + error paths (5 including bare Exception), `build_notifier` (6 tests: missing token, missing chat_id, both missing, both set, whitespace stripping, blank token).
 - 10 new tests (2026-04-08): `tests/unit/mf/test_daily_snapshot_helpers.py` — `TestBuildPortfolioSummary` (10): isinstance check, date propagation, mf_available flag (True/False), total_value computation, total_pnl computation, total_pnl_pct quantization, all deltas None without prev data, mf_day_delta, total_day_delta absent when only prev_mf absent.
-- **Total: 327 tests** — all offline, no API dependency (10 new in test_factory.py)
+- 20 unit tests in `tests/unit/portfolio/test_trade_models.py` — `TradeAction` enum coercion/rejection, `Trade` BUY+SELL construction, qty/price > 0 validation, `frozen=True` enforcement, `Decimal` precision round-trip, float coercion via `str()`.
+- 25 unit tests in `tests/unit/portfolio/test_trade_store.py` — `record_trade` insert + idempotency, `get_trades` strategy/leg filters + date ASC ordering, `get_position` net qty (BUY-only, SELL-only, mixed), weighted avg price, SELL price ignored, schema coexistence with existing tables.
+- 13 unit tests in `tests/unit/portfolio/test_seed_trades.py` — `build_trades` count/shape/keys, ILTS BUY+SELL mix, FinRakshak all-BUY, idempotency (3×), `get_position` weighted avg for EBBETF0431, short net qty for NIFTY_JUN_PE.
+- **Total: 385 tests** — all offline, no API dependency (58 new in tests/unit/portfolio/)
 - `python -m pytest` is the confirmed invocation convention (adds CWD to sys.path automatically)
 - `python -m pytest tests/unit/` = full offline suite
 
@@ -313,3 +330,4 @@ All 11 codes verified against live AMFI flat file on 2026-04-04.
 | 2026-04-08 | **MockBrokerClient (5.d).** `src/client/mock_client.py`: stateful offline broker client. `_margin_available` (Decimal), `_orders`, `_positions`, `_price_map`, `_error_queue`. Setup API: `set_price`, `set_margin`, `simulate_error` (one-shot), `reset`. All 10 `BrokerClient` methods; fixture loading graceful (WARNING + empty on miss); `price*qty*0.1` NRML margin proxy; `place_order` / `modify_order` / `cancel_order` raise correct exception types. 38 tests in `tests/unit/test_mock_client.py`; all green. |
 | 2026-04-08 | **Composition root factory (5.e).** `src/client/factory.py`: `create_client(env, **kwargs)` is the sole `src/` importer of `UpstoxLiveClient` and `MockBrokerClient`. `env="prod"` → `UpstoxLiveClient` (UPSTOX_ANALYTICS_TOKEN); `env="sandbox"` → `UpstoxLiveClient` (UPSTOX_SANDBOX_TOKEN, with kwarg fallback); `env="test"` → `MockBrokerClient` (offline). `ValueError` on unknown env with hint message. `VALID_ENVS: Final = ("prod", "sandbox", "test")`. 10 tests in `tests/unit/test_factory.py` (all env branches, kwargs forwarding, margin propagation, BrokerClient isinstance, env-var sandbox fallback); all green. |
 | 2026-04-08 | **Consumer migration to factory (5.f — final).** `daily_snapshot.py` switched from direct `UpstoxMarketClient` import to `create_client(os.getenv("UPSTOX_ENV", "prod"))` inside `_async_main()`. `import os` added at module level (stdlib). `tracker.py` confirmed already using `from src.client.protocol import MarketDataProvider`. `test_client.py` confirmed clean — no hierarchy tests (those were removed in 5.a). `UpstoxMarketClient` no longer imported by any consumer outside `src/client/`. `UPSTOX_ENV=test` enables `MockBrokerClient`-backed smoke-test without a real token. Pure refactor — no new tests. 327 tests, all green. **TODO #5 complete.** |
+| 2026-04-08 | **Trade ledger.** `TradeAction` + `Trade` (frozen Pydantic, qty/price > 0) added to `src/portfolio/models.py`. `trades` table added to `PortfolioStore` (additive, `CREATE IF NOT EXISTS`): `record_trade` (idempotent), `get_trades` (strategy/leg filter, date ASC), `get_position` (net qty + weighted avg buy price in Python). `scripts/seed_trades.py` backfills all ILTS + FinRakshak positions (7 trades). `scripts/record_trade.py` CLI for future captures — validates via model, inserts, prints position summary. LIQUIDBEES key verified against `NSE.json.gz` BOD: `NSE_EQ\|INF732E01037`. Live DB seeded; existing tables untouched (20 snapshots, 11 MF transactions confirmed). 58 new tests in `tests/unit/portfolio/`. 385 total, all green. |

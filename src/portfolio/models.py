@@ -14,7 +14,51 @@ from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
 
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, Field, computed_field, field_validator
+
+
+class TradeAction(str, Enum):
+    """Direction of a physical trade execution — BUY or SELL."""
+
+    BUY = "BUY"
+    SELL = "SELL"
+
+
+class Trade(BaseModel):
+    """A single physical trade execution — one row in the trades ledger.
+
+    Immutable after construction (frozen=True). Monetary fields use Decimal
+    stored as TEXT in SQLite, same convention as Leg.entry_price and MFTransaction.
+
+    Attributes:
+        strategy_name: Strategy this trade belongs to, e.g. "ILTS" or "FinRakshak".
+        leg_role: Human label identifying the position, e.g. "EBBETF0431".
+        instrument_key: Upstox instrument key, e.g. "NSE_EQ|INF754K01LE1".
+        trade_date: Actual execution date.
+        action: BUY or SELL.
+        quantity: Units transacted. Always positive — direction is in action.
+        price: Execution price per unit. Always positive.
+        notes: Optional free-text annotation (contract note ref, reason, etc.).
+    """
+
+    strategy_name: str = Field(..., min_length=1)
+    leg_role: str = Field(..., min_length=1)
+    instrument_key: str = Field(..., min_length=1)
+    trade_date: date
+    action: TradeAction
+    quantity: int = Field(..., gt=0)
+    price: Decimal = Field(..., gt=0)
+    notes: str = ""
+
+    model_config = {"frozen": True}
+
+    @field_validator("price", mode="before")
+    @classmethod
+    def price_must_be_positive(cls, v: object) -> object:
+        """Coerce str/float inputs and guard against zero/negative values."""
+        if isinstance(v, float):
+            v = Decimal(str(v))
+        return v
 
 
 class Direction(str, Enum):

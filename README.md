@@ -155,7 +155,82 @@ This will:
 
 ---
 
+## Trade Ledger
 
+NiftyShield tracks every physical trade execution in a `trades` table — separate from the strategy leg definitions in `ilts.py` / `finrakshak.py`. This enables accurate weighted-average cost basis across multiple entries, a full audit trail for option rolls, and position queries without touching strategy files.
+
+The two systems run in parallel: `Leg.entry_price` continues to drive `daily_snapshot.py` P&L until an explicit switch is made. The trade ledger grows independently.
+
+### Backfill existing positions
+
+```bash
+# Dry run first — inspect what will be inserted
+python scripts/seed_trades.py --dry-run
+
+# Seed the live DB (idempotent — safe to re-run)
+python scripts/seed_trades.py
+```
+
+### Record a new trade
+
+```bash
+python scripts/record_trade.py \
+  --strategy ILTS \
+  --leg EBBETF0431 \
+  --key "NSE_EQ|INF754K01LE1" \
+  --date 2026-04-08 \
+  --action BUY \
+  --qty 27 \
+  --price 1386.20 \
+  --notes "addition to ILTS position"
+```
+
+Prints the updated net position immediately after insert:
+
+```
+ILTS / EBBETF0431: 465 units @ avg ₹1388.01
+```
+
+Use `--dry-run` to validate fields without touching the DB:
+
+```bash
+python scripts/record_trade.py --strategy ILTS --leg EBBETF0431 \
+  --key "NSE_EQ|INF754K01LE1" --date 2026-04-08 \
+  --action BUY --qty 27 --price 1386.20 --dry-run
+```
+
+### Query position directly
+
+```python
+from src.portfolio.store import PortfolioStore
+from pathlib import Path
+
+store = PortfolioStore(Path("data/portfolio/portfolio.sqlite"))
+net_qty, avg_price = store.get_position("ILTS", "EBBETF0431")
+# (465, Decimal('1388.0077...'))
+```
+
+### Short legs
+
+SELL trades are recorded with `--action SELL`. Net quantity will be negative, avg price will be `0.00` (premium received, not a cost basis):
+
+```bash
+python scripts/record_trade.py \
+  --strategy ILTS \
+  --leg NIFTY_JUN_PE \
+  --key "NSE_FO|37805" \
+  --date 2026-01-15 \
+  --action SELL \
+  --qty 65 \
+  --price 840.00 \
+  --notes "short PE leg, ILTS hedge"
+```
+
+```
+ILTS / NIFTY_JUN_PE: -65 units @ avg ₹0.00
+```
+
+---
 
 ## Testing Philosophy
 
@@ -214,8 +289,11 @@ All backtesting runs **fully offline** against local Parquet/SQLite stores. No A
 
 - [x] Upstox OAuth login + token management
 - [x] API connectivity verification
-- [ ] BrokerClient protocol + MockBrokerClient
-- [ ] NiftyBees market data fetcher
+- [x] BrokerClient protocol + MockBrokerClient
+- [x] NiftyBees market data fetcher (LTP, option chain via Analytics Token)
+- [x] Daily snapshot pipeline (P&L, Telegram notification, historical replay)
+- [x] MF portfolio tracking (transactions, NAV snapshots, holdings P&L)
+- [x] Trade ledger (execution history, weighted avg cost basis, position queries)
 - [ ] Option chain fetcher with Greeks
 - [ ] Historical data pipeline (active + expired)
 - [ ] Offline data bootstrap script
@@ -225,7 +303,6 @@ All backtesting runs **fully offline** against local Parquet/SQLite stores. No A
 - [ ] Risk manager (margin monitoring)
 - [ ] Order execution engine
 - [ ] Websocket streaming + replay
-- [ ] FD-OD capital structure tracker integration
 
 ---
 
