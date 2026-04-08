@@ -218,7 +218,13 @@ Before writing any code: read `CONTEXT.md`, state `CONTEXT.md ✓`, confirm file
 
 4. **Greeks capture** — fix option chain call (`NSE_INDEX|Nifty 50`), define `OptionChain` Pydantic model, implement `_extract_greeks_from_chain()`. Fixture `nifty_chain_2026-04-07.json` already recorded — use it to drive the model definition.
 
-5. **BrokerClient protocol layer** — `protocol.py`, `UpstoxLiveClient` (wrapping current `upstox_market.py`), `MockBrokerClient`, `factory.py`. Required before any new feature module is added. Current `upstox_market.py` is an acknowledged violation of dependency inversion — do not add further modules against it directly.
+5. **BrokerClient protocol layer** — Required before any new feature module is added. Current `upstox_market.py` violates dependency inversion — do not add further modules against it directly. Sub-tasks in order:
+   - **5.a** — Expand `src/client/exceptions.py`: add `AuthenticationError`, `RateLimitError`, `OrderRejectedError`, `InsufficientMarginError`, `InstrumentNotFoundError`. Tests in `tests/unit/test_exceptions.py` (8 tests).
+   - **5.b** — Create `src/client/protocol.py`: full `BrokerClient` + `MarketStream` protocols, narrow sub-protocols (`MarketDataProvider`, `OrderExecutor`, `PortfolioReader`), stub type aliases. Migrate `MarketDataProvider` import in `tracker.py` from local definition to `protocol.py`. Tests in `tests/unit/test_protocol.py` (~10 tests).
+   - **5.c** — Create `src/client/upstox_live.py`: `UpstoxLiveClient` wrapping `upstox_market.py` for market data; order/portfolio methods raise `NotImplementedError` with constraint reason. Tests in `tests/unit/test_upstox_live.py` (~12 tests).
+   - **5.d** — Create `src/client/mock_client.py`: stateful `MockBrokerClient` — in-memory price map, order/position tracking, margin validation, one-shot `simulate_error()`, fixture loading. This is the primary test double for all future modules. Tests in `tests/unit/test_mock_client.py` (~25 tests).
+   - **5.e** — Create `src/client/factory.py`: `create_client(env)` composition root (`prod`→`UpstoxLiveClient`, `sandbox`→`UpstoxLiveClient` with sandbox token, `test`→`MockBrokerClient`). Only file that imports concrete clients. Tests in `tests/unit/test_factory.py` (~6 tests).
+   - **5.f** — Consumer migration: `daily_snapshot.py` switches from direct `UpstoxMarketClient` import to `create_client(UPSTOX_ENV)` (default `"prod"`). `tracker.py` `MarketDataProvider` import confirmed from `protocol.py`. Full suite (246 + new tests) must be green.
 
 6. **P&L visualization** — matplotlib script or React dashboard from snapshot time series. Deferred until several weeks of snapshot history exist and `PortfolioSummary` dataclass is extracted (TODO 1).
 
