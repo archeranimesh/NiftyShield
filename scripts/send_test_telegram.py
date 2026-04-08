@@ -39,7 +39,7 @@ def main() -> int:
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     message = (
-        f"NiftyShield test message — {now}\n"
+        f"🟢 NiftyShield test message — {now}\n"
         "\n"
         "  ── Combined Portfolio ─────────────────────────────────\n"
         "  MF current value    : ₹   58,21,000  P&L:  +4,21,000 (+7.80%)\n"

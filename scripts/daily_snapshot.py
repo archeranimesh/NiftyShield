@@ -558,7 +558,13 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
     notifier = build_notifier()
     if notifier:
         date_str = snap_date.strftime("%Y-%m-%d")
-        message = f"NiftyShield snapshot {date_str}\n{summary_text}"
+        _total_pnl = (
+            sum((p.total_pnl for p in strategy_pnls.values() if p), Decimal("0"))
+            + (mf_pnl.total_pnl if mf_pnl else Decimal("0"))
+            + (_etf_current_value(strategies, prices) - _etf_cost_basis(strategies))
+        )
+        _emoji = "🟢" if _total_pnl >= 0 else "🔴"
+        message = f"{_emoji} NiftyShield snapshot {date_str}\n{summary_text}"
         if not notifier.send(message):
             print("  WARNING: Telegram notification failed (see logs).")
     else:
