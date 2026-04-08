@@ -9,6 +9,7 @@ preserve sub-rupee precision through P&L calculations and SQLite round-trips.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
@@ -143,3 +144,42 @@ class DailySnapshot(BaseModel):
         if direction == Direction.BUY:
             return (self.ltp - entry_price) * quantity
         return (entry_price - self.ltp) * quantity
+
+
+@dataclass(frozen=True)
+class PortfolioSummary:
+    """Combined portfolio value snapshot across MF, ETF, and options.
+
+    Computed once per snapshot run and consumed by both the formatted output
+    path and the upcoming visualization layer.  All monetary fields are
+    Decimal.  Day-change fields are None on the first ever run when no
+    prior-day snapshot exists.
+    """
+
+    snapshot_date: date
+
+    # MF component — zeroed when mf_available is False (fetch failed)
+    mf_value: Decimal
+    mf_invested: Decimal
+    mf_pnl: Decimal
+    mf_pnl_pct: Decimal | None  # None when MF fetch failed
+    mf_available: bool
+
+    # ETF component
+    etf_value: Decimal
+    etf_basis: Decimal
+
+    # Options net P&L (sign-corrected for short legs)
+    options_pnl: Decimal
+
+    # Combined totals
+    total_value: Decimal
+    total_invested: Decimal
+    total_pnl: Decimal
+    total_pnl_pct: Decimal  # quantized to 2 dp
+
+    # Day-change deltas — None when prior-day data is unavailable
+    mf_day_delta: Decimal | None = None
+    etf_day_delta: Decimal | None = None
+    options_day_delta: Decimal | None = None
+    total_day_delta: Decimal | None = None

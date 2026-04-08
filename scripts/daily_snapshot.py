@@ -43,7 +43,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 # Pure-computation helpers only need these types at import time — no I/O.
-from src.portfolio.models import AssetType, DailySnapshot, Strategy  # noqa: E402
+from src.portfolio.models import AssetType, DailySnapshot, PortfolioSummary, Strategy  # noqa: E402
 
 
 # ── Pure helper functions — no I/O, no side effects ──────────────
@@ -151,22 +151,22 @@ def _compute_prev_mf_pnl(
     return _aggregate(prev_nav_snaps[0].snapshot_date, schemes)
 
 
-def _format_combined_summary(
+def _build_portfolio_summary(
+    snap_date: date,
     strategies: list[Strategy],
     prices: dict[str, float],
     strategy_pnls: dict[str, object],
     mf_pnl: object | None,
     prev_snapshots: dict[int, DailySnapshot] | None = None,
     prev_mf_pnl: object | None = None,
-) -> str:
-    """Build the combined portfolio summary as a formatted string.
+) -> PortfolioSummary:
+    """Compute combined portfolio values into a PortfolioSummary.
 
-    When prev_snapshots / prev_mf_pnl are supplied (non-empty), a Δday column
-    is appended to the MF, ETF, and Options lines showing the change vs the
-    most recent prior snapshot.  If no prev data is available the Δday column
-    is omitted entirely — no zeros, no dashes.
+    Owns all arithmetic — ETF mark-to-market, options net P&L, MF totals,
+    combined aggregates, and day-change deltas.  Pure: no I/O, no side effects.
 
     Args:
+        snap_date: The snapshot date (stored in PortfolioSummary.snapshot_date).
         strategies: All loaded Strategy objects.
         prices: instrument_key → LTP (current day).
         strategy_pnls: strategy name → StrategyPnL (from compute_pnl).
@@ -175,17 +175,17 @@ def _format_combined_summary(
         prev_mf_pnl: PortfolioPnL for the prior date, or None.
 
     Returns:
-        Multi-line formatted summary string (no trailing newline).
+        Fully populated PortfolioSummary dataclass.
     """
     etf_value = _etf_current_value(strategies, prices)
     etf_basis = _etf_cost_basis(strategies)
 
-    # Options net P&L — sign already correct for short legs in compute_pnl
     options_pnl = sum(
         (p.total_pnl for p in strategy_pnls.values() if p),  # type: ignore[union-attr]
         Decimal("0"),
     )
 
+    mf_available = mf_pnl is not None
     mf_value = mf_pnl.total_current_value if mf_pnl else Decimal("0")  # type: ignore[union-attr]
     mf_invested = mf_pnl.total_invested if mf_pnl else Decimal("0")  # type: ignore[union-attr]
     mf_pnl_amt = mf_pnl.total_pnl if mf_pnl else Decimal("0")  # type: ignore[union-attr]
@@ -200,7 +200,7 @@ def _format_combined_summary(
         else Decimal("0")
     )
 
-    # ── Day-change deltas (omitted entirely when prev data unavailable) ──
+    # ── Day-change deltas (None when prior data unavailable) ──────
     etf_day_delta: Decimal | None = None
     options_day_delta: Decimal | None = None
     mf_day_delta: Decimal | None = None
@@ -220,7 +220,6 @@ def _format_combined_summary(
     if prev_mf_pnl is not None and mf_pnl is not None:
         mf_day_delta = mf_value - prev_mf_pnl.total_current_value  # type: ignore[union-attr]
 
-    # Total day delta: sum all non-None components; omit line if nothing available
     any_delta = etf_day_delta is not None or mf_day_delta is not None
     total_day_delta: Decimal | None = None
     if any_delta:
@@ -230,26 +229,100 @@ def _format_combined_summary(
             + (options_day_delta or Decimal("0"))
         )
 
-    # ── Format helpers ────────────────────────────────────────────
+    return PortfolioSummary(
+        snapshot_date=snap_date,
+        mf_value=mf_value,
+        mf_invested=mf_invested,
+        mf_pnl=mf_pnl_amt,
+        mf_pnl_pct=mf_pnl_pct,
+        mf_available=mf_available,
+        etf_value=etf_value,
+        etf_basis=etf_basis,
+        options_pnl=options_pnl,
+        total_value=total_value,
+        total_invested=total_invested,
+        total_pnl=total_pnl,
+        total_pnl_pct=total_pnl_pct,
+        mf_day_delta=mf_day_delta,
+        etf_day_delta=etf_day_delta,
+        options_day_delta=options_day_delta,
+        total_day_delta=total_day_delta,
+    )
+
+
+def _format_combined_summary(
+    strategies: list[Strategy],
+    prices: dict[str, float],
+    strategy_pnls: dict[str, object],
+    mf_pnl: object | None,
+    prev_snapshots: dict[int, DailySnapshot] | None = None,
+    prev_mf_pnl: object | None = None,
+    snap_date: date | None = None,
+) -> str:
+    """Build the combined portfolio summary as a formatted string.
+
+    When prev_snapshots / prev_mf_pnl are supplied (non-empty), a Δday column
+    is appended to the MF, ETF, and Options lines showing the change vs the
+    most recent prior snapshot.  If no prev data is available the Δday column
+    is omitted entirely — no zeros, no dashes.
+
+    Args:
+        strategies: All loaded Strategy objects.
+        prices: instrument_key → LTP (current day).
+        strategy_pnls: strategy name → StrategyPnL (from compute_pnl).
+        mf_pnl: Completed MF PortfolioPnL, or None if the MF fetch failed.
+        prev_snapshots: {leg_id: DailySnapshot} from get_prev_snapshots(), or None.
+        prev_mf_pnl: PortfolioPnL for the prior date, or None.
+        snap_date: Snapshot date stored in the summary (defaults to today).
+
+    Returns:
+        Multi-line formatted summary string (no trailing newline).
+    """
+    summary = _build_portfolio_summary(
+        snap_date=snap_date or date.today(),
+        strategies=strategies,
+        prices=prices,
+        strategy_pnls=strategy_pnls,
+        mf_pnl=mf_pnl,
+        prev_snapshots=prev_snapshots,
+        prev_mf_pnl=prev_mf_pnl,
+    )
+
     def _delta(d: Decimal | None) -> str:
         return f"  Δday: {d:>+12,.0f}" if d is not None else ""
 
-    # ── Build lines ───────────────────────────────────────────────
     lines: list[str] = ["", "  ── Combined Portfolio ─────────────────────────────────"]
 
-    if mf_pnl:
-        mf_pnl_str = f"  P&L: {mf_pnl_amt:>+11,.0f} ({mf_pnl_pct:+}%)"
-        lines.append(f"  MF current value    : ₹{mf_value:>14,.0f}{_delta(mf_day_delta)}{mf_pnl_str}")
+    if summary.mf_available:
+        mf_pnl_str = f"  P&L: {summary.mf_pnl:>+11,.0f} ({summary.mf_pnl_pct:+}%)"
+        lines.append(
+            f"  MF current value    : ₹{summary.mf_value:>14,.0f}"
+            f"{_delta(summary.mf_day_delta)}{mf_pnl_str}"
+        )
     else:
-        lines.append(f"  MF current value    :          [failed]{_delta(mf_day_delta)}")
+        lines.append(
+            f"  MF current value    :          [failed]{_delta(summary.mf_day_delta)}"
+        )
 
-    lines.append(f"  ETF current value   : ₹{etf_value:>14,.0f}{_delta(etf_day_delta)}  (basis ₹{etf_basis:,.0f})")
-    lines.append(f"  Options net P&L     : {options_pnl:>+15,.0f}{_delta(options_day_delta)}")
+    lines.append(
+        f"  ETF current value   : ₹{summary.etf_value:>14,.0f}"
+        f"{_delta(summary.etf_day_delta)}  (basis ₹{summary.etf_basis:,.0f})"
+    )
+    lines.append(
+        f"  Options net P&L     : {summary.options_pnl:>+15,.0f}"
+        f"{_delta(summary.options_day_delta)}"
+    )
     lines.append("  ───────────────────────────────────────────────────────")
-    lines.append(f"  Total value         : ₹{total_value:>14,.0f}{_delta(total_day_delta)}")
-    lines.append(f"  Total invested      : ₹{total_invested:>14,.0f}")
-    lines.append(f"  Total P&L           : {total_pnl:>+15,.0f}  ({total_pnl_pct:+}%)")
-    if not mf_pnl:
+    lines.append(
+        f"  Total value         : ₹{summary.total_value:>14,.0f}"
+        f"{_delta(summary.total_day_delta)}"
+    )
+    lines.append(f"  Total invested      : ₹{summary.total_invested:>14,.0f}")
+    lines.append(
+        f"  Total P&L           : {summary.total_pnl:>+15,.0f}"
+        f"  ({summary.total_pnl_pct:+}%)"
+    )
+    if not summary.mf_available:
         lines.append("  NOTE: MF fetch failed — MF value excluded from total")
 
     return "\n".join(lines)
@@ -262,11 +335,11 @@ def _print_combined_summary(
     mf_pnl: object | None,
     prev_snapshots: dict[int, DailySnapshot] | None = None,
     prev_mf_pnl: object | None = None,
+    snap_date: date | None = None,
 ) -> None:
     """Print the combined portfolio value across MF, ETF, and options.
 
     Delegates to _format_combined_summary and prints the result.
-    Signature is preserved for backward compatibility.
 
     Args:
         strategies: All loaded Strategy objects.
@@ -275,9 +348,10 @@ def _print_combined_summary(
         mf_pnl: Completed MF PortfolioPnL, or None if the MF fetch failed.
         prev_snapshots: {leg_id: DailySnapshot} from get_prev_snapshots(), or None.
         prev_mf_pnl: PortfolioPnL for the prior date, or None.
+        snap_date: Snapshot date stored in the summary (defaults to today).
     """
     print(_format_combined_summary(
-        strategies, prices, strategy_pnls, mf_pnl, prev_snapshots, prev_mf_pnl
+        strategies, prices, strategy_pnls, mf_pnl, prev_snapshots, prev_mf_pnl, snap_date
     ))
 
 
@@ -418,6 +492,7 @@ def _historical_main(snap_date: date, db_path: Path) -> int:
         strategies, prices, strategy_pnls, mf_pnl,
         prev_snapshots=prev_snapshots,
         prev_mf_pnl=prev_mf_pnl,
+        snap_date=snap_date,
     )
     print("\n  Done.")
     return 0
@@ -549,6 +624,7 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
         strategies, prices, strategy_pnls, mf_pnl,
         prev_snapshots=prev_snapshots,
         prev_mf_pnl=prev_mf_pnl,
+        snap_date=snap_date,
     )
     print(summary_text)
 

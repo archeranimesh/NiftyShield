@@ -80,7 +80,7 @@ tests/
 - Greeks capture — `_fetch_greeks()` returns `{}` immediately (explicit TODO)
 - `scripts/roll_leg.py` — CLI to close an old leg and open a replacement in one atomic transaction (not written)
 - Trade history model — `Trade`, `TradeAction` not yet defined; no audit trail for rolls/adjustments
-- `PortfolioSummary` type — combined MF + ETF + options totals computed inline in `daily_snapshot.py`; should migrate to a frozen dataclass in `src/portfolio/models.py` before the visualization commit
+- ~~`PortfolioSummary` type~~ — **DONE (2026-04-08)**: `PortfolioSummary` frozen dataclass added to `src/portfolio/models.py`. `_build_portfolio_summary()` extracted from `_format_combined_summary()` in `daily_snapshot.py`. Both callers (`_async_main`, `_historical_main`) thread `snap_date` through. 10 new tests, 246 total.
 - ~~Day-change P&L in combined summary~~ — **DONE (2026-04-07)**: `PortfolioStore.get_prev_snapshots()`, `MFStore.get_prev_nav_snapshots()`, `_build_prev_prices()`, `_compute_prev_mf_pnl()` helpers added. Combined summary now shows `Δday` for MF, ETF, and options when prev data exists; column omitted silently on first run.
 
 ### Live Data
@@ -168,6 +168,7 @@ Every code was replaced by grepping the live AMFI flat file.
 - `nav_fetcher` is injected into `MFTracker` via `NavFetcherFn = Callable[[set[str]], dict[str, Decimal]]` — tests pass a plain lambda, production defaults to `fetch_navs`. Missing NAV codes are skipped with a WARNING log, not raised — the tracker does not know which codes are critical.
 - `fetch_navs` missing-code behaviour: absent from result dict, logged at WARNING. Caller decides whether a missing code is fatal. The tracker skips; `seed_mf_holdings.py` is the right place to treat a missing code as an error (not yet implemented — currently silently skips).
 - **Combined portfolio summary** in `daily_snapshot.py`: `total_value = MF current value + ETF mark-to-market + options net P&L`. ETF legs identified by `leg.asset_type == AssetType.EQUITY`. `_etf_current_value` and `_etf_cost_basis` are pure helper functions at module level, directly importable in tests with no stubs required.
+- **`PortfolioSummary`** is a `frozen=True` dataclass in `src/portfolio/models.py`. Carries all combined totals (`mf_value`, `etf_value`, `options_pnl`, `total_value`, `total_pnl`, `total_pnl_pct`) plus four day-delta fields (all `Decimal | None`). `_build_portfolio_summary()` in `daily_snapshot.py` owns the computation; `_format_combined_summary()` delegates to it. `snapshot_date: date` field included for the upcoming visualization commit.
 - `PortfolioTracker.compute_pnl()` returns `StrategyPnL` with `total_pnl` as `Decimal`. No bridging cast needed when combining with other `Decimal` values in the combined summary.
 - **MF snapshot is non-fatal in cron:** the MF block in `daily_snapshot.py` is wrapped in `try/except Exception`. AMFI unreachable at 3:45 PM does not abort the portfolio snapshot — it logs a WARNING and the combined summary prints `[failed]` for the MF line.
 - `seed_mf_holdings.py` separates `build_transactions()` (pure, no I/O) from `seed_holdings()` (calls store) — `build_transactions()` is independently testable with no DB.
@@ -206,10 +207,10 @@ Before writing any code: read `CONTEXT.md`, state `CONTEXT.md ✓`, confirm file
 
 ## Immediate TODOs (in priority order)
 
-1. **daily_snapshot.py enhancements** — one remaining change:
-   - ~~**Day-change delta in output**~~ — **DONE (2026-04-07)**
-   - **Extract `PortfolioSummary`** frozen dataclass from inline computation in `daily_snapshot.py` into `src/portfolio/models.py` — prerequisite for visualization commit.
-   - ~~**Date parameter** (`--date YYYY-MM-DD`)~~ — **DONE** (2026-04-07): `_historical_main()` + `_compute_strategy_pnl_from_prices()` added. `PortfolioStore.get_snapshots_for_date()` + `MFStore.get_nav_snapshots_for_date()` added. 23 new tests.
+1. ~~**daily_snapshot.py enhancements**~~ — **ALL DONE**:
+   - ~~**Day-change delta in output**~~ — DONE (2026-04-07)
+   - ~~**Extract `PortfolioSummary`**~~ — DONE (2026-04-08)
+   - ~~**Date parameter** (`--date YYYY-MM-DD`)~~ — DONE (2026-04-07)
 
 2. ~~**Telegram bot notifications**~~ — **DONE (2026-04-08)**: `src/notifications/telegram.py` with `TelegramNotifier` + `build_notifier()`. Raw `requests`, HTML parse_mode, `<pre>` block for monospace alignment. Non-fatal (`Exception` caught broadly, WARNING logged). Injected in `_async_main` — skipped silently when env vars absent. `_format_combined_summary()` extracted from `_print_combined_summary()` so both the terminal and Telegram share the same formatted text. Smoke-test script: `scripts/send_test_telegram.py`. 25 new offline tests. 236 total, all green.
 
@@ -273,7 +274,8 @@ All 11 codes verified against live AMFI flat file on 2026-04-04.
 - 4 tests added to `tests/unit/mf/test_store.py` — `MFStore.get_nav_snapshots_for_date`: all schemes returned, other dates excluded, empty list, ordered by amfi_code.
 - 12 new tests (2026-04-07): `PortfolioStore.get_prev_snapshots` (4 tests in test_portfolio.py), `MFStore.get_prev_nav_snapshots` (4 tests in mf/test_store.py), day-change delta in summary output (2 tests), `_build_prev_prices` helper (2 tests) — both in test_daily_snapshot_historical.py.
 - 25 new tests (2026-04-08): `tests/unit/test_notifications.py` — `_html_escape` (5), `escape_mdv2` (3), `TelegramNotifier.send` happy path (6) + error paths (5 including bare Exception), `build_notifier` (6 tests: missing token, missing chat_id, both missing, both set, whitespace stripping, blank token).
-- **Total: 236 tests** — all offline, no API dependency
+- 10 new tests (2026-04-08): `tests/unit/mf/test_daily_snapshot_helpers.py` — `TestBuildPortfolioSummary` (10): isinstance check, date propagation, mf_available flag (True/False), total_value computation, total_pnl computation, total_pnl_pct quantization, all deltas None without prev data, mf_day_delta, total_day_delta absent when only prev_mf absent.
+- **Total: 246 tests** — all offline, no API dependency
 - `python -m pytest` is the confirmed invocation convention (adds CWD to sys.path automatically)
 - `python -m pytest tests/unit/` = full offline suite
 
@@ -286,3 +288,4 @@ All 11 codes verified against live AMFI flat file on 2026-04-04.
 | 2026-04-01 — 2026-04-04 | **Foundation sprint.** Auth, portfolio module, full MF stack (models/store/nav_fetcher/tracker), daily snapshot cron, seed scripts. All key decisions now in Architecture Decisions above. All 11 AMFI codes corrected against live AMFI flat file. 8-point code review applied (Decimal migration, shared db.py, enum compat, exception hierarchy, deferred I/O imports). 176 offline tests green. DB wiped and re-seeded; clean baseline from 2026-04-06. |
 | 2026-04-07 | --date historical query mode, day-change delta, _compute_prev_mf_pnl. 211 tests all green. |
 | 2026-04-08 | **Telegram bot notifications.** `src/notifications/telegram.py`: `TelegramNotifier` + `build_notifier()`. Raw requests, HTML parse_mode, `<pre>` block. Non-fatal (broad Exception catch). `_format_combined_summary()` extracted from `_print_combined_summary()` — both terminal and Telegram share the same formatted text. Injected in `_async_main`, skipped silently when env vars absent. `scripts/send_test_telegram.py` smoke-test script. `.env.example` updated with `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID`. 25 new tests, 236 total, all green. |
+| 2026-04-08 | **PortfolioSummary extraction.** `PortfolioSummary` frozen dataclass added to `src/portfolio/models.py` (snapshot_date, MF/ETF/options components, combined totals, 4 day-delta fields). `_build_portfolio_summary()` extracted into `daily_snapshot.py` — owns all arithmetic previously inline in `_format_combined_summary()`. `_format_combined_summary()` and `_print_combined_summary()` gain optional `snap_date` kwarg (backward compat). Both `_async_main` and `_historical_main` thread `snap_date` through. 10 new tests, 246 total, all green. |
