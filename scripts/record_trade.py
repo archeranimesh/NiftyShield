@@ -5,17 +5,17 @@ Pure insert path — no DB reads until the post-insert position summary.
 
 Usage:
     python scripts/record_trade.py \\
-        --strategy ILTS \\
+        --strategy finideas_ilts \\
         --leg EBBETF0431 \\
         --key "NSE_EQ|INF754K01LE1" \\
         --date 2026-04-08 \\
         --action BUY \\
         --qty 27 \\
         --price 1386.20 \\
-        --notes "addition to ILTS position"
+        --notes "addition to finideas_ilts position"
 
     # Dry run — prints Trade object without inserting:
-    python scripts/record_trade.py --strategy ILTS --leg EBBETF0431 \\
+    python scripts/record_trade.py --strategy finideas_ilts --leg EBBETF0431 \\
         --key "NSE_EQ|INF754K01LE1" --date 2026-04-08 --action BUY \\
         --qty 27 --price 1386.20 --dry-run
 """
@@ -40,7 +40,7 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Record a single trade execution into the portfolio trade ledger."
     )
-    parser.add_argument("--strategy", required=True, help='Strategy name, e.g. "ILTS"')
+    parser.add_argument("--strategy", required=True, help='Strategy name, e.g. "finideas_ilts"')
     parser.add_argument("--leg", required=True, help='Leg role label, e.g. "EBBETF0431"')
     parser.add_argument(
         "--key", required=True, help='Upstox instrument key, e.g. "NSE_EQ|INF754K01LE1"'

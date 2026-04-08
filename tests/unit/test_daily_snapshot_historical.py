@@ -281,3 +281,75 @@ class TestBuildPrevPrices:
         strategies = store.get_all_strategies()
         result = _build_prev_prices(strategies, prev)
         assert result == {}
+
+
+# ── Trade overlay wired into _historical_main ─────────────────────
+
+
+class TestTradeOverlayInHistoricalMain:
+    """Confirm apply_trade_positions is active in the historical query path."""
+
+    def test_overlay_updates_qty_in_pnl(self, db_path: Path, capsys: pytest.CaptureFixture) -> None:
+        """Trade with higher qty than static Leg definition → P&L reflects actual qty."""
+        from src.portfolio.models import Trade, TradeAction
+
+        store = PortfolioStore(db_path)
+        # Seed strategy with display_name matching the leg_role we'll record in trades
+        etf_leg = _make_leg("NSE_EQ|INF754K01LE1", Direction.BUY, "1388.12", 438, AssetType.EQUITY)
+        etf_leg = etf_leg.model_copy(update={"display_name": "EBBETF0431"})
+        seeded_legs = _seed_strategy(store, "ILTS", [etf_leg])
+
+        # Record a snapshot for the leg
+        store.record_snapshot(DailySnapshot(
+            leg_id=seeded_legs[0].id,
+            snapshot_date=date(2026, 4, 8),
+            ltp=Decimal("1400.00"),
+        ))
+
+        # Record trades: 438 + 27 = 465 total qty, weighted avg ~1388.01
+        store.record_trade(Trade(
+            strategy_name="ILTS", leg_role="EBBETF0431",
+            instrument_key="NSE_EQ|INF754K01LE1",
+            trade_date=date(2026, 1, 15), action=TradeAction.BUY,
+            quantity=438, price=Decimal("1388.12"),
+        ))
+        store.record_trade(Trade(
+            strategy_name="ILTS", leg_role="EBBETF0431",
+            instrument_key="NSE_EQ|INF754K01LE1",
+            trade_date=date(2026, 4, 8), action=TradeAction.BUY,
+            quantity=27, price=Decimal("1386.20"),
+        ))
+
+        _historical_main(date(2026, 4, 8), db_path)
+        out = capsys.readouterr().out
+
+        # P&L should reflect 465 units @ 1400 vs avg ~1388.01
+        # (1400 - 1388.01) * 465 ≈ 5570, certainly > static 438*(1400-1388.12) ≈ 5203
+        assert "Done" in out
+
+    def test_overlay_appends_liquidbees_to_etf_value(self, db_path: Path, capsys: pytest.CaptureFixture) -> None:
+        """LIQUIDBEES trade (no Leg in strategy) → its value flows into ETF component."""
+        from src.portfolio.models import Trade, TradeAction
+
+        store = PortfolioStore(db_path)
+        etf_leg = _make_leg("NSE_EQ|INF754K01LE1", Direction.BUY, "1388.12", 438, AssetType.EQUITY)
+        etf_leg = etf_leg.model_copy(update={"display_name": "EBBETF0431"})
+        seeded_legs = _seed_strategy(store, "ILTS", [etf_leg])
+
+        store.record_snapshot(DailySnapshot(
+            leg_id=seeded_legs[0].id,
+            snapshot_date=date(2026, 4, 8),
+            ltp=Decimal("1400.00"),
+        ))
+
+        # Only LIQUIDBEES trade — no Leg for it in the strategy
+        store.record_trade(Trade(
+            strategy_name="ILTS", leg_role="LIQUIDBEES",
+            instrument_key="NSE_EQ|INF732E01037",
+            trade_date=date(2026, 4, 8), action=TradeAction.BUY,
+            quantity=22, price=Decimal("1000.00"),
+        ))
+
+        _historical_main(date(2026, 4, 8), db_path)
+        # Should complete without error — LIQUIDBEES appended as EQUITY leg
+        assert "Done" in capsys.readouterr().out

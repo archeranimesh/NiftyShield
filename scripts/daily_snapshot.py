@@ -410,6 +410,7 @@ def _historical_main(snap_date: date, db_path: Path) -> int:
     from src.mf.store import MFStore
     from src.mf.tracker import PortfolioPnL, _aggregate, _scheme_pnl  # noqa: PLC2701
     from src.portfolio.store import PortfolioStore
+    from src.portfolio.tracker import apply_trade_positions
 
     if not db_path.exists():
         print(f"  ERROR: DB not found at {db_path}")
@@ -421,6 +422,12 @@ def _historical_main(snap_date: date, db_path: Path) -> int:
     if not strategies:
         print("  ERROR: No strategies found in DB. Run seed_portfolio first.")
         return 1
+
+    # ── Overlay trade-derived positions onto strategy leg definitions ─
+    strategies = [
+        apply_trade_positions(s, store.get_all_positions_for_strategy(s.name))
+        for s in strategies
+    ]
 
     snapshots_by_leg = store.get_snapshots_for_date(snap_date)
     if not snapshots_by_leg:
@@ -525,7 +532,7 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
     from src.mf.store import MFStore
     from src.mf.tracker import MFTracker
     from src.portfolio.store import PortfolioStore
-    from src.portfolio.tracker import PortfolioTracker
+    from src.portfolio.tracker import PortfolioTracker, apply_trade_positions
 
     # ── Validate DB exists ───────────────────────────────────────
     if not db_path.exists():
@@ -539,6 +546,15 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
     if not strategies:
         print("  ERROR: No strategies found in DB. Run seed_portfolio first.")
         return 1
+
+    # ── Overlay trade-derived positions onto strategy leg definitions ─
+    # Replaces static qty/entry_price in Leg objects with the live reality
+    # from the trades ledger. Appends legs that exist in trades but not in
+    # the strategy definition (e.g. LIQUIDBEES). Pure — no network.
+    strategies = [
+        apply_trade_positions(s, store.get_all_positions_for_strategy(s.name))
+        for s in strategies
+    ]
 
     # Fetch prev-day snapshots early (before LTP fetch) — pure DB read, no network
     prev_snapshots = store.get_prev_snapshots(snap_date)
@@ -559,7 +575,7 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
 
     # ── Fetch all LTPs in one batch (Nifty spot piggybacked) ─────
     try:
-        prices = client.get_ltp_sync(list(all_keys | {NIFTY_INDEX_KEY}))
+        prices = await client.get_ltp(list(all_keys | {NIFTY_INDEX_KEY}))
     except LTPFetchError as e:
         print(f"  ERROR: LTP fetch failed — {e}")
         print("  Aborting: cannot record snapshots with stale/zero prices.")

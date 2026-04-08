@@ -17,6 +17,7 @@ from src.portfolio.models import (
     DailySnapshot,
     Direction,
     Leg,
+    ProductType,
     Strategy,
 )
 from src.portfolio.store import PortfolioStore
@@ -63,6 +64,94 @@ class StrategyPnL:
         return (self.total_pnl / entry * 100) if entry > 0 else Decimal("0")
 
 
+def apply_trade_positions(
+    strategy: Strategy,
+    positions: dict[str, tuple[int, Decimal, str]],
+) -> Strategy:
+    """Return a new Strategy with leg quantities and entry prices from the trades ledger.
+
+    Matching between strategy legs and trade positions is done on instrument_key —
+    the unambiguous Upstox key (e.g. "NSE_EQ|INF754K01LE1"). display_name is NOT
+    used for matching because it contains human-readable suffixes in the strategy
+    definition (e.g. "EBBETF0431 (Bharat Bond ETF Apr 2031)") that differ from the
+    short leg_role in the trades table ("EBBETF0431").
+
+    For every leg in the strategy whose instrument_key has a matching entry in
+    *positions*, the returned copy has quantity and entry_price replaced with the
+    trade-derived net_qty and weighted-average buy price.
+
+    Legs with zero net quantity in *positions* are dropped — they are fully closed.
+
+    Leg roles in *positions* whose instrument_key has no matching leg in the strategy
+    (e.g. LIQUIDBEES, which is in the trades table but not in ilts.py) are appended
+    as new EQUITY/CNC legs so their mark-to-market value flows into the P&L summary.
+
+    Legs in the strategy whose instrument_key has no entry in *positions* (e.g.
+    options legs never individually traded via record_trade) are passed through
+    unchanged.
+
+    This function is pure — no I/O, no DB access.
+
+    Args:
+        strategy: Original Strategy object from ALL_STRATEGIES.
+        positions: Output of PortfolioStore.get_all_positions_for_strategy() —
+            dict[leg_role → (net_qty, avg_buy_price, instrument_key)].
+
+    Returns:
+        New Strategy instance with trade-derived quantities where available.
+    """
+    # Build instrument_key → (leg_role, net_qty, avg_price) for O(1) lookup
+    by_instrument_key: dict[str, tuple[str, int, Decimal]] = {
+        instrument_key: (leg_role, net_qty, avg_price)
+        for leg_role, (net_qty, avg_price, instrument_key) in positions.items()
+    }
+
+    updated_legs: list[Leg] = []
+    matched_keys: set[str] = set()
+
+    for leg in strategy.legs:
+        if leg.instrument_key in by_instrument_key:
+            matched_keys.add(leg.instrument_key)
+            _, net_qty, avg_price = by_instrument_key[leg.instrument_key]
+            if net_qty == 0:
+                continue  # fully closed — drop from active P&L
+            updated_legs.append(leg.model_copy(update={
+                "quantity": net_qty,
+                "entry_price": avg_price,
+            }))
+        else:
+            updated_legs.append(leg)
+
+    # Append legs that exist in trades but not in the strategy definition
+    entry_date = strategy.legs[0].entry_date if strategy.legs else __import__("datetime").date.today()
+    for leg_role, (net_qty, avg_price, instrument_key) in positions.items():
+        if instrument_key in matched_keys:
+            continue
+        if net_qty == 0:
+            continue  # fully closed — skip
+        updated_legs.append(Leg(
+            instrument_key=instrument_key,
+            display_name=leg_role,
+            asset_type=AssetType.EQUITY,
+            direction=Direction.BUY,
+            quantity=net_qty,
+            lot_size=1,
+            entry_price=avg_price,
+            entry_date=entry_date,
+            expiry=None,
+            strike=None,
+            product_type=ProductType.CNC,
+        ))
+
+    return Strategy(
+        id=strategy.id,
+        name=strategy.name,
+        description=strategy.description,
+        legs=updated_legs,
+        created_at=strategy.created_at,
+    )
+
+
 class PortfolioTracker:
     """Tracks P&L and records daily snapshots for all strategies."""
 
@@ -70,12 +159,43 @@ class PortfolioTracker:
         self.store = store
         self.market = market
 
+    def _get_overlaid_strategy(self, strategy_name: str) -> Strategy | None:
+        """Load a strategy from the store and overlay trade-derived positions.
+
+        Applies apply_trade_positions so that quantities and entry prices
+        reflect the trades ledger rather than the static seed values.
+
+        Args:
+            strategy_name: Strategy to load and overlay.
+
+        Returns:
+            Strategy with trade overlay applied, or None if not found.
+        """
+        strategy = self.store.get_strategy(strategy_name)
+        if not strategy:
+            return None
+        positions = self.store.get_all_positions_for_strategy(strategy_name)
+        if positions:
+            strategy = apply_trade_positions(strategy, positions)
+        return strategy
+
+    def _get_all_overlaid_strategies(self) -> list[Strategy]:
+        """Load all strategies from the store with trade overlays applied."""
+        strategies = self.store.get_all_strategies()
+        result = []
+        for s in strategies:
+            positions = self.store.get_all_positions_for_strategy(s.name)
+            if positions:
+                s = apply_trade_positions(s, positions)
+            result.append(s)
+        return result
+
     async def compute_pnl(self, strategy_name: str) -> StrategyPnL | None:
         """Fetch current prices and compute live P&L for a strategy.
 
         Returns None if strategy not found in the store.
         """
-        strategy = self.store.get_strategy(strategy_name)
+        strategy = self._get_overlaid_strategy(strategy_name)
         if not strategy:
             logger.warning("Strategy '%s' not found in store", strategy_name)
             return None
@@ -124,7 +244,7 @@ class PortfolioTracker:
             Number of snapshots recorded.
         """
         snap_date = snapshot_date or date.today()
-        strategy = self.store.get_strategy(strategy_name)
+        strategy = self._get_overlaid_strategy(strategy_name)
         if not strategy:
             logger.warning("Strategy '%s' not found — skipping snapshot", strategy_name)
             return 0
@@ -138,7 +258,13 @@ class PortfolioTracker:
         snapshots = []
         for leg in strategy.legs:
             if leg.id is None:
-                continue
+                # Trade-only leg (e.g. LIQUIDBEES) — auto-persist to get a DB id
+                leg_id = self.store.ensure_leg(strategy_name, leg)
+                leg = leg.model_copy(update={"id": leg_id})
+                logger.info(
+                    "Auto-persisted trade-only leg '%s' (id=%d) for '%s'",
+                    leg.display_name, leg_id, strategy_name,
+                )
 
             ltp = Decimal(str(prices.get(leg.instrument_key, 0.0)))
             greeks = greeks_map.get(leg.instrument_key, {})
@@ -177,7 +303,7 @@ class PortfolioTracker:
         underlying_price: float | None = None,
     ) -> dict[str, int]:
         """Record daily snapshots for every strategy in the store."""
-        strategies = self.store.get_all_strategies()
+        strategies = self._get_all_overlaid_strategies()
         results = {}
         for strategy in strategies:
             count = await self.record_daily_snapshot(

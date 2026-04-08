@@ -159,6 +159,39 @@ class PortfolioStore:
         )
         return cursor.lastrowid  # type: ignore[return-value]
 
+    def ensure_leg(self, strategy_name: str, leg: Leg) -> int:
+        """Persist a trade-only leg to the legs table if it has no id.
+
+        Used by PortfolioTracker to auto-create DB rows for legs that
+        exist in the trades ledger but not in the original strategy
+        definition (e.g. LIQUIDBEES). Idempotent — returns existing id
+        if the leg already exists.
+
+        Args:
+            strategy_name: Owning strategy name (looked up to get strategy_id).
+            leg: Leg to persist. If leg.id is set, returns it immediately.
+
+        Returns:
+            The leg's DB id (existing or newly inserted).
+
+        Raises:
+            ValueError: If the strategy does not exist in the DB.
+        """
+        if leg.id is not None:
+            return leg.id
+
+        with _connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT id FROM strategies WHERE name = ?", (strategy_name,)
+            ).fetchone()
+            if not row:
+                raise ValueError(f"Strategy '{strategy_name}' not found in DB")
+            strategy_id = row["id"]
+
+            # Attach strategy_id so _upsert_leg can match
+            leg_with_sid = leg.model_copy(update={"strategy_id": strategy_id})
+            return self._upsert_leg(conn, leg_with_sid)
+
     def get_strategy(self, name: str) -> Strategy | None:
         """Load a strategy with all its legs by name."""
         with _connect(self.db_path) as conn:

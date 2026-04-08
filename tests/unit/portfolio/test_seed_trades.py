@@ -3,10 +3,10 @@
 All tests use a file-based SQLite DB under pytest's tmp_path — fully offline.
 
 Coverage:
-- build_trades: correct count (7 total: 6 ILTS + 1 FinRakshak).
+- build_trades: correct count (7 total: 6 finideas_ilts + 1 finrakshak).
 - build_trades: each trade has correct strategy_name and leg_role.
-- build_trades: ILTS has both BUY and SELL actions (NIFTY_JUN_PE is SELL).
-- build_trades: FinRakshak has exactly one BUY trade.
+- build_trades: finideas_ilts has both BUY and SELL actions (NIFTY_JUN_PE is SELL).
+- build_trades: finrakshak has exactly one BUY trade.
 - build_trades: Decimal precision on price fields.
 - seed_trades: all 7 trades inserted on first run.
 - seed_trades: idempotent — running 3× leaves the same row count.
@@ -41,32 +41,32 @@ def test_build_trades_total_count() -> None:
 
 
 def test_build_trades_ilts_count() -> None:
-    ilts = [t for t in build_trades() if t.strategy_name == "ILTS"]
+    ilts = [t for t in build_trades() if t.strategy_name == "finideas_ilts"]
     assert len(ilts) == len(_ILTS_TRADES)
 
 
 def test_build_trades_finrakshak_count() -> None:
-    fr = [t for t in build_trades() if t.strategy_name == "FinRakshak"]
+    fr = [t for t in build_trades() if t.strategy_name == "finrakshak"]
     assert len(fr) == len(_FINRAKSHAK_TRADES)
 
 
 def test_build_trades_ilts_has_sell_action() -> None:
     """NIFTY_JUN_PE is the short leg — must be TradeAction.SELL."""
-    ilts = [t for t in build_trades() if t.strategy_name == "ILTS"]
+    ilts = [t for t in build_trades() if t.strategy_name == "finideas_ilts"]
     sell_trades = [t for t in ilts if t.action == TradeAction.SELL]
     assert len(sell_trades) >= 1
     assert any(t.leg_role == "NIFTY_JUN_PE" for t in sell_trades)
 
 
 def test_build_trades_all_finrakshak_are_buy() -> None:
-    fr = [t for t in build_trades() if t.strategy_name == "FinRakshak"]
+    fr = [t for t in build_trades() if t.strategy_name == "finrakshak"]
     assert all(t.action == TradeAction.BUY for t in fr)
 
 
 def test_build_trades_ebbetf0431_has_two_buys() -> None:
     ebbetf = [
         t for t in build_trades()
-        if t.strategy_name == "ILTS" and t.leg_role == "EBBETF0431"
+        if t.strategy_name == "finideas_ilts" and t.leg_role == "EBBETF0431"
     ]
     assert len(ebbetf) == 2
     assert all(t.action == TradeAction.BUY for t in ebbetf)
@@ -84,7 +84,7 @@ def test_build_trades_liquidbees_instrument_key() -> None:
 
 
 def test_build_trades_finrakshak_instrument_key() -> None:
-    fr = [t for t in build_trades() if t.strategy_name == "FinRakshak"]
+    fr = [t for t in build_trades() if t.strategy_name == "finrakshak"]
     assert fr[0].instrument_key == "NSE_FO|37810"
 
 
@@ -98,13 +98,13 @@ def test_build_trades_decimal_precision_ebbetf() -> None:
 def test_build_trades_decimal_precision_nifty_jun_pe() -> None:
     pe = [
         t for t in build_trades()
-        if t.strategy_name == "ILTS" and t.leg_role == "NIFTY_JUN_PE"
+        if t.strategy_name == "finideas_ilts" and t.leg_role == "NIFTY_JUN_PE"
     ]
     assert pe[0].price == Decimal("840.00")
 
 
 def test_build_trades_finrakshak_price_precision() -> None:
-    fr = [t for t in build_trades() if t.strategy_name == "FinRakshak"]
+    fr = [t for t in build_trades() if t.strategy_name == "finrakshak"]
     assert fr[0].price == Decimal("962.15")
 
 
@@ -119,8 +119,8 @@ def test_seed_trades_inserts_all(store: PortfolioStore) -> None:
 def test_seed_trades_idempotent_twice(store: PortfolioStore) -> None:
     seed_trades(store)
     seed_trades(store)
-    ilts = store.get_trades("ILTS")
-    fr = store.get_trades("FinRakshak")
+    ilts = store.get_trades("finideas_ilts")
+    fr = store.get_trades("finrakshak")
     assert len(ilts) == len(_ILTS_TRADES)
     assert len(fr) == len(_FINRAKSHAK_TRADES)
 
@@ -129,14 +129,14 @@ def test_seed_trades_idempotent_three_times(store: PortfolioStore) -> None:
     seed_trades(store)
     seed_trades(store)
     seed_trades(store)
-    total = len(store.get_trades("ILTS")) + len(store.get_trades("FinRakshak"))
+    total = len(store.get_trades("finideas_ilts")) + len(store.get_trades("finrakshak"))
     assert total == len(build_trades())
 
 
 def test_seed_trades_ebbetf0431_position(store: PortfolioStore) -> None:
     """After seed, EBBETF0431 net qty = 465 and avg price is the weighted average."""
     seed_trades(store)
-    net_qty, avg_price = store.get_position("ILTS", "EBBETF0431")
+    net_qty, avg_price = store.get_position("finideas_ilts", "EBBETF0431")
     assert net_qty == 465
     expected_avg = (
         Decimal("438") * Decimal("1388.12") + Decimal("27") * Decimal("1386.20")
@@ -147,6 +147,6 @@ def test_seed_trades_ebbetf0431_position(store: PortfolioStore) -> None:
 def test_seed_trades_nifty_jun_pe_is_short(store: PortfolioStore) -> None:
     """NIFTY_JUN_PE SELL 65 → net qty -65, avg buy price 0."""
     seed_trades(store)
-    net_qty, avg_price = store.get_position("ILTS", "NIFTY_JUN_PE")
+    net_qty, avg_price = store.get_position("finideas_ilts", "NIFTY_JUN_PE")
     assert net_qty == -65
     assert avg_price == Decimal("0")
