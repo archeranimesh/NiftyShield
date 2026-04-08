@@ -10,8 +10,8 @@ import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Protocol, runtime_checkable
 
+from src.client.protocol import MarketDataProvider
 from src.portfolio.models import (
     AssetType,
     DailySnapshot,
@@ -22,19 +22,6 @@ from src.portfolio.models import (
 from src.portfolio.store import PortfolioStore
 
 logger = logging.getLogger(__name__)
-
-
-# ── Minimal protocol surface needed by tracker ───────────────────
-
-@runtime_checkable
-class MarketDataProvider(Protocol):
-    """Subset of BrokerClient that the tracker actually needs."""
-
-    async def get_ltp(self, instruments: list[str]) -> dict[str, float]: ...
-
-    async def get_option_chain(
-        self, instrument: str, expiry: str
-    ) -> dict: ...
 
 
 # ── P&L summary dataclasses ─────────────────────────────────────
