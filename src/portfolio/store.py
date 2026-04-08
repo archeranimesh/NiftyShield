@@ -486,6 +486,40 @@ class PortfolioStore:
         avg_price = (buy_value / buy_qty) if buy_qty > 0 else Decimal("0")
         return (net_qty, avg_price)
 
+    def get_all_positions_for_strategy(
+        self, strategy_name: str
+    ) -> dict[str, tuple[int, Decimal, str]]:
+        """Derive net position for every leg that has trades in a strategy.
+
+        Iterates over all distinct leg_roles for the given strategy and calls
+        get_position() for each. Legs with zero net quantity (fully closed) are
+        still included so callers can decide how to handle them.
+
+        Args:
+            strategy_name: Strategy to query (e.g. "ILTS").
+
+        Returns:
+            Dict keyed by leg_role → (net_qty, avg_buy_price, instrument_key).
+            instrument_key is taken from the most recent trade for that leg.
+            Returns empty dict when no trades exist for the strategy.
+        """
+        with _connect(self.db_path) as conn:
+            rows = conn.execute(
+                """SELECT DISTINCT leg_role, instrument_key
+                   FROM trades
+                   WHERE strategy_name = ?
+                   ORDER BY leg_role""",
+                (strategy_name,),
+            ).fetchall()
+
+        result: dict[str, tuple[int, Decimal, str]] = {}
+        for row in rows:
+            leg_role = row["leg_role"]
+            instrument_key = row["instrument_key"]
+            net_qty, avg_price = self.get_position(strategy_name, leg_role)
+            result[leg_role] = (net_qty, avg_price, instrument_key)
+        return result
+
     @staticmethod
     def _row_to_trade(row: sqlite3.Row) -> Trade:
         return Trade(

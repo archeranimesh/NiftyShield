@@ -281,3 +281,79 @@ def test_get_position_sell_only_avg_price_is_zero(store: PortfolioStore) -> None
     store.record_trade(_sell(qty=65, price="840.00"))
     _, avg = store.get_position("ILTS", "NIFTY_JUN_PE")
     assert avg == Decimal("0")
+
+
+# ── get_all_positions_for_strategy ────────────────────────────────────────────
+
+
+def test_get_all_positions_empty_when_no_trades(store: PortfolioStore) -> None:
+    """Returns empty dict when strategy has no trades at all."""
+    result = store.get_all_positions_for_strategy("ILTS")
+    assert result == {}
+
+
+def test_get_all_positions_single_leg(store: PortfolioStore) -> None:
+    """Single leg BUY — returns correct net qty, avg price, and instrument_key."""
+    store.record_trade(_buy(qty=438, price="1388.12"))
+    result = store.get_all_positions_for_strategy("ILTS")
+    assert "EBBETF0431" in result
+    net_qty, avg_price, key = result["EBBETF0431"]
+    assert net_qty == 438
+    assert avg_price == Decimal("1388.12")
+    assert key == "NSE_EQ|INF754K01LE1"
+
+
+def test_get_all_positions_multiple_legs(store: PortfolioStore) -> None:
+    """Multiple legs returned — one BUY equity, one SELL option."""
+    store.record_trade(_buy(qty=438, price="1388.12"))
+    store.record_trade(_sell(qty=65, price="840.00"))
+    result = store.get_all_positions_for_strategy("ILTS")
+    assert set(result.keys()) == {"EBBETF0431", "NIFTY_JUN_PE"}
+    assert result["EBBETF0431"][0] == 438
+    assert result["NIFTY_JUN_PE"][0] == -65
+
+
+def test_get_all_positions_accumulates_multiple_buys(store: PortfolioStore) -> None:
+    """Two BUY trades for same leg on different dates → correct net qty and weighted avg."""
+    store.record_trade(_buy(qty=438, price="1388.12", trade_date=date(2026, 1, 15)))
+    store.record_trade(_buy(qty=27, price="1386.20", trade_date=date(2026, 4, 8)))
+    result = store.get_all_positions_for_strategy("ILTS")
+    net_qty, avg_price, _ = result["EBBETF0431"]
+    assert net_qty == 465
+    # Weighted avg: (438*1388.12 + 27*1386.20) / 465
+    expected = (Decimal("438") * Decimal("1388.12") + Decimal("27") * Decimal("1386.20")) / Decimal("465")
+    assert avg_price == expected
+
+
+def test_get_all_positions_instrument_key_from_trades(store: PortfolioStore) -> None:
+    """instrument_key in result comes from the trades table, not from Leg definitions."""
+    store.record_trade(
+        Trade(
+            strategy_name="ILTS", leg_role="LIQUIDBEES",
+            instrument_key="NSE_EQ|INF732E01037",
+            trade_date=date(2026, 4, 8), action=TradeAction.BUY,
+            quantity=22, price=Decimal("1000.00"),
+        )
+    )
+    result = store.get_all_positions_for_strategy("ILTS")
+    assert "LIQUIDBEES" in result
+    assert result["LIQUIDBEES"][2] == "NSE_EQ|INF732E01037"
+
+
+def test_get_all_positions_isolates_by_strategy(store: PortfolioStore) -> None:
+    """ILTS trades do not appear in FinRakshak results and vice versa."""
+    store.record_trade(_buy(strategy="ILTS", leg="EBBETF0431", qty=438))
+    store.record_trade(
+        Trade(
+            strategy_name="FinRakshak", leg_role="NIFTY_DEC_PE",
+            instrument_key="NSE_FO|37810",
+            trade_date=date(2026, 1, 15), action=TradeAction.BUY,
+            quantity=65, price=Decimal("962.15"),
+        )
+    )
+    ilts = store.get_all_positions_for_strategy("ILTS")
+    fr = store.get_all_positions_for_strategy("FinRakshak")
+    assert "EBBETF0431" in ilts
+    assert "EBBETF0431" not in fr
+    assert "NIFTY_DEC_PE" in fr
+    assert "NIFTY_DEC_PE" not in ilts
