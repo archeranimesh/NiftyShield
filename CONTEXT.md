@@ -6,7 +6,7 @@
 
 ---
 
-## Current State (as of 2026-04-08)
+## Current State (as of 2026-04-10)
 
 ### What Exists (committed and working)
 
@@ -14,7 +14,9 @@
 src/
 ├── auth/
 │   ├── login.py              # OAuth flow — opens browser, captures code, saves token to .env
-│   └── verify.py             # API connectivity check — fetches user profile
+│   ├── verify.py             # API connectivity check — fetches user profile
+│   ├── nuvama_login.py       # Nuvama request_id flow — opens browser, captures request_id from redirect, initializes APIConnect session, saves NUVAMA_SETTINGS_FILE to .env. APIConnect persists session token in settings_file (no daily re-auth required after first login).
+│   └── nuvama_verify.py      # Nuvama connectivity check — loads APIConnect from settings_file, calls Holdings(), prints holding count + ltp. parse_holdings() is a pure function (testable independently).
 ├── analytics/                # Exploratory scripts (not production modules)
 │   └── verify_analytics.py   # Tests LTP, option chain, Greeks, historical candles via Analytics Token
 ├── sandbox/                  # Exploratory scripts
@@ -71,6 +73,10 @@ tests/
 │       ├── test_seed.py      # 20 tests: seed transaction shape, verified AMFI code set, idempotency, Decimal precision, total_invested sum
 │       ├── test_daily_snapshot_mf.py   # 12 tests: MF wire-up path — schema coexistence, full seed→snapshot→aggregate, empty holdings, nav failure
 │       └── test_daily_snapshot_helpers.py  # 11 tests: _etf_current_value + _etf_cost_basis pure helpers. No sys.modules stubs needed — daily_snapshot.py has no I/O imports at module level.
+└── auth/
+    ├── __init__.py
+    ├── test_nuvama_login.py   # 16 tests: build_login_url, extract_request_id (full URL + bare token + whitespace), initialize_session (APIConnect args, parent dir creation, is_production flag), save_settings_path (write + upsert), login flow (missing creds, empty input, full flow). autouse clean_env fixture prevents dotenv leakage.
+    └── test_nuvama_verify.py  # 17 tests: parse_holdings (flat list, whitespace strip, multiple records, empty, invalid JSON, missing key), load_api_connect (missing creds, settings file missing, happy path), verify (true/false on valid/invalid response, config error, api exception, stdout count). autouse clean_env fixture.
 └── fixtures/
     ├── responses/            # 7 JSON fixtures recorded from real APIs (LTP, option chain, Greeks, candles)
     └── amfi/
@@ -112,7 +118,8 @@ tests/
 ### Tokens & Auth
 - **Analytics Token** is the primary working token (read-side: quotes, option chain, Greeks, candles, websocket). Lasts 1 year, no OAuth required.
 - **Daily OAuth token** (Algo Trading app) needed only for portfolio/positions read and order execution.
-- Both tokens stored in `.env`.
+- Both Upstox tokens stored in `.env`.
+- **Nuvama APIConnect** uses a `request_id` redirect flow (one-time login via browser). Session token is persisted in `data/nuvama/settings.json` (path configurable via `NUVAMA_SETTINGS_FILE`). Unlike Upstox, no daily re-auth — session survives until explicitly invalidated. Login: `python -m src.auth.nuvama_login`. Verify: `python -m src.auth.nuvama_verify`.
 
 ### Instrument Keys (verified against live API)
 | Instrument | Key | Notes |
@@ -340,3 +347,4 @@ All 11 codes verified against live AMFI flat file on 2026-04-04.
 | 2026-04-08 | **Trade ledger.** `TradeAction` + `Trade` (frozen Pydantic, qty/price > 0) added to `src/portfolio/models.py`. `trades` table added to `PortfolioStore` (additive, `CREATE IF NOT EXISTS`): `record_trade` (idempotent), `get_trades` (strategy/leg filter, date ASC), `get_position` (net qty + weighted avg buy price in Python). `scripts/seed_trades.py` backfills all ILTS + FinRakshak positions (7 trades). `scripts/record_trade.py` CLI for future captures — validates via model, inserts, prints position summary. LIQUIDBEES key verified against `NSE.json.gz` BOD: `NSE_EQ\|INF732E01037`. Live DB seeded; existing tables untouched (20 snapshots, 11 MF transactions confirmed). 58 new tests in `tests/unit/portfolio/`. 385 total, all green. |
 | 2026-04-08 | **Trade overlay into P&L pipeline.** `get_all_positions_for_strategy()` added to `PortfolioStore` — returns all leg_roles with (net_qty, avg_price, instrument_key) for a strategy. `apply_trade_positions()` pure function added to `src/portfolio/tracker.py` — patches Leg qty/entry_price from trades, appends trade-only legs (LIQUIDBEES) as EQUITY/CNC, drops zero-net-qty legs, returns new Strategy without mutating original. Wired into both `_async_main` and `_historical_main` in `daily_snapshot.py` immediately after `get_all_strategies()`. P&L now reflects actual traded qty and weighted avg cost basis. 17 new tests (6 store + 9 apply_trade_positions + 2 integration). 400 total, all green. |
 | 2026-04-08 | **Trade overlay internalized + strategy name fix.** Three bugs fixed: (1) `daily_snapshot.py` called `client.get_ltp_sync()` which doesn't exist on `UpstoxLiveClient` — changed to `await client.get_ltp()`. (2) `PortfolioTracker.compute_pnl`, `record_daily_snapshot`, `record_all_strategies` re-loaded raw DB legs, bypassing the trade overlay — added `_get_overlaid_strategy()` / `_get_all_overlaid_strategies()` private helpers so the overlay is applied internally. Trade-only legs (LIQUIDBEES) with no DB id are auto-persisted via new `store.ensure_leg()`. (3) `trades.strategy_name` used `ILTS`/`FinRakshak` but `strategies.name` had `finideas_ilts`/`finrakshak` — overlay returned empty and was silently a no-op. Migrated DB rows + fixed `seed_trades.py`, `record_trade.py`, and test assertions. 240 portfolio+MF tests green. |
+| 2026-04-10 | **Nuvama broker integration — auth layer.** `src/auth/nuvama_login.py`: request_id redirect flow via `APIConnect` PyPI package. `build_login_url`, `extract_request_id` (full URL + bare token), `initialize_session`, `save_settings_path`, `login` orchestrator. `src/auth/nuvama_verify.py`: `load_api_connect` (reads from settings_file, no request_id needed after first login), `parse_holdings` (pure, maps `eq.data.rmsHdg` → flat list), `verify` (connectivity check with tabular output). `tests/unit/auth/` created: 16 login tests + 17 verify tests = 33 offline tests, all green. `.env.example` updated with `NUVAMA_API_KEY`, `NUVAMA_API_SECRET`, `NUVAMA_SETTINGS_FILE`. Scope: read-only (bonds/holdings for margin tracking + EOD positions). Order execution NOT wired for Nuvama. |
