@@ -29,3 +29,21 @@
   Total P&L           :      +1,543,278  (+22.78%)
 
   Done.
+[2026-04-09 15:45:04] Daily snapshot for 2026-04-09
+  Strategies: 2, Instruments: 5
+  Nifty spot: 23,775.10
+  Recorded 6 snapshots:
+    finideas_ilts: 5 legs, P&L: +31,798 (+3.97%)
+    finrakshak: 1 legs, P&L: -24,070 (-38.49%)
+  MF portfolio (11 schemes): ₹7,949,987  P&L +1,784,422 (+28.94%)
+
+  ── Combined Portfolio ─────────────────────────────────
+  MF current value    : ₹     7,949,987  Δday:     +242,531  P&L:  +1,784,422 (+28.94%)
+  ETF current value   : ₹       668,350  Δday:       -1,162  (basis ₹667,424)
+  Options net P&L     :          +7,728  Δday:         +271
+  ───────────────────────────────────────────────────────
+  Total value         : ₹     8,626,065  Δday:     +241,639
+  Total invested      : ₹     6,832,989
+  Total P&L           :      +1,793,076  (+26.24%)
+
+  Done.

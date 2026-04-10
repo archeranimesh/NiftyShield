@@ -91,6 +91,7 @@ tests/
 - ~~Trade history model~~ — **DONE (2026-04-08)**: `Trade` + `TradeAction` in `src/portfolio/models.py`. `trades` table in `PortfolioStore` with `record_trade`, `get_trades`, `get_position`. `scripts/seed_trades.py` (backfill) + `scripts/record_trade.py` (ongoing capture). Live DB seeded with 7 trades. 58 new tests.
 - ~~`PortfolioSummary` type~~ — **DONE (2026-04-08)**: `PortfolioSummary` frozen dataclass added to `src/portfolio/models.py`. `_build_portfolio_summary()` extracted from `_format_combined_summary()` in `daily_snapshot.py`. Both callers (`_async_main`, `_historical_main`) thread `snap_date` through. 10 new tests, 246 total.
 - ~~Day-change P&L in combined summary~~ — **DONE (2026-04-07)**: `PortfolioStore.get_prev_snapshots()`, `MFStore.get_prev_nav_snapshots()`, `_build_prev_prices()`, `_compute_prev_mf_pnl()` helpers added. Combined summary now shows `Δday` for MF, ETF, and options when prev data exists; column omitted silently on first run.
+- ~~FinRakshak protection effectiveness stats~~ — **DONE (2026-04-10)**: `finrakshak_day_delta` field added to `PortfolioSummary`. Computed in `_build_portfolio_summary` by isolating finrakshak's contribution from combined `options_day_delta`. `_format_protection_stats()` pure helper appends a protection section to the log output (MF Δday / FinRakshak Δday / Net + ✅/⚠️ verdict). Telegram header line now includes hedge verdict and net amount. 10 new tests (31 total in test_daily_snapshot_helpers.py). Omitted silently on first run.
 
 ### Live Data
 

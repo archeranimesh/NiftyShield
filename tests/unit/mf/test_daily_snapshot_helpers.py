@@ -18,6 +18,7 @@ from scripts.daily_snapshot import (
     _build_portfolio_summary,
     _etf_cost_basis,
     _etf_current_value,
+    _format_protection_stats,
 )
 from src.portfolio.models import AssetType, PortfolioSummary
 
@@ -35,6 +36,7 @@ class _Leg:
 @dataclass
 class _Strategy:
     legs: list[_Leg]
+    name: str = ""
 
 
 def _etf_leg(key: str, entry_price: float, quantity: int) -> _Leg:
@@ -219,3 +221,88 @@ class TestBuildPortfolioSummary:
             _SNAP_DATE, _ETF_STRATS, _ETF_PRICES, {}, None, prev_mf_pnl=None
         )
         assert result.total_day_delta is None
+
+
+# ── _format_protection_stats ─────────────────────────────────────
+
+
+def _make_summary(
+    mf_day_delta: Decimal | None,
+    finrakshak_day_delta: Decimal | None,
+) -> PortfolioSummary:
+    """Build a minimal PortfolioSummary with only the protection fields set."""
+    return PortfolioSummary(
+        snapshot_date=_SNAP_DATE,
+        mf_value=Decimal("500000"),
+        mf_invested=Decimal("450000"),
+        mf_pnl=Decimal("50000"),
+        mf_pnl_pct=Decimal("11.11"),
+        mf_available=True,
+        etf_value=Decimal("140000"),
+        etf_basis=Decimal("138800"),
+        options_pnl=Decimal("0"),
+        total_value=Decimal("640000"),
+        total_invested=Decimal("588800"),
+        total_pnl=Decimal("51200"),
+        total_pnl_pct=Decimal("8.70"),
+        mf_day_delta=mf_day_delta,
+        finrakshak_day_delta=finrakshak_day_delta,
+    )
+
+
+class TestFormatProtectionStats:
+    def test_returns_empty_list_when_both_deltas_none(self) -> None:
+        summary = _make_summary(None, None)
+        assert _format_protection_stats(summary) == []
+
+    def test_returns_empty_list_when_mf_delta_none(self) -> None:
+        summary = _make_summary(None, Decimal("5000"))
+        assert _format_protection_stats(summary) == []
+
+    def test_returns_empty_list_when_finrakshak_delta_none(self) -> None:
+        summary = _make_summary(Decimal("10000"), None)
+        assert _format_protection_stats(summary) == []
+
+    def test_returns_six_lines_when_both_deltas_present(self) -> None:
+        summary = _make_summary(Decimal("242531"), Decimal("-1840"))
+        lines = _format_protection_stats(summary)
+        assert len(lines) == 6
+
+    def test_protected_verdict_when_net_positive(self) -> None:
+        # MF up +242k, put loses -1.8k → net +240k → Protected
+        summary = _make_summary(Decimal("242531"), Decimal("-1840"))
+        lines = _format_protection_stats(summary)
+        assert any("✅ Protected" in line for line in lines)
+        assert not any("⚠️" in line for line in lines)
+
+    def test_protected_verdict_when_net_exactly_zero(self) -> None:
+        summary = _make_summary(Decimal("50000"), Decimal("-50000"))
+        lines = _format_protection_stats(summary)
+        assert any("✅ Protected" in line for line in lines)
+
+    def test_exposed_verdict_when_net_negative(self) -> None:
+        # MF down -87k, put gains only +54k → net -33k → Exposed
+        summary = _make_summary(Decimal("-87340"), Decimal("54210"))
+        lines = _format_protection_stats(summary)
+        assert any("⚠️" in line for line in lines)
+        assert not any("✅" in line for line in lines)
+
+    def test_full_cover_day_shows_protected(self) -> None:
+        # Put gains more than MF loses → still Protected
+        summary = _make_summary(Decimal("-112500"), Decimal("115800"))
+        lines = _format_protection_stats(summary)
+        net_line = lines[-1]
+        assert "✅ Protected" in net_line
+        assert "+3,300" in net_line
+
+    def test_net_amount_present_in_output(self) -> None:
+        summary = _make_summary(Decimal("100000"), Decimal("-20000"))
+        lines = _format_protection_stats(summary)
+        net_line = lines[-1]
+        assert "+80,000" in net_line
+
+    def test_mf_and_finrakshak_amounts_in_output(self) -> None:
+        summary = _make_summary(Decimal("242531"), Decimal("-1840"))
+        text = "\n".join(_format_protection_stats(summary))
+        assert "+242,531" in text
+        assert "-1,840" in text

@@ -205,6 +205,7 @@ def _build_portfolio_summary(
     etf_day_delta: Decimal | None = None
     options_day_delta: Decimal | None = None
     mf_day_delta: Decimal | None = None
+    finrakshak_day_delta: Decimal | None = None
 
     if prev_snapshots:
         prev_prices = _build_prev_prices(strategies, prev_snapshots)
@@ -217,6 +218,15 @@ def _build_portfolio_summary(
         )
         etf_day_delta = etf_value - prev_etf_value
         options_day_delta = options_pnl - prev_options_pnl
+
+        # Finrakshak delta isolated — needed for hedge effectiveness reporting
+        frak_strat = next(
+            (s for s in strategies if getattr(s, "name", None) == "finrakshak"), None
+        )
+        curr_frak = strategy_pnls.get("finrakshak")
+        if frak_strat is not None and curr_frak is not None:
+            prev_frak_pnl = _compute_strategy_pnl_from_prices(frak_strat, prev_prices_dec)
+            finrakshak_day_delta = curr_frak.total_pnl - prev_frak_pnl.total_pnl  # type: ignore[union-attr]
 
     if prev_mf_pnl is not None and mf_pnl is not None:
         mf_day_delta = mf_value - prev_mf_pnl.total_current_value  # type: ignore[union-attr]
@@ -248,7 +258,39 @@ def _build_portfolio_summary(
         etf_day_delta=etf_day_delta,
         options_day_delta=options_day_delta,
         total_day_delta=total_day_delta,
+        finrakshak_day_delta=finrakshak_day_delta,
     )
+
+
+def _format_protection_stats(summary: "PortfolioSummary") -> list[str]:
+    """Build FinRakshak hedge effectiveness lines for the snapshot output.
+
+    Compares MF day-change against FinRakshak day-change to answer:
+    "did the hedge offset the day's MF move?"
+
+    Returns an empty list when either delta is unavailable (first run,
+    or finrakshak not in the portfolio on that date).
+
+    Args:
+        summary: Fully computed PortfolioSummary.
+
+    Returns:
+        List of formatted lines (ready to extend into a lines: list[str]).
+        Empty list when insufficient data.
+    """
+    if summary.mf_day_delta is None or summary.finrakshak_day_delta is None:
+        return []
+
+    net = summary.mf_day_delta + summary.finrakshak_day_delta
+    verdict = "✅ Protected" if net >= 0 else "⚠️  Exposed"
+    return [
+        "",
+        "  ── FinRakshak Protection ──────────────────────────────",
+        f"  MF Δday             : {summary.mf_day_delta:>+15,.0f}",
+        f"  FinRakshak Δday     : {summary.finrakshak_day_delta:>+15,.0f}",
+        "  ───────────────────────────────────────────────────────",
+        f"  Net (MF + hedge)    : {net:>+15,.0f}  {verdict}",
+    ]
 
 
 def _format_combined_summary(
@@ -325,6 +367,8 @@ def _format_combined_summary(
     )
     if not summary.mf_available:
         lines.append("  NOTE: MF fetch failed — MF value excluded from total")
+
+    lines.extend(_format_protection_stats(summary))
 
     return "\n".join(lines)
 
@@ -658,7 +702,25 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
             + (_etf_current_value(strategies, prices) - _etf_cost_basis(strategies))
         )
         _emoji = "🟢" if _total_pnl >= 0 else "🔴"
-        message = f"{_emoji} NiftyShield snapshot {date_str}\n{summary_text}"
+
+        # Build summary object once to extract protection verdict for header
+        from src.portfolio.models import PortfolioSummary as _PS  # noqa: F401
+        _summary_obj = _build_portfolio_summary(
+            snap_date=snap_date,
+            strategies=strategies,
+            prices=prices,
+            strategy_pnls=strategy_pnls,
+            mf_pnl=mf_pnl,
+            prev_snapshots=prev_snapshots,
+            prev_mf_pnl=prev_mf_pnl,
+        )
+        _prot_lines = _format_protection_stats(_summary_obj)
+        _prot_header = ""
+        if _prot_lines:
+            _net = _summary_obj.mf_day_delta + _summary_obj.finrakshak_day_delta  # type: ignore[operator]
+            _prot_header = f"\n  Hedge: {'✅ Protected' if _net >= 0 else '⚠️  Exposed'}  ({_net:+,.0f})"
+
+        message = f"{_emoji} NiftyShield snapshot {date_str}{_prot_header}\n{summary_text}"
         if not notifier.send(message):
             print("  WARNING: Telegram notification failed (see logs).")
     else:

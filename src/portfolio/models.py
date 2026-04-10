@@ -227,3 +227,7 @@ class PortfolioSummary:
     etf_day_delta: Decimal | None = None
     options_day_delta: Decimal | None = None
     total_day_delta: Decimal | None = None
+
+    # FinRakshak-specific day delta — isolated from combined options_day_delta
+    # Enables hedge effectiveness reporting: MF Δday + FinRakshak Δday = net protection
+    finrakshak_day_delta: Decimal | None = None
