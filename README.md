@@ -137,7 +137,47 @@ Opens your browser for Upstox OAuth login. Access token is saved to `.env` autom
 python -m src.auth.verify
 ```
 
-Confirms API connectivity by fetching your account profile.
+Confirms Upstox API connectivity by fetching your account profile.
+
+### Nuvama Login (one-time)
+
+NiftyShield tracks your Nuvama bond and gold bond holdings for margin and portfolio visibility. Nuvama uses a `request_id` redirect flow — run this once and the session persists indefinitely in a local settings file.
+
+**Prerequisites:** Add these to your `.env`:
+
+```
+NUVAMA_API_KEY=your_api_key
+NUVAMA_API_SECRET=your_api_secret
+NUVAMA_SETTINGS_FILE=data/nuvama/settings.json
+```
+
+**Login:**
+
+```bash
+python -m src.auth.nuvama_login
+```
+
+Opens your browser to the Nuvama login page. After authenticating, you'll be redirected to a URL containing a `request_id` token. Paste the full redirect URL (or just the token) at the prompt. The session is saved to `NUVAMA_SETTINGS_FILE` — no daily re-auth required.
+
+**Verify:**
+
+```bash
+python -m src.auth.nuvama_verify
+```
+
+Loads the saved session and fetches live holdings. Expected output:
+
+```
+✓ Nuvama session active — 6 holding(s) found.
+  Efsl-10%-29-4-34-ncd                      qty=     700  ltp=1014
+  Goi  Loan  8.28%  2027                    qty=    2000  ltp=152
+  Efsl-9.20%-21-7-26-ncd                    qty=     500  ltp=998.99
+  Efsl-9.67%-20-1-28-ncd                    qty=    1200  ltp=997.2
+  Efsl-9.67%-29-4-29-ncd                    qty=     700  ltp=998.8
+  2.50%goldbonds2031sr-iii                  qty=      50  ltp=14982
+```
+
+Unlike Upstox, Nuvama does not require daily re-auth — the session token in `settings.json` survives until explicitly invalidated.
 
 ### ✅ Step 3: Run Daily Snapshot
 

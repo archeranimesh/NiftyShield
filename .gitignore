@@ -7,3 +7,4 @@ __pycache__/
 *.log
 tests/fixtures/responses/.DS_Store
 .DS_Store
+PROJECT_INSTRUCTIONS_DRAFT.md

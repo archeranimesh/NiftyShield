@@ -1,70 +1,56 @@
 # NiftyShield — AI Assistant Pre-Task Protocol
 
-> This file is auto-loaded at session start. Follow this protocol before any code change.
+> Auto-loaded at session start. Every step is mandatory.
 
 ---
 
 ## Step 1 — Read CONTEXT.md first
 
-Always read `CONTEXT.md` before writing any code or making any file changes.
-State `CONTEXT.md ✓` in your first response to confirm it has been read.
-Do not rely on chat history or session summaries — CONTEXT.md is the single source of truth.
+Read `CONTEXT.md` before writing any code. State `CONTEXT.md ✓` in your first response.
+Do not rely on chat history — CONTEXT.md is the single source of truth.
 
-## Step 2 — Confirm scope before starting
+**Load additional files when relevant:**
+- Adding/changing module architecture → also read `DECISIONS.md`
+- Touching instrument keys, AMFI codes, market data → also read `REFERENCES.md`
+- Starting a new feature → also read `TODOS.md` + `PLANNER.md`
+- Working inside `src/<module>/` → that module's `CLAUDE.md` loads automatically
 
-If the prompt does not name specific files or modules, ask before starting.
-Do not infer scope from vague descriptions. One clarifying question is better than
-building the wrong thing.
+## Step 2 — Confirm scope
 
-Minimum scope to confirm:
-- Which `src/` module(s) are being added or changed?
-- Which existing files are touched?
-- Are new tests required (default: yes, always)?
+If the prompt does not name specific files, ask before starting. One clarifying question beats building the wrong thing.
 
-## Step 3 — State your plan in one sentence
+Confirm: which `src/` modules change? Which files are touched? Tests required? (default: yes)
 
-Before writing any code, state what you will build and which files will change.
-If the plan touches more than 2 files, wait for explicit go-ahead before proceeding.
+## Step 3 — State plan, wait for go-ahead
 
-Format:
-> Plan: [what is being built] → touches [file1, file2]. Tests in [test file]. Proceed?
+> Plan: [one sentence] → touches [file1, file2]. Tests in [test file]. Proceed?
 
-## Step 4 — Test coverage is not optional
+If plan touches more than 2 files, wait for explicit go-ahead.
 
-Every implementation must include offline unit tests. Default coverage if not specified:
-- One happy path test per new public function
-- One error/edge case per new public function
-- No network calls in tests — use fixtures or mocks
+## Step 4 — Tests are mandatory
 
-## Step 5 — Update CONTEXT.md after implementation
+Every public function needs: one happy-path test + one error/edge-case test. No network in tests.
 
-After completing any implementation:
-- Add new architectural decisions to the "Architecture Decisions" section
-- Update "What Exists" if new modules/files were added
-- Update "What Does NOT Exist Yet" to remove completed items
-- Add a session log entry
-- Use targeted `Edit` calls — never rewrite CONTEXT.md with `Write`
+## Step 5 — Update docs after implementation
+
+After any implementation, use targeted `Edit` calls (never `Write`) to update:
+- `CONTEXT.md` — "What Exists" module tree if new files added
+- `DECISIONS.md` — any new architecture decisions
+- `TODOS.md` — mark completed items, add session log entry
+- The relevant `src/<module>/CLAUDE.md` if module invariants changed
 
 ---
 
-## Current constraints (check before suggesting any approach)
-
-| Constraint | Impact |
-|---|---|
-| Order execution blocked (static IP required) | All order logic via MockBrokerClient only |
-| Expired Instruments API blocked (paid tier) | No backtesting against expired option contracts |
-| Greeks columns null in DB | `_fetch_greeks()` is a no-op until OptionChain model is defined |
-| `upstox_market.py` violates BrokerClient protocol | Do not add further modules depending on it directly |
-
----
-
-## Quick reference — key paths
+## Quick reference
 
 | What | Where |
 |---|---|
-| Authoritative project state | `CONTEXT.md` |
-| Immediate TODOs (priority order) | `CONTEXT.md` → Immediate TODOs |
-| Strategy definitions | `src/portfolio/strategies/finideas/` |
+| Project state | `CONTEXT.md` |
+| Architecture decisions | `DECISIONS.md` |
+| Instrument keys / AMFI codes / API quirks | `REFERENCES.md` |
+| Open TODOs + session log | `TODOS.md` |
+| Multi-sprint roadmap | `PLANNER.md` |
+| Strategy definitions (code) | `src/portfolio/strategies/finideas/` |
 | Shared DB connection | `src/db.py` |
 | Exception hierarchy | `src/client/exceptions.py` |
 | API fixtures | `tests/fixtures/responses/` |
