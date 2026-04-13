@@ -19,6 +19,8 @@ src/
 │   ├── verify.py             # API connectivity check — fetches user profile
 │   ├── nuvama_login.py       # Nuvama request_id flow — opens browser, captures request_id from redirect, initializes APIConnect session, saves NUVAMA_SETTINGS_FILE to .env. APIConnect persists session token in settings_file (no daily re-auth required after first login).
 │   └── nuvama_verify.py      # Nuvama connectivity check — loads APIConnect from settings_file, calls Holdings(), prints holding count + ltp. parse_holdings() is a pure function (testable independently).
+│   ├── dhan_login.py          # Dhan manual token flow — opens web.dhan.co, prompts for token, validates, saves DHAN_ACCESS_TOKEN to .env via dotenv.set_key(). Pure functions: build_login_url(), validate_token(), save_token(). No SDK dependency.
+│   └── dhan_verify.py         # Dhan connectivity check — loads DHAN_CLIENT_ID + DHAN_ACCESS_TOKEN, calls GET /v2/profile + /v2/holdings via raw requests. parse_holdings() pure function. Returns True/False.
 ├── analytics/                # Exploratory scripts (not production modules)
 │   └── verify_analytics.py   # Tests LTP, option chain, Greeks, historical candles via Analytics Token
 ├── sandbox/                  # Exploratory scripts
@@ -67,7 +69,10 @@ scripts/
 ├── skills/commit/SKILL.md    # NiftyShield commit format (disable-model-invocation: true — manual only)
 └── agents/
     ├── code-reviewer.md      # Opus: checks Decimal, BrokerClient protocol, type hints, async correctness
-    └── test-runner.md        # Haiku: runs python -m pytest tests/unit/ and reports
+    ├── test-runner.md        # Haiku: runs python -m pytest tests/unit/ and reports
+    ├── greeks-analyst.md     # Sonnet: OptionChain model design, _extract_greeks_from_chain(), fixture analysis
+    ├── roll-validator.md     # Opus: pre-roll position check, Trade model integrity, DB atomicity — hard deadline 2026-06-30
+    └── options-strategist.md # Opus: delta-neutral sizing, IC/strangle design, risk module logic (src/risk/ scope)
 
 docs/archive/
 ├── CODE_REVIEW_2026-04-04.md        # Full codebase code review from foundation sprint
@@ -92,7 +97,9 @@ tests/
 └── auth/
     ├── __init__.py
     ├── test_nuvama_login.py   # 16 tests: build_login_url, extract_request_id (full URL + bare token + whitespace), initialize_session (APIConnect args, parent dir creation, is_production flag), save_settings_path (write + upsert), login flow (missing creds, empty input, full flow). autouse clean_env fixture prevents dotenv leakage.
-    └── test_nuvama_verify.py  # 17 tests: parse_holdings (flat list, whitespace strip, multiple records, empty, invalid JSON, missing key), load_api_connect (missing creds, settings file missing, happy path), verify (true/false on valid/invalid response, config error, api exception, stdout count). autouse clean_env fixture.
+    ├── test_nuvama_verify.py  # 17 tests: parse_holdings (flat list, whitespace strip, multiple records, empty, invalid JSON, missing key), load_api_connect (missing creds, settings file missing, happy path), verify (true/false on valid/invalid response, config error, api exception, stdout count). autouse clean_env fixture.
+    ├── test_dhan_login.py     # 13 tests: build_login_url, validate_token (strip/empty/whitespace), save_token (write/upsert/preserve), login flow (missing client_id, empty input, full flow, whitespace token). autouse clean_env fixture.
+    └── test_dhan_verify.py    # 18 tests: _build_headers, load_dhan_credentials (happy/missing_id/missing_token/whitespace), fetch_profile (happy/401), fetch_holdings (list/empty/dict), parse_holdings (multiple/empty/missing/malformed), verify (success/missing_creds/401/stdout). autouse clean_env fixture.
 └── fixtures/
     ├── responses/            # 7 JSON fixtures recorded from real APIs (LTP, option chain, Greeks, candles)
     └── amfi/
@@ -169,9 +176,9 @@ Strategy leg tables (instrument keys, entry prices, quantities, protected MF por
 
 ## Test Coverage
 
-- **Total: 400 tests** — all offline, no API dependency
+- **Total: 431 tests** — all offline, no API dependency
 - Run: `python -m pytest tests/unit/`
-- Auth tests: `tests/unit/auth/` (33 tests — Nuvama login + verify)
+- Auth tests: `tests/unit/auth/` (64 tests — Nuvama login + verify, Dhan login + verify)
 - MF tests: `tests/unit/mf/` (127 tests)
 - Portfolio tests: `tests/unit/portfolio/` + `tests/unit/test_portfolio.py` (80+ tests)
 - Client tests: `tests/unit/test_client.py`, `test_protocol.py`, `test_exceptions.py`, `test_factory.py`, `test_mock_client.py`, `test_upstox_live.py` (90+ tests)

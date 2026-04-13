@@ -137,7 +137,22 @@
 
 ---
 
+## Dhan Integration
+
+**Two API tiers:** Trading APIs (free — portfolio, positions, funds, orders) vs Data APIs (₹499/month or ₹4,788/year — option chain, historical data, expired options, market depth). Current integration uses free tier only.
+
+**Scope: read-only.** Holdings, positions, fund limits for after-market P&L review. No order execution wired for Dhan.
+
+**Raw `requests` client (no `dhanhq` SDK):** All Dhan APIs are plain REST with `access-token` header auth. The `dhanhq` package is a thin wrapper that adds no value for read-only calls. Raw requests give us full control over request/response shapes — essential for building Pydantic models for the backtesting engine later. Migration cost to SDK is near-zero if ever needed.
+
+**Manual 24-hour token from `web.dhan.co`:** Token generation requires Application Name (e.g. `NiftyShield`), optional Postback URL, Token validity (default 24h). No OAuth flow — simpler than both Upstox and Nuvama.
+
+**Future: Data APIs subscription for backtesting engine.** Dhan offers 5 years of minute-level expired options data (OHLC + IV + OI + spot) via `POST /v2/charts/rollingoption`. This unblocks what Upstox charges for separately (Expired Instruments API requires paid Upstox subscription). Evaluate Data APIs subscription when backtesting sprint begins.
+
+---
+
 ## Deferred / Not Yet Built
+
 
 - `src/models/` — shared Pydantic models (both portfolio/ and mf/ migrate here together)
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/`, `src/streaming/` — all empty

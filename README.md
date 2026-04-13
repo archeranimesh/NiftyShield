@@ -179,6 +179,43 @@ Loads the saved session and fetches live holdings. Expected output:
 
 Unlike Upstox, Nuvama does not require daily re-auth — the session token in `settings.json` survives until explicitly invalidated.
 
+### Dhan Login (daily)
+
+NiftyShield monitors your Dhan portfolio for F&O P&L tracking and after-market holdings review. Dhan uses a manual 24-hour access token generated from their web portal.
+
+**Prerequisites:** Add your Client ID to `.env`:
+
+```
+DHAN_CLIENT_ID=<your-client-id>
+```
+
+Find it: login to [web.dhan.co](https://web.dhan.co) → Profile icon (top-right) → Client ID is displayed.
+
+**Login:**
+
+```bash
+python -m src.auth.dhan_login
+```
+
+Opens your browser to Dhan web portal. Navigate to Profile → "Access DhanHQ APIs" → "Generate Access Token". Fill in App Name (e.g. `NiftyShield`), keep Token validity at 24h. Copy the generated token and paste it at the prompt.
+
+**Verify:**
+
+```bash
+python -m src.auth.dhan_verify
+```
+
+Confirms Dhan connectivity by fetching your profile and holdings. Expected output:
+
+```
+✓ Dhan session active — profile: JOHN DOE (1000000001)
+✓ 5 holding(s) found.
+  HDFC                                     qty=    1000  avg=2655.00
+  TCS                                      qty=     500  avg=3345.00
+```
+
+> **Note:** Dhan tokens expire every 24 hours. Re-run `dhan_login` daily, or generate a new token from web.dhan.co.
+
 ### ✅ Step 3: Run Daily Snapshot
 
 ```

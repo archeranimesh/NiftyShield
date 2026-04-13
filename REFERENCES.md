@@ -13,10 +13,15 @@
 | Daily OAuth Token | `UPSTOX_ACCESS_TOKEN` | Daily | Portfolio/positions read, order execution |
 | Sandbox Token | `UPSTOX_SANDBOX_TOKEN` | Session | Upstox sandbox integration tests |
 | Nuvama APIConnect | `NUVAMA_SETTINGS_FILE` path | Until invalidated | Bonds/holdings read, EOD positions |
+| Dhan Client ID | `DHAN_CLIENT_ID` | Permanent | Identifies Dhan account (numeric) |
+| Dhan Access Token | `DHAN_ACCESS_TOKEN` | 24 hours | Portfolio, positions, funds (free Trading APIs) |
 
 **Nuvama login (one-time):** `python -m src.auth.nuvama_login`
 **Nuvama verify:** `python -m src.auth.nuvama_verify`
 **Upstox OAuth:** `python -m src.auth.login` (daily for portfolio/order features)
+**Dhan login:** `python -m src.auth.dhan_login` (daily — opens browser, saves token)
+**Dhan verify:** `python -m src.auth.dhan_verify` (confirms connectivity + prints holdings)
+
 
 ---
 
