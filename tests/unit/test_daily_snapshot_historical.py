@@ -219,10 +219,12 @@ class TestHistoricalMain:
     def test_combined_summary_printed(
         self, seeded_store: PortfolioStore, db_path: Path, capsys: pytest.CaptureFixture
     ) -> None:
-        """Combined portfolio section must always appear on success."""
+        """Restructured combined summary sections must appear on success."""
         _historical_main(date(2026, 4, 6), db_path)
         out = capsys.readouterr().out
-        assert "Combined Portfolio" in out
+        assert "── Equity" in out
+        assert "── Derivatives" in out
+        assert "Total value" in out
 
     def test_done_printed_on_success(
         self, seeded_store: PortfolioStore, db_path: Path, capsys: pytest.CaptureFixture

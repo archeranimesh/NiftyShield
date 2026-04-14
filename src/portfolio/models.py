@@ -231,3 +231,20 @@ class PortfolioSummary:
     # FinRakshak-specific day delta — isolated from combined options_day_delta
     # Enables hedge effectiveness reporting: MF Δday + FinRakshak Δday = net protection
     finrakshak_day_delta: Decimal | None = None
+
+    # Dhan equity component (defaults to 0 when Dhan unavailable)
+    dhan_equity_value: Decimal = Decimal("0")
+    dhan_equity_basis: Decimal = Decimal("0")
+    dhan_equity_pnl: Decimal = Decimal("0")
+    dhan_equity_pnl_pct: Decimal | None = None
+    dhan_equity_day_delta: Decimal | None = None
+
+    # Dhan bond component
+    dhan_bond_value: Decimal = Decimal("0")
+    dhan_bond_basis: Decimal = Decimal("0")
+    dhan_bond_pnl: Decimal = Decimal("0")
+    dhan_bond_pnl_pct: Decimal | None = None
+    dhan_bond_day_delta: Decimal | None = None
+
+    # Whether Dhan data was available this run
+    dhan_available: bool = False

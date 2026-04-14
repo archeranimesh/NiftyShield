@@ -160,11 +160,13 @@ def _build_portfolio_summary(
     mf_pnl: object | None,
     prev_snapshots: dict[int, DailySnapshot] | None = None,
     prev_mf_pnl: object | None = None,
+    dhan_summary: object | None = None,
 ) -> PortfolioSummary:
     """Compute combined portfolio values into a PortfolioSummary.
 
     Owns all arithmetic — ETF mark-to-market, options net P&L, MF totals,
-    combined aggregates, and day-change deltas.  Pure: no I/O, no side effects.
+    Dhan equity/bond, combined aggregates, and day-change deltas.
+    Pure: no I/O, no side effects.
 
     Args:
         snap_date: The snapshot date (stored in PortfolioSummary.snapshot_date).
@@ -174,6 +176,7 @@ def _build_portfolio_summary(
         mf_pnl: Completed MF PortfolioPnL, or None if the MF fetch failed.
         prev_snapshots: {leg_id: DailySnapshot} from get_prev_snapshots(), or None.
         prev_mf_pnl: PortfolioPnL for the prior date, or None.
+        dhan_summary: DhanPortfolioSummary, or None if Dhan unavailable.
 
     Returns:
         Fully populated PortfolioSummary dataclass.
@@ -192,9 +195,22 @@ def _build_portfolio_summary(
     mf_pnl_amt = mf_pnl.total_pnl if mf_pnl else Decimal("0")  # type: ignore[union-attr]
     mf_pnl_pct = mf_pnl.total_pnl_pct if mf_pnl else None  # type: ignore[union-attr]
 
-    total_value = mf_value + etf_value + options_pnl
-    total_invested = mf_invested + etf_basis
-    total_pnl = mf_pnl_amt + (etf_value - etf_basis) + options_pnl
+    # ── Dhan components (default to 0 when unavailable) ───────────
+    dhan_available = dhan_summary is not None
+    dhan_eq_value = dhan_summary.equity_value if dhan_summary else Decimal("0")  # type: ignore[union-attr]
+    dhan_eq_basis = dhan_summary.equity_basis if dhan_summary else Decimal("0")  # type: ignore[union-attr]
+    dhan_eq_pnl = dhan_summary.equity_pnl if dhan_summary else Decimal("0")  # type: ignore[union-attr]
+    dhan_eq_pnl_pct = dhan_summary.equity_pnl_pct if dhan_summary else None  # type: ignore[union-attr]
+    dhan_eq_day_delta = dhan_summary.equity_day_delta if dhan_summary else None  # type: ignore[union-attr]
+    dhan_bd_value = dhan_summary.bond_value if dhan_summary else Decimal("0")  # type: ignore[union-attr]
+    dhan_bd_basis = dhan_summary.bond_basis if dhan_summary else Decimal("0")  # type: ignore[union-attr]
+    dhan_bd_pnl = dhan_summary.bond_pnl if dhan_summary else Decimal("0")  # type: ignore[union-attr]
+    dhan_bd_pnl_pct = dhan_summary.bond_pnl_pct if dhan_summary else None  # type: ignore[union-attr]
+    dhan_bd_day_delta = dhan_summary.bond_day_delta if dhan_summary else None  # type: ignore[union-attr]
+
+    total_value = mf_value + etf_value + options_pnl + dhan_eq_value + dhan_bd_value
+    total_invested = mf_invested + etf_basis + dhan_eq_basis + dhan_bd_basis
+    total_pnl = mf_pnl_amt + (etf_value - etf_basis) + options_pnl + dhan_eq_pnl + dhan_bd_pnl
     total_pnl_pct = (
         (total_pnl / total_invested * 100).quantize(Decimal("0.01"))
         if total_invested
@@ -231,13 +247,20 @@ def _build_portfolio_summary(
     if prev_mf_pnl is not None and mf_pnl is not None:
         mf_day_delta = mf_value - prev_mf_pnl.total_current_value  # type: ignore[union-attr]
 
-    any_delta = etf_day_delta is not None or mf_day_delta is not None
+    any_delta = (
+        etf_day_delta is not None
+        or mf_day_delta is not None
+        or dhan_eq_day_delta is not None
+        or dhan_bd_day_delta is not None
+    )
     total_day_delta: Decimal | None = None
     if any_delta:
         total_day_delta = (
             (mf_day_delta or Decimal("0"))
             + (etf_day_delta or Decimal("0"))
             + (options_day_delta or Decimal("0"))
+            + (dhan_eq_day_delta or Decimal("0"))
+            + (dhan_bd_day_delta or Decimal("0"))
         )
 
     return PortfolioSummary(
@@ -259,6 +282,17 @@ def _build_portfolio_summary(
         options_day_delta=options_day_delta,
         total_day_delta=total_day_delta,
         finrakshak_day_delta=finrakshak_day_delta,
+        dhan_equity_value=dhan_eq_value,
+        dhan_equity_basis=dhan_eq_basis,
+        dhan_equity_pnl=dhan_eq_pnl,
+        dhan_equity_pnl_pct=dhan_eq_pnl_pct,
+        dhan_equity_day_delta=dhan_eq_day_delta,
+        dhan_bond_value=dhan_bd_value,
+        dhan_bond_basis=dhan_bd_basis,
+        dhan_bond_pnl=dhan_bd_pnl,
+        dhan_bond_pnl_pct=dhan_bd_pnl_pct,
+        dhan_bond_day_delta=dhan_bd_day_delta,
+        dhan_available=dhan_available,
     )
 
 
@@ -301,13 +335,13 @@ def _format_combined_summary(
     prev_snapshots: dict[int, DailySnapshot] | None = None,
     prev_mf_pnl: object | None = None,
     snap_date: date | None = None,
+    dhan_summary: object | None = None,
 ) -> str:
     """Build the combined portfolio summary as a formatted string.
 
-    When prev_snapshots / prev_mf_pnl are supplied (non-empty), a Δday column
-    is appended to the MF, ETF, and Options lines showing the change vs the
-    most recent prior snapshot.  If no prev data is available the Δday column
-    is omitted entirely — no zeros, no dashes.
+    Restructured into sections: Equity → Bonds → Derivatives → Total.
+    When prev data is supplied, a Δday column is appended. If no prev data
+    is available the Δday column is omitted entirely.
 
     Args:
         strategies: All loaded Strategy objects.
@@ -317,6 +351,7 @@ def _format_combined_summary(
         prev_snapshots: {leg_id: DailySnapshot} from get_prev_snapshots(), or None.
         prev_mf_pnl: PortfolioPnL for the prior date, or None.
         snap_date: Snapshot date stored in the summary (defaults to today).
+        dhan_summary: DhanPortfolioSummary, or None if Dhan unavailable.
 
     Returns:
         Multi-line formatted summary string (no trailing newline).
@@ -329,33 +364,86 @@ def _format_combined_summary(
         mf_pnl=mf_pnl,
         prev_snapshots=prev_snapshots,
         prev_mf_pnl=prev_mf_pnl,
+        dhan_summary=dhan_summary,
     )
 
     def _delta(d: Decimal | None) -> str:
         return f"  Δday: {d:>+12,.0f}" if d is not None else ""
 
-    lines: list[str] = ["", "  ── Combined Portfolio ─────────────────────────────────"]
+    def _pnl_str(pnl: Decimal, pct: Decimal | None) -> str:
+        pct_part = f" ({pct:+}%)" if pct is not None else ""
+        return f"P&L: {pnl:>+11,.0f}{pct_part}"
+
+    lines: list[str] = []
+
+    # ── Equity section ────────────────────────────────────────────
+    lines.append("")
+    lines.append("  ── Equity ─────────────────────────────────────────────")
 
     if summary.mf_available:
-        mf_pnl_str = f"  P&L: {summary.mf_pnl:>+11,.0f} ({summary.mf_pnl_pct:+}%)"
         lines.append(
-            f"  MF current value    : ₹{summary.mf_value:>14,.0f}"
-            f"{_delta(summary.mf_day_delta)}{mf_pnl_str}"
+            f"  MF (mutual funds)   : ₹{summary.mf_value:>14,.0f}"
+            f"{_delta(summary.mf_day_delta)}"
+        )
+        lines.append(
+            f"                        {_pnl_str(summary.mf_pnl, summary.mf_pnl_pct)}"
         )
     else:
         lines.append(
-            f"  MF current value    :          [failed]{_delta(summary.mf_day_delta)}"
+            f"  MF (mutual funds)   :          [failed]{_delta(summary.mf_day_delta)}"
         )
 
     lines.append(
-        f"  ETF current value   : ₹{summary.etf_value:>14,.0f}"
-        f"{_delta(summary.etf_day_delta)}  (basis ₹{summary.etf_basis:,.0f})"
+        f"  Finideas ETF        : ₹{summary.etf_value:>14,.0f}"
+        f"{_delta(summary.etf_day_delta)}"
     )
+    lines.append(
+        f"                        (basis ₹{summary.etf_basis:,.0f})"
+    )
+
+    if summary.dhan_available and summary.dhan_equity_value > 0:
+        lines.append(
+            f"  Dhan Equity         : ₹{summary.dhan_equity_value:>14,.0f}"
+            f"{_delta(summary.dhan_equity_day_delta)}"
+        )
+        lines.append(
+            f"                        {_pnl_str(summary.dhan_equity_pnl, summary.dhan_equity_pnl_pct)}"
+        )
+
+    eq_subtotal = summary.mf_value + summary.etf_value + summary.dhan_equity_value
+    lines.append("  ───────────────────────────────────────────────────────")
+    lines.append(f"  Equity subtotal     : ₹{eq_subtotal:>14,.0f}")
+
+    # ── Bonds section ─────────────────────────────────────────────
+    lines.append("")
+    lines.append("  ── Bonds ──────────────────────────────────────────────")
+
+    if summary.dhan_available and summary.dhan_bond_value > 0:
+        lines.append(
+            f"  Dhan Bonds          : ₹{summary.dhan_bond_value:>14,.0f}"
+            f"{_delta(summary.dhan_bond_day_delta)}"
+        )
+        lines.append(
+            f"                        {_pnl_str(summary.dhan_bond_pnl, summary.dhan_bond_pnl_pct)}"
+        )
+        lines.append("  ───────────────────────────────────────────────────────")
+        lines.append(f"  Bonds subtotal      : ₹{summary.dhan_bond_value:>14,.0f}")
+    elif not summary.dhan_available:
+        lines.append("  Dhan Bonds          :          [unavailable]")
+    else:
+        lines.append("  (no bond holdings)")
+
+    # ── Derivatives section ───────────────────────────────────────
+    lines.append("")
+    lines.append("  ── Derivatives ────────────────────────────────────────")
     lines.append(
         f"  Options net P&L     : {summary.options_pnl:>+15,.0f}"
         f"{_delta(summary.options_day_delta)}"
     )
-    lines.append("  ───────────────────────────────────────────────────────")
+
+    # ── Total section ─────────────────────────────────────────────
+    lines.append("")
+    lines.append("  ═══════════════════════════════════════════════════════")
     lines.append(
         f"  Total value         : ₹{summary.total_value:>14,.0f}"
         f"{_delta(summary.total_day_delta)}"
@@ -367,6 +455,8 @@ def _format_combined_summary(
     )
     if not summary.mf_available:
         lines.append("  NOTE: MF fetch failed — MF value excluded from total")
+    if not summary.dhan_available:
+        lines.append("  NOTE: Dhan unavailable — Dhan values excluded from total")
 
     lines.extend(_format_protection_stats(summary))
 
@@ -381,8 +471,9 @@ def _print_combined_summary(
     prev_snapshots: dict[int, DailySnapshot] | None = None,
     prev_mf_pnl: object | None = None,
     snap_date: date | None = None,
+    dhan_summary: object | None = None,
 ) -> None:
-    """Print the combined portfolio value across MF, ETF, and options.
+    """Print the combined portfolio value across MF, ETF, options, and Dhan.
 
     Delegates to _format_combined_summary and prints the result.
 
@@ -394,9 +485,11 @@ def _print_combined_summary(
         prev_snapshots: {leg_id: DailySnapshot} from get_prev_snapshots(), or None.
         prev_mf_pnl: PortfolioPnL for the prior date, or None.
         snap_date: Snapshot date stored in the summary (defaults to today).
+        dhan_summary: DhanPortfolioSummary, or None if unavailable.
     """
     print(_format_combined_summary(
-        strategies, prices, strategy_pnls, mf_pnl, prev_snapshots, prev_mf_pnl, snap_date
+        strategies, prices, strategy_pnls, mf_pnl, prev_snapshots, prev_mf_pnl,
+        snap_date, dhan_summary,
     ))
 
 
@@ -540,11 +633,28 @@ def _historical_main(snap_date: date, db_path: Path) -> int:
     else:
         print(f"  No MF NAV snapshots found for {snap_date.isoformat()}.")
 
+    # ── Dhan portfolio from stored snapshots (non-fatal) ──────────
+    dhan_summary = None
+    try:
+        from src.dhan.store import DhanStore
+        from src.dhan.reader import build_dhan_summary
+        dhan_store = DhanStore(db_path)
+        dhan_holdings = dhan_store.get_snapshot_for_date(snap_date)
+        if dhan_holdings:
+            prev_dhan = dhan_store.get_prev_snapshot(snap_date)
+            dhan_summary = build_dhan_summary(dhan_holdings, snap_date, prev_dhan or None)
+            print(f"  Dhan portfolio: {len(dhan_holdings)} holding(s) from stored snapshot")
+        else:
+            print(f"  No Dhan snapshots found for {snap_date.isoformat()}.")
+    except Exception as e:  # noqa: BLE001
+        print(f"  WARNING: Dhan historical lookup failed — {e}")
+
     _print_combined_summary(
         strategies, prices, strategy_pnls, mf_pnl,
         prev_snapshots=prev_snapshots,
         prev_mf_pnl=prev_mf_pnl,
         snap_date=snap_date,
+        dhan_summary=dhan_summary,
     )
     print("\n  Done.")
     return 0
@@ -615,6 +725,35 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
     NIFTY_INDEX_KEY = "NSE_INDEX|Nifty 50"
 
     all_keys = {leg.instrument_key for strategy in strategies for leg in strategy.legs}
+
+    # ── Pre-fetch Dhan holdings (before LTP batch) — add their Upstox keys ──
+    # Holdings are fetched now so their NSE_EQ|{ISIN} keys can be piggybacked
+    # onto the single Upstox batch LTP call, avoiding Dhan's paid Data API.
+    _dhan_holdings_prefetched: list = []
+    _dhan_client_id: str = ""
+    _dhan_token: str = ""
+    _dhan_tracked_isins: set[str] = set()
+    try:
+        from src.auth.dhan_verify import load_dhan_credentials
+        from src.dhan.reader import fetch_dhan_holdings, upstox_keys_for_holdings
+
+        _dhan_client_id, _dhan_token = load_dhan_credentials()
+        _dhan_tracked_isins = {
+            leg.instrument_key.split("|", 1)[1]
+            for s in strategies for leg in s.legs
+            if leg.instrument_key.startswith("NSE_EQ|")
+        }
+        _dhan_holdings_prefetched = fetch_dhan_holdings(
+            _dhan_client_id, _dhan_token, _dhan_tracked_isins
+        )
+        dhan_upstox_keys = upstox_keys_for_holdings(_dhan_holdings_prefetched)
+        all_keys |= dhan_upstox_keys
+        print(f"  Dhan: {len(_dhan_holdings_prefetched)} holding(s) — keys added to LTP batch")
+    except ValueError as e:
+        print(f"  Dhan: skipped — {e}")
+    except Exception as e:  # noqa: BLE001
+        print(f"  WARNING: Dhan holdings pre-fetch failed — {e}")
+
     print(f"  Strategies: {len(strategies)}, Instruments: {len(all_keys)}")
 
     # ── Fetch all LTPs in one batch (Nifty spot piggybacked) ─────
@@ -681,12 +820,46 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
     except Exception as e:  # noqa: BLE001
         print(f"  WARNING: MF snapshot failed — {e}")
 
+    # ── Dhan portfolio snapshot — enrich with Upstox prices (non-fatal) ──
+    # Holdings were pre-fetched before the LTP batch; prices now available.
+    dhan_summary = None
+    if _dhan_holdings_prefetched:
+        try:
+            from src.dhan.reader import build_dhan_summary, enrich_with_upstox_prices
+            from src.dhan.store import DhanStore
+
+            enriched = enrich_with_upstox_prices(_dhan_holdings_prefetched, prices)
+
+            dhan_store = DhanStore(db_path)
+            prev_dhan = dhan_store.get_prev_snapshot(snap_date)
+            dhan_summary = build_dhan_summary(enriched, snap_date, prev_dhan or None)
+
+            all_dhan = list(dhan_summary.equity_holdings) + list(dhan_summary.bond_holdings)
+            dhan_store.record_snapshot(all_dhan, snap_date)
+
+            eq_count = len(dhan_summary.equity_holdings)
+            bd_count = len(dhan_summary.bond_holdings)
+            print(f"  Dhan portfolio: {eq_count} equity, {bd_count} bond holding(s)")
+            if dhan_summary.equity_value > 0:
+                print(
+                    f"    Equity: ₹{dhan_summary.equity_value:,.0f}  "
+                    f"P&L {dhan_summary.equity_pnl:+,.0f}"
+                )
+            if dhan_summary.bond_value > 0:
+                print(
+                    f"    Bonds:  ₹{dhan_summary.bond_value:,.0f}  "
+                    f"P&L {dhan_summary.bond_pnl:+,.0f}"
+                )
+        except Exception as e:  # noqa: BLE001
+            print(f"  WARNING: Dhan portfolio enrichment failed — {e}")
+
     # ── Combined portfolio summary ────────────────────────────────
     summary_text = _format_combined_summary(
         strategies, prices, strategy_pnls, mf_pnl,
         prev_snapshots=prev_snapshots,
         prev_mf_pnl=prev_mf_pnl,
         snap_date=snap_date,
+        dhan_summary=dhan_summary,
     )
     print(summary_text)
 
@@ -713,6 +886,7 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
             mf_pnl=mf_pnl,
             prev_snapshots=prev_snapshots,
             prev_mf_pnl=prev_mf_pnl,
+            dhan_summary=dhan_summary,
         )
         _prot_lines = _format_protection_stats(_summary_obj)
         _prot_header = ""

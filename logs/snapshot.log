@@ -71,3 +71,51 @@
   Net (MF + hedge)    :         -32,550  ⚠️  Exposed
 
   Done.
+[2026-04-13 15:45:04] Daily snapshot for 2026-04-13
+  Strategies: 2, Instruments: 5
+  Nifty spot: 23,842.65
+  Recorded 6 snapshots:
+    finideas_ilts: 5 legs, P&L: +34,490 (+4.31%)
+    finrakshak: 1 legs, P&L: -23,540 (-37.64%)
+  MF portfolio (11 schemes): ₹8,006,295  P&L +1,840,730 (+29.86%)
+
+  ── Combined Portfolio ─────────────────────────────────
+  MF current value    : ₹     8,006,295  Δday:      +84,691  P&L:  +1,840,730 (+29.86%)
+  ETF current value   : ₹       672,954  Δday:         +418  (basis ₹667,424)
+  Options net P&L     :         +10,951  Δday:       +4,006
+  ───────────────────────────────────────────────────────
+  Total value         : ₹     8,690,199  Δday:      +89,116
+  Total invested      : ₹     6,832,989
+  Total P&L           :      +1,857,210  (+27.18%)
+
+  ── FinRakshak Protection ──────────────────────────────
+  MF Δday             :         +84,691
+  FinRakshak Δday     :          +4,696
+  ───────────────────────────────────────────────────────
+  Net (MF + hedge)    :         +89,388  ✅ Protected
+
+  Done.
+[2026-04-14 15:45:03] Daily snapshot for 2026-04-14
+  Strategies: 2, Instruments: 5
+  Nifty spot: 23,842.65
+  Recorded 6 snapshots:
+    finideas_ilts: 5 legs, P&L: +34,490 (+4.31%)
+    finrakshak: 1 legs, P&L: -23,540 (-37.64%)
+  MF portfolio (11 schemes): ₹7,962,496  P&L +1,796,930 (+29.14%)
+
+  ── Combined Portfolio ─────────────────────────────────
+  MF current value    : ₹     7,962,496  Δday:      -43,799  P&L:  +1,796,930 (+29.14%)
+  ETF current value   : ₹       672,954  Δday:           +0  (basis ₹667,424)
+  Options net P&L     :         +10,951  Δday:           +0
+  ───────────────────────────────────────────────────────
+  Total value         : ₹     8,646,400  Δday:      -43,799
+  Total invested      : ₹     6,832,989
+  Total P&L           :      +1,813,411  (+26.54%)
+
+  ── FinRakshak Protection ──────────────────────────────
+  MF Δday             :         -43,799
+  FinRakshak Δday     :              +0
+  ───────────────────────────────────────────────────────
+  Net (MF + hedge)    :         -43,799  ⚠️  Exposed
+
+  Done.

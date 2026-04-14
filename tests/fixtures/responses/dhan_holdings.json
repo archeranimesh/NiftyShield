@@ -1,0 +1,53 @@
+{
+  "description": "Sample Dhan GET /v2/holdings response — 4 instruments including 2 already tracked by strategy",
+  "response": [
+    {
+      "exchange": "NSE_EQ",
+      "tradingSymbol": "NIFTYIETF",
+      "securityId": "13611",
+      "isin": "INF109K012R6",
+      "totalQty": 500,
+      "dpQty": 500,
+      "t1Qty": 0,
+      "availableQty": 0,
+      "collateralQty": 500,
+      "avgCostPrice": 268.50
+    },
+    {
+      "exchange": "NSE_EQ",
+      "tradingSymbol": "LIQUIDCASE",
+      "securityId": "25780",
+      "isin": "INF0R8F01034",
+      "totalQty": 200,
+      "dpQty": 200,
+      "t1Qty": 0,
+      "availableQty": 0,
+      "collateralQty": 200,
+      "avgCostPrice": 1003.25
+    },
+    {
+      "exchange": "NSE_EQ",
+      "tradingSymbol": "EBBETF0431",
+      "securityId": "14832",
+      "isin": "INF754K01LE1",
+      "totalQty": 465,
+      "dpQty": 465,
+      "t1Qty": 0,
+      "availableQty": 0,
+      "collateralQty": 465,
+      "avgCostPrice": 1388.01
+    },
+    {
+      "exchange": "NSE_EQ",
+      "tradingSymbol": "LIQUIDBEES",
+      "securityId": "10576",
+      "isin": "INF732E01037",
+      "totalQty": 3,
+      "dpQty": 3,
+      "t1Qty": 0,
+      "availableQty": 0,
+      "collateralQty": 3,
+      "avgCostPrice": 1000.00
+    }
+  ]
+}

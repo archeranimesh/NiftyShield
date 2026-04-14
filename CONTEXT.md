@@ -8,7 +8,7 @@
 
 ---
 
-## Current State (as of 2026-04-12)
+## Current State (as of 2026-04-14)
 
 ### What Exists (committed and working)
 
@@ -43,6 +43,12 @@ src/
 │   ├── store.py              # SQLite: mf_transactions + mf_nav_snapshots in shared DB. get_holdings() returns dict[str, MFHolding].
 │   ├── nav_fetcher.py        # AMFI flat file download + parse → {amfi_code: Decimal}. Injectable source for offline tests.
 │   └── tracker.py            # MFTracker: load holdings, fetch NAVs, upsert snapshots, return PortfolioPnL. MFHolding imported from models.
+├── dhan/
+│   ├── CLAUDE.md             # Module context: classification config, data flow, Dhan API quirks
+│   ├── __init__.py           # Package marker
+│   ├── models.py             # Frozen dataclasses: DhanHolding (EQUITY/BOND, LTP, cost/pnl properties), DhanPortfolioSummary (split by classification, Decimal fields, day deltas)
+│   ├── reader.py             # Pure + HTTP functions. fetch_holdings_raw/fetch_ltp_raw (I/O). classify_holding, build_dhan_holdings (filter+classify), build_security_id_map, enrich_with_ltp (Dhan API — paid tier), enrich_with_upstox_prices (preferred), upstox_keys_for_holdings, build_dhan_summary (pure). fetch_dhan_holdings() + fetch_dhan_portfolio() orchestrators.
+│   └── store.py              # DhanStore: dhan_holdings_snapshots table. record_snapshot (upsert), get_snapshot_for_date, get_prev_snapshot (MAX date < d, keyed by ISIN).
 ├── instruments/
 │   └── lookup.py             # Offline BOD search (NSE.json.gz). CLI: --find-legs mode.
 ├── notifications/
@@ -176,13 +182,14 @@ Strategy leg tables (instrument keys, entry prices, quantities, protected MF por
 
 ## Test Coverage
 
-- **Total: 431 tests** — all offline, no API dependency
+- **Total: 558 tests** — all offline, no API dependency
 - Run: `python -m pytest tests/unit/`
 - Auth tests: `tests/unit/auth/` (64 tests — Nuvama login + verify, Dhan login + verify)
 - MF tests: `tests/unit/mf/` (127 tests)
 - Portfolio tests: `tests/unit/portfolio/` + `tests/unit/test_portfolio.py` (80+ tests)
 - Client tests: `tests/unit/test_client.py`, `test_protocol.py`, `test_exceptions.py`, `test_factory.py`, `test_mock_client.py`, `test_upstox_live.py` (90+ tests)
 - Snapshot tests: `tests/unit/test_daily_snapshot_historical.py`, `test_daily_snapshot_helpers.py`, `test_notifications.py` (50+ tests)
+- Dhan tests: `tests/unit/dhan/` (90 tests — models, reader, store, daily_snapshot integration)
 
 ---
 

@@ -1,0 +1,16 @@
+{
+  "description": "Sample Dhan POST /v2/marketfeed/ltp response for NIFTYIETF and LIQUIDCASE",
+  "response": {
+    "data": {
+      "NSE_EQ": {
+        "13611": {
+          "last_price": 275.40
+        },
+        "25780": {
+          "last_price": 1005.50
+        }
+      }
+    },
+    "status": "success"
+  }
+}
