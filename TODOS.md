@@ -9,10 +9,8 @@ Fix option chain call (`NSE_INDEX|Nifty 50`), define `OptionChain` Pydantic mode
 Fixture `nifty_chain_2026-04-07.json` already recorded in `tests/fixtures/responses/` — use it to drive model definition.
 Blocked by: nothing. Next to implement.
 
-### 2. `scripts/roll_leg.py`
-Atomic close-old-leg + open-new-leg CLI. Required before JUN 2026 expiry roll (2026-06-30).
-Pattern: single DB transaction — `record_trade(SELL, old_leg)` + `record_trade(BUY, new_leg)`.
-Must validate via `Trade` model; print updated net position after.
+### ~~2. `scripts/roll_leg.py`~~ — **DONE (2026-04-15)**
+`PortfolioStore.record_roll(close_trade, open_trade)` added — single `_connect` block, both INSERTs atomic. `scripts/roll_leg.py` CLI: `--old-*/--new-*` flag pairs, `_build_trades()` pure function, `--dry-run`. 14 new tests (4 store + 10 script). 599 total, all pre-existing failures unchanged.
 
 ### 3. P&L visualization
 Matplotlib script or React dashboard from `daily_snapshots` time series.
@@ -87,3 +85,4 @@ Do in one commit with `src/strategy/` start — they migrate together.
 | 2026-04-14 | **Dhan portfolio integration.** `src/dhan/` module: `models.py` (DhanHolding, DhanPortfolioSummary frozen dataclasses), `reader.py` (fetch_holdings_raw, fetch_ltp_raw, classify_holding, build_dhan_holdings, build_security_id_map, enrich_with_ltp, build_dhan_summary, fetch_dhan_portfolio), `store.py` (DhanStore — dhan_holdings_snapshots table, upsert, get_prev_snapshot). `src/portfolio/models.py` extended with 9 Dhan fields on PortfolioSummary (all default-zero — existing tests unaffected). `daily_snapshot.py`: `_async_main` wires Dhan (non-fatal, excludes strategy ISINs), `_historical_main` reads stored Dhan snapshots, `_build_portfolio_summary` includes Dhan in totals, `_format_combined_summary` restructured to Equity/Bonds/Derivatives/Total sections. `test_daily_snapshot_historical.py` updated for new sectioned format. 81 new Dhan tests (57 module + 24 snapshot integration). 549 total, all green (pre-existing upstox_live/nuvama failures unchanged). |
 | 2026-04-15 | **Fuzzy instrument search.** `src/instruments/lookup.py`: `_score_query()` + `_best_score()` private helpers implement `exact(1.0) > prefix(0.92) > fuzzy` ranking via rapidfuzz (difflib fallback, no hard dep). `InstrumentLookup.search()` now scores + sorts all candidates; `min_score` param added. Signature of all other methods unchanged. 27 new tests in `tests/unit/instruments/test_lookup.py`. 585 total. |
 | 2026-04-15 | **quant-4pc-local analysed.** Prior Dhan-focused research repo reviewed. Reusable components identified: `BacktestEngine` + `Strategy` protocol (port into `src/backtest/`), `IronCondorStrategy` + `IronCondorConfig` (port into `src/strategy/`), `_normalize_df()` data normalisation improvements for `src/dhan/reader.py`, retry/backoff pattern for future rate-limiter. Full porting notes in `PLANNER.md` → "quant-4pc-local Reference" section. Folder gitignored (`quant-4pc-local/`). |
+| 2026-04-15 | **Atomic leg roll CLI (TODO 2).** `PortfolioStore.record_roll()` — single `_connect` block, two INSERTs, one transaction. `scripts/roll_leg.py`: `--old-*/--new-*` flag pairs, `_build_trades()` pure function, `--dry-run`. README.md updated with full CLI signature + dry-run example. 14 new tests (4 `test_trade_store.py` + 10 `test_roll_leg.py`). 599 total. |

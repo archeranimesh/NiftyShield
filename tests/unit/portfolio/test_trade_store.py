@@ -357,3 +357,87 @@ def test_get_all_positions_isolates_by_strategy(store: PortfolioStore) -> None:
     assert "EBBETF0431" not in fr
     assert "NIFTY_DEC_PE" in fr
     assert "NIFTY_DEC_PE" not in ilts
+
+
+# ── record_roll ───────────────────────────────────────────────────────────────
+
+
+def _close_trade(
+    strategy: str = "finideas_ilts",
+    leg: str = "NIFTY_MAY_PE_ATM",
+    key: str = "NSE_FO|12345",
+    trade_date: date = date(2026, 6, 20),
+    qty: int = 50,
+    price: str = "45.00",
+) -> Trade:
+    """BUY-to-close an existing short option leg."""
+    return Trade(
+        strategy_name=strategy,
+        leg_role=leg,
+        instrument_key=key,
+        trade_date=trade_date,
+        action=TradeAction.BUY,
+        quantity=qty,
+        price=Decimal(price),
+    )
+
+
+def _open_trade(
+    strategy: str = "finideas_ilts",
+    leg: str = "NIFTY_JUN_PE_ATM",
+    key: str = "NSE_FO|67890",
+    trade_date: date = date(2026, 6, 20),
+    qty: int = 50,
+    price: str = "85.00",
+) -> Trade:
+    """SELL-to-open a new short option leg."""
+    return Trade(
+        strategy_name=strategy,
+        leg_role=leg,
+        instrument_key=key,
+        trade_date=trade_date,
+        action=TradeAction.SELL,
+        quantity=qty,
+        price=Decimal(price),
+    )
+
+
+def test_record_roll_both_trades_inserted(store: PortfolioStore) -> None:
+    """Happy path: close + open trade both appear in the ledger."""
+    store.record_roll(_close_trade(), _open_trade())
+    close_rows = store.get_trades("finideas_ilts", leg_role="NIFTY_MAY_PE_ATM")
+    open_rows = store.get_trades("finideas_ilts", leg_role="NIFTY_JUN_PE_ATM")
+    assert len(close_rows) == 1
+    assert len(open_rows) == 1
+    assert close_rows[0].action == TradeAction.BUY
+    assert close_rows[0].price == Decimal("45.00")
+    assert open_rows[0].action == TradeAction.SELL
+    assert open_rows[0].price == Decimal("85.00")
+
+
+def test_record_roll_is_idempotent(store: PortfolioStore) -> None:
+    """Calling record_roll twice leaves exactly 2 rows — no duplicates."""
+    store.record_roll(_close_trade(), _open_trade())
+    store.record_roll(_close_trade(), _open_trade())
+    all_trades = store.get_trades("finideas_ilts")
+    assert len(all_trades) == 2
+
+
+def test_record_roll_partial_duplicate_still_inserts_missing_leg(
+    store: PortfolioStore,
+) -> None:
+    """If close trade already exists, record_roll still inserts the open trade."""
+    store.record_trade(_close_trade())  # pre-insert the close side
+    store.record_roll(_close_trade(), _open_trade())
+    assert len(store.get_trades("finideas_ilts", leg_role="NIFTY_MAY_PE_ATM")) == 1
+    assert len(store.get_trades("finideas_ilts", leg_role="NIFTY_JUN_PE_ATM")) == 1
+
+
+def test_record_roll_positions_reflect_both_legs(store: PortfolioStore) -> None:
+    """After a roll: old leg shows net +50 (BUY to close a prior short),
+    new leg shows net -50 (SELL to open)."""
+    store.record_roll(_close_trade(), _open_trade())
+    old_qty, _ = store.get_position("finideas_ilts", "NIFTY_MAY_PE_ATM")
+    new_qty, _ = store.get_position("finideas_ilts", "NIFTY_JUN_PE_ATM")
+    assert old_qty == 50   # BUY 50 → net +50
+    assert new_qty == -50  # SELL 50 → net -50

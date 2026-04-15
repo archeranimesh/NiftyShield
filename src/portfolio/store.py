@@ -455,6 +455,43 @@ class PortfolioStore:
                 ),
             )
 
+    def record_roll(self, close_trade: Trade, open_trade: Trade) -> None:
+        """Atomically insert a closing trade and an opening trade for a leg roll.
+
+        Both INSERTs execute within a single SQLite transaction — either both
+        are committed or neither is (rollback on any exception). Duplicate
+        protection follows the same ON CONFLICT DO NOTHING semantics as
+        record_trade, so re-running the same roll is safe.
+
+        Args:
+            close_trade: Trade that closes the existing position (BUY to cover
+                a short, or SELL to close a long).
+            open_trade: Trade that opens the replacement position.
+        """
+        _INSERT = (
+            "INSERT INTO trades"
+            " (strategy_name, leg_role, instrument_key, trade_date,"
+            "  action, quantity, price, notes)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+            " ON CONFLICT(strategy_name, leg_role, trade_date, action)"
+            " DO NOTHING"
+        )
+        with _connect(self.db_path) as conn:
+            for trade in (close_trade, open_trade):
+                conn.execute(
+                    _INSERT,
+                    (
+                        trade.strategy_name,
+                        trade.leg_role,
+                        trade.instrument_key,
+                        trade.trade_date.isoformat(),
+                        trade.action.value,
+                        trade.quantity,
+                        str(trade.price),
+                        trade.notes,
+                    ),
+                )
+
     def get_trades(
         self,
         strategy_name: str,

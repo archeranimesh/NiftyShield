@@ -276,6 +276,47 @@ python scripts/record_trade.py --strategy ILTS --leg EBBETF0431 \
   --action BUY --qty 27 --price 1386.20 --dry-run
 ```
 
+### Roll an option leg (expiry roll)
+
+Use `roll_leg.py` to atomically close an expiring position and open the replacement in a single DB transaction. If either insert fails, neither is committed.
+
+```bash
+python scripts/roll_leg.py \
+  --strategy finideas_ilts \
+  --date 2026-06-20 \
+  --old-leg NIFTY_MAY_PE_ATM \
+  --old-key "NSE_FO|<expiring-token>" \
+  --old-action BUY \
+  --old-qty 50 \
+  --old-price 45.00 \
+  --new-leg NIFTY_JUN_PE_ATM \
+  --new-key "NSE_FO|<new-token>" \
+  --new-action SELL \
+  --new-qty 50 \
+  --new-price 85.00 \
+  --notes "JUN expiry roll"
+```
+
+Prints updated net positions immediately after both inserts:
+
+```
+Roll complete — finideas_ilts  [2026-06-20]
+  CLOSED  NIFTY_MAY_PE_ATM : 0 units @ avg ₹0.00
+  OPENED  NIFTY_JUN_PE_ATM : -50 units @ avg ₹0.00
+```
+
+Use `--dry-run` to validate both trades without touching the DB:
+
+```bash
+python scripts/roll_leg.py --strategy finideas_ilts --date 2026-06-20 \
+  --old-leg NIFTY_MAY_PE_ATM --old-key "NSE_FO|12345" \
+  --old-action BUY --old-qty 50 --old-price 45.00 \
+  --new-leg NIFTY_JUN_PE_ATM --new-key "NSE_FO|67890" \
+  --new-action SELL --new-qty 50 --new-price 85.00 --dry-run
+```
+
+**`--old-action` convention:** BUY to cover a short (most option legs are short); SELL to exit a long.
+
 ### Query position directly
 
 ```python
@@ -371,6 +412,7 @@ All backtesting runs **fully offline** against local Parquet/SQLite stores. No A
 - [x] Daily snapshot pipeline (P&L, Telegram notification, historical replay)
 - [x] MF portfolio tracking (transactions, NAV snapshots, holdings P&L)
 - [x] Trade ledger (execution history, weighted avg cost basis, position queries)
+- [x] Atomic leg roll CLI (expiry rolls with single-transaction close + open)
 - [ ] Option chain fetcher with Greeks
 - [ ] Historical data pipeline (active + expired)
 - [ ] Offline data bootstrap script

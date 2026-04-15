@@ -69,7 +69,8 @@ scripts/
 ├── send_test_telegram.py     # Smoke-test script. Reads TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID from .env, sends a sample P&L message. Exit code 0/1. Run before first cron to verify credentials.
 ├── seed_mf_holdings.py       # One-time CLI. Inserts 11 INITIAL MF transactions. Idempotent. --dry-run flag.
 ├── seed_trades.py            # Idempotent backfill of all finideas_ilts + finrakshak executions as Trade rows. build_trades() (pure) + seed_trades() (I/O). --dry-run flag. 7 trades total. strategy_name must match strategies table (finideas_ilts, finrakshak).
-└── record_trade.py           # CLI for recording future trades. Validates via Trade model; inserts; prints updated net position + avg price. --dry-run prints without touching DB. --strategy takes DB strategy name (e.g. finideas_ilts, not ILTS).
+├── record_trade.py           # CLI for recording future trades. Validates via Trade model; inserts; prints updated net position + avg price. --dry-run prints without touching DB. --strategy takes DB strategy name (e.g. finideas_ilts, not ILTS).
+└── roll_leg.py               # CLI for atomic option leg rolls. Closes old leg + opens new leg in a single DB transaction. Pure _build_trades() validates both Trade objects before any DB write. --old-*/--new-* flag pairs. --dry-run. Calls store.record_roll().
 
 .claude/
 ├── skills/commit/SKILL.md    # NiftyShield commit format (disable-model-invocation: true — manual only)
@@ -90,7 +91,8 @@ tests/
 │   │   ├── __init__.py
 │   │   ├── test_trade_models.py    # 20 tests: TradeAction enum, Trade valid/invalid construction, qty/price validators, frozen=True, Decimal precision
 │   │   ├── test_trade_store.py     # 25 tests: record_trade CRUD, idempotency, get_trades filters + ordering, get_position (BUY-only, SELL-only, mixed, weighted avg, ignores SELL price, schema coexistence)
-│   │   └── test_seed_trades.py     # 13 tests: build_trades shape, strategy/leg/key correctness, BUY+SELL actions, idempotency (3×), EBBETF0431 weighted avg, NIFTY_JUN_PE short position
+│   │   ├── test_seed_trades.py     # 13 tests: build_trades shape, strategy/leg/key correctness, BUY+SELL actions, idempotency (3×), EBBETF0431 weighted avg, NIFTY_JUN_PE short position
+│   └── test_roll_leg.py        # 10 tests: _build_trades happy path (fields, notes, leg independence), validation errors (zero/negative qty, zero price)
 │   └── mf/
 │       ├── __init__.py       # Package marker
 │       ├── test_models.py    # 25 tests: MFTransaction + MFNavSnapshot valid/invalid/edge cases
@@ -185,11 +187,11 @@ Strategy leg tables (instrument keys, entry prices, quantities, protected MF por
 
 ## Test Coverage
 
-- **Total: 585 tests** — all offline, no API dependency
+- **Total: 599 tests** — all offline, no API dependency
 - Run: `python -m pytest tests/unit/`
 - Auth tests: `tests/unit/auth/` (64 tests — Nuvama login + verify, Dhan login + verify)
 - MF tests: `tests/unit/mf/` (127 tests)
-- Portfolio tests: `tests/unit/portfolio/` + `tests/unit/test_portfolio.py` (80+ tests)
+- Portfolio tests: `tests/unit/portfolio/` + `tests/unit/test_portfolio.py` (94+ tests — includes 4 record_roll store tests + 10 _build_trades script tests)
 - Client tests: `tests/unit/test_client.py`, `test_protocol.py`, `test_exceptions.py`, `test_factory.py`, `test_mock_client.py`, `test_upstox_live.py` (90+ tests)
 - Snapshot tests: `tests/unit/test_daily_snapshot_historical.py`, `test_daily_snapshot_helpers.py`, `test_notifications.py` (50+ tests)
 - Dhan tests: `tests/unit/dhan/` (90 tests — models, reader, store, daily_snapshot integration)
