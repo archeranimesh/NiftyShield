@@ -15,12 +15,17 @@ Usage:
 """
 
 import contextlib
+import logging
 import os
 import webbrowser
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
 from dotenv import load_dotenv, set_key
+
+# Suppress stray 'apiconnect.log' created by APIConnect's module-level basicConfig.
+# See nuvama_verify.py for full explanation.
+logging.root.addHandler(logging.NullHandler())
 
 try:
     from APIConnect.APIConnect import APIConnect  # type: ignore[import]

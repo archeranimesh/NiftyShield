@@ -8,11 +8,19 @@ Usage:
 """
 
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
+
+# APIConnect.py has a module-level logging.basicConfig(filename='apiconnect.log')
+# that fires at import time and creates a stray file in CWD (project root).
+# basicConfig is a no-op when handlers already exist, so adding NullHandler first
+# suppresses the stray file. init_logger() inside APIConnect.__init__ removes all
+# handlers and re-configures using settings.ini — so actual log routing is unaffected.
+logging.root.addHandler(logging.NullHandler())
 
 try:
     from APIConnect.APIConnect import APIConnect  # type: ignore[import]
