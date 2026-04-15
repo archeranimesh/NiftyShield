@@ -36,6 +36,26 @@ The script has grown to ~600 lines with three distinct responsibilities mixed to
 
 **Pre-condition:** No new features during this refactor. Test count must not change.
 
+### 6. Fuzzy instrument search (`rapidfuzz`) — **DONE (2026-04-15)**
+`InstrumentLookup.search()` upgraded: `exact(1.0) > prefix(0.92) > fuzzy` ranking via `_score_query()` + `_best_score()`. `min_score` param added. 27 tests in `tests/unit/instruments/test_lookup.py`.
+
+**Remaining deployment step:** add `rapidfuzz` to `requirements.txt`.
+The implementation falls back silently to `difflib` when rapidfuzz is absent, but rapidfuzz is ~10–50× faster on the full NSE BOD file (~100k instruments).
+
+To verify rapidfuzz is active in the venv:
+```bash
+python -c "from rapidfuzz import fuzz; print('rapidfuzz OK:', fuzz.token_set_ratio('NIFTY', 'nifty'))"
+# Expected: rapidfuzz OK: 100.0
+```
+
+To install:
+```bash
+pip install rapidfuzz          # inside venv
+# or pin it:
+echo "rapidfuzz>=3.0" >> requirements.txt
+pip install -r requirements.txt
+```
+
 ### 4. `src/models/` migration
 Move `portfolio/models.py` Pydantic models and `mf/models.py` models to `src/models/`.
 Do in one commit with `src/strategy/` start — they migrate together.
@@ -65,4 +85,5 @@ Do in one commit with `src/strategy/` start — they migrate together.
 | 2026-04-13 | **Dhan auth layer.** `src/auth/dhan_login.py` + `dhan_verify.py`. Manual 24h token flow via web.dhan.co. Raw `requests` client (no dhanhq SDK). Pure functions: `build_login_url()`, `validate_token()`, `save_token()`, `load_dhan_credentials()`, `fetch_profile()`, `fetch_holdings()`, `parse_holdings()`. 31 offline tests (13 login + 18 verify). Read-only scope — free Trading APIs only. Data APIs (₹499/month — option chain, historical, expired options) deferred for backtesting sprint. 431 total tests, all green (excluding pre-existing upstox_live failures). |
 | 2026-04-14 | **Dhan LTP fix — switch to Upstox batch fetch.** Dhan `POST /v2/marketfeed/ltp` returns 401 on free tier (requires ₹499/month Data API). Added `enrich_with_upstox_prices()` + `upstox_keys_for_holdings()` + `fetch_dhan_holdings()` to `reader.py`. Restructured `_async_main`: Dhan holdings pre-fetched before Upstox LTP batch → keys added to `all_keys` → enriched after single batch call. `fetch_dhan_portfolio()` accepts optional `upstox_prices` param. 9 new tests. 558 total. |
 | 2026-04-14 | **Dhan portfolio integration.** `src/dhan/` module: `models.py` (DhanHolding, DhanPortfolioSummary frozen dataclasses), `reader.py` (fetch_holdings_raw, fetch_ltp_raw, classify_holding, build_dhan_holdings, build_security_id_map, enrich_with_ltp, build_dhan_summary, fetch_dhan_portfolio), `store.py` (DhanStore — dhan_holdings_snapshots table, upsert, get_prev_snapshot). `src/portfolio/models.py` extended with 9 Dhan fields on PortfolioSummary (all default-zero — existing tests unaffected). `daily_snapshot.py`: `_async_main` wires Dhan (non-fatal, excludes strategy ISINs), `_historical_main` reads stored Dhan snapshots, `_build_portfolio_summary` includes Dhan in totals, `_format_combined_summary` restructured to Equity/Bonds/Derivatives/Total sections. `test_daily_snapshot_historical.py` updated for new sectioned format. 81 new Dhan tests (57 module + 24 snapshot integration). 549 total, all green (pre-existing upstox_live/nuvama failures unchanged). |
+| 2026-04-15 | **Fuzzy instrument search.** `src/instruments/lookup.py`: `_score_query()` + `_best_score()` private helpers implement `exact(1.0) > prefix(0.92) > fuzzy` ranking via rapidfuzz (difflib fallback, no hard dep). `InstrumentLookup.search()` now scores + sorts all candidates; `min_score` param added. Signature of all other methods unchanged. 27 new tests in `tests/unit/instruments/test_lookup.py`. 585 total. |
 | 2026-04-15 | **quant-4pc-local analysed.** Prior Dhan-focused research repo reviewed. Reusable components identified: `BacktestEngine` + `Strategy` protocol (port into `src/backtest/`), `IronCondorStrategy` + `IronCondorConfig` (port into `src/strategy/`), `_normalize_df()` data normalisation improvements for `src/dhan/reader.py`, retry/backoff pattern for future rate-limiter. Full porting notes in `PLANNER.md` → "quant-4pc-local Reference" section. Folder gitignored (`quant-4pc-local/`). |

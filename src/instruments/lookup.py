@@ -22,6 +22,69 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
+# Optional fast fuzzy; difflib is stdlib fallback — no hard dependency on rapidfuzz.
+try:
+    from rapidfuzz import fuzz as _fuzz  # type: ignore
+
+    def _fuzzy_ratio(a: str, b: str) -> float:
+        """Token-set ratio normalised to 0.0–1.0."""
+        return _fuzz.token_set_ratio(a, b) / 100.0
+
+except ImportError:  # pragma: no cover
+    from difflib import SequenceMatcher as _SM  # type: ignore
+
+    def _fuzzy_ratio(a: str, b: str) -> float:  # type: ignore[misc]
+        return _SM(None, a, b).ratio()
+
+
+def _score_query(query: str, candidate: str) -> tuple[float, str]:
+    """Return (score, reason) for a query against a single candidate string.
+
+    Ranking tier:
+        exact  → 1.00  (case-insensitive equality)
+        prefix → 0.92  (candidate starts with query)
+        fuzzy  → rapidfuzz token_set_ratio (or difflib fallback)
+
+    Args:
+        query: The search term (already stripped/lowercased by caller).
+        candidate: A single field value (trading_symbol, name, etc.).
+
+    Returns:
+        Tuple of (score 0.0–1.0, reason string).
+    """
+    c = candidate.strip().lower()
+    if not c:
+        return 0.0, "none"
+    if query == c:
+        return 1.0, "exact"
+    if c.startswith(query):
+        return 0.92, "prefix"
+    return _fuzzy_ratio(query, c), "fuzzy"
+
+
+def _best_score(query: str, instrument: dict[str, Any]) -> tuple[float, str]:
+    """Return the highest (score, reason) across all searchable fields of an instrument.
+
+    Args:
+        query: Lowercased, stripped search term.
+        instrument: Raw instrument dict from the BOD JSON.
+
+    Returns:
+        Best (score, reason) tuple across trading_symbol, name, underlying_symbol, short_name.
+    """
+    fields = [
+        instrument.get("trading_symbol", ""),
+        instrument.get("name", ""),
+        instrument.get("underlying_symbol", ""),
+        instrument.get("short_name", ""),
+    ]
+    best = (0.0, "none")
+    for field in fields:
+        s, r = _score_query(query, field)
+        if s > best[0]:
+            best = (s, r)
+    return best
+
 
 # ── Offline lookup from BOD JSON ─────────────────────────────────
 
@@ -58,17 +121,31 @@ class InstrumentLookup:
         segment: str | None = None,
         instrument_type: str | None = None,
         max_results: int = 10,
+        min_score: float = 0.0,
     ) -> list[dict[str, Any]]:
-        """Free-text search across trading_symbol, name, and underlying_symbol.
+        """Ranked free-text search across trading_symbol, name, and underlying_symbol.
+
+        Results are scored and sorted: exact matches first (1.0), prefix matches
+        second (0.92), fuzzy matches last (rapidfuzz token_set_ratio or difflib
+        fallback). The old substring behaviour is preserved at min_score=0.0 (any
+        positive fuzzy score is included).
 
         Args:
             query: Text to match (case-insensitive).
             segment: Filter by segment (e.g. 'NSE_EQ', 'NSE_FO').
             instrument_type: Filter by type (e.g. 'EQ', 'CE', 'PE', 'FUT').
             max_results: Maximum results to return.
+            min_score: Discard results below this score (0.0–1.0). Use ~0.65 to
+                suppress low-confidence fuzzy matches.
+
+        Returns:
+            List of instrument dicts sorted by descending score, capped at max_results.
         """
-        query_lower = query.lower()
-        results = []
+        if not query or not query.strip():
+            return []
+
+        query_lower = query.strip().lower()
+        scored: list[tuple[float, str, dict[str, Any]]] = []
 
         for inst in self._instruments:
             if segment and inst.get("segment") != segment:
@@ -76,19 +153,12 @@ class InstrumentLookup:
             if instrument_type and inst.get("instrument_type") != instrument_type:
                 continue
 
-            searchable = " ".join([
-                inst.get("trading_symbol", ""),
-                inst.get("name", ""),
-                inst.get("underlying_symbol", ""),
-                inst.get("short_name", ""),
-            ]).lower()
+            score, reason = _best_score(query_lower, inst)
+            if score > 0.0 and score >= min_score:
+                scored.append((score, reason, inst))
 
-            if query_lower in searchable:
-                results.append(inst)
-                if len(results) >= max_results:
-                    break
-
-        return results
+        scored.sort(key=lambda t: t[0], reverse=True)
+        return [inst for _, _, inst in scored[:max_results]]
 
     def search_equity(self, symbol: str) -> list[dict[str, Any]]:
         """Search for an equity instrument by trading symbol.

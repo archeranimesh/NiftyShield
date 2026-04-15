@@ -50,7 +50,7 @@ src/
 │   ├── reader.py             # Pure + HTTP functions. fetch_holdings_raw/fetch_ltp_raw (I/O). classify_holding, build_dhan_holdings (filter+classify), build_security_id_map, enrich_with_ltp (Dhan API — paid tier), enrich_with_upstox_prices (preferred), upstox_keys_for_holdings, build_dhan_summary (pure). fetch_dhan_holdings() + fetch_dhan_portfolio() orchestrators.
 │   └── store.py              # DhanStore: dhan_holdings_snapshots table. record_snapshot (upsert), get_snapshot_for_date, get_prev_snapshot (MAX date < d, keyed by ISIN).
 ├── instruments/
-│   └── lookup.py             # Offline BOD search (NSE.json.gz). CLI: --find-legs mode.
+│   └── lookup.py             # Offline BOD search (NSE.json.gz). CLI: --find-legs mode. search() uses ranked exact>prefix>fuzzy scoring via _score_query()/_best_score() (rapidfuzz; difflib fallback). min_score param added.
 ├── notifications/
 │   ├── CLAUDE.md             # Module context: non-fatal contract, build_notifier() → None, HTML parse_mode
 │   ├── __init__.py           # Package marker.
@@ -100,6 +100,9 @@ tests/
 │       ├── test_seed.py      # 20 tests: seed transaction shape, verified AMFI code set, idempotency, Decimal precision, total_invested sum
 │       ├── test_daily_snapshot_mf.py   # 12 tests: MF wire-up path — schema coexistence, full seed→snapshot→aggregate, empty holdings, nav failure
 │       └── test_daily_snapshot_helpers.py  # 11 tests: _etf_current_value + _etf_cost_basis pure helpers. No sys.modules stubs needed — daily_snapshot.py has no I/O imports at module level.
+└── instruments/
+│   ├── __init__.py
+│   └── test_lookup.py        # 27 tests: _score_query tiers, _best_score field selection, InstrumentLookup.search ranking/filters/min_score/edge cases
 └── auth/
     ├── __init__.py
     ├── test_nuvama_login.py   # 16 tests: build_login_url, extract_request_id (full URL + bare token + whitespace), initialize_session (APIConnect args, parent dir creation, is_production flag), save_settings_path (write + upsert), login flow (missing creds, empty input, full flow). autouse clean_env fixture prevents dotenv leakage.
@@ -182,7 +185,7 @@ Strategy leg tables (instrument keys, entry prices, quantities, protected MF por
 
 ## Test Coverage
 
-- **Total: 558 tests** — all offline, no API dependency
+- **Total: 585 tests** — all offline, no API dependency
 - Run: `python -m pytest tests/unit/`
 - Auth tests: `tests/unit/auth/` (64 tests — Nuvama login + verify, Dhan login + verify)
 - MF tests: `tests/unit/mf/` (127 tests)
