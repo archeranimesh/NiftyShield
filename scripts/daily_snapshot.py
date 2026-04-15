@@ -1044,4 +1044,10 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # os._exit bypasses atexit and threading cleanup — necessary to kill the
+    # APIConnect SDK's background Feed thread, which is non-daemon and would
+    # otherwise block process exit indefinitely after a Nuvama fetch.
+    # Same pattern as nuvama_verify.py and nuvama_login.py.
+    import os as _os
+    _code = main()
+    _os._exit(_code)
