@@ -19,6 +19,23 @@ Matplotlib script or React dashboard from `daily_snapshots` time series.
 Deferred until several weeks of snapshot history exist.
 `PortfolioSummary` dataclass already extracted — ready to query.
 
+### 5. Split `scripts/daily_snapshot.py` into focused modules
+
+The script has grown to ~600 lines with three distinct responsibilities mixed together. Split into:
+
+- **`src/portfolio/summary.py`** — pure computation: `_etf_current_value`, `_etf_cost_basis`, `_build_prev_prices`, `_compute_prev_mf_pnl`, `_build_portfolio_summary`, `_compute_strategy_pnl_from_prices`. No I/O, no imports beyond models. Fully unit-testable in isolation.
+- **`src/portfolio/formatting.py`** — pure formatting: `_format_combined_summary`, `_format_protection_stats`. Depends only on `PortfolioSummary` — zero I/O. Test by asserting substring/line presence.
+- **`scripts/daily_snapshot.py`** — thin I/O orchestration only: `_async_main`, `_historical_main`, `main()`, `parse_args()`. Imports summary + formatting from `src/portfolio/`. No arithmetic here.
+
+**Phase boundaries and commits:**
+1. Extract `summary.py` + tests → commit (`refactor(portfolio): extract summary computation`)
+2. Extract `formatting.py` + tests → commit (`refactor(portfolio): extract summary formatting`)
+3. Slim down `daily_snapshot.py` (orchestration only) → update CONTEXT.md → commit (`refactor(scripts): daily_snapshot orchestration only`)
+
+**Why:** Current file mixes pure functions (fully testable) with async I/O, making unit tests brittle. Moves reusable computation into `src/` where the backtesting and visualization layers (TODO 3) can import it directly without going through the script.
+
+**Pre-condition:** No new features during this refactor. Test count must not change.
+
 ### 4. `src/models/` migration
 Move `portfolio/models.py` Pydantic models and `mf/models.py` models to `src/models/`.
 Do in one commit with `src/strategy/` start — they migrate together.

@@ -15,6 +15,30 @@ Do not rely on chat history — CONTEXT.md is the single source of truth.
 - Starting a new feature → also read `TODOS.md` + `PLANNER.md`
 - Working inside `src/<module>/` → that module's `CLAUDE.md` loads automatically
 
+**Before opening any source file — use these tools first to reduce token usage:**
+
+**codebase-memory-mcp (graph-first):** The entire `src/` and `scripts/` tree is indexed. Query the graph before reaching for `Read`. Key calls:
+- `search_graph(query=...)` — find a symbol by name or natural language
+- `get_code_snippet(qualified_name)` — read only the target function, not the whole file
+- `trace_path(function_name, direction="outbound")` — full call graph without reading source
+- `search_code(pattern)` — grep enriched with structural ranking in one call
+Fall back to `Read` only for files the graph cannot resolve: markdown, config, test fixtures.
+
+**git log (commit history first):** Commit messages in this repo follow a structured format that encodes the *reason* for every change — faster than reading code cold.
+- `git log --oneline -15 <file>` — what changed in a specific file and when
+- `git show <sha>` — full diff + intent for any commit
+- `git log --oneline -20` — recent session history across the whole repo
+Check git log before asking "why does this code look like this?" — the answer is usually in a commit message.
+
+## Python Standards (new module checklist)
+
+Every new Python package directory — whether under `src/`, `scripts/`, or `tests/` — **must include an `__init__.py`**. A single comment line is sufficient. Without it:
+- `codebase-memory-mcp` silently skips the entire directory (all functions become invisible to the graph)
+- Type checkers and IDEs lose symbol resolution
+- `python -m <package>.<module>` falls back to namespace package semantics (fragile)
+
+Reminder: after adding a new package, re-index: `mcp__codebase-memory-mcp__index_repository`.
+
 ## Step 2 — Confirm scope
 
 If the prompt does not name specific files, ask before starting. One clarifying question beats building the wrong thing.
@@ -39,6 +63,18 @@ After any implementation, use targeted `Edit` calls (never `Write`) to update:
 - `TODOS.md` — mark completed items, add session log entry
 - The relevant `src/<module>/CLAUDE.md` if module invariants changed
 
+## Step 6 — Commit after each logical phase
+
+Once a self-contained phase is complete (tests green + docs updated), **commit before starting the next phase**. Never bundle unrelated changes across phases into a single commit.
+
+Identify phase boundaries in Step 3 when planning. Typical phase boundaries:
+- Model → tests green → commit
+- Store → tests green → commit
+- Tracker/orchestration → tests green → docs updated → commit
+- Formatting / pure helpers → tests green → commit
+
+Commit format is in `.claude/skills/commit/SKILL.md`. Run `python -m pytest tests/unit/` and confirm all tests pass before each commit. If a phase touches only docs or config (no logic), a single commit at the end of the session is acceptable.
+
 ---
 
 ## Quick reference
@@ -57,3 +93,14 @@ After any implementation, use targeted `Edit` calls (never `Write`) to update:
 | Live DB | `data/portfolio/portfolio.sqlite` |
 | Cron log | `logs/snapshot.log` |
 | Run all tests | `python -m pytest tests/unit/` |
+| Commit format | `.claude/skills/commit/SKILL.md` |
+
+## Module CLAUDE.md files (auto-loaded when working in that directory)
+
+| Module | Context file |
+|---|---|
+| `src/portfolio/` | Leg/Trade distinction, Decimal invariant, `apply_trade_positions()`, strategy_name constraint |
+| `src/mf/` | Transaction ledger model, AMFI source, Decimal TEXT invariant, MFHolding location |
+| `src/client/` | BrokerClient protocol rule, 4 implementations, blocked methods, two-token constraint |
+| `src/notifications/` | Non-fatal contract, `build_notifier()` → None, HTML parse_mode |
+| `src/dhan/` | LTP via Upstox batch, two-phase fetch, classification config, double-count prevention |
