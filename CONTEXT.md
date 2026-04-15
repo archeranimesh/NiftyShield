@@ -119,10 +119,10 @@ tests/
 
 ### What Does NOT Exist Yet
 
+- `src/nuvama/` — Nuvama bond portfolio module — **IN PROGRESS (2026-04-15)** — 4-phase plan in TODOS.md
 - `src/models/` — shared Pydantic models (deferred; portfolio/ and mf/ models migrate here together — see PLANNER.md)
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/`, `src/streaming/` — all empty
 - `OptionChain` Pydantic model — not defined; `_fetch_greeks()` returns `{}` immediately
-- `scripts/roll_leg.py` — atomic close + open CLI (needed before 2026-06-30 JUN expiry roll)
 
 ### Live Data
 

@@ -4,10 +4,38 @@
 
 ## Open TODOs (priority order)
 
+### 0. Nuvama bond portfolio integration — **IN PROGRESS (2026-04-15)**
+
+New module `src/nuvama/` fetching bond holdings from Nuvama APIConnect and adding them to the daily snapshot Bonds section.
+
+**Schema probe completed 2026-04-15.** Key findings:
+- `rmsHdg` records have: `isin`, `cpName`, `ltp`, `totalQty`, `totalVal`, `chgP`, `exc`, `hairCut`, `sym`, `trdSym`, `dpName`, `asTyp`. No `avgPrice`.
+- Cost basis seeded manually via `scripts/seed_nuvama_positions.py` into `nuvama_positions` table in `portfolio.sqlite`.
+- Day-change delta derived from `chgP` field (percent) — no prior snapshot needed.
+- LIQUIDBEES (`INF732E01037`) excluded by ISIN (already tracked in ILTS strategy).
+- All holdings classified as BOND (Nuvama account is bonds-only).
+
+**Phase plan:**
+1. `src/nuvama/` models + reader (pure functions) + tests → commit
+2. `src/nuvama/store.py` + `scripts/seed_nuvama_positions.py` + tests → commit
+3. `src/portfolio/models.py` — add `nuvama_*` fields to `PortfolioSummary` + tests → commit
+4. `scripts/daily_snapshot.py` wiring (`_async_main`, `_build_portfolio_summary`, `_format_combined_summary`) + tests → commit
+
+**Known positions (for seed script):**
+
+| ISIN | Instrument | Qty | Avg Price |
+|---|---|---|---|
+| `INE532F07FD3` | EFSL 10% NCD 2034 | 700 | ₹1,000.00 |
+| `INE532F07EC8` | EFSL 9.20% NCD 2026 | 500 | ₹1,000.00 |
+| `INE532F07DK3` | EFSL 9.67% NCD 2028 | 1,200 | ₹1,001.06 |
+| `INE532F07FN2` | EFSL 9.67% NCD 2029 | 700 | ₹1,000.00 |
+| `IN0020070069` | G-Sec 8.28% 2027 | 2,000 | ₹109.00 |
+| `IN0020230168` | SGB 2031 2.50% | 50 | ₹6,199.00 |
+
 ### 1. Greeks capture
 Fix option chain call (`NSE_INDEX|Nifty 50`), define `OptionChain` Pydantic model, implement `_extract_greeks_from_chain()`.
 Fixture `nifty_chain_2026-04-07.json` already recorded in `tests/fixtures/responses/` — use it to drive model definition.
-Blocked by: nothing. Next to implement.
+Blocked by: nothing. Next after Nuvama integration.
 
 ### ~~2. `scripts/roll_leg.py`~~ — **DONE (2026-04-15)**
 `PortfolioStore.record_roll(close_trade, open_trade)` added — single `_connect` block, both INSERTs atomic. `scripts/roll_leg.py` CLI: `--old-*/--new-*` flag pairs, `_build_trades()` pure function, `--dry-run`. 14 new tests (4 store + 10 script). 599 total, all pre-existing failures unchanged.
@@ -86,3 +114,4 @@ Do in one commit with `src/strategy/` start — they migrate together.
 | 2026-04-15 | **Fuzzy instrument search.** `src/instruments/lookup.py`: `_score_query()` + `_best_score()` private helpers implement `exact(1.0) > prefix(0.92) > fuzzy` ranking via rapidfuzz (difflib fallback, no hard dep). `InstrumentLookup.search()` now scores + sorts all candidates; `min_score` param added. Signature of all other methods unchanged. 27 new tests in `tests/unit/instruments/test_lookup.py`. 585 total. |
 | 2026-04-15 | **quant-4pc-local analysed.** Prior Dhan-focused research repo reviewed. Reusable components identified: `BacktestEngine` + `Strategy` protocol (port into `src/backtest/`), `IronCondorStrategy` + `IronCondorConfig` (port into `src/strategy/`), `_normalize_df()` data normalisation improvements for `src/dhan/reader.py`, retry/backoff pattern for future rate-limiter. Full porting notes in `PLANNER.md` → "quant-4pc-local Reference" section. Folder gitignored (`quant-4pc-local/`). |
 | 2026-04-15 | **Atomic leg roll CLI (TODO 2).** `PortfolioStore.record_roll()` — single `_connect` block, two INSERTs, one transaction. `scripts/roll_leg.py`: `--old-*/--new-*` flag pairs, `_build_trades()` pure function, `--dry-run`. README.md updated with full CLI signature + dry-run example. 14 new tests (4 `test_trade_store.py` + 10 `test_roll_leg.py`). 599 total. |
+| 2026-04-15 | **Nuvama bond schema probe.** `scripts/probe_nuvama_schema.py` added. Full `rmsHdg` field set confirmed: `isin`, `ltp`, `totalQty`, `totalVal`, `chgP`, `exc`, `hairCut` — no `avgPrice`. 6 holdings: 4 EFSL NCDs, 1 GOI G-Sec, 1 SGB. Cost basis sourced from Nuvama UI screenshot and will be seeded. LIQUIDBEES excluded by ISIN. Plan finalized — 4-phase implementation begins. |
