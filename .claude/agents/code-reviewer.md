@@ -38,6 +38,24 @@ You are a code reviewer for the NiftyShield trading automation project. Your job
 - `TelegramNotifier.send()` must never re-raise. If a code path could cause `send()` to propagate an exception, flag it.
 - Callers of `build_notifier()` must guard with `if notifier:` before calling `.send()`.
 
+### 7. General Python Hygiene
+
+After completing the NiftyShield-specific checks above, run a general Python review using `REVIEW.md` (repo root) as the checklist. Key categories to scan in every diff:
+
+- **Mutable default arguments** — any `def f(x=[])` or `def f(x={})` pattern
+- **Late binding closures** — lambdas or nested functions inside loops that capture the loop variable
+- **Bare or overly broad `except`** — `except:` or `except Exception: pass` without logging or re-raise
+- **Generator exhaustion** — generator passed to two consumers; second iteration silently empty
+- **Dict/set/list mutation during iteration** — `del`, `.pop()`, `.update()`, `.append()` on the container being iterated
+- **`__eq__` without `__hash__`** — any class defining `__eq__` must explicitly define `__hash__`
+- **`None` as sentinel when `None` is a valid domain value** — use `_MISSING = object()` instead
+- **Set iteration order assumptions** — `list(some_set)[0]` or any ordering assumption on a `set`
+- **`zip` without `strict=True`** — mismatched-length sequences silently truncate (Python 3.10+ project)
+- **`copy.copy()` on nested mutables** — should be `copy.deepcopy()` for complex objects
+- **SQL/shell injection** — f-strings feeding into `cursor.execute()` or `os.system()`/`subprocess`; use parameterized queries and argument lists
+
+For full examples and rationale for each rule, read `REVIEW.md`. Flag issues from this section as `WARNING` unless they involve injection or data mutation, which are `CRITICAL`.
+
 ## Output Format
 
 For each issue found:

@@ -73,7 +73,11 @@ Identify phase boundaries in Step 3 when planning. Typical phase boundaries:
 - Tracker/orchestration → tests green → docs updated → commit
 - Formatting / pure helpers → tests green → commit
 
-Commit format is in `.claude/skills/commit/SKILL.md`. Run `python -m pytest tests/unit/` and confirm all tests pass before each commit. If a phase touches only docs or config (no logic), a single commit at the end of the session is acceptable.
+Commit format is in `.claude/skills/commit/SKILL.md`. Before each commit:
+1. Run `python -m pytest tests/unit/` — all tests must pass.
+2. Invoke the `code-reviewer` agent against the diff (`git diff HEAD` or staged files). It checks Decimal invariant, BrokerClient protocol, async correctness, and general Python hygiene (`REVIEW.md`). Address any `CRITICAL` or `ERROR` findings before committing. `WARNING`-level findings may be deferred with a documented reason.
+
+If a phase touches only docs or config (no logic), skip the code-reviewer; a single commit at the end of the session is acceptable.
 
 ---
 
@@ -94,6 +98,7 @@ Commit format is in `.claude/skills/commit/SKILL.md`. Run `python -m pytest test
 | Cron log | `logs/snapshot.log` |
 | Run all tests | `python -m pytest tests/unit/` |
 | Commit format | `.claude/skills/commit/SKILL.md` |
+| Python review checklist | `REVIEW.md` |
 
 ## Module CLAUDE.md files (auto-loaded when working in that directory)
 
