@@ -55,6 +55,11 @@ src/
 │   ├── CLAUDE.md             # Module context: non-fatal contract, build_notifier() → None, HTML parse_mode
 │   ├── __init__.py           # Package marker.
 │   └── telegram.py           # TelegramNotifier: fire-and-forget sendMessage via raw requests (HTML parse_mode, <pre> block). build_notifier() returns None when env vars absent. send() never raises — catches Exception broadly, logs WARNING, returns False.
+├── nuvama/
+│   ├── __init__.py           # Package marker
+│   ├── models.py             # Frozen dataclasses: NuvamaBondHolding (isin/qty/avg_price/ltp/chg_pct/hair_cut; cost_basis/current_value/pnl/pnl_pct/day_delta properties), NuvamaBondSummary (total_value/basis/pnl/pnl_pct/total_day_delta). All BOND classification.
+│   ├── reader.py             # parse_bond_holdings() (pure, joins positions dict for avg_price, skips _EXCLUDE_ISINS + missing positions with WARNING, catches InvalidOperation), build_nuvama_summary() (pure aggregation), fetch_nuvama_portfolio() (I/O orchestrator). _extract_rms_hdg() handles both resp.data.rmsHdg and eq.data.rmsHdg response paths.
+│   └── store.py              # NuvamaStore: nuvama_positions (ISIN PK, avg_price TEXT, qty, label — seed once via seed_nuvama_positions.py), nuvama_holdings_snapshots (UNIQUE(isin, snapshot_date) upsert). get_positions() → ISIN→Decimal. get_prev_total_value() calendar-agnostic Python-Decimal sum.
 ├── db.py                     # Shared SQLite context manager — WAL mode, row_factory, FK enforcement, auto commit/rollback.
 └── client/
     ├── CLAUDE.md             # Module context: BrokerClient protocol rule, 4 implementations, active constraints
@@ -70,7 +75,9 @@ scripts/
 ├── seed_mf_holdings.py       # One-time CLI. Inserts 11 INITIAL MF transactions. Idempotent. --dry-run flag.
 ├── seed_trades.py            # Idempotent backfill of all finideas_ilts + finrakshak executions as Trade rows. build_trades() (pure) + seed_trades() (I/O). --dry-run flag. 7 trades total. strategy_name must match strategies table (finideas_ilts, finrakshak).
 ├── record_trade.py           # CLI for recording future trades. Validates via Trade model; inserts; prints updated net position + avg price. --dry-run prints without touching DB. --strategy takes DB strategy name (e.g. finideas_ilts, not ILTS).
-└── roll_leg.py               # CLI for atomic option leg rolls. Closes old leg + opens new leg in a single DB transaction. Pure _build_trades() validates both Trade objects before any DB write. --old-*/--new-* flag pairs. --dry-run. Calls store.record_roll().
+├── roll_leg.py               # CLI for atomic option leg rolls. Closes old leg + opens new leg in a single DB transaction. Pure _build_trades() validates both Trade objects before any DB write. --old-*/--new-* flag pairs. --dry-run. Calls store.record_roll().
+├── seed_nuvama_positions.py  # One-time seed of Nuvama bond cost-basis. build_positions() pure (6 instruments). seed_positions() I/O wrapper. --write (required to commit), --overwrite, --db. Dry-run by default.
+└── probe_nuvama_schema.py    # Diagnostic script (not production). Dumps all rmsHdg fields from live Holdings() response.
 
 .claude/
 ├── skills/commit/SKILL.md    # NiftyShield commit format (disable-model-invocation: true — manual only)
@@ -119,7 +126,7 @@ tests/
 
 ### What Does NOT Exist Yet
 
-- `src/nuvama/` — Nuvama bond portfolio module — **IN PROGRESS (2026-04-15)** — 4-phase plan in TODOS.md
+- `src/nuvama/CLAUDE.md` — module context file not yet written
 - `src/models/` — shared Pydantic models (deferred; portfolio/ and mf/ models migrate here together — see PLANNER.md)
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/`, `src/streaming/` — all empty
 - `OptionChain` Pydantic model — not defined; `_fetch_greeks()` returns `{}` immediately
@@ -187,7 +194,7 @@ Strategy leg tables (instrument keys, entry prices, quantities, protected MF por
 
 ## Test Coverage
 
-- **Total: 599 tests** — all offline, no API dependency
+- **Total: 599 + 97 new nuvama tests = 696 tests** (54 pydantic-dependent skipped in sandbox, all pass in Mac venv)
 - Run: `python -m pytest tests/unit/`
 - Auth tests: `tests/unit/auth/` (64 tests — Nuvama login + verify, Dhan login + verify)
 - MF tests: `tests/unit/mf/` (127 tests)

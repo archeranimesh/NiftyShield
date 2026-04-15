@@ -161,6 +161,7 @@ def _build_portfolio_summary(
     prev_snapshots: dict[int, DailySnapshot] | None = None,
     prev_mf_pnl: object | None = None,
     dhan_summary: object | None = None,
+    nuvama_summary: object | None = None,
 ) -> PortfolioSummary:
     """Compute combined portfolio values into a PortfolioSummary.
 
@@ -208,9 +209,17 @@ def _build_portfolio_summary(
     dhan_bd_pnl_pct = dhan_summary.bond_pnl_pct if dhan_summary else None  # type: ignore[union-attr]
     dhan_bd_day_delta = dhan_summary.bond_day_delta if dhan_summary else None  # type: ignore[union-attr]
 
-    total_value = mf_value + etf_value + options_pnl + dhan_eq_value + dhan_bd_value
-    total_invested = mf_invested + etf_basis + dhan_eq_basis + dhan_bd_basis
-    total_pnl = mf_pnl_amt + (etf_value - etf_basis) + options_pnl + dhan_eq_pnl + dhan_bd_pnl
+    # ── Nuvama components (default to 0 when unavailable) ─────────
+    nuvama_available = nuvama_summary is not None
+    nuvama_bd_value = nuvama_summary.total_value if nuvama_summary else Decimal("0")  # type: ignore[union-attr]
+    nuvama_bd_basis = nuvama_summary.total_basis if nuvama_summary else Decimal("0")  # type: ignore[union-attr]
+    nuvama_bd_pnl = nuvama_summary.total_pnl if nuvama_summary else Decimal("0")  # type: ignore[union-attr]
+    nuvama_bd_pnl_pct = nuvama_summary.total_pnl_pct if nuvama_summary else None  # type: ignore[union-attr]
+    nuvama_bd_day_delta = nuvama_summary.total_day_delta if nuvama_summary else None  # type: ignore[union-attr]
+
+    total_value = mf_value + etf_value + options_pnl + dhan_eq_value + dhan_bd_value + nuvama_bd_value
+    total_invested = mf_invested + etf_basis + dhan_eq_basis + dhan_bd_basis + nuvama_bd_basis
+    total_pnl = mf_pnl_amt + (etf_value - etf_basis) + options_pnl + dhan_eq_pnl + dhan_bd_pnl + nuvama_bd_pnl
     total_pnl_pct = (
         (total_pnl / total_invested * 100).quantize(Decimal("0.01"))
         if total_invested
@@ -252,6 +261,7 @@ def _build_portfolio_summary(
         or mf_day_delta is not None
         or dhan_eq_day_delta is not None
         or dhan_bd_day_delta is not None
+        or nuvama_bd_day_delta is not None
     )
     total_day_delta: Decimal | None = None
     if any_delta:
@@ -261,6 +271,7 @@ def _build_portfolio_summary(
             + (options_day_delta or Decimal("0"))
             + (dhan_eq_day_delta or Decimal("0"))
             + (dhan_bd_day_delta or Decimal("0"))
+            + (nuvama_bd_day_delta or Decimal("0"))
         )
 
     return PortfolioSummary(
@@ -293,6 +304,12 @@ def _build_portfolio_summary(
         dhan_bond_pnl_pct=dhan_bd_pnl_pct,
         dhan_bond_day_delta=dhan_bd_day_delta,
         dhan_available=dhan_available,
+        nuvama_bond_value=nuvama_bd_value,
+        nuvama_bond_basis=nuvama_bd_basis,
+        nuvama_bond_pnl=nuvama_bd_pnl,
+        nuvama_bond_pnl_pct=nuvama_bd_pnl_pct,
+        nuvama_bond_day_delta=nuvama_bd_day_delta,
+        nuvama_available=nuvama_available,
     )
 
 
@@ -336,6 +353,7 @@ def _format_combined_summary(
     prev_mf_pnl: object | None = None,
     snap_date: date | None = None,
     dhan_summary: object | None = None,
+    nuvama_summary: object | None = None,
 ) -> str:
     """Build the combined portfolio summary as a formatted string.
 
@@ -365,6 +383,7 @@ def _format_combined_summary(
         prev_snapshots=prev_snapshots,
         prev_mf_pnl=prev_mf_pnl,
         dhan_summary=dhan_summary,
+        nuvama_summary=nuvama_summary,
     )
 
     def _delta(d: Decimal | None) -> str:
@@ -418,6 +437,8 @@ def _format_combined_summary(
     lines.append("")
     lines.append("  ── Bonds ──────────────────────────────────────────────")
 
+    _has_any_bonds = False
+
     if summary.dhan_available and summary.dhan_bond_value > 0:
         lines.append(
             f"  Dhan Bonds          : ₹{summary.dhan_bond_value:>14,.0f}"
@@ -426,11 +447,27 @@ def _format_combined_summary(
         lines.append(
             f"                        {_pnl_str(summary.dhan_bond_pnl, summary.dhan_bond_pnl_pct)}"
         )
-        lines.append("  ───────────────────────────────────────────────────────")
-        lines.append(f"  Bonds subtotal      : ₹{summary.dhan_bond_value:>14,.0f}")
+        _has_any_bonds = True
     elif not summary.dhan_available:
         lines.append("  Dhan Bonds          :          [unavailable]")
-    else:
+
+    if summary.nuvama_available and summary.nuvama_bond_value > 0:
+        lines.append(
+            f"  Nuvama Bonds        : ₹{summary.nuvama_bond_value:>14,.0f}"
+            f"{_delta(summary.nuvama_bond_day_delta)}"
+        )
+        lines.append(
+            f"                        {_pnl_str(summary.nuvama_bond_pnl, summary.nuvama_bond_pnl_pct)}"
+        )
+        _has_any_bonds = True
+    elif not summary.nuvama_available:
+        lines.append("  Nuvama Bonds        :          [unavailable]")
+
+    bonds_subtotal = summary.dhan_bond_value + summary.nuvama_bond_value
+    if _has_any_bonds:
+        lines.append("  ───────────────────────────────────────────────────────")
+        lines.append(f"  Bonds subtotal      : ₹{bonds_subtotal:>14,.0f}")
+    elif summary.dhan_available and summary.nuvama_available:
         lines.append("  (no bond holdings)")
 
     # ── Derivatives section ───────────────────────────────────────
@@ -457,6 +494,8 @@ def _format_combined_summary(
         lines.append("  NOTE: MF fetch failed — MF value excluded from total")
     if not summary.dhan_available:
         lines.append("  NOTE: Dhan unavailable — Dhan values excluded from total")
+    if not summary.nuvama_available:
+        lines.append("  NOTE: Nuvama unavailable — Nuvama bonds excluded from total")
 
     lines.extend(_format_protection_stats(summary))
 
@@ -472,8 +511,9 @@ def _print_combined_summary(
     prev_mf_pnl: object | None = None,
     snap_date: date | None = None,
     dhan_summary: object | None = None,
+    nuvama_summary: object | None = None,
 ) -> None:
-    """Print the combined portfolio value across MF, ETF, options, and Dhan.
+    """Print the combined portfolio value across MF, ETF, options, Dhan, and Nuvama.
 
     Delegates to _format_combined_summary and prints the result.
 
@@ -486,10 +526,11 @@ def _print_combined_summary(
         prev_mf_pnl: PortfolioPnL for the prior date, or None.
         snap_date: Snapshot date stored in the summary (defaults to today).
         dhan_summary: DhanPortfolioSummary, or None if unavailable.
+        nuvama_summary: NuvamaBondSummary, or None if unavailable.
     """
     print(_format_combined_summary(
         strategies, prices, strategy_pnls, mf_pnl, prev_snapshots, prev_mf_pnl,
-        snap_date, dhan_summary,
+        snap_date, dhan_summary, nuvama_summary,
     ))
 
 
@@ -649,12 +690,47 @@ def _historical_main(snap_date: date, db_path: Path) -> int:
     except Exception as e:  # noqa: BLE001
         print(f"  WARNING: Dhan historical lookup failed — {e}")
 
+    # ── Nuvama bonds from stored snapshots (non-fatal) ───────────
+    nuvama_summary = None
+    try:
+        from src.nuvama.store import NuvamaStore
+        from src.nuvama.reader import build_nuvama_summary
+        from src.nuvama.models import NuvamaBondHolding
+
+        nuvama_store = NuvamaStore(db_path)
+        nuvama_snaps = nuvama_store.get_snapshot_for_date(snap_date)
+        positions = nuvama_store.get_positions()
+        if nuvama_snaps and positions:
+            # Reconstruct NuvamaBondHolding stubs from stored snapshot values.
+            # chg_pct is not stored — use 0 so day_delta reads as 0 for historical.
+            holdings_for_summary = [
+                NuvamaBondHolding(
+                    isin=isin,
+                    company_name=isin,  # label not stored in snapshot; ISIN is sufficient
+                    trading_symbol="",
+                    exchange="",
+                    qty=1,  # absorbed into current_value below
+                    avg_price=positions.get(isin, current_value),
+                    ltp=current_value,  # ltp × qty = current_value when qty=1
+                    chg_pct=Decimal("0"),
+                    hair_cut=Decimal("0"),
+                )
+                for isin, current_value in nuvama_snaps.items()
+            ]
+            nuvama_summary = build_nuvama_summary(holdings_for_summary, snap_date)
+            print(f"  Nuvama bonds: {len(holdings_for_summary)} holding(s) from stored snapshot")
+        else:
+            print(f"  No Nuvama bond snapshots found for {snap_date.isoformat()}.")
+    except Exception as e:  # noqa: BLE001
+        print(f"  WARNING: Nuvama historical lookup failed — {e}")
+
     _print_combined_summary(
         strategies, prices, strategy_pnls, mf_pnl,
         prev_snapshots=prev_snapshots,
         prev_mf_pnl=prev_mf_pnl,
         snap_date=snap_date,
         dhan_summary=dhan_summary,
+        nuvama_summary=nuvama_summary,
     )
     print("\n  Done.")
     return 0
@@ -853,6 +929,31 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
         except Exception as e:  # noqa: BLE001
             print(f"  WARNING: Dhan portfolio enrichment failed — {e}")
 
+    # ── Nuvama bond portfolio snapshot (non-fatal) ────────────────
+    nuvama_summary = None
+    try:
+        from src.auth.nuvama_verify import load_api_connect
+        from src.nuvama.reader import fetch_nuvama_portfolio
+        from src.nuvama.store import NuvamaStore
+
+        nuvama_store = NuvamaStore(db_path)
+        positions = nuvama_store.get_positions()
+        if positions:
+            nuvama_api = load_api_connect()
+            nuvama_summary = fetch_nuvama_portfolio(nuvama_api, positions, snap_date)
+            nuvama_store.record_all_snapshots(list(nuvama_summary.holdings), snap_date)
+            print(
+                f"  Nuvama bonds: {len(nuvama_summary.holdings)} holding(s)  "
+                f"₹{nuvama_summary.total_value:,.0f}  "
+                f"P&L {nuvama_summary.total_pnl:+,.0f}"
+            )
+        else:
+            print("  Nuvama: skipped — no positions seeded (run seed_nuvama_positions.py --write)")
+    except (ValueError, FileNotFoundError) as e:
+        print(f"  Nuvama: skipped — {e}")
+    except Exception as e:  # noqa: BLE001
+        print(f"  WARNING: Nuvama bond snapshot failed — {e}")
+
     # ── Combined portfolio summary ────────────────────────────────
     summary_text = _format_combined_summary(
         strategies, prices, strategy_pnls, mf_pnl,
@@ -860,6 +961,7 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
         prev_mf_pnl=prev_mf_pnl,
         snap_date=snap_date,
         dhan_summary=dhan_summary,
+        nuvama_summary=nuvama_summary,
     )
     print(summary_text)
 
@@ -887,6 +989,7 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
             prev_snapshots=prev_snapshots,
             prev_mf_pnl=prev_mf_pnl,
             dhan_summary=dhan_summary,
+            nuvama_summary=nuvama_summary,
         )
         _prot_lines = _format_protection_stats(_summary_obj)
         _prot_header = ""
