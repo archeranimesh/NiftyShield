@@ -8,3 +8,6 @@ __pycache__/
 tests/fixtures/responses/.DS_Store
 .DS_Store
 PROJECT_INSTRUCTIONS_DRAFT.md
+
+# Local reference repos (kept for future design reference, not part of NiftyShield)
+quant-4pc-local/
