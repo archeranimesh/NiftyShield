@@ -248,3 +248,14 @@ class PortfolioSummary:
 
     # Whether Dhan data was available this run
     dhan_available: bool = False
+
+    # Nuvama bond component (defaults to 0 when Nuvama unavailable)
+    # Cost basis from seeded nuvama_positions table; LTP inline from Holdings().
+    nuvama_bond_value: Decimal = Decimal("0")
+    nuvama_bond_basis: Decimal = Decimal("0")
+    nuvama_bond_pnl: Decimal = Decimal("0")
+    nuvama_bond_pnl_pct: Decimal | None = None
+    nuvama_bond_day_delta: Decimal | None = None
+
+    # Whether Nuvama data was available this run
+    nuvama_available: bool = False
