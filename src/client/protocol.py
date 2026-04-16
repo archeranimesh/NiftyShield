@@ -40,17 +40,17 @@ from typing import Any, Callable, Protocol, runtime_checkable
 # Stub type aliases — replace with Pydantic model imports when src/models/ exists
 # ---------------------------------------------------------------------------
 
-OrderRequest = Any      # TODO: replace with Pydantic model from src.models
-OrderResponse = Any     # TODO: replace with Pydantic model from src.models
-OrderModify = Any       # TODO: replace with Pydantic model from src.models
-Position = Any          # TODO: replace with Pydantic model from src.models
-Holding = Any           # TODO: replace with Pydantic model from src.models
-MarginResponse = Any    # TODO: replace with Pydantic model from src.models
-OptionChain = Any       # TODO: replace with Pydantic model from src.models
-Candle = Any            # TODO: replace with Pydantic model from src.models
-CandleRequest = Any     # TODO: replace with Pydantic model from src.models
-Contract = Any          # TODO: replace with Pydantic model from src.models
-Tick = Any              # TODO: replace with Pydantic model from src.models
+OrderRequest = Any  # TODO: replace with Pydantic model from src.models
+OrderResponse = Any  # TODO: replace with Pydantic model from src.models
+OrderModify = Any  # TODO: replace with Pydantic model from src.models
+Position = Any  # TODO: replace with Pydantic model from src.models
+Holding = Any  # TODO: replace with Pydantic model from src.models
+MarginResponse = Any  # TODO: replace with Pydantic model from src.models
+OptionChain = Any  # TODO: replace with Pydantic model from src.models
+Candle = Any  # TODO: replace with Pydantic model from src.models
+CandleRequest = Any  # TODO: replace with Pydantic model from src.models
+Contract = Any  # TODO: replace with Pydantic model from src.models
+Tick = Any  # TODO: replace with Pydantic model from src.models
 
 
 # ---------------------------------------------------------------------------

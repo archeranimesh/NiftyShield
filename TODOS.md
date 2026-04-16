@@ -65,22 +65,7 @@ The script has grown to ~600 lines with three distinct responsibilities mixed to
 ### 6. Fuzzy instrument search (`rapidfuzz`) — **DONE (2026-04-15)**
 `InstrumentLookup.search()` upgraded: `exact(1.0) > prefix(0.92) > fuzzy` ranking via `_score_query()` + `_best_score()`. `min_score` param added. 27 tests in `tests/unit/instruments/test_lookup.py`.
 
-**Remaining deployment step:** add `rapidfuzz` to `requirements.txt`.
-The implementation falls back silently to `difflib` when rapidfuzz is absent, but rapidfuzz is ~10–50× faster on the full NSE BOD file (~100k instruments).
-
-To verify rapidfuzz is active in the venv:
-```bash
-python -c "from rapidfuzz import fuzz; print('rapidfuzz OK:', fuzz.token_set_ratio('NIFTY', 'nifty'))"
-# Expected: rapidfuzz OK: 100.0
-```
-
-To install:
-```bash
-pip install rapidfuzz          # inside venv
-# or pin it:
-echo "rapidfuzz>=3.0" >> requirements.txt
-pip install -r requirements.txt
-```
+**Deployment step: DONE (2026-04-16).** `RapidFuzz==3.14.5` pinned in `requirements.txt`. Fallback to `difflib` remains for environments without it, but rapidfuzz is ~10–50× faster on the full NSE BOD file (~100k instruments).
 
 ### 4. `src/models/` migration
 Move `portfolio/models.py` Pydantic models and `mf/models.py` models to `src/models/`.
@@ -175,4 +160,6 @@ All existing `# TODO:` comments need a GitHub issue or reference link added. Low
 | 2026-04-15 | **Atomic leg roll CLI (TODO 2).** `PortfolioStore.record_roll()` — single `_connect` block, two INSERTs, one transaction. `scripts/roll_leg.py`: `--old-*/--new-*` flag pairs, `_build_trades()` pure function, `--dry-run`. README.md updated with full CLI signature + dry-run example. 14 new tests (4 `test_trade_store.py` + 10 `test_roll_leg.py`). 599 total. |
 | 2026-04-15 | **Nuvama bond schema probe.** `scripts/probe_nuvama_schema.py` added. Full `rmsHdg` field set confirmed: `isin`, `ltp`, `totalQty`, `totalVal`, `chgP`, `exc`, `hairCut` — no `avgPrice`. 6 holdings: 4 EFSL NCDs, 1 GOI G-Sec, 1 SGB. Cost basis sourced from Nuvama UI screenshot and will be seeded. LIQUIDBEES excluded by ISIN. Plan finalized — 4-phase implementation begins. |
 | 2026-04-15 | **fix(scripts): os._exit() for daily_snapshot.py.** APIConnect `__init__` spawns a non-daemon Feed thread. `sys.exit()` waits for non-daemon threads so the process hung after completing. Replaced with `os._exit(main())` — identical fix to `nuvama_verify.py` and `nuvama_login.py`. Committed separately by Animesh (7a49720). |
+| 2026-04-16 | **TD-3 resolved.** Stripped vertical alignment padding from stub type alias block in `src/client/protocol.py` lines 43–53. Normalised to 2-space inline comment style per Google §3.6. No logic change. |
+| 2026-04-16 | **rapidfuzz deployment step confirmed done.** `RapidFuzz==3.14.5` already present in `requirements.txt`. TODOS.md updated to reflect closure. |
 | 2026-04-15 | **Nuvama bond portfolio integration (TODO 0) — all 4 phases complete.** `src/nuvama/` module: `models.py` (NuvamaBondHolding + NuvamaBondSummary frozen dataclasses), `reader.py` (parse_bond_holdings, build_nuvama_summary, fetch_nuvama_portfolio), `store.py` (NuvamaStore — nuvama_positions + nuvama_holdings_snapshots tables). `scripts/seed_nuvama_positions.py` (6 instruments, idempotent, dry-run by default). `PortfolioSummary` extended with 6 nuvama_* fields (all default-zero). `daily_snapshot.py`: Nuvama fetch block in `_async_main` (non-fatal), historical reconstruction in `_historical_main`, Nuvama Bonds line in `_format_combined_summary`, nuvama fields in `_build_portfolio_summary`. 97 new tests (54 pydantic-dependent — all pass in Mac venv). |
