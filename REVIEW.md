@@ -584,6 +584,203 @@ __all__ = ["BrokerClient", "OrderValidationError", "fetch_option_chain"]
 
 ---
 
+## Part III: Google Python Style Guide — Mandatory Rules for New Code
+
+These rules apply to **all new code** written in this repository. Violations in existing code are tracked as tech debt (TD-1 through TD-7 in `TODOS.md`) and will be cleaned up incrementally. For new code there is no grace period — flag these as `CRITICAL` during review.
+
+---
+
+### G1. No `@staticmethod` (§2.17)
+
+`@staticmethod` is explicitly prohibited by the Google style guide unless required by a third-party library API.
+
+```python
+# Wrong — staticmethod inside a class
+class FooStore:
+    @staticmethod
+    def _parse_row(row: dict) -> Foo:
+        return Foo(id=row["id"])
+
+# Right — module-level private function
+def _parse_row(row: dict) -> Foo:
+    return Foo(id=row["id"])
+```
+
+**Rule:** Any `@staticmethod` in new code is a `CRITICAL` finding. The method is not using `self` or `cls`, so it has no reason to live inside the class. Move it to module scope with a `_` prefix to preserve the "private" intent.
+
+---
+
+### G2. Line Length ≤ 80 Characters (§3.2)
+
+The Google style guide specifies **80 characters**, not 100. The project's existing code predates this enforcement; new code must comply.
+
+```python
+# Wrong — 94 chars
+result = some_function(argument_one, argument_two, argument_three, argument_four)
+
+# Right — wrap at logical boundaries
+result = some_function(
+    argument_one,
+    argument_two,
+    argument_three,
+    argument_four,
+)
+```
+
+**Rule:** New code lines must not exceed 80 characters. The sole exception is URLs in comments that cannot be shortened — put them on their own line with a `# ` prefix so the URL itself does not pad the line count. Flag any new line > 80 chars during review.
+
+---
+
+### G3. No Vertical Token Alignment (§3.6)
+
+Aligning tokens on consecutive lines with extra whitespace is prohibited. It creates noisy diffs when any single line changes.
+
+```python
+# Wrong — extra spaces to align the `=` signs
+foo             = 1
+long_variable   = 2
+x               = 3
+
+# Also wrong — aligning `# TODO:` comments with padding
+STATUS_PENDING  = "pending"   # TODO: replace with enum
+STATUS_ACTIVE   = "active"    # TODO: replace with enum
+
+# Right — single space around operators
+foo = 1
+long_variable = 2
+x = 3
+```
+
+**Rule:** No padding spaces inserted purely for column alignment. One space before and after `=`, `:`, and `#` delimiters. Flag during review.
+
+---
+
+### G4. TODO Comment Format (§3.12)
+
+The `# TODO(username):` format is **discouraged for new code**. The current style requires a bug tracker reference.
+
+```python
+# Wrong — old username format
+# TODO(animesh): fix this edge case
+
+# Wrong — no reference, just floating text
+# TODO: fix this
+
+# Right — link to a trackable item
+# TODO: https://github.com/archeranimesh/NiftyShield/issues/42 — handle zero-leg edge case
+# TODO: NIFTY-42 — handle zero-leg edge case
+```
+
+**Rule:** Every `# TODO:` in new code must include a bug reference (URL or issue ID) immediately after the colon. A free-text TODO with no reference is not mergeable.
+
+---
+
+### G5. `except Exception` Requires an Intent Comment (§2.4)
+
+Catching `Exception` (rather than a specific type) is a code smell that masks bugs. When it genuinely cannot be avoided — e.g., at a network isolation boundary — it must be justified.
+
+```python
+# Wrong — silent broad catch
+try:
+    result = call_external_api()
+except Exception:
+    return None
+
+# Wrong — logged but no justification
+try:
+    result = call_external_api()
+except Exception as e:
+    logger.error("Failed: %s", e)
+    return None
+
+# Right — explicit isolation point with justification
+try:
+    result = call_external_api()
+except Exception as e:  # Intentional: isolate all upstream failures at service boundary
+    logger.error("Upstream API failure, returning None: %s", e)
+    return None
+```
+
+**Rule:** `except Exception` or bare `except` without an inline comment stating it is an *intentional isolation point* is a `CRITICAL` finding. The comment must explain *why* a broad catch is correct here, not just restate the catch.
+
+---
+
+### G6. No `assert` in Production Code (§2.4)
+
+`assert` statements are stripped when Python runs with the `-O` flag and are therefore unreliable as precondition guards outside tests.
+
+```python
+# Wrong — in src/ modules
+def withdraw(amount: Decimal) -> None:
+    assert amount > 0, "Amount must be positive"
+    ...
+
+# Right — raise the appropriate domain exception
+def withdraw(amount: Decimal) -> None:
+    if amount <= 0:
+        raise ValueError(f"Amount must be positive, got {amount}")
+    ...
+```
+
+**Rule:** `assert` is only permitted in `tests/` directories. In `src/` and `scripts/`, raise the appropriate exception from the `BrokerError` hierarchy or a built-in (`ValueError`, `TypeError`). Any `assert` outside `tests/` is a `CRITICAL` finding.
+
+---
+
+### G7. Logger Calls Must Use `%`-Style Formatting (§3.10.1)
+
+f-strings are evaluated eagerly even when the log level is disabled. %-style arguments are passed lazily and never evaluated if the message is filtered out. The Google style guide explicitly mandates `%`-style for logger calls.
+
+```python
+# Wrong — f-string in logger call
+logger.debug(f"Processing {len(orders)} orders for {symbol}")
+logger.error(f"Order {order_id} rejected: {reason}")
+
+# Right — %-style arguments
+logger.debug("Processing %d orders for %s", len(orders), symbol)
+logger.error("Order %s rejected: %s", order_id, reason)
+```
+
+**Rule:** f-strings in any `logger.*()` call are a `CRITICAL` finding. f-strings are fine everywhere else in new code. %-placeholders are required for all logging calls.
+
+---
+
+### G8. Import Ordering (§3.13)
+
+Imports must be in exactly three groups, separated by blank lines, in this order:
+
+1. `from __future__ import ...`
+2. Standard library (`os`, `sys`, `datetime`, `decimal`, `asyncio`, ...)
+3. Third-party packages (`aiohttp`, `pydantic`, `pytest`, ...)
+4. Local application imports (`from src.client import ...`)
+
+```python
+# Wrong — mixed ordering, no blank-line separation
+import os
+from src.client.protocol import BrokerClient
+import asyncio
+import pydantic
+
+# Right
+from __future__ import annotations
+
+import asyncio
+import os
+
+import pydantic
+
+from src.client.protocol import BrokerClient
+```
+
+**Rule:** Any import block that violates the group order or lacks blank-line separation between groups is an `ERROR` finding. Within each group, `import X` lines come before `from X import Y` lines, and both are alphabetically sorted.
+
+---
+
+### Meta-Rule: Scope of Part III
+
+Part III applies at the **diff level** — only lines introduced or modified in the current PR are subject to these rules. Do not apply them retroactively to unchanged lines in the same file; that belongs to the TD-1 through TD-7 tech debt backlog in `TODOS.md`.
+
+---
+
 ## The Underlying Principle
 
 Pythonic code and clean code converge on the same goal: **code that communicates intent so clearly that bugs have nowhere to hide.** A bug can only persist undetected in code that is ambiguous, overly complex, or poorly named. Every rule above is a different attack on the same problem — reducing the gap between what the code *says* and what it *does*.

@@ -119,3 +119,46 @@
   Net (MF + hedge)    :         -43,799  ⚠️  Exposed
 
   Done.
+[2026-04-15 15:45:02] Daily snapshot for 2026-04-15
+  Dhan: 2 holding(s) — keys added to LTP batch
+  Strategies: 2, Instruments: 7
+  Nifty spot: 24,231.30
+  Recorded 6 snapshots:
+    finideas_ilts: 5 legs, P&L: +37,537 (+4.69%)
+    finrakshak: 1 legs, P&L: -30,365 (-48.55%)
+  MF portfolio (11 schemes): ₹7,962,496  P&L +1,796,930 (+29.14%)
+  Dhan portfolio: 1 equity, 1 bond holding(s)
+    Equity: ₹782,416  P&L +51,380
+    Bonds:  ₹243,942  P&L +236
+
+  ── Equity ─────────────────────────────────────────────
+  MF (mutual funds)   : ₹     7,962,496  Δday:           +0
+                        P&L:  +1,796,930 (+29.14%)
+  Finideas ETF        : ₹       672,656  Δday:         -298
+                        (basis ₹667,424)
+  Dhan Equity         : ₹       782,416  Δday:      +13,003
+                        P&L:     +51,380 (+7.03%)
+  ───────────────────────────────────────────────────────
+  Equity subtotal     : ₹     9,417,568
+
+  ── Bonds ──────────────────────────────────────────────
+  Dhan Bonds          : ₹       243,942  Δday:          +43
+                        P&L:        +236 (+0.10%)
+  ───────────────────────────────────────────────────────
+  Bonds subtotal      : ₹       243,942
+
+  ── Derivatives ────────────────────────────────────────
+  Options net P&L     :          +7,172  Δday:       -3,778
+
+  ═══════════════════════════════════════════════════════
+  Total value         : ₹     9,668,682  Δday:       +8,970
+  Total invested      : ₹     7,807,731
+  Total P&L           :      +1,860,951  (+23.83%)
+
+  ── FinRakshak Protection ──────────────────────────────
+  MF Δday             :              +0
+  FinRakshak Δday     :          -6,825
+  ───────────────────────────────────────────────────────
+  Net (MF + hedge)    :          -6,825  ⚠️  Exposed
+
+  Done.

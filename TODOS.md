@@ -88,6 +88,65 @@ Do in one commit with `src/strategy/` start — they migrate together.
 
 ---
 
+## Tech Debt — Google Python Style Guide Violations
+
+Identified 2026-04-16 via full audit against the PDF style guide. Existing code is NOT being changed in place — these are tracked for systematic cleanup when refactoring adjacent code.
+
+### TD-1: `@staticmethod` overuse (§2.17 — "Never use `staticmethod`")
+
+The guide says to use module-level `_private_function()` instead. Each `@staticmethod` below should become a standalone `_function(...)` at module scope. Change is mechanical — no logic changes.
+
+| File | Method |
+|---|---|
+| `src/mf/store.py` | `_row_to_transaction()`, `_row_to_nav_snapshot()` |
+| `src/portfolio/store.py` | `_row_to_leg()`, `_row_to_snapshot()` |
+| `src/portfolio/tracker.py` | `_extract_greeks_from_chain()` |
+| `src/dhan/store.py` | `_row_to_holding()` |
+| `src/instruments/lookup.py` | `_score_query()` or similar |
+| `src/client/upstox_market.py` | row-mapping helper |
+
+**Approach:** Do one module at a time as part of adjacent refactoring work. Never worth a standalone commit.
+
+### TD-2: Line length violations (§3.2 — 80 char limit)
+
+~44 lines exceed 80 chars; 7 lines exceed 100 chars. The 7 >100 lines are the priority — they are unwrapped f-strings or SQL concatenations and are clearly fixable.
+
+| File | Lines |
+|---|---|
+| `src/portfolio/store.py` | L129 (116c), L292 (102c), L621 (111c) |
+| `src/nuvama/store.py` | L229 (104c) |
+| `src/dhan/reader.py` | L167 (101c) |
+| `src/portfolio/models.py` | L95 (102c) |
+| `src/portfolio/tracker.py` | L126 (102c) |
+
+### TD-3: Vertical token alignment (§3.6 — "Don't use spaces to vertically align")
+
+`src/client/protocol.py` lines 43–53: the `= Any      # TODO:` stub assignments use extra spaces to align the comment column. Strip the padding — 11 lines, 5-minute fix.
+
+### TD-4: Missing license boilerplate (§3.8.2)
+
+Every file should contain a license header. Zero files have one. Decision needed on which license to use before this can be automated.
+
+### TD-5: `except Exception` without intent comment (§2.4)
+
+The guide allows broad catches only at documented isolation points. These two need a one-line comment explaining they are intentional:
+
+- `src/auth/dhan_verify.py` lines 165, 184
+- `src/auth/nuvama_verify.py` lines 154, 177
+
+### TD-6: Stale `assert` in production module (§2.4)
+
+`src/client/upstox_live.py:46` has `assert issubclass(type, type)` — reads like a placeholder that was never removed. Investigate and delete or replace with a real check.
+
+### TD-7: TODO format missing bug reference (§3.12)
+
+Current format: `# TODO: description`
+Required format: `# TODO: <issue-url-or-ref> — description`
+
+All existing `# TODO:` comments need a GitHub issue or reference link added. Low priority — only matters for searchability.
+
+---
+
 ## Session Log
 
 | Date | What Changed |
