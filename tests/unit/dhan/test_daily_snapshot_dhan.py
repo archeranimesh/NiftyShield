@@ -208,8 +208,8 @@ class TestFormatCombinedSummaryEquitySection:
     def test_dhan_equity_value_in_output(self) -> None:
         dhan = _make_dhan_summary()
         out = _format_combined_summary(_ETF_STRATS, _ETF_PRICES, {}, None, dhan_summary=dhan)
-        # 500 × 275.40 = 137_700 → formatted as 137,700
-        assert "137,700" in out
+        # 500 × 275.40 = 137_700 → Indian format: 1,37,700 (not 137,700)
+        assert "1,37,700" in out
 
     def test_dhan_equity_line_absent_when_unavailable(self) -> None:
         out = _format_combined_summary(_ETF_STRATS, _ETF_PRICES, {}, None, dhan_summary=None)
@@ -246,8 +246,8 @@ class TestFormatCombinedSummaryBondsSection:
     def test_dhan_bond_value_in_output(self) -> None:
         dhan = _make_dhan_summary()
         out = _format_combined_summary(_ETF_STRATS, _ETF_PRICES, {}, None, dhan_summary=dhan)
-        # 200 × 1005.50 = 201_100 → formatted as 201,100
-        assert "201,100" in out
+        # 200 × 1005.50 = 201_100 → Indian format: 2,01,100 (not 201,100)
+        assert "2,01,100" in out
 
     def test_bonds_subtotal_present_when_dhan_available(self) -> None:
         dhan = _make_dhan_summary()

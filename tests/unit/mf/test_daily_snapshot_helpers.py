@@ -293,16 +293,16 @@ class TestFormatProtectionStats:
         lines = _format_protection_stats(summary)
         net_line = lines[-1]
         assert "✅ Protected" in net_line
-        assert "+3,300" in net_line
+        assert "+3,300" in net_line  # 3,300 < 1 lakh — same in Indian format
 
     def test_net_amount_present_in_output(self) -> None:
         summary = _make_summary(Decimal("100000"), Decimal("-20000"))
         lines = _format_protection_stats(summary)
         net_line = lines[-1]
-        assert "+80,000" in net_line
+        assert "+80,000" in net_line  # 80,000 < 1 lakh — same in Indian format
 
     def test_mf_and_finrakshak_amounts_in_output(self) -> None:
         summary = _make_summary(Decimal("242531"), Decimal("-1840"))
         text = "\n".join(_format_protection_stats(summary))
-        assert "+242,531" in text
-        assert "-1,840" in text
+        assert "+2,42,531" in text  # Indian format: 2,42,531 (not 242,531)
+        assert "-1,840" in text  # 1,840 < 1 lakh — same in Indian format

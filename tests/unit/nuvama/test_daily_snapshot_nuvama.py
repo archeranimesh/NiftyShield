@@ -161,11 +161,11 @@ class TestFormatCombinedSummaryNuvamaBondsSection:
 
     def test_nuvama_bond_value_in_output(self):
         out = _format(nuvama_summary=_make_nuvama_summary(total_value="3158740.00"))
-        assert "3,158,740" in out
+        assert "31,58,740" in out  # Indian format: 31,58,740 (not 3,158,740)
 
     def test_nuvama_bond_pnl_in_output(self):
         out = _format(nuvama_summary=_make_nuvama_summary(total_pnl="529518.00"))
-        assert "+529,518" in out
+        assert "+5,29,518" in out  # Indian format: 5,29,518 (not 529,518)
 
     def test_nuvama_included_in_bonds_waterfall_and_total(self):
         # Waterfall layout: Nuvama sub-item visible under Bonds; total reflects
@@ -173,7 +173,7 @@ class TestFormatCombinedSummaryNuvamaBondsSection:
         nuvama = _make_nuvama_summary(total_value="3000000.00")
         out = _format(nuvama_summary=nuvama)
         assert "├ Nuvama Bonds" in out
-        assert "3,000,000" in out
+        assert "30,00,000" in out  # Indian format: 30,00,000 (not 3,000,000)
 
     def test_both_zero_bond_holdings_bonds_section_present(self):
         """When both Dhan and Nuvama have zero bond holdings, Bonds section still
