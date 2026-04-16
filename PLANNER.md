@@ -28,10 +28,8 @@ CONTEXT.md split + DECISIONS.md + REFERENCES.md + TODOS.md + PLANNER.md. Module 
 
 ## Near-Term (May–June 2026)
 
-### `src/models/` migration
-Move `portfolio/models.py` + `mf/models.py` to `src/models/` in one refactor commit.
-Trigger: when starting `src/strategy/` — both model sets migrate together.
-Stub type aliases in `protocol.py` (`X = Any`) get replaced with real imports at the same time.
+### ~~`src/models/` migration~~ — **DONE (2026-04-16)**
+`src/models/portfolio.py` + `src/models/mf.py` live at canonical paths. `protocol.py` remaining `X = Any` stubs are for execution/streaming models not yet built — they will be replaced when those modules are created.
 
 ### FinRakshak effectiveness tracking
 Automated monthly report: FinRakshak P&L vs MF portfolio drawdown.
@@ -74,10 +72,10 @@ Unblocked when static IP is provisioned.
 ## Long-Term (Q4 2026+)
 
 ### Backtesting engine (`src/backtest/`)
-- Currently blocked: Expired Instruments API requires paid subscription
-- Interim: NSE option chain CSV dumps as backtest data source
-- Data models already designed against target Upstox schema — migration seamless when API unlocks
-- `bootstrap.py` in `data/` will add Upstox as second data source with no downstream changes
+- **Unblocked:** Evaluated APIs and decided to adopt the paid DhanHQ Data API (₹400/month) for expired options due to its superior ATM-relative querying model.
+- Prerequisite: Spin up a PostgreSQL + TimescaleDB container for storing the daily option chain OHLC data, as SQLite will not scale for 5 years of 1-minute deep tick data.
+- Interim: Continue using the NSE option chain CSV dumps for structural testing if necessary, but Dhan Data API gives a direct path to production-grade data lakes.
+- Data models already designed; need to map Dhan `POST /v2/charts/rollingoption` payload formats into internal Pydantic standards.
 - **Reference implementation available:** See "quant-4pc-local reference" section below — backtest engine + IC strategy scaffold already designed and tested. Port rather than build from scratch.
 
 ---

@@ -18,7 +18,7 @@ from decimal import Decimal
 import pytest
 
 from scripts.roll_leg import _build_trades
-from src.portfolio.models import TradeAction
+from src.models.portfolio import TradeAction
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────

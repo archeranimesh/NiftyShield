@@ -16,7 +16,7 @@ from pathlib import Path
 # Allow running from project root
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.portfolio.models import DailySnapshot
+from src.models.portfolio import DailySnapshot
 from src.portfolio.store import PortfolioStore
 from src.portfolio.strategies import ALL_STRATEGIES
 

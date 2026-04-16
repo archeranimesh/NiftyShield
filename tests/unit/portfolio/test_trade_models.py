@@ -17,7 +17,7 @@ from decimal import Decimal
 import pytest
 from pydantic import ValidationError
 
-from src.portfolio.models import Trade, TradeAction
+from src.models.portfolio import Trade, TradeAction
 
 
 # ── TradeAction ──────────────────────────────────────────────────────────────

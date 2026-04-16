@@ -10,7 +10,7 @@ from decimal import Decimal
 import pytest
 from pydantic import ValidationError
 
-from src.mf.models import MFNavSnapshot, MFTransaction, TransactionType
+from src.models.mf import MFNavSnapshot, MFTransaction, TransactionType
 
 
 # ---------------------------------------------------------------------------

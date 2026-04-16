@@ -1,8 +1,13 @@
-"""Pydantic models for the mutual fund tracking domain.
+"""Shared data models for the mutual fund tracking domain.
 
-Two models:
+Canonical home for all MF domain types. Modules in src/mf/ import from here.
+
+Two Pydantic models:
 - MFTransaction: a single purchase/SIP installment/redemption event.
 - MFNavSnapshot: the NAV recorded for a scheme on a given date.
+
+One computed dataclass:
+- MFHolding: net holding derived from the transaction ledger at query time.
 
 Current holdings and P&L are derived at query time from these records —
 nothing is pre-computed or stored redundantly.

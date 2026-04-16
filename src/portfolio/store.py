@@ -12,7 +12,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from src.db import connect as _connect
-from src.portfolio.models import (
+from src.models.portfolio import (
     AssetType,
     DailySnapshot,
     Direction,

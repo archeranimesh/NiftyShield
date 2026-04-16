@@ -24,7 +24,7 @@ from pathlib import Path
 
 import pytest
 
-from src.portfolio.models import Trade, TradeAction
+from src.models.portfolio import Trade, TradeAction
 from src.portfolio.store import PortfolioStore
 
 

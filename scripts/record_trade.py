@@ -30,7 +30,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.portfolio.models import Trade, TradeAction
+from src.models.portfolio import Trade, TradeAction
 from src.portfolio.store import PortfolioStore
 
 DEFAULT_DB_PATH = Path("data/portfolio/portfolio.sqlite")

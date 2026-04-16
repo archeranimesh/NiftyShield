@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from src.mf.models import MFHolding, MFNavSnapshot, MFTransaction, TransactionType
+from src.models.mf import MFHolding, MFNavSnapshot, MFTransaction, TransactionType
 from src.mf.store import MFStore
 from src.portfolio.store import PortfolioStore
 

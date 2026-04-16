@@ -17,7 +17,7 @@ from unittest.mock import MagicMock, call
 
 import pytest
 
-from src.mf.models import MFNavSnapshot
+from src.models.mf import MFNavSnapshot
 from src.mf.tracker import (
     MFHolding,
     MFTracker,

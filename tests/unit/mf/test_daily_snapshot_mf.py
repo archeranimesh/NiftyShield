@@ -24,7 +24,7 @@ from pathlib import Path
 import pytest
 
 from scripts.seed_mf_holdings import seed_holdings
-from src.mf.models import MFHolding
+from src.models.mf import MFHolding
 from src.mf.store import MFStore
 from src.mf.tracker import MFTracker, PortfolioPnL
 from src.portfolio.store import PortfolioStore

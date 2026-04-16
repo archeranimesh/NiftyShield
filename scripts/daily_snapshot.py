@@ -44,7 +44,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 # Pure-computation helpers only need these types at import time — no I/O.
-from src.portfolio.models import AssetType, DailySnapshot, PortfolioSummary, Strategy  # noqa: E402
+from src.models.portfolio import AssetType, DailySnapshot, PortfolioSummary, Strategy  # noqa: E402
 
 
 # ── Pure helper functions — no I/O, no side effects ──────────────

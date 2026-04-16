@@ -123,7 +123,7 @@
 
 **`MFHolding` defined in `src/mf/models.py`**, not `tracker.py` — avoids the circular import that would result from `store.py` importing a type defined in `tracker.py`.
 
-**`src/models/` migration deferred:** Both `portfolio/models.py` and `mf/models.py` are module-local. Migration to `src/models/` happens in one refactor commit when the strategy engine is built.
+**`src/models/` migration complete (2026-04-16):** `portfolio/models.py` and `mf/models.py` moved to `src/models/portfolio.py` and `src/models/mf.py`. All consumers in `src/`, `scripts/`, and `tests/` updated. Old files deleted. `src/models/__init__.py` re-exports everything for convenience. Canonical import paths: `from src.models.portfolio import Leg` and `from src.models.mf import MFTransaction`. `src/strategy/`, `src/execution/`, `src/backtest/` can now import shared types without coupling through `src/portfolio/`.
 
 ---
 
@@ -185,7 +185,9 @@
 
 **Manual 24-hour token from `web.dhan.co`:** Token generation requires Application Name (e.g. `NiftyShield`), optional Postback URL, Token validity (default 24h). No OAuth flow — simpler than both Upstox and Nuvama.
 
-**Future: Data APIs subscription for backtesting engine.** Dhan offers 5 years of minute-level expired options data (OHLC + IV + OI + spot) via `POST /v2/charts/rollingoption`. This unblocks what Upstox charges for separately (Expired Instruments API requires paid Upstox subscription). Evaluate Data APIs subscription when backtesting sprint begins.
+**Data Source for Backtesting Engine is DhanHQ Data API:** We have evaluated Upstox, Kite, Nuvama, and DhanHQ. Kite does not offer expired options data. Upstox Plus requires tracking massive dictionaries of exact legacy option symbol IDs. DhanHQ enables querying via relative ATM strikes (e.g., ATM ± 10) simplifying option chain reconstruction drastically. We will subscribe to the Dhan Data API (₹400/month or ₹4,788/year) explicitly for its `POST /v2/charts/rollingoption` capabilities.
+
+**Local Storage Architecture for Historical Chains:** Because minute-level OHLCV data for hundreds of strikes across multiple expiries will rapidly blow up a standard SQLite database, this data will be ingested into a **PostgreSQL + TimescaleDB** local instance. Timescale's hypertables will provide out-of-the-box compression and high-performance time-series aggregations.
 
 ---
 
@@ -201,11 +203,8 @@
 
 ## Deferred / Not Yet Built
 
-
-- `src/models/` — shared Pydantic models (both portfolio/ and mf/ migrate here together)
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/`, `src/streaming/` — all empty
 - `OptionChain` Pydantic model — not defined; `_fetch_greeks()` returns `{}` immediately
-- `scripts/roll_leg.py` — atomic close + open CLI (needed before JUN 2026 expiry roll 2026-06-30)
 - Greeks capture — deferred until `OptionChain` model defined; fixture `nifty_chain_2026-04-07.json` already recorded
 - Expired instruments API — blocked (paid subscription). NSE CSV dumps as interim backtest source
 - Order execution — blocked (static IP not provisioned). `MockBrokerClient` for all development

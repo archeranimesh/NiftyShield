@@ -21,9 +21,9 @@ from scripts.daily_snapshot import (
     _compute_strategy_pnl_from_prices,
     _historical_main,
 )
-from src.mf.models import MFNavSnapshot
+from src.models.mf import MFNavSnapshot
 from src.mf.store import MFStore
-from src.portfolio.models import (
+from src.models.portfolio import (
     AssetType,
     DailySnapshot,
     Direction,
@@ -293,7 +293,7 @@ class TestTradeOverlayInHistoricalMain:
 
     def test_overlay_updates_qty_in_pnl(self, db_path: Path, capsys: pytest.CaptureFixture) -> None:
         """Trade with higher qty than static Leg definition → P&L reflects actual qty."""
-        from src.portfolio.models import Trade, TradeAction
+        from src.models.portfolio import Trade, TradeAction
 
         store = PortfolioStore(db_path)
         # Seed strategy with display_name matching the leg_role we'll record in trades
@@ -331,7 +331,7 @@ class TestTradeOverlayInHistoricalMain:
 
     def test_overlay_appends_liquidbees_to_etf_value(self, db_path: Path, capsys: pytest.CaptureFixture) -> None:
         """LIQUIDBEES trade (no Leg in strategy) → its value flows into ETF component."""
-        from src.portfolio.models import Trade, TradeAction
+        from src.models.portfolio import Trade, TradeAction
 
         store = PortfolioStore(db_path)
         etf_leg = _make_leg("NSE_EQ|INF754K01LE1", Direction.BUY, "1388.12", 438, AssetType.EQUITY)

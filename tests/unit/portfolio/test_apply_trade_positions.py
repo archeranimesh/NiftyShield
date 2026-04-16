@@ -21,7 +21,7 @@ Coverage:
 from datetime import date
 from decimal import Decimal
 
-from src.portfolio.models import (
+from src.models.portfolio import (
     AssetType,
     Direction,
     Leg,

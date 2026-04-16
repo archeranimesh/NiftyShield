@@ -15,7 +15,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from src.db import connect as _connect
-from src.mf.models import MFHolding, MFNavSnapshot, MFTransaction, TransactionType
+from src.models.mf import MFHolding, MFNavSnapshot, MFTransaction, TransactionType
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS mf_transactions (

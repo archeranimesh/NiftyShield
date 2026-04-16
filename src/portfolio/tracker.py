@@ -12,7 +12,7 @@ from datetime import date
 from decimal import Decimal
 
 from src.client.protocol import MarketDataProvider
-from src.portfolio.models import (
+from src.models.portfolio import (
     AssetType,
     DailySnapshot,
     Direction,

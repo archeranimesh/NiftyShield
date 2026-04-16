@@ -23,7 +23,7 @@ from scripts.seed_mf_holdings import (
     build_transactions,
     seed_holdings,
 )
-from src.mf.models import MFHolding, TransactionType
+from src.models.mf import MFHolding, TransactionType
 from src.mf.store import MFStore
 
 

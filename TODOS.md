@@ -67,9 +67,8 @@ The script has grown to ~600 lines with three distinct responsibilities mixed to
 
 **Deployment step: DONE (2026-04-16).** `RapidFuzz==3.14.5` pinned in `requirements.txt`. Fallback to `difflib` remains for environments without it, but rapidfuzz is ~10–50× faster on the full NSE BOD file (~100k instruments).
 
-### 4. `src/models/` migration
-Move `portfolio/models.py` Pydantic models and `mf/models.py` models to `src/models/`.
-Do in one commit with `src/strategy/` start — they migrate together.
+### ~~4. `src/models/` migration~~ — **DONE (2026-04-16)**
+`src/models/portfolio.py` + `src/models/mf.py` created. All consumers in `src/`, `scripts/`, and `tests/` updated (34 import lines). Old `src/portfolio/models.py` and `src/mf/models.py` deleted. `protocol.py` stub comment updated to reflect `src/models/` now exists. Zero old-path imports remaining.
 
 ---
 
@@ -159,4 +158,5 @@ All existing `# TODO:` comments need a GitHub issue or reference link added. Low
 | 2026-04-15 | **fix(scripts): os._exit() for daily_snapshot.py.** APIConnect `__init__` spawns a non-daemon Feed thread. `sys.exit()` waits for non-daemon threads so the process hung after completing. Replaced with `os._exit(main())` — identical fix to `nuvama_verify.py` and `nuvama_login.py`. Committed separately by Animesh (7a49720). |
 | 2026-04-16 | **TD-3 resolved.** Stripped vertical alignment padding from stub type alias block in `src/client/protocol.py` lines 43–53. Normalised to 2-space inline comment style per Google §3.6. No logic change. |
 | 2026-04-16 | **rapidfuzz deployment step confirmed done.** `RapidFuzz==3.14.5` already present in `requirements.txt`. TODOS.md updated to reflect closure. |
+| 2026-04-16 | **`src/models/` migration (TODO 4) complete.** `src/models/portfolio.py` + `src/models/mf.py` created (prior partial session had created files; import migration completed this session). All 34 import sites in `src/`, `scripts/`, `tests/` updated to new paths. `src/portfolio/models.py` + `src/mf/models.py` deleted. `protocol.py` stub-block comment updated. Zero old-path imports remaining. |
 | 2026-04-15 | **Nuvama bond portfolio integration (TODO 0) — all 4 phases complete.** `src/nuvama/` module: `models.py` (NuvamaBondHolding + NuvamaBondSummary frozen dataclasses), `reader.py` (parse_bond_holdings, build_nuvama_summary, fetch_nuvama_portfolio), `store.py` (NuvamaStore — nuvama_positions + nuvama_holdings_snapshots tables). `scripts/seed_nuvama_positions.py` (6 instruments, idempotent, dry-run by default). `PortfolioSummary` extended with 6 nuvama_* fields (all default-zero). `daily_snapshot.py`: Nuvama fetch block in `_async_main` (non-fatal), historical reconstruction in `_historical_main`, Nuvama Bonds line in `_format_combined_summary`, nuvama fields in `_build_portfolio_summary`. 97 new tests (54 pydantic-dependent — all pass in Mac venv). |

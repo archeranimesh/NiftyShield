@@ -21,7 +21,7 @@ from pathlib import Path
 import pytest
 
 from scripts.seed_trades import _FINRAKSHAK_TRADES, _ILTS_TRADES, build_trades, seed_trades
-from src.portfolio.models import TradeAction
+from src.models.portfolio import TradeAction
 from src.portfolio.store import PortfolioStore
 
 

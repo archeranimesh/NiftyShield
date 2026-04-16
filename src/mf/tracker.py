@@ -25,7 +25,7 @@ from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Callable
 
-from src.mf.models import MFHolding, MFNavSnapshot
+from src.models.mf import MFHolding, MFNavSnapshot
 from src.mf.nav_fetcher import fetch_navs
 from src.mf.store import MFStore
 

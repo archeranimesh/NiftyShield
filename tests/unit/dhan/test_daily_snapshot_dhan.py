@@ -24,7 +24,7 @@ from scripts.daily_snapshot import (
     _format_combined_summary,
 )
 from src.dhan.models import DhanHolding, DhanPortfolioSummary
-from src.portfolio.models import AssetType, PortfolioSummary
+from src.models.portfolio import AssetType, PortfolioSummary
 
 # ── Shared test constants ────────────────────────────────────────────
 

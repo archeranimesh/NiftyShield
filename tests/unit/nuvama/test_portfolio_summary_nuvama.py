@@ -13,7 +13,7 @@ import pytest
 
 pytest.importorskip("pydantic", reason="pydantic required for PortfolioSummary")
 
-from src.portfolio.models import PortfolioSummary  # noqa: E402
+from src.models.portfolio import PortfolioSummary  # noqa: E402
 
 
 def _base_kwargs() -> dict:

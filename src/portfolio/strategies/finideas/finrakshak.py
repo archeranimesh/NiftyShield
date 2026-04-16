@@ -8,7 +8,7 @@ Entry date: 01 April 2026.
 
 from datetime import date
 
-from src.portfolio.models import (
+from src.models.portfolio import (
     AssetType,
     Direction,
     Leg,

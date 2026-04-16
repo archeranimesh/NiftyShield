@@ -20,7 +20,7 @@ from scripts.daily_snapshot import (
     _etf_current_value,
     _format_protection_stats,
 )
-from src.portfolio.models import AssetType, PortfolioSummary
+from src.models.portfolio import AssetType, PortfolioSummary
 
 # ── Minimal fakes ────────────────────────────────────────────────
 

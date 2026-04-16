@@ -22,11 +22,10 @@ place.
 
 Stub type aliases
 -----------------
-src/models/ does not exist yet. Until it is built, each model name is aliased to
-Any so that protocol.py has zero import-time dependency on models/ at runtime.
-All method signatures use forward references (strings) for the same reason.
-When src/models/ is created, replace each ``X = Any`` line with the concrete
-import and remove its TODO comment.
+src/models/ now exists (src/models/portfolio.py + src/models/mf.py). The stubs
+below cover execution and streaming models not yet built (OrderRequest, Position,
+Candle, etc.). When a model is added to src/models/, replace its ``X = Any``
+line with the concrete import from src.models and remove the TODO comment.
 
 Do not import concrete client implementations here. Only factory.py (the
 composition root) knows which implementation to wire.

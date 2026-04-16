@@ -25,7 +25,7 @@ from pathlib import Path
 # Allow ``python scripts/seed_mf_holdings.py`` from repo root
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.mf.models import MFTransaction, TransactionType
+from src.models.mf import MFTransaction, TransactionType
 from src.mf.store import MFStore
 
 # ---------------------------------------------------------------------------

@@ -1,10 +1,15 @@
-"""Data models for portfolio strategy tracking.
+"""Shared data models for portfolio strategy tracking.
 
-Covers strategy definitions, individual legs, and daily price/greeks snapshots.
+Canonical home for all portfolio domain types. Modules in src/portfolio/,
+src/strategy/, src/risk/, and src/execution/ all import from here — never
+from each other — to keep the dependency graph acyclic.
+
+Covers strategy definitions, individual legs, daily price/greeks snapshots,
+trade ledger entries, and the combined portfolio summary dataclass.
+
 All timestamps are UTC internally; IST conversion happens at display layer only.
-
-Monetary fields (entry_price, ltp, close, underlying_price) use Decimal to
-preserve sub-rupee precision through P&L calculations and SQLite round-trips.
+Monetary fields (entry_price, ltp, close, underlying_price, price) use Decimal
+to preserve sub-rupee precision through P&L calculations and SQLite round-trips.
 """
 
 from __future__ import annotations

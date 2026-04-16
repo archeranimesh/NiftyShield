@@ -25,9 +25,12 @@ src/
 │   └── verify_analytics.py   # Tests LTP, option chain, Greeks, historical candles via Analytics Token
 ├── sandbox/                  # Exploratory scripts
 │   └── order_lifecycle.py    # Place → Modify → Cancel via V3 Order API (sandbox=True)
+├── models/
+│   ├── __init__.py           # Re-exports all shared models from portfolio.py + mf.py for convenience.
+│   ├── portfolio.py          # Canonical home for all portfolio domain types: Leg, Strategy, DailySnapshot, Trade, TradeAction, Direction, ProductType, AssetType, PortfolioSummary. Migrated from src/portfolio/models.py (TODO 4, 2026-04-16). Monetary fields Decimal; P&L methods accept float|Decimal.
+│   └── mf.py                 # Canonical home for all MF domain types: MFTransaction, MFNavSnapshot, TransactionType, MFHolding. Migrated from src/mf/models.py (TODO 4, 2026-04-16).
 ├── portfolio/
 │   ├── CLAUDE.md             # Module context: Leg/Trade distinction, Decimal invariant, apply_trade_positions() overlay, strategy_name constraint
-│   ├── models.py             # Pydantic: Leg, Strategy, DailySnapshot, Trade, TradeAction. Monetary fields (entry_price, ltp, close, underlying_price, price) are Decimal. P&L methods accept float|Decimal, return Decimal. Trade is frozen=True with qty > 0 and price > 0 validators.
 │   ├── store.py              # SQLite: strategies, legs, daily_snapshots, trades. Trades methods: record_trade (idempotent), get_trades (strategy/leg filter, date ASC), get_position (net qty + weighted avg buy price), get_all_positions_for_strategy (all leg_roles → (net_qty, avg_price, instrument_key)), ensure_leg (auto-persist trade-only legs to get a DB id for snapshot recording; idempotent). entry_price/ltp/close/underlying_price/price stored as TEXT for Decimal precision. WAL + upsert semantics.
 │   ├── tracker.py            # PortfolioTracker: loads strategies, fetches LTPs, records snapshots. Trade overlay applied internally via _get_overlaid_strategy()/_get_all_overlaid_strategies() — compute_pnl, record_daily_snapshot, record_all_strategies all use trade-derived qty/entry_price automatically. Trade-only legs (e.g. LIQUIDBEES) with no DB id are auto-persisted via store.ensure_leg(). compute_pnl() returns StrategyPnL with Decimal total_pnl. Float LTPs from API converted via Decimal(str()) at boundary. apply_trade_positions() module-level pure function: overlays trade-derived qty/entry_price onto strategy Leg objects; appends trade-only legs as EQUITY/CNC; drops zero-net-qty legs.
 │   └── strategies/
@@ -127,7 +130,7 @@ tests/
 ### What Does NOT Exist Yet
 
 - `src/nuvama/CLAUDE.md` — module context file not yet written
-- `src/models/` — shared Pydantic models (deferred; portfolio/ and mf/ models migrate here together — see PLANNER.md)
+- `src/nuvama/CLAUDE.md` — module context file not yet written
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/`, `src/streaming/` — all empty
 - `OptionChain` Pydantic model — not defined; `_fetch_greeks()` returns `{}` immediately
 

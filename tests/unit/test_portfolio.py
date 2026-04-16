@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from src.portfolio.models import (
+from src.models.portfolio import (
     AssetType,
     DailySnapshot,
     Direction,
