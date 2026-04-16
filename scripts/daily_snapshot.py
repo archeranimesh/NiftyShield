@@ -357,9 +357,19 @@ def _format_combined_summary(
 ) -> str:
     """Build the combined portfolio summary as a formatted string.
 
-    Restructured into sections: Equity → Bonds → Derivatives → Total.
-    When prev data is supplied, a Δday column is appended. If no prev data
-    is available the Δday column is omitted entirely.
+    Two layouts depending on whether prior-day data is available:
+
+    Waterfall (has_deltas=True, standard after first run):
+      Header → Today's change waterfall by segment → Hedge effectiveness
+      (FinRakshak inline after waterfall) → single context line with
+      total value + all-time P&L.
+
+    Fallback (has_deltas=False, first run):
+      Header → Equity / Bonds / Derivatives / Total sections (values +
+      P&L %) → FinRakshak protection appended if both deltas available.
+
+    The returned string always starts with the status header line so it
+    can be sent to Telegram directly without a separate subject line.
 
     Args:
         strategies: All loaded Strategy objects.
@@ -370,6 +380,7 @@ def _format_combined_summary(
         prev_mf_pnl: PortfolioPnL for the prior date, or None.
         snap_date: Snapshot date stored in the summary (defaults to today).
         dhan_summary: DhanPortfolioSummary, or None if Dhan unavailable.
+        nuvama_summary: NuvamaBondSummary, or None if Nuvama unavailable.
 
     Returns:
         Multi-line formatted summary string (no trailing newline).
@@ -386,118 +397,209 @@ def _format_combined_summary(
         nuvama_summary=nuvama_summary,
     )
 
-    def _delta(d: Decimal | None) -> str:
-        return f"  Δday: {d:>+12,.0f}" if d is not None else ""
-
-    def _pnl_str(pnl: Decimal, pct: Decimal | None) -> str:
-        pct_part = f" ({pct:+}%)" if pct is not None else ""
-        return f"P&L: {pnl:>+11,.0f}{pct_part}"
+    has_deltas = summary.total_day_delta is not None
+    date_str = summary.snapshot_date.strftime("%Y-%m-%d")
+    if has_deltas:
+        status_emoji = "🟢" if summary.total_day_delta >= 0 else "🔴"
+    else:
+        status_emoji = "🟢" if summary.total_pnl >= 0 else "🔴"
 
     lines: list[str] = []
 
-    # ── Equity section ────────────────────────────────────────────
-    lines.append("")
-    lines.append("  ── Equity ─────────────────────────────────────────────")
+    # ── Header (included in both paths; used directly as Telegram message) ──
+    lines.append(f"{status_emoji} NiftyShield | {date_str}")
 
-    if summary.mf_available:
-        lines.append(
-            f"  MF (mutual funds)   : ₹{summary.mf_value:>14,.0f}"
-            f"{_delta(summary.mf_day_delta)}"
+    if has_deltas:
+        # ── Waterfall: contribution to today's change ──────────────────
+        eq_subtotal = summary.mf_value + summary.etf_value + summary.dhan_equity_value
+        bonds_subtotal = summary.dhan_bond_value + summary.nuvama_bond_value
+        eq_day = (
+            (summary.mf_day_delta or Decimal("0"))
+            + (summary.etf_day_delta or Decimal("0"))
+            + (summary.dhan_equity_day_delta or Decimal("0"))
         )
-        lines.append(
-            f"                        {_pnl_str(summary.mf_pnl, summary.mf_pnl_pct)}"
+        bd_day = (
+            (summary.dhan_bond_day_delta or Decimal("0"))
+            + (summary.nuvama_bond_day_delta or Decimal("0"))
         )
+        options_day = summary.options_day_delta or Decimal("0")
+        equity_pct = int(eq_subtotal / summary.total_value * 100) if summary.total_value else 0
+        bonds_pct = int(bonds_subtotal / summary.total_value * 100) if summary.total_value else 0
+        SEP = "  " + "─" * 34
+
+        lines += [
+            "",
+            f"📊 Today: {summary.total_day_delta:>+,.0f}",
+            "",
+        ]
+        lines.append(
+            f"  {'Equity':<14} {eq_day:>+12,.0f}  {'▲' if eq_day >= 0 else '▼'}  {equity_pct}%"
+        )
+        if summary.mf_available:
+            lines.append(
+                f"  {'├ MF':<14} {(summary.mf_day_delta or Decimal('0')):>+12,.0f}"
+            )
+        else:
+            lines.append("  ├ MF                  [failed]")
+        lines.append(
+            f"  {'├ ETF':<14} {(summary.etf_day_delta or Decimal('0')):>+12,.0f}"
+        )
+        if summary.dhan_available and summary.dhan_equity_value > 0:
+            lines.append(
+                f"  {'└ Dhan Equity':<14} {(summary.dhan_equity_day_delta or Decimal('0')):>+12,.0f}"
+            )
+        lines.append(
+            f"  {'Bonds':<14} {bd_day:>+12,.0f}  {'▲' if bd_day >= 0 else '▼'}  {bonds_pct}%"
+        )
+        if summary.nuvama_available and summary.nuvama_bond_value > 0:
+            lines.append(
+                f"  {'├ Nuvama Bonds':<14} {(summary.nuvama_bond_day_delta or Decimal('0')):>+12,.0f}"
+            )
+        elif not summary.nuvama_available:
+            lines.append("  ├ Nuvama Bonds        [unavailable]")
+        if summary.dhan_available and summary.dhan_bond_value > 0:
+            lines.append(
+                f"  {'└ Dhan Bonds':<14} {(summary.dhan_bond_day_delta or Decimal('0')):>+12,.0f}"
+            )
+        elif not summary.dhan_available:
+            lines.append("  └ Dhan Bonds          [unavailable]")
+        lines.append(
+            f"  {'Derivatives':<14} {options_day:>+12,.0f}  {'▲' if options_day >= 0 else '▼'}"
+        )
+        lines.append(SEP)
+        lines.append(f"  {'Net':<14} {summary.total_day_delta:>+12,.0f}  {status_emoji}")
+
+        # ── Hedge (FinRakshak) — inline after waterfall ────────────────
+        if summary.mf_day_delta is not None and summary.finrakshak_day_delta is not None:
+            net = summary.mf_day_delta + summary.finrakshak_day_delta
+            verdict = "✅ Protected" if net >= 0 else "⚠️  Exposed"
+            lines += [
+                "",
+                "🛡 Hedge (FinRakshak)",
+                f"  MF Δ        {summary.mf_day_delta:>+14,.0f}",
+                f"  Hedge Δ     {summary.finrakshak_day_delta:>+14,.0f}",
+                SEP,
+                f"  Net         {net:>+14,.0f}  {verdict}",
+                f"  Options P&L {summary.options_pnl:>+14,.0f}",
+            ]
+
+        # ── Context line: total value + all-time P&L (signal vs scoreboard) ──
+        lines += [
+            "",
+            f"💰 Total: ₹{summary.total_value:,.0f}  |  "
+            f"P&L {summary.total_pnl:+,.0f} ({summary.total_pnl_pct:+}%) all-time",
+        ]
+        if not summary.mf_available:
+            lines.append("  NOTE: MF fetch failed — MF value excluded from total")
+        if not summary.dhan_available:
+            lines.append("  NOTE: Dhan unavailable — Dhan values excluded from total")
+        if not summary.nuvama_available:
+            lines.append("  NOTE: Nuvama unavailable — Nuvama bonds excluded from total")
+
     else:
+        # ── Fallback: no prior-day data — show portfolio values ────────
+        def _delta(d: Decimal | None) -> str:
+            return f"  Δday: {d:>+12,.0f}" if d is not None else ""
+
+        def _pnl_str(pnl: Decimal, pct: Decimal | None) -> str:
+            pct_part = f" ({pct:+}%)" if pct is not None else ""
+            return f"P&L: {pnl:>+11,.0f}{pct_part}"
+
+        eq_subtotal = summary.mf_value + summary.etf_value + summary.dhan_equity_value
+        bonds_subtotal = summary.dhan_bond_value + summary.nuvama_bond_value
+
+        # ── Equity section ─────────────────────────────────────────────
+        lines.append("")
+        lines.append("  ── Equity ─────────────────────────────────────────────")
+        if summary.mf_available:
+            lines.append(
+                f"  MF (mutual funds)   : ₹{summary.mf_value:>14,.0f}"
+                f"{_delta(summary.mf_day_delta)}"
+            )
+            lines.append(
+                f"                        {_pnl_str(summary.mf_pnl, summary.mf_pnl_pct)}"
+            )
+        else:
+            lines.append(
+                f"  MF (mutual funds)   :          [failed]{_delta(summary.mf_day_delta)}"
+            )
         lines.append(
-            f"  MF (mutual funds)   :          [failed]{_delta(summary.mf_day_delta)}"
+            f"  Finideas ETF        : ₹{summary.etf_value:>14,.0f}"
+            f"{_delta(summary.etf_day_delta)}"
         )
-
-    lines.append(
-        f"  Finideas ETF        : ₹{summary.etf_value:>14,.0f}"
-        f"{_delta(summary.etf_day_delta)}"
-    )
-    lines.append(
-        f"                        (basis ₹{summary.etf_basis:,.0f})"
-    )
-
-    if summary.dhan_available and summary.dhan_equity_value > 0:
-        lines.append(
-            f"  Dhan Equity         : ₹{summary.dhan_equity_value:>14,.0f}"
-            f"{_delta(summary.dhan_equity_day_delta)}"
-        )
-        lines.append(
-            f"                        {_pnl_str(summary.dhan_equity_pnl, summary.dhan_equity_pnl_pct)}"
-        )
-
-    eq_subtotal = summary.mf_value + summary.etf_value + summary.dhan_equity_value
-    lines.append("  ───────────────────────────────────────────────────────")
-    lines.append(f"  Equity subtotal     : ₹{eq_subtotal:>14,.0f}")
-
-    # ── Bonds section ─────────────────────────────────────────────
-    lines.append("")
-    lines.append("  ── Bonds ──────────────────────────────────────────────")
-
-    _has_any_bonds = False
-
-    if summary.dhan_available and summary.dhan_bond_value > 0:
-        lines.append(
-            f"  Dhan Bonds          : ₹{summary.dhan_bond_value:>14,.0f}"
-            f"{_delta(summary.dhan_bond_day_delta)}"
-        )
-        lines.append(
-            f"                        {_pnl_str(summary.dhan_bond_pnl, summary.dhan_bond_pnl_pct)}"
-        )
-        _has_any_bonds = True
-    elif not summary.dhan_available:
-        lines.append("  Dhan Bonds          :          [unavailable]")
-
-    if summary.nuvama_available and summary.nuvama_bond_value > 0:
-        lines.append(
-            f"  Nuvama Bonds        : ₹{summary.nuvama_bond_value:>14,.0f}"
-            f"{_delta(summary.nuvama_bond_day_delta)}"
-        )
-        lines.append(
-            f"                        {_pnl_str(summary.nuvama_bond_pnl, summary.nuvama_bond_pnl_pct)}"
-        )
-        _has_any_bonds = True
-    elif not summary.nuvama_available:
-        lines.append("  Nuvama Bonds        :          [unavailable]")
-
-    bonds_subtotal = summary.dhan_bond_value + summary.nuvama_bond_value
-    if _has_any_bonds:
+        lines.append(f"                        (basis ₹{summary.etf_basis:,.0f})")
+        if summary.dhan_available and summary.dhan_equity_value > 0:
+            lines.append(
+                f"  Dhan Equity         : ₹{summary.dhan_equity_value:>14,.0f}"
+                f"{_delta(summary.dhan_equity_day_delta)}"
+            )
+            lines.append(
+                f"                        {_pnl_str(summary.dhan_equity_pnl, summary.dhan_equity_pnl_pct)}"
+            )
         lines.append("  ───────────────────────────────────────────────────────")
-        lines.append(f"  Bonds subtotal      : ₹{bonds_subtotal:>14,.0f}")
-    elif summary.dhan_available and summary.nuvama_available:
-        lines.append("  (no bond holdings)")
+        lines.append(f"  Equity subtotal     : ₹{eq_subtotal:>14,.0f}")
 
-    # ── Derivatives section ───────────────────────────────────────
-    lines.append("")
-    lines.append("  ── Derivatives ────────────────────────────────────────")
-    lines.append(
-        f"  Options net P&L     : {summary.options_pnl:>+15,.0f}"
-        f"{_delta(summary.options_day_delta)}"
-    )
+        # ── Bonds section ──────────────────────────────────────────────
+        lines.append("")
+        lines.append("  ── Bonds ──────────────────────────────────────────────")
+        _has_any_bonds = False
+        if summary.dhan_available and summary.dhan_bond_value > 0:
+            lines.append(
+                f"  Dhan Bonds          : ₹{summary.dhan_bond_value:>14,.0f}"
+                f"{_delta(summary.dhan_bond_day_delta)}"
+            )
+            lines.append(
+                f"                        {_pnl_str(summary.dhan_bond_pnl, summary.dhan_bond_pnl_pct)}"
+            )
+            _has_any_bonds = True
+        elif not summary.dhan_available:
+            lines.append("  Dhan Bonds          :          [unavailable]")
+        if summary.nuvama_available and summary.nuvama_bond_value > 0:
+            lines.append(
+                f"  Nuvama Bonds        : ₹{summary.nuvama_bond_value:>14,.0f}"
+                f"{_delta(summary.nuvama_bond_day_delta)}"
+            )
+            lines.append(
+                f"                        {_pnl_str(summary.nuvama_bond_pnl, summary.nuvama_bond_pnl_pct)}"
+            )
+            _has_any_bonds = True
+        elif not summary.nuvama_available:
+            lines.append("  Nuvama Bonds        :          [unavailable]")
+        if _has_any_bonds:
+            lines.append("  ───────────────────────────────────────────────────────")
+            lines.append(f"  Bonds subtotal      : ₹{bonds_subtotal:>14,.0f}")
+        elif summary.dhan_available and summary.nuvama_available:
+            lines.append("  (no bond holdings)")
 
-    # ── Total section ─────────────────────────────────────────────
-    lines.append("")
-    lines.append("  ═══════════════════════════════════════════════════════")
-    lines.append(
-        f"  Total value         : ₹{summary.total_value:>14,.0f}"
-        f"{_delta(summary.total_day_delta)}"
-    )
-    lines.append(f"  Total invested      : ₹{summary.total_invested:>14,.0f}")
-    lines.append(
-        f"  Total P&L           : {summary.total_pnl:>+15,.0f}"
-        f"  ({summary.total_pnl_pct:+}%)"
-    )
-    if not summary.mf_available:
-        lines.append("  NOTE: MF fetch failed — MF value excluded from total")
-    if not summary.dhan_available:
-        lines.append("  NOTE: Dhan unavailable — Dhan values excluded from total")
-    if not summary.nuvama_available:
-        lines.append("  NOTE: Nuvama unavailable — Nuvama bonds excluded from total")
+        # ── Derivatives section ─────────────────────────────────────────
+        lines.append("")
+        lines.append("  ── Derivatives ────────────────────────────────────────")
+        lines.append(
+            f"  Options net P&L     : {summary.options_pnl:>+15,.0f}"
+            f"{_delta(summary.options_day_delta)}"
+        )
 
-    lines.extend(_format_protection_stats(summary))
+        # ── Total section ───────────────────────────────────────────────
+        lines.append("")
+        lines.append("  ═══════════════════════════════════════════════════════")
+        lines.append(
+            f"  Total value         : ₹{summary.total_value:>14,.0f}"
+            f"{_delta(summary.total_day_delta)}"
+        )
+        lines.append(f"  Total invested      : ₹{summary.total_invested:>14,.0f}")
+        lines.append(
+            f"  Total P&L           : {summary.total_pnl:>+15,.0f}"
+            f"  ({summary.total_pnl_pct:+}%)"
+        )
+        if not summary.mf_available:
+            lines.append("  NOTE: MF fetch failed — MF value excluded from total")
+        if not summary.dhan_available:
+            lines.append("  NOTE: Dhan unavailable — Dhan values excluded from total")
+        if not summary.nuvama_available:
+            lines.append("  NOTE: Nuvama unavailable — Nuvama bonds excluded from total")
+
+        # FinRakshak protection appended at end in fallback mode
+        lines.extend(_format_protection_stats(summary))
 
     return "\n".join(lines)
 
@@ -513,7 +615,7 @@ def _print_combined_summary(
     dhan_summary: object | None = None,
     nuvama_summary: object | None = None,
 ) -> None:
-    """Print the combined portfolio value across MF, ETF, options, Dhan, and Nuvama.
+    """Print the combined portfolio summary including date header and all sections.
 
     Delegates to _format_combined_summary and prints the result.
 
@@ -966,39 +1068,13 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
     print(summary_text)
 
     # ── Telegram notification (non-fatal, skipped if env vars absent) ─
+    # summary_text already contains the status header and hedge section,
+    # so it can be sent directly without a separate subject line.
     from src.notifications.telegram import build_notifier
 
     notifier = build_notifier()
     if notifier:
-        date_str = snap_date.strftime("%Y-%m-%d")
-        _total_pnl = (
-            sum((p.total_pnl for p in strategy_pnls.values() if p), Decimal("0"))
-            + (mf_pnl.total_pnl if mf_pnl else Decimal("0"))
-            + (_etf_current_value(strategies, prices) - _etf_cost_basis(strategies))
-        )
-        _emoji = "🟢" if _total_pnl >= 0 else "🔴"
-
-        # Build summary object once to extract protection verdict for header
-        from src.portfolio.models import PortfolioSummary as _PS  # noqa: F401
-        _summary_obj = _build_portfolio_summary(
-            snap_date=snap_date,
-            strategies=strategies,
-            prices=prices,
-            strategy_pnls=strategy_pnls,
-            mf_pnl=mf_pnl,
-            prev_snapshots=prev_snapshots,
-            prev_mf_pnl=prev_mf_pnl,
-            dhan_summary=dhan_summary,
-            nuvama_summary=nuvama_summary,
-        )
-        _prot_lines = _format_protection_stats(_summary_obj)
-        _prot_header = ""
-        if _prot_lines:
-            _net = _summary_obj.mf_day_delta + _summary_obj.finrakshak_day_delta  # type: ignore[operator]
-            _prot_header = f"\n  Hedge: {'✅ Protected' if _net >= 0 else '⚠️  Exposed'}  ({_net:+,.0f})"
-
-        message = f"{_emoji} NiftyShield snapshot {date_str}{_prot_header}\n{summary_text}"
-        if not notifier.send(message):
+        if not notifier.send(summary_text):
             print("  WARNING: Telegram notification failed (see logs).")
     else:
         import logging as _logging

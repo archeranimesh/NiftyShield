@@ -213,5 +213,8 @@ class TestFormatCombinedSummaryNuvamaBondsSection:
 
     def test_nuvama_day_delta_shown(self):
         out = _format(nuvama_summary=_make_nuvama_summary(total_day_delta="-12345.00"))
-        assert "Δday" in out
-        assert "-12,345" in out
+        # A non-None nuvama_bond_day_delta makes total_day_delta non-None, which
+        # triggers the waterfall path (not the fallback). Confirm both the path
+        # taken and the value.
+        assert "📊 Today:" in out        # waterfall path confirmed
+        assert "-12,345" in out          # Nuvama Bonds contribution line
