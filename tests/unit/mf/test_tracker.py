@@ -23,8 +23,8 @@ from src.mf.tracker import (
     MFTracker,
     PortfolioPnL,
     SchemePnL,
-    _aggregate,
-    _scheme_pnl,
+    aggregate_mf_pnl,
+    compute_scheme_pnl,
 )
 
 # ---------------------------------------------------------------------------
@@ -72,30 +72,30 @@ def _mock_fetcher(navs: dict[str, Decimal]):
 
 class TestSchemePnL:
     def test_current_value_is_units_times_nav(self) -> None:
-        result = _scheme_pnl(HOLDING_A, NAV_A)
+        result = compute_scheme_pnl(HOLDING_A, NAV_A)
         assert result.current_value == CURRENT_VALUE_A
 
     def test_pnl_is_current_value_minus_invested(self) -> None:
-        result = _scheme_pnl(HOLDING_A, NAV_A)
+        result = compute_scheme_pnl(HOLDING_A, NAV_A)
         assert result.pnl == CURRENT_VALUE_A - HOLDING_A.total_invested
 
     def test_pnl_pct_calculation(self) -> None:
-        result = _scheme_pnl(HOLDING_A, NAV_A)
+        result = compute_scheme_pnl(HOLDING_A, NAV_A)
         expected = (result.pnl / HOLDING_A.total_invested * Decimal("100")).quantize(
             Decimal("0.01")
         )
         assert result.pnl_pct == expected
 
     def test_current_value_quantized_to_two_dp(self) -> None:
-        result = _scheme_pnl(HOLDING_A, NAV_A)
+        result = compute_scheme_pnl(HOLDING_A, NAV_A)
         assert result.current_value == result.current_value.quantize(Decimal("0.01"))
 
     def test_pnl_pct_quantized_to_two_dp(self) -> None:
-        result = _scheme_pnl(HOLDING_A, NAV_A)
+        result = compute_scheme_pnl(HOLDING_A, NAV_A)
         assert result.pnl_pct == result.pnl_pct.quantize(Decimal("0.01"))
 
     def test_fields_passed_through_unchanged(self) -> None:
-        result = _scheme_pnl(HOLDING_A, NAV_A)
+        result = compute_scheme_pnl(HOLDING_A, NAV_A)
         assert result.amfi_code == HOLDING_A.amfi_code
         assert result.current_nav == NAV_A
         assert result.total_units == HOLDING_A.total_units
@@ -103,7 +103,7 @@ class TestSchemePnL:
 
     def test_zero_invested_gives_zero_pnl_pct(self) -> None:
         holding = MFHolding("000000", "Test Scheme", Decimal("100"), Decimal("0"))
-        result = _scheme_pnl(holding, Decimal("50.00"))
+        result = compute_scheme_pnl(holding, Decimal("50.00"))
         assert result.pnl_pct == Decimal("0.00")
 
     def test_loss_scenario_pnl_is_negative(self) -> None:
@@ -111,7 +111,7 @@ class TestSchemePnL:
         holding = MFHolding(
             "000001", "Test Scheme", Decimal("100"), Decimal("10000.00")
         )
-        result = _scheme_pnl(holding, Decimal("50.00"))
+        result = compute_scheme_pnl(holding, Decimal("50.00"))
         assert result.pnl < Decimal("0")
         assert result.pnl_pct < Decimal("0")
 
@@ -123,33 +123,33 @@ class TestSchemePnL:
 
 class TestAggregate:
     def _two_schemes(self) -> list[SchemePnL]:
-        return [_scheme_pnl(HOLDING_A, NAV_A), _scheme_pnl(HOLDING_B, NAV_B)]
+        return [compute_scheme_pnl(HOLDING_A, NAV_A), compute_scheme_pnl(HOLDING_B, NAV_B)]
 
     def test_total_invested_is_sum_of_schemes(self) -> None:
-        result = _aggregate(TODAY, self._two_schemes())
+        result = aggregate_mf_pnl(TODAY, self._two_schemes())
         expected = HOLDING_A.total_invested + HOLDING_B.total_invested
         assert result.total_invested == expected
 
     def test_total_current_value_is_sum_of_scheme_values(self) -> None:
-        result = _aggregate(TODAY, self._two_schemes())
+        result = aggregate_mf_pnl(TODAY, self._two_schemes())
         expected = CURRENT_VALUE_A + CURRENT_VALUE_B
         assert result.total_current_value == expected
 
     def test_total_pnl_equals_value_minus_invested(self) -> None:
-        result = _aggregate(TODAY, self._two_schemes())
+        result = aggregate_mf_pnl(TODAY, self._two_schemes())
         assert result.total_pnl == result.total_current_value - result.total_invested
 
     def test_snapshot_date_preserved(self) -> None:
-        result = _aggregate(TODAY, self._two_schemes())
+        result = aggregate_mf_pnl(TODAY, self._two_schemes())
         assert result.snapshot_date == TODAY
 
     def test_schemes_list_preserved(self) -> None:
         schemes = self._two_schemes()
-        result = _aggregate(TODAY, schemes)
+        result = aggregate_mf_pnl(TODAY, schemes)
         assert result.schemes == schemes
 
     def test_empty_schemes_returns_zero_portfolio(self) -> None:
-        result = _aggregate(TODAY, [])
+        result = aggregate_mf_pnl(TODAY, [])
         assert result.total_invested == Decimal("0")
         assert result.total_current_value == Decimal("0")
         assert result.total_pnl == Decimal("0")

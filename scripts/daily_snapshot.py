@@ -138,18 +138,18 @@ def _compute_prev_mf_pnl(
     Returns:
         PortfolioPnL for the prior date, or None if no matching schemes.
     """
-    from src.mf.tracker import _aggregate, _scheme_pnl  # noqa: PLC2701
+    from src.mf.tracker import aggregate_mf_pnl, compute_scheme_pnl
 
     if not prev_nav_snaps or not holdings:
         return None
     schemes = [
-        _scheme_pnl(holdings[s.amfi_code], s.nav)
+        compute_scheme_pnl(holdings[s.amfi_code], s.nav)
         for s in prev_nav_snaps
         if s.amfi_code in holdings
     ]
     if not schemes:
         return None
-    return _aggregate(prev_nav_snaps[0].snapshot_date, schemes)
+    return aggregate_mf_pnl(prev_nav_snaps[0].snapshot_date, schemes)
 
 
 def _build_portfolio_summary(
@@ -688,7 +688,7 @@ def _historical_main(snap_date: date, db_path: Path) -> int:
         Exit code: 0 for success, 1 for any fatal error.
     """
     from src.mf.store import MFStore
-    from src.mf.tracker import PortfolioPnL, _aggregate, _scheme_pnl  # noqa: PLC2701
+    from src.mf.tracker import PortfolioPnL, aggregate_mf_pnl, compute_scheme_pnl
     from src.portfolio.store import PortfolioStore
     from src.portfolio.tracker import apply_trade_positions
 
@@ -759,11 +759,11 @@ def _historical_main(snap_date: date, db_path: Path) -> int:
     if nav_snaps:
         holdings = mf_store.get_holdings()
         schemes = [
-            _scheme_pnl(holdings[s.amfi_code], s.nav)
+            compute_scheme_pnl(holdings[s.amfi_code], s.nav)
             for s in nav_snaps
             if s.amfi_code in holdings
         ]
-        mf_pnl = _aggregate(snap_date, schemes) if schemes else None
+        mf_pnl = aggregate_mf_pnl(snap_date, schemes) if schemes else None
         if mf_pnl and mf_pnl.schemes:
             print(
                 f"  MF portfolio ({len(mf_pnl.schemes)} schemes): "

@@ -126,17 +126,17 @@ class MFTracker:
                     nav=nav,
                 )
             )
-            schemes.append(_scheme_pnl(holding, nav))
+            schemes.append(compute_scheme_pnl(holding, nav))
 
-        return _aggregate(today, schemes)
+        return aggregate_mf_pnl(today, schemes)
 
 
 # ---------------------------------------------------------------------------
-# Pure computation helpers — no I/O, independently testable
+# Public computation helpers — no I/O, independently testable
 # ---------------------------------------------------------------------------
 
 
-def _scheme_pnl(holding: MFHolding, nav: Decimal) -> SchemePnL:
+def compute_scheme_pnl(holding: MFHolding, nav: Decimal) -> SchemePnL:
     """Compute P&L for one scheme given its holding and current NAV.
 
     Args:
@@ -165,7 +165,7 @@ def _scheme_pnl(holding: MFHolding, nav: Decimal) -> SchemePnL:
     )
 
 
-def _aggregate(snapshot_date: date, schemes: list[SchemePnL]) -> PortfolioPnL:
+def aggregate_mf_pnl(snapshot_date: date, schemes: list[SchemePnL]) -> PortfolioPnL:
     """Sum per-scheme figures into portfolio-level totals.
 
     Args:
