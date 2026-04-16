@@ -41,10 +41,6 @@ from src.client.protocol import (
 )
 from src.client.upstox_market import UpstoxMarketClient
 
-# Verify protocol conformance at import time (structural typing — no inheritance needed).
-# These assertions catch signature drift early and document intent explicitly.
-assert issubclass(type, type)  # placeholder — runtime isinstance checks are in tests
-
 
 class UpstoxLiveClient:
     """Production BrokerClient implementation backed by Upstox V3 APIs.

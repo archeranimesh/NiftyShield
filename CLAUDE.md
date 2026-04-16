@@ -15,14 +15,17 @@ Do not rely on chat history — CONTEXT.md is the single source of truth.
 - Starting a new feature → also read `TODOS.md` + `PLANNER.md`
 - Working inside `src/<module>/` → that module's `CLAUDE.md` loads automatically
 
-**Before opening any source file — use these tools first to reduce token usage:**
+**⛔ DO NOT call `Read` on any file under `src/` or `scripts/` without first trying the graph.**
 
-**codebase-memory-mcp (graph-first):** The entire `src/` and `scripts/` tree is indexed. Query the graph before reaching for `Read`. Key calls:
-- `search_graph(query=...)` — find a symbol by name or natural language
-- `get_code_snippet(qualified_name)` — read only the target function, not the whole file
-- `trace_path(function_name, direction="outbound")` — full call graph without reading source
-- `search_code(pattern)` — grep enriched with structural ranking in one call
-Fall back to `Read` only for files the graph cannot resolve: markdown, config, test fixtures.
+The entire `src/` and `scripts/` tree is indexed in `codebase-memory-mcp`. Using `Read` on a source file when the graph can answer the question wastes tokens and violates this protocol. This has been a recurring mistake — treat it as a hard rule, not a suggestion.
+
+**Decision tree before touching any source file:**
+1. Need a symbol/function? → `search_graph(query=...)` or `get_code_snippet(qualified_name)`
+2. Need callers/callees? → `trace_path(function_name)`
+3. Need a grep? → `search_code(pattern)`
+4. Still not enough? → `Read` is now permitted — but state why the graph was insufficient.
+
+`Read` is only the first tool for: markdown files, TOML/YAML config, test fixtures, and files the graph explicitly cannot resolve.
 
 **git log (commit history first):** Commit messages in this repo follow a structured format that encodes the *reason* for every change — faster than reading code cold.
 - `git log --oneline -15 <file>` — what changed in a specific file and when
