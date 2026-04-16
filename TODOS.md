@@ -75,9 +75,13 @@ All functions re-exported from `daily_snapshot.py` for backward compatibility. T
 - **7d** (`PortfolioStore` `str` vs `Path`): Changed `__init__` signature to `Path | str`; coerces via `Path(db_path)` with empty-string guard.
 - **7e** (historical delta label): Updated assertions from `"Δday"` to `"📊 Today:"` in `test_daily_snapshot_historical.py`.
 
-### 8. Format numerical values with Indian number format
-Currently, numbers in `src/portfolio/formatting.py` and across the codebase are formatted using standard Python formatting (e.g., `{value:,.0f}`), which defaults to configuring commas according to the International system (e.g. millions, `13,912,790`). Create a centralized utility to format integers and decimals as per the Indian numbering system (Crores/Lakhs, e.g. `1,39,12,790`) and apply it across all text summaries and notifications.
-Files: `src/portfolio/formatting.py`, `src/utils/number_formatting.py` (new)
+### ~~8. Format numerical values with Indian number format~~ — **DONE (2026-04-16)**
+
+`src/utils/number_formatting.py` — `fmt_inr(value, *, decimals, sign, width)` with `_group_indian()` helper. Groups last 3 digits then pairs leftward (1,39,12,790 style). 37 tests in `tests/unit/utils/test_number_formatting.py`.
+
+`src/portfolio/formatting.py` — all `{:,.0f}` monetary format calls replaced with `fmt_inr()`. Both waterfall and fallback paths covered. 6 test assertions updated in `test_daily_snapshot_helpers.py`, `test_daily_snapshot_dhan.py`, `test_daily_snapshot_nuvama.py`.
+
+774 tests, all green.
 
 ---
 
@@ -168,5 +172,6 @@ All existing `# TODO:` comments need a GitHub issue or reference link added. Low
 | 2026-04-16 | **TD-3 resolved.** Stripped vertical alignment padding from stub type alias block in `src/client/protocol.py` lines 43–53. Normalised to 2-space inline comment style per Google §3.6. No logic change. |
 | 2026-04-16 | **rapidfuzz deployment step confirmed done.** `RapidFuzz==3.14.5` already present in `requirements.txt`. TODOS.md updated to reflect closure. |
 | 2026-04-16 | **`src/models/` migration (TODO 4) complete.** `src/models/portfolio.py` + `src/models/mf.py` created (prior partial session had created files; import migration completed this session). All 34 import sites in `src/`, `scripts/`, `tests/` updated to new paths. `src/portfolio/models.py` + `src/mf/models.py` deleted. `protocol.py` stub-block comment updated. Zero old-path imports remaining. |
+| 2026-04-16 | **Indian number format (TODO 8) complete.** `src/utils/number_formatting.py`: `fmt_inr()` utility with `_group_indian()` helper, 37 tests. `src/portfolio/formatting.py`: all `{:,.0f}` monetary formats replaced. 6 test assertions updated across 3 test files. 774 passing. |
 | 2026-04-16 | **daily_snapshot.py split (TODO 5) complete.** `_aggregate`/`_scheme_pnl` made public in `src/mf/tracker.py`. `src/portfolio/summary.py` (6 pure computation fns) + `src/portfolio/formatting.py` (2 pure formatting fns) extracted. `daily_snapshot.py` slimmed to I/O orchestration only (~350 lines). All re-exported for backward compat. 4 commits, 717 tests passing, 20 pre-existing failures unchanged. |
 | 2026-04-15 | **Nuvama bond portfolio integration (TODO 0) — all 4 phases complete.** `src/nuvama/` module: `models.py` (NuvamaBondHolding + NuvamaBondSummary frozen dataclasses), `reader.py` (parse_bond_holdings, build_nuvama_summary, fetch_nuvama_portfolio), `store.py` (NuvamaStore — nuvama_positions + nuvama_holdings_snapshots tables). `scripts/seed_nuvama_positions.py` (6 instruments, idempotent, dry-run by default). `PortfolioSummary` extended with 6 nuvama_* fields (all default-zero). `daily_snapshot.py`: Nuvama fetch block in `_async_main` (non-fatal), historical reconstruction in `_historical_main`, Nuvama Bonds line in `_format_combined_summary`, nuvama fields in `_build_portfolio_summary`. 97 new tests (54 pydantic-dependent — all pass in Mac venv). |

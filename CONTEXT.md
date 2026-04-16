@@ -65,6 +65,9 @@ src/
 │   ├── models.py             # Frozen dataclasses: NuvamaBondHolding (isin/qty/avg_price/ltp/chg_pct/hair_cut; cost_basis/current_value/pnl/pnl_pct/day_delta properties), NuvamaBondSummary (total_value/basis/pnl/pnl_pct/total_day_delta). All BOND classification.
 │   ├── reader.py             # parse_bond_holdings() (pure, joins positions dict for avg_price, skips _EXCLUDE_ISINS + missing positions with WARNING, catches InvalidOperation), build_nuvama_summary() (pure aggregation), fetch_nuvama_portfolio() (I/O orchestrator). _extract_rms_hdg() handles both resp.data.rmsHdg and eq.data.rmsHdg response paths.
 │   └── store.py              # NuvamaStore: nuvama_positions (ISIN PK, avg_price TEXT, qty, label — seed once via seed_nuvama_positions.py), nuvama_holdings_snapshots (UNIQUE(isin, snapshot_date) upsert). get_positions() → ISIN→Decimal. get_prev_total_value() calendar-agnostic Python-Decimal sum.
+├── utils/
+│   ├── __init__.py           # Package marker.
+│   └── number_formatting.py  # fmt_inr(value, *, decimals, sign, width) — Indian numbering system (Lakhs/Crores). _group_indian() private helper. No I/O or dependencies beyond stdlib.
 ├── db.py                     # Shared SQLite context manager — WAL mode, row_factory, FK enforcement, auto commit/rollback.
 └── client/
     ├── CLAUDE.md             # Module context: BrokerClient protocol rule, 4 implementations, active constraints
@@ -199,7 +202,7 @@ Strategy leg tables (instrument keys, entry prices, quantities, protected MF por
 
 ## Test Coverage
 
-- **Total: 599 + 97 new nuvama tests = 696 tests** (54 pydantic-dependent skipped in sandbox, all pass in Mac venv)
+- **Total: 774 tests** (all passing)
 - Run: `python -m pytest tests/unit/`
 - Auth tests: `tests/unit/auth/` (64 tests — Nuvama login + verify, Dhan login + verify)
 - MF tests: `tests/unit/mf/` (127 tests)
