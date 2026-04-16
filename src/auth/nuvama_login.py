@@ -150,7 +150,14 @@ def initialize_session(
     with _in_dir(session_dir):
         # SDK resolves LOG_FILE relative to CWD — create the logs dir before init.
         Path("logs").mkdir(exist_ok=True)
-        api = APIConnect(api_key, api_secret, request_id, download_contract, str(conf_abs))
+        # APIConnect.__init__ fetches the public IP via api.ipify.org with verify=False.
+        # Suppress the resulting InsecureRequestWarning — it comes from vendor code we
+        # cannot fix, and the endpoint (a plain IP-echo service) is low-risk.
+        import warnings
+        import urllib3
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", urllib3.exceptions.InsecureRequestWarning)
+            api = APIConnect(api_key, api_secret, request_id, download_contract, str(conf_abs))
 
     return api
 
