@@ -151,7 +151,7 @@ def verify(env_path: Path = Path(".env")) -> bool:
         if raw is not None:
             _dump_response_shape(raw)
         return False
-    except Exception as e:
+    except Exception as e:  # Broad catch: Nuvama SDK may raise non-standard exceptions (e.g. network error, internal SDK error); connectivity check must not crash
         print(f"✗ Nuvama connectivity check failed: {e}")
         return False
 
@@ -174,7 +174,7 @@ def _dump_response_shape(raw: str) -> None:
             print(
                 f"  Response is not a dict — type: {type(data).__name__}, value: {str(data)[:200]}"
             )
-    except Exception:
+    except Exception:  # Diagnostic helper — silently swallow json.loads failures; never let shape-dumping crash the caller
         print(f"  Raw response (first 500 chars): {raw[:500]}")
 
 

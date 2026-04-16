@@ -162,7 +162,7 @@ def verify(env_path: Path = Path(".env")) -> bool:
         else:
             print(f"✗ Dhan profile fetch failed (HTTP {status}): {e}")
         return False
-    except Exception as e:
+    except Exception as e:  # Broad catch: guards against transport errors and unexpected SDK raises beyond requests.HTTPError (e.g. connection reset, timeout)
         print(f"✗ Dhan connectivity check failed: {e}")
         return False
 
@@ -181,7 +181,7 @@ def verify(env_path: Path = Path(".env")) -> bool:
         status = e.response.status_code if e.response is not None else "unknown"
         print(f"✗ Holdings fetch failed (HTTP {status}): {e}")
         return False
-    except Exception as e:
+    except Exception as e:  # Broad catch: parse_holdings or fetch_holdings may raise beyond HTTPError (e.g. malformed non-JSON response, unexpected SDK raise)
         print(f"✗ Holdings fetch failed: {e}")
         return False
 

@@ -112,12 +112,9 @@ The guide says to use module-level `_private_function()` instead. Each `@staticm
 
 Every file should contain a license header. Zero files have one. Decision needed on which license to use before this can be automated.
 
-### TD-5: `except Exception` without intent comment (§2.4)
+### ~~TD-5~~: `except Exception` without intent comment (§2.4) — **DONE 2026-04-16**
 
-The guide allows broad catches only at documented isolation points. These two need a one-line comment explaining they are intentional:
-
-- `src/auth/dhan_verify.py` lines 165, 184
-- `src/auth/nuvama_verify.py` lines 154, 177
+Intent comments added to all four broad catches (dhan_verify.py:165,184 + nuvama_verify.py:154,177). Each comment names the specific hazard being isolated.
 
 ### TD-6: Stale `assert` in production module (§2.4)
 
