@@ -94,14 +94,16 @@ CREATE INDEX IF NOT EXISTS idx_trades_strategy_leg
 class PortfolioStore:
     """SQLite-backed store for strategy portfolio tracking."""
 
-    def __init__(self, db_path: Path) -> None:
+    def __init__(self, db_path: Path | str) -> None:
         """Initialize store, creating DB and tables if needed.
 
         Args:
-            db_path: Path to SQLite database file.
+            db_path: Path to SQLite database file (str or Path).
         """
-        self.db_path = db_path
-        db_path.parent.mkdir(parents=True, exist_ok=True)
+        if not db_path:
+            raise ValueError("db_path must not be empty")
+        self.db_path = Path(db_path)
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
         with _connect(self.db_path) as conn:
             conn.executescript(_SCHEMA)
 

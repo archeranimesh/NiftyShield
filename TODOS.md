@@ -4,6 +4,8 @@
 
 ## Open TODOs (priority order)
 
+> **Note:** The enterprise architecture refactoring plan has been broken down into strictly ordered Agile User Stories. Please cross-reference [JIRA.md](file:///Users/abhadra/myWork/myCode/python/NiftyShield/JIRA.md) for the active backlog of architectural optimization tasks!
+
 ### ~~0. Nuvama bond portfolio integration~~ — **DONE (2026-04-15)**
 
 New module `src/nuvama/` fetching bond holdings from Nuvama APIConnect and adding them to the daily snapshot Bonds section.
@@ -63,35 +65,19 @@ All functions re-exported from `daily_snapshot.py` for backward compatibility. T
 ### ~~4. `src/models/` migration~~ — **DONE (2026-04-16)**
 `src/models/portfolio.py` + `src/models/mf.py` created. All consumers in `src/`, `scripts/`, and `tests/` updated (34 import lines). Old `src/portfolio/models.py` and `src/mf/models.py` deleted. `protocol.py` stub comment updated to reflect `src/models/` now exists. Zero old-path imports remaining.
 
-### 7. Fix pre-existing test failures (20 total, confirmed pre-migration)
+### ~~7. Fix pre-existing test failures~~ — **DONE (2026-04-16)**
 
-#### 7a. `pytest-asyncio` missing — 12 failures in `tests/unit/test_upstox_live.py`
-All async tests fail with "async def functions are not natively supported."
-Fix: `pip install pytest-asyncio` + add to `requirements-dev.txt` + add `asyncio_mode = "auto"` to `pytest.ini` (or `pyproject.toml`).
-Files: `requirements-dev.txt`, `pytest.ini` (or `pyproject.toml`), `tests/unit/test_upstox_live.py` (remove `@pytest.mark.asyncio` if mode=auto).
+20 failures resolved in one commit. 737 passing, 0 failures.
 
-#### 7b. Nuvama verify tests expect `KeyError` but `parse_holdings()` now has fallback — 3 failures
-`_extract_rms_hdg()` added a two-path fallback (`resp.data.rmsHdg` → `eq.data.rmsHdg`) that silently returns empty list on total miss. Tests still assert `KeyError` is raised on bad input.
-Fix: update the 3 tests in `tests/unit/auth/test_nuvama_verify.py` — `test_parse_holdings_raises_on_missing_key`, `test_parse_holdings_raises_on_wrong_top_level`, `test_verify_returns_false_on_missing_schema_key` — to assert empty list / `False` return rather than `KeyError`.
-Files: `tests/unit/auth/test_nuvama_verify.py`
+- **7a** (`pytest-asyncio`): Added `pytest-asyncio==1.3.0` to `requirements.txt`, created `pytest.ini` with `asyncio_mode = auto`. 12 async tests in `test_upstox_live.py` now pass.
+- **7b** (nuvama verify): Updated 3 tests to assert empty-list return / `True` result instead of `KeyError`, matching `parse_holdings()` two-path fallback behaviour.
+- **7c** (bond formatting): Updated 3 stale assertions in `test_daily_snapshot_dhan.py` and `test_daily_snapshot_nuvama.py` to match the waterfall layout (`"├ Nuvama Bonds"`, `"── Bonds"`, etc.).
+- **7d** (`PortfolioStore` `str` vs `Path`): Changed `__init__` signature to `Path | str`; coerces via `Path(db_path)` with empty-string guard.
+- **7e** (historical delta label): Updated assertions from `"Δday"` to `"📊 Today:"` in `test_daily_snapshot_historical.py`.
 
-#### 7c. Bond section formatting assertions stale — 3 failures
-`_format_combined_summary` was restructured when Nuvama was integrated. Three tests assert strings that no longer appear in the output.
-- `test_no_bond_holdings_shows_placeholder` — asserts `"no bond holdings"` in Dhan-only context
-- `test_bonds_subtotal_includes_nuvama` — asserts `"Bonds subtotal"` exists
-- `test_no_bond_holdings_shown_when_both_available_but_zero` — asserts `"(no bond holdings)"`
-Fix: read current `_format_combined_summary` output for those inputs, update the 3 assertions to match actual strings.
-Files: `tests/unit/dhan/test_daily_snapshot_dhan.py`, `tests/unit/nuvama/test_daily_snapshot_nuvama.py`
-
-#### 7d. `PortfolioStore` receives `str` instead of `Path` — 1 failure
-`tests/unit/nuvama/test_store.py::test_shares_db_with_portfolio` passes `str(tmp_path / "shared.sqlite")` but `PortfolioStore.__init__` calls `db_path.parent.mkdir()` which requires a `Path`.
-Fix: either wrap `db_path = Path(db_path)` at the top of `PortfolioStore.__init__` (more robust), or change the test to pass `tmp_path / "shared.sqlite"` directly (keeps strict typing).
-Files: `src/portfolio/store.py` (preferred) or `tests/unit/nuvama/test_store.py`
-
-#### 7e. Historical Δday assertion stale — 1 failure
-`test_day_change_delta_shown_when_prev_snapshot_exists` asserts `"Δday" in out` but the current formatter no longer emits that exact string in the historical output path.
-Fix: print the actual output for that test case, find the correct day-change label, update assertion.
-Files: `tests/unit/test_daily_snapshot_historical.py`
+### 8. Format numerical values with Indian number format
+Currently, numbers in `src/portfolio/formatting.py` and across the codebase are formatted using standard Python formatting (e.g., `{value:,.0f}`), which defaults to configuring commas according to the International system (e.g. millions, `13,912,790`). Create a centralized utility to format integers and decimals as per the Indian numbering system (Crores/Lakhs, e.g. `1,39,12,790`) and apply it across all text summaries and notifications.
+Files: `src/portfolio/formatting.py`, `src/utils/number_formatting.py` (new)
 
 ---
 

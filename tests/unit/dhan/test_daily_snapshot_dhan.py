@@ -254,8 +254,9 @@ class TestFormatCombinedSummaryBondsSection:
         out = _format_combined_summary(_ETF_STRATS, _ETF_PRICES, {}, None, dhan_summary=dhan)
         assert "Bonds subtotal" in out
 
-    def test_no_bond_holdings_shows_placeholder(self) -> None:
-        # DhanPortfolioSummary with no bond holdings but dhan_available=True
+    def test_zero_bond_value_dhan_line_absent(self) -> None:
+        # When Dhan bond_value=0, the Dhan Bonds line is omitted entirely —
+        # no placeholder text; Bonds section still shows Nuvama [unavailable].
         dhan = DhanPortfolioSummary(
             snapshot_date=_SNAP_DATE,
             equity_holdings=(_niftyietf_holding(),),
@@ -270,7 +271,8 @@ class TestFormatCombinedSummaryBondsSection:
             bond_pnl_pct=None,
         )
         out = _format_combined_summary(_ETF_STRATS, _ETF_PRICES, {}, None, dhan_summary=dhan)
-        assert "no bond holdings" in out
+        assert "── Bonds" in out
+        assert "Dhan Bonds" not in out
 
 
 # ── Tests: _format_combined_summary Total section ────────────────────

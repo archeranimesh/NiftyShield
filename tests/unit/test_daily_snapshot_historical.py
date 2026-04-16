@@ -235,7 +235,7 @@ class TestHistoricalMain:
     def test_day_change_delta_shown_when_prev_snapshot_exists(
         self, seeded_store: PortfolioStore, db_path: Path, capsys: pytest.CaptureFixture
     ) -> None:
-        """When a prior-date snapshot exists, Δday appears in the combined summary."""
+        """When a prior-date snapshot exists, the waterfall Today section appears."""
         legs = seeded_store.get_strategy("ILTS").legs  # type: ignore[union-attr]
         seeded_store.record_snapshot(
             DailySnapshot(
@@ -247,14 +247,14 @@ class TestHistoricalMain:
         )
         _historical_main(date(2026, 4, 7), db_path)
         out = capsys.readouterr().out
-        assert "Δday" in out
+        assert "📊 Today:" in out
 
     def test_day_change_delta_omitted_when_no_prior_snapshot(
         self, seeded_store: PortfolioStore, db_path: Path, capsys: pytest.CaptureFixture
     ) -> None:
-        """When no prior date exists (first ever run), Δday must NOT appear."""
+        """When no prior date exists (first ever run), Today section must NOT appear."""
         _historical_main(date(2026, 4, 6), db_path)
-        assert "Δday" not in capsys.readouterr().out
+        assert "📊 Today:" not in capsys.readouterr().out
 
 
 # ── _build_prev_prices ────────────────────────────────────────────
