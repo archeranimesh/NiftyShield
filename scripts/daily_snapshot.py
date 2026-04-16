@@ -10,12 +10,14 @@ Two modes of operation:
     date from the local SQLite DB and prints the P&L summary. No API calls,
     no network, no .env required. Useful for reviewing past snapshots.
 
-Import design:
-    Only stdlib and the pure-computation helpers' types are imported at module
-    level (Decimal, Path, Strategy, AssetType). All I/O-triggering imports
-    (dotenv, create_client, stores, tracker) are deferred into the
-    _async_main() / _historical_main() functions so that the pure helper
-    functions are importable in tests with no side effects.
+Architecture (TODO 5 refactor):
+    Pure computation  →  src/portfolio/summary.py
+    Pure formatting   →  src/portfolio/formatting.py
+    I/O orchestration →  this file (_async_main, _historical_main, main)
+
+    All I/O-triggering imports (dotenv, create_client, stores, tracker) are
+    deferred into _async_main() / _historical_main() so the src/ modules
+    remain importable in tests without side effects.
 
 Usage:
     # Record today's snapshot (live fetch)
@@ -44,7 +46,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 # Pure-computation helpers only need these types at import time — no I/O.
-from src.models.portfolio import AssetType, DailySnapshot, PortfolioSummary, Strategy  # noqa: E402
+from src.models.portfolio import DailySnapshot, Strategy  # noqa: E402
 from src.portfolio.formatting import (  # noqa: E402
     _format_combined_summary,
     _format_protection_stats,
@@ -57,11 +59,6 @@ from src.portfolio.summary import (  # noqa: E402
     _etf_cost_basis,
     _etf_current_value,
 )
-
-
-# ── Pure helper functions — moved to src/portfolio/summary.py + formatting.py
-# (TODO 5). Re-exported here so existing test imports keep working.
-# Direct imports from src.portfolio.{summary,formatting} preferred for new code.
 
 
 def _print_combined_summary(

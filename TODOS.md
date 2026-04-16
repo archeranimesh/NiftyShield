@@ -45,22 +45,15 @@ Matplotlib script or React dashboard from `daily_snapshots` time series.
 Deferred until several weeks of snapshot history exist.
 `PortfolioSummary` dataclass already extracted — ready to query.
 
-### 5. Split `scripts/daily_snapshot.py` into focused modules
+### ~~5. Split `scripts/daily_snapshot.py` into focused modules~~ — **DONE (2026-04-16)**
 
-The script has grown to ~600 lines with three distinct responsibilities mixed together. Split into:
+Four commits:
+- Phase 0 (`refactor(mf)`): `_aggregate` → `aggregate_mf_pnl`, `_scheme_pnl` → `compute_scheme_pnl` in `src/mf/tracker.py`.
+- Phase 1 (`refactor(portfolio)`): `src/portfolio/summary.py` — 6 pure computation functions extracted.
+- Phase 2 (`refactor(portfolio)`): `src/portfolio/formatting.py` — 2 pure formatting functions extracted.
+- Phase 3 (`refactor(scripts)`): `daily_snapshot.py` slimmed to I/O orchestration only; CONTEXT.md updated.
 
-- **`src/portfolio/summary.py`** — pure computation: `_etf_current_value`, `_etf_cost_basis`, `_build_prev_prices`, `_compute_prev_mf_pnl`, `_build_portfolio_summary`, `_compute_strategy_pnl_from_prices`. No I/O, no imports beyond models. Fully unit-testable in isolation.
-- **`src/portfolio/formatting.py`** — pure formatting: `_format_combined_summary`, `_format_protection_stats`. Depends only on `PortfolioSummary` — zero I/O. Test by asserting substring/line presence.
-- **`scripts/daily_snapshot.py`** — thin I/O orchestration only: `_async_main`, `_historical_main`, `main()`, `parse_args()`. Imports summary + formatting from `src/portfolio/`. No arithmetic here.
-
-**Phase boundaries and commits:**
-1. Extract `summary.py` + tests → commit (`refactor(portfolio): extract summary computation`)
-2. Extract `formatting.py` + tests → commit (`refactor(portfolio): extract summary formatting`)
-3. Slim down `daily_snapshot.py` (orchestration only) → update CONTEXT.md → commit (`refactor(scripts): daily_snapshot orchestration only`)
-
-**Why:** Current file mixes pure functions (fully testable) with async I/O, making unit tests brittle. Moves reusable computation into `src/` where the backtesting and visualization layers (TODO 3) can import it directly without going through the script.
-
-**Pre-condition:** No new features during this refactor. Test count must not change.
+All functions re-exported from `daily_snapshot.py` for backward compatibility. Test count unchanged (717 passing, 20 pre-existing failures).
 
 ### 6. Fuzzy instrument search (`rapidfuzz`) — **DONE (2026-04-15)**
 `InstrumentLookup.search()` upgraded: `exact(1.0) > prefix(0.92) > fuzzy` ranking via `_score_query()` + `_best_score()`. `min_score` param added. 27 tests in `tests/unit/instruments/test_lookup.py`.
@@ -69,6 +62,36 @@ The script has grown to ~600 lines with three distinct responsibilities mixed to
 
 ### ~~4. `src/models/` migration~~ — **DONE (2026-04-16)**
 `src/models/portfolio.py` + `src/models/mf.py` created. All consumers in `src/`, `scripts/`, and `tests/` updated (34 import lines). Old `src/portfolio/models.py` and `src/mf/models.py` deleted. `protocol.py` stub comment updated to reflect `src/models/` now exists. Zero old-path imports remaining.
+
+### 7. Fix pre-existing test failures (20 total, confirmed pre-migration)
+
+#### 7a. `pytest-asyncio` missing — 12 failures in `tests/unit/test_upstox_live.py`
+All async tests fail with "async def functions are not natively supported."
+Fix: `pip install pytest-asyncio` + add to `requirements-dev.txt` + add `asyncio_mode = "auto"` to `pytest.ini` (or `pyproject.toml`).
+Files: `requirements-dev.txt`, `pytest.ini` (or `pyproject.toml`), `tests/unit/test_upstox_live.py` (remove `@pytest.mark.asyncio` if mode=auto).
+
+#### 7b. Nuvama verify tests expect `KeyError` but `parse_holdings()` now has fallback — 3 failures
+`_extract_rms_hdg()` added a two-path fallback (`resp.data.rmsHdg` → `eq.data.rmsHdg`) that silently returns empty list on total miss. Tests still assert `KeyError` is raised on bad input.
+Fix: update the 3 tests in `tests/unit/auth/test_nuvama_verify.py` — `test_parse_holdings_raises_on_missing_key`, `test_parse_holdings_raises_on_wrong_top_level`, `test_verify_returns_false_on_missing_schema_key` — to assert empty list / `False` return rather than `KeyError`.
+Files: `tests/unit/auth/test_nuvama_verify.py`
+
+#### 7c. Bond section formatting assertions stale — 3 failures
+`_format_combined_summary` was restructured when Nuvama was integrated. Three tests assert strings that no longer appear in the output.
+- `test_no_bond_holdings_shows_placeholder` — asserts `"no bond holdings"` in Dhan-only context
+- `test_bonds_subtotal_includes_nuvama` — asserts `"Bonds subtotal"` exists
+- `test_no_bond_holdings_shown_when_both_available_but_zero` — asserts `"(no bond holdings)"`
+Fix: read current `_format_combined_summary` output for those inputs, update the 3 assertions to match actual strings.
+Files: `tests/unit/dhan/test_daily_snapshot_dhan.py`, `tests/unit/nuvama/test_daily_snapshot_nuvama.py`
+
+#### 7d. `PortfolioStore` receives `str` instead of `Path` — 1 failure
+`tests/unit/nuvama/test_store.py::test_shares_db_with_portfolio` passes `str(tmp_path / "shared.sqlite")` but `PortfolioStore.__init__` calls `db_path.parent.mkdir()` which requires a `Path`.
+Fix: either wrap `db_path = Path(db_path)` at the top of `PortfolioStore.__init__` (more robust), or change the test to pass `tmp_path / "shared.sqlite"` directly (keeps strict typing).
+Files: `src/portfolio/store.py` (preferred) or `tests/unit/nuvama/test_store.py`
+
+#### 7e. Historical Δday assertion stale — 1 failure
+`test_day_change_delta_shown_when_prev_snapshot_exists` asserts `"Δday" in out` but the current formatter no longer emits that exact string in the historical output path.
+Fix: print the actual output for that test case, find the correct day-change label, update assertion.
+Files: `tests/unit/test_daily_snapshot_historical.py`
 
 ---
 
@@ -159,4 +182,5 @@ All existing `# TODO:` comments need a GitHub issue or reference link added. Low
 | 2026-04-16 | **TD-3 resolved.** Stripped vertical alignment padding from stub type alias block in `src/client/protocol.py` lines 43–53. Normalised to 2-space inline comment style per Google §3.6. No logic change. |
 | 2026-04-16 | **rapidfuzz deployment step confirmed done.** `RapidFuzz==3.14.5` already present in `requirements.txt`. TODOS.md updated to reflect closure. |
 | 2026-04-16 | **`src/models/` migration (TODO 4) complete.** `src/models/portfolio.py` + `src/models/mf.py` created (prior partial session had created files; import migration completed this session). All 34 import sites in `src/`, `scripts/`, `tests/` updated to new paths. `src/portfolio/models.py` + `src/mf/models.py` deleted. `protocol.py` stub-block comment updated. Zero old-path imports remaining. |
+| 2026-04-16 | **daily_snapshot.py split (TODO 5) complete.** `_aggregate`/`_scheme_pnl` made public in `src/mf/tracker.py`. `src/portfolio/summary.py` (6 pure computation fns) + `src/portfolio/formatting.py` (2 pure formatting fns) extracted. `daily_snapshot.py` slimmed to I/O orchestration only (~350 lines). All re-exported for backward compat. 4 commits, 717 tests passing, 20 pre-existing failures unchanged. |
 | 2026-04-15 | **Nuvama bond portfolio integration (TODO 0) — all 4 phases complete.** `src/nuvama/` module: `models.py` (NuvamaBondHolding + NuvamaBondSummary frozen dataclasses), `reader.py` (parse_bond_holdings, build_nuvama_summary, fetch_nuvama_portfolio), `store.py` (NuvamaStore — nuvama_positions + nuvama_holdings_snapshots tables). `scripts/seed_nuvama_positions.py` (6 instruments, idempotent, dry-run by default). `PortfolioSummary` extended with 6 nuvama_* fields (all default-zero). `daily_snapshot.py`: Nuvama fetch block in `_async_main` (non-fatal), historical reconstruction in `_historical_main`, Nuvama Bonds line in `_format_combined_summary`, nuvama fields in `_build_portfolio_summary`. 97 new tests (54 pydantic-dependent — all pass in Mac venv). |
