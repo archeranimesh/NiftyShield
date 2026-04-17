@@ -270,7 +270,7 @@ def _historical_main(snap_date: date, db_path: Path) -> int:
                 )
                 for r in options_rows
             ]
-            cumulative_map = nuvama_store.get_cumulative_realized_pnl()
+            cumulative_map = nuvama_store.get_cumulative_realized_pnl(before_date=snap_date)
             high, low, n_high, n_low = nuvama_store.get_intraday_extremes(snap_date)
             nuvama_options_summary = build_options_summary(
                 pos_list, 
@@ -535,7 +535,7 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
         options_pos = parse_options_positions(raw_netpos)
         if options_pos:
             nuvama_store.record_all_options_snapshots(options_pos, snap_date)
-            cumulative_map = nuvama_store.get_cumulative_realized_pnl()
+            cumulative_map = nuvama_store.get_cumulative_realized_pnl(before_date=snap_date)
             high, low, n_high, n_low = nuvama_store.get_intraday_extremes(snap_date)
             nuvama_options_summary = build_options_summary(
                 options_pos, 

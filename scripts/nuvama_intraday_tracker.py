@@ -76,7 +76,7 @@ async def main() -> int:
         # Calculate PnL Breakdown
         unrealized = sum((p.unrealized_pnl for p in positions), Decimal("0"))
         realized_today = sum((p.realized_pnl_today for p in positions), Decimal("0"))
-        historical_map = store.get_cumulative_realized_pnl()
+        historical_map = store.get_cumulative_realized_pnl(before_date=now.date())
         historical_total = sum(historical_map.values(), Decimal("0"))
         
         total_realized = realized_today + historical_total

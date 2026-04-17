@@ -1,6 +1,6 @@
 """Tests for src/nuvama/store.py — NuvamaStore."""
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
@@ -210,3 +210,53 @@ class TestGetPrevTotalValue:
         store.record_snapshot("A", date(2026, 4, 14), 2000, Decimal("144.40"), Decimal("288800.00"))
         result = store.get_prev_total_value(date(2026, 4, 15))
         assert result == Decimal("288800.00")
+
+# ---------------------------------------------------------------------------
+# Options Snapshots
+# ---------------------------------------------------------------------------
+
+
+class TestOptionsSnapshots:
+    def test_record_options_snapshot(self, store):
+        store.record_options_snapshot(
+            date(2026, 4, 15), "A", "Instrument A", 100, Decimal("10"), Decimal("11"), Decimal("100"), Decimal("50")
+        )
+        result = store.get_options_snapshot_for_date(date(2026, 4, 15))
+        assert len(result) == 1
+        assert result[0]["trade_symbol"] == "A"
+        assert result[0]["realized_pnl_today"] == "50"
+
+    def test_get_cumulative_realized_pnl_default_excludes_today(self, store):
+        """Default behavior should exclude today (date.today())."""
+        today = date.today()
+        yesterday = today - timedelta(days=1)
+        
+        # Yesterday
+        store.record_options_snapshot(
+            yesterday, "A", "Instrument A", 0, Decimal("10"), Decimal("10"), Decimal("0"), Decimal("100")
+        )
+        # Today
+        store.record_options_snapshot(
+            today, "A", "Instrument A", 100, Decimal("10"), Decimal("11"), Decimal("100"), Decimal("50")
+        )
+        
+        # Default implementation should exclude today
+        result = store.get_cumulative_realized_pnl()
+        assert result["A"] == Decimal("100")
+
+    def test_get_cumulative_realized_pnl_with_explicit_before_date(self, store):
+        """Explicit before_date should filter correctly."""
+        d1 = date(2026, 4, 10)
+        d2 = date(2026, 4, 11)
+        d3 = date(2026, 4, 12)
+        
+        store.record_options_snapshot(d1, "A", "Ins", 0, Decimal("0"), Decimal("0"), Decimal("0"), Decimal("10"))
+        store.record_options_snapshot(d2, "A", "Ins", 0, Decimal("0"), Decimal("0"), Decimal("0"), Decimal("20"))
+        store.record_options_snapshot(d3, "A", "Ins", 0, Decimal("0"), Decimal("0"), Decimal("0"), Decimal("30"))
+        
+        # before d2 -> only d1
+        assert store.get_cumulative_realized_pnl(before_date=d2)["A"] == Decimal("10")
+        # before d3 -> d1 + d2
+        assert store.get_cumulative_realized_pnl(before_date=d3)["A"] == Decimal("30")
+        # before far future -> all
+        assert store.get_cumulative_realized_pnl(before_date=date(2026, 5, 1))["A"] == Decimal("60")

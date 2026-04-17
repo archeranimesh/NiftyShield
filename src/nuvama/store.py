@@ -331,11 +331,20 @@ class NuvamaStore:
                 realized_pnl_today=h.realized_pnl_today,
             )
 
-    def get_cumulative_realized_pnl(self) -> dict[str, Decimal]:
-        """Return cumulative realized PnL grouped by trade_symbol across all snapshots."""
+    def get_cumulative_realized_pnl(self, before_date: date | None = None) -> dict[str, Decimal]:
+        """Return cumulative realized PnL grouped by trade_symbol across all snapshots.
+        
+        Args:
+            before_date: If provided, only returns PnL from snapshots BEFORE this date.
+                Defaults to date.today() to exclude current session tracking.
+        """
+        if before_date is None:
+            before_date = date.today()
+
         with connect(self._db_path) as conn:
             rows = conn.execute(
-                "SELECT trade_symbol, realized_pnl_today FROM nuvama_options_snapshots"
+                "SELECT trade_symbol, realized_pnl_today FROM nuvama_options_snapshots WHERE snapshot_date < ?",
+                (before_date.isoformat(),),
             ).fetchall()
         
         result: dict[str, Decimal] = {}
