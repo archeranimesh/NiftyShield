@@ -13,6 +13,7 @@ Do not rely on chat history — CONTEXT.md is the single source of truth.
 - Adding/changing module architecture → also read `DECISIONS.md`
 - Touching instrument keys, AMFI codes, market data → also read `REFERENCES.md`
 - Starting a new feature → also read `TODOS.md` + `PLANNER.md`
+- Any task in `src/backtest/`, `src/paper/`, `src/strategy/`, or referenced in BACKTEST_PLAN.md → also read `BACKTEST_PLAN.md`
 - Working inside `src/<module>/` → that module's `CLAUDE.md` loads automatically
 
 **⛔ DO NOT call `Read` on any file under `src/` or `scripts/` without first trying the graph.**
@@ -102,6 +103,7 @@ If a phase touches only docs or config (no logic), skip the code-reviewer; a sin
 | Run all tests | `python -m pytest tests/unit/` |
 | Commit format | `.claude/skills/commit/SKILL.md` |
 | Python review checklist | `REVIEW.md` |
+| Backtest → paper → live pipeline plan | `BACKTEST_PLAN.md` |
 
 ## Module CLAUDE.md files (auto-loaded when working in that directory)
 

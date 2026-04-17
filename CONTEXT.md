@@ -4,7 +4,7 @@
 > Read this before writing any code. Do not rely on session summaries or chat history.
 > Repo: https://github.com/archeranimesh/NiftyShield
 
-**Related files:** [DECISIONS.md](DECISIONS.md) — architecture rationale | [REFERENCES.md](REFERENCES.md) — instrument keys, AMFI codes, API quirks | [TODOS.md](TODOS.md) — open work + session log | [PLANNER.md](PLANNER.md) — multi-sprint roadmap | [INSTRUCTION.md](INSTRUCTION.md) — per-task prompt templates and session workflow
+**Related files:** [DECISIONS.md](DECISIONS.md) — architecture rationale | [REFERENCES.md](REFERENCES.md) — instrument keys, AMFI codes, API quirks | [TODOS.md](TODOS.md) — open work + session log | [PLANNER.md](PLANNER.md) — multi-sprint roadmap | [BACKTEST_PLAN.md](BACKTEST_PLAN.md) — phased backtest → paper → live pipeline plan (load when working on src/backtest/, src/paper/, src/strategy/, or any Phase 0-4 task) | [INSTRUCTION.md](INSTRUCTION.md) — per-task prompt templates and session workflow
 
 ---
 
@@ -192,6 +192,7 @@ Before writing any code: read `CONTEXT.md`, state `CONTEXT.md ✓`, confirm scop
 - Architecture decisions or new modules: also read `DECISIONS.md`
 - Instrument keys, market data, AMFI codes: also read `REFERENCES.md`
 - Starting new feature work: also read `TODOS.md` + `PLANNER.md`
+- Working on backtest, paper trading, strategy research, or any task tagged Phase 0-4: also read `BACKTEST_PLAN.md`. Tick `[x]` only when the task's DoD is fully met and the commit has landed. Do not skip phase gates.
 - Working in a `src/` module: that module's `CLAUDE.md` loads automatically
 
 ## Immediate TODOs
