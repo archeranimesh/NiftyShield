@@ -232,6 +232,11 @@ def _build_portfolio_summary(
     nuvama_options_realized = (
         nuvama_options_summary.total_realized_pnl_today + nuvama_options_summary.cumulative_realized_pnl
     ) if nuvama_options_summary else Decimal("0")  # type: ignore[union-attr]
+    nuvama_options_intraday_high = nuvama_options_summary.intraday_high if nuvama_options_summary else None  # type: ignore[union-attr]
+    nuvama_options_intraday_low = nuvama_options_summary.intraday_low if nuvama_options_summary else None  # type: ignore[union-attr]
+    nuvama_nifty_high = nuvama_options_summary.nifty_high if nuvama_options_summary else None  # type: ignore[union-attr]
+    nuvama_nifty_low = nuvama_options_summary.nifty_low if nuvama_options_summary else None  # type: ignore[union-attr]
+
 
     total_value = mf_value + etf_value + options_pnl + dhan_eq_value + dhan_bd_value + nuvama_bd_value
     total_invested = mf_invested + etf_basis + dhan_eq_basis + dhan_bd_basis + nuvama_bd_basis
@@ -329,5 +334,9 @@ def _build_portfolio_summary(
         nuvama_options_pnl=nuvama_options_pnl,
         nuvama_options_unrealized=nuvama_options_unrealized,
         nuvama_options_realized=nuvama_options_realized,
+        nuvama_options_intraday_high=nuvama_options_intraday_high,
+        nuvama_options_intraday_low=nuvama_options_intraday_low,
+        nuvama_nifty_high=nuvama_nifty_high,
+        nuvama_nifty_low=nuvama_nifty_low,
         nuvama_options_available=nuvama_options_available,
     )

@@ -271,7 +271,16 @@ def _historical_main(snap_date: date, db_path: Path) -> int:
                 for r in options_rows
             ]
             cumulative_map = nuvama_store.get_cumulative_realized_pnl()
-            nuvama_options_summary = build_options_summary(pos_list, snap_date, cumulative_map)
+            high, low, n_high, n_low = nuvama_store.get_intraday_extremes(snap_date)
+            nuvama_options_summary = build_options_summary(
+                pos_list, 
+                snap_date, 
+                cumulative_map,
+                intraday_high=high,
+                intraday_low=low,
+                nifty_high=n_high,
+                nifty_low=n_low
+            )
             print(f"  Nuvama options: {len(pos_list)} holding(s) from stored snapshot")
         else:
             print(f"  No Nuvama options snapshots found for {snap_date.isoformat()}.")
@@ -527,7 +536,16 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
         if options_pos:
             nuvama_store.record_all_options_snapshots(options_pos, snap_date)
             cumulative_map = nuvama_store.get_cumulative_realized_pnl()
-            nuvama_options_summary = build_options_summary(options_pos, snap_date, cumulative_map)
+            high, low, n_high, n_low = nuvama_store.get_intraday_extremes(snap_date)
+            nuvama_options_summary = build_options_summary(
+                options_pos, 
+                snap_date, 
+                cumulative_map,
+                intraday_high=high,
+                intraday_low=low,
+                nifty_high=n_high,
+                nifty_low=n_low
+            )
             print(
                 f"  Nuvama options: {len(options_pos)} position(s)  "
                 f"Unrealized P&L {nuvama_options_summary.total_unrealized_pnl:+,.0f}  "

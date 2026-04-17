@@ -206,6 +206,14 @@ def _format_combined_summary(
             if summary.nuvama_options_available:
                 lines.append("")
                 lines.append(f"  Nuvama M2M P&L      {fmt_inr(summary.nuvama_options_unrealized, sign=True, width=14)}")
+                
+                if summary.nuvama_options_intraday_high is not None and summary.nuvama_options_intraday_low is not None:
+                    hl_str = f"{fmt_inr(summary.nuvama_options_intraday_high, sign=True)} / {fmt_inr(summary.nuvama_options_intraday_low, sign=True)}"
+                    lines.append(f"   ├ M2M High/Low   {hl_str:>16}")
+                if summary.nuvama_nifty_high is not None and summary.nuvama_nifty_low is not None:
+                    nifty_hl_str = f"{summary.nuvama_nifty_high:,.0f} / {summary.nuvama_nifty_low:,.0f}"
+                    lines.append(f"   └ Nifty High/Low {nifty_hl_str:>16}")
+
                 lines.append(f"  Nuvama Realized     {fmt_inr(summary.nuvama_options_realized, sign=True, width=14)}")
 
         # ── Context line: total value + all-time P&L (signal vs scoreboard) ──

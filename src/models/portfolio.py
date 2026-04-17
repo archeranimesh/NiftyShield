@@ -265,9 +265,12 @@ class PortfolioSummary:
     # Whether Nuvama data was available this run
     nuvama_available: bool = False
 
-    # Nuvama options component (defaults to 0 when unavailable)
     nuvama_options_pnl: Decimal = Decimal("0")
     nuvama_options_unrealized: Decimal = Decimal("0")
     nuvama_options_realized: Decimal = Decimal("0")
+    nuvama_options_intraday_high: Decimal | None = None
+    nuvama_options_intraday_low: Decimal | None = None
+    nuvama_nifty_high: float | None = None
+    nuvama_nifty_low: float | None = None
     nuvama_options_day_delta: Decimal | None = None
     nuvama_options_available: bool = False

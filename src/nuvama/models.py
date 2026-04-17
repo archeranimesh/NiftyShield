@@ -139,6 +139,11 @@ class NuvamaOptionsSummary:
     total_realized_pnl_today: Decimal
     # Represents the historical sum of realized PnL from the ledger
     cumulative_realized_pnl: Decimal
+
+    intraday_high: Decimal | None = None
+    intraday_low: Decimal | None = None
+    nifty_high: float | None = None
+    nifty_low: float | None = None
     
     @property
     def net_pnl(self) -> Decimal:

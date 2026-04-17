@@ -82,6 +82,10 @@ def build_options_summary(
     positions: list[NuvamaOptionPosition],
     snapshot_date: date,
     cumulative_realized_pnl_map: dict[str, Decimal],
+    intraday_high: Decimal | None = None,
+    intraday_low: Decimal | None = None,
+    nifty_high: float | None = None,
+    nifty_low: float | None = None,
 ) -> NuvamaOptionsSummary:
     """Aggregate a list of options positions into a NuvamaOptionsSummary."""
     total_unrealized = sum((p.unrealized_pnl for p in positions), Decimal("0"))
@@ -97,4 +101,8 @@ def build_options_summary(
         total_unrealized_pnl=total_unrealized,
         total_realized_pnl_today=total_realized_today,
         cumulative_realized_pnl=total_cumulative_realized,
+        intraday_high=intraday_high,
+        intraday_low=intraday_low,
+        nifty_high=nifty_high,
+        nifty_low=nifty_low,
     )
