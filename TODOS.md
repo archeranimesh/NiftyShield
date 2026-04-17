@@ -63,12 +63,10 @@ Intent comments added to all four broad catches (dhan_verify.py:165,184 + nuvama
 
 `src/client/upstox_live.py:46` has `assert issubclass(type, type)` — reads like a placeholder that was never removed. Investigate and delete or replace with a real check.
 
-### TD-7: TODO format missing bug reference (§3.12)
+### ~~TD-7~~: TODO format missing bug reference (§3.12) — **DONE 2026-04-17**
 
-Current format: `# TODO: description`
-Required format: `# TODO: <issue-url-or-ref> — description`
-
-All existing `# TODO:` comments need a GitHub issue or reference link added. Low priority — only matters for searchability.
+All `# TODO:` comments updated to `# TODO: TD-7 — description` format per §3.12.
+2 in `src/portfolio/tracker.py`, 11 in `src/client/protocol.py`.
 
 ---
 

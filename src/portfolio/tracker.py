@@ -322,7 +322,7 @@ class PortfolioTracker:
         Remove the early return below once the OptionChain Pydantic
         model is defined and the extraction logic is in place.
         """
-        # TODO: Remove this early return once greeks extraction is implemented.
+        # TODO: TD-7 — remove this early return once greeks extraction is implemented.
         return {}
 
 
@@ -334,6 +334,6 @@ class PortfolioTracker:
         This is a placeholder — adapt to the actual OptionChain model
         once the Pydantic models for the option chain API are finalized.
         """
-        # TODO: Implement once OptionChain Pydantic model is defined.
+        # TODO: TD-7 — implement once OptionChain Pydantic model is defined.
         # Expected fields: iv, delta, theta, gamma, vega, oi, volume
         return None
