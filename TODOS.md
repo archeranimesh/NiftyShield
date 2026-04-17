@@ -4,6 +4,16 @@
 
 ## Open TODOs (priority order)
 
+### 0. Tests for Nuvama options + intraday features (protocol debt)
+
+Both features implemented outside Claude have no unit tests — violates the "every public function needs happy-path + edge-case test" protocol.
+
+Missing test coverage (add to `tests/unit/nuvama/`):
+
+- `test_models.py` — `NuvamaOptionPosition` construction/frozen, `NuvamaOptionsSummary` construction/frozen, `net_pnl` property (unrealized + cumulative_realized)
+- `test_options_reader.py` (new file) — `parse_options_positions()`: happy path (OPTIDX + OPTSTK), skips non-option rows, handles flat positions (net_qty=0), handles missing `resp.data.pos`, handles malformed record (KeyError/ValueError/InvalidOperation); `build_options_summary()`: aggregation math, intraday high/low propagation, empty positions list
+- `test_store.py` additions — `record_options_snapshot` upsert + idempotency, `get_cumulative_realized_pnl` cross-symbol aggregation, `get_options_snapshot_for_date` retrieval, `record_intraday_positions` inserts + purge-on-call, `get_intraday_extremes` max/min/nifty aggregation, empty-date returns `(None, None, None, None)`
+
 ### 1. Greeks capture
 Fix option chain call (`NSE_INDEX|Nifty 50`), define `OptionChain` Pydantic model, implement `_extract_greeks_from_chain()`.
 Fixture `nifty_chain_2026-04-07.json` already recorded in `tests/fixtures/responses/` — use it to drive model definition.
@@ -13,6 +23,10 @@ Blocked by: nothing. Next after Nuvama integration.
 Matplotlib script or React dashboard from `daily_snapshots` time series.
 Deferred until several weeks of snapshot history exist.
 `PortfolioSummary` dataclass already extracted — ready to query.
+
+### 4. Nuvama Session P&L Alignment
+Evaluate replacing "All-time Total P&L" in `nuvama_intraday_tracker.py` with "Session Total P&L" (Unrealized + Today's Realized) to strictly match the Nuvama mobile/web UI dashboard. 
+Current implementation adds historical ledger (+17k), which differs from Nuvama's -17k session view.
 
 ---
 
@@ -106,3 +120,4 @@ All `# TODO:` comments updated to `# TODO: TD-7 — description` format per §3.
 | 2026-04-15 | **Nuvama bond portfolio integration (TODO 0) — all 4 phases complete.** `src/nuvama/` module: `models.py` (NuvamaBondHolding + NuvamaBondSummary frozen dataclasses), `reader.py` (parse_bond_holdings, build_nuvama_summary, fetch_nuvama_portfolio), `store.py` (NuvamaStore — nuvama_positions + nuvama_holdings_snapshots tables). `scripts/seed_nuvama_positions.py` (6 instruments, idempotent, dry-run by default). `PortfolioSummary` extended with 6 nuvama_* fields (all default-zero). `daily_snapshot.py`: Nuvama fetch block in `_async_main` (non-fatal), historical reconstruction in `_historical_main`, Nuvama Bonds line in `_format_combined_summary`, nuvama fields in `_build_portfolio_summary`. 97 new tests (54 pydantic-dependent — all pass in Mac venv). |
 | 2026-04-16 | **Nuvama option PnL reporting complete.** Extended `src/nuvama/` to parse `NetPosition()`, fetch legacy cumulative PnL from db, and output realized/unrealized metrics. Added to `daily_snapshot.py` formatting logic to display Nuvama options distinct from tracking. |
 | 2026-04-17 | **Intraday tracking for options.** `nuvama_intraday_snapshots` table with 30-day retention loop created. `scripts/nuvama_intraday_tracker.py` fetches 5-minute sampling bounds (both options PnL and Upstox Nifty constraints) allowing native intraday insights. Python `Decimal` used to guard aggregations constraints against Float inaccuracies. Output wired into Telegram formatting properly (`M2M High/Low` and `Nifty High/Low`). |
+| 2026-04-17 | **Doc sync (Claude).** Updated CONTEXT.md: header date, nuvama models entry (NuvamaOptionPosition + NuvamaOptionsSummary), options_reader entry (build_options_summary), store entry (nuvama_options_snapshots table + 6 new methods), portfolio.py PortfolioSummary nuvama_options_* fields, summary.py nuvama_options_summary param, nuvama_intraday_tracker script description, removed duplicate CLAUDE.md entry, test coverage note. Added two DECISIONS.md entries (Intelligent EOD Snapshot pattern + Nuvama SDK os._exit() rule). Added TODO-0 for missing option/intraday tests. |

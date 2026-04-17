@@ -147,5 +147,5 @@ class NuvamaOptionsSummary:
     
     @property
     def net_pnl(self) -> Decimal:
-        """Total PnL including both current paper profit and all-time realized profit."""
-        return self.total_unrealized_pnl + self.cumulative_realized_pnl
+        """Total PnL including current paper profit, today's realized, and historical ledger."""
+        return self.total_unrealized_pnl + self.total_realized_pnl_today + self.cumulative_realized_pnl

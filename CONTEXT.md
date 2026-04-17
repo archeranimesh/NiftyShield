@@ -8,7 +8,7 @@
 
 ---
 
-## Current State (as of 2026-04-14)
+## Current State (as of 2026-04-17)
 
 ### What Exists (committed and working)
 
@@ -27,13 +27,13 @@ src/
 │   └── order_lifecycle.py    # Place → Modify → Cancel via V3 Order API (sandbox=True)
 ├── models/
 │   ├── __init__.py           # Re-exports all shared models from portfolio.py + mf.py for convenience.
-│   ├── portfolio.py          # Canonical home for all portfolio domain types: Leg, Strategy, DailySnapshot, Trade, TradeAction, Direction, ProductType, AssetType, PortfolioSummary. Migrated from src/portfolio/models.py (TODO 4, 2026-04-16). Monetary fields Decimal; P&L methods accept float|Decimal.
+│   ├── portfolio.py          # Canonical home for all portfolio domain types: Leg, Strategy, DailySnapshot, Trade, TradeAction, Direction, ProductType, AssetType, PortfolioSummary. Migrated from src/portfolio/models.py (TODO 4, 2026-04-16). Monetary fields Decimal; P&L methods accept float|Decimal. PortfolioSummary extended with 9 nuvama_options_* fields: nuvama_options_pnl/unrealized/realized/intraday_high/intraday_low/nuvama_nifty_high/nuvama_nifty_low/nuvama_options_day_delta/nuvama_options_available (all default-zero/False/None).
 │   └── mf.py                 # Canonical home for all MF domain types: MFTransaction, MFNavSnapshot, TransactionType, MFHolding. Migrated from src/mf/models.py (TODO 4, 2026-04-16).
 ├── portfolio/
 │   ├── CLAUDE.md             # Module context: Leg/Trade distinction, Decimal invariant, apply_trade_positions() overlay, strategy_name constraint
 │   ├── store.py              # SQLite: strategies, legs, daily_snapshots, trades. Trades methods: record_trade (idempotent), get_trades (strategy/leg filter, date ASC), get_position (net qty + weighted avg buy price), get_all_positions_for_strategy (all leg_roles → (net_qty, avg_price, instrument_key)), ensure_leg (auto-persist trade-only legs to get a DB id for snapshot recording; idempotent). entry_price/ltp/close/underlying_price/price stored as TEXT for Decimal precision. WAL + upsert semantics.
 │   ├── tracker.py            # PortfolioTracker: loads strategies, fetches LTPs, records snapshots. Trade overlay applied internally via _get_overlaid_strategy()/_get_all_overlaid_strategies() — compute_pnl, record_daily_snapshot, record_all_strategies all use trade-derived qty/entry_price automatically. Trade-only legs (e.g. LIQUIDBEES) with no DB id are auto-persisted via store.ensure_leg(). compute_pnl() returns StrategyPnL with Decimal total_pnl. Float LTPs from API converted via Decimal(str()) at boundary. apply_trade_positions() module-level pure function: overlays trade-derived qty/entry_price onto strategy Leg objects; appends trade-only legs as EQUITY/CNC; drops zero-net-qty legs.
-│   ├── summary.py            # Pure computation (TODO 5): _etf_current_value, _etf_cost_basis, _build_prev_prices, _compute_prev_mf_pnl, _compute_strategy_pnl_from_prices, _build_portfolio_summary. No I/O. Deferred imports for mf.tracker + portfolio.tracker to avoid circular deps at import time. Re-exported from daily_snapshot.py for backward compat.
+│   ├── summary.py            # Pure computation (TODO 5): _etf_current_value, _etf_cost_basis, _build_prev_prices, _compute_prev_mf_pnl, _compute_strategy_pnl_from_prices, _build_portfolio_summary. No I/O. Deferred imports for mf.tracker + portfolio.tracker to avoid circular deps at import time. Re-exported from daily_snapshot.py for backward compat. _build_portfolio_summary accepts optional nuvama_options_summary (NuvamaOptionsSummary | None) and populates all 9 nuvama_options_* fields on PortfolioSummary.
 │   ├── formatting.py         # Pure formatting (TODO 5): _format_protection_stats, _format_combined_summary. Depends on summary.py + PortfolioSummary. No I/O. Re-exported from daily_snapshot.py for backward compat.
 │   └── strategies/
 │       ├── __init__.py       # ALL_STRATEGIES registry
@@ -62,10 +62,10 @@ src/
 │   └── telegram.py           # TelegramNotifier: fire-and-forget sendMessage via raw requests (HTML parse_mode, <pre> block). build_notifier() returns None when env vars absent. send() never raises — catches Exception broadly, logs WARNING, returns False.
 ├── nuvama/
 │   ├── __init__.py           # Package marker
-│   ├── models.py             # Frozen dataclasses: NuvamaBondHolding (isin/qty/avg_price/ltp/chg_pct/hair_cut; cost_basis/current_value/pnl/pnl_pct/day_delta properties), NuvamaBondSummary (total_value/basis/pnl/pnl_pct/total_day_delta). All BOND classification.
+│   ├── models.py             # Frozen dataclasses: NuvamaBondHolding (isin/qty/avg_price/ltp/chg_pct/hair_cut; cost_basis/current_value/pnl/pnl_pct/day_delta properties), NuvamaBondSummary (total_value/basis/pnl/pnl_pct/total_day_delta). All BOND classification. NuvamaOptionPosition (trade_symbol/instrument_name/net_qty/avg_price/ltp/unrealized_pnl/realized_pnl_today). NuvamaOptionsSummary (snapshot_date/positions tuple/total_unrealized_pnl/total_realized_pnl_today/cumulative_realized_pnl/intraday_high/low/nifty_high/low; net_pnl property = unrealized + cumulative_realized).
 │   ├── reader.py             # parse_bond_holdings() (pure, joins positions dict for avg_price, skips _EXCLUDE_ISINS + missing positions with WARNING, catches InvalidOperation), build_nuvama_summary() (pure aggregation), fetch_nuvama_portfolio() (I/O orchestrator). _extract_rms_hdg() handles both resp.data.rmsHdg and eq.data.rmsHdg response paths.
-│   ├── options_reader.py     # parse_options_positions() captures F&O options positions via NetPosition() call, aggregating cumulative tracking points inline.
-│   └── store.py              # NuvamaStore: nuvama_positions (ISIN PK, avg_price TEXT, qty, label — seed once via seed_nuvama_positions.py), nuvama_holdings_snapshots (UNIQUE(isin, snapshot_date) upsert), nuvama_intraday_snapshots (30-day retention loop) and get_intraday_extremes(). 
+│   ├── options_reader.py     # parse_options_positions() (pure) — filters OPTIDX/OPTSTK from NetPosition() JSON, resolves avg_price from cfAvgSlPrc/cfAvgByPrc, skips non-option rows and malformed records. build_options_summary() (pure) — aggregates positions list + cumulative_realized_pnl_map + optional intraday/nifty bounds → NuvamaOptionsSummary.
+│   └── store.py              # NuvamaStore: nuvama_positions (ISIN PK, avg_price TEXT, qty, label — seed once), nuvama_holdings_snapshots (UNIQUE(isin, snapshot_date) upsert, get_prev_total_value() calendar-agnostic), nuvama_options_snapshots (PRIMARY KEY (trade_symbol, snapshot_date) upsert — record_options_snapshot/record_all_options_snapshots/get_options_snapshot_for_date/get_cumulative_realized_pnl aggregates realized_pnl_today across all historical rows per symbol), nuvama_intraday_snapshots (record_intraday_positions/purge_old_intraday 30-day retention/get_intraday_extremes — sums unrealized+realized per timestamp, returns max_pnl/min_pnl/nifty_high/nifty_low).
 ├── utils/
 │   ├── __init__.py           # Package marker.
 │   └── number_formatting.py  # fmt_inr(value, *, decimals, sign, width) — Indian numbering system (Lakhs/Crores). _group_indian() private helper. No I/O or dependencies beyond stdlib.
@@ -80,7 +80,7 @@ src/
 
 scripts/
 ├── daily_snapshot.py         # Thin I/O orchestration only (TODO 5 refactor). Live mode: fetches LTPs via await client.get_ltp() + Nifty spot, records snapshots, prints P&L, sends Telegram notification (non-fatal). Historical mode (--date YYYY-MM-DD): reads stored snapshots, computes P&L offline — no API call. _print_combined_summary() wraps _format_combined_summary() with print(). Pure computation in src/portfolio/summary.py; pure formatting in src/portfolio/formatting.py — re-exported here for backward compat. Live mode uses create_client(os.getenv("UPSTOX_ENV", "prod")) — UPSTOX_ENV=test runs against MockBrokerClient for local smoke-testing without a real token.
-├── nuvama_intraday_tracker.py # Invoked every 5 minutes by Cron; saves silent F&O snapshot and bounds to Nuvama DB for granular volatility graphing.
+├── nuvama_intraday_tracker.py # Invoked every 5 minutes by Cron (*/5 9-15 * * 1-5). Fetches Nuvama NetPosition() for options positions + Nifty 50 spot from Upstox batch LTP. Records per-leg intraday state via store.record_intraday_positions() (auto-purges rows > 30 days). os._exit() required — Nuvama SDK spawns a non-daemon background thread that hangs sys.exit().
 ├── send_test_telegram.py     # Smoke-test script. Reads TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID from .env, sends a sample P&L message. Exit code 0/1. Run before first cron to verify credentials.
 ├── seed_mf_holdings.py       # One-time CLI. Inserts 11 INITIAL MF transactions. Idempotent. --dry-run flag.
 ├── seed_trades.py            # Idempotent backfill of all finideas_ilts + finrakshak executions as Trade rows. build_trades() (pure) + seed_trades() (I/O). --dry-run flag. 7 trades total. strategy_name must match strategies table (finideas_ilts, finrakshak).
@@ -139,7 +139,6 @@ tests/
 
 ### What Does NOT Exist Yet
 
-- `src/nuvama/CLAUDE.md` — module context file not yet written
 - `src/nuvama/CLAUDE.md` — module context file not yet written
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/`, `src/streaming/` — all empty
 - `OptionChain` Pydantic model — not defined; `_fetch_greeks()` returns `{}` immediately
@@ -216,6 +215,7 @@ Strategy leg tables (instrument keys, entry prices, quantities, protected MF por
 - Client tests: `tests/unit/test_client.py`, `test_protocol.py`, `test_exceptions.py`, `test_factory.py`, `test_mock_client.py`, `test_upstox_live.py` (90+ tests)
 - Snapshot tests: `tests/unit/test_daily_snapshot_historical.py`, `test_daily_snapshot_helpers.py`, `test_notifications.py` (50+ tests)
 - Dhan tests: `tests/unit/dhan/` (90 tests — models, reader, store, daily_snapshot integration)
+- Nuvama tests: `tests/unit/nuvama/` (123 tests — bond models, bond store, reader, seed, portfolio summary integration; **⚠️ no tests yet for NuvamaOptionPosition/NuvamaOptionsSummary, parse_options_positions(), build_options_summary(), options store methods, or intraday store methods — see TODOS.md**)
 
 ---
 

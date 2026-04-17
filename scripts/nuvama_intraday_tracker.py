@@ -72,10 +72,20 @@ async def main() -> int:
     # 3. Save to database
     try:
         store.record_intraday_positions(now, float(nifty_spot), positions)
-        total_pnl = sum((p.unrealized_pnl for p in positions), Decimal("0"))
+        
+        # Calculate PnL Breakdown
+        unrealized = sum((p.unrealized_pnl for p in positions), Decimal("0"))
+        realized_today = sum((p.realized_pnl_today for p in positions), Decimal("0"))
+        historical_map = store.get_cumulative_realized_pnl()
+        historical_total = sum(historical_map.values(), Decimal("0"))
+        
+        total_realized = realized_today + historical_total
+        total_pnl = unrealized + total_realized
+        
         logger.info(
-            "Net PnL: {:+,.0f} | Recorded {:d} positions for intraday tracking (Nifty: {:,.2f}).".format(
-                total_pnl, len(positions), nifty_spot
+            "Total PnL: {:+,.0f} | Unrealized: {:+,.0f} | Realized: {:+,.0f} (Today: {:+,.0f}, Ledger: {:+,.0f}) | "
+            "Positions: {:d} | Nifty: {:,.2f}".format(
+                total_pnl, unrealized, total_realized, realized_today, historical_total, len(positions), nifty_spot
             )
         )
     except Exception as e:  # Intentional: isolate db failure
