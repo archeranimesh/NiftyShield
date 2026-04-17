@@ -46,6 +46,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 # Pure-computation helpers only need these types at import time — no I/O.
+from src.market_calendar.holidays import is_trading_day  # noqa: E402
 from src.models.portfolio import DailySnapshot, Strategy  # noqa: E402
 from src.portfolio.formatting import (  # noqa: E402
     _format_combined_summary,
@@ -618,6 +619,10 @@ def main() -> int:
         return _historical_main(snap_date, args.db_path)
 
     snap_date = date.today()
+    if not is_trading_day(snap_date):
+        print(f"[{now}] Market holiday ({snap_date.isoformat()}) — skipping snapshot.")
+        return 0
+
     print(f"[{now}] Daily snapshot for {snap_date.isoformat()}")
     return asyncio.run(_async_main(snap_date, args.db_path))
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from dotenv import load_dotenv
@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 from src.auth.nuvama_verify import load_api_connect
 from src.client.exceptions import LTPFetchError
 from src.client.factory import create_client
+from src.market_calendar.holidays import is_trading_day
 from src.nuvama.options_reader import parse_options_positions
 from src.nuvama.store import NuvamaStore
 
@@ -27,6 +28,10 @@ async def main() -> int:
     load_dotenv()
     logging.basicConfig(level=logging.INFO, force=True, format="%(levelname)s: %(message)s")
     now = datetime.now()
+
+    if not is_trading_day(date.today()):
+        logger.info("market_holiday date=%s — skipping intraday tracker", date.today())
+        return 0
     store = NuvamaStore()
 
     # 1. Fetch Nuvama options positions
