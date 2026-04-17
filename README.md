@@ -179,6 +179,17 @@ Loads the saved session and fetches live holdings. Expected output:
 
 Unlike Upstox, Nuvama does not require daily re-auth — the session token in `settings.json` survives until explicitly invalidated.
 
+### Nuvama Intraday Options Tracking (Cron)
+
+NiftyShield automatically tracks Nuvama options positional M2M Highs/Lows and captures corresponding Nifty Spot points.
+
+**Cron setup:** Run this silently structured cron hook every 5 minutes during market hours.
+```bash
+*/5 9-15 * * 1-5 cd /path/to/NiftyShield && .venv/bin/python -m scripts.nuvama_intraday_tracker
+```
+The tracker efficiently polls Nuvama + Upstox and permanently persists the 30-day bounding history (M2M max/min + Spot bounds) directly localized inside `portfolio.sqlite` to be naturally utilized during Daily Snapshots.
+
+
 ### Dhan Login (daily)
 
 NiftyShield monitors your Dhan portfolio for F&O P&L tracking and after-market holdings review. Dhan uses a manual 24-hour access token generated from their web portal.
@@ -226,6 +237,7 @@ This will:
 
 * Fetch latest market prices (LTP)
 * Compute P&L for each leg
+* Extract Nuvama Intraday High/Low Bounds
 * Aggregate strategy-level P&L
 * Store results in SQLite (`daily_snapshots` table)
 
@@ -413,6 +425,9 @@ All backtesting runs **fully offline** against local Parquet/SQLite stores. No A
 - [x] MF portfolio tracking (transactions, NAV snapshots, holdings P&L)
 - [x] Trade ledger (execution history, weighted avg cost basis, position queries)
 - [x] Atomic leg roll CLI (expiry rolls with single-transaction close + open)
+- [x] Nuvama portfolio monitoring (Bonds/Gold Bonds)
+- [x] Nuvama Options P&L fetch and reporting
+- [x] Nuvama Intraday tracker (5-minute M2M/Spot bounds snapshotting)
 - [ ] Option chain fetcher with Greeks
 - [ ] Historical data pipeline (active + expired)
 - [ ] Offline data bootstrap script

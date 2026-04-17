@@ -64,7 +64,8 @@ src/
 │   ├── __init__.py           # Package marker
 │   ├── models.py             # Frozen dataclasses: NuvamaBondHolding (isin/qty/avg_price/ltp/chg_pct/hair_cut; cost_basis/current_value/pnl/pnl_pct/day_delta properties), NuvamaBondSummary (total_value/basis/pnl/pnl_pct/total_day_delta). All BOND classification.
 │   ├── reader.py             # parse_bond_holdings() (pure, joins positions dict for avg_price, skips _EXCLUDE_ISINS + missing positions with WARNING, catches InvalidOperation), build_nuvama_summary() (pure aggregation), fetch_nuvama_portfolio() (I/O orchestrator). _extract_rms_hdg() handles both resp.data.rmsHdg and eq.data.rmsHdg response paths.
-│   └── store.py              # NuvamaStore: nuvama_positions (ISIN PK, avg_price TEXT, qty, label — seed once via seed_nuvama_positions.py), nuvama_holdings_snapshots (UNIQUE(isin, snapshot_date) upsert). get_positions() → ISIN→Decimal. get_prev_total_value() calendar-agnostic Python-Decimal sum.
+│   ├── options_reader.py     # parse_options_positions() captures F&O options positions via NetPosition() call, aggregating cumulative tracking points inline.
+│   └── store.py              # NuvamaStore: nuvama_positions (ISIN PK, avg_price TEXT, qty, label — seed once via seed_nuvama_positions.py), nuvama_holdings_snapshots (UNIQUE(isin, snapshot_date) upsert), nuvama_intraday_snapshots (30-day retention loop) and get_intraday_extremes(). 
 ├── utils/
 │   ├── __init__.py           # Package marker.
 │   └── number_formatting.py  # fmt_inr(value, *, decimals, sign, width) — Indian numbering system (Lakhs/Crores). _group_indian() private helper. No I/O or dependencies beyond stdlib.
@@ -79,6 +80,7 @@ src/
 
 scripts/
 ├── daily_snapshot.py         # Thin I/O orchestration only (TODO 5 refactor). Live mode: fetches LTPs via await client.get_ltp() + Nifty spot, records snapshots, prints P&L, sends Telegram notification (non-fatal). Historical mode (--date YYYY-MM-DD): reads stored snapshots, computes P&L offline — no API call. _print_combined_summary() wraps _format_combined_summary() with print(). Pure computation in src/portfolio/summary.py; pure formatting in src/portfolio/formatting.py — re-exported here for backward compat. Live mode uses create_client(os.getenv("UPSTOX_ENV", "prod")) — UPSTOX_ENV=test runs against MockBrokerClient for local smoke-testing without a real token.
+├── nuvama_intraday_tracker.py # Invoked every 5 minutes by Cron; saves silent F&O snapshot and bounds to Nuvama DB for granular volatility graphing.
 ├── send_test_telegram.py     # Smoke-test script. Reads TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID from .env, sends a sample P&L message. Exit code 0/1. Run before first cron to verify credentials.
 ├── seed_mf_holdings.py       # One-time CLI. Inserts 11 INITIAL MF transactions. Idempotent. --dry-run flag.
 ├── seed_trades.py            # Idempotent backfill of all finideas_ilts + finrakshak executions as Trade rows. build_trades() (pure) + seed_trades() (I/O). --dry-run flag. 7 trades total. strategy_name must match strategies table (finideas_ilts, finrakshak).
@@ -152,7 +154,8 @@ tests/
 - `underlying_price` will populate from 2026-04-06 onwards
 - Greeks columns are null across all snapshots
 - `trades` table seeded 2026-04-08 — 7 rows: finideas_ilts (6 legs including LIQUIDBEES) + finrakshak (1). EBBETF0431 net=465 @ avg ₹1388.01. **strategy_name migrated 2026-04-08:** `ILTS` → `finideas_ilts`, `FinRakshak` → `finrakshak` to match strategies table. Must use DB strategy names in all future `record_trade.py` calls.
-- Cron job set up: `45 15 * * 1-5` — snapshots accumulate automatically from Monday
+- `nuvama_intraday_snapshots` logging active on 2026-04-17 (30-day retention loop engaged automatically).
+- Cron jobs set up: `45 15 * * 1-5` for daily EOD options recording, plus `*/5 9-15 * * 1-5` for intraday extremes monitoring.
 
 ---
 
