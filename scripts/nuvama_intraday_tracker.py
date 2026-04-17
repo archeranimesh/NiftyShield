@@ -10,6 +10,7 @@ import asyncio
 import logging
 import os
 from datetime import datetime
+from decimal import Decimal
 
 from dotenv import load_dotenv
 
@@ -25,8 +26,6 @@ logger = logging.getLogger(__name__)
 async def main() -> int:
     load_dotenv()
     logging.basicConfig(level=logging.INFO, force=True, format="%(levelname)s: %(message)s")
-    logger.info("Starting intraday nuvama options tracking loop...")
-
     now = datetime.now()
     store = NuvamaStore()
 
@@ -40,6 +39,7 @@ async def main() -> int:
             format="%(asctime)s [%(levelname)s] %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S"
         )
+        logger.info("Starting intraday nuvama options tracking loop...")
         
         logger.info("Fetching NetPosition()...")
         response = api.NetPosition()
@@ -72,7 +72,12 @@ async def main() -> int:
     # 3. Save to database
     try:
         store.record_intraday_positions(now, float(nifty_spot), positions)
-        logger.info("Recorded %d positions for intraday tracking.", len(positions))
+        total_pnl = sum((p.unrealized_pnl for p in positions), Decimal("0"))
+        logger.info(
+            "Net PnL: {:+,.0f} | Recorded {:d} positions for intraday tracking (Nifty: {:,.2f}).".format(
+                total_pnl, len(positions), nifty_spot
+            )
+        )
     except Exception as e:  # Intentional: isolate db failure
         logger.error("Failed to record intraday positions: %s", e)
         return 1
