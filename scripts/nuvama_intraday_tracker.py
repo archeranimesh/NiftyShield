@@ -24,36 +24,34 @@ logger = logging.getLogger(__name__)
 
 async def main() -> int:
     load_dotenv()
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    logging.basicConfig(level=logging.INFO, force=True, format="%(levelname)s: %(message)s")
+    logger.info("Starting intraday nuvama options tracking loop...")
 
     now = datetime.now()
+    store = NuvamaStore()
 
     # 1. Fetch Nuvama options positions
     try:
+        logger.info("Logging into Nuvama...")
         api = load_api_connect()
+        logger.info("Fetching NetPosition()...")
         response = api.NetPosition()
-        if response.get("stat") != "Ok":
-            logger.error("Nuvama API returned non-Ok stat: %s", response)
-            return 1
 
-        store = NuvamaStore()
-        cumulative_pnl = store.get_cumulative_realized_pnl()
-
-        positions, _ = parse_options_positions(
-            response=response,
-            cumulative_realized_pnl=cumulative_pnl,
-        )
+        positions = parse_options_positions(response)
         if not positions:
             logger.info("No Nuvama options positions found.")
             return 0
 
     except Exception as e:  # Intentional: isolate all upstream Nuvama failures
         logger.error("Failed to fetch Nuvama positions: %s", e)
+        import traceback
+        traceback.print_exc()
         return 1
 
     # 2. Fetch Nifty Spot from Upstox
     nifty_spot = 0.0
     try:
+        logger.info("Fetching Nifty LTP from Upstox...")
         env = os.getenv("UPSTOX_ENV", "prod")
         client = create_client(env)
         NIFTY_INDEX_KEY = "NSE_INDEX|Nifty 50"
@@ -76,4 +74,7 @@ async def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(asyncio.run(main()))
+    exit_code = asyncio.run(main())
+    # os._exit is absolutely required because the Nuvama APIConnect SDK
+    # launches a non-daemon background thread that will indefinitely hang standard exits.
+    os._exit(exit_code)
