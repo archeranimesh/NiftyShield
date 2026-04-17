@@ -32,8 +32,10 @@ async def main() -> int:
 
     # 1. Fetch Nuvama options positions
     try:
-        logger.info("Logging into Nuvama...")
         api = load_api_connect()
+        # Nuvama SDK removes all standard logging handlers on __init__. We must restore it.
+        logging.basicConfig(level=logging.INFO, force=True, format="%(levelname)s: %(message)s")
+        
         logger.info("Fetching NetPosition()...")
         response = api.NetPosition()
 
