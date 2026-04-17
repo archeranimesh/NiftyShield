@@ -82,6 +82,9 @@ def load_api_connect(env_path: Path = Path(".env")) -> Any:
     original_cwd = Path.cwd()
     os.chdir(session_dir)
     try:
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        
         # download_contract=False: never download instruments.zip during a connectivity
         # check — that is a separate, deliberate operation.
         api = APIConnect(api_key, api_secret, "", False, conf_arg)
