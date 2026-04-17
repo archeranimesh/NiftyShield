@@ -4,84 +4,15 @@
 
 ## Open TODOs (priority order)
 
-> **Note:** The enterprise architecture refactoring plan has been broken down into strictly ordered Agile User Stories. Please cross-reference [JIRA.md](file:///Users/abhadra/myWork/myCode/python/NiftyShield/JIRA.md) for the active backlog of architectural optimization tasks!
-
-### ~~0. Nuvama bond portfolio integration~~ — **DONE (2026-04-15)**
-
-New module `src/nuvama/` fetching bond holdings from Nuvama APIConnect and adding them to the daily snapshot Bonds section.
-
-**Schema probe completed 2026-04-15.** Key findings:
-- `rmsHdg` records have: `isin`, `cpName`, `ltp`, `totalQty`, `totalVal`, `chgP`, `exc`, `hairCut`, `sym`, `trdSym`, `dpName`, `asTyp`. No `avgPrice`.
-- Cost basis seeded manually via `scripts/seed_nuvama_positions.py` into `nuvama_positions` table in `portfolio.sqlite`.
-- Day-change delta derived from `chgP` field (percent) — no prior snapshot needed.
-- LIQUIDBEES (`INF732E01037`) excluded by ISIN (already tracked in ILTS strategy).
-- All holdings classified as BOND (Nuvama account is bonds-only).
-
-**Phase plan:**
-1. `src/nuvama/` models + reader (pure functions) + tests → commit
-2. `src/nuvama/store.py` + `scripts/seed_nuvama_positions.py` + tests → commit
-3. `src/portfolio/models.py` — add `nuvama_*` fields to `PortfolioSummary` + tests → commit
-4. `scripts/daily_snapshot.py` wiring (`_async_main`, `_build_portfolio_summary`, `_format_combined_summary`) + tests → commit
-
-**Known positions (for seed script):**
-
-| ISIN | Instrument | Qty | Avg Price |
-|---|---|---|---|
-| `INE532F07FD3` | EFSL 10% NCD 2034 | 700 | ₹1,000.00 |
-| `INE532F07EC8` | EFSL 9.20% NCD 2026 | 500 | ₹1,000.00 |
-| `INE532F07DK3` | EFSL 9.67% NCD 2028 | 1,200 | ₹1,001.06 |
-| `INE532F07FN2` | EFSL 9.67% NCD 2029 | 700 | ₹1,000.00 |
-| `IN0020070069` | G-Sec 8.28% 2027 | 2,000 | ₹109.00 |
-| `IN0020230168` | SGB 2031 2.50% | 50 | ₹6,199.00 |
-
 ### 1. Greeks capture
 Fix option chain call (`NSE_INDEX|Nifty 50`), define `OptionChain` Pydantic model, implement `_extract_greeks_from_chain()`.
 Fixture `nifty_chain_2026-04-07.json` already recorded in `tests/fixtures/responses/` — use it to drive model definition.
 Blocked by: nothing. Next after Nuvama integration.
 
-### ~~2. `scripts/roll_leg.py`~~ — **DONE (2026-04-15)**
-`PortfolioStore.record_roll(close_trade, open_trade)` added — single `_connect` block, both INSERTs atomic. `scripts/roll_leg.py` CLI: `--old-*/--new-*` flag pairs, `_build_trades()` pure function, `--dry-run`. 14 new tests (4 store + 10 script). 599 total, all pre-existing failures unchanged.
-
 ### 3. P&L visualization
 Matplotlib script or React dashboard from `daily_snapshots` time series.
 Deferred until several weeks of snapshot history exist.
 `PortfolioSummary` dataclass already extracted — ready to query.
-
-### ~~5. Split `scripts/daily_snapshot.py` into focused modules~~ — **DONE (2026-04-16)**
-
-Four commits:
-- Phase 0 (`refactor(mf)`): `_aggregate` → `aggregate_mf_pnl`, `_scheme_pnl` → `compute_scheme_pnl` in `src/mf/tracker.py`.
-- Phase 1 (`refactor(portfolio)`): `src/portfolio/summary.py` — 6 pure computation functions extracted.
-- Phase 2 (`refactor(portfolio)`): `src/portfolio/formatting.py` — 2 pure formatting functions extracted.
-- Phase 3 (`refactor(scripts)`): `daily_snapshot.py` slimmed to I/O orchestration only; CONTEXT.md updated.
-
-All functions re-exported from `daily_snapshot.py` for backward compatibility. Test count unchanged (717 passing, 20 pre-existing failures).
-
-### 6. Fuzzy instrument search (`rapidfuzz`) — **DONE (2026-04-15)**
-`InstrumentLookup.search()` upgraded: `exact(1.0) > prefix(0.92) > fuzzy` ranking via `_score_query()` + `_best_score()`. `min_score` param added. 27 tests in `tests/unit/instruments/test_lookup.py`.
-
-**Deployment step: DONE (2026-04-16).** `RapidFuzz==3.14.5` pinned in `requirements.txt`. Fallback to `difflib` remains for environments without it, but rapidfuzz is ~10–50× faster on the full NSE BOD file (~100k instruments).
-
-### ~~4. `src/models/` migration~~ — **DONE (2026-04-16)**
-`src/models/portfolio.py` + `src/models/mf.py` created. All consumers in `src/`, `scripts/`, and `tests/` updated (34 import lines). Old `src/portfolio/models.py` and `src/mf/models.py` deleted. `protocol.py` stub comment updated to reflect `src/models/` now exists. Zero old-path imports remaining.
-
-### ~~7. Fix pre-existing test failures~~ — **DONE (2026-04-16)**
-
-20 failures resolved in one commit. 737 passing, 0 failures.
-
-- **7a** (`pytest-asyncio`): Added `pytest-asyncio==1.3.0` to `requirements.txt`, created `pytest.ini` with `asyncio_mode = auto`. 12 async tests in `test_upstox_live.py` now pass.
-- **7b** (nuvama verify): Updated 3 tests to assert empty-list return / `True` result instead of `KeyError`, matching `parse_holdings()` two-path fallback behaviour.
-- **7c** (bond formatting): Updated 3 stale assertions in `test_daily_snapshot_dhan.py` and `test_daily_snapshot_nuvama.py` to match the waterfall layout (`"├ Nuvama Bonds"`, `"── Bonds"`, etc.).
-- **7d** (`PortfolioStore` `str` vs `Path`): Changed `__init__` signature to `Path | str`; coerces via `Path(db_path)` with empty-string guard.
-- **7e** (historical delta label): Updated assertions from `"Δday"` to `"📊 Today:"` in `test_daily_snapshot_historical.py`.
-
-### ~~8. Format numerical values with Indian number format~~ — **DONE (2026-04-16)**
-
-`src/utils/number_formatting.py` — `fmt_inr(value, *, decimals, sign, width)` with `_group_indian()` helper. Groups last 3 digits then pairs leftward (1,39,12,790 style). 37 tests in `tests/unit/utils/test_number_formatting.py`.
-
-`src/portfolio/formatting.py` — all `{:,.0f}` monetary format calls replaced with `fmt_inr()`. Both waterfall and fallback paths covered. 6 test assertions updated in `test_daily_snapshot_helpers.py`, `test_daily_snapshot_dhan.py`, `test_daily_snapshot_nuvama.py`.
-
-774 tests, all green.
 
 ---
 

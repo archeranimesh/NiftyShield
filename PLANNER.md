@@ -8,9 +8,6 @@
 
 ## Current Sprint (April 2026)
 
-### ~~Context reorganisation~~ — DONE (2026-04-12)
-CONTEXT.md split + DECISIONS.md + REFERENCES.md + TODOS.md + PLANNER.md. Module CLAUDE.md files, commit skill, code-reviewer + test-runner agents, PROJECT_INSTRUCTIONS_DRAFT.md, CODE_REVIEW.md archived.
-
 ### Next up: Greeks capture
 - Define `OptionChain` Pydantic model using `tests/fixtures/responses/nifty_chain_2026-04-07.json`
 - Implement `_extract_greeks_from_chain()` in `src/portfolio/tracker.py`
@@ -18,18 +15,9 @@ CONTEXT.md split + DECISIONS.md + REFERENCES.md + TODOS.md + PLANNER.md. Module 
 - Store Greeks columns in `daily_snapshots` (columns exist, currently null)
 - Tests: fixture-driven, fully offline
 
-### After Greeks: `scripts/roll_leg.py`
-- Atomic close + open in a single DB transaction
-- Hard deadline: JUN 2026 expiry roll on 2026-06-30
-- Validate both legs via `Trade` model before writing
-- Print updated net position after roll
-
 ---
 
 ## Near-Term (May–June 2026)
-
-### ~~`src/models/` migration~~ — **DONE (2026-04-16)**
-`src/models/portfolio.py` + `src/models/mf.py` live at canonical paths. `protocol.py` remaining `X = Any` stubs are for execution/streaming models not yet built — they will be replaced when those modules are created.
 
 ### FinRakshak effectiveness tracking
 Automated monthly report: FinRakshak P&L vs MF portfolio drawdown.
@@ -144,11 +132,6 @@ Extract the exponential backoff loop (configurable retries 0–5, base sleep * 2
 Pros: eliminates the sync/async mismatch, removes the only sync network call, cleaner `UpstoxLiveClient` delegation.
 Cons: larger change, breaks existing `test_client.py` tests, needs aiohttp fixture pattern.
 Status: deferred until order execution is unblocked (natural refactor moment).
-
-**`src/models/` timing:**
-Option A: migrate now before strategy engine (cleaner start for new modules).
-Option B: wait until strategy engine sprint (one large refactor vs two smaller ones).
-Status: leaning Option B — no current consumers need shared models urgently.
 
 **Nuvama order execution:**
 Currently read-only. Evaluate whether to wire order execution for Nuvama's bond/NCD legs

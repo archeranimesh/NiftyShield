@@ -97,8 +97,11 @@ scripts/
     └── options-strategist.md # Opus: delta-neutral sizing, IC/strangle design, risk module logic (src/risk/ scope)
 
 docs/archive/
-├── CODE_REVIEW_2026-04-04.md        # Full codebase code review from foundation sprint
-└── daily_snapshot_old_2026-04-12.py # Pre-factory.py version of daily_snapshot script
+├── CODE_REVIEW_2026-04-04.md              # Full codebase code review from foundation sprint
+├── daily_snapshot_old_2026-04-12.py       # Pre-factory.py version of daily_snapshot script
+├── JIRA_enterprise_plan_2026-04-12.md     # Speculative SQLAlchemy/loguru/UoW architecture plan — never activated
+├── PROJECT_INSTRUCTIONS_DRAFT_2026-04-12.md # Claude Desktop instructions draft — superseded by live project settings
+└── PROMPT_TEMPLATE_2026-04-12.md          # Session prompt template — superseded by INSTRUCTION.md
 
 tests/
 ├── unit/

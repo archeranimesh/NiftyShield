@@ -15,7 +15,6 @@
 | `TODOS.md` | Open work + session log | Starting new feature, reviewing priority |
 | `PLANNER.md` | Sprint roadmap, blocked items | Multi-session planning |
 | `src/<module>/CLAUDE.md` | Module-specific invariants | Auto-loaded when you name the module |
-| `PROJECT_INSTRUCTIONS_DRAFT.md` | Trimmed project instructions | Paste into Claude Desktop project settings |
 
 ---
 
@@ -204,11 +203,11 @@ EOF
 
 After significant refactors or new modules:
 ```
-Update PROJECT_INSTRUCTIONS_DRAFT.md to reflect [what changed].
-Keep it trimmed — anything now in CONTEXT.md or DECISIONS.md should not be duplicated here.
+Update the Claude Desktop project instructions to reflect [what changed].
+Keep it trimmed — anything now in CONTEXT.md or DECISIONS.md should not be duplicated there.
 ```
 
-Then copy the contents into Claude Desktop → Project → Instructions to replace the old version.
+The live project instructions live in Claude Desktop → Project → Instructions directly.
 
 ---
 
