@@ -105,3 +105,42 @@ class NuvamaBondSummary:
 
     # Day-change (sum of per-holding day_delta)
     total_day_delta: Decimal
+
+
+@dataclass(frozen=True)
+class NuvamaOptionPosition:
+    """A single Nuvama F&O Option positional holding.
+
+    Attributes:
+        trade_symbol: The unique trading symbol (e.g. 'NIFTY2642123000PE').
+        instrument_name: Human readable name (e.g. 'NIFTY 21 APR PE 23000').
+        net_qty: Net quantity held (negative means short).
+        avg_price: The carry-forward average price (cfAvgSlPrc or cfAvgByPrc).
+        ltp: Last Traded Price.
+        unrealized_pnl: Unrealized profit/loss.
+        realized_pnl_today: Profit/loss realized today.
+    """
+    trade_symbol: str
+    instrument_name: str
+    net_qty: int
+    avg_price: Decimal
+    ltp: Decimal
+    unrealized_pnl: Decimal
+    realized_pnl_today: Decimal
+
+
+@dataclass(frozen=True)
+class NuvamaOptionsSummary:
+    """Aggregated Nuvama Options PnL status."""
+    snapshot_date: date
+    positions: tuple[NuvamaOptionPosition, ...]
+    
+    total_unrealized_pnl: Decimal
+    total_realized_pnl_today: Decimal
+    # Represents the historical sum of realized PnL from the ledger
+    cumulative_realized_pnl: Decimal
+    
+    @property
+    def net_pnl(self) -> Decimal:
+        """Total PnL including both current paper profit and all-time realized profit."""
+        return self.total_unrealized_pnl + self.cumulative_realized_pnl

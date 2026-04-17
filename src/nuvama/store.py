@@ -41,6 +41,20 @@ CREATE TABLE IF NOT EXISTS nuvama_holdings_snapshots (
 )
 """
 
+_CREATE_OPTIONS_SNAPSHOTS = """
+CREATE TABLE IF NOT EXISTS nuvama_options_snapshots (
+    snapshot_date       TEXT NOT NULL,
+    trade_symbol        TEXT NOT NULL,
+    instrument_name     TEXT NOT NULL,
+    net_qty             INTEGER NOT NULL,
+    avg_price           TEXT NOT NULL,
+    ltp                 TEXT NOT NULL,
+    unrealized_pnl      TEXT NOT NULL,
+    realized_pnl_today  TEXT NOT NULL,
+    PRIMARY KEY (trade_symbol, snapshot_date)
+)
+"""
+
 
 class NuvamaStore:
     """Read/write access to Nuvama tables in portfolio.sqlite."""
@@ -58,6 +72,7 @@ class NuvamaStore:
         with connect(self._db_path) as conn:
             conn.execute(_CREATE_POSITIONS)
             conn.execute(_CREATE_SNAPSHOTS)
+            conn.execute(_CREATE_OPTIONS_SNAPSHOTS)
 
     # ------------------------------------------------------------------
     # Positions (cost basis)
@@ -241,3 +256,86 @@ class NuvamaStore:
         if not rows:
             return None
         return sum((Decimal(r["current_value"]) for r in rows), Decimal("0"))
+
+    # ------------------------------------------------------------------
+    # Options Snapshots
+    # ------------------------------------------------------------------
+
+    def record_options_snapshot(
+        self,
+        snapshot_date: date,
+        trade_symbol: str,
+        instrument_name: str,
+        net_qty: int,
+        avg_price: Decimal,
+        ltp: Decimal,
+        unrealized_pnl: Decimal,
+        realized_pnl_today: Decimal,
+    ) -> None:
+        """Upsert one options holding snapshot row."""
+        with connect(self._db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO nuvama_options_snapshots
+                    (snapshot_date, trade_symbol, instrument_name, net_qty, avg_price, ltp, unrealized_pnl, realized_pnl_today)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(trade_symbol, snapshot_date) DO UPDATE SET
+                    instrument_name    = excluded.instrument_name,
+                    net_qty            = excluded.net_qty,
+                    avg_price          = excluded.avg_price,
+                    ltp                = excluded.ltp,
+                    unrealized_pnl     = excluded.unrealized_pnl,
+                    realized_pnl_today = excluded.realized_pnl_today
+                """,
+                (
+                    snapshot_date.isoformat(),
+                    trade_symbol,
+                    instrument_name,
+                    net_qty,
+                    str(avg_price),
+                    str(ltp),
+                    str(unrealized_pnl),
+                    str(realized_pnl_today),
+                ),
+            )
+
+    def record_all_options_snapshots(
+        self,
+        holdings: list,
+        snapshot_date: date,
+    ) -> None:
+        """Upsert snapshot rows for a list of NuvamaOptionPosition objects."""
+        for h in holdings:
+            self.record_options_snapshot(
+                snapshot_date=snapshot_date,
+                trade_symbol=h.trade_symbol,
+                instrument_name=h.instrument_name,
+                net_qty=h.net_qty,
+                avg_price=h.avg_price,
+                ltp=h.ltp,
+                unrealized_pnl=h.unrealized_pnl,
+                realized_pnl_today=h.realized_pnl_today,
+            )
+
+    def get_cumulative_realized_pnl(self) -> dict[str, Decimal]:
+        """Return cumulative realized PnL grouped by trade_symbol across all snapshots."""
+        with connect(self._db_path) as conn:
+            rows = conn.execute(
+                "SELECT trade_symbol, realized_pnl_today FROM nuvama_options_snapshots"
+            ).fetchall()
+        
+        result: dict[str, Decimal] = {}
+        for row in rows:
+            sym = row["trade_symbol"]
+            val = Decimal(row["realized_pnl_today"])
+            result[sym] = result.get(sym, Decimal("0")) + val
+        return result
+
+    def get_options_snapshot_for_date(self, snapshot_date: date) -> list[dict]:
+        """Return all options snapshot rows for a given date."""
+        with connect(self._db_path) as conn:
+            rows = conn.execute(
+                "SELECT * FROM nuvama_options_snapshots WHERE snapshot_date = ?",
+                (snapshot_date.isoformat(),),
+            ).fetchall()
+        return [dict(r) for r in rows]

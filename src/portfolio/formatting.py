@@ -62,6 +62,7 @@ def _format_combined_summary(
     snap_date: date | None = None,
     dhan_summary: object | None = None,
     nuvama_summary: object | None = None,
+    nuvama_options_summary: object | None = None,
 ) -> str:
     """Build the combined portfolio summary as a formatted string.
 
@@ -89,6 +90,7 @@ def _format_combined_summary(
         snap_date: Snapshot date stored in the summary (defaults to today).
         dhan_summary: DhanPortfolioSummary, or None if Dhan unavailable.
         nuvama_summary: NuvamaBondSummary, or None if Nuvama unavailable.
+        nuvama_options_summary: NuvamaOptionsSummary, or None if unavailable.
 
     Returns:
         Multi-line formatted summary string (no trailing newline).
@@ -103,6 +105,7 @@ def _format_combined_summary(
         prev_mf_pnl=prev_mf_pnl,
         dhan_summary=dhan_summary,
         nuvama_summary=nuvama_summary,
+        nuvama_options_summary=nuvama_options_summary,
     )
 
     has_deltas = summary.total_day_delta is not None
@@ -180,6 +183,11 @@ def _format_combined_summary(
             f"  {'Derivatives':<14} {fmt_inr(options_day, sign=True, width=12)}"
             f"  {'▲' if options_day >= 0 else '▼'}"
         )
+        lines.append(f"  {'├ Finideas P&L':<14} {fmt_inr(summary.options_pnl, sign=True, width=12)}")
+        if summary.nuvama_options_available:
+            lines.append(f"  {'└ Nuvama P&L':<14} {fmt_inr(summary.nuvama_options_pnl, sign=True, width=12)}")
+        else:
+            lines.append(f"  {'└ Nuvama P&L':<14} [unavailable]")
         lines.append(SEP)
         lines.append(f"  {'Net':<14} {fmt_inr(summary.total_day_delta, sign=True, width=12)}  {status_emoji}")
 
@@ -194,8 +202,11 @@ def _format_combined_summary(
                 f"  Hedge Δ     {fmt_inr(summary.finrakshak_day_delta, sign=True, width=14)}",
                 SEP,
                 f"  Net         {fmt_inr(net, sign=True, width=14)}  {verdict}",
-                f"  Options P&L {fmt_inr(summary.options_pnl, sign=True, width=14)}",
             ]
+            if summary.nuvama_options_available:
+                lines.append("")
+                lines.append(f"  Nuvama M2M P&L      {fmt_inr(summary.nuvama_options_unrealized, sign=True, width=14)}")
+                lines.append(f"  Nuvama Realized     {fmt_inr(summary.nuvama_options_realized, sign=True, width=14)}")
 
         # ── Context line: total value + all-time P&L (signal vs scoreboard) ──
         lines += [
@@ -289,9 +300,14 @@ def _format_combined_summary(
         lines.append("")
         lines.append("  ── Derivatives ────────────────────────────────────────")
         lines.append(
-            f"  Options net P&L     : {fmt_inr(summary.options_pnl, sign=True, width=15)}"
+            f"  Upstox options P&L  : {fmt_inr(summary.options_pnl, sign=True, width=15)}"
             f"{_delta(summary.options_day_delta)}"
         )
+        if summary.nuvama_options_available:
+            lines.append(
+                f"  Nuvama options P&L  : {fmt_inr(summary.nuvama_options_pnl, sign=True, width=15)}"
+                f"{_delta(summary.nuvama_options_day_delta)}"
+            )
 
         # ── Total section ───────────────────────────────────────────────
         lines.append("")

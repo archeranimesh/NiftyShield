@@ -168,6 +168,7 @@ def _build_portfolio_summary(
     prev_mf_pnl: object | None = None,
     dhan_summary: object | None = None,
     nuvama_summary: object | None = None,
+    nuvama_options_summary: object | None = None,
 ) -> PortfolioSummary:
     """Compute combined portfolio values into a PortfolioSummary.
 
@@ -224,9 +225,17 @@ def _build_portfolio_summary(
     nuvama_bd_pnl_pct = nuvama_summary.total_pnl_pct if nuvama_summary else None  # type: ignore[union-attr]
     nuvama_bd_day_delta = nuvama_summary.total_day_delta if nuvama_summary else None  # type: ignore[union-attr]
 
+    # ── Nuvama options component ─────────
+    nuvama_options_available = nuvama_options_summary is not None
+    nuvama_options_pnl = nuvama_options_summary.net_pnl if nuvama_options_summary else Decimal("0")  # type: ignore[union-attr]
+    nuvama_options_unrealized = nuvama_options_summary.total_unrealized_pnl if nuvama_options_summary else Decimal("0")  # type: ignore[union-attr]
+    nuvama_options_realized = (
+        nuvama_options_summary.total_realized_pnl_today + nuvama_options_summary.cumulative_realized_pnl
+    ) if nuvama_options_summary else Decimal("0")  # type: ignore[union-attr]
+
     total_value = mf_value + etf_value + options_pnl + dhan_eq_value + dhan_bd_value + nuvama_bd_value
     total_invested = mf_invested + etf_basis + dhan_eq_basis + dhan_bd_basis + nuvama_bd_basis
-    total_pnl = mf_pnl_amt + (etf_value - etf_basis) + options_pnl + dhan_eq_pnl + dhan_bd_pnl + nuvama_bd_pnl
+    total_pnl = mf_pnl_amt + (etf_value - etf_basis) + options_pnl + dhan_eq_pnl + dhan_bd_pnl + nuvama_bd_pnl + nuvama_options_pnl
     total_pnl_pct = (
         (total_pnl / total_invested * 100).quantize(Decimal("0.01"))
         if total_invested
@@ -317,4 +326,8 @@ def _build_portfolio_summary(
         nuvama_bond_pnl_pct=nuvama_bd_pnl_pct,
         nuvama_bond_day_delta=nuvama_bd_day_delta,
         nuvama_available=nuvama_available,
+        nuvama_options_pnl=nuvama_options_pnl,
+        nuvama_options_unrealized=nuvama_options_unrealized,
+        nuvama_options_realized=nuvama_options_realized,
+        nuvama_options_available=nuvama_options_available,
     )

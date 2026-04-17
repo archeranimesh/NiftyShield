@@ -71,6 +71,7 @@ def _print_combined_summary(
     snap_date: date | None = None,
     dhan_summary: object | None = None,
     nuvama_summary: object | None = None,
+    nuvama_options_summary: object | None = None,
 ) -> None:
     """Print the combined portfolio summary including date header and all sections.
 
@@ -86,10 +87,11 @@ def _print_combined_summary(
         snap_date: Snapshot date stored in the summary (defaults to today).
         dhan_summary: DhanPortfolioSummary, or None if unavailable.
         nuvama_summary: NuvamaBondSummary, or None if unavailable.
+        nuvama_options_summary: NuvamaOptionsSummary, or None if unavailable.
     """
     print(_format_combined_summary(
         strategies, prices, strategy_pnls, mf_pnl, prev_snapshots, prev_mf_pnl,
-        snap_date, dhan_summary, nuvama_summary,
+        snap_date, dhan_summary, nuvama_summary, nuvama_options_summary,
     ))
 
 
@@ -248,6 +250,34 @@ def _historical_main(snap_date: date, db_path: Path) -> int:
     except Exception as e:  # noqa: BLE001
         print(f"  WARNING: Nuvama historical lookup failed — {e}")
 
+    # ── Nuvama options from stored snapshots (non-fatal) ─────────
+    nuvama_options_summary = None
+    try:
+        from src.nuvama.options_reader import build_options_summary
+        from src.nuvama.models import NuvamaOptionPosition
+
+        options_rows = nuvama_store.get_options_snapshot_for_date(snap_date)
+        if options_rows:
+            pos_list = [
+                NuvamaOptionPosition(
+                    trade_symbol=r["trade_symbol"],
+                    instrument_name=r["instrument_name"],
+                    net_qty=r["net_qty"],
+                    avg_price=Decimal(r["avg_price"]),
+                    ltp=Decimal(r["ltp"]),
+                    unrealized_pnl=Decimal(r["unrealized_pnl"]),
+                    realized_pnl_today=Decimal(r["realized_pnl_today"]),
+                )
+                for r in options_rows
+            ]
+            cumulative_map = nuvama_store.get_cumulative_realized_pnl()
+            nuvama_options_summary = build_options_summary(pos_list, snap_date, cumulative_map)
+            print(f"  Nuvama options: {len(pos_list)} holding(s) from stored snapshot")
+        else:
+            print(f"  No Nuvama options snapshots found for {snap_date.isoformat()}.")
+    except Exception as e:  # noqa: BLE001
+        print(f"  WARNING: Nuvama options historical lookup failed — {e}")
+
     _print_combined_summary(
         strategies, prices, strategy_pnls, mf_pnl,
         prev_snapshots=prev_snapshots,
@@ -255,6 +285,7 @@ def _historical_main(snap_date: date, db_path: Path) -> int:
         snap_date=snap_date,
         dhan_summary=dhan_summary,
         nuvama_summary=nuvama_summary,
+        nuvama_options_summary=nuvama_options_summary,
     )
     print("\n  Done.")
     return 0
@@ -463,20 +494,51 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
         nuvama_store = NuvamaStore(db_path)
         positions = nuvama_store.get_positions()
         if positions:
-            nuvama_api = load_api_connect()
-            nuvama_summary = fetch_nuvama_portfolio(nuvama_api, positions, snap_date)
-            nuvama_store.record_all_snapshots(list(nuvama_summary.holdings), snap_date)
-            print(
-                f"  Nuvama bonds: {len(nuvama_summary.holdings)} holding(s)  "
-                f"₹{nuvama_summary.total_value:,.0f}  "
-                f"P&L {nuvama_summary.total_pnl:+,.0f}"
-            )
+            try:
+                from src.auth.nuvama_verify import load_api_connect
+                nuvama_api_instance = load_api_connect()
+                nuvama_summary = fetch_nuvama_portfolio(nuvama_api_instance, positions, snap_date)
+                nuvama_store.record_all_snapshots(list(nuvama_summary.holdings), snap_date)
+                print(
+                    f"  Nuvama bonds: {len(nuvama_summary.holdings)} holding(s)  "
+                    f"₹{nuvama_summary.total_value:,.0f}  "
+                    f"P&L {nuvama_summary.total_pnl:+,.0f}"
+                )
+            except (ValueError, FileNotFoundError) as e:
+                print(f"  Nuvama bonds: skipped — {e}")
+                nuvama_api_instance = None
         else:
-            print("  Nuvama: skipped — no positions seeded (run seed_nuvama_positions.py --write)")
-    except (ValueError, FileNotFoundError) as e:
-        print(f"  Nuvama: skipped — {e}")
+            print("  Nuvama bonds: skipped — no positions seeded.")
     except Exception as e:  # noqa: BLE001
         print(f"  WARNING: Nuvama bond snapshot failed — {e}")
+        nuvama_api_instance = None
+
+    # ── Nuvama options portfolio snapshot (non-fatal) ─────────────
+    nuvama_options_summary = None
+    try:
+        from src.nuvama.options_reader import parse_options_positions, build_options_summary
+
+        if 'nuvama_api_instance' not in locals() or nuvama_api_instance is None:
+            from src.auth.nuvama_verify import load_api_connect
+            nuvama_api_instance = load_api_connect()
+
+        raw_netpos = nuvama_api_instance.NetPosition()
+        options_pos = parse_options_positions(raw_netpos)
+        if options_pos:
+            nuvama_store.record_all_options_snapshots(options_pos, snap_date)
+            cumulative_map = nuvama_store.get_cumulative_realized_pnl()
+            nuvama_options_summary = build_options_summary(options_pos, snap_date, cumulative_map)
+            print(
+                f"  Nuvama options: {len(options_pos)} position(s)  "
+                f"Unrealized P&L {nuvama_options_summary.total_unrealized_pnl:+,.0f}  "
+                f"Net P&L {nuvama_options_summary.net_pnl:+,.0f}"
+            )
+        else:
+            print("  Nuvama options: skipped — no active positions found.")
+    except (ValueError, FileNotFoundError) as e:
+        print(f"  Nuvama options: skipped — {e}")
+    except Exception as e:  # noqa: BLE001
+        print(f"  WARNING: Nuvama options snapshot failed — {e}")
 
     # ── Combined portfolio summary ────────────────────────────────
     summary_text = _format_combined_summary(
@@ -486,6 +548,7 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
         snap_date=snap_date,
         dhan_summary=dhan_summary,
         nuvama_summary=nuvama_summary,
+        nuvama_options_summary=nuvama_options_summary,
     )
     print(summary_text)
 
