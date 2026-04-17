@@ -1,0 +1,41 @@
+# NSE Equity Segment Trading Holidays — 2026
+# Source: https://www.nseindia.com/products-services/equity-holidays
+# Updated: 2026-04-17
+# Refresh annually each January from the NSE published calendar.
+# Format: ISO 8601 date (YYYY-MM-DD) and official holiday name.
+
+holidays:
+  - date: "2026-01-26"
+    name: "Republic Day"
+  - date: "2026-02-26"
+    name: "Mahashivratri"
+  - date: "2026-03-20"
+    name: "Id-Ul-Fitr (Ramzan Id)"
+  - date: "2026-04-02"
+    name: "Shri Ram Navami"
+  - date: "2026-04-03"
+    name: "Good Friday"
+  - date: "2026-04-14"
+    name: "Dr. Baba Saheb Ambedkar Jayanti"
+  - date: "2026-05-01"
+    name: "Maharashtra Day"
+  - date: "2026-05-27"
+    name: "Buddha Purnima"
+  - date: "2026-06-27"
+    name: "Bakri Id (Id-Ul-Adha)"
+  - date: "2026-07-17"
+    name: "Muharram"
+  - date: "2026-08-15"
+    name: "Independence Day"
+  - date: "2026-09-17"
+    name: "Ganesh Chaturthi"
+  - date: "2026-10-02"
+    name: "Mahatma Gandhi Jayanti / Dussehra"
+  - date: "2026-10-28"
+    name: "Diwali - Laxmi Pujan"
+  - date: "2026-10-29"
+    name: "Diwali - Balipratipada"
+  - date: "2026-11-04"
+    name: "Gurunanak Jayanti"
+  - date: "2026-12-25"
+    name: "Christmas"

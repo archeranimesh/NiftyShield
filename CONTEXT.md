@@ -54,6 +54,10 @@ src/
 │   ├── models.py             # Frozen dataclasses: DhanHolding (EQUITY/BOND, LTP, cost/pnl properties), DhanPortfolioSummary (split by classification, Decimal fields, day deltas)
 │   ├── reader.py             # Pure + HTTP functions. fetch_holdings_raw/fetch_ltp_raw (I/O). classify_holding, build_dhan_holdings (filter+classify), build_security_id_map, enrich_with_ltp (Dhan API — paid tier), enrich_with_upstox_prices (preferred), upstox_keys_for_holdings, build_dhan_summary (pure). fetch_dhan_holdings() + fetch_dhan_portfolio() orchestrators.
 │   └── store.py              # DhanStore: dhan_holdings_snapshots table. record_snapshot (upsert), get_snapshot_for_date, get_prev_snapshot (MAX date < d, keyed by ISIN).
+├── market_calendar/
+│   ├── __init__.py           # Package marker.
+│   ├── data/nse_2026.yaml    # NSE 2026 equity holiday list — version-controlled config (src/ not data/ because data/ is gitignored). Update each January.
+│   └── holidays.py           # NSE equity holiday detection. load_holidays(year) → frozenset[date] (cached, fail-open on missing YAML). is_trading_day(d) → bool (weekday AND not in holiday set). prev_trading_day(d) → date (walks back to nearest prior trading day).
 ├── instruments/
 │   └── lookup.py             # Offline BOD search (NSE.json.gz). CLI: --find-legs mode. search() uses ranked exact>prefix>fuzzy scoring via _score_query()/_best_score() (rapidfuzz; difflib fallback). min_score param added.
 ├── notifications/
@@ -131,6 +135,9 @@ tests/
     ├── test_nuvama_verify.py  # 17 tests: parse_holdings (flat list, whitespace strip, multiple records, empty, invalid JSON, missing key), load_api_connect (missing creds, settings file missing, happy path), verify (true/false on valid/invalid response, config error, api exception, stdout count). autouse clean_env fixture.
     ├── test_dhan_login.py     # 13 tests: build_login_url, validate_token (strip/empty/whitespace), save_token (write/upsert/preserve), login flow (missing client_id, empty input, full flow, whitespace token). autouse clean_env fixture.
     └── test_dhan_verify.py    # 18 tests: _build_headers, load_dhan_credentials (happy/missing_id/missing_token/whitespace), fetch_profile (happy/401), fetch_holdings (list/empty/dict), parse_holdings (multiple/empty/missing/malformed), verify (success/missing_creds/401/stdout). autouse clean_env fixture.
+└── market_calendar/
+│   ├── __init__.py
+│   └── test_holidays.py      # 31 tests: load_holidays (happy path, missing file, cache, malformed entries), is_trading_day (weekdays/weekends/holidays/fail-open), prev_trading_day (normal/weekend-skip/holiday-skip/fail-open), real 2026 YAML smoke tests
 └── fixtures/
     ├── responses/            # 7 JSON fixtures recorded from real APIs (LTP, option chain, Greeks, candles)
     └── amfi/
@@ -207,7 +214,7 @@ Strategy leg tables (instrument keys, entry prices, quantities, protected MF por
 
 ## Test Coverage
 
-- **Total: 774 tests** (all passing)
+- **Total: 805 tests** (all passing; 774 pre-existing + 31 market_calendar)
 - Run: `python -m pytest tests/unit/`
 - Auth tests: `tests/unit/auth/` (64 tests — Nuvama login + verify, Dhan login + verify)
 - MF tests: `tests/unit/mf/` (127 tests)
