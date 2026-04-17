@@ -14,7 +14,7 @@ Two tables, both in the shared portfolio.sqlite:
 from __future__ import annotations
 
 import logging
-from datetime import date
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from src.db import connect
@@ -55,6 +55,19 @@ CREATE TABLE IF NOT EXISTS nuvama_options_snapshots (
 )
 """
 
+_CREATE_INTRADAY_SNAPSHOTS = """
+CREATE TABLE IF NOT EXISTS nuvama_intraday_snapshots (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp           TIMESTAMP NOT NULL,
+    nifty_spot          DECIMAL,
+    trade_symbol        TEXT NOT NULL,
+    net_qty             INTEGER NOT NULL,
+    ltp                 DECIMAL NOT NULL,
+    unrealized_pnl      DECIMAL NOT NULL,
+    realized_pnl_today  DECIMAL NOT NULL
+)
+"""
+
 
 class NuvamaStore:
     """Read/write access to Nuvama tables in portfolio.sqlite."""
@@ -73,6 +86,7 @@ class NuvamaStore:
             conn.execute(_CREATE_POSITIONS)
             conn.execute(_CREATE_SNAPSHOTS)
             conn.execute(_CREATE_OPTIONS_SNAPSHOTS)
+            conn.execute(_CREATE_INTRADAY_SNAPSHOTS)
 
     # ------------------------------------------------------------------
     # Positions (cost basis)
@@ -339,3 +353,82 @@ class NuvamaStore:
                 (snapshot_date.isoformat(),),
             ).fetchall()
         return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # Intraday Tracker
+    # ------------------------------------------------------------------
+
+    def purge_old_intraday(self, days: int = 30) -> None:
+        """Delete intraday snapshots older than the retention limit."""
+        cutoff = datetime.now() - timedelta(days=days)
+        with connect(self._db_path) as conn:
+            conn.execute(
+                "DELETE FROM nuvama_intraday_snapshots WHERE timestamp < ?",
+                (cutoff.isoformat(),)
+            )
+
+    def record_intraday_positions(
+        self,
+        timestamp: datetime,
+        nifty_spot: float,
+        positions: list,
+    ) -> None:
+        """Insert the raw 5-minute leg states for later investigation."""
+        with connect(self._db_path) as conn:
+            conn.executemany(
+                """
+                INSERT INTO nuvama_intraday_snapshots (
+                    timestamp, nifty_spot, trade_symbol, net_qty, ltp,
+                    unrealized_pnl, realized_pnl_today
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        timestamp.isoformat(),
+                        nifty_spot,
+                        pos.trade_symbol,
+                        pos.net_qty,
+                        str(pos.ltp),
+                        str(pos.unrealized_pnl),
+                        str(pos.realized_pnl_today),
+                    )
+                    for pos in positions
+                ],
+            )
+        self.purge_old_intraday(days=30)
+
+    def get_intraday_extremes(self, snap_date: date) -> tuple[Decimal | None, Decimal | None, float | None, float | None]:
+        """Aggregate 5-minute states to find the day's total portfolio high and low."""
+        with connect(self._db_path) as conn:
+            rows = conn.execute(
+                """
+                SELECT timestamp, unrealized_pnl, realized_pnl_today, nifty_spot
+                FROM nuvama_intraday_snapshots
+                WHERE date(timestamp) = ?
+                """,
+                (snap_date.isoformat(),)
+            ).fetchall()
+            
+        if not rows:
+            return None, None, None, None
+            
+        pnl_by_ts: dict[str, Decimal] = {}
+        nifty_spots: list[float] = []
+        
+        for row in rows:
+            ts = row["timestamp"]
+            urlz = Decimal(str(row["unrealized_pnl"]))
+            rlz = Decimal(str(row["realized_pnl_today"]))
+            nifty = row["nifty_spot"]
+            
+            pnl_by_ts[ts] = pnl_by_ts.get(ts, Decimal("0")) + urlz + rlz
+            if nifty is not None:
+                nifty_spots.append(float(str(nifty)))
+                
+        pnls = list(pnl_by_ts.values())
+        max_pnl = max(pnls) if pnls else None
+        min_pnl = min(pnls) if pnls else None
+        nifty_high = max(nifty_spots) if nifty_spots else None
+        nifty_low = min(nifty_spots) if nifty_spots else None
+        
+        return max_pnl, min_pnl, nifty_high, nifty_low
