@@ -14,6 +14,9 @@ Do not rely on chat history — CONTEXT.md is the single source of truth.
 - Touching instrument keys, AMFI codes, market data → also read `REFERENCES.md`
 - Starting a new feature → also read `TODOS.md` + `PLANNER.md`
 - Any task in `src/backtest/`, `src/paper/`, `src/strategy/`, or referenced in BACKTEST_PLAN.md → also read `BACKTEST_PLAN.md`
+- Backtest / paper trading / strategy research → also read `BACKTEST_PLAN.md`
+- Implementing a metric / ratio / ML technique → also read `LITERATURE.md` entry for the cited LIT code
+- Working a specific story → load ONLY that story file + `CONTEXT.md` + module `CLAUDE.md`
 - Working inside `src/<module>/` → that module's `CLAUDE.md` loads automatically
 
 **⛔ DO NOT call `Read` on any file under `src/` or `scripts/` without first trying the graph.**

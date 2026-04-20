@@ -4,8 +4,7 @@
 > Read this before writing any code. Do not rely on session summaries or chat history.
 > Repo: https://github.com/archeranimesh/NiftyShield
 
-**Related files:** [DECISIONS.md](DECISIONS.md) — architecture rationale | [REFERENCES.md](REFERENCES.md) — instrument keys, AMFI codes, API quirks | [TODOS.md](TODOS.md) — open work + session log | [PLANNER.md](PLANNER.md) — multi-sprint roadmap | [BACKTEST_PLAN.md](BACKTEST_PLAN.md) — phased backtest → paper → live pipeline plan (load when working on src/backtest/, src/paper/, src/strategy/, or any Phase 0-4 task) | [INSTRUCTION.md](INSTRUCTION.md) — per-task prompt templates and session workflow
-
+**Related files:** [DECISIONS.md](DECISIONS.md) | [REFERENCES.md](REFERENCES.md) | [TODOS.md](TODOS.md) | [PLANNER.md](PLANNER.md) | [BACKTEST_PLAN.md](BACKTEST_PLAN.md) — phased backtest → paper → live plan | [LITERATURE.md](LITERATURE.md) — concept reference (Kelly, Sharpe, meta-labeling) | [docs/plan/](docs/plan/) — one story file per task | [INSTRUCTION.md](INSTRUCTION.md)
 ---
 
 ## Current State (as of 2026-04-17)
