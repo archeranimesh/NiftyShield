@@ -2,6 +2,9 @@
 
 Intended to run via cron:
 */5 9-15 * * 1-5 python -m scripts.nuvama_intraday_tracker
+
+The cron fires from 9:00 but the script exits early for ticks before 9:15
+(Nuvama NetPosition data is stale / unreliable during the opening auction window).
 """
 
 from __future__ import annotations
@@ -32,6 +35,11 @@ async def main() -> int:
     if not is_trading_day(date.today()):
         logger.info("market_holiday date=%s — skipping intraday tracker", date.today())
         return 0
+
+    if now.hour == 9 and now.minute < 15:
+        logger.info("before_market_open time=%s — skipping (tracker starts at 09:15)", now.strftime("%H:%M"))
+        return 0
+
     store = NuvamaStore()
 
     # 1. Fetch Nuvama options positions
@@ -84,13 +92,12 @@ async def main() -> int:
         historical_map = store.get_cumulative_realized_pnl(before_date=now.date())
         historical_total = sum(historical_map.values(), Decimal("0"))
         
-        total_realized = realized_today + historical_total
-        total_pnl = unrealized + total_realized
-        
+        total_pnl = unrealized + realized_today
+
         logger.info(
-            "Total PnL: {:+,.0f} | Unrealized: {:+,.0f} | Realized: {:+,.0f} (Today: {:+,.0f}, Ledger: {:+,.0f}) | "
+            "Total PnL: {:+,.0f} | Unrealized: {:+,.0f} | Realized Today: {:+,.0f} | Ledger: {:+,.0f} | "
             "Positions: {:d} | Nifty: {:,.2f}".format(
-                total_pnl, unrealized, total_realized, realized_today, historical_total, len(positions), nifty_spot
+                total_pnl, unrealized, realized_today, historical_total, len(positions), nifty_spot
             )
         )
     except Exception as e:  # Intentional: isolate db failure
