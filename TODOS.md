@@ -50,7 +50,260 @@ Current implementation adds historical ledger (+17k), which differs from Nuvama'
 
 ---
 
-## Tech Debt — Google Python Style Guide Violations
+## Architecture Review 2026-04-21 — Action Items
+
+Findings from full top-down review using `python-architecture-review.prompt.md` v6.
+Items are ordered by priority tier. AR- prefix identifies items from this review.
+
+---
+
+### P0 — Correctness Bugs (fix before next trading day)
+
+These produce wrong numbers silently. No architectural work required — surgical one-line fixes.
+
+#### AR-1: Fix `if not raw_ltp:` truthiness check — `src/portfolio/tracker.py:209`
+
+**Problem:** `prices.get(leg.instrument_key, 0.0)` returns `0.0` when the key is missing. `if not raw_ltp:` catches both `0.0` (missing key) and a legitimately zero LTP (an option expiring worthless). An ITM option that expires at zero is recorded with `entry_price` as its LTP — a materially wrong P&L snapshot.
+
+**Fix:**
+```python
+# Before
+raw_ltp = prices.get(leg.instrument_key, 0.0)
+if not raw_ltp:
+
+# After
+raw_ltp = prices.get(leg.instrument_key)
+if raw_ltp is None:
+```
+
+**Tests required:** Add one test case in `tests/unit/portfolio/` asserting that a zero LTP is used as-is (not replaced by entry_price).
+
+#### AR-2: Fix `if underlying_price:` truthiness check — `daily_snapshot.py:163, 408`
+
+Same class of bug. Nifty is never actually zero, so this has no live impact today — but it is semantically wrong and sets a pattern that will eventually catch something.
+
+**Fix:** Both occurrences: `if underlying_price is not None:` instead of `if underlying_price:`.
+
+---
+
+### P1 — Test Coverage Gap (production code with zero tests)
+
+#### AR-3: Write tests for all Nuvama options + intraday code paths
+
+Supersedes and expands TODO-0 above. The options reader and intraday store run every 5 minutes in production with zero unit tests.
+
+Specifically, the `MockNuvamaClient` protocol (AR-9 below) must exist first to make `parse_options_positions` and `build_options_summary` fully testable offline. Until AR-9 is done, write tests that call the pure functions directly with fixture JSON.
+
+**Files:** `tests/unit/nuvama/test_options_reader.py` (new), `tests/unit/nuvama/test_store.py` (additions), `tests/unit/nuvama/test_models.py` (additions). See TODO-0 for the full list of test cases.
+
+**Dependency:** AR-9 (Nuvama protocol) unblocks deeper mock-based tests. Write fixture-driven pure function tests now; extend after AR-9.
+
+---
+
+### P2 — Architecture (complete before Phase 0 CSP expansion)
+
+These must be done before adding a new strategy or data source in Phase 0. Each new integration without these fixes adds another 5–9 fields to `PortfolioSummary` and another non-fatal block in `_async_main`.
+
+#### AR-4: Refactor `PortfolioSummary` from flat accumulator to per-source composition
+
+**Problem:** `PortfolioSummary` (`src/models/portfolio.py:198–277`) has 26 fields, grown by 5–9 per integration (Dhan +10, Nuvama bonds +5, Nuvama options +9). Adding the next source (CSP, Zerodha, anything) requires editing `PortfolioSummary`, `_build_portfolio_summary`, `_format_combined_summary`, `_async_main`, and `_historical_main` — 5 files, 3 layers.
+
+**Fix in three parts:**
+
+*Part 1 — `src/models/portfolio.py`:* Replace the per-source field blocks with typed optional references to the source summaries. Keep only cross-source aggregates as flat fields:
+```python
+@dataclass(frozen=True)
+class PortfolioSummary:
+    snapshot_date: date
+    total_value: Decimal
+    total_invested: Decimal
+    total_pnl: Decimal
+    total_pnl_pct: Decimal
+    total_day_delta: Decimal | None
+    etf_value: Decimal
+    etf_basis: Decimal
+    etf_day_delta: Decimal | None
+    options_pnl: Decimal
+    options_day_delta: Decimal | None
+    finrakshak_day_delta: Decimal | None
+    mf_pnl: "PortfolioPnL | None" = None   # TYPE_CHECKING import
+    dhan: "DhanPortfolioSummary | None" = None
+    nuvama_bonds: "NuvamaBondSummary | None" = None
+    nuvama_options: "NuvamaOptionsSummary | None" = None
+```
+16 fields instead of 26. Adding CSP = one new `Optional[CSPSummary]` field.
+
+*Part 2 — `src/portfolio/summary.py`:* `_build_portfolio_summary` computes only cross-source aggregates from the source totals and stores source summaries as-is. Eliminates the 30+ `field = source.field if source else Decimal("0")` lines and all 14 `# type: ignore[union-attr]` suppressions.
+
+*Part 3 — `src/portfolio/formatting.py`:* `_format_combined_summary` accesses source data via `summary.dhan`, `summary.nuvama_bonds`, etc. (typed) rather than via flat fields copied from the source.
+
+**Files:** `src/models/portfolio.py`, `src/portfolio/summary.py`, `src/portfolio/formatting.py`, test files asserting on `PortfolioSummary` fields.
+**Note:** `_async_main` and `_historical_main` do NOT change — they already pass the right objects in.
+
+#### AR-5: Type the `object | None` parameters in `_build_portfolio_summary`
+
+Partially overlaps with AR-4 but has independent value. Even before AR-4 is done, the function can be properly typed using `TYPE_CHECKING`-guarded imports.
+
+**Problem:** `_build_portfolio_summary` has four `object | None` typed parameters and 14 `# type: ignore[union-attr]` suppressions. mypy cannot verify this function.
+
+**Fix:** Add `TYPE_CHECKING` imports at the top of `summary.py` and `formatting.py`:
+```python
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from src.mf.tracker import PortfolioPnL
+    from src.dhan.models import DhanPortfolioSummary
+    from src.nuvama.models import NuvamaBondSummary, NuvamaOptionsSummary
+```
+Replace `object | None` parameter types with the real types. Remove all 14 `# type: ignore[union-attr]` lines.
+
+**Files:** `src/portfolio/summary.py`, `src/portfolio/formatting.py`, `scripts/daily_snapshot.py`.
+
+#### AR-6: Fix `NuvamaBondHolding` historical reconstruction hack — `daily_snapshot.py:231–245`
+
+**Problem:** `_historical_main` constructs `NuvamaBondHolding` stubs with `qty=1` and `ltp=current_value` to trick the `current_value` property (`ltp × qty`) into returning the stored snapshot value. This is a silent correctness dependency: if `NuvamaBondHolding.current_value` ever gains additional terms (e.g., haircut), the historical path silently diverges.
+
+**Fix:** Store `ltp` and `qty` in `nuvama_holdings_snapshots` (or add a `build_nuvama_summary_from_stored()` that takes `{isin: current_value}` directly and bypasses the holding model). The simplest correct fix is a pure function in `src/nuvama/reader.py` that accepts `{isin: current_value}` and `positions` and builds a `NuvamaBondSummary` without the holding stub trick.
+
+**Files:** `src/nuvama/reader.py`, `src/nuvama/store.py`, `scripts/daily_snapshot.py`.
+
+#### AR-7: Make `record_all_snapshots` and `record_all_options_snapshots` atomic — `src/nuvama/store.py`
+
+**Problem:** Both methods iterate and commit each row in a separate transaction. A mid-iteration crash leaves a partial day's snapshot persisted. Compare with `PortfolioStore.record_snapshots_bulk()` which uses `executemany` in one connection block.
+
+**Fix:** Rewrite both methods to use `executemany` in a single `with connect(...) as conn:` block, matching the `PortfolioStore` pattern.
+
+**Tests required:** Verify idempotency (re-run writes same data) and partial-write rollback (exception mid-batch leaves nothing committed).
+
+---
+
+### P3 — Performance & Structural Correctness
+
+#### AR-8: Replace Python aggregation with SQL GROUP BY in `get_cumulative_realized_pnl` — `src/nuvama/store.py:334`
+
+**Problem:** Fetches all historical `realized_pnl_today` rows with no `GROUP BY` and aggregates by `trade_symbol` in Python. The result set grows unboundedly with every trading day. After one year of daily options recording, this is hundreds of rows fetched on every intraday 5-minute tick.
+
+**Fix:**
+```python
+# Before
+rows = conn.execute(
+    "SELECT trade_symbol, realized_pnl_today FROM nuvama_options_snapshots WHERE snapshot_date < ?",
+    (before_date.isoformat(),),
+).fetchall()
+# ... Python loop aggregation
+
+# After
+rows = conn.execute(
+    """SELECT trade_symbol, SUM(realized_pnl_today) AS cumulative
+       FROM nuvama_options_snapshots
+       WHERE snapshot_date < ?
+       GROUP BY trade_symbol""",
+    (before_date.isoformat(),),
+).fetchall()
+return {row["trade_symbol"]: Decimal(row["cumulative"]) for row in rows}
+```
+
+**Tests:** Existing `get_cumulative_realized_pnl` tests will validate the fix with no changes needed.
+
+#### AR-9: Wrap Nuvama APIConnect SDK behind a 2-method protocol — `src/nuvama/`
+
+**Problem:** The Nuvama `apiconnect` SDK is the only external dependency not abstracted behind a protocol. Any SDK upgrade touches `reader.py`, `options_reader.py`, `daily_snapshot.py`, and `nuvama_intraday_tracker.py`. More immediately: it blocks a `MockNuvamaClient` for testing (AR-3).
+
+**Fix:** Add `src/nuvama/protocol.py`:
+```python
+from typing import Protocol, runtime_checkable
+
+@runtime_checkable
+class NuvamaClient(Protocol):
+    def Holdings(self) -> str: ...
+    def NetPosition(self) -> str: ...
+```
+Update `fetch_nuvama_portfolio()` and `nuvama_intraday_tracker.py` to accept `NuvamaClient` instead of `Any`. Create a `MockNuvamaClient` in `tests/` that returns fixture JSON strings.
+
+**Files:** `src/nuvama/protocol.py` (new), `src/nuvama/reader.py`, `src/nuvama/options_reader.py`, `scripts/nuvama_intraday_tracker.py`, `scripts/daily_snapshot.py`.
+
+#### AR-10: Batch `get_all_positions_for_strategy` to eliminate N+1 DB connections — `src/portfolio/store.py:561`
+
+**Problem:** Opens one connection to get `DISTINCT leg_role, instrument_key`, then calls `get_position()` for each leg — each opens a new connection and fetches all trades. For 7 legs: 8 connections, 7 full `trades` table scans per call. Called twice per snapshot run (`_get_all_overlaid_strategies` + compute loop in `_async_main`).
+
+**Fix:** Replace the loop over `get_position()` with a single SQL aggregate query:
+```sql
+SELECT leg_role, instrument_key,
+       SUM(CASE WHEN action='BUY' THEN quantity ELSE 0 END) AS buy_qty,
+       SUM(CASE WHEN action='SELL' THEN quantity ELSE 0 END) AS sell_qty,
+       SUM(CASE WHEN action='BUY' THEN quantity * CAST(price AS REAL) ELSE 0 END) AS buy_value
+FROM trades
+WHERE strategy_name = ?
+GROUP BY leg_role, instrument_key
+```
+Compute `avg_price` from `buy_value / buy_qty` in Python with Decimal (preserving the Decimal invariant). One connection, one query, same result.
+
+**Note:** `price` is TEXT in the DB (Decimal invariant). Fetch raw rows and reconstruct with `Decimal(row["price"])` — do not use `CAST` for the final average.
+
+#### AR-11: Eliminate double LTP fetch in `_async_main` — `scripts/daily_snapshot.py`
+
+**Problem:** `await tracker.record_all_strategies(...)` fetches LTPs internally. Then `_async_main` calls `await tracker.compute_pnl(strategy.name)` for each strategy to get `StrategyPnL` for the summary — a second batch LTP call to Upstox per run.
+
+**Fix:** Have `record_all_strategies` return `dict[str, StrategyPnL]` alongside the snapshot counts, built from the already-fetched prices inside `record_daily_snapshot`. The `compute_pnl` calls in `_async_main` are then replaced by a dict lookup. No API change to the `BrokerClient` protocol required.
+
+#### AR-12: Defer module-level I/O imports in `nuvama_intraday_tracker.py`
+
+**Problem:** `from src.auth.nuvama_verify import load_api_connect` and `from src.nuvama.store import NuvamaStore` are module-level imports. This is inconsistent with `daily_snapshot.py` which explicitly defers all I/O imports into `_async_main`. The intraday tracker cannot be safely imported in tests without the auth chain.
+
+**Fix:** Move `load_api_connect`, `NuvamaStore`, `parse_options_positions`, `create_client`, `LTPFetchError` imports inside `async def main()`, matching the `daily_snapshot.py` pattern.
+
+---
+
+### P4 — Observability & Hygiene
+
+Small items, each independently committable. None require test changes.
+
+#### AR-13: Add `exc_info=True` to `logger.error` in `nuvama_intraday_tracker.py`
+
+Lines 66 and 104 use `logger.error("...: %s", e)` which loses the stack trace. Replace both with `logger.exception("...")` (equivalent to `logger.error(..., exc_info=True)`). Remove the `traceback.print_exc()` on line 68 — it duplicates to stderr outside the logging system.
+
+#### AR-14: Add a run/correlation ID to `_async_main` and `nuvama_intraday_tracker.main()`
+
+When multiple non-fatal blocks fail in a single run, there is no way to group the log lines. Add at the start of each function:
+```python
+import uuid
+run_id = uuid.uuid4().hex[:8]
+logger.info("run_id=%s starting snapshot", run_id)
+```
+Pass `run_id` into log calls for the non-fatal blocks. Files: `scripts/daily_snapshot.py`, `scripts/nuvama_intraday_tracker.py`.
+
+#### AR-15: Delete TD-6 dead assert — `src/client/upstox_live.py:46`
+
+`assert issubclass(type, type)` is always `True`. It is dead code that looks like a guard. Delete it. No tests required.
+
+#### AR-16: Fix `__import__("datetime").date.today()` inline — `src/portfolio/tracker.py:126`
+
+`date` is already imported at line 12 of `tracker.py`. Replace `__import__("datetime").date.today()` with `date.today()`. No logic change.
+
+#### AR-17: Fix `classify_holding()` return type — `src/dhan/reader.py`
+
+`classify_holding()` returns `"BOND"` or `"EQUITY"` as plain strings while `AssetType` enum exists in `src/models/portfolio.py`. Downstream code does `if h.classification == "EQUITY"` string comparisons. Change `DhanHolding.classification` to `AssetType` and `classify_holding()` to return `AssetType.BOND` / `AssetType.EQUITY`. Update all downstream comparisons.
+
+#### AR-18: Fix unnecessary Decimal round-trip in `_etf_cost_basis` — `src/portfolio/summary.py:60`
+
+`Decimal(str(leg.entry_price)) * Decimal(str(leg.quantity))` — `entry_price` is already a `Decimal`. `Decimal(str(Decimal))` is redundant. Replace with `leg.entry_price * leg.quantity` (multiplying `Decimal` by `int` is exact).
+
+#### AR-19: Fix `nifty_spot DECIMAL` → `REAL` in intraday schema — `src/nuvama/store.py`
+
+`nuvama_intraday_snapshots` declares `nifty_spot DECIMAL` and `ltp DECIMAL`. In SQLite, `DECIMAL` is a text affinity — values inserted as floats are stored as REAL. The column affinity is misleading. Change both to `REAL`. The `float(str(nifty))` in `get_intraday_extremes` can then be simplified to `float(nifty)`. **Requires a migration** — add `ALTER TABLE` or drop/recreate in `_ensure_tables` with a schema version guard.
+
+---
+
+### P5 — Packaging Hygiene
+
+#### AR-20: Remove `uuid==1.30` from `requirements.txt`
+
+The PyPI `uuid` package is a deprecated wrapper around stdlib `uuid`. It is almost certainly a transitive dependency that leaked into the top-level requirements. Verify with `pip show uuid --files` and remove if not directly imported anywhere in `src/` or `scripts/`.
+
+#### AR-21: Split `requirements-dev.txt` from `requirements.txt`
+
+Move `pytest`, `pytest-asyncio`, and `RapidFuzz` (test-only) into `requirements-dev.txt`. Production dependencies (broker SDKs, requests, pydantic, dotenv) stay in `requirements.txt`. Standard practice; no code changes required.
+
+---
 
 Identified 2026-04-16 via full audit against the PDF style guide. Existing code is NOT being changed in place — these are tracked for systematic cleanup when refactoring adjacent code.
 
@@ -142,3 +395,4 @@ All `# TODO:` comments updated to `# TODO: TD-7 — description` format per §3.
 | 2026-04-17 | **Intraday tracking for options.** `nuvama_intraday_snapshots` table with 30-day retention loop created. `scripts/nuvama_intraday_tracker.py` fetches 5-minute sampling bounds (both options PnL and Upstox Nifty constraints) allowing native intraday insights. Python `Decimal` used to guard aggregations constraints against Float inaccuracies. Output wired into Telegram formatting properly (`M2M High/Low` and `Nifty High/Low`). |
 | 2026-04-17 | **Market holiday guard — complete.** `src/market_calendar/holidays.py`: `load_holidays()`, `is_trading_day()`, `prev_trading_day()` — fail-open on missing YAML, module-level cache. `src/market_calendar/data/nse_2026.yaml`: 17 NSE 2026 holidays. Guards added to `daily_snapshot.py` (live mode only — historical `--date` always runs) and `nuvama_intraday_tracker.py`. `.gitignore` fixed: `data/` → `/data/` (anchored to root). 31 tests green. `get_prev_snapshots()` confirmed calendar-agnostic — no store changes needed. |
 | 2026-04-17 | **Doc sync (Claude).** Updated CONTEXT.md: header date, nuvama models entry (NuvamaOptionPosition + NuvamaOptionsSummary), options_reader entry (build_options_summary), store entry (nuvama_options_snapshots table + 6 new methods), portfolio.py PortfolioSummary nuvama_options_* fields, summary.py nuvama_options_summary param, nuvama_intraday_tracker script description, removed duplicate CLAUDE.md entry, test coverage note. Added two DECISIONS.md entries (Intelligent EOD Snapshot pattern + Nuvama SDK os._exit() rule). Added TODO-0 for missing option/intraday tests. |
+| 2026-04-21 | **Architecture review (Claude).** Full top-down review using `python-architecture-review.prompt.md` v6. 21 action items added to TODOS.md (AR-1 through AR-21) across 5 priority tiers. P0: two `if not x:` truthiness bugs that corrupt P&L snapshots. P1: Nuvama options + intraday test coverage gap (supersedes TODO-0). P2: `PortfolioSummary` god dataclass refactor, type safety in `_build_portfolio_summary`, Nuvama historical reconstruction hack, atomic record_all_*, Nuvama protocol abstraction. P3: SQL GROUP BY for cumulative PnL, N+1 fix in store, double LTP fetch, deferred imports in intraday tracker. P4: observability (exc_info, run ID, dead assert, classify_holding enum). P5: packaging hygiene. No code changed — review only. |
