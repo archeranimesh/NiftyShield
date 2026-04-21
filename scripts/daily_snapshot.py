@@ -160,7 +160,7 @@ def _historical_main(snap_date: date, db_path: Path) -> int:
         (float(s.underlying_price) for s in snapshots_by_leg.values() if s.underlying_price),
         None,
     )
-    if underlying_price:
+    if underlying_price is not None:
         print(f"  Nifty spot (stored): {underlying_price:,.2f}")
     else:
         print("  Nifty spot: not recorded for this date.")
@@ -406,7 +406,7 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
         return 1
 
     underlying_price = prices.get(NIFTY_INDEX_KEY)
-    if underlying_price:
+    if underlying_price is not None:
         print(f"  Nifty spot: {underlying_price:,.2f}")
     else:
         print("  WARNING: Could not fetch Nifty spot price.")

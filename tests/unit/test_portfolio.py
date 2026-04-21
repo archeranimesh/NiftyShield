@@ -375,3 +375,40 @@ class TestPortfolioTracker:
         tracker = PortfolioTracker(tmp_store, market)
         pnl = asyncio.run(tracker.compute_pnl("does_not_exist"))
         assert pnl is None
+
+    def test_compute_pnl_zero_ltp_used_as_is(self, tmp_store):
+        """A zero LTP (option expiring worthless) must be used as-is,
+        not replaced by entry_price as the old `if not raw_ltp:` bug did.
+
+        AR-1: prices.get(key) + `if raw_ltp is None:` fix.
+        """
+        s = Strategy(
+            name="zero_ltp_test",
+            legs=[
+                Leg(
+                    instrument_key="OPT|KEY",
+                    display_name="Short PE expiring worthless",
+                    asset_type=AssetType.PE,
+                    direction=Direction.SELL,
+                    quantity=65,
+                    lot_size=65,
+                    entry_price=500.0,
+                    entry_date=date(2026, 4, 1),
+                    product_type=ProductType.NRML,
+                ),
+            ],
+        )
+        tmp_store.upsert_strategy(s)
+
+        # Explicitly provide LTP=0.0 (option has expired worthless).
+        market = FakeMarket({"OPT|KEY": 0.0})
+        tracker = PortfolioTracker(tmp_store, market)
+
+        pnl = asyncio.run(tracker.compute_pnl("zero_ltp_test"))
+
+        assert pnl is not None
+        leg_pnl = pnl.legs[0]
+        # LTP must be 0, not entry_price (500).
+        assert leg_pnl.current_price == Decimal("0")
+        # SELL P&L = (entry - ltp) * qty = (500 - 0) * 65 = 32500
+        assert leg_pnl.pnl == Decimal("32500")

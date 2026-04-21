@@ -205,8 +205,8 @@ class PortfolioTracker:
 
         leg_pnls = []
         for leg in strategy.legs:
-            raw_ltp = prices.get(leg.instrument_key, 0.0)
-            if not raw_ltp:
+            raw_ltp = prices.get(leg.instrument_key)
+            if raw_ltp is None:
                 logger.warning(
                     "No LTP for %s (%s) — using entry price as fallback",
                     leg.display_name,
