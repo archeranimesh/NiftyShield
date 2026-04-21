@@ -61,7 +61,7 @@ Items are ordered by priority tier. AR- prefix identifies items from this review
 
 These produce wrong numbers silently. No architectural work required — surgical one-line fixes.
 
-#### AR-1: Fix `if not raw_ltp:` truthiness check — `src/portfolio/tracker.py:209`
+#### ~~AR-1~~: Fix `if not raw_ltp:` truthiness check — `src/portfolio/tracker.py:209` — **DONE 2026-04-21**
 
 **Problem:** `prices.get(leg.instrument_key, 0.0)` returns `0.0` when the key is missing. `if not raw_ltp:` catches both `0.0` (missing key) and a legitimately zero LTP (an option expiring worthless). An ITM option that expires at zero is recorded with `entry_price` as its LTP — a materially wrong P&L snapshot.
 
@@ -78,7 +78,7 @@ if raw_ltp is None:
 
 **Tests required:** Add one test case in `tests/unit/portfolio/` asserting that a zero LTP is used as-is (not replaced by entry_price).
 
-#### AR-2: Fix `if underlying_price:` truthiness check — `daily_snapshot.py:163, 408`
+#### ~~AR-2~~: Fix `if underlying_price:` truthiness check — `daily_snapshot.py:163, 408` — **DONE 2026-04-21**
 
 Same class of bug. Nifty is never actually zero, so this has no live impact today — but it is semantically wrong and sets a pattern that will eventually catch something.
 
@@ -396,3 +396,4 @@ All `# TODO:` comments updated to `# TODO: TD-7 — description` format per §3.
 | 2026-04-17 | **Market holiday guard — complete.** `src/market_calendar/holidays.py`: `load_holidays()`, `is_trading_day()`, `prev_trading_day()` — fail-open on missing YAML, module-level cache. `src/market_calendar/data/nse_2026.yaml`: 17 NSE 2026 holidays. Guards added to `daily_snapshot.py` (live mode only — historical `--date` always runs) and `nuvama_intraday_tracker.py`. `.gitignore` fixed: `data/` → `/data/` (anchored to root). 31 tests green. `get_prev_snapshots()` confirmed calendar-agnostic — no store changes needed. |
 | 2026-04-17 | **Doc sync (Claude).** Updated CONTEXT.md: header date, nuvama models entry (NuvamaOptionPosition + NuvamaOptionsSummary), options_reader entry (build_options_summary), store entry (nuvama_options_snapshots table + 6 new methods), portfolio.py PortfolioSummary nuvama_options_* fields, summary.py nuvama_options_summary param, nuvama_intraday_tracker script description, removed duplicate CLAUDE.md entry, test coverage note. Added two DECISIONS.md entries (Intelligent EOD Snapshot pattern + Nuvama SDK os._exit() rule). Added TODO-0 for missing option/intraday tests. |
 | 2026-04-21 | **Architecture review (Claude).** Full top-down review using `python-architecture-review.prompt.md` v6. 21 action items added to TODOS.md (AR-1 through AR-21) across 5 priority tiers. P0: two `if not x:` truthiness bugs that corrupt P&L snapshots. P1: Nuvama options + intraday test coverage gap (supersedes TODO-0). P2: `PortfolioSummary` god dataclass refactor, type safety in `_build_portfolio_summary`, Nuvama historical reconstruction hack, atomic record_all_*, Nuvama protocol abstraction. P3: SQL GROUP BY for cumulative PnL, N+1 fix in store, double LTP fetch, deferred imports in intraday tracker. P4: observability (exc_info, run ID, dead assert, classify_holding enum). P5: packaging hygiene. No code changed — review only. |
+| 2026-04-21 | **P0 correctness fixes (AR-1, AR-2).** AR-1: `tracker.py` — `prices.get(key, 0.0)` + `if not raw_ltp:` → `prices.get(key)` + `if raw_ltp is None:`. Zero LTP (expiring-worthless option) now used as-is instead of being replaced by entry_price. New test `test_compute_pnl_zero_ltp_used_as_is` in `tests/unit/test_portfolio.py`. AR-2: `daily_snapshot.py` lines 163 + 409 — `if underlying_price:` → `if underlying_price is not None:` at both occurrences. 785 tests passing (1 pre-existing rapidfuzz sandbox delta, unrelated). |
