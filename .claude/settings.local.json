@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__codebase-memory-mcp__get_code_snippet",
+      "Bash(pip show:*)",
+      "Bash(git rm:*)"
+    ]
+  }
+}
