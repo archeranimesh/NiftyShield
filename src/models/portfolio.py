@@ -79,6 +79,7 @@ class ProductType(str, Enum):
 
 class AssetType(str, Enum):
     EQUITY = "EQUITY"
+    BOND = "BOND"
     CE = "CE"
     PE = "PE"
     FUTURES = "FUTURES"

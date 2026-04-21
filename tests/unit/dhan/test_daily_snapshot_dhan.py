@@ -43,7 +43,7 @@ _LIQUIDBEES_ISIN = "INF732E01037"  # already tracked by finideas_ilts
 @dataclass
 class _Leg:
     instrument_key: str
-    entry_price: float
+    entry_price: Decimal
     quantity: int
     asset_type: AssetType
     id: int | None = None
@@ -69,7 +69,7 @@ class _FakeMFPnL:
 
 
 def _etf_leg(key: str, entry_price: float, quantity: int) -> _Leg:
-    return _Leg(key, entry_price, quantity, AssetType.EQUITY)
+    return _Leg(key, Decimal(str(entry_price)), quantity, AssetType.EQUITY)
 
 
 _ETF_KEY = "NSE_EQ|INF754K01LE1"
@@ -88,7 +88,7 @@ def _niftyietf_holding(ltp: Decimal | None = Decimal("275.40")) -> DhanHolding:
         total_qty=500,
         collateral_qty=500,
         avg_cost_price=Decimal("268.50"),
-        classification="EQUITY",
+        classification=AssetType.EQUITY,
         ltp=ltp,
     )
 
@@ -102,7 +102,7 @@ def _liquidcase_holding(ltp: Decimal | None = Decimal("1005.50")) -> DhanHolding
         total_qty=200,
         collateral_qty=200,
         avg_cost_price=Decimal("1003.25"),
-        classification="BOND",
+        classification=AssetType.BOND,
         ltp=ltp,
     )
 

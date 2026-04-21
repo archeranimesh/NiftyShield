@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from src.dhan.models import DhanHolding
+from src.models.portfolio import AssetType
 from src.dhan.reader import (
     build_dhan_holdings,
     build_dhan_summary,
@@ -43,22 +44,22 @@ def ltp_response() -> dict:
 class TestClassifyHolding:
 
     def test_equity_default(self):
-        assert classify_holding("NIFTYIETF") == "EQUITY"
+        assert classify_holding("NIFTYIETF") == AssetType.EQUITY
 
     def test_bond_liquidcase(self):
-        assert classify_holding("LIQUIDCASE") == "BOND"
+        assert classify_holding("LIQUIDCASE") == AssetType.BOND
 
     def test_bond_liquidbees(self):
-        assert classify_holding("LIQUIDBEES") == "BOND"
+        assert classify_holding("LIQUIDBEES") == AssetType.BOND
 
     def test_bond_case_insensitive(self):
-        assert classify_holding("liquidcase") == "BOND"
+        assert classify_holding("liquidcase") == AssetType.BOND
 
     def test_unknown_defaults_to_equity(self):
-        assert classify_holding("RELIANCE") == "EQUITY"
+        assert classify_holding("RELIANCE") == AssetType.EQUITY
 
     def test_whitespace_stripped(self):
-        assert classify_holding("  LIQUIDCASE  ") == "BOND"
+        assert classify_holding("  LIQUIDCASE  ") == AssetType.BOND
 
 
 # ── build_dhan_holdings ──────────────────────────────────────────
@@ -83,8 +84,8 @@ class TestBuildDhanHoldings:
         exclude = {"INF754K01LE1", "INF732E01037"}
         holdings = build_dhan_holdings(raw_holdings, exclude_isins=exclude)
         by_sym = {h.trading_symbol: h for h in holdings}
-        assert by_sym["NIFTYIETF"].classification == "EQUITY"
-        assert by_sym["LIQUIDCASE"].classification == "BOND"
+        assert by_sym["NIFTYIETF"].classification == AssetType.EQUITY
+        assert by_sym["LIQUIDCASE"].classification == AssetType.BOND
 
     def test_decimal_precision(self, raw_holdings):
         exclude = {"INF754K01LE1", "INF732E01037"}
@@ -139,7 +140,7 @@ class TestBuildSecurityIdMap:
         h = DhanHolding(
             trading_symbol="TEST", isin="INF000", security_id="abc",
             exchange="NSE_EQ", total_qty=10, collateral_qty=0,
-            avg_cost_price=Decimal("100"), classification="EQUITY",
+            avg_cost_price=Decimal("100"), classification=AssetType.EQUITY,
         )
         assert build_security_id_map([h]) == {}
 
@@ -190,14 +191,14 @@ class TestBuildDhanSummary:
                 trading_symbol="NIFTYIETF", isin="INF109K012R6",
                 security_id="13611", exchange="NSE_EQ",
                 total_qty=500, collateral_qty=500,
-                avg_cost_price=Decimal("268.50"), classification="EQUITY",
+                avg_cost_price=Decimal("268.50"), classification=AssetType.EQUITY,
                 ltp=Decimal("275.40"),
             ),
             DhanHolding(
                 trading_symbol="LIQUIDCASE", isin="INF0R8F01034",
                 security_id="25780", exchange="NSE_EQ",
                 total_qty=200, collateral_qty=200,
-                avg_cost_price=Decimal("1003.25"), classification="BOND",
+                avg_cost_price=Decimal("1003.25"), classification=AssetType.BOND,
                 ltp=Decimal("1005.50"),
             ),
         ]
@@ -232,14 +233,14 @@ class TestBuildDhanSummary:
                 trading_symbol="NIFTYIETF", isin="INF109K012R6",
                 security_id="13611", exchange="NSE_EQ",
                 total_qty=500, collateral_qty=500,
-                avg_cost_price=Decimal("268.50"), classification="EQUITY",
+                avg_cost_price=Decimal("268.50"), classification=AssetType.EQUITY,
                 ltp=Decimal("270.00"),
             ),
             "INF0R8F01034": DhanHolding(
                 trading_symbol="LIQUIDCASE", isin="INF0R8F01034",
                 security_id="25780", exchange="NSE_EQ",
                 total_qty=200, collateral_qty=200,
-                avg_cost_price=Decimal("1003.25"), classification="BOND",
+                avg_cost_price=Decimal("1003.25"), classification=AssetType.BOND,
                 ltp=Decimal("1004.00"),
             ),
         }
@@ -267,7 +268,7 @@ class TestBuildDhanSummary:
 # ── enrich_with_upstox_prices ─────────────────────────────────────
 
 
-def _bare_holding(symbol: str, isin: str, security_id: str, classification: str) -> DhanHolding:
+def _bare_holding(symbol: str, isin: str, security_id: str, classification: AssetType) -> DhanHolding:
     return DhanHolding(
         trading_symbol=symbol,
         isin=isin,
@@ -283,30 +284,30 @@ def _bare_holding(symbol: str, isin: str, security_id: str, classification: str)
 
 class TestEnrichWithUpstoxPrices:
     def test_enriches_from_nse_eq_key(self):
-        h = _bare_holding("NIFTYIETF", "INF109K012R6", "13611", "EQUITY")
+        h = _bare_holding("NIFTYIETF", "INF109K012R6", "13611", AssetType.EQUITY)
         prices = {"NSE_EQ|INF109K012R6": 275.40}
         result = enrich_with_upstox_prices([h], prices)
         assert result[0].ltp == Decimal("275.40")
 
     def test_missing_key_stays_none(self):
-        h = _bare_holding("NIFTYIETF", "INF109K012R6", "13611", "EQUITY")
+        h = _bare_holding("NIFTYIETF", "INF109K012R6", "13611", AssetType.EQUITY)
         result = enrich_with_upstox_prices([h], {})
         assert result[0].ltp is None
 
     def test_preserves_all_fields(self):
-        h = _bare_holding("LIQUIDCASE", "INF0R8F01034", "25780", "BOND")
+        h = _bare_holding("LIQUIDCASE", "INF0R8F01034", "25780", AssetType.BOND)
         prices = {"NSE_EQ|INF0R8F01034": 1005.50}
         result = enrich_with_upstox_prices([h], prices)
         r = result[0]
         assert r.trading_symbol == "LIQUIDCASE"
         assert r.isin == "INF0R8F01034"
-        assert r.classification == "BOND"
+        assert r.classification == AssetType.BOND
         assert r.total_qty == 100
         assert r.avg_cost_price == Decimal("200.00")
 
     def test_multiple_holdings_independent(self):
-        eq = _bare_holding("NIFTYIETF", "INF109K012R6", "13611", "EQUITY")
-        bd = _bare_holding("LIQUIDCASE", "INF0R8F01034", "25780", "BOND")
+        eq = _bare_holding("NIFTYIETF", "INF109K012R6", "13611", AssetType.EQUITY)
+        bd = _bare_holding("LIQUIDCASE", "INF0R8F01034", "25780", AssetType.BOND)
         prices = {
             "NSE_EQ|INF109K012R6": 275.40,
             "NSE_EQ|INF0R8F01034": 1005.50,
@@ -316,8 +317,8 @@ class TestEnrichWithUpstoxPrices:
         assert result[1].ltp == Decimal("1005.50")
 
     def test_partial_match_leaves_missing_as_none(self):
-        eq = _bare_holding("NIFTYIETF", "INF109K012R6", "13611", "EQUITY")
-        bd = _bare_holding("LIQUIDCASE", "INF0R8F01034", "25780", "BOND")
+        eq = _bare_holding("NIFTYIETF", "INF109K012R6", "13611", AssetType.EQUITY)
+        bd = _bare_holding("LIQUIDCASE", "INF0R8F01034", "25780", AssetType.BOND)
         prices = {"NSE_EQ|INF109K012R6": 275.40}  # only equity present
         result = enrich_with_upstox_prices([eq, bd], prices)
         assert result[0].ltp == Decimal("275.40")
@@ -332,8 +333,8 @@ class TestEnrichWithUpstoxPrices:
 
 class TestUpstoxKeysForHoldings:
     def test_derives_nse_eq_keys(self):
-        eq = _bare_holding("NIFTYIETF", "INF109K012R6", "13611", "EQUITY")
-        bd = _bare_holding("LIQUIDCASE", "INF0R8F01034", "25780", "BOND")
+        eq = _bare_holding("NIFTYIETF", "INF109K012R6", "13611", AssetType.EQUITY)
+        bd = _bare_holding("LIQUIDCASE", "INF0R8F01034", "25780", AssetType.BOND)
         keys = upstox_keys_for_holdings([eq, bd])
         assert keys == {"NSE_EQ|INF109K012R6", "NSE_EQ|INF0R8F01034"}
 
@@ -341,5 +342,5 @@ class TestUpstoxKeysForHoldings:
         assert upstox_keys_for_holdings([]) == set()
 
     def test_single_holding(self):
-        h = _bare_holding("NIFTYIETF", "INF109K012R6", "13611", "EQUITY")
+        h = _bare_holding("NIFTYIETF", "INF109K012R6", "13611", AssetType.EQUITY)
         assert upstox_keys_for_holdings([h]) == {"NSE_EQ|INF109K012R6"}

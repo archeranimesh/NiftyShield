@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 
+from src.models.portfolio import AssetType
+
 _TWO_DP = Decimal("0.01")
 
 
@@ -28,7 +30,7 @@ class DhanHolding:
         total_qty: Total quantity held in demat.
         collateral_qty: Quantity pledged as collateral.
         avg_cost_price: Average buy price from Dhan.
-        classification: 'EQUITY' or 'BOND'.
+        classification: AssetType.EQUITY or AssetType.BOND.
         ltp: Last traded price (from Dhan marketfeed). None if unavailable.
     """
 
@@ -39,7 +41,7 @@ class DhanHolding:
     total_qty: int
     collateral_qty: int
     avg_cost_price: Decimal
-    classification: str  # "EQUITY" or "BOND"
+    classification: AssetType
     ltp: Decimal | None = None
 
     @property

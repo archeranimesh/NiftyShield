@@ -8,6 +8,7 @@ import pytest
 
 from src.dhan.models import DhanHolding
 from src.dhan.store import DhanStore
+from src.models.portfolio import AssetType
 
 
 @pytest.fixture
@@ -26,14 +27,14 @@ def _make_holdings() -> list[DhanHolding]:
             trading_symbol="NIFTYIETF", isin="INF109K012R6",
             security_id="13611", exchange="NSE_EQ",
             total_qty=500, collateral_qty=500,
-            avg_cost_price=Decimal("268.50"), classification="EQUITY",
+            avg_cost_price=Decimal("268.50"), classification=AssetType.EQUITY,
             ltp=Decimal("275.40"),
         ),
         DhanHolding(
             trading_symbol="LIQUIDCASE", isin="INF0R8F01034",
             security_id="25780", exchange="NSE_EQ",
             total_qty=200, collateral_qty=200,
-            avg_cost_price=Decimal("1003.25"), classification="BOND",
+            avg_cost_price=Decimal("1003.25"), classification=AssetType.BOND,
             ltp=Decimal("1005.50"),
         ),
     ]
@@ -65,7 +66,7 @@ class TestRecordSnapshot:
             trading_symbol="NIFTYIETF", isin="INF109K012R6",
             security_id="13611", exchange="NSE_EQ",
             total_qty=500, collateral_qty=500,
-            avg_cost_price=Decimal("268.50"), classification="EQUITY",
+            avg_cost_price=Decimal("268.50"), classification=AssetType.EQUITY,
             ltp=Decimal("280.00"),
         )]
         store.record_snapshot(updated, d)
@@ -106,7 +107,7 @@ class TestGetSnapshotForDate:
             trading_symbol="TEST", isin="INF000001",
             security_id="99", exchange="NSE_EQ",
             total_qty=10, collateral_qty=0,
-            avg_cost_price=Decimal("100"), classification="EQUITY",
+            avg_cost_price=Decimal("100"), classification=AssetType.EQUITY,
             ltp=None,
         )
         store.record_snapshot([h], date(2026, 4, 14))

@@ -57,7 +57,7 @@ def _etf_cost_basis(strategies: list[Strategy]) -> Decimal:
         Sum of entry costs as Decimal.
     """
     return sum(
-        Decimal(str(leg.entry_price)) * Decimal(str(leg.quantity))
+        leg.entry_price * leg.quantity
         for strategy in strategies
         for leg in strategy.legs
         if leg.asset_type == AssetType.EQUITY

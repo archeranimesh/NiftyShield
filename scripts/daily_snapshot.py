@@ -39,6 +39,7 @@ import argparse
 import asyncio
 import os
 import sys
+import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -322,6 +323,9 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
 
     load_dotenv()
 
+    run_id = uuid.uuid4().hex[:8]
+    print(f"  run_id={run_id}")
+
     from src.client.exceptions import LTPFetchError
     from src.client.factory import create_client
     from src.mf.store import MFStore
@@ -393,7 +397,7 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
     except ValueError as e:
         print(f"  Dhan: skipped — {e}")
     except Exception as e:  # noqa: BLE001
-        print(f"  WARNING: Dhan holdings pre-fetch failed — {e}")
+        print(f"  WARNING [{run_id}]: Dhan holdings pre-fetch failed — {e}")
 
     print(f"  Strategies: {len(strategies)}, Instruments: {len(all_keys)}")
 
@@ -459,7 +463,7 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
         holdings = mf_store.get_holdings()
         prev_mf_pnl = _compute_prev_mf_pnl(prev_nav_snaps, holdings)
     except Exception as e:  # noqa: BLE001
-        print(f"  WARNING: MF snapshot failed — {e}")
+        print(f"  WARNING [{run_id}]: MF snapshot failed — {e}")
 
     # ── Dhan portfolio snapshot — enrich with Upstox prices (non-fatal) ──
     # Holdings were pre-fetched before the LTP batch; prices now available.
@@ -492,7 +496,7 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
                     f"P&L {dhan_summary.bond_pnl:+,.0f}"
                 )
         except Exception as e:  # noqa: BLE001
-            print(f"  WARNING: Dhan portfolio enrichment failed — {e}")
+            print(f"  WARNING [{run_id}]: Dhan portfolio enrichment failed — {e}")
 
     # ── Nuvama bond portfolio snapshot (non-fatal) ────────────────
     nuvama_summary = None
@@ -520,7 +524,7 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
         else:
             print("  Nuvama bonds: skipped — no positions seeded.")
     except Exception as e:  # noqa: BLE001
-        print(f"  WARNING: Nuvama bond snapshot failed — {e}")
+        print(f"  WARNING [{run_id}]: Nuvama bond snapshot failed — {e}")
         nuvama_api_instance = None
 
     # ── Nuvama options portfolio snapshot (non-fatal) ─────────────
@@ -557,7 +561,7 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
     except (ValueError, FileNotFoundError) as e:
         print(f"  Nuvama options: skipped — {e}")
     except Exception as e:  # noqa: BLE001
-        print(f"  WARNING: Nuvama options snapshot failed — {e}")
+        print(f"  WARNING [{run_id}]: Nuvama options snapshot failed — {e}")
 
     # ── Combined portfolio summary ────────────────────────────────
     summary_text = _format_combined_summary(

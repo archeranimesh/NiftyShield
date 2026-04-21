@@ -6,6 +6,7 @@ from decimal import Decimal
 import pytest
 
 from src.dhan.models import DhanHolding, DhanPortfolioSummary
+from src.models.portfolio import AssetType
 
 
 # ── Fixtures ─────────────────────────────────────────────────────
@@ -21,7 +22,7 @@ def _make_holding(**overrides) -> DhanHolding:
         "total_qty": 500,
         "collateral_qty": 500,
         "avg_cost_price": Decimal("268.50"),
-        "classification": "EQUITY",
+        "classification": AssetType.EQUITY,
         "ltp": Decimal("275.40"),
     }
     defaults.update(overrides)
@@ -88,16 +89,16 @@ class TestDhanHoldingProperties:
 class TestDhanHoldingClassification:
 
     def test_equity_classification(self):
-        h = _make_holding(classification="EQUITY")
-        assert h.classification == "EQUITY"
+        h = _make_holding(classification=AssetType.EQUITY)
+        assert h.classification == AssetType.EQUITY
 
     def test_bond_classification(self):
         h = _make_holding(
             trading_symbol="LIQUIDCASE",
             isin="INF0R8F01034",
-            classification="BOND",
+            classification=AssetType.BOND,
         )
-        assert h.classification == "BOND"
+        assert h.classification == AssetType.BOND
 
 
 # ── DhanPortfolioSummary ─────────────────────────────────────────

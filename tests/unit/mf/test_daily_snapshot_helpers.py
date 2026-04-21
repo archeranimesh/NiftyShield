@@ -28,7 +28,7 @@ from src.models.portfolio import AssetType, PortfolioSummary
 @dataclass
 class _Leg:
     instrument_key: str
-    entry_price: float
+    entry_price: Decimal
     quantity: int
     asset_type: AssetType
 
@@ -40,11 +40,11 @@ class _Strategy:
 
 
 def _etf_leg(key: str, entry_price: float, quantity: int) -> _Leg:
-    return _Leg(key, entry_price, quantity, AssetType.EQUITY)
+    return _Leg(key, Decimal(str(entry_price)), quantity, AssetType.EQUITY)
 
 
 def _fo_leg(key: str, entry_price: float, quantity: int) -> _Leg:
-    return _Leg(key, entry_price, quantity, AssetType.PE)
+    return _Leg(key, Decimal(str(entry_price)), quantity, AssetType.PE)
 
 
 def _strats(*legs: _Leg) -> list[_Strategy]:
@@ -82,7 +82,7 @@ def test_etf_cost_basis_multiple_etf_legs_summed() -> None:
 def test_etf_cost_basis_decimal_precision() -> None:
     """Entry price with sub-rupee precision must survive Decimal conversion."""
     strats = _strats(_etf_leg(ETF_KEY, 1388.12, 438))
-    assert _etf_cost_basis(strats) == Decimal(str(1388.12)) * 438
+    assert _etf_cost_basis(strats) == Decimal("1388.12") * 438
 
 
 # ── _etf_current_value ────────────────────────────────────────────

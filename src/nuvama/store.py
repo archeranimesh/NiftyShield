@@ -59,14 +59,19 @@ _CREATE_INTRADAY_SNAPSHOTS = """
 CREATE TABLE IF NOT EXISTS nuvama_intraday_snapshots (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp           TIMESTAMP NOT NULL,
-    nifty_spot          DECIMAL,
+    nifty_spot          REAL,
     trade_symbol        TEXT NOT NULL,
     net_qty             INTEGER NOT NULL,
-    ltp                 DECIMAL NOT NULL,
+    ltp                 REAL NOT NULL,
     unrealized_pnl      DECIMAL NOT NULL,
     realized_pnl_today  DECIMAL NOT NULL
 )
 """
+
+# Schema version for nuvama_intraday_snapshots.
+# v0: nifty_spot/ltp declared DECIMAL (misleading — values stored as REAL).
+# v1: corrected to REAL; old table dropped and recreated on first run.
+_INTRADAY_SCHEMA_VERSION = 1
 
 
 class NuvamaStore:
@@ -81,11 +86,26 @@ class NuvamaStore:
     # ------------------------------------------------------------------
 
     def _ensure_tables(self) -> None:
-        """Create tables if they do not exist."""
+        """Create tables if they do not exist.
+
+        AR-19 migration: nuvama_intraday_snapshots v0 declared nifty_spot/ltp
+        as DECIMAL (text affinity). v1 corrects them to REAL. Since this table
+        holds at most 30 days of intraday high/low data (not financial ledger
+        entries), we drop and recreate on schema version mismatch rather than
+        migrating in place.
+        """
         with connect(self._db_path) as conn:
             conn.execute(_CREATE_POSITIONS)
             conn.execute(_CREATE_SNAPSHOTS)
             conn.execute(_CREATE_OPTIONS_SNAPSHOTS)
+            stored_version = conn.execute("PRAGMA user_version").fetchone()[0]
+            if stored_version < _INTRADAY_SCHEMA_VERSION:
+                conn.execute(
+                    "DROP TABLE IF EXISTS nuvama_intraday_snapshots"
+                )
+                conn.execute(
+                    f"PRAGMA user_version = {_INTRADAY_SCHEMA_VERSION}"
+                )
             conn.execute(_CREATE_INTRADAY_SNAPSHOTS)
 
     # ------------------------------------------------------------------
@@ -432,7 +452,7 @@ class NuvamaStore:
             
             pnl_by_ts[ts] = pnl_by_ts.get(ts, Decimal("0")) + urlz + rlz
             if nifty is not None:
-                nifty_spots.append(float(str(nifty)))
+                nifty_spots.append(float(nifty))
                 
         pnls = list(pnl_by_ts.values())
         max_pnl = max(pnls) if pnls else None

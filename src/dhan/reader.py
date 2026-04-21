@@ -29,6 +29,7 @@ from typing import Any
 import requests
 
 from src.dhan.models import DhanHolding, DhanPortfolioSummary
+from src.models.portfolio import AssetType
 
 logger = logging.getLogger(__name__)
 
@@ -127,16 +128,16 @@ def fetch_ltp_raw(
 # ── Pure functions (no I/O) ──────────────────────────────────────
 
 
-def classify_holding(trading_symbol: str) -> str:
+def classify_holding(trading_symbol: str) -> AssetType:
     """Classify a holding as EQUITY or BOND based on trading symbol.
 
     Args:
         trading_symbol: NSE trading symbol.
 
     Returns:
-        'BOND' if the symbol is a known liquid/bond ETF, else 'EQUITY'.
+        AssetType.BOND if the symbol is a known liquid/bond ETF, else AssetType.EQUITY.
     """
-    return "BOND" if trading_symbol.strip().upper() in _BOND_SYMBOLS else "EQUITY"
+    return AssetType.BOND if trading_symbol.strip().upper() in _BOND_SYMBOLS else AssetType.EQUITY
 
 
 def build_dhan_holdings(
@@ -319,8 +320,8 @@ def build_dhan_summary(
     Returns:
         DhanPortfolioSummary with fully computed fields.
     """
-    equity = [h for h in holdings if h.classification == "EQUITY"]
-    bonds = [h for h in holdings if h.classification == "BOND"]
+    equity = [h for h in holdings if h.classification == AssetType.EQUITY]
+    bonds = [h for h in holdings if h.classification == AssetType.BOND]
 
     def _subtotal(group: list[DhanHolding]) -> tuple[Decimal, Decimal, Decimal, Decimal | None]:
         value = sum((h.current_value or h.cost_basis for h in group), Decimal("0"))
@@ -342,12 +343,12 @@ def build_dhan_summary(
     if prev_holdings:
         prev_eq_value = sum(
             (h.current_value or h.cost_basis for h in prev_holdings.values()
-             if h.classification == "EQUITY"),
+             if h.classification == AssetType.EQUITY),
             Decimal("0"),
         )
         prev_bd_value = sum(
             (h.current_value or h.cost_basis for h in prev_holdings.values()
-             if h.classification == "BOND"),
+             if h.classification == AssetType.BOND),
             Decimal("0"),
         )
         if prev_eq_value > 0 or eq_value > 0:

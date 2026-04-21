@@ -253,43 +253,37 @@ Compute `avg_price` from `buy_value / buy_qty` in Python with Decimal (preservin
 
 ---
 
-### P4 — Observability & Hygiene
+### P4 — Observability & Hygiene — **DONE 2026-04-21**
 
-Small items, each independently committable. None require test changes.
+All 7 items completed in one session. 859 tests pass.
 
-#### AR-13: Add `exc_info=True` to `logger.error` in `nuvama_intraday_tracker.py`
+#### ~~AR-13~~: Add `exc_info=True` to `logger.error` in `nuvama_intraday_tracker.py` — **DONE**
 
-Lines 66 and 104 use `logger.error("...: %s", e)` which loses the stack trace. Replace both with `logger.exception("...")` (equivalent to `logger.error(..., exc_info=True)`). Remove the `traceback.print_exc()` on line 68 — it duplicates to stderr outside the logging system.
+Replaced `logger.error("...: %s", e)` + `traceback.print_exc()` with `logger.exception("run_id=%s ...", run_id)` throughout `scripts/nuvama_intraday_tracker.py`.
 
-#### AR-14: Add a run/correlation ID to `_async_main` and `nuvama_intraday_tracker.main()`
+#### ~~AR-14~~: Add a run/correlation ID to `_async_main` and `nuvama_intraday_tracker.main()` — **DONE**
 
-When multiple non-fatal blocks fail in a single run, there is no way to group the log lines. Add at the start of each function:
-```python
-import uuid
-run_id = uuid.uuid4().hex[:8]
-logger.info("run_id=%s starting snapshot", run_id)
-```
-Pass `run_id` into log calls for the non-fatal blocks. Files: `scripts/daily_snapshot.py`, `scripts/nuvama_intraday_tracker.py`.
+Added `run_id = uuid.uuid4().hex[:8]` at the top of both entry points. All non-fatal WARNING blocks now include `[{run_id}]`.
 
-#### AR-15: Delete TD-6 dead assert — `src/client/upstox_live.py:46`
+#### ~~AR-15~~: Delete TD-6 dead assert — `src/client/upstox_live.py:46` — **DONE (pre-existing)**
 
-`assert issubclass(type, type)` is always `True`. It is dead code that looks like a guard. Delete it. No tests required.
+Assert was already absent; verified via grep.
 
-#### AR-16: Fix `__import__("datetime").date.today()` inline — `src/portfolio/tracker.py:126`
+#### ~~AR-16~~: Fix `__import__("datetime").date.today()` inline — `src/portfolio/tracker.py:126` — **DONE**
 
-`date` is already imported at line 12 of `tracker.py`. Replace `__import__("datetime").date.today()` with `date.today()`. No logic change.
+Replaced with `date.today()` — `date` was already imported at line 12.
 
-#### AR-17: Fix `classify_holding()` return type — `src/dhan/reader.py`
+#### ~~AR-17~~: Fix `classify_holding()` return type — `src/dhan/reader.py` — **DONE**
 
-`classify_holding()` returns `"BOND"` or `"EQUITY"` as plain strings while `AssetType` enum exists in `src/models/portfolio.py`. Downstream code does `if h.classification == "EQUITY"` string comparisons. Change `DhanHolding.classification` to `AssetType` and `classify_holding()` to return `AssetType.BOND` / `AssetType.EQUITY`. Update all downstream comparisons.
+Added `AssetType.BOND = "BOND"` to the enum in `src/models/portfolio.py`. Changed `DhanHolding.classification: str` → `AssetType`. Updated `classify_holding()`, all string comparisons in `build_dhan_summary()`, and all 4 affected test files (`test_models.py`, `test_reader.py`, `test_store.py`, `test_daily_snapshot_dhan.py`). Test stubs updated: `_Leg.entry_price: float` → `Decimal` (conversion at helper boundary).
 
-#### AR-18: Fix unnecessary Decimal round-trip in `_etf_cost_basis` — `src/portfolio/summary.py:60`
+#### ~~AR-18~~: Fix unnecessary Decimal round-trip in `_etf_cost_basis` — `src/portfolio/summary.py:60` — **DONE**
 
-`Decimal(str(leg.entry_price)) * Decimal(str(leg.quantity))` — `entry_price` is already a `Decimal`. `Decimal(str(Decimal))` is redundant. Replace with `leg.entry_price * leg.quantity` (multiplying `Decimal` by `int` is exact).
+Replaced `Decimal(str(leg.entry_price)) * Decimal(str(leg.quantity))` with `leg.entry_price * leg.quantity`. Test stubs in `test_daily_snapshot_helpers.py` and `test_daily_snapshot_dhan.py` updated to use `Decimal(str(float))` at the helper boundary (matching production type).
 
-#### AR-19: Fix `nifty_spot DECIMAL` → `REAL` in intraday schema — `src/nuvama/store.py`
+#### ~~AR-19~~: Fix `nifty_spot DECIMAL` → `REAL` in intraday schema — `src/nuvama/store.py` — **DONE**
 
-`nuvama_intraday_snapshots` declares `nifty_spot DECIMAL` and `ltp DECIMAL`. In SQLite, `DECIMAL` is a text affinity — values inserted as floats are stored as REAL. The column affinity is misleading. Change both to `REAL`. The `float(str(nifty))` in `get_intraday_extremes` can then be simplified to `float(nifty)`. **Requires a migration** — add `ALTER TABLE` or drop/recreate in `_ensure_tables` with a schema version guard.
+Changed DDL to `REAL`. Added `_INTRADAY_SCHEMA_VERSION = 1` guard via `PRAGMA user_version` — drops and recreates the 30-day-retention table on first run after deploy. Simplified `float(str(nifty))` → `float(nifty)` in `get_intraday_extremes()`.
 
 ---
 
@@ -397,4 +391,5 @@ All `# TODO:` comments updated to `# TODO: TD-7 — description` format per §3.
 | 2026-04-17 | **Doc sync (Claude).** Updated CONTEXT.md: header date, nuvama models entry (NuvamaOptionPosition + NuvamaOptionsSummary), options_reader entry (build_options_summary), store entry (nuvama_options_snapshots table + 6 new methods), portfolio.py PortfolioSummary nuvama_options_* fields, summary.py nuvama_options_summary param, nuvama_intraday_tracker script description, removed duplicate CLAUDE.md entry, test coverage note. Added two DECISIONS.md entries (Intelligent EOD Snapshot pattern + Nuvama SDK os._exit() rule). Added TODO-0 for missing option/intraday tests. |
 | 2026-04-21 | **Architecture review (Claude).** Full top-down review using `python-architecture-review.prompt.md` v6. 21 action items added to TODOS.md (AR-1 through AR-21) across 5 priority tiers. P0: two `if not x:` truthiness bugs that corrupt P&L snapshots. P1: Nuvama options + intraday test coverage gap (supersedes TODO-0). P2: `PortfolioSummary` god dataclass refactor, type safety in `_build_portfolio_summary`, Nuvama historical reconstruction hack, atomic record_all_*, Nuvama protocol abstraction. P3: SQL GROUP BY for cumulative PnL, N+1 fix in store, double LTP fetch, deferred imports in intraday tracker. P4: observability (exc_info, run ID, dead assert, classify_holding enum). P5: packaging hygiene. No code changed — review only. |
 | 2026-04-21 | **P0 correctness fixes (AR-1, AR-2).** AR-1: `tracker.py` — `prices.get(key, 0.0)` + `if not raw_ltp:` → `prices.get(key)` + `if raw_ltp is None:`. Zero LTP (expiring-worthless option) now used as-is instead of being replaced by entry_price. New test `test_compute_pnl_zero_ltp_used_as_is` in `tests/unit/test_portfolio.py`. AR-2: `daily_snapshot.py` lines 163 + 409 — `if underlying_price:` → `if underlying_price is not None:` at both occurrences. 785 tests passing (1 pre-existing rapidfuzz sandbox delta, unrelated). |
+| 2026-04-21 | **P4 hygiene (AR-13 through AR-19, Claude).** AR-13: `logger.exception()` + run_id in `nuvama_intraday_tracker.py`, dropped `traceback.print_exc()`. AR-14: `run_id = uuid.uuid4().hex[:8]` in both cron entry points; run_id threaded into all non-fatal WARNING prints. AR-15: pre-existing — dead assert already absent. AR-16: `__import__("datetime").date.today()` → `date.today()` in `tracker.py`. AR-17: Added `AssetType.BOND` to enum; `DhanHolding.classification: str` → `AssetType`; `classify_holding()` returns `AssetType`; all string comparisons and 4 test files updated; `_Leg` stubs corrected to `Decimal` entry_price. AR-18: Removed redundant `Decimal(str(...))` wrap in `_etf_cost_basis()`; test stubs fixed to convert float→Decimal at helper boundary. AR-19: `nuvama_intraday_snapshots` DDL `DECIMAL`→`REAL`; `PRAGMA user_version` schema guard (drop+recreate, v0→v1); `float(str(nifty))` → `float(nifty)`. 859 tests passing. |
 | 2026-04-21 | **P1 test coverage gap (AR-3) — Nuvama options + intraday.** Added 54 new tests across 3 files. `tests/unit/nuvama/test_models.py`: 11 new tests for `NuvamaOptionPosition` (construction, frozen, short/flat qty) and `NuvamaOptionsSummary` (construction, frozen, `net_pnl` property, cumulative exclusion, intraday bounds). `tests/unit/nuvama/test_options_reader.py` (new file): 26 tests for `parse_options_positions` (OPTIDX/OPTSTK happy paths, non-option filtering, flat position, short/long price selection, cfAvg→avg fallbacks, instrument name construction, missing key, malformed record edge cases) and `build_options_summary` (unrealized/realized aggregation, cumulative map, intraday bounds propagation, `net_pnl` correctness). `tests/unit/nuvama/test_store.py`: 13 new tests for `record_all_options_snapshots` (multi-insert, empty list, idempotent upsert) and intraday methods (`record_intraday_positions`, `get_intraday_extremes`: empty/single-timestamp/multi-timestamp/multi-leg summation/date isolation, `purge_old_intraday`: removes old / keeps recent / auto-purge on write). 847 passing, 12 pre-existing upstox_live sandbox failures unchanged. |

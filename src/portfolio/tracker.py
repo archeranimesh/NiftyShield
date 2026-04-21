@@ -123,7 +123,7 @@ def apply_trade_positions(
             updated_legs.append(leg)
 
     # Append legs that exist in trades but not in the strategy definition
-    entry_date = strategy.legs[0].entry_date if strategy.legs else __import__("datetime").date.today()
+    entry_date = strategy.legs[0].entry_date if strategy.legs else date.today()
     for leg_role, (net_qty, avg_price, instrument_key) in positions.items():
         if instrument_key in matched_keys:
             continue
