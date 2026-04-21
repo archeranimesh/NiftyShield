@@ -249,14 +249,192 @@ class TestOptionsSnapshots:
         d1 = date(2026, 4, 10)
         d2 = date(2026, 4, 11)
         d3 = date(2026, 4, 12)
-        
+
         store.record_options_snapshot(d1, "A", "Ins", 0, Decimal("0"), Decimal("0"), Decimal("0"), Decimal("10"))
         store.record_options_snapshot(d2, "A", "Ins", 0, Decimal("0"), Decimal("0"), Decimal("0"), Decimal("20"))
         store.record_options_snapshot(d3, "A", "Ins", 0, Decimal("0"), Decimal("0"), Decimal("0"), Decimal("30"))
-        
+
         # before d2 -> only d1
         assert store.get_cumulative_realized_pnl(before_date=d2)["A"] == Decimal("10")
         # before d3 -> d1 + d2
         assert store.get_cumulative_realized_pnl(before_date=d3)["A"] == Decimal("30")
         # before far future -> all
         assert store.get_cumulative_realized_pnl(before_date=date(2026, 5, 1))["A"] == Decimal("60")
+
+
+# ---------------------------------------------------------------------------
+# record_all_options_snapshots
+# ---------------------------------------------------------------------------
+
+
+class TestRecordAllOptionsSnapshots:
+    def _make_pos(self, symbol: str, unrealized: str = "1000", realized: str = "0"):
+        from src.nuvama.models import NuvamaOptionPosition
+        return NuvamaOptionPosition(
+            trade_symbol=symbol,
+            instrument_name=f"Inst {symbol}",
+            net_qty=-50,
+            avg_price=Decimal("120"),
+            ltp=Decimal("90"),
+            unrealized_pnl=Decimal(unrealized),
+            realized_pnl_today=Decimal(realized),
+        )
+
+    def test_records_multiple_positions(self, store):
+        positions = [self._make_pos("A"), self._make_pos("B")]
+        store.record_all_options_snapshots(positions, date(2026, 4, 21))
+        result = store.get_options_snapshot_for_date(date(2026, 4, 21))
+        assert len(result) == 2
+        assert {r["trade_symbol"] for r in result} == {"A", "B"}
+
+    def test_empty_list_no_crash(self, store):
+        store.record_all_options_snapshots([], date(2026, 4, 21))
+        assert store.get_options_snapshot_for_date(date(2026, 4, 21)) == []
+
+    def test_idempotent_upsert_same_day(self, store):
+        """Re-running record_all on the same day must not duplicate rows."""
+        pos = self._make_pos("A")
+        store.record_all_options_snapshots([pos], date(2026, 4, 21))
+        store.record_all_options_snapshots([pos], date(2026, 4, 21))
+        result = store.get_options_snapshot_for_date(date(2026, 4, 21))
+        assert len(result) == 1  # upsert — not duplicated
+
+
+# ---------------------------------------------------------------------------
+# Intraday store methods
+# ---------------------------------------------------------------------------
+
+
+class TestIntradayStore:
+    """Tests for record_intraday_positions, get_intraday_extremes, purge_old_intraday."""
+
+    def _pos(self, symbol: str = "A", unrealized: str = "1000", realized: str = "200"):
+        from types import SimpleNamespace
+        return SimpleNamespace(
+            trade_symbol=symbol,
+            net_qty=-50,
+            ltp=Decimal("90"),
+            unrealized_pnl=Decimal(unrealized),
+            realized_pnl_today=Decimal(realized),
+        )
+
+    def test_record_intraday_inserts_rows(self, store):
+        import sqlite3
+        from datetime import datetime
+        ts = datetime(2026, 4, 21, 9, 15, 0)
+        store.record_intraday_positions(ts, 22950.5, [self._pos("A")])
+        with sqlite3.connect(store._db_path) as conn:
+            rows = conn.execute("SELECT * FROM nuvama_intraday_snapshots").fetchall()
+        assert len(rows) == 1
+
+    def test_get_intraday_extremes_empty_returns_nones(self, store):
+        assert store.get_intraday_extremes(date(2026, 4, 21)) == (None, None, None, None)
+
+    def test_get_intraday_extremes_single_timestamp(self, store):
+        from datetime import datetime
+        ts = datetime(2026, 4, 21, 9, 15, 0)
+        store.record_intraday_positions(ts, 22950.5, [self._pos("A", "1000", "200")])
+        max_pnl, min_pnl, nifty_high, nifty_low = store.get_intraday_extremes(date(2026, 4, 21))
+        # single timestamp: 1000 + 200 = 1200
+        assert max_pnl == Decimal("1200")
+        assert min_pnl == Decimal("1200")
+        assert nifty_high == 22950.5
+        assert nifty_low == 22950.5
+
+    def test_get_intraday_extremes_multiple_timestamps(self, store):
+        """max/min taken across aggregated per-timestamp totals."""
+        from datetime import datetime
+        ts1 = datetime(2026, 4, 21, 9, 15, 0)
+        ts2 = datetime(2026, 4, 21, 9, 20, 0)
+        store.record_intraday_positions(ts1, 22950.5, [self._pos("A", "1000", "0")])
+        store.record_intraday_positions(ts2, 23100.0, [self._pos("A", "-500", "0")])
+        max_pnl, min_pnl, nifty_high, nifty_low = store.get_intraday_extremes(date(2026, 4, 21))
+        assert max_pnl == Decimal("1000")
+        assert min_pnl == Decimal("-500")
+        assert nifty_high == 23100.0
+        assert nifty_low == 22950.5
+
+    def test_get_intraday_extremes_multi_leg_same_timestamp(self, store):
+        """Multiple legs at the same timestamp are SUMMED before taking max/min."""
+        from datetime import datetime
+        ts = datetime(2026, 4, 21, 9, 15, 0)
+        pos_a = self._pos("A", unrealized="1000", realized="0")
+        pos_b = self._pos("B", unrealized="500", realized="100")
+        store.record_intraday_positions(ts, 23000.0, [pos_a, pos_b])
+        max_pnl, min_pnl, _, _ = store.get_intraday_extremes(date(2026, 4, 21))
+        # 1000 + 0 + 500 + 100 = 1600
+        assert max_pnl == Decimal("1600")
+        assert min_pnl == Decimal("1600")
+
+    def test_get_intraday_extremes_date_isolation(self, store):
+        """Yesterday's rows must not appear in today's query."""
+        from datetime import datetime
+        ts_today = datetime(2026, 4, 21, 9, 15, 0)
+        ts_yest = datetime(2026, 4, 20, 9, 15, 0)
+        store.record_intraday_positions(ts_today, 23000.0, [self._pos("A", "1000", "0")])
+        store.record_intraday_positions(ts_yest, 22000.0, [self._pos("A", "9999", "0")])
+        max_pnl, _, _, _ = store.get_intraday_extremes(date(2026, 4, 21))
+        assert max_pnl == Decimal("1000")  # yesterday's 9999 excluded
+
+    def test_get_intraday_extremes_nifty_none_when_no_rows(self, store):
+        result = store.get_intraday_extremes(date(2026, 4, 21))
+        assert result[2] is None  # nifty_high
+        assert result[3] is None  # nifty_low
+
+    def test_purge_removes_old_rows(self, store):
+        """Rows older than the retention window are deleted by purge_old_intraday."""
+        import sqlite3
+        from datetime import datetime, timedelta
+        old_ts = (datetime.now() - timedelta(days=31)).isoformat()
+        with sqlite3.connect(store._db_path) as conn:
+            conn.execute(
+                """INSERT INTO nuvama_intraday_snapshots
+                   (timestamp, nifty_spot, trade_symbol, net_qty, ltp,
+                    unrealized_pnl, realized_pnl_today)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (old_ts, 23000.0, "OLD", -50, "90", "1000", "0"),
+            )
+        store.purge_old_intraday(days=30)
+        with sqlite3.connect(store._db_path) as conn:
+            rows = conn.execute("SELECT * FROM nuvama_intraday_snapshots").fetchall()
+        assert len(rows) == 0
+
+    def test_purge_keeps_recent_rows(self, store):
+        """Rows within the retention window are preserved by purge_old_intraday."""
+        import sqlite3
+        from datetime import datetime, timedelta
+        recent_ts = (datetime.now() - timedelta(days=1)).isoformat()
+        with sqlite3.connect(store._db_path) as conn:
+            conn.execute(
+                """INSERT INTO nuvama_intraday_snapshots
+                   (timestamp, nifty_spot, trade_symbol, net_qty, ltp,
+                    unrealized_pnl, realized_pnl_today)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (recent_ts, 23000.0, "RECENT", -50, "90", "1000", "0"),
+            )
+        store.purge_old_intraday(days=30)
+        with sqlite3.connect(store._db_path) as conn:
+            rows = conn.execute("SELECT * FROM nuvama_intraday_snapshots").fetchall()
+        assert len(rows) == 1
+
+    def test_record_intraday_purges_automatically(self, store):
+        """record_intraday_positions calls purge on every write — stale rows are cleaned up."""
+        import sqlite3
+        from datetime import datetime, timedelta
+        old_ts = (datetime.now() - timedelta(days=31)).isoformat()
+        with sqlite3.connect(store._db_path) as conn:
+            conn.execute(
+                """INSERT INTO nuvama_intraday_snapshots
+                   (timestamp, nifty_spot, trade_symbol, net_qty, ltp,
+                    unrealized_pnl, realized_pnl_today)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (old_ts, 23000.0, "OLD", -50, "90", "1000", "0"),
+            )
+        # new record_intraday_positions call should purge the old row automatically
+        new_ts = datetime(2026, 4, 21, 9, 15, 0)
+        store.record_intraday_positions(new_ts, 23000.0, [self._pos("NEW")])
+        with sqlite3.connect(store._db_path) as conn:
+            rows = conn.execute("SELECT trade_symbol FROM nuvama_intraday_snapshots").fetchall()
+        symbols = [r[0] for r in rows]
+        assert "OLD" not in symbols
+        assert "NEW" in symbols

@@ -203,3 +203,164 @@ def test_summary_holdings_tuple():
     s = _make_summary([h])
     assert isinstance(s.holdings, tuple)
     assert len(s.holdings) == 1
+
+
+# ===========================================================================
+# NuvamaOptionPosition
+# ===========================================================================
+
+from src.nuvama.models import NuvamaOptionPosition, NuvamaOptionsSummary  # noqa: E402
+
+
+def _make_option_pos(
+    symbol: str = "NIFTY2642123000PE",
+    net_qty: int = -50,
+    unrealized: str = "1500.00",
+    realized_today: str = "0.00",
+) -> NuvamaOptionPosition:
+    return NuvamaOptionPosition(
+        trade_symbol=symbol,
+        instrument_name="NIFTY 21 APR PE 23000",
+        net_qty=net_qty,
+        avg_price=Decimal("120.00"),
+        ltp=Decimal("90.00"),
+        unrealized_pnl=Decimal(unrealized),
+        realized_pnl_today=Decimal(realized_today),
+    )
+
+
+def test_option_position_construction():
+    pos = _make_option_pos()
+    assert pos.trade_symbol == "NIFTY2642123000PE"
+    assert pos.instrument_name == "NIFTY 21 APR PE 23000"
+    assert pos.net_qty == -50
+    assert pos.avg_price == Decimal("120.00")
+    assert pos.ltp == Decimal("90.00")
+    assert pos.unrealized_pnl == Decimal("1500.00")
+    assert pos.realized_pnl_today == Decimal("0.00")
+
+
+def test_option_position_frozen():
+    pos = _make_option_pos()
+    with pytest.raises((AttributeError, TypeError)):
+        pos.net_qty = 10  # type: ignore[misc]
+
+
+def test_option_position_short_negative_qty():
+    pos = _make_option_pos(net_qty=-100)
+    assert pos.net_qty < 0
+
+
+def test_option_position_flat_zero_qty_captures_realized():
+    """Squared-off position (net_qty=0) is valid — realized PnL must be preserved."""
+    pos = NuvamaOptionPosition(
+        trade_symbol="FLAT",
+        instrument_name="FLAT 21 APR PE 23000",
+        net_qty=0,
+        avg_price=Decimal("0"),
+        ltp=Decimal("0"),
+        unrealized_pnl=Decimal("0"),
+        realized_pnl_today=Decimal("300.00"),
+    )
+    assert pos.net_qty == 0
+    assert pos.realized_pnl_today == Decimal("300.00")
+    assert pos.avg_price == Decimal("0")
+
+
+# ===========================================================================
+# NuvamaOptionsSummary
+# ===========================================================================
+
+
+def test_options_summary_construction():
+    pos = _make_option_pos()
+    summary = NuvamaOptionsSummary(
+        snapshot_date=date(2026, 4, 21),
+        positions=(pos,),
+        total_unrealized_pnl=Decimal("1500.00"),
+        total_realized_pnl_today=Decimal("0.00"),
+        cumulative_realized_pnl=Decimal("5000.00"),
+    )
+    assert summary.snapshot_date == date(2026, 4, 21)
+    assert len(summary.positions) == 1
+    assert summary.total_unrealized_pnl == Decimal("1500.00")
+    assert summary.cumulative_realized_pnl == Decimal("5000.00")
+
+
+def test_options_summary_frozen():
+    summary = NuvamaOptionsSummary(
+        snapshot_date=date(2026, 4, 21),
+        positions=(),
+        total_unrealized_pnl=Decimal("0"),
+        total_realized_pnl_today=Decimal("0"),
+        cumulative_realized_pnl=Decimal("0"),
+    )
+    with pytest.raises((AttributeError, TypeError)):
+        summary.total_unrealized_pnl = Decimal("999")  # type: ignore[misc]
+
+
+def test_options_summary_net_pnl_is_unrealized_plus_today():
+    """net_pnl = unrealized + today's realized only (NOT cumulative)."""
+    summary = NuvamaOptionsSummary(
+        snapshot_date=date(2026, 4, 21),
+        positions=(),
+        total_unrealized_pnl=Decimal("1500.00"),
+        total_realized_pnl_today=Decimal("300.00"),
+        cumulative_realized_pnl=Decimal("10000.00"),
+    )
+    assert summary.net_pnl == Decimal("1800.00")
+
+
+def test_options_summary_net_pnl_excludes_cumulative():
+    """Regression: a large cumulative must not inflate net_pnl."""
+    summary = NuvamaOptionsSummary(
+        snapshot_date=date(2026, 4, 21),
+        positions=(),
+        total_unrealized_pnl=Decimal("0"),
+        total_realized_pnl_today=Decimal("0"),
+        cumulative_realized_pnl=Decimal("99999.00"),
+    )
+    assert summary.net_pnl == Decimal("0")
+
+
+def test_options_summary_intraday_fields_default_none():
+    summary = NuvamaOptionsSummary(
+        snapshot_date=date(2026, 4, 21),
+        positions=(),
+        total_unrealized_pnl=Decimal("0"),
+        total_realized_pnl_today=Decimal("0"),
+        cumulative_realized_pnl=Decimal("0"),
+    )
+    assert summary.intraday_high is None
+    assert summary.intraday_low is None
+    assert summary.nifty_high is None
+    assert summary.nifty_low is None
+
+
+def test_options_summary_with_intraday_bounds():
+    summary = NuvamaOptionsSummary(
+        snapshot_date=date(2026, 4, 21),
+        positions=(),
+        total_unrealized_pnl=Decimal("0"),
+        total_realized_pnl_today=Decimal("0"),
+        cumulative_realized_pnl=Decimal("0"),
+        intraday_high=Decimal("3000.00"),
+        intraday_low=Decimal("-500.00"),
+        nifty_high=23100.5,
+        nifty_low=22950.0,
+    )
+    assert summary.intraday_high == Decimal("3000.00")
+    assert summary.intraday_low == Decimal("-500.00")
+    assert summary.nifty_high == 23100.5
+    assert summary.nifty_low == 22950.0
+
+
+def test_options_summary_empty_positions():
+    summary = NuvamaOptionsSummary(
+        snapshot_date=date(2026, 4, 21),
+        positions=(),
+        total_unrealized_pnl=Decimal("0"),
+        total_realized_pnl_today=Decimal("0"),
+        cumulative_realized_pnl=Decimal("0"),
+    )
+    assert summary.positions == ()

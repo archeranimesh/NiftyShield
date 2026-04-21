@@ -214,7 +214,7 @@ Strategy leg tables (instrument keys, entry prices, quantities, protected MF por
 
 ## Test Coverage
 
-- **Total: 805 tests** (all passing; 774 pre-existing + 31 market_calendar)
+- **Total: ~859 tests** (847 passing; 12 pre-existing `test_upstox_live.py` sandbox failures — unrelated to recent changes)
 - Run: `python -m pytest tests/unit/`
 - Auth tests: `tests/unit/auth/` (64 tests — Nuvama login + verify, Dhan login + verify)
 - MF tests: `tests/unit/mf/` (127 tests)
@@ -222,7 +222,7 @@ Strategy leg tables (instrument keys, entry prices, quantities, protected MF por
 - Client tests: `tests/unit/test_client.py`, `test_protocol.py`, `test_exceptions.py`, `test_factory.py`, `test_mock_client.py`, `test_upstox_live.py` (90+ tests)
 - Snapshot tests: `tests/unit/test_daily_snapshot_historical.py`, `test_daily_snapshot_helpers.py`, `test_notifications.py` (50+ tests)
 - Dhan tests: `tests/unit/dhan/` (90 tests — models, reader, store, daily_snapshot integration)
-- Nuvama tests: `tests/unit/nuvama/` (123 tests — bond models, bond store, reader, seed, portfolio summary integration; **⚠️ no tests yet for NuvamaOptionPosition/NuvamaOptionsSummary, parse_options_positions(), build_options_summary(), options store methods, or intraday store methods — see TODOS.md**)
+- Nuvama tests: `tests/unit/nuvama/` (176 tests — bond models, bond store, reader, seed, portfolio summary integration, **NuvamaOptionPosition + NuvamaOptionsSummary models (AR-3), parse_options_positions + build_options_summary (AR-3), record_all_options_snapshots, record_intraday_positions, get_intraday_extremes, purge_old_intraday (AR-3)**)
 
 ---
 
