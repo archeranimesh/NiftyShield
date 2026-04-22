@@ -455,6 +455,42 @@ This project is for personal use and educational purposes. Options trading invol
 
 ---
 
+## Reference Documents (for AI assistants and contributors)
+
+The project root contains a set of markdown files that serve as structured context for both AI coding assistants and human contributors. `CLAUDE.md` defines exactly when each file should be loaded.
+
+### Always load at the start of every session
+
+| File | Purpose |
+|---|---|
+| [`CLAUDE.md`](CLAUDE.md) | AI pre-task protocol — mandatory 6-step workflow: read context → confirm scope → plan → test → update docs → commit. Loaded automatically at session start. |
+| [`CONTEXT.md`](CONTEXT.md) | **Single source of truth** for codebase state — full module tree, what exists vs. what doesn't, live DB state, test coverage counts, and active constraints. Read before writing any code. |
+
+### Load when relevant
+
+| File | When to load | Purpose |
+|---|---|---|
+| [`DECISIONS.md`](DECISIONS.md) | Adding or changing module architecture | Architecture decisions with rationale and tradeoffs — why specific design choices were made and what alternatives were rejected. |
+| [`REFERENCES.md`](REFERENCES.md) | Touching instrument keys, AMFI codes, or market data | Instrument keys, AMFI scheme codes, API quirks, token lifetimes, exact DB column names. |
+| [`TODOS.md`](TODOS.md) | Starting a new feature | Two-in-one: open action items (priority-tiered P0→P5 from architecture review) + chronological session log. Mark items done and add a log entry after each session. |
+| [`PLANNER.md`](PLANNER.md) | Starting a new feature | Multi-sprint feature roadmap — where the next task fits in the overall sequence. |
+| [`BACKTEST_PLAN.md`](BACKTEST_PLAN.md) | Any backtest, paper trading, or strategy research task | Phased backtesting → paper trading → live execution pipeline plan. Read before any Phase 0–4 work. |
+| [`LITERATURE.md`](LITERATURE.md) | Implementing a quantitative metric, ratio, or ML technique | Concept reference for Kelly Criterion, Sharpe ratio, meta-labeling, Greeks. Each entry carries a `LIT-N` code referenced in code comments and TODOs. |
+| [`REVIEW.md`](REVIEW.md) | Before every commit (via `code-reviewer` agent) | Python code review checklist — subtle bug patterns (Part I), Pythonic idioms (Part II), and Google Style Guide mandatory rules G1–G8: no `@staticmethod`, 80-char line limit, `%`-style logger calls, etc. (Part III). |
+
+### Quick reference — when to read what
+
+```
+Every session          →  CLAUDE.md  +  CONTEXT.md
+New feature            →  + TODOS.md + PLANNER.md
+Architecture change    →  + DECISIONS.md
+Market data / keys     →  + REFERENCES.md
+Backtest / strategy    →  + BACKTEST_PLAN.md + LITERATURE.md
+Before each commit     →  REVIEW.md  (via code-reviewer agent)
+```
+
+---
+
 ## License
 
 Private repository. Not for redistribution.
