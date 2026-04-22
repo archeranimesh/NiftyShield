@@ -47,7 +47,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 # Pure-computation helpers only need these types at import time — no I/O.
-from src.market_calendar.holidays import is_trading_day  # noqa: E402
+from src.market_calendar.holidays import is_trading_day, prev_trading_day  # noqa: E402
 from src.models.portfolio import DailySnapshot, Strategy  # noqa: E402
 from src.portfolio.formatting import (  # noqa: E402
     _format_combined_summary,
@@ -458,8 +458,13 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
             print(
                 "  MF portfolio: no holdings — skipped (run seed_mf_holdings.py first)"
             )
-        # Previous day's MF value for day-change delta (non-fatal)
-        prev_nav_snaps = mf_store.get_prev_nav_snapshots(snap_date)
+        # Previous day's MF value for day-change delta (non-fatal).
+        # We look back to prev_trading_day(snap_date), not snap_date itself.
+        # morning_nav.py corrects yesterday's row to yesterday's actual NAV;
+        # daily_snapshot at 15:45 writes today's row with yesterday's NAV
+        # (AMFI not yet published).  Without this offset, both rows have the
+        # same NAV and the delta collapses to 0.
+        prev_nav_snaps = mf_store.get_prev_nav_snapshots(prev_trading_day(snap_date))
         holdings = mf_store.get_holdings()
         prev_mf_pnl = _compute_prev_mf_pnl(prev_nav_snaps, holdings)
     except Exception as e:  # noqa: BLE001
