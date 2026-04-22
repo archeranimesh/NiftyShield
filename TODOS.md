@@ -104,7 +104,7 @@ Specifically, the `MockNuvamaClient` protocol (AR-9 below) must exist first to m
 
 These must be done before adding a new strategy or data source in Phase 0. Each new integration without these fixes adds another 5–9 fields to `PortfolioSummary` and another non-fatal block in `_async_main`.
 
-#### AR-4: Refactor `PortfolioSummary` from flat accumulator to per-source composition
+#### ~~AR-4~~: Refactor `PortfolioSummary` from flat accumulator to per-source composition — **DONE 2026-04-22**
 
 **Problem:** `PortfolioSummary` (`src/models/portfolio.py:198–277`) has 26 fields, grown by 5–9 per integration (Dhan +10, Nuvama bonds +5, Nuvama options +9). Adding the next source (CSP, Zerodha, anything) requires editing `PortfolioSummary`, `_build_portfolio_summary`, `_format_combined_summary`, `_async_main`, and `_historical_main` — 5 files, 3 layers.
 
@@ -140,7 +140,7 @@ class PortfolioSummary:
 **Files:** `src/models/portfolio.py`, `src/portfolio/summary.py`, `src/portfolio/formatting.py`, test files asserting on `PortfolioSummary` fields.
 **Note:** `_async_main` and `_historical_main` do NOT change — they already pass the right objects in.
 
-#### AR-5: Type the `object | None` parameters in `_build_portfolio_summary`
+#### ~~AR-5~~: Type the `object | None` parameters in `_build_portfolio_summary` — **DONE 2026-04-22**
 
 Partially overlaps with AR-4 but has independent value. Even before AR-4 is done, the function can be properly typed using `TYPE_CHECKING`-guarded imports.
 
@@ -158,7 +158,7 @@ Replace `object | None` parameter types with the real types. Remove all 14 `# ty
 
 **Files:** `src/portfolio/summary.py`, `src/portfolio/formatting.py`, `scripts/daily_snapshot.py`.
 
-#### AR-6: Fix `NuvamaBondHolding` historical reconstruction hack — `daily_snapshot.py:231–245`
+#### ~~AR-6~~: Fix `NuvamaBondHolding` historical reconstruction hack — `daily_snapshot.py:231–245` — **DONE 2026-04-22**
 
 **Problem:** `_historical_main` constructs `NuvamaBondHolding` stubs with `qty=1` and `ltp=current_value` to trick the `current_value` property (`ltp × qty`) into returning the stored snapshot value. This is a silent correctness dependency: if `NuvamaBondHolding.current_value` ever gains additional terms (e.g., haircut), the historical path silently diverges.
 
@@ -166,7 +166,7 @@ Replace `object | None` parameter types with the real types. Remove all 14 `# ty
 
 **Files:** `src/nuvama/reader.py`, `src/nuvama/store.py`, `scripts/daily_snapshot.py`.
 
-#### AR-7: Make `record_all_snapshots` and `record_all_options_snapshots` atomic — `src/nuvama/store.py`
+#### ~~AR-7~~: Make `record_all_snapshots` and `record_all_options_snapshots` atomic — `src/nuvama/store.py` — **DONE 2026-04-22**
 
 **Problem:** Both methods iterate and commit each row in a separate transaction. A mid-iteration crash leaves a partial day's snapshot persisted. Compare with `PortfolioStore.record_snapshots_bulk()` which uses `executemany` in one connection block.
 
@@ -394,3 +394,4 @@ All `# TODO:` comments updated to `# TODO: TD-7 — description` format per §3.
 | 2026-04-21 | **P4 hygiene (AR-13 through AR-19, Claude).** AR-13: `logger.exception()` + run_id in `nuvama_intraday_tracker.py`, dropped `traceback.print_exc()`. AR-14: `run_id = uuid.uuid4().hex[:8]` in both cron entry points; run_id threaded into all non-fatal WARNING prints. AR-15: pre-existing — dead assert already absent. AR-16: `__import__("datetime").date.today()` → `date.today()` in `tracker.py`. AR-17: Added `AssetType.BOND` to enum; `DhanHolding.classification: str` → `AssetType`; `classify_holding()` returns `AssetType`; all string comparisons and 4 test files updated; `_Leg` stubs corrected to `Decimal` entry_price. AR-18: Removed redundant `Decimal(str(...))` wrap in `_etf_cost_basis()`; test stubs fixed to convert float→Decimal at helper boundary. AR-19: `nuvama_intraday_snapshots` DDL `DECIMAL`→`REAL`; `PRAGMA user_version` schema guard (drop+recreate, v0→v1); `float(str(nifty))` → `float(nifty)`. 859 tests passing. |
 | 2026-04-21 | **P1 test coverage gap (AR-3) — Nuvama options + intraday.** Added 54 new tests across 3 files. `tests/unit/nuvama/test_models.py`: 11 new tests for `NuvamaOptionPosition` (construction, frozen, short/flat qty) and `NuvamaOptionsSummary` (construction, frozen, `net_pnl` property, cumulative exclusion, intraday bounds). `tests/unit/nuvama/test_options_reader.py` (new file): 26 tests for `parse_options_positions` (OPTIDX/OPTSTK happy paths, non-option filtering, flat position, short/long price selection, cfAvg→avg fallbacks, instrument name construction, missing key, malformed record edge cases) and `build_options_summary` (unrealized/realized aggregation, cumulative map, intraday bounds propagation, `net_pnl` correctness). `tests/unit/nuvama/test_store.py`: 13 new tests for `record_all_options_snapshots` (multi-insert, empty list, idempotent upsert) and intraday methods (`record_intraday_positions`, `get_intraday_extremes`: empty/single-timestamp/multi-timestamp/multi-leg summation/date isolation, `purge_old_intraday`: removes old / keeps recent / auto-purge on write). 847 passing, 12 pre-existing upstox_live sandbox failures unchanged. |
 | 2026-04-22 | **Morning NAV backfill script.** `scripts/morning_nav.py`: standalone cron script that fetches AMFI NAVs and upserts the previous trading day's MF snapshot. Fixes the stale-NAV problem where the 15:45 snapshot captures T-2 NAV (AMFI hasn't published yet). Runs at 09:15 IST — `prev_trading_day(date.today())` handles Mon→Fri and holiday edge cases. `--date` override for manual recovery. 6 new tests in `tests/unit/test_morning_nav.py`. Cron: `15 9 * * 1-5 cd /path/to/NiftyShield && python -m scripts.morning_nav >> logs/snapshot.log 2>&1`. |
+| 2026-04-22 | **P2 architecture refactor (AR-4, AR-5, AR-6, AR-7 — Claude).** AR-7: `record_all_snapshots` + `record_all_options_snapshots` rewritten to use `executemany` inside a single `with connect() as conn:` block — atomicity matches `PortfolioStore.record_snapshots_bulk()`. Rollback tests added. AR-5: `object|None` params replaced with real types via `TYPE_CHECKING` guards in `summary.py` + `formatting.py`; all 14 `# type: ignore[union-attr]` suppressions removed. AR-6: `get_snapshot_for_date` now returns `dict[str,dict]` with `qty/ltp/current_value` keys; `_historical_main` reconstructs true `NuvamaBondHolding` objects from stored `qty`+`ltp` — `qty=1` stub gone. AR-4: `PortfolioSummary` refactored from 26-field flat accumulator to 16-field composed model with four typed `Optional` source references (`mf_pnl`, `dhan`, `nuvama_bonds`, `nuvama_options`); availability exposed as computed `@property`; `_build_portfolio_summary` dead intermediate variables removed; `formatting.py` double-guards inside available-checks eliminated. `test_portfolio_summary_nuvama.py` deleted (superseded). `test_telegram_formatting.py` added (cross-source smoke test with numeric delta assertions). All REVIEW.md G2 violations in new diff lines fixed (long arithmetic lines wrapped). 846 passing; 1 pre-existing rapidfuzz/difflib delta in `test_lookup.py`; 12 pre-existing sandbox skips unchanged. Commit: `4de0ec4`. |

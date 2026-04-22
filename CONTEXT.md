@@ -7,7 +7,7 @@
 **Related files:** [DECISIONS.md](DECISIONS.md) | [REFERENCES.md](REFERENCES.md) | [TODOS.md](TODOS.md) | [PLANNER.md](PLANNER.md) | [BACKTEST_PLAN.md](BACKTEST_PLAN.md) — phased backtest → paper → live plan | [LITERATURE.md](LITERATURE.md) — concept reference (Kelly, Sharpe, meta-labeling) | [docs/plan/](docs/plan/) — one story file per task | [INSTRUCTION.md](INSTRUCTION.md)
 ---
 
-## Current State (as of 2026-04-17)
+## Current State (as of 2026-04-22)
 
 ### What Exists (committed and working)
 
@@ -26,14 +26,14 @@ src/
 │   └── order_lifecycle.py    # Place → Modify → Cancel via V3 Order API (sandbox=True)
 ├── models/
 │   ├── __init__.py           # Re-exports all shared models from portfolio.py + mf.py for convenience.
-│   ├── portfolio.py          # Canonical home for all portfolio domain types: Leg, Strategy, DailySnapshot, Trade, TradeAction, Direction, ProductType, AssetType, PortfolioSummary. Migrated from src/portfolio/models.py (TODO 4, 2026-04-16). Monetary fields Decimal; P&L methods accept float|Decimal. PortfolioSummary extended with 9 nuvama_options_* fields: nuvama_options_pnl/unrealized/realized/intraday_high/intraday_low/nuvama_nifty_high/nuvama_nifty_low/nuvama_options_day_delta/nuvama_options_available (all default-zero/False/None).
+│   ├── portfolio.py          # Canonical home for all portfolio domain types: Leg, Strategy, DailySnapshot, Trade, TradeAction, Direction, ProductType, AssetType, PortfolioSummary. Monetary fields Decimal; P&L methods accept float|Decimal. PortfolioSummary refactored (AR-4): 16 flat cross-source fields + four typed Optional source references: mf_pnl (PortfolioPnL|None), dhan (DhanPortfolioSummary|None), nuvama_bonds (NuvamaBondSummary|None), nuvama_options (NuvamaOptionsSummary|None). Availability exposed via computed @property (dhan_available, nuvama_available, nuvama_options_available, mf_available). String-literal TYPE_CHECKING annotations on source fields avoid circular imports.
 │   └── mf.py                 # Canonical home for all MF domain types: MFTransaction, MFNavSnapshot, TransactionType, MFHolding. Migrated from src/mf/models.py (TODO 4, 2026-04-16).
 ├── portfolio/
 │   ├── CLAUDE.md             # Module context: Leg/Trade distinction, Decimal invariant, apply_trade_positions() overlay, strategy_name constraint
 │   ├── store.py              # SQLite: strategies, legs, daily_snapshots, trades. Trades methods: record_trade (idempotent), get_trades (strategy/leg filter, date ASC), get_position (net qty + weighted avg buy price), get_all_positions_for_strategy (all leg_roles → (net_qty, avg_price, instrument_key)), ensure_leg (auto-persist trade-only legs to get a DB id for snapshot recording; idempotent). entry_price/ltp/close/underlying_price/price stored as TEXT for Decimal precision. WAL + upsert semantics.
 │   ├── tracker.py            # PortfolioTracker: loads strategies, fetches LTPs, records snapshots. Trade overlay applied internally via _get_overlaid_strategy()/_get_all_overlaid_strategies() — compute_pnl, record_daily_snapshot, record_all_strategies all use trade-derived qty/entry_price automatically. Trade-only legs (e.g. LIQUIDBEES) with no DB id are auto-persisted via store.ensure_leg(). compute_pnl() returns StrategyPnL with Decimal total_pnl. Float LTPs from API converted via Decimal(str()) at boundary. apply_trade_positions() module-level pure function: overlays trade-derived qty/entry_price onto strategy Leg objects; appends trade-only legs as EQUITY/CNC; drops zero-net-qty legs.
-│   ├── summary.py            # Pure computation (TODO 5): _etf_current_value, _etf_cost_basis, _build_prev_prices, _compute_prev_mf_pnl, _compute_strategy_pnl_from_prices, _build_portfolio_summary. No I/O. Deferred imports for mf.tracker + portfolio.tracker to avoid circular deps at import time. Re-exported from daily_snapshot.py for backward compat. _build_portfolio_summary accepts optional nuvama_options_summary (NuvamaOptionsSummary | None) and populates all 9 nuvama_options_* fields on PortfolioSummary.
-│   ├── formatting.py         # Pure formatting (TODO 5): _format_protection_stats, _format_combined_summary. Depends on summary.py + PortfolioSummary. No I/O. Re-exported from daily_snapshot.py for backward compat.
+│   ├── summary.py            # Pure computation (AR-4/5): _etf_current_value, _etf_cost_basis, _build_prev_prices, _compute_prev_mf_pnl, _compute_strategy_pnl_from_prices, _build_portfolio_summary. No I/O. TYPE_CHECKING guards replace object|None params; all 14 # type: ignore[union-attr] suppressions removed (AR-5). _build_portfolio_summary computes only cross-source aggregates (total_value/invested/pnl/day_delta) and passes source summary objects directly into PortfolioSummary — no dead intermediate extraction variables.
+│   ├── formatting.py         # Pure formatting (AR-4): _format_protection_stats, _format_combined_summary. Depends on summary.py + PortfolioSummary. No I/O. All double-guards (if summary.dhan else Decimal("0") nested inside if summary.dhan_available blocks) removed — source object guaranteed non-None inside its available check by @property construction. mf_pnl guards retained (mf_available not checked before inline mf_pnl access).
 │   └── strategies/
 │       ├── __init__.py       # ALL_STRATEGIES registry
 │       └── finideas/
@@ -68,7 +68,7 @@ src/
 │   ├── models.py             # Frozen dataclasses: NuvamaBondHolding (isin/qty/avg_price/ltp/chg_pct/hair_cut; cost_basis/current_value/pnl/pnl_pct/day_delta properties), NuvamaBondSummary (total_value/basis/pnl/pnl_pct/total_day_delta). All BOND classification. NuvamaOptionPosition (trade_symbol/instrument_name/net_qty/avg_price/ltp/unrealized_pnl/realized_pnl_today). NuvamaOptionsSummary (snapshot_date/positions tuple/total_unrealized_pnl/total_realized_pnl_today/cumulative_realized_pnl/intraday_high/low/nifty_high/low; net_pnl property = unrealized + cumulative_realized).
 │   ├── reader.py             # parse_bond_holdings() (pure, joins positions dict for avg_price, skips _EXCLUDE_ISINS + missing positions with WARNING, catches InvalidOperation), build_nuvama_summary() (pure aggregation), fetch_nuvama_portfolio() (I/O orchestrator). _extract_rms_hdg() handles both resp.data.rmsHdg and eq.data.rmsHdg response paths.
 │   ├── options_reader.py     # parse_options_positions() (pure) — filters OPTIDX/OPTSTK from NetPosition() JSON, resolves avg_price from cfAvgSlPrc/cfAvgByPrc, skips non-option rows and malformed records. build_options_summary() (pure) — aggregates positions list + cumulative_realized_pnl_map + optional intraday/nifty bounds → NuvamaOptionsSummary.
-│   └── store.py              # NuvamaStore: nuvama_positions (ISIN PK, avg_price TEXT, qty, label — seed once), nuvama_holdings_snapshots (UNIQUE(isin, snapshot_date) upsert, get_prev_total_value() calendar-agnostic), nuvama_options_snapshots (PRIMARY KEY (trade_symbol, snapshot_date) upsert — record_options_snapshot/record_all_options_snapshots/get_options_snapshot_for_date/get_cumulative_realized_pnl aggregates realized_pnl_today across all historical rows per symbol), nuvama_intraday_snapshots (record_intraday_positions/purge_old_intraday 30-day retention/get_intraday_extremes — sums unrealized+realized per timestamp, returns max_pnl/min_pnl/nifty_high/nifty_low).
+│   └── store.py              # NuvamaStore: nuvama_positions (ISIN PK, avg_price TEXT, qty, label — seed once), nuvama_holdings_snapshots (UNIQUE(isin, snapshot_date) upsert; get_snapshot_for_date returns dict[str,dict] with qty/ltp/current_value keys — AR-6; record_all_snapshots uses executemany in single transaction — AR-7; get_prev_total_value() calendar-agnostic), nuvama_options_snapshots (PRIMARY KEY (trade_symbol, snapshot_date) upsert — record_all_options_snapshots atomic via executemany — AR-7; get_cumulative_realized_pnl aggregates realized_pnl_today across all historical rows per symbol), nuvama_intraday_snapshots (record_intraday_positions/purge_old_intraday 30-day retention/get_intraday_extremes — sums unrealized+realized per timestamp, returns max_pnl/min_pnl/nifty_high/nifty_low).
 ├── utils/
 │   ├── __init__.py           # Package marker.
 │   └── number_formatting.py  # fmt_inr(value, *, decimals, sign, width) — Indian numbering system (Lakhs/Crores). _group_indian() private helper. No I/O or dependencies beyond stdlib.
@@ -82,7 +82,7 @@ src/
     └── factory.py            # Composition root. create_client(env) → BrokerClient. env: "prod" → UpstoxLiveClient (UPSTOX_ANALYTICS_TOKEN), "sandbox" → UpstoxLiveClient (UPSTOX_SANDBOX_TOKEN), "test" → MockBrokerClient. ONLY file in src/ that imports concrete clients.
 
 scripts/
-├── daily_snapshot.py         # Thin I/O orchestration only. Live mode: holiday guard (is_trading_day) exits early on NSE holidays before any API call; fetches LTPs, records snapshots, prints P&L, sends Telegram (non-fatal). Historical mode (--date YYYY-MM-DD): reads stored snapshots, computes P&L offline — no holiday guard, no API call. Pure computation in src/portfolio/summary.py; pure formatting in src/portfolio/formatting.py. Live mode: create_client(UPSTOX_ENV) — UPSTOX_ENV=test → MockBrokerClient.
+├── daily_snapshot.py         # Thin I/O orchestration only. Live mode: holiday guard (is_trading_day) exits early on NSE holidays before any API call; fetches LTPs, records snapshots, prints P&L, sends Telegram (non-fatal). Historical mode (--date YYYY-MM-DD): reads stored snapshots, computes P&L offline — no holiday guard, no API call. Pure computation in src/portfolio/summary.py; pure formatting in src/portfolio/formatting.py. Live mode: create_client(UPSTOX_ENV) — UPSTOX_ENV=test → MockBrokerClient. _historical_main reconstructs NuvamaBondHolding objects using actual qty+ltp from NuvamaStore.get_snapshot_for_date() (AR-6 — no more qty=1 stub).
 ├── morning_nav.py            # MF NAV backfill cron (09:15 IST, weekdays). Fetches AMFI and upserts MFNavSnapshot for prev_trading_day(today) — fixes stale T-2 NAV written by the 15:45 daily_snapshot run (AMFI not yet published at that time). --date override for manual recovery. Exit 0/1. Cron: 15 9 * * 1-5.
 ├── nuvama_intraday_tracker.py # Invoked every 5 minutes by Cron (*/5 9-15 * * 1-5). Holiday guard (is_trading_day) exits early on NSE holidays. Fetches Nuvama NetPosition() for options positions + Nifty 50 spot from Upstox batch LTP. Records per-leg intraday state via store.record_intraday_positions() (auto-purges rows > 30 days). os._exit() required — Nuvama SDK spawns a non-daemon background thread that hangs sys.exit().
 ├── send_test_telegram.py     # Smoke-test script. Reads TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID from .env, sends a sample P&L message. Exit code 0/1. Run before first cron to verify credentials.
@@ -116,7 +116,8 @@ tests/
 │   │   ├── test_trade_models.py    # 20 tests: TradeAction enum, Trade valid/invalid construction, qty/price validators, frozen=True, Decimal precision
 │   │   ├── test_trade_store.py     # 25 tests: record_trade CRUD, idempotency, get_trades filters + ordering, get_position (BUY-only, SELL-only, mixed, weighted avg, ignores SELL price, schema coexistence)
 │   │   ├── test_seed_trades.py     # 13 tests: build_trades shape, strategy/leg/key correctness, BUY+SELL actions, idempotency (3×), EBBETF0431 weighted avg, NIFTY_JUN_PE short position
-│   └── test_roll_leg.py        # 10 tests: _build_trades happy path (fields, notes, leg independence), validation errors (zero/negative qty, zero price)
+│   │   ├── test_roll_leg.py        # 10 tests: _build_trades happy path (fields, notes, leg independence), validation errors (zero/negative qty, zero price)
+│   │   └── test_telegram_formatting.py  # 1 test: _format_combined_summary smoke test — fully populated cross-source PortfolioSummary; asserts section presence + per-section numeric output (day deltas, total value)
 │   └── mf/
 │       ├── __init__.py       # Package marker
 │       ├── test_models.py    # 25 tests: MFTransaction + MFNavSnapshot valid/invalid/edge cases
@@ -125,7 +126,7 @@ tests/
 │       ├── test_tracker.py   # 27 tests: pure P&L math + mocked store/fetcher orchestration
 │       ├── test_seed.py      # 20 tests: seed transaction shape, verified AMFI code set, idempotency, Decimal precision, total_invested sum
 │       ├── test_daily_snapshot_mf.py   # 12 tests: MF wire-up path — schema coexistence, full seed→snapshot→aggregate, empty holdings, nav failure
-│       └── test_daily_snapshot_helpers.py  # 11 tests: _etf_current_value + _etf_cost_basis pure helpers. No sys.modules stubs needed — daily_snapshot.py has no I/O imports at module level.
+│       └── test_daily_snapshot_helpers.py  # 30 tests: _etf_current_value + _etf_cost_basis helpers; PortfolioSummary construction with mf/dhan/nuvama source objects; mf_available/dhan_available/nuvama_available @property behaviour; total_value/invested/pnl aggregation across sources. Assertions use direct field access (result.mf_pnl is None / result.dhan.equity_value == ...) — no conditional ternaries.
 └── instruments/
 │   ├── __init__.py
 │   └── test_lookup.py        # 27 tests: _score_query tiers, _best_score field selection, InstrumentLookup.search ranking/filters/min_score/edge cases
@@ -215,7 +216,7 @@ Strategy leg tables (instrument keys, entry prices, quantities, protected MF por
 
 ## Test Coverage
 
-- **Total: ~859 tests** (847 passing; 12 pre-existing `test_upstox_live.py` sandbox failures — unrelated to recent changes)
+- **Total: ~859 tests** (846 passing; 1 pre-existing `test_lookup.py` rapidfuzz/difflib delta; 12 pre-existing `test_upstox_live.py` sandbox failures — unrelated to recent changes)
 - Run: `python -m pytest tests/unit/`
 - Auth tests: `tests/unit/auth/` (64 tests — Nuvama login + verify, Dhan login + verify)
 - MF tests: `tests/unit/mf/` (127 tests)
@@ -223,7 +224,7 @@ Strategy leg tables (instrument keys, entry prices, quantities, protected MF por
 - Client tests: `tests/unit/test_client.py`, `test_protocol.py`, `test_exceptions.py`, `test_factory.py`, `test_mock_client.py`, `test_upstox_live.py` (90+ tests)
 - Snapshot tests: `tests/unit/test_daily_snapshot_historical.py`, `test_daily_snapshot_helpers.py`, `test_notifications.py` (50+ tests)
 - Dhan tests: `tests/unit/dhan/` (90 tests — models, reader, store, daily_snapshot integration)
-- Nuvama tests: `tests/unit/nuvama/` (176 tests — bond models, bond store, reader, seed, portfolio summary integration, **NuvamaOptionPosition + NuvamaOptionsSummary models (AR-3), parse_options_positions + build_options_summary (AR-3), record_all_options_snapshots, record_intraday_positions, get_intraday_extremes, purge_old_intraday (AR-3)**)
+- Nuvama tests: `tests/unit/nuvama/` (163 tests — bond models, bond store, reader, seed, **NuvamaOptionPosition + NuvamaOptionsSummary models (AR-3), parse_options_positions + build_options_summary (AR-3), record_all_options_snapshots atomic (AR-7), record_intraday_positions, get_intraday_extremes, purge_old_intraday (AR-3)**; test_portfolio_summary_nuvama.py deleted — superseded by composed model structure)
 
 ---
 
