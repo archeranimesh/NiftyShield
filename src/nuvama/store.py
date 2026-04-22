@@ -226,7 +226,7 @@ class NuvamaStore:
         holdings: list,
         snapshot_date: date,
     ) -> None:
-        """Upsert snapshot rows for a list of NuvamaBondHolding objects.
+        """Upsert snapshot rows for a list of NuvamaBondHolding objects in a single transaction.
 
         Convenience wrapper used by daily_snapshot.py after fetch.
 
@@ -234,30 +234,60 @@ class NuvamaStore:
             holdings: List of NuvamaBondHolding instances.
             snapshot_date: Date to record against.
         """
-        for h in holdings:
-            self.record_snapshot(
-                isin=h.isin,
-                snapshot_date=snapshot_date,
-                qty=h.qty,
-                ltp=h.ltp,
-                current_value=h.current_value,
+        if not holdings:
+            return
+
+        with connect(self._db_path) as conn:
+            conn.executemany(
+                """
+                INSERT INTO nuvama_holdings_snapshots
+                    (isin, snapshot_date, qty, ltp, current_value)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(isin, snapshot_date) DO UPDATE SET
+                    qty           = excluded.qty,
+                    ltp           = excluded.ltp,
+                    current_value = excluded.current_value
+                """,
+                [
+                    (
+                        h.isin,
+                        snapshot_date.isoformat(),
+                        h.qty,
+                        str(h.ltp),
+                        str(h.current_value),
+                    )
+                    for h in holdings
+                ],
             )
 
-    def get_snapshot_for_date(self, snapshot_date: date) -> dict[str, Decimal]:
-        """Return all snapshot rows for a given date as ISIN → current_value.
+    def get_snapshot_for_date(self, snapshot_date: date) -> dict[str, dict]:
+        """Return all snapshot rows for a given date mapped by ISIN.
 
         Args:
             snapshot_date: Date to query.
 
         Returns:
-            Dict mapping ISIN to current_value. Empty dict if no rows.
+            Dict mapping ISIN to a dictionary containing:
+            - isin: str
+            - qty: int
+            - ltp: Decimal
+            - current_value: Decimal
+            Empty dict if no rows.
         """
         with connect(self._db_path) as conn:
             rows = conn.execute(
-                "SELECT isin, current_value FROM nuvama_holdings_snapshots WHERE snapshot_date = ?",
+                "SELECT isin, qty, ltp, current_value FROM nuvama_holdings_snapshots WHERE snapshot_date = ?",
                 (snapshot_date.isoformat(),),
             ).fetchall()
-        return {row["isin"]: Decimal(row["current_value"]) for row in rows}
+        return {
+            row["isin"]: {
+                "isin": row["isin"],
+                "qty": row["qty"],
+                "ltp": Decimal(row["ltp"]),
+                "current_value": Decimal(row["current_value"])
+            }
+            for row in rows
+        }
 
     def get_prev_total_value(self, before_date: date) -> Decimal | None:
         """Return the sum of current_value for the most recent snapshot before a date.
@@ -338,17 +368,37 @@ class NuvamaStore:
         holdings: list,
         snapshot_date: date,
     ) -> None:
-        """Upsert snapshot rows for a list of NuvamaOptionPosition objects."""
-        for h in holdings:
-            self.record_options_snapshot(
-                snapshot_date=snapshot_date,
-                trade_symbol=h.trade_symbol,
-                instrument_name=h.instrument_name,
-                net_qty=h.net_qty,
-                avg_price=h.avg_price,
-                ltp=h.ltp,
-                unrealized_pnl=h.unrealized_pnl,
-                realized_pnl_today=h.realized_pnl_today,
+        """Upsert snapshot rows for a list of NuvamaOptionPosition objects in a single transaction."""
+        if not holdings:
+            return
+
+        with connect(self._db_path) as conn:
+            conn.executemany(
+                """
+                INSERT INTO nuvama_options_snapshots
+                    (snapshot_date, trade_symbol, instrument_name, net_qty, avg_price, ltp, unrealized_pnl, realized_pnl_today)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(trade_symbol, snapshot_date) DO UPDATE SET
+                    instrument_name    = excluded.instrument_name,
+                    net_qty            = excluded.net_qty,
+                    avg_price          = excluded.avg_price,
+                    ltp                = excluded.ltp,
+                    unrealized_pnl     = excluded.unrealized_pnl,
+                    realized_pnl_today = excluded.realized_pnl_today
+                """,
+                [
+                    (
+                        snapshot_date.isoformat(),
+                        h.trade_symbol,
+                        h.instrument_name,
+                        h.net_qty,
+                        str(h.avg_price),
+                        str(h.ltp),
+                        str(h.unrealized_pnl),
+                        str(h.realized_pnl_today),
+                    )
+                    for h in holdings
+                ],
             )
 
     def get_cumulative_realized_pnl(self, before_date: date | None = None) -> dict[str, Decimal]:

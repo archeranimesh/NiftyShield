@@ -20,6 +20,13 @@ from src.models.portfolio import DailySnapshot, PortfolioSummary, Strategy
 from src.portfolio.summary import _build_portfolio_summary
 from src.utils.number_formatting import fmt_inr
 
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from src.mf.tracker import PortfolioPnL
+    from src.dhan.models import DhanPortfolioSummary
+    from src.nuvama.models import NuvamaBondSummary, NuvamaOptionsSummary
+    from src.portfolio.tracker import StrategyPnL
+
 
 def _format_protection_stats(summary: PortfolioSummary) -> list[str]:
     """Build FinRakshak hedge effectiveness lines for the snapshot output.
@@ -55,14 +62,14 @@ def _format_protection_stats(summary: PortfolioSummary) -> list[str]:
 def _format_combined_summary(
     strategies: list[Strategy],
     prices: dict[str, float],
-    strategy_pnls: dict[str, object],
-    mf_pnl: object | None,
+    strategy_pnls: dict[str, "StrategyPnL"],
+    mf_pnl: "PortfolioPnL | None",
     prev_snapshots: dict[int, DailySnapshot] | None = None,
-    prev_mf_pnl: object | None = None,
+    prev_mf_pnl: "PortfolioPnL | None" = None,
     snap_date: date | None = None,
-    dhan_summary: object | None = None,
-    nuvama_summary: object | None = None,
-    nuvama_options_summary: object | None = None,
+    dhan_summary: "DhanPortfolioSummary | None" = None,
+    nuvama_summary: "NuvamaBondSummary | None" = None,
+    nuvama_options_summary: "NuvamaOptionsSummary | None" = None,
 ) -> str:
     """Build the combined portfolio summary as a formatted string.
 
@@ -122,16 +129,26 @@ def _format_combined_summary(
 
     if has_deltas:
         # ── Waterfall: contribution to today's change ──────────────────
-        eq_subtotal = summary.mf_value + summary.etf_value + summary.dhan_equity_value
-        bonds_subtotal = summary.dhan_bond_value + summary.nuvama_bond_value
+        mf_value = (
+            summary.mf_pnl.total_current_value if summary.mf_pnl else Decimal("0")
+        )
+        eq_subtotal = (
+            mf_value
+            + summary.etf_value
+            + (summary.dhan.equity_value if summary.dhan else Decimal("0"))
+        )
+        bonds_subtotal = (
+            (summary.dhan.bond_value if summary.dhan else Decimal("0"))
+            + (summary.nuvama_bonds.total_value if summary.nuvama_bonds else Decimal("0"))
+        )
         eq_day = (
             (summary.mf_day_delta or Decimal("0"))
             + (summary.etf_day_delta or Decimal("0"))
-            + (summary.dhan_equity_day_delta or Decimal("0"))
+            + ((summary.dhan.equity_day_delta or Decimal("0")) if summary.dhan else Decimal("0"))
         )
         bd_day = (
-            (summary.dhan_bond_day_delta or Decimal("0"))
-            + (summary.nuvama_bond_day_delta or Decimal("0"))
+            ((summary.dhan.bond_day_delta or Decimal("0")) if summary.dhan else Decimal("0"))
+            + ((summary.nuvama_bonds.total_day_delta or Decimal("0")) if summary.nuvama_bonds else Decimal("0"))
         )
         options_day = summary.options_day_delta or Decimal("0")
         equity_pct = int(eq_subtotal / summary.total_value * 100) if summary.total_value else 0
@@ -156,26 +173,26 @@ def _format_combined_summary(
         lines.append(
             f"  {'├ ETF':<14} {fmt_inr(summary.etf_day_delta or Decimal('0'), sign=True, width=12)}"
         )
-        if summary.dhan_available and summary.dhan_equity_value > 0:
+        if summary.dhan_available and summary.dhan.equity_value > 0:
             lines.append(
                 f"  {'└ Dhan Equity':<14} "
-                f"{fmt_inr(summary.dhan_equity_day_delta or Decimal('0'), sign=True, width=12)}"
+                f"{fmt_inr(summary.dhan.equity_day_delta or Decimal('0'), sign=True, width=12)}"
             )
         lines.append(
             f"  {'Bonds':<14} {fmt_inr(bd_day, sign=True, width=12)}"
             f"  {'▲' if bd_day >= 0 else '▼'}  {bonds_pct}%"
         )
-        if summary.nuvama_available and summary.nuvama_bond_value > 0:
+        if summary.nuvama_available and summary.nuvama_bonds.total_value > 0:
             lines.append(
                 f"  {'├ Nuvama Bonds':<14} "
-                f"{fmt_inr(summary.nuvama_bond_day_delta or Decimal('0'), sign=True, width=12)}"
+                f"{fmt_inr(summary.nuvama_bonds.total_day_delta or Decimal('0'), sign=True, width=12)}"
             )
         elif not summary.nuvama_available:
             lines.append("  ├ Nuvama Bonds        [unavailable]")
-        if summary.dhan_available and summary.dhan_bond_value > 0:
+        if summary.dhan_available and summary.dhan.bond_value > 0:
             lines.append(
                 f"  {'└ Dhan Bonds':<14} "
-                f"{fmt_inr(summary.dhan_bond_day_delta or Decimal('0'), sign=True, width=12)}"
+                f"{fmt_inr(summary.dhan.bond_day_delta or Decimal('0'), sign=True, width=12)}"
             )
         elif not summary.dhan_available:
             lines.append("  └ Dhan Bonds          [unavailable]")
@@ -185,7 +202,7 @@ def _format_combined_summary(
         )
         lines.append(f"  {'├ Finideas P&L':<14} {fmt_inr(summary.options_pnl, sign=True, width=12)}")
         if summary.nuvama_options_available:
-            lines.append(f"  {'└ Nuvama P&L':<14} {fmt_inr(summary.nuvama_options_pnl, sign=True, width=12)}")
+            lines.append(f"  {'└ Nuvama P&L':<14} {fmt_inr(summary.nuvama_options.net_pnl, sign=True, width=12)}")
         else:
             lines.append(f"  {'└ Nuvama P&L':<14} [unavailable]")
         lines.append(SEP)
@@ -205,16 +222,22 @@ def _format_combined_summary(
             ]
             if summary.nuvama_options_available:
                 lines.append("")
-                lines.append(f"  Nuvama M2M P&L      {fmt_inr(summary.nuvama_options_unrealized, sign=True, width=14)}")
+                lines.append(f"  Nuvama M2M P&L      {fmt_inr(summary.nuvama_options.total_unrealized_pnl, sign=True, width=14)}")
                 
-                if summary.nuvama_options_intraday_high is not None and summary.nuvama_options_intraday_low is not None:
-                    hl_str = f"{fmt_inr(summary.nuvama_options_intraday_high, sign=True)} / {fmt_inr(summary.nuvama_options_intraday_low, sign=True)}"
+                n_opt_high = summary.nuvama_options.intraday_high
+                n_opt_low = summary.nuvama_options.intraday_low
+                if n_opt_high is not None and n_opt_low is not None:
+                    hl_str = f"{fmt_inr(n_opt_high, sign=True)} / {fmt_inr(n_opt_low, sign=True)}"
                     lines.append(f"   ├ M2M High/Low   {hl_str:>16}")
-                if summary.nuvama_nifty_high is not None and summary.nuvama_nifty_low is not None:
-                    nifty_hl_str = f"{summary.nuvama_nifty_high:,.0f} / {summary.nuvama_nifty_low:,.0f}"
+                
+                n_nifty_high = summary.nuvama_options.nifty_high
+                n_nifty_low = summary.nuvama_options.nifty_low
+                if n_nifty_high is not None and n_nifty_low is not None:
+                    nifty_hl_str = f"{n_nifty_high:,.0f} / {n_nifty_low:,.0f}"
                     lines.append(f"   └ Nifty High/Low {nifty_hl_str:>16}")
 
-                lines.append(f"  Nuvama Realized     {fmt_inr(summary.nuvama_options_realized, sign=True, width=14)}")
+                n_realized = summary.nuvama_options.total_realized_pnl_today + summary.nuvama_options.cumulative_realized_pnl
+                lines.append(f"  Nuvama Realized     {fmt_inr(n_realized, sign=True, width=14)}")
 
         # ── Context line: total value + all-time P&L (signal vs scoreboard) ──
         lines += [
@@ -238,19 +261,29 @@ def _format_combined_summary(
             pct_part = f" ({pct:+}%)" if pct is not None else ""
             return f"P&L: {fmt_inr(pnl, sign=True, width=11)}{pct_part}"
 
-        eq_subtotal = summary.mf_value + summary.etf_value + summary.dhan_equity_value
-        bonds_subtotal = summary.dhan_bond_value + summary.nuvama_bond_value
+        mf_value = (
+            summary.mf_pnl.total_current_value if summary.mf_pnl else Decimal("0")
+        )
+        eq_subtotal = (
+            mf_value
+            + summary.etf_value
+            + (summary.dhan.equity_value if summary.dhan else Decimal("0"))
+        )
+        bonds_subtotal = (
+            (summary.dhan.bond_value if summary.dhan else Decimal("0"))
+            + (summary.nuvama_bonds.total_value if summary.nuvama_bonds else Decimal("0"))
+        )
 
         # ── Equity section ─────────────────────────────────────────────
         lines.append("")
         lines.append("  ── Equity ─────────────────────────────────────────────")
         if summary.mf_available:
             lines.append(
-                f"  MF (mutual funds)   : ₹{fmt_inr(summary.mf_value, width=14)}"
+                f"  MF (mutual funds)   : ₹{fmt_inr((summary.mf_pnl.total_current_value if summary.mf_pnl else Decimal('0')), width=14)}"
                 f"{_delta(summary.mf_day_delta)}"
             )
             lines.append(
-                f"                        {_pnl_str(summary.mf_pnl, summary.mf_pnl_pct)}"
+                f"                        {_pnl_str((summary.mf_pnl.total_pnl if summary.mf_pnl else Decimal('0')), (summary.mf_pnl.total_pnl_pct if summary.mf_pnl else None))}"
             )
         else:
             lines.append(
@@ -261,13 +294,13 @@ def _format_combined_summary(
             f"{_delta(summary.etf_day_delta)}"
         )
         lines.append(f"                        (basis ₹{fmt_inr(summary.etf_basis)})")
-        if summary.dhan_available and summary.dhan_equity_value > 0:
+        if summary.dhan_available and summary.dhan.equity_value > 0:
             lines.append(
-                f"  Dhan Equity         : ₹{fmt_inr(summary.dhan_equity_value, width=14)}"
-                f"{_delta(summary.dhan_equity_day_delta)}"
+                f"  Dhan Equity         : ₹{fmt_inr(summary.dhan.equity_value, width=14)}"
+                f"{_delta(summary.dhan.equity_day_delta or Decimal('0'))}"
             )
             lines.append(
-                f"                        {_pnl_str(summary.dhan_equity_pnl, summary.dhan_equity_pnl_pct)}"
+                f"                        {_pnl_str(summary.dhan.equity_pnl, summary.dhan.equity_pnl_pct)}"
             )
         lines.append("  ───────────────────────────────────────────────────────")
         lines.append(f"  Equity subtotal     : ₹{fmt_inr(eq_subtotal, width=14)}")
@@ -276,24 +309,24 @@ def _format_combined_summary(
         lines.append("")
         lines.append("  ── Bonds ──────────────────────────────────────────────")
         _has_any_bonds = False
-        if summary.dhan_available and summary.dhan_bond_value > 0:
+        if summary.dhan_available and summary.dhan.bond_value > 0:
             lines.append(
-                f"  Dhan Bonds          : ₹{fmt_inr(summary.dhan_bond_value, width=14)}"
-                f"{_delta(summary.dhan_bond_day_delta)}"
+                f"  Dhan Bonds          : ₹{fmt_inr(summary.dhan.bond_value, width=14)}"
+                f"{_delta(summary.dhan.bond_day_delta or Decimal('0'))}"
             )
             lines.append(
-                f"                        {_pnl_str(summary.dhan_bond_pnl, summary.dhan_bond_pnl_pct)}"
+                f"                        {_pnl_str(summary.dhan.bond_pnl, summary.dhan.bond_pnl_pct)}"
             )
             _has_any_bonds = True
         elif not summary.dhan_available:
             lines.append("  Dhan Bonds          :          [unavailable]")
-        if summary.nuvama_available and summary.nuvama_bond_value > 0:
+        if summary.nuvama_available and summary.nuvama_bonds.total_value > 0:
             lines.append(
-                f"  Nuvama Bonds        : ₹{fmt_inr(summary.nuvama_bond_value, width=14)}"
-                f"{_delta(summary.nuvama_bond_day_delta)}"
+                f"  Nuvama Bonds        : ₹{fmt_inr(summary.nuvama_bonds.total_value, width=14)}"
+                f"{_delta(summary.nuvama_bonds.total_day_delta or Decimal('0'))}"
             )
             lines.append(
-                f"                        {_pnl_str(summary.nuvama_bond_pnl, summary.nuvama_bond_pnl_pct)}"
+                f"                        {_pnl_str(summary.nuvama_bonds.total_pnl, summary.nuvama_bonds.total_pnl_pct)}"
             )
             _has_any_bonds = True
         elif not summary.nuvama_available:
@@ -313,8 +346,8 @@ def _format_combined_summary(
         )
         if summary.nuvama_options_available:
             lines.append(
-                f"  Nuvama options P&L  : {fmt_inr(summary.nuvama_options_pnl, sign=True, width=15)}"
-                f"{_delta(summary.nuvama_options_day_delta)}"
+                f"  Nuvama options P&L  : {fmt_inr(summary.nuvama_options.net_pnl, sign=True, width=15)}"
+                f"{_delta(None)}"
             )
 
         # ── Total section ───────────────────────────────────────────────

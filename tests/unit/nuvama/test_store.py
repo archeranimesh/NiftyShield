@@ -140,13 +140,13 @@ class TestRecordSnapshot:
     def test_records_single_holding(self, store):
         store.record_snapshot("A", date(2026, 4, 15), 700, Decimal("1014"), Decimal("709800"))
         result = store.get_snapshot_for_date(date(2026, 4, 15))
-        assert result["A"] == Decimal("709800")
+        assert result["A"]["current_value"] == Decimal("709800")
 
     def test_upsert_same_day(self, store):
         store.record_snapshot("A", date(2026, 4, 15), 700, Decimal("1010"), Decimal("707000"))
         store.record_snapshot("A", date(2026, 4, 15), 700, Decimal("1014"), Decimal("709800"))
         result = store.get_snapshot_for_date(date(2026, 4, 15))
-        assert result["A"] == Decimal("709800")  # last write wins
+        assert result["A"]["current_value"] == Decimal("709800")  # last write wins
 
     def test_multiple_instruments_same_day(self, store):
         store.record_snapshot("A", date(2026, 4, 15), 700, Decimal("1014"), Decimal("709800"))
@@ -157,8 +157,8 @@ class TestRecordSnapshot:
     def test_different_dates_isolated(self, store):
         store.record_snapshot("A", date(2026, 4, 14), 700, Decimal("1010"), Decimal("707000"))
         store.record_snapshot("A", date(2026, 4, 15), 700, Decimal("1014"), Decimal("709800"))
-        assert store.get_snapshot_for_date(date(2026, 4, 14))["A"] == Decimal("707000")
-        assert store.get_snapshot_for_date(date(2026, 4, 15))["A"] == Decimal("709800")
+        assert store.get_snapshot_for_date(date(2026, 4, 14))["A"]["current_value"] == Decimal("707000")
+        assert store.get_snapshot_for_date(date(2026, 4, 15))["A"]["current_value"] == Decimal("709800")
 
     def test_empty_for_unknown_date(self, store):
         assert store.get_snapshot_for_date(date(2026, 4, 15)) == {}
@@ -178,6 +178,19 @@ class TestRecordAllSnapshots:
 
     def test_empty_list_no_crash(self, store):
         store.record_all_snapshots([], date(2026, 4, 15))
+        assert store.get_snapshot_for_date(date(2026, 4, 15)) == {}
+
+    def test_atomicity_rollback_on_error(self, store):
+        """A corrupt row mid-batch must roll back the entire transaction."""
+        import sqlite3
+
+        h1 = _holding_stub("A", 700, "1014")
+        h2 = _holding_stub(None, 700, "1014")  # None isin violates NOT NULL
+
+        with pytest.raises(sqlite3.IntegrityError):
+            store.record_all_snapshots([h1, h2], date(2026, 4, 15))
+
+        # Assert table remains empty for this date, proving h1 was rolled back
         assert store.get_snapshot_for_date(date(2026, 4, 15)) == {}
 
 
@@ -298,6 +311,19 @@ class TestRecordAllOptionsSnapshots:
         store.record_all_options_snapshots([pos], date(2026, 4, 21))
         result = store.get_options_snapshot_for_date(date(2026, 4, 21))
         assert len(result) == 1  # upsert — not duplicated
+
+    def test_atomicity_rollback_on_error(self, store):
+        """A corrupt row mid-batch must roll back the entire transaction."""
+        import sqlite3
+
+        h1 = self._make_pos("A")
+        h2 = self._make_pos(None)  # None trade_symbol violates NOT NULL
+
+        with pytest.raises(sqlite3.IntegrityError):
+            store.record_all_options_snapshots([h1, h2], date(2026, 4, 21))
+
+        # Assert table remains empty for this date, proving h1 was rolled back
+        assert store.get_options_snapshot_for_date(date(2026, 4, 21)) == []
 
 
 # ---------------------------------------------------------------------------

@@ -24,6 +24,13 @@ from src.models.portfolio import (
     Strategy,
 )
 
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from src.mf.tracker import PortfolioPnL
+    from src.dhan.models import DhanPortfolioSummary
+    from src.nuvama.models import NuvamaBondSummary, NuvamaOptionsSummary
+    from src.portfolio.tracker import StrategyPnL
+
 
 def _etf_current_value(strategies: list[Strategy], prices: dict[str, float]) -> Decimal:
     """Mark-to-market value of all EQUITY legs across strategies.
@@ -98,7 +105,7 @@ def _build_prev_prices(
 def _compute_prev_mf_pnl(
     prev_nav_snaps: list,  # list[MFNavSnapshot]
     holdings: dict,        # dict[str, MFHolding]
-) -> object | None:
+) -> "PortfolioPnL | None":
     """Reconstruct a PortfolioPnL from stored NAV snapshots and current holdings.
 
     Used by both live and historical paths to compute the previous day's MF
@@ -162,13 +169,13 @@ def _build_portfolio_summary(
     snap_date: date,
     strategies: list[Strategy],
     prices: dict[str, float],
-    strategy_pnls: dict[str, object],
-    mf_pnl: object | None,
+    strategy_pnls: dict[str, "StrategyPnL"],
+    mf_pnl: "PortfolioPnL | None",
     prev_snapshots: dict[int, DailySnapshot] | None = None,
-    prev_mf_pnl: object | None = None,
-    dhan_summary: object | None = None,
-    nuvama_summary: object | None = None,
-    nuvama_options_summary: object | None = None,
+    prev_mf_pnl: "PortfolioPnL | None" = None,
+    dhan_summary: "DhanPortfolioSummary | None" = None,
+    nuvama_summary: "NuvamaBondSummary | None" = None,
+    nuvama_options_summary: "NuvamaOptionsSummary | None" = None,
 ) -> PortfolioSummary:
     """Compute combined portfolio values into a PortfolioSummary.
 
@@ -194,53 +201,48 @@ def _build_portfolio_summary(
     etf_basis = _etf_cost_basis(strategies)
 
     options_pnl = sum(
-        (p.total_pnl for p in strategy_pnls.values() if p),  # type: ignore[union-attr]
+        (p.total_pnl for p in strategy_pnls.values() if p),
         Decimal("0"),
     )
 
-    mf_available = mf_pnl is not None
-    mf_value = mf_pnl.total_current_value if mf_pnl else Decimal("0")  # type: ignore[union-attr]
-    mf_invested = mf_pnl.total_invested if mf_pnl else Decimal("0")  # type: ignore[union-attr]
-    mf_pnl_amt = mf_pnl.total_pnl if mf_pnl else Decimal("0")  # type: ignore[union-attr]
-    mf_pnl_pct = mf_pnl.total_pnl_pct if mf_pnl else None  # type: ignore[union-attr]
+    mf_value = mf_pnl.total_current_value if mf_pnl else Decimal("0")
+    mf_invested = mf_pnl.total_invested if mf_pnl else Decimal("0")
 
-    # ── Dhan components (default to 0 when unavailable) ───────────
-    dhan_available = dhan_summary is not None
-    dhan_eq_value = dhan_summary.equity_value if dhan_summary else Decimal("0")  # type: ignore[union-attr]
-    dhan_eq_basis = dhan_summary.equity_basis if dhan_summary else Decimal("0")  # type: ignore[union-attr]
-    dhan_eq_pnl = dhan_summary.equity_pnl if dhan_summary else Decimal("0")  # type: ignore[union-attr]
-    dhan_eq_pnl_pct = dhan_summary.equity_pnl_pct if dhan_summary else None  # type: ignore[union-attr]
-    dhan_eq_day_delta = dhan_summary.equity_day_delta if dhan_summary else None  # type: ignore[union-attr]
-    dhan_bd_value = dhan_summary.bond_value if dhan_summary else Decimal("0")  # type: ignore[union-attr]
-    dhan_bd_basis = dhan_summary.bond_basis if dhan_summary else Decimal("0")  # type: ignore[union-attr]
-    dhan_bd_pnl = dhan_summary.bond_pnl if dhan_summary else Decimal("0")  # type: ignore[union-attr]
-    dhan_bd_pnl_pct = dhan_summary.bond_pnl_pct if dhan_summary else None  # type: ignore[union-attr]
-    dhan_bd_day_delta = dhan_summary.bond_day_delta if dhan_summary else None  # type: ignore[union-attr]
+    dhan_eq_value = dhan_summary.equity_value if dhan_summary else Decimal("0")
+    dhan_eq_basis = dhan_summary.equity_basis if dhan_summary else Decimal("0")
+    dhan_bd_value = dhan_summary.bond_value if dhan_summary else Decimal("0")
+    dhan_bd_basis = dhan_summary.bond_basis if dhan_summary else Decimal("0")
 
-    # ── Nuvama components (default to 0 when unavailable) ─────────
-    nuvama_available = nuvama_summary is not None
-    nuvama_bd_value = nuvama_summary.total_value if nuvama_summary else Decimal("0")  # type: ignore[union-attr]
-    nuvama_bd_basis = nuvama_summary.total_basis if nuvama_summary else Decimal("0")  # type: ignore[union-attr]
-    nuvama_bd_pnl = nuvama_summary.total_pnl if nuvama_summary else Decimal("0")  # type: ignore[union-attr]
-    nuvama_bd_pnl_pct = nuvama_summary.total_pnl_pct if nuvama_summary else None  # type: ignore[union-attr]
-    nuvama_bd_day_delta = nuvama_summary.total_day_delta if nuvama_summary else None  # type: ignore[union-attr]
+    nuvama_bd_value = (
+        nuvama_summary.total_value if nuvama_summary else Decimal("0")
+    )
+    nuvama_bd_basis = (
+        nuvama_summary.total_basis if nuvama_summary else Decimal("0")
+    )
 
-    # ── Nuvama options component ─────────
-    nuvama_options_available = nuvama_options_summary is not None
-    nuvama_options_pnl = nuvama_options_summary.net_pnl if nuvama_options_summary else Decimal("0")  # type: ignore[union-attr]
-    nuvama_options_unrealized = nuvama_options_summary.total_unrealized_pnl if nuvama_options_summary else Decimal("0")  # type: ignore[union-attr]
-    nuvama_options_realized = (
-        nuvama_options_summary.total_realized_pnl_today + nuvama_options_summary.cumulative_realized_pnl
-    ) if nuvama_options_summary else Decimal("0")  # type: ignore[union-attr]
-    nuvama_options_intraday_high = nuvama_options_summary.intraday_high if nuvama_options_summary else None  # type: ignore[union-attr]
-    nuvama_options_intraday_low = nuvama_options_summary.intraday_low if nuvama_options_summary else None  # type: ignore[union-attr]
-    nuvama_nifty_high = nuvama_options_summary.nifty_high if nuvama_options_summary else None  # type: ignore[union-attr]
-    nuvama_nifty_low = nuvama_options_summary.nifty_low if nuvama_options_summary else None  # type: ignore[union-attr]
-
-
-    total_value = mf_value + etf_value + options_pnl + dhan_eq_value + dhan_bd_value + nuvama_bd_value
-    total_invested = mf_invested + etf_basis + dhan_eq_basis + dhan_bd_basis + nuvama_bd_basis
-    total_pnl = mf_pnl_amt + (etf_value - etf_basis) + options_pnl + dhan_eq_pnl + dhan_bd_pnl + nuvama_bd_pnl + nuvama_options_pnl
+    total_value = (
+        mf_value + etf_value + options_pnl
+        + dhan_eq_value + dhan_bd_value + nuvama_bd_value
+    )
+    total_invested = (
+        mf_invested + etf_basis
+        + dhan_eq_basis + dhan_bd_basis + nuvama_bd_basis
+    )
+    
+    total_pnl = (
+        (mf_pnl.total_pnl if mf_pnl else Decimal("0"))
+        + (etf_value - etf_basis)
+        + options_pnl
+        + (dhan_summary.equity_pnl if dhan_summary else Decimal("0"))
+        + (dhan_summary.bond_pnl if dhan_summary else Decimal("0"))
+        + (nuvama_summary.total_pnl if nuvama_summary else Decimal("0"))
+        + (
+            nuvama_options_summary.net_pnl
+            if nuvama_options_summary
+            else Decimal("0")
+        )
+    )
+    
     total_pnl_pct = (
         (total_pnl / total_invested * 100).quantize(Decimal("0.01"))
         if total_invested
@@ -272,17 +274,23 @@ def _build_portfolio_summary(
         curr_frak = strategy_pnls.get("finrakshak")
         if frak_strat is not None and curr_frak is not None:
             prev_frak_pnl = _compute_strategy_pnl_from_prices(frak_strat, prev_prices_dec)
-            finrakshak_day_delta = curr_frak.total_pnl - prev_frak_pnl.total_pnl  # type: ignore[union-attr]
+            finrakshak_day_delta = curr_frak.total_pnl - prev_frak_pnl.total_pnl
 
     if prev_mf_pnl is not None and mf_pnl is not None:
-        mf_day_delta = mf_value - prev_mf_pnl.total_current_value  # type: ignore[union-attr]
+        mf_day_delta = mf_value - prev_mf_pnl.total_current_value
 
     any_delta = (
         etf_day_delta is not None
         or mf_day_delta is not None
-        or dhan_eq_day_delta is not None
-        or dhan_bd_day_delta is not None
-        or nuvama_bd_day_delta is not None
+        or (
+            dhan_summary.equity_day_delta if dhan_summary else None
+        ) is not None
+        or (
+            dhan_summary.bond_day_delta if dhan_summary else None
+        ) is not None
+        or (
+            nuvama_summary.total_day_delta if nuvama_summary else None
+        ) is not None
     )
     total_day_delta: Decimal | None = None
     if any_delta:
@@ -290,18 +298,26 @@ def _build_portfolio_summary(
             (mf_day_delta or Decimal("0"))
             + (etf_day_delta or Decimal("0"))
             + (options_day_delta or Decimal("0"))
-            + (dhan_eq_day_delta or Decimal("0"))
-            + (dhan_bd_day_delta or Decimal("0"))
-            + (nuvama_bd_day_delta or Decimal("0"))
+            + (
+                (dhan_summary.equity_day_delta or Decimal("0"))
+                if dhan_summary else Decimal("0")
+            )
+            + (
+                (dhan_summary.bond_day_delta or Decimal("0"))
+                if dhan_summary else Decimal("0")
+            )
+            + (
+                (nuvama_summary.total_day_delta or Decimal("0"))
+                if nuvama_summary else Decimal("0")
+            )
         )
 
     return PortfolioSummary(
         snapshot_date=snap_date,
-        mf_value=mf_value,
-        mf_invested=mf_invested,
-        mf_pnl=mf_pnl_amt,
-        mf_pnl_pct=mf_pnl_pct,
-        mf_available=mf_available,
+        mf_pnl=mf_pnl,
+        dhan=dhan_summary,
+        nuvama_bonds=nuvama_summary,
+        nuvama_options=nuvama_options_summary,
         etf_value=etf_value,
         etf_basis=etf_basis,
         options_pnl=options_pnl,
@@ -314,29 +330,4 @@ def _build_portfolio_summary(
         options_day_delta=options_day_delta,
         total_day_delta=total_day_delta,
         finrakshak_day_delta=finrakshak_day_delta,
-        dhan_equity_value=dhan_eq_value,
-        dhan_equity_basis=dhan_eq_basis,
-        dhan_equity_pnl=dhan_eq_pnl,
-        dhan_equity_pnl_pct=dhan_eq_pnl_pct,
-        dhan_equity_day_delta=dhan_eq_day_delta,
-        dhan_bond_value=dhan_bd_value,
-        dhan_bond_basis=dhan_bd_basis,
-        dhan_bond_pnl=dhan_bd_pnl,
-        dhan_bond_pnl_pct=dhan_bd_pnl_pct,
-        dhan_bond_day_delta=dhan_bd_day_delta,
-        dhan_available=dhan_available,
-        nuvama_bond_value=nuvama_bd_value,
-        nuvama_bond_basis=nuvama_bd_basis,
-        nuvama_bond_pnl=nuvama_bd_pnl,
-        nuvama_bond_pnl_pct=nuvama_bd_pnl_pct,
-        nuvama_bond_day_delta=nuvama_bd_day_delta,
-        nuvama_available=nuvama_available,
-        nuvama_options_pnl=nuvama_options_pnl,
-        nuvama_options_unrealized=nuvama_options_unrealized,
-        nuvama_options_realized=nuvama_options_realized,
-        nuvama_options_intraday_high=nuvama_options_intraday_high,
-        nuvama_options_intraday_low=nuvama_options_intraday_low,
-        nuvama_nifty_high=nuvama_nifty_high,
-        nuvama_nifty_low=nuvama_nifty_low,
-        nuvama_options_available=nuvama_options_available,
     )

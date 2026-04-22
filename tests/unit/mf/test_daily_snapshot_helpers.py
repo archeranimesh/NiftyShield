@@ -163,8 +163,7 @@ class TestBuildPortfolioSummary:
     def test_mf_available_false_when_mf_pnl_none(self) -> None:
         result = _build_portfolio_summary(_SNAP_DATE, _ETF_STRATS, _ETF_PRICES, {}, None)
         assert result.mf_available is False
-        assert result.mf_value == Decimal("0")
-        assert result.mf_pnl_pct is None
+        assert result.mf_pnl is None
 
     def test_mf_available_true_when_mf_pnl_provided(self) -> None:
         mf = _FakeMFPnL(
@@ -175,8 +174,9 @@ class TestBuildPortfolioSummary:
         )
         result = _build_portfolio_summary(_SNAP_DATE, _ETF_STRATS, _ETF_PRICES, {}, mf)
         assert result.mf_available is True
-        assert result.mf_value == Decimal("500000")
-        assert result.mf_pnl_pct == Decimal("11.11")
+        assert result.mf_pnl is not None
+        assert result.mf_pnl.total_current_value == Decimal("500000")
+        assert result.mf_pnl.total_pnl_pct == Decimal("11.11")
 
     def test_total_value_is_mf_plus_etf_plus_options(self) -> None:
         # ETF: 1400 × 100 = 140_000; options P&L = +2000; MF = 500_000
@@ -233,11 +233,7 @@ def _make_summary(
     """Build a minimal PortfolioSummary with only the protection fields set."""
     return PortfolioSummary(
         snapshot_date=_SNAP_DATE,
-        mf_value=Decimal("500000"),
-        mf_invested=Decimal("450000"),
-        mf_pnl=Decimal("50000"),
-        mf_pnl_pct=Decimal("11.11"),
-        mf_available=True,
+        mf_pnl=_FakeMFPnL(Decimal("500000"), Decimal("450000"), Decimal("50000"), Decimal("11.11")),
         etf_value=Decimal("140000"),
         etf_basis=Decimal("138800"),
         options_pnl=Decimal("0"),

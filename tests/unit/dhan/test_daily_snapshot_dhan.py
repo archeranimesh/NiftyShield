@@ -149,20 +149,21 @@ class TestBuildPortfolioSummaryDhanFields:
     def test_dhan_available_false_when_none(self) -> None:
         result = _build_portfolio_summary(_SNAP_DATE, _ETF_STRATS, _ETF_PRICES, {}, None, dhan_summary=None)
         assert result.dhan_available is False
-        assert result.dhan_equity_value == Decimal("0")
-        assert result.dhan_bond_value == Decimal("0")
+        assert result.dhan is None
 
     def test_equity_value_populated(self) -> None:
         dhan = _make_dhan_summary()
         result = _build_portfolio_summary(_SNAP_DATE, _ETF_STRATS, _ETF_PRICES, {}, None, dhan_summary=dhan)
         # NIFTYIETF: 500 × 275.40 = 137_700
-        assert result.dhan_equity_value == Decimal("275.40") * 500
+        assert result.dhan is not None
+        assert result.dhan.equity_value == Decimal("275.40") * 500
 
     def test_bond_value_populated(self) -> None:
         dhan = _make_dhan_summary()
         result = _build_portfolio_summary(_SNAP_DATE, _ETF_STRATS, _ETF_PRICES, {}, None, dhan_summary=dhan)
         # LIQUIDCASE: 200 × 1005.50 = 201_100
-        assert result.dhan_bond_value == Decimal("1005.50") * 200
+        assert result.dhan is not None
+        assert result.dhan.bond_value == Decimal("1005.50") * 200
 
     def test_dhan_included_in_total_value(self) -> None:
         dhan = _make_dhan_summary()
@@ -185,8 +186,9 @@ class TestBuildPortfolioSummaryDhanFields:
     def test_dhan_day_deltas_propagated(self) -> None:
         dhan = _make_dhan_summary(equity_day_delta=Decimal("3450"), bond_day_delta=Decimal("450"))
         result = _build_portfolio_summary(_SNAP_DATE, _ETF_STRATS, _ETF_PRICES, {}, None, dhan_summary=dhan)
-        assert result.dhan_equity_day_delta == Decimal("3450")
-        assert result.dhan_bond_day_delta == Decimal("450")
+        assert result.dhan is not None
+        assert result.dhan.equity_day_delta == Decimal("3450")
+        assert result.dhan.bond_day_delta == Decimal("450")
 
     def test_total_day_delta_includes_dhan_when_present(self) -> None:
         dhan = _make_dhan_summary(equity_day_delta=Decimal("2000"), bond_day_delta=Decimal("100"))

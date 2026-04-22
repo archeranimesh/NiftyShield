@@ -78,14 +78,16 @@ class TestBuildPortfolioSummaryNuvamaFields:
             **_minimal_summary_kwargs(),
             nuvama_summary=_make_nuvama_summary(total_value="3158740.00"),
         )
-        assert s.nuvama_bond_value == Decimal("3158740.00")
+        assert s.nuvama_bonds is not None
+        assert s.nuvama_bonds.total_value == Decimal("3158740.00")
 
     def test_nuvama_bond_pnl_populated(self):
         s = _build_portfolio_summary(
             **_minimal_summary_kwargs(),
             nuvama_summary=_make_nuvama_summary(total_pnl="529518.00"),
         )
-        assert s.nuvama_bond_pnl == Decimal("529518.00")
+        assert s.nuvama_bonds is not None
+        assert s.nuvama_bonds.total_pnl == Decimal("529518.00")
 
     def test_nuvama_included_in_total_value(self):
         s = _build_portfolio_summary(
@@ -121,7 +123,8 @@ class TestBuildPortfolioSummaryNuvamaFields:
             **_minimal_summary_kwargs(),
             nuvama_summary=_make_nuvama_summary(total_day_delta="-12345.00"),
         )
-        assert s.nuvama_bond_day_delta == Decimal("-12345.00")
+        assert s.nuvama_bonds is not None
+        assert s.nuvama_bonds.total_day_delta == Decimal("-12345.00")
 
     def test_total_day_delta_includes_nuvama(self):
         s = _build_portfolio_summary(

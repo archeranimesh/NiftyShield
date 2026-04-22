@@ -229,7 +229,7 @@ def _historical_main(snap_date: date, db_path: Path) -> int:
         nuvama_snaps = nuvama_store.get_snapshot_for_date(snap_date)
         positions = nuvama_store.get_positions()
         if nuvama_snaps and positions:
-            # Reconstruct NuvamaBondHolding stubs from stored snapshot values.
+            # Reconstruct NuvamaBondHolding from stored snapshot values.
             # chg_pct is not stored — use 0 so day_delta reads as 0 for historical.
             holdings_for_summary = [
                 NuvamaBondHolding(
@@ -237,13 +237,13 @@ def _historical_main(snap_date: date, db_path: Path) -> int:
                     company_name=isin,  # label not stored in snapshot; ISIN is sufficient
                     trading_symbol="",
                     exchange="",
-                    qty=1,  # absorbed into current_value below
-                    avg_price=positions.get(isin, current_value),
-                    ltp=current_value,  # ltp × qty = current_value when qty=1
+                    qty=snap["qty"],
+                    avg_price=positions.get(isin, snap["current_value"]),
+                    ltp=snap["ltp"],
                     chg_pct=Decimal("0"),
                     hair_cut=Decimal("0"),
                 )
-                for isin, current_value in nuvama_snaps.items()
+                for isin, snap in nuvama_snaps.items()
             ]
             nuvama_summary = build_nuvama_summary(holdings_for_summary, snap_date)
             print(f"  Nuvama bonds: {len(holdings_for_summary)} holding(s) from stored snapshot")

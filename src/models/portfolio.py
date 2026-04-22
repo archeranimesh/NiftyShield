@@ -17,6 +17,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.mf.tracker import PortfolioPnL
+    from src.dhan.models import DhanPortfolioSummary
+    from src.nuvama.models import NuvamaBondSummary, NuvamaOptionsSummary
 from enum import Enum
 
 from pydantic import BaseModel, Field, computed_field, field_validator
@@ -208,13 +214,6 @@ class PortfolioSummary:
 
     snapshot_date: date
 
-    # MF component — zeroed when mf_available is False (fetch failed)
-    mf_value: Decimal
-    mf_invested: Decimal
-    mf_pnl: Decimal
-    mf_pnl_pct: Decimal | None  # None when MF fetch failed
-    mf_available: bool
-
     # ETF component
     etf_value: Decimal
     etf_basis: Decimal
@@ -228,6 +227,11 @@ class PortfolioSummary:
     total_pnl: Decimal
     total_pnl_pct: Decimal  # quantized to 2 dp
 
+    mf_pnl: "PortfolioPnL | None" = None
+    dhan: "DhanPortfolioSummary | None" = None
+    nuvama_bonds: "NuvamaBondSummary | None" = None
+    nuvama_options: "NuvamaOptionsSummary | None" = None
+
     # Day-change deltas — None when prior-day data is unavailable
     mf_day_delta: Decimal | None = None
     etf_day_delta: Decimal | None = None
@@ -238,40 +242,18 @@ class PortfolioSummary:
     # Enables hedge effectiveness reporting: MF Δday + FinRakshak Δday = net protection
     finrakshak_day_delta: Decimal | None = None
 
-    # Dhan equity component (defaults to 0 when Dhan unavailable)
-    dhan_equity_value: Decimal = Decimal("0")
-    dhan_equity_basis: Decimal = Decimal("0")
-    dhan_equity_pnl: Decimal = Decimal("0")
-    dhan_equity_pnl_pct: Decimal | None = None
-    dhan_equity_day_delta: Decimal | None = None
+    @property
+    def mf_available(self) -> bool:
+        return self.mf_pnl is not None
 
-    # Dhan bond component
-    dhan_bond_value: Decimal = Decimal("0")
-    dhan_bond_basis: Decimal = Decimal("0")
-    dhan_bond_pnl: Decimal = Decimal("0")
-    dhan_bond_pnl_pct: Decimal | None = None
-    dhan_bond_day_delta: Decimal | None = None
+    @property
+    def dhan_available(self) -> bool:
+        return self.dhan is not None
 
-    # Whether Dhan data was available this run
-    dhan_available: bool = False
+    @property
+    def nuvama_available(self) -> bool:
+        return self.nuvama_bonds is not None
 
-    # Nuvama bond component (defaults to 0 when Nuvama unavailable)
-    # Cost basis from seeded nuvama_positions table; LTP inline from Holdings().
-    nuvama_bond_value: Decimal = Decimal("0")
-    nuvama_bond_basis: Decimal = Decimal("0")
-    nuvama_bond_pnl: Decimal = Decimal("0")
-    nuvama_bond_pnl_pct: Decimal | None = None
-    nuvama_bond_day_delta: Decimal | None = None
-
-    # Whether Nuvama data was available this run
-    nuvama_available: bool = False
-
-    nuvama_options_pnl: Decimal = Decimal("0")
-    nuvama_options_unrealized: Decimal = Decimal("0")
-    nuvama_options_realized: Decimal = Decimal("0")
-    nuvama_options_intraday_high: Decimal | None = None
-    nuvama_options_intraday_low: Decimal | None = None
-    nuvama_nifty_high: float | None = None
-    nuvama_nifty_low: float | None = None
-    nuvama_options_day_delta: Decimal | None = None
-    nuvama_options_available: bool = False
+    @property
+    def nuvama_options_available(self) -> bool:
+        return self.nuvama_options is not None
