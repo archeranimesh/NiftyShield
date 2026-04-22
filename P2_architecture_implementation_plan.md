@@ -4,69 +4,54 @@ This plan outlines the steps to resolve the P2 architecture issues (AR-4, AR-5, 
 
 ## User Review Required
 
-- **AR-4 (`PortfolioSummary` Refactoring):** We will remove all source-specific flattened fields (e.g., `dhan_equity_value`, `nuvama_bond_basis`) from `PortfolioSummary`. Instead, it will contain references to the source summaries (`dhan`, `nuvama_bonds`, `nuvama_options`, `mf_pnl`). This requires cascading changes to `_build_portfolio_summary`, `_format_combined_summary`, and all related tests.
-- **AR-6 (`NuvamaBondHolding` Historical Hack):** The database table `nuvama_holdings_snapshots` already stores `ltp` and `qty`. We will update `NuvamaStore.get_snapshot_for_date` to return these fields instead of just `current_value`, and use them to construct completely accurate `NuvamaBondHolding` objects in `_historical_main()`. 
-
-## Open Questions
-
-None currently.
+The plan is divided into three distinct phases. Each phase will be executed and committed separately to isolate changes and minimize the blast radius if test failures occur.
 
 ## Proposed Changes
 
----
+### Phase 1 — AR-7 (Atomicity)
+**Target:** `src/nuvama/store.py`, `tests/unit/nuvama/test_store.py`
+- Rewrite `record_all_snapshots` and `record_all_options_snapshots` to use `conn.executemany` in a single `with connect(...) as conn:` block.
+- **Testing:** Update `tests/unit/nuvama/test_store.py` to include a failure-injection test. We will pass a batch of rows where a middle row is corrupt (e.g., violating a UNIQUE or NOT NULL constraint) to force an exception during `executemany`. The test will assert that the transaction rolls back completely and the table remains empty, proving atomicity.
 
-### `src/models/`
+### Phase 2 — AR-5 (Typing Pass)
+**Target:** `src/portfolio/summary.py`, `src/portfolio/formatting.py`
+- Add `TYPE_CHECKING` imports for `PortfolioPnL`, `DhanPortfolioSummary`, `NuvamaBondSummary`, and `NuvamaOptionsSummary`.
+- Replace all `object | None` parameters with their exact types.
+- Remove the `# type: ignore[union-attr]` suppressions.
+- **Note:** This is purely a type-annotation pass with no behavioral changes. Tests remain unchanged.
 
-#### [MODIFY] [portfolio.py](file:///Users/abhadra/myWork/myCode/python/NiftyShield/src/models/portfolio.py)
-- Import `TYPE_CHECKING` and add conditional imports for `PortfolioPnL`, `DhanPortfolioSummary`, `NuvamaBondSummary`, and `NuvamaOptionsSummary`.
-- Refactor `PortfolioSummary` dataclass:
-  - Remove all flat `mf_*`, `dhan_*`, and `nuvama_*` properties (e.g., `dhan_equity_value`, `nuvama_options_pnl`, etc.).
-  - Add optional typed references: `mf_pnl: PortfolioPnL | None`, `dhan: DhanPortfolioSummary | None`, `nuvama_bonds: NuvamaBondSummary | None`, `nuvama_options: NuvamaOptionsSummary | None`.
-  - Keep combined aggregate fields: `total_value`, `total_invested`, `total_pnl`, `total_pnl_pct`, `total_day_delta`, `etf_value`, `etf_basis`, `etf_day_delta`, `options_pnl`, `options_day_delta`, `finrakshak_day_delta`.
+### Phase 3 — AR-4 + AR-6 (Structural Refactor)
+**Targets:** `src/models/portfolio.py`, `src/portfolio/summary.py`, `src/portfolio/formatting.py`, `src/nuvama/store.py`, `scripts/daily_snapshot.py`, and test files.
 
----
+**AR-4 (`PortfolioSummary` Refactoring):**
+- In `src/models/portfolio.py`, add `TYPE_CHECKING` imports. To avoid runtime `NameError` during module load, field annotations for the newly added objects must use string literals (or `from __future__ import annotations`). We will use string literals, e.g., `mf_pnl: "PortfolioPnL | None" = None`.
+- Remove all flat source-specific properties (e.g., `dhan_equity_value`, `nuvama_bond_basis`) from `PortfolioSummary`.
+- Add typed references: `mf_pnl`, `dhan`, `nuvama_bonds`, `nuvama_options`.
+- Update `_build_portfolio_summary` to compute aggregates and pass the summary objects directly into `PortfolioSummary`.
+- Update `_format_combined_summary` and `_format_protection_stats` to access source-specific data via these objects (e.g., `summary.dhan.equity_value` instead of `summary.dhan_equity_value`), with appropriate `None` checks.
 
-### `src/portfolio/`
+**AR-6 (`NuvamaBondHolding` Historical Hack):**
+- **Justification for approach:** Extracting actual `qty` and `ltp` from `nuvama_holdings_snapshots` is the most correct approach because it reconstructs the historical state using actual recorded values rather than reverse-engineering them from a stored aggregate. This eliminates the hacky dummy stubs and doesn't require adding a new factory method that bypasses the model.
+- **DDL Verification:** Verified that `_CREATE_SNAPSHOTS` in `store.py` already includes `qty` and `ltp` columns. No schema migration is required.
+- Update `NuvamaStore.get_snapshot_for_date` to return `isin`, `qty`, `ltp`, and `current_value` as a dictionary (e.g., list of dicts).
+- **Callers to update:** `scripts/daily_snapshot.py` (line 229) and `tests/unit/nuvama/test_store.py` (8 instances).
+- In `_historical_main()`, use the returned `qty` and `ltp` to construct completely accurate `NuvamaBondHolding` objects.
 
-#### [MODIFY] [summary.py](file:///Users/abhadra/myWork/myCode/python/NiftyShield/src/portfolio/summary.py)
-- Import `TYPE_CHECKING` and correctly type the parameters in `_build_portfolio_summary` (replacing `object | None`).
-- Remove the 14 `# type: ignore[union-attr]` suppressions.
-- Update `_build_portfolio_summary` logic to compute the cross-source aggregates (e.g., `total_value`) directly from the passed source summaries, and store the source summaries inside the returned `PortfolioSummary` rather than unpacking all their fields.
-
-#### [MODIFY] [formatting.py](file:///Users/abhadra/myWork/myCode/python/NiftyShield/src/portfolio/formatting.py)
-- Import `TYPE_CHECKING` and correctly type parameters where appropriate.
-- Update `_format_combined_summary` and `_format_protection_stats` to access source-specific data via the typed optional references in `PortfolioSummary` (e.g., `summary.dhan.equity_value` instead of `summary.dhan_equity_value`). Add appropriate `None` checks.
-
----
-
-### `src/nuvama/`
-
-#### [MODIFY] [store.py](file:///Users/abhadra/myWork/myCode/python/NiftyShield/src/nuvama/store.py)
-- Update `get_snapshot_for_date` to return a list of dicts including `isin`, `qty`, `ltp`, and `current_value` instead of just mapping ISIN to `current_value`.
-- Make `record_all_snapshots` atomic by using a single `with connect(self._db_path) as conn:` block and `conn.executemany` with the `INSERT ... ON CONFLICT ...` query.
-- Make `record_all_options_snapshots` atomic in the exact same manner.
-
----
-
-### `scripts/`
-
-#### [MODIFY] [daily_snapshot.py](file:///Users/abhadra/myWork/myCode/python/NiftyShield/scripts/daily_snapshot.py)
-- Update `_historical_main` to accommodate the change in `NuvamaStore.get_snapshot_for_date`'s return type.
-- Remove the `qty=1` stub hack in `_historical_main`. Pass the true `qty` and `ltp` returned from the database to reconstruct accurate `NuvamaBondHolding` instances.
-
----
-
-### `tests/`
-
-#### [MODIFY] test files (multiple)
-- Update all tests that instantiate or assert against `PortfolioSummary` to align with the new schema (e.g., `tests/unit/portfolio/test_summary.py`, `tests/unit/test_daily_snapshot_historical.py`, `tests/unit/dhan/test_daily_snapshot_dhan.py`, etc.).
-- Add atomic tests for `record_all_snapshots` and `record_all_options_snapshots` in `tests/unit/nuvama/test_store.py` (verifying partial write rollback).
+**Affected Test Files:**
+Based on codebase search, the following test files interact with `PortfolioSummary` and need schema updates:
+- `tests/unit/dhan/test_daily_snapshot_dhan.py`
+- `tests/unit/dhan/test_models.py`
+- `tests/unit/nuvama/test_portfolio_summary_nuvama.py`
+- `tests/unit/nuvama/test_daily_snapshot_nuvama.py`
+- `tests/unit/mf/test_daily_snapshot_helpers.py`
 
 ## Verification Plan
 
 ### Automated Tests
-- Run `python -m pytest tests/unit/` to ensure all 859+ tests pass.
+1. Run `python -m pytest tests/unit/` to ensure all 859+ tests pass.
+2. Add a new test case exercising `_format_combined_summary` with a fully populated `PortfolioSummary` (containing all nested objects) to catch any potential `None`-dereferencing bugs from the AR-4 changes.
+3. Run the code-reviewer agent (`.claude/agents/code-reviewer.md`) as mandated by `CLAUDE.md` to verify the architectural integrity of the changes.
 
 ### Manual Verification
-- Run `python -m scripts.daily_snapshot --date <recent_snapshot_date>` to verify historical reconstruction works exactly as before.
-- Run `python -m scripts.daily_snapshot` locally (dry run / test DB) to ensure live snapshot and formatting still works correctly.
+1. Run `python -m scripts.daily_snapshot --date <recent_snapshot_date>` to verify historical reconstruction works. Specifically verify that the `NuvamaBondSummary` output matches what the live snapshot path would produce for that date.
+2. Run `python -m scripts.daily_snapshot` locally with a dry-run or sandbox token to ensure formatting correctly outputs the same visual Telegram-ready message.
