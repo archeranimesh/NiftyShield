@@ -83,6 +83,7 @@ src/
 
 scripts/
 ├── daily_snapshot.py         # Thin I/O orchestration only. Live mode: holiday guard (is_trading_day) exits early on NSE holidays before any API call; fetches LTPs, records snapshots, prints P&L, sends Telegram (non-fatal). Historical mode (--date YYYY-MM-DD): reads stored snapshots, computes P&L offline — no holiday guard, no API call. Pure computation in src/portfolio/summary.py; pure formatting in src/portfolio/formatting.py. Live mode: create_client(UPSTOX_ENV) — UPSTOX_ENV=test → MockBrokerClient.
+├── morning_nav.py            # MF NAV backfill cron (09:15 IST, weekdays). Fetches AMFI and upserts MFNavSnapshot for prev_trading_day(today) — fixes stale T-2 NAV written by the 15:45 daily_snapshot run (AMFI not yet published at that time). --date override for manual recovery. Exit 0/1. Cron: 15 9 * * 1-5.
 ├── nuvama_intraday_tracker.py # Invoked every 5 minutes by Cron (*/5 9-15 * * 1-5). Holiday guard (is_trading_day) exits early on NSE holidays. Fetches Nuvama NetPosition() for options positions + Nifty 50 spot from Upstox batch LTP. Records per-leg intraday state via store.record_intraday_positions() (auto-purges rows > 30 days). os._exit() required — Nuvama SDK spawns a non-daemon background thread that hangs sys.exit().
 ├── send_test_telegram.py     # Smoke-test script. Reads TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID from .env, sends a sample P&L message. Exit code 0/1. Run before first cron to verify credentials.
 ├── seed_mf_holdings.py       # One-time CLI. Inserts 11 INITIAL MF transactions. Idempotent. --dry-run flag.
