@@ -505,6 +505,8 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
 
     # ── Nuvama bond portfolio snapshot (non-fatal) ────────────────
     nuvama_summary = None
+    from src.nuvama.protocol import NuvamaClient
+    nuvama_api_instance: NuvamaClient | None = None
     try:
         from src.auth.nuvama_verify import load_api_connect
         from src.nuvama.reader import fetch_nuvama_portfolio
@@ -537,7 +539,7 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
     try:
         from src.nuvama.options_reader import parse_options_positions, build_options_summary
 
-        if 'nuvama_api_instance' not in locals() or nuvama_api_instance is None:
+        if nuvama_api_instance is None:
             from src.auth.nuvama_verify import load_api_connect
             nuvama_api_instance = load_api_connect()
 

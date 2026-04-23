@@ -32,6 +32,7 @@ async def main() -> int:
     from src.client.factory import create_client
     from src.nuvama.options_reader import parse_options_positions
     from src.nuvama.store import NuvamaStore
+    from src.nuvama.protocol import NuvamaClient
 
     load_dotenv()
     logging.basicConfig(level=logging.INFO, force=True, format="%(levelname)s: %(message)s")
@@ -51,7 +52,7 @@ async def main() -> int:
 
     # 1. Fetch Nuvama options positions
     try:
-        api = load_api_connect()
+        api: NuvamaClient = load_api_connect()
         # Nuvama SDK removes all standard logging handlers on __init__. We must restore it.
         logging.basicConfig(
             level=logging.INFO, 
