@@ -360,19 +360,61 @@ def test_get_all_positions_isolates_by_strategy(store: PortfolioStore) -> None:
 
 
 def test_get_all_positions_single_connection(store: PortfolioStore) -> None:
-    """Must only open a single database connection for the entire operation, avoiding N+1."""
+    """Single DB connection for all legs; values match expected net qty and WAP."""
     import src.portfolio.store as store_mod
     from unittest.mock import patch
-    
-    store.record_trade(_buy(strategy="ILTS", leg="L1"))
-    store.record_trade(_buy(strategy="ILTS", leg="L2"))
-    store.record_trade(_buy(strategy="ILTS", leg="L3"))
-    
+
+    store.record_trade(_buy(strategy="ILTS", leg="L1", qty=100, price="1000.00"))
+    store.record_trade(_buy(strategy="ILTS", leg="L2", qty=50, price="500.00"))
+    store.record_trade(_buy(strategy="ILTS", leg="L3", qty=200, price="250.00"))
+
     with patch.object(store_mod, "_connect", wraps=store_mod._connect) as spy:
         result = store.get_all_positions_for_strategy("ILTS")
-        
-        assert len(result) == 3
+
         assert spy.call_count == 1
+
+    assert len(result) == 3
+    assert result["L1"] == (100, Decimal("1000.00"), "NSE_EQ|INF754K01LE1")
+    assert result["L2"] == (50, Decimal("500.00"), "NSE_EQ|INF754K01LE1")
+    assert result["L3"] == (200, Decimal("250.00"), "NSE_EQ|INF754K01LE1")
+
+
+def test_get_all_positions_instrument_key_after_roll(store: PortfolioStore) -> None:
+    """After a roll, instrument_key must reflect the most recently inserted trade.
+
+    A rolled leg keeps the same leg_role but the new contract has a different
+    instrument_key. The batch query orders by id ASC so the last row for each
+    leg always carries the current (post-roll) key.
+    """
+    OLD_KEY = "NSE_FO|OLD_CONTRACT"
+    NEW_KEY = "NSE_FO|NEW_CONTRACT"
+
+    # Original position: BUY old contract
+    store.record_trade(Trade(
+        strategy_name="ILTS", leg_role="NIFTY_MAY_PE",
+        instrument_key=OLD_KEY, trade_date=date(2026, 1, 15),
+        action=TradeAction.BUY, quantity=50, price=Decimal("800.00"),
+    ))
+    # Close old contract
+    store.record_trade(Trade(
+        strategy_name="ILTS", leg_role="NIFTY_MAY_PE",
+        instrument_key=OLD_KEY, trade_date=date(2026, 2, 15),
+        action=TradeAction.SELL, quantity=50, price=Decimal("600.00"),
+    ))
+    # Open new contract (roll forward)
+    store.record_trade(Trade(
+        strategy_name="ILTS", leg_role="NIFTY_MAY_PE",
+        instrument_key=NEW_KEY, trade_date=date(2026, 2, 20),
+        action=TradeAction.BUY, quantity=50, price=Decimal("700.00"),
+    ))
+
+    result = store.get_all_positions_for_strategy("ILTS")
+
+    net_qty, avg_price, ikey = result["NIFTY_MAY_PE"]
+    assert ikey == NEW_KEY, f"Expected new contract key after roll, got {ikey!r}"
+    assert net_qty == 50  # closed old (50-50=0) + opened new (50) = 50 net
+    # avg buy price = weighted avg of both BUY legs: (50*800 + 50*700) / 100
+    assert avg_price == Decimal("750.00")
 
 
 # ── record_roll ───────────────────────────────────────────────────────────────

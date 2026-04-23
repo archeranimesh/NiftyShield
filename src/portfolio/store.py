@@ -581,7 +581,7 @@ class PortfolioStore:
                 """SELECT leg_role, instrument_key, action, quantity, price
                    FROM trades
                    WHERE strategy_name = ?
-                   ORDER BY leg_role""",
+                   ORDER BY leg_role, id ASC""",
                 (strategy_name,),
             ).fetchall()
 
