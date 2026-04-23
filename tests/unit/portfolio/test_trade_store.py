@@ -359,6 +359,22 @@ def test_get_all_positions_isolates_by_strategy(store: PortfolioStore) -> None:
     assert "NIFTY_DEC_PE" not in ilts
 
 
+def test_get_all_positions_single_connection(store: PortfolioStore) -> None:
+    """Must only open a single database connection for the entire operation, avoiding N+1."""
+    import src.portfolio.store as store_mod
+    from unittest.mock import patch
+    
+    store.record_trade(_buy(strategy="ILTS", leg="L1"))
+    store.record_trade(_buy(strategy="ILTS", leg="L2"))
+    store.record_trade(_buy(strategy="ILTS", leg="L3"))
+    
+    with patch.object(store_mod, "_connect", wraps=store_mod._connect) as spy:
+        result = store.get_all_positions_for_strategy("ILTS")
+        
+        assert len(result) == 3
+        assert spy.call_count == 1
+
+
 # ── record_roll ───────────────────────────────────────────────────────────────
 
 

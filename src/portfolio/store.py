@@ -561,35 +561,52 @@ class PortfolioStore:
     def get_all_positions_for_strategy(
         self, strategy_name: str
     ) -> dict[str, tuple[int, Decimal, str]]:
-        """Derive net position for every leg that has trades in a strategy.
+        """Derive net position for every leg in a single DB round-trip.
 
-        Iterates over all distinct leg_roles for the given strategy and calls
-        get_position() for each. Legs with zero net quantity (fully closed) are
-        still included so callers can decide how to handle them.
+        Replaces the previous N+1 pattern (1 DISTINCT query + 1 get_position()
+        call per leg, each opening its own connection). Now: one _connect block,
+        one SELECT, full Python Decimal aggregation.
 
         Args:
-            strategy_name: Strategy to query (e.g. "ILTS").
+            strategy_name: Strategy to query (e.g. "finideas_ilts").
 
         Returns:
             Dict keyed by leg_role → (net_qty, avg_buy_price, instrument_key).
-            instrument_key is taken from the most recent trade for that leg.
             Returns empty dict when no trades exist for the strategy.
         """
+        from collections import defaultdict
+
         with _connect(self.db_path) as conn:
-            rows = conn.execute(
-                """SELECT DISTINCT leg_role, instrument_key
+            all_rows = conn.execute(
+                """SELECT leg_role, instrument_key, action, quantity, price
                    FROM trades
                    WHERE strategy_name = ?
                    ORDER BY leg_role""",
                 (strategy_name,),
             ).fetchall()
 
+        buy_qty: dict[str, int] = defaultdict(int)
+        sell_qty: dict[str, int] = defaultdict(int)
+        buy_value: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
+        ikey: dict[str, str] = {}
+
+        for row in all_rows:
+            leg = row["leg_role"]
+            ikey[leg] = row["instrument_key"]
+            qty = row["quantity"]
+            price = Decimal(row["price"])  # TEXT → Decimal, no float
+            if row["action"] == "BUY":
+                buy_qty[leg] += qty
+                buy_value[leg] += price * qty
+            else:
+                sell_qty[leg] += qty
+
         result: dict[str, tuple[int, Decimal, str]] = {}
-        for row in rows:
-            leg_role = row["leg_role"]
-            instrument_key = row["instrument_key"]
-            net_qty, avg_price = self.get_position(strategy_name, leg_role)
-            result[leg_role] = (net_qty, avg_price, instrument_key)
+        for leg, instrument_key in ikey.items():
+            bq = buy_qty[leg]
+            net = bq - sell_qty[leg]
+            avg = buy_value[leg] / bq if bq > 0 else Decimal("0")
+            result[leg] = (net, avg, instrument_key)
         return result
 
     @staticmethod
