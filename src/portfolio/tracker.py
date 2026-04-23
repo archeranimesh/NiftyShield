@@ -190,19 +190,10 @@ class PortfolioTracker:
             result.append(s)
         return result
 
-    async def compute_pnl(self, strategy_name: str) -> StrategyPnL | None:
-        """Fetch current prices and compute live P&L for a strategy.
-
-        Returns None if strategy not found in the store.
-        """
-        strategy = self._get_overlaid_strategy(strategy_name)
-        if not strategy:
-            logger.warning("Strategy '%s' not found in store", strategy_name)
-            return None
-
-        instrument_keys = [leg.instrument_key for leg in strategy.legs]
-        prices = await self.market.get_ltp(instrument_keys)
-
+    def _build_strategy_pnl(
+        self, strategy: Strategy, prices: dict[str, float]
+    ) -> StrategyPnL:
+        """Compute StrategyPnL from an already-fetched prices dict."""
         leg_pnls = []
         for leg in strategy.legs:
             raw_ltp = prices.get(leg.instrument_key)
@@ -225,32 +216,49 @@ class PortfolioTracker:
                 )
             )
 
-        return StrategyPnL(strategy_name=strategy_name, legs=leg_pnls)
+        return StrategyPnL(strategy_name=strategy.name, legs=leg_pnls)
+
+    async def compute_pnl(self, strategy_name: str) -> StrategyPnL | None:
+        """Fetch current prices and compute live P&L for a strategy.
+
+        Returns None if strategy not found in the store.
+        """
+        strategy = self._get_overlaid_strategy(strategy_name)
+        if not strategy:
+            logger.warning("Strategy '%s' not found in store", strategy_name)
+            return None
+
+        instrument_keys = [leg.instrument_key for leg in strategy.legs]
+        prices = await self.market.get_ltp(instrument_keys)
+        return self._build_strategy_pnl(strategy, prices)
 
     async def record_daily_snapshot(
         self,
         strategy_name: str,
         snapshot_date: date | None = None,
         underlying_price: float | None = None,
-    ) -> int:
+        prices: dict[str, float] | None = None,
+    ) -> tuple[int, StrategyPnL | None]:
         """Fetch current prices and record a daily snapshot for every leg.
 
         Args:
             strategy_name: Name of the strategy in the store.
             snapshot_date: Date to record (defaults to today).
             underlying_price: Nifty spot price (optional, stored for context).
+            prices: Optional pre-fetched prices to skip the LTP fetch.
 
         Returns:
-            Number of snapshots recorded.
+            Tuple of (number of snapshots recorded, StrategyPnL based on prices).
         """
         snap_date = snapshot_date or date.today()
         strategy = self._get_overlaid_strategy(strategy_name)
         if not strategy:
             logger.warning("Strategy '%s' not found — skipping snapshot", strategy_name)
-            return 0
+            return 0, None
 
         instrument_keys = [leg.instrument_key for leg in strategy.legs]
-        prices = await self.market.get_ltp(instrument_keys)
+        if prices is None:
+            prices = await self.market.get_ltp(instrument_keys)
 
         # Try to get greeks for option legs
         greeks_map = await self._fetch_greeks(strategy.legs)
@@ -286,6 +294,8 @@ class PortfolioTracker:
                 )
             )
 
+        pnl = self._build_strategy_pnl(strategy, prices)
+
         if snapshots:
             count = self.store.record_snapshots_bulk(snapshots)
             logger.info(
@@ -294,23 +304,26 @@ class PortfolioTracker:
                 strategy_name,
                 snap_date.isoformat(),
             )
-            return count
-        return 0
+            return count, pnl
+        return 0, pnl
 
     async def record_all_strategies(
         self,
         snapshot_date: date | None = None,
         underlying_price: float | None = None,
-    ) -> dict[str, int]:
+        prices: dict[str, float] | None = None,
+    ) -> tuple[dict[str, int], dict[str, StrategyPnL | None]]:
         """Record daily snapshots for every strategy in the store."""
         strategies = self._get_all_overlaid_strategies()
-        results = {}
+        counts = {}
+        pnls = {}
         for strategy in strategies:
-            count = await self.record_daily_snapshot(
-                strategy.name, snapshot_date, underlying_price
+            count, pnl = await self.record_daily_snapshot(
+                strategy.name, snapshot_date, underlying_price, prices=prices
             )
-            results[strategy.name] = count
-        return results
+            counts[strategy.name] = count
+            pnls[strategy.name] = pnl
+        return counts, pnls
 
     async def _fetch_greeks(self, legs: list[Leg]) -> dict[str, dict]:
         """Best-effort fetch of Greeks from option chain for option legs.

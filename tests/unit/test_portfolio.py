@@ -360,10 +360,12 @@ class TestPortfolioTracker:
         market = FakeMarket({"X": 105.0})
         tracker = PortfolioTracker(tmp_store, market)
 
-        count = asyncio.run(
+        count, pnl = asyncio.run(
             tracker.record_daily_snapshot("record_test", date(2026, 4, 2))
         )
         assert count == 1
+        assert pnl is not None
+        assert pnl.total_pnl == Decimal("50")
 
         leg_id = tmp_store.get_strategy("record_test").legs[0].id
         snaps = tmp_store.get_snapshots(leg_id)
@@ -412,3 +414,57 @@ class TestPortfolioTracker:
         assert leg_pnl.current_price == Decimal("0")
         # SELL P&L = (entry - ltp) * qty = (500 - 0) * 65 = 32500
         assert leg_pnl.pnl == Decimal("32500")
+
+    def test_record_daily_snapshot_uses_provided_prices(self, tmp_store):
+        from unittest.mock import patch
+        s = Strategy(
+            name="pass_through_test",
+            legs=[
+                Leg(
+                    instrument_key="Y", display_name="Y", asset_type=AssetType.EQUITY,
+                    direction=Direction.BUY, quantity=10, entry_price=100.0,
+                    entry_date=date(2026, 4, 1), product_type=ProductType.CNC,
+                ),
+            ],
+        )
+        tmp_store.upsert_strategy(s)
+
+        market = FakeMarket({"Y": 105.0})
+        tracker = PortfolioTracker(tmp_store, market)
+
+        with patch.object(market, "get_ltp", wraps=market.get_ltp) as spy:
+            count, pnl = asyncio.run(
+                tracker.record_daily_snapshot("pass_through_test", date(2026, 4, 2), prices={"Y": 110.0})
+            )
+            assert count == 1
+            assert spy.call_count == 0  # market.get_ltp was skipped
+            assert pnl.total_pnl == Decimal("100")  # (110 - 100) * 10
+
+    def test_record_all_strategies_uses_provided_prices(self, tmp_store):
+        from unittest.mock import patch
+        for name in ["strat1", "strat2"]:
+            tmp_store.upsert_strategy(Strategy(
+                name=name,
+                legs=[
+                    Leg(
+                        instrument_key=name, display_name=name, asset_type=AssetType.EQUITY,
+                        direction=Direction.BUY, quantity=10, entry_price=100.0,
+                        entry_date=date(2026, 4, 1), product_type=ProductType.CNC,
+                    )
+                ]
+            ))
+
+        market = FakeMarket({"strat1": 110.0, "strat2": 120.0})
+        tracker = PortfolioTracker(tmp_store, market)
+
+        with patch.object(market, "get_ltp", wraps=market.get_ltp) as spy:
+            counts, pnls = asyncio.run(tracker.record_all_strategies(
+                snapshot_date=date(2026, 4, 2),
+                prices={"strat1": 110.0, "strat2": 120.0}
+            ))
+            
+            assert spy.call_count == 0  # no internal get_ltp calls because prices were provided
+            assert len(counts) == 2
+            assert len(pnls) == 2
+            assert pnls["strat1"].total_pnl == Decimal("100")
+            assert pnls["strat2"].total_pnl == Decimal("200")

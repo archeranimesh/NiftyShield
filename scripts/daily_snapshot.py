@@ -421,19 +421,18 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
 
     # ── Record snapshots and collect P&L — single event loop ─────
     tracker = PortfolioTracker(store, client)
-    results = await tracker.record_all_strategies(
+    results, strategy_pnls = await tracker.record_all_strategies(
         snapshot_date=snap_date,
         underlying_price=underlying_price,
+        prices=prices,
     )
 
     total_snaps = sum(results.values())
     print(f"  Recorded {total_snaps} snapshots:")
 
-    strategy_pnls: dict[str, object] = {}
     for strategy in strategies:
         count = results.get(strategy.name, 0)
-        pnl = await tracker.compute_pnl(strategy.name)
-        strategy_pnls[strategy.name] = pnl
+        pnl = strategy_pnls.get(strategy.name)
         if pnl:
             print(
                 f"    {strategy.name}: {count} legs, "
