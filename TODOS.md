@@ -178,7 +178,7 @@ Replace `object | None` parameter types with the real types. Remove all 14 `# ty
 
 ### P3 — Performance & Structural Correctness
 
-#### AR-8: Replace Python aggregation with SQL GROUP BY in `get_cumulative_realized_pnl` — `src/nuvama/store.py:334`
+#### ~~AR-8~~: Replace Python aggregation with SQL GROUP BY in `get_cumulative_realized_pnl` — `src/nuvama/store.py:334` — **DONE 2026-04-23**
 
 **Problem:** Fetches all historical `realized_pnl_today` rows with no `GROUP BY` and aggregates by `trade_symbol` in Python. The result set grows unboundedly with every trading day. After one year of daily options recording, this is hundreds of rows fetched on every intraday 5-minute tick.
 
@@ -204,7 +204,7 @@ return {row["trade_symbol"]: Decimal(row["cumulative"]) for row in rows}
 
 **Tests:** Existing `get_cumulative_realized_pnl` tests will validate the fix with no changes needed.
 
-#### AR-9: Wrap Nuvama APIConnect SDK behind a 2-method protocol — `src/nuvama/`
+#### ~~AR-9~~: Wrap Nuvama APIConnect SDK behind a 2-method protocol — `src/nuvama/` — **DONE 2026-04-23**
 
 **Problem:** The Nuvama `apiconnect` SDK is the only external dependency not abstracted behind a protocol. Any SDK upgrade touches `reader.py`, `options_reader.py`, `daily_snapshot.py`, and `nuvama_intraday_tracker.py`. More immediately: it blocks a `MockNuvamaClient` for testing (AR-3).
 
@@ -221,7 +221,7 @@ Update `fetch_nuvama_portfolio()` and `nuvama_intraday_tracker.py` to accept `Nu
 
 **Files:** `src/nuvama/protocol.py` (new), `src/nuvama/reader.py`, `src/nuvama/options_reader.py`, `scripts/nuvama_intraday_tracker.py`, `scripts/daily_snapshot.py`.
 
-#### AR-10: Batch `get_all_positions_for_strategy` to eliminate N+1 DB connections — `src/portfolio/store.py:561`
+#### ~~AR-10~~: Batch `get_all_positions_for_strategy` to eliminate N+1 DB connections — `src/portfolio/store.py:561` — **DONE 2026-04-23**
 
 **Problem:** Opens one connection to get `DISTINCT leg_role, instrument_key`, then calls `get_position()` for each leg — each opens a new connection and fetches all trades. For 7 legs: 8 connections, 7 full `trades` table scans per call. Called twice per snapshot run (`_get_all_overlaid_strategies` + compute loop in `_async_main`).
 
@@ -239,13 +239,13 @@ Compute `avg_price` from `buy_value / buy_qty` in Python with Decimal (preservin
 
 **Note:** `price` is TEXT in the DB (Decimal invariant). Fetch raw rows and reconstruct with `Decimal(row["price"])` — do not use `CAST` for the final average.
 
-#### AR-11: Eliminate double LTP fetch in `_async_main` — `scripts/daily_snapshot.py`
+#### ~~AR-11~~: Eliminate double LTP fetch in `_async_main` — `scripts/daily_snapshot.py` — **DONE 2026-04-23**
 
 **Problem:** `await tracker.record_all_strategies(...)` fetches LTPs internally. Then `_async_main` calls `await tracker.compute_pnl(strategy.name)` for each strategy to get `StrategyPnL` for the summary — a second batch LTP call to Upstox per run.
 
 **Fix:** Have `record_all_strategies` return `dict[str, StrategyPnL]` alongside the snapshot counts, built from the already-fetched prices inside `record_daily_snapshot`. The `compute_pnl` calls in `_async_main` are then replaced by a dict lookup. No API change to the `BrokerClient` protocol required.
 
-#### AR-12: Defer module-level I/O imports in `nuvama_intraday_tracker.py`
+#### ~~AR-12~~: Defer module-level I/O imports in `nuvama_intraday_tracker.py` — **DONE 2026-04-23**
 
 **Problem:** `from src.auth.nuvama_verify import load_api_connect` and `from src.nuvama.store import NuvamaStore` are module-level imports. This is inconsistent with `daily_snapshot.py` which explicitly defers all I/O imports into `_async_main`. The intraday tracker cannot be safely imported in tests without the auth chain.
 
@@ -395,3 +395,4 @@ All `# TODO:` comments updated to `# TODO: TD-7 — description` format per §3.
 | 2026-04-21 | **P1 test coverage gap (AR-3) — Nuvama options + intraday.** Added 54 new tests across 3 files. `tests/unit/nuvama/test_models.py`: 11 new tests for `NuvamaOptionPosition` (construction, frozen, short/flat qty) and `NuvamaOptionsSummary` (construction, frozen, `net_pnl` property, cumulative exclusion, intraday bounds). `tests/unit/nuvama/test_options_reader.py` (new file): 26 tests for `parse_options_positions` (OPTIDX/OPTSTK happy paths, non-option filtering, flat position, short/long price selection, cfAvg→avg fallbacks, instrument name construction, missing key, malformed record edge cases) and `build_options_summary` (unrealized/realized aggregation, cumulative map, intraday bounds propagation, `net_pnl` correctness). `tests/unit/nuvama/test_store.py`: 13 new tests for `record_all_options_snapshots` (multi-insert, empty list, idempotent upsert) and intraday methods (`record_intraday_positions`, `get_intraday_extremes`: empty/single-timestamp/multi-timestamp/multi-leg summation/date isolation, `purge_old_intraday`: removes old / keeps recent / auto-purge on write). 847 passing, 12 pre-existing upstox_live sandbox failures unchanged. |
 | 2026-04-22 | **Morning NAV backfill script.** `scripts/morning_nav.py`: standalone cron script that fetches AMFI NAVs and upserts the previous trading day's MF snapshot. Fixes the stale-NAV problem where the 15:45 snapshot captures T-2 NAV (AMFI hasn't published yet). Runs at 09:15 IST — `prev_trading_day(date.today())` handles Mon→Fri and holiday edge cases. `--date` override for manual recovery. 6 new tests in `tests/unit/test_morning_nav.py`. Cron: `15 9 * * 1-5 cd /path/to/NiftyShield && python -m scripts.morning_nav >> logs/snapshot.log 2>&1`. |
 | 2026-04-22 | **P2 architecture refactor (AR-4, AR-5, AR-6, AR-7 — Claude).** AR-7: `record_all_snapshots` + `record_all_options_snapshots` rewritten to use `executemany` inside a single `with connect() as conn:` block — atomicity matches `PortfolioStore.record_snapshots_bulk()`. Rollback tests added. AR-5: `object|None` params replaced with real types via `TYPE_CHECKING` guards in `summary.py` + `formatting.py`; all 14 `# type: ignore[union-attr]` suppressions removed. AR-6: `get_snapshot_for_date` now returns `dict[str,dict]` with `qty/ltp/current_value` keys; `_historical_main` reconstructs true `NuvamaBondHolding` objects from stored `qty`+`ltp` — `qty=1` stub gone. AR-4: `PortfolioSummary` refactored from 26-field flat accumulator to 16-field composed model with four typed `Optional` source references (`mf_pnl`, `dhan`, `nuvama_bonds`, `nuvama_options`); availability exposed as computed `@property`; `_build_portfolio_summary` dead intermediate variables removed; `formatting.py` double-guards inside available-checks eliminated. `test_portfolio_summary_nuvama.py` deleted (superseded). `test_telegram_formatting.py` added (cross-source smoke test with numeric delta assertions). All REVIEW.md G2 violations in new diff lines fixed (long arithmetic lines wrapped). 846 passing; 1 pre-existing rapidfuzz/difflib delta in `test_lookup.py`; 12 pre-existing sandbox skips unchanged. Commit: `4de0ec4`. |
+| 2026-04-23 | **P3 architecture refactor (AR-8, AR-9, AR-10, AR-11, AR-12 — Claude).** Phase 1: AR-8: `get_cumulative_realized_pnl` uses single SQL `GROUP BY` avoiding unbound Python loop; AR-10: `get_all_positions_for_strategy` uses single SQL aggregate query eliminating N+1 connection loops; AR-9a: `NuvamaClient` protocol extracted + `MockNuvamaClient` created, `fetch_nuvama_portfolio` signature updated; AR-12: Deferred I/O imports in `nuvama_intraday_tracker.py` into `main()`. Phase 2: AR-9b: Wired `NuvamaClient` type annotation into `daily_snapshot.py` (fixed uninitialized locals fallback) and `nuvama_intraday_tracker.py`; AR-11: `PortfolioTracker._build_strategy_pnl` extracted, `record_daily_snapshot` and `record_all_strategies` now accept master `prices` dict and return computed `StrategyPnL` eliminating the redundant `compute_pnl` double-fetch from Upstox. All Phase 1 and 2 tests green (854 passing). |
