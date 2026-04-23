@@ -16,9 +16,9 @@ import json
 import logging
 from datetime import date
 from decimal import Decimal, InvalidOperation
-from typing import Any
 
 from src.nuvama.models import NuvamaBondHolding, NuvamaBondSummary
+from src.nuvama.protocol import NuvamaClient
 
 logger = logging.getLogger(__name__)
 
@@ -140,7 +140,7 @@ def build_nuvama_summary(
 
 
 def fetch_nuvama_portfolio(
-    api: Any,
+    api: NuvamaClient,
     positions: dict[str, Decimal],
     snapshot_date: date,
     exclude_isins: frozenset[str] | None = None,
@@ -151,7 +151,8 @@ def fetch_nuvama_portfolio(
     for wrapping in try/except (see daily_snapshot.py non-fatal pattern).
 
     Args:
-        api: Initialized APIConnect instance (from load_api_connect()).
+        api: Initialized NuvamaClient instance (e.g. from load_api_connect(),
+            or MockNuvamaClient for offline testing).
         positions: ISIN → avg_price mapping (from NuvamaStore.get_positions()).
         snapshot_date: Date for the summary.
         exclude_isins: Additional ISINs to skip beyond the module default.
@@ -161,7 +162,7 @@ def fetch_nuvama_portfolio(
 
     Raises:
         json.JSONDecodeError: On malformed API response.
-        Exception: Propagates any APIConnect errors to caller.
+        Exception: Propagates any NuvamaClient errors to caller.
     """
     raw = api.Holdings()
     holdings = parse_bond_holdings(raw, positions, exclude_isins)
