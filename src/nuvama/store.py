@@ -413,16 +413,13 @@ class NuvamaStore:
 
         with connect(self._db_path) as conn:
             rows = conn.execute(
-                "SELECT trade_symbol, realized_pnl_today FROM nuvama_options_snapshots WHERE snapshot_date < ?",
+                """SELECT trade_symbol, SUM(realized_pnl_today) AS cumulative
+                   FROM nuvama_options_snapshots
+                   WHERE snapshot_date < ?
+                   GROUP BY trade_symbol""",
                 (before_date.isoformat(),),
             ).fetchall()
-        
-        result: dict[str, Decimal] = {}
-        for row in rows:
-            sym = row["trade_symbol"]
-            val = Decimal(row["realized_pnl_today"])
-            result[sym] = result.get(sym, Decimal("0")) + val
-        return result
+        return {row["trade_symbol"]: Decimal(str(row["cumulative"])) for row in rows}
 
     def get_options_snapshot_for_date(self, snapshot_date: date) -> list[dict]:
         """Return all options snapshot rows for a given date."""
