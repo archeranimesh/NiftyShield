@@ -16,19 +16,23 @@ import uuid
 from datetime import date, datetime
 from decimal import Decimal
 
-from dotenv import load_dotenv
-
-from src.auth.nuvama_verify import load_api_connect
-from src.client.exceptions import LTPFetchError
-from src.client.factory import create_client
+# Pure-computation helper only — no I/O on import.
 from src.market_calendar.holidays import is_trading_day
-from src.nuvama.options_reader import parse_options_positions
-from src.nuvama.store import NuvamaStore
 
 logger = logging.getLogger(__name__)
 
 
 async def main() -> int:
+    # All I/O-triggering imports deferred here so the module is importable
+    # without a live .env or Nuvama SDK. Follows daily_snapshot.py pattern.
+    from dotenv import load_dotenv
+
+    from src.auth.nuvama_verify import load_api_connect
+    from src.client.exceptions import LTPFetchError
+    from src.client.factory import create_client
+    from src.nuvama.options_reader import parse_options_positions
+    from src.nuvama.store import NuvamaStore
+
     load_dotenv()
     logging.basicConfig(level=logging.INFO, force=True, format="%(levelname)s: %(message)s")
     run_id = uuid.uuid4().hex[:8]
