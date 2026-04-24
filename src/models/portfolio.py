@@ -104,7 +104,9 @@ class Leg(BaseModel):
     lot_size: int = Field(default=1, description="Lot size — 1 for ETFs, 75 for Nifty options")
     entry_price: Decimal
     entry_date: date
-    expiry: date | None = Field(default=None, description="Expiry date for F&O legs, None for equity")
+    expiry: date | None = Field(
+        default=None, description="Expiry date for F&O legs, None for equity"
+    )
     strike: float | None = Field(default=None, description="Strike price for options")
     product_type: ProductType
 

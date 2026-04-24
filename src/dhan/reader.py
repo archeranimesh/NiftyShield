@@ -165,7 +165,11 @@ def build_dhan_holdings(
             if not isin:
                 continue
             if isin in exclude:
-                logger.debug("Skipping %s (ISIN %s) — already tracked", h.get("tradingSymbol"), isin)
+                logger.debug(
+                    "Skipping %s (ISIN %s) — already tracked",
+                    h.get("tradingSymbol"),
+                    isin,
+                )
                 continue
 
             symbol = h.get("tradingSymbol", "UNKNOWN").strip()

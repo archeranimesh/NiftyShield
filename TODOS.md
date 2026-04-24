@@ -85,17 +85,11 @@ Per §2.17: replace with module-level `_private_function()`. Mechanical — no l
 | `src/instruments/lookup.py` | `_score_query()` |
 | `src/client/upstox_market.py` | row-mapping helper |
 
-### DEBT-2: Line length violations (TD-2)
+### DEBT-2: Line length violations (TD-2) ✅ DONE (2026-04-24)
 
-7 lines exceed 100 chars (priority — unwrapped f-strings or SQL concatenations):
-
-| File | Line(s) | Length |
-|---|---|---|
-| `src/portfolio/store.py` | L129, L292, L621 | 116c, 102c, 111c |
-| `src/nuvama/store.py` | L229 | 104c |
-| `src/dhan/reader.py` | L167 | 101c |
-| `src/models/portfolio.py` | L95 | 102c |
-| `src/portfolio/tracker.py` | L126 | 102c |
+11 lines >100 chars wrapped across 5 files: `src/portfolio/store.py` (docstring, 2× ternary),
+`src/nuvama/store.py` (2× SQL strings, 2× SQL column list, docstring, method signature),
+`src/dhan/reader.py` (logger.debug), `src/models/portfolio.py` (Field definition). 868 tests pass.
 
 ### DEBT-3: Missing license boilerplate (TD-4)
 
@@ -107,6 +101,7 @@ License decision needed before this can be automated. Every file should carry a 
 
 | Date | What Changed |
 |---|---|
+| 2026-04-24 | **DEBT-2 line length (TD-2).** Wrapped 11 lines >100 chars across `src/portfolio/store.py`, `src/nuvama/store.py`, `src/dhan/reader.py`, `src/models/portfolio.py`. 868 tests pass. |
 | 2026-04-24 | **P4-PKG packaging hygiene.** Removed `uuid==1.30` (stdlib shim, AR-20). Created `requirements-dev.txt` with `pytest`, `pytest-asyncio`, `RapidFuzz` (AR-21). |
 | 2026-04-22 | **Morning NAV backfill.** `scripts/morning_nav.py`: fetches AMFI NAVs for `prev_trading_day(today)`. Fixes stale T-2 NAV written by 15:45 cron. `--date` override for manual recovery. 6 tests. Cron: `15 9 * * 1-5`. |
 | 2026-04-22 | **P2 architecture refactor (AR-4, AR-5, AR-6, AR-7).** `PortfolioSummary` refactored from 26-field flat to 16-field composed model with typed Optional source refs. `record_all_snapshots` + `record_all_options_snapshots` atomic via `executemany`. Historical bond reconstruction uses real `qty`+`ltp` (no `qty=1` stub). All 14 `# type: ignore[union-attr]` suppressions removed. 846 passing. Commit: `4de0ec4`. |

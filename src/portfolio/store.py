@@ -128,7 +128,10 @@ class PortfolioStore:
             return strategy_id
 
     def _upsert_leg(self, conn: sqlite3.Connection, leg: Leg) -> int:
-        """Insert a leg if it doesn't already exist (matched on strategy + instrument + direction + entry_price)."""
+        """Insert a leg if it doesn't already exist.
+
+        Matched on strategy + instrument + direction + entry_price.
+        """
         existing = conn.execute(
             """SELECT id FROM legs
                WHERE strategy_id = ? AND instrument_key = ? AND direction = ?
@@ -291,7 +294,9 @@ class PortfolioStore:
                     snapshot.vega,
                     snapshot.oi,
                     snapshot.volume,
-                    str(snapshot.underlying_price) if snapshot.underlying_price is not None else None,
+                    str(snapshot.underlying_price)
+                    if snapshot.underlying_price is not None
+                    else None,
                 ),
             )
             return cursor.lastrowid  # type: ignore[return-value]
@@ -637,5 +642,9 @@ class PortfolioStore:
             vega=row["vega"],
             oi=row["oi"],
             volume=row["volume"],
-            underlying_price=Decimal(row["underlying_price"]) if row["underlying_price"] is not None else None,
+            underlying_price=(
+                Decimal(row["underlying_price"])
+                if row["underlying_price"] is not None
+                else None
+            ),
         )

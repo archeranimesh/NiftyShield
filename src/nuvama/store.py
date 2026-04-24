@@ -276,7 +276,9 @@ class NuvamaStore:
         """
         with connect(self._db_path) as conn:
             rows = conn.execute(
-                "SELECT isin, qty, ltp, current_value FROM nuvama_holdings_snapshots WHERE snapshot_date = ?",
+                "SELECT isin, qty, ltp, current_value"
+                " FROM nuvama_holdings_snapshots"
+                " WHERE snapshot_date = ?",
                 (snapshot_date.isoformat(),),
             ).fetchall()
         return {
@@ -305,7 +307,9 @@ class NuvamaStore:
         # Step 1: find the most recent snapshot date before before_date
         with connect(self._db_path) as conn:
             date_row = conn.execute(
-                "SELECT MAX(snapshot_date) AS d FROM nuvama_holdings_snapshots WHERE snapshot_date < ?",
+                "SELECT MAX(snapshot_date) AS d"
+                " FROM nuvama_holdings_snapshots"
+                " WHERE snapshot_date < ?",
                 (before_date.isoformat(),),
             ).fetchone()
         if date_row is None or date_row["d"] is None:
@@ -341,7 +345,8 @@ class NuvamaStore:
             conn.execute(
                 """
                 INSERT INTO nuvama_options_snapshots
-                    (snapshot_date, trade_symbol, instrument_name, net_qty, avg_price, ltp, unrealized_pnl, realized_pnl_today)
+                    (snapshot_date, trade_symbol, instrument_name,
+                     net_qty, avg_price, ltp, unrealized_pnl, realized_pnl_today)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(trade_symbol, snapshot_date) DO UPDATE SET
                     instrument_name    = excluded.instrument_name,
@@ -368,7 +373,10 @@ class NuvamaStore:
         holdings: list,
         snapshot_date: date,
     ) -> None:
-        """Upsert snapshot rows for a list of NuvamaOptionPosition objects in a single transaction."""
+        """Upsert snapshot rows for a list of NuvamaOptionPosition objects.
+
+        Executes as a single atomic transaction.
+        """
         if not holdings:
             return
 
@@ -376,7 +384,8 @@ class NuvamaStore:
             conn.executemany(
                 """
                 INSERT INTO nuvama_options_snapshots
-                    (snapshot_date, trade_symbol, instrument_name, net_qty, avg_price, ltp, unrealized_pnl, realized_pnl_today)
+                    (snapshot_date, trade_symbol, instrument_name,
+                     net_qty, avg_price, ltp, unrealized_pnl, realized_pnl_today)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(trade_symbol, snapshot_date) DO UPDATE SET
                     instrument_name    = excluded.instrument_name,
@@ -473,7 +482,9 @@ class NuvamaStore:
             )
         self.purge_old_intraday(days=30)
 
-    def get_intraday_extremes(self, snap_date: date) -> tuple[Decimal | None, Decimal | None, float | None, float | None]:
+    def get_intraday_extremes(
+        self, snap_date: date
+    ) -> tuple[Decimal | None, Decimal | None, float | None, float | None]:
         """Aggregate 5-minute states to find the day's total portfolio high and low."""
         with connect(self._db_path) as conn:
             rows = conn.execute(
