@@ -507,6 +507,40 @@ Before each commit     →  REVIEW.md  (via code-reviewer agent)
 
 ---
 
+## Skills & Agents — Phrase Triggers
+
+NiftyShield has pre-configured skills and agents you invoke by saying a phrase to Claude. No setup needed — just use the trigger phrase and the right tool fires automatically.
+
+### Skills (reusable workflows)
+
+| Skill | Say this | What happens |
+|---|---|---|
+| **md-cleanup** | "clean up the markdown" or "archive completed TODOs" | Archives all ✅ DONE items from TODOS.md, trims session log, updates CONTEXT.md date + test count, syncs README structure, commits. Full checklist in `.claude/skills/md-cleanup/SKILL.md`. |
+| **commit** | "generate a commit message" | Produces a commit in the project-standard format (`type(scope): subject` + `Why:` + `What:` + `Ref:`). Full format spec in `.claude/skills/commit/SKILL.md`. |
+
+### Agents (specialist sub-tasks)
+
+| Agent | Model | Say this | What it does |
+|---|---|---|---|
+| **code-reviewer** | Opus | "Run the code-reviewer agent on `src/portfolio/`" | Checks Decimal invariants, BrokerClient protocol compliance, type hints, async correctness, and the REVIEW.md Python hygiene checklist. Returns CRITICAL / ERROR / WARNING findings with file + line. Use before every merge on monetary or async code. |
+| **test-runner** | Haiku | "Run the test-runner agent" | Runs `python -m pytest tests/unit/` and reports pass/fail count plus any failures. Fast and cheap — use after every code change before committing. |
+| **greeks-analyst** | Sonnet | "Use the greeks-analyst agent to design the OptionChain model" | Inspects the real fixture at `tests/fixtures/responses/nifty_chain_2026-04-07.json`, proposes the `OptionChain` Pydantic model shape, designs `_extract_greeks_from_chain()`, and lists tests required. Scope: P1-NEXT Greeks Capture task. |
+| **roll-validator** | Opus | "Use the roll-validator agent before I roll [leg]" | Validates pre-roll net position, Trade model integrity for both close and open legs, atomicity of the SQLite transaction, and instrument key correctness. Returns SAFE TO ROLL or DO NOT ROLL verdict. Use before every expiry roll — treats it as a real P&L event. |
+| **options-strategist** | Opus | "Use the options-strategist agent to size a short strangle for [expiry]" | Designs IC or short strangle legs (strike selection by delta, max credit/loss, margin estimate, net delta). Also does delta-neutral portfolio analysis and rebalance signal generation. All output is advisory until `src/execution/` is live. |
+
+### When to reach for which
+
+```
+After writing code           →  test-runner (quick) → code-reviewer (before merge)
+About to commit              →  commit skill
+Expiry is approaching        →  roll-validator before touching the DB
+Greeks / OptionChain work    →  greeks-analyst
+Strategy design question     →  options-strategist
+TODOS getting messy          →  md-cleanup skill
+```
+
+---
+
 ## License
 
 Private repository. Not for redistribution.
