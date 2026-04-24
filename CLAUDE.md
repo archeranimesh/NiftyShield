@@ -70,7 +70,7 @@ Confirm: which `src/` modules change? Which files are touched? Tests required? (
 
 ## Step 3 — State plan, wait for go-ahead
 
-> Plan: [one sentence] → touches [file1, file2]. Tests in [test file]. Proceed?
+> Plan: [one sentence] → touches [file1, file2] → tests in [test file] → commit. Proceed?
 
 If plan touches more than 2 files, wait for explicit go-ahead.
 
@@ -78,29 +78,26 @@ If plan touches more than 2 files, wait for explicit go-ahead.
 
 Every public function needs: one happy-path test + one error/edge-case test. No network in tests.
 
-## Step 5 — Update docs after implementation
+## Step 5 — Close the phase (docs → tests → commit)
 
-After any implementation, use targeted `Edit` calls (never `Write`) to update:
+A phase is not complete until all three are done. Never move to the next phase mid-checklist.
+
+**5a — Update docs** (targeted `Edit` calls only, never `Write`):
 - `CONTEXT.md` — "What Exists" module tree if new files added
 - `DECISIONS.md` — any new architecture decisions
 - `TODOS.md` — mark completed items, add session log entry
 - The relevant `src/<module>/CLAUDE.md` if module invariants changed
 
-## Step 6 — Commit after each logical phase
+**5b — Verify tests green:**
+- Run `python -m pytest tests/unit/ --tb=no -q` — all must pass before committing.
 
-Once a self-contained phase is complete (tests green + docs updated), **commit before starting the next phase**. Never bundle unrelated changes across phases into a single commit.
+**5c — Commit** (format in `.claude/skills/commit/SKILL.md`):
+- Code changes: run the `code-reviewer` agent against `git diff HEAD`. Address any `CRITICAL` or `ERROR` findings before committing. `WARNING` may be deferred with a documented reason.
+- Docs / config only: skip code-reviewer. Commit immediately after 5a.
+- **Never bundle changes from separate phases into one commit.**
 
-Identify phase boundaries in Step 3 when planning. Typical phase boundaries:
-- Model → tests green → commit
-- Store → tests green → commit
-- Tracker/orchestration → tests green → docs updated → commit
-- Formatting / pure helpers → tests green → commit
-
-Commit format is in `.claude/skills/commit/SKILL.md`. Before each commit:
-1. Run `python -m pytest tests/unit/` — all tests must pass.
-2. Invoke the `code-reviewer` agent against the diff (`git diff HEAD` or staged files). It checks Decimal invariant, BrokerClient protocol, async correctness, and general Python hygiene (`REVIEW.md`). Address any `CRITICAL` or `ERROR` findings before committing. `WARNING`-level findings may be deferred with a documented reason.
-
-If a phase touches only docs or config (no logic), skip the code-reviewer; a single commit at the end of the session is acceptable.
+Typical phase boundaries (each gets its own commit):
+- Model → Store → Tracker/orchestration → Formatting / pure helpers
 
 ---
 
