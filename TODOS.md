@@ -56,15 +56,35 @@ Matplotlib chart or React dashboard from `daily_snapshots` time series (componen
 
 ---
 
-## P4-PKG — Packaging Hygiene ✅ DONE (2026-04-24)
+## P4-PKG — Packaging / Infra Hygiene
 
-### PKG-1: Remove `uuid==1.30` from `requirements.txt` (AR-20) ✅
+### PKG-1: Remove `uuid==1.30` from `requirements.txt` (AR-20) ✅ DONE (2026-04-24)
 
 Confirmed: all `import uuid` / `from uuid import uuid4` usages in `src/` and `scripts/` hit the Python 3 stdlib — the PyPI shim was a transitive leak. Removed.
 
-### PKG-2: Split `requirements-dev.txt` (AR-21) ✅
+### PKG-2: Split `requirements-dev.txt` (AR-21) ✅ DONE (2026-04-24)
 
 Created `requirements-dev.txt` (`-r requirements.txt` + `pytest`, `pytest-asyncio`, `RapidFuzz`). All three removed from `requirements.txt`.
+
+### PKG-3: Document graph project ID in `CLAUDE.md` Quick Reference (AR-22)
+
+The `codebase-memory-mcp` project name is `Users-abhadra-myWork-myCode-python-NiftyShield`, not `NiftyShield`. Every session without this documented burns a `list_projects` round-trip (~200 tokens wasted before any real work). Add one row to the Quick Reference table in `CLAUDE.md`:
+
+```
+| Graph project ID | `Users-abhadra-myWork-myCode-python-NiftyShield` |
+```
+
+One-line change. No tests required.
+
+### PKG-4: Add bash output discipline and git-log-first rule to `CLAUDE.md` (AR-23)
+
+Two Claude token optimizations that belong in the protocol but are missing or underspecified:
+
+**Bash output discipline** — any bash command that reads data (DB query, log, test run) must pre-aggregate or filter before output reaches Claude context. See DEBT-5 for the explicit contract. Document as a rule in Rule 0 or a dedicated "Context Window Hygiene" section in `CLAUDE.md`.
+
+**Git log before cold Read** — `git log --oneline -10 <file>` costs ~20 tokens and often answers "why does this look like this?" without any file read. Rule 0 mentions this but buries it. It should be step 0 of the decision tree, before even hitting the graph, for any question about *intent* or *recent change*. This repo's commit format (`Why:` / `What:` / `Ref:`) is specifically designed for this — the Why: line encodes intent that would require reading both old and new code to infer otherwise.
+
+Token math: `git log --oneline -10 <file>` ≈ 20 tokens. `Read <file>` on a 400-line store ≈ 1,600 tokens. If the log answers the question, that's an 80× reduction on that lookup.
 
 ---
 
@@ -91,6 +111,33 @@ Per §2.17: replace with module-level `_private_function()`. Mechanical — no l
 `src/nuvama/store.py` (2× SQL strings, 2× SQL column list, docstring, method signature),
 `src/dhan/reader.py` (logger.debug), `src/models/portfolio.py` (Field definition). 868 tests pass.
 
+### DEBT-4: `SELECT *` column over-fetch in store layer (TD-5)
+
+Multiple store `get_*` methods use `SELECT *` + `dict(r)` / `_row_to_*()`, pulling entire rows when callers consume only 3-4 fields. Code quality issue — return type is opaque, callers can't tell what fields exist without tracing to the schema.
+
+Files and methods to target:
+
+| File | Method | Action |
+|---|---|---|
+| `src/nuvama/store.py` | `get_options_snapshot_for_date` | `SELECT *` → named columns; return typed `dataclass` not `list[dict]` |
+| `src/portfolio/store.py` | `get_prev_snapshots` | `SELECT *` → named columns matching `DailySnapshot` fields only |
+| `src/mf/store.py` | `get_nav_snapshots`, `get_prev_nav_snapshots` | `SELECT *` → named columns matching `NavSnapshot` fields only |
+
+Fix alongside adjacent refactoring (same file edit). Never a standalone commit.
+
+### DEBT-5: Pre-aggregate bash tool output before it enters Claude context (TD-6)
+
+When Claude runs a bash DB query during a session, the full result set is appended to the context window and carried forward for the rest of the session. A `SELECT * FROM nuvama_options_snapshots` returning 15 rows × 20 columns adds ~300 tokens that persist for every subsequent tool call. The fix is pre-aggregating in SQL so Claude receives a summary row, not raw rows.
+
+Document an explicit output contract in `CLAUDE.md` Rule 0 (or a new "Bash Output Discipline" section):
+
+- Aggregate questions (total P&L, portfolio value) → single summary row via `SUM`/`MAX`/`COUNT`
+- Diagnostic questions (which rows have null Greeks?) → `SELECT instrument_key, snapshot_date … LIMIT 10`
+- Test runs → `pytest --tb=no -q` for pass/fail; full `-v` only when debugging a specific failure
+- Log reads → `tail -20` or `grep ERROR`, never `cat`
+
+Pattern to follow: `get_cumulative_realized_pnl` — `GROUP BY / SUM` at SQL layer, returns a compact `dict` not a row list. Apply the same discipline at the bash invocation layer when Claude reads data directly.
+
 ### DEBT-3: Missing license boilerplate (TD-4)
 
 License decision needed before this can be automated. Every file should carry a header once the license is chosen.
@@ -101,6 +148,7 @@ License decision needed before this can be automated. Every file should carry a 
 
 | Date | What Changed |
 |---|---|
+| 2026-04-24 | **Claude token optimization audit.** Added PKG-3 (graph project ID in CLAUDE.md), PKG-4 (bash output discipline + git-log-first rule in CLAUDE.md). Reframed DEBT-4 (SELECT * is code quality, not token issue). Reframed DEBT-5 (pre-aggregate bash output before Claude context, not store methods). No code changes — planning only. |
 | 2026-04-24 | **DEBT-2 line length (TD-2).** Wrapped 11 lines >100 chars across `src/portfolio/store.py`, `src/nuvama/store.py`, `src/dhan/reader.py`, `src/models/portfolio.py`. 868 tests pass. |
 | 2026-04-24 | **P4-PKG packaging hygiene.** Removed `uuid==1.30` (stdlib shim, AR-20). Created `requirements-dev.txt` with `pytest`, `pytest-asyncio`, `RapidFuzz` (AR-21). |
 | 2026-04-22 | **Morning NAV backfill.** `scripts/morning_nav.py`: fetches AMFI NAVs for `prev_trading_day(today)`. Fixes stale T-2 NAV written by 15:45 cron. `--date` override for manual recovery. 6 tests. Cron: `15 9 * * 1-5`. |
