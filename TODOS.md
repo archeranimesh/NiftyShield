@@ -56,18 +56,15 @@ Matplotlib chart or React dashboard from `daily_snapshots` time series (componen
 
 ---
 
-## P4-PKG — Packaging Hygiene
+## P4-PKG — Packaging Hygiene ✅ DONE (2026-04-24)
 
-### PKG-1: Remove `uuid==1.30` from `requirements.txt` (AR-20)
+### PKG-1: Remove `uuid==1.30` from `requirements.txt` (AR-20) ✅
 
-PyPI `uuid` is a deprecated stdlib wrapper — almost certainly a transitive leak into top-level requirements.
-Steps: `pip show uuid --files`, verify no direct import in `src/` or `scripts/`, then remove if clean.
+Confirmed: all `import uuid` / `from uuid import uuid4` usages in `src/` and `scripts/` hit the Python 3 stdlib — the PyPI shim was a transitive leak. Removed.
 
-### PKG-2: Split `requirements-dev.txt` (AR-21)
+### PKG-2: Split `requirements-dev.txt` (AR-21) ✅
 
-Move `pytest`, `pytest-asyncio`, `RapidFuzz` to a new `requirements-dev.txt`.
-Production dependencies (broker SDKs, `requests`, `pydantic`, `python-dotenv`) stay in `requirements.txt`.
-No code changes required.
+Created `requirements-dev.txt` (`-r requirements.txt` + `pytest`, `pytest-asyncio`, `RapidFuzz`). All three removed from `requirements.txt`.
 
 ---
 
@@ -110,6 +107,7 @@ License decision needed before this can be automated. Every file should carry a 
 
 | Date | What Changed |
 |---|---|
+| 2026-04-24 | **P4-PKG packaging hygiene.** Removed `uuid==1.30` (stdlib shim, AR-20). Created `requirements-dev.txt` with `pytest`, `pytest-asyncio`, `RapidFuzz` (AR-21). |
 | 2026-04-22 | **Morning NAV backfill.** `scripts/morning_nav.py`: fetches AMFI NAVs for `prev_trading_day(today)`. Fixes stale T-2 NAV written by 15:45 cron. `--date` override for manual recovery. 6 tests. Cron: `15 9 * * 1-5`. |
 | 2026-04-22 | **P2 architecture refactor (AR-4, AR-5, AR-6, AR-7).** `PortfolioSummary` refactored from 26-field flat to 16-field composed model with typed Optional source refs. `record_all_snapshots` + `record_all_options_snapshots` atomic via `executemany`. Historical bond reconstruction uses real `qty`+`ltp` (no `qty=1` stub). All 14 `# type: ignore[union-attr]` suppressions removed. 846 passing. Commit: `4de0ec4`. |
 | 2026-04-23 | **P3 architecture refactor (AR-8, AR-9, AR-10, AR-11, AR-12).** `get_cumulative_realized_pnl` uses SQL `GROUP BY` (bounded result set). `get_all_positions_for_strategy` uses single aggregate query (N+1 eliminated). `NuvamaClient` protocol + `MockNuvamaClient` created. Deferred I/O imports in `nuvama_intraday_tracker.py`. `record_all_strategies` returns `dict[str, StrategyPnL]` — double LTP fetch eliminated. 854 passing. |
