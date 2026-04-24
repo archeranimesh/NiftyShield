@@ -215,3 +215,40 @@ All `# TODO:` comments updated to `# TODO: TD-7 — description` format per §3.
 | 2026-04-21 | **P0 correctness fixes (AR-1, AR-2).** Zero-LTP bug + underlying_price truthiness bugs fixed. 785 tests passing. |
 | 2026-04-21 | **P4 hygiene (AR-13 → AR-19).** exc_info, run_id, dead assert, date.today(), AssetType.BOND, Decimal round-trip, intraday schema REAL + version guard. 859 tests. |
 | 2026-04-21 | **P1 test coverage (AR-3).** 54 new Nuvama options + intraday tests. 847 passing. |
+| 2026-04-22 | **Morning NAV backfill.** `scripts/morning_nav.py`: fetches AMFI NAVs for `prev_trading_day(today)`. Fixes stale T-2 NAV written by 15:45 cron. `--date` override for manual recovery. 6 tests. Cron: `15 9 * * 1-5`. |
+| 2026-04-22 | **P2 architecture refactor (AR-4, AR-5, AR-6, AR-7).** `PortfolioSummary` refactored from 26-field flat to 16-field composed model with typed Optional source refs. `record_all_snapshots` + `record_all_options_snapshots` atomic via `executemany`. Historical bond reconstruction uses real `qty`+`ltp` (no `qty=1` stub). All 14 `# type: ignore[union-attr]` suppressions removed. 846 passing. Commit: `4de0ec4`. |
+| 2026-04-23 | **P3 architecture refactor (AR-8, AR-9, AR-10, AR-11, AR-12).** `get_cumulative_realized_pnl` uses SQL `GROUP BY` (bounded result set). `get_all_positions_for_strategy` uses single aggregate query (N+1 eliminated). `NuvamaClient` protocol + `MockNuvamaClient` created. Deferred I/O imports in `nuvama_intraday_tracker.py`. `record_all_strategies` returns `dict[str, StrategyPnL]` — double LTP fetch eliminated. 854 passing. |
+| 2026-04-24 | **P4 packaging hygiene (AR-20, AR-21).** Removed `uuid==1.30` stdlib shim. Created `requirements-dev.txt` (pytest, pytest-asyncio, RapidFuzz). |
+| 2026-04-24 | **Claude token optimisation (AR-22, AR-23).** Graph project ID added to CLAUDE.md Quick Reference. git-log promoted to step 0 in Rule 0. `Rule 1 — Bash Output Discipline` added with four-pattern contract table. |
+| 2026-04-24 | **DEBT-2 line length (TD-2).** 11 lines >100 chars wrapped across `src/portfolio/store.py`, `src/nuvama/store.py`, `src/dhan/reader.py`, `src/models/portfolio.py`. 868 tests pass. |
+| 2026-04-24 | **DEBT-4 SELECT * (TD-5).** Named column lists in all store `get_*` methods. `get_options_snapshot_for_date` → `list[NuvamaOptionPosition]` (typed). `get_snapshots_for_date` + `get_nav_snapshots_for_date` also fixed. 868 tests pass. |
+| 2026-04-24 | **Root markdown cleanup.** Archived all ✅ DONE items (PKG-1–4, DEBT-2,4,5) here. Moved `python-architecture-review.prompt.md` to `docs/`. Updated README.md actual src/ layout. Wrote `.claude/skills/md-cleanup/SKILL.md`. |
+
+---
+
+## Completed P4-PKG Items (2026-04-24)
+
+### PKG-1: Remove `uuid==1.30` from `requirements.txt` (AR-20)
+All `import uuid` usages hit stdlib — PyPI shim was a transitive leak. Removed from `requirements.txt`.
+
+### PKG-2: Split `requirements-dev.txt` (AR-21)
+Created `requirements-dev.txt` (`-r requirements.txt` + pytest, pytest-asyncio, RapidFuzz). All three removed from `requirements.txt`.
+
+### PKG-3: Document graph project ID in `CLAUDE.md` (AR-22)
+Added `| Graph project ID | \`Users-abhadra-myWork-myCode-python-NiftyShield\` |` to Quick Reference table.
+
+### PKG-4: Bash output discipline in `CLAUDE.md` (AR-23)
+`Rule 1 — Bash Output Discipline` added with four-pattern contract (aggregate → SUM/COUNT, diagnostic → named cols + LIMIT 10, test runs → --tb=no -q, log reads → tail/grep). Token math included.
+
+---
+
+## Completed P5-DEBT Items (2026-04-24)
+
+### DEBT-2: Line length violations (TD-2)
+11 lines >100 chars wrapped across 5 files. 868 tests pass.
+
+### DEBT-4: `SELECT *` over-fetch in store layer (TD-5)
+Named column lists in all store `get_*` methods. `get_options_snapshot_for_date` → `list[NuvamaOptionPosition]`. 868 tests pass.
+
+### DEBT-5: Pre-aggregate bash output (TD-6)
+Completed as part of PKG-4. `Rule 1 — Bash Output Discipline` in `CLAUDE.md` satisfies full DoD.

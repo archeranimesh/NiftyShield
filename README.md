@@ -67,31 +67,46 @@ NiftyShield is a systematic options trading engine built on a leveraged capital 
 ```
 NiftyShield/
 ├── src/
-│   ├── auth/              # OAuth flow, token management
+│   ├── auth/              # OAuth flow — Upstox, Nuvama, Dhan
 │   ├── client/
-│   │   ├── protocol.py    # BrokerClient & MarketStream protocols
-│   │   ├── upstox_live.py # Live Upstox implementation
-│   │   ├── upstox_sandbox.py
-│   │   ├── mock_client.py # Stateful offline mock
-│   │   └── factory.py     # Client injection
-│   ├── models/            # Pydantic models for API shapes
-│   ├── strategy/          # Signal generation
-│   ├── execution/         # Order management
-│   ├── data/              # Historical data, expired instruments
-│   ├── streaming/         # Websocket feeds + replay
-│   ├── backtest/          # Backtesting engine
-│   ├── risk/              # Margin, position sizing, delta
-│   └── utils/             # Logging, config, helpers
+│   │   ├── protocol.py        # BrokerClient + sub-protocols (ISP)
+│   │   ├── upstox_live.py     # Live Upstox implementation
+│   │   ├── upstox_sandbox.py  # Sandbox implementation
+│   │   ├── upstox_market.py   # Analytics Token market data (legacy)
+│   │   ├── mock_client.py     # Stateful offline mock
+│   │   └── factory.py         # Composition root (sole concrete importer)
+│   ├── models/            # Shared Pydantic models (portfolio + mf)
+│   ├── portfolio/         # Strategy P&L, daily snapshots, trade ledger
+│   ├── mf/                # MF transaction ledger, AMFI NAV fetcher
+│   ├── dhan/              # Dhan equity/bond holdings + Upstox LTP enrichment
+│   ├── nuvama/            # Nuvama bond holdings + options P&L
+│   ├── instruments/       # Offline BOD instrument fuzzy lookup
+│   ├── market_calendar/   # NSE holiday calendar (YAML-backed, fail-open)
+│   ├── notifications/     # Telegram notifier (non-fatal, HTML parse_mode)
+│   ├── utils/             # Number formatting, config helpers
+│   ├── db.py              # Shared SQLite context manager (WAL, FK, Row factory)
+│   ├── strategy/          # [empty — planned Q3 2026]
+│   ├── execution/         # [empty — planned Q3 2026]
+│   ├── backtest/          # [empty — planned Q4 2026]
+│   └── risk/              # [empty — planned Q3 2026]
+├── scripts/
+│   ├── daily_snapshot.py          # Main EOD cron (15:45 IST, Mon–Fri)
+│   ├── morning_nav.py             # Pre-market AMFI NAV fetch (09:15 IST)
+│   ├── nuvama_intraday_tracker.py # 5-min M2M/Spot bounds (*/5 09:00–15:00)
+│   ├── record_trade.py            # CLI: insert a new trade row
+│   ├── roll_leg.py                # CLI: atomic close + open for expiry rolls
+│   └── seed_*.py                  # One-time DB seeding scripts
 ├── tests/
-│   ├── unit/              # Offline tests (default)
-│   ├── integration/       # Sandbox tests (opt-in)
-│   └── fixtures/          # Recorded API responses + tick streams
+│   ├── unit/              # ~870 offline tests (default — no network)
+│   └── fixtures/          # Recorded API responses (JSON)
 ├── data/
-│   ├── offline/           # Bootstrap'd historical data
-│   └── bootstrap.py       # One-time data fetch
-├── config/                # Environment configs (dev/stage/prod)
+│   └── portfolio/         # portfolio.sqlite (live DB — gitignored)
+├── docs/
+│   ├── plan/              # Per-story task files (one per feature)
+│   └── archive/           # Completed plans, archived TODOs, old agents
 ├── .env.example
 ├── requirements.txt
+├── requirements-dev.txt
 └── README.md
 ```
 
@@ -425,18 +440,19 @@ All backtesting runs **fully offline** against local Parquet/SQLite stores. No A
 - [x] MF portfolio tracking (transactions, NAV snapshots, holdings P&L)
 - [x] Trade ledger (execution history, weighted avg cost basis, position queries)
 - [x] Atomic leg roll CLI (expiry rolls with single-transaction close + open)
-- [x] Nuvama portfolio monitoring (Bonds/Gold Bonds)
-- [x] Nuvama Options P&L fetch and reporting
-- [x] Nuvama Intraday tracker (5-minute M2M/Spot bounds snapshotting)
-- [ ] Option chain fetcher with Greeks
-- [ ] Historical data pipeline (active + expired)
-- [ ] Offline data bootstrap script
-- [ ] Backtesting engine
-- [ ] Strategy engine (short strangle / iron condor)
-- [ ] Delta-neutral adjustment logic
-- [ ] Risk manager (margin monitoring)
-- [ ] Order execution engine
-- [ ] Websocket streaming + replay
+- [x] Nuvama portfolio monitoring (bonds/gold bonds)
+- [x] Nuvama options P&L fetch and reporting
+- [x] Nuvama intraday tracker (5-minute M2M/Spot bounds snapshotting)
+- [x] Dhan portfolio monitoring (equity + bond holdings, Upstox LTP enrichment)
+- [x] NSE market holiday calendar (fail-open, version-controlled YAML)
+- [x] Morning NAV backfill script (pre-market AMFI fetch, T-1 gap fix)
+- [ ] Option chain fetcher with Greeks (`OptionChain` Pydantic model — P1-NEXT)
+- [ ] Historical data pipeline (active + expired instruments)
+- [ ] Backtesting engine (`src/backtest/`) — Q4 2026
+- [ ] Strategy engine (`src/strategy/`) — Q3 2026
+- [ ] Delta-neutral adjustment + risk manager (`src/risk/`) — Q3 2026
+- [ ] Order execution engine (`src/execution/`) — blocked (static IP)
+- [ ] Websocket streaming + replay (`src/streaming/`) — Q3 2026
 
 ---
 
