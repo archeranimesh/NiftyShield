@@ -51,7 +51,40 @@ No implementation until Animesh chooses an option.
 
 Deferred until late May 2026 (need 4+ weeks of snapshot data).
 
-Matplotlib chart or React dashboard from `daily_snapshots` time series (component breakdown over time). `PortfolioSummary` dataclass is already extracted and ready to query. Plan notes in `PLANNER.md`.
+Deliver as a **persistent Cowork artifact** (self-contained HTML page, re-opens with fresh data each session via live DB queries). Four independent panels, each independently viable:
+
+### Panel 1 — Mutual Funds (MF)
+- Source: `mf_nav_snapshots` (NAV history) + `mf_transactions` (cost basis: one INITIAL row per scheme with units + amount)
+- Data available: 16 days (2026-04-03 → present), 11 schemes
+- P&L formula: `(current_nav − avg_cost_per_unit) × units` per scheme per day
+- Chart: cumulative rupee P&L curve per scheme + bar chart of current unrealized gain per scheme
+
+### Panel 2 — Dhan ETFs
+- Source: `dhan_holdings_snapshots` (avg_cost_price + ltp + total_qty per day)
+- Data available: 9 days (2026-04-14 → present); NIFTYIETF (equity) + LIQUIDCASE (bond)
+- P&L formula: `(ltp − avg_cost_price) × total_qty` — directly computable, no join needed
+- Chart: daily P&L curve per instrument
+
+### Panel 3 — Nuvama Bonds (NCDs, G-Sec, SGB)
+- Source: `nuvama_holdings_snapshots` (current_value per ISIN per day) + `nuvama_positions` (static cost basis: avg_price × qty)
+- Data available: 8 days (2026-04-15 → present); EFSL NCDs, G-Sec 8.28% 2027, SGB 2023-24
+- P&L formula: `current_value − (qty × avg_price)` per ISIN per day
+- Chart: daily mark-to-market P&L per bond instrument
+
+### Panel 4 — Nuvama Options (FinRakshak)
+- Source: `nuvama_options_snapshots` (unrealized_pnl + realized_pnl_today per leg per EOD snapshot)
+- Data available: 7 days (2026-04-16 → present); 23–38 open legs per day
+- Caveat: closed legs disappear from subsequent snapshots; `realized_pnl_today` captures same-day closures only
+- P&L formula: `SUM(unrealized_pnl)` for open legs + `SUM(realized_pnl_today)` cumulated over all historical dates
+- Chart: daily total unrealized P&L + cumulative realized P&L line — strategy-level only, not per-leg
+
+### Not yet possible
+- Zerodha: no table in DB, no integration built. If FinRakshak has any Zerodha legs, they are a blind spot.
+
+### Implementation notes
+- All four panels can share one artifact; data fetched via `mcp__workspace__bash` → Python → JSON on open
+- Render with Chart.js or Recharts (both available in artifact sandbox)
+- `PortfolioSummary` dataclass already extracted and queryable; `PLANNER.md` has broader context
 
 ---
 
@@ -83,5 +116,6 @@ License decision needed before this can be automated. Every file should carry a 
 | Date | What Changed |
 |---|---|
 | 2026-04-24 | **Root markdown cleanup.** Archived all ✅ DONE items (PKG-1–4, DEBT-2,4,5) + session log to TODOS_ARCHIVE_2026-04-24.md. Moved `python-architecture-review.prompt.md` to `docs/`. Updated README.md project structure to actual src/ layout. Wrote `.claude/skills/md-cleanup/SKILL.md`. |
+| 2026-04-24 | **P&L Visualization scoping.** Audited DB for all viable data sources. Expanded P3-DEFER with 4 panels (MF, Dhan ETFs, Nuvama Bonds, Nuvama Options), data availability, P&L formulas, and known gap (Zerodha/FinRakshak not integrated). |
 
 Full log (2026-04-01 → 2026-04-24): [docs/archive/TODOS_ARCHIVE_2026-04-24.md](docs/archive/TODOS_ARCHIVE_2026-04-24.md)
