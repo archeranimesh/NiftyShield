@@ -114,18 +114,9 @@ Files and methods to target:
 
 Fix alongside adjacent refactoring (same file edit). Never a standalone commit.
 
-### DEBT-5: Pre-aggregate bash tool output before it enters Claude context (TD-6)
+### DEBT-5: Pre-aggregate bash tool output before it enters Claude context (TD-6) ✅ DONE (2026-04-24)
 
-When Claude runs a bash DB query during a session, the full result set is appended to the context window and carried forward for the rest of the session. A `SELECT * FROM nuvama_options_snapshots` returning 15 rows × 20 columns adds ~300 tokens that persist for every subsequent tool call. The fix is pre-aggregating in SQL so Claude receives a summary row, not raw rows.
-
-Document an explicit output contract in `CLAUDE.md` Rule 0 (or a new "Bash Output Discipline" section):
-
-- Aggregate questions (total P&L, portfolio value) → single summary row via `SUM`/`MAX`/`COUNT`
-- Diagnostic questions (which rows have null Greeks?) → `SELECT instrument_key, snapshot_date … LIMIT 10`
-- Test runs → `pytest --tb=no -q` for pass/fail; full `-v` only when debugging a specific failure
-- Log reads → `tail -20` or `grep ERROR`, never `cat`
-
-Pattern to follow: `get_cumulative_realized_pnl` — `GROUP BY / SUM` at SQL layer, returns a compact `dict` not a row list. Apply the same discipline at the bash invocation layer when Claude reads data directly.
+Completed as part of PKG-4 (AR-23). `Rule 1 — Bash Output Discipline` added to `CLAUDE.md` with the explicit four-pattern contract table (aggregate → `SUM`/`MAX`/`COUNT`, diagnostic → named columns + `LIMIT 10`, test runs → `--tb=no -q`, log reads → `tail`/`grep`). Token math and `get_cumulative_realized_pnl` reference callout included.
 
 ### DEBT-3: Missing license boilerplate (TD-4)
 
@@ -137,6 +128,7 @@ License decision needed before this can be automated. Every file should carry a 
 
 | Date | What Changed |
 |---|---|
+| 2026-04-24 | **DEBT-5 (TD-6) closed.** `Rule 1 — Bash Output Discipline` (added as PKG-4/AR-23) satisfies the full DEBT-5 DoD. TODOS.md updated to reflect completion — no code changes. |
 | 2026-04-24 | **PKG-3 + PKG-4 (AR-22, AR-23).** Graph project ID added to CLAUDE.md Quick Reference. git-log promoted to step 0 in Rule 0 decision tree. `Rule 1 — Bash Output Discipline` section added with explicit aggregate/diagnostic/test/log contract table. |
 | 2026-04-24 | **Claude token optimization audit.** Added PKG-3 (graph project ID in CLAUDE.md), PKG-4 (bash output discipline + git-log-first rule in CLAUDE.md). Reframed DEBT-4 (SELECT * is code quality, not token issue). Reframed DEBT-5 (pre-aggregate bash output before Claude context, not store methods). No code changes — planning only. |
 | 2026-04-24 | **DEBT-2 line length (TD-2).** Wrapped 11 lines >100 chars across `src/portfolio/store.py`, `src/nuvama/store.py`, `src/dhan/reader.py`, `src/models/portfolio.py`. 868 tests pass. |
