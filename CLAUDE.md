@@ -4,13 +4,37 @@
 
 ---
 
+## ⛔ Rule 0 — Graph before Read (enforced by PreToolUse hook)
+
+**NEVER call `Read` on `src/` or `scripts/` without first trying the graph.**
+A hook will fire and remind you. It will not block — the decision is yours — but skipping the
+graph when it can answer the question wastes tokens and violates this protocol.
+
+**Decision tree — run in order before any source file touch:**
+1. Need a symbol/function? → `search_graph(query=...)` or `get_code_snippet(qualified_name)`
+2. Need callers/callees? → `trace_path(function_name)`
+3. Need a grep? → `search_code(pattern)`
+4. Need a specific block? → `bash sed -n 'N,Mp' <file>` (cheaper than `Read` on the whole file)
+5. Still not enough? → `Read` is permitted — but **state why** the graph was insufficient.
+
+`Read` is the *first* tool only for: markdown files, TOML/YAML config, test fixtures.
+
+**git log first for "why does this look like this?" questions:**
+- `git log --oneline -15 <file>` — what changed and when
+- `git show <sha>` — full diff + intent
+- `git log --oneline -20` — recent session history
+The commit format in this repo encodes the reason for every change — faster than reading code cold.
+
+---
+
 ## Step 1 — Read CONTEXT.md first
 
 Read `CONTEXT.md` before writing any code. State `CONTEXT.md ✓` in your first response.
 Do not rely on chat history — CONTEXT.md is the single source of truth.
+Module tree (file-level descriptions): **`CONTEXT_TREE.md`** — load only when adding new modules or doing a full codebase survey.
 
 **Load additional files when relevant:**
-- Adding/changing module architecture → also read `DECISIONS.md`
+- Adding/changing module architecture → also read `DECISIONS.md` + `CONTEXT_TREE.md`
 - Touching instrument keys, AMFI codes, market data → also read `REFERENCES.md`
 - Starting a new feature → also read `TODOS.md` + `PLANNER.md`
 - Any task in `src/backtest/`, `src/paper/`, `src/strategy/`, or referenced in BACKTEST_PLAN.md → also read `BACKTEST_PLAN.md`
@@ -18,24 +42,6 @@ Do not rely on chat history — CONTEXT.md is the single source of truth.
 - Implementing a metric / ratio / ML technique → also read `LITERATURE.md` entry for the cited LIT code
 - Working a specific story → load ONLY that story file + `CONTEXT.md` + module `CLAUDE.md`
 - Working inside `src/<module>/` → that module's `CLAUDE.md` loads automatically
-
-**⛔ DO NOT call `Read` on any file under `src/` or `scripts/` without first trying the graph.**
-
-The entire `src/` and `scripts/` tree is indexed in `codebase-memory-mcp`. Using `Read` on a source file when the graph can answer the question wastes tokens and violates this protocol. This has been a recurring mistake — treat it as a hard rule, not a suggestion.
-
-**Decision tree before touching any source file:**
-1. Need a symbol/function? → `search_graph(query=...)` or `get_code_snippet(qualified_name)`
-2. Need callers/callees? → `trace_path(function_name)`
-3. Need a grep? → `search_code(pattern)`
-4. Still not enough? → `Read` is now permitted — but state why the graph was insufficient.
-
-`Read` is only the first tool for: markdown files, TOML/YAML config, test fixtures, and files the graph explicitly cannot resolve.
-
-**git log (commit history first):** Commit messages in this repo follow a structured format that encodes the *reason* for every change — faster than reading code cold.
-- `git log --oneline -15 <file>` — what changed in a specific file and when
-- `git show <sha>` — full diff + intent for any commit
-- `git log --oneline -20` — recent session history across the whole repo
-Check git log before asking "why does this code look like this?" — the answer is usually in a commit message.
 
 ## Python Standards (new module checklist)
 
