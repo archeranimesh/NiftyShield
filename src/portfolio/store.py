@@ -388,7 +388,9 @@ class PortfolioStore:
         """
         with _connect(self.db_path) as conn:
             rows = conn.execute(
-                "SELECT * FROM daily_snapshots WHERE snapshot_date = ?",
+                "SELECT id, leg_id, snapshot_date, ltp, close, iv, delta, theta,"
+                " gamma, vega, oi, volume, underlying_price"
+                " FROM daily_snapshots WHERE snapshot_date = ?",
                 (d.isoformat(),),
             ).fetchall()
             return {r["leg_id"]: self._row_to_snapshot(r) for r in rows}
@@ -416,7 +418,9 @@ class PortfolioStore:
             if not row or not row["prev_date"]:
                 return {}
             rows = conn.execute(
-                "SELECT * FROM daily_snapshots WHERE snapshot_date = ?",
+                "SELECT id, leg_id, snapshot_date, ltp, close, iv, delta, theta,"
+                " gamma, vega, oi, volume, underlying_price"
+                " FROM daily_snapshots WHERE snapshot_date = ?",
                 (row["prev_date"],),
             ).fetchall()
             return {r["leg_id"]: self._row_to_snapshot(r) for r in rows}

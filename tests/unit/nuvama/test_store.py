@@ -236,8 +236,8 @@ class TestOptionsSnapshots:
         )
         result = store.get_options_snapshot_for_date(date(2026, 4, 15))
         assert len(result) == 1
-        assert result[0]["trade_symbol"] == "A"
-        assert result[0]["realized_pnl_today"] == "50"
+        assert result[0].trade_symbol == "A"
+        assert result[0].realized_pnl_today == Decimal("50")
 
     def test_get_cumulative_realized_pnl_default_excludes_today(self, store):
         """Default behavior should exclude today (date.today())."""
@@ -298,7 +298,7 @@ class TestRecordAllOptionsSnapshots:
         store.record_all_options_snapshots(positions, date(2026, 4, 21))
         result = store.get_options_snapshot_for_date(date(2026, 4, 21))
         assert len(result) == 2
-        assert {r["trade_symbol"] for r in result} == {"A", "B"}
+        assert {r.trade_symbol for r in result} == {"A", "B"}
 
     def test_empty_list_no_crash(self, store):
         store.record_all_options_snapshots([], date(2026, 4, 21))

@@ -273,7 +273,10 @@ class MFStore:
         Returns:
             Snapshots ordered by snapshot_date ascending.
         """
-        query = "SELECT * FROM mf_nav_snapshots WHERE amfi_code = ?"
+        query = (
+            "SELECT snapshot_date, amfi_code, scheme_name, nav"
+            " FROM mf_nav_snapshots WHERE amfi_code = ?"
+        )
         params: list = [amfi_code]
 
         if from_date is not None:
@@ -304,7 +307,8 @@ class MFStore:
         """
         with _connect(self.db_path) as conn:
             rows = conn.execute(
-                "SELECT * FROM mf_nav_snapshots WHERE snapshot_date = ? ORDER BY amfi_code",
+                "SELECT snapshot_date, amfi_code, scheme_name, nav"
+                " FROM mf_nav_snapshots WHERE snapshot_date = ? ORDER BY amfi_code",
                 (d.isoformat(),),
             ).fetchall()
             return [self._row_to_nav_snapshot(r) for r in rows]
@@ -331,8 +335,8 @@ class MFStore:
             if not row or not row["prev_date"]:
                 return []
             rows = conn.execute(
-                "SELECT * FROM mf_nav_snapshots WHERE snapshot_date = ?"
-                " ORDER BY amfi_code",
+                "SELECT snapshot_date, amfi_code, scheme_name, nav"
+                " FROM mf_nav_snapshots WHERE snapshot_date = ? ORDER BY amfi_code",
                 (row["prev_date"],),
             ).fetchall()
             return [self._row_to_nav_snapshot(r) for r in rows]

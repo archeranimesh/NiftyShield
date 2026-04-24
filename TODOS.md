@@ -100,19 +100,12 @@ Per §2.17: replace with module-level `_private_function()`. Mechanical — no l
 `src/nuvama/store.py` (2× SQL strings, 2× SQL column list, docstring, method signature),
 `src/dhan/reader.py` (logger.debug), `src/models/portfolio.py` (Field definition). 868 tests pass.
 
-### DEBT-4: `SELECT *` column over-fetch in store layer (TD-5)
+### DEBT-4: `SELECT *` column over-fetch in store layer (TD-5) ✅ DONE (2026-04-24)
 
-Multiple store `get_*` methods use `SELECT *` + `dict(r)` / `_row_to_*()`, pulling entire rows when callers consume only 3-4 fields. Code quality issue — return type is opaque, callers can't tell what fields exist without tracing to the schema.
-
-Files and methods to target:
-
-| File | Method | Action |
-|---|---|---|
-| `src/nuvama/store.py` | `get_options_snapshot_for_date` | `SELECT *` → named columns; return typed `dataclass` not `list[dict]` |
-| `src/portfolio/store.py` | `get_prev_snapshots` | `SELECT *` → named columns matching `DailySnapshot` fields only |
-| `src/mf/store.py` | `get_nav_snapshots`, `get_prev_nav_snapshots` | `SELECT *` → named columns matching `NavSnapshot` fields only |
-
-Fix alongside adjacent refactoring (same file edit). Never a standalone commit.
+Named column lists in all store `get_*` methods; `get_options_snapshot_for_date` now returns
+`list[NuvamaOptionPosition]` (typed, not `list[dict]`). `daily_snapshot.py` caller simplified.
+Bonus: `get_snapshots_for_date` and `get_nav_snapshots_for_date` also fixed (same pattern, same file).
+868 tests pass.
 
 ### DEBT-5: Pre-aggregate bash tool output before it enters Claude context (TD-6) ✅ DONE (2026-04-24)
 
@@ -128,6 +121,7 @@ License decision needed before this can be automated. Every file should carry a 
 
 | Date | What Changed |
 |---|---|
+| 2026-04-24 | **DEBT-4 (TD-5) closed.** Named column SELECT in all store `get_*` methods. `get_options_snapshot_for_date` → `list[NuvamaOptionPosition]`; `daily_snapshot.py` caller simplified. Bonus: `get_snapshots_for_date` + `get_nav_snapshots_for_date` also fixed. 868 tests pass. |
 | 2026-04-24 | **DEBT-5 (TD-6) closed.** `Rule 1 — Bash Output Discipline` (added as PKG-4/AR-23) satisfies the full DEBT-5 DoD. TODOS.md updated to reflect completion — no code changes. |
 | 2026-04-24 | **PKG-3 + PKG-4 (AR-22, AR-23).** Graph project ID added to CLAUDE.md Quick Reference. git-log promoted to step 0 in Rule 0 decision tree. `Rule 1 — Bash Output Discipline` section added with explicit aggregate/diagnostic/test/log contract table. |
 | 2026-04-24 | **Claude token optimization audit.** Added PKG-3 (graph project ID in CLAUDE.md), PKG-4 (bash output discipline + git-log-first rule in CLAUDE.md). Reframed DEBT-4 (SELECT * is code quality, not token issue). Reframed DEBT-5 (pre-aggregate bash output before Claude context, not store methods). No code changes — planning only. |

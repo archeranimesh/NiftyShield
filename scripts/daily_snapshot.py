@@ -256,22 +256,9 @@ def _historical_main(snap_date: date, db_path: Path) -> int:
     nuvama_options_summary = None
     try:
         from src.nuvama.options_reader import build_options_summary
-        from src.nuvama.models import NuvamaOptionPosition
 
-        options_rows = nuvama_store.get_options_snapshot_for_date(snap_date)
-        if options_rows:
-            pos_list = [
-                NuvamaOptionPosition(
-                    trade_symbol=r["trade_symbol"],
-                    instrument_name=r["instrument_name"],
-                    net_qty=r["net_qty"],
-                    avg_price=Decimal(r["avg_price"]),
-                    ltp=Decimal(r["ltp"]),
-                    unrealized_pnl=Decimal(r["unrealized_pnl"]),
-                    realized_pnl_today=Decimal(r["realized_pnl_today"]),
-                )
-                for r in options_rows
-            ]
+        pos_list = nuvama_store.get_options_snapshot_for_date(snap_date)
+        if pos_list:
             cumulative_map = nuvama_store.get_cumulative_realized_pnl(before_date=snap_date)
             high, low, n_high, n_low = nuvama_store.get_intraday_extremes(snap_date)
             nuvama_options_summary = build_options_summary(

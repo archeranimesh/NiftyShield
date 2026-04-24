@@ -14,10 +14,12 @@ Two tables, both in the shared portfolio.sqlite:
 from __future__ import annotations
 
 import logging
+import sqlite3
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from src.db import connect
+from src.nuvama.models import NuvamaOptionPosition
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +74,19 @@ CREATE TABLE IF NOT EXISTS nuvama_intraday_snapshots (
 # v0: nifty_spot/ltp declared DECIMAL (misleading — values stored as REAL).
 # v1: corrected to REAL; old table dropped and recreated on first run.
 _INTRADAY_SCHEMA_VERSION = 1
+
+
+def _row_to_option_position(row: sqlite3.Row) -> NuvamaOptionPosition:
+    """Map a nuvama_options_snapshots row to a typed NuvamaOptionPosition."""
+    return NuvamaOptionPosition(
+        trade_symbol=row["trade_symbol"],
+        instrument_name=row["instrument_name"],
+        net_qty=row["net_qty"],
+        avg_price=Decimal(row["avg_price"]),
+        ltp=Decimal(row["ltp"]),
+        unrealized_pnl=Decimal(row["unrealized_pnl"]),
+        realized_pnl_today=Decimal(row["realized_pnl_today"]),
+    )
 
 
 class NuvamaStore:
@@ -430,14 +445,18 @@ class NuvamaStore:
             ).fetchall()
         return {row["trade_symbol"]: Decimal(str(row["cumulative"])) for row in rows}
 
-    def get_options_snapshot_for_date(self, snapshot_date: date) -> list[dict]:
+    def get_options_snapshot_for_date(
+        self, snapshot_date: date
+    ) -> list[NuvamaOptionPosition]:
         """Return all options snapshot rows for a given date."""
         with connect(self._db_path) as conn:
             rows = conn.execute(
-                "SELECT * FROM nuvama_options_snapshots WHERE snapshot_date = ?",
+                "SELECT snapshot_date, trade_symbol, instrument_name, net_qty,"
+                " avg_price, ltp, unrealized_pnl, realized_pnl_today"
+                " FROM nuvama_options_snapshots WHERE snapshot_date = ?",
                 (snapshot_date.isoformat(),),
             ).fetchall()
-        return [dict(r) for r in rows]
+        return [_row_to_option_position(r) for r in rows]
 
     # ------------------------------------------------------------------
     # Intraday Tracker
