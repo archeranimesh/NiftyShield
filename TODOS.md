@@ -71,20 +71,47 @@ Deliver as a **persistent Cowork artifact** (self-contained HTML page, re-opens 
 - P&L formula: `current_value − (qty × avg_price)` per ISIN per day
 - Chart: daily mark-to-market P&L per bond instrument
 
-### Panel 4 — Nuvama Options (FinRakshak)
+### Panel 4 — Nuvama Options (own options book, not FinRakshak)
 - Source: `nuvama_options_snapshots` (unrealized_pnl + realized_pnl_today per leg per EOD snapshot)
 - Data available: 7 days (2026-04-16 → present); 23–38 open legs per day
 - Caveat: closed legs disappear from subsequent snapshots; `realized_pnl_today` captures same-day closures only
 - P&L formula: `SUM(unrealized_pnl)` for open legs + `SUM(realized_pnl_today)` cumulated over all historical dates
 - Chart: daily total unrealized P&L + cumulative realized P&L line — strategy-level only, not per-leg
 
-### Not yet possible
-- Zerodha: no table in DB, no integration built. If FinRakshak has any Zerodha legs, they are a blind spot.
+### Not yet possible — Zerodha (FinRakshak + ILTS)
+- FinRakshak and ILTS both run on Zerodha. No Zerodha table in DB, no integration built. These strategies are a complete blind spot for visualization until Kite Connect is integrated (see P3-DEFER — Zerodha / Kite Connect Integration below).
 
 ### Implementation notes
 - All four panels can share one artifact; data fetched via `mcp__workspace__bash` → Python → JSON on open
 - Render with Chart.js or Recharts (both available in artifact sandbox)
 - `PortfolioSummary` dataclass already extracted and queryable; `PLANNER.md` has broader context
+
+---
+
+## P3-DEFER — Zerodha / Kite Connect Integration
+
+Deferred indefinitely — revisit when FinRakshak/ILTS P&L visibility becomes a priority.
+
+FinRakshak and ILTS both run on Zerodha. Currently zero Zerodha data in the DB — positions, avg cost, and P&L for these two strategies are invisible to NiftyShield.
+
+**Feasibility analysis (2026-04-24):**
+
+Zerodha offers two tiers of Kite Connect API:
+
+- **Personal (free):** `positions()`, `holdings()`, `orders()`, `funds()` — full portfolio state, no market data. Enough to capture holdings and avg cost price.
+- **Paid (₹500/month):** Everything above + live LTP via REST (`ltp()`, `quote()`) and WebSocket tick streaming + historical candles.
+
+For NiftyShield's use case the practical approach is a **hybrid**: Zerodha free API for position state (instrument, qty, avg cost) + existing Upstox Analytics token for LTP — the same pattern already used in `src/dhan/`. This avoids the ₹500/month charge while giving full P&L computation.
+
+**Auth:** Kite Connect uses the same daily request-token → access-token flow as Upstox. A `src/zerodha/` module mirroring `src/auth/` would be needed, plus a morning login step.
+
+**Implementation scope when ready:**
+- `src/zerodha/` — auth + `KiteClient` implementing `BrokerClient` protocol (positions, holdings only; LTP delegated to Upstox)
+- `zerodha_holdings_snapshots` table in SQLite (same shape as `dhan_holdings_snapshots`)
+- `morning_nav.py` or new script to snapshot Zerodha positions at BOD
+- Unblocks Panel 5 in P&L Visualization artifact (FinRakshak + ILTS)
+
+**Note:** Zerodha also launched a **Kite MCP** server (2025) — could enable direct Zerodha queries inside Cowork sessions without building a custom client. Worth evaluating before writing `src/zerodha/` from scratch.
 
 ---
 
@@ -117,5 +144,6 @@ License decision needed before this can be automated. Every file should carry a 
 |---|---|
 | 2026-04-24 | **Root markdown cleanup.** Archived all ✅ DONE items (PKG-1–4, DEBT-2,4,5) + session log to TODOS_ARCHIVE_2026-04-24.md. Moved `python-architecture-review.prompt.md` to `docs/`. Updated README.md project structure to actual src/ layout. Wrote `.claude/skills/md-cleanup/SKILL.md`. |
 | 2026-04-24 | **P&L Visualization scoping.** Audited DB for all viable data sources. Expanded P3-DEFER with 4 panels (MF, Dhan ETFs, Nuvama Bonds, Nuvama Options), data availability, P&L formulas, and known gap (Zerodha/FinRakshak not integrated). |
+| 2026-04-24 | **Zerodha/Kite feasibility + corrections.** Corrected Panel 4 attribution (Nuvama options ≠ FinRakshak; FinRakshak + ILTS run on Zerodha). Added P3-DEFER entry for Kite Connect integration with free/paid tier analysis, hybrid architecture approach, and Kite MCP note. |
 
 Full log (2026-04-01 → 2026-04-24): [docs/archive/TODOS_ARCHIVE_2026-04-24.md](docs/archive/TODOS_ARCHIVE_2026-04-24.md)
