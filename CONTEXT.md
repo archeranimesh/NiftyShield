@@ -199,13 +199,7 @@ Before writing any code: read `CONTEXT.md`, state `CONTEXT.md ✓`, confirm scop
 
 ## Immediate TODOs
 
-Open work and priority order have moved to **[TODOS.md](TODOS.md)**.
-   - ~~**5.c**~~ — **DONE (2026-04-08)**: `src/client/upstox_live.py` created. `UpstoxLiveClient` wraps `UpstoxMarketClient` for `get_ltp` + `get_option_chain`. All blocked methods raise `NotImplementedError` with documented reasons. 14 tests in `tests/unit/test_upstox_live.py`. 279 total, all green.
-   - ~~**5.d**~~ — **DONE (2026-04-08)**: `src/client/mock_client.py` created. Stateful `MockBrokerClient` — in-memory `_price_map`, `_orders`, `_positions`, `_margin_available` (Decimal), `_error_queue`. Setup API: `set_price`, `set_margin`, `simulate_error` (one-shot), `reset`. All 10 `BrokerClient` methods implemented; fixture loading graceful (WARNING + empty return on miss). `price*qty*0.1` NRML margin proxy. 38 tests in `tests/unit/test_mock_client.py`; all green.
-   - ~~**5.e**~~ — **DONE (2026-04-08)**: `src/client/factory.py` created. `create_client(env)` is the sole composition root and the only `src/` importer of `UpstoxLiveClient` + `MockBrokerClient`. 10 tests in `tests/unit/test_factory.py`; all green.
-   - ~~**5.f**~~ — **DONE (2026-04-08)**: `daily_snapshot.py` migrated from direct `UpstoxMarketClient` import to `create_client(os.getenv("UPSTOX_ENV", "prod"))`. `tracker.py` confirmed already using `from src.client.protocol import MarketDataProvider`. `UpstoxMarketClient` no longer imported by any consumer outside `src/client/`. No new tests — pure refactor. 327 tests total, all green.
-
-6. **P&L visualization** — matplotlib script or React dashboard from snapshot time series. Deferred until several weeks of snapshot history exist and `PortfolioSummary` dataclass is extracted (TODO 1).
+Open work and priority order: **[TODOS.md](TODOS.md)**.
 
 ---
 

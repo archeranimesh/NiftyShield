@@ -82,72 +82,55 @@ Tests: `test_get_cumulative_realized_pnl_default_excludes_today` and `test_get_c
 **AR-10 — Eliminate N+1 DB connections in `get_all_positions_for_strategy`**  
 File: `src/portfolio/store.py:561`
 
-Current: Opens 1 connection for `DISTINCT leg_role`, then calls `get_position()` per leg — each `get_position()` opens its own connection and fetches all `trades` rows for that strategy.  
-For 7 legs: **8 connections, 7 full table scans per call**. Called twice per snapshot run.
+Current: Opens 1 connection for `DISTINCT leg_role`, then calls `get_position()` per leg — each opens a new connection and full table scan. For 7 legs: **8 connections, 7 scans per call**. Called twice per snapshot run.
+
+> [!CAUTION]
+> Do NOT use a `_get_avg_buy_price()` helper — it would open one connection per leg, recreating the N+1 problem. Do NOT use `CAST(price AS REAL)` anywhere — violates the Decimal invariant.
+
+**Fix:** One `_connect` block, one `SELECT *` for all trades, full Python Decimal aggregation:
 
 ```python
-# AFTER — single connection, single aggregate query
+from collections import defaultdict
+
 def get_all_positions_for_strategy(
     self, strategy_name: str
 ) -> dict[str, tuple[int, Decimal, str]]:
-    """Derive net position for every leg in one SQL aggregate query.
-    
-    Single connection, single GROUP BY — replaces the previous N+1 pattern
-    (one connection for DISTINCT + one get_position() call per leg).
-    """
+    """Single DB round-trip replacing the previous N+1 pattern."""
     with _connect(self.db_path) as conn:
-        rows = conn.execute(
-            """SELECT
-                   leg_role,
-                   instrument_key,
-                   SUM(CASE WHEN action='BUY' THEN quantity ELSE 0 END) AS buy_qty,
-                   SUM(CASE WHEN action='SELL' THEN quantity ELSE 0 END) AS sell_qty,
-                   SUM(CASE WHEN action='BUY' THEN CAST(price AS REAL) * quantity ELSE 0 END) AS buy_value
+        all_rows = conn.execute(
+            """SELECT leg_role, instrument_key, action, quantity, price
                FROM trades
                WHERE strategy_name = ?
-               GROUP BY leg_role, instrument_key
                ORDER BY leg_role""",
             (strategy_name,),
         ).fetchall()
 
-    result: dict[str, tuple[int, Decimal, str]] = {}
-    for row in rows:
-        buy_qty = row["buy_qty"]
-        sell_qty = row["sell_qty"]
-        net_qty = buy_qty - sell_qty
-        # Reconstruct avg_price from raw TEXT price to preserve Decimal invariant
-        avg_price: Decimal
-        if buy_qty > 0:
-            # Re-fetch individual rows for precise Decimal arithmetic
-            avg_price = self._get_avg_buy_price(strategy_name, row["leg_role"])
+    buy_qty: dict[str, int] = defaultdict(int)
+    sell_qty: dict[str, int] = defaultdict(int)
+    buy_value: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
+    ikey: dict[str, str] = {}
+
+    for row in all_rows:
+        leg = row["leg_role"]
+        ikey[leg] = row["instrument_key"]
+        qty = row["quantity"]
+        price = Decimal(row["price"])   # TEXT → Decimal, no float
+        if row["action"] == "BUY":
+            buy_qty[leg] += qty
+            buy_value[leg] += price * qty
         else:
-            avg_price = Decimal("0")
-        result[row["leg_role"]] = (net_qty, avg_price, row["instrument_key"])
+            sell_qty[leg] += qty
+
+    result: dict[str, tuple[int, Decimal, str]] = {}
+    for leg, instrument_key in ikey.items():
+        bq = buy_qty[leg]
+        net = bq - sell_qty[leg]
+        avg = buy_value[leg] / bq if bq > 0 else Decimal("0")
+        result[leg] = (net, avg, instrument_key)
     return result
 ```
 
-> [!IMPORTANT]
-> **Decimal invariant on `price`:** `price` is stored as TEXT. `SUM(CAST(price AS REAL) * quantity)` is used only to compute the buy_value for division. For the final `avg_price`, use a helper `_get_avg_buy_price()` that fetches BUY rows as `Decimal(row["price"])` and computes the weighted average in Python — this preserves full Decimal precision.
->
-> Alternatively: fetch BUY rows via `WHERE action='BUY' AND strategy_name=? AND leg_role=?` as a sub-query and do Python Decimal arithmetic. The simplest correct approach that avoids any float in the avg_price path.
-
-**Simplest correct approach for avg_price:**
-```python
-# In the same connection block, or a helper method:
-def _get_avg_buy_price(self, strategy_name: str, leg_role: str) -> Decimal:
-    with _connect(self.db_path) as conn:
-        rows = conn.execute(
-            "SELECT quantity, price FROM trades WHERE strategy_name=? AND leg_role=? AND action='BUY'",
-            (strategy_name, leg_role),
-        ).fetchall()
-    total_qty = sum(r["quantity"] for r in rows)
-    if total_qty == 0:
-        return Decimal("0")
-    total_value = sum(Decimal(r["price"]) * r["quantity"] for r in rows)
-    return total_value / total_qty
-```
-
-Tests: All existing `test_trade_store.py` tests for `get_all_positions_for_strategy` validate this. Add one test asserting a single DB call (mock `_connect`).
+Connection count: **8 → 1**. Tests: all existing `test_trade_store.py` tests validate. Add `test_get_all_positions_single_connection` — spy `_connect`, assert called exactly once.
 
 ---
 
@@ -181,33 +164,34 @@ class NuvamaClient(Protocol):
 ```
 
 #### [MODIFY] `src/nuvama/reader.py`
-Change signature of `fetch_nuvama_portfolio`:
+
+`@runtime_checkable` means `isinstance(mock, NuvamaClient)` works at runtime — so the import must be a **normal import, not a `TYPE_CHECKING` guard**:
+
 ```python
-# Before
-from typing import Any
-def fetch_nuvama_portfolio(api: Any, ...) -> NuvamaBondSummary:
+# Normal import — required because protocol is runtime_checkable
+from src.nuvama.protocol import NuvamaClient
 
-# After
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from src.nuvama.protocol import NuvamaClient
-
-def fetch_nuvama_portfolio(api: "NuvamaClient", ...) -> NuvamaBondSummary:
+def fetch_nuvama_portfolio(api: NuvamaClient, ...) -> NuvamaBondSummary:
+    ...
 ```
 
+Remove `Any` from imports if it's no longer used elsewhere in the file.
+
 #### [MODIFY] `src/nuvama/options_reader.py`
-Check if it takes an api parameter — if so, apply same typing.
+Check if any function takes `api: Any` — if so, apply same `NuvamaClient` annotation.
 
-#### [NEW] `tests/unit/nuvama/mock_client.py`
+#### [NEW] `src/nuvama/mock_client.py` *(not in tests/)*
+
+Follows `src/client/mock_client.py` convention — lives in `src/` so scripts and integration tests can import it without coupling to the test tree:
+
 ```python
-"""MockNuvamaClient for offline testing of Nuvama reader functions."""
+"""MockNuvamaClient — offline substitute for Nuvama APIConnect SDK."""
 from __future__ import annotations
-
 import json
 
 
 class MockNuvamaClient:
-    """Returns fixture JSON strings for Holdings() and NetPosition()."""
+    """Satisfies NuvamaClient protocol. See src/client/mock_client.py for the pattern."""
 
     def __init__(
         self,
@@ -224,7 +208,7 @@ class MockNuvamaClient:
         return self._net_position
 ```
 
-Tests to add: verify `MockNuvamaClient` satisfies `NuvamaClient` protocol via `isinstance(mock, NuvamaClient)`.
+Tests: `isinstance(MockNuvamaClient(), NuvamaClient)` must be `True`. Add to `tests/unit/nuvama/test_protocol.py` (new file).
 
 ---
 
@@ -269,64 +253,82 @@ No behavior change — purely type-level improvement.
 
 ---
 
-### Step B: Eliminate Double LTP Fetch (AR-11)
+### Step B: Eliminate All Extra LTP Fetches (AR-11)
 
-**Depends on:** Step A (daily_snapshot.py must be stable before further edits)
+**Depends on:** Step A (daily_snapshot.py must be stable)
 
-**Problem:** In `_async_main` (lines 424–443):
-1. `await tracker.record_all_strategies(...)` — fetches LTPs internally per strategy
-2. `await tracker.compute_pnl(strategy.name)` per strategy — fetches LTPs again
+**Actual problem — three fetches, not two:**
+1. `_async_main` line ~406: `prices = await client.get_ltp(all_keys | {NIFTY_INDEX_KEY})` — master batch
+2. Inside `record_all_strategies` → `record_daily_snapshot` → `self.market.get_ltp(instrument_keys)` — per-strategy refetch
+3. `compute_pnl(strategy.name)` → `self.market.get_ltp(instrument_keys)` — per-strategy refetch again
 
-**Fix:** Change `record_all_strategies` return type to `dict[str, StrategyPnL | None]`, built from prices already fetched in `record_daily_snapshot`.
+The partial fix (returning `StrategyPnL` from `record_all_strategies`) eliminates #3 but leaves #2 — going from 5 total fetches to 3, not 1.
+
+**Correct fix:** Add `prices: dict[str, float] | None = None` to `record_daily_snapshot` and `record_all_strategies`. When provided, skip the internal `get_ltp` call. Compute `StrategyPnL` inline from the passed prices.
 
 #### [MODIFY] `src/portfolio/tracker.py`
 
 ```python
-# record_daily_snapshot: add StrategyPnL to return value
+def _build_strategy_pnl(
+    self, strategy: Strategy, prices: dict[str, float]
+) -> StrategyPnL:
+    """Compute StrategyPnL from an already-fetched prices dict."""
+    leg_pnls = []
+    for leg in strategy.legs:
+        raw_ltp = prices.get(leg.instrument_key)
+        ltp = Decimal(str(raw_ltp)) if raw_ltp is not None else leg.entry_price
+        leg_pnls.append(LegPnL(leg=leg, current_price=ltp, pnl=leg.pnl(ltp), pnl_percent=leg.pnl_percent(ltp)))
+    return StrategyPnL(strategy_name=strategy.name, legs=leg_pnls)
+
 async def record_daily_snapshot(
-    self, strategy_name: str, snapshot_date: date | None = None,
+    self,
+    strategy_name: str,
+    snapshot_date: date | None = None,
     underlying_price: float | None = None,
+    prices: dict[str, float] | None = None,  # NEW — skip internal get_ltp if provided
 ) -> tuple[int, StrategyPnL | None]:  # was: int
     ...
-    # At the point where LTPs are already fetched (prices dict exists):
-    strategy_pnl = self._compute_pnl_from_prices(strategy, prices)
-    return count, strategy_pnl
+    if prices is None:
+        prices = await self.market.get_ltp(instrument_keys)
+    # record snapshots using prices (unchanged logic)
+    ...
+    pnl = self._build_strategy_pnl(strategy, prices)
+    return count, pnl
 
-# record_all_strategies: collect and return StrategyPnL per strategy
 async def record_all_strategies(
-    self, snapshot_date: date | None = None,
+    self,
+    snapshot_date: date | None = None,
     underlying_price: float | None = None,
-) -> tuple[dict[str, int], dict[str, StrategyPnL | None]]:  # was: dict[str, int]
-    strategies = self._get_all_overlaid_strategies()
-    counts: dict[str, int] = {}
-    pnls: dict[str, StrategyPnL | None] = {}
-    for strategy in strategies:
-        count, pnl = await self.record_daily_snapshot(strategy.name, snapshot_date, underlying_price)
-        counts[strategy.name] = count
-        pnls[strategy.name] = pnl
-    return counts, pnls
+    prices: dict[str, float] | None = None,  # NEW — passed through
+) -> tuple[dict[str, int], dict[str, StrategyPnL | None]]:
+    ...
+    count, pnl = await self.record_daily_snapshot(
+        strategy.name, snapshot_date, underlying_price, prices=prices
+    )
 ```
 
 #### [MODIFY] `scripts/daily_snapshot.py` (lines 424–443)
 
 ```python
-# BEFORE
-results = await tracker.record_all_strategies(...)
-strategy_pnls: dict[str, object] = {}
-for strategy in strategies:
-    count = results.get(strategy.name, 0)
-    pnl = await tracker.compute_pnl(strategy.name)  # ← 2nd LTP fetch
-    strategy_pnls[strategy.name] = pnl
-
-# AFTER
-results, strategy_pnls = await tracker.record_all_strategies(...)
+# AFTER — pass master prices, drop all compute_pnl calls
+results, strategy_pnls = await tracker.record_all_strategies(
+    snapshot_date=snap_date,
+    underlying_price=underlying_price,
+    prices=prices,  # master prices already fetched at line ~406
+)
 for strategy in strategies:
     count = results.get(strategy.name, 0)
     pnl = strategy_pnls.get(strategy.name)
     # print block unchanged
 ```
 
-Tests: Update `test_record_all_strategies` for new return type. Add a test asserting `market.get_ltp` is called exactly once per strategy after the fix.
+LTP fetches: **5 → 1** (master batch only). `compute_pnl` is no longer called in `_async_main`.
+
+Tests:
+- Update `test_record_all_strategies` for new `(counts, pnls)` return type
+- Update `test_record_daily_snapshot` for new `(count, pnl)` return type  
+- Add `test_record_daily_snapshot_uses_provided_prices` — assert `market.get_ltp` NOT called when `prices` kwarg is provided
+- Add `test_record_all_strategies_single_ltp_call` — mock tracker, assert single `get_ltp` call for 2-strategy portfolio
 
 ---
 
@@ -335,14 +337,14 @@ Tests: Update `test_record_all_strategies` for new return type. Add a test asser
 ### After Phase 1 (each agent independently)
 ```bash
 python -m pytest tests/unit/ -v --tb=short
-# Expected: 846+ passing, same pre-existing failures
+# Expected: 859+ passing, same pre-existing failures
 ```
 
 ### After Phase 2
 ```bash
 python -m pytest tests/unit/ -v --tb=short
-# Expected: 846+ passing
-UPSTOX_ENV=test python -m scripts.daily_snapshot  # smoke test — no double fetch warning
+# Expected: 859+ passing
+UPSTOX_ENV=test python -m scripts.daily_snapshot  # smoke test — single LTP batch fetch
 ```
 
 ### Per-AR smoke commands
@@ -365,9 +367,9 @@ python -c "import scripts.nuvama_intraday_tracker"  # must not fail without .env
 |---|---|---|
 | `perf(nuvama): replace Python aggregation with SQL GROUP BY in get_cumulative_realized_pnl` | AR-8 | `src/nuvama/store.py` |
 | `perf(portfolio): eliminate N+1 DB connections in get_all_positions_for_strategy` | AR-10 | `src/portfolio/store.py` |
-| `refactor(nuvama): introduce NuvamaClient protocol and MockNuvamaClient` | AR-9a | `src/nuvama/protocol.py`, `reader.py`, `options_reader.py`, `tests/` |
+| `refactor(nuvama): introduce NuvamaClient protocol and MockNuvamaClient` | AR-9a | `src/nuvama/protocol.py`, `src/nuvama/mock_client.py`, `reader.py`, `options_reader.py` |
 | `refactor(scripts): defer I/O imports in nuvama_intraday_tracker` | AR-12 | `scripts/nuvama_intraday_tracker.py` |
-| `refactor(nuvama): wire NuvamaClient type into daily_snapshot + intraday_tracker` | AR-9b | `scripts/daily_snapshot.py`, `scripts/nuvama_intraday_tracker.py` |
-| `perf(tracker): eliminate double LTP fetch in record_all_strategies` | AR-11 | `src/portfolio/tracker.py`, `scripts/daily_snapshot.py` |
+| `refactor(nuvama): wire NuvamaClient type into scripts` | AR-9b | `scripts/daily_snapshot.py`, `scripts/nuvama_intraday_tracker.py` |
+| `perf(tracker): eliminate all extra LTP fetches via prices pass-through` | AR-11 | `src/portfolio/tracker.py`, `scripts/daily_snapshot.py` |
 
 Each commit: run `python -m pytest tests/unit/` → all green before tagging.
