@@ -66,25 +66,14 @@ Confirmed: all `import uuid` / `from uuid import uuid4` usages in `src/` and `sc
 
 Created `requirements-dev.txt` (`-r requirements.txt` + `pytest`, `pytest-asyncio`, `RapidFuzz`). All three removed from `requirements.txt`.
 
-### PKG-3: Document graph project ID in `CLAUDE.md` Quick Reference (AR-22)
+### PKG-3: Document graph project ID in `CLAUDE.md` Quick Reference (AR-22) ✅ DONE (2026-04-24)
 
-The `codebase-memory-mcp` project name is `Users-abhadra-myWork-myCode-python-NiftyShield`, not `NiftyShield`. Every session without this documented burns a `list_projects` round-trip (~200 tokens wasted before any real work). Add one row to the Quick Reference table in `CLAUDE.md`:
+Added `| Graph project ID | \`Users-abhadra-myWork-myCode-python-NiftyShield\` |` as first row of Quick Reference table.
 
-```
-| Graph project ID | `Users-abhadra-myWork-myCode-python-NiftyShield` |
-```
+### PKG-4: Add bash output discipline and git-log-first rule to `CLAUDE.md` (AR-23) ✅ DONE (2026-04-24)
 
-One-line change. No tests required.
-
-### PKG-4: Add bash output discipline and git-log-first rule to `CLAUDE.md` (AR-23)
-
-Two Claude token optimizations that belong in the protocol but are missing or underspecified:
-
-**Bash output discipline** — any bash command that reads data (DB query, log, test run) must pre-aggregate or filter before output reaches Claude context. See DEBT-5 for the explicit contract. Document as a rule in Rule 0 or a dedicated "Context Window Hygiene" section in `CLAUDE.md`.
-
-**Git log before cold Read** — `git log --oneline -10 <file>` costs ~20 tokens and often answers "why does this look like this?" without any file read. Rule 0 mentions this but buries it. It should be step 0 of the decision tree, before even hitting the graph, for any question about *intent* or *recent change*. This repo's commit format (`Why:` / `What:` / `Ref:`) is specifically designed for this — the Why: line encodes intent that would require reading both old and new code to infer otherwise.
-
-Token math: `git log --oneline -10 <file>` ≈ 20 tokens. `Read <file>` on a 400-line store ≈ 1,600 tokens. If the log answers the question, that's an 80× reduction on that lookup.
+- Promoted git-log to step 0 in Rule 0 decision tree (removed buried separate block, integrated inline with token cost call-out).
+- Added `Rule 1 — Bash Output Discipline` section with explicit contract table: aggregate queries, diagnostic queries, test runs, log reads. Token math included.
 
 ---
 
@@ -148,6 +137,7 @@ License decision needed before this can be automated. Every file should carry a 
 
 | Date | What Changed |
 |---|---|
+| 2026-04-24 | **PKG-3 + PKG-4 (AR-22, AR-23).** Graph project ID added to CLAUDE.md Quick Reference. git-log promoted to step 0 in Rule 0 decision tree. `Rule 1 — Bash Output Discipline` section added with explicit aggregate/diagnostic/test/log contract table. |
 | 2026-04-24 | **Claude token optimization audit.** Added PKG-3 (graph project ID in CLAUDE.md), PKG-4 (bash output discipline + git-log-first rule in CLAUDE.md). Reframed DEBT-4 (SELECT * is code quality, not token issue). Reframed DEBT-5 (pre-aggregate bash output before Claude context, not store methods). No code changes — planning only. |
 | 2026-04-24 | **DEBT-2 line length (TD-2).** Wrapped 11 lines >100 chars across `src/portfolio/store.py`, `src/nuvama/store.py`, `src/dhan/reader.py`, `src/models/portfolio.py`. 868 tests pass. |
 | 2026-04-24 | **P4-PKG packaging hygiene.** Removed `uuid==1.30` (stdlib shim, AR-20). Created `requirements-dev.txt` with `pytest`, `pytest-asyncio`, `RapidFuzz` (AR-21). |

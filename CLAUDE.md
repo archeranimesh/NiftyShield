@@ -11,6 +11,7 @@ A hook will fire and remind you. It will not block — the decision is yours —
 graph when it can answer the question wastes tokens and violates this protocol.
 
 **Decision tree — run in order before any source file touch:**
+0. "Why does this look like this?" / "What changed recently?" → `git log --oneline -10 <file>` (~20 tokens). The `Why:` line in each commit encodes intent — often answers the question without reading any code at all. `git show <sha>` for full diff. `git log --oneline -20` for recent session history. **Run this before the graph for any question about intent or recent change.**
 1. Need a symbol/function? → `search_graph(query=...)` or `get_code_snippet(qualified_name)`
 2. Need callers/callees? → `trace_path(function_name)`
 3. Need a grep? → `search_code(pattern)`
@@ -19,11 +20,20 @@ graph when it can answer the question wastes tokens and violates this protocol.
 
 `Read` is the *first* tool only for: markdown files, TOML/YAML config, test fixtures.
 
-**git log first for "why does this look like this?" questions:**
-- `git log --oneline -15 <file>` — what changed and when
-- `git show <sha>` — full diff + intent
-- `git log --oneline -20` — recent session history
-The commit format in this repo encodes the reason for every change — faster than reading code cold.
+---
+
+## ⛔ Rule 1 — Bash Output Discipline
+
+Any bash command that **reads data** (DB query, log file, test run) must pre-aggregate or filter before output reaches Claude context. Raw result sets are appended to the context window and carried for every subsequent tool call — aggregate at the source, not after.
+
+| Query type | Required pattern |
+|---|---|
+| Aggregate (total P&L, portfolio value, count) | Single summary row via `SUM` / `MAX` / `COUNT` — never `SELECT *` |
+| Diagnostic (which rows have null Greeks?) | Named columns + `LIMIT 10` — never full table dump |
+| Test runs | `pytest --tb=no -q` for pass/fail; full `-v` only when debugging a specific failure |
+| Log reads | `tail -20 logs/snapshot.log` or `grep ERROR` — never `cat` |
+
+Token math: `SELECT *` on a 15-row × 20-column table ≈ 300 tokens that persist all session. A `GROUP BY / SUM` summary row ≈ 15 tokens. Reference implementation: `get_cumulative_realized_pnl` — SQL-layer aggregation returning a compact `dict`.
 
 ---
 
@@ -98,6 +108,7 @@ If a phase touches only docs or config (no logic), skip the code-reviewer; a sin
 
 | What | Where |
 |---|---|
+| Graph project ID | `Users-abhadra-myWork-myCode-python-NiftyShield` |
 | Project state | `CONTEXT.md` |
 | Architecture decisions | `DECISIONS.md` |
 | Instrument keys / AMFI codes / API quirks | `REFERENCES.md` |
