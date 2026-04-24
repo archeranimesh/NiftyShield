@@ -119,18 +119,9 @@ For NiftyShield's use case the practical approach is a **hybrid**: Zerodha free 
 
 Fix alongside adjacent refactoring. Never worth a standalone commit.
 
-### DEBT-1: `@staticmethod` overuse (TD-1)
+### ~~DEBT-1: `@staticmethod` overuse (TD-1)~~ — DONE 2026-04-24
 
-Per §2.17: replace with module-level `_private_function()`. Mechanical — no logic changes.
-
-| File | Method(s) |
-|---|---|
-| `src/mf/store.py` | `_row_to_transaction()`, `_row_to_nav_snapshot()` |
-| `src/portfolio/store.py` | `_row_to_leg()`, `_row_to_snapshot()` |
-| `src/portfolio/tracker.py` | `_extract_greeks_from_chain()` |
-| `src/dhan/store.py` | `_row_to_holding()` |
-| `src/instruments/lookup.py` | `_score_query()` |
-| `src/client/upstox_market.py` | row-mapping helper |
+All 8 `@staticmethod` row-mapper / helper methods promoted to module-level `_private_function()`. No logic changes. 868 tests green.
 
 ### DEBT-3: Missing license boilerplate (TD-4)
 
@@ -142,6 +133,7 @@ License decision needed before this can be automated. Every file should carry a 
 
 | Date | What Changed |
 |---|---|
+| 2026-04-24 | **DEBT-1 (`@staticmethod` overuse).** Promoted 8 static methods to module-level `_private_function()` across `src/mf/store.py`, `src/portfolio/store.py`, `src/portfolio/tracker.py`, `src/dhan/store.py`, `src/instruments/lookup.py`, `src/client/upstox_market.py`. Added `import sqlite3` to `dhan/store.py`. 868 tests green. |
 | 2026-04-24 | **Root markdown cleanup.** Archived all ✅ DONE items (PKG-1–4, DEBT-2,4,5) + session log to TODOS_ARCHIVE_2026-04-24.md. Moved `python-architecture-review.prompt.md` to `docs/`. Updated README.md project structure to actual src/ layout. Wrote `.claude/skills/md-cleanup/SKILL.md`. |
 | 2026-04-24 | **P&L Visualization scoping.** Audited DB for all viable data sources. Expanded P3-DEFER with 4 panels (MF, Dhan ETFs, Nuvama Bonds, Nuvama Options), data availability, P&L formulas, and known gap (Zerodha/FinRakshak not integrated). |
 | 2026-04-24 | **Zerodha/Kite feasibility + corrections.** Corrected Panel 4 attribution (Nuvama options ≠ FinRakshak; FinRakshak + ILTS run on Zerodha). Added P3-DEFER entry for Kite Connect integration with free/paid tier analysis, hybrid architecture approach, and Kite MCP note. |

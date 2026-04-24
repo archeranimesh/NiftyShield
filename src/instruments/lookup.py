@@ -86,6 +86,19 @@ def _best_score(query: str, instrument: dict[str, Any]) -> tuple[float, str]:
     return best
 
 
+def _parse_expiry(expiry_val: Any) -> str | None:
+    """Convert Upstox expiry (epoch ms) to YYYY-MM-DD string."""
+    if expiry_val is None:
+        return None
+    if isinstance(expiry_val, str):
+        return expiry_val
+    try:
+        dt = datetime.fromtimestamp(expiry_val / 1000, tz=timezone.utc)
+        return dt.strftime("%Y-%m-%d")
+    except (TypeError, ValueError, OSError):
+        return None
+
+
 # ── Offline lookup from BOD JSON ─────────────────────────────────
 
 
@@ -205,7 +218,7 @@ class InstrumentLookup:
                 continue
 
             if expiry is not None:
-                inst_expiry = self._parse_expiry(inst.get("expiry"))
+                inst_expiry = _parse_expiry(inst.get("expiry"))
                 if inst_expiry != expiry:
                     continue
 
@@ -240,7 +253,7 @@ class InstrumentLookup:
             if underlying.upper() not in inst.get("underlying_symbol", "").upper():
                 continue
             if expiry is not None:
-                inst_expiry = self._parse_expiry(inst.get("expiry"))
+                inst_expiry = _parse_expiry(inst.get("expiry"))
                 if inst_expiry != expiry:
                     continue
 
@@ -257,18 +270,7 @@ class InstrumentLookup:
                 return inst
         return None
 
-    @staticmethod
-    def _parse_expiry(expiry_val: Any) -> str | None:
-        """Convert Upstox expiry (epoch ms) to YYYY-MM-DD string."""
-        if expiry_val is None:
-            return None
-        if isinstance(expiry_val, str):
-            return expiry_val
-        try:
-            dt = datetime.fromtimestamp(expiry_val / 1000, tz=timezone.utc)
-            return dt.strftime("%Y-%m-%d")
-        except (TypeError, ValueError, OSError):
-            return None
+    # ── Expiry parsing (module-level: _parse_expiry) ──
 
     @property
     def count(self) -> int:
@@ -365,7 +367,7 @@ def format_results(results: list[dict[str, Any]], fields: list[str] | None = Non
         for f in available:
             val = r.get(f, "")
             if f == "expiry" and isinstance(val, (int, float)):
-                val = InstrumentLookup._parse_expiry(val) or val
+                val = _parse_expiry(val) or val
             row.append(f"{str(val):<25}")
         lines.append("  ".join(row))
 

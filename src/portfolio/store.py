@@ -91,6 +91,41 @@ CREATE INDEX IF NOT EXISTS idx_trades_strategy_leg
 """
 
 
+def _row_to_trade(row: sqlite3.Row) -> Trade:
+    return Trade(
+        strategy_name=row["strategy_name"],
+        leg_role=row["leg_role"],
+        instrument_key=row["instrument_key"],
+        trade_date=date.fromisoformat(row["trade_date"]),
+        action=TradeAction(row["action"]),
+        quantity=row["quantity"],
+        price=Decimal(row["price"]),
+        notes=row["notes"],
+    )
+
+
+def _row_to_snapshot(row: sqlite3.Row) -> DailySnapshot:
+    return DailySnapshot(
+        id=row["id"],
+        leg_id=row["leg_id"],
+        snapshot_date=date.fromisoformat(row["snapshot_date"]),
+        ltp=Decimal(row["ltp"]),
+        close=Decimal(row["close"]) if row["close"] is not None else None,
+        iv=row["iv"],
+        delta=row["delta"],
+        theta=row["theta"],
+        gamma=row["gamma"],
+        vega=row["vega"],
+        oi=row["oi"],
+        volume=row["volume"],
+        underlying_price=(
+            Decimal(row["underlying_price"])
+            if row["underlying_price"] is not None
+            else None
+        ),
+    )
+
+
 class PortfolioStore:
     """SQLite-backed store for strategy portfolio tracking."""
 
@@ -355,7 +390,7 @@ class PortfolioStore:
 
         with _connect(self.db_path) as conn:
             rows = conn.execute(query, params).fetchall()
-            return [self._row_to_snapshot(r) for r in rows]
+            return [_row_to_snapshot(r) for r in rows]
 
     def get_strategy_snapshots(
         self,
@@ -393,7 +428,7 @@ class PortfolioStore:
                 " FROM daily_snapshots WHERE snapshot_date = ?",
                 (d.isoformat(),),
             ).fetchall()
-            return {r["leg_id"]: self._row_to_snapshot(r) for r in rows}
+            return {r["leg_id"]: _row_to_snapshot(r) for r in rows}
 
     def get_prev_snapshots(self, d: date) -> dict[int, DailySnapshot]:
         """Return all leg snapshots for the most recent date strictly before d.
@@ -423,7 +458,7 @@ class PortfolioStore:
                 " FROM daily_snapshots WHERE snapshot_date = ?",
                 (row["prev_date"],),
             ).fetchall()
-            return {r["leg_id"]: self._row_to_snapshot(r) for r in rows}
+            return {r["leg_id"]: _row_to_snapshot(r) for r in rows}
 
     def get_latest_snapshot_date(self) -> date | None:
         """Return the most recent snapshot date across all legs."""
@@ -528,7 +563,7 @@ class PortfolioStore:
 
         with _connect(self.db_path) as conn:
             rows = conn.execute(query, params).fetchall()
-            return [self._row_to_trade(r) for r in rows]
+            return [_row_to_trade(r) for r in rows]
 
     def get_position(
         self, strategy_name: str, leg_role: str
@@ -618,37 +653,4 @@ class PortfolioStore:
             result[leg] = (net, avg, instrument_key)
         return result
 
-    @staticmethod
-    def _row_to_trade(row: sqlite3.Row) -> Trade:
-        return Trade(
-            strategy_name=row["strategy_name"],
-            leg_role=row["leg_role"],
-            instrument_key=row["instrument_key"],
-            trade_date=date.fromisoformat(row["trade_date"]),
-            action=TradeAction(row["action"]),
-            quantity=row["quantity"],
-            price=Decimal(row["price"]),
-            notes=row["notes"],
-        )
-
-    @staticmethod
-    def _row_to_snapshot(row: sqlite3.Row) -> DailySnapshot:
-        return DailySnapshot(
-            id=row["id"],
-            leg_id=row["leg_id"],
-            snapshot_date=date.fromisoformat(row["snapshot_date"]),
-            ltp=Decimal(row["ltp"]),
-            close=Decimal(row["close"]) if row["close"] is not None else None,
-            iv=row["iv"],
-            delta=row["delta"],
-            theta=row["theta"],
-            gamma=row["gamma"],
-            vega=row["vega"],
-            oi=row["oi"],
-            volume=row["volume"],
-            underlying_price=(
-                Decimal(row["underlying_price"])
-                if row["underlying_price"] is not None
-                else None
-            ),
-        )
+    # ── Row mappers (module-level: _row_to_trade, _row_to_snapshot) ──

@@ -46,6 +46,26 @@ CREATE INDEX IF NOT EXISTS idx_mf_nav_amfi_date
 """
 
 
+def _row_to_transaction(row: sqlite3.Row) -> MFTransaction:
+    return MFTransaction(
+        scheme_name=row["scheme_name"],
+        amfi_code=row["amfi_code"],
+        transaction_date=date.fromisoformat(row["transaction_date"]),
+        units=Decimal(row["units"]),
+        amount=Decimal(row["amount"]),
+        transaction_type=TransactionType(row["transaction_type"]),
+    )
+
+
+def _row_to_nav_snapshot(row: sqlite3.Row) -> MFNavSnapshot:
+    return MFNavSnapshot(
+        snapshot_date=date.fromisoformat(row["snapshot_date"]),
+        amfi_code=row["amfi_code"],
+        scheme_name=row["scheme_name"],
+        nav=Decimal(row["nav"]),
+    )
+
+
 class MFStore:
     """SQLite-backed store for mutual fund transaction and NAV tracking.
 
@@ -165,7 +185,7 @@ class MFStore:
 
         with _connect(self.db_path) as conn:
             rows = conn.execute(query, params).fetchall()
-            return [self._row_to_transaction(r) for r in rows]
+            return [_row_to_transaction(r) for r in rows]
 
     def get_holdings(self) -> dict[str, MFHolding]:
         """Net holdings per scheme, derived from the transaction ledger.
@@ -290,7 +310,7 @@ class MFStore:
 
         with _connect(self.db_path) as conn:
             rows = conn.execute(query, params).fetchall()
-            return [self._row_to_nav_snapshot(r) for r in rows]
+            return [_row_to_nav_snapshot(r) for r in rows]
 
     def get_nav_snapshots_for_date(self, d: date) -> list[MFNavSnapshot]:
         """Return all NAV snapshots recorded on a specific date.
@@ -311,7 +331,7 @@ class MFStore:
                 " FROM mf_nav_snapshots WHERE snapshot_date = ? ORDER BY amfi_code",
                 (d.isoformat(),),
             ).fetchall()
-            return [self._row_to_nav_snapshot(r) for r in rows]
+            return [_row_to_nav_snapshot(r) for r in rows]
 
     def get_prev_nav_snapshots(self, d: date) -> list[MFNavSnapshot]:
         """Return all NAV snapshots for the most recent date strictly before d.
@@ -339,7 +359,7 @@ class MFStore:
                 " FROM mf_nav_snapshots WHERE snapshot_date = ? ORDER BY amfi_code",
                 (row["prev_date"],),
             ).fetchall()
-            return [self._row_to_nav_snapshot(r) for r in rows]
+            return [_row_to_nav_snapshot(r) for r in rows]
 
     def get_latest_nav(self, amfi_code: str) -> MFNavSnapshot | None:
         """Return the most recent NAV snapshot for a scheme.
@@ -357,26 +377,6 @@ class MFStore:
                    ORDER BY snapshot_date DESC LIMIT 1""",
                 (amfi_code,),
             ).fetchone()
-            return self._row_to_nav_snapshot(row) if row else None
+            return _row_to_nav_snapshot(row) if row else None
 
-    # ── Row mappers ───────────────────────────────────────────────
-
-    @staticmethod
-    def _row_to_transaction(row: sqlite3.Row) -> MFTransaction:
-        return MFTransaction(
-            scheme_name=row["scheme_name"],
-            amfi_code=row["amfi_code"],
-            transaction_date=date.fromisoformat(row["transaction_date"]),
-            units=Decimal(row["units"]),
-            amount=Decimal(row["amount"]),
-            transaction_type=TransactionType(row["transaction_type"]),
-        )
-
-    @staticmethod
-    def _row_to_nav_snapshot(row: sqlite3.Row) -> MFNavSnapshot:
-        return MFNavSnapshot(
-            snapshot_date=date.fromisoformat(row["snapshot_date"]),
-            amfi_code=row["amfi_code"],
-            scheme_name=row["scheme_name"],
-            nav=Decimal(row["nav"]),
-        )
+    # ── Row mappers (module-level: _row_to_transaction, _row_to_nav_snapshot) ──

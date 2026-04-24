@@ -13,6 +13,7 @@ portfolio/store.py and mf/store.py).
 
 from __future__ import annotations
 
+import sqlite3
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -39,6 +40,21 @@ CREATE TABLE IF NOT EXISTS dhan_holdings_snapshots (
 CREATE INDEX IF NOT EXISTS idx_dhan_snapshots_date
     ON dhan_holdings_snapshots(snapshot_date);
 """
+
+
+def _row_to_holding(row: sqlite3.Row) -> DhanHolding:
+    """Convert a SQLite row to a DhanHolding."""
+    return DhanHolding(
+        trading_symbol=row["trading_symbol"],
+        isin=row["isin"],
+        security_id=row["security_id"],
+        exchange=row["exchange"],
+        total_qty=row["total_qty"],
+        collateral_qty=row["collateral_qty"],
+        avg_cost_price=Decimal(row["avg_cost_price"]),
+        classification=row["classification"],
+        ltp=Decimal(row["ltp"]) if row["ltp"] is not None else None,
+    )
 
 
 class DhanStore:
@@ -120,7 +136,7 @@ class DhanStore:
                 "SELECT * FROM dhan_holdings_snapshots WHERE snapshot_date = ?",
                 (d.isoformat(),),
             ).fetchall()
-        return [self._row_to_holding(r) for r in rows]
+        return [_row_to_holding(r) for r in rows]
 
     def get_prev_snapshot(self, d: date) -> dict[str, DhanHolding]:
         """Return holdings for the most recent date strictly before d, keyed by ISIN.
@@ -145,19 +161,6 @@ class DhanStore:
                 "SELECT * FROM dhan_holdings_snapshots WHERE snapshot_date = ?",
                 (row["prev_date"],),
             ).fetchall()
-        return {r["isin"]: self._row_to_holding(r) for r in rows}
+        return {r["isin"]: _row_to_holding(r) for r in rows}
 
-    @staticmethod
-    def _row_to_holding(row) -> DhanHolding:
-        """Convert a SQLite row to a DhanHolding."""
-        return DhanHolding(
-            trading_symbol=row["trading_symbol"],
-            isin=row["isin"],
-            security_id=row["security_id"],
-            exchange=row["exchange"],
-            total_qty=row["total_qty"],
-            collateral_qty=row["collateral_qty"],
-            avg_cost_price=Decimal(row["avg_cost_price"]),
-            classification=row["classification"],
-            ltp=Decimal(row["ltp"]) if row["ltp"] is not None else None,
-        )
+    # ── Row mappers (module-level: _row_to_holding) ──

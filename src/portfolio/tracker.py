@@ -152,6 +152,18 @@ def apply_trade_positions(
     )
 
 
+def _extract_greeks_from_chain(chain: dict, leg: Leg) -> dict | None:
+    """Extract greeks for a specific strike/type from an option chain response.
+
+    The chain format depends on the Upstox API response structure.
+    This is a placeholder — adapt to the actual OptionChain model
+    once the Pydantic models for the option chain API are finalized.
+    """
+    # TODO: TD-7 — implement once OptionChain Pydantic model is defined.
+    # Expected fields: iv, delta, theta, gamma, vega, oi, volume
+    return None
+
+
 class PortfolioTracker:
     """Tracks P&L and records daily snapshots for all strategies."""
 
@@ -339,14 +351,4 @@ class PortfolioTracker:
         return {}
 
 
-    @staticmethod
-    def _extract_greeks_from_chain(chain: dict, leg: Leg) -> dict | None:
-        """Extract greeks for a specific strike/type from an option chain response.
-
-        The chain format depends on the Upstox API response structure.
-        This is a placeholder — adapt to the actual OptionChain model
-        once the Pydantic models for the option chain API are finalized.
-        """
-        # TODO: TD-7 — implement once OptionChain Pydantic model is defined.
-        # Expected fields: iv, delta, theta, gamma, vega, oi, volume
-        return None
+    # ── Greeks extraction (module-level: _extract_greeks_from_chain) ──

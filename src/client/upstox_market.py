@@ -33,6 +33,16 @@ V2_OPTION_CHAIN_URL = "https://api.upstox.com/v2/option/chain"
 MAX_INSTRUMENTS_PER_REQUEST = 500
 
 
+def _remap_response(data: dict[str, Any]) -> dict[str, Any]:
+    """Remap colon-format response keys to pipe-format using instrument_token."""
+    remapped: dict[str, Any] = {}
+    for _resp_key, value in data.items():
+        pipe_key = value.get("instrument_token", "")
+        if pipe_key:
+            remapped[pipe_key] = value
+    return remapped
+
+
 class UpstoxMarketClient:
     """Sync client for Upstox Market Quote V3 API.
 
@@ -113,7 +123,7 @@ class UpstoxMarketClient:
             )
             resp.raise_for_status()
             data = resp.json().get("data", {})
-            return self._remap_response(data)
+            return _remap_response(data)
         except requests.RequestException as e:
             raise DataFetchError(f"OHLC fetch failed: {e}") from e
 
@@ -201,12 +211,4 @@ class UpstoxMarketClient:
 
         return results
 
-    @staticmethod
-    def _remap_response(data: dict[str, Any]) -> dict[str, Any]:
-        """Remap colon-format response keys to pipe-format using instrument_token."""
-        remapped: dict[str, Any] = {}
-        for _resp_key, value in data.items():
-            pipe_key = value.get("instrument_token", "")
-            if pipe_key:
-                remapped[pipe_key] = value
-        return remapped
+    # ── Response remapping (module-level: _remap_response) ──
