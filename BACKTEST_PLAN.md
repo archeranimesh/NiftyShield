@@ -387,7 +387,16 @@ Dhan's `rollingoption` (historical) payload includes `iv` but not `delta`, `gamm
 - [ ] Config dataclass `CSPConfig` exposes all parameters from the spec: `target_delta`,
   `entry_dte_range`, `profit_target_pct`, `time_stop_days` (calendar days from entry — not
   DTE remaining), `loss_stop_delta` (R2 delta gate, default −0.45), `loss_stop_mark_multiple`
-  (R2 mark trigger, default 1.75), `underlying_symbol`, `lot_size`.
+  (R2 mark trigger, default 1.75), `underlying_symbol`, `lot_size`,
+  `niftybees_instrument_key` (default `NSE_EQ|INF204KB14I2`).
+- [ ] **NiftyBees collateral leg in backtest P&L (required):** The backtest engine must model
+  the NiftyBees ETF position alongside the short put — same decision as paper trading (see
+  `DECISIONS.md` 2026-04-25 entry). At each simulated strategy start date, compute
+  `niftybees_qty = floor(lot_size × nifty_spot / niftybees_ltp)` using the historical Nifty
+  spot and NiftyBees closing price on that date. Mark the ETF position to market daily
+  alongside the option. Annual reset within a multi-year backtest run: close the old ETF
+  position at year-end, open a new qty-adjusted position in January. The combined P&L
+  (option + ETF) is the authoritative metric for variance comparison against paper results.
 - [ ] **R5 re-entry logic** implemented as an explicit branch in `on_day`, togglable via
   config flags:
   - `enable_reentry: bool = False` — default off → V1 baseline (no re-entry).
@@ -543,7 +552,7 @@ The most important piece of code in this plan. Detects strategy drift in real ti
 
 - [ ] Upstox order execution status: Phase 2 of this plan assumes static IP is provisioned. If it is not, CSP goes live via manual order placement; NiftyShield still records trades via `record_trade.py`.
 - [ ] Entry: first monthly expiry cycle after Phase 1 gate passes. Strike per the CSP spec.
-- [ ] 1 lot only (currently 35 units for NiftyBees; confirm current lot size — lot sizes change).
+- [ ] 1 lot only (lot size 65 as of Jan 2026; confirm current lot size before entry — lot sizes change annually).
 - [ ] Commitment: at least 6 monthly cycles before deciding to scale, extend, or kill.
 
 ---

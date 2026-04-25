@@ -84,6 +84,43 @@ expiry date, entry delta, entry mid price, actual fill price (mid minus slippage
 R7 below), IV at entry, India VIX at entry, IVR at entry (log even before R3 is enforced),
 underlying spot price at entry, DTE at entry.
 
+**Collateral leg — record once per strategy year (not per cycle):**
+
+The paper strategy tracks the full combined P&L: short put premium + NiftyBees ETF
+mark-to-market. This reflects the real economics — NiftyBees is the pledged collateral whose
+value moves with Nifty 50, and its P&L belongs in the strategy's total return picture.
+
+Record the NiftyBees leg as a BUY at strategy inception (or at each annual reset). The
+quantity is calculated as:
+
+```
+qty = floor((lot_size × nifty_spot) / niftybees_ltp)
+```
+
+Example — strategy start 2026-04-25 (lot size 65, Nifty 23,897.95, NiftyBees 271.35):
+
+```bash
+python -m scripts.record_paper_trade \
+  --strategy paper_csp_nifty_v1 \
+  --leg long_niftybees \
+  --key "NSE_EQ|INF204KB14I2" \
+  --action BUY \
+  --qty 5725 \
+  --price 271.35 \
+  --date 2026-04-25 \
+  --notes "Collateral leg: 1 Nifty lot equiv (65 × 23897.95 / 271.35 = 5725 units). Annual reset."
+```
+
+**Annual reset procedure:** Once per calendar year (January, after expiry), record a SELL at
+current NiftyBees LTP to close the old position (realises P&L), then immediately record a
+fresh BUY at the new qty computed from current Nifty spot and NiftyBees LTP. This keeps the
+collateral-equivalent sizing accurate as Nifty drifts over the year.
+
+> **Note on combined P&L:** `PaperTracker.compute_pnl` includes all open legs automatically —
+> the short put and `long_niftybees` are fetched together in one LTP batch. The
+> `paper_nav_snapshots` `total_pnl` field already reflects the combined position. During a
+> Nifty selloff both legs move against you simultaneously; this is the correct view of risk.
+
 ---
 
 ## Exit Rules

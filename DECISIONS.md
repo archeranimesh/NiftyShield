@@ -256,6 +256,20 @@ option leg is switched. Reviewed 2026-04-25 with strategy-stress-test pass; no m
 given the ₹1.2 cr+ collateral pool (₹75L MF + ₹30L bonds + ₹15.5L NiftyBees ETF). Rules
 R1–R7 also revised in the same review session — see `docs/strategies/csp_nifty_v1.md`.
 
+**2026-04-25 — NiftyBees collateral modelled as a `long_niftybees` leg in paper P&L.**
+The CSP strategy's true economics include both the short put premium and the mark-to-market
+of the pledged NiftyBees ETF collateral. Modelling only the option leg understates both the
+return (ETF appreciates in uptrends) and the drawdown (ETF declines alongside a falling put).
+Decision: record a BUY of NiftyBees equivalent to 1 Nifty lot as `leg_role=long_niftybees`
+in `paper_csp_nifty_v1` at strategy inception. Qty formula: `floor(lot_size × nifty_spot /
+niftybees_ltp)`. Reset annually (January, post-expiry): SELL old qty at current LTP to
+realise P&L, BUY new qty at recomputed size. `PaperTracker.compute_pnl` requires zero changes
+— it is instrument-key agnostic and batches all open legs into a single LTP fetch.
+Instrument key: `NSE_EQ|INF204KB14I2`. This decision carries forward to Phase 1 backtest:
+the backtest engine must include the NiftyBees collateral leg in all CSP strategy P&L
+calculations. See `docs/strategies/csp_nifty_v1.md` for the exact `record_paper_trade.py`
+command and annual reset procedure.
+
 ---
 
 ## Deferred / Not Yet Built
