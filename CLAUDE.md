@@ -78,6 +78,23 @@ If plan touches more than 2 files, wait for explicit go-ahead.
 
 Every public function needs: one happy-path test + one error/edge-case test. No network in tests.
 
+**⛔ Before writing any test helper that constructs a domain model (Pydantic / dataclass):**
+
+Never write a `_make_*` / `build_*` / fixture helper from memory. Domain models evolve — required fields are added, enums are renamed, validators change. Writing from memory produces helpers that fail at collection time, wasting two round-trips to diagnose errors you introduced yourself.
+
+Mandatory pre-step — run these before opening the test file:
+
+```
+get_code_snippet("<ModelClassName>")   # exact field list, required vs optional, types
+search_graph("<EnumName>")             # every enum used in the helper — get all members
+```
+
+Concrete failures this prevents (from 2026-04-25 session):
+- `Direction.SHORT` → does not exist; members are `BUY` / `SELL`
+- `entry_date` → required field on `Leg`; omitting it raises `ValidationError` at collection
+
+One graph call before the first line of test code eliminates both. Do not skip it.
+
 ## Step 5 — Close the phase (docs → tests → commit)
 
 A phase is not complete until all three are done. Never move to the next phase mid-checklist.
@@ -95,6 +112,16 @@ A phase is not complete until all three are done. Never move to the next phase m
 - Code changes: run the `code-reviewer` agent against `git diff HEAD`. Address any `CRITICAL` or `ERROR` findings before committing. `WARNING` may be deferred with a documented reason.
 - Docs / config only: skip code-reviewer. Commit immediately after 5a.
 - **Never bundle changes from separate phases into one commit.**
+
+**⛔ The commit must be executed, not drafted.** A written-out commit message is not a commit. The phase is not closed until you have run:
+
+```bash
+git add <files>
+git commit -m "<message>"
+git log --oneline -1   # confirm SHA appears — this is the proof of completion
+```
+
+Providing the commit message to the user and stopping is a recurring failure mode (2026-04-24, 2026-04-25). The commit is the last mandatory action of every phase. Do not hand off to the user to run it.
 
 Typical phase boundaries (each gets its own commit):
 - Model → Store → Tracker/orchestration → Formatting / pure helpers
