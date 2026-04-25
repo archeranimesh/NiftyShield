@@ -180,10 +180,10 @@ cycles" floor from the initial draft was statistically too thin.
 
 Small tool to enforce that every strategy spec has the required sections. Prevents spec rot over years.
 
-- [ ] `scripts/validate_strategy_spec.py` — reads `docs/strategies/*.md`, checks for presence of required section headers (Name, Entry, Exit, Adjustment, Sizing, Kill Criteria, Variance Threshold). Returns non-zero exit on missing sections.
-- [ ] Tests: happy path + each missing-section case.
-- [ ] Add to a pre-commit hook or CI step (deferred until CI exists; for now, manual run).
-- [ ] Commit: `feat(scripts): strategy spec validator`.
+- [x] `scripts/validate_strategy_spec.py` — reads `docs/strategies/*.md`, checks for presence of required section headers (Name, Entry, Exit, Adjustment, Sizing, Kill Criteria, Variance Threshold). Returns non-zero exit on missing sections.
+- [x] Tests: happy path + each missing-section case. 28 tests in `tests/unit/test_validate_strategy_spec.py` — parametrised per required section, deprecated detection, non-spec skip, directory scan, explicit file path. All green.
+- [x] Add to a pre-commit hook or CI step (deferred until CI exists; for now, manual run).
+- [x] Commit: `feat(scripts): strategy spec validator`.
 
 ---
 

@@ -41,6 +41,17 @@ Architecture decision recorded in `DECISIONS.md`: shared SQLite DB + `paper_` pr
 
 ---
 
+## ~~P1-NEXT — Strategy Spec Validator~~ — DONE 2026-04-25
+
+Sprint 0.7 from `BACKTEST_PLAN.md`.
+
+Implemented:
+- `scripts/validate_strategy_spec.py` — reads `docs/strategies/*.md`; skips DEPRECATED files (blockquote `**DEPRECATED` or `Status | DEPRECATED` table row) and non-spec files (no `| Name |` metadata table); validates 8 required `##` section headers (Entry, Exit, Adjustment, Position Sizing, P&L Distribution, Regimes, Kill Criteria, Variance Threshold); exits 1 on any active failure.
+- `tests/unit/test_validate_strategy_spec.py` — 28 tests: happy path, case/plural heading variants, deprecated detection (both formats), per-section missing parametrised, multi-missing, directory scan, explicit file path, live smoke-test against `csp_nifty_v1.md`. All green. 952 total passing.
+- `csp_nifty_v1.md` confirmed passing. `csp_niftybees_v1.md` correctly skipped as DEPRECATED.
+
+---
+
 ## P2-EVAL — Nuvama Session P&L Alignment
 
 Decision needed before any code changes.
