@@ -29,7 +29,7 @@
 
 | Phase | Window | Focus | Gate to next phase |
 |---|---|---|---|
-| **Phase 0** | Now — ~Jul 2026 | Foundation hardening + first paper strategy live | Paper trade (CSP) running ≥8 weeks, trades ledger stable through one Finideas roll |
+| **Phase 0** | Now — ~Mar 2027 | Foundation hardening + first paper strategy live | Paper trade (CSP) running ≥ 6 full cycles (~6 months), trades ledger stable through one Finideas roll |
 | **Phase 1** | Aug 2026 — Dec 2026 | Backtest engine + data pipeline + CSP backtest calibrated to paper | CSP backtest distribution matches paper realised within ±1.5 SD |
 | **Phase 2** | Jan 2027 — Jun 2027 | CSP goes live (1 lot) + add strategy #2 (iron condor) to the pipeline | CSP live ≥3 months within backtest envelope, IC paper-trading started |
 | **Phase 3** | Jul 2027 — 2028 | IC live + strategy #3 (event-driven) + portfolio-level construction | 3 strategies live, ≥6 months each within envelope, regime classifier operational |
@@ -126,6 +126,9 @@ Decide the exact specification of the first strategy to paper-trade. The recomme
   - **Kill criteria** (conditions under which you stop running it — trailing 6-month return, max drawdown, variance from backtest, execution error count)
   - **Variance threshold for live deployment** (e.g., realised mean within ±1.5 SD of backtest mean over ≥4 months of paper trading)
 - [x] Commit: `docs(strategies): add CSP v1 specification`.
+- [x] **2026-04-25 review:** underlying switched from NiftyBees to Nifty 50 index options.
+  `docs/strategies/csp_nifty_v1.md` created as successor; `csp_niftybees_v1.md` retained as
+  DEPRECATED. Rules R1–R7 revised. See `DECISIONS.md` → Strategy Decisions.
 
 **Why this artifact matters:** The spec is the contract between your intentions and your code. When paper-trade results diverge from expectations, you compare to the spec, not to a moving target. Without this, strategies mutate silently as you "improve" them and you lose the ability to measure anything consistently.
 
@@ -160,9 +163,16 @@ Begin paper trading the strategy specified in 0.4. The mechanics:
 - [ ] Apply a slippage haircut on entry: assume you got filled 0.25 INR worse than mid. Record this in the notes field.
 - [ ] Exit triggers: monitor daily via `daily_snapshot.py` output. When profit target / time stop / loss stop hits, log the exit trade.
 - [ ] Never override the spec in real time. If you feel the urge to override, log it in `TODOS.md` with the reason — this is valuable data about your own discipline. Then follow the spec anyway.
-- [ ] Minimum paper-trade duration before moving to Phase 1 live deployment: **8 weeks** covering at least 2 full monthly expiry cycles.
+- [ ] Minimum paper-trade duration before moving to Phase 1 live deployment: **6 full monthly
+  expiry cycles (approximately 6 months)**, with at least one cycle that triggers each of:
+  profit target, time stop, delta-stop (R2). All three exit mechanisms must be exercised at
+  least once before the variance gate is credible.
 
-**Why 8 weeks minimum:** Fewer than 2 expiry cycles gives you 1–2 data points, which is noise. At 2 cycles you start to see whether the mechanics work end-to-end, even if the statistical significance is still zero.
+**Why 6 cycles minimum:** 2 cycles is 2 data points — noise, not signal. You need enough
+cycles to see the exit-type distribution (profit target vs time stop vs delta-stop) and
+compare it against the backtest frequency of each. Six cycles is a coarse but credible
+distribution; prefer 8+ if calendar permits before committing capital. The "8 weeks / 2
+cycles" floor from the initial draft was statistically too thin.
 
 ---
 
@@ -182,8 +192,10 @@ Small tool to enforce that every strategy spec has the required sections. Preven
 All of the following must be true before starting Phase 1. Do not start Phase 1 tasks until this gate is ticked.
 
 - [ ] 0.1, 0.2, 0.3, 0.5, 0.7 are all `[x]`.
-- [ ] CSP v1 paper trading has ≥8 weeks of data covering ≥2 monthly expiries (0.6).
-- [ ] `docs/strategies/csp_niftybees_v1.md` exists and passes the validator (0.7).
+- [ ] CSP v1 paper trading has ≥ 6 full monthly expiry cycles, with at least one each of:
+  profit-target exit, time-stop exit, delta-stop exit (0.6).
+- [ ] `docs/strategies/csp_nifty_v1.md` exists and passes the validator (0.7).
+  (`csp_niftybees_v1.md` retained as DEPRECATED — not required to pass validator.)
 - [ ] Jun 2026 Finideas roll executed cleanly with no orphaned positions (0.3).
 - [ ] Full test suite green; `CONTEXT.md` + `DECISIONS.md` + `TODOS.md` reflect Phase 0 end state.
 - [ ] Animesh has reviewed paper trade results and confirms "ready to build the backtest engine" in a session log entry.
@@ -223,7 +235,26 @@ Confirmed from Dhan docs (`https://dhanhq.co/docs/v2/expired-options-data/`, ver
 - [ ] Store `DHAN_DATA_TOKEN` in `.env` (or confirm existing `DHAN_ACCESS_TOKEN` suffices — tier-dependent; verify via one test call).
 - [ ] Record confirmed facts in `DECISIONS.md` → "Dhan Integration" section: 5-year history, 1-min resolution, ATM±10/±3 split, no Greeks in payload, 1 req/sec, 30-day window, confirmed "nearing expiry" definition.
 
-**Stop signal:** If the "nearing expiry" definition restricts ATM±10 to <7 DTE only, the Phase 2 iron condor strategy needs a redesign before Phase 1 starts. CSP at 25-delta typically lands at ATM-3 or ATM-4 on NiftyBees — inside the always-available ATM±3 window — so CSP backtesting is unaffected.
+**Stop signal:** If the "nearing expiry" definition restricts ATM±10 to <7 DTE only, the
+Phase 2 iron condor strategy needs a redesign before Phase 1 starts. CSP at 25-delta
+typically lands at ATM-3 or ATM-4 on Nifty — inside the always-available ATM±3 window —
+so CSP backtesting is unaffected.
+
+**Caveat on bid/ask history:** Dhan expired-options data (`rollingoption`) does not include
+bid/ask spread history — only OHLCV + IV + OI. The backtest fills at OHLC midpoint and
+applies the R7 slippage model (`max(₹0.25, 0.5 × spread)` at entry/target; 1.5× at
+loss-stop). Realistic spread calibration — particularly the stressed-exit multiplier — is
+deferred to the paper phase, where actual Dhan live-chain bid/ask snapshots will be captured
+(task 1.10).
+
+**India VIX ingestion requirement (Phase 1 prerequisite for R3 filter):** The CSP v1 R3
+rule requires a trailing 252-day IVR computed from India VIX OHLC history. No India VIX
+data currently exists in the repo (confirmed by grep 2026-04-25). Before R3 can be applied
+in backtesting, a separate ingestion sub-task is needed: fetch India VIX OHLC history from
+NSE or Upstox, store alongside `underlying_ohlc` in Timescale (see task 1.3), and expose it
+to `CSPConfig`. Until this pipeline exists, V1/V2/V3 backtest runs proceed without the IVR
+entry filter — the backtest will be slightly more permissive than the live spec. Document
+this gap in the V1 backtest result notes.
 
 ---
 
@@ -350,26 +381,64 @@ Dhan's `rollingoption` (historical) payload includes `iv` but not `delta`, `gamm
 
 ## 1.7 — CODE — Implement CSP strategy in backtest engine
 
-- [ ] `src/strategy/csp.py` — cash-secured put strategy matching `docs/strategies/csp_niftybees_v1.md` line-for-line. Strategy rules are code-generated from the spec; if spec changes, code changes, commit both together.
-- [ ] Config dataclass `CSPConfig` exposes all parameters from the spec: target_delta, entry_dte_range, profit_target_pct, time_stop_dte, loss_stop_multiple, underlying_symbol, lot_size.
-- [ ] Tests: entry decision (correct strike from chain), exit decision (each of the three triggers), no-open-position idempotency.
+- [ ] `src/strategy/csp.py` — cash-secured put strategy matching `docs/strategies/csp_nifty_v1.md`
+  line-for-line. Strategy rules are code-generated from the spec; if spec changes, code
+  changes, commit both together.
+- [ ] Config dataclass `CSPConfig` exposes all parameters from the spec: `target_delta`,
+  `entry_dte_range`, `profit_target_pct`, `time_stop_days` (calendar days from entry — not
+  DTE remaining), `loss_stop_delta` (R2 delta gate, default −0.45), `loss_stop_mark_multiple`
+  (R2 mark trigger, default 1.75), `underlying_symbol`, `lot_size`.
+- [ ] **R5 re-entry logic** implemented as an explicit branch in `on_day`, togglable via
+  config flags:
+  - `enable_reentry: bool = False` — default off → V1 baseline (no re-entry).
+  - `enable_reentry=True, ivr_gated=True` → V2 (re-enter after profit exit if DTE ≥ 14 and
+    IVR ≥ 25).
+  - `enable_reentry=True, ivr_gated=False` → V3 (re-enter after any exit if DTE ≥ 14, no
+    IVR gate).
+  This three-way toggle must be clean enough to flip in config without touching strategy
+  logic, so V1/V2/V3 variant runs differ only in config, not code.
+- [ ] Tests: entry decision (correct strike from chain), exit decision (each of: profit
+  target, 21-day time stop, delta gate, mark gate), R5 re-entry branch (IVR-gated and
+  ungated paths), no-open-position idempotency.
 - [ ] Commit: `feat(strategy): cash-secured put v1`.
 
 ---
 
-## 1.8 — CODE — Run CSP backtest across full history
+## 1.8 — CODE — Run CSP backtest across full history (three variants)
 
-- [ ] `scripts/run_backtest.py --strategy csp --start 2020-01-01 --end 2026-06-30 --config docs/strategies/csp_niftybees_v1.md` — CLI that runs the engine, persists results, prints summary.
-- [ ] Run it. Persist result. Note run_id.
-- [ ] Extract from `backtest_daily_pnl` + `backtest_metrics`:
-  - Annualised net return (after cost model)
-  - Max drawdown (depth + duration)
-  - Monthly P&L distribution: mean, median, 5th percentile, 95th percentile, worst month
-  - Sharpe, Sortino
-  - Monthly win rate
-  - Behavior during stress windows: Mar 2020, Feb–Mar 2022, Jun 2024 (election day), Oct 2024
-- [ ] Write these into `docs/strategies/csp_niftybees_v1.md` → new section "Backtest Results (run_id: ...)".
-- [ ] Commit: `docs(strategies): CSP v1 backtest results`.
+Run three comparable variants so the V1-vs-V2-vs-V3 decision is data-driven:
+
+- [ ] **V1** (baseline — no re-entry): `--strategy csp --config docs/strategies/csp_nifty_v1.md
+  --variant V1` (`enable_reentry=False`)
+- [ ] **V2** (R5 re-entry, IVR-gated): `--variant V2` (`enable_reentry=True, ivr_gated=True`)
+- [ ] **V3** (always-on roll, no IVR gate): `--variant V3` (`enable_reentry=True,
+  ivr_gated=False`)
+
+`scripts/run_backtest.py` must accept a `--variant` flag and persist each run with its own
+`run_id` + `variant` tag in `backtest_runs`. The three runs are comparable — same data
+window, same cost model, same underlying — differing only in the re-entry config flag.
+
+For each variant, extract from `backtest_daily_pnl` + `backtest_metrics`:
+- Annualised net return (after cost model)
+- Max drawdown (depth + duration)
+- Monthly P&L distribution: mean, median, 5th percentile, 95th percentile, worst month
+- **Sharpe, Sortino** (both required for the V1-vs-V2-vs-V3 comparison)
+- Monthly win rate
+- Behaviour during stress windows: Feb–Mar 2022, Jun 2024 (election day), Oct 2024
+
+**Note on historical window:** Dhan `rollingoption` data starts 2021-08-01. COVID crash
+(Mar 2020) is not covered — acknowledged limitation. Best available stress scenario is Jun
+2024 election day.
+
+**Note on R3 (IVR filter):** India VIX ingestion does not yet exist (see 1.1 note). All
+three variant runs proceed without the IVR entry filter. Document this gap explicitly in the
+backtest result notes — live paper trading will apply R3 manually until the ingestion
+pipeline is built.
+
+- [ ] Write results into `docs/strategies/csp_nifty_v1.md` → "Backtest Results" table (all
+  three variants side by side). The V1-vs-V2-vs-V3 verdict is **Animesh's** to make based on
+  the data; the backtest provides the comparison, not the decision.
+- [ ] Commit: `docs(strategies): CSP v1 backtest results (V1/V2/V3 variants)`.
 
 ---
 
@@ -412,9 +481,22 @@ This is the core validation gate of the whole pipeline. If this step doesn't pas
 - [ ] Compute the distribution of monthly returns from the paper-trade data over the same window.
 - [ ] Z-score: `(paper_mean - backtest_mean) / backtest_std`.
 - [ ] **Pass condition:** |Z| ≤ 1.5. Realised within ±1.5 SD of backtest.
-- [ ] **Expected bias (subtract before computing Z):** The BS-vs-Dhan delta drift from 1.6a typically costs 5–10 paise per lot per month on strike selection. If paper traded Dhan-delta-selected strikes and backtest used BS-delta-selected strikes, the systematic drift is real and not a bug. Compute the magnitude by re-running the backtest with strike selection forced to match the strikes actually paper-traded (not delta-selected); the difference between the two backtest runs = the BS selection bias. Subtract this from the paper-vs-backtest gap before evaluating Z.
-- [ ] **Fail condition (after bias adjustment):** |Z| > 1.5. The backtest is miscalibrated. Debug before proceeding. Likely culprits in order of probability: slippage model too optimistic, cost model missing a component, entry/exit logic in code diverges from paper-trade behavior, backtest data has survivorship or fill-assumption issues, BS drift larger than expected (revisit 1.6a option-(a) calibration of `r`).
-- [ ] Record Z-score, bias adjustment, and decision in `docs/strategies/csp_niftybees_v1.md` → "Variance Check" section.
+- [ ] **Expected bias (subtract before computing Z):** The BS-vs-Dhan delta drift from 1.6a
+  typically costs 5–10 paise per lot per month on strike selection. If paper traded
+  Dhan-delta-selected strikes and backtest used BS-delta-selected strikes, the systematic
+  drift is real and not a bug. Compute the magnitude by re-running the **active variant**
+  (V1, V2, or V3 — whichever Animesh selected after 1.8) with strike selection forced to
+  match the strikes actually paper-traded (not delta-selected); the difference between the
+  two runs = the BS selection bias. Subtract this from the paper-vs-backtest gap before
+  evaluating Z. The active variant must be recorded in `docs/strategies/csp_nifty_v1.md`
+  "Variance Check Results" before this computation runs.
+- [ ] **Fail condition (after bias adjustment):** |Z| > 1.5. The backtest is miscalibrated.
+  Debug before proceeding. Likely culprits in order of probability: slippage model too
+  optimistic, cost model missing a component, entry/exit logic in code diverges from
+  paper-trade behaviour, backtest data has survivorship or fill-assumption issues, BS drift
+  larger than expected (revisit 1.6a option-(a) calibration of `r`).
+- [ ] Record Z-score, bias adjustment, active variant, and decision in
+  `docs/strategies/csp_nifty_v1.md` → "Variance Check Results" section.
 - [ ] If fail: iterate on the backtest until it aligns, then re-run 1.8 and 1.11.
 
 ---
