@@ -125,7 +125,7 @@ Decide the exact specification of the first strategy to paper-trade. The recomme
   - **Regimes you expect it to work in / fail in**
   - **Kill criteria** (conditions under which you stop running it — trailing 6-month return, max drawdown, variance from backtest, execution error count)
   - **Variance threshold for live deployment** (e.g., realised mean within ±1.5 SD of backtest mean over ≥4 months of paper trading)
-- [ ] Commit: `docs(strategies): add CSP v1 specification`.
+- [x] Commit: `docs(strategies): add CSP v1 specification`.
 
 **Why this artifact matters:** The spec is the contract between your intentions and your code. When paper-trade results diverge from expectations, you compare to the spec, not to a moving target. Without this, strategies mutate silently as you "improve" them and you lose the ability to measure anything consistently.
 
@@ -681,6 +681,7 @@ When triggered: stop new entries immediately, close existing positions according
 | Date | Task | Commit SHA | Notes |
 |---|---|---|---|
 | 2026-04-24 | 0.1 | cd3ed6b | 174 nuvama tests across test_models (32), test_options_reader (26), test_store (43) + supporting files. Follow-up fix 92a6c74. Status gap closed retroactively. |
+| 2026-04-25 | 0.4 | fb69043 | CSP v1 spec written: docs/strategies/csp_niftybees_v1.md. All required sections present: entry/exit/adjustment/sizing/prior P&L distribution/regimes/kill criteria/variance threshold. Open questions for v2 logged. |
 
 ---
 
