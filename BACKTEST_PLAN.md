@@ -64,12 +64,12 @@
 
 Close the test gap from `TODOS.md` item 0. These features were built without tests and violate the repo's "every public function needs happy-path + edge-case test" contract.
 
-- [ ] Add `tests/unit/nuvama/test_models.py` coverage for `NuvamaOptionPosition`, `NuvamaOptionsSummary.net_pnl` (unrealized + cumulative_realized) — frozen, construction validation, property math.
-- [ ] Add `tests/unit/nuvama/test_options_reader.py` — `parse_options_positions()` happy path (OPTIDX + OPTSTK), skips non-option rows, handles flat positions (net_qty=0), missing `resp.data.pos`, malformed records. `build_options_summary()` aggregation + empty-list edge case.
-- [ ] Extend `tests/unit/nuvama/test_store.py` — `record_options_snapshot` upsert + idempotency, `get_cumulative_realized_pnl` cross-symbol SUM, `record_intraday_positions` purge-on-call, `get_intraday_extremes` max/min/nifty aggregation, empty-date `(None, None, None, None)`.
-- [ ] Full suite green: `python -m pytest tests/unit/`.
-- [ ] `code-reviewer` agent clean on diff.
-- [ ] Commit: `test(nuvama): add coverage for options + intraday`.
+- [x] Add `tests/unit/nuvama/test_models.py` coverage for `NuvamaOptionPosition`, `NuvamaOptionsSummary.net_pnl` (unrealized + cumulative_realized) — frozen, construction validation, property math.
+- [x] Add `tests/unit/nuvama/test_options_reader.py` — `parse_options_positions()` happy path (OPTIDX + OPTSTK), skips non-option rows, handles flat positions (net_qty=0), missing `resp.data.pos`, malformed records. `build_options_summary()` aggregation + empty-list edge case.
+- [x] Extend `tests/unit/nuvama/test_store.py` — `record_options_snapshot` upsert + idempotency, `get_cumulative_realized_pnl` cross-symbol SUM, `record_intraday_positions` purge-on-call, `get_intraday_extremes` max/min/nifty aggregation, empty-date `(None, None, None, None)`.
+- [x] Full suite green: `python -m pytest tests/unit/`.
+- [x] `code-reviewer` agent clean on diff.
+- [x] Commit: `test(nuvama): add coverage for options + intraday`.
 
 **Why now:** This is tech debt that blocks confident refactors later. Every subsequent phase touches `nuvama/` indirectly; untested methods will break silently.
 
@@ -681,7 +681,7 @@ When triggered: stop new entries immediately, close existing positions according
 
 | Date | Task | Commit SHA | Notes |
 |---|---|---|---|
-| | | | |
+| 2026-04-24 | 0.1 | cd3ed6b | 174 nuvama tests across test_models (32), test_options_reader (26), test_store (43) + supporting files. Follow-up fix 92a6c74. Status gap closed retroactively. |
 
 ---
 
