@@ -18,11 +18,14 @@ from __future__ import annotations
 
 import logging
 import os
+from datetime import date
+from decimal import Decimal
 from typing import Any
 
 import requests
 
 from src.client.exceptions import LTPFetchError
+from src.models.options import OptionChain, OptionChainStrike, OptionLeg
 
 logger = logging.getLogger(__name__)
 
@@ -212,3 +215,143 @@ class UpstoxMarketClient:
         return results
 
     # ── Response remapping (module-level: _remap_response) ──
+
+
+# ── Option chain parsers ─────────────────────────────────────────────────────
+
+
+def _safe_decimal(val: Any) -> Decimal:
+    """Coerce a value to Decimal, returning Decimal("0") on any failure.
+
+    Emits a WARNING log when coercion is needed so callers can diagnose
+    data quality issues without crashing.
+
+    Args:
+        val: Raw value from the broker response (float, str, None, …).
+
+    Returns:
+        Decimal representation of val, or Decimal("0") if conversion fails.
+    """
+    if val is None:
+        logger.warning("Greek value is None — coercing to Decimal('0')")
+        return Decimal("0")
+    try:
+        return Decimal(str(val))
+    except Exception:
+        logger.warning("Non-numeric Greek value %r — coercing to Decimal('0')", val)
+        return Decimal("0")
+
+
+def _parse_option_leg(options_dict: dict, strike: Decimal) -> OptionLeg | None:
+    """Parse one side (CE or PE) of a strike entry into an OptionLeg.
+
+    Returns None when either the ``market_data`` or ``option_greeks``
+    sub-dicts are missing or empty — callers treat that as an absent leg.
+
+    Args:
+        options_dict: The ``call_options`` or ``put_options`` dict from the
+            Upstox option chain response.
+        strike: Strike price as Decimal (already converted from the parent
+            strike entry).
+
+    Returns:
+        Populated OptionLeg, or None if data is absent.
+    """
+    market_data = options_dict.get("market_data") or {}
+    option_greeks = options_dict.get("option_greeks") or {}
+
+    if not market_data and not option_greeks:
+        return None
+
+    try:
+        oi = int(float(market_data.get("oi") or 0))
+    except (TypeError, ValueError):
+        oi = 0
+
+    try:
+        volume = int(float(market_data.get("volume") or 0))
+    except (TypeError, ValueError):
+        volume = 0
+
+    return OptionLeg(
+        ltp=_safe_decimal(market_data.get("ltp")),
+        bid=_safe_decimal(market_data.get("bid_price")),
+        ask=_safe_decimal(market_data.get("ask_price")),
+        oi=oi,
+        volume=volume,
+        delta=_safe_decimal(option_greeks.get("delta")),
+        gamma=_safe_decimal(option_greeks.get("gamma")),
+        theta=_safe_decimal(option_greeks.get("theta")),
+        vega=_safe_decimal(option_greeks.get("vega")),
+        iv=_safe_decimal(option_greeks.get("iv")),
+        strike=strike,
+    )
+
+
+def parse_upstox_option_chain(data: list[dict]) -> OptionChain:
+    """Parse the Upstox option chain response into a source-agnostic OptionChain.
+
+    Accepts the raw list returned by ``get_option_chain_sync`` (the value of
+    ``resp.json()["data"]``).  Returns an empty-strikes OptionChain when data
+    is empty or not a list — callers need not guard against None.
+
+    Field mapping (Upstox → OptionLeg):
+        market_data.ltp          → ltp
+        market_data.bid_price    → bid
+        market_data.ask_price    → ask
+        market_data.oi           → oi  (int cast via int(float(...)))
+        market_data.volume       → volume
+        option_greeks.delta      → delta
+        option_greeks.gamma      → gamma
+        option_greeks.theta      → theta
+        option_greeks.vega       → vega
+        option_greeks.iv         → iv
+        option_greeks.pop        → ignored (not a standard Greek)
+
+    Args:
+        data: List of strike dicts from the Upstox V2 option chain endpoint.
+
+    Returns:
+        Populated OptionChain.  ``strikes`` may be empty if data is empty or
+        every strike entry is malformed.
+    """
+    _EMPTY_EXPIRY = date(1970, 1, 1)
+    _EMPTY = OptionChain(
+        underlying_spot=Decimal("0"),
+        expiry=_EMPTY_EXPIRY,
+        strikes={},
+    )
+
+    if not data or not isinstance(data, list):
+        return _EMPTY
+
+    first = data[0]
+    try:
+        underlying_spot = Decimal(str(first.get("underlying_spot_price", 0)))
+    except Exception:
+        underlying_spot = Decimal("0")
+
+    try:
+        expiry = date.fromisoformat(first["expiry"])
+    except (KeyError, ValueError, TypeError):
+        expiry = _EMPTY_EXPIRY
+
+    strikes: dict[Decimal, OptionChainStrike] = {}
+    for entry in data:
+        try:
+            raw_strike = entry.get("strike_price")
+            if raw_strike is None:
+                continue
+            strike_key = Decimal(str(raw_strike))
+        except Exception:
+            continue
+
+        ce = _parse_option_leg(entry.get("call_options") or {}, strike_key)
+        pe = _parse_option_leg(entry.get("put_options") or {}, strike_key)
+        strikes[strike_key] = OptionChainStrike(ce=ce, pe=pe)
+
+    return OptionChain(
+        underlying_spot=underlying_spot,
+        expiry=expiry,
+        strikes=strikes,
+    )

@@ -227,11 +227,23 @@
 
 ---
 
+## OptionChain Model
+
+**Source-agnostic `OptionChain` Pydantic model (decided 2026-04-24, implemented 2026-04-25):** `OptionLeg`, `OptionChainStrike`, `OptionChain` defined in `src/models/options.py`. Field names are source-agnostic (`delta`, not `greeks_delta`). Translation from Upstox/Dhan response shapes happens in each client's parser, not in the model. `OptionLeg` carries no `instrument_key` — lookup is by strike price + asset_type (both on the `Leg` model), so the OptionChain model stays vendor-neutral.
+
+**Upstox-first for live chain, Dhan from Phase 1.10:** Upstox Analytics Token is already active — zero marginal cost. Dhan Data API (₹400/month) is not yet subscribed. When it is activated for the backtesting engine, Phase 1.10 switches live chain to Dhan so that backtest Greeks (historical Dhan data) and live Greeks come from the same vendor. Without consistent source, IV percentile rules used in strategy entry logic would have systematic bias between backtest and live.
+
+**Strike lookup: `Decimal(str(leg.strike))` dict key.** `OptionChain.strikes` is keyed by `Decimal`. Nifty strikes are always integers. `Decimal("22250.0") == Decimal("22250")` is True in Python (value equality governs dict lookup), so float-origin strikes round-trip correctly.
+
+**`_parse_option_leg` coerces null/non-numeric Greeks to `Decimal("0")` with WARNING.** Best-effort contract — a bad Greek field never aborts the snapshot.
+
+**`get_option_chain_sync` pre-existing return-type bug:** Returns `resp.json().get("data", {})` — the data field is a list, not a dict; default `{}` is wrong; return annotation `dict[str, Any]` is wrong. Deferred fix — absorb in `parse_upstox_option_chain` by accepting `list[dict]`. Do not fix the bug in this task.
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/`, `src/streaming/` — all empty
-- `OptionChain` Pydantic model — not defined; `_fetch_greeks()` returns `{}` immediately
-- Greeks capture — deferred until `OptionChain` model defined; fixture `nifty_chain_2026-04-07.json` already recorded
 - Expired instruments API — blocked (paid subscription). NSE CSV dumps as interim backtest source
 - Order execution — blocked (static IP not provisioned). `MockBrokerClient` for all development
 - P&L visualization — matplotlib or React dashboard; deferred until several weeks of snapshot history

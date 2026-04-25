@@ -16,20 +16,11 @@
 
 ---
 
-## P1-NEXT — Greeks Capture
+## ~~P1-NEXT — Greeks Capture~~ — DONE 2026-04-25
 
 Story file: `docs/plan/0_2_greeks_capture.md`
 
-Fix the option chain call, define the `OptionChain` Pydantic model, implement `_extract_greeks_from_chain()`, and wire the null Greeks columns in `daily_snapshots`.
-
-Steps:
-- Fix API call: instrument key must be `NSE_INDEX|Nifty 50`
-- Define `OptionChain` Pydantic model — drive from `tests/fixtures/responses/nifty_chain_2026-04-07.json`
-- Implement `_extract_greeks_from_chain()` in `src/portfolio/tracker.py` (currently returns `{}`)
-- Wire Greeks columns into `daily_snapshots` (columns already exist, currently null)
-- Tests: fixture-driven, fully offline
-
-Blocked by: nothing.
+Implemented: `src/models/options.py` (OptionLeg, OptionChainStrike, OptionChain), `src/client/upstox_market.py` (parse_upstox_option_chain + _parse_option_leg + _safe_decimal), `src/portfolio/tracker.py` (_extract_greeks_from_chain + real _fetch_greeks), `tests/unit/test_greeks_capture.py` (16 tests, all green). 883 tests total passing.
 
 ---
 
@@ -137,5 +128,7 @@ License decision needed before this can be automated. Every file should carry a 
 | 2026-04-24 | **Root markdown cleanup.** Archived all ✅ DONE items (PKG-1–4, DEBT-2,4,5) + session log to TODOS_ARCHIVE_2026-04-24.md. Moved `python-architecture-review.prompt.md` to `docs/`. Updated README.md project structure to actual src/ layout. Wrote `.claude/skills/md-cleanup/SKILL.md`. |
 | 2026-04-24 | **P&L Visualization scoping.** Audited DB for all viable data sources. Expanded P3-DEFER with 4 panels (MF, Dhan ETFs, Nuvama Bonds, Nuvama Options), data availability, P&L formulas, and known gap (Zerodha/FinRakshak not integrated). |
 | 2026-04-24 | **Zerodha/Kite feasibility + corrections.** Corrected Panel 4 attribution (Nuvama options ≠ FinRakshak; FinRakshak + ILTS run on Zerodha). Added P3-DEFER entry for Kite Connect integration with free/paid tier analysis, hybrid architecture approach, and Kite MCP note. |
+| 2026-04-25 | **Greeks capture implemented (task 0.2).** `src/models/options.py` (OptionLeg, OptionChainStrike, OptionChain frozen Pydantic), `src/client/upstox_market.py` (parse_upstox_option_chain + _parse_option_leg + _safe_decimal helper), `src/portfolio/tracker.py` (_extract_greeks_from_chain + real async _fetch_greeks replacing early-return stub), `tests/unit/test_greeks_capture.py` (16 fixture-driven offline tests). Greeks columns in daily_snapshots now populated. 883 tests green. |
+| 2026-04-24 | **Greeks capture design finalized.** Decisions: Upstox-first (Dhan switch at Phase 1.10 for IV source consistency); strike+asset_type lookup not instrument_key; `get_option_chain_sync` return-type bug noted and deferred. Full phase breakdown + 16-test plan written to `docs/plan/0_2_greeks_capture.md`. DECISIONS.md updated with OptionChain model decisions. Implementation not yet started — ready to pick up next session. |
 
 Full log (2026-04-01 → 2026-04-24): [docs/archive/TODOS_ARCHIVE_2026-04-24.md](docs/archive/TODOS_ARCHIVE_2026-04-24.md)

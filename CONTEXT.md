@@ -16,13 +16,14 @@ Load that file when adding new modules or doing a full structural survey.
 For task work, use the graph: `search_graph`, `get_code_snippet`, `trace_path`.
 
 Key top-level packages: `src/auth`, `src/client`, `src/models`, `src/portfolio`, `src/mf`, `src/dhan`, `src/nuvama`, `src/instruments`, `src/market_calendar`, `src/notifications`, `src/utils`, `src/db.py`
+
+`src/models/options.py` — `OptionLeg`, `OptionChainStrike`, `OptionChain` (all `frozen=True` Pydantic). Source-agnostic field names; Upstox parser in `src/client/upstox_market.py` (`parse_upstox_option_chain`). Dhan parser deferred to Phase 1.10.
 Scripts: `daily_snapshot.py`, `morning_nav.py`, `nuvama_intraday_tracker.py`, `seed_*.py`, `record_trade.py`, `roll_leg.py`
 
 ### What Does NOT Exist Yet
 
 - `src/nuvama/CLAUDE.md` — module context file not yet written
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/`, `src/streaming/` — all empty
-- `OptionChain` Pydantic model — not defined; `_fetch_greeks()` returns `{}` immediately
 
 ### Live Data
 
@@ -52,7 +53,7 @@ Instrument keys, AMFI codes, API quirks, auth tokens: **[REFERENCES.md](REFERENC
 |---|---|
 | Order execution blocked (static IP required) | MockBrokerClient for all order dev/testing |
 | Expired Instruments API blocked (paid tier) | NSE option chain CSV dumps as interim backtest source |
-| Greeks columns null in DB | `_fetch_greeks()` early return — fix after OptionChain model is defined |
+| Greeks columns in DB | Populated from 2026-04-25 onwards via `_fetch_greeks()` + `parse_upstox_option_chain` |
 | `underlying_price` null for pre-2026-04-06 snapshots | DB wiped; clean baseline starts Monday |
 | Upstox has no MF API | AMFI flat file as sole NAV source; MF holdings managed via seed script + monthly SIP inserts |
 | MF NAV at 3:45 PM cron is T-1 | Expected for MFs — AMFI publishes after market close. Combined summary shows mixed-timestamp data by design. |
@@ -83,7 +84,7 @@ Strategy leg tables (instrument keys, entry prices, quantities, protected MF por
 
 ## Test Coverage
 
-- **Total: ~868 tests** (868 passing; 1 pre-existing `test_lookup.py` rapidfuzz/difflib delta; 12 pre-existing `test_upstox_live.py` sandbox failures — unrelated to recent changes)
+- **Total: ~883 tests** (883 passing; 1 pre-existing `test_lookup.py` rapidfuzz/difflib delta; 12 pre-existing `test_upstox_live.py` sandbox failures — unrelated to recent changes)
 - Run: `python -m pytest tests/unit/`
 - Auth tests: `tests/unit/auth/` (64 tests — Nuvama login + verify, Dhan login + verify)
 - MF tests: `tests/unit/mf/` (127 tests)

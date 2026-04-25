@@ -79,14 +79,13 @@ Close the test gap from `TODOS.md` item 0. These features were built without tes
 
 Carried over from `TODOS.md` item 1 and `PLANNER.md` Current Sprint. Required before any options strategy can be backtested or paper-traded with proper delta/vega tracking.
 
-- [ ] Define `OptionChain` Pydantic model in `src/models/portfolio.py` (or new `src/models/options.py` if the portfolio module gets crowded) using `tests/fixtures/responses/nifty_chain_2026-04-07.json` (Upstox fixture) as the initial schema reference. Include per-strike CE/PE with `ltp`, `bid`, `ask`, `oi`, `delta`, `gamma`, `theta`, `vega`, `iv`.
-- [ ] **Source-agnostic shape:** The model must accommodate both Upstox and Dhan response shapes (Phase 1.10 adds Dhan as primary). Dhan's sample response uses keys `greeks.delta/theta/gamma/vega`, `implied_volatility`, `top_bid_price`, `top_ask_price` per the Option Chain API docs. Keep the internal model field names neutral (`delta`, not `greeks_delta`) and handle the key translation in each client's parser — not in the model. This avoids a breaking refactor at 1.10.
-- [ ] Fix the option chain API call in `src/portfolio/tracker.py` — use `NSE_INDEX|Nifty 50` as the underlying key (documented quirk in `REFERENCES.md`).
-- [ ] Implement `_extract_greeks_from_chain()` as a module-level private function per Google §2.17 (no `@staticmethod`). Pure function, fixture-testable.
-- [ ] Populate Greeks columns in `daily_snapshots` (columns already exist, currently null).
-- [ ] Tests: fixture-driven, fully offline. Cover: happy path, missing strike, malformed Greek value, empty chain response. Use Upstox fixture for now; the Dhan fixture is added in 1.10.
-- [ ] Invoke `greeks-analyst` agent on design before implementation (per `.claude/agents/greeks-analyst.md`).
-- [ ] Commit: `feat(portfolio): capture Greeks from option chain`.
+- [x] Define `OptionChain` Pydantic model in `src/models/options.py`. Includes per-strike CE/PE with `ltp`, `bid`, `ask`, `oi`, `delta`, `gamma`, `theta`, `vega`, `iv`.
+- [x] **Source-agnostic shape:** Field names are vendor-neutral (`delta`, not `greeks_delta`). Upstox → OptionLeg translation in `src/client/upstox_market.py`. Dhan parser deferred to Phase 1.10.
+- [x] Fixed option chain API call in `_fetch_greeks` — uses `NSE_INDEX|Nifty 50` as underlying key.
+- [x] Implemented `_extract_greeks_from_chain()` as module-level private function in `tracker.py`. Pure function, fixture-tested.
+- [x] Greeks columns in `daily_snapshots` will populate from 2026-04-25 onwards.
+- [x] 16 fixture-driven offline tests in `tests/unit/test_greeks_capture.py`. All green.
+- [x] Commit: `feat(models): add source-agnostic OptionChain model + Upstox Greeks capture`.
 
 **Why now:** CSP paper trading (0.6) uses the live option chain to pick strikes and log decisions. The existing Upstox client serves this for Phase 0. The `OptionChain` model built here is the foundation both for Phase 0 paper trading and for Phase 1.10's Dhan-backed production path.
 

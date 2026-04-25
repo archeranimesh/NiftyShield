@@ -12,6 +12,8 @@ from datetime import date
 from decimal import Decimal
 
 from src.client.protocol import MarketDataProvider
+from src.client.upstox_market import parse_upstox_option_chain
+from src.models.options import OptionChain
 from src.models.portfolio import (
     AssetType,
     DailySnapshot,
@@ -338,17 +340,92 @@ class PortfolioTracker:
         return counts, pnls
 
     async def _fetch_greeks(self, legs: list[Leg]) -> dict[str, dict]:
-        """Best-effort fetch of Greeks from option chain for option legs.
+        """Best-effort fetch of Greeks from Upstox option chain for option legs.
 
-        Returns a dict keyed by instrument_key with available greeks.
-        Non-option legs and failures return empty dicts silently.
+        Filters to CE/PE legs with a non-None expiry, groups by expiry,
+        makes one chain call per expiry, then extracts Greeks per leg.
+        Failures are logged at WARNING — never raise, never block the
+        snapshot from recording.
 
-        NOTE: Skipped until _extract_greeks_from_chain is implemented.
-        Remove the early return below once the OptionChain Pydantic
-        model is defined and the extraction logic is in place.
+        Args:
+            legs: All legs for the strategy being snapshotted.
+
+        Returns:
+            Dict mapping instrument_key -> {"delta", "gamma", "theta",
+            "vega", "iv", "oi", "volume"} for every option leg whose
+            Greeks could be resolved. Missing keys mean the leg was
+            equity/bond/futures or the chain call failed.
         """
-        # TODO: TD-7 — remove this early return once greeks extraction is implemented.
+        option_legs = [
+            leg for leg in legs
+            if leg.asset_type in {AssetType.CE, AssetType.PE}
+            and leg.expiry is not None
+        ]
+        if not option_legs:
+            return {}
+
+        # Group by expiry — one chain call per expiry date.
+        by_expiry: dict[date, list[Leg]] = {}
+        for leg in option_legs:
+            by_expiry.setdefault(leg.expiry, []).append(leg)  # type: ignore[arg-type]
+
+        result: dict[str, dict] = {}
+        for expiry, exp_legs in by_expiry.items():
+            try:
+                raw = await self.market.get_option_chain(
+                    "NSE_INDEX|Nifty 50", expiry.isoformat()
+                )
+                chain = parse_upstox_option_chain(raw if isinstance(raw, list) else [])
+            except Exception as exc:
+                logger.warning("Greeks fetch failed for expiry %s: %s", expiry, exc)
+                continue
+            for leg in exp_legs:
+                greeks = _extract_greeks_from_chain(chain, leg)
+                if greeks:
+                    result[leg.instrument_key] = greeks
+        return result
+
+
+# ── Greeks extraction (module-level: _extract_greeks_from_chain) ──
+
+
+def _extract_greeks_from_chain(
+    chain: OptionChain, leg: Leg
+) -> dict[str, Decimal]:
+    """Extract Greeks for a single option leg from a parsed OptionChain.
+
+    Looks up the leg's strike in ``chain.strikes`` by ``Decimal(str(leg.strike))``
+    and picks the CE or PE side via ``leg.asset_type``.  Returns an empty
+    dict for any mismatch so callers can handle missing data uniformly.
+
+    Args:
+        chain: Fully parsed OptionChain for the relevant expiry.
+        leg: The strategy leg whose Greeks are needed.
+
+    Returns:
+        Dict with keys: delta, gamma, theta, vega, iv, oi, volume — all
+        Decimal except oi and volume which are int.  Empty dict when the
+        leg is not an option, has no strike, or the strike is not in the
+        chain.
+    """
+    if leg.strike is None or leg.asset_type not in {AssetType.CE, AssetType.PE}:
         return {}
 
+    key = Decimal(str(leg.strike))
+    strike_entry = chain.strikes.get(key)
+    if strike_entry is None:
+        return {}
 
-    # ── Greeks extraction (module-level: _extract_greeks_from_chain) ──
+    option_leg = strike_entry.ce if leg.asset_type == AssetType.CE else strike_entry.pe
+    if option_leg is None:
+        return {}
+
+    return {
+        "delta": option_leg.delta,
+        "gamma": option_leg.gamma,
+        "theta": option_leg.theta,
+        "vega": option_leg.vega,
+        "iv": option_leg.iv,
+        "oi": option_leg.oi,
+        "volume": option_leg.volume,
+    }

@@ -12,6 +12,7 @@
 #   from src.models import Leg, MFTransaction
 
 from src.models.mf import MFHolding, MFNavSnapshot, MFTransaction, TransactionType
+from src.models.options import OptionChain, OptionChainStrike, OptionLeg
 from src.models.portfolio import (
     AssetType,
     DailySnapshot,
@@ -25,6 +26,10 @@ from src.models.portfolio import (
 )
 
 __all__ = [
+    # option chain models
+    "OptionChain",
+    "OptionChainStrike",
+    "OptionLeg",
     # portfolio models
     "AssetType",
     "DailySnapshot",
