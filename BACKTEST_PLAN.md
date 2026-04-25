@@ -115,7 +115,7 @@ This is the first real operational test of `scripts/roll_leg.py` in production. 
 
 Decide the exact specification of the first strategy to paper-trade. The recommendation from conversation is **monthly cash-secured put (CSP) on NiftyBees at 25-delta, 30–45 DTE entry, exit at 50% profit OR 21 DTE OR 2× credit loss, no adjustments, one lot**. But the spec is yours to finalise.
 
-- [ ] Write `docs/strategies/csp_niftybees_v1.md` — the Strategy Specification Document. Sections required:
+- [x] Write `docs/strategies/csp_niftybees_v1.md` — the Strategy Specification Document. Sections required:
   - **Name, version, author, date**
   - **Entry rule** (what, when, at what strike/delta, how much capital)
   - **Exit rule** (profit target, time stop, loss stop — exact numbers)
