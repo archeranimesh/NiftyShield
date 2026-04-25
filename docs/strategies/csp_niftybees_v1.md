@@ -1,5 +1,12 @@
 # Cash-Secured Put — NiftyBees ETF v1
 
+> **DEPRECATED 2026-04-25.** This strategy document has been superseded by
+> [`docs/strategies/csp_nifty_v1.md`](csp_nifty_v1.md), which switches the option leg from
+> NiftyBees options to Nifty 50 index options for liquidity reasons (OI typically < 1,000
+> on NiftyBees monthlies; spreads > 5% of mid). NiftyBees ETF is retained as pledged
+> collateral. Rules R1–R7 were also revised. See `DECISIONS.md` for the full rationale.
+> This file is retained as a historical reference only — do not use it for any new work.
+
 | Field       | Value                               |
 |-------------|-------------------------------------|
 | Name        | Cash-Secured Put on NiftyBees ETF   |

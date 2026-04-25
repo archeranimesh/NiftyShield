@@ -241,6 +241,19 @@
 
 ---
 
+## Strategy Decisions
+
+**2026-04-25 — CSP v1 underlying switched from NiftyBees options to Nifty 50 index options.**
+Rationale: NiftyBees options have insufficient liquidity (OI typically < 1,000 on monthlies,
+bid/ask spreads > 5% of mid) to trade with confidence or backtest reliably. NiftyBees ETF
+tracking error vs Nifty 50 is ≤0.02% annually, making Nifty index options a near-perfect
+proxy for premium exposure. The NiftyBees holding is retained as pledged collateral; only the
+option leg is switched. Reviewed 2026-04-25 with strategy-stress-test pass; no margin concern
+given the ₹1.2 cr+ collateral pool (₹75L MF + ₹30L bonds + ₹15.5L NiftyBees ETF). Rules
+R1–R7 also revised in the same review session — see `docs/strategies/csp_nifty_v1.md`.
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/`, `src/streaming/` — all empty
