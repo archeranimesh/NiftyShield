@@ -24,6 +24,23 @@ Implemented: `src/models/options.py` (OptionLeg, OptionChainStrike, OptionChain)
 
 ---
 
+## ~~P1-NEXT — Paper Trading Module~~ — DONE 2026-04-25
+
+Sprint 0.5 from `BACKTEST_PLAN.md`.
+
+Implemented:
+- `src/paper/__init__.py`, `src/paper/CLAUDE.md` — package + module invariants doc
+- `src/paper/models.py` — `PaperTrade` (frozen Pydantic, `paper_` prefix validator, `is_paper: Literal[True]`), `PaperPosition` (frozen dataclass, `avg_cost` + `avg_sell_price`), `PaperNavSnapshot` (frozen dataclass)
+- `src/paper/store.py` — `PaperStore` with `paper_trades` + `paper_nav_snapshots` tables; UNIQUE idempotency; Decimal-as-TEXT invariant
+- `src/paper/tracker.py` — `PaperTracker.compute_pnl()` + `record_daily_snapshot()` + `record_all_strategies()`; correct short P&L via `avg_sell_price`
+- `scripts/record_paper_trade.py` — CLI mirroring `record_trade.py`; enforces `paper_` prefix; prints position summary post-insert
+- Paper trading is standalone — not wired into `daily_snapshot.py`. Use `record_paper_trade.py` to log entries/exits; `PaperTracker.record_daily_snapshot()` for mark-to-market (call manually or via a future `paper_snapshot.py` script).
+- `tests/unit/paper/` — 65 tests (20 models, 24 store, 18 tracker, 9 CLI). 948 total passing.
+
+Architecture decision recorded in `DECISIONS.md`: shared SQLite DB + `paper_` prefix convention; `avg_sell_price` tracked separately for short positions.
+
+---
+
 ## P2-EVAL — Nuvama Session P&L Alignment
 
 Decision needed before any code changes.

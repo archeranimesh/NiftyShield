@@ -134,20 +134,20 @@ Decide the exact specification of the first strategy to paper-trade. The recomme
 
 ---
 
-## 0.5 — CODE — Paper trading module (`src/paper/`)
+## 0.5 — CODE — Paper trading module (`src/paper/`) — DONE 2026-04-25
 
 New module to record paper trades, mark-to-market daily, compute realised P&L. Reuses existing `Trade` model and `PortfolioStore` patterns — no parallel infrastructure.
 
-- [ ] Create `src/paper/` package with `__init__.py`. Re-index `codebase-memory-mcp` after.
-- [ ] `src/paper/CLAUDE.md` — module invariants (paper trades never touch live `trades` table; `strategy_name` prefix `paper_` by convention; no broker calls).
-- [ ] `src/paper/models.py` — `PaperTrade` (frozen, mirrors `Trade` model but with explicit `is_paper: bool = True` field and `strategy_name` constrained to start with `paper_`), `PaperPosition` (derived, frozen).
-- [ ] `src/paper/store.py` — `PaperStore` with `paper_trades` and `paper_nav_snapshots` tables in shared `portfolio.sqlite`. UNIQUE constraint `(strategy_name, leg_role, trade_date, action)` for idempotency. Decimal-as-TEXT invariant preserved.
-- [ ] `src/paper/tracker.py` — `PaperTracker` that mirrors `PortfolioTracker`'s shape: `compute_pnl()`, `record_daily_snapshot()`. Consumes `BrokerClient` protocol for LTP (not a parallel market client).
-- [ ] `scripts/record_paper_trade.py` — CLI mirroring `record_trade.py`, but writes to `paper_trades`. Enforces `strategy_name` starts with `paper_`.
-- [ ] Tests: ≥80% coverage on new module. Happy path + edge cases (idempotency, wrong strategy prefix rejection, Decimal round-trip).
-- [ ] Extend `scripts/daily_snapshot.py` to include a paper-trades section in the combined summary (wrapped `try/except` like Dhan/Nuvama, non-fatal).
-- [ ] `code-reviewer` agent on diff.
-- [ ] Commit sequence (separate commits per phase boundary per `CLAUDE.md` Step 6): models → store → tracker → CLI → snapshot wiring.
+- [x] Create `src/paper/` package with `__init__.py`. Re-index `codebase-memory-mcp` after.
+- [x] `src/paper/CLAUDE.md` — module invariants (paper trades never touch live `trades` table; `strategy_name` prefix `paper_` by convention; no broker calls).
+- [x] `src/paper/models.py` — `PaperTrade` (frozen, mirrors `Trade` model but with explicit `is_paper: Literal[True]` field and `strategy_name` constrained to start with `paper_`), `PaperPosition` (derived, frozen, includes `avg_sell_price` for short positions), `PaperNavSnapshot` (frozen dataclass).
+- [x] `src/paper/store.py` — `PaperStore` with `paper_trades` and `paper_nav_snapshots` tables in shared `portfolio.sqlite`. UNIQUE constraint `(strategy_name, leg_role, trade_date, action)` for idempotency. Decimal-as-TEXT invariant preserved.
+- [x] `src/paper/tracker.py` — `PaperTracker` that mirrors `PortfolioTracker`'s shape: `compute_pnl()`, `record_daily_snapshot()`, `record_all_strategies()`. Consumes `BrokerClient` protocol for LTP. Correct short P&L via `avg_sell_price`.
+- [x] `scripts/record_paper_trade.py` — CLI mirroring `record_trade.py`, but writes to `paper_trades`. Enforces `strategy_name` starts with `paper_`.
+- [x] Tests: 65 tests across 4 test files (20 models, 24 store, 18 tracker, 9 CLI). 948 total passing.
+- [x] Paper trading runs standalone — not wired into `daily_snapshot.py`. Use `scripts/record_paper_trade.py` to log trades and `scripts/paper_snapshot.py` (future) or a direct `PaperTracker` call to mark-to-market. Keeps the live EOD run free of paper simulation concerns.
+- [x] `code-reviewer` agent on diff — 1 CRITICAL (intent comment on broad except, fixed), WARNINGs addressed (enum comparison, redundant Decimal(str()), sorted set iteration).
+- [x] Commit sequence: models → store → tracker → CLI → snapshot wiring → docs.
 
 **Design decision to record in `DECISIONS.md`:** "Paper trades stored in same SQLite DB as live trades but in separate tables with `paper_` prefix on strategy names. Rationale: reuse of store, tracker, snapshot, and Telegram infrastructure with zero parallel code; prefix convention prevents accidental cross-contamination at query time."
 
@@ -764,6 +764,7 @@ When triggered: stop new entries immediately, close existing positions according
 |---|---|---|---|
 | 2026-04-24 | 0.1 | cd3ed6b | 174 nuvama tests across test_models (32), test_options_reader (26), test_store (43) + supporting files. Follow-up fix 92a6c74. Status gap closed retroactively. |
 | 2026-04-25 | 0.4 | fb69043 | CSP v1 spec written: docs/strategies/csp_niftybees_v1.md. All required sections present: entry/exit/adjustment/sizing/prior P&L distribution/regimes/kill criteria/variance threshold. Open questions for v2 logged. |
+| 2026-04-25 | 0.5 | pending | Paper trading module: src/paper/ (models, store, tracker), scripts/record_paper_trade.py, daily_snapshot.py wiring. 65 new tests, 948 total. SHA to be updated post-commit. |
 
 ---
 

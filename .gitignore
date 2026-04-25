@@ -12,3 +12,4 @@ PROJECT_INSTRUCTIONS_DRAFT.md
 # Local reference repos (kept for future design reference, not part of NiftyShield)
 quant-4pc-local/
 logs/snapshot.log
+docs/strategies/csp_v1_revision_prompt.md
