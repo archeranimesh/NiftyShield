@@ -52,6 +52,23 @@ Implemented:
 
 ---
 
+## P1-NEXT — `scripts/find_strike_by_delta.py`
+
+Paper trading entry workflow: given an underlying + expiry, fetch the live option chain, filter strikes by a delta range, and print matching strikes with premium and instrument key — ready to pipe directly into `record_paper_trade.py`.
+
+**Scope:**
+- `scripts/find_strike_by_delta.py` — new script, no `src/` changes
+- CLI: `--underlying NIFTY --expiry 2026-05-29 --option-type PE --delta-min -0.30 --delta-max -0.15 --expiry-date <today>` (defaults to today for spot)
+- Uses `UpstoxLiveClient.get_option_chain()` + `parse_upstox_option_chain` (both exist in `src/client/upstox_market.py`)
+- Output: table of matching strikes showing strike, delta, IV, bid, ask, LTP, instrument_key
+- `--dry-run` prints the first match as a ready-to-run `record_paper_trade.py` command
+
+**Dependencies already in place:** `OptionChainStrike` (delta/iv fields), `parse_upstox_option_chain`, `UPSTOX_ANALYTICS_TOKEN` in `.env`
+
+**Tests:** offline fixture-driven (reuse `tests/fixtures/responses/nifty_chain_2026-04-07.json`); no new fixtures needed
+
+---
+
 ## P2-EVAL — Nuvama Session P&L Alignment
 
 Decision needed before any code changes.
@@ -159,7 +176,9 @@ License decision needed before this can be automated. Every file should carry a 
 | 2026-04-25 | **NiftyBees collateral leg — docs + design decision.** No code changes. Decision recorded in `DECISIONS.md`: NiftyBees ETF (NSE_EQ|INF204KB14I2) modelled as `long_niftybees` leg in paper P&L; qty = floor(lot_size × nifty_spot / niftybees_ltp); annual reset in January. `docs/strategies/csp_nifty_v1.md` updated with collateral leg setup section + exact `record_paper_trade.py` command (5725 units @ 271.35 on 2026-04-25). `BACKTEST_PLAN.md` 1.7 extended: `CSPConfig.niftybees_instrument_key`, NiftyBees collateral leg required in backtest P&L, historical ETF OHLC needed; Phase 2.2 lot-size note corrected (65, not 35). |
 | 2026-04-25 | **Greeks capture implemented (task 0.2).** `src/models/options.py` (OptionLeg, OptionChainStrike, OptionChain frozen Pydantic), `src/client/upstox_market.py` (parse_upstox_option_chain + _parse_option_leg + _safe_decimal helper), `src/portfolio/tracker.py` (_extract_greeks_from_chain + real async _fetch_greeks replacing early-return stub), `tests/unit/test_greeks_capture.py` (16 fixture-driven offline tests). Greeks columns in daily_snapshots now populated. 883 tests green. |
 | 2026-04-25 | **Paper trading module (sprint 0.5).** `src/paper/` package: `PaperTrade` (frozen Pydantic, `paper_` prefix validator), `PaperPosition` + `PaperNavSnapshot` (frozen dataclasses), `PaperStore` (paper_trades + paper_nav_snapshots in shared SQLite), `PaperTracker` (compute_pnl + record_daily_snapshot + record_all_strategies). `scripts/record_paper_trade.py` with `--underlying/--strike/--option-type/--expiry` auto-lookup via InstrumentLookup. `scripts/paper_snapshot.py` standalone mark-to-market. `docs/paper_trading.md` end-to-end guide. Not wired into daily_snapshot.py. 65 tests. 948 total passing. |
+| 2026-04-25 | **`find_strike_by_delta.py` scoped.** Added P1-NEXT TODO for live option chain strike filter by delta range. No code yet — all dependencies in place. |
 | 2026-04-25 | **CSP v1 strategy review.** Underlying switched from NiftyBees options → Nifty 50 index options (liquidity: OI <1000 / spreads >5% on NiftyBees). `docs/strategies/csp_nifty_v1.md` created as successor; `csp_niftybees_v1.md` retained DEPRECATED. Rules revised: R1 time-stop clarified (21 calendar days from entry), R2 loss-stop changed to delta gate −0.45 OR 1.75× mark, R3 IVR filter added (specified, not yet enforced — no VIX ingestion pipeline), R4 event filter added (specified, not yet enforced — pending task 3.3), R5 re-entry revised (IVR-gated after profit exit), R6 kill criterion added (3× avg credit single-cycle stop), R7 slippage model revised (bid-ask based). Lot size documented as 65 (Jan 2026). Paper-trade minimum raised from 2 cycles to 6 cycles. `DECISIONS.md` updated with Strategy Decisions section. `BACKTEST_PLAN.md` updated: tasks 0.4/0.6/0.8/1.1/1.7/1.8/1.11 revised to reflect new underlying and V1/V2/V3 variant backtest structure. Commits: 946e5a5 (strategy + DECISIONS), follow-up commit (plan + TODOS). |
+| 2026-04-26 | **NiftyShield integrated strategy design.** Analysed FinRakshak coverage gap (~15% of ₹80L+ MF portfolio). Designed integrated strategy: CSP income (1 lot, per `csp_nifty_v1.md`) + protective put spread (4 lots, 8–20% OTM monthly) + quarterly tail puts (2 lots, 5-delta). Net annual cost ₹1.5L–₹3.3L (within 3–5% budget). Wrote `docs/strategies/niftyshield_integrated_v1.md` — passes validator. Two-tier backtest methodology: real data for CSP, BS synthetic pricing with vol skew for protective legs. Updated `DECISIONS.md` (3 entries: integrated strategy, static beta, two-tier backtest). Updated `BACKTEST_PLAN.md` (tasks 0.4a, 0.6a, 1.9, 1.9a; gates 0.8 + 1.12 extended). FinRakshak treated as independent — not counted in hedge ratio. |
 | 2026-04-24 | **Greeks capture design finalized.** Decisions: Upstox-first (Dhan switch at Phase 1.10 for IV source consistency); strike+asset_type lookup not instrument_key; `get_option_chain_sync` return-type bug noted and deferred. Full phase breakdown + 16-test plan written to `docs/plan/0_2_greeks_capture.md`. DECISIONS.md updated with OptionChain model decisions. Implementation not yet started — ready to pick up next session. |
 
 Full log (2026-04-01 → 2026-04-24): [docs/archive/TODOS_ARCHIVE_2026-04-24.md](docs/archive/TODOS_ARCHIVE_2026-04-24.md)

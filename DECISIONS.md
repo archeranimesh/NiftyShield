@@ -256,6 +256,34 @@ option leg is switched. Reviewed 2026-04-25 with strategy-stress-test pass; no m
 given the ₹1.2 cr+ collateral pool (₹75L MF + ₹30L bonds + ₹15.5L NiftyBees ETF). Rules
 R1–R7 also revised in the same review session — see `docs/strategies/csp_nifty_v1.md`.
 
+**2026-04-26 — NiftyShield Integrated Strategy: CSP income + layered MF protection.**
+Design decision: integrate the CSP income engine (`csp_nifty_v1.md`) with protective
+put spreads (4 lots, 8–20% OTM) and quarterly tail puts (2 lots, ~30% OTM, 5-delta)
+into a single tracked strategy (`paper_niftyshield_v1`). Rationale: FinRakshak covers
+~15% of the ₹80L+ MF portfolio (1 lot, ₹15.6L notional). The remaining ~85% is
+unhedged against >8% corrections. CSP income subsidises ~20–30% of the protection
+cost; the remainder is an explicit 3–5% annual insurance budget. FinRakshak is NOT
+counted in NiftyShield's hedge ratio — treated as independent and managed by Finideas.
+
+**2026-04-26 — Static beta 1.25 for hedge ratio (initial; switch to rolling planned).**
+The MF portfolio's weighted-average beta to Nifty is estimated at ~1.25 (mid/small
+cap heavy). Nifty-equivalent exposure: ₹80L × 1.25 = ₹100L. Put spread lot count
+(4 lots) sized to cover ~65% of remaining unhedged exposure. Static beta avoids
+complexity while NAV history is short (<1 month clean data post-DB-wipe). Switch to
+rolling 60-day beta once 12+ months of `mf_nav_snapshots` exist and the delta from
+static exceeds 0.1.
+
+**2026-04-26 — Two-tier backtest methodology for integrated strategy.**
+Tier 1 (CSP leg): real Dhan expired options data — same as standalone CSP backtest.
+Tier 2 (protective legs): Black-Scholes synthetic pricing with fixed skew markup
+(+2% IV per 5% OTM, initial). Rationale: Dhan `rollingoption` coverage (ATM±3 to
+ATM±10) does not extend to 8–30% OTM strikes. Synthetic pricing has known optimistic
+biases (underprices deep OTM puts, overestimates crisis fills). These biases are
+acknowledged and documented in the strategy spec. Paper-trading phase with real Dhan
+live chain prices (`/v2/optionchain` — full strike range) provides the true
+validation. Variance threshold for protective legs widened to |Z| ≤ 2.0 (vs 1.5 for
+CSP) to accommodate the structural pricing error.
+
 **2026-04-25 — NiftyBees collateral modelled as a `long_niftybees` leg in paper P&L.**
 The CSP strategy's true economics include both the short put premium and the mark-to-market
 of the pledged NiftyBees ETF collateral. Modelling only the option leg understates both the

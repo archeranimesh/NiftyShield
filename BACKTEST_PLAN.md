@@ -187,6 +187,49 @@ Small tool to enforce that every strategy spec has the required sections. Preven
 
 ---
 
+## 0.4a — STRATEGY — NiftyShield Integrated Strategy Specification
+
+**Owner: Animesh. Not for Cowork.**
+
+Companion to 0.4 (CSP v1). Integrates the CSP income engine with layered MF
+portfolio protection (protective put spreads + quarterly tail puts). Addresses the
+FinRakshak coverage gap (~15% of ₹80L+ MF portfolio hedged).
+
+- [x] Write `docs/strategies/niftyshield_integrated_v1.md` — full strategy spec with
+  all required sections. CSP leg references `csp_nifty_v1.md` by inclusion; protective
+  legs (put spread + tail puts) specified in full.
+- [x] Spec passes strategy-spec validator (0.7).
+- [x] Commit: `docs(strategies): add NiftyShield integrated v1 specification`.
+
+**Why a separate spec (not just extending CSP v1):** The protection legs have different
+entry schedules (Leg 2 monthly, Leg 3 quarterly), different exit rules (hold to expiry
+vs CSP's three triggers), different kill criteria, and require a different backtest
+methodology (synthetic pricing vs real market data). Bundling them into `csp_nifty_v1.md`
+would produce an incoherent spec. The CSP rules are included by reference; the protective
+rules stand independently.
+
+---
+
+## 0.6a — STRATEGY — Start paper trading NiftyShield integrated v1
+
+**Owner: Animesh. Not for Cowork.**
+
+Begin paper trading the protective legs alongside CSP v1:
+
+- [ ] Each month, at Leg 1 (CSP) entry time, also enter Leg 2 (put spread, 4 lots)
+  via `record_paper_trade.py` with `--strategy paper_niftyshield_v1`.
+- [ ] Each quarter (Jan/Apr/Jul/Oct), enter Leg 3 (tail puts, 2 lots) via
+  `record_paper_trade.py`.
+- [ ] Record real bid/ask and delta for protective strikes — this data is critical for
+  calibrating the Phase 1 synthetic pricing model.
+- [ ] Minimum duration: 6 monthly cycles for Legs 1+2; 2 quarterly cycles for Leg 3.
+- [ ] Leg 2 enters even when Leg 1 is skipped (R3/R4 filters) — protection is
+  unconditional.
+- [ ] Track NiftyBees accumulation: in surplus months, record intended NiftyBees BUY
+  under `paper_niftyshield_v1 / accumulated_niftybees`.
+
+---
+
 ## 0.8 — GATE — End of Phase 0
 
 All of the following must be true before starting Phase 1. Do not start Phase 1 tasks until this gate is ticked.
@@ -196,6 +239,9 @@ All of the following must be true before starting Phase 1. Do not start Phase 1 
   profit-target exit, time-stop exit, delta-stop exit (0.6).
 - [ ] `docs/strategies/csp_nifty_v1.md` exists and passes the validator (0.7).
   (`csp_niftybees_v1.md` retained as DEPRECATED — not required to pass validator.)
+- [ ] `docs/strategies/niftyshield_integrated_v1.md` exists and passes the validator (0.4a).
+- [ ] NiftyShield integrated paper trading (0.6a) has ≥ 6 monthly cycles for Legs 1+2
+  and ≥ 2 quarterly cycles for Leg 3.
 - [ ] Jun 2026 Finideas roll executed cleanly with no orphaned positions (0.3).
 - [ ] Full test suite green; `CONTEXT.md` + `DECISIONS.md` + `TODOS.md` reflect Phase 0 end state.
 - [ ] Animesh has reviewed paper trade results and confirms "ready to build the backtest engine" in a session log entry.
@@ -480,6 +526,63 @@ pipeline is built.
 
 ---
 
+## 1.9 — CODE — Synthetic pricer for deep OTM protective legs
+
+Required for backtesting NiftyShield integrated strategy (Legs 2+3). Dhan
+`rollingoption` does not cover 8–30% OTM strikes. Build a Black-Scholes synthetic
+pricer with parametric vol skew.
+
+- [ ] `src/backtest/skew.py` — parametric vol skew model:
+  - `iv_with_skew(atm_iv, spot, strike, option_type)` → adjusted IV.
+  - Initial model: fixed markup of +2% IV per 5% OTM (linear extrapolation from ATM).
+  - Calibration interface: `fit_skew(observed_chain: OptionChain)` → `SkewParams`.
+    Uses live chain snapshots from 1.10 when available; falls back to fixed markup.
+  - Output: `SkewParams` dataclass with `slope_per_pct_otm` (default 0.4, i.e.,
+    +2% per 5% OTM = 0.4% per 1% OTM) and optional quadratic term for smile
+    curvature (deferred to Phase 2).
+- [ ] `src/backtest/synthetic_pricer.py`:
+  - `price_otm_put(spot, strike, expiry, atm_iv, skew_params, r, now)` → Decimal.
+  - Combines `greeks.black_scholes_price` (from 1.6a) with `skew.iv_with_skew`.
+  - `price_put_spread(spot, long_strike, short_strike, ...)` → net debit (Decimal).
+  - `price_tail_put(spot, strike, ...)` → premium (Decimal).
+- [ ] Tests: known-value synthetic prices vs hand-computed BS; skew markup correctness
+  (8% OTM = +3.2% IV, 20% OTM = +8% IV); spread debit = long − short; edge cases
+  (0 DTE, deep ITM).
+- [ ] Commit: `feat(backtest): synthetic pricer with parametric vol skew for deep OTM`.
+
+**Known bias (document in every backtest using this pricer):** BS + linear skew
+underprices deep OTM puts by an estimated 10–20% vs real market. The paper-trading
+phase (0.6a) collects real prices to measure this gap. After 6 months of 1.10
+snapshots, recalibrate via `fit_skew` and re-run.
+
+---
+
+## 1.9a — CODE — Integrated strategy backtest (three legs combined)
+
+Run NiftyShield integrated strategy across available history:
+- Leg 1 (CSP): uses `TimescalePricer` from real Dhan data (per 1.7).
+- Legs 2+3: uses `SyntheticPricer` from 1.9.
+
+- [ ] `src/strategy/niftyshield.py` — `NiftyShieldConfig` + `NiftyShieldStrategy`
+  implementing the `Strategy` protocol. Composes CSP logic (from 1.7) with protective
+  put spread entry/exit and quarterly tail put entry. Config exposes: `put_spread_lots`,
+  `tail_put_lots`, `otm_pct_long` (default 0.08), `otm_pct_short` (default 0.20),
+  `tail_delta` (default 0.05), `beta` (default 1.25), `coverage_ratio` (default 0.65).
+- [ ] Backtest across 2021-08 to present. Persist results in `backtest_runs` with
+  `strategy_name = niftyshield_integrated_v1`.
+- [ ] Extract metrics: net annual cost in flat/up years, payoff in Feb–Mar 2022
+  (Russia/Ukraine ~15% drop), payoff in Jun 2024 (election day), combined Sharpe,
+  max drawdown depth + duration.
+- [ ] Write results into `docs/strategies/niftyshield_integrated_v1.md` → "Backtest
+  Results" section.
+- [ ] Commit: `docs(strategies): NiftyShield integrated v1 backtest results`.
+
+**Critical note:** The Feb–Mar 2022 stress test is the most important single output.
+If the put spread does not show a positive payoff during that window, the synthetic
+pricer or the strategy logic has a bug. Investigate before moving on.
+
+---
+
 ## 1.11 — STRATEGY — Variance check: paper vs backtest
 
 **Owner: Animesh. Cowork may assist with the SQL/computation but the decision is yours.**
@@ -512,8 +615,10 @@ This is the core validation gate of the whole pipeline. If this step doesn't pas
 
 ## 1.12 — GATE — End of Phase 1
 
-- [ ] 1.1–1.10 all `[x]` (including 1.6a and 1.10).
-- [ ] 1.11 passes (|Z| ≤ 1.5, bias-adjusted) with results documented.
+- [ ] 1.1–1.10 all `[x]` (including 1.6a, 1.9, 1.9a, and 1.10).
+- [ ] 1.11 passes (|Z| ≤ 1.5, bias-adjusted) for CSP leg with results documented.
+- [ ] 1.9a integrated backtest run complete; Feb–Mar 2022 stress test shows positive
+  put spread payoff; results written to `niftyshield_integrated_v1.md`.
 - [ ] Timescale has ≥3 years of Nifty options data ingested.
 - [ ] Full test suite green.
 - [ ] Animesh sign-off in a `TODOS.md` session log entry: "CSP backtest calibrated to paper. Ready to go live."
@@ -774,6 +879,7 @@ When triggered: stop new entries immediately, close existing positions according
 | 2026-04-24 | 0.1 | cd3ed6b | 174 nuvama tests across test_models (32), test_options_reader (26), test_store (43) + supporting files. Follow-up fix 92a6c74. Status gap closed retroactively. |
 | 2026-04-25 | 0.4 | fb69043 | CSP v1 spec written: docs/strategies/csp_niftybees_v1.md. All required sections present: entry/exit/adjustment/sizing/prior P&L distribution/regimes/kill criteria/variance threshold. Open questions for v2 logged. |
 | 2026-04-25 | 0.5 | pending | Paper trading module: src/paper/ (models, store, tracker), scripts/record_paper_trade.py, daily_snapshot.py wiring. 65 new tests, 948 total. SHA to be updated post-commit. |
+| 2026-04-26 | 0.4a | pending | NiftyShield integrated strategy spec: docs/strategies/niftyshield_integrated_v1.md. CSP + put spread (4 lots, 8–20% OTM) + tail puts (2 lots, 5-delta quarterly). Validator passes. |
 
 ---
 

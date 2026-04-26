@@ -65,7 +65,7 @@ trade without inserting.  If multiple match, the list is printed — supply
 ### Option B: standalone lookup script
 
 ```bash
-python scripts/instrument_lookup.py --type PE --underlying NIFTY --strike 23000
+python scripts/instrument_lookup.py --query NIFTY --strike 23000 --type PE
 ```
 
 Copy the `instrument_key` from the output (format: `NSE_FO|XXXXXXX`).

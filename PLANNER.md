@@ -19,6 +19,9 @@
 
 ## Near-Term (May–June 2026)
 
+### Paper trade entry helper: strike selection by delta
+`scripts/find_strike_by_delta.py` — fetches live option chain, filters strikes by delta range, prints strike/premium/IV/key table. Closes the gap between "I want delta ~−0.20" and the `--price` + `--key` arguments required by `record_paper_trade.py`. Unblocked — all dependencies in place (`OptionChainStrike`, `parse_upstox_option_chain`, `UPSTOX_ANALYTICS_TOKEN`).
+
 ### FinRakshak effectiveness tracking
 Automated monthly report: FinRakshak P&L vs MF portfolio drawdown.
 `finrakshak_day_delta` already in `PortfolioSummary` — query over snapshot history.
