@@ -273,7 +273,7 @@ All of the following must be true before starting Phase 1. Do not start Phase 1 
 
 **Why this order (backtest after paper, not before):** Covered in conversation. A backtest whose output can't be validated against a known realised outcome is a simulation, not a measurement. Phase 0 gives us that known outcome.
 
-> **Task numbering note:** Tasks run 1.1 → 1.2 (DEFERRED) → 1.3 → 1.3a → 1.4 → 1.5 → 1.6 → 1.6a → 1.7 → 1.8 → 1.9 → 1.9a → 1.10 → 1.11 → 1.12. Task 1.2 (TimescaleDB) is deferred — DhanHQ rejected 2026-04-27, NSE Bhavcopy Parquet is the storage layer. Do not renumber existing tasks.
+> **Task numbering note:** Tasks run 1.1 → 1.2 (DEFERRED) → 1.3 → 1.3a → 1.4 → 1.5 → 1.6 → 1.6a → 1.7 → 1.8 → 1.9 → 1.9a → 1.10 → 1.10a → 1.11 → 1.12. Task 1.2 (TimescaleDB) is deferred — DhanHQ rejected 2026-04-27, NSE Bhavcopy Parquet is the storage layer. Task 1.10a (intraday chain snapshots) added 2026-04-27. Do not renumber existing tasks.
 
 ---
 
@@ -536,19 +536,35 @@ applies R3 manually until the VIX Parquet is populated.
 
 ## 1.10 — CODE — Upstox live option chain snapshot (daily accumulation)
 
-**Decision (2026-04-27):** Upstox Analytics Token is the confirmed live market data source for forward testing and production (see `DECISIONS.md`). The Upstox option chain client already works (`src/client/upstox_market.py` + `parse_upstox_option_chain` from task 0.2). This task adds a daily snapshot cron job to accumulate forward-captured Greeks + bid/ask data into SQLite — the same data that was previously planned via Dhan, now via the already-integrated Upstox path.
+**Decision (2026-04-27):** Upstox Analytics Token is the confirmed live market data source for forward testing and production (see `DECISIONS.md`). The Upstox option chain client already works (`src/client/upstox_market.py` + `parse_upstox_option_chain` from task 0.2). This task adds a daily EOD snapshot cron job to accumulate forward-captured Greeks + bid/ask data — the same data that was previously planned via Dhan, now via the already-integrated Upstox path.
 
 No new client code needed. The snapshot accumulation is the deliverable.
 
+**Storage: Parquet, not TimescaleDB.** Task 1.2 (TimescaleDB) is deferred indefinitely — see `DECISIONS.md` → "Task 1.10 chain snapshot storage revised from TimescaleDB to Parquet". The original hypertable spec is superseded.
+
 - [ ] `scripts/upstox_chain_snapshot.py` — cron-ready. Holiday guard via `market_calendar.is_trading_day`. Fetches option chain for: (Nifty 50, current-week expiry), (Nifty 50, current-month expiry), (Nifty 50, next-month expiry). Three calls via `UpstoxLiveClient.get_option_chain()` + `parse_upstox_option_chain`.
-- [ ] Persist to new Timescale hypertable `option_chain_snapshots`: `(underlying, expiry_date, strike, option_type, snapshot_ts, ltp, bid, ask, oi, volume, iv, delta, gamma, theta, vega, spot)`. Hypertable on `snapshot_ts`, chunk interval 7 days. Primary key `(underlying, expiry_date, strike, option_type, snapshot_ts)`.
+- [ ] Persist to Parquet at `data/offline/chain_snapshots/{year}/{month}/upstox_{date}.parquet`. Schema: `snapshot_ts TIMESTAMP, underlying TEXT, expiry_date DATE, strike DECIMAL, option_type CHAR(2), spot DECIMAL, ltp DECIMAL, bid DECIMAL, ask DECIMAL, oi BIGINT, volume BIGINT, iv DECIMAL, delta DECIMAL, gamma DECIMAL, theta DECIMAL, vega DECIMAL`. One file per capture day. Partition path is DuckDB glob-compatible — do not change the path structure.
 - [ ] Cron entry: `30 15 * * 1-5` (3:30 PM IST, before the 3:45 `daily_snapshot.py`, so the chain snapshot is captured at closer-to-closing levels without competing for rate-limit budget).
-- [ ] Tests: mock chain response, verify persistence, snapshot idempotency.
-- [ ] Commit sequence: client → factory wire-up → snapshot CLI + schema → tests.
+- [ ] Tests: mock chain response, verify Parquet write, snapshot idempotency (re-run on same date = overwrite, not append).
+- [ ] Commit sequence: snapshot CLI → Parquet writer → tests.
 
-**Why start the snapshot accumulating in Phase 1 even though it's not used by the Phase 1 backtest:** Forward-looking data capture. By end of Phase 2 you have 6+ months of daily Greeks + bid/ask captured, which unlocks three things: (a) calibration dataset for the BS-vs-Dhan delta drift documented in 1.6a; (b) realised bid/ask spread dataset to fit the Phase 1.4 slippage model against; (c) primary Greeks source for Phase 3+ strategies that need realistic delta tracking. None of these require the snapshot to start later. Starting it now costs one cron job.
+**Why start the snapshot accumulating in Phase 1 even though it's not used by the Phase 1 backtest:** Forward-looking data capture. By end of Phase 2 you have 6+ months of daily Greeks + bid/ask captured, which unlocks three things: (a) calibration dataset for the BS-vs-live delta drift documented in 1.6a; (b) realised bid/ask spread dataset to fit the Phase 1.4 slippage model against; (c) primary Greeks source for Phase 3+ strategies that need realistic delta tracking. None of these require the snapshot to start later. Starting it now costs one cron job. Cannot be back-filled.
 
-**Capacity note to record in `DECISIONS.md`:** Dhan option chain rate limit of 1 req / 3 sec caps intraday chain refresh at ~20 per minute. Sufficient for EOD snapshots and per-trade-decision paper strategies. **Not sufficient for tick-level delta-neutral adjustment** (Phase 3+ concern). If a future strategy needs sub-3-second chain updates, either batch a single chain call across multiple strategies (all strikes in one response) or fall back to Upstox's option chain for that strategy's live-Greeks path. The `MarketDataProvider` protocol allows this swap without touching the strategy code.
+---
+
+## 1.10a — CODE — Intraday live option chain snapshots (5-min cadence)
+
+Companion to task 1.10. Captures the full option chain every 5 minutes during market hours. Storage and rationale: see `DECISIONS.md` → "Intraday live option chain snapshots at 5-min cadence".
+
+- [ ] Extend `scripts/upstox_chain_snapshot.py` with a `--mode intraday` flag (or create a separate `scripts/upstox_chain_intraday.py`). Same three expiry fetches as task 1.10 but called at 5-min intervals. Include timestamp in filename: `data/offline/chain_snapshots_5min/{year}/{month}/{day}/upstox_{HH}{MM}.parquet`.
+- [ ] Cron entry: `*/5 9-15 * * 1-5` (every 5 minutes, 9:00 AM to 3:55 PM IST). Holiday guard via `market_calendar.is_trading_day`.
+- [ ] Schema: identical to task 1.10 chain_snapshots Parquet. `snapshot_ts` carries the full intraday timestamp.
+- [ ] Tests: mock chain response, Parquet write per interval, no duplicate files on re-run within same 5-min window.
+- [ ] Commit: `feat(backtest): intraday option chain snapshot at 5-min cadence`.
+
+**Why this matters for task 1.11 variance check:** The BS IV-reconstruction delta in task 1.6a diverges from real Upstox Greeks by an estimated 0.5–2 delta points. The variance check requires you to measure and subtract this bias before computing Z. The intraday snapshot dataset provides the ground-truth series. Six months of 5-min captures during the paper-trade window (Phase 0.6) is the minimum needed to compute a credible bias distribution. Starting in Phase 1 ensures that data is available when task 1.11 runs.
+
+**Upstox rate limit note:** 3 API calls per 5-min interval (one per expiry) = 225 calls/day. Well within the Analytics Token budget. Monitor if the number of tracked expiries increases in Phase 2.
 
 ---
 
@@ -645,7 +661,7 @@ This is the core validation gate of the whole pipeline. If this step doesn't pas
 
 ## 1.12 — GATE — End of Phase 1
 
-- [ ] 1.1–1.10 all `[x]` (including **1.3a**, 1.6a, 1.9, 1.9a, and 1.10).
+- [ ] 1.1–1.10a all `[x]` (including **1.3a**, 1.6a, 1.9, 1.9a, 1.10, and **1.10a**).
 - [ ] 1.3 complete: NSE F&O Bhavcopy ingested to Parquet for NIFTY options, 2016–present (≥8 years). Data quality: settle_price non-zero for ≥95% of ATM±5 strikes per monthly expiry; no gaps >3 consecutive trading days in any calendar month.
 - [ ] 1.3a complete: Nifty 50 daily + 15-min, India VIX daily, NiftyBees daily ingested to Parquet; data quality gate passed (Nifty close ±0.05% vs NSE, VIX <1% missing days, NiftyBees tracking error <0.5% over any rolling 1-year period).
 - [ ] 1.1 complete: Stockmock calibration backtest results documented in `csp_nifty_v1.md` for COVID, IL&FS, 2022 windows.
