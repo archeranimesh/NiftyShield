@@ -446,7 +446,12 @@ All backtesting runs **fully offline** against local Parquet/SQLite stores. No A
 - [x] Dhan portfolio monitoring (equity + bond holdings, Upstox LTP enrichment)
 - [x] NSE market holiday calendar (fail-open, version-controlled YAML)
 - [x] Morning NAV backfill script (pre-market AMFI fetch, T-1 gap fix)
-- [ ] Option chain fetcher with Greeks (`OptionChain` Pydantic model — P1-NEXT)
+- [x] Greeks capture — `OptionChain` Pydantic model + `_extract_greeks_from_chain` (2026-04-25)
+- [x] Paper trading module (`src/paper/`) — `PaperTrade`, `PaperStore`, `PaperTracker`, `record_paper_trade.py` (2026-04-25)
+- [x] Strategy spec validator — `scripts/validate_strategy_spec.py`, 28 tests (2026-04-25)
+- [x] CSP v1 strategy spec — `docs/strategies/csp_nifty_v1.md` (Nifty 50 index options, R1–R7)
+- [x] NiftyShield integrated strategy spec — `docs/strategies/niftyshield_integrated_v1.md`
+- [ ] `find_strike_by_delta.py` — live chain strike filter by delta range (P1-NEXT)
 - [ ] Historical data pipeline (active + expired instruments)
 - [ ] Backtesting engine (`src/backtest/`) — Q4 2026
 - [ ] Strategy engine (`src/strategy/`) — Q3 2026
@@ -490,7 +495,7 @@ The project root contains a set of markdown files that serve as structured conte
 | [`REFERENCES.md`](REFERENCES.md) | Touching instrument keys, AMFI codes, or market data | Instrument keys, AMFI scheme codes, API quirks, token lifetimes, exact DB column names. |
 | [`TODOS.md`](TODOS.md) | Starting a new feature | Two-in-one: open action items (priority-tiered P0→P5 from architecture review) + chronological session log. Mark items done and add a log entry after each session. |
 | [`PLANNER.md`](PLANNER.md) | Starting a new feature | Multi-sprint feature roadmap — where the next task fits in the overall sequence. |
-| [`BACKTEST_PLAN.md`](BACKTEST_PLAN.md) | Any backtest, paper trading, or strategy research task | Phased backtesting → paper trading → live execution pipeline plan. Read before any Phase 0–4 work. |
+| [`BACKTEST_PLAN.md`](BACKTEST_PLAN.md) | Any backtest, paper trading, or strategy research task | Phased backtesting → paper trading → live execution pipeline plan. Read before any Phase 0–4 work. **Renders as an interactive card-format widget** — say "show me the plan" to get the visual view. |
 | [`LITERATURE.md`](LITERATURE.md) | Implementing a quantitative metric, ratio, or ML technique | Concept reference for Kelly Criterion, Sharpe ratio, meta-labeling, Greeks. Each entry carries a `LIT-N` code referenced in code comments and TODOs. |
 | [`REVIEW.md`](REVIEW.md) | Before every commit (via `code-reviewer` agent) | Python code review checklist — subtle bug patterns (Part I), Pythonic idioms (Part II), and Google Style Guide mandatory rules G1–G8: no `@staticmethod`, 80-char line limit, `%`-style logger calls, etc. (Part III). |
 
@@ -515,6 +520,7 @@ NiftyShield has pre-configured skills and agents you invoke by saying a phrase t
 
 | Skill | Say this | What happens |
 |---|---|---|
+| **plan view** | "show me the plan" · "render the backtest plan" · "what's the current plan status" | Reads `BACKTEST_PLAN.md` and renders the full phased plan as an interactive card-format widget — coloured task cards (Code / Strategy / Operational), done/pending state from `[x]` checkboxes, time estimates, owner badges, and gate rows. Any session that reads the file will render in this format automatically. |
 | **md-cleanup** | "clean up the markdown" or "archive completed TODOs" | Archives all ✅ DONE items from TODOS.md, trims session log, updates CONTEXT.md date + test count, syncs README structure, commits. Full checklist in `.claude/skills/md-cleanup/SKILL.md`. |
 | **commit** | "generate a commit message" | Produces a commit in the project-standard format (`type(scope): subject` + `Why:` + `What:` + `Ref:`). Full format spec in `.claude/skills/commit/SKILL.md`. |
 
@@ -537,6 +543,7 @@ Expiry is approaching        →  roll-validator before touching the DB
 Greeks / OptionChain work    →  greeks-analyst
 Strategy design question     →  options-strategist
 TODOS getting messy          →  md-cleanup skill
+Check plan / what's next     →  "show me the plan"  (card-format widget)
 ```
 
 ---

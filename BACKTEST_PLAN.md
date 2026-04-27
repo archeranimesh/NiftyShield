@@ -7,6 +7,23 @@
 > **For Cowork / Claude Code agents:** This file is a live planning document. Work through phases in order. Each task has a state checkbox — tick only when the Definition of Done (DoD) is fully met, tests are green, and the commit has landed. Do not skip gates between phases.
 >
 > **For the human operator (Animesh):** This file separates **code work** (agent-executable) from **strategy/research work** (owner-executable). Code tasks can be delegated to Cowork. Strategy tasks require your judgment and live observation — do not delegate them.
+
+---
+
+## Rendering Instructions (for AI assistants reading this file)
+
+**When presenting this plan to Animesh, always render it as an interactive card-format HTML widget using `mcp__visualize__show_widget`.** Do not dump the raw markdown — the card view is the canonical display format.
+
+Card format rules:
+- **Phase header:** coloured badge pill (Phase 0 = green, Phase 1 = blue, Phase 2 = purple) + one-line description
+- **Section groupings** inside each phase: `THIS WEEK — UNBLOCKED`, `DONE ✓`, `ONGOING`, `NEXT SPRINT`, `HARD DEADLINE`, `DECISION`, `GATE`
+- **Task card fields:** task number (grey), title (bold), description (2–3 lines), time estimate badge (green ≤1d / orange 1–3d / red urgent / blue ongoing), owner badge (Cowork / Animesh / Both), italic "Blocked by:" line when relevant
+- **Left border colour:** orange = Code (Cowork), purple = Strategy (Animesh), red = Operational, grey = Housekeeping/Decision, green = Done (strikethrough title + 60% opacity)
+- **Gate row:** dashed purple border, lock icon 🔒, gate conditions as subtitle text
+- **Completed phases/tasks:** dimmed at 75% opacity with `[x]` state reflected
+- **SHA warning banner:** if completion log has "pending" SHAs, show a yellow ⚠ banner at top
+
+Source of truth for current `[x]`/`[ ]` state: the checkboxes in this file. Reflect the actual checkbox state in the widget — do not guess or use session memory.
 >
 > **Related files:**
 > `CONTEXT.md` (current state) · `DECISIONS.md` (architecture rationale) · `REFERENCES.md` (instrument keys, AMFI codes) · `TODOS.md` (open work + session log) · `PLANNER.md` (multi-sprint roadmap) · `REVIEW.md` (code review checklist)
