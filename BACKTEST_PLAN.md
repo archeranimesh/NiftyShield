@@ -359,7 +359,32 @@ Historical options data in SQLite does not scale. `DECISIONS.md` already commits
 
 **Why daily resolution is not the first target anymore:** Dhan returns 1-minute only. We aggregate to daily at query time, not ingest time. ~390 rows per trading day per strike × 21 strikes × 2 types × 60 expiries × 5 years = ~500M rows in Timescale. Compressible to ~15–30 GB on disk with Timescale's native compression. Acceptable.
 
-**Note on the historical data endpoint:** Dhan also offers `/v2/charts/historical` for underlying OHLC (Nifty spot, NiftyBees) across years. Ingest this separately into `underlying_ohlc` using the same pattern. Do not bundle with options ingestion — different rate-limit budgets, different failure modes.
+**Note on the historical data endpoint:** Dhan also offers `/v2/charts/historical` for underlying OHLC, but see task 1.3a below — underlying OHLC (Nifty 50, India VIX, NiftyBees) is ingested via Upstox `/v2/historical-candle/` instead, at zero additional cost. Do not bundle with Dhan options ingestion — different APIs, different rate-limit budgets, different failure modes.
+
+---
+
+## 1.3a — CODE — Underlying OHLC ingest (Nifty 50, India VIX, NiftyBees)
+
+**Data cost: FREE — uses existing `UPSTOX_ANALYTICS_TOKEN`. No DhanHQ subscription required.**
+
+This is the zero-cost data foundation for two downstream research pipelines that run after Phase 1.12:
+- **Swing strategy Tier 1** (points-based backtesting, Phase 2 Track A) — uses Nifty 50 daily + 15-min OHLC and India VIX. Zero paid data required for Tier 1. Only swing Tier 2 (option spread P&L) needs DhanHQ.
+- **Investment strategy backtesting** (Phase 2 Track B, all stages) — uses Nifty 50 daily + NiftyBees daily. Entirely free throughout.
+
+Also provides the India VIX series required by the CSP R3 IVR filter (tasks 1.7 / 1.8) — no other source currently exists in the repo.
+
+- [ ] Ingest from Upstox `/v2/historical-candle/{instrument_key}/{interval}`:
+  - `NSE_INDEX|Nifty 50` — daily candles, full available history (≥5 years)
+  - `NSE_INDEX|Nifty 50` — 15-min candles, full available history (≥5 years)
+  - `NSE_INDEX|India VIX` — daily candles, full available history (≥5 years)
+  - `NSE_EQ|INF204KB14I2` (NiftyBees) — daily candles, full available history
+- [ ] Storage: Parquet, partitioned by `instrument + date`. Follow `CONTEXT.md` data layer convention. Directory: `data/historical/ohlc/`.
+- [ ] `src/backtest/ohlc_ingest.py` — async fetcher; resumable (check existing Parquet files before each request, skip if range present); rate-limited to Upstox historical-candle budget (separate from DhanHQ `rollingoption` budget).
+- [ ] Derived fields computed and stored alongside raw OHLC: 14-day ATR, 20-day ATR, 50-day linear regression slope (swing regime engine), 10-month SMA (investment SMA filter), 252-day VIX percentile rank (IVR/IVP for CSP R3 + swing filters).
+- [ ] Tests: fixture-driven, resumability check (skip if Parquet range already present), ATR computation unit test, VIX percentile rank boundary test.
+- [ ] Commit: `feat(backtest): Upstox OHLC ingest for Nifty/VIX/NiftyBees`.
+
+**Gate:** Nifty 50 daily close must match NSE published values within ±0.05% for 95% of days over full history. India VIX series must have <1% missing trading days (fill with previous close for holidays; flag and investigate gaps >1 trading day). NiftyBees NAV tracks Nifty 50 within ±0.5% tracking error over any rolling 1-year period.
 
 ---
 
@@ -632,7 +657,8 @@ This is the core validation gate of the whole pipeline. If this step doesn't pas
 
 ## 1.12 — GATE — End of Phase 1
 
-- [ ] 1.1–1.10 all `[x]` (including 1.6a, 1.9, 1.9a, and 1.10).
+- [ ] 1.1–1.10 all `[x]` (including **1.3a**, 1.6a, 1.9, 1.9a, and 1.10).
+- [ ] 1.3a complete: Nifty 50 daily + 15-min, India VIX daily, NiftyBees daily ingested to Parquet; data quality gate passed (Nifty close ±0.05% vs NSE, VIX <1% missing days, NiftyBees tracking error <0.5% over any rolling 1-year period).
 - [ ] 1.11 passes (|Z| ≤ 1.5, bias-adjusted) for CSP leg with results documented.
 - [ ] 1.9a integrated backtest run complete; Feb–Mar 2022 stress test shows positive
   put spread payoff; results written to `niftyshield_integrated_v1.md`.
@@ -725,6 +751,172 @@ The most important piece of code in this plan. Detects strategy drift in real ti
 
 ---
 
+## Phase 2 — Parallel Research Tracks (start after Phase 1.12 gate)
+
+These two tracks run **in parallel** with Phase 2.1–2.7. They are independent of the CSP/IC pipeline — the only prerequisite is Phase 1.12 (backtest engine + data pipeline complete). Neither track must wait for 2.7 to close before starting.
+
+**Track A data cost:** Stages 2.S0–2.S3a (Tier 1) use **zero paid data** — Upstox OHLC only, from task 1.3a. Tier 2 (option spread backtesting, 2.S3b) requires DhanHQ at the same ₹400/month as task 1.3. Tier 2 is conditional on Tier 1 passing.
+
+**Track B data cost:** All stages use **zero paid data** — Upstox OHLC (1.3a), NSE PE CSV (free download), AMFI liquid fund NAV (already in `src/mf/`). No DhanHQ at any stage.
+
+Full methodology documents: `docs/plan/SWING_STRATEGY_RESEARCH.md` (Track A) · `docs/plan/INVESTMENT_STRATEGY_RESEARCH.md` (Track B).
+
+---
+
+### Track A — Swing Strategy Pipeline
+
+Three strategies researched sequentially: **Donchian Channel Trend Following → Opening Range Breakout → Gap Fade**. One strategy must be fully validated through paper trading (2.S6) before the next begins signal generation (2.S2). No parallelism within the track.
+
+#### 2.S0 — CODE — Swing data infrastructure
+
+**No paid data required.**
+
+- [ ] Verify Upstox OHLC Parquet from 1.3a covers: Nifty 50 daily + 15-min, India VIX daily.
+- [ ] Confirm derived fields present: 14-day ATR, 20-day ATR, 50-day regression slope, 252-day VIX percentile rank.
+- [ ] **Gate:** Nifty close ±0.05% vs NSE; VIX <1% missing trading days; ATR and slope values visually consistent with chart overlay on Nifty price history. No code written until data verified.
+
+#### 2.S1 — CODE — Regime engine (`src/strategy/regime.py`)
+
+**No paid data required.**
+
+- [ ] 3×3 classifier: Dimension 1 = trend slope (50-day linear regression normalised by 50-day ATR → Trending up / Range-bound / Trending down). Dimension 2 = VIX percentile (252-day trailing → High vol >75th / Normal 25–75th / Low <25th).
+- [ ] Tag every historical trading day with its regime cell. Store alongside OHLC in the signal Parquet.
+- [ ] Regime distribution report: % of days and % of total Nifty return in each cell.
+- [ ] **Gate:** Tags deterministic (same input → same output). No single cell >40% of all trading days. 2022 H1 correction visually tagged "trending-down + high-vol" transitioning to "range-bound + normal-vol".
+
+**Overlap note:** This regime engine feeds directly into Phase 3.5's classifier — see 3.5 for consolidation guidance.
+
+#### 2.S2 — CODE — Signal generators (sequential: Donchian → ORB → Gap Fade)
+
+**No paid data required (Tier 1 points-based signals on spot index).**
+
+- [ ] **2.S2a — Donchian Channel:** Daily OHLC → LONG/SHORT/FLAT signal + trailing stop level + current ATR. Parameters: channel lookback 40D (sweep 20–60), ATR stop multiplier 3.0 (sweep 2.0–4.5), ATR lookback 20D. Always-in system.
+- [ ] **2.S2b — ORB:** 15-min OHLC + daily ATR → LONG/SHORT/NO_TRADE + OR range + target/stop levels. Entry on breakout candle close. Structural filter: exclude weekly expiry Thursdays. Parameters: opening candle count 2 (sweep 1–3), max OR width 0.6× 14D ATR (sweep 0.3–0.8), R:R multiple 1.5 (sweep 1.0–2.5).
+- [ ] **2.S2c — Gap Fade:** Daily open vs prev close + 15-min → LONG/SHORT/NO_TRADE + gap size + target. VIX filter: skip when VIX > 75th percentile. Parameters: min gap 0.3% (sweep 0.2–0.5%), max gap 1.0% (sweep 0.7–1.5%), fill fraction 0.5 (sweep 0.3–0.7).
+- [ ] **Gate per signal:** Trade log on full training set (pre-Jan 2024). Trade count within expected range: Donchian 15–25/yr, ORB 80–150/yr after filter, Gap Fade 60–100/yr after filter. No signals on non-trading days. No overlapping positions in always-in system.
+
+#### 2.S3a — CODE — Tier 1 backtester (points-based) — `src/backtest/points_bt.py`
+
+**No paid data required.**
+
+- [ ] Per-signal P&L in Nifty points: entry price = spot at signal trigger; exit = spot at exit trigger (trailing stop / target / time stop). Direction: +1 long, −1 short.
+- [ ] Mark-to-market daily (unrealised equity curve), not just trade-level.
+- [ ] Cost model: flat ₹40/round-trip + 0.5 points slippage per side.
+- [ ] **Donchian Tier 1 gate:** Equity curve + trade log + summary stats (Calmar, win rate, avg win/avg loss, max consecutive losses, max drawdown in points). Pass criteria: trade log internally consistent; win rate 35–50%; profit factor > 1.3. If win rate >60% or <25%, signal logic has a bug.
+- [ ] If Donchian passes Tier 1: run ORB Tier 1, then Gap Fade Tier 1.
+
+#### 2.S3b — CODE — Tier 2 backtester (option spread P&L) — `src/backtest/spread_bt.py`
+
+**Requires DhanHQ expired options data (same ₹400/month as task 1.3).**
+
+**Conditional on Tier 1 passing for the same strategy. A strategy may advance to walk-forward (2.S4) on Tier 1 P&L alone if DhanHQ strike coverage is insufficient.**
+
+- [ ] Extend Phase 1 backtest engine to handle vertical spreads and iron condors (not just single legs).
+- [ ] Strike selection per execution mapping (see `SWING_STRATEGY_RESEARCH.md §Design Constraint`): short strike at ~15-delta, long strike 200 points further OTM for credit spreads; iron condors = bull put spread + bear call spread.
+- [ ] VIX regime governs spread type: credit spreads (normal/high VIX) vs debit spreads (low VIX) vs skip (neutral + low VIX).
+- [ ] Track exclusion rate per strategy: if >20% of trades excluded due to missing DhanHQ strikes, Tier 1 is the authoritative validation for that strategy.
+- [ ] Slippage sensitivity: re-run at 0, 2, 4 points per leg. If profitability flips between 2 and 4 points, edge is too thin for options execution.
+- [ ] **Gate:** Tier 1 vs Tier 2 P&L gap documented (quantifies conversion cost of directional edge into options P&L). Results internally consistent (no negative prices, no trades on non-trading days).
+
+#### 2.S4 — CODE + STRATEGY — Walk-forward optimisation + validation (per strategy)
+
+- [ ] Rolling walk-forward: 252-day training window, 63-day step, parameter sweep per strategy within specified ranges. Primary P&L tier: Tier 1 (mandatory). Run Tier 2 walk-forward also if Tier 2 data available; Tier 1 optimum is authoritative if tiers disagree.
+- [ ] Per-window OOS Calmar. Monte Carlo: 10,000 iterations on OOS trade returns — check 95th percentile DD < 1.5× observed max DD, 99th percentile DD < 50% of allocated capital.
+- [ ] Parameter sensitivity: ≥60% of neighbours within 80% of optimal on all parameter axes; plateau width ≥3 steps per axis.
+- [ ] Regime decomposition: no single regime cell contributing >80% of cumulative profit.
+- [ ] **6 failure conditions** (per `SWING_STRATEGY_RESEARCH.md §Part 3`): OOS Calmar, walk-forward consistency, MC 95th DD, parameter sensitivity, regime concentration, slippage sensitivity. Any kill = abandon that strategy, move to next.
+- [ ] Calmar thresholds: Donchian ≥0.8 · ORB ≥0.6 · Gap Fade ≥0.5.
+- [ ] STRATEGY gate: human review and sign-off on full validation report (equity curve, trade log, MC distribution chart, parameter sensitivity heatmap, regime decomposition table).
+
+#### 2.S5 — CODE — Portfolio construction (if ≥2 strategies pass 2.S4)
+
+- [ ] Equal-risk allocation: normalise position size so each strategy contributes equal ATR-based risk to the combined portfolio.
+- [ ] Combined OOS equity curve on Jan 2024+ test set.
+- [ ] Combined walk-forward median Calmar ≥1.0; pairwise daily return correlation <0.3; MC 95th percentile combined DD < individual strategy worst-case.
+- [ ] If only 1 strategy survived 2.S4: skip portfolio construction, proceed to 2.S6 with that strategy solo.
+- [ ] **Gate:** Portfolio allocation weights documented; combined equity curve and risk metrics reviewed; human sign-off.
+
+#### 2.S6 — STRATEGY — Paper trading (surviving strategies)
+
+**Owner: Animesh. Not for Cowork.**
+
+- [ ] Minimum 60 trading days (~3 calendar months). Minimum 15 completed trades for directional strategies, 8 for iron condors.
+- [ ] Strategy name prefix: `paper_research_<strategy>_v1` (e.g., `paper_research_donchian_v1`).
+- [ ] Record via `record_paper_trade.py`: observe live option chain, select strikes per execution mapping, record entry with bid/ask at decision time. Apply 1-point adverse slippage (note in record).
+- [ ] Iron condor entry conditions: range-bound trend AND 25th–75th VIX percentile (both required); monthly expiry 30–45 DTE; skip when VIX <25th percentile.
+- [ ] **Gate:** Realised Sharpe, win rate, avg trade duration within 1 SD of walk-forward OOS distribution. >1.5 SD below expectation → stop and diagnose (execution model wrong or regime shift). Paper trading report with trade log, equity curve, comparison to backtest OOS distribution, slippage analysis.
+
+#### 2.S7 — STRATEGY — Live deployment (minimum viable size)
+
+**Owner: Animesh. Not for Cowork.**
+
+- [ ] 1 lot Nifty options per spread. Maximum 2 concurrent positions (1 directional + 1 neutral, or 2 directional from different strategies).
+- [ ] Scaling: 2 lots after 60 live trading days with metrics within 1 SD of paper results. Never faster.
+- [ ] Live kill criteria: trailing 60-day Calmar <0.3 → reduce to 1 lot, review; 3 consecutive losses >1.5× average backtest loss → pause, diagnose; any single trade loss >2× spread width → halt immediately (execution error).
+
+---
+
+### Track B — Investment Strategy Pipeline
+
+Three strategies researched sequentially: **10-Month SMA Trend Filter → Dual Momentum → PE Band Rebalancing**. One strategy validated before the next begins.
+
+**All stages: zero paid data required throughout.** Sources: Upstox OHLC (from 1.3a, existing token), NiftyBees NAV (Upstox, existing token), Nifty PE ratio (NSE historical CSV, free download), liquid fund NAV (AMFI, already in `src/mf/`).
+
+#### 2.I0 — CODE — Investment data infrastructure
+
+**No paid data required.**
+
+- [ ] Nifty 50 weekly + monthly OHLC derived from daily Parquet in 1.3a (no new API call).
+- [ ] NiftyBees ETF daily close from Upstox (existing token, `NSE_EQ|INF204KB14I2`).
+- [ ] Nifty trailing PE monthly series from NSE historical CSV download (verify availability back to 1999; use full history if available).
+- [ ] Risk-free rate series: 364-day T-bill yield OR liquid fund NAV (AMFI, already in `src/mf/`).
+- [ ] Storage: Parquet, same convention as swing OHLC.
+- [ ] **Gate:** NiftyBees NAV tracks Nifty 50 within ±0.5% tracking error over any rolling 1-year period. PE data <2% missing months (fill with previous value; flag gaps >1 month). Risk-free rate series complete for full backtest period. PE data visually cross-checked against NSE PE charts at known inflection points (2008 crash ~12, 2020 crash ~18, 2024 peak ~24).
+
+#### 2.I1 — CODE — Signal generators (sequential: SMA → Dual Momentum → PE Band)
+
+**No paid data required.**
+
+- [ ] **I-1a: 10-month SMA signal** → monthly allocation % (0% or 100%). Entry when Nifty monthly close > N-month SMA. Exit when close < SMA. Parameters: SMA lookback 10 months (sweep 8–14), re-entry delay 0 months (sweep 0–2).
+- [ ] **I-1b: Dual Momentum signal** → monthly allocation % (0% or 100%). Both conditions required: (1) Nifty trailing N-month return > 0% (absolute momentum); (2) Nifty trailing N-month return > risk-free rate proxy (relative momentum). Parameters: absolute lookback 12 months (sweep 6–15), relative lookback 12 months (sweep 6–15), risk-free rate 7% (sweep 5–8%).
+- [ ] **I-1c: PE Band signal** → quarterly allocation % (30%, 70%, or 100%). Allocation rules: PE <18 → 100%; PE 18–25 → 70%; PE >25 → 30%. 30% floor preserves NiftyBees collateral for Finideas margin. Parameters: low threshold 18 (sweep 15–20), high threshold 25 (sweep 23–28), intermediate allocation 70% (sweep 50–80%).
+- [ ] **Gate per signal:** Allocation log on full training set (pre-Jan 2024). Allocation change count within expected range: SMA 2–4/yr, Dual Momentum 2–4/yr, PE Bands 1–3/yr. >6 changes/yr → signal too noisy for >1yr investment approach.
+
+#### 2.I2 — CODE — Points-based backtest (`src/backtest/allocation_bt.py`)
+
+**No paid data required. Tier 1 only — no option data used at any stage.**
+
+- [ ] P&L in NiftyBees NAV terms: entry NAV × (exit NAV / entry NAV − 1) × allocation %. Cash return (liquid fund rate) applied during out-of-market periods.
+- [ ] Transaction costs: ₹100/round-trip (conservative for ₹5L+ NiftyBees orders).
+- [ ] For all three strategies: equity curve vs buy-and-hold (single chart, both lines), drawdown chart, summary (total return, CAGR, max DD, Calmar, time-in-market %, round-trip count).
+- [ ] **Gate:** Internally consistent (no NAV jumps on non-rebalancing days, cash return applied correctly, costs deducted at each round-trip). Visual inspection: equity curve tracks buy-and-hold during bull periods, diverges positively during corrections.
+
+#### 2.I3 — CODE + STRATEGY — Walk-forward + validation (sequential: SMA → Dual Momentum → PE Band)
+
+- [ ] 36-month training window, 12-month step (modified from swing's 252-day/63-day — monthly signals need longer windows).
+- [ ] Thresholds per `INVESTMENT_STRATEGY_RESEARCH.md §Part 3` (relaxed vs swing): OOS Calmar ≥0.3, >50% windows net-positive, MC 95th DD <2× observed max DD, parameter plateau width ≥2 steps.
+- [ ] **Buy-and-hold comparison mandatory:** strategy must demonstrate either (a) higher Calmar/Sharpe, OR (b) >30% reduction in max drawdown with ≤20% return underperformance. Neither condition → abandon regardless of other metrics.
+- [ ] **Gate per strategy:** validation report (equity curve, allocation log, MC distribution chart, parameter sensitivity heatmap, regime decomposition table, buy-and-hold comparison); human review and sign-off.
+
+#### 2.I4 — STRATEGY — Paper trading
+
+**Owner: Animesh. Not for Cowork.**
+
+- [ ] Minimum 6 months (2 rebalance events). Extend to 12 months if 2 events are statistically insufficient.
+- [ ] Strategy name prefix: `paper_invest_<strategy>_v1` (e.g., `paper_invest_sma_v1`).
+- [ ] On each monthly check day: record signal value (SMA level, momentum return, PE value), allocation decision, NiftyBees NAV at decision time.
+- [ ] **Gate:** Allocation decisions match what the signal generator would produce on live data (verify by running generator on live data and comparing). Execution slippage ≤ ₹0.50/unit.
+
+#### 2.I5 — STRATEGY — Live deployment
+
+**Owner: Animesh. Not for Cowork.**
+
+- [ ] Start with ₹5L NiftyBees allocation under the validated strategy. No explicit scaling rule — allocation % governs sizing automatically.
+- [ ] Quarterly review: compare actual allocation changes and returns to backtest envelope.
+- [ ] Live kill criteria: trailing 12-month Calmar <0.2 → review; 2 consecutive back-to-back whipsaws → pause and compare to backtest whipsaw frequency; >6 allocation changes in any 12-month period → signal degraded, suspend.
+
+---
+
 # Phase 3 — IC Live + Third Strategy + Portfolio Construction
 
 **Objective:** CSP and IC running live, add a third strategy (event-driven), introduce portfolio-level thinking (correlations, regime-aware sizing).
@@ -774,6 +966,8 @@ The most important piece of code in this plan. Detects strategy drift in real ti
 ---
 
 ## 3.5 — CODE — Regime classifier (rule-based, not ML)
+
+**Overlap with Track A (2.S1):** The swing strategy pipeline builds a regime engine in 2.S1 (`src/strategy/regime.py`) using trend slope (50D regression / ATR) × VIX percentile (252D) — a 3×3 grid already tagging all historical trading days. Phase 3.5's classifier adds IV-based dimensions (IVR, IVP, realised vol) on top of that directional/vol framework. When building 3.5, evaluate whether `src/strategy/regime.py` (Track A) can be extended with IV dimensions rather than creating a parallel module. One consolidated `src/regime/` module with pluggable dimension sets is architecturally preferred over two independent classifiers with overlapping VIX logic. Confirm with the code-reviewer agent that the consolidation does not break Track A signal generators before merging.
 
 - [ ] `src/regime/` module. Features: IV rank (IVR), IV percentile (IVP), trailing realised vol, VIX level, trend strength (20D SMA slope). Pure computation from existing `daily_snapshots` + option chain snapshots.
 - [ ] Classifier outputs one of: HIGH_IV (IVR > 50), MID_IV (30–50), LOW_IV (< 30) — with separate TRENDING/RANGING overlay.
@@ -895,8 +1089,8 @@ When triggered: stop new entries immediately, close existing positions according
 |---|---|---|---|
 | 2026-04-24 | 0.1 | cd3ed6b | 174 nuvama tests across test_models (32), test_options_reader (26), test_store (43) + supporting files. Follow-up fix 92a6c74. Status gap closed retroactively. |
 | 2026-04-25 | 0.4 | fb69043 | CSP v1 spec written: docs/strategies/csp_niftybees_v1.md. All required sections present: entry/exit/adjustment/sizing/prior P&L distribution/regimes/kill criteria/variance threshold. Open questions for v2 logged. |
-| 2026-04-25 | 0.5 | pending | Paper trading module: src/paper/ (models, store, tracker), scripts/record_paper_trade.py, daily_snapshot.py wiring. 65 new tests, 948 total. SHA to be updated post-commit. |
-| 2026-04-26 | 0.4a | pending | NiftyShield integrated strategy spec: docs/strategies/niftyshield_integrated_v1.md. CSP + put spread (4 lots, 8–20% OTM) + tail puts (2 lots, 5-delta quarterly). Validator passes. |
+| 2026-04-25 | 0.5 | 5ccfc52 | Paper trading module: src/paper/ (models, store, tracker), scripts/record_paper_trade.py, daily_snapshot.py wiring. 65 new tests, 948 total. |
+| 2026-04-26 | 0.4a | 88dc95e | NiftyShield integrated strategy spec: docs/strategies/niftyshield_integrated_v1.md. CSP + put spread (4 lots, 8–20% OTM) + tail puts (2 lots, 5-delta quarterly). Validator passes. |
 
 ---
 
@@ -913,6 +1107,7 @@ These need a decision from the human operator before the relevant phase starts. 
 - **Phase 1.10:** Confirm `UnderlyingScrip` security IDs for NIFTYBEES (Nifty 50 is `13`, already known from Dhan docs). Look up via Dhan instrument list and record in `REFERENCES.md` before 1.10 CLI runs.
 - **Phase 2.2:** Is static IP provisioned by the time CSP is ready to go live? If not, plan for manual order placement + `record_trade.py` ledger capture.
 - **Phase 4.1:** What's the acceptable "Finideas is worth its fee" spread vs benchmark? The plan uses ±2% / +3% / middle-zone; this is the author's suggestion, not a hard rule.
+- **Phase 3.2 vs Track A swing strategies — UNRESOLVED:** `BACKTEST_PLAN.md §3.2` specifies an "event-driven calendar spread" (RBI policy / budget / major earnings, entered 1 day before, exited 1 day after) as the third Phase 3 strategy. `docs/plan/SWING_STRATEGY_RESEARCH.md` defines three different strategy candidates (Donchian Channel, ORB, Gap Fade) that run through a separate research pipeline (Phase 2 Track A) producing 0–3 validated live strategies after Phase 1.12. These were designed independently and now conflict. **Decision required before Phase 3 begins:** Does the calendar spread (§3.2) (a) **replace** whichever swing strategy fails validation — making it the fallback third live strategy if Track A yields fewer than 3 survivors; or (b) become a **fourth strategy** that enters Phase 3 alongside Track A graduates? If (b), the "one new strategy per year" Cross-Cutting Rule applies and the Phase 3 timeline must be extended accordingly. Cowork: do not resolve — surface and wait.
 
 ---
 

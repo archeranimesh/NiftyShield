@@ -33,9 +33,40 @@ Start once 4+ weeks of snapshot data available.
 
 ---
 
-## Medium-Term (Q3 2026 — post static IP)
+## Medium-Term (Q3–Q4 2026)
 
-### Order execution layer (`src/execution/`)
+### Swing Strategy Research Pipeline (Phase 2 Track A — starts after Phase 1.12 gate)
+
+Full methodology: `docs/plan/SWING_STRATEGY_RESEARCH.md`. Three rule-based directional/neutral swing strategies on Nifty index options (Donchian Channel, ORB, Gap Fade), validated sequentially.
+
+**Stage sequence and data cost:**
+- **2.S0 — Data infra (free):** Verify Upstox OHLC Parquet from task 1.3a covers Nifty 50 daily + 15-min + India VIX daily.
+- **2.S1 — Regime engine (free):** `src/strategy/regime.py` — 3×3 classifier (50D trend slope × 252D VIX percentile). Tags every historical trading day.
+- **2.S2 — Signal generators (free):** One per strategy (Donchian, ORB, Gap Fade) on spot OHLC. Pure directional signals, no option data.
+- **2.S3a — Tier 1 backtester (free):** `src/backtest/points_bt.py` — P&L in Nifty points. Validates signal quality with zero paid data. Mandatory first pass.
+- **2.S3b — Tier 2 backtester (DhanHQ ₹400/mo):** `src/backtest/spread_bt.py` — option spread P&L. Conditional on Tier 1 passing. If DhanHQ strike exclusion rate >20%, Tier 1 is authoritative.
+- **2.S4 — Walk-forward + validation (Code + Strategy):** 252-day rolling window, 63-day step. 6 failure conditions (OOS Calmar, consistency, MC 95th DD, sensitivity, regime concentration, slippage). Calmar thresholds: Donchian ≥0.8, ORB ≥0.6, Gap Fade ≥0.5.
+- **2.S5 — Portfolio construction (Code):** Equal-risk allocation if ≥2 strategies pass. Combined Calmar ≥1.0; pairwise correlation <0.3.
+- **2.S6 — Paper trading (Animesh):** 60 trading days minimum; prefix `paper_research_<strategy>_v1`.
+- **2.S7 — Live deployment (Animesh):** 1 lot; scale to 2 after 60 days within envelope.
+
+**Key data cost note:** Tier 1 and all regime/signal work is entirely free (existing `UPSTOX_ANALYTICS_TOKEN`). DhanHQ is only needed for Tier 2, and Tier 2 is optional if Tier 1 results are conclusive.
+
+### Investment Strategy Research Pipeline (Phase 2 Track B — starts after Phase 1.12 gate)
+
+Full methodology: `docs/plan/INVESTMENT_STRATEGY_RESEARCH.md`. Three systematic NiftyBees ETF allocation strategies (10-Month SMA, Dual Momentum, PE Band Rebalancing) on separate capital pool, >1yr holding periods, validated sequentially.
+
+**Stage sequence and data cost — all stages zero paid data:**
+- **2.I0 — Data infra (free):** NiftyBees ETF daily (Upstox), Nifty PE monthly (NSE historical CSV, free), liquid fund NAV (AMFI, already in `src/mf/`).
+- **2.I1 — Signal generators (free):** SMA filter (monthly), dual momentum (monthly), PE band (quarterly allocation tiers).
+- **2.I2 — Backtest (free):** `src/backtest/allocation_bt.py` — P&L in NiftyBees NAV terms; includes cash return during out-of-market periods; buy-and-hold comparison mandatory.
+- **2.I3 — Walk-forward + validation (Code + Strategy):** 36-month window, 12-month step; relaxed thresholds (OOS Calmar ≥0.3); buy-and-hold must be beaten on risk-adjusted basis OR drawdown must be reduced >30%.
+- **2.I4 — Paper trading (Animesh):** 6 months minimum; prefix `paper_invest_<strategy>_v1`.
+- **2.I5 — Live deployment (Animesh):** ₹5L NiftyBees pool; quarterly rebalance review.
+
+**Key data cost note:** No DhanHQ at any stage. The entire investment strategy pipeline costs nothing beyond the existing Upstox analytics token.
+
+### Order execution layer (`src/execution/`) — post static IP
 Unblocked when static IP is provisioned.
 - `place_order`, `modify_order`, `cancel_order` on `UpstoxLiveClient`
 - GTT orders for SL management
@@ -61,6 +92,14 @@ Unblocked when static IP is provisioned.
 ---
 
 ## Long-Term (Q4 2026+)
+
+### Swing + Investment strategy pipelines mature into Phase 3
+
+By Phase 2 end (mid-2027), the parallel research tracks (Track A: `docs/plan/SWING_STRATEGY_RESEARCH.md`, Track B: `docs/plan/INVESTMENT_STRATEGY_RESEARCH.md`) will have produced 0–3 validated live swing strategies and 0–3 validated live investment strategies. These feed into Phase 3 portfolio construction. Key long-term milestones:
+
+- **Track A → Phase 3:** Validated swing strategies (Donchian, ORB, Gap Fade) enter Phase 3 alongside CSP + IC. Decision on calendar spread (§3.2) vs Track A graduates required before Phase 3 starts — see Open Questions.
+- **Track B → Phase 3:** Validated investment strategies go live with ₹5L NiftyBees allocation and run independently of the options book. Regime classifier (Phase 3.5) and Track A's regime engine (2.S1) consolidate into a single `src/regime/` module.
+- **Phase 4 (2028+):** Finideas evaluation uses ≥24 months of tracked realised P&L. Basket of 3–5 validated strategies benchmarked against passive alternatives.
 
 ### Backtesting engine (`src/backtest/`)
 - **Unblocked:** Evaluated APIs and decided to adopt the paid DhanHQ Data API (₹400/month) for expired options due to its superior ATM-relative querying model.
