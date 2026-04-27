@@ -7,7 +7,7 @@
 **Related files:** [DECISIONS.md](DECISIONS.md) | [REFERENCES.md](REFERENCES.md) | [TODOS.md](TODOS.md) | [PLANNER.md](PLANNER.md) | [BACKTEST_PLAN.md](BACKTEST_PLAN.md) — phased backtest → paper → live plan | [LITERATURE.md](LITERATURE.md) — concept reference (Kelly, Sharpe, meta-labeling) | [docs/plan/](docs/plan/) — one story file per task | [INSTRUCTION.md](INSTRUCTION.md)
 ---
 
-## Current State (as of 2026-04-24)
+## Current State (as of 2026-04-27)
 
 ### What Exists (committed and working)
 
@@ -24,7 +24,7 @@ Scripts: `daily_snapshot.py`, `morning_nav.py`, `nuvama_intraday_tracker.py`, `s
 ### What Does NOT Exist Yet
 
 - `src/nuvama/CLAUDE.md` — module context file not yet written
-- `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/`, `src/streaming/` — all empty
+- `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/`, `src/streaming/` — all empty (planned per BACKTEST_PLAN.md Phase 1–2)
 
 ### Live Data
 
@@ -85,7 +85,7 @@ Strategy leg tables (instrument keys, entry prices, quantities, protected MF por
 
 ## Test Coverage
 
-- **Total: ~883 tests** (883 passing; 1 pre-existing `test_lookup.py` rapidfuzz/difflib delta; 12 pre-existing `test_upstox_live.py` sandbox failures — unrelated to recent changes)
+- **Total: ~976 tests** (976 passing; 1 pre-existing `test_lookup.py` rapidfuzz/difflib delta — unrelated to recent changes)
 - Run: `python -m pytest tests/unit/`
 - Auth tests: `tests/unit/auth/` (64 tests — Nuvama login + verify, Dhan login + verify)
 - MF tests: `tests/unit/mf/` (127 tests)

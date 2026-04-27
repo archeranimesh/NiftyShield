@@ -77,6 +77,7 @@ NiftyShield/
 │   │   └── factory.py         # Composition root (sole concrete importer)
 │   ├── models/            # Shared Pydantic models (portfolio + mf)
 │   ├── portfolio/         # Strategy P&L, daily snapshots, trade ledger
+│   ├── paper/             # Paper trading — PaperTrade, PaperStore, PaperTracker
 │   ├── mf/                # MF transaction ledger, AMFI NAV fetcher
 │   ├── dhan/              # Dhan equity/bond holdings + Upstox LTP enrichment
 │   ├── nuvama/            # Nuvama bond holdings + options P&L
@@ -85,24 +86,28 @@ NiftyShield/
 │   ├── notifications/     # Telegram notifier (non-fatal, HTML parse_mode)
 │   ├── utils/             # Number formatting, config helpers
 │   ├── db.py              # Shared SQLite context manager (WAL, FK, Row factory)
-│   ├── strategy/          # [empty — planned Q3 2026]
-│   ├── execution/         # [empty — planned Q3 2026]
-│   ├── backtest/          # [empty — planned Q4 2026]
+│   ├── strategy/          # [empty — planned Phase 2 Track A]
+│   ├── execution/         # [empty — planned Q3 2026 post static IP]
+│   ├── backtest/          # [empty — planned Phase 1 Q4 2026]
 │   └── risk/              # [empty — planned Q3 2026]
 ├── scripts/
 │   ├── daily_snapshot.py          # Main EOD cron (15:45 IST, Mon–Fri)
 │   ├── morning_nav.py             # Pre-market AMFI NAV fetch (09:15 IST)
 │   ├── nuvama_intraday_tracker.py # 5-min M2M/Spot bounds (*/5 09:00–15:00)
-│   ├── record_trade.py            # CLI: insert a new trade row
+│   ├── record_trade.py            # CLI: insert a live trade row
+│   ├── record_paper_trade.py      # CLI: insert a paper trade row (paper_ prefix)
+│   ├── paper_snapshot.py          # Standalone paper mark-to-market
+│   ├── validate_strategy_spec.py  # Validates docs/strategies/*.md required sections
 │   ├── roll_leg.py                # CLI: atomic close + open for expiry rolls
 │   └── seed_*.py                  # One-time DB seeding scripts
 ├── tests/
-│   ├── unit/              # ~870 offline tests (default — no network)
+│   ├── unit/              # ~976 offline tests (default — no network)
 │   └── fixtures/          # Recorded API responses (JSON)
 ├── data/
 │   └── portfolio/         # portfolio.sqlite (live DB — gitignored)
 ├── docs/
-│   ├── plan/              # Per-story task files (one per feature)
+│   ├── plan/              # Per-story task files + swing/investment research pipelines
+│   ├── strategies/        # Strategy spec documents (csp_nifty_v1.md, etc.)
 │   └── archive/           # Completed plans, archived TODOs, old agents
 ├── .env.example
 ├── requirements.txt
