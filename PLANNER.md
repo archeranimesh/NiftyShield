@@ -44,13 +44,13 @@ Full methodology: `docs/plan/SWING_STRATEGY_RESEARCH.md`. Three rule-based direc
 - **2.S1 — Regime engine (free):** `src/strategy/regime.py` — 3×3 classifier (50D trend slope × 252D VIX percentile). Tags every historical trading day.
 - **2.S2 — Signal generators (free):** One per strategy (Donchian, ORB, Gap Fade) on spot OHLC. Pure directional signals, no option data.
 - **2.S3a — Tier 1 backtester (free):** `src/backtest/points_bt.py` — P&L in Nifty points. Validates signal quality with zero paid data. Mandatory first pass.
-- **2.S3b — Tier 2 backtester (DhanHQ ₹400/mo):** `src/backtest/spread_bt.py` — option spread P&L. Conditional on Tier 1 passing. If DhanHQ strike exclusion rate >20%, Tier 1 is authoritative.
+- **2.S3b — Tier 2 backtester (NSE Bhavcopy — FREE):** `src/backtest/spread_bt.py` — option spread P&L using Bhavcopy EOD data + BS IV reconstruction. Conditional on Tier 1 passing. If Bhavcopy strike exclusion rate >20%, Tier 1 is authoritative.
 - **2.S4 — Walk-forward + validation (Code + Strategy):** 252-day rolling window, 63-day step. 6 failure conditions (OOS Calmar, consistency, MC 95th DD, sensitivity, regime concentration, slippage). Calmar thresholds: Donchian ≥0.8, ORB ≥0.6, Gap Fade ≥0.5.
 - **2.S5 — Portfolio construction (Code):** Equal-risk allocation if ≥2 strategies pass. Combined Calmar ≥1.0; pairwise correlation <0.3.
 - **2.S6 — Paper trading (Animesh):** 60 trading days minimum; prefix `paper_research_<strategy>_v1`.
 - **2.S7 — Live deployment (Animesh):** 1 lot; scale to 2 after 60 days within envelope.
 
-**Key data cost note:** Tier 1 and all regime/signal work is entirely free (existing `UPSTOX_ANALYTICS_TOKEN`). DhanHQ is only needed for Tier 2, and Tier 2 is optional if Tier 1 results are conclusive.
+**Key data cost note:** Tier 1 and all regime/signal work is entirely free (existing `UPSTOX_ANALYTICS_TOKEN`). Tier 2 uses NSE Bhavcopy (free, task 1.3) with BS IV reconstruction (task 1.6a). DhanHQ was evaluated and rejected (2026-04-27) — 1-min data is only 5 days deep, not the documented 5 years.
 
 ### Investment Strategy Research Pipeline (Phase 2 Track B — starts after Phase 1.12 gate)
 
@@ -102,10 +102,11 @@ By Phase 2 end (mid-2027), the parallel research tracks (Track A: `docs/plan/SWI
 - **Phase 4 (2028+):** Finideas evaluation uses ≥24 months of tracked realised P&L. Basket of 3–5 validated strategies benchmarked against passive alternatives.
 
 ### Backtesting engine (`src/backtest/`)
-- **Unblocked:** Evaluated APIs and decided to adopt the paid DhanHQ Data API (₹400/month) for expired options due to its superior ATM-relative querying model.
-- Prerequisite: Spin up a PostgreSQL + TimescaleDB container for storing the daily option chain OHLC data, as SQLite will not scale for 5 years of 1-minute deep tick data.
-- Interim: Continue using the NSE option chain CSV dumps for structural testing if necessary, but Dhan Data API gives a direct path to production-grade data lakes.
-- Data models already designed; need to map Dhan `POST /v2/charts/rollingoption` payload formats into internal Pydantic standards.
+- **Unblocked (2026-04-27 decision):** Data source stack finalised — TrueData rejected (EOD-only historical); DhanHQ rejected (1-min data only 5 days deep, not 5 years as documented). Adopted: Stockmock for calibration backtests (manual UI, already subscribed) + NSE F&O Bhavcopy for programmatic pipeline (free, 2016–present, covers IL&FS + COVID stress windows).
+- **TimescaleDB deferred indefinitely:** Original justification was DhanHQ 500M-row 1-min volume. With Bhavcopy EOD-only (~4M rows for 8 years), Parquet + SQLite is sufficient.
+- **Data pipeline:** `src/backtest/bhavcopy_ingest.py` + `scripts/bhavcopy_bootstrap.py` (see P1-NEXT in TODOS.md). Parquet partitioned by `data/offline/options_ohlcv/{year}/{month}/`.
+- **IV reconstruction:** Bhavcopy has no IV field — compute via BS inverse (`scipy.optimize.brentq` on `settle_price`). Implementation: `src/backtest/greeks.py` task 1.6a.
+- **Live Greeks:** Upstox confirmed as sole production source (existing `src/client/upstox_market.py`). No new broker client needed.
 - **Reference implementation available:** See "quant-4pc-local reference" section below — backtest engine + IC strategy scaffold already designed and tested. Port rather than build from scratch.
 
 ---
@@ -162,8 +163,8 @@ Extract the exponential backoff loop (configurable retries 0–5, base sleep * 2
 |---|---|---|
 | Order execution (place/modify/cancel) | Static IP not provisioned | Unknown |
 | GTT orders, webhooks | Static IP not provisioned | Unknown |
-| Historical candles (expired instruments) | Paid Upstox subscription | Unknown |
-| Expired option contracts | Paid Upstox subscription | Unknown |
+| Historical candles (expired instruments) | ~~Paid Upstox subscription~~ → **Unblocked:** NSE Bhavcopy (task 1.3) provides EOD options OHLCV free, 2016–present | See TODOS P1-NEXT |
+| Expired option contracts | ~~Paid Upstox subscription~~ → **Unblocked:** NSE Bhavcopy covers all expired contracts; DhanHQ evaluated and rejected 2026-04-27 | See TODOS P1-NEXT |
 | Portfolio/positions read on `UpstoxLiveClient` | Daily OAuth token not wired | When needed |
 
 ---

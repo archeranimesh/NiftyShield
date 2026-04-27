@@ -273,93 +273,75 @@ All of the following must be true before starting Phase 1. Do not start Phase 1 
 
 **Why this order (backtest after paper, not before):** Covered in conversation. A backtest whose output can't be validated against a known realised outcome is a simulation, not a measurement. Phase 0 gives us that known outcome.
 
-> **Task numbering note:** Tasks run 1.1 → 1.6 → 1.6a → 1.7 → 1.8 → 1.10 → 1.11 → 1.12. The 1.9 slot was reserved during an earlier draft and merged into the 1.11 variance check after the Dhan live chain decision (2026-04-17). The gap is intentional; do not renumber.
+> **Task numbering note:** Tasks run 1.1 → 1.2 (DEFERRED) → 1.3 → 1.3a → 1.4 → 1.5 → 1.6 → 1.6a → 1.7 → 1.8 → 1.9 → 1.9a → 1.10 → 1.11 → 1.12. Task 1.2 (TimescaleDB) is deferred — DhanHQ rejected 2026-04-27, NSE Bhavcopy Parquet is the storage layer. Do not renumber existing tasks.
 
 ---
 
-## 1.1 — STRATEGY — DhanHQ Data API subscription
+## 1.1 — STRATEGY — Stockmock calibration backtests
 
-**Owner: Animesh.**
+**Owner: Animesh. Not for Cowork.**
 
-Confirmed from Dhan docs (`https://dhanhq.co/docs/v2/expired-options-data/`, verified 2026-04-17):
+**Decision (2026-04-27):** DhanHQ Data API rejected — 1-min data is only ~5 days deep (not 5 years as initially believed); EOD is 5 years but misses COVID Mar 2020 and IL&FS Sep–Oct 2018. TrueData also rejected — 6-month 1-min depth, no historical Greeks. See `DECISIONS.md` → "Backtest Data Source Decision (2026-04-27)".
 
-- **History depth:** 5 years, rolling. Index options and stock options both covered. Covers 2021 onwards — includes Russia/Ukraine (Feb 2022), rate-hike vol (Oct 2022), SVB (Mar 2023), Israel (Oct 2023), election day (Jun 2024), Hindenburg/Adani (Oct 2024). **Does NOT cover COVID crash (Mar 2020)** — worst stress scenario available is Jun 2024 election day. Acknowledge this as a known limitation of the stress-test methodology.
-- **Resolution:** 1-minute.
-- **Strike coverage (asymmetric — important):** "ATM±10 for index options nearing expiry, ATM±3 for all other contracts." The cutoff for "nearing expiry" is NOT documented — must be verified before ingesting. A 30–45 DTE iron condor at 15-delta typically lives at ATM±5 to ATM±8, which could fall outside ATM±3 coverage if "nearing expiry" means <14 DTE or <7 DTE.
-- **Query shape:** Strike parameter is ATM-relative (`ATM`, `ATM+3`, `ATM-7`), not absolute. Payload includes `expiryFlag` (`WEEK`/`MONTH`), `expiryCode` (expiry index), `drvOptionType` (`CALL`/`PUT`), `requiredData` array.
-- **`requiredData` fields offered:** `open, high, low, close, iv, volume, strike, oi, spot`. **No delta, gamma, theta, vega.** Greeks must be computed locally (see 1.6a).
-- **API rate limit:** 1 request per second (per the Market Quote page; rollingoption doesn't document a separate limit — assume same).
-- **Per-call window:** Max 30 days of data. Full backfill requires ~60 calls per (strike, option_type) combination.
+Stockmock ([stockmock.in](https://stockmock.in)) is already subscribed. It is a UI-based NSE F&O options backtester covering all critical stress windows (COVID Mar 2020, IL&FS Sep–Oct 2018, 2022 rate hike) that no API vendor provides at reasonable cost. This task establishes the calibration baseline before the programmatic NSE Bhavcopy pipeline (task 1.3) is built.
+
+**Stress scenarios to run:**
+- **COVID crash (Feb–Apr 2020):** Nifty fell ~38% peak-to-trough. Run monthly CSP at 20-delta short put. Record: strikes hit, premium collected, max mark-to-market loss, breach frequency across 15/20/25/30-delta levels.
+- **IL&FS crisis (Sep–Oct 2018):** ~15% Nifty correction over 6 weeks. Same metrics.
+- **2022 rate-hike selloff (Jan–Jun 2022):** Slow grind ~17% over 6 months (different character — no single crash day). Same metrics.
+- **Stable baseline (Jan–Dec 2023):** Moderate vol, no crash. Record win rate, avg premium, exit-type distribution for comparison.
 
 **Tasks:**
 
-- [ ] Before subscribing, ask Dhan support (or test with one trial call): what does "nearing expiry" mean for the ATM±10 strike window? <14 DTE? <30 DTE? Record answer in `DECISIONS.md`. If the window is <7 DTE only, iron condor backtests at 30–45 DTE entry are impossible and the strategy pipeline must adapt (move to weekly IC with <7 DTE entry, or use ATM±3-compatible structures like bull/bear put spreads at 3-strikes-OTM).
-- [ ] Subscribe to DhanHQ Data API (₹400/month per `DECISIONS.md` Dhan Integration).
-- [ ] Store `DHAN_DATA_TOKEN` in `.env` (or confirm existing `DHAN_ACCESS_TOKEN` suffices — tier-dependent; verify via one test call).
-- [ ] Record confirmed facts in `DECISIONS.md` → "Dhan Integration" section: 5-year history, 1-min resolution, ATM±10/±3 split, no Greeks in payload, 1 req/sec, 30-day window, confirmed "nearing expiry" definition.
+- [ ] Run Stockmock backtest for each stress window above. For each monthly expiry: record entry strike (20-delta), premium collected, mark-to-market at peak loss, whether each exit rule (time-stop/delta-stop/loss-stop) triggered.
+- [ ] Run stable baseline (Jan–Dec 2023) — establishes expected exit-type distribution in normal markets.
+- [ ] Summarise findings in `docs/strategies/csp_nifty_v1.md` → add "Calibration Backtest Results (Stockmock)" section: breach frequency per delta level, estimated max drawdown on 1 lot per stress window, observed exit-type distribution. This data drives the initial hardcoded `CSPConfig` thresholds in task 1.7.
+- [ ] Commit: `docs(strategies): CSP v1 Stockmock calibration backtest results`.
 
-**Stop signal:** If the "nearing expiry" definition restricts ATM±10 to <7 DTE only, the
-Phase 2 iron condor strategy needs a redesign before Phase 1 starts. CSP at 25-delta
-typically lands at ATM-3 or ATM-4 on Nifty — inside the always-available ATM±3 window —
-so CSP backtesting is unaffected.
+**Limitation to document:** Stockmock output is UI reports only — no Python API, no direct integration with NiftyShield codebase. Results feed initial hardcoded `CSPConfig` parameters in task 1.7. Once the NSE Bhavcopy pipeline (1.3) and backtest engine (1.4) are live, Stockmock findings become the calibration target for the programmatic variance check in task 1.11.
 
-**Caveat on bid/ask history:** Dhan expired-options data (`rollingoption`) does not include
-bid/ask spread history — only OHLCV + IV + OI. The backtest fills at OHLC midpoint and
-applies the R7 slippage model (`max(₹0.25, 0.5 × spread)` at entry/target; 1.5× at
-loss-stop). Realistic spread calibration — particularly the stressed-exit multiplier — is
-deferred to the paper phase, where actual Dhan live-chain bid/ask snapshots will be captured
-(task 1.10).
-
-**India VIX ingestion requirement (Phase 1 prerequisite for R3 filter):** The CSP v1 R3
-rule requires a trailing 252-day IVR computed from India VIX OHLC history. No India VIX
-data currently exists in the repo (confirmed by grep 2026-04-25). Before R3 can be applied
-in backtesting, a separate ingestion sub-task is needed: fetch India VIX OHLC history from
-NSE or Upstox, store alongside `underlying_ohlc` in Timescale (see task 1.3), and expose it
-to `CSPConfig`. Until this pipeline exists, V1/V2/V3 backtest runs proceed without the IVR
-entry filter — the backtest will be slightly more permissive than the live spec. Document
-this gap in the V1 backtest result notes.
+**India VIX ingestion requirement (Phase 1 prerequisite for R3 filter):** The CSP v1 R3 rule requires a trailing 252-day IVR computed from India VIX OHLC history. India VIX is ingested via Upstox in task 1.3a (free, `NSE_INDEX|India VIX`, already planned). Until that pipeline is built and populated, Stockmock-based backtests proceed without the IVR entry filter — document this gap explicitly in the Stockmock results notes.
 
 ---
 
-## 1.2 — CODE — TimescaleDB container
+## 1.2 — DEFERRED — TimescaleDB container
 
-Historical options data in SQLite does not scale. `DECISIONS.md` already commits to PostgreSQL + TimescaleDB for this data.
+**Deferred indefinitely (2026-04-27).** Original justification: DhanHQ 1-minute data at ~500M rows across 5 years would exceed SQLite/Parquet capacity. DhanHQ has been rejected as a data source. The NSE F&O Bhavcopy pipeline (task 1.3) produces EOD-only data — approximately 4M rows for 8 years of NIFTY options history — well within Parquet + existing `portfolio.sqlite` capacity.
 
-- [ ] Add `docker-compose.yml` at repo root with a `timescale` service. Pin version. Expose 5432 on localhost only. Persistent volume `data/timescale/` (gitignored).
-- [ ] Document startup in `README.md`: `docker compose up -d timescale`.
-- [ ] Add `TIMESCALE_DSN` to `.env.example`.
-- [ ] Create `src/db_timescale.py` — connection context manager, sibling to existing `src/db.py`. Uses `psycopg` (v3, not psycopg2). No ORM.
-- [ ] Smoke test script `scripts/timescale_health.py` — connects, runs `SELECT 1`, prints version. Not committed to tests (requires running container); runs manually.
-- [ ] Commit: `chore(infra): add TimescaleDB container + connection layer`.
+Revisit TimescaleDB only if a future minute-level paid data source is adopted that genuinely requires a time-series database. Do not build this until that need is confirmed — the operational overhead (Docker container, psycopg dependency, DSN management) is not justified for EOD data volumes.
 
-**Explicitly out of scope for this task:** SQLAlchemy, migrations framework, ORM models. Keep the raw-SQL posture consistent with existing SQLite code.
+`src/db_timescale.py`, `docker-compose.yml`, and `TIMESCALE_DSN` are all deferred. All Phase 1 storage uses: Parquet under `data/offline/` for options OHLCV + `portfolio.sqlite` for backtest results (via `BacktestStore` in task 1.5).
 
 ---
 
-## 1.3 — CODE — Options OHLC schema + ingestion
+## 1.3 — CODE — NSE F&O Bhavcopy ingestion pipeline
 
-- [ ] Timescale schema (raw SQL in `src/backtest/schema.sql`):
-  - `options_ohlc` hypertable: `(underlying TEXT, expiry_flag TEXT, expiry_code INT, expiry_date DATE, atm_offset INT, option_type CHAR(2), timestamp TIMESTAMPTZ, open NUMERIC, high NUMERIC, low NUMERIC, close NUMERIC, iv NUMERIC, volume BIGINT, oi BIGINT, spot NUMERIC, strike NUMERIC)`. Primary key `(underlying, expiry_flag, expiry_code, atm_offset, option_type, timestamp)`. Hypertable on `timestamp`, chunk interval 7 days.
-  - Index on `(underlying, expiry_flag, expiry_code, timestamp)` for strategy-side queries.
-  - Rationale for schema shape: Dhan's API is ATM-relative (`ATM+3` not `22500CE`). Storing `atm_offset` + `spot` + `strike` lets you reconstruct absolute strikes for reporting while keeping the primary access pattern (ATM-relative lookup) a single index read.
-- [ ] `src/backtest/dhan_ingest.py`:
-  - Pydantic model for the `rollingoption` response shape (nested `data.ce`/`data.pe` with parallel arrays `open/high/low/close/iv/volume/oi/strike/spot/timestamp`).
-  - Mapper `response_to_bars()` — zips the parallel arrays into `OptionsBar` records, one per (timestamp, option_type).
-  - Handles `pe: null` / `ce: null` gracefully (empty side, not error).
-  - Batched insert into Timescale via `ON CONFLICT DO NOTHING`.
-- [ ] `src/backtest/rate_limiter.py` — token bucket at 1 req/sec (per Dhan docs). Async-safe. Reusable for live Dhan calls later.
-- [ ] CLI `scripts/backtest_ingest.py`:
-  - Args: `--underlying NIFTY --start 2021-08-01 --end 2026-06-30 --strikes "ATM-10:ATM+10" --expiry-flag MONTH --resolution 1`.
-  - Iterates (expiry, strike, option_type, 30-day-window) and calls the API. ~60 calls per (strike, option_type) × 21 strikes × 2 types = ~2,500 calls per full backfill. At 1 req/sec that's ~45 minutes of runtime.
-  - **Resumable:** before each call, check if the (underlying, expiry_code, atm_offset, option_type, date-range) is already fully populated in Timescale. Skip if yes. Required because the ingestion will be killed and restarted repeatedly during development.
-  - Progress logging: emit `ingested %d bars for %s %s ATM%+d %s [%d/%d]` every call.
-  - Graceful handling of empty responses (expired strike outside ATM±10 window, for instance) — log INFO, continue.
-- [ ] Tests: response → bar mapping (happy path + `pe: null`), idempotency on re-ingest, rate limiter, resumability check (skip when range already covered).
-- [ ] Commit sequence: schema → ingest module → rate limiter → CLI → tests.
+**Data cost: FREE — authoritative source from NSE directly. No API subscription required.**
 
-**Why daily resolution is not the first target anymore:** Dhan returns 1-minute only. We aggregate to daily at query time, not ingest time. ~390 rows per trading day per strike × 21 strikes × 2 types × 60 expiries × 5 years = ~500M rows in Timescale. Compressible to ~15–30 GB on disk with Timescale's native compression. Acceptable.
+NSE publishes daily F&O bhavcopy CSV files (end-of-day OHLCV + OI + settlement price for every active option strike) going back to 2016. This is the programmatic foundation for the backtest engine — free, exchange-authoritative, and covers COVID Mar 2020 + IL&FS Sep–Oct 2018 + all subsequent stress windows.
 
-**Note on the historical data endpoint:** Dhan also offers `/v2/charts/historical` for underlying OHLC, but see task 1.3a below — underlying OHLC (Nifty 50, India VIX, NiftyBees) is ingested via Upstox `/v2/historical-candle/` instead, at zero additional cost. Do not bundle with Dhan options ingestion — different APIs, different rate-limit budgets, different failure modes.
+**Schema (Parquet, partitioned by expiry month under `data/offline/`):**
+`date DATE, symbol TEXT, underlying TEXT, expiry DATE, strike DECIMAL, option_type CHAR(2), open DECIMAL, high DECIMAL, low DECIMAL, close DECIMAL, volume BIGINT, oi BIGINT, settle_price DECIMAL`
+
+**No Greeks in raw data.** IV must be reconstructed via Black-Scholes inverse (see task 1.6a): use `settle_price` as the option price, and Nifty spot from the 1.3a Parquet for the same date. Greeks (delta, gamma, etc.) are then derived from the reconstructed IV.
+
+- [ ] `src/backtest/bhavcopy_ingest.py`:
+  - `download_bhavcopy(date)` → downloads the daily CSV ZIP from NSE CDN. Add a politeness delay (≥1 second between requests) — NSE CDN is rate-sensitive.
+  - `parse_bhavcopy(csv_path)` → reads CSV, filters `INSTRUMENT_TYPE == 'OPTSTK' OR 'OPTIDX'`, further filters `SYMBOL == 'NIFTY'` (configurable). Returns list of `BhavRecord` (frozen Pydantic dataclass).
+  - `parse_option_symbol(symbol: str)` → extracts expiry, strike, option_type from NSE option symbol strings (e.g. `NIFTY26APR24000PE` → expiry=2026-04-24, strike=24000, option_type=PE). **Edge cases:** symbols with leading zeros in strike, symbols for weekly expiries. Write a dedicated parser, do not regex guess.
+  - Batched Parquet write: one file per expiry month, append-mode, `data/offline/options_ohlcv/{year}/{month}/`. Idempotent: if a day's data is already in the Parquet for that month, skip re-download.
+  - CLI `scripts/bhavcopy_bootstrap.py`:
+    - Args: `--underlying NIFTY --start 2016-01-01 --end <today>`.
+    - Iterates trading days, downloads, parses, writes. Resumable — checks Parquet for each date before downloading. Progress logging: `downloaded %s [%d/%d days]` per month.
+    - Graceful handling of missing dates (NSE CDN returns 404 on holidays — log INFO, continue).
+- [ ] Tests (fixture-driven, no network):
+  - `parse_option_symbol` happy path — standard monthly expiry symbol.
+  - `parse_option_symbol` edge cases — weekly expiry, strike with leading zeros, unknown format (raises `ValueError`).
+  - `parse_bhavcopy` — fixture CSV with NIFTY + non-NIFTY rows, verify NIFTY-only output.
+  - Idempotency: second ingest of same date is a no-op (check Parquet row count unchanged).
+- [ ] Commit sequence: model → ingest module → CLI → tests.
+
+**Note on underlying OHLC:** Nifty 50 spot price (needed for IV reconstruction in 1.6a) comes from task 1.3a (Upstox free historical candle). Do not duplicate in bhavcopy ingestion — join at query time by `date`.
 
 ---
 
@@ -392,7 +374,7 @@ Also provides the India VIX series required by the CSP R3 IVR filter (tasks 1.7 
 
 Per `PLANNER.md` → "quant-4pc-local Reference", the engine is already designed. Port, don't rebuild.
 
-- [ ] `src/backtest/engine.py` — port `BacktestEngine`, `Strategy` Protocol (`setup / on_day / teardown`), `DayContext`, `BacktestResult`. Adapt data loader to consume Timescale (via `src/db_timescale.py`) instead of DuckDB/Parquet.
+- [ ] `src/backtest/engine.py` — port `BacktestEngine`, `Strategy` Protocol (`setup / on_day / teardown`), `DayContext`, `BacktestResult`. Adapt data loader to consume NSE Bhavcopy Parquet files from `data/offline/options_ohlcv/` (via `pyarrow.parquet` or `pandas.read_parquet`) instead of DuckDB/Timescale. Join with 1.3a Nifty spot Parquet for IV reconstruction context.
 - [ ] `src/backtest/pricers.py` — option pricing callbacks. Two implementations:
   - `TimescalePricer` — mark-to-market from stored OHLC (primary).
   - `BlackScholesPricer` — for strikes/expiries not in Timescale (fallback; Phase 3 concern, stub for now).
@@ -441,11 +423,14 @@ Port the IC strategy from quant-4pc as the second test of the engine (first test
 
 ---
 
-## 1.6a — CODE — Black-Scholes Greeks for backtest
+## 1.6a — CODE — Black-Scholes IV reconstruction + Greeks for backtest
 
-Dhan's `rollingoption` (historical) payload includes `iv` but not `delta`, `gamma`, `theta`, or `vega`. Strategies that select strikes by delta (CSP at 25-delta, IC at 15-delta wings) need local computation. **Decision (2026-04-17):** Option A — Black-Scholes from stored IV only, for historical backtest. Live paper trading uses Dhan's own Greeks from `/v2/optionchain` (see 1.10).
+NSE F&O Bhavcopy provides OHLCV + settle_price + OI but **no IV and no Greeks**. Strike selection by delta (CSP at 25-delta, IC at 15-delta wings) requires local computation in two steps: (1) reconstruct IV from the observed option price, (2) compute Greeks from that IV.
+
+**Decision (2026-04-27):** IV reconstruction via Black-Scholes inverse (root-finding on `settle_price`) using Nifty spot from 1.3a Parquet. Greeks then derived from reconstructed IV. Live paper trading uses Upstox Analytics Token live option chain, which provides real-time Greeks directly (zero reconstruction needed — confirmed working in task 0.2).
 
 - [ ] `src/backtest/greeks.py` — pure functions:
+  - `implied_vol(S, K, T, r, option_price, option_type)` → IV via Brent root-finding (`scipy.optimize.brentq` on `black_scholes_price - option_price`). Bounds: `[1e-4, 10.0]`. Returns `None` (with WARNING) if root-finding fails (e.g. deep ITM at expiry with zero time value). Use `settle_price` as `option_price`.
   - `black_scholes_price(S, K, T, r, sigma, option_type)` → price.
   - `delta(S, K, T, r, sigma, option_type)` → delta.
   - `gamma`, `theta`, `vega` — sibling functions.
@@ -457,13 +442,15 @@ Dhan's `rollingoption` (historical) payload includes `iv` but not `delta`, `gamm
   - Parity check: BS call + put at same strike satisfy put-call parity to within 1e-4.
   - Known-value tests: compute delta for ATM option at 30 DTE at 15% IV → must be close to 0.52 for call, -0.48 for put. Pin these with `pytest.approx`.
   - Boundary: 0 DTE (expiration day) returns intrinsic for in-the-money, 0 for out-of-the-money.
+  - `implied_vol` round-trip: `implied_vol(S, K, T, r, black_scholes_price(S, K, T, r, sigma, t), t) ≈ sigma` to within 1e-4.
+  - `implied_vol` failure path: deep ITM with near-zero extrinsic — returns None, emits WARNING.
 - [ ] `src/backtest/strike_selector.py` — `select_strike_by_delta(chain, target_delta, option_type, now, expiry, r)` — reverse-lookup: given target delta, find the closest `atm_offset` strike in the loaded chain that satisfies it. Uses `greeks.delta()` + the `iv` from Dhan data.
 - [ ] Tests: strike selection happy path, target-delta unreachable (log WARNING, return closest available), out-of-ATM-window (return None).
 - [ ] Commit: `feat(backtest): Black-Scholes Greeks + delta-based strike selector`.
 
-**Known bias (must be called out in the variance check at 1.11):** Local BS deltas will systematically differ from Dhan's reported deltas (from the live chain snapshots captured in 1.10) by ~0.5–2 delta points at 25-delta. Causes: Dhan fits a volatility surface and applies forward-adjustment assumptions; we use raw BS with a fixed `r` and no dividend/forward correction. Practical effect: backtest strike selection at "25-delta" may pick ATM−3 while live paper trading at "25-delta" picks ATM−4 on the same day, or vice versa. The P&L impact is small per month but creates a structural backtest-vs-paper variance floor that must be **subtracted or acknowledged** before computing the |Z| ≤ 1.5 threshold in 1.11. If this bias turns out to be larger than expected in practice, the fix is either (a) calibrate `r` to minimize RMS delta error against the 1.10 snapshot dataset, or (b) switch to reading historical Greeks from the 1.10 snapshot store for the subset of dates where snapshots exist (post-Phase-1.10 dates only; pre-Phase-1.10 history stays on BS).
+**Known bias (must be called out in the variance check at 1.11):** Reconstructed BS deltas will systematically differ from Upstox's live reported deltas (from the Upstox chain snapshots captured in 1.10) by ~0.5–2 delta points at 25-delta. Causes: Upstox fits a volatility surface with forward-adjustment; we use BS inverse on `settle_price` with a fixed `r` and no dividend/forward correction. Additionally, `settle_price` is an exchange-determined settlement value, not the mid-of-bid-ask at the strategy entry time — this is an additional source of structural bias on entry price. Practical effect: backtest strike selection at "25-delta" may pick a different strike than live paper trading on the same day. The P&L impact is small per month but creates a structural backtest-vs-paper variance floor that must be **subtracted or acknowledged** before computing the |Z| ≤ 1.5 threshold in 1.11. If this bias turns out to be larger than expected, fix by calibrating `r` to minimise RMS delta error against the 1.10 snapshot dataset.
 
-**Why not do (b) upfront:** Phase 1 needs backtest results over 5 years, but 1.10 snapshots only start accumulating from 1.10 deployment date. Using snapshot Greeks for the last ~3 months and BS for the prior 5 years creates a discontinuity at the boundary that will confound the variance check. Uniform BS across the full history is the cleaner methodology. Revisit after Phase 2 when 6+ months of snapshot data exists.
+**Why not use live snapshot Greeks retroactively:** 1.10 snapshots only start accumulating from 1.10 deployment date (~Phase 1). Using snapshot Greeks for the last ~3 months and BS for the prior 8 years creates a boundary discontinuity that will confound the variance check. Uniform BS IV reconstruction across the full 2016–present history is the cleaner methodology. Revisit after Phase 2 when 6+ months of snapshot data exists.
 
 ---
 
@@ -521,42 +508,39 @@ For each variant, extract from `backtest_daily_pnl` + `backtest_metrics`:
 - Monthly P&L distribution: mean, median, 5th percentile, 95th percentile, worst month
 - **Sharpe, Sortino** (both required for the V1-vs-V2-vs-V3 comparison)
 - Monthly win rate
-- Behaviour during stress windows: Feb–Mar 2022, Jun 2024 (election day), Oct 2024
+- Behaviour during all stress windows (see below)
 
-**Note on historical window:** Dhan `rollingoption` data starts 2021-08-01. COVID crash
-(Mar 2020) is not covered — acknowledged limitation. Best available stress scenario is Jun
-2024 election day.
+**Note on historical window:** NSE F&O Bhavcopy data starts 2016-01-01. All critical
+stress windows are **now covered**: COVID crash (Feb–Apr 2020), IL&FS crisis (Sep–Oct
+2018), 2022 rate-hike selloff (Jan–Jun 2022), Russia/Ukraine (Feb 2022), election day
+(Jun 2024), Hindenburg/Adani (Oct 2024). This is a significant improvement over the
+originally-planned DhanHQ window (2021-08 onwards, which missed COVID and IL&FS entirely).
+Stress windows to include in results table: **IL&FS (Sep–Oct 2018), COVID (Feb–Apr 2020),
+2022 rate hike (Jan–Jun 2022), Jun 2024 election day, Oct 2024**.
 
-**Note on R3 (IVR filter):** India VIX ingestion does not yet exist (see 1.1 note). All
-three variant runs proceed without the IVR entry filter. Document this gap explicitly in the
-backtest result notes — live paper trading will apply R3 manually until the ingestion
-pipeline is built.
+**Note on R3 (IVR filter):** India VIX ingestion (task 1.3a) must be completed before
+IVR can be applied. All three variant runs proceed without the IVR entry filter until 1.3a
+is done. Document this gap explicitly in the backtest result notes — live paper trading
+applies R3 manually until the VIX Parquet is populated.
 
 - [ ] Write results into `docs/strategies/csp_nifty_v1.md` → "Backtest Results" table (all
-  three variants side by side). The V1-vs-V2-vs-V3 verdict is **Animesh's** to make based on
-  the data; the backtest provides the comparison, not the decision.
+  three variants side by side, all stress windows). Cross-reference against Stockmock
+  calibration results (task 1.1) — the programmatic backtest and Stockmock UI results should
+  be broadly directionally consistent for the COVID and IL&FS windows. Large divergence
+  between the two is a signal of a bug in the Bhavcopy data pipeline or IV reconstruction.
+  The V1-vs-V2-vs-V3 verdict is **Animesh's** to make based on the data; the backtest
+  provides the comparison, not the decision.
 - [ ] Commit: `docs(strategies): CSP v1 backtest results (V1/V2/V3 variants)`.
 
 ---
 
-## 1.10 — CODE — Dhan live option chain client + daily snapshot
+## 1.10 — CODE — Upstox live option chain snapshot (daily accumulation)
 
-**Decision (2026-04-17):** Switch live Greeks source from Upstox to Dhan `/v2/optionchain`. Dhan returns `greeks.delta/theta/gamma/vega`, `implied_volatility`, `top_bid_price`/`top_ask_price`, OI, volume at every strike in one call. Upstox remains wired as a documented fallback — same `BrokerClient` protocol, different implementation.
+**Decision (2026-04-27):** Upstox Analytics Token is the confirmed live market data source for forward testing and production (see `DECISIONS.md`). The Upstox option chain client already works (`src/client/upstox_market.py` + `parse_upstox_option_chain` from task 0.2). This task adds a daily snapshot cron job to accumulate forward-captured Greeks + bid/ask data into SQLite — the same data that was previously planned via Dhan, now via the already-integrated Upstox path.
 
-- [ ] `src/client/dhan_market.py` — new async client for Dhan Data APIs. Methods:
-  - `get_option_chain(underlying_scrip: int, underlying_seg: str, expiry: date) → OptionChain` — POSTs to `/v2/optionchain`. Uses the existing `OptionChain` Pydantic model from 0.2 (extended if needed to carry bid/ask and full Greeks dict — the model was sketched against an Upstox fixture, verify it accommodates Dhan's shape).
-  - `get_expiry_list(underlying_scrip, underlying_seg) → list[date]` — POSTs to `/v2/optionchain/expirylist`. Returns parsed dates.
-  - Rate limit: **1 request per 3 seconds** per Dhan docs. Use the same token bucket from 1.3 but parameterised (this is a different budget from rollingoption's 1/sec). `RateLimiter(1, 3.0)`.
-  - Authentication: `DHAN_ACCESS_TOKEN` + `DHAN_CLIENT_ID` from `.env` (already present).
-- [ ] `src/client/dhan_market.py` conforms to `MarketDataProvider` sub-protocol from `src/client/protocol.py`. No new protocol methods.
-- [ ] `UnderlyingScrip` lookup: Nifty 50 is `13`, segment `IDX_I` per Dhan sample payloads. Add these as constants in `src/dhan/constants.py` along with any other commonly-queried underlyings (NIFTYBEES — look up security ID from Dhan instrument list, record in `REFERENCES.md`). **Do not hardcode magic numbers inside the client** — all security IDs go through the constants module.
-- [ ] Extend `factory.py` — `create_market_data_provider(source: str)` where `source ∈ {"dhan", "upstox"}` returns the appropriate `MarketDataProvider`. Default from env var `MARKET_DATA_SOURCE=dhan`. Upstox path preserved for fallback.
-- [ ] Tests: fixture-driven (record a real Dhan response on day one, commit to `tests/fixtures/responses/dhan_option_chain/`). Cover: happy path, empty chain, single-sided chain (only CE or only PE populated), rate-limiter behavior.
-- [ ] `code-reviewer` agent on diff — heavy focus on protocol conformance and rate-limit correctness.
+No new client code needed. The snapshot accumulation is the deliverable.
 
-**Snapshot job (runs in parallel with daily_snapshot.py):**
-
-- [ ] `scripts/dhan_chain_snapshot.py` — cron-ready. Holiday guard via `market_calendar.is_trading_day`. Fetches option chain for: (Nifty 50, current-week expiry), (Nifty 50, current-month expiry), (Nifty 50, next-month expiry). Three API calls = ~9 seconds at rate limit.
+- [ ] `scripts/upstox_chain_snapshot.py` — cron-ready. Holiday guard via `market_calendar.is_trading_day`. Fetches option chain for: (Nifty 50, current-week expiry), (Nifty 50, current-month expiry), (Nifty 50, next-month expiry). Three calls via `UpstoxLiveClient.get_option_chain()` + `parse_upstox_option_chain`.
 - [ ] Persist to new Timescale hypertable `option_chain_snapshots`: `(underlying, expiry_date, strike, option_type, snapshot_ts, ltp, bid, ask, oi, volume, iv, delta, gamma, theta, vega, spot)`. Hypertable on `snapshot_ts`, chunk interval 7 days. Primary key `(underlying, expiry_date, strike, option_type, snapshot_ts)`.
 - [ ] Cron entry: `30 15 * * 1-5` (3:30 PM IST, before the 3:45 `daily_snapshot.py`, so the chain snapshot is captured at closer-to-closing levels without competing for rate-limit budget).
 - [ ] Tests: mock chain response, verify persistence, snapshot idempotency.
@@ -570,15 +554,18 @@ pipeline is built.
 
 ## 1.9 — CODE — Synthetic pricer for deep OTM protective legs
 
-Required for backtesting NiftyShield integrated strategy (Legs 2+3). Dhan
-`rollingoption` does not cover 8–30% OTM strikes. Build a Black-Scholes synthetic
-pricer with parametric vol skew.
+Required for backtesting NiftyShield integrated strategy (Legs 2+3). NSE F&O Bhavcopy
+covers all strikes at EOD, but actual fill prices for 8–30% OTM puts are highly
+illiquid — Bhavcopy settle_price at deep OTM strikes may reflect exchange-computed
+theoretical values, not real traded prices. Build a Black-Scholes synthetic pricer
+with parametric vol skew as the primary pricing model for deep OTM protective legs,
+and cross-validate against Bhavcopy settle_price where available.
 
 - [ ] `src/backtest/skew.py` — parametric vol skew model:
   - `iv_with_skew(atm_iv, spot, strike, option_type)` → adjusted IV.
   - Initial model: fixed markup of +2% IV per 5% OTM (linear extrapolation from ATM).
   - Calibration interface: `fit_skew(observed_chain: OptionChain)` → `SkewParams`.
-    Uses live chain snapshots from 1.10 when available; falls back to fixed markup.
+    Uses live Upstox chain snapshots from 1.10 when available; falls back to fixed markup.
   - Output: `SkewParams` dataclass with `slope_per_pct_otm` (default 0.4, i.e.,
     +2% per 5% OTM = 0.4% per 1% OTM) and optional quadratic term for smile
     curvature (deferred to Phase 2).
@@ -594,27 +581,27 @@ pricer with parametric vol skew.
 
 **Known bias (document in every backtest using this pricer):** BS + linear skew
 underprices deep OTM puts by an estimated 10–20% vs real market. The paper-trading
-phase (0.6a) collects real prices to measure this gap. After 6 months of 1.10
-snapshots, recalibrate via `fit_skew` and re-run.
+phase (0.6a) collects real prices from the live Upstox chain to measure this gap.
+After 6 months of 1.10 Upstox chain snapshots, recalibrate via `fit_skew` and re-run.
 
 ---
 
 ## 1.9a — CODE — Integrated strategy backtest (three legs combined)
 
 Run NiftyShield integrated strategy across available history:
-- Leg 1 (CSP): uses `TimescalePricer` from real Dhan data (per 1.7).
-- Legs 2+3: uses `SyntheticPricer` from 1.9.
+- Leg 1 (CSP): uses `BhavcopyCsvPricer` from NSE Bhavcopy data (per 1.7).
+- Legs 2+3: uses `SyntheticPricer` from 1.9 (cross-validated against Bhavcopy settle_price where available).
 
 - [ ] `src/strategy/niftyshield.py` — `NiftyShieldConfig` + `NiftyShieldStrategy`
   implementing the `Strategy` protocol. Composes CSP logic (from 1.7) with protective
   put spread entry/exit and quarterly tail put entry. Config exposes: `put_spread_lots`,
   `tail_put_lots`, `otm_pct_long` (default 0.08), `otm_pct_short` (default 0.20),
   `tail_delta` (default 0.05), `beta` (default 1.25), `coverage_ratio` (default 0.65).
-- [ ] Backtest across 2021-08 to present. Persist results in `backtest_runs` with
+- [ ] Backtest across 2016-01 to present (NSE Bhavcopy full depth). Persist results in `backtest_runs` with
   `strategy_name = niftyshield_integrated_v1`.
-- [ ] Extract metrics: net annual cost in flat/up years, payoff in Feb–Mar 2022
-  (Russia/Ukraine ~15% drop), payoff in Jun 2024 (election day), combined Sharpe,
-  max drawdown depth + duration.
+- [ ] Extract metrics: net annual cost in flat/up years, payoff in IL&FS (Sep–Oct 2018),
+  payoff in COVID (Feb–Apr 2020), payoff in Feb–Mar 2022 (Russia/Ukraine ~15% drop),
+  payoff in Jun 2024 (election day), combined Sharpe, max drawdown depth + duration.
 - [ ] Write results into `docs/strategies/niftyshield_integrated_v1.md` → "Backtest
   Results" section.
 - [ ] Commit: `docs(strategies): NiftyShield integrated v1 backtest results`.
@@ -635,20 +622,21 @@ This is the core validation gate of the whole pipeline. If this step doesn't pas
 - [ ] Compute the distribution of monthly returns from the paper-trade data over the same window.
 - [ ] Z-score: `(paper_mean - backtest_mean) / backtest_std`.
 - [ ] **Pass condition:** |Z| ≤ 1.5. Realised within ±1.5 SD of backtest.
-- [ ] **Expected bias (subtract before computing Z):** The BS-vs-Dhan delta drift from 1.6a
-  typically costs 5–10 paise per lot per month on strike selection. If paper traded
-  Dhan-delta-selected strikes and backtest used BS-delta-selected strikes, the systematic
-  drift is real and not a bug. Compute the magnitude by re-running the **active variant**
-  (V1, V2, or V3 — whichever Animesh selected after 1.8) with strike selection forced to
-  match the strikes actually paper-traded (not delta-selected); the difference between the
-  two runs = the BS selection bias. Subtract this from the paper-vs-backtest gap before
-  evaluating Z. The active variant must be recorded in `docs/strategies/csp_nifty_v1.md`
-  "Variance Check Results" before this computation runs.
+- [ ] **Expected bias (subtract before computing Z):** The BS IV-reconstruction delta vs
+  Upstox live delta from 1.6a typically diverges 0.5–2 delta points at 25-delta (see 1.6a
+  known bias note). Additionally, NSE Bhavcopy `settle_price` is not the same as
+  mid-of-bid-ask at paper-trade entry time — this creates a structural entry-price bias.
+  Compute the magnitude by re-running the **active variant** (V1, V2, or V3 — whichever
+  Animesh selected after 1.8) with strike selection forced to match the strikes actually
+  paper-traded (not delta-selected); the difference between the two runs = the BS selection
+  bias. Subtract this from the paper-vs-backtest gap before evaluating Z. The active
+  variant must be recorded in `docs/strategies/csp_nifty_v1.md` "Variance Check Results"
+  before this computation runs.
 - [ ] **Fail condition (after bias adjustment):** |Z| > 1.5. The backtest is miscalibrated.
   Debug before proceeding. Likely culprits in order of probability: slippage model too
   optimistic, cost model missing a component, entry/exit logic in code diverges from
-  paper-trade behaviour, backtest data has survivorship or fill-assumption issues, BS drift
-  larger than expected (revisit 1.6a option-(a) calibration of `r`).
+  paper-trade behaviour, Bhavcopy settle_price is an outlier for that strike/date, BS IV
+  reconstruction error larger than expected (revisit 1.6a `r` calibration).
 - [ ] Record Z-score, bias adjustment, active variant, and decision in
   `docs/strategies/csp_nifty_v1.md` → "Variance Check Results" section.
 - [ ] If fail: iterate on the backtest until it aligns, then re-run 1.8 and 1.11.
@@ -658,11 +646,11 @@ This is the core validation gate of the whole pipeline. If this step doesn't pas
 ## 1.12 — GATE — End of Phase 1
 
 - [ ] 1.1–1.10 all `[x]` (including **1.3a**, 1.6a, 1.9, 1.9a, and 1.10).
+- [ ] 1.3 complete: NSE F&O Bhavcopy ingested to Parquet for NIFTY options, 2016–present (≥8 years). Data quality: settle_price non-zero for ≥95% of ATM±5 strikes per monthly expiry; no gaps >3 consecutive trading days in any calendar month.
 - [ ] 1.3a complete: Nifty 50 daily + 15-min, India VIX daily, NiftyBees daily ingested to Parquet; data quality gate passed (Nifty close ±0.05% vs NSE, VIX <1% missing days, NiftyBees tracking error <0.5% over any rolling 1-year period).
-- [ ] 1.11 passes (|Z| ≤ 1.5, bias-adjusted) for CSP leg with results documented.
-- [ ] 1.9a integrated backtest run complete; Feb–Mar 2022 stress test shows positive
-  put spread payoff; results written to `niftyshield_integrated_v1.md`.
-- [ ] Timescale has ≥3 years of Nifty options data ingested.
+- [ ] 1.1 complete: Stockmock calibration backtest results documented in `csp_nifty_v1.md` for COVID, IL&FS, 2022 windows.
+- [ ] 1.11 passes (|Z| ≤ 1.5, bias-adjusted) for CSP leg with results documented. Programmatic backtest results directionally consistent with Stockmock calibration results for overlapping stress windows.
+- [ ] 1.9a integrated backtest run complete; IL&FS + COVID + Feb–Mar 2022 stress tests all show positive put spread payoff; results written to `niftyshield_integrated_v1.md`.
 - [ ] Full test suite green.
 - [ ] Animesh sign-off in a `TODOS.md` session log entry: "CSP backtest calibrated to paper. Ready to go live."
 
@@ -807,14 +795,14 @@ Three strategies researched sequentially: **Donchian Channel Trend Following →
 
 #### 2.S3b — CODE — Tier 2 backtester (option spread P&L) — `src/backtest/spread_bt.py`
 
-**Requires DhanHQ expired options data (same ₹400/month as task 1.3).**
+**Data: NSE F&O Bhavcopy (task 1.3) — FREE. No DhanHQ required.**
 
-**Conditional on Tier 1 passing for the same strategy. A strategy may advance to walk-forward (2.S4) on Tier 1 P&L alone if DhanHQ strike coverage is insufficient.**
+**Conditional on Tier 1 passing for the same strategy. A strategy may advance to walk-forward (2.S4) on Tier 1 P&L alone if Bhavcopy settle_price data quality is insufficient for a given strike/expiry combination (e.g., highly illiquid deep OTM strikes with zero or suspect settle_price values).**
 
 - [ ] Extend Phase 1 backtest engine to handle vertical spreads and iron condors (not just single legs).
 - [ ] Strike selection per execution mapping (see `SWING_STRATEGY_RESEARCH.md §Design Constraint`): short strike at ~15-delta, long strike 200 points further OTM for credit spreads; iron condors = bull put spread + bear call spread.
 - [ ] VIX regime governs spread type: credit spreads (normal/high VIX) vs debit spreads (low VIX) vs skip (neutral + low VIX).
-- [ ] Track exclusion rate per strategy: if >20% of trades excluded due to missing DhanHQ strikes, Tier 1 is the authoritative validation for that strategy.
+- [ ] Track exclusion rate per strategy: if >20% of trades excluded due to missing or suspect Bhavcopy settle_price data, Tier 1 is the authoritative validation for that strategy.
 - [ ] Slippage sensitivity: re-run at 0, 2, 4 points per leg. If profitability flips between 2 and 4 points, edge is too thin for options execution.
 - [ ] **Gate:** Tier 1 vs Tier 2 P&L gap documented (quantifies conversion cost of directional edge into options P&L). Results internally consistent (no negative prices, no trades on non-trading days).
 
@@ -1098,13 +1086,11 @@ When triggered: stop new entries immediately, close existing positions according
 
 These need a decision from the human operator before the relevant phase starts. Cowork: do not guess; surface these and wait.
 
-- **Phase 0.4:** Is the strategy CSP on NiftyBees, or do you want to start with a different first paper strategy?
-- **Phase 1.1 — RESOLVED (2026-04-17):** DhanHQ Data API confirmed to offer 5 years of 1-minute expired options data (rollingoption endpoint) for both index and stock options. Does not cover COVID crash (Mar 2020); best stress data available is Jun 2024 election day. ₹400/month.
-- **Phase 1.1 — STILL OPEN:** What is Dhan's definition of "nearing expiry" for the rollingoption ATM±10 strike window? (ATM±3 applies to "all other contracts".) Needs confirmation from Dhan support or a trial API call before the iron condor strategy design is locked. If the window is <7 DTE only, 30–45 DTE IC backtests are impossible and the Phase 2 strategy pipeline must adapt. **Note:** This is a historical-endpoint limitation only. The live `/v2/optionchain` endpoint (used in 1.10) returns all strikes for any expiry.
-- **Phase 1.6a — RESOLVED (2026-04-17):** Option A chosen — Black-Scholes from stored IV for historical backtest. Known delta drift vs Dhan live Greeks documented as an expected bias in the 1.11 variance check.
-- **Phase 1.6a:** Risk-free rate for Black-Scholes Greeks — defaulting to 7% (current Indian regime). Revisit if RBI policy shifts materially during Phase 1. Revisit also after 1.10 snapshots accumulate — `r` can be empirically calibrated to minimise RMS delta error vs Dhan's reported deltas.
-- **Phase 1.10 — RESOLVED (2026-04-17):** Live Greeks source switched to Dhan `/v2/optionchain` (Greeks, IV, bid/ask, OI in one response; 1 req / 3 sec rate limit). Upstox retained as documented fallback. Live chain snapshot cron starts in Phase 1 (3:30 PM IST, before daily_snapshot) to accumulate forward-captured Greeks + bid/ask for calibration and Phase 3 strategy needs.
-- **Phase 1.10:** Confirm `UnderlyingScrip` security IDs for NIFTYBEES (Nifty 50 is `13`, already known from Dhan docs). Look up via Dhan instrument list and record in `REFERENCES.md` before 1.10 CLI runs.
+- **Phase 0.4 — RESOLVED (2026-04-25):** Underlying switched from NiftyBees to Nifty 50 index options. Active spec is `csp_nifty_v1.md`; `csp_niftybees_v1.md` retained DEPRECATED.
+- **Phase 1.1 — SUPERSEDED (2026-04-27):** DhanHQ Data API evaluation complete. DhanHQ rejected — 1-min data is only ~5 days deep, EOD is 5 years but misses COVID and IL&FS. Stockmock adopted for calibration backtests (already subscribed, UI-based, covers all stress windows). NSE F&O Bhavcopy adopted for programmatic pipeline (free, 2016–present). See `DECISIONS.md` → "Backtest Data Source Decision (2026-04-27)".
+- **Phase 1.6a — RESOLVED (2026-04-27):** BS IV reconstruction adopted — `implied_vol()` via Brent root-finding on NSE Bhavcopy `settle_price` + Nifty spot from 1.3a. Known structural bias vs Upstox live deltas documented as expected variance floor in 1.11.
+- **Phase 1.6a:** Risk-free rate for Black-Scholes — defaulting to 7% (current Indian regime). Revisit if RBI policy shifts materially during Phase 1. After 6+ months of 1.10 Upstox snapshots, empirically calibrate `r` to minimise RMS delta error vs Upstox reported deltas.
+- **Phase 1.10 — RESOLVED (2026-04-27):** Upstox Analytics Token confirmed as live Greeks source for forward testing and production (already integrated). Live option chain snapshot cron (`scripts/upstox_chain_snapshot.py`) starts in Phase 1 to accumulate forward-captured Greeks + bid/ask. No Dhan live chain client needed.
 - **Phase 2.2:** Is static IP provisioned by the time CSP is ready to go live? If not, plan for manual order placement + `record_trade.py` ledger capture.
 - **Phase 4.1:** What's the acceptable "Finideas is worth its fee" spread vs benchmark? The plan uses ±2% / +3% / middle-zone; this is the author's suggestion, not a hard rule.
 - **Phase 3.2 vs Track A swing strategies — UNRESOLVED:** `BACKTEST_PLAN.md §3.2` specifies an "event-driven calendar spread" (RBI policy / budget / major earnings, entered 1 day before, exited 1 day after) as the third Phase 3 strategy. `docs/plan/SWING_STRATEGY_RESEARCH.md` defines three different strategy candidates (Donchian Channel, ORB, Gap Fade) that run through a separate research pipeline (Phase 2 Track A) producing 0–3 validated live strategies after Phase 1.12. These were designed independently and now conflict. **Decision required before Phase 3 begins:** Does the calendar spread (§3.2) (a) **replace** whichever swing strategy fails validation — making it the fallback third live strategy if Track A yields fewer than 3 survivors; or (b) become a **fourth strategy** that enters Phase 3 alongside Track A graduates? If (b), the "one new strategy per year" Cross-Cutting Rule applies and the Phase 3 timeline must be extended accordingly. Cowork: do not resolve — surface and wait.

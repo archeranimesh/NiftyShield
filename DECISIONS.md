@@ -215,9 +215,9 @@
 
 **Manual 24-hour token from `web.dhan.co`:** Token generation requires Application Name (e.g. `NiftyShield`), optional Postback URL, Token validity (default 24h). No OAuth flow — simpler than both Upstox and Nuvama.
 
-**Data Source for Backtesting Engine is DhanHQ Data API:** We have evaluated Upstox, Kite, Nuvama, and DhanHQ. Kite does not offer expired options data. Upstox Plus requires tracking massive dictionaries of exact legacy option symbol IDs. DhanHQ enables querying via relative ATM strikes (e.g., ATM ± 10) simplifying option chain reconstruction drastically. We will subscribe to the Dhan Data API (₹400/month or ₹4,788/year) explicitly for its `POST /v2/charts/rollingoption` capabilities.
+**Data Source for Backtesting Engine — SUPERSEDED (2026-04-27):** See "Backtest Data Source Decision (2026-04-27)" section below. DhanHQ was the original choice; it has been rejected after evaluation. NSE F&O Bhavcopy (free, from exchange) is now the programmatic data source for options OHLCV backtesting.
 
-**Local Storage Architecture for Historical Chains:** Because minute-level OHLCV data for hundreds of strikes across multiple expiries will rapidly blow up a standard SQLite database, this data will be ingested into a **PostgreSQL + TimescaleDB** local instance. Timescale's hypertables will provide out-of-the-box compression and high-performance time-series aggregations.
+**Local Storage Architecture for Historical Chains — REVISED (2026-04-27):** TimescaleDB was originally selected to handle the volume of DhanHQ's 1-minute data (~500M rows). DhanHQ has been rejected; the NSE F&O Bhavcopy pipeline produces EOD data (~4M rows for 8 years across all NIFTY strikes) — well within Parquet + SQLite capacity. TimescaleDB is **deferred indefinitely** — revisit only if a future paid minute-level data source is adopted. All new backtest storage uses Parquet (`data/offline/`) + existing `portfolio.sqlite`.
 
 ---
 
@@ -300,10 +300,67 @@ command and annual reset procedure.
 
 ---
 
+## Backtest Data Source Decision (2026-04-27)
+
+Evaluated TrueData and DhanHQ for NSE Nifty options backtesting. Primary use case: insurance calibration backtest for the NiftyShield short put strategy, targeting delta-based strike selection with a max drawdown of ~₹6L on a ₹1 crore portfolio.
+
+**TrueData — Rejected:**
+- 1-min bar data: 6 months depth only — useless for stress event backtesting
+- Tick data: 5 days depth
+- `getTickHistorywithGreeks` is under development — unavailable
+- Historical Greeks do not exist; Greeks are live-only and a paid add-on
+- EOD data: 10+ years, but freely available from NSE directly
+- No justifiable cost given free alternatives
+
+**DhanHQ Data API — Rejected for backtesting:**
+- 1-min intraday: ~5 days depth only (previously believed to be 5 years — confirmed wrong after evaluation)
+- EOD: 5 years depth — misses COVID Mar 2020 and IL&FS Sep–Oct 2018, the two most important stress windows for NiftyShield's drawdown methodology
+- No historical Greeks
+- Previously adopted as the primary backtesting source in this file; that decision is superseded. DhanHQ Data API subscription will NOT be pursued.
+
+**Stockmock ([stockmock.in](https://stockmock.in)) — Adopted for calibration backtest phase:**
+- Already subscribed, no additional cost
+- UI-based NSE F&O options backtester with historical data
+- Covers key stress windows: COVID Mar 2020, IL&FS Sep–Oct 2018, 2022 rate-hike selloff — exactly the windows DhanHQ cannot provide
+- Purpose-built for the insurance calibration objective: finding the right delta strike, breach frequency across market regimes, premium behaviour across IV environments
+- Limitation: no Python API, output is UI reports only — cannot integrate directly with NiftyShield codebase
+- Action: run stress scenario backtests manually across COVID, IL&FS, 2022 windows; document delta sweet spot findings; use results to set initial hardcoded thresholds in `csp_nifty_v1.md`
+
+**NSE F&O Bhavcopy (free, direct from exchange) — Adopted for programmatic pipeline:**
+- NSE publishes daily F&O bhavcopy CSV files going back to 2016+ at zero cost
+- Each file contains every active option strike: symbol, expiry, strike, option type, OHLCV, OI, settlement price
+- Authoritative source (exchange itself), no vendor dependency, no API subscription
+- No Greeks — IV must be reconstructed via Black-Scholes inverse from settlement price and spot (spot from Upstox OHLC via task 1.3a)
+- Data depth: 2016–present, covering COVID Mar 2020, IL&FS Sep–Oct 2018, 2022 rate hike — all critical stress windows
+- Storage: Parquet, partitioned by expiry month, under `data/offline/`
+- Schema: `date, symbol, expiry, strike, option_type, open, high, low, close, volume, oi, settle_price`
+- Implementation: `src/backtest/bhavcopy_ingest.py` — download, parse option symbol string (e.g. `NIFTY26APR24000PE`), normalise, store. See BACKTEST_PLAN.md task 1.3.
+
+**Upstox API — Confirmed for forward testing and production:**
+- Already integrated in NiftyShield codebase (`src/client/upstox_market.py`, `UpstoxLiveClient`)
+- Provides live option chain with real-time Greeks (delta, IV, theta, vega) at 1-min cadence via the Analytics Token — zero additional cost
+- Forward testing phase after calibration backtest is complete
+- Production delta monitoring for monthly CSP strike selection
+- `UPSTOX_ANALYTICS_TOKEN` already active; no new subscription required
+
+**Final stack:**
+
+| Phase | Tool | Cost |
+|---|---|---|
+| Calibration backtest (historical) | Stockmock UI | Already subscribed |
+| Programmatic data pipeline | NSE F&O Bhavcopy ingestion | Free |
+| Forward testing + production | Upstox API (existing) | Already integrated |
+
+**Implication for two-tier backtest methodology (2026-04-26 decision):** The original Tier 1 rationale ("real Dhan expired options data") is updated — Tier 1 now uses NSE F&O Bhavcopy for OHLCV + Black-Scholes IV reconstruction. Tier 2 (deep OTM synthetic pricing for protective legs) is unchanged — still Black-Scholes with parametric skew (`src/backtest/synthetic_pricer.py`), since NSE Bhavcopy covers all strikes at EOD.
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/`, `src/streaming/` — all empty
-- Expired instruments API — blocked (paid subscription). NSE CSV dumps as interim backtest source
+- Expired instruments API (Upstox) — blocked (paid subscription). NSE F&O Bhavcopy is the adopted alternative for historical options OHLCV — no Upstox paid tier needed for backtesting
+- TimescaleDB — deferred indefinitely (original justification was DhanHQ 1-min volume; DhanHQ rejected 2026-04-27; NSE Bhavcopy EOD data fits in Parquet + SQLite)
+- DhanHQ Data API subscription — rejected 2026-04-27 (insufficient historical depth for stress testing; no historical Greeks)
 - Order execution — blocked (static IP not provisioned). `MockBrokerClient` for all development
 - P&L visualization — matplotlib or React dashboard; deferred until several weeks of snapshot history
 - `ReplayMarketStream` + `StreamRecorder` — not yet built
