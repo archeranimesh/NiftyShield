@@ -401,6 +401,73 @@ Decision reached via multi-model council (GPT-5.4, Gemini 3.1 Pro, Claude Opus 4
 
 ---
 
+## Slippage Model for Historical Bhavcopy Backtest (2026-04-30)
+
+Decision reached via multi-model council (GPT-5.4, Gemini 3.1 Pro, Claude Opus 4.6, Grok-4). Supersedes the placeholder in task 1.4 which assumed a flat 0.5–1 INR band. High consensus across all four models on the core architecture; minor divergence on exact parameter values and failure-mode philosophy.
+
+**Primary model: absolute INR, VIX-regime-aware (not percentage of premium).** Unanimous. Option spreads in Nifty options are far more stable in absolute rupee terms than as a percentage of premium — the minimum tick (₹0.05) and order book depth create an absolute floor that percentage models cannot replicate. A ₹90 put and a ₹200 put at similar OI and delta will have spreads within ~1.5× of each other, not 2.2× as a percentage model implies.
+
+**Fill model:** `entry SELL fill = settle_price − s`; `exit BUY fill = settle_price + s`, where `s` (one-sided slippage, INR) is:
+
+| India VIX | Base slippage (`s`) |
+|---|---|
+| VIX ≤ 20 | ₹1.0 |
+| 20 < VIX ≤ 25 | ₹1.5 |
+| 25 < VIX ≤ 30 | ₹3.0 |
+| VIX > 30 (crisis) | ₹4.0 |
+
+**Secondary adjustment: OI-based liquidity multiplier.** Multiplier applied to base `s`:
+
+| Strike OI | Multiplier |
+|---|---|
+| ≥ 50,000 | 1.0× |
+| 20,000 – 49,999 | 1.5× |
+| 5,000 – 19,999 | 2.0× |
+| < 5,000 | 2.5× (flag as potentially unexecutable) |
+
+Final slippage: `s_final = base_slippage(vix) × liquidity_multiplier(oi)`. The base values are anchored at the 60th–70th percentile of estimated spreads — modestly conservative, not worst-case.
+
+**`SlippageModel` dataclass fields (for `src/backtest/costs.py`):**
+
+```python
+@dataclass(frozen=True)
+class SlippageModel:
+    # VIX tier thresholds and base slippage values (INR, one-sided)
+    vix_tiers: tuple[tuple[float, float], ...] = (
+        (20.0, 1.0), (25.0, 1.5), (30.0, 3.0), (float('inf'), 4.0)
+    )
+    # OI tier thresholds and multipliers
+    oi_tiers: tuple[tuple[int, float], ...] = (
+        (50_000, 1.0), (20_000, 1.5), (5_000, 2.0), (0, 2.5)
+    )
+    # Asymmetric stop-loss exit multiplier (optional; applied to 2× stop exits only)
+    stop_loss_exit_multiplier: float = 1.5
+```
+
+**Critical: slippage must propagate into exit trigger logic.** Exit rules (50% profit, 2× credit stop, 21 DTE) are calculated from realized fills, not settle prices. If the opening SELL filled at ₹98.5 (settle ₹100 − ₹1.5 slippage), the actual credit is ₹98.5. The 50% profit target is ₹49.25; the 2× stop is ₹197. Exit BUY fill also includes slippage: `exit_fill = settle + s`. Failing to propagate slippage through trigger logic systematically overstates profitability — a common backtest error.
+
+**Asymmetric exit slippage (optional enhancement).** Stop-loss exits occur during crashes when VIX has already spiked and the 25-delta put is now 50–60 delta — spreads are widest exactly when losses are largest. Apply `stop_loss_exit_multiplier = 1.5–2.0×` to the 2× stop-loss BUY fill. Profit-target and time-stop exits use standard slippage. Implement if the base model's stop-loss bias turns out to be material in the variance check.
+
+**Three-scenario sensitivity (mandatory in all backtest reports):**
+
+| Scenario | VIX ≤ 25 | VIX > 25 |
+|---|---|---|
+| Optimistic | ₹0.75/side | ₹1.5/side |
+| Base (primary) | ₹1.0–1.5/side | ₹3.0/side |
+| Conservative | ₹2.5/side | ₹5.0/side |
+
+Decision rule applied at reporting time: profitable at zero slippage only → reject; profitable at base, marginal at conservative → paper trade small; profitable at conservative → strong deployment candidate.
+
+**Forward calibration plan.** Once 3–6 months of Upstox 5-min bid/ask snapshots accumulate (task 1.10a, already running): segment realized half-spreads by delta bucket, DTE bucket, VIX regime, OI level, time of day. Fit a regression `expected_half_spread = f(log(OI), VIX, DTE, premium, moneyness)`. If within ±30% of the tiered model, historical backtest conclusions hold. If materially different, retrofit and re-evaluate. This plan does not delay running the backtest — use the tiered model now, calibrate later.
+
+**Materiality.** Typical net credit: ₹80–150/unit → ₹4,000–7,500/lot (50 units). Round-trip slippage at base case: ~₹100–150/lot. Annual drag on 12 round-trips: ₹1,200–1,800/lot. Meaningful but not strategy-killing for a CSP with genuine edge; will reduce returns but should not transform a profitable strategy into a losing one unless the edge is razor-thin — in which case slippage is doing the right diagnostic work.
+
+**Failure-mode verdict: optimistic bias (underestimating slippage) is the worse failure.** Three of four models agreed unambiguously; one dissented on grounds that for a low-frequency strategy with fast feedback loops and a forward data collection plan, the cost of false negatives (rejecting a viable strategy) could outweigh false positives. The dissent has merit in the abstract but is outweighed by: (1) asymmetric real-world consequences — underestimating slippage leads to committing real capital to a strategy with an illusory edge, while overestimating leads to opportunity cost only; (2) psychological anchoring — live positions are harder to exit than abandoned backtests; (3) slippage is highest exactly when losses are largest (stop exits during volatility spikes), so underestimating it understates the worst drawdowns. Err modestly conservative at the 60th–70th percentile, not the 95th.
+
+**Methodology statement (ready for strategy spec documentation):** "Historical NSE Bhavcopy settle prices are treated as mid-market proxies. Executable fills for short options occur at bid on entry and ask on exit; we adjust by a modeled half-spread. In the absence of historical bid/ask data, we employ an absolute slippage model in INR premium points, conditioned on India VIX regime and strike-level open interest as a liquidity proxy. Results are presented across optimistic, base, and conservative slippage scenarios. The base case is anchored to the 60th–70th percentile of estimated spreads. Forward calibration using real-time 5-minute bid/ask snapshots (task 1.10a) will validate and, if necessary, retrofit the historical model."
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/`, `src/streaming/` — all empty

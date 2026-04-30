@@ -385,12 +385,13 @@ Per `PLANNER.md` → "quant-4pc-local Reference", the engine is already designed
   - GST: 18% on brokerage + transaction.
   - SEBI turnover fee: ₹10 per crore of premium.
   - Stamp duty: 0.003% on buy side.
-  - Slippage model: 0.5–1 INR per lot at entry/exit under normal vol, 2–3 INR on expiry-day fast markets. Parameterise via `SlippageModel` dataclass.
-- [ ] Tests: engine happy path, daily-loop invariants, cost model unit tests (each cost component + total on a known trade), slippage model edge cases.
+  - **Slippage model (council decision 2026-04-30 — see `DECISIONS.md → Slippage Model`):** Absolute INR, VIX-regime-aware, with OI liquidity multiplier. `SlippageModel` frozen dataclass holds VIX tiers, OI tiers, and an optional `stop_loss_exit_multiplier`. `estimate_slippage(vix, strike_oi) → float`. `adjusted_fill(settle_price, side, vix, strike_oi) → Decimal`. **Critical:** exit trigger levels (50% profit, 2× stop) must be computed from realized fills, not `settle_price` — propagate slippage through the trigger logic or profitability will be systematically overstated.
+  - Every backtest report must include three-scenario sensitivity output: optimistic / base / conservative slippage bands. Decision rule: profitable at base only → paper trade; profitable at conservative → deploy candidate. See `DECISIONS.md` for exact values.
+- [ ] Tests: engine happy path, daily-loop invariants, cost model unit tests (each cost component + total on a known trade), slippage model — all four VIX tiers, all OI multiplier tiers, stop-loss exit asymmetry, exit trigger propagation (assert 50% target uses realized fill not settle).
 - [ ] `code-reviewer` on diff — heavy focus on Decimal invariant (not float) throughout the cost model.
 - [ ] Commit sequence: engine → pricers → costs → integration test.
 
-**Decision to record in `DECISIONS.md`:** "Backtest cost model built as a composable `CostModel` with separate functions per cost component (brokerage, STT, exchange, GST, SEBI, stamp, slippage). Rationale: each component has its own regulatory source and changes independently. Unit-testable in isolation. Parametrised for what-if scenarios."
+**Decision already recorded in `DECISIONS.md`:** Slippage model (2026-04-30). When implementing, also add the composable `CostModel` rationale: "separate functions per cost component (brokerage, STT, exchange, GST, SEBI, stamp, slippage) because each component has its own regulatory source and changes independently."
 
 ---
 
