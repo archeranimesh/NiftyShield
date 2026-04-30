@@ -68,6 +68,22 @@ If the prompt does not name specific files, ask before starting. One clarifying 
 
 Confirm: which `src/` modules change? Which files are touched? Tests required? (default: yes)
 
+## Step 2b — Council checkpoint (planning gate, mandatory)
+
+Before stating the implementation plan, ask: **does this task contain a decision that warrants
+a council call?**
+
+Check against `docs/council/README.md#when-to-trigger-the-council`. A decision qualifies when
+**all three** hold: (1) load-bearing and costly to reverse, (2) two defensible approaches with
+materially different outcomes, (3) spans multiple disciplines simultaneously.
+
+**If yes:** surface the decision to the user, draft the council question, recommend a template,
+and wait for the council output before writing any code. The council output gates Step 3.
+
+**If no:** proceed directly to Step 3.
+
+This checkpoint exists only in the planning phase. Never invoke the council mid-implementation.
+
 ## Step 3 — State plan, wait for go-ahead
 
 > Plan: [one sentence] → touches [file1, file2] → tests in [test file] → commit. Proceed?
@@ -190,6 +206,8 @@ Never use a lower-ranked response to contradict Stage 3.
 | Commit format | `.claude/skills/commit/SKILL.md` |
 | Python review checklist | `REVIEW.md` |
 | Backtest → paper → live pipeline plan | `BACKTEST_PLAN.md` |
+| Council trigger criteria + workflow | `docs/council/README.md` |
+| Completed council decisions | `docs/council/YYYY-MM-DD_<topic>.md` |
 
 ## Module CLAUDE.md files (auto-loaded when working in that directory)
 

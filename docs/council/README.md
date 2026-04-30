@@ -12,6 +12,59 @@ docs/council/
 └── README.md
 ```
 
+## When to Trigger the Council
+
+**The council is a planning-phase tool. Never invoke it mid-implementation.**
+The right moment is after scope is confirmed but before the implementation plan is finalised —
+so the council output can gate the plan, not interrupt code already written.
+
+Trigger when **all three conditions hold simultaneously:**
+
+**1. The decision is load-bearing**
+It will be embedded in the backtest engine, a strategy doc, or live execution logic, and
+reversing it later costs significant rework. A wrong call on spread width formula is baked
+into hundreds of parameter combinations; a wrong call on a variable name is a one-line rename.
+
+**2. Two or more defensible approaches exist with materially different outcomes**
+Not "I'm not sure which is cleaner" but "approach A and approach B produce meaningfully
+different P&L outcomes or architectural constraints, and first principles alone don't resolve
+the tradeoff." The Donchian always-in vs. signal-in-only question qualified — structural EV
+difference of ₹800–2,160/lot per inter-signal period, not a stylistic preference.
+
+**3. The question spans multiple disciplines simultaneously**
+Options microstructure + quant modelling + backtest fidelity + NSE execution reality, all
+bearing on the same decision. The council's value is cross-disciplinary stress-testing where
+one domain's obvious answer breaks in another.
+
+### Concrete NiftyShield triggers
+
+| Topic | Template |
+|-------|----------|
+| Any new strategy's core entry/exit rule | `strategy_parameters` |
+| IV reconstruction approach (BS vs. SVI vs. other) | `backtest_methodology` |
+| Slippage model choice for Tier 2 backtest | `backtest_methodology` |
+| Kill-switch / circuit-breaker criteria for live execution | `strategy_parameters` |
+| Position sizing formula when it interacts with dynamic width + lot constraints | `strategy_parameters` |
+| Storage or module boundary decisions with long-lived lock-in | `data_architecture` |
+
+### Do NOT trigger the council for
+
+- Implementation questions (class structure, async vs. sync, naming)
+- Decisions already resolved in `DECISIONS.md` — re-litigating settled decisions is noise
+- Anything resolvable by reading existing docs or running a quick quantitative check
+- Parameter sweeps — the backtest resolves those empirically; council opinions on specific
+  numbers (e.g., "should k be 0.8 or 0.9?") are weaker than observed Sharpe data
+- Reversible decisions where the cost of being wrong is a small refactor
+
+### Phase constraint
+
+```
+Planning phase  ✓  Confirm scope → identify council-worthy decisions → submit to council
+                    → receive output → update DECISIONS.md + plan doc → THEN implement
+Implementation  ✗  Do not stop mid-implementation to ask the council; finish the phase,
+                    open a new planning session for any unresolved architectural questions
+```
+
 ## Submitting a Question
 
 ```bash
