@@ -323,7 +323,7 @@ NSE publishes daily F&O bhavcopy CSV files (end-of-day OHLCV + OI + settlement p
 **Schema (Parquet, partitioned by expiry month under `data/offline/`):**
 `date DATE, symbol TEXT, underlying TEXT, expiry DATE, strike DECIMAL, option_type CHAR(2), open DECIMAL, high DECIMAL, low DECIMAL, close DECIMAL, volume BIGINT, oi BIGINT, settle_price DECIMAL`
 
-**No Greeks in raw data.** IV must be reconstructed via Black-Scholes inverse (see task 1.6a): use `settle_price` as the option price, and Nifty spot from the 1.3a Parquet for the same date. Greeks (delta, gamma, etc.) are then derived from the reconstructed IV.
+**No Greeks in raw data.** IV must be reconstructed via Black '76 inverse (see task 1.6a): use Nifty Futures `settle_price` as the forward price, with price blend logic (`close` if liquid, `settle_price` as fallback) for the option price. Greeks (delta, gamma, etc.) derived from smoothed IV via smile fit. Full methodology in `DECISIONS.md → IV Reconstruction Methodology (2026-04-30)`.
 
 - [ ] `src/backtest/bhavcopy_ingest.py`:
   - `download_bhavcopy(date)` → downloads the daily CSV ZIP from NSE CDN. Add a politeness delay (≥1 second between requests) — NSE CDN is rate-sensitive.
@@ -423,34 +423,65 @@ Port the IC strategy from quant-4pc as the second test of the engine (first test
 
 ---
 
-## 1.6a — CODE — Black-Scholes IV reconstruction + Greeks for backtest
+## 1.6a — CODE — Black '76 IV reconstruction + Greeks for backtest
 
-NSE F&O Bhavcopy provides OHLCV + settle_price + OI but **no IV and no Greeks**. Strike selection by delta (CSP at 25-delta, IC at 15-delta wings) requires local computation in two steps: (1) reconstruct IV from the observed option price, (2) compute Greeks from that IV.
+NSE F&O Bhavcopy provides OHLCV + settle_price + OI but **no IV and no Greeks**. Strike selection by delta (CSP at 25-delta, IC at 15-delta wings) requires local computation: (1) reconstruct IV per strike via Black '76 inversion, (2) fit a smooth volatility smile, (3) compute delta from smoothed IV.
 
-**Decision (2026-04-27):** IV reconstruction via Black-Scholes inverse (root-finding on `settle_price`) using Nifty spot from 1.3a Parquet. Greeks then derived from reconstructed IV. Live paper trading uses Upstox Analytics Token live option chain, which provides real-time Greeks directly (zero reconstruction needed — confirmed working in task 0.2).
+**Decision (2026-04-30, council — supersedes 2026-04-27 plan):** Use **Black '76** with Nifty Futures `settle_price` as the forward price `F`. This eliminates dividend yield and carry estimation simultaneously. Stepped RBI repo rate replaces the constant 7% placeholder. Price blend (`close` if liquid, `settle_price` as fallback) replaces uniform `settle_price`. Quadratic smile fit in log-moneyness before delta computation replaces raw per-strike delta. Full methodology and module shape in `DECISIONS.md → IV Reconstruction Methodology (2026-04-30)`.
 
-- [ ] `src/backtest/greeks.py` — pure functions:
-  - `implied_vol(S, K, T, r, option_price, option_type)` → IV via Brent root-finding (`scipy.optimize.brentq` on `black_scholes_price - option_price`). Bounds: `[1e-4, 10.0]`. Returns `None` (with WARNING) if root-finding fails (e.g. deep ITM at expiry with zero time value). Use `settle_price` as `option_price`.
-  - `black_scholes_price(S, K, T, r, sigma, option_type)` → price.
-  - `delta(S, K, T, r, sigma, option_type)` → delta.
-  - `gamma`, `theta`, `vega` — sibling functions.
-  - Use `scipy.stats.norm` for `N(d1)`/`N(d2)`. Add scipy to `requirements.txt`.
-  - `r` (risk-free rate) — default to a configurable constant (7% for current Indian regime); expose as a parameter of `CostModel` or `BacktestConfig` so it can be tuned.
-  - `T` (time to expiry in years) — computed from strategy `now` date to expiry date; **convention: calendar days / 365.25**. Document this explicitly in the module docstring — trading-days-over-252 is equally defensible and yields slightly different deltas, so the choice must be visible.
-  - No dividend yield adjustment. Indian index options are European on a forward, but the forward-vs-spot gap on Nifty is small (<1% on monthly) and including it adds complexity without improving the backtest's fitness-for-purpose.
-- [ ] Tests:
-  - Parity check: BS call + put at same strike satisfy put-call parity to within 1e-4.
-  - Known-value tests: compute delta for ATM option at 30 DTE at 15% IV → must be close to 0.52 for call, -0.48 for put. Pin these with `pytest.approx`.
-  - Boundary: 0 DTE (expiration day) returns intrinsic for in-the-money, 0 for out-of-the-money.
-  - `implied_vol` round-trip: `implied_vol(S, K, T, r, black_scholes_price(S, K, T, r, sigma, t), t) ≈ sigma` to within 1e-4.
-  - `implied_vol` failure path: deep ITM with near-zero extrinsic — returns None, emits WARNING.
-- [ ] `src/backtest/strike_selector.py` — `select_strike_by_delta(chain, target_delta, option_type, now, expiry, r)` — reverse-lookup: given target delta, find the closest `atm_offset` strike in the loaded chain that satisfies it. Uses `greeks.delta()` + the `iv` from Dhan data.
-- [ ] Tests: strike selection happy path, target-delta unreachable (log WARNING, return closest available), out-of-ATM-window (return None).
-- [ ] Commit: `feat(backtest): Black-Scholes Greeks + delta-based strike selector`.
+**Prerequisites before starting this task:**
+- Task 1.3 complete (Bhavcopy Parquet available, including futures rows if the open question in `DECISIONS.md` is resolved to parse futures in 1.3).
+- Task 1.3a complete (Nifty OHLC Parquet available as spot fallback for futures derivation).
+- Open question resolved: does task 1.3 ingest `FUTIDX NIFTY` rows, or does task 1.6a derive futures price at query time from spot + repo rate?
 
-**Known bias (must be called out in the variance check at 1.11):** Reconstructed BS deltas will systematically differ from Upstox's live reported deltas (from the Upstox chain snapshots captured in 1.10) by ~0.5–2 delta points at 25-delta. Causes: Upstox fits a volatility surface with forward-adjustment; we use BS inverse on `settle_price` with a fixed `r` and no dividend/forward correction. Additionally, `settle_price` is an exchange-determined settlement value, not the mid-of-bid-ask at the strategy entry time — this is an additional source of structural bias on entry price. Practical effect: backtest strike selection at "25-delta" may pick a different strike than live paper trading on the same day. The P&L impact is small per month but creates a structural backtest-vs-paper variance floor that must be **subtracted or acknowledged** before computing the |Z| ≤ 1.5 threshold in 1.11. If this bias turns out to be larger than expected, fix by calibrating `r` to minimise RMS delta error against the 1.10 snapshot dataset.
+- [ ] `src/backtest/repo_rates.py`:
+  - `get_repo_rate(date: date) → float` — stepped RBI repo rate lookup. `REPO_HISTORY: list[tuple[str, float]]` constant at module level (~20 entries, 2016–present). Pure function, no I/O, no network.
 
-**Why not use live snapshot Greeks retroactively:** 1.10 snapshots only start accumulating from 1.10 deployment date (~Phase 1). Using snapshot Greeks for the last ~3 months and BS for the prior 8 years creates a boundary discontinuity that will confound the variance check. Uniform BS IV reconstruction across the full 2016–present history is the cleaner methodology. Revisit after Phase 2 when 6+ months of snapshot data exists.
+- [ ] `src/backtest/greeks.py` — pure Black '76 functions. All parameterised on `F` (futures forward), not `S` (spot):
+  - `black76_price(F, K, T, r, sigma, option_type) → Decimal`
+  - `black76_iv(price, F, K, T, r, option_type) → float | None` — Brent root-finding via `scipy.optimize.brentq`. Bounds `[0.01, 3.0]`. Apply exclusion gates before calling: DTE < 5, price < ₹1.0, extrinsic < ₹0.50. Returns `None` + WARNING on non-convergence.
+  - `black76_delta(F, K, T, r, sigma, option_type) → float`
+  - `black76_gamma`, `black76_theta`, `black76_vega` — sibling functions.
+  - `T` convention: **calendar days / 365.25**. Document this in the module docstring — trading-days/252 is equally defensible but yields different deltas; the choice must be visible and consistent.
+  - Add `scipy` to `requirements.txt` if not already present.
+
+- [ ] `src/backtest/iv_reconstruction.py` — full daily pipeline, pure functions throughout:
+  - `select_price_for_entry(row) → tuple[Decimal | None, str]` — blend logic. Returns `(price, source_tag)` where source_tag ∈ `{'market', 'settle_model', 'unusable'}`. `market` path: `close` if volume > 0 AND `|close − settle_price| / max(settle_price, 0.5) < 0.50`. `settle_model` fallback. `unusable` if neither available.
+  - `atm_sanity_check(chain_df, F, T, r) → dict` — put-call parity check at ATM strike. Returns `parity_error_pct`, `approx_iv` (Brenner-Subrahmanyam: `straddle / (0.8 × F × √T)`), `quality` (`'good' | 'suspect'`). Threshold: parity error > 0.5% of spot → `suspect`.
+  - `fit_smile_and_get_delta(put_chain_df, F, T, r) → pd.DataFrame | None` — fit quadratic `IV = a + b·ln(K/F) + c·ln(K/F)²` weighted by ATM proximity (`w = 1 / (1 + 10·ln(K/F)²)`). For each strike compute smoothed IV, then `black76_delta`. Returns per-strike DataFrame with `strike, iv_raw, iv_smooth, delta` columns. Returns `None` if < 4 valid strikes.
+  - `compute_30dte_atm_iv(date, expiry_surfaces: dict, F_dict: dict) → float | None` — variance-space interpolation to 30-DTE constant-maturity ATM IV. Uses two nearest expiries in 7–90 DTE range. `var_interp = var_short + weight × (var_long − var_short)` where `var = σ²T`. Returns `None` if < 1 usable expiry.
+  - `iv_percentile(current_iv: float, iv_history: list[float], lookback: int = 252) → float | None` — percentile rank of `current_iv` vs trailing `lookback` observations. Returns `None` if < 20 observations.
+  - `DailyChainResult` — frozen dataclass: `date, smile_df, atm_iv_30dte, sanity_check, usable_strikes, suspect`.
+  - `process_daily_chain(date, options_df, futures_df, spot_fallback) → DailyChainResult` — orchestrates full pipeline. Filters monthly expiry only (last Thursday; Wednesday if Thursday is NSE holiday — use `src/market_calendar` for this). Applies exclusion gates. Runs sanity check. Inverts IV per strike. Fits smile. Computes 30-DTE ATM IV.
+
+- [ ] `src/backtest/strike_selector.py`:
+  - `select_strike_by_delta(smile_df: pd.DataFrame, target_delta: float, option_type: str) → pd.Series | None` — given smoothed delta output from `fit_smile_and_get_delta`, returns the row with delta closest to `target_delta`. Logs WARNING if closest delta deviates > 0.05 from target. Returns `None` if DataFrame empty.
+
+- [ ] Tests (`tests/unit/backtest/test_greeks.py`, `tests/unit/backtest/test_iv_reconstruction.py`):
+  - Black '76 put-call parity to within 1e-4.
+  - Known-value: ATM call at 30 DTE, 15% IV, `F = K` → delta ≈ 0.52; put ≈ −0.48. Pin with `pytest.approx`.
+  - Boundary: `T = 0` returns intrinsic for ITM, 0 for OTM.
+  - `black76_iv` round-trip: `black76_iv(black76_price(F, K, T, r, σ, t), F, K, T, r, t) ≈ σ` to 1e-4.
+  - `black76_iv` failure: DTE < 5 → `None`; near-zero extrinsic → `None`.
+  - `select_price_for_entry`: all three source-tag branches (market / settle_model / unusable).
+  - `atm_sanity_check`: good-parity case, suspect-parity case (forced large deviation).
+  - `fit_smile_and_get_delta`: happy path (≥ 4 valid strikes), < 4 valid strikes → `None`.
+  - `compute_30dte_atm_iv`: two-expiry interpolation, single-expiry fallback, empty input → `None`.
+  - `iv_percentile`: < 20 obs → `None`; correct 0th/100th percentile boundary values.
+  - `select_strike_by_delta`: happy path, > 0.05 gap from target (logs WARNING).
+
+- [ ] Re-index `codebase-memory-mcp` after adding the `src/backtest/` package (`__init__.py` required).
+- [ ] Commit sequence: `repo_rates` → `greeks` → `iv_reconstruction` → `strike_selector` → tests. One commit per module; do not bundle.
+- [ ] Commit format example: `feat(backtest): add Black '76 Greeks module`.
+
+**Known biases (call out explicitly in 1.11 variance check):**
+- `settle_price` is not an executable fill — entry price structurally mid-market-optimistic. Quantify the gap against real fills using task 1.10 snapshots. Absorbed by the slippage model (task 1.4).
+- Black '76 delta from EOD settlement vs Upstox live delta (proprietary intraday surface): ~0.5–2 delta point structural mismatch expected at 25-delta. Compute RMS delta error against 1.10 snapshots to establish the variance floor before applying the |Z| ≤ 1.5 gate in 1.11.
+- Weekly/monthly expiry mixing post-2019: filter strictly for monthly expiry in `process_daily_chain` — mixing distorts smile fit.
+
+**Why not use live snapshot Greeks retroactively:** 1.10 snapshots accumulate only from 1.10 deployment. Mixing snapshot Greeks (last ~3 months) with reconstructed IV (prior 8 years) creates a discontinuity that confounds the 1.11 variance check. Uniform Black '76 reconstruction across 2016–present is the cleaner methodology. Reassess after Phase 2 when 6+ months of snapshot data exists.
+
+**Biases eliminated vs original Black-Scholes + spot plan:** Dividend yield / carry adjustment (now implicit in futures price). Seasonal IV inflation around Nifty ex-dividend periods. Dependency on Upstox spot as the sole forward price source.
 
 ---
 
@@ -1104,8 +1135,7 @@ These need a decision from the human operator before the relevant phase starts. 
 
 - **Phase 0.4 — RESOLVED (2026-04-25):** Underlying switched from NiftyBees to Nifty 50 index options. Active spec is `csp_nifty_v1.md`; `csp_niftybees_v1.md` retained DEPRECATED.
 - **Phase 1.1 — SUPERSEDED (2026-04-27):** DhanHQ Data API evaluation complete. DhanHQ rejected — 1-min data is only ~5 days deep, EOD is 5 years but misses COVID and IL&FS. Stockmock adopted for calibration backtests (already subscribed, UI-based, covers all stress windows). NSE F&O Bhavcopy adopted for programmatic pipeline (free, 2016–present). See `DECISIONS.md` → "Backtest Data Source Decision (2026-04-27)".
-- **Phase 1.6a — RESOLVED (2026-04-27):** BS IV reconstruction adopted — `implied_vol()` via Brent root-finding on NSE Bhavcopy `settle_price` + Nifty spot from 1.3a. Known structural bias vs Upstox live deltas documented as expected variance floor in 1.11.
-- **Phase 1.6a:** Risk-free rate for Black-Scholes — defaulting to 7% (current Indian regime). Revisit if RBI policy shifts materially during Phase 1. After 6+ months of 1.10 Upstox snapshots, empirically calibrate `r` to minimise RMS delta error vs Upstox reported deltas.
+- **Phase 1.6a — SUPERSEDED (2026-04-30, council):** Original 2026-04-27 decision (Black-Scholes + spot + fixed 7% rate) superseded. **Black '76 with Nifty Futures as forward** adopted — eliminates dividend yield estimation. Stepped RBI repo rate replaces constant 7%. Quadratic smile fit in log-moneyness before delta computation. Price blend (`close` if liquid, `settle_price` fallback) replaces uniform `settle_price`. Known structural bias vs Upstox live deltas retained as expected variance floor in 1.11. Open question: whether futures rows are parsed in task 1.3 or derived in 1.6a — resolve before starting 1.6a. Full methodology in `DECISIONS.md → IV Reconstruction Methodology (2026-04-30)`.
 - **Phase 1.10 — RESOLVED (2026-04-27):** Upstox Analytics Token confirmed as live Greeks source for forward testing and production (already integrated). Live option chain snapshot cron (`scripts/upstox_chain_snapshot.py`) starts in Phase 1 to accumulate forward-captured Greeks + bid/ask. No Dhan live chain client needed.
 - **Phase 2.2:** Is static IP provisioned by the time CSP is ready to go live? If not, plan for manual order placement + `record_trade.py` ledger capture.
 - **Phase 4.1:** What's the acceptable "Finideas is worth its fee" spread vs benchmark? The plan uses ±2% / +3% / middle-zone; this is the author's suggestion, not a hard rule.

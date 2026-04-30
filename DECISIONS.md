@@ -357,7 +357,47 @@ Evaluated TrueData and DhanHQ for NSE Nifty options backtesting. Primary use cas
 | Programmatic data pipeline | NSE F&O Bhavcopy ingestion | Free |
 | Forward testing + production | Upstox API (existing) | Already integrated |
 
-**Implication for two-tier backtest methodology (2026-04-26 decision):** The original Tier 1 rationale ("real Dhan expired options data") is updated — Tier 1 now uses NSE F&O Bhavcopy for OHLCV + Black-Scholes IV reconstruction. Tier 2 (deep OTM synthetic pricing for protective legs) is unchanged — still Black-Scholes with parametric skew (`src/backtest/synthetic_pricer.py`), since NSE Bhavcopy covers all strikes at EOD.
+**Implication for two-tier backtest methodology (2026-04-26 decision):** The original Tier 1 rationale ("real Dhan expired options data") is updated — Tier 1 now uses NSE F&O Bhavcopy for OHLCV + Black '76 IV reconstruction (see IV Reconstruction Methodology 2026-04-30 below). Tier 2 (deep OTM synthetic pricing for protective legs) is unchanged — still Black-Scholes with parametric skew (`src/backtest/synthetic_pricer.py`), since NSE Bhavcopy covers all strikes at EOD.
+
+---
+
+## IV Reconstruction Methodology (2026-04-30)
+
+Decision reached via multi-model council (GPT-5.4, Gemini 3.1 Pro, Claude Opus 4.6, Grok-4). Supersedes the 2026-04-27 placeholder in task 1.6a which assumed Black-Scholes with spot + fixed risk-free rate.
+
+**Pricing model: Black '76 (not Black-Scholes with spot).** Nifty Futures `settle_price` (same expiry as the option) is used as the forward price `F`. This eliminates both dividend yield estimation (`q`) and carry-adjusted spot forward estimation simultaneously — the market's own consensus is embedded in the futures price. For the rare case where the exact-expiry future is unavailable in the Bhavcopy, fall back to `F ≈ S × exp(r × T)` using Nifty spot from task 1.3a.
+
+**Risk-free rate: stepped RBI Repo Rate, not a constant.** RBI changed the repo rate ~20 times between 2016 and 2024 (notably: 4.0% May 2020, 6.5% from Feb 2023). A constant 7% understates the discount factor during the 2020 low-rate period. Impact on IV is small (~0.1–0.3 IV points on 30-DTE options) but directionally systematic. Implement as a hardcoded stepped table in `src/backtest/repo_rates.py` — ~20 entries, zero ongoing cost. Even with Black '76, `r` is still needed for the `exp(−rT)` discount factor.
+
+**Option price field: guarded blend per job, not uniform `settle_price`.** Two separate jobs have different requirements:
+- *Entry pricing / strike selection* (needs execution realism): use `close` if volume > 0 AND `|close − settle_price| / max(settle_price, 0.5) < 0.50`. Fall back to `settle_price` when `close` is stale or zero. Mark rows where neither is usable as `unusable`.
+- *IV percentile time series* (needs cross-year consistency): use `settle_price` uniformly for the ATM IV series. Consistency across 8 years matters more than per-day accuracy on any single date.
+
+**IV inversion: per-strike Black '76 inverse via `scipy.optimize.brentq`.** Standard method; recovers the market's strike-specific implied vol. The volatility smile/skew is what you discover through inversion — it does not invalidate the method. Bounds: `σ ∈ [0.01, 3.0]`. Returns `None` + WARNING on non-convergence. Exclusion gates applied before inversion: DTE < 5 calendar days, price < ₹1.0, extrinsic value < ₹0.50, `settle_price ≤ 0`. Extreme IV results (> 150%) during crash regimes are valid — keep but flag; do not cap.
+
+**Delta computation: quadratic smile fit in log-moneyness before computing delta.** Raw per-strike IV inversion is noisy for illiquid strikes. For delta-based strike selection, fit a quadratic `IV = a + b·log(K/F) + c·log(K/F)²` weighted by ATM proximity, then compute Black '76 delta from the smoothed IV at each strike. This handles the Nifty skew correctly (deep OTM puts carry a skew premium vs ATM) and produces stable 25-delta strike selection even when some individual strikes have bad data. Implemented via `np.polyfit` — computationally trivial.
+
+**IV percentile: 30-DTE constant-maturity ATM IV, variance-space interpolation.** A single daily number comparable across all 8 years. Interpolate to 30 DTE in total-variance space (`σ²T` is additive) using the two nearest available expiries in the 7–90 DTE range. 252-day rolling lookback for percentile rank. Use `settle_price`-based ATM IV uniformly for this series (consistency over execution realism).
+
+**Daily validation: ATM straddle + put-call parity sanity check.** Run before computing the IV surface each day. Checks: (1) put-call parity error < 0.5% of spot — detects spot/futures data misalignment or corrupt Bhavcopy rows; (2) Brenner-Subrahmanyam ATM IV approximation (`straddle / (0.8 × F × √T)`) provides a fast independent sanity check on the inversion pipeline. Days with parity error > 0.5% are flagged `suspect` but retained — do not silently drop.
+
+**Module shape:**
+
+| Module | Contents |
+|---|---|
+| `src/backtest/repo_rates.py` | `get_repo_rate(date) → float` — stepped RBI repo table, no I/O |
+| `src/backtest/greeks.py` | `black76_price`, `black76_iv`, `black76_delta`, `black76_gamma`, `black76_theta`, `black76_vega` — all parameterised on `F` (futures forward), not `S` (spot) |
+| `src/backtest/iv_reconstruction.py` | `select_price_for_entry`, `atm_sanity_check`, `fit_smile_and_get_delta`, `compute_30dte_atm_iv`, `iv_percentile`, `process_daily_chain` — full daily pipeline; `DailyChainResult` frozen dataclass as output |
+| `src/backtest/strike_selector.py` | `select_strike_by_delta(smile_df, target_delta, option_type)` — consumes smoothed delta output from `iv_reconstruction`; not raw per-strike IV inversion |
+
+**Open question (unresolved, 2026-04-30):** Should `bhavcopy_ingest.py` (task 1.3) also parse `FUTIDX NIFTY` rows from the same daily Bhavcopy CSV and store them in a separate Parquet, or should task 1.6a derive futures prices at query time? Parsing futures in task 1.3 is cleaner (single download, single parse pass, no repeated I/O); storing them in a separate Parquet avoids coupling the ingestion schema to the IV pipeline's needs. Resolve this before starting task 1.6a implementation.
+
+**Known biases remaining after Black '76 switch (must be called out in 1.11 variance check):**
+- `settle_price` is not an executable fill — entry price is structurally mid-market-optimistic. Absorbed by the slippage model (task 1.4); quantify the gap in 1.11.
+- Black '76 delta from EOD settlement vs Upstox live chain delta (which uses a proprietary intraday surface fit): ~0.5–2 delta points structural mismatch expected at 25-delta. Compute RMS delta error against task 1.10 snapshots in 1.11 to establish the structural variance floor before applying the |Z| ≤ 1.5 gate.
+- Weekly vs monthly expiry confusion post-2019: filter explicitly for monthly expiry (last Thursday, or Wednesday if Thursday is a NSE holiday) in `process_daily_chain`. Mixing weekly/monthly strikes distorts the smile fit.
+
+**Biases eliminated vs original Black-Scholes + spot plan:** Dividend yield / carry adjustment (now implicit in futures price). Seasonal IV bias from ex-dividend periods. Dependency on Upstox spot as the sole forward price source.
 
 ---
 
