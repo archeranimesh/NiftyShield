@@ -346,3 +346,223 @@ See inline widget rendered in conversation.
 4. **Move Track A and Track B** out of BACKTEST_PLAN.md into a separate research backlog. They inflate the plan without contributing to the MVP.
 5. **Run POC 1 (Bhavcopy data quality)** as the first output of task 1.3, before investing in the engine.
 6. **The critical path is calendar time, not engineering time.** Optimise for starting paper trading immediately and building code in parallel.
+
+---
+
+## 11. Council Synthesis — Refinements and Additions (2026-04-30)
+
+**Synthesis posture:** Multi-reviewer council pass. The original review's six recommendations stand. The twelve refinements below are layered on top. Items marked "What NOT to Adopt" are explicitly rejected.
+
+---
+
+### 11.1 India-Specific Market Microstructure Fixes (Critical)
+
+These are implementation-breaking issues the original review missed.
+
+**A. Bhavcopy Settle Price ≠ Tradable Price**
+
+NSE Bhavcopy uses a 30-minute VWAP (3:00–3:30 PM) for settlement, not the LTP at close. Upstox EOD snapshot captures 3:30 PM LTP. If a sharp move occurs at 3:25 PM, the IV reconstructed from Bhavcopy will diverge materially from live Greeks.
+
+Action: In POC 3 and task 1.6a, validate the BS model against Upstox EOD snapshot data (synchronised spot + option LTP), not against Bhavcopy. Use Bhavcopy for broad strike selection only, with an explicit note that it carries VWAP smoothing.
+
+**B. Historical Lot Size Changes**
+
+Nifty lot sizes changed: 75 → 50 → 25 over the 8-year backtest window. If the engine assumes lot size = 25 for 2018 data, ROI calculations, margin math, and absolute P&L distributions are invalid — making the variance check (1.11) against 2026 paper trades structurally unfair.
+
+Action: Add "Historical Lot Size Mapping" to task 1.3-QA. The engine must dynamically resolve lot size by date.
+
+**C. Expiry-Day STT Trap**
+
+If a short put expires ITM, STT is charged at 0.125% on intrinsic value — far higher than squaring off at 3:15 PM (0.0625% on premium). This silently destroys CSP backtest P&L in tail scenarios.
+
+Action: Ensure the strategy spec (1.7) enforces "Always square off ITM options by 3:15 PM on expiry day; never allow physical settlement." Ensure the cost model penalises ITM expiration correctly if the rule is violated.
+
+---
+
+### 11.2 Statistical Fix to Kill Criteria (Strong Consensus)
+
+A 25-delta CSP has ~75% expected win rate. With N=6 trials, even a correctly functioning strategy has a ~3.5% probability of showing ≤2 wins (≤33%), and ~17% probability of showing ≤3 wins (50%). The "<40% win rate" kill criterion is too aggressive for the sample size.
+
+**Revised Kill Criteria:**
+
+- Month 3 checkpoint: If 0 wins in first 3 cycles → pause paper trading, investigate strike/timing selection.
+- Month 6 gate: If realised max monthly loss exceeds 2× the backtest-predicted max loss for the same market regime, OR win rate ≤33% (≤2 wins in 6) → full strategy review.
+- Max drawdown criterion (8%): unchanged — this is regime-independent.
+
+---
+
+### 11.3 Add Trading Calendar & Expiry Resolver (Strong Consensus)
+
+Indian options backtesting breaks on: weekly vs monthly expiry transitions (Nifty: mid-2019 onward), holiday-shifted expiry dates, changed expiry conventions over time, and strike spacing changes (50-point → 100-point at higher Nifty levels).
+
+**Add task 1.3b — Trading Calendar + Expiry Resolver:**
+- Trading day calendar (handles exchange holidays)
+- Monthly expiry resolver by historical regime
+- Lot size by date (absorbs the lot size mapping from 11.1B)
+- Strike interval by Nifty level/date
+
+Estimated effort: 1–2 days. Prevents weeks of subtle bugs in the engine.
+
+---
+
+### 11.4 Interim Variance Check at Month 2 (Strong Consensus)
+
+Waiting 6 months to discover systematic errors (e.g., missing STT, wrong lot size, flipped slippage sign) wastes time.
+
+Action: After 2 complete paper trading cycles (~8 weeks), run an interim Z-score comparison. The sample is too small for a go/no-go decision, but large enough to catch architectural bugs. If |Z| > 3.0 at N=2, something is fundamentally broken in the measurement chain — debug immediately rather than waiting 4 more months.
+
+---
+
+### 11.5 Graduated Response Protocol for Variance Check (Strong Consensus)
+
+The current plan treats |Z| ≤ 1.5 as binary pass/fail. This doesn't translate into operational decisions.
+
+**Confidence Tiers:**
+
+| Z-score range | Confidence | Deployment posture |
+|---|---|---|
+| \|Z\| ≤ 0.5 | High | Full planned size |
+| 0.5 < \|Z\| ≤ 1.0 | Moderate | Full size, weekly monitoring |
+| 1.0 < \|Z\| ≤ 1.5 | Low | Half size, daily monitoring for first month |
+| \|Z\| > 1.5 | Fail | No deploy; run 2 debug variants (bias-adjusted, parameter-tuned) before re-gate |
+
+**Post-live monitoring triggers (section 2.1):**
+- |Z| 1.5–2.0 for 3 weeks → reduce to paper-only until Z returns below 1.0
+- |Z| > 2.0 single week → halt all live trading, full investigation
+- |Z| < 1.0 for 4 consecutive weeks after breach → resume normal size
+
+---
+
+### 11.6 Reproducibility Requirement (Consensus)
+
+**Add to task 1.5 (Backtest Results Storage):** Every run must record `git_commit` hash, `strategy_spec_hash` (config YAML checksum), `data_version` (Parquet file checksums or date range), `cost_model_version`, and `run_timestamp`.
+
+Acceptance criterion: Re-running with identical inputs produces bit-identical P&L output. This is essential for debugging variance check failures — you must distinguish "I fixed the bug" from "the data changed under me."
+
+---
+
+### 11.7 Golden Dataset Fixtures (Majority Consensus)
+
+**Add sub-task under 1.4:** Create a small, manually-verified test dataset covering:
+- 1 normal month (e.g., July 2021)
+- 1 volatile month (e.g., March 2020)
+- 1 expiry week in detail
+- Expected strike selection, trade lifecycle, and P&L hand-calculated
+
+This becomes the regression test backbone. Without it, full-history runs are untestable — you can't tell if a 3% P&L change after a refactor is a bug fix or a regression.
+
+---
+
+### 11.8 Consolidate POCs into Implementation Tasks (Majority Consensus)
+
+**Revised POC structure (replaces Section 4):**
+
+- **POC 1** → Merge into task 1.3-QA. When auditing Bhavcopy data quality, simultaneously test whether 25-delta strikes can be reconstructed for 4–5 sample months: include Sept 2018, a weekly-expiry transition month, and a boring month — not just March 2020.
+- **POC 2** → Merge into Sprint 1 deliverable for 1.10. Deploy EOD snapshot cron; its first 20 days of operation is the reliability test.
+- **POC 3** → Fold into 1.6a implementation. When building the IV reconstruction, validate against 5 days of live Upstox data as part of the acceptance test.
+
+Result: Zero standalone POC tasks. Validation is embedded in implementation. Saves ~1 week.
+
+---
+
+### 11.9 Cron Health Monitoring (Consensus)
+
+**Add task 2.1a — Job Healthcheck:** A simple daily script checking whether the EOD snapshot (1.10) produced today's file, whether daily_snapshot ran, whether files are non-empty, and sending a Telegram alert on any failure.
+
+For a solo system with no cloud redundancy, this is more important than dashboards. Silent data gaps in forward capture are unfixable — the data cannot be backfilled.
+
+---
+
+### 11.10 Timeline Realism (Majority Consensus)
+
+**Adjust Sprints 1–4 from 8 weeks to 10–12 weeks.** Rationale: single operator with a day job, Cowork sessions are not daily, NSE bulk downloads have operational friction, and the first IV reconstruction attempt always surfaces edge cases (negative time value, dividend effects).
+
+The paper trading gate (month 6–7) doesn't move, so this slack doesn't affect the critical path. It prevents false urgency that causes corners to be cut.
+
+---
+
+### 11.11 Contingency for Data Quality Failure (Consensus)
+
+The original review proposes a kill criterion (>10% missing data → Stockmock-only) but no middle ground.
+
+**Add contingency:** If Bhavcopy audit shows >10% gaps in stress windows but <5% gaps in normal periods → proceed with partial backtest (2021–present, ~5 years) + use Stockmock output for 2016–2020 stress-period calibration. Re-evaluate full-engine value after 3 months of EOD snapshot accumulation (1.10).
+
+---
+
+### 11.12 Don't Fully Block Engine on Poor Early Paper Results (Split Opinion — Adopted with Nuance)
+
+The original review states: "If paper trading fails badly, don't build the engine." The nuance: a basic historical options engine has option value beyond this one CSP spec — it enables parameter diagnosis, variant testing, and stress-window replay. If early paper results look bad, you need the engine more, not less, to understand why.
+
+**Revised rule:**
+- Continue foundational infra regardless: 1.3, 1.3-QA, 1.3b, 1.4, 1.5, 1.6a
+- Gate only strategy-specific work (1.7, 1.8) on whether early paper results show catastrophic failure
+- If paper performance is poor but explainable (e.g., entered during high-vol regime), proceed with engine build — the engine is the diagnostic tool
+
+---
+
+### 11.13 What NOT to Adopt
+
+| Suggestion | Reason to reject |
+|---|---|
+| Move EOD snapshot to cloud | Conflicts with local-first assumption; adds operational complexity prematurely; laptop sleep risk is manageable with simple OS settings |
+| Partially reinstate IC port in Phase 1 | Original review's deferral logic is stronger; engine can be validated with CSP alone |
+| Shorten critical path to 5–7 weeks | Unrealistic for solo operator; 10–12 weeks is honest |
+| Full variance decomposition (4 bias types) | Premature analytical complexity for MVP; keep bias-adjusted Z-score simple |
+| Extensive assumptions register as separate file | Good practice but process overhead for a 1-person team; capture in DECISIONS.md inline |
+
+---
+
+### 11.14 Revised Task Additions (Net)
+
+| New Task | Effort | Sprint |
+|---|---|---|
+| 1.3-QA — Data quality audit (includes lot size mapping, POC 1 validation) | 1–2 days | Sprint 2 |
+| 1.3b — Trading calendar + expiry resolver | 1–2 days | Sprint 1 |
+| 1.4a — Golden fixture dataset with expected outputs | 1 day | Sprint 2 |
+| 1.5 enhancement — Run lineage metadata | 2 hours | Sprint 2 |
+| 2.1a — Cron job healthcheck + alert | 0.5 days | Sprint 1 |
+
+Total added effort: ~5–6 days across 10–12 weeks. Net impact on critical path: negligible.
+
+---
+
+### 11.15 Updated Execution Plan (Section 9 Revisions)
+
+**Revised Sprint durations:** Sprints 1–4 extend to 10–12 weeks total (was 8 weeks).
+
+**Sprint 1 additions (weeks 1–3):**
+- 1.3b — Trading Calendar + Expiry Resolver (Cowork, 1–2 days)
+- 2.1a — Cron job healthcheck + Telegram alert (Cowork, 0.5 days)
+
+**Sprint 2 additions (weeks 3–5, was 3–4):**
+- 1.3-QA — includes lot size historical mapping + POC 1 validation (not just data quality)
+- 1.4a — Golden fixture dataset: July 2021 (normal), March 2020 (volatile), 1 expiry week
+- 1.5 — Add run lineage metadata (git_commit, spec_hash, data_version, cost_model_version, run_timestamp)
+
+**Month 2 addition:**
+- Interim Z-score check after 2 paper cycles (~8 weeks). No go/no-go decision; |Z| > 3.0 → debug immediately.
+
+**Gate (month 6–7) revised:**
+- Replace binary pass/fail with graduated response tiers (see 11.5)
+- Kill criterion: win rate ≤33% (≤2 wins in 6), not <40%
+
+---
+
+### 11.16 Final Summary
+
+The original review's six recommendations stand. Adopt them. Layer these twelve refinements on top:
+
+1. Fix the VWAP vs LTP assumption in IV reconstruction — validate 1.6a against Upstox EOD, not Bhavcopy
+2. Add historical lot size mapping to 1.3-QA and 1.3b
+3. Handle expiry-day STT trap in cost model and strategy spec (1.7)
+4. Revise kill criteria: ≤2 wins in 6 (not <40%), month-3 interim checkpoint
+5. Add trading calendar + expiry resolver as task 1.3b (Sprint 1)
+6. Run interim variance check at month 2 (|Z| > 3.0 = architectural bug)
+7. Replace binary variance gate with graduated confidence tiers + post-live triggers
+8. Add run lineage metadata (reproducibility) to 1.5
+9. Create golden fixture dataset as task 1.4a (Sprint 2)
+10. Consolidate POCs into implementation acceptance criteria (zero standalone POC tasks)
+11. Add cron job healthcheck as task 2.1a (Sprint 1)
+12. Budget 10–12 weeks for Sprints 1–4; keep month 6–7 gate unchanged
+
+The single most important action remains unchanged from the original review: **start paper trading this week, and start code in parallel. The bottleneck is calendar time. Everything else is engineering that fits inside that window.**
