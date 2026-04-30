@@ -1,0 +1,3 @@
+[submodule "tools/llm-council"]
+	path = tools/llm-council
+	url = https://github.com/karpathy/llm-council.git
