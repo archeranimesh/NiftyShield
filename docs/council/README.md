@@ -50,6 +50,39 @@ python scripts/ask_council.py --topic foo --question "..." --dry-run
 3. Decision is saved to `docs/council/YYYY-MM-DD_<topic>.md`
 4. I read the decision file and update `DECISIONS.md` + relevant plan files
 
+## Response File Structure
+
+Every completed council file follows this layout:
+
+```
+# Council Decision: <topic>
+
+Date: YYYY-MM-DD
+Chairman: <model>
+Council members: <model-A>, <model-B>, <model-C>
+
+---
+
+## Stage 3 — Chairman Synthesis          ← READ THIS FIRST — authoritative
+  Summary Table                           ← canonical before/after for each decision
+  Dissenting Notes                        ← minority positions; first post-validation targets
+  Implementation Sequencing               ← which docs to update and in what order
+
+## Stage 1 — Individual Responses        ← background context only
+  ### <model-A>
+  ### <model-B>
+  ### <model-C>
+
+## Aggregate Rankings (Stage 2 Peer Review)
+  - <model>: avg rank N.NN (4 votes)     ← higher rank = peers judged it strongest
+
+## Prompt Sent (first 3000 chars)        ← the context injected into the council
+```
+
+**Stage 3 is the only section that drives implementation.** Stage 1 is raw panel output —
+informative but not directive. The Aggregate Rankings tell you which Stage 1 response the
+chairman weighted most heavily.
+
 ## Archived Decisions (pre-integration — submitted manually)
 
 | Date | Topic | Outcome |

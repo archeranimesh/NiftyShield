@@ -128,6 +128,48 @@ Typical phase boundaries (each gets its own commit):
 
 ---
 
+## Council Decision Protocol
+
+When a council response file (`docs/council/YYYY-MM-DD_<topic>.md`) is shared or referenced,
+follow this parsing and action order — do not treat all three stages equally.
+
+### Reading priority
+
+| Stage | Section header | Role | What to do |
+|-------|---------------|------|------------|
+| 3 | `## Stage 3 — Chairman Synthesis` | **Authoritative recommendation** | Read this first and fully — this is what gets implemented |
+| 2 | `## Aggregate Rankings (Stage 2 Peer Review)` | Peer credibility signal | Use to weight Stage 1 opinions when Stage 3 leaves a nuance unresolved |
+| 1 | `## Stage 1 — Individual Responses` | Raw panel opinions | Background context only — do NOT implement from Stage 1 directly |
+
+### Inside Stage 3 — what to extract
+
+1. **Summary Table** (always present at end of Stage 3): canonical before/after for each decision. This is the implementation spec.
+2. **Dissenting Notes** section: minority positions that were noted but overruled. Log these in `DECISIONS.md` under "Noted, deferred" — they are first candidates for post-validation testing.
+3. **Implementation Sequencing** (if present): lists which docs to update and in what order. Follow it literally.
+4. **Additional Rules Surfaced**: supplementary constraints that emerged during review. Treat these as mandatory additions to the relevant plan/strategy doc.
+
+### Mandatory post-read actions
+
+After reading a council file, always:
+
+1. Update `DECISIONS.md` — add a row for each decision in the Summary Table with the council date and topic as the source.
+2. Update the relevant plan or strategy doc (named in Implementation Sequencing) — edit it to reflect Stage 3 recommendations, not the original design.
+3. Do **not** implement code until DECISIONS.md and the strategy doc reflect the council output. The council decision gates implementation.
+
+### Aggregate Rankings — how to interpret
+
+```
+- model-A: avg rank 1.0 (4 votes)   ← panel judged this the strongest response
+- model-B: avg rank 2.25 (4 votes)
+- model-C: avg rank 2.75 (4 votes)
+```
+
+The chairman draws heavily on the top-ranked response. If Stage 3 feels thin on a topic,
+the highest-ranked Stage 1 response is the right place to look for supporting detail.
+Never use a lower-ranked response to contradict Stage 3.
+
+---
+
 ## Quick reference
 
 | What | Where |
