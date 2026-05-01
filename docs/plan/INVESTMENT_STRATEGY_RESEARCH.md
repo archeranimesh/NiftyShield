@@ -239,6 +239,102 @@ levels) — the thresholds would need a one-time recalibration.
 
 ---
 
+### Strategy 4: Covered Call Overlay on Pledged NiftyBees
+
+> **Type:** Yield enhancement overlay — not an allocation strategy. Runs permanently on the
+> existing NiftyBees collateral position regardless of which allocation strategy (1, 2, or 3)
+> is active. Does not govern *how much* NiftyBees to hold; governs *what yield to extract*
+> from the units already held.
+
+**Core hypothesis:** NiftyBees units pledged as Finideas collateral are a passive position
+that generates no options premium. Selling a 15-delta OTM Nifty 50 monthly call against the
+pledged units converts the collateral into an active yield source. The short call is covered
+by the NiftyBees holding (NiftyBees tracks Nifty 50 within ≤0.02% annually), so a sharp
+Nifty rally that drives the call into loss also appreciates the ETF units by an offsetting
+amount. The net result is that the call premium is structurally "free" income — the hedge
+is built into the existing position.
+
+**Prerequisite (verify before paper-trading):** Confirm with Upstox that the NiftyBees pledge
+for Finideas margin does not conflict with simultaneously using the same units as covered call
+collateral for the short Nifty call. These are two margin obligations on the same asset. If
+the broker treats them as separate margin blocks, the call must be cash-margined independently
+and the capital efficiency argument changes. Do not paper-trade until this is confirmed.
+
+**Signal source:** None — always-on. Same Wednesday-after-expiry entry window as CSP (30–45
+DTE). Coordinate entries so the CSP (short put) and the covered call (short call) are entered
+in the same cycle: the combined position is a synthetic covered strangle — short put + short
+call, both cash-secured / covered by the collateral pool.
+
+**Timeframe:** Monthly. Same cycle as CSP.
+
+**IVR filter (same R3 discipline as CSP):** Skip the cycle if IVR < 25 (trailing 252-day
+percentile of India VIX). At the IV floor, call premium is thin and the risk/reward of
+selling covered calls degrades toward zero after costs. Log India VIX and IVR at every entry
+decision, even in cycles where entry is skipped.
+
+**Parameters (2):**
+
+| Parameter | Initial | Sweep range | Step |
+|---|---|---|---|
+| Call delta target | 15 | 10–20 | 5 |
+| Exit profit target (% of credit) | 50% | 40%–70% | 10% |
+
+**Entry:** Sell 1 Nifty 50 monthly call at the 15-delta strike, same expiry cycle as the CSP
+short put. Use the live Upstox option chain for delta reading (same infrastructure as CSP
+strike selection). Limit order at mid price of bid/ask; same ₹0.25 improvement discipline
+as CSP if unfilled after 5 minutes.
+
+**Exit rules (three independent triggers — first to fire wins):**
+
+1. **Profit target:** Close when the call's mark-to-market value has decayed to ≤50% of
+   entry credit. Retain the remaining 50% rather than holding to expiry.
+2. **Time stop:** 21 calendar days from entry (same clock as CSP). Exit if no other trigger
+   has fired.
+3. **Delta stop:** Close immediately if call delta crosses +0.40 (Nifty has rallied sharply
+   toward the strike). Fires earlier than the mark-based trigger, at lower gamma, yielding
+   better fills in a fast market.
+
+**Quantity constraint:** Maximum 1 Nifty lot call (65 units) per ~5,700 NiftyBees units
+pledged (derived from CSP collateral calculation: 65 × Nifty spot / NiftyBees LTP). Do not
+sell more call notional than is covered by the pledged NiftyBees position. Recompute at each
+annual NiftyBees leg reset.
+
+**Expected yield (indicative, pending paper calibration):** 15-delta OTM Nifty monthly call
+at IVR ~35 typically collects ₹55–85/unit. On 65 units: ₹3,575–5,525 gross credit per cycle.
+Net of costs (~₹80–100 round-trip per lot): ₹3,475–5,425. On ₹15.5L notional, this is
+approximately 0.22–0.35% per monthly cycle, or 2.7–4.2% annualised incremental yield on the
+collateral position. Modest but structurally persistent — the IV risk premium that makes the
+CSP work on the put side applies symmetrically to the call side at equivalent delta.
+
+**Works in:** Range-bound to mildly bullish markets where Nifty stays below the 15-delta
+call strike through the cycle. Roughly 80% of Nifty months historically remain within ±5%
+of entry; the 15-delta strike is typically 3–5% OTM, so the call expires worthless in most
+cycles. High-IVR environments (IVR > 50) generate richer premium for the same delta target.
+
+**Fails in:** Sharp sustained rallies where Nifty breaks out above the call strike. The
+NiftyBees position appreciates and partially offsets the call mark-to-market loss, but the
+opportunity cost is real — the upside above the strike is capped. In practice this is not
+a capital loss (the ETF gain and call loss net close to zero) but it is a missed profit.
+The delta stop (call delta > +0.40) limits the realised loss on the call leg by closing
+before terminal gamma acceleration.
+
+**Relationship to IC and CSP:** Running CSP (short put) + Covered Call (short call) in the
+same monthly cycle creates a synthetic short strangle at the portfolio level — the call is
+covered by NiftyBees, the put is cash-secured by the broader collateral pool. This is the
+natural Phase 2/3 evolution toward a full monthly income structure using existing collateral.
+When the IC is eventually deployed, evaluate whether to retire the separate Covered Call leg
+(since the IC already includes a short call spread) to avoid position overlap and double
+margin.
+
+**Validation approach:** This strategy does not require the full backtest engine pipeline.
+A 6-month paper overlay period — recording call entries and exits alongside the CSP paper
+trades using `record_paper_trade.py` with prefix `paper_covered_call_v1` — is sufficient
+to calibrate the cost model, confirm broker mechanics, and measure the delta-stop frequency.
+Use Bhavcopy call prices for a retrospective cross-check against the paper results once
+task 1.3 data is available.
+
+---
+
 ### Confidence Ranking
 
 **1. 10-Month SMA Trend Filter (highest).** The most validated single rule in tactical
@@ -261,6 +357,8 @@ portfolio construction even if standalone performance is mediocre. The risk is t
 thresholds need periodic recalibration as India's market structure evolves. Included because
 the combination of a momentum filter (Strategy 1 or 2) with a value filter (Strategy 3)
 is more robust than either alone — momentum catches crashes, value catches recoveries.
+
+**4. Covered Call Overlay (highest operational confidence, conditional on broker mechanics).** The hedge is near-perfect (NiftyBees tracks Nifty 50 within ≤0.02% annually), the premium source is structural (IV risk premium on the call side mirrors what makes CSP work on the put side), and the infrastructure reuse is maximal (same entry window, same IVR filter, same exit rules as CSP). Confidence is high once broker pledge compatibility is confirmed. Before that confirmation, operational confidence is zero — do not paper-trade. Once confirmed, this has the clearest risk/reward of any strategy in this document because the downside is opportunity cost (capped upside on a strong Nifty rally), not capital loss.
 
 ---
 

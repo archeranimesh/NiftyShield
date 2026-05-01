@@ -746,6 +746,7 @@ The most important piece of code in this plan. Detects strategy drift in real ti
 **Owner: Animesh.**
 
 - [ ] `docs/strategies/ic_nifty_monthly_v1.md` — same required sections as CSP spec (0.4). Strategy candidate: 15-delta wings, 30–45 DTE entry, exit at 50% profit OR 21 DTE OR 2× credit loss, defined-risk (not naked), sized so max loss ≤ 2% of total capital.
+- [ ] **Iron Butterfly as regime-conditional IC variant (include in spec):** When IVR < 25th percentile AND 50D trend slope |z| < 0.5 (tight consolidation, "Accumulation" regime), shift the IC to an ATM-centred Iron Butterfly — short ATM call + short ATM put + OTM wings at ATR-proportional width. ATM straddle collects 60–70% more extrinsic value than 15-delta OTM options in low-IV regimes. Entry, exit, and wing sizing rules are the same as the standard IC (50%/21 DTE/2× stop); only the strike placement is regime-conditional. Document the regime-switching rule explicitly in the spec with its own trigger threshold, and include a separate P&L variant in the Phase 2.5 backtest run so the two placements can be compared directly.
 - [ ] Passes strategy-spec validator (0.7).
 - [ ] Invoke `options-strategist` agent on the sizing/risk section before committing.
 - [ ] Commit: `docs(strategies): add IC v1 specification`.
@@ -970,13 +971,22 @@ Three strategies researched sequentially: **10-Month SMA Trend Filter → Dual M
 
 ---
 
-## 3.2 — STRATEGY — Third strategy specification (event-driven calendar)
+## 3.2 — STRATEGY — Third strategy specification
 
 **Owner: Animesh.**
 
-- [ ] Candidate: calendar spread entered 1 trading day before RBI policy / budget / major earnings, exited 1 trading day after. Monetises IV crush asymmetry.
-- [ ] Write `docs/strategies/calendar_event_v1.md`. Validator passes.
-- [ ] Low frequency (6–10 trades/year) so variance checking needs a longer window — note this in the spec (variance window = 18 months, not 4 months).
+Two competing candidates — evaluate and choose one before writing the spec. Do not run both simultaneously; the "one new strategy per year" cross-cutting rule applies.
+
+**Candidate A — Jade Lizard (preferred candidate):**
+Short OTM put + short OTM bear call spread (same expiry, 30–45 DTE). The defining constraint: total net credit collected must strictly exceed the call spread width, eliminating upside risk entirely. Exploits Nifty's structural put-call skew — Nifty puts consistently carry 2–4 IV points more than equivalent-delta calls due to persistent institutional tail-hedging demand, making the short put leg structurally richer than the call spread leg costs. Deploy in neutral-to-bullish HMM regimes (High Vol Chop + Accumulation); skip in trending-down or crash regimes where the naked put-side exposure is penalised. Exit rules: same 50% profit / 21 DTE / 2× credit stop as IC. Max loss is defined (call spread width minus total credit) on the upside; put-side loss is theoretically large but bounded by position sizing (max loss ≤ 2% of total capital). Preferred over the calendar spread because it reuses 90% of the IC engine infrastructure, the skew edge is structural and persistent in India, and the backtest data (Bhavcopy) already supports it without additional data sources.
+
+**Candidate B — Event-Driven Calendar Spread:**
+Calendar spread entered 1 trading day before RBI policy / budget / major earnings, exited 1 trading day after. Monetises IV crush asymmetry. Low frequency (6–10 trades/year), so variance checking needs a longer window (18 months minimum). Depends on `src/market_calendar/events.py` (task 3.3) being built first. Trade count is too low for robust statistical validation within Phase 3's timeline — this is the primary reason to prefer Candidate A.
+
+- [ ] Choose Candidate A or B. Document the decision in `DECISIONS.md` with rationale.
+- [ ] Write the strategy spec (`docs/strategies/jade_lizard_v1.md` or `calendar_event_v1.md`). Validator passes.
+- [ ] Invoke `options-strategist` agent on the sizing/risk section before committing.
+- [ ] Commit: `docs(strategies): add [chosen strategy] v1 specification`.
 
 ---
 
@@ -1050,7 +1060,7 @@ Three strategies researched sequentially: **10-Month SMA Trend Filter → Dual M
 
 **Owner: Animesh.**
 
-- [ ] Candidates: short strangle (regime-conditional — HIGH_IV only), ratio spread, jade lizard. One per year maximum.
+- [ ] Candidates: short strangle (regime-conditional — HIGH_IV only), ratio spread. One per year maximum. (Jade Lizard moved to Phase 3 candidate pool — see task 3.2.)
 - [ ] Each goes through the full Phase 0–2 pipeline (spec → paper → backtest → variance check → live). No shortcuts.
 
 ---
