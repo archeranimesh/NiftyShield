@@ -346,6 +346,62 @@ width (ATR ~375), 1 lot = ₹22,500 max loss — accept 1-lot minimum in paper p
 Noted, deferred: ATR-based short strike selection (spot ± 1.0×ATR) instead of delta-based,
 to eliminate model dependency on the IV surface. First candidate for post-validation testing.
 
+**2026-05-01 — ORB strategy: volatility filter — ATR primary + VIX-IVP 90th-percentile structural exclusion (council ruling).**
+Source: `docs/council/2026-05-01_orb-volatility-filter-design.md`. ATR (14-day) is the
+theoretically correct primary filter: OR width / ATR directly measures compression relative
+to recent realised price action. VIX is added as a **structural binary exclusion** (not a
+swept parameter): exclude entry days where India VIX IVP (63-day trailing rank) ≥ 90th
+percentile. Rationale: on pre-event consolidation days (e.g., day before RBI MPC at 10:00
+AM), realised vol is low (ATR qualifies), but VIX is elevated (forward-looking pricing of
+the announcement). On these days the ORB hypothesis is structurally degraded — the OR
+compression represents *waiting*, not *indecision resolving into conviction*. The 90th
+percentile framing is self-calibrating (adapts to the prevailing vol regime) and is not
+subject to the fixed-threshold boundary noise rejected in the Donchian ruling (~5 affected
+days/year vs. 20–30% for a fixed VIX level). VIX exclusion is a configurable flag
+(`vix_exclusion_enabled: bool = True`, `vix_ivp_threshold: float = 0.90`,
+`vix_lookback_days: int = 63`). **Ablation is mandatory**: the backtest must report Sharpe
+with and without the VIX exclusion. If the delta is < 0.1 Sharpe, the flag is set to
+`False` and the filter is dropped entirely — simpler architecture wins. Confidence: High.
+
+**2026-05-01 — ORB strategy: event day treatment — structural calendar exclusion mandatory (council ruling).**
+Source: `docs/council/2026-05-01_orb-volatility-filter-design.md`. Pre-scheduled macro
+event dates are a structural exclusion from the ORB signal universe, conceptually identical
+to the existing Thursday expiry exclusion. On RBI MPC announcement day (10:00 AM IST),
+Union Budget day (11:00 AM IST), and FOMC+1 IST day (next NSE session after US
+announcement), the ORB hypothesis is structurally inapplicable — the opening range
+represents pre-announcement positioning, not overnight information resolution into
+directional conviction. Pre-published calendars do not introduce look-ahead bias: RBI MPC
+dates are published 12+ months ahead, Budget and FOMC dates are known months in advance.
+Exclusion list: (1) RBI MPC announcement day — ~6/year; (2) Union Budget day — 1/year;
+(3) FOMC+1 IST trading day — ~8/year; (4) Weekly expiry Thursday — ~52/year (already in
+spec). Total: ~67 structural exclusions/year. **Surprise events (unscheduled geopolitical
+shocks, flash crashes) are NOT excluded** — they belong to the true tail-risk distribution.
+Post-event days (day after RBI/Budget) remain in-universe — these are the strategy's best
+setup days. Backtest must report count and hypothetical P&L of excluded-day signals that
+would have fired but were not taken. Calendar lives in `src/market_calendar/`; method:
+`is_event_exclusion_date(date) -> tuple[bool, str | None]`. Confidence: High.
+
+**2026-05-01 — ORB strategy: near-expiry contract selection — DTE ≤ 2 → skip to next weekly (council ruling).**
+Source: `docs/council/2026-05-01_orb-volatility-filter-design.md`. Minimum DTE for any
+new spread entry is 3. When a signal fires on a day where the nearest weekly expiry is
+≤ 2 DTE away, skip to the following weekly expiry (+7 days). Day-of-week mapping:
+Monday (3 DTE) → use current Thursday ✓; Tuesday (2 DTE) → skip to next Thursday (9 DTE);
+Wednesday (1 DTE) → skip to next Thursday (8 DTE); Thursday → excluded (expiry day);
+Friday (6 DTE) → use next Thursday ✓. Constraint is **backtest fidelity, not live
+liquidity**: Nifty weekly options at 2 DTE are highly liquid (ATM±5 bid-ask 1–3 pts,
+OI 5–20 lakh). The constraint is that 15-min discrete-bar backtesting cannot model 2-DTE
+gamma path-dependency accurately — a 100-point intraday Nifty move changes delta by 0.40
+at 2 DTE (gamma ~0.004/pt), and intra-bar spike → recovery creates ~70% P&L underestimation
+in the backtest vs. the true path-dependent loss. At 3+ DTE the error drops to 25–35%
+(acceptable for research-grade Phase 1 validation). Implementation stub: `select_expiry()`
+in `src/instruments/`. Confidence: High.
+Noted, deferred: ORB same-day-close architecture (hard exit at 15:15) means profit is
+~95% delta-driven, not theta-driven. This raises whether debit spreads (profit scales
+with directional move, no cap until spread width) are superior to credit spreads (profit
+capped at premium collected, holding period mismatch) for this strategy. Test credit vs.
+debit P&L on the same signals in Phase 1 walk-forward; if debit shows > 0.15 Sharpe
+improvement, a separate council is warranted.
+
 ---
 
 ## Backtest Data Source Decision (2026-04-27)

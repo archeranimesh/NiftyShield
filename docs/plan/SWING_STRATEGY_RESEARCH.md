@@ -178,19 +178,72 @@ the edge concentrates — unfiltered ORB on Nifty is break-even at best.
 | Max OR width (fraction of 14d ATR)  | 0.6     | 0.3–0.8     | 0.1  |
 | Risk-reward target multiple         | 1.5     | 1.0–2.5     | 0.5  |
 
-**Entry:** Compute OR = high − low of first N 15-min candles. If OR < (filter × 14-day ATR),
-the day qualifies. Go long (bull spread) on break above OR high. Go short (bear spread) on
-break below OR low. One entry per direction per day. The spread is entered on the breakout
-candle's close, not intraday — no live execution required.
+**Volatility filter (council ruling 2026-05-01):** Two-layer filter. Primary layer: OR width
+< (fraction × 14-day ATR) — the theoretically correct compression denominator, directly
+measures recent realised price action. Structural exclusion layer: skip any entry day where
+India VIX IVP (63-day trailing percentile rank) ≥ 90th percentile. This is a binary flag
+(`vix_exclusion_enabled`, default `True`), **not a swept parameter** — it excludes ~12
+days/year where the ORB hypothesis is structurally degraded: pre-event consolidation days
+where realised vol is low (ATR qualifies) but implied vol is elevated (market pricing known
+event risk). The 90th-percentile framing is self-calibrating and avoids the fixed-threshold
+boundary noise rejected in the Donchian council. Config: `vix_ivp_threshold = 0.90`,
+`vix_lookback_days = 63`. **Ablation is mandatory in walk-forward**: report Sharpe with and
+without the VIX exclusion layer. If the delta is < 0.1 Sharpe, drop the VIX layer entirely
+and set the flag to `False`.
+
+**Entry:** Compute OR = high − low of first N 15-min candles. If OR < (fraction × 14-day
+ATR) AND VIX-IVP < 90th percentile (or flag disabled), the day qualifies. Go long (bull
+spread) on break above OR high. Go short (bear spread) on break below OR low. One entry per
+direction per day. The spread is entered on the breakout candle's close, not intraday — no
+live execution required.
 
 **Exit:** Target at entry ± (R:R multiple × OR width). Hard close at 15:15 IST if target not
-hit. This is strictly intraday — no overnight carry. Spread expiry is the nearest weekly
-(Thursday expiry), giving 0–4 DTE. Use weekly options, not monthly, to minimise premium cost
-on what is a same-day directional bet.
+hit. This is strictly intraday — no overnight carry. Spread expiry selected per the DTE rule
+below. Use weekly options, not monthly, to minimise premium cost on what is a same-day
+directional bet.
 
-**Structural filter:** Exclude weekly expiry days (Thursday) from the universe entirely. Weekly
-options expiry creates artificial pinning and two-way chop that systematically destroys ORB
-entries. This is not an optimisation — it is a structural exclusion.
+**Expiry / DTE selection rule (council ruling 2026-05-01):** Minimum 3 DTE for any new
+spread entry. When the nearest Thursday expiry is ≤ 2 DTE away, skip to the following
+weekly expiry (+7 calendar days). Day-of-week mapping:
+
+| Signal day | DTE to nearest Thursday | Action             |
+|-----------|------------------------|--------------------|
+| Monday    | 3                      | Use this Thursday  |
+| Tuesday   | 2                      | **Skip to next Thursday (9 DTE)** |
+| Wednesday | 1                      | **Skip to next Thursday (8 DTE)** |
+| Thursday  | 0                      | Excluded (expiry day)             |
+| Friday    | 6                      | Use next Thursday  |
+
+Rationale: the constraint is backtest fidelity, not live liquidity. At ≤ 2 DTE, ATM gamma
+(~0.004/point) creates ~70% P&L underestimation in 15-min discrete-bar backtesting vs.
+the true path-dependent loss. At 3+ DTE, the error drops to ~25–35% — acceptable for
+Phase 1 research-grade validation. Implementation: `select_expiry()` in `src/instruments/`.
+
+**Deferred question (logged 2026-05-01):** Since the hard exit at 15:15 means P&L is
+~95% delta-driven (not theta-driven), it is worth testing whether debit spreads outperform
+credit spreads on the same ORB signals. Debit spread profit scales with the magnitude of
+the directional move; credit spread profit is capped at the collected premium. Test in
+Phase 1 walk-forward; if debit shows > 0.15 Sharpe improvement, a separate council is
+warranted before Tier 2 implementation.
+
+**Structural exclusions (council ruling 2026-05-01):** The following calendar dates are
+excluded from the signal universe — the ORB hypothesis (overnight information resolves into
+the OR; breakout signals directional conviction) is structurally inapplicable on these days:
+
+| Event                          | Frequency | Calendar source            |
+|-------------------------------|-----------|---------------------------|
+| Weekly expiry Thursday        | ~52/year  | NSE expiry calendar        |
+| RBI MPC announcement day      | 6/year    | RBI website (published annually) |
+| Union Budget day              | 1/year    | Ministry of Finance        |
+| FOMC+1 IST trading day        | ~8/year   | Fed website (next NSE session after US announcement) |
+
+Total structural exclusions: ~67 days/year. **Surprise events (unscheduled geopolitical
+shocks, flash crashes) are NOT excluded** — they belong to the true tail-risk distribution
+and must be absorbed. Post-event days (day after RBI/Budget) **remain in-universe** — these
+are the strategy's strongest setup days (overnight uncertainty has already resolved).
+Backtest must report count + hypothetical P&L of excluded-day signals that fired but were
+not taken, as an ablation check on whether the exclusion improves metrics. Calendar method:
+`is_event_exclusion_date(date) -> tuple[bool, str | None]` in `src/market_calendar/`.
 
 **Works in:** Trending days following overnight gaps, post-event days (RBI, Fed, earnings
 season). Approximately 40–50% of Nifty trading days show a clean directional move from the
@@ -530,9 +583,11 @@ the change, do not iterate).
 - No spread selection yet — pure directional signal on spot index
 
 **2b — ORB signal generator:**
-- Input: 15-min OHLC + daily ATR + regime tags
-- Output: per-day signal (LONG / SHORT / NO_TRADE) + OR high/low + target/stop levels
-- Structural filter: exclude weekly expiry Thursdays
+- Input: 15-min OHLC + daily ATR + India VIX daily close + regime tags
+- Output: per-day signal (LONG / SHORT / NO_TRADE) + OR high/low + target/stop levels + expiry date
+- Structural exclusions: weekly expiry Thursdays, RBI MPC days, Budget day, FOMC+1 IST days
+- VIX-IVP structural exclusion: skip when 63-day IVP ≥ 90th percentile (ablation flag)
+- Expiry selection: `select_expiry()` — DTE ≤ 2 → skip to next weekly
 
 **2c — Gap Fade signal generator:**
 - Input: daily OHLC (open vs prev close) + 15-min candles (entry timing) + regime tags
@@ -865,3 +920,4 @@ confirmed.
 | 2026-04-27 | Stage 3 | Expanded | Stage 3 → two-tier (Tier 1: points, Tier 2: options). |
 | 2026-04-27 | — | Split | Separated from STRATEGY_RESEARCH.md into standalone swing file. Investment strategies moved to INVESTMENT_STRATEGY_RESEARCH.md. |
 | 2026-04-30 | Strategy 1 | Council review | 3-model council (GPT-5.4, Gemini 3.1 Pro, Grok 4; chairman: Claude Opus 4.6) reviewed Donchian roll mechanics, VIX regime switching, and spread width. Three unanimous decisions: (1) always-in → signal-in-only + 21-DTE management rule; (2) VIX credit/debit switch deferred post-validation, uniform credit spreads for Tier 2 backtest; (3) fixed 200pt width → ATR-proportional `min(round_to_50(0.8 × ATR_40d), 500)`, floor 150. Full decision: `docs/council/2026-04-30_donchian-roll-mechanics.md`. |
+| 2026-05-01 | Strategy 2 | Council review | 4-model council (GPT-4.1, Gemini 3.1 Pro, Claude Opus 4.6, Grok-4; chairman: Claude Opus 4.6; GPT-4.1 top peer-ranked). Three binding decisions: (D1) ATR primary filter + VIX-IVP ≥ 90th pctile (63d) structural exclusion flag with mandatory ablation; (D2) structural calendar exclusion of RBI MPC days, Budget day, FOMC+1 IST days (surprise events stay in, post-event days stay in); (D3) DTE ≤ 2 → skip to next weekly (backtest fidelity constraint, ~70% P&L underestimation at 2 DTE on 15-min bars). Deferred: credit vs. debit spreads for same-day-close ORB (test in Phase 1 walk-forward). Full decision: `docs/council/2026-05-01_orb-volatility-filter-design.md`. |
