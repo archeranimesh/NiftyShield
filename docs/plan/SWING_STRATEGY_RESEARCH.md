@@ -286,7 +286,10 @@ the second 15-min candle, i.e., at 9:45, to let opening volatility settle).
 
 **Entry:** Gap-up > min and < max → short signal (bear spread). Gap-down > min and < max →
 long signal (bull spread). Enter at the close of the second 15-min candle (9:45). Stop at the
-session's high/low established in the first two candles. Weekly expiry options, 0–4 DTE.
+session's high/low established in the first two candles. Weekly expiry options, minimum 3 DTE
+(same constraint as ORB — at ≤ 2 DTE, ATM gamma creates ~70% P&L underestimation on 15-min
+discrete-bar backtesting; ruling carried from 2026-05-01 ORB council). When the nearest
+Thursday expiry is ≤ 2 DTE, skip to the following weekly (+7 calendar days).
 
 **Exit:** Target at open ± (fill fraction × gap size). Hard exit at 12:30 IST — gap fills
 that haven't happened by lunch rarely complete. Close spread at 12:30 regardless.
@@ -297,7 +300,11 @@ rather than India-specific news. This is the majority of gap days.
 **Fails in:** Budget day, RBI policy days, major global events. Gaps on these days are
 information-driven and persist. Also fails during sustained high-VIX regimes where even
 correlation-driven gaps carry genuine directional information. The VIX filter (§Regime
-Classification) handles this — skip gap-fade signals when VIX > 75th percentile.
+Classification) handles this — skip gap-fade signals when India VIX IVP (63-day trailing
+percentile rank) ≥ 75th percentile. Config: `vix_ivp_threshold = 0.75`,
+`vix_lookback_days = 63`. Same IVP framing as ORB (2026-05-01 council): self-calibrating,
+avoids fixed-threshold boundary noise that affects ~20–30% of entry days around any fixed
+VIX level.
 
 ---
 
@@ -592,7 +599,7 @@ the change, do not iterate).
 **2c — Gap Fade signal generator:**
 - Input: daily OHLC (open vs prev close) + 15-min candles (entry timing) + regime tags
 - Output: per-day signal (LONG / SHORT / NO_TRADE) + gap size + target/stop levels
-- VIX filter: skip when VIX > 75th percentile
+- VIX filter: skip when India VIX IVP (63-day) ≥ 75th percentile (`vix_ivp_threshold = 0.75`, `vix_lookback_days = 63`)
 
 **Gate per signal generator:** Run on the full training set (pre-Jan 2024). Generate trade
 log: entry date, signal direction, entry price, exit price, exit reason (target/stop/time),
@@ -920,4 +927,5 @@ confirmed.
 | 2026-04-27 | Stage 3 | Expanded | Stage 3 → two-tier (Tier 1: points, Tier 2: options). |
 | 2026-04-27 | — | Split | Separated from STRATEGY_RESEARCH.md into standalone swing file. Investment strategies moved to INVESTMENT_STRATEGY_RESEARCH.md. |
 | 2026-04-30 | Strategy 1 | Council review | 3-model council (GPT-5.4, Gemini 3.1 Pro, Grok 4; chairman: Claude Opus 4.6) reviewed Donchian roll mechanics, VIX regime switching, and spread width. Three unanimous decisions: (1) always-in → signal-in-only + 21-DTE management rule; (2) VIX credit/debit switch deferred post-validation, uniform credit spreads for Tier 2 backtest; (3) fixed 200pt width → ATR-proportional `min(round_to_50(0.8 × ATR_40d), 500)`, floor 150. Full decision: `docs/council/2026-04-30_donchian-roll-mechanics.md`. |
+| 2026-05-01 | Strategy 3 | Spec correction | No council warranted. Two gaps carried forward from ORB council ruling (2026-05-01): (1) DTE floor: "0–4 DTE" → minimum 3 DTE, same backtest-fidelity rationale (~70% P&L underestimation at ≤ 2 DTE on 15-min bars); (2) VIX filter: raw 252-day percentile → 63-day IVP framing (`vix_ivp_threshold = 0.75`, `vix_lookback_days = 63`), consistent with ORB self-calibrating filter. |
 | 2026-05-01 | Strategy 2 | Council review | 4-model council (GPT-4.1, Gemini 3.1 Pro, Claude Opus 4.6, Grok-4; chairman: Claude Opus 4.6; GPT-4.1 top peer-ranked). Three binding decisions: (D1) ATR primary filter + VIX-IVP ≥ 90th pctile (63d) structural exclusion flag with mandatory ablation; (D2) structural calendar exclusion of RBI MPC days, Budget day, FOMC+1 IST days (surprise events stay in, post-event days stay in); (D3) DTE ≤ 2 → skip to next weekly (backtest fidelity constraint, ~70% P&L underestimation at 2 DTE on 15-min bars). Deferred: credit vs. debit spreads for same-day-close ORB (test in Phase 1 walk-forward). Full decision: `docs/council/2026-05-01_orb-volatility-filter-design.md`. |
