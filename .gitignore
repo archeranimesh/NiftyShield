@@ -13,3 +13,5 @@ PROJECT_INSTRUCTIONS_DRAFT.md
 quant-4pc-local/
 logs/snapshot.log
 docs/strategies/csp_v1_revision_prompt.md
+docs/council/2026-04-30_donchian-roll-mechanics.md
+docs/council/pending/2026-04-30_donchian-roll-mechanics_prompt.md

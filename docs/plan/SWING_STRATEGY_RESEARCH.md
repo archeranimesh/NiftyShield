@@ -46,25 +46,32 @@ backtest. The backtest must model these — see §Implementation Stage 3.
 
 **Execution mapping:**
 
-| Signal direction | VIX regime    | Spread type          | Max loss            |
-|-----------------|---------------|----------------------|---------------------|
-| Bullish         | Normal/High   | Bull put spread (credit) | Spread width − credit |
-| Bullish         | Low           | Bull call spread (debit) | Premium paid        |
-| Bearish         | Normal/High   | Bear call spread (credit)| Spread width − credit |
-| Bearish         | Low           | Bear put spread (debit)  | Premium paid        |
-| Neutral         | Normal/High   | Iron condor (credit)     | Wider leg width − net credit |
-| Neutral         | Low           | Skip — edge too thin     | —                   |
+| Signal direction | Backtest (Tier 2) | Post-validation (if edge confirmed) |
+|-----------------|-------------------|-------------------------------------|
+| Bullish         | Bull put spread (credit, 30–45 DTE) | Credit in normal/high VIX; debit in low VIX |
+| Bearish         | Bear call spread (credit, 30–45 DTE) | Credit in normal/high VIX; debit in low VIX |
+| Neutral         | Not applicable (signal-in-only — no neutral entry) | Iron condor if regime-switch validated |
 
-**Why credit spreads in normal/high VIX and debit in low VIX:** When VIX is elevated, option
-premiums are rich — selling spreads captures inflated premium with a statistical tailwind
-(realised vol typically undershoots implied during mean-reversion from VIX spikes). When VIX
-is low, premiums are thin and selling offers poor risk/reward; buying a debit spread costs
-less and benefits if the directional move materialises with any vol expansion.
+> **Council decision (2026-04-30):** VIX-based credit/debit regime switching is deferred out
+> of the Tier 2 backtest. Use **credit spreads uniformly** for both bullish and bearish
+> signals during backtesting. The switching logic has insufficient sample size (~30–50 trades
+> over 5 years) to validate independently, and VIX boundary noise (std dev ~1.2 points/day)
+> affects ~20–30% of entry days around the threshold. The directional signal is the edge to
+> validate first.
+>
+> **Post-validation only:** If the directional edge is confirmed and the regime switch is
+> subsequently tested, require Sharpe improvement >0.15 to justify added complexity. If
+> implemented, use **hysteresis (Schmitt Trigger)**: enter credit regime when VIX rises
+> above upper band (~19); enter debit regime when VIX falls below lower band (~14); maintain
+> previous classification in the dead zone (14–19) to prevent boundary ping-pong.
 
-The neutral/low-VIX "skip" is deliberate: iron condors in low-vol environments collect tiny
-premiums relative to their spread width, making the risk/reward structurally negative. The
-premium collected on a 200-point-wide Nifty iron condor at VIX 11 is roughly ₹3,000–4,000
-per lot against a max loss of ₹9,000–10,000. Not worth the operational overhead.
+**Why credit spreads in normal/high VIX and debit in low VIX (rationale, for post-validation):**
+When VIX is elevated, option premiums are rich — selling spreads captures inflated premium
+with a statistical tailwind (realised vol typically undershoots implied during mean-reversion
+from VIX spikes). When VIX is low, premiums are thin and selling offers poor risk/reward;
+buying a debit spread costs less and benefits if the directional move materialises with any
+vol expansion. The neutral/low-VIX iron condor skip remains: collecting tiny premiums against
+large spread width at VIX < 25th percentile is structurally negative-EV.
 
 ---
 
@@ -93,18 +100,48 @@ catch 3-week trends and generates too few trades for statistical validation in 5
 | ATR lookback (days)      | 20      | 14, 20      | —    |
 
 **Entry:** Go long (bull spread) when daily close > N-day high channel. Go short (bear spread)
-when daily close < N-day low channel. Always-in system — a new breakout in the opposite
-direction triggers exit of the current spread and entry of a new one.
+when daily close < N-day low channel. **Signal-in-only** — a position is only held when an
+active channel breakout signal exists. A new breakout in the opposite direction while in a
+trade triggers exit of the current spread and entry of a new one in the new direction.
 
 **Exit:** Trailing stop at entry price ± (ATR multiplier × current ATR). Recalculated daily.
-When stop triggers, close spread and wait for next channel breakout (no immediate reversal
-on stop — only on a fresh channel break).
+When stop triggers, **close spread and go flat** — do not enter a new spread until the next
+fresh channel breakout fires. Additionally: if the trade reaches 21 DTE with ≥50% of maximum
+profit captured, close to harvest theta acceleration and avoid gamma risk near expiry. If
+unprofitable at 21 DTE but stop has not fired, hold — directional thesis remains intact.
+
+> **Council decision (2026-04-30):** The original "always-in" architecture was rejected.
+> Being flat between signals costs nothing and eliminates ₹800–2,160/lot of uncompensated
+> inter-signal theta bleed per inactive period. Mid-contract rolls (close + open simultaneously)
+> are also eliminated — every new entry occurs on a fresh signal at 30–45 DTE, controlled
+> timing, not forced by a stop event.
 
 **Spread sizing:** Enter the spread on the signal day's close. Strike selection: short strike
-at the nearest 15-delta option, long strike 200 points further OTM (credit spreads) or short
-strike ATM ± 100, long strike 200 points further OTM (debit spreads). Monthly expiry, 30–45
-DTE at entry. If the signal triggers within 14 DTE of the nearest monthly, use the *next*
-monthly.
+at the nearest 15-delta option. **ATR-proportional spread width (dynamic):**
+
+```
+spread_width = min(round_to_50(k × ATR_40d), 500 points)
+k = 0.8 (sweep [0.6, 0.7, 0.8, 0.9, 1.0] in walk-forward optimisation)
+floor: 150 points (minimum 3 strikes for meaningful premium)
+cap: 500 points (liquidity + DhanHQ strike coverage boundary)
+```
+
+Monthly expiry, 30–45 DTE at entry. If the signal triggers within 14 DTE of the nearest
+monthly, use the *next* monthly.
+
+**Position sizing (complement to dynamic width):**
+
+```
+max_risk_per_trade = ₹7,500 (research phase)
+lots = max(1, floor(max_risk_per_trade / (spread_width × 75)))
+```
+
+Note: lot size changed to 75 (from 25) in November 2024. Use 75 for all current calculations.
+
+> **Council decision (2026-04-30):** Fixed 200-point width rejected. At 40-day ATR of
+> 400–500 points, a 200-point spread is traversed by a single average day's adverse move,
+> producing structurally poor 1:6+ risk:reward. ATR-proportional width maintains ~10%
+> breach probability across all vol regimes.
 
 **Works in:** Sustained FII-driven trends (2021 H1 bull run, 2022 H1 correction, 2023
 recovery, 2024 post-election rally). Nifty has spent roughly 55–60% of the last 5 years in
@@ -570,7 +607,8 @@ period with initial parameters. Generate:
   max drawdown (points), Calmar ratio (annualised points return / max drawdown in points)
 
 **Pass criteria:** Trade log is internally consistent (no trades on non-trading days, no
-overlapping positions in an always-in system, exit prices within the day's high-low range).
+overlapping positions in the signal-in-only system, no open positions during flat/inter-signal
+periods, exit prices within the day's high-low range).
 Summary stats are plausible — Donchian on Nifty daily bars should produce 15–25 trades/year
 with win rate 35–50% and profit factor > 1.3 if the trend-following hypothesis holds. If
 win rate > 60% or < 25%, the signal logic likely has a bug.
@@ -586,9 +624,10 @@ sufficient strike coverage. Tier 2 is attempted only after Tier 1 passes for the
 - Extend the Phase 1 backtest engine (BACKTEST_PLAN.md) to handle vertical spreads and
   iron condors, not just single legs
 - For each signal, select strikes using the execution mapping table (§Design Constraint):
-  - Credit spreads: short strike at ~15-delta, long strike 200 points further OTM
-  - Debit spreads: short strike ATM ± 100, long strike 200 points further OTM
-  - Iron condors: bull put spread + bear call spread, both at ~15-delta shorts
+  - All structures: short strike at ~15-delta; long strike at ATR-proportional width
+    further OTM (`min(round_to_50(0.8 × ATR_40d), 500)`, floor 150 points)
+  - Backtest Tier 2 uses credit spreads uniformly (debit/iron condor deferred per council)
+  - Iron condors: deferred to post-validation optimisation
 - Use DhanHQ expired option data for historical pricing (BACKTEST_PLAN.md §1.1)
 - Model costs: ₹20/order brokerage + STT + exchange charges + 2-point slippage per leg
 - Greeks computation: local Black-Scholes from DhanHQ IV data (no Greeks in DhanHQ API —
@@ -712,34 +751,28 @@ metrics reviewed. Human sign-off.
 - Apply 1-point adverse slippage on entry (record in notes field)
 - Monitor exits daily; log exit trades when signal triggers
 
-**Spread-specific paper trading rules:**
-- For **bull put spreads** (credit): sell the 15-delta put, buy the put 200 points lower.
-  Record both legs as a single paper trade with net credit.
-- For **bear call spreads** (credit): sell the 15-delta call, buy the call 200 points higher.
-- For **bull call spreads** (debit): buy the ATM+100 call, sell the call 200 points higher.
-- For **bear put spreads** (debit): buy the ATM−100 put, sell the put 200 points lower.
-- For **iron condors** (neutral signal): enter both a bull put spread and a bear call spread
-  simultaneously. Record as two linked paper trades under the same strategy.
+**Spread-specific paper trading rules (v1 — directional credit spreads only):**
 
-**Iron condor entry conditions (neutral regime only):**
-- Signal: Nifty regime tagged as "range-bound" on both trend dimension AND VIX in 25th–75th
-  percentile (normal-vol). Both conditions must be true simultaneously.
-- Strike selection: short put at 15-delta, short call at 15-delta, longs 200 points further
-  OTM on each side.
-- Entry: monthly options, 30–45 DTE.
-- Exit: close at 50% of max profit OR 21 DTE OR if either short strike is breached (close
-  the full iron condor, not just the tested side). No adjustments during paper phase —
-  adjustments are hypothesis-generation for a future version, not for v1.
-- Skip: when VIX < 25th percentile (low-vol). Premium collected is too thin relative to
-  spread width.
+> **Council decision (2026-04-30):** Debit spreads and iron condors are deferred to
+> post-validation. Paper trading runs credit spreads only for both bull and bear signals.
+> Spread width is ATR-proportional, not fixed 200 points.
+
+- Compute `spread_width = min(round_to_50(0.8 × ATR_40d), 500)`, floor 150. Record ATR_40d
+  and computed width in the paper trade notes field at entry.
+- For **bull put spreads** (bullish credit): sell the 15-delta put, buy the put `spread_width`
+  points lower. Record both legs as a single paper trade with net credit.
+- For **bear call spreads** (bearish credit): sell the 15-delta call, buy the call
+  `spread_width` points higher. Record both legs as a single paper trade with net credit.
+- Debit spreads (bull call / bear put): deferred. Do not paper-trade until VIX regime switch
+  is validated post-backtest.
+- Iron condors: deferred. Do not paper-trade until neutral-signal architecture is validated.
 
 **Gate:**
 - Realised Sharpe, win rate, and average trade duration must fall within 1 standard deviation
   of the walk-forward OOS distribution
 - If any metric is >1.5 SD below backtest expectation, stop and diagnose — either execution
   model is wrong (slippage, fill assumptions) or a regime shift occurred
-- Minimum 15 completed trades for directional strategies, minimum 8 for iron condors
-  (iron condors trigger less frequently — range-bound + normal-vol regime)
+- Minimum 15 completed trades for directional strategies
 
 **Pass criteria:** Paper trading report generated: trade log, equity curve, comparison to
 backtest OOS distribution, slippage analysis (actual vs. modelled). Human review and explicit
@@ -749,9 +782,12 @@ backtest OOS distribution, slippage analysis (actual vs. modelled). Human review
 
 ### Stage 7: Live Deployment (minimum viable size)
 
-**Capital allocation:** 1 lot Nifty options per spread. Maximum 2 concurrent positions
-(1 directional + 1 neutral, or 2 directional in different strategies). Total max risk at any
-point = 2 × spread width × lot size = 2 × 200 × 65 = ₹26,000 per concurrent position pair.
+**Capital allocation:** 1 lot Nifty options per spread (lot size = 75 as of Nov 2024).
+Maximum 2 concurrent positions (2 directional from different strategies — neutral/iron condor
+deferred to post-validation). Total max risk at any point = 2 × ATR-proportional spread width
+× 75. At ATR 400 (normal vol), width = 300 points → 2 × 300 × 75 = ₹45,000 max concurrent
+exposure. Scales down in low-vol and up in high-vol — review position count limits if ATR
+pushes width to 500-point cap.
 
 **Scaling rule:** After 60 live trading days with metrics within 1 SD of paper results,
 increase to 2 lots. After another 60 days, consider 3 lots. Never scale faster than this.
@@ -825,3 +861,4 @@ confirmed.
 | 2026-04-26 | — | — | Plan created. Pending Phase 0 gate. |
 | 2026-04-27 | Stage 3 | Expanded | Stage 3 → two-tier (Tier 1: points, Tier 2: options). |
 | 2026-04-27 | — | Split | Separated from STRATEGY_RESEARCH.md into standalone swing file. Investment strategies moved to INVESTMENT_STRATEGY_RESEARCH.md. |
+| 2026-04-30 | Strategy 1 | Council review | 3-model council (GPT-5.4, Gemini 3.1 Pro, Grok 4; chairman: Claude Opus 4.6) reviewed Donchian roll mechanics, VIX regime switching, and spread width. Three unanimous decisions: (1) always-in → signal-in-only + 21-DTE management rule; (2) VIX credit/debit switch deferred post-validation, uniform credit spreads for Tier 2 backtest; (3) fixed 200pt width → ATR-proportional `min(round_to_50(0.8 × ATR_40d), 500)`, floor 150. Full decision: `docs/council/2026-04-30_donchian-roll-mechanics.md`. |
