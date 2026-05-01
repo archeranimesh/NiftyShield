@@ -7,7 +7,7 @@
 **Related files:** [MISSION.md](MISSION.md) — immutable mission + grounding principles | [DECISIONS.md](DECISIONS.md) | [REFERENCES.md](REFERENCES.md) | [TODOS.md](TODOS.md) | [PLANNER.md](PLANNER.md) | [BACKTEST_PLAN.md](BACKTEST_PLAN.md) — phased backtest → paper → live plan | [LITERATURE.md](LITERATURE.md) — concept reference (Kelly, Sharpe, meta-labeling) | [docs/plan/](docs/plan/) — one story file per task | [INSTRUCTION.md](INSTRUCTION.md)
 ---
 
-## Current State (as of 2026-04-27)
+## Current State (as of 2026-05-01)
 
 ### What Exists (committed and working)
 
@@ -85,7 +85,7 @@ Strategy leg tables (instrument keys, entry prices, quantities, protected MF por
 
 ## Test Coverage
 
-- **Total: ~976 tests** (976 passing; 1 pre-existing `test_lookup.py` rapidfuzz/difflib delta — unrelated to recent changes)
+- **Total: ~1010 tests** (985 passing; 25 pre-existing `test_upstox_live.py` failures — `pytest-asyncio` not installed in sandbox, not code regressions)
 - Run: `python -m pytest tests/unit/`
 - Auth tests: `tests/unit/auth/` (64 tests — Nuvama login + verify, Dhan login + verify)
 - MF tests: `tests/unit/mf/` (127 tests)

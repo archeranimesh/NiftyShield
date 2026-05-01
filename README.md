@@ -99,19 +99,22 @@ NiftyShield/
 │   ├── paper_snapshot.py          # Standalone paper mark-to-market
 │   ├── validate_strategy_spec.py  # Validates docs/strategies/*.md required sections
 │   ├── roll_leg.py                # CLI: atomic close + open for expiry rolls
+│   ├── ask_council.py             # CLI: submit questions to llm-council (online or offline)
 │   └── seed_*.py                  # One-time DB seeding scripts
 ├── tests/
-│   ├── unit/              # ~976 offline tests (default — no network)
+│   ├── unit/              # ~1010 offline tests (default — no network)
 │   └── fixtures/          # Recorded API responses (JSON)
 ├── data/
 │   └── portfolio/         # portfolio.sqlite (live DB — gitignored)
 ├── docs/
 │   ├── plan/              # Per-story task files + swing/investment research pipelines
 │   ├── strategies/        # Strategy spec documents (csp_nifty_v1.md, etc.)
+│   ├── council/           # Council decision files + README workflow
 │   └── archive/           # Completed plans, archived TODOs, old agents
 ├── .env.example
 ├── requirements.txt
 ├── requirements-dev.txt
+├── tools/             # Git submodules (llm-council)
 └── README.md
 ```
 
@@ -535,7 +538,7 @@ NiftyShield has pre-configured skills and agents you invoke by saying a phrase t
 |---|---|---|---|
 | **code-reviewer** | Opus | "Run the code-reviewer agent on `src/portfolio/`" | Checks Decimal invariants, BrokerClient protocol compliance, type hints, async correctness, and the REVIEW.md Python hygiene checklist. Returns CRITICAL / ERROR / WARNING findings with file + line. Use before every merge on monetary or async code. |
 | **test-runner** | Haiku | "Run the test-runner agent" | Runs `python -m pytest tests/unit/` and reports pass/fail count plus any failures. Fast and cheap — use after every code change before committing. |
-| **greeks-analyst** | Sonnet | "Use the greeks-analyst agent to design the OptionChain model" | Inspects the real fixture at `tests/fixtures/responses/nifty_chain_2026-04-07.json`, proposes the `OptionChain` Pydantic model shape, designs `_extract_greeks_from_chain()`, and lists tests required. Scope: P1-NEXT Greeks Capture task. |
+| **greeks-analyst** | Sonnet | "Use the greeks-analyst agent to design the OptionChain model" | Inspects the real fixture at `tests/fixtures/responses/nifty_chain_2026-04-07.json`, proposes extensions or analysis on the `OptionChain` Pydantic model and `_extract_greeks_from_chain()`. Greeks capture shipped 2026-04-25 — use for future Greeks-related analysis. |
 | **roll-validator** | Opus | "Use the roll-validator agent before I roll [leg]" | Validates pre-roll net position, Trade model integrity for both close and open legs, atomicity of the SQLite transaction, and instrument key correctness. Returns SAFE TO ROLL or DO NOT ROLL verdict. Use before every expiry roll — treats it as a real P&L event. |
 | **options-strategist** | Opus | "Use the options-strategist agent to size a short strangle for [expiry]" | Designs IC or short strangle legs (strike selection by delta, max credit/loss, margin estimate, net delta). Also does delta-neutral portfolio analysis and rebalance signal generation. All output is advisory until `src/execution/` is live. |
 
