@@ -304,6 +304,48 @@ the backtest engine must include the NiftyBees collateral leg in all CSP strateg
 calculations. See `docs/strategies/csp_nifty_v1.md` for the exact `record_paper_trade.py`
 command and annual reset procedure.
 
+**2026-05-01 — Donchian strategy: signal-in-only architecture (council ruling).**
+Source: `docs/council/2026-05-01_donchian-roll-mechanics.md`. Always-in architecture rejected.
+When the ATR trailing stop fires, close the spread and go flat — do not open a new spread
+until the next fresh Donchian channel breakout fires. Cost analysis is unambiguous: a
+mid-contract roll (4 legs on NSE, no native multi-leg order type) incurs ₹1,100–1,900 in
+slippage + brokerage + STT per event — 28–76% of a single cycle's gross premium at 20 DTE.
+Additionally, holding a spread during consolidation periods bleeds ₹800–2,160/lot per
+inter-signal period in uncompensated theta. The only "roll" permitted is signal-driven:
+when an opposite-direction breakout fires, close the current spread and immediately enter the
+new direction at fresh 30–45 DTE timing. Three exit triggers in priority order: (1) ATR
+trailing stop → flat; (2) ≥50% max profit captured AND ≤21 DTE → close; (3) opposite
+breakout → close and enter new direction. Confidence: High.
+
+**2026-05-01 — Donchian strategy: uniform credit spreads; VIX regime switching deferred (council ruling).**
+Source: `docs/council/2026-05-01_donchian-roll-mechanics.md`. Credit/debit VIX regime
+switching removed from the Tier 2 backtest scope. Sample size argument is decisive: only
+8–12 low-VIX debit trades expected over 5 years — no performance metric has a meaningful
+confidence interval at that count. Additional disqualifiers: VIX boundary noise (~1 point
+daily std dev) affects ~20–30% of entry days around any fixed threshold; layering a vol-regime
+decision on a directional signal confounds attribution (can't isolate which edge is working).
+Use **credit spreads uniformly** for both bullish and bearish signals during all backtest and
+paper-trade phases. Post-validation contingency (if directional edge confirmed): regime
+switching may be added if it improves Sharpe by > 0.15. If implemented, mandatory hysteresis:
+enter credit regime at VIX > 19, enter debit regime at VIX < 14, hold previous state in the
+14–19 dead zone. Confidence: High.
+
+**2026-05-01 — Donchian strategy: ATR-proportional spread width; fixed 200 points rejected (council ruling).**
+Source: `docs/council/2026-05-01_donchian-roll-mechanics.md`. Fixed 200-point spread
+width creates a regime-dependent strategy that fails in high-volatility environments —
+exactly where larger trends and more signal opportunities arise. At ATR 500, a 200-point
+spread is breached by a single average adverse day's move, producing risk:reward > 1:6.
+Mandated formula: `spread_width = min(round_to_50(k × ATR_40d), 500)` with k = 0.8
+(walk-forward sweep [0.6, 0.7, 0.8, 0.9, 1.0]), floor 150 points (minimum 3 strikes for
+meaningful premium), cap 500 points (NSE monthly OI thins beyond ±500 from ATM). This
+maintains ~10% breach probability across all vol regimes. `k` is the 4th optimisable
+parameter (added to the sweep table in `docs/plan/SWING_STRATEGY_RESEARCH.md`). Position
+sizing with variable width: `lots = max(1, floor(₹7,500 / (spread_width × 75)))`. At 300pt
+width (ATR ~375), 1 lot = ₹22,500 max loss — accept 1-lot minimum in paper phase; track
+% of capital at risk per trade and flag any > 2%. Lot size = 75 (post-Nov 2024). Confidence: High.
+Noted, deferred: ATR-based short strike selection (spot ± 1.0×ATR) instead of delta-based,
+to eliminate model dependency on the IV surface. First candidate for post-validation testing.
+
 ---
 
 ## Backtest Data Source Decision (2026-04-27)

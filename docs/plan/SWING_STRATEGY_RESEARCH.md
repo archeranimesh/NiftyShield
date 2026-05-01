@@ -3,7 +3,7 @@
 | Field        | Value                                                     |
 |--------------|-----------------------------------------------------------|
 | Author       | Animesh Bhadra (archeranimesh)                            |
-| Date         | 2026-04-27                                                |
+| Date         | 2026-04-27 (council update 2026-05-01)                    |
 | Status       | Draft — pending Phase 0 gate (BACKTEST_PLAN.md §0.8)      |
 | Signal source| Nifty 50 Index spot (`NSE_INDEX|Nifty 50`)                |
 | Regime filter| India VIX (`NSE_INDEX|India VIX`, Dhan: security ID `25`) |
@@ -44,34 +44,33 @@ The tradeoff: option spreads introduce IV sensitivity, bid-ask slippage on 4-leg
 (iron condors), and theta decay as a profit/cost component that doesn't exist in a futures
 backtest. The backtest must model these — see §Implementation Stage 3.
 
-**Execution mapping:**
+**Execution mapping (backtest and live):**
 
-| Signal direction | Backtest (Tier 2) | Post-validation (if edge confirmed) |
-|-----------------|-------------------|-------------------------------------|
-| Bullish         | Bull put spread (credit, 30–45 DTE) | Credit in normal/high VIX; debit in low VIX |
-| Bearish         | Bear call spread (credit, 30–45 DTE) | Credit in normal/high VIX; debit in low VIX |
-| Neutral         | Not applicable (signal-in-only — no neutral entry) | Iron condor if regime-switch validated |
+| Signal direction | Execution | DTE | Notes |
+|-----------------|-----------|-----|-------|
+| Bullish         | Bull put spread (credit) | 30–45 DTE monthly | Short strike at ~15-delta; width = ATR-proportional formula |
+| Bearish         | Bear call spread (credit) | 30–45 DTE monthly | Short strike at ~15-delta; width = ATR-proportional formula |
+| Neutral / no signal | Flat — no position | — | Signal-in-only: do not hold during non-trending periods |
 
-> **Council decision (2026-04-30):** VIX-based credit/debit regime switching is deferred out
-> of the Tier 2 backtest. Use **credit spreads uniformly** for both bullish and bearish
-> signals during backtesting. The switching logic has insufficient sample size (~30–50 trades
-> over 5 years) to validate independently, and VIX boundary noise (std dev ~1.2 points/day)
-> affects ~20–30% of entry days around the threshold. The directional signal is the edge to
-> validate first.
+> **Council decision (2026-05-01, confirmed 2026-04-30):** Credit spreads uniformly for both
+> bullish and bearish signals — VIX-based regime switching (credit vs. debit) is **deferred**.
+> Sample size argument is decisive: only 8–12 low-VIX debit trades expected over 5 years —
+> insufficient to validate any regime-switching rule. Additionally, VIX boundary noise
+> (daily std dev ~0.8–1.5 points) affects ~20–30% of entry days around any fixed threshold,
+> creating systematic execution noise. The directional signal is the edge to validate first.
 >
-> **Post-validation only:** If the directional edge is confirmed and the regime switch is
-> subsequently tested, require Sharpe improvement >0.15 to justify added complexity. If
-> implemented, use **hysteresis (Schmitt Trigger)**: enter credit regime when VIX rises
-> above upper band (~19); enter debit regime when VIX falls below lower band (~14); maintain
-> previous classification in the dead zone (14–19) to prevent boundary ping-pong.
+> **Post-validation contingency (only if directional edge confirmed):** Regime switching may
+> be tested subsequently. Require **Sharpe improvement > 0.15** to justify added complexity.
+> If implemented, mandatory **hysteresis (Schmitt Trigger)**: enter credit regime when VIX
+> rises above upper band (~19); enter debit regime when VIX falls below lower band (~14);
+> maintain previous classification in the dead zone (14–19) to prevent boundary ping-pong.
 
-**Why credit spreads in normal/high VIX and debit in low VIX (rationale, for post-validation):**
-When VIX is elevated, option premiums are rich — selling spreads captures inflated premium
-with a statistical tailwind (realised vol typically undershoots implied during mean-reversion
-from VIX spikes). When VIX is low, premiums are thin and selling offers poor risk/reward;
-buying a debit spread costs less and benefits if the directional move materialises with any
-vol expansion. The neutral/low-VIX iron condor skip remains: collecting tiny premiums against
-large spread width at VIX < 25th percentile is structurally negative-EV.
+**Structural rationale (credit spreads as default):** Credit spreads have a natural
+structural advantage for a trend-following system — if the trend continues, the short option
+decays to zero and the full credit is kept regardless of how far the move extends. A debit
+spread requires the move to be large enough to overcome the debit paid; it is sensitive to
+*magnitude*, not just *direction*. This asymmetry favours credit spreads as the baseline
+for a momentum-entry system.
 
 ---
 
@@ -91,13 +90,14 @@ to exhaust. A channel breakout on daily bars captures the initiation of these tr
 dominated and add false signals without improving trend capture. Not weekly — too slow to
 catch 3-week trends and generates too few trades for statistical validation in 5 years.
 
-**Parameters (3):**
+**Parameters (4):**
 
-| Parameter                | Initial | Sweep range | Step |
-|--------------------------|---------|-------------|------|
-| Channel lookback (N days)| 40      | 20–60       | 5    |
-| ATR trailing stop mult.  | 3.0     | 2.0–4.5     | 0.5  |
-| ATR lookback (days)      | 20      | 14, 20      | —    |
+| Parameter                     | Initial | Sweep range | Step |
+|-------------------------------|---------|-------------|------|
+| Channel lookback (N days)     | 40      | 20–60       | 5    |
+| ATR trailing stop mult.       | 3.0     | 2.0–4.5     | 0.5  |
+| ATR lookback (days)           | 20      | 14, 20      | —    |
+| Width multiplier k (× ATR_40d)| 0.8     | 0.6–1.0     | 0.1  |
 
 **Entry:** Go long (bull spread) when daily close > N-day high channel. Go short (bear spread)
 when daily close < N-day low channel. **Signal-in-only** — a position is only held when an
@@ -147,9 +147,12 @@ Note: lot size changed to 75 (from 25) in November 2024. Use 75 for all current 
 recovery, 2024 post-election rally). Nifty has spent roughly 55–60% of the last 5 years in
 trending regimes — above average for a major index and the structural foundation of this edge.
 
-**Fails in:** Choppy consolidation ranges. 2022 H2 (16000–18500 for months) is the canonical
-failure period. Also fails during sharp V-reversals where the trailing stop exits at the worst
-moment. Budget-week and election-week whipsaws can generate consecutive losing round-trips.
+**Fails in:** Sharp V-reversals where the trailing stop exits at the worst moment.
+Budget-week and election-week whipsaws can generate consecutive losing round-trips. Note:
+the signal-in-only architecture eliminates the prior failure mode of always-in systems
+(₹800–2,160/lot uncompensated theta bleed per consolidation period) — the strategy is flat
+during choppy ranges, so the 2022 H2 (16000–18500 for months) consolidation is now a
+"missed opportunity" rather than an active loss.
 
 ---
 
