@@ -47,8 +47,8 @@ Module tree (file-level descriptions): **`CONTEXT_TREE.md`** — load only when 
 - Adding/changing module architecture → also read `DECISIONS.md` + `CONTEXT_TREE.md`
 - Touching instrument keys, AMFI codes, market data → also read `REFERENCES.md`
 - Starting a new feature → also read `TODOS.md` + `PLANNER.md`
-- Any task in `src/backtest/`, `src/paper/`, `src/strategy/`, or referenced in BACKTEST_PLAN.md → also read `BACKTEST_PLAN.md`
-- Backtest / paper trading / strategy research → also read `BACKTEST_PLAN.md`
+- Phase 0 backtest / paper trading / strategy / `src/paper/` / `src/risk/` work → also read `BACKTEST_PLAN.md` (Phase 0 only — ~300 lines)
+- Phase 1+ work (only after Phase 0.8 gate passes) → also read `BACKTEST_PLAN_PHASE1.md`
 - Implementing a metric / ratio / ML technique → also read `LITERATURE.md` entry for the cited LIT code
 - Working a specific story → load ONLY that story file + `CONTEXT.md` + module `CLAUDE.md`
 - Working inside `src/<module>/` → that module's `CLAUDE.md` loads automatically

@@ -200,7 +200,7 @@ def format_decision(topic: str, prompt: str, result: dict) -> str:
         "",
         "## Stage 3 — Chairman Synthesis",
         "",
-        stage3.get("response", "*(no synthesis returned)*"),
+        stage3.get("response") or "*(no synthesis returned)*",
         "",
         "---",
         "",
@@ -211,7 +211,7 @@ def format_decision(topic: str, prompt: str, result: dict) -> str:
     for entry in stage1:
         lines.append(f"### {entry['model']}")
         lines.append("")
-        lines.append(entry.get("response", ""))
+        lines.append(entry.get("response") or "")
         lines.append("")
 
     agg: list[dict] = metadata.get("aggregate_rankings", [])
