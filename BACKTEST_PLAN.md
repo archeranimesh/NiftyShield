@@ -783,15 +783,30 @@ This is the core validation gate of the whole pipeline. If this step doesn't pas
 
 The most important piece of code in this plan. Detects strategy drift in real time.
 
-- [ ] `src/backtest/continuous.py` — weekly job that:
-  1. Re-runs CSP backtest over the trailing 3 months of history.
-  2. Queries live (or paper) P&L over the same 3-month window.
-  3. Computes Z-score of realised vs backtest.
-  4. Logs to `backtest_runs` with a `mode = "continuous"` flag.
-  5. Alerts via Telegram if |Z| > 1.5 for 3 consecutive weeks.
-- [ ] Cron entry: `0 18 * * SUN` (Sunday evening, after Friday close + weekend data settle).
-- [ ] Tests: Z-score computation, threshold trigger, Telegram notification path (mocked).
-- [ ] Commit: `feat(backtest): continuous re-validation`.
+**Council decision 2026-05-02:** Weekly Z-score replaced by per-cycle lower-sided CUSUM. See `docs/council/2026-05-02_continuous-revalidation-statistical-power.md` and `DECISIONS.md → Live Strategy Monitoring`.
+
+- [ ] `src/risk/monitoring.py` — per-cycle job that:
+  1. At each CSP cycle close (exit triggered), reads closed-cycle realized P&L from the trade store.
+  2. Computes standardized cycle return: `z_t = (cycle_pnl_t − μ_backtest) / σ_backtest`.
+  3. Updates lower-sided CUSUM: `C_t = max(0, C_{t−1} − z_t − 0.50)`.
+  4. Tracks two CUSUM series: (a) combined P&L (short put + NiftyBees MTM), (b) option-leg-only.
+  5. Persists `C_t`, cycle count, and Z-score in `monitoring_state` SQLite table.
+  6. Alerts via Telegram when CUSUM thresholds are crossed (gated by N):
+     - N < 6: log only, no alert
+     - 6 ≤ N < 12: `C_t ≥ 3.0` → manual review alert
+     - N ≥ 12: `C_t ≥ 3.0` warning, `C_t ≥ 4.0` reduce to paper-only, `C_t ≥ 5.0` halt
+  7. Logs monthly Z-score (dashboard metric) regardless of N.
+- [ ] `src/risk/cusum_config.py` — stores `μ_backtest`, `σ_backtest`, `k`, `h_warning`, `h_reduce`, `h_halt`. Updated after Phase 2 bootstrap calibration.
+- [ ] Early deployment guard stack (module: `src/risk/early_guards.py`):
+  - Guard 1 (R6 enhanced): cycle loss > 3× reference credit → pause + review
+  - Guard 2 (rolling drawdown): 3-cycle cumulative > 4× avg credit → paper-only; 6-cycle > 6× → halt
+  - Guard 3 (consecutive loss): 3 consecutive cycles at net loss → halt + mandatory review
+  - Guard 4 (MTM guard): combined drawdown > 3× entry credit before stop fires → close + pause next entry
+  - Guard 5 (regime flag): VIX/IVR/event divergence → pause (requires Phase 1.3a VIX data)
+  - Guard 6 (slippage): realized slippage > 2× modeled × 2 cycles → paper-only
+  - Guard 7 (data quality): missing/stale required inputs → skip cycle
+- [ ] Tests: CUSUM computation (accumulation, reset via floor, sign convention), guard trigger logic, edge cases (first cycle, N<6 no-alert, h thresholds), Telegram notification path (mocked). No network in tests.
+- [ ] Commit: `feat(risk): per-cycle CUSUM monitoring + early deployment guards`.
 
 ---
 
@@ -846,7 +861,7 @@ The most important piece of code in this plan. Detects strategy drift in real ti
 
 ## 2.7 — GATE — End of Phase 2
 
-- [ ] CSP live for ≥3 months within backtest envelope (|rolling 3-month Z| < 1.5 consistently).
+- [ ] CSP live for ≥3 months: no CUSUM halt or reduce signal triggered (hard guards all clear; CUSUM `C_t < h_halt` at each cycle close during this window).
 - [ ] No kill criterion triggered for CSP.
 - [ ] IC v1 paper trading ≥12 weeks, variance check passed (per 1.11 methodology).
 - [ ] Continuous re-validation loop operational and has run weekly with no missed runs.
@@ -1183,7 +1198,10 @@ Calendar spread entered 1 trading day before RBI policy / budget / major earning
 
 ## Variance monitoring thresholds
 
-- Rolling 3-month Z-score of realised vs backtest: alert if |Z| > 1.5 for 3 consecutive weeks.
+**Council decision 2026-05-02:** Weekly Z-score monitoring replaced by per-cycle CUSUM. See `DECISIONS.md → Live Strategy Monitoring`.
+
+- Per-cycle CUSUM (lower-sided, k=0.50): `C_t ≥ 3.0` warning, `C_t ≥ 4.0` reduce, `C_t ≥ 5.0` halt. Active thresholds are N-gated (see Task 2.1).
+- Monthly Z-score logged as dashboard metric from day one; not used as a halt/reduce trigger before N=24 live closed cycles.
 - Monthly: reconcile live trades against backtest predictions for the same month. Divergence > 1 SD investigated, > 2 SD reviewed with the `code-reviewer` and `options-strategist` agents.
 
 ## Kill triggers (global)
@@ -1192,7 +1210,7 @@ Any of these triggers a pause on the affected strategy, not the whole system:
 
 - Trailing 6-month realised return < 0% for that strategy.
 - Max drawdown > 10% of deployed capital for that strategy.
-- |Z| > 2 for 4 consecutive weeks.
+- CUSUM `C_t ≥ h_halt` (5.0 default) at any cycle close (N-gated: halt threshold only active at N≥12).
 - Three consecutive execution errors (missed roll, wrong-side fill, fat finger).
 
 When triggered: stop new entries immediately, close existing positions according to the strategy's normal exit rules (not panic-close), post-mortem, decide keep/modify/kill within 30 days.

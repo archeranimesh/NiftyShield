@@ -795,6 +795,55 @@ Source: `docs/council/2026-05-02_gamma-acceleration-mispricing-option-buying.md`
 
 ---
 
+## Live Strategy Monitoring (Council Decision 2026-05-02)
+
+**Source:** `docs/council/2026-05-02_continuous-revalidation-statistical-power.md` — unanimous council decision; supersedes Task 2.1 Z-score specification.
+
+**Primary monitor: Lower-sided CUSUM on closed CSP cycles (not weekly Z-score).** The original Task 2.1 spec (weekly rolling Z-score, |Z| > 1.5–2.0 halt/reduce) is statistically unsound for ~12 observations/year. Weekly recomputation does not generate new evidence; it re-reads the same small sample with autocorrelated noise and ~20%+ false-alarm rate over 3 months.
+
+Replace with:
+
+```
+C_t = max(0, C_{t−1} − z_t − k)
+z_t = (cycle_pnl_t − μ_backtest) / σ_backtest
+
+k = 0.50   (detects ~1.0σ adverse shift)
+h_warning = 3.0   (review, no automatic action)
+h_reduce  = 4.0   (reduce to paper-only)
+h_halt    = 5.0   (halt new live entries)
+```
+
+Update frequency: monthly, at cycle close only. Do not update on partial/open trades. Two versions tracked: (a) combined strategy P&L (put + NiftyBees), (b) option-leg-only. Persist `C_t` in `monitoring_state` SQLite table.
+
+**Z-score retained as dashboard-only metric.** Logged monthly from day one for retrospective calibration and annual review. Not a halt trigger before N=24 live closed cycles. Not evaluated weekly.
+
+**Phased statistical governance:**
+
+| Live closed cycles | Monitoring regime |
+|---:|---|
+| N < 6 | Hard risk guards only. Log CUSUM for diagnostics. |
+| 6 ≤ N < 12 | CUSUM warning (h=3.0) triggers manual review. No automated halt. |
+| 12 ≤ N < 24 | CUSUM reduce/halt thresholds active. Z-score advisory. |
+| N ≥ 24 | Full statistical governance: CUSUM + Z-score + guards. |
+
+**Early deployment guard stack (active from first live trade):**
+
+1. **R6 enhanced** — single-cycle catastrophic loss; reference credit = max(backtest regime avg, live avg if N≥3, approved benchmark)
+2. **Rolling drawdown** — cumulative loss over 3 cycles > 4× avg entry credit → paper-only; 6 cycles > 6× → halt. Switch to backtest-percentile version after Phase 2 calibration.
+3. **Consecutive loss limit** — 3 consecutive CSP cycles closed at loss → halt + mandatory review (P(3 in a row) ≈ 1.5–2.5% at 75–80% win rate)
+4. **Open-position MTM guard** — combined strategy drawdown > 3× entry credit before option stop fires → close + pause next entry + review collateral
+5. **Regime-divergence flag** — pause if India VIX > 95th percentile, VIX 5-day change > 95th percentile, Nifty 5-day move > 95th percentile, IVR < 25, or R4 event inside window. Requires VIX ingestion (Phase 1.3a); Guards 1–4 used until available.
+6. **Slippage/liquidity guard** — realized slippage > 2× modeled for 2 consecutive cycles → paper-only; > 3× single cycle → pause + review
+7. **Data-quality gate** — skip cycle if any required input (option chain, spot, expiry calendar, strike metadata, strategy state, India VIX) is missing or stale
+
+**Implementation:** `src/risk/monitoring.py` (Phase 2 task). `monitoring_state` SQLite table. Alerts via `src/notifications/`.
+
+**Calibration:** After Phase 2 backtest completion, run block-bootstrap simulations to validate/adjust h thresholds against target false-alarm rates (≤5% per year for h_halt).
+
+**Noted, deferred (minority position):** DeepSeek proposed SPRT — rejected due to sensitivity to distributional misspecification in fat-tailed, negatively-skewed option-selling returns (skew ≈ −1.2, kurtosis ≈ 5–6). Candidate for evaluation post-N=50 when distributional shape is better characterised.
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/`, `src/streaming/` — all empty
