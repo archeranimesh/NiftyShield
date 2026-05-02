@@ -75,9 +75,10 @@ The strategy has three legs entered on different schedules:
 
 ### Leg 1 — CSP (Income Leg)
 
-**Identical to `csp_nifty_v1.md` rules.** Sell 1 lot Nifty 25-delta put, 30–45 DTE,
-Wednesday after monthly expiry. All entry rules (R1–R7), exit rules, and kill criteria
-from that spec apply without modification.
+**Identical to `csp_nifty_v1.md` rules.** Sell 1 lot Nifty 22-delta put (updated
+from 25-delta per 2026-05-02 council ruling in DECISIONS.md), 30–45 DTE, Wednesday
+after monthly expiry. All entry rules (R1–R7), exit rules, and kill criteria from that
+spec apply without modification.
 
 Entry, exit, and adjustment rules for Leg 1 are governed entirely by
 `csp_nifty_v1.md`. They are not repeated here to avoid spec divergence.
@@ -93,6 +94,15 @@ Leg 1. 4 lots.
   24000, this is ~22080 → round to nearest 50 = 22050 or 22100.
 - Short put: closest available strike to `Nifty_spot × 0.80` (20% below spot). At
   Nifty 24000, this is ~19200.
+
+**Liquidity filter (2026-05-02 council ruling):** At time of entry, check OI on the
+selected 8% OTM long put strike. If OI < 500 contracts, step one strike inward to
+the nearest 50-point increment closer to spot (e.g., ~7% OTM). If that strike also
+has OI < 500, step again to ~6% OTM. Log any deviation from the 8% base in the trade
+record (`trade_metadata` field or paper trade notes) including the OI observed at the
+base strike. Do not use delta-based selection as a fallback — the liquidity filter
+applies strictly within the %OTM framework. Rationale and full council analysis:
+`docs/council/2026-05-02_integrated-leg2-strike-methodology.md`.
 
 **Lot count:** 4 lots. Derived from:
 
@@ -541,9 +551,13 @@ material in the 5–8% dead zone where protection doesn't yet kick in.
 
 ## Open Questions for v2
 
-- Should Leg 2 use delta-based strike selection (e.g., 15-delta) instead of
-  percentage-OTM? Delta-based adapts to IV regime; percentage-OTM is simpler.
-  Measure both in backtest.
+- ~~Should Leg 2 use delta-based strike selection (e.g., 15-delta) instead of
+  percentage-OTM?~~ **Resolved 2026-05-02 (council):** fixed %OTM retained as
+  primary. Delta-based rejected — dead zone widens in low-vol regimes where most
+  moderate corrections occur; cost spikes at VIX>20. 92% vs 85% payoff reliability
+  in 8–15% scenarios. Delta-based deferred as a conditional Phase 2 overlay at
+  IVR > 70% only. See DECISIONS.md and
+  `docs/council/2026-05-02_integrated-leg2-strike-methodology.md`.
 
 - Should Leg 3 switch from quarterly to semi-annual (cheaper, but larger gap between
   renewals)? Depends on the observed frequency of tail events in the backtest window.
