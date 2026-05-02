@@ -421,6 +421,25 @@ Source: `docs/council/2026-05-02_nifty-long-instrument-comparison-protection.md`
 Source: `docs/council/2026-05-02_csp-entry-delta-v2.md`. Chairman synthesis (GPT-4.1, Grok-4-fast, DeepSeek-R1). Analytical optimum for the 21-day hold / −0.45 delta-stop / 50% profit-target system is ~22-delta: captures ~85% of 25-delta credit, approximately halves stop-out frequency, and produces the highest Sharpe (~1.4 vs ~1.1–1.3 at 25-delta) in skew-adjusted Black-Scholes modelling of the Nifty vol surface. 20-delta further reduces tail risk but costs meaningful EV via thinner premium and wider relative slippage; 25-delta yields best fills but stop-out frequency is approximately 2× that of 22-delta. Strategy doc updated: `docs/strategies/csp_nifty_v1.md`. Implementation requirements: (1) delta is a parameterised input in scripts — candidate values 20, 22, 25 selectable at entry; (2) liquidity gate: skip cycle if bid/ask spread > 5% of premium at the target delta strike; (3) regime-adaptive delta in future IVR-aware versions — 20–22-delta when IVR > 40 (high vol expansion), 25-delta when IVR 25–40 (normal). Do NOT base the v2 delta policy on N=6–8 paper cycles — sample is too small to capture stop-out or tail-event statistics. Maintain 12-month parameter discipline before re-tuning. Confidence: High.
 Noted, deferred: ATR-based short strike selection as an alternative to delta-based, to eliminate IV surface model dependency — first candidate for post-validation testing.
 
+**2026-05-02 — Gap Fade VIX-IVP filter: 75th percentile confirmed; asymmetry with ORB 90th is binding (council ruling).**
+Source: `docs/council/2026-05-02_gap-fade-vix-filter-threshold.md`. Council (GPT-4.1 +
+DeepSeek-R1 joint top-ranked at 1.5; Grok-4-fast at 3.0; chairman synthesis reconstructed
+after Stage 3 failure). Asymmetric thresholds confirmed binding: Gap Fade (S3) = IVP_63d ≥
+0.75 → skip; ORB (S2) = IVP_63d ≥ 0.90 → skip. Structural rationale: Gap Fade failure is
+continuous/gradient (GIFT→NSE correlation breaks from IVP ~65–70 onward, below r ≈ 0.40 by
+IVP 75); ORB failure is binary/tail-driven (hypothesis intact across normal-to-moderate IV,
+degrades only at extreme pre-event anticipation IVP ≥ 90). A unified threshold at 75th
+over-filters ORB; at 90th it retains ~35–40% structurally impaired Gap Fade trades. Both
+measured as 63-day trailing percentile rank (`vix_lookback_days = 63`), self-calibrating.
+Statistical risk of trade-count shortfall at 75th is acceptable (~15–20% insufficient
+windows vs. 25% kill condition). Contingency protocol: (1) primary — expand gap range
+0.3–1.0% → 0.25–1.2%; (2) secondary — raise threshold by 0.05 steps up to 0.85 maximum.
+Mandatory ablation: report Gap Fade Sharpe at IVP thresholds [0.70, 0.75, 0.80, 0.85] in
+Phase 1 walk-forward. Config: `vix_ivp_threshold = 0.75`, `vix_lookback_days = 63` (S3).
+Confidence: High.
+Noted, deferred: Grok-4-fast recommended 80th as safer default — ablation in Phase 1.8
+will resolve empirically whether the 75th vs 80th delta exceeds 0.10 Sharpe.
+
 **2026-05-02 — Leg 2 strike selection: fixed %OTM maintained; delta-based rejected as primary (council ruling).**
 Source: `docs/council/2026-05-02_integrated-leg2-strike-methodology.md`. Unanimous council (GPT-4.1 chairman, Grok-4-fast, DeepSeek-R1; Grok ranked #1 in peer review). Fixed %OTM strikes (long put at 8% below spot, short put at 20% below spot) retained as the sole primary methodology for Leg 2. Delta-based selection (long put at 15-delta, short put at 5-delta) rejected as primary on three grounds: (1) the dead zone widens to 10–12% in low-vol regimes — exactly the regime where moderate corrections are most common (~70% of historical moderates); (2) cost spikes sharply in high-IV periods (can double or triple at VIX=22), risking budget overruns precisely when protection demand is highest; (3) empirical Monte Carlo modelling shows %OTM at 92% reliability vs 85% for delta-based for payoff >50% of MF loss in 8–15% correction scenarios. Liquidity filter added: if 8% OTM OI < 500 contracts at entry, step one strike inward (7% OTM; if still < 500, use 6% OTM). Log any deviation from 8% base in trade metadata. Delta-based reserved as a conditional overlay for future consideration at IVR > 70% in Phase 2 research. Confidence: High.
 Noted, deferred: delta-based as a hybrid/conditional overlay in extraordinary volatility events (IVR > 70%) — first candidate for Phase 2 enhancement after paper-trade validation confirms %OTM reliability.
