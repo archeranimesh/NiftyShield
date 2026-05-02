@@ -63,14 +63,20 @@ the data is available for R3 calibration once the pipeline is live.*
 **Event filter (R4 — specified, not yet enforced):** Skip the cycle if any of the following
 falls inside the trade DTE window: Union Budget (Feb 1 ± 1 trading day), RBI MPC
 announcement day, election-result day. Indian-market tail-event premium is not adequately
-priced into 25-delta. *Enforcement depends on `src/market_calendar/events.yaml`
+priced into 22-delta (and was not at 25-delta either). *Enforcement depends on `src/market_calendar/events.yaml`
 (BACKTEST_PLAN.md task 3.3 — not yet created). Until 3.3 lands, document any event exposure
 in the trade log for each cycle.*
 
-**Strike selection:** Closest available strike to the 25-delta put, as reported by the live
-Dhan option chain (`/v2/optionchain`, Phase 1.10) or Upstox option chain fallback (Phase 0,
-current). If two strikes straddle 25-delta exactly, take the further OTM one (lower absolute
-delta) to reduce assignment probability.
+**Strike selection:** Closest available strike to the **22-delta put** (council default,
+2026-05-02 — supersedes 25-delta; see `docs/council/2026-05-02_csp-entry-delta-v2.md` and
+`DECISIONS.md`), as reported by the live Dhan option chain (`/v2/optionchain`, Phase 1.10)
+or Upstox option chain fallback (Phase 0, current). If two strikes straddle 22-delta exactly,
+take the further OTM one (lower absolute delta) to reduce assignment probability. Delta is a
+**parameterised input** — candidate values 20, 22, 25 are selectable at entry to enable
+regime-adaptive operation once IVR ingestion is live. **Liquidity gate (new):** if the
+bid/ask spread at the target delta strike exceeds 5% of the option mid price, skip the cycle
+for that delta and try the adjacent candidate (e.g., 22 → 25); if no candidate passes the
+gate, skip the cycle entirely and log in `TODOS.md`.
 
 **Entry time:** 10:00–10:30 AM IST. Allow the first 30 minutes of price discovery to settle
 before reading delta.
@@ -156,9 +162,10 @@ loss stop (below), not by exiting early.
 
 **Re-entry after early profit exit (R5 — revised):** After a profit-target exit (50% target
 hit before the time stop fires), if DTE to the current expiry is ≥ 14 AND IVR ≥ 25,
-re-enter at the new 25-delta strike of the same expiry. If either condition fails, wait for
-the standard Wednesday-after-next-expiry entry. No re-entry is permitted after a loss-stop
-or time-stop exit within the same expiry cycle.
+re-enter at the new **22-delta** strike of the same expiry (matching the default delta at
+first entry). If either condition fails, wait for the standard Wednesday-after-next-expiry
+entry. No re-entry is permitted after a loss-stop or time-stop exit within the same expiry
+cycle.
 
 > **Rationale:** Reduces idle-capital drag on winning cycles without abandoning v1 simplicity.
 > The IVR floor matches R3, keeping entry discipline consistent across first entry and
@@ -194,9 +201,10 @@ This rule will be revisited when designing v2, informed by the paper-trade log.
 > periodically — verify against the NSE lot-size schedule before every entry. The 65-unit
 > figure is not permanent.
 
-**Notional capital deployed:** Strike × 65. At a 25-delta strike near 23,000 (Nifty spot
-~23,897 as of 2026-04-25), notional ≈ ₹14,95,000 per lot. In the portfolio's cash-secured
-framing, this notional is backed by the existing pledged collateral pool.
+**Notional capital deployed:** Strike × 65. At a 22-delta strike near 22,700–22,800 (Nifty
+spot ~23,897 as of 2026-04-25; 22-delta sits approximately 100–200 points further OTM than
+25-delta), notional ≈ ₹14,75,000–14,82,000 per lot. In the portfolio's cash-secured framing,
+this notional is backed by the existing pledged collateral pool.
 
 **Margin / collateral note:** The operator's collateral pool is approximately ₹1.2 cr (₹75L
 MF + ₹30L bonds + ₹15.5L NiftyBees). SPAN + exposure margin for a single short Nifty put
@@ -242,10 +250,15 @@ is **1 lot**, irrespective of capital availability.
 These are prior hypotheses to validate — not claims of edge. Written before running the
 backtest so there is a genuine prediction to compare against.
 
-> **Note:** The figures below are indicative estimates calibrated against generic 25-delta
-> monthly put performance on Nifty 50 at ~23,000 strike, 65-unit lot size, under
-> moderate-IV conditions. They are *not* derived from a backtest. They will be replaced with
-> the measured backtest distribution from Phase 1.8 (V1 variant) once that run is complete.
+> **Note:** The figures below are indicative estimates originally calibrated against 25-delta
+> monthly put performance on Nifty 50, 65-unit lot size, under moderate-IV conditions.
+> The strategy default was updated to **22-delta** (council 2026-05-02); at 22-delta, credit
+> is approximately 85% of 25-delta and stop-out frequency is approximately halved — expect
+> the win-rate and average-winning-month figures to improve modestly, average-losing-month
+> to shrink (less frequent stops, but stops are deeper moves when they do fire).
+> These priors are *not* derived from a backtest. They will be replaced with the measured
+> backtest distribution from Phase 1.8 (V1 variant — now parameterised to run at 22-delta)
+> once that run is complete.
 
 | Metric                          | Prior estimate (indicative, pending 1.8) |
 |---------------------------------|------------------------------------------|
@@ -262,7 +275,10 @@ backtest so there is a genuine prediction to compare against.
 ## Regimes Expected to Work In
 
 **High IV (IVR > 50):** Premium richness compensates for elevated move probability. Preferred
-entry environment. Target delta stays at 25 — do not chase higher delta to inflate credit.
+entry environment. Target delta stays at **22** — do not chase higher delta to inflate credit.
+If IVR > 40 specifically (strongly elevated vol expansion), consider stepping down to 20-delta
+(regime-adaptive rule, selectable via the parameterised delta input; requires IVR ingestion
+pipeline to be live before enforcing programmatically).
 
 **Neutral to mildly bullish market:** Time decay is the primary P&L driver. Strategy is
 structurally long theta, short gamma.
@@ -282,9 +298,10 @@ mark trigger fires. The loss cap limits damage but the strategy has no edge in a
 bear.
 
 **Rapid IV expansion after entry (event-driven spike):** Even without a large directional
-move, a VIX jump of 30%+ can take a 25-delta put to 45+ delta within days, triggering the R2
-delta gate. Mark-to-market loss accumulates quickly. The event filter (R4) is intended to
-reduce exposure to known catalyst events.
+move, a VIX jump of 30%+ can take a 22-delta put to 45+ delta within days, triggering the R2
+delta gate. At 22-delta the initial gamma is lower than at 25-delta, so the path to −0.45 is
+somewhat longer — but it is not immune to sharp vol spikes. Mark-to-market loss accumulates
+quickly. The event filter (R4) is intended to reduce exposure to known catalyst events.
 
 **Low IV at entry (IVR < 25):** R3 mandates skipping the cycle. At the IV floor, premium
 collected is structurally thin and risk/reward degrades to near-zero after costs. Losses on
@@ -409,9 +426,15 @@ paper-trade data.
   a higher floor (e.g. IVR < 30)? Calibrate after 6+ cycles once the IVR ingestion pipeline
   is live (currently no India VIX data in repo).
 
-- Is 25-delta the optimal entry point for Nifty 50 monthly CSP, or does the strategy's
-  asymmetric payoff favour a tighter OTM target (20-delta) to reduce delta-stop frequency?
-  Measure per-exit-type statistics in paper logs to inform v2.
+- ~~Is 25-delta the optimal entry point for Nifty 50 monthly CSP, or does the strategy's
+  asymmetric payoff favour a tighter OTM target (20-delta) to reduce delta-stop frequency?~~
+  **RESOLVED 2026-05-02 (council)** — analytical optimum is **22-delta** for the 21-day
+  hold / −0.45 delta-stop / 50% profit-target system on Nifty 50. Captures ~85% of 25-delta
+  credit, approximately halves stop-out frequency, best Sharpe in skew-adjusted model.
+  Strategy doc updated accordingly. Policy gate: maintain 12-month parameter discipline;
+  only re-tune when both backtest and live fill data show unambiguous advantage for a
+  different value. Per-exit-type statistics in paper logs remain valuable for forward
+  calibration — continue logging. See `docs/council/2026-05-02_csp-entry-delta-v2.md`.
 
 - Does the R2 delta gate at −0.45 produce better outcomes than a pure mark-based stop?
   Requires per-exit-type P&L breakdown from the paper log.

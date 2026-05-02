@@ -284,12 +284,14 @@ def _post_json(url: str, payload: dict, timeout: float) -> dict:
         return json.loads(resp.read())
 
 
-def run_council(prompt: str, url: str = COUNCIL_URL) -> dict:
+def run_council(prompt: str, url: str = COUNCIL_URL, timeout: float = 600.0) -> dict:
     """Create a council conversation and submit the prompt.
 
     Args:
         prompt: The full assembled prompt string.
         url: Base URL of the council backend.
+        timeout: Seconds to wait for the council to complete all stages.
+            Default 600 s (10 min). Raise to 900+ for large multi-context prompts.
 
     Returns:
         Full result dict with stage1, stage2, stage3, metadata keys.
@@ -299,11 +301,10 @@ def run_council(prompt: str, url: str = COUNCIL_URL) -> dict:
     """
     conv = _post_json(f"{url}/api/conversations", {}, timeout=10.0)
     conv_id = conv["id"]
-    # Stage 1 + 2 + 3 all happen server-side; allow up to 5 minutes
     return _post_json(
         f"{url}/api/conversations/{conv_id}/message",
         {"content": prompt},
-        timeout=300.0,
+        timeout=timeout,
     )
 
 
@@ -346,6 +347,14 @@ def main() -> None:
         action="store_true",
         help="Print the assembled prompt to stdout without submitting to the council.",
     )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=600.0,
+        metavar="SECONDS",
+        help="Seconds to wait for the council to complete all stages (default: 600). "
+             "Raise to 900+ for large multi-context prompts.",
+    )
     args = parser.parse_args()
 
     # Resolve and validate extra context files
@@ -384,9 +393,10 @@ def main() -> None:
         sys.exit(0)
 
     # Submit to council
-    print(f"Submitting '{args.topic}' to council… (2–3 minutes)")
+    timeout_min = args.timeout / 60
+    print(f"Submitting '{args.topic}' to council… (timeout: {timeout_min:.0f} min)")
     try:
-        result = run_council(prompt)
+        result = run_council(prompt, timeout=args.timeout)
     except urllib.error.URLError as exc:
         print(f"ERROR: Council request failed: {exc}", file=sys.stderr)
         sys.exit(1)
