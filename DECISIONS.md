@@ -483,6 +483,63 @@ Noted, deferred: delta-based as a hybrid/conditional overlay in extraordinary vo
 
 ---
 
+## §7.3 — Multi-Strategy Portfolio Risk (Phase 3)
+
+**2026-05-02 — All Nifty options strategies governed as a single portfolio risk unit (council ruling).**
+Source: `docs/council/2026-05-02_multi-strategy-portfolio-risk-allocation.md`. Chairman: Claude Opus 4.6. Council: GPT-5.5, Gemini 3.1 Pro, Grok-4, DeepSeek-R1. GPT-5.5 ranked #1 in peer review; chairman synthesis draws heavily from it.
+
+**Architectural note:** `niftyshield_integrated_v1.md` explicitly states that its Leg 1 *is* the CSP — "Entry, exit, and adjustment rules for Leg 1 are governed entirely by `csp_nifty_v1.md`." Running standalone CSP v2 (A) concurrently with Integrated (B) creates **2 lots of short-put exposure**, not 1. This doubled exposure must be explicitly sized within the portfolio risk budget.
+
+**Binding rules for Phase 3 (all 13 are mandatory):**
+
+| # | Rule |
+|---|------|
+| 1 | All Nifty option strategies are ONE portfolio risk unit |
+| 2 | Options-only bullish delta cap: +1.0 Nifty futures-equivalent lot (warning at +0.75) |
+| 3 | Options + NiftyBees bullish delta cap: +2.0 lots (warning at +1.5) |
+| 4 | −10% Nifty / IV+10–15 vol stress loss: ≤ ₹3L options-only, ≤ ₹4L with NiftyBees |
+| 5 | Absolute portfolio drawdown kill zone: ₹6L |
+| 6 | Far OTM long puts (>15% OTM) receive no risk-reduction credit in −10% scenario; 8–15% OTM receives 50–70% credit |
+| 7 | Size from internal stress-loss budget, never from broker SPAN margin |
+| 8 | SPAN offsets reduce required cash only — they do not permit larger short-premium size |
+| 9 | Shadow Gross Margin: portfolio must survive simultaneous removal of ALL SPAN offsets without exceeding 80% of ₹45L post-haircut collateral pool (~₹36L) |
+| 10 | Maximum short-put lots across all concurrent strategies: 2 |
+| 11 | Validate paper/live results only against the **cap-aware portfolio backtest** (Layer 2), not standalone per-strategy backtests |
+| 12 | Log every skipped signal with explicit risk-cap reason: `DELTA_CAP \| STRESS_LOSS_CAP \| MARGIN_CAP \| DUPLICATE_EXPOSURE \| EVENT_FILTER \| TREND_FILTER \| LIQUIDITY_FILTER \| MANUAL_BLOCK` |
+| 13 | Protective hedge entries (Integrated Legs 2 and 3) are **never** blocked by the delta cap |
+
+**Trade priority order when delta cap is binding:**
+1. Risk-reducing exits (always allowed)
+2. Protective hedge entries (Legs 2, 3) — unconditional
+3. Integrated CSP (Leg 1) — priority over standalone (hedged structure)
+4. Standalone CSP v2 — only if residual stress budget remains
+5. Swing strategies — bearish spreads may pass if they reduce stress; bullish blocked first
+6. Covered call overlay — must not be used as a loophole for more short puts
+
+**Scenario stress table (reprice full book before any new bullish entry):**
+
+| Scenario | Spot Move | IV Shock |
+|----------|-----------|----------|
+| Moderate | −5% | +5 vol points |
+| Significant | −10% | +10–15 vol points |
+| Severe | −15% | +15–20 vol points |
+| Tail | −20% | +20 vol points |
+
+**Three-layer variance validation framework:**
+- Layer 1 — Standalone per-strategy backtest (uncapped): validates raw edge in isolation.
+- Layer 2 — Cap-aware portfolio backtest (primary benchmark): simulates real Phase 3 deployment; includes shared margin, delta cap, stress-loss cap, signal-skipping, position netting, and broker cost model.
+- Layer 3 — Paper/live variance check: compare against Layer 2 only. Gate: |paper PnL − cap-aware backtest PnL| / backtest PnL < **15%** tracking error.
+
+**Implementation sequence:**
+- Phase 0.6c: `PortfolioDeltaTracker` in `src/risk/` — daily delta aggregation across paper positions
+- Phase 1: Scenario repricing engine (stress-loss guard) in `src/risk/`
+- Phase 2: `src/backtest/portfolio_sim.py` — cap-aware portfolio backtester with signal-skipping
+- Phase 3 gate: Cap-aware backtest Sharpe ≥ 0.8 and max DD < ₹6L across 6+ years before live deployment
+
+**Noted, deferred:** Liquidity buffer rule (free cash ≥ 1.5× current margin) and OI-based liquidity multiplier on the conservative offset haircut (credit only 70% of SPAN offset for spreads wider than 10%) — first candidates for Phase 2 `src/risk/` expansion. Confidence: High.
+
+---
+
 ## Backtest Data Source Decision (2026-04-27)
 
 Evaluated TrueData and DhanHQ for NSE Nifty options backtesting. Primary use case: insurance calibration backtest for the NiftyShield short put strategy, targeting delta-based strike selection with a max drawdown of ~₹6L on a ₹1 crore portfolio.

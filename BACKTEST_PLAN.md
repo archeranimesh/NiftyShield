@@ -277,6 +277,27 @@ Begin paper trading the protective legs alongside CSP v1:
 
 Begin running all three tracks simultaneously. This is a parallel research stream alongside 0.6 and 0.6a — same monthly entry calendar, independent recording.
 
+---
+
+## 0.6c — CODE — PortfolioDeltaTracker (Phase 3 prerequisite, start early)
+
+**Owner: Cowork. Source: `docs/council/2026-05-02_multi-strategy-portfolio-risk-allocation.md` §7.3.**
+
+Build the first component of `src/risk/` — delta aggregation across all concurrent paper positions. This is the foundation that Phase 1's stress-loss engine and Phase 2's cap-aware backtester build on top of. Starting it in Phase 0 means it runs alongside paper trades from the beginning, giving real data to calibrate against.
+
+- [ ] `src/risk/__init__.py` — package stub.
+- [ ] `src/risk/models.py` — `PortfolioDelta` frozen dataclass: `options_delta_lots: Decimal`, `niftybees_delta_lots: Decimal`, `total_delta_lots: Decimal`, `warning_breached: bool`, `cap_breached: bool`, `as_of: datetime`.
+- [ ] `src/risk/delta_tracker.py` — `PortfolioDeltaTracker`:
+  - `aggregate_delta(paper_positions: list[PaperPosition], nifty_spot: Decimal, lot_size: int) → PortfolioDelta`
+  - Converts each position's stored delta to Nifty futures-equivalent lots: `Σ(delta × lots × lot_size × nifty_spot / (nifty_spot × lot_size))` — simplifies to `Σ(delta × lots)`.
+  - NiftyBees delta: `niftybees_qty × niftybees_ltp / (nifty_spot × lot_size)` (beta = 1.0).
+  - Hard cap: options-only +1.0 lots (warning +0.75); options + NiftyBees +2.0 lots (warning +1.5). Constants are parameterised — do not hardcode.
+  - Returns `PortfolioDelta` with `warning_breached` and `cap_breached` flags set.
+- [ ] `src/risk/entry_gate.py` — `check_entry_allowed(current_delta: PortfolioDelta, trade_delta_lots: Decimal, is_protective: bool) → tuple[bool, str]`. Protective entries (Legs 2/3) bypass the cap entirely (`is_protective=True` → always `(True, "")`).
+- [ ] Tests: `tests/unit/risk/test_delta_tracker.py` — happy path (delta within cap), warning boundary, hard cap breach, protective entry bypass, zero-position base case.
+- [ ] `python -m pytest tests/unit/ --tb=no -q` green.
+- [ ] Commit: `feat(risk): add PortfolioDeltaTracker with entry gate`.
+
 - [ ] On first monthly entry after 0.4b is complete, record Track A base leg (long NiftyBees) via `record_paper_trade.py --strategy paper_track_a --leg-role base_etf`.
 - [ ] Record Track B base leg (long Nifty Futures) via `record_paper_trade.py --strategy paper_track_b --leg-role base_futures`. Use notional ₹15.5L at current spot; record entry date and expiry.
 - [ ] Record Track C base leg (Deep ITM Call) via `record_paper_trade.py --strategy paper_track_c --leg-role base_ditm_call`. Record the actual strike selected (delta ≈ 0.90), premium paid, and expiry.
@@ -742,6 +763,7 @@ This is the core validation gate of the whole pipeline. If this step doesn't pas
 - [ ] 1.1 complete: Stockmock calibration backtest results documented in `csp_nifty_v1.md` for COVID, IL&FS, 2022 windows.
 - [ ] 1.11 passes (|Z| ≤ 1.5, bias-adjusted) for CSP leg with results documented. Programmatic backtest results directionally consistent with Stockmock calibration results for overlapping stress windows.
 - [ ] 1.9a integrated backtest run complete; IL&FS + COVID + Feb–Mar 2022 stress tests all show positive put spread payoff; results written to `niftyshield_integrated_v1.md`.
+- [ ] Scenario stress-loss engine added to `src/risk/`: `StressLossEngine` that reprices the full open options book at −5% / −10% / −15% / −20% spot with corresponding IV shocks. Hedge credit rules from §7.3 applied (far OTM puts >15% OTM receive no credit in −10% scenario). Integration test against a known position set verifies ≤₹3L options-only cap logic.
 - [ ] Full test suite green.
 - [ ] Animesh sign-off in a `TODOS.md` session log entry: "CSP backtest calibrated to paper. Ready to go live."
 
@@ -828,6 +850,9 @@ The most important piece of code in this plan. Detects strategy drift in real ti
 - [ ] No kill criterion triggered for CSP.
 - [ ] IC v1 paper trading ≥12 weeks, variance check passed (per 1.11 methodology).
 - [ ] Continuous re-validation loop operational and has run weekly with no missed runs.
+- [ ] `src/backtest/portfolio_sim.py` complete — cap-aware portfolio backtester with shared delta cap, stress-loss cap, signal-skipping (deterministic priority order from §7.3), position netting, SPAN-offset modelling, and broker cost model. Shadow signal book recorded for every skipped signal with explicit `skip_reason`.
+- [ ] Cap-aware portfolio backtest (Layer 2) run over 2016–present; Sharpe ≥ 0.8 and max DD < ₹6L — if not met, Phase 3 live deployment is blocked regardless of per-strategy metrics.
+- [ ] Paper/live variance check uses **Layer 2 cap-aware backtest only** — |paper PnL − cap-aware backtest PnL| / backtest PnL < 15%.
 
 ---
 
@@ -1071,6 +1096,10 @@ Calendar spread entered 1 trading day before RBI policy / budget / major earning
 - [ ] 3 strategies live, each ≥6 months, each within backtest envelope.
 - [ ] Portfolio attribution operational.
 - [ ] Regime classifier recording daily observations for ≥3 months (needed before Phase 4 can use it as an allocation signal).
+- [ ] `src/risk/` fully operational: `PortfolioDeltaTracker` (Phase 0.6c) + scenario stress-loss engine (Phase 1) running daily pre-market at 9:30 AM IST, with intraday re-check on delta exceedance.
+- [ ] All 13 binding rules from `DECISIONS.md §7.3` enforced in live execution path — documented with test coverage.
+- [ ] No live cycle has breached the ₹6L absolute portfolio drawdown kill zone.
+- [ ] Attribution metrics tracked separately per cycle: standalone strategy expectancy, executed portfolio expectancy, skipped-signal opportunity cost, risk-cap benefit, net risk-cap drag (see §7.3 for full list).
 
 ---
 
