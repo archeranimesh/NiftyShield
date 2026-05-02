@@ -10,11 +10,16 @@ on the project-root discovery that works for ``src/``.
 Functions covered
 -----------------
 query_model:
-  1  no_fallbacks_payload_uses_model_key   — singular ``model`` str in payload
-  2  fallbacks_payload_uses_models_array   — ``models`` list: [primary, fb]
-  3  model_used_extracted_from_response    — taken from data["model"], not slug
-  4  model_used_defaults_to_primary        — when data["model"] is absent
-  5  returns_none_on_http_exception        — any exception → None
+  1  no_fallbacks_payload_uses_model_key      — singular ``model`` str in payload
+  2  fallbacks_payload_uses_models_array      — ``models`` list: [primary, fb]
+  3  model_used_extracted_from_response       — taken from data["model"], not slug
+  4  model_used_defaults_to_primary           — when data["model"] is absent
+  5  returns_none_on_http_exception           — any exception → None
+  6  402_with_fallback_retries_client_side    — 402 bypasses server failover; client retries
+  7  402_without_fallback_returns_none        — 402 + no fallbacks → None (credit exhaustion)
+  8  402_cascades_through_all_fallbacks       — each fallback also 402s → None
+  9  transport_error_with_fallback_retries    — disconnect retries client-side with fallback
+ 10  transport_error_without_fallback_is_none — disconnect + no fallbacks → None
 
 query_models_parallel:
   6  dispatches_fallback_per_model         — each member gets its fb from dict
@@ -39,6 +44,7 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch, call
 
+import httpx
 import pytest
 
 # ── path setup ────────────────────────────────────────────────────────────────
@@ -152,6 +158,135 @@ class TestQueryModelPayload:
 
         with patch("backend.openrouter.httpx.AsyncClient", MagicMock(return_value=mock_cm)):
             result = await query_model("openai/gpt-4.1", [{"role": "user", "content": "q"}])
+
+        assert result is None
+
+
+class TestQueryModel402Fallback:
+    """Verify client-side fallback fires on 402 (billing rejection).
+
+    OpenRouter's server-side ``models[]`` array failover does NOT trigger on
+    402 — the request is rejected before model dispatch.  These tests confirm
+    that ``query_model`` handles 402 client-side by recursing with the fallback.
+    """
+
+    def _make_402_error(self) -> httpx.HTTPStatusError:
+        req = httpx.Request("POST", "https://openrouter.ai/api/v1/chat/completions")
+        resp = httpx.Response(402, request=req)
+        return httpx.HTTPStatusError("402 Payment Required", request=req, response=resp)
+
+    def _make_http_mock_raising(self, exc: Exception):
+        """Return an httpx.AsyncClient mock whose .post raises ``exc``."""
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(side_effect=exc)
+        mock_cm = MagicMock()
+        mock_cm.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_cm.__aexit__ = AsyncMock(return_value=False)
+        return MagicMock(return_value=mock_cm)
+
+    async def test_402_with_fallback_retries_client_side(self) -> None:
+        """Primary returns 402 → client retries with fallback; fallback succeeds."""
+        err_cls = self._make_http_mock_raising(self._make_402_error())
+        ok_cls, _ = _make_http_mock(content="fallback answer", model_slug="openai/gpt-4.1")
+
+        call_count = 0
+
+        def client_factory(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            # First call (primary) → 402; second call (fallback) → success
+            return err_cls(*args, **kwargs) if call_count == 1 else ok_cls(*args, **kwargs)
+
+        with patch("backend.openrouter.httpx.AsyncClient", side_effect=client_factory):
+            result = await query_model(
+                "openai/gpt-5.5",
+                [{"role": "user", "content": "q"}],
+                fallbacks=["openai/gpt-4.1"],
+            )
+
+        assert result is not None
+        assert result["content"] == "fallback answer"
+        assert result["model_used"] == "openai/gpt-4.1"
+
+    async def test_402_without_fallback_returns_none(self) -> None:
+        """Primary returns 402 with no fallbacks configured → None."""
+        err_cls = self._make_http_mock_raising(self._make_402_error())
+
+        with patch("backend.openrouter.httpx.AsyncClient", err_cls):
+            result = await query_model(
+                "openai/gpt-5.5",
+                [{"role": "user", "content": "q"}],
+                fallbacks=None,
+            )
+
+        assert result is None
+
+    async def test_402_cascades_through_all_fallbacks(self) -> None:
+        """Every attempt returns 402 (credit exhaustion) → final result is None."""
+        err_cls = self._make_http_mock_raising(self._make_402_error())
+
+        with patch("backend.openrouter.httpx.AsyncClient", err_cls):
+            result = await query_model(
+                "openai/gpt-5.5",
+                [{"role": "user", "content": "q"}],
+                fallbacks=["openai/gpt-4.1", "anthropic/claude-3-5-haiku"],
+            )
+
+        assert result is None
+
+
+class TestQueryModelTransportFallback:
+    """Verify client-side fallback fires on connection-level errors.
+
+    'Server disconnected without sending a response' is an
+    httpx.RemoteProtocolError, a subclass of httpx.TransportError.
+    OpenRouter's server-side models[] array failover cannot fire because
+    the HTTP round-trip never completed — so we must retry client-side.
+    """
+
+    def _make_transport_mock_raising(self, exc: Exception):
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(side_effect=exc)
+        mock_cm = MagicMock()
+        mock_cm.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_cm.__aexit__ = AsyncMock(return_value=False)
+        return MagicMock(return_value=mock_cm)
+
+    async def test_transport_error_with_fallback_retries_client_side(self) -> None:
+        """RemoteProtocolError on primary → client retries with fallback."""
+        disconnect = httpx.RemoteProtocolError("Server disconnected without sending a response")
+        err_cls = self._make_transport_mock_raising(disconnect)
+        ok_cls, _ = _make_http_mock(content="fallback ok", model_slug="openai/gpt-4.1")
+
+        call_count = 0
+
+        def client_factory(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            return err_cls(*args, **kwargs) if call_count == 1 else ok_cls(*args, **kwargs)
+
+        with patch("backend.openrouter.httpx.AsyncClient", side_effect=client_factory):
+            result = await query_model(
+                "anthropic/claude-opus-4.6",
+                [{"role": "user", "content": "q"}],
+                fallbacks=["openai/gpt-4.1"],
+            )
+
+        assert result is not None
+        assert result["content"] == "fallback ok"
+        assert result["model_used"] == "openai/gpt-4.1"
+
+    async def test_transport_error_without_fallback_returns_none(self) -> None:
+        """Transport error with no fallbacks → None."""
+        disconnect = httpx.RemoteProtocolError("Server disconnected without sending a response")
+        err_cls = self._make_transport_mock_raising(disconnect)
+
+        with patch("backend.openrouter.httpx.AsyncClient", err_cls):
+            result = await query_model(
+                "anthropic/claude-opus-4.6",
+                [{"role": "user", "content": "q"}],
+                fallbacks=None,
+            )
 
         assert result is None
 
