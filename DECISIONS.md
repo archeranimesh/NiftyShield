@@ -440,6 +440,43 @@ Confidence: High.
 Noted, deferred: Grok-4-fast recommended 80th as safer default — ablation in Phase 1.8
 will resolve empirically whether the 75th vs 80th delta exceeds 0.10 Sharpe.
 
+**2026-05-02 — IC v1 delta targets: mild asymmetry; aggressive put-skew harvesting and symmetric deltas both rejected (council ruling).**
+Source: `docs/council/2026-05-02_iron-condor-v1-core-design.md`. Chairman synthesis unanimous on rejecting symmetric deltas. Nifty's put skew (3–6 IV points richer at equivalent deltas) makes a 15-delta put and 15-delta call fundamentally different risk objects; symmetric IC is economically naive. Aggressive asymmetry (20Δ/10Δ) rejected because CSP already owns the left-tail premium trade — stacking a 20-delta IC short put on a 22-delta CSP short put creates correlated double exposure that destroys Calmar in sharp selloffs.
+
+Adopted defaults:
+
+| Mode | Short Put Target Δ | Short Call Target Δ |
+|------|-----------------:|------------------:|
+| Standalone IC (no CSP open) | ~15Δ | ~10Δ |
+| Concurrent with CSP open | ~8–10Δ | ~12–15Δ |
+
+Delta targets are parameterised inputs (candidates: put 10/12/15/18/20; call 8/10/12/15) for regime-adaptive operation once IVR ingestion is live. Tie-breaker: if two strikes straddle the target delta, choose the farther OTM strike — consistent with CSP v1's rule. Confidence: High.
+
+**2026-05-02 — IC v1 adjustment rule: no intra-trade rolls or adjustments; exit-only (council ruling).**
+Source: `docs/council/2026-05-02_iron-condor-v1-core-design.md`. Near-unanimous (3 of 4 council members). Rolling introduces path-dependency, partial-fill assumptions, bid/ask widening during stress, and re-entry credit modelling — multiplies Phase 2 complexity by 3–5×. The spread structure caps maximum loss by design; if the trade is wrong, accept the defined loss and re-enter next cycle. Single retail operator managing intraday rolling under stress is a recipe for discretionary errors that invalidate the systematic edge.
+
+IC v1 exit stack (first trigger wins):
+
+| # | Trigger | Action |
+|---|---------|--------|
+| 1 | Profit target | Close full IC when mark ≤ 50% of opening credit |
+| 2 | Loss stop | Close full IC when mark ≥ 2.0× opening credit |
+| 3 | Delta stop | Close full IC if either short leg reaches absolute delta ≥ 0.35 |
+| 4 | Time stop | Close full IC at 14 DTE if still open |
+| 5 | Expiry rule | Never hold IC to expiry in v1 |
+
+Delta stop is an *exit* trigger, not a roll trigger. Backtest both 0.30 and 0.35; default 0.35 for paper v1 (0.30 may over-exit on call side in normal noise). Adjustments deferred to IC v2, informed by v1 paper and backtest results. Confidence: High.
+Noted, deferred: if Calmar fails without adjustments, tighten entry filters (higher IVR threshold, add 200-DMA trend filter) or reduce wing width — do not add adjustment complexity as a first response.
+
+**2026-05-02 — IC v1 portfolio interaction with CSP: portfolio-aware caps; neither strict delta neutrality nor pure independence (council ruling).**
+Source: `docs/council/2026-05-02_iron-condor-v1-core-design.md`. Two responses argued independence (trust SPAN), one for delta neutrality, one for portfolio-aware caps; chairman adopted portfolio-aware caps. SPAN is a margin system, not a risk manager or Calmar optimizer — running CSP (short 22Δ put) + IC (short 15–20Δ put spread) independently creates combined net delta of approximately −0.30 to −0.40, amplifying downside beta above the portfolio's 1.25 target. Strict delta neutrality rejected because forcing the book to zero delta requires selling uncomfortably close calls (20–25Δ), which generates frequent false stop-outs in Nifty's persistent upward-drift regime.
+
+Portfolio-aware rule: when CSP is open, IC entry is permitted only if the combined book satisfies:
+- Combined option delta (lot-equivalent): −0.05 to +0.25
+- Combined downside max loss (CSP stop + IC put-side max): ≤ monthly risk budget (₹6L)
+
+If these limits cannot be satisfied at 1 lot, skip the IC cycle. Each strategy retains its own `strategy_name` in the trades table. Sizing is fixed at 1 lot (verify current NSE lot-size before each cycle — do not hardcode 65). The control levers are strike selection, wing width, and cycle-skipping — not fractional sizing. Confidence: High.
+
 **2026-05-02 — Leg 2 strike selection: fixed %OTM maintained; delta-based rejected as primary (council ruling).**
 Source: `docs/council/2026-05-02_integrated-leg2-strike-methodology.md`. Unanimous council (GPT-4.1 chairman, Grok-4-fast, DeepSeek-R1; Grok ranked #1 in peer review). Fixed %OTM strikes (long put at 8% below spot, short put at 20% below spot) retained as the sole primary methodology for Leg 2. Delta-based selection (long put at 15-delta, short put at 5-delta) rejected as primary on three grounds: (1) the dead zone widens to 10–12% in low-vol regimes — exactly the regime where moderate corrections are most common (~70% of historical moderates); (2) cost spikes sharply in high-IV periods (can double or triple at VIX=22), risking budget overruns precisely when protection demand is highest; (3) empirical Monte Carlo modelling shows %OTM at 92% reliability vs 85% for delta-based for payoff >50% of MF loss in 8–15% correction scenarios. Liquidity filter added: if 8% OTM OI < 500 contracts at entry, step one strike inward (7% OTM; if still < 500, use 6% OTM). Log any deviation from 8% base in trade metadata. Delta-based reserved as a conditional overlay for future consideration at IVR > 70% in Phase 2 research. Confidence: High.
 Noted, deferred: delta-based as a hybrid/conditional overlay in extraordinary volatility events (IVR > 70%) — first candidate for Phase 2 enhancement after paper-trade validation confirms %OTM reliability.
