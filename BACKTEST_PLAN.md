@@ -227,6 +227,30 @@ rules stand independently.
 
 ---
 
+## 0.4b — STRATEGY — 3-track Nifty long instrument comparison specification
+
+**Owner: Animesh. Not for Cowork.**
+
+Design document for the 12-month paper-trading comparison of three distinct Nifty long exposure vehicles, each with overlay strategies. This is a research spec, not a deployment spec — the objective is empirical data to inform which vehicle/overlay combination becomes the live hedge base.
+
+- [ ] Write `docs/strategies/nifty_track_comparison_v1.md` covering:
+  - **Track A:** Long NiftyBees ETF (1 lot equivalent, ~₹15.5L), base instrument, available overlays (protective put, covered call, collar, put spread).
+  - **Track B:** Long Nifty Futures (1 lot, monthly roll, ~₹15.5L notional / ~₹1.5L margin), available overlays (protective put ONLY — covered call and CSP overlay are structurally blocked per 2026-05-02 council ruling).
+  - **Track C:** Long Deep ITM Call (delta ≈ 0.90, strike 2000–2500 below spot, monthly roll), available overlays (covered call/diagonal, CSP, collar, vertical put spread — NOT protective put which creates redundant bull call spread).
+  - **Capital normalization method:** Notional Equivalent Exposure (NEE) — all tracks sized to 1 Nifty lot equivalent. Track B: notional value (not margin), with surplus capital return (liquid fund rate) tracked separately.
+  - **Blocked combinations** (must list explicitly): Track B + Covered Call, Track B + CSP. Any overlay that creates an unintentional double short-put structure.
+  - **Daily P&L report schema:** base P&L + per-overlay P&L + net combined, per track. Daily Delta/Theta/Vega per track. Max drawdown in absolute and % of NEE. Cumulative premium paid/received per overlay leg. Tracking error (delta drift) between tracks.
+  - **Strategy namespaces:** `paper_track_a`, `paper_track_b`, `paper_track_c` (base leg + overlay legs recorded as independent rows under the same strategy name).
+  - **Roll mechanics:** monthly roll for Track A (options), Track B (futures), and Track C (call). Track C roll: select lowest strike with delta ≈ 0.90 on expiry day; treat premium paid as capital at risk.
+  - **Minimum duration:** 6 monthly cycles per track to cross one earnings-announcement + one high-VIX event.
+  - **Kill criteria per track:** delta drift below 0.40 on Track C for 3 consecutive days (position has diverged from the "long Nifty" comparator role) → roll immediately, document.
+- [ ] Spec passes strategy-spec validator (0.7).
+- [ ] Commit: `docs(strategies): add 3-track Nifty instrument comparison spec v1`.
+
+**Source:** `docs/council/2026-05-02_nifty-long-instrument-comparison-protection.md` — Stage 3 Chairman Synthesis.
+
+---
+
 ## 0.6a — STRATEGY — Start paper trading NiftyShield integrated v1
 
 **Owner: Animesh. Not for Cowork.**
@@ -244,6 +268,25 @@ Begin paper trading the protective legs alongside CSP v1:
   unconditional.
 - [ ] Track NiftyBees accumulation: in surplus months, record intended NiftyBees BUY
   under `paper_niftyshield_v1 / accumulated_niftybees`.
+
+---
+
+## 0.6b — STRATEGY — Start paper trading 3-track Nifty instrument comparison
+
+**Owner: Animesh. Not for Cowork. Blocked by: 0.4b (spec must exist and pass validator before any trades are recorded).**
+
+Begin running all three tracks simultaneously. This is a parallel research stream alongside 0.6 and 0.6a — same monthly entry calendar, independent recording.
+
+- [ ] On first monthly entry after 0.4b is complete, record Track A base leg (long NiftyBees) via `record_paper_trade.py --strategy paper_track_a --leg-role base_etf`.
+- [ ] Record Track B base leg (long Nifty Futures) via `record_paper_trade.py --strategy paper_track_b --leg-role base_futures`. Use notional ₹15.5L at current spot; record entry date and expiry.
+- [ ] Record Track C base leg (Deep ITM Call) via `record_paper_trade.py --strategy paper_track_c --leg-role base_ditm_call`. Record the actual strike selected (delta ≈ 0.90), premium paid, and expiry.
+- [ ] For each overlay activated on a given track (protective put, covered call, collar, CSP — per the approved matrix in 0.4b), record as a separate leg row within the same strategy namespace.
+- [ ] Do NOT record Track B + Covered Call or Track B + CSP — blocked per council ruling. If you want to test those hypothetically, document the hypothetical P&L in the spec notes, do not record as paper trades.
+- [ ] On each expiry: roll all base legs, update leg records. Document delta at roll time for Track C — if delta has drifted below 0.80 for more than 3 consecutive days, this is a kill-criteria event; document it.
+- [ ] Minimum 6 monthly cycles before drawing any cross-track conclusions. Include at least one high-VIX event (India VIX >18) in the comparison window.
+- [ ] Monthly entry note in the spec: record which overlays were activated per track, at what premium/delta, with brief rationale (IV environment, market condition). This is the data that Phase 1 synthetic pricing will be calibrated against.
+
+**Source:** `docs/council/2026-05-02_nifty-long-instrument-comparison-protection.md` — Stage 3 Chairman Synthesis.
 
 ---
 
