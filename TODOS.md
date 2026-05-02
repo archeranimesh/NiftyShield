@@ -16,6 +16,38 @@
 
 ---
 
+## P1-NEXT — Define historical replay harness for exit-path validation
+
+**Prerequisite for Phase 0.8 gate criterion B (delta/mark-stop and time-stop validation).**
+
+When live paper trading doesn't produce a delta-stop or time-stop exit during the paper window, the council-approved alternative is a deterministic historical replay: run the production paper-trade code against a known stress episode (e.g., COVID week of 2020-03-16 or IL&FS week of 2018-09-21) injected into the staging environment.
+
+**Scope (to design, not build yet — depends on Phase 1 backtest data pipeline):**
+- Replay harness injects historical option chain snapshots into `PaperTracker` monitoring loop
+- Must use the same strategy logic, data schema, cost model, and P&L attribution code as live paper
+- Output: confirms monitoring daemon correctly identifies the trigger condition, queues the exit, and records P&L with correct attribution
+- Do not build until Phase 1 NSE Bhavcopy pipeline (task 1.3) exists — historical chain data needed
+
+**Owner:** Animesh + Cowork. Design doc first (`docs/plan/replay_harness.md`). No code until Phase 1 gate passes.
+
+---
+
+## P1-NEXT — India VIX ingestion for IVR calculation (blocks R3 enforcement)
+
+**Prerequisite for Phase 0.8 gate criteria C and D (regime completeness + regime-matched Z-score).**
+
+IVR (IV Rank) at entry is required to: (1) enforce R3 entry filter (IVR 25–50), (2) flag high-IVR regime cycles (IVR > 50) for criterion C, (3) filter backtest for regime-matched Z-score comparison in task 1.11. Currently, India VIX is not ingested — R3 enforcement and regime completeness checks are blocked.
+
+**Scope:**
+- Daily India VIX ingestion to Parquet (same pipeline as task 1.3a — confirm VIX is included there)
+- 252-day rolling IVR calculation: `ivr = (vix_today - vix_252d_low) / (vix_252d_high - vix_252d_low)`
+- Log IVR at entry for every paper trade record (add field to `PaperTrade` model or `paper_nav_snapshots`)
+- Enable R3 gate enforcement in paper trading workflow
+
+**Owner:** Cowork. Unblocks R3, criterion C, and task 1.11 regime-matched comparison.
+
+---
+
 ## P1-NEXT — Stockmock calibration backtests (Animesh / STRATEGY)
 
 **Prerequisite to Task 1.7** (hardcoded δ/IV/credit thresholds in `src/backtest/engine.py`).
@@ -164,6 +196,7 @@ License decision needed before this can be automated. Every file should carry a 
 
 | Date | What Changed |
 |---|---|
+| 2026-05-02 | **Council decision ingested — variance gate regime completeness.** Read `docs/council/2026-05-02_variance-gate-regime-completeness.md`; updated `DECISIONS.md` (new "Variance Gate" section — Z-score reframed as smoke test, graduated deployment tiers 0–3, regime completeness requirement, regime-matched Z-score mandate, spec consistency open issue); updated `BACKTEST_PLAN.md` Phase 0.8 gate (criteria A–D replacing single exit-type bullet) and Task 1.11 (dual Z-score: global + regime-matched); created `docs/plan/variance_gate.md` (full gate specification); added two P1-NEXT tasks to `TODOS.md` (replay harness + India VIX ingestion). No code changes. |
 | 2026-05-02 | **Council decision ingested — near-expiry gamma buy research.** Read `docs/council/2026-05-02_gamma-acceleration-mispricing-option-buying.md`; updated `DECISIONS.md` with new "Signal Hierarchy Decisions — Near-Expiry Buy Research" section covering signal hierarchy (Gamma Gearing primary, Speed secondary, OI velocity confirmation), mispricing threshold formula, forward-test architecture, mandatory Phase 0 schema fields, Phase 3 prerequisites, and kill criteria. No code changes — data collection only until Phase 3 gate. |
 | 2026-05-01 | **Root markdown cleanup.** Archived session log (2026-04-27 → 2026-04-30) to TODOS_ARCHIVE_2026-05-01.md; updated CONTEXT.md date + test count; synced README.md project structure. |
 

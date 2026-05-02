@@ -844,6 +844,39 @@ Update frequency: monthly, at cycle close only. Do not update on partial/open tr
 
 ---
 
+## Variance Gate — Phase 0.8 Deployment Gate (Council Decision 2026-05-02)
+
+**Source:** `docs/council/2026-05-02_variance-gate-regime-completeness.md` — unanimous council decision on CSP v1 Phase 0.8 variance gate design.
+
+**Z-score is a smoke test, not a proof.** At N=6, `|Z| ≤ 1.5` has <40% power to detect realistic operational drift (0.25–0.75 SD mean degradation from slippage, stale chains, wider spreads under stress). A passing Z-score means "no gross mismatch detected yet." It does not mean "strategy validated." Treat it as a diagnostic only. Renamed internally: **paper/backtest drift smoke test**.
+
+**Graduated deployment adopted.** Because one Nifty lot is indivisible, "graduated" means graduated *permissions*, not fractional sizing. Four tiers:
+
+| Tier | Requirements | Constraints |
+|---|---|---|
+| 0 — Paper only | Recording works, P&L reconciles, reason codes logged | No live capital |
+| 0.5 — Two-cycle review | After 2 executed paper cycles: strike selection, bid/ask/mid, fill assumptions, P&L reconcile, skipped entries correctly skipped | Operational sanity only, not statistical |
+| 1 — Limited live pilot | All Phase 0.8 revised criteria met (A–D); no unresolved accounting defects; `|Z| ≤ 1.5` on regime-matched comparison; all exit paths validated (live or replay); ≥1 stress path validated (replay acceptable) | 1 lot max; manual approval per entry; no discretionary rolling; no deployment if current regime absent from both paper and replay |
+| 2 — Normal v1 live | N≥12 executed cycles, OR N≥6 + ≥1 genuine live/paper stressed episode; ≥1 delta/mark-stop observed live (not only replay); slippage within R7 model tolerance; no rule overrides; drawdown within expected envelope (≤₹6L on ₹1cr) | Strategy runs as designed at conservative size |
+| 3 — Overlay integration | N≥18-24; full regime coverage live+replay; verified high-IVR behaviour; verified hedge-overlay interaction; backtest/paper/live reconciliation clean | Prerequisite for NiftyShield integrated spec |
+
+**Regime-matched Z-score required.** Comparing 6 calm paper cycles against an 8-year distribution inclusive of COVID and IL&FS produces a spurious variance flag when the paper sample is drawn from a non-stationary subset. Task 1.11 must compute `|Z| ≤ 1.5` against **both** the full backtest distribution **and** a regime-matched subset (filter backtest for cycles with IVR/vol conditions matching the paper period).
+
+**Exit-path completeness: supplement with replay.** Exit-type completeness (profit target, time stop, delta/mark stop) is retained but rare paths may be validated through deterministic historical replay against a known stress episode (e.g., a 2020 or 2022 week) run through the production paper-trade code. This unblocks deployment from indefinite market-event dependency.
+
+**Regime completeness: supplementary layer (not replacement).** At least one of three stress conditions must be observed or replayed before Tier 1 pilot:
+- High IVR: ≥1 cycle with IVR > 50 at entry
+- Drawdown stress: ≥1 holding window with ≥5% Nifty intraday peak-to-trough decline
+- Delta pressure: ≥1 cycle where short-put delta reaches ≤ −0.35 before any exit fires
+
+**Spec consistency open issue (must resolve before codifying gate):** Nifty lot size 65 vs 50; time stop 21 calendar days from entry vs 21 DTE remaining; R-number naming varies between `csp_nifty_v1.md` and `BACKTEST_PLAN.md`; trend filter (R4) definition inconsistent. Gate references one canonical spec (`docs/strategies/csp_nifty_v1.md`) once reconciled. Unreconciled spec = blocked gate. Resolve in Phase 0.7 validator pass.
+
+**Noted, deferred (minority position — Gemini):** Deprecating exit-type completeness entirely in favour of synthetic state injection. Rejected — exit-type completeness validates implementation correctness (a different failure mode from regime completeness); both are necessary. Candidate for re-evaluation if the replay harness proves costly to build.
+
+**Full gate specification:** `docs/plan/variance_gate.md`
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/`, `src/streaming/` — all empty

@@ -315,9 +315,48 @@ Build the first component of `src/risk/` — delta aggregation across all concur
 
 All of the following must be true before starting Phase 1. Do not start Phase 1 tasks until this gate is ticked.
 
+> **Council decision 2026-05-02:** Gate criteria revised. Full rationale in `DECISIONS.md → Variance Gate` and `docs/plan/variance_gate.md`.
+
 - [ ] 0.1, 0.2, 0.3, 0.5, 0.7 are all `[x]`.
-- [ ] CSP v1 paper trading has ≥ 6 full monthly expiry cycles, with at least one each of:
-  profit-target exit, time-stop exit, delta-stop exit (0.6).
+
+**CSP v1 paper trading gate — all four criteria (A–D) must pass:**
+
+- [ ] **(A) Minimum paper sample:** ≥6 executed paper CSP cycles **and** ≥9 calendar months of
+  entry-decision observation (whichever comes later). Cycles skipped by R3/R4/event filters
+  count as filter-validation observations, not executed cycles. Do not force trades to
+  satisfy the count — the strategy is behaving correctly when it skips.
+
+- [ ] **(B) Exit-path validation:** Each exit mechanism validated at least once through either
+  live paper occurrence **or** deterministic historical replay (production paper-trade code
+  run against a known historical stress episode injected into staging):
+
+  | Exit Type | Validation requirement |
+  |---|---|
+  | Profit target (50%) | Live paper preferred; replay acceptable |
+  | Time stop (21-day) | Live paper preferred; replay acceptable |
+  | Delta/mark stop | Live paper required before Tier 2 scaling; replay acceptable for Tier 1 pilot |
+
+- [ ] **(C) Regime completeness (supplementary — at least one of three):**
+
+  | Regime Criterion | Definition | Validation Method |
+  |---|---|---|
+  | High IVR | ≥1 cycle with IVR > 50 at entry | Live paper preferred; replay acceptable |
+  | Drawdown stress | ≥1 holding window with ≥5% Nifty intraday peak-to-trough decline | Monitor via `nuvama_intraday_tracker.py`; replay acceptable |
+  | Delta pressure | ≥1 cycle where short-put delta reaches ≤ −0.35 before any exit fires | Live paper preferred; replay acceptable |
+
+  If the market does not naturally provide any of these within 9 calendar months, use
+  historical replay. Do not hold deployment hostage to exogenous market events indefinitely.
+
+- [ ] **(D) Regime-matched Z-score:** Paper-vs-backtest `|Z| ≤ 1.5` on **both** the full 8-year
+  backtest distribution **and** a regime-matched subset (filter backtest for cycles with
+  IVR/vol conditions matching the paper period). See task 1.11. The Z-score is a **drift
+  smoke test only** — a pass does not mean the strategy is statistically proven.
+
+- [ ] **Spec consistency resolved** before codifying the gate: lot size (65 vs 50), time-stop
+  definition (21 calendar days from entry vs 21 DTE remaining), R-number naming, R4 trend
+  filter definition. Gate references `docs/strategies/csp_nifty_v1.md` as sole canonical
+  spec. Unreconciled spec = blocked gate.
+
 - [ ] `docs/strategies/csp_nifty_v1.md` exists and passes the validator (0.7).
   (`csp_niftybees_v1.md` retained as DEPRECATED — not required to pass validator.)
 - [ ] `docs/strategies/niftyshield_integrated_v1.md` exists and passes the validator (0.4a).
@@ -728,12 +767,22 @@ pricer or the strategy logic has a bug. Investigate before moving on.
 
 **Owner: Animesh. Cowork may assist with the SQL/computation but the decision is yours.**
 
+> **Council decision 2026-05-02:** Z-score is a **drift smoke test only**, not a statistical proof. Added regime-matched comparison requirement. Full rationale in `DECISIONS.md → Variance Gate` and `docs/plan/variance_gate.md`.
+
 This is the core validation gate of the whole pipeline. If this step doesn't pass, the backtest is not trustworthy and Phase 2 cannot start.
 
-- [ ] Compute the distribution of monthly returns from the CSP backtest, restricted to months that overlap the paper-trade window from Phase 0.6.
+**What a passing Z-score means:** "No gross mismatch detected yet." At N≈6, `|Z| ≤ 1.5` has <40% power to detect realistic drift (0.25–0.75 SD). A pass unlocks **Tier 1 limited pilot only** — it does not mean the strategy is statistically proven.
+
+- [ ] Compute the distribution of monthly returns from the CSP backtest, restricted to months
+  that overlap the paper-trade window from Phase 0.6.
 - [ ] Compute the distribution of monthly returns from the paper-trade data over the same window.
-- [ ] Z-score: `(paper_mean - backtest_mean) / backtest_std`.
-- [ ] **Pass condition:** |Z| ≤ 1.5. Realised within ±1.5 SD of backtest.
+- [ ] **Global Z-score:** `(paper_mean - backtest_mean) / backtest_std` against full 8-year
+  distribution.
+- [ ] **Regime-matched Z-score:** Filter the backtest for cycles whose IVR/vol conditions
+  match the paper period (same IVR quintile at entry). Compute Z against this subset only.
+  Both `|Z| ≤ 1.5` values must pass — global **and** regime-matched. If only global passes,
+  the paper period likely sampled a non-stationary regime slice; investigate before
+  proceeding.
 - [ ] **Expected bias (subtract before computing Z):** The BS IV-reconstruction delta vs
   Upstox live delta from 1.6a typically diverges 0.5–2 delta points at 25-delta (see 1.6a
   known bias note). Additionally, NSE Bhavcopy `settle_price` is not the same as
@@ -744,13 +793,16 @@ This is the core validation gate of the whole pipeline. If this step doesn't pas
   bias. Subtract this from the paper-vs-backtest gap before evaluating Z. The active
   variant must be recorded in `docs/strategies/csp_nifty_v1.md` "Variance Check Results"
   before this computation runs.
-- [ ] **Fail condition (after bias adjustment):** |Z| > 1.5. The backtest is miscalibrated.
-  Debug before proceeding. Likely culprits in order of probability: slippage model too
-  optimistic, cost model missing a component, entry/exit logic in code diverges from
-  paper-trade behaviour, Bhavcopy settle_price is an outlier for that strike/date, BS IV
-  reconstruction error larger than expected (revisit 1.6a `r` calibration).
-- [ ] Record Z-score, bias adjustment, active variant, and decision in
-  `docs/strategies/csp_nifty_v1.md` → "Variance Check Results" section.
+- [ ] **Fail condition (after bias adjustment):** |Z| > 1.5 on either comparison. The backtest
+  is miscalibrated. Debug before proceeding. Likely culprits in order of probability:
+  slippage model too optimistic, cost model missing a component, entry/exit logic in code
+  diverges from paper-trade behaviour, Bhavcopy settle_price is an outlier for that
+  strike/date, BS IV reconstruction error larger than expected (revisit 1.6a `r`
+  calibration), or regime mismatch (calm paper sample vs stress-inclusive global
+  distribution — resolve with regime-matched subset).
+- [ ] Record both Z-scores (global + regime-matched), bias adjustment, regime-match filter
+  used, active variant, and decision in `docs/strategies/csp_nifty_v1.md` → "Variance
+  Check Results" section.
 - [ ] If fail: iterate on the backtest until it aligns, then re-run 1.8 and 1.11.
 
 ---
