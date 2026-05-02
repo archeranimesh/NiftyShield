@@ -164,6 +164,7 @@ License decision needed before this can be automated. Every file should carry a 
 
 | Date | What Changed |
 |---|---|
+| 2026-05-02 | **Council decision ingested — near-expiry gamma buy research.** Read `docs/council/2026-05-02_gamma-acceleration-mispricing-option-buying.md`; updated `DECISIONS.md` with new "Signal Hierarchy Decisions — Near-Expiry Buy Research" section covering signal hierarchy (Gamma Gearing primary, Speed secondary, OI velocity confirmation), mispricing threshold formula, forward-test architecture, mandatory Phase 0 schema fields, Phase 3 prerequisites, and kill criteria. No code changes — data collection only until Phase 3 gate. |
 | 2026-05-01 | **Root markdown cleanup.** Archived session log (2026-04-27 → 2026-04-30) to TODOS_ARCHIVE_2026-05-01.md; updated CONTEXT.md date + test count; synced README.md project structure. |
 
 Full log (2026-04-01 → 2026-04-30): [docs/archive/TODOS_ARCHIVE_2026-05-01.md](docs/archive/TODOS_ARCHIVE_2026-05-01.md)

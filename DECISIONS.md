@@ -702,6 +702,99 @@ Decision rule applied at reporting time: profitable at zero slippage only → re
 
 ---
 
+---
+
+## Signal Hierarchy Decisions — Near-Expiry Buy Research
+
+**2026-05-02 — Near-expiry premium explosion ("1 to 20"): Gamma convexity primary; Vega demoted to regime filter (council ruling).**
+Source: `docs/council/2026-05-02_gamma-acceleration-mispricing-option-buying.md`. Chairman: Claude Opus 4.6. Council: GPT-5.5, Gemini 3.1 Pro, Grok-4, DeepSeek-R1. GPT-5.5 + Grok-4 top-ranked in peer review.
+
+At 0–2 DTE, the "1 to 20" premium event is primarily a **Gamma convexity event**, not a Vega event. A 20× move from pure IV expansion would require IV to spike from ~15% to ~300% — empirically impossible on NSE index options outside once-per-decade black swans. The mechanism is spot approaching the strike, delta exploding from ~0.03 to ~0.45, option transitioning from lottery ticket to directional exposure. Vega is not irrelevant — it is dormant and reactivates as a co-primary under specific identifiable conditions: (1) scheduled macro event within the expiry window (RBI MPC, Union Budget, election); (2) 2–3 DTE monthly expiry with IV rank jumping >30 percentiles intraday; (3) India VIX shock (15→20+ intraday, ~1×/year); (4) market maker risk withdrawal / liquidity evaporation. In these regimes the hierarchy becomes Gamma + IV expansion + event premium.
+
+This is **exploratory research for a Phase 3 complementary buying overlay**. It does not modify the Phase 0 CSP strategy. Capital allocation is prohibited until Phase 3 gate clearance. Confidence: High.
+
+**2026-05-02 — Gamma Gearing as primary entry measure; Speed (dΓ/dS) as secondary; OI velocity as confirmation only (council ruling).**
+Source: `docs/council/2026-05-02_gamma-acceleration-mispricing-option-buying.md`.
+
+**Primary entry measure (Gamma Gearing):**
+```
+Gamma_gearing = Γ × S² / option_ask
+```
+Answers "how much convexity per rupee risked?" Raw Gamma can be high on already-expensive options — this normalises for cost. Entry threshold: above empirical 75th percentile for the DTE bucket (to be calibrated in forward test).
+
+**Secondary measure (Speed):**
+```
+Speed = (Γ_now - Γ_5min_ago) / (S_now - S_5min_ago)
+```
+Speed measures Gamma change as spot moves toward the strike — directly relevant to the explosion mechanism. Prefer entries where the 5-min Gamma impulse (`Γ_now - Γ_5min_ago`) is driven by `Speed × ΔS`, not merely `Color × Δt` (time decay alone means the option is decaying into deeper lottery-ticket territory).
+
+**OI velocity:** Coincident to lagging (5–15 min after the initial premium move). Use as **confirmation post-trigger**, never as the lead signal. 5-minute OI delta is too noisy (NSE 3-minute snapshot batching, expiry closeouts). Use 15–30 minute window. Formula: `OI_velocity_15m = (OI_now - OI_15m_ago) / max(OI_15m_ago, 1)`. Directional interpretation mandatory: rising OI + rising option price + spot moving toward strike = demand. Rising OI + falling option price = writing/supply (false positive). Confidence: High.
+
+**2026-05-02 — Modified signal hierarchy for near-expiry buy research (council ruling).**
+Source: `docs/council/2026-05-02_gamma-acceleration-mispricing-option-buying.md`.
+
+```
+PRIMARY:     Gamma_gearing above 75th pct for DTE bucket
+             + Underlying velocity toward strike (>1% in 30 min)
+             + Speed > 0 (Gamma rising due to spot approach)
+
+CONFIRMATION: OI_velocity_15m > +15–20%
+             + Volume_zscore_5m > 2.0
+             + Option price rising with underlying direction
+
+QUALITY FILTER: Mispricing: theoretical - ask ≥ max(₹0.75, 1.0 × spread, 35% of ask)
+               OR Strike IV percentile < 30th of 20-day history
+               + Bid-ask spread ≤ 25–30% of mid
+               + Ask qty ≥ intended lot size
+
+REGIME FILTER: Strike IV percentile not exhausted (< 80th pct of 20-day history)
+              + India VIX > 12
+              + Event calendar awareness
+```
+
+**Hard filters (must pass before evaluation):** DTE ≤ 2; premium ₹2–₹10 (preferred); bid-ask ≤ 25–30% of mid; ask qty ≥ lot size; India VIX > 12; quote not stale (last traded within 5 min); no existing open position in same direction. Confidence: High.
+
+**2026-05-02 — BS mispricing as quality filter only; minimum INR divergence formula; extreme OTM: replace BS with IV percentile (council ruling).**
+Source: `docs/council/2026-05-02_gamma-acceleration-mispricing-option-buying.md`.
+
+Theoretical mispricing must be applied **after** Gamma acceleration has triggered, not as a primary signal. Near-expiry far-OTM options are where model error is largest. Sub-₹5 options are dominated by tick-size effects, stale quotes, and microstructure distortion. Black '76 can say "not obviously overpriced" but cannot reliably price a ₹1.40 option at ₹2.10.
+
+**Minimum INR divergence for sub-₹5 options:**
+```
+Required: theoretical - ask ≥ max(₹0.75, 1.0 × spread, 35% of ask, 2 × rolling model residual error)
+Illiquid (OI < 500, spread > 30% of mid): max(₹1.00, 1.5 × spread, 50% of ask, 2.5 × rolling model residual)
+```
+
+Compare against executable prices: `expected_exit_bid - entry_ask > required_edge` (round-trip, not one-sided theoretical).
+
+**Extreme OTM (>15–20% OTM):** replace BS theoretical with: (1) Strike IV percentile vs 20-day history (preferred); (2) Strike IV percentile vs same-expiry wing neighbours; (3) Premium percentile vs distance-to-strike; (4) Ask / expected-move convexity score. Black '76 theoretical retained in schema for audit but not as sole oracle. Confidence: High.
+
+**2026-05-02 — Forward test architecture: data collection only; no capital; schema fields mandated now (council ruling).**
+Source: `docs/council/2026-05-02_gamma-acceleration-mispricing-option-buying.md`.
+
+**Execution reality — central risk:** Theoretical 1:5 R:R compresses to ~1:1.8–2.5 after bid-ask friction → break-even win rate rises from 16.7% to ~28–35%. Strategy is marginal unless forward testing demonstrates real fills with realised R:R above break-even. Limit orders have severe adverse selection risk: fills may disproportionately be false signals (options that revert), not explosive ones. Fill window: 2 minutes; if unfilled, mark `signal_valid_but_unfilled`, do NOT chase.
+
+**Paper accounting rules:** Entry fill = next observed ask ≤ limit_price; exit fill = at bid, never mid. Track three outcomes separately: (1) signal occurred, (2) order would have filled, (3) filled trade hit target/stop.
+
+**Phase 3 prerequisites:** ≥52 observed signals with full schema data; fillability >50% of signals executing at limit; realised R:R distribution median >1.5R after conservative slippage.
+
+**Pre-defined kill criteria:** Abandon if after 50 observed signals: win rate <20% (on hypothetical fills) OR median realised R:R <1.3 OR fillability <40%.
+
+**Mandatory schema fields to capture in Phase 0** (impossible to reconstruct later):
+- Quote/depth: best_bid, best_ask, bid_ask_spread, bid_qty, ask_qty, top-5 depth
+- Trade activity: last_traded_price/qty/time, volume, volume_5m, volume_15m, average_traded_price (VWAP), open_interest, oi_change_5m/15m/30m
+- Underlying context: nifty_spot, nifty_futures_price, futures_basis, underlying_return_1m/5m/15m, underlying_realised_vol_5m/15m, distance_to_strike_pct, distance_to_strike_in_intraday_sigma
+- Model audit: theoretical_price, model_edge (theoretical − ask), smile_fit_residual, strike_iv_percentile_20d, pricing_model_version
+- Market regime: india_vix, india_vix_percentile_252d, nifty_above_200dma (bool), event_flag, event_type
+- Execution simulation: signal_id, signal_timestamp, entry_limit_price, entry_fill_possible (bool), entry_fill_price_conservative, MFE, MAE, exit_fill_possible, exit_fill_price_conservative, realised_R_multiple, unfilled_reason
+- Calendar/expiry: expiry_date, dte_calendar, dte_trading, time_to_expiry_seconds, weekly_or_monthly, nse_oi_timestamp
+
+**Phase 0 action:** Begin data collection at key strikes on expiry days and day-before-expiry (5-min cadence, 9:30–15:15). Extend `daily_snapshot.py` or create dedicated intraday snapshot script. No paper trades, no live trades — observation and schema population only. **Next review:** 3 months from activation or after 20 observed signals.
+
+**Preferred minimum premium ₹2–₹3:** Options at ₹3–₹10 yield better realised R:R than ₹0.50–₹1.50 because execution drag is proportionally lower, even if the headline multiple is smaller. Confidence: High.
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/`, `src/streaming/` — all empty
