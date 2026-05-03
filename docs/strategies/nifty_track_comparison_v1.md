@@ -15,13 +15,22 @@
 ## Purpose and Research Question
 
 This is not a trading strategy in the sense of `csp_nifty_v1.md`. It is a **controlled
-comparison framework**: run three structurally different long-Nifty base positions in parallel,
-apply the same menu of overlays to each, and measure which combination of (base × overlay)
-produces the best risk-adjusted return over ≥6 monthly cycles.
+comparison framework** with two distinct research questions answered from a single data
+collection run.
 
-**Research question:** Given equivalent notional Nifty exposure, does the choice of base
-instrument (ETF / Futures / Deep ITM Call) materially affect the risk-adjusted return once
-protective and income overlays are applied?
+**Research question 1 — Base instrument comparison (all three tracks, no overlays):**
+Given equivalent notional Nifty exposure (NEE), how do the three instruments differ in:
+- Delta sensitivity: if Nifty moves 1%, how much does each position move in ₹?
+- Margin and capital locked at broker level
+- Transaction costs and rolling costs annualised
+
+**Research question 2 — Protection effectiveness (Track A / NiftyBees only):**
+When the Nifty index falls, how much protection does each overlay structure deliver, and
+what is the long-term running cost of carrying that protection? Protection overlays are
+applied to Track A (NiftyBees) as the base because it is the primary capital deployment.
+Track B and Track C receive the same overlays for data completeness — the DB can be queried
+later to compare (base × overlay) combinations across all three tracks — but the primary
+protection analysis is Track A only.
 
 **Three tracks:**
 
@@ -43,17 +52,17 @@ All three tracks run simultaneously for the full comparison window.
 
 | Overlay | Track A | Track B | Track C |
 |---------|---------|---------|---------|
-| Protective Put (buy OTM put, ~8–10% OTM) | ✅ Safe | ✅ Safe (note: Track B + PP ≡ long call — record anyway for comparison) | ✅ Safe (note: Track C + PP ≡ bull call spread) |
+| Protective Put (buy OTM put, ~8–10% OTM) | ✅ Safe | ✅ Safe (note: Track B + PP ≡ long call — record for completeness) | ✅ Safe (note: Track C + PP ≡ bull call spread) |
 | Covered Call (sell OTM call, ~3–5% OTM) | ✅ Safe | 🚫 **BLOCKED** | ✅ Safe (creates diagonal/vertical spread) |
-| CSP — Cash-Secured Put (short ~22–25Δ put) | ✅ Safe (with caution: assignment doubles ETF holding) | 🚫 **BLOCKED** | ✅ Safe (monitor for synthetic straddle) |
-| Collar (PP + Covered Call together) | ✅ Preferred | ✅ Safe (collar only — never standalone covered call or CSP) | ✅ Safe |
+| Collar (PP + Covered Call together) | ✅ Preferred | ✅ Safe (collar only — never standalone covered call) | ✅ Safe |
 
 **Blocked combinations — hard rules, never record:**
 
-- **Track B + Covered Call:** Futures + short call = synthetic short put (unlimited downside). Violates `MISSION.md` Principle I.
-- **Track B + CSP (standalone):** Futures + short put = double short-put exposure. Hard tail-risk breach.
+- **Track B + standalone Covered Call:** Futures + short call = synthetic short put (unlimited downside). Violates `MISSION.md` Principle I.
 
-These two combinations are documented in `DECISIONS.md` as permanently blocked per the council ruling.
+This combination is documented in `DECISIONS.md` as permanently blocked per the council ruling.
+CSP (Cash-Secured Put) is excluded from this framework entirely — it is tracked as a
+standalone strategy in `paper_csp_nifty_v1` and is not an overlay here.
 
 **Redundant but not blocked (record, flag in leg notes):**
 
@@ -147,19 +156,49 @@ overlay menu above; blocked combinations are never recorded.
 Each overlay is a separate leg within the same strategy namespace:
 
 - Leg role naming: `overlay_pp` (protective put), `overlay_cc` (covered call),
-  `overlay_csp` (cash-secured put), `overlay_collar_put` / `overlay_collar_call` (collar).
+  `overlay_collar_put` / `overlay_collar_call` (collar).
 - Collar legs must always be entered together in the same session — never enter the
   covered-call leg of a collar without simultaneously entering the protective put.
 - Enter overlays on the same day as the base leg, or at the next entry window if
   liquidity is insufficient on day 1.
-- For Track A CSP overlay: note in `--notes` the assignment risk (if assigned, ETF holding
-  doubles — confirm collateral pool covers).
+
+### Overlay Expiry Selection (Quarterly vs Yearly vs Monthly)
+
+The objective is cost efficiency — longer DTE means lower annualised theta drag and fewer
+rolls. Use the following decision process at each overlay entry:
+
+1. **Query the option chain for three candidate expiries:** next quarterly (Mar/Jun/Sep/Dec),
+   next yearly (Jun or Dec far-dated), and next monthly. For each, find the target strike
+   (e.g., 8–10% OTM put for protective put; 3–5% OTM call for covered call).
+
+2. **Compute spread quality for each expiry at the target strike:**
+   `spread_pct = (ask - bid) / mid × 100`
+
+3. **Prefer quarterly if `spread_pct ≤ 3%`.** Quarterly Nifty options (near-term Mar/Jun/Sep/Dec
+   contracts) typically carry OI of 2,000–5,000 contracts on relevant put strikes — sufficient
+   to fill 1 lot with manageable slippage.
+
+4. **Prefer yearly if quarterly spread_pct > 3% AND yearly spread_pct ≤ 3%.** Far-dated yearly
+   puts (e.g., Dec of next year) can occasionally be tighter than quarterly if there is a
+   concentrated institutional hedging flow. Use the data, not the assumption.
+
+5. **Fall back to monthly if both quarterly and yearly spread_pct > 3%.** Log the spread values
+   in `--notes` at entry so the liquidity history builds over time.
+
+6. **For collars:** both legs (put and call) must use the same expiry. Apply the gate to
+   `max(put_spread_pct, call_spread_pct)` — use the expiry where the worse of the two legs
+   still passes the 3% gate. If no single expiry passes for both legs, fall back to monthly
+   for the collar and log the reason.
+
+7. **Log at every entry:** expiry chosen, DTE at entry, `spread_pct` for each leg, OI at
+   the target strike. This builds the empirical record of liquidity across the expiry curve
+   and is the primary data for answering "what is the running cost of protection?"
 
 ### Entry Constraints
 
 - Do not enter any overlay on Track B except Protective Put or Collar. The `paper_track_b`
   namespace should be inspected before adding any new leg; if no protective put exists,
-  a covered call or CSP leg must not be recorded.
+  a standalone covered call leg must not be recorded.
 - Track C delta must be ≥ 0.85 at entry. If `find_strike_by_delta.py` cannot find a strike
   with delta ≥ 0.85 in the current monthly expiry, use the next quarterly expiry.
 
@@ -257,10 +296,10 @@ Overlays are not adjusted intra-cycle except:
 - **Collar legs:** If the market rallies sharply past the short call strike of a collar
   (covered call leg is deep ITM), do not roll the short call higher. Hold to expiry. Record
   the outcome; this is data for the comparison.
-- **Track A CSP assignment:** If the CSP overlay is assigned (rare in paper trading — treat
-  as a simulated delivery), record a BUY of the underlying at the strike price and note in
-  `TODOS.md`. Do not force-close the resulting doubled ETF holding; carry it forward until
-  the next entry window and re-normalise.
+- **Long-dated overlay rolls:** Quarterly or yearly overlay legs do not expire on the same
+  cycle as the base leg. When the base leg rolls monthly, the overlay continues unchanged.
+  Only roll an overlay leg when it expires or when its DTE falls below 5. Log the roll
+  separately with DTE and remaining extrinsic value at time of roll.
 
 ---
 
@@ -341,7 +380,8 @@ Track B (paper_track_b)
 
 Track C (paper_track_c)
   Base (Deep ITM CE):    +₹X,XXX  Δ +0.88 Θ -₹55 V +₹90
-  Overlay (CSP):         +₹XXX    Δ -0.22 Θ +₹72 V -₹130
+  Overlay (PP):          -₹XXX    Δ -0.08 Θ -₹38 V +₹160
+  Overlay (CC):          +₹XXX    Δ -0.05 Θ +₹18 V -₹60
   NET:                   ...
   Track C delta: 0.88 [OK / WARNING (<0.65) / CRITICAL (<0.40, day N of 3)]
 ```
@@ -376,7 +416,7 @@ trade; will be replaced by measured distributions after 6+ cycles and Phase 1 ba
 | Annualised theta drag (Track C base) | — | — | ~₹14,000–21,000/year |
 | Capital at risk (per cycle, worst case) | Full NEE (~₹15.5L) | Full notional (unlimited beyond SPAN, but futures are closed at roll) | Option premium only (~₹2–3L) |
 | Cross-track tracking error (base only) | Baseline | ~0% vs Nifty 50 (futures tracks perfectly) | Expected 5–10% drift per month due to delta decay; corrected at roll |
-| Overlay edge hypothesis | Collars reduce drawdown by ~30–40% at cost of ~15–20% of upside cap | PP converts futures to long call (defined risk); collar is most efficient here | CSP overlay adds ~₹4,000–8,000/month income; Track C + CSP ≈ synthetic straddle — monitor net delta |
+| Overlay edge hypothesis | Collar: drawdown reduced ~30–40% at cost of ~15–20% upside cap; PP alone: full downside floor at premium cost; CC alone: income offset vs capped upside | PP converts futures to long call (defined risk, full downside floor); Collar most capital-efficient here | PP creates bull call spread (defined risk, limited gain); CC creates vertical/diagonal spread |
 
 **Key comparison hypothesis:** Track B (Futures) will have the highest raw return per ₹
 of capital actually posted (SPAN margin basis), but the lowest return on NEE basis.
@@ -392,26 +432,32 @@ The comparison is only meaningful after ≥ 6 cycles including at least one high
 ## Regimes Expected to Work In
 
 **All three tracks benefit from a trending bull market:** All bases capture Nifty upside.
-Income overlays (covered call, CSP) add further credit. Best environment for the framework.
+Covered call overlay adds further income; protective put is a mild drag (premium paid for
+protection that does not fire). Best environment for the framework overall.
 
-**Track A + Collar in range-bound market:** Collar collects both put premium (if Nifty
-hovers near lower bound) and retains most of the base appreciation. The least costly
-protection structure in low-volatility sideways regimes.
+**Track A + Collar in range-bound market:** Collar collects call premium while the put
+provides a floor if Nifty drifts lower. The cost-of-carry is the net debit (typically
+small when put IV > call IV, which is normal for Nifty's negative skew). The least
+expensive protection structure in sideways-low-IV regimes.
 
-**Track C in high-IV environments:** The deep ITM call captures the long-delta exposure
-while the CSP overlay benefits from elevated put premium. Combined net Theta can approach
-neutral or positive, making Track C potentially the most capital-efficient structure when IV
-is rich.
+**Track A + Protective Put in high-IV entry environments (VIX > 18):** Put premium is
+expensive but IV mean-reversion tends to add mark-to-market value to the long put position
+even before Nifty moves. The overlay earns on both the vol compression and any downside
+move. Track A + PP is the cleanest expression of "buy protection when it is expensive
+but justified."
 
-**Track B + Protective Put in crash scenarios:** The PP converts to a long call when Nifty
-drops (capped loss), while Track A suffers full ETF drawdown and Track C loses at most the
-premium paid. This makes Track B + PP surprisingly resilient — but only with the PP in
-place. Standalone Track B is the worst of the three in a crash.
+**Track B + Protective Put in crash scenarios:** PP converts the unlimited-downside futures
+to a long call profile — defined loss, unlimited upside. While the PP premium is the cost,
+it is the only structure among the three that provides both unlimited upside AND a defined
+floor. Track A loses the full ETF value below the put strike; Track C is already defined-
+risk (premium). This makes Track B + PP the structurally superior crash protection among
+the three — but only with the PP in place.
 
-**High-VIX entry environments (VIX > 18):** All overlay structures become more expensive to
-enter, but premium collected from income overlays also rises. Track C's theta drag decreases
-as IV rises (the call carries more extrinsic value, making it harder to recover via income).
-Track A + CSP or Track A + Collar is preferred entry structure in high-VIX.
+**Track C in high-IV environments (base only):** The deep ITM call's extrinsic value rises
+with IV, which temporarily inflates the position's mark-to-market. Delta fidelity can also
+improve transiently as the call's strike moves closer to ATM in a downdraft. However, the
+theta drag is highest in high-IV environments, making long-dated Track C more favourable
+than monthly in these regimes.
 
 ---
 
@@ -423,7 +469,9 @@ Track A + CSP or Track A + Collar is preferred entry structure in high-VIX.
 - Track B: full futures loss unless protective put is in place; without PP, worst performer.
 - Track C: capped at premium paid; best natural floor of the three bases.
 
-Income overlays (CSP, covered call) will add losses on top of base drawdowns in this regime.
+Covered call overlay will add losses on top of base drawdowns in this regime (short call
+gains are offset by the faster-falling base). Protective put and collar are the only
+overlays that improve the outcome.
 
 **Sharp IV expansion post-entry:**
 
@@ -436,16 +484,11 @@ Income overlays (CSP, covered call) will add losses on top of base drawdowns in 
 
 **Low-IV flat market (VIX < 12):**
 
-Track C has the worst outcome: theta drag with no income from overlays (CSP and CC premiums
-are thin). Track A + Collar is neutral-to-slightly-positive (thin collar credit still beats
-zero). Track B (futures alone) is neutral; futures carry no theta.
-
-**Assignment risk on Track A + CSP overlay:**
-
-If Nifty falls past the CSP strike and the short put is assigned, Track A effectively
-doubles its NiftyBees exposure. While the collateral pool covers this comfortably, the
-comparison is distorted for that cycle. Flag any assignment in `TODOS.md` and note the
-distortion in the cycle's P&L commentary.
+Track C has the worst outcome: theta drag accumulates with no directional move to
+compensate. Track A + Collar has the lowest cost structure here (thin premiums on both
+legs, but net debit is also small). Track B (futures alone) is neutral; futures carry no
+theta. The protective put on any track is pure drag in this regime — this is the regime
+where the "running cost of protection" is most visible and most painful.
 
 ---
 
@@ -464,8 +507,8 @@ distortion in the cycle's P&L commentary.
 **Any track — immediate overlay close:**
 
 If an overlay leg creates a net position that, when aggregated across legs, produces
-an unhedged short put exposure greater than 1 lot (e.g., Track B acquires a standalone CSP
-inadvertently), close the violating leg immediately and log in `TODOS.md`.
+an unhedged short put or short call exposure (e.g., a covered call on Track B entered
+without a paired protective put), close the violating leg immediately and log in `TODOS.md`.
 
 ### Framework-Level Kill Criteria
 
@@ -597,6 +640,11 @@ task.*
 - At what point does the Track C deep ITM call behave more like a futures position (delta
   stable near 0.90 all cycle) vs. an option (delta decaying, requiring frequent re-entries)?
   The 3-consecutive-days threshold is a first guess; calibrate from paper data.
-- Is there a VIX regime where Track C + CSP produces net-positive theta (income overlays
-  exceed base theta drag)? This would make Track C the structurally superior choice in
-  high-IV markets.
+- What is the actual spread_pct profile of quarterly vs yearly Nifty protective puts at
+  the 8–10% OTM strike over the 6-cycle window? The bid/ask gate will generate this data
+  automatically — use it to determine whether yearly overlays are ever genuinely accessible
+  at 1-lot retail scale, or whether quarterly is the practical ceiling.
+- Does the annualised premium cost of a quarterly protective put differ materially from
+  three monthly rolls covering the same period, once slippage on the extra rolls is accounted
+  for? The per-roll slippage on three monthlies may cancel out the theta efficiency advantage
+  of the quarterly in thin-spread regimes.
