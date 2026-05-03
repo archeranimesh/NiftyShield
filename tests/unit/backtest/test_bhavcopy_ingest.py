@@ -109,3 +109,42 @@ def test_load_options_ohlcv_date_filter(bhavcopy_zip, tmp_path):
 def test_load_options_ohlcv_empty_on_no_data(tmp_path):
     df = load_options_ohlcv(underlying="NIFTY", start=date(2020, 1, 1), end=date(2020, 1, 31), data_dir=tmp_path)
     assert len(df) == 0
+
+from scripts.bhavcopy_bootstrap import main as bootstrap_main
+import urllib.error
+from unittest.mock import patch, MagicMock
+
+@patch('scripts.bhavcopy_bootstrap.download_bhavcopy')
+@patch('scripts.bhavcopy_bootstrap.time.sleep')
+def test_bhavcopy_bootstrap_404_handling(mock_sleep, mock_download, tmp_path):
+    mock_download.side_effect = FileNotFoundError("NSE returned 404")
+    
+    args = [
+        "--start", "2024-04-24",
+        "--end", "2024-04-24",
+        "--dest", str(tmp_path)
+    ]
+    
+    # Should not raise exception
+    bootstrap_main(args)
+    
+    assert mock_download.call_count == 1
+    mock_sleep.assert_called_once_with(1.0)
+
+@patch('scripts.bhavcopy_bootstrap.download_bhavcopy')
+@patch('scripts.bhavcopy_bootstrap.time.sleep')
+def test_bhavcopy_bootstrap_error_handling(mock_sleep, mock_download, tmp_path):
+    mock_download.side_effect = IOError("HTTP Error 500")
+    
+    args = [
+        "--start", "2024-04-24",
+        "--end", "2024-04-24",
+        "--dest", str(tmp_path)
+    ]
+    
+    # Should not raise exception
+    bootstrap_main(args)
+    
+    assert mock_download.call_count == 1
+    mock_sleep.assert_called_once_with(1.0)
+
