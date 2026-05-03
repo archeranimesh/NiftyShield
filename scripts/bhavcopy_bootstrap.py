@@ -46,7 +46,7 @@ def main(args_list=None):
         while current_date <= end_date:
             month_key = current_date.strftime("%Y-%m")
             if last_month and last_month != month_key:
-                logger.info(f"[{last_month}] downloaded {downloaded_by_month[last_month]}/{total_days_by_month[last_month]} trading days")
+                logger.info("[%s] downloaded %s/%s trading days", last_month, downloaded_by_month[last_month], total_days_by_month[last_month])
                 
             last_month = month_key
             
@@ -57,34 +57,36 @@ def main(args_list=None):
             total_days_by_month[month_key] += 1
                 
             if current_date in holidays:
-                logger.info(f"{current_date} — holiday/no data, skipping")
+                logger.info("%s — holiday/no data, skipping", current_date)
                 current_date += timedelta(days=1)
                 continue
                 
             try:
                 zip_path = download_bhavcopy(current_date, dest_dir=tmp_path)
                 
-                options_records = [r for r in parse_bhavcopy(zip_path, underlying=args.underlying) if r.instrument in ("OPTIDX", "OPTSTK")]
+                records = parse_bhavcopy(zip_path, underlying=args.underlying, include_futures=args.include_futures)
+                
+                options_records = [r for r in records if r.instrument in ("OPTIDX", "OPTSTK")]
                 options_dest = args.dest / "options_ohlcv"
                 write_to_parquet(options_records, current_date, dest_dir=options_dest)
                 
                 if args.include_futures:
-                    futures_records = [r for r in parse_bhavcopy(zip_path, underlying=args.underlying) if r.instrument in ("FUTIDX", "FUTSTK")]
+                    futures_records = [r for r in records if r.instrument in ("FUTIDX", "FUTSTK")]
                     futures_dest = args.dest / "futures_ohlcv"
                     write_to_parquet(futures_records, current_date, dest_dir=futures_dest)
                     
                 downloaded_by_month[month_key] += 1
                 
             except FileNotFoundError:
-                logger.info(f"{current_date} — holiday/no data, skipping")
+                logger.info("%s — holiday/no data, skipping", current_date)
             except Exception as e:
-                logger.error(f"{current_date} — {e}")
+                logger.error("%s — %s", current_date, e)
                 
             time.sleep(1.0)
             current_date += timedelta(days=1)
             
         if last_month:
-            logger.info(f"[{last_month}] downloaded {downloaded_by_month[last_month]}/{total_days_by_month[last_month]} trading days")
+            logger.info("[%s] downloaded %s/%s trading days", last_month, downloaded_by_month[last_month], total_days_by_month[last_month])
 
 if __name__ == "__main__":
     main()

@@ -35,7 +35,7 @@ def bhavcopy_zip(tmp_path):
     return zip_path
 
 def test_parse_bhavcopy_filters_to_nifty(bhavcopy_zip):
-    records = parse_bhavcopy(bhavcopy_zip, underlying="NIFTY")
+    records = parse_bhavcopy(bhavcopy_zip, underlying="NIFTY", include_futures=True)
     
     # 1 OPTIDX CE, 1 OPTIDX PE, 1 FUTIDX. 
     # Missing: BANKNIFTY, RELIANCE, corrupted CE strike 0.
@@ -60,7 +60,7 @@ def test_parse_bhavcopy_empty_on_no_match(bhavcopy_zip):
 def test_parse_bhavcopy_corrupt_zip(tmp_path):
     corrupt_zip = tmp_path / "corrupt.zip"
     corrupt_zip.write_bytes(b"not a zip file")
-    with pytest.raises(zipfile.BadZipFile):
+    with pytest.raises(ValueError, match="Corrupt or unreadable ZIP file"):
         parse_bhavcopy(corrupt_zip)
 
 from src.backtest.bhavcopy_ingest import write_to_parquet
@@ -92,7 +92,7 @@ def test_idempotency_skip_existing_date(bhavcopy_zip, tmp_path):
     assert second_table.num_rows == initial_rows
 
 def test_load_options_ohlcv_date_filter(bhavcopy_zip, tmp_path):
-    records = parse_bhavcopy(bhavcopy_zip, underlying="NIFTY")
+    records = parse_bhavcopy(bhavcopy_zip, underlying="NIFTY", include_futures=True)
     trade_date = records[0].trade_date
     write_to_parquet(records, trade_date, dest_dir=tmp_path)
     

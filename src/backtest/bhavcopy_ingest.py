@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import urllib.request
 import urllib.error
+import calendar
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -29,6 +30,16 @@ class BhavRecord(BaseModel, frozen=True):
     settle_price: Decimal
     volume: int
     oi: int
+
+
+def get_last_thursday(year: int, month: int) -> date:
+    c = calendar.Calendar(firstweekday=calendar.MONDAY)
+    monthcal = c.monthdatescalendar(year, month)
+    for week in reversed(monthcal):
+        thursday = week[calendar.THURSDAY]
+        if thursday.month == month:
+            return thursday
+    return date(year, month, 1)
 
 
 def parse_option_symbol(symbol: str) -> dict[str, str | date | Decimal]:
@@ -70,23 +81,7 @@ def parse_option_symbol(symbol: str) -> dict[str, str | date | Decimal]:
             "option_type": option_type
         }
         
-    # Try DDMONYY / YYMONDD
-    m_monthly_day = re.match(r'^(\d{2}[A-Z]{3}\d{2})(\d+)$', rest)
-    if m_monthly_day and Decimal(m_monthly_day.group(2)) > 0:
-        expiry_token, strike_str = m_monthly_day.groups()
-        yy = int(expiry_token[:2])
-        mon_str = expiry_token[2:5]
-        dd = int(expiry_token[5:])
-        year = 2000 + yy
-        month = datetime.strptime(mon_str, "%b").month
-        return {
-            "underlying": underlying,
-            "expiry": date(year, month, dd),
-            "strike": Decimal(strike_str),
-            "option_type": option_type
-        }
-        
-    # Try YYMON
+    # Try YYMON (monthly)
     m_monthly = re.match(r'^(\d{2}[A-Z]{3})(\d+)$', rest)
     if m_monthly:
         expiry_token, strike_str = m_monthly.groups()
@@ -94,67 +89,74 @@ def parse_option_symbol(symbol: str) -> dict[str, str | date | Decimal]:
         mon_str = expiry_token[2:5]
         year = 2000 + yy
         month = datetime.strptime(mon_str, "%b").month
-        # We don't know the exact day without a calendar calculation, defaulting to 1st for now
-        # Actually, if we just need it for testing, returning the 1st of the month is okay unless specified
         return {
             "underlying": underlying,
-            "expiry": date(year, month, 1),
+            "expiry": get_last_thursday(year, month),
             "strike": Decimal(strike_str),
             "option_type": option_type
         }
         
     raise ValueError(f"Unrecognized expiry format in symbol: {symbol}")
 
-def parse_bhavcopy(csv_path: Path, underlying: str = "NIFTY") -> list[BhavRecord]:
+def parse_bhavcopy(csv_path: Path, underlying: str = "NIFTY", include_futures: bool = False) -> list[BhavRecord]:
     """
     Parses an NSE Bhavcopy CSV file inside a ZIP and returns matching BhavRecords.
+    Raises ValueError on a corrupt or unreadable ZIP.
     """
     records = []
     
-    with zipfile.ZipFile(csv_path) as z:
-        # Assume there's only one CSV in the ZIP
-        csv_filename = z.namelist()[0]
-        with z.open(csv_filename) as f:
-            # Decode lines as string
-            lines = [line.decode("utf-8") for line in f.readlines()]
-            reader = csv.DictReader(lines)
-            
-            for row in reader:
-                instrument = row["INSTRUMENT"]
-                if instrument not in ("OPTIDX", "OPTSTK", "FUTIDX", "FUTSTK"):
-                    continue
-                    
-                sym = row["SYMBOL"]
-                if sym != underlying:
-                    continue
-                    
-                strike = Decimal(row["STRIKE_PR"])
-                opt_type = row["OPTION_TYP"]
+    valid_instruments = {"OPTIDX", "OPTSTK"}
+    if include_futures:
+        valid_instruments.update({"FUTIDX", "FUTSTK"})
+        
+    try:
+        with zipfile.ZipFile(csv_path) as z:
+            # Assume there's only one CSV in the ZIP
+            csv_filename = z.namelist()[0]
+            with z.open(csv_filename) as f:
+                # Decode lines as string
+                lines = [line.decode("utf-8") for line in f.readlines()]
+                reader = csv.DictReader(lines)
                 
-                if strike == 0 and opt_type in ("CE", "PE"):
-                    logger.warning(f"Skipping corrupted strike row: {row}")
-                    continue
+                for row in reader:
+                    instrument = row["INSTRUMENT"]
+                    if instrument not in valid_instruments:
+                        continue
+                        
+                    sym = row["SYMBOL"]
+                    if sym != underlying:
+                        continue
+                        
+                    strike = Decimal(row["STRIKE_PR"])
+                    opt_type = row["OPTION_TYP"]
                     
-                trade_date = datetime.strptime(row["TIMESTAMP"], "%d-%b-%Y").date()
-                expiry = datetime.strptime(row["EXPIRY_DT"], "%d-%b-%Y").date()
+                    if strike == 0 and opt_type in ("CE", "PE"):
+                        logger.warning("Skipping corrupted strike row: %s", row)
+                        continue
+                        
+                    trade_date = datetime.strptime(row["TIMESTAMP"], "%d-%b-%Y").date()
+                    expiry = datetime.strptime(row["EXPIRY_DT"], "%d-%b-%Y").date()
+                    
+                    rec = BhavRecord(
+                        trade_date=trade_date,
+                        symbol=sym,
+                        underlying=sym,
+                        instrument=instrument,
+                        expiry=expiry,
+                        strike=strike,
+                        option_type=opt_type,
+                        open=Decimal(row["OPEN"]),
+                        high=Decimal(row["HIGH"]),
+                        low=Decimal(row["LOW"]),
+                        close=Decimal(row["CLOSE"]),
+                        settle_price=Decimal(row["SETTLE_PR"]),
+                        volume=int(row["CONTRACTS"]),
+                        oi=int(row["OPEN_INT"])
+                    )
+                    records.append(rec)
                 
-                rec = BhavRecord(
-                    trade_date=trade_date,
-                    symbol=sym,
-                    underlying=sym,
-                    instrument=instrument,
-                    expiry=expiry,
-                    strike=strike,
-                    option_type=opt_type,
-                    open=Decimal(row["OPEN"]),
-                    high=Decimal(row["HIGH"]),
-                    low=Decimal(row["LOW"]),
-                    close=Decimal(row["CLOSE"]),
-                    settle_price=Decimal(row["SETTLE_PR"]),
-                    volume=int(row["CONTRACTS"]),
-                    oi=int(row["OPEN_INT"])
-                )
-                records.append(rec)
+    except zipfile.BadZipFile as e:
+        raise ValueError(f"Corrupt or unreadable ZIP file: {csv_path}") from e
                 
     return records
 
@@ -237,13 +239,14 @@ def write_to_parquet(records: list[BhavRecord], month_date: date, dest_dir: Path
         existing_table = pq.read_table(parquet_path)
         
         # Idempotency check: if trade_date already in existing data, skip append
-        existing_dates = existing_table.column('trade_date').to_pylist()
+        existing_dates = set(existing_table.column('trade_date').to_pylist())
         new_dates = set(new_table.column('trade_date').to_pylist())
         
-        # If any of the new dates are already in the existing dates, we assume it's already written
-        # Actually, let's just check the first date since we process one day at a time
-        trade_date = records[0].trade_date
-        if trade_date in existing_dates:
+        # If any of the new dates are already in the existing dates, we assume it's already written.
+        # Note: This batch behavior is conservative — if any date in a batch overlaps, the whole 
+        # batch is skipped rather than just the duplicates. For the bootstrap use case (one day 
+        # at a time) this is correct. Downstream callers passing multi-day batches need to know about it.
+        if any(d in existing_dates for d in new_dates):
             return
             
         final_table = pa.concat_tables([existing_table, new_table])
