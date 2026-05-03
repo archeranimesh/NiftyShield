@@ -74,12 +74,12 @@
 **Owner: Animesh. Not for Cowork. Blocks task 0.6b.**
 
 - [x] Write `docs/strategies/nifty_track_comparison_v1.md` covering:
-  - Track A (NiftyBees ETF), Track B (Nifty Futures, monthly roll), Track C (Deep ITM Call, delta ≈ 0.90)
+  - Spot (NiftyBees ETF), Futures (Nifty Futures, monthly roll), Proxy (Deep ITM Call, delta ≈ 0.90)
   - Capital normalization: Notional Equivalent Exposure (NEE) — all tracks sized to 1 Nifty lot equivalent
-  - Blocked combinations (must list explicitly): Track B + Covered Call, Track B + CSP
+  - Blocked combinations (must list explicitly): Futures + Covered Call (standalone)
   - Daily P&L report schema: base P&L + per-overlay P&L + net combined, per track; daily Delta/Theta/Vega
-  - Strategy namespaces: `paper_track_a`, `paper_track_b`, `paper_track_c`
-  - Roll mechanics: monthly roll for all tracks; Track C kill criterion (delta < 0.40 for 3 consecutive days)
+  - Strategy namespaces: `paper_nifty_spot`, `paper_nifty_futures`, `paper_nifty_proxy`
+  - Roll mechanics: monthly roll for all tracks; Proxy kill criterion (delta < 0.40 for 3 consecutive days)
   - Minimum duration: 6 monthly cycles per track
 - [x] Spec passes `validate_strategy_spec.py`.
 - [x] Commit: `docs(strategies): add 3-track Nifty instrument comparison spec v1`. <!-- SHA: see below -->
@@ -115,12 +115,12 @@
 
 **Owner: Animesh. Not for Cowork. Blocked by: 0.4b (spec must exist and pass validator first).**
 
-- [ ] Enter Track A base leg (long NiftyBees) via `record_paper_trade.py --strategy paper_track_a --leg base_etf`.
-- [ ] Enter Track B base leg (long Nifty Futures notional) via `--strategy paper_track_b --leg base_futures`.
-- [ ] Enter Track C base leg (Deep ITM Call, delta ≈ 0.90) via `--strategy paper_track_c --leg base_ditm_call`.
+- [ ] Enter Spot base leg (long NiftyBees) via `record_paper_trade.py --strategy paper_nifty_spot --leg base_etf`.
+- [ ] Enter Futures base leg (long Nifty Futures notional) via `--strategy paper_nifty_futures --leg base_futures`.
+- [ ] Enter Proxy base leg (Deep ITM Call, delta ≈ 0.90) via `--strategy paper_nifty_proxy --leg base_ditm_call`.
 - [ ] For each approved overlay per track, record as a separate leg within the same strategy namespace.
-- [ ] Do NOT record Track B + Covered Call or Track B + CSP — blocked per council ruling.
-- [ ] On each expiry: roll all base legs; document delta at roll time for Track C.
+- [ ] Do NOT record Futures + standalone Covered Call — blocked per council ruling.
+- [ ] On each expiry: roll all base legs; document delta at roll time for Proxy.
 - [ ] Minimum 6 monthly cycles before cross-track conclusions. Include ≥1 high-VIX event (India VIX >18).
 
 ---

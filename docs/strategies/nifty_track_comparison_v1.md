@@ -24,24 +24,24 @@ Given equivalent notional Nifty exposure (NEE), how do the three instruments dif
 - Margin and capital locked at broker level
 - Transaction costs and rolling costs annualised
 
-**Research question 2 — Protection effectiveness (Track A / NiftyBees only):**
+**Research question 2 — Protection effectiveness (Spot / NiftyBees only):**
 When the Nifty index falls, how much protection does each overlay structure deliver, and
 what is the long-term running cost of carrying that protection? Protection overlays are
-applied to Track A (NiftyBees) as the base because it is the primary capital deployment.
-Track B and Track C receive the same overlays for data completeness — the DB can be queried
+applied to Spot (NiftyBees) as the base because it is the primary capital deployment.
+Futures and Proxy receive the same overlays for data completeness — the DB can be queried
 later to compare (base × overlay) combinations across all three tracks — but the primary
-protection analysis is Track A only.
+protection analysis is Spot only.
 
 **Three tracks:**
 
-- **Track A** — Long NiftyBees ETF (physical, delivery)
-  - Strategy namespace: `paper_track_a`
+- **Spot** — Long NiftyBees ETF (physical, delivery)
+  - Strategy namespace: `paper_nifty_spot`
   - Collateral: cash deployed
-- **Track B** — Long Nifty Futures (monthly roll, full notional)
-  - Strategy namespace: `paper_track_b`
+- **Futures** — Long Nifty Futures (monthly roll, full notional)
+  - Strategy namespace: `paper_nifty_futures`
   - Collateral: SPAN margin (~₹1.5L) + surplus parked in liquid fund (tracked separately)
-- **Track C** — Long Nifty via Deep ITM Call (delta ≈ 0.90, monthly expiry)
-  - Strategy namespace: `paper_track_c`
+- **Proxy** — Long Nifty via Deep ITM Call (delta ≈ 0.90, monthly expiry)
+  - Strategy namespace: `paper_nifty_proxy`
   - Collateral: option premium paid upfront (~₹2–3L)
 
 All three tracks run simultaneously for the full comparison window.
@@ -50,15 +50,15 @@ All three tracks run simultaneously for the full comparison window.
 
 ## Approved Overlay Menu
 
-| Overlay | Track A | Track B | Track C |
+| Overlay | Spot | Futures | Proxy |
 |---------|---------|---------|---------|
-| Protective Put (buy OTM put, ~8–10% OTM) | ✅ Safe | ✅ Safe (note: Track B + PP ≡ long call — record for completeness) | ✅ Safe (note: Track C + PP ≡ bull call spread) |
+| Protective Put (buy OTM put, ~8–10% OTM) | ✅ Safe | ✅ Safe (note: Futures + PP ≡ long call — record for completeness) | ✅ Safe (note: Proxy + PP ≡ bull call spread) |
 | Covered Call (sell OTM call, ~3–5% OTM) | ✅ Safe | 🚫 **BLOCKED** | ✅ Safe (creates diagonal/vertical spread) |
 | Collar (PP + Covered Call together) | ✅ Preferred | ✅ Safe (collar only — never standalone covered call) | ✅ Safe |
 
 **Blocked combinations — hard rules, never record:**
 
-- **Track B + standalone Covered Call:** Futures + short call = synthetic short put (unlimited downside). Violates `MISSION.md` Principle I.
+- **Futures + standalone Covered Call:** Futures + short call = synthetic short put (unlimited downside). Violates `MISSION.md` Principle I.
 
 This combination is documented in `DECISIONS.md` as permanently blocked per the council ruling.
 CSP (Cash-Secured Put) is excluded from this framework entirely — it is tracked as a
@@ -66,8 +66,8 @@ standalone strategy in `paper_csp_nifty_v1` and is not an overlay here.
 
 **Redundant but not blocked (record, flag in leg notes):**
 
-- Track C + Protective Put: equivalent to entering a bull call spread directly. Record for completeness; note in `--notes` that it is structurally redundant.
-- Track B + Protective Put: equivalent to buying a long call. Record; note redundancy.
+- Proxy + Protective Put: equivalent to entering a bull call spread directly. Record for completeness; note in `--notes` that it is structurally redundant.
+- Futures + Protective Put: equivalent to buying a long call. Record; note redundancy.
 
 ---
 
@@ -82,24 +82,24 @@ trading day. All three must enter on the same day; do not stagger tracks.
 
 **Entry time:** 10:00–10:30 AM IST for all legs.
 
-**Track A — Long NiftyBees ETF:**
+**Spot — Long NiftyBees ETF:**
 
 Quantity = `floor((lot_size × nifty_spot) / niftybees_ltp)` where lot_size = 65
 (1 Nifty lot equivalent, as per NEE definition in Position Sizing).
 
 ```bash
 python -m scripts.record_paper_trade \
-  --strategy paper_track_a \
+  --strategy paper_nifty_spot \
   --leg base_etf \
   --key "NSE_EQ|INF204KB14I2" \
   --action BUY \
   --qty <computed_qty> \
   --price <niftybees_ltp> \
   --date <entry_date> \
-  --notes "Track A base: NEE qty. Nifty spot=<spot>, lot_size=65."
+  --notes "Spot base: NEE qty. Nifty spot=<spot>, lot_size=65."
 ```
 
-**Track B — Long Nifty Futures (1 lot, monthly front contract):**
+**Futures — Long Nifty Futures (1 lot, monthly front contract):**
 
 Record the notional futures position at the current front-month futures price.
 Qty = 65 (1 lot). Instrument key: look up the current front-month Nifty futures key
@@ -107,17 +107,17 @@ from the BOD instrument file (pattern: `NSE_FO|NIFTY<DDMMMYYYY>FUT`).
 
 ```bash
 python -m scripts.record_paper_trade \
-  --strategy paper_track_b \
+  --strategy paper_nifty_futures \
   --leg base_futures \
   --key "<front_month_futures_key>" \
   --action BUY \
   --qty 65 \
   --price <futures_price> \
   --date <entry_date> \
-  --notes "Track B base: 1 lot Nifty futures. Notional=<65×futures_price>. Surplus capital=<nee_capital - span_margin> parked notionally."
+  --notes "Futures base: 1 lot Nifty futures. Notional=<65×futures_price>. Surplus capital=<nee_capital - span_margin> parked notionally."
 ```
 
-**Track C — Long Deep ITM Call (delta ≈ 0.90, monthly expiry):**
+**Proxy — Long Deep ITM Call (delta ≈ 0.90, monthly expiry):**
 
 Use `find_strike_by_delta.py` to locate the call strike closest to delta = 0.90 (search
 range 0.85–0.95). Select the strike whose delta is nearest 0.90; if equidistant between
@@ -135,7 +135,7 @@ python -m scripts.find_strike_by_delta \
 
 # Step 2: record the entry
 python -m scripts.record_paper_trade \
-  --strategy paper_track_c \
+  --strategy paper_nifty_proxy \
   --leg base_ditm_call \
   --underlying "NSE_INDEX|Nifty 50" \
   --strike <selected_strike> \
@@ -145,7 +145,7 @@ python -m scripts.record_paper_trade \
   --qty 65 \
   --price <mid_price_minus_slippage> \
   --date <entry_date> \
-  --notes "Track C base: Deep ITM CE delta=<actual_delta>, strike=<strike>. Target delta 0.90."
+  --notes "Proxy base: Deep ITM CE delta=<actual_delta>, strike=<strike>. Target delta 0.90."
 ```
 
 ### Phase 2 — Overlay Entry
@@ -196,10 +196,10 @@ rolls. Use the following decision process at each overlay entry:
 
 ### Entry Constraints
 
-- Do not enter any overlay on Track B except Protective Put or Collar. The `paper_track_b`
+- Do not enter any overlay on Futures except Protective Put or Collar. The `paper_nifty_futures`
   namespace should be inspected before adding any new leg; if no protective put exists,
   a standalone covered call leg must not be recorded.
-- Track C delta must be ≥ 0.85 at entry. If `find_strike_by_delta.py` cannot find a strike
+- Proxy delta must be ≥ 0.85 at entry. If `find_strike_by_delta.py` cannot find a strike
   with delta ≥ 0.85 in the current monthly expiry, use the next quarterly expiry.
 
 ---
@@ -217,9 +217,9 @@ roll on the next trading day.
 1. Record a SELL/BUY-to-close for the expiring leg at LTP (mid price with slippage per
    Position Sizing).
 2. Immediately record the new leg (same role, next expiry) at the new entry price.
-3. For Track C: re-run `find_strike_by_delta.py` for the new expiry to find the fresh
+3. For Proxy: re-run `find_strike_by_delta.py` for the new expiry to find the fresh
    delta ≈ 0.90 strike. The strike will differ from the previous cycle.
-4. For Track B: roll to the new front-month futures contract.
+4. For Futures: roll to the new front-month futures contract.
 5. All overlay legs with the same expiry are rolled simultaneously. Overlays on longer
    expiries (e.g., quarterly tail puts) are managed independently.
 
@@ -227,9 +227,9 @@ roll on the next trading day.
 system error), log the reason in `TODOS.md` and execute on the next trading day. Never
 carry an expiring short option leg through to settlement.
 
-### Track C — Early Exit Trigger (Delta Decay)
+### Proxy — Early Exit Trigger (Delta Decay)
 
-Track C has an additional exit trigger independent of the monthly roll. If the deep ITM
+Proxy has an additional exit trigger independent of the monthly roll. If the deep ITM
 call delta falls below **0.40 for 3 consecutive trading days**, close the position
 immediately (buy-to-close) and re-enter at a deeper strike (delta ≈ 0.90 for the current
 or next monthly expiry, whichever has ≥ 7 DTE remaining). Log the delta values for all
@@ -237,15 +237,15 @@ or next monthly expiry, whichever has ≥ 7 DTE remaining). Log the delta values
 
 This trigger fires when: (a) Nifty has fallen substantially toward or below the call strike,
 or (b) gamma decay has compressed the delta as expiry approaches. Either condition degrades
-Track C's ability to serve as a "long Nifty" proxy.
+Proxy's ability to serve as a "long Nifty" proxy.
 
-### Track B — Intra-Cycle Exit
+### Futures — Intra-Cycle Exit
 
 No intra-cycle exit rule for the base futures leg. Futures are marked to market daily;
 unrealised losses are captured in paper P&L without forcing a close. The only exit is the
 monthly roll.
 
-For protective put overlays on Track B: hold to expiry unless the underlying moves
+For protective put overlays on Futures: hold to expiry unless the underlying moves
 unexpectedly strongly upward (put value ≈ zero and DTE ≤ 5) — in that case close early to
 capture residual value; log the decision.
 
@@ -262,24 +262,24 @@ event for the comparison to be credible).
 
 ## Adjustment Rules
 
-### Track A — No Adjustments
+### Spot — No Adjustments
 
 Once the NiftyBees base leg is entered, it is not adjusted intra-cycle. If India VIX
 spikes, hold. If NiftyBees price drifts due to tracking error, note in `TODOS.md` but do
 not rebalance until the annual reset.
 
-**Annual reset (Track A):** Once per calendar year (January, after expiry), record a SELL
+**Annual reset (Spot):** Once per calendar year (January, after expiry), record a SELL
 at current NiftyBees LTP to close the old position, then immediately record a fresh BUY at
 the new NEE quantity. This keeps the notional equivalent sizing accurate as Nifty drifts.
 
-### Track B — No Intra-Cycle Adjustment
+### Futures — No Intra-Cycle Adjustment
 
 The futures leg carries its full delta exposure throughout the cycle. No stop-losses, no
 delta hedging. If the position is materially underwater, hold until roll. The purpose is to
-capture the unmanaged futures P&L as the Track B baseline — adjusting it defeats the
+capture the unmanaged futures P&L as the Futures baseline — adjusting it defeats the
 comparison.
 
-### Track C — Delta Monitoring (Daily)
+### Proxy — Delta Monitoring (Daily)
 
 Record the deep ITM call's delta at each `paper_snapshot.py` run. If delta falls below
 0.65 (warning threshold), flag it in the daily snapshot log. If delta falls below 0.40 for
@@ -287,7 +287,7 @@ Record the deep ITM call's delta at each `paper_snapshot.py` run. If delta falls
 
 Delta readings come from the live Upstox option chain. If the option chain is unavailable
 on a given day, interpolate from the prior day's delta and document the gap. Do not leave a
-Track C position unmonitored for more than 2 consecutive trading days.
+Proxy position unmonitored for more than 2 consecutive trading days.
 
 ### Overlay Adjustments
 
@@ -312,13 +312,13 @@ basis. NEE = `nifty_spot × lot_size` = `nifty_spot × 65`.
 
 At Nifty spot ~24,000 (approximate as of mid-2026): NEE ≈ ₹15,60,000.
 
-| Track | Capital deployed | NEE-equivalent basis |
+| Name | Capital deployed | NEE-equivalent basis |
 |-------|-----------------|----------------------|
 | A | NEE qty × NiftyBees LTP ≈ NEE | Full cash deployed equals notional |
 | B | SPAN margin ~₹1.5L + surplus ~₹14.1L notionally tracked | SPAN covers margin; surplus is notional (not actually deployed in paper) |
 | C | Option premium paid (~₹2–3L) | Capital at risk = premium; notional exposure = NEE |
 
-**Track B capital note:** In paper trading, Track B only "locks" the SPAN margin. Record the
+**Futures capital note:** In paper trading, Futures only "locks" the SPAN margin. Record the
 surplus capital (NEE − SPAN margin) in `--notes` at entry for each cycle. When computing
 Return on NEE for cross-track comparison, always divide by the full NEE, not just the
 SPAN margin — the notional exposure is identical for all three tracks and that is the correct
@@ -333,9 +333,9 @@ periodically — verify before each entry cycle.
 |-----------|------------------|
 | Normal entry / profit exit | `max(₹0.25, 0.50 × bid-ask spread)` |
 | Forced exit (stop trigger, expiry day) | `1.5 × max(₹0.25, 0.50 × bid-ask spread)` |
-| Track C deep ITM call (wide spreads) | `max(₹0.50, 0.50 × bid-ask spread)` |
+| Proxy deep ITM call (wide spreads) | `max(₹0.50, 0.50 × bid-ask spread)` |
 
-Track C typically has wider bid-ask spreads than ATM options. If the spread exceeds ₹10.00,
+Proxy typically has wider bid-ask spreads than ATM options. If the spread exceeds ₹10.00,
 note it in `TODOS.md` and use the actual mid at fill time (not the tighter normal model).
 
 ### Transaction Costs (applied to paper P&L)
@@ -351,7 +351,7 @@ Same model as `csp_nifty_v1.md`:
 | SEBI fee | ₹10 per crore of premium turnover |
 | Stamp duty | 0.003% on buy side |
 
-For equity (Track A NiftyBees): brokerage ₹20, STT 0.1% on sell-side, exchange 0.00345%,
+For equity (Spot NiftyBees): brokerage ₹20, STT 0.1% on sell-side, exchange 0.00345%,
 GST 18% on brokerage + exchange, SEBI fee ₹10/crore. No STT on buy side for delivery.
 
 ---
@@ -364,7 +364,7 @@ format for this framework:
 
 ```
 Date: YYYY-MM-DD
-Track A (paper_track_a)
+Spot (paper_nifty_spot)
   Base (NiftyBees):      +₹X,XXX  Δ +0.92 Θ 0 V +₹YYY
   Overlay (PP):          -₹XXX    Δ -0.08 Θ -₹42 V +₹180
   Overlay (Collar-Call): +₹XXX    Δ -0.05 Θ +₹18 V -₹60
@@ -372,18 +372,18 @@ Track A (paper_track_a)
   Max DD (cycle):        -₹X,XXX  (-X.X% of NEE)
   Return on NEE:         +X.XX%
 
-Track B (paper_track_b)
+Futures (paper_nifty_futures)
   Base (Futures):        +₹X,XXX  Δ +1.00 Θ 0 V 0
   Overlay (Collar-Put):  +₹XXX    Δ -0.08 Θ -₹38 V +₹160
   Overlay (Collar-Call): +₹XXX    ...
   NET:                   ...
 
-Track C (paper_track_c)
+Proxy (paper_nifty_proxy)
   Base (Deep ITM CE):    +₹X,XXX  Δ +0.88 Θ -₹55 V +₹90
   Overlay (PP):          -₹XXX    Δ -0.08 Θ -₹38 V +₹160
   Overlay (CC):          +₹XXX    Δ -0.05 Θ +₹18 V -₹60
   NET:                   ...
-  Track C delta: 0.88 [OK / WARNING (<0.65) / CRITICAL (<0.40, day N of 3)]
+  Proxy delta: 0.88 [OK / WARNING (<0.65) / CRITICAL (<0.40, day N of 3)]
 ```
 
 **Mandatory daily fields per track:**
@@ -393,7 +393,7 @@ Track C (paper_track_c)
 - Cycle max drawdown (peak-to-trough since current entry, as % of NEE)
 - Return on NEE (cumulative since cycle entry)
 
-**Track C delta alert:** If Track C delta is < 0.65 (warning) or < 0.40 (critical), flag it
+**Proxy delta alert:** If Proxy delta is < 0.65 (warning) or < 0.40 (critical), flag it
 prominently in the snapshot output.
 
 Greeks come from the live Upstox option chain (`parse_upstox_option_chain`). NiftyBees
@@ -409,19 +409,19 @@ trade; will be replaced by measured distributions after 6+ cycles and Phase 1 ba
 
 **All figures per 1-lot per month, at 1 Nifty lot NEE (~₹15.5L).**
 
-| Metric | Track A (ETF) | Track B (Futures) | Track C (Deep ITM Call) |
+| Metric | Spot (NiftyBees ETF) | Futures (Nifty Futures) | Proxy (Deep ITM Call) |
 |--------|--------------|-------------------|------------------------|
 | Monthly P&L distribution | Near-identical to Nifty 50 index return | Near-identical to Nifty 50 index return | Slightly lower on up-months (delta < 1.0); slightly better floor on down-months (max loss = premium) |
 | Theta drag (base only) | None | None | ~₹55–80/day (extrinsic decay on deep ITM call) |
-| Annualised theta drag (Track C base) | — | — | ~₹14,000–21,000/year |
+| Annualised theta drag (Proxy base) | — | — | ~₹14,000–21,000/year |
 | Capital at risk (per cycle, worst case) | Full NEE (~₹15.5L) | Full notional (unlimited beyond SPAN, but futures are closed at roll) | Option premium only (~₹2–3L) |
 | Cross-track tracking error (base only) | Baseline | ~0% vs Nifty 50 (futures tracks perfectly) | Expected 5–10% drift per month due to delta decay; corrected at roll |
 | Overlay edge hypothesis | Collar: drawdown reduced ~30–40% at cost of ~15–20% upside cap; PP alone: full downside floor at premium cost; CC alone: income offset vs capped upside | PP converts futures to long call (defined risk, full downside floor); Collar most capital-efficient here | PP creates bull call spread (defined risk, limited gain); CC creates vertical/diagonal spread |
 
-**Key comparison hypothesis:** Track B (Futures) will have the highest raw return per ₹
+**Key comparison hypothesis:** Futures will have the highest raw return per ₹
 of capital actually posted (SPAN margin basis), but the lowest return on NEE basis.
-Track C will have the lowest absolute downside in a crash (max loss = premium) but ongoing
-theta drag that penalises flat or slowly-rising markets. Track A will be the smoothest
+Proxy will have the lowest absolute downside in a crash (max loss = premium) but ongoing
+theta drag that penalises flat or slowly-rising markets. Spot will be the smoothest
 equity curve with collars applied, at the cost of capped upside.
 
 The comparison is only meaningful after ≥ 6 cycles including at least one high-VIX event
@@ -435,28 +435,28 @@ The comparison is only meaningful after ≥ 6 cycles including at least one high
 Covered call overlay adds further income; protective put is a mild drag (premium paid for
 protection that does not fire). Best environment for the framework overall.
 
-**Track A + Collar in range-bound market:** Collar collects call premium while the put
+**Spot + Collar in range-bound market:** Collar collects call premium while the put
 provides a floor if Nifty drifts lower. The cost-of-carry is the net debit (typically
 small when put IV > call IV, which is normal for Nifty's negative skew). The least
 expensive protection structure in sideways-low-IV regimes.
 
-**Track A + Protective Put in high-IV entry environments (VIX > 18):** Put premium is
+**Spot + Protective Put in high-IV entry environments (VIX > 18):** Put premium is
 expensive but IV mean-reversion tends to add mark-to-market value to the long put position
 even before Nifty moves. The overlay earns on both the vol compression and any downside
-move. Track A + PP is the cleanest expression of "buy protection when it is expensive
+move. Spot + PP is the cleanest expression of "buy protection when it is expensive
 but justified."
 
-**Track B + Protective Put in crash scenarios:** PP converts the unlimited-downside futures
+**Futures + Protective Put in crash scenarios:** PP converts the unlimited-downside futures
 to a long call profile — defined loss, unlimited upside. While the PP premium is the cost,
 it is the only structure among the three that provides both unlimited upside AND a defined
-floor. Track A loses the full ETF value below the put strike; Track C is already defined-
-risk (premium). This makes Track B + PP the structurally superior crash protection among
+floor. Spot loses the full ETF value below the put strike; Proxy is already defined-
+risk (premium). This makes Futures + PP the structurally superior crash protection among
 the three — but only with the PP in place.
 
-**Track C in high-IV environments (base only):** The deep ITM call's extrinsic value rises
+**Proxy in high-IV environments (base only):** The deep ITM call's extrinsic value rises
 with IV, which temporarily inflates the position's mark-to-market. Delta fidelity can also
 improve transiently as the call's strike moves closer to ATM in a downdraft. However, the
-theta drag is highest in high-IV environments, making long-dated Track C more favourable
+theta drag is highest in high-IV environments, making long-dated Proxy more favourable
 than monthly in these regimes.
 
 ---
@@ -465,9 +465,9 @@ than monthly in these regimes.
 
 **Sustained Nifty downtrend ≥ 8% in a cycle:**
 
-- Track A: full ETF drawdown; protective overlay essential to avoid large loss.
-- Track B: full futures loss unless protective put is in place; without PP, worst performer.
-- Track C: capped at premium paid; best natural floor of the three bases.
+- Spot: full ETF drawdown; protective overlay essential to avoid large loss.
+- Futures: full futures loss unless protective put is in place; without PP, worst performer.
+- Proxy: capped at premium paid; best natural floor of the three bases.
 
 Covered call overlay will add losses on top of base drawdowns in this regime (short call
 gains are offset by the faster-falling base). Protective put and collar are the only
@@ -475,18 +475,18 @@ overlays that improve the outcome.
 
 **Sharp IV expansion post-entry:**
 
-- Track C delta decays faster near the strike as Nifty falls, triggering the delta < 0.40
-  kill criterion. If IV spikes while Nifty is flat, Track C's extrinsic value balloons —
+- Proxy delta decays faster near the strike as Nifty falls, triggering the delta < 0.40
+  kill criterion. If IV spikes while Nifty is flat, Proxy's extrinsic value balloons —
   beneficial for the long call holder, but confuses the comparison (delta fidelity degrades).
-- Track B + Collar: the short call leg of the collar benefits from IV spike (can close for
+- Futures + Collar: the short call leg of the collar benefits from IV spike (can close for
   profit), but the short call gains on IV while Nifty is falling — creates a complex
   interaction. Log carefully.
 
 **Low-IV flat market (VIX < 12):**
 
-Track C has the worst outcome: theta drag accumulates with no directional move to
-compensate. Track A + Collar has the lowest cost structure here (thin premiums on both
-legs, but net debit is also small). Track B (futures alone) is neutral; futures carry no
+Proxy has the worst outcome: theta drag accumulates with no directional move to
+compensate. Spot + Collar has the lowest cost structure here (thin premiums on both
+legs, but net debit is also small). Futures (futures alone) is neutral; futures carry no
 theta. The protective put on any track is pure drag in this regime — this is the regime
 where the "running cost of protection" is most visible and most painful.
 
@@ -496,7 +496,7 @@ where the "running cost of protection" is most visible and most painful.
 
 ### Per-Track Kill Criteria
 
-**Track C — mandatory early exit (not a "pause", an immediate action):**
+**Proxy — mandatory early exit (not a "pause", an immediate action):**
 
 1. **Delta < 0.40 for 3 consecutive trading days:** Close the base leg and re-enter at
    delta ≈ 0.90. This is an intra-cycle correction, not a strategy pause.
@@ -507,7 +507,7 @@ where the "running cost of protection" is most visible and most painful.
 **Any track — immediate overlay close:**
 
 If an overlay leg creates a net position that, when aggregated across legs, produces
-an unhedged short put or short call exposure (e.g., a covered call on Track B entered
+an unhedged short put or short call exposure (e.g., a covered call on Futures entered
 without a paired protective put), close the violating leg immediately and log in `TODOS.md`.
 
 ### Framework-Level Kill Criteria
@@ -519,13 +519,13 @@ are managed to completion under the standard exit rules.
    30-day window.** At NEE ~₹15.5L, this is ~₹77,500 combined loss across the three tracks
    in 30 days. This is an extreme scenario given defined-risk structures on all tracks.
 
-2. **Track B positions have any open uncovered short put exposure at any point.** Immediate
-   close of the violating leg AND pause on all Track B new entries pending a review session.
-   Rationale: unlimited-downside risk on Track B is a mission violation; zero tolerance.
+2. **Futures positions have any open uncovered short put exposure at any point.** Immediate
+   close of the violating leg AND pause on all Futures new entries pending a review session.
+   Rationale: unlimited-downside risk on Futures is a mission violation; zero tolerance.
 
-3. **Data quality failure for ≥ 3 consecutive days on Track C delta:** If the Upstox option
-   chain returns no data for the Track C deep ITM call for 3+ consecutive days (and
-   `find_strike_by_delta.py` cannot locate the position), pause Track C entries and investigate.
+3. **Data quality failure for ≥ 3 consecutive days on Proxy delta:** If the Upstox option
+   chain returns no data for the Proxy deep ITM call for 3+ consecutive days (and
+   `find_strike_by_delta.py` cannot locate the position), pause Proxy entries and investigate.
 
 4. **Three consecutive roll failures** (any track): wrong-side fill, missed roll, unintended
    expiry carry-through. Each error logged individually in `TODOS.md` before the count resets.
@@ -561,7 +561,7 @@ credible sample to distinguish structural from random performance differences.
 After 6 cycles, the comparison produces a valid conclusion when **all** of the following hold:
 
 1. **All three tracks completed all 6 cycles** without any framework kill criterion being
-   triggered that distorts the comparison (e.g., Track B assignment risk breach).
+   triggered that distorts the comparison (e.g., Futures assignment risk breach).
 
 2. **At least one cycle in each track triggered a loss scenario** (Nifty declined ≥ 3% in
    the cycle). Without a down-month observation, the comparison cannot measure the protective
@@ -581,7 +581,7 @@ At conclusion, produce a summary report covering:
 - **Return on NEE** (annualised): all three tracks, with and without overlays.
 - **Max drawdown** (depth and duration): all three tracks.
 - **Overlay cost/benefit**: cumulative premium paid vs protection delivered per overlay type.
-- **Track C delta drift profile**: how often did delta drift below 0.65? How costly was each
+- **Proxy delta drift profile**: how often did delta drift below 0.65? How costly was each
   re-entry after a delta-trigger close?
 - **Sharpe and Sortino** (annualised, 6-cycle basis — acknowledged to be a very short window).
 - **Recommendation**: which (base × overlay) combination proceeds to a standalone strategy
@@ -589,7 +589,7 @@ At conclusion, produce a summary report covering:
 
 ### Z-Score Gate (if comparison output triggers a live strategy)
 
-If the comparison concludes that one combination (e.g., Track A + Collar) is strong enough
+If the comparison concludes that one combination (e.g., Spot + Collar) is strong enough
 to proceed to live trading, that combination must first be spun off into its own strategy
 spec (`nifty_<name>_v1.md`) and complete its own Phase 0 paper trading (minimum 6 additional
 cycles) before Phase 2 live deployment. This framework's 6 cycles **do not substitute** for
@@ -604,7 +604,7 @@ will be defined in its own spec.
 comparison is a Phase 0 research output; backtesting the winning combination is a Phase 1
 task.*
 
-| Field | Track A | Track B | Track C |
+| Field | Spot | Futures | Proxy |
 |-------|---------|---------|---------|
 | Run ID | TBD | TBD | TBD |
 | Backtest window | TBD | TBD | TBD |
@@ -619,7 +619,7 @@ task.*
 
 *Section to be populated after 6 monthly cycles are complete.*
 
-| Field | Track A | Track B | Track C |
+| Field | Spot | Futures | Proxy |
 |-------|---------|---------|---------|
 | Cycles completed | TBD | TBD | TBD |
 | High-VIX events observed | TBD | TBD | TBD |
@@ -633,11 +633,11 @@ task.*
 
 ## Open Questions for Post-Comparison Review
 
-- Does Track C's theta drag (estimated ₹14,000–21,000/year on the base alone) fully offset
-  the capital efficiency advantage (₹2–3L at risk vs ₹15.5L for Track A)?
-- Is the Track B + Collar meaningfully different from Track A + Collar once NEE-normalised?
+- Does Proxy's theta drag (estimated ₹14,000–21,000/year on the base alone) fully offset
+  the capital efficiency advantage (₹2–3L at risk vs ₹15.5L for Spot)?
+- Is the Futures + Collar meaningfully different from Spot + Collar once NEE-normalised?
   The council noted they may converge; the paper data will confirm.
-- At what point does the Track C deep ITM call behave more like a futures position (delta
+- At what point does the Proxy deep ITM call behave more like a futures position (delta
   stable near 0.90 all cycle) vs. an option (delta decaying, requiring frequent re-entries)?
   The 3-consecutive-days threshold is a first guess; calibrate from paper data.
 - What is the actual spread_pct profile of quarterly vs yearly Nifty protective puts at
