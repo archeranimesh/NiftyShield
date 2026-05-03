@@ -157,3 +157,98 @@ def parse_bhavcopy(csv_path: Path, underlying: str = "NIFTY") -> list[BhavRecord
                 records.append(rec)
                 
     return records
+
+
+def download_bhavcopy(trade_date: date, dest_dir: Path) -> Path:
+    """
+    Downloads the NSE F&O Bhavcopy ZIP for the given date.
+    Returns the path to the downloaded ZIP.
+    Raises FileNotFoundError if the file does not exist (e.g., holiday).
+    """
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    
+    # URL format: https://nsearchives.nseindia.com/content/historical/DERIVATIVES/YYYY/MON/foDDMONYYYYbhav.csv.zip
+    year_str = trade_date.strftime("%Y")
+    month_str = trade_date.strftime("%b").upper()
+    date_str = trade_date.strftime("%d%b%Y").upper()
+    
+    filename = f"fo{date_str}bhav.csv.zip"
+    url = f"https://nsearchives.nseindia.com/content/historical/DERIVATIVES/{year_str}/{month_str}/{filename}"
+    
+    dest_path = dest_dir / filename
+    
+    req = urllib.request.Request(
+        url, 
+        headers={'User-Agent': 'Mozilla/5.0'}
+    )
+    
+    try:
+        with urllib.request.urlopen(req) as response, open(dest_path, 'wb') as out_file:
+            out_file.write(response.read())
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            raise FileNotFoundError(f"NSE returned 404 for {trade_date} - likely a holiday")
+        raise IOError(f"HTTP Error {e.code} for {trade_date}")
+    except Exception as e:
+        raise IOError(f"Error downloading {trade_date}: {e}")
+        
+    return dest_path
+
+
+def write_to_parquet(records: list[BhavRecord], month_date: date, dest_dir: Path) -> None:
+    """
+    Idempotently appends records to the Parquet file for the given month.
+    """
+    if not records:
+        return
+        
+    year = month_date.strftime("%Y")
+    month = month_date.strftime("%m")
+    
+    partition_dir = dest_dir / year / month
+    partition_dir.mkdir(parents=True, exist_ok=True)
+    
+    parquet_path = partition_dir / f"nifty_{year}_{month}.parquet"
+    
+    # Convert records to list of dicts
+    data = [r.model_dump() for r in records]
+    
+    # Schema must strictly use decimal128(18,4) for price fields to prevent float64 inference
+    schema = pa.schema([
+        ('trade_date', pa.date32()),
+        ('symbol', pa.string()),
+        ('underlying', pa.string()),
+        ('instrument', pa.string()),
+        ('expiry', pa.date32()),
+        ('strike', pa.decimal128(18, 4)),
+        ('option_type', pa.string()),
+        ('open', pa.decimal128(18, 4)),
+        ('high', pa.decimal128(18, 4)),
+        ('low', pa.decimal128(18, 4)),
+        ('close', pa.decimal128(18, 4)),
+        ('settle_price', pa.decimal128(18, 4)),
+        ('volume', pa.int64()),
+        ('oi', pa.int64()),
+    ])
+    
+    new_table = pa.Table.from_pylist(data, schema=schema)
+    
+    if parquet_path.exists():
+        existing_table = pq.read_table(parquet_path)
+        
+        # Idempotency check: if trade_date already in existing data, skip append
+        existing_dates = existing_table.column('trade_date').to_pylist()
+        new_dates = set(new_table.column('trade_date').to_pylist())
+        
+        # If any of the new dates are already in the existing dates, we assume it's already written
+        # Actually, let's just check the first date since we process one day at a time
+        trade_date = records[0].trade_date
+        if trade_date in existing_dates:
+            return
+            
+        final_table = pa.concat_tables([existing_table, new_table])
+    else:
+        final_table = new_table
+        
+    pq.write_table(final_table, parquet_path)
+

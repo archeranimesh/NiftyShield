@@ -62,3 +62,50 @@ def test_parse_bhavcopy_corrupt_zip(tmp_path):
     corrupt_zip.write_bytes(b"not a zip file")
     with pytest.raises(zipfile.BadZipFile):
         parse_bhavcopy(corrupt_zip)
+
+from src.backtest.bhavcopy_ingest import write_to_parquet
+from src.backtest.bhavcopy_loader import load_options_ohlcv
+import pyarrow.parquet as pq
+
+def test_idempotency_skip_existing_date(bhavcopy_zip, tmp_path):
+    records = parse_bhavcopy(bhavcopy_zip, underlying="NIFTY")
+    assert len(records) > 0
+    trade_date = records[0].trade_date
+    
+    # First write
+    write_to_parquet(records, trade_date, dest_dir=tmp_path)
+    
+    # Check rows
+    year = trade_date.strftime("%Y")
+    month = trade_date.strftime("%m")
+    parquet_path = tmp_path / year / month / f"nifty_{year}_{month}.parquet"
+    assert parquet_path.exists()
+    
+    first_table = pq.read_table(parquet_path)
+    initial_rows = first_table.num_rows
+    
+    # Second write
+    write_to_parquet(records, trade_date, dest_dir=tmp_path)
+    
+    # Check rows are unchanged
+    second_table = pq.read_table(parquet_path)
+    assert second_table.num_rows == initial_rows
+
+def test_load_options_ohlcv_date_filter(bhavcopy_zip, tmp_path):
+    records = parse_bhavcopy(bhavcopy_zip, underlying="NIFTY")
+    trade_date = records[0].trade_date
+    write_to_parquet(records, trade_date, dest_dir=tmp_path)
+    
+    # Load with valid date
+    df = load_options_ohlcv(underlying="NIFTY", start=trade_date, end=trade_date, data_dir=tmp_path)
+    assert len(df) == 3
+    assert (df['trade_date'] == trade_date).all()
+    
+    # Load outside date
+    outside_date = date(1999, 1, 1)
+    df_empty = load_options_ohlcv(underlying="NIFTY", start=outside_date, end=outside_date, data_dir=tmp_path)
+    assert len(df_empty) == 0
+
+def test_load_options_ohlcv_empty_on_no_data(tmp_path):
+    df = load_options_ohlcv(underlying="NIFTY", start=date(2020, 1, 1), end=date(2020, 1, 31), data_dir=tmp_path)
+    assert len(df) == 0
