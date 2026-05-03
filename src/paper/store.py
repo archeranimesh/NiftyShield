@@ -52,6 +52,18 @@ CREATE TABLE IF NOT EXISTS paper_nav_snapshots (
 
 CREATE INDEX IF NOT EXISTS idx_paper_nav_strategy_date
     ON paper_nav_snapshots(strategy_name, snapshot_date);
+
+CREATE TABLE IF NOT EXISTS paper_proxy_delta_log (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    strategy_name      TEXT NOT NULL,
+    log_date           TEXT NOT NULL,
+    delta              TEXT NOT NULL,
+    is_below_threshold BOOLEAN NOT NULL,
+    UNIQUE(strategy_name, log_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_paper_proxy_delta_log_strategy_date
+    ON paper_proxy_delta_log(strategy_name, log_date);
 """
 
 
@@ -356,3 +368,65 @@ class PaperStore:
                 "SELECT DISTINCT strategy_name FROM paper_trades ORDER BY strategy_name"
             ).fetchall()
         return [r["strategy_name"] for r in rows]
+
+    # ── Proxy Delta Log ───────────────────────────────────────────────────────
+
+    def record_proxy_delta_log(
+        self, strategy_name: str, log_date: date, delta: Decimal, is_below_threshold: bool
+    ) -> None:
+        """Record the daily delta value and threshold status for a proxy strategy.
+
+        Args:
+            strategy_name: Strategy name (e.g., 'paper_nifty_proxy').
+            log_date: The date of the snapshot.
+            delta: The current delta value.
+            is_below_threshold: True if delta < 0.40.
+        """
+        with _connect(self.db_path) as conn:
+            conn.execute(
+                """INSERT INTO paper_proxy_delta_log
+                   (strategy_name, log_date, delta, is_below_threshold)
+                   VALUES (?, ?, ?, ?)
+                   ON CONFLICT(strategy_name, log_date)
+                   DO UPDATE SET
+                       delta              = excluded.delta,
+                       is_below_threshold = excluded.is_below_threshold""",
+                (
+                    strategy_name,
+                    log_date.isoformat(),
+                    str(delta),
+                    1 if is_below_threshold else 0,
+                ),
+            )
+
+    def get_proxy_delta_consecutive_days(
+        self, strategy_name: str, current_date: date
+    ) -> int:
+        """Get the number of consecutive trading days where delta was below threshold.
+        
+        Counts backward from current_date.
+        
+        Args:
+            strategy_name: Strategy name.
+            current_date: The date to start counting backwards from.
+            
+        Returns:
+            Number of consecutive days immediately preceding (and including) 
+            current_date where is_below_threshold was True.
+        """
+        with _connect(self.db_path) as conn:
+            rows = conn.execute(
+                "SELECT log_date, is_below_threshold "
+                "FROM paper_proxy_delta_log "
+                "WHERE strategy_name = ? AND log_date <= ? "
+                "ORDER BY log_date DESC",
+                (strategy_name, current_date.isoformat()),
+            ).fetchall()
+            
+        consecutive = 0
+        for row in rows:
+            if row["is_below_threshold"]:
+                consecutive += 1
+            else:
+                break
+        return consecutive
