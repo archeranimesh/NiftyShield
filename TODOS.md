@@ -83,37 +83,6 @@ Build the programmatic EOD options data pipeline. Unblocked — no paid data req
 
 ---
 
-## P1-NEXT — `scripts/find_strike_by_delta.py`
-
-Paper trading entry workflow: given an underlying + expiry, fetch the live option chain, filter strikes by a delta range, and print matching strikes with premium and instrument key — ready to pipe directly into `record_paper_trade.py`.
-
-**Scope:**
-- `scripts/find_strike_by_delta.py` — new script, no `src/` changes
-- CLI: `--underlying NIFTY --expiry 2026-05-29 --option-type PE --delta-min -0.30 --delta-max -0.15 --expiry-date <today>` (defaults to today for spot)
-- Uses `UpstoxLiveClient.get_option_chain()` + `parse_upstox_option_chain` (both exist in `src/client/upstox_market.py`)
-- Output: table of matching strikes showing strike, delta, IV, bid, ask, LTP, instrument_key
-- `--dry-run` prints the first match as a ready-to-run `record_paper_trade.py` command
-
-**Dependencies already in place:** `OptionChainStrike` (delta/iv fields), `parse_upstox_option_chain`, `UPSTOX_ANALYTICS_TOKEN` in `.env`
-
-**Tests:** offline fixture-driven (reuse `tests/fixtures/responses/nifty_chain_2026-04-07.json`); no new fixtures needed
-
----
-
-## P2-EVAL — Nuvama Session P&L Alignment
-
-Decision needed before any code changes.
-
-Current `nuvama_intraday_tracker.py` shows "All-time Total P&L" — cumulative sum of all historical `realized_pnl_today` rows via `get_cumulative_realized_pnl()`. This diverges from the Nuvama mobile/web UI which shows "Session P&L" (Unrealized + Today's Realized only), causing a visible mismatch (e.g. system shows +17k, Nuvama shows -17k).
-
-Options:
-1. Keep cumulative — true inception P&L; diverges from Nuvama UI intentionally
-2. Switch to session-only — matches Nuvama UI; cumulative history still in DB but not displayed
-
-No implementation until Animesh chooses an option.
-
----
-
 ## P3-DEFER — P&L Visualization
 
 Deferred until late May 2026 (need 4+ weeks of snapshot data).

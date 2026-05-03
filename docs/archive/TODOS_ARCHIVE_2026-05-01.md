@@ -18,3 +18,25 @@
 ---
 
 Full log (2026-04-01 → 2026-04-26): [TODOS_ARCHIVE_2026-04-27.md](TODOS_ARCHIVE_2026-04-27.md)
+
+---
+
+## Completed Items — archived 2026-05-03
+
+### ✅ P1-NEXT — `scripts/find_strike_by_delta.py`
+
+**Completed:** 2026-05-03
+
+Paper trading entry workflow script. Given an underlying + expiry, fetches the live option chain, filters strikes by a delta range, and prints matching strikes with premium and instrument key — ready to pipe directly into `record_paper_trade.py`.
+
+Delivered:
+- `scripts/find_strike_by_delta.py` — CLI with `--underlying`, `--expiry`, `--option-type`, `--delta-min`, `--delta-max`; fixed-width table (strike/IV/ltp/mid/bid/ask/OI/key); `--dry-run` emits ready-to-paste `record_paper_trade.py` command
+- Three importable helpers: `filter_strikes_by_delta`, `format_table`, `build_record_command`; internal `_infer_leg` / `_safe_float`
+- Works directly on raw Upstox chain data to preserve `instrument_key` (stripped by parsed `OptionChain` model)
+- 30 offline unit tests in `tests/unit/test_find_strike_by_delta.py` using existing `nifty_chain_2026-04-07.json` fixture
+
+---
+
+### ✅ P2-EVAL — Nuvama Session P&L Alignment
+
+**Resolved:** 2026-05-03 — decision: **keep cumulative (Option 1)**. True inception P&L is preferred over matching the Nuvama UI session view. The divergence from the Nuvama mobile/web "Session P&L" display is intentional — NiftyShield tracks all-time realized P&L via `get_cumulative_realized_pnl()`. No code changes required.
