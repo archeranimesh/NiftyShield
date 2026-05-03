@@ -148,3 +148,33 @@ def test_bhavcopy_bootstrap_error_handling(mock_sleep, mock_download, tmp_path):
     assert mock_download.call_count == 1
     mock_sleep.assert_called_once_with(1.0)
 
+
+@patch('scripts.bhavcopy_bootstrap.download_bhavcopy')
+@patch('scripts.bhavcopy_bootstrap.time.sleep')
+def test_bhavcopy_integration_end_to_end(mock_sleep, mock_download, bhavcopy_zip, tmp_path):
+    mock_download.return_value = bhavcopy_zip
+    
+    args = [
+        "--start", "2024-04-25",
+        "--end", "2024-04-25",
+        "--dest", str(tmp_path),
+        "--include-futures"
+    ]
+    
+    bootstrap_main(args)
+    
+    # 1. Options Parquet
+    options_df = load_options_ohlcv("NIFTY", date(2024, 4, 25), date(2024, 4, 25), tmp_path / "options_ohlcv")
+    assert len(options_df) == 2  # 1 CE, 1 PE for NIFTY
+    
+    first_open = options_df.iloc[0]['open']
+    assert isinstance(first_open, Decimal)
+    
+    assert str(options_df['volume'].dtype).startswith('int')
+    
+    # 2. Futures Parquet
+    futures_df = load_options_ohlcv("NIFTY", date(2024, 4, 25), date(2024, 4, 25), tmp_path / "futures_ohlcv")
+    assert len(futures_df) == 1
+    assert futures_df.iloc[0]['instrument'] == 'FUTIDX'
+    assert futures_df.iloc[0]['strike'] == Decimal("0")
+    assert futures_df.iloc[0]['option_type'] == "XX"
