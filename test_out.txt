@@ -1,0 +1,175 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.7, pytest-7.4.4, pluggy-1.0.0
+rootdir: /Users/abhadra/myWork/myCode/python/NiftyShield
+configfile: pytest.ini
+plugins: anyio-4.2.0
+collected 14 items
+
+tests/unit/backtest/test_bhavcopy_ingest.py ....F..F.F....               [100%]
+
+=================================== FAILURES ===================================
+_____________________ test_parse_bhavcopy_filters_to_nifty _____________________
+
+bhavcopy_zip = PosixPath('/private/var/folders/n2/td4rs_g97mxgl59mrfnycznr0000gn/T/pytest-of-abhadra/pytest-6/test_parse_bhavcopy_filters_to0/bhavcopy.csv.zip')
+
+    def test_parse_bhavcopy_filters_to_nifty(bhavcopy_zip):
+        records = parse_bhavcopy(bhavcopy_zip, underlying="NIFTY")
+    
+        # 1 OPTIDX CE, 1 OPTIDX PE, 1 FUTIDX.
+        # Missing: BANKNIFTY, RELIANCE, corrupted CE strike 0.
+>       assert len(records) == 3
+E       AssertionError: assert 2 == 3
+E        +  where 2 = len([BhavRecord(trade_date=datetime.date(2024, 4, 25), symbol='NIFTY', underlying='NIFTY', instrument='OPTIDX', expiry=dat... high=Decimal('100.0'), low=Decimal('70.0'), close=Decimal('85.0'), settle_price=Decimal('85.0'), volume=400, oi=8000)])
+
+tests/unit/backtest/test_bhavcopy_ingest.py:42: AssertionError
+------------------------------ Captured log call -------------------------------
+WARNING  src.backtest.bhavcopy_ingest:bhavcopy_ingest.py:134 Skipping corrupted strike row: {'INSTRUMENT': 'OPTIDX', 'SYMBOL': 'NIFTY', 'EXPIRY_DT': '25-APR-2024', 'OPTION_TYP': 'CE', 'STRIKE_PR': '0', 'OPEN': '0', 'HIGH': '0', 'LOW': '0', 'CLOSE': '0', 'SETTLE_PR': '0', 'CONTRACTS': '0', 'VAL_INLAKH': '0', 'OPEN_INT': '0', 'CHG_IN_OI': '0', 'TIMESTAMP': '25-APR-2024'}
+_______________________ test_parse_bhavcopy_corrupt_zip ________________________
+
+csv_path = PosixPath('/private/var/folders/n2/td4rs_g97mxgl59mrfnycznr0000gn/T/pytest-of-abhadra/pytest-6/test_parse_bhavcopy_corrupt_zi0/corrupt.zip')
+underlying = 'NIFTY', include_futures = False
+
+    def parse_bhavcopy(csv_path: Path, underlying: str = "NIFTY", include_futures: bool = False) -> list[BhavRecord]:
+        """
+        Parses an NSE Bhavcopy CSV file inside a ZIP and returns matching BhavRecords.
+        Raises ValueError on a corrupt or unreadable ZIP.
+        """
+        records = []
+    
+        valid_instruments = {"OPTIDX", "OPTSTK"}
+        if include_futures:
+            valid_instruments.update({"FUTIDX", "FUTSTK"})
+    
+        try:
+>           with zipfile.ZipFile(csv_path) as z:
+
+src/backtest/bhavcopy_ingest.py:113: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/opt/anaconda3/lib/python3.12/zipfile/__init__.py:1349: in __init__
+    self._RealGetContents()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <zipfile.ZipFile [closed]>
+
+    def _RealGetContents(self):
+        """Read in the table of contents for the ZIP file."""
+        fp = self.fp
+        try:
+            endrec = _EndRecData(fp)
+        except OSError:
+            raise BadZipFile("File is not a zip file")
+        if not endrec:
+>           raise BadZipFile("File is not a zip file")
+E           zipfile.BadZipFile: File is not a zip file
+
+/opt/anaconda3/lib/python3.12/zipfile/__init__.py:1416: BadZipFile
+
+The above exception was the direct cause of the following exception:
+
+tmp_path = PosixPath('/private/var/folders/n2/td4rs_g97mxgl59mrfnycznr0000gn/T/pytest-of-abhadra/pytest-6/test_parse_bhavcopy_corrupt_zi0')
+
+    def test_parse_bhavcopy_corrupt_zip(tmp_path):
+        corrupt_zip = tmp_path / "corrupt.zip"
+        corrupt_zip.write_bytes(b"not a zip file")
+        with pytest.raises(zipfile.BadZipFile):
+>           parse_bhavcopy(corrupt_zip)
+
+tests/unit/backtest/test_bhavcopy_ingest.py:64: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+csv_path = PosixPath('/private/var/folders/n2/td4rs_g97mxgl59mrfnycznr0000gn/T/pytest-of-abhadra/pytest-6/test_parse_bhavcopy_corrupt_zi0/corrupt.zip')
+underlying = 'NIFTY', include_futures = False
+
+    def parse_bhavcopy(csv_path: Path, underlying: str = "NIFTY", include_futures: bool = False) -> list[BhavRecord]:
+        """
+        Parses an NSE Bhavcopy CSV file inside a ZIP and returns matching BhavRecords.
+        Raises ValueError on a corrupt or unreadable ZIP.
+        """
+        records = []
+    
+        valid_instruments = {"OPTIDX", "OPTSTK"}
+        if include_futures:
+            valid_instruments.update({"FUTIDX", "FUTSTK"})
+    
+        try:
+            with zipfile.ZipFile(csv_path) as z:
+                # Assume there's only one CSV in the ZIP
+                csv_filename = z.namelist()[0]
+                with z.open(csv_filename) as f:
+                    # Decode lines as string
+                    lines = [line.decode("utf-8") for line in f.readlines()]
+                    reader = csv.DictReader(lines)
+    
+                    for row in reader:
+                        instrument = row["INSTRUMENT"]
+                        if instrument not in valid_instruments:
+                            continue
+    
+                        sym = row["SYMBOL"]
+                        if sym != underlying:
+                            continue
+    
+                        strike = Decimal(row["STRIKE_PR"])
+                        opt_type = row["OPTION_TYP"]
+    
+                        if strike == 0 and opt_type in ("CE", "PE"):
+                            logger.warning("Skipping corrupted strike row: %s", row)
+                            continue
+    
+                        trade_date = datetime.strptime(row["TIMESTAMP"], "%d-%b-%Y").date()
+                        expiry = datetime.strptime(row["EXPIRY_DT"], "%d-%b-%Y").date()
+    
+                        rec = BhavRecord(
+                            trade_date=trade_date,
+                            symbol=sym,
+                            underlying=sym,
+                            instrument=instrument,
+                            expiry=expiry,
+                            strike=strike,
+                            option_type=opt_type,
+                            open=Decimal(row["OPEN"]),
+                            high=Decimal(row["HIGH"]),
+                            low=Decimal(row["LOW"]),
+                            close=Decimal(row["CLOSE"]),
+                            settle_price=Decimal(row["SETTLE_PR"]),
+                            volume=int(row["CONTRACTS"]),
+                            oi=int(row["OPEN_INT"])
+                        )
+                        records.append(rec)
+    
+        except zipfile.BadZipFile as e:
+>           raise ValueError(f"Corrupt or unreadable ZIP file: {csv_path}") from e
+E           ValueError: Corrupt or unreadable ZIP file: /private/var/folders/n2/td4rs_g97mxgl59mrfnycznr0000gn/T/pytest-of-abhadra/pytest-6/test_parse_bhavcopy_corrupt_zi0/corrupt.zip
+
+src/backtest/bhavcopy_ingest.py:159: ValueError
+_____________________ test_load_options_ohlcv_date_filter ______________________
+
+bhavcopy_zip = PosixPath('/private/var/folders/n2/td4rs_g97mxgl59mrfnycznr0000gn/T/pytest-of-abhadra/pytest-6/test_load_options_ohlcv_date_f0/bhavcopy.csv.zip')
+tmp_path = PosixPath('/private/var/folders/n2/td4rs_g97mxgl59mrfnycznr0000gn/T/pytest-of-abhadra/pytest-6/test_load_options_ohlcv_date_f0')
+
+    def test_load_options_ohlcv_date_filter(bhavcopy_zip, tmp_path):
+        records = parse_bhavcopy(bhavcopy_zip, underlying="NIFTY")
+        trade_date = records[0].trade_date
+        write_to_parquet(records, trade_date, dest_dir=tmp_path)
+    
+        # Load with valid date
+        df = load_options_ohlcv(underlying="NIFTY", start=trade_date, end=trade_date, data_dir=tmp_path)
+>       assert len(df) == 3
+E       assert 2 == 3
+E        +  where 2 = len(   trade_date symbol underlying  ... settle_price volume     oi\n0  2024-04-25  NIFTY      NIFTY  ...     120.0000    500  10000\n1  2024-04-25  NIFTY      NIFTY  ...      85.0000    400   8000\n\n[2 rows x 14 columns])
+
+tests/unit/backtest/test_bhavcopy_ingest.py:101: AssertionError
+------------------------------ Captured log call -------------------------------
+WARNING  src.backtest.bhavcopy_ingest:bhavcopy_ingest.py:134 Skipping corrupted strike row: {'INSTRUMENT': 'OPTIDX', 'SYMBOL': 'NIFTY', 'EXPIRY_DT': '25-APR-2024', 'OPTION_TYP': 'CE', 'STRIKE_PR': '0', 'OPEN': '0', 'HIGH': '0', 'LOW': '0', 'CLOSE': '0', 'SETTLE_PR': '0', 'CONTRACTS': '0', 'VAL_INLAKH': '0', 'OPEN_INT': '0', 'CHG_IN_OI': '0', 'TIMESTAMP': '25-APR-2024'}
+=============================== warnings summary ===============================
+../../../../../../opt/anaconda3/lib/python3.12/site-packages/_pytest/config/__init__.py:1373
+  /opt/anaconda3/lib/python3.12/site-packages/_pytest/config/__init__.py:1373: PytestConfigWarning: Unknown config option: asyncio_mode
+  
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/unit/backtest/test_bhavcopy_ingest.py::test_parse_bhavcopy_filters_to_nifty
+FAILED tests/unit/backtest/test_bhavcopy_ingest.py::test_parse_bhavcopy_corrupt_zip
+FAILED tests/unit/backtest/test_bhavcopy_ingest.py::test_load_options_ohlcv_date_filter
+=================== 3 failed, 11 passed, 1 warning in 1.71s ====================

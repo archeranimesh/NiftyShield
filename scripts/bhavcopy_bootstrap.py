@@ -1,11 +1,14 @@
 import argparse
 import logging
-import sys
 import time
 import tempfile
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from collections import defaultdict
+
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from src.backtest.bhavcopy_ingest import download_bhavcopy, parse_bhavcopy, write_to_parquet
 

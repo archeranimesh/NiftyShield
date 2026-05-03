@@ -1,13 +1,14 @@
 import csv
 import logging
+import os
 import zipfile
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 import re
-import urllib.request
-import urllib.error
 import calendar
+
+import requests
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -161,39 +162,91 @@ def parse_bhavcopy(csv_path: Path, underlying: str = "NIFTY", include_futures: b
     return records
 
 
+_ZIP_MAGIC = b"PK\x03\x04"
+
+_NSE_HEADERS = {
+    "user-agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/134.0.0.0 Safari/537.36"
+    ),
+    "accept": (
+        "text/html,application/xhtml+xml,application/xml;"
+        "q=0.9,image/webp,*/*;q=0.8"
+    ),
+    "accept-language": "en-US,en;q=0.9",
+    "accept-encoding": "gzip, deflate, br",
+    "Referer": "https://www.nseindia.com/",
+    "Sec-CH-UA": '"Google Chrome";v="134", "Chromium";v="134", "Not?A_Brand";v="99"',
+    "Sec-CH-UA-Mobile": "?0",
+    "Sec-CH-UA-Platform": '"Windows"',
+    "DNT": "1",
+}
+
+_NSE_CDN = "https://nsearchives.nseindia.com/content/historical/DERIVATIVES"
+
+
 def download_bhavcopy(trade_date: date, dest_dir: Path) -> Path:
     """
     Downloads the NSE F&O Bhavcopy ZIP for the given date.
+
+    Uses a requests.Session that pre-warms on nseindia.com to acquire Akamai
+    cookies before hitting nsearchives.nseindia.com. Optionally reads a raw
+    NSE_COOKIE env-var to inject a browser session cookie when automated
+    warm-up is insufficient.
+
     Returns the path to the downloaded ZIP.
-    Raises FileNotFoundError if the file does not exist (e.g., holiday).
+    Raises FileNotFoundError on HTTP 404 (holiday or non-trading day).
+    Raises IOError if the response is not a valid ZIP (Akamai block) or on
+    any other network failure.
     """
     dest_dir.mkdir(parents=True, exist_ok=True)
-    
-    # URL format: https://nsearchives.nseindia.com/content/historical/DERIVATIVES/YYYY/MON/foDDMONYYYYbhav.csv.zip
-    year_str = trade_date.strftime("%Y")
-    month_str = trade_date.strftime("%b").upper()
+
     date_str = trade_date.strftime("%d%b%Y").upper()
-    
+    month_str = trade_date.strftime("%b").upper()
+    year_str = trade_date.strftime("%Y")
     filename = f"fo{date_str}bhav.csv.zip"
-    url = f"https://nsearchives.nseindia.com/content/historical/DERIVATIVES/{year_str}/{month_str}/{filename}"
-    
+    url = f"{_NSE_CDN}/{year_str}/{month_str}/{filename}"
     dest_path = dest_dir / filename
-    
-    req = urllib.request.Request(
-        url, 
-        headers={'User-Agent': 'Mozilla/5.0'}
-    )
-    
+
+    session = requests.Session()
+    session.headers.update(_NSE_HEADERS)
+
+    # Inject browser cookie if provided — get from browser DevTools → Network
+    # tab → any nseindia.com request → copy the Cookie header value, then:
+    # export NSE_COOKIE="<paste here>"
+    nse_cookie = os.environ.get("NSE_COOKIE", "").strip()
+    if nse_cookie:
+        session.headers["Cookie"] = nse_cookie
+        logger.info("NSE_COOKIE found in env — using browser session cookie")
+    else:
+        # Pre-warm: visit nseindia.com to acquire Akamai session cookies.
+        # This may not fully satisfy JS-challenge requirements but picks up
+        # any stateless cookies set on the homepage.
+        try:
+            session.get("https://www.nseindia.com", timeout=10)
+        except Exception:
+            pass  # warm-up is best-effort; continue regardless
+
     try:
-        with urllib.request.urlopen(req) as response, open(dest_path, 'wb') as out_file:
-            out_file.write(response.read())
-    except urllib.error.HTTPError as e:
-        if e.code == 404:
-            raise FileNotFoundError(f"NSE returned 404 for {trade_date} - likely a holiday")
-        raise IOError(f"HTTP Error {e.code} for {trade_date}")
+        resp = session.get(url, timeout=30)
     except Exception as e:
         raise IOError(f"Error downloading {trade_date}: {e}")
-        
+
+    if resp.status_code == 404:
+        raise FileNotFoundError(f"NSE returned 404 for {trade_date} — likely a holiday")
+    if resp.status_code != 200:
+        raise IOError(f"HTTP {resp.status_code} for {trade_date}")
+
+    content = resp.content
+    if not content[:4] == _ZIP_MAGIC:
+        raise IOError(
+            f"Response for {trade_date} is not a ZIP file — Akamai bot-check "
+            f"returned HTML. Set NSE_COOKIE env-var with a browser session "
+            f"cookie from nseindia.com to bypass."
+        )
+
+    dest_path.write_bytes(content)
     return dest_path
 
 

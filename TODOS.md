@@ -16,6 +16,29 @@
 
 ---
 
+## P1-NEXT — Fix bhavcopy pipeline for NSE UDiFF format (Dec 2024+)
+
+**Discovered 2026-05-03 during smoke test.** NSE migrated F&O bhavcopy to UDiFF format in
+late 2024. Old URL and CSV schema only cover 2016 → ~Nov 2024. Full column mapping and fix
+spec in `DECISIONS.md → "NSE Bhavcopy Format Migration"`.
+
+**File to change:** `src/backtest/bhavcopy_ingest.py` only. No schema or model changes.
+
+**Exact cutover date:** TBD. Confirmed working: `2024-04-25` (legacy). Confirmed broken:
+`2024-12-02` (legacy). Binary search needed to pin the exact month boundary.
+
+**Safe bootstrap range until fix ships:** `--end 2024-11-01`. Covers 2016–Oct 2024 (~8.5
+years), including all critical stress windows: IL&FS Sep 2018, COVID Mar 2020,
+rate-hike Jan–Jun 2022, Jun 2024 election day.
+
+**Changes required:**
+1. `download_bhavcopy`: try UDiFF URL first (`/content/fo/BhavCopy_NSE_FO_0_0_0_{YYYYMMDD}_F_0000.csv.zip`); fall back to legacy URL on 404.
+2. `parse_bhavcopy`: detect format by checking `'TradDt' in reader.fieldnames`. Route to `_parse_legacy()` or `_parse_udiff()` accordingly. `BhavRecord` model unchanged.
+3. `_parse_udiff()`: map UDiFF columns. Key differences: ISO date strings (no strptime); `FinInstrmTp` → instrument (`IDO`→OPTIDX, `STO`→OPTSTK, `IDF`→FUTIDX, `SDF`→FUTSTK); filter by `TckrSymb == underlying`.
+4. Tests: add one UDiFF fixture row (NIFTY `IDO` option). Test format detection and routing.
+
+---
+
 ## P1-NEXT — Define historical replay harness for exit-path validation
 
 **Prerequisite for Phase 0.8 gate criterion B (delta/mark-stop and time-stop validation).**
@@ -165,6 +188,8 @@ License decision needed before this can be automated. Every file should carry a 
 
 | Date | What Changed |
 |---|---|
+| 2026-05-03 | **NSE UDiFF migration discovered during smoke test.** Old bhavcopy archive URL confirmed working up to 2024-04-25; broken from 2024-12-02. New UDiFF URL (`/content/fo/BhavCopy_NSE_FO_0_0_0_{YYYYMMDD}_F_0000.csv.zip`) and CSV schema (34 columns, ISO dates, `FinInstrmTp` instrument codes) documented in `DECISIONS.md → NSE Bhavcopy Format Migration`. Fix spec added to TODOS P1-NEXT. Safe bootstrap range: `--end 2024-11-01`. Exact cutover date TBD. |
+| 2026-05-03 | **Completed Phase 1.3: NSE F&O Bhavcopy ingestion pipeline.** Added `src/backtest/__init__.py`, `bhavcopy_ingest.py`, and `bhavcopy_loader.py`. `BhavRecord` strictly enforces the `Decimal` invariant for prices and isolates `FUTIDX` strikes to 0. `parse_option_symbol` handles weekly/monthly formats. Data stored in Parquet idempotently. `scripts/bhavcopy_bootstrap.py` handles resumable offline downloads from NSE CDN with a politeness delay and leaves the `FUTIDX` schema resolution for Task 1.6a via the `--include-futures` flag. Tests interleaved by component commits. |
 | 2026-05-03 | **Added `scripts/find_strike_by_delta.py`.** CLI: live option chain → filter strikes by |delta| range → fixed-width table (strike/IV/ltp/mid/bid/ask/OI/key) + `--dry-run` ready-to-paste `record_paper_trade.py` commands. Three importable helpers (`filter_strikes_by_delta`, `format_table`, `build_record_command`) + `_infer_leg`/`_safe_float`. Works directly on raw Upstox chain data to preserve `instrument_key` (stripped by the parsed `OptionChain` model). 30 offline unit tests in `tests/unit/test_find_strike_by_delta.py` using existing `nifty_chain_2026-04-07.json` fixture. |
 | 2026-05-02 | **Council decision ingested — variance gate regime completeness.** Read `docs/council/2026-05-02_variance-gate-regime-completeness.md`; updated `DECISIONS.md` (new "Variance Gate" section — Z-score reframed as smoke test, graduated deployment tiers 0–3, regime completeness requirement, regime-matched Z-score mandate, spec consistency open issue); updated `BACKTEST_PLAN.md` Phase 0.8 gate (criteria A–D replacing single exit-type bullet) and Task 1.11 (dual Z-score: global + regime-matched); created `docs/plan/variance_gate.md` (full gate specification); added two P1-NEXT tasks to `TODOS.md` (replay harness + India VIX ingestion). No code changes. |
 | 2026-05-02 | **Council decision ingested — near-expiry gamma buy research.** Read `docs/council/2026-05-02_gamma-acceleration-mispricing-option-buying.md`; updated `DECISIONS.md` with new "Signal Hierarchy Decisions — Near-Expiry Buy Research" section covering signal hierarchy (Gamma Gearing primary, Speed secondary, OI velocity confirmation), mispricing threshold formula, forward-test architecture, mandatory Phase 0 schema fields, Phase 3 prerequisites, and kill criteria. No code changes — data collection only until Phase 3 gate. |

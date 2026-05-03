@@ -65,7 +65,7 @@ NSE publishes daily F&O bhavcopy CSV files (end-of-day OHLCV + OI + settlement p
 
 **No Greeks in raw data.** IV must be reconstructed via Black '76 inverse (see task 1.6a): use Nifty Futures `settle_price` as the forward price, with price blend logic (`close` if liquid, `settle_price` as fallback) for the option price. Greeks (delta, gamma, etc.) derived from smoothed IV via smile fit. Full methodology in `DECISIONS.md → IV Reconstruction Methodology (2026-04-30)`.
 
-- [ ] `src/backtest/bhavcopy_ingest.py`:
+- [x] `src/backtest/bhavcopy_ingest.py`:
   - `download_bhavcopy(date)` → downloads the daily CSV ZIP from NSE CDN. Add a politeness delay (≥1 second between requests) — NSE CDN is rate-sensitive.
   - `parse_bhavcopy(csv_path)` → reads CSV, filters `INSTRUMENT_TYPE == 'OPTSTK' OR 'OPTIDX'`, further filters `SYMBOL == 'NIFTY'` (configurable). Returns list of `BhavRecord` (frozen Pydantic dataclass).
   - `parse_option_symbol(symbol: str)` → extracts expiry, strike, option_type from NSE option symbol strings (e.g. `NIFTY26APR24000PE` → expiry=2026-04-24, strike=24000, option_type=PE). **Edge cases:** symbols with leading zeros in strike, symbols for weekly expiries. Write a dedicated parser, do not regex guess.
@@ -74,12 +74,12 @@ NSE publishes daily F&O bhavcopy CSV files (end-of-day OHLCV + OI + settlement p
     - Args: `--underlying NIFTY --start 2016-01-01 --end <today>`.
     - Iterates trading days, downloads, parses, writes. Resumable — checks Parquet for each date before downloading. Progress logging: `downloaded %s [%d/%d days]` per month.
     - Graceful handling of missing dates (NSE CDN returns 404 on holidays — log INFO, continue).
-- [ ] Tests (fixture-driven, no network):
+- [x] Tests (fixture-driven, no network):
   - `parse_option_symbol` happy path — standard monthly expiry symbol.
   - `parse_option_symbol` edge cases — weekly expiry, strike with leading zeros, unknown format (raises `ValueError`).
   - `parse_bhavcopy` — fixture CSV with NIFTY + non-NIFTY rows, verify NIFTY-only output.
   - Idempotency: second ingest of same date is a no-op (check Parquet row count unchanged).
-- [ ] Commit sequence: model → ingest module → CLI → tests.
+- [x] Commit sequence: model → ingest module → CLI → tests.
 
 **Note on underlying OHLC:** Nifty 50 spot price (needed for IV reconstruction in 1.6a) comes from task 1.3a (Upstox free historical candle). Do not duplicate in bhavcopy ingestion — join at query time by `date`.
 

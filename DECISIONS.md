@@ -278,6 +278,59 @@
 | 2026-05-02 | Near-expiry buy research (Phase 3): Gamma Gearing primary; Speed secondary; OI velocity confirmation only | `docs/council/2026-05-02_gamma-acceleration-mispricing-option-buying.md` |
 | 2026-05-02 | Live monitoring: CUSUM lower-sided (k=0.50, h_warn=3.0, h_reduce=4.0, h_halt=5.0) replaces weekly Z-score | `docs/council/2026-05-02_continuous-revalidation-statistical-power.md` |
 | 2026-05-02 | Phase 0.8 gate: 4 criteria (A–D); Z-score is smoke test only; graduated deployment tiers 0 → 0.5 → 1 → 2 → 3 | `docs/council/2026-05-02_variance-gate-regime-completeness.md`, `docs/plan/variance_gate.md` |
+| 2026-05-03 | NSE Bhavcopy: old archive URL covers 2016–~Nov 2024 only; Dec 2024+ uses new UDiFF format at a different URL and CSV schema | `TODOS.md → P1-NEXT UDiFF fix` |
+
+---
+
+## NSE Bhavcopy Format Migration (discovered 2026-05-03)
+
+NSE migrated F&O bhavcopy to a new **UDiFF (Unified Distilled File Format)** in late 2024.
+The old archive URL and CSV schema are only valid up to approximately November 2024.
+The exact cutover date is TBD (binary search needed between 2024-04-25 confirmed working and
+2024-12-02 confirmed broken). Safe bootstrap range until fix: `--end 2024-11-01`.
+
+### URL change
+
+| Era | URL pattern |
+|---|---|
+| Legacy (2016 → ~Nov 2024) | `https://nsearchives.nseindia.com/content/historical/DERIVATIVES/{YYYY}/{MON}/fo{DDMONYYYY}bhav.csv.zip` |
+| UDiFF (Dec 2024 → present) | `https://nsearchives.nseindia.com/content/fo/BhavCopy_NSE_FO_0_0_0_{YYYYMMDD}_F_0000.csv.zip` |
+
+### CSV schema change
+
+| BhavRecord field | Legacy column | UDiFF column |
+|---|---|---|
+| `trade_date` | `TIMESTAMP` (DD-Mon-YYYY) | `TradDt` (YYYY-MM-DD, no strptime needed) |
+| `symbol` / `underlying` | `SYMBOL` | `TckrSymb` |
+| `instrument` | `INSTRUMENT` (OPTIDX/OPTSTK/FUTIDX/FUTSTK) | `FinInstrmTp` — mapping: `IDO`→OPTIDX, `STO`→OPTSTK, `IDF`→FUTIDX, `SDF`→FUTSTK |
+| `expiry` | `EXPIRY_DT` (DD-Mon-YYYY) | `XpryDt` (YYYY-MM-DD) |
+| `strike` | `STRIKE_PR` | `StrkPric` |
+| `option_type` | `OPTION_TYP` | `OptnTp` |
+| `open` | `OPEN` | `OpnPric` |
+| `high` | `HIGH` | `HghPric` |
+| `low` | `LOW` | `LwPric` |
+| `close` | `CLOSE` | `ClsPric` |
+| `settle_price` | `SETTLE_PR` | `SttlmPric` |
+| `volume` | `CONTRACTS` | `TtlTradgVol` |
+| `oi` | `OPEN_INT` | `OpnIntrst` |
+| _(not in model)_ | — | `UndrlygPric` — underlying spot price; consider adding to BhavRecord in future |
+
+### Fix required — `src/backtest/bhavcopy_ingest.py` only
+
+1. **`download_bhavcopy`**: dual URL strategy — try UDiFF URL first; on 404 fall back to legacy URL.
+   Detect which was used by checking ZIP magic bytes on response. No caller change needed.
+
+2. **`parse_bhavcopy`**: detect format by presence of `TradDt` in CSV headers.
+   Route to `_parse_legacy(reader)` or `_parse_udiff(reader)` accordingly. Both return `list[BhavRecord]`.
+   `BhavRecord` model is unchanged — the mapping difference is purely inside the two parser functions.
+
+3. **`_parse_udiff` filtering**: `TckrSymb == underlying` AND `FinInstrmTp in valid_instruments`
+   where `valid_instruments = {'IDO', 'STO'}` by default, `{'IDF', 'SDF'}` added when `include_futures=True`.
+
+4. **Tests**: add a UDiFF fixture row (one `IDO` NIFTY row) alongside the existing legacy fixture.
+   Test `parse_bhavcopy` routes to the correct parser based on headers.
+
+5. **`NSE_COOKIE` env var** remains required for Akamai bypass on both URL patterns.
 
 ---
 
