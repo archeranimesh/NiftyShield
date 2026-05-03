@@ -385,6 +385,134 @@ ILTS / NIFTY_JUN_PE: -65 units @ avg ₹0.00
 
 ---
 
+## Paper Trade Entry Workflow
+
+The typical paper trade entry is a two-step process: scan the live chain for a strike that matches your delta target, then record the trade.
+
+### Step 1 — Find a strike by delta
+
+```bash
+# Scan both CE and PE sides for 20–30 delta, default expiry
+python scripts/find_strike_by_delta.py \
+    --expiry 2026-05-29 \
+    --delta-min 0.20 --delta-max 0.30
+```
+
+Output:
+
+```
+Fetching option chain: NSE_INDEX|Nifty 50  expiry=2026-05-29 …
+
+  Nifty 50  expiry: 2026-05-29  |  spot: ₹24,250.00
+  SIDE    STRIKE    DELTA    IV%      LTP      MID      BID      ASK        OI  KEY
+  ────────────────────────────────────────────────────────────────────────────────────────
+  CE      25000    +0.2851   12.43    85.50    85.25    85.00    85.50    124500  NSE_FO|41200
+  CE      25100    +0.2310   11.87    65.25    65.38    65.25    65.50     98200  NSE_FO|41210
+  PE      23500   -0.2976   12.18    80.50    80.25    80.00    80.50    156800  NSE_FO|41300
+  PE      23400   -0.2512   11.55    65.75    65.63    65.50    65.75    132400  NSE_FO|41310
+```
+
+Filter to one side and add `--dry-run` to get a ready-to-paste `record_paper_trade.py` command per match:
+
+```bash
+python scripts/find_strike_by_delta.py \
+    --expiry 2026-05-29 \
+    --delta-min 0.20 --delta-max 0.30 \
+    --option-type PE \
+    --strategy paper_csp_nifty_v1 \
+    --leg short_put \
+    --qty 75 \
+    --action SELL \
+    --dry-run
+```
+
+Output adds:
+
+```
+─── Dry-run (SELL · paper_csp_nifty_v1) ────────────────────────────────────────
+
+# PE 23500 | delta=-0.2976 | iv=12.18%
+python scripts/record_paper_trade.py \
+    --strategy paper_csp_nifty_v1 \
+    --leg short_put \
+    --key "NSE_FO|41300" \
+    --date 2026-05-03 \
+    --action SELL \
+    --qty 75 \
+    --price 80.25
+
+# PE 23400 | delta=-0.2512 | iv=11.55%
+python scripts/record_paper_trade.py \
+    --strategy paper_csp_nifty_v1 \
+    --leg short_put \
+    --key "NSE_FO|41310" \
+    --date 2026-05-03 \
+    --action SELL \
+    --qty 75 \
+    --price 65.63
+```
+
+Price defaults to `(bid + ask) / 2`; falls back to LTP when the spread is zero. `--leg` is auto-inferred from `--option-type` + `--action` when omitted (`PE + SELL → short_put`, `CE + SELL → short_call`, etc.).
+
+All flags:
+
+| Flag | Default | Notes |
+|---|---|---|
+| `--expiry` | *(required)* | YYYY-MM-DD |
+| `--delta-min` | `0.20` | Lower bound for \|delta\| |
+| `--delta-max` | `0.35` | Upper bound for \|delta\| |
+| `--option-type` | `BOTH` | `CE` / `PE` / `BOTH` |
+| `--underlying` | `NSE_INDEX\|Nifty 50` | Override for other underlyings |
+| `--strategy` | `paper_csp_nifty_v1` | Must start with `paper_` |
+| `--leg` | *(auto-inferred)* | e.g. `short_put`, `short_call` |
+| `--qty` | `75` | 1 Nifty lot |
+| `--action` | `SELL` | `BUY` / `SELL` |
+| `--date` | today | Trade execution date |
+| `--dry-run` | off | Emit record_paper_trade commands |
+
+Requires `UPSTOX_ANALYTICS_TOKEN` in `.env`.
+
+### Step 2 — Record the paper trade
+
+Copy the command from `--dry-run` output and run it directly. See [Paper Trade CLI](#paper-trade-cli) for the full `record_paper_trade.py` reference.
+
+### Paper Trade CLI
+
+```bash
+# Auto-resolve instrument key from underlying + strike + expiry
+python scripts/record_paper_trade.py \
+    --strategy paper_csp_nifty_v1 \
+    --leg short_put \
+    --underlying NIFTY \
+    --strike 23500 \
+    --option-type PE \
+    --expiry 2026-05-29 \
+    --date 2026-05-03 \
+    --action SELL \
+    --qty 75 \
+    --price 80.25
+
+# Or use --key directly (faster — no BOD lookup)
+python scripts/record_paper_trade.py \
+    --strategy paper_csp_nifty_v1 \
+    --leg short_put \
+    --key "NSE_FO|41300" \
+    --date 2026-05-03 \
+    --action SELL \
+    --qty 75 \
+    --price 80.25
+
+# Dry run — validate without inserting
+python scripts/record_paper_trade.py \
+    --strategy paper_csp_nifty_v1 --leg short_put \
+    --key "NSE_FO|41300" --date 2026-05-03 \
+    --action SELL --qty 75 --price 80.25 --dry-run
+```
+
+`--strategy` must start with `paper_`. Strategy name is enforced at both the CLI and model layer to prevent cross-contamination with the live trade ledger.
+
+---
+
 ## Testing Philosophy
 
 Three-stage promotion pipeline — code must clear each stage before moving forward:
@@ -459,7 +587,7 @@ All backtesting runs **fully offline** against local Parquet/SQLite stores. No A
 - [x] Strategy spec validator — `scripts/validate_strategy_spec.py`, 28 tests (2026-04-25)
 - [x] CSP v1 strategy spec — `docs/strategies/csp_nifty_v1.md` (Nifty 50 index options, R1–R7)
 - [x] NiftyShield integrated strategy spec — `docs/strategies/niftyshield_integrated_v1.md`
-- [ ] `find_strike_by_delta.py` — live chain strike filter by delta range (P1-NEXT)
+- [x] `find_strike_by_delta.py` — live chain → |delta| filter → strike/IV/key table + `--dry-run` record_paper_trade commands (2026-05-03)
 - [ ] Historical data pipeline (active + expired instruments)
 - [ ] Backtesting engine (`src/backtest/`) — Q4 2026
 - [ ] Strategy engine (`src/strategy/`) — Q3 2026
