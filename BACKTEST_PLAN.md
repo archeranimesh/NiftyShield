@@ -73,7 +73,7 @@
 
 **Owner: Animesh. Not for Cowork. Blocks task 0.6b.**
 
-- [ ] Write `docs/strategies/nifty_track_comparison_v1.md` covering:
+- [x] Write `docs/strategies/nifty_track_comparison_v1.md` covering:
   - Track A (NiftyBees ETF), Track B (Nifty Futures, monthly roll), Track C (Deep ITM Call, delta ≈ 0.90)
   - Capital normalization: Notional Equivalent Exposure (NEE) — all tracks sized to 1 Nifty lot equivalent
   - Blocked combinations (must list explicitly): Track B + Covered Call, Track B + CSP
@@ -81,8 +81,8 @@
   - Strategy namespaces: `paper_track_a`, `paper_track_b`, `paper_track_c`
   - Roll mechanics: monthly roll for all tracks; Track C kill criterion (delta < 0.40 for 3 consecutive days)
   - Minimum duration: 6 monthly cycles per track
-- [ ] Spec passes `validate_strategy_spec.py`.
-- [ ] Commit: `docs(strategies): add 3-track Nifty instrument comparison spec v1`.
+- [x] Spec passes `validate_strategy_spec.py`.
+- [x] Commit: `docs(strategies): add 3-track Nifty instrument comparison spec v1`. <!-- SHA: see below -->
 
 **Source:** `docs/council/2026-05-02_nifty-long-instrument-comparison-protection.md` Stage 3.
 
@@ -115,9 +115,9 @@
 
 **Owner: Animesh. Not for Cowork. Blocked by: 0.4b (spec must exist and pass validator first).**
 
-- [ ] Enter Track A base leg (long NiftyBees) via `record_paper_trade.py --strategy paper_track_a --leg-role base_etf`.
-- [ ] Enter Track B base leg (long Nifty Futures notional) via `--strategy paper_track_b --leg-role base_futures`.
-- [ ] Enter Track C base leg (Deep ITM Call, delta ≈ 0.90) via `--strategy paper_track_c --leg-role base_ditm_call`.
+- [ ] Enter Track A base leg (long NiftyBees) via `record_paper_trade.py --strategy paper_track_a --leg base_etf`.
+- [ ] Enter Track B base leg (long Nifty Futures notional) via `--strategy paper_track_b --leg base_futures`.
+- [ ] Enter Track C base leg (Deep ITM Call, delta ≈ 0.90) via `--strategy paper_track_c --leg base_ditm_call`.
 - [ ] For each approved overlay per track, record as a separate leg within the same strategy namespace.
 - [ ] Do NOT record Track B + Covered Call or Track B + CSP — blocked per council ruling.
 - [ ] On each expiry: roll all base legs; document delta at roll time for Track C.
