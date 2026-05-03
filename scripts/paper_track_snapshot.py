@@ -17,8 +17,79 @@ from src.instruments.lookup import InstrumentLookup
 from src.notifications.telegram import TelegramNotifier
 from src.paper.store import PaperStore
 from src.paper.proxy_monitor import ProxyDeltaMonitor
-from src.paper.track_snapshot import generate_track_snapshot
+from src.paper.track_snapshot import TrackPnL, generate_track_snapshot
 from src.paper.metrics import compute_nee
+
+
+# --- Overlay display helpers -------------------------------------------------
+
+# Collar has two leg roles that merge into one display line.
+_OVERLAY_LABELS: dict[str, str] = {
+    "overlay_pp": "PP",
+    "overlay_cc": "CC",
+    "overlay_collar_put": "Collar",
+    "overlay_collar_call": "Collar",
+}
+
+_BASE_LABELS: dict[str, str] = {
+    "paper_nifty_spot": "NiftyBees",
+    "paper_nifty_futures": "Futures",
+    "paper_nifty_proxy": "Proxy (DITM CE)",
+}
+
+
+def _fmt(value: Decimal) -> str:
+    """Format a Decimal as a signed, comma-separated integer string."""
+    sign = "+" if value >= 0 else ""
+    return f"{sign}{value:,.0f}"
+
+
+def _hedge_verdict(base: Decimal, overlay_total: Decimal) -> str:
+    """Return the emoji + text verdict for the hedge effectiveness line."""
+    if base < 0:
+        if overlay_total > 0:
+            absorbed_pct = abs(overlay_total) / abs(base) * 100
+            if abs(base + overlay_total) < abs(base):
+                return f"✅ Protected ({absorbed_pct:.0f}% absorbed)"
+            return f"⚠️ Partial ({absorbed_pct:.0f}% absorbed)"
+        return "❌ No protection"
+    # base >= 0
+    if overlay_total < 0:
+        return "⚠️ Cost (overlay drag on up-move)"
+    return "✅ Protected"
+
+
+def _format_pnl_block(track_name: str, pnl: TrackPnL) -> list[str]:
+    """Build the 🛡 Hedge block lines for a track's PnL.
+
+    Groups overlay_collar_put + overlay_collar_call into a single Collar line.
+    Falls back to a plain base-only line when no overlays are present.
+    """
+    base_label = _BASE_LABELS.get(track_name, "Base")
+    lines: list[str] = []
+
+    # Merge overlay legs by display name (collar_put + collar_call → Collar).
+    grouped: dict[str, Decimal] = {}
+    for role, amount in pnl.overlay_pnls.items():
+        label = _OVERLAY_LABELS.get(role, role)
+        grouped[label] = grouped.get(label, Decimal("0")) + amount
+
+    if not grouped:
+        lines.append(f"  Base ({base_label}):  {_fmt(pnl.base_pnl)}")
+        return lines
+
+    overlay_names = " + ".join(grouped)
+    overlay_total = sum(grouped.values())
+
+    lines.append(f"  🛡 Hedge ({overlay_names})")
+    lines.append(f"    {base_label:<22} {_fmt(pnl.base_pnl)}")
+    for label, amount in grouped.items():
+        lines.append(f"    {label:<22} {_fmt(amount)}")
+    lines.append(f"    {'─' * 35}")
+    verdict = _hedge_verdict(pnl.base_pnl, overlay_total)
+    lines.append(f"    {'Net':<22} {_fmt(pnl.net_pnl)}  {verdict}")
+
+    return lines
 
 
 class MockBrokerClientDryRun:
@@ -117,7 +188,8 @@ async def main() -> None:
 
         # Print output
         print(f"\n[{track_name.upper()}]")
-        print(f"  PNL    : Base={snapshot.pnl.base_pnl:,.2f} | Overlay={sum(snapshot.pnl.overlay_pnls.values()):,.2f} | Net={snapshot.pnl.net_pnl:,.2f}")
+        for line in _format_pnl_block(track_name, snapshot.pnl):
+            print(line)
         print(f"  GREEKS : Δ={snapshot.greeks.net_delta:.2f} | Θ={snapshot.greeks.net_theta:.2f} | V={snapshot.greeks.net_vega:.2f}")
         print(f"  METRICS: Max DD={snapshot.max_drawdown_pct:.2f}% (₹{snapshot.max_drawdown_abs:,.2f}) | Ret/NEE={snapshot.return_on_nee:.2f}%")
         
