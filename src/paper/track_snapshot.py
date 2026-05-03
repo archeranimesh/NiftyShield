@@ -10,7 +10,8 @@ import logging
 
 from src.client.protocol import BrokerClient
 from src.client.upstox_market import parse_upstox_option_chain
-from src.instruments.lookup import InstrumentLookup
+from src.instruments.lookup import InstrumentLookup, parse_expiry
+from src.models.options import OptionChain
 from src.models.portfolio import TradeAction
 from src.paper.metrics import (
     NIFTYBEES_BETA_TO_NIFTY,
@@ -36,6 +37,8 @@ class TrackPnL:
     base_pnl: Decimal
     overlay_pnls: dict[str, Decimal]  # e.g., {'overlay_pp': Decimal("-100"), ...}
     net_pnl: Decimal
+    unrealized_pnl: Decimal
+    realized_pnl: Decimal
 
 
 @dataclass(frozen=True)
@@ -99,7 +102,7 @@ async def generate_track_snapshot(
     if not trades:
         return TrackSnapshot(
             track_name=track_namespace,
-            pnl=TrackPnL(Decimal("0"), {}, Decimal("0")),
+            pnl=TrackPnL(Decimal("0"), {}, Decimal("0"), Decimal("0"), Decimal("0")),
             greeks=TrackGreeks(Decimal("0"), Decimal("0"), Decimal("0")),
             max_drawdown_abs=Decimal("0"),
             max_drawdown_pct=Decimal("0"),
@@ -120,14 +123,18 @@ async def generate_track_snapshot(
     base_pnl = Decimal("0")
     overlay_pnls: dict[str, Decimal] = {}
     
+    total_unrealized = Decimal("0")
+    total_realized = Decimal("0")
+    
     net_delta = Decimal("0")
     net_theta = Decimal("0")
     net_vega = Decimal("0")
     
     proxy_state = None
     proxy_alert = None
+    proxy_base_leg_delta = None
     
-    fetched_chains: dict[str, parse_upstox_option_chain] = {}
+    fetched_chains: dict[str, OptionChain | None] = {}
     
     for pos in open_positions:
         is_base = pos.leg_role.startswith("base_")
@@ -136,7 +143,11 @@ async def generate_track_snapshot(
         raw_ltp = prices.get(pos.instrument_key, 0.0)
         ltp = Decimal(str(raw_ltp))
         unrealized = _compute_leg_unrealized_pnl(pos, ltp)
-        leg_total_pnl = unrealized + realized_by_leg.get(pos.leg_role, Decimal("0"))
+        leg_realized = realized_by_leg.get(pos.leg_role, Decimal("0"))
+        leg_total_pnl = unrealized + leg_realized
+        
+        total_unrealized += unrealized
+        total_realized += leg_realized
         
         if is_base:
             base_pnl += leg_total_pnl
@@ -155,8 +166,7 @@ async def generate_track_snapshot(
             inst = lookup.get_by_key(pos.instrument_key)
             if inst:
                 expiry = inst.get("expiry")
-                from src.instruments.lookup import _parse_expiry
-                parsed_expiry = _parse_expiry(expiry)
+                parsed_expiry = parse_expiry(expiry)
                 strike = Decimal(str(inst.get("strike_price", 0)))
                 opt_type = inst.get("instrument_type")
                 
@@ -184,16 +194,18 @@ async def generate_track_snapshot(
         net_theta += leg_theta * qty_d
         net_vega += leg_vega * qty_d
         
-        if pos.leg_role == "base_ditm_call" and proxy_monitor:
-            # Note: pass the single-unit delta to monitor, not net_delta
-            state_label, consecutive = proxy_monitor.update_and_check(leg_delta, snapshot_date)
-            proxy_state = state_label
-            if state_label == "CRITICAL":
-                proxy_alert = f"CRITICAL (<0.40, day {consecutive} of 3+)"
-            elif state_label == "WARNING":
-                proxy_alert = f"WARNING (<0.65)"
-            else:
-                proxy_alert = "OK"
+        if pos.leg_role == "base_ditm_call":
+            proxy_base_leg_delta = leg_delta
+            
+    if proxy_monitor and proxy_base_leg_delta is not None:
+        state_label, consecutive = proxy_monitor.update_and_check(proxy_base_leg_delta, snapshot_date)
+        proxy_state = state_label
+        if state_label == "CRITICAL":
+            proxy_alert = f"CRITICAL (<0.40, day {consecutive} of 3+)"
+        elif state_label == "WARNING":
+            proxy_alert = f"WARNING (<0.65)"
+        else:
+            proxy_alert = "OK"
                 
     net_pnl = base_pnl + sum(overlay_pnls.values())
     
@@ -208,7 +220,7 @@ async def generate_track_snapshot(
     
     return TrackSnapshot(
         track_name=track_namespace,
-        pnl=TrackPnL(base_pnl, overlay_pnls, net_pnl),
+        pnl=TrackPnL(base_pnl, overlay_pnls, net_pnl, total_unrealized, total_realized),
         greeks=TrackGreeks(net_delta, net_theta, net_vega),
         max_drawdown_abs=max_dd_abs,
         max_drawdown_pct=max_dd_pct,

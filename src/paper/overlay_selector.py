@@ -5,7 +5,10 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from decimal import Decimal
+import logging
 from typing import Literal
+
+logger = logging.getLogger(__name__)
 
 from src.client.protocol import BrokerClient
 from src.client.upstox_market import parse_upstox_option_chain
@@ -108,7 +111,8 @@ async def select_overlay_expiry(
                 timeout=timeout_sec
             )
             chain = parse_upstox_option_chain(raw_chain)
-        except Exception:
+        except Exception as e:
+            logger.warning("Failed to fetch chain for expiry %s: %s", expiry, e)
             # If fetch fails, append empty profile and continue
             if option_type == "COLLAR":
                 profiles.append(CollarSpreadProfile(expiry, None, None, None, None))

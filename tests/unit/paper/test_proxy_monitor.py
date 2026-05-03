@@ -22,26 +22,27 @@ class MockPaperStore:
         return self.consecutive
 
 
-def test_proxy_delta_monitor():
+def test_proxy_delta_monitor_ok():
     store = MockPaperStore()
     monitor = ProxyDeltaMonitor(store)
     
-    # OK state (>= 0.65)
     state, count = monitor.update_and_check(Decimal("0.70"), date(2023, 1, 1))
     assert state == "OK"
     assert count == 0
+
+def test_proxy_delta_monitor_warning():
+    store = MockPaperStore()
+    monitor = ProxyDeltaMonitor(store)
     
-    # WARNING state (0.40 <= delta < 0.65)
     state, count = monitor.update_and_check(Decimal("0.50"), date(2023, 1, 2))
     assert state == "WARNING"
     assert count == 0
+
+def test_proxy_delta_monitor_critical_path():
+    store = MockPaperStore()
+    monitor = ProxyDeltaMonitor(store)
     
-    # CRITICAL path (delta < 0.40)
     state, count = monitor.update_and_check(Decimal("0.35"), date(2023, 1, 3))
-    # Threshold < 0.40 but consecutive days = 1 (since MockStore increments)
-    # The condition in proxy_monitor is:
-    # if consecutive_days >= 3: CRITICAL
-    # elif delta < 0.65: WARNING
     assert state == "WARNING"
     assert count == 1
     

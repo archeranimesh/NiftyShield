@@ -86,7 +86,7 @@ def _best_score(query: str, instrument: dict[str, Any]) -> tuple[float, str]:
     return best
 
 
-def _parse_expiry(expiry_val: Any) -> str | None:
+def parse_expiry(expiry_val: Any) -> str | None:
     """Convert Upstox expiry (epoch ms) to YYYY-MM-DD string."""
     if expiry_val is None:
         return None
@@ -218,7 +218,7 @@ class InstrumentLookup:
                 continue
 
             if expiry is not None:
-                inst_expiry = _parse_expiry(inst.get("expiry"))
+                inst_expiry = parse_expiry(inst.get("expiry"))
                 if inst_expiry != expiry:
                     continue
 
@@ -253,7 +253,7 @@ class InstrumentLookup:
             if underlying.upper() not in inst.get("underlying_symbol", "").upper():
                 continue
             if expiry is not None:
-                inst_expiry = _parse_expiry(inst.get("expiry"))
+                inst_expiry = parse_expiry(inst.get("expiry"))
                 if inst_expiry != expiry:
                     continue
 
@@ -270,7 +270,7 @@ class InstrumentLookup:
                 return inst
         return None
 
-    # ── Expiry parsing (module-level: _parse_expiry) ──
+    # ── Expiry parsing (module-level: parse_expiry) ──
 
     @property
     def count(self) -> int:
@@ -367,7 +367,7 @@ def format_results(results: list[dict[str, Any]], fields: list[str] | None = Non
         for f in available:
             val = r.get(f, "")
             if f == "expiry" and isinstance(val, (int, float)):
-                val = _parse_expiry(val) or val
+                val = parse_expiry(val) or val
             row.append(f"{str(val):<25}")
         lines.append("  ".join(row))
 

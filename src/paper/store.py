@@ -404,7 +404,8 @@ class PaperStore:
     ) -> int:
         """Get the number of consecutive trading days where delta was below threshold.
         
-        Counts backward from current_date.
+        Counts backward from current_date. Stops if there's a gap of more than
+        3 calendar days between two entries, implying a break in the sequence.
         
         Args:
             strategy_name: Strategy name.
@@ -424,9 +425,17 @@ class PaperStore:
             ).fetchall()
             
         consecutive = 0
+        last_date = None
         for row in rows:
+            row_date = date.fromisoformat(row["log_date"])
+            if last_date is not None:
+                if (last_date - row_date).days > 3:
+                    break
+                    
             if row["is_below_threshold"]:
                 consecutive += 1
+                last_date = row_date
             else:
                 break
+                
         return consecutive
