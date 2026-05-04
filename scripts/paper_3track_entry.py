@@ -87,6 +87,7 @@ class LivePrices:
     proxy_oi: int
     proxy_bid: float
     proxy_ask: float
+    proxy_candidates: list  # ranked list of all candidates (for display only)
 
 
 # ── Step A: derive expiry from BOD ───────────────────────────────────────────
@@ -195,13 +196,32 @@ def filter_proxy_candidates(raw_chain: list[dict[str, Any]]) -> list[dict[str, A
 
 
 def auto_select_proxy(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    """Pick nearest to delta 0.90; on tie take higher delta (deeper ITM for CE)."""
+    """Rank candidates: round-100 strikes first, then by bid-ask spread ascending.
+
+    Ranking key (ascending):
+      1. is_non_round — 0 for multiples of 100 (preferred), 1 for 50-increment strikes
+      2. spread       — tighter spread wins within each tier
+      3. delta proximity to PROXY_TARGET_DELTA — tiebreaker only
+
+    Sorts `rows` in place so callers see the final ranked order.
+    """
     if not rows:
         raise ValueError(
             f"No CE strikes found with delta in [{PROXY_DELTA_MIN}, {PROXY_DELTA_MAX}]. "
             "The chain may be empty or the expiry too close. Try --expiry with another date."
         )
-    best = min(rows, key=lambda r: (abs(abs(r["delta"]) - PROXY_TARGET_DELTA), -r["delta"]))
+
+    def _rank_key(r: dict[str, Any]) -> tuple:
+        spread = r["ask"] - r["bid"] if (r["ask"] > 0 and r["bid"] > 0) else 9_999.0
+        is_non_round = int(r["strike"]) % 100 != 0
+        delta_dist = abs(abs(r["delta"]) - PROXY_TARGET_DELTA)
+        return (is_non_round, spread, delta_dist)
+
+    rows.sort(key=_rank_key)
+    for i, r in enumerate(rows):
+        r["rank"] = i + 1
+
+    best = rows[0]
     logger.info(
         "Auto-selected proxy: strike=%.0f delta=%.4f OI=%d spread=%.2f key=%s",
         best["strike"], best["delta"], best["oi"],
@@ -342,6 +362,7 @@ def fetch_live_prices(
         proxy_oi=proxy_row["oi"],
         proxy_bid=proxy_row["bid"],
         proxy_ask=proxy_row["ask"],
+        proxy_candidates=candidates,
     )
 
 
@@ -452,11 +473,26 @@ def print_preview(p: LivePrices, gates: dict[str, str], confirmed: bool) -> None
     for track, leg, qty, price, notional in rows:
         print(f"  {track:<22} {leg:<18} {qty:>6} {float(price):>10.2f} ₹{float(notional):>12,.0f}")
 
-    spread = p.proxy_ask - p.proxy_bid
+    # Ranked proxy candidate table
     print(f"{'═' * W}")
-    print(f"  Proxy  strike={p.proxy_strike:.0f}  OI={p.proxy_oi:,}  "
-          f"spread=₹{spread:.2f}  (bid={p.proxy_bid:.2f} / ask={p.proxy_ask:.2f})")
-    print(f"  Proxy  key={p.proxy_instrument_key}")
+    print(f"  Proxy candidates — delta {PROXY_DELTA_MIN}–{PROXY_DELTA_MAX} "
+          f"(ranked: round-100 first, then spread ↑)")
+    print(f"  {'Rank':>4}  {'Strike':>7}  {'Delta':>6}  {'OI':>8}  "
+          f"{'Bid':>8}  {'Ask':>8}  {'Spread':>7}  {'Round?':>6}")
+    print(f"  {'─' * 68}")
+    for c in p.proxy_candidates:
+        c_spread = c["ask"] - c["bid"]
+        is_round = int(c["strike"]) % 100 == 0
+        marker = "◀ selected" if c["strike"] == p.proxy_strike else ""
+        round_tag = "✓" if is_round else ""
+        print(
+            f"  {c['rank']:>4}  {c['strike']:>7.0f}  {c['delta']:>6.4f}  "
+            f"{c['oi']:>8,}  {c['bid']:>8.2f}  {c['ask']:>8.2f}  "
+            f"₹{c_spread:>6.2f}  {round_tag:>6}  {marker}"
+        )
+    spread = p.proxy_ask - p.proxy_bid
+    print(f"{'─' * W}")
+    print(f"  Selected key={p.proxy_instrument_key}")
     print(f"  OI gate    : {gates['oi']}")
     print(f"  Spread gate: {gates['spread']}")
     print(f"{'═' * W}")
