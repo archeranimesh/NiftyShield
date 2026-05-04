@@ -94,6 +94,7 @@ CREATE TABLE IF NOT EXISTS paper_leg_snapshots (
 Add `TestLegSnapshots` class:
 - `test_record_leg_snapshot_roundtrip`
 - `test_record_leg_snapshot_upsert`
+- `test_record_leg_snapshot_inconsistent_total_pnl_raises` — construct a `PaperLegSnapshot` where `total_pnl != unrealized_pnl + realized_pnl`, assert `store.record_leg_snapshot(...)` raises `ValueError`
 - `test_get_leg_snapshot_missing`
 - `test_get_prev_leg_snapshot_returns_max_before_date`
 - `test_get_prev_leg_snapshot_no_prior`
@@ -213,14 +214,37 @@ async def _close_leg(broker, store, trade, roll_date, dry_run) -> PaperTrade
 
 async def _open_new_leg(broker, overlay_type, strategy, roll_date, lot_size, ...) -> PaperTrade
 
+async def _roll_single(store, broker, lookup, overlay_type, strategy, leg_role, roll_date, force, dry_run, yes):
+    # 2-trade atomicity: close first, then open.
+    # If _open_new_leg fails after the close trade has been written,
+    # delete the close trade before re-raising — same 'all or none' guarantee as collar.
+    close_trade = await _close_leg(broker, store, trade, roll_date, dry_run)
+    try:
+        open_trade = await _open_new_leg(...)
+    except Exception:
+        if not dry_run:
+            store.delete_trade(close_trade)  # rollback: un-close the leg
+        raise
+
 async def _roll_collar(...)  # 4-trade atomic: close_put, close_call, open_put, open_call
+    # Same pattern: validate and write all four or none.
+    # If any open fails after closes are written, delete both close trades before re-raising.
 
 def _print_roll_report(results: list) -> None  # per-plan table
 
 async def main() -> None  # --overlay, --date, --tracks, --yes, --dry-run, --force
 ```
 
-DTE check: skip if `(expiry - roll_date).days > OVERLAY_ROLL_DTE` unless `--force`.
+> [!IMPORTANT]
+> `_roll_single` (PP/CC) and `_roll_collar` must have identical atomicity guarantees.
+> PP/CC is a 2-trade operation (close + open); collar is a 4-trade operation (close×2 + open×2).
+> In both cases: if any write after the first fails, all prior writes in the same roll are
+> deleted before the exception propagates. The paper book must never be left with a closed
+> leg and no replacement.
+>
+> This requires `PaperStore.delete_trade(trade: PaperTrade) -> None` — a new store method
+> (keyed on the unique constraint: `strategy_name, leg_role, trade_date, action`).
+> Add it to Phase A's store method additions and include a test in `TestLegSnapshots`.
 
 #### [NEW] [test_paper_3track_overlay_roll.py](file:///Users/abhadra/myWork/myCode/python/NiftyShield/tests/unit/paper/test_paper_3track_overlay_roll.py)
 - `test_parse_expiry_from_key_pe`
