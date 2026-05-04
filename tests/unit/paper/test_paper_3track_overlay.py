@@ -246,6 +246,21 @@ def test_check_existing_overlay_open_position_returns_last_buy(tmp_path: Path) -
     assert result.action == TradeAction.BUY
 
 
+def test_check_existing_overlay_open_sell_position_returns_trade(tmp_path: Path) -> None:
+    """CC/collar_call positions are opened via SELL. The bug was that last_trade was
+    only updated on BUY, so open SELL positions returned None as if no position existed."""
+    from src.paper.store import PaperStore
+    store = PaperStore(tmp_path / "p.db")
+    trade = _make_trade(action=TradeAction.SELL, leg_role="overlay_cc")
+    store.record_trade(trade)
+    result = overlay._check_existing_overlay(store, _STRATEGY, "overlay_cc")
+    assert result is not None, (
+        "open CC position (net SELL) must be detected — "
+        "was returning None before the last_trade-on-every-iteration fix"
+    )
+    assert result.action == TradeAction.SELL
+
+
 def test_check_existing_overlay_closed_position_returns_none(tmp_path: Path) -> None:
     from src.paper.store import PaperStore
     store = PaperStore(tmp_path / "p.db")
@@ -268,6 +283,84 @@ def test_check_existing_overlay_same_expiry_no_force_needed(tmp_path: Path) -> N
     # Same expiry scenario: the guard in _run() compares expiries;
     # if same, it proceeds without --force. We verify the check itself finds the position.
     assert existing is not None
+
+
+def test_check_existing_overlay_diff_expiry_requires_force(tmp_path: Path) -> None:
+    """Different expiry without --force must exit(1).
+
+    The existing open trade's instrument_key encodes the old expiry (2026-05-29).
+    The newly selected best expiry is 2026-06-26. Without --force the script
+    must exit(1) rather than silently stacking a second overlay on the same leg.
+    """
+    import asyncio
+    from src.paper.store import PaperStore
+    from unittest.mock import AsyncMock, patch
+
+    db = tmp_path / "p.db"
+    store = PaperStore(db)
+    # Record an existing open PP with a May expiry in the instrument key
+    existing_trade = PaperTrade(
+        strategy_name="paper_nifty_spot",
+        leg_role="overlay_pp",
+        instrument_key="NSE_FO|NIFTY29MAY2026PE",  # encodes 2026-05-29
+        trade_date=date(2026, 5, 1),
+        action=TradeAction.BUY,
+        quantity=65,
+        price=Decimal("310.00"),
+    )
+    store.record_trade(existing_trade)
+
+    # _run() fetches chains; mock everything network-related so we reach the expiry guard
+    args = _make_args(
+        overlay="pp",
+        tracks=["paper_nifty_spot"],
+        db_path=db,
+        dry_run=False,
+        yes=True,
+        force=False,  # no --force
+        date_str="2026-06-01",
+    )
+
+    # Minimal chain with one PE candidate in 8-10% OTM band (spot=24000, target ~21600-22080)
+    dummy_chain = [{
+        "strike_price": 22000.0,
+        "underlying_spot_price": 24000.0,
+        "put_options": {
+            "instrument_key": "NSE_FO|NIFTY22000PE26JUN2026",
+            "market_data": {"bid_price": 300.0, "ask_price": 302.0, "ltp": 301.0, "oi": 10000},
+            "option_greeks": {"delta": -0.25, "iv": 0.18},
+        },
+        "call_options": {"instrument_key": "", "market_data": {}, "option_greeks": {}},
+    }]
+
+    # Stub BOD so _collect_expiry_candidates returns a quarterly (2026-06-26)
+    dummy_lookup = type("L", (), {
+        "_instruments": [
+            {
+                "segment": "NSE_FO",
+                "instrument_type": "PE",
+                "underlying_symbol": "NIFTY",
+                "expiry": "2026-06-26",
+            }
+        ]
+    })()
+
+    with (
+        patch("scripts.paper_3track_overlay.UpstoxMarketClient") as MockClient,
+        patch("scripts.paper_3track_overlay.InstrumentLookup") as MockLookup,
+        patch("scripts.paper_3track_overlay._pe", return_value="2026-05-29"),
+    ):
+        mock_instance = MockClient.return_value
+        mock_instance.get_option_chain = AsyncMock(return_value=dummy_chain)
+        MockLookup.from_file.return_value = dummy_lookup
+
+        with pytest.raises(SystemExit) as exc_info:
+            asyncio.run(overlay._run(args))
+
+    assert exc_info.value.code == 1, (
+        "Different expiry without --force must exit(1) — "
+        "the safety check must prevent silently stacking a second overlay"
+    )
 
 
 # ── Fixture helper ────────────────────────────────────────────────────────────

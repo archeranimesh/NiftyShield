@@ -49,7 +49,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from src.client.upstox_market import UpstoxMarketClient
-from src.instruments.lookup import InstrumentLookup, parse_expiry as _parse_expiry
+from src.instruments.lookup import InstrumentLookup, parse_expiry as _pe
 from src.models.portfolio import TradeAction
 from src.paper.models import PaperTrade
 from src.paper.store import PaperStore
@@ -237,7 +237,7 @@ def _collect_expiry_candidates(
             continue
         if inst.get("underlying_symbol", "").upper() != "NIFTY":
             continue
-        exp = _parse_expiry(inst.get("expiry"))
+        exp = _pe(inst.get("expiry"))
         if exp:
             seen.add(exp)
 
@@ -318,15 +318,17 @@ def _check_existing_overlay(
     trades = store.get_trades(strategy, leg_role)
     if not trades:
         return None
-    # Compute net qty to decide if position is open
+    # Compute net qty to decide if position is open.
+    # last_trade is updated on every iteration — not only on BUY — so that
+    # open SELL positions (CC, overlay_collar_call) are correctly returned.
     net = 0
     last_trade: PaperTrade | None = None
     for t in trades:
         if t.action == TradeAction.BUY:
             net += t.quantity
-            last_trade = t
         else:
             net -= t.quantity
+        last_trade = t  # track regardless of direction
     return last_trade if net != 0 else None
 
 
@@ -438,11 +440,6 @@ async def _run(args: argparse.Namespace) -> None:
         )
         sys.exit(1)
 
-    # Remove CC-blocked tracks silently for CC (guard already fired above)
-    # — this branch can't be reached for CC, but keeps logic explicit
-    if overlay_type in ("cc",):
-        effective_tracks = [t for t in effective_tracks if t not in _CC_BLOCKED_TRACKS]
-
     # Build client
     try:
         client = UpstoxMarketClient()
@@ -519,10 +516,7 @@ async def _run(args: argparse.Namespace) -> None:
             # Safety check: existing open overlay with a DIFFERENT expiry
             existing = _check_existing_overlay(store, strategy, leg_role)
             if existing is not None:
-                # Parse existing expiry from instrument key
-                existing_key = existing.instrument_key
-                from src.instruments.lookup import parse_expiry as _pe
-                existing_expiry = _pe(existing_key) or ""
+                existing_expiry = _pe(existing.instrument_key) or ""
                 if existing_expiry and existing_expiry != best_expiry:
                     if not args.force:
                         print(
