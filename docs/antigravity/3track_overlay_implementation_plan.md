@@ -252,7 +252,7 @@ async def main() -> None  # --overlay, --date, --tracks, --yes, --dry-run, --for
 >
 > This requires `PaperStore.delete_trade(trade: PaperTrade) -> None` — a new store method
 > (keyed on the unique constraint: `strategy_name, leg_role, trade_date, action`).
-> Add it to Phase A's store method additions and include a test in `TestLegSnapshots`.
+> See Phase A — `delete_trade` is already specified there alongside `test_delete_trade_removes_correct_row`.
 
 #### [NEW] [test_paper_3track_overlay_roll.py](file:///Users/abhadra/myWork/myCode/python/NiftyShield/tests/unit/paper/test_paper_3track_overlay_roll.py)
 - `test_parse_expiry_from_key_pe`
