@@ -19,7 +19,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from src.db import connect as _connect
-from src.paper.models import PaperNavSnapshot, PaperPosition, PaperTrade
+from src.paper.models import PaperLegSnapshot, PaperNavSnapshot, PaperPosition, PaperTrade
 from src.models.portfolio import TradeAction
 
 _SCHEMA = """
@@ -64,6 +64,17 @@ CREATE TABLE IF NOT EXISTS paper_proxy_delta_log (
 
 CREATE INDEX IF NOT EXISTS idx_paper_proxy_delta_log_strategy_date
     ON paper_proxy_delta_log(strategy_name, log_date);
+
+CREATE TABLE IF NOT EXISTS paper_leg_snapshots (
+    strategy_name  TEXT    NOT NULL,
+    leg_role       TEXT    NOT NULL,
+    snapshot_date  TEXT    NOT NULL,
+    unrealized_pnl TEXT    NOT NULL,
+    realized_pnl   TEXT    NOT NULL,
+    total_pnl      TEXT    NOT NULL,
+    ltp            TEXT,
+    PRIMARY KEY (strategy_name, leg_role, snapshot_date)
+) STRICT;
 """
 
 
@@ -77,6 +88,18 @@ def _row_to_trade(row) -> PaperTrade:
         quantity=row["quantity"],
         price=Decimal(row["price"]),
         notes=row["notes"],
+    )
+
+
+def _row_to_leg_snapshot(row) -> PaperLegSnapshot:
+    return PaperLegSnapshot(
+        strategy_name=row["strategy_name"],
+        leg_role=row["leg_role"],
+        snapshot_date=date.fromisoformat(row["snapshot_date"]),
+        unrealized_pnl=Decimal(row["unrealized_pnl"]),
+        realized_pnl=Decimal(row["realized_pnl"]),
+        total_pnl=Decimal(row["total_pnl"]),
+        ltp=Decimal(row["ltp"]) if row["ltp"] is not None else None,
     )
 
 
@@ -431,11 +454,148 @@ class PaperStore:
             if last_date is not None:
                 if (last_date - row_date).days > 3:
                     break
-                    
+
             if row["is_below_threshold"]:
                 consecutive += 1
                 last_date = row_date
             else:
                 break
-                
+
         return consecutive
+
+    # ── Leg snapshots ─────────────────────────────────────────────────────────
+
+    def record_leg_snapshot(self, snap: PaperLegSnapshot) -> None:
+        """Upsert a per-leg daily P&L snapshot.
+
+        Asserts ``snap.total_pnl == snap.unrealized_pnl + snap.realized_pnl``
+        before writing. Raises ``ValueError`` on mismatch — same invariant
+        class as the Decimal-as-TEXT rule.
+
+        ON CONFLICT UPDATE replaces the row if the same
+        (strategy_name, leg_role, snapshot_date) already exists — idempotent
+        re-runs are safe.
+
+        Args:
+            snap: The PaperLegSnapshot to persist.
+
+        Raises:
+            ValueError: If total_pnl != unrealized_pnl + realized_pnl.
+        """
+        expected = snap.unrealized_pnl + snap.realized_pnl
+        if snap.total_pnl != expected:
+            raise ValueError(
+                f"PaperLegSnapshot total_pnl invariant violated: "
+                f"total_pnl={snap.total_pnl} but "
+                f"unrealized_pnl + realized_pnl={expected} "
+                f"(strategy={snap.strategy_name!r}, leg_role={snap.leg_role!r})"
+            )
+        with _connect(self.db_path) as conn:
+            conn.execute(
+                """INSERT INTO paper_leg_snapshots
+                   (strategy_name, leg_role, snapshot_date, unrealized_pnl,
+                    realized_pnl, total_pnl, ltp)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(strategy_name, leg_role, snapshot_date)
+                   DO UPDATE SET
+                       unrealized_pnl = excluded.unrealized_pnl,
+                       realized_pnl   = excluded.realized_pnl,
+                       total_pnl      = excluded.total_pnl,
+                       ltp            = excluded.ltp""",
+                (
+                    snap.strategy_name,
+                    snap.leg_role,
+                    snap.snapshot_date.isoformat(),
+                    str(snap.unrealized_pnl),
+                    str(snap.realized_pnl),
+                    str(snap.total_pnl),
+                    str(snap.ltp) if snap.ltp is not None else None,
+                ),
+            )
+
+    def get_leg_snapshot(
+        self,
+        strategy_name: str,
+        leg_role: str,
+        snap_date: date,
+    ) -> PaperLegSnapshot | None:
+        """Return the leg snapshot for a specific (strategy, leg, date), or None.
+
+        Args:
+            strategy_name: Paper strategy name.
+            leg_role: Leg identifier within the strategy.
+            snap_date: Exact snapshot date to look up.
+
+        Returns:
+            The matching PaperLegSnapshot, or None if not found.
+        """
+        with _connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT strategy_name, leg_role, snapshot_date, unrealized_pnl,"
+                " realized_pnl, total_pnl, ltp"
+                " FROM paper_leg_snapshots"
+                " WHERE strategy_name = ? AND leg_role = ? AND snapshot_date = ?",
+                (strategy_name, leg_role, snap_date.isoformat()),
+            ).fetchone()
+
+        if row is None:
+            return None
+        return _row_to_leg_snapshot(row)
+
+    def get_prev_leg_snapshot(
+        self,
+        strategy_name: str,
+        leg_role: str,
+        before_date: date,
+    ) -> PaperLegSnapshot | None:
+        """Return the most recent leg snapshot strictly before ``before_date``.
+
+        Used to compute delta-from-yesterday: call with ``before_date=today``
+        to get the prior trading day's snapshot.
+
+        Args:
+            strategy_name: Paper strategy name.
+            leg_role: Leg identifier within the strategy.
+            before_date: Upper bound (exclusive) on snapshot_date.
+
+        Returns:
+            The PaperLegSnapshot with MAX(snapshot_date) < before_date,
+            or None if no prior snapshot exists.
+        """
+        with _connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT strategy_name, leg_role, snapshot_date, unrealized_pnl,"
+                " realized_pnl, total_pnl, ltp"
+                " FROM paper_leg_snapshots"
+                " WHERE strategy_name = ? AND leg_role = ? AND snapshot_date < ?"
+                " ORDER BY snapshot_date DESC LIMIT 1",
+                (strategy_name, leg_role, before_date.isoformat()),
+            ).fetchone()
+
+        if row is None:
+            return None
+        return _row_to_leg_snapshot(row)
+
+    def delete_trade(self, trade: PaperTrade) -> None:
+        """Delete a single paper trade by its unique constraint fields.
+
+        Keyed on (strategy_name, leg_role, trade_date, action) — the same
+        unique constraint enforced by the paper_trades table. No-op if the
+        row does not exist; safe to call in a rollback path where the write
+        may not have committed.
+
+        Args:
+            trade: The PaperTrade to delete.
+        """
+        with _connect(self.db_path) as conn:
+            conn.execute(
+                "DELETE FROM paper_trades"
+                " WHERE strategy_name = ? AND leg_role = ?"
+                " AND trade_date = ? AND action = ?",
+                (
+                    trade.strategy_name,
+                    trade.leg_role,
+                    trade.trade_date.isoformat(),
+                    trade.action.value,
+                ),
+            )

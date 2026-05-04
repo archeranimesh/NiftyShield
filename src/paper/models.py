@@ -136,3 +136,33 @@ class PaperNavSnapshot:
     realized_pnl: Decimal
     total_pnl: Decimal
     underlying_price: Decimal | None = None
+
+
+@dataclass(frozen=True)
+class PaperLegSnapshot:
+    """Per-leg daily P&L snapshot for a paper strategy.
+
+    One row per (strategy_name, leg_role, snapshot_date) in
+    ``paper_leg_snapshots``. Enables delta-from-yesterday tracking per
+    individual overlay or base leg without polluting the strategy-total
+    ``paper_nav_snapshots`` table.
+
+    Attributes:
+        strategy_name: Paper strategy this snapshot belongs to.
+        leg_role: Leg identifier within the strategy, e.g. ``overlay_pp``.
+        snapshot_date: Date of this snapshot.
+        unrealized_pnl: Mark-to-market P&L for the open position on this leg.
+        realized_pnl: Cumulative realized P&L from closed trades on this leg.
+        total_pnl: unrealized_pnl + realized_pnl. Must satisfy
+            ``total_pnl == unrealized_pnl + realized_pnl`` — enforced by
+            ``PaperStore.record_leg_snapshot`` at write time.
+        ltp: Last traded price at snapshot time (optional context).
+    """
+
+    strategy_name: str
+    leg_role: str
+    snapshot_date: date
+    unrealized_pnl: Decimal
+    realized_pnl: Decimal
+    total_pnl: Decimal
+    ltp: Decimal | None = None

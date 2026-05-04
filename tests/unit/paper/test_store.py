@@ -303,3 +303,98 @@ def test_paper_tables_coexist_with_portfolio_tables(db_path: Path) -> None:
     ps = PaperStore(db_path)
     ps.record_trade(_sell_trade())
     assert len(ps.get_trades(_STRATEGY)) == 1
+
+
+# ── TestLegSnapshots ──────────────────────────────────────────────────────────
+
+
+from src.paper.models import PaperLegSnapshot
+
+
+def _leg_snap(**overrides) -> PaperLegSnapshot:
+    defaults = dict(
+        strategy_name=_STRATEGY,
+        leg_role="overlay_pp",
+        snapshot_date=date(2026, 5, 1),
+        unrealized_pnl=Decimal("300.00"),
+        realized_pnl=Decimal("100.00"),
+        total_pnl=Decimal("400.00"),
+        ltp=Decimal("220.50"),
+    )
+    defaults.update(overrides)
+    return PaperLegSnapshot(**defaults)
+
+
+class TestLegSnapshots:
+    def test_record_leg_snapshot_roundtrip(self, store: PaperStore) -> None:
+        original = _leg_snap()
+        store.record_leg_snapshot(original)
+        retrieved = store.get_leg_snapshot(_STRATEGY, "overlay_pp", date(2026, 5, 1))
+        assert retrieved is not None
+        assert retrieved.strategy_name == original.strategy_name
+        assert retrieved.leg_role == original.leg_role
+        assert retrieved.snapshot_date == original.snapshot_date
+        assert retrieved.unrealized_pnl == original.unrealized_pnl
+        assert retrieved.realized_pnl == original.realized_pnl
+        assert retrieved.total_pnl == original.total_pnl
+        assert retrieved.ltp == original.ltp
+
+    def test_record_leg_snapshot_upsert(self, store: PaperStore) -> None:
+        store.record_leg_snapshot(_leg_snap(unrealized_pnl=Decimal("100"), total_pnl=Decimal("200")))
+        store.record_leg_snapshot(_leg_snap(unrealized_pnl=Decimal("999"), total_pnl=Decimal("1099")))
+        retrieved = store.get_leg_snapshot(_STRATEGY, "overlay_pp", date(2026, 5, 1))
+        assert retrieved is not None
+        assert retrieved.unrealized_pnl == Decimal("999")
+        assert retrieved.total_pnl == Decimal("1099")
+
+    def test_record_leg_snapshot_inconsistent_total_pnl_raises(
+        self, store: PaperStore
+    ) -> None:
+        # total_pnl=999 but unrealized(300) + realized(100) = 400 — mismatch
+        bad = _leg_snap(total_pnl=Decimal("999"))
+        with pytest.raises(ValueError, match="total_pnl invariant violated"):
+            store.record_leg_snapshot(bad)
+
+    def test_get_leg_snapshot_missing(self, store: PaperStore) -> None:
+        result = store.get_leg_snapshot(_STRATEGY, "overlay_pp", date(2026, 5, 1))
+        assert result is None
+
+    def test_get_prev_leg_snapshot_returns_max_before_date(
+        self, store: PaperStore
+    ) -> None:
+        store.record_leg_snapshot(_leg_snap(snapshot_date=date(2026, 5, 1)))
+        store.record_leg_snapshot(_leg_snap(
+            snapshot_date=date(2026, 5, 2),
+            unrealized_pnl=Decimal("400"),
+            total_pnl=Decimal("500"),
+        ))
+        # before_date=2026-05-03 → should return the 2026-05-02 row (MAX < 2026-05-03)
+        prev = store.get_prev_leg_snapshot(_STRATEGY, "overlay_pp", date(2026, 5, 3))
+        assert prev is not None
+        assert prev.snapshot_date == date(2026, 5, 2)
+        assert prev.unrealized_pnl == Decimal("400")
+
+    def test_get_prev_leg_snapshot_no_prior(self, store: PaperStore) -> None:
+        store.record_leg_snapshot(_leg_snap(snapshot_date=date(2026, 5, 5)))
+        # before_date=2026-05-05 → nothing strictly before it
+        prev = store.get_prev_leg_snapshot(_STRATEGY, "overlay_pp", date(2026, 5, 5))
+        assert prev is None
+
+    def test_delete_trade_removes_correct_row(self, store: PaperStore) -> None:
+        t1 = _sell_trade(leg_role="overlay_pp", trade_date=date(2026, 5, 1))
+        t2 = _buy_trade(leg_role="overlay_pp", trade_date=date(2026, 5, 28))
+        store.record_trade(t1)
+        store.record_trade(t2)
+        assert len(store.get_trades(_STRATEGY, leg_role="overlay_pp")) == 2
+
+        store.delete_trade(t1)
+        remaining = store.get_trades(_STRATEGY, leg_role="overlay_pp")
+        assert len(remaining) == 1
+        assert remaining[0].trade_date == date(2026, 5, 28)
+        assert remaining[0].action == TradeAction.BUY
+
+    def test_delete_trade_noop_when_not_found(self, store: PaperStore) -> None:
+        # Deleting a nonexistent trade must not raise
+        ghost = _sell_trade(leg_role="overlay_pp", trade_date=date(2026, 1, 1))
+        store.delete_trade(ghost)  # should be silent no-op
+        assert store.get_trades(_STRATEGY) == []
