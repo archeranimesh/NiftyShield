@@ -59,6 +59,11 @@ PROXY_DELTA_MAX = 0.95
 PROXY_TARGET_DELTA = 0.90
 PROXY_OI_MIN = 5_000
 PROXY_SPREAD_MAX = 5.0
+
+# DTE bands for multi-expiry proxy search
+PROXY_MONTHLY_DTE = (15, 45)       # front-month expiry
+PROXY_QUARTERLY_DTE = (46, 200)    # next quarterly (Jun / Sep)
+PROXY_YEARLY_DTE = (201, 420)      # year-end expiry (Dec)
 SPAN_MARGIN_ESTIMATE = Decimal("150000")
 DEFAULT_BOD = Path("data/instruments/NSE.json.gz")
 DEFAULT_DB = Path("data/portfolio/portfolio.sqlite")
@@ -244,61 +249,151 @@ def compute_proxy_entry_price(row: dict[str, Any]) -> Decimal:
 
 # ── Step C: orchestrate all live fetches ─────────────────────────────────────
 
+def collect_candidate_expiries(
+    lookup: InstrumentLookup, today: date
+) -> dict[str, str]:
+    """Return one expiry per DTE band from BOD: monthly, quarterly, yearly.
+
+    Scans all NIFTY CE/PE entries and picks the nearest expiry in each band:
+      monthly:   DTE 15–45   (front-month rollover window)
+      quarterly: DTE 46–200  (next Jun / Sep quarter-end)
+      yearly:    DTE 201–420 (Dec year-end contract)
+
+    Returns a dict like {"monthly": "2026-05-26", "quarterly": "2026-06-30", ...}.
+    Categories with no matching expiry in BOD are omitted silently.
+    """
+    from src.instruments.lookup import parse_expiry as _parse
+
+    seen: set[str] = set()
+    for inst in lookup._instruments:
+        if inst.get("segment") != "NSE_FO":
+            continue
+        if inst.get("instrument_type") not in ("CE", "PE"):
+            continue
+        if inst.get("underlying_symbol", "").upper() != "NIFTY":
+            continue
+        exp = _parse(inst.get("expiry"))
+        if exp:
+            seen.add(exp)
+
+    result: dict[str, str] = {}
+    for exp in sorted(seen):
+        dte = (date.fromisoformat(exp) - today).days
+        if dte < PROXY_MONTHLY_DTE[0]:
+            continue
+        if dte <= PROXY_MONTHLY_DTE[1] and "monthly" not in result:
+            result["monthly"] = exp
+        elif PROXY_QUARTERLY_DTE[0] <= dte <= PROXY_QUARTERLY_DTE[1] and "quarterly" not in result:
+            result["quarterly"] = exp
+        elif PROXY_YEARLY_DTE[0] <= dte <= PROXY_YEARLY_DTE[1] and "yearly" not in result:
+            result["yearly"] = exp
+
+    logger.info(
+        "Proxy expiry candidates: %s",
+        {k: f"{v} DTE={(date.fromisoformat(v) - today).days}" for k, v in result.items()},
+    )
+    return result
+
 def fetch_live_prices(
     client: UpstoxMarketClient,
     lookup: InstrumentLookup,
-    expiry: str,
+    futures_expiry: str,
     today: date,
     cycle: int,
     lot_size: int,
+    force_proxy_expiry: str | None = None,
 ) -> LivePrices:
-    """Fetch all prices for a 3-track entry in three API calls.
+    """Fetch all prices for a 3-track entry.
 
-    1. get_option_chain_sync → proxy candidates + nifty_spot
-    2. search_futures (BOD, no API) → futures instrument_key
-    3. get_ltp_sync([niftybees, futures]) → two LTPs
+    API calls:
+      - One get_option_chain_sync per proxy expiry category (up to 3: monthly /
+        quarterly / yearly), or just the forced expiry when --expiry is given.
+      - One get_ltp_sync for NiftyBees + front-month futures.
+
+    Proxy selection ranks candidates across all expiries: round-100 strikes
+    first, then tightest bid-ask spread, then delta proximity to 0.90.
     """
-    # 1. Option chain
-    logger.info("Fetching option chain: underlying=%s expiry=%s", NIFTY_UNDERLYING, expiry)
-    try:
-        raw_chain = client.get_option_chain_sync(NIFTY_UNDERLYING, expiry)
-    except Exception as exc:
-        logger.error(
-            "Option chain fetch failed: underlying=%s expiry=%s — %s",
-            NIFTY_UNDERLYING, expiry, exc, exc_info=True,
-        )
-        raise
+    # 1. Determine proxy expiry candidates
+    if force_proxy_expiry:
+        proxy_expiries: dict[str, str] = {"override": force_proxy_expiry}
+    else:
+        proxy_expiries = collect_candidate_expiries(lookup, today)
 
-    if not raw_chain:
+    if not proxy_expiries:
         raise ValueError(
-            f"Option chain returned empty data for expiry={expiry}. "
-            "Check that the expiry is valid and the market is open."
+            "No suitable NIFTY option expiries found in BOD "
+            f"(bands: monthly DTE {PROXY_MONTHLY_DTE}, "
+            f"quarterly DTE {PROXY_QUARTERLY_DTE}, yearly DTE {PROXY_YEARLY_DTE})."
         )
-    logger.debug("Option chain: %d strike entries received", len(raw_chain))
 
-    # Extract spot price from first chain entry
-    spot_raw = _safe_float((raw_chain[0] if raw_chain else {}).get("underlying_spot_price"))
-    if spot_raw <= 0:
+    # 2. Fetch option chains and collect candidates across all expiries
+    nifty_spot: Decimal | None = None
+    all_candidates: list[dict[str, Any]] = []
+
+    for exp_type, exp_date in proxy_expiries.items():
+        dte = (date.fromisoformat(exp_date) - today).days
+        logger.info(
+            "Fetching option chain: type=%-10s expiry=%s DTE=%d",
+            exp_type, exp_date, dte,
+        )
+        try:
+            raw_chain = client.get_option_chain_sync(NIFTY_UNDERLYING, exp_date)
+        except Exception as exc:
+            logger.warning(
+                "Chain fetch failed for %s (%s, DTE=%d): %s — skipping",
+                exp_type, exp_date, dte, exc,
+            )
+            continue
+
+        if not raw_chain:
+            logger.warning("Empty chain for %s (%s) — skipping", exp_type, exp_date)
+            continue
+
+        logger.debug("  %s chain: %d strike entries", exp_type, len(raw_chain))
+
+        # Spot from the first successful chain
+        if nifty_spot is None:
+            spot_raw = _safe_float((raw_chain[0]).get("underlying_spot_price"))
+            if spot_raw > 0:
+                nifty_spot = Decimal(str(round(spot_raw, 2)))
+                logger.info("Nifty spot from %s chain: ₹%s", exp_type, nifty_spot)
+
+        cands = filter_proxy_candidates(raw_chain)
+        for c in cands:
+            c["expiry"] = exp_date
+            c["dte"] = dte
+            c["expiry_type"] = exp_type
+        all_candidates.extend(cands)
+        logger.info("  → %d candidates from %s (%s, DTE=%d)", len(cands), exp_type, exp_date, dte)
+
+    if nifty_spot is None or nifty_spot <= 0:
         raise ValueError(
-            "underlying_spot_price is missing or zero in option chain response. "
-            "Run with LOG_LEVEL=DEBUG to inspect the raw response."
+            "underlying_spot_price missing in all option chain responses. "
+            "Run with LOG_LEVEL=DEBUG to inspect."
         )
-    nifty_spot = Decimal(str(round(spot_raw, 2)))
-    logger.info("Nifty spot from chain: ₹%s", nifty_spot)
 
-    # Proxy selection
-    candidates = filter_proxy_candidates(raw_chain)
+    if not all_candidates:
+        raise ValueError(
+            f"No CE candidates in delta [{PROXY_DELTA_MIN}, {PROXY_DELTA_MAX}] "
+            f"across expiries {list(proxy_expiries.values())}. "
+            "Market may be closed or delta band too narrow."
+        )
+
+    # Proxy selection across all expiries
+    candidates = all_candidates
     proxy_row = auto_select_proxy(candidates)
     proxy_price = compute_proxy_entry_price(proxy_row)
 
-    # 2. Futures key from BOD
-    logger.info("Looking up NIFTY futures key from BOD (expiry=%s)", expiry)
-    fut_list = lookup.search_futures("NIFTY", expiry=expiry, max_results=5)
-    logger.debug("search_futures('NIFTY', expiry=%s) → %d results", expiry, len(fut_list))
+    # 3. Futures key from BOD (always front-month, independent of proxy expiry)
+    logger.info("Looking up NIFTY futures key from BOD (expiry=%s)", futures_expiry)
+    fut_list = lookup.search_futures("NIFTY", expiry=futures_expiry, max_results=5)
+    logger.debug(
+        "search_futures('NIFTY', expiry=%s) → %d results", futures_expiry, len(fut_list)
+    )
 
     if not fut_list:
         raise ValueError(
-            f"No NIFTY futures in BOD for expiry={expiry}. "
+            f"No NIFTY futures in BOD for expiry={futures_expiry}. "
             "BOD file may not include this expiry. Verify data/instruments/NSE.json.gz."
         )
     futures_key = fut_list[0].get("instrument_key", "")
@@ -351,7 +446,7 @@ def fetch_live_prices(
         )
 
     return LivePrices(
-        entry_date=today, expiry=expiry,
+        entry_date=today, expiry=proxy_row["expiry"],
         nifty_spot=nifty_spot, lot_size=lot_size, cycle=cycle,
         niftybees_ltp=niftybees_ltp, niftybees_qty=niftybees_qty,
         futures_key=futures_key, futures_price=futures_price,
@@ -473,26 +568,37 @@ def print_preview(p: LivePrices, gates: dict[str, str], confirmed: bool) -> None
     for track, leg, qty, price, notional in rows:
         print(f"  {track:<22} {leg:<18} {qty:>6} {float(price):>10.2f} ₹{float(notional):>12,.0f}")
 
-    # Ranked proxy candidate table
+    # Ranked proxy candidate table grouped by expiry type
     print(f"{'═' * W}")
     print(f"  Proxy candidates — delta {PROXY_DELTA_MIN}–{PROXY_DELTA_MAX} "
-          f"(ranked: round-100 first, then spread ↑)")
-    print(f"  {'Rank':>4}  {'Strike':>7}  {'Delta':>6}  {'OI':>8}  "
-          f"{'Bid':>8}  {'Ask':>8}  {'Spread':>7}  {'Round?':>6}")
-    print(f"  {'─' * 68}")
+          f"(ranked: round-100 first, spread ↑)")
+    print(f"  {'Rk':>3}  {'Type':<10}  {'DTE':>4}  {'Strike':>7}  {'Delta':>6}  "
+          f"{'OI':>8}  {'Bid':>8}  {'Ask':>8}  {'Sprd':>6}  {'R':>2}")
+    print(f"  {'─' * 74}")
+    prev_type = None
     for c in p.proxy_candidates:
         c_spread = c["ask"] - c["bid"]
+        exp_type = c.get("expiry_type", "override")
+        dte = c.get("dte", 0)
+        if exp_type != prev_type:
+            if prev_type is not None:
+                print(f"  {'─' * 74}")
+            prev_type = exp_type
         is_round = int(c["strike"]) % 100 == 0
-        marker = "◀ selected" if c["strike"] == p.proxy_strike else ""
+        is_selected = (
+            c["strike"] == p.proxy_strike
+            and c.get("expiry") == p.expiry
+        )
+        marker = " ◀" if is_selected else ""
         round_tag = "✓" if is_round else ""
         print(
-            f"  {c['rank']:>4}  {c['strike']:>7.0f}  {c['delta']:>6.4f}  "
-            f"{c['oi']:>8,}  {c['bid']:>8.2f}  {c['ask']:>8.2f}  "
-            f"₹{c_spread:>6.2f}  {round_tag:>6}  {marker}"
+            f"  {c['rank']:>3}  {exp_type:<10}  {dte:>4}  {c['strike']:>7.0f}  "
+            f"{c['delta']:>6.4f}  {c['oi']:>8,}  {c['bid']:>8.2f}  {c['ask']:>8.2f}  "
+            f"₹{c_spread:>5.2f}  {round_tag:>2}{marker}"
         )
     spread = p.proxy_ask - p.proxy_bid
     print(f"{'─' * W}")
-    print(f"  Selected key={p.proxy_instrument_key}")
+    print(f"  Selected  expiry={p.expiry}  key={p.proxy_instrument_key}")
     print(f"  OI gate    : {gates['oi']}")
     print(f"  Spread gate: {gates['spread']}")
     print(f"{'═' * W}")
@@ -532,7 +638,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--expiry", type=str, default=None, metavar="YYYY-MM-DD",
-        help="Override proxy/futures expiry. Default: auto-derived from BOD futures.",
+        help="Pin proxy search to this single expiry. Futures always uses front-month.",
     )
     parser.add_argument(
         "--cycle", type=int, default=1,
@@ -583,25 +689,30 @@ def main() -> None:
         logger.error("Failed to load BOD file %s: %s", args.bod_path, exc, exc_info=True)
         sys.exit(1)
 
-    # Derive expiry
+    # Futures expiry — always front-month (from BOD futures)
+    try:
+        futures_expiry = derive_expiry(lookup, today)
+    except ValueError as exc:
+        logger.error("Futures expiry derivation failed: %s", exc)
+        sys.exit(1)
+
+    # Proxy expiry override — if given, restricts proxy search to that single expiry
+    force_proxy_expiry: str | None = None
     if args.expiry:
         try:
             date.fromisoformat(args.expiry)
         except ValueError:
             logger.error("--expiry must be YYYY-MM-DD, got: %r", args.expiry)
             sys.exit(1)
-        expiry = args.expiry
-        logger.info("Using user-supplied expiry: %s", expiry)
-    else:
-        try:
-            expiry = derive_expiry(lookup, today)
-        except ValueError as exc:
-            logger.error("Expiry derivation failed: %s", exc)
-            sys.exit(1)
+        force_proxy_expiry = args.expiry
+        logger.info("Proxy expiry forced to: %s (monthly/quarterly/yearly scan disabled)", force_proxy_expiry)
 
-    # Fetch all live prices
+    # Fetch all live prices (proxy searched across monthly + quarterly + yearly unless forced)
     try:
-        prices = fetch_live_prices(client, lookup, expiry, today, args.cycle, LOT_SIZE)
+        prices = fetch_live_prices(
+            client, lookup, futures_expiry, today, args.cycle, LOT_SIZE,
+            force_proxy_expiry=force_proxy_expiry,
+        )
     except Exception as exc:
         logger.error("fetch_live_prices failed: %s", exc, exc_info=True)
         sys.exit(1)
