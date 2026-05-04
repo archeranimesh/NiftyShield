@@ -73,14 +73,22 @@ CREATE TABLE IF NOT EXISTS paper_leg_snapshots (
     ltp            TEXT,
     PRIMARY KEY (strategy_name, leg_role, snapshot_date)
 ) STRICT;
-
-CREATE INDEX IF NOT EXISTS idx_paper_leg_snap_strategy_leg
-    ON paper_leg_snapshots(strategy_name, leg_role, snapshot_date);
 ```
+> [!NOTE]
+> No explicit index added — the PRIMARY KEY already creates an implicit B-tree index on
+> `(strategy_name, leg_role, snapshot_date)`. A duplicate index would waste storage and
+> would never be chosen over the PK index by SQLite's query planner.
 3. Add 3 new methods to `PaperStore` (after `get_proxy_delta_consecutive_days`, line 441):
-   - `record_leg_snapshot(snap: PaperLegSnapshot) -> None` — upsert ON CONFLICT UPDATE
+   - `record_leg_snapshot(snap: PaperLegSnapshot) -> None` — assert `snap.total_pnl == snap.unrealized_pnl + snap.realized_pnl` before the INSERT; raises `ValueError` on mismatch. Then upsert via ON CONFLICT UPDATE.
    - `get_leg_snapshot(strategy_name, leg_role, snap_date) -> PaperLegSnapshot | None`
    - `get_prev_leg_snapshot(strategy_name, leg_role, before_date) -> PaperLegSnapshot | None` — `MAX(snapshot_date) < before_date`
+
+> [!IMPORTANT]
+> The `total_pnl` assertion in `record_leg_snapshot` is the same class of invariant
+> as the Decimal-as-TEXT rule: it prevents silent data corruption from a manually
+> constructed `PaperLegSnapshot` with inconsistent fields. It must live in the store
+> method (not only in a `__post_init__`), because the store is the last choke point
+> before SQLite.
 
 #### [MODIFY] [test_store.py](file:///Users/abhadra/myWork/myCode/python/NiftyShield/tests/unit/paper/test_store.py)
 Add `TestLegSnapshots` class:
@@ -117,22 +125,34 @@ def _print_confirmation_table(overlay_type, rows, entry_date, expiry, dte) -> No
 async def main() -> None  # --overlay, --date, --tracks, --yes, --dry-run, --force
 ```
 
-CLI blocked-combo guard (argparse time):
+CLI blocked-combo guard — applied to the **resolved** track list, not raw argparse:
 ```python
+ALL_TRACKS = ["paper_nifty_spot", "paper_nifty_futures", "paper_nifty_proxy"]
+
+# In main(), immediately after parse_args():
+effective_tracks = args.tracks if args.tracks else ALL_TRACKS  # resolve defaults first
+
 if args.overlay == "cc" and "paper_nifty_futures" in effective_tracks:
     print("ERROR: Covered call BLOCKED on paper_nifty_futures...")
     sys.exit(1)
 ```
+> [!IMPORTANT]
+> `effective_tracks` must be resolved before the guard runs. Without this, omitting
+> `--tracks` (which implies all three including futures) would silently bypass the
+> hard exit(1) check — the exact failure mode that makes this rule safety-critical.
 
 Collar atomicity: validate both legs before writing either; on second-leg failure, delete first.
 
 #### [NEW] [test_paper_3track_overlay.py](file:///Users/abhadra/myWork/myCode/python/NiftyShield/tests/unit/paper/test_paper_3track_overlay.py)
-- `test_rank_overlay_key_round_strike_wins`
+- `test_rank_overlay_key_round_strike_wins` — `is_non_round=0` beats `is_non_round=1`
 - `test_rank_overlay_key_higher_oi_wins_in_same_bucket`
-- `test_cc_blocked_on_futures_exits_1`
+- `test_cc_blocked_on_futures_exits_1` — implicit futures (no `--tracks`) triggers guard
+- `test_cc_on_spot_and_proxy_succeeds` — positive case: CC on spot+proxy passes guard
 - `test_build_trades_pp_leg_roles`
-- `test_build_trades_collar_both_legs`
+- `test_build_trades_collar_both_legs` — both `overlay_collar_put` + `overlay_collar_call`
 - `test_check_existing_overlay_no_open_returns_none`
+- `test_check_existing_overlay_same_expiry_no_force_needed` — existing open, same expiry: proceeds
+- `test_check_existing_overlay_diff_expiry_requires_force` — different expiry without `--force` exits 1
 
 ---
 
@@ -151,7 +171,7 @@ Key functions:
 BASE_LEGS = {"base_etf", "base_futures", "base_ditm_call"}
 OVERLAY_PREFIX = "overlay_"
 
-async def _leg_delta(store, strategy, leg_role, today_pnl, today) -> Decimal
+def _leg_delta(store, strategy, leg_role, today_pnl, today) -> Decimal  # sync — SQLite call only
 def _protection_status(base_delta: Decimal, overlay_delta: Decimal) -> str  # ✅/⚠️/❌
 def _print_longs_section(leg_results: dict) -> None
 def _print_protection_section(track_results: dict, overlay_type: str) -> None
@@ -212,13 +232,14 @@ DTE check: skip if `(expiry - roll_date).days > OVERLAY_ROLL_DTE` unless `--forc
 ---
 
 ### Phase E — Docs
-> **Commit: `docs: update CONTEXT.md and TODOS.md for overlay automation feature`**
+> **Commit: `docs: update CONTEXT.md, TODOS.md, and src/paper/CLAUDE.md for overlay automation`**
 
-#### [MODIFY] CONTEXT.md, CONTEXT_TREE.md, TODOS.md
-- Add `paper_leg_snapshots` table to DB schema section
+#### [MODIFY] CONTEXT.md, CONTEXT_TREE.md, TODOS.md, src/paper/CLAUDE.md
+- Add `paper_leg_snapshots` table to CONTEXT.md DB schema section
 - Add new scripts to CONTEXT_TREE.md
 - Mark overlay automation tasks complete in TODOS.md
 - Note `paper_3track_snapshot.py` as new canonical cron script
+- Update `src/paper/CLAUDE.md` with: new `PaperLegSnapshot` model, the `total_pnl` assertion invariant in `record_leg_snapshot`, and the three new store methods — material changes to `src/paper/` invariants require the module CLAUDE.md to stay current
 
 ---
 
@@ -260,7 +281,7 @@ Each phase is one conversation. At session start, load only:
 | Phase | Files needed in context |
 |---|---|
 | A | `src/paper/models.py` (139 lines) + `src/paper/store.py` (442 lines) |
-| B | `src/paper/store.py` imports only + `paper_3track_entry.py` (ranking reference) |
+| B | `src/paper/store.py` imports only + `paper_3track_overlay_entry.py` (ranking/pattern reference) |
 | C | `src/paper/store.py` imports + `paper_track_snapshot.py` (pattern reference) |
 | D | Phase B output (for `_parse_expiry_from_key`) + `store.py` imports |
-| E | CONTEXT.md + TODOS.md |
+| E | CONTEXT.md + TODOS.md + `src/paper/CLAUDE.md` |
