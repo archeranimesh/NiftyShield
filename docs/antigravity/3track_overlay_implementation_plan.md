@@ -78,10 +78,11 @@ CREATE TABLE IF NOT EXISTS paper_leg_snapshots (
 > No explicit index added — the PRIMARY KEY already creates an implicit B-tree index on
 > `(strategy_name, leg_role, snapshot_date)`. A duplicate index would waste storage and
 > would never be chosen over the PK index by SQLite's query planner.
-3. Add 3 new methods to `PaperStore` (after `get_proxy_delta_consecutive_days`, line 441):
+3. Add 4 new methods to `PaperStore` (after `get_proxy_delta_consecutive_days`, line 441):
    - `record_leg_snapshot(snap: PaperLegSnapshot) -> None` — assert `snap.total_pnl == snap.unrealized_pnl + snap.realized_pnl` before the INSERT; raises `ValueError` on mismatch. Then upsert via ON CONFLICT UPDATE.
    - `get_leg_snapshot(strategy_name, leg_role, snap_date) -> PaperLegSnapshot | None`
    - `get_prev_leg_snapshot(strategy_name, leg_role, before_date) -> PaperLegSnapshot | None` — `MAX(snapshot_date) < before_date`
+   - `delete_trade(trade: PaperTrade) -> None` — delete by unique constraint `(strategy_name, leg_role, trade_date, action)`; no-op if row not found (safe to call in a rollback path where the write may not have committed)
 
 > [!IMPORTANT]
 > The `total_pnl` assertion in `record_leg_snapshot` is the same class of invariant
@@ -98,6 +99,7 @@ Add `TestLegSnapshots` class:
 - `test_get_leg_snapshot_missing`
 - `test_get_prev_leg_snapshot_returns_max_before_date`
 - `test_get_prev_leg_snapshot_no_prior`
+- `test_delete_trade_removes_correct_row` — record two trades, delete one by its unique key fields, assert only the other remains via `get_trades`
 
 ---
 
@@ -215,12 +217,18 @@ async def _close_leg(broker, store, trade, roll_date, dry_run) -> PaperTrade
 async def _open_new_leg(broker, overlay_type, strategy, roll_date, lot_size, ...) -> PaperTrade
 
 async def _roll_single(store, broker, lookup, overlay_type, strategy, leg_role, roll_date, force, dry_run, yes):
+    # Resolve the expiring trade before attempting any writes.
+    trades = store.get_trades(strategy, leg_role)
+    expiring = _find_expiring_overlay(trades, roll_date, leg_role)
+    if not expiring:
+        return  # nothing to roll for this leg
+    trade = expiring[0]  # at most one open overlay per leg role
     # 2-trade atomicity: close first, then open.
     # If _open_new_leg fails after the close trade has been written,
     # delete the close trade before re-raising — same 'all or none' guarantee as collar.
     close_trade = await _close_leg(broker, store, trade, roll_date, dry_run)
     try:
-        open_trade = await _open_new_leg(...)
+        open_trade = await _open_new_leg(broker, lookup, overlay_type, strategy, roll_date, ...)
     except Exception:
         if not dry_run:
             store.delete_trade(close_trade)  # rollback: un-close the leg
@@ -252,6 +260,7 @@ async def main() -> None  # --overlay, --date, --tracks, --yes, --dry-run, --for
 - `test_parse_expiry_from_key_equity_returns_none`
 - `test_find_expiring_overlay_filters_by_dte`
 - `test_find_expiring_overlay_skips_equity`
+- `test_roll_single_open_failure_deletes_close_trade` — mock `_open_new_leg` to raise, assert `store.delete_trade` was called with the close trade (verifies the rollback path runs, not just that it exists)
 
 ---
 
