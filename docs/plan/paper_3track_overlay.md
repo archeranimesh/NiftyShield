@@ -144,21 +144,61 @@ else:
 For a Collar, the gate is `max(put_spread_pct, call_spread_pct) ≤ 3.0` on the
 same expiry. If no single expiry passes for both legs, fall back to monthly.
 
-### Strike targeting (replacing manual delta-range guessing)
+### Module-level constants (mirrors `paper_3track_entry.py` style)
 
-Rather than a fixed delta range, the script computes the target strike directly from
-spot price and selects the closest listed strike:
+```python
+LOT_SIZE = 65                  # Nifty 50, effective Jan 2026 — verify before each cycle
 
-| Overlay leg | Method | Typical |delta| |
-|---|---|---|
-| PP (protective put) | `floor(spot × 0.90)` rounded to nearest 50 | 0.05–0.15 |
-| CC (covered call) | `ceil(spot × 1.04)` rounded to nearest 50 | 0.20–0.35 |
-| Collar put | same as PP | 0.05–0.15 |
-| Collar call | same as CC | 0.20–0.35 |
+# Protective put targeting (strategy doc: 8–10% OTM)
+PP_OTM_MIN    = 0.08           # lower bound OTM fraction below spot
+PP_OTM_MAX    = 0.10           # upper bound OTM fraction below spot
+PP_TARGET_OTM = 0.09           # midpoint — ranking tiebreaker only
 
-The exact percentage bounds (8–10% OTM for PP, 3–5% OTM for CC) are defined as
-module-level constants and match the strategy doc. The actual delta is displayed in
-the confirmation table for review — it is informational, not a gate.
+# Covered call targeting (strategy doc: 3–5% OTM)
+CC_OTM_MIN    = 0.03
+CC_OTM_MAX    = 0.05
+CC_TARGET_OTM = 0.04
+
+# Expiry selection gate (strategy doc §Overlay Expiry Selection)
+SPREAD_PCT_MAX = 3.0           # prefer quarterly when spread_pct ≤ this
+
+# Roll trigger
+OVERLAY_ROLL_DTE = 5           # DTE at or below which an overlay is eligible to roll
+```
+
+These are fixed constants matching the strategy doc. No CLI override — changes
+require a commit that also updates the strategy doc version reference.
+
+### Strike selection — mirrors `auto_select_proxy` ranking
+
+Target strikes are found by OTM% band; candidates are ranked using the same
+three-tier sort as `auto_select_proxy` in `paper_3track_entry.py`.
+**Highest OI always wins within a spread tier.**
+
+```python
+def _rank_overlay_key(r: dict, target_otm: float) -> tuple:
+    spread = r["ask"] - r["bid"] if (r["ask"] > 0 and r["bid"] > 0) else 9_999.0
+    is_non_round = int(r["strike"]) % 100 != 0
+    spread_bucket = int(spread / 2)             # ₹2 buckets — same as entry script
+    otm_dist = abs(r["otm_pct"] - target_otm)  # proximity tiebreaker only
+    return (is_non_round, spread_bucket, -r["oi"], spread, otm_dist)
+```
+
+Ranking key (ascending — lower wins):
+
+1. `is_non_round` — multiples of 100 preferred over 50-increment strikes
+2. `spread_bucket` — tighter spread tier wins (bucketed in ₹2 to suppress sub-rupee noise)
+3. `-oi` — **highest OI wins within the same spread tier** (primary liquidity signal)
+4. `spread` — exact spread tiebreaker inside a bucket
+5. `otm_dist` — proximity to `PP_TARGET_OTM` / `CC_TARGET_OTM` — final tiebreaker only
+
+`otm_pct` for a PE at `strike`: `(spot - strike) / spot`.
+`otm_pct` for a CE at `strike`: `(strike - spot) / spot`.
+Only strikes where `OTM_MIN ≤ otm_pct ≤ OTM_MAX` enter the candidate pool.
+
+There is **no hard OI minimum gate**. The ranking always produces a winner; the
+confirmation table shows OI for operator review before any DB write. Delta is an
+informational display field — not a gate.
 
 ### Confirmation display (before any DB write)
 
@@ -295,18 +335,49 @@ Cumulative overlay P&L = all realized + current open unrealized across all cycle
 
 ## Script 3: `paper_3track_snapshot.py` — Combined PnL Display
 
+### Scope boundary
+
+`paper_snapshot.py` is the general-purpose snapshot runner — it handles any
+`paper_*` strategy and will serve future strategies beyond the 3-track comparison.
+`paper_3track_snapshot.py` is **3-track specific**: it knows the three strategy
+namespaces, the base/overlay leg split, and the Longs + Protection display format.
+When a new paper strategy is added in future, it gets its own display script (or is
+handled by the generic `paper_snapshot.py`) — not by extending this one.
+
 ### CLI
 
 ```
 python -m scripts.paper_3track_snapshot \
     [--date YYYY-MM-DD]          # default: today
-    [--save]                      # write paper_leg_snapshots rows to DB
-    [--underlying <price>]        # Nifty spot (for NEE % display)
+    [--underlying <price>]        # Nifty spot price (for NEE % display)
+    [--no-save]                   # dry-run: display only, skip DB write
 ```
 
-`--save` writes both `paper_nav_snapshots` (strategy-total, existing) and
-`paper_leg_snapshots` (per-leg, new). Run with `--save` from the EOD cron so that
-tomorrow's run can compute Δ from yesterday.
+By default, every run writes `paper_nav_snapshots` (strategy-total) and
+`paper_leg_snapshots` (per-leg) to the DB — matching the cron behaviour of
+`nuvama_intraday_tracker`, which always saves. `--no-save` is the explicit opt-out
+for ad-hoc inspection without polluting the snapshot history.
+
+### Cron setup (mirrors `nuvama_intraday_tracker` pattern)
+
+```
+# EOD paper snapshot — runs once at 15:50, after market close
+50 15 * * 1-5  cd /path/to/NiftyShield && python -m scripts.paper_3track_snapshot
+```
+
+Module docstring will carry the cron line in the same format as
+`nuvama_intraday_tracker.py`:
+
+```python
+"""3-Track paper trading PnL snapshot — Longs + Protection display.
+
+Intended to run via cron:
+50 15 * * 1-5  python -m scripts.paper_3track_snapshot
+
+Saves paper_nav_snapshots (strategy-total) and paper_leg_snapshots (per-leg)
+on every run. Use --no-save for ad-hoc inspection without DB writes.
+"""
+```
 
 ### Output format
 
@@ -425,8 +496,7 @@ Delta is fetched from the live option chain for `base_ditm_call`'s instrument ke
        --overlay pp \
        --tracks futures proxy \
        --date <entry_date>     → records PP-only on Futures + Proxy
-4. paper_3track_snapshot.py \
-       --save                  → writes first leg snapshots (Δ = 0)
+4. paper_3track_snapshot.py    → writes first leg snapshots (Δ = 0); save is default
 ```
 
 ## Execution Flow — Monthly Roll Day
@@ -438,17 +508,20 @@ Delta is fetched from the live option chain for `base_ditm_call`'s instrument ke
    paper_3track_overlay_roll.py \
        --overlay collar        → closes monthly collar (DTE ≤ 5), opens new cycle
    [quarterly overlays skipped automatically — DTE > 5]
-3. paper_3track_snapshot.py --save   → records post-roll PnL snapshot
+3. paper_3track_snapshot.py          → records post-roll PnL snapshot (save is default)
 ```
 
 ## Execution Flow — Daily (EOD cron, 3:50 PM IST)
 
 ```
-python -m scripts.paper_3track_snapshot --save --underlying <nifty_spot>
+# crontab entry — no --save flag needed, save is default
+50 15 * * 1-5  cd /path/to/NiftyShield && python -m scripts.paper_3track_snapshot
 ```
 
-This is the only daily operation needed. Entry and roll scripts are manual, run
-on the specific calendar dates.
+The script fetches live LTPs, computes PnL for all 3 tracks + all overlay legs,
+displays the Longs + Protection report, and writes snapshots to DB — all in one
+run. No separate `--save` step. Entry and roll scripts remain manual, run on
+specific calendar dates only.
 
 ---
 
@@ -519,23 +592,24 @@ Start with Phase A.
 
 ---
 
-## Open Questions (resolve before implementation)
+## Resolved Decisions
 
-1. **OTM% constants** — strategy doc says "8–10% OTM for PP" and "3–5% OTM for CC".
-   Should these be configurable via CLI args, or fixed constants matching the strategy
-   doc? Recommendation: fixed constants (matching spec), with a `--pp-otm-pct` override
-   for experimentation. Decision needed before Phase B.
+All open questions from the initial draft are resolved:
 
-2. **OI threshold for PP** — strategy doc says OI ≥ 5,000 for the Proxy base DITM call.
-   For overlay PPs (8–10% OTM), what is the minimum acceptable OI? Illiquid deep OTM
-   puts on monthly expiry can have OI < 500. Recommendation: OI ≥ 1,000 for overlays
-   (monthly), ≥ 500 for quarterly (institutional hedging OI patterns differ). Confirm.
+1. **OTM% constants** — Fixed module-level constants (`PP_OTM_MIN/MAX/TARGET`,
+   `CC_OTM_MIN/MAX/TARGET`) matching strategy doc. No CLI override. Same pattern
+   as `PROXY_DELTA_MIN/MAX/TARGET` in `paper_3track_entry.py`.
 
-3. **Snapshot script replaces or extends `paper_snapshot.py`?** — Two options: (a)
-   `paper_3track_snapshot.py` is a new script that runs in addition to `paper_snapshot.py`
-   (separate concerns), or (b) it replaces `paper_snapshot.py` for the 3-track strategies.
-   Recommendation: new script — `paper_snapshot.py` remains general-purpose. Confirm.
+2. **OI for overlay strikes** — No hard minimum gate. Use `auto_select_proxy`-style
+   ranking: highest OI wins within each ₹2 spread bucket. OI is displayed in the
+   confirmation table for operator review. This matches the existing entry script's
+   approach exactly.
 
-4. **`--save` as default on cron?** — Should the cron always save leg snapshots, or only
-   on explicit `--save`? Recommendation: `--save` opt-in (explicit) to prevent accidental
-   snapshot pollution during ad-hoc runs. Confirm.
+3. **Snapshot script scope** — `paper_snapshot.py` remains general-purpose (handles
+   any `paper_*` strategy). `paper_3track_snapshot.py` is 3-track specific and knows
+   the base/overlay split. Future strategies get their own display scripts, not an
+   extension of this one.
+
+4. **`--save` default** — Save is on by default, every run. `--no-save` is the
+   explicit opt-out for ad-hoc inspection. Matches `nuvama_intraday_tracker` pattern.
+   Cron entry carries no flags.
