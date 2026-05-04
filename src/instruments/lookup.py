@@ -211,7 +211,7 @@ class InstrumentLookup:
                 continue
 
             underlying_sym = inst.get("underlying_symbol", "")
-            if underlying.upper() not in underlying_sym.upper():
+            if underlying_sym.upper() != underlying.upper():
                 continue
 
             if strike is not None and inst.get("strike_price") != strike:
@@ -250,7 +250,7 @@ class InstrumentLookup:
                 continue
             if inst.get("instrument_type") != "FUT":
                 continue
-            if underlying.upper() not in inst.get("underlying_symbol", "").upper():
+            if inst.get("underlying_symbol", "").upper() != underlying.upper():
                 continue
             if expiry is not None:
                 inst_expiry = parse_expiry(inst.get("expiry"))

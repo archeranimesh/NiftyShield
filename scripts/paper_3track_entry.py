@@ -39,6 +39,10 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from src.client.upstox_market import UpstoxMarketClient
 from src.instruments.lookup import InstrumentLookup, parse_expiry
 from src.models.portfolio import TradeAction
