@@ -187,6 +187,7 @@ def filter_proxy_candidates(raw_chain: list[dict[str, Any]]) -> list[dict[str, A
             "iv": _safe_float(greeks.get("iv")),
             "ltp": ltp, "mid": mid, "bid": bid, "ask": ask,
             "oi": oi, "instrument_key": key,
+            "option_type": "CE",
         })
         logger.debug(
             "Proxy candidate: strike=%.0f delta=%.4f OI=%d spread=%.2f mid=%.2f",
@@ -219,8 +220,11 @@ def auto_select_proxy(rows: list[dict[str, Any]]) -> dict[str, Any]:
     def _rank_key(r: dict[str, Any]) -> tuple:
         spread = r["ask"] - r["bid"] if (r["ask"] > 0 and r["bid"] > 0) else 9_999.0
         is_non_round = int(r["strike"]) % 100 != 0
+        # Bucket spreads into ₹2 windows so candidates within the same spread
+        # tier compete on OI (higher OI wins) rather than on sub-rupee differences.
+        spread_bucket = int(spread / 2)
         delta_dist = abs(abs(r["delta"]) - PROXY_TARGET_DELTA)
-        return (is_non_round, spread, delta_dist)
+        return (is_non_round, spread_bucket, -r["oi"], spread, delta_dist)
 
     rows.sort(key=_rank_key)
     for i, r in enumerate(rows):
@@ -568,33 +572,25 @@ def print_preview(p: LivePrices, gates: dict[str, str], confirmed: bool) -> None
     for track, leg, qty, price, notional in rows:
         print(f"  {track:<22} {leg:<18} {qty:>6} {float(price):>10.2f} ₹{float(notional):>12,.0f}")
 
-    # Ranked proxy candidate table grouped by expiry type
+    # Ranked proxy candidate table (top 10)
     print(f"{'═' * W}")
+    total = len(p.proxy_candidates)
     print(f"  Proxy candidates — delta {PROXY_DELTA_MIN}–{PROXY_DELTA_MAX} "
-          f"(ranked: round-100 first, spread ↑)")
-    print(f"  {'Rk':>3}  {'Type':<10}  {'DTE':>4}  {'Strike':>7}  {'Delta':>6}  "
-          f"{'OI':>8}  {'Bid':>8}  {'Ask':>8}  {'Sprd':>6}  {'R':>2}")
-    print(f"  {'─' * 74}")
-    prev_type = None
-    for c in p.proxy_candidates:
+          f"(showing top 10 of {total}, ranked: round-100 first, spread↑ OI↓)")
+    print(f"  {'Rk':>3}  {'Expiry':<12}  {'Strike':>7}  {'Type':>4}  {'Delta':>6}  "
+          f"{'OI':>9}  {'Bid':>8}  {'Ask':>8}  {'Sprd':>6}  {'R':>2}")
+    print(f"  {'─' * 76}")
+    for c in p.proxy_candidates[:10]:
         c_spread = c["ask"] - c["bid"]
-        exp_type = c.get("expiry_type", "override")
-        dte = c.get("dte", 0)
-        if exp_type != prev_type:
-            if prev_type is not None:
-                print(f"  {'─' * 74}")
-            prev_type = exp_type
         is_round = int(c["strike"]) % 100 == 0
-        is_selected = (
-            c["strike"] == p.proxy_strike
-            and c.get("expiry") == p.expiry
-        )
+        is_selected = c["strike"] == p.proxy_strike and c.get("expiry") == p.expiry
         marker = " ◀" if is_selected else ""
         round_tag = "✓" if is_round else ""
+        opt_type = c.get("option_type", "CE")
         print(
-            f"  {c['rank']:>3}  {exp_type:<10}  {dte:>4}  {c['strike']:>7.0f}  "
-            f"{c['delta']:>6.4f}  {c['oi']:>8,}  {c['bid']:>8.2f}  {c['ask']:>8.2f}  "
-            f"₹{c_spread:>5.2f}  {round_tag:>2}{marker}"
+            f"  {c['rank']:>3}  {c.get('expiry', p.expiry):<12}  {c['strike']:>7.0f}  "
+            f"{opt_type:>4}  {c['delta']:>6.4f}  {c['oi']:>9,}  "
+            f"{c['bid']:>8.2f}  {c['ask']:>8.2f}  ₹{c_spread:>5.2f}  {round_tag:>2}{marker}"
         )
     spread = p.proxy_ask - p.proxy_bid
     print(f"{'─' * W}")
