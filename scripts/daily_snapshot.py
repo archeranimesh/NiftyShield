@@ -240,7 +240,7 @@ def _historical_main(snap_date: date, db_path: Path) -> int:
                     qty=snap["qty"],
                     avg_price=positions.get(isin, snap["current_value"]),
                     ltp=snap["ltp"],
-                    chg_pct=Decimal("0"),
+                    chg_pct=snap["chg_pct"],  # stored since schema v2; '0' for pre-migration rows
                     hair_cut=Decimal("0"),
                 )
                 for isin, snap in nuvama_snaps.items()

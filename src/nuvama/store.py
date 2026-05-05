@@ -6,9 +6,12 @@ Two tables, both in the shared portfolio.sqlite:
     — Static cost-basis table seeded once from scripts/seed_nuvama_positions.py.
       Never updated by the snapshot run; only by explicit seed/update commands.
 
-  nuvama_holdings_snapshots(isin, snapshot_date, qty, ltp, current_value)
+  nuvama_holdings_snapshots(isin, snapshot_date, qty, ltp, current_value, chg_pct)
     — Daily EOD snapshot per instrument. UNIQUE(isin, snapshot_date) with
       upsert semantics — re-runs on the same day are idempotent.
+      chg_pct: day-change % from the live Holdings() response; used to
+      reconstruct day_delta in historical mode (DEFAULT '0' for rows
+      written before schema v2).
 """
 
 from __future__ import annotations
@@ -39,6 +42,7 @@ CREATE TABLE IF NOT EXISTS nuvama_holdings_snapshots (
     qty             INTEGER NOT NULL,
     ltp             TEXT NOT NULL,
     current_value   TEXT NOT NULL,
+    chg_pct         TEXT NOT NULL DEFAULT '0',
     PRIMARY KEY (isin, snapshot_date)
 )
 """
@@ -70,10 +74,11 @@ CREATE TABLE IF NOT EXISTS nuvama_intraday_snapshots (
 )
 """
 
-# Schema version for nuvama_intraday_snapshots.
-# v0: nifty_spot/ltp declared DECIMAL (misleading — values stored as REAL).
-# v1: corrected to REAL; old table dropped and recreated on first run.
-_INTRADAY_SCHEMA_VERSION = 1
+# Schema version for nuvama tables (stored in PRAGMA user_version).
+# v0: nifty_spot/ltp in intraday table declared DECIMAL (wrong affinity).
+# v1: intraday table recreated with REAL columns.
+# v2: nuvama_holdings_snapshots gains chg_pct TEXT NOT NULL DEFAULT '0'.
+_SCHEMA_VERSION = 2
 
 
 def _row_to_option_position(row: sqlite3.Row) -> NuvamaOptionPosition:
@@ -101,26 +106,36 @@ class NuvamaStore:
     # ------------------------------------------------------------------
 
     def _ensure_tables(self) -> None:
-        """Create tables if they do not exist.
+        """Create tables and run incremental schema migrations.
 
-        AR-19 migration: nuvama_intraday_snapshots v0 declared nifty_spot/ltp
-        as DECIMAL (text affinity). v1 corrects them to REAL. Since this table
-        holds at most 30 days of intraday high/low data (not financial ledger
-        entries), we drop and recreate on schema version mismatch rather than
-        migrating in place.
+        Migration history:
+          v0 → v1: nuvama_intraday_snapshots nifty_spot/ltp DECIMAL→REAL;
+                   table dropped and recreated (no financial data lost).
+          v1 → v2: nuvama_holdings_snapshots gains chg_pct TEXT NOT NULL
+                   DEFAULT '0'; existing rows default to '0' (safe).
         """
         with connect(self._db_path) as conn:
             conn.execute(_CREATE_POSITIONS)
             conn.execute(_CREATE_SNAPSHOTS)
             conn.execute(_CREATE_OPTIONS_SNAPSHOTS)
             stored_version = conn.execute("PRAGMA user_version").fetchone()[0]
-            if stored_version < _INTRADAY_SCHEMA_VERSION:
-                conn.execute(
-                    "DROP TABLE IF EXISTS nuvama_intraday_snapshots"
-                )
-                conn.execute(
-                    f"PRAGMA user_version = {_INTRADAY_SCHEMA_VERSION}"
-                )
+            if stored_version < 1:
+                conn.execute("DROP TABLE IF EXISTS nuvama_intraday_snapshots")
+            if stored_version < 2:
+                # Guard: CREATE TABLE already includes chg_pct on fresh DBs;
+                # ALTER TABLE is only needed for existing DBs that predate v2.
+                existing_cols = {
+                    row["name"]
+                    for row in conn.execute(
+                        "PRAGMA table_info(nuvama_holdings_snapshots)"
+                    ).fetchall()
+                }
+                if "chg_pct" not in existing_cols:
+                    conn.execute(
+                        "ALTER TABLE nuvama_holdings_snapshots"
+                        " ADD COLUMN chg_pct TEXT NOT NULL DEFAULT '0'"
+                    )
+                conn.execute(f"PRAGMA user_version = {_SCHEMA_VERSION}")
             conn.execute(_CREATE_INTRADAY_SNAPSHOTS)
 
     # ------------------------------------------------------------------
@@ -203,6 +218,7 @@ class NuvamaStore:
         qty: int,
         ltp: Decimal,
         current_value: Decimal,
+        chg_pct: Decimal = Decimal("0"),
     ) -> None:
         """Upsert one holding snapshot row.
 
@@ -215,17 +231,20 @@ class NuvamaStore:
             qty: Quantity held.
             ltp: Last traded price.
             current_value: ltp × qty (Decimal, stored as TEXT).
+            chg_pct: Day-change percent from the live Holdings() response.
+                Defaults to 0 when not available (e.g. seeding from static data).
         """
         with connect(self._db_path) as conn:
             conn.execute(
                 """
                 INSERT INTO nuvama_holdings_snapshots
-                    (isin, snapshot_date, qty, ltp, current_value)
-                VALUES (?, ?, ?, ?, ?)
+                    (isin, snapshot_date, qty, ltp, current_value, chg_pct)
+                VALUES (?, ?, ?, ?, ?, ?)
                 ON CONFLICT(isin, snapshot_date) DO UPDATE SET
                     qty           = excluded.qty,
                     ltp           = excluded.ltp,
-                    current_value = excluded.current_value
+                    current_value = excluded.current_value,
+                    chg_pct       = excluded.chg_pct
                 """,
                 (
                     isin,
@@ -233,6 +252,7 @@ class NuvamaStore:
                     qty,
                     str(ltp),
                     str(current_value),
+                    str(chg_pct),
                 ),
             )
 
@@ -256,12 +276,13 @@ class NuvamaStore:
             conn.executemany(
                 """
                 INSERT INTO nuvama_holdings_snapshots
-                    (isin, snapshot_date, qty, ltp, current_value)
-                VALUES (?, ?, ?, ?, ?)
+                    (isin, snapshot_date, qty, ltp, current_value, chg_pct)
+                VALUES (?, ?, ?, ?, ?, ?)
                 ON CONFLICT(isin, snapshot_date) DO UPDATE SET
                     qty           = excluded.qty,
                     ltp           = excluded.ltp,
-                    current_value = excluded.current_value
+                    current_value = excluded.current_value,
+                    chg_pct       = excluded.chg_pct
                 """,
                 [
                     (
@@ -270,6 +291,7 @@ class NuvamaStore:
                         h.qty,
                         str(h.ltp),
                         str(h.current_value),
+                        str(getattr(h, "chg_pct", Decimal("0"))),
                     )
                     for h in holdings
                 ],
@@ -291,7 +313,7 @@ class NuvamaStore:
         """
         with connect(self._db_path) as conn:
             rows = conn.execute(
-                "SELECT isin, qty, ltp, current_value"
+                "SELECT isin, qty, ltp, current_value, chg_pct"
                 " FROM nuvama_holdings_snapshots"
                 " WHERE snapshot_date = ?",
                 (snapshot_date.isoformat(),),
@@ -301,7 +323,8 @@ class NuvamaStore:
                 "isin": row["isin"],
                 "qty": row["qty"],
                 "ltp": Decimal(row["ltp"]),
-                "current_value": Decimal(row["current_value"])
+                "current_value": Decimal(row["current_value"]),
+                "chg_pct": Decimal(row["chg_pct"]),
             }
             for row in rows
         }

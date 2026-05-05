@@ -22,7 +22,7 @@ def _pos(isin: str, avg_price: str = "1000.00", qty: int = 100, label: str = "")
     return {"isin": isin, "avg_price": Decimal(avg_price), "qty": qty, "label": label}
 
 
-def _holding_stub(isin: str, qty: int = 100, ltp: str = "1010.00"):
+def _holding_stub(isin: str, qty: int = 100, ltp: str = "1010.00", chg_pct: str = "0"):
     """Minimal stub that duck-types NuvamaBondHolding for record_all_snapshots."""
     from types import SimpleNamespace
     return SimpleNamespace(
@@ -30,6 +30,7 @@ def _holding_stub(isin: str, qty: int = 100, ltp: str = "1010.00"):
         qty=qty,
         ltp=Decimal(ltp),
         current_value=Decimal(ltp) * qty,
+        chg_pct=Decimal(chg_pct),
     )
 
 
@@ -163,6 +164,34 @@ class TestRecordSnapshot:
     def test_empty_for_unknown_date(self, store):
         assert store.get_snapshot_for_date(date(2026, 4, 15)) == {}
 
+    def test_chg_pct_stored_and_returned(self, store):
+        """chg_pct written via record_snapshot is returned by get_snapshot_for_date."""
+        store.record_snapshot(
+            "A", date(2026, 4, 15), 700, Decimal("1014"), Decimal("709800"),
+            chg_pct=Decimal("-1.28"),
+        )
+        result = store.get_snapshot_for_date(date(2026, 4, 15))
+        assert result["A"]["chg_pct"] == Decimal("-1.28")
+
+    def test_chg_pct_defaults_to_zero_when_omitted(self, store):
+        """Callers that omit chg_pct (e.g. seed scripts) get Decimal('0') back."""
+        store.record_snapshot("A", date(2026, 4, 15), 700, Decimal("1014"), Decimal("709800"))
+        result = store.get_snapshot_for_date(date(2026, 4, 15))
+        assert result["A"]["chg_pct"] == Decimal("0")
+
+    def test_upsert_updates_chg_pct(self, store):
+        """A second record_snapshot on the same day overwrites chg_pct."""
+        store.record_snapshot(
+            "A", date(2026, 4, 15), 700, Decimal("1014"), Decimal("709800"),
+            chg_pct=Decimal("-0.50"),
+        )
+        store.record_snapshot(
+            "A", date(2026, 4, 15), 700, Decimal("1016"), Decimal("711200"),
+            chg_pct=Decimal("0.20"),
+        )
+        result = store.get_snapshot_for_date(date(2026, 4, 15))
+        assert result["A"]["chg_pct"] == Decimal("0.20")
+
 
 # ---------------------------------------------------------------------------
 # record_all_snapshots
@@ -179,6 +208,21 @@ class TestRecordAllSnapshots:
     def test_empty_list_no_crash(self, store):
         store.record_all_snapshots([], date(2026, 4, 15))
         assert store.get_snapshot_for_date(date(2026, 4, 15)) == {}
+
+    def test_chg_pct_propagated_from_holdings(self, store):
+        """chg_pct on the stub is stored and round-trips through get_snapshot_for_date."""
+        holdings = [_holding_stub("A", 700, "1014", chg_pct="-1.28")]
+        store.record_all_snapshots(holdings, date(2026, 4, 15))
+        result = store.get_snapshot_for_date(date(2026, 4, 15))
+        assert result["A"]["chg_pct"] == Decimal("-1.28")
+
+    def test_chg_pct_missing_on_stub_defaults_to_zero(self, store):
+        """Stubs without chg_pct attribute (e.g. old code paths) default to '0'."""
+        from types import SimpleNamespace
+        h = SimpleNamespace(isin="A", qty=100, ltp=Decimal("1014"), current_value=Decimal("101400"))
+        store.record_all_snapshots([h], date(2026, 4, 15))
+        result = store.get_snapshot_for_date(date(2026, 4, 15))
+        assert result["A"]["chg_pct"] == Decimal("0")
 
     def test_atomicity_rollback_on_error(self, store):
         """A corrupt row mid-batch must roll back the entire transaction."""
