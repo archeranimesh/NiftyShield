@@ -62,6 +62,44 @@ overlay_collar_call     SELL CE — collar call leg
 
 **Result:** Entry script writes 1 row for PP, 1 for CC, 2 for collar (put + call). No track loop.
 
+**CLI changes:**
+- `--tracks` removed entirely. No per-track loop means no track targeting at entry time.
+- `--date` made optional; defaults to `date.today()` with a stderr warning:
+  `WARNING: --date not provided — defaulting to today: YYYY-MM-DD. Pass --date YYYY-MM-DD to override.`
+  Pass an explicit past date only when entering retroactively (e.g. decision made intraday, script run post-market).
+- No `--spot` argument. Spot is fetched live from `underlying_spot_price` in the option chain payload. A CLI override would risk stale values silently misplacing the OTM band.
+
+**Candidate display — same ranked table format as `paper_3track_entry.py`:**
+
+One candidate table is printed per leg role (PP → one PE table; CC → one CE table; Collar → one PE table + one CE table). Format mirrors the proxy candidate block in `print_preview`, with `OTM%` replacing `Delta` as the selection axis:
+
+```
+  PP candidates — PE  8–10% OTM  (showing top 10 of N, ranked: round-100 first, spread↑ OI↓)
+   Rk  Expiry         Strike  Type    OTM%         OI       Bid       Ask    Sprd   R
+  ────────────────────────────────────────────────────────────────────────────────────────
+    1  2026-06-26      21500    PE    8.9%    1,200,000    250.10    255.40   ₹5.30   ✓ ◀
+    2  2026-06-26      21000    PE    9.8%      890,000    210.20    216.00   ₹5.80   ✓
+   ...
+  ──────────────────────────────────────────────────────────────────────────────────────
+  Selected  expiry=2026-06-26  key=NSE_FO|XXXXX
+  OI gate    : ✅ PASS  OI=1,200,000 (min 5,000)
+  Spread gate: ✅ PASS  spread_pct=2.1% (max 3.0%)
+════════════════════════════════════════════════════════════════════════
+```
+
+Ranking key (identical to `_rank_overlay_key` — ascending, lower wins):
+1. `is_non_round` — multiples of 100 preferred (0) over 50-increment strikes (1)
+2. `spread_bucket` — `int(spread / 2)` — tighter ₹2 spread tier wins
+3. `-oi` — highest OI wins within the same spread tier
+4. `spread` — exact spread tiebreaker inside a bucket
+5. `otm_dist` — proximity to target OTM (9% for PP, 4% for CC) — final tiebreaker
+
+Gates (warn-only, non-blocking — same philosophy as entry script):
+- **OI gate**: `OI ≥ 5,000` → ✅ PASS / ⚠️ WARN
+- **Spread gate**: `spread_pct ≤ 3.0%` → ✅ PASS / ⚠️ WARN (this is the expiry selection gate; best expiry already preferred but displayed for transparency)
+
+`◀` marks the selected row. `✓` in the `R` column marks round-100 strikes.
+
 ```python
 # Before (per-track):
 for strategy in effective_tracks:
