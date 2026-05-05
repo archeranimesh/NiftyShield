@@ -53,10 +53,12 @@ overlay_collar_call     SELL CE — collar call leg
 - Per-track loop over `effective_tracks` for overlay trade building.
 - `_CC_BLOCKED_TRACKS` write-time guard (`sys.exit` if futures in tracks).
 - The `existing` expiry check per (strategy, leg_role) — now just (OVERLAY_STRATEGY, leg_role).
+- `--tracks` CLI argument entirely. With a single shared overlay strategy there is no concept of "apply to these tracks" at entry time — that is a display-layer concern resolved by `show_overlay` in the snapshot script. Removing `--tracks` also eliminates the need for `_TRACK_MAP` and `effective_tracks`.
 
 **Add:**
 - `OVERLAY_STRATEGY = "paper_overlay_shared"` constant.
 - Single `_check_existing_overlay(store, OVERLAY_STRATEGY, leg_role)` call before writing.
+- `--date` defaults to `date.today()` (no longer `required=True`). When the default is used, print a visible warning to stderr: `WARNING: --date not provided — defaulting to today: YYYY-MM-DD. Pass --date YYYY-MM-DD to override.` Pass an explicit date only when entering a trade retroactively (e.g. you decided intraday but are running the script post-market).
 
 **Result:** Entry script writes 1 row for PP, 1 for CC, 2 for collar (put + call). No track loop.
 
@@ -207,7 +209,7 @@ If you have 3 identical PP rows (same instrument_key, same trade_date), the UNIQ
 
 | Phase | Scope | Files | Tests |
 |---|---|---|---|
-| F-1 | Add `OVERLAY_STRATEGY` constant; update entry script to write 1 row | `paper_3track_overlay.py` | 4 tests — single row per overlay type, CC futures no longer errors |
+| F-1 | Add `OVERLAY_STRATEGY` constant; update entry script to write 1 row; remove `--tracks`; make `--date` optional (default today + warning) | `paper_3track_overlay.py` | 5 tests — single row per overlay type, CC futures no longer errors, `--date` absent emits warning and uses today |
 | F-2 | Update `generate_track_snapshot` — `overlay_strategy` param + `show_overlay` flag | `src/paper/track_snapshot.py` | 3 tests — overlay injected from shared strategy; futures CC suppressed |
 | F-3 | Update snapshot script — `_infer_overlay_type`, pass flags | `paper_3track_snapshot.py` | 3 tests — `_infer_overlay_type` pp/cc/collar/None |
 | F-4 | Update roll script — single strategy, simplified loop | `paper_3track_overlay_roll.py` | 4 tests — roll writes 1 close + 1 open; collar is 4 trades not 12 |
