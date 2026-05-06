@@ -556,6 +556,55 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
     except Exception as e:  # noqa: BLE001
         print(f"  WARNING [{run_id}]: Nuvama options snapshot failed — {e}")
 
+    # ── Dhan Options (Intraday) — non-fatal ───────────────────────
+    dhan_options_section = "[unavailable]"
+    try:
+        from datetime import timezone
+        from src.dhan.positions import (
+            build_options_summary as _build_dhan_opts_summary,
+            fetch_fund_limit_raw,
+            fetch_positions_raw,
+            filter_intraday_options,
+            format_options_section,
+            parse_fund_limit,
+            parse_option_positions,
+        )
+        from src.dhan.store import DhanStore
+
+        _dhan_client_id = os.environ["DHAN_CLIENT_ID"]
+        _dhan_access_token = os.environ["DHAN_ACCESS_TOKEN"]
+        _dhan_opts_ts = datetime.now(tz=timezone.utc)
+        _dhan_opts_store = DhanStore(db_path)
+
+        _raw_pos = fetch_positions_raw(_dhan_client_id, _dhan_access_token)
+        _dhan_positions = filter_intraday_options(parse_option_positions(_raw_pos))
+        _dhan_opts_summary = _build_dhan_opts_summary(_dhan_positions, _dhan_opts_ts)
+
+        _raw_fl = fetch_fund_limit_raw(_dhan_client_id, _dhan_access_token)
+        _dhan_fund_limit = parse_fund_limit(_raw_fl, _dhan_opts_ts)
+
+        _dhan_opts_store.record_options_snapshot(
+            _dhan_opts_ts, _dhan_opts_summary, _dhan_positions, is_eod=True
+        )
+        _dhan_opts_store.record_margin_snapshot(_dhan_opts_ts, _dhan_fund_limit)
+
+        _month_pnl = _dhan_opts_store.get_monthly_realized_pnl(
+            _dhan_opts_ts.year, _dhan_opts_ts.month
+        )
+        dhan_options_section = format_options_section(_dhan_opts_summary, _month_pnl)
+
+        print(
+            f"  Dhan options: {_dhan_opts_summary.position_count} position(s)  "
+            f"Realized {_dhan_opts_summary.realized_pnl:+,.0f}  "
+            f"Month {_month_pnl:+,.0f}"
+        )
+    except Exception:  # noqa: BLE001
+        import logging as _logging
+        _logging.getLogger(__name__).exception(
+            "Dhan Options fetch failed — continuing without it"
+        )
+        print(f"  WARNING [{run_id}]: Dhan Options fetch failed — showing [unavailable]")
+
     # ── Combined portfolio summary ────────────────────────────────
     summary_text = _format_combined_summary(
         strategies, prices, strategy_pnls, mf_pnl,
@@ -566,11 +615,13 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
         nuvama_summary=nuvama_summary,
         nuvama_options_summary=nuvama_options_summary,
     )
+    # Append Dhan Options section (always — shows [unavailable] on failure).
+    summary_text = summary_text + "\n\n" + dhan_options_section
     print(summary_text)
 
     # ── Telegram notification (non-fatal, skipped if env vars absent) ─
-    # summary_text already contains the status header and hedge section,
-    # so it can be sent directly without a separate subject line.
+    # summary_text already contains the status header, hedge section, and
+    # the Dhan Options (Intraday) block appended above.
     from src.notifications.telegram import build_notifier
 
     notifier = build_notifier()
