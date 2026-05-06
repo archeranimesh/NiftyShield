@@ -221,22 +221,22 @@ class TestParseOptionPositions:
         return data["response"]
 
     def test_parse_all_rows(self, raw_positions) -> None:
-        """Fixture has 5 rows; all 5 parse correctly (filtering is separate)."""
+        """Fixture has 9 rows (8 NSE_FNO + 1 NSE_EQ); all parse correctly (filtering is separate)."""
         result = parse_option_positions(raw_positions)
-        assert len(result) == 5
+        assert len(result) == 9
 
     def test_parse_field_mapping(self, raw_positions) -> None:
         """First row: verify every field maps correctly from camelCase."""
         result = parse_option_positions(raw_positions)
         pos = result[0]
-        assert pos.security_id == "41234"
-        assert pos.trading_symbol == "NIFTY2550523500CE"
+        assert pos.security_id == "49081"
+        assert pos.trading_symbol == "NIFTY-May2026-23750-PE"
         assert pos.exchange_segment == "NSE_FNO"
         assert pos.product_type == "INTRADAY"
         assert pos.position_type == "SHORT"
-        assert pos.buy_qty == 0
-        assert pos.sell_qty == 50
-        assert pos.net_qty == -50
+        assert pos.buy_qty == 130
+        assert pos.sell_qty == 130
+        assert pos.net_qty == 0
 
     def test_parse_monetary_fields_are_decimal_not_float(self, raw_positions) -> None:
         """Dhan returns floats in JSON; parser must convert via Decimal(str(v))."""
@@ -248,11 +248,11 @@ class TestParseOptionPositions:
             assert isinstance(pos.unrealized_pnl, Decimal)
 
     def test_parse_decimal_value_accuracy(self, raw_positions) -> None:
-        """sell_avg=120.5 must survive as Decimal('120.5'), not float approximation."""
+        """sell_avg=89.45 must survive as Decimal('89.45'), not float approximation."""
         result = parse_option_positions(raw_positions)
-        assert result[0].sell_avg == Decimal("120.5")
-        # Second position has buyAvg=85.25 — verify sub-rupee precision
-        assert result[1].buy_avg == Decimal("85.25")
+        assert result[0].sell_avg == Decimal("89.45")
+        # Second position has buyAvg=252.40 — verify sub-rupee precision retained
+        assert result[1].buy_avg == Decimal("252.40")
 
     def test_parse_empty_list(self) -> None:
         result = parse_option_positions([])
@@ -269,9 +269,9 @@ class TestFilterIntradayOptions:
         return parse_option_positions(raw)
 
     def test_keeps_nse_fno_intraday_and_margin(self, all_positions) -> None:
-        """Fixture: 2 INTRADAY + 1 MARGIN on NSE_FNO → keeps 3. CNC and NSE_EQ excluded."""
+        """Fixture: 4 INTRADAY + 4 MARGIN on NSE_FNO → keeps 8. NSE_EQ/CNC excluded."""
         result = filter_intraday_options(all_positions)
-        assert len(result) == 3
+        assert len(result) == 8
         for pos in result:
             assert pos.exchange_segment == "NSE_FNO"
             assert pos.product_type in ("INTRADAY", "MARGIN")
@@ -280,7 +280,7 @@ class TestFilterIntradayOptions:
         """MARGIN (Dhan API name for NRML/Normal UI label) on NSE_FNO is same-day intraday."""
         result = filter_intraday_options(all_positions)
         symbols = {p.trading_symbol for p in result}
-        assert "NIFTY2550524200CE" in symbols  # NSE_FNO/MARGIN row
+        assert "NIFTY-May2026-24200-CE" in symbols  # NSE_FNO/MARGIN row
 
     def test_excludes_equity_cnc(self, all_positions) -> None:
         result = filter_intraday_options(all_positions)
@@ -288,9 +288,10 @@ class TestFilterIntradayOptions:
         assert "NIFTYIETF" not in symbols  # NSE_EQ/CNC row
 
     def test_excludes_fno_cnc(self, all_positions) -> None:
-        result = filter_intraday_options(all_positions)
-        symbols = {p.trading_symbol for p in result}
-        assert "BANKNIFTY2550545000CE" not in symbols  # NSE_FNO/CNC row
+        """CNC on NSE_FNO is excluded — segment passes but productType does not."""
+        cnc_pos = _make_option_position(exchange_segment="NSE_FNO", product_type="CNC")
+        result = filter_intraday_options([cnc_pos])
+        assert result == []
 
     def test_empty_input(self) -> None:
         assert filter_intraday_options([]) == []
