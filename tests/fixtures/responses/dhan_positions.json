@@ -1,0 +1,61 @@
+{
+  "description": "Sample Dhan GET /v2/positions response — mix of NSE_FNO/INTRADAY, NSE_FNO/CNC, NSE_EQ/CNC to exercise filtering",
+  "response": [
+    {
+      "securityId": "41234",
+      "tradingSymbol": "NIFTY2550523500CE",
+      "exchangeSegment": "NSE_FNO",
+      "productType": "INTRADAY",
+      "positionType": "SHORT",
+      "buyQty": 0,
+      "sellQty": 50,
+      "netQty": -50,
+      "buyAvg": 0.0,
+      "sellAvg": 120.5,
+      "realizedProfit": 0.0,
+      "unrealizedProfit": 1250.0
+    },
+    {
+      "securityId": "41235",
+      "tradingSymbol": "NIFTY2550523400PE",
+      "exchangeSegment": "NSE_FNO",
+      "productType": "INTRADAY",
+      "positionType": "SHORT",
+      "buyQty": 50,
+      "sellQty": 100,
+      "netQty": -50,
+      "buyAvg": 85.25,
+      "sellAvg": 95.75,
+      "realizedProfit": 2625.0,
+      "unrealizedProfit": 0.0
+    },
+    {
+      "securityId": "13611",
+      "tradingSymbol": "NIFTYIETF",
+      "exchangeSegment": "NSE_EQ",
+      "productType": "CNC",
+      "positionType": "LONG",
+      "buyQty": 500,
+      "sellQty": 0,
+      "netQty": 500,
+      "buyAvg": 268.5,
+      "sellAvg": 0.0,
+      "realizedProfit": 0.0,
+      "unrealizedProfit": 5000.0
+    },
+    {
+      "securityId": "41299",
+      "tradingSymbol": "BANKNIFTY2550545000CE",
+      "exchangeSegment": "NSE_FNO",
+      "productType": "CNC",
+      "positionType": "SHORT",
+      "buyQty": 0,
+      "sellQty": 15,
+      "netQty": -15,
+      "buyAvg": 0.0,
+      "sellAvg": 310.0,
+      "realizedProfit": 0.0,
+      "unrealizedProfit": 750.0
+    }
+  ]
+}

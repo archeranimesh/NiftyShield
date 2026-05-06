@@ -1,0 +1,13 @@
+{
+  "description": "Sample Dhan GET /v2/fundlimit response — note 'availabelBalance' is Dhan's real API typo (missing 'l')",
+  "response": {
+    "dhanClientId": "1000000001",
+    "availabelBalance": 150000.75,
+    "sodLimit": 200000.0,
+    "collateralAmount": 350000.0,
+    "receiveableAmount": 0.0,
+    "utilizedAmount": 49999.25,
+    "blockedPayoutAmount": 0.0,
+    "withdrawableBalance": 100001.50
+  }
+}
