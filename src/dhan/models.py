@@ -10,7 +10,7 @@ the portfolio and mf modules. All dataclasses are frozen (immutable).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal
 
 from src.models.portfolio import AssetType
@@ -102,3 +102,75 @@ class DhanPortfolioSummary:
     # Day-change deltas (None on first run)
     equity_day_delta: Decimal | None = None
     bond_day_delta: Decimal | None = None
+
+
+@dataclass(frozen=True)
+class DhanOptionPosition:
+    """A single intraday Dhan option position (NSE_FNO, INTRADAY product type).
+
+    Attributes:
+        security_id: Dhan's numeric security ID.
+        trading_symbol: NSE symbol (e.g. 'NIFTY2550523500CE').
+        exchange_segment: Always 'NSE_FNO' after filtering.
+        product_type: Always 'INTRADAY' after filtering.
+        position_type: 'LONG' or 'SHORT'.
+        buy_qty: Total buy quantity traded today.
+        sell_qty: Total sell quantity traded today.
+        net_qty: Open quantity; 0 = fully closed.
+        buy_avg: Average buy price as Decimal.
+        sell_avg: Average sell price as Decimal.
+        realized_pnl: Profit locked in from closed legs today.
+        unrealized_pnl: Mark-to-market on open qty; ~0 at 3:45 for intraday.
+    """
+
+    security_id: str
+    trading_symbol: str
+    exchange_segment: str
+    product_type: str
+    position_type: str
+    buy_qty: int
+    sell_qty: int
+    net_qty: int
+    buy_avg: Decimal
+    sell_avg: Decimal
+    realized_pnl: Decimal
+    unrealized_pnl: Decimal
+
+
+@dataclass(frozen=True)
+class DhanOptionsSummary:
+    """Aggregated view of all intraday option positions at a point in time.
+
+    Attributes:
+        realized_pnl: Sum of realized_pnl across all positions.
+        unrealized_pnl: Sum of unrealized_pnl across all positions.
+        total_pnl: realized_pnl + unrealized_pnl.
+        position_count: Total positions tracked (open + closed today).
+        snapshot_ts: UTC timestamp of the snapshot.
+    """
+
+    realized_pnl: Decimal
+    unrealized_pnl: Decimal
+    total_pnl: Decimal
+    position_count: int
+    snapshot_ts: datetime
+
+
+@dataclass(frozen=True)
+class DhanFundLimit:
+    """Margin state from GET /v2/fundlimit. Stored silently — not in Telegram.
+
+    Attributes:
+        available_balance: Funds available for trading (maps from 'availabelBalance' —
+            sic, Dhan API typo).
+        utilized_amount: Margin consumed by open positions.
+        collateral_amount: Value of pledged collateral.
+        withdrawable_balance: Amount that can be withdrawn.
+        snapshot_ts: UTC timestamp of the fetch.
+    """
+
+    available_balance: Decimal
+    utilized_amount: Decimal
+    collateral_amount: Decimal
+    withdrawable_balance: Decimal
+    snapshot_ts: datetime
