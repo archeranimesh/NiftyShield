@@ -106,18 +106,26 @@ def parse_option_positions(raw: list[dict[str, Any]]) -> list[DhanOptionPosition
 def filter_intraday_options(
     positions: list[DhanOptionPosition],
 ) -> list[DhanOptionPosition]:
-    """Keep only NSE_FNO INTRADAY positions.
+    """Keep only NSE_FNO option positions (INTRADAY or NORMAL product type).
+
+    Both INTRADAY (MIS) and MARGIN (NRML) product types are included because
+    MARGIN orders on NSE_FNO are used for same-day intraday trades — the user
+    squares off manually before close rather than relying on Dhan auto-square-off.
+    Dhan's UI labels these "Normal" but the API returns productType="MARGIN".
+    NSE_EQ and other segments are always excluded.
 
     Args:
         positions: Full list from parse_option_positions.
 
     Returns:
-        Subset where exchangeSegment == 'NSE_FNO' and productType == 'INTRADAY'.
+        Subset where exchangeSegment == 'NSE_FNO' and productType in
+        ('INTRADAY', 'MARGIN').
     """
     return [
         p
         for p in positions
-        if p.exchange_segment == "NSE_FNO" and p.product_type == "INTRADAY"
+        if p.exchange_segment == "NSE_FNO"
+        and p.product_type in ("INTRADAY", "MARGIN")
     ]
 
 

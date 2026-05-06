@@ -220,10 +220,10 @@ class TestParseOptionPositions:
         data = json.loads((_FIXTURES / "dhan_positions.json").read_text())
         return data["response"]
 
-    def test_parse_happy_two_intraday_positions(self, raw_positions) -> None:
-        """Fixture has 4 rows; all 4 parse correctly (filtering is separate)."""
+    def test_parse_all_rows(self, raw_positions) -> None:
+        """Fixture has 5 rows; all 5 parse correctly (filtering is separate)."""
         result = parse_option_positions(raw_positions)
-        assert len(result) == 4
+        assert len(result) == 5
 
     def test_parse_field_mapping(self, raw_positions) -> None:
         """First row: verify every field maps correctly from camelCase."""
@@ -268,13 +268,19 @@ class TestFilterIntradayOptions:
         raw = json.loads((_FIXTURES / "dhan_positions.json").read_text())["response"]
         return parse_option_positions(raw)
 
-    def test_keeps_only_nse_fno_intraday(self, all_positions) -> None:
-        """Fixture: 2 NSE_FNO/INTRADAY, 1 NSE_EQ/CNC, 1 NSE_FNO/CNC → keeps 2."""
+    def test_keeps_nse_fno_intraday_and_margin(self, all_positions) -> None:
+        """Fixture: 2 INTRADAY + 1 MARGIN on NSE_FNO → keeps 3. CNC and NSE_EQ excluded."""
         result = filter_intraday_options(all_positions)
-        assert len(result) == 2
+        assert len(result) == 3
         for pos in result:
             assert pos.exchange_segment == "NSE_FNO"
-            assert pos.product_type == "INTRADAY"
+            assert pos.product_type in ("INTRADAY", "MARGIN")
+
+    def test_includes_margin_product_type(self, all_positions) -> None:
+        """MARGIN (Dhan API name for NRML/Normal UI label) on NSE_FNO is same-day intraday."""
+        result = filter_intraday_options(all_positions)
+        symbols = {p.trading_symbol for p in result}
+        assert "NIFTY2550524200CE" in symbols  # NSE_FNO/MARGIN row
 
     def test_excludes_equity_cnc(self, all_positions) -> None:
         result = filter_intraday_options(all_positions)
@@ -289,10 +295,15 @@ class TestFilterIntradayOptions:
     def test_empty_input(self) -> None:
         assert filter_intraday_options([]) == []
 
-    def test_no_intraday_in_input(self) -> None:
+    def test_no_fno_in_input(self) -> None:
         """All CNC — result is empty."""
         cnc = [_make_option_position(product_type="CNC")]
         assert filter_intraday_options(cnc) == []
+
+    def test_margin_on_non_fno_excluded(self) -> None:
+        """MARGIN on NSE_EQ should not be included — segment gate applies first."""
+        eq_margin = [_make_option_position(exchange_segment="NSE_EQ", product_type="MARGIN")]
+        assert filter_intraday_options(eq_margin) == []
 
 
 # ── Phase B: build_options_summary ───────────────────────────────────────────

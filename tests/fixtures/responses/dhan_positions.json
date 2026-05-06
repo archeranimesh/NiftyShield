@@ -1,5 +1,5 @@
 {
-  "description": "Sample Dhan GET /v2/positions response — mix of NSE_FNO/INTRADAY, NSE_FNO/CNC, NSE_EQ/CNC to exercise filtering",
+  "description": "Sample Dhan GET /v2/positions response — mix of NSE_FNO/INTRADAY, NSE_FNO/MARGIN, NSE_FNO/CNC, NSE_EQ/CNC. MARGIN on NSE_FNO maps to NRML in the UI; used for same-day intraday trades squared off manually.",
   "response": [
     {
       "securityId": "41234",
@@ -27,6 +27,20 @@
       "buyAvg": 85.25,
       "sellAvg": 95.75,
       "realizedProfit": 2625.0,
+      "unrealizedProfit": 0.0
+    },
+    {
+      "securityId": "41301",
+      "tradingSymbol": "NIFTY2550524200CE",
+      "exchangeSegment": "NSE_FNO",
+      "productType": "MARGIN",
+      "positionType": "SHORT",
+      "buyQty": 130,
+      "sellQty": 130,
+      "netQty": 0,
+      "buyAvg": 265.05,
+      "sellAvg": 162.75,
+      "realizedProfit": -13299.0,
       "unrealizedProfit": 0.0
     },
     {
