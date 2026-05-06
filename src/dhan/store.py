@@ -1,11 +1,14 @@
 """SQLite persistence for Dhan portfolio snapshots.
 
-Stores daily Dhan holdings snapshots for day-change delta tracking.
+Stores daily Dhan holdings snapshots for day-change delta tracking,
+plus intraday and EOD options snapshots and margin state.
 Uses the shared portfolio.sqlite DB via src/db.py connection factory.
 
-Table: dhan_holdings_snapshots
-    Stores one row per holding per date. UNIQUE on (isin, snapshot_date)
-    so re-runs are idempotent (last write wins via upsert).
+Tables:
+    dhan_holdings_snapshots — one row per holding per date (UNIQUE isin+date).
+    dhan_options_snapshots  — one row per 15-min intraday tick + one EOD row
+                              per day (is_eod flag differentiates them).
+    dhan_margin_snapshots   — blind-append margin state from /v2/fundlimit.
 
 Monetary values stored as TEXT for Decimal precision (same convention as
 portfolio/store.py and mf/store.py).
@@ -13,13 +16,15 @@ portfolio/store.py and mf/store.py).
 
 from __future__ import annotations
 
+import dataclasses
+import json
 import sqlite3
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 
 from src.db import connect as _connect
-from src.dhan.models import DhanHolding
+from src.dhan.models import DhanFundLimit, DhanHolding, DhanOptionPosition, DhanOptionsSummary
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS dhan_holdings_snapshots (
@@ -39,6 +44,34 @@ CREATE TABLE IF NOT EXISTS dhan_holdings_snapshots (
 
 CREATE INDEX IF NOT EXISTS idx_dhan_snapshots_date
     ON dhan_holdings_snapshots(snapshot_date);
+
+CREATE TABLE IF NOT EXISTS dhan_options_snapshots (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts_utc          TEXT NOT NULL,
+    trade_date      TEXT NOT NULL,
+    realized_pnl    TEXT NOT NULL,
+    unrealized_pnl  TEXT NOT NULL,
+    total_pnl       TEXT NOT NULL,
+    position_count  INTEGER NOT NULL,
+    positions_json  TEXT NOT NULL,
+    is_eod          INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_dhan_opts_date
+    ON dhan_options_snapshots(trade_date);
+
+CREATE TABLE IF NOT EXISTS dhan_margin_snapshots (
+    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts_utc               TEXT NOT NULL,
+    trade_date           TEXT NOT NULL,
+    available_balance    TEXT NOT NULL,
+    utilized_amount      TEXT NOT NULL,
+    collateral_amount    TEXT NOT NULL,
+    withdrawable_balance TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_dhan_margin_date
+    ON dhan_margin_snapshots(trade_date);
 """
 
 
@@ -163,4 +196,145 @@ class DhanStore:
             ).fetchall()
         return {r["isin"]: _row_to_holding(r) for r in rows}
 
-    # ── Row mappers (module-level: _row_to_holding) ──
+    # ── Options snapshots ─────────────────────────────────────────────────────
+
+    def record_options_snapshot(
+        self,
+        ts: datetime,
+        summary: DhanOptionsSummary,
+        positions: list[DhanOptionPosition],
+        is_eod: bool = False,
+    ) -> None:
+        """Persist one options snapshot row.
+
+        positions is serialized to a JSON blob (default=str handles Decimal).
+        Blind append — no upsert; multiple intraday ticks per day are expected.
+
+        Args:
+            ts: UTC timestamp of the snapshot.
+            summary: Aggregated P&L summary.
+            positions: Individual position objects to store as JSON blob.
+            is_eod: True for the final 3:45 PM EOD snapshot; False for intraday ticks.
+        """
+        positions_json = json.dumps(
+            [dataclasses.asdict(p) for p in positions], default=str
+        )
+        trade_date = ts.date().isoformat()
+        with _connect(self.db_path) as conn:
+            conn.execute(
+                """INSERT INTO dhan_options_snapshots
+                   (ts_utc, trade_date, realized_pnl, unrealized_pnl, total_pnl,
+                    position_count, positions_json, is_eod)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    ts.isoformat(),
+                    trade_date,
+                    str(summary.realized_pnl),
+                    str(summary.unrealized_pnl),
+                    str(summary.total_pnl),
+                    summary.position_count,
+                    positions_json,
+                    1 if is_eod else 0,
+                ),
+            )
+
+    def get_intraday_extremes(self, trade_date: date) -> dict:
+        """Return max_pnl, min_pnl, eod_pnl for a given trade date.
+
+        max_pnl and min_pnl are computed across all rows (intraday + EOD).
+        eod_pnl is taken from the single row where is_eod=1.
+
+        Args:
+            trade_date: The trading day to query.
+
+        Returns:
+            Dict with keys: max_pnl, min_pnl, eod_pnl (each Decimal | None).
+            All values are None when no rows exist for the date.
+        """
+        d = trade_date.isoformat()
+        with _connect(self.db_path) as conn:
+            agg = conn.execute(
+                """SELECT MAX(CAST(total_pnl AS REAL)) AS max_pnl,
+                          MIN(CAST(total_pnl AS REAL)) AS min_pnl
+                   FROM dhan_options_snapshots
+                   WHERE trade_date = ?""",
+                (d,),
+            ).fetchone()
+            eod_row = conn.execute(
+                """SELECT total_pnl FROM dhan_options_snapshots
+                   WHERE trade_date = ? AND is_eod = 1
+                   LIMIT 1""",
+                (d,),
+            ).fetchone()
+
+        max_pnl = Decimal(str(agg["max_pnl"])) if agg["max_pnl"] is not None else None
+        min_pnl = Decimal(str(agg["min_pnl"])) if agg["min_pnl"] is not None else None
+        eod_pnl = Decimal(eod_row["total_pnl"]) if eod_row else None
+        return {"max_pnl": max_pnl, "min_pnl": min_pnl, "eod_pnl": eod_pnl}
+
+    def get_monthly_realized_pnl(self, year: int, month: int) -> Decimal:
+        """Sum realized_pnl from all EOD snapshots (is_eod=1) in a calendar month.
+
+        Only EOD rows are summed — intraday rows hold cumulative-to-that-point
+        values and would double-count if included.
+
+        Args:
+            year: Calendar year (e.g. 2026).
+            month: Calendar month (1–12).
+
+        Returns:
+            Decimal sum. Returns Decimal("0") if no EOD rows exist for the month.
+        """
+        prefix = f"{year:04d}-{month:02d}-%"
+        with _connect(self.db_path) as conn:
+            row = conn.execute(
+                """SELECT SUM(CAST(realized_pnl AS REAL)) AS total
+                   FROM dhan_options_snapshots
+                   WHERE is_eod = 1 AND trade_date LIKE ?""",
+                (prefix,),
+            ).fetchone()
+        raw = row["total"] if row and row["total"] is not None else None
+        return Decimal(str(raw)) if raw is not None else Decimal("0")
+
+    # ── Margin snapshots ──────────────────────────────────────────────────────
+
+    def record_margin_snapshot(self, ts: datetime, fund_limit: DhanFundLimit) -> None:
+        """Persist one margin snapshot row. Blind append — no upsert.
+
+        Args:
+            ts: UTC timestamp of the fetch.
+            fund_limit: Parsed DhanFundLimit from /v2/fundlimit.
+        """
+        trade_date = ts.date().isoformat()
+        with _connect(self.db_path) as conn:
+            conn.execute(
+                """INSERT INTO dhan_margin_snapshots
+                   (ts_utc, trade_date, available_balance, utilized_amount,
+                    collateral_amount, withdrawable_balance)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (
+                    ts.isoformat(),
+                    trade_date,
+                    str(fund_limit.available_balance),
+                    str(fund_limit.utilized_amount),
+                    str(fund_limit.collateral_amount),
+                    str(fund_limit.withdrawable_balance),
+                ),
+            )
+
+    def purge_old_intraday(self, days: int = 30) -> int:
+        """Delete dhan_options_snapshots rows older than `days`.
+
+        Args:
+            days: Retention window. Rows with trade_date older than this are removed.
+
+        Returns:
+            Number of rows deleted.
+        """
+        with _connect(self.db_path) as conn:
+            cursor = conn.execute(
+                """DELETE FROM dhan_options_snapshots
+                   WHERE trade_date < date('now', ?)""",
+                (f"-{days} days",),
+            )
+        return cursor.rowcount
