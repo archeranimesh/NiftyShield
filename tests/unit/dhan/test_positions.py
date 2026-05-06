@@ -424,10 +424,14 @@ class TestFormatOptionsSection:
         text = format_options_section(summary, month_pnl=Decimal("0"))
         assert "-1,500" in text
 
-    def test_html_header_present(self) -> None:
+    def test_header_present_no_html(self) -> None:
+        # Output is plain text — no HTML markup (send() wraps everything in <pre>
+        # and html-escapes the content; inline <b> inside <pre> is not rendered
+        # by Telegram clients anyway).
         summary = _make_options_summary()
         text = format_options_section(summary, month_pnl=Decimal("0"))
-        assert "<b>Dhan Options (Intraday)</b>" in text
+        assert "Dhan Options (Intraday)" in text
+        assert "<b>" not in text
 
     def test_position_count_rendered(self) -> None:
         summary = _make_options_summary(position_count=3)

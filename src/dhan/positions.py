@@ -179,7 +179,12 @@ def parse_fund_limit(raw: dict[str, Any], ts: datetime) -> DhanFundLimit:
 
 
 def format_options_section(summary: DhanOptionsSummary, month_pnl: Decimal) -> str:
-    """Format Dhan Options summary as an HTML Telegram message section.
+    """Format Dhan Options summary as a plain-text Telegram message section.
+
+    The output is plain text — no HTML markup — because send() in
+    TelegramNotifier wraps the entire message in a <pre> block and
+    HTML-escapes the content before sending. Inline HTML tags inside
+    <pre> are not rendered by Telegram clients anyway.
 
     The unrealized P&L line is omitted when zero — for strictly intraday
     trading that is the expected state at 3:45 PM. A non-zero unrealized
@@ -192,14 +197,14 @@ def format_options_section(summary: DhanOptionsSummary, month_pnl: Decimal) -> s
         month_pnl: Calendar-month realized P&L from DhanStore.get_monthly_realized_pnl.
 
     Returns:
-        HTML-formatted string for Telegram (parse_mode=HTML).
+        Plain-text string ready for embedding in the combined Telegram message.
     """
     lines = [
-        "📊 <b>Dhan Options (Intraday)</b>",
-        f"Today P&amp;L:  <b>{summary.realized_pnl:+,.0f}</b>",
-        f"Month P&amp;L:  <b>{month_pnl:+,.0f}</b>",
+        "📊 Dhan Options (Intraday)",
+        f"Today P&L:  {summary.realized_pnl:+,.0f}",
+        f"Month P&L:  {month_pnl:+,.0f}",
         f"Positions:  {summary.position_count:d}",
     ]
     if summary.unrealized_pnl != Decimal("0"):
-        lines.append(f"⚠️ Unrealized: <b>{summary.unrealized_pnl:+,.0f}</b>")
+        lines.append(f"⚠️ Unrealized: {summary.unrealized_pnl:+,.0f}")
     return "\n".join(lines)
