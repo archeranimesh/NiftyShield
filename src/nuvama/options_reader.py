@@ -82,12 +82,26 @@ def build_options_summary(
     positions: list[NuvamaOptionPosition],
     snapshot_date: date,
     cumulative_realized_pnl_map: dict[str, Decimal],
+    monthly_historical_pnl: Decimal = Decimal("0"),
     intraday_high: Decimal | None = None,
     intraday_low: Decimal | None = None,
     nifty_high: float | None = None,
     nifty_low: float | None = None,
 ) -> NuvamaOptionsSummary:
-    """Aggregate a list of options positions into a NuvamaOptionsSummary."""
+    """Aggregate a list of options positions into a NuvamaOptionsSummary.
+
+    Args:
+        positions: Live option positions from the API.
+        snapshot_date: Date of the snapshot.
+        cumulative_realized_pnl_map: All-time realized P&L per symbol from the store.
+        monthly_historical_pnl: Stored EOD realized P&L for calendar month rows
+            *before* today (from NuvamaStore.get_monthly_realized_pnl). Today's
+            realized (from live API) is added here to produce the monthly total.
+        intraday_high: Session unrealized P&L high-water mark.
+        intraday_low: Session unrealized P&L low-water mark.
+        nifty_high: Nifty index session high.
+        nifty_low: Nifty index session low.
+    """
     total_unrealized = sum((p.unrealized_pnl for p in positions), Decimal("0"))
     total_realized_today = sum((p.realized_pnl_today for p in positions), Decimal("0"))
 
@@ -95,11 +109,14 @@ def build_options_summary(
         cumulative_realized_pnl_map.values(), Decimal("0")
     )
 
+    monthly_realized = monthly_historical_pnl + total_realized_today
+
     return NuvamaOptionsSummary(
         snapshot_date=snapshot_date,
         positions=tuple(positions),
         total_unrealized_pnl=total_unrealized,
         total_realized_pnl_today=total_realized_today,
+        monthly_realized_pnl=monthly_realized,
         cumulative_realized_pnl=total_cumulative_realized,
         intraday_high=intraday_high,
         intraday_low=intraday_low,

@@ -137,7 +137,9 @@ class NuvamaOptionsSummary:
     
     total_unrealized_pnl: Decimal
     total_realized_pnl_today: Decimal
-    # Represents the historical sum of realized PnL from the ledger
+    # Calendar-month realized P&L: today's realized + stored EOD rows earlier this month
+    monthly_realized_pnl: Decimal
+    # All-time historical sum of realized P&L from the ledger
     cumulative_realized_pnl: Decimal
 
     intraday_high: Decimal | None = None

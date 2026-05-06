@@ -91,8 +91,8 @@ Strategy leg tables (instrument keys, entry prices, quantities, protected MF por
 - Portfolio tests: `tests/unit/portfolio/` + `tests/unit/test_portfolio.py` (94+ tests — includes 4 record_roll store tests + 10 _build_trades script tests)
 - Client tests: `tests/unit/test_client.py`, `test_protocol.py`, `test_exceptions.py`, `test_factory.py`, `test_mock_client.py`, `test_upstox_live.py` (90+ tests)
 - Snapshot tests: `tests/unit/test_daily_snapshot_historical.py`, `test_daily_snapshot_helpers.py`, `test_notifications.py` (50+ tests)
-- Dhan tests: `tests/unit/dhan/` (90 tests — models, reader, store, daily_snapshot integration)
-- Nuvama tests: `tests/unit/nuvama/` (163 tests — bond models, bond store, reader, seed, **NuvamaOptionPosition + NuvamaOptionsSummary models (AR-3), parse_options_positions + build_options_summary (AR-3), record_all_options_snapshots atomic (AR-7), record_intraday_positions, get_intraday_extremes, purge_old_intraday (AR-3)**; test_portfolio_summary_nuvama.py deleted — superseded by composed model structure)
+- Dhan tests: `tests/unit/dhan/` (152 tests — models, positions parser/filter/formatter, store options+margin, daily_snapshot integration)
+- Nuvama tests: `tests/unit/nuvama/` (169 tests — bond models, bond store, reader, seed, **NuvamaOptionPosition + NuvamaOptionsSummary models (AR-3), parse_options_positions + build_options_summary (AR-3), record_all_options_snapshots atomic (AR-7), record_intraday_positions, get_intraday_extremes, purge_old_intraday (AR-3), get_monthly_realized_pnl (Phase E)**; test_portfolio_summary_nuvama.py deleted — superseded by composed model structure)
 
 ---
 

@@ -468,6 +468,44 @@ class NuvamaStore:
             ).fetchall()
         return {row["trade_symbol"]: Decimal(str(row["cumulative"])) for row in rows}
 
+    def get_monthly_realized_pnl(
+        self,
+        year: int,
+        month: int,
+        before_date: date | None = None,
+    ) -> Decimal:
+        """Sum realized_pnl_today from nuvama_options_snapshots for a calendar month.
+
+        Args:
+            year: Calendar year (e.g. 2026).
+            month: Calendar month (1–12).
+            before_date: Exclude rows on or after this date. Pass snap_date (today)
+                to match the same boundary used by get_cumulative_realized_pnl —
+                today's realized comes from the live API, not the store.
+
+        Returns:
+            Decimal sum. Returns Decimal("0") if no rows match.
+        """
+        month_prefix = f"{year:04d}-{month:02d}-%"
+        with connect(self._db_path) as conn:
+            if before_date is not None:
+                row = conn.execute(
+                    """SELECT SUM(realized_pnl_today)
+                       FROM nuvama_options_snapshots
+                       WHERE snapshot_date LIKE ?
+                         AND snapshot_date < ?""",
+                    (month_prefix, before_date.isoformat()),
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    """SELECT SUM(realized_pnl_today)
+                       FROM nuvama_options_snapshots
+                       WHERE snapshot_date LIKE ?""",
+                    (month_prefix,),
+                ).fetchone()
+        total = row[0] if row and row[0] is not None else "0"
+        return Decimal(str(total))
+
     def get_options_snapshot_for_date(
         self, snapshot_date: date
     ) -> list[NuvamaOptionPosition]:

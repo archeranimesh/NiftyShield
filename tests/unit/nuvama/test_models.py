@@ -279,6 +279,7 @@ def test_options_summary_construction():
         positions=(pos,),
         total_unrealized_pnl=Decimal("1500.00"),
         total_realized_pnl_today=Decimal("0.00"),
+        monthly_realized_pnl=Decimal("0"),
         cumulative_realized_pnl=Decimal("5000.00"),
     )
     assert summary.snapshot_date == date(2026, 4, 21)
@@ -293,6 +294,7 @@ def test_options_summary_frozen():
         positions=(),
         total_unrealized_pnl=Decimal("0"),
         total_realized_pnl_today=Decimal("0"),
+        monthly_realized_pnl=Decimal("0"),
         cumulative_realized_pnl=Decimal("0"),
     )
     with pytest.raises((AttributeError, TypeError)):
@@ -306,6 +308,7 @@ def test_options_summary_net_pnl_is_unrealized_plus_today():
         positions=(),
         total_unrealized_pnl=Decimal("1500.00"),
         total_realized_pnl_today=Decimal("300.00"),
+        monthly_realized_pnl=Decimal("0"),
         cumulative_realized_pnl=Decimal("10000.00"),
     )
     assert summary.net_pnl == Decimal("1800.00")
@@ -318,6 +321,7 @@ def test_options_summary_net_pnl_excludes_cumulative():
         positions=(),
         total_unrealized_pnl=Decimal("0"),
         total_realized_pnl_today=Decimal("0"),
+        monthly_realized_pnl=Decimal("0"),
         cumulative_realized_pnl=Decimal("99999.00"),
     )
     assert summary.net_pnl == Decimal("0")
@@ -329,6 +333,7 @@ def test_options_summary_intraday_fields_default_none():
         positions=(),
         total_unrealized_pnl=Decimal("0"),
         total_realized_pnl_today=Decimal("0"),
+        monthly_realized_pnl=Decimal("0"),
         cumulative_realized_pnl=Decimal("0"),
     )
     assert summary.intraday_high is None
@@ -343,6 +348,7 @@ def test_options_summary_with_intraday_bounds():
         positions=(),
         total_unrealized_pnl=Decimal("0"),
         total_realized_pnl_today=Decimal("0"),
+        monthly_realized_pnl=Decimal("0"),
         cumulative_realized_pnl=Decimal("0"),
         intraday_high=Decimal("3000.00"),
         intraday_low=Decimal("-500.00"),
@@ -361,6 +367,7 @@ def test_options_summary_empty_positions():
         positions=(),
         total_unrealized_pnl=Decimal("0"),
         total_realized_pnl_today=Decimal("0"),
+        monthly_realized_pnl=Decimal("0"),
         cumulative_realized_pnl=Decimal("0"),
     )
     assert summary.positions == ()

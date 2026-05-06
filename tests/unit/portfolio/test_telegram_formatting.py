@@ -46,6 +46,7 @@ def test_telegram_fully_populated_summary():
         positions=(),
         total_unrealized_pnl=Decimal("800.00"),
         total_realized_pnl_today=Decimal("200.00"),
+        monthly_realized_pnl=Decimal("0.00"),
         cumulative_realized_pnl=Decimal("0.00"),
         intraday_high=Decimal("1500.00"),
         intraday_low=Decimal("-500.00"),

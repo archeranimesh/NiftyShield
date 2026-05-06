@@ -236,6 +236,8 @@ def _format_combined_summary(
                     nifty_hl_str = f"{n_nifty_high:,.0f} / {n_nifty_low:,.0f}"
                     lines.append(f"   └ Nifty High/Low {nifty_hl_str:>16}")
 
+                lines.append(f"  Today P&L           {fmt_inr(summary.nuvama_options.total_realized_pnl_today, sign=True, width=14)}")
+                lines.append(f"  Month P&L           {fmt_inr(summary.nuvama_options.monthly_realized_pnl, sign=True, width=14)}")
                 n_realized = summary.nuvama_options.total_realized_pnl_today + summary.nuvama_options.cumulative_realized_pnl
                 lines.append(f"  Nuvama Realized     {fmt_inr(n_realized, sign=True, width=14)}")
 
