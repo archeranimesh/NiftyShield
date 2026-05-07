@@ -565,47 +565,70 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
         print(f"  WARNING [{run_id}]: Nuvama options snapshot failed — {e}")
 
     # ── Dhan Options (Intraday) — non-fatal ───────────────────────
+    # Historical run (--date <past>): read from stored EOD snapshot — no API call.
+    # Live run (today): fetch live positions, store EOD row, then format.
     dhan_options_section = "[unavailable]"
     try:
         from datetime import timezone
-        from src.dhan.positions import (
-            build_options_summary as _build_dhan_opts_summary,
-            fetch_fund_limit_raw,
-            fetch_positions_raw,
-            filter_intraday_options,
-            format_options_section,
-            parse_fund_limit,
-            parse_option_positions,
-        )
+        from src.dhan.positions import format_options_section
         from src.dhan.store import DhanStore
 
-        _dhan_client_id = os.environ["DHAN_CLIENT_ID"]
-        _dhan_access_token = os.environ["DHAN_ACCESS_TOKEN"]
-        _dhan_opts_ts = datetime.now(tz=timezone.utc)
         _dhan_opts_store = DhanStore(db_path)
 
-        _raw_pos = fetch_positions_raw(_dhan_client_id, _dhan_access_token)
-        _dhan_positions = filter_intraday_options(parse_option_positions(_raw_pos))
-        _dhan_opts_summary = _build_dhan_opts_summary(_dhan_positions, _dhan_opts_ts)
+        if snap_date < date.today():
+            # ── Historical path — read stored EOD row ─────────────
+            _stored = _dhan_opts_store.get_eod_options_snapshot(snap_date)
+            if _stored is not None:
+                _dhan_opts_summary, _ = _stored
+                _month_pnl = _dhan_opts_store.get_monthly_realized_pnl(
+                    snap_date.year, snap_date.month
+                )
+                dhan_options_section = format_options_section(_dhan_opts_summary, _month_pnl)
+                print(
+                    f"  Dhan options (stored): {_dhan_opts_summary.position_count} position(s)  "
+                    f"Realized {_dhan_opts_summary.realized_pnl:+,.0f}  "
+                    f"Month {_month_pnl:+,.0f}"
+                )
+            else:
+                dhan_options_section = "[no snapshot stored for this date]"
+                print(f"  Dhan options: no EOD snapshot found for {snap_date.isoformat()}")
+        else:
+            # ── Live path — fetch from Dhan API, store EOD row ────
+            from src.dhan.positions import (
+                build_options_summary as _build_dhan_opts_summary,
+                fetch_fund_limit_raw,
+                fetch_positions_raw,
+                filter_intraday_options,
+                parse_fund_limit,
+                parse_option_positions,
+            )
 
-        _raw_fl = fetch_fund_limit_raw(_dhan_client_id, _dhan_access_token)
-        _dhan_fund_limit = parse_fund_limit(_raw_fl, _dhan_opts_ts)
+            _dhan_client_id = os.environ["DHAN_CLIENT_ID"]
+            _dhan_access_token = os.environ["DHAN_ACCESS_TOKEN"]
+            _dhan_opts_ts = datetime.now(tz=timezone.utc)
 
-        _dhan_opts_store.record_options_snapshot(
-            _dhan_opts_ts, _dhan_opts_summary, _dhan_positions, is_eod=True
-        )
-        _dhan_opts_store.record_margin_snapshot(_dhan_opts_ts, _dhan_fund_limit)
+            _raw_pos = fetch_positions_raw(_dhan_client_id, _dhan_access_token)
+            _dhan_positions = filter_intraday_options(parse_option_positions(_raw_pos))
+            _dhan_opts_summary = _build_dhan_opts_summary(_dhan_positions, _dhan_opts_ts)
 
-        _month_pnl = _dhan_opts_store.get_monthly_realized_pnl(
-            _dhan_opts_ts.year, _dhan_opts_ts.month
-        )
-        dhan_options_section = format_options_section(_dhan_opts_summary, _month_pnl)
+            _raw_fl = fetch_fund_limit_raw(_dhan_client_id, _dhan_access_token)
+            _dhan_fund_limit = parse_fund_limit(_raw_fl, _dhan_opts_ts)
 
-        print(
-            f"  Dhan options: {_dhan_opts_summary.position_count} position(s)  "
-            f"Realized {_dhan_opts_summary.realized_pnl:+,.0f}  "
-            f"Month {_month_pnl:+,.0f}"
-        )
+            _dhan_opts_store.record_options_snapshot(
+                _dhan_opts_ts, _dhan_opts_summary, _dhan_positions, is_eod=True
+            )
+            _dhan_opts_store.record_margin_snapshot(_dhan_opts_ts, _dhan_fund_limit)
+
+            _month_pnl = _dhan_opts_store.get_monthly_realized_pnl(
+                _dhan_opts_ts.year, _dhan_opts_ts.month
+            )
+            dhan_options_section = format_options_section(_dhan_opts_summary, _month_pnl)
+
+            print(
+                f"  Dhan options: {_dhan_opts_summary.position_count} position(s)  "
+                f"Realized {_dhan_opts_summary.realized_pnl:+,.0f}  "
+                f"Month {_month_pnl:+,.0f}"
+            )
     except Exception:  # noqa: BLE001
         import logging as _logging
         _logging.getLogger(__name__).exception(

@@ -272,6 +272,62 @@ class DhanStore:
         eod_pnl = Decimal(eod_row["total_pnl"]) if eod_row else None
         return {"max_pnl": max_pnl, "min_pnl": min_pnl, "eod_pnl": eod_pnl}
 
+    def get_eod_options_snapshot(
+        self, trade_date: date
+    ) -> tuple[DhanOptionsSummary, list[DhanOptionPosition]] | None:
+        """Read back the EOD options snapshot stored for a given trading date.
+
+        Picks the latest is_eod=1 row for the date (there should only be one,
+        but ORDER BY ts_utc DESC LIMIT 1 is defensive against duplicates).
+
+        Args:
+            trade_date: The trading day to retrieve.
+
+        Returns:
+            (DhanOptionsSummary, list[DhanOptionPosition]) if an EOD row exists,
+            None otherwise.
+        """
+        d = trade_date.isoformat()
+        with _connect(self.db_path) as conn:
+            row = conn.execute(
+                """SELECT ts_utc, realized_pnl, unrealized_pnl, total_pnl,
+                          position_count, positions_json
+                   FROM dhan_options_snapshots
+                   WHERE trade_date = ? AND is_eod = 1
+                   ORDER BY ts_utc DESC LIMIT 1""",
+                (d,),
+            ).fetchone()
+        if row is None:
+            return None
+
+        ts = datetime.fromisoformat(row["ts_utc"])
+        summary = DhanOptionsSummary(
+            realized_pnl=Decimal(row["realized_pnl"]),
+            unrealized_pnl=Decimal(row["unrealized_pnl"]),
+            total_pnl=Decimal(row["total_pnl"]),
+            position_count=row["position_count"],
+            snapshot_ts=ts,
+        )
+        raw_pos: list[dict] = json.loads(row["positions_json"])
+        positions = [
+            DhanOptionPosition(
+                security_id=p["security_id"],
+                trading_symbol=p["trading_symbol"],
+                exchange_segment=p["exchange_segment"],
+                product_type=p["product_type"],
+                position_type=p["position_type"],
+                buy_qty=p["buy_qty"],
+                sell_qty=p["sell_qty"],
+                net_qty=p["net_qty"],
+                buy_avg=Decimal(p["buy_avg"]),
+                sell_avg=Decimal(p["sell_avg"]),
+                realized_pnl=Decimal(p["realized_pnl"]),
+                unrealized_pnl=Decimal(p["unrealized_pnl"]),
+            )
+            for p in raw_pos
+        ]
+        return summary, positions
+
     def get_monthly_realized_pnl(self, year: int, month: int) -> Decimal:
         """Sum realized_pnl from all EOD snapshots (is_eod=1) in a calendar month.
 

@@ -289,3 +289,58 @@ class TestGetMonthlyRealizedPnl:
             datetime(2026, 5, 7, 15, 45, 0, tzinfo=timezone.utc),
         )
         assert store.get_monthly_realized_pnl(2026, 5) == Decimal("-1000")
+
+
+# ── get_eod_options_snapshot ──────────────────────────────────────────────────
+
+
+class TestGetEodOptionsSnapshot:
+    def test_happy_path_roundtrip(self, store: DhanStore) -> None:
+        """Stored EOD row reconstructs summary + positions with correct Decimals."""
+        pos = _make_position(realized_pnl=Decimal("2500.00"), unrealized_pnl=Decimal("0.00"))
+        summary = _make_summary(realized_pnl=Decimal("2500.00"), total_pnl=Decimal("2500.00"))
+        store.record_options_snapshot(_TS, summary, [pos], is_eod=True)
+
+        result = store.get_eod_options_snapshot(_DATE)
+
+        assert result is not None
+        got_summary, got_positions = result
+        assert got_summary.realized_pnl == Decimal("2500.00")
+        assert got_summary.unrealized_pnl == Decimal("0.00")
+        assert got_summary.total_pnl == Decimal("2500.00")
+        assert got_summary.position_count == 2
+        assert len(got_positions) == 1
+        assert got_positions[0].trading_symbol == "NIFTY2550523500CE"
+        assert got_positions[0].realized_pnl == Decimal("2500.00")
+
+    def test_returns_none_when_no_eod_row(self, store: DhanStore) -> None:
+        """Intraday-only rows must not satisfy the query."""
+        store.record_options_snapshot(_TS, _make_summary(), [_make_position()], is_eod=False)
+
+        assert store.get_eod_options_snapshot(_DATE) is None
+
+    def test_returns_none_for_missing_date(self, store: DhanStore) -> None:
+        store.record_options_snapshot(_TS, _make_summary(), [], is_eod=True)
+
+        assert store.get_eod_options_snapshot(date(2026, 4, 1)) is None
+
+    def test_duplicate_eod_rows_returns_latest(self, store: DhanStore) -> None:
+        """If two is_eod=1 rows exist (shouldn't happen, but must be defensive)."""
+        ts_early = datetime(2026, 5, 6, 15, 45, 0, tzinfo=timezone.utc)
+        ts_late = datetime(2026, 5, 6, 16, 0, 0, tzinfo=timezone.utc)
+        store.record_options_snapshot(
+            ts_early,
+            _make_summary(realized_pnl=Decimal("1000"), total_pnl=Decimal("1000")),
+            [],
+            is_eod=True,
+        )
+        store.record_options_snapshot(
+            ts_late,
+            _make_summary(realized_pnl=Decimal("1500"), total_pnl=Decimal("1500")),
+            [],
+            is_eod=True,
+        )
+
+        result = store.get_eod_options_snapshot(_DATE)
+        assert result is not None
+        assert result[0].realized_pnl == Decimal("1500")
