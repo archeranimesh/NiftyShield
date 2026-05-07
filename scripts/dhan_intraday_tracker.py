@@ -104,9 +104,9 @@ def main() -> int:
         purged = store.purge_old_intraday(days=30)
 
         logger.info(
-            "Realized: %+,.0f | Unrealized: %+,.0f | Positions: %d",
-            summary.realized_pnl,
-            summary.unrealized_pnl,
+            "Realized: %s | Unrealized: %s | Positions: %d",
+            f"{summary.realized_pnl:+,.0f}",
+            f"{summary.unrealized_pnl:+,.0f}",
             summary.position_count,
         )
         if purged:
