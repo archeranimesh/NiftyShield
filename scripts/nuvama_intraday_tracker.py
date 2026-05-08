@@ -19,7 +19,7 @@ from decimal import Decimal
 # Pure-computation helper only — no I/O on import.
 from src.market_calendar.holidays import is_trading_day
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("nuvama")
 
 
 async def main() -> int:
@@ -35,7 +35,12 @@ async def main() -> int:
     from src.nuvama.protocol import NuvamaClient
 
     load_dotenv()
-    logging.basicConfig(level=logging.INFO, force=True, format="%(levelname)s: %(message)s")
+    logging.basicConfig(
+        level=logging.INFO,
+        force=True,
+        format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
     run_id = uuid.uuid4().hex[:8]
     now = datetime.now()
     logger.info("run_id=%s starting intraday tracker", run_id)
@@ -55,10 +60,10 @@ async def main() -> int:
         api: NuvamaClient = load_api_connect()
         # Nuvama SDK removes all standard logging handlers on __init__. We must restore it.
         logging.basicConfig(
-            level=logging.INFO, 
-            force=True, 
-            format="%(asctime)s [%(levelname)s] %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S"
+            level=logging.INFO,
+            force=True,
+            format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
         )
         logger.info("Starting intraday nuvama options tracking loop...")
         
@@ -101,10 +106,9 @@ async def main() -> int:
         total_pnl = unrealized + realized_today
 
         logger.info(
-            "Total PnL: {:+,.0f} | Unrealized: {:+,.0f} | Realized Today: {:+,.0f} | Ledger: {:+,.0f} | "
-            "Positions: {:d} | Nifty: {:,.2f}".format(
-                total_pnl, unrealized, realized_today, historical_total, len(positions), nifty_spot
-            )
+            "Total: %+,.0f | Unreal: %+,.0f | RealToday: %+,.0f | CumReal: %+,.0f | "
+            "Pos: %d | Nifty: %,.2f",
+            total_pnl, unrealized, realized_today, historical_total, len(positions), nifty_spot,
         )
     except Exception:  # Intentional: isolate db failure
         logger.exception("run_id=%s failed to record intraday positions", run_id)

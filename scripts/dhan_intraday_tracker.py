@@ -23,7 +23,7 @@ from datetime import date, datetime
 # Pure-computation helper only — no I/O on import.
 from src.market_calendar.holidays import is_trading_day
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("dhan")
 
 
 def main() -> int:
@@ -54,7 +54,7 @@ def main() -> int:
     logging.basicConfig(
         level=logging.INFO,
         force=True,
-        format="%(asctime)s [%(levelname)s] %(message)s",
+        format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
@@ -104,9 +104,11 @@ def main() -> int:
         purged = store.purge_old_intraday(days=30)
 
         logger.info(
-            "Realized: %s | Unrealized: %s | Positions: %d",
-            f"{summary.realized_pnl:+,.0f}",
-            f"{summary.unrealized_pnl:+,.0f}",
+            "Total: %+,.0f | Unreal: %+,.0f | RealToday: %+,.0f | AvailMgn: %+,.0f | Pos: %d",
+            summary.unrealized_pnl + summary.realized_pnl,
+            summary.unrealized_pnl,
+            summary.realized_pnl,
+            fund_limit.available_balance,
             summary.position_count,
         )
         if purged:
