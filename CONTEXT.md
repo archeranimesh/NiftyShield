@@ -14,6 +14,7 @@
 Full file-level module tree: **[CONTEXT_TREE.md](CONTEXT_TREE.md)**
 Load that file when adding new modules or doing a full structural survey.
 Key top-level packages: `src/auth`, `src/client`, `src/models`, `src/portfolio`, `src/paper`, `src/mf`, `src/dhan`, `src/nuvama`, `src/intraday`, `src/instruments`, `src/market_calendar`, `src/notifications`, `src/utils`, `src/backtest`, `src/db.py`
+`src/backtest/ivr.py` — `compute_ivr(vix_today, vix_series)`: IVR formula over trailing 252-day VIX window; returns `float | None`; clamps to `[0.0, 1.0]`; flat-window safe (returns 0.5). 11 unit tests in `tests/unit/backtest/test_ivr.py`.
 
 `src/models/options.py` — `OptionLeg`, `OptionChainStrike`, `OptionChain` (all `frozen=True` Pydantic). Source-agnostic field names; Upstox parser in `src/client/upstox_market.py` (`parse_upstox_option_chain`). Dhan parser deferred to Phase 1.10.
 `src/paper/` — paper trading module. `PaperTrade` model (frozen Pydantic, `paper_` prefix enforced), `PaperPosition` + `PaperNavSnapshot` + `PaperLegSnapshot` (frozen dataclasses), `PaperStore` (`paper_trades` + `paper_nav_snapshots` + `paper_leg_snapshots` tables in shared SQLite), `PaperTracker` (compute_pnl + record_daily_snapshot). `PaperStore` API: `record_leg_snapshot` (upsert; enforces `total_pnl == unrealized_pnl + realized_pnl`), `get_leg_snapshot`, `get_prev_leg_snapshot`, `delete_trade` (no-op if missing). See `src/paper/CLAUDE.md` for full invariants.
