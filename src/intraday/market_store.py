@@ -41,17 +41,27 @@ class IntradayMarketStore:
         """Insert one market-context row.
 
         Args:
-            timestamp: UTC datetime of the snapshot tick.
+            timestamp: UTC datetime of the snapshot tick. Must be timezone-aware.
             nifty_spot: Nifty 50 index level (0.0 if fetch failed).
             india_vix: India VIX level (0.0 if fetch failed).
+
+        Raises:
+            ValueError: If timestamp is naive (lacks tzinfo).
         """
+        if timestamp.tzinfo is None:
+            raise ValueError("timestamp must be timezone-aware (preferably UTC)")
+            
+        # Explicit conversion to UTC ISO string to prevent string sort issues in SQLite
+        # and to avoid Python 3.12+ sqlite3 default adapter deprecation warnings.
+        timestamp_iso = timestamp.astimezone(datetime.timezone.utc).isoformat()
+        
         with connect(self._db_path) as db:
             db.execute(
                 """
                 INSERT INTO intraday_market_snapshots (timestamp, nifty_spot, india_vix)
                 VALUES (?, ?, ?)
                 """,
-                (timestamp, nifty_spot, india_vix),
+                (timestamp_iso, nifty_spot, india_vix),
             )
 
     def purge_old(self, days: int = 30) -> int:
@@ -64,10 +74,11 @@ class IntradayMarketStore:
             Number of rows deleted.
         """
         cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=days)
+        cutoff_iso = cutoff.isoformat()
         with connect(self._db_path) as db:
             cursor = db.execute(
                 "DELETE FROM intraday_market_snapshots WHERE timestamp < ?",
-                (cutoff,),
+                (cutoff_iso,),
             )
             return cursor.rowcount
 
