@@ -6,21 +6,17 @@
 
 ---
 
-## Current Sprint (April 2026)
+## Completed (April–May 2026) ✓
 
-### Next up: Greeks capture
-- Define `OptionChain` Pydantic model using `tests/fixtures/responses/nifty_chain_2026-04-07.json`
-- Implement `_extract_greeks_from_chain()` in `src/portfolio/tracker.py`
-- Fix the option chain API call (must use `NSE_INDEX|Nifty 50`)
-- Store Greeks columns in `daily_snapshots` (columns exist, currently null)
-- Tests: fixture-driven, fully offline
+- ✓ **Greeks capture** — `OptionChain` model live, Greeks populating `daily_snapshots` from 2026-04-25
+- ✓ **`scripts/find_strike_by_delta.py`** — live delta filter + `record_paper_trade.py` command output (shipped 2026-05-03)
+- ✓ **Bhavcopy pipeline** — `src/backtest/bhavcopy_ingest.py` + `bhavcopy_loader.py` + bootstrap script (Phase 1.3, 2026-05-03)
+- ✓ **Dhan intraday options tracking** — all phases A–E complete (2026-05-06)
+- ✓ **3-track paper framework** — entry, snapshot, overlay, roll scripts all shipped (2026-05-04)
 
 ---
 
 ## Near-Term (May–June 2026)
-
-### Paper trade entry helper: strike selection by delta
-`scripts/find_strike_by_delta.py` — fetches live option chain, filters strikes by delta range, prints strike/premium/IV/key table. Closes the gap between "I want delta ~−0.20" and the `--price` + `--key` arguments required by `record_paper_trade.py`. Unblocked — all dependencies in place (`OptionChainStrike`, `parse_upstox_option_chain`, `UPSTOX_ANALYTICS_TOKEN`).
 
 ### FinRakshak effectiveness tracking
 Automated monthly report: FinRakshak P&L vs MF portfolio drawdown.
