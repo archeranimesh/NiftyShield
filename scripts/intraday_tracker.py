@@ -29,14 +29,48 @@ async def main() -> int:
     Returns:
         max(dhan_exit, nuvama_exit) — non-zero if either tracker failed.
     """
+    import logging
+    from datetime import datetime, timezone
+    from dotenv import load_dotenv
+    from src.client.factory import create_client
+    from src.intraday.market_store import IntradayMarketStore
     from scripts.dhan_intraday_tracker import main as dhan_main
     from scripts.nuvama_intraday_tracker import main as nuvama_main
 
+    load_dotenv()
+    logging.basicConfig(
+        level=logging.INFO,
+        force=True,
+        format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    logger = logging.getLogger("intraday")
+
+    nifty_spot = 0.0
+    india_vix = 0.0
+    try:
+        env = os.getenv("UPSTOX_ENV", "prod")
+        client = create_client(env)
+        NIFTY_KEY = "NSE_INDEX|Nifty 50"
+        VIX_KEY = "NSE_INDEX|India VIX"
+        prices = await client.get_ltp([NIFTY_KEY, VIX_KEY])
+        nifty_spot = float(prices.get(NIFTY_KEY, 0.0))
+        india_vix = float(prices.get(VIX_KEY, 0.0))
+        
+        logger.info(f"[market] Nifty: {nifty_spot:,.2f} | VIX: {india_vix:.2f}")
+        
+        store = IntradayMarketStore()
+        now = datetime.now(timezone.utc)
+        store.record_market_snapshot(now, nifty_spot, india_vix)
+        store.purge_old(days=30)
+    except Exception:
+        logger.exception("Failed to fetch or store market context (Nifty/VIX)")
+
     # Dhan first — sync, no SDK thread pollution.
-    dhan_exit = dhan_main()
+    dhan_exit = dhan_main(nifty_spot=nifty_spot, india_vix=india_vix)
 
     # Nuvama second — SDK launches background thread after this returns.
-    nuvama_exit = await nuvama_main()
+    nuvama_exit = await nuvama_main(nifty_spot=nifty_spot, india_vix=india_vix)
 
     return max(dhan_exit, nuvama_exit)
 

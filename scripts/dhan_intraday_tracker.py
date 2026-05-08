@@ -26,7 +26,7 @@ from src.market_calendar.holidays import is_trading_day
 logger = logging.getLogger("dhan")
 
 
-def main() -> int:
+def main(nifty_spot: float = 0.0, india_vix: float = 0.0) -> int:
     """Run one Dhan intraday options snapshot tick.
 
     Returns:

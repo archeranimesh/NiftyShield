@@ -22,14 +22,12 @@ from src.market_calendar.holidays import is_trading_day
 logger = logging.getLogger("nuvama")
 
 
-async def main() -> int:
+async def main(nifty_spot: float = 0.0, india_vix: float = 0.0) -> int:
     # All I/O-triggering imports deferred here so the module is importable
     # without a live .env or Nuvama SDK. Follows daily_snapshot.py pattern.
     from dotenv import load_dotenv
 
     from src.auth.nuvama_verify import load_api_connect
-    from src.client.exceptions import LTPFetchError
-    from src.client.factory import create_client
     from src.nuvama.options_reader import parse_options_positions
     from src.nuvama.store import NuvamaStore
     from src.nuvama.protocol import NuvamaClient
@@ -79,19 +77,7 @@ async def main() -> int:
         logger.exception("run_id=%s failed to fetch Nuvama positions", run_id)
         return 1
 
-    # 2. Fetch Nifty Spot from Upstox
-    nifty_spot = 0.0
-    try:
-        logger.info("Fetching Nifty LTP from Upstox...")
-        env = os.getenv("UPSTOX_ENV", "prod")
-        client = create_client(env)
-        NIFTY_INDEX_KEY = "NSE_INDEX|Nifty 50"
-        prices = await client.get_ltp([NIFTY_INDEX_KEY])
-        nifty_spot = prices.get(NIFTY_INDEX_KEY, 0.0)
-    except LTPFetchError:
-        logger.exception("run_id=%s Upstox LTP fetch failed", run_id)
-    except Exception:  # Intentional: isolate all upstream Upstox failures
-        logger.exception("run_id=%s failed to fetch Nifty spot", run_id)
+    # 2. (Removed) Fetch Nifty Spot from Upstox - now passed as argument
 
     # 3. Save to database
     try:
@@ -108,7 +94,7 @@ async def main() -> int:
         logger.info(
             f"Total: {total_pnl:+,.0f} | Unreal: {unrealized:+,.0f} | "
             f"RealToday: {realized_today:+,.0f} | CumReal: {historical_total:+,.0f} | "
-            f"Pos: {len(positions)} | Nifty: {nifty_spot:,.2f}"
+            f"Pos: {len(positions)}"
         )
     except Exception:  # Intentional: isolate db failure
         logger.exception("run_id=%s failed to record intraday positions", run_id)
@@ -118,7 +104,22 @@ async def main() -> int:
 
 
 if __name__ == "__main__":
-    exit_code = asyncio.run(main())
+    from dotenv import load_dotenv
+    from src.client.factory import create_client
+
+    async def run_standalone():
+        load_dotenv()
+        env = os.getenv("UPSTOX_ENV", "prod")
+        client = create_client(env)
+        try:
+            prices = await client.get_ltp(["NSE_INDEX|Nifty 50", "NSE_INDEX|India VIX"])
+            nifty = float(prices.get("NSE_INDEX|Nifty 50", 0.0))
+            vix = float(prices.get("NSE_INDEX|India VIX", 0.0))
+        except Exception:
+            nifty, vix = 0.0, 0.0
+        return await main(nifty_spot=nifty, india_vix=vix)
+
+    exit_code = asyncio.run(run_standalone())
     # os._exit is absolutely required because the Nuvama APIConnect SDK
     # launches a non-daemon background thread that will indefinitely hang standard exits.
     os._exit(exit_code)
