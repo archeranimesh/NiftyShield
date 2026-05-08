@@ -81,7 +81,7 @@ async def main(nifty_spot: float = 0.0, india_vix: float = 0.0) -> int:
 
     # 3. Save to database
     try:
-        store.record_intraday_positions(now, float(nifty_spot), positions)
+        store.record_intraday_positions(now, positions)
         
         # Calculate PnL Breakdown
         unrealized = sum((p.unrealized_pnl for p in positions), Decimal("0"))
