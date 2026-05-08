@@ -1,4 +1,3 @@
-import sqlite3
 import datetime
 import pytest
 
@@ -29,13 +28,19 @@ def test_purge_old(temp_db):
     store = IntradayMarketStore(temp_db)
     now = datetime.datetime.now(datetime.timezone.utc)
     old = now - datetime.timedelta(days=35)
-    
+
     store.record_market_snapshot(old, 21000.0, 15.0)
     store.record_market_snapshot(now, 22000.5, 14.2)
-    
+
     deleted = store.purge_old(days=30)
     assert deleted == 1
-    
-    # Verify only the old one was deleted and latest is the new one
+
     latest = store.get_latest()
     assert latest == (22000.5, 14.2)
+
+
+def test_record_naive_timestamp_raises(temp_db):
+    store = IntradayMarketStore(temp_db)
+    naive = datetime.datetime(2026, 5, 8, 15, 25, 0)  # no tzinfo
+    with pytest.raises(ValueError, match="timezone-aware"):
+        store.record_market_snapshot(naive, 24172.6, 13.45)
