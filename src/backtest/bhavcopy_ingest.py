@@ -16,6 +16,14 @@ from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
+# UDiFF (Dec 2024+) instrument type codes → canonical instrument strings
+_UDIFF_FI_MAP: dict[str, str] = {
+    "IDO": "OPTIDX",
+    "STO": "OPTSTK",
+    "IDF": "FUTIDX",
+    "SDF": "FUTSTK",
+}
+
 class BhavRecord(BaseModel, frozen=True):
     trade_date: date
     symbol: str
@@ -99,67 +107,113 @@ def parse_option_symbol(symbol: str) -> dict[str, str | date | Decimal]:
         
     raise ValueError(f"Unrecognized expiry format in symbol: {symbol}")
 
-def parse_bhavcopy(csv_path: Path, underlying: str = "NIFTY", include_futures: bool = False) -> list[BhavRecord]:
-    """
-    Parses an NSE Bhavcopy CSV file inside a ZIP and returns matching BhavRecords.
-    Raises ValueError on a corrupt or unreadable ZIP.
+def _parse_legacy(
+    reader: csv.DictReader,
+    valid_instruments: set[str],
+    underlying: str,
+) -> list[BhavRecord]:
+    """Parse pre-Dec 2024 NSE F&O bhavcopy CSV (legacy archive format)."""
+    records = []
+    for row in reader:
+        instrument = row["INSTRUMENT"]
+        if instrument not in valid_instruments:
+            continue
+        sym = row["SYMBOL"]
+        if sym != underlying:
+            continue
+        strike = Decimal(row["STRIKE_PR"])
+        opt_type = row["OPTION_TYP"]
+        if strike == 0 and opt_type in ("CE", "PE"):
+            logger.warning("Skipping corrupted strike row: %s", row)
+            continue
+        trade_date = datetime.strptime(row["TIMESTAMP"], "%d-%b-%Y").date()
+        expiry = datetime.strptime(row["EXPIRY_DT"], "%d-%b-%Y").date()
+        records.append(BhavRecord(
+            trade_date=trade_date,
+            symbol=sym,
+            underlying=sym,
+            instrument=instrument,
+            expiry=expiry,
+            strike=strike,
+            option_type=opt_type,
+            open=Decimal(row["OPEN"]),
+            high=Decimal(row["HIGH"]),
+            low=Decimal(row["LOW"]),
+            close=Decimal(row["CLOSE"]),
+            settle_price=Decimal(row["SETTLE_PR"]),
+            volume=int(row["CONTRACTS"]),
+            oi=int(row["OPEN_INT"]),
+        ))
+    return records
+
+
+def _parse_udiff(
+    reader: csv.DictReader,
+    valid_instruments: set[str],
+    underlying: str,
+) -> list[BhavRecord]:
+    """Parse Dec 2024+ NSE F&O bhavcopy CSV (UDiFF format).
+
+    Instrument type codes are mapped via ``_UDIFF_FI_MAP`` to the same canonical
+    strings used by the legacy parser so ``BhavRecord`` is format-agnostic.
     """
     records = []
-    
+    for row in reader:
+        fi_code = row.get("FinInstrmTp", "").strip()
+        instrument = _UDIFF_FI_MAP.get(fi_code)
+        if instrument is None or instrument not in valid_instruments:
+            continue
+        sym = row["TckrSymb"].strip()
+        if sym != underlying:
+            continue
+        strike_raw = (row.get("StrkPric") or "0").strip() or "0"
+        strike = Decimal(strike_raw)
+        opt_type = (row.get("OptnTp") or "").strip() or "XX"
+        if strike == 0 and opt_type in ("CE", "PE"):
+            logger.warning("Skipping corrupted strike row: %s", row)
+            continue
+        trade_date = date.fromisoformat(row["TradDt"].strip())
+        expiry = date.fromisoformat(row["XpryDt"].strip())
+        records.append(BhavRecord(
+            trade_date=trade_date,
+            symbol=sym,
+            underlying=sym,
+            instrument=instrument,
+            expiry=expiry,
+            strike=strike,
+            option_type=opt_type,
+            open=Decimal(row["OpnPric"]),
+            high=Decimal(row["HghPric"]),
+            low=Decimal(row["LwPric"]),
+            close=Decimal(row["ClsPric"]),
+            settle_price=Decimal(row["SttlmPric"]),
+            volume=int(row["TtlTradgVol"]),
+            oi=int(row["OpnIntrst"]),
+        ))
+    return records
+
+
+def parse_bhavcopy(csv_path: Path, underlying: str = "NIFTY", include_futures: bool = False) -> list[BhavRecord]:
+    """Parse an NSE F&O Bhavcopy ZIP and return matching BhavRecords.
+
+    Detects legacy vs UDiFF format automatically by inspecting CSV headers.
+    Raises ValueError on a corrupt or unreadable ZIP.
+    """
     valid_instruments = {"OPTIDX", "OPTSTK"}
     if include_futures:
         valid_instruments.update({"FUTIDX", "FUTSTK"})
-        
+
     try:
         with zipfile.ZipFile(csv_path) as z:
-            # Assume there's only one CSV in the ZIP
             csv_filename = z.namelist()[0]
             with z.open(csv_filename) as f:
-                # Decode lines as string
                 lines = [line.decode("utf-8") for line in f.readlines()]
                 reader = csv.DictReader(lines)
-                
-                for row in reader:
-                    instrument = row["INSTRUMENT"]
-                    if instrument not in valid_instruments:
-                        continue
-                        
-                    sym = row["SYMBOL"]
-                    if sym != underlying:
-                        continue
-                        
-                    strike = Decimal(row["STRIKE_PR"])
-                    opt_type = row["OPTION_TYP"]
-                    
-                    if strike == 0 and opt_type in ("CE", "PE"):
-                        logger.warning("Skipping corrupted strike row: %s", row)
-                        continue
-                        
-                    trade_date = datetime.strptime(row["TIMESTAMP"], "%d-%b-%Y").date()
-                    expiry = datetime.strptime(row["EXPIRY_DT"], "%d-%b-%Y").date()
-                    
-                    rec = BhavRecord(
-                        trade_date=trade_date,
-                        symbol=sym,
-                        underlying=sym,
-                        instrument=instrument,
-                        expiry=expiry,
-                        strike=strike,
-                        option_type=opt_type,
-                        open=Decimal(row["OPEN"]),
-                        high=Decimal(row["HIGH"]),
-                        low=Decimal(row["LOW"]),
-                        close=Decimal(row["CLOSE"]),
-                        settle_price=Decimal(row["SETTLE_PR"]),
-                        volume=int(row["CONTRACTS"]),
-                        oi=int(row["OPEN_INT"])
-                    )
-                    records.append(rec)
-                
+                if "TradDt" in (reader.fieldnames or []):
+                    return _parse_udiff(reader, valid_instruments, underlying)
+                return _parse_legacy(reader, valid_instruments, underlying)
     except zipfile.BadZipFile as e:
         raise ValueError(f"Corrupt or unreadable ZIP file: {csv_path}") from e
-                
-    return records
 
 
 _ZIP_MAGIC = b"PK\x03\x04"
@@ -184,69 +238,96 @@ _NSE_HEADERS = {
 }
 
 _NSE_CDN = "https://nsearchives.nseindia.com/content/historical/DERIVATIVES"
+_UDIFF_CDN = "https://nsearchives.nseindia.com/content/fo"
 
 
-def download_bhavcopy(trade_date: date, dest_dir: Path) -> Path:
-    """
-    Downloads the NSE F&O Bhavcopy ZIP for the given date.
-
-    Uses a requests.Session that pre-warms on nseindia.com to acquire Akamai
-    cookies before hitting nsearchives.nseindia.com. Optionally reads a raw
-    NSE_COOKIE env-var to inject a browser session cookie when automated
-    warm-up is insufficient.
-
-    Returns the path to the downloaded ZIP.
-    Raises FileNotFoundError on HTTP 404 (holiday or non-trading day).
-    Raises IOError if the response is not a valid ZIP (Akamai block) or on
-    any other network failure.
-    """
-    dest_dir.mkdir(parents=True, exist_ok=True)
-
-    date_str = trade_date.strftime("%d%b%Y").upper()
-    month_str = trade_date.strftime("%b").upper()
-    year_str = trade_date.strftime("%Y")
-    filename = f"fo{date_str}bhav.csv.zip"
-    url = f"{_NSE_CDN}/{year_str}/{month_str}/{filename}"
-    dest_path = dest_dir / filename
-
+def _build_session() -> requests.Session:
+    """Build a requests.Session with NSE headers and optional cookie injection."""
     session = requests.Session()
     session.headers.update(_NSE_HEADERS)
-
-    # Inject browser cookie if provided — get from browser DevTools → Network
-    # tab → any nseindia.com request → copy the Cookie header value, then:
-    # export NSE_COOKIE="<paste here>"
     nse_cookie = os.environ.get("NSE_COOKIE", "").strip()
     if nse_cookie:
         session.headers["Cookie"] = nse_cookie
         logger.info("NSE_COOKIE found in env — using browser session cookie")
     else:
-        # Pre-warm: visit nseindia.com to acquire Akamai session cookies.
-        # This may not fully satisfy JS-challenge requirements but picks up
-        # any stateless cookies set on the homepage.
+        # Pre-warm: pick up any stateless Akamai cookies from the homepage.
         try:
             session.get("https://www.nseindia.com", timeout=10)
         except Exception:
-            pass  # warm-up is best-effort; continue regardless
+            pass  # best-effort; continue regardless
+    return session
+
+
+def download_bhavcopy(trade_date: date, dest_dir: Path) -> Path:
+    """Download the NSE F&O Bhavcopy ZIP for the given trade date.
+
+    Tries the UDiFF URL first (Dec 2024+). On 404 falls back to the legacy
+    archive URL (2016 – ~Nov 2024). Uses a requests.Session pre-warmed on
+    nseindia.com to acquire Akamai cookies; set NSE_COOKIE env-var to inject
+    a browser session cookie when automated warm-up is insufficient.
+
+    Returns the local path of the downloaded ZIP.
+    Raises FileNotFoundError on HTTP 404 from both URLs (holiday / non-trading day).
+    Raises IOError on Akamai bot-block (non-ZIP response) or other network error.
+    """
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    session = _build_session()
+
+    # --- UDiFF URL (Dec 2024+) ---
+    udiff_date_str = trade_date.strftime("%Y%m%d")
+    udiff_filename = f"BhavCopy_NSE_FO_0_0_0_{udiff_date_str}_F_0000.csv.zip"
+    udiff_url = f"{_UDIFF_CDN}/{udiff_filename}"
 
     try:
-        resp = session.get(url, timeout=30)
+        resp = session.get(udiff_url, timeout=30)
     except Exception as e:
-        raise IOError(f"Error downloading {trade_date}: {e}")
+        raise IOError(f"Error downloading {trade_date}: {e}") from e
 
-    if resp.status_code == 404:
+    if resp.status_code == 200:
+        content = resp.content
+        if content[:4] != _ZIP_MAGIC:
+            raise IOError(
+                f"UDiFF response for {trade_date} is not a ZIP — Akamai bot-check "
+                f"returned HTML. Set NSE_COOKIE env-var with a browser session cookie."
+            )
+        dest_path = dest_dir / udiff_filename
+        dest_path.write_bytes(content)
+        logger.info("Downloaded UDiFF bhavcopy for %s → %s", trade_date, udiff_filename)
+        return dest_path
+
+    if resp.status_code != 404:
+        raise IOError(f"UDiFF HTTP {resp.status_code} for {trade_date}")
+
+    # UDiFF 404 — fall back to legacy archive URL
+    logger.debug("UDiFF 404 for %s — trying legacy URL", trade_date)
+
+    # --- Legacy URL (2016 – ~Nov 2024) ---
+    date_str = trade_date.strftime("%d%b%Y").upper()
+    month_str = trade_date.strftime("%b").upper()
+    year_str = trade_date.strftime("%Y")
+    legacy_filename = f"fo{date_str}bhav.csv.zip"
+    legacy_url = f"{_NSE_CDN}/{year_str}/{month_str}/{legacy_filename}"
+
+    try:
+        legacy_resp = session.get(legacy_url, timeout=30)
+    except Exception as e:
+        raise IOError(f"Error downloading {trade_date} (legacy): {e}") from e
+
+    if legacy_resp.status_code == 404:
         raise FileNotFoundError(f"NSE returned 404 for {trade_date} — likely a holiday")
-    if resp.status_code != 200:
-        raise IOError(f"HTTP {resp.status_code} for {trade_date}")
+    if legacy_resp.status_code != 200:
+        raise IOError(f"Legacy HTTP {legacy_resp.status_code} for {trade_date}")
 
-    content = resp.content
-    if not content[:4] == _ZIP_MAGIC:
+    content = legacy_resp.content
+    if content[:4] != _ZIP_MAGIC:
         raise IOError(
-            f"Response for {trade_date} is not a ZIP file — Akamai bot-check "
-            f"returned HTML. Set NSE_COOKIE env-var with a browser session "
-            f"cookie from nseindia.com to bypass."
+            f"Legacy response for {trade_date} is not a ZIP — Akamai bot-check "
+            f"returned HTML. Set NSE_COOKIE env-var with a browser session cookie."
         )
 
+    dest_path = dest_dir / legacy_filename
     dest_path.write_bytes(content)
+    logger.info("Downloaded legacy bhavcopy for %s → %s", trade_date, legacy_filename)
     return dest_path
 
 

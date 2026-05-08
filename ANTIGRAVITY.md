@@ -75,6 +75,8 @@ python scripts/daily_snapshot.py
 
 **State-mutating commands require approval.** `run_command` will block and wait for explicit UI approval before executing `git add`, `git commit`, `git push`, DB writes, or any network call. This is a system-level gate — do not attempt to work around it.
 
+**`run_command` does not persist working directory.** Each call executes as a fresh `bash -c` process starting at the repo root. A `cd` in one call has no effect on the next. Use absolute paths in all commands, or chain the directory change and the execution in a single call (e.g., `cd /abs/path && python -m pytest`).
+
 ---
 
 ## Commit Protocol
@@ -82,13 +84,15 @@ python scripts/daily_snapshot.py
 Execute in this exact order. A written-out commit message is not a commit — the phase is not closed until the SHA is confirmed.
 
 1. `run_command: git diff HEAD` — review all uncommitted changes.
-2. **Code-reviewer gate — choose the right tier:**
-   - **Financial logic commits** (any change touching Greeks, P&L, Decimal fields, BrokerClient boundaries,
-     `src/paper/`, `src/portfolio/`, `src/mf/`, `src/client/`): **stop here**. Tell Animesh to run the
-     real `@code-reviewer` subagent via Claude before you proceed. Do not approximate this with persona adoption.
-   - **Non-financial commits** (tooling, config, docs, scripts with no monetary logic): `view_file:
-     .claude/agents/code-reviewer.md` + `view_file: REVIEW.md` — adopt the combined persona and evaluate
-     the diff. Both files must be in context; REVIEW.md hygiene rules are missed without it.
+2. **Code-reviewer gate:**
+   - **Any commit touching `.py` files** (`src/`, `scripts/`, `tests/`): **stop here**. Emit the signal:
+     `CODE REVIEW GATE — awaiting @code-reviewer via Claude`. Tell Animesh to switch to Claude and run
+     the real `@code-reviewer` agent against `git diff HEAD`. Do not approximate with persona adoption —
+     you are a Gemini engine and cannot spawn Claude agents. Wait for Animesh to confirm the review is
+     clean before proceeding to `git add`.
+   - **Docs / config only** (no `.py` files changed): `view_file: .claude/agents/code-reviewer.md` +
+     `view_file: REVIEW.md` — adopt the combined persona and evaluate the diff. Both files must be in
+     context; REVIEW.md hygiene rules are missed without it.
 3. Resolve any `CRITICAL` or `ERROR` findings before proceeding. `WARNING` findings may be deferred
    with a documented reason recorded in the commit `Why:` line.
 4. `view_file: .claude/skills/commit/SKILL.md` — read the required commit format.

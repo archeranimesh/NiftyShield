@@ -4,7 +4,10 @@ from decimal import Decimal
 import zipfile
 import tempfile
 from pathlib import Path
-from src.backtest.bhavcopy_ingest import parse_option_symbol, parse_bhavcopy, BhavRecord
+from unittest.mock import patch, MagicMock
+from src.backtest.bhavcopy_ingest import parse_option_symbol, parse_bhavcopy, BhavRecord, download_bhavcopy
+
+_ZIP_MAGIC = b"PK\x03\x04"
 
 def test_parse_option_symbol_monthly():
     res = parse_option_symbol("NIFTY26APR24000PE")
@@ -147,6 +150,141 @@ def test_bhavcopy_bootstrap_error_handling(mock_sleep, mock_download, tmp_path):
     
     assert mock_download.call_count == 1
     mock_sleep.assert_called_once_with(1.0)
+
+
+# ---------------------------------------------------------------------------
+# UDiFF format tests
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def udiff_bhavcopy_zip(tmp_path):
+    csv_path = Path("tests/fixtures/responses/bhavcopy/udiff_bhavcopy.csv")
+    zip_path = tmp_path / "udiff_bhavcopy.csv.zip"
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.write(csv_path, arcname="udiff_bhavcopy.csv")
+    return zip_path
+
+
+def test_parse_bhavcopy_udiff_format_detected(udiff_bhavcopy_zip):
+    """UDiFF header (TradDt) routes to the UDiFF parser, not the legacy one."""
+    records = parse_bhavcopy(udiff_bhavcopy_zip, underlying="NIFTY", include_futures=True)
+    # 1 CE + 1 PE + 1 FUTIDX; BANKNIFTY and corrupted-zero-strike CE are excluded
+    assert len(records) == 3
+
+
+def test_parse_bhavcopy_udiff_filters_underlying(udiff_bhavcopy_zip):
+    records = parse_bhavcopy(udiff_bhavcopy_zip, underlying="NIFTY")
+    for r in records:
+        assert r.underlying == "NIFTY"
+        assert r.instrument in ("OPTIDX", "OPTSTK")
+
+
+def test_parse_bhavcopy_udiff_instrument_mapping(udiff_bhavcopy_zip):
+    """IDO → OPTIDX, IDF → FUTIDX — model canonical strings preserved."""
+    records = parse_bhavcopy(udiff_bhavcopy_zip, underlying="NIFTY", include_futures=True)
+    instruments = {r.instrument for r in records}
+    assert "OPTIDX" in instruments
+    assert "FUTIDX" in instruments
+
+
+def test_parse_bhavcopy_udiff_decimal_fields(udiff_bhavcopy_zip):
+    records = parse_bhavcopy(udiff_bhavcopy_zip, underlying="NIFTY")
+    for r in records:
+        for field in ("open", "high", "low", "close", "settle_price", "strike"):
+            assert isinstance(getattr(r, field), Decimal), f"{field} is not Decimal"
+
+
+def test_parse_bhavcopy_udiff_date_parsing(udiff_bhavcopy_zip):
+    records = parse_bhavcopy(udiff_bhavcopy_zip, underlying="NIFTY")
+    for r in records:
+        assert r.trade_date == date(2025, 1, 2)
+        assert r.expiry == date(2025, 1, 30)
+
+
+def test_parse_bhavcopy_udiff_futures_excluded_by_default(udiff_bhavcopy_zip):
+    records = parse_bhavcopy(udiff_bhavcopy_zip, underlying="NIFTY", include_futures=False)
+    assert all(r.instrument != "FUTIDX" for r in records)
+
+
+def test_parse_bhavcopy_udiff_no_match(udiff_bhavcopy_zip):
+    records = parse_bhavcopy(udiff_bhavcopy_zip, underlying="SENSEX")
+    assert len(records) == 0
+
+
+# ---------------------------------------------------------------------------
+# download_bhavcopy: UDiFF-first with legacy fallback
+# ---------------------------------------------------------------------------
+
+def _fake_zip_response(status_code: int = 200, is_zip: bool = True) -> MagicMock:
+    resp = MagicMock()
+    resp.status_code = status_code
+    resp.content = _ZIP_MAGIC + b"\x00" * 16 if is_zip else b"<html>blocked</html>"
+    return resp
+
+
+def _patched_session(mock_session_cls: MagicMock) -> MagicMock:
+    """Return the inner session mock wired up to the Session constructor."""
+    session = MagicMock()
+    mock_session_cls.return_value = session
+    return session
+
+
+# Set NSE_COOKIE so _build_session skips the pre-warm GET — keeps side_effect
+# counts deterministic (no extra call consumed by the warm-up).
+_SKIP_WARMUP = {"NSE_COOKIE": "test_cookie"}
+
+
+@patch("src.backtest.bhavcopy_ingest.requests.Session")
+@patch.dict("os.environ", _SKIP_WARMUP)
+def test_download_bhavcopy_udiff_success(mock_session_cls, tmp_path):
+    session = _patched_session(mock_session_cls)
+    session.get.return_value = _fake_zip_response(200, is_zip=True)
+
+    result = download_bhavcopy(date(2025, 1, 2), tmp_path)
+
+    assert "BhavCopy_NSE_FO_0_0_0_20250102_F_0000" in result.name
+    assert result.exists()
+    # Only one GET: UDiFF succeeded on first try
+    assert session.get.call_count == 1
+
+
+@patch("src.backtest.bhavcopy_ingest.requests.Session")
+@patch.dict("os.environ", _SKIP_WARMUP)
+def test_download_bhavcopy_udiff_404_falls_back_to_legacy(mock_session_cls, tmp_path):
+    session = _patched_session(mock_session_cls)
+    session.get.side_effect = [
+        _fake_zip_response(404, is_zip=False),  # UDiFF 404
+        _fake_zip_response(200, is_zip=True),   # legacy success
+    ]
+
+    result = download_bhavcopy(date(2024, 4, 25), tmp_path)
+
+    assert result.name.startswith("fo")  # legacy filename pattern
+    assert result.exists()
+    assert session.get.call_count == 2
+
+
+@patch("src.backtest.bhavcopy_ingest.requests.Session")
+@patch.dict("os.environ", _SKIP_WARMUP)
+def test_download_bhavcopy_both_404_raises(mock_session_cls, tmp_path):
+    session = _patched_session(mock_session_cls)
+    session.get.side_effect = [
+        _fake_zip_response(404, is_zip=False),  # UDiFF 404
+        _fake_zip_response(404, is_zip=False),  # legacy 404 → holiday
+    ]
+
+    with pytest.raises(FileNotFoundError, match="404"):
+        download_bhavcopy(date(2025, 1, 1), tmp_path)
+
+
+@patch("src.backtest.bhavcopy_ingest.requests.Session")
+@patch.dict("os.environ", _SKIP_WARMUP)
+def test_download_bhavcopy_udiff_akamai_block_raises(mock_session_cls, tmp_path):
+    session = _patched_session(mock_session_cls)
+    session.get.return_value = _fake_zip_response(200, is_zip=False)  # HTML, not ZIP
+
+    with pytest.raises(IOError, match="not a ZIP"):
+        download_bhavcopy(date(2025, 1, 2), tmp_path)
 
 
 @patch('scripts.bhavcopy_bootstrap.download_bhavcopy')
