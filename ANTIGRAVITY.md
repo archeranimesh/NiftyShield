@@ -82,13 +82,19 @@ python scripts/daily_snapshot.py
 Execute in this exact order. A written-out commit message is not a commit — the phase is not closed until the SHA is confirmed.
 
 1. `run_command: git diff HEAD` — review all uncommitted changes.
-2. `view_file: .claude/agents/code-reviewer.md` — adopt the persona and evaluate the diff against those rules. This is persona adoption (approximate), not a true subagent invocation.
-3. Resolve any `CRITICAL` or `ERROR` findings before proceeding. `WARNING` findings may be deferred with a documented reason.
+2. **Code-reviewer gate — choose the right tier:**
+   - **Financial logic commits** (any change touching Greeks, P&L, Decimal fields, BrokerClient boundaries,
+     `src/paper/`, `src/portfolio/`, `src/mf/`, `src/client/`): **stop here**. Tell Animesh to run the
+     real `@code-reviewer` subagent via Claude before you proceed. Do not approximate this with persona adoption.
+   - **Non-financial commits** (tooling, config, docs, scripts with no monetary logic): `view_file:
+     .claude/agents/code-reviewer.md` + `view_file: REVIEW.md` — adopt the combined persona and evaluate
+     the diff. Both files must be in context; REVIEW.md hygiene rules are missed without it.
+3. Resolve any `CRITICAL` or `ERROR` findings before proceeding. `WARNING` findings may be deferred
+   with a documented reason recorded in the commit `Why:` line.
 4. `view_file: .claude/skills/commit/SKILL.md` — read the required commit format.
-5. Propose `git add <files>` followed by `git commit -m "<message>"` via `run_command`. The UI will block for Animesh's approval before execution.
+5. Propose `git add <files>` followed by `git commit -m "<message>"` via `run_command`. The UI will
+   block for Animesh's approval before execution.
 6. After approval, run `git log --oneline -1` to confirm the SHA appears — this is proof of completion.
-
-**On the code-reviewer gate:** Step 2 is a persona approximation. For any commit touching financial logic (Greeks, P&L, Decimal fields, BrokerClient boundaries), ask Animesh to run the real `@code-reviewer` subagent via Claude before you propose the commit.
 
 **Never bundle changes from separate phases into one commit.** Each phase (model → store → tracker → helpers) gets its own commit.
 
@@ -106,3 +112,30 @@ Execute in this exact order. A written-out commit message is not a commit — th
 | Log reads | `tail -20 logs/snapshot.log` or `grep ERROR logs/snapshot.log` — never `cat` on log files |
 
 `SELECT *` on a 15-row × 20-column table ≈ 300 tokens that persist all session. A `GROUP BY / SUM` row ≈ 15 tokens.
+
+
+---
+
+## Phase Completion Output (mandatory)
+
+At the end of every phase, produce this structured block before stopping.
+Claude uses this to verify your work without re-reading changed files.
+The SHA is proof of completion; the test count is the DoD check.
+
+```
+PHASE COMPLETE
+files_changed:
+  - <path relative to repo root>
+  - <path relative to repo root>
+tests_added: <N>
+tests_passing: <N of M total>
+commit_sha: <7-char SHA from git log --oneline -1>
+```
+
+**How to populate:**
+- `files_changed`: list every file staged in the commit (from `git diff --name-only HEAD~1`)
+- `tests_added`: count of new test functions introduced this phase (`grep -c "def test_" <new test file>`)
+- `tests_passing`: from `pytest --tb=no -q` final summary line (e.g. `47 passed`)
+- `commit_sha`: from `git log --oneline -1` — the first 7 chars of the SHA
+
+If any field cannot be populated (e.g. docs-only commit with no tests), state `n/a` with a one-word reason.

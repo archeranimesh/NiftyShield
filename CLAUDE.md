@@ -52,6 +52,7 @@ Module tree (file-level descriptions): **`CONTEXT_TREE.md`** — load only when 
 - Implementing a metric / ratio / ML technique → also read `LITERATURE.md` entry for the cited LIT code
 - Working a specific story → load ONLY that story file + `CONTEXT.md` + module `CLAUDE.md`
 - Working inside `src/<module>/` → that module's `CLAUDE.md` loads automatically
+- Reviewing or building on Antigravity's work → also read `ANTIGRAVITY.md`
 
 ## Python Standards (new module checklist)
 
@@ -110,6 +111,29 @@ Concrete failures this prevents (from 2026-04-25 session):
 - `entry_date` → required field on `Leg`; omitting it raises `ValidationError` at collection
 
 One graph call before the first line of test code eliminates both. Do not skip it.
+
+## Agent AutoTrigger Rules
+
+Spawning the correct sub-agent is not optional for the conditions below.
+Inline review is not a substitute — each agent runs in an isolated context with the right model.
+
+| Agent | Trigger condition | Blocking? |
+|---|---|---|
+| `test-runner` (Haiku) | After any code file is edited, before code-reviewer | **Yes** — must pass before proceeding |
+| `code-reviewer` (Opus) | Before every commit touching code | **Yes** — CRITICAL/ERROR findings must resolve |
+| `greeks-analyst` (Sonnet) | Any change to `src/paper/`, option chain parsing, or delta/gamma fields | **Yes** |
+| `roll-validator` (Opus) | Any change to roll logic or `scripts/roll_leg.py` invocation | **Yes** |
+| `options-strategist` (Opus) | Council checkpoint (Step 2b) when no real council is warranted | Advisory |
+
+**"Blocking"** means the next protocol step does not proceed until the agent returns clean.
+For `code-reviewer`: any `CRITICAL` or `ERROR` finding must be resolved; `WARNING` may be
+deferred with a documented reason in the commit message.
+
+**Financial logic commits** (Greeks, P&L, Decimal paths, BrokerClient boundaries):
+real `@code-reviewer` subagent is mandatory — Antigravity's persona approximation is
+insufficient because it does not load `REVIEW.md` hygiene rules unless explicitly provided.
+
+
 
 ## Step 5 — Close the phase (docs → tests → commit)
 
@@ -208,6 +232,20 @@ Never use a lower-ranked response to contradict Stage 3.
 | Backtest → paper → live pipeline plan | `BACKTEST_PLAN.md` |
 | Council trigger criteria + workflow | `docs/council/README.md` |
 | Completed council decisions | `docs/council/YYYY-MM-DD_<topic>.md` |
+| Antigravity operating protocol | `ANTIGRAVITY.md` |
+| Claude–Antigravity workflow division | `docs/antigravity/ai_collaboration_plan.md` |
+
+## AI Collaboration — Antigravity
+
+This project uses two AI agents. Claude (you) handles planning, graph queries, council decisions, and the mandatory `@code-reviewer` gate. Antigravity handles autonomous multi-file implementation, TDD loops, and commit execution.
+
+**What this means for Claude:**
+- Antigravity may have authored uncommitted or recently committed code. When reviewing it, run the real `@code-reviewer` agent against `git diff HEAD` — Antigravity's own review is persona-based and approximate.
+- Antigravity follows `ANTIGRAVITY.md` (project root). Its file-editing tools differ from Claude's: it uses `multi_replace_file_content` where Claude uses `Edit`, and `write_to_file` only for new files.
+- The workflow division (who does what, in which phase) is in `docs/antigravity/ai_collaboration_plan.md`.
+- Council decisions are always Claude's responsibility. Antigravity does not trigger the council.
+
+---
 
 ## Module CLAUDE.md files (auto-loaded when working in that directory)
 

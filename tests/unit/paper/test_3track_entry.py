@@ -60,6 +60,7 @@ def _make_prices(**kwargs) -> LivePrices:
         proxy_actual_delta=Decimal("0.9050"),
         proxy_instrument_key="NSE_FO|NIFTY21500CE",
         proxy_oi=12_000, proxy_bid=2715.0, proxy_ask=2723.0,
+        proxy_candidates=(),
     )
     defaults.update(kwargs)
     return LivePrices(**defaults)

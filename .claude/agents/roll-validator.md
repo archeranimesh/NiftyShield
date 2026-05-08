@@ -1,5 +1,5 @@
 ---
-model: claude-opus-4-5
+model: claude-opus-4-6
 description: NiftyShield roll-leg validation — pre-roll position check, Trade model integrity, DB transaction safety before JUN 2026 expiry
 ---
 

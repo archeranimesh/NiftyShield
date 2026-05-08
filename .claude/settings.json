@@ -9,6 +9,15 @@
             "command": ".claude/hooks/guard_src_reads.sh"
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/council_check.sh"
+          }
+        ]
       }
     ]
   }

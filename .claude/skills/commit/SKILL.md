@@ -1,24 +1,83 @@
+# NiftyShield Commit Executor
+
+Execute the full commit workflow. A written-out commit message is not a commit — this skill
+runs the git commands and confirms the SHA. The phase is not closed until the SHA appears.
+
 ---
-disable-model-invocation: true
+
+## Step 1 — Review the diff
+
+```bash
+git -C /path/to/repo diff HEAD
+```
+
+Scan for: Decimal violations, BrokerClient imports outside factory.py, missing type hints,
+blocking calls in async paths. If the diff touches financial logic (Greeks, P&L, Decimal
+fields), stop and invoke the `@code-reviewer` subagent before proceeding.
+
 ---
 
-# NiftyShield Commit Message Format
+## Step 2 — Run the test suite
 
-Use this format for every commit in this project. Run manually — never triggered automatically.
+```bash
+python -m pytest tests/unit/ --tb=no -q
+```
 
-## Format
+All tests must pass. If any fail, do not proceed — fix failures first.
+
+---
+
+## Step 3 — Construct the commit message
+
+Use this format exactly:
 
 ```
 <type>(<scope>): <what changed, imperative mood, ≤60 chars>
 
-Why: <one sentence on the reason or the problem solved>
+Why: <one sentence — reason or problem solved, not a restatement of what changed>
 What:
-- <file path>: <one-line description of change>
-- <file path>: <one-line description of change>
-Ref: <relevant constraint from Current Constraints, or "none">
+- <file path relative to repo root>: <one-line description>
+- <file path relative to repo root>: <one-line description>
+Ref: <relevant constraint from CONTEXT.md → Current Constraints, or "none">
 ```
 
-## Types
+**Types:** `feat` / `fix` / `refactor` / `test` / `chore` / `docs`
+**Scope:** folder name under `src/` or `scripts/` (e.g. `portfolio`, `client`, `mf`, `scripts`)
+
+Rules:
+- Subject line ≤ 60 chars, imperative mood, no trailing period
+- `Why:` explains the reason, never just restates `What:`
+- One `What:` bullet per file changed
+- Never bundle changes from separate phases into one commit
+
+---
+
+## Step 4 — Stage and commit
+
+```bash
+git -C /path/to/repo add <file1> <file2> ...
+git -C /path/to/repo commit -m "$(cat <<'EOF'
+<paste message here>
+EOF
+)"
+```
+
+Stage only the files for this phase. Never `git add -A` across phase boundaries.
+
+---
+
+## Step 5 — Confirm the SHA (mandatory)
+
+```bash
+git -C /path/to/repo log --oneline -1
+```
+
+The SHA must appear in output. This is proof of completion. If this step is skipped,
+the phase is not closed.
+
+---
+
+## Type reference
 
 | Type | When |
 |---|---|
@@ -28,17 +87,6 @@ Ref: <relevant constraint from Current Constraints, or "none">
 | `test` | Test added or updated |
 | `chore` | Tooling, config, deps, scripts |
 | `docs` | Documentation only |
-
-## Scope
-
-Folder name under `src/` or `scripts/`. Examples: `portfolio`, `mf`, `client`, `notifications`, `auth`, `instruments`, `scripts`.
-
-## Rules
-
-- Subject line: imperative mood, ≤60 chars, no period at end
-- `Why:` — one sentence: the reason or problem solved, not a restatement of what changed
-- `What:` — one bullet per file changed, path relative to repo root
-- `Ref:` — cite the relevant constraint from `CONTEXT.md → Current Constraints`, or `"none"`
 
 ## Examples
 
@@ -70,21 +118,4 @@ What:
 - src/client/mock_client.py: stateful offline broker with simulate_error + reset
 - tests/unit/test_mock_client.py: 38 tests covering all BrokerClient methods
 Ref: Order execution blocked (static IP required)
-```
-
-## Usage
-
-When you ask Claude to generate a commit message, it will produce the above format ready to paste into:
-
-```bash
-git commit -m "$(cat <<'EOF'
-feat(portfolio): add trade overlay to snapshot pipeline
-
-Why: Snapshots were using definition prices not actual execution prices
-What:
-- src/portfolio/tracker.py: internalize apply_trade_positions overlay
-- src/portfolio/store.py: add ensure_leg for trade-only legs
-Ref: none
-EOF
-)"
 ```

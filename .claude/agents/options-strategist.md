@@ -1,5 +1,5 @@
 ---
-model: claude-opus-4-5
+model: claude-opus-4-6
 description: NiftyShield options strategy design — delta-neutral positioning, Iron Condor / short strangle sizing, risk module logic for NSE index options
 ---
 
