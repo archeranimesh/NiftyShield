@@ -7,6 +7,8 @@
 
 ## Data Layer
 
+**UTC-only timestamps in intraday_market_snapshots:** `record_market_snapshot` raises ValueError on naive datetime; stores as UTC ISO string. Prevents SQLite string-sort breakage when naive local and UTC-aware strings coexist. Ref: commit a259115.
+
 **Intraday Market Context Separation (2026-05-08):** Market context separated into `intraday_market_snapshots` via `IntradayMarketStore`; Nifty+VIX fetched once in orchestrator. Previously, Nifty spot was tracked redundantly in broker-specific options tables (e.g., `nuvama_intraday_snapshots`). Separating it enables both Dhan and Nuvama trackers to share the same market context without redundant API calls.
 
 **Shared SQLite connection factory (`src/db.py`):** Single `connect()` context manager used by both `PortfolioStore` and `MFStore`. WAL mode, `sqlite3.Row` factory, FK enforcement, auto commit/rollback. Any PRAGMA change applies everywhere from one place.
