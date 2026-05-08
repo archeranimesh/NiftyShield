@@ -44,7 +44,7 @@ async def main() -> int:
         format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
-    logger = logging.getLogger("intraday")
+    logger = logging.getLogger("market")
 
     nifty_spot = 0.0
     india_vix = 0.0
@@ -57,7 +57,7 @@ async def main() -> int:
         nifty_spot = float(prices.get(NIFTY_KEY, 0.0))
         india_vix = float(prices.get(VIX_KEY, 0.0))
         
-        logger.info(f"[market] Nifty: {nifty_spot:,.2f} | VIX: {india_vix:.2f}")
+        logger.info(f"Nifty: {nifty_spot:,.2f} | VIX: {india_vix:.2f}")
         
         store = IntradayMarketStore()
         now = datetime.now(timezone.utc)

@@ -29,6 +29,12 @@ logger = logging.getLogger("dhan")
 def main(nifty_spot: float = 0.0, india_vix: float = 0.0) -> int:
     """Run one Dhan intraday options snapshot tick.
 
+    Args:
+        nifty_spot: Nifty 50 level fetched by the combined orchestrator.
+            Accepted for API symmetry with nuvama_intraday_tracker; not yet
+            stored or logged here (market context lives in intraday_market_snapshots).
+        india_vix: India VIX level — same note as nifty_spot.
+
     Returns:
         0 on success or deliberate skip, 1 on unrecoverable error.
     """
