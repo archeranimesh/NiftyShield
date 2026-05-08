@@ -98,6 +98,37 @@ DOD
 - [ ] TODOS.md updated (session log entry, completed items marked)
 - [ ] Commit executed (not drafted) — SHA confirmed via git log --oneline -1
 
+QUALITY_GATES
+Antigravity runs these gates using its own tooling — not Claude's sub-agents.
+
+Test gate (replaces Claude's test-runner agent):
+  run_command: python -m pytest tests/unit/ --tb=no -q
+  All tests must pass before proceeding to review. If failures exist, fix them first.
+
+Review gate (replaces Claude's code-reviewer agent) — two tiers:
+  NON-FINANCIAL code (tooling, config, scripts with no monetary logic):
+    view_file: .claude/agents/code-reviewer.md
+    view_file: REVIEW.md
+    Adopt both as persona. Evaluate git diff HEAD against all rules in both files.
+    Resolve CRITICAL/ERROR before committing. WARNING may be deferred with a note.
+
+  FINANCIAL logic (any change touching Decimal fields, P&L, Greeks, BrokerClient,
+    src/paper/, src/portfolio/, src/mf/, src/client/):
+    STOP. Do not commit. Tell Animesh: "This commit touches financial logic.
+    Please ask Claude to run the real @code-reviewer agent against git diff HEAD
+    before I proceed." Wait for Claude's verdict before continuing.
+
+STOP_CONDITIONS
+Stop mid-implementation and surface to Animesh (who relays to Claude) when:
+  - A design decision arises that isn't resolved by CONTEXT.md, DECISIONS.md, or the graph
+    (e.g. two valid approaches with different P&L or architectural consequences)
+  - A required symbol or model field is missing from the codebase and needs a new design decision
+  - A test is failing for a reason that suggests the spec is wrong, not the implementation
+
+Do NOT stop for: implementation style choices, naming decisions, minor refactors.
+When stopping, include in the relay message: what the ambiguity is, the two options
+you considered, and which you would pick if forced. Claude resolves it and you continue.
+
 PHASE_COMPLETION_OUTPUT
 At end of phase, produce this block:
 PHASE COMPLETE
@@ -105,6 +136,7 @@ files_changed: [list]
 tests_added: N
 tests_passing: N of M
 commit_sha: <7-char SHA>
+ambiguities_noted: [list any stop-condition items that arose, or "none"]
 ```
 
 ---
