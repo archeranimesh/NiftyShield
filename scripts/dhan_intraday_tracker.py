@@ -103,13 +103,11 @@ def main() -> int:
         store.record_margin_snapshot(ts, fund_limit)
         purged = store.purge_old_intraday(days=30)
 
+        total_pnl = summary.unrealized_pnl + summary.realized_pnl
         logger.info(
-            "Total: %+,.0f | Unreal: %+,.0f | RealToday: %+,.0f | AvailMgn: %+,.0f | Pos: %d",
-            summary.unrealized_pnl + summary.realized_pnl,
-            summary.unrealized_pnl,
-            summary.realized_pnl,
-            fund_limit.available_balance,
-            summary.position_count,
+            f"Total: {total_pnl:+,.0f} | Unreal: {summary.unrealized_pnl:+,.0f} | "
+            f"RealToday: {summary.realized_pnl:+,.0f} | AvailMgn: {fund_limit.available_balance:+,.0f} | "
+            f"Pos: {summary.position_count}"
         )
         if purged:
             logger.info("purged %d old intraday row(s)", purged)

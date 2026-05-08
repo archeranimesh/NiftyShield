@@ -106,9 +106,9 @@ async def main() -> int:
         total_pnl = unrealized + realized_today
 
         logger.info(
-            "Total: %+,.0f | Unreal: %+,.0f | RealToday: %+,.0f | CumReal: %+,.0f | "
-            "Pos: %d | Nifty: %,.2f",
-            total_pnl, unrealized, realized_today, historical_total, len(positions), nifty_spot,
+            f"Total: {total_pnl:+,.0f} | Unreal: {unrealized:+,.0f} | "
+            f"RealToday: {realized_today:+,.0f} | CumReal: {historical_total:+,.0f} | "
+            f"Pos: {len(positions)} | Nifty: {nifty_spot:,.2f}"
         )
     except Exception:  # Intentional: isolate db failure
         logger.exception("run_id=%s failed to record intraday positions", run_id)
