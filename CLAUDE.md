@@ -91,6 +91,33 @@ This checkpoint exists only in the planning phase. Never invoke the council mid-
 
 If plan touches more than 2 files, wait for explicit go-ahead.
 
+## Step 3b — Implementation routing (mandatory after go-ahead)
+
+Once go-ahead is received, decide who implements **before writing any code**.
+This is a fork — the two paths do not overlap.
+
+**Claude implements:**
+→ Proceed to Step 4. AutoTrigger agents (test-runner, code-reviewer) fire during and after
+  implementation. Claude commits via the commit skill.
+
+**Antigravity implements:**
+→ Invoke the `handoff-antigravity` skill now. Produce the structured handoff prompt and stop.
+  Do not write any code. Antigravity picks up from the handoff, runs its own protocol
+  (TDD loop, persona review, commit), and returns a Phase Completion Output block.
+  Claude verifies: SHA matches `git log --oneline -1`, test count meets DoD. If both check
+  out, the phase is closed. If not, Claude opens a fix session with the failure details.
+
+**When to choose Antigravity:**
+- Task spans 3+ files with clear, non-ambiguous spec
+- TDD loop needed (write tests first, iterate until green)
+- Phase is from BACKTEST_PLAN.md with a fully documented DoD
+- Implementation is mechanical — no real-time design decisions expected
+
+**When Claude implements:**
+- Single file or 2-file task where inline judgment calls are likely
+- Exploratory work where the spec may change as code is written
+- Any task requiring graph queries mid-implementation to resolve ambiguity
+
 ## Step 4 — Tests are mandatory
 
 Every public function needs: one happy-path test + one error/edge-case test. No network in tests.
