@@ -65,7 +65,6 @@ _CREATE_INTRADAY_SNAPSHOTS = """
 CREATE TABLE IF NOT EXISTS nuvama_intraday_snapshots (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp           TIMESTAMP NOT NULL,
-    nifty_spot          REAL,
     trade_symbol        TEXT NOT NULL,
     net_qty             INTEGER NOT NULL,
     ltp                 REAL NOT NULL,
@@ -78,7 +77,8 @@ CREATE TABLE IF NOT EXISTS nuvama_intraday_snapshots (
 # v0: nifty_spot/ltp in intraday table declared DECIMAL (wrong affinity).
 # v1: intraday table recreated with REAL columns.
 # v2: nuvama_holdings_snapshots gains chg_pct TEXT NOT NULL DEFAULT '0'.
-_SCHEMA_VERSION = 2
+# v3: nuvama_intraday_snapshots drops nifty_spot (moved to intraday_market_snapshots).
+_SCHEMA_VERSION = 3
 
 
 def _row_to_option_position(row: sqlite3.Row) -> NuvamaOptionPosition:
@@ -134,6 +134,18 @@ class NuvamaStore:
                     conn.execute(
                         "ALTER TABLE nuvama_holdings_snapshots"
                         " ADD COLUMN chg_pct TEXT NOT NULL DEFAULT '0'"
+                    )
+                conn.execute(f"PRAGMA user_version = {_SCHEMA_VERSION}")
+            if stored_version < 3:
+                existing_cols = {
+                    row["name"]
+                    for row in conn.execute(
+                        "PRAGMA table_info(nuvama_intraday_snapshots)"
+                    ).fetchall()
+                }
+                if "nifty_spot" in existing_cols:
+                    conn.execute(
+                        "ALTER TABLE nuvama_intraday_snapshots DROP COLUMN nifty_spot"
                     )
                 conn.execute(f"PRAGMA user_version = {_SCHEMA_VERSION}")
             conn.execute(_CREATE_INTRADAY_SNAPSHOTS)
@@ -535,7 +547,6 @@ class NuvamaStore:
     def record_intraday_positions(
         self,
         timestamp: datetime,
-        nifty_spot: float,
         positions: list,
     ) -> None:
         """Insert the raw 5-minute leg states for later investigation."""
@@ -543,14 +554,13 @@ class NuvamaStore:
             conn.executemany(
                 """
                 INSERT INTO nuvama_intraday_snapshots (
-                    timestamp, nifty_spot, trade_symbol, net_qty, ltp,
+                    timestamp, trade_symbol, net_qty, ltp,
                     unrealized_pnl, realized_pnl_today
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 [
                     (
                         timestamp.isoformat(),
-                        nifty_spot,
                         pos.trade_symbol,
                         pos.net_qty,
                         str(pos.ltp),
@@ -569,7 +579,7 @@ class NuvamaStore:
         with connect(self._db_path) as conn:
             rows = conn.execute(
                 """
-                SELECT timestamp, unrealized_pnl, realized_pnl_today, nifty_spot
+                SELECT timestamp, unrealized_pnl, realized_pnl_today
                 FROM nuvama_intraday_snapshots
                 WHERE date(timestamp) = ?
                 """,
@@ -580,22 +590,16 @@ class NuvamaStore:
             return None, None, None, None
             
         pnl_by_ts: dict[str, Decimal] = {}
-        nifty_spots: list[float] = []
         
         for row in rows:
             ts = row["timestamp"]
             urlz = Decimal(str(row["unrealized_pnl"]))
             rlz = Decimal(str(row["realized_pnl_today"]))
-            nifty = row["nifty_spot"]
             
             pnl_by_ts[ts] = pnl_by_ts.get(ts, Decimal("0")) + urlz + rlz
-            if nifty is not None:
-                nifty_spots.append(float(nifty))
                 
         pnls = list(pnl_by_ts.values())
         max_pnl = max(pnls) if pnls else None
         min_pnl = min(pnls) if pnls else None
-        nifty_high = max(nifty_spots) if nifty_spots else None
-        nifty_low = min(nifty_spots) if nifty_spots else None
         
-        return max_pnl, min_pnl, nifty_high, nifty_low
+        return max_pnl, min_pnl, None, None

@@ -392,7 +392,7 @@ class TestIntradayStore:
         import sqlite3
         from datetime import datetime
         ts = datetime(2026, 4, 21, 9, 15, 0)
-        store.record_intraday_positions(ts, 22950.5, [self._pos("A")])
+        store.record_intraday_positions(ts, [self._pos("A")])
         with sqlite3.connect(store._db_path) as conn:
             rows = conn.execute("SELECT * FROM nuvama_intraday_snapshots").fetchall()
         assert len(rows) == 1
@@ -403,26 +403,26 @@ class TestIntradayStore:
     def test_get_intraday_extremes_single_timestamp(self, store):
         from datetime import datetime
         ts = datetime(2026, 4, 21, 9, 15, 0)
-        store.record_intraday_positions(ts, 22950.5, [self._pos("A", "1000", "200")])
+        store.record_intraday_positions(ts, [self._pos("A", "1000", "200")])
         max_pnl, min_pnl, nifty_high, nifty_low = store.get_intraday_extremes(date(2026, 4, 21))
         # single timestamp: 1000 + 200 = 1200
         assert max_pnl == Decimal("1200")
         assert min_pnl == Decimal("1200")
-        assert nifty_high == 22950.5
-        assert nifty_low == 22950.5
+        assert nifty_high is None
+        assert nifty_low is None
 
     def test_get_intraday_extremes_multiple_timestamps(self, store):
         """max/min taken across aggregated per-timestamp totals."""
         from datetime import datetime
         ts1 = datetime(2026, 4, 21, 9, 15, 0)
         ts2 = datetime(2026, 4, 21, 9, 20, 0)
-        store.record_intraday_positions(ts1, 22950.5, [self._pos("A", "1000", "0")])
-        store.record_intraday_positions(ts2, 23100.0, [self._pos("A", "-500", "0")])
+        store.record_intraday_positions(ts1, [self._pos("A", "1000", "0")])
+        store.record_intraday_positions(ts2, [self._pos("A", "-500", "0")])
         max_pnl, min_pnl, nifty_high, nifty_low = store.get_intraday_extremes(date(2026, 4, 21))
         assert max_pnl == Decimal("1000")
         assert min_pnl == Decimal("-500")
-        assert nifty_high == 23100.0
-        assert nifty_low == 22950.5
+        assert nifty_high is None
+        assert nifty_low is None
 
     def test_get_intraday_extremes_multi_leg_same_timestamp(self, store):
         """Multiple legs at the same timestamp are SUMMED before taking max/min."""
@@ -430,7 +430,7 @@ class TestIntradayStore:
         ts = datetime(2026, 4, 21, 9, 15, 0)
         pos_a = self._pos("A", unrealized="1000", realized="0")
         pos_b = self._pos("B", unrealized="500", realized="100")
-        store.record_intraday_positions(ts, 23000.0, [pos_a, pos_b])
+        store.record_intraday_positions(ts, [pos_a, pos_b])
         max_pnl, min_pnl, _, _ = store.get_intraday_extremes(date(2026, 4, 21))
         # 1000 + 0 + 500 + 100 = 1600
         assert max_pnl == Decimal("1600")
@@ -441,8 +441,8 @@ class TestIntradayStore:
         from datetime import datetime
         ts_today = datetime(2026, 4, 21, 9, 15, 0)
         ts_yest = datetime(2026, 4, 20, 9, 15, 0)
-        store.record_intraday_positions(ts_today, 23000.0, [self._pos("A", "1000", "0")])
-        store.record_intraday_positions(ts_yest, 22000.0, [self._pos("A", "9999", "0")])
+        store.record_intraday_positions(ts_today, [self._pos("A", "1000", "0")])
+        store.record_intraday_positions(ts_yest, [self._pos("A", "9999", "0")])
         max_pnl, _, _, _ = store.get_intraday_extremes(date(2026, 4, 21))
         assert max_pnl == Decimal("1000")  # yesterday's 9999 excluded
 
@@ -459,10 +459,10 @@ class TestIntradayStore:
         with sqlite3.connect(store._db_path) as conn:
             conn.execute(
                 """INSERT INTO nuvama_intraday_snapshots
-                   (timestamp, nifty_spot, trade_symbol, net_qty, ltp,
+                   (timestamp, trade_symbol, net_qty, ltp,
                     unrealized_pnl, realized_pnl_today)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (old_ts, 23000.0, "OLD", -50, "90", "1000", "0"),
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (old_ts, "OLD", -50, "90", "1000", "0"),
             )
         store.purge_old_intraday(days=30)
         with sqlite3.connect(store._db_path) as conn:
@@ -477,10 +477,10 @@ class TestIntradayStore:
         with sqlite3.connect(store._db_path) as conn:
             conn.execute(
                 """INSERT INTO nuvama_intraday_snapshots
-                   (timestamp, nifty_spot, trade_symbol, net_qty, ltp,
+                   (timestamp, trade_symbol, net_qty, ltp,
                     unrealized_pnl, realized_pnl_today)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (recent_ts, 23000.0, "RECENT", -50, "90", "1000", "0"),
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (recent_ts, "RECENT", -50, "90", "1000", "0"),
             )
         store.purge_old_intraday(days=30)
         with sqlite3.connect(store._db_path) as conn:
@@ -495,14 +495,14 @@ class TestIntradayStore:
         with sqlite3.connect(store._db_path) as conn:
             conn.execute(
                 """INSERT INTO nuvama_intraday_snapshots
-                   (timestamp, nifty_spot, trade_symbol, net_qty, ltp,
+                   (timestamp, trade_symbol, net_qty, ltp,
                     unrealized_pnl, realized_pnl_today)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (old_ts, 23000.0, "OLD", -50, "90", "1000", "0"),
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (old_ts, "OLD", -50, "90", "1000", "0"),
             )
         # new record_intraday_positions call should purge the old row automatically
         new_ts = datetime(2026, 4, 21, 9, 15, 0)
-        store.record_intraday_positions(new_ts, 23000.0, [self._pos("NEW")])
+        store.record_intraday_positions(new_ts, [self._pos("NEW")])
         with sqlite3.connect(store._db_path) as conn:
             rows = conn.execute("SELECT trade_symbol FROM nuvama_intraday_snapshots").fetchall()
         symbols = [r[0] for r in rows]
