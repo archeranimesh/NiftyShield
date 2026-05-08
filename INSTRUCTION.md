@@ -45,6 +45,100 @@ Read CONTEXT.md and REFERENCES.md. [Task involving instrument keys / AMFI codes 
 
 ---
 
+## Prompt Crafting Guide
+
+Every prompt you write is classified by a hook before Claude processes it.
+Get this right and the full protocol (prompt scoring, council check, routing,
+AutoTrigger agents) fires automatically. Get it wrong and Claude skips straight
+to implementation.
+
+### Two prompt types — write them differently
+
+**Task prompt** (file changes expected) → start with an action verb:
+`fix`, `implement`, `add`, `build`, `create`, `write`, `update`, `refactor`,
+`migrate`, `roll`, `backtest`, `record`, `seed`, `extend`, `convert`, `wire`
+
+**Query prompt** (read-only, no code changes) → start with a question word:
+`what`, `why`, `how does`, `explain`, `show me`, `list`, `is`, `are`, `which`
+
+Do not start a task prompt with "can you" or "could you" — those read as queries
+and skip the protocol. Write the verb directly: `fix X`, not `can you fix X`.
+
+---
+
+### What a complete task prompt includes
+
+The protocol hook scores your prompt on four dimensions. Include all four and
+Claude starts immediately. Miss three or more and it stops to ask one question.
+
+| Dimension | What to provide | Example |
+|---|---|---|
+| **Files** | Specific `src/` or `scripts/` file, not just the module | `src/backtest/bhavcopy_ingest.py` |
+| **Phase / story** | Section from `BACKTEST_PLAN.md` or story from `docs/plan/` | `BACKTEST_PLAN.md §Phase 0.5` |
+| **Tests** | Whether tests are needed and what kind | `offline unit tests, happy path + edge case` |
+| **DoD** | What "done" looks like | `all tests pass, CONTEXT.md updated, SHA confirmed` |
+
+The context files to load (`CONTEXT.md`, `DECISIONS.md`, etc.) are handled
+automatically — you do not need to list them unless the task is unusual.
+
+---
+
+### Routing — Claude or Antigravity?
+
+You can direct the routing at the prompt level. Claude will ask if you don't,
+but stating it upfront saves a round-trip.
+
+Add one of these to the end of any task prompt:
+
+```
+Implement this via Antigravity — produce the handoff prompt and stop.
+```
+```
+Implement this directly — Claude path.
+```
+
+**When to choose Antigravity:** 3+ files, spec fully documented in DECISIONS.md
+or BACKTEST_PLAN.md, TDD loop needed, no mid-implementation design decisions expected.
+
+**When to choose Claude:** single or two-file task, exploratory work where the
+spec may change, or the task needs graph queries mid-implementation.
+
+---
+
+### Complete prompt templates (copy-paste)
+
+**Minimal task (single file, clear spec):**
+```
+Fix [symptom] in src/[module]/[file].py.
+Tests required: yes — offline, happy path + error case.
+DoD: tests pass, commit SHA confirmed.
+```
+
+**Feature with phase reference:**
+```
+Implement [feature] — BACKTEST_PLAN.md §Phase N.M.
+Files: src/[module]/[file].py, tests/unit/[module]/test_[file].py.
+DoD: all tests pass, CONTEXT.md updated, commit SHA confirmed.
+Implement this via Antigravity — produce the handoff prompt and stop.
+```
+
+**Bug fix:**
+```
+Fix [symptom] in src/[module]/[file].py.
+Symptom: [what goes wrong]
+Reproduce: [command or test name]
+Diagnose first, propose fix, wait for go-ahead before editing.
+```
+
+**Query (no protocol triggered):**
+```
+What does [function/class] do?
+Why is [design decision] structured this way?
+Explain the [concept] in the context of this codebase.
+```
+
+---
+
 ## Per-Task Prompt Templates
 
 ### 1 — Implement a new feature
