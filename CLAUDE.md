@@ -255,6 +255,7 @@ Never use a lower-ranked response to contradict Stage 3.
 | Cron log | `logs/snapshot.log` |
 | Run all tests | `python -m pytest tests/unit/` |
 | Commit format | `.claude/skills/commit/SKILL.md` |
+| Session close / protocol audit | `.claude/skills/session-close/SKILL.md` |
 | Python review checklist | `REVIEW.md` |
 | Backtest → paper → live pipeline plan | `BACKTEST_PLAN.md` |
 | Council trigger criteria + workflow | `docs/council/README.md` |
