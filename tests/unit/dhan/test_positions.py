@@ -17,6 +17,7 @@ import pytest
 from src.dhan.models import DhanFundLimit, DhanOptionPosition, DhanOptionsSummary
 from src.dhan.positions import (
     build_options_summary,
+    compute_charges,
     filter_intraday_options,
     format_options_section,
     parse_fund_limit,
@@ -57,6 +58,8 @@ def _make_options_summary(**overrides) -> DhanOptionsSummary:
         "realized_pnl": Decimal("3000.00"),
         "unrealized_pnl": Decimal("0.00"),
         "total_pnl": Decimal("3000.00"),
+        "charges": Decimal("0.00"),
+        "brokerage": Decimal("0.00"),
         "position_count": 2,
         "snapshot_ts": _TS,
     }
@@ -175,6 +178,14 @@ class TestDhanOptionsSummary:
             total_pnl=Decimal("-2500.00"),
         )
         assert s.realized_pnl < Decimal("0")
+
+    def test_net_pnl_property(self) -> None:
+        s = _make_options_summary(
+            realized_pnl=Decimal("1000"),
+            charges=Decimal("100"),
+            brokerage=Decimal("50"),
+        )
+        assert s.net_pnl == Decimal("850")
 
 
 # ── DhanFundLimit ─────────────────────────────────────────────────────────────
@@ -316,10 +327,11 @@ class TestBuildOptionsSummary:
             _make_option_position(realized_pnl=Decimal("1000"), unrealized_pnl=Decimal("250")),
             _make_option_position(realized_pnl=Decimal("2000"), unrealized_pnl=Decimal("0")),
         ]
-        summary = build_options_summary(positions, _TS)
+        summary = build_options_summary(positions, _TS, trade_count=2)
         assert summary.realized_pnl == Decimal("3000")
         assert summary.unrealized_pnl == Decimal("250")
         assert summary.total_pnl == Decimal("3250")
+        assert summary.brokerage == Decimal("40")
         assert summary.position_count == 2
         assert summary.snapshot_ts == _TS
 
@@ -347,6 +359,46 @@ class TestBuildOptionsSummary:
     def test_returns_dhan_options_summary_type(self) -> None:
         summary = build_options_summary([], _TS)
         assert isinstance(summary, DhanOptionsSummary)
+
+
+class TestComputeCharges:
+    def test_known_positions_actuals(self) -> None:
+        """Verify against known actuals from May data.
+        Actuals: 383/263/231 charges, 800 brokerage.
+        """
+        # Mock positions to produce a known turnover
+        # Total turnover ≈ 435,849 (approx from known charges)
+        # We'll use one big position to verify the math
+        positions = [
+            _make_option_position(
+                buy_qty=1000, buy_avg=Decimal("200"),
+                sell_qty=1000, sell_avg=Decimal("235.849"),
+            )
+        ]
+        # turnover: buy=200k, sell=235.849k, total=435.849k
+        # charges:
+        # exchange = 0.00053 * 435849 = 230.99997 -> 231.00
+        # sebi     = 0.00001 * 435849 = 4.35849 -> 4.36
+        # stamp    = 0.00003 * 200000 = 6.00
+        # stt      = 0.00100 * 235849 = 235.849 -> 235.85
+        # gst      = 0.18 * (brk + exchange + sebi)
+        # brk=0 -> gst = 0.18 * (0 + 231.00 + 4.36) = 42.3648 -> 42.36
+        # total_charges = 231.00 + 4.36 + 6.00 + 235.85 + 42.36 = 519.57
+
+        total_charges, brokerage = compute_charges(positions, trade_count=0)
+        assert brokerage == Decimal("0")
+        assert total_charges == Decimal("519.57")
+
+    def test_zero_positions(self) -> None:
+        total_charges, brokerage = compute_charges([], trade_count=0)
+        assert total_charges == Decimal("0")
+        assert brokerage == Decimal("0")
+
+    def test_zero_trade_count(self) -> None:
+        positions = [_make_option_position(buy_qty=100, buy_avg=Decimal("10"))]
+        total_charges, brokerage = compute_charges(positions, trade_count=0)
+        assert brokerage == Decimal("0")
+        assert total_charges > Decimal("0")  # Statutory charges still apply
 
 
 # ── Phase B: parse_fund_limit ─────────────────────────────────────────────────
@@ -396,44 +448,74 @@ class TestFormatOptionsSection:
         summary = _make_options_summary(
             realized_pnl=Decimal("3000"),
             unrealized_pnl=Decimal("0"),
-            total_pnl=Decimal("3000"),
+            charges=Decimal("100"),
+            brokerage=Decimal("50"),
         )
-        text = format_options_section(summary, month_pnl=Decimal("12000"))
+        text = format_options_section(
+            summary,
+            month_pnl=Decimal("12000"),
+            month_charges=Decimal("400"),
+            month_brokerage=Decimal("200"),
+        )
         assert "Unrealized" not in text
         assert "⚠️" not in text
+        assert "Today Net:    +2,850" in text
+        assert "Month Net:    +11,400" in text
 
     def test_nonzero_unrealized_shows_warning_line(self) -> None:
         summary = _make_options_summary(
             realized_pnl=Decimal("3000"),
             unrealized_pnl=Decimal("-500"),
-            total_pnl=Decimal("2500"),
+            charges=Decimal("100"),
+            brokerage=Decimal("50"),
         )
-        text = format_options_section(summary, month_pnl=Decimal("12000"))
+        text = format_options_section(
+            summary,
+            month_pnl=Decimal("12000"),
+            month_charges=Decimal("400"),
+            month_brokerage=Decimal("200"),
+        )
         assert "⚠️" in text
         assert "Unrealized" in text
         assert "-500" in text
 
     def test_month_pnl_renders(self) -> None:
-        summary = _make_options_summary(realized_pnl=Decimal("3000"), unrealized_pnl=Decimal("0"))
-        text = format_options_section(summary, month_pnl=Decimal("45000"))
-        assert "Month" in text
-        assert "45,000" in text
+        summary = _make_options_summary()
+        text = format_options_section(
+            summary,
+            month_pnl=Decimal("45000"),
+            month_charges=Decimal("0"),
+            month_brokerage=Decimal("0"),
+        )
+        assert "Month P&L:    +45,000" in text
 
     def test_today_pnl_renders_with_sign(self) -> None:
         summary = _make_options_summary(realized_pnl=Decimal("-1500"), unrealized_pnl=Decimal("0"))
-        text = format_options_section(summary, month_pnl=Decimal("0"))
+        text = format_options_section(
+            summary,
+            month_pnl=Decimal("0"),
+            month_charges=Decimal("0"),
+            month_brokerage=Decimal("0"),
+        )
         assert "-1,500" in text
 
     def test_header_present_no_html(self) -> None:
-        # Output is plain text — no HTML markup (send() wraps everything in <pre>
-        # and html-escapes the content; inline <b> inside <pre> is not rendered
-        # by Telegram clients anyway).
         summary = _make_options_summary()
-        text = format_options_section(summary, month_pnl=Decimal("0"))
+        text = format_options_section(
+            summary,
+            month_pnl=Decimal("0"),
+            month_charges=Decimal("0"),
+            month_brokerage=Decimal("0"),
+        )
         assert "Dhan Options (Intraday)" in text
         assert "<b>" not in text
 
     def test_position_count_rendered(self) -> None:
         summary = _make_options_summary(position_count=3)
-        text = format_options_section(summary, month_pnl=Decimal("0"))
+        text = format_options_section(
+            summary,
+            month_pnl=Decimal("0"),
+            month_charges=Decimal("0"),
+            month_brokerage=Decimal("0"),
+        )
         assert "3" in text

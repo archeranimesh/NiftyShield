@@ -129,25 +129,77 @@ def filter_intraday_options(
     ]
 
 
+def compute_charges(
+    positions: list[DhanOptionPosition], trade_count: int
+) -> tuple[Decimal, Decimal]:
+    """Compute statutory charges and brokerage for a list of positions.
+
+    Inputs are list[DhanOptionPosition] — turnover is derived from buy/sell
+    quantities and average prices.
+
+    Rates (NSE F&O):
+        exchange_charges = 0.000530 × total_turnover
+        sebi_charges     = 0.000010 × total_turnover
+        stamp_duty       = 0.000030 × buy_turnover (buy side only)
+        stt              = 0.001000 × sell_turnover (Budget 2024 rate, sell side only)
+        gst              = 0.18 × (brokerage + exchange_charges + sebi_charges)
+
+    Rounding: all intermediate values Decimal, final results rounded to 2dp
+    with ROUND_HALF_UP.
+
+    Args:
+        positions: List of intraday option positions.
+        trade_count: Number of executed orders (used for ₹20/order brokerage).
+
+    Returns:
+        (total_charges, brokerage) as Decimals.
+    """
+    from src.dhan.models import _TWO_DP
+
+    buy_turnover = sum((p.buy_qty * p.buy_avg for p in positions), Decimal("0"))
+    sell_turnover = sum((p.sell_qty * p.sell_avg for p in positions), Decimal("0"))
+    total_turnover = buy_turnover + sell_turnover
+
+    brokerage = Decimal("20") * trade_count
+    exchange_charges = Decimal("0.000530") * total_turnover
+    sebi_charges = Decimal("0.000010") * total_turnover
+    stamp_duty = Decimal("0.000030") * buy_turnover
+    stt = Decimal("0.001000") * sell_turnover
+    gst = Decimal("0.18") * (brokerage + exchange_charges + sebi_charges)
+
+    total_charges = exchange_charges + sebi_charges + stamp_duty + stt + gst
+
+    return (
+        total_charges.quantize(_TWO_DP, rounding="ROUND_HALF_UP"),
+        brokerage.quantize(_TWO_DP, rounding="ROUND_HALF_UP"),
+    )
+
+
 def build_options_summary(
     positions: list[DhanOptionPosition],
     ts: datetime,
+    trade_count: int = 0,
 ) -> DhanOptionsSummary:
     """Aggregate a list of filtered intraday positions into a summary.
 
     Args:
         positions: Already-filtered list (NSE_FNO INTRADAY only).
         ts: UTC timestamp of the snapshot.
+        trade_count: Number of executed orders for brokerage calculation.
 
     Returns:
-        DhanOptionsSummary with summed P&L and position count.
+        DhanOptionsSummary with summed P&L, charges, and position count.
     """
     realized = sum((p.realized_pnl for p in positions), Decimal("0"))
     unrealized = sum((p.unrealized_pnl for p in positions), Decimal("0"))
+    charges, brokerage = compute_charges(positions, trade_count)
+
     return DhanOptionsSummary(
         realized_pnl=realized,
         unrealized_pnl=unrealized,
         total_pnl=realized + unrealized,
+        charges=charges,
+        brokerage=brokerage,
         position_count=len(positions),
         snapshot_ts=ts,
     )
@@ -178,7 +230,12 @@ def parse_fund_limit(raw: dict[str, Any], ts: datetime) -> DhanFundLimit:
 # ── Telegram formatter ────────────────────────────────────────────────────────
 
 
-def format_options_section(summary: DhanOptionsSummary, month_pnl: Decimal) -> str:
+def format_options_section(
+    summary: DhanOptionsSummary,
+    month_pnl: Decimal,
+    month_charges: Decimal,
+    month_brokerage: Decimal,
+) -> str:
     """Format Dhan Options summary as a plain-text Telegram message section.
 
     The output is plain text — no HTML markup — because send() in
@@ -194,16 +251,25 @@ def format_options_section(summary: DhanOptionsSummary, month_pnl: Decimal) -> s
 
     Args:
         summary: Aggregated DhanOptionsSummary for today.
-        month_pnl: Calendar-month realized P&L from DhanStore.get_monthly_realized_pnl.
+        month_pnl: Calendar-month realized P&L.
+        month_charges: Calendar-month total statutory charges.
+        month_brokerage: Calendar-month total brokerage.
 
     Returns:
         Plain-text string ready for embedding in the combined Telegram message.
     """
+    today_cost = summary.charges + summary.brokerage
+    month_cost = month_charges + month_brokerage
+
     lines = [
         "📊 Dhan Options (Intraday)",
-        f"Today P&L:  {summary.realized_pnl:+,.0f}",
-        f"Month P&L:  {month_pnl:+,.0f}",
-        f"Positions:  {summary.position_count:d}",
+        f"Today P&L:    {summary.realized_pnl:+,.0f}  gross",
+        f"Today Cost:   {-today_cost:,.0f}  (chg: {-summary.charges:,.0f}  brk: {-summary.brokerage:,.0f})",
+        f"Today Net:    {summary.net_pnl:+,.0f}",
+        f"Month P&L:    {month_pnl:+,.0f}  gross",
+        f"Month Cost:   {-month_cost:,.0f}  (chg: {-month_charges:,.0f}  brk: {-month_brokerage:,.0f})",
+        f"Month Net:    {month_pnl - month_cost:+,.0f}",
+        f"Positions:   {summary.position_count:d}",
     ]
     if summary.unrealized_pnl != Decimal("0"):
         lines.append(f"⚠️ Unrealized: {summary.unrealized_pnl:+,.0f}")

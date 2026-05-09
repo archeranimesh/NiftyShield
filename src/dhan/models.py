@@ -9,7 +9,7 @@ the portfolio and mf modules. All dataclasses are frozen (immutable).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal
 
@@ -145,6 +145,8 @@ class DhanOptionsSummary:
         realized_pnl: Sum of realized_pnl across all positions.
         unrealized_pnl: Sum of unrealized_pnl across all positions.
         total_pnl: realized_pnl + unrealized_pnl.
+        charges: Total statutory charges (STT, GST, etc) except brokerage.
+        brokerage: Total brokerage paid.
         position_count: Total positions tracked (open + closed today).
         snapshot_ts: UTC timestamp of the snapshot.
     """
@@ -154,6 +156,13 @@ class DhanOptionsSummary:
     total_pnl: Decimal
     position_count: int
     snapshot_ts: datetime
+    charges: Decimal = field(default_factory=lambda: Decimal("0"))
+    brokerage: Decimal = field(default_factory=lambda: Decimal("0"))
+
+    @property
+    def net_pnl(self) -> Decimal:
+        """realized_pnl minus all charges and brokerage."""
+        return self.realized_pnl - self.charges - self.brokerage
 
 
 @dataclass(frozen=True)

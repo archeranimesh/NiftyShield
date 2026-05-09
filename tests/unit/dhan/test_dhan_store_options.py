@@ -57,6 +57,8 @@ def _make_summary(**overrides) -> DhanOptionsSummary:
         "realized_pnl": Decimal("3000.00"),
         "unrealized_pnl": Decimal("0.00"),
         "total_pnl": Decimal("3000.00"),
+        "charges": Decimal("0.00"),
+        "brokerage": Decimal("0.00"),
         "position_count": 2,
         "snapshot_ts": _TS,
     }
@@ -95,6 +97,8 @@ class TestRecordOptionsSnapshot:
         assert Decimal(row["realized_pnl"]) == Decimal("3000.00")
         assert Decimal(row["unrealized_pnl"]) == Decimal("0.00")
         assert Decimal(row["total_pnl"]) == Decimal("3000.00")
+        assert Decimal(row["charges"]) == Decimal("0.00")
+        assert Decimal(row["brokerage"]) == Decimal("0.00")
         assert row["position_count"] == 2
         assert row["is_eod"] == 0
         assert row["trade_date"] == "2026-05-06"
@@ -309,6 +313,26 @@ class TestGetMonthlyRealizedPnl:
         assert store.get_monthly_realized_pnl(2026, 5) == Decimal("-1000")
 
 
+class TestGetMonthlyCharges:
+    def _insert_eod(self, store: DhanStore, charges: Decimal, brokerage: Decimal, ts: datetime) -> None:
+        summary = _make_summary(charges=charges, brokerage=brokerage)
+        store.record_options_snapshot(ts, summary, [], is_eod=True)
+
+    def test_sums_charges_and_brokerage(self, store: DhanStore) -> None:
+        for day in (6, 7):
+            ts = datetime(2026, 5, day, 15, 45, 0, tzinfo=timezone.utc)
+            self._insert_eod(store, Decimal("100"), Decimal("40"), ts)
+        
+        c, b = store.get_monthly_charges(2026, 5)
+        assert c == Decimal("200")
+        assert b == Decimal("80")
+
+    def test_no_rows_returns_zeros(self, store: DhanStore) -> None:
+        c, b = store.get_monthly_charges(2026, 5)
+        assert c == Decimal("0")
+        assert b == Decimal("0")
+
+
 # ── get_eod_options_snapshot ──────────────────────────────────────────────────
 
 
@@ -326,6 +350,8 @@ class TestGetEodOptionsSnapshot:
         assert got_summary.realized_pnl == Decimal("2500.00")
         assert got_summary.unrealized_pnl == Decimal("0.00")
         assert got_summary.total_pnl == Decimal("2500.00")
+        assert got_summary.charges == Decimal("0.00")
+        assert got_summary.brokerage == Decimal("0.00")
         assert got_summary.position_count == 2
         assert len(got_positions) == 1
         assert got_positions[0].trading_symbol == "NIFTY2550523500CE"

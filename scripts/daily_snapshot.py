@@ -296,7 +296,7 @@ def _historical_main(snap_date: date, db_path: Path) -> int:
 # ── I/O-heavy entrypoint — all network/DB imports are local ──────
 
 
-async def _async_main(snap_date: date, db_path: Path) -> int:
+async def _async_main(snap_date: date, db_path: Path, dhan_trade_count: int = 0) -> int:
     """All async I/O for the daily snapshot run.
 
     All imports that trigger I/O (dotenv, stores, clients, tracker) are
@@ -583,7 +583,12 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
                 _month_pnl = _dhan_opts_store.get_monthly_realized_pnl(
                     snap_date.year, snap_date.month
                 )
-                dhan_options_section = format_options_section(_dhan_opts_summary, _month_pnl)
+                _month_charges, _month_brokerage = _dhan_opts_store.get_monthly_charges(
+                    snap_date.year, snap_date.month
+                )
+                dhan_options_section = format_options_section(
+                    _dhan_opts_summary, _month_pnl, _month_charges, _month_brokerage
+                )
                 print(
                     f"  Dhan options (stored): {_dhan_opts_summary.position_count} position(s)  "
                     f"Realized {_dhan_opts_summary.realized_pnl:+,.0f}  "
@@ -609,7 +614,9 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
 
             _raw_pos = fetch_positions_raw(_dhan_client_id, _dhan_access_token)
             _dhan_positions = filter_intraday_options(parse_option_positions(_raw_pos))
-            _dhan_opts_summary = _build_dhan_opts_summary(_dhan_positions, _dhan_opts_ts)
+            _dhan_opts_summary = _build_dhan_opts_summary(
+                _dhan_positions, _dhan_opts_ts, trade_count=dhan_trade_count
+            )
 
             _raw_fl = fetch_fund_limit_raw(_dhan_client_id, _dhan_access_token)
             _dhan_fund_limit = parse_fund_limit(_raw_fl, _dhan_opts_ts)
@@ -622,7 +629,12 @@ async def _async_main(snap_date: date, db_path: Path) -> int:
             _month_pnl = _dhan_opts_store.get_monthly_realized_pnl(
                 _dhan_opts_ts.year, _dhan_opts_ts.month
             )
-            dhan_options_section = format_options_section(_dhan_opts_summary, _month_pnl)
+            _month_charges, _month_brokerage = _dhan_opts_store.get_monthly_charges(
+                _dhan_opts_ts.year, _dhan_opts_ts.month
+            )
+            dhan_options_section = format_options_section(
+                _dhan_opts_summary, _month_pnl, _month_charges, _month_brokerage
+            )
 
             print(
                 f"  Dhan options: {_dhan_opts_summary.position_count} position(s)  "
@@ -688,6 +700,12 @@ def main() -> int:
             "Omit to run a live snapshot for today."
         ),
     )
+    parser.add_argument(
+        "--dhan-trade-count",
+        type=int,
+        default=0,
+        help="Number of executed orders today (used for ₹20/order brokerage calc)",
+    )
     args = parser.parse_args()
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -703,7 +721,7 @@ def main() -> int:
         return 0
 
     print(f"[{now}] Daily snapshot for {snap_date.isoformat()}")
-    return asyncio.run(_async_main(snap_date, args.db_path))
+    return asyncio.run(_async_main(snap_date, args.db_path, dhan_trade_count=args.dhan_trade_count))
 
 
 if __name__ == "__main__":

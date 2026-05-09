@@ -52,6 +52,8 @@ CREATE TABLE IF NOT EXISTS dhan_options_snapshots (
     realized_pnl    TEXT NOT NULL,
     unrealized_pnl  TEXT NOT NULL,
     total_pnl       TEXT NOT NULL,
+    charges         TEXT NOT NULL DEFAULT '0',
+    brokerage       TEXT NOT NULL DEFAULT '0',
     position_count  INTEGER NOT NULL,
     positions_json  TEXT NOT NULL,
     is_eod          INTEGER NOT NULL DEFAULT 0
@@ -103,6 +105,23 @@ class DhanStore:
         db_path.parent.mkdir(parents=True, exist_ok=True)
         with _connect(self.db_path) as conn:
             conn.executescript(_SCHEMA)
+        self._migrate()
+
+    def _migrate(self) -> None:
+        """Perform schema migrations (add columns if missing)."""
+        with _connect(self.db_path) as conn:
+            columns = [
+                r["name"]
+                for r in conn.execute("PRAGMA table_info(dhan_options_snapshots)").fetchall()
+            ]
+            if "charges" not in columns:
+                conn.execute(
+                    "ALTER TABLE dhan_options_snapshots ADD COLUMN charges TEXT NOT NULL DEFAULT '0'"
+                )
+            if "brokerage" not in columns:
+                conn.execute(
+                    "ALTER TABLE dhan_options_snapshots ADD COLUMN brokerage TEXT NOT NULL DEFAULT '0'"
+                )
 
     def record_snapshot(
         self, holdings: list[DhanHolding], snapshot_date: date
@@ -232,14 +251,16 @@ class DhanStore:
             conn.execute(
                 """INSERT INTO dhan_options_snapshots
                    (ts_utc, trade_date, realized_pnl, unrealized_pnl, total_pnl,
-                    position_count, positions_json, is_eod)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    charges, brokerage, position_count, positions_json, is_eod)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     ts.isoformat(),
                     trade_date,
                     str(summary.realized_pnl),
                     str(summary.unrealized_pnl),
                     str(summary.total_pnl),
+                    str(summary.charges),
+                    str(summary.brokerage),
                     summary.position_count,
                     positions_json,
                     1 if is_eod else 0,
@@ -299,7 +320,7 @@ class DhanStore:
         with _connect(self.db_path) as conn:
             row = conn.execute(
                 """SELECT ts_utc, realized_pnl, unrealized_pnl, total_pnl,
-                          position_count, positions_json
+                          charges, brokerage, position_count, positions_json
                    FROM dhan_options_snapshots
                    WHERE trade_date = ? AND is_eod = 1
                    ORDER BY ts_utc DESC LIMIT 1""",
@@ -313,6 +334,8 @@ class DhanStore:
             realized_pnl=Decimal(row["realized_pnl"]),
             unrealized_pnl=Decimal(row["unrealized_pnl"]),
             total_pnl=Decimal(row["total_pnl"]),
+            charges=Decimal(row["charges"]),
+            brokerage=Decimal(row["brokerage"]),
             position_count=row["position_count"],
             snapshot_ts=ts,
         )
@@ -359,6 +382,31 @@ class DhanStore:
             ).fetchone()
         raw = row["total"] if row and row["total"] is not None else None
         return Decimal(str(raw)) if raw is not None else Decimal("0")
+
+    def get_monthly_charges(self, year: int, month: int) -> tuple[Decimal, Decimal]:
+        """Sum charges and brokerage from EOD rows (is_eod=1) in a calendar month.
+
+        Args:
+            year: Calendar year.
+            month: Calendar month (1–12).
+
+        Returns:
+            (total_charges, total_brokerage) as Decimals.
+        """
+        prefix = f"{year:04d}-{month:02d}-%"
+        with _connect(self.db_path) as conn:
+            row = conn.execute(
+                """SELECT SUM(CAST(charges AS REAL)) AS total_charges,
+                          SUM(CAST(brokerage AS REAL)) AS total_brokerage
+                   FROM dhan_options_snapshots
+                   WHERE is_eod = 1 AND trade_date LIKE ?""",
+                (prefix,),
+            ).fetchone()
+        
+        charges = row["total_charges"] if row and row["total_charges"] is not None else 0
+        brokerage = row["total_brokerage"] if row and row["total_brokerage"] is not None else 0
+        
+        return (Decimal(str(charges)), Decimal(str(brokerage)))
 
     # ── Margin snapshots ──────────────────────────────────────────────────────
 
