@@ -208,30 +208,67 @@ are set in `.env`).
 
 ## Step 4 — Overlay Roll
 
-Run **when DTE of any overlay leg reaches ≤ 5**. Default behaviour without `--yes` is dry-run.
+The roll script closes an expiring overlay leg at live LTP and immediately opens a fresh leg using
+the same strike-selection logic as the entry script. The DTE gate is **≤ 5 calendar days** to
+expiry (`OVERLAY_ROLL_DTE = 5` in `paper_3track_overlay.py`).
 
-```bash
-# Check what would roll (dry-run — safe to run any time):
-python -m scripts.paper_3track_overlay_roll --date 2026-05-09
+### When does DTE ≤ 5 occur?
 
-# Execute the roll:
-python -m scripts.paper_3track_overlay_roll --date 2026-05-09 --yes
+Overlay expiry type determines when the roll window opens:
 
-# Force-roll even if DTE > 5 (manual intervention):
-python -m scripts.paper_3track_overlay_roll --date 2026-05-09 --yes --force
+| Overlay expiry | Typical expiry date | Roll window opens |
+|----------------|--------------------|--------------------|
+| Monthly | Last Thursday of the month | ~Friday of the prior week |
+| Quarterly (Jun/Sep/Dec) | Last Thursday of the quarter month | ~Friday of the prior week |
+| Yearly (far-Dec) | Last Thursday of December | ~Friday of the prior week |
 
-# Single track:
-python -m scripts.paper_3track_overlay_roll --date 2026-05-09 --yes --tracks spot proxy
+In practice: **check every Thursday morning**. If today's date is within 5 calendar days of
+the overlay expiry, the roll fires. For monthly overlays this means the roll happens in the
+last week of the month — typically the Thursday before expiry week or the Monday of expiry week.
+
+### How to detect it
+
+**Option A — daily cron (recommended):** Run the dry-run check every trading day at 09:30 IST.
+It prints nothing if no leg is due; prints the roll table if DTE ≤ 5. Review output and execute
+manually when non-empty.
+
+```
+30 4 * * 1-5  cd /path/to/NiftyShield && python -m scripts.paper_3track_overlay_roll 2>&1 | grep -v "^$"
 ```
 
-**Atomicity guarantee:**
+**Option B — manual Thursday check:** Every Thursday morning before market open, run the dry-run
+and decide whether to execute.
+
+### Commands
+
+```bash
+# Dry-run — always safe, writes nothing:
+python -m scripts.paper_3track_overlay_roll
+
+# Execute the roll (after reviewing dry-run output):
+python -m scripts.paper_3track_overlay_roll --yes
+
+# Force-roll even if DTE > 5 (manual intervention):
+python -m scripts.paper_3track_overlay_roll --yes --force
+
+# Single track only:
+python -m scripts.paper_3track_overlay_roll --yes --tracks spot proxy
+```
+
+`--date` defaults to today, so it does not need to be passed in normal use.
+
+### Atomicity guarantee
 
 - Single leg: close is written first. If the new open fails, the close is deleted (position restored).
-- Collar (4-trade): rollback chain is close_call → close_put → open_put in reverse order. All 4
-  succeed or none persist.
+- Collar (4-trade): rollback chain is open_call → open_put → close_call → close_put in reverse.
+  All 4 succeed or none persist.
 
-**When to run the roll check:** Either add a cron to run `--dry-run` daily and alert on non-empty
-output, or check manually every Monday morning.
+### Do not defer
+
+If the roll cannot execute on the trigger day (market holiday, system error), execute on the next
+trading day. **Never carry an expiring short option (CC or collar call) through to settlement** —
+it expires worthless if OTM (acceptable) or gets assigned if ITM (not acceptable for paper tracking).
+Log missed rolls in `TODOS.md`.
 
 ---
 
@@ -319,10 +356,10 @@ BOD instruments file must be current: `data/instruments/NSE.json.gz`
 
 | Task | Command | When |
 |------|---------|------|
-| Enter base legs | `python scripts/paper_3track_entry.py --confirm` | Cycle start (Weds post-expiry) |
-| Enter PP overlay | `python -m scripts.paper_3track_overlay --overlay pp --date <date> --yes` | Same day as base entry |
-| Enter Collar overlay | `python -m scripts.paper_3track_overlay --overlay collar --date <date> --yes` | Same day as base entry |
-| Daily snapshot | `python scripts/paper_3track_snapshot.py --date <date>` | 15:35 IST daily |
-| Dry-run snapshot | `python scripts/paper_3track_snapshot.py --date <date> --no-save` | Ad hoc inspection |
-| Roll check (dry) | `python -m scripts.paper_3track_overlay_roll --date <date>` | Weekly / any time |
-| Execute roll | `python -m scripts.paper_3track_overlay_roll --date <date> --yes` | When DTE ≤ 5 on any overlay |
+| Enter base legs | `python scripts/paper_3track_entry.py --confirm` | Cycle start (Weds post-expiry, 10:00–10:30 AM) |
+| Enter PP overlay | `python -m scripts.paper_3track_overlay --overlay pp --yes` | Same day as base entry |
+| Enter Collar overlay | `python -m scripts.paper_3track_overlay --overlay collar --yes` | Same day as base entry |
+| Daily snapshot | `python scripts/paper_3track_snapshot.py` | 15:35 IST daily (cron) |
+| Dry-run snapshot | `python scripts/paper_3track_snapshot.py --no-save` | Ad hoc inspection |
+| Roll check (dry) | `python -m scripts.paper_3track_overlay_roll` | Every Thursday morning (or daily cron) |
+| Execute roll | `python -m scripts.paper_3track_overlay_roll --yes` | After dry-run confirms DTE ≤ 5 on any overlay |

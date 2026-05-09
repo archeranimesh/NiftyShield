@@ -182,6 +182,20 @@ Fix alongside adjacent refactoring. Never worth a standalone commit.
 
 License decision needed before this can be automated. Every file should carry a header once the license is chosen.
 
+### DEBT-4: `find_strike_by_delta.py` — `DEFAULT_LOT_SIZE = 75` inconsistent with `constants.LOT_SIZE = 65`
+
+`scripts/find_strike_by_delta.py` line 40 defines `DEFAULT_LOT_SIZE = 75`. All 3-track scripts
+use `LOT_SIZE = 65` (now centralised in `src/paper/constants.py`). One of these is wrong, or 75
+was set before the Jan 2026 lot-size change and never updated.
+
+**Impact:** Running `find_strike_by_delta.py` without `--qty` produces dry-run
+`record_paper_trade.py` commands with `--qty 75` — wrong quantity for 3-track entries.
+
+**Fix when touching `find_strike_by_delta.py` next:**
+1. Confirm correct lot size against NSE circular.
+2. Replace `DEFAULT_LOT_SIZE = 75` with `from src.paper.constants import LOT_SIZE as DEFAULT_LOT_SIZE`.
+3. Update the `--qty` help string accordingly.
+
 ---
 
 ## Session Log
