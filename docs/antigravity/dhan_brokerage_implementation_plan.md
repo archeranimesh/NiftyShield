@@ -62,14 +62,15 @@ Positions:   8
 
 #### [MODIFY] [daily_snapshot.py](file:///Users/abhadra/myWork/myCode/python/NiftyShield/scripts/daily_snapshot.py)
 - Add `--dhan-trade-count` argument to `argparse`.
-- In `_async_main` (live path):
-    - Pass `args.dhan_trade_count` to `build_options_summary`.
-    - Fetch `month_charges` and `month_brokerage` from the store.
-    - Pass the new monthly values to `format_options_section`.
-- In `_historical_main` (historical path):
-    - Read `charges` and `brokerage` from the stored EOD row.
-    - Fetch monthly totals from the store.
-    - Pass all required args to `format_options_section`.
+- In `_async_main` (Dhan Options section):
+    - **Live path** (`snap_date == today`):
+        - Pass `args.dhan_trade_count` to `build_options_summary`.
+        - Fetch `month_charges, month_brokerage = _dhan_opts_store.get_monthly_charges(...)`.
+        - Pass values to `format_options_section`.
+    - **Historical path** (`snap_date < today`):
+        - Read `charges` and `brokerage` from the stored EOD row.
+        - Fetch monthly totals from the store.
+        - Pass all required args to `format_options_section`.
 
 ### Tests
 
