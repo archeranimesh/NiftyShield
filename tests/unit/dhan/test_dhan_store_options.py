@@ -118,7 +118,7 @@ class TestRecordOptionsSnapshot:
         assert row["is_eod"] == 1
 
     def test_multiple_intraday_rows_allowed(self, store: DhanStore) -> None:
-        """Blind append — same date can have many rows."""
+        """Blind append — same date can have many intraday rows."""
         for _ in range(3):
             store.record_options_snapshot(_TS, _make_summary(), [], is_eod=False)
 
@@ -128,6 +128,24 @@ class TestRecordOptionsSnapshot:
                 "SELECT COUNT(*) AS n FROM dhan_options_snapshots"
             ).fetchone()["n"]
         assert count == 3
+
+    def test_eod_is_idempotent(self, store: DhanStore) -> None:
+        """Re-running EOD write replaces the existing EOD row — no double-count."""
+        ts2 = _TS.replace(hour=11)  # second run, same trade_date
+        summary1 = _make_summary(realized_pnl=Decimal("-7797"), total_pnl=Decimal("-7797"))
+        summary2 = _make_summary(realized_pnl=Decimal("-7797"), total_pnl=Decimal("-7797"))
+
+        store.record_options_snapshot(_TS, summary1, [], is_eod=True)
+        store.record_options_snapshot(ts2, summary2, [], is_eod=True)
+
+        from src.db import connect as _connect
+        with _connect(store.db_path) as conn:
+            rows = conn.execute(
+                "SELECT COUNT(*) AS n, SUM(CAST(realized_pnl AS REAL)) AS total "
+                "FROM dhan_options_snapshots WHERE is_eod = 1"
+            ).fetchone()
+        assert rows["n"] == 1, "only one EOD row must exist per trade_date"
+        assert rows["total"] == -7797.0
 
 
 # ── get_intraday_extremes ─────────────────────────────────────────────────────

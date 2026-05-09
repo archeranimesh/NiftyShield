@@ -208,7 +208,10 @@ class DhanStore:
         """Persist one options snapshot row.
 
         positions is serialized to a JSON blob (default=str handles Decimal).
-        Blind append — no upsert; multiple intraday ticks per day are expected.
+        Intraday rows (is_eod=False): blind append — multiple ticks per day are expected.
+        EOD rows (is_eod=True): idempotent — any existing EOD row for the same trade_date
+        is deleted before the new row is inserted, so re-running the EOD script cannot
+        produce duplicate rows that double-count in get_monthly_realized_pnl.
 
         Args:
             ts: UTC timestamp of the snapshot.
@@ -221,6 +224,11 @@ class DhanStore:
         )
         trade_date = ts.date().isoformat()
         with _connect(self.db_path) as conn:
+            if is_eod:
+                conn.execute(
+                    "DELETE FROM dhan_options_snapshots WHERE trade_date = ? AND is_eod = 1",
+                    (trade_date,),
+                )
             conn.execute(
                 """INSERT INTO dhan_options_snapshots
                    (ts_utc, trade_date, realized_pnl, unrealized_pnl, total_pnl,
