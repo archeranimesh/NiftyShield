@@ -46,6 +46,7 @@ load_dotenv()
 from src.client.upstox_market import UpstoxMarketClient
 from src.instruments.lookup import InstrumentLookup, parse_expiry
 from src.models.portfolio import TradeAction
+from src.paper.constants import LOT_SIZE
 from src.paper.models import PaperTrade
 from src.paper.store import PaperStore
 
@@ -53,7 +54,6 @@ from src.paper.store import PaperStore
 
 NIFTYBEES_KEY = "NSE_EQ|INF204KB14I2"
 NIFTY_UNDERLYING = "NSE_INDEX|Nifty 50"
-LOT_SIZE = 65           # Nifty 50, effective Jan 2026 — verify before each cycle
 PROXY_DELTA_MIN = 0.85
 PROXY_DELTA_MAX = 0.95
 PROXY_TARGET_DELTA = 0.90

@@ -47,6 +47,7 @@ from src.client.upstox_market import UpstoxMarketClient
 from src.instruments.lookup import InstrumentLookup
 from src.models.portfolio import TradeAction
 from src.notifications.telegram import TelegramNotifier
+from src.paper.constants import LOT_SIZE
 from src.paper.metrics import compute_nee
 from src.paper.models import PaperLegSnapshot, PaperNavSnapshot
 from src.paper.proxy_monitor import ProxyDeltaMonitor
@@ -54,8 +55,6 @@ from src.paper.store import PaperStore
 from src.paper.track_snapshot import TrackPnL, TrackSnapshot, generate_track_snapshot
 
 # ── Constants ─────────────────────────────────────────────────────────────────
-
-LOT_SIZE = 65           # Nifty 50, effective Jan 2026 — verify before each cycle
 DEFAULT_DB  = Path("data/portfolio/portfolio.sqlite")
 DEFAULT_BOD = Path("data/instruments/NSE.json.gz")
 
@@ -313,7 +312,7 @@ def _print_summary_table(
 # ── Main async orchestration ──────────────────────────────────────────────────
 
 async def _run(args: argparse.Namespace) -> None:
-    snap_date: date = date.fromisoformat(args.date)
+    snap_date: date = date.fromisoformat(args.date) if args.date else date.today()
     save: bool = not args.no_save
 
     _TRACK_MAP = {
@@ -471,8 +470,8 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
-        "--date", required=True, metavar="YYYY-MM-DD",
-        help="Snapshot date.",
+        "--date", default=None, metavar="YYYY-MM-DD",
+        help="Snapshot date (default: today).",
     )
     parser.add_argument(
         "--spot", type=float, default=None, metavar="PRICE",

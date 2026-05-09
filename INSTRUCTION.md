@@ -334,12 +334,53 @@ Read CONTEXT.md and TODOS.md. Update docs to reflect what we built last session:
 
 ## What Each Agent Does
 
-| Agent | Model | Invoke when |
-|---|---|---|
-| `code-reviewer` | Opus | Before merging anything that touches monetary fields, BrokerClient, or async paths |
-| `test-runner` | Haiku | After any code change — quick sanity check before commit |
+| Agent | Model | Blocking? | Invoke when |
+|---|---|---|---|
+| `test-runner` | Haiku | Yes | After any code edit — must pass before code-reviewer fires |
+| `code-reviewer` | Opus | Yes | Before every commit touching code — CRITICAL/ERROR findings must resolve |
+| `greeks-analyst` | Sonnet | Yes | Any change to `src/paper/`, option chain parsing, or delta/gamma fields |
+| `roll-validator` | Opus | Yes | Any change to roll logic or `scripts/roll_leg.py` invocation |
+| `options-strategist` | Opus | Advisory | Council checkpoint (Step 2b) when no full council is warranted |
 
-Both live in `.claude/agents/`. Claude Desktop auto-discovers them.
+All five live in `.claude/agents/`. Claude Desktop auto-discovers them.
+
+**Invocation syntax (conversational):**
+```
+Run the code-reviewer agent on git diff HEAD.
+Run the test-runner agent. Report pass/fail count and any failures.
+Run the greeks-analyst agent on src/paper/tracker.py.
+Run the roll-validator agent — I just changed roll logic in scripts/roll_leg.py.
+Run the options-strategist agent — council checkpoint for [decision].
+```
+
+**Blocking** means the next protocol step does not proceed until the agent returns clean.
+For `code-reviewer`: any `CRITICAL` or `ERROR` finding must be resolved before committing; `WARNING` may be deferred with a documented reason in the commit message.
+
+---
+
+## What Each Skill Does
+
+Skills live in `.claude/skills/`. Unlike agents (which spawn isolated subagents), skills expand inline — Claude reads the SKILL.md and executes its steps directly in the current session.
+
+| Skill | Invoke when | Trigger phrase |
+|---|---|---|
+| `commit` | End of every phase — executes full git workflow, not just formats a message | `"Run the commit skill"` / `"Commit what we built"` |
+| `md-cleanup` | End of sprint or after a big phase — archive TODOs, sync README, trim root | `"Clean up the markdown"` / `"Archive completed TODOs"` |
+| `prompt-refine` | Before starting work when your prompt feels underspecified | `"Refine this prompt: [draft]"` / `"Is this prompt good enough?"` |
+| `handoff-antigravity` | After Step 3 go-ahead, when routing to Antigravity — produces structured paste-ready prompt | `"Prepare the Antigravity handoff"` / `"Write the Antigravity prompt"` |
+| `session-close` | End of any work session — protocol compliance + token efficiency self-audit | `"Session close"` / `"End of session report"` |
+
+**What each skill does in one line:**
+
+`commit` — diff review → pytest → construct message → `git add` + `git commit` → SHA confirmation. Stops and invokes `@code-reviewer` before committing if financial logic (Decimal, Greeks, BrokerClient) is touched.
+
+`md-cleanup` — archives completed TODOs to `docs/archive/`, updates CONTEXT.md date + test count, syncs README.md project structure and roadmap checkboxes, relocates stale plan/prompt files out of root.
+
+`prompt-refine` — scores your prompt on 8 dimensions (named files, phase, tests, DoD, boundaries, etc.); fills minor gaps from CONTEXT.md and proceeds; asks exactly ONE targeted question if 3+ dimensions are missing.
+
+`handoff-antigravity` — extracts only the relevant blocks from BACKTEST_PLAN.md and CONTEXT.md inline (saves Antigravity 3,000–5,000 input tokens vs file reads), outputs a complete OBJECTIVE / GRAPH_POINTERS / BOUNDARIES / CONTEXT_EXTRACT / REVIEW_RULES / DOD / QUALITY_GATES / PHASE_COMPLETION_OUTPUT block.
+
+`session-close` — reconstructs the session action log, scores all 14 protocol steps as FOLLOWED / LEGITIMATE SKIP / VIOLATION, audits Rule 0 + Rule 1 token efficiency, flags agents inlined instead of spawned, produces improvement suggestions based only on violations actually observed.
 
 ---
 

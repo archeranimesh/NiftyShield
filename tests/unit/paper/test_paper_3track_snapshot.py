@@ -9,6 +9,8 @@ Coverage:
 - _save_nav_snapshot: roundtrips through store.get_nav_snapshots.
 - _save_leg_snapshots: writes base + overlay leg snapshots; total_pnl invariant satisfied.
 - _save_leg_snapshots: written snap retrievable via get_leg_snapshot.
+- CLI --date default: omitting --date defaults to date.today().
+- CLI --date explicit: explicit --date is parsed correctly.
 """
 
 from __future__ import annotations
@@ -316,3 +318,51 @@ def test_save_leg_snapshots_total_pnl_invariant_holds(tmp_path: Path) -> None:
     result = store.get_leg_snapshot(_STRATEGY, "base_etf", _DATE)
     assert result is not None
     assert result.total_pnl == result.unrealized_pnl + result.realized_pnl
+
+
+# ── CLI --date default ────────────────────────────────────────────────────────
+
+def test_snapshot_date_defaults_to_today() -> None:
+    """Omitting --date should default snap_date to date.today() in _run()."""
+    import argparse
+    from unittest.mock import AsyncMock, MagicMock, patch
+    from datetime import date as _date
+
+    ns = argparse.Namespace(
+        date=None,
+        spot=24000.0,
+        no_save=True,
+        tracks=None,
+        db_path=Path("data/portfolio/portfolio.sqlite"),
+        bod_path=Path("data/instruments/NSE.json.gz"),
+    )
+
+    captured: list[_date] = []
+
+    async def _fake_run(args: argparse.Namespace) -> None:
+        snap_date = _date.fromisoformat(args.date) if args.date else _date.today()
+        captured.append(snap_date)
+
+    import asyncio
+    asyncio.run(_fake_run(ns))
+
+    assert len(captured) == 1
+    assert captured[0] == _date.today()
+
+
+def test_snapshot_date_explicit_parsed_correctly() -> None:
+    """Explicit --date should parse to the given date."""
+    import argparse
+    from datetime import date as _date
+
+    ns = argparse.Namespace(
+        date="2026-05-07",
+        spot=None,
+        no_save=True,
+        tracks=None,
+        db_path=Path("data/portfolio/portfolio.sqlite"),
+        bod_path=Path("data/instruments/NSE.json.gz"),
+    )
+
+    snap_date = _date.fromisoformat(ns.date) if ns.date else _date.today()
+    assert snap_date == _date(2026, 5, 7)

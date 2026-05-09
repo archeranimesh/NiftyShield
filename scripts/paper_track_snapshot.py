@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.client.upstox_market import UpstoxMarketClient
 from src.instruments.lookup import InstrumentLookup
 from src.notifications.telegram import TelegramNotifier
+from src.paper.constants import LOT_SIZE
 from src.paper.store import PaperStore
 from src.paper.proxy_monitor import ProxyDeltaMonitor
 from src.paper.track_snapshot import TrackPnL, generate_track_snapshot
@@ -123,7 +124,6 @@ async def main() -> None:
 
     snapshot_date = date.fromisoformat(args.date)
     nifty_spot = Decimal(str(args.underlying_price))
-    LOT_SIZE = 65  # Nifty 50, effective January 2026 — verify before each entry cycle.
     nee = compute_nee(nifty_spot, LOT_SIZE)
 
     store = PaperStore(Path("data/portfolio/portfolio.sqlite"))

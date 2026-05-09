@@ -51,13 +51,13 @@ load_dotenv()
 from src.client.upstox_market import UpstoxMarketClient
 from src.instruments.lookup import InstrumentLookup, parse_expiry as _pe
 from src.models.portfolio import TradeAction
+from src.paper.constants import LOT_SIZE
 from src.paper.models import PaperTrade
 from src.paper.store import PaperStore
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
 NIFTY_UNDERLYING = "NSE_INDEX|Nifty 50"
-LOT_SIZE = 65           # Nifty 50, effective Jan 2026 — verify before each cycle
 
 # Protective put targeting (strategy doc: 8–10% OTM)
 PP_OTM_MIN    = 0.08
@@ -424,7 +424,7 @@ def _print_confirmation_table(
 async def _run(args: argparse.Namespace) -> None:
     """Core async logic — separated for testability."""
     overlay_type: str = args.overlay
-    entry_date: date = date.fromisoformat(args.date)
+    entry_date: date = date.fromisoformat(args.date) if args.date else date.today()
 
     # Resolve effective track list BEFORE any guard
     effective_tracks: list[str] = args.tracks if args.tracks else list(ALL_TRACKS)
@@ -625,8 +625,8 @@ def main() -> None:
         help="Overlay type: pp (protective put), cc (covered call), collar (both).",
     )
     parser.add_argument(
-        "--date", required=True, metavar="YYYY-MM-DD",
-        help="Entry date.",
+        "--date", default=None, metavar="YYYY-MM-DD",
+        help="Entry date (default: today).",
     )
     parser.add_argument(
         "--tracks", nargs="+",

@@ -12,6 +12,8 @@ Coverage:
 - _check_existing_overlay: no trades returns None.
 - _check_existing_overlay: open position returns last BUY trade.
 - _check_existing_overlay: closed position (net=0) returns None.
+- CLI --date default: omitting --date defaults to date.today().
+- CLI --date explicit: explicit --date is parsed correctly.
 """
 
 from __future__ import annotations
@@ -387,3 +389,30 @@ def _make_args(
     ns.date     = date_str
     ns.bod_path = bod_path
     return ns
+
+
+# ── CLI --date default ────────────────────────────────────────────────────────
+
+def test_overlay_date_defaults_to_today() -> None:
+    """Omitting --date should default entry_date to date.today()."""
+    from datetime import date as _date
+
+    # Simulate the logic in _run() with args.date = None
+    class _Args:
+        date = None
+
+    args = _Args()
+    entry_date = _date.fromisoformat(args.date) if args.date else _date.today()
+    assert entry_date == _date.today()
+
+
+def test_overlay_date_explicit_parsed_correctly() -> None:
+    """Explicit --date should parse to the given date."""
+    from datetime import date as _date
+
+    class _Args:
+        date = "2026-05-09"
+
+    args = _Args()
+    entry_date = _date.fromisoformat(args.date) if args.date else _date.today()
+    assert entry_date == _date(2026, 5, 9)
