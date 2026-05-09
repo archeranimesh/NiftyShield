@@ -122,7 +122,10 @@ Also provides the India VIX series required by the CSP R3 IVR filter (tasks 1.7 
 
 - One zip per trading day: `NSE_OPT_1MIN_YYYYMMDD.zip`, `NSE_IDX_1MIN_YYYYMMDD.zip`
 - Inside each OPT zip: one CSV per active contract. ~327 NIFTY files per day (2019), ~1,500–2,500 per day (2022–2024, weekly expiry proliferation)
-- CSV schema: **no header row.** Columns: `YMD, Time(HH:MM), Open, High, Low, Close, Volume, OI`
+- CSV schema: **no header row.** Column order is vendor-documented in the TrueData purchase email (NOTE 1/NOTE 2) — do not infer from data alone:
+  - 1-min: `YMD(YYYYMMDD), Time(HH:MM), Open, High, Low, Close, Volume, Open Interest`
+  - Tick: `YMD(YYYYMMDD), Time(HH:MM:SS), Close, Volume, Open Interest` ← column 3 is Close (last trade price), not Open
+  - Cross-validated against sample data 2026-05-09: 1-min open/low/volume match tick aggregates exactly.
 - Sparse: minutes with no trades are absent (not zero-filled). This is realistic, not a data gap.
 - Volume and OI are in number of contracts (not lots). Divide by lot size from the registry.
 - Filename encodes all contract metadata — two formats:
