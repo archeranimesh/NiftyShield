@@ -280,7 +280,37 @@ def _historical_main(snap_date: date, db_path: Path) -> int:
     except Exception as e:  # noqa: BLE001
         print(f"  WARNING: Nuvama options historical lookup failed — {e}")
 
-    _print_combined_summary(
+    # ── Dhan options from stored EOD snapshot (non-fatal) ───────────
+    dhan_options_section = "[unavailable]"
+    try:
+        from src.dhan.positions import format_options_section as _fmt_opts
+        from src.dhan.store import DhanStore as _DhanOptsStore
+
+        _dhan_opts_store = _DhanOptsStore(db_path)
+        _stored = _dhan_opts_store.get_eod_options_snapshot(snap_date)
+        if _stored is not None:
+            _dhan_opts_summary, _ = _stored
+            _month_pnl = _dhan_opts_store.get_monthly_realized_pnl(
+                snap_date.year, snap_date.month
+            )
+            _month_charges, _month_brokerage = _dhan_opts_store.get_monthly_charges(
+                snap_date.year, snap_date.month
+            )
+            dhan_options_section = _fmt_opts(
+                _dhan_opts_summary, _month_pnl, _month_charges, _month_brokerage
+            )
+            print(
+                f"  Dhan options (stored): {_dhan_opts_summary.position_count} position(s)  "
+                f"Realized {_dhan_opts_summary.realized_pnl:+,.0f}  "
+                f"Month {_month_pnl:+,.0f}"
+            )
+        else:
+            dhan_options_section = "[no snapshot stored for this date]"
+            print(f"  Dhan options: no EOD snapshot found for {snap_date.isoformat()}")
+    except Exception as e:  # noqa: BLE001
+        print(f"  WARNING: Dhan options historical lookup failed — {e}")
+
+    summary_text = _format_combined_summary(
         strategies, prices, strategy_pnls, mf_pnl,
         prev_snapshots=prev_snapshots,
         prev_mf_pnl=prev_mf_pnl,
@@ -289,6 +319,8 @@ def _historical_main(snap_date: date, db_path: Path) -> int:
         nuvama_summary=nuvama_summary,
         nuvama_options_summary=nuvama_options_summary,
     )
+    summary_text = summary_text + "\n\n" + dhan_options_section
+    print(summary_text)
     print("\n  Done.")
     return 0
 
