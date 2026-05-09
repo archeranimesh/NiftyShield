@@ -366,11 +366,43 @@ The exact cutover date is TBD (binary search needed between 2024-04-25 confirmed
 
 | Tool | Status | Reason |
 |---|---|---|
-| TrueData | Rejected | 1-min: 6 months depth; tick: 5 days; no historical Greeks |
+| TrueData API | Rejected | 1-min API: 6 months depth; tick API: 5 days depth; no historical Greeks via API |
+| TrueData historical dump | Adopted — 1-min intraday pipeline (task 1.3b) | Dump product (separate from API) delivers daily zips back to Jun 2015. ₹7,999/year of data. First purchase: 2022–2024. See `BACKTEST_PLAN_PHASE1.md §1.3b` and "TrueData Historical Dump (2026-05-09)" below |
 | DhanHQ Data API | Rejected | 1-min: ~5 days depth (not 5 years); EOD misses COVID Mar 2020 + IL&FS Sep 2018 |
 | Stockmock | Adopted — calibration backtests | Already subscribed; covers all critical stress windows; UI-only |
 | NSE F&O Bhavcopy | Adopted — programmatic pipeline | Free; exchange-authoritative; 2016–present; see `BACKTEST_PLAN_PHASE1.md §1.3` |
 | Upstox Analytics API | Confirmed — forward testing + production | Already integrated; live Greeks at zero additional cost |
+
+---
+
+## TrueData Historical Dump (2026-05-09)
+
+**Context:** TrueData's API was evaluated and rejected in April 2026 (depth too shallow). Their separate *historical data dump* product was re-evaluated in May 2026 after receiving sample files. These are different products — the dump delivers complete historical CSVs, one zip per trading day, going back to Jun 2015 (1-min) and Oct 2018 (tick).
+
+**What was confirmed from sample analysis (2026-05-09):**
+
+| Property | Value |
+|---|---|
+| Zip naming | `NSE_OPT_1MIN_YYYYMMDD.zip`, `NSE_IDX_1MIN_YYYYMMDD.zip` |
+| Schema | No header row. Columns: `YMD, Time(HH:MM), O, H, L, C, Volume, OI` |
+| Contract naming | Weekly: `NIFTY{YY}{MMDD}{STRIKE}{CE/PE}.csv`; Monthly: `NIFTY{YY}{MMM}{STRIKE}{CE/PE}.csv` |
+| Sparse bars | Minutes with no trades are absent — not zero-filled. Expected. |
+| Volume/OI | In contracts, not lots. Requires lot-size lookup at ingestion time. |
+| NIFTY contracts/day | ~327 in 2019; estimated 1,500–2,500 in 2022–2024 (weekly expiry proliferation) |
+| IDX zip contents | `NIFTY.csv` (spot 1-min) + `INDIAVIX.csv` (VIX 1-min) — same schema |
+| No Greeks | IV/delta not in raw data — must compute via Black '76 (same as Bhavcopy pipeline) |
+
+**Decision: buy 1-min, not tick.**
+Tick data (₹11,999/year) gives sub-second OHLCV. CSP exit triggers (50% profit, 21-day time stop, delta stop) do not require sub-minute resolution. 1-min is sufficient through Phase 2. Revisit tick if execution latency becomes material in Phase 3+.
+
+**Decision: buy 2022–2024 first (₹24K), not full history (₹64K+).**
+Rationale: modern weekly-expiry regime, covers 2022 rate-hike crash and 2024 election spike. If Phase 1.11 variance check requires older history (COVID crash Feb–Apr 2020), purchase 2019–2021 at that point. Do not buy 8 years upfront before quality gate passes.
+
+**Storage decision:**
+Parquet, partitioned by `year/month/date`, NIFTY-only filter at ingestion. Estimated 1.5–3 GB for 3 years of NIFTY options. Raw zips (~9 GB for 3 years) kept on cold/external storage. Full storage layout and ingestion pipeline: `BACKTEST_PLAN_PHASE1.md §1.3b`.
+
+**Relationship to Bhavcopy (task 1.3):**
+TrueData supplements, does not replace, Bhavcopy. Bhavcopy remains the free EOD source for 8-year history. TrueData adds 1-min intraday resolution for the purchased date range, enabling intraday exit simulation.
 
 ---
 

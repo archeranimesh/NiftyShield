@@ -13,7 +13,7 @@
 
 **Why this order (backtest after paper, not before):** Covered in conversation. A backtest whose output can't be validated against a known realised outcome is a simulation, not a measurement. Phase 0 gives us that known outcome.
 
-> **Task numbering note:** Tasks run 1.1 → 1.2 (DEFERRED) → 1.3 → 1.3a → 1.4 → 1.5 → 1.6 → 1.6a → 1.7 → 1.8 → 1.9 → 1.9a → 1.10 → 1.10a → 1.11 → 1.12. Task 1.2 (TimescaleDB) is deferred — DhanHQ rejected 2026-04-27, NSE Bhavcopy Parquet is the storage layer. Task 1.10a (intraday chain snapshots) added 2026-04-27. Do not renumber existing tasks.
+> **Task numbering note:** Tasks run 1.1 → 1.2 (DEFERRED) → 1.3 → 1.3a → 1.3b → 1.4 → 1.5 → 1.6 → 1.6a → 1.7 → 1.8 → 1.9 → 1.9a → 1.10 → 1.10a → 1.11 → 1.12. Task 1.2 (TimescaleDB) is deferred — DhanHQ rejected 2026-04-27, NSE Bhavcopy Parquet is the storage layer. Task 1.10a (intraday chain snapshots) added 2026-04-27. Task 1.3b (TrueData 1-min ingestion) added 2026-05-09. Do not renumber existing tasks.
 
 ---
 
@@ -107,6 +107,103 @@ Also provides the India VIX series required by the CSP R3 IVR filter (tasks 1.7 
 - [ ] Commit: `feat(backtest): Upstox OHLC ingest for Nifty/VIX/NiftyBees`.
 
 **Gate:** Nifty 50 daily close must match NSE published values within ±0.05% for 95% of days over full history. India VIX series must have <1% missing trading days (fill with previous close for holidays; flag and investigate gaps >1 trading day). NiftyBees NAV tracks Nifty 50 within ±0.5% tracking error over any rolling 1-year period.
+
+---
+
+## 1.3b — CODE — TrueData 1-min options data ingestion pipeline
+
+**Data cost: ₹7,999/year of historical data. Recommended first purchase: 2022–2024 (3 years, ₹24K). Extend to earlier years after quality validation gate passes.**
+
+**Why TrueData dump, not Bhavcopy:** Bhavcopy (task 1.3) is EOD-only — it cannot tell you if the 50% profit target or delta stop triggered intraday. TrueData's historical dump provides 1-minute OHLCV+OI for every active NIFTY option contract, enabling realistic intraday exit simulation. This is the same data used for 1-min charting in Amibroker/Excel; the format is plain CSV and Python-readable despite that vendor framing. See `DECISIONS.md → TrueData Historical Dump (2026-05-09)`.
+
+> **Start this task only after TrueData confirms payment and delivers the zip files. Estimated delivery: 3–4 business days after payment.**
+
+**Data format (confirmed from sample analysis 2026-05-09):**
+
+- One zip per trading day: `NSE_OPT_1MIN_YYYYMMDD.zip`, `NSE_IDX_1MIN_YYYYMMDD.zip`
+- Inside each OPT zip: one CSV per active contract. ~327 NIFTY files per day (2019), ~1,500–2,500 per day (2022–2024, weekly expiry proliferation)
+- CSV schema: **no header row.** Columns: `YMD, Time(HH:MM), Open, High, Low, Close, Volume, OI`
+- Sparse: minutes with no trades are absent (not zero-filled). This is realistic, not a data gap.
+- Volume and OI are in number of contracts (not lots). Divide by lot size from the registry.
+- Filename encodes all contract metadata — two formats:
+  - Weekly expiry: `NIFTY{YY}{MMDD}{STRIKE}{CE/PE}.csv` → e.g. `NIFTY1940411500CE` = NIFTY Apr 4, 2019 weekly, strike 11500, CE
+  - Monthly expiry: `NIFTY{YY}{MMM}{STRIKE}{CE/PE}.csv` → e.g. `NIFTY19APR11500CE` = NIFTY Apr 2019 monthly, strike 11500, CE
+  - Parser must handle both — they cannot be unified into a single regex pattern.
+- IDX zip contains `NIFTY.csv` (spot 1-min, 09:07 pre-open onwards) and `INDIAVIX.csv` (1-min VIX). Both follow the same 8-column schema.
+
+**Directory layout (place raw zips here before running ingestion):**
+
+```
+data/historical/
+├── raw/
+│   └── 1min/                         # drop TrueData zips here, read-only after ingestion
+│       ├── NSE_OPT_1MIN_20220103.zip
+│       ├── NSE_IDX_1MIN_20220103.zip
+│       └── ...
+└── parquet/
+    ├── options/                        # Hive-partitioned, NIFTY options only
+    │   └── year=2022/
+    │       └── month=01/
+    │           └── date=2022-01-03/
+    │               data.parquet        # all active NIFTY contracts that day
+    ├── spot_1min.parquet               # NIFTY index 1-min, all dates, single file
+    ├── vix_1min.parquet                # INDIAVIX 1-min, all dates, single file
+    └── registry.sqlite                 # contract metadata + lot-size lookup
+```
+
+**Size estimate (Parquet, zstd, NIFTY-only):** ~2 MB/day in 2022–2024 → ~1.5 GB for 3 years. Keep raw zips on external storage (~9 GB for 3 years at ~12 MB/zip). Parquet lives on laptop SSD.
+
+**Tasks:**
+
+- [ ] `src/backtest/lot_sizes.py`:
+  - `LOT_SIZE_HISTORY: list[tuple[date, int]]` — stepped NIFTY lot size by effective date. Pure constant, no I/O. Consult exchange circulars to populate (lot size changes annually in Nov/Dec).
+  - `get_lot_size(underlying: str, as_of: date) → int` — binary search on history. Pure function.
+  - Tests: boundary dates, before first known entry, after last known entry.
+
+- [ ] `src/backtest/truedata_parser.py`:
+  - `parse_opt_filename(filename: str) → tuple[str, date, int, str] | None` — returns `(underlying, expiry, strike, option_type)`. Handles both weekly (YYMMDD) and monthly (YYMMMM) formats. Returns `None` on unrecognised pattern (never raises — caller skips).
+  - `parse_opt_csv_rows(content: str) → list[dict]` — parses headerless 8-column CSV. Handles sparse rows (missing minutes = absent, not `NaN`). Returns list of `{ts: datetime, open: Decimal, high: Decimal, low: Decimal, close: Decimal, volume: int, oi: int}`.
+  - `parse_idx_csv(filename: str, content: str) → list[dict]` — same schema, for spot + VIX files.
+  - Tests: weekly filename parse, monthly filename parse, unrecognised filename → `None`, sparse CSV (gaps in minutes), single-row CSV (illiquid far OTM contract).
+
+- [ ] `scripts/truedata_ingest.py` — CLI, processes one or more daily zips:
+  - Args: `--zip-dir data/historical/raw/1min/ --parquet-dir data/historical/parquet/ --underlying NIFTY --start 2022-01-01 --end 2024-12-31`
+  - For each OPT zip in date range: open zip in memory, filter filenames starting with `NIFTY` (case-sensitive, excludes BANKNIFTY), parse each file, assemble per-day DataFrame, write Parquet to `options/year=YYYY/month=MM/date=YYYY-MM-DD/data.parquet` with zstd compression.
+  - Idempotent: skip dates where the target Parquet already exists and is non-empty.
+  - Progress: `log.info("ingested %s: %d contracts, %d rows", date, contracts, rows)` per day.
+  - For each IDX zip: extract `NIFTY.csv` → append to `spot_1min.parquet`; extract `INDIAVIX.csv` → append to `vix_1min.parquet`. Deduplicate on timestamp after append.
+  - Columns written to options Parquet: `symbol TEXT, underlying TEXT, expiry DATE, strike INT, option_type TEXT, ts TIMESTAMP (IST, stored as UTC), open DECIMAL, high DECIMAL, low DECIMAL, close DECIMAL, volume INT, oi INT`.
+
+- [ ] `scripts/truedata_registry.py` — builds/updates `registry.sqlite` from ingested Parquet:
+  - Schema: `CREATE TABLE IF NOT EXISTS contracts (symbol TEXT PRIMARY KEY, underlying TEXT, expiry DATE, strike INT, option_type TEXT, lot_size INT, first_date DATE, last_date DATE)`.
+  - Scans all `options/` Parquet files; for each unique symbol derives lot_size from `lot_sizes.get_lot_size(underlying, first_date)`.
+  - Idempotent: upsert on `symbol`.
+  - Usage: `python -m scripts.truedata_registry --parquet-dir data/historical/parquet/`
+
+- [ ] Data quality gate (run before task 1.4 backtest wiring):
+  - Contract count per day ≥ 800 for 2022–2024 dates (flag days with fewer — likely bad delivery from vendor).
+  - VIX 1-min series: < 1% missing trading days (gaps on holidays are expected; gaps on trading days are not).
+  - Spot from `spot_1min.parquet` matches Bhavcopy close for NIFTY within ±0.05% for 95% of days in overlapping range (cross-reference with task 1.3 output).
+  - No contract with `expiry < first_date` in registry (would indicate filename parse error).
+  - Log results to `logs/truedata_quality.log`.
+
+- [ ] Tests (`tests/unit/backtest/test_truedata_parser.py`): fixture-driven, no file I/O.
+  - `parse_opt_filename` — weekly, monthly, BANKNIFTY (should return underlying=BANKNIFTY so caller can filter), unrecognised → `None`.
+  - `parse_opt_csv_rows` — normal rows, sparse (missing minute gaps), single row, malformed row (skipped).
+  - Lot-size boundary tests.
+  - No zip file access in unit tests — use in-memory string fixtures.
+
+- [ ] Commit sequence: `lot_sizes` → `truedata_parser` → `truedata_ingest` → `truedata_registry` → tests.
+
+**Relationship to existing pipelines:**
+- Task 1.3 (Bhavcopy EOD) is unchanged — still the free source for the CSP backtest EOD mode and full 8-year history.
+- Task 1.3a (Upstox OHLC/VIX daily) is unchanged — still the daily VIX series for IVR computation going back to Upstox's full history. TrueData's `vix_1min.parquet` supplements it at 1-min resolution for the purchased date range only.
+- Task 1.4 (backtest engine) runs in **EOD mode** using Bhavcopy for Phase 1 CSP backtest. **1-min mode** (using `data/historical/parquet/options/`) is a Phase 1.5 upgrade once the ingest pipeline is validated. Do not block Phase 1 tasks on 1-min engine integration.
+
+**Why buy only 2022–2024 first:**
+- Covers one proper bear-to-recovery cycle (2022 rate hike selloff + 2023 recovery), one high-IV window (Jan–Mar 2022), and the 2024 election day spike.
+- Weekly expiry proliferation post-2019 means pre-2022 data has structurally different contract density — calibrate on the modern regime first.
+- If quality gate passes and the regime-matched variance check (task 1.11) needs more history, purchase 2019–2021 (add COVID crash window, ₹24K more).
 
 ---
 
