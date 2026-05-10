@@ -155,6 +155,54 @@ python -m scripts.paper_3track_overlay --overlay collar
 python -m scripts.paper_3track_overlay --overlay collar --yes
 ```
 
+### Reading the candidate table
+
+Each command prints a ranked candidate table before the confirmation table — same format
+as `paper_3track_entry.py`. Columns: `Rk | Expiry | Label | Strike | OTM% | OI | Bid | Ask | Sprd% | G`.
+The `G` column is the spread gate (✓ = spread_pct ≤ 3%, ✗ = fails gate). The auto-selected
+candidate is marked `◀`.
+
+The confirmation table includes a **Type** column (PE/CE) so collar rows are unambiguous —
+BUY PE rows and SELL CE rows appear separately per track.
+
+### Selecting a non-default candidate
+
+By default the top-ranked candidate (rank 1, marked `◀`) is used. To pick a different
+candidate from the table, add `--index N` on the commit run:
+
+```bash
+# Dry-run — review the candidate table, note the rank you want:
+python -m scripts.paper_3track_overlay --overlay pp
+
+# Commit with rank 2 instead of rank 1:
+python -m scripts.paper_3track_overlay --overlay pp --yes --index 2
+
+# Collar — same rank N is applied independently to both PE and CE pools:
+python -m scripts.paper_3track_overlay --overlay collar --yes --index 2
+```
+
+If `--index N` exceeds the number of available candidates, it clamps to the last rank and
+logs a warning. `--index 1` is the default; you do not need to pass it explicitly.
+
+### Verifying what was written
+
+After any `--yes` run the status line shows `RECORDED TO DB — N new, M skipped`.
+A non-zero skip count means the unique constraint `(strategy, leg_role, date, action)`
+already existed — the DB was not modified for those rows. To inspect the DB directly:
+
+```bash
+python - <<'EOF'
+import sys; sys.path.insert(0, ".")
+from src.paper.store import PaperStore
+store = PaperStore("data/portfolio/portfolio.sqlite")
+for s in ["paper_nifty_spot", "paper_nifty_futures", "paper_nifty_proxy"]:
+    trades = store.get_trades(s)
+    print(f"\n{s} ({len(trades)} trades):")
+    for t in trades:
+        print(f"  {t.trade_date}  {t.leg_role:<26}  {t.action.value:<4}  qty={t.quantity}  price={t.price}")
+EOF
+```
+
 ### YAML path (offline price verification)
 
 Use this when you want to inspect strikes before recording — for example if the option chain
@@ -378,7 +426,9 @@ BOD instruments file must be current: `data/instruments/NSE.json.gz`
 |------|---------|------|
 | Enter base legs | `python scripts/paper_3track_entry.py --confirm` | Cycle start (Weds post-expiry, 10:00–10:30 AM) |
 | Enter PP overlay | `python -m scripts.paper_3track_overlay --overlay pp --yes` | Same day as base entry |
+| Enter CC overlay | `python -m scripts.paper_3track_overlay --overlay cc --yes` | Same day as base entry |
 | Enter Collar overlay | `python -m scripts.paper_3track_overlay --overlay collar --yes` | Same day as base entry |
+| Pick non-default candidate | add `--index 2` to any overlay `--yes` command | After dry-run review |
 | Daily snapshot | `python scripts/paper_3track_snapshot.py` | 15:35 IST daily (cron) |
 | Dry-run snapshot | `python scripts/paper_3track_snapshot.py --no-save` | Ad hoc inspection |
 | Roll check (dry) | `python -m scripts.paper_3track_overlay_roll` | Every Thursday morning (or daily cron) |
