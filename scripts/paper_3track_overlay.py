@@ -68,6 +68,7 @@ from src.paper.constants import (
 from src.paper.models import PaperTrade
 from src.paper.store import PaperStore
 from src.paper._utils import safe_float
+from src.paper._display import BASE_LABELS, OVERLAY_LABELS
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
@@ -451,16 +452,13 @@ def _print_confirmation_table(
         f"{'Type':>4}  {'Str':>7} {'Act':>4} {'Qty':>4} {'Price':>8}  {'Sprd%':>6}  {'OI':>9}"
     )
     print(f"  {'─' * (W - 2)}")
-    track_labels = {
-        "paper_nifty_spot":    "Spot",
-        "paper_nifty_futures": "Futures",
-        "paper_nifty_proxy":   "Proxy",
-    }
+
     for r in rows:
-        label = track_labels.get(r.strategy, r.strategy)
+        label = BASE_LABELS.get(r.strategy, r.strategy)
+        leg_display = OVERLAY_LABELS.get(r.leg_role, r.leg_role)
         sprd = f"{r.spread_pct:.1f}%" if r.spread_pct is not None else "  N/A"
         print(
-            f"  {label:<28} {r.strategy:<26} {r.leg_role:<22} "
+            f"  {label:<28} {r.strategy:<26} {leg_display:<22} "
             f"{r.option_type:>4}  {r.strike:>7.0f} {r.action.value:>4} {LOT_SIZE:>4} "
             f"₹{float(r.price):>7.2f}  {sprd:>6}  {r.oi:>9,}"
         )

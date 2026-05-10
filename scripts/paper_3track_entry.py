@@ -56,6 +56,7 @@ from src.paper.constants import (
 )
 from src.paper.models import PaperTrade
 from src.paper.store import PaperStore
+from src.paper._display import BASE_LABELS
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
@@ -544,11 +545,11 @@ def print_preview(p: LivePrices, gates: dict[str, str], confirmed: bool) -> None
     print(f"  {'─' * 70}")
 
     rows = [
-        ("A  Spot (NiftyBees)", "base_etf",
+        (f"A  {BASE_LABELS['paper_nifty_spot']}", "base_etf",
          p.niftybees_qty, p.niftybees_ltp, p.niftybees_ltp * p.niftybees_qty),
-        ("B  Futures", "base_futures",
+        (f"B  {BASE_LABELS['paper_nifty_futures']}", "base_futures",
          p.lot_size, p.futures_price, p.futures_price * p.lot_size),
-        (f"C  Proxy δ={p.proxy_actual_delta}", "base_ditm_call",
+        (f"C  {BASE_LABELS['paper_nifty_proxy']} δ={p.proxy_actual_delta}", "base_ditm_call",
          p.lot_size, p.proxy_price, p.proxy_price * p.lot_size),
     ]
     for track, leg, qty, price, notional in rows:

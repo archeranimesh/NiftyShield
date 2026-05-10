@@ -133,6 +133,7 @@ These run continuously throughout Phase 0, independent of the code queue above.
 - [ ] Each quarter (Jan/Apr/Jul/Oct): enter Leg 3 (tail puts, 2 lots).
 - [ ] Leg 2 enters even when Leg 1 is skipped (R3/R4 filters) — protection is unconditional.
 - [ ] **Implementation Task**: Create `scripts/paper_csp_roll.py` to automate roll-over of Leg 1 (CSP) positions, mirroring the `paper_3track_overlay_roll.py` workflow.
+- [ ] `paper_3track_overlay.py:243` — migrate `lookup._instruments` loop to `get_expiry_candidates` public API, same pattern as the Phase 1 fix in `paper_3track_entry.py`.
 - [ ] Minimum: 6 monthly cycles for Legs 1+2; 2 quarterly cycles for Leg 3.
 
 ### 0.6b — 3-Track Nifty Instrument Comparison Paper Trading
