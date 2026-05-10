@@ -105,6 +105,10 @@ def _parse_args() -> argparse.Namespace:
 
 async def _run(args: argparse.Namespace) -> int:
     """Async entry point. Returns exit code."""
+    from dotenv import load_dotenv
+
+    load_dotenv()
+
     snapshot_date: date | None = None
     if args.snapshot_date:
         try:
