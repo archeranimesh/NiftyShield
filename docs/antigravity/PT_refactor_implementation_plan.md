@@ -1,4 +1,4 @@
-# Implementation Plan - Paper Trading Refactor (Refined v3)
+# Implementation Plan - Paper Trading Refactor (Refined v4)
 
 Audit and refactor of the paper trading system (`src/paper/` and related scripts) to eliminate duplication, improve hygiene, and ensure architectural consistency.
 
@@ -43,12 +43,18 @@ Audit and refactor of the paper trading system (`src/paper/` and related scripts
 Files: `paper_3track_entry.py`, `paper_3track_snapshot.py`, `paper_3track_overlay.py`, `paper_3track_overlay_roll.py`, `paper_track_snapshot.py`, `paper_3track_overlay_entry.py`, `record_paper_trade.py`, `paper_snapshot.py`.
 
 #### [MODIFY] [paper_3track_entry.py](file:///Users/abhadra/myWork/myCode/python/NiftyShield/scripts/paper_3track_entry.py)
-- **Fix G5**: Add intent comments (e.g., `# G5: Log failure and continue to next candidate`).
+- **Fix G5**: Add intent comments explaining *why* the broad catch is correct at that boundary — not a tag. Required format per REVIEW.md G5:
+    ```python
+    # Intentional: isolate all per-expiry chain-fetch failures so a single
+    # bad expiry does not abort the full multi-expiry entry sweep.
+    ```
+    Do NOT use `# G5: ...` as a label — that describes what happens, not why the catch is justified.
 - **Fix G7**: Remove f-string from `logger.info` argument (dict comprehension at L297).
 - **Fix G8**: Group and alphabetize imports.
 - **Fix Part I §5**: Replace `c["strike"] == p.proxy_strike` with `abs(c["strike"] - p.proxy_strike) < 0.01` (# epsilon < 50/100 NSE strike increments).
-- **API Fix**: Replace `lookup._instruments` loop with `dict(lookup.get_expiry_candidates(underlying="NIFTY", today=today, preference=["quarterly", "yearly", "monthly"]))`. 
+- **API Fix**: Replace `lookup._instruments` loop with `dict(lookup.get_expiry_candidates(underlying="NIFTY", today=today))`.
     - *Verification*: `lookup.get_expiry_candidates` returns `list[tuple[str, str]]`, so `dict()` is required for the subsequent `.items()` call.
+    - *Preference order*: Use the default `["monthly", "quarterly", "yearly"]` — do NOT pass `["quarterly", "yearly", "monthly"]`. The original code fetches monthly first (smallest DTE, first in sorted calendar order); preserving that order ensures the Nifty spot price is sourced from the monthly chain, which is the most liquid. Changing preference order is a silent behavioural change and must not be introduced in a refactor commit.
 - Use consolidated constants and `safe_float`.
 
 #### [MODIFY] [record_paper_trade.py](file:///Users/abhadra/myWork/myCode/python/NiftyShield/scripts/record_paper_trade.py)
@@ -70,7 +76,11 @@ Files: `paper_3track_entry.py`, `paper_3track_snapshot.py`, `paper_3track_overla
 
 ### Phase 2 Commit Plan
 - **Commit**: `refactor(paper): extract display helpers to _display module`
-- **Verification**: Run `python -m pytest tests/unit/paper/test_display.py` before committing.
+- **Verification**: Run the full paper regression suite before committing — not just `test_display.py`:
+    ```
+    python -m pytest tests/unit/paper/ --tb=no -q
+    ```
+    A display extraction that silently breaks `test_track_snapshot.py` or `test_paper_store.py` must be caught before the commit, not after.
 
 ---
 
@@ -87,6 +97,39 @@ Files: `paper_3track_entry.py`, `paper_3track_snapshot.py`, `paper_3track_overla
     - Fix Part I §5 in `paper_3track_entry.py` and `record_paper_trade.py`.
     - Fix logger f-string in `paper_3track_entry.py`.
     - Add intent comments to `except Exception` blocks.
+    - *Scope for G5/G8*: Do not re-audit from scratch. Use the Phase 0 audit findings to identify exactly which scripts have G5/G8 violations and list them explicitly in the commit body. "All other scripts" is not an acceptable scope description — name each file that is touched.
+
+---
+
+## Out of Scope — Design Gaps Surfaced by This Refactor
+
+### CSP has no roll script (`paper_csp_roll.py`)
+
+The 3-track system has `paper_3track_overlay_roll.py` to roll expiring overlay
+legs atomically when DTE ≤ 5. CSP has no equivalent. Rolling the CSP short put
+at expiry — buy back the expiring strike, sell the next monthly at 22-delta —
+is the same operational concept: DTE gate, strike re-selection, atomic close+open
+with rollback on failure. Currently the operator must manually chain
+`record_paper_trade.py --close` followed by a new entry, with no guard against
+partial execution.
+
+**This is new functionality and must NOT be implemented in this refactor.**
+Add the following task to `TODOS.md` before closing this plan:
+
+> **New task**: Implement `scripts/paper_csp_roll.py` — atomic DTE-gated roll
+> of the CSP short put leg. Reuse the atomic close+open pattern from
+> `paper_3track_overlay_roll.py`. Inputs: DTE gate (default `OVERLAY_ROLL_DTE`),
+> target delta (default 22, parameterised), `--dry-run` flag. Log India VIX
+> level at roll time for future R3 calibration. IVR enforcement deferred until
+> VIX ingestion lands (Task 1).
+
+**Forward-looking note for this refactor:** The atomic close+open logic inside
+`paper_3track_overlay_roll.py` will eventually need to be extracted into
+`src/paper/` (e.g. `src/paper/roll.py`) so both roll scripts share it without
+duplication. Do not bake this logic deeper into overlay-specific code during
+Phase 1 or Phase 2 — keep it separable. When `paper_csp_roll.py` is
+implemented, extracting into `src/paper/roll.py` becomes Phase 3 of this
+refactor series.
 
 ---
 
