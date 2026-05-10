@@ -60,3 +60,8 @@ def create_client(env: str, **kwargs: Any) -> BrokerClient:
         )
 
     raise ValueError(f"Unknown env '{env}'. Valid values: {VALID_ENVS}")
+
+
+#: Backward-compatible alias used by scripts/paper_snapshot.py.
+#: New code should call ``create_client`` directly.
+create_broker_client = create_client
