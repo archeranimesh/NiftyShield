@@ -23,8 +23,8 @@ at DTE ≤ 5 if needed). Premium collected is the sole return source.
 
 ```
 Cycle start (once per expiry cycle, ~25–35 DTE)
-  └── find_strike_by_delta.py --dry-run     ← pick strike, get ready-to-paste command
-      └── record_paper_trade.py             ← write SELL leg to DB
+  └── record_paper_trade.py --expiry YYYY-MM-DD --no-dry-run   ← fetch + rank + record in one step
+      └── (optional) find_strike_by_delta.py --expiry ...       ← explore full ranked table first
 
 Daily at 15:35 IST (cron)
   └── paper_snapshot.py                     ← mark-to-market P&L
@@ -70,9 +70,20 @@ more than 15 minutes elapse before you record — mid-price drifts.
 
 ---
 
-## Step 2 — Record the Entry
+Run this directly to fetch the chain, rank candidates, pick rank 1, and resolve the price (mid-price) automatically.
 
-Copy the command emitted by `find_strike_by_delta.py` above. It will look like:
+```bash
+# Preview (dry-run default — RECOMMENDED):
+python scripts/record_paper_trade.py --expiry 2026-05-26
+
+# Write to DB (rank 1 — default):
+python scripts/record_paper_trade.py --expiry 2026-05-26 --no-dry-run
+
+# Write to DB (pick rank 2):
+python scripts/record_paper_trade.py --expiry 2026-05-26 --index 2 --no-dry-run
+```
+
+**Alternative — Manual resolution** (copy-paste command from `find_strike_by_delta.py` output):
 
 ```bash
 # PE 24000 | delta=-0.2513 | iv=12.40%
@@ -82,15 +93,7 @@ python scripts/record_paper_trade.py \
     --no-dry-run
 ```
 
-**Preview first** (no DB write — default behaviour, omit `--no-dry-run`):
-
-```bash
-python scripts/record_paper_trade.py \
-    --key "NSE_FO|<instrument_key>" \
-    --price 87.50
-```
-
-**Alternative — BOD lookup** (if you know strike/expiry but not the instrument key):
+**Alternative — BOD lookup** (offline search from BOD JSON):
 
 ```bash
 python scripts/record_paper_trade.py \
@@ -106,9 +109,8 @@ python scripts/record_paper_trade.py \
 
 ```bash
 python scripts/record_paper_trade.py \
-    --key "NSE_FO|<instrument_key>" \
-    --price 87.50 \
-    --notes "entry: 0.25 delta, IVR 42, 28 DTE, spot 24385" \
+    --expiry 2026-05-26 \
+    --notes "entry: rank 1, IVR 42, 28 DTE" \
     --no-dry-run
 ```
 
@@ -244,11 +246,12 @@ mode): `data/instruments/NSE.json.gz`
 
 | Task | Command | When |
 |------|---------|------|
-| Find strike + get command | `python scripts/find_strike_by_delta.py --expiry YYYY-MM-DD` | Cycle start, 10:00–11:00 AM IST |
-| Preview entry (no DB write) | `python scripts/record_paper_trade.py --key "NSE_FO|..." --price NNN.NN` | Before committing |
-| Record entry (write to DB) | `python scripts/record_paper_trade.py --key "NSE_FO|..." --price NNN.NN --no-dry-run` | After preview confirms |
+| Explore strikes | `python scripts/find_strike_by_delta.py --expiry YYYY-MM-DD` | Optional exploration |
+| Preview entry (chain) | `python scripts/record_paper_trade.py --expiry YYYY-MM-DD` | Cycle start, 10:00–11:00 AM IST |
+| Record entry (chain) | `python scripts/record_paper_trade.py --expiry YYYY-MM-DD --no-dry-run` | Cycle start |
+| Record entry (manual) | `python scripts/record_paper_trade.py --key "NSE_FO|..." --price NNN.NN --no-dry-run` | Copy-paste from find_strike |
 | Close expiring leg | `python scripts/record_paper_trade.py --key "NSE_FO|..." --action BUY --price NNN.NN --no-dry-run` | DTE ≤ 5 or stop-loss |
-| Open replacement leg | copy command from find_strike_by_delta output (already has `--no-dry-run`) | Immediately after close |
+| Open replacement leg | `python scripts/record_paper_trade.py --expiry NEXT_YYYY-MM-DD --no-dry-run` | Immediately after close |
 | Inspect P&L (no write) | `python scripts/paper_snapshot.py --strategy paper_csp_nifty_v1` | Ad hoc |
 | Write daily snapshot | `python scripts/paper_snapshot.py --strategy paper_csp_nifty_v1 --no-dry-run` | 15:35 IST cron |
 | Verify open positions | inline Python snippet above | Any time |

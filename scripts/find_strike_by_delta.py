@@ -170,10 +170,38 @@ def filter_strikes_by_delta(
     return rows
 
 
+def rank_strikes(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Rank filtered strike rows by CSP entry preference.
+
+    Ranking tuple (ascending — lower wins):
+      1. is_non_round  — 0 for multiples of 100 (preferred), 1 otherwise
+      2. spread_bucket — int((ask - bid) / 2) — tighter ₹2 bucket wins
+      3. -oi           — highest OI within the same bucket
+      4. spread        — exact spread as final tiebreaker
+
+    Args:
+        rows: Output of :func:`filter_strikes_by_delta`.
+
+    Returns:
+        New list sorted by preference with a ``rank`` field (1-based int)
+        added to each row dict.
+    """
+
+    def _key(r: dict[str, Any]) -> tuple:
+        spread = r["ask"] - r["bid"] if (r["ask"] > 0 and r["bid"] > 0) else 9_999.0
+        is_non_round = int(r["strike"]) % 100 != 0
+        spread_bucket = int(spread / 2)
+        return (is_non_round, spread_bucket, -r["oi"], spread)
+
+    sorted_rows = sorted(rows, key=_key)
+    return [{**r, "rank": i + 1} for i, r in enumerate(sorted_rows)]
+
+
 def format_table(
     rows: list[dict[str, Any]],
     underlying_spot: float = 0.0,
     expiry: str = "",
+    selected_key: str = "",
 ) -> str:
     """Format matching strike rows as a fixed-width table string.
 
@@ -198,7 +226,7 @@ def format_table(
     )
 
     col_hdr = (
-        f"  {'SIDE':<5} {'STRIKE':>8}  {'DELTA':>7}  {'IV%':>6}  "
+        f"  {'Rk':>3}  {'SIDE':<5} {'STRIKE':>8}  {'DELTA':>7}  {'IV%':>6}  "
         f"{'LTP':>8}  {'MID':>8}  {'BID':>8}  {'ASK':>8}  {'OI':>8}  KEY"
     )
     sep = "  " + "─" * (len(col_hdr) - 2)
@@ -211,12 +239,13 @@ def format_table(
 
     for r in rows:
         sign = "+" if r["delta"] >= 0 else ""
+        marker = "  ◀" if r["instrument_key"] == selected_key else ""
         lines.append(
-            f"  {r['side']:<5} {r['strike']:>8.0f}  "
+            f"  {r.get('rank', ''):>3}  {r['side']:<5} {r['strike']:>8.0f}  "
             f"{sign}{r['delta']:>6.4f}  {r['iv']:>6.2f}  "
             f"{r['ltp']:>8.2f}  {r['mid']:>8.2f}  "
             f"{r['bid']:>8.2f}  {r['ask']:>8.2f}  "
-            f"{r['oi']:>8d}  {r['instrument_key']}"
+            f"{r['oi']:>8d}  {r['instrument_key']}{marker}"
         )
 
     return "\n".join(lines)
@@ -319,6 +348,13 @@ def _parse_args() -> argparse.Namespace:
         "--underlying",
         default=UNDERLYING_DEFAULT,
         help=f'Underlying instrument key. Default: "{UNDERLYING_DEFAULT}".',
+    )
+    p.add_argument(
+        "--index",
+        type=int,
+        default=1,
+        metavar="N",
+        help="Select the Nth-ranked candidate (1-based). Default: 1.",
     )
 
     dry_grp = p.add_argument_group(
@@ -436,9 +472,28 @@ def main() -> None:
         delta_min=args.delta_min,
         delta_max=args.delta_max,
     )
+    ranked = rank_strikes(rows)
+
+    pick_idx = 0
+    if ranked:
+        pick_idx = min(args.index - 1, len(ranked) - 1)
+        if args.index - 1 > len(ranked) - 1:
+            print(
+                f"WARNING: --index {args.index} out of range; "
+                f"clamping to rank {len(ranked)}.",
+                file=sys.stderr,
+            )
 
     print()
-    print(format_table(rows, underlying_spot=underlying_spot, expiry=args.expiry))
+    selected_key = ranked[pick_idx]["instrument_key"] if ranked else ""
+    print(
+        format_table(
+            ranked,
+            underlying_spot=underlying_spot,
+            expiry=args.expiry,
+            selected_key=selected_key,
+        )
+    )
 
     if not rows or not args.dry_run:
         sys.exit(0)
@@ -451,21 +506,22 @@ def main() -> None:
     )
 
     print()
-    banner = f"─── Dry-run ({args.action} · {args.strategy}) "
+    banner = f"─── Rank {args.index} selected ({args.action} · {args.strategy}) "
     print(banner + "─" * max(0, 72 - len(banner)))
-    for row in rows:
-        row_leg = fixed_leg or _infer_leg(row["side"], args.action)
-        print()
-        print(
-            build_record_command(
-                row,
-                strategy=args.strategy,
-                leg=row_leg,
-                action=args.action,
-                qty=args.qty,
-                trade_date=args.trade_date,
-            )
+
+    selected = ranked[pick_idx]
+    row_leg = fixed_leg or _infer_leg(selected["side"], args.action)
+    print()
+    print(
+        build_record_command(
+            selected,
+            strategy=args.strategy,
+            leg=row_leg,
+            action=args.action,
+            qty=args.qty,
+            trade_date=args.trade_date,
         )
+    )
     print()
 
 

@@ -199,3 +199,118 @@ def test_closed_position_prints_closed_message(tmp_path: Path) -> None:
     code, out, _ = _run(buy_args, db)
     assert code == 0
     assert "closed" in out or "net qty" in out
+
+
+# ── Chain mode ────────────────────────────────────────────────────────────────
+
+
+_FAKE_CHAIN = [
+    {
+        "strike_price": 23800,
+        "underlying_spot_price": 24176.15,
+        "put_options": {
+            "instrument_key": "NSE_FO|72172",
+            "market_data": {
+                "ltp": 175.2,
+                "bid_price": 174.05,
+                "ask_price": 176.55,
+                "oi": 1041300,
+            },
+            "option_greeks": {"delta": -0.3054, "iv": 16.38},
+        },
+        "call_options": {},
+    },
+    {
+        "strike_price": 23700,
+        "underlying_spot_price": 24176.15,
+        "put_options": {
+            "instrument_key": "NSE_FO|72168",
+            "market_data": {
+                "ltp": 150.0,
+                "bid_price": 148.25,
+                "ask_price": 150.00,
+                "oi": 782795,
+            },
+            "option_greeks": {"delta": -0.2688, "iv": 16.62},
+        },
+        "call_options": {},
+    },
+]
+
+
+@patch("scripts.record_paper_trade.UpstoxMarketClient")
+def test_chain_mode_dry_run_prints_table(mock_client_cls, tmp_path: Path) -> None:
+    """--expiry triggers chain fetch; table printed; no DB insert."""
+    db = tmp_path / "db.sqlite"
+    mock_client = mock_client_cls.return_value
+    mock_client.get_option_chain_sync.return_value = _FAKE_CHAIN
+
+    code, out, err = _run(["--expiry", "2026-05-26"], db)
+
+    assert code == 0, f"stderr: {err}"
+    assert "SIDE" in out
+    assert "STRIKE" in out
+    assert "23800" in out
+    assert "Dry run" in out
+    mock_client.get_option_chain_sync.assert_called_once()
+
+
+@patch("scripts.record_paper_trade.UpstoxMarketClient")
+def test_chain_mode_resolves_key_and_price(mock_client_cls, tmp_path: Path) -> None:
+    """Resolved key + mid-price injected; correct instrument recorded."""
+    db = tmp_path / "db.sqlite"
+    mock_client = mock_client_cls.return_value
+    mock_client.get_option_chain_sync.return_value = _FAKE_CHAIN
+
+    code, out, err = _run(["--expiry", "2026-05-26", "--no-dry-run"], db)
+
+    assert code == 0, f"stderr: {err}"
+    store = PaperStore(db)
+    trades = store.get_trades(_STRATEGY)
+    assert len(trades) == 1
+    # 23700 PE is rank 1 (spread_bucket=0 wins over 23800's spread_bucket=1)
+    assert trades[0].instrument_key == "NSE_FO|72168"
+    # mid = (148.25 + 150.00) / 2 = 149.125 -> rounded (half-to-even) to 149.12
+    assert trades[0].price == Decimal("149.12")
+
+
+@patch("scripts.record_paper_trade.UpstoxMarketClient")
+def test_chain_mode_index_2_picks_second_rank(mock_client_cls, tmp_path: Path) -> None:
+    """--index 2 selects second-ranked row."""
+    db = tmp_path / "db.sqlite"
+    mock_client = mock_client_cls.return_value
+    mock_client.get_option_chain_sync.return_value = _FAKE_CHAIN
+
+    code, out, err = _run(
+        ["--expiry", "2026-05-26", "--index", "2", "--no-dry-run"], db
+    )
+
+    assert code == 0, f"stderr: {err}"
+    store = PaperStore(db)
+    trades = store.get_trades(_STRATEGY)
+    assert len(trades) == 1
+    # 23800 PE is rank 2
+    assert trades[0].instrument_key == "NSE_FO|72172"
+    # mid = (174.05 + 176.55) / 2 = 175.3
+    assert trades[0].price == Decimal("175.3")
+
+
+@patch("scripts.record_paper_trade.UpstoxMarketClient")
+def test_chain_mode_empty_chain_exits_1(mock_client_cls, tmp_path: Path) -> None:
+    """Empty chain → exit code 1, no insert."""
+    db = tmp_path / "db.sqlite"
+    mock_client = mock_client_cls.return_value
+    mock_client.get_option_chain_sync.return_value = []
+
+    code, out, err = _run(["--expiry", "2026-05-26"], db)
+
+    assert code == 1
+    assert "empty data" in err
+
+
+def test_chain_mode_mutually_exclusive_with_key(tmp_path: Path) -> None:
+    """--expiry + --key → exit code 1."""
+    db = tmp_path / "db.sqlite"
+    code, out, err = _run(["--expiry", "2026-05-26", "--key", "NSE_FO|12345"], db)
+    assert code == 1
+    assert "mutually exclusive" in err

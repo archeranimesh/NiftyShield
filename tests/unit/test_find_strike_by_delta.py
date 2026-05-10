@@ -68,6 +68,7 @@ from scripts.find_strike_by_delta import (
     build_record_command,
     filter_strikes_by_delta,
     format_table,
+    rank_strikes,
 )
 
 # ── Fixture loading ───────────────────────────────────────────────────────────
@@ -302,3 +303,72 @@ def test_safe_float_valid_string() -> None:
 
 def test_safe_float_invalid_returns_custom_default() -> None:
     assert _safe_float("N/A", default=-1.0) == -1.0
+
+
+# ── rank_strikes ──────────────────────────────────────────────────────────────
+
+
+def test_rank_strikes_empty_returns_empty() -> None:
+    assert rank_strikes([]) == []
+
+
+def test_rank_strikes_adds_rank_field_1_based() -> None:
+    rows = filter_strikes_by_delta(_load_chain(), "PE", 0.20, 0.40)
+    ranked = rank_strikes(rows)
+    assert len(ranked) == len(rows)
+    assert ranked[0]["rank"] == 1
+    assert ranked[1]["rank"] == 2
+
+
+def test_rank_strikes_prefers_round_100_strikes() -> None:
+    # 22250 PE (non-round) vs 22200 PE (round)
+    # Both are in the chain. 22250 has higher OI and tighter spread in fixture,
+    # but 22200 is a multiple of 100.
+    rows = [
+        {
+            "strike": 22250.0,
+            "bid": 100.0,
+            "ask": 101.0,
+            "oi": 1000,
+            "instrument_key": "K1",
+            "delta": -0.45,
+        },
+        {
+            "strike": 22200.0,
+            "bid": 100.0,
+            "ask": 101.0,
+            "oi": 500,
+            "instrument_key": "K2",
+            "delta": -0.40,
+        },
+    ]
+    ranked = rank_strikes(rows)
+    # 22200 (round) should be rank 1 despite lower OI
+    assert ranked[0]["strike"] == 22200.0
+    assert ranked[1]["strike"] == 22250.0
+
+
+def test_rank_strikes_prefers_higher_oi() -> None:
+    # Both round, both same spread bucket.
+    rows = [
+        {
+            "strike": 22200.0,
+            "bid": 100.0,
+            "ask": 101.0,
+            "oi": 500,
+            "instrument_key": "K1",
+            "delta": -0.40,
+        },
+        {
+            "strike": 22300.0,
+            "bid": 100.0,
+            "ask": 101.0,
+            "oi": 1000,
+            "instrument_key": "K2",
+            "delta": -0.42,
+        },
+    ]
+    ranked = rank_strikes(rows)
+    # 22300 should be rank 1 due to higher OI
+    assert ranked[0]["strike"] == 22300.0
+    assert ranked[1]["strike"] == 22200.0

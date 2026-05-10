@@ -52,6 +52,17 @@ from src.instruments.lookup import InstrumentLookup
 from src.models.portfolio import TradeAction
 from src.paper.models import PaperTrade
 from src.paper.store import PaperStore
+from scripts.find_strike_by_delta import (
+    DEFAULT_LOT_SIZE,
+    UNDERLYING_DEFAULT,
+    filter_strikes_by_delta,
+    format_table,
+    rank_strikes,
+)
+from src.client.upstox_market import UpstoxMarketClient
+from dotenv import load_dotenv
+
+load_dotenv()
 
 DEFAULT_DB_PATH = Path("data/portfolio/portfolio.sqlite")
 DEFAULT_BOD_PATH = Path("data/instruments/NSE.json.gz")
@@ -62,8 +73,8 @@ def _parse_args() -> argparse.Namespace:
         description=(
             "Record a single paper trade into the paper_trades ledger. "
             "--strategy must start with 'paper_'.  Provide either --key "
-            "(direct instrument key) or the lookup flags "
-            "(--underlying / --strike / --option-type / --expiry)."
+            "(direct instrument key), --expiry (live chain lookup), or "
+            "lookup flags (--underlying / --strike / --option-type / --expiry)."
         )
     )
     parser.add_argument(
@@ -77,7 +88,47 @@ def _parse_args() -> argparse.Namespace:
         help='Leg role label, e.g. "short_put". Default: short_put.',
     )
 
-    # ── Instrument identification (one of two modes) ──────────────────────────
+    # ── Chain lookup mode ─────────────────────────────────────────────────────
+    chain_group = parser.add_argument_group(
+        "chain lookup",
+        "Auto-select strike from live option chain (mutually exclusive with --key and --underlying).",
+    )
+    chain_group.add_argument(
+        "--expiry",
+        default=None,
+        metavar="YYYY-MM-DD",
+        help="Fetch live option chain and auto-select best strike for this expiry.",
+    )
+    chain_group.add_argument(
+        "--delta-min",
+        type=float,
+        default=0.20,
+        metavar="FLOAT",
+        help="Lower |delta| bound for chain filter. Default: 0.20.",
+    )
+    chain_group.add_argument(
+        "--delta-max",
+        type=float,
+        default=0.35,
+        metavar="FLOAT",
+        help="Upper |delta| bound for chain filter. Default: 0.35.",
+    )
+    chain_group.add_argument(
+        "--option-type",
+        choices=["CE", "PE", "BOTH"],
+        default=None,
+        help="Option side for chain filter. Default: PE.",
+    )
+    chain_group.add_argument(
+        "--index",
+        type=int,
+        default=1,
+        metavar="N",
+        help="Select the Nth-ranked candidate from the chain (1-based). Default: 1.",
+    )
+    # ──────────────────────────────────────────────────────────────────────────
+
+    # ── Instrument identification (one of two lookup modes) ───────────────────
     key_group = parser.add_argument_group(
         "direct key", "Provide the Upstox instrument key directly"
     )
@@ -90,7 +141,7 @@ def _parse_args() -> argparse.Namespace:
     lookup_group = parser.add_argument_group(
         "instrument lookup",
         "Auto-resolve instrument key from the offline BOD JSON "
-        "(mutually exclusive with --key)",
+        "(mutually exclusive with --key and --expiry)",
     )
     lookup_group.add_argument(
         "--underlying",
@@ -102,17 +153,6 @@ def _parse_args() -> argparse.Namespace:
         type=float,
         default=None,
         help="Strike price, e.g. 23000",
-    )
-    lookup_group.add_argument(
-        "--option-type",
-        choices=["CE", "PE"],
-        default=None,
-        help="CE or PE",
-    )
-    lookup_group.add_argument(
-        "--expiry",
-        default=None,
-        help="Expiry date in YYYY-MM-DD, e.g. 2026-05-29",
     )
     lookup_group.add_argument(
         "--bod-path",
@@ -137,10 +177,10 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--qty",
         type=int,
-        default=75,
-        help="Units transacted (positive integer). Default: 75.",
+        default=DEFAULT_LOT_SIZE,
+        help=f"Units transacted (positive integer). Default: {DEFAULT_LOT_SIZE}.",
     )
-    parser.add_argument("--price", required=True, help="Execution price per unit.")
+    parser.add_argument("--price", default=None, help="Execution price per unit.")
     parser.add_argument(
         "--notes",
         default="",
@@ -164,6 +204,84 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _resolve_from_chain(args: argparse.Namespace) -> tuple[str, str] | None:
+    """Fetch live option chain, rank candidates, return (instrument_key, price).
+
+    Prints the ranked table (mirroring find_strike_by_delta output) and the
+    selected row so the user can verify before the DB write.
+
+    Args:
+        args: Parsed CLI arguments (uses expiry, delta_min, delta_max,
+              option_type, index, underlying=UNDERLYING_DEFAULT).
+
+    Returns:
+        (instrument_key, price_str) for the selected rank, or None on failure
+        (caller should sys.exit(1)).
+    """
+    try:
+        client = UpstoxMarketClient()
+    except ValueError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return None
+
+    print(
+        f"Fetching live chain: {UNDERLYING_DEFAULT}  expiry={args.expiry} …",
+        flush=True,
+    )
+    try:
+        raw_data = client.get_option_chain_sync(UNDERLYING_DEFAULT, args.expiry)
+    except Exception as exc:
+        print(f"ERROR: option chain fetch failed — {exc}", file=sys.stderr)
+        return None
+
+    if not raw_data:
+        print(
+            "ERROR: API returned empty data — check expiry date.",
+            file=sys.stderr,
+        )
+        return None
+
+    option_type = args.option_type or "PE"
+    rows = filter_strikes_by_delta(
+        raw_data,
+        option_type=option_type,
+        delta_min=args.delta_min,
+        delta_max=args.delta_max,
+    )
+    if not rows:
+        print("ERROR: No strikes found in delta range.", file=sys.stderr)
+        return None
+
+    ranked = rank_strikes(rows)
+    pick_idx = min(args.index - 1, len(ranked) - 1)
+    if args.index - 1 > len(ranked) - 1:
+        print(
+            f"WARNING: --index {args.index} out of range; clamping to rank {len(ranked)}.",
+            file=sys.stderr,
+        )
+
+    selected = ranked[pick_idx]
+    underlying_spot = float(raw_data[0].get("underlying_spot_price", 0.0))
+
+    print()
+    print(
+        format_table(
+            ranked,
+            underlying_spot=underlying_spot,
+            expiry=args.expiry,
+            selected_key=selected["instrument_key"],
+        )
+    )
+
+    price = round(selected["mid"] if selected["mid"] > 0 else selected["ltp"], 2)
+    print(
+        f"\n# Rank {args.index}: {selected['side']} {selected['strike']:.0f} | "
+        f"delta={selected['delta']:+.4f} | iv={selected['iv']:.2f}% | price=₹{price}"
+    )
+
+    return selected["instrument_key"], str(price)
+
+
 def _resolve_instrument_key(args: argparse.Namespace) -> str | None:
     """Resolve instrument key from --key or from BOD lookup flags.
 
@@ -176,6 +294,24 @@ def _resolve_instrument_key(args: argparse.Namespace) -> str | None:
     Returns:
         Resolved instrument_key string, or None on failure.
     """
+    # Chain mode — --expiry provided (and not by lookup flags)
+    # We need to distinguish between chain-mode --expiry and lookup-mode --expiry.
+    # Chain mode is active if --expiry is set BUT --underlying is NOT set.
+    if args.expiry and not args.underlying:
+        if args.key:
+            print(
+                "ERROR: --expiry is mutually exclusive with --key.",
+                file=sys.stderr,
+            )
+            return None
+        result = _resolve_from_chain(args)
+        if result is None:
+            return None
+        key, price_str = result
+        # Inject resolved price back into args so main() can use it
+        args.price = price_str
+        return key
+
     # Direct key — no lookup needed
     if args.key:
         if args.underlying or args.strike or args.option_type or args.expiry:
@@ -288,6 +424,23 @@ def main() -> None:
     except ValueError:
         print(
             f"ERROR: --date must be YYYY-MM-DD, got: {args.trade_date}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    if args.expiry:
+        try:
+            date.fromisoformat(args.expiry)
+        except ValueError:
+            print(
+                f"ERROR: --expiry must be YYYY-MM-DD, got: {args.expiry}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+    if args.price is None:
+        print(
+            "ERROR: --price is required when not in chain mode (--expiry).",
             file=sys.stderr,
         )
         sys.exit(1)
