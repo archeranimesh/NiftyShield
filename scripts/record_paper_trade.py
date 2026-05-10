@@ -324,6 +324,30 @@ def _resolve_from_chain(args: argparse.Namespace) -> tuple[str, str] | None:
     return selected["instrument_key"], str(price)
 
 
+def _resolve_from_position(args: argparse.Namespace) -> str | None:
+    """Resolve instrument key from the current open position in the DB.
+
+    Args:
+        args: Parsed CLI arguments (uses db_path, strategy, leg).
+
+    Returns:
+        Resolved instrument_key string, or None if no open short position.
+    """
+    store = PaperStore(args.db_path)
+    pos = store.get_position(args.strategy, args.leg)
+
+    if pos.net_qty >= 0:
+        print(
+            f"ERROR: no open short position to close for {args.strategy} / {args.leg} "
+            f"(net qty = {pos.net_qty}).",
+            file=sys.stderr,
+        )
+        return None
+
+    print(f"Resolved key from position: {pos.instrument_key}")
+    return pos.instrument_key
+
+
 def _resolve_instrument_key(args: argparse.Namespace) -> str | None:
     """Resolve instrument key from --key or from BOD lookup flags.
 
@@ -336,6 +360,13 @@ def _resolve_instrument_key(args: argparse.Namespace) -> str | None:
     Returns:
         Resolved instrument_key string, or None on failure.
     """
+    # Auto-key from DB — --close provided AND (no key AND no underlying provided)
+    if args.close and not args.key and not args.underlying:
+        key = _resolve_from_position(args)
+        if key is not None:
+            return key
+        return None
+
     # Chain mode — --expiry provided OR (no key AND no underlying provided)
     # We need to distinguish between chain-mode --expiry and lookup-mode --expiry.
     # Chain mode is active if --underlying is NOT set AND --key is NOT set.

@@ -369,3 +369,97 @@ def test_close_and_action_are_mutually_exclusive(tmp_path: Path) -> None:
     code, _, err = _run(args, db)
     assert code == 1
     assert "--close" in err and "--action" in err
+
+
+# ── --close extension (auto-key / auto-price) ─────────────────────────────────
+
+
+def test_close_auto_resolves_key_from_position(tmp_path: Path) -> None:
+    """--close and no --key: resolves instrument from open short position."""
+    db = tmp_path / "db.sqlite"
+    # Seed short position (net_qty = -75)
+    _run(_base_args("SELL") + ["--no-dry-run"], db)
+    
+    # Close without --key
+    close_args = [
+        "--strategy", _STRATEGY,
+        "--leg", _LEG,
+        "--price", "10.00",
+        "--close",
+        "--no-dry-run",
+    ]
+    code, out, err = _run(close_args, db)
+    assert code == 0, f"stderr: {err}"
+    assert "Resolved key from position" in out
+    assert _KEY in out
+    
+    store = PaperStore(db)
+    pos = store.get_position(_STRATEGY, _LEG)
+    assert pos.net_qty == 0
+
+
+def test_close_auto_key_flat_position_exits_1(tmp_path: Path) -> None:
+    """--close and no --key: exits 1 if no open short position exists."""
+    db = tmp_path / "db.sqlite"
+    # No seeding -> flat position
+    close_args = [
+        "--strategy", _STRATEGY,
+        "--leg", _LEG,
+        "--price", "10.00",
+        "--close",
+    ]
+    code, out, err = _run(close_args, db)
+    assert code == 1
+    assert "no open short position" in err
+
+
+@patch("scripts.record_paper_trade.UpstoxMarketClient")
+def test_close_auto_fetches_ltp_when_no_price(mock_client_cls, tmp_path: Path) -> None:
+    """--close and no --price: fetches LTP and uses it as rounded Decimal."""
+    db = tmp_path / "db.sqlite"
+    mock_client = mock_client_cls.return_value
+    mock_client.get_ltp_sync.return_value = {_KEY: 12.506}  # Should round to 12.51
+    
+    close_args = [
+        "--strategy", _STRATEGY,
+        "--leg", _LEG,
+        "--key", _KEY,
+        "--close",
+        "--no-dry-run",
+    ]
+    code, out, err = _run(close_args, db)
+    assert code == 0, f"stderr: {err}"
+    assert "Auto-price: LTP=₹12.51" in out
+    
+    store = PaperStore(db)
+    trades = store.get_trades(_STRATEGY)
+    buy_trades = [t for t in trades if t.action.value == "BUY"]
+    assert len(buy_trades) == 1
+    assert buy_trades[0].price == Decimal("12.51")
+
+
+@patch("scripts.record_paper_trade.PaperStore")
+def test_close_explicit_key_skips_db_lookup(mock_store_cls, tmp_path: Path) -> None:
+    """--close with explicit --key skips the PaperStore.get_position call in resolver."""
+    db = tmp_path / "db.sqlite"
+    # We don't care about the return value, just that it's not called during resolution.
+    # Note: main() calls get_position at the end for the summary, so we can't just 
+    # assert_not_called() if we run the whole main().
+    # But _resolve_from_position is the ONLY thing that calls it before the price guard.
+    # Actually, let's just check that get_position was NOT called.
+    
+    close_args = [
+        "--strategy", _STRATEGY,
+        "--leg", _LEG,
+        "--key", _KEY,
+        "--price", "10.00",
+        "--close",
+        "--no-dry-run",
+    ]
+    # We must mock the return value for the summary call in main() to avoid errors
+    mock_store_cls.return_value.get_position.return_value.net_qty = 0
+    
+    _run(close_args, db)
+    
+    # It should only be called ONCE (for the summary in main), not TWICE.
+    assert mock_store_cls.return_value.get_position.call_count == 1
