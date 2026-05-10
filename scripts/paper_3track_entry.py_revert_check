@@ -1,0 +1,45 @@
+# Reverting paper_3track_entry.py to see if tests pass
+import logging
+import math
+import os
+import sys
+from dataclasses import dataclass
+from datetime import date
+from decimal import Decimal
+from pathlib import Path
+from typing import Any
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+from src.client.upstox_market import UpstoxMarketClient
+from src.instruments.lookup import InstrumentLookup, parse_expiry
+from src.models.portfolio import TradeAction
+from src.paper.constants import LOT_SIZE
+from src.paper.models import PaperTrade
+from src.paper.store import PaperStore
+
+# ── Constants ────────────────────────────────────────────────────────────────
+
+NIFTYBEES_KEY = "NSE_EQ|INF204KB14I2"
+NIFTY_UNDERLYING = "NSE_INDEX|Nifty 50"
+PROXY_DELTA_MIN = 0.85
+PROXY_DELTA_MAX = 0.95
+PROXY_TARGET_DELTA = 0.90
+PROXY_OI_MIN = 5_000
+PROXY_SPREAD_MAX = 5.0
+
+# DTE bands for multi-expiry proxy search
+PROXY_MONTHLY_DTE = (15, 45)       # front-month expiry
+PROXY_QUARTERLY_DTE = (46, 200)    # next quarterly (Jun / Sep)
+PROXY_YEARLY_DTE = (201, 420)      # year-end expiry (Dec)
+SPAN_MARGIN_ESTIMATE = Decimal("150000")
+DEFAULT_BOD = Path("data/instruments/NSE.json.gz")
+DEFAULT_DB = Path("data/portfolio/portfolio.sqlite")
+
+logger = logging.getLogger(__name__)
+
+# ... rest of the file ...

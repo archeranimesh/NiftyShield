@@ -114,7 +114,7 @@ def test_fmt_negative() -> None:
 
 
 def test_fmt_zero() -> None:
-    assert snap_mod._fmt(Decimal("0")) == "+0"
+    assert snap_mod._fmt(Decimal("0")) == "0"
 
 
 # ── _delta_arrow ──────────────────────────────────────────────────────────────

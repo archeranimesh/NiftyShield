@@ -48,8 +48,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.client.factory import create_broker_client
 from src.paper.store import PaperStore
 from src.paper.tracker import PaperTracker
+from src.paper.constants import DEFAULT_DB_PATH
 
-DEFAULT_DB_PATH = Path("data/portfolio/portfolio.sqlite")
+
+
 
 logging.basicConfig(
     level=logging.WARNING,

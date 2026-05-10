@@ -15,50 +15,18 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.client.upstox_market import UpstoxMarketClient
 from src.instruments.lookup import InstrumentLookup
 from src.notifications.telegram import TelegramNotifier
-from src.paper.constants import LOT_SIZE
+from src.paper.constants import DEFAULT_BOD_PATH, DEFAULT_DB_PATH, LOT_SIZE
 from src.paper.store import PaperStore
 from src.paper.proxy_monitor import ProxyDeltaMonitor
 from src.paper.track_snapshot import TrackPnL, generate_track_snapshot
 from src.paper.metrics import compute_nee
+from src.paper._utils import safe_float
+from src.paper._display import BASE_LABELS, OVERLAY_LABELS, fmt_decimal as _fmt, hedge_verdict as _hedge_verdict
 
 
 # --- Overlay display helpers -------------------------------------------------
 
 # Collar has two leg roles that merge into one display line.
-_OVERLAY_LABELS: dict[str, str] = {
-    "overlay_pp": "PP",
-    "overlay_cc": "CC",
-    "overlay_collar_put": "Collar",
-    "overlay_collar_call": "Collar",
-}
-
-_BASE_LABELS: dict[str, str] = {
-    "paper_nifty_spot": "NiftyBees",
-    "paper_nifty_futures": "Futures",
-    "paper_nifty_proxy": "Proxy (DITM CE)",
-}
-
-
-def _fmt(value: Decimal) -> str:
-    """Format a Decimal as a signed, comma-separated integer string."""
-    sign = "+" if value >= 0 else ""
-    return f"{sign}{value:,.0f}"
-
-
-def _hedge_verdict(base: Decimal, overlay_total: Decimal) -> str:
-    """Return the emoji + text verdict for the hedge effectiveness line."""
-    if base < 0:
-        if overlay_total > 0:
-            absorbed_pct = abs(overlay_total) / abs(base) * 100
-            if abs(base + overlay_total) < abs(base):
-                return f"✅ Protected ({absorbed_pct:.0f}% absorbed)"
-            return f"⚠️ Partial ({absorbed_pct:.0f}% absorbed)"
-        return "❌ No protection"
-    # base >= 0
-    if overlay_total < 0:
-        return "⚠️ Cost (overlay drag on up-move)"
-    return "✅ Protected"
-
 
 def _format_pnl_block(track_name: str, pnl: TrackPnL) -> list[str]:
     """Build the 🛡 Hedge block lines for a track's PnL.
@@ -66,13 +34,13 @@ def _format_pnl_block(track_name: str, pnl: TrackPnL) -> list[str]:
     Groups overlay_collar_put + overlay_collar_call into a single Collar line.
     Falls back to a plain base-only line when no overlays are present.
     """
-    base_label = _BASE_LABELS.get(track_name, "Base")
+    base_label = BASE_LABELS.get(track_name, "Base")
     lines: list[str] = []
 
     # Merge overlay legs by display name (collar_put + collar_call → Collar).
     grouped: dict[str, Decimal] = {}
     for role, amount in pnl.overlay_pnls.items():
-        label = _OVERLAY_LABELS.get(role, role)
+        label = OVERLAY_LABELS.get(role, role)
         grouped[label] = grouped.get(label, Decimal("0")) + amount
 
     if not grouped:
@@ -126,7 +94,7 @@ async def main() -> None:
     nifty_spot = Decimal(str(args.underlying_price))
     nee = compute_nee(nifty_spot, LOT_SIZE)
 
-    store = PaperStore(Path("data/portfolio/portfolio.sqlite"))
+    store = PaperStore(DEFAULT_DB_PATH)
     try:
         broker = UpstoxMarketClient()
     except ValueError:
@@ -135,7 +103,7 @@ async def main() -> None:
             broker = MockBrokerClientDryRun()
         else:
             raise
-    lookup = InstrumentLookup.from_file(Path("data/instruments/NSE.json.gz"))
+    lookup = InstrumentLookup.from_file(DEFAULT_BOD_PATH)
     proxy_monitor = ProxyDeltaMonitor(store)
     bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
     chat_id = os.getenv("TELEGRAM_CHAT_ID", "")

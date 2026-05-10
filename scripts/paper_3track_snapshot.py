@@ -47,67 +47,31 @@ from src.client.upstox_market import UpstoxMarketClient
 from src.instruments.lookup import InstrumentLookup
 from src.models.portfolio import TradeAction
 from src.notifications.telegram import TelegramNotifier
-from src.paper.constants import LOT_SIZE
+from src.paper.constants import DEFAULT_BOD_PATH, DEFAULT_DB_PATH, LOT_SIZE
 from src.paper.metrics import compute_nee
 from src.paper.models import PaperLegSnapshot, PaperNavSnapshot
 from src.paper.proxy_monitor import ProxyDeltaMonitor
 from src.paper.store import PaperStore
 from src.paper.track_snapshot import TrackPnL, TrackSnapshot, generate_track_snapshot
+from src.paper._utils import safe_float
+from src.paper._display import (
+    BASE_LABELS,
+    OVERLAY_LABELS,
+    fmt_decimal as _fmt,
+    delta_arrow as _delta_arrow,
+    hedge_verdict as _hedge_verdict,
+)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
-DEFAULT_DB  = Path("data/portfolio/portfolio.sqlite")
-DEFAULT_BOD = Path("data/instruments/NSE.json.gz")
 
 ALL_TRACKS = ["paper_nifty_spot", "paper_nifty_futures", "paper_nifty_proxy"]
 
-_BASE_LABELS: dict[str, str] = {
-    "paper_nifty_spot":    "NiftyBees (Spot)",
-    "paper_nifty_futures": "Nifty Futures",
-    "paper_nifty_proxy":   "Proxy DITM CE",
-}
 
-_OVERLAY_LABELS: dict[str, str] = {
-    "overlay_pp":           "PP",
-    "overlay_cc":           "CC",
-    "overlay_collar_put":   "Collar",
-    "overlay_collar_call":  "Collar",
-}
 
 logger = logging.getLogger(__name__)
 
 
-# ── Formatting helpers ────────────────────────────────────────────────────────
 
-def _fmt(value: Decimal) -> str:
-    """Signed, comma-separated integer string: +1,234 or -5,678."""
-    sign = "+" if value >= 0 else ""
-    return f"{sign}{value:,.0f}"
-
-
-def _delta_arrow(delta: Decimal | None) -> str:
-    """Return a coloured delta-from-yesterday arrow string."""
-    if delta is None:
-        return "  (no prior)"
-    if delta > 0:
-        return f"  Δ {_fmt(delta)} ▲"
-    if delta < 0:
-        return f"  Δ {_fmt(delta)} ▼"
-    return "  Δ ±0"
-
-
-def _hedge_verdict(base: Decimal, overlay_total: Decimal) -> str:
-    if base < 0:
-        if overlay_total > 0:
-            pct = abs(overlay_total) / abs(base) * 100
-            net_after = base + overlay_total
-            if abs(net_after) < abs(base):
-                return f"✅ Protected ({pct:.0f}% absorbed)"
-            return f"⚠️  Partial ({pct:.0f}% absorbed)"
-        return "❌ No protection"
-    # base >= 0
-    if overlay_total < 0:
-        return "⚠️  Overlay drag on up-move"
-    return "✅ No hedge cost today"
 
 
 # ── Per-leg delta calculation ─────────────────────────────────────────────────
@@ -139,13 +103,13 @@ def _print_track_block(
 ) -> None:
     """Print the full track block to stdout."""
     W = 88
-    label = _BASE_LABELS.get(track_name, track_name)
+    label = BASE_LABELS.get(track_name, track_name)
     pnl = snapshot.pnl
 
     # Merge collar legs
     grouped_overlay: dict[str, Decimal] = {}
     for role, amount in pnl.overlay_pnls.items():
-        display = _OVERLAY_LABELS.get(role, role)
+        display = OVERLAY_LABELS.get(role, role)
         grouped_overlay[display] = grouped_overlay.get(display, Decimal("0")) + amount
 
     overlay_total = sum(grouped_overlay.values()) if grouped_overlay else Decimal("0")
@@ -168,7 +132,7 @@ def _print_track_block(
             # Sum per-leg deltas for merged groups (collar)
             overlay_delta_sum: Decimal | None = None
             for role, role_pnl in pnl.overlay_pnls.items():
-                if _OVERLAY_LABELS.get(role, role) == display:
+                if OVERLAY_LABELS.get(role, role) == display:
                     rd = leg_deltas.get(role)
                     if rd is not None:
                         overlay_delta_sum = (overlay_delta_sum or Decimal("0")) + rd
@@ -301,7 +265,7 @@ def _print_summary_table(
     for name, snap in results:
         pnl = snap.pnl
         overlay_total = sum(pnl.overlay_pnls.values()) if pnl.overlay_pnls else Decimal("0")
-        label = _BASE_LABELS.get(name, name)
+        label = BASE_LABELS.get(name, name)
         print(
             f"  {label:<28} {_fmt(pnl.base_pnl):>12} {_fmt(overlay_total):>12}"
             f" {_fmt(pnl.net_pnl):>12} {float(snap.return_on_nee):>8.2f}%"
@@ -361,6 +325,7 @@ async def _run(args: argparse.Namespace) -> None:
             ltp_resp = await broker.get_ltp(["NSE_INDEX|Nifty 50"])
             raw = ltp_resp.get("NSE_INDEX|Nifty 50", 0)
             nifty_spot = Decimal(str(raw))
+        # Intentional: top-level catch for daily snapshot failure.
         except Exception as exc:
             logger.error("Live spot fetch failed: %s — pass --spot <price> to override.", exc)
             sys.exit(1)
@@ -407,6 +372,7 @@ async def _run(args: argparse.Namespace) -> None:
         if inst_keys:
             try:
                 raw_ltps = await broker.get_ltp(inst_keys)
+            # Intentional: catch all snapshot generation errors.
             except Exception as exc:
                 logger.warning("LTP fetch for leg snapshots failed: %s", exc)
         ltp_map: dict[str, Decimal] = {
@@ -437,6 +403,7 @@ async def _run(args: argparse.Namespace) -> None:
             if notifier:
                 try:
                     await notifier.send_message(msg)
+                # Intentional: catch notification errors to avoid crashing main snapshot.
                 except Exception as exc:
                     logger.warning("Telegram alert failed: %s", exc)
 
@@ -487,12 +454,12 @@ def main() -> None:
         help="Restrict to specific tracks (default: all three).",
     )
     parser.add_argument(
-        "--db-path", type=Path, default=DEFAULT_DB,
-        help=f"SQLite DB path (default: {DEFAULT_DB})",
+        "--db-path", type=Path, default=DEFAULT_DB_PATH,
+        help=f"SQLite DB path (default: {DEFAULT_DB_PATH})",
     )
     parser.add_argument(
-        "--bod-path", type=Path, default=DEFAULT_BOD,
-        help=f"BOD instruments JSON path (default: {DEFAULT_BOD})",
+        "--bod-path", type=Path, default=DEFAULT_BOD_PATH,
+        help=f"BOD instruments JSON path (default: {DEFAULT_BOD_PATH})",
     )
     args = parser.parse_args()
 

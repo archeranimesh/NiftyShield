@@ -97,7 +97,7 @@ Files: `paper_3track_entry.py`, `paper_3track_snapshot.py`, `paper_3track_overla
     - Fix Part I §5 in `paper_3track_entry.py` and `record_paper_trade.py`.
     - Fix logger f-string in `paper_3track_entry.py`.
     - Add intent comments to `except Exception` blocks.
-    - *Scope for G5/G8*: Do not re-audit from scratch. Use the Phase 0 audit findings to identify exactly which scripts have G5/G8 violations and list them explicitly in the commit body. "All other scripts" is not an acceptable scope description — name each file that is touched.
+    - *Scope for G5/G8*: Touched files include `paper_3track_entry.py`, `paper_3track_snapshot.py`, `paper_3track_overlay.py`, `paper_3track_overlay_roll.py`, `record_paper_trade.py`, `overlay_selector.py`, and `track_snapshot.py`.
 
 ---
 

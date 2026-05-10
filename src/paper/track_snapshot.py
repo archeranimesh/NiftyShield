@@ -176,6 +176,7 @@ async def generate_track_snapshot(
                         try:
                             raw_chain = await broker.get_option_chain(underlying, parsed_expiry)
                             fetched_chains[parsed_expiry] = parse_upstox_option_chain(raw_chain)
+                        # Intentional: isolate LTP fetch errors for single legs.
                         except Exception:
                             fetched_chains[parsed_expiry] = None
                             

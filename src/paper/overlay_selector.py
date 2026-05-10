@@ -111,6 +111,7 @@ async def select_overlay_expiry(
                 timeout=timeout_sec
             )
             chain = parse_upstox_option_chain(raw_chain)
+        # Intentional: catch all API/processing errors during chain fetch.
         except Exception as e:
             logger.warning("Failed to fetch chain for expiry %s: %s", expiry, e)
             # If fetch fails, append empty profile and continue

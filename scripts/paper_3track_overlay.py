@@ -51,37 +51,30 @@ load_dotenv()
 from src.client.upstox_market import UpstoxMarketClient
 from src.instruments.lookup import InstrumentLookup, parse_expiry as _pe
 from src.models.portfolio import TradeAction
-from src.paper.constants import LOT_SIZE
+from src.paper.constants import (
+    CC_OTM_MAX,
+    CC_OTM_MIN,
+    CC_TARGET_OTM,
+    DEFAULT_BOD_PATH,
+    DEFAULT_DB_PATH,
+    LOT_SIZE,
+    NIFTY_UNDERLYING,
+    OVERLAY_ROLL_DTE,
+    PP_OTM_MAX,
+    PP_OTM_MIN,
+    PP_TARGET_OTM,
+    SPREAD_PCT_MAX,
+)
 from src.paper.models import PaperTrade
 from src.paper.store import PaperStore
+from src.paper._utils import safe_float
 
 # ── Constants ────────────────────────────────────────────────────────────────
-
-NIFTY_UNDERLYING = "NSE_INDEX|Nifty 50"
-
-# Protective put targeting (strategy doc: 8–10% OTM)
-PP_OTM_MIN    = 0.08
-PP_OTM_MAX    = 0.10
-PP_TARGET_OTM = 0.09
-
-# Covered call targeting (strategy doc: 3–5% OTM)
-CC_OTM_MIN    = 0.03
-CC_OTM_MAX    = 0.05
-CC_TARGET_OTM = 0.04
-
-# Expiry selection gate (strategy doc §Overlay Expiry Selection)
-SPREAD_PCT_MAX = 3.0    # prefer quarterly when spread_pct ≤ this
-
-# Roll trigger (used by roll script; declared here for single source of truth)
-OVERLAY_ROLL_DTE = 5
 
 ALL_TRACKS = ["paper_nifty_spot", "paper_nifty_futures", "paper_nifty_proxy"]
 
 # Futures track is permanently blocked from standalone covered calls
 _CC_BLOCKED_TRACKS = {"paper_nifty_futures"}
-
-DEFAULT_DB  = Path("data/portfolio/portfolio.sqlite")
-DEFAULT_BOD = Path("data/instruments/NSE.json.gz")
 
 logger = logging.getLogger(__name__)
 
@@ -134,11 +127,13 @@ def _rank_overlay_key(r: dict, target_otm: float) -> tuple:
     4. spread        — exact spread tiebreaker inside a bucket
     5. otm_dist      — proximity to target OTM — final tiebreaker only
     """
-    spread = r["ask"] - r["bid"] if (r["ask"] > 0 and r["bid"] > 0) else 9_999.0
-    is_non_round = int(r["strike"]) % 100 != 0
+    bid = safe_float(r.get("bid"))
+    ask = safe_float(r.get("ask"))
+    spread = ask - bid if (bid > 0 and ask > 0) else 9_999.0
+    is_non_round = int(safe_float(r.get("strike"))) % 100 != 0
     spread_bucket = int(spread / 2)
-    otm_dist = abs(r["otm_pct"] - target_otm)
-    return (is_non_round, spread_bucket, -r["oi"], spread, otm_dist)
+    otm_dist = abs(safe_float(r.get("otm_pct")) - target_otm)
+    return (is_non_round, spread_bucket, -int(safe_float(r.get("oi"))), spread, otm_dist)
 
 
 def _extract_chain_candidates(
@@ -304,6 +299,7 @@ async def _fetch_candidates_for_expiries(
         logger.info("Fetching chain: %s (%s, DTE=%d)", expiry, label, dte)
         try:
             chain = await client.get_option_chain(NIFTY_UNDERLYING, expiry)
+        # Intentional: isolate per-expiry chain fetch failures.
         except Exception as exc:
             logger.warning("Chain fetch failed for %s (%s): %s — skipping", label, expiry, exc)
             continue
@@ -510,6 +506,7 @@ async def _run(args: argparse.Namespace) -> None:
     # Load BOD for expiry candidates
     try:
         lookup = InstrumentLookup.from_file(args.bod_path)
+    # Intentional: catch all BOD load/parsing errors.
     except Exception as exc:
         logger.error("Failed to load BOD %s: %s", args.bod_path, exc)
         sys.exit(1)
@@ -528,6 +525,7 @@ async def _run(args: argparse.Namespace) -> None:
         first_chain = await client.get_option_chain(NIFTY_UNDERLYING, expiry_candidates[0][1])
         if first_chain:
             spot = _safe(first_chain[0].get("underlying_spot_price"))
+    # Intentional: catch all live price fetch failures.
     except Exception as exc:
         logger.error("Could not fetch spot price: %s", exc)
         sys.exit(1)
@@ -666,12 +664,14 @@ async def _run(args: argparse.Namespace) -> None:
                         trade.strategy_name, trade.leg_role, trade.action.value,
                         trade.trade_date,
                     )
+        # Intentional: top-level catch for trade recording failure.
         except Exception as exc:
             logger.error("Write failed after %d trades: %s — rolling back", len(written), exc)
             for t in written:
                 try:
                     store.delete_trade(t)
                     logger.info("Rolled back: %s %s", t.strategy_name, t.leg_role)
+                # Intentional: isolate rollback failures.
                 except Exception as rb_exc:
                     logger.error("Rollback failed for %s %s: %s", t.strategy_name, t.leg_role, rb_exc)
             print(f"ERROR: Write failed — all trades rolled back. Reason: {exc}", file=sys.stderr)
@@ -743,12 +743,12 @@ def main() -> None:
         ),
     )
     parser.add_argument(
-        "--db-path", type=Path, default=DEFAULT_DB,
-        help=f"SQLite DB path (default: {DEFAULT_DB})",
+        "--db-path", type=Path, default=DEFAULT_DB_PATH,
+        help=f"SQLite DB path (default: {DEFAULT_DB_PATH})",
     )
     parser.add_argument(
-        "--bod-path", type=Path, default=DEFAULT_BOD,
-        help=f"BOD instruments JSON path (default: {DEFAULT_BOD})",
+        "--bod-path", type=Path, default=DEFAULT_BOD_PATH,
+        help=f"BOD instruments JSON path (default: {DEFAULT_BOD_PATH})",
     )
     args = parser.parse_args()
 

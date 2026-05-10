@@ -49,6 +49,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from dotenv import load_dotenv
+
 from src.instruments.lookup import InstrumentLookup
 from src.models.portfolio import TradeAction
 from src.paper.models import PaperTrade
@@ -61,12 +63,12 @@ from scripts.find_strike_by_delta import (
     rank_strikes,
 )
 from src.client.upstox_market import UpstoxMarketClient
-from dotenv import load_dotenv
+from src.paper.constants import DEFAULT_BOD_PATH, DEFAULT_DB_PATH
+from src.paper._utils import safe_float
 
 load_dotenv()
 
-DEFAULT_DB_PATH = Path("data/portfolio/portfolio.sqlite")
-DEFAULT_BOD_PATH = Path("data/instruments/NSE.json.gz")
+
 
 
 def _parse_args() -> argparse.Namespace:
@@ -247,6 +249,7 @@ def _resolve_from_chain(args: argparse.Namespace) -> tuple[str, str] | None:
             expiries = lookup.get_expiry_candidates(
                 underlying="NIFTY", today=date.today()
             )
+        # Intentional: catch all API connectivity issues during chain fetch.
         except Exception as exc:
             print(f"ERROR: failed to load BOD or resolve expiries — {exc}", file=sys.stderr)
             return None
@@ -269,8 +272,8 @@ def _resolve_from_chain(args: argparse.Namespace) -> tuple[str, str] | None:
                 print(f"  WARNING: API returned empty data for {expiry} — skipping.")
                 continue
 
-            if underlying_spot == 0.0:
-                underlying_spot = float(raw_data[0].get("underlying_spot_price", 0.0))
+            if underlying_spot <= 0.0:
+                underlying_spot = safe_float(raw_data[0].get("underlying_spot_price", 0.0))
 
             option_type = args.option_type or "PE"
             rows = filter_strikes_by_delta(
@@ -286,6 +289,7 @@ def _resolve_from_chain(args: argparse.Namespace) -> tuple[str, str] | None:
             
             all_rows.extend(rows)
 
+        # Intentional: prevent a single processing failure from crashing the sweep.
         except Exception as exc:
             print(f"  WARNING: fetch failed for {expiry} — {exc} — skipping.")
             continue
@@ -410,6 +414,7 @@ def _resolve_instrument_key(args: argparse.Namespace) -> str | None:
 
     try:
         lookup = InstrumentLookup.from_file(args.bod_path)
+    # Intentional: catch all BOD file loading/parsing errors.
     except Exception as exc:
         print(f"ERROR: failed to load BOD file — {exc}", file=sys.stderr)
         return None
@@ -533,6 +538,7 @@ def main() -> None:
             except ValueError as exc:
                 print(f"ERROR: {exc}", file=sys.stderr)
                 sys.exit(1)
+            # Intentional: prevent LTP fetch failure from crashing the script.
             except Exception as exc:
                 print(f"ERROR: failed to fetch LTP — {exc}", file=sys.stderr)
                 sys.exit(1)
@@ -554,6 +560,7 @@ def main() -> None:
             price=Decimal(args.price),
             notes=args.notes,
         )
+    # Intentional: top-level catch for trade recording failure.
     except Exception as exc:
         print(f"ERROR: invalid trade data — {exc}", file=sys.stderr)
         sys.exit(1)

@@ -33,11 +33,11 @@ import yaml
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.models.portfolio import TradeAction
+from src.paper.constants import DEFAULT_DB_PATH
 from src.paper.models import PaperTrade
 from src.paper.store import PaperStore
 
 DEFAULT_CONFIG = Path("data/paper/overlay_entry.yaml")
-DEFAULT_DB = Path("data/portfolio/portfolio.sqlite")
 
 # Tracks and whether each may carry a standalone covered call
 _TRACKS = ["paper_nifty_spot", "paper_nifty_futures", "paper_nifty_proxy"]
@@ -338,8 +338,8 @@ def main() -> None:
     parser.add_argument(
         "--db-path",
         type=Path,
-        default=DEFAULT_DB,
-        help=f"Path to SQLite DB (default: {DEFAULT_DB})",
+        default=DEFAULT_DB_PATH,
+        help=f"Path to SQLite DB (default: {DEFAULT_DB_PATH})",
     )
     parser.add_argument(
         "--dry-run",

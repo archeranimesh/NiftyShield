@@ -55,21 +55,14 @@ load_dotenv()
 from src.client.upstox_market import UpstoxMarketClient
 from src.instruments.lookup import InstrumentLookup, parse_expiry as _pe
 from src.models.portfolio import TradeAction
+from src.paper.constants import DEFAULT_BOD_PATH, DEFAULT_DB_PATH, LOT_SIZE, OVERLAY_ROLL_DTE
 from src.paper.models import PaperTrade
 from src.paper.store import PaperStore
+from src.paper._utils import safe_float
 
 # Re-use constants and pure helpers from the entry script — single source of truth.
 from scripts.paper_3track_overlay import (
     ALL_TRACKS,
-    CC_OTM_MAX,
-    CC_OTM_MIN,
-    CC_TARGET_OTM,
-    LOT_SIZE,
-    NIFTY_UNDERLYING,
-    OVERLAY_ROLL_DTE,
-    PP_OTM_MAX,
-    PP_OTM_MIN,
-    PP_TARGET_OTM,
     _ACTION_FOR_ROLE,
     _CC_BLOCKED_TRACKS,
     _OPTION_TYPE_FOR_ROLE,
@@ -79,8 +72,7 @@ from scripts.paper_3track_overlay import (
     _select_best_candidate,
 )
 
-DEFAULT_DB  = Path("data/portfolio/portfolio.sqlite")
-DEFAULT_BOD = Path("data/instruments/NSE.json.gz")
+
 
 logger = logging.getLogger(__name__)
 
@@ -363,6 +355,7 @@ async def _roll_single(
         open_trade = await _open_new_leg(
             broker, store, lookup, existing.leg_role, existing.strategy_name, roll_date, dry_run
         )
+    # Intentional: isolate per-strategy roll processing failures.
     except Exception:
         if not dry_run:
             store.delete_trade(close_trade)  # restore pre-roll state
@@ -416,6 +409,7 @@ async def _roll_collar(
     close_put = await _close_leg(broker, store, put_leg, roll_date, dry_run)
     try:
         close_call = await _close_leg(broker, store, call_leg, roll_date, dry_run)
+    # Intentional: catch failure to close second leg of a collar and rollback first.
     except Exception:
         if not dry_run:
             store.delete_trade(close_put)
@@ -425,6 +419,7 @@ async def _roll_collar(
         open_put = await _open_new_leg(
             broker, store, lookup, "overlay_collar_put", put_leg.strategy_name, roll_date, dry_run
         )
+    # Intentional: catch failure to open new leg and rollback both closed legs.
     except Exception:
         if not dry_run:
             store.delete_trade(close_call)
@@ -435,6 +430,7 @@ async def _roll_collar(
         open_call = await _open_new_leg(
             broker, store, lookup, "overlay_collar_call", call_leg.strategy_name, roll_date, dry_run
         )
+    # Intentional: catch failure to open final leg and rollback all previous steps.
     except Exception:
         if not dry_run:
             store.delete_trade(open_put)
@@ -614,14 +610,14 @@ def main() -> None:
     parser.add_argument(
         "--db-path",
         type=Path,
-        default=DEFAULT_DB,
-        help=f"Path to SQLite DB (default: {DEFAULT_DB})",
+        default=DEFAULT_DB_PATH,
+        help=f"Path to SQLite DB (default: {DEFAULT_DB_PATH})",
     )
     parser.add_argument(
         "--bod-path",
         type=Path,
-        default=DEFAULT_BOD,
-        help=f"Path to BOD instrument JSON (default: {DEFAULT_BOD})",
+        default=DEFAULT_BOD_PATH,
+        help=f"Path to BOD instrument JSON (default: {DEFAULT_BOD_PATH})",
     )
     args = parser.parse_args()
     asyncio.run(_run(args))

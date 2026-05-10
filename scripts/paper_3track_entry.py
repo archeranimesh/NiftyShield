@@ -46,14 +46,19 @@ load_dotenv()
 from src.client.upstox_market import UpstoxMarketClient
 from src.instruments.lookup import InstrumentLookup, parse_expiry
 from src.models.portfolio import TradeAction
-from src.paper.constants import LOT_SIZE
+from src.paper._utils import safe_float
+from src.paper.constants import (
+    DEFAULT_BOD_PATH,
+    DEFAULT_DB_PATH,
+    LOT_SIZE,
+    NIFTY_UNDERLYING,
+    NIFTYBEES_KEY,
+)
 from src.paper.models import PaperTrade
 from src.paper.store import PaperStore
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
-NIFTYBEES_KEY = "NSE_EQ|INF204KB14I2"
-NIFTY_UNDERLYING = "NSE_INDEX|Nifty 50"
 PROXY_DELTA_MIN = 0.85
 PROXY_DELTA_MAX = 0.95
 PROXY_TARGET_DELTA = 0.90
@@ -65,8 +70,6 @@ PROXY_MONTHLY_DTE = (15, 45)       # front-month expiry
 PROXY_QUARTERLY_DTE = (46, 200)    # next quarterly (Jun / Sep)
 PROXY_YEARLY_DTE = (201, 420)      # year-end expiry (Dec)
 SPAN_MARGIN_ESTIMATE = Decimal("150000")
-DEFAULT_BOD = Path("data/instruments/NSE.json.gz")
-DEFAULT_DB = Path("data/portfolio/portfolio.sqlite")
 
 logger = logging.getLogger(__name__)
 
@@ -152,23 +155,19 @@ def derive_expiry(lookup: InstrumentLookup, today: date) -> str:
 
 # ── Step B: proxy candidate selection ────────────────────────────────────────
 
-def _safe_float(val: Any) -> float:
-    try:
-        return float(val)
-    except (TypeError, ValueError):
-        return 0.0
+
 
 
 def filter_proxy_candidates(raw_chain: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Extract CE rows from raw option chain in the 0.85–0.95 delta band."""
     rows: list[dict[str, Any]] = []
     for entry in raw_chain:
-        strike = _safe_float(entry.get("strike_price"))
+        strike = safe_float(entry.get("strike_price"))
         opt = entry.get("call_options") or {}
         greeks = opt.get("option_greeks") or {}
         mktdata = opt.get("market_data") or {}
         key = opt.get("instrument_key", "")
-        delta = _safe_float(greeks.get("delta"))
+        delta = safe_float(greeks.get("delta"))
 
         if not (PROXY_DELTA_MIN <= abs(delta) <= PROXY_DELTA_MAX):
             continue
@@ -176,15 +175,15 @@ def filter_proxy_candidates(raw_chain: list[dict[str, Any]]) -> list[dict[str, A
             logger.debug("Strike %.0f: no instrument_key, skipping", strike)
             continue
 
-        bid = _safe_float(mktdata.get("bid_price"))
-        ask = _safe_float(mktdata.get("ask_price"))
-        ltp = _safe_float(mktdata.get("ltp"))
+        bid = safe_float(mktdata.get("bid_price"))
+        ask = safe_float(mktdata.get("ask_price"))
+        ltp = safe_float(mktdata.get("ltp"))
         mid = (bid + ask) / 2.0 if (bid > 0 and ask > 0) else ltp
-        oi = int(_safe_float(mktdata.get("oi")))
+        oi = int(safe_float(mktdata.get("oi")))
 
         rows.append({
             "strike": strike, "delta": delta,
-            "iv": _safe_float(greeks.get("iv")),
+            "iv": safe_float(greeks.get("iv")),
             "ltp": ltp, "mid": mid, "bid": bid, "ask": ask,
             "oi": oi, "instrument_key": key,
             "option_type": "CE",
@@ -218,13 +217,16 @@ def auto_select_proxy(rows: list[dict[str, Any]]) -> dict[str, Any]:
         )
 
     def _rank_key(r: dict[str, Any]) -> tuple:
-        spread = r["ask"] - r["bid"] if (r["ask"] > 0 and r["bid"] > 0) else 9_999.0
+        bid = safe_float(r.get("bid"))
+        ask = safe_float(r.get("ask"))
+        spread = ask - bid if (ask > 0 and bid > 0) else 9_999.0
         is_non_round = int(r["strike"]) % 100 != 0
         # Bucket spreads into ₹2 windows so candidates within the same spread
         # tier compete on OI (higher OI wins) rather than on sub-rupee differences.
         spread_bucket = int(spread / 2)
-        delta_dist = abs(abs(r["delta"]) - PROXY_TARGET_DELTA)
-        return (is_non_round, spread_bucket, -r["oi"], spread, delta_dist)
+        delta_dist = abs(abs(safe_float(r.get("delta"))) - PROXY_TARGET_DELTA)
+        # Final tiebreaker: prefer deeper ITM (higher delta) on tied distance.
+        return (is_non_round, spread_bucket, -int(safe_float(r.get("oi"))), spread, delta_dist, -abs(safe_float(r.get("delta"))))
 
     rows.sort(key=_rank_key)
     for i, r in enumerate(rows):
@@ -253,49 +255,25 @@ def compute_proxy_entry_price(row: dict[str, Any]) -> Decimal:
 
 # ── Step C: orchestrate all live fetches ─────────────────────────────────────
 
-def collect_candidate_expiries(
-    lookup: InstrumentLookup, today: date
-) -> dict[str, str]:
-    """Return one expiry per DTE band from BOD: monthly, quarterly, yearly.
-
-    Scans all NIFTY CE/PE entries and picks the nearest expiry in each band:
-      monthly:   DTE 15–45   (front-month rollover window)
-      quarterly: DTE 46–200  (next Jun / Sep quarter-end)
-      yearly:    DTE 201–420 (Dec year-end contract)
+def collect_candidate_expiries(lookup: InstrumentLookup, today: date) -> dict[str, str]:
+    """Identify candidates for monthly, quarterly, and yearly proxy expiries.
 
     Returns a dict like {"monthly": "2026-05-26", "quarterly": "2026-06-30", ...}.
     Categories with no matching expiry in BOD are omitted silently.
     """
-    from src.instruments.lookup import parse_expiry as _parse
+    # Use the public InstrumentLookup API instead of accessing _instruments directly.
+    # get_expiry_candidates returns a list of (band_name, expiry_date) tuples.
+    # Default preference: ["monthly", "quarterly", "yearly"] ensures Nifty spot
+    # is sourced from the most liquid (monthly) chain.
+    candidates = lookup.get_expiry_candidates(underlying="NIFTY", today=today)
+    result = dict(candidates)
 
-    seen: set[str] = set()
-    for inst in lookup._instruments:
-        if inst.get("segment") != "NSE_FO":
-            continue
-        if inst.get("instrument_type") not in ("CE", "PE"):
-            continue
-        if inst.get("underlying_symbol", "").upper() != "NIFTY":
-            continue
-        exp = _parse(inst.get("expiry"))
-        if exp:
-            seen.add(exp)
-
-    result: dict[str, str] = {}
-    for exp in sorted(seen):
-        dte = (date.fromisoformat(exp) - today).days
-        if dte < PROXY_MONTHLY_DTE[0]:
-            continue
-        if dte <= PROXY_MONTHLY_DTE[1] and "monthly" not in result:
-            result["monthly"] = exp
-        elif PROXY_QUARTERLY_DTE[0] <= dte <= PROXY_QUARTERLY_DTE[1] and "quarterly" not in result:
-            result["quarterly"] = exp
-        elif PROXY_YEARLY_DTE[0] <= dte <= PROXY_YEARLY_DTE[1] and "yearly" not in result:
-            result["yearly"] = exp
-
-    logger.info(
-        "Proxy expiry candidates: %s",
-        {k: f"{v} DTE={(date.fromisoformat(v) - today).days}" for k, v in result.items()},
-    )
+    # Log results with DTE for operator clarity
+    log_map = {
+        k: f"{v} DTE={(date.fromisoformat(v) - today).days}"
+        for k, v in result.items()
+    }
+    logger.info("Proxy expiry candidates: %s", log_map)
     return result
 
 def fetch_live_prices(
@@ -342,6 +320,8 @@ def fetch_live_prices(
         )
         try:
             raw_chain = client.get_option_chain_sync(NIFTY_UNDERLYING, exp_date)
+        # Intentional: isolate all per-expiry chain-fetch failures so a single
+        # bad expiry does not abort the full multi-expiry entry sweep.
         except Exception as exc:
             logger.warning(
                 "Chain fetch failed for %s (%s, DTE=%d): %s — skipping",
@@ -357,7 +337,7 @@ def fetch_live_prices(
 
         # Spot from the first successful chain
         if nifty_spot is None:
-            spot_raw = _safe_float((raw_chain[0]).get("underlying_spot_price"))
+            spot_raw = safe_float((raw_chain[0]).get("underlying_spot_price"))
             if spot_raw > 0:
                 nifty_spot = Decimal(str(round(spot_raw, 2)))
                 logger.info("Nifty spot from %s chain: ₹%s", exp_type, nifty_spot)
@@ -413,6 +393,8 @@ def fetch_live_prices(
     logger.info("Fetching LTP for %s", ltp_keys)
     try:
         ltps = client.get_ltp_sync(ltp_keys)
+    # Intentional: log with exc_info before re-raising so the full
+    # traceback appears in structured logs even when caller swallows output.
     except Exception as exc:
         logger.error("LTP fetch failed for keys=%s — %s", ltp_keys, exc, exc_info=True)
         raise
@@ -583,7 +565,8 @@ def print_preview(p: LivePrices, gates: dict[str, str], confirmed: bool) -> None
     for c in p.proxy_candidates[:10]:
         c_spread = c["ask"] - c["bid"]
         is_round = int(c["strike"]) % 100 == 0
-        is_selected = c["strike"] == p.proxy_strike and c.get("expiry") == p.expiry
+        # Part I §5: epsilon comparison for strike floats
+        is_selected = abs(c["strike"] - p.proxy_strike) < 0.01 and c.get("expiry") == p.expiry
         marker = " ◀" if is_selected else ""
         round_tag = "✓" if is_round else ""
         opt_type = c.get("option_type", "CE")
@@ -641,12 +624,12 @@ def main() -> None:
         help="Cycle number tag for the notes field (default: 1).",
     )
     parser.add_argument(
-        "--bod-path", type=Path, default=DEFAULT_BOD,
-        help=f"BOD instruments JSON path (default: {DEFAULT_BOD})",
+        "--bod-path", type=Path, default=DEFAULT_BOD_PATH,
+        help=f"BOD instruments JSON path (default: {DEFAULT_BOD_PATH})",
     )
     parser.add_argument(
-        "--db-path", type=Path, default=DEFAULT_DB,
-        help=f"SQLite DB path (default: {DEFAULT_DB})",
+        "--db-path", type=Path, default=DEFAULT_DB_PATH,
+        help=f"SQLite DB path (default: {DEFAULT_DB_PATH})",
     )
     parser.add_argument(
         "--config", type=Path, default=None, metavar="CONFIG",
@@ -681,6 +664,7 @@ def main() -> None:
     try:
         lookup = InstrumentLookup.from_file(args.bod_path)
         logger.info("BOD loaded: %s", args.bod_path)
+    # Intentional: top-level catch for BOD loading failure.
     except Exception as exc:
         logger.error("Failed to load BOD file %s: %s", args.bod_path, exc, exc_info=True)
         sys.exit(1)
@@ -709,6 +693,7 @@ def main() -> None:
             client, lookup, futures_expiry, today, args.cycle, LOT_SIZE,
             force_proxy_expiry=force_proxy_expiry,
         )
+    # Intentional: top-level catch for price fetching failure.
     except Exception as exc:
         logger.error("fetch_live_prices failed: %s", exc, exc_info=True)
         sys.exit(1)
