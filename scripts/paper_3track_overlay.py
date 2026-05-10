@@ -385,6 +385,43 @@ def _build_trade(
 
 # ── Confirmation display ─────────────────────────────────────────────────────
 
+def _print_candidate_table(
+    leg_role: str,
+    option_type: str,
+    pool: list[dict],
+    best_key: str,
+    target_otm: float,
+    otm_min: float,
+    otm_max: float,
+) -> None:
+    """Print ranked overlay candidate table (top 10), mirroring entry script output."""
+    # Sort by rank key so ranks are stable regardless of fetch order
+    ranked = sorted(pool, key=lambda r: _rank_overlay_key(r, target_otm))
+    total = len(ranked)
+    W = 96
+    print(
+        f"\n  Overlay candidates ({option_type}, {leg_role}) — "
+        f"OTM {otm_min*100:.0f}%–{otm_max*100:.0f}%  "
+        f"(showing top 10 of {total}, ranked: round-100 first, spread↑ OI↓)"
+    )
+    print(
+        f"  {'Rk':>3}  {'Expiry':<12}  {'Label':<12}  {'Strike':>7}  {'OTM%':>5}  "
+        f"{'OI':>9}  {'Bid':>8}  {'Ask':>8}  {'Sprd%':>6}  {'G':>1}"
+    )
+    print(f"  {'─' * (W - 2)}")
+    for i, c in enumerate(ranked[:10], start=1):
+        spread_pct = c.get("spread_pct")
+        gate = "✓" if spread_pct is not None and spread_pct <= SPREAD_PCT_MAX else "✗"
+        is_selected = c["instrument_key"] == best_key
+        marker = " ◀" if is_selected else ""
+        sprd_str = f"{spread_pct:.1f}%" if spread_pct is not None else "  N/A"
+        print(
+            f"  {i:>3}  {c['expiry']:<12}  {c['expiry_label']:<12}  {c['strike']:>7.0f}  "
+            f"{c['otm_pct']*100:>4.1f}%  {c['oi']:>9,}  "
+            f"{c['bid']:>8.2f}  {c['ask']:>8.2f}  {sprd_str:>6}  {gate}{marker}"
+        )
+
+
 def _print_confirmation_table(
     overlay_type: str,
     rows: list[OverlayRow],
@@ -518,6 +555,16 @@ async def _run(args: argparse.Namespace) -> None:
         best_expiry = best["expiry"]
         best_dte = (date.fromisoformat(best_expiry) - entry_date).days
         best["dte"] = best_dte
+
+        _print_candidate_table(
+            leg_role=leg_role,
+            option_type=option_type,
+            pool=pool,
+            best_key=best["instrument_key"],
+            target_otm=target_otm,
+            otm_min=otm_min,
+            otm_max=otm_max,
+        )
 
         for strategy in effective_tracks:
             # Safety check: existing open overlay with a DIFFERENT expiry

@@ -424,3 +424,98 @@ def test_overlay_date_explicit_parsed_correctly() -> None:
     args = _Args()
     entry_date = _date.fromisoformat(args.date) if args.date else _date.today()
     assert entry_date == _date(2026, 5, 9)
+
+
+# ── _print_candidate_table ────────────────────────────────────────────────────
+
+
+def _pool_of(n: int, best_index: int = 0) -> tuple[list[dict], str]:
+    """Return (pool, best_key) with n candidates.  Candidate at best_index is best."""
+    pool = [
+        _candidate(
+            strike=22000.0 - i * 50,
+            instrument_key=f"NSE_FO|NIFTY{int(22000 - i*50)}PE",
+            oi=10_000 - i * 500,
+            bid=300.0 - i,
+            ask=302.0 - i,
+        )
+        for i in range(n)
+    ]
+    best_key = pool[best_index]["instrument_key"]
+    return pool, best_key
+
+
+def test_print_candidate_table_marks_selected(capsys: pytest.CaptureFixture) -> None:
+    """The selected candidate must be marked with ◀ in the output."""
+    pool, best_key = _pool_of(3, best_index=0)
+    overlay._print_candidate_table(
+        leg_role="overlay_pp",
+        option_type="PE",
+        pool=pool,
+        best_key=best_key,
+        target_otm=0.09,
+        otm_min=0.08,
+        otm_max=0.10,
+    )
+    captured = capsys.readouterr().out
+    assert "◀" in captured, "Selected candidate must be marked with ◀"
+
+
+def test_print_candidate_table_non_selected_has_no_marker(capsys: pytest.CaptureFixture) -> None:
+    """Non-selected candidates must NOT carry the ◀ marker."""
+    pool, best_key = _pool_of(3, best_index=0)
+    overlay._print_candidate_table(
+        leg_role="overlay_pp",
+        option_type="PE",
+        pool=pool,
+        best_key=best_key,
+        target_otm=0.09,
+        otm_min=0.08,
+        otm_max=0.10,
+    )
+    lines = capsys.readouterr().out.splitlines()
+    # Data rows start after the header/separator lines; ◀ must appear exactly once
+    marker_count = sum(1 for line in lines if "◀" in line)
+    assert marker_count == 1, f"Expected exactly 1 ◀ marker, got {marker_count}"
+
+
+def test_print_candidate_table_single_entry(capsys: pytest.CaptureFixture) -> None:
+    """Table with one candidate must not raise and must show 1 data row."""
+    pool, best_key = _pool_of(1)
+    overlay._print_candidate_table(
+        leg_role="overlay_cc",
+        option_type="CE",
+        pool=pool,
+        best_key=best_key,
+        target_otm=0.04,
+        otm_min=0.03,
+        otm_max=0.05,
+    )
+    out = capsys.readouterr().out
+    assert "◀" in out
+    # Exactly one data row with the strike value
+    strike_str = f"{pool[0]['strike']:.0f}"
+    matching = [line for line in out.splitlines() if strike_str in line]
+    assert len(matching) >= 1
+
+
+def test_print_candidate_table_caps_at_ten_rows(capsys: pytest.CaptureFixture) -> None:
+    """Even with >10 candidates only the top 10 are printed."""
+    pool, best_key = _pool_of(15, best_index=0)
+    overlay._print_candidate_table(
+        leg_role="overlay_pp",
+        option_type="PE",
+        pool=pool,
+        best_key=best_key,
+        target_otm=0.09,
+        otm_min=0.08,
+        otm_max=0.10,
+    )
+    out = capsys.readouterr().out
+    # Data lines are those containing ₹-free numeric content in the strike column;
+    # the simplest proxy: count lines that have a rank number at position 2–4.
+    data_lines = [
+        line for line in out.splitlines()
+        if line.strip() and line.strip()[0].isdigit()
+    ]
+    assert len(data_lines) <= 10, f"Expected ≤10 data rows, got {len(data_lines)}"
