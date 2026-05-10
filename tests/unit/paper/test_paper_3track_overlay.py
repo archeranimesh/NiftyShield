@@ -385,6 +385,7 @@ def _make_args(
     force: bool = False,
     date_str: str = "2026-05-07",
     bod_path: Path = Path("data/instruments/NSE.json.gz"),
+    index: int = 1,
 ) -> object:
     import argparse
     ns = argparse.Namespace()
@@ -396,6 +397,7 @@ def _make_args(
     ns.force    = force
     ns.date     = date_str
     ns.bod_path = bod_path
+    ns.index    = index
     return ns
 
 
@@ -519,3 +521,98 @@ def test_print_candidate_table_caps_at_ten_rows(capsys: pytest.CaptureFixture) -
         if line.strip() and line.strip()[0].isdigit()
     ]
     assert len(data_lines) <= 10, f"Expected ≤10 data rows, got {len(data_lines)}"
+
+
+# ── _select_best_candidate index ──────────────────────────────────────────────
+
+
+def _ranked_pool(n: int) -> list[dict]:
+    """Return n candidates with strictly decreasing OI so rank order is deterministic."""
+    return [
+        _candidate(
+            strike=22000.0 - i * 100,
+            instrument_key=f"NSE_FO|NIFTY{int(22000 - i*100)}PE",
+            oi=10_000 - i * 500,
+            bid=300.0,
+            ask=302.0,
+        )
+        for i in range(n)
+    ]
+
+
+def test_select_best_candidate_default_returns_rank1() -> None:
+    """Default index=0 must return the top-ranked candidate."""
+    pool = _ranked_pool(3)
+    best = overlay._select_best_candidate(pool, 0.09, "PE", index=0)
+    # Highest OI (10,000) is at i=0 → strike 22000
+    assert best["strike"] == 22000.0
+
+
+def test_select_best_candidate_index1_returns_rank2() -> None:
+    """index=1 must return the 2nd-ranked candidate."""
+    pool = _ranked_pool(3)
+    best = overlay._select_best_candidate(pool, 0.09, "PE", index=1)
+    assert best["strike"] == 21900.0  # i=1 → OI 9,500
+
+
+def test_select_best_candidate_index_clamped_when_out_of_range() -> None:
+    """index beyond pool size must clamp to last, not raise."""
+    pool = _ranked_pool(3)
+    best = overlay._select_best_candidate(pool, 0.09, "PE", index=99)
+    assert best["strike"] == 21800.0  # i=2 → last entry
+
+
+def test_confirmation_table_shows_type_column(capsys: pytest.CaptureFixture) -> None:
+    """Type (PE/CE) column must appear in the confirmation table header and rows."""
+    from scripts.paper_3track_overlay import OverlayRow, _print_confirmation_table
+    from decimal import Decimal
+    from src.models.portfolio import TradeAction
+
+    rows = [
+        OverlayRow(
+            strategy="paper_nifty_spot",
+            leg_role="overlay_pp",
+            option_type="PE",
+            action=TradeAction.BUY,
+            strike=22000.0,
+            instrument_key="NSE_FO|NIFTY22000PE",
+            price=Decimal("310.00"),
+            spread_pct=1.3,
+            oi=10_000,
+            expiry="2026-06-26",
+            expiry_label="quarterly",
+            dte=47,
+        )
+    ]
+    _print_confirmation_table("pp", rows, date(2026, 5, 7), "2026-06-26", 47, "DRY RUN")
+    out = capsys.readouterr().out
+    assert "Type" in out, "Header must contain 'Type' column"
+    assert "PE" in out, "Row must show option type PE"
+
+
+def test_confirmation_table_collar_shows_pe_and_ce(capsys: pytest.CaptureFixture) -> None:
+    """Collar confirmation table must show both PE and CE in the Type column."""
+    from scripts.paper_3track_overlay import OverlayRow, _print_confirmation_table
+    from decimal import Decimal
+    from src.models.portfolio import TradeAction
+
+    rows = [
+        OverlayRow(
+            strategy="paper_nifty_spot", leg_role="overlay_collar_put",
+            option_type="PE", action=TradeAction.BUY,
+            strike=22000.0, instrument_key="NSE_FO|NIFTY22000PE",
+            price=Decimal("310.00"), spread_pct=1.3, oi=10_000,
+            expiry="2026-06-26", expiry_label="quarterly", dte=47,
+        ),
+        OverlayRow(
+            strategy="paper_nifty_spot", leg_role="overlay_collar_call",
+            option_type="CE", action=TradeAction.SELL,
+            strike=25000.0, instrument_key="NSE_FO|NIFTY25000CE",
+            price=Decimal("120.00"), spread_pct=1.1, oi=8_000,
+            expiry="2026-06-26", expiry_label="quarterly", dte=47,
+        ),
+    ]
+    _print_confirmation_table("collar", rows, date(2026, 5, 7), "2026-06-26", 47, "DRY RUN")
+    out = capsys.readouterr().out
+    assert "PE" in out, "Collar table must show PE row"
+    assert "CE" in out, "Collar table must show CE row"

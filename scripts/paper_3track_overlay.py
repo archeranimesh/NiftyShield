@@ -202,17 +202,32 @@ def _select_best_candidate(
     candidates: list[dict],
     target_otm: float,
     option_type: str,
+    index: int = 0,
 ) -> dict:
-    """Pick the best overlay candidate using _rank_overlay_key."""
+    """Pick the Nth-ranked overlay candidate using _rank_overlay_key.
+
+    Args:
+        candidates: Pool of filtered candidates for this option_type.
+        target_otm: Target OTM fraction used as final tiebreaker in ranking.
+        option_type: "PE" or "CE".
+        index: 0-based rank index to select (default 0 = top-ranked).
+               Clamped to len(candidates)-1 if out of range.
+    """
     if not candidates:
         raise ValueError(
             f"No {option_type} candidates found in OTM band after filtering all expiries."
         )
     candidates.sort(key=lambda r: _rank_overlay_key(r, target_otm))
-    best = candidates[0]
+    idx = min(index, len(candidates) - 1)
+    if idx != index:
+        logger.warning(
+            "--index %d out of range for %s (%d candidates) — using index %d",
+            index + 1, option_type, len(candidates), idx + 1,
+        )
+    best = candidates[idx]
     logger.info(
-        "Selected %s: strike=%.0f expiry=%s spread_pct=%s OI=%d",
-        option_type, best["strike"], best["expiry"], best["spread_pct"], best["oi"],
+        "Selected %s rank=%d: strike=%.0f expiry=%s spread_pct=%s OI=%d",
+        option_type, idx + 1, best["strike"], best["expiry"], best["spread_pct"], best["oi"],
     )
     return best
 
@@ -430,14 +445,14 @@ def _print_confirmation_table(
     dte: int,
     mode: str,
 ) -> None:
-    W = 96
+    W = 104
     print(f"\n{'═' * W}")
     print(f"  Overlay: {overlay_type.upper()}  |  Date: {entry_date}  |  {mode}")
     print(f"  Expiry selected: {expiry} ({rows[0].expiry_label if rows else '?'}, DTE={dte})")
     print(f"{'═' * W}")
     print(
         f"  {'Track':<28} {'Strategy':<26} {'Leg':<22} "
-        f"{'Str':>7} {'Act':>4} {'Qty':>4} {'Price':>8}  {'Sprd%':>6}  {'OI':>9}"
+        f"{'Type':>4}  {'Str':>7} {'Act':>4} {'Qty':>4} {'Price':>8}  {'Sprd%':>6}  {'OI':>9}"
     )
     print(f"  {'─' * (W - 2)}")
     track_labels = {
@@ -450,7 +465,7 @@ def _print_confirmation_table(
         sprd = f"{r.spread_pct:.1f}%" if r.spread_pct is not None else "  N/A"
         print(
             f"  {label:<28} {r.strategy:<26} {r.leg_role:<22} "
-            f"{r.strike:>7.0f} {r.action.value:>4} {LOT_SIZE:>4} "
+            f"{r.option_type:>4}  {r.strike:>7.0f} {r.action.value:>4} {LOT_SIZE:>4} "
             f"₹{float(r.price):>7.2f}  {sprd:>6}  {r.oi:>9,}"
         )
     print(f"{'═' * W}")
@@ -523,6 +538,7 @@ async def _run(args: argparse.Namespace) -> None:
 
     # Per leg-role: fetch candidates and select best
     store = PaperStore(args.db_path)
+    logger.info("DB path (resolved): %s", args.db_path.resolve())
     overlay_rows: list[OverlayRow] = []
 
     for leg_role in _LEG_ROLES[overlay_type]:
@@ -551,7 +567,8 @@ async def _run(args: argparse.Namespace) -> None:
             for r in pool:
                 r["expiry_label"] = "fallback"
 
-        best = _select_best_candidate(pool, target_otm, option_type)
+        pick_idx = (args.index - 1) if getattr(args, "index", 1) > 1 else 0
+        best = _select_best_candidate(pool, target_otm, option_type, index=pick_idx)
         best_expiry = best["expiry"]
         best_dte = (date.fromisoformat(best_expiry) - entry_date).days
         best["dte"] = best_dte
@@ -631,15 +648,24 @@ async def _run(args: argparse.Namespace) -> None:
             }, entry_date, LOT_SIZE))
 
         written: list[PaperTrade] = []
+        skipped: list[PaperTrade] = []
         try:
             for trade in trades_to_write:
-                store.record_trade(trade)
-                written.append(trade)
-                logger.info(
-                    "Recorded: %s %s %s qty=%d price=%s",
-                    trade.strategy_name, trade.leg_role, trade.action.value,
-                    trade.quantity, trade.price,
-                )
+                inserted = store.record_trade(trade)
+                if inserted:
+                    written.append(trade)
+                    logger.info(
+                        "Recorded: %s %s %s qty=%d price=%s",
+                        trade.strategy_name, trade.leg_role, trade.action.value,
+                        trade.quantity, trade.price,
+                    )
+                else:
+                    skipped.append(trade)
+                    logger.warning(
+                        "SKIPPED (duplicate): %s %s %s — already exists for %s",
+                        trade.strategy_name, trade.leg_role, trade.action.value,
+                        trade.trade_date,
+                    )
         except Exception as exc:
             logger.error("Write failed after %d trades: %s — rolling back", len(written), exc)
             for t in written:
@@ -651,9 +677,14 @@ async def _run(args: argparse.Namespace) -> None:
             print(f"ERROR: Write failed — all trades rolled back. Reason: {exc}", file=sys.stderr)
             sys.exit(1)
 
+        if skipped:
+            print(
+                f"\n  ⚠  {len(skipped)} trade(s) skipped — already exist in DB for this "
+                f"(strategy, leg_role, date, action). Use --force to override expiry conflicts."
+            )
+        status = f"RECORDED TO DB — {len(written)} new, {len(skipped)} skipped"
         _print_confirmation_table(
-            overlay_type, overlay_rows, entry_date, header_expiry, header_dte,
-            f"RECORDED TO DB — {len(written)} trades written"
+            overlay_type, overlay_rows, entry_date, header_expiry, header_dte, status
         )
 
 
@@ -703,6 +734,13 @@ def main() -> None:
     parser.add_argument(
         "--force", action="store_true",
         help="Override existing open overlay with a different expiry.",
+    )
+    parser.add_argument(
+        "--index", type=int, default=1, metavar="N",
+        help=(
+            "Select the Nth-ranked candidate from the dry-run table (default: 1). "
+            "For collar, the same rank N is applied to both PE and CE legs independently."
+        ),
     )
     parser.add_argument(
         "--db-path", type=Path, default=DEFAULT_DB,

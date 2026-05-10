@@ -127,7 +127,7 @@ class PaperStore:
 
     # ── Trades ledger ─────────────────────────────────────────────────────────
 
-    def record_trade(self, trade: PaperTrade) -> None:
+    def record_trade(self, trade: PaperTrade) -> bool:
         """Insert a paper trade into the ledger. Silently skips exact duplicates.
 
         Uniqueness is on (strategy_name, leg_role, trade_date, action).
@@ -135,9 +135,12 @@ class PaperStore:
 
         Args:
             trade: The paper trade to persist.
+
+        Returns:
+            True if the row was inserted; False if skipped as a duplicate.
         """
         with _connect(self.db_path) as conn:
-            conn.execute(
+            cur = conn.execute(
                 """INSERT INTO paper_trades
                    (strategy_name, leg_role, instrument_key, trade_date,
                     action, quantity, price, notes)
@@ -155,6 +158,7 @@ class PaperStore:
                     trade.notes,
                 ),
             )
+            return cur.rowcount == 1
 
     def get_trades(
         self,
