@@ -132,6 +132,7 @@ These run continuously throughout Phase 0, independent of the code queue above.
 - [ ] At each CSP entry: also enter Leg 2 (put spread, 4 lots) via `--strategy paper_niftyshield_v1`.
 - [ ] Each quarter (Jan/Apr/Jul/Oct): enter Leg 3 (tail puts, 2 lots).
 - [ ] Leg 2 enters even when Leg 1 is skipped (R3/R4 filters) — protection is unconditional.
+- [ ] **Implementation Task**: Create `scripts/paper_csp_roll.py` to automate roll-over of Leg 1 (CSP) positions, mirroring the `paper_3track_overlay_roll.py` workflow.
 - [ ] Minimum: 6 monthly cycles for Legs 1+2; 2 quarterly cycles for Leg 3.
 
 ### 0.6b — 3-Track Nifty Instrument Comparison Paper Trading
