@@ -33,6 +33,10 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from src.client.upstox_market import UpstoxMarketClient
 
 UNDERLYING_DEFAULT = "NSE_INDEX|Nifty 50"
