@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from typing import Any
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -224,35 +225,66 @@ def _resolve_from_chain(args: argparse.Namespace) -> tuple[str, str] | None:
         print(f"ERROR: {exc}", file=sys.stderr)
         return None
 
-    print(
-        f"Fetching live chain: {UNDERLYING_DEFAULT}  expiry={args.expiry} …",
-        flush=True,
-    )
-    try:
-        raw_data = client.get_option_chain_sync(UNDERLYING_DEFAULT, args.expiry)
-    except Exception as exc:
-        print(f"ERROR: option chain fetch failed — {exc}", file=sys.stderr)
+    # Resolve expiries
+    expiries: list[tuple[str, str]] = []  # (label, expiry_str)
+    if args.expiry:
+        expiries = [("manual", args.expiry)]
+    else:
+        try:
+            lookup = InstrumentLookup.from_file(args.bod_path)
+            # Preference for CSP: monthly -> quarterly -> yearly
+            # TODO: derive symbol from args.underlying
+            expiries = lookup.get_expiry_candidates(
+                underlying="NIFTY", today=date.today()
+            )
+        except Exception as exc:
+            print(f"ERROR: failed to load BOD or resolve expiries — {exc}", file=sys.stderr)
+            return None
+
+    if not expiries:
+        print("ERROR: no eligible expiries found (DTE 15–420).", file=sys.stderr)
         return None
 
-    if not raw_data:
+    all_rows: list[dict[str, Any]] = []
+    underlying_spot = 0.0
+
+    for label, expiry in expiries:
         print(
-            "ERROR: API returned empty data — check expiry date.",
-            file=sys.stderr,
+            f"Fetching live chain: {UNDERLYING_DEFAULT}  expiry={expiry} ({label}) …",
+            flush=True,
         )
+        try:
+            raw_data = client.get_option_chain_sync(UNDERLYING_DEFAULT, expiry)
+            if not raw_data:
+                print(f"  WARNING: API returned empty data for {expiry} — skipping.")
+                continue
+
+            if underlying_spot == 0.0:
+                underlying_spot = float(raw_data[0].get("underlying_spot_price", 0.0))
+
+            option_type = args.option_type or "PE"
+            rows = filter_strikes_by_delta(
+                raw_data,
+                option_type=option_type,
+                delta_min=args.delta_min,
+                delta_max=args.delta_max,
+            )
+            # Annotate rows with expiry and label
+            for r in rows:
+                r["expiry"] = expiry
+                r["expiry_label"] = label
+            
+            all_rows.extend(rows)
+
+        except Exception as exc:
+            print(f"  WARNING: fetch failed for {expiry} — {exc} — skipping.")
+            continue
+
+    if not all_rows:
+        print("ERROR: no strikes found across all candidate expiries (empty data).", file=sys.stderr)
         return None
 
-    option_type = args.option_type or "PE"
-    rows = filter_strikes_by_delta(
-        raw_data,
-        option_type=option_type,
-        delta_min=args.delta_min,
-        delta_max=args.delta_max,
-    )
-    if not rows:
-        print("ERROR: No strikes found in delta range.", file=sys.stderr)
-        return None
-
-    ranked = rank_strikes(rows)
+    ranked = rank_strikes(all_rows)
     pick_idx = min(args.index - 1, len(ranked) - 1)
     if args.index - 1 > len(ranked) - 1:
         print(
@@ -261,14 +293,13 @@ def _resolve_from_chain(args: argparse.Namespace) -> tuple[str, str] | None:
         )
 
     selected = ranked[pick_idx]
-    underlying_spot = float(raw_data[0].get("underlying_spot_price", 0.0))
 
     print()
     print(
         format_table(
             ranked,
             underlying_spot=underlying_spot,
-            expiry=args.expiry,
+            expiry=args.expiry or "Multiple (auto)",
             selected_key=selected["instrument_key"],
         )
     )
@@ -276,7 +307,8 @@ def _resolve_from_chain(args: argparse.Namespace) -> tuple[str, str] | None:
     price = round(selected["mid"] if selected["mid"] > 0 else selected["ltp"], 2)
     print(
         f"\n# Rank {args.index}: {selected['side']} {selected['strike']:.0f} | "
-        f"delta={selected['delta']:+.4f} | iv={selected['iv']:.2f}% | price=₹{price}"
+        f"delta={selected['delta']:+.4f} | iv={selected['iv']:.2f}% | "
+        f"expiry={selected['expiry']} ({selected['expiry_label']}) | price=₹{price}"
     )
 
     return selected["instrument_key"], str(price)
@@ -294,16 +326,10 @@ def _resolve_instrument_key(args: argparse.Namespace) -> str | None:
     Returns:
         Resolved instrument_key string, or None on failure.
     """
-    # Chain mode — --expiry provided (and not by lookup flags)
+    # Chain mode — --expiry provided OR (no key AND no underlying provided)
     # We need to distinguish between chain-mode --expiry and lookup-mode --expiry.
-    # Chain mode is active if --expiry is set BUT --underlying is NOT set.
-    if args.expiry and not args.underlying:
-        if args.key:
-            print(
-                "ERROR: --expiry is mutually exclusive with --key.",
-                file=sys.stderr,
-            )
-            return None
+    # Chain mode is active if --underlying is NOT set AND --key is NOT set.
+    if not args.key and not args.underlying:
         result = _resolve_from_chain(args)
         if result is None:
             return None
@@ -438,9 +464,9 @@ def main() -> None:
             )
             sys.exit(1)
 
-    if args.price is None:
+    if args.price is None and (args.key or args.underlying):
         print(
-            "ERROR: --price is required when not in chain mode (--expiry).",
+            "ERROR: --price is required when not in chain mode (auto-expiry).",
             file=sys.stderr,
         )
         sys.exit(1)

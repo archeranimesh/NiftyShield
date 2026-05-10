@@ -272,6 +272,66 @@ class InstrumentLookup:
 
     # ── Expiry parsing (module-level: parse_expiry) ──
 
+    def get_expiry_candidates(
+        self,
+        underlying: str,
+        today: date,
+        preference: list[str] | None = None
+    ) -> list[tuple[str, str]]:
+        """Return (label, expiry_date) pairs in preference order.
+
+        DTE bands:
+          monthly:   DTE 15–45
+          quarterly: DTE 46–200
+          yearly:    DTE 201–420
+
+        Preference order: monthly → quarterly → yearly (default for CSP).
+
+        Args:
+            underlying: Underlying symbol (e.g. 'NIFTY').
+            today: Reference date for DTE calculation.
+            preference: Custom order of labels. Defaults to ["monthly", "quarterly", "yearly"].
+
+        Returns:
+            List of (label, expiry_date_str) tuples.
+        """
+        seen: set[str] = set()
+        for inst in self._instruments:
+            if inst.get("segment") != "NSE_FO":
+                continue
+            if inst.get("instrument_type") not in ("CE", "PE"):
+                continue
+            if inst.get("underlying_symbol", "").upper() != underlying.upper():
+                continue
+            exp = parse_expiry(inst.get("expiry"))
+            if exp:
+                seen.add(exp)
+
+        mapping: dict[str, str] = {}
+        for exp in sorted(seen):
+            dte = (date.fromisoformat(exp) - today).days
+            if dte < 15:
+                continue
+            
+            label = None
+            if 15 <= dte <= 45:
+                label = "monthly"
+            elif 46 <= dte <= 200:
+                label = "quarterly"
+            elif 201 <= dte <= 420:
+                label = "yearly"
+            
+            if label and label not in mapping:
+                mapping[label] = exp
+
+        pref_order = preference or ["monthly", "quarterly", "yearly"]
+        result: list[tuple[str, str]] = []
+        for label in pref_order:
+            if label in mapping:
+                result.append((label, mapping[label]))
+        
+        return result
+
     @property
     def count(self) -> int:
         """Total number of instruments loaded."""

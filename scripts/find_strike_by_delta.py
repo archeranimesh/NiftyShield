@@ -209,6 +209,7 @@ def format_table(
         rows: Output of :func:`filter_strikes_by_delta`.
         underlying_spot: Spot price for the header line (optional).
         expiry: Expiry date string for the header line (optional).
+        selected_key: Instrument key of the selected rank to highlight.
 
     Returns:
         Multi-line string ready for ``print()``.
@@ -226,8 +227,9 @@ def format_table(
     )
 
     col_hdr = (
-        f"  {'Rk':>3}  {'SIDE':<5} {'STRIKE':>8}  {'DELTA':>7}  {'IV%':>6}  "
-        f"{'LTP':>8}  {'MID':>8}  {'BID':>8}  {'ASK':>8}  {'OI':>8}  KEY"
+        f"  {'Rk':>3}  {'EXPIRY':<12} {'LABEL':<10} {'SIDE':<5} {'STRIKE':>8}  "
+        f"{'DELTA':>7}  {'IV%':>6}  {'LTP':>8}  {'MID':>8}  {'BID':>8}  "
+        f"{'ASK':>8}  {'OI':>8}  KEY"
     )
     sep = "  " + "─" * (len(col_hdr) - 2)
 
@@ -241,7 +243,8 @@ def format_table(
         sign = "+" if r["delta"] >= 0 else ""
         marker = "  ◀" if r["instrument_key"] == selected_key else ""
         lines.append(
-            f"  {r.get('rank', ''):>3}  {r['side']:<5} {r['strike']:>8.0f}  "
+            f"  {r.get('rank', ''):>3}  {r.get('expiry', ''):<12} "
+            f"{r.get('expiry_label', ''):<10} {r['side']:<5} {r['strike']:>8.0f}  "
             f"{sign}{r['delta']:>6.4f}  {r['iv']:>6.2f}  "
             f"{r['ltp']:>8.2f}  {r['mid']:>8.2f}  "
             f"{r['bid']:>8.2f}  {r['ask']:>8.2f}  "
@@ -320,9 +323,14 @@ def _parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--expiry",
-        required=True,
         metavar="YYYY-MM-DD",
-        help="Option expiry date, e.g. 2026-05-29.",
+        help="Option expiry date, e.g. 2026-05-29. Auto-selected if omitted.",
+    )
+    p.add_argument(
+        "--bod-path",
+        type=Path,
+        default=Path("data/instruments/NSE.json.gz"),
+        help="BOD instruments JSON path (used for auto-expiry).",
     )
     p.add_argument(
         "--delta-min",
@@ -430,14 +438,15 @@ def main() -> None:
             file=sys.stderr,
         )
         sys.exit(1)
-    try:
-        date.fromisoformat(args.expiry)
-    except ValueError:
-        print(
-            f"ERROR: --expiry must be YYYY-MM-DD, got: {args.expiry!r}",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+    if args.expiry:
+        try:
+            date.fromisoformat(args.expiry)
+        except ValueError:
+            print(
+                f"ERROR: --expiry must be YYYY-MM-DD, got: {args.expiry!r}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
 
     try:
         client = UpstoxMarketClient()
@@ -445,34 +454,66 @@ def main() -> None:
         print(f"ERROR: {exc}", file=sys.stderr)
         sys.exit(1)
 
-    print(
-        f"Fetching option chain: {args.underlying}  expiry={args.expiry} …",
-        flush=True,
-    )
-    try:
-        raw_data = client.get_option_chain_sync(args.underlying, args.expiry)
-    except Exception as exc:
-        print(f"ERROR: option chain fetch failed — {exc}", file=sys.stderr)
+    # Resolve expiries
+    expiries: list[tuple[str, str]] = []  # (label, expiry_str)
+    if args.expiry:
+        expiries = [("manual", args.expiry)]
+    else:
+        from src.instruments.lookup import InstrumentLookup
+        try:
+            lookup = InstrumentLookup.from_file(args.bod_path)
+            # Preference for CSP: monthly -> quarterly -> yearly
+            # TODO: derive symbol from args.underlying
+            expiries = lookup.get_expiry_candidates(
+                underlying="NIFTY", today=date.today()
+            )
+        except Exception as exc:
+            print(f"ERROR: failed to load BOD or resolve expiries — {exc}", file=sys.stderr)
+            sys.exit(1)
+
+    if not expiries:
+        print("ERROR: no eligible expiries found (DTE 15–420).", file=sys.stderr)
         sys.exit(1)
 
-    if not raw_data:
+    all_rows: list[dict[str, Any]] = []
+    underlying_spot = 0.0
+
+    for label, expiry in expiries:
         print(
-            "ERROR: API returned empty data — check underlying key and expiry date.",
-            file=sys.stderr,
+            f"Fetching option chain: {args.underlying}  expiry={expiry} ({label}) …",
+            flush=True,
         )
+        try:
+            raw_data = client.get_option_chain_sync(args.underlying, expiry)
+            if not raw_data:
+                print(f"  WARNING: API returned empty data for {expiry} — skipping.")
+                continue
+
+            if underlying_spot == 0.0:
+                underlying_spot = _safe_float(raw_data[0].get("underlying_spot_price"))
+
+            rows = filter_strikes_by_delta(
+                raw_data,
+                option_type=args.option_type,
+                delta_min=args.delta_min,
+                delta_max=args.delta_max,
+            )
+            # Annotate rows with expiry and label
+            for r in rows:
+                r["expiry"] = expiry
+                r["expiry_label"] = label
+            
+            all_rows.extend(rows)
+
+        except Exception as exc:
+            print(f"  WARNING: fetch failed for {expiry} — {exc} — skipping.")
+            continue
+
+    if not all_rows:
+        print("ERROR: no strikes found across all candidate expiries (empty data).", file=sys.stderr)
         sys.exit(1)
 
-    underlying_spot = _safe_float(
-        (raw_data[0] if raw_data else {}).get("underlying_spot_price")
-    )
-
-    rows = filter_strikes_by_delta(
-        raw_data,
-        option_type=args.option_type,
-        delta_min=args.delta_min,
-        delta_max=args.delta_max,
-    )
-    ranked = rank_strikes(rows)
+    ranked = rank_strikes(all_rows)
 
     pick_idx = 0
     if ranked:
@@ -490,12 +531,12 @@ def main() -> None:
         format_table(
             ranked,
             underlying_spot=underlying_spot,
-            expiry=args.expiry,
+            expiry=args.expiry or "Multiple (auto)",
             selected_key=selected_key,
         )
     )
 
-    if not rows or not args.dry_run:
+    if not all_rows or not args.dry_run:
         sys.exit(0)
 
     # Infer leg per-row when BOTH sides are shown and no explicit --leg given
