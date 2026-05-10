@@ -314,3 +314,58 @@ def test_chain_mode_mutually_exclusive_with_key(tmp_path: Path) -> None:
     code, out, err = _run(["--expiry", "2026-05-26", "--key", "NSE_FO|12345"], db)
     assert code == 1
     assert "mutually exclusive" in err
+
+
+# ── --close flag ──────────────────────────────────────────────────────────────
+
+
+def test_close_flag_is_buy_to_close(tmp_path: Path) -> None:
+    """--close records a BUY trade without requiring --action BUY explicitly."""
+    db = tmp_path / "db.sqlite"
+    # Open short put
+    _run(_base_args("SELL") + ["--no-dry-run"], db)
+    # Close with --close flag; no --action needed
+    close_args = [
+        "--strategy", _STRATEGY,
+        "--leg", _LEG,
+        "--key", _KEY,
+        "--date", _DATE,
+        "--qty", _QTY,
+        "--price", "12.50",
+        "--close",
+        "--no-dry-run",
+    ]
+    code, out, err = _run(close_args, db)
+    assert code == 0, f"stderr: {err}"
+    store = PaperStore(db)
+    trades = store.get_trades(_STRATEGY)
+    buy_trades = [t for t in trades if t.action.value == "BUY"]
+    assert len(buy_trades) == 1
+    assert buy_trades[0].price == Decimal("12.50")
+
+
+def test_close_flag_dry_run_shows_buy_action(tmp_path: Path) -> None:
+    """--close in dry-run mode must display action=BUY in the preview."""
+    db = tmp_path / "db.sqlite"
+    close_args = [
+        "--strategy", _STRATEGY,
+        "--leg", _LEG,
+        "--key", _KEY,
+        "--date", _DATE,
+        "--qty", _QTY,
+        "--price", "12.50",
+        "--close",
+    ]
+    code, out, err = _run(close_args, db)
+    assert code == 0, f"stderr: {err}"
+    assert "BUY" in out
+    assert "Dry run" in out
+
+
+def test_close_and_action_are_mutually_exclusive(tmp_path: Path) -> None:
+    """--close combined with explicit --action should exit 1."""
+    db = tmp_path / "db.sqlite"
+    args = _base_args("BUY") + ["--close"]
+    code, _, err = _run(args, db)
+    assert code == 1
+    assert "--close" in err and "--action" in err

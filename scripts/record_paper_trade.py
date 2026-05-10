@@ -194,6 +194,16 @@ def _parse_args() -> argparse.Namespace:
         help=f"Path to the SQLite database (default: {DEFAULT_DB_PATH})",
     )
     parser.add_argument(
+        "--close",
+        action="store_true",
+        default=False,
+        help=(
+            "Buy-to-close shorthand: implies --action BUY. "
+            "Use when closing an existing short leg (e.g. roll-close of a CSP). "
+            "Mutually exclusive with --action."
+        ),
+    )
+    parser.add_argument(
         "--dry-run",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -439,6 +449,17 @@ def main() -> None:
             file=sys.stderr,
         )
         sys.exit(1)
+
+    # --close implies BUY; reject combination with explicit --action
+    if args.close:
+        if args.action != "SELL":  # SELL is the argparse default — any other value means explicit
+            print(
+                "ERROR: --close and --action are mutually exclusive; "
+                "--close already implies --action BUY.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        args.action = "BUY"
 
     # Resolve instrument key (direct --key or BOD lookup)
     instrument_key = _resolve_instrument_key(args)
