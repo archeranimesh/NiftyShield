@@ -7,7 +7,7 @@
 **Related files:** [MISSION.md](MISSION.md) — immutable mission + grounding principles | [DECISIONS.md](DECISIONS.md) | [REFERENCES.md](REFERENCES.md) | [TODOS.md](TODOS.md) | [PLANNER.md](PLANNER.md) | [BACKTEST_PLAN.md](BACKTEST_PLAN.md) — Phase 0 active tasks only (~300 lines) | [BACKTEST_PLAN_PHASE1.md](BACKTEST_PLAN_PHASE1.md) — Phase 1+ tasks (load only after Phase 0.8 gate) | [LITERATURE.md](LITERATURE.md) — concept reference (Kelly, Sharpe, meta-labeling) | [docs/plan/](docs/plan/) — one story file per task | [INSTRUCTION.md](INSTRUCTION.md)
 ---
 
-## Current State (as of 2026-05-08)
+## Current State (as of 2026-05-10)
 
 ### What Exists (committed and working)
 
@@ -18,7 +18,8 @@ Key top-level packages: `src/auth`, `src/client`, `src/models`, `src/portfolio`,
 
 `src/models/options.py` — `OptionLeg`, `OptionChainStrike`, `OptionChain` (all `frozen=True` Pydantic). Source-agnostic field names; Upstox parser in `src/client/upstox_market.py` (`parse_upstox_option_chain`). Dhan parser deferred to Phase 1.10.
 `src/paper/` — paper trading module. `PaperTrade` model (frozen Pydantic, `paper_` prefix enforced), `PaperPosition` + `PaperNavSnapshot` + `PaperLegSnapshot` (frozen dataclasses), `PaperStore` (`paper_trades` + `paper_nav_snapshots` + `paper_leg_snapshots` tables in shared SQLite), `PaperTracker` (compute_pnl + record_daily_snapshot). `PaperStore` API: `record_leg_snapshot` (upsert; enforces `total_pnl == unrealized_pnl + realized_pnl`), `get_leg_snapshot`, `get_prev_leg_snapshot`, `delete_trade` (no-op if missing). See `src/paper/CLAUDE.md` for full invariants.
-Scripts: `daily_snapshot.py`, `morning_nav.py`, `nuvama_intraday_tracker.py`, `seed_*.py`, `record_trade.py`, `record_paper_trade.py` (supports `--underlying/--strike/--option-type/--expiry` auto-lookup via BOD JSON; `--expiry` optional — omit for auto-selection via `get_expiry_candidates`), `paper_snapshot.py` (standalone paper mark-to-market), `roll_leg.py`, `find_strike_by_delta.py` (live option chain → filter by |delta| range → cross-ranks across all candidate expiries (monthly→quarterly→yearly from BOD) when `--expiry` omitted; strike/IV/key table + `--dry-run` record_paper_trade commands), `paper_3track_overlay.py` (live-fetch overlay entry for all 3 tracks; PP/CC/collar; CC permanently blocked on futures track), `paper_3track_snapshot.py` (canonical EOD cron — live spot fetch + per-leg delta-from-yesterday + writes to `paper_leg_snapshots`; `--no-save` for dry-run), `paper_3track_overlay_roll.py` (rolls expiring overlay legs at DTE ≤ 5; atomic close+open; collar is 4-trade atomic with full rollback chain; `--force` to bypass DTE gate)
+Scripts: `daily_snapshot.py`, `morning_nav.py`, `nuvama_intraday_tracker.py`, `intraday_tracker.py` (combined Dhan+Nuvama orchestrator, `*/15 9-15 * * 1-5`; fetches Nifty+VIX once async), `seed_*.py`, `record_trade.py`, `record_paper_trade.py` (supports `--underlying/--strike/--option-type/--expiry` auto-lookup via BOD JSON; `--expiry` optional — omit for auto-selection via `get_expiry_candidates`), `paper_snapshot.py` (standalone paper mark-to-market), `roll_leg.py`, `find_strike_by_delta.py` (live option chain → filter by |delta| range → cross-ranks across all candidate expiries (monthly→quarterly→yearly from BOD) when `--expiry` omitted; strike/IV/key table + `--dry-run` record_paper_trade commands), `paper_3track_overlay.py` (live-fetch overlay entry for all 3 tracks; PP/CC/collar; CC permanently blocked on futures track), `paper_3track_snapshot.py` (canonical EOD cron — live spot fetch + per-leg delta-from-yesterday + writes to `paper_leg_snapshots`; `--no-save` for dry-run), `paper_3track_overlay_roll.py` (rolls expiring overlay legs at DTE ≤ 5; atomic close+open; collar is 4-trade atomic with full rollback chain; `--force` to bypass DTE gate), `bhavcopy_bootstrap.py` (resumable bulk NSE bhavcopy download 2016–2024-11; UDiFF fix pending for Dec 2024+)
+`src/instruments/lookup.py` — `get_expiry_candidates(underlying, today, preference)`: enumerates NIFTY expiries from BOD JSON into monthly (DTE 15–45) / quarterly (46–200) / yearly (201–420) buckets; default preference `["monthly","quarterly","yearly"]`; custom order accepted for hedge use.
 
 ### What Does NOT Exist Yet
 
@@ -84,7 +85,7 @@ Strategy leg tables (instrument keys, entry prices, quantities, protected MF por
 
 ## Test Coverage
 
-- **Total: ~1101 tests** (paper module: 83 tests across Phases A–D all passing; pre-existing failures in `test_upstox_live.py` + `test_mock_client.py` — `pytest-asyncio` not installed in sandbox, not code regressions)
+- **Total: ~1107 tests** (paper module: 83 tests across Phases A–D all passing; 6 new expiry-candidate tests in `tests/unit/instruments/test_expiry_candidates.py`; pre-existing failures in `test_upstox_live.py` + `test_mock_client.py` — `pytest-asyncio` not installed in sandbox, not code regressions)
 - Run: `python -m pytest tests/unit/`
 - Auth tests: `tests/unit/auth/` (64 tests — Nuvama login + verify, Dhan login + verify)
 - MF tests: `tests/unit/mf/` (127 tests)

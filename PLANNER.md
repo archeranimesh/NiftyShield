@@ -10,22 +10,37 @@
 
 - ✓ **Greeks capture** — `OptionChain` model live, Greeks populating `daily_snapshots` from 2026-04-25
 - ✓ **`scripts/find_strike_by_delta.py`** — live delta filter + `record_paper_trade.py` command output (shipped 2026-05-03)
-- ✓ **Bhavcopy pipeline** — `src/backtest/bhavcopy_ingest.py` + `bhavcopy_loader.py` + bootstrap script (Phase 1.3, 2026-05-03)
-- ✓ **Dhan intraday options tracking** — all phases A–E complete (2026-05-06)
-- ✓ **3-track paper framework** — entry, snapshot, overlay, roll scripts all shipped (2026-05-04)
+- ✓ **Bhavcopy pipeline** — `src/backtest/bhavcopy_ingest.py` + `bhavcopy_loader.py` + bootstrap script (Phase 1.3, 2026-05-03). UDiFF fix pending — see TODOS Task 0.
+- ✓ **3-track strategy spec (0.4b)** — `docs/strategies/nifty_track_comparison_v1.md` written + passes validator (2026-05-03). Unblocks 0.6b paper entry.
+- ✓ **Dhan intraday options tracking** — all phases A–E complete: `DhanOptionPosition`, `DhanOptionsSummary`, `DhanFundLimit`, `dhan_options_snapshots` + `dhan_margin_snapshots`, combined `intraday_tracker.py` orchestrator (2026-05-06)
+- ✓ **3-track paper framework** — entry (`paper_3track_overlay.py`), snapshot (`paper_3track_snapshot.py`), roll (`paper_3track_overlay_roll.py`) scripts all shipped; `PaperLegSnapshot` + `paper_leg_snapshots` table (2026-05-04)
+- ✓ **Intraday tracker schema refactor** — `IntradayMarketStore` isolates market context (Nifty+VIX); Nuvama v3 schema migration removes `nifty_spot` column; orchestrator fetches market data once async (2026-05-08)
+- ✓ **Auto-expiry for CSP entry scripts** — `get_expiry_candidates()` in `src/instruments/lookup.py`; `--expiry` optional on `find_strike_by_delta.py` + `record_paper_trade.py`; cross-ranks across monthly/quarterly/yearly expiry buckets (2026-05-10, SHA 21cd505)
 
 ---
 
 ## Near-Term (May–June 2026)
 
+Active code queue in priority order — see `TODOS.md` for full specs.
+
+### Task 0 — Fix bhavcopy UDiFF format migration (ASAP)
+`src/backtest/bhavcopy_ingest.py` needs dual-URL + dual-parser to cover Dec 2024+. Safe range until fix ships: `--end 2024-11-01`.
+
+### Task 1 — India VIX ingestion + IVR calculation (Jun 2026)
+Daily VIX Parquet from Upstox (`NSE_INDEX|India VIX`). Wires `compute_ivr()` (already in `src/backtest/ivr.py`) into paper trade entry logging. Enables R3 filter + Phase 0.8 gate criteria C/D.
+
+### Task 2 — PortfolioDeltaTracker (Jun 2026)
+`src/risk/` package: `PortfolioDelta` dataclass, `PortfolioDeltaTracker.aggregate_delta()`, `check_entry_allowed()`. Caps: options-only +1.0 lots, combined +2.0 lots.
+
+### Task 3 — June 2026 Finideas Roll (HARD DEADLINE 2026-06-30)
+NIFTY_JUN 23000 CE + PE legs expire. Invoke `roll-validator` agent ≥1 week before deadline.
+
+### P&L Visualization artifact
+~6 weeks of snapshot data now available — buildable. Four panels: MF, Dhan ETFs, Nuvama Bonds, Nuvama Options. Cowork artifact (self-contained HTML, live DB queries). Revisit once Tasks 0–2 are shipped.
+
 ### FinRakshak effectiveness tracking
 Automated monthly report: FinRakshak P&L vs MF portfolio drawdown.
 `finrakshak_day_delta` already in `PortfolioSummary` — query over snapshot history.
-
-### P&L visualization
-Matplotlib chart from `daily_snapshots` time series (component breakdown over time).
-Start once 4+ weeks of snapshot data available.
-`snapshot_date` field already in `PortfolioSummary` — ready to query.
 
 ---
 

@@ -47,6 +47,17 @@
 
 ---
 
+## 0.4b — DONE — 3-Track Nifty Long Instrument Comparison Specification ✓ 2026-05-03
+
+- [x] `docs/strategies/nifty_track_comparison_v1.md` — Track A NiftyBees ETF / Track B Nifty Futures / Track C Deep ITM Call (delta ≈ 0.90)
+- [x] NEE capital normalisation, blocked combinations (Futures + CC), daily P&L schema, strategy namespaces `paper_nifty_spot/futures/proxy`, monthly roll mechanics, Track C delta kill criterion (< 0.40 × 3 days), 6-cycle minimum
+- [x] Passes `validate_strategy_spec.py` exit code 0
+- [x] Fixed `--leg-role` → `--leg` doc discrepancy in `BACKTEST_PLAN.md` task 0.6b
+- [x] Committed `docs(strategies): add 3-track Nifty instrument comparison spec v1`
+- [x] Source: `docs/council/2026-05-02_nifty-long-instrument-comparison-protection.md` Stage 3. Unblocks task 0.6b.
+
+---
+
 ## 0.7 — DONE — Strategy specification validator ✓ (after 0.5)
 
 - [x] `scripts/validate_strategy_spec.py` — checks required sections (Name, Entry, Exit, Adjustment, Sizing, Kill Criteria, Variance Threshold); non-zero exit on missing sections

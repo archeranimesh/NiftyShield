@@ -1,22 +1,26 @@
 # NiftyShield — TODOs
 
-> Open work only. Completed items and session history through 2026-04-30:
-> [docs/archive/TODOS_ARCHIVE_2026-05-01.md](docs/archive/TODOS_ARCHIVE_2026-05-01.md)
+> Open work only. Completed items and session history:
+> - 2026-04-30 and earlier: [docs/archive/TODOS_ARCHIVE_2026-05-01.md](docs/archive/TODOS_ARCHIVE_2026-05-01.md)
+> - 2026-05-01 to 2026-05-09: [docs/archive/TODOS_ARCHIVE_2026-05-10.md](docs/archive/TODOS_ARCHIVE_2026-05-10.md)
 
 ---
 
-## Priority Key
+## Sequential Queue — Next 6 Months
 
-| Label | Meaning |
-|---|---|
-| `P1-NEXT` | Do this sprint — unblocked, highest impact |
-| `P2-EVAL` | Decision or evaluation required before any code |
-| `P3-DEFER` | Explicitly deferred — reason and ETA documented |
-| `P5-DEBT` | Technical debt — fix alongside adjacent refactoring only, never standalone |
+Tasks 0–3 run in this order. Do not start the next until the current ships and tests are green.
+Ongoing paper-trading tasks (Animesh) run in parallel and are listed separately below.
+
+| # | Task | Owner | Hard Deadline | Status |
+|---|---|---|---|---|
+| **0** | Fix bhavcopy UDiFF format (Dec 2024+) | Cowork | ASAP | Unblocked |
+| **1** | India VIX ingestion + IVR calculation | Cowork | Jun 2026 | Unblocked |
+| **2** | PortfolioDeltaTracker (`src/risk/`) | Cowork | Jun 2026 | Unblocked |
+| **3** | June 2026 Finideas roll cycle | Animesh + Cowork | **2026-06-30** | Awaiting Finideas instructions |
 
 ---
 
-## P1-NEXT — Fix bhavcopy pipeline for NSE UDiFF format (Dec 2024+)
+## Task 0 — Fix bhavcopy pipeline for NSE UDiFF format (Dec 2024+)
 
 **Discovered 2026-05-03 during smoke test.** NSE migrated F&O bhavcopy to UDiFF format in
 late 2024. Old URL and CSV schema only cover 2016 → ~Nov 2024. Full column mapping and fix
@@ -32,6 +36,7 @@ years), including all critical stress windows: IL&FS Sep 2018, COVID Mar 2020,
 rate-hike Jan–Jun 2022, Jun 2024 election day.
 
 **Changes required:**
+
 1. `download_bhavcopy`: try UDiFF URL first (`/content/fo/BhavCopy_NSE_FO_0_0_0_{YYYYMMDD}_F_0000.csv.zip`); fall back to legacy URL on 404.
 2. `parse_bhavcopy`: detect format by checking `'TradDt' in reader.fieldnames`. Route to `_parse_legacy()` or `_parse_udiff()` accordingly. `BhavRecord` model unchanged.
 3. `_parse_udiff()`: map UDiFF columns. Key differences: ISO date strings (no strptime); `FinInstrmTp` → instrument (`IDO`→OPTIDX, `STO`→OPTSTK, `IDF`→FUTIDX, `SDF`→FUTSTK); filter by `TckrSymb == underlying`.
@@ -39,181 +44,232 @@ rate-hike Jan–Jun 2022, Jun 2024 election day.
 
 ---
 
-## P1-NEXT — Define historical replay harness for exit-path validation
-
-**Prerequisite for Phase 0.8 gate criterion B (delta/mark-stop and time-stop validation).**
-
-When live paper trading doesn't produce a delta-stop or time-stop exit during the paper window, the council-approved alternative is a deterministic historical replay: run the production paper-trade code against a known stress episode (e.g., COVID week of 2020-03-16 or IL&FS week of 2018-09-21) injected into the staging environment.
-
-**Scope (to design, not build yet — depends on Phase 1 backtest data pipeline):**
-- Replay harness injects historical option chain snapshots into `PaperTracker` monitoring loop
-- Must use the same strategy logic, data schema, cost model, and P&L attribution code as live paper
-- Output: confirms monitoring daemon correctly identifies the trigger condition, queues the exit, and records P&L with correct attribution
-- Do not build until Phase 1 NSE Bhavcopy pipeline (task 1.3) exists — historical chain data needed
-
-**Owner:** Animesh + Cowork. Design doc first (`docs/plan/replay_harness.md`). No code until Phase 1 gate passes.
-
----
-
-## P1-NEXT — India VIX ingestion for IVR calculation (blocks R3 enforcement)
+## Task 1 — India VIX ingestion + IVR calculation
 
 **Prerequisite for Phase 0.8 gate criteria C and D (regime completeness + regime-matched Z-score).**
 
-IVR (IV Rank) at entry is required to: (1) enforce R3 entry filter (IVR 25–50), (2) flag high-IVR regime cycles (IVR > 50) for criterion C, (3) filter backtest for regime-matched Z-score comparison in task 1.11. Currently, India VIX is not ingested — R3 enforcement and regime completeness checks are blocked.
+IVR (IV Rank) at entry is required to: (1) enforce R3 entry filter (IVR 25–50), (2) flag high-IVR
+regime cycles (IVR > 50) for criterion C, (3) filter backtest for regime-matched Z-score comparison
+in task 1.11. Currently, India VIX is not ingested — R3 enforcement and regime completeness checks
+are blocked.
 
-**Scope:**
-- Daily India VIX ingestion to Parquet (same pipeline as task 1.3a — confirm VIX is included there)
-- 252-day rolling IVR calculation: `ivr = (vix_today - vix_252d_low) / (vix_252d_high - vix_252d_low)`
-- Log IVR at entry for every paper trade record (add field to `PaperTrade` model or `paper_nav_snapshots`)
-- Enable R3 gate enforcement in paper trading workflow
+**Scope (implements the VIX daily sub-path of BACKTEST_PLAN_PHASE1.md task 1.3a):**
 
-**Owner:** Cowork. Unblocks R3, criterion C, and task 1.11 regime-matched comparison.
+- `src/backtest/ohlc_ingest.py` (or new `src/backtest/vix_ingest.py`): daily India VIX ingest from
+  `NSE_INDEX|India VIX` via Upstox `/v2/historical-candle/` (free, existing `UPSTOX_ANALYTICS_TOKEN`).
+  Store as Parquet: `data/historical/ohlc/india_vix/`. Resumable — skip dates already present.
+- IVR formula: `ivr = (vix_today − vix_252d_low) / (vix_252d_high − vix_252d_low)`. Clamp to `[0.0, 1.0]`.
+  Already implemented in `src/backtest/ivr.py` (`compute_ivr`) — wire at entry-log time.
+- Log IVR at entry for every paper trade: add `ivr_at_entry: float | None` field to `PaperTrade` model
+  or `paper_nav_snapshots` (confirm canonical location in `src/paper/CLAUDE.md` before changing schema).
+- Enable R3 gate check in `scripts/record_paper_trade.py`: compute IVR from ingested data; warn (do not
+  block) when IVR < 25 or > 50.
+- Tests: VIX Parquet resumability (skip if already present); IVR boundary tests (already in `test_ivr.py`);
+  R3 warning path in `record_paper_trade.py` (mock IVR fetch).
 
----
-
-## P1-NEXT — Stockmock calibration backtests (Animesh / STRATEGY)
-
-**Prerequisite to Task 1.7** (hardcoded δ/IV/credit thresholds in `src/backtest/engine.py`).
-
-Run CSP + IC backtests on Nifty options in Stockmock UI across four stress windows:
-- IL&FS Sep–Oct 2018
-- COVID Feb–Apr 2020
-- 2022 bear (Jan–Jun 2022)
-- Stable trending (Jan–Jun 2023)
-
-Record results (max drawdown, Calmar, win rate, avg credit captured) in `docs/strategy/csp_nifty_v1.md` → section "Calibration Backtest Results (Stockmock)". These numbers become the empirical basis for 1.7 thresholds and 1.12 gate validation.
-
-**Note:** User's decision document references `csp_niftybees_v1.md` — the canonical file is `csp_nifty_v1.md` (underlying changed from NiftyBees to Nifty 50 options per 2026-04-25 DECISIONS.md entry).
-
-**Owner:** Animesh. No code required — manual UI workflow in Stockmock.
+**Owner:** Cowork. Unblocks R3, criterion C, and BACKTEST_PLAN_PHASE1.md task 1.11 regime-matched comparison.
 
 ---
 
-## P1-NEXT — NSE F&O Bhavcopy ingestion pipeline (`src/backtest/bhavcopy_ingest.py`)
+## Task 2 — PortfolioDeltaTracker (`src/risk/`)
 
-Build the programmatic EOD options data pipeline. Unblocked — no paid data required.
+**Source: `docs/council/2026-05-02_multi-strategy-portfolio-risk-allocation.md` §7.3.**
 
-**Scope:**
-- `src/backtest/bhavcopy_ingest.py`: `download_bhavcopy(date) → Path`, `parse_bhavcopy(path) → pd.DataFrame`, `parse_option_symbol(symbol: str) → tuple[date, Decimal, str]`
-- Output schema: `date DATE, symbol TEXT, underlying TEXT, expiry DATE, strike DECIMAL, option_type CHAR(2), open DECIMAL, high DECIMAL, low DECIMAL, close DECIMAL, volume BIGINT, oi BIGINT, settle_price DECIMAL`
-- Parquet output path: `data/offline/options_ohlcv/{year}/{month}/`
-- `scripts/bhavcopy_bootstrap.py`: resumable bulk download 2016-01-01 → today
-- `src/backtest/bhavcopy_loader.py`: `load_options_ohlcv(underlying, start, end) → pd.DataFrame` (reads Parquet with pyarrow)
+Cowork code task — unblocked. Implements the aggregate portfolio-delta guard that prevents net long bias
+from compounding across all open paper positions and the NiftyBees ETF holding.
 
-**Tests:** offline fixture-driven; no network in unit tests. One downloaded Bhavcopy CSV as fixture; test `parse_option_symbol` round-trips and edge cases (weekly vs monthly expiry symbol formats).
+**Exact scope (from BACKTEST_PLAN.md task 0.6c):**
 
-**Data source:** `https://www.nseindia.com/api/eodarchives?type=fo` — daily ZIP, contains `fo{DDMONYYYY}bhav.csv.zip`.
+- `src/risk/__init__.py` — package stub with one comment line (required for codebase-memory-mcp indexing).
+- `src/risk/models.py` — `PortfolioDelta` frozen dataclass: `options_delta_lots: Decimal`,
+  `niftybees_delta_lots: Decimal`, `total_delta_lots: Decimal`, `warning_breached: bool`,
+  `cap_breached: bool`, `as_of: datetime`.
+- `src/risk/delta_tracker.py` — `PortfolioDeltaTracker`:
+  - `aggregate_delta(paper_positions: list[PaperPosition], nifty_spot: Decimal, lot_size: int) → PortfolioDelta`
+  - Options-only cap: +1.0 lots (warning +0.75). Options + NiftyBees cap: +2.0 lots (warning +1.5). Constants parameterised.
+  - NiftyBees delta: `niftybees_qty × niftybees_ltp / (nifty_spot × lot_size)` (beta = 1.0).
+- `src/risk/entry_gate.py` — `check_entry_allowed(current_delta: PortfolioDelta, trade_delta_lots: Decimal, is_protective: bool) → tuple[bool, str]`. Protective entries always `(True, "")`.
+- Tests: `tests/unit/risk/test_delta_tracker.py` — happy path, warning boundary, hard cap breach,
+  protective bypass, zero-position base case. `tests/unit/risk/__init__.py` required.
+- `python -m pytest tests/unit/ --tb=no -q` green.
+- Commit: `feat(risk): add PortfolioDeltaTracker with entry gate`.
 
----
-
-## P3-DEFER — P&L Visualization
-
-Deferred until late May 2026 (need 4+ weeks of snapshot data).
-
-Deliver as a **persistent Cowork artifact** (self-contained HTML page, re-opens with fresh data each session via live DB queries). Four independent panels, each independently viable:
-
-### Panel 1 — Mutual Funds (MF)
-- Source: `mf_nav_snapshots` (NAV history) + `mf_transactions` (cost basis: one INITIAL row per scheme with units + amount)
-- Data available: 16 days (2026-04-03 → present), 11 schemes
-- P&L formula: `(current_nav − avg_cost_per_unit) × units` per scheme per day
-- Chart: cumulative rupee P&L curve per scheme + bar chart of current unrealized gain per scheme
-
-### Panel 2 — Dhan ETFs
-- Source: `dhan_holdings_snapshots` (avg_cost_price + ltp + total_qty per day)
-- Data available: 9 days (2026-04-14 → present); NIFTYIETF (equity) + LIQUIDCASE (bond)
-- P&L formula: `(ltp − avg_cost_price) × total_qty` — directly computable, no join needed
-- Chart: daily P&L curve per instrument
-
-### Panel 3 — Nuvama Bonds (NCDs, G-Sec, SGB)
-- Source: `nuvama_holdings_snapshots` (current_value per ISIN per day) + `nuvama_positions` (static cost basis: avg_price × qty)
-- Data available: 8 days (2026-04-15 → present); EFSL NCDs, G-Sec 8.28% 2027, SGB 2023-24
-- P&L formula: `current_value − (qty × avg_price)` per ISIN per day
-- Chart: daily mark-to-market P&L per bond instrument
-
-### Panel 4 — Nuvama Options (own options book, not FinRakshak)
-- Source: `nuvama_options_snapshots` (unrealized_pnl + realized_pnl_today per leg per EOD snapshot)
-- Data available: 7 days (2026-04-16 → present); 23–38 open legs per day
-- Caveat: closed legs disappear from subsequent snapshots; `realized_pnl_today` captures same-day closures only
-- P&L formula: `SUM(unrealized_pnl)` for open legs + `SUM(realized_pnl_today)` cumulated over all historical dates
-- Chart: daily total unrealized P&L + cumulative realized P&L line — strategy-level only, not per-leg
-
-### Not yet possible — Zerodha (FinRakshak + ILTS)
-- FinRakshak and ILTS both run on Zerodha. No Zerodha table in DB, no integration built. These strategies are a complete blind spot for visualization until Kite Connect is integrated (see P3-DEFER — Zerodha / Kite Connect Integration below).
-
-### Implementation notes
-- All four panels can share one artifact; data fetched via `mcp__workspace__bash` → Python → JSON on open
-- Render with Chart.js or Recharts (both available in artifact sandbox)
-- `PortfolioSummary` dataclass already extracted and queryable; `PLANNER.md` has broader context
+**Owner:** Cowork. Unblocks the entry guard for 0.6b paper trades.
 
 ---
 
-## P3-DEFER — Zerodha / Kite Connect Integration
+## Task 3 — June 2026 Finideas Roll Cycle
 
-Deferred indefinitely — revisit when FinRakshak/ILTS P&L visibility becomes a priority.
+**Hard deadline: 2026-06-30** (NIFTY_JUN 23000 CE and PE legs expire, per `REFERENCES.md`).
 
-FinRakshak and ILTS both run on Zerodha. Currently zero Zerodha data in the DB — positions, avg cost, and P&L for these two strategies are invisible to NiftyShield.
+Invoke `roll-validator` agent ≥1 week before deadline. Steps:
 
-**Feasibility analysis (2026-04-24):**
+- [ ] Invoke `roll-validator` agent ≥1 week before 2026-06-30 to pre-check position state, Trade model integrity, and DB atomicity.
+- [ ] Receive Finideas roll instructions (strike, expiry, quantity for each leg).
+- [ ] Run `python -m scripts.roll_leg --dry-run ...` with all four `--old-*/--new-*` flags filled. Verify output.
+- [ ] Run without `--dry-run`. Verify both Trade rows inserted atomically.
+- [ ] Run `python -m scripts.daily_snapshot` same day. Confirm P&L continues uninterrupted; new JUL/SEP leg prices reflected in mark-to-market.
+- [ ] Session log entry in `TODOS.md` with date, old/new instrument keys, and any anomalies.
+- [ ] If any bug surfaces: file a separate fix commit before moving on.
 
-Zerodha offers two tiers of Kite Connect API:
-
-- **Personal (free):** `positions()`, `holdings()`, `orders()`, `funds()` — full portfolio state, no market data. Enough to capture holdings and avg cost price.
-- **Paid (₹500/month):** Everything above + live LTP via REST (`ltp()`, `quote()`) and WebSocket tick streaming + historical candles.
-
-For NiftyShield's use case the practical approach is a **hybrid**: Zerodha free API for position state (instrument, qty, avg cost) + existing Upstox Analytics token for LTP — the same pattern already used in `src/dhan/`. This avoids the ₹500/month charge while giving full P&L computation.
-
-**Auth:** Kite Connect uses the same daily request-token → access-token flow as Upstox. A `src/zerodha/` module mirroring `src/auth/` would be needed, plus a morning login step.
-
-**Implementation scope when ready:**
-- `src/zerodha/` — auth + `KiteClient` implementing `BrokerClient` protocol (positions, holdings only; LTP delegated to Upstox)
-- `zerodha_holdings_snapshots` table in SQLite (same shape as `dhan_holdings_snapshots`)
-- `morning_nav.py` or new script to snapshot Zerodha positions at BOD
-- Unblocks Panel 5 in P&L Visualization artifact (FinRakshak + ILTS)
-
-**Note:** Zerodha also launched a **Kite MCP** server (2025) — could enable direct Zerodha queries inside Cowork sessions without building a custom client. Worth evaluating before writing `src/zerodha/` from scratch.
+**Owner:** Animesh (receives instructions) + Cowork (executes scripts).
 
 ---
 
-## P5-DEBT — Technical Debt
+## Ongoing Paper Trading (Animesh — parallel to Tasks 0–3)
 
-Fix alongside adjacent refactoring. Never worth a standalone commit.
+These run continuously throughout Phase 0, independent of the code queue above.
 
-### DEBT-3: Missing license boilerplate (TD-4)
+### 0.6 — CSP v1 Paper Trading
 
-License decision needed before this can be automated. Every file should carry a header once the license is chosen.
+- [ ] Each month at entry date: observe live chain, decide strike (22-delta target per `csp_nifty_v1.md`). Log via `record_paper_trade.py` with mid − 0.25 INR slippage haircut.
+- [ ] Monitor daily via `daily_snapshot.py`. Log exit when profit target / time stop / loss stop hits.
+- [ ] Never override the spec in real time. If urge to override: log it in `TODOS.md` with reason, then follow spec anyway.
+- [ ] Minimum: **6 full monthly cycles (~6 months)**, with at least one cycle triggering each exit type.
 
-### DEBT-4: `find_strike_by_delta.py` — `DEFAULT_LOT_SIZE = 75` inconsistent with `constants.LOT_SIZE = 65`
+### 0.6a — NiftyShield Integrated v1 Paper Trading
 
-`scripts/find_strike_by_delta.py` line 40 defines `DEFAULT_LOT_SIZE = 75`. All 3-track scripts
-use `LOT_SIZE = 65` (now centralised in `src/paper/constants.py`). One of these is wrong, or 75
-was set before the Jan 2026 lot-size change and never updated.
+- [ ] At each CSP entry: also enter Leg 2 (put spread, 4 lots) via `--strategy paper_niftyshield_v1`.
+- [ ] Each quarter (Jan/Apr/Jul/Oct): enter Leg 3 (tail puts, 2 lots).
+- [ ] Leg 2 enters even when Leg 1 is skipped (R3/R4 filters) — protection is unconditional.
+- [ ] Minimum: 6 monthly cycles for Legs 1+2; 2 quarterly cycles for Leg 3.
 
-**Impact:** Running `find_strike_by_delta.py` without `--qty` produces dry-run
-`record_paper_trade.py` commands with `--qty 75` — wrong quantity for 3-track entries.
+### 0.6b — 3-Track Nifty Instrument Comparison Paper Trading
+
+**Unblocked (0.4b done 2026-05-03). Source: `docs/strategies/nifty_track_comparison_v1.md`.**
+
+- [ ] Enter Spot base leg (long NiftyBees) via `--strategy paper_nifty_spot --leg base_etf`.
+- [ ] Enter Futures base leg (long Nifty Futures notional) via `--strategy paper_nifty_futures --leg base_futures`.
+- [ ] Enter Proxy base leg (Deep ITM Call, delta ≈ 0.90) via `--strategy paper_nifty_proxy --leg base_ditm_call`.
+- [ ] For each approved overlay per track, record as a separate leg within the same strategy namespace.
+- [ ] Do NOT record Futures + standalone Covered Call — blocked per council ruling.
+- [ ] On each expiry: roll all base legs; document delta at roll time for Proxy.
+- [ ] Minimum 6 monthly cycles before cross-track conclusions. Include ≥1 high-VIX event (India VIX >18).
+
+### Stockmock Calibration Backtests (Animesh only — prerequisite for Phase 1.7)
+
+Run CSP + IC backtests on Nifty options in Stockmock UI across four stress windows. No code required.
+
+- [ ] COVID crash (Feb–Apr 2020): monthly CSP at 20-delta. Record strikes hit, premium, max M2M loss, breach frequency.
+- [ ] IL&FS crisis (Sep–Oct 2018): same metrics.
+- [ ] 2022 rate-hike selloff (Jan–Jun 2022): same metrics.
+- [ ] Stable baseline (Jan–Dec 2023): establishes expected exit-type distribution in normal markets.
+- [ ] Summarise in `docs/strategies/csp_nifty_v1.md` → "Calibration Backtest Results (Stockmock)" section.
+- [ ] Commit: `docs(strategies): CSP v1 Stockmock calibration backtest results`.
+
+**Note:** Canonical strategy file is `csp_nifty_v1.md` (underlying changed from NiftyBees to Nifty 50 per 2026-04-25 decision).
+
+---
+
+## Phase 1 — Backtest Engine (Aug–Dec 2026, after Phase 0.8 gate)
+
+*Load `BACKTEST_PLAN_PHASE1.md` when Phase 0.8 gate clears. Tasks below are summaries only.*
+
+### Historical Replay Harness for Exit-Path Validation
+
+**Prerequisite for Phase 0.8 gate criterion B (delta/mark-stop and time-stop validation).**
+
+When live paper trading doesn't produce a delta-stop or time-stop exit during the paper window,
+the council-approved alternative is a deterministic historical replay against a known stress episode
+(COVID week of 2020-03-16 or IL&FS week of 2018-09-21) injected into staging.
+
+**Scope (design doc first — code depends on Phase 1 bhavcopy pipeline):**
+
+- Replay harness injects historical option chain snapshots into `PaperTracker` monitoring loop.
+- Must use same strategy logic, data schema, cost model, and P&L attribution code as live paper.
+- Output: confirms monitoring daemon correctly identifies the trigger, queues the exit, records P&L.
+- Do not build until Phase 1.3a (NSE Bhavcopy pipeline + VIX) data is available.
+- Design doc: `docs/plan/replay_harness.md`. No code until Phase 0.8 gate passes.
+
+**Owner:** Animesh + Cowork.
+
+### Underlying OHLC Ingest — Nifty 50, India VIX, NiftyBees (task 1.3a)
+
+Full spec in `BACKTEST_PLAN_PHASE1.md`. Parquet under `data/historical/ohlc/`. Resumable async fetcher.
+Derived fields: 14-day ATR, 50-day regression slope, 10-month SMA, 252-day VIX percentile rank.
+
+*Note: the VIX daily sub-path is pulled forward into Task 1 above (IVR gate unblock). The full
+1.3a task (Nifty 50 15-min + NiftyBees) remains a Phase 1 item.*
+
+### TrueData 1-min Options Ingestion (task 1.3b)
+
+Full spec in `BACKTEST_PLAN_PHASE1.md`. Start only after TrueData delivers zip files (₹7,999/year, 3-year purchase recommended). Hive-partitioned Parquet at `data/historical/parquet/options/`. ~1.5 GB for 2022–2024.
+
+### Backtest Engine + CSP Calibration (tasks 1.4–1.12)
+
+Full task list in `BACKTEST_PLAN_PHASE1.md`. Key milestones:
+
+- **1.4:** `BacktestEngine` core (Strategy Protocol + DayContext + run loop). Port from `quant-4pc-local`.
+- **1.5:** `BacktestStore` — SQLite results storage (separate from `portfolio.sqlite`).
+- **1.6a:** BS IV reconstruction from `settle_price` + Nifty Futures forward.
+- **1.7:** `CSPStrategy` with `CSPConfig` — thresholds from Stockmock calibration results.
+- **1.8:** Full bootstrap run 2016–2024; distribution analysis.
+- **1.11:** Regime-matched Z-score (full distribution + stress-window subset). Gate: `|Z| ≤ 1.5` on both.
+- **1.12:** Phase 1 gate — paper vs backtest distributions match; Animesh sign-off to start Phase 2.
+
+---
+
+## Phase 2 — Research Pipelines & Integrations (2027+)
+
+*Start only after Phase 1.12 gate. Detailed specs in `PLANNER.md` and `docs/plan/`.*
+
+### P&L Visualization (Cowork artifact)
+
+Deferred until 4+ weeks of snapshot data available (was late May 2026, now at ~6 weeks — revisit).
+
+Deliver as a persistent Cowork artifact (self-contained HTML, re-opens with fresh data via live DB queries). Four panels: MF (`mf_nav_snapshots`), Dhan ETFs (`dhan_holdings_snapshots`), Nuvama Bonds (`nuvama_holdings_snapshots`), Nuvama Options (`nuvama_options_snapshots`). Chart.js or Recharts. Panel 5 (Zerodha) blocked until Kite Connect integration.
+
+**Note:** Now that ~6 weeks of data exists, this is buildable. Move to Task 4 if Animesh confirms priority.
+
+### Zerodha / Kite Connect Integration
+
+Deferred until FinRakshak/ILTS P&L visibility becomes a priority. Hybrid approach: Zerodha free API for position state + Upstox Analytics token for LTP (same pattern as `src/dhan/`). Evaluate Kite MCP server (2025) before writing `src/zerodha/` from scratch.
+
+### Swing Strategy Research Pipeline (Phase 2 Track A)
+
+Full methodology: `docs/plan/SWING_STRATEGY_RESEARCH.md`. Stages 2.S0–2.S7 (regime engine → signal generators → points backtester → option spread backtester → walk-forward → paper → live). Starts after Phase 1.12 gate.
+
+### Investment Strategy Research Pipeline (Phase 2 Track B)
+
+Full methodology: `docs/plan/INVESTMENT_STRATEGY_RESEARCH.md`. Stages 2.I0–2.I5 (SMA / Dual Momentum / PE Band strategies on NiftyBees, ₹5L pool). Zero paid data. Starts after Phase 1.12 gate.
+
+### Order Execution Layer (`src/execution/`)
+
+Blocked: static IP not provisioned. Unblocked when IP is confirmed. `place_order`, `modify_order`, `cancel_order` on `UpstoxLiveClient`; GTT orders; pre-order margin validation via `src/risk/`. All logic already designed against `BrokerClient` protocol.
+
+### paper_snapshot.py → Telegram notification
+
+Wire `build_notifier` from `src/notifications/` into `paper_snapshot.py`. Add `[DRY RUN]` label. Non-fatal, fire-and-forget. Defer until `paper_snapshot.py` is touched for another reason.
+
+---
+
+## Technical Debt
+
+Fix alongside adjacent refactoring only. Never a standalone commit.
+
+### DEBT-3: Missing license boilerplate
+
+License decision needed before automation. Every file should carry a header once the license is chosen.
+
+### DEBT-4: `find_strike_by_delta.py` — `DEFAULT_LOT_SIZE = 75` vs `constants.LOT_SIZE = 65`
+
+`scripts/find_strike_by_delta.py` line 40 defines `DEFAULT_LOT_SIZE = 75`. All 3-track scripts use
+`LOT_SIZE = 65` (centralised in `src/paper/constants.py`). Running `find_strike_by_delta.py` without
+`--qty` produces dry-run commands with the wrong quantity.
 
 **Fix when touching `find_strike_by_delta.py` next:**
 1. Confirm correct lot size against NSE circular.
 2. Replace `DEFAULT_LOT_SIZE = 75` with `from src.paper.constants import LOT_SIZE as DEFAULT_LOT_SIZE`.
-3. Update the `--qty` help string accordingly.
+3. Update the `--qty` help string.
 
 ---
 
 ## Session Log
 
 | Date | What Changed |
-| 2026-05-10 | **Auto-expiry for CSP entry scripts (SHA 21cd505).** `src/instruments/lookup.py`: added `get_expiry_candidates(underlying, today, preference)` — enumerates NIFTY expiries from BOD JSON into monthly (DTE 15–45) / quarterly (46–200) / yearly (201–420) buckets; default preference `["monthly","quarterly","yearly"]` (CSP income); accepts custom order for hedge use. `scripts/find_strike_by_delta.py`: `--expiry` now optional; when omitted, fetches chains for all candidate expiries and cross-ranks strikes by delta→round-100→spread→OI across the merged pool. `scripts/record_paper_trade.py`: wires same auto-expiry path; `--expiry` now an optional override. 6 unit tests in `tests/unit/instruments/test_expiry_candidates.py`. 58 targeted tests passing. |
-| 2026-05-08 | **Intraday market store review fixes (3 commits).** `4d972c6`: added Google-style docstrings to all public methods in `IntradayMarketStore`, removed unused `sqlite3` import, renamed orchestrator logger `"intraday"` → `"market"` (prevents double-bracket log prefix), added docstring noting Dhan tracker accepts nifty/vix params for API symmetry but defers storage. `a259115`: enforced UTC timezone-awareness in `record_market_snapshot` — raises `ValueError` on naive `datetime`, converts to ISO string before SQLite insert to avoid Python 3.12 adapter deprecation and string-sort inconsistency. `a192727`: test coverage for the naive-timestamp `ValueError` contract; removed unused `sqlite3` import from test file. |
-| 2026-05-08 | **Intraday Tracker Schema Refactor (Phases 1-3).** Phase 1: `src/intraday/market_store.py` (`IntradayMarketStore` + `intraday_market_snapshots` table) to isolate market context (Nifty+VIX). Phase 2: Nuvama v3 schema migration (`_SCHEMA_VERSION = 3`, `DROP COLUMN nifty_spot` from `nuvama_intraday_snapshots`). Phase 3: Orchestrator `scripts/intraday_tracker.py` updated to fetch Nifty+VIX once async and pass to both Dhan and Nuvama trackers; Nuvama standalone fetch removed. Test coverage maintained across all phases. |
-| 2026-05-08 | **Doc cleanup.** Archived 12 completed/obsolete docs (SHA 254689e): bhavcopy plans/walkthroughs, antigravity global.md, plan story files for tasks 0.1/0.2/0.5/dhan-intraday, superseded csp_niftybees_v1.md, one-time prompts, resolved council pending prompt. 3-track docs kept for separate review. Pruned PLANNER.md stale April sprint section (SHA d03259e). |
 |---|---|
-| 2026-05-06 | **Dhan intraday options tracking complete (Phases A–E).** Phase A: `DhanOptionPosition`, `DhanOptionsSummary`, `DhanFundLimit` frozen dataclasses in `src/dhan/models.py`. Phase B: `src/dhan/positions.py` — `fetch_positions_raw`, `parse_option_positions`, `filter_intraday_options` (keeps NSE_FNO + productType in INTRADAY/MARGIN; MARGIN=Dhan API name for what UI labels Normal), `build_options_summary`, `fetch_fund_limit_raw`, `parse_fund_limit` (maps `availabelBalance` typo), `format_options_section`. Phase C: `DhanStore` extended with `dhan_options_snapshots` + `dhan_margin_snapshots` tables + 5 methods. Phase D: `scripts/dhan_intraday_tracker.py` + `scripts/intraday_tracker.py` (combined Dhan+Nuvama orchestrator, `*/15 9-15 * * 1-5`). Phase E: `NuvamaOptionsSummary.monthly_realized_pnl` field + `NuvamaStore.get_monthly_realized_pnl` + `build_options_summary(monthly_historical_pnl)` + `formatting.py` split into Today/Month/Realized three lines + `tests/unit/nuvama/test_nuvama_store_monthly.py`. Fixture updated to real 2026-05-06 Dhan values (MARGIN productType discovery). 428 targeted tests passing. |
-| 2026-05-04 | **Overlay automation complete (Phases A–E).** Phase A: `PaperLegSnapshot` dataclass + `paper_leg_snapshots` table + 4 new `PaperStore` methods (`record_leg_snapshot` with `total_pnl` invariant assertion, `get_leg_snapshot`, `get_prev_leg_snapshot`, `delete_trade` no-op rollback). Phase B: `scripts/paper_3track_overlay.py` — live-fetch overlay entry (PP/CC/collar) across all 3 tracks; CC permanently blocked on futures; `_check_existing_overlay` tracks SELL positions correctly; atomic rollback via `delete_trade`. Phase C: `scripts/paper_3track_snapshot.py` — canonical EOD cron; live spot fetch (--spot to override); per-leg delta-from-yesterday display; writes `paper_leg_snapshots`. Phase D: `scripts/paper_3track_overlay_roll.py` — `_parse_expiry_from_key` regex; `_find_expiring_overlay` (DTE gate + force bypass; Phase B SELL-direction fix applied); `_roll_single` 2-trade atomic; `_roll_collar` 4-trade atomic with full rollback chain. Phase E: docs (`CONTEXT.md`, `CONTEXT_TREE.md`, `TODOS.md`, `src/paper/CLAUDE.md`). 83 tests across Phases A–D all passing (commits: 5c25139, e066bcc, 3878672, d3fe226, Phase D pending commit). |
-| 2026-05-03 | **Task 0.4b complete.** Wrote `docs/strategies/nifty_track_comparison_v1.md` — 3-track Nifty instrument comparison spec (Track A NiftyBees / Track B Futures / Track C Deep ITM Call) based on council `2026-05-02_nifty-long-instrument-comparison-protection.md` Stage 3. Covers NEE normalization, blocked combinations (Track B + CC / CSP), daily P&L schema with per-overlay Greek attribution, strategy namespaces `paper_track_a/b/c`, monthly roll mechanics, Track C delta kill criterion (< 0.40 × 3 days), 6-cycle minimum, conclusion gate, and all 8 validator sections. Passes `validate_strategy_spec.py` exit code 0. Fixed `--leg-role` → `--leg` doc discrepancy in `BACKTEST_PLAN.md` task 0.6b. Unblocks task 0.6b (paper trade entry from tomorrow). |
-| 2026-05-03 | **NSE UDiFF migration discovered during smoke test.** Old bhavcopy archive URL confirmed working up to 2024-04-25; broken from 2024-12-02. New UDiFF URL (`/content/fo/BhavCopy_NSE_FO_0_0_0_{YYYYMMDD}_F_0000.csv.zip`) and CSV schema (34 columns, ISO dates, `FinInstrmTp` instrument codes) documented in `DECISIONS.md → NSE Bhavcopy Format Migration`. Fix spec added to TODOS P1-NEXT. Safe bootstrap range: `--end 2024-11-01`. Exact cutover date TBD. |
-| 2026-05-03 | **Completed Phase 1.3: NSE F&O Bhavcopy ingestion pipeline.** Added `src/backtest/__init__.py`, `bhavcopy_ingest.py`, and `bhavcopy_loader.py`. `BhavRecord` strictly enforces the `Decimal` invariant for prices and isolates `FUTIDX` strikes to 0. `parse_option_symbol` handles weekly/monthly formats. Data stored in Parquet idempotently. `scripts/bhavcopy_bootstrap.py` handles resumable offline downloads from NSE CDN with a politeness delay and leaves the `FUTIDX` schema resolution for Task 1.6a via the `--include-futures` flag. Tests interleaved by component commits. |
-| 2026-05-03 | **Added `scripts/find_strike_by_delta.py`.** CLI: live option chain → filter strikes by |delta| range → fixed-width table (strike/IV/ltp/mid/bid/ask/OI/key) + `--dry-run` ready-to-paste `record_paper_trade.py` commands. Three importable helpers (`filter_strikes_by_delta`, `format_table`, `build_record_command`) + `_infer_leg`/`_safe_float`. Works directly on raw Upstox chain data to preserve `instrument_key` (stripped by the parsed `OptionChain` model). 30 offline unit tests in `tests/unit/test_find_strike_by_delta.py` using existing `nifty_chain_2026-04-07.json` fixture. |
-| 2026-05-02 | **Council decision ingested — variance gate regime completeness.** Read `docs/council/2026-05-02_variance-gate-regime-completeness.md`; updated `DECISIONS.md` (new "Variance Gate" section — Z-score reframed as smoke test, graduated deployment tiers 0–3, regime completeness requirement, regime-matched Z-score mandate, spec consistency open issue); updated `BACKTEST_PLAN.md` Phase 0.8 gate (criteria A–D replacing single exit-type bullet) and Task 1.11 (dual Z-score: global + regime-matched); created `docs/plan/variance_gate.md` (full gate specification); added two P1-NEXT tasks to `TODOS.md` (replay harness + India VIX ingestion). No code changes. |
-| 2026-05-02 | **Council decision ingested — near-expiry gamma buy research.** Read `docs/council/2026-05-02_gamma-acceleration-mispricing-option-buying.md`; updated `DECISIONS.md` with new "Signal Hierarchy Decisions — Near-Expiry Buy Research" section covering signal hierarchy (Gamma Gearing primary, Speed secondary, OI velocity confirmation), mispricing threshold formula, forward-test architecture, mandatory Phase 0 schema fields, Phase 3 prerequisites, and kill criteria. No code changes — data collection only until Phase 3 gate. |
-| 2026-05-01 | **Root markdown cleanup.** Archived session log (2026-04-27 → 2026-04-30) to TODOS_ARCHIVE_2026-05-01.md; updated CONTEXT.md date + test count; synced README.md project structure. |
+| 2026-05-10 | **Auto-expiry for CSP entry scripts (SHA 21cd505).** `src/instruments/lookup.py`: added `get_expiry_candidates(underlying, today, preference)` — enumerates NIFTY expiries from BOD JSON into monthly (DTE 15–45) / quarterly (46–200) / yearly (201–420) buckets; default preference `["monthly","quarterly","yearly"]` (CSP income); accepts custom order for hedge use. `scripts/find_strike_by_delta.py`: `--expiry` now optional; when omitted, fetches chains for all candidate expiries and cross-ranks strikes by delta→round-100→spread→OI across the merged pool. `scripts/record_paper_trade.py`: wires same auto-expiry path; `--expiry` now an optional override. 6 unit tests in `tests/unit/instruments/test_expiry_candidates.py`. 58 targeted tests passing. |
+| 2026-05-10 | **Markdown sweep.** Archived 2026-05-01 to 2026-05-09 session log + completed bhavcopy P1-NEXT section to `docs/archive/TODOS_ARCHIVE_2026-05-10.md`. Restructured TODOS.md (Task 0–3 sequential queue + Phase 1/2 buckets). Updated BACKTEST_PLAN.md completion log. Updated PLANNER.md completed section. Updated CONTEXT.md date + test count. |
 
+Full log (2026-05-01 → 2026-05-09): [docs/archive/TODOS_ARCHIVE_2026-05-10.md](docs/archive/TODOS_ARCHIVE_2026-05-10.md)
 Full log (2026-04-01 → 2026-04-30): [docs/archive/TODOS_ARCHIVE_2026-05-01.md](docs/archive/TODOS_ARCHIVE_2026-05-01.md)

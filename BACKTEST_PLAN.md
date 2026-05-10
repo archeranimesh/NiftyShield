@@ -2,7 +2,7 @@
 
 > **Current phase:** Phase 0. Load this file for all backtest/paper/strategy tasks in Phase 0.
 > **Phase 1+ tasks:** `BACKTEST_PLAN_PHASE1.md` — load only when Phase 0.8 gate has passed.
-> **Archived done tasks (0.1, 0.2, 0.4, 0.4a, 0.5, 0.7):** `docs/archive/BACKTEST_PLAN_ARCHIVE.md`
+> **Archived done tasks (0.1, 0.2, 0.4, 0.4a, 0.4b, 0.5, 0.7):** `docs/archive/BACKTEST_PLAN_ARCHIVE.md`
 >
 > **Rendering:** Present using `mcp__visualize__show_widget` — card format with phase badge,
 > section groupings (DONE ✓ / ONGOING / HARD DEADLINE / GATE), owner badges (Cowork / Animesh),
@@ -66,25 +66,6 @@
 - [ ] Run `python -m scripts.daily_snapshot` same day. Confirm P&L continues uninterrupted; new JUL/SEP leg prices reflected in mark-to-market.
 - [ ] Session log entry in `TODOS.md` with date, old/new instrument keys, and any anomalies observed.
 - [ ] If any bug surfaces: file a separate fix commit before moving on.
-
----
-
-## 0.4b — STRATEGY — 3-track Nifty long instrument comparison specification
-
-**Owner: Animesh. Not for Cowork. Blocks task 0.6b.**
-
-- [x] Write `docs/strategies/nifty_track_comparison_v1.md` covering:
-  - Spot (NiftyBees ETF), Futures (Nifty Futures, monthly roll), Proxy (Deep ITM Call, delta ≈ 0.90)
-  - Capital normalization: Notional Equivalent Exposure (NEE) — all tracks sized to 1 Nifty lot equivalent
-  - Blocked combinations (must list explicitly): Futures + Covered Call (standalone)
-  - Daily P&L report schema: base P&L + per-overlay P&L + net combined, per track; daily Delta/Theta/Vega
-  - Strategy namespaces: `paper_nifty_spot`, `paper_nifty_futures`, `paper_nifty_proxy`
-  - Roll mechanics: monthly roll for all tracks; Proxy kill criterion (delta < 0.40 for 3 consecutive days)
-  - Minimum duration: 6 monthly cycles per track
-- [x] Spec passes `validate_strategy_spec.py`.
-- [x] Commit: `docs(strategies): add 3-track Nifty instrument comparison spec v1`. <!-- SHA: see below -->
-
-**Source:** `docs/council/2026-05-02_nifty-long-instrument-comparison-protection.md` Stage 3.
 
 ---
 
@@ -229,6 +210,8 @@ All of the following must be true before loading `BACKTEST_PLAN_PHASE1.md`.
 | 2026-04-25 | 0.4 | fb69043 | CSP v1 spec: docs/strategies/csp_niftybees_v1.md. |
 | 2026-04-25 | 0.5 | 5ccfc52 | Paper trading module src/paper/. 65 new tests, 948 total. |
 | 2026-04-26 | 0.4a | 88dc95e | NiftyShield integrated spec: docs/strategies/niftyshield_integrated_v1.md. |
+| 2026-05-03 | 0.4b | — | 3-track Nifty instrument comparison spec: docs/strategies/nifty_track_comparison_v1.md. Unblocks 0.6b. |
+| 2026-05-10 | auto-expiry | 21cd505 | get_expiry_candidates() in lookup.py; --expiry optional on find_strike_by_delta.py + record_paper_trade.py. |
 
 ---
 
