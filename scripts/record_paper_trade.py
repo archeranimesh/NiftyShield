@@ -3,43 +3,39 @@
 Validates all fields via PaperTrade before touching the DB.
 Enforces the ``paper_`` prefix on --strategy before construction.
 
+Dry-run is on by default — use ``--no-dry-run`` to actually write to the DB.
+
+All trading args default to the CSP Nifty v1 settings so the minimum command
+after copying from ``find_strike_by_delta.py --dry-run`` output is:
+
+    python scripts/record_paper_trade.py --key "NSE_FO|12345" --price 120.50 --no-dry-run
+
 Instrument key can be supplied directly via --key, or auto-resolved from the
 offline BOD JSON using the --underlying / --strike / --option-type / --expiry
 lookup flags.  Both modes are mutually exclusive.
 
-Usage — explicit key:
+Usage — explicit key, write to DB:
     python scripts/record_paper_trade.py \\
-        --strategy paper_csp_nifty_v1 \\
-        --leg short_put \\
         --key "NSE_FO|12345" \\
-        --date 2026-05-01 \\
-        --action SELL \\
-        --qty 75 \\
         --price 120.50 \\
-        --notes "entry at mid; assumed 0.25 slippage"
+        --no-dry-run
 
-Usage — auto instrument lookup ("sell a Nifty 50 put at 23000, May expiry"):
+Override any default:
     python scripts/record_paper_trade.py \\
-        --strategy paper_csp_nifty_v1 \\
-        --leg short_put \\
-        --underlying NIFTY \\
-        --strike 23000 \\
-        --option-type PE \\
-        --expiry 2026-05-29 \\
-        --date 2026-05-01 \\
-        --action SELL \\
-        --qty 75 \\
-        --price 120.50
+        --key "NSE_FO|12345" \\
+        --action BUY \\
+        --price 12.50 \\
+        --notes "roll-close: 4 DTE" \\
+        --no-dry-run
+
+Usage — auto instrument lookup:
+    python scripts/record_paper_trade.py \\
+        --underlying NIFTY --strike 23000 --option-type PE --expiry 2026-05-29 \\
+        --price 120.50 --no-dry-run
 
     If --expiry is omitted, all matching expiries are shown — re-run with --expiry
     to narrow the selection.  If multiple instruments match after all filters are
     applied, the list is printed and no insert is made; use --key directly.
-
-    # Dry run — prints PaperTrade without inserting:
-    python scripts/record_paper_trade.py --strategy paper_csp_nifty_v1 \\
-        --leg short_put --underlying NIFTY --strike 23000 --option-type PE \\
-        --expiry 2026-05-29 --date 2026-05-01 --action SELL --qty 75 --price 120.50 \\
-        --dry-run
 """
 
 from __future__ import annotations
@@ -72,10 +68,14 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--strategy",
-        required=True,
-        help='Paper strategy name — must start with "paper_", e.g. "paper_csp_nifty_v1"',
+        default="paper_csp_nifty_v1",
+        help='Paper strategy name — must start with "paper_". Default: paper_csp_nifty_v1.',
     )
-    parser.add_argument("--leg", required=True, help='Leg role label, e.g. "short_put"')
+    parser.add_argument(
+        "--leg",
+        default="short_put",
+        help='Leg role label, e.g. "short_put". Default: short_put.',
+    )
 
     # ── Instrument identification (one of two modes) ──────────────────────────
     key_group = parser.add_argument_group(
@@ -124,20 +124,23 @@ def _parse_args() -> argparse.Namespace:
 
     parser.add_argument(
         "--date",
-        required=True,
         dest="trade_date",
-        help="Execution date in YYYY-MM-DD format",
+        default=str(date.today()),
+        help="Execution date in YYYY-MM-DD format. Default: today.",
     )
     parser.add_argument(
         "--action",
-        required=True,
         choices=["BUY", "SELL"],
-        help="BUY or SELL",
+        default="SELL",
+        help="BUY or SELL. Default: SELL.",
     )
     parser.add_argument(
-        "--qty", required=True, type=int, help="Units transacted (positive integer)"
+        "--qty",
+        type=int,
+        default=75,
+        help="Units transacted (positive integer). Default: 75.",
     )
-    parser.add_argument("--price", required=True, help="Execution price per unit")
+    parser.add_argument("--price", required=True, help="Execution price per unit.")
     parser.add_argument(
         "--notes",
         default="",
@@ -151,8 +154,12 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--dry-run",
-        action="store_true",
-        help="Print the PaperTrade object without inserting into the DB.",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Preview the PaperTrade without inserting into the DB (default: on). "
+            "Use --no-dry-run to write."
+        ),
     )
     return parser.parse_args()
 

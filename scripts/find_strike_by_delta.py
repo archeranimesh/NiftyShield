@@ -1,23 +1,22 @@
 """CLI: live Nifty option chain → filter by |delta| range → strike/IV/key table.
 
-Optionally prints ready-to-paste ``record_paper_trade.py`` commands when
-``--dry-run`` is given alongside ``--strategy`` / ``--leg`` / ``--qty``.
+Prints ready-to-paste ``record_paper_trade.py`` commands by default (``--dry-run``
+is on by default).  Use ``--no-dry-run`` to suppress the command block and show
+the strike table only.
 
 Works on the raw Upstox V2 option chain response so that ``instrument_key``
 (not preserved by the parsed ``OptionChain`` model) is available in the output.
 
-Usage — table only:
-    python scripts/find_strike_by_delta.py \\
-        --expiry 2026-05-29 \\
-        --delta-min 0.20 --delta-max 0.35
+Usage — CSP Nifty v1 entry (all defaults apply, one arg needed):
+    python scripts/find_strike_by_delta.py --expiry 2026-05-29
 
-Filter PE only with dry-run commands:
+Table only (no command block):
+    python scripts/find_strike_by_delta.py --expiry 2026-05-29 --no-dry-run
+
+Override option side or strategy:
     python scripts/find_strike_by_delta.py \\
         --expiry 2026-05-29 \\
-        --delta-min 0.20 --delta-max 0.35 \\
-        --option-type PE \\
-        --strategy paper_csp_nifty_v1 --leg short_put \\
-        --qty 75 --action SELL --dry-run
+        --option-type CE --strategy paper_other_v1 --action SELL
 
 Underlying defaults to ``NSE_INDEX|Nifty 50``; override with ``--underlying``.
 Delta range is always expressed as absolute (positive) values — sign is inferred
@@ -38,6 +37,11 @@ from src.client.upstox_market import UpstoxMarketClient
 
 UNDERLYING_DEFAULT = "NSE_INDEX|Nifty 50"
 DEFAULT_LOT_SIZE = 75  # current Nifty lot size
+
+# Defaults that mirror record_paper_trade.py — used to emit minimal commands.
+DEFAULT_STRATEGY = "paper_csp_nifty_v1"
+DEFAULT_ACTION = "SELL"
+DEFAULT_LEG = "short_put"
 
 
 # ── Data helpers ──────────────────────────────────────────────────────────────
@@ -228,13 +232,18 @@ def build_record_command(
     Uses mid-price (bid+ask)/2 when both are non-zero; falls back to ltp.
     Price is rounded to 2 decimal places.
 
+    Emits a minimal command — args that match ``record_paper_trade.py`` defaults
+    (``DEFAULT_STRATEGY``, ``DEFAULT_ACTION``, ``DEFAULT_LEG``, ``DEFAULT_LOT_SIZE``)
+    are omitted; ``--date`` is always omitted (defaults to today).  ``--no-dry-run``
+    is always appended so the pasted command writes to the DB.
+
     Args:
         row: A row dict from :func:`filter_strikes_by_delta`.
         strategy: ``--strategy`` value (must start with ``paper_``).
         leg: ``--leg`` value, e.g. ``short_put``.
         action: ``BUY`` or ``SELL``.
         qty: Quantity in units.
-        trade_date: ISO date string, e.g. ``2026-05-03``.
+        trade_date: ISO date string (kept for API compat; not emitted in output).
 
     Returns:
         Multi-line shell command string with a comment header showing
@@ -244,16 +253,23 @@ def build_record_command(
     delta_str = f"{row['delta']:+.4f}"
     iv_str = f"{row['iv']:.2f}%"
 
+    arg_parts: list[str] = []
+    if strategy != DEFAULT_STRATEGY:
+        arg_parts.append(f"--strategy {strategy}")
+    if leg != DEFAULT_LEG:
+        arg_parts.append(f"--leg {leg}")
+    arg_parts.append(f'--key "{row["instrument_key"]}"')
+    if action != DEFAULT_ACTION:
+        arg_parts.append(f"--action {action}")
+    if qty != DEFAULT_LOT_SIZE:
+        arg_parts.append(f"--qty {qty}")
+    arg_parts.append(f"--price {price}")
+    arg_parts.append("--no-dry-run")
+
+    cmd_body = " \\\n    ".join(arg_parts)
     return (
         f"# {row['side']} {row['strike']:.0f} | delta={delta_str} | iv={iv_str}\n"
-        f"python scripts/record_paper_trade.py \\\n"
-        f"    --strategy {strategy} \\\n"
-        f"    --leg {leg} \\\n"
-        f"    --key \"{row['instrument_key']}\" \\\n"
-        f"    --date {trade_date} \\\n"
-        f"    --action {action} \\\n"
-        f"    --qty {qty} \\\n"
-        f"    --price {price}"
+        f"python scripts/record_paper_trade.py \\\n    {cmd_body}"
     )
 
 
@@ -292,8 +308,8 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument(
         "--option-type",
         choices=["CE", "PE", "BOTH"],
-        default="BOTH",
-        help="Filter by option side. Default: BOTH.",
+        default="PE",
+        help="Filter by option side. Default: PE.",
     )
     p.add_argument(
         "--underlying",
@@ -342,8 +358,12 @@ def _parse_args() -> argparse.Namespace:
     )
     dry_grp.add_argument(
         "--dry-run",
-        action="store_true",
-        help="Print ready-to-paste record_paper_trade.py commands below the table.",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Print ready-to-paste record_paper_trade.py commands below the table "
+            "(default: on). Use --no-dry-run to suppress."
+        ),
     )
     return p.parse_args()
 

@@ -31,10 +31,12 @@ format_table
 build_record_command
  17  test_build_command_starts_with_record_paper_trade  command prefix correct
  18  test_build_command_contains_instrument_key         key in command
- 19  test_build_command_contains_strategy               strategy name in command
- 20  test_build_command_uses_mid_price                  mid=(bid+ask)/2 as --price
- 21  test_build_command_falls_back_to_ltp               no bid/ask → ltp as --price
- 22  test_build_command_comment_includes_delta_and_iv   comment line has delta= iv=
+ 19  test_build_command_omits_default_strategy          default strategy NOT in command
+ 20  test_build_command_includes_strategy_when_nondefault  non-default strategy IS in command
+ 21  test_build_command_includes_no_dry_run             --no-dry-run appended
+ 22  test_build_command_uses_mid_price                  mid=(bid+ask)/2 as --price
+ 23  test_build_command_falls_back_to_ltp               no bid/ask → ltp as --price
+ 24  test_build_command_comment_includes_delta_and_iv   comment line has delta= iv=
 
 _infer_leg
  23  test_infer_leg_pe_sell                             PE+SELL → "short_put"
@@ -226,9 +228,23 @@ def test_build_command_contains_instrument_key() -> None:
     assert "NSE_FO|99999" in cmd
 
 
-def test_build_command_contains_strategy() -> None:
+def test_build_command_omits_default_strategy() -> None:
+    """Default strategy (paper_csp_nifty_v1) is not emitted — it's the record_paper_trade default."""
     cmd = build_record_command(_SAMPLE_ROW, **_CMD_KWARGS)
-    assert "paper_csp_nifty_v1" in cmd
+    assert "--strategy" not in cmd
+
+
+def test_build_command_includes_strategy_when_nondefault() -> None:
+    """Non-default strategy must appear in the generated command."""
+    kwargs = {**_CMD_KWARGS, "strategy": "paper_other_v1"}
+    cmd = build_record_command(_SAMPLE_ROW, **kwargs)
+    assert "--strategy paper_other_v1" in cmd
+
+
+def test_build_command_includes_no_dry_run() -> None:
+    """Generated command always appends --no-dry-run so the paste writes to DB."""
+    cmd = build_record_command(_SAMPLE_ROW, **_CMD_KWARGS)
+    assert "--no-dry-run" in cmd
 
 
 def test_build_command_uses_mid_price() -> None:

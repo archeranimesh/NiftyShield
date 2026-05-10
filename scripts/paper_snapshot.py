@@ -6,25 +6,30 @@ same (strategy, date) updates the existing row.
 
 Does NOT touch daily_snapshot.py or the live trades ledger.
 
+Dry-run is on by default — use ``--no-dry-run`` to write to the DB.
+
 Usage:
-    # Snapshot all known paper strategies (uses today's date):
+    # Inspect all strategies (dry-run, no DB write):
     python scripts/paper_snapshot.py
 
-    # Single strategy:
+    # Inspect a single strategy:
     python scripts/paper_snapshot.py --strategy paper_csp_nifty_v1
 
-    # With known underlying price (skips a market fetch):
-    python scripts/paper_snapshot.py --underlying-price 23250.5
+    # Write snapshot for a single strategy:
+    python scripts/paper_snapshot.py --strategy paper_csp_nifty_v1 --no-dry-run
 
-    # Historical date (P&L computation uses that date but LTPs are still live):
-    python scripts/paper_snapshot.py --date 2026-05-01
+    # With known underlying price:
+    python scripts/paper_snapshot.py --underlying-price 23250.5 --no-dry-run
 
-    # Dry run — prints P&L without writing to DB:
-    python scripts/paper_snapshot.py --dry-run
+    # Historical date:
+    python scripts/paper_snapshot.py --date 2026-05-01 --no-dry-run
+
+Cron line (15:35 IST = 10:05 UTC):
+    5 10 * * 1-5  cd /path/to/NiftyShield && python scripts/paper_snapshot.py --strategy paper_csp_nifty_v1 --no-dry-run
 
 Environment:
-    UPSTOX_ENV            prod | sandbox | test  (default: prod)
-    UPSTOX_ACCESS_TOKEN   required for prod/sandbox
+    UPSTOX_ENV              prod | sandbox | test  (default: prod)
+    UPSTOX_ACCESS_TOKEN     required for prod/sandbox
     UPSTOX_ANALYTICS_TOKEN  required for market data (LTP)
 """
 
@@ -88,8 +93,12 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--dry-run",
-        action="store_true",
-        help="Compute and print P&L without writing to the DB.",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Compute and print P&L without writing to the DB (default: on). "
+            "Use --no-dry-run to write."
+        ),
     )
     return parser.parse_args()
 

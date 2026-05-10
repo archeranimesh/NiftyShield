@@ -7,10 +7,10 @@ Coverage:
 - CLI rejects strategy without paper_ prefix with exit code 1.
 - CLI rejects invalid date format with exit code 1.
 - CLI rejects invalid action (not BUY/SELL) with exit code 2 (argparse).
-- CLI rejects zero quantity with exit code 1.
-- --dry-run prints trade fields without inserting.
-- Happy-path SELL inserts a row and prints position summary.
-- Happy-path BUY inserts a row and prints position summary.
+- --dry-run is the default (no DB write without --no-dry-run).
+- Minimal args (only --key + --price) use CSP defaults and preview-only.
+- Happy-path SELL inserts a row and prints position summary (--no-dry-run).
+- Happy-path BUY inserts a row and prints position summary (--no-dry-run).
 - Re-running same args is idempotent (no duplicate row).
 """
 
@@ -115,10 +115,22 @@ def test_rejects_invalid_action(tmp_path: Path) -> None:
     assert code == 2
 
 
-# ── Dry run ───────────────────────────────────────────────────────────────────
+# ── Dry run / defaults ────────────────────────────────────────────────────────
 
 
-def test_dry_run_prints_fields_no_insert(tmp_path: Path) -> None:
+def test_dry_run_is_default(tmp_path: Path) -> None:
+    """Running without --no-dry-run must not insert anything into the DB."""
+    db = tmp_path / "db.sqlite"
+    code, out, _ = _run(_base_args("SELL"), db)  # no --no-dry-run
+    assert code == 0
+    assert "Dry run" in out
+    if db.exists():
+        store = PaperStore(db)
+        assert store.get_trades(_STRATEGY) == []
+
+
+def test_dry_run_prints_fields(tmp_path: Path) -> None:
+    """Explicit --dry-run flag also works and shows all trade fields."""
     db = tmp_path / "db.sqlite"
     args = _base_args() + ["--dry-run"]
     code, out, _ = _run(args, db)
@@ -126,7 +138,18 @@ def test_dry_run_prints_fields_no_insert(tmp_path: Path) -> None:
     assert "paper_csp_nifty_v1" in out
     assert "120.50" in out
     assert "is_paper" in out
-    # DB should not exist or be empty
+    if db.exists():
+        store = PaperStore(db)
+        assert store.get_trades(_STRATEGY) == []
+
+
+def test_defaults_produce_dry_run_with_csp_strategy(tmp_path: Path) -> None:
+    """Only --key + --price → defaults to paper_csp_nifty_v1, short_put, SELL, dry-run."""
+    db = tmp_path / "db.sqlite"
+    code, out, err = _run(["--key", _KEY, "--price", _PRICE], db)
+    assert code == 0, f"stderr: {err}"
+    assert "paper_csp_nifty_v1" in out
+    assert "Dry run" in out
     if db.exists():
         store = PaperStore(db)
         assert store.get_trades(_STRATEGY) == []
@@ -137,7 +160,7 @@ def test_dry_run_prints_fields_no_insert(tmp_path: Path) -> None:
 
 def test_sell_inserts_row_and_prints_summary(tmp_path: Path) -> None:
     db = tmp_path / "db.sqlite"
-    code, out, err = _run(_base_args("SELL"), db)
+    code, out, err = _run(_base_args("SELL") + ["--no-dry-run"], db)
     assert code == 0, f"stderr: {err}"
     assert _STRATEGY in out
     store = PaperStore(db)
@@ -150,9 +173,9 @@ def test_sell_inserts_row_and_prints_summary(tmp_path: Path) -> None:
 def test_buy_inserts_row_and_prints_summary(tmp_path: Path) -> None:
     db = tmp_path / "db.sqlite"
     # First SELL to open
-    _run(_base_args("SELL"), db)
+    _run(_base_args("SELL") + ["--no-dry-run"], db)
     # Then BUY to close
-    buy_args = list(_base_args("BUY"))
+    buy_args = list(_base_args("BUY")) + ["--no-dry-run"]
     buy_args[buy_args.index(_PRICE)] = "60.00"
     code, out, err = _run(buy_args, db)
     assert code == 0, f"stderr: {err}"
@@ -162,17 +185,17 @@ def test_buy_inserts_row_and_prints_summary(tmp_path: Path) -> None:
 
 def test_idempotent_rerun(tmp_path: Path) -> None:
     db = tmp_path / "db.sqlite"
-    _run(_base_args("SELL"), db)
-    _run(_base_args("SELL"), db)
-    _run(_base_args("SELL"), db)
+    _run(_base_args("SELL") + ["--no-dry-run"], db)
+    _run(_base_args("SELL") + ["--no-dry-run"], db)
+    _run(_base_args("SELL") + ["--no-dry-run"], db)
     store = PaperStore(db)
     assert len(store.get_trades(_STRATEGY)) == 1
 
 
 def test_closed_position_prints_closed_message(tmp_path: Path) -> None:
     db = tmp_path / "db.sqlite"
-    _run(_base_args("SELL"), db)
-    buy_args = list(_base_args("BUY"))
+    _run(_base_args("SELL") + ["--no-dry-run"], db)
+    buy_args = list(_base_args("BUY")) + ["--no-dry-run"]
     code, out, _ = _run(buy_args, db)
     assert code == 0
     assert "closed" in out or "net qty" in out
