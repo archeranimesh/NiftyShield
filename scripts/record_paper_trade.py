@@ -516,12 +516,32 @@ def main() -> None:
             )
             sys.exit(1)
 
-    if args.price is None and (args.key or args.underlying):
-        print(
-            "ERROR: --price is required when not in chain mode (auto-expiry).",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+    if args.price is None:
+        if args.close:
+            # Auto-price from LTP
+            try:
+                client = UpstoxMarketClient()
+                ltp_dict = client.get_ltp_sync([instrument_key])
+                if instrument_key not in ltp_dict:
+                    print(f"ERROR: LTP not found for {instrument_key}", file=sys.stderr)
+                    sys.exit(1)
+                
+                price = ltp_dict[instrument_key]
+                rounded_price = round(price, 2)
+                print(f"Auto-price: LTP=₹{rounded_price}")
+                args.price = str(rounded_price)
+            except ValueError as exc:
+                print(f"ERROR: {exc}", file=sys.stderr)
+                sys.exit(1)
+            except Exception as exc:
+                print(f"ERROR: failed to fetch LTP — {exc}", file=sys.stderr)
+                sys.exit(1)
+        elif args.key or args.underlying:
+            print(
+                "ERROR: --price is required when not in chain mode (auto-expiry).",
+                file=sys.stderr,
+            )
+            sys.exit(1)
 
     try:
         trade = PaperTrade(
