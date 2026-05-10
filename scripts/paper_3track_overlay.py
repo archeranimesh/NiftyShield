@@ -429,16 +429,23 @@ async def _run(args: argparse.Namespace) -> None:
     # Resolve effective track list BEFORE any guard
     effective_tracks: list[str] = args.tracks if args.tracks else list(ALL_TRACKS)
 
-    # Hard block: futures + standalone CC
-    if overlay_type == "cc" and any(t in _CC_BLOCKED_TRACKS for t in effective_tracks):
+    # Hard block: futures + standalone CC — auto-exclude and warn, do not abort
+    if overlay_type == "cc":
         blocked = [t for t in effective_tracks if t in _CC_BLOCKED_TRACKS]
-        print(
-            f"ERROR: Covered call is BLOCKED on {', '.join(blocked)} "
-            "(synthetic short put risk — MISSION.md Principle I).\n"
-            "       Use --overlay collar to add protection alongside the covered call.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+        if blocked:
+            for t in blocked:
+                print(
+                    f"  ⚠  BLOCKED: {t} + standalone overlay_cc skipped "
+                    "(synthetic short put risk — MISSION.md Principle I)."
+                )
+            effective_tracks = [t for t in effective_tracks if t not in _CC_BLOCKED_TRACKS]
+        if not effective_tracks:
+            print(
+                "ERROR: No eligible tracks remain after applying CC block. "
+                "All requested tracks are blocked for standalone covered call.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
 
     # Build client
     try:

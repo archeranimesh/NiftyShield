@@ -5,7 +5,8 @@ Coverage:
 - _rank_overlay_key: higher OI wins within the same (is_non_round, spread_bucket).
 - _otm_pct: PE and CE directional correctness.
 - _extract_chain_candidates: OTM band filtering (in-band, out-of-band, no key).
-- effective_tracks CC guard: implicit futures (no --tracks arg) triggers exit(1).
+- effective_tracks CC guard: futures auto-excluded from CC, spot+proxy proceed.
+- effective_tracks CC guard: CC with futures-only track list exits(1) — no eligible tracks.
 - effective_tracks CC guard: CC on spot + proxy succeeds (positive case).
 - build_trade: leg_role → action mapping for PP and CC.
 - build_trade: collar produces both overlay_collar_put and overlay_collar_call.
@@ -171,28 +172,35 @@ def test_extract_chain_candidates_no_key_excluded() -> None:
 # ── CC guard — effective_tracks ───────────────────────────────────────────────
 
 
-def test_cc_blocked_on_futures_exits_1(tmp_path: Path) -> None:
-    """CC with implicit all-tracks (futures included) must exit(1)."""
+def test_cc_futures_auto_excluded_leaves_spot_and_proxy() -> None:
+    """CC guard must auto-exclude futures and leave spot + proxy in effective_tracks."""
+    all_tracks = list(overlay.ALL_TRACKS)  # includes paper_nifty_futures
+    blocked = [t for t in all_tracks if t in overlay._CC_BLOCKED_TRACKS]
+    remaining = [t for t in all_tracks if t not in overlay._CC_BLOCKED_TRACKS]
+
+    assert "paper_nifty_futures" in blocked
+    assert "paper_nifty_spot" in remaining
+    assert "paper_nifty_proxy" in remaining
+    assert len(remaining) == 2
+
+
+def test_cc_exits_when_all_tracks_blocked(tmp_path: Path) -> None:
+    """CC must exit(1) only when every requested track is blocked (futures-only list)."""
+    import asyncio
     db = tmp_path / "p.db"
-    args = _make_args(overlay="cc", tracks=None, db_path=db)  # None → defaults to ALL_TRACKS
-
+    args = _make_args(
+        overlay="cc",
+        tracks=["paper_nifty_futures"],  # only blocked track
+        db_path=db,
+    )
     with pytest.raises(SystemExit) as exc_info:
-        import asyncio
         asyncio.run(overlay._run(args))
-
     assert exc_info.value.code == 1
 
 
 def test_cc_on_spot_and_proxy_succeeds(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """CC restricted to spot + proxy must pass the CC-on-futures guard."""
-    db = tmp_path / "p.db"
-    args = _make_args(
-        overlay="cc",
-        tracks=["paper_nifty_spot", "paper_nifty_proxy"],
-        db_path=db,
-    )
-    # Resolve effective_tracks the same way _run() does, then verify guard does NOT fire
-    effective_tracks = args.tracks if args.tracks else list(overlay.ALL_TRACKS)
+    effective_tracks = ["paper_nifty_spot", "paper_nifty_proxy"]
     assert not any(t in overlay._CC_BLOCKED_TRACKS for t in effective_tracks), (
         "CC guard should NOT fire when futures is not in effective_tracks"
     )

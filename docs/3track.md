@@ -116,37 +116,44 @@ warn — thin OI or wide spread inflates realised slippage.
 
 ## Step 2 — Overlay Entry
 
-### Live-fetch path (recommended)
+### How overlays work across tracks
+
+One option contract is selected per overlay type. The same `instrument_key` is then recorded
+as a separate leg against each eligible strategy namespace. This is not three independently
+managed positions — it is one option tracked in three accounting buckets for comparison.
+
+| Overlay | Tracks it applies to | DB rows written |
+|---------|----------------------|-----------------|
+| PP | spot, futures, proxy | 3 |
+| CC | spot, proxy only (futures permanently blocked) | 2 |
+| Collar | spot, futures, proxy | 6 (put + call per track) |
+
+### Which option is selected
+
+**PP — Buy PE:** 8–10% OTM below spot, target 9%. At Nifty 24,000 → target strike ~21,840.
+
+**CC — Sell CE:** 3–5% OTM above spot, target 4%. At Nifty 24,000 → target strike ~24,960.
+
+Both use the same ranking algorithm: round-100 strikes preferred over 50-increment → tightest
+₹2 spread bucket → highest OI within that bucket → OTM proximity to target as final tiebreaker.
+Expiry preference for both: quarterly (DTE 46–200) → yearly (DTE 201–420) → monthly (DTE 15–45),
+using whichever expiry has spread_pct ≤ 3%. Falls back to monthly if no expiry passes the gate.
+
+### Commands
 
 ```bash
-# Preview — prints confirmation table, prompts Proceed? [y/N]:
+# PP — preview then confirm:
 python -m scripts.paper_3track_overlay --overlay pp
-
-# Write directly (skip prompt):
 python -m scripts.paper_3track_overlay --overlay pp --yes
 
-# Collar:
+# CC — preview then confirm (futures track is auto-skipped with a warning):
+python -m scripts.paper_3track_overlay --overlay cc
+python -m scripts.paper_3track_overlay --overlay cc --yes
+
+# Collar — preview then confirm:
+python -m scripts.paper_3track_overlay --overlay collar
 python -m scripts.paper_3track_overlay --overlay collar --yes
-
-# Specific tracks only:
-python -m scripts.paper_3track_overlay --overlay pp --tracks spot proxy --yes
 ```
-
-**`--date` is required as coded today.** Should default to `date.today()` — the fix is
-pending (see TODOS.md). Until then, pass it explicitly:
-
-```bash
-python -m scripts.paper_3track_overlay --overlay pp --date 2026-05-09 --yes
-```
-
-**Expiry selection logic (automatic):** Prefers quarterly (DTE 46–200) → yearly (DTE 201–420)
-→ monthly (DTE 15–45). Uses the expiry where spread_pct ≤ 3.0% (SPREAD_PCT_MAX). Falls back to
-monthly if no expiry passes the gate. The chosen expiry and spread_pct are logged.
-
-**OTM targets:**
-
-- PP: 8–10% OTM (target 9%)
-- CC: 3–5% OTM (target 4%)
 
 ### YAML path (offline price verification)
 
@@ -256,6 +263,19 @@ python -m scripts.paper_3track_overlay_roll --yes --tracks spot proxy
 ```
 
 `--date` defaults to today, so it does not need to be passed in normal use.
+
+### CC roll when the short call is ITM
+
+The roll script has **one trigger only: DTE ≤ 5**. There is no ITM-based early roll.
+
+If the market has rallied past the short call strike before DTE ≤ 5, the CC is held. This is
+by design — the loss on an ITM CC is the data being collected (it quantifies the upside cap cost).
+Rolling the strike higher mid-cycle would distort the comparison. When DTE ≤ 5 arrives, the roll
+closes the ITM CC at live LTP (recording the realised loss) and opens a fresh CE at 3–5% OTM
+from current spot.
+
+**Do not use `--force` to roll early just because the CC is ITM.** If you want to study a
+managed CC strategy that rolls ITM options, that belongs in a separate strategy spec, not here.
 
 ### Atomicity guarantee
 
