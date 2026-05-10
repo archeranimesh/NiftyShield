@@ -20,7 +20,7 @@ This plan details the implementation of automatic instrument key resolution and 
         ```python
         if args.close and not args.key and not args.underlying:
             key = _resolve_from_position(args)
-            if key:
+            if key is not None:
                 return key
             # If _resolve_from_position returns None, it already printed error and we'll exit 1
             return None
@@ -42,8 +42,9 @@ This plan details the implementation of automatic instrument key resolution and 
                         sys.exit(1)
                     
                     price = ltp_dict[instrument_key]
-                    print(f"Auto-price: LTP=₹{price}")
-                    args.price = str(price)
+                    rounded_price = round(price, 2)
+                    print(f"Auto-price: LTP=₹{rounded_price}")
+                    args.price = str(rounded_price)
                 except ValueError as exc:
                     print(f"ERROR: {exc}", file=sys.stderr)
                     sys.exit(1)
@@ -71,10 +72,10 @@ I will add 4 new tests to `tests/unit/paper/test_record_paper_trade.py`:
     *   Assert exit code 1 and error message.
 3.  `test_close_auto_fetches_ltp_when_no_price`:
     *   Mock `UpstoxMarketClient.get_ltp_sync`.
-    *   Run with `--close` and no `--price`.
-    *   Assert LTP is used as price.
+    *   Run with `--close`, explicit `--key`, and no `--price`.
+    *   Assert LTP is fetched, rounded, and used as price.
 4.  `test_close_explicit_key_skips_db_lookup`:
-    *   Mock `PaperStore.get_position`.
+    *   Mock `scripts.record_paper_trade.PaperStore`.
     *   Run with `--close` and explicit `--key`.
     *   Assert `get_position` is NOT called.
 
