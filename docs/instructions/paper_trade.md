@@ -151,7 +151,7 @@ To add via the overlay automation script (which handles all three tracks at once
 python3 scripts/paper_3track_overlay.py --overlay pp
 
 # Write
-python3 scripts/paper_3track_overlay.py --overlay pp --yes
+python3 scripts/paper_3track_overlay.py --overlay pp --no-dry-run --yes
 ```
 
 `--overlay` accepts `pp`, `cc`, or `collar`. Same `--index N` logic applies.
@@ -168,10 +168,8 @@ python3 scripts/paper_3track_overlay_roll.py
 
 **Default behaviour**: Dry-run — shows what would be rolled, writes nothing.
 
-**To write**:
-```bash
-python3 scripts/paper_3track_overlay_roll.py --yes
-```
+# Execute the roll (after reviewing dry-run output):
+python3 scripts/paper_3track_overlay_roll.py --no-dry-run --yes
 
 The roll is atomic: it closes the expiring leg and opens the next-cycle leg in a single
 transaction, with rollback on failure.
@@ -180,7 +178,7 @@ transaction, with rollback on failure.
 
 | Flag | Default | When to use |
 |------|---------|-------------|
-| `--yes` | off (dry-run) | Execute the roll |
+| `--no-dry-run` | off (dry-run) | Execute the roll |
 | `--force` | off | Bypass the DTE ≤ 5 gate (use for out-of-cycle testing only) |
 | `--tracks A,B,C` | all tracks | Limit roll to specific tracks |
 | `--date YYYY-MM-DD` | today | Override the reference date |
@@ -195,18 +193,18 @@ Mark-to-market all 3-track positions and write daily P&L snapshots.
 python3 scripts/paper_3track_snapshot.py
 ```
 
-**Default behaviour**: Fetches live LTP from Upstox and writes to DB.
+**Default behaviour**: Dry-run — preview proposed P&L, writes nothing.
 
-**Dry-run (no DB write)**:
+**To write (live save)**:
 ```bash
-python3 scripts/paper_3track_snapshot.py --no-save
+python3 scripts/paper_3track_snapshot.py --no-dry-run
 ```
 
 ### Overrides
 
 | Flag | Default | When to use |
 |------|---------|-------------|
-| `--no-save` | off | Preview P&L without writing to DB |
+| `--no-dry-run` | off | Write snapshot to DB |
 | `--spot FLOAT` | live fetch | Pass today's Nifty spot manually (e.g., market closed) |
 | `--tracks A,B,C` | all | Limit snapshot to specific tracks |
 | `--date YYYY-MM-DD` | today | Backfill a missed snapshot date |
@@ -231,7 +229,7 @@ python3 scripts/paper_snapshot.py --no-dry-run --strategy paper_csp_nifty_v1
 | Flag | Default | When to use |
 |------|---------|-------------|
 | `--no-dry-run` | dry-run | Write the snapshot to DB |
-| `--underlying-price FLOAT` | live fetch | Pass today's NiftyBees LTP manually |
+| `--spot FLOAT` | live fetch | Pass today's Nifty spot manually |
 | `--date YYYY-MM-DD` | today | Backfill a missed snapshot date |
 
 ---
@@ -242,8 +240,8 @@ python3 scripts/paper_snapshot.py --no-dry-run --strategy paper_csp_nifty_v1
 |--------|---------|-----------------|------------|
 | `paper_3track_entry.py` | Open 3-track base legs | ✓ preview | `--confirm` |
 | `record_paper_trade.py` | Record any single leg (CSP, overlay, close) | ✓ dry-run | `--no-dry-run` |
-| `paper_3track_overlay_roll.py` | Roll expiring overlay legs | ✓ dry-run | `--yes` |
-| `paper_3track_snapshot.py` | EOD mark-to-market (3-track) | ✗ live write | `--no-save` for dry-run |
+| `paper_3track_overlay_roll.py` | Roll expiring overlay legs | ✓ dry-run | `--no-dry-run --yes` |
+| `paper_3track_snapshot.py` | EOD mark-to-market (3-track) | ✓ dry-run | `--no-dry-run` |
 | `paper_snapshot.py` | EOD mark-to-market (CSP) | ✓ dry-run | `--no-dry-run` |
 
 **Rule of thumb**: always run without the write flag first to inspect output, then re-run
@@ -257,14 +255,14 @@ with the write flag to commit.
 [ ] Month start
     [ ] paper_3track_entry.py --confirm           # open 3-track base legs
     [ ] record_paper_trade.py --no-dry-run        # open CSP short put
-    [ ] paper_3track_overlay.py --overlay pp --yes  # add protective put overlays
+    [ ] paper_3track_overlay.py --overlay pp --no-dry-run --yes  # add protective put overlays
 
 [ ] Every market day
-    [ ] paper_3track_snapshot.py                  # 3-track EOD P&L
+    [ ] paper_3track_snapshot.py --no-dry-run     # 3-track EOD P&L
     [ ] paper_snapshot.py --no-dry-run --strategy paper_csp_nifty_v1  # CSP EOD P&L
 
 [ ] When DTE ≤ 5 (expiry week)
-    [ ] paper_3track_overlay_roll.py --yes        # roll expiring overlays
+    [ ] paper_3track_overlay_roll.py --no-dry-run --yes        # roll expiring overlays
 
 [ ] Month end / CSP expiry
     [ ] record_paper_trade.py --no-dry-run --close  # close CSP short put

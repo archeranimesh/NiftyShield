@@ -32,6 +32,19 @@ This plan addresses a series of CLI consistency and UX improvements for the pape
 
 > **Post-phase step:** run `mcp__codebase-memory-mcp__index_repository` to register `src/paper/formatting.py` in the codebase graph before Phase 2 begins.
 
+#### Commit
+
+```
+feat(paper): add shared formatting helpers for PnL output
+
+Why: Duplicate output code across snapshot scripts; centralise to enforce consistent INR formatting
+What:
+- src/paper/formatting.py: fmt_inr, format_pnl_table, format_track_summary
+- src/paper/__init__.py: re-export formatting helpers
+- tests/unit/paper/test_formatting.py: happy-path + edge-case tests for all three helpers
+Ref: none
+```
+
 ---
 
 ### Phase 2: CLI Unification [CLI-1, CLI-2, CLI-4]
@@ -66,6 +79,24 @@ This plan addresses a series of CLI consistency and UX improvements for the pape
 - `docs/instructions/paper_trade.md` — same `--no-save` → `--no-dry-run` sweep.
 - `CONTEXT_TREE.md` — update `paper_3track_snapshot.py` description (currently references `--no-save`).
 
+#### Commit
+
+```
+refactor(scripts): unify CLI flags across paper trading scripts
+
+Why: Inconsistent --no-save / --underlying-price and bare str --date types cause silent usage errors
+What:
+- scripts/paper_3track_snapshot.py: --no-save → --dry-run (default True); --date fromisoformat
+- scripts/paper_3track_overlay_roll.py: add --dry-run / --no-dry-run flag
+- scripts/paper_snapshot.py: --underlying-price → --spot; --date fromisoformat
+- scripts/paper_3track_overlay.py: --date fromisoformat
+- scripts/find_strike_by_delta.py: --date fromisoformat
+- docs/instructions/3track.md: --no-save → --no-dry-run sweep; cron example updated
+- docs/instructions/paper_trade.md: --no-save → --no-dry-run sweep
+- CONTEXT_TREE.md: update paper_3track_snapshot.py description
+Ref: none
+```
+
 ---
 
 ### Phase 3: UX & Functional Enhancements [UX-6, UX-7, UX-8, CLI-3, CLI-5, CLI-10]
@@ -89,6 +120,22 @@ This plan addresses a series of CLI consistency and UX improvements for the pape
 - `tests/unit/paper/test_paper_3track_snapshot.py` — add cases for `--verbose` gating.
 - `tests/unit/paper/test_paper_3track_overlay_roll.py` — add cases for `--index` and `--overlay` filtering logic.
 
+#### Commit
+
+```
+feat(scripts): add UX enhancements and new CLI filter flags
+
+Why: Summary table buried under verbose output; no index/overlay filter for targeted rolls
+What:
+- scripts/paper_snapshot.py: use format_pnl_table for output
+- scripts/paper_3track_snapshot.py: summary table before verbose blocks; add --verbose/-v flag
+- scripts/paper_3track_overlay_roll.py: add --index N and --overlay pp|cc|collar flags
+- scripts/find_strike_by_delta.py: add --track spot|futures|proxy shortcut
+- tests/unit/paper/test_paper_3track_snapshot.py: --verbose gating cases
+- tests/unit/paper/test_paper_3track_overlay_roll.py: --index and --overlay filter cases
+Ref: none
+```
+
 ---
 
 ### Phase 4: Refinement [CLI-11, CLI-12]
@@ -103,6 +150,19 @@ This plan addresses a series of CLI consistency and UX improvements for the pape
 
 #### [NEW] tests for Phase 4 changes
 - `tests/unit/paper/test_paper_3track_overlay_roll.py` — confirmation prompt: invoked without `--yes`; skipped with `--yes`; non-interactive guard raises cleanly.
+
+#### Commit
+
+```
+feat(scripts): add interactive confirmation and surface trade notes
+
+Why: --no-dry-run without --yes can trigger unintended writes; notes improve audit trail
+What:
+- scripts/paper_3track_overlay_roll.py: align --yes; add confirmation prompt; non-interactive guard
+- scripts/paper_snapshot.py: surface trade notes in snapshot footer/column
+- tests/unit/paper/test_paper_3track_overlay_roll.py: confirmation prompt and guard cases
+Ref: none
+```
 
 ## Verification Plan
 

@@ -144,15 +144,15 @@ using whichever expiry has spread_pct ≤ 3%. Falls back to monthly if no expiry
 ```bash
 # PP — preview then confirm:
 python -m scripts.paper_3track_overlay --overlay pp
-python -m scripts.paper_3track_overlay --overlay pp --yes
+python -m scripts.paper_3track_overlay --overlay pp --no-dry-run --yes
 
 # CC — preview then confirm (futures track is auto-skipped with a warning):
 python -m scripts.paper_3track_overlay --overlay cc
-python -m scripts.paper_3track_overlay --overlay cc --yes
+python -m scripts.paper_3track_overlay --overlay cc --no-dry-run --yes
 
 # Collar — preview then confirm:
 python -m scripts.paper_3track_overlay --overlay collar
-python -m scripts.paper_3track_overlay --overlay collar --yes
+python -m scripts.paper_3track_overlay --overlay collar --no-dry-run --yes
 ```
 
 ### Reading the candidate table
@@ -175,10 +175,10 @@ candidate from the table, add `--index N` on the commit run:
 python -m scripts.paper_3track_overlay --overlay pp
 
 # Commit with rank 2 instead of rank 1:
-python -m scripts.paper_3track_overlay --overlay pp --yes --index 2
+python -m scripts.paper_3track_overlay --overlay pp --no-dry-run --yes --index 2
 
 # Collar — same rank N is applied independently to both PE and CE pools:
-python -m scripts.paper_3track_overlay --overlay collar --yes --index 2
+python -m scripts.paper_3track_overlay --overlay collar --no-dry-run --yes --index 2
 ```
 
 If `--index N` exceeds the number of available candidates, it clamps to the last rank and
@@ -231,17 +231,17 @@ python scripts/paper_3track_overlay_entry.py
 Runs **every trading day at 15:35 IST**. This is the canonical EOD mark-to-market.
 
 ```bash
-# Live save (default):
+# Live save:
+python scripts/paper_3track_snapshot.py --date 2026-05-09 --no-dry-run
+
+# Dry-run — print report, no DB write (default):
 python scripts/paper_3track_snapshot.py --date 2026-05-09
 
-# Dry-run — print report, no DB write:
-python scripts/paper_3track_snapshot.py --date 2026-05-09 --no-save
-
 # If Upstox is down, pass spot manually:
-python scripts/paper_3track_snapshot.py --date 2026-05-09 --no-save --spot 24250
+python scripts/paper_3track_snapshot.py --date 2026-05-09 --dry-run --spot 24250
 
 # Single track (debug):
-python scripts/paper_3track_snapshot.py --date 2026-05-09 --no-save --tracks proxy
+python scripts/paper_3track_snapshot.py --date 2026-05-09 --dry-run --tracks proxy
 ```
 
 **What it writes:**
@@ -256,7 +256,7 @@ are set in `.env`).
 **Cron line (15:35 IST = 10:05 UTC):**
 
 ```
-5 10 * * 1-5  cd /path/to/NiftyShield && python scripts/paper_3track_snapshot.py --date $(date +\%Y-\%m-\%d)
+5 10 * * 1-5  cd /path/to/NiftyShield && python scripts/paper_3track_snapshot.py --date $(date +\%Y-\%m-\%d) --no-dry-run
 ```
 
 ---
@@ -297,17 +297,17 @@ and decide whether to execute.
 ### Commands
 
 ```bash
-# Dry-run — always safe, writes nothing:
+# Dry-run — always safe, writes nothing (default):
 python -m scripts.paper_3track_overlay_roll
 
 # Execute the roll (after reviewing dry-run output):
-python -m scripts.paper_3track_overlay_roll --yes
+python -m scripts.paper_3track_overlay_roll --no-dry-run --yes
 
 # Force-roll even if DTE > 5 (manual intervention):
-python -m scripts.paper_3track_overlay_roll --yes --force
+python -m scripts.paper_3track_overlay_roll --no-dry-run --yes --force
 
 # Single track only:
-python -m scripts.paper_3track_overlay_roll --yes --tracks spot proxy
+python -m scripts.paper_3track_overlay_roll --no-dry-run --yes --tracks spot proxy
 ```
 
 `--date` defaults to today, so it does not need to be passed in normal use.
@@ -345,8 +345,8 @@ Log missed rolls in `TODOS.md`.
 On the **Wednesday after each monthly Nifty expiry** (same cadence as entry):
 
 1. Close all three base legs at LTP.
-2. Re-enter all three base legs via `paper_3track_entry.py --cycle N --confirm`.
-3. Re-enter overlays via `paper_3track_overlay.py --overlay <type> --yes`.
+2. Re-enter all three base legs via `paper_3track_entry.py --confirm`.
+3. Re-enter overlays via `paper_3track_overlay.py --overlay <type> --no-dry-run --yes`.
 4. Overlay legs on quarterly/yearly expiries do **not** roll monthly — they continue until
    their own DTE ≤ 5 trigger fires via `paper_3track_overlay_roll.py`.
 
@@ -425,11 +425,11 @@ BOD instruments file must be current: `data/instruments/NSE.json.gz`
 | Task | Command | When |
 |------|---------|------|
 | Enter base legs | `python scripts/paper_3track_entry.py --confirm` | Cycle start (Weds post-expiry, 10:00–10:30 AM) |
-| Enter PP overlay | `python -m scripts.paper_3track_overlay --overlay pp --yes` | Same day as base entry |
-| Enter CC overlay | `python -m scripts.paper_3track_overlay --overlay cc --yes` | Same day as base entry |
-| Enter Collar overlay | `python -m scripts.paper_3track_overlay --overlay collar --yes` | Same day as base entry |
-| Pick non-default candidate | add `--index 2` to any overlay `--yes` command | After dry-run review |
-| Daily snapshot | `python scripts/paper_3track_snapshot.py` | 15:35 IST daily (cron) |
-| Dry-run snapshot | `python scripts/paper_3track_snapshot.py --no-save` | Ad hoc inspection |
+| Enter PP overlay | `python -m scripts.paper_3track_overlay --overlay pp --no-dry-run --yes` | Same day as base entry |
+| Enter CC overlay | `python -m scripts.paper_3track_overlay --overlay cc --no-dry-run --yes` | Same day as base entry |
+| Enter Collar overlay | `python -m scripts.paper_3track_overlay --overlay collar --no-dry-run --yes` | Same day as base entry |
+| Pick non-default candidate | add `--no-dry-run --yes --index 2` | After dry-run review |
+| Daily snapshot | `python scripts/paper_3track_snapshot.py --no-dry-run` | 15:35 IST daily (cron) |
+| Dry-run snapshot | `python scripts/paper_3track_snapshot.py` | Ad hoc inspection |
 | Roll check (dry) | `python -m scripts.paper_3track_overlay_roll` | Every Thursday morning (or daily cron) |
-| Execute roll | `python -m scripts.paper_3track_overlay_roll --yes` | After dry-run confirms DTE ≤ 5 on any overlay |
+| Execute roll | `python -m scripts.paper_3track_overlay_roll --no-dry-run --yes` | After dry-run confirms DTE ≤ 5 on any overlay |

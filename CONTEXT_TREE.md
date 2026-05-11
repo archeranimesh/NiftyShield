@@ -35,6 +35,14 @@ src/
 │           ├── __init__.py
 │           ├── ilts.py       # ILTS: 4 legs (EBBETF0431 + 3 Nifty options)
 │           └── finrakshak.py # FinRakshak: 1 leg (protective put)
+├── paper/
+│   ├── CLAUDE.md             # Module context: paper_ prefix, Decimal invariant, idempotent record_trade
+│   ├── __init__.py           # Package marker. Re-exports formatting helpers.
+│   ├── constants.py          # Shared paths (portfolio.sqlite, NSE.json.gz) and risk params (LOT_SIZE=65, OVERLAY_ROLL_DTE=5).
+│   ├── models.py             # PaperTrade (trade_date, action, quantity, price, leg_role) and PaperSnapshot.
+│   ├── store.py              # PaperStore (SQLite): record_trade (idempotent), get_trades, delete_trade (rollback), get_all_strategy_names, record_daily_snapshot, get_prev_leg_snapshot (delta tracking).
+│   ├── formatting.py         # Shared output helpers (fmt_inr, format_pnl_table, format_track_summary). Decimal precision; sign-aware.
+│   └── _display.py           # Legacy labels (BASE_LABELS, OVERLAY_LABELS) and hedge_verdict.
 ├── mf/
 │   ├── CLAUDE.md             # Module context: transaction ledger model, AMFI source, Decimal TEXT invariant, MFHolding location
 │   ├── __init__.py           # Package marker
@@ -84,13 +92,18 @@ scripts/
 ├── send_test_telegram.py     # Smoke-test script. Reads TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID from .env, sends a sample P&L message. Exit code 0/1. Run before first cron to verify credentials.
 ├── seed_mf_holdings.py       # One-time CLI. Inserts 11 INITIAL MF transactions. Idempotent. --dry-run flag.
 ├── seed_trades.py            # Idempotent backfill of all finideas_ilts + finrakshak executions as Trade rows. build_trades() (pure) + seed_trades() (I/O). --dry-run flag. 7 trades total. strategy_name must match strategies table (finideas_ilts, finrakshak).
-├── record_trade.py           # CLI for recording future trades. Validates via Trade model; inserts; prints updated net position + avg price. --dry-run prints without touching DB. --strategy takes DB strategy name (e.g. finideas_ilts, not ILTS).
-├── roll_leg.py               # CLI for atomic option leg rolls. Closes old leg + opens new leg in a single DB transaction. Pure _build_trades() validates both Trade objects before any DB write. --old-*/--new-* flag pairs. --dry-run. Calls store.record_roll().
+├── find_strike_by_delta.py    # CLI: live Nifty option chain → filter by |delta| range → strike/IV/key table. Prints ready-to-paste record_paper_trade.py commands. --expiry and --date use type=date.fromisoformat. Added --track shortcut.
+├── paper_3track_entry.py      # Base leg entry for 3-Track comparison. Auto-selects DITM CE proxy + futures + NiftyBees. --confirm required to write.
+├── paper_3track_overlay.py    # Live-fetch overlay entry for all 3 tracks (spot/futures/proxy). PP/CC/collar types. CC permanently blocked on paper_nifty_futures (synthetic short put). _check_existing_overlay detects open SELL positions correctly. Atomicity: failed writes rolled back via store.delete_trade(). Imports: ALL_TRACKS, _ACTION_FOR_ROLE, _OPTION_TYPE_FOR_ROLE, _build_trade, _collect_expiry_candidates, _fetch_candidates_for_expiries, _select_best_candidate reused by roll script.
+├── paper_3track_snapshot.py   # Canonical EOD cron for 3-track comparison (15:45 IST). Live spot fetch (--spot to override). Per-leg delta-from-yesterday via get_prev_leg_snapshot. Writes paper_nav_snapshots + paper_leg_snapshots (--no-save for dry-run). _hedge_verdict shows overlay protection ratio. Uses format_track_summary() for summary-first reporting; --verbose for leg details.
+├── paper_snapshot.py          # EOD mark-to-market for CSP Nifty. Dry-run by default; --no-dry-run to write. Integrated format_pnl_table() for standardized output.
+├── paper_track_snapshot.py    # Legacy snapshot script (preserved for compatibility).
+├── record_paper_trade.py      # Automated CSP/overlay trade recorder. Resolves instrument keys/prices from live chain or existing DB position. Dry-run by default.
+├── record_trade.py            # CLI for recording future trades. Validates via Trade model; inserts; prints updated net position + avg price. --dry-run prints without touching DB. --strategy takes DB strategy name (e.g. finideas_ilts, not ILTS).
+├── roll_leg.py                # CLI for atomic option leg rolls. Closes old leg + opens new leg in a single DB transaction. Pure _build_trades() validates both Trade objects before any DB write. --old-*/--new-* flag pairs. --dry-run. Calls store.record_roll().
 ├── seed_nuvama_positions.py  # One-time seed of Nuvama bond cost-basis. build_positions() pure (6 instruments). seed_positions() I/O wrapper. --write (required to commit), --overwrite, --db. Dry-run by default.
 ├── probe_nuvama_schema.py    # Diagnostic script (not production). Dumps all rmsHdg fields from live Holdings() response.
-├── paper_3track_overlay.py   # Live-fetch overlay entry for all 3 tracks (spot/futures/proxy). PP/CC/collar types. CC permanently blocked on paper_nifty_futures (synthetic short put). _check_existing_overlay detects open SELL positions correctly. Atomicity: failed writes rolled back via store.delete_trade(). Imports: ALL_TRACKS, _ACTION_FOR_ROLE, _OPTION_TYPE_FOR_ROLE, _build_trade, _collect_expiry_candidates, _fetch_candidates_for_expiries, _select_best_candidate reused by roll script.
-├── paper_3track_snapshot.py  # Canonical EOD cron for 3-track comparison (15:45 IST). Live spot fetch (--spot to override). Per-leg delta-from-yesterday via get_prev_leg_snapshot. Writes paper_nav_snapshots + paper_leg_snapshots (--no-save for dry-run). _hedge_verdict shows overlay protection ratio. _save_leg_snapshots writes base leg + all overlay legs.
-└── paper_3track_overlay_roll.py # Rolls expiring overlay legs at DTE ≤ OVERLAY_ROLL_DTE (5). _parse_expiry_from_key extracts date from NSE_FO key regex. _find_expiring_overlay: Phase-B fix applied (last_trade tracks SELL direction). _roll_single: 2-trade atomic (close written first; open failure → delete_trade rollback). _roll_collar: 4-trade atomic with full rollback chain. --force bypasses DTE gate. Imports constants + helpers from paper_3track_overlay.py.
+└── paper_3track_overlay_roll.py # Rolls expiring overlay legs at DTE ≤ OVERLAY_ROLL_DTE (5). _parse_expiry_from_key extracts date from NSE_FO key regex. _find_expiring_overlay: Phase-B fix applied (last_trade tracks SELL direction). _roll_single: 2-trade atomic (close written first; open failure → delete_trade rollback). --force bypasses DTE gate. --yes skips interactive confirmation (TTY-aware). Imports constants + helpers from paper_3track_overlay.py.
 
 .claude/
 ├── settings.json             # PreToolUse hook: warns on Read targeting src/ or scripts/
