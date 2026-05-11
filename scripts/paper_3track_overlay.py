@@ -470,7 +470,7 @@ def _print_confirmation_table(
 async def _run(args: argparse.Namespace) -> None:
     """Core async logic — separated for testability."""
     overlay_type: str = args.overlay
-    entry_date: date = date.fromisoformat(args.date) if args.date else date.today()
+    entry_date: date = args.date or date.today()
 
     # Resolve effective track list BEFORE any guard
     effective_tracks: list[str] = args.tracks if args.tracks else list(ALL_TRACKS)
@@ -708,7 +708,7 @@ def main() -> None:
         help="Overlay type: pp (protective put), cc (covered call), collar (both).",
     )
     parser.add_argument(
-        "--date", default=None, metavar="YYYY-MM-DD",
+        "--date", default=None, type=date.fromisoformat, metavar="YYYY-MM-DD",
         help="Entry date (default: today).",
     )
     parser.add_argument(

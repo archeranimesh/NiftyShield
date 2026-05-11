@@ -1,41 +1,25 @@
 """CLI for recording a single paper trade into the paper_trades ledger.
 
-Validates all fields via PaperTrade before touching the DB.
-Enforces the ``paper_`` prefix on --strategy before construction.
+Supports four modes of instrument resolution:
+1. Direct Key: Provide --key "NSE_FO|12345" and --price.
+2. Auto-expiry (Live Chain): Provide --expiry YYYY-MM-DD. Fetches live LTP and
+   delta-ranked strikes (like find_strike_by_delta), picking rank via --index N.
+3. BOD Lookup: Provide --underlying, --strike, --option-type, --expiry to
+   resolve a key from the offline BOD JSON (data/instruments/NSE.json.gz).
+4. Close Shorthand: Use --close to auto-resolve the instrument key from the
+   current open short position in the DB and fetch live LTP for the price.
 
 Dry-run is on by default — use ``--no-dry-run`` to actually write to the DB.
 
-All trading args default to the CSP Nifty v1 settings so the minimum command
-after copying from ``find_strike_by_delta.py --dry-run`` output is:
+Usage Examples:
+    # Explicit key:
+    python scripts/record_paper_trade.py --key "NSE_FO|12345" --price 120.5 --no-dry-run
 
-    python scripts/record_paper_trade.py --key "NSE_FO|12345" --price 120.50 --no-dry-run
+    # Live chain pick (rank 1):
+    python scripts/record_paper_trade.py --expiry 2026-05-29 --delta-min 0.15 --no-dry-run
 
-Instrument key can be supplied directly via --key, or auto-resolved from the
-offline BOD JSON using the --underlying / --strike / --option-type / --expiry
-lookup flags.  Both modes are mutually exclusive.
-
-Usage — explicit key, write to DB:
-    python scripts/record_paper_trade.py \\
-        --key "NSE_FO|12345" \\
-        --price 120.50 \\
-        --no-dry-run
-
-Override any default:
-    python scripts/record_paper_trade.py \\
-        --key "NSE_FO|12345" \\
-        --action BUY \\
-        --price 12.50 \\
-        --notes "roll-close: 4 DTE" \\
-        --no-dry-run
-
-Usage — auto instrument lookup:
-    python scripts/record_paper_trade.py \\
-        --underlying NIFTY --strike 23000 --option-type PE --expiry 2026-05-29 \\
-        --price 120.50 --no-dry-run
-
-    If --expiry is omitted, all matching expiries are shown — re-run with --expiry
-    to narrow the selection.  If multiple instruments match after all filters are
-    applied, the list is printed and no insert is made; use --key directly.
+    # Close current short position at live LTP:
+    python scripts/record_paper_trade.py --strategy paper_nifty_spot --leg overlay_pp --close --no-dry-run
 """
 
 from __future__ import annotations

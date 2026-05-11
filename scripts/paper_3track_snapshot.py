@@ -4,23 +4,23 @@
 Combines base vs protection P&L, per-leg delta-from-yesterday tracking, and
 proxy delta monitoring into a single terminal report. Writes both
 ``paper_nav_snapshots`` (strategy-level) and ``paper_leg_snapshots`` (per-leg)
-by default; use ``--no-save`` for a dry-run inspection.
+by default; use ``--dry-run`` for a dry-run inspection (default: on).
 
 Replaces ``paper_track_snapshot.py`` as the canonical cron snapshot script.
 ``paper_track_snapshot.py`` is preserved for backward-compatible operator use.
 
 Usage:
-    # Live fetch — save snapshots (default):
+    # Live fetch — save snapshots:
+    python scripts/paper_3track_snapshot.py --date 2026-05-07 --no-dry-run
+
+    # Dry-run — print report only, no DB writes (default):
     python scripts/paper_3track_snapshot.py --date 2026-05-07
 
-    # Dry-run — print report only, no DB writes:
-    python scripts/paper_3track_snapshot.py --date 2026-05-07 --no-save
-
     # Restrict to specific tracks:
-    python scripts/paper_3track_snapshot.py --date 2026-05-07 --tracks spot proxy
+    python scripts/paper_3track_snapshot.py --date 2026-05-07 --tracks spot proxy --no-dry-run
 
 Cron example (daily at 15:35 IST):
-    35 10 * * 1-5  cd /path/to/NiftyShield && python scripts/paper_3track_snapshot.py
+    35 10 * * 1-5  cd /path/to/NiftyShield && python scripts/paper_3track_snapshot.py --no-dry-run
 
 Diagnostics:
     LOG_LEVEL=DEBUG python scripts/paper_3track_snapshot.py --date 2026-05-07
@@ -52,6 +52,7 @@ from src.paper.metrics import compute_nee
 from src.paper.models import PaperLegSnapshot, PaperNavSnapshot
 from src.paper.proxy_monitor import ProxyDeltaMonitor
 from src.paper.store import PaperStore
+from src.paper.formatting import format_track_summary
 from src.paper.track_snapshot import TrackPnL, TrackSnapshot, generate_track_snapshot
 from src.paper._utils import safe_float
 from src.paper._display import (
@@ -276,8 +277,8 @@ def _print_summary_table(
 # ── Main async orchestration ──────────────────────────────────────────────────
 
 async def _run(args: argparse.Namespace) -> None:
-    snap_date: date = date.fromisoformat(args.date) if args.date else date.today()
-    save: bool = not args.no_save
+    snap_date: date = args.date or date.today()
+    save: bool = not args.dry_run
 
     _TRACK_MAP = {
         "spot":    "paper_nifty_spot",
@@ -292,8 +293,8 @@ async def _run(args: argparse.Namespace) -> None:
     try:
         broker = UpstoxMarketClient()
     except ValueError:
-        if args.no_save:
-            logger.warning("UPSTOX_ANALYTICS_TOKEN not set — using mock broker (--no-save mode).")
+        if args.dry_run:
+            logger.warning("UPSTOX_ANALYTICS_TOKEN not set — using mock broker (dry-run mode).")
 
             class _MockBroker:
                 async def get_ltp(self, keys):
@@ -304,7 +305,7 @@ async def _run(args: argparse.Namespace) -> None:
         else:
             logger.error(
                 "UPSTOX_ANALYTICS_TOKEN not set. "
-                "Use --no-save for a dry-run without live prices."
+                "Use --dry-run for a dry-run without live prices."
             )
             sys.exit(1)
 
@@ -348,6 +349,7 @@ async def _run(args: argparse.Namespace) -> None:
     print(f"{'═' * W}")
 
     results: list[tuple[str, TrackSnapshot]] = []
+    summary_rows = []
 
     for track_name in tracks:
         monitor = proxy_monitor if track_name == "paper_nifty_proxy" else None
@@ -362,6 +364,16 @@ async def _run(args: argparse.Namespace) -> None:
             proxy_monitor=monitor,
         )
         results.append((track_name, snapshot))
+
+        pnl = snapshot.pnl
+        overlay_total = sum(pnl.overlay_pnls.values()) if pnl.overlay_pnls else Decimal("0")
+        summary_rows.append({
+            "track": BASE_LABELS.get(track_name, track_name),
+            "base_pnl": pnl.base_pnl,
+            "overlay_pnl": overlay_total,
+            "net_pnl": pnl.net_pnl,
+            "return_on_nee": snapshot.return_on_nee,
+        })
 
         # Collect LTP map from positions (needed for leg snapshot ltp field)
         trades = store.get_trades(track_name)
@@ -378,20 +390,6 @@ async def _run(args: argparse.Namespace) -> None:
         ltp_map: dict[str, Decimal] = {
             k: Decimal(str(v)) for k, v in raw_ltps.items() if v
         }
-
-        # Compute per-leg deltas-from-yesterday for display
-        pnl = snapshot.pnl
-        leg_deltas: dict[str, Decimal | None] = {}
-
-        base_role = _base_leg_role(track_name)
-        base_unrealized = pnl.unrealized_pnl - sum(pnl.overlay_pnls.values())
-        base_total = base_unrealized + pnl.realized_pnl
-        leg_deltas[base_role] = _leg_delta(store, track_name, base_role, base_total, snap_date)
-
-        for role, role_pnl in pnl.overlay_pnls.items():
-            leg_deltas[role] = _leg_delta(store, track_name, role, role_pnl, snap_date)
-
-        _print_track_block(track_name, snapshot, leg_deltas, snap_date)
 
         # Telegram critical alert
         if snapshot.proxy_delta_alert and "CRITICAL" in snapshot.proxy_delta_alert:
@@ -412,11 +410,29 @@ async def _run(args: argparse.Namespace) -> None:
             _save_nav_snapshot(store, track_name, snapshot, snap_date, nifty_spot)
             _save_leg_snapshots(store, track_name, snapshot, snap_date, ltp_map)
 
-    _print_summary_table(results, snap_date)
+    # Print summary table at the TOP (as requested)
+    if summary_rows:
+        print("\n" + format_track_summary(summary_rows, title=f"Comparison Summary — {snap_date}", is_dry_run=args.dry_run))
+
+    # Print detailed blocks only if verbose
+    if args.verbose:
+        for track_name, snapshot in results:
+            # Re-calculate leg_deltas for display
+            pnl = snapshot.pnl
+            leg_deltas = {}
+            base_role = _base_leg_role(track_name)
+            base_unrealized = pnl.unrealized_pnl - sum(pnl.overlay_pnls.values())
+            base_total = base_unrealized + pnl.realized_pnl
+            leg_deltas[base_role] = _leg_delta(store, track_name, base_role, base_total, snap_date)
+            for role, role_pnl in pnl.overlay_pnls.items():
+                leg_deltas[role] = _leg_delta(store, track_name, role, role_pnl, snap_date)
+            
+            _print_track_block(track_name, snapshot, leg_deltas, snap_date)
+
     if save:
-        print(f"  ✅  All snapshots written to {args.db_path}\n")
+        print(f"\n  ✅  All snapshots written to {args.db_path}\n")
     else:
-        print("  ℹ️   --no-save: no records written.\n")
+        print("\n  ℹ️   Dry-run: no records written.\n")
 
 
 def main() -> None:
@@ -432,12 +448,12 @@ def main() -> None:
         description=(
             "Canonical daily snapshot for the 3-Track Nifty Long Comparison framework.\n"
             "Writes paper_nav_snapshots + paper_leg_snapshots by default.\n"
-            "Use --no-save for a dry-run inspection."
+            "Use --dry-run for a dry-run inspection (default: on)."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
-        "--date", default=None, metavar="YYYY-MM-DD",
+        "--date", default=None, type=date.fromisoformat, metavar="YYYY-MM-DD",
         help="Snapshot date (default: today).",
     )
     parser.add_argument(
@@ -445,8 +461,12 @@ def main() -> None:
         help="Nifty 50 spot price (default: live fetch via UpstoxMarketClient).",
     )
     parser.add_argument(
-        "--no-save", action="store_true",
-        help="Print report only — do not write to DB.",
+        "--dry-run", action=argparse.BooleanOptionalAction, default=True,
+        help="Print report only — do not write to DB (default: on).",
+    )
+    parser.add_argument(
+        "--verbose", action="store_true",
+        help="Print detailed per-leg P&L tables and Greeks.",
     )
     parser.add_argument(
         "--tracks", nargs="+", choices=["spot", "futures", "proxy"],

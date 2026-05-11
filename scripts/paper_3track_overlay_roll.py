@@ -16,17 +16,17 @@ Blocked combinations (inherited from entry script):
     paper_nifty_futures + standalone overlay_cc (synthetic short put risk).
 
 Usage:
-    # Dry-run — show what would roll, write nothing:
-    python -m scripts.paper_3track_overlay_roll --date 2026-05-07 --dry-run
+    # Dry-run — show what would roll, write nothing (default):
+    python -m scripts.paper_3track_overlay_roll --date 2026-05-07
 
     # Live run:
-    python -m scripts.paper_3track_overlay_roll --date 2026-05-07 --yes
+    python -m scripts.paper_3track_overlay_roll --date 2026-05-07 --no-dry-run --yes
 
     # Force-roll legs whose DTE > OVERLAY_ROLL_DTE (e.g., manual intervention):
-    python -m scripts.paper_3track_overlay_roll --date 2026-05-07 --yes --force
+    python -m scripts.paper_3track_overlay_roll --date 2026-05-07 --no-dry-run --yes --force
 
     # Restrict to specific tracks:
-    python -m scripts.paper_3track_overlay_roll --date 2026-05-07 --yes --tracks spot proxy
+    python -m scripts.paper_3track_overlay_roll --date 2026-05-07 --no-dry-run --yes --tracks spot proxy
 
 Diagnostics:
     LOG_LEVEL=DEBUG python -m scripts.paper_3track_overlay_roll ...
@@ -277,6 +277,7 @@ async def _open_new_leg(
     strategy: str,
     roll_date: date,
     dry_run: bool,
+    index: int = 0,
 ) -> PaperTrade:
     """Select and record the replacement overlay leg.
 
@@ -290,6 +291,7 @@ async def _open_new_leg(
         strategy:  Strategy name for the new trade.
         roll_date: Date to record the new trade.
         dry_run:   If True, build the trade but do not write it.
+        index:     0-based rank index for candidate selection (default 0 = top-ranked).
 
     Returns:
         The newly built PaperTrade.
@@ -313,7 +315,7 @@ async def _open_new_leg(
     )
 
     candidates = gate_passers if gate_passers else all_candidates
-    best = _select_best_candidate(candidates, target_otm, option_type)
+    best = _select_best_candidate(candidates, target_otm, option_type, index=index)
     best["dte"] = (date.fromisoformat(best["expiry"]) - roll_date).days
 
     new_trade = _build_trade(strategy, leg_role, best, roll_date, LOT_SIZE)
@@ -333,6 +335,7 @@ async def _roll_single(
     existing: PaperTrade,
     roll_date: date,
     dry_run: bool,
+    index: int = 0,
 ) -> RollResult:
     """Roll one overlay leg atomically (close + open).
 
@@ -353,7 +356,8 @@ async def _roll_single(
     close_trade = await _close_leg(broker, store, existing, roll_date, dry_run)
     try:
         open_trade = await _open_new_leg(
-            broker, store, lookup, existing.leg_role, existing.strategy_name, roll_date, dry_run
+            broker, store, lookup, existing.leg_role, existing.strategy_name, roll_date, dry_run,
+            index=index,
         )
     # Intentional: isolate per-strategy roll processing failures.
     except Exception:
@@ -386,6 +390,7 @@ async def _roll_collar(
     call_leg: PaperTrade,
     roll_date: date,
     dry_run: bool,
+    index: int = 0,
 ) -> list[RollResult]:
     """Roll a collar atomically (4-trade: close put, close call, open put, open call).
 
@@ -417,7 +422,8 @@ async def _roll_collar(
 
     try:
         open_put = await _open_new_leg(
-            broker, store, lookup, "overlay_collar_put", put_leg.strategy_name, roll_date, dry_run
+            broker, store, lookup, "overlay_collar_put", put_leg.strategy_name, roll_date, dry_run,
+            index=index,
         )
     # Intentional: catch failure to open new leg and rollback both closed legs.
     except Exception:
@@ -428,7 +434,8 @@ async def _roll_collar(
 
     try:
         open_call = await _open_new_leg(
-            broker, store, lookup, "overlay_collar_call", call_leg.strategy_name, roll_date, dry_run
+            broker, store, lookup, "overlay_collar_call", call_leg.strategy_name, roll_date, dry_run,
+            index=index,
         )
     # Intentional: catch failure to open final leg and rollback all previous steps.
     except Exception:
@@ -485,7 +492,7 @@ def _print_roll_report(results: list[RollResult], roll_date: date, dry_run: bool
     for r in results:
         old_short = r.old_instrument_key.replace("NSE_FO|NIFTY", "")
         new_short = r.new_instrument_key.replace("NSE_FO|NIFTY", "")
-        pnl_str = f"+{r.cycle_pnl:,.0f}" if r.cycle_pnl >= 0 else f"{r.cycle_pnl:,.0f}"
+        pnl_str = f"₹{r.cycle_pnl:+,.0f}"
         print(
             f"  {r.strategy:<24} {r.leg_role:<20} {old_short:<28} {new_short:<28} "
             f"{pnl_str:>12} {r.new_dte:>5}"
@@ -493,27 +500,31 @@ def _print_roll_report(results: list[RollResult], roll_date: date, dry_run: bool
         total_pnl += r.cycle_pnl
 
     print(f"  {'─' * 76}")
-    total_str = f"+{total_pnl:,.0f}" if total_pnl >= 0 else f"{total_pnl:,.0f}"
+    total_str = f"₹{total_pnl:+,.0f}"
     print(f"  {'Total cycle P&L':>74} {total_str:>12}")
     print(f"{'═' * 80}")
     if dry_run:
-        print("\n  Re-run without --dry-run (or with --yes) to write to DB.")
+        print("\n  Re-run with --no-dry-run --yes to write to DB.")
     print()
 
 
 # ── Main orchestration ────────────────────────────────────────────────────────
 
 async def _run(args: argparse.Namespace) -> None:
-    """Async entry point — detect and execute overlay rolls.
-
-    Args:
-        args: Parsed CLI arguments.
-    """
+    """Async entry point — detect and execute overlay rolls."""
     log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
     logging.basicConfig(level=log_level, format="%(levelname)s %(name)s %(message)s")
 
     roll_date: date = args.date or date.today()
-    dry_run: bool = not args.yes  # default is dry-run unless --yes is passed
+    dry_run: bool = args.dry_run
+
+    # CLI-3: Guard against hanging on input() in non-TTY environments
+    if not dry_run and not args.yes and not sys.stdin.isatty():
+        print(
+            "ERROR: --no-dry-run requires --yes in non-interactive environments.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     effective_tracks: list[str] = []
     if args.tracks:
@@ -531,48 +542,90 @@ async def _run(args: argparse.Namespace) -> None:
         sys.exit(1)
 
     broker = UpstoxMarketClient(token)
-    results: list[RollResult] = []
 
-    for strategy in effective_tracks:
-        trades_by_role: dict[str, list[PaperTrade]] = {}
-        for leg_role in _OVERLAY_ROLES:
-            trades_by_role[leg_role] = store.get_trades(strategy, leg_role)
+    # Resolve --overlay filter to the set of leg roles to consider
+    _OVERLAY_FILTER: set[str] | None = None
+    if args.overlay == "pp":
+        _OVERLAY_FILTER = {"overlay_pp"}
+    elif args.overlay == "cc":
+        _OVERLAY_FILTER = {"overlay_cc"}
+    elif args.overlay == "collar":
+        _OVERLAY_FILTER = {"overlay_collar_put", "overlay_collar_call"}
+    # None means no filter — roll all eligible legs
 
-        # Detect collar (both collar legs open simultaneously)
-        collar_put_candidates  = _find_expiring_overlay(
-            trades_by_role["overlay_collar_put"], roll_date, "overlay_collar_put", args.force
-        )
-        collar_call_candidates = _find_expiring_overlay(
-            trades_by_role["overlay_collar_call"], roll_date, "overlay_collar_call", args.force
-        )
+    candidate_index: int = max(0, (args.index or 1) - 1)  # CLI is 1-based, internal is 0-based
 
-        if collar_put_candidates and collar_call_candidates:
-            logger.info("%s: rolling collar (4-trade atomic)", strategy)
-            collar_results = await _roll_collar(
-                broker, store, lookup,
-                collar_put_candidates[0], collar_call_candidates[0],
-                roll_date, dry_run,
+    # Helper to execute the roll loop
+    async def _do_rolls(is_dry: bool) -> list[RollResult]:
+        roll_results = []
+        for strategy in effective_tracks:
+            trades_by_role: dict[str, list[PaperTrade]] = {}
+            for leg_role in _OVERLAY_ROLES:
+                trades_by_role[leg_role] = store.get_trades(strategy, leg_role)
+
+            # Collar: only attempt if filter allows both collar legs (or no filter set)
+            collar_allowed = _OVERLAY_FILTER is None or (
+                "overlay_collar_put" in _OVERLAY_FILTER and
+                "overlay_collar_call" in _OVERLAY_FILTER
             )
-            results.extend(collar_results)
-            continue  # collar handled — skip individual leg checks for this strategy
+            if collar_allowed:
+                collar_put_candidates  = _find_expiring_overlay(
+                    trades_by_role["overlay_collar_put"], roll_date, "overlay_collar_put", args.force
+                )
+                collar_call_candidates = _find_expiring_overlay(
+                    trades_by_role["overlay_collar_call"], roll_date, "overlay_collar_call", args.force
+                )
+                if collar_put_candidates and collar_call_candidates:
+                    collar_results = await _roll_collar(
+                        broker, store, lookup,
+                        collar_put_candidates[0], collar_call_candidates[0],
+                        roll_date, is_dry, index=candidate_index,
+                    )
+                    roll_results.extend(collar_results)
+                    continue
 
-        # Roll individual legs (pp, cc — collar legs handled only together above)
-        for leg_role in ("overlay_pp", "overlay_cc"):
-            # Enforce blocked combo: futures + standalone CC
-            if strategy in _CC_BLOCKED_TRACKS and leg_role == "overlay_cc":
-                continue
+            for leg_role in ("overlay_pp", "overlay_cc"):
+                if _OVERLAY_FILTER is not None and leg_role not in _OVERLAY_FILTER:
+                    continue
+                if strategy in _CC_BLOCKED_TRACKS and leg_role == "overlay_cc":
+                    continue
+                candidates = _find_expiring_overlay(
+                    trades_by_role[leg_role], roll_date, leg_role, args.force
+                )
+                if not candidates:
+                    continue
+                result = await _roll_single(
+                    broker, store, lookup, candidates[0], roll_date, is_dry,
+                    index=candidate_index,
+                )
+                roll_results.append(result)
+        return roll_results
 
-            candidates = _find_expiring_overlay(
-                trades_by_role[leg_role], roll_date, leg_role, args.force
-            )
-            if not candidates:
-                continue
+    # 1. Always do a dry-run first to show the report if not using --yes
+    if not args.yes:
+        results = await _do_rolls(is_dry=True)
+        _print_roll_report(results, roll_date, dry_run=True)
+        
+        if not results or dry_run:
+            return
 
-            logger.info("%s/%s: rolling single leg", strategy, leg_role)
-            result = await _roll_single(broker, store, lookup, candidates[0], roll_date, dry_run)
-            results.append(result)
-
-    _print_roll_report(results, roll_date, dry_run)
+        # Interactive confirmation
+        try:
+            confirm = input("Confirm roll execution? [y/N]: ").strip().lower()
+            if confirm != "y":
+                print("Aborted.")
+                sys.exit(0)
+        except (KeyboardInterrupt, EOFError):
+            print("\nAborted.")
+            sys.exit(0)
+        
+        # Now execute for real
+        results = await _do_rolls(is_dry=False)
+        _print_roll_report(results, roll_date, dry_run=False)
+    else:
+        # --yes passed, execute directly
+        results = await _do_rolls(is_dry=dry_run)
+        _print_roll_report(results, roll_date, dry_run=dry_run)
 
 
 def main() -> None:
@@ -603,9 +656,28 @@ def main() -> None:
         help="Roll even when DTE > OVERLAY_ROLL_DTE (manual intervention).",
     )
     parser.add_argument(
+        "--overlay",
+        choices=["pp", "cc", "collar"],
+        default=None,
+        help="Restrict rolls to a specific overlay type. Default: all eligible legs.",
+    )
+    parser.add_argument(
+        "--index",
+        type=int,
+        default=1,
+        metavar="N",
+        help="1-based rank of the replacement candidate to select (default: 1 = top-ranked).",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Print report only — do not write to DB (default: on).",
+    )
+    parser.add_argument(
         "--yes",
         action="store_true",
-        help="Write to DB. Without this flag the script runs as a dry-run.",
+        help="Skip interactive confirmation and write to DB (for non-interactive use).",
     )
     parser.add_argument(
         "--db-path",

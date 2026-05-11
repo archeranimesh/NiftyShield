@@ -19,7 +19,7 @@ Usage:
     python scripts/paper_snapshot.py --strategy paper_csp_nifty_v1 --no-dry-run
 
     # With known underlying price:
-    python scripts/paper_snapshot.py --underlying-price 23250.5 --no-dry-run
+    python scripts/paper_snapshot.py --spot 23250.5 --no-dry-run
 
     # Historical date:
     python scripts/paper_snapshot.py --date 2026-05-01 --no-dry-run
@@ -47,6 +47,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.client.factory import create_broker_client
 from src.paper.store import PaperStore
+from src.paper.formatting import format_pnl_table
 from src.paper.tracker import PaperTracker
 from src.paper.constants import DEFAULT_DB_PATH
 
@@ -77,12 +78,12 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--date",
-        dest="snapshot_date",
+        type=date.fromisoformat,
         default=None,
         help="Snapshot date in YYYY-MM-DD (defaults to today).",
     )
     parser.add_argument(
-        "--underlying-price",
+        "--spot",
         type=float,
         default=None,
         help="Nifty 50 spot price for context (optional; stored in snapshot).",
@@ -111,16 +112,7 @@ async def _run(args: argparse.Namespace) -> int:
 
     load_dotenv()
 
-    snapshot_date: date | None = None
-    if args.snapshot_date:
-        try:
-            snapshot_date = date.fromisoformat(args.snapshot_date)
-        except ValueError:
-            print(
-                f"ERROR: --date must be YYYY-MM-DD, got: {args.snapshot_date!r}",
-                file=sys.stderr,
-            )
-            return 1
+    snap_date = args.date or date.today()
 
     env = os.environ.get("UPSTOX_ENV", "prod")
     client = create_broker_client(env=env)
@@ -143,50 +135,41 @@ async def _run(args: argparse.Namespace) -> int:
         print("No paper strategies found in DB.  Record a trade first.")
         return 0
 
-    snap_date = snapshot_date or date.today()
     any_printed = False
+    pnl_rows = []
 
     for name in strategy_names:
         pnl = await tracker.compute_pnl(name)
         if pnl is None:
-            print(f"{name}: no trades — skipped")
             continue
 
         unrealized, realized, total = pnl
-        underlying_str = (
-            f"  underlying : ₹{args.underlying_price:,.2f}\n"
-            if args.underlying_price is not None
-            else ""
-        )
+        pnl_rows.append({
+            "strategy": name,
+            "unrealized": unrealized,
+            "realized": realized,
+            "total": total,
+        })
         any_printed = True
 
         if args.dry_run:
-            print(
-                f"\n[DRY RUN] {name} — {snap_date}\n"
-                f"  unrealized : ₹{unrealized:,.2f}\n"
-                f"  realized   : ₹{realized:,.2f}\n"
-                f"  total P&L  : ₹{total:,.2f}\n"
-                f"{underlying_str}"
-                f"  (not written to DB)"
-            )
+            # Still print the underlying for context in dry-run
+            if args.spot is not None:
+                print(f"{name} underlying : ₹{args.spot:,.2f}")
         else:
             snap = await tracker.record_daily_snapshot(
                 name,
                 snapshot_date=snap_date,
-                underlying_price=args.underlying_price,
+                underlying_price=args.spot,
             )
             if snap:
                 print(
-                    f"{name} — {snap.snapshot_date}\n"
-                    f"  unrealized : ₹{snap.unrealized_pnl:,.2f}\n"
-                    f"  realized   : ₹{snap.realized_pnl:,.2f}\n"
-                    f"  total P&L  : ₹{snap.total_pnl:,.2f}"
+                    f"  ✅  {name}: recorded to DB (P&L: ₹{float(total):+,.2f})"
                 )
-                if snap.underlying_price is not None:
-                    print(f"  underlying : ₹{snap.underlying_price:,.2f}")
-
-    if not any_printed and not args.dry_run:
-        print("All strategies skipped — no trades found.")
+    if pnl_rows:
+        print("\n" + format_pnl_table(pnl_rows, title=f"Snapshots for {snap_date}", is_dry_run=args.dry_run))
+    elif not any_printed:
+        print("No active strategies with trades found.")
 
     return 0
 

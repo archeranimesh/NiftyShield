@@ -323,6 +323,7 @@ def _parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--expiry",
+        type=date.fromisoformat,
         metavar="YYYY-MM-DD",
         help="Option expiry date, e.g. 2026-05-29. Auto-selected if omitted.",
     )
@@ -372,10 +373,12 @@ def _parse_args() -> argparse.Namespace:
     dry_grp.add_argument(
         "--strategy",
         default="paper_csp_nifty_v1",
-        help=(
-            'Paper strategy name (must start with "paper_"). '
-            "Default: paper_csp_nifty_v1."
-        ),
+        help="Paper strategy namespace (default: paper_csp_nifty_v1).",
+    )
+    p.add_argument(
+        "--track",
+        choices=["spot", "futures", "proxy"],
+        help="Shortcut to set --strategy to paper_nifty_<track>.",
     )
     dry_grp.add_argument(
         "--leg",
@@ -399,8 +402,8 @@ def _parse_args() -> argparse.Namespace:
     )
     dry_grp.add_argument(
         "--date",
-        dest="trade_date",
-        default=str(date.today()),
+        type=date.fromisoformat,
+        default=date.today(),
         metavar="YYYY-MM-DD",
         help="Trade execution date. Default: today.",
     )
@@ -419,6 +422,9 @@ def _parse_args() -> argparse.Namespace:
 def main() -> None:
     """CLI entry point: fetch chain, filter, print table + optional dry-run commands."""
     args = _parse_args()
+
+    if args.track:
+        args.strategy = f"paper_nifty_{args.track}"
 
     if args.delta_min < 0 or args.delta_max < 0:
         print(
@@ -439,14 +445,8 @@ def main() -> None:
         )
         sys.exit(1)
     if args.expiry:
-        try:
-            date.fromisoformat(args.expiry)
-        except ValueError:
-            print(
-                f"ERROR: --expiry must be YYYY-MM-DD, got: {args.expiry!r}",
-                file=sys.stderr,
-            )
-            sys.exit(1)
+        # Validated by argparse type=date.fromisoformat
+        pass
 
     try:
         client = UpstoxMarketClient()
@@ -457,7 +457,7 @@ def main() -> None:
     # Resolve expiries
     expiries: list[tuple[str, str]] = []  # (label, expiry_str)
     if args.expiry:
-        expiries = [("manual", args.expiry)]
+        expiries = [("manual", str(args.expiry))]
     else:
         from src.instruments.lookup import InstrumentLookup
         try:
@@ -560,7 +560,7 @@ def main() -> None:
             leg=row_leg,
             action=args.action,
             qty=args.qty,
-            trade_date=args.trade_date,
+            trade_date=str(args.date),
         )
     )
     print()

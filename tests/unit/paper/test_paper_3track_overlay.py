@@ -395,7 +395,7 @@ def _make_args(
     ns.dry_run  = dry_run
     ns.yes      = yes
     ns.force    = force
-    ns.date     = date_str
+    ns.date     = date.fromisoformat(date_str) if isinstance(date_str, str) else date_str
     ns.bod_path = bod_path
     ns.index    = index
     return ns
