@@ -243,6 +243,113 @@ Blocked: static IP not provisioned. Unblocked when IP is confirmed. `place_order
 
 Wire `build_notifier` from `src/notifications/` into `paper_snapshot.py`. Add `[DRY RUN]` label. Non-fatal, fire-and-forget. Defer until `paper_snapshot.py` is touched for another reason.
 
+### Telegram — Paper Trade Roll Alert (all tracks)
+
+Single unified alert per leg. Fires when **either** condition is met first, then escalates in frequency as DTE shrinks. Not two independent alerts.
+
+---
+
+**Trigger conditions (first one to fire starts the alert cycle):**
+
+- **Condition A — DTE:** `(expiry_date − today).days <= 5`. Applies to all open legs (short and long).
+- **Condition B — Decay:** short/sell legs only; `current_premium ≤ entry_premium × 0.25` (≥ 75% of premium captured). Entry premium from `PaperTrade.entry_price`; current premium from daily snapshot LTP.
+
+Whichever fires first determines the alert reason in the message body. If both are true simultaneously, lead with DTE since that's the action-forcing constraint.
+
+---
+
+**Escalating frequency schedule (DTE-driven once alert cycle starts):**
+
+| DTE | Frequency |
+|-----|-----------|
+| 5–4 | Every other day |
+| 3–2 | Daily |
+| 1   | Daily, message prefixed with `⚠️ URGENT` |
+
+If Condition B (decay) fires at DTE > 5: send once at the decay trigger date, then go quiet until DTE 5 when the normal escalation schedule kicks in.
+
+Alert cycle ends when `PaperStore` records a close for the leg (roll completed). Re-arms on the replacement leg after a roll.
+
+---
+
+**Message content (minimum):**
+- Alert reason: `ROLL DUE (DTE N)` or `DECAY TARGET HIT (X%)` — whichever triggered
+- Strategy name, leg label, instrument key, expiry date, current DTE
+- For decay alerts: entry premium, current premium, decay %
+- Suggested command: `paper_3track_overlay_roll.py` or `paper_csp_roll.py` invocation
+
+---
+
+**Implementation notes:**
+- Lives in `paper_snapshot.py` / `paper_3track_snapshot.py`, part of the daily EOD cron.
+- Frequency gating requires persisted state: a `paper_alerts` table keyed on `(trade_id, alert_type)` storing `last_sent_date`. Check this before firing to enforce the every-other-day cadence.
+- Use `build_notifier` from `src/notifications/`. Non-fatal — log warning on Telegram failure, do not abort snapshot.
+- Idempotent: if cron runs twice in a day, alert fires at most once (guard on `last_sent_date == today`).
+
+---
+
+### `paper_alerts` Table — Schema + Audit Trail
+
+New table in `portfolio.sqlite` (shared DB via `src/db.py`). Required before the alert cron logic can be built.
+
+**DDL:**
+
+```sql
+CREATE TABLE IF NOT EXISTS paper_alerts (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    trade_id        TEXT        NOT NULL,          -- FK to paper_trades.trade_id
+    alert_type      TEXT        NOT NULL,          -- 'ROLL_DTE' | 'DECAY_TARGET'
+    triggered_by    TEXT        NOT NULL,          -- 'DTE' | 'DECAY' (which condition fired this cycle)
+    dte_at_fire     INTEGER,                       -- DTE on the day alert was sent
+    decay_pct       REAL,                          -- % decay at fire time (NULL for pure DTE alerts)
+    entry_premium   TEXT        NOT NULL,          -- Decimal as TEXT (snapshot of entry_price at fire time)
+    current_premium TEXT        NOT NULL,          -- Decimal as TEXT (LTP at fire time)
+    last_sent_date  TEXT        NOT NULL,          -- ISO date YYYY-MM-DD (UTC); gate for idempotency + cadence
+    sent_count      INTEGER     NOT NULL DEFAULT 1,-- total times this alert has fired for this trade_id + alert_type cycle
+    telegram_ok     INTEGER     NOT NULL DEFAULT 1,-- 1 = delivered, 0 = Telegram call failed (logged but non-fatal)
+    created_at      TEXT        NOT NULL,          -- ISO datetime UTC; set on first INSERT
+    updated_at      TEXT        NOT NULL           -- ISO datetime UTC; updated on every re-fire
+);
+
+CREATE INDEX IF NOT EXISTS idx_paper_alerts_trade
+    ON paper_alerts (trade_id, alert_type);
+
+CREATE INDEX IF NOT EXISTS idx_paper_alerts_last_sent
+    ON paper_alerts (last_sent_date);
+```
+
+**Row lifecycle:**
+- **First fire:** `INSERT` with `sent_count = 1`, `created_at = updated_at = now`.
+- **Re-fire (same cycle):** `UPDATE` — increment `sent_count`, refresh `last_sent_date`, `current_premium`, `dte_at_fire`, `decay_pct`, `telegram_ok`, `updated_at`. Never insert a second row for the same `(trade_id, alert_type)`.
+- **Roll / leg close:** do NOT delete the row — it is the audit trail. The alert re-arms on the replacement leg's `trade_id`, which will have its own fresh row.
+
+**Cadence gate logic (pseudo-code):**
+
+```python
+row = store.get_alert(trade_id, alert_type)
+if row is None:
+    fire_alert(); store.insert_alert(...)
+elif row.last_sent_date == today:
+    pass  # already fired today — idempotent guard
+elif dte <= 2 or (dte <= 4 and (today - row.last_sent_date).days >= 2):
+    fire_alert(); store.update_alert(...)
+# else: too soon, skip
+```
+
+**`PaperStore` methods to add:**
+- `get_alert(trade_id, alert_type) → PaperAlert | None`
+- `upsert_alert(alert: PaperAlert) → None` — insert on first fire, update on re-fire
+
+**`PaperAlert` model:** frozen `dataclass` (same pattern as `PaperNavSnapshot`). Monetary fields (`entry_premium`, `current_premium`) as `Decimal`, stored as TEXT. `last_sent_date` as `datetime.date`. `created_at` / `updated_at` as UTC `datetime`.
+
+**Tests (`tests/unit/paper/test_paper_alerts.py`):**
+- Happy path: first fire inserts row, re-fire increments `sent_count` and refreshes `last_sent_date`.
+- Idempotency: second call on same day does not update.
+- Cadence gate: at DTE 4, skips if `last_sent_date` was yesterday; fires if 2 days elapsed.
+- Cadence gate: at DTE ≤ 2, fires regardless of gap.
+- Telegram failure: `telegram_ok = 0` recorded, snapshot continues without exception.
+- Roll re-arm: closing a leg does not delete the alert row; new leg gets its own fresh row.
+
 ---
 
 ## Technical Debt
