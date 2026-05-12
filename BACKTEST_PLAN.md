@@ -204,14 +204,10 @@ All of the following must be true before loading `BACKTEST_PLAN_PHASE1.md`.
 
 *Append-only. Cowork: add one row per completed task with date, task ID, commit SHA.*
 
+*Completed tasks (0.1, 0.2, 0.4, 0.4a, 0.4b, 0.5, 0.7, auto-expiry) archived in [docs/archive/BACKTEST_PLAN_ARCHIVE.md](docs/archive/BACKTEST_PLAN_ARCHIVE.md).*
+
 | Date | Task | Commit SHA | Notes |
 |---|---|---|---|
-| 2026-04-24 | 0.1 | cd3ed6b | 174 nuvama tests. Follow-up fix 92a6c74. |
-| 2026-04-25 | 0.4 | fb69043 | CSP v1 spec: docs/strategies/csp_niftybees_v1.md. |
-| 2026-04-25 | 0.5 | 5ccfc52 | Paper trading module src/paper/. 65 new tests, 948 total. |
-| 2026-04-26 | 0.4a | 88dc95e | NiftyShield integrated spec: docs/strategies/niftyshield_integrated_v1.md. |
-| 2026-05-03 | 0.4b | — | 3-track Nifty instrument comparison spec: docs/strategies/nifty_track_comparison_v1.md. Unblocks 0.6b. |
-| 2026-05-10 | auto-expiry | 21cd505 | get_expiry_candidates() in lookup.py; --expiry optional on find_strike_by_delta.py + record_paper_trade.py. |
 
 ---
 
