@@ -47,10 +47,14 @@ from scripts.find_strike_by_delta import (
     rank_strikes,
 )
 from src.client.upstox_market import UpstoxMarketClient
+from src.backtest.ivr import compute_ivr
+from src.backtest.vix_ingest import load_vix_series
 from src.paper.constants import DEFAULT_BOD_PATH, DEFAULT_DB_PATH
 from src.paper._utils import safe_float
 
 load_dotenv()
+
+DEFAULT_VIX_DIR = Path("data/historical/ohlc/india_vix")
 
 
 
@@ -458,6 +462,72 @@ def _resolve_instrument_key(args: argparse.Namespace) -> str | None:
     return None
 
 
+def _get_ivr_and_warn(trade_date: date, action: TradeAction) -> float | None:
+    """Load VIX series, compute IVR, and print warnings for R3 entry gates.
+
+    Warnings are printed to stderr but do not block execution.
+
+    Args:
+        trade_date: Date of the trade execution.
+        action: BUY or SELL.
+
+    Returns:
+        Computed IVR value or None if data is insufficient.
+    """
+    if not DEFAULT_VIX_DIR.exists():
+        print(
+            f"WARNING: VIX data directory not found at {DEFAULT_VIX_DIR}. "
+            "IVR will not be recorded.",
+            file=sys.stderr,
+        )
+        return None
+
+    series = load_vix_series(DEFAULT_VIX_DIR)
+    if series.empty:
+        print("WARNING: No VIX data found in Parquet. IVR skipped.", file=sys.stderr)
+        return None
+
+    # We need the VIX close for the trade date.
+    # If the trade is today, we might not have it yet in Parquet.
+    if trade_date not in series.index:
+        print(
+            f"WARNING: No VIX data for {trade_date}. IVR skipped.",
+            file=sys.stderr,
+        )
+        return None
+
+    vix_today = series[trade_date]
+    # compute_ivr expects the window *ending* on or before today.
+    # We pass the series up to trade_date.
+    historical = series[series.index <= trade_date]
+    ivr = compute_ivr(vix_today, historical)
+
+    if ivr is None:
+        print(
+            f"WARNING: Insufficient VIX history ({len(historical)}/252 days). "
+            "IVR skipped.",
+            file=sys.stderr,
+        )
+        return None
+
+    # R3 Entry Gate Warnings (SELL only)
+    if action == TradeAction.SELL:
+        if 0.25 <= ivr <= 0.50:
+            print(
+                f"ATTENTION: IVR is {ivr:.2f} (R3 Entry Window). "
+                "Ensure sufficient premium/margin for potential expansion.",
+                file=sys.stderr,
+            )
+        elif ivr < 0.25:
+            print(
+                f"WARNING: Low IVR ({ivr:.2f}). "
+                "Risk of volatility expansion is high.",
+                file=sys.stderr,
+            )
+
+    return ivr
+
+
 def main() -> None:
     """CLI entry point. Validates, optionally inserts, prints position summary."""
     args = _parse_args()
@@ -533,6 +603,8 @@ def main() -> None:
             )
             sys.exit(1)
 
+    ivr_at_entry = _get_ivr_and_warn(trade_date, TradeAction(args.action))
+
     try:
         trade = PaperTrade(
             strategy_name=args.strategy,
@@ -543,6 +615,7 @@ def main() -> None:
             quantity=args.qty,
             price=Decimal(args.price),
             notes=args.notes,
+            ivr_at_entry=ivr_at_entry,
         )
     # Intentional: top-level catch for trade recording failure.
     except Exception as exc:
@@ -558,6 +631,8 @@ def main() -> None:
         print(f"  action    : {trade.action.value}")
         print(f"  quantity  : {trade.quantity}")
         print(f"  price     : ₹{trade.price}")
+        if trade.ivr_at_entry is not None:
+            print(f"  ivr_entry : {trade.ivr_at_entry:.2f}")
         print(f"  is_paper  : {trade.is_paper}")
         if trade.notes:
             print(f"  notes     : {trade.notes}")
