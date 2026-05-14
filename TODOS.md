@@ -1,9 +1,6 @@
 # NiftyShield — TODOs
 
-> Open work only. Completed items and session history:
-> - 2026-04-30 and earlier: [docs/archive/TODOS_ARCHIVE_2026-05-01.md](docs/archive/TODOS_ARCHIVE_2026-05-01.md)
-> - 2026-05-01 to 2026-05-09: [docs/archive/TODOS_ARCHIVE_2026-05-10.md](docs/archive/TODOS_ARCHIVE_2026-05-10.md)
-> - 2026-05-10 to 2026-05-11: [docs/archive/TODOS_ARCHIVE_2026-05-12.md](docs/archive/TODOS_ARCHIVE_2026-05-12.md)
+> Open work only. Completed items and session history: [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md)
 
 ---
 
@@ -420,8 +417,6 @@ License decision needed before automation. Every file should carry a header once
 
 | Date | What Changed |
 |---|---|
-| 2026-05-12 | **CLI/UX audit cross-check.** Verified against commits `264adf0` + `8cd9307`: CLI-1–5, CLI-10–11, UX-6–9 all implemented. CLI-12 (--notes surface in paper_snapshot.py) confirmed absent — remains open. Archived session log to `TODOS_ARCHIVE_2026-05-12.md`. Stripped done CLI/UX items from TODOS.md. |
+| 2026-05-12 | **CLI/UX audit cross-check.** Verified against commits `264adf0` + `8cd9307`: CLI-1–5, CLI-10–11, UX-6–9 all implemented. CLI-12 (--notes surface in paper_snapshot.py) confirmed absent — remains open. Archived session log to `TODOS_ARCHIVE.md`. Stripped done CLI/UX items from TODOS.md. |
 
-Full log (2026-05-10 → 2026-05-11): [docs/archive/TODOS_ARCHIVE_2026-05-12.md](docs/archive/TODOS_ARCHIVE_2026-05-12.md)
-Full log (2026-05-01 → 2026-05-09): [docs/archive/TODOS_ARCHIVE_2026-05-10.md](docs/archive/TODOS_ARCHIVE_2026-05-10.md)
-Full log (2026-04-01 → 2026-04-30): [docs/archive/TODOS_ARCHIVE_2026-05-01.md](docs/archive/TODOS_ARCHIVE_2026-05-01.md)
+Full log: [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md)
