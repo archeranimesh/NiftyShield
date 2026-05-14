@@ -40,6 +40,7 @@ class PaperTrade(BaseModel):
         quantity: Units transacted. Always positive — direction is in action.
         price: Simulated execution price per unit. Always positive.
         notes: Optional annotation (slippage assumption, decision rationale, etc.).
+        ivr_at_entry: India VIX IV Rank at trade entry [0.0, 1.0].
         is_paper: Always True. Explicit marker for defensive query filtering.
     """
 
@@ -51,6 +52,7 @@ class PaperTrade(BaseModel):
     quantity: int = Field(..., gt=0)
     price: Decimal = Field(..., gt=0)
     notes: str = ""
+    ivr_at_entry: float | None = None
     is_paper: Literal[True] = True
 
     model_config = {"frozen": True}

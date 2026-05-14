@@ -14,6 +14,7 @@ as UTC; IST conversion at display layer only.
 
 from __future__ import annotations
 
+import sqlite3
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -33,6 +34,7 @@ CREATE TABLE IF NOT EXISTS paper_trades (
     quantity       INTEGER NOT NULL,
     price          TEXT NOT NULL,
     notes          TEXT NOT NULL DEFAULT '',
+    ivr_at_entry   REAL DEFAULT NULL,
     UNIQUE(strategy_name, leg_role, trade_date, action)
 );
 
@@ -88,6 +90,7 @@ def _row_to_trade(row) -> PaperTrade:
         quantity=row["quantity"],
         price=Decimal(row["price"]),
         notes=row["notes"],
+        ivr_at_entry=row["ivr_at_entry"],
     )
 
 
@@ -124,6 +127,13 @@ class PaperStore:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         with _connect(self.db_path) as conn:
             conn.executescript(_SCHEMA)
+            # Migration: add ivr_at_entry to paper_trades if missing
+            try:
+                conn.execute(
+                    "ALTER TABLE paper_trades ADD COLUMN ivr_at_entry REAL DEFAULT NULL"
+                )
+            except sqlite3.OperationalError:
+                pass  # Column already exists
 
     # ── Trades ledger ─────────────────────────────────────────────────────────
 
@@ -143,8 +153,8 @@ class PaperStore:
             cur = conn.execute(
                 """INSERT INTO paper_trades
                    (strategy_name, leg_role, instrument_key, trade_date,
-                    action, quantity, price, notes)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    action, quantity, price, notes, ivr_at_entry)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                    ON CONFLICT(strategy_name, leg_role, trade_date, action)
                    DO NOTHING""",
                 (
@@ -156,6 +166,7 @@ class PaperStore:
                     trade.quantity,
                     str(trade.price),
                     trade.notes,
+                    trade.ivr_at_entry,
                 ),
             )
             return cur.rowcount == 1
@@ -178,7 +189,7 @@ class PaperStore:
             if leg_role is not None:
                 rows = conn.execute(
                     "SELECT strategy_name, leg_role, instrument_key, trade_date,"
-                    " action, quantity, price, notes"
+                    " action, quantity, price, notes, ivr_at_entry"
                     " FROM paper_trades"
                     " WHERE strategy_name = ? AND leg_role = ?"
                     " ORDER BY trade_date ASC",
@@ -187,7 +198,7 @@ class PaperStore:
             else:
                 rows = conn.execute(
                     "SELECT strategy_name, leg_role, instrument_key, trade_date,"
-                    " action, quantity, price, notes"
+                    " action, quantity, price, notes, ivr_at_entry"
                     " FROM paper_trades"
                     " WHERE strategy_name = ?"
                     " ORDER BY trade_date ASC",
