@@ -12,7 +12,7 @@ Ongoing paper-trading tasks (Animesh) run in parallel and are listed separately 
 | # | Task | Owner | Hard Deadline | Status |
 |---|---|---|---|---|
 | **0** | Fix bhavcopy UDiFF format (Dec 2024+) | Cowork | ASAP | ✅ Done (2026-05-14) |
-| **1** | India VIX ingestion + IVR calculation | Cowork | Jun 2026 | Unblocked |
+| **1** | India VIX ingestion + IVR calculation | Cowork | Jun 2026 | ✅ Done (2026-05-14) |
 | **2** | PortfolioDeltaTracker (`src/risk/`) | Cowork | Jun 2026 | Unblocked |
 | **3** | June 2026 Finideas roll cycle | Animesh + Cowork | **2026-06-30** | Awaiting Finideas instructions |
 
@@ -53,16 +53,16 @@ are blocked.
 
 **Scope (implements the VIX daily sub-path of BACKTEST_PLAN_PHASE1.md task 1.3a):**
 
-- `src/backtest/ohlc_ingest.py` (or new `src/backtest/vix_ingest.py`): daily India VIX ingest from
+- [x] `src/backtest/ohlc_ingest.py` (or new `src/backtest/vix_ingest.py`): daily India VIX ingest from
   `NSE_INDEX|India VIX` via Upstox `/v2/historical-candle/` (free, existing `UPSTOX_ANALYTICS_TOKEN`).
   Store as Parquet: `data/historical/ohlc/india_vix/`. Resumable — skip dates already present.
-- IVR formula: `ivr = (vix_today − vix_252d_low) / (vix_252d_high − vix_252d_low)`. Clamp to `[0.0, 1.0]`.
+- [x] IVR formula: `ivr = (vix_today − vix_252d_low) / (vix_252d_high − vix_252d_low)`. Clamp to `[0.0, 1.0]`.
   Already implemented in `src/backtest/ivr.py` (`compute_ivr`) — wire at entry-log time.
-- Log IVR at entry for every paper trade: add `ivr_at_entry: float | None` field to `PaperTrade` model
+- [x] Log IVR at entry for every paper trade: add `ivr_at_entry: float | None` field to `PaperTrade` model
   or `paper_nav_snapshots` (confirm canonical location in `src/paper/CLAUDE.md` before changing schema).
-- Enable R3 gate check in `scripts/record_paper_trade.py`: compute IVR from ingested data; warn (do not
+- [x] Enable R3 gate check in `scripts/record_paper_trade.py`: compute IVR from ingested data; warn (do not
   block) when IVR < 25 or > 50.
-- Tests: VIX Parquet resumability (skip if already present); IVR boundary tests (already in `test_ivr.py`);
+- [x] Tests: VIX Parquet resumability (skip if already present); IVR boundary tests (already in `test_ivr.py`);
   R3 warning path in `record_paper_trade.py` (mock IVR fetch).
 
 **Owner:** Cowork. Unblocks R3, criterion C, and BACKTEST_PLAN_PHASE1.md task 1.11 regime-matched comparison.
@@ -417,6 +417,7 @@ License decision needed before automation. Every file should carry a header once
 
 | Date | What Changed |
 |---|---|
+| 2026-05-14 | **Task 1 closed.** India VIX ingestion pipeline (`vix_ingest.py`) implemented with Upstox API + NSE CSV support. `PaperTrade` model and `paper_trades` table migrated to include `ivr_at_entry`. `record_paper_trade.py` integrated with `compute_ivr` and R3 entry gate warnings. 12 new tests across phases A–C green. Updated CONTEXT.md + TODOS.md. |
 | 2026-05-14 | **Task 0 closed.** UDiFF fix confirmed already implemented by Antigravity (commits `490ec9b`, `590f472`): dual-URL download, `_parse_legacy`/`_parse_udiff`, format detection via `TradDt` header, 25 tests green, UDiFF fixture present. Smoke-tested against 2026-05-13 (live UDiFF download). Updated CONTEXT.md + TODOS.md. Bootstrap resume run pending (`--start 2017-06-01 --end <today>`). |
 | 2026-05-12 | **CLI/UX audit cross-check.** Verified against commits `264adf0` + `8cd9307`: CLI-1–5, CLI-10–11, UX-6–9 all implemented. CLI-12 (--notes surface in paper_snapshot.py) confirmed absent — remains open. Archived session log to `TODOS_ARCHIVE.md`. Stripped done CLI/UX items from TODOS.md. |
 

@@ -206,8 +206,7 @@ All of the following must be true before loading `BACKTEST_PLAN_PHASE1.md`.
 
 *Completed tasks (0.1, 0.2, 0.4, 0.4a, 0.4b, 0.5, 0.7, auto-expiry) archived in [docs/archive/BACKTEST_PLAN_ARCHIVE.md](docs/archive/BACKTEST_PLAN_ARCHIVE.md).*
 
-| Date | Task | Commit SHA | Notes |
-|---|---|---|---|
+| 2026-05-14 | Task 1 | 5d1c3c0 | India VIX ingestion + IVR integration into record_paper_trade.py. |
 
 ---
 
