@@ -77,4 +77,5 @@ def test_store_migration_idempotent(tmp_path):
     store1 = PaperStore(db_file)
     # Should not raise exception
     store2 = PaperStore(db_file)
-    assert store1.db_path == store2.db_path
+    # Confirm functionality after multiple inits (idempotent migration)
+    assert store2.get_trades("nonexistent") == []

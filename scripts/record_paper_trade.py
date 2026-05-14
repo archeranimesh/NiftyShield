@@ -46,9 +46,9 @@ from scripts.find_strike_by_delta import (
     format_table,
     rank_strikes,
 )
-from src.client.upstox_market import UpstoxMarketClient
 from src.backtest.ivr import compute_ivr
 from src.backtest.vix_ingest import load_vix_series
+from src.client.upstox_market import UpstoxMarketClient
 from src.paper.constants import DEFAULT_BOD_PATH, DEFAULT_DB_PATH
 from src.paper._utils import safe_float
 
@@ -182,6 +182,12 @@ def _parse_args() -> argparse.Namespace:
         type=Path,
         default=DEFAULT_DB_PATH,
         help=f"Path to the SQLite database (default: {DEFAULT_DB_PATH})",
+    )
+    parser.add_argument(
+        "--vix-data-dir",
+        type=Path,
+        default=DEFAULT_VIX_DIR,
+        help=f"Path to the India VIX Parquet directory (default: {DEFAULT_VIX_DIR})",
     )
     parser.add_argument(
         "--close",
@@ -462,7 +468,9 @@ def _resolve_instrument_key(args: argparse.Namespace) -> str | None:
     return None
 
 
-def _get_ivr_and_warn(trade_date: date, action: TradeAction) -> float | None:
+def _get_ivr_and_warn(
+    trade_date: date, action: TradeAction, vix_data_dir: Path
+) -> float | None:
     """Load VIX series, compute IVR, and print warnings for R3 entry gates.
 
     Warnings are printed to stderr but do not block execution.
@@ -470,19 +478,20 @@ def _get_ivr_and_warn(trade_date: date, action: TradeAction) -> float | None:
     Args:
         trade_date: Date of the trade execution.
         action: BUY or SELL.
+        vix_data_dir: Path to the India VIX Parquet directory.
 
     Returns:
         Computed IVR value or None if data is insufficient.
     """
-    if not DEFAULT_VIX_DIR.exists():
+    if not vix_data_dir.exists():
         print(
-            f"WARNING: VIX data directory not found at {DEFAULT_VIX_DIR}. "
+            f"WARNING: VIX data directory not found at {vix_data_dir}. "
             "IVR will not be recorded.",
             file=sys.stderr,
         )
         return None
 
-    series = load_vix_series(DEFAULT_VIX_DIR)
+    series = load_vix_series(vix_data_dir)
     if series.empty:
         print("WARNING: No VIX data found in Parquet. IVR skipped.", file=sys.stderr)
         return None
@@ -522,6 +531,12 @@ def _get_ivr_and_warn(trade_date: date, action: TradeAction) -> float | None:
             print(
                 f"WARNING: Low IVR ({ivr:.2f}). "
                 "Risk of volatility expansion is high.",
+                file=sys.stderr,
+            )
+        elif ivr > 0.50:
+            print(
+                f"WARNING: High IVR ({ivr:.2f}). "
+                "Elevated vol regime — premium rich but tail risk is elevated.",
                 file=sys.stderr,
             )
 
@@ -603,7 +618,9 @@ def main() -> None:
             )
             sys.exit(1)
 
-    ivr_at_entry = _get_ivr_and_warn(trade_date, TradeAction(args.action))
+    ivr_at_entry = _get_ivr_and_warn(
+        trade_date, TradeAction(args.action), args.vix_data_dir
+    )
 
     try:
         trade = PaperTrade(

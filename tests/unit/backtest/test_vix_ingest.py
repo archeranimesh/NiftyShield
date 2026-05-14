@@ -84,7 +84,9 @@ def test_ingest_api_skips_dates_already_present(mock_get, tmp_path):
     out_dir = tmp_path / "vix"
     # Pre-populate 2024-01-01 to 2024-01-05
     initial_df = pd.DataFrame({
-        "date": pd.to_datetime(["2024-01-01", "2024-01-02", "2024-01-03", "2024-01-04", "2024-01-05"]),
+        "date": pd.to_datetime([
+            "2024-01-01", "2024-01-02", "2024-01-03", "2024-01-04", "2024-01-05"
+        ]),
         "open": [14.5, 14.8, 15.1, 15.4, 15.7],
         "high": [15.2, 15.5, 15.8, 16.0, 16.3],
         "low": [14.1, 14.6, 14.9, 15.2, 15.5],
