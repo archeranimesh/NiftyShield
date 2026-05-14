@@ -11,7 +11,7 @@ Ongoing paper-trading tasks (Animesh) run in parallel and are listed separately 
 
 | # | Task | Owner | Hard Deadline | Status |
 |---|---|---|---|---|
-| **0** | Fix bhavcopy UDiFF format (Dec 2024+) | Cowork | ASAP | Unblocked |
+| **0** | Fix bhavcopy UDiFF format (Dec 2024+) | Cowork | ASAP | ✅ Done (2026-05-14) |
 | **1** | India VIX ingestion + IVR calculation | Cowork | Jun 2026 | Unblocked |
 | **2** | PortfolioDeltaTracker (`src/risk/`) | Cowork | Jun 2026 | Unblocked |
 | **3** | June 2026 Finideas roll cycle | Animesh + Cowork | **2026-06-30** | Awaiting Finideas instructions |
@@ -417,6 +417,7 @@ License decision needed before automation. Every file should carry a header once
 
 | Date | What Changed |
 |---|---|
+| 2026-05-14 | **Task 0 closed.** UDiFF fix confirmed already implemented by Antigravity (commits `490ec9b`, `590f472`): dual-URL download, `_parse_legacy`/`_parse_udiff`, format detection via `TradDt` header, 25 tests green, UDiFF fixture present. Smoke-tested against 2026-05-13 (live UDiFF download). Updated CONTEXT.md + TODOS.md. Bootstrap resume run pending (`--start 2017-06-01 --end <today>`). |
 | 2026-05-12 | **CLI/UX audit cross-check.** Verified against commits `264adf0` + `8cd9307`: CLI-1–5, CLI-10–11, UX-6–9 all implemented. CLI-12 (--notes surface in paper_snapshot.py) confirmed absent — remains open. Archived session log to `TODOS_ARCHIVE.md`. Stripped done CLI/UX items from TODOS.md. |
 
 Full log: [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md)
