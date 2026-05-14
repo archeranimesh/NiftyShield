@@ -44,15 +44,49 @@ Read and extract (do not paste in full — extract only what's relevant to the t
 
 ## Step 2 — Compose the handoff prompt
 
+### ⚠️ Claude authoring rule — context brief, not implementation spec
+
+The handoff prompt is a **context injection**, not a step-by-step recipe.
+Claude resolves design decisions and provides constraints. Antigravity derives
+the implementation plan from that context. If the prompt contains:
+- exact function signatures with full bodies
+- line-by-line implementation instructions
+- pre-written test cases with expected values
+
+…it is too detailed. Antigravity will skip planning and start coding immediately.
+Keep OBJECTIVE to one sentence. Keep PHASES to phase names + files only.
+Leave the "how" to Antigravity's planning step.
+
+---
+
 Output this block in full, ready to paste to Antigravity:
 
 ```
-Read CONTEXT.md and ANTIGRAVITY.md. Then execute this handoff.
+Read CONTEXT.md and ANTIGRAVITY.md. State "CONTEXT.md ✓" before anything else.
+Then follow this handoff exactly — do not skip the PLANNING_GATE.
 
 OBJECTIVE
-<one sentence, imperative mood — what gets built this phase>
+<one sentence, imperative mood — what gets built>
+
+PLANNING_GATE (mandatory — do not skip)
+Before writing any code or test:
+1. State your plan: for each phase below, write one sentence describing what
+   you will build, list the files you will touch, and the expected test count.
+2. End with: "Awaiting go-ahead to begin Phase A."
+3. Stop. Do not write any code until Animesh replies with "proceed" or equivalent.
+
+If your plan deviates from the PHASES block (different files, different approach),
+state the deviation explicitly so Animesh can relay it to Claude for resolution.
+
+PHASES
+<list phase names — files touched (names only, no code), commit message per phase>
+Example format:
+  Phase A — <name>: touches <file1>, <file2>. Commit: "feat(scope): ..."
+  Phase B — <name>: touches <file3>, <file4>. Commit: "feat(scope): ..."
+  [one line per phase — no implementation detail, no function signatures]
 
 GRAPH_POINTERS
+
 Run these graph queries first before reading any source file:
 - search_graph("<PrimaryClass>")
 - get_code_snippet("<Module.method>")
@@ -96,7 +130,9 @@ DOD
 - [ ] New public functions have happy-path + error/edge-case tests (offline, no network)
 - [ ] CONTEXT.md updated (module tree) if new files added
 - [ ] TODOS.md updated (session log entry, completed items marked)
-- [ ] Commit executed (not drafted) — SHA confirmed via git log --oneline -1
+- [ ] One commit per phase — never bundle phases into a single commit
+- [ ] Each commit executed (not drafted) — SHA confirmed via git log --oneline -1
+- [ ] PHASE COMPLETE block emitted after every phase before starting the next
 
 QUALITY_GATES
 Antigravity runs these gates using its own tooling — not Claude's sub-agents.
