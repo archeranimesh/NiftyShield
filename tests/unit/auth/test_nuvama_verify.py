@@ -182,6 +182,54 @@ def test_load_api_connect_uses_ini_conf_when_present(tmp_path, monkeypatch):
     assert mock_cls.call_args[0][4] == str(conf_file)
 
 
+def test_load_api_connect_wraps_connection_error_as_data_fetch_error(tmp_path, monkeypatch):
+    # APIConnect.__init__ calls _CheckUpdate() — a live HTTP POST — and raises
+    # requests.exceptions.ConnectionError when the network is unavailable.
+    # load_api_connect must re-raise this as DataFetchError so callers can log
+    # it cleanly without the full urllib3 traceback chain.
+    import requests.exceptions
+    from src.client.exceptions import DataFetchError
+
+    session_file = tmp_path / "data_MYKEY.txt"
+    session_file.write_text('{"vt": "token"}')
+
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        f"NUVAMA_API_KEY=MYKEY\n"
+        f"NUVAMA_API_SECRET=MYSECRET\n"
+        f"NUVAMA_SETTINGS_FILE={session_file}\n"
+    )
+
+    monkeypatch.setattr("src.auth.nuvama_verify.NUVAMA_CONF_FILE", str(tmp_path / "no_conf.ini"))
+
+    with patch("src.auth.nuvama_verify.APIConnect", side_effect=requests.exceptions.ConnectionError("DNS failed")):
+        with pytest.raises(DataFetchError, match="Nuvama SDK init failed"):
+            load_api_connect(env_path)
+
+
+def test_load_api_connect_wraps_arbitrary_sdk_init_error_as_data_fetch_error(tmp_path, monkeypatch):
+    # Any exception from APIConnect.__init__ (not just ConnectionError) must be
+    # wrapped as DataFetchError — the SDK is a black box that may raise non-standard
+    # errors on version check, auth failure, etc.
+    from src.client.exceptions import DataFetchError
+
+    session_file = tmp_path / "data_MYKEY.txt"
+    session_file.write_text('{"vt": "token"}')
+
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        f"NUVAMA_API_KEY=MYKEY\n"
+        f"NUVAMA_API_SECRET=MYSECRET\n"
+        f"NUVAMA_SETTINGS_FILE={session_file}\n"
+    )
+
+    monkeypatch.setattr("src.auth.nuvama_verify.NUVAMA_CONF_FILE", str(tmp_path / "no_conf.ini"))
+
+    with patch("src.auth.nuvama_verify.APIConnect", side_effect=RuntimeError("unexpected SDK crash")):
+        with pytest.raises(DataFetchError):
+            load_api_connect(env_path)
+
+
 def test_load_api_connect_changes_cwd_to_session_dir(tmp_path, monkeypatch):
     # SDK reads data_{api_key}.txt relative to CWD. We use chdir to the session
     # file's directory before init — no copying, no stray files in project root.

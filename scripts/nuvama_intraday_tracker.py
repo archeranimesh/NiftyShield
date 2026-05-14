@@ -54,6 +54,8 @@ async def main(nifty_spot: float = 0.0, india_vix: float = 0.0) -> int:
     store = NuvamaStore()
 
     # 1. Fetch Nuvama options positions
+    from src.client.exceptions import DataFetchError
+
     try:
         api: NuvamaClient = load_api_connect()
         # Nuvama SDK removes all standard logging handlers on __init__. We must restore it.
@@ -64,7 +66,7 @@ async def main(nifty_spot: float = 0.0, india_vix: float = 0.0) -> int:
             datefmt="%Y-%m-%d %H:%M:%S",
         )
         logger.info("Starting intraday nuvama options tracking loop...")
-        
+
         logger.info("Fetching NetPosition()...")
         response = api.NetPosition()
 
@@ -73,7 +75,13 @@ async def main(nifty_spot: float = 0.0, india_vix: float = 0.0) -> int:
             logger.info("No Nuvama options positions found.")
             return 0
 
-    except Exception:  # Intentional: isolate all upstream Nuvama failures
+    except DataFetchError as exc:
+        # Known transient: SDK init hit a network failure (DNS not ready after
+        # sleep, firewall, etc.). Single-line warning — no traceback needed.
+        logger.warning("run_id=%s skipped — %s", run_id, exc)
+        return 1
+    except Exception:
+        # Unexpected failure: preserve full traceback for debugging.
         logger.exception("run_id=%s failed to fetch Nuvama positions", run_id)
         return 1
 

@@ -84,10 +84,22 @@ def load_api_connect(env_path: Path = Path(".env")) -> Any:
     try:
         import urllib3
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-        
+
         # download_contract=False: never download instruments.zip during a connectivity
         # check — that is a separate, deliberate operation.
-        api = APIConnect(api_key, api_secret, "", False, conf_arg)
+        try:
+            api = APIConnect(api_key, api_secret, "", False, conf_arg)
+        except Exception as sdk_exc:
+            # APIConnect.__init__ calls _CheckUpdate() — a live HTTP POST to
+            # nc.nuvamawealth.com — before returning. Any network failure here
+            # (DNS down, machine just woke from sleep, firewall) surfaces as a
+            # requests.exceptions.ConnectionError buried in a urllib3 chain.
+            # Re-raise as DataFetchError so callers can log it cleanly without
+            # the full 15-frame urllib3→requests traceback.
+            from src.client.exceptions import DataFetchError
+            raise DataFetchError(
+                f"Nuvama SDK init failed (network unavailable): {sdk_exc}"
+            ) from sdk_exc
     finally:
         os.chdir(original_cwd)
     return api
