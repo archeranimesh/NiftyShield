@@ -71,6 +71,14 @@ class TestSchemaCoexistence:
         NuvamaStore(db)
         NuvamaStore(db)  # no error
 
+    def test_schema_version_is_current(self, tmp_path):
+        import sqlite3
+        db = str(tmp_path / "v.sqlite")
+        NuvamaStore(db)
+        with sqlite3.connect(db) as conn:
+            version = conn.execute("PRAGMA user_version").fetchone()[0]
+        assert version == 3
+
 
 # ---------------------------------------------------------------------------
 # seed_positions / get_positions

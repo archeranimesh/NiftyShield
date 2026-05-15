@@ -135,7 +135,7 @@ class NuvamaStore:
                         "ALTER TABLE nuvama_holdings_snapshots"
                         " ADD COLUMN chg_pct TEXT NOT NULL DEFAULT '0'"
                     )
-                conn.execute(f"PRAGMA user_version = {_SCHEMA_VERSION}")
+                conn.execute("PRAGMA user_version = 3")
             if stored_version < 3:
                 existing_cols = {
                     row["name"]
@@ -147,7 +147,7 @@ class NuvamaStore:
                     conn.execute(
                         "ALTER TABLE nuvama_intraday_snapshots DROP COLUMN nifty_spot"
                     )
-                conn.execute(f"PRAGMA user_version = {_SCHEMA_VERSION}")
+                conn.execute("PRAGMA user_version = 3")
             conn.execute(_CREATE_INTRADAY_SNAPSHOTS)
 
     # ------------------------------------------------------------------
