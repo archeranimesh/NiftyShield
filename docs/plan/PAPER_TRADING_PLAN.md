@@ -63,10 +63,10 @@ DAEMON (persistent, 09:15–15:30)
     │       └── SignalPipeline      ← pluggable strategy (PT-S2)
     │
     ├── RapidCouncil                ← fires only when a strategy returns an ACTION event
-    │   ├── QuantAnalyst   (Haiku)
+    │   ├── QuantAnalyst   (DeepSeek R1)
     │   ├── SpecGuardian   (Haiku)
-    │   ├── RiskManager    (Sonnet)
-    │   ├── OptionsStrategist (Sonnet)
+    │   ├── RiskManager    (o3-mini)
+    │   ├── OptionsStrategist (Grok-4-fast)
     │   └── Chairman       (Sonnet)  ← parallel Stage 1 → immediate synthesis
     │
     ├── TelegramGateway             ← extends TelegramNotifier; adds inbound polling
@@ -181,15 +181,19 @@ Thin layer over `PaperStore`. Given an `ApprovedAction`:
 Fires only when `StrategyMonitor` routes an `ACTION` event to it. Four Stage 1 calls in
 parallel (`asyncio.gather`), chairman call immediately after. Total budget: 30 seconds.
 
-**Council composition:**
+**Council composition (heterogeneous multi-vendor — avoids correlated blind spots):**
 
-| Persona | Model | Lens |
-|---|---|---|
-| QuantAnalyst | `claude-haiku-4-5` | Greeks math, EV, probability of each option |
-| SpecGuardian | `claude-haiku-4-5` | Reads strategy spec verbatim; flags non-compliant options |
-| RiskManager | `claude-sonnet-4-6` | Tail scenarios, worst-case P&L, margin impact |
-| OptionsStrategist | `claude-sonnet-4-6` | Market structure, VIX regime, OI walls, trend |
-| Chairman | `claude-sonnet-4-6` | Synthesises all four → ranked `ApprovedAction` list |
+| Persona | Model | Provider | Rationale |
+|---|---|---|---|
+| QuantAnalyst | `deepseek/deepseek-r1-0528` | OpenRouter | Reasoning model; strong math, EV, Greeks probability — proven in governance council |
+| SpecGuardian | `claude-haiku-4-5` | Anthropic direct | Fastest at mechanical rule-following; spec compliance is a retrieval+check task, not reasoning |
+| RiskManager | `openai/o3-mini` | OpenRouter | Chain-of-thought adversarial reasoning; built specifically for "what breaks this plan" |
+| OptionsStrategist | `x-ai/grok-4-fast` | **xAI direct** | Live search for real-time FII flow, OI changes, breaking news — unique capability not available via OpenRouter |
+| Chairman | `claude-sonnet-4-6` | Anthropic direct | Synthesis; consistent with existing council infrastructure within 30s wall-clock budget |
+
+> **⚠ Grok-4-fast must be called via xAI direct API (`https://api.x.ai/v1`), not OpenRouter.**
+> OpenRouter routes Grok without search grounding enabled. Live search is the entire reason
+> Grok is in this seat — without it, substitute `openai/gpt-4o` via OpenRouter instead.
 
 **SpecGuardian** receives the full strategy spec doc as context (e.g. `ic_nifty_v1.md`
 for the IC strategy). It outputs "complies / does not comply" for each proposed action
@@ -199,8 +203,11 @@ spec forbids.
 `CouncilOutput`: `actions: list[ApprovedAction]`, `chairman_rationale: str`,
 `dissenting_notes: str | None`, `latency_ms: int`.
 
-Timeout: `asyncio.wait_for(..., timeout=25.0)`. Partial timeout → chairman proceeds with
-available responses. Full timeout → escalates to `WARN` Telegram, no action taken.
+Timeout: Stage 1 parallel calls `asyncio.wait_for(..., timeout=25.0)` → expected ~10s.
+Chairman call `asyncio.wait_for(..., timeout=15.0)` → expected ~10s.
+Total wall-clock budget: **~20s typical, 40s hard cap**.
+Partial Stage 1 timeout → chairman proceeds with available responses.
+Full timeout → escalates to `WARN` Telegram, no action taken.
 
 ---
 
