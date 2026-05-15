@@ -69,5 +69,5 @@ def load_options_ohlcv(
         
         return filtered_df
     except Exception as e:
-        logger.error(f"Error loading Parquet partitions: {e}")
+        logger.error("Error loading Parquet partitions: %s", e)
         return pd.DataFrame()
