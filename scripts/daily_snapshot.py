@@ -38,22 +38,18 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
-import sys
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-# Pure-computation helpers only need these types at import time — no I/O.
-from src.market_calendar.holidays import is_trading_day, prev_trading_day  # noqa: E402
-from src.models.portfolio import DailySnapshot, Strategy  # noqa: E402
-from src.portfolio.formatting import (  # noqa: E402
+from src.market_calendar.holidays import is_trading_day, prev_trading_day
+from src.models.portfolio import DailySnapshot, Strategy
+from src.portfolio.formatting import (
     _format_combined_summary,
     _format_protection_stats,
 )
-from src.portfolio.summary import (  # noqa: E402
+from src.portfolio.summary import (
     _build_portfolio_summary,
     _build_prev_prices,
     _compute_prev_mf_pnl,
