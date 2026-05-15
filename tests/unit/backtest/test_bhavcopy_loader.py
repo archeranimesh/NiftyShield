@@ -1,9 +1,22 @@
-import pytest
-import pandas as pd
-from pathlib import Path
+from __future__ import annotations
+
+import inspect
 from datetime import date
-from unittest.mock import patch, MagicMock
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pandas as pd
+import pytest
+
 from src.backtest.bhavcopy_loader import load_options_ohlcv
+from src.backtest.constants import DEFAULT_DATA_DIR
+
+
+def test_load_options_ohlcv_default_value():
+    """Verify that the function's default data_dir is DEFAULT_DATA_DIR."""
+    sig = inspect.signature(load_options_ohlcv)
+    assert sig.parameters["data_dir"].default == DEFAULT_DATA_DIR
+
 
 def test_load_options_ohlcv_happy_path(tmp_path):
     # Setup: Create a dummy parquet file

@@ -1,8 +1,13 @@
+from __future__ import annotations
+
+import logging
+from datetime import date
+from pathlib import Path
+
 import pandas as pd
 import pyarrow.parquet as pq
-from pathlib import Path
-from datetime import date
-import logging
+
+from src.backtest.constants import DEFAULT_DATA_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -10,7 +15,7 @@ def load_options_ohlcv(
     underlying: str,
     start: date,
     end: date,
-    data_dir: Path = Path("data/offline/options_ohlcv"),
+    data_dir: Path = DEFAULT_DATA_DIR,
     columns: list[str] | None = None
 ) -> pd.DataFrame:
     """
