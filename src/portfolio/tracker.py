@@ -377,6 +377,8 @@ class PortfolioTracker:
                 )
                 chain = parse_upstox_option_chain(raw if isinstance(raw, list) else [])
             except Exception as exc:
+                # Intentional: Broad catch to prevent a single failed expiry fetch from blocking
+                # greeks computation for all other legs in the batch.
                 logger.warning("Greeks fetch failed for expiry %s: %s", expiry, exc)
                 continue
             for leg in exp_legs:
