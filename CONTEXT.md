@@ -26,6 +26,7 @@ Scripts: `daily_snapshot.py`, `morning_nav.py`, `nuvama_intraday_tracker.py`, `i
 
 - `src/nuvama/CLAUDE.md` — module context file not yet written
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/`, `src/streaming/` — all empty (planned per BACKTEST_PLAN.md Phase 1–2)
+- `src/gamma/` — planned; spec in `docs/strategies/near_expiry_buy_v1.md`; Phase A (`gamma_daily_watch.py`) to be implemented next
 
 ### Live Data
 

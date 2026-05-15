@@ -267,6 +267,7 @@
 | 2026-04-25 | CSP underlying → Nifty 50 index options (NiftyBees rejected: OI <1,000, spread >5% of mid) | `docs/strategies/csp_nifty_v1.md` |
 | 2026-04-25 | NiftyBees collateral modelled as `long_niftybees` leg in paper P&L; annual reset in January | `docs/strategies/csp_nifty_v1.md` |
 | 2026-04-26 | NiftyShield integrated: CSP Leg 1 + put spread 4 lots (8–20% OTM) + tail puts 2 lots (5-delta quarterly) | `docs/strategies/niftyshield_integrated_v1.md` |
+| 2026-05-02 | Leg 2 strike selection: %OTM (long put at 8% below spot, short put at 20% below spot) over delta-based; delta-based rejected due to cost unpredictability at high VIX and dead-zone variability in low-vol regimes | `docs/council/archive/strategy/2026-05-02_integrated-leg2-strike-methodology.md` |
 | 2026-04-26 | Static beta 1.25 for MF hedge ratio; switch to rolling 60d beta after 12+ months NAV history | `docs/strategies/niftyshield_integrated_v1.md` |
 | 2026-04-26 | Two-tier backtest: Tier 1 = Bhavcopy + Black '76 IV; Tier 2 = synthetic pricer for deep OTM protective legs | `BACKTEST_PLAN_PHASE1.md §1.9a` |
 | 2026-04-27 | Data stack: TrueData + DhanHQ rejected; Stockmock (calibration) + NSE Bhavcopy (programmatic) adopted | `BACKTEST_PLAN_PHASE1.md §1.1, §1.3` |
@@ -279,7 +280,8 @@
 | 2026-05-02 | Gap Fade VIX-IVP filter: 75th percentile (vs ORB 90th); asymmetry is structural and binding | `docs/council/2026-05-02_gap-fade-vix-filter-threshold.md` |
 | 2026-05-02 | IC v1: mild put-side asymmetry (short put 16Δ / short call 14Δ normal; 18Δ/12Δ high-IVR); symmetric deltas rejected | `docs/council/2026-05-02_iron-condor-v1-core-design.md` |
 | 2026-05-02 | 3-track comparison: Track C = Deep ITM Call (delta ≈ 0.90); Track B + Covered Call / CSP programmatically blocked | `docs/council/2026-05-02_nifty-long-instrument-comparison-protection.md` |
-| 2026-05-02 | Near-expiry buy research (Phase 3): Gamma Gearing primary; Speed secondary; OI velocity confirmation only | `docs/council/2026-05-02_gamma-acceleration-mispricing-option-buying.md` |
+| 2026-05-02 | Near-expiry buy research: Gamma Gearing primary; Speed secondary; OI velocity confirmation only; weekly 0–1 DTE Nifty; paper trading Phase 0 (not Phase 3) | `docs/strategies/near_expiry_buy_v1.md`, `docs/council/archive/research/2026-05-02_gamma-acceleration-mispricing-option-buying.md` |
+| 2026-05-15 | Dhan Data API (₹499/month) subscribed for: (1) L2 order book depth for gamma_scan.py fill simulation; (2) historical expired options data supplementing NSE Bhavcopy for Phase 1 backtest pipeline | `docs/strategies/near_expiry_buy_v1.md §3` |
 | 2026-05-02 | Live monitoring: CUSUM lower-sided (k=0.50, h_warn=3.0, h_reduce=4.0, h_halt=5.0) replaces weekly Z-score | `docs/council/2026-05-02_continuous-revalidation-statistical-power.md` |
 | 2026-05-02 | Phase 0.8 gate: 4 criteria (A–D); Z-score is smoke test only; graduated deployment tiers 0 → 0.5 → 1 → 2 → 3 | `docs/council/2026-05-02_variance-gate-regime-completeness.md`, `docs/plan/variance_gate.md` |
 | 2026-05-03 | NSE Bhavcopy: old archive URL covers 2016–~Nov 2024 only; Dec 2024+ uses new UDiFF format at a different URL and CSV schema | `TODOS.md → P1-NEXT UDiFF fix` |

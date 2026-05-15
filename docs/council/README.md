@@ -6,11 +6,16 @@ Archived outputs from the LLM Council (tools/llm-council) on NiftyShield design 
 
 ```
 docs/council/
-├── YYYY-MM-DD_<topic>.md        # completed council decisions
-├── pending/
-│   └── YYYY-MM-DD_<topic>_prompt.md   # prompts saved when council server was offline
-└── README.md
+├── README.md
+├── archive/
+│   ├── strategy/    # entry/exit rules, instrument selection, strike methodology
+│   ├── risk/        # portfolio risk caps, monitoring regimes, deployment gates
+│   └── research/    # Phase 3+ / option-buying / future strategy research
+└── pending/
+    └── YYYY-MM-DD_<topic>_prompt.md   # prompts saved when council server was offline
 ```
+
+Active (unresolved) council decisions live directly under `docs/council/` as `YYYY-MM-DD_<topic>.md`. Once the decision is absorbed into `DECISIONS.md` and the relevant strategy/plan docs, it moves to the appropriate `archive/` subfolder.
 
 ## When to Trigger the Council
 
@@ -136,9 +141,34 @@ Council members: <model-A>, <model-B>, <model-C>
 informative but not directive. The Aggregate Rankings tell you which Stage 1 response the
 chairman weighted most heavily.
 
-## Archived Decisions (pre-integration — submitted manually)
+## Archived Decisions
 
-| Date | Topic | Outcome |
+All decisions below have been absorbed into `DECISIONS.md` and the relevant strategy/plan docs.
+Full council output files are in `archive/` subfolders.
+
+### archive/strategy/
+
+| Date | File | Key Decision |
 |---|---|---|
-| 2026-04-30 | IV Reconstruction | Black '76 + futures forward + stepped repo rate + quadratic smile fit |
-| 2026-04-30 | Slippage Model | Absolute INR, VIX-regime-aware, OI liquidity multiplier |
+| 2026-04-30 | `2026-04-30_donchian-roll-mechanics.md` | **Superseded** by 2026-05-01 version — preliminary roll mechanics analysis |
+| 2026-05-01 | `2026-05-01_donchian-roll-mechanics.md` | Signal-in-only (flat between signals); uniform credit spreads; ATR-proportional width `min(round50(0.8×ATR_40d), 500)`, floor 150 |
+| 2026-05-01 | `2026-05-01_orb-volatility-filter-design.md` | ATR primary filter + VIX-IVP ≥90th pct structural exclusion; event-day calendar exclusion mandatory; DTE ≤2 → skip to next weekly |
+| 2026-05-02 | `2026-05-02_csp-entry-delta-v2.md` | 22-delta default (85% of 25Δ credit, ~half stop-out rate); 25-delta when IVR 25–40 |
+| 2026-05-02 | `2026-05-02_gap-fade-vix-filter-threshold.md` | Gap Fade IVP threshold: 75th pct (vs ORB 90th); asymmetry is structural and binding |
+| 2026-05-02 | `2026-05-02_integrated-leg2-strike-methodology.md` | %OTM over delta-based for Leg 2 (long 8% below spot, short 20% below spot); delta-based rejected on cost unpredictability at high VIX |
+| 2026-05-02 | `2026-05-02_iron-condor-v1-core-design.md` | Mild put-side asymmetry: short put 16Δ / short call 14Δ normal; 18Δ/12Δ high-IVR; symmetric deltas rejected |
+| 2026-05-02 | `2026-05-02_nifty-long-instrument-comparison-protection.md` | Track C = Deep ITM Call (delta ≈ 0.90); Futures + Covered Call / CSP programmatically blocked |
+
+### archive/risk/
+
+| Date | File | Key Decision |
+|---|---|---|
+| 2026-05-02 | `2026-05-02_continuous-revalidation-statistical-power.md` | CUSUM lower-sided (k=0.50, h_warn=3.0, h_reduce=4.0, h_halt=5.0) replaces weekly Z-score; graduated regime by N; slippage/loss early guards |
+| 2026-05-02 | `2026-05-02_multi-strategy-portfolio-risk-allocation.md` | 10 binding rules: delta caps (+1.0/+2.0 lots), ₹3–4L stress loss, ₹6L drawdown kill, shadow gross margin, 2 max short-put lots |
+| 2026-05-02 | `2026-05-02_variance-gate-regime-completeness.md` | Phase 0.8 gate: 4 criteria A–D; Z-score is smoke test only; graduated deployment tiers 0→0.5→1→2→3 |
+
+### archive/research/
+
+| Date | File | Key Decision |
+|---|---|---|
+| 2026-05-02 | `2026-05-02_gamma-acceleration-mispricing-option-buying.md` | Near-expiry buy research (Phase 3): Gamma Gearing primary metric; Speed secondary; OI velocity confirmation only |

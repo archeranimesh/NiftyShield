@@ -144,8 +144,8 @@ tests/
 │       ├── test_daily_snapshot_mf.py   # 12 tests: MF wire-up path — schema coexistence, full seed→snapshot→aggregate, empty holdings, nav failure
 │       └── test_daily_snapshot_helpers.py  # 30 tests: _etf_current_value + _etf_cost_basis helpers; PortfolioSummary construction with mf/dhan/nuvama source objects; mf_available/dhan_available/nuvama_available @property behaviour; total_value/invested/pnl aggregation across sources. Assertions use direct field access (result.mf_pnl is None / result.dhan.equity_value == ...) — no conditional ternaries.
 └── instruments/
-│   ├── __init__.py
-│   └── test_lookup.py        # 27 tests: _score_query tiers, _best_score field selection, InstrumentLookup.search ranking/filters/min_score/edge cases
+    ├── __init__.py
+    └── test_lookup.py        # 27 tests: _score_query tiers, _best_score field selection, InstrumentLookup.search ranking/filters/min_score/edge cases
 └── auth/
     ├── __init__.py
     ├── test_nuvama_login.py   # 16 tests: build_login_url, extract_request_id (full URL + bare token + whitespace), initialize_session (APIConnect args, parent dir creation, is_production flag), save_settings_path (write + upsert), login flow (missing creds, empty input, full flow). autouse clean_env fixture prevents dotenv leakage.
