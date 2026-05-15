@@ -16,6 +16,7 @@ Error policy:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from datetime import date
@@ -24,7 +25,7 @@ from typing import Any
 
 import requests
 
-from src.client.exceptions import LTPFetchError
+from src.client.exceptions import DataFetchError, LTPFetchError
 from src.models.options import OptionChain, OptionChainStrike, OptionLeg
 
 logger = logging.getLogger(__name__)
@@ -112,8 +113,6 @@ class UpstoxMarketClient:
         Raises:
             DataFetchError: If the HTTP request fails.
         """
-        from src.client.exceptions import DataFetchError
-
         if not instruments:
             return {}
 
@@ -145,8 +144,6 @@ class UpstoxMarketClient:
         Raises:
             DataFetchError: If the HTTP request fails.
         """
-        from src.client.exceptions import DataFetchError
-
         try:
             resp = self._session.get(
                 V2_OPTION_CHAIN_URL,
@@ -162,14 +159,12 @@ class UpstoxMarketClient:
 
     async def get_ltp(self, instruments: list[str]) -> dict[str, float]:
         """Async wrapper around get_ltp_sync."""
-        import asyncio
         return await asyncio.to_thread(self.get_ltp_sync, instruments)
 
     async def get_option_chain(
         self, instrument: str, expiry: str
     ) -> dict[str, Any]:
         """Async wrapper around get_option_chain_sync."""
-        import asyncio
         return await asyncio.to_thread(
             self.get_option_chain_sync, instrument, expiry
         )
