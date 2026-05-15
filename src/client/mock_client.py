@@ -33,7 +33,8 @@ Usage in tests
     order = {"instrument_key": "NSE_FO|12345", "quantity": 50,
              "price": 150.0, "direction": "SELL"}
     result = asyncio.run(client.place_order(order))
-    assert result["status"] == "complete"
+    if result["status"] != "complete":
+        raise RuntimeError("Order failed")
 """
 
 from __future__ import annotations
