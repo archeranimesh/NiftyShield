@@ -4,8 +4,8 @@ All functions here are fully unit-testable without a DB, network, or .env.
 They consume plain data structures (Strategy, DailySnapshot, PortfolioSummary)
 and return Decimal values or PortfolioSummary dataclasses.
 
-These helpers were extracted from scripts/daily_snapshot.py (TODO 5) so that
-the backtesting and visualisation layers (TODO 3) can import them directly
+These helpers were extracted from scripts/daily_snapshot.py (TODO: TD-5) so that
+the backtesting and visualisation layers (TODO: TD-3) can import them directly
 without going through the script.
 
 Deferred imports are preserved for mf.tracker and portfolio.tracker to avoid
