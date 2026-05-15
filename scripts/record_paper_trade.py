@@ -31,6 +31,8 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+import pandas as pd
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from dotenv import load_dotenv
@@ -47,7 +49,8 @@ from scripts.find_strike_by_delta import (
     rank_strikes,
 )
 from src.backtest.ivr import compute_ivr
-from src.backtest.vix_ingest import load_vix_series
+from src.backtest.vix_ingest import fetch_vix_latest, load_vix_series
+from src.intraday.market_store import IntradayMarketStore
 from src.client.upstox_market import UpstoxMarketClient
 from src.paper.constants import DEFAULT_BOD_PATH, DEFAULT_DB_PATH
 from src.paper._utils import safe_float
@@ -469,9 +472,17 @@ def _resolve_instrument_key(args: argparse.Namespace) -> str | None:
 
 
 def _get_ivr_and_warn(
-    trade_date: date, action: TradeAction, vix_data_dir: Path
+    trade_date: date, action: TradeAction, vix_data_dir: Path, db_path: Path
 ) -> float | None:
-    """Load VIX series, compute IVR, and print warnings for R3 entry gates.
+    """Fetch live VIX, load historical window, compute IVR, warn on R3 gates.
+
+    For today's trades: checks intraday_market_snapshots first (already fetched
+    by the intraday tracker every 15 min — no duplicate API call). Falls back to
+    a live Upstox API call only when the DB has no today-IST snapshot.
+    For back-dated trades: looks up the Parquet for that date's close.
+
+    The 252-day historical window always comes from the Parquet. If the Parquet
+    has insufficient history, IVR returns None — bootstrap with vix_ingest.py.
 
     Warnings are printed to stderr but do not block execution.
 
@@ -479,47 +490,64 @@ def _get_ivr_and_warn(
         trade_date: Date of the trade execution.
         action: BUY or SELL.
         vix_data_dir: Path to the India VIX Parquet directory.
+        db_path: Path to the shared SQLite database (for intraday snapshots).
 
     Returns:
         Computed IVR value or None if data is insufficient.
     """
-    if not vix_data_dir.exists():
-        print(
-            f"WARNING: VIX data directory not found at {vix_data_dir}. "
-            "IVR will not be recorded.",
-            file=sys.stderr,
-        )
-        return None
+    today = date.today()
 
-    series = load_vix_series(vix_data_dir)
-    if series.empty:
-        print("WARNING: No VIX data found in Parquet. IVR skipped.", file=sys.stderr)
-        return None
+    # ── Resolve vix_today ────────────────────────────────────────────────────
+    if trade_date == today:
+        # 1. Prefer intraday DB — already fetched by the tracker, no API call.
+        vix_today = IntradayMarketStore(db_path).get_latest_vix_today()
+        if vix_today is not None:
+            print(f"INFO: India VIX from intraday snapshot = {vix_today:.2f}", file=sys.stderr)
+        else:
+            # 2. Fall back to live API fetch (pre-market, tracker not running, etc.)
+            vix_today = fetch_vix_latest()
+            if vix_today is None:
+                print(
+                    "WARNING: Could not fetch live India VIX "
+                    "(check UPSTOX_ANALYTICS_TOKEN). IVR skipped.",
+                    file=sys.stderr,
+                )
+                return None
+            print(f"INFO: Live India VIX = {vix_today:.2f}", file=sys.stderr)
+    else:
+        # Back-dated trade — look up Parquet for that specific date.
+        if not vix_data_dir.exists():
+            print(
+                f"WARNING: VIX data directory not found at {vix_data_dir}. "
+                "IVR skipped.",
+                file=sys.stderr,
+            )
+            return None
+        series = load_vix_series(vix_data_dir)
+        if trade_date not in series.index:
+            print(
+                f"WARNING: No VIX data for {trade_date} in Parquet. IVR skipped.",
+                file=sys.stderr,
+            )
+            return None
+        vix_today = series[trade_date]
 
-    # We need the VIX close for the trade date.
-    # If the trade is today, we might not have it yet in Parquet.
-    if trade_date not in series.index:
-        print(
-            f"WARNING: No VIX data for {trade_date}. IVR skipped.",
-            file=sys.stderr,
-        )
-        return None
+    # ── Load 252-day historical window from Parquet ──────────────────────────
+    historical = pd.Series(dtype="float64")
+    if vix_data_dir.exists():
+        full_series = load_vix_series(vix_data_dir)
+        historical = full_series[full_series.index < trade_date]
 
-    vix_today = series[trade_date]
-    # compute_ivr expects the window *ending* on or before today.
-    # We pass the series up to trade_date.
-    historical = series[series.index <= trade_date]
     ivr = compute_ivr(vix_today, historical)
-
     if ivr is None:
         print(
             f"WARNING: Insufficient VIX history ({len(historical)}/252 days). "
-            "IVR skipped.",
+            "IVR skipped — run vix_ingest.py to bootstrap.",
             file=sys.stderr,
         )
         return None
 
-    # R3 Entry Gate Warnings (SELL only)
+    # ── R3 Entry Gate Warnings (SELL only) ───────────────────────────────────
     if action == TradeAction.SELL:
         if 0.25 <= ivr <= 0.50:
             print(
@@ -533,7 +561,7 @@ def _get_ivr_and_warn(
                 "Risk of volatility expansion is high.",
                 file=sys.stderr,
             )
-        elif ivr > 0.50:
+        else:
             print(
                 f"WARNING: High IVR ({ivr:.2f}). "
                 "Elevated vol regime — premium rich but tail risk is elevated.",
@@ -619,7 +647,7 @@ def main() -> None:
             sys.exit(1)
 
     ivr_at_entry = _get_ivr_and_warn(
-        trade_date, TradeAction(args.action), args.vix_data_dir
+        trade_date, TradeAction(args.action), args.vix_data_dir, args.db_path
     )
 
     try:
@@ -648,8 +676,12 @@ def main() -> None:
         print(f"  action    : {trade.action.value}")
         print(f"  quantity  : {trade.quantity}")
         print(f"  price     : ₹{trade.price}")
-        if trade.ivr_at_entry is not None:
-            print(f"  ivr_entry : {trade.ivr_at_entry:.2f}")
+        ivr_display = (
+            f"{trade.ivr_at_entry:.2f}"
+            if trade.ivr_at_entry is not None
+            else "None (VIX data missing — R3 gate skipped)"
+        )
+        print(f"  ivr_entry : {ivr_display}")
         print(f"  is_paper  : {trade.is_paper}")
         if trade.notes:
             print(f"  notes     : {trade.notes}")

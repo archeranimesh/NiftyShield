@@ -5,6 +5,7 @@ from pathlib import Path
 from datetime import date
 from unittest.mock import MagicMock, patch
 from src.backtest.vix_ingest import (
+    fetch_vix_latest,
     ingest_vix_from_csv,
     ingest_vix_from_api,
     load_vix_series,
@@ -127,6 +128,48 @@ def test_ingest_api_skips_dates_already_present(mock_get, tmp_path):
     df = pd.read_parquet(year_dir / "india_vix_2024.parquet")
     assert len(df) == 8
     assert df["date"].iloc[-1] == pd.Timestamp("2024-01-08")
+
+@patch("src.backtest.vix_ingest.requests.get")
+def test_fetch_vix_latest_returns_most_recent_close(mock_get):
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "data": {
+            "candles": [
+                ["2026-05-15T00:00:00+05:30", 14.5, 15.2, 14.1, 14.80, 0, 0],
+                ["2026-05-14T00:00:00+05:30", 14.2, 14.9, 13.8, 14.50, 0, 0],
+            ]
+        }
+    }
+    mock_get.return_value = mock_response
+
+    result = fetch_vix_latest(token="test_token")
+
+    assert result == 14.80  # close of the most recent (index 0) candle
+
+
+@patch("src.backtest.vix_ingest.requests.get")
+def test_fetch_vix_latest_returns_none_on_empty_candles(mock_get):
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"data": {"candles": []}}
+    mock_get.return_value = mock_response
+
+    assert fetch_vix_latest(token="test_token") is None
+
+
+def test_fetch_vix_latest_returns_none_when_no_token():
+    # No token passed, no env var set
+    with patch.dict("os.environ", {}, clear=True):
+        assert fetch_vix_latest(token=None) is None
+
+
+@patch("src.backtest.vix_ingest.requests.get")
+def test_fetch_vix_latest_returns_none_on_network_error(mock_get):
+    mock_get.side_effect = requests.RequestException("timeout")
+
+    assert fetch_vix_latest(token="test_token") is None
+
 
 @patch("src.backtest.vix_ingest.requests.get")
 def test_ingest_api_raises_data_fetch_error_on_network_failure(mock_get, tmp_path):

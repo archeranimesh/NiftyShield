@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from urllib.parse import quote
 
@@ -137,6 +137,50 @@ def ingest_vix_from_api(
 
     df = pd.DataFrame(rows)
     return _merge_and_save(df, out_dir)
+
+
+def fetch_vix_latest(token: str | None = None) -> float | None:
+    """Fetch the most recent India VIX daily close from the Upstox API.
+
+    Requests the last 5 calendar days so that intraday calls (before today's
+    candle settles) still return the previous close rather than nothing.
+
+    Args:
+        token: Upstox Analytics token. Falls back to UPSTOX_ANALYTICS_TOKEN
+            env var.
+
+    Returns:
+        Most recent VIX close, or None if the token is missing, the network
+        call fails, or the API returns no candles.
+    """
+    token = token or os.getenv("UPSTOX_ANALYTICS_TOKEN")
+    if not token:
+        logger.warning("UPSTOX_ANALYTICS_TOKEN not set — cannot fetch live VIX.")
+        return None
+
+    today = date.today()
+    from_date = today - timedelta(days=5)
+    instrument_key = "NSE_INDEX|India VIX"
+    encoded_key = quote(instrument_key, safe="")
+    url = (
+        f"https://api.upstox.com/v2/historical-candle/{encoded_key}/"
+        f"day/{today.isoformat()}"
+    )
+    params = {"from_date": from_date.isoformat()}
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+
+    try:
+        response = requests.get(url, params=params, headers=headers, timeout=10)
+        response.raise_for_status()
+        candles = response.json().get("data", {}).get("candles", [])
+        if not candles:
+            logger.warning("Upstox returned no VIX candles for last 5 days.")
+            return None
+        # candles are newest-first; take index 0 for the latest close
+        return float(candles[0][4])
+    except requests.RequestException as exc:
+        logger.warning("Live VIX fetch failed: %s", exc)
+        return None
 
 
 def load_vix_series(data_dir: Path) -> pd.Series:

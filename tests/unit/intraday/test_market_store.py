@@ -44,3 +44,33 @@ def test_record_naive_timestamp_raises(temp_db):
     naive = datetime.datetime(2026, 5, 8, 15, 25, 0)  # no tzinfo
     with pytest.raises(ValueError, match="timezone-aware"):
         store.record_market_snapshot(naive, 24172.6, 13.45)
+
+
+def test_get_latest_vix_today_returns_vix_for_todays_snapshot(temp_db):
+    store = IntradayMarketStore(temp_db)
+    now = datetime.datetime.now(datetime.timezone.utc)
+    store.record_market_snapshot(now, 23500.0, 14.80)
+
+    result = store.get_latest_vix_today()
+    assert result == 14.80
+
+
+def test_get_latest_vix_today_returns_none_for_stale_snapshot(temp_db):
+    store = IntradayMarketStore(temp_db)
+    yesterday = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=1)
+    store.record_market_snapshot(yesterday, 23500.0, 15.20)
+
+    assert store.get_latest_vix_today() is None
+
+
+def test_get_latest_vix_today_returns_none_when_table_empty(temp_db):
+    store = IntradayMarketStore(temp_db)
+    assert store.get_latest_vix_today() is None
+
+
+def test_get_latest_vix_today_returns_none_when_vix_is_zero(temp_db):
+    store = IntradayMarketStore(temp_db)
+    now = datetime.datetime.now(datetime.timezone.utc)
+    store.record_market_snapshot(now, 23500.0, 0.0)  # VIX fetch failed that tick
+
+    assert store.get_latest_vix_today() is None

@@ -97,3 +97,33 @@ class IntradayMarketStore:
             if row:
                 return (row["nifty_spot"], row["india_vix"])
             return None
+
+    def get_latest_vix_today(self) -> Optional[float]:
+        """Return today's most recent India VIX from intraday snapshots.
+
+        Checks the latest snapshot timestamp against today's IST date so
+        that a stale row from a previous session is never returned. Returns
+        None when the table is empty, when the intraday tracker has not run
+        today, or when the stored VIX is zero (fetch failed on that tick).
+
+        Returns:
+            India VIX float if a valid today-IST snapshot exists, else None.
+        """
+        IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+        today_ist = datetime.datetime.now(IST).date()
+
+        with connect(self._db_path) as db:
+            cursor = db.execute(
+                "SELECT india_vix, timestamp FROM intraday_market_snapshots"
+                " ORDER BY timestamp DESC LIMIT 1"
+            )
+            row = cursor.fetchone()
+            if row is None:
+                return None
+
+            ts = datetime.datetime.fromisoformat(row["timestamp"])
+            if ts.astimezone(IST).date() != today_ist:
+                return None
+
+            vix = row["india_vix"]
+            return float(vix) if vix else None
