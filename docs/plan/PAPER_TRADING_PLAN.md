@@ -1,568 +1,461 @@
 # NiftyShield — Paper Trading Backbone Plan
 
-> **Status:** Design document. No code exists yet for this system.
-> **Depends on:** `BACKTEST_PLAN.md` Phase 0 (current). Read that first.
-> **Related:** `CONTEXT.md` · `DECISIONS.md` · `BACKTEST_PLAN.md` · `docs/council/2026-05-02_iron-condor-v1-core-design.md`
-> **Load this file when:** planning or implementing anything in `src/strategy/`, `src/council/`,
-> or the paper trading monitor/daemon layer.
+> **Status:** Design document. Implementation not started.
+> **Load this file when:** planning or implementing `src/strategy/`, `src/council/`,
+> the monitor daemon, or any pluggable strategy.
+> **Related:** `CONTEXT.md` · `DECISIONS.md` · `BACKTEST_PLAN.md`
+> · `docs/plan/signal_pipeline_spec.md`
+> · `docs/council/2026-05-02_iron-condor-v1-core-design.md`
 
 ---
 
-## Design Philosophy
+## Core Idea
 
-Three principles govern every decision in this plan:
+One backbone. Any number of pluggable strategies.
 
-1. **The backbone is strategy-agnostic.** Monitoring logic, council consultation, Telegram
-   approval, and synthetic fills are infrastructure. Strategies plug into them — not the
-   reverse. A new strategy (short strangle, calendar spread) requires implementing one
-   protocol, not touching the backbone.
+The backbone runs a cron-driven daemon that calls every registered strategy on every tick.
+Each strategy decides independently whether it has something to act on — an entry signal,
+a threshold breach, an exit trigger. If it does, the council is consulted and the result
+goes to Telegram for approval. If it doesn't, the tick is silent.
 
-2. **The LLM is never in the hot path.** The monitor daemon fires on deterministic threshold
-   breach. The council runs only after a breach. You approve before anything executes.
-   Council latency (15–30s) is acceptable because human approval is already required.
-
-3. **IC v1 uses exits, not adjustments — per council ruling.**
-   `docs/council/2026-05-02_iron-condor-v1-core-design.md` (Chairman: Opus, unanimous
-   3/4 on no-rolls) mandates exit-only logic for IC v1. The backbone supports adjustment
-   capability for future strategies (IC v2, short strangle). IC v1 routes all breach events
-   to the exit stack, not the adjustment advisor.
+A strategy that fires every day (Signal Pipeline) and a strategy that fires once in three
+weeks (Iron Condor) both live on the same backbone without any special-casing.
 
 ---
 
-## Architecture Overview
+## What Already Exists
+
+Before building anything, this is the infrastructure already in place that the backbone
+builds on. Do not reimplement these.
+
+| What | Where | Role in backbone |
+|---|---|---|
+| `PaperStore` | `src/paper/store.py` | Persistence for all paper trades, snapshots, leg snapshots |
+| `PaperTracker` | `src/paper/tracker.py` | Mark-to-market computation |
+| `PaperTrade` / `PaperPosition` | `src/paper/models.py` | Position state models |
+| `TelegramNotifier` | `src/notifications/notifier.py` | Outbound alerts — backbone extends this, does not replace it |
+| `BrokerClient` / `MarketDataProvider` | `src/client/protocol.py` | Live market data — `StrategyMonitor` consumes this sub-protocol |
+| `OptionChain` / `OptionChainStrike` | `src/models/options.py` | Chain model passed to every strategy on each tick |
+| `PortfolioDeltaTracker` | `src/risk/` (Task 2) | Entry gate — strategies call this before opening a position |
+| `compute_ivr` | `src/backtest/ivr.py` | IVR at entry — used by both IC and Signal Pipeline |
+| `get_expiry_candidates` | `src/instruments/lookup.py` | Expiry selection for IC entry |
+| `is_trading_day` | `src/market_calendar/holidays.py` | Daemon skips non-trading days |
+| `src/db.py` | `src/db.py` | Shared SQLite connection — all new tables go through this |
+
+---
+
+## Architecture
 
 ```
-CRON LAYER
-├── 09:00  pre_market_brief.py       (stateless, exits)
-├── 09:15  start_paper_monitor.py    (launches daemon, exits)
-├── 15:30  stop_paper_monitor.py     (SIGTERM daemon, exits)
-└── 15:35  eod_paper_summary.py      (stateless, exits)
+CRON (stateless scripts, exit after run)
+├── 09:00  pre_market_brief.py     — positions + Greeks + IVR snapshot → Telegram
+├── 09:15  start_monitor.py        — launches daemon if not running
+├── 15:30  stop_monitor.py         — SIGTERM daemon
+└── 15:35  eod_summary.py          — daily P&L + council activity → Telegram
 
-DAEMON (09:15–15:30, persistent asyncio process)
-└── paper_monitor_daemon.py
-    ├── MarketDataProvider (existing BrokerClient sub-protocol)
-    │   ├── UpstoxLiveClient        ← paper trading mode
-    │   └── HistoricalReplayer      ← backtest mode (Phase PT-5)
+DAEMON (persistent, 09:15–15:30)
+└── monitor_daemon.py
     │
-    ├── StrategyMonitor             ← Layer 1: deterministic thresholds
-    │   └── PaperStrategy (protocol) ← each strategy implements this
-    │       └── IronCondorV1        ← first concrete implementation
+    ├── StrategyMonitor             ← polls every 90s; calls check_signals() on all strategies
+    │   │
+    │   └── [registered strategies]
+    │       ├── IronCondorV1        ← pluggable strategy (PT-S1)
+    │       └── SignalPipeline      ← pluggable strategy (PT-S2)
     │
-    ├── RapidCouncil                ← Layer 2: multi-model panel (on breach only)
-    │   ├── QuantAnalyst    (Haiku) ← Greeks math, EV, probability
-    │   ├── SpecGuardian    (Haiku) ← spec compliance check
-    │   ├── RiskManager   (Sonnet) ← tail scenarios, margin impact
-    │   └── OptionsStrategist (Sonnet) ← market structure, VIX regime, OI walls
-    │       └── Chairman  (Sonnet) ← parallel Stage 1 → immediate synthesis
+    ├── RapidCouncil                ← fires only when a strategy returns an ACTION event
+    │   ├── QuantAnalyst   (Haiku)
+    │   ├── SpecGuardian   (Haiku)
+    │   ├── RiskManager    (Sonnet)
+    │   ├── OptionsStrategist (Sonnet)
+    │   └── Chairman       (Sonnet)  ← parallel Stage 1 → immediate synthesis
     │
-    ├── ApprovalGateway (protocol)
-    │   ├── TelegramGateway         ← paper trading: you approve via phone
-    │   └── AutoApprover            ← backtest: auto-accepts council's top pick
+    ├── TelegramGateway             ← extends TelegramNotifier; adds inbound polling
+    │   └── inline keyboard approval → callback routes to PaperExecutor
     │
-    └── PaperExecutor               ← Layer 3: synthetic fills, position update
-        ├── PaperFillSimulator      ← paper: mid ± slippage
-        └── BacktestFillSim         ← backtest: VIX-regime slippage model
+    └── PaperExecutor               ← wraps PaperStore; applies approved actions
+        └── PaperFillSimulator      ← mid ± slippage; records to paper_trades
 
-PERSISTENCE (portfolio.sqlite, shared via src/db.py)
-├── paper_trades           ← existing (PaperStore)
-├── paper_nav_snapshots    ← existing (PaperStore)
-├── paper_leg_snapshots    ← existing (PaperStore)
-├── paper_alerts           ← existing (planned in TODOS.md)
-├── pending_adjustments    ← NEW: approval state machine
-├── council_outputs        ← NEW: full council reasoning log
-└── daemon_heartbeat       ← NEW: watchdog signal
+PERSISTENCE  (portfolio.sqlite via src/db.py)
+├── [existing]  paper_trades, paper_nav_snapshots, paper_leg_snapshots, paper_alerts
+└── [new]       pending_approvals, council_outputs, daemon_heartbeat
 ```
 
 ---
 
-## Phase PT-0 — Strategy Protocol & Core Infrastructure
+## Phase PT-0 — Common Infrastructure
 
-**Target:** June 2026 (after Task 2 PortfolioDeltaTracker ships)
+**Target:** June–July 2026
+**Prerequisite:** Task 2 (PortfolioDeltaTracker) shipped
 **Owner:** Cowork
-**Blocks:** All subsequent phases
+**Blocks:** all strategy phases
 
-### What gets built
+Everything in this phase is strategy-agnostic. No IC-specific or signal-specific logic here.
 
-**`src/strategy/__init__.py`** — package stub (required for codebase-memory-mcp indexing).
+---
 
-**`src/strategy/protocol.py`** — `PaperStrategy` protocol. Three abstract methods every
-strategy must implement:
+### PT-0a — PaperStrategy Protocol
+
+**`src/strategy/__init__.py`** — package stub.
+
+**`src/strategy/protocol.py`** — `PaperStrategy` protocol. This is the only contract a
+strategy must satisfy to plug into the backbone.
 
 ```python
-def check_thresholds(
-    self,
-    position: PaperPosition,
-    market: OptionChain,
-) -> list[BreachEvent]:
-    """Return breach events if any monitoring threshold is violated."""
+class PaperStrategy(Protocol):
+    strategy_name: str   # must start with "paper_"
 
-def describe_context(
-    self,
-    position: PaperPosition,
-    market: OptionChain,
-    breach: BreachEvent,
-) -> str:
-    """Return structured context string for the council prompt."""
+    async def check_signals(
+        self,
+        market: OptionChain,
+        positions: list[PaperPosition],
+    ) -> list[SignalEvent]:
+        """
+        Called on every monitor tick for every registered strategy.
+        Return [] if nothing to act on — the tick is silent.
+        Return one or more SignalEvents to trigger council consultation.
+        """
 
-def apply_adjustment(
-    self,
-    position: PaperPosition,
-    adjustment: Adjustment,
-) -> PaperPosition:
-    """Apply an approved adjustment and return the new position state."""
+    def describe_context(
+        self,
+        event: SignalEvent,
+        market: OptionChain,
+        positions: list[PaperPosition],
+    ) -> str:
+        """Structured context string for the council prompt."""
+
+    async def apply_action(
+        self,
+        positions: list[PaperPosition],
+        action: ApprovedAction,
+    ) -> list[PaperPosition]:
+        """Apply an approved action. Returns updated position list."""
 ```
 
-`BreachEvent` is a frozen dataclass: `breach_type: str`, `severity: Literal["INFO","WARN","ACTION"]`,
-`current_value: Decimal`, `threshold_value: Decimal`, `description: str`.
+`SignalEvent`: `event_type: str`, `severity: Literal["INFO","WARN","ACTION"]`,
+`description: str`, `payload: dict[str, Any]`.
 
-`Adjustment` is a frozen dataclass: `adjustment_type: str`, `legs_to_close: list[str]`,
+Only `severity == "ACTION"` triggers council + Telegram approval.
+`WARN` sends a plain Telegram message (no approval needed).
+`INFO` is logged silently.
+
+`ApprovedAction`: `action_type: str`, `legs_to_close: list[str]`,
 `legs_to_open: list[LegSpec]`, `rationale: str`, `council_rank: int`.
 
-**`src/strategy/monitor.py`** — `StrategyMonitor`. Async polling loop. Polls every 90 seconds
-during market hours. On each tick: fetches live option chain for each open paper position,
-calls `strategy.check_thresholds()`, raises breach events with `severity == "ACTION"` to the
-council pipeline. `severity == "INFO"` is logged silently. `severity == "WARN"` is logged and
-sent as a Telegram message (no approval required).
+---
 
-Heartbeat: writes `{timestamp, positions_checked, last_breach}` to `daemon_heartbeat` table
-on every poll cycle. Watchdog in `start_paper_monitor.py` checks this on startup — if last
-heartbeat > 5 minutes ago and market is open, it restarts the daemon.
+### PT-0b — StrategyMonitor
 
-**`src/strategy/executor.py`** — `PaperExecutor`. Given an approved `Adjustment`, computes
-synthetic fills (mid price ± slippage haircut), updates `paper_trades` via `PaperStore`,
-writes a row to `adjustment_log`. Returns updated `PaperPosition`.
+**`src/strategy/monitor.py`** — `StrategyMonitor`.
 
-**New SQLite tables** (migrations in `PaperStore`):
+- Holds a registry of `PaperStrategy` instances.
+- Polls every 90 seconds during market hours.
+- On each tick: fetches live `OptionChain` once (shared across all strategies), calls
+  `check_signals()` on each registered strategy.
+- Routes `ACTION` events to `RapidCouncil` → `TelegramGateway`.
+- Writes heartbeat to `daemon_heartbeat` on every tick.
+- Does not know about IC or Signal Pipeline specifically.
+
+---
+
+### PT-0c — PaperExecutor
+
+**`src/strategy/executor.py`** — `PaperExecutor`.
+
+Thin layer over `PaperStore`. Given an `ApprovedAction`:
+1. Computes synthetic fills via `PaperFillSimulator` (mid ± slippage).
+2. Calls `PaperStore.record_trade()` for each leg change.
+3. Writes a row to `council_outputs` for audit.
+4. Returns the updated `list[PaperPosition]`.
+
+`PaperFillSimulator`: uses the VIX-regime slippage model from `DECISIONS.md §Slippage`
+(already specified: ₹1.0–₹4.0 base + OI multiplier). Port the model, do not reinvent it.
+
+---
+
+### PT-0d — RapidCouncil
+
+**`src/council/__init__.py`** — package stub.
+
+**`src/council/rapid.py`** — `RapidCouncil`.
+
+Fires only when `StrategyMonitor` routes an `ACTION` event to it. Four Stage 1 calls in
+parallel (`asyncio.gather`), chairman call immediately after. Total budget: 30 seconds.
+
+**Council composition:**
+
+| Persona | Model | Lens |
+|---|---|---|
+| QuantAnalyst | `claude-haiku-4-5` | Greeks math, EV, probability of each option |
+| SpecGuardian | `claude-haiku-4-5` | Reads strategy spec verbatim; flags non-compliant options |
+| RiskManager | `claude-sonnet-4-6` | Tail scenarios, worst-case P&L, margin impact |
+| OptionsStrategist | `claude-sonnet-4-6` | Market structure, VIX regime, OI walls, trend |
+| Chairman | `claude-sonnet-4-6` | Synthesises all four → ranked `ApprovedAction` list |
+
+**SpecGuardian** receives the full strategy spec doc as context (e.g. `ic_nifty_v1.md`
+for the IC strategy). It outputs "complies / does not comply" for each proposed action
+with cited clause. This prevents council members from suggesting actions the strategy
+spec forbids.
+
+`CouncilOutput`: `actions: list[ApprovedAction]`, `chairman_rationale: str`,
+`dissenting_notes: str | None`, `latency_ms: int`.
+
+Timeout: `asyncio.wait_for(..., timeout=25.0)`. Partial timeout → chairman proceeds with
+available responses. Full timeout → escalates to `WARN` Telegram, no action taken.
+
+---
+
+### PT-0e — Bidirectional Telegram Gateway
+
+**`src/notifications/telegram_gateway.py`** — `TelegramGateway`.
+
+Extends (does not replace) the existing `TelegramNotifier`. Added capabilities:
+
+- `send_approval_request(council_output, event) → int`: sends inline keyboard message
+  with council-ranked actions. Returns `message_id`.
+- `start_polling(callback) → None`: async polling loop for `CallbackQuery` (button presses)
+  and command handlers (`/status`, `/pnl`, `/pending`, `/pause`, `/resume`).
+
+Non-fatal contract preserved: all Telegram API calls wrapped in `try/except`, return
+`False` on failure, never raise.
+
+Auth guard: every inbound handler checks `chat_id == TELEGRAM_CHAT_ID`. Other senders
+are silently dropped and logged at WARNING.
+
+Timeout scanning: background asyncio task checks `pending_approvals` every 5 minutes.
+Expired rows (status PENDING, `expires_at < now`) set to EXPIRED → treated as no action.
+
+---
+
+### PT-0f — New SQLite Tables
+
+Three new tables, migrations added to `PaperStore.__init__`:
 
 ```sql
-CREATE TABLE IF NOT EXISTS pending_adjustments (
+CREATE TABLE IF NOT EXISTS pending_approvals (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     strategy_name   TEXT NOT NULL,
-    breach_type     TEXT NOT NULL,
-    council_output  TEXT NOT NULL,       -- JSON blob of full council response
-    status          TEXT NOT NULL,       -- PENDING | APPROVED | REJECTED | EXPIRED | AUTO
-    approved_option INTEGER,             -- which ranked option was chosen (1-indexed)
-    expires_at      TEXT NOT NULL,       -- ISO UTC datetime (30 min default)
-    telegram_msg_id INTEGER,             -- for editing/deleting the approval message
+    event_type      TEXT NOT NULL,
+    council_output  TEXT NOT NULL,      -- JSON blob
+    status          TEXT NOT NULL,      -- PENDING|APPROVED|REJECTED|EXPIRED
+    approved_rank   INTEGER,
+    expires_at      TEXT NOT NULL,      -- ISO UTC
+    telegram_msg_id INTEGER,
     created_at      TEXT NOT NULL,
     resolved_at     TEXT
 );
 
-CREATE TABLE IF NOT EXISTS daemon_heartbeat (
-    id              INTEGER PRIMARY KEY CHECK (id = 1),  -- singleton row
-    last_beat       TEXT NOT NULL,       -- ISO UTC datetime
-    positions_count INTEGER NOT NULL DEFAULT 0,
-    last_breach     TEXT                 -- breach_type of last event, or NULL
-);
-
 CREATE TABLE IF NOT EXISTS council_outputs (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    pending_adj_id  INTEGER NOT NULL REFERENCES pending_adjustments(id),
-    persona         TEXT NOT NULL,       -- QuantAnalyst | SpecGuardian | RiskManager | OptionsStrategist | Chairman
-    model           TEXT NOT NULL,       -- e.g. claude-haiku-4-5
+    approval_id     INTEGER NOT NULL REFERENCES pending_approvals(id),
+    persona         TEXT NOT NULL,
+    model           TEXT NOT NULL,
     prompt_tokens   INTEGER,
     output_tokens   INTEGER,
     latency_ms      INTEGER,
-    response        TEXT NOT NULL,       -- raw text response
+    response        TEXT NOT NULL,
     created_at      TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS daemon_heartbeat (
+    id              INTEGER PRIMARY KEY CHECK (id = 1),
+    pid             INTEGER NOT NULL,
+    last_beat       TEXT NOT NULL,      -- ISO UTC
+    strategies      TEXT NOT NULL,      -- JSON array of registered strategy names
+    last_event      TEXT
 );
 ```
 
-**Tests:** `tests/unit/strategy/` — protocol conformance, monitor threshold firing, executor
-fill simulation, heartbeat write, pending_adjustments state transitions.
+---
+
+### PT-0g — Daemon + Cron Scripts
+
+**`scripts/monitor_daemon.py`** — persistent process. Two concurrent asyncio tasks:
+`StrategyMonitor.run()` and `TelegramGateway.start_polling()`. Writes heartbeat every
+tick. Handles `SIGTERM` cleanly: expires pending approvals, writes final heartbeat, exits.
+
+**`scripts/start_monitor.py`** — checks heartbeat staleness; if stale or absent, launches
+daemon via `subprocess.Popen`. Exits immediately.
+
+**`scripts/stop_monitor.py`** — reads PID from `daemon_heartbeat`; `SIGTERM`; waits 30s;
+`SIGKILL` if unresponsive.
+
+**`scripts/pre_market_brief.py`** — stateless; open positions + Greeks + IVR → Telegram.
+
+**`scripts/eod_summary.py`** — stateless; today's P&L + council activity count → Telegram.
+
+**Cron additions:**
+```cron
+00 09 * * 1-5  python -m scripts.pre_market_brief
+15 09 * * 1-5  python -m scripts.start_monitor
+30 15 * * 1-5  python -m scripts.stop_monitor
+35 15 * * 1-5  python -m scripts.eod_summary
+```
+
+**Dependency to add:** `python-telegram-bot>=21.0` in `requirements.txt`.
 
 ---
 
-## Phase PT-1 — Bidirectional Telegram Gateway
+### PT-0 Tests
 
-**Target:** July 2026
-**Owner:** Cowork
-**Blocked by:** PT-0
+`tests/unit/strategy/` and `tests/unit/council/` (both need `__init__.py`):
 
-The existing `src/notifications/` is outbound-only (fire-and-forget). This phase adds an
-inbound polling bot that runs as a task within the daemon's asyncio event loop.
-
-### What gets built
-
-**Dependency:** `python-telegram-bot>=21.0` added to `requirements.txt`. Uses async polling
-mode — no webhook, no public URL required. Compatible with the existing asyncio event loop.
-
-**`src/notifications/telegram_gateway.py`** — `TelegramGateway`. Extends the notification
-pattern (non-fatal, `build_gateway()` returns `None` when unconfigured) with:
-
-- `send_approval_request(adj: PendingAdjustment) → int`: sends an inline keyboard message
-  with council-ranked options. Returns the Telegram `message_id` for tracking.
-- `start_polling(callback: ApprovalCallback) → None`: starts the async polling loop.
-  Handles `CallbackQuery` (button press) and routes to the approval callback.
-- `send_info(message: str) → bool`: same contract as the existing notifier's `send()`.
-
-Inline keyboard layout for an adjustment request:
-```
-⚠️ NIFTY IC — Short Call delta hit 0.36
-Spot: 24,180 | Strike: 24,000 | DTE: 12 | P&L: -₹2,340
-
-QuantAnalyst + RiskManager: Roll call spread to 24,500
-OptionsStrategist: Close full IC (trending move, don't fight it)
-SpecGuardian: Both options comply with ic_nifty_v1.md
-
-[1] Roll call spread → 24,500 (+₹12 credit est.)
-[2] Close full IC (–₹2,340 locked loss)
-[3] Do nothing (monitor continues, re-alerts in 15 min)
-
-⏱ Expires in 28 min → auto "Do nothing"
-```
-
-**Inbound commands** (registered as `CommandHandler`):
-
-| Command | Response |
-|---|---|
-| `/status` | Open positions, current Greeks, unrealized P&L |
-| `/pnl` | Cumulative paper P&L by strategy |
-| `/pending` | Any pending approval requests |
-| `/pause` | Suspend monitoring (sends WARN-level only, no ACTION triggers) |
-| `/resume` | Re-enable monitoring |
-| `/help` | Command list |
-
-**Auth guard:** Every inbound handler checks `update.effective_chat.id == TELEGRAM_CHAT_ID`.
-Messages from other chat IDs are silently dropped and logged at WARNING.
-
-**Timeout handling:** A background asyncio task scans `pending_adjustments` every 5 minutes.
-Rows where `expires_at < now` and `status == PENDING` are set to `EXPIRED` with
-`approved_option = NULL`. The daemon treats EXPIRED as "do nothing" and continues monitoring.
-
-**Non-fatal contract preserved:** `TelegramGateway` wraps all Telegram API calls in
-`try/except`. Network failure → log WARNING, return False. The daemon never aborts due to
-Telegram failure.
-
-**Tests:** mock `python-telegram-bot`'s `Application` object. Test auth guard, button
-routing, timeout scanning, non-fatal on API failure.
+- Protocol conformance: a `MockStrategy` satisfies `PaperStrategy`.
+- `StrategyMonitor`: INFO/WARN/ACTION routing; heartbeat write; empty strategy list.
+- `PaperExecutor`: fill simulation; `PaperStore.record_trade` called correctly.
+- `RapidCouncil`: parallel execution (mocked API); partial timeout; SpecGuardian veto;
+  full timeout escalation.
+- `TelegramGateway`: auth guard; button routing; timeout scanning; non-fatal on failure.
+- Table migrations: all three tables created idempotently.
 
 ---
 
-## Phase PT-2 — Rapid Council Integration
-
-**Target:** July–August 2026
-**Owner:** Cowork
-**Blocked by:** PT-1
-
-### Council Design
-
-**Architecture:** Stage 1 fires 4 API calls in parallel (`asyncio.gather`). Chairman calls
-immediately after. No Stage 2 peer review (too slow). Total budget: 30 seconds.
-
-**`src/council/__init__.py`** — package stub.
-
-**`src/council/rapid.py`** — `RapidCouncil`:
-
-```python
-async def consult(
-    self,
-    context: str,          # from strategy.describe_context()
-    strategy_spec: str,    # full text of e.g. ic_nifty_v1.md
-    breach: BreachEvent,
-) -> CouncilOutput:
-    """Run rapid council. Returns ranked adjustment options."""
-```
-
-`CouncilOutput` is a frozen Pydantic model: `options: list[AdjustmentOption]`, `chairman_rationale: str`,
-`dissenting_notes: str | None`, `total_latency_ms: int`, `persona_responses: list[PersonaResponse]`.
-
-`AdjustmentOption`: `rank: int`, `label: str`, `description: str`, `credit_impact: Decimal | None`,
-`delta_impact: Decimal | None`, `supporting_personas: list[str]`, `dissenting_personas: list[str]`.
-
-### Council Members — Model Assignments
-
-| Persona | Model | Role | Why |
-|---|---|---|---|
-| **QuantAnalyst** | `claude-haiku-4-5` | Greeks math, EV, probability of each option | Haiku is fast and accurate on structured numeric reasoning. Greeks context is well-structured. |
-| **SpecGuardian** | `claude-haiku-4-5` | Reads strategy spec doc verbatim, flags compliance violations | Mechanical check — does not need deep reasoning. Haiku speed matters here. |
-| **RiskManager** | `claude-sonnet-4-6` | Tail scenarios, worst-case P&L, margin impact, liquidity at stressed bid/ask | Needs more nuance than Haiku; Opus is overkill for a time-bounded decision. |
-| **OptionsStrategist** | `claude-sonnet-4-6` | Market structure, VIX regime, OI walls, whether this is a trending or noise move | Same reasoning — Sonnet quality at Sonnet speed. |
-| **Chairman** | `claude-sonnet-4-6` | Synthesises all four responses into ranked options | Speed matters. Opus is authoritative for governance councils but too slow for real-time. |
-
-**System prompt structure per persona:** Each persona receives a system prompt encoding its
-"lens" (e.g. QuantAnalyst: "You evaluate adjustment options purely through the lens of
-expected value and Greeks arithmetic. Do not discuss market narrative."). The user turn
-contains the structured context from `strategy.describe_context()`.
-
-**SpecGuardian note:** This persona receives the full text of the relevant strategy spec
-(`ic_nifty_v1.md` for Iron Condor) as part of its context. Its output is: "complies / does
-not comply" for each proposed option, with cited spec clause. This prevents council drift
-where members suggest adjustments that the strategy spec explicitly forbids.
-
-**Timeout safety:** `asyncio.wait_for(gather(...), timeout=25.0)`. If any persona times out,
-its `PersonaResponse` is marked `timed_out=True` and the chairman proceeds with available
-responses. A full timeout escalates to "do nothing" and sends a Telegram warning.
-
-**Logging:** Every council run writes to `council_outputs` (one row per persona + one for
-chairman). Token counts and latency recorded. This is the audit trail and the training corpus
-for future council calibration.
-
-**Tests:** Mock all 5 API calls. Test parallel execution, partial timeout handling, option
-ranking, SpecGuardian veto path.
-
----
-
-## Phase PT-3 — Cron Layer & Daemon Lifecycle
+## Phase PT-S1 — Iron Condor v1 (Pluggable Strategy)
 
 **Target:** August 2026
-**Owner:** Cowork
-**Blocked by:** PT-2
+**Blocked by:** PT-0 + `docs/strategies/ic_nifty_v1.md` (must exist first)
+**Owner:** Cowork (backbone wiring) + Animesh (entry execution)
 
-### Scripts
-
-**`scripts/pre_market_brief.py`** (cron 09:00 weekdays): fetches current paper positions from
-`PaperStore`, computes delta via `PortfolioDeltaTracker`, fetches spot from `BrokerClient`,
-sends Telegram message: open positions, strikes vs spot, DTE, unrealized P&L, IVR from
-latest VIX Parquet. Stateless — reads DB, sends Telegram, exits.
-
-**`scripts/start_paper_monitor.py`** (cron 09:15 weekdays): checks `daemon_heartbeat` —
-if heartbeat exists and is < 10 minutes old, daemon is already running (skip). Otherwise:
-`subprocess.Popen(['python', '-m', 'scripts.paper_monitor_daemon'])`. Exits immediately.
-
-**`scripts/paper_monitor_daemon.py`** (persistent): the main event loop. Runs
-`StrategyMonitor.run()` (polls every 90s) and `TelegramGateway.start_polling()` as two
-concurrent asyncio tasks. Writes heartbeat on each monitor tick. Handles `SIGTERM` cleanly:
-marks pending adjustments as EXPIRED, writes final heartbeat, exits.
-
-**`scripts/stop_paper_monitor.py`** (cron 15:30 weekdays): reads PID from `daemon_heartbeat`
-(add a `pid` column in PT-0 migration), sends `SIGTERM`. Waits up to 30s for clean exit,
-then `SIGKILL` if unresponsive.
-
-**`scripts/eod_paper_summary.py`** (cron 15:35 weekdays): reads `paper_nav_snapshots` and
-`paper_leg_snapshots` from today, computes daily P&L, adjustment count, Greeks snapshot.
-Formats and sends to Telegram. Stateless — exits after send.
-
-### Cron table (additions to existing crontab)
-
-```cron
-# Paper trading lifecycle
-00 09 * * 1-5   cd /path/to/NiftyShield && python -m scripts.pre_market_brief
-15 09 * * 1-5   cd /path/to/NiftyShield && python -m scripts.start_paper_monitor
-30 15 * * 1-5   cd /path/to/NiftyShield && python -m scripts.stop_paper_monitor
-35 15 * * 1-5   cd /path/to/NiftyShield && python -m scripts.eod_paper_summary
-```
-
-**Tests:** Daemon startup/shutdown integration test with `MockBrokerClient`. Heartbeat
-write + stale detection. SIGTERM clean exit. Pre-market and EOD formatting unit tests.
-
----
-
-## Phase PT-4 — Iron Condor v1 Strategy Implementation
-
-**Target:** August–September 2026
-**Owner:** Cowork (backbone) + Animesh (entry decisions during paper run)
-**Blocked by:** PT-3, `docs/strategies/ic_nifty_v1.md` (must exist per council impl. path)
-
-### Council ruling recap
-
-Per `docs/council/2026-05-02_iron-condor-v1-core-design.md` (Chairman synthesis, §2):
-IC v1 has **no adjustments**. All breach events route to the IC exit stack. The council
-in paper trading mode will still run and log its analysis — but the `AdjustmentOptions`
-are restricted to exit variants only (close full IC, close call spread only, close put
-spread only). No rolls, no hedges added in v1.
-
-This is enforced in `IronCondorV1.describe_context()` which appends:
-`"STRATEGY CONSTRAINT: IC v1 permits exits only. Do not propose rolls or new legs."`.
-`SpecGuardian` will flag any non-exit suggestion as non-compliant.
-
-### What gets built
+**Council ruling:** `docs/council/2026-05-02_iron-condor-v1-core-design.md` — no
+adjustments in v1. All `ACTION` events route to exit options only. `SpecGuardian`
+receives `ic_nifty_v1.md` and flags any non-exit proposal as non-compliant.
 
 **`src/strategy/ic_nifty_v1.py`** — `IronCondorV1` implements `PaperStrategy`.
 
-`IronCondorV1Config` (frozen Pydantic):
+`check_signals()` returns `SignalEvent` for:
 
-```python
-short_put_delta: Decimal = Decimal("0.15")   # standalone default
-short_call_delta: Decimal = Decimal("0.10")  # standalone default
-wing_width_points: int = 500
-profit_target_pct: Decimal = Decimal("0.50")
-loss_stop_multiple: Decimal = Decimal("2.0")
-delta_stop: Decimal = Decimal("0.35")
-time_stop_dte: int = 14
-csp_open_put_delta: Decimal = Decimal("0.09")   # when CSP concurrent
-csp_open_call_delta: Decimal = Decimal("0.13")  # when CSP concurrent
-```
+| Event | Severity | Trigger |
+|---|---|---|
+| `PROFIT_TARGET` | ACTION | mark ≤ 50% of entry credit |
+| `LOSS_STOP` | ACTION | mark ≥ 2.0× entry credit |
+| `DELTA_STOP` | ACTION | either short leg \|delta\| ≥ 0.35 |
+| `TIME_STOP` | ACTION | DTE ≤ 14 |
+| `DELTA_WARN` | WARN | either short leg \|delta\| ≥ 0.25 |
+| `DTE_WARN` | INFO | DTE ≤ 21 |
 
-`check_thresholds()` returns breach events for:
-- **PROFIT_TARGET**: mark ≤ 50% of entry credit → severity ACTION
-- **LOSS_STOP**: mark ≥ 2.0× entry credit → severity ACTION
-- **DELTA_STOP**: either short leg |delta| ≥ 0.35 → severity ACTION
-- **TIME_STOP**: DTE ≤ 14 → severity ACTION
-- **DELTA_WARN**: either short leg |delta| ≥ 0.25 → severity WARN (Telegram alert, no council)
-- **DTE_WARN**: DTE ≤ 21 → severity INFO (logged only)
+No open position → `check_signals()` returns `[]`. Entry is manual via
+`scripts/paper_ic_entry.py` (validates delta gate, credit gate, liquidity gate).
 
-`apply_adjustment()` for IC v1 only handles `adjustment_type == "CLOSE_FULL"` or `"CLOSE_CALL_SPREAD"`
-or `"CLOSE_PUT_SPREAD"`. Any other type raises `ValueError("IC v1: only exits permitted")`.
+`apply_action()` accepts only `CLOSE_FULL`, `CLOSE_CALL_SPREAD`, `CLOSE_PUT_SPREAD`.
+Any other `action_type` raises `ValueError` — the spec forbids it.
 
-**Entry helper integration:** `find_strike_by_delta.py` already exists and outputs
-`record_paper_trade.py` commands. A new `scripts/paper_ic_entry.py` wraps the 4-leg IC
-entry: calls `find_strike_by_delta` for each leg, validates portfolio delta gate via
-`PortfolioDeltaTracker`, checks minimum credit, liquidity gate, then generates the 4
-`record_paper_trade.py` commands for Animesh to review and run.
-
-**Strategy name:** `paper_ic_nifty_v1` (enforced by `paper_` prefix rule).
-
-**Tests:** All 5 breach types. `apply_adjustment` rejects non-exit types. Entry validation
-(delta gate, credit gate, liquidity gate). Integration with `MockBrokerClient`.
+**Strategy name:** `paper_ic_nifty_v1`
 
 ---
 
-## Phase PT-5 — Backtesting Mode
+## Phase PT-S2 — Signal Pipeline (Pluggable Strategy)
 
-**Target:** Phase 1 (after Phase 0.8 gate, Aug–Dec 2026)
+**Target:** August–September 2026
+**Blocked by:** PT-0 + OpenRouter API key
 **Owner:** Cowork
-**Blocked by:** PT-4 + Phase 1.3 (NSE Bhavcopy + TrueData pipeline operational)
+**Full spec:** `docs/plan/signal_pipeline_spec.md`
 
-The key design payoff: same `StrategyMonitor` + `IronCondorV1` code runs over historical
-data with swapped providers.
+**`src/signals/`** — full module per spec §8. `SignalPipeline` implements `PaperStrategy`.
 
-### What gets built
+`check_signals()` fires **every day** regardless of open position state:
+1. Fetches `MarketSnapshot` (option chain, VIX, FII, GIFT Nifty).
+2. Calls all three providers in parallel: Grok, GPT-4o, Gemini (same `asyncio.gather`
+   pattern as `RapidCouncil` — 30s timeout).
+3. Aggregates votes via `SignalAggregator` (majority + confidence gate).
+4. Consensus ≥ 2/3 with confidence ≥ 3 → `ACTION` event with direction + strike.
+5. Split or low confidence → `INFO` event (logged only, no Telegram).
 
-**`src/backtest/historical_replayer.py`** — `HistoricalReplayer` implements `MarketDataProvider`.
-Reads option chain Parquet files (from bhavcopy/TrueData pipeline), reconstructs Greeks via
-Black '76 (`src/backtest/greeks.py`), yields `OptionChain` objects in chronological order.
-Configurable replay speed (useful for debugging). Respects market calendar via
-`src/market_calendar/`.
+At 15:00 IST, if a signal position is open → `ACTION` event for `CLOSE_POSITION`
+(fixed exit). Auto-approved — no council call needed.
 
-**`src/backtest/auto_approver.py`** — `AutoApprover` implements `ApprovalGateway`. Two modes:
-`COUNCIL_TOP_PICK` (auto-accepts option ranked #1 by chairman — optimistic scenario) and
-`RULE_BASED` (pre-specified policy: e.g. "always close full IC on any ACTION breach").
-`RULE_BASED` mode is the default for walk-forward validation — it makes backtest results
-policy-reproducible without council calls.
+`apply_action()` handles `ENTER_CALL`, `ENTER_PUT`, `NO_TRADE`, `CLOSE_POSITION`.
 
-**`src/backtest/fill_simulator.py`** — `BacktestFillSim` implements fill simulation using
-the slippage model from `DECISIONS.md §Slippage`: VIX-regime-aware absolute INR slippage +
-OI liquidity multiplier. Generates optimistic / base / conservative P&L scenarios (slippage
-multiplier ×1.0 / ×1.0 / ×1.5). Slippage definition already decided and documented.
+**Note on council interaction:** The Signal Pipeline's three providers (Grok/GPT-4o/Gemini)
+form their own internal consensus inside `check_signals()`. The `RapidCouncil` (Claude
+personas) is called after, to frame the approved action for the Telegram approval message.
+This keeps the approval UX identical across all strategies.
 
-**Backtest entry point:** `scripts/run_ic_backtest.py`. Args: `--start`, `--end`, `--mode`
-(COUNCIL_TOP_PICK | RULE_BASED), `--policy` (for RULE_BASED), `--slippage` (optimistic |
-base | conservative). Runs `StrategyMonitor` in replay mode, collects `BacktestResult` per
-cycle, writes to a separate `backtest.sqlite` (not `portfolio.sqlite`).
-
-**Tests:** Replayer reading fixture Parquet file. `AutoApprover` both modes. `BacktestFillSim`
-slippage model boundary cases. Full mini-backtest over 3 synthetic cycles.
+**Strategy name:** `paper_signal_v1`
 
 ---
 
-## Infrastructure Gaps — Existing Code Needs Enhancement
+## Phase PT-B — Backtesting Mode (Infrastructure Swap)
 
-Before PT-0 ships, audit these gaps:
+**Target:** Phase 1 (after Phase 0.8 gate)
+**Blocked by:** PT-S1 + Phase 1.3 (Bhavcopy + TrueData pipeline)
 
-| Gap | Current State | Required Change | Priority |
-|---|---|---|---|
-| `src/strategy/` | Empty directory | Create from PT-0 | PT-0 blocker |
-| `src/council/` | Does not exist | Create from PT-2 | PT-2 blocker |
-| `src/notifications/` | Outbound only | Add `TelegramGateway` as separate class (do not modify `TelegramNotifier`) | PT-1 |
-| `src/paper/store.py` | No `pending_adjustments`, `council_outputs`, `daemon_heartbeat` tables | Add migrations in PT-0 | PT-0 |
-| `src/paper/` | No `PaperExecutor` | Add in PT-0 | PT-0 |
-| `src/client/protocol.py` | `MarketDataProvider` sub-protocol exists | Already correct — no change | — |
-| `src/risk/` | Task 2 (PortfolioDeltaTracker) pending | Must ship before PT-0 starts | Prerequisite |
-| `scripts/` | No daemon lifecycle scripts | Add in PT-3 | PT-3 |
-| `requirements.txt` | No `python-telegram-bot` | Add in PT-1 | PT-1 |
-| `tests/unit/strategy/` | Does not exist | Create with `__init__.py` in PT-0 | PT-0 |
-| `tests/unit/council/` | Does not exist | Create with `__init__.py` in PT-2 | PT-2 |
+Same strategies, swapped providers — no strategy code changes.
 
-**Invariants that apply to all new code in this plan:**
+| Live | Backtest |
+|---|---|
+| `UpstoxLiveClient` (MarketDataProvider) | `HistoricalReplayer` |
+| `TelegramGateway` | `AutoApprover` |
+| `PaperFillSimulator` | `BacktestFillSim` (VIX-regime slippage model) |
 
-- `paper_` prefix on all strategy names — enforced by Pydantic validator on `PaperTrade`.
-- `Decimal` everywhere for money. Never float in the P&L path.
-- All timestamps UTC in DB; IST only at display layer.
-- New packages must have `__init__.py` (re-index codebase-memory-mcp after each new package).
-- `BrokerClient` injected via constructor; never imported directly outside `factory.py`.
-- All Telegram interactions non-fatal: catch all exceptions, log WARNING, continue.
-- No `SELECT *` queries — aggregate at SQL layer.
+**`src/backtest/historical_replayer.py`** — reads Parquet, reconstructs Greeks via
+Black '76 (`src/backtest/greeks.py`), yields `OptionChain` chronologically.
+
+**`src/backtest/auto_approver.py`** — two modes: `COUNCIL_TOP_PICK` (accepts rank-1,
+optimistic) and `RULE_BASED` (pre-specified policy, reproducible walk-forward).
+
+**`src/backtest/fill_simulator.py`** — VIX-regime slippage from `DECISIONS.md`.
+Generates optimistic / base / conservative scenarios.
 
 ---
 
-## Council Member Recommendation & Open Question
+## Infrastructure Gap Summary
 
-### Recommended Rapid Council (this plan)
+| Gap | State | Phase |
+|---|---|---|
+| `src/strategy/` | Empty directory | PT-0 |
+| `src/council/` | Does not exist | PT-0 |
+| `src/notifications/telegram_gateway.py` | Does not exist | PT-0 |
+| `pending_approvals`, `council_outputs`, `daemon_heartbeat` tables | Do not exist | PT-0 |
+| `PaperExecutor` | Does not exist | PT-0 |
+| Daemon + cron scripts | Do not exist | PT-0 |
+| `python-telegram-bot>=21.0` | Not in requirements.txt | PT-0 |
+| `tests/unit/strategy/`, `tests/unit/council/` | Do not exist | PT-0 |
+| `src/strategy/ic_nifty_v1.py` | Does not exist | PT-S1 |
+| `docs/strategies/ic_nifty_v1.md` | Does not exist (council specified, not written) | PT-S1 prereq |
+| `src/signals/` | Spec exists, no code | PT-S2 |
+| `src/backtest/historical_replayer.py` | Does not exist | PT-B |
+| `src/backtest/auto_approver.py` | Does not exist | PT-B |
+| `src/backtest/fill_simulator.py` | Does not exist | PT-B |
 
-| Persona | Model | Cost/call | Speed |
-|---|---|---|---|
-| QuantAnalyst | `claude-haiku-4-5` | Lowest | ~3s |
-| SpecGuardian | `claude-haiku-4-5` | Lowest | ~3s |
-| RiskManager | `claude-sonnet-4-6` | Medium | ~8s |
-| OptionsStrategist | `claude-sonnet-4-6` | Medium | ~8s |
-| Chairman (synthesis) | `claude-sonnet-4-6` | Medium | ~10s |
+**Invariants that apply to all new code:**
+- `paper_` prefix on all `strategy_name` values — enforced by `PaperTrade` Pydantic validator.
+- `Decimal` for all monetary fields; TEXT in SQLite; `Decimal(str(row["col"]))` at read.
+- Timestamps UTC in DB; IST at display layer only.
+- `BrokerClient` injected via constructor; never imported outside `factory.py`.
+- `__init__.py` in every new package; re-index codebase-memory-mcp after adding packages.
+- All Telegram calls non-fatal: catch all exceptions, log WARNING, never raise.
 
-All four Stage 1 calls run in parallel. Total wall-clock: ~13s (chairman waits for slowest
-Stage 1 response). Well within the 30-second budget.
+---
 
-The SpecGuardian is the addition that didn't exist in earlier architecture discussions.
-It prevents "adjustment creep" — the tendency for council members to suggest creative
-solutions that violate the documented strategy rules. Having a model that reads the spec
-verbatim and flags compliance creates an audit-friendly paper trail.
+## Open Question — 5th Council Persona
 
-### Open Question for Animesh
+**Should we add `MarketSentimentAnalyst` (web search, real-time news)?**
 
-**Should we add a 5th Stage 1 persona: `MarketSentimentAnalyst`?**
-
-This persona would use web search to check for:
-- SEBI circulars, RBI announcements, or budget dates in the next 5 trading days
-- Any NSE technical advisories (margin changes, lot size changes)
-- FII/DII provisional data from NSE (published intraday)
-
-**Arguments for:** Brings macro context that the other personas lack. An adjustment decision
-looks different if RBI MPC is tomorrow vs. a quiet week.
-
-**Arguments against:**
-- Adds ~10–15 seconds via web fetch (possible timeout risk during market hours)
-- Web search can fail silently, leaving the council without this persona's input
-- The event filter (R4 in CSP/IC spec) already screens for known events at entry time. By
-  the time the monitor fires, you're already inside a trade — macro context is advisory, not
-  actionable.
-- The existing `OptionsStrategist` persona already has market context in its system prompt
-  (VIX level, IVR, DTE, spot vs strikes). Most of what `MarketSentimentAnalyst` would add
-  is already implicitly in the Greeks and VIX context.
-
-**Recommendation: Skip for PT-2, add only if OptionsStrategist recommendations consistently
-feel under-informed during paper trading review.** The SpecGuardian is higher value per
-token.
+Adds ~10–15s and a web-fetch dependency during market hours. Current recommendation: skip.
+The Signal Pipeline's Grok and Gemini providers already cover real-time sentiment and global
+macro — that context flows into `describe_context()` and is available to the Claude council
+without a 5th persona. Revisit after PT-S2 paper trading review if `OptionsStrategist`
+recommendations feel under-informed.
 
 ---
 
 ## Phase Dependency Map
 
 ```
-[BACKTEST_PLAN Task 2: PortfolioDeltaTracker]
-        ↓
-   [PT-0: Protocol + Core Infra]
-        ↓
-   [PT-1: Bidirectional Telegram]
-        ↓
-   [PT-2: Rapid Council]
-        ↓
-   [PT-3: Cron Layer + Daemon]
-        ↓
-   [PT-4: IronCondorV1 Strategy]
-        ↓
-[Phase 0.8 gate passes]
-        ↓
-   [PT-5: Backtesting Mode]
+[Task 2: PortfolioDeltaTracker]
+         ↓
+    [PT-0: Common Infrastructure]
+         ↓               ↓
+[PT-S1: Iron Condor] [PT-S2: Signal Pipeline]
+         ↓
+ [Phase 0.8 gate]
+         ↓
+    [PT-B: Backtesting]
 ```
 
 ---
 
 ## Completion Log
 
-*Append-only. One row per completed phase.*
-
 | Date | Phase | Commit SHA | Notes |
 |---|---|---|---|
 | — | — | — | — |
-
----
-
-## Open Questions for Future Sessions
-
-- **PT-1:** Should the Telegram approval window be 30 minutes (default) or DTE-aware (shorter
-  when DTE ≤ 5)?
-- **PT-3:** Should the daemon run as a `systemd` service instead of cron-launched subprocess?
-  More robust restart guarantees but requires system-level setup.
-- **PT-4:** Confirm NSE lot size before hardcoding IC lot size. Current constants file has
-  `LOT_SIZE = 65` (`src/paper/constants.py`) but DEBT-4 flags a `DEFAULT_LOT_SIZE = 75`
-  inconsistency in `find_strike_by_delta.py`. Resolve before IC entry scripts are built.
-- **MarketSentimentAnalyst:** Add as 5th council persona or not? (see above)
