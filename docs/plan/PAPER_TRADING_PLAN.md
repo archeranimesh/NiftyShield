@@ -309,6 +309,43 @@ daemon via `subprocess.Popen`. Exits immediately.
 
 ---
 
+## Phase PT-S0 — CSP v1 (Pluggable Strategy)
+
+**Target:** After PT-0 ships (validates backbone with a live strategy before IC)
+**Blocked by:** PT-0
+**Owner:** Cowork
+**Note:** CSP is already running via `record_paper_trade.py` + `daily_snapshot.py`.
+This phase migrates it onto the backbone — it does not change the strategy spec.
+Existing `paper_trades` rows are unaffected.
+
+**`src/strategy/csp_nifty_v1.py`** — `CSPNiftyV1` implements `PaperStrategy`.
+
+`check_signals()` returns `SignalEvent` for:
+
+| Event | Severity | Trigger |
+|---|---|---|
+| `PROFIT_TARGET` | ACTION | mark ≤ 50% of entry credit |
+| `LOSS_STOP` | ACTION | mark ≥ 2.0× entry credit |
+| `DELTA_STOP` | ACTION | short put \|delta\| ≥ 0.35 |
+| `TIME_STOP` | ACTION | DTE ≤ 21 |
+| `ROLL_DUE_DTE` | WARN | DTE ≤ 5 |
+| `ROLL_DUE_DECAY` | WARN | current premium ≤ 25% of entry premium (≥75% captured) |
+| `DELTA_WARN` | WARN | short put \|delta\| ≥ 0.25 |
+
+`WARN` events replace the `paper_alerts` table logic currently specced in `TODOS.md`
+(CLI-12 area). Once this phase ships, the `paper_alerts` cron alert logic is retired in
+favour of the unified `WARN` path through `TelegramGateway`.
+
+Entry remains manual: `record_paper_trade.py` as today. The daemon picks up the new
+position on its next tick automatically.
+
+The existing cron entry for `paper_snapshot.py` is retired; EOD mark-to-market is
+handled by `eod_summary.py` via `PaperTracker` (already used there).
+
+**Strategy name:** `paper_csp_nifty_v1`
+
+---
+
 ## Phase PT-S1 — Iron Condor v1 (Pluggable Strategy)
 
 **Target:** August 2026
@@ -373,6 +410,41 @@ This keeps the approval UX identical across all strategies.
 
 ---
 
+## Phase PT-S3 — 3-Track Comparison (Pluggable Strategy)
+
+**Target:** After PT-S0
+**Blocked by:** PT-0
+**Owner:** Cowork
+**Note:** 3-track already runs via `paper_3track_snapshot.py` (EOD cron) and
+`paper_3track_overlay_roll.py` (manual roll). This phase migrates roll alerts onto
+the backbone. Greek-based adjustment decisions are not needed here — these are long
+positions with mechanical roll timing.
+
+**`src/strategy/nifty_track_comparison_v1.py`** — `NiftyTrackComparisonV1` implements
+`PaperStrategy`. Covers all three tracks (Spot/Futures/Proxy) and their overlays
+(collar, CSP overlay, CC) as a single registered strategy.
+
+`check_signals()` returns `SignalEvent` for:
+
+| Event | Severity | Trigger |
+|---|---|---|
+| `ROLL_DUE_DTE` | WARN | any open leg DTE ≤ 5 |
+| `ROLL_DUE_DECAY` | WARN | any short overlay premium ≤ 25% of entry (≥75% captured) |
+| `OVERLAY_EXPIRED` | WARN | overlay expiry passed with no roll recorded |
+
+No `ACTION` events — 3-track rolls are mechanical, no council consultation needed.
+`apply_action()` is a no-op (rolls are executed manually via the existing
+`paper_3track_overlay_roll.py` script; the backbone only delivers the reminder).
+
+The existing `paper_3track_snapshot.py` EOD cron is **retained** — it writes
+`paper_leg_snapshots` which the backbone's `eod_summary.py` reads. The two coexist
+during the migration period; `paper_3track_snapshot.py` is retired only after
+`eod_summary.py` covers all three tracks cleanly.
+
+**Strategy name:** `paper_nifty_3track_v1` (single registration covers all tracks)
+
+---
+
 ## Phase PT-B — Backtesting Mode (Infrastructure Swap)
 
 **Target:** Phase 1 (after Phase 0.8 gate)
@@ -409,9 +481,11 @@ Generates optimistic / base / conservative scenarios.
 | Daemon + cron scripts | Do not exist | PT-0 |
 | `python-telegram-bot>=21.0` | Not in requirements.txt | PT-0 |
 | `tests/unit/strategy/`, `tests/unit/council/` | Do not exist | PT-0 |
+| `src/strategy/csp_nifty_v1.py` | Does not exist | PT-S0 |
 | `src/strategy/ic_nifty_v1.py` | Does not exist | PT-S1 |
 | `docs/strategies/ic_nifty_v1.md` | Does not exist (council specified, not written) | PT-S1 prereq |
 | `src/signals/` | Spec exists, no code | PT-S2 |
+| `src/strategy/nifty_track_comparison_v1.py` | Does not exist | PT-S3 |
 | `src/backtest/historical_replayer.py` | Does not exist | PT-B |
 | `src/backtest/auto_approver.py` | Does not exist | PT-B |
 | `src/backtest/fill_simulator.py` | Does not exist | PT-B |
@@ -442,14 +516,16 @@ recommendations feel under-informed.
 
 ```
 [Task 2: PortfolioDeltaTracker]
-         ↓
+              ↓
     [PT-0: Common Infrastructure]
-         ↓               ↓
-[PT-S1: Iron Condor] [PT-S2: Signal Pipeline]
-         ↓
- [Phase 0.8 gate]
-         ↓
-    [PT-B: Backtesting]
+              ↓
+    [PT-S0: CSP v1]          ← validates backbone with live strategy
+       ↓        ↓        ↓        ↓
+[PT-S1: IC] [PT-S2: Signal] [PT-S3: 3-Track] [future strategies...]
+       ↓
+[Phase 0.8 gate]
+       ↓
+  [PT-B: Backtesting]
 ```
 
 ---
