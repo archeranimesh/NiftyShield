@@ -45,7 +45,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.client.factory import create_broker_client
+from src.client.factory import create_client
 from src.paper.store import PaperStore
 from src.paper.formatting import format_pnl_table
 from src.paper.tracker import PaperTracker
@@ -115,7 +115,7 @@ async def _run(args: argparse.Namespace) -> int:
     snap_date = args.date or date.today()
 
     env = os.environ.get("UPSTOX_ENV", "prod")
-    client = create_broker_client(env=env)
+    client = create_client(env=env)
     store = PaperStore(args.db_path)
     tracker = PaperTracker(store=store, market=client)
 
