@@ -418,6 +418,26 @@ License decision needed before automation. Every file should carry a header once
 | Date | What Changed |
 |---|---|
 | 2026-05-15 | **Council audit + near_expiry_buy_v1.md.** All 12 council files verified absorbed → archived into `docs/council/archive/strategy/`, `archive/risk/`, `archive/research/`. Added missing DECISIONS.md row for integrated-leg2. Gamma strategy doc `near_expiry_buy_v1.md` v1.1 created with two-phase architecture. Dhan Data API subscription decision added to DECISIONS.md. |
+| 2026-05-15 | **Audit Remediation Finding [11].** Removed `create_broker_client` alias from `src/client/factory.py`. Updated `scripts/paper_snapshot.py` to use `create_client` directly. Deleted `tests/unit/paper/test_paper_store.py` (redundant alias regression guard). All 1349 tests green. SHA: 8639d44. |
+| 2026-05-15 | **Audit Remediation Finding [10].** Replaced hardcoded string path with `DEFAULT_DATA_DIR` constant anchored to `__file__` in `src/backtest/bhavcopy_loader.py`. Created `src/backtest/constants.py` to hold backtest defaults. Added `test_load_options_ohlcv_default_value` using `inspect.signature` to verify default behavior. SHA: e46e96d. |
+| 2026-05-15 | **Audit Remediation Finding [7].** Moved inline imports (`asyncio`, `DataFetchError`) to module top-level in `src/client/upstox_market.py`. SHA: 67861d4. |
+| 2026-05-15 | **Audit Remediation Finding [6].** Removed `sys.path` hack and module-level `noqa: E402` imports in `scripts/daily_snapshot.py`. SHA: 46a9bfe. |
+| 2026-05-15 | **Audit Remediation Finding [5].** Replaced generic TODOs in `src/portfolio/summary.py:7,8` with tracker IDs (`(TODO: TD-5)`, `(TODO: TD-3)`). SHA: 1bfa20c. |
+| 2026-05-15 | **Audit Remediation Finding [4].** Added intent comment to broad `except Exception` block in `src/portfolio/tracker.py:379`. SHA: 240aa9e. |
+| 2026-05-15 | **Audit Remediation Finding [3].** Replaced `assert` with `RuntimeError` in usage example in `src/client/mock_client.py`. SHA: b54569e. |
+| 2026-05-15 | **Audit Remediation Finding [2].** Replaced f-string with constant in `PRAGMA user_version` at `src/nuvama/store.py`. Added `test_schema_version_is_current`. SHA: 290a1d8. |
+| 2026-05-15 | **Audit Remediation Finding [1].** Replaced f-string with lazy logging in `src/backtest/bhavcopy_loader.py:72`. Added unit tests in `tests/unit/backtest/test_bhavcopy_loader.py`. SHA: 4d69050. |
+
+- [2026-05-16] audit finding [12] — move PortfolioStore to async factory — 68504ae
+- [2026-05-15] audit finding [11] — remove create_broker_client alias from factory — 8639d44
+- [2026-05-15] audit finding [10] — replace hardcoded data path with constant in bhavcopy_loader — e46e96d
+- [2026-05-15] audit finding [7] — move inline imports to top-level in upstox_market — 67861d4
+- [2026-05-15] audit finding [6] — remove sys.path hack from daily_snapshot — 46a9bfe
+- [2026-05-15] audit finding [5] — add tracker IDs to TODOs in summary docstring — 1bfa20c
+- [2026-05-15] audit finding [4] — add intent comment for broad exception in tracker — 240aa9e
+- [2026-05-15] audit finding [3] — replace assert in mock_client docstring — b54569e
+- [2026-05-15] audit finding [2] — replace f-string in PRAGMA user_version with constant — 290a1d8
+- [2026-05-15] audit finding [1] — replace f-string in logger.error with lazy formatting in bhavcopy_loader — 4d69050
 | 2026-05-14 | **Task 1 closed.** India VIX ingestion pipeline (`vix_ingest.py`) implemented with Upstox API + NSE CSV support. `PaperTrade` model and `paper_trades` table migrated to include `ivr_at_entry`. `record_paper_trade.py` integrated with `compute_ivr` and R3 entry gate warnings (IVR < 0.25, 0.25–0.50, > 0.50). `--vix-data-dir` CLI arg added. 17 new tests across phases A–C + fix commit (`8449cbf`) green. Updated CONTEXT.md + TODOS.md. |
 | 2026-05-14 | **Task 0 closed.** UDiFF fix confirmed already implemented by Antigravity (commits `490ec9b`, `590f472`): dual-URL download, `_parse_legacy`/`_parse_udiff`, format detection via `TradDt` header, 25 tests green, UDiFF fixture present. Smoke-tested against 2026-05-13 (live UDiFF download). Updated CONTEXT.md + TODOS.md. Bootstrap resume run pending (`--start 2017-06-01 --end <today>`). |
 | 2026-05-12 | **CLI/UX audit cross-check.** Verified against commits `264adf0` + `8cd9307`: CLI-1–5, CLI-10–11, UX-6–9 all implemented. CLI-12 (--notes surface in paper_snapshot.py) confirmed absent — remains open. Archived session log to `TODOS_ARCHIVE.md`. Stripped done CLI/UX items from TODOS.md. |
