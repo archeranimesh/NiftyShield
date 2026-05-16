@@ -43,6 +43,12 @@
 
 ---
 
+## PortfolioStore
+
+**2026-05-16 — Async factory sentinel pattern**: `PortfolioStore.create()` uses `object.__new__` to bypass `__init__`, avoiding `_skip_init` bool flag. Sync constructor (`__init__`) unchanged for sync script callers. Sentinel approach chosen over `_skip_init` to prevent accidental uninitialized-store construction.
+
+---
+
 ## Portfolio & Trade Model
 
 **`Leg` vs `Trade` distinction:** `Leg` (in `ilts.py`, `finrakshak.py`) is a conceptual strategy role — instrument + direction + entry price as a definition. `Trade` (in the `trades` table) is a physical execution — what actually transacted, when, at what price. They coexist permanently: `Leg` defines shape; `Trade` drives cost-basis and qty.

@@ -525,3 +525,31 @@ def test_create_async_factory_empty_path() -> None:
             await PortfolioStore.create("")
     
     asyncio.run(run())
+
+
+def test_sync_constructor_still_works(db_path: Path) -> None:
+    """Happy path for sync callers: PortfolioStore(db_path) initializes the DB."""
+    store = PortfolioStore(db_path)
+    assert store.db_path == db_path
+
+    # Verify tables exist
+    import sqlite3
+    with sqlite3.connect(str(db_path)) as conn:
+        tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+        assert "strategies" in tables
+
+
+def test_create_bypasses_init_sentinel(tmp_path: Path) -> None:
+    """Internal consistency: confirm object.__new__ bypasses initialization."""
+    db_path = tmp_path / "sentinel_test.sqlite"
+    
+    # Manually bypass __init__ like PortfolioStore.create does
+    store = object.__new__(PortfolioStore)
+    store.db_path = db_path
+    
+    # Since _initialize hasn't run, the file might not even exist yet
+    # or it will be empty if we connect to it.
+    import sqlite3
+    with sqlite3.connect(str(db_path)) as conn:
+        tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+        assert len(tables) == 0

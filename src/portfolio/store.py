@@ -127,15 +127,15 @@ def _row_to_snapshot(row: sqlite3.Row) -> DailySnapshot:
     )
 
 
+_UNINITIALIZED = object()
+
+
 class PortfolioStore:
     """SQLite-backed store for strategy portfolio tracking."""
 
     @classmethod
     async def create(cls, db_path: Path | str) -> PortfolioStore:
-        """Async factory to create and initialize the store.
-
-        Moves the blocking schema execution into a thread to avoid
-        starving the event loop.
+        """Async factory — moves blocking schema init off the event loop.
 
         Args:
             db_path: Path to SQLite database file (str or Path).
@@ -143,26 +143,38 @@ class PortfolioStore:
         Returns:
             An initialized PortfolioStore instance.
         """
-        store = cls(db_path, _skip_init=True)
+        if not db_path:
+            raise ValueError("db_path must not be empty")
+        store = object.__new__(cls)  # bypass __init__ entirely
+        store.db_path = Path(db_path)
+        store.db_path.parent.mkdir(parents=True, exist_ok=True)
         await asyncio.to_thread(store._initialize)
         return store
 
-    def __init__(self, db_path: Path | str, _skip_init: bool = False) -> None:
+    def __init__(self, db_path: Path | str, _sentinel: object = _UNINITIALIZED) -> None:
         """Initialize store, creating DB and tables if needed.
 
         Args:
             db_path: Path to SQLite database file (str or Path).
-            _skip_init: Internal use only. If True, skips blocking I/O.
+            _sentinel: Internal use only. Prevents accidental direct construction
+                       when using the async factory.
         """
+        if _sentinel is not _UNINITIALIZED:
+            raise TypeError(
+                "Direct construction with _sentinel is reserved for internal use. "
+                "Use PortfolioStore.create() in async contexts."
+            )
         if not db_path:
             raise ValueError("db_path must not be empty")
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        if not _skip_init:
-            self._initialize()
+        self._initialize()
 
     def _initialize(self) -> None:
-        """Run blocking schema initialization. Internal use only."""
+        """Run blocking schema initialization.
+
+        Idempotent (CREATE TABLE IF NOT EXISTS). Do not call after construction.
+        """
         with _connect(self.db_path) as conn:
             conn.executescript(_SCHEMA)
 
