@@ -358,7 +358,7 @@ async def _async_main(snap_date: date, db_path: Path, dhan_trade_count: int = 0)
         print("  Run 'python -m scripts.seed_portfolio' first.")
         return 1
 
-    store = PortfolioStore(db_path)
+    store = await PortfolioStore.create(db_path)
     strategies = store.get_all_strategies()
 
     if not strategies:

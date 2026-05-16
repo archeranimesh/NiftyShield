@@ -22,6 +22,7 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+import asyncio
 import pytest
 
 from src.models.portfolio import Trade, TradeAction
@@ -499,3 +500,28 @@ def test_record_roll_positions_reflect_both_legs(store: PortfolioStore) -> None:
     new_qty, _ = store.get_position("finideas_ilts", "NIFTY_JUN_PE_ATM")
     assert old_qty == 50   # BUY 50 → net +50
     assert new_qty == -50  # SELL 50 → net -50
+
+def test_create_async_factory(db_path: Path) -> None:
+    """Happy path: create() returns an initialized store."""
+    async def run():
+        store = await PortfolioStore.create(db_path)
+        assert isinstance(store, PortfolioStore)
+        assert store.db_path == db_path
+
+        # Verify tables exist
+        import sqlite3
+        with sqlite3.connect(str(db_path)) as conn:
+            tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+            assert "strategies" in tables
+            assert "trades" in tables
+    
+    asyncio.run(run())
+
+
+def test_create_async_factory_empty_path() -> None:
+    """Edge case: create() with empty path raises ValueError."""
+    async def run():
+        with pytest.raises(ValueError, match="db_path must not be empty"):
+            await PortfolioStore.create("")
+    
+    asyncio.run(run())

@@ -6,6 +6,7 @@ All writes are explicit — no ORM magic. Reads return Pydantic models.
 
 from __future__ import annotations
 
+import asyncio
 import sqlite3
 from datetime import date, datetime
 from decimal import Decimal
@@ -129,16 +130,39 @@ def _row_to_snapshot(row: sqlite3.Row) -> DailySnapshot:
 class PortfolioStore:
     """SQLite-backed store for strategy portfolio tracking."""
 
-    def __init__(self, db_path: Path | str) -> None:
+    @classmethod
+    async def create(cls, db_path: Path | str) -> PortfolioStore:
+        """Async factory to create and initialize the store.
+
+        Moves the blocking schema execution into a thread to avoid
+        starving the event loop.
+
+        Args:
+            db_path: Path to SQLite database file (str or Path).
+
+        Returns:
+            An initialized PortfolioStore instance.
+        """
+        store = cls(db_path, _skip_init=True)
+        await asyncio.to_thread(store._initialize)
+        return store
+
+    def __init__(self, db_path: Path | str, _skip_init: bool = False) -> None:
         """Initialize store, creating DB and tables if needed.
 
         Args:
             db_path: Path to SQLite database file (str or Path).
+            _skip_init: Internal use only. If True, skips blocking I/O.
         """
         if not db_path:
             raise ValueError("db_path must not be empty")
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        if not _skip_init:
+            self._initialize()
+
+    def _initialize(self) -> None:
+        """Run blocking schema initialization. Internal use only."""
         with _connect(self.db_path) as conn:
             conn.executescript(_SCHEMA)
 
