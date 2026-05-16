@@ -697,7 +697,7 @@ async def _async_main(snap_date: date, db_path: Path, dhan_trade_count: int = 0)
 
     notifier = build_notifier()
     if notifier:
-        if not notifier.send(summary_text):
+        if not await notifier.send(summary_text):
             print("  WARNING: Telegram notification failed (see logs).")
     else:
         import logging as _logging

@@ -30,7 +30,7 @@ import logging
 import os
 import re
 
-import requests
+import aiohttp
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +71,7 @@ class TelegramNotifier:
         self._chat_id = chat_id
         self._timeout = timeout
 
-    def send(self, text: str) -> bool:
+    async def send(self, text: str) -> bool:
         """Send a plain-text message to the configured chat.
 
         The message is wrapped in a <pre> block so monospace formatting
@@ -91,14 +91,19 @@ class TelegramNotifier:
             "parse_mode": "HTML",
         }
         try:
-            resp = requests.post(self._url, json=payload, timeout=self._timeout)
-            resp.raise_for_status()
-            data = resp.json()
-            if not data.get("ok"):
-                logger.warning("Telegram API error: %s", data.get("description"))
-                return False
-            return True
-        except Exception as exc:  # noqa: BLE001
+            timeout = aiohttp.ClientTimeout(total=self._timeout)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post(self._url, json=payload) as resp:
+                    resp.raise_for_status()
+                    data = await resp.json()
+                    if not data.get("ok"):
+                        logger.warning(
+                            "Telegram API error: %s",
+                            data.get("description")
+                        )
+                        return False
+                    return True
+        except Exception as exc:  # Intentional: isolate all API failures
             logger.warning("Telegram notification failed: %s", exc)
             return False
 

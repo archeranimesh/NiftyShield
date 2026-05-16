@@ -24,3 +24,4 @@ websocket-client==1.9.0
 pandas>=2.0.0
 pyarrow>=12.0.0
 jugaad-data>=0.30
+aiohttp==3.10.5

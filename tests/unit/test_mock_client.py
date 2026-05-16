@@ -50,11 +50,6 @@ def make_client(**kwargs) -> MockBrokerClient:
     return MockBrokerClient(fixtures_dir=FIXTURES_DIR, **kwargs)
 
 
-def run(coro):
-    """Run a coroutine synchronously. Keeps tests readable without pytest-asyncio."""
-    return asyncio.get_event_loop().run_until_complete(coro)
-
-
 def _order(
     instrument_key: str = "NSE_FO|37810",
     quantity: int = 50,
@@ -99,29 +94,29 @@ class TestProtocolConformance:
 
 
 class TestGetLtp:
-    def test_known_key_returned(self) -> None:
+    async def test_known_key_returned(self) -> None:
         client = make_client()
         client.set_price("NSE_FO|37810", 123.45)
-        result = run(client.get_ltp(["NSE_FO|37810"]))
+        result = await client.get_ltp(["NSE_FO|37810"])
         assert result == {"NSE_FO|37810": 123.45}
 
-    def test_unknown_key_omitted(self) -> None:
+    async def test_unknown_key_omitted(self) -> None:
         client = make_client()
         client.set_price("NSE_FO|37810", 100.0)
-        result = run(client.get_ltp(["NSE_FO|37810", "NSE_FO|99999"]))
+        result = await client.get_ltp(["NSE_FO|37810", "NSE_FO|99999"])
         assert "NSE_FO|99999" not in result
         assert "NSE_FO|37810" in result
 
-    def test_empty_price_map_returns_empty(self) -> None:
+    async def test_empty_price_map_returns_empty(self) -> None:
         client = make_client()
-        result = run(client.get_ltp(["NSE_FO|37810"]))
+        result = await client.get_ltp(["NSE_FO|37810"])
         assert result == {}
 
-    def test_multiple_keys_returned(self) -> None:
+    async def test_multiple_keys_returned(self) -> None:
         client = make_client()
         client.set_price("NSE_FO|A", 10.0)
         client.set_price("NSE_FO|B", 20.0)
-        result = run(client.get_ltp(["NSE_FO|A", "NSE_FO|B"]))
+        result = await client.get_ltp(["NSE_FO|A", "NSE_FO|B"])
         assert len(result) == 2
 
 
@@ -131,30 +126,29 @@ class TestGetLtp:
 
 
 class TestGetOptionChain:
-    def test_returns_empty_dict_when_fixture_missing(self) -> None:
+    async def test_returns_empty_dict_when_fixture_missing(self) -> None:
         client = make_client()
-        result = run(client.get_option_chain("NSE_INDEX|Nifty 50", "2099-01-01"))
+        result = await client.get_option_chain("NSE_INDEX|Nifty 50", "2099-01-01")
         assert result == {}
 
-    def test_returns_dict_when_fixture_present(self, tmp_path: Path) -> None:
+    async def test_returns_dict_when_fixture_present(self, tmp_path: Path) -> None:
         # get_option_chain generates the path:
         #   option_chain/{instrument}_{expiry}.json
         # where pipe and spaces are replaced with underscores.
         # We create a fixture file with that exact generated name.
         chain_dir = tmp_path / "option_chain"
         chain_dir.mkdir()
-        fixture_data = {"status": "success", "data": [{"strike_price": 24000}]}
         fixture_file = chain_dir / "NSE_INDEX_Nifty_50_2026-04-07.json"
         fixture_file.write_text('{"status": "success", "data": [{"strike_price": 24000}]}')
         client = MockBrokerClient(fixtures_dir=tmp_path)
-        result = run(client.get_option_chain("NSE_INDEX|Nifty 50", "2026-04-07"))
+        result = await client.get_option_chain("NSE_INDEX|Nifty 50", "2026-04-07")
         assert isinstance(result, dict)
         assert len(result) > 0
         assert result["status"] == "success"
 
-    def test_returns_empty_dict_without_fixtures_dir(self) -> None:
+    async def test_returns_empty_dict_without_fixtures_dir(self) -> None:
         client = MockBrokerClient(fixtures_dir=None)
-        result = run(client.get_option_chain("NSE_INDEX|Nifty 50", "2026-04-07"))
+        result = await client.get_option_chain("NSE_INDEX|Nifty 50", "2026-04-07")
         assert result == {}
 
 
@@ -164,49 +158,49 @@ class TestGetOptionChain:
 
 
 class TestPlaceOrder:
-    def test_returns_complete_status(self) -> None:
+    async def test_returns_complete_status(self) -> None:
         client = make_client()
-        result = run(client.place_order(_order(price=100.0, quantity=10)))
+        result = await client.place_order(_order(price=100.0, quantity=10))
         assert result["status"] == "complete"
         assert "order_id" in result
 
-    def test_deducts_margin_proxy(self) -> None:
+    async def test_deducts_margin_proxy(self) -> None:
         client = make_client(initial_margin=500_000.0)
-        run(client.place_order(_order(price=100.0, quantity=50)))
-        margins = run(client.get_margins())
+        await client.place_order(_order(price=100.0, quantity=50))
+        margins = await client.get_margins()
         # 100 * 50 * 0.1 = 500 deducted
         assert margins["available_margin"] == pytest.approx(500_000.0 - 500.0)
 
-    def test_order_appended_to_internal_list(self) -> None:
+    async def test_order_appended_to_internal_list(self) -> None:
         client = make_client()
-        run(client.place_order(_order()))
+        await client.place_order(_order())
         assert len(client._orders) == 1
 
-    def test_position_appended_from_order(self) -> None:
+    async def test_position_appended_from_order(self) -> None:
         client = make_client()
-        result = run(client.place_order(_order(instrument_key="NSE_FO|37810")))
-        positions = run(client.get_positions())
+        result = await client.place_order(_order(instrument_key="NSE_FO|37810"))
+        positions = await client.get_positions()
         assert len(positions) == 1
         assert positions[0]["instrument_key"] == "NSE_FO|37810"
         assert positions[0]["order_id"] == result["order_id"]
 
-    def test_insufficient_margin_raises(self) -> None:
+    async def test_insufficient_margin_raises(self) -> None:
         client = make_client(initial_margin=100.0)
         with pytest.raises(InsufficientMarginError):
-            run(client.place_order(_order(price=1000.0, quantity=1000)))
+            await client.place_order(_order(price=1000.0, quantity=1000))
 
-    def test_insufficient_margin_is_order_rejected_error(self) -> None:
+    async def test_insufficient_margin_is_order_rejected_error(self) -> None:
         """InsufficientMarginError must be a subtype of OrderRejectedError."""
         client = make_client(initial_margin=1.0)
         with pytest.raises(OrderRejectedError):
-            run(client.place_order(_order(price=9999.0, quantity=9999)))
+            await client.place_order(_order(price=9999.0, quantity=9999))
 
-    def test_multiple_orders_accumulate(self) -> None:
+    async def test_multiple_orders_accumulate(self) -> None:
         client = make_client()
-        run(client.place_order(_order()))
-        run(client.place_order(_order()))
+        await client.place_order(_order())
+        await client.place_order(_order())
         assert len(client._orders) == 2
-        positions = run(client.get_positions())
+        positions = await client.get_positions()
         assert len(positions) == 2
 
 
@@ -216,18 +210,18 @@ class TestPlaceOrder:
 
 
 class TestModifyOrder:
-    def test_modifies_existing_order(self) -> None:
+    async def test_modifies_existing_order(self) -> None:
         client = make_client()
-        placed = run(client.place_order(_order(price=100.0)))
+        placed = await client.place_order(_order(price=100.0))
         oid = placed["order_id"]
-        modified = run(client.modify_order(oid, {"price": 120.0}))
+        modified = await client.modify_order(oid, {"price": 120.0})
         assert modified["price"] == 120.0
         assert modified["order_id"] == oid
 
-    def test_raises_for_unknown_order_id(self) -> None:
+    async def test_raises_for_unknown_order_id(self) -> None:
         client = make_client()
         with pytest.raises(OrderRejectedError):
-            run(client.modify_order("nonexistent-id", {"price": 99.0}))
+            await client.modify_order("nonexistent-id", {"price": 99.0})
 
 
 # ---------------------------------------------------------------------------
@@ -236,20 +230,20 @@ class TestModifyOrder:
 
 
 class TestCancelOrder:
-    def test_marks_order_cancelled(self) -> None:
+    async def test_marks_order_cancelled(self) -> None:
         client = make_client()
-        placed = run(client.place_order(_order()))
+        placed = await client.place_order(_order())
         oid = placed["order_id"]
-        result = run(client.cancel_order(oid))
+        result = await client.cancel_order(oid)
         assert result["status"] == "cancelled"
         # Verify internal state updated
         order_in_list = next(o for o in client._orders if o["order_id"] == oid)
         assert order_in_list["status"] == "cancelled"
 
-    def test_raises_for_unknown_order_id(self) -> None:
+    async def test_raises_for_unknown_order_id(self) -> None:
         client = make_client()
         with pytest.raises(OrderRejectedError):
-            run(client.cancel_order("ghost-order-id"))
+            await client.cancel_order("ghost-order-id")
 
 
 # ---------------------------------------------------------------------------
@@ -258,28 +252,28 @@ class TestCancelOrder:
 
 
 class TestPortfolioReader:
-    def test_get_positions_returns_copy(self) -> None:
+    async def test_get_positions_returns_copy(self) -> None:
         """Mutating the returned list must not affect internal state."""
         client = make_client()
-        run(client.place_order(_order()))
-        positions = run(client.get_positions())
+        await client.place_order(_order())
+        positions = await client.get_positions()
         positions.clear()
         assert len(client._positions) == 1
 
-    def test_get_holdings_always_empty(self) -> None:
+    async def test_get_holdings_always_empty(self) -> None:
         client = make_client()
-        assert run(client.get_holdings()) == []
+        assert await client.get_holdings() == []
 
-    def test_get_margins_reflects_deductions(self) -> None:
+    async def test_get_margins_reflects_deductions(self) -> None:
         client = make_client(initial_margin=200_000.0)
-        run(client.place_order(_order(price=200.0, quantity=100)))
-        margins = run(client.get_margins())
+        await client.place_order(_order(price=200.0, quantity=100))
+        margins = await client.get_margins()
         # 200 * 100 * 0.1 = 2000 deducted
         assert margins["available_margin"] == pytest.approx(200_000.0 - 2_000.0)
 
-    def test_get_margins_key_present(self) -> None:
+    async def test_get_margins_key_present(self) -> None:
         client = make_client()
-        margins = run(client.get_margins())
+        margins = await client.get_margins()
         assert "available_margin" in margins
 
 
@@ -289,35 +283,33 @@ class TestPortfolioReader:
 
 
 class TestHistoricalAndExpired:
-    def test_candles_returns_empty_list_when_fixture_missing(self) -> None:
+    async def test_candles_returns_empty_list_when_fixture_missing(self) -> None:
         client = make_client()
-        result = run(client.get_historical_candles(
+        result = await client.get_historical_candles(
             {"instrument_key": "NSE_EQ|FAKE", "interval": "1minute"}
-        ))
+        )
         assert result == []
 
-    def test_candles_returns_list_from_known_fixture(self) -> None:
+    async def test_candles_returns_list_from_known_fixture(self) -> None:
         # Fixture: historical_candles/niftybees_daily_30d.json
         # instrument_key=NSE_EQ_INF204KB14I2, interval=day
         # (pipe replaced with _)
         client = make_client()
-        result = run(client.get_historical_candles(
+        result = await client.get_historical_candles(
             {"instrument_key": "NSE_EQ|INF204KB14I2", "interval": "daily_30d"}
-        ))
+        )
         # File is named niftybees_daily_30d — different naming; expect []
         # (fixture name doesn't match the auto-generated path — graceful fallback)
         assert isinstance(result, list)
 
-    def test_expired_always_empty(self) -> None:
+    async def test_expired_always_empty(self) -> None:
         client = make_client()
-        result = run(
-            client.get_expired_option_contracts("NSE_INDEX|Nifty 50", "2026-04-07")
-        )
+        result = await client.get_expired_option_contracts("NSE_INDEX|Nifty 50", "2026-04-07")
         assert result == []
 
-    def test_candles_with_non_dict_params(self) -> None:
+    async def test_candles_with_non_dict_params(self) -> None:
         client = make_client()
-        result = run(client.get_historical_candles("anything"))
+        result = await client.get_historical_candles("anything")
         assert isinstance(result, list)
 
 
@@ -327,35 +319,35 @@ class TestHistoricalAndExpired:
 
 
 class TestSimulateError:
-    def test_error_fires_on_next_call(self) -> None:
+    async def test_error_fires_on_next_call(self) -> None:
         client = make_client()
         client.simulate_error("get_ltp", RuntimeError("injected"))
         with pytest.raises(RuntimeError, match="injected"):
-            run(client.get_ltp(["NSE_FO|37810"]))
+            await client.get_ltp(["NSE_FO|37810"])
 
-    def test_second_call_succeeds_after_error(self) -> None:
+    async def test_second_call_succeeds_after_error(self) -> None:
         """One-shot: the error queue is cleared after the first raise."""
         client = make_client()
         client.set_price("NSE_FO|37810", 100.0)
         client.simulate_error("get_ltp", RuntimeError("one-shot"))
         with pytest.raises(RuntimeError):
-            run(client.get_ltp(["NSE_FO|37810"]))
+            await client.get_ltp(["NSE_FO|37810"])
         # Second call must succeed without raising
-        result = run(client.get_ltp(["NSE_FO|37810"]))
+        result = await client.get_ltp(["NSE_FO|37810"])
         assert result == {"NSE_FO|37810": 100.0}
 
-    def test_simulate_error_on_place_order(self) -> None:
+    async def test_simulate_error_on_place_order(self) -> None:
         client = make_client()
         client.simulate_error("place_order", OrderRejectedError("rejected"))
         with pytest.raises(OrderRejectedError):
-            run(client.place_order(_order()))
+            await client.place_order(_order())
 
-    def test_simulate_error_does_not_affect_other_methods(self) -> None:
+    async def test_simulate_error_does_not_affect_other_methods(self) -> None:
         client = make_client()
         client.set_price("NSE_FO|37810", 50.0)
         client.simulate_error("place_order", RuntimeError("boom"))
         # get_ltp is unaffected
-        result = run(client.get_ltp(["NSE_FO|37810"]))
+        result = await client.get_ltp(["NSE_FO|37810"])
         assert "NSE_FO|37810" in result
 
 
@@ -365,27 +357,27 @@ class TestSimulateError:
 
 
 class TestReset:
-    def test_reset_clears_orders_and_positions(self) -> None:
+    async def test_reset_clears_orders_and_positions(self) -> None:
         client = make_client()
-        run(client.place_order(_order()))
+        await client.place_order(_order())
         client.reset()
         assert client._orders == []
         assert client._positions == []
 
-    def test_reset_restores_default_margin(self) -> None:
+    async def test_reset_restores_default_margin(self) -> None:
         client = make_client(initial_margin=1_000_000.0)
-        run(client.place_order(_order(price=500.0, quantity=100)))
+        await client.place_order(_order(price=500.0, quantity=100))
         client.reset()
-        margins = run(client.get_margins())
+        margins = await client.get_margins()
         assert margins["available_margin"] == pytest.approx(500_000.0)
 
-    def test_reset_clears_error_queue(self) -> None:
+    async def test_reset_clears_error_queue(self) -> None:
         client = make_client()
         client.set_price("NSE_FO|37810", 10.0)
         client.simulate_error("get_ltp", RuntimeError("stale"))
         client.reset()
         # Error queue cleared — call must succeed
-        result = run(client.get_ltp(["NSE_FO|37810"]))
+        result = await client.get_ltp(["NSE_FO|37810"])
         assert result == {"NSE_FO|37810": 10.0}
 
     def test_reset_preserves_price_map(self) -> None:

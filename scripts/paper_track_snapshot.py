@@ -66,7 +66,7 @@ class MockBrokerClientDryRun:
     async def get_option_chain(self, u, e): return {"data": []}
 
 class MockNotifier:
-    async def send_message(self, text): print(f"[MOCK TELEGRAM] {text}")
+    async def send(self, text): print(f"[MOCK TELEGRAM] {text}")
 
 
 async def main() -> None:
@@ -164,7 +164,7 @@ async def main() -> None:
         if track_name == "paper_nifty_proxy" and snapshot.proxy_delta_alert:
             print(f"  ALERT  : Proxy Delta State -> {snapshot.proxy_delta_alert}")
             if "CRITICAL" in snapshot.proxy_delta_alert:
-                await notifier.send_message(f"🚨 **CRITICAL**: Proxy Delta Monitor triggered: {snapshot.proxy_delta_alert}\nDelta: {snapshot.greeks.net_delta:.2f}")
+                await notifier.send(f"🚨 **CRITICAL**: Proxy Delta Monitor triggered: {snapshot.proxy_delta_alert}\nDelta: {snapshot.greeks.net_delta:.2f}")
 
     print("\n" + "-" * 75)
     print("Snapshot Generation Complete.")

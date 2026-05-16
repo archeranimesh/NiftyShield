@@ -400,7 +400,7 @@ async def _run(args: argparse.Namespace) -> None:
             )
             if notifier:
                 try:
-                    await notifier.send_message(msg)
+                    await notifier.send(msg)
                 # Intentional: catch notification errors to avoid crashing main snapshot.
                 except Exception as exc:
                     logger.warning("Telegram alert failed: %s", exc)

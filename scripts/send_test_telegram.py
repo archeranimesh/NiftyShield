@@ -14,6 +14,7 @@ Exit codes:
 
 from __future__ import annotations
 
+import asyncio
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -54,7 +55,7 @@ def main() -> int:
     )
 
     print(f"Sending test message at {now} …")
-    ok = notifier.send(message)
+    ok = asyncio.run(notifier.send(message))
     if ok:
         print("  ✓ Message delivered. Check your Telegram chat.")
         return 0

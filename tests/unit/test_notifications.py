@@ -1,16 +1,16 @@
 """Unit tests for src/notifications/telegram.py.
 
-All tests are fully offline — requests.post is patched throughout.
+All tests are fully offline — aiohttp.ClientSession is patched throughout.
 No network, no real bot token, no TELEGRAM_* env vars required.
 """
 
 from __future__ import annotations
 
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-import requests
+import aiohttp
 
 from src.notifications.telegram import (
     TelegramNotifier,
@@ -60,116 +60,141 @@ def test_escape_mdv2_plain_text_unchanged() -> None:
     assert escape_mdv2("hello world") == "hello world"
 
 
+# ── TelegramNotifier.send — mocks ───────────────────────────────
+
+
+def _make_mock_session(resp_data: dict, status: int = 200) -> MagicMock:
+    """Mock aiohttp.ClientSession with a context-managed post() response."""
+    mock_resp = MagicMock()
+    mock_resp.json = AsyncMock(return_value=resp_data)
+    mock_resp.status = status
+    if status >= 400:
+        mock_resp.raise_for_status.side_effect = aiohttp.ClientResponseError(
+            request_info=MagicMock(),
+            history=(),
+            status=status,
+            message="Error"
+        )
+    else:
+        mock_resp.raise_for_status.return_value = None
+
+    # mock_resp used as 'async with session.post(...) as resp:'
+    mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
+    mock_resp.__aexit__ = AsyncMock(return_value=None)
+
+    mock_session = MagicMock()
+    mock_session.post.return_value = mock_resp
+    # mock_session used as 'async with aiohttp.ClientSession(...) as session:'
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.__aexit__ = AsyncMock(return_value=None)
+    
+    return mock_session
+
+
 # ── TelegramNotifier.send — happy path ───────────────────────────
 
 
-def _make_ok_response() -> MagicMock:
-    """Mock requests.Response with ok=True API body."""
-    resp = MagicMock()
-    resp.json.return_value = {"ok": True, "result": {"message_id": 42}}
-    resp.raise_for_status.return_value = None
-    return resp
-
-
-def test_send_returns_true_on_success() -> None:
-    with patch("src.notifications.telegram.requests.post") as mock_post:
-        mock_post.return_value = _make_ok_response()
+async def test_send_returns_true_on_success() -> None:
+    mock_session = _make_mock_session({"ok": True, "result": {"message_id": 42}})
+    with patch("src.notifications.telegram.aiohttp.ClientSession", return_value=mock_session):
         notifier = TelegramNotifier(bot_token="fake-token", chat_id="123")
-        assert notifier.send("hello") is True
+        assert await notifier.send("hello") is True
 
 
-def test_send_posts_to_correct_url() -> None:
-    with patch("src.notifications.telegram.requests.post") as mock_post:
-        mock_post.return_value = _make_ok_response()
+async def test_send_posts_to_correct_url() -> None:
+    mock_session = _make_mock_session({"ok": True})
+    with patch("src.notifications.telegram.aiohttp.ClientSession", return_value=mock_session):
         notifier = TelegramNotifier(bot_token="MY_TOKEN", chat_id="456")
-        notifier.send("test")
-        url = mock_post.call_args[0][0]
+        await notifier.send("test")
+        # ClientSession instantiation url is not where post happens
+        # It's session.post(url, ...)
+        url = mock_session.post.call_args[0][0]
         assert "MY_TOKEN" in url
         assert "sendMessage" in url
 
 
-def test_send_uses_html_parse_mode() -> None:
-    with patch("src.notifications.telegram.requests.post") as mock_post:
-        mock_post.return_value = _make_ok_response()
+async def test_send_uses_html_parse_mode() -> None:
+    mock_session = _make_mock_session({"ok": True})
+    with patch("src.notifications.telegram.aiohttp.ClientSession", return_value=mock_session):
         notifier = TelegramNotifier(bot_token="tok", chat_id="789")
-        notifier.send("msg")
-        payload = mock_post.call_args[1]["json"]
+        await notifier.send("msg")
+        payload = mock_session.post.call_args[1]["json"]
         assert payload["parse_mode"] == "HTML"
 
 
-def test_send_wraps_text_in_pre_block() -> None:
-    with patch("src.notifications.telegram.requests.post") as mock_post:
-        mock_post.return_value = _make_ok_response()
+async def test_send_wraps_text_in_pre_block() -> None:
+    mock_session = _make_mock_session({"ok": True})
+    with patch("src.notifications.telegram.aiohttp.ClientSession", return_value=mock_session):
         notifier = TelegramNotifier(bot_token="tok", chat_id="789")
-        notifier.send("hello")
-        payload = mock_post.call_args[1]["json"]
+        await notifier.send("hello")
+        payload = mock_session.post.call_args[1]["json"]
         assert payload["text"].startswith("<pre>")
         assert payload["text"].endswith("</pre>")
 
 
-def test_send_escapes_html_in_message() -> None:
+async def test_send_escapes_html_in_message() -> None:
     """'&' in the P&L summary must not break HTML parse_mode."""
-    with patch("src.notifications.telegram.requests.post") as mock_post:
-        mock_post.return_value = _make_ok_response()
+    mock_session = _make_mock_session({"ok": True})
+    with patch("src.notifications.telegram.aiohttp.ClientSession", return_value=mock_session):
         notifier = TelegramNotifier(bot_token="tok", chat_id="789")
-        notifier.send("P&L: +3,250")
-        payload = mock_post.call_args[1]["json"]
+        await notifier.send("P&L: +3,250")
+        payload = mock_session.post.call_args[1]["json"]
         assert "&amp;" in payload["text"]
         assert "&L" not in payload["text"]
 
 
-def test_send_passes_correct_chat_id() -> None:
-    with patch("src.notifications.telegram.requests.post") as mock_post:
-        mock_post.return_value = _make_ok_response()
+async def test_send_passes_correct_chat_id() -> None:
+    mock_session = _make_mock_session({"ok": True})
+    with patch("src.notifications.telegram.aiohttp.ClientSession", return_value=mock_session):
         notifier = TelegramNotifier(bot_token="tok", chat_id="CHATID_999")
-        notifier.send("msg")
-        payload = mock_post.call_args[1]["json"]
+        await notifier.send("msg")
+        payload = mock_session.post.call_args[1]["json"]
         assert payload["chat_id"] == "CHATID_999"
 
 
 # ── TelegramNotifier.send — error paths ──────────────────────────
 
 
-def test_send_returns_false_on_request_exception() -> None:
-    with patch("src.notifications.telegram.requests.post") as mock_post:
-        mock_post.side_effect = requests.ConnectionError("unreachable")
+async def test_send_returns_false_on_request_exception() -> None:
+    # Patch ClientSession to raise on creation or entering context
+    with patch("src.notifications.telegram.aiohttp.ClientSession") as mock_cls:
+        mock_cls.side_effect = Exception("unreachable")
         notifier = TelegramNotifier(bot_token="tok", chat_id="123")
-        assert notifier.send("hello") is False
+        assert await notifier.send("hello") is False
 
 
-def test_send_returns_false_on_timeout() -> None:
-    with patch("src.notifications.telegram.requests.post") as mock_post:
-        mock_post.side_effect = requests.Timeout("timed out")
+async def test_send_returns_false_on_timeout() -> None:
+    mock_session = MagicMock()
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.__aexit__ = AsyncMock(return_value=None)
+    mock_session.post.side_effect = aiohttp.ServerTimeoutError("timed out")
+    
+    with patch("src.notifications.telegram.aiohttp.ClientSession", return_value=mock_session):
         notifier = TelegramNotifier(bot_token="tok", chat_id="123")
-        assert notifier.send("hello") is False
+        assert await notifier.send("hello") is False
 
 
-def test_send_returns_false_on_http_error() -> None:
-    with patch("src.notifications.telegram.requests.post") as mock_post:
-        resp = MagicMock()
-        resp.raise_for_status.side_effect = requests.HTTPError("401 Unauthorized")
-        mock_post.return_value = resp
+async def test_send_returns_false_on_http_error() -> None:
+    mock_session = _make_mock_session({}, status=401)
+    with patch("src.notifications.telegram.aiohttp.ClientSession", return_value=mock_session):
         notifier = TelegramNotifier(bot_token="tok", chat_id="123")
-        assert notifier.send("hello") is False
+        assert await notifier.send("hello") is False
 
 
-def test_send_returns_false_when_api_ok_is_false() -> None:
-    with patch("src.notifications.telegram.requests.post") as mock_post:
-        resp = MagicMock()
-        resp.raise_for_status.return_value = None
-        resp.json.return_value = {"ok": False, "description": "chat not found"}
-        mock_post.return_value = resp
+async def test_send_returns_false_when_api_ok_is_false() -> None:
+    mock_session = _make_mock_session({"ok": False, "description": "chat not found"})
+    with patch("src.notifications.telegram.aiohttp.ClientSession", return_value=mock_session):
         notifier = TelegramNotifier(bot_token="tok", chat_id="bad_id")
-        assert notifier.send("hello") is False
+        assert await notifier.send("hello") is False
 
 
-def test_send_does_not_raise_on_any_failure() -> None:
+async def test_send_does_not_raise_on_any_failure() -> None:
     """send() must be non-fatal — no exception should escape."""
-    with patch("src.notifications.telegram.requests.post") as mock_post:
-        mock_post.side_effect = Exception("unexpected crash")
+    with patch("src.notifications.telegram.aiohttp.ClientSession") as mock_cls:
+        mock_cls.side_effect = RuntimeError("unexpected crash")
         notifier = TelegramNotifier(bot_token="tok", chat_id="123")
         # Would raise if exception propagates
-        result = notifier.send("hello")
+        result = await notifier.send("hello")
         assert result is False
 
 
