@@ -1,24 +1,25 @@
-# Audit Finding [13] Remediation: Async Telegram Notifications (Revised)
+# Audit Finding [13] Remediation: Async Telegram Notifications (Final)
 
-Remediate the blocking `requests.post` call in `TelegramNotifier.send` by converting it to an asynchronous method using `aiohttp` and unifying the API across all call sites.
+Remediate the blocking `requests.post` call in `TelegramNotifier.send` by converting it to an asynchronous method using `aiohttp` with proper resource management and unified API call sites.
 
 ## User Review Required
 
 > [!IMPORTANT]
-> This change converts `TelegramNotifier.send` to an `async` method. All four call sites in the repository will be updated. This includes fixing two scripts (`paper_track_snapshot.py` and `paper_3track_snapshot.py`) that are currently calling a non-existent `send_message()` method.
+> This change converts `TelegramNotifier.send` to an `async` method. All four call sites in the repository will be updated. `pytest-asyncio` is required for testing; I will verify its installation (as it is listed in `requirements-dev.txt`) before running tests.
 
 ## Proposed Changes
 
 ### Notifications
 
 #### [MODIFY] [telegram.py](file:///Users/abhadra/myWork/myCode/python/NiftyShield/src/notifications/telegram.py)
-- Replace `requests` with `aiohttp` (imported inline to match `lookup.py` pattern or at module level).
+- Replace `requests` with `aiohttp` (imported at module level).
 - Convert `send` to `async def send(self, text: str) -> bool`.
-- Use `aiohttp.ClientSession` for the POST request.
-- Ensure the "Non-Fatal Contract" (catching all exceptions, returning `False`) is maintained in the async implementation.
+- **Resource Management:** Use `async with aiohttp.ClientSession(timeout=timeout) as session:` inside `send()` to ensure the session is closed after the request.
+- Use `await session.post(self._url, json=payload)` for the request.
+- Maintain the non-fatal contract: catch `Exception` and return `False`.
 
 #### [MODIFY] [CLAUDE.md](file:///Users/abhadra/myWork/myCode/python/NiftyShield/src/notifications/CLAUDE.md)
-- Update **Transport** documentation from `requests.post` to `aiohttp`.
+- Update **Transport** documentation to `aiohttp` with `async with` session management.
 - Update code examples to show `await notifier.send(message)`.
 
 ### Scripts
@@ -27,26 +28,28 @@ Remediate the blocking `requests.post` call in `TelegramNotifier.send` by conver
 - Update `notifier.send(summary_text)` to `await notifier.send(summary_text)`.
 
 #### [MODIFY] [send_test_telegram.py](file:///Users/abhadra/myWork/myCode/python/NiftyShield/scripts/send_test_telegram.py)
-- Wrap the single `notifier.send(message)` call in `asyncio.run()`. This preserves the script's synchronous structure while safely executing the now-async notification.
+- Update to `import asyncio` and wrap the `notifier.send(message)` call in `asyncio.run()`.
 
 #### [MODIFY] [paper_track_snapshot.py](file:///Users/abhadra/myWork/myCode/python/NiftyShield/scripts/paper_track_snapshot.py)
-- Rename the local `MockNotifier.send_message` to `send`.
-- Update the `TelegramNotifier` call site from `await notifier.send_message(...)` to `await notifier.send(...)`.
+- Rename `MockNotifier.send_message` to `send`.
+- Update call site from `await notifier.send_message(...)` to `await notifier.send(...)`.
 
 #### [MODIFY] [paper_3track_snapshot.py](file:///Users/abhadra/myWork/myCode/python/NiftyShield/scripts/paper_3track_snapshot.py)
-- Update the `TelegramNotifier` call site from `await notifier.send_message(msg)` to `await notifier.send(msg)`.
+- Update call site from `await notifier.send_message(msg)` to `await notifier.send(msg)`.
 
 ### Tests
 
 #### [MODIFY] [test_notifications.py](file:///Users/abhadra/myWork/myCode/python/NiftyShield/tests/unit/test_notifications.py)
 - Mark tests with `@pytest.mark.asyncio`.
-- Replace `requests.post` patching with `aiohttp.ClientSession.post` mocking (using `aresponses` or manual `AsyncMock` patching of `aiohttp`).
+- Replace `requests.post` patching with `unittest.mock.patch("aiohttp.ClientSession.post", new_callable=AsyncMock)`.
+- Verify response handling for `ok=True/False` using `AsyncMock` to simulate `resp.json()` and `resp.raise_for_status()`.
 
 ## Verification Plan
 
 ### Automated Tests
-- Run `python -m pytest tests/unit/test_notifications.py`
-- Run `python -m pytest tests/unit/ --tb=no -q`
+- Confirm `pytest-asyncio` is installed: `pip install pytest-asyncio` (if missing).
+- Run `python -m pytest tests/unit/test_notifications.py`.
+- Run full suite: `python -m pytest tests/unit/ --tb=no -q`.
 
 ### Manual Verification
-- Run `python -m scripts.send_test_telegram` (verify `asyncio.run` integration).
+- Run `python -m scripts.send_test_telegram`.
