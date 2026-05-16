@@ -10,7 +10,7 @@ Two modes of operation:
     date from the local SQLite DB and prints the P&L summary. No API calls,
     no network, no .env required. Useful for reviewing past snapshots.
 
-Architecture (TODO 5 refactor):
+Architecture (TODO: TD-5 refactor):
     Pure computation  →  src/portfolio/summary.py
     Pure formatting   →  src/portfolio/formatting.py
     I/O orchestration →  this file (_async_main, _historical_main, main)
