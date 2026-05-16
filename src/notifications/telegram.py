@@ -1,7 +1,7 @@
 """Telegram notification sink for portfolio P&L summaries.
 
-Sends a formatted message to a Telegram chat via the Bot API using a
-simple requests.post() call — no SDK, no framework.
+Sends a formatted message to a Telegram chat via the Bot API using an
+asynchronous aiohttp POST call — no SDK, no framework.
 
 Configuration (via environment variables):
     TELEGRAM_BOT_TOKEN: Bot token from @BotFather.
@@ -11,7 +11,7 @@ Configuration (via environment variables):
 Usage:
     notifier = build_notifier()          # Returns None if env vars absent
     if notifier:
-        notifier.send("Hello from NiftyShield")
+        await notifier.send("Hello from NiftyShield")
 
 Design notes:
     - send() never raises — returns False on failure and logs a WARNING.
