@@ -643,44 +643,32 @@ async def _run(args: argparse.Namespace) -> None:
                 "dte": r.dte, "spread_pct": r.spread_pct, "oi": r.oi,
             }, entry_date, LOT_SIZE))
 
-        written: list[PaperTrade] = []
-        skipped: list[PaperTrade] = []
         try:
-            for trade in trades_to_write:
-                inserted = store.record_trade(trade)
-                if inserted:
-                    written.append(trade)
-                    logger.info(
-                        "Recorded: %s %s %s qty=%d price=%s",
-                        trade.strategy_name, trade.leg_role, trade.action.value,
-                        trade.quantity, trade.price,
-                    )
-                else:
-                    skipped.append(trade)
-                    logger.warning(
-                        "SKIPPED (duplicate): %s %s %s — already exists for %s",
-                        trade.strategy_name, trade.leg_role, trade.action.value,
-                        trade.trade_date,
-                    )
+            inserted_trades, skipped_trades = store.record_trades(trades_to_write)
+            for trade in inserted_trades:
+                logger.info(
+                    "Recorded: %s %s %s qty=%d price=%s",
+                    trade.strategy_name, trade.leg_role, trade.action.value,
+                    trade.quantity, trade.price,
+                )
+            for trade in skipped_trades:
+                logger.warning(
+                    "SKIPPED (duplicate): %s %s %s — already exists for %s",
+                    trade.strategy_name, trade.leg_role, trade.action.value,
+                    trade.trade_date,
+                )
         # Intentional: top-level catch for trade recording failure.
         except Exception as exc:
-            logger.error("Write failed after %d trades: %s — rolling back", len(written), exc)
-            for t in written:
-                try:
-                    store.delete_trade(t)
-                    logger.info("Rolled back: %s %s", t.strategy_name, t.leg_role)
-                # Intentional: isolate rollback failures.
-                except Exception as rb_exc:
-                    logger.error("Rollback failed for %s %s: %s", t.strategy_name, t.leg_role, rb_exc)
+            logger.error("Write failed for batch: %s — rolled back automatically by DB", exc)
             print(f"ERROR: Write failed — all trades rolled back. Reason: {exc}", file=sys.stderr)
             sys.exit(1)
 
-        if skipped:
+        if skipped_trades:
             print(
-                f"\n  ⚠  {len(skipped)} trade(s) skipped — already exist in DB for this "
+                f"\n  ⚠  {len(skipped_trades)} trade(s) skipped — already exist in DB for this "
                 f"(strategy, leg_role, date, action). Use --force to override expiry conflicts."
             )
-        status = f"RECORDED TO DB — {len(written)} new, {len(skipped)} skipped"
+        status = f"RECORDED TO DB — {len(inserted_trades)} new, {len(skipped_trades)} skipped"
         _print_confirmation_table(
             overlay_type, overlay_rows, entry_date, header_expiry, header_dte, status
         )

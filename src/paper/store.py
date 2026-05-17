@@ -171,6 +171,47 @@ class PaperStore:
             )
             return cur.rowcount == 1
 
+    def record_trades(self, trades: list[PaperTrade]) -> tuple[list[PaperTrade], list[PaperTrade]]:
+        """Insert multiple paper trades in a single atomic transaction.
+
+        Silently skips exact duplicates (based on the unique constraint).
+        If any trade insertion raises an error, the entire batch is rolled back.
+
+        Args:
+            trades: List of PaperTrade objects to persist.
+
+        Returns:
+            A tuple of (inserted_trades, skipped_trades).
+        """
+        inserted_trades: list[PaperTrade] = []
+        skipped_trades: list[PaperTrade] = []
+        with _connect(self.db_path) as conn:
+            for trade in trades:
+                cur = conn.execute(
+                    """INSERT INTO paper_trades
+                       (strategy_name, leg_role, instrument_key, trade_date,
+                        action, quantity, price, notes, ivr_at_entry)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                       ON CONFLICT(strategy_name, leg_role, trade_date, action)
+                       DO NOTHING""",
+                    (
+                        trade.strategy_name,
+                        trade.leg_role,
+                        trade.instrument_key,
+                        trade.trade_date.isoformat(),
+                        trade.action.value,
+                        trade.quantity,
+                        str(trade.price),
+                        trade.notes,
+                        trade.ivr_at_entry,
+                    ),
+                )
+                if cur.rowcount == 1:
+                    inserted_trades.append(trade)
+                else:
+                    skipped_trades.append(trade)
+        return inserted_trades, skipped_trades
+
     def get_trades(
         self,
         strategy_name: str,

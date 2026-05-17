@@ -126,6 +126,67 @@ def test_record_trade_different_legs_both_stored(store: PaperStore) -> None:
     assert len(store.get_trades(_STRATEGY)) == 2
 
 
+# ── record_trades (batch) ─────────────────────────────────────────────────────
+
+
+def test_record_trades_happy_path(store: PaperStore) -> None:
+    t1 = _sell_trade(leg_role="short_put", trade_date=date(2026, 6, 1))
+    t2 = _sell_trade(leg_role="short_call", trade_date=date(2026, 6, 1))
+    inserted, skipped = store.record_trades([t1, t2])
+    assert len(inserted) == 2
+    assert len(skipped) == 0
+    trades = store.get_trades(_STRATEGY)
+    assert len(trades) == 2
+
+
+def test_record_trades_duplicate_skip(store: PaperStore) -> None:
+    t1 = _sell_trade(leg_role="short_put", trade_date=date(2026, 6, 1))
+    t2 = _sell_trade(leg_role="short_call", trade_date=date(2026, 6, 1))
+    store.record_trade(t1)  # Insert t1 first
+    
+    inserted, skipped = store.record_trades([t1, t2])
+    assert len(inserted) == 1
+    assert inserted[0].leg_role == "short_call"
+    assert len(skipped) == 1
+    assert skipped[0].leg_role == "short_put"
+    trades = store.get_trades(_STRATEGY)
+    assert len(trades) == 2
+
+
+def test_record_trades_atomicity_rollback(store: PaperStore, monkeypatch: pytest.MonkeyPatch) -> None:
+    import contextlib
+    from src.db import connect as real_connect
+
+    t1 = _sell_trade(leg_role="short_put", trade_date=date(2026, 6, 1))
+    t2 = _sell_trade(leg_role="short_call", trade_date=date(2026, 6, 1))
+    
+    @contextlib.contextmanager
+    def exploding_connect(db_path):
+        with real_connect(db_path) as real_conn:
+            class Wrapper:
+                def __init__(self, conn):
+                    self.conn = conn
+                    self.call_count = 0
+                
+                def execute(self, sql, params=None):
+                    if "INSERT INTO paper_trades" in sql:
+                        self.call_count += 1
+                        if self.call_count == 2:
+                            raise RuntimeError("Mocked error")
+                    return self.conn.execute(sql, params)
+                    
+            yield Wrapper(real_conn)
+            
+    monkeypatch.setattr("src.paper.store._connect", exploding_connect)
+
+    with pytest.raises(RuntimeError, match="Mocked error"):
+        store.record_trades([t1, t2])
+        
+    # Verify rollback: t1 should not be in the DB
+    trades = store.get_trades(_STRATEGY)
+    assert len(trades) == 0
+
+
 # ── get_trades ────────────────────────────────────────────────────────────────
 
 
