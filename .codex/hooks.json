@@ -1,0 +1,34 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/abhadra/myWork/myCode/python/NiftyShield/.codex/hooks/guard_src_reads.sh'"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/abhadra/myWork/myCode/python/NiftyShield/.codex/hooks/council_check.sh'"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/abhadra/myWork/myCode/python/NiftyShield/.codex/hooks/task_protocol.sh'"
+          }
+        ]
+      }
+    ]
+  }
+}

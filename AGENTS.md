@@ -1,0 +1,409 @@
+# NiftyShield — AI Assistant Pre-Task Protocol
+
+> Auto-loaded at session start. Every step is mandatory.
+
+---
+
+## ⛔ Rule 0 — Graph before Read (enforced by PreToolUse hook)
+
+**NEVER call `Read` on `src/` or `scripts/` without first trying the graph.**
+A hook will fire and remind you. It will not block — the decision is yours — but skipping the
+graph when it can answer the question wastes tokens and violates this protocol.
+
+**Decision tree — run in order before any source file touch:**
+0. "Why does this look like this?" / "What changed recently?" → `git log --oneline -10 <file>` (~20 tokens). The `Why:` line in each commit encodes intent — often answers the question without reading any code at all. `git show <sha>` for full diff. `git log --oneline -20` for recent session history. **Run this before the graph for any question about intent or recent change.**
+1. Need a symbol/function? → `search_graph(query=...)` or `get_code_snippet(qualified_name)`
+2. Need callers/callees? → `trace_path(function_name)`
+3. Need a grep? → `search_code(pattern)`
+4. Need a specific block? → `bash sed -n 'N,Mp' <file>` (cheaper than `Read` on the whole file)
+5. Still not enough? → `Read` is permitted — but **state why** the graph was insufficient.
+
+`Read` is the *first* tool only for: markdown files, TOML/YAML config, test fixtures.
+
+---
+
+## ⛔ Rule 1 — Bash Output Discipline
+
+Any bash command that **reads data** (DB query, log file, test run) must pre-aggregate or filter before output reaches Codex context. Raw result sets are appended to the context window and carried for every subsequent tool call — aggregate at the source, not after.
+
+| Query type | Required pattern |
+|---|---|
+| Aggregate (total P&L, portfolio value, count) | Single summary row via `SUM` / `MAX` / `COUNT` — never `SELECT *` |
+| Diagnostic (which rows have null Greeks?) | Named columns + `LIMIT 10` — never full table dump |
+| Test runs | `pytest --tb=no -q` for pass/fail; full `-v` only when debugging a specific failure |
+| Log reads | `tail -20 logs/snapshot.log` or `grep ERROR` — never `cat` |
+
+Token math: `SELECT *` on a 15-row × 20-column table ≈ 300 tokens that persist all session. A `GROUP BY / SUM` summary row ≈ 15 tokens. Reference implementation: `get_cumulative_realized_pnl` — SQL-layer aggregation returning a compact `dict`.
+
+---
+
+## Step 1 — Read CONTEXT.md first
+
+Read `CONTEXT.md` before writing any code. State `CONTEXT.md ✓` in your first response.
+Do not rely on chat history — CONTEXT.md is the single source of truth.
+Module tree (file-level descriptions): **`CONTEXT_TREE.md`** — load only when adding new modules or doing a full codebase survey.
+
+**Load additional files when relevant:**
+- Adding/changing module architecture → also read `DECISIONS.md` + `CONTEXT_TREE.md`
+- Touching instrument keys, AMFI codes, market data → also read `REFERENCES.md`
+- Starting a new feature → also read `TODOS.md` + `PLANNER.md`
+- Phase 0 backtest / paper trading / strategy / `src/paper/` / `src/risk/` work → also read `BACKTEST_PLAN.md` (Phase 0 only — ~300 lines)
+- Phase 1+ work (only after Phase 0.8 gate passes) → also read `BACKTEST_PLAN_PHASE1.md`
+- Implementing a metric / ratio / ML technique → also read `LITERATURE.md` entry for the cited LIT code
+- Working a specific story → load ONLY that story file + `CONTEXT.md` + module `AGENTS.md`
+- Working inside `src/<module>/` → that module's `AGENTS.md` loads automatically
+- Reviewing or building on Antigravity's work → also read `ANTIGRAVITY.md`
+
+## Python Standards (new module checklist)
+
+Every new Python package directory — whether under `src/`, `scripts/`, or `tests/` — **must include an `__init__.py`**. A single comment line is sufficient. Without it:
+- `codebase-memory-mcp` silently skips the entire directory (all functions become invisible to the graph)
+- Type checkers and IDEs lose symbol resolution
+- `python -m <package>.<module>` falls back to namespace package semantics (fragile)
+
+Reminder: after adding a new package, re-index: `mcp__codebase-memory-mcp__index_repository`.
+
+## Step 2 — Confirm scope
+
+If the prompt does not name specific files, ask before starting. One clarifying question beats building the wrong thing.
+
+Confirm: which `src/` modules change? Which files are touched? Tests required? (default: yes)
+
+## Step 2b — Council checkpoint (planning gate, mandatory)
+
+Before stating the implementation plan, ask: **does this task contain a decision that warrants
+a council call?**
+
+Check against `docs/council/README.md#when-to-trigger-the-council`. A decision qualifies when
+**all three** hold: (1) load-bearing and costly to reverse, (2) two defensible approaches with
+materially different outcomes, (3) spans multiple disciplines simultaneously.
+
+**If yes:** surface the decision to the user, draft the council question, recommend a template,
+and wait for the council output before writing any code. The council output gates Step 3.
+
+**If no:** proceed directly to Step 3.
+
+This checkpoint exists only in the planning phase. Never invoke the council mid-implementation.
+
+## Step 3 — State plan, wait for go-ahead
+
+> Plan: [one sentence] → touches [file1, file2] → tests in [test file] → commit. Proceed?
+
+If plan touches more than 2 files, wait for explicit go-ahead.
+
+## Step 3b — Implementation routing (mandatory after go-ahead)
+
+Once go-ahead is received, decide who implements **before writing any code**.
+This is a fork — the two paths do not overlap.
+
+**Codex implements:**
+→ Proceed to Step 4. AutoTrigger agents (test-runner, code-reviewer) fire during and after
+  implementation. Codex commits via the commit skill.
+
+**Antigravity implements:**
+→ Invoke the `handoff-antigravity` skill now. Produce the structured handoff prompt and stop.
+  Do not write any code. Antigravity picks up from the handoff, runs its own protocol
+  (TDD loop, persona review, commit), and returns a Phase Completion Output block.
+  Codex verifies: SHA matches `git log --oneline -1`, test count meets DoD. If both check
+  out, the phase is closed. If not, Codex opens a fix session with the failure details.
+
+**When to choose Antigravity:**
+- Task spans 3+ files with clear, non-ambiguous spec
+- TDD loop needed (write tests first, iterate until green)
+- Phase is from BACKTEST_PLAN.md with a fully documented DoD
+- Implementation is mechanical — no real-time design decisions expected
+
+**When Codex implements:**
+- Single file or 2-file task where inline judgment calls are likely
+- Exploratory work where the spec may change as code is written
+- Any task requiring graph queries mid-implementation to resolve ambiguity
+
+## Step 4 — Tests are mandatory
+
+Every public function needs: one happy-path test + one error/edge-case test. No network in tests.
+
+**⛔ Before writing any test helper that constructs a domain model (Pydantic / dataclass):**
+
+Never write a `_make_*` / `build_*` / fixture helper from memory. Domain models evolve — required fields are added, enums are renamed, validators change. Writing from memory produces helpers that fail at collection time, wasting two round-trips to diagnose errors you introduced yourself.
+
+Mandatory pre-step — run these before opening the test file:
+
+```
+get_code_snippet("<ModelClassName>")   # exact field list, required vs optional, types
+search_graph("<EnumName>")             # every enum used in the helper — get all members
+```
+
+Concrete failures this prevents (from 2026-04-25 session):
+- `Direction.SHORT` → does not exist; members are `BUY` / `SELL`
+- `entry_date` → required field on `Leg`; omitting it raises `ValidationError` at collection
+
+One graph call before the first line of test code eliminates both. Do not skip it.
+
+## Agent AutoTrigger Rules
+
+Spawning the correct sub-agent is not optional for the conditions below.
+Inline review is not a substitute — each agent runs in an isolated context with the right model.
+
+| Agent | Trigger condition | Blocking? |
+|---|---|---|
+| `test-runner` (Haiku) | After any code file is edited, before code-reviewer | **Yes** — must pass before proceeding |
+| `code-reviewer` (Opus) | Before every commit touching code | **Yes** — CRITICAL/ERROR findings must resolve |
+| `greeks-analyst` (Sonnet) | Any change to `src/paper/`, option chain parsing, or delta/gamma fields | **Yes** |
+| `roll-validator` (Opus) | Any change to roll logic or `scripts/roll_leg.py` invocation | **Yes** |
+| `options-strategist` (Opus) | Council checkpoint (Step 2b) when no real council is warranted | Advisory |
+
+**"Blocking"** means the next protocol step does not proceed until the agent returns clean.
+For `code-reviewer`: any `CRITICAL` or `ERROR` finding must be resolved; `WARNING` may be
+deferred with a documented reason in the commit message.
+
+**Financial logic commits** (Greeks, P&L, Decimal paths, BrokerClient boundaries):
+real `@code-reviewer` subagent is mandatory — Antigravity's persona approximation is
+insufficient because it does not load `REVIEW.md` hygiene rules unless explicitly provided.
+
+
+
+## Step 5 — Close the phase (docs → tests → commit)
+
+A phase is not complete until all three are done. Never move to the next phase mid-checklist.
+
+**5a — Update docs** (targeted `Edit` calls only, never `Write`):
+- `CONTEXT.md` — "What Exists" module tree if new files added
+- `DECISIONS.md` — any new architecture decisions
+- `TODOS.md` — mark completed items, add session log entry
+- The relevant `src/<module>/AGENTS.md` if module invariants changed
+
+**5b — Verify tests green:**
+- Run `python -m pytest tests/unit/ --tb=no -q` — all must pass before committing.
+
+**5c — Commit** (format in `.Codex/skills/commit/SKILL.md`):
+- Code changes: run the `code-reviewer` agent against `git diff HEAD`. Address any `CRITICAL` or `ERROR` findings before committing. `WARNING` may be deferred with a documented reason.
+- Docs / config only: skip code-reviewer. Commit immediately after 5a.
+- **Never bundle changes from separate phases into one commit.**
+
+**⛔ The commit must be executed, not drafted.** A written-out commit message is not a commit. The phase is not closed until you have run:
+
+```bash
+git add <files>
+git commit -m "<message>"
+git log --oneline -1   # confirm SHA appears — this is the proof of completion
+```
+
+Providing the commit message to the user and stopping is a recurring failure mode (2026-04-24, 2026-04-25). The commit is the last mandatory action of every phase. Do not hand off to the user to run it.
+
+Typical phase boundaries (each gets its own commit):
+- Model → Store → Tracker/orchestration → Formatting / pure helpers
+
+---
+
+## Council Decision Protocol
+
+When a council response file (`docs/council/YYYY-MM-DD_<topic>.md`) is shared or referenced,
+follow this parsing and action order — do not treat all three stages equally.
+
+### Reading priority
+
+| Stage | Section header | Role | What to do |
+|-------|---------------|------|------------|
+| 3 | `## Stage 3 — Chairman Synthesis` | **Authoritative recommendation** | Read this first and fully — this is what gets implemented |
+| 2 | `## Aggregate Rankings (Stage 2 Peer Review)` | Peer credibility signal | Use to weight Stage 1 opinions when Stage 3 leaves a nuance unresolved |
+| 1 | `## Stage 1 — Individual Responses` | Raw panel opinions | Background context only — do NOT implement from Stage 1 directly |
+
+### Inside Stage 3 — what to extract
+
+1. **Summary Table** (always present at end of Stage 3): canonical before/after for each decision. This is the implementation spec.
+2. **Dissenting Notes** section: minority positions that were noted but overruled. Log these in `DECISIONS.md` under "Noted, deferred" — they are first candidates for post-validation testing.
+3. **Implementation Sequencing** (if present): lists which docs to update and in what order. Follow it literally.
+4. **Additional Rules Surfaced**: supplementary constraints that emerged during review. Treat these as mandatory additions to the relevant plan/strategy doc.
+
+### Mandatory post-read actions
+
+After reading a council file, always:
+
+1. Update `DECISIONS.md` — add a row for each decision in the Summary Table with the council date and topic as the source.
+2. Update the relevant plan or strategy doc (named in Implementation Sequencing) — edit it to reflect Stage 3 recommendations, not the original design.
+3. Do **not** implement code until DECISIONS.md and the strategy doc reflect the council output. The council decision gates implementation.
+
+### Aggregate Rankings — how to interpret
+
+```
+- model-A: avg rank 1.0 (4 votes)   ← panel judged this the strongest response
+- model-B: avg rank 2.25 (4 votes)
+- model-C: avg rank 2.75 (4 votes)
+```
+
+The chairman draws heavily on the top-ranked response. If Stage 3 feels thin on a topic,
+the highest-ranked Stage 1 response is the right place to look for supporting detail.
+Never use a lower-ranked response to contradict Stage 3.
+
+---
+
+## Quick reference
+
+| What | Where |
+|---|---|
+| Graph project ID | `Users-abhadra-myWork-myCode-python-NiftyShield` |
+| Project state | `CONTEXT.md` |
+| Architecture decisions | `DECISIONS.md` |
+| Instrument keys / AMFI codes / API quirks | `REFERENCES.md` |
+| Open TODOs + session log | `TODOS.md` |
+| Multi-sprint roadmap | `PLANNER.md` |
+| Strategy definitions (code) | `src/portfolio/strategies/finideas/` |
+| Shared DB connection | `src/db.py` |
+| Exception hierarchy | `src/client/exceptions.py` |
+| API fixtures | `tests/fixtures/responses/` |
+| Live DB | `data/portfolio/portfolio.sqlite` |
+| Cron log | `logs/snapshot.log` |
+| Run all tests | `python -m pytest tests/unit/` |
+| Commit format | `.Codex/skills/commit/SKILL.md` |
+| Session close / protocol audit | `.Codex/skills/session-close/SKILL.md` |
+| Python review checklist | `REVIEW.md` |
+| Backtest → paper → live pipeline plan | `BACKTEST_PLAN.md` |
+| Council trigger criteria + workflow | `docs/council/README.md` |
+| Completed council decisions | `docs/council/YYYY-MM-DD_<topic>.md` |
+| Antigravity operating protocol | `ANTIGRAVITY.md` |
+| Codex–Antigravity workflow division | `docs/antigravity/ai_collaboration_plan.md` |
+
+## AI Collaboration — Antigravity
+
+This project uses two AI agents. Codex (you) handles planning, graph queries, council decisions, and the mandatory `@code-reviewer` gate. Antigravity handles autonomous multi-file implementation, TDD loops, and commit execution.
+
+**What this means for Codex:**
+- Antigravity may have authored uncommitted or recently committed code. When reviewing it, run the real `@code-reviewer` agent against `git diff HEAD` — Antigravity's own review is persona-based and approximate.
+- Antigravity follows `ANTIGRAVITY.md` (project root). Its file-editing tools differ from Codex's: it uses `multi_replace_file_content` where Codex uses `Edit`, and `write_to_file` only for new files.
+- The workflow division (who does what, in which phase) is in `docs/antigravity/ai_collaboration_plan.md`.
+- Council decisions are always Codex's responsibility. Antigravity does not trigger the council.
+
+---
+
+## Module AGENTS.md files (auto-loaded when working in that directory)
+
+| Module | Context file |
+|---|---|
+| `src/portfolio/` | Leg/Trade distinction, Decimal invariant, `apply_trade_positions()`, strategy_name constraint |
+| `src/mf/` | Transaction ledger model, AMFI source, Decimal TEXT invariant, MFHolding location |
+| `src/client/` | BrokerClient protocol rule, 4 implementations, blocked methods, two-token constraint |
+| `src/notifications/` | Non-fatal contract, `build_notifier()` → None, HTML parse_mode |
+| `src/dhan/` | LTP via Upstox batch, two-phase fetch, classification config, double-count prevention |
+
+## Imported Claude Cowork project instructions
+
+## Project Overview
+
+Automated trading system built on the Upstox Developer API for:
+- Options selling on NiftyBees ETF (pledged for margin)
+- Delta-neutral adjustments based on real-time Greeks
+- Backtesting against expired option contract data
+- Portfolio monitoring integrated with the FD-OD capital structure
+
+Full architecture state in `CONTEXT.md`. Architecture decisions in `DECISIONS.md`. Instrument keys and AMFI codes in `REFERENCES.md`. Open work in `TODOS.md`.
+
+---
+
+## Pre-Task Protocol
+
+Before writing any code:
+1. Read `CONTEXT.md` — authoritative codebase state. State `CONTEXT.md ✓` in first response.
+2. If prompt does not name specific files, ask before starting. One clarifying question beats building the wrong thing.
+3. State plan in one sentence → which files change → tests required. If >2 files, wait for go-ahead.
+4. Tests are mandatory. Every public function needs one happy-path + one error/edge-case test. No network in tests.
+5. After implementation, update `CONTEXT.md` (module tree), `DECISIONS.md` (new decisions), `TODOS.md` (session log).
+
+Additional files to read when relevant:
+- Architecture changes → `DECISIONS.md`
+- Instrument keys / AMFI codes → `REFERENCES.md`
+- New feature work → `TODOS.md` + `PLANNER.md`
+- Working in a `src/` module → that module's `CLAUDE.md` loads automatically
+
+---
+
+## Python Standards
+
+- Python 3.10+, type hints on all function signatures, Google-style docstrings on all public functions/classes.
+- Functions 10–20 lines typical. Split only when it improves clarity, not by rule.
+- `dataclasses` or `Pydantic` for all API request/response shapes.
+- Vectorized ops (NumPy/Pandas) for historical analysis. Generators for large dataset iteration.
+
+## Async Model
+
+- `asyncio` + `aiohttp` for all I/O-bound operations.
+- Never mix asyncio with blocking calls in the hot path.
+- CPU-bound work (backtesting, Greeks) → `ProcessPoolExecutor` dispatched from the event loop.
+- All coroutines must have explicit timeout handling.
+
+## Data Layer
+
+- Monetary fields: always `Decimal`, stored as TEXT in SQLite. Never float. Read back with `Decimal(row["col"])`.
+- Timestamps: stored as UTC, converted to IST at display layer only.
+- Historical candles: Parquet, partitioned by instrument + date.
+- Config + credentials: TOML/YAML + env vars.
+
+## BrokerClient Protocol
+
+All modules depend on `BrokerClient` protocol (`src/client/protocol.py`), never on concrete implementations. Constructor injection only. `factory.py` is the sole composition root — the only file in `src/` that imports `UpstoxLiveClient` or `MockBrokerClient` directly.
+
+Default test mode is offline (`MockBrokerClient`). Sandbox tests are opt-in (`@pytest.mark.sandbox`). CI runs offline tests only.
+
+## Error Handling
+
+Custom exception hierarchy rooted at `BrokerError` — see `src/client/exceptions.py`. Retryable: `RateLimitError`, `DataFetchError`. Terminal (do not retry): `OrderRejectedError`, `InstrumentNotFoundError`. All blocked API methods raise `NotImplementedError` with explanatory message.
+
+## Logging
+
+Structured JSON in prod. Every API call logs: timestamp, endpoint, request_id, latency_ms, status_code. Every order logs: order_id, instrument, action, qty, price, status. Debug: `UPSTOX_DEBUG=1`.
+
+## Security
+
+Never commit API keys, secrets, or tokens. Credentials in `.env` (local) or secrets manager (prod). `.env` in `.gitignore` always.
+
+---
+
+## Commit Message Format
+
+```
+<type>(<scope>): <what changed, imperative mood, ≤60 chars>
+
+Why: <one sentence — reason or problem solved>
+What:
+- <file path>: <one-line description>
+Ref: <constraint from CONTEXT.md, or "none">
+```
+
+Types: `feat` / `fix` / `refactor` / `test` / `chore` / `docs`
+Scope: folder name under `src/` or `scripts/`
+
+---
+
+## Project Structure (abbreviated)
+
+```
+src/
+├── auth/              # OAuth (Upstox) + Nuvama session auth
+├── client/            # BrokerClient protocol + 3 implementations + factory
+├── portfolio/         # Models, store, tracker, strategy definitions
+├── mf/                # MF transaction ledger, AMFI NAV fetcher, tracker
+├── instruments/       # Offline BOD instrument lookup
+├── notifications/     # Telegram notifier (non-fatal, HTML parse_mode)
+└── db.py              # Shared SQLite context manager
+scripts/               # daily_snapshot.py, seed_*.py, record_trade.py
+tests/unit/            # 400 offline tests — run with: python -m pytest tests/unit/
+data/portfolio/        # portfolio.sqlite (live DB)
+```
+
+Full tree with file-level descriptions in `CONTEXT.md`.
+
+---
+
+## Environment Variables (key ones)
+
+| Variable | Description |
+|---|---|
+| `UPSTOX_ANALYTICS_TOKEN` | Long-lived Analytics Token for market data |
+| `UPSTOX_ACCESS_TOKEN` | Daily OAuth token (not yet wired for portfolio reads) |
+| `UPSTOX_SANDBOX_TOKEN` | Sandbox access token |
+| `UPSTOX_ENV` | `prod` / `sandbox` / `test` — selects client implementation |
+| `UPSTOX_DEBUG` | `1` = verbose request/response logging |
+| `TELEGRAM_BOT_TOKEN` | Telegram bot token for cron notifications |
+| `TELEGRAM_CHAT_ID` | Telegram chat ID |
+| `NUVAMA_SETTINGS_FILE` | Path to Nuvama APIConnect session file |
+
+Full list with examples in `.env.example`.
