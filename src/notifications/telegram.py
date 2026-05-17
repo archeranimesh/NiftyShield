@@ -94,6 +94,8 @@ class TelegramNotifier:
             )
             return False
 
+        # Increment before the API call so that network timeouts or HTTP errors 
+        # still burn a budget slot, preventing rapid retry loops on broken endpoints.
         self._messages_sent += 1
         html_text = _html_escape(text)
         payload = {
@@ -123,6 +125,7 @@ def build_notifier() -> TelegramNotifier | None:
     """Build a TelegramNotifier from environment variables.
 
     Reads TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID from the environment.
+    Reads TELEGRAM_MESSAGE_BUDGET (default 10) for the per-session cap.
     Returns None (silently) when either variable is absent — callers
     guard with ``if notifier:`` and skip notification without error.
 
@@ -133,7 +136,14 @@ def build_notifier() -> TelegramNotifier | None:
     chat_id = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
     if not token or not chat_id:
         return None
-    return TelegramNotifier(bot_token=token, chat_id=chat_id)
+        
+    try:
+        budget = int(os.environ.get("TELEGRAM_MESSAGE_BUDGET", "10"))
+    except ValueError:
+        logger.warning("Invalid TELEGRAM_MESSAGE_BUDGET. Defaulting to 10.")
+        budget = 10
+
+    return TelegramNotifier(bot_token=token, chat_id=chat_id, budget=budget)
 
 
 # ── Internal helpers ──────────────────────────────────────────────

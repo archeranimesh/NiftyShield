@@ -257,3 +257,21 @@ def test_build_notifier_returns_none_for_blank_token(monkeypatch: pytest.MonkeyP
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "   ")
     monkeypatch.setenv("TELEGRAM_CHAT_ID", "123")
     assert build_notifier() is None
+
+
+def test_build_notifier_reads_budget_env_var(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "tok")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "123")
+    monkeypatch.setenv("TELEGRAM_MESSAGE_BUDGET", "42")
+    notifier = build_notifier()
+    assert notifier is not None
+    assert notifier._budget == 42
+
+
+def test_build_notifier_defaults_budget_on_invalid_env_var(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "tok")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "123")
+    monkeypatch.setenv("TELEGRAM_MESSAGE_BUDGET", "not-an-int")
+    notifier = build_notifier()
+    assert notifier is not None
+    assert notifier._budget == 10
