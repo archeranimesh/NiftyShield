@@ -23,6 +23,8 @@ if notifier:
 
 `build_notifier()` checks for `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in the environment. If either is absent, returns `None`. Callers must guard with `if notifier:` — never assume it's configured.
 
+`TELEGRAM_MESSAGE_BUDGET` (default `10`) caps the total messages a single notifier instance will send per process lifetime. Increment before the HTTP call, so network timeouts still burn a slot (prevents rapid retry loops). Raise the budget via env var for long-lived processes like `intraday_tracker.py`; set to `0` to silence all notifications.
+
 ---
 
 ## Message Format

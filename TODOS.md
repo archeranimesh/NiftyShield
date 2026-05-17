@@ -411,6 +411,14 @@ License decision needed before automation. Every file should carry a header once
 2. Replace `DEFAULT_LOT_SIZE = 75` with `from src.paper.constants import LOT_SIZE as DEFAULT_LOT_SIZE`.
 3. Update the `--qty` help string.
 
+### DEBT-5: `test_bhavcopy_ingest.py` — Missing test coverage for `write_to_parquet` append path
+
+The `test_write_to_parquet_lineage_metadata` test only covers the initial write path (`new_table`). The merge/append path in `src/backtest/bhavcopy_ingest.py` (the `replace_schema_metadata` call) is not directly covered. 
+
+**Fix when touching `test_bhavcopy_ingest.py` next:**
+1. Add a test that writes twice with different dates.
+2. Assert that the merged Parquet file carries the *second* run's lineage metadata (run_timestamp).
+
 ---
 
 ## Session Log
@@ -428,6 +436,10 @@ License decision needed before automation. Every file should carry a header once
 | 2026-05-15 | **Audit Remediation Finding [2].** Replaced f-string with constant in `PRAGMA user_version` at `src/nuvama/store.py`. Added `test_schema_version_is_current`. SHA: 290a1d8. |
 | 2026-05-15 | **Audit Remediation Finding [1].** Replaced f-string with lazy logging in `src/backtest/bhavcopy_loader.py:72`. Added unit tests in `tests/unit/backtest/test_bhavcopy_loader.py`. SHA: 4d69050. |
 
+- [2026-05-17] audit finding [16] — add missing lineage metadata to Parquet storage — 9874d84
+- [2026-05-17] audit finding [15] — manual rollback — f54063c
+- [2026-05-17] audit finding [14] — implement per-session Telegram message budget — 90f7acd
+- [2026-05-16] audit finding [13] — convert TelegramNotifier to async aiohttp and fix all callers — b10aec9
 - [2026-05-16] audit finding [12] — move PortfolioStore to async factory — 68504ae
 - [2026-05-15] audit finding [11] — remove create_broker_client alias from factory — 8639d44
 - [2026-05-15] audit finding [10] — replace hardcoded data path with constant in bhavcopy_loader — e46e96d

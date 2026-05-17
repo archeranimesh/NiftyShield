@@ -1,18 +1,18 @@
-# Audit Finding [13] Remediation: Async Telegram Notifications (Finalized)
+# Audit Finding [13] Remediation: Async Telegram Notifications (Finalized v2)
 
-Remediate the blocking `requests.post` call in `TelegramNotifier.send` by converting it to an asynchronous method using `aiohttp` with proper resource management, unified API call sites, and explicit dependency tracking.
+Remediate the blocking `requests.post` call in `TelegramNotifier.send` by converting it to an asynchronous method using `aiohttp` with proper resource management, explicitly awaited JSON parsing, unified API call sites, and pinned dependency tracking.
 
 ## User Review Required
 
 > [!IMPORTANT]
-> This change introduces `aiohttp` as a production dependency. I will add it to `requirements.txt`. The implementation will use `aiohttp.ClientTimeout` as required by the library.
+> This change introduces `aiohttp==3.10.5` as a production dependency. `resp.json()` in `aiohttp` is a coroutine and will be explicitly awaited. Mocking in tests will use `AsyncMock` for `resp.json()`.
 
 ## Proposed Changes
 
 ### Dependencies
 
 #### [MODIFY] [requirements.txt](file:///Users/abhadra/myWork/myCode/python/NiftyShield/requirements.txt)
-- Add `aiohttp`.
+- Add `aiohttp==3.10.5`.
 
 ### Notifications
 
@@ -21,7 +21,10 @@ Remediate the blocking `requests.post` call in `TelegramNotifier.send` by conver
 - Convert `send` to `async def send(self, text: str) -> bool`.
 - **Timeout Handling:** Use `timeout = aiohttp.ClientTimeout(total=self._timeout)`.
 - **Resource Management:** Use `async with aiohttp.ClientSession(timeout=timeout) as session:`.
-- Perform the POST: `async with session.post(self._url, json=payload) as resp:`.
+- **Request & Parsing:** 
+  - `async with session.post(self._url, json=payload) as resp:`.
+  - `resp.raise_for_status()`.
+  - `data = await resp.json()`.
 - Maintain the non-fatal contract: catch `Exception`, log warning, and return `False`.
 
 #### [MODIFY] [CLAUDE.md](file:///Users/abhadra/myWork/myCode/python/NiftyShield/src/notifications/CLAUDE.md)
@@ -50,13 +53,13 @@ Remediate the blocking `requests.post` call in `TelegramNotifier.send` by conver
 - Convert all test functions to `async def test_*`.
 - **Mock Strategy:** Patch `aiohttp.ClientSession` directly.
 - Mock `__aenter__` on the `ClientSession` mock to return a mock session object.
-- Mock `post` on that session object to return a mock response context manager (`AsyncMock` for `__aenter__`).
-- Mock `json()` and `raise_for_status()` on the mock response.
+- Mock `post` on that session object to return a mock response context manager.
+- **Async Parsing Mock:** Mock `json()` as an `AsyncMock` to verify `await resp.json()`. Mock `raise_for_status()` as a plain `MagicMock` (synchronous in aiohttp).
 
 ## Verification Plan
 
 ### Automated Tests
-- Run `pip install aiohttp pytest-asyncio`.
+- Run `pip install aiohttp==3.10.5 pytest-asyncio`.
 - Run `python -m pytest tests/unit/test_notifications.py`.
 - Run full suite: `python -m pytest tests/unit/ --tb=no -q`.
 

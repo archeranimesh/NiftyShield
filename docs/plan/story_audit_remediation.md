@@ -18,12 +18,12 @@ Resume rule: read CONTEXT.md → find first unchecked box → implement → test
 
 ## Batch 2 — Async Safety
 - [x] [12] store.py:142 — blocking __init__ | SHA: 68504ae
-- [ ] [13] telegram.py:94 — blocking requests.post | SHA:
+- [x] [13] telegram.py:94 — blocking requests.post | SHA: b10aec9
 
 ## Batch 3 — Operational
-- [ ] [14] telegram.py:55 — no rate limit | SHA:
-- [ ] [15] paper_3track_overlay.py:666 — manual rollback | SHA:
-- [ ] [16] bhavcopy_ingest.py:334 — missing lineage metadata | SHA:
+- [x] [14] telegram.py:55 — no rate limit | SHA: 90f7acd
+- [x] [15] paper_3track_overlay.py:666 — manual rollback | SHA: f54063c
+- [x] [16] bhavcopy_ingest.py:334 — missing lineage metadata | SHA: 9874d84
 - [ ] [17] daily_snapshot.py — no cron heartbeat | SHA:
 
 ## Batch 4 — Types / Domain
