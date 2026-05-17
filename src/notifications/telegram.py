@@ -66,10 +66,13 @@ class TelegramNotifier:
         bot_token: str,
         chat_id: str,
         timeout: int = 10,
+        budget: int = 10,
     ) -> None:
         self._url = _TELEGRAM_API.format(token=bot_token)
         self._chat_id = chat_id
         self._timeout = timeout
+        self._budget = budget
+        self._messages_sent = 0
 
     async def send(self, text: str) -> bool:
         """Send a plain-text message to the configured chat.
@@ -84,6 +87,14 @@ class TelegramNotifier:
         Returns:
             True if the API returned ok=True, False on any error.
         """
+        if self._messages_sent >= self._budget:
+            logger.warning(
+                "Telegram notification budget exceeded (%d messages). Suppressing.",
+                self._budget
+            )
+            return False
+
+        self._messages_sent += 1
         html_text = _html_escape(text)
         payload = {
             "chat_id": self._chat_id,

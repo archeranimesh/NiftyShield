@@ -198,6 +198,26 @@ async def test_send_does_not_raise_on_any_failure() -> None:
         assert result is False
 
 
+# ── TelegramNotifier.send — budget limits ────────────────────────
+
+async def test_send_respects_message_budget() -> None:
+    mock_session = _make_mock_session({"ok": True})
+    with patch("src.notifications.telegram.aiohttp.ClientSession", return_value=mock_session):
+        notifier = TelegramNotifier(bot_token="tok", chat_id="123", budget=2)
+        assert await notifier.send("msg 1") is True
+        assert await notifier.send("msg 2") is True
+        assert await notifier.send("msg 3") is False
+        assert mock_session.post.call_count == 2
+
+
+async def test_send_with_zero_budget_suppresses_all() -> None:
+    mock_session = _make_mock_session({"ok": True})
+    with patch("src.notifications.telegram.aiohttp.ClientSession", return_value=mock_session):
+        notifier = TelegramNotifier(bot_token="tok", chat_id="123", budget=0)
+        assert await notifier.send("msg") is False
+        assert mock_session.post.call_count == 0
+
+
 # ── build_notifier ────────────────────────────────────────────────
 
 
