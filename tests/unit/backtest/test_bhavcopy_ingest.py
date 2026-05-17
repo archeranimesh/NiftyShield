@@ -316,3 +316,44 @@ def test_bhavcopy_integration_end_to_end(mock_sleep, mock_download, bhavcopy_zip
     assert futures_df.iloc[0]['instrument'] == 'FUTIDX'
     assert futures_df.iloc[0]['strike'] == Decimal("0")
     assert futures_df.iloc[0]['option_type'] == "XX"
+
+def test_write_to_parquet_lineage_metadata(bhavcopy_zip, tmp_path):
+    records = parse_bhavcopy(bhavcopy_zip, underlying="NIFTY")
+    assert len(records) > 0
+    trade_date = records[0].trade_date
+    
+    write_to_parquet(records, trade_date, dest_dir=tmp_path)
+    
+    year = trade_date.strftime("%Y")
+    month = trade_date.strftime("%m")
+    parquet_path = tmp_path / year / month / f"nifty_{year}_{month}.parquet"
+    
+    table = pq.read_table(parquet_path)
+    metadata = table.schema.metadata
+    
+    assert metadata is not None
+    assert b"git_commit" in metadata
+    assert b"run_timestamp" in metadata
+    assert len(metadata[b"git_commit"]) > 0
+
+@patch("src.backtest.bhavcopy_ingest.subprocess.check_output")
+def test_write_to_parquet_metadata_git_failure(mock_subprocess, bhavcopy_zip, tmp_path):
+    import subprocess
+    mock_subprocess.side_effect = subprocess.CalledProcessError(1, "git")
+    
+    records = parse_bhavcopy(bhavcopy_zip, underlying="NIFTY")
+    trade_date = records[0].trade_date
+    
+    # Should not raise exception
+    write_to_parquet(records, trade_date, dest_dir=tmp_path)
+    
+    year = trade_date.strftime("%Y")
+    month = trade_date.strftime("%m")
+    parquet_path = tmp_path / year / month / f"nifty_{year}_{month}.parquet"
+    
+    table = pq.read_table(parquet_path)
+    metadata = table.schema.metadata
+    
+    assert metadata is not None
+    assert metadata[b"git_commit"] == b"unknown"
+    assert b"run_timestamp" in metadata

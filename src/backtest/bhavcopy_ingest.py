@@ -2,11 +2,12 @@ import csv
 import logging
 import os
 import zipfile
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 import re
 import calendar
+import subprocess
 
 import requests
 
@@ -367,6 +368,23 @@ def write_to_parquet(records: list[BhavRecord], month_date: date, dest_dir: Path
         ('oi', pa.int64()),
     ])
     
+    metadata = schema.metadata or {}
+    try:
+        git_commit = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], 
+            text=True, 
+            stderr=subprocess.DEVNULL, 
+            timeout=2
+        ).strip()
+    except Exception:
+        git_commit = "unknown"
+        
+    metadata.update({
+        b"git_commit": git_commit.encode('utf-8'),
+        b"run_timestamp": datetime.now(timezone.utc).isoformat().encode('utf-8')
+    })
+    schema = schema.with_metadata(metadata)
+    
     new_table = pa.Table.from_pylist(data, schema=schema)
     
     if parquet_path.exists():
@@ -384,6 +402,7 @@ def write_to_parquet(records: list[BhavRecord], month_date: date, dest_dir: Path
             return
             
         final_table = pa.concat_tables([existing_table, new_table])
+        final_table = final_table.replace_schema_metadata(schema.metadata)
     else:
         final_table = new_table
         
