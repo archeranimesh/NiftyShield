@@ -313,6 +313,28 @@ class TestPortfolioStore:
         result = tmp_store.get_prev_snapshots(date(2026, 4, 6))
         assert result == {}
 
+    def test_record_and_get_heartbeat(self, tmp_store):
+        """Happy path: record a heartbeat and verify we can retrieve it."""
+        assert tmp_store.get_latest_heartbeat("daily_snapshot") is None
+
+        tmp_store.record_heartbeat("daily_snapshot", "SUCCESS", "Finished successfully")
+        hb = tmp_store.get_latest_heartbeat("daily_snapshot")
+        assert hb is not None
+        assert hb["service"] == "daily_snapshot"
+        assert hb["status"] == "SUCCESS"
+        assert hb["message"] == "Finished successfully"
+        assert hb["last_run"] is not None
+
+    def test_record_heartbeat_overwrite(self, tmp_store):
+        """Verify record_heartbeat overwrites the previous state for the same service."""
+        tmp_store.record_heartbeat("daily_snapshot", "SUCCESS", "All good")
+        tmp_store.record_heartbeat("daily_snapshot", "FAILED", "Something went wrong")
+
+        hb = tmp_store.get_latest_heartbeat("daily_snapshot")
+        assert hb is not None
+        assert hb["status"] == "FAILED"
+        assert hb["message"] == "Something went wrong"
+
 
 # ── Tracker tests ────────────────────────────────────────────────
 

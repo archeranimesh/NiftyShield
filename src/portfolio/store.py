@@ -11,6 +11,7 @@ import sqlite3
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 from src.db import connect as _connect
 from src.models.portfolio import (
@@ -89,6 +90,13 @@ CREATE TABLE IF NOT EXISTS trades (
 
 CREATE INDEX IF NOT EXISTS idx_trades_strategy_leg
     ON trades(strategy_name, leg_role, trade_date);
+
+CREATE TABLE IF NOT EXISTS cron_heartbeats (
+    service TEXT PRIMARY KEY,
+    last_run TEXT NOT NULL,
+    status TEXT NOT NULL,
+    message TEXT
+);
 """
 
 
@@ -688,5 +696,48 @@ class PortfolioStore:
             avg = buy_value[leg] / bq if bq > 0 else Decimal("0")
             result[leg] = (net, avg, instrument_key)
         return result
+
+    # ── Cron heartbeats ──────────────────────────────────────────
+
+    def record_heartbeat(
+        self, service: str, status: str, message: str | None = None
+    ) -> None:
+        """Record the heartbeat of a cron service.
+
+        Args:
+            service: Name of the cron service (e.g. "daily_snapshot").
+            status: Execution status (e.g. "SUCCESS", "FAILED").
+            message: Optional additional metadata or error message.
+        """
+        now = datetime.now().isoformat()
+        with _connect(self.db_path) as conn:
+            conn.execute(
+                """INSERT OR REPLACE INTO cron_heartbeats (service, last_run, status, message)
+                   VALUES (?, ?, ?, ?)""",
+                (service, now, status, message),
+            )
+
+    def get_latest_heartbeat(self, service: str) -> dict[str, Any] | None:
+        """Fetch the latest heartbeat record for a service.
+
+        Args:
+            service: Name of the cron service.
+
+        Returns:
+            Dict containing the heartbeat record, or None if not found.
+        """
+        with _connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT service, last_run, status, message FROM cron_heartbeats WHERE service = ?",
+                (service,),
+            ).fetchone()
+            if not row:
+                return None
+            return {
+                "service": row["service"],
+                "last_run": row["last_run"],
+                "status": row["status"],
+                "message": row["message"],
+            }
 
     # ── Row mappers (module-level: _row_to_trade, _row_to_snapshot) ──

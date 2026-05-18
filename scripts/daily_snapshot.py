@@ -359,354 +359,366 @@ async def _async_main(snap_date: date, db_path: Path, dhan_trade_count: int = 0)
         return 1
 
     store = await PortfolioStore.create(db_path)
-    strategies = store.get_all_strategies()
 
-    if not strategies:
-        print("  ERROR: No strategies found in DB. Run seed_portfolio first.")
-        return 1
-
-    # ── Overlay trade-derived positions onto strategy leg definitions ─
-    # Replaces static qty/entry_price in Leg objects with the live reality
-    # from the trades ledger. Appends legs that exist in trades but not in
-    # the strategy definition (e.g. LIQUIDBEES). Pure — no network.
-    strategies = [
-        apply_trade_positions(s, store.get_all_positions_for_strategy(s.name))
-        for s in strategies
-    ]
-
-    # Fetch prev-day snapshots early (before LTP fetch) — pure DB read, no network
-    prev_snapshots = store.get_prev_snapshots(snap_date)
-
-    # ── Initialize market client ─────────────────────────────────
     try:
-        env = os.getenv("UPSTOX_ENV", "prod")
-        client = create_client(env)
-    except ValueError as e:
-        print(f"  ERROR: {e}")
-        return 1
+        strategies = store.get_all_strategies()
 
-    # ── Collect all unique instrument keys across strategies ──────
-    NIFTY_INDEX_KEY = "NSE_INDEX|Nifty 50"
+        if not strategies:
+            print("  ERROR: No strategies found in DB. Run seed_portfolio first.")
+            store.record_heartbeat("daily_snapshot", "FAILED", "No strategies found in DB")
+            return 1
 
-    all_keys = {leg.instrument_key for strategy in strategies for leg in strategy.legs}
+        # ── Overlay trade-derived positions onto strategy leg definitions ─
+        # Replaces static qty/entry_price in Leg objects with the live reality
+        # from the trades ledger. Appends legs that exist in trades but not in
+        # the strategy definition (e.g. LIQUIDBEES). Pure — no network.
+        strategies = [
+            apply_trade_positions(s, store.get_all_positions_for_strategy(s.name))
+            for s in strategies
+        ]
 
-    # ── Pre-fetch Dhan holdings (before LTP batch) — add their Upstox keys ──
-    # Holdings are fetched now so their NSE_EQ|{ISIN} keys can be piggybacked
-    # onto the single Upstox batch LTP call, avoiding Dhan's paid Data API.
-    _dhan_holdings_prefetched: list = []
-    _dhan_client_id: str = ""
-    _dhan_token: str = ""
-    _dhan_tracked_isins: set[str] = set()
-    try:
-        from src.auth.dhan_verify import load_dhan_credentials
-        from src.dhan.reader import fetch_dhan_holdings, upstox_keys_for_holdings
+        # Fetch prev-day snapshots early (before LTP fetch) — pure DB read, no network
+        prev_snapshots = store.get_prev_snapshots(snap_date)
 
-        _dhan_client_id, _dhan_token = load_dhan_credentials()
-        _dhan_tracked_isins = {
-            leg.instrument_key.split("|", 1)[1]
-            for s in strategies for leg in s.legs
-            if leg.instrument_key.startswith("NSE_EQ|")
-        }
-        _dhan_holdings_prefetched = fetch_dhan_holdings(
-            _dhan_client_id, _dhan_token, _dhan_tracked_isins
-        )
-        dhan_upstox_keys = upstox_keys_for_holdings(_dhan_holdings_prefetched)
-        all_keys |= dhan_upstox_keys
-        print(f"  Dhan: {len(_dhan_holdings_prefetched)} holding(s) — keys added to LTP batch")
-    except ValueError as e:
-        print(f"  Dhan: skipped — {e}")
-    except Exception as e:  # noqa: BLE001
-        print(f"  WARNING [{run_id}]: Dhan holdings pre-fetch failed — {e}")
-
-    print(f"  Strategies: {len(strategies)}, Instruments: {len(all_keys)}")
-
-    # ── Fetch all LTPs in one batch (Nifty spot piggybacked) ─────
-    try:
-        prices = await client.get_ltp(list(all_keys | {NIFTY_INDEX_KEY}))
-    except LTPFetchError as e:
-        print(f"  ERROR: LTP fetch failed — {e}")
-        print("  Aborting: cannot record snapshots with stale/zero prices.")
-        return 1
-
-    underlying_price = prices.get(NIFTY_INDEX_KEY)
-    if underlying_price is not None:
-        print(f"  Nifty spot: {underlying_price:,.2f}")
-    else:
-        print("  WARNING: Could not fetch Nifty spot price.")
-
-    missing = all_keys - set(prices.keys())
-    if missing:
-        print(f"  WARNING: No LTP for {len(missing)} instruments: {missing}")
-
-    # ── Record snapshots and collect P&L — single event loop ─────
-    tracker = PortfolioTracker(store, client)
-    results, strategy_pnls = await tracker.record_all_strategies(
-        snapshot_date=snap_date,
-        underlying_price=underlying_price,
-        prices=prices,
-    )
-
-    total_snaps = sum(results.values())
-    print(f"  Recorded {total_snaps} snapshots:")
-
-    for strategy in strategies:
-        count = results.get(strategy.name, 0)
-        pnl = strategy_pnls.get(strategy.name)
-        if pnl:
-            print(
-                f"    {strategy.name}: {count} legs, "
-                f"P&L: {pnl.total_pnl:+,.0f} ({pnl.total_pnl_percent:+.2f}%)"
-            )
-        else:
-            print(f"    {strategy.name}: {count} legs")
-
-    # ── MF portfolio snapshot (non-fatal) ─────────────────────────
-    mf_pnl = None
-    prev_mf_pnl: object | None = None
-    try:
-        mf_store = MFStore(db_path)
-        mf_pnl = MFTracker(mf_store).record_snapshot(snap_date)
-        if mf_pnl.schemes:
-            print(
-                f"  MF portfolio ({len(mf_pnl.schemes)} schemes): "
-                f"₹{mf_pnl.total_current_value:,.0f}  "
-                f"P&L {mf_pnl.total_pnl:+,.0f} ({mf_pnl.total_pnl_pct:+}%)"
-            )
-        else:
-            print(
-                "  MF portfolio: no holdings — skipped (run seed_mf_holdings.py first)"
-            )
-        # Previous day's MF value for day-change delta (non-fatal).
-        # We look back to prev_trading_day(snap_date), not snap_date itself.
-        # morning_nav.py corrects yesterday's row to yesterday's actual NAV;
-        # daily_snapshot at 15:45 writes today's row with yesterday's NAV
-        # (AMFI not yet published).  Without this offset, both rows have the
-        # same NAV and the delta collapses to 0.
-        prev_nav_snaps = mf_store.get_prev_nav_snapshots(prev_trading_day(snap_date))
-        holdings = mf_store.get_holdings()
-        prev_mf_pnl = _compute_prev_mf_pnl(prev_nav_snaps, holdings)
-    except Exception as e:  # noqa: BLE001
-        print(f"  WARNING [{run_id}]: MF snapshot failed — {e}")
-
-    # ── Dhan portfolio snapshot — enrich with Upstox prices (non-fatal) ──
-    # Holdings were pre-fetched before the LTP batch; prices now available.
-    dhan_summary = None
-    if _dhan_holdings_prefetched:
+        # ── Initialize market client ─────────────────────────────────
         try:
-            from src.dhan.reader import build_dhan_summary, enrich_with_upstox_prices
-            from src.dhan.store import DhanStore
+            env = os.getenv("UPSTOX_ENV", "prod")
+            client = create_client(env)
+        except ValueError as e:
+            print(f"  ERROR: {e}")
+            store.record_heartbeat("daily_snapshot", "FAILED", f"Client creation error: {e}")
+            return 1
 
-            enriched = enrich_with_upstox_prices(_dhan_holdings_prefetched, prices)
+        # ── Collect all unique instrument keys across strategies ──────
+        NIFTY_INDEX_KEY = "NSE_INDEX|Nifty 50"
 
-            dhan_store = DhanStore(db_path)
-            prev_dhan = dhan_store.get_prev_snapshot(snap_date)
-            dhan_summary = build_dhan_summary(enriched, snap_date, prev_dhan or None)
+        all_keys = {leg.instrument_key for strategy in strategies for leg in strategy.legs}
 
-            all_dhan = list(dhan_summary.equity_holdings) + list(dhan_summary.bond_holdings)
-            dhan_store.record_snapshot(all_dhan, snap_date)
+        # ── Pre-fetch Dhan holdings (before LTP batch) — add their Upstox keys ──
+        # Holdings are fetched now so their NSE_EQ|{ISIN} keys can be piggybacked
+        # onto the single Upstox batch LTP call, avoiding Dhan's paid Data API.
+        _dhan_holdings_prefetched: list = []
+        _dhan_client_id: str = ""
+        _dhan_token: str = ""
+        _dhan_tracked_isins: set[str] = set()
+        try:
+            from src.auth.dhan_verify import load_dhan_credentials
+            from src.dhan.reader import fetch_dhan_holdings, upstox_keys_for_holdings
 
-            eq_count = len(dhan_summary.equity_holdings)
-            bd_count = len(dhan_summary.bond_holdings)
-            print(f"  Dhan portfolio: {eq_count} equity, {bd_count} bond holding(s)")
-            if dhan_summary.equity_value > 0:
-                print(
-                    f"    Equity: ₹{dhan_summary.equity_value:,.0f}  "
-                    f"P&L {dhan_summary.equity_pnl:+,.0f}"
-                )
-            if dhan_summary.bond_value > 0:
-                print(
-                    f"    Bonds:  ₹{dhan_summary.bond_value:,.0f}  "
-                    f"P&L {dhan_summary.bond_pnl:+,.0f}"
-                )
+            _dhan_client_id, _dhan_token = load_dhan_credentials()
+            _dhan_tracked_isins = {
+                leg.instrument_key.split("|", 1)[1]
+                for s in strategies for leg in s.legs
+                if leg.instrument_key.startswith("NSE_EQ|")
+            }
+            _dhan_holdings_prefetched = fetch_dhan_holdings(
+                _dhan_client_id, _dhan_token, _dhan_tracked_isins
+            )
+            dhan_upstox_keys = upstox_keys_for_holdings(_dhan_holdings_prefetched)
+            all_keys |= dhan_upstox_keys
+            print(f"  Dhan: {len(_dhan_holdings_prefetched)} holding(s) — keys added to LTP batch")
+        except ValueError as e:
+            print(f"  Dhan: skipped — {e}")
         except Exception as e:  # noqa: BLE001
-            print(f"  WARNING [{run_id}]: Dhan portfolio enrichment failed — {e}")
+            print(f"  WARNING [{run_id}]: Dhan holdings pre-fetch failed — {e}")
 
-    # ── Nuvama bond portfolio snapshot (non-fatal) ────────────────
-    nuvama_summary = None
-    from src.nuvama.protocol import NuvamaClient
-    nuvama_api_instance: NuvamaClient | None = None
-    try:
-        from src.auth.nuvama_verify import load_api_connect
-        from src.nuvama.reader import fetch_nuvama_portfolio
-        from src.nuvama.store import NuvamaStore
+        print(f"  Strategies: {len(strategies)}, Instruments: {len(all_keys)}")
 
-        nuvama_store = NuvamaStore(db_path)
-        positions = nuvama_store.get_positions()
-        if positions:
+        # ── Fetch all LTPs in one batch (Nifty spot piggybacked) ─────
+        try:
+            prices = await client.get_ltp(list(all_keys | {NIFTY_INDEX_KEY}))
+        except LTPFetchError as e:
+            print(f"  ERROR: LTP fetch failed — {e}")
+            print("  Aborting: cannot record snapshots with stale/zero prices.")
+            store.record_heartbeat("daily_snapshot", "FAILED", f"LTP fetch failed: {e}")
+            return 1
+
+        underlying_price = prices.get(NIFTY_INDEX_KEY)
+        if underlying_price is not None:
+            print(f"  Nifty spot: {underlying_price:,.2f}")
+        else:
+            print("  WARNING: Could not fetch Nifty spot price.")
+
+        missing = all_keys - set(prices.keys())
+        if missing:
+            print(f"  WARNING: No LTP for {len(missing)} instruments: {missing}")
+
+        # ── Record snapshots and collect P&L — single event loop ─────
+        tracker = PortfolioTracker(store, client)
+        results, strategy_pnls = await tracker.record_all_strategies(
+            snapshot_date=snap_date,
+            underlying_price=underlying_price,
+            prices=prices,
+        )
+
+        total_snaps = sum(results.values())
+        print(f"  Recorded {total_snaps} snapshots:")
+
+        for strategy in strategies:
+            count = results.get(strategy.name, 0)
+            pnl = strategy_pnls.get(strategy.name)
+            if pnl:
+                print(
+                    f"    {strategy.name}: {count} legs, "
+                    f"P&L: {pnl.total_pnl:+,.0f} ({pnl.total_pnl_percent:+.2f}%)"
+                )
+            else:
+                print(f"    {strategy.name}: {count} legs")
+
+        # ── MF portfolio snapshot (non-fatal) ─────────────────────────
+        mf_pnl = None
+        prev_mf_pnl: object | None = None
+        try:
+            mf_store = MFStore(db_path)
+            mf_pnl = MFTracker(mf_store).record_snapshot(snap_date)
+            if mf_pnl.schemes:
+                print(
+                    f"  MF portfolio ({len(mf_pnl.schemes)} schemes): "
+                    f"₹{mf_pnl.total_current_value:,.0f}  "
+                    f"P&L {mf_pnl.total_pnl:+,.0f} ({mf_pnl.total_pnl_pct:+}%)"
+                )
+            else:
+                print(
+                    "  MF portfolio: no holdings — skipped (run seed_mf_holdings.py first)"
+                )
+            # Previous day's MF value for day-change delta (non-fatal).
+            # We look back to prev_trading_day(snap_date), not snap_date itself.
+            # morning_nav.py corrects yesterday's row to yesterday's actual NAV;
+            # daily_snapshot at 15:45 writes today's row with yesterday's NAV
+            # (AMFI not yet published).  Without this offset, both rows have the
+            # same NAV and the delta collapses to 0.
+            prev_nav_snaps = mf_store.get_prev_nav_snapshots(prev_trading_day(snap_date))
+            holdings = mf_store.get_holdings()
+            prev_mf_pnl = _compute_prev_mf_pnl(prev_nav_snaps, holdings)
+        except Exception as e:  # noqa: BLE001
+            print(f"  WARNING [{run_id}]: MF snapshot failed — {e}")
+
+        # ── Dhan portfolio snapshot — enrich with Upstox prices (non-fatal) ──
+        # Holdings were pre-fetched before the LTP batch; prices now available.
+        dhan_summary = None
+        if _dhan_holdings_prefetched:
             try:
+                from src.dhan.reader import build_dhan_summary, enrich_with_upstox_prices
+                from src.dhan.store import DhanStore
+
+                enriched = enrich_with_upstox_prices(_dhan_holdings_prefetched, prices)
+
+                dhan_store = DhanStore(db_path)
+                prev_dhan = dhan_store.get_prev_snapshot(snap_date)
+                dhan_summary = build_dhan_summary(enriched, snap_date, prev_dhan or None)
+
+                all_dhan = list(dhan_summary.equity_holdings) + list(dhan_summary.bond_holdings)
+                dhan_store.record_snapshot(all_dhan, snap_date)
+
+                eq_count = len(dhan_summary.equity_holdings)
+                bd_count = len(dhan_summary.bond_holdings)
+                print(f"  Dhan portfolio: {eq_count} equity, {bd_count} bond holding(s)")
+                if dhan_summary.equity_value > 0:
+                    print(
+                        f"    Equity: ₹{dhan_summary.equity_value:,.0f}  "
+                        f"P&L {dhan_summary.equity_pnl:+,.0f}"
+                    )
+                if dhan_summary.bond_value > 0:
+                    print(
+                        f"    Bonds:  ₹{dhan_summary.bond_value:,.0f}  "
+                        f"P&L {dhan_summary.bond_pnl:+,.0f}"
+                    )
+            except Exception as e:  # noqa: BLE001
+                print(f"  WARNING [{run_id}]: Dhan portfolio enrichment failed — {e}")
+
+        # ── Nuvama bond portfolio snapshot (non-fatal) ────────────────
+        nuvama_summary = None
+        from src.nuvama.protocol import NuvamaClient
+        nuvama_api_instance: NuvamaClient | None = None
+        try:
+            from src.auth.nuvama_verify import load_api_connect
+            from src.nuvama.reader import fetch_nuvama_portfolio
+            from src.nuvama.store import NuvamaStore
+
+            nuvama_store = NuvamaStore(db_path)
+            positions = nuvama_store.get_positions()
+            if positions:
+                try:
+                    from src.auth.nuvama_verify import load_api_connect
+                    nuvama_api_instance = load_api_connect()
+                    nuvama_summary = fetch_nuvama_portfolio(nuvama_api_instance, positions, snap_date)
+                    nuvama_store.record_all_snapshots(list(nuvama_summary.holdings), snap_date)
+                    print(
+                        f"  Nuvama bonds: {len(nuvama_summary.holdings)} holding(s)  "
+                        f"₹{nuvama_summary.total_value:,.0f}  "
+                        f"P&L {nuvama_summary.total_pnl:+,.0f}"
+                    )
+                except (ValueError, FileNotFoundError) as e:
+                    print(f"  Nuvama bonds: skipped — {e}")
+                    nuvama_api_instance = None
+            else:
+                print("  Nuvama bonds: skipped — no positions seeded.")
+        except Exception as e:  # noqa: BLE001
+            print(f"  WARNING [{run_id}]: Nuvama bond snapshot failed — {e}")
+            nuvama_api_instance = None
+
+        # ── Nuvama options portfolio snapshot (non-fatal) ─────────────
+        nuvama_options_summary = None
+        try:
+            from src.nuvama.options_reader import parse_options_positions, build_options_summary
+
+            if nuvama_api_instance is None:
                 from src.auth.nuvama_verify import load_api_connect
                 nuvama_api_instance = load_api_connect()
-                nuvama_summary = fetch_nuvama_portfolio(nuvama_api_instance, positions, snap_date)
-                nuvama_store.record_all_snapshots(list(nuvama_summary.holdings), snap_date)
-                print(
-                    f"  Nuvama bonds: {len(nuvama_summary.holdings)} holding(s)  "
-                    f"₹{nuvama_summary.total_value:,.0f}  "
-                    f"P&L {nuvama_summary.total_pnl:+,.0f}"
+
+            raw_netpos = nuvama_api_instance.NetPosition()
+            options_pos = parse_options_positions(raw_netpos)
+            if options_pos:
+                nuvama_store.record_all_options_snapshots(options_pos, snap_date)
+                cumulative_map = nuvama_store.get_cumulative_realized_pnl(before_date=snap_date)
+                monthly_hist = nuvama_store.get_monthly_realized_pnl(
+                    snap_date.year, snap_date.month, before_date=snap_date
                 )
-            except (ValueError, FileNotFoundError) as e:
-                print(f"  Nuvama bonds: skipped — {e}")
-                nuvama_api_instance = None
-        else:
-            print("  Nuvama bonds: skipped — no positions seeded.")
-    except Exception as e:  # noqa: BLE001
-        print(f"  WARNING [{run_id}]: Nuvama bond snapshot failed — {e}")
-        nuvama_api_instance = None
+                high, low, n_high, n_low = nuvama_store.get_intraday_extremes(snap_date)
+                nuvama_options_summary = build_options_summary(
+                    options_pos,
+                    snap_date,
+                    cumulative_map,
+                    monthly_historical_pnl=monthly_hist,
+                    intraday_high=high,
+                    intraday_low=low,
+                    nifty_high=n_high,
+                    nifty_low=n_low,
+                )
+                print(
+                    f"  Nuvama options: {len(options_pos)} position(s)  "
+                    f"Unrealized P&L {nuvama_options_summary.total_unrealized_pnl:+,.0f}  "
+                    f"Net P&L {nuvama_options_summary.net_pnl:+,.0f}"
+                )
+            else:
+                print("  Nuvama options: skipped — no active positions found.")
+        except (ValueError, FileNotFoundError) as e:
+            print(f"  Nuvama options: skipped — {e}")
+        except Exception as e:  # noqa: BLE001
+            print(f"  WARNING [{run_id}]: Nuvama options snapshot failed — {e}")
 
-    # ── Nuvama options portfolio snapshot (non-fatal) ─────────────
-    nuvama_options_summary = None
-    try:
-        from src.nuvama.options_reader import parse_options_positions, build_options_summary
+        # ── Dhan Options (Intraday) — non-fatal ───────────────────────
+        # Historical run (--date <past>): read from stored EOD snapshot — no API call.
+        # Live run (today): fetch live positions, store EOD row, then format.
+        dhan_options_section = "[unavailable]"
+        try:
+            from datetime import timezone
+            from src.dhan.positions import format_options_section
+            from src.dhan.store import DhanStore
 
-        if nuvama_api_instance is None:
-            from src.auth.nuvama_verify import load_api_connect
-            nuvama_api_instance = load_api_connect()
+            _dhan_opts_store = DhanStore(db_path)
 
-        raw_netpos = nuvama_api_instance.NetPosition()
-        options_pos = parse_options_positions(raw_netpos)
-        if options_pos:
-            nuvama_store.record_all_options_snapshots(options_pos, snap_date)
-            cumulative_map = nuvama_store.get_cumulative_realized_pnl(before_date=snap_date)
-            monthly_hist = nuvama_store.get_monthly_realized_pnl(
-                snap_date.year, snap_date.month, before_date=snap_date
-            )
-            high, low, n_high, n_low = nuvama_store.get_intraday_extremes(snap_date)
-            nuvama_options_summary = build_options_summary(
-                options_pos,
-                snap_date,
-                cumulative_map,
-                monthly_historical_pnl=monthly_hist,
-                intraday_high=high,
-                intraday_low=low,
-                nifty_high=n_high,
-                nifty_low=n_low,
-            )
-            print(
-                f"  Nuvama options: {len(options_pos)} position(s)  "
-                f"Unrealized P&L {nuvama_options_summary.total_unrealized_pnl:+,.0f}  "
-                f"Net P&L {nuvama_options_summary.net_pnl:+,.0f}"
-            )
-        else:
-            print("  Nuvama options: skipped — no active positions found.")
-    except (ValueError, FileNotFoundError) as e:
-        print(f"  Nuvama options: skipped — {e}")
-    except Exception as e:  # noqa: BLE001
-        print(f"  WARNING [{run_id}]: Nuvama options snapshot failed — {e}")
+            if snap_date < date.today():
+                # ── Historical path — read stored EOD row ─────────────
+                _stored = _dhan_opts_store.get_eod_options_snapshot(snap_date)
+                if _stored is not None:
+                    _dhan_opts_summary, _ = _stored
+                    _month_pnl = _dhan_opts_store.get_monthly_realized_pnl(
+                        snap_date.year, snap_date.month
+                    )
+                    _month_charges, _month_brokerage = _dhan_opts_store.get_monthly_charges(
+                        snap_date.year, snap_date.month
+                    )
+                    dhan_options_section = format_options_section(
+                        _dhan_opts_summary, _month_pnl, _month_charges, _month_brokerage
+                    )
+                    print(
+                        f"  Dhan options (stored): {_dhan_opts_summary.position_count} position(s)  "
+                        f"Realized {_dhan_opts_summary.realized_pnl:+,.0f}  "
+                        f"Month {_month_pnl:+,.0f}"
+                    )
+                else:
+                    dhan_options_section = "[no snapshot stored for this date]"
+                    print(f"  Dhan options: no EOD snapshot found for {snap_date.isoformat()}")
+            else:
+                # ── Live path — fetch from Dhan API, store EOD row ────
+                from src.dhan.positions import (
+                    build_options_summary as _build_dhan_opts_summary,
+                    fetch_fund_limit_raw,
+                    fetch_positions_raw,
+                    filter_intraday_options,
+                    parse_fund_limit,
+                    parse_option_positions,
+                )
 
-    # ── Dhan Options (Intraday) — non-fatal ───────────────────────
-    # Historical run (--date <past>): read from stored EOD snapshot — no API call.
-    # Live run (today): fetch live positions, store EOD row, then format.
-    dhan_options_section = "[unavailable]"
-    try:
-        from datetime import timezone
-        from src.dhan.positions import format_options_section
-        from src.dhan.store import DhanStore
+                _dhan_client_id = os.environ["DHAN_CLIENT_ID"]
+                _dhan_access_token = os.environ["DHAN_ACCESS_TOKEN"]
+                _dhan_opts_ts = datetime.now(tz=timezone.utc)
 
-        _dhan_opts_store = DhanStore(db_path)
+                _raw_pos = fetch_positions_raw(_dhan_client_id, _dhan_access_token)
+                _dhan_positions = filter_intraday_options(parse_option_positions(_raw_pos))
+                _dhan_opts_summary = _build_dhan_opts_summary(
+                    _dhan_positions, _dhan_opts_ts, trade_count=dhan_trade_count
+                )
 
-        if snap_date < date.today():
-            # ── Historical path — read stored EOD row ─────────────
-            _stored = _dhan_opts_store.get_eod_options_snapshot(snap_date)
-            if _stored is not None:
-                _dhan_opts_summary, _ = _stored
+                _raw_fl = fetch_fund_limit_raw(_dhan_client_id, _dhan_access_token)
+                _dhan_fund_limit = parse_fund_limit(_raw_fl, _dhan_opts_ts)
+
+                _dhan_opts_store.record_options_snapshot(
+                    _dhan_opts_ts, _dhan_opts_summary, _dhan_positions, is_eod=True
+                )
+                _dhan_opts_store.record_margin_snapshot(_dhan_opts_ts, _dhan_fund_limit)
+
                 _month_pnl = _dhan_opts_store.get_monthly_realized_pnl(
-                    snap_date.year, snap_date.month
+                    _dhan_opts_ts.year, _dhan_opts_ts.month
                 )
                 _month_charges, _month_brokerage = _dhan_opts_store.get_monthly_charges(
-                    snap_date.year, snap_date.month
+                    _dhan_opts_ts.year, _dhan_opts_ts.month
                 )
                 dhan_options_section = format_options_section(
                     _dhan_opts_summary, _month_pnl, _month_charges, _month_brokerage
                 )
+
                 print(
-                    f"  Dhan options (stored): {_dhan_opts_summary.position_count} position(s)  "
+                    f"  Dhan options: {_dhan_opts_summary.position_count} position(s)  "
                     f"Realized {_dhan_opts_summary.realized_pnl:+,.0f}  "
                     f"Month {_month_pnl:+,.0f}"
                 )
-            else:
-                dhan_options_section = "[no snapshot stored for this date]"
-                print(f"  Dhan options: no EOD snapshot found for {snap_date.isoformat()}")
+        except Exception:  # noqa: BLE001
+            import logging as _logging
+            _logging.getLogger(__name__).exception(
+                "Dhan Options fetch failed — continuing without it"
+            )
+            print(f"  WARNING [{run_id}]: Dhan Options fetch failed — showing [unavailable]")
+
+        # ── Combined portfolio summary ────────────────────────────────
+        summary_text = _format_combined_summary(
+            strategies, prices, strategy_pnls, mf_pnl,
+            prev_snapshots=prev_snapshots,
+            prev_mf_pnl=prev_mf_pnl,
+            snap_date=snap_date,
+            dhan_summary=dhan_summary,
+            nuvama_summary=nuvama_summary,
+            nuvama_options_summary=nuvama_options_summary,
+        )
+        # Append Dhan Options section (always — shows [unavailable] on failure).
+        summary_text = summary_text + "\n\n" + dhan_options_section
+        print(summary_text)
+
+        # ── Telegram notification (non-fatal, skipped if env vars absent) ─
+        # summary_text already contains the status header, hedge section, and
+        # the Dhan Options (Intraday) block appended above.
+        from src.notifications.telegram import build_notifier
+
+        notifier = build_notifier()
+        if notifier:
+            if not await notifier.send(summary_text):
+                print("  WARNING: Telegram notification failed (see logs).")
         else:
-            # ── Live path — fetch from Dhan API, store EOD row ────
-            from src.dhan.positions import (
-                build_options_summary as _build_dhan_opts_summary,
-                fetch_fund_limit_raw,
-                fetch_positions_raw,
-                filter_intraday_options,
-                parse_fund_limit,
-                parse_option_positions,
+            import logging as _logging
+            _logging.getLogger(__name__).debug(
+                "Telegram notifier not configured — skipping (set TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID)"
             )
 
-            _dhan_client_id = os.environ["DHAN_CLIENT_ID"]
-            _dhan_access_token = os.environ["DHAN_ACCESS_TOKEN"]
-            _dhan_opts_ts = datetime.now(tz=timezone.utc)
+        store.record_heartbeat("daily_snapshot", "SUCCESS")
 
-            _raw_pos = fetch_positions_raw(_dhan_client_id, _dhan_access_token)
-            _dhan_positions = filter_intraday_options(parse_option_positions(_raw_pos))
-            _dhan_opts_summary = _build_dhan_opts_summary(
-                _dhan_positions, _dhan_opts_ts, trade_count=dhan_trade_count
-            )
-
-            _raw_fl = fetch_fund_limit_raw(_dhan_client_id, _dhan_access_token)
-            _dhan_fund_limit = parse_fund_limit(_raw_fl, _dhan_opts_ts)
-
-            _dhan_opts_store.record_options_snapshot(
-                _dhan_opts_ts, _dhan_opts_summary, _dhan_positions, is_eod=True
-            )
-            _dhan_opts_store.record_margin_snapshot(_dhan_opts_ts, _dhan_fund_limit)
-
-            _month_pnl = _dhan_opts_store.get_monthly_realized_pnl(
-                _dhan_opts_ts.year, _dhan_opts_ts.month
-            )
-            _month_charges, _month_brokerage = _dhan_opts_store.get_monthly_charges(
-                _dhan_opts_ts.year, _dhan_opts_ts.month
-            )
-            dhan_options_section = format_options_section(
-                _dhan_opts_summary, _month_pnl, _month_charges, _month_brokerage
-            )
-
-            print(
-                f"  Dhan options: {_dhan_opts_summary.position_count} position(s)  "
-                f"Realized {_dhan_opts_summary.realized_pnl:+,.0f}  "
-                f"Month {_month_pnl:+,.0f}"
-            )
-    except Exception:  # noqa: BLE001
-        import logging as _logging
-        _logging.getLogger(__name__).exception(
-            "Dhan Options fetch failed — continuing without it"
-        )
-        print(f"  WARNING [{run_id}]: Dhan Options fetch failed — showing [unavailable]")
-
-    # ── Combined portfolio summary ────────────────────────────────
-    summary_text = _format_combined_summary(
-        strategies, prices, strategy_pnls, mf_pnl,
-        prev_snapshots=prev_snapshots,
-        prev_mf_pnl=prev_mf_pnl,
-        snap_date=snap_date,
-        dhan_summary=dhan_summary,
-        nuvama_summary=nuvama_summary,
-        nuvama_options_summary=nuvama_options_summary,
-    )
-    # Append Dhan Options section (always — shows [unavailable] on failure).
-    summary_text = summary_text + "\n\n" + dhan_options_section
-    print(summary_text)
-
-    # ── Telegram notification (non-fatal, skipped if env vars absent) ─
-    # summary_text already contains the status header, hedge section, and
-    # the Dhan Options (Intraday) block appended above.
-    from src.notifications.telegram import build_notifier
-
-    notifier = build_notifier()
-    if notifier:
-        if not await notifier.send(summary_text):
-            print("  WARNING: Telegram notification failed (see logs).")
-    else:
-        import logging as _logging
-        _logging.getLogger(__name__).debug(
-            "Telegram notifier not configured — skipping (set TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID)"
-        )
-
-    print("\n  Done.")
-    return 0
+        print("\n  Done.")
+        return 0
+    except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
+        store.record_heartbeat("daily_snapshot", "FAILED", f"Unexpected error: {e}\n{tb}")
+        raise
 
 
 def main() -> int:
