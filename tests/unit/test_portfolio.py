@@ -324,6 +324,7 @@ class TestPortfolioStore:
         assert hb["status"] == "SUCCESS"
         assert hb["message"] == "Finished successfully"
         assert hb["last_run"] is not None
+        assert "+00:00" in hb["last_run"]
 
     def test_record_heartbeat_overwrite(self, tmp_store):
         """Verify record_heartbeat overwrites the previous state for the same service."""

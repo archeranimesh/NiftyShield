@@ -709,7 +709,8 @@ class PortfolioStore:
             status: Execution status (e.g. "SUCCESS", "FAILED").
             message: Optional additional metadata or error message.
         """
-        now = datetime.now().isoformat()
+        from datetime import timezone
+        now = datetime.now(tz=timezone.utc).isoformat()
         with _connect(self.db_path) as conn:
             conn.execute(
                 """INSERT OR REPLACE INTO cron_heartbeats (service, last_run, status, message)

@@ -715,9 +715,7 @@ async def _async_main(snap_date: date, db_path: Path, dhan_trade_count: int = 0)
         print("\n  Done.")
         return 0
     except Exception as e:
-        import traceback
-        tb = traceback.format_exc()
-        store.record_heartbeat("daily_snapshot", "FAILED", f"Unexpected error: {e}\n{tb}")
+        store.record_heartbeat("daily_snapshot", "FAILED", f"Unexpected error: {e}")
         raise
 
 
