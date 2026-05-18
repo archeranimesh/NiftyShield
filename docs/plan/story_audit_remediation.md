@@ -24,7 +24,7 @@ Resume rule: read CONTEXT.md → find first unchecked box → implement → test
 - [x] [14] telegram.py:55 — no rate limit | SHA: 90f7acd
 - [x] [15] paper_3track_overlay.py:666 — manual rollback | SHA: f54063c
 - [x] [16] bhavcopy_ingest.py:334 — missing lineage metadata | SHA: 9874d84
-- [ ] [17] daily_snapshot.py — no cron heartbeat | SHA:
+- [x] [17] daily_snapshot.py — no cron heartbeat | SHA: 6f2ce32
 
 ## Batch 4 — Types / Domain
 - [ ] [18] protocol.py:42-52 — Any stubs | SHA:

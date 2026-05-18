@@ -436,6 +436,7 @@ The `test_write_to_parquet_lineage_metadata` test only covers the initial write 
 | 2026-05-15 | **Audit Remediation Finding [2].** Replaced f-string with constant in `PRAGMA user_version` at `src/nuvama/store.py`. Added `test_schema_version_is_current`. SHA: 290a1d8. |
 | 2026-05-15 | **Audit Remediation Finding [1].** Replaced f-string with lazy logging in `src/backtest/bhavcopy_loader.py:72`. Added unit tests in `tests/unit/backtest/test_bhavcopy_loader.py`. SHA: 4d69050. |
 
+- [2026-05-18] audit finding [17] — implement cron heartbeat in DB for daily snapshot — 6f2ce32
 - [2026-05-17] audit finding [16] — add missing lineage metadata to Parquet storage — 9874d84
 - [2026-05-17] audit finding [15] — manual rollback — f54063c
 - [2026-05-17] audit finding [14] — implement per-session Telegram message budget — 90f7acd
