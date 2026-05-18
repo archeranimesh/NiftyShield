@@ -20,6 +20,8 @@ import logging
 import sys
 from datetime import date, datetime
 
+import requests.exceptions
+
 # Pure-computation helper only — no I/O on import.
 from src.market_calendar.holidays import is_trading_day
 
@@ -118,6 +120,9 @@ def main(nifty_spot: float = 0.0, india_vix: float = 0.0) -> int:
         if purged:
             logger.info("purged %d old intraday row(s)", purged)
 
+    except requests.exceptions.ConnectionError as e:
+        logger.warning("Network unavailable — skipping Dhan snapshot: %s", e)
+        return 0
     except Exception:
         logger.exception("Dhan intraday tracker failed")
         return 1

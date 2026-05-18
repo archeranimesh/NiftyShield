@@ -33,6 +33,7 @@ async def main() -> int:
     from datetime import datetime, timezone
     from dotenv import load_dotenv
     from src.client.factory import create_client
+    from src.client.exceptions import DataFetchError
     from src.intraday.market_store import IntradayMarketStore
     from scripts.dhan_intraday_tracker import main as dhan_main
     from scripts.nuvama_intraday_tracker import main as nuvama_main
@@ -63,6 +64,8 @@ async def main() -> int:
         now = datetime.now(timezone.utc)
         store.record_market_snapshot(now, nifty_spot, india_vix)
         store.purge_old(days=30)
+    except DataFetchError as e:
+        logger.warning("Network unavailable — skipping market context fetch: %s", e)
     except Exception:
         logger.exception("Failed to fetch or store market context (Nifty/VIX)")
 
