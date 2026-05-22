@@ -35,21 +35,22 @@ from __future__ import annotations
 
 from typing import Any, Callable, Protocol, runtime_checkable
 
+from src.models import OptionChain
+
 # ---------------------------------------------------------------------------
 # Stub type aliases — replace with Pydantic model imports when src/models/ exists
 # ---------------------------------------------------------------------------
 
-OrderRequest = Any  # TODO: TD-7 — replace with Pydantic model from src.models
-OrderResponse = Any  # TODO: TD-7 — replace with Pydantic model from src.models
-OrderModify = Any  # TODO: TD-7 — replace with Pydantic model from src.models
-Position = Any  # TODO: TD-7 — replace with Pydantic model from src.models
-Holding = Any  # TODO: TD-7 — replace with Pydantic model from src.models
-MarginResponse = Any  # TODO: TD-7 — replace with Pydantic model from src.models
-OptionChain = Any  # TODO: TD-7 — replace with Pydantic model from src.models
-Candle = Any  # TODO: TD-7 — replace with Pydantic model from src.models
-CandleRequest = Any  # TODO: TD-7 — replace with Pydantic model from src.models
-Contract = Any  # TODO: TD-7 — replace with Pydantic model from src.models
-Tick = Any  # TODO: TD-7 — replace with Pydantic model from src.models
+OrderRequest = dict[str, Any]  # TODO: TD-7 — replace with Pydantic model from src.models
+OrderResponse = dict[str, Any]  # TODO: TD-7 — replace with Pydantic model from src.models
+OrderModify = dict[str, Any]  # TODO: TD-7 — replace with Pydantic model from src.models
+Position = dict[str, Any]  # TODO: TD-7 — replace with Pydantic model from src.models
+Holding = dict[str, Any]  # TODO: TD-7 — replace with Pydantic model from src.models
+MarginResponse = dict[str, Any]  # TODO: TD-7 — replace with Pydantic model from src.models
+Candle = dict[str, Any]  # TODO: TD-7 — replace with Pydantic model from src.models
+CandleRequest = dict[str, Any]  # TODO: TD-7 — replace with Pydantic model from src.models
+Contract = dict[str, Any]  # TODO: TD-7 — replace with Pydantic model from src.models
+Tick = dict[str, Any]  # TODO: TD-7 — replace with Pydantic model from src.models
 
 
 # ---------------------------------------------------------------------------

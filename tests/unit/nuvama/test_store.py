@@ -399,7 +399,7 @@ class TestIntradayStore:
     def test_record_intraday_inserts_rows(self, store):
         import sqlite3
         from datetime import datetime
-        ts = datetime(2026, 4, 21, 9, 15, 0)
+        ts = datetime.now()
         store.record_intraday_positions(ts, [self._pos("A")])
         with sqlite3.connect(store._db_path) as conn:
             rows = conn.execute("SELECT * FROM nuvama_intraday_snapshots").fetchall()
@@ -410,9 +410,9 @@ class TestIntradayStore:
 
     def test_get_intraday_extremes_single_timestamp(self, store):
         from datetime import datetime
-        ts = datetime(2026, 4, 21, 9, 15, 0)
+        ts = datetime.now()
         store.record_intraday_positions(ts, [self._pos("A", "1000", "200")])
-        max_pnl, min_pnl, nifty_high, nifty_low = store.get_intraday_extremes(date(2026, 4, 21))
+        max_pnl, min_pnl, nifty_high, nifty_low = store.get_intraday_extremes(ts.date())
         # single timestamp: 1000 + 200 = 1200
         assert max_pnl == Decimal("1200")
         assert min_pnl == Decimal("1200")
@@ -421,12 +421,12 @@ class TestIntradayStore:
 
     def test_get_intraday_extremes_multiple_timestamps(self, store):
         """max/min taken across aggregated per-timestamp totals."""
-        from datetime import datetime
-        ts1 = datetime(2026, 4, 21, 9, 15, 0)
-        ts2 = datetime(2026, 4, 21, 9, 20, 0)
+        from datetime import datetime, timedelta
+        ts1 = datetime.now()
+        ts2 = ts1 + timedelta(minutes=5)
         store.record_intraday_positions(ts1, [self._pos("A", "1000", "0")])
         store.record_intraday_positions(ts2, [self._pos("A", "-500", "0")])
-        max_pnl, min_pnl, nifty_high, nifty_low = store.get_intraday_extremes(date(2026, 4, 21))
+        max_pnl, min_pnl, nifty_high, nifty_low = store.get_intraday_extremes(ts1.date())
         assert max_pnl == Decimal("1000")
         assert min_pnl == Decimal("-500")
         assert nifty_high is None
@@ -435,23 +435,23 @@ class TestIntradayStore:
     def test_get_intraday_extremes_multi_leg_same_timestamp(self, store):
         """Multiple legs at the same timestamp are SUMMED before taking max/min."""
         from datetime import datetime
-        ts = datetime(2026, 4, 21, 9, 15, 0)
+        ts = datetime.now()
         pos_a = self._pos("A", unrealized="1000", realized="0")
         pos_b = self._pos("B", unrealized="500", realized="100")
         store.record_intraday_positions(ts, [pos_a, pos_b])
-        max_pnl, min_pnl, _, _ = store.get_intraday_extremes(date(2026, 4, 21))
+        max_pnl, min_pnl, _, _ = store.get_intraday_extremes(ts.date())
         # 1000 + 0 + 500 + 100 = 1600
         assert max_pnl == Decimal("1600")
         assert min_pnl == Decimal("1600")
 
     def test_get_intraday_extremes_date_isolation(self, store):
         """Yesterday's rows must not appear in today's query."""
-        from datetime import datetime
-        ts_today = datetime(2026, 4, 21, 9, 15, 0)
-        ts_yest = datetime(2026, 4, 20, 9, 15, 0)
+        from datetime import datetime, timedelta
+        ts_today = datetime.now()
+        ts_yest = ts_today - timedelta(days=1)
         store.record_intraday_positions(ts_today, [self._pos("A", "1000", "0")])
         store.record_intraday_positions(ts_yest, [self._pos("A", "9999", "0")])
-        max_pnl, _, _, _ = store.get_intraday_extremes(date(2026, 4, 21))
+        max_pnl, _, _, _ = store.get_intraday_extremes(ts_today.date())
         assert max_pnl == Decimal("1000")  # yesterday's 9999 excluded
 
     def test_get_intraday_extremes_nifty_none_when_no_rows(self, store):
@@ -509,7 +509,7 @@ class TestIntradayStore:
                 (old_ts, "OLD", -50, "90", "1000", "0"),
             )
         # new record_intraday_positions call should purge the old row automatically
-        new_ts = datetime(2026, 4, 21, 9, 15, 0)
+        new_ts = datetime.now()
         store.record_intraday_positions(new_ts, [self._pos("NEW")])
         with sqlite3.connect(store._db_path) as conn:
             rows = conn.execute("SELECT trade_symbol FROM nuvama_intraday_snapshots").fetchall()

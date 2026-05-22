@@ -456,3 +456,5 @@ The `test_write_to_parquet_lineage_metadata` test only covers the initial write 
 | 2026-05-12 | **CLI/UX audit cross-check.** Verified against commits `264adf0` + `8cd9307`: CLI-1–5, CLI-10–11, UX-6–9 all implemented. CLI-12 (--notes surface in paper_snapshot.py) confirmed absent — remains open. Archived session log to `TODOS_ARCHIVE.md`. Stripped done CLI/UX items from TODOS.md. |
 
 Full log: [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md)
+
+- **2026-05-22**: Resolved audit finding [18] by replacing Any stubs in protocol.py with dict[str, Any] and importing OptionChain. Fixed time-bomb tests in nuvama/test_store.py.
