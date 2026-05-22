@@ -113,9 +113,10 @@ the monthly — the adjustment budget is exhausted; close instead of roll.
 
 | Parameter        | Value / Status                                                       |
 |------------------|----------------------------------------------------------------------|
-| Target expiry    | Next weekly expiry (Thursday)                                        |
-| DTE at entry     | 5–10 DTE                                                             |
-| Entry timing     | Monday morning (10:00–10:30 AM IST) of the entry week               |
+| Target expiry    | Next weekly expiry (**Tuesday**)                                     |
+| DTE at entry     | ~6 DTE (entered Wednesday, expires following Tuesday)                |
+| Entry timing     | **Wednesday 10:30 AM IST** — after the prior week's Tuesday expiry settles |
+| Hard time stop   | **Monday 2:30 PM IST** — exit all legs irrespective of P&L. Never hold into Tuesday expiry day. |
 | Short put Δ      | ⚠️ OPEN: 8–10Δ recommended (15Δ is too close to ATM at 7 DTE)      |
 | Short call Δ     | ⚠️ OPEN: 5–8Δ                                                      |
 | Wing width       | ⚠️ OPEN: 100–200 points (500 points is structurally unworkable at 7 DTE — long protection would be nearly worthless with a wide spread) |
@@ -158,14 +159,22 @@ Each layer manages its own exits independently. Exits are not coordinated across
 
 | Trigger           | Weekly     | Monthly    | Quarterly  | Yearly     |
 |-------------------|-----------|-----------|-----------|-----------|
-| Profit target     | 40% of credit | 50% of credit | 50% of credit | 50% of credit |
+| Profit target     | **>75% of original net credit** | 50% of credit | 50% of credit | 50% of credit |
 | Loss stop         | 1.5× credit | 2.0× credit | 2.0× credit | 2.0× credit |
 | Delta stop        | 0.30Δ on either short leg | 0.35Δ | 0.35Δ | 0.40Δ |
-| Time stop         | 1 DTE      | 14 DTE    | 21 DTE    | 30 DTE    |
+| Time stop         | **Monday 2:30 PM IST** (hard — no exceptions) | 14 DTE | 21 DTE | 30 DTE |
 | Never hold to expiry | Always  | Always    | Always    | Always    |
 
-> **Weekly profit target is tighter (40%)** because the weekly IC's credit is thin and the
-> gamma risk near expiry rises sharply. Taking profit early is more important at this layer.
+> **Weekly profit target (>75%):** Higher than a naked IC because the long-leg tightening
+> adjustment progressively reduces max loss over the trade's life — by the time 75% is
+> captured, the wings are typically much narrower than at entry, making the remaining risk
+> small. The 75% threshold is measured against the **original net credit at entry** (before
+> tightening debits), not the adjusted net credit.
+>
+> **Weekly time stop (Monday 2:30 PM):** Hard rule — no exceptions. The trade window is
+> Wednesday 10:30 AM to Monday 2:30 PM (~4 trading days). Exiting Monday afternoon avoids
+> holding into Tuesday expiry day while still leaving enough DTE for reasonable liquidity
+> on the exit fills.
 >
 > **Yearly delta stop is looser (0.40Δ)** because at 200+ DTE, a single large-move day can
 > push an option to 0.40Δ without it being a trend reversal — giving the position more room
@@ -190,6 +199,75 @@ An adjustment (roll) is preferred over exit when:
 3. The roll does not require placing the new short strike outside the next outer layer's short strike.
 
 If any of these three conditions fails, exit instead of rolling.
+
+### Long-leg tightening (Weekly IC only)
+
+This adjustment applies exclusively to the **bought (long) legs** of the weekly IC. The
+short legs are never touched by this rule.
+
+**Concept:** At any point during the trade's life, monitor the premium differential between
+the current long leg and the next strike one step closer to the short leg (i.e., one step
+toward ATM). When this differential is ≤ ₹3, it costs almost nothing to step the long leg
+closer. This fires in **both market directions**:
+
+- Market moves **toward** the short strike → short-side premiums spike, adjacent differentials
+  compress on the threatened side → tighten the long leg to improve delta hedge and reduce max loss.
+- Market moves **away from** the short strike → that side's premiums decay, adjacent
+  differentials compress as all strikes approach zero → tighten the long leg cheaply while
+  the position is safe, so protection is already closer if the market reverses.
+
+**Example (13→14 May 2026):**
+Spot moved up (23,413 → 23,491). Put side became safer.
+22500PE decayed from ₹31 → ₹10.8. Adjacent 22550PE (one step toward short at 22800) = ₹12.4.
+Differential = ₹1.6 → trigger fires. Sell 22500PE at ₹10.8, buy 22550PE at ₹12.4. Net debit
+₹1.6/unit = ₹104 (65 units). Long put moves 22500 → 22550, 50 points closer to the short.
+
+The trigger is purely premium-differential-based, not directional.
+
+**Trigger:** At any 15-minute check during market hours:
+
+```
+abs(next_strike_premium − current_long_leg_premium) ≤ ₹3
+```
+
+where `next_strike_premium` is the premium of the strike one step closer to the short leg
+(i.e., one step toward ATM for puts; one step toward ATM for calls).
+
+**Action:**
+1. Exit (sell) the current long leg at market.
+2. Buy the next strike one step closer to the short leg.
+3. Net debit = difference between the two premiums (≤ ₹3 by trigger condition).
+4. Record: old strike, new strike, debit paid, reason = "long-leg tighten".
+
+**This applies independently to both sides:**
+- Put spread: long put walks up toward the short put as the market falls.
+- Call spread: long call walks down toward the short call as the market rallies.
+- Each side triggers and executes independently — a call-side tighten does not depend on
+  what the put side is doing.
+
+**No limit on number of tightening steps per cycle.** The long leg may step multiple times
+in a single session if the market keeps moving and the ₹3 threshold keeps being met. The
+only hard stop is when the long leg reaches the strike immediately adjacent to the short leg
+(one strike away) — at that point the spread width is at minimum and no further tightening
+is possible.
+
+**Minimum spread floor:** ⚠️ OPEN — define the minimum number of strikes between long and
+short leg below which no further tightening occurs (e.g., never narrow to fewer than 2
+strikes between long and short). Prevents the position from degenerating into a near-zero
+width spread that has no practical protection value.
+
+**The ₹3 threshold is a parameter, not a constant.** For the paper-trade hypothesis,
+start at ₹3 and log every tightening event with the actual premium differential at trigger
+time. This data will reveal whether ₹3 is too tight (rarely triggers) or too loose
+(over-trades). Candidate range: ₹2–₹5.
+
+**Why only the weekly IC:** At 5–10 DTE, gamma is high enough that intraday moves
+materially change the premium differential between adjacent strikes. At monthly DTE (30–45),
+this differential compresses much more slowly — the tightening trigger would rarely fire and
+the incremental delta improvement per step is smaller. The monthly and outer layers use the
+roll mechanics below instead.
+
+---
 
 ### Roll mechanics (inner layers only: Weekly and Monthly)
 
@@ -295,6 +373,8 @@ the spec is considered final.
 | 8 | Minimum credit gate per layer | % of wing width — define per layer | Entry quality filter |
 | 9 | Yearly IC entry: full 300+ DTE or enter at 200 DTE? | Enter at listing / enter at 200 DTE window | Vega exposure at entry |
 | 10 | Weekly IC: skip expiry week of monthly/quarterly expiry? | Skip (avoid overlapping expiry week) / allow | Execution complexity |
+| 11 | Long-leg tightening threshold | ₹2 / ₹3 / ₹5 — start at ₹3, calibrate from paper data | Trigger frequency, transaction cost drag |
+| 12 | Minimum spread floor (tightening stop) | 1 strike / 2 strikes between long and short | Prevents degenerate near-zero-width spread |
 
 ---
 
@@ -343,3 +423,6 @@ trading, and vice versa.
 | Date       | Change                                                    |
 |------------|-----------------------------------------------------------|
 | 2026-05-21 | Initial draft from design discussion. All open questions flagged. |
+| 2026-05-21 | Added long-leg tightening rule for weekly IC. OQ #11 (threshold) and #12 (floor) added. |
+| 2026-05-21 | Corrected tightening rule — trigger is direction-agnostic (fires on decay AND on rally). Added real example from 13–14 May 2026 trade. |
+| 2026-05-21 | Weekly IC rules finalised: entry Wednesday 10:30 AM, profit target >75% of original credit, hard time stop Monday 2:30 PM. |
