@@ -185,6 +185,38 @@ class TestLegValidation:
                 strike=150.0,
             )
 
+        # Bond with expiry
+        with pytest.raises(
+            ValidationError, match="Expiry must be None for BOND"
+        ):
+            Leg(
+                instrument_key="BOND_TEST",
+                display_name="Bond Test",
+                asset_type=AssetType.BOND,
+                direction=Direction.BUY,
+                quantity=10,
+                entry_price=Decimal("150.00"),
+                entry_date=date(2026, 4, 1),
+                product_type=ProductType.CNC,
+                expiry=date(2026, 1, 1),
+            )
+
+        # Bond with strike
+        with pytest.raises(
+            ValidationError, match="Strike must be None for BOND"
+        ):
+            Leg(
+                instrument_key="BOND_TEST",
+                display_name="Bond Test",
+                asset_type=AssetType.BOND,
+                direction=Direction.BUY,
+                quantity=10,
+                entry_price=Decimal("150.00"),
+                entry_date=date(2026, 4, 1),
+                product_type=ProductType.CNC,
+                strike=150.0,
+            )
+
         # Futures without expiry
         with pytest.raises(
             ValidationError, match="Expiry must not be None for FUTURES"
@@ -320,6 +352,34 @@ class TestLegValidation:
         Leg(
             instrument_key="OTHER_CE",
             display_name="OTHER 22150 CE",
+            asset_type=AssetType.CE,
+            direction=Direction.BUY,
+            quantity=75,
+            entry_price=Decimal("100.00"),
+            entry_date=date(2026, 4, 1),
+            product_type=ProductType.NRML,
+            expiry=date(2026, 1, 1),
+            strike=22150.0,
+        )
+
+        # BANKNIFTY option is not Nifty-grid validated
+        Leg(
+            instrument_key="BANKNIFTY_CE",
+            display_name="BANKNIFTY 22150 CE",
+            asset_type=AssetType.CE,
+            direction=Direction.BUY,
+            quantity=75,
+            entry_price=Decimal("100.00"),
+            entry_date=date(2026, 4, 1),
+            product_type=ProductType.NRML,
+            expiry=date(2026, 1, 1),
+            strike=22150.0,
+        )
+
+        # FINNIFTY option is not Nifty-grid validated
+        Leg(
+            instrument_key="FINNIFTY_CE",
+            display_name="FINNIFTY 22150 CE",
             asset_type=AssetType.CE,
             direction=Direction.BUY,
             quantity=75,

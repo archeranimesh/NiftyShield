@@ -153,10 +153,11 @@ class Leg(BaseModel):
             self.asset_type in {AssetType.CE, AssetType.PE}
             and self.strike is not None
         ):
-            # Check if Nifty option
+            # Check if Nifty 50 option (exclude BANK/FIN/MIDCPNIFTY)
+            name_upper = self.display_name.upper()
             is_nifty = (
-                "NIFTY" in self.instrument_key.upper()
-                or "NIFTY" in self.display_name.upper()
+                "NIFTY" in name_upper
+                and not any(x in name_upper for x in {"BANK", "FIN", "MIDCP"})
             )
             if is_nifty:
                 # strike < 18000: multiple of 50

@@ -67,6 +67,16 @@
 
 **`seed_trades.py` separates `build_trades()` (pure) from `seed_trades()` (I/O):** mirrors `seed_mf_holdings.py` pattern. Tests call `build_trades()` directly with no DB. Dates marked `2026-01-15` are placeholders pending contract note verification.
 
+**Leg validation design debt and inline imports:** The domain model `Leg`
+contains inline imports of `is_trading_day` to avoid circular dependencies
+with `market_calendar`. Long-term, validation should be factored out of Pydantic
+`model_validator` or accept pre-computed parameters.
+
+**Leg expiry whitelist is hardcoded in domain model:** The irregular expiry
+whitelist is currently hardcoded in `portfolio.py` to prevent cyclic import
+issues. It should ideally reside in a configuration file or a calendar module
+with a clean interface.
+
 ---
 
 ## P&L & Reporting
