@@ -27,7 +27,7 @@ Resume rule: read CONTEXT.md → find first unchecked box → implement → test
 - [x] [17] daily_snapshot.py — no cron heartbeat | SHA: 6f2ce32
 
 ## Batch 4 — Types / Domain
-- [x] [18] protocol.py:42-52 — Any stubs (Interim fix: replaced with dict[str, Any] as cosmetic boundary constraint; schema validation pending TD-7) | SHA: a14e8fa
+- [x] [18] protocol.py:42-52 — Any stubs (Interim fix: replaced with dict[str, Any] as cosmetic boundary constraint; schema validation pending TD-7) | SHA: 7cd5872
 - [ ] [19] models/portfolio.py — missing field validators | SHA:
 - [ ] [20] store.py:605 — tuples instead of Position | SHA:
 - [ ] [21] paper_3track_overlay.py — business logic in script | SHA:
