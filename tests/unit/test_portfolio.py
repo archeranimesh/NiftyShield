@@ -390,6 +390,24 @@ class TestLegValidation:
             strike=22150.0,
         )
 
+        # Nifty key but generic name triggers validation
+        with pytest.raises(
+            ValidationError,
+            match="Nifty strike 22150.0 must be a multiple of 100",
+        ):
+            Leg(
+                instrument_key="NIFTY_CE_TEST",
+                display_name="CE 22150",
+                asset_type=AssetType.CE,
+                direction=Direction.BUY,
+                quantity=75,
+                entry_price=Decimal("100.00"),
+                entry_date=date(2026, 4, 1),
+                product_type=ProductType.NRML,
+                expiry=date(2026, 1, 1),
+                strike=22150.0,
+            )
+
     def test_expiry_trading_day_validation(self):
         # Saturday is not a trading day
         with pytest.raises(
