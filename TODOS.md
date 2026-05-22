@@ -419,6 +419,21 @@ The `test_write_to_parquet_lineage_metadata` test only covers the initial write 
 1. Add a test that writes twice with different dates.
 2. Assert that the merged Parquet file carries the *second* run's lineage metadata (run_timestamp).
 
+### DEBT-6: Leg validation and calendar data gaps for historical backtesting
+
+The `Leg` domain model and validation routines carry several design debts
+and missing data that must be resolved before executing backtests at scale:
+
+1. **Move hardcoded expiry whitelist:** The irregular expiry whitelist
+   (`{date(2026, 4, 7), date(2026, 12, 29)}`) is hardcoded in the domain model
+   `Leg` class. Move this to a configuration file/YAML in `market_calendar`.
+2. **Populate historical holidays:** Holiday YAML datasets for 2017–2025 are
+   missing in `src/market_calendar/data/`. Constructing historical `Leg`
+   instances pre-2026 will fail-open and skip holiday validation entirely.
+3. **Formalize `is_nifty` check:** Replace the current denylist-based check
+   on `display_name` with a formal predicate based on `instrument_key` to avoid
+   false positives/negatives if other index options are introduced.
+
 ---
 
 ## Session Log
