@@ -9,6 +9,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from src.models.portfolio import (
     AssetType,
@@ -99,6 +100,386 @@ class TestLegPnL:
     def test_total_lots(self):
         leg = _make_leg(Direction.BUY, 975.0, 65, lot_size=65)
         assert leg.total_lots == 1
+
+
+class TestLegValidation:
+    def test_valid_legs(self):
+        # 1. Equity: no expiry, no strike
+        leg_eq = Leg(
+            instrument_key="EQ_TEST",
+            display_name="Equity Test",
+            asset_type=AssetType.EQUITY,
+            direction=Direction.BUY,
+            quantity=10,
+            lot_size=1,
+            entry_price=Decimal("150.00"),
+            entry_date=date(2026, 4, 1),
+            product_type=ProductType.CNC,
+        )
+        assert leg_eq.expiry is None
+        assert leg_eq.strike is None
+
+        # 2. Futures: expiry must be not None, strike must be None
+        leg_fut = Leg(
+            instrument_key="FUT_TEST",
+            display_name="Futures Test",
+            asset_type=AssetType.FUTURES,
+            direction=Direction.BUY,
+            quantity=1,
+            lot_size=75,
+            entry_price=Decimal("22000.00"),
+            entry_date=date(2026, 4, 1),
+            expiry=date(2026, 1, 1),  # Jan 1, 2026 is a Thursday
+            product_type=ProductType.NRML,
+        )
+        assert leg_fut.expiry == date(2026, 1, 1)
+        assert leg_fut.strike is None
+
+        # 3. Option PE: expiry and strike not None
+        leg_pe = Leg(
+            instrument_key="PE_TEST",
+            display_name="PE Test",
+            asset_type=AssetType.PE,
+            direction=Direction.SELL,
+            quantity=75,
+            lot_size=75,
+            entry_price=Decimal("100.00"),
+            entry_date=date(2026, 4, 1),
+            expiry=date(2026, 1, 1),  # Jan 1, 2026 is Thursday
+            strike=22000.0,
+            product_type=ProductType.NRML,
+        )
+        assert leg_pe.expiry == date(2026, 1, 1)
+        assert leg_pe.strike == 22000.0
+
+    def test_invalid_asset_type_invariants(self):
+        # Equity with expiry
+        with pytest.raises(
+            ValidationError, match="Expiry must be None for EQUITY"
+        ):
+            Leg(
+                instrument_key="EQ_TEST",
+                display_name="Equity Test",
+                asset_type=AssetType.EQUITY,
+                direction=Direction.BUY,
+                quantity=10,
+                entry_price=Decimal("150.00"),
+                entry_date=date(2026, 4, 1),
+                product_type=ProductType.CNC,
+                expiry=date(2026, 1, 1),
+            )
+
+        # Equity with strike
+        with pytest.raises(
+            ValidationError, match="Strike must be None for EQUITY"
+        ):
+            Leg(
+                instrument_key="EQ_TEST",
+                display_name="Equity Test",
+                asset_type=AssetType.EQUITY,
+                direction=Direction.BUY,
+                quantity=10,
+                entry_price=Decimal("150.00"),
+                entry_date=date(2026, 4, 1),
+                product_type=ProductType.CNC,
+                strike=150.0,
+            )
+
+        # Futures without expiry
+        with pytest.raises(
+            ValidationError, match="Expiry must not be None for FUTURES"
+        ):
+            Leg(
+                instrument_key="FUT_TEST",
+                display_name="Futures Test",
+                asset_type=AssetType.FUTURES,
+                direction=Direction.BUY,
+                quantity=75,
+                entry_price=Decimal("22000.00"),
+                entry_date=date(2026, 4, 1),
+                product_type=ProductType.NRML,
+            )
+
+        # Futures with strike
+        with pytest.raises(
+            ValidationError, match="Strike must be None for FUTURES"
+        ):
+            Leg(
+                instrument_key="FUT_TEST",
+                display_name="Futures Test",
+                asset_type=AssetType.FUTURES,
+                direction=Direction.BUY,
+                quantity=75,
+                entry_price=Decimal("22000.00"),
+                entry_date=date(2026, 4, 1),
+                product_type=ProductType.NRML,
+                expiry=date(2026, 1, 1),
+                strike=22000.0,
+            )
+
+        # Option without expiry
+        with pytest.raises(
+            ValidationError,
+            match="Expiry must not be None for option type CE",
+        ):
+            Leg(
+                instrument_key="CE_TEST",
+                display_name="CE Test",
+                asset_type=AssetType.CE,
+                direction=Direction.BUY,
+                quantity=75,
+                entry_price=Decimal("100.00"),
+                entry_date=date(2026, 4, 1),
+                product_type=ProductType.NRML,
+                strike=22000.0,
+            )
+
+        # Option without strike
+        with pytest.raises(
+            ValidationError,
+            match="Strike must not be None for option type PE",
+        ):
+            Leg(
+                instrument_key="PE_TEST",
+                display_name="PE Test",
+                asset_type=AssetType.PE,
+                direction=Direction.BUY,
+                quantity=75,
+                entry_price=Decimal("100.00"),
+                entry_date=date(2026, 4, 1),
+                product_type=ProductType.NRML,
+                expiry=date(2026, 1, 1),
+            )
+
+    def test_nifty_strike_grid_validation(self):
+        # Valid Nifty strike < 18000: multiple of 50
+        Leg(
+            instrument_key="NIFTY_PE",
+            display_name="NIFTY 17550 PE",
+            asset_type=AssetType.PE,
+            direction=Direction.BUY,
+            quantity=75,
+            entry_price=Decimal("100.00"),
+            entry_date=date(2026, 4, 1),
+            product_type=ProductType.NRML,
+            expiry=date(2026, 1, 1),
+            strike=17550.0,
+        )
+
+        # Invalid Nifty strike < 18000: not multiple of 50
+        with pytest.raises(
+            ValidationError,
+            match="Nifty strike 17525.5 must be a multiple of 50",
+        ):
+            Leg(
+                instrument_key="NIFTY_PE",
+                display_name="NIFTY 17525.5 PE",
+                asset_type=AssetType.PE,
+                direction=Direction.BUY,
+                quantity=75,
+                entry_price=Decimal("100.00"),
+                entry_date=date(2026, 4, 1),
+                product_type=ProductType.NRML,
+                expiry=date(2026, 1, 1),
+                strike=17525.5,
+            )
+
+        # Valid Nifty strike >= 18000: multiple of 100
+        Leg(
+            instrument_key="NIFTY_CE",
+            display_name="NIFTY 22100 CE",
+            asset_type=AssetType.CE,
+            direction=Direction.BUY,
+            quantity=75,
+            entry_price=Decimal("100.00"),
+            entry_date=date(2026, 4, 1),
+            product_type=ProductType.NRML,
+            expiry=date(2026, 1, 1),
+            strike=22100.0,
+        )
+
+        # Invalid Nifty strike >= 18000: multiple of 50 but not 100
+        with pytest.raises(
+            ValidationError,
+            match="Nifty strike 22150.0 must be a multiple of 100",
+        ):
+            Leg(
+                instrument_key="NIFTY_CE",
+                display_name="NIFTY 22150 CE",
+                asset_type=AssetType.CE,
+                direction=Direction.BUY,
+                quantity=75,
+                entry_price=Decimal("100.00"),
+                entry_date=date(2026, 4, 1),
+                product_type=ProductType.NRML,
+                expiry=date(2026, 1, 1),
+                strike=22150.0,
+            )
+
+        # Non-Nifty option is not grid validated
+        Leg(
+            instrument_key="OTHER_CE",
+            display_name="OTHER 22150 CE",
+            asset_type=AssetType.CE,
+            direction=Direction.BUY,
+            quantity=75,
+            entry_price=Decimal("100.00"),
+            entry_date=date(2026, 4, 1),
+            product_type=ProductType.NRML,
+            expiry=date(2026, 1, 1),
+            strike=22150.0,
+        )
+
+    def test_expiry_trading_day_validation(self):
+        # Saturday is not a trading day
+        with pytest.raises(
+            ValidationError, match="is not a valid trading day"
+        ):
+            Leg(
+                instrument_key="FUT_TEST",
+                display_name="Futures Test",
+                asset_type=AssetType.FUTURES,
+                direction=Direction.BUY,
+                quantity=75,
+                entry_price=Decimal("22000.00"),
+                entry_date=date(2026, 4, 1),
+                product_type=ProductType.NRML,
+                expiry=date(2026, 1, 3),  # Jan 3, 2026 is Saturday
+            )
+
+    def test_expiry_thursday_logic(self):
+        # Jan 1, 2026 is a Thursday (trading day)
+        # Jan 2, 2026 is a Friday (trading day). Expiry on Friday should fail.
+        with pytest.raises(
+            ValidationError, match="cannot be after Thursday of its week"
+        ):
+            Leg(
+                instrument_key="FUT_TEST",
+                display_name="Futures Test",
+                asset_type=AssetType.FUTURES,
+                direction=Direction.BUY,
+                quantity=75,
+                entry_price=Decimal("22000.00"),
+                entry_date=date(2026, 4, 1),
+                product_type=ProductType.NRML,
+                expiry=date(2026, 1, 2),
+            )
+
+        # Wednesday Dec 31, 2025: nominal Thursday is Jan 1, 2026 which
+        # is a trading day. So Dec 31, 2025 is not a valid expiry.
+        with pytest.raises(
+            ValidationError,
+            match=(
+                "must be Thursday or the preceding trading day if Thursday "
+                "is a holiday"
+            ),
+        ):
+            Leg(
+                instrument_key="FUT_TEST",
+                display_name="Futures Test",
+                asset_type=AssetType.FUTURES,
+                direction=Direction.BUY,
+                quantity=75,
+                entry_price=Decimal("22000.00"),
+                entry_date=date(2026, 4, 1),
+                product_type=ProductType.NRML,
+                expiry=date(2025, 12, 31),
+            )
+
+        # Thursday April 2, 2026 is a holiday (Shri Ram Navami).
+        # Wednesday April 1, 2026 is a valid expiry (preceding trading day).
+        Leg(
+            instrument_key="FUT_TEST",
+            display_name="Futures Test",
+            asset_type=AssetType.FUTURES,
+            direction=Direction.BUY,
+            quantity=75,
+            entry_price=Decimal("22000.00"),
+            entry_date=date(2026, 4, 1),
+            product_type=ProductType.NRML,
+            expiry=date(2026, 4, 1),
+        )
+
+        # Tuesday March 31, 2026: nominal Thursday is April 2, 2026 (holiday),
+        # but Wednesday April 1, 2026 is a trading day, so Tuesday cannot
+        # be the expiry.
+        with pytest.raises(
+            ValidationError,
+            match="is a trading day after .* in the same week",
+        ):
+            Leg(
+                instrument_key="FUT_TEST",
+                display_name="Futures Test",
+                asset_type=AssetType.FUTURES,
+                direction=Direction.BUY,
+                quantity=75,
+                entry_price=Decimal("22000.00"),
+                entry_date=date(2026, 4, 1),
+                product_type=ProductType.NRML,
+                expiry=date(2026, 3, 31),
+            )
+
+    def test_pre_2019_expiry_logic(self):
+        # Prior to June 27, 2019, option expiries must be monthly.
+        # May 31, 2018 is last Thursday of May 2018 (valid monthly expiry)
+        Leg(
+            instrument_key="PE_TEST",
+            display_name="PE Test",
+            asset_type=AssetType.PE,
+            direction=Direction.BUY,
+            quantity=75,
+            entry_price=Decimal("100.00"),
+            entry_date=date(2018, 4, 1),
+            product_type=ProductType.NRML,
+            expiry=date(2018, 5, 31),
+            strike=20000.0,
+        )
+
+        # May 24, 2018 is Thursday, but not monthly expiry. Should fail.
+        with pytest.raises(
+            ValidationError,
+            match="Prior to June 27, 2019, option",
+        ):
+            Leg(
+                instrument_key="PE_TEST",
+                display_name="PE Test",
+                asset_type=AssetType.PE,
+                direction=Direction.BUY,
+                quantity=75,
+                entry_price=Decimal("100.00"),
+                entry_date=date(2018, 4, 1),
+                product_type=ProductType.NRML,
+                expiry=date(2018, 5, 24),
+                strike=20000.0,
+            )
+
+    def test_expiry_whitelist(self):
+        # Whitelist expiries date(2026, 4, 7) and date(2026, 12, 29)
+        # are allowed even though they are Tuesdays
+        Leg(
+            instrument_key="PE_TEST",
+            display_name="PE Test",
+            asset_type=AssetType.PE,
+            direction=Direction.BUY,
+            quantity=75,
+            entry_price=Decimal("100.00"),
+            entry_date=date(2026, 4, 1),
+            product_type=ProductType.NRML,
+            expiry=date(2026, 4, 7),
+            strike=20000.0,
+        )
+        Leg(
+            instrument_key="PE_TEST",
+            display_name="PE Test",
+            asset_type=AssetType.PE,
+            direction=Direction.BUY,
+            quantity=75,
+            entry_price=Decimal("100.00"),
+            entry_date=date(2026, 4, 1),
+            product_type=ProductType.NRML,
+            expiry=date(2026, 12, 29),
+            strike=20000.0,
+        )
 
 
 # ── Strategy P&L tests ──────────────────────────────────────────
@@ -354,6 +735,7 @@ class TestPortfolioTracker:
                     instrument_key="B", display_name="B", asset_type=AssetType.PE,
                     direction=Direction.SELL, quantity=65, entry_price=840.0,
                     entry_date=date(2026, 4, 1), product_type=ProductType.NRML, lot_size=65,
+                    expiry=date(2026, 12, 29), strike=840.0,
                 ),
             ],
         )
@@ -420,6 +802,8 @@ class TestPortfolioTracker:
                     entry_price=500.0,
                     entry_date=date(2026, 4, 1),
                     product_type=ProductType.NRML,
+                    expiry=date(2026, 12, 29),
+                    strike=500.0,
                 ),
             ],
         )

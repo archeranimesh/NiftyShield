@@ -42,7 +42,7 @@ def _make_leg(
     direction: Direction,
     entry_price: str,
     quantity: int,
-    asset_type: AssetType = AssetType.PE,
+    asset_type: AssetType = AssetType.EQUITY,
 ) -> Leg:
     return Leg(
         instrument_key=instrument_key,

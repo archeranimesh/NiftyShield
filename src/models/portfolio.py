@@ -15,7 +15,7 @@ to preserve sub-rupee precision through P&L calculations and SQLite round-trips.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
@@ -25,7 +25,13 @@ if TYPE_CHECKING:
     from src.nuvama.models import NuvamaBondSummary, NuvamaOptionsSummary
 from enum import Enum
 
-from pydantic import BaseModel, Field, computed_field, field_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 
 
 class TradeAction(str, Enum):
@@ -109,6 +115,146 @@ class Leg(BaseModel):
     )
     strike: float | None = Field(default=None, description="Strike price for options")
     product_type: ProductType
+
+    @model_validator(mode="after")
+    def validate_leg_invariants(self) -> Leg:
+        """Enforce option/futures leg constraints, strike grid, and
+        expiry schedules.
+        """
+        # 1. Asset type specific expiry and strike checks
+        if self.asset_type in {AssetType.EQUITY, AssetType.BOND}:
+            if self.expiry is not None:
+                raise ValueError(
+                    f"Expiry must be None for {self.asset_type.name}"
+                )
+            if self.strike is not None:
+                raise ValueError(
+                    f"Strike must be None for {self.asset_type.name}"
+                )
+        elif self.asset_type == AssetType.FUTURES:
+            if self.expiry is None:
+                raise ValueError("Expiry must not be None for FUTURES")
+            if self.strike is not None:
+                raise ValueError("Strike must be None for FUTURES")
+        elif self.asset_type in {AssetType.CE, AssetType.PE}:
+            if self.expiry is None:
+                raise ValueError(
+                    f"Expiry must not be None for option "
+                    f"type {self.asset_type.name}"
+                )
+            if self.strike is None:
+                raise ValueError(
+                    f"Strike must not be None for option "
+                    f"type {self.asset_type.name}"
+                )
+
+        # 2. Strike grid validation for Nifty options
+        if (
+            self.asset_type in {AssetType.CE, AssetType.PE}
+            and self.strike is not None
+        ):
+            # Check if Nifty option
+            is_nifty = (
+                "NIFTY" in self.instrument_key.upper()
+                or "NIFTY" in self.display_name.upper()
+            )
+            if is_nifty:
+                # strike < 18000: multiple of 50
+                # strike >= 18000: multiple of 100
+                strike_dec = Decimal(str(self.strike))
+                is_low = strike_dec < Decimal("18000")
+                grid = Decimal("50") if is_low else Decimal("100")
+                if strike_dec % grid != Decimal("0"):
+                    raise ValueError(
+                        f"Nifty strike {self.strike} must be a "
+                        f"multiple of {grid}"
+                    )
+
+        # 3. Expiry validations (only for F&O legs where expiry is not None)
+        if self.expiry is not None:
+            # Check whitelist exceptions (skip validations)
+            whitelist = {date(2026, 4, 7), date(2026, 12, 29)}
+            if self.expiry not in whitelist:
+                # Import is_trading_day inline to prevent circular imports
+                from src.market_calendar.holidays import is_trading_day
+                
+                # Check 1: Expiry must be a trading day
+                if not is_trading_day(self.expiry):
+                    raise ValueError(
+                        f"Expiry date {self.expiry} is not a valid trading day"
+                    )
+                
+                # Check 2: Expiry must be Thursday, or the
+                # preceding trading day if Thursday is a holiday.
+                # Find Thursday of the expiry's week
+                # weekday() is 0 for Monday, ..., 3 for Thursday
+                weekday_diff = 3 - self.expiry.weekday()
+                nominal_thursday = (
+                    self.expiry + timedelta(days=weekday_diff)
+                )
+                
+                if self.expiry > nominal_thursday:
+                    # Expiry cannot be after Thursday (e.g. Friday)
+                    raise ValueError(
+                        f"Expiry date {self.expiry} cannot be after "
+                        f"Thursday of its week"
+                    )
+                
+                # Verify that all days between expiry + 1 and nominal_thursday
+                # (inclusive) are NOT trading days
+                curr = self.expiry + timedelta(days=1)
+                while curr <= nominal_thursday:
+                    if is_trading_day(curr):
+                        raise ValueError(
+                            f"Expiry date {self.expiry} must be Thursday or "
+                            f"the preceding trading day if Thursday is a "
+                            f"holiday. {curr} is a trading day after "
+                            f"{self.expiry} in the same week."
+                        )
+                    curr += timedelta(days=1)
+
+                # Check 3: Prior to June 27, 2019, option
+                # expiries must strictly be monthly.
+                is_option = self.asset_type in {AssetType.CE, AssetType.PE}
+                if is_option and self.expiry < date(2019, 6, 27):
+                    # Compute last Thursday of the month
+                    if self.expiry.month == 12:
+                        next_month_1st = date(self.expiry.year + 1, 1, 1)
+                    else:
+                        next_month_1st = date(
+                            self.expiry.year, self.expiry.month + 1, 1
+                        )
+                    last_day_of_month = next_month_1st - timedelta(days=1)
+                    
+                    # Find last Thursday of the month
+                    offset = (last_day_of_month.weekday() - 3) % 7
+                    last_thursday = (
+                        last_day_of_month - timedelta(days=offset)
+                    )
+                    
+                    if self.expiry > last_thursday:
+                        raise ValueError(
+                            f"Expiry date {self.expiry} is after the last "
+                            f"Thursday {last_thursday} of the month"
+                        )
+                    
+                    # All days from expiry + 1 to last_thursday
+                    # must not be trading days.
+                    curr = self.expiry + timedelta(days=1)
+                    while curr <= last_thursday:
+                        if is_trading_day(curr):
+                            raise ValueError(
+                                f"Prior to June 27, 2019, option expiries "
+                                f"must strictly be monthly expiries. "
+                                f"{self.expiry} is not the last Thursday "
+                                f"of the month or the preceding trading "
+                                f"day if the last Thursday is a holiday. "
+                                f"{curr} is a trading day after "
+                                f"{self.expiry} in the same month."
+                            )
+                        curr += timedelta(days=1)
+                        
+        return self
 
     @computed_field
     @property

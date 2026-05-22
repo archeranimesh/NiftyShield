@@ -191,14 +191,25 @@ def test_extract_greeks_missing_strike() -> None:
 def test_extract_greeks_equity_leg() -> None:
     """Equity leg returns empty dict without touching the chain."""
     chain = parse_upstox_option_chain(_load_chain_data())
-    leg = _make_leg(strike=22250.0, asset_type=AssetType.EQUITY)
+    leg = _make_leg(strike=None, expiry=None, asset_type=AssetType.EQUITY)
     assert _extract_greeks_from_chain(chain, leg) == {}
 
 
 def test_extract_greeks_none_strike() -> None:
     """Leg with strike=None returns empty dict."""
     chain = parse_upstox_option_chain(_load_chain_data())
-    leg = _make_leg(strike=None, asset_type=AssetType.CE)
+    leg = Leg.model_construct(
+        display_name="TEST",
+        instrument_key="NSE_FO|FAKE",
+        quantity=50,
+        entry_price=Decimal("100"),
+        entry_date=date(2026, 1, 1),
+        direction=Direction.SELL,
+        asset_type=AssetType.CE,
+        product_type=ProductType.NRML,
+        expiry=date(2026, 4, 7),
+        strike=None,
+    )
     assert _extract_greeks_from_chain(chain, leg) == {}
 
 
