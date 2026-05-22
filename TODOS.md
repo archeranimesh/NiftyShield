@@ -458,3 +458,5 @@ The `test_write_to_parquet_lineage_metadata` test only covers the initial write 
 Full log: [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md)
 
 - **2026-05-22**: Resolved audit finding [18] by replacing Any stubs in protocol.py with dict[str, Any] and importing OptionChain. Fixed time-bomb tests in nuvama/test_store.py.
+- [2026-05-22] audit finding [19] — implement Leg validation constraints — 20f0bb3
+

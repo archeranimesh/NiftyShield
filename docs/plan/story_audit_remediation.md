@@ -28,7 +28,7 @@ Resume rule: read CONTEXT.md → find first unchecked box → implement → test
 
 ## Batch 4 — Types / Domain
 - [x] [18] protocol.py:42-52 — Any stubs (Interim fix: replaced with dict[str, Any] as cosmetic boundary constraint; schema validation pending TD-7) | SHA: 7cd5872
-- [ ] [19] models/portfolio.py — missing field validators | SHA:
+- [x] [19] models/portfolio.py — missing field validators | SHA: 20f0bb3
 - [ ] [20] store.py:605 — tuples instead of Position | SHA:
 - [ ] [21] paper_3track_overlay.py — business logic in script | SHA:
 
