@@ -431,7 +431,7 @@ and missing data that must be resolved before executing backtests at scale:
    missing in `src/market_calendar/data/`. Constructing historical `Leg`
    instances pre-2026 will fail-open and skip holiday validation entirely.
 3. **Formalize `is_nifty` check:** Replace the current denylist-based check
-   on `display_name` with a formal predicate based on `instrument_key` to avoid
+   on name and key with a formal predicate based on `instrument_key` to avoid
    false positives/negatives if other index options are introduced.
 
 ---
@@ -474,4 +474,5 @@ Full log: [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md)
 
 - **2026-05-22**: Resolved audit finding [18] by replacing Any stubs in protocol.py with dict[str, Any] and importing OptionChain. Fixed time-bomb tests in nuvama/test_store.py.
 - [2026-05-22] audit finding [19] — implement Leg validation constraints — 20f0bb3
+- [2026-05-22] audit finding [19] follow-up — scan name and key for is_nifty — d4816f2
 

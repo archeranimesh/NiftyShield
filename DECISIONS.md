@@ -77,11 +77,11 @@ whitelist is currently hardcoded in `portfolio.py` to prevent cyclic import
 issues. It should ideally reside in a configuration file or a calendar module
 with a clean interface.
 
-**`is_nifty` detection uses denylist check on `display_name`:** Strike grid
-validation identifies Nifty 50 options by display name, excluding "BANK",
-"FIN", "MIDCP". This denylist approach will misidentify new Nifty index
-variants, and does not check `instrument_key`. This is a latent trap if other
-index options are traded in the future.
+**`is_nifty` detection uses denylist check on name and key:** Strike grid
+validation identifies Nifty 50 options by checking both `display_name` and
+`instrument_key`, excluding "BANK", "FIN", "MIDCP". This denylist approach will
+misidentify new Nifty index variants. This is a latent trap if other index
+options are traded in the future.
 
 ---
 
