@@ -207,7 +207,7 @@ def test_get_position_unknown_leg_returns_zero(store: PortfolioStore) -> None:
     pos = store.get_position("ILTS", "EBBETF0431")
     assert pos.quantity == 0
     assert pos.average_price == Decimal("0")
-    assert pos.instrument_key == "UNKNOWN"
+    assert pos.instrument_key is None
 
 
 def test_get_position_buy_only_net_quantity(store: PortfolioStore) -> None:
@@ -430,6 +430,36 @@ def test_get_all_positions_instrument_key_after_roll(store: PortfolioStore) -> N
     assert pos.average_price == Decimal("750.00")
 
 
+def test_get_position_instrument_key_after_roll(store: PortfolioStore) -> None:
+    """After a roll, get_position must return the most recent trade's instrument_key."""
+    OLD_KEY = "NSE_FO|OLD_CONTRACT"
+    NEW_KEY = "NSE_FO|NEW_CONTRACT"
+
+    # Original position: BUY old contract
+    store.record_trade(Trade(
+        strategy_name="ILTS", leg_role="NIFTY_MAY_PE",
+        instrument_key=OLD_KEY, trade_date=date(2026, 1, 15),
+        action=TradeAction.BUY, quantity=50, price=Decimal("800.00"),
+    ))
+    # Close old contract
+    store.record_trade(Trade(
+        strategy_name="ILTS", leg_role="NIFTY_MAY_PE",
+        instrument_key=OLD_KEY, trade_date=date(2026, 2, 15),
+        action=TradeAction.SELL, quantity=50, price=Decimal("600.00"),
+    ))
+    # Open new contract (roll forward)
+    store.record_trade(Trade(
+        strategy_name="ILTS", leg_role="NIFTY_MAY_PE",
+        instrument_key=NEW_KEY, trade_date=date(2026, 2, 20),
+        action=TradeAction.BUY, quantity=50, price=Decimal("700.00"),
+    ))
+
+    pos = store.get_position("ILTS", "NIFTY_MAY_PE")
+    assert pos.instrument_key == NEW_KEY, f"Expected new contract key after roll, got {pos.instrument_key!r}"
+    assert pos.quantity == 50
+    assert pos.average_price == Decimal("750.00")
+
+
 # ── record_roll ───────────────────────────────────────────────────────────────
 
 
@@ -537,6 +567,33 @@ def test_create_async_factory_empty_path() -> None:
             await PortfolioStore.create("")
     
     asyncio.run(run())
+
+
+def test_position_validation_non_negative_average_price() -> None:
+    """Position average_price must be non-negative, and allows string/float coercion."""
+    # Happy path: float/string/int coercion
+    pos1 = Position(strategy_name="ILTS", leg_role="L1", instrument_key="KEY1", quantity=10, average_price=1388.12)
+    assert pos1.average_price == Decimal("1388.12")
+
+    pos2 = Position(strategy_name="ILTS", leg_role="L1", instrument_key="KEY1", quantity=10, average_price="1388.12")
+    assert pos2.average_price == Decimal("1388.12")
+
+    pos3 = Position(strategy_name="ILTS", leg_role="L1", instrument_key="KEY1", quantity=10, average_price=0)
+    assert pos3.average_price == Decimal("0")
+
+    # Error case: negative average_price
+    with pytest.raises(ValueError, match="average_price must be non-negative"):
+        Position(strategy_name="ILTS", leg_role="L1", instrument_key="KEY1", quantity=10, average_price=-5.5)
+
+    with pytest.raises(ValueError, match="average_price must be non-negative"):
+        Position(strategy_name="ILTS", leg_role="L1", instrument_key="KEY1", quantity=10, average_price="-1")
+
+
+def test_position_validation_optional_instrument_key() -> None:
+    """Position allows instrument_key to be None."""
+    pos = Position(strategy_name="ILTS", leg_role="L1", instrument_key=None, quantity=0, average_price=0)
+    assert pos.instrument_key is None
+    assert pos.quantity == 0
 
 
 def test_sync_constructor_still_works(db_path: Path) -> None:

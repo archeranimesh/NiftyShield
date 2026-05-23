@@ -84,25 +84,29 @@ class Position(BaseModel):
     Attributes:
         strategy_name: Strategy this position belongs to.
         leg_role: Role/name of the leg.
-        instrument_key: Instrument key of the position.
+        instrument_key: Instrument key of the position, or None if no trades exist.
         quantity: Net quantity (positive for net long, negative for net short).
         average_price: Weighted average buy price of remaining units.
     """
 
     strategy_name: str = Field(..., min_length=1)
     leg_role: str = Field(..., min_length=1)
-    instrument_key: str = Field(..., min_length=1)
-    quantity: int
-    average_price: Decimal = Field(default=Decimal("0"))
+    instrument_key: str | None = Field(default=None)
+    quantity: int  # negative for net short positions
+    average_price: Decimal = Field(default=Decimal("0"), ge=0)
 
     model_config = {"frozen": True}
 
     @field_validator("average_price", mode="before")
     @classmethod
     def avg_price_must_be_non_negative(cls, v: object) -> object:
-        """Coerce str/float inputs and guard against negative values."""
+        """Coerce str/float/int inputs and guard against negative values."""
         if isinstance(v, float):
             v = Decimal(str(v))
+        elif isinstance(v, (str, int)):
+            v = Decimal(v)
+        if isinstance(v, Decimal) and v < 0:
+            raise ValueError("average_price must be non-negative")
         return v
 
 

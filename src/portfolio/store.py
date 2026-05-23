@@ -626,14 +626,14 @@ class PortfolioStore:
 
         Returns:
             Position: The position model. If no trades exist, returns a Position
-            with quantity=0, average_price=Decimal("0"), and instrument_key="UNKNOWN".
+            with quantity=0, average_price=Decimal("0"), and instrument_key=None.
         """
         trades = self.get_trades(strategy_name, leg_role)
         if not trades:
             return Position(
                 strategy_name=strategy_name,
                 leg_role=leg_role,
-                instrument_key="UNKNOWN",
+                instrument_key=None,
                 quantity=0,
                 average_price=Decimal("0"),
             )
@@ -641,7 +641,7 @@ class PortfolioStore:
         buy_qty = Decimal("0")
         buy_value = Decimal("0")
         sell_qty = Decimal("0")
-        instrument_key = trades[0].instrument_key
+        instrument_key = trades[-1].instrument_key
 
         for t in trades:
             if t.action == TradeAction.BUY:
