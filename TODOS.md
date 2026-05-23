@@ -478,4 +478,6 @@ Full log: [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md)
 - [2026-05-22] audit finding [19] follow-up — scan name and key for is_nifty — d4816f2
 - [2026-05-23] audit finding [20] — return Position models instead of tuples from store — 1520d3f
 - [2026-05-23] audit finding [21] — move pricing and ranking business logic from scripts to domain models — 80046db
+- [2026-05-23] audit finding [8] — extract persistence logic into SnapshotService to resolve SRP violation — 6d28864
+
 
