@@ -21,6 +21,7 @@ from src.models.portfolio import (
 )
 from src.portfolio.store import PortfolioStore
 from src.portfolio.tracker import PortfolioTracker
+from src.portfolio.service import SnapshotService
 
 
 # ── Helpers ──────────────────────────────────────────────────────
@@ -953,3 +954,134 @@ class TestPortfolioTracker:
             assert len(pnls) == 2
             assert pnls["strat1"].total_pnl == Decimal("100")
             assert pnls["strat2"].total_pnl == Decimal("200")
+
+
+# ── SnapshotService tests ──────────────────────────────────────────
+
+
+class TestSnapshotService:
+    def test_persist_snapshots_happy_path(self, tmp_store):
+        """Happy path: persist snapshots for a strategy with legs."""
+        s = Strategy(
+            name="service_happy_test",
+            legs=[
+                Leg(
+                    instrument_key="M1", display_name="M1", asset_type=AssetType.EQUITY,
+                    direction=Direction.BUY, quantity=10, entry_price=Decimal("100.00"),
+                    entry_date=date(2026, 4, 1), product_type=ProductType.CNC,
+                ),
+            ],
+        )
+        tmp_store.upsert_strategy(s)
+        strategy = tmp_store.get_strategy("service_happy_test")
+
+        service = SnapshotService(tmp_store)
+        prices = {"M1": 105.0}
+        greeks_map = {}
+
+        count = service.persist_snapshots(
+            strategy_name="service_happy_test",
+            strategy=strategy,
+            snap_date=date(2026, 4, 2),
+            prices=prices,
+            greeks_map=greeks_map,
+            underlying_price=23500.5,
+        )
+
+        assert count == 1
+        leg_id = strategy.legs[0].id
+        snaps = tmp_store.get_snapshots(leg_id)
+        assert len(snaps) == 1
+        assert snaps[0].ltp == Decimal("105.0")
+        assert snaps[0].underlying_price == Decimal("23500.5")
+
+    def test_persist_snapshots_trade_only_leg_auto_persisted(self, tmp_store):
+        """Trade-only leg (where id is None) must be auto-persisted before recording daily snapshot."""
+        s = Strategy(
+            name="service_trade_only_test",
+            legs=[
+                # Leg without id (id is None) - mimics LIQUIDBEES from overlay
+                Leg(
+                    instrument_key="LIQUIDBEES", display_name="LIQUIDBEES",
+                    asset_type=AssetType.EQUITY, direction=Direction.BUY,
+                    quantity=5, entry_price=Decimal("1000.00"),
+                    entry_date=date(2026, 4, 1), product_type=ProductType.CNC,
+                ),
+            ],
+        )
+        # Note: We do NOT call upsert_strategy, so the leg has no ID in the DB.
+        # However, the strategy itself must exist in strategies table.
+        tmp_store.upsert_strategy(Strategy(name="service_trade_only_test"))
+
+        service = SnapshotService(tmp_store)
+        prices = {"LIQUIDBEES": 1001.0}
+        greeks_map = {}
+
+        count = service.persist_snapshots(
+            strategy_name="service_trade_only_test",
+            strategy=s,
+            snap_date=date(2026, 4, 2),
+            prices=prices,
+            greeks_map=greeks_map,
+        )
+
+        assert count == 1
+        # The leg should now be auto-persisted, let's verify we can load the strategy and see it
+        loaded = tmp_store.get_strategy("service_trade_only_test")
+        assert len(loaded.legs) == 1
+        leg = loaded.legs[0]
+        assert leg.instrument_key == "LIQUIDBEES"
+        assert leg.id is not None
+
+        # Verify snapshot was written
+        snaps = tmp_store.get_snapshots(leg.id)
+        assert len(snaps) == 1
+        assert snaps[0].ltp == Decimal("1001.0")
+
+    def test_persist_snapshots_empty_strategy_legs(self, tmp_store):
+        """If strategy has no legs, zero snapshots should be recorded."""
+        s = Strategy(name="service_empty_test", legs=[])
+        tmp_store.upsert_strategy(s)
+
+        service = SnapshotService(tmp_store)
+        count = service.persist_snapshots(
+            strategy_name="service_empty_test",
+            strategy=s,
+            snap_date=date(2026, 4, 2),
+            prices={},
+            greeks_map={},
+        )
+        assert count == 0
+
+    def test_tracker_uses_injected_snapshot_service(self, tmp_store):
+        """PortfolioTracker.record_daily_snapshot should delegate persistence to SnapshotService."""
+        from unittest.mock import MagicMock
+        s = Strategy(
+            name="tracker_delegate_test",
+            legs=[
+                Leg(
+                    instrument_key="Z", display_name="Z", asset_type=AssetType.EQUITY,
+                    direction=Direction.BUY, quantity=10, entry_price=100.0,
+                    entry_date=date(2026, 4, 1), product_type=ProductType.CNC,
+                ),
+            ],
+        )
+        tmp_store.upsert_strategy(s)
+
+        market = FakeMarket({"Z": 105.0})
+        mock_service = MagicMock(spec=SnapshotService)
+        mock_service.persist_snapshots.return_value = 42
+
+        tracker = PortfolioTracker(tmp_store, market, snapshot_service=mock_service)
+
+        count, pnl = asyncio.run(
+            tracker.record_daily_snapshot("tracker_delegate_test", date(2026, 4, 2))
+        )
+
+        assert count == 42
+        assert mock_service.persist_snapshots.called
+        # Verify it was called with correct arguments
+        args, kwargs = mock_service.persist_snapshots.call_args
+        assert kwargs["strategy_name"] == "tracker_delegate_test"
+        assert kwargs["snap_date"] == date(2026, 4, 2)
+        assert kwargs["prices"] == {"Z": 105.0}

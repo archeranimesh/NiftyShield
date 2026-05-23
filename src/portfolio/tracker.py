@@ -24,6 +24,7 @@ from src.models.portfolio import (
     Position,
 )
 from src.portfolio.store import PortfolioStore
+from src.portfolio.service import SnapshotService
 
 logger = logging.getLogger(__name__)
 
@@ -155,24 +156,18 @@ def apply_trade_positions(
     )
 
 
-def _extract_greeks_from_chain(chain: dict, leg: Leg) -> dict | None:
-    """Extract greeks for a specific strike/type from an option chain response.
-
-    The chain format depends on the Upstox API response structure.
-    This is a placeholder — adapt to the actual OptionChain model
-    once the Pydantic models for the option chain API are finalized.
-    """
-    # TODO: TD-7 — implement once OptionChain Pydantic model is defined.
-    # Expected fields: iv, delta, theta, gamma, vega, oi, volume
-    return None
-
-
 class PortfolioTracker:
     """Tracks P&L and records daily snapshots for all strategies."""
 
-    def __init__(self, store: PortfolioStore, market: MarketDataProvider) -> None:
+    def __init__(
+        self,
+        store: PortfolioStore,
+        market: MarketDataProvider,
+        snapshot_service: SnapshotService | None = None,
+    ) -> None:
         self.store = store
         self.market = market
+        self.snapshot_service = snapshot_service or SnapshotService(store)
 
     def _get_overlaid_strategy(self, strategy_name: str) -> Strategy | None:
         """Load a strategy from the store and overlay trade-derived positions.
@@ -278,49 +273,17 @@ class PortfolioTracker:
         # Try to get greeks for option legs
         greeks_map = await self._fetch_greeks(strategy.legs)
 
-        snapshots = []
-        for leg in strategy.legs:
-            if leg.id is None:
-                # Trade-only leg (e.g. LIQUIDBEES) — auto-persist to get a DB id
-                leg_id = self.store.ensure_leg(strategy_name, leg)
-                leg = leg.model_copy(update={"id": leg_id})
-                logger.info(
-                    "Auto-persisted trade-only leg '%s' (id=%d) for '%s'",
-                    leg.display_name, leg_id, strategy_name,
-                )
-
-            ltp = Decimal(str(prices.get(leg.instrument_key, 0.0)))
-            greeks = greeks_map.get(leg.instrument_key, {})
-
-            snapshots.append(
-                DailySnapshot(
-                    leg_id=leg.id,
-                    snapshot_date=snap_date,
-                    ltp=ltp,
-                    close=ltp,  # EOD snapshot — LTP is close
-                    iv=greeks.get("iv"),
-                    delta=greeks.get("delta"),
-                    theta=greeks.get("theta"),
-                    gamma=greeks.get("gamma"),
-                    vega=greeks.get("vega"),
-                    oi=greeks.get("oi"),
-                    volume=greeks.get("volume"),
-                    underlying_price=underlying_price,
-                )
-            )
+        count = self.snapshot_service.persist_snapshots(
+            strategy_name=strategy_name,
+            strategy=strategy,
+            snap_date=snap_date,
+            prices=prices,
+            greeks_map=greeks_map,
+            underlying_price=underlying_price,
+        )
 
         pnl = self._build_strategy_pnl(strategy, prices)
-
-        if snapshots:
-            count = self.store.record_snapshots_bulk(snapshots)
-            logger.info(
-                "Recorded %d snapshots for '%s' on %s",
-                count,
-                strategy_name,
-                snap_date.isoformat(),
-            )
-            return count, pnl
-        return 0, pnl
+        return count, pnl
 
     async def record_all_strategies(
         self,
