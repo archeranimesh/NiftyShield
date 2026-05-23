@@ -30,7 +30,7 @@ Resume rule: read CONTEXT.md → find first unchecked box → implement → test
 - [x] [18] protocol.py:42-52 — Any stubs (Interim fix: replaced with dict[str, Any] as cosmetic boundary constraint; schema validation pending TD-7) | SHA: 7cd5872
 - [x] [19] models/portfolio.py — missing field validators | SHA: 20f0bb3
 - [x] [20] store.py:605 — tuples instead of Position | SHA: 1520d3f
-- [ ] [21] paper_3track_overlay.py — business logic in script | SHA:
+- [x] [21] paper_3track_overlay.py — business logic in script | SHA: 80046db
 
 ## Batch 5 — SOLID Refactors (each gets its own commit)
 - [ ] [8] tracker.py:169 — SRP violation | SHA:
