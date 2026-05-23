@@ -33,7 +33,7 @@ Resume rule: read CONTEXT.md → find first unchecked box → implement → test
 - [x] [21] paper_3track_overlay.py — business logic in script | SHA: 80046db
 
 ## Batch 5 — SOLID Refactors (each gets its own commit)
-- [x] [8] tracker.py:169 — SRP violation | SHA: 6d28864
+- [x] [8] tracker.py:169 — SRP violation | SHA: 3242fbd
 - [ ] [9] summary.py:236 — OCP strategy branching | SHA:
 
 ## Batch 6 — Financial Correctness (each gets its own commit)
