@@ -136,17 +136,17 @@ def test_seed_trades_idempotent_three_times(store: PortfolioStore) -> None:
 def test_seed_trades_ebbetf0431_position(store: PortfolioStore) -> None:
     """After seed, EBBETF0431 net qty = 465 and avg price is the weighted average."""
     seed_trades(store)
-    net_qty, avg_price = store.get_position("finideas_ilts", "EBBETF0431")
-    assert net_qty == 465
+    pos = store.get_position("finideas_ilts", "EBBETF0431")
+    assert pos.quantity == 465
     expected_avg = (
         Decimal("438") * Decimal("1388.12") + Decimal("27") * Decimal("1386.20")
     ) / Decimal("465")
-    assert avg_price == expected_avg
+    assert pos.average_price == expected_avg
 
 
 def test_seed_trades_nifty_jun_pe_is_short(store: PortfolioStore) -> None:
     """NIFTY_JUN_PE SELL 65 → net qty -65, avg buy price 0."""
     seed_trades(store)
-    net_qty, avg_price = store.get_position("finideas_ilts", "NIFTY_JUN_PE")
-    assert net_qty == -65
-    assert avg_price == Decimal("0")
+    pos = store.get_position("finideas_ilts", "NIFTY_JUN_PE")
+    assert pos.quantity == -65
+    assert pos.average_price == Decimal("0")

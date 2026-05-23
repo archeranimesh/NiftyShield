@@ -23,6 +23,7 @@ from src.models.portfolio import (
     Strategy,
     Trade,
     TradeAction,
+    Position,
 )
 
 _SCHEMA = """
@@ -611,7 +612,7 @@ class PortfolioStore:
 
     def get_position(
         self, strategy_name: str, leg_role: str
-    ) -> tuple[int, Decimal]:
+    ) -> Position:
         """Derive net quantity and weighted average buy price from the ledger.
 
         Net quantity = SUM(qty for BUY) - SUM(qty for SELL).
@@ -624,16 +625,23 @@ class PortfolioStore:
             leg_role: Leg within that strategy.
 
         Returns:
-            (net_quantity, avg_buy_price). Returns (0, Decimal("0")) when no
-            trades exist for the given strategy/leg combination.
+            Position: The position model. If no trades exist, returns a Position
+            with quantity=0, average_price=Decimal("0"), and instrument_key="UNKNOWN".
         """
         trades = self.get_trades(strategy_name, leg_role)
         if not trades:
-            return (0, Decimal("0"))
+            return Position(
+                strategy_name=strategy_name,
+                leg_role=leg_role,
+                instrument_key="UNKNOWN",
+                quantity=0,
+                average_price=Decimal("0"),
+            )
 
         buy_qty = Decimal("0")
         buy_value = Decimal("0")
         sell_qty = Decimal("0")
+        instrument_key = trades[0].instrument_key
 
         for t in trades:
             if t.action == TradeAction.BUY:
@@ -644,11 +652,17 @@ class PortfolioStore:
 
         net_qty = int(buy_qty - sell_qty)
         avg_price = (buy_value / buy_qty) if buy_qty > 0 else Decimal("0")
-        return (net_qty, avg_price)
+        return Position(
+            strategy_name=strategy_name,
+            leg_role=leg_role,
+            instrument_key=instrument_key,
+            quantity=net_qty,
+            average_price=avg_price,
+        )
 
     def get_all_positions_for_strategy(
         self, strategy_name: str
-    ) -> dict[str, tuple[int, Decimal, str]]:
+    ) -> dict[str, Position]:
         """Derive net position for every leg in a single DB round-trip.
 
         Replaces the previous N+1 pattern (1 DISTINCT query + 1 get_position()
@@ -659,7 +673,7 @@ class PortfolioStore:
             strategy_name: Strategy to query (e.g. "finideas_ilts").
 
         Returns:
-            Dict keyed by leg_role → (net_qty, avg_buy_price, instrument_key).
+            Dict keyed by leg_role → Position model.
             Returns empty dict when no trades exist for the strategy.
         """
         from collections import defaultdict
@@ -689,12 +703,18 @@ class PortfolioStore:
             else:
                 sell_qty[leg] += qty
 
-        result: dict[str, tuple[int, Decimal, str]] = {}
+        result: dict[str, Position] = {}
         for leg, instrument_key in ikey.items():
             bq = buy_qty[leg]
             net = bq - sell_qty[leg]
             avg = buy_value[leg] / bq if bq > 0 else Decimal("0")
-            result[leg] = (net, avg, instrument_key)
+            result[leg] = Position(
+                strategy_name=strategy_name,
+                leg_role=leg,
+                instrument_key=instrument_key,
+                quantity=net,
+                average_price=avg,
+            )
         return result
 
     # ── Cron heartbeats ──────────────────────────────────────────

@@ -25,7 +25,7 @@ from pathlib import Path
 import asyncio
 import pytest
 
-from src.models.portfolio import Trade, TradeAction
+from src.models.portfolio import Trade, TradeAction, Position
 from src.portfolio.store import PortfolioStore
 
 
@@ -204,23 +204,24 @@ def test_get_trades_unknown_strategy_returns_empty(store: PortfolioStore) -> Non
 
 
 def test_get_position_unknown_leg_returns_zero(store: PortfolioStore) -> None:
-    qty, avg = store.get_position("ILTS", "EBBETF0431")
-    assert qty == 0
-    assert avg == Decimal("0")
+    pos = store.get_position("ILTS", "EBBETF0431")
+    assert pos.quantity == 0
+    assert pos.average_price == Decimal("0")
+    assert pos.instrument_key == "UNKNOWN"
 
 
 def test_get_position_buy_only_net_quantity(store: PortfolioStore) -> None:
     store.record_trade(_buy(qty=438))
-    qty, _ = store.get_position("ILTS", "EBBETF0431")
-    assert qty == 438
+    pos = store.get_position("ILTS", "EBBETF0431")
+    assert pos.quantity == 438
 
 
 def test_get_position_sell_only_net_quantity(store: PortfolioStore) -> None:
     """Short position — only SELL trades, no BUY."""
     store.record_trade(_sell(qty=65))
-    qty, avg = store.get_position("ILTS", "NIFTY_JUN_PE")
-    assert qty == -65
-    assert avg == Decimal("0")  # no buy trades → avg is zero
+    pos = store.get_position("ILTS", "NIFTY_JUN_PE")
+    assert pos.quantity == -65
+    assert pos.average_price == Decimal("0")  # no buy trades → avg is zero
 
 
 def test_get_position_mixed_buy_sell_net(store: PortfolioStore) -> None:
@@ -241,25 +242,25 @@ def test_get_position_mixed_buy_sell_net(store: PortfolioStore) -> None:
             quantity=30, price=Decimal("1400.00"),
         )
     )
-    qty, _ = store.get_position("ILTS", "EBBETF0431")
-    assert qty == 70
+    pos = store.get_position("ILTS", "EBBETF0431")
+    assert pos.quantity == 70
 
 
 def test_get_position_avg_price_single_buy(store: PortfolioStore) -> None:
     store.record_trade(_buy(qty=438, price="1388.12"))
-    _, avg = store.get_position("ILTS", "EBBETF0431")
-    assert avg == Decimal("1388.12")
+    pos = store.get_position("ILTS", "EBBETF0431")
+    assert pos.average_price == Decimal("1388.12")
 
 
 def test_get_position_avg_price_two_buys_weighted(store: PortfolioStore) -> None:
     """Weighted average: (438*1388.12 + 27*1386.20) / 465."""
     store.record_trade(_buy(trade_date=date(2026, 1, 15), qty=438, price="1388.12"))
     store.record_trade(_buy(trade_date=date(2026, 4, 8), qty=27, price="1386.20"))
-    _, avg = store.get_position("ILTS", "EBBETF0431")
+    pos = store.get_position("ILTS", "EBBETF0431")
     expected = (
         Decimal("438") * Decimal("1388.12") + Decimal("27") * Decimal("1386.20")
     ) / Decimal("465")
-    assert avg == expected
+    assert pos.average_price == expected
 
 
 def test_get_position_avg_price_ignores_sell_price(store: PortfolioStore) -> None:
@@ -273,15 +274,15 @@ def test_get_position_avg_price_ignores_sell_price(store: PortfolioStore) -> Non
             quantity=30, price=Decimal("9999.00"),  # artificially high — must be ignored
         )
     )
-    _, avg = store.get_position("ILTS", "EBBETF0431")
-    assert avg == Decimal("1388.00")
+    pos = store.get_position("ILTS", "EBBETF0431")
+    assert pos.average_price == Decimal("1388.00")
 
 
 def test_get_position_sell_only_avg_price_is_zero(store: PortfolioStore) -> None:
     """No BUY trades → avg price is Decimal('0'), not an error."""
     store.record_trade(_sell(qty=65, price="840.00"))
-    _, avg = store.get_position("ILTS", "NIFTY_JUN_PE")
-    assert avg == Decimal("0")
+    pos = store.get_position("ILTS", "NIFTY_JUN_PE")
+    assert pos.average_price == Decimal("0")
 
 
 # ── get_all_positions_for_strategy ────────────────────────────────────────────
@@ -298,10 +299,10 @@ def test_get_all_positions_single_leg(store: PortfolioStore) -> None:
     store.record_trade(_buy(qty=438, price="1388.12"))
     result = store.get_all_positions_for_strategy("ILTS")
     assert "EBBETF0431" in result
-    net_qty, avg_price, key = result["EBBETF0431"]
-    assert net_qty == 438
-    assert avg_price == Decimal("1388.12")
-    assert key == "NSE_EQ|INF754K01LE1"
+    pos = result["EBBETF0431"]
+    assert pos.quantity == 438
+    assert pos.average_price == Decimal("1388.12")
+    assert pos.instrument_key == "NSE_EQ|INF754K01LE1"
 
 
 def test_get_all_positions_multiple_legs(store: PortfolioStore) -> None:
@@ -310,8 +311,8 @@ def test_get_all_positions_multiple_legs(store: PortfolioStore) -> None:
     store.record_trade(_sell(qty=65, price="840.00"))
     result = store.get_all_positions_for_strategy("ILTS")
     assert set(result.keys()) == {"EBBETF0431", "NIFTY_JUN_PE"}
-    assert result["EBBETF0431"][0] == 438
-    assert result["NIFTY_JUN_PE"][0] == -65
+    assert result["EBBETF0431"].quantity == 438
+    assert result["NIFTY_JUN_PE"].quantity == -65
 
 
 def test_get_all_positions_accumulates_multiple_buys(store: PortfolioStore) -> None:
@@ -319,11 +320,11 @@ def test_get_all_positions_accumulates_multiple_buys(store: PortfolioStore) -> N
     store.record_trade(_buy(qty=438, price="1388.12", trade_date=date(2026, 1, 15)))
     store.record_trade(_buy(qty=27, price="1386.20", trade_date=date(2026, 4, 8)))
     result = store.get_all_positions_for_strategy("ILTS")
-    net_qty, avg_price, _ = result["EBBETF0431"]
-    assert net_qty == 465
+    pos = result["EBBETF0431"]
+    assert pos.quantity == 465
     # Weighted avg: (438*1388.12 + 27*1386.20) / 465
     expected = (Decimal("438") * Decimal("1388.12") + Decimal("27") * Decimal("1386.20")) / Decimal("465")
-    assert avg_price == expected
+    assert pos.average_price == expected
 
 
 def test_get_all_positions_instrument_key_from_trades(store: PortfolioStore) -> None:
@@ -338,7 +339,7 @@ def test_get_all_positions_instrument_key_from_trades(store: PortfolioStore) -> 
     )
     result = store.get_all_positions_for_strategy("ILTS")
     assert "LIQUIDBEES" in result
-    assert result["LIQUIDBEES"][2] == "NSE_EQ|INF732E01037"
+    assert result["LIQUIDBEES"].instrument_key == "NSE_EQ|INF732E01037"
 
 
 def test_get_all_positions_isolates_by_strategy(store: PortfolioStore) -> None:
@@ -375,9 +376,20 @@ def test_get_all_positions_single_connection(store: PortfolioStore) -> None:
         assert spy.call_count == 1
 
     assert len(result) == 3
-    assert result["L1"] == (100, Decimal("1000.00"), "NSE_EQ|INF754K01LE1")
-    assert result["L2"] == (50, Decimal("500.00"), "NSE_EQ|INF754K01LE1")
-    assert result["L3"] == (200, Decimal("250.00"), "NSE_EQ|INF754K01LE1")
+    pos_l1 = result["L1"]
+    assert pos_l1.quantity == 100
+    assert pos_l1.average_price == Decimal("1000.00")
+    assert pos_l1.instrument_key == "NSE_EQ|INF754K01LE1"
+    
+    pos_l2 = result["L2"]
+    assert pos_l2.quantity == 50
+    assert pos_l2.average_price == Decimal("500.00")
+    assert pos_l2.instrument_key == "NSE_EQ|INF754K01LE1"
+    
+    pos_l3 = result["L3"]
+    assert pos_l3.quantity == 200
+    assert pos_l3.average_price == Decimal("250.00")
+    assert pos_l3.instrument_key == "NSE_EQ|INF754K01LE1"
 
 
 def test_get_all_positions_instrument_key_after_roll(store: PortfolioStore) -> None:
@@ -411,11 +423,11 @@ def test_get_all_positions_instrument_key_after_roll(store: PortfolioStore) -> N
 
     result = store.get_all_positions_for_strategy("ILTS")
 
-    net_qty, avg_price, ikey = result["NIFTY_MAY_PE"]
-    assert ikey == NEW_KEY, f"Expected new contract key after roll, got {ikey!r}"
-    assert net_qty == 50  # closed old (50-50=0) + opened new (50) = 50 net
+    pos = result["NIFTY_MAY_PE"]
+    assert pos.instrument_key == NEW_KEY, f"Expected new contract key after roll, got {pos.instrument_key!r}"
+    assert pos.quantity == 50  # closed old (50-50=0) + opened new (50) = 50 net
     # avg buy price = weighted avg of both BUY legs: (50*800 + 50*700) / 100
-    assert avg_price == Decimal("750.00")
+    assert pos.average_price == Decimal("750.00")
 
 
 # ── record_roll ───────────────────────────────────────────────────────────────
@@ -496,10 +508,10 @@ def test_record_roll_positions_reflect_both_legs(store: PortfolioStore) -> None:
     """After a roll: old leg shows net +50 (BUY to close a prior short),
     new leg shows net -50 (SELL to open)."""
     store.record_roll(_close_trade(), _open_trade())
-    old_qty, _ = store.get_position("finideas_ilts", "NIFTY_MAY_PE_ATM")
-    new_qty, _ = store.get_position("finideas_ilts", "NIFTY_JUN_PE_ATM")
-    assert old_qty == 50   # BUY 50 → net +50
-    assert new_qty == -50  # SELL 50 → net -50
+    pos_old = store.get_position("finideas_ilts", "NIFTY_MAY_PE_ATM")
+    pos_new = store.get_position("finideas_ilts", "NIFTY_JUN_PE_ATM")
+    assert pos_old.quantity == 50   # BUY 50 → net +50
+    assert pos_new.quantity == -50  # SELL 50 → net -50
 
 def test_create_async_factory(db_path: Path) -> None:
     """Happy path: create() returns an initialized store."""

@@ -78,6 +78,34 @@ class Trade(BaseModel):
         return v
 
 
+class Position(BaseModel):
+    """Aggregated positional state for a strategy leg from the trades ledger.
+
+    Attributes:
+        strategy_name: Strategy this position belongs to.
+        leg_role: Role/name of the leg.
+        instrument_key: Instrument key of the position.
+        quantity: Net quantity (positive for net long, negative for net short).
+        average_price: Weighted average buy price of remaining units.
+    """
+
+    strategy_name: str = Field(..., min_length=1)
+    leg_role: str = Field(..., min_length=1)
+    instrument_key: str = Field(..., min_length=1)
+    quantity: int
+    average_price: Decimal = Field(default=Decimal("0"))
+
+    model_config = {"frozen": True}
+
+    @field_validator("average_price", mode="before")
+    @classmethod
+    def avg_price_must_be_non_negative(cls, v: object) -> object:
+        """Coerce str/float inputs and guard against negative values."""
+        if isinstance(v, float):
+            v = Decimal(str(v))
+        return v
+
+
 class Direction(str, Enum):
     BUY = "BUY"
     SELL = "SELL"

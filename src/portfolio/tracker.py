@@ -21,6 +21,7 @@ from src.models.portfolio import (
     Leg,
     ProductType,
     Strategy,
+    Position,
 )
 from src.portfolio.store import PortfolioStore
 
@@ -68,7 +69,7 @@ class StrategyPnL:
 
 def apply_trade_positions(
     strategy: Strategy,
-    positions: dict[str, tuple[int, Decimal, str]],
+    positions: dict[str, Position],
 ) -> Strategy:
     """Return a new Strategy with leg quantities and entry prices from the trades ledger.
 
@@ -97,15 +98,15 @@ def apply_trade_positions(
     Args:
         strategy: Original Strategy object from ALL_STRATEGIES.
         positions: Output of PortfolioStore.get_all_positions_for_strategy() —
-            dict[leg_role → (net_qty, avg_buy_price, instrument_key)].
+            dict[leg_role → Position].
 
     Returns:
         New Strategy instance with trade-derived quantities where available.
     """
-    # Build instrument_key → (leg_role, net_qty, avg_price) for O(1) lookup
-    by_instrument_key: dict[str, tuple[str, int, Decimal]] = {
-        instrument_key: (leg_role, net_qty, avg_price)
-        for leg_role, (net_qty, avg_price, instrument_key) in positions.items()
+    # Build instrument_key → Position for O(1) lookup
+    by_instrument_key: dict[str, Position] = {
+        pos.instrument_key: pos
+        for pos in positions.values()
     }
 
     updated_legs: list[Leg] = []
@@ -114,31 +115,31 @@ def apply_trade_positions(
     for leg in strategy.legs:
         if leg.instrument_key in by_instrument_key:
             matched_keys.add(leg.instrument_key)
-            _, net_qty, avg_price = by_instrument_key[leg.instrument_key]
-            if net_qty == 0:
+            pos = by_instrument_key[leg.instrument_key]
+            if pos.quantity == 0:
                 continue  # fully closed — drop from active P&L
             updated_legs.append(leg.model_copy(update={
-                "quantity": net_qty,
-                "entry_price": avg_price,
+                "quantity": pos.quantity,
+                "entry_price": pos.average_price,
             }))
         else:
             updated_legs.append(leg)
 
     # Append legs that exist in trades but not in the strategy definition
     entry_date = strategy.legs[0].entry_date if strategy.legs else date.today()
-    for leg_role, (net_qty, avg_price, instrument_key) in positions.items():
-        if instrument_key in matched_keys:
+    for leg_role, pos in positions.items():
+        if pos.instrument_key in matched_keys:
             continue
-        if net_qty == 0:
+        if pos.quantity == 0:
             continue  # fully closed — skip
         updated_legs.append(Leg(
-            instrument_key=instrument_key,
+            instrument_key=pos.instrument_key,
             display_name=leg_role,
             asset_type=AssetType.EQUITY,
             direction=Direction.BUY,
-            quantity=net_qty,
+            quantity=pos.quantity,
             lot_size=1,
-            entry_price=avg_price,
+            entry_price=pos.average_price,
             entry_date=entry_date,
             expiry=None,
             strike=None,
