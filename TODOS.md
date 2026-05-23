@@ -475,4 +475,5 @@ Full log: [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md)
 - **2026-05-22**: Resolved audit finding [18] by replacing Any stubs in protocol.py with dict[str, Any] and importing OptionChain. Fixed time-bomb tests in nuvama/test_store.py.
 - [2026-05-22] audit finding [19] — implement Leg validation constraints — 20f0bb3
 - [2026-05-22] audit finding [19] follow-up — scan name and key for is_nifty — d4816f2
+- [2026-05-23] audit finding [20] — return Position models instead of tuples from store — 1520d3f
 
