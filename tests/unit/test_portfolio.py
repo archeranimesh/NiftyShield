@@ -995,6 +995,58 @@ class TestSnapshotService:
         assert snaps[0].ltp == Decimal("105.0")
         assert snaps[0].underlying_price == Decimal("23500.5")
 
+    def test_persist_snapshots_with_greeks(self, tmp_store):
+        """Verify that all greeks (including theta) are persisted correctly."""
+        s = Strategy(
+            name="service_greeks_test",
+            legs=[
+                Leg(
+                    instrument_key="OPT1", display_name="OPT1", asset_type=AssetType.PE,
+                    direction=Direction.SELL, quantity=75, entry_price=Decimal("150.00"),
+                    entry_date=date(2026, 4, 1), product_type=ProductType.NRML,
+                    expiry=date(2026, 12, 29), strike=150.0,
+                ),
+            ],
+        )
+        tmp_store.upsert_strategy(s)
+        strategy = tmp_store.get_strategy("service_greeks_test")
+
+        service = SnapshotService(tmp_store)
+        prices = {"OPT1": 120.0}
+        greeks_map = {
+            "OPT1": {
+                "iv": 0.185,
+                "delta": -0.22,
+                "gamma": 0.0015,
+                "theta": -4.25,
+                "vega": 0.08,
+                "oi": 150000,
+                "volume": 25000,
+            }
+        }
+
+        count = service.persist_snapshots(
+            strategy_name="service_greeks_test",
+            strategy=strategy,
+            snap_date=date(2026, 4, 2),
+            prices=prices,
+            greeks_map=greeks_map,
+        )
+
+        assert count == 1
+        leg_id = strategy.legs[0].id
+        snaps = tmp_store.get_snapshots(leg_id)
+        assert len(snaps) == 1
+        snap = snaps[0]
+        assert snap.ltp == Decimal("120.0")
+        assert snap.iv == 0.185
+        assert snap.delta == -0.22
+        assert snap.gamma == 0.0015
+        assert snap.theta == -4.25
+        assert snap.vega == 0.08
+        assert snap.oi == 150000
+        assert snap.volume == 25000
+
     def test_persist_snapshots_trade_only_leg_auto_persisted(self, tmp_store):
         """Trade-only leg (where id is None) must be auto-persisted before recording daily snapshot."""
         s = Strategy(

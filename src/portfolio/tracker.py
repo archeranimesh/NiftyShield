@@ -167,7 +167,7 @@ class PortfolioTracker:
     ) -> None:
         self.store = store
         self.market = market
-        self.snapshot_service = snapshot_service or SnapshotService(store)
+        self.snapshot_service = snapshot_service if snapshot_service is not None else SnapshotService(store)
 
     def _get_overlaid_strategy(self, strategy_name: str) -> Strategy | None:
         """Load a strategy from the store and overlay trade-derived positions.

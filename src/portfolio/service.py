@@ -78,6 +78,7 @@ class SnapshotService:
                     iv=greeks.get("iv"),
                     delta=greeks.get("delta"),
                     gamma=greeks.get("gamma"),
+                    theta=greeks.get("theta"),
                     vega=greeks.get("vega"),
                     oi=greeks.get("oi"),
                     volume=greeks.get("volume"),
