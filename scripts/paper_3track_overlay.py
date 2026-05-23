@@ -127,6 +127,7 @@ def _rank_overlay_key(r: dict, target_otm: float) -> tuple:
     4. spread        — exact spread tiebreaker inside a bucket
     5. otm_dist      — proximity to target OTM — final tiebreaker only
     """
+    # NOTE: API returns float; precision loss before this point
     bid = Decimal(str(safe_float(r.get("bid"))))
     ask = Decimal(str(safe_float(r.get("ask"))))
     strike = Decimal(str(safe_float(r.get("strike"))))

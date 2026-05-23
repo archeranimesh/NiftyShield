@@ -97,10 +97,16 @@ def calculate_otm_pct(strike: Decimal, spot: Decimal, option_type: str) -> Decim
 
     Returns:
         The OTM fraction as a Decimal.
+
+    Raises:
+        ValueError: If option_type is not 'PE' or 'CE'.
     """
     if option_type == "PE":
         return (spot - strike) / spot
-    return (strike - spot) / spot
+    elif option_type == "CE":
+        return (strike - spot) / spot
+    else:
+        raise ValueError(f"Unknown option_type: {option_type}. Expected 'PE' or 'CE'.")
 
 
 def rank_overlay_key(
