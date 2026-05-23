@@ -50,6 +50,7 @@ load_dotenv()
 
 from src.client.upstox_market import UpstoxMarketClient
 from src.instruments.lookup import InstrumentLookup, parse_expiry as _pe
+from src.models.options import calculate_otm_pct, rank_overlay_key
 from src.models.portfolio import TradeAction
 from src.paper.constants import (
     CC_OTM_MAX,
@@ -114,9 +115,7 @@ def _otm_pct(strike: float, spot: float, option_type: str) -> float:
     PE: (spot - strike) / spot   (positive when strike < spot)
     CE: (strike - spot) / spot   (positive when strike > spot)
     """
-    if option_type == "PE":
-        return (spot - strike) / spot
-    return (strike - spot) / spot
+    return float(calculate_otm_pct(Decimal(str(strike)), Decimal(str(spot)), option_type))
 
 
 def _rank_overlay_key(r: dict, target_otm: float) -> tuple:
@@ -128,13 +127,13 @@ def _rank_overlay_key(r: dict, target_otm: float) -> tuple:
     4. spread        — exact spread tiebreaker inside a bucket
     5. otm_dist      — proximity to target OTM — final tiebreaker only
     """
-    bid = safe_float(r.get("bid"))
-    ask = safe_float(r.get("ask"))
-    spread = ask - bid if (bid > 0 and ask > 0) else 9_999.0
-    is_non_round = int(safe_float(r.get("strike"))) % 100 != 0
-    spread_bucket = int(spread / 2)
-    otm_dist = abs(safe_float(r.get("otm_pct")) - target_otm)
-    return (is_non_round, spread_bucket, -int(safe_float(r.get("oi"))), spread, otm_dist)
+    bid = Decimal(str(safe_float(r.get("bid"))))
+    ask = Decimal(str(safe_float(r.get("ask"))))
+    strike = Decimal(str(safe_float(r.get("strike"))))
+    oi = int(safe_float(r.get("oi")))
+    otm_pct = Decimal(str(safe_float(r.get("otm_pct"))))
+    target_otm_dec = Decimal(str(target_otm))
+    return rank_overlay_key(strike, bid, ask, oi, otm_pct, target_otm_dec)
 
 
 def _extract_chain_candidates(

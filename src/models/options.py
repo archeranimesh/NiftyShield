@@ -82,3 +82,56 @@ class OptionChain(BaseModel, frozen=True):
     underlying_spot: Decimal
     expiry: date
     strikes: dict[Decimal, OptionChainStrike]
+
+
+def calculate_otm_pct(strike: Decimal, spot: Decimal, option_type: str) -> Decimal:
+    """Calculate the OTM fraction for a strike relative to spot.
+
+    PE: (spot - strike) / spot   (positive when strike < spot)
+    CE: (strike - spot) / spot   (positive when strike > spot)
+
+    Args:
+        strike: Option strike price.
+        spot: Spot price of the underlying.
+        option_type: Option type ("PE" or "CE").
+
+    Returns:
+        The OTM fraction as a Decimal.
+    """
+    if option_type == "PE":
+        return (spot - strike) / spot
+    return (strike - spot) / spot
+
+
+def rank_overlay_key(
+    strike: Decimal,
+    bid: Decimal,
+    ask: Decimal,
+    oi: int,
+    otm_pct: Decimal,
+    target_otm: Decimal,
+) -> tuple[bool, int, int, Decimal, Decimal]:
+    """5-tuple ranking key for overlay candidates (ascending — lower wins).
+
+    1. is_non_round  — multiples of 100 preferred over 50-increment strikes (bool)
+    2. spread_bucket — tighter ₹2 spread tier wins (int)
+    3. -oi           — highest OI wins within the same spread tier (int)
+    4. spread        — exact spread tiebreaker inside a bucket (Decimal)
+    5. otm_dist      — proximity to target OTM — final tiebreaker only (Decimal)
+
+    Args:
+        strike: Option strike price.
+        bid: Best bid price.
+        ask: Best ask price.
+        oi: Open interest.
+        otm_pct: OTM fraction.
+        target_otm: Target OTM fraction.
+
+    Returns:
+        A 5-tuple used for sorting/ranking candidates.
+    """
+    spread = ask - bid if (bid > Decimal("0") and ask > Decimal("0")) else Decimal("9999.0")
+    is_non_round = int(strike) % 100 != 0
+    spread_bucket = int(spread / Decimal("2"))
+    otm_dist = abs(otm_pct - target_otm)
+    return (is_non_round, spread_bucket, -oi, spread, otm_dist)
