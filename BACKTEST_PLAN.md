@@ -73,6 +73,7 @@
 
 **Owner: Animesh. Not for Cowork.**
 
+- [ ] Each month at entry date: before entry, run the `docs/regime_probe.pine` script on NIFTY 1D **and** 1W via the TV MCP (Codex). Record `regime_code` and `vix_level` from both timeframes in the paper trade note field. If 1W `regime_code ≥ 2` (Volatile-Ranging or Volatile-Trending), document the conflict — this is regime completeness data for Phase 0.8 Gate criterion C.
 - [ ] Each month at entry date: observe live option chain, decide strike (22-delta target per `csp_nifty_v1.md`). Log via `record_paper_trade.py` with mid price − 0.25 INR slippage haircut.
 - [ ] Exit triggers: monitor daily via `daily_snapshot.py`. When profit target / time stop / loss stop hits, log exit.
 - [ ] Never override the spec in real time. If urge to override: log it in `TODOS.md` with reason, then follow spec anyway.
@@ -150,6 +151,8 @@ All of the following must be true before loading `BACKTEST_PLAN_PHASE1.md`.
   | High IVR | ≥1 cycle with IVR > 50 at entry |
   | Drawdown stress | ≥1 holding window with ≥5% Nifty intraday peak-to-trough decline |
   | Delta pressure | ≥1 cycle where short-put delta reaches ≤ −0.35 before any exit fires |
+
+  **Regime logging tool:** Use `docs/regime_probe.pine` via TV MCP (Codex) at each paper trade entry to record the 1D + 1W regime snapshot. The `regime_code` and `vix_level` fields from both timeframes must be captured in the paper trade note. This creates the empirical regime log needed for criterion D's regime-matched Z-score. If 1W `regime_code ≥ 2` at entry, that cycle is tagged as "entered in volatile regime" — a distinct bucket for criterion D analysis.
 
 - [ ] **(D) Regime-matched Z-score:** Paper vs backtest `|Z| ≤ 1.5` on **both** the full 8-year backtest distribution **and** a regime-matched subset. See `BACKTEST_PLAN_PHASE1.md` task 1.11.
 

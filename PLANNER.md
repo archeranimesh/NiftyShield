@@ -53,6 +53,11 @@ Full methodology: `docs/plan/SWING_STRATEGY_RESEARCH.md`. Three rule-based direc
 **Stage sequence and data cost:**
 - **2.S0 — Data infra (free):** Verify Upstox OHLC Parquet from task 1.3a covers Nifty 50 daily + 15-min + India VIX daily.
 - **2.S1 — Regime engine (free):** `src/strategy/regime.py` — 3×3 classifier (50D trend slope × 252D VIX percentile). Tags every historical trading day.
+  **Prototype validated 2026-05-23:** `docs/regime_probe.pine` is a live Pine Script probe (TV MCP-readable via `data_get_pine_tables`) that has validated the core regime signal design against real NIFTY data. Key design constraints surfaced by the prototype that `src/strategy/regime.py` must respect:
+  (1) **Multi-timeframe check is mandatory** — 1D and 1W regime signals diverged on 2026-05-22 (1D=Sideways, 1W=Volatile-Ranging). Weekly regime vetoes daily for strangle entry. The `regime.py` classifier must tag each bar with both TF signals, not just the chart timeframe.
+  (2) **HV annualization must be timeframe-aware** — `std(log_returns, 20) × sqrt(annualization_factor)` where `annualization_factor = 252` (daily), `52` (weekly), `12` (monthly). Hardcoding 252 overstates weekly HV by ~2.2×.
+  (3) **Regime × VIX matrix drives options recommendation** — see `DECISIONS.md → TradingView MCP Regime Probe` for the full 4×3 matrix. `regime.py` should output both `regime_code` (int) and `vix_level` (str) so the recommendation lookup is a trivial dict access downstream.
+  (4) **ATR% percentile rank** is a more reliable vol signal than raw ATR on historical data — compute as `percentrank(atr_pct, 252)` across the training window. An `atr_pct_rank ≥ 80` veto overrides the Sideways label when weekly vol is elevated.
 - **2.S2 — Signal generators (free):** One per strategy (Donchian, ORB, Gap Fade) on spot OHLC. Pure directional signals, no option data.
 - **2.S3a — Tier 1 backtester (free):** `src/backtest/points_bt.py` — P&L in Nifty points. Validates signal quality with zero paid data. Mandatory first pass.
 - **2.S3b — Tier 2 backtester (NSE Bhavcopy — FREE):** `src/backtest/spread_bt.py` — option spread P&L using Bhavcopy EOD data + BS IV reconstruction. Conditional on Tier 1 passing. If Bhavcopy strike exclusion rate >20%, Tier 1 is authoritative.
