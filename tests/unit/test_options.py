@@ -117,5 +117,5 @@ def test_rank_overlay_key_sorting() -> None:
     # candidate F: round strike, spread 2.0, oi 20000, otm_pct 0.02
     # Since higher OI wins (-oi is lower for higher OI), F should rank higher than E.
     rk_e = rank_overlay_key(Decimal("22100"), Decimal("10.0"), Decimal("12.0"), 10000, Decimal("0.02"), Decimal("0.02"))
-    rk_f = rank_overlay_key(Decimal("22200"), Decimal("10.0"), Decimal("12.0"), 20000, Decimal("0.02"), Decimal("0.02"))
+    rk_f = rank_overlay_key(Decimal("22100"), Decimal("10.0"), Decimal("12.0"), 20000, Decimal("0.02"), Decimal("0.02"))
     assert rk_f < rk_e
