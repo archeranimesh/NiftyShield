@@ -17,6 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -32,6 +33,8 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class TradeAction(str, Enum):
@@ -406,8 +409,6 @@ def create_strategy_instance(
         # This keeps imports targeted and avoids loading unrelated strategies (and their validation checks).
         # Note: 'finideas' is currently hardcoded as the sole provider package. If more provider
         # directories are added under strategies/, they should be appended to the provider list.
-        import logging
-        logger = logging.getLogger(__name__)
         try:
             import importlib
             for provider in ["finideas"]:
