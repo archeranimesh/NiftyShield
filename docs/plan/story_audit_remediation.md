@@ -34,7 +34,7 @@ Resume rule: read CONTEXT.md → find first unchecked box → implement → test
 
 ## Batch 5 — SOLID Refactors (each gets its own commit)
 - [x] [8] tracker.py:169 — SRP violation | SHA: 3242fbd
-- [x] [9] summary.py:236 — OCP strategy branching | SHA: 14a6117
+- [x] [9] summary.py:236 — OCP strategy branching | SHA: bcedcb0
 
 ## Batch 6 — Financial Correctness (each gets its own commit)
 - [ ] [22] ilts.py:49 — hardcoded lot_size=65 | SHA:
