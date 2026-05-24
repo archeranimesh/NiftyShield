@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS legs (
     entry_price TEXT NOT NULL,
     entry_date TEXT NOT NULL,
     expiry TEXT,
-    strike REAL,
+    strike TEXT,
     product_type TEXT NOT NULL
 );
 
@@ -239,7 +239,7 @@ class PortfolioStore:
                 str(leg.entry_price),
                 leg.entry_date.isoformat(),
                 leg.expiry.isoformat() if leg.expiry else None,
-                leg.strike,
+                str(leg.strike) if leg.strike is not None else None,
                 leg.product_type.value,
             ),
         )
@@ -332,7 +332,7 @@ class PortfolioStore:
                 entry_price=Decimal(r["entry_price"]),
                 entry_date=date.fromisoformat(r["entry_date"]),
                 expiry=date.fromisoformat(r["expiry"]) if r["expiry"] else None,
-                strike=r["strike"],
+                strike=Decimal(r["strike"]) if r["strike"] is not None else None,
                 product_type=ProductType(r["product_type"]),
             )
             for r in rows

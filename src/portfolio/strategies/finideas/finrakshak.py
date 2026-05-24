@@ -7,6 +7,7 @@ Entry date: 01 April 2026.
 """
 
 from datetime import date
+from decimal import Decimal
 
 from src.instruments.lot_size import DateAwareLotSizeResolver
 from src.models.portfolio import (
@@ -35,7 +36,7 @@ FINRAKSHAK = HedgeStrategy(
             entry_price=962.15,
             entry_date=date(2026, 4, 1),
             expiry=date(2026, 12, 29),
-            strike=23000.0,
+            strike=Decimal("23000"),
             product_type=ProductType.NRML,
         ),
     ],

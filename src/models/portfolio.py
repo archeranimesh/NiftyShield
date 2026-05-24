@@ -148,7 +148,7 @@ class Leg(BaseModel):
     expiry: date | None = Field(
         default=None, description="Expiry date for F&O legs, None for equity"
     )
-    strike: float | None = Field(default=None, description="Strike price for options")
+    strike: Decimal | None = Field(default=None, description="Strike price for options")
     product_type: ProductType
 
     @model_validator(mode="after")
@@ -201,7 +201,7 @@ class Leg(BaseModel):
             if is_nifty:
                 # strike < 18000: multiple of 50
                 # strike >= 18000: multiple of 100
-                strike_dec = Decimal(str(self.strike))
+                strike_dec = self.strike
                 is_low = strike_dec < Decimal("18000")
                 grid = Decimal("50") if is_low else Decimal("100")
                 if strike_dec % grid != Decimal("0"):

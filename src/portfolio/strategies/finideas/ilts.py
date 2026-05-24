@@ -10,6 +10,7 @@ Entry date: 01 April 2026.
 """
 
 from datetime import date
+from decimal import Decimal
 
 from src.instruments.lot_size import DateAwareLotSizeResolver
 from src.models.portfolio import (
@@ -51,7 +52,7 @@ FINIDEAS_ILTS = Strategy(
             entry_price=975.0,
             entry_date=date(2026, 4, 1),
             expiry=date(2026, 12, 29),
-            strike=23000.0,
+            strike=Decimal("23000"),
             product_type=ProductType.NRML,
         ),
         Leg(
@@ -64,7 +65,7 @@ FINIDEAS_ILTS = Strategy(
             entry_price=1082.0,
             entry_date=date(2026, 4, 1),
             expiry=date(2026, 6, 30),
-            strike=23000.0,
+            strike=Decimal("23000"),
             product_type=ProductType.NRML,
         ),
         Leg(
@@ -77,7 +78,7 @@ FINIDEAS_ILTS = Strategy(
             entry_price=840.0,
             entry_date=date(2026, 4, 1),
             expiry=date(2026, 6, 30),
-            strike=23000.0,
+            strike=Decimal("23000"),
             product_type=ProductType.NRML,
         ),
     ],

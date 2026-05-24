@@ -150,11 +150,11 @@ class TestLegValidation:
             entry_price=Decimal("100.00"),
             entry_date=date(2026, 4, 1),
             expiry=date(2026, 1, 1),  # Jan 1, 2026 is Thursday
-            strike=22000.0,
+            strike=Decimal("22000.00"),
             product_type=ProductType.NRML,
         )
         assert leg_pe.expiry == date(2026, 1, 1)
-        assert leg_pe.strike == 22000.0
+        assert leg_pe.strike == Decimal("22000.00")
 
     def test_invalid_asset_type_invariants(self):
         # Equity with expiry
@@ -186,7 +186,7 @@ class TestLegValidation:
                 entry_price=Decimal("150.00"),
                 entry_date=date(2026, 4, 1),
                 product_type=ProductType.CNC,
-                strike=150.0,
+                strike=Decimal("150"),
             )
 
         # Bond with expiry
@@ -218,7 +218,7 @@ class TestLegValidation:
                 entry_price=Decimal("150.00"),
                 entry_date=date(2026, 4, 1),
                 product_type=ProductType.CNC,
-                strike=150.0,
+                strike=Decimal("150"),
             )
 
         # Futures without expiry
@@ -250,7 +250,7 @@ class TestLegValidation:
                 entry_date=date(2026, 4, 1),
                 product_type=ProductType.NRML,
                 expiry=date(2026, 1, 1),
-                strike=22000.0,
+                strike=Decimal("22000"),
             )
 
         # Option without expiry
@@ -267,7 +267,7 @@ class TestLegValidation:
                 entry_price=Decimal("100.00"),
                 entry_date=date(2026, 4, 1),
                 product_type=ProductType.NRML,
-                strike=22000.0,
+                strike=Decimal("22000"),
             )
 
         # Option without strike
@@ -299,7 +299,7 @@ class TestLegValidation:
             entry_date=date(2026, 4, 1),
             product_type=ProductType.NRML,
             expiry=date(2026, 1, 1),
-            strike=17550.0,
+            strike=Decimal("17550"),
         )
 
         # Invalid Nifty strike < 18000: not multiple of 50
@@ -317,7 +317,7 @@ class TestLegValidation:
                 entry_date=date(2026, 4, 1),
                 product_type=ProductType.NRML,
                 expiry=date(2026, 1, 1),
-                strike=17525.5,
+                strike=Decimal("17525.5"),
             )
 
         # Valid Nifty strike >= 18000: multiple of 100
@@ -331,13 +331,13 @@ class TestLegValidation:
             entry_date=date(2026, 4, 1),
             product_type=ProductType.NRML,
             expiry=date(2026, 1, 1),
-            strike=22100.0,
+            strike=Decimal("22100"),
         )
 
         # Invalid Nifty strike >= 18000: multiple of 50 but not 100
         with pytest.raises(
             ValidationError,
-            match="Nifty strike 22150.0 must be a multiple of 100",
+            match=r"Nifty strike 22150\.0 must be a multiple of 100",
         ):
             Leg(
                 instrument_key="NIFTY_CE",
@@ -349,7 +349,7 @@ class TestLegValidation:
                 entry_date=date(2026, 4, 1),
                 product_type=ProductType.NRML,
                 expiry=date(2026, 1, 1),
-                strike=22150.0,
+                strike=Decimal("22150.0"),
             )
 
         # Non-Nifty option is not grid validated
@@ -363,7 +363,7 @@ class TestLegValidation:
             entry_date=date(2026, 4, 1),
             product_type=ProductType.NRML,
             expiry=date(2026, 1, 1),
-            strike=22150.0,
+            strike=Decimal("22150.0"),
         )
 
         # BANKNIFTY option is not Nifty-grid validated
@@ -377,7 +377,7 @@ class TestLegValidation:
             entry_date=date(2026, 4, 1),
             product_type=ProductType.NRML,
             expiry=date(2026, 1, 1),
-            strike=22150.0,
+            strike=Decimal("22150.0"),
         )
 
         # FINNIFTY option is not Nifty-grid validated
@@ -391,13 +391,13 @@ class TestLegValidation:
             entry_date=date(2026, 4, 1),
             product_type=ProductType.NRML,
             expiry=date(2026, 1, 1),
-            strike=22150.0,
+            strike=Decimal("22150.0"),
         )
 
         # Nifty key but generic name triggers validation
         with pytest.raises(
             ValidationError,
-            match="Nifty strike 22150.0 must be a multiple of 100",
+            match=r"Nifty strike 22150\.0 must be a multiple of 100",
         ):
             Leg(
                 instrument_key="NIFTY_CE_TEST",
@@ -409,7 +409,7 @@ class TestLegValidation:
                 entry_date=date(2026, 4, 1),
                 product_type=ProductType.NRML,
                 expiry=date(2026, 1, 1),
-                strike=22150.0,
+                strike=Decimal("22150.0"),
             )
 
     def test_expiry_trading_day_validation(self):
@@ -514,7 +514,7 @@ class TestLegValidation:
             entry_date=date(2018, 4, 1),
             product_type=ProductType.NRML,
             expiry=date(2018, 5, 31),
-            strike=20000.0,
+            strike=Decimal("20000"),
         )
 
         # May 24, 2018 is Thursday, but not monthly expiry. Should fail.
@@ -532,7 +532,7 @@ class TestLegValidation:
                 entry_date=date(2018, 4, 1),
                 product_type=ProductType.NRML,
                 expiry=date(2018, 5, 24),
-                strike=20000.0,
+                strike=Decimal("20000"),
             )
 
     def test_expiry_whitelist(self):
@@ -548,7 +548,7 @@ class TestLegValidation:
             entry_date=date(2026, 4, 1),
             product_type=ProductType.NRML,
             expiry=date(2026, 4, 7),
-            strike=20000.0,
+            strike=Decimal("20000"),
         )
         Leg(
             instrument_key="PE_TEST",
@@ -560,7 +560,7 @@ class TestLegValidation:
             entry_date=date(2026, 4, 1),
             product_type=ProductType.NRML,
             expiry=date(2026, 12, 29),
-            strike=20000.0,
+            strike=Decimal("20000"),
         )
 
 
@@ -857,7 +857,7 @@ class TestPortfolioTracker:
                     instrument_key="B", display_name="B", asset_type=AssetType.PE,
                     direction=Direction.SELL, quantity=65, entry_price=840.0,
                     entry_date=date(2026, 4, 1), product_type=ProductType.NRML, lot_size=65,
-                    expiry=date(2026, 12, 29), strike=840.0,
+                    expiry=date(2026, 12, 29), strike=Decimal("840"),
                 ),
             ],
         )
@@ -925,7 +925,7 @@ class TestPortfolioTracker:
                     entry_date=date(2026, 4, 1),
                     product_type=ProductType.NRML,
                     expiry=date(2026, 12, 29),
-                    strike=500.0,
+                    strike=Decimal("500"),
                 ),
             ],
         )
@@ -1047,7 +1047,7 @@ class TestSnapshotService:
                     instrument_key="OPT1", display_name="OPT1", asset_type=AssetType.PE,
                     direction=Direction.SELL, quantity=75, entry_price=Decimal("150.00"),
                     entry_date=date(2026, 4, 1), product_type=ProductType.NRML,
-                    expiry=date(2026, 12, 29), strike=150.0,
+                    expiry=date(2026, 12, 29), strike=Decimal("150"),
                 ),
             ],
         )
