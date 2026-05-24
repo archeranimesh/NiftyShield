@@ -307,18 +307,42 @@ class InstrumentLookup:
             if exp:
                 seen.add(exp)
 
+        # Parse all expiries to determine calendar cadence
+        parsed_expiries: list[date] = []
+        for exp in seen:
+            try:
+                parsed_expiries.append(date.fromisoformat(exp))
+            except ValueError:
+                continue
+
+        # Find the last expiry of each calendar month
+        last_of_month: dict[tuple[int, int], date] = {}
+        for d in parsed_expiries:
+            key = (d.year, d.month)
+            if key not in last_of_month or d > last_of_month[key]:
+                last_of_month[key] = d
+
         mapping: dict[str, str] = {}
         for exp in sorted(seen):
-            dte = (date.fromisoformat(exp) - today).days
+            try:
+                d = date.fromisoformat(exp)
+            except ValueError:
+                continue
+
+            dte = (d - today).days
             if dte < 15:
                 continue
             
+            is_monthly = (d == last_of_month[(d.year, d.month)])
+            is_quarterly = is_monthly and (d.month in (3, 6, 9, 12))
+            is_yearly = is_monthly and (d.month in (6, 12))
+            
             label = None
-            if 15 <= dte <= 45:
+            if 15 <= dte <= 45 and is_monthly:
                 label = "monthly"
-            elif 46 <= dte <= 200:
+            elif 46 <= dte <= 200 and is_quarterly:
                 label = "quarterly"
-            elif 201 <= dte <= 420:
+            elif 201 <= dte <= 420 and is_yearly:
                 label = "yearly"
             
             if label and label not in mapping:
