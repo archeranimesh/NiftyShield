@@ -267,14 +267,16 @@ def _build_portfolio_summary(
         etf_day_delta = etf_value - prev_etf_value
         options_day_delta = options_pnl - prev_options_pnl
 
-        # Finrakshak delta isolated — needed for hedge effectiveness reporting
-        frak_strat = next(
-            (s for s in strategies if getattr(s, "name", None) == "finrakshak"), None
-        )
-        curr_frak = strategy_pnls.get("finrakshak")
-        if frak_strat is not None and curr_frak is not None:
-            prev_frak_pnl = _compute_strategy_pnl_from_prices(frak_strat, prev_prices_dec)
-            finrakshak_day_delta = curr_frak.total_pnl - prev_frak_pnl.total_pnl
+        # Polymorphic hedge delta aggregation
+        for s in strategies:
+            curr_pnl = strategy_pnls.get(s.name)
+            if curr_pnl is not None:
+                calc_delta = getattr(s, "get_protection_delta", None)
+                if calc_delta is not None:
+                    delta = calc_delta(curr_pnl.total_pnl, prev_prices_dec)
+                    if delta is not None:
+                        finrakshak_day_delta = delta
+                        break
 
     if prev_mf_pnl is not None and mf_pnl is not None:
         mf_day_delta = mf_value - prev_mf_pnl.total_current_value

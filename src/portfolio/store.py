@@ -24,6 +24,7 @@ from src.models.portfolio import (
     Trade,
     TradeAction,
     Position,
+    create_strategy_instance,
 )
 
 _SCHEMA = """
@@ -287,7 +288,7 @@ class PortfolioStore:
                 return None
 
             legs = self._get_legs(conn, row["id"])
-            return Strategy(
+            return create_strategy_instance(
                 id=row["id"],
                 name=row["name"],
                 description=row["description"],
@@ -303,7 +304,7 @@ class PortfolioStore:
             for row in rows:
                 legs = self._get_legs(conn, row["id"])
                 strategies.append(
-                    Strategy(
+                    create_strategy_instance(
                         id=row["id"],
                         name=row["name"],
                         description=row["description"],

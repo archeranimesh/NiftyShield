@@ -360,6 +360,58 @@ class Strategy(BaseModel):
             Decimal("0"),
         )
 
+    def get_protection_delta(
+        self,
+        current_pnl: Decimal,
+        prev_prices: dict[str, Decimal],
+    ) -> Decimal | None:
+        """Calculate the protection delta contribution of this strategy.
+
+        Returns None by default. Subclasses (like HedgeStrategy) can override
+        this to compute the delta compared to prior day's prices.
+        """
+        return None
+
+
+class HedgeStrategy(Strategy):
+    """A strategy that serves as a portfolio hedge."""
+
+    def get_protection_delta(
+        self,
+        current_pnl: Decimal,
+        prev_prices: dict[str, Decimal],
+    ) -> Decimal | None:
+        """Calculate the protection delta for this hedge strategy."""
+        from src.portfolio.summary import _compute_strategy_pnl_from_prices
+
+        prev_pnl = _compute_strategy_pnl_from_prices(self, prev_prices)
+        return current_pnl - prev_pnl.total_pnl
+
+
+def create_strategy_instance(
+    id: int | None,
+    name: str,
+    description: str,
+    legs: list[Leg],
+    created_at: datetime | None,
+) -> Strategy:
+    """Polymorphic factory to construct the appropriate Strategy subclass."""
+    if name.lower() == "finrakshak":
+        return HedgeStrategy(
+            id=id,
+            name=name,
+            description=description,
+            legs=legs,
+            created_at=created_at,
+        )
+    return Strategy(
+        id=id,
+        name=name,
+        description=description,
+        legs=legs,
+        created_at=created_at,
+    )
+
 
 class DailySnapshot(BaseModel):
     """A single day's closing data for one leg."""

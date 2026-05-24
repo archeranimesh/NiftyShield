@@ -11,12 +11,12 @@ from datetime import date
 from src.models.portfolio import (
     AssetType,
     Direction,
+    HedgeStrategy,
     Leg,
     ProductType,
-    Strategy,
 )
 
-FINRAKSHAK = Strategy(
+FINRAKSHAK = HedgeStrategy(
     name="finrakshak",
     description=(
         "FinRakshak: Long-dated Nifty protective put. "

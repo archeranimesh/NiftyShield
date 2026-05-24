@@ -147,7 +147,7 @@ def apply_trade_positions(
             product_type=ProductType.CNC,
         ))
 
-    return Strategy(
+    return strategy.__class__(
         id=strategy.id,
         name=strategy.name,
         description=strategy.description,

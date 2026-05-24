@@ -15,9 +15,11 @@ from src.models.portfolio import (
     AssetType,
     DailySnapshot,
     Direction,
+    HedgeStrategy,
     Leg,
     ProductType,
     Strategy,
+    create_strategy_instance,
 )
 from src.portfolio.store import PortfolioStore
 from src.portfolio.tracker import PortfolioTracker
@@ -588,6 +590,46 @@ class TestStrategyPnL:
             ],
         )
         assert strategy.total_entry_value == Decimal("40000")
+
+
+class TestPolymorphicStrategy:
+    def test_create_strategy_instance_factory(self):
+        s1 = create_strategy_instance(1, "FinRakshak", "Protective Put", [], None)
+        assert isinstance(s1, HedgeStrategy)
+        assert s1.name == "FinRakshak"
+
+        s2 = create_strategy_instance(2, "finrakshak", "Protective Put", [], None)
+        assert isinstance(s2, HedgeStrategy)
+
+        s3 = create_strategy_instance(3, "finideas_ilts", "ILTS", [], None)
+        assert isinstance(s3, Strategy)
+        assert not isinstance(s3, HedgeStrategy)
+
+    def test_get_protection_delta_polymorphism(self):
+        strat = Strategy(name="some_strategy", legs=[])
+        assert strat.get_protection_delta(Decimal("1000"), {}) is None
+
+        hedge_strat = HedgeStrategy(
+            name="finrakshak",
+            legs=[
+                Leg(
+                    instrument_key="NSE_FO|37810",
+                    display_name="NIFTY DEC 23000 PE",
+                    asset_type=AssetType.PE,
+                    direction=Direction.BUY,
+                    quantity=65,
+                    lot_size=65,
+                    entry_price=Decimal("962.15"),
+                    entry_date=date(2026, 4, 1),
+                    expiry=date(2026, 12, 29),
+                    strike=23000.0,
+                    product_type=ProductType.NRML,
+                )
+            ]
+        )
+        prev_prices = {"NSE_FO|37810": Decimal("950.0")}
+        delta = hedge_strat.get_protection_delta(Decimal("1000"), prev_prices)
+        assert delta == Decimal("1000") - (Decimal("-12.15") * 65)
 
 
 # ── Store tests ──────────────────────────────────────────────────

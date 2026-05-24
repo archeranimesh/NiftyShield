@@ -17,6 +17,7 @@ from src.models.portfolio import (
     AssetType,
     DailySnapshot,
     Direction,
+    HedgeStrategy,
     Leg,
     PortfolioSummary,
     Position,
@@ -24,6 +25,7 @@ from src.models.portfolio import (
     Strategy,
     Trade,
     TradeAction,
+    create_strategy_instance,
 )
 
 __all__ = [
@@ -35,6 +37,7 @@ __all__ = [
     "AssetType",
     "DailySnapshot",
     "Direction",
+    "HedgeStrategy",
     "Leg",
     "PortfolioSummary",
     "Position",
@@ -42,6 +45,7 @@ __all__ = [
     "Strategy",
     "Trade",
     "TradeAction",
+    "create_strategy_instance",
     # mf models
     "MFHolding",
     "MFNavSnapshot",
