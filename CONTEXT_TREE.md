@@ -61,6 +61,7 @@ src/
 │   ├── data/nse_2026.yaml    # NSE 2026 equity holiday list — version-controlled config (src/ not data/ because data/ is gitignored). Update each January.
 │   └── holidays.py           # NSE equity holiday detection. load_holidays(year) → frozenset[date] (cached, fail-open on missing YAML). is_trading_day(d) → bool (weekday AND not in holiday set). prev_trading_day(d) → date (walks back to nearest prior trading day).
 ├── instruments/
+│   ├── lot_size.py           # DateAwareLotSizeResolver: resolves market lot sizes for underlying symbols (like NIFTY, BANKNIFTY) based on date.
 │   └── lookup.py             # Offline BOD search (NSE.json.gz). CLI: --find-legs mode. search() uses ranked exact>prefix>fuzzy scoring via _score_query()/_best_score() (rapidfuzz; difflib fallback). min_score param added.
 ├── notifications/
 │   ├── CLAUDE.md             # Module context: non-fatal contract, build_notifier() → None, HTML parse_mode
@@ -145,6 +146,7 @@ tests/
 │       └── test_daily_snapshot_helpers.py  # 30 tests: _etf_current_value + _etf_cost_basis helpers; PortfolioSummary construction with mf/dhan/nuvama source objects; mf_available/dhan_available/nuvama_available @property behaviour; total_value/invested/pnl aggregation across sources. Assertions use direct field access (result.mf_pnl is None / result.dhan.equity_value == ...) — no conditional ternaries.
 └── instruments/
     ├── __init__.py
+    ├── test_lot_size.py      # 3 tests: DateAwareLotSizeResolver happy paths (Nifty, Bank Nifty) and edge cases (ETFs, fallback to 1)
     └── test_lookup.py        # 27 tests: _score_query tiers, _best_score field selection, InstrumentLookup.search ranking/filters/min_score/edge cases
 └── auth/
     ├── __init__.py

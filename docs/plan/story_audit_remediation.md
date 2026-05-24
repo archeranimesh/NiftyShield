@@ -37,7 +37,7 @@ Resume rule: read CONTEXT.md → find first unchecked box → implement → test
 - [x] [9] summary.py:236 — OCP strategy branching | SHA: c5cc706
 
 ## Batch 6 — Financial Correctness (each gets its own commit)
-- [ ] [22] ilts.py:49 — hardcoded lot_size=65 | SHA:
+- [x] [22] ilts.py:49 — hardcoded lot_size=65 | SHA: eb078f2
 - [ ] [23] bhavcopy_ingest.py:143,189 — no VWAP distinction | SHA:
 - [ ] [24] lookup.py:317 — DTE bands, no cadence awareness | SHA:
 - [ ] [25] dhan/positions.py:167 — flat STT rate | SHA:
