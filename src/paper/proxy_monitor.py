@@ -3,6 +3,7 @@
 from datetime import date
 from decimal import Decimal
 
+from src.paper.constants import STRATEGY_PROXY
 from src.paper.store import PaperStore
 
 
@@ -13,7 +14,7 @@ class ProxyDeltaMonitor:
     WARNING_THRESHOLD = Decimal("0.65")
     CRITICAL_DAYS = 3
 
-    def __init__(self, store: PaperStore, strategy_name: str = "paper_nifty_proxy") -> None:
+    def __init__(self, store: PaperStore, strategy_name: str = STRATEGY_PROXY) -> None:
         """Initialize the monitor.
         
         Args:

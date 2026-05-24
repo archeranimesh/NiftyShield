@@ -33,15 +33,20 @@ import yaml
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.models.portfolio import TradeAction
-from src.paper.constants import DEFAULT_DB_PATH
+from src.paper.constants import (
+    DEFAULT_DB_PATH,
+    STRATEGY_FUTURES,
+    STRATEGY_PROXY,
+    STRATEGY_SPOT,
+)
 from src.paper.models import PaperTrade
 from src.paper.store import PaperStore
 
 DEFAULT_CONFIG = Path("data/paper/overlay_entry.yaml")
 
 # Tracks and whether each may carry a standalone covered call
-_TRACKS = ["paper_nifty_spot", "paper_nifty_futures", "paper_nifty_proxy"]
-_CC_BLOCKED = {"paper_nifty_futures"}  # Futures + standalone CC is permanently blocked
+_TRACKS = [STRATEGY_SPOT, STRATEGY_FUTURES, STRATEGY_PROXY]
+_CC_BLOCKED = {STRATEGY_FUTURES}  # Futures + standalone CC is permanently blocked
 
 
 @dataclass

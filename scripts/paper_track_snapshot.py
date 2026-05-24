@@ -15,7 +15,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.client.upstox_market import UpstoxMarketClient
 from src.instruments.lookup import InstrumentLookup
 from src.notifications.telegram import TelegramNotifier
-from src.paper.constants import DEFAULT_BOD_PATH, DEFAULT_DB_PATH, LOT_SIZE
+from src.paper.constants import (
+    DEFAULT_BOD_PATH,
+    DEFAULT_DB_PATH,
+    LOT_SIZE,
+    STRATEGY_FUTURES,
+    STRATEGY_PROXY,
+    STRATEGY_SPOT,
+)
 from src.paper.store import PaperStore
 from src.paper.proxy_monitor import ProxyDeltaMonitor
 from src.paper.track_snapshot import TrackPnL, generate_track_snapshot
@@ -113,9 +120,9 @@ async def main() -> None:
         notifier = MockNotifier()
 
     tracks = [
-        "paper_nifty_spot",
-        "paper_nifty_futures",
-        "paper_nifty_proxy"
+        STRATEGY_SPOT,
+        STRATEGY_FUTURES,
+        STRATEGY_PROXY,
     ]
 
     print(f"\n--- Nifty 3-Track Snapshot for {snapshot_date} ---")
@@ -126,7 +133,7 @@ async def main() -> None:
     
     for track_name in tracks:
         # Determine if we should pass the proxy monitor
-        monitor = proxy_monitor if track_name == "paper_nifty_proxy" else None
+        monitor = proxy_monitor if track_name == STRATEGY_PROXY else None
         
         snapshot = await generate_track_snapshot(
             store=store,
@@ -161,7 +168,7 @@ async def main() -> None:
         print(f"  GREEKS : Δ={snapshot.greeks.net_delta:.2f} | Θ={snapshot.greeks.net_theta:.2f} | V={snapshot.greeks.net_vega:.2f}")
         print(f"  METRICS: Max DD={snapshot.max_drawdown_pct:.2f}% (₹{snapshot.max_drawdown_abs:,.2f}) | Ret/NEE={snapshot.return_on_nee:.2f}%")
         
-        if track_name == "paper_nifty_proxy" and snapshot.proxy_delta_alert:
+        if track_name == STRATEGY_PROXY and snapshot.proxy_delta_alert:
             print(f"  ALERT  : Proxy Delta State -> {snapshot.proxy_delta_alert}")
             if "CRITICAL" in snapshot.proxy_delta_alert:
                 await notifier.send(f"🚨 **CRITICAL**: Proxy Delta Monitor triggered: {snapshot.proxy_delta_alert}\nDelta: {snapshot.greeks.net_delta:.2f}")

@@ -1,11 +1,13 @@
 # src/paper/_display.py
 from decimal import Decimal
 
+from src.paper.constants import STRATEGY_FUTURES, STRATEGY_PROXY, STRATEGY_SPOT
+
 # Standardised labels for 3-Track comparison
 BASE_LABELS = {
-    "paper_nifty_spot": "NiftyBees (Spot)",
-    "paper_nifty_futures": "Nifty Futures",
-    "paper_nifty_proxy": "Proxy DITM CE",
+    STRATEGY_SPOT: "NiftyBees (Spot)",
+    STRATEGY_FUTURES: "Nifty Futures",
+    STRATEGY_PROXY: "Proxy DITM CE",
 }
 
 OVERLAY_LABELS = {

@@ -55,7 +55,15 @@ load_dotenv()
 from src.client.upstox_market import UpstoxMarketClient
 from src.instruments.lookup import InstrumentLookup, parse_expiry as _pe
 from src.models.portfolio import TradeAction
-from src.paper.constants import DEFAULT_BOD_PATH, DEFAULT_DB_PATH, LOT_SIZE, OVERLAY_ROLL_DTE
+from src.paper.constants import (
+    DEFAULT_BOD_PATH,
+    DEFAULT_DB_PATH,
+    LOT_SIZE,
+    OVERLAY_ROLL_DTE,
+    STRATEGY_FUTURES,
+    STRATEGY_PROXY,
+    STRATEGY_SPOT,
+)
 from src.paper.models import PaperTrade
 from src.paper.store import PaperStore
 from src.paper._utils import safe_float
@@ -528,7 +536,7 @@ async def _run(args: argparse.Namespace) -> None:
 
     effective_tracks: list[str] = []
     if args.tracks:
-        track_map = {"spot": "paper_nifty_spot", "futures": "paper_nifty_futures", "proxy": "paper_nifty_proxy"}
+        track_map = {"spot": STRATEGY_SPOT, "futures": STRATEGY_FUTURES, "proxy": STRATEGY_PROXY}
         effective_tracks = [track_map[t] for t in args.tracks if t in track_map]
     else:
         effective_tracks = list(ALL_TRACKS)

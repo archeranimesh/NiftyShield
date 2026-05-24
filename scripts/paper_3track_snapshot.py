@@ -47,7 +47,14 @@ from src.client.upstox_market import UpstoxMarketClient
 from src.instruments.lookup import InstrumentLookup
 from src.models.portfolio import TradeAction
 from src.notifications.telegram import TelegramNotifier
-from src.paper.constants import DEFAULT_BOD_PATH, DEFAULT_DB_PATH, LOT_SIZE
+from src.paper.constants import (
+    DEFAULT_BOD_PATH,
+    DEFAULT_DB_PATH,
+    LOT_SIZE,
+    STRATEGY_FUTURES,
+    STRATEGY_PROXY,
+    STRATEGY_SPOT,
+)
 from src.paper.metrics import compute_nee
 from src.paper.models import PaperLegSnapshot, PaperNavSnapshot
 from src.paper.proxy_monitor import ProxyDeltaMonitor
@@ -65,7 +72,7 @@ from src.paper._display import (
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-ALL_TRACKS = ["paper_nifty_spot", "paper_nifty_futures", "paper_nifty_proxy"]
+ALL_TRACKS = [STRATEGY_SPOT, STRATEGY_FUTURES, STRATEGY_PROXY]
 
 
 
@@ -165,9 +172,9 @@ def _print_track_block(
 def _base_leg_role(track_name: str) -> str:
     """Return the base leg_role for a track."""
     return {
-        "paper_nifty_spot":    "base_etf",
-        "paper_nifty_futures": "base_futures",
-        "paper_nifty_proxy":   "base_ditm_call",
+        STRATEGY_SPOT:    "base_etf",
+        STRATEGY_FUTURES: "base_futures",
+        STRATEGY_PROXY:   "base_ditm_call",
     }.get(track_name, "base_etf")
 
 
@@ -281,9 +288,9 @@ async def _run(args: argparse.Namespace) -> None:
     save: bool = not args.dry_run
 
     _TRACK_MAP = {
-        "spot":    "paper_nifty_spot",
-        "futures": "paper_nifty_futures",
-        "proxy":   "paper_nifty_proxy",
+        "spot":    STRATEGY_SPOT,
+        "futures": STRATEGY_FUTURES,
+        "proxy":   STRATEGY_PROXY,
     }
     tracks = [_TRACK_MAP[t] for t in args.tracks] if args.tracks else list(ALL_TRACKS)
 
@@ -352,7 +359,7 @@ async def _run(args: argparse.Namespace) -> None:
     summary_rows = []
 
     for track_name in tracks:
-        monitor = proxy_monitor if track_name == "paper_nifty_proxy" else None
+        monitor = proxy_monitor if track_name == STRATEGY_PROXY else None
         snapshot = await generate_track_snapshot(
             store=store,
             broker=broker,

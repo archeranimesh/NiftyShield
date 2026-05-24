@@ -65,6 +65,9 @@ from src.paper.constants import (
     PP_OTM_MIN,
     PP_TARGET_OTM,
     SPREAD_PCT_MAX,
+    STRATEGY_FUTURES,
+    STRATEGY_PROXY,
+    STRATEGY_SPOT,
 )
 from src.paper.models import PaperTrade
 from src.paper.store import PaperStore
@@ -73,10 +76,10 @@ from src.paper._display import BASE_LABELS, OVERLAY_LABELS
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
-ALL_TRACKS = ["paper_nifty_spot", "paper_nifty_futures", "paper_nifty_proxy"]
+ALL_TRACKS = [STRATEGY_SPOT, STRATEGY_FUTURES, STRATEGY_PROXY]
 
 # Futures track is permanently blocked from standalone covered calls
-_CC_BLOCKED_TRACKS = {"paper_nifty_futures"}
+_CC_BLOCKED_TRACKS = {STRATEGY_FUTURES}
 
 logger = logging.getLogger(__name__)
 
@@ -740,9 +743,9 @@ def main() -> None:
 
     # Map short track names → strategy names
     _TRACK_MAP = {
-        "spot":    "paper_nifty_spot",
-        "futures": "paper_nifty_futures",
-        "proxy":   "paper_nifty_proxy",
+        "spot":    STRATEGY_SPOT,
+        "futures": STRATEGY_FUTURES,
+        "proxy":   STRATEGY_PROXY,
     }
     if args.tracks:
         args.tracks = [_TRACK_MAP[t] for t in args.tracks]
