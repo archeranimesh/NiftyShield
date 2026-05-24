@@ -137,13 +137,24 @@ def _parse_strike_from_symbol(symbol: str) -> Decimal:
     Examples:
         'NIFTY-May2026-23750-PE' -> Decimal('23750')
         'NIFTY2550523500CE' -> Decimal('23500')
+        'NIFTY25O1523500CE' -> Decimal('23500')
     """
-    # Try hyphenated format first (e.g. NIFTY-May2026-23750-PE)
+    # 1. Try hyphenated format first (e.g. NIFTY-May2026-23750-PE)
     match = re.search(r"-(\d+(?:\.\d+)?)-(?:CE|PE)", symbol, re.IGNORECASE)
     if match:
         return Decimal(match.group(1))
 
-    # Try NSE standard format (e.g. NIFTY2550523500CE)
+    # 2. Try NSE weekly option format (e.g. NIFTY2550523500CE, NIFTY25O1523500CE)
+    match = re.search(r"^[A-Z]+(?:\d{2})([1-9ONDond])(?:\d{2})(\d+(?:\.\d+)?)(?:CE|PE)$", symbol, re.IGNORECASE)
+    if match:
+        return Decimal(match.group(2))
+
+    # 3. Try NSE monthly option format (e.g. NIFTY25MAY23500CE)
+    match = re.search(r"^[A-Z]+(?:\d{2})(?:[A-Z]{3})(\d+(?:\.\d+)?)(?:CE|PE)$", symbol, re.IGNORECASE)
+    if match:
+        return Decimal(match.group(1))
+
+    # 4. Fallback to general capture if custom patterns fail
     match = re.search(r"(\d+(?:\.\d+)?)(?:CE|PE)", symbol, re.IGNORECASE)
     if match:
         digits = match.group(1)

@@ -451,6 +451,7 @@ class TestComputeCharges:
         assert total_charges == Decimal("0.82")
 
     def test_itm_expiry_nse_format(self) -> None:
+        # 1. Weekly with numeric month (May)
         positions = [
             _make_option_position(
                 trading_symbol="NIFTY2550523500CE",
@@ -461,10 +462,55 @@ class TestComputeCharges:
         ]
         total_charges, brokerage = compute_charges(positions, trade_count=0, is_itm_expiry=True)
         assert brokerage == Decimal("0")
-        # strike = 23500
-        # stt = 0.00125 * 23500 * 50 = 1468.75
-        # total_charges = 0.265 + 0.005 + 0.015 + 1468.75 + 0.0486 = 1469.0836 -> 1469.08
         assert total_charges == Decimal("1469.08")
+
+        # 2. Weekly with alphabetical month (Oct, O)
+        positions_oct = [
+            _make_option_position(
+                trading_symbol="NIFTY25O1523500CE",
+                buy_qty=50, buy_avg=Decimal("10"),
+                sell_qty=0, sell_avg=Decimal("0"),
+                net_qty=50,
+            )
+        ]
+        total_charges_oct, _ = compute_charges(positions_oct, trade_count=0, is_itm_expiry=True)
+        assert total_charges_oct == Decimal("1469.08")
+
+        # 3. Weekly with alphabetical month (Nov, N)
+        positions_nov = [
+            _make_option_position(
+                trading_symbol="NIFTY25N1523500CE",
+                buy_qty=50, buy_avg=Decimal("10"),
+                sell_qty=0, sell_avg=Decimal("0"),
+                net_qty=50,
+            )
+        ]
+        total_charges_nov, _ = compute_charges(positions_nov, trade_count=0, is_itm_expiry=True)
+        assert total_charges_nov == Decimal("1469.08")
+
+        # 4. Weekly with alphabetical month (Dec, D)
+        positions_dec = [
+            _make_option_position(
+                trading_symbol="NIFTY25D1523500CE",
+                buy_qty=50, buy_avg=Decimal("10"),
+                sell_qty=0, sell_avg=Decimal("0"),
+                net_qty=50,
+            )
+        ]
+        total_charges_dec, _ = compute_charges(positions_dec, trade_count=0, is_itm_expiry=True)
+        assert total_charges_dec == Decimal("1469.08")
+
+        # 5. Monthly with 3-letter month (MAY)
+        positions_monthly = [
+            _make_option_position(
+                trading_symbol="NIFTY25MAY23500CE",
+                buy_qty=50, buy_avg=Decimal("10"),
+                sell_qty=0, sell_avg=Decimal("0"),
+                net_qty=50,
+            )
+        ]
+        total_charges_monthly, _ = compute_charges(positions_monthly, trade_count=0, is_itm_expiry=True)
+        assert total_charges_monthly == Decimal("1469.08")
 
     def test_itm_expiry_unparseable_symbol(self) -> None:
         positions = [
