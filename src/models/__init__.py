@@ -26,6 +26,7 @@ from src.models.portfolio import (
     Trade,
     TradeAction,
     create_strategy_instance,
+    register_strategy_type,
 )
 
 __all__ = [
@@ -46,6 +47,7 @@ __all__ = [
     "Trade",
     "TradeAction",
     "create_strategy_instance",
+    "register_strategy_type",
     # mf models
     "MFHolding",
     "MFNavSnapshot",

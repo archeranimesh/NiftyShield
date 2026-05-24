@@ -363,12 +363,12 @@ class Strategy(BaseModel):
     def get_protection_delta(
         self,
         current_pnl: Decimal,
-        prev_prices: dict[str, Decimal],
+        prev_pnl: Decimal,
     ) -> Decimal | None:
         """Calculate the protection delta contribution of this strategy.
 
         Returns None by default. Subclasses (like HedgeStrategy) can override
-        this to compute the delta compared to prior day's prices.
+        this to compute the delta compared to prior day's P&L.
         """
         return None
 
@@ -379,13 +379,22 @@ class HedgeStrategy(Strategy):
     def get_protection_delta(
         self,
         current_pnl: Decimal,
-        prev_prices: dict[str, Decimal],
+        prev_pnl: Decimal,
     ) -> Decimal | None:
         """Calculate the protection delta for this hedge strategy."""
-        from src.portfolio.summary import _compute_strategy_pnl_from_prices
+        return current_pnl - prev_pnl
 
-        prev_pnl = _compute_strategy_pnl_from_prices(self, prev_prices)
-        return current_pnl - prev_pnl.total_pnl
+
+_STRATEGY_REGISTRY: dict[str, type[Strategy]] = {}
+
+
+def register_strategy_type(name: str, cls: type[Strategy]) -> None:
+    """Register a strategy subclass for polymorphic instantiation by name."""
+    _STRATEGY_REGISTRY[name.lower()] = cls
+
+
+# Register default strategy types
+register_strategy_type("finrakshak", HedgeStrategy)
 
 
 def create_strategy_instance(
@@ -396,15 +405,8 @@ def create_strategy_instance(
     created_at: datetime | None,
 ) -> Strategy:
     """Polymorphic factory to construct the appropriate Strategy subclass."""
-    if name.lower() == "finrakshak":
-        return HedgeStrategy(
-            id=id,
-            name=name,
-            description=description,
-            legs=legs,
-            created_at=created_at,
-        )
-    return Strategy(
+    cls = _STRATEGY_REGISTRY.get(name.lower(), Strategy)
+    return cls(
         id=id,
         name=name,
         description=description,

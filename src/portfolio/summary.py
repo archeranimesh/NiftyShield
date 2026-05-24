@@ -20,6 +20,7 @@ from decimal import Decimal
 from src.models.portfolio import (
     AssetType,
     DailySnapshot,
+    HedgeStrategy,
     PortfolioSummary,
     Strategy,
 )
@@ -269,13 +270,15 @@ def _build_portfolio_summary(
 
         # Polymorphic hedge delta aggregation
         for s in strategies:
-            curr_pnl = strategy_pnls.get(s.name)
-            if curr_pnl is not None:
-                calc_delta = getattr(s, "get_protection_delta", None)
-                if calc_delta is not None:
-                    delta = calc_delta(curr_pnl.total_pnl, prev_prices_dec)
+            if isinstance(s, HedgeStrategy):
+                curr_pnl = strategy_pnls.get(s.name)
+                if curr_pnl is not None:
+                    prev_pnl = _compute_strategy_pnl_from_prices(s, prev_prices_dec).total_pnl
+                    delta = s.get_protection_delta(curr_pnl.total_pnl, prev_pnl)
                     if delta is not None:
                         finrakshak_day_delta = delta
+                        # Note: We assume exactly one hedge strategy exists for the portfolio's finrakshak_day_delta slot.
+                        # If multiple are added, the first one encountered governs the slot.
                         break
 
     if prev_mf_pnl is not None and mf_pnl is not None:

@@ -607,35 +607,26 @@ class TestPolymorphicStrategy:
 
     def test_get_protection_delta_polymorphism(self):
         strat = Strategy(name="some_strategy", legs=[])
-        assert strat.get_protection_delta(Decimal("1000"), {}) is None
+        assert strat.get_protection_delta(Decimal("1000"), Decimal("800")) is None
 
-        hedge_strat = HedgeStrategy(
-            name="finrakshak",
-            legs=[
-                Leg(
-                    instrument_key="NSE_FO|37810",
-                    display_name="NIFTY DEC 23000 PE",
-                    asset_type=AssetType.PE,
-                    direction=Direction.BUY,
-                    quantity=65,
-                    lot_size=65,
-                    entry_price=Decimal("962.15"),
-                    entry_date=date(2026, 4, 1),
-                    expiry=date(2026, 12, 29),
-                    strike=23000.0,
-                    product_type=ProductType.NRML,
-                )
-            ]
-        )
-        prev_prices = {"NSE_FO|37810": Decimal("950.0")}
-        delta = hedge_strat.get_protection_delta(Decimal("1000"), prev_prices)
-        assert delta == Decimal("1000") - (Decimal("-12.15") * 65)
+        hedge_strat = HedgeStrategy(name="finrakshak", legs=[])
+        delta = hedge_strat.get_protection_delta(Decimal("1000"), Decimal("800"))
+        assert delta == Decimal("200")
 
 
 # ── Store tests ──────────────────────────────────────────────────
 
 
 class TestPortfolioStore:
+    def test_get_strategy_returns_subclass(self, tmp_store):
+        s = Strategy(name="finrakshak", legs=[_make_leg(Direction.BUY, 962.15, 65)])
+        tmp_store.upsert_strategy(s)
+
+        loaded = tmp_store.get_strategy("finrakshak")
+        assert loaded is not None
+        assert isinstance(loaded, HedgeStrategy)
+        assert loaded.name == "finrakshak"
+
     def test_upsert_strategy(self, tmp_store):
         s = Strategy(name="s1", legs=[_make_leg(Direction.BUY, 100.0, 10)])
         sid = tmp_store.upsert_strategy(s)
