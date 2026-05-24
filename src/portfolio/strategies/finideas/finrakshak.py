@@ -8,6 +8,7 @@ Entry date: 01 April 2026.
 
 from datetime import date
 
+from src.instruments.lot_size import DateAwareLotSizeResolver
 from src.models.portfolio import (
     AssetType,
     Direction,
@@ -30,7 +31,7 @@ FINRAKSHAK = HedgeStrategy(
             asset_type=AssetType.PE,
             direction=Direction.BUY,
             quantity=65,
-            lot_size=65,
+            lot_size=DateAwareLotSizeResolver.resolve("NIFTY", date(2026, 4, 1)),
             entry_price=962.15,
             entry_date=date(2026, 4, 1),
             expiry=date(2026, 12, 29),
