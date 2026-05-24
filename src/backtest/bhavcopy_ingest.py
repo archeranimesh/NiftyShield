@@ -37,7 +37,7 @@ class BhavRecord(BaseModel, frozen=True):
     high: Decimal
     low: Decimal
     close: Decimal
-    settle_price: Decimal
+    settle_price: Decimal  # Note: NSE bhavcopy settle_price is a 30-min VWAP (3:00-3:30 PM), not EOD LTP.
     volume: int
     oi: int
 
@@ -141,6 +141,9 @@ def _parse_legacy(
             high=Decimal(row["HIGH"]),
             low=Decimal(row["LOW"]),
             close=Decimal(row["CLOSE"]),
+            # Note: SETTLE_PR in legacy bhavcopy is the 30-minute VWAP settlement price.
+            # IV reconstruction using settle_price will diverge from live Greeks on volatile close days.
+            # Refer to T1-B.1 in docs/reviews/audit_2026-05-15.md.
             settle_price=Decimal(row["SETTLE_PR"]),
             volume=int(row["CONTRACTS"]),
             oi=int(row["OPEN_INT"]),
@@ -187,6 +190,9 @@ def _parse_udiff(
             high=Decimal(row["HghPric"]),
             low=Decimal(row["LwPric"]),
             close=Decimal(row["ClsPric"]),
+            # Note: SttlmPric in UDiFF bhavcopy is the 30-minute VWAP settlement price.
+            # IV reconstruction using settle_price will diverge from live Greeks on volatile close days.
+            # Refer to T1-B.1 in docs/reviews/audit_2026-05-15.md.
             settle_price=Decimal(row["SttlmPric"]),
             volume=int(row["TtlTradgVol"]),
             oi=int(row["OpnIntrst"]),
