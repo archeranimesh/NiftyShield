@@ -243,7 +243,7 @@ Full task list in `BACKTEST_PLAN_PHASE1.md`. Key milestones:
 
 - **1.4:** `BacktestEngine` core (Strategy Protocol + DayContext + run loop). Port from `quant-4pc-local`.
 - **1.5:** `BacktestStore` — SQLite results storage (separate from `portfolio.sqlite`).
-- **1.6a:** BS IV reconstruction from `settle_price` + Nifty Futures forward.
+- **1.6a:** BS IV reconstruction from `settle_price` + Nifty Futures forward (Note: address actual IV/LTP divergence correction here per finding [23]).
 - **1.7:** `CSPStrategy` with `CSPConfig` — thresholds from Stockmock calibration results.
 - **1.8:** Full bootstrap run 2016–2024; distribution analysis.
 - **1.11:** Regime-matched Z-score (full distribution + stress-window subset). Gate: `|Z| ≤ 1.5` on both.

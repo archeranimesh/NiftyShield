@@ -310,6 +310,8 @@ options are traded in the future.
 | 2026-05-02 | Phase 0.8 gate: 4 criteria (A–D); Z-score is smoke test only; graduated deployment tiers 0 → 0.5 → 1 → 2 → 3 | `docs/council/2026-05-02_variance-gate-regime-completeness.md`, `docs/plan/variance_gate.md` |
 | 2026-05-03 | NSE Bhavcopy: old archive URL covers 2016–~Nov 2024 only; Dec 2024+ uses new UDiFF format at a different URL and CSV schema | `TODOS.md → P1-NEXT UDiFF fix` |
 | 2026-05-23 | TradingView MCP (`tradesdontlie/tradingview-mcp`) validated as real-time regime signal channel; `docs/regime_probe.pine` is the canonical probe script; multi-timeframe regime divergence (1D vs 1W) is a mandatory check before strangle entry | `docs/tv_mcp_testing_framework.md` |
+| 2026-05-24 | Settle vs LTP: Bhavcopy `settle_price` is daily VWAP (3:00–3:30 PM), not EOD LTP. Actual IV divergence correction (using Upstox/Dhan EOD LTP validation target) is deferred until programmatic IV reconstruction is implemented. | `docs/reviews/audit_2026-05-15.md` finding [23] |
+
 
 ---
 
