@@ -17,6 +17,11 @@ from scripts.paper_3track_entry import (
     derive_expiry,
     filter_proxy_candidates,
 )
+from src.paper.constants import (
+    STRATEGY_FUTURES,
+    STRATEGY_PROXY,
+    STRATEGY_SPOT,
+)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -170,7 +175,7 @@ class TestBuildTrades:
     def test_strategy_names(self):
         trades = build_trades(_make_prices())
         names = {t.strategy_name for t in trades}
-        assert names == {"paper_nifty_spot", "paper_nifty_futures", "paper_nifty_proxy"}
+        assert names == {STRATEGY_SPOT, STRATEGY_FUTURES, STRATEGY_PROXY}
 
     def test_leg_roles(self):
         trades = build_trades(_make_prices())

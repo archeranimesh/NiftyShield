@@ -52,7 +52,7 @@ from src.backtest.ivr import compute_ivr
 from src.backtest.vix_ingest import fetch_vix_latest, load_vix_series
 from src.intraday.market_store import IntradayMarketStore
 from src.client.upstox_market import UpstoxMarketClient
-from src.paper.constants import DEFAULT_BOD_PATH, DEFAULT_DB_PATH
+from src.paper.constants import DEFAULT_BOD_PATH, DEFAULT_DB_PATH, STRATEGY_CSP
 from src.paper._utils import safe_float
 
 load_dotenv()
@@ -73,8 +73,8 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--strategy",
-        default="paper_csp_nifty_v1",
-        help='Paper strategy name — must start with "paper_". Default: paper_csp_nifty_v1.',
+        default=STRATEGY_CSP,
+        help=f'Paper strategy name — must start with "paper_". Default: {STRATEGY_CSP}.',
     )
     parser.add_argument(
         "--leg",

@@ -38,12 +38,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from src.client.upstox_market import UpstoxMarketClient
+from src.paper.constants import STRATEGY_CSP
 
 UNDERLYING_DEFAULT = "NSE_INDEX|Nifty 50"
 DEFAULT_LOT_SIZE = 75  # current Nifty lot size
 
 # Defaults that mirror record_paper_trade.py — used to emit minimal commands.
-DEFAULT_STRATEGY = "paper_csp_nifty_v1"
+DEFAULT_STRATEGY = STRATEGY_CSP
 DEFAULT_ACTION = "SELL"
 DEFAULT_LEG = "short_put"
 
@@ -372,8 +373,8 @@ def _parse_args() -> argparse.Namespace:
     )
     dry_grp.add_argument(
         "--strategy",
-        default="paper_csp_nifty_v1",
-        help="Paper strategy namespace (default: paper_csp_nifty_v1).",
+        default=DEFAULT_STRATEGY,
+        help=f"Paper strategy namespace (default: {DEFAULT_STRATEGY}).",
     )
     p.add_argument(
         "--track",

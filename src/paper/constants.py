@@ -16,6 +16,12 @@ NIFTY_UNDERLYING = "NSE_INDEX|Nifty 50"
 NIFTYBEES_KEY = "NSE_EQ|INF204KB14I2"
 LOT_SIZE: int = 65  # 1 Nifty lot = 65 units, effective Jan 2026
 
+# Strategy Names (T1-C verification: paper trading strategies must start with paper_)
+STRATEGY_SPOT = "paper_nifty_spot"
+STRATEGY_FUTURES = "paper_nifty_futures"
+STRATEGY_PROXY = "paper_nifty_proxy"
+STRATEGY_CSP = "paper_csp_nifty_v1"
+
 # 3-Track Targeting Thresholds (Extracted from paper_3track_overlay.py)
 PP_OTM_MIN = 0.08
 PP_OTM_MAX = 0.10

@@ -53,6 +53,9 @@ from src.paper.constants import (
     LOT_SIZE,
     NIFTY_UNDERLYING,
     NIFTYBEES_KEY,
+    STRATEGY_FUTURES,
+    STRATEGY_PROXY,
+    STRATEGY_SPOT,
 )
 from src.paper.models import PaperTrade
 from src.paper.store import PaperStore
@@ -484,7 +487,7 @@ def build_trades(p: LivePrices) -> list[PaperTrade]:
     surplus = nee - SPAN_MARGIN_ESTIMATE
 
     spot = PaperTrade(
-        strategy_name="paper_nifty_spot",
+        strategy_name=STRATEGY_SPOT,
         leg_role="base_etf",
         instrument_key=NIFTYBEES_KEY,
         trade_date=p.entry_date,
@@ -498,7 +501,7 @@ def build_trades(p: LivePrices) -> list[PaperTrade]:
     )
     notional_fut = p.futures_price * Decimal(str(p.lot_size))
     futures = PaperTrade(
-        strategy_name="paper_nifty_futures",
+        strategy_name=STRATEGY_FUTURES,
         leg_role="base_futures",
         instrument_key=p.futures_key,
         trade_date=p.entry_date,
@@ -511,7 +514,7 @@ def build_trades(p: LivePrices) -> list[PaperTrade]:
         ),
     )
     proxy = PaperTrade(
-        strategy_name="paper_nifty_proxy",
+        strategy_name=STRATEGY_PROXY,
         leg_role="base_ditm_call",
         instrument_key=p.proxy_instrument_key,
         trade_date=p.entry_date,
