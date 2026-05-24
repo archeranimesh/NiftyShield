@@ -484,7 +484,7 @@ Full log: [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md)
 - [2026-05-24] audit finding [23] — document VWAP distinction for settle_price in bhavcopy ingest — 518db23
 - [2026-05-24] audit finding [24] — verify contract cadence in get_expiry_candidates — 247e380
 - [2026-05-24] audit finding [25] — implement STT branching logic for ITM options expiry — 64c13a4, 9eba231
-- [2026-05-24] audit finding [26] — centralize paper strategy names to constants — 763208a
+- [2026-05-24] audit finding [26] — centralize paper strategy names to constants — 763208a, 2a80ba8
 
 
 
