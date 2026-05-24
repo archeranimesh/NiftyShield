@@ -360,6 +360,24 @@ class TestBuildOptionsSummary:
         summary = build_options_summary([], _TS)
         assert isinstance(summary, DhanOptionsSummary)
 
+    def test_build_options_summary_itm_expiry(self) -> None:
+        positions = [
+            _make_option_position(
+                trading_symbol="NIFTY-May2026-23750-PE",
+                buy_qty=50, buy_avg=Decimal("10"),
+                sell_qty=0, sell_avg=Decimal("0"),
+                net_qty=50,
+            )
+        ]
+        summary = build_options_summary(positions, _TS, trade_count=0, is_itm_expiry=True)
+        # exchange_charges = 0.000530 * 500 = 0.265
+        # sebi_charges     = 0.000010 * 500 = 0.005
+        # stamp_duty       = 0.000030 * 500 = 0.015
+        # stt              = 0.001250 * 23750 * 50 = 1484.375
+        # gst              = 0.18 * (0 + 0.265 + 0.005) = 0.0486
+        # total_charges    = 0.265 + 0.005 + 0.015 + 1484.375 + 0.0486 = 1484.7086 -> 1484.71
+        assert summary.charges == Decimal("1484.71")
+
 
 class TestComputeCharges:
     def test_known_positions_actuals(self) -> None:
@@ -399,6 +417,69 @@ class TestComputeCharges:
         total_charges, brokerage = compute_charges(positions, trade_count=0)
         assert brokerage == Decimal("0")
         assert total_charges > Decimal("0")  # Statutory charges still apply
+
+    def test_itm_expiry_long(self) -> None:
+        positions = [
+            _make_option_position(
+                trading_symbol="NIFTY-May2026-23750-PE",
+                buy_qty=50, buy_avg=Decimal("10"),
+                sell_qty=0, sell_avg=Decimal("0"),
+                net_qty=50,
+            )
+        ]
+        total_charges, brokerage = compute_charges(positions, trade_count=0, is_itm_expiry=True)
+        assert brokerage == Decimal("0")
+        # total_charges = 0.265 + 0.005 + 0.015 + 1484.375 + 0.0486 = 1484.7086 -> 1484.71
+        assert total_charges == Decimal("1484.71")
+
+    def test_itm_expiry_short(self) -> None:
+        positions = [
+            _make_option_position(
+                trading_symbol="NIFTY-May2026-23750-PE",
+                buy_qty=0, buy_avg=Decimal("0"),
+                sell_qty=50, sell_avg=Decimal("10"),
+                net_qty=-50,
+            )
+        ]
+        total_charges, brokerage = compute_charges(positions, trade_count=0, is_itm_expiry=True)
+        assert brokerage == Decimal("0")
+        # standard sell_turnover = 500
+        # exchange_charges = 0.265, sebi_charges = 0.005, stamp_duty = 0
+        # stt = 0.001000 * 500 = 0.50 (no exercise STT for short)
+        # gst = 0.18 * 0.27 = 0.0486
+        # total_charges = 0.265 + 0.005 + 0.50 + 0.0486 = 0.8186 -> 0.82
+        assert total_charges == Decimal("0.82")
+
+    def test_itm_expiry_nse_format(self) -> None:
+        positions = [
+            _make_option_position(
+                trading_symbol="NIFTY2550523500CE",
+                buy_qty=50, buy_avg=Decimal("10"),
+                sell_qty=0, sell_avg=Decimal("0"),
+                net_qty=50,
+            )
+        ]
+        total_charges, brokerage = compute_charges(positions, trade_count=0, is_itm_expiry=True)
+        assert brokerage == Decimal("0")
+        # strike = 23500
+        # stt = 0.00125 * 23500 * 50 = 1468.75
+        # total_charges = 0.265 + 0.005 + 0.015 + 1468.75 + 0.0486 = 1469.0836 -> 1469.08
+        assert total_charges == Decimal("1469.08")
+
+    def test_itm_expiry_unparseable_symbol(self) -> None:
+        positions = [
+            _make_option_position(
+                trading_symbol="INVALID_SYMBOL",
+                buy_qty=50, buy_avg=Decimal("10"),
+                sell_qty=0, sell_avg=Decimal("0"),
+                net_qty=50,
+            )
+        ]
+        total_charges, brokerage = compute_charges(positions, trade_count=0, is_itm_expiry=True)
+        assert brokerage == Decimal("0")
+        # strike = 0 -> stt = 0
+        # total_charges = 0.265 + 0.005 + 0.015 + 0 + 0.0486 = 0.3336 -> 0.33
+        assert total_charges == Decimal("0.33")
 
 
 # ── Phase B: parse_fund_limit ─────────────────────────────────────────────────

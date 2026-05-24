@@ -13,6 +13,8 @@ API note: Dhan's /v2/fundlimit response uses 'availabelBalance' (missing an 'l')
 
 from __future__ import annotations
 
+import re
+
 from datetime import datetime
 from decimal import Decimal
 from typing import Any
@@ -129,8 +131,33 @@ def filter_intraday_options(
     ]
 
 
+def _parse_strike_from_symbol(symbol: str) -> Decimal:
+    """Parse the strike price from a trading symbol.
+
+    Examples:
+        'NIFTY-May2026-23750-PE' -> Decimal('23750')
+        'NIFTY2550523500CE' -> Decimal('23500')
+    """
+    # Try hyphenated format first (e.g. NIFTY-May2026-23750-PE)
+    match = re.search(r"-(\d+(?:\.\d+)?)-(?:CE|PE)", symbol, re.IGNORECASE)
+    if match:
+        return Decimal(match.group(1))
+
+    # Try NSE standard format (e.g. NIFTY2550523500CE)
+    match = re.search(r"(\d+(?:\.\d+)?)(?:CE|PE)", symbol, re.IGNORECASE)
+    if match:
+        digits = match.group(1)
+        if len(digits) >= 8:
+            digits = digits[5:]
+        return Decimal(digits)
+
+    return Decimal("0")
+
+
 def compute_charges(
-    positions: list[DhanOptionPosition], trade_count: int
+    positions: list[DhanOptionPosition],
+    trade_count: int,
+    is_itm_expiry: bool = False,
 ) -> tuple[Decimal, Decimal]:
     """Compute statutory charges and brokerage for a list of positions.
 
@@ -142,6 +169,8 @@ def compute_charges(
         sebi_charges     = 0.000010 × total_turnover
         stamp_duty       = 0.000030 × buy_turnover (buy side only)
         stt              = 0.001000 × sell_turnover (Budget 2024 rate, sell side only)
+                           If is_itm_expiry is True and option is ITM (held to expiry, net_qty > 0),
+                           STT is 0.001250 × strike × net_qty (exercised value).
         gst              = 0.18 × (brokerage + exchange_charges + sebi_charges)
 
     Rounding: all intermediate values Decimal, final results rounded to 2dp
@@ -150,6 +179,7 @@ def compute_charges(
     Args:
         positions: List of intraday option positions.
         trade_count: Number of executed orders (used for ₹20/order brokerage).
+        is_itm_expiry: Whether the positions are expired in-the-money.
 
     Returns:
         (total_charges, brokerage) as Decimals.
@@ -164,7 +194,17 @@ def compute_charges(
     exchange_charges = Decimal("0.000530") * total_turnover
     sebi_charges = Decimal("0.000010") * total_turnover
     stamp_duty = Decimal("0.000030") * buy_turnover
+    
+    # 1. Standard STT on premium for sell trades
     stt = Decimal("0.001000") * sell_turnover
+    
+    # 2. Additional STT for ITM expiry: if option is exercised (net_qty > 0)
+    if is_itm_expiry:
+        for p in positions:
+            if p.net_qty > 0:
+                strike = _parse_strike_from_symbol(p.trading_symbol)
+                stt += Decimal("0.001250") * strike * p.net_qty
+
     gst = Decimal("0.18") * (brokerage + exchange_charges + sebi_charges)
 
     total_charges = exchange_charges + sebi_charges + stamp_duty + stt + gst
@@ -179,6 +219,7 @@ def build_options_summary(
     positions: list[DhanOptionPosition],
     ts: datetime,
     trade_count: int = 0,
+    is_itm_expiry: bool = False,
 ) -> DhanOptionsSummary:
     """Aggregate a list of filtered intraday positions into a summary.
 
@@ -186,13 +227,14 @@ def build_options_summary(
         positions: Already-filtered list (NSE_FNO INTRADAY only).
         ts: UTC timestamp of the snapshot.
         trade_count: Number of executed orders for brokerage calculation.
+        is_itm_expiry: Whether the positions are expired in-the-money.
 
     Returns:
         DhanOptionsSummary with summed P&L, charges, and position count.
     """
     realized = sum((p.realized_pnl for p in positions), Decimal("0"))
     unrealized = sum((p.unrealized_pnl for p in positions), Decimal("0"))
-    charges, brokerage = compute_charges(positions, trade_count)
+    charges, brokerage = compute_charges(positions, trade_count, is_itm_expiry=is_itm_expiry)
 
     return DhanOptionsSummary(
         realized_pnl=realized,
