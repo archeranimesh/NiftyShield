@@ -335,6 +335,7 @@ class InstrumentLookup:
             
             is_monthly = (d == last_of_month[(d.year, d.month)])
             is_quarterly = is_monthly and (d.month in (3, 6, 9, 12))
+            # NSE's long-dated options (yearly/half-yearly) expire in June and December.
             is_yearly = is_monthly and (d.month in (6, 12))
             
             label = None

@@ -45,25 +45,25 @@ def test_expiry_candidates_dte_gate():
 
 def test_expiry_candidates_dte_boundary():
     """DTE=45 is monthly, DTE=46 is quarterly."""
-    # Reference date: April 16, 2026.
-    # dte45 = May 31, 2026 (DTE 45). Only May expiry, so is_monthly is True.
-    # dte46 = June 1, 2026 (DTE 46). Only June expiry, so is_monthly/is_quarterly is True.
-    today = date(2026, 4, 16)
-    dte45 = "2026-05-31"
-    dte46 = "2026-06-01"
-    
-    instruments = [
-        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": dte45},
-        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": dte46},
-    ]
-    lookup = InstrumentLookup(instruments)
-    candidates = lookup.get_expiry_candidates("NIFTY", today)
-    
-    # In default order: monthly, quarterly
-    assert candidates == [
-        ("monthly", dte45),
-        ("quarterly", dte46)
-    ]
+    # Test DTE=45 is monthly:
+    # Let today be April 13, 2026. May 28, 2026 (last Thursday of May) is DTE 45.
+    today_m = date(2026, 4, 13)
+    m_exp = "2026-05-28"
+    lookup_m = InstrumentLookup([
+        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": m_exp}
+    ])
+    candidates_m = lookup_m.get_expiry_candidates("NIFTY", today_m)
+    assert candidates_m == [("monthly", m_exp)]
+
+    # Test DTE=46 is quarterly:
+    # Let today be May 10, 2026. June 25, 2026 (last Thursday of June) is DTE 46.
+    today_q = date(2026, 5, 10)
+    q_exp = "2026-06-25"
+    lookup_q = InstrumentLookup([
+        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": q_exp}
+    ])
+    candidates_q = lookup_q.get_expiry_candidates("NIFTY", today_q)
+    assert candidates_q == [("quarterly", q_exp)]
 
 def test_expiry_candidates_missing_category():
     """Missing category (e.g. quarterly) does not crash and returns others."""
