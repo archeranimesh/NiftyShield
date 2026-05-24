@@ -1,19 +1,24 @@
 """One-shot migration: legs.strike REAL → TEXT.
 
 SQLite does not support ALTER COLUMN, so we use the recommended
-rename-new-column approach:
-  1. Add strike_text TEXT column.
-  2. Copy REAL → TEXT via CAST (REAL integer strikes like 23000.0
-     come back as '23000.0'; we normalise to '23000' by stripping
-     trailing '.0' for whole numbers).
-  3. Drop strike_text into place via a full table rebuild
-     (new_legs temp → INSERT SELECT → DROP old → rename new).
+table-rebuild approach:
+  1. Drop any leftover legs_new from a prior partial run.
+  2. Create legs_new with strike TEXT.
+  3. INSERT-SELECT with normalised strike values.
+  4. DROP old legs table, RENAME legs_new → legs, recreate index.
+
+All DDL and DML run inside a single explicit transaction (conn.execute
+for DDL, not executescript — executescript issues an implicit COMMIT
+before running, which would break atomicity).
 
 Run once against the live DB after deploying faac98c:
 
     python -m scripts.migrate_strike_to_text [--db path/to/portfolio.sqlite]
 
-Safe to re-run: checks column type first and exits early if already TEXT.
+Idempotent:
+  - Exits early if legs.strike is already TEXT.
+  - Opens with DROP TABLE IF EXISTS legs_new, so a partial prior run
+    that left legs_new behind does not block a retry.
 """
 from __future__ import annotations
 
@@ -72,9 +77,16 @@ def migrate(db_path: Path) -> None:
         rows = conn.execute("SELECT * FROM legs").fetchall()
         print(f"  {len(rows)} leg rows to migrate.")
 
-        with conn:  # single transaction
-            # Step 1: rebuild the legs table with strike as TEXT.
-            conn.executescript("""
+        # Single explicit transaction.  Using conn.execute() for DDL (not
+        # executescript) so the with-conn wrapper actually provides atomicity —
+        # executescript issues an implicit COMMIT before running, which would
+        # silently break the transaction boundary.
+        with conn:
+            # Guard: drop any leftover from a prior partial run.
+            conn.execute("DROP TABLE IF EXISTS legs_new")
+
+            # Step 1: create legs_new with strike as TEXT.
+            conn.execute("""
                 CREATE TABLE legs_new (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     strategy_id INTEGER NOT NULL REFERENCES strategies(id),
@@ -89,7 +101,7 @@ def migrate(db_path: Path) -> None:
                     expiry TEXT,
                     strike TEXT,
                     product_type TEXT NOT NULL
-                );
+                )
             """)
 
             # Step 2: insert rows with normalised strike TEXT.
@@ -118,11 +130,11 @@ def migrate(db_path: Path) -> None:
                 )
 
             # Step 3: swap old table out, new table in.
-            conn.executescript("""
-                DROP TABLE legs;
-                ALTER TABLE legs_new RENAME TO legs;
-                CREATE INDEX IF NOT EXISTS idx_legs_strategy ON legs(strategy_id);
-            """)
+            conn.execute("DROP TABLE legs")
+            conn.execute("ALTER TABLE legs_new RENAME TO legs")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_legs_strategy ON legs(strategy_id)"
+            )
 
         # Verify.
         new_type = _col_type(conn, "legs", "strike")
