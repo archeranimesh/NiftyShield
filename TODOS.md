@@ -481,5 +481,7 @@ Full log: [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md)
 - [2026-05-23] audit finding [8] — extract persistence logic into SnapshotService to resolve SRP violation — 3242fbd
 - [2026-05-24] audit finding [9] — implement polymorphic strategy summary methods to resolve OCP violation — c5cc706
 - [2026-05-24] audit finding [22] — implement DateAwareLotSizeResolver and resolve options lot sizes dynamically — eb078f2
+- [2026-05-24] audit finding [23] — document VWAP distinction for settle_price in bhavcopy ingest — 518db23
+
 
 
