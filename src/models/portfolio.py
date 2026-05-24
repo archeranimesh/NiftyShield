@@ -404,7 +404,10 @@ def create_strategy_instance(
     if name.lower() not in _STRATEGY_REGISTRY:
         # Dynamic import of specifically named strategy modules to register their subclasses.
         # This keeps imports targeted and avoids loading unrelated strategies (and their validation checks).
-        # Any import errors or validation exceptions during test initialization are handled gracefully.
+        # Note: 'finideas' is currently hardcoded as the sole provider package. If more provider
+        # directories are added under strategies/, they should be appended to the provider list.
+        import logging
+        logger = logging.getLogger(__name__)
         try:
             import importlib
             for provider in ["finideas"]:
@@ -413,8 +416,15 @@ def create_strategy_instance(
                     break
                 except ImportError:
                     continue
-        except Exception:
+        except ImportError:
             pass
+        except Exception as e:
+            logger.warning(
+                "Unexpected error during dynamic registration of strategy '%s': %s",
+                name,
+                e,
+                exc_info=True,
+            )
 
     cls = _STRATEGY_REGISTRY.get(name.lower(), Strategy)
     return cls(
