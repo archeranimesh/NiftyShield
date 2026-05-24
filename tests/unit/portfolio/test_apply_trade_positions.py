@@ -72,7 +72,7 @@ def _option_leg(
         entry_price=Decimal(entry_price),
         entry_date=date(2026, 1, 15),
         expiry=date(2026, 12, 29),
-        strike=23000.0,
+        strike=Decimal("23000"),
         product_type=ProductType.NRML,
     )
 

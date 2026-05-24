@@ -332,7 +332,7 @@ class PortfolioStore:
                 entry_price=Decimal(r["entry_price"]),
                 entry_date=date.fromisoformat(r["entry_date"]),
                 expiry=date.fromisoformat(r["expiry"]) if r["expiry"] else None,
-                strike=Decimal(r["strike"]) if r["strike"] is not None else None,
+                strike=Decimal(str(r["strike"])) if r["strike"] is not None else None,
                 product_type=ProductType(r["product_type"]),
             )
             for r in rows

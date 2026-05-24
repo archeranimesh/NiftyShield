@@ -54,7 +54,7 @@ def _load_chain_data() -> list[dict]:
 
 def _make_leg(
     *,
-    strike: float | None = 22250.0,
+    strike: Decimal | None = Decimal("22250"),
     asset_type: AssetType = AssetType.CE,
     expiry: date | None = date(2026, 4, 7),
     instrument_key: str = "NSE_FO|FAKE",
@@ -164,7 +164,7 @@ def test_parse_chain_empty_data() -> None:
 def test_extract_greeks_ce_happy_path() -> None:
     """CE leg at 22250 returns correct delta from chain."""
     chain = parse_upstox_option_chain(_load_chain_data())
-    leg = _make_leg(strike=22250.0, asset_type=AssetType.CE)
+    leg = _make_leg(strike=Decimal("22250"), asset_type=AssetType.CE)
     greeks = _extract_greeks_from_chain(chain, leg)
     assert greeks["delta"] == Decimal("0.525")
     assert greeks["iv"] == Decimal("27.4")
@@ -175,7 +175,7 @@ def test_extract_greeks_ce_happy_path() -> None:
 def test_extract_greeks_pe_happy_path() -> None:
     """PE leg at 22250 returns correct (negative) delta from chain."""
     chain = parse_upstox_option_chain(_load_chain_data())
-    leg = _make_leg(strike=22250.0, asset_type=AssetType.PE)
+    leg = _make_leg(strike=Decimal("22250"), asset_type=AssetType.PE)
     greeks = _extract_greeks_from_chain(chain, leg)
     assert greeks["delta"] == Decimal("-0.4755")
     assert greeks["iv"] == Decimal("28.68")
@@ -184,7 +184,7 @@ def test_extract_greeks_pe_happy_path() -> None:
 def test_extract_greeks_missing_strike() -> None:
     """Strike not present in the chain returns empty dict."""
     chain = parse_upstox_option_chain(_load_chain_data())
-    leg = _make_leg(strike=99999.0, asset_type=AssetType.CE)
+    leg = _make_leg(strike=Decimal("99999"), asset_type=AssetType.CE)
     assert _extract_greeks_from_chain(chain, leg) == {}
 
 
@@ -245,7 +245,7 @@ async def test_fetch_greeks_correct_underlying_key() -> None:
     tracker = PortfolioTracker(store=store, market=market)
 
     option_leg = _make_leg(
-        strike=22250.0,
+        strike=Decimal("22250"),
         asset_type=AssetType.CE,
         expiry=date(2026, 4, 7),
         instrument_key="NSE_FO|40718",

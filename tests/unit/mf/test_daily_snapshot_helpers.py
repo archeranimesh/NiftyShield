@@ -242,7 +242,7 @@ class TestBuildPortfolioSummary:
                     entry_price=Decimal("962.15"),
                     entry_date=date(2026, 4, 1),
                     expiry=date(2026, 12, 29),
-                    strike=23000.0,
+                    strike=Decimal("23000"),
                     product_type=ProductType.NRML,
                 )
             ]
