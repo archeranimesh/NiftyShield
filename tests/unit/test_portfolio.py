@@ -20,6 +20,7 @@ from src.models.portfolio import (
     ProductType,
     Strategy,
     create_strategy_instance,
+    register_strategy_type,
 )
 from src.portfolio.store import PortfolioStore
 from src.portfolio.tracker import PortfolioTracker
@@ -604,6 +605,15 @@ class TestPolymorphicStrategy:
         s3 = create_strategy_instance(3, "finideas_ilts", "ILTS", [], None)
         assert isinstance(s3, Strategy)
         assert not isinstance(s3, HedgeStrategy)
+
+        # Verify OCP dynamic registry capability
+        class CustomTestStrategy(Strategy):
+            pass
+
+        register_strategy_type("custom_test", CustomTestStrategy)
+        s_custom = create_strategy_instance(4, "custom_test", "Custom strategy description", [], None)
+        assert isinstance(s_custom, CustomTestStrategy)
+        assert s_custom.name == "custom_test"
 
     def test_get_protection_delta_polymorphism(self):
         strat = Strategy(name="some_strategy", legs=[])

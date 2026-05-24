@@ -14,6 +14,7 @@ from src.models.portfolio import (
     HedgeStrategy,
     Leg,
     ProductType,
+    register_strategy_type,
 )
 
 FINRAKSHAK = HedgeStrategy(
@@ -38,3 +39,5 @@ FINRAKSHAK = HedgeStrategy(
         ),
     ],
 )
+
+register_strategy_type("finrakshak", HedgeStrategy)

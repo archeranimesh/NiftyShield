@@ -222,6 +222,72 @@ class TestBuildPortfolioSummary:
         )
         assert result.total_day_delta is None
 
+    def test_finrakshak_day_delta_computed_with_hedge_strategy(self) -> None:
+        from src.models.portfolio import HedgeStrategy, Leg, AssetType, Direction, ProductType
+        from scripts.daily_snapshot import DailySnapshot
+        from src.portfolio.tracker import LegPnL, StrategyPnL
+
+        # Current hedge strategy with 1 leg
+        hedge_strat = HedgeStrategy(
+            name="finrakshak",
+            legs=[
+                Leg(
+                    id=1,
+                    instrument_key="NSE_FO|37810",
+                    display_name="NIFTY DEC 23000 PE",
+                    asset_type=AssetType.PE,
+                    direction=Direction.BUY,
+                    quantity=65,
+                    lot_size=65,
+                    entry_price=Decimal("962.15"),
+                    entry_date=date(2026, 4, 1),
+                    expiry=date(2026, 12, 29),
+                    strike=23000.0,
+                    product_type=ProductType.NRML,
+                )
+            ]
+        )
+
+        # Current prices & current StrategyPnL
+        current_prices = {"NSE_FO|37810": 1000.0}
+        leg_pnl = (Decimal("1000.0") - Decimal("962.15")) * 65
+        pnls = {
+            "finrakshak": StrategyPnL(
+                strategy_name="finrakshak",
+                legs=[
+                    LegPnL(
+                        leg=hedge_strat.legs[0],
+                        current_price=Decimal("1000.0"),
+                        pnl=leg_pnl,
+                        pnl_percent=Decimal("0"),
+                    )
+                ]
+            )
+        }
+
+        # Prior snapshot with prior price (e.g. 950.0)
+        prev_snapshots = {
+            1: DailySnapshot(
+                leg_id=1,
+                snapshot_date=date(2026, 5, 23),
+                ltp=Decimal("950.0"),
+            )
+        }
+
+        # Call _build_portfolio_summary
+        result = _build_portfolio_summary(
+            _SNAP_DATE,
+            [hedge_strat],
+            current_prices,
+            pnls,
+            None,
+            prev_snapshots=prev_snapshots,
+        )
+
+        # Prior P&L = (950.0 - 962.15) * 65 = -12.15 * 65 = -789.75
+        # Expected day delta = current_pnl - prior_pnl = 2460.25 - (-789.75) = 3250.00
+        assert result.finrakshak_day_delta == Decimal("3250")
+
 
 # ── _format_protection_stats ─────────────────────────────────────
 

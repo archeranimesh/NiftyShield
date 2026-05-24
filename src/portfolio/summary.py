@@ -276,9 +276,9 @@ def _build_portfolio_summary(
                     prev_pnl = _compute_strategy_pnl_from_prices(s, prev_prices_dec).total_pnl
                     delta = s.get_protection_delta(curr_pnl.total_pnl, prev_pnl)
                     if delta is not None:
-                        finrakshak_day_delta = delta
                         # Note: We assume exactly one hedge strategy exists for the portfolio's finrakshak_day_delta slot.
                         # If multiple are added, the first one encountered governs the slot.
+                        finrakshak_day_delta = delta
                         break
 
     if prev_mf_pnl is not None and mf_pnl is not None:

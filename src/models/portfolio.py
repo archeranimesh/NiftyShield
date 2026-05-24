@@ -393,10 +393,6 @@ def register_strategy_type(name: str, cls: type[Strategy]) -> None:
     _STRATEGY_REGISTRY[name.lower()] = cls
 
 
-# Register default strategy types
-register_strategy_type("finrakshak", HedgeStrategy)
-
-
 def create_strategy_instance(
     id: int | None,
     name: str,
@@ -405,6 +401,21 @@ def create_strategy_instance(
     created_at: datetime | None,
 ) -> Strategy:
     """Polymorphic factory to construct the appropriate Strategy subclass."""
+    if name.lower() not in _STRATEGY_REGISTRY:
+        # Dynamic import of specifically named strategy modules to register their subclasses.
+        # This keeps imports targeted and avoids loading unrelated strategies (and their validation checks).
+        # Any import errors or validation exceptions during test initialization are handled gracefully.
+        try:
+            import importlib
+            for provider in ["finideas"]:
+                try:
+                    importlib.import_module(f"src.portfolio.strategies.{provider}.{name.lower()}")
+                    break
+                except ImportError:
+                    continue
+        except Exception:
+            pass
+
     cls = _STRATEGY_REGISTRY.get(name.lower(), Strategy)
     return cls(
         id=id,
