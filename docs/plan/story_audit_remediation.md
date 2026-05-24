@@ -40,7 +40,7 @@ Resume rule: read CONTEXT.md → find first unchecked box → implement → test
 - [x] [22] ilts.py:49 — hardcoded lot_size=65 | SHA: eb078f2
 - [x] [23] bhavcopy_ingest.py:143,189 — no VWAP distinction | SHA: 518db23
 - [x] [24] lookup.py:317 — DTE bands, no cadence awareness | SHA: 247e380
-- [ ] [25] dhan/positions.py:167 — flat STT rate | SHA:
+- [x] [25] dhan/positions.py:167 — flat STT rate | SHA: 64c13a4, 9eba231
 - [ ] [26] paper_3track_entry.py:487 — verify T1-C before fixing | SHA:
 - [ ] [27] models/portfolio.py:110 — Leg.strike is float | SHA:
 - [ ] [28] upstox_market.py:208 — float(price) cast | SHA:
