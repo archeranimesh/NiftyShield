@@ -488,6 +488,7 @@ Full log: [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md)
 - [2026-05-24] audit finding [26] — centralize paper strategy names to constants — 763208a, 2a80ba8
 - [2026-05-25] audit finding [28] — replace float ltp price cast with Decimal — 1cf71a5, fc0911e
 - [2026-05-25] audit finding [29] — refactor StrategyPnL and tracker to use Decimal strictly — 3a82c88
+- [2026-05-25] audit finding [30] — note resolution of float re-contamination in summary.py — 0c31655
 
 
 
