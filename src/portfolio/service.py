@@ -28,9 +28,9 @@ class SnapshotService:
         strategy_name: str,
         strategy: Strategy,
         snap_date: date,
-        prices: dict[str, float],
+        prices: dict[str, Decimal],
         greeks_map: dict[str, dict],
-        underlying_price: float | None = None,
+        underlying_price: Decimal | None = None,
     ) -> int:
         """Create DailySnapshot models and persist them in bulk.
 
@@ -48,11 +48,6 @@ class SnapshotService:
             Number of snapshots recorded.
         """
         snapshots = []
-        underlying_price_dec = (
-            Decimal(str(underlying_price))
-            if underlying_price is not None
-            else None
-        )
 
         for leg in strategy.legs:
             if leg.id is None:
@@ -66,7 +61,7 @@ class SnapshotService:
                     strategy_name,
                 )
 
-            ltp = Decimal(str(prices.get(leg.instrument_key, 0.0)))
+            ltp = prices.get(leg.instrument_key, Decimal("0.0"))
             greeks = greeks_map.get(leg.instrument_key, {})
 
             snapshots.append(
@@ -82,7 +77,7 @@ class SnapshotService:
                     vega=greeks.get("vega"),
                     oi=greeks.get("oi"),
                     volume=greeks.get("volume"),
-                    underlying_price=underlying_price_dec,
+                    underlying_price=underlying_price,
                 )
             )
 

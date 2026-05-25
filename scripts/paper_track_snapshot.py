@@ -69,7 +69,8 @@ def _format_pnl_block(track_name: str, pnl: TrackPnL) -> list[str]:
 
 
 class MockBrokerClientDryRun:
-    async def get_ltp(self, keys): return {k: 100.0 for k in keys}
+    async def get_ltp(self, keys: list[str]) -> dict[str, Decimal]:
+        return {k: Decimal("100.0") for k in keys}
     async def get_option_chain(self, u, e): return {"data": []}
 
 class MockNotifier:

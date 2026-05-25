@@ -265,7 +265,7 @@ def enrich_with_ltp(
 
 def enrich_with_upstox_prices(
     holdings: list[DhanHolding],
-    prices: dict[str, float],
+    prices: dict[str, Decimal],
 ) -> list[DhanHolding]:
     """Return new holdings with LTP populated from an Upstox batch LTP dict.
 
@@ -275,7 +275,7 @@ def enrich_with_upstox_prices(
 
     Args:
         holdings: DhanHolding objects (ltp=None).
-        prices: Upstox batch LTP dict: {instrument_key: float}.
+        prices: Upstox batch LTP dict: {instrument_key: Decimal}.
 
     Returns:
         New list of DhanHolding objects with ltp populated where available.
@@ -296,7 +296,7 @@ def enrich_with_upstox_prices(
                 collateral_qty=h.collateral_qty,
                 avg_cost_price=h.avg_cost_price,
                 classification=h.classification,
-                ltp=Decimal(str(last_price)),
+                ltp=last_price,
             )
         else:
             logger.warning(
@@ -424,7 +424,7 @@ def fetch_dhan_portfolio(
     snapshot_date: date,
     exclude_isins: set[str] | None = None,
     prev_holdings: dict[str, DhanHolding] | None = None,
-    upstox_prices: dict[str, float] | None = None,
+    upstox_prices: dict[str, Decimal] | None = None,
 ) -> DhanPortfolioSummary:
     """Fetch Dhan portfolio, enrich with LTP, classify, and build summary.
 

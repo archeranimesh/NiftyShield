@@ -201,7 +201,7 @@ class PortfolioTracker:
         return result
 
     def _build_strategy_pnl(
-        self, strategy: Strategy, prices: dict[str, float]
+        self, strategy: Strategy, prices: dict[str, Decimal]
     ) -> StrategyPnL:
         """Compute StrategyPnL from an already-fetched prices dict."""
         leg_pnls = []
@@ -246,8 +246,8 @@ class PortfolioTracker:
         self,
         strategy_name: str,
         snapshot_date: date | None = None,
-        underlying_price: float | None = None,
-        prices: dict[str, float] | None = None,
+        underlying_price: Decimal | None = None,
+        prices: dict[str, Decimal] | None = None,
     ) -> tuple[int, StrategyPnL | None]:
         """Fetch current prices and record a daily snapshot for every leg.
 
@@ -288,8 +288,8 @@ class PortfolioTracker:
     async def record_all_strategies(
         self,
         snapshot_date: date | None = None,
-        underlying_price: float | None = None,
-        prices: dict[str, float] | None = None,
+        underlying_price: Decimal | None = None,
+        prices: dict[str, Decimal] | None = None,
     ) -> tuple[dict[str, int], dict[str, StrategyPnL | None]]:
         """Record daily snapshots for every strategy in the store."""
         strategies = self._get_all_overlaid_strategies()

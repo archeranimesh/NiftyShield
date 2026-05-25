@@ -61,7 +61,7 @@ from src.portfolio.summary import (
 
 def _print_combined_summary(
     strategies: list[Strategy],
-    prices: dict[str, float],
+    prices: dict[str, Decimal],
     strategy_pnls: dict[str, object],
     mf_pnl: object | None,
     prev_snapshots: dict[int, DailySnapshot] | None = None,
@@ -146,15 +146,15 @@ def _historical_main(snap_date: date, db_path: Path) -> int:
         for leg in strategy.legs
         if leg.id is not None
     }
-    prices: dict[str, float] = {
-        leg_id_to_key[leg_id]: float(snap.ltp)
+    prices: dict[str, Decimal] = {
+        leg_id_to_key[leg_id]: snap.ltp
         for leg_id, snap in snapshots_by_leg.items()
         if leg_id in leg_id_to_key
     }
 
     # Nifty spot — pick from any snapshot that stored it
     underlying_price = next(
-        (float(s.underlying_price) for s in snapshots_by_leg.values() if s.underlying_price),
+        (s.underlying_price for s in snapshots_by_leg.values() if s.underlying_price),
         None,
     )
     if underlying_price is not None:
@@ -163,10 +163,9 @@ def _historical_main(snap_date: date, db_path: Path) -> int:
         print("  Nifty spot: not recorded for this date.")
 
     # Compute P&L for each strategy from stored prices
-    decimal_prices = {k: Decimal(str(v)) for k, v in prices.items()}
     strategy_pnls: dict[str, object] = {}
     for strategy in strategies:
-        pnl = _compute_strategy_pnl_from_prices(strategy, decimal_prices)
+        pnl = _compute_strategy_pnl_from_prices(strategy, prices)
         strategy_pnls[strategy.name] = pnl
         print(
             f"    {strategy.name}: "

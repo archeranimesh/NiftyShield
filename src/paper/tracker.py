@@ -144,14 +144,13 @@ class PaperTracker:
 
         positions = self._get_open_positions(strategy_name)
         instrument_keys = [p.instrument_key for p in positions if p.instrument_key]
-        prices: dict[str, float] = {}
+        prices: dict[str, Decimal] = {}
         if instrument_keys:
             prices = await self.market.get_ltp(instrument_keys)
 
         unrealized = Decimal("0")
         for pos in positions:
-            raw_ltp = prices.get(pos.instrument_key, 0.0)
-            ltp = Decimal(str(raw_ltp))
+            ltp = prices.get(pos.instrument_key, Decimal("0"))
             unrealized += _compute_leg_unrealized_pnl(pos, ltp)
 
         realized = _compute_realized_pnl(self.store, strategy_name)

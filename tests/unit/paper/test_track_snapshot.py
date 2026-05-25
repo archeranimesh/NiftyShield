@@ -29,11 +29,11 @@ class MockPaperStore:
 
 
 class MockBrokerClient:
-    async def get_ltp(self, instrument_keys: list[str]) -> dict[str, float]:
+    async def get_ltp(self, instrument_keys: list[str]) -> dict[str, Decimal]:
         return {
-            "NIFTYBEES": 250.0,
-            "NIFTY_FUT": 24000.0,
-            "NIFTY_OPT": 100.0
+            "NIFTYBEES": Decimal("250.0"),
+            "NIFTY_FUT": Decimal("24000.0"),
+            "NIFTY_OPT": Decimal("100.0")
         }
 
 

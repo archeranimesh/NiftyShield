@@ -61,7 +61,7 @@ def _format_protection_stats(summary: PortfolioSummary) -> list[str]:
 
 def _format_combined_summary(
     strategies: list[Strategy],
-    prices: dict[str, float],
+    prices: dict[str, Decimal],
     strategy_pnls: dict[str, "StrategyPnL"],
     mf_pnl: "PortfolioPnL | None",
     prev_snapshots: dict[int, DailySnapshot] | None = None,

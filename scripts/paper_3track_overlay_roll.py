@@ -245,8 +245,8 @@ async def _close_leg(
     """
     # Fetch live LTP for the closing price
     ltp_resp = await broker.get_ltp([existing.instrument_key])
-    raw = ltp_resp.get(existing.instrument_key, 0)
-    close_price = Decimal(str(round(float(raw), 2)))
+    raw = ltp_resp.get(existing.instrument_key, Decimal("0"))
+    close_price = Decimal(str(raw)).quantize(Decimal("0.01"))
     if close_price <= 0:
         logger.warning(
             "LTP fetch returned 0 for %s — using existing open price as close fallback",

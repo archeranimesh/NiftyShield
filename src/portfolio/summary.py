@@ -33,7 +33,10 @@ if TYPE_CHECKING:
     from src.portfolio.tracker import StrategyPnL
 
 
-def _etf_current_value(strategies: list[Strategy], prices: dict[str, float]) -> Decimal:
+def _etf_current_value(
+    strategies: list[Strategy],
+    prices: dict[str, Decimal],
+) -> Decimal:
     """Mark-to-market value of all EQUITY legs across strategies.
 
     ETF legs are assets — value is qty × current LTP.
@@ -75,7 +78,7 @@ def _etf_cost_basis(strategies: list[Strategy]) -> Decimal:
 def _build_prev_prices(
     strategies: list[Strategy],
     prev_snapshots: dict[int, DailySnapshot],
-) -> dict[str, float]:
+) -> dict[str, Decimal]:
     """Build instrument_key → LTP dict from previous-day snapshots.
 
     Uses the leg_id → instrument_key mapping derived from strategy legs to
@@ -88,7 +91,7 @@ def _build_prev_prices(
         prev_snapshots: {leg_id: DailySnapshot} from get_prev_snapshots().
 
     Returns:
-        {instrument_key: float(ltp)} for all legs that have a prev-day row.
+        {instrument_key: snap.ltp (Decimal)} for all legs that have a prev-day row.
     """
     leg_id_to_key: dict[int, str] = {
         leg.id: leg.instrument_key
@@ -97,7 +100,7 @@ def _build_prev_prices(
         if leg.id is not None
     }
     return {
-        leg_id_to_key[leg_id]: float(snap.ltp)
+        leg_id_to_key[leg_id]: snap.ltp
         for leg_id, snap in prev_snapshots.items()
         if leg_id in leg_id_to_key
     }
@@ -169,7 +172,7 @@ def _compute_strategy_pnl_from_prices(
 def _build_portfolio_summary(
     snap_date: date,
     strategies: list[Strategy],
-    prices: dict[str, float],
+    prices: dict[str, Decimal],
     strategy_pnls: dict[str, "StrategyPnL"],
     mf_pnl: "PortfolioPnL | None",
     prev_snapshots: dict[int, DailySnapshot] | None = None,
@@ -259,9 +262,8 @@ def _build_portfolio_summary(
     if prev_snapshots:
         prev_prices = _build_prev_prices(strategies, prev_snapshots)
         prev_etf_value = _etf_current_value(strategies, prev_prices)
-        prev_prices_dec = {k: Decimal(str(v)) for k, v in prev_prices.items()}
         prev_options_pnl = sum(
-            (_compute_strategy_pnl_from_prices(s, prev_prices_dec).total_pnl
+            (_compute_strategy_pnl_from_prices(s, prev_prices).total_pnl
              for s in strategies),
             Decimal("0"),
         )
@@ -273,7 +275,7 @@ def _build_portfolio_summary(
             if isinstance(s, HedgeStrategy):
                 curr_pnl = strategy_pnls.get(s.name)
                 if curr_pnl is not None:
-                    prev_pnl = _compute_strategy_pnl_from_prices(s, prev_prices_dec).total_pnl
+                    prev_pnl = _compute_strategy_pnl_from_prices(s, prev_prices).total_pnl
                     delta = s.get_protection_delta(curr_pnl.total_pnl, prev_pnl)
                     if delta is not None:
                         # Note: We assume exactly one hedge strategy exists for the portfolio's finrakshak_day_delta slot.

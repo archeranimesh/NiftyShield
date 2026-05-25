@@ -55,11 +55,11 @@ def _make_leg(
 class FakeMarket:
     """Fake market data provider for tracker tests."""
 
-    def __init__(self, prices: dict[str, float]) -> None:
-        self.prices = prices
+    def __init__(self, prices: dict[str, Decimal | float]) -> None:
+        self.prices = {k: Decimal(str(v)) for k, v in prices.items()}
 
-    async def get_ltp(self, instruments: list[str]) -> dict[str, float]:
-        return {k: self.prices.get(k, 0.0) for k in instruments}
+    async def get_ltp(self, instruments: list[str]) -> dict[str, Decimal]:
+        return {k: self.prices.get(k, Decimal("0.0")) for k in instruments}
 
     async def get_option_chain(self, instrument: str, expiry: str) -> dict:
         return {}

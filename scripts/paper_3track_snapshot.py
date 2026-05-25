@@ -304,8 +304,8 @@ async def _run(args: argparse.Namespace) -> None:
             logger.warning("UPSTOX_ANALYTICS_TOKEN not set — using mock broker (dry-run mode).")
 
             class _MockBroker:
-                async def get_ltp(self, keys):
-                    return {k: 0.0 for k in keys}
+                async def get_ltp(self, keys: list[str]) -> dict[str, Decimal]:
+                    return {k: Decimal("0.0") for k in keys}
                 async def get_option_chain(self, u, e):
                     return []
             broker = _MockBroker()

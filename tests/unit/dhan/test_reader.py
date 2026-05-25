@@ -285,7 +285,7 @@ def _bare_holding(symbol: str, isin: str, security_id: str, classification: Asse
 class TestEnrichWithUpstoxPrices:
     def test_enriches_from_nse_eq_key(self):
         h = _bare_holding("NIFTYIETF", "INF109K012R6", "13611", AssetType.EQUITY)
-        prices = {"NSE_EQ|INF109K012R6": 275.40}
+        prices = {"NSE_EQ|INF109K012R6": Decimal("275.40")}
         result = enrich_with_upstox_prices([h], prices)
         assert result[0].ltp == Decimal("275.40")
 
@@ -296,7 +296,7 @@ class TestEnrichWithUpstoxPrices:
 
     def test_preserves_all_fields(self):
         h = _bare_holding("LIQUIDCASE", "INF0R8F01034", "25780", AssetType.BOND)
-        prices = {"NSE_EQ|INF0R8F01034": 1005.50}
+        prices = {"NSE_EQ|INF0R8F01034": Decimal("1005.50")}
         result = enrich_with_upstox_prices([h], prices)
         r = result[0]
         assert r.trading_symbol == "LIQUIDCASE"
@@ -309,8 +309,8 @@ class TestEnrichWithUpstoxPrices:
         eq = _bare_holding("NIFTYIETF", "INF109K012R6", "13611", AssetType.EQUITY)
         bd = _bare_holding("LIQUIDCASE", "INF0R8F01034", "25780", AssetType.BOND)
         prices = {
-            "NSE_EQ|INF109K012R6": 275.40,
-            "NSE_EQ|INF0R8F01034": 1005.50,
+            "NSE_EQ|INF109K012R6": Decimal("275.40"),
+            "NSE_EQ|INF0R8F01034": Decimal("1005.50"),
         }
         result = enrich_with_upstox_prices([eq, bd], prices)
         assert result[0].ltp == Decimal("275.40")
@@ -319,13 +319,13 @@ class TestEnrichWithUpstoxPrices:
     def test_partial_match_leaves_missing_as_none(self):
         eq = _bare_holding("NIFTYIETF", "INF109K012R6", "13611", AssetType.EQUITY)
         bd = _bare_holding("LIQUIDCASE", "INF0R8F01034", "25780", AssetType.BOND)
-        prices = {"NSE_EQ|INF109K012R6": 275.40}  # only equity present
+        prices = {"NSE_EQ|INF109K012R6": Decimal("275.40")}  # only equity present
         result = enrich_with_upstox_prices([eq, bd], prices)
         assert result[0].ltp == Decimal("275.40")
         assert result[1].ltp is None
 
     def test_empty_holdings_returns_empty(self):
-        assert enrich_with_upstox_prices([], {"NSE_EQ|SOMETHING": 100.0}) == []
+        assert enrich_with_upstox_prices([], {"NSE_EQ|SOMETHING": Decimal("100.0")}) == []
 
 
 # ── upstox_keys_for_holdings ─────────────────────────────────────
