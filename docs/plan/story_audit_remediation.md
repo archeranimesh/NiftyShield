@@ -46,4 +46,4 @@ Resume rule: read CONTEXT.md → find first unchecked box → implement → test
 - [x] [28] upstox_market.py:208 — float(price) cast | SHA: 1cf71a5, fc0911e
 - [x] [29] tracker.py:208,327 — StrategyPnL float | SHA: 3a82c88
 - [x] [30] summary.py:35,99,171 — float() re-contamination | SHA: 0c31655
-- [ ] [31] protocol.py:68,125 — MarketDataProvider returns float ← START HERE | SHA:
+- [x] [31] protocol.py:68,125 — MarketDataProvider returns float ← START HERE | SHA: e100e28
