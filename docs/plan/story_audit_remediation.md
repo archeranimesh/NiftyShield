@@ -43,7 +43,7 @@ Resume rule: read CONTEXT.md → find first unchecked box → implement → test
 - [x] [25] dhan/positions.py:167 — flat STT rate | SHA: 64c13a4, 9eba231
 - [x] [26] paper_3track_entry.py:487 — verify T1-C before fixing | SHA: 763208a, 2a80ba8
 - [x] [27] models/portfolio.py:110 — Leg.strike is float | SHA: faac98c, 39d9085
-- [x] [28] upstox_market.py:208 — float(price) cast | SHA: 1cf71a5
+- [x] [28] upstox_market.py:208 — float(price) cast | SHA: 1cf71a5, fc0911e
 - [ ] [29] tracker.py:208,327 — StrategyPnL float | SHA:
 - [ ] [30] summary.py:35,99,171 — float() re-contamination | SHA:
 - [ ] [31] protocol.py:68,125 — MarketDataProvider returns float ← START HERE | SHA:
