@@ -67,7 +67,9 @@ class MarketDataProvider(Protocol):
     protocol without any inheritance.
     """
 
-    async def get_ltp(self, instruments: list[str]) -> dict[str, Decimal]: ...
+    async def get_ltp(self, instruments: list[str]) -> dict[str, Decimal]:
+        """Fetch last-traded prices for the given instruments as Decimals for financial precision."""
+        ...
 
     async def get_option_chain(
         self, instrument: str, expiry: str
@@ -124,7 +126,9 @@ class BrokerClient(Protocol):
 
     # ── MarketDataProvider surface ───────────────────────────────
 
-    async def get_ltp(self, instruments: list[str]) -> dict[str, Decimal]: ...
+    async def get_ltp(self, instruments: list[str]) -> dict[str, Decimal]:
+        """Fetch last-traded prices for the given instruments as Decimals for financial precision."""
+        ...
 
     async def get_option_chain(
         self, instrument: str, expiry: str
