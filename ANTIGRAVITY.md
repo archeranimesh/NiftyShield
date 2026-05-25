@@ -120,6 +120,37 @@ Execute in this exact order. A written-out commit message is not a commit — th
 
 ---
 
+## Story File Execution Protocol (Single-Finding Mode)
+
+Use this protocol whenever a handover prompt points to a story file (e.g. `docs/plan/story_audit_remediation.md`) and asks you to work the next unchecked item.
+
+**One finding. No exceptions.**
+Find the first `- [ ]` line in the story file. That is your only task. Do not look at any other unchecked item. Do not batch, combine, or preview adjacent findings regardless of how trivial they appear.
+
+**Pre-implementation gate — state before writing any code:**
+> "I am implementing finding [N] — `<one-line description>`. Files that will change: `<list>`. Tests in: `<test file>`."
+Do not write a single line of code until this statement is made.
+
+**Implementation:** Follow all rules in `CLAUDE.md` and `REVIEW.md`. Every public function touched needs one happy-path test and one error/edge-case test. Before writing any test helper that constructs a domain model, run `get_code_snippet('<ModelClassName>')` to get the exact current field list — never construct models from memory.
+
+**Test gate — blocking:**
+After implementation, before touching anything else, run:
+```bash
+python -m pytest tests/unit/ --tb=no -q
+```
+All tests must be green. Fix failures before proceeding. Do not skip this step.
+
+**Commit:** Follow the commit format in `.claude/skills/commit/SKILL.md`. Execute the commit — do not draft it. The `Why:` line must reference the audit finding number and link to the review file. Run `git log --oneline -1` and copy the SHA.
+
+**Record and stop:**
+1. Re-read the story file (`view_file: <story_file>`) — do not rely on working memory for the current checkbox state.
+2. Change `- [ ]` to `- [x]` on the completed line, appending `| SHA: <sha>`.
+3. Add one line to `TODOS.md` under the session log: `- [YYYY-MM-DD] audit finding [N] — <description> — <SHA>`.
+4. Commit the doc update.
+5. **Stop.** You are done. Do not proceed to the next unchecked item. The next session picks up from the next unchecked box.
+
+---
+
 ## Phase Completion Output (mandatory)
 
 At the end of every phase, produce this structured block before stopping.
