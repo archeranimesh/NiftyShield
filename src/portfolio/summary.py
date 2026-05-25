@@ -10,6 +10,8 @@ without going through the script.
 
 Deferred imports are preserved for mf.tracker and portfolio.tracker to avoid
 potential circular imports and keep this module I/O-free at import time.
+
+Cleaned up float annotations and casts (finding [30]).
 """
 
 from __future__ import annotations
