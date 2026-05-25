@@ -33,6 +33,7 @@ composition root) knows which implementation to wire.
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any, Callable, Protocol, runtime_checkable
 
 from src.models import OptionChain
@@ -66,7 +67,7 @@ class MarketDataProvider(Protocol):
     protocol without any inheritance.
     """
 
-    async def get_ltp(self, instruments: list[str]) -> dict[str, float]: ...
+    async def get_ltp(self, instruments: list[str]) -> dict[str, Decimal]: ...
 
     async def get_option_chain(
         self, instrument: str, expiry: str
@@ -123,7 +124,7 @@ class BrokerClient(Protocol):
 
     # ── MarketDataProvider surface ───────────────────────────────
 
-    async def get_ltp(self, instruments: list[str]) -> dict[str, float]: ...
+    async def get_ltp(self, instruments: list[str]) -> dict[str, Decimal]: ...
 
     async def get_option_chain(
         self, instrument: str, expiry: str

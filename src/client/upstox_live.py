@@ -27,6 +27,8 @@ Expired instruments:
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 from src.client.protocol import (
     BrokerClient,
     CandleRequest,
@@ -69,7 +71,7 @@ class UpstoxLiveClient:
 
     # ── MarketDataProvider surface (working today) ───────────────
 
-    async def get_ltp(self, instruments: list[str]) -> dict[str, float]:
+    async def get_ltp(self, instruments: list[str]) -> dict[str, Decimal]:
         """Fetch last-traded prices for the given instrument keys.
 
         Delegates to UpstoxMarketClient. Raises LTPFetchError on total
@@ -81,7 +83,7 @@ class UpstoxLiveClient:
                          (e.g. ``["NSE_EQ|INF754K01LE1"]``).
 
         Returns:
-            Dict mapping instrument_key -> last_price (float).
+            Dict mapping instrument_key -> last_price (Decimal).
 
         Raises:
             LTPFetchError: If the API request fails or returns no data.

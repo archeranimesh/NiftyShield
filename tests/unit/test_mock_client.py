@@ -25,6 +25,7 @@ Coverage:
 from __future__ import annotations
 
 import asyncio
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -98,7 +99,7 @@ class TestGetLtp:
         client = make_client()
         client.set_price("NSE_FO|37810", 123.45)
         result = await client.get_ltp(["NSE_FO|37810"])
-        assert result == {"NSE_FO|37810": 123.45}
+        assert result == {"NSE_FO|37810": Decimal("123.45")}
 
     async def test_unknown_key_omitted(self) -> None:
         client = make_client()
@@ -334,7 +335,7 @@ class TestSimulateError:
             await client.get_ltp(["NSE_FO|37810"])
         # Second call must succeed without raising
         result = await client.get_ltp(["NSE_FO|37810"])
-        assert result == {"NSE_FO|37810": 100.0}
+        assert result == {"NSE_FO|37810": Decimal("100.0")}
 
     async def test_simulate_error_on_place_order(self) -> None:
         client = make_client()
@@ -378,11 +379,11 @@ class TestReset:
         client.reset()
         # Error queue cleared — call must succeed
         result = await client.get_ltp(["NSE_FO|37810"])
-        assert result == {"NSE_FO|37810": 10.0}
+        assert result == {"NSE_FO|37810": Decimal("10.0")}
 
     def test_reset_preserves_price_map(self) -> None:
         client = make_client()
         client.set_price("NSE_FO|37810", 99.0)
         client.reset()
         # Price map not cleared by reset
-        assert client._price_map.get("NSE_FO|37810") == 99.0
+        assert client._price_map.get("NSE_FO|37810") == Decimal("99.0")

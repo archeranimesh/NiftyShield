@@ -73,21 +73,21 @@ class MockBrokerClient:
         self._margin_available: Decimal = Decimal(str(initial_margin))
         self._orders: list[dict] = []
         self._positions: list[dict] = []
-        self._price_map: dict[str, float] = {}
+        self._price_map: dict[str, Decimal] = {}
         self._error_queue: dict[str, Exception] = {}
 
     # ------------------------------------------------------------------
     # Test-setup helpers — called by test code before ``act``
     # ------------------------------------------------------------------
 
-    def set_price(self, instrument_key: str, price: float) -> None:
+    def set_price(self, instrument_key: str, price: Decimal | float) -> None:
         """Populate ``_price_map`` with a known price for an instrument.
 
         Args:
             instrument_key: Upstox instrument key (e.g. ``"NSE_FO|37810"``).
             price: Last traded price to return from ``get_ltp``.
         """
-        self._price_map[instrument_key] = price
+        self._price_map[instrument_key] = Decimal(str(price))
 
     def set_margin(self, amount: float) -> None:
         """Override available margin.
@@ -161,7 +161,7 @@ class MockBrokerClient:
     # BrokerClient — MarketDataProvider surface
     # ------------------------------------------------------------------
 
-    async def get_ltp(self, instruments: list[str]) -> dict[str, float]:
+    async def get_ltp(self, instruments: list[str]) -> dict[str, Decimal]:
         """Return LTPs from the internal price map.
 
         Unknown instrument keys are silently omitted from the result dict,

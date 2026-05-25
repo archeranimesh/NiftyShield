@@ -12,6 +12,9 @@ Covers:
 
 from __future__ import annotations
 
+from decimal import Decimal
+from typing import Any
+
 import pytest
 import requests
 
@@ -122,5 +125,49 @@ def test_ltp_maps_instrument_token_to_price(client: UpstoxMarketClient, monkeypa
 
     monkeypatch.setattr(client._session, "get", lambda *a, **kw: _Resp())
     result = client.get_ltp_sync(["NSE_FO|37810"])
-    assert result == {"NSE_FO|37810": 975.0}
+    assert result == {"NSE_FO|37810": Decimal("975.0")}
+
+
+@pytest.mark.asyncio
+async def test_async_get_ltp_maps_correctly(
+    client: UpstoxMarketClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Async get_ltp must correctly return remapped Decimal prices."""
+
+    class _Resp:
+        def raise_for_status(self) -> None:
+            pass
+
+        def json(self) -> dict[str, Any]:
+            return {
+                "data": {
+                    "NSE_FO:NIFTY26D2923000PE": {
+                        "instrument_token": "NSE_FO|37810",
+                        "last_price": 975.0,
+                    }
+                }
+            }
+
+    monkeypatch.setattr(client._session, "get", lambda *a, **kw: _Resp())
+    result = await client.get_ltp(["NSE_FO|37810"])
+    assert result == {"NSE_FO|37810": Decimal("975.0")}
+
+
+@pytest.mark.asyncio
+async def test_async_get_ltp_raises_on_empty_data(
+    client: UpstoxMarketClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Async get_ltp must raise LTPFetchError on empty response."""
+
+    class _Resp:
+        def raise_for_status(self) -> None:
+            pass
+
+        def json(self) -> dict[str, Any]:
+            return {"status": "success", "data": {}}
+
+    monkeypatch.setattr(client._session, "get", lambda *a, **kw: _Resp())
+    with pytest.raises(LTPFetchError, match="empty data"):
+        await client.get_ltp(["NSE_FO|37810"])
+
 

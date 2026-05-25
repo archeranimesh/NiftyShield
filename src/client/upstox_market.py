@@ -75,7 +75,7 @@ class UpstoxMarketClient:
 
     # ── Sync methods (used directly by CLI scripts) ──────────────
 
-    def get_ltp_sync(self, instruments: list[str]) -> dict[str, float]:
+    def get_ltp_sync(self, instruments: list[str]) -> dict[str, Decimal]:
         """Fetch LTP for a list of instrument keys.
 
         Args:
@@ -88,7 +88,7 @@ class UpstoxMarketClient:
         if not instruments:
             return {}
 
-        results: dict[str, float] = {}
+        results: dict[str, Decimal] = {}
 
         # Batch into chunks of 500
         for i in range(0, len(instruments), MAX_INSTRUMENTS_PER_REQUEST):
@@ -157,7 +157,7 @@ class UpstoxMarketClient:
 
     # ── Async wrappers (satisfy MarketDataProvider protocol) ─────
 
-    async def get_ltp(self, instruments: list[str]) -> dict[str, float]:
+    async def get_ltp(self, instruments: list[str]) -> dict[str, Decimal]:
         """Async wrapper around get_ltp_sync."""
         return await asyncio.to_thread(self.get_ltp_sync, instruments)
 
@@ -171,7 +171,7 @@ class UpstoxMarketClient:
 
     # ── Internal helpers ─────────────────────────────────────────
 
-    def _fetch_ltp_batch(self, instruments: list[str]) -> dict[str, float]:
+    def _fetch_ltp_batch(self, instruments: list[str]) -> dict[str, Decimal]:
         """Fetch LTP for a single batch of up to 500 instruments.
 
         Raises:
@@ -195,12 +195,12 @@ class UpstoxMarketClient:
                 f"LTP batch returned empty data for {len(instruments)} instruments"
             )
 
-        results: dict[str, float] = {}
+        results: dict[str, Decimal] = {}
         for _resp_key, quote in data.items():
             pipe_key = quote.get("instrument_token", "")
             price = quote.get("last_price")
             if pipe_key and price is not None:
-                results[pipe_key] = float(price)
+                results[pipe_key] = Decimal(str(price))
 
         if not results:
             raise LTPFetchError(
