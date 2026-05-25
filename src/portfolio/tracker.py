@@ -215,7 +215,10 @@ class PortfolioTracker:
                 )
                 ltp: Decimal = leg.entry_price
             else:
-                ltp = Decimal(str(raw_ltp))
+                ltp = (
+                    raw_ltp if isinstance(raw_ltp, Decimal)
+                    else Decimal(str(raw_ltp))
+                )
 
             leg_pnls.append(
                 LegPnL(

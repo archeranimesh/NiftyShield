@@ -32,12 +32,16 @@ from src.portfolio.service import SnapshotService
 
 def _make_leg(
     direction: Direction,
-    entry_price: float,
+    entry_price: Decimal | float | str,
     quantity: int,
     id: int | None = None,
     asset_type: AssetType = AssetType.EQUITY,
     lot_size: int = 1,
 ) -> Leg:
+    ep = (
+        entry_price if isinstance(entry_price, Decimal)
+        else Decimal(str(entry_price))
+    )
     return Leg(
         id=id,
         instrument_key="TEST|INST",
@@ -46,7 +50,7 @@ def _make_leg(
         direction=direction,
         quantity=quantity,
         lot_size=lot_size,
-        entry_price=entry_price,
+        entry_price=ep,
         entry_date=date(2026, 4, 1),
         product_type=ProductType.CNC,
     )
@@ -849,21 +853,33 @@ class TestPortfolioTracker:
             name="tracker_test",
             legs=[
                 Leg(
-                    instrument_key="A", display_name="A", asset_type=AssetType.EQUITY,
-                    direction=Direction.BUY, quantity=100, entry_price=500.0,
-                    entry_date=date(2026, 4, 1), product_type=ProductType.CNC,
+                    instrument_key="A",
+                    display_name="A",
+                    asset_type=AssetType.EQUITY,
+                    direction=Direction.BUY,
+                    quantity=100,
+                    entry_price=Decimal("500.0"),
+                    entry_date=date(2026, 4, 1),
+                    product_type=ProductType.CNC,
                 ),
                 Leg(
-                    instrument_key="B", display_name="B", asset_type=AssetType.PE,
-                    direction=Direction.SELL, quantity=65, entry_price=840.0,
-                    entry_date=date(2026, 4, 1), product_type=ProductType.NRML, lot_size=65,
-                    expiry=date(2026, 12, 29), strike=Decimal("840"),
+                    instrument_key="B",
+                    display_name="B",
+                    asset_type=AssetType.PE,
+                    direction=Direction.SELL,
+                    quantity=65,
+                    entry_price=Decimal("840.0"),
+                    entry_date=date(2026, 4, 1),
+                    product_type=ProductType.NRML,
+                    lot_size=65,
+                    expiry=date(2026, 12, 29),
+                    strike=Decimal("840"),
                 ),
             ],
         )
         tmp_store.upsert_strategy(s)
 
-        market = FakeMarket({"A": 510.0, "B": 800.0})
+        market = FakeMarket({"A": Decimal("510.0"), "B": Decimal("800.0")})
         tracker = PortfolioTracker(tmp_store, market)
 
         pnl = asyncio.run(tracker.compute_pnl("tracker_test"))
@@ -876,15 +892,20 @@ class TestPortfolioTracker:
             name="record_test",
             legs=[
                 Leg(
-                    instrument_key="X", display_name="X", asset_type=AssetType.EQUITY,
-                    direction=Direction.BUY, quantity=10, entry_price=100.0,
-                    entry_date=date(2026, 4, 1), product_type=ProductType.CNC,
+                    instrument_key="X",
+                    display_name="X",
+                    asset_type=AssetType.EQUITY,
+                    direction=Direction.BUY,
+                    quantity=10,
+                    entry_price=Decimal("100.0"),
+                    entry_date=date(2026, 4, 1),
+                    product_type=ProductType.CNC,
                 ),
             ],
         )
         tmp_store.upsert_strategy(s)
 
-        market = FakeMarket({"X": 105.0})
+        market = FakeMarket({"X": Decimal("105.0")})
         tracker = PortfolioTracker(tmp_store, market)
 
         count, pnl = asyncio.run(
@@ -921,7 +942,7 @@ class TestPortfolioTracker:
                     direction=Direction.SELL,
                     quantity=65,
                     lot_size=65,
-                    entry_price=500.0,
+                    entry_price=Decimal("500.0"),
                     entry_date=date(2026, 4, 1),
                     product_type=ProductType.NRML,
                     expiry=date(2026, 12, 29),
@@ -932,7 +953,7 @@ class TestPortfolioTracker:
         tmp_store.upsert_strategy(s)
 
         # Explicitly provide LTP=0.0 (option has expired worthless).
-        market = FakeMarket({"OPT|KEY": 0.0})
+        market = FakeMarket({"OPT|KEY": Decimal("0.0")})
         tracker = PortfolioTracker(tmp_store, market)
 
         pnl = asyncio.run(tracker.compute_pnl("zero_ltp_test"))
@@ -950,20 +971,29 @@ class TestPortfolioTracker:
             name="pass_through_test",
             legs=[
                 Leg(
-                    instrument_key="Y", display_name="Y", asset_type=AssetType.EQUITY,
-                    direction=Direction.BUY, quantity=10, entry_price=100.0,
-                    entry_date=date(2026, 4, 1), product_type=ProductType.CNC,
+                    instrument_key="Y",
+                    display_name="Y",
+                    asset_type=AssetType.EQUITY,
+                    direction=Direction.BUY,
+                    quantity=10,
+                    entry_price=Decimal("100.0"),
+                    entry_date=date(2026, 4, 1),
+                    product_type=ProductType.CNC,
                 ),
             ],
         )
         tmp_store.upsert_strategy(s)
 
-        market = FakeMarket({"Y": 105.0})
+        market = FakeMarket({"Y": Decimal("105.0")})
         tracker = PortfolioTracker(tmp_store, market)
 
         with patch.object(market, "get_ltp", wraps=market.get_ltp) as spy:
             count, pnl = asyncio.run(
-                tracker.record_daily_snapshot("pass_through_test", date(2026, 4, 2), prices={"Y": 110.0})
+                tracker.record_daily_snapshot(
+                    "pass_through_test",
+                    date(2026, 4, 2),
+                    prices={"Y": Decimal("110.0")},
+                )
             )
             assert count == 1
             assert spy.call_count == 0  # market.get_ltp was skipped
@@ -976,20 +1006,25 @@ class TestPortfolioTracker:
                 name=name,
                 legs=[
                     Leg(
-                        instrument_key=name, display_name=name, asset_type=AssetType.EQUITY,
-                        direction=Direction.BUY, quantity=10, entry_price=100.0,
-                        entry_date=date(2026, 4, 1), product_type=ProductType.CNC,
+                        instrument_key=name,
+                        display_name=name,
+                        asset_type=AssetType.EQUITY,
+                        direction=Direction.BUY,
+                        quantity=10,
+                        entry_price=Decimal("100.0"),
+                        entry_date=date(2026, 4, 1),
+                        product_type=ProductType.CNC,
                     )
                 ]
             ))
 
-        market = FakeMarket({"strat1": 110.0, "strat2": 120.0})
+        market = FakeMarket({"strat1": Decimal("110.0"), "strat2": Decimal("120.0")})
         tracker = PortfolioTracker(tmp_store, market)
 
         with patch.object(market, "get_ltp", wraps=market.get_ltp) as spy:
             counts, pnls = asyncio.run(tracker.record_all_strategies(
                 snapshot_date=date(2026, 4, 2),
-                prices={"strat1": 110.0, "strat2": 120.0}
+                prices={"strat1": Decimal("110.0"), "strat2": Decimal("120.0")}
             ))
             
             assert spy.call_count == 0  # no internal get_ltp calls because prices were provided
