@@ -42,7 +42,13 @@ src/
 │   ├── models.py             # PaperTrade (trade_date, action, quantity, price, leg_role) and PaperSnapshot.
 │   ├── store.py              # PaperStore (SQLite): record_trade (idempotent), get_trades, delete_trade (rollback), get_all_strategy_names, record_daily_snapshot, get_prev_leg_snapshot (delta tracking).
 │   ├── formatting.py         # Shared output helpers (fmt_inr, format_pnl_table, format_track_summary). Decimal precision; sign-aware.
-│   └── _display.py           # Legacy labels (BASE_LABELS, OVERLAY_LABELS) and hedge_verdict.
+│   ├── tracker.py            # PaperTracker: P&L computation and daily snapshot recording. Mirrors PortfolioTracker shape; operates on paper_trades/paper_nav_snapshots only. LTP floats converted at boundary via Decimal(str()).
+│   ├── track_snapshot.py     # Core logic for producing the daily structured output for the three tracks. Async; dataclass-based snapshot type per track.
+│   ├── metrics.py            # Pure metric functions: compute_nee() (Nifty-equivalent exposure), cost attribution helpers. NIFTYBEES_BETA_TO_NIFTY = 0.92.
+│   ├── overlay_selector.py   # Overlay expiry selector — finds most cost-efficient protection leg across candidate expiries. Async; returns ranked candidates.
+│   ├── proxy_monitor.py      # Track C delta monitor. ProxyDeltaMonitor tracks DITM call delta drift for the proxy track and flags rebalance triggers.
+│   ├── _display.py           # Legacy labels (BASE_LABELS, OVERLAY_LABELS) and hedge_verdict. Kept for backward compat with older snapshot scripts.
+│   └── _utils.py             # Paper-local utilities: safe_float(val, default) — converts any value to float without raising.
 ├── mf/
 │   ├── CLAUDE.md             # Module context: transaction ledger model, AMFI source, Decimal TEXT invariant, MFHolding location
 │   ├── __init__.py           # Package marker
