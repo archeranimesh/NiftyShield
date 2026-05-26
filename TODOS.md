@@ -341,6 +341,7 @@ and missing data that must be resolved before executing backtests at scale:
 
 | Date | What Changed |
 |---|---|
+| 2026-05-26 | Task A — Wire src/risk/ delta gate into record_paper_trade.py — b9c00146e2bb268aa0d8449a295e0d92c17cfab1 |
 | 2026-05-26 | Task C — CLI-12: surface trade notes in paper_snapshot output — c71331b |
 | 2026-05-26 | Task B — migrate private instrument loop in `paper_3track_overlay.py:243` — 13b3daa |
 | 2026-05-26 | Task A — add paper_csp_roll.py for CSP leg roll automation — 3063fbf |
