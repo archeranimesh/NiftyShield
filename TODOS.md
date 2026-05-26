@@ -13,7 +13,7 @@ Ongoing paper-trading tasks (Animesh) run in parallel and are listed separately 
 |---|---|---|---|---|
 | **0** | Fix bhavcopy UDiFF format (Dec 2024+) | Cowork | ASAP | ✅ Done (2026-05-14) |
 | **1** | India VIX ingestion + IVR calculation | Cowork | Jun 2026 | ✅ Done (2026-05-14) |
-| **2** | PortfolioDeltaTracker (`src/risk/`) | Cowork | Jun 2026 | Unblocked |
+| **2** | PortfolioDeltaTracker (`src/risk/`) | Cowork | Jun 2026 | ✅ Done (2026-05-26) |
 | **3** | June 2026 Finideas roll cycle | Animesh + Cowork | **2026-06-30** | Awaiting Finideas instructions |
 
 ---
@@ -440,6 +440,7 @@ and missing data that must be resolved before executing backtests at scale:
 
 | Date | What Changed |
 |---|---|
+| 2026-05-26 | Task 2 closed — PortfolioDeltaTracker + entry gate (`src/risk/`); 20 tests; 1471+20 suite green |
 | 2026-05-25 | audit finding [31] — document Decimal return type in protocol get_ltp — e100e28 |
 | 2026-05-25 | audit finding [30] — note float re-contamination resolution in summary.py — 0c31655 |
 | 2026-05-25 | audit finding [29] — refactor StrategyPnL and tracker to use Decimal strictly — 3a82c88 |
