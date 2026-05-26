@@ -58,7 +58,7 @@
 
 ---
 
-- [x] **Task C — CLI-12: surface `--notes` in `paper_snapshot.py` output** | SHA: 69c7a49
+- [x] **Task C — CLI-12: surface `--notes` in `paper_snapshot.py` output** | SHA: c71331b
 
   `PaperTrade` has a `notes: str | None` field in `paper_trades`. No snapshot script reads it.
   Surface it in `scripts/paper_snapshot.py`.
