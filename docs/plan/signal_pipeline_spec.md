@@ -221,12 +221,15 @@ Today is {trade_date}. Monthly expiry: {monthly_expiry}.
 {{
   "direction": "BULLISH" | "BEARISH" | "NEUTRAL",
   "confidence": 1–5,
-  "recommended_strike": <integer>,
+  "recommended_strike": <integer — must be ATM strike or the single strike immediately above/below ATM>,
   "entry_premium_low": <number>,
   "entry_premium_high": <number>,
   "key_reason": "<one sentence>",
   "key_risk": "<one sentence>"
 }}
+
+ATM strike is {atm_strike}. Permitted strikes: {atm_minus_1}, {atm_strike}, {atm_plus_1}.
+Any other strike will be rejected. If uncertain, use {atm_strike}.
 ```
 
 ### Provider-specific suffixes
@@ -256,16 +259,21 @@ resistance/support proxies.
 
 ```
 1. Parallel await of all three providers (asyncio.gather, timeout=30s)
-2. Count votes per direction
-3. If 2 or 3 models agree on BULLISH or BEARISH:
+2. Validate each response — reject (log WARNING, exclude from vote) if:
+     a. recommended_strike is not in {atm_minus_1, atm_strike, atm_plus_1}
+     b. direction is not a valid Direction enum member
+     c. confidence is outside 1–5
+   A rejected response counts as a missing vote, not a NEUTRAL vote.
+3. Count votes per direction across validated responses only
+4. If 2 or 3 models agree on BULLISH or BEARISH:
      consensus_direction = majority direction
      consensus_confidence = avg confidence of agreeing models
      trade_action = BUY_CALL (BULLISH) | BUY_PUT (BEARISH)
          only if consensus_confidence >= MIN_CONFIDENCE_THRESHOLD (default 3)
          else NO_TRADE
-4. If split (all 3 differ, or 2/3 NEUTRAL):
+5. If split (all 3 differ, or 2/3 NEUTRAL), or fewer than 2 valid responses:
      trade_action = NO_TRADE
-5. recommended_strike = modal strike among agreeing models (or lower strike if tie)
+6. recommended_strike = modal strike among agreeing models (or ATM if tie)
 ```
 
 ---
@@ -314,6 +322,7 @@ CREATE TABLE IF NOT EXISTS signal_outcomes (
     pnl_per_lot        TEXT,
     nifty_close        TEXT NOT NULL,
     executed           INTEGER NOT NULL DEFAULT 0,  -- boolean
+    phase              TEXT NOT NULL DEFAULT 'openrouter_only',  -- 'openrouter_only' | 'search_enabled'
     notes              TEXT,
     recorded_at        TEXT NOT NULL
 );
@@ -437,7 +446,64 @@ luck in a trending market.
 
 ---
 
-## 14. Required API Tokens (checklist)
+## 14. Performance Report (`scripts/signal_report.py`)
+
+On-demand terminal summary of signal pipeline performance. No cron — run manually.
+
+```
+python -m scripts.signal_report
+python -m scripts.signal_report --from 2026-08-01 --to 2026-10-31
+python -m scripts.signal_report --phase openrouter_only
+python -m scripts.signal_report --phase search_enabled
+```
+
+**Output sections (in order):**
+
+```
+Signal Pipeline Performance Report
+Period: 2026-08-01 → 2026-10-31  |  Phase: all
+─────────────────────────────────────────────────
+OVERALL
+  Trading days in period : 62
+  Signals generated      : 58   (4 NO_TRADE days)
+  Executed trades        : 41   (17 skipped by you)
+  Win rate               : 24/41  =  58.5%
+  Avg P&L per lot        : ₹ 312
+  Expected value         : ₹ 312 × 58.5% - ₹ 480 × 41.5% = ₹-17  ← negative = bad
+  Random baseline EV     : ₹ -42   (coin flip, same entry/exit)
+
+PER-MODEL ACCURACY  (direction_called == nifty_close > nifty_open)
+  grok    : 34/58 = 58.6%
+  gpt4o   : 31/58 = 53.4%
+  gemini  : 29/58 = 50.0%
+
+CONFIDENCE CALIBRATION
+  confidence 1–2 : 8 trades   win rate 37.5%
+  confidence 3   : 18 trades  win rate 55.6%
+  confidence 4   : 11 trades  win rate 63.6%
+  confidence 5   : 4 trades   win rate 75.0%
+
+NO_TRADE ACCURACY
+  NO_TRADE days : 4
+  Market moved > 0.5% : 2/4 (50%) — signal correctly avoided
+
+PHASE BREAKDOWN
+  openrouter_only : 30 trades  EV ₹-42
+  search_enabled  : 11 trades  EV ₹+88
+─────────────────────────────────────────────────
+```
+
+**Implementation notes:**
+- Reads from `signal_responses`, `daily_signals`, `signal_outcomes` via `SignalStore`.
+- Random baseline: for each executed trade day, simulate a coin-flip direction using
+  `hash(trade_date) % 2` (deterministic, reproducible). Same entry premium, same exit.
+- `--phase` filter applies to `signal_outcomes.phase` column.
+- Skipped trades (executed=0) excluded from P&L stats but included in direction accuracy
+  (the model call happened regardless of whether you traded).
+
+---
+
+## 15. Required API Tokens (checklist)
 
 - [ ] `XAI_API_KEY` — https://console.x.ai (Grok, Phase 2)
 - [ ] `OPENROUTER_API_KEY` — https://openrouter.ai (Phase 1 start here)
