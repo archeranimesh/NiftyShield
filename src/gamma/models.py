@@ -63,9 +63,9 @@ class GammaChainSnapshot:
     best_bid: decimal.Decimal | None
     best_ask: decimal.Decimal | None
     bid_ask_spread: decimal.Decimal | None
-    oi: typing.Optional[int]
+    oi: int | None
     oi_change_1d: decimal.Decimal | None
-    volume_day: typing.Optional[int]
+    volume_day: int | None
     strike_iv_pctile_20d: decimal.Decimal | None
     gamma_gearing_pctile_dte: decimal.Decimal | None
     created_at: datetime.datetime
@@ -103,7 +103,7 @@ class GammaWatchlistEntry:
     removal_reason: str | None
     distance_pct: decimal.Decimal | None
     gamma_gearing: decimal.Decimal | None
-    oi: typing.Optional[int]
+    oi: int | None
     oi_change_1d: decimal.Decimal | None
     days_on_watchlist: int
     elevated: bool
