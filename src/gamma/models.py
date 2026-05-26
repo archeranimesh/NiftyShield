@@ -1,15 +1,16 @@
 """Data models for near-expiry gamma strategy.
 
-All monetary, Greek, and numeric/derived values use Decimal (stored as TEXT in SQLite)
-to preserve precision.
+All monetary, Greek, and numeric/derived values use Decimal
+(stored as TEXT in SQLite) to preserve precision.
 """
 
-from dataclasses import dataclass
-from datetime import date, datetime
-from decimal import Decimal
+import dataclasses
+import datetime
+import decimal
+import typing
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class GammaChainSnapshot:
     """Represents a single row in the gamma_chain_snapshots table.
 
@@ -29,46 +30,48 @@ class GammaChainSnapshot:
         theta_val: Option Theta (optional).
         iv_val: Option Implied Volatility (optional).
         gamma_gearing: Computed gamma gearing (optional).
-        distance_pct: Distance to strike as a percentage of spot (optional).
+        distance_pct: Distance to strike as a % of spot (optional).
         best_bid: Best bid price (optional).
         best_ask: Best ask price (optional).
         bid_ask_spread: Bid-ask spread (optional).
         oi: Open interest in contracts (optional).
-        oi_change_1d: Open interest fractional change vs prior day (optional).
+        oi_change_1d: Fractional change in OI vs prior day (optional).
         volume_day: Daily cumulative volume (optional).
-        strike_iv_pctile_20d: Percentile rank of IV vs prior 20 days (optional).
-        gamma_gearing_pctile_dte: Percentile rank of gearing by DTE (optional).
-        created_at: Creation timestamp in UTC.
+        strike_iv_pctile_20d: IV percentile rank vs prior 20 days
+            (optional).
+        gamma_gearing_pctile_dte: Percentile rank of gearing by DTE
+            (optional).
+        created_at: Creation timestamp in UTC (must be timezone-aware).
     """
 
-    snapshot_date: date
+    snapshot_date: datetime.date
     snapshot_time: str
-    expiry_date: date
+    expiry_date: datetime.date
     strike: int
-    option_type: str
+    option_type: typing.Literal["CE", "PE"]
     dte_calendar: int
-    nifty_spot: Decimal
-    nifty_futures: Decimal | None
-    india_vix: Decimal | None
-    delta_val: Decimal | None
-    gamma_val: Decimal | None
-    vega_val: Decimal | None
-    theta_val: Decimal | None
-    iv_val: Decimal | None
-    gamma_gearing: Decimal | None
-    distance_pct: Decimal | None
-    best_bid: Decimal | None
-    best_ask: Decimal | None
-    bid_ask_spread: Decimal | None
-    oi: int | None
-    oi_change_1d: Decimal | None
-    volume_day: int | None
-    strike_iv_pctile_20d: Decimal | None
-    gamma_gearing_pctile_dte: Decimal | None
-    created_at: datetime
+    nifty_spot: decimal.Decimal
+    nifty_futures: decimal.Decimal | None
+    india_vix: decimal.Decimal | None
+    delta_val: decimal.Decimal | None
+    gamma_val: decimal.Decimal | None
+    vega_val: decimal.Decimal | None
+    theta_val: decimal.Decimal | None
+    iv_val: decimal.Decimal | None
+    gamma_gearing: decimal.Decimal | None
+    distance_pct: decimal.Decimal | None
+    best_bid: decimal.Decimal | None
+    best_ask: decimal.Decimal | None
+    bid_ask_spread: decimal.Decimal | None
+    oi: typing.Optional[int]
+    oi_change_1d: decimal.Decimal | None
+    volume_day: typing.Optional[int]
+    strike_iv_pctile_20d: decimal.Decimal | None
+    gamma_gearing_pctile_dte: decimal.Decimal | None
+    created_at: datetime.datetime
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class GammaWatchlistEntry:
     """Represents a single row in the gamma_watchlist table.
 
@@ -78,28 +81,30 @@ class GammaWatchlistEntry:
         option_type: Option type ('CE' or 'PE').
         added_date: Date the strike was first added to the watchlist.
         last_seen_date: Date the strike was last seen/re-evaluated.
-        removed_date: Date the strike was removed from the watchlist (optional).
+        removed_date: Date the strike was removed from watchlist
+            (optional).
         removal_reason: Reason for removal (optional).
-        distance_pct: Distance to strike as percentage of spot at last evaluation (optional).
+        distance_pct: Distance to strike at last evaluation (optional).
         gamma_gearing: Gamma gearing at last evaluation (optional).
         oi: Open interest at last evaluation (optional).
-        oi_change_1d: Open interest fractional change vs prior day at last evaluation (optional).
-        days_on_watchlist: Total days the strike has been on the watchlist.
+        oi_change_1d: Fractional change in OI vs prior day (optional).
+        days_on_watchlist: Total days the strike has been on the
+            watchlist.
         elevated: Whether the strike is elevated (priority candidate).
         elevation_reason: Reason for elevation (optional).
     """
 
-    expiry_date: date
+    expiry_date: datetime.date
     strike: int
-    option_type: str
-    added_date: date
-    last_seen_date: date
-    removed_date: date | None
+    option_type: typing.Literal["CE", "PE"]
+    added_date: datetime.date
+    last_seen_date: datetime.date
+    removed_date: datetime.date | None
     removal_reason: str | None
-    distance_pct: Decimal | None
-    gamma_gearing: Decimal | None
-    oi: int | None
-    oi_change_1d: Decimal | None
+    distance_pct: decimal.Decimal | None
+    gamma_gearing: decimal.Decimal | None
+    oi: typing.Optional[int]
+    oi_change_1d: decimal.Decimal | None
     days_on_watchlist: int
     elevated: bool
     elevation_reason: str | None

@@ -7,9 +7,10 @@ to preserve Decimal precision.
 
 from __future__ import annotations
 
+import datetime
+import decimal
 import sqlite3
-from datetime import date, datetime
-from decimal import Decimal
+import typing
 
 from src.gamma.models import GammaChainSnapshot, GammaWatchlistEntry
 
@@ -58,9 +59,12 @@ CREATE TABLE IF NOT EXISTS gamma_chain_snapshots (
     UNIQUE (snapshot_date, snapshot_time, expiry_date, strike, option_type)
 );
 
-CREATE INDEX IF NOT EXISTS idx_gcs_expiry  ON gamma_chain_snapshots (expiry_date);
-CREATE INDEX IF NOT EXISTS idx_gcs_strike  ON gamma_chain_snapshots (strike, option_type);
-CREATE INDEX IF NOT EXISTS idx_gcs_date    ON gamma_chain_snapshots (snapshot_date);
+CREATE INDEX IF NOT EXISTS idx_gcs_expiry
+    ON gamma_chain_snapshots (expiry_date);
+CREATE INDEX IF NOT EXISTS idx_gcs_strike
+    ON gamma_chain_snapshots (strike, option_type);
+CREATE INDEX IF NOT EXISTS idx_gcs_date
+    ON gamma_chain_snapshots (snapshot_date);
 
 CREATE TABLE IF NOT EXISTS gamma_watchlist (
     id                    INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -70,7 +74,8 @@ CREATE TABLE IF NOT EXISTS gamma_watchlist (
     added_date            TEXT NOT NULL,       -- date first qualified
     last_seen_date        TEXT NOT NULL,       -- updated daily by Phase A
     removed_date          TEXT,               -- NULL = still active
-    removal_reason        TEXT,               -- spot_moved_away | oi_unwinding | expired
+    -- Reason: spot_moved_away | oi_unwinding | expired
+    removal_reason        TEXT,
 
     -- State at last evaluation
     distance_pct          TEXT,
@@ -86,126 +91,135 @@ CREATE TABLE IF NOT EXISTS gamma_watchlist (
     UNIQUE (expiry_date, strike, option_type)  -- one active row per strike
 );
 
-CREATE INDEX IF NOT EXISTS idx_gwl_active ON gamma_watchlist (removed_date, expiry_date);
+CREATE INDEX IF NOT EXISTS idx_gwl_active
+    ON gamma_watchlist (removed_date, expiry_date);
 """
 
 
+def _dec(v: decimal.Decimal | None) -> str | None:
+    """Helper to convert a Decimal to its DB string representation, or None."""
+    return str(v) if v is not None else None
+
+
 def _row_to_chain_snapshot(row: sqlite3.Row) -> GammaChainSnapshot:
+    dt = datetime.datetime.fromisoformat(row["created_at"])
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=datetime.timezone.utc)
     return GammaChainSnapshot(
-        snapshot_date=date.fromisoformat(row["snapshot_date"]),
+        snapshot_date=datetime.date.fromisoformat(row["snapshot_date"]),
         snapshot_time=row["snapshot_time"],
-        expiry_date=date.fromisoformat(row["expiry_date"]),
+        expiry_date=datetime.date.fromisoformat(row["expiry_date"]),
         strike=row["strike"],
         option_type=row["option_type"],
         dte_calendar=row["dte_calendar"],
-        nifty_spot=Decimal(row["nifty_spot"]),
+        nifty_spot=decimal.Decimal(row["nifty_spot"]),
         nifty_futures=(
-            Decimal(row["nifty_futures"])
+            decimal.Decimal(row["nifty_futures"])
             if row["nifty_futures"] is not None
             else None
         ),
         india_vix=(
-            Decimal(row["india_vix"])
+            decimal.Decimal(row["india_vix"])
             if row["india_vix"] is not None
             else None
         ),
         delta_val=(
-            Decimal(row["delta_val"])
+            decimal.Decimal(row["delta_val"])
             if row["delta_val"] is not None
             else None
         ),
         gamma_val=(
-            Decimal(row["gamma_val"])
+            decimal.Decimal(row["gamma_val"])
             if row["gamma_val"] is not None
             else None
         ),
         vega_val=(
-            Decimal(row["vega_val"])
+            decimal.Decimal(row["vega_val"])
             if row["vega_val"] is not None
             else None
         ),
         theta_val=(
-            Decimal(row["theta_val"])
+            decimal.Decimal(row["theta_val"])
             if row["theta_val"] is not None
             else None
         ),
         iv_val=(
-            Decimal(row["iv_val"])
+            decimal.Decimal(row["iv_val"])
             if row["iv_val"] is not None
             else None
         ),
         gamma_gearing=(
-            Decimal(row["gamma_gearing"])
+            decimal.Decimal(row["gamma_gearing"])
             if row["gamma_gearing"] is not None
             else None
         ),
         distance_pct=(
-            Decimal(row["distance_pct"])
+            decimal.Decimal(row["distance_pct"])
             if row["distance_pct"] is not None
             else None
         ),
         best_bid=(
-            Decimal(row["best_bid"])
+            decimal.Decimal(row["best_bid"])
             if row["best_bid"] is not None
             else None
         ),
         best_ask=(
-            Decimal(row["best_ask"])
+            decimal.Decimal(row["best_ask"])
             if row["best_ask"] is not None
             else None
         ),
         bid_ask_spread=(
-            Decimal(row["bid_ask_spread"])
+            decimal.Decimal(row["bid_ask_spread"])
             if row["bid_ask_spread"] is not None
             else None
         ),
         oi=row["oi"],
         oi_change_1d=(
-            Decimal(row["oi_change_1d"])
+            decimal.Decimal(row["oi_change_1d"])
             if row["oi_change_1d"] is not None
             else None
         ),
         volume_day=row["volume_day"],
         strike_iv_pctile_20d=(
-            Decimal(row["strike_iv_pctile_20d"])
+            decimal.Decimal(row["strike_iv_pctile_20d"])
             if row["strike_iv_pctile_20d"] is not None
             else None
         ),
         gamma_gearing_pctile_dte=(
-            Decimal(row["gamma_gearing_pctile_dte"])
+            decimal.Decimal(row["gamma_gearing_pctile_dte"])
             if row["gamma_gearing_pctile_dte"] is not None
             else None
         ),
-        created_at=datetime.fromisoformat(row["created_at"]),
+        created_at=dt,
     )
 
 
 def _row_to_watchlist_entry(row: sqlite3.Row) -> GammaWatchlistEntry:
     return GammaWatchlistEntry(
-        expiry_date=date.fromisoformat(row["expiry_date"]),
+        expiry_date=datetime.date.fromisoformat(row["expiry_date"]),
         strike=row["strike"],
         option_type=row["option_type"],
-        added_date=date.fromisoformat(row["added_date"]),
-        last_seen_date=date.fromisoformat(row["last_seen_date"]),
+        added_date=datetime.date.fromisoformat(row["added_date"]),
+        last_seen_date=datetime.date.fromisoformat(row["last_seen_date"]),
         removed_date=(
-            date.fromisoformat(row["removed_date"])
+            datetime.date.fromisoformat(row["removed_date"])
             if row["removed_date"] is not None
             else None
         ),
         removal_reason=row["removal_reason"],
         distance_pct=(
-            Decimal(row["distance_pct"])
+            decimal.Decimal(row["distance_pct"])
             if row["distance_pct"] is not None
             else None
         ),
         gamma_gearing=(
-            Decimal(row["gamma_gearing"])
+            decimal.Decimal(row["gamma_gearing"])
             if row["gamma_gearing"] is not None
             else None
         ),
         oi=row["oi"],
         oi_change_1d=(
-            Decimal(row["oi_change_1d"])
+            decimal.Decimal(row["oi_change_1d"])
             if row["oi_change_1d"] is not None
             else None
         ),
@@ -219,6 +233,8 @@ class GammaStore:
     """SQLite-backed store for near-expiry gamma data.
 
     All methods are stateless and expect an active sqlite3.Connection.
+    The connection MUST have conn.row_factory = sqlite3.Row set before
+    calling any read methods (this is the default in src.db.connect).
     """
 
     def create_tables(self, conn: sqlite3.Connection) -> None:
@@ -233,6 +249,8 @@ class GammaStore:
         self, conn: sqlite3.Connection, snap: GammaChainSnapshot
     ) -> None:
         """Insert or update a chain snapshot in the database.
+
+        Preserves the original created_at timestamp on conflict updates.
 
         Args:
             conn: An open SQLite connection.
@@ -273,8 +291,7 @@ class GammaStore:
                 volume_day = excluded.volume_day,
                 strike_iv_pctile_20d = excluded.strike_iv_pctile_20d,
                 gamma_gearing_pctile_dte =
-                    excluded.gamma_gearing_pctile_dte,
-                created_at = excluded.created_at
+                    excluded.gamma_gearing_pctile_dte
             """,
             (
                 snap.snapshot_date.isoformat(),
@@ -284,83 +301,23 @@ class GammaStore:
                 snap.option_type,
                 snap.dte_calendar,
                 str(snap.nifty_spot),
-                (
-                    str(snap.nifty_futures)
-                    if snap.nifty_futures is not None
-                    else None
-                ),
-                (
-                    str(snap.india_vix)
-                    if snap.india_vix is not None
-                    else None
-                ),
-                (
-                    str(snap.delta_val)
-                    if snap.delta_val is not None
-                    else None
-                ),
-                (
-                    str(snap.gamma_val)
-                    if snap.gamma_val is not None
-                    else None
-                ),
-                (
-                    str(snap.vega_val)
-                    if snap.vega_val is not None
-                    else None
-                ),
-                (
-                    str(snap.theta_val)
-                    if snap.theta_val is not None
-                    else None
-                ),
-                (
-                    str(snap.iv_val)
-                    if snap.iv_val is not None
-                    else None
-                ),
-                (
-                    str(snap.gamma_gearing)
-                    if snap.gamma_gearing is not None
-                    else None
-                ),
-                (
-                    str(snap.distance_pct)
-                    if snap.distance_pct is not None
-                    else None
-                ),
-                (
-                    str(snap.best_bid)
-                    if snap.best_bid is not None
-                    else None
-                ),
-                (
-                    str(snap.best_ask)
-                    if snap.best_ask is not None
-                    else None
-                ),
-                (
-                    str(snap.bid_ask_spread)
-                    if snap.bid_ask_spread is not None
-                    else None
-                ),
+                _dec(snap.nifty_futures),
+                _dec(snap.india_vix),
+                _dec(snap.delta_val),
+                _dec(snap.gamma_val),
+                _dec(snap.vega_val),
+                _dec(snap.theta_val),
+                _dec(snap.iv_val),
+                _dec(snap.gamma_gearing),
+                _dec(snap.distance_pct),
+                _dec(snap.best_bid),
+                _dec(snap.best_ask),
+                _dec(snap.bid_ask_spread),
                 snap.oi,
-                (
-                    str(snap.oi_change_1d)
-                    if snap.oi_change_1d is not None
-                    else None
-                ),
+                _dec(snap.oi_change_1d),
                 snap.volume_day,
-                (
-                    str(snap.strike_iv_pctile_20d)
-                    if snap.strike_iv_pctile_20d is not None
-                    else None
-                ),
-                (
-                    str(snap.gamma_gearing_pctile_dte)
-                    if snap.gamma_gearing_pctile_dte is not None
-                    else None
-                ),
+                _dec(snap.strike_iv_pctile_20d),
+                _dec(snap.gamma_gearing_pctile_dte),
                 snap.created_at.isoformat(),
             ),
         )
@@ -368,10 +325,10 @@ class GammaStore:
     def get_chain_snapshots(
         self,
         conn: sqlite3.Connection,
-        expiry_date: date,
-        snapshot_date: date,
+        expiry_date: datetime.date,
+        snapshot_date: datetime.date,
     ) -> list[GammaChainSnapshot]:
-        """Fetch all chain snapshots for a given expiry date and snapshot date.
+        """Fetch chain snapshots for an expiry and snapshot date.
 
         Args:
             conn: An open SQLite connection.
@@ -395,10 +352,10 @@ class GammaStore:
     def get_yesterday_snapshot(
         self,
         conn: sqlite3.Connection,
-        expiry_date: date,
+        expiry_date: datetime.date,
         strike: int,
-        option_type: str,
-        today: date,
+        option_type: typing.Literal["CE", "PE"],
+        today: datetime.date,
     ) -> GammaChainSnapshot | None:
         """Fetch the most recent snapshot before today for the option.
 
@@ -469,22 +426,10 @@ class GammaStore:
                     else None
                 ),
                 entry.removal_reason,
-                (
-                    str(entry.distance_pct)
-                    if entry.distance_pct is not None
-                    else None
-                ),
-                (
-                    str(entry.gamma_gearing)
-                    if entry.gamma_gearing is not None
-                    else None
-                ),
+                _dec(entry.distance_pct),
+                _dec(entry.gamma_gearing),
                 entry.oi,
-                (
-                    str(entry.oi_change_1d)
-                    if entry.oi_change_1d is not None
-                    else None
-                ),
+                _dec(entry.oi_change_1d),
                 entry.days_on_watchlist,
                 1 if entry.elevated else 0,
                 entry.elevation_reason,
@@ -492,7 +437,7 @@ class GammaStore:
         )
 
     def get_active_watchlist(
-        self, conn: sqlite3.Connection, expiry_date: date
+        self, conn: sqlite3.Connection, expiry_date: datetime.date
     ) -> list[GammaWatchlistEntry]:
         """Fetch all active watchlist entries for a given expiry date.
 
@@ -516,12 +461,12 @@ class GammaStore:
     def remove_from_watchlist(
         self,
         conn: sqlite3.Connection,
-        expiry_date: date,
+        expiry_date: datetime.date,
         strike: int,
-        option_type: str,
+        option_type: typing.Literal["CE", "PE"],
         reason: str,
-        removed_date: date,
-    ) -> None:
+        removed_date: datetime.date,
+    ) -> bool:
         """Mark an entry on the watchlist as removed.
 
         Args:
@@ -531,8 +476,11 @@ class GammaStore:
             option_type: Option type ('CE' | 'PE').
             reason: Reason for removal.
             removed_date: Date of removal.
+
+        Returns:
+            True if the watchlist entry was updated, False otherwise.
         """
-        conn.execute(
+        cur = conn.execute(
             """
             UPDATE gamma_watchlist
             SET removed_date = ?, removal_reason = ?
@@ -546,46 +494,57 @@ class GammaStore:
                 option_type,
             ),
         )
+        return cur.rowcount > 0
 
     def get_iv_history(
         self,
         conn: sqlite3.Connection,
         strike: int,
-        option_type: str,
-        limit: int = 20,
-    ) -> list[Decimal]:
-        """Fetch the trailing limit IV values, across all expiries.
+        option_type: typing.Literal["CE", "PE"],
+        limit_days: int = 20,
+    ) -> list[decimal.Decimal]:
+        """Fetch the trailing IV values across the last limit_days.
 
         Args:
             conn: An open SQLite connection.
             strike: Strike price.
             option_type: Option type ('CE' | 'PE').
-            limit: Maximum number of historical values to retrieve.
+            limit_days: Maximum number of historical trading days to look back.
 
         Returns:
             A list of Decimal objects representing the historical IV values,
-            in chronological order.
+            ordered chronologically (oldest to newest).
         """
         rows = conn.execute(
             """
             SELECT iv_val FROM gamma_chain_snapshots
-            WHERE strike = ? AND option_type = ? AND iv_val IS NOT NULL
+            WHERE strike = ?
+              AND option_type = ?
+              AND iv_val IS NOT NULL
+              AND snapshot_date IN (
+                SELECT DISTINCT snapshot_date FROM gamma_chain_snapshots
+                WHERE strike = ?
+                  AND option_type = ?
+                  AND iv_val IS NOT NULL
+                ORDER BY snapshot_date DESC
+                LIMIT ?
+              )
             ORDER BY snapshot_date DESC, snapshot_time DESC
-            LIMIT ?
             """,
-            (strike, option_type, limit),
+            (strike, option_type, strike, option_type, limit_days),
         ).fetchall()
-        return [Decimal(row["iv_val"]) for row in reversed(rows)]
+        return [decimal.Decimal(row["iv_val"]) for row in reversed(rows)]
 
     def get_gearing_by_dte(
         self, conn: sqlite3.Connection, target_dte: int, limit_days: int = 60
-    ) -> list[Decimal]:
+    ) -> list[decimal.Decimal]:
         """Fetch all gamma_gearing values for target DTE over limit_days.
 
         Args:
             conn: An open SQLite connection.
             target_dte: The calendar DTE to match.
-            limit_days: Number of distinct trailing snapshot dates to look back.
+            limit_days: Number of distinct trailing snapshot dates
+                to look back.
 
         Returns:
             A list of Decimal objects representing the gamma_gearing values,
@@ -598,11 +557,13 @@ class GammaStore:
               AND gamma_gearing IS NOT NULL
               AND snapshot_date IN (
                 SELECT DISTINCT snapshot_date FROM gamma_chain_snapshots
+                WHERE dte_calendar = ?
+                  AND gamma_gearing IS NOT NULL
                 ORDER BY snapshot_date DESC
                 LIMIT ?
             )
             ORDER BY snapshot_date DESC, snapshot_time DESC
             """,
-            (target_dte, limit_days),
+            (target_dte, target_dte, limit_days),
         ).fetchall()
-        return [Decimal(row["gamma_gearing"]) for row in rows]
+        return [decimal.Decimal(row["gamma_gearing"]) for row in rows]

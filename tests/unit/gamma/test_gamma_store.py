@@ -4,9 +4,9 @@ Uses an in-memory SQLite database to test DDL creation, CRUD operations,
 conflict resolution, and calibration queries.
 """
 
+import datetime
+import decimal
 import sqlite3
-from datetime import date, datetime, timezone
-from decimal import Decimal
 
 import pytest
 
@@ -48,42 +48,44 @@ def test_create_tables(db_conn):
 def test_chain_snapshot_roundtrip(store, db_conn):
     """Test inserting a chain snapshot and fetching it back.
 
-    Verifies all fields round-trip and preserve types.
+    Verifies all fields round-trip and preserve types and timezones.
     """
     snap = GammaChainSnapshot(
-        snapshot_date=date(2026, 5, 26),
+        snapshot_date=datetime.date(2026, 5, 26),
         snapshot_time="15:20",
-        expiry_date=date(2026, 5, 28),
+        expiry_date=datetime.date(2026, 5, 28),
         strike=25000,
         option_type="CE",
         dte_calendar=2,
-        nifty_spot=Decimal("25010.50"),
-        nifty_futures=Decimal("25035.75"),
-        india_vix=Decimal("13.45"),
-        delta_val=Decimal("0.5523"),
-        gamma_val=Decimal("0.0012"),
-        vega_val=Decimal("12.45"),
-        theta_val=Decimal("-15.20"),
-        iv_val=Decimal("0.1450"),
-        gamma_gearing=Decimal("5.85"),
-        distance_pct=Decimal("0.0004"),
-        best_bid=Decimal("85.50"),
-        best_ask=Decimal("86.00"),
-        bid_ask_spread=Decimal("0.50"),
+        nifty_spot=decimal.Decimal("25010.50"),
+        nifty_futures=decimal.Decimal("25035.75"),
+        india_vix=decimal.Decimal("13.45"),
+        delta_val=decimal.Decimal("0.5523"),
+        gamma_val=decimal.Decimal("0.0012"),
+        vega_val=decimal.Decimal("12.45"),
+        theta_val=decimal.Decimal("-15.20"),
+        iv_val=decimal.Decimal("0.1450"),
+        gamma_gearing=decimal.Decimal("5.85"),
+        distance_pct=decimal.Decimal("0.0004"),
+        best_bid=decimal.Decimal("85.50"),
+        best_ask=decimal.Decimal("86.00"),
+        bid_ask_spread=decimal.Decimal("0.50"),
         oi=15000,
-        oi_change_1d=Decimal("0.125"),
+        oi_change_1d=decimal.Decimal("0.125"),
         volume_day=45000,
-        strike_iv_pctile_20d=Decimal("0.45"),
-        gamma_gearing_pctile_dte=Decimal("0.78"),
-        created_at=datetime(2026, 5, 26, 9, 50, 0),
+        strike_iv_pctile_20d=decimal.Decimal("0.45"),
+        gamma_gearing_pctile_dte=decimal.Decimal("0.78"),
+        created_at=datetime.datetime(
+            2026, 5, 26, 9, 50, 0, tzinfo=datetime.timezone.utc
+        ),
     )
 
     store.insert_chain_snapshot(db_conn, snap)
 
     results = store.get_chain_snapshots(
         db_conn,
-        expiry_date=date(2026, 5, 28),
-        snapshot_date=date(2026, 5, 26),
+        expiry_date=datetime.date(2026, 5, 28),
+        snapshot_date=datetime.date(2026, 5, 26),
     )
     assert len(results) == 1
     fetched = results[0]
@@ -117,25 +119,26 @@ def test_chain_snapshot_roundtrip(store, db_conn):
 
 def test_chain_snapshot_upsert_on_conflict(store, db_conn):
     """Verify that inserting a snapshot with the same unique constraint
-    triggers an update.
+    triggers an update but preserves created_at.
     """
+    t1 = datetime.datetime(2026, 5, 26, 9, 50, 0, tzinfo=datetime.timezone.utc)
     snap1 = GammaChainSnapshot(
-        snapshot_date=date(2026, 5, 26),
+        snapshot_date=datetime.date(2026, 5, 26),
         snapshot_time="15:20",
-        expiry_date=date(2026, 5, 28),
+        expiry_date=datetime.date(2026, 5, 28),
         strike=25000,
         option_type="CE",
         dte_calendar=2,
-        nifty_spot=Decimal("25000.00"),
+        nifty_spot=decimal.Decimal("25000.00"),
         nifty_futures=None,
         india_vix=None,
         delta_val=None,
         gamma_val=None,
         vega_val=None,
         theta_val=None,
-        iv_val=Decimal("0.14"),
-        gamma_gearing=Decimal("4.5"),
-        distance_pct=Decimal("0.0"),
+        iv_val=decimal.Decimal("0.14"),
+        gamma_gearing=decimal.Decimal("4.5"),
+        distance_pct=decimal.Decimal("0.0"),
         best_bid=None,
         best_ask=None,
         bid_ask_spread=None,
@@ -144,58 +147,61 @@ def test_chain_snapshot_upsert_on_conflict(store, db_conn):
         volume_day=2000,
         strike_iv_pctile_20d=None,
         gamma_gearing_pctile_dte=None,
-        created_at=datetime(2026, 5, 26, 9, 50, 0),
+        created_at=t1,
     )
     store.insert_chain_snapshot(db_conn, snap1)
 
+    t2 = datetime.datetime(2026, 5, 26, 9, 55, 0, tzinfo=datetime.timezone.utc)
     snap2 = GammaChainSnapshot(
-        snapshot_date=date(2026, 5, 26),
+        snapshot_date=datetime.date(2026, 5, 26),
         snapshot_time="15:20",
-        expiry_date=date(2026, 5, 28),
+        expiry_date=datetime.date(2026, 5, 28),
         strike=25000,
         option_type="CE",
         dte_calendar=2,
-        nifty_spot=Decimal("25010.00"),  # updated spot
-        nifty_futures=Decimal("25020.00"),
-        india_vix=Decimal("14.0"),
-        delta_val=Decimal("0.5"),
-        gamma_val=Decimal("0.001"),
-        vega_val=Decimal("10.0"),
-        theta_val=Decimal("-10.0"),
-        iv_val=Decimal("0.15"),  # updated IV
-        gamma_gearing=Decimal("5.5"),  # updated gearing
-        distance_pct=Decimal("0.0004"),
-        best_bid=Decimal("50.0"),
-        best_ask=Decimal("51.0"),
-        bid_ask_spread=Decimal("1.0"),
+        nifty_spot=decimal.Decimal("25010.00"),  # updated spot
+        nifty_futures=decimal.Decimal("25020.00"),
+        india_vix=decimal.Decimal("14.0"),
+        delta_val=decimal.Decimal("0.5"),
+        gamma_val=decimal.Decimal("0.001"),
+        vega_val=decimal.Decimal("10.0"),
+        theta_val=decimal.Decimal("-10.0"),
+        iv_val=decimal.Decimal("0.15"),  # updated IV
+        gamma_gearing=decimal.Decimal("5.5"),  # updated gearing
+        distance_pct=decimal.Decimal("0.0004"),
+        best_bid=decimal.Decimal("50.0"),
+        best_ask=decimal.Decimal("51.0"),
+        bid_ask_spread=decimal.Decimal("1.0"),
         oi=1200,  # updated OI
-        oi_change_1d=Decimal("0.2"),
+        oi_change_1d=decimal.Decimal("0.2"),
         volume_day=2500,  # updated vol
-        strike_iv_pctile_20d=Decimal("0.5"),
-        gamma_gearing_pctile_dte=Decimal("0.6"),
-        created_at=datetime(2026, 5, 26, 9, 55, 0),
+        strike_iv_pctile_20d=decimal.Decimal("0.5"),
+        gamma_gearing_pctile_dte=decimal.Decimal("0.6"),
+        created_at=t2,  # should be ignored on upsert conflict
     )
     store.insert_chain_snapshot(db_conn, snap2)
 
     results = store.get_chain_snapshots(
         db_conn,
-        expiry_date=date(2026, 5, 28),
-        snapshot_date=date(2026, 5, 26),
+        expiry_date=datetime.date(2026, 5, 28),
+        snapshot_date=datetime.date(2026, 5, 26),
     )
     assert len(results) == 1
     fetched = results[0]
-    assert fetched.nifty_spot == Decimal("25010.00")
-    assert fetched.iv_val == Decimal("0.15")
-    assert fetched.gamma_gearing == Decimal("5.5")
+    assert fetched.nifty_spot == decimal.Decimal("25010.00")
+    assert fetched.iv_val == decimal.Decimal("0.15")
+    assert fetched.gamma_gearing == decimal.Decimal("5.5")
     assert fetched.oi == 1200
     assert fetched.volume_day == 2500
+    # verify created_at was NOT overwritten by snap2.created_at (t2)
+    assert fetched.created_at == t1
 
 
 def test_get_yesterday_snapshot(store, db_conn):
     """Verify get_yesterday_snapshot fetches the most recent snapshot
     strictly before today.
     """
-    expiry = date(2026, 5, 28)
+    expiry = datetime.date(2026, 5, 28)
     strike = 25000
     opt = "CE"
 
@@ -208,7 +214,7 @@ def test_get_yesterday_snapshot(store, db_conn):
             strike=strike,
             option_type=opt,
             dte_calendar=5,
-            nifty_spot=Decimal("25000.00"),
+            nifty_spot=decimal.Decimal("25000.00"),
             nifty_futures=None,
             india_vix=None,
             delta_val=None,
@@ -226,63 +232,75 @@ def test_get_yesterday_snapshot(store, db_conn):
             volume_day=None,
             strike_iv_pctile_20d=None,
             gamma_gearing_pctile_dte=None,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.datetime.now(datetime.timezone.utc),
         )
 
-    # Insert snapshots on 2026-05-24, 2026-05-25 (two times), and 2026-05-26
+    # Insert snapshots on 24, 25 (twice), and 26 May
     store.insert_chain_snapshot(
-        db_conn, make_snap(date(2026, 5, 24), "15:20", Decimal("0.12"))
+        db_conn,
+        make_snap(
+            datetime.date(2026, 5, 24), "15:20", decimal.Decimal("0.12")
+        ),
     )
     store.insert_chain_snapshot(
-        db_conn, make_snap(date(2026, 5, 25), "10:30", Decimal("0.13"))
+        db_conn,
+        make_snap(
+            datetime.date(2026, 5, 25), "10:30", decimal.Decimal("0.13")
+        ),
     )
     store.insert_chain_snapshot(
-        db_conn, make_snap(date(2026, 5, 25), "15:20", Decimal("0.14"))
+        db_conn,
+        make_snap(
+            datetime.date(2026, 5, 25), "15:20", decimal.Decimal("0.14")
+        ),
     )
     store.insert_chain_snapshot(
-        db_conn, make_snap(date(2026, 5, 26), "15:20", Decimal("0.15"))
+        db_conn,
+        make_snap(
+            datetime.date(2026, 5, 26), "15:20", decimal.Decimal("0.15")
+        ),
     )
 
     # Query with today = 2026-05-26. Should get 2026-05-25 15:20 snapshot
     yesterday = store.get_yesterday_snapshot(
-        db_conn, expiry, strike, opt, today=date(2026, 5, 26)
+        db_conn, expiry, strike, opt, today=datetime.date(2026, 5, 26)
     )
     assert yesterday is not None
-    assert yesterday.snapshot_date == date(2026, 5, 25)
+    assert yesterday.snapshot_date == datetime.date(2026, 5, 25)
     assert yesterday.snapshot_time == "15:20"
-    assert yesterday.iv_val == Decimal("0.14")
+    assert yesterday.iv_val == decimal.Decimal("0.14")
 
     # Query with today = 2026-05-25. Should get 2026-05-24 snapshot
     yesterday = store.get_yesterday_snapshot(
-        db_conn, expiry, strike, opt, today=date(2026, 5, 25)
+        db_conn, expiry, strike, opt, today=datetime.date(2026, 5, 25)
     )
     assert yesterday is not None
-    assert yesterday.snapshot_date == date(2026, 5, 24)
-    assert yesterday.iv_val == Decimal("0.12")
+    assert yesterday.snapshot_date == datetime.date(2026, 5, 24)
+    assert yesterday.iv_val == decimal.Decimal("0.12")
 
     # Query with today = 2026-05-23. Should return None
     yesterday = store.get_yesterday_snapshot(
-        db_conn, expiry, strike, opt, today=date(2026, 5, 23)
+        db_conn, expiry, strike, opt, today=datetime.date(2026, 5, 23)
     )
     assert yesterday is None
 
 
 def test_watchlist_operations(store, db_conn):
     """Test watchlist upsert, active queries, and removal updates."""
-    expiry = date(2026, 5, 28)
+    expiry = datetime.date(2026, 5, 28)
 
     entry1 = GammaWatchlistEntry(
         expiry_date=expiry,
         strike=25000,
         option_type="CE",
-        added_date=date(2026, 5, 25),
-        last_seen_date=date(2026, 5, 26),
+        added_date=datetime.date(2026, 5, 25),
+        last_seen_date=datetime.date(2026, 5, 26),
         removed_date=None,
         removal_reason=None,
-        distance_pct=Decimal("0.015"),
-        gamma_gearing=Decimal("4.5"),
+        distance_pct=decimal.Decimal("0.015"),
+        gamma_gearing=decimal.Decimal("4.5"),
         oi=2500,
-        oi_change_1d=Decimal("0.15"),
+        oi_change_1d=decimal.Decimal("0.15"),
         days_on_watchlist=2,
         elevated=False,
         elevation_reason=None,
@@ -292,14 +310,14 @@ def test_watchlist_operations(store, db_conn):
         expiry_date=expiry,
         strike=24900,
         option_type="PE",
-        added_date=date(2026, 5, 26),
-        last_seen_date=date(2026, 5, 26),
+        added_date=datetime.date(2026, 5, 26),
+        last_seen_date=datetime.date(2026, 5, 26),
         removed_date=None,
         removal_reason=None,
-        distance_pct=Decimal("0.02"),
-        gamma_gearing=Decimal("6.2"),
+        distance_pct=decimal.Decimal("0.02"),
+        gamma_gearing=decimal.Decimal("6.2"),
         oi=5000,
-        oi_change_1d=Decimal("0.35"),
+        oi_change_1d=decimal.Decimal("0.35"),
         days_on_watchlist=1,
         elevated=True,
         elevation_reason="Aggressive OI build",
@@ -323,14 +341,14 @@ def test_watchlist_operations(store, db_conn):
         expiry_date=expiry,
         strike=25000,
         option_type="CE",
-        added_date=date(2026, 5, 25),
-        last_seen_date=date(2026, 5, 26),
+        added_date=datetime.date(2026, 5, 25),
+        last_seen_date=datetime.date(2026, 5, 26),
         removed_date=None,
         removal_reason=None,
-        distance_pct=Decimal("0.012"),
-        gamma_gearing=Decimal("5.1"),
+        distance_pct=decimal.Decimal("0.012"),
+        gamma_gearing=decimal.Decimal("5.1"),
         oi=3000,
-        oi_change_1d=Decimal("0.20"),
+        oi_change_1d=decimal.Decimal("0.20"),
         days_on_watchlist=2,
         elevated=True,  # updated to True
         elevation_reason="Now elevated",
@@ -343,10 +361,25 @@ def test_watchlist_operations(store, db_conn):
     assert active[1].elevated is True
     assert active[1].elevation_reason == "Now elevated"
 
-    # Remove entry1 from watchlist
-    store.remove_from_watchlist(
-        db_conn, expiry, 25000, "CE", "spot_moved_away", date(2026, 5, 27)
-    )
+    # Remove entry1 from watchlist - should return True
+    assert store.remove_from_watchlist(
+        db_conn,
+        expiry,
+        25000,
+        "CE",
+        "spot_moved_away",
+        datetime.date(2026, 5, 27),
+    ) is True
+
+    # Try removing non-existing entry - should return False
+    assert store.remove_from_watchlist(
+        db_conn,
+        expiry,
+        25200,
+        "CE",
+        "spot_moved_away",
+        datetime.date(2026, 5, 27),
+    ) is False
 
     # Active watchlist should now only contain entry2
     active = store.get_active_watchlist(db_conn, expiry)
@@ -369,15 +402,15 @@ def test_get_iv_history(store, db_conn):
     strike = 25000
     opt = "CE"
 
-    def insert_snap(dt_val, iv_val, expiry_val):
+    def insert_snap(dt_val, iv_val, expiry_val, snap_time="15:20"):
         snap = GammaChainSnapshot(
             snapshot_date=dt_val,
-            snapshot_time="15:20",
+            snapshot_time=snap_time,
             expiry_date=expiry_val,
             strike=strike,
             option_type=opt,
             dte_calendar=2,
-            nifty_spot=Decimal("25000.00"),
+            nifty_spot=decimal.Decimal("25000.00"),
             nifty_futures=None,
             india_vix=None,
             delta_val=None,
@@ -395,21 +428,52 @@ def test_get_iv_history(store, db_conn):
             volume_day=None,
             strike_iv_pctile_20d=None,
             gamma_gearing_pctile_dte=None,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.datetime.now(datetime.timezone.utc),
         )
         store.insert_chain_snapshot(db_conn, snap)
 
-    # Insert snapshots spanning different expiry contracts (cross-expiry)
-    insert_snap(date(2026, 5, 10), Decimal("0.12"), date(2026, 5, 14))
-    insert_snap(date(2026, 5, 11), Decimal("0.13"), date(2026, 5, 14))
-    insert_snap(date(2026, 5, 17), Decimal("0.14"), date(2026, 5, 21))
-    insert_snap(date(2026, 5, 18), Decimal("0.15"), date(2026, 5, 21))
+    # Insert snapshots on 2026-05-10, 2026-05-11, 2026-05-17, 2026-05-18
+    # and add a second snapshot on 2026-05-18 to test distinct days logic
+    insert_snap(
+        datetime.date(2026, 5, 10),
+        decimal.Decimal("0.12"),
+        datetime.date(2026, 5, 14),
+    )
+    insert_snap(
+        datetime.date(2026, 5, 11),
+        decimal.Decimal("0.13"),
+        datetime.date(2026, 5, 14),
+    )
+    insert_snap(
+        datetime.date(2026, 5, 17),
+        decimal.Decimal("0.14"),
+        datetime.date(2026, 5, 21),
+    )
+    insert_snap(
+        datetime.date(2026, 5, 18),
+        decimal.Decimal("0.15"),
+        datetime.date(2026, 5, 21),
+        "10:30",
+    )
+    insert_snap(
+        datetime.date(2026, 5, 18),
+        decimal.Decimal("0.16"),
+        datetime.date(2026, 5, 21),
+        "15:20",
+    )
 
-    # Fetch history with limit=3
-    history = store.get_iv_history(db_conn, strike, opt, limit=3)
-    # Ordered DESC limit 3 (0.15, 0.14, 0.13), then reversed to
-    # chronological ASC (0.13, 0.14, 0.15)
-    assert history == [Decimal("0.13"), Decimal("0.14"), Decimal("0.15")]
+    # Fetch history with limit_days=3.
+    # The distinct days are May 18 (gives May 18 10:30 and 15:20),
+    # May 17 (gives May 17 15:20), and May 11 (gives May 11 15:20).
+    # Chronological ordering should return May 11, May 17, May 18 (10:30),
+    # May 18 (15:20).
+    history = store.get_iv_history(db_conn, strike, opt, limit_days=3)
+    assert history == [
+        decimal.Decimal("0.13"),
+        decimal.Decimal("0.14"),
+        decimal.Decimal("0.15"),
+        decimal.Decimal("0.16"),
+    ]
 
 
 def test_get_gearing_by_dte(store, db_conn):
@@ -424,7 +488,7 @@ def test_get_gearing_by_dte(store, db_conn):
             strike=25000,
             option_type="CE",
             dte_calendar=dte,
-            nifty_spot=Decimal("25000.00"),
+            nifty_spot=decimal.Decimal("25000.00"),
             nifty_futures=None,
             india_vix=None,
             delta_val=None,
@@ -442,24 +506,40 @@ def test_get_gearing_by_dte(store, db_conn):
             volume_day=None,
             strike_iv_pctile_20d=None,
             gamma_gearing_pctile_dte=None,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.datetime.now(datetime.timezone.utc),
         )
         store.insert_chain_snapshot(db_conn, snap)
 
-    # Insert snapshots on 2026-05-24, 2026-05-25, 2026-05-26 with DTE = 0 or 1
+    # Insert snapshots on 24, 25, and 26 May with DTE = 0 or 1
     insert_snap(
-        date(2026, 5, 24), "15:20", date(2026, 5, 24), 0, Decimal("8.5")
+        datetime.date(2026, 5, 24),
+        "15:20",
+        datetime.date(2026, 5, 24),
+        0,
+        decimal.Decimal("8.5"),
     )
     insert_snap(
-        date(2026, 5, 25), "15:20", date(2026, 5, 25), 0, Decimal("9.2")
+        datetime.date(2026, 5, 25),
+        "15:20",
+        datetime.date(2026, 5, 25),
+        0,
+        decimal.Decimal("9.2"),
     )
     insert_snap(
-        date(2026, 5, 26), "15:20", date(2026, 5, 26), 0, Decimal("10.1")
+        datetime.date(2026, 5, 26),
+        "15:20",
+        datetime.date(2026, 5, 26),
+        0,
+        decimal.Decimal("10.1"),
     )
 
     # Snapshot on same date but different DTE
     insert_snap(
-        date(2026, 5, 26), "15:20", date(2026, 5, 27), 1, Decimal("3.2")
+        datetime.date(2026, 5, 26),
+        "15:20",
+        datetime.date(2026, 5, 27),
+        1,
+        decimal.Decimal("3.2"),
     )
 
     # Fetch gearing for DTE = 0, limit_days = 2 (dates 25 and 26)
@@ -467,10 +547,10 @@ def test_get_gearing_by_dte(store, db_conn):
         db_conn, target_dte=0, limit_days=2
     )
     # Should get [10.1, 9.2] (descending order by date/time)
-    assert gearing_list == [Decimal("10.1"), Decimal("9.2")]
+    assert gearing_list == [decimal.Decimal("10.1"), decimal.Decimal("9.2")]
 
     # Fetch gearing for DTE = 1
     gearing_list_dte1 = store.get_gearing_by_dte(
         db_conn, target_dte=1, limit_days=2
     )
-    assert gearing_list_dte1 == [Decimal("3.2")]
+    assert gearing_list_dte1 == [decimal.Decimal("3.2")]
