@@ -27,7 +27,7 @@ async def test_notes_printed_for_open_legs_with_notes(
     mock_create_client: MagicMock,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Test that notes are printed only for open legs that have non-empty notes."""
+    """Test that notes are printed only for open legs that have non-empty notes, using bulk get_positions."""
     mock_store = MagicMock()
     mock_store_cls.return_value = mock_store
 
@@ -76,37 +76,33 @@ async def test_notes_printed_for_open_legs_with_notes(
     ]
     mock_store.get_trades.return_value = trades
 
-    # Mock get_position to return net_qty for each leg
-    def mock_get_position(strategy_name: str, leg_role: str) -> PaperPosition:
-        if leg_role == "leg_open_with_notes":
-            return PaperPosition(
-                strategy_name=strategy_name,
-                leg_role=leg_role,
-                net_qty=-65,
-                avg_cost=Decimal("0"),
-                avg_sell_price=Decimal("150.00"),
-                instrument_key="NSE_FO|NIFTY26500CE",
-            )
-        elif leg_role == "leg_open_no_notes":
-            return PaperPosition(
-                strategy_name=strategy_name,
-                leg_role=leg_role,
-                net_qty=-65,
-                avg_cost=Decimal("0"),
-                avg_sell_price=Decimal("120.00"),
-                instrument_key="NSE_FO|NIFTY26600CE",
-            )
-        else:
-            return PaperPosition(
-                strategy_name=strategy_name,
-                leg_role=leg_role,
-                net_qty=0,
-                avg_cost=Decimal("90.00"),
-                avg_sell_price=Decimal("90.00"),
-                instrument_key="NSE_FO|NIFTY26700CE",
-            )
-
-    mock_store.get_position.side_effect = mock_get_position
+    # Mock get_positions (Issue 2 bulk call)
+    mock_store.get_positions.return_value = [
+        PaperPosition(
+            strategy_name="paper_strategy_1",
+            leg_role="leg_open_with_notes",
+            net_qty=-65,
+            avg_cost=Decimal("0"),
+            avg_sell_price=Decimal("150.00"),
+            instrument_key="NSE_FO|NIFTY26500CE",
+        ),
+        PaperPosition(
+            strategy_name="paper_strategy_1",
+            leg_role="leg_open_no_notes",
+            net_qty=-65,
+            avg_cost=Decimal("0"),
+            avg_sell_price=Decimal("120.00"),
+            instrument_key="NSE_FO|NIFTY26600CE",
+        ),
+        PaperPosition(
+            strategy_name="paper_strategy_1",
+            leg_role="leg_closed_with_notes",
+            net_qty=0,
+            avg_cost=Decimal("90.00"),
+            avg_sell_price=Decimal("90.00"),
+            instrument_key="NSE_FO|NIFTY26700CE",
+        ),
+    ]
 
     args = argparse.Namespace(
         strategy="paper_strategy_1",
@@ -162,14 +158,16 @@ async def test_no_notes_printed_when_empty_or_null(
     ]
     mock_store.get_trades.return_value = trades
 
-    mock_store.get_position.return_value = PaperPosition(
-        strategy_name="paper_strategy_1",
-        leg_role="leg_open_no_notes",
-        net_qty=-65,
-        avg_cost=Decimal("0"),
-        avg_sell_price=Decimal("120.00"),
-        instrument_key="NSE_FO|NIFTY26600CE",
-    )
+    mock_store.get_positions.return_value = [
+        PaperPosition(
+            strategy_name="paper_strategy_1",
+            leg_role="leg_open_no_notes",
+            net_qty=-65,
+            avg_cost=Decimal("0"),
+            avg_sell_price=Decimal("120.00"),
+            instrument_key="NSE_FO|NIFTY26600CE",
+        )
+    ]
 
     args = argparse.Namespace(
         strategy="paper_strategy_1",
@@ -185,3 +183,78 @@ async def test_no_notes_printed_when_empty_or_null(
     captured = capsys.readouterr()
     # The output should NOT have any "Notes: " prefix
     assert "Notes: " not in captured.out
+
+
+@pytest.mark.asyncio
+@patch("scripts.paper_snapshot.create_client")
+@patch("scripts.paper_snapshot.PaperStore")
+@patch("scripts.paper_snapshot.PaperTracker")
+async def test_most_recent_note_only_for_multiple_trades_per_leg(
+    mock_tracker_cls: MagicMock,
+    mock_store_cls: MagicMock,
+    mock_create_client: MagicMock,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Test that if a leg has multiple trades (e.g. roll/entry), only the most recent note is printed (Issue 1)."""
+    mock_store = MagicMock()
+    mock_store_cls.return_value = mock_store
+
+    mock_tracker = MagicMock()
+    mock_tracker_cls.return_value = mock_tracker
+
+    mock_store.get_strategy_names.return_value = ["paper_strategy_1"]
+    mock_tracker.compute_pnl = AsyncMock(return_value=(Decimal("100"), Decimal("50"), Decimal("150")))
+
+    # Two trades on the same open leg:
+    # 1. First trade (older): notes = "initial entry note"
+    # 2. Second trade (newer): notes = "roll adjustment note"
+    trades = [
+        PaperTrade(
+            strategy_name="paper_strategy_1",
+            leg_role="leg_open_multi_trade",
+            instrument_key="NSE_FO|NIFTY26500CE",
+            trade_date=date(2026, 5, 20),
+            action=TradeAction.BUY,
+            quantity=65,
+            price=Decimal("140.00"),
+            notes="initial entry note",
+        ),
+        PaperTrade(
+            strategy_name="paper_strategy_1",
+            leg_role="leg_open_multi_trade",
+            instrument_key="NSE_FO|NIFTY26500CE",
+            trade_date=date(2026, 5, 26),
+            action=TradeAction.SELL,
+            quantity=65,
+            price=Decimal("150.00"),
+            notes="roll adjustment note",
+        ),
+    ]
+    mock_store.get_trades.return_value = trades
+
+    mock_store.get_positions.return_value = [
+        PaperPosition(
+            strategy_name="paper_strategy_1",
+            leg_role="leg_open_multi_trade",
+            net_qty=65, # net qty is open
+            avg_cost=Decimal("140.00"),
+            avg_sell_price=Decimal("150.00"),
+            instrument_key="NSE_FO|NIFTY26500CE",
+        )
+    ]
+
+    args = argparse.Namespace(
+        strategy="paper_strategy_1",
+        date=None,
+        spot=25000.0,
+        db_path="dummy.db",
+        dry_run=True,
+    )
+
+    exit_code = await _run(args)
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    # Check that ONLY the most recent note ("roll adjustment note") is printed
+    assert "Notes: [leg_open_multi_trade] roll adjustment note" in captured.out
+    assert "initial entry note" not in captured.out

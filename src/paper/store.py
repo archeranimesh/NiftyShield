@@ -247,6 +247,77 @@ class PaperStore:
                 ).fetchall()
         return [_row_to_trade(r) for r in rows]
 
+    def get_positions(self, strategy_name: str) -> list[PaperPosition]:
+        """Compute net open positions for all legs of a strategy in a single query.
+
+        Args:
+            strategy_name: Paper strategy name.
+
+        Returns:
+            List of PaperPosition.
+        """
+        with _connect(self.db_path) as conn:
+            rows = conn.execute(
+                "SELECT leg_role, action, quantity, price, instrument_key"
+                " FROM paper_trades"
+                " WHERE strategy_name = ?"
+                " ORDER BY trade_date ASC",
+                (strategy_name,),
+            ).fetchall()
+
+        if not rows:
+            return []
+
+        from collections import defaultdict
+        leg_rows = defaultdict(list)
+        for row in rows:
+            leg_rows[row["leg_role"]].append(row)
+
+        positions = []
+        for leg_role, rows_for_leg in leg_rows.items():
+            net_qty = 0
+            buy_total_qty = 0
+            buy_total_cost = Decimal("0")
+            sell_total_qty = 0
+            sell_total_cost = Decimal("0")
+            instrument_key = ""
+
+            for row in rows_for_leg:
+                instrument_key = row["instrument_key"]
+                qty = row["quantity"]
+                price = Decimal(row["price"])
+                if TradeAction(row["action"]) == TradeAction.BUY:
+                    net_qty += qty
+                    buy_total_qty += qty
+                    buy_total_cost += price * qty
+                else:
+                    net_qty -= qty
+                    sell_total_qty += qty
+                    sell_total_cost += price * qty
+
+            avg_cost = (
+                buy_total_cost / buy_total_qty
+                if buy_total_qty > 0
+                else Decimal("0")
+            )
+            avg_sell_price = (
+                sell_total_cost / sell_total_qty
+                if sell_total_qty > 0
+                else Decimal("0")
+            )
+
+            positions.append(
+                PaperPosition(
+                    strategy_name=strategy_name,
+                    leg_role=leg_role,
+                    net_qty=net_qty,
+                    avg_cost=avg_cost,
+                    avg_sell_price=avg_sell_price,
+                    instrument_key=instrument_key,
+                )
+            )
+        return positions
+
     def get_position(
         self,
         strategy_name: str,

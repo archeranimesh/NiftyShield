@@ -252,6 +252,26 @@ def test_get_position_unknown_returns_zero(store: PaperStore) -> None:
     assert pos.instrument_key == ""
 
 
+def test_get_positions_bulk(store: PaperStore) -> None:
+    # Record trades for different legs
+    store.record_trade(_sell_trade(leg_role="leg_1", quantity=75, price=Decimal("120.50")))
+    store.record_trade(_buy_trade(leg_role="leg_2", quantity=75, price=Decimal("60.00")))
+    
+    positions = store.get_positions(_STRATEGY)
+    assert len(positions) == 2
+    
+    # Map by leg_role
+    pos_map = {p.leg_role: p for p in positions}
+    assert "leg_1" in pos_map
+    assert "leg_2" in pos_map
+    
+    assert pos_map["leg_1"].net_qty == -75
+    assert pos_map["leg_1"].avg_sell_price == Decimal("120.50")
+    
+    assert pos_map["leg_2"].net_qty == 75
+    assert pos_map["leg_2"].avg_cost == Decimal("60.00")
+
+
 # ── record_nav_snapshot ───────────────────────────────────────────────────────
 
 

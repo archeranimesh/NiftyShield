@@ -153,16 +153,19 @@ async def _run(args: argparse.Namespace) -> int:
         })
         any_printed = True
 
-        # Collect notes from open trades/legs
+        # Collect notes from open trades/legs (only the most recent trade per open leg)
         trades = store.get_trades(name)
-        leg_roles = {t.leg_role for t in trades}
-        open_legs = {
-            role for role in leg_roles
-            if store.get_position(name, role).net_qty != 0
-        }
+        positions = store.get_positions(name)
+        open_legs = {p.leg_role for p in positions if p.net_qty != 0}
+
+        most_recent_trade_per_leg = {}
         for trade in trades:
-            if trade.leg_role in open_legs and trade.notes and trade.notes.strip():
-                all_notes.append((trade.leg_role, trade.notes.strip()))
+            if trade.leg_role in open_legs:
+                most_recent_trade_per_leg[trade.leg_role] = trade
+
+        for leg_role, trade in most_recent_trade_per_leg.items():
+            if trade.notes and trade.notes.strip():
+                all_notes.append((leg_role, trade.notes.strip()))
 
         if args.dry_run:
             # Still print the underlying for context in dry-run

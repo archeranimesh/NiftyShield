@@ -241,9 +241,5 @@ class PaperTracker:
         Returns:
             List of PaperPosition where net_qty != 0.
         """
-        trades = self.store.get_trades(strategy_name)
-        leg_roles: set[str] = {t.leg_role for t in trades}
-        positions = [
-            self.store.get_position(strategy_name, role) for role in leg_roles
-        ]
+        positions = self.store.get_positions(strategy_name)
         return [p for p in positions if p.net_qty != 0]
