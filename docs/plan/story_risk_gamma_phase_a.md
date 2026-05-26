@@ -113,65 +113,267 @@ project ID `Users-abhadra-myWork-myCode-python-NiftyShield`.
 
 ---
 
-## Task B2 — `scripts/gamma_daily_watch.py`
+## Task B2 — `scripts/gamma_daily_watch.py` (split into 5 sub-tasks)
 
-**Spec:** `docs/strategies/near_expiry_buy_v1.md` §5 (Phase A logic) and §12 (responsibilities 1–8).
-This task is the EOD cron script. Depends on B1 (GammaStore) being green first.
+> Each sub-task is one Antigravity session, one commit. Do not combine. The next sub-task
+> may not start until the prior SHA is confirmed and all tests are green.
+
+---
+
+### Task B2.1 — Script scaffold: CLI flags + expiry resolution
+
+**What to build:** The runnable skeleton of `gamma_daily_watch.py`. No chain fetch, no DB
+writes. Just argument parsing, logging setup, expiry resolution, and the main entry point
+that calls (stubbed) stage functions.
+
+**Files to create/change:**
+- `scripts/gamma_daily_watch.py` — new file
+- `tests/unit/scripts/__init__.py` — new stub (only if it does not already exist)
+- `tests/unit/scripts/test_gamma_daily_watch.py` — new file
+
+**What to implement:**
+
+1. `argparse` setup: `--morning` (bool flag), `--dry-run` (bool flag), `--date` (optional
+   override, format `YYYY-MM-DD`, defaults to today — useful for manual backfill runs).
+
+2. Logging: structured output via standard `logging`. INFO level default; `DEBUG` when
+   `UPSTOX_DEBUG=1`. Log format: `%(asctime)s %(levelname)s %(message)s`.
+
+3. `resolve_expiries(today: datetime.date) -> tuple[datetime.date, datetime.date]` —
+   returns `(current_week_expiry, next_week_expiry)` both as `datetime.date`.
+   Use `src/market_calendar` — verify API via `search_graph("market_calendar")` before
+   writing. Do not hardcode. Current-week = next or current Thursday (if today is Thursday
+   and market is open, use today). Next-week = the Thursday after that.
+
+4. `main()` entry point: parse args → resolve expiries → log resolved dates → call stub
+   functions `_fetch_and_snapshot(...)` and `_update_watchlist(...)` (both `pass` for now)
+   → exit 0. Respects `--morning` (skip `_update_watchlist` call).
+
+**Tests:**
+- `test_resolve_expiries_mid_week`: Monday input → correct Thu + following Thu returned.
+- `test_resolve_expiries_on_thursday`: Thursday input → same Thursday as current-week expiry.
+- `test_morning_flag_skips_watchlist`: mock `_update_watchlist`; assert it is NOT called
+  when `--morning` is passed.
+- `test_dry_run_flag_propagates`: assert `dry_run=True` flows into `_fetch_and_snapshot`.
+
+**Commit:** `feat(gamma): scaffold gamma_daily_watch with CLI flags and expiry resolution`
+
+- [x] **B2.1** — Script scaffold: CLI + expiry resolution | SHA: b68bb3d
+
+---
+
+### Task B2.2 — Chain fetch + field computation
+
+**What to build:** The `_fetch_and_snapshot()` function and all pure computation helpers.
+No DB writes yet — function returns a `list[GammaChainSnapshot]`.
 
 **Files to change:**
-- `scripts/gamma_daily_watch.py` — the full Phase A script
-- `tests/unit/scripts/test_gamma_daily_watch.py` — unit tests with mocked chain + mocked GammaStore
+- `scripts/gamma_daily_watch.py` — replace the B2.1 stub with the real implementation
+- `tests/unit/scripts/test_gamma_daily_watch.py` — add new tests
 
-**What the script does (from §12):**
+**What to implement:**
 
-1. Determine expiry dates: current-week expiry (next or current Thursday) + the following
-   Thursday. Use `src/market_calendar` — verify API via `search_graph("market_calendar")`
-   before writing. Do not hardcode dates.
+1. `_fetch_chain(client: BrokerClient, expiry_date: datetime.date) -> OptionChain | None` —
+   fetches option chain via `BrokerClient`. Returns `None` on empty/market-closed response;
+   logs WARNING and returns early (do not raise).
+   Verify `BrokerClient` method signature via `search_graph("get_option_chain")` or
+   `trace_path("parse_upstox_option_chain")` before writing.
 
-2. Fetch Upstox option chain for both expiries via `BrokerClient` (obtained from `factory.py`
-   — verify factory API via `search_graph("factory")`). Use `parse_upstox_option_chain`
-   from `src/client/upstox_market.py`.
+2. `_compute_snapshots(chain: OptionChain, expiry_date: datetime.date, today: datetime.date,
+   snapshot_time: str, store: GammaStore, conn: sqlite3.Connection) -> list[GammaChainSnapshot]` —
+   iterates all strikes within ±10% of spot and computes:
+   - `gamma_gearing = gamma × nifty_spot² / ask_price`
+     Guard: if `ask_price` is `None` or `ask_price <= Decimal("0.50")` → set `gamma_gearing = None`,
+     log `WARNING: ask_price too low for gearing computation (strike=X, ask=Y)`.
+   - `distance_pct = abs(nifty_spot − strike) / nifty_spot`
+   - `oi_change_1d`: call `store.get_yesterday_snapshot(...)`. If `None` or prior `oi` is
+     `None` or zero → set `oi_change_1d = None`. Otherwise
+     `(today_oi − prior_oi) / prior_oi`.
+   - `bid_ask_spread = best_ask − best_bid` (both must be non-None; else `None`)
+   - `dte_calendar = (expiry_date − today).days`
+   Returns the constructed `list[GammaChainSnapshot]`.
 
-3. For each strike within ±10% of spot on both expiries, compute:
-   - `gamma_gearing = gamma × nifty_spot² / ask_price`  (see §4)
-   - `distance_pct = |nifty_spot − strike| / nifty_spot`
-   - `oi_change_1d` = fractional change vs yesterday's `gamma_chain_snapshots` row for
-     the same `(expiry_date, strike, option_type)` (use `GammaStore.get_yesterday_snapshot`)
-   - `bid_ask_spread = best_ask − best_bid`
+3. `_fetch_and_snapshot(client, expiries, today, snapshot_time, store, conn, dry_run) -> list[GammaChainSnapshot]` —
+   calls `_fetch_chain` for each expiry, calls `_compute_snapshots`, collects results.
+   If `dry_run=True`, logs computed rows but does NOT call any store method here (persistence
+   is B2.3's responsibility — this function only returns the list).
 
-4. Upsert all computed rows into `gamma_chain_snapshots` via `GammaStore.insert_chain_snapshot`.
+**Tests (mock BrokerClient and GammaStore, no network, no SQLite):**
+- `test_compute_snapshots_normal`: mocked chain with 2 strikes, mocked
+  `get_yesterday_snapshot` returning prior OI → assert correct `oi_change_1d`,
+  `gamma_gearing`, `distance_pct`, `bid_ask_spread`.
+- `test_compute_snapshots_ask_guard`: strike with `ask_price = Decimal("0.10")` →
+  `gamma_gearing` is `None`, warning logged, row still in output.
+- `test_compute_snapshots_no_prior_oi`: `get_yesterday_snapshot` returns `None` →
+  `oi_change_1d` is `None`.
+- `test_fetch_chain_empty_response`: `BrokerClient` returns empty chain → `_fetch_chain`
+  returns `None`, warning logged.
 
-5. Update `gamma_watchlist` for the current-week expiry:
-   - Add qualifying strikes (all five criteria from §5b).
-   - Update `last_seen_date` + current state for already-listed strikes.
-   - Mark removals for strikes that no longer qualify (two removal criteria from §5b).
-   - Set `elevated = True` for priority candidates (three elevation criteria from §5b).
+**Commit:** `feat(gamma): add chain fetch and field computation to gamma_daily_watch`
 
-6. Percentile calibration (§5c): recompute `strike_iv_pctile_20d` and `gamma_gearing_p75`
-   by DTE bucket only when ≥ 20 days of snapshots exist for the expiry; otherwise log
-   `WARNING: insufficient history for percentile calibration (N days)` and skip.
-   Store results back into the relevant `gamma_chain_snapshots` rows.
+- [ ] **B2.2** — Chain fetch + field computation
 
-7. Telegram summary via `build_notifier()` from `src/notifications/`:
-   `"Gamma watch: {N} strikes captured, {N} on watchlist, {N} elevated, {N} added, {N} removed"`
-   Non-fatal — log warning on failure, do not abort.
+---
 
-8. Support `--morning` flag: when passed, run steps 1–4 only (snapshot, no watchlist update).
-   Used for the optional 10:30 IST baseline cron.
+### Task B2.3 — Snapshot persistence
 
-9. Support `--dry-run` flag: fetch + compute + log, but do not write to DB or send Telegram.
+**What to build:** Wire `GammaStore.insert_chain_snapshot` into `_fetch_and_snapshot`.
+The script now writes to `gamma_chain_snapshots` after computing. `--dry-run` bypasses
+the writes.
 
-**Tests (no network, mock all I/O):**
-- Happy path: mocked chain with 3 strikes → `GammaStore.insert_chain_snapshot` called 3×,
-  watchlist updated, Telegram summary sent.
-- `--morning` flag: `upsert_watchlist` is NOT called.
-- `--dry-run`: store methods not called, no Telegram.
-- Empty chain (market closed): script exits cleanly with a WARNING log, no exception.
-- Insufficient history (< 20 days): percentile step skipped, warning logged.
+**Files to change:**
+- `scripts/gamma_daily_watch.py` — add persistence call inside `_fetch_and_snapshot`
+- `tests/unit/scripts/test_gamma_daily_watch.py` — add new tests
 
-**Commit:** `feat(gamma): implement gamma_daily_watch.py Phase A chain capture`
+**What to implement:**
 
-- [ ] **B2** — `scripts/gamma_daily_watch.py`: Phase A chain capture + watchlist update
+1. After `_compute_snapshots` returns the list, iterate and call
+   `store.insert_chain_snapshot(conn, snap)` for each item (unless `dry_run=True`).
+
+2. Log at INFO level: `"Snapshot: {N} rows written for expiry {expiry_date}"` after each
+   expiry batch. Log `"dry-run: skipping {N} snapshot writes"` when dry run.
+
+3. Wrap the entire fetch+persist loop in a `try/except Exception` per expiry — a failure
+   on one expiry should not abort the other. Log ERROR and continue.
+
+**Tests:**
+- `test_persistence_called_per_snapshot`: mock `GammaStore.insert_chain_snapshot`; assert
+  it is called once per computed snapshot (3 strikes × 2 option types = 6 calls for a
+  chain with 3 strikes).
+- `test_dry_run_skips_persistence`: `insert_chain_snapshot` NOT called when
+  `dry_run=True`.
+- `test_single_expiry_failure_does_not_abort`: mock first expiry fetch to raise
+  `DataFetchError`; assert second expiry is still processed.
+
+**Commit:** `feat(gamma): wire snapshot persistence into gamma_daily_watch`
+
+- [ ] **B2.3** — Snapshot persistence
+
+---
+
+### Task B2.4 — Watchlist maintenance
+
+**What to build:** The `_update_watchlist()` function. Implements all §5b add/retain/remove/
+elevate logic for the current-week expiry. Skipped when `--morning` is passed.
+
+**Files to change:**
+- `scripts/gamma_daily_watch.py` — replace B2.1 stub with real implementation
+- `tests/unit/scripts/test_gamma_daily_watch.py` — add new tests
+
+**What to implement:**
+
+`_update_watchlist(today_snaps: list[GammaChainSnapshot], current_week_expiry: datetime.date,
+today: datetime.date, store: GammaStore, conn: sqlite3.Connection, dry_run: bool) -> dict` —
+returns a stats dict `{"added": int, "retained": int, "removed": int, "elevated": int}`.
+
+Inclusion criteria (all five must hold, §5b):
+```
+dte_calendar BETWEEN 2 AND 6
+distance_pct <= Decimal("0.04")
+gamma_gearing >= Decimal("3.0")   (skip if None)
+oi >= 1000                         (skip if None)
+oi_change_1d >= 0                  (skip if None — treat missing OI change as neutral pass)
+```
+
+Elevation criteria (all three must hold simultaneously):
+```
+distance_pct <= Decimal("0.03")
+distance_pct < yesterday's distance_pct   (use get_yesterday_snapshot to get prior distance_pct)
+gamma_gearing > 3-day moving average of gamma_gearing for this strike
+    (use get_iv_history pattern via direct SQL or a helper — 3 values is sufficient)
+oi_change_1d >= Decimal("0.10")
+```
+
+Removal criteria (either triggers removal, §5b):
+```
+distance_pct > Decimal("0.05") for 2 consecutive days
+    → check yesterday's snapshot; removal_reason = "spot_moved_away"
+oi_change_1d < Decimal("-0.20") for 2 consecutive days
+    → check yesterday's snapshot; removal_reason = "oi_unwinding"
+expiry_date < today
+    → removal_reason = "expired"
+```
+For the consecutive-day checks: if yesterday's snapshot is missing, do not remove
+(insufficient evidence).
+
+If `dry_run=True`: compute the full stats dict, log what would be written, but call no
+store methods.
+
+**Tests:**
+- `test_watchlist_add_qualifying_strike`: strike passes all 5 criteria →
+  `upsert_watchlist` called, `added` count = 1.
+- `test_watchlist_skip_low_gearing`: `gamma_gearing = Decimal("2.5")` → not added.
+- `test_watchlist_removal_spot_moved_two_days`: yesterday + today both have
+  `distance_pct > 0.05` → `remove_from_watchlist` called with `"spot_moved_away"`.
+- `test_watchlist_no_removal_on_single_day_breach`: only today breaches distance →
+  NOT removed (insufficient consecutive evidence).
+- `test_watchlist_elevation`: all three elevation criteria pass →
+  `elevated=True` in the upserted entry.
+- `test_watchlist_expired_removal`: `expiry_date < today` → removed with `"expired"`.
+- `test_morning_flag_skips_watchlist`: `_update_watchlist` not called when
+  `--morning` passed (tested at the `main()` level).
+- `test_dry_run_no_store_calls`: store methods not called when `dry_run=True`.
+
+**Commit:** `feat(gamma): implement watchlist maintenance in gamma_daily_watch`
+
+- [ ] **B2.4** — Watchlist maintenance
+
+---
+
+### Task B2.5 — Percentile calibration + Telegram summary
+
+**What to build:** The final two pipeline stages: rolling percentile backfill into
+`gamma_chain_snapshots` and the Telegram EOD summary. This closes B2.
+
+**Files to change:**
+- `scripts/gamma_daily_watch.py` — add `_run_calibration()` and wire Telegram
+- `tests/unit/scripts/test_gamma_daily_watch.py` — add new tests
+
+**What to implement:**
+
+1. `_run_calibration(today_snaps: list[GammaChainSnapshot], today: datetime.date,
+   store: GammaStore, conn: sqlite3.Connection, dry_run: bool) -> None`
+
+   For each unique `(strike, option_type)` in `today_snaps`:
+   - Call `store.get_iv_history(conn, strike, option_type, limit_days=20)`.
+   - If `len(history) < 20`: log
+     `WARNING: insufficient history for IV percentile (strike=X, opt=Y, days=N)` and skip.
+   - Else: compute percentile rank of today's `iv_val` within `history` using
+     `sum(1 for v in history if v <= today_iv) / len(history)`.
+   - Update the today snap row via `store.insert_chain_snapshot` (upsert will overwrite
+     `strike_iv_pctile_20d` in place).
+
+   For DTE-bucket gearing percentile (`gamma_gearing_pctile_dte`):
+   - For each DTE value present in `today_snaps` (typically 2–6):
+     call `store.get_gearing_by_dte(conn, target_dte=dte, limit_days=60)`.
+   - If `len(history) < 20`: log warning and skip the bucket.
+   - Else: compute percentile rank of today's `gamma_gearing` against the history.
+   - Update affected snap rows via upsert.
+
+   If `dry_run=True`: compute but do not write.
+
+2. Wire Telegram: after all stages complete, call `build_notifier()` and send:
+   `"Gamma watch: {captured} strikes captured, {watchlist} on watchlist, {elevated} elevated, {added} added, {removed} removed"`
+   where counts come from the stats dict returned by `_update_watchlist`.
+   Non-fatal: wrap in `try/except`, log WARNING on failure, do not reraise.
+   Skip entirely when `dry_run=True`.
+
+**Tests:**
+- `test_calibration_skipped_insufficient_history`: `get_iv_history` returns 15 values →
+  `insert_chain_snapshot` NOT called for that strike, warning logged.
+- `test_calibration_writes_percentile`: `get_iv_history` returns 20 values → percentile
+  computed correctly, `insert_chain_snapshot` called with updated `strike_iv_pctile_20d`.
+- `test_calibration_dry_run`: `insert_chain_snapshot` NOT called when `dry_run=True`.
+- `test_telegram_summary_sent`: mock `build_notifier`; assert notifier called with the
+  correct message template.
+- `test_telegram_failure_non_fatal`: notifier raises `Exception` → script does not
+  reraise, logs WARNING.
+- `test_full_pipeline_integration`: end-to-end with all mocks wired — mocked chain,
+  mocked store, mocked notifier — assert all stages run in order and stats are correct.
+
+**Commit:** `feat(gamma): add percentile calibration and Telegram summary to gamma_daily_watch`
+
+- [ ] **B2.5** — Percentile calibration + Telegram summary
 
 ---
 
