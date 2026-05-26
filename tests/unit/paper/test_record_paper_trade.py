@@ -17,7 +17,7 @@ Coverage:
 from __future__ import annotations
 
 import sys
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from io import StringIO
 from pathlib import Path
@@ -463,3 +463,181 @@ def test_close_explicit_key_skips_db_lookup(mock_store_cls, tmp_path: Path) -> N
     
     # It should only be called ONCE (for the summary in main), not TWICE.
     assert mock_store_cls.return_value.get_position.call_count == 1
+
+
+# ── Delta gate tests ──────────────────────────────────────────────────────────
+
+from src.risk.models import PortfolioDelta
+from datetime import timezone
+
+def _make_mock_delta(
+    options: Decimal = Decimal(0),
+    niftybees: Decimal = Decimal(0),
+    warning: bool = False,
+    cap: bool = False,
+) -> PortfolioDelta:
+    return PortfolioDelta(
+        options_delta_lots=options,
+        niftybees_delta_lots=niftybees,
+        total_delta_lots=options + niftybees,
+        warning_breached=warning,
+        cap_breached=cap,
+        as_of=datetime.now(tz=timezone.utc),
+    )
+
+@patch("scripts.record_paper_trade.UpstoxMarketClient")
+@patch("scripts.record_paper_trade.PortfolioDeltaTracker.aggregate_delta")
+def test_gate_blocks_on_cap_breached(mock_aggregate, mock_client_cls, tmp_path: Path) -> None:
+    """Gate blocks when cap_breached=True, exit code 1."""
+    db = tmp_path / "db.sqlite"
+    mock_client = mock_client_cls.return_value
+    mock_client.get_ltp_sync.return_value = {"NSE_INDEX|Nifty 50": Decimal("24000")}
+    mock_aggregate.return_value = _make_mock_delta(cap=True)
+
+    args = [
+        "--strategy", _STRATEGY,
+        "--leg", _LEG,
+        "--key", _KEY,
+        "--date", _DATE,
+        "--action", "BUY",
+        "--qty", _QTY,
+        "--price", _PRICE,
+        "--no-dry-run",
+    ]
+    code, out, err = _run(args, db)
+    assert code == 1
+    assert "hard cap breached" in err.lower()
+
+
+@patch("scripts.record_paper_trade.UpstoxMarketClient")
+@patch("scripts.record_paper_trade.PortfolioDeltaTracker.aggregate_delta")
+def test_gate_warns_on_warning_breached(mock_aggregate, mock_client_cls, tmp_path: Path) -> None:
+    """Gate warns but trade proceeds when warning_breached=True, exit code 0."""
+    db = tmp_path / "db.sqlite"
+    mock_client = mock_client_cls.return_value
+    mock_client.get_ltp_sync.return_value = {"NSE_INDEX|Nifty 50": Decimal("24000")}
+    mock_aggregate.return_value = _make_mock_delta(warning=True)
+
+    args = [
+        "--strategy", _STRATEGY,
+        "--leg", _LEG,
+        "--key", _KEY,
+        "--date", _DATE,
+        "--action", "BUY",
+        "--qty", _QTY,
+        "--price", _PRICE,
+        "--no-dry-run",
+    ]
+    code, out, err = _run(args, db)
+    assert code == 0
+    assert "WARNING: portfolio delta near cap" in out
+    
+    # Assert trade is recorded
+    store = PaperStore(db)
+    assert len(store.get_trades(_STRATEGY)) == 1
+
+
+@patch("scripts.record_paper_trade.UpstoxMarketClient")
+@patch("scripts.record_paper_trade.PortfolioDeltaTracker.aggregate_delta")
+def test_gate_passes_silently_on_no_breach(mock_aggregate, mock_client_cls, tmp_path: Path) -> None:
+    """Gate passes silently on no breach, exit code 0."""
+    db = tmp_path / "db.sqlite"
+    mock_client = mock_client_cls.return_value
+    mock_client.get_ltp_sync.return_value = {"NSE_INDEX|Nifty 50": Decimal("24000")}
+    mock_aggregate.return_value = _make_mock_delta()
+
+    args = [
+        "--strategy", _STRATEGY,
+        "--leg", _LEG,
+        "--key", _KEY,
+        "--date", _DATE,
+        "--action", "BUY",
+        "--qty", _QTY,
+        "--price", _PRICE,
+        "--no-dry-run",
+    ]
+    code, out, err = _run(args, db)
+    assert code == 0
+    assert "portfolio delta near cap" not in out
+    assert "portfolio delta near cap" not in err
+
+    store = PaperStore(db)
+    assert len(store.get_trades(_STRATEGY)) == 1
+
+
+@patch("scripts.record_paper_trade.UpstoxMarketClient")
+@patch("scripts.record_paper_trade.PortfolioDeltaTracker.aggregate_delta")
+def test_gate_skipped_on_sell(mock_aggregate, mock_client_cls, tmp_path: Path) -> None:
+    """Gate is skipped on SELL, exit code 0."""
+    db = tmp_path / "db.sqlite"
+    # Even if cap is breached, SELL skips the gate
+    mock_aggregate.return_value = _make_mock_delta(cap=True)
+
+    args = [
+        "--strategy", _STRATEGY,
+        "--leg", _LEG,
+        "--key", _KEY,
+        "--date", _DATE,
+        "--action", "SELL",
+        "--qty", _QTY,
+        "--price", _PRICE,
+        "--no-dry-run",
+    ]
+    code, out, err = _run(args, db)
+    assert code == 0
+    mock_aggregate.assert_not_called()
+
+
+@patch("scripts.record_paper_trade.UpstoxMarketClient")
+@patch("scripts.record_paper_trade.PortfolioDeltaTracker.aggregate_delta")
+def test_gate_skipped_on_close(mock_aggregate, mock_client_cls, tmp_path: Path) -> None:
+    """Gate is skipped on --close path (even though it implies action=BUY), exit code 0."""
+    db = tmp_path / "db.sqlite"
+    mock_client = mock_client_cls.return_value
+    mock_client.get_ltp_sync.return_value = {_KEY: 12.50}
+    
+    # Seed short position
+    _run(_base_args("SELL") + ["--no-dry-run"], db)
+    
+    # Even if cap is breached, close skips the gate
+    mock_aggregate.return_value = _make_mock_delta(cap=True)
+
+    args = [
+        "--strategy", _STRATEGY,
+        "--leg", _LEG,
+        "--key", _KEY,
+        "--date", _DATE,
+        "--qty", _QTY,
+        "--price", "12.50",
+        "--close",
+        "--no-dry-run",
+    ]
+    code, out, err = _run(args, db)
+    assert code == 0
+    mock_aggregate.assert_not_called()
+
+
+@patch("scripts.record_paper_trade.UpstoxMarketClient")
+@patch("scripts.record_paper_trade.PortfolioDeltaTracker.aggregate_delta")
+def test_gate_protective_put_bypasses_cap(mock_aggregate, mock_client_cls, tmp_path: Path) -> None:
+    """BUY PE is protective and bypasses cap check, exit code 0."""
+    db = tmp_path / "db.sqlite"
+    mock_client = mock_client_cls.return_value
+    mock_client.get_ltp_sync.return_value = {"NSE_INDEX|Nifty 50": Decimal("24000")}
+    mock_aggregate.return_value = _make_mock_delta(cap=True)
+
+    args = [
+        "--strategy", _STRATEGY,
+        "--leg", _LEG,
+        "--key", "NSE_FO|NIFTY26MAY22000PE",  # PE key triggers protective put bypass
+        "--date", _DATE,
+        "--action", "BUY",
+        "--qty", _QTY,
+        "--price", _PRICE,
+        "--no-dry-run",
+    ]
+    code, out, err = _run(args, db)
+    assert code == 0
+    
+    store = PaperStore(db)
+    assert len(store.get_trades(_STRATEGY)) == 1

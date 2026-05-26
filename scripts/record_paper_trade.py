@@ -52,8 +52,10 @@ from src.backtest.ivr import compute_ivr
 from src.backtest.vix_ingest import fetch_vix_latest, load_vix_series
 from src.intraday.market_store import IntradayMarketStore
 from src.client.upstox_market import UpstoxMarketClient
-from src.paper.constants import DEFAULT_BOD_PATH, DEFAULT_DB_PATH, STRATEGY_CSP
+from src.paper.constants import DEFAULT_BOD_PATH, DEFAULT_DB_PATH, STRATEGY_CSP, LOT_SIZE
 from src.paper._utils import safe_float
+from src.risk.delta_tracker import PortfolioDeltaTracker
+from src.risk.entry_gate import check_entry_allowed
 
 load_dotenv()
 
@@ -649,6 +651,37 @@ def main() -> None:
     ivr_at_entry = _get_ivr_and_warn(
         trade_date, TradeAction(args.action), args.vix_data_dir, args.db_path
     )
+
+    if args.action == "BUY" and not args.close:
+        try:
+            market_client = UpstoxMarketClient()
+            ltp_dict = market_client.get_ltp_sync(["NSE_INDEX|Nifty 50"])
+            if "NSE_INDEX|Nifty 50" in ltp_dict:
+                nifty_spot = ltp_dict["NSE_INDEX|Nifty 50"]
+            else:
+                print("ERROR: failed to fetch live Nifty spot price (key missing in LTP response).", file=sys.stderr)
+                sys.exit(1)
+        except Exception as exc:
+            print(f"ERROR: failed to fetch live Nifty spot price — {exc}", file=sys.stderr)
+            sys.exit(1)
+
+        store = PaperStore(args.db_path)
+        strategies = store.get_strategy_names()
+        positions = []
+        for strat in strategies:
+            strat_positions = store.get_positions(strat)
+            positions.extend([p for p in strat_positions if p.net_qty != 0])
+
+        tracker = PortfolioDeltaTracker()
+        portfolio_delta = tracker.aggregate_delta(positions, nifty_spot, LOT_SIZE)
+        is_protective = "PE" in instrument_key
+
+        allowed, reason = check_entry_allowed(portfolio_delta, Decimal("0"), is_protective)
+        if not allowed:
+            print(reason, file=sys.stderr)
+            sys.exit(1)
+        elif reason.startswith("WARNING:"):
+            print(reason)
 
     try:
         trade = PaperTrade(
