@@ -109,7 +109,7 @@ Round-trip test: insert → retrieve → assert fields match including Decimal p
 After commit: re-index codebase — run `mcp__codebase-memory-mcp__index_repository` with
 project ID `Users-abhadra-myWork-myCode-python-NiftyShield`.
 
-- [ ] **B1** — `src/gamma/` package scaffolding: models + GammaStore
+- [x] **B1** — `src/gamma/` package scaffolding: models + GammaStore | SHA: d785b9e
 
 ---
 
