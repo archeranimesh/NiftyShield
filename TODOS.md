@@ -104,6 +104,57 @@ for any open trade that has a non-empty notes field. Pull via
 
 ---
 
+## Task 4 — MVP: Multi-bagger Value Picks Tracker (`src/mvp/`)
+
+**Full spec:** `docs/plan/mvp_tracker.md`  
+**Priority:** after Task 3 (June 2026 Finideas roll cycle)
+
+Track stock calls from TV channels, Telegram, and research houses (DSIJ, prudentequity, etc.).
+Capture quickly during the day, fill in price/target/SL EOD, hourly cron tracks performance.
+**MVP** = **M**ulti-bagger, **V**alue, **P**ick — the three dominant recommendation categories.
+
+### Phases
+
+| Phase | Files | Status |
+|---|---|---|
+| M1 | `src/mvp/models.py`, `src/mvp/store.py`, `tests/unit/mvp/` | ⬜ Not started |
+| M2 | `src/mvp/tracker.py` | ⬜ Not started |
+| M3 | `scripts/mvp.py` (full CLI) | ⬜ Not started |
+| M4 | `scripts/mvp_watch.py` (hourly cron) | ⬜ Not started |
+| M5 | Docs close + cron entry | ⬜ Not started |
+
+### CLI surface (final)
+
+```bash
+# Setup
+mvp provider add dsij "DSIJ" --source tv
+mvp category add dsij value-picks "Value Picks"
+
+# Capture (minimum: symbol only)
+mvp add RELIANCE
+mvp add RELIANCE -p dsij -c value-picks
+
+# EOD fill-in (flips PENDING → OPEN)
+mvp update abc123 --price 1200 --target 1400 --sl 1100
+
+# List / close
+mvp list                     # pending (default)
+mvp list --open
+mvp close abc123 --price 1380
+
+# Summary
+mvp summary
+mvp summary -p dsij
+mvp summary -p dsij -c value-picks
+mvp summary RELIANCE         # cross-provider view of one stock
+```
+
+### Cron
+`0 9-15 * * 1-5` — hourly during market hours. Telegram summary + `logs/mvp_watch.log`.
+Auto-closes on target/SL breach. Skips `PENDING` rows.
+
+---
+
 ## Phase 1 — Backtest Engine (Aug–Dec 2026, after Phase 0.8 gate)
 
 *Load `BACKTEST_PLAN_PHASE1.md` when Phase 0.8 gate clears. Tasks below are summaries only.*
