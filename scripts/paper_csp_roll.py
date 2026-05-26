@@ -143,7 +143,7 @@ def _find_expiring_csp(
             net -= t.quantity
         last_trade = t
 
-    if net == 0 or last_trade is None:
+    if net >= 0 or last_trade is None:
         return []
 
     expiry = _parse_expiry_from_key(last_trade.instrument_key)
@@ -220,6 +220,7 @@ async def _open_new_csp_leg(
     strategy: str,
     roll_date: date,
     dry_run: bool,
+    quantity: int,
     index: int = 0,
 ) -> PaperTrade:
     """Select and record the replacement CSP leg.
@@ -275,7 +276,7 @@ async def _open_new_csp_leg(
         instrument_key=selected["instrument_key"],
         trade_date=roll_date,
         action=TradeAction.SELL,
-        quantity=LOT_SIZE,
+        quantity=quantity,
         price=Decimal(str(selected["mid"])).quantize(Decimal("0.01")),
         notes=f"Roll open: replacement {selected['instrument_key']}",
     )
@@ -316,12 +317,21 @@ async def _roll_csp(
     close_trade = await _close_csp_leg(broker, store, existing, roll_date, dry_run)
     try:
         open_trade = await _open_new_csp_leg(
-            broker, store, lookup, existing.strategy_name, roll_date, dry_run, index=index
+            broker, store, lookup, existing.strategy_name, roll_date, dry_run,
+            quantity=existing.quantity, index=index
         )
-    except Exception:
+    except Exception as e:
         if not dry_run:
-            store.delete_trade(close_trade)  # restore pre-roll state
-        raise
+            try:
+                store.delete_trade(close_trade)  # restore pre-roll state
+            except Exception as rollback_err:
+                logger.error(
+                    "CRITICAL: Failed to rollback close trade %s during roll failure: %s",
+                    close_trade.instrument_key,
+                    rollback_err,
+                    exc_info=True,
+                )
+        raise e
 
     expiry_from_key = _parse_expiry_from_key(open_trade.instrument_key)
     new_dte = (expiry_from_key - roll_date).days if expiry_from_key else -1

@@ -42,6 +42,7 @@ def _make_csp_trade(
     price: Decimal = Decimal("150.00"),
     trade_date: date = date(2026, 4, 1),
     action: TradeAction = TradeAction.SELL,
+    quantity: int = 65,
 ) -> PaperTrade:
     # Querying PaperTrade snippet shows field names:
     # strategy_name: str, leg_role: str, instrument_key: str, trade_date: date,
@@ -52,7 +53,7 @@ def _make_csp_trade(
         instrument_key=instrument_key,
         trade_date=trade_date,
         action=action,
-        quantity=65,
+        quantity=quantity,
         price=price,
     )
 
@@ -202,3 +203,102 @@ def test_roll_csp_dry_run(tmp_path: Path) -> None:
     trades = store.get_trades(_STRATEGY, "short_put")
     assert len(trades) == 1
     assert trades[0].action == TradeAction.SELL
+
+
+def test_roll_csp_preserves_quantity(tmp_path: Path) -> None:
+    """The roll-open trade must match the quantity of the existing trade (not hardcoded LOT_SIZE)."""
+    store = _make_store(tmp_path)
+    # Open with quantity 130 (2 lots)
+    existing = _make_csp_trade(instrument_key="NSE_FO|NIFTY12MAY2026PE")
+    existing = PaperTrade(
+        strategy_name=existing.strategy_name,
+        leg_role=existing.leg_role,
+        instrument_key=existing.instrument_key,
+        trade_date=existing.trade_date,
+        action=existing.action,
+        quantity=130,
+        price=existing.price,
+    )
+    store.record_trade(existing)
+
+    mock_broker = AsyncMock()
+    mock_broker.get_ltp = AsyncMock(return_value={existing.instrument_key: Decimal("90.00")})
+    
+    dummy_chain = [
+        {
+            "strike_price": 22000.0,
+            "underlying_spot_price": 22200.0,
+            "put_options": {
+                "instrument_key": "NSE_FO|NIFTY28MAY2026PE",
+                "option_greeks": {"delta": -0.22, "iv": 15.0},
+                "market_data": {"bid_price": 100.0, "ask_price": 102.0, "oi": 5000, "ltp": 101.0},
+            }
+        }
+    ]
+    mock_broker.get_option_chain = AsyncMock(return_value=dummy_chain)
+
+    mock_lookup = MagicMock()
+    mock_lookup.get_expiry_candidates = MagicMock(return_value=[("monthly", "2026-05-28")])
+
+    async def _run() -> None:
+        await roll_mod._roll_csp(
+            mock_broker, store, mock_lookup, existing, _ROLL_DATE, dry_run=False
+        )
+
+    asyncio.run(_run())
+
+    trades = store.get_trades(_STRATEGY, "short_put")
+    assert len(trades) == 3
+    # Close trade quantity should be 130
+    assert trades[1].quantity == 130
+    # New open trade quantity should also be 130
+    assert trades[2].quantity == 130
+
+
+def test_roll_csp_rollback_failure_handling(tmp_path: Path) -> None:
+    """If store.delete_trade raises during rollback, the original exception must still propagate."""
+    store = _make_store(tmp_path)
+    existing = _make_csp_trade()
+    store.record_trade(existing)
+
+    mock_broker = AsyncMock()
+    mock_broker.get_ltp = AsyncMock(return_value={existing.instrument_key: Decimal("90.00")})
+    mock_lookup = MagicMock()
+
+    # Make delete_trade raise an error during rollback
+    store.delete_trade = MagicMock(side_effect=RuntimeError("DB Lock"))
+
+    async def _run() -> None:
+        with patch.object(roll_mod, "_open_new_csp_leg", side_effect=ValueError("Open API Failed")):
+            with pytest.raises(ValueError, match="Open API Failed"):
+                await roll_mod._roll_csp(
+                    mock_broker, store, mock_lookup, existing, _ROLL_DATE, dry_run=False
+                )
+
+    asyncio.run(_run())
+
+
+def test_find_expiring_csp_only_net_short() -> None:
+    # A spurious net long position (+65) should not trigger a roll
+    trade_buy = _make_csp_trade(action=TradeAction.BUY, quantity=130)
+    trade_sell = _make_csp_trade(action=TradeAction.SELL, quantity=65)
+    # net = +65
+    assert roll_mod._find_expiring_csp([trade_buy, trade_sell], _ROLL_DATE) == []
+
+
+def test_close_csp_leg_ltp_fallback(tmp_path: Path) -> None:
+    """If LTP fetch returns 0, the close trade must fall back to existing.price."""
+    store = _make_store(tmp_path)
+    existing = _make_csp_trade(price=Decimal("150.00"))
+    store.record_trade(existing)
+
+    mock_broker = AsyncMock()
+    # LTP returns 0
+    mock_broker.get_ltp = AsyncMock(return_value={existing.instrument_key: Decimal("0.00")})
+
+    async def _run() -> None:
+        close = await roll_mod._close_csp_leg(mock_broker, store, existing, _ROLL_DATE, dry_run=False)
+        assert close.price == Decimal("150.00")
+
+    asyncio.run(_run())
+
