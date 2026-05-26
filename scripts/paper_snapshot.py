@@ -137,6 +137,7 @@ async def _run(args: argparse.Namespace) -> int:
 
     any_printed = False
     pnl_rows = []
+    all_notes = []
 
     for name in strategy_names:
         pnl = await tracker.compute_pnl(name)
@@ -151,6 +152,17 @@ async def _run(args: argparse.Namespace) -> int:
             "total": total,
         })
         any_printed = True
+
+        # Collect notes from open trades/legs
+        trades = store.get_trades(name)
+        leg_roles = {t.leg_role for t in trades}
+        open_legs = {
+            role for role in leg_roles
+            if store.get_position(name, role).net_qty != 0
+        }
+        for trade in trades:
+            if trade.leg_role in open_legs and trade.notes and trade.notes.strip():
+                all_notes.append((trade.leg_role, trade.notes.strip()))
 
         if args.dry_run:
             # Still print the underlying for context in dry-run
@@ -168,6 +180,15 @@ async def _run(args: argparse.Namespace) -> int:
                 )
     if pnl_rows:
         print("\n" + format_pnl_table(pnl_rows, title=f"Snapshots for {snap_date}", is_dry_run=args.dry_run))
+        if all_notes:
+            seen = set()
+            deduped_notes = []
+            for leg_role, note in all_notes:
+                pair = (leg_role, note)
+                if pair not in seen:
+                    seen.add(pair)
+                    deduped_notes.append(f"[{leg_role}] {note}")
+            print("Notes: " + " | ".join(deduped_notes))
     elif not any_printed:
         print("No active strategies with trades found.")
 
