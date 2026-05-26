@@ -15,6 +15,7 @@ as UTC; IST conversion at display layer only.
 from __future__ import annotations
 
 import sqlite3
+from collections import defaultdict
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -233,7 +234,7 @@ class PaperStore:
                     " action, quantity, price, notes, ivr_at_entry"
                     " FROM paper_trades"
                     " WHERE strategy_name = ? AND leg_role = ?"
-                    " ORDER BY trade_date ASC",
+                    " ORDER BY trade_date ASC, id ASC",
                     (strategy_name, leg_role),
                 ).fetchall()
             else:
@@ -242,7 +243,7 @@ class PaperStore:
                     " action, quantity, price, notes, ivr_at_entry"
                     " FROM paper_trades"
                     " WHERE strategy_name = ?"
-                    " ORDER BY trade_date ASC",
+                    " ORDER BY trade_date ASC, id ASC",
                     (strategy_name,),
                 ).fetchall()
         return [_row_to_trade(r) for r in rows]
@@ -261,14 +262,13 @@ class PaperStore:
                 "SELECT leg_role, action, quantity, price, instrument_key"
                 " FROM paper_trades"
                 " WHERE strategy_name = ?"
-                " ORDER BY trade_date ASC",
+                " ORDER BY trade_date ASC, id ASC",
                 (strategy_name,),
             ).fetchall()
 
         if not rows:
             return []
 
-        from collections import defaultdict
         leg_rows = defaultdict(list)
         for row in rows:
             leg_rows[row["leg_role"]].append(row)
@@ -337,63 +337,17 @@ class PaperStore:
         Returns:
             PaperPosition with net_qty=0 and avg_cost=Decimal("0") if no trades exist.
         """
-        with _connect(self.db_path) as conn:
-            rows = conn.execute(
-                "SELECT action, quantity, price, instrument_key"
-                " FROM paper_trades"
-                " WHERE strategy_name = ? AND leg_role = ?"
-                " ORDER BY trade_date ASC",
-                (strategy_name, leg_role),
-            ).fetchall()
-
-        if not rows:
-            return PaperPosition(
+        positions = {p.leg_role: p for p in self.get_positions(strategy_name)}
+        return positions.get(
+            leg_role,
+            PaperPosition(
                 strategy_name=strategy_name,
                 leg_role=leg_role,
                 net_qty=0,
                 avg_cost=Decimal("0"),
                 avg_sell_price=Decimal("0"),
                 instrument_key="",
-            )
-
-        net_qty = 0
-        buy_total_qty = 0
-        buy_total_cost = Decimal("0")
-        sell_total_qty = 0
-        sell_total_cost = Decimal("0")
-        instrument_key = ""
-
-        for row in rows:
-            instrument_key = row["instrument_key"]
-            qty = row["quantity"]
-            price = Decimal(row["price"])
-            if TradeAction(row["action"]) == TradeAction.BUY:
-                net_qty += qty
-                buy_total_qty += qty
-                buy_total_cost += price * qty
-            else:
-                net_qty -= qty
-                sell_total_qty += qty
-                sell_total_cost += price * qty
-
-        avg_cost = (
-            buy_total_cost / buy_total_qty
-            if buy_total_qty > 0
-            else Decimal("0")
-        )
-        avg_sell_price = (
-            sell_total_cost / sell_total_qty
-            if sell_total_qty > 0
-            else Decimal("0")
-        )
-
-        return PaperPosition(
-            strategy_name=strategy_name,
-            leg_role=leg_role,
-            net_qty=net_qty,
-            avg_cost=avg_cost,
-            avg_sell_price=avg_sell_price,
-            instrument_key=instrument_key,
+            ),
         )
 
     # ── NAV snapshots ─────────────────────────────────────────────────────────
