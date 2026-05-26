@@ -304,7 +304,7 @@ def test_check_existing_overlay_diff_expiry_requires_force(tmp_path: Path) -> No
     """
     import asyncio
     from src.paper.store import PaperStore
-    from unittest.mock import AsyncMock, patch
+    from unittest.mock import AsyncMock, MagicMock, patch
 
     db = tmp_path / "p.db"
     store = PaperStore(db)
@@ -345,14 +345,7 @@ def test_check_existing_overlay_diff_expiry_requires_force(tmp_path: Path) -> No
 
     # Stub BOD so _collect_expiry_candidates returns a quarterly (2026-06-26)
     dummy_lookup = type("L", (), {
-        "_instruments": [
-            {
-                "segment": "NSE_FO",
-                "instrument_type": "PE",
-                "underlying_symbol": "NIFTY",
-                "expiry": "2026-06-26",
-            }
-        ]
+        "get_expiry_candidates": MagicMock(return_value=[("quarterly", "2026-06-26")])
     })()
 
     with (
@@ -616,3 +609,23 @@ def test_confirmation_table_collar_shows_pe_and_ce(capsys: pytest.CaptureFixture
     out = capsys.readouterr().out
     assert "PE" in out, "Collar table must show PE row"
     assert "CE" in out, "Collar table must show CE row"
+
+
+def test_collect_expiry_candidates_calls_get_expiry_candidates() -> None:
+    """Test that _collect_expiry_candidates calls get_expiry_candidates on lookup."""
+    from scripts.paper_3track_overlay import _collect_expiry_candidates
+    from unittest.mock import MagicMock
+    from datetime import date
+
+    mock_lookup = MagicMock()
+    mock_lookup.get_expiry_candidates.return_value = [("quarterly", "2026-06-26")]
+
+    today = date(2026, 5, 1)
+    res = _collect_expiry_candidates(mock_lookup, today)
+
+    mock_lookup.get_expiry_candidates.assert_called_once_with(
+        underlying="NIFTY",
+        today=today,
+        preference=["quarterly", "yearly", "monthly"]
+    )
+    assert res == [("quarterly", "2026-06-26")]

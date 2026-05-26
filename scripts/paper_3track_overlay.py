@@ -243,37 +243,9 @@ def _collect_expiry_candidates(
       yearly:    DTE 201–420
       monthly:   DTE 15–45 (always included as final fallback)
     """
-    seen: set[str] = set()
-    for inst in lookup._instruments:
-        if inst.get("segment") != "NSE_FO":
-            continue
-        if inst.get("instrument_type") not in ("CE", "PE"):
-            continue
-        if inst.get("underlying_symbol", "").upper() != "NIFTY":
-            continue
-        exp = _pe(inst.get("expiry"))
-        if exp:
-            seen.add(exp)
-
-    quarterly = yearly = monthly = None
-    for exp in sorted(seen):
-        dte = (date.fromisoformat(exp) - today).days
-        if dte < 15:
-            continue
-        if 46 <= dte <= 200 and quarterly is None:
-            quarterly = exp
-        elif 201 <= dte <= 420 and yearly is None:
-            yearly = exp
-        elif 15 <= dte <= 45 and monthly is None:
-            monthly = exp
-
-    result: list[tuple[str, str]] = []
-    if quarterly:
-        result.append(("quarterly", quarterly))
-    if yearly:
-        result.append(("yearly", yearly))
-    if monthly:
-        result.append(("monthly", monthly))
+    result = lookup.get_expiry_candidates(
+        underlying="NIFTY", today=today, preference=["quarterly", "yearly", "monthly"]
+    )
 
     logger.info(
         "Overlay expiry candidates: %s",
