@@ -12,7 +12,7 @@ import logging
 import os
 import sys
 from datetime import date, datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from src.market_calendar.holidays import is_trading_day
 
