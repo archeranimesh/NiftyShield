@@ -33,39 +33,21 @@ Invoke `roll-validator` agent ≥1 week before deadline. Steps:
 
 ---
 
-## Ongoing Paper Trading (Animesh — parallel to Tasks 0–3)
+## Open Implementation Tasks (Phase 0)
 
-These run continuously throughout Phase 0, independent of the code queue above.
+### paper_csp_roll.py — CSP leg roll automation (0.6a)
 
-### 0.6 — CSP v1 Paper Trading
+Create `scripts/paper_csp_roll.py` to automate roll-over of Leg 1 (CSP) positions,
+mirroring the `paper_3track_overlay_roll.py` workflow.
 
-- [ ] Each month at entry date: observe live chain, decide strike (22-delta target per `csp_nifty_v1.md`). Log via `record_paper_trade.py` with mid − 0.25 INR slippage haircut.
-- [ ] Monitor daily via `daily_snapshot.py`. Log exit when profit target / time stop / loss stop hits.
-- [ ] Never override the spec in real time. If urge to override: log it in `TODOS.md` with reason, then follow spec anyway.
-- [ ] Minimum: **6 full monthly cycles (~6 months)**, with at least one cycle triggering each exit type.
+### paper_3track_overlay.py:243 — migrate private instrument loop
 
-### 0.6a — NiftyShield Integrated v1 Paper Trading
+`paper_3track_overlay.py:243` uses `lookup._instruments` directly. Migrate to
+`get_expiry_candidates` public API, same pattern as the Phase 1 fix in `paper_3track_entry.py`.
 
-- [ ] At each CSP entry: also enter Leg 2 (put spread, 4 lots) via `--strategy paper_niftyshield_v1`.
-- [ ] Each quarter (Jan/Apr/Jul/Oct): enter Leg 3 (tail puts, 2 lots).
-- [ ] Leg 2 enters even when Leg 1 is skipped (R3/R4 filters) — protection is unconditional.
-- [ ] **Implementation Task**: Create `scripts/paper_csp_roll.py` to automate roll-over of Leg 1 (CSP) positions, mirroring the `paper_3track_overlay_roll.py` workflow.
-- [ ] `paper_3track_overlay.py:243` — migrate `lookup._instruments` loop to `get_expiry_candidates` public API, same pattern as the Phase 1 fix in `paper_3track_entry.py`.
-- [ ] Minimum: 6 monthly cycles for Legs 1+2; 2 quarterly cycles for Leg 3.
+---
 
-### 0.6b — 3-Track Nifty Instrument Comparison Paper Trading
-
-**Unblocked (0.4b done 2026-05-03). Source: `docs/strategies/nifty_track_comparison_v1.md`.**
-
-- [ ] Enter Spot base leg (long NiftyBees) via `--strategy paper_nifty_spot --leg base_etf`.
-- [ ] Enter Futures base leg (long Nifty Futures notional) via `--strategy paper_nifty_futures --leg base_futures`.
-- [ ] Enter Proxy base leg (Deep ITM Call, delta ≈ 0.90) via `--strategy paper_nifty_proxy --leg base_ditm_call`.
-- [ ] For each approved overlay per track, record as a separate leg within the same strategy namespace.
-- [ ] Do NOT record Futures + standalone Covered Call — blocked per council ruling.
-- [ ] On each expiry: roll all base legs; document delta at roll time for Proxy.
-- [ ] Minimum 6 monthly cycles before cross-track conclusions. Include ≥1 high-VIX event (India VIX >18).
-
-### Stockmock Calibration Backtests (Animesh only — prerequisite for Phase 1.7)
+## Stockmock Calibration Backtests (Animesh only — prerequisite for Phase 1.7)
 
 Run CSP + IC backtests on Nifty options in Stockmock UI across four stress windows. No code required.
 

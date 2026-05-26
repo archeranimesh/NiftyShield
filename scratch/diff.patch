@@ -1,0 +1,124 @@
+diff --git a/DECISIONS.md b/DECISIONS.md
+index 318cc3e..210c7f4 100644
+--- a/DECISIONS.md
++++ b/DECISIONS.md
+@@ -67,6 +67,16 @@
+ 
+ **`seed_trades.py` separates `build_trades()` (pure) from `seed_trades()` (I/O):** mirrors `seed_mf_holdings.py` pattern. Tests call `build_trades()` directly with no DB. Dates marked `2026-01-15` are placeholders pending contract note verification.
+ 
++**Leg validation design debt and inline imports:** The domain model `Leg`
++contains inline imports of `is_trading_day` to avoid circular dependencies
++with `market_calendar`. Long-term, validation should be factored out of Pydantic
++`model_validator` or accept pre-computed parameters.
++
++**Leg expiry whitelist is hardcoded in domain model:** The irregular expiry
++whitelist is currently hardcoded in `portfolio.py` to prevent cyclic import
++issues. It should ideally reside in a configuration file or a calendar module
++with a clean interface.
++
+ ---
+ 
+ ## P&L & Reporting
+diff --git a/src/models/portfolio.py b/src/models/portfolio.py
+index 115f3f3..a213a8a 100644
+--- a/src/models/portfolio.py
++++ b/src/models/portfolio.py
+@@ -153,10 +153,11 @@ class Leg(BaseModel):
+             self.asset_type in {AssetType.CE, AssetType.PE}
+             and self.strike is not None
+         ):
+-            # Check if Nifty option
++            # Check if Nifty 50 option (exclude BANK/FIN/MIDCPNIFTY)
++            name_upper = self.display_name.upper()
+             is_nifty = (
+-                "NIFTY" in self.instrument_key.upper()
+-                or "NIFTY" in self.display_name.upper()
++                "NIFTY" in name_upper
++                and not any(x in name_upper for x in {"BANK", "FIN", "MIDCP"})
+             )
+             if is_nifty:
+                 # strike < 18000: multiple of 50
+diff --git a/tests/unit/test_portfolio.py b/tests/unit/test_portfolio.py
+index b976c12..c91ce82 100644
+--- a/tests/unit/test_portfolio.py
++++ b/tests/unit/test_portfolio.py
+@@ -185,6 +185,38 @@ class TestLegValidation:
+                 strike=150.0,
+             )
+ 
++        # Bond with expiry
++        with pytest.raises(
++            ValidationError, match="Expiry must be None for BOND"
++        ):
++            Leg(
++                instrument_key="BOND_TEST",
++                display_name="Bond Test",
++                asset_type=AssetType.BOND,
++                direction=Direction.BUY,
++                quantity=10,
++                entry_price=Decimal("150.00"),
++                entry_date=date(2026, 4, 1),
++                product_type=ProductType.CNC,
++                expiry=date(2026, 1, 1),
++            )
++
++        # Bond with strike
++        with pytest.raises(
++            ValidationError, match="Strike must be None for BOND"
++        ):
++            Leg(
++                instrument_key="BOND_TEST",
++                display_name="Bond Test",
++                asset_type=AssetType.BOND,
++                direction=Direction.BUY,
++                quantity=10,
++                entry_price=Decimal("150.00"),
++                entry_date=date(2026, 4, 1),
++                product_type=ProductType.CNC,
++                strike=150.0,
++            )
++
+         # Futures without expiry
+         with pytest.raises(
+             ValidationError, match="Expiry must not be None for FUTURES"
+@@ -330,6 +362,34 @@ class TestLegValidation:
+             strike=22150.0,
+         )
+ 
++        # BANKNIFTY option is not Nifty-grid validated
++        Leg(
++            instrument_key="BANKNIFTY_CE",
++            display_name="BANKNIFTY 22150 CE",
++            asset_type=AssetType.CE,
++            direction=Direction.BUY,
++            quantity=75,
++            entry_price=Decimal("100.00"),
++            entry_date=date(2026, 4, 1),
++            product_type=ProductType.NRML,
++            expiry=date(2026, 1, 1),
++            strike=22150.0,
++        )
++
++        # FINNIFTY option is not Nifty-grid validated
++        Leg(
++            instrument_key="FINNIFTY_CE",
++            display_name="FINNIFTY 22150 CE",
++            asset_type=AssetType.CE,
++            direction=Direction.BUY,
++            quantity=75,
++            entry_price=Decimal("100.00"),
++            entry_date=date(2026, 4, 1),
++            product_type=ProductType.NRML,
++            expiry=date(2026, 1, 1),
++            strike=22150.0,
++        )
++
+     def test_expiry_trading_day_validation(self):
+         # Saturday is not a trading day
+         with pytest.raises(
+diff --git a/tools/llm-council b/tools/llm-council
+--- a/tools/llm-council
++++ b/tools/llm-council
+@@ -1 +1 @@
+-Subproject commit 722b82795a2336b49c21ea2d4ee7a6e9b562e554
++Subproject commit 722b82795a2336b49c21ea2d4ee7a6e9b562e554-dirty

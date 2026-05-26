@@ -5,6 +5,25 @@
 
 ---
 
+## Ongoing Paper Trading — Active as of 2026-05-26
+
+All three tracks confirmed running in production (EOD snapshot log verified 2026-05-25).
+Activity items removed from TODOS.md — these are continuous trading discipline, not discrete tasks.
+
+**0.6 — CSP v1 Paper Trading** (`paper_csp_nifty_v1`): active. Monthly CSP entries at 22-delta
+per `csp_nifty_v1.md`. Monitored via `daily_snapshot.py`. Minimum 6 full cycles before conclusions.
+
+**0.6a — NiftyShield Integrated v1** (`paper_niftyshield_v1`): active alongside CSP. Leg 2
+(put spread, 4 lots) at each CSP entry; Leg 3 (tail puts) quarterly (Jan/Apr/Jul/Oct). Two open
+implementation tasks remain in TODOS.md: `paper_csp_roll.py` + `paper_3track_overlay.py:243` migration.
+
+**0.6b — 3-Track Nifty Comparison** (`paper_nifty_spot` / `paper_nifty_futures` / `paper_nifty_proxy`):
+active. All base legs entered. Overlays running. Futures standalone CC permanently blocked (council ruling).
+Minimum 6 monthly cycles + ≥1 high-VIX event (India VIX >18) before cross-track conclusions.
+Source: `docs/strategies/nifty_track_comparison_v1.md`.
+
+---
+
 ## Completed Tasks: 2026-05-14 → 2026-05-26
 
 ### Task 0 — Fix bhavcopy pipeline for NSE UDiFF format ✅ Done 2026-05-14
