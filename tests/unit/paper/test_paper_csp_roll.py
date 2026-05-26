@@ -209,16 +209,7 @@ def test_roll_csp_preserves_quantity(tmp_path: Path) -> None:
     """The roll-open trade must match the quantity of the existing trade (not hardcoded LOT_SIZE)."""
     store = _make_store(tmp_path)
     # Open with quantity 130 (2 lots)
-    existing = _make_csp_trade(instrument_key="NSE_FO|NIFTY12MAY2026PE")
-    existing = PaperTrade(
-        strategy_name=existing.strategy_name,
-        leg_role=existing.leg_role,
-        instrument_key=existing.instrument_key,
-        trade_date=existing.trade_date,
-        action=existing.action,
-        quantity=130,
-        price=existing.price,
-    )
+    existing = _make_csp_trade(instrument_key="NSE_FO|NIFTY12MAY2026PE", quantity=130)
     store.record_trade(existing)
 
     mock_broker = AsyncMock()
