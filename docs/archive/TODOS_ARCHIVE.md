@@ -5,6 +5,34 @@
 
 ---
 
+## Completed Tasks: 2026-05-14 → 2026-05-26
+
+### Task 0 — Fix bhavcopy pipeline for NSE UDiFF format ✅ Done 2026-05-14
+
+NSE migrated F&O bhavcopy to UDiFF format in late 2024. `src/backtest/bhavcopy_ingest.py` updated:
+`download_bhavcopy` tries UDiFF URL first, falls back to legacy on 404. `parse_bhavcopy` detects
+format via `'TradDt' in reader.fieldnames` and routes to `_parse_legacy()` or `_parse_udiff()`.
+`BhavRecord` model unchanged. UDiFF fixture + routing tests added. Commits: `490ec9b`, `590f472`.
+
+### Task 1 — India VIX ingestion + IVR calculation ✅ Done 2026-05-14
+
+`src/backtest/vix_ingest.py` — daily India VIX ingest via Upstox Analytics token; Parquet at
+`data/historical/ohlc/india_vix/`; resumable. `src/backtest/ivr.py` — `compute_ivr()` formula with
+252-day window, clamped `[0.0, 1.0]`. `PaperTrade.ivr_at_entry: float | None` field added.
+`scripts/record_paper_trade.py` R3 gate: warns when IVR < 0.25 or > 0.50. 18 unit tests.
+Unblocks Phase 0.8 gate criteria C + D and BACKTEST_PLAN_PHASE1.md task 1.11.
+
+### Task 2 — PortfolioDeltaTracker (`src/risk/`) ✅ Done 2026-05-26
+
+`src/risk/` package: `PortfolioDelta` frozen dataclass (`models.py`); `PortfolioDeltaTracker.aggregate_delta()`
+(`delta_tracker.py`) — CE/futures = `net_qty/lot_size`, PE = `-net_qty/lot_size`, NiftyBees =
+`qty×avg_cost/(spot×lot_size)`; options thresholds 0.75w/1.0c lots, combined 1.5w/2.0c lots, parameterised.
+`check_entry_allowed()` (`entry_gate.py`) — protective bypass, cap blocks, warning passes with message.
+21 unit tests. 1472 total suite green. Commit: `e8898d3`.
+Source: `docs/council/2026-05-02_multi-strategy-portfolio-risk-allocation.md` §7.3.
+
+---
+
 ## Session Log: 2026-05-10 → 2026-05-12
 
 | Date | What Changed |

@@ -6,93 +6,12 @@
 
 ## Sequential Queue — Next 6 Months
 
-Tasks 0–3 run in this order. Do not start the next until the current ships and tests are green.
+Tasks run in order. Do not start the next until the current ships and tests are green.
 Ongoing paper-trading tasks (Animesh) run in parallel and are listed separately below.
 
 | # | Task | Owner | Hard Deadline | Status |
 |---|---|---|---|---|
-| **0** | Fix bhavcopy UDiFF format (Dec 2024+) | Cowork | ASAP | ✅ Done (2026-05-14) |
-| **1** | India VIX ingestion + IVR calculation | Cowork | Jun 2026 | ✅ Done (2026-05-14) |
-| **2** | PortfolioDeltaTracker (`src/risk/`) | Cowork | Jun 2026 | ✅ Done (2026-05-26) |
 | **3** | June 2026 Finideas roll cycle | Animesh + Cowork | **2026-06-30** | Awaiting Finideas instructions |
-
----
-
-## Task 0 — Fix bhavcopy pipeline for NSE UDiFF format (Dec 2024+)
-
-**Discovered 2026-05-03 during smoke test.** NSE migrated F&O bhavcopy to UDiFF format in
-late 2024. Old URL and CSV schema only cover 2016 → ~Nov 2024. Full column mapping and fix
-spec in `DECISIONS.md → "NSE Bhavcopy Format Migration"`.
-
-**File to change:** `src/backtest/bhavcopy_ingest.py` only. No schema or model changes.
-
-**Exact cutover date:** TBD. Confirmed working: `2024-04-25` (legacy). Confirmed broken:
-`2024-12-02` (legacy). Binary search needed to pin the exact month boundary.
-
-**Safe bootstrap range until fix ships:** `--end 2024-11-01`. Covers 2016–Oct 2024 (~8.5
-years), including all critical stress windows: IL&FS Sep 2018, COVID Mar 2020,
-rate-hike Jan–Jun 2022, Jun 2024 election day.
-
-**Changes required:**
-
-1. `download_bhavcopy`: try UDiFF URL first (`/content/fo/BhavCopy_NSE_FO_0_0_0_{YYYYMMDD}_F_0000.csv.zip`); fall back to legacy URL on 404.
-2. `parse_bhavcopy`: detect format by checking `'TradDt' in reader.fieldnames`. Route to `_parse_legacy()` or `_parse_udiff()` accordingly. `BhavRecord` model unchanged.
-3. `_parse_udiff()`: map UDiFF columns. Key differences: ISO date strings (no strptime); `FinInstrmTp` → instrument (`IDO`→OPTIDX, `STO`→OPTSTK, `IDF`→FUTIDX, `SDF`→FUTSTK); filter by `TckrSymb == underlying`.
-4. Tests: add one UDiFF fixture row (NIFTY `IDO` option). Test format detection and routing.
-
----
-
-## Task 1 — India VIX ingestion + IVR calculation
-
-**Prerequisite for Phase 0.8 gate criteria C and D (regime completeness + regime-matched Z-score).**
-
-IVR (IV Rank) at entry is required to: (1) enforce R3 entry filter (IVR 25–50), (2) flag high-IVR
-regime cycles (IVR > 50) for criterion C, (3) filter backtest for regime-matched Z-score comparison
-in task 1.11. Currently, India VIX is not ingested — R3 enforcement and regime completeness checks
-are blocked.
-
-**Scope (implements the VIX daily sub-path of BACKTEST_PLAN_PHASE1.md task 1.3a):**
-
-- [x] `src/backtest/ohlc_ingest.py` (or new `src/backtest/vix_ingest.py`): daily India VIX ingest from
-  `NSE_INDEX|India VIX` via Upstox `/v2/historical-candle/` (free, existing `UPSTOX_ANALYTICS_TOKEN`).
-  Store as Parquet: `data/historical/ohlc/india_vix/`. Resumable — skip dates already present.
-- [x] IVR formula: `ivr = (vix_today − vix_252d_low) / (vix_252d_high − vix_252d_low)`. Clamp to `[0.0, 1.0]`.
-  Already implemented in `src/backtest/ivr.py` (`compute_ivr`) — wire at entry-log time.
-- [x] Log IVR at entry for every paper trade: add `ivr_at_entry: float | None` field to `PaperTrade` model
-  or `paper_nav_snapshots` (confirm canonical location in `src/paper/CLAUDE.md` before changing schema).
-- [x] Enable R3 gate check in `scripts/record_paper_trade.py`: compute IVR from ingested data; warn (do not
-  block) when IVR < 25 or > 50.
-- [x] Tests: VIX Parquet resumability (skip if already present); IVR boundary tests (already in `test_ivr.py`);
-  R3 warning path in `record_paper_trade.py` (mock IVR fetch).
-
-**Owner:** Cowork. Unblocks R3, criterion C, and BACKTEST_PLAN_PHASE1.md task 1.11 regime-matched comparison.
-
----
-
-## Task 2 — PortfolioDeltaTracker (`src/risk/`)
-
-**Source: `docs/council/2026-05-02_multi-strategy-portfolio-risk-allocation.md` §7.3.**
-
-Cowork code task — unblocked. Implements the aggregate portfolio-delta guard that prevents net long bias
-from compounding across all open paper positions and the NiftyBees ETF holding.
-
-**Exact scope (from BACKTEST_PLAN.md task 0.6c):**
-
-- `src/risk/__init__.py` — package stub with one comment line (required for codebase-memory-mcp indexing).
-- `src/risk/models.py` — `PortfolioDelta` frozen dataclass: `options_delta_lots: Decimal`,
-  `niftybees_delta_lots: Decimal`, `total_delta_lots: Decimal`, `warning_breached: bool`,
-  `cap_breached: bool`, `as_of: datetime`.
-- `src/risk/delta_tracker.py` — `PortfolioDeltaTracker`:
-  - `aggregate_delta(paper_positions: list[PaperPosition], nifty_spot: Decimal, lot_size: int) → PortfolioDelta`
-  - Options-only cap: +1.0 lots (warning +0.75). Options + NiftyBees cap: +2.0 lots (warning +1.5). Constants parameterised.
-  - NiftyBees delta: `niftybees_qty × niftybees_ltp / (nifty_spot × lot_size)` (beta = 1.0).
-- `src/risk/entry_gate.py` — `check_entry_allowed(current_delta: PortfolioDelta, trade_delta_lots: Decimal, is_protective: bool) → tuple[bool, str]`. Protective entries always `(True, "")`.
-- Tests: `tests/unit/risk/test_delta_tracker.py` — happy path, warning boundary, hard cap breach,
-  protective bypass, zero-position base case. `tests/unit/risk/__init__.py` required.
-- `python -m pytest tests/unit/ --tb=no -q` green.
-- Commit: `feat(risk): add PortfolioDeltaTracker with entry gate`.
-
-**Owner:** Cowork. Unblocks the entry guard for 0.6b paper trades.
 
 ---
 
