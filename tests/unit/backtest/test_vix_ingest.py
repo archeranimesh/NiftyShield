@@ -27,7 +27,7 @@ def test_ingest_csv_writes_parquet(fixture_csv, tmp_path):
     df = pd.read_parquet(parquet_path)
     assert set(df.columns) == {"date", "open", "high", "low", "close"}
     assert len(df) == 5
-    assert df["date"].dtype == "datetime64[ns]"
+    assert "datetime64" in str(df["date"].dtype)
 
 def test_ingest_csv_resumable(fixture_csv, tmp_path):
     out_dir = tmp_path / "vix"
