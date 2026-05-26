@@ -674,9 +674,10 @@ def main() -> None:
 
         tracker = PortfolioDeltaTracker()
         portfolio_delta = tracker.aggregate_delta(positions, nifty_spot, LOT_SIZE)
-        is_protective = "PE" in instrument_key
+        is_protective = instrument_key.endswith("PE")
 
-        allowed, reason = check_entry_allowed(portfolio_delta, Decimal("0"), is_protective)
+        trade_delta_lots = Decimal(args.qty) / Decimal(LOT_SIZE)
+        allowed, reason = check_entry_allowed(portfolio_delta, trade_delta_lots, is_protective)
         if not allowed:
             print(reason, file=sys.stderr)
             sys.exit(1)
