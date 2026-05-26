@@ -238,10 +238,8 @@ def _collect_expiry_candidates(
 ) -> list[tuple[str, str]]:
     """Return (label, expiry_date) pairs in preference order: quarterly → yearly → monthly.
 
-    Labels and DTE bands mirror find_overlay_strikes.py:
-      quarterly: DTE 46–200
-      yearly:    DTE 201–420
-      monthly:   DTE 15–45 (always included as final fallback)
+    Delegates to get_expiry_candidates with preference [quarterly, yearly, monthly].
+    DTE bands are defined in src/instruments/lookup.py.
     """
     result = lookup.get_expiry_candidates(
         underlying="NIFTY", today=today, preference=["quarterly", "yearly", "monthly"]
