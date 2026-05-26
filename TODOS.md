@@ -341,6 +341,7 @@ and missing data that must be resolved before executing backtests at scale:
 
 | Date | What Changed |
 |---|---|
+| 2026-05-26 | Task B — migrate private instrument loop in `paper_3track_overlay.py:243` — 13b3daa |
 | 2026-05-26 | Task A — add paper_csp_roll.py for CSP leg roll automation — 3063fbf |
 | 2026-05-26 | Task 2 closed — PortfolioDeltaTracker + entry gate (`src/risk/`); 20 tests; 1471+20 suite green |
 | 2026-05-25 | audit finding [31] — document Decimal return type in protocol get_ltp — e100e28 |

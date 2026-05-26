@@ -37,7 +37,7 @@
 
 ---
 
-- [ ] **Task B — migrate private instrument loop in `paper_3track_overlay.py:243`** | SHA:
+- [x] **Task B — migrate private instrument loop in `paper_3track_overlay.py:243`** | SHA: 13b3daa
 
   Replace the `lookup._instruments` private attribute access with the `get_expiry_candidates`
   public API. Single loop, single file — do not touch anything else.
