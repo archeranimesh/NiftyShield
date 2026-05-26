@@ -6,7 +6,7 @@
 
 ---
 
-- [x] **Task A — `scripts/paper_csp_roll.py`** | SHA: a5ea6eb
+- [x] **Task A — `scripts/paper_csp_roll.py`** | SHA: 3063fbf
 
   Create a script that automates rolling Leg 1 (CSP) positions in `paper_csp_nifty_v1`,
   mirroring `scripts/paper_3track_overlay_roll.py`.
