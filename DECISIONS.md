@@ -291,23 +291,23 @@ options are traded in the future.
 | 2026-04-25 | CSP underlying → Nifty 50 index options (NiftyBees rejected: OI <1,000, spread >5% of mid) | `docs/strategies/csp_nifty_v1.md` |
 | 2026-04-25 | NiftyBees collateral modelled as `long_niftybees` leg in paper P&L; annual reset in January | `docs/strategies/csp_nifty_v1.md` |
 | 2026-04-26 | NiftyShield integrated: CSP Leg 1 + put spread 4 lots (8–20% OTM) + tail puts 2 lots (5-delta quarterly) | `docs/strategies/niftyshield_integrated_v1.md` |
-| 2026-05-02 | Leg 2 strike selection: %OTM (long put at 8% below spot, short put at 20% below spot) over delta-based; delta-based rejected due to cost unpredictability at high VIX and dead-zone variability in low-vol regimes | `docs/council/archive/strategy/2026-05-02_integrated-leg2-strike-methodology.md` |
+| 2026-05-02 | Leg 2 strike selection: %OTM (long put at 8% below spot, short put at 20% below spot) over delta-based; delta-based rejected due to cost unpredictability at high VIX and dead-zone variability in low-vol regimes | — |
 | 2026-04-26 | Static beta 1.25 for MF hedge ratio; switch to rolling 60d beta after 12+ months NAV history | `docs/strategies/niftyshield_integrated_v1.md` |
 | 2026-04-26 | Two-tier backtest: Tier 1 = Bhavcopy + Black '76 IV; Tier 2 = synthetic pricer for deep OTM protective legs | `BACKTEST_PLAN_PHASE1.md §1.9a` |
 | 2026-04-27 | Data stack: TrueData + DhanHQ rejected; Stockmock (calibration) + NSE Bhavcopy (programmatic) adopted | `BACKTEST_PLAN_PHASE1.md §1.1, §1.3` |
 | 2026-04-27 | TimescaleDB deferred indefinitely (Bhavcopy EOD ~4M rows fits Parquet + SQLite) | `BACKTEST_PLAN_PHASE1.md §1.2` |
 | 2026-04-30 | IV reconstruction: Black '76 with Nifty Futures forward; stepped RBI repo rate; quadratic smile fit for delta | `BACKTEST_PLAN_PHASE1.md §1.6a` |
 | 2026-04-30 | Slippage: absolute INR, VIX-regime-aware + OI liquidity multiplier; base at 60–70th percentile | `BACKTEST_PLAN_PHASE1.md §1.4` |
-| 2026-05-01 | Donchian: signal-in-only (ATR trailing stop → flat, not always-in); credit spreads uniform; ATR-proportional spread width | `docs/council/2026-05-01_donchian-roll-mechanics.md` |
-| 2026-05-01 | ORB: ATR primary filter + VIX-IVP 90th-pct structural exclusion; event-day calendar exclusion mandatory; DTE ≤ 2 → skip to next weekly | `docs/council/2026-05-01_orb-volatility-filter-design.md` |
-| 2026-05-02 | CSP delta: 22-delta default (85% of 25d credit, ~half stop-out rate); 25-delta when IVR 25–40; parameterised in scripts | `docs/council/2026-05-02_csp-entry-delta-v2.md` |
-| 2026-05-02 | Gap Fade VIX-IVP filter: 75th percentile (vs ORB 90th); asymmetry is structural and binding | `docs/council/2026-05-02_gap-fade-vix-filter-threshold.md` |
-| 2026-05-02 | IC v1: mild put-side asymmetry (short put 16Δ / short call 14Δ normal; 18Δ/12Δ high-IVR); symmetric deltas rejected | `docs/council/2026-05-02_iron-condor-v1-core-design.md` |
-| 2026-05-02 | 3-track comparison: Track C = Deep ITM Call (delta ≈ 0.90); Track B + Covered Call / CSP programmatically blocked | `docs/council/2026-05-02_nifty-long-instrument-comparison-protection.md` |
-| 2026-05-02 | Near-expiry buy research: Gamma Gearing primary; Speed secondary; OI velocity confirmation only; weekly 0–1 DTE Nifty; paper trading Phase 0 (not Phase 3) | `docs/strategies/near_expiry_buy_v1.md`, `docs/council/archive/research/2026-05-02_gamma-acceleration-mispricing-option-buying.md` |
+| 2026-05-01 | Donchian: signal-in-only (ATR trailing stop → flat, not always-in); credit spreads uniform; ATR-proportional spread width | — |
+| 2026-05-01 | ORB: ATR primary filter + VIX-IVP 90th-pct structural exclusion; event-day calendar exclusion mandatory; DTE ≤ 2 → skip to next weekly | — |
+| 2026-05-02 | CSP delta: 22-delta default (85% of 25d credit, ~half stop-out rate); 25-delta when IVR 25–40; parameterised in scripts | — |
+| 2026-05-02 | Gap Fade VIX-IVP filter: 75th percentile (vs ORB 90th); asymmetry is structural and binding | — |
+| 2026-05-02 | IC v1: mild put-side asymmetry (short put 16Δ / short call 14Δ normal; 18Δ/12Δ high-IVR); symmetric deltas rejected | — |
+| 2026-05-02 | 3-track comparison: Track C = Deep ITM Call (delta ≈ 0.90); Track B + Covered Call / CSP programmatically blocked | — |
+| 2026-05-02 | Near-expiry buy research: Gamma Gearing primary; Speed secondary; OI velocity confirmation only; weekly 0–1 DTE Nifty; paper trading Phase 0 (not Phase 3) | `docs/strategies/near_expiry_buy_v1.md` |
 | 2026-05-15 | Dhan Data API (₹499/month) subscribed for: (1) L2 order book depth for gamma_scan.py fill simulation; (2) historical expired options data supplementing NSE Bhavcopy for Phase 1 backtest pipeline | `docs/strategies/near_expiry_buy_v1.md §3` |
-| 2026-05-02 | Live monitoring: CUSUM lower-sided (k=0.50, h_warn=3.0, h_reduce=4.0, h_halt=5.0) replaces weekly Z-score | `docs/council/2026-05-02_continuous-revalidation-statistical-power.md` |
-| 2026-05-02 | Phase 0.8 gate: 4 criteria (A–D); Z-score is smoke test only; graduated deployment tiers 0 → 0.5 → 1 → 2 → 3 | `docs/council/2026-05-02_variance-gate-regime-completeness.md`, `docs/plan/variance_gate.md` |
+| 2026-05-02 | Live monitoring: CUSUM lower-sided (k=0.50, h_warn=3.0, h_reduce=4.0, h_halt=5.0) replaces weekly Z-score | — |
+| 2026-05-02 | Phase 0.8 gate: 4 criteria (A–D); Z-score is smoke test only; graduated deployment tiers 0 → 0.5 → 1 → 2 → 3 | `docs/plan/variance_gate.md` |
 | 2026-05-03 | NSE Bhavcopy: old archive URL covers 2016–~Nov 2024 only; Dec 2024+ uses new UDiFF format at a different URL and CSV schema | `TODOS.md → P1-NEXT UDiFF fix` |
 | 2026-05-23 | TradingView MCP (`tradesdontlie/tradingview-mcp`) validated as real-time regime signal channel; `docs/regime_probe.pine` is the canonical probe script; multi-timeframe regime divergence (1D vs 1W) is a mandatory check before strangle entry | `docs/tv_mcp_testing_framework.md` |
 | 2026-05-24 | Settle vs LTP: Bhavcopy `settle_price` is daily VWAP (3:00–3:30 PM), not EOD LTP. Actual IV divergence correction (using Upstox/Dhan EOD LTP validation target) is deferred until programmatic IV reconstruction is implemented. | `docs/reviews/audit_2026-05-15.md` finding [23] |
@@ -424,7 +424,6 @@ The exact cutover date is TBD (binary search needed between 2024-04-25 confirmed
 
 **Trade priority when delta cap binding:** Risk-reducing exits → Protective hedges (Legs 2/3) → Integrated CSP (Leg 1) → Standalone CSP v2 → Bearish swing spreads → (covered call blocked)
 
-**Source:** `docs/council/2026-05-02_multi-strategy-portfolio-risk-allocation.md`
 
 ---
 
@@ -474,7 +473,7 @@ TrueData supplements, does not replace, Bhavcopy. Bhavcopy remains the free EOD 
 
 ## IV Reconstruction Methodology (2026-04-30)
 
-**Key choices (full rationale: `docs/council/2026-05-02_*`):**
+**Key choices:**
 - Pricing model: **Black '76** (Nifty Futures `settle_price` as forward `F` — eliminates dividend yield + carry adjustment)
 - Risk-free rate: **Stepped RBI Repo Rate** (~20 entries, 2016–2024) in `src/backtest/repo_rates.py`
 - Option price: **Guarded blend** — `close` if volume >0 and `|close − settle| / settle < 0.50`; else `settle_price`; mark unusable rows
@@ -512,7 +511,7 @@ TrueData supplements, does not replace, Bhavcopy. Bhavcopy remains the free EOD 
 | 5,000–19,999 | 2.0× |
 | < 5,000 | 2.5× (flag as potentially unexecutable) |
 
-Stop-loss exit multiplier: 1.5× (spreads widest during crashes). All backtest reports must include optimistic / base / conservative scenario table. **Source:** `docs/council/2026-05-02_continuous-revalidation-statistical-power.md`
+Stop-loss exit multiplier: 1.5× (spreads widest during crashes). All backtest reports must include optimistic / base / conservative scenario table.
 
 ---
 
@@ -535,7 +534,7 @@ Update monthly at cycle close only. Two versions: (a) combined strategy P&L, (b)
 | 12 ≤ N < 24 | CUSUM reduce/halt thresholds active; Z-score advisory |
 | N ≥ 24 | Full: CUSUM + Z-score + guards |
 
-**Early guards (active from first live trade):** R6 single-cycle catastrophic loss; 3-cycle rolling drawdown > 4× credit → paper-only; 3 consecutive losses → halt; open MTM > 3× credit → close + pause; regime-divergence flag (VIX >95th pct, IVR <25, R4 event); slippage > 2× modeled for 2 cycles → paper-only. **Implementation:** `src/risk/monitoring.py` (Phase 2). **Source:** `docs/council/2026-05-02_continuous-revalidation-statistical-power.md`
+**Early guards (active from first live trade):** R6 single-cycle catastrophic loss; 3-cycle rolling drawdown > 4× credit → paper-only; 3 consecutive losses → halt; open MTM > 3× credit → close + pause; regime-divergence flag (VIX >95th pct, IVR <25, R4 event); slippage > 2× modeled for 2 cycles → paper-only. **Implementation:** `src/risk/monitoring.py` (Phase 2).
 
 ---
 
@@ -549,7 +548,7 @@ Update monthly at cycle close only. Two versions: (a) combined strategy P&L, (b)
 | 2 — Normal v1 live | N ≥ 12 cycles OR N ≥ 6 + ≥1 genuine stressed episode; ≥1 delta-stop live | Runs as designed at conservative size |
 | 3 — Overlay integration | N ≥ 18–24; full regime coverage; hedge-overlay interaction verified | Prerequisite for NiftyShield integrated |
 
-Full gate specification: `docs/plan/variance_gate.md`. **Source:** `docs/council/2026-05-02_variance-gate-regime-completeness.md`
+Full gate specification: `docs/plan/variance_gate.md`.
 
 ---
 

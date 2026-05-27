@@ -87,7 +87,7 @@ Not every `BACKTEST_PLAN.md` checkbox gets a story file upfront — that would b
 
 **Initial story files created** (2026-04-17):
 
-- Phase 0: `0_1_nuvama_tests.md`, `0_2_greeks_capture.md`, `0_3_finideas_roll.md`, `0_5_paper_module.md`
+- Phase 0: `0_1_nuvama_tests.md`, `0_2_greeks_capture.md`, `0_5_paper_module.md` — `0_3_finideas_roll.md` → archived at `docs/archive/plan/` (implementation complete, execution pending)
 - Phase 1: `1_5b_analytics_module.md`, `1_10_dhan_chain_client.md`
 
 All other story files to be generated as their phase approaches activation.

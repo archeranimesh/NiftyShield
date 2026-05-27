@@ -10,7 +10,7 @@
 | Underlying              | Nifty 50 index — weekly options only                                                               |
 | Expiry scope            | Current-week expiry (Thursday) + Wednesday before it (0–1 DTE at entry)                           |
 | Lot size                | 75 units (verify against NSE before each expiry)                                                   |
-| Council source          | `docs/council/archive/research/2026-05-02_gamma-acceleration-mispricing-option-buying.md`          |
+| Council source          | `docs/archive/council/research/2026-05-02_gamma-acceleration-mispricing-option-buying.md`          |
 | Council pending         | 2 open questions — see §14. Both must resolve before Phase 3 live deployment.                      |
 | Data dependency         | Dhan Data API (₹499/month) for L2 depth — see §4                                                  |
 

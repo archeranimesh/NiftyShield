@@ -1,6 +1,6 @@
 # 0.3 — June 2026 Finideas roll cycle
 
-**Status:** NOT STARTED
+**Status:** IMPLEMENTATION COMPLETE — execution pending (awaiting Finideas roll instructions; deadline 2026-06-30)
 **Owner:** Animesh (execution decisions) + Cowork (pre-roll validation via agent)
 **Phase:** 0
 **Blocks:** 0.8 (Phase 0 gate)

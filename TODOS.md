@@ -12,7 +12,7 @@ Ongoing paper-trading tasks (Animesh) run in parallel and are listed separately 
 
 | # | Task | Owner | Hard Deadline | Status |
 |---|---|---|---|---|
-| **3** | June 2026 Finideas roll cycle | Animesh + Cowork | **2026-06-30** | Awaiting Finideas instructions |
+| **3** | June 2026 Finideas roll cycle | Animesh + Cowork | **2026-06-30** | Implementation complete — execution pending (awaiting Finideas instructions) |
 
 ---
 
