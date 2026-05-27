@@ -212,36 +212,36 @@ class Leg(BaseModel):
 
         # 3. Expiry validations (only for F&O legs where expiry is not None)
         if self.expiry is not None:
-            # Check whitelist exceptions (skip validations)
-            whitelist = {date(2026, 4, 7), date(2026, 12, 29)}
-            if self.expiry not in whitelist:
-                # Import is_trading_day inline to prevent circular imports
-                from src.market_calendar.holidays import is_trading_day
-                
-                # Check 1: Expiry must be a trading day
-                if not is_trading_day(self.expiry):
-                    raise ValueError(
-                        f"Expiry date {self.expiry} is not a valid trading day"
-                    )
-                
-                # Check 2: Expiry must be Thursday, or the
-                # preceding trading day if Thursday is a holiday.
-                # Find Thursday of the expiry's week
-                # weekday() is 0 for Monday, ..., 3 for Thursday
+            # Import is_trading_day inline to prevent circular imports
+            from src.market_calendar.holidays import is_trading_day
+
+            # Check 1: Expiry must be a trading day
+            if not is_trading_day(self.expiry):
+                raise ValueError(
+                    f"Expiry date {self.expiry} is not a valid trading day"
+                )
+
+            # Check 2: Day-of-week constraint.
+            # NSE moved Nifty (and other index) expiry from Thursday to
+            # Tuesday effective April 2026 (SEBI circular). All Upstox BOD
+            # instrument data from April 2026 onwards uses Tuesday expiries.
+            # For dates before April 2026 we keep the original Thursday rule;
+            # for April 2026 onwards we rely solely on Check 1 (trading day).
+            _NSE_TUESDAY_EXPIRY_CUTOFF = date(2026, 4, 1)
+            if self.expiry < _NSE_TUESDAY_EXPIRY_CUTOFF:
+                # Pre-cutoff: expiry must be Thursday, or the preceding
+                # trading day if Thursday is a holiday.
                 weekday_diff = 3 - self.expiry.weekday()
                 nominal_thursday = (
                     self.expiry + timedelta(days=weekday_diff)
                 )
-                
+
                 if self.expiry > nominal_thursday:
-                    # Expiry cannot be after Thursday (e.g. Friday)
                     raise ValueError(
                         f"Expiry date {self.expiry} cannot be after "
                         f"Thursday of its week"
                     )
-                
-                # Verify that all days between expiry + 1 and nominal_thursday
-                # (inclusive) are NOT trading days
+
                 curr = self.expiry + timedelta(days=1)
                 while curr <= nominal_thursday:
                     if is_trading_day(curr):
