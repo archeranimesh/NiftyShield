@@ -4,7 +4,7 @@
 > **Load this file when:** planning or implementing `src/strategy/`, `src/council/`,
 > the monitor daemon, or any pluggable strategy.
 > **Related:** `CONTEXT.md` · `DECISIONS.md` · `BACKTEST_PLAN.md`
-> · `docs/plan/signal_pipeline_spec.md`
+> · `docs/plan/signals/` (signals_stories.md + signals_tasks.md + signals_schema.md)
 > · `docs/council/2026-05-02_iron-condor-v1-core-design.md`
 
 ---
@@ -391,7 +391,7 @@ Any other `action_type` raises `ValueError` — the spec forbids it.
 **Target:** August–September 2026
 **Blocked by:** PT-0 + OpenRouter API key
 **Owner:** Cowork
-**Full spec:** `docs/plan/signal_pipeline_spec.md`
+**Stories + tasks:** `docs/plan/signals/signals_stories.md` · `docs/plan/signals/signals_tasks.md`
 
 **`src/signals/`** — full module per spec §8. `SignalPipeline` implements `PaperStrategy`.
 
