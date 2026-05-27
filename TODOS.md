@@ -13,6 +13,8 @@ Ongoing paper-trading tasks (Animesh) run in parallel and are listed separately 
 | # | Task | Owner | Hard Deadline | Status |
 |---|---|---|---|---|
 | **3** | June 2026 Finideas roll cycle | Animesh + Cowork | **2026-06-30** | Implementation complete — execution pending (awaiting Finideas instructions) |
+| **4** | MVP: Multi-bagger Value Picks Tracker (`src/mvp/`) | Cowork | After Task 3 | ⬜ Not started |
+| **5** | backtest-eval-core: `BacktestStore` + `src/analytics/` (tasks 1.5 + 1.5b) | Cowork | Aug 2026 (Phase 1, after tasks 1.3 + 1.4) | ⬜ Not started — **blocked by tasks 1.3 (Bhavcopy ingest) + 1.4 (BacktestEngine)** |
 
 ---
 
@@ -195,7 +197,7 @@ Full spec in `BACKTEST_PLAN_PHASE1.md`. Start only after TrueData delivers zip f
 Full task list in `BACKTEST_PLAN_PHASE1.md`. Key milestones:
 
 - **1.4:** `BacktestEngine` core (Strategy Protocol + DayContext + run loop). Port from `quant-4pc-local`.
-- **1.5:** `BacktestStore` — SQLite results storage (separate from `portfolio.sqlite`).
+- **1.5 + 1.5b:** `BacktestStore` (SQLite results storage) + `src/analytics/` (pure-function evaluation layer). **Full spec: `docs/plan/backtest-eval-core/`** — copy `prompt.md` to start.
 - **1.6a:** BS IV reconstruction from `settle_price` + Nifty Futures forward (Note: address actual IV/LTP divergence correction here per finding [23]).
 - **1.7:** `CSPStrategy` with `CSPConfig` — thresholds from Stockmock calibration results.
 - **1.8:** Full bootstrap run 2016–2024; distribution analysis.
