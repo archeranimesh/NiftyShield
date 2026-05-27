@@ -13,6 +13,7 @@ Ongoing paper-trading tasks (Animesh) run in parallel and are listed separately 
 | # | Task | Owner | Hard Deadline | Status |
 |---|---|---|---|---|
 | **3** | June 2026 Finideas roll cycle | Animesh + Cowork | **2026-06-30** | Implementation complete — execution pending (awaiting Finideas instructions) |
+| **3b** | **variance-gate VG0: CSP v1 spec reconciliation** (lot size, time stop, R-numbers, R4) | Animesh + Cowork | Before Phase 0.8 gate evaluation | ⬜ Not started — story: `docs/plan/variance-gate/` |
 | **4a** | **chain-data: EOD + intraday chain snapshot cron** (`src/backtest/chain_writer.py`, `scripts/upstox_chain_snapshot.py`, `scripts/upstox_chain_intraday.py`) | Cowork | **ASAP — data cannot be back-filled** | ⬜ Not started — story: `docs/plan/chain-data/` |
 | **4b** | MVP: Multi-bagger Value Picks Tracker (`src/mvp/`) | Cowork | After Task 3 | ⬜ Not started |
 | **4c** | **paper-backbone: Strategy Monitor daemon + pluggable strategy backbone** (`src/strategy/`, `src/council/`, `src/notifications/telegram_gateway.py`) | Cowork | **Jun–Jul 2026** | ⬜ Not started — story: `docs/plan/paper-backbone/` |
@@ -36,6 +37,29 @@ Invoke `roll-validator` agent ≥1 week before deadline. Steps:
 - [ ] If any bug surfaces: file a separate fix commit before moving on.
 
 **Owner:** Animesh (receives instructions) + Cowork (executes scripts).
+
+---
+
+## Task 3b — Variance Gate: CSP v1 Spec Reconciliation
+
+**Full spec:** `docs/plan/variance-gate/variance_gate_stories.md` → VG0
+**Priority:** immediately actionable — docs-only, no code changes, unblocks Phase 0.8 gate evaluation
+**Story folder:** `docs/plan/variance-gate/` (prompt, tasks, stories, spec)
+
+Four mismatches to resolve in `docs/strategies/csp_nifty_v1.md`:
+
+- [ ] **Lot size:** confirm 65 units; update any reference to 50 units with transition date annotation.
+- [ ] **Time stop:** define as "21 calendar days from entry date" — align with `BACKTEST_PLAN.md`.
+- [ ] **R-number naming:** pick one canonical scheme (R1–R7); update `csp_nifty_v1.md` + `BACKTEST_PLAN.md`.
+- [ ] **R4 definition:** single definition — event filter or 200-DMA filter; if both, name R4a + R4b.
+
+**Commit:** `docs(strategies): reconcile CSP v1 spec — lot size, time stop, R-numbers, R4`
+
+**Variance gate parallel track** (ongoing, no Cowork action needed until events occur):
+- VG1 Tier 0.5 review: triggers after 2nd CSP paper cycle closes
+- VG2 Gate A+B: triggers at ≥6 cycles; Gate B3 (delta-stop) replay blocked until Phase 1.3a
+- VG3 Gate C: triggers on first qualifying stress event (live) or after Phase 1 replay harness
+- VG4 Gate D: blocked by Phase 1 task 1.11 (Z-score computation)
 
 ---
 
@@ -462,6 +486,7 @@ and missing data that must be resolved before executing backtests at scale:
 
 | Date | What Changed |
 |---|---|
+| 2026-05-27 | variance-gate story created — `docs/plan/variance-gate/` (prompt, tasks, stories, spec); `docs/plan/variance_gate.md` archived; README.md + TODOS.md updated |
 | 2026-05-26 | Task B2.1 — Script scaffold: CLI + expiry resolution — b68bb3d |
 | 2026-05-26 | Task B1 — scaffolding and store for `src/gamma/` option chain watcher — d8c2e69 |
 | 2026-05-26 | Task A — Wire src/risk/ delta gate into record_paper_trade.py — b9c00146e2bb268aa0d8449a295e0d92c17cfab1 |
