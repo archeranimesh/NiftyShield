@@ -13,7 +13,7 @@
 
 **Why this order (backtest after paper, not before):** Covered in conversation. A backtest whose output can't be validated against a known realised outcome is a simulation, not a measurement. Phase 0 gives us that known outcome.
 
-> **Task numbering note:** Tasks run 1.1 → 1.2 (DEFERRED) → 1.3 → 1.3a → 1.3b → 1.4 → 1.5 → 1.6 → 1.6a → 1.7 → 1.8 → 1.9 → 1.9a → 1.10 → 1.10a → 1.11 → 1.12. Task 1.2 (TimescaleDB) is deferred — DhanHQ rejected 2026-04-27, NSE Bhavcopy Parquet is the storage layer. Task 1.10a (intraday chain snapshots) added 2026-04-27. Task 1.3b (TrueData 1-min ingestion) added 2026-05-09. Do not renumber existing tasks.
+> **Task numbering note:** Tasks run 1.1 → 1.2 (DEFERRED) → 1.3 → 1.3a → 1.3b → 1.4 → 1.5 → 1.6 → 1.6a → 1.7 → 1.8 → 1.9 → 1.9a → 1.10 → 1.10a → 1.11 → 1.12. Task 1.2 (TimescaleDB) is deferred — DhanHQ rejected 2026-04-27, NSE Bhavcopy Parquet is the storage layer. Tasks 1.10 + 1.10a migrated to `docs/plan/chain-data/` story (2026-05-27) — implementation tracked there as CD1.2 + CD2.1. Task 1.3b (TrueData 1-min ingestion) added 2026-05-09. Do not renumber existing tasks.
 
 ---
 
@@ -408,11 +408,15 @@ applies R3 manually until the VIX Parquet is populated.
 
 ## 1.10 — CODE — Upstox live option chain snapshot (daily accumulation)
 
+> **⚠ MIGRATED (2026-05-27):** This task is now tracked in `docs/plan/chain-data/` as story CD1.2.
+> Implementation checklist below is superseded by `chain_data_tasks.md`. Update checkboxes there, not here.
+> This section is retained for historical reference and phase-gate accounting only.
+
 **Decision (2026-04-27):** Upstox Analytics Token is the confirmed live market data source for forward testing and production (see `DECISIONS.md`). The Upstox option chain client already works (`src/client/upstox_market.py` + `parse_upstox_option_chain` from task 0.2). This task adds a daily EOD snapshot cron job to accumulate forward-captured Greeks + bid/ask data — the same data that was previously planned via Dhan, now via the already-integrated Upstox path.
 
 No new client code needed. The snapshot accumulation is the deliverable.
 
-**Storage: Parquet, not TimescaleDB.** Task 1.2 (TimescaleDB) is deferred indefinitely — see `DECISIONS.md` → "Task 1.10 chain snapshot storage revised from TimescaleDB to Parquet". The original hypertable spec is superseded.
+**Storage: Parquet, not TimescaleDB.** Task 1.2 (TimescaleDB) is deferred indefinitely — see `DECISIONS.md` → "Chain snapshot storage: Parquet". The original hypertable spec is superseded.
 
 - [ ] `scripts/upstox_chain_snapshot.py` — cron-ready. Holiday guard via `market_calendar.is_trading_day`. Fetches option chain for: (Nifty 50, current-week expiry), (Nifty 50, current-month expiry), (Nifty 50, next-month expiry). Three calls via `UpstoxLiveClient.get_option_chain()` + `parse_upstox_option_chain`.
 - [ ] Persist to Parquet at `data/offline/chain_snapshots/{year}/{month}/upstox_{date}.parquet`. Schema: `snapshot_ts TIMESTAMP, underlying TEXT, expiry_date DATE, strike DECIMAL, option_type CHAR(2), spot DECIMAL, ltp DECIMAL, bid DECIMAL, ask DECIMAL, oi BIGINT, volume BIGINT, iv DECIMAL, delta DECIMAL, gamma DECIMAL, theta DECIMAL, vega DECIMAL`. One file per capture day. Partition path is DuckDB glob-compatible — do not change the path structure.
@@ -425,6 +429,9 @@ No new client code needed. The snapshot accumulation is the deliverable.
 ---
 
 ## 1.10a — CODE — Intraday live option chain snapshots (5-min cadence)
+
+> **⚠ MIGRATED (2026-05-27):** This task is now tracked in `docs/plan/chain-data/` as story CD2.1.
+> This section is retained for historical reference and phase-gate accounting only.
 
 Companion to task 1.10. Captures the full option chain every 5 minutes during market hours. Storage and rationale: see `DECISIONS.md` → "Intraday live option chain snapshots at 5-min cadence".
 

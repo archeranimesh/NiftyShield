@@ -465,7 +465,7 @@ strikes), the variance check methodology differs:
    bias).
 
 5. **If |Z_cost| > 2.0:** The BS skew model is miscalibrated. Recalibrate against
-   the accumulated live chain snapshots (task 1.10) and re-run.
+   the accumulated live chain snapshots (chain-data story, `data/offline/chain_snapshots/`) and re-run.
 
 **Payoff validation (crash scenario — cannot be variance-checked statistically):**
 The protective legs' payoff in a crash cannot be validated by a Z-score (crashes are
@@ -513,8 +513,8 @@ these strikes.
   +2% IV per 5% OTM (e.g., 8% OTM put priced at ATM IV + 3.2%; 20% OTM put at
   ATM IV + 8%). Crude but directionally correct.
 - **Skew model (Phase 2+):** Calibrate against accumulated live chain snapshots from
-  task 1.10. Refit the skew parameters monthly using the most recent 60 trading days
-  of observed IV across all strikes.
+  the chain-data story (`data/offline/chain_snapshots/`). Refit the skew parameters
+  monthly using the most recent 60 trading days of observed IV across all strikes.
 
 **Known biases:**
 1. **BS underprices deep OTM puts** (vol smile not captured by flat IV). The fixed

@@ -69,8 +69,8 @@ in the trade log for each cycle.*
 
 **Strike selection:** Closest available strike to the **22-delta put** (council default,
 2026-05-02 — supersedes 25-delta; see `docs/council/2026-05-02_csp-entry-delta-v2.md` and
-`DECISIONS.md`), as reported by the live Dhan option chain (`/v2/optionchain`, Phase 1.10)
-or Upstox option chain fallback (Phase 0, current). If two strikes straddle 22-delta exactly,
+`DECISIONS.md`), as reported by the live Upstox option chain (`parse_upstox_option_chain`, chain-data story)
+or Dhan option chain if vendor is switched in future. If two strikes straddle 22-delta exactly,
 take the further OTM one (lower absolute delta) to reduce assignment probability. Delta is a
 **parameterised input** — candidate values 20, 22, 25 are selectable at entry to enable
 regime-adaptive operation once IVR ingestion is live. **Liquidity gate (new):** if the

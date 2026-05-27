@@ -13,7 +13,8 @@ Ongoing paper-trading tasks (Animesh) run in parallel and are listed separately 
 | # | Task | Owner | Hard Deadline | Status |
 |---|---|---|---|---|
 | **3** | June 2026 Finideas roll cycle | Animesh + Cowork | **2026-06-30** | Implementation complete — execution pending (awaiting Finideas instructions) |
-| **4** | MVP: Multi-bagger Value Picks Tracker (`src/mvp/`) | Cowork | After Task 3 | ⬜ Not started |
+| **4a** | **chain-data: EOD + intraday chain snapshot cron** (`src/backtest/chain_writer.py`, `scripts/upstox_chain_snapshot.py`, `scripts/upstox_chain_intraday.py`) | Cowork | **ASAP — data cannot be back-filled** | ⬜ Not started — story: `docs/plan/chain-data/` |
+| **4b** | MVP: Multi-bagger Value Picks Tracker (`src/mvp/`) | Cowork | After Task 3 | ⬜ Not started |
 | **5** | backtest-eval-core: `BacktestStore` + `src/analytics/` (tasks 1.5 + 1.5b) | Cowork | Aug 2026 (Phase 1, after tasks 1.3 + 1.4) | ⬜ Not started — **blocked by tasks 1.3 (Bhavcopy ingest) + 1.4 (BacktestEngine)** |
 
 ---

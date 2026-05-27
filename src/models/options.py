@@ -3,7 +3,7 @@
 Field names (delta, gamma, iv, …) are standard names.  Translation from
 broker response shapes (Upstox, Dhan, …) happens in each client's parser
 module — not here.  This keeps the model portable across Phase 0 (Upstox)
-and Phase 1.10 (Dhan primary chain source).
+and the chain-data story (Upstox live snapshots + future Dhan parser).
 
 All monetary/Greek fields are Decimal.  Models are frozen (immutable after
 construction) so they can be safely cached or passed across async tasks.

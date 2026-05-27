@@ -1,6 +1,6 @@
 # 1.10 — Dhan live option chain client + daily snapshot
 
-**Status:** NOT STARTED
+**Status:** ABANDONED (2026-05-27) — superseded by `docs/plan/chain-data/` story. Dhan client approach dropped; Upstox-first confirmed. Implementation tracked as CD1.1–CD3.1 in chain_data_tasks.md.
 **Owner:** Cowork
 **Phase:** 1
 **Blocks:** 1.12 (Phase 1 gate), 3.5 (regime signal computation needs chain snapshots)

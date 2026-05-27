@@ -29,10 +29,10 @@ To get the most out of me, give me the **Objective**, the **Pointers**, and the 
 > *"Here is the code for my client.py: [1000 lines of code] ... fix the Dhan parser."* (This bloats context and is unnecessary).
 
 **Great Input:**
-> *"Antigravity, we need to implement the Dhan option chain parser.
-> 1. Check `TODOS.md` for the specific requirements under Phase 1.10.
-> 2. Look at `src/client/upstox_market.py` for how the Upstox parser does it.
-> 3. Implement the logic in the Dhan module and make sure `pytest tests/unit/dhan/` passes.
+> *"Antigravity, we need to implement the Upstox chain snapshot writer.
+> 1. Check `docs/plan/chain-data/chain_data_stories.md` for the CD1.1 story spec.
+> 2. Look at `src/backtest/vix_ingest.py` for the established Parquet write pattern.
+> 3. Implement `src/backtest/chain_writer.py` and make sure `pytest tests/unit/backtest/test_chain_writer.py` passes.
 > 4. Do not commit yet, just show me the diff."*
 
 ### Why this works:
