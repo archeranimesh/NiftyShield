@@ -15,6 +15,7 @@ Ongoing paper-trading tasks (Animesh) run in parallel and are listed separately 
 | **3** | June 2026 Finideas roll cycle | Animesh + Cowork | **2026-06-30** | Implementation complete — execution pending (awaiting Finideas instructions) |
 | **4a** | **chain-data: EOD + intraday chain snapshot cron** (`src/backtest/chain_writer.py`, `scripts/upstox_chain_snapshot.py`, `scripts/upstox_chain_intraday.py`) | Cowork | **ASAP — data cannot be back-filled** | ⬜ Not started — story: `docs/plan/chain-data/` |
 | **4b** | MVP: Multi-bagger Value Picks Tracker (`src/mvp/`) | Cowork | After Task 3 | ⬜ Not started |
+| **4c** | **paper-backbone: Strategy Monitor daemon + pluggable strategy backbone** (`src/strategy/`, `src/council/`, `src/notifications/telegram_gateway.py`) | Cowork | **Jun–Jul 2026** | ⬜ Not started — story: `docs/plan/paper-backbone/` |
 | **5** | backtest-eval-core: `BacktestStore` + `src/analytics/` (tasks 1.5 + 1.5b) | Cowork | Aug 2026 (Phase 1, after tasks 1.3 + 1.4) | ⬜ Not started — **blocked by tasks 1.3 (Bhavcopy ingest) + 1.4 (BacktestEngine)** |
 
 ---
@@ -159,6 +160,31 @@ Auto-closes on target/SL breach. Skips `PENDING` rows.
 
 ---
 
+## Task 4c — paper-backbone: Strategy Monitor Daemon + Pluggable Strategy Backbone
+
+**Full spec:** `docs/plan/paper-backbone/paper_backbone_stories.md`
+**Target:** Jun–Jul 2026 (PT-0 blocks all strategy phases)
+**Prerequisite:** Task 2 (PortfolioDeltaTracker) — ✅ shipped 2026-05-26
+
+One daemon backbone that all pluggable strategies (CSP, IC, 3-Track, Signal Pipeline) run on.
+Replaces manual snapshot monitoring with automated signal detection + council consultation + Telegram approval.
+
+CSP (`paper_csp_nifty_v1`) and 3-Track (`paper_nifty_spot/futures/proxy`) are already live as
+paper trades — their backbone integration classes (PB2.1, PB4.1) plug in once PT-0 ships.
+
+### Phases
+
+| Phase | Tasks | Target | Status |
+|---|---|---|---|
+| PT-0 — Common Infrastructure | PB1.1–PB1.7: `PaperStrategy` protocol, `StrategyMonitor`, `PaperExecutor`, `RapidCouncil`, `TelegramGateway`, DB migrations, daemon scripts | Jun–Jul 2026 | ⬜ Not started |
+| PT-S0 — CSP v1 backbone | PB2.1: `CSPNiftyV1` — already live, adds auto-signal detection | After PT-0 | ⬜ Not started |
+| PT-S1 — Iron Condor v1 | PB3.1: `IronCondorV1` — entry via `paper_ic_entry.py`; backbone handles exits | Aug 2026 | ⬜ Not started |
+| PT-S3 — 3-Track backbone | PB4.1: `NiftyTrackComparisonV1` — already live, adds WARN roll reminders | After PT-0 | ⬜ Not started |
+| PT-S2 — Signal Pipeline | Blocked on `signals` story (`docs/plan/signals/`) + OpenRouter API key | Aug–Sep 2026 | ⬜ Not started |
+| PT-B — Backtesting mode | Historical replayer + AutoApprover swap-in | After Phase 0.8 gate | ⬜ Blocked |
+
+---
+
 ## Phase 1 — Backtest Engine (Aug–Dec 2026, after Phase 0.8 gate)
 
 *Load `BACKTEST_PLAN_PHASE1.md` when Phase 0.8 gate clears. Tasks below are summaries only.*
@@ -239,7 +265,14 @@ Blocked: static IP not provisioned. Unblocked when IP is confirmed. `place_order
 
 Wire `build_notifier` from `src/notifications/` into `paper_snapshot.py`. Add `[DRY RUN]` label. Non-fatal, fire-and-forget. Defer until `paper_snapshot.py` is touched for another reason.
 
-### Telegram — Paper Trade Roll Alert (all tracks)
+### Telegram — Paper Trade Roll Alert (all tracks) ⚠️ SUPERSEDED by paper-backbone PT-S0/PT-S3
+
+> **Do not implement the manual `paper_alerts` cron logic below.** Once `paper-backbone` ships,
+> roll alerts are delivered via `NiftyTrackComparisonV1.check_signals()` WARN events (PT-S3)
+> and `CSPNiftyV1.check_signals()` WARN events (PT-S0) routed through `TelegramGateway`.
+> The `paper_alerts` table design below is retained for reference only.
+
+### Telegram — Paper Trade Roll Alert (original design — reference only)
 
 Single unified alert per leg. Fires when **either** condition is met first, then escalates in frequency as DTE shrinks. Not two independent alerts.
 

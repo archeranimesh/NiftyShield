@@ -20,4 +20,4 @@
 - [ ] **S5.2** — `scripts/morning_signal.py`: 09:15 AM pipeline cron (no unit tests)
 - [ ] **S5.3** — `scripts/record_signal_outcome.py`: 03:00 PM outcome recorder (no unit tests)
 - [ ] **S5.4** — `scripts/signal_report.py`: on-demand performance report with random baseline (no unit tests)
-- [ ] **S6** — Docs close: CONTEXT.md tree, DECISIONS.md entry, TODOS.md log, PAPER_TRADING_PLAN.md ref update
+- [ ] **S6** — Docs close: CONTEXT.md tree, DECISIONS.md entry, TODOS.md log

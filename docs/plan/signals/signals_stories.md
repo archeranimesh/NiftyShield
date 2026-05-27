@@ -1002,9 +1002,7 @@ No unit tests for this script.
   (single key); Phase 2 upgrades Grok + Gemini to direct SDKs with search; phase column
   in signal_outcomes tracks contribution of search capability"
 - `TODOS.md` — session log entry
-- `docs/plan/PAPER_TRADING_PLAN.md` — update Phase PT-S2 to reference
-  `docs/plan/signals/signals_stories.md` instead of `signal_pipeline_spec.md`
 
 No code changes. No tests. Targeted `Edit` calls only — never `Write` on these files.
 
-**Commit:** `docs(signals): update CONTEXT.md, DECISIONS.md, TODOS.md, PAPER_TRADING_PLAN.md for signals module`
+**Commit:** `docs(signals): update CONTEXT.md, DECISIONS.md, TODOS.md for signals module`

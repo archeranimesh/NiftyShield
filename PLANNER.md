@@ -35,6 +35,12 @@ Daily VIX Parquet from Upstox (`NSE_INDEX|India VIX`). Wires `compute_ivr()` (al
 ### Task 3 — June 2026 Finideas Roll (HARD DEADLINE 2026-06-30)
 NIFTY_JUN 23000 CE + PE legs expire. Invoke `roll-validator` agent ≥1 week before deadline.
 
+### Task 4c — paper-backbone (Jun–Jul 2026)
+`src/strategy/` protocol + `StrategyMonitor` daemon + `RapidCouncil` + `TelegramGateway` approval flow.
+CSP and 3-Track strategies are already live as paper trades (since 2026-05-11); this phase adds
+automated signal detection and Telegram approval routing. **Full spec: `docs/plan/paper-backbone/`** — copy `prompt.md` to start.
+PT-0 (PB1.1–PB1.7) is the only unblocked entry point and blocks all strategy phases.
+
 ### P&L Visualization artifact
 ~6 weeks of snapshot data now available — buildable. Four panels: MF, Dhan ETFs, Nuvama Bonds, Nuvama Options. Cowork artifact (self-contained HTML, live DB queries). Revisit once Tasks 0–2 are shipped.
 
@@ -96,9 +102,8 @@ Unblocked when static IP is provisioned.
 - Depends on: Greeks capture being live + order execution unblocked
 
 ### Strategy engine (`src/strategy/`)
-- Signal generation for NiftyBees price action (demand/supply zones)
-- Entry/exit logic for delta-neutral positions
-- Connects to websocket streaming for real-time triggers
+- **paper-backbone (Task 4c)** — `PaperStrategy` protocol + `StrategyMonitor` daemon + pluggable strategies (CSP, IC, 3-Track, Signal Pipeline). Full spec: `docs/plan/paper-backbone/`.
+- Phase 2 regime engine (`src/strategy/regime.py`) and swing signal generators are separate work, start after Phase 1.12 gate — see Phase 2 Track A below.
 
 ### Websocket streaming (`src/streaming/`)
 - `live.py`: Upstox websocket handler
