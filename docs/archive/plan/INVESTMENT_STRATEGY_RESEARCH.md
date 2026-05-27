@@ -1,3 +1,10 @@
+> **ARCHIVED 2026-05-27.** This document has been superseded by
+> `docs/plan/signals-eval-core/` (stories SE4.x, SE5–SE6) and
+> `docs/strategies/covered_call_overlay_v1.md` (Strategy 4). All strategy parameters,
+> validation thresholds, and failure conditions are faithfully carried into the
+> signals-eval-core story specs. Do not edit. Read the story specs for the live implementation
+> guide; read this file only to understand original design intent.
+
 # NiftyShield — Investment Strategy Research Pipeline
 
 | Field        | Value                                                     |

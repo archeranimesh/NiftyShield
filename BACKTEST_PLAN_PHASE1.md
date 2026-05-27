@@ -675,7 +675,7 @@ These two tracks run **in parallel** with Phase 2.1–2.7. They are independent 
 
 **Track B data cost:** All stages use **zero paid data** — Upstox OHLC (1.3a), NSE PE CSV (free download), AMFI liquid fund NAV (already in `src/mf/`). No DhanHQ at any stage.
 
-Full methodology documents: `docs/plan/SWING_STRATEGY_RESEARCH.md` (Track A) · `docs/plan/INVESTMENT_STRATEGY_RESEARCH.md` (Track B).
+Full methodology documents: `docs/plan/signals-eval-core/` (Track A: stories SE3.x; Track B: stories SE4.x; shared validation pipeline: SE5–SE6).
 
 ---
 
@@ -728,7 +728,7 @@ Three strategies researched sequentially: **Donchian Channel Trend Following →
 **Conditional on Tier 1 passing for the same strategy. A strategy may advance to walk-forward (2.S4) on Tier 1 P&L alone if Bhavcopy settle_price data quality is insufficient for a given strike/expiry combination (e.g., highly illiquid deep OTM strikes with zero or suspect settle_price values).**
 
 - [ ] Extend Phase 1 backtest engine to handle vertical spreads and iron condors (not just single legs).
-- [ ] Strike selection per execution mapping (see `SWING_STRATEGY_RESEARCH.md §Design Constraint`): short strike at ~15-delta, long strike 200 points further OTM for credit spreads; iron condors = bull put spread + bear call spread.
+- [ ] Strike selection per execution mapping (see `docs/plan/signals-eval-core/stories.md §SE7.1`): short strike at ~15-delta, long strike ATR-proportional width further OTM for credit spreads; iron condors = bull put spread + bear call spread.
 - [ ] VIX regime governs spread type: credit spreads (normal/high VIX) vs debit spreads (low VIX) vs skip (neutral + low VIX).
 - [ ] Track exclusion rate per strategy: if >20% of trades excluded due to missing or suspect Bhavcopy settle_price data, Tier 1 is the authoritative validation for that strategy.
 - [ ] Slippage sensitivity: re-run at 0, 2, 4 points per leg. If profitability flips between 2 and 4 points, edge is too thin for options execution.
@@ -740,7 +740,7 @@ Three strategies researched sequentially: **Donchian Channel Trend Following →
 - [ ] Per-window OOS Calmar. Monte Carlo: 10,000 iterations on OOS trade returns — check 95th percentile DD < 1.5× observed max DD, 99th percentile DD < 50% of allocated capital.
 - [ ] Parameter sensitivity: ≥60% of neighbours within 80% of optimal on all parameter axes; plateau width ≥3 steps per axis.
 - [ ] Regime decomposition: no single regime cell contributing >80% of cumulative profit.
-- [ ] **6 failure conditions** (per `SWING_STRATEGY_RESEARCH.md §Part 3`): OOS Calmar, walk-forward consistency, MC 95th DD, parameter sensitivity, regime concentration, slippage sensitivity. Any kill = abandon that strategy, move to next.
+- [ ] **6 failure conditions** (per `docs/plan/signals-eval-core/stories.md §SE6.4`): OOS Calmar, walk-forward consistency, MC 95th DD, parameter sensitivity, regime concentration, slippage sensitivity. Any kill = abandon that strategy, move to next.
 - [ ] Calmar thresholds: Donchian ≥0.8 · ORB ≥0.6 · Gap Fade ≥0.5.
 - [ ] STRATEGY gate: human review and sign-off on full validation report (equity curve, trade log, MC distribution chart, parameter sensitivity heatmap, regime decomposition table).
 
@@ -810,7 +810,7 @@ Three strategies researched sequentially: **10-Month SMA Trend Filter → Dual M
 #### 2.I3 — CODE + STRATEGY — Walk-forward + validation (sequential: SMA → Dual Momentum → PE Band)
 
 - [ ] 36-month training window, 12-month step (modified from swing's 252-day/63-day — monthly signals need longer windows).
-- [ ] Thresholds per `INVESTMENT_STRATEGY_RESEARCH.md §Part 3` (relaxed vs swing): OOS Calmar ≥0.3, >50% windows net-positive, MC 95th DD <2× observed max DD, parameter plateau width ≥2 steps.
+- [ ] Thresholds per `docs/plan/signals-eval-core/stories.md §SE6.4` (relaxed vs swing): OOS Calmar ≥0.3, >50% windows net-positive, MC 95th DD <2× observed max DD, parameter plateau width ≥2 steps.
 - [ ] **Buy-and-hold comparison mandatory:** strategy must demonstrate either (a) higher Calmar/Sharpe, OR (b) >30% reduction in max drawdown with ≤20% return underperformance. Neither condition → abandon regardless of other metrics.
 - [ ] **Gate per strategy:** validation report (equity curve, allocation log, MC distribution chart, parameter sensitivity heatmap, regime decomposition table, buy-and-hold comparison); human review and sign-off.
 

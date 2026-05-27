@@ -4,6 +4,8 @@ Date: 2026-05-01
 Chairman: anthropic/claude-opus-4.6  
 Council members: openai/gpt-4.1, google/gemini-3.1-pro-preview, anthropic/claude-opus-4.6
 
+> **Note (2026-05-27):** The research doc referenced throughout this council file (`SWING_STRATEGY_RESEARCH.md`) has been consolidated into `docs/plan/signals-eval-core/`. Canonical implementation specs are in `docs/plan/signals-eval-core/stories.md` (SE3.1 for Donchian). This file is an immutable historical record — body text is unchanged.
+
 ---
 
 ## Stage 3 — Chairman Synthesis
@@ -160,7 +162,7 @@ Fixed 200 points is **structurally broken** in high-vol environments. Use `min(r
 | VIX regime switching | **Uniform credit spreads** — regime switching deferred | Insufficient sample size (8–12 low-VIX trades), 20–30% boundary noise, attribution confounding |
 | Spread width | **ATR-proportional** — `min(round_to_50(0.8 × ATR_40d), 500)`, floor 150 | Fixed 200pt structurally fails at ATR > 400; dynamic width maintains ~10% breach probability across regimes |
 
-### Required Updates to SWING_STRATEGY_RESEARCH.md
+### Required Updates to `docs/plan/signals-eval-core/stories.md` (SE3.1)
 
 1. **§Entry/Exit:** Confirm signal-in-only architecture. Explicitly define all three exit triggers with priority order.
 2. **§Execution mapping:** Single row — all signals → credit spread (30–45 DTE monthly, short at 15-delta). Footnote VIX regime switching as deferred.

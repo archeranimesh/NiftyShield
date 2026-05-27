@@ -1,3 +1,9 @@
+> **ARCHIVED 2026-05-27.** This document has been superseded by
+> `docs/plan/signals-eval-core/` (stories SE3.x, SE5–SE6, SE6.5). All strategy parameters,
+> validation thresholds, and council decisions in this file are faithfully carried into the
+> signals-eval-core story specs. Do not edit. Read the story specs for the live implementation
+> guide; read this file only to understand original design intent or pre-council history.
+
 # NiftyShield — Swing Strategy Research Pipeline
 
 | Field        | Value                                                     |

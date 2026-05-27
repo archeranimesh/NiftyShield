@@ -4,6 +4,8 @@ Date: 2026-04-30
 Chairman: anthropic/claude-opus-4.6  
 Council members: google/gemini-3.1-pro-preview, anthropic/claude-opus-4.6, x-ai/grok-4
 
+> **Note (2026-05-27):** The research doc referenced throughout this council file (`SWING_STRATEGY_RESEARCH.md`) has been consolidated into `docs/plan/signals-eval-core/`. Canonical implementation specs are in `docs/plan/signals-eval-core/stories.md` (SE3.1 for Donchian). This file is an immutable historical record — body text is unchanged.
+
 ---
 
 ## Stage 3 — Chairman Synthesis
@@ -204,7 +206,7 @@ Sweep `k` across [0.6, 0.7, 0.8, 0.9, 1.0] alongside channel lookback (20–60, 
 ## Implementation Sequencing
 
 Per BACKTEST_PLAN.md phased gates:
-1. Update `SWING_STRATEGY_RESEARCH.md` with these architectural changes
+1. Update `docs/plan/signals-eval-core/stories.md` (SE3.1) with these architectural changes
 2. Tier 1 backtest validates directional signal quality (Nifty points, no options structure)
 3. Tier 2 backtest validates execution layer (credit spreads, dynamic width, signal-in-only)
 4. Post-validation: test regime switch as optimisation; require Sharpe Δ > 0.15 to retain

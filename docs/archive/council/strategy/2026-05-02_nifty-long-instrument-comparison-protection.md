@@ -4,6 +4,8 @@ Date: 2026-05-02
 Chairman: openai/gpt-4.1-2025-04-14  
 Council members: openai/gpt-4.1-2025-04-14, google/gemini-3.1-pro-preview-20260219, x-ai/grok-4-07-09, deepseek/deepseek-r1-0528
 
+> **Note (2026-05-27):** The research doc referenced throughout this council file (`INVESTMENT_STRATEGY_RESEARCH.md`) has been consolidated into `docs/plan/signals-eval-core/`. Canonical implementation specs are in `docs/plan/signals-eval-core/stories.md` (SE4.x for investment strategies). This file is an immutable historical record — body text is unchanged.
+
 ---
 
 ## Stage 3 — Chairman Synthesis

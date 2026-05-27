@@ -4,6 +4,8 @@ Date: 2026-05-02
 Chairman: anthropic/claude-opus-4.6  
 Council members: openai/gpt-4.1-2025-04-14, x-ai/grok-4-fast, deepseek/deepseek-r1-0528
 
+> **Note (2026-05-27):** The research doc referenced throughout this council file (`SWING_STRATEGY_RESEARCH.md`) has been consolidated into `docs/plan/signals-eval-core/`. Canonical implementation specs are in `docs/plan/signals-eval-core/stories.md` (SE3.3 for Gap Fade). This file is an immutable historical record — body text is unchanged.
+
 ---
 
 ## Stage 3 — Chairman Synthesis
@@ -104,7 +106,7 @@ Both the Gap Fade and ORB VIX filters require ablation in the Phase 1 walk-forwa
    procedure only — it is not triggered at runtime during live execution.
 
 3. All threshold choices and any contingency adjustments triggered during walk-forward
-   must be logged in `SWING_STRATEGY_RESEARCH.md` completion log entries.
+   must be logged in `docs/plan/signals-eval-core/tasks.md` completion log entries (SE3.3).
 
 4. Add code comments in `src/strategy/signals/gap_fade.py` (when implemented) citing this
    council decision as the basis for the 75th-percentile filter.
@@ -145,7 +147,7 @@ Both the Gap Fade and ORB VIX filters require ablation in the Phase 1 walk-forwa
 ### Implementation Sequencing
 
 1. Update `DECISIONS.md` with this council ruling.
-2. Update `SWING_STRATEGY_RESEARCH.md` completion log with a dated entry.
+2. Update `docs/plan/signals-eval-core/tasks.md` completion log with a dated entry (SE3.3).
 3. No code changes yet — `src/strategy/` does not exist. Apply when implementing the
    signal generators in Phase 1, Stage 2c.
 

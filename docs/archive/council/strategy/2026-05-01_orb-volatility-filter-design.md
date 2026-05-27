@@ -4,6 +4,8 @@ Date: 2026-05-01
 Chairman: anthropic/claude-opus-4.6  
 Council members: openai/gpt-4.1, google/gemini-3.1-pro-preview, anthropic/claude-opus-4.6, x-ai/grok-4
 
+> **Note (2026-05-27):** The research doc referenced throughout this council file (`SWING_STRATEGY_RESEARCH.md`) has been consolidated into `docs/plan/signals-eval-core/`. Canonical implementation specs are in `docs/plan/signals-eval-core/stories.md` (SE3.2 for ORB). This file is an immutable historical record — body text is unchanged.
+
 ---
 
 ## Stage 3 — Chairman Synthesis
@@ -573,7 +575,7 @@ Deferred question (log to DECISIONS.md): Whether ORB same-day-close should use d
 
 ---
 
-## Action Items for SWING_STRATEGY_RESEARCH.md Update
+## Action Items for `docs/plan/signals-eval-core/stories.md` Update (SE3.2)
 
 1. Amend Strategy 2 volatility filter section: ATR primary, VIX-IVP ≥ 90th percentile as structural exclusion flag
 2. Amend structural exclusion list: add RBI MPC day, Budget day, FOMC+1 IST day alongside Thursday expiry

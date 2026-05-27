@@ -17,6 +17,7 @@ Ongoing paper-trading tasks (Animesh) run in parallel and are listed separately 
 | **4b** | MVP: Multi-bagger Value Picks Tracker (`src/mvp/`) | Cowork | After Task 3 | ⬜ Not started |
 | **4c** | **paper-backbone: Strategy Monitor daemon + pluggable strategy backbone** (`src/strategy/`, `src/council/`, `src/notifications/telegram_gateway.py`) | Cowork | **Jun–Jul 2026** | ⬜ Not started — story: `docs/plan/paper-backbone/` |
 | **5** | backtest-eval-core: `BacktestStore` + `src/analytics/` (tasks 1.5 + 1.5b) | Cowork | Aug 2026 (Phase 1, after tasks 1.3 + 1.4) | ⬜ Not started — **blocked by tasks 1.3 (Bhavcopy ingest) + 1.4 (BacktestEngine)** |
+| **6** | **signals-eval-core: regime engine + signal generators + validation pipeline** (`src/strategy/`, `src/backtest/points_bt.py` + `allocation_bt.py` + `walkforward.py` + `montecarlo.py` + `sensitivity.py` + `reports.py`) | Cowork | Q4 2026 (Phase 2, after Phase 1.12 gate) | ⬜ Not started — **blocked by backtest-eval-core (task 5) + Phase 1.12 gate** — story: `docs/plan/signals-eval-core/` |
 
 ---
 
@@ -251,11 +252,43 @@ Deferred until FinRakshak/ILTS P&L visibility becomes a priority. Hybrid approac
 
 ### Swing Strategy Research Pipeline (Phase 2 Track A)
 
-Full methodology: `docs/plan/SWING_STRATEGY_RESEARCH.md`. Stages 2.S0–2.S7 (regime engine → signal generators → points backtester → option spread backtester → walk-forward → paper → live). Starts after Phase 1.12 gate.
+Full methodology: `docs/plan/signals-eval-core/` (tasks SE1–SE3 + SE5–SE6). Stages 2.S0–2.S7 (regime engine → signal generators → points backtester → option spread backtester → walk-forward → paper → live). Starts after Phase 1.12 gate.
 
 ### Investment Strategy Research Pipeline (Phase 2 Track B)
 
-Full methodology: `docs/plan/INVESTMENT_STRATEGY_RESEARCH.md`. Stages 2.I0–2.I5 (SMA / Dual Momentum / PE Band strategies on NiftyBees, ₹5L pool). Zero paid data. Starts after Phase 1.12 gate.
+Full methodology: `docs/plan/signals-eval-core/` (tasks SE1–SE2 + SE4–SE6). Stages 2.I0–2.I5 (SMA / Dual Momentum / PE Band strategies on NiftyBees, ₹5L pool). Zero paid data. Starts after Phase 1.12 gate.
+
+### signals-eval-core — Implementation Priority Order (Task 6)
+
+Implementation sequence within `docs/plan/signals-eval-core/tasks.md`. Each phase gates the next.
+
+| Priority | Task(s) | Prerequisite | What unblocks |
+|----------|---------|--------------|---------------|
+| **1** | SE1.1 — data coverage verification | Task 1.3a (Nifty OHLC Parquet) committed | Confirms data exists before writing any code |
+| **2** | SE1.2 — `pe_loader.py` (NSE PE CSV → Parquet) | SE1.1 pass | Unblocks SE4.3 (PE Band signal) |
+| **3** | SE1.3 — `rf_rate.py` (AMFI liquid fund monthly rate) | `src/mf/` infrastructure | Unblocks SE4.2 (Dual Momentum) |
+| **4** | SE2.1 — `src/strategy/` package setup + `CLAUDE.md` | SE1.1 pass | Unblocks all SE2–SE4 |
+| **5** | SE2.2 — `RegimeTagger` + `SignalEvalStore` (regime CRUD) | SE2.1 | Unblocks SE3.x signal generators |
+| **6** | SE2.3 — `regime_distribution_report.py` (visual gate) | SE2.2 | Phase 2.S1 gate: no single cell >40% of days |
+| **7** | SE3.1 — `DonchianSignalGenerator` + `SwingSignal` model | SE2.2 | Unblocks SE5.1 (Tier 1 backtester) |
+| **8** | SE4.1 — `SMASignalGenerator` + `AllocationDecision` model | SE2.2 | Unblocks SE5.2 (allocation backtester); **parallel with SE3.1** |
+| **9** | SE3.2 — `ORBSignalGenerator` + calendar exclusions | SE3.1 | Donchian must complete before ORB starts |
+| **10** | SE4.2 — `DualMomSignalGenerator` | SE4.1 + SE1.3 | Sequential after SMA |
+| **11** | SE3.3 — `GapFadeSignalGenerator` | SE3.2 | Sequential after ORB |
+| **12** | SE4.3 — `PEBandSignalGenerator` | SE4.2 + SE1.2 | Sequential after Dual Momentum |
+| **13** | SE5.1 — `PointsBacktester` (Tier 1 swing) | SE3.1 + backtest-eval-core B1.x | Core validation path — Donchian Tier 1 gate |
+| **14** | SE5.2 — `AllocationBacktester` (investment) | SE4.1 + backtest-eval-core B1.x | **Parallel with SE5.1** |
+| **15** | SE5.3 — `SpreadSelector` + `SpreadSpec` | SE3.1 (SwingSignal) | Used by SE7.1 only |
+| **16** | SE6.1 — `WalkForwardEngine` | SE5.1 or SE5.2 + backtest-eval-core B2.x | Blocks SE6.2–SE6.4 |
+| **17** | SE6.2 — `MonteCarloSimulator` | SE6.1 | **Parallel with SE6.3** |
+| **18** | SE6.3 — `SensitivityAnalyser` | SE6.1 | **Parallel with SE6.2** |
+| **19** | SE6.4 — `SwingValidationReport` + `InvestmentValidationReport` | SE6.1 + SE6.2 + SE6.3 | Phase 2.S4 / 2.I3 human review gate |
+| **20** | SE7.1 — `SpreadBacktester` (Tier 2, conditional) | SE5.1 Donchian pass + Bhavcopy exclusion rate <20% | Start only if Tier 1 passes; otherwise skip |
+| **21** | SE8 — Docs close | All prior SE tasks committed | Phase 2 checkboxes in `BACKTEST_PLAN_PHASE1.md` |
+
+**Critical path:** SE1.1 → SE2.1 → SE2.2 → SE3.1 → SE5.1 → SE6.1 → SE6.2/SE6.3 → SE6.4.
+SE4.x (investment signals) and SE5.2 are a parallel branch off SE2.2 that rejoins at SE6.1.
+SE7.1 is conditional and does not block SE8.
 
 ### Order Execution Layer (`src/execution/`)
 

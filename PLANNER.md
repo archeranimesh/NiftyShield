@@ -54,7 +54,7 @@ Automated monthly report: FinRakshak P&L vs MF portfolio drawdown.
 
 ### Swing Strategy Research Pipeline (Phase 2 Track A — starts after Phase 1.12 gate)
 
-Full methodology: `docs/plan/SWING_STRATEGY_RESEARCH.md`. Three rule-based directional/neutral swing strategies on Nifty index options (Donchian Channel, ORB, Gap Fade), validated sequentially.
+Full methodology: `docs/plan/signals-eval-core/` (stories SE3.x + SE5–SE6). Three rule-based directional/neutral swing strategies on Nifty index options (Donchian Channel, ORB, Gap Fade), validated sequentially.
 
 **Stage sequence and data cost:**
 - **2.S0 — Data infra (free):** Verify Upstox OHLC Parquet from task 1.3a covers Nifty 50 daily + 15-min + India VIX daily.
@@ -76,7 +76,7 @@ Full methodology: `docs/plan/SWING_STRATEGY_RESEARCH.md`. Three rule-based direc
 
 ### Investment Strategy Research Pipeline (Phase 2 Track B — starts after Phase 1.12 gate)
 
-Full methodology: `docs/plan/INVESTMENT_STRATEGY_RESEARCH.md`. Three systematic NiftyBees ETF allocation strategies (10-Month SMA, Dual Momentum, PE Band Rebalancing) on separate capital pool, >1yr holding periods, validated sequentially.
+Full methodology: `docs/plan/signals-eval-core/` (stories SE4.x + SE5–SE6). Three systematic NiftyBees ETF allocation strategies (10-Month SMA, Dual Momentum, PE Band Rebalancing) on separate capital pool, >1yr holding periods, validated sequentially.
 
 **Stage sequence and data cost — all stages zero paid data:**
 - **2.I0 — Data infra (free):** NiftyBees ETF daily (Upstox), Nifty PE monthly (NSE historical CSV, free), liquid fund NAV (AMFI, already in `src/mf/`).
@@ -116,7 +116,7 @@ Unblocked when static IP is provisioned.
 
 ### Swing + Investment strategy pipelines mature into Phase 3
 
-By Phase 2 end (mid-2027), the parallel research tracks (Track A: `docs/plan/SWING_STRATEGY_RESEARCH.md`, Track B: `docs/plan/INVESTMENT_STRATEGY_RESEARCH.md`) will have produced 0–3 validated live swing strategies and 0–3 validated live investment strategies. These feed into Phase 3 portfolio construction. Key long-term milestones:
+By Phase 2 end (mid-2027), the parallel research tracks (Track A: swing strategies SE3.x in `docs/plan/signals-eval-core/`, Track B: investment strategies SE4.x in `docs/plan/signals-eval-core/`) will have produced 0–3 validated live swing strategies and 0–3 validated live investment strategies. These feed into Phase 3 portfolio construction. Key long-term milestones:
 
 - **Track A → Phase 3:** Validated swing strategies (Donchian, ORB, Gap Fade) enter Phase 3 alongside CSP + IC. Decision on calendar spread (§3.2) vs Track A graduates required before Phase 3 starts — see Open Questions.
 - **Track B → Phase 3:** Validated investment strategies go live with ₹5L NiftyBees allocation and run independently of the options book. Regime classifier (Phase 3.5) and Track A's regime engine (2.S1) consolidate into a single `src/regime/` module.
