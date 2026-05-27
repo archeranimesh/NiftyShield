@@ -1,6 +1,7 @@
 # NiftyShield — TODOs
 
 > Open work only. Completed items and session history: [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md)
+> Known defects (deferred fixes): [BUGS.md](BUGS.md)
 
 ---
 
@@ -106,7 +107,7 @@ for any open trade that has a non-empty notes field. Pull via
 
 ## Task 4 — MVP: Multi-bagger Value Picks Tracker (`src/mvp/`)
 
-**Full spec:** `docs/plan/mvp_tracker.md`  
+**Full spec:** `docs/plan/mvp/mvp_stories.md`
 **Priority:** after Task 3 (June 2026 Finideas roll cycle)
 
 Track stock calls from TV channels, Telegram, and research houses (DSIJ, prudentequity, etc.).

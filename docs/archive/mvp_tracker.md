@@ -121,13 +121,47 @@ mvp category add dsij tas "TAS"
 mvp category list dsij
 ```
 
+### Instrument search (pre-flight — use existing script)
+
+Before adding a pick, use the existing `scripts/instrument_lookup.py` to find the exact
+`trading_symbol` Upstox uses:
+
+```bash
+python -m scripts.instrument_lookup --query "HDFC" --segment NSE_EQ
+python -m scripts.instrument_lookup --query "tata motor" --segment NSE_EQ
+```
+
+Copy the `trading_symbol` from the output, then pass it to `mvp add`. No `mvp search`
+subcommand needed — the lookup script already covers this.
+
+---
+
 ### Daily capture (minimum: symbol only)
 
 ```bash
-mvp add RELIANCE
+mvp add RELIANCE                          # exact match → auto-resolves instrument_key
+mvp add HDFC                              # ambiguous → interactive picker (see below)
+mvp add HDFC --pick 1                     # skip picker, take result #1 from search
+mvp add RELIANCE --defer-key              # skip resolution entirely (pure quick-capture)
 mvp add RELIANCE -p prudentequity
 mvp add RELIANCE -p dsij -c value-picks
 ```
+
+**Instrument resolution flow at `mvp add` time:**
+
+1. `InstrumentLookup.search_equity(symbol)` is called (offline BOD JSON, no network).
+2. **Exact match** (score = 1.0, single result): auto-resolve, print confirmation line, proceed.
+3. **Ambiguous** (score = 1.0 but multiple hits, OR top score < 1.0):
+   - Print the top-10 ranked results in the same tabular format as `mvp search`.
+   - Prompt: `Select instrument [1-N / s to skip / q to quit]:`.
+   - `s` → record the pick with `instrument_key = NULL`, status PENDING; user resolves at `mvp update`.
+   - `q` → abort without inserting anything.
+4. **No results**: warn and prompt same as ambiguous case (user likely mistyped).
+5. `--pick N` skips the interactive prompt; uses result N from the ranked list.
+6. `--defer-key` skips the lookup entirely; `instrument_key` stays NULL.
+
+BOD JSON path: `data/instruments/NSE.json.gz` (must exist; if missing, resolution is skipped
+with a warning and behaviour falls back to `--defer-key`).
 
 ### EOD fill-in (flips PENDING → OPEN)
 
@@ -242,7 +276,14 @@ Each phase = one commit. M1 must land before M2; M2 before M4. M3 can run parall
 
 ### Phase M3 DoD
 - All subcommands wired: `provider add/list`, `category add/list`, `add`, `update`, `list`, `close`, `summary`
-- `mvp add RELIANCE` resolves instrument_key via `InstrumentLookup.search_equity(symbol)`
+- No `mvp search` subcommand — pre-flight lookup is handled by existing `scripts/instrument_lookup.py`
+- `mvp add <symbol>` resolution flow:
+  - Exact single match → auto-resolve `instrument_key`, print confirmation
+  - Ambiguous or no match → interactive numbered picker; `s` to skip, `q` to abort
+  - `--pick N` bypasses interactive prompt
+  - `--defer-key` skips resolution entirely (instrument_key stays NULL)
+  - Missing BOD JSON degrades gracefully to `--defer-key` behaviour with a warning
+- `mvp update` still resolves/overwrites `instrument_key` if `--symbol` or `--key` provided (backward compat)
 - `mvp summary RELIANCE` cross-provider query works
 - `mvp list` defaults to `--status pending`
 
@@ -262,7 +303,9 @@ Each phase = one commit. M1 must land before M2; M2 before M4. M3 can run parall
 - `provider` as the top-level entity — covers orgs (DSIJ, CNBC) and individuals uniformly.
 - `category_id` nullable at insert time — quick capture doesn't force provider assignment.
 - Cron skips `PENDING` rows (null `entry_price`) — no spurious snapshots.
-- `instrument_key` resolved at `update` time (when symbol is confirmed), not at `add` time.
+- `instrument_key` resolved at `add` time via `InstrumentLookup.search_equity()` (offline BOD JSON).
+  Exact single match → auto-resolved. Ambiguous → interactive picker. `--defer-key` or missing BOD
+  file → NULL (resolved later at `mvp update` time, backward-compatible).
 - Monetary fields (`entry_price`, `target_price`, `stop_loss`, `ltp`) stored as `TEXT`
   (Decimal invariant, same as rest of codebase).
 - Auto-close only when both price AND the relevant threshold (target/SL) are non-null.
