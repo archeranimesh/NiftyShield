@@ -234,6 +234,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-05-28 | chain-data CD1.1 — ChainWriter — Parquet EOD and intraday chain snapshot writer — ce57240 |
 | 2026-05-28 | TODOS.md reordered — immediate actions + calendar at top, build queue + phases below |
 | 2026-05-28 | TODOS.md restructured — unified numbering, removed P-label clashes, P0-2 removed (done) |
 | 2026-05-28 | P0-2 + Task 3b: R3 caveat updated; CSP v1 spec reconciled (lot size, time stop, R-numbers, R4) |
