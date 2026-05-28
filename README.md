@@ -213,6 +213,18 @@ NiftyShield automatically tracks Nuvama options positional M2M Highs/Lows and ca
 The tracker efficiently polls Nuvama + Upstox and permanently persists the 30-day bounding history (M2M max/min + Spot bounds) directly localized inside `portfolio.sqlite` to be naturally utilized during Daily Snapshots.
 
 
+### EOD Option Chain Snapshot (Cron)
+
+Fetches Nifty option chains for up to 3 expiries (monthly / quarterly / yearly) and writes each to Parquet for downstream backtesting and slippage analysis.
+
+```bash
+# EOD option chain snapshot — 3:30 PM IST, Mon–Fri
+30 15 * * 1-5  cd /path/to/NiftyShield && python -m scripts.upstox_chain_snapshot >> logs/chain_snapshot.log 2>&1
+```
+
+Output path: `data/offline/chain_snapshots/{year}/{month}/upstox_{date}.parquet` (override with `CHAIN_SNAPSHOT_DIR`).
+
+
 ### Dhan Login (daily)
 
 NiftyShield monitors your Dhan portfolio for F&O P&L tracking and after-market holdings review. Dhan uses a manual 24-hour access token generated from their web portal.
