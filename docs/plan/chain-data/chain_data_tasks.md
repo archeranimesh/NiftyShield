@@ -17,7 +17,7 @@
 
 ## Phase CD2 — Intraday 5-min snapshot
 
-- [x] **CD2.1** — `scripts/upstox_chain_intraday.py`: 5-min intraday cron (same schema, `--mode` flag optional) + tests | SHA: 086c330
+- [x] **CD2.1** — `scripts/upstox_chain_intraday.py`: 5-min intraday cron (same schema, `--mode` flag optional) + tests | SHA: c1aea22
 
 ## Phase CD3 — Query utilities
 
