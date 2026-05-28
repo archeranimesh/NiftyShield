@@ -18,6 +18,7 @@ Ongoing paper-trading tasks (Animesh) run in parallel and are listed separately 
 | **4cc** | **covered-call-overlay: entry helper + exit handler** (`src/paper/constants.py`, `scripts/paper_cc_entry.py`, `scripts/paper_cc_roll.py`) | Cowork | **ASAP — each skipped monthly cycle is a lost paper data point** | ⬜ Not started — story: `docs/plan/covered-call-overlay/` |
 | **4b** | MVP: Multi-bagger Value Picks Tracker (`src/mvp/`) | Cowork | After Task 3 | ⬜ Not started |
 | **4c** | **paper-backbone: Strategy Monitor daemon + pluggable strategy backbone** (`src/strategy/`, `src/council/`, `src/notifications/telegram_gateway.py`) | Cowork | **Jun–Jul 2026** | ⬜ Not started — story: `docs/plan/paper-backbone/` |
+| **4d** | **paper-exit-signals: automated exit detection + closure for CC, PP, Collar overlays** (`src/strategy/exit_signals.py`, `CCOverlayV1`, `PPOverlayV1`, `CollarOverlayV1`, `OverlayCloser`, `paper_exit_events` table) | Cowork | **After 4c** — each live overlay cycle without automated exits is discretionary data | ⬜ Not started — story: `docs/plan/paper-exit-signals/` — **blocked by 4c (paper-backbone PB1.1–PB1.7)** |
 | **5** | backtest-eval-core: `BacktestStore` + `src/analytics/` (tasks 1.5 + 1.5b) | Cowork | Aug 2026 (Phase 1, after tasks 1.3 + 1.4) | ⬜ Not started — **blocked by tasks 1.3 (Bhavcopy ingest) + 1.4 (BacktestEngine)** |
 | **6** | **signals-eval-core: regime engine + signal generators + validation pipeline** (`src/strategy/`, `src/backtest/points_bt.py` + `allocation_bt.py` + `walkforward.py` + `montecarlo.py` + `sensitivity.py` + `reports.py`) | Cowork | Q4 2026 (Phase 2, after Phase 1.12 gate) | ⬜ Not started — **blocked by backtest-eval-core (task 5) + Phase 1.12 gate** — story: `docs/plan/signals-eval-core/` |
 
@@ -229,6 +230,34 @@ paper trades — their backbone integration classes (PB2.1, PB4.1) plug in once 
 | PT-S3 — 3-Track backbone | PB4.1: `NiftyTrackComparisonV1` — already live, adds WARN roll reminders | After PT-0 | ⬜ Not started |
 | PT-S2 — Signal Pipeline | Blocked on `signals` story (`docs/plan/signals/`) + OpenRouter API key | Aug–Sep 2026 | ⬜ Not started |
 | PT-B — Backtesting mode | Historical replayer + AutoApprover swap-in | After Phase 0.8 gate | ⬜ Blocked |
+
+---
+
+## Task 4d — paper-exit-signals: Automated Exit Detection + Closure for CC, PP, Collar Overlays
+
+**Full spec:** `docs/plan/paper-exit-signals/` (prompt, schema, stories, tasks)
+**Priority:** after 4c (paper-backbone) — every overlay cycle without automated exits is discretionary data, not reproducible system data
+**Blocked by:** Task 4c PB1.1–PB1.7 (StrategyMonitor, PaperExecutor must be committed first)
+**Council authority:** `docs/council/2026-05-28_paper-trade-exit-philosophy.md` — Chairman Synthesis (GPT-5.5 #1). All 10 thresholds are binding. No threshold changes without a new council decision.
+
+Extends paper-backbone with: (1) a pure stateless `ExitSignalEngine` rule engine, (2) three pluggable overlay strategy classes (`CCOverlayV1`, `PPOverlayV1`, `CollarOverlayV1`), (3) atomic multi-leg closure (`OverlayCloser`) with rollback for Collar, (4) `paper_exit_events` audit table with dual-signal Q2 validation fields, and (5) EOD signal write path in `paper_3track_snapshot.py`.
+
+Tier 1 (EOD detection) is mandatory for Phase 0. Tier 2 (intraday daemon) is wired but disabled via `MONITOR_OVERLAYS=0` env gate.
+
+**Archive gates (ES9):** both `docs/council/2026-05-28_paper-trade-exit-philosophy.md` and `docs/strategies/csp_nifty_v1.md` are archived via `git mv` when ES9 closes. The code is the spec after this story ships.
+
+| Phase | Files | Status |
+|---|---|---|
+| ES0 | `paper_exit_events` DDL in `PaperStore.__init__`; `PaperStore.insert_exit_event`, `get_open_exit_events`, `update_exit_event_status`; tests | ⬜ Not started |
+| ES1 | `src/strategy/exit_signal_engine.py` — `ExitSignalEngine` (pure/stateless, no DB/async); `ExitSignal` enum; `ExitEvent` dataclass; all CSP/CC/PP/Collar rules; tests | ⬜ Not started |
+| ES2 | Fix `CSPNiftyV1` thresholds: `DELTA_STOP` 0.35 → 0.45, `DELTA_WARN` new at 0.35, `LOSS_STOP` 2.0× → 1.75×; re-run tests | ⬜ Not started |
+| ES3 | `src/strategy/cc_overlay_v1.py` — `CCOverlayV1` implementing `PaperStrategy` protocol; `check_signals()` calls engine; dual-signal audit fields populated; tests | ⬜ Not started |
+| ES4 | `src/strategy/pp_overlay_v1.py` — `PPOverlayV1`; `CRASH_MONETIZE` rule + bid/ask liquidity gate; `DTE_REVIEW` INFO; tests | ⬜ Not started |
+| ES5 | `src/strategy/collar_overlay_v1.py` — `CollarOverlayV1`; `COLLAR_CALL_DECAY` (25% remaining), `COLLAR_CALL_WARN`, `COLLAR_PUT_CRASH`, `DTE_FORCED`; tests | ⬜ Not started |
+| ES6 | `src/strategy/overlay_closer.py` — `OverlayCloser`; atomic Collar close (buy call → sell put) with rollback on leg 2 failure; re-sell call to restore on abort; tests | ⬜ Not started |
+| ES7 | `scripts/paper_3track_snapshot.py` — Tier 1 EOD signal write: call `ExitSignalEngine.evaluate()` per open leg; deduplication guard (skip if `OPEN` event already exists for same trade_id + signal); write `paper_exit_events` row with `detected_by=EOD`; Telegram ACTION alert; tests | ⬜ Not started |
+| ES8 | `scripts/paper_daemon.py` — register `CCOverlayV1`, `PPOverlayV1`, `CollarOverlayV1` in `StrategyMonitor`; `MONITOR_OVERLAYS=0` gate; README update | ⬜ Not started |
+| ES9 | Docs close: 10 rows in `DECISIONS.md` (council 2026-05-28); update `CONTEXT.md` module tree; `TODOS.md` session log; `git mv` council file → `docs/council/archive/strategy/`; `git mv` csp spec → `docs/strategies/archive/` with deprecation notice | ⬜ Not started |
 
 ---
 
@@ -508,6 +537,7 @@ and missing data that must be resolved before executing backtests at scale:
 
 | Date | What Changed |
 |---|---|
+| 2026-05-28 | paper-exit-signals story created — `docs/plan/paper-exit-signals/` (prompt, schema, stories, tasks); council exit-philosophy decisions absorbed into DECISIONS.md (10 rows); Task 4d added to sequential queue; csp_nifty_v1.md + council file archived at ES9 |
 | 2026-05-28 | covered-call-overlay plan created — `docs/plan/covered-call-overlay/` (prompt, tasks, stories, schema); broker mechanics confirmed; Task 4cc added to sequential queue |
 | 2026-05-27 | variance-gate story created — `docs/plan/variance-gate/` (prompt, tasks, stories, spec); `docs/plan/variance_gate.md` archived; README.md + TODOS.md updated |
 | 2026-05-26 | Task B2.1 — Script scaffold: CLI + expiry resolution — b68bb3d |
