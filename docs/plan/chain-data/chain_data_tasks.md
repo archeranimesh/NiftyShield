@@ -21,7 +21,7 @@
 
 ## Phase CD3 — Query utilities
 
-- [ ] **CD3.1** — `src/backtest/chain_reader.py`: DuckDB-based scan + filter utilities (time-range, strike, expiry) + tests
+- [x] **CD3.1** — `src/backtest/chain_reader.py`: DuckDB-based scan + filter utilities (time-range, strike, expiry) + tests | SHA: 7c0fe66
 
 ## Phase CD4 — Docs close
 
