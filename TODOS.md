@@ -171,7 +171,7 @@ Tasks run in order. Do not start the next until the current ships and tests are 
 | # | Task | Owner | Deadline | Status |
 |---|---|---|---|---|
 | 1 | June 2026 Finideas roll | Animesh + Cowork | **2026-06-30** | Execution pending — awaiting Finideas instructions |
-| 2 | chain-data: EOD + intraday chain snapshot cron | Cowork | **ASAP** — data cannot be back-filled | ✅ Shipped — [story](docs/plan/chain-data/) |
+| 2 | chain-data: EOD + intraday chain snapshot cron | Cowork | **ASAP** — data cannot be back-filled | ✅ Shipped — [story](docs/archive/plan/chain-data/) |
 | 3 | covered-call-overlay: entry helper + exit handler | Cowork | **ASAP** — each skipped cycle loses a data point | ⬜ Not started — [story](docs/plan/covered-call-overlay/) |
 | 4 | MVP: Multi-bagger Value Picks Tracker | Cowork | After #1 | ⬜ Not started — [story](docs/plan/mvp/) |
 | 5 | paper-backbone: Strategy Monitor daemon | Cowork | **Jun–Jul 2026** | ⬜ Not started — [story](docs/plan/paper-backbone/) |

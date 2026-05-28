@@ -13,7 +13,7 @@
 
 **Why this order (backtest after paper, not before):** Covered in conversation. A backtest whose output can't be validated against a known realised outcome is a simulation, not a measurement. Phase 0 gives us that known outcome.
 
-> **Task numbering note:** Tasks run 1.1 → 1.2 (DEFERRED) → 1.3 → 1.3a → 1.3b → 1.4 → 1.5 → 1.6 → 1.6a → 1.7 → 1.8 → 1.9 → 1.9a → 1.10 → 1.10a → 1.11 → 1.12. Task 1.2 (TimescaleDB) is deferred — DhanHQ rejected 2026-04-27, NSE Bhavcopy Parquet is the storage layer. Tasks 1.10 + 1.10a migrated to `docs/plan/chain-data/` story (2026-05-27) — implementation tracked there as CD1.2 + CD2.1. Task 1.3b (TrueData 1-min ingestion) added 2026-05-09. Do not renumber existing tasks.
+> **Task numbering note:** Tasks run 1.1 → 1.2 (DEFERRED) → 1.3 → 1.3a → 1.3b → 1.4 → 1.5 → 1.6 → 1.6a → 1.7 → 1.8 → 1.9 → 1.9a → 1.10 → 1.10a → 1.11 → 1.12. Task 1.2 (TimescaleDB) is deferred — DhanHQ rejected 2026-04-27, NSE Bhavcopy Parquet is the storage layer. Tasks 1.10 + 1.10a implemented via `docs/archive/plan/chain-data/` story (completed 2026-05-29) — CD1.2 + CD2.1. Task 1.3b (TrueData 1-min ingestion) added 2026-05-09. Do not renumber existing tasks.
 
 ---
 
@@ -406,10 +406,10 @@ applies R3 manually until the VIX Parquet is populated.
 
 ---
 
-## 1.10 — CODE — Upstox live option chain snapshot (daily accumulation) → migrated to chain-data story (`docs/plan/chain-data/`)
+## 1.10 — CODE — Upstox live option chain snapshot (daily accumulation) → chain-data story (`docs/archive/plan/chain-data/`)
 
-> **⚠ MIGRATED (2026-05-27):** This task is now tracked in `docs/plan/chain-data/` as story CD1.2.
-> Implementation checklist below is superseded by `chain_data_tasks.md`. Update checkboxes there, not here.
+> **✅ COMPLETED (2026-05-29):** Implemented via `docs/archive/plan/chain-data/` as story CD1.2.
+> Implementation checklist below is superseded by `chain_data_tasks.md` (archived).
 > This section is retained for historical reference and phase-gate accounting only.
 
 **Decision (2026-04-27):** Upstox Analytics Token is the confirmed live market data source for forward testing and production (see `DECISIONS.md`). The Upstox option chain client already works (`src/client/upstox_market.py` + `parse_upstox_option_chain` from task 0.2). This task adds a daily EOD snapshot cron job to accumulate forward-captured Greeks + bid/ask data — the same data that was previously planned via Dhan, now via the already-integrated Upstox path.
@@ -428,9 +428,9 @@ No new client code needed. The snapshot accumulation is the deliverable.
 
 ---
 
-## 1.10a — CODE — Intraday live option chain snapshots (5-min cadence) → migrated to chain-data story (`docs/plan/chain-data/`)
+## 1.10a — CODE — Intraday live option chain snapshots (5-min cadence) → chain-data story (`docs/archive/plan/chain-data/`)
 
-> **⚠ MIGRATED (2026-05-27):** This task is now tracked in `docs/plan/chain-data/` as story CD2.1.
+> **✅ COMPLETED (2026-05-29):** Implemented via `docs/archive/plan/chain-data/` as story CD2.1.
 > This section is retained for historical reference and phase-gate accounting only.
 
 Companion to task 1.10. Captures the full option chain every 5 minutes during market hours. Storage and rationale: see `DECISIONS.md` → "Intraday live option chain snapshots at 5-min cadence".

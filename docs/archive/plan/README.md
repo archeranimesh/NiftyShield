@@ -88,8 +88,8 @@ Not every `BACKTEST_PLAN.md` checkbox gets a story file upfront — that would b
 **Initial story files created** (2026-04-17):
 
 - Phase 0: `0_1_nuvama_tests.md`, `0_2_greeks_capture.md`, `0_5_paper_module.md` — `0_3_finideas_roll.md` → archived at `docs/archive/plan/` (implementation complete, execution pending)
-- Phase 1: `1_5b_analytics_module.md` — `1_10_dhan_chain_client.md` → ABANDONED (2026-05-27); superseded by `docs/plan/chain-data/` story
-- chain-data: `chain-data/` folder (prompt, tasks, stories, schema) — covers tasks 1.10 + 1.10a
+- Phase 1: `1_5b_analytics_module.md` — `1_10_dhan_chain_client.md` → ABANDONED (2026-05-27); superseded by `docs/archive/plan/chain-data/` story
+- chain-data: `chain-data/` folder (prompt, tasks, stories, schema) — covers tasks 1.10 + 1.10a → **COMPLETED (2026-05-29)**; archived at `docs/archive/plan/chain-data/`
 - variance-gate: `variance-gate/` folder (prompt, tasks, stories, spec) — CSP v1 Phase 0.8 deployment gate; `docs/archive/plan/variance_gate.md` archived (2026-05-27)
 
 All other story files to be generated as their phase approaches activation.

@@ -1,0 +1,399 @@
+diff --git a/src/backtest/chain_writer.py b/src/backtest/chain_writer.py
+new file mode 100644
+index 0000000..0272734
+--- /dev/null
++++ b/src/backtest/chain_writer.py
+@@ -0,0 +1,149 @@
++from datetime import datetime, timezone, timedelta
++from decimal import Decimal, ROUND_HALF_UP
++from pathlib import Path
++import pyarrow as pa
++import pyarrow.parquet as pq
++
++from src.models.options import OptionChain
++
++
++def _chain_to_table(
++    chain: OptionChain,
++    snapshot_ts: datetime,
++    underlying: str,
++) -> pa.Table:
++    """Convert an OptionChain snapshot into a PyArrow Table."""
++    cols = {
++        "snapshot_ts": [],
++        "underlying": [],
++        "expiry_date": [],
++        "strike": [],
++        "option_type": [],
++        "spot": [],
++        "ltp": [],
++        "bid": [],
++        "ask": [],
++        "oi": [],
++        "volume": [],
++        "iv": [],
++        "delta": [],
++        "gamma": [],
++        "theta": [],
++        "vega": [],
++    }
++
++    _D6 = Decimal("1.000000")
++
++    def q6(v: Decimal | None) -> Decimal:
++        if v is None:
++            return Decimal("0.000000")
++        return v.quantize(_D6, rounding=ROUND_HALF_UP)
++
++    for strike_price, strike_strike in chain.strikes.items():
++        for opt_type, leg in [("CE", strike_strike.ce), ("PE", strike_strike.pe)]:
++            if leg is None:
++                continue
++            cols["snapshot_ts"].append(snapshot_ts)
++            cols["underlying"].append(underlying)
++            cols["expiry_date"].append(chain.expiry)
++            cols["strike"].append(q6(leg.strike))
++            cols["option_type"].append(opt_type)
++            cols["spot"].append(q6(chain.underlying_spot))
++            cols["ltp"].append(q6(leg.ltp))
++            cols["bid"].append(q6(leg.bid))
++            cols["ask"].append(q6(leg.ask))
++            cols["oi"].append(int(leg.oi))
++            cols["volume"].append(int(leg.volume))
++            cols["iv"].append(q6(leg.iv))
++            cols["delta"].append(q6(leg.delta))
++            cols["gamma"].append(q6(leg.gamma))
++            cols["theta"].append(q6(leg.theta))
++            cols["vega"].append(q6(leg.vega))
++
++    schema = pa.schema([
++        ("snapshot_ts", pa.timestamp("us", tz="UTC")),
++        ("underlying", pa.string()),
++        ("expiry_date", pa.date32()),
++        ("strike", pa.decimal128(18, 6)),
++        ("option_type", pa.string()),
++        ("spot", pa.decimal128(18, 6)),
++        ("ltp", pa.decimal128(18, 6)),
++        ("bid", pa.decimal128(18, 6)),
++        ("ask", pa.decimal128(18, 6)),
++        ("oi", pa.int64()),
++        ("volume", pa.int64()),
++        ("iv", pa.decimal128(18, 6)),
++        ("delta", pa.decimal128(18, 6)),
++        ("gamma", pa.decimal128(18, 6)),
++        ("theta", pa.decimal128(18, 6)),
++        ("vega", pa.decimal128(18, 6)),
++    ])
++    return pa.Table.from_pydict(cols, schema=schema)
++
++
++class ChainWriter:
++    """Writer for saving OptionChain snapshots to Parquet format."""
++
++    def __init__(self, base_dir: str) -> None:
++        """Store base_dir. Create no directories in __init__."""
++        self.base_dir = Path(base_dir)
++
++    def write_eod_snapshot(
++        self,
++        chain: OptionChain,
++        snapshot_ts: datetime,
++        underlying: str = "NIFTY_50",
++    ) -> Path:
++        """Write an EOD chain snapshot to Parquet.
++
++        Path: {base_dir}/{year}/{month}/upstox_{date}.parquet
++        Overwrites any existing file for the same date (idempotent).
++        Returns the path written.
++        """
++        if snapshot_ts.tzinfo is None or snapshot_ts.tzinfo.utcoffset(snapshot_ts) != timedelta(0):
++            raise ValueError("snapshot_ts must be timezone-aware UTC")
++
++        ist_tz = timezone(timedelta(hours=5, minutes=30))
++        ist_ts = snapshot_ts.astimezone(ist_tz)
++        year = f"{ist_ts.year:04d}"
++        month = f"{ist_ts.month:02d}"
++        date_str = ist_ts.strftime("%Y-%m-%d")
++
++        dest_dir = self.base_dir / year / month
++        dest_dir.mkdir(parents=True, exist_ok=True)
++        dest_path = dest_dir / f"upstox_{date_str}.parquet"
++
++        table = _chain_to_table(chain, snapshot_ts, underlying)
++        pq.write_table(table, dest_path)
++        return dest_path
++
++    def write_intraday_snapshot(
++        self,
++        chain: OptionChain,
++        snapshot_ts: datetime,
++        underlying: str = "NIFTY_50",
++    ) -> Path:
++        """Write a 5-min intraday snapshot to Parquet.
++
++        Path: {base_dir}/{year}/{month}/{day}/upstox_{HHMM}.parquet
++        HHMM is IST 24-hour (convert from UTC snapshot_ts internally).
++        Overwrites any existing file for the same HHMM (idempotent).
++        Returns the path written.
++        """
++        if snapshot_ts.tzinfo is None or snapshot_ts.tzinfo.utcoffset(snapshot_ts) != timedelta(0):
++            raise ValueError("snapshot_ts must be timezone-aware UTC")
++
++        ist_tz = timezone(timedelta(hours=5, minutes=30))
++        ist_ts = snapshot_ts.astimezone(ist_tz)
++        year = f"{ist_ts.year:04d}"
++        month = f"{ist_ts.month:02d}"
++        day = f"{ist_ts.day:02d}"
++        hhmm = ist_ts.strftime("%H%M")
++
++        dest_dir = self.base_dir / year / month / day
++        dest_dir.mkdir(parents=True, exist_ok=True)
++        dest_path = dest_dir / f"upstox_{hhmm}.parquet"
++
++        table = _chain_to_table(chain, snapshot_ts, underlying)
++        pq.write_table(table, dest_path)
++        return dest_path
+diff --git a/tests/unit/backtest/test_chain_writer.py b/tests/unit/backtest/test_chain_writer.py
+new file mode 100644
+index 0000000..889b235
+--- /dev/null
++++ b/tests/unit/backtest/test_chain_writer.py
+@@ -0,0 +1,226 @@
++from datetime import datetime, date, timezone, timedelta
++from decimal import Decimal
++from pathlib import Path
++import pandas as pd
++import pytest
++
++from src.backtest.chain_writer import ChainWriter
++from src.models.options import OptionChain, OptionChainStrike, OptionLeg
++
++
++def _make_dummy_leg(strike: Decimal, delta: Decimal = Decimal("-0.25")) -> OptionLeg:
++    return OptionLeg(
++        ltp=Decimal("123.45"),
++        bid=Decimal("123.00"),
++        ask=Decimal("123.90"),
++        oi=1000,
++        volume=5000,
++        delta=delta,
++        gamma=Decimal("0.0012"),
++        theta=Decimal("-12.34"),
++        vega=Decimal("5.67"),
++        iv=Decimal("15.5"),
++        strike=strike,
++    )
++
++
++def test_write_eod_creates_correct_path(tmp_path: Path) -> None:
++    """Assert returned path matches {base_dir}/2026/05/upstox_2026-05-27.parquet."""
++    writer = ChainWriter(str(tmp_path))
++    chain = OptionChain(
++        underlying_spot=Decimal("22000.00"),
++        expiry=date(2026, 5, 28),
++        strikes={
++            Decimal("22000"): OptionChainStrike(
++                ce=_make_dummy_leg(Decimal("22000"), Decimal("0.5")),
++                pe=_make_dummy_leg(Decimal("22000"), Decimal("-0.5")),
++            )
++        },
++    )
++    # 09:30 UTC = 15:00 IST, so date remains 2026-05-27
++    ts = datetime(2026, 5, 27, 9, 30, tzinfo=timezone.utc)
++    path = writer.write_eod_snapshot(chain, ts)
++    expected_path = tmp_path / "2026" / "05" / "upstox_2026-05-27.parquet"
++    assert path == expected_path
++    assert path.exists()
++
++
++def test_write_eod_idempotent(tmp_path: Path) -> None:
++    """Write twice with same date; file count = 1, last write wins."""
++    writer = ChainWriter(str(tmp_path))
++    chain = OptionChain(
++        underlying_spot=Decimal("22000.00"),
++        expiry=date(2026, 5, 28),
++        strikes={
++            Decimal("22000"): OptionChainStrike(
++                ce=_make_dummy_leg(Decimal("22000"), Decimal("0.5")),
++                pe=_make_dummy_leg(Decimal("22000"), Decimal("-0.5")),
++            )
++        },
++    )
++    ts = datetime(2026, 5, 27, 9, 30, tzinfo=timezone.utc)
++    path1 = writer.write_eod_snapshot(chain, ts)
++    
++    # Write a slightly modified one
++    chain2 = OptionChain(
++        underlying_spot=Decimal("22100.00"),
++        expiry=date(2026, 5, 28),
++        strikes={
++            Decimal("22000"): OptionChainStrike(
++                ce=_make_dummy_leg(Decimal("22000"), Decimal("0.5")),
++                pe=_make_dummy_leg(Decimal("22000"), Decimal("-0.5")),
++            )
++        },
++    )
++    path2 = writer.write_eod_snapshot(chain2, ts)
++    assert path1 == path2
++    
++    df = pd.read_parquet(path2)
++    assert Decimal(str(df["spot"].iloc[0])) == Decimal("22100.000000")
++    
++    # Check that there is only 1 file in the directory
++    dir_files = list((tmp_path / "2026" / "05").glob("*.parquet"))
++    assert len(dir_files) == 1
++
++
++def test_write_eod_roundtrip(tmp_path: Path) -> None:
++    """Write then read back with pd.read_parquet; assert row count and spot value correct."""
++    writer = ChainWriter(str(tmp_path))
++    chain = OptionChain(
++        underlying_spot=Decimal("22000.00"),
++        expiry=date(2026, 5, 28),
++        strikes={
++            Decimal("22000"): OptionChainStrike(
++                ce=_make_dummy_leg(Decimal("22000"), Decimal("0.5")),
++                pe=_make_dummy_leg(Decimal("22000"), Decimal("-0.5")),
++            ),
++            Decimal("22100"): OptionChainStrike(
++                ce=_make_dummy_leg(Decimal("22100"), Decimal("0.4")),
++                pe=None, # Only CE leg present
++            ),
++        },
++    )
++    ts = datetime(2026, 5, 27, 10, 0, tzinfo=timezone.utc)
++    path = writer.write_eod_snapshot(chain, ts)
++    
++    df = pd.read_parquet(path)
++    # Total legs: 2 from strike 22000 (CE+PE) and 1 from strike 22100 (CE) = 3 rows
++    assert len(df) == 3
++    assert Decimal(str(df["spot"].iloc[0])) == Decimal("22000.000000")
++    assert df["option_type"].tolist() == ["CE", "PE", "CE"]
++    assert df["strike"].tolist() == [Decimal("22000"), Decimal("22000"), Decimal("22100")]
++    assert df["underlying"].tolist() == ["NIFTY_50"] * 3
++    # Check that the timezone of snapshot_ts is preserved as UTC in read-back
++    assert df["snapshot_ts"].dt.tz is not None
++
++
++def test_write_intraday_path(tmp_path: Path) -> None:
++    """Assert {base_dir}/2026/05/27/upstox_1430.parquet for 09:00 UTC (= 14:30 IST)."""
++    writer = ChainWriter(str(tmp_path))
++    chain = OptionChain(
++        underlying_spot=Decimal("22000.00"),
++        expiry=date(2026, 5, 28),
++        strikes={
++            Decimal("22000"): OptionChainStrike(
++                ce=_make_dummy_leg(Decimal("22000"), Decimal("0.5")),
++            )
++        },
++    )
++    # 09:00 UTC -> 14:30 IST (9 + 5.5 = 14.5)
++    ts = datetime(2026, 5, 27, 9, 0, tzinfo=timezone.utc)
++    path = writer.write_intraday_snapshot(chain, ts)
++    expected_path = tmp_path / "2026" / "05" / "27" / "upstox_1430.parquet"
++    assert path == expected_path
++    assert path.exists()
++
++
++def test_write_intraday_idempotent(tmp_path: Path) -> None:
++    """Same 5-min window, second write overwrites."""
++    writer = ChainWriter(str(tmp_path))
++    chain1 = OptionChain(
++        underlying_spot=Decimal("22000.00"),
++        expiry=date(2026, 5, 28),
++        strikes={
++            Decimal("22000"): OptionChainStrike(
++                ce=_make_dummy_leg(Decimal("22000"), Decimal("0.5")),
++            )
++        },
++    )
++    chain2 = OptionChain(
++        underlying_spot=Decimal("22050.00"),
++        expiry=date(2026, 5, 28),
++        strikes={
++            Decimal("22000"): OptionChainStrike(
++                ce=_make_dummy_leg(Decimal("22000"), Decimal("0.5")),
++            )
++        },
++    )
++    ts = datetime(2026, 5, 27, 9, 0, tzinfo=timezone.utc)
++    path1 = writer.write_intraday_snapshot(chain1, ts)
++    path2 = writer.write_intraday_snapshot(chain2, ts)
++    
++    assert path1 == path2
++    df = pd.read_parquet(path2)
++    assert Decimal(str(df["spot"].iloc[0])) == Decimal("22050.000000")
++    
++    dir_files = list((tmp_path / "2026" / "05" / "27").glob("*.parquet"))
++    assert len(dir_files) == 1
++
++
++def test_naive_ts_raises(tmp_path: Path) -> None:
++    """datetime.utcnow() (naive) -> ValueError."""
++    writer = ChainWriter(str(tmp_path))
++    chain = OptionChain(
++        underlying_spot=Decimal("22000.00"),
++        expiry=date(2026, 5, 28),
++        strikes={},
++    )
++    # Using timezone-naive datetime
++    naive_ts = datetime.utcnow()
++    
++    with pytest.raises(ValueError, match="snapshot_ts must be timezone-aware UTC"):
++        writer.write_eod_snapshot(chain, naive_ts)
++        
++    with pytest.raises(ValueError, match="snapshot_ts must be timezone-aware UTC"):
++        writer.write_intraday_snapshot(chain, naive_ts)
++
++
++def test_empty_chain_writes_zero_rows(tmp_path: Path) -> None:
++    """OptionChain with no strikes -> Parquet with 0 rows, no error."""
++    writer = ChainWriter(str(tmp_path))
++    chain = OptionChain(
++        underlying_spot=Decimal("22000.00"),
++        expiry=date(2026, 5, 28),
++        strikes={},
++    )
++    ts = datetime(2026, 5, 27, 9, 30, tzinfo=timezone.utc)
++    path = writer.write_eod_snapshot(chain, ts)
++    
++    assert path.exists()
++    df = pd.read_parquet(path)
++    assert len(df) == 0
++    # Columns should still be defined
++    assert "strike" in df.columns
++    assert "option_type" in df.columns
++
++
++def test_decimal_precision(tmp_path: Path) -> None:
++    """Read back a delta field; assert Decimal(str(val)) matches input to 6 dp."""
++    writer = ChainWriter(str(tmp_path))
++    delta_val = Decimal("0.123456")
++    chain = OptionChain(
++        underlying_spot=Decimal("22000.00"),
++        expiry=date(2026, 5, 28),
++        strikes={
++            Decimal("22000"): OptionChainStrike(
++                ce=_make_dummy_leg(Decimal("22000"), delta_val),
++            )
++        },
++    )
++    ts = datetime(2026, 5, 27, 9, 30, tzinfo=timezone.utc)
++    path = writer.write_eod_snapshot(chain, ts)
++    
++    df = pd.read_parquet(path)
++    assert len(df) == 1
++    retrieved_delta = Decimal(str(df["delta"].iloc[0]))
++    assert retrieved_delta == delta_val
+diff --git a/tests/unit/paper/test_record_paper_trade.py b/tests/unit/paper/test_record_paper_trade.py
+index ed6a4d1..f6a7d8a 100644
+--- a/tests/unit/paper/test_record_paper_trade.py
++++ b/tests/unit/paper/test_record_paper_trade.py
+@@ -384,6 +384,7 @@ def test_close_auto_resolves_key_from_position(tmp_path: Path) -> None:
+     close_args = [
+         "--strategy", _STRATEGY,
+         "--leg", _LEG,
++        "--qty", _QTY,
+         "--price", "10.00",
+         "--close",
+         "--no-dry-run",

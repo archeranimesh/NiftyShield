@@ -30,7 +30,7 @@ To get the most out of me, give me the **Objective**, the **Pointers**, and the 
 
 **Great Input:**
 > *"Antigravity, we need to implement the Upstox chain snapshot writer.
-> 1. Check `docs/plan/chain-data/chain_data_stories.md` for the CD1.1 story spec.
+> 1. Check `docs/archive/plan/chain-data/chain_data_stories.md` for the CD1.1 story spec.
 > 2. Look at `src/backtest/vix_ingest.py` for the established Parquet write pattern.
 > 3. Implement `src/backtest/chain_writer.py` and make sure `pytest tests/unit/backtest/test_chain_writer.py` passes.
 > 4. Do not commit yet, just show me the diff."*

@@ -363,7 +363,7 @@ IVR is sensitive to outliers (one big spike year inflates the denominator). IVP 
 **Implementation notes:**
 - Compute from India VIX for index-wide IV state; from specific option chain for strategy-specific IV state.
 - 252-day lookback = 1 trading year.
-- Update daily via the Upstox chain snapshot cron (chain-data story, task CD1.2).
+- Update daily via the Upstox chain snapshot cron (`scripts/upstox_chain_snapshot.py`, chain-data story archived at `docs/archive/plan/chain-data/`).
 
 **Further reading:** Tastytrade research team has published extensively on IVR thresholds and historical win-rate conditioning. Their studies are promotional but the empirical methodology is sound.
 
