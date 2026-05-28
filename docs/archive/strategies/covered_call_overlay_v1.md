@@ -6,7 +6,7 @@
 | Version                  | v1                                                                           |
 | Author                   | Animesh Bhadra (archeranimesh)                                               |
 | Date                     | 2026-05-27                                                                   |
-| Status                   | Pending broker confirmation — do not paper-trade until ✅ recorded below    |
+| Status                   | ✅ Broker confirmed 2026-05-28 — ready for paper-trading                    |
 | Underlying (option leg)  | Nifty 50 index (`NSE_INDEX|Nifty 50`, same as CSP)                          |
 | Collateral               | NiftyBees ETF (`NSE_EQ|INF204KB14I2`) — already pledged for Finideas margin |
 | Instrument               | Nifty 50 monthly call options (NSE) — same cycle as CSP                     |
@@ -26,24 +26,22 @@
 
 ---
 
-## Broker Mechanics (confirm before paper-trading)
+## Broker Mechanics
 
-> **⛔ HARD BLOCK** — Do not paper-trade until this section is completed.
+> **✅ Confirmed 2026-05-28 — hard block cleared.**
 
-**Question to confirm with Upstox:**
+**Question confirmed with Upstox:**
 NiftyBees ETF units are pledged as margin collateral for the Finideas portfolio (the existing
 CSP strategy and related positions). If a short Nifty 50 call is simultaneously opened, does
 Upstox treat the NiftyBees pledge as covering the call exposure, or does it require
 independent cash margin for the call?
 
-**Expected resolution:**
-- **✅ Confirmed compatible:** NiftyBees pledge counts as covered call collateral → capital
-  efficiency argument holds. Record date and confirmation reference here.
-- **⛔ Blocked:** Call requires independent cash margin → the short call must be sized against
-  free cash, not NiftyBees pledge → revise quantity constraint and capital efficiency numbers
-  before proceeding.
+**Resolution:**
+- **✅ Confirmed compatible:** NiftyBees pledge counts as covered call collateral — no
+  independent cash margin required for the call. Capital efficiency argument holds.
+  Quantity constraint (`max_lots` formula) is valid as specified.
 
-**Status:** ⬜ Not yet confirmed (2026-05-27)
+**Status:** ✅ Confirmed 2026-05-28 (verbal confirmation from Upstox)
 
 ---
 
@@ -179,3 +177,4 @@ discrepancy (paper mid vs. actual Bhavcopy) >₹5/unit should be investigated.
 | Date       | Stage   | Outcome | Notes                                           |
 |------------|---------|---------|------------------------------------------------|
 | 2026-05-27 | —       | Created | Spec from INVESTMENT_STRATEGY_RESEARCH.md §Strategy 4. Pending broker confirmation. |
+| 2026-05-28 | Broker  | ✅ Confirmed | Upstox confirmed: NiftyBees pledge covers short call exposure — no independent cash margin required. Hard block cleared. Ready for paper-trading. |

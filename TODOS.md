@@ -15,6 +15,7 @@ Ongoing paper-trading tasks (Animesh) run in parallel and are listed separately 
 | **3** | June 2026 Finideas roll cycle | Animesh + Cowork | **2026-06-30** | Implementation complete — execution pending (awaiting Finideas instructions) |
 | **3b** | **variance-gate VG0: CSP v1 spec reconciliation** (lot size, time stop, R-numbers, R4) | Animesh + Cowork | Before Phase 0.8 gate evaluation | ⬜ Not started — story: `docs/plan/variance-gate/` |
 | **4a** | **chain-data: EOD + intraday chain snapshot cron** (`src/backtest/chain_writer.py`, `scripts/upstox_chain_snapshot.py`, `scripts/upstox_chain_intraday.py`) | Cowork | **ASAP — data cannot be back-filled** | ⬜ Not started — story: `docs/plan/chain-data/` |
+| **4cc** | **covered-call-overlay: entry helper + exit handler** (`src/paper/constants.py`, `scripts/paper_cc_entry.py`, `scripts/paper_cc_roll.py`) | Cowork | **ASAP — each skipped monthly cycle is a lost paper data point** | ⬜ Not started — story: `docs/plan/covered-call-overlay/` |
 | **4b** | MVP: Multi-bagger Value Picks Tracker (`src/mvp/`) | Cowork | After Task 3 | ⬜ Not started |
 | **4c** | **paper-backbone: Strategy Monitor daemon + pluggable strategy backbone** (`src/strategy/`, `src/council/`, `src/notifications/telegram_gateway.py`) | Cowork | **Jun–Jul 2026** | ⬜ Not started — story: `docs/plan/paper-backbone/` |
 | **5** | backtest-eval-core: `BacktestStore` + `src/analytics/` (tasks 1.5 + 1.5b) | Cowork | Aug 2026 (Phase 1, after tasks 1.3 + 1.4) | ⬜ Not started — **blocked by tasks 1.3 (Bhavcopy ingest) + 1.4 (BacktestEngine)** |
@@ -60,6 +61,27 @@ Four mismatches to resolve in `docs/strategies/csp_nifty_v1.md`:
 - VG2 Gate A+B: triggers at ≥6 cycles; Gate B3 (delta-stop) replay blocked until Phase 1.3a
 - VG3 Gate C: triggers on first qualifying stress event (live) or after Phase 1 replay harness
 - VG4 Gate D: blocked by Phase 1 task 1.11 (Z-score computation)
+
+---
+
+## Task 4cc — Covered Call Overlay Scripts
+
+**Full spec:** `docs/plan/covered-call-overlay/stories.md`
+**Priority:** immediately after chain-data (4a) — each skipped monthly cycle loses a paper data point
+**Story folder:** `docs/plan/covered-call-overlay/` (prompt, tasks, stories, schema)
+**Strategy doc:** `docs/strategies/covered_call_overlay_v1.md` (broker mechanics confirmed 2026-05-28)
+
+Relationship to existing infrastructure: standalone scripts separate from `paper_3track_overlay.py`
+(delta-based strike selection vs OTM-based; NiftyBees qty constraint; distinct strategy namespace).
+First paper trade can be entered manually via `find_strike_by_delta.py` + `record_paper_trade.py`
+in the interim — automation (CC1–CC3) makes subsequent cycles repeatable.
+
+| Phase | Files | Status |
+|---|---|---|
+| CC1 | `src/paper/constants.py` — `STRATEGY_CC_OVERLAY` + `compute_max_lots` + tests | ⬜ Not started |
+| CC2 | `scripts/paper_cc_entry.py` — delta selection + IVR gate + qty constraint + dry-run output | ⬜ Not started |
+| CC3 | `scripts/paper_cc_roll.py` — profit-target / time-stop / delta-stop exit handler + tests | ⬜ Not started |
+| CC4 | Docs close | ⬜ Not started |
 
 ---
 
@@ -486,6 +508,7 @@ and missing data that must be resolved before executing backtests at scale:
 
 | Date | What Changed |
 |---|---|
+| 2026-05-28 | covered-call-overlay plan created — `docs/plan/covered-call-overlay/` (prompt, tasks, stories, schema); broker mechanics confirmed; Task 4cc added to sequential queue |
 | 2026-05-27 | variance-gate story created — `docs/plan/variance-gate/` (prompt, tasks, stories, spec); `docs/plan/variance_gate.md` archived; README.md + TODOS.md updated |
 | 2026-05-26 | Task B2.1 — Script scaffold: CLI + expiry resolution — b68bb3d |
 | 2026-05-26 | Task B1 — scaffolding and store for `src/gamma/` option chain watcher — d8c2e69 |
