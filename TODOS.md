@@ -327,27 +327,8 @@ Ref: DEBT-4 (TODOS.md) — resolved
 
 ### P1 — Data Integrity Fixes
 
-**P1-1: Fix corrupt `paper_nifty_futures` snapshots for 2026-05-27**
-- What: `paper_leg_snapshots` for `base_futures` on 2026-05-27 has `ltp=NULL`, causing
-  `total_pnl = -₹15,56,457` (full notional treated as loss). Same corruption in `paper_nav_snapshots`.
-- Root cause: `paper_3track_snapshot.py` fetched LTP for an expired contract (May futures expired 2026-05-26)
-  and got `None`; the P&L calculation did not guard against `None` LTP.
-- Fix: directly UPDATE the two corrupt rows to `ltp=NULL, unrealized_pnl=0, total_pnl=0`
-  with a note "expiry day — LTP unavailable; zeroed to avoid corruption". This is audit-accurate:
-  the contract had zero value on its expiry day.
-- Commands:
-  ```sql
-  UPDATE paper_leg_snapshots
-  SET unrealized_pnl='0', realized_pnl='0', total_pnl='0',
-      ltp=NULL
-  WHERE strategy_name='paper_nifty_futures' AND leg_role='base_futures'
-    AND snapshot_date='2026-05-27';
-
-  UPDATE paper_nav_snapshots
-  SET unrealized_pnl='0', realized_pnl='0', total_pnl='0'
-  WHERE strategy_name='paper_nifty_futures' AND snapshot_date='2026-05-27';
-  ```
-- DoD: run the two UPDATEs; verify the row shows 0 P&L.
+~~**P1-1: Fix corrupt `paper_nifty_futures` snapshots for 2026-05-27**~~ ✅ DONE (2026-05-28)
+Both rows zeroed directly in DB — `paper_leg_snapshots` + `paper_nav_snapshots` for `base_futures` 2026-05-27 set to `unrealized_pnl=0, realized_pnl=0, total_pnl=0, ltp=NULL`. Root cause: snapshot ran after May futures expiry, got `None` LTP, propagated full notional as loss. Guarded by P1-2.
 
 **P1-2: Guard `paper_3track_snapshot.py` against None LTP on expired legs**
 - What: When a base position expires, any subsequent snapshot run will fetch `ltp=None`
