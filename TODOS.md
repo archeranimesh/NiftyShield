@@ -305,11 +305,18 @@ and `docs/strategies/csp_nifty_v1.md` archived via `git mv` only after all ES st
 
 ### P0 — Must Do Before Next Session
 
-**P0-1: Commit `find_strike_by_delta.py` DEBT-4 fix**
-- What: `DEFAULT_LOT_SIZE = 75` → `from src.paper.constants import LOT_SIZE as DEFAULT_LOT_SIZE`
-- Code change is live in working tree but uncommitted. Run tests first.
-- DoD: `python -m pytest tests/unit/ --tb=no -q` green → `git add scripts/find_strike_by_delta.py && git commit`
-- Commit message: `fix(scripts): import LOT_SIZE from constants in find_strike_by_delta (was hardcoded 75)`
+~~**P0-1: Commit `find_strike_by_delta.py` DEBT-4 fix**~~ ✅ DONE — `a086e40` (2026-05-28)
+```
+fix(scripts): import LOT_SIZE from constants in find_strike_by_delta
+
+Why: DEFAULT_LOT_SIZE = 75 was hardcoded, contradicting constants.LOT_SIZE = 65
+     (effective Jan 2026). Caused record_paper_trade.py (which imports from this
+     module) to default to 75u, producing wrong quantity on CSP Cycle 2 entry.
+     DB rows id=31,32 corrected directly from 75u → 65u.
+What:
+- scripts/find_strike_by_delta.py: replace hardcoded 75 with LOT_SIZE import
+Ref: DEBT-4 (TODOS.md) — resolved
+```
 
 **P0-2: Fix stale R3 caveat in `docs/strategies/csp_nifty_v1.md`**
 - What: Line 54 reads `"R3 not yet enforced"`. IVR warnings shipped in sha `8449cbf` (2026-05-14).
