@@ -1,5 +1,6 @@
 """Tests for track snapshot reporter."""
 
+import logging
 import pytest
 from datetime import date
 from decimal import Decimal
@@ -91,11 +92,140 @@ def test_compute_realized_pnl_by_leg():
         PaperTrade(strategy_name="paper_strat", leg_role="overlay", instrument_key="B", trade_date=date(2023,1,1), action=TradeAction.SELL, quantity=50, price=Decimal("50"), notes=""),
         PaperTrade(strategy_name="paper_strat", leg_role="overlay", instrument_key="B", trade_date=date(2023,1,2), action=TradeAction.BUY, quantity=50, price=Decimal("30"), notes="")
     ]
-    
+
     store = MockPaperStore(trades, [], [])
     realized = _compute_realized_pnl_by_leg(store, "paper_strat")
-    
+
     # base: buy 100 @ 100, sell 50 @ 120 -> closed 50. realized = (120 - 100) * 50 = 1000
     assert realized["base"] == Decimal("1000")
     # overlay: sell 50 @ 50, buy 50 @ 30 -> closed 50. realized = (50 - 30) * 50 = 1000
     assert realized["overlay"] == Decimal("1000")
+
+
+# ---------------------------------------------------------------------------
+# P1-2: None LTP guard — expired instrument must not produce notional loss
+# ---------------------------------------------------------------------------
+
+class _BrokerNoPrice:
+    """Simulates an expired instrument: get_ltp returns an empty dict (key absent)."""
+
+    async def get_ltp(self, keys: list[str]) -> dict[str, Decimal]:
+        return {}
+
+    async def get_option_chain(self, underlying: str, expiry) -> list:
+        return []
+
+
+@pytest.mark.asyncio
+async def test_none_ltp_skips_mtm_and_logs_warning(caplog: pytest.LogCaptureFixture) -> None:
+    """When get_ltp returns no price for a base leg (expired instrument),
+    unrealized P&L must be 0 and a WARNING must be logged — not a full notional loss.
+
+    Regression guard for P1-1 (2026-05-27): May futures expiry propagated
+    ``(0 - avg_cost) * qty`` as a ₹24 000 loss because the absent key fell
+    back to the default 0.0 in prices.get().
+    """
+    trades = [
+        PaperTrade(
+            strategy_name="paper_nifty_futures",
+            leg_role="base_futures",
+            instrument_key="NSE_FO|EXPIRED_FUT",
+            trade_date=date(2026, 5, 1),
+            action=TradeAction.BUY,
+            quantity=1,
+            price=Decimal("24000.0"),
+            notes="",
+        )
+    ]
+    positions = [
+        PaperPosition(
+            strategy_name="paper_nifty_futures",
+            leg_role="base_futures",
+            instrument_key="NSE_FO|EXPIRED_FUT",
+            net_qty=1,
+            avg_cost=Decimal("24000.0"),
+            avg_sell_price=Decimal("0"),
+        )
+    ]
+
+    store = MockPaperStore(trades, positions, [])
+    broker = _BrokerNoPrice()
+    lookup = MockInstrumentLookup()
+
+    with caplog.at_level(logging.WARNING, logger="src.paper.track_snapshot"):
+        snap = await generate_track_snapshot(
+            store, broker, lookup,
+            "paper_nifty_futures",
+            Decimal("24000"),
+            Decimal("100000"),
+            date(2026, 5, 28),
+        )
+
+    # Must not propagate a notional loss — unrealized is 0 when LTP is unavailable
+    assert snap.pnl.base_pnl == Decimal("0"), (
+        f"Expected base_pnl=0 for expired leg, got {snap.pnl.base_pnl}"
+    )
+    assert snap.pnl.net_pnl == Decimal("0")
+    # WARNING must be logged
+    assert any("LTP unavailable" in r.message for r in caplog.records), (
+        "Expected a WARNING about unavailable LTP — none found"
+    )
+
+
+@pytest.mark.asyncio
+async def test_none_ltp_does_not_suppress_realized_pnl(caplog: pytest.LogCaptureFixture) -> None:
+    """Realized P&L from prior closes must still be reported even when the
+    current LTP is unavailable (e.g. expired but partially closed earlier).
+    """
+    # One BUY trade + one partial SELL already recorded (realized gain)
+    trades = [
+        PaperTrade(
+            strategy_name="paper_nifty_futures",
+            leg_role="base_futures",
+            instrument_key="NSE_FO|EXPIRED_FUT",
+            trade_date=date(2026, 5, 1),
+            action=TradeAction.BUY,
+            quantity=2,
+            price=Decimal("24000.0"),
+            notes="",
+        ),
+        PaperTrade(
+            strategy_name="paper_nifty_futures",
+            leg_role="base_futures",
+            instrument_key="NSE_FO|EXPIRED_FUT",
+            trade_date=date(2026, 5, 20),
+            action=TradeAction.SELL,
+            quantity=1,
+            price=Decimal("24500.0"),
+            notes="",
+        ),
+    ]
+    # Remaining open qty = 1
+    positions = [
+        PaperPosition(
+            strategy_name="paper_nifty_futures",
+            leg_role="base_futures",
+            instrument_key="NSE_FO|EXPIRED_FUT",
+            net_qty=1,
+            avg_cost=Decimal("24000.0"),
+            avg_sell_price=Decimal("24500.0"),
+        )
+    ]
+
+    store = MockPaperStore(trades, positions, [])
+    broker = _BrokerNoPrice()
+    lookup = MockInstrumentLookup()
+
+    with caplog.at_level(logging.WARNING, logger="src.paper.track_snapshot"):
+        snap = await generate_track_snapshot(
+            store, broker, lookup,
+            "paper_nifty_futures",
+            Decimal("24000"),
+            Decimal("100000"),
+            date(2026, 5, 28),
+        )
+
+    # realized = (24500 - 24000) * 1 = 500; unrealized = 0 (LTP unavailable)
+    assert snap.pnl.base_pnl == Decimal("500")
+    assert snap.pnl.net_pnl == Decimal("500")
+    assert any("LTP unavailable" in r.message for r in caplog.records)

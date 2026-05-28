@@ -140,9 +140,17 @@ async def generate_track_snapshot(
         is_base = pos.leg_role.startswith("base_")
         is_overlay = pos.leg_role.startswith("overlay_")
         
-        raw_ltp = prices.get(pos.instrument_key, 0.0)
-        ltp = Decimal(str(raw_ltp))
-        unrealized = _compute_leg_unrealized_pnl(pos, ltp)
+        raw_ltp = prices.get(pos.instrument_key)
+        if raw_ltp is None:
+            logger.warning(
+                "LTP unavailable for %s (%s) — likely expired. Skipping MTM for this leg.",
+                pos.instrument_key,
+                pos.leg_role,
+            )
+            unrealized = Decimal("0")
+        else:
+            ltp = Decimal(str(raw_ltp))
+            unrealized = _compute_leg_unrealized_pnl(pos, ltp)
         leg_realized = realized_by_leg.get(pos.leg_role, Decimal("0"))
         leg_total_pnl = unrealized + leg_realized
         
