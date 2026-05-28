@@ -21,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.backtest.ivr import compute_ivr
 from src.backtest.vix_ingest import fetch_vix_latest, load_vix_series
 from src.client.upstox_market import UpstoxMarketClient
+from src.intraday.market_store import IntradayMarketStore
 from src.instruments.lookup import InstrumentLookup
 from src.paper.constants import (
     DEFAULT_BOD_PATH,
@@ -80,7 +81,6 @@ async def run() -> None:
         try:
             series = load_vix_series(vix_data_dir)
             # Fetch latest VIX (intraday DB or live API fallback)
-            from src.intraday.market_store import IntradayMarketStore
             vix_today = IntradayMarketStore(DEFAULT_DB_PATH).get_latest_vix_today()
             if vix_today is None:
                 vix_today = fetch_vix_latest()
@@ -127,19 +127,21 @@ async def run() -> None:
         print("ERROR: failed to fetch live Nifty 50 spot price.", file=sys.stderr)
         sys.exit(1)
 
-    niftybees_ltp = args.niftybees_ltp
-    if niftybees_ltp is None:
+    niftybees_ltp: Decimal
+    if args.niftybees_ltp is not None:
+        niftybees_ltp = Decimal(str(args.niftybees_ltp))
+    else:
         val = ltp_map.get(NIFTYBEES_KEY)
         if val is None:
             print("ERROR: failed to fetch live NiftyBees LTP.", file=sys.stderr)
             sys.exit(1)
-        niftybees_ltp = float(val)
+        niftybees_ltp = val
 
     # compute max lots
     max_lots = compute_max_lots(
         niftybees_units=args.niftybees_units,
         nifty_spot=nifty_spot,
-        niftybees_ltp=Decimal(str(niftybees_ltp)),
+        niftybees_ltp=niftybees_ltp,
         lot_size=LOT_SIZE,
     )
 

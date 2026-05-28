@@ -234,7 +234,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
-| 2026-05-29 | covered-call-overlay CC2 — paper_cc_entry.py entry helper — 36da72c |
+| 2026-05-29 | covered-call-overlay CC2 — paper_cc_entry.py entry helper — 972a13c |
 | 2026-05-29 | covered-call-overlay CC1 — STRATEGY_CC_OVERLAY + compute_max_lots + 7 tests — 0e5ebeb |
 | 2026-05-29 | chain-data CD4 — Docs close — af6449d (amended from 80cf95e to add CONTEXT_TREE.md) |
 | 2026-05-28 | chain-data CD3.1 — ChainReader — DuckDB-based EOD and intraday chain query utilities — 7c0fe66 |

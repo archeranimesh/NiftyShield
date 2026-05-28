@@ -8,6 +8,6 @@
 ---
 
 - [x] **CC1** — `src/paper/constants.py`: add `STRATEGY_CC_OVERLAY` constant + `compute_max_lots` pure function + tests | SHA: 0e5ebeb
-- [x] **CC2** — `scripts/paper_cc_entry.py`: delta-based CE selection + IVR gate + qty constraint + dry-run command output | SHA: 36da72c
+- [x] **CC2** — `scripts/paper_cc_entry.py`: delta-based CE selection + IVR gate + qty constraint + dry-run command output | SHA: 972a13c
 - [ ] **CC3** — `scripts/paper_cc_roll.py`: three-trigger exit handler (profit target / time stop / delta stop)
 - [ ] **CC4** — Docs close: CONTEXT.md tree, DECISIONS.md entry, TODOS.md session log
