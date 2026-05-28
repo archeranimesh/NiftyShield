@@ -80,8 +80,8 @@ Invoke `roll-validator` agent ≥1 week before deadline.
 
 | Step | Files | Status |
 |---|---|---|
-| CC1 | `src/paper/constants.py` — `STRATEGY_CC_OVERLAY` + `compute_max_lots` + tests | ⬜ Not started |
-| CC2 | `scripts/paper_cc_entry.py` — delta selection + IVR gate + qty constraint + dry-run | ⬜ Not started |
+| CC1 | `src/paper/constants.py` — `STRATEGY_CC_OVERLAY` + `compute_max_lots` + tests | ✅ Shipped |
+| CC2 | `scripts/paper_cc_entry.py` — delta selection + IVR gate + qty constraint + dry-run | ✅ Shipped |
 | CC3 | `scripts/paper_cc_roll.py` — profit-target / time-stop / delta-stop exit handler + tests | ⬜ Not started |
 | CC4 | Docs close | ⬜ Not started |
 
@@ -234,6 +234,8 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-05-29 | covered-call-overlay CC2 — paper_cc_entry.py entry helper — 36da72c |
+| 2026-05-29 | covered-call-overlay CC1 — STRATEGY_CC_OVERLAY + compute_max_lots + 7 tests — 0e5ebeb |
 | 2026-05-29 | chain-data CD4 — Docs close — af6449d (amended from 80cf95e to add CONTEXT_TREE.md) |
 | 2026-05-28 | chain-data CD3.1 — ChainReader — DuckDB-based EOD and intraday chain query utilities — 7c0fe66 |
 | 2026-05-28 | chain-data CD2.1 — upstox_chain_intraday — 5-min intraday option chain snapshot — c1aea22 |
