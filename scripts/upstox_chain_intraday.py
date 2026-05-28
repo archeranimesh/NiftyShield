@@ -44,13 +44,24 @@ _PREFERENCE = ["monthly", "quarterly", "yearly"]
 _NIFTY_UNDERLYING = "NIFTY_50"
 
 
-def main() -> int:
+import argparse
+
+def main(args: list[str] | None = None) -> int:
     """Fetch intraday option chain for 3 Nifty expiries and persist to Parquet.
 
     Returns 0 on success, 1 on any error.
     Designed to run as: */5 9-15 * * 1-5 (Mon–Fri).
     """
     _setup_logging()
+
+    parser = argparse.ArgumentParser(description="Intraday chain snapshot")
+    parser.add_argument(
+        "--mode",
+        choices=["intraday", "eod"],
+        default="intraday",
+        help="Optional mode flag",
+    )
+    parsed_args = parser.parse_args(args if args is not None else [])
 
     today = date.today()
 
@@ -76,7 +87,7 @@ def main() -> int:
         logger.warning(
             "only %d expiry candidates found (expected 3): %s",
             len(expiries),
-            [exp for _, exp in expiries],
+            expiries,
         )
 
     if not expiries:
@@ -90,14 +101,15 @@ def main() -> int:
         try:
             raw = client.get_option_chain_sync(_NIFTY_INSTRUMENT, expiry_str)
             chain = parse_upstox_option_chain(raw)
-            path = writer.write_intraday_snapshot(chain, snapshot_ts, _NIFTY_UNDERLYING)
-            row_count = len(chain.strikes) * 2
+            if parsed_args.mode == "eod":
+                path = writer.write_eod_snapshot(chain, snapshot_ts, _NIFTY_UNDERLYING)
+            else:
+                path = writer.write_intraday_snapshot(chain, snapshot_ts, _NIFTY_UNDERLYING)
             logger.info(
-                "snapshot written: expiry=%s label=%s strikes=%d rows=%d path=%s",
+                "snapshot written: expiry=%s label=%s strikes=%d path=%s",
                 expiry_str,
                 label,
                 len(chain.strikes),
-                row_count,
                 path,
             )
         except DataFetchError as exc:
@@ -125,4 +137,4 @@ def _setup_logging() -> None:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))

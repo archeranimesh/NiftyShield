@@ -184,3 +184,52 @@ def test_base_dir_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         main()
 
     mock_writer_cls.assert_called_once_with(custom_dir)
+
+
+def test_bod_load_failure_returns_one() -> None:
+    """If BOD file cannot be loaded, main() prints error and returns 1."""
+    with (
+        patch(f"{_SCRIPT_MODULE}.is_trading_day", return_value=True),
+        patch(f"{_SCRIPT_MODULE}.InstrumentLookup") as mock_lu_cls,
+    ):
+        mock_lu_cls.from_file.side_effect = OSError("BOD load error")
+
+        result = main()
+
+    assert result == 1
+
+
+def test_mode_flag_parsing() -> None:
+    """The script accepts --mode flag and calls correct write function."""
+    mock_chain = _make_mock_chain()
+    mock_lookup = _make_mock_lookup(THREE_EXPIRIES[:1])
+
+    with (
+        patch(f"{_SCRIPT_MODULE}.is_trading_day", return_value=True),
+        patch(f"{_SCRIPT_MODULE}.InstrumentLookup") as mock_lu_cls,
+        patch(f"{_SCRIPT_MODULE}.UpstoxMarketClient"),
+        patch(f"{_SCRIPT_MODULE}.parse_upstox_option_chain", return_value=mock_chain),
+        patch(f"{_SCRIPT_MODULE}.ChainWriter") as mock_writer_cls,
+    ):
+        mock_lu_cls.from_file.return_value = mock_lookup
+        mock_writer_cls.return_value.write_intraday_snapshot.return_value = Path("/tmp/x.parquet")
+        mock_writer_cls.return_value.write_eod_snapshot.return_value = Path("/tmp/x.parquet")
+
+        # Call with --mode intraday
+        result = main(["--mode", "intraday"])
+        assert result == 0
+        mock_writer_cls.return_value.write_intraday_snapshot.assert_called_once()
+        mock_writer_cls.return_value.write_eod_snapshot.assert_not_called()
+
+        mock_writer_cls.return_value.write_intraday_snapshot.reset_mock()
+        mock_writer_cls.return_value.write_eod_snapshot.reset_mock()
+
+        # Call with --mode eod
+        result = main(["--mode", "eod"])
+        assert result == 0
+        mock_writer_cls.return_value.write_eod_snapshot.assert_called_once()
+        mock_writer_cls.return_value.write_intraday_snapshot.assert_not_called()
+
+        # Call with invalid mode raises SystemExit due to argparse choices
+        with pytest.raises(SystemExit):
+            main(["--mode", "invalid"])

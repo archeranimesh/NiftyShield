@@ -422,7 +422,8 @@ class TestIntradayStore:
     def test_get_intraday_extremes_multiple_timestamps(self, store):
         """max/min taken across aggregated per-timestamp totals."""
         from datetime import datetime, timedelta
-        ts1 = datetime.now()
+        ts1 = datetime.now() - timedelta(days=1)
+        ts1 = ts1.replace(hour=10, minute=0, second=0, microsecond=0)
         ts2 = ts1 + timedelta(minutes=5)
         store.record_intraday_positions(ts1, [self._pos("A", "1000", "0")])
         store.record_intraday_positions(ts2, [self._pos("A", "-500", "0")])
