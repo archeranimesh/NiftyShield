@@ -27,6 +27,15 @@ class ChainReader:
             self._conn = duckdb.connect(database=":memory:")
         return self._conn
 
+    def close(self) -> None:
+        """Explicitly close the in-memory DuckDB connection if active."""
+        if self._conn is not None:
+            try:
+                self._conn.close()
+            except Exception:
+                pass
+            self._conn = None
+
     def get_eod_snapshots(
         self,
         start_date: date,
@@ -41,6 +50,11 @@ class ChainReader:
 
         Globs: {eod_dir}/{year}/{month}/upstox_*.parquet.
         Returns empty DataFrame if no files exist.
+
+        Note:
+            DuckDB materializes PyArrow Decimal128 columns as float64 inside the returned
+            pandas DataFrame (e.g., spot, strike, ltp, bid, ask, iv, delta, gamma, vega, theta).
+            Callers who require precise Decimal representations should cast floats explicitly.
         """
         if not self.eod_dir.exists():
             return pd.DataFrame(columns=self.EMPTY_COLS)
@@ -50,6 +64,9 @@ class ChainReader:
         if not files:
             return pd.DataFrame(columns=self.EMPTY_COLS)
 
+        # Note: Using an f-string for the glob path is required here because DuckDB's
+        # read_parquet() function is a table function and does not accept parameter markers (?)
+        # for its file path parameter.
         query = f"""
             SELECT * FROM read_parquet('{glob_pattern}')
             WHERE CAST(snapshot_ts AS DATE) >= ?
@@ -91,6 +108,11 @@ class ChainReader:
 
         Globs: {intraday_dir}/{year}/{month}/{day}/upstox_*.parquet.
         Returns empty DataFrame if no files exist or intraday_dir is None.
+
+        Note:
+            DuckDB materializes PyArrow Decimal128 columns as float64 inside the returned
+            pandas DataFrame (e.g., spot, strike, ltp, bid, ask, iv, delta, gamma, vega, theta).
+            Callers who require precise Decimal representations should cast floats explicitly.
         """
         if self.intraday_dir is None or not self.intraday_dir.exists():
             return pd.DataFrame(columns=self.EMPTY_COLS)
@@ -108,6 +130,9 @@ class ChainReader:
         if not files:
             return pd.DataFrame(columns=self.EMPTY_COLS)
 
+        # Note: Using an f-string for the glob path is required here because DuckDB's
+        # read_parquet() function is a table function and does not accept parameter markers (?)
+        # for its file path parameter.
         query = f"""
             SELECT * FROM read_parquet('{glob_pattern}')
             WHERE underlying = ?
@@ -138,10 +163,16 @@ class ChainReader:
         strike: Decimal,
         option_type: str,
         underlying: str = "NIFTY_50",
+        expiry_date: date | None = None,
     ) -> pd.DataFrame:
         """Return daily delta time series for a specific strike.
 
         Convenience wrapper over get_eod_snapshots. Columns: snapshot_ts, delta, iv, ltp.
+
+        Note:
+            DuckDB materializes PyArrow Decimal128 columns as float64 inside the returned
+            pandas DataFrame (e.g., ltp, iv, delta).
+            Callers who require precise Decimal representations should cast floats explicitly.
         """
         cols = ["snapshot_ts", "delta", "iv", "ltp"]
         if not self.eod_dir.exists():
@@ -152,6 +183,9 @@ class ChainReader:
         if not files:
             return pd.DataFrame(columns=cols)
 
+        # Note: Using an f-string for the glob path is required here because DuckDB's
+        # read_parquet() function is a table function and does not accept parameter markers (?)
+        # for its file path parameter.
         query = f"""
             SELECT snapshot_ts, delta, iv, ltp
             FROM read_parquet('{glob_pattern}')
@@ -160,9 +194,15 @@ class ChainReader:
               AND underlying = ?
               AND strike = ?
               AND option_type = ?
-            ORDER BY snapshot_ts ASC
         """
         params = [start_date, end_date, underlying, strike, option_type]
+
+        if expiry_date is not None:
+            query += " AND expiry_date = ?"
+            params.append(expiry_date)
+
+        query += " ORDER BY snapshot_ts ASC"
+
         df = self.conn.execute(query, params).df()
         if df.empty:
             return pd.DataFrame(columns=cols)
