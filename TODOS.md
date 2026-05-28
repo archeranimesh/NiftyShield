@@ -171,7 +171,7 @@ Tasks run in order. Do not start the next until the current ships and tests are 
 | # | Task | Owner | Deadline | Status |
 |---|---|---|---|---|
 | 1 | June 2026 Finideas roll | Animesh + Cowork | **2026-06-30** | Execution pending — awaiting Finideas instructions |
-| 2 | chain-data: EOD + intraday chain snapshot cron | Cowork | **ASAP** — data cannot be back-filled | ⬜ Not started — [story](docs/plan/chain-data/) |
+| 2 | chain-data: EOD + intraday chain snapshot cron | Cowork | **ASAP** — data cannot be back-filled | ✅ Shipped — [story](docs/plan/chain-data/) |
 | 3 | covered-call-overlay: entry helper + exit handler | Cowork | **ASAP** — each skipped cycle loses a data point | ⬜ Not started — [story](docs/plan/covered-call-overlay/) |
 | 4 | MVP: Multi-bagger Value Picks Tracker | Cowork | After #1 | ⬜ Not started — [story](docs/plan/mvp/) |
 | 5 | paper-backbone: Strategy Monitor daemon | Cowork | **Jun–Jul 2026** | ⬜ Not started — [story](docs/plan/paper-backbone/) |
@@ -234,6 +234,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-05-29 | chain-data CD4 — Docs close — 80cf95e |
 | 2026-05-28 | chain-data CD3.1 — ChainReader — DuckDB-based EOD and intraday chain query utilities — 7c0fe66 |
 | 2026-05-28 | chain-data CD2.1 — upstox_chain_intraday — 5-min intraday option chain snapshot — c1aea22 |
 | 2026-05-28 | chain-data CD1.2 — upstox_chain_snapshot — EOD option chain snapshot cron — 0db8767 |

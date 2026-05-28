@@ -17,6 +17,13 @@ src/
 │   └── dhan_verify.py         # Dhan connectivity check — loads DHAN_CLIENT_ID + DHAN_ACCESS_TOKEN, calls GET /v2/profile + /v2/holdings via raw requests. parse_holdings() pure function. Returns True/False.
 ├── analytics/                # Exploratory scripts (not production modules)
 │   └── verify_analytics.py   # Tests LTP, option chain, Greeks, historical candles via Analytics Token
+├── backtest/
+│   ├── __init__.py           # Package marker
+│   ├── chain_writer.py       # ChainWriter: writes EOD and 5-min intraday option chain snapshots to PyArrow Parquet
+│   ├── chain_reader.py       # ChainReader: DuckDB-based scanning and filtering of chain snapshots
+│   ├── bhavcopy_ingest.py    # Downloads and parses NSE F&O bhavcopy (both legacy and UDiFF formats) to Parquet
+│   ├── vix_ingest.py         # India VIX historical ingestion pipeline (NSE CSV / Upstox API)
+│   └── ivr.py                # Trailing 252-day India VIX Implied Volatility Rank (IVR) calculation
 ├── sandbox/                  # Exploratory scripts
 │   └── order_lifecycle.py    # Place → Modify → Cancel via V3 Order API (sandbox=True)
 ├── models/

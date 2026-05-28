@@ -25,4 +25,4 @@
 
 ## Phase CD4 — Docs close
 
-- [ ] **CD4** — Docs close: `CONTEXT.md` tree, `DECISIONS.md` entry, `BACKTEST_PLAN_PHASE1.md` checkboxes 1.10 + 1.10a, `TODOS.md` session log
+- [x] **CD4** — Docs close: `CONTEXT.md` tree, `DECISIONS.md` entry, `BACKTEST_PLAN_PHASE1.md` checkboxes 1.10 + 1.10a, `TODOS.md` session log | SHA: 80cf95e
