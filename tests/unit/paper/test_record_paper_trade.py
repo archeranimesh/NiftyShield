@@ -384,6 +384,7 @@ def test_close_auto_resolves_key_from_position(tmp_path: Path) -> None:
     close_args = [
         "--strategy", _STRATEGY,
         "--leg", _LEG,
+        "--qty", _QTY,
         "--price", "10.00",
         "--close",
         "--no-dry-run",
