@@ -234,7 +234,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
-| 2026-05-29 | chain-data CD4 — Docs close — 80cf95e |
+| 2026-05-29 | chain-data CD4 — Docs close — af6449d (amended from 80cf95e to add CONTEXT_TREE.md) |
 | 2026-05-28 | chain-data CD3.1 — ChainReader — DuckDB-based EOD and intraday chain query utilities — 7c0fe66 |
 | 2026-05-28 | chain-data CD2.1 — upstox_chain_intraday — 5-min intraday option chain snapshot — c1aea22 |
 | 2026-05-28 | chain-data CD1.2 — upstox_chain_snapshot — EOD option chain snapshot cron — 0db8767 |
