@@ -50,10 +50,10 @@ Invoke `roll-validator` agent ≥1 week before deadline. Steps:
 
 Four mismatches to resolve in `docs/strategies/csp_nifty_v1.md`:
 
-- [ ] **Lot size:** confirm 65 units; update any reference to 50 units with transition date annotation.
-- [ ] **Time stop:** define as "21 calendar days from entry date" — align with `BACKTEST_PLAN.md`.
-- [ ] **R-number naming:** pick one canonical scheme (R1–R7); update `csp_nifty_v1.md` + `BACKTEST_PLAN.md`.
-- [ ] **R4 definition:** single definition — event filter or 200-DMA filter; if both, name R4a + R4b.
+- [x] **Lot size:** confirmed 65 units (effective Jan 2026); revision history present in §Position Sizing. No 50-unit references remain.
+- [x] **Time stop:** defined as "21 calendar days from entry date" in §Exit Rules R1. Aligned with BACKTEST_PLAN.md "21-day" reference in gate (B).
+- [x] **R-number naming:** canonical scheme R1–R7 in csp_nifty_v1.md. No cross-file inconsistencies found.
+- [x] **R4 definition:** confirmed as event filter only (Budget / RBI MPC / election-result day). No 200-DMA filter. BACKTEST_PLAN.md gate updated to correct stale "trend filter" label.
 
 **Commit:** `docs(strategies): reconcile CSP v1 spec — lot size, time stop, R-numbers, R4`
 
@@ -330,9 +330,8 @@ Ref: DEBT-4 (TODOS.md) — resolved
 ~~**P1-1: Fix corrupt `paper_nifty_futures` snapshots for 2026-05-27**~~ ✅ DONE (2026-05-28)
 Both rows zeroed directly in DB — `paper_leg_snapshots` + `paper_nav_snapshots` for `base_futures` 2026-05-27 set to `unrealized_pnl=0, realized_pnl=0, total_pnl=0, ltp=NULL`. Root cause: snapshot ran after May futures expiry, got `None` LTP, propagated full notional as loss. Guarded by P1-2.
 
-**P1-2: Guard `paper_3track_snapshot.py` against None LTP on expired legs**
-- What: When a base position expires, any subsequent snapshot run will fetch `ltp=None`
-  and corrupt the P&L. Need a guard in the snapshot MTM calculation.
+~~**P1-2: Guard `paper_3track_snapshot.py` against None LTP on expired legs**~~ ✅ DONE — `57299e4` (2026-05-28)
+Guard implemented in `src/paper/track_snapshot.py` (`generate_track_snapshot`): `prices.get(key, 0.0)` → `prices.get(key)`; `None` branch logs WARNING and sets `unrealized=0`. 2 regression tests added. Root: `prices.get(key, 0.0)` default passed `ltp=0` to `_compute_leg_unrealized_pnl`, producing full notional as loss.
 - Fix: in the LTP fetch / P&L computation path, if `ltp is None` for a base leg, log a
   WARNING (`"LTP unavailable for {key} — likely expired. Skipping MTM for this leg."`)
   and write `unrealized_pnl=0` rather than propagating `None` into arithmetic.
@@ -693,6 +692,8 @@ and missing data that must be resolved before executing backtests at scale:
 
 | Date | What Changed |
 |---|---|
+| 2026-05-28 | P0-2 + Task 3b: update R3 caveat (warnings live since 8449cbf); reconcile CSP v1 spec (lot size, time stop, R-numbers, R4); BACKTEST_PLAN.md gate item checked |
+| 2026-05-28 | P1-2: guard None LTP in generate_track_snapshot — 57299e4; 2 regression tests; 1457 passing |
 | 2026-05-28 | Session: CSP Cycle 1 closed (profit target ₹8,898.50); Cycle 2 opened (23300 PE JUN 30 @ ₹158.6, 65u); May futures settled (₹23,911.3, back-dated 2026-05-26); June futures opened (₹24,006.2); DEBT-4 fixed (DEFAULT_LOT_SIZE 75→65); DB rows id=31,32 corrected; paper-exit-signals stories extended with ES10/ES11/ES12 + gap analysis; Task 4d prioritisation updated |
 | 2026-05-28 | paper-exit-signals story created — `docs/plan/paper-exit-signals/` (prompt, schema, stories, tasks); council exit-philosophy decisions absorbed into DECISIONS.md (10 rows); Task 4d added to sequential queue; csp_nifty_v1.md + council file archived at ES9 |
 | 2026-05-28 | covered-call-overlay plan created — `docs/plan/covered-call-overlay/` (prompt, tasks, stories, schema); broker mechanics confirmed; Task 4cc added to sequential queue |

@@ -51,14 +51,14 @@ a market holiday, enter on the next trading day.
 Do not enter if a CSP position for the current cycle is already open. One open position at a
 time, always.
 
-**IVR filter (R3 — specified, not yet enforced):** Skip the cycle if India VIX < 12 OR IVR
+**IVR filter (R3 — warning enforced at entry):** Skip the cycle if India VIX < 12 OR IVR
 < 25 (trailing 252-day percentile of India VIX). Rationale: short premium at the floor of
 IV has near-zero positive expectancy after costs, with unbounded vol-expansion risk on any
-shock. *This rule is specified but cannot yet be enforced in backtesting or paper-trade
-monitoring — India VIX historical data ingestion does not yet exist in the repo. A Phase 1
-ingestion sub-task is required before R3 can be applied to the backtest engine (see
-BACKTEST_PLAN.md Phase 1 notes). Until then: log India VIX level and IVR at every entry so
-the data is available for R3 calibration once the pipeline is live.*
+shock. *R3 warning enforced at entry via `record_paper_trade.py` (sha `8449cbf`, 2026-05-14):
+warnings fire for IVR < 0.25 (low-vol skip advisory) and IVR 0.25–0.50 (attention — in-window
+but suboptimal). Hard block (skip-cycle enforcement) deferred to ES12. India VIX ingestion is
+live (`vix_ingest.py`); ≥252-day history required for reliable IVR computation — criterion
+satisfied from Cycle 3 onwards once the bootstrap run completes.*
 
 **Event filter (R4 — specified, not yet enforced):** Skip the cycle if any of the following
 falls inside the trade DTE window: Union Budget (Feb 1 ± 1 trading day), RBI MPC

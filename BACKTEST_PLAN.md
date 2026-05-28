@@ -156,7 +156,7 @@ All of the following must be true before loading `BACKTEST_PLAN_PHASE1.md`.
 
 - [ ] **(D) Regime-matched Z-score:** Paper vs backtest `|Z| ≤ 1.5` on **both** the full 8-year backtest distribution **and** a regime-matched subset. See `BACKTEST_PLAN_PHASE1.md` task 1.11.
 
-- [ ] **Spec consistency resolved** before codifying gate: lot size (65 vs 50), time-stop definition, R-number naming, R4 trend filter. Gate references `docs/strategies/csp_nifty_v1.md` as sole canonical spec.
+- [x] **Spec consistency resolved** (Task 3b, 2026-05-28): lot size confirmed 65 units (revision history in §Position Sizing); time stop defined as 21 calendar days from entry date (§Exit Rules R1); R-number scheme canonical R1–R7; R4 confirmed as event filter (Budget / RBI MPC / election-result day) — no 200-DMA trend filter. Gate references `docs/strategies/csp_nifty_v1.md` as sole canonical spec.
 
 - [ ] `docs/strategies/csp_nifty_v1.md` exists and passes the validator (0.7).
 - [ ] `docs/strategies/niftyshield_integrated_v1.md` exists and passes the validator (0.4a).
