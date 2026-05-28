@@ -309,7 +309,7 @@ options are traded in the future.
 | 2026-05-02 | Live monitoring: CUSUM lower-sided (k=0.50, h_warn=3.0, h_reduce=4.0, h_halt=5.0) replaces weekly Z-score | — |
 | 2026-05-02 | Phase 0.8 gate: 4 criteria (A–D); Z-score is smoke test only; graduated deployment tiers 0 → 0.5 → 1 → 2 → 3 | `docs/plan/variance_gate.md` |
 | 2026-05-03 | NSE Bhavcopy: old archive URL covers 2016–~Nov 2024 only; Dec 2024+ uses new UDiFF format at a different URL and CSV schema | `TODOS.md → P1-NEXT UDiFF fix` |
-| 2026-05-23 | TradingView MCP (`tradesdontlie/tradingview-mcp`) validated as real-time regime signal channel; `docs/regime_probe.pine` is the canonical probe script; multi-timeframe regime divergence (1D vs 1W) is a mandatory check before strangle entry | `docs/tv_mcp_testing_framework.md` |
+| 2026-05-23 | TradingView MCP (`tradesdontlie/tradingview-mcp`) validated as real-time regime signal channel; `docs/strategies/regime_probe.pine` is the canonical probe script; multi-timeframe regime divergence (1D vs 1W) is a mandatory check before strangle entry | `docs/archive/tv_mcp_testing_framework.md` |
 | 2026-05-24 | Settle vs LTP: Bhavcopy `settle_price` is daily VWAP (3:00–3:30 PM), not EOD LTP. Actual IV divergence correction (using Upstox/Dhan EOD LTP validation target) is deferred until programmatic IV reconstruction is implemented. | `docs/reviews/audit_2026-05-15.md` finding [23] |
 
 
@@ -319,7 +319,7 @@ options are traded in the future.
 
 **Tool:** `tradesdontlie/tradingview-mcp` — Chrome DevTools Protocol bridge to TradingView Desktop (port 9222). 78 MCP tools. Used via ChatGPT/Codex with the MCP server running locally.
 
-**Validated findings (from `docs/tv_mcp_testing_framework.md` Phases 0, 3, 3C):**
+**Validated findings (from `docs/archive/tv_mcp_testing_framework.md` Phases 0, 3, 3C):**
 
 - `chart_get_state` returns a manifest only (symbol, resolution, chartType, study name+ID list). Study IDs are session-scoped random strings — call `chart_get_state` at the start of every session to resolve current IDs before calling `indicator_set_inputs`.
 - `data_get_pine_tables` reads Pine Script `table.new()` output as a flat `rows: string[]` array, each entry pipe-separated (`"key | value"`). Numeric values arrive as strings — explicit `float()` cast required at consumption. Tables are identified by study name (stable), not by session ID.
@@ -337,7 +337,7 @@ Running the probe on 2026-05-22 (NIFTY at 23,719):
 
 The weekly regime vetoes the daily tactical signal. **Rule: if 1W regime_code ≥ 2 (Volatile), do not deploy strangles regardless of daily regime.** Both signals must be ≤ 0 (Sideways/Transitioning) for strangle entry to proceed.
 
-**HV annualization bug (known):** `hv_20_ann` in `regime_probe.pine` uses `math.sqrt(252)` hardcoded regardless of timeframe. On weekly charts this overstates annualized HV by a factor of √(252/52) ≈ 2.2×. The daily HV figure is correct; never use `hv_20_ann` from the weekly table. **Fix:** Version 2 probe should run everything on the daily chart and pull weekly regime via `request.security()`.
+**HV annualization bug (known):** `hv_20_ann` in `docs/strategies/regime_probe.pine` uses `math.sqrt(252)` hardcoded regardless of timeframe. On weekly charts this overstates annualized HV by a factor of √(252/52) ≈ 2.2×. The daily HV figure is correct; never use `hv_20_ann` from the weekly table. **Fix:** Version 2 probe should run everything on the daily chart and pull weekly regime via `request.security()`.
 
 **Regime × VIX options recommendation matrix (implemented in probe, validated live):**
 
