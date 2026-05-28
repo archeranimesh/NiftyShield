@@ -38,10 +38,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from src.client.upstox_market import UpstoxMarketClient
-from src.paper.constants import STRATEGY_CSP
+from src.paper.constants import LOT_SIZE, STRATEGY_CSP
 
 UNDERLYING_DEFAULT = "NSE_INDEX|Nifty 50"
-DEFAULT_LOT_SIZE = 75  # current Nifty lot size
+DEFAULT_LOT_SIZE = LOT_SIZE  # single source of truth: src/paper/constants.py
 
 # Defaults that mirror record_paper_trade.py — used to emit minimal commands.
 DEFAULT_STRATEGY = STRATEGY_CSP
