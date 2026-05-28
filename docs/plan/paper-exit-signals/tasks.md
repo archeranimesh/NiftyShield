@@ -40,9 +40,44 @@
 
 - [ ] ES8 — Register overlay strategies in daemon; `MONITOR_OVERLAYS` gate | SHA: ___
 
-## Phase ES9 — Docs Close + Archive
+## Phase ES10 — CSP Lifecycle: R5 Re-entry
+
+- [ ] ES10 — R5 re-entry eligibility check in `CSPNiftyV1.apply_action(PROFIT_TARGET)` + Telegram alert + tests | SHA: ___
+
+## Phase ES11 — Base Expiry Roll Detection
+
+- [ ] ES11 — Base expiry detection in `paper_3track_snapshot.py`; `get_next_contract()` in `InstrumentLookup`; Telegram alert with roll commands + tests | SHA: ___
+
+## Phase ES12 — Entry Discipline
+
+- [ ] ES12 — Liquidity gate enforcement in `find_strike_by_delta.py`; R3 hard block + `--force-entry` in `record_paper_trade.py` + tests | SHA: ___
+
+## Phase ES9 — Docs Close + Archive (MUST BE LAST)
 
 - [ ] ES9 — DECISIONS.md (10 rows), CONTEXT.md, TODOS.md; archive council + csp_nifty_v1 spec | SHA: ___
+
+---
+
+---
+
+## Implementation Priority
+
+Run stories in this order — later stories depend on earlier ones:
+
+| Priority | Stories | Rationale |
+|---|---|---|
+| **P0 — Gate** | Prerequisite check | `StrategyMonitor` + `PaperExecutor` must exist (PB1.2, PB1.3) |
+| **P1 — Foundation** | ES0 → ES1 → ES2 | Schema, rule engine, CSP threshold fix — everything else depends on these |
+| **P2 — CSP lifecycle** | ES10 → ES12 | R5 re-entry + entry discipline — directly impacts open Cycle 2 position |
+| **P3 — Overlays** | ES3 → ES4 → ES5 → ES6 | CC, PP, Collar strategy classes + OverlayCloser |
+| **P4 — Integration** | ES7 → ES8 | EOD + daemon wiring — needs P1 + P3 complete |
+| **P5 — Base lifecycle** | ES11 | Base expiry roll alert — monthly cadence; next event 2026-06-30 |
+| **P6 — Docs** | ES9 | Always last — archives spec only when all code is committed |
+
+**Out-of-scope gaps** (need separate story files, not blocked on this story):
+- R4 event filter (Budget, RBI MPC, elections) — requires `src/market_calendar/events.yaml` design
+- Collateral leg tracking (`long_niftybees` per cycle) — lifecycle story needed
+- Transaction cost model application to paper P&L — analytics story needed
 
 ---
 

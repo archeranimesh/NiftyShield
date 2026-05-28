@@ -82,9 +82,16 @@ COLLAR_PUT_CRASH    -- Collar long put crash monetisation
 COLLAR_CLOSE_ALL    -- full overlay exit (MANUAL_OVERRIDE)
 COLLAR_REBALANCE    -- future: mid-cycle rebalance (reserved, not Phase 0)
 
+-- CSP lifecycle (ES10)
+R5_REENTRY_ELIGIBLE  -- profit-target close passed all R5 gates (DTE ≥ 14, IVR ≥ 0.25, no open pos)
+R5_REENTRY_BLOCKED   -- profit-target close but re-entry blocked; notes field contains reason
+
+-- Base position lifecycle (ES11)
+BASE_EXPIRY_ALERT    -- base leg (futures or DITM call) within 5 DTE of expiry; roll commands in notes
+
 -- Manual / system
 MANUAL              -- user-initiated close not matching any rule
-MANUAL_OVERRIDE     -- overrides the no-independent-stop rule for Collar
+MANUAL_OVERRIDE     -- overrides the no-independent-stop rule for Collar or R3 gate (--force-entry)
 NONE                -- no signal (default / cleared state)
 ```
 

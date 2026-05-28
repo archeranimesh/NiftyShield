@@ -233,31 +233,204 @@ paper trades — their backbone integration classes (PB2.1, PB4.1) plug in once 
 
 ---
 
-## Task 4d — paper-exit-signals: Automated Exit Detection + Closure for CC, PP, Collar Overlays
+## Task 4d — paper-exit-signals: Automated Exit Detection + Closure (extended)
 
 **Full spec:** `docs/plan/paper-exit-signals/` (prompt, schema, stories, tasks)
-**Priority:** after 4c (paper-backbone) — every overlay cycle without automated exits is discretionary data, not reproducible system data
 **Blocked by:** Task 4c PB1.1–PB1.7 (StrategyMonitor, PaperExecutor must be committed first)
-**Council authority:** `docs/council/2026-05-28_paper-trade-exit-philosophy.md` — Chairman Synthesis (GPT-5.5 #1). All 10 thresholds are binding. No threshold changes without a new council decision.
+**Council authority:** `docs/council/2026-05-28_paper-trade-exit-philosophy.md` — Chairman Synthesis. All 10 thresholds are binding. No threshold changes without a new council decision.
 
-Extends paper-backbone with: (1) a pure stateless `ExitSignalEngine` rule engine, (2) three pluggable overlay strategy classes (`CCOverlayV1`, `PPOverlayV1`, `CollarOverlayV1`), (3) atomic multi-leg closure (`OverlayCloser`) with rollback for Collar, (4) `paper_exit_events` audit table with dual-signal Q2 validation fields, and (5) EOD signal write path in `paper_3track_snapshot.py`.
+Extends paper-backbone with the full exit + lifecycle pipeline. Covers exit detection
+(ExitSignalEngine), overlay closures (CCOverlayV1, PPOverlayV1, CollarOverlayV1,
+OverlayCloser), CSP post-exit re-entry eligibility (R5), base position expiry roll
+detection, and entry discipline enforcement (liquidity gate + R3 hard block).
 
-Tier 1 (EOD detection) is mandatory for Phase 0. Tier 2 (intraday daemon) is wired but disabled via `MONITOR_OVERLAYS=0` env gate.
+Tier 1 (EOD detection) is mandatory for Phase 0. Tier 2 (intraday daemon) is wired but
+disabled via `MONITOR_OVERLAYS=0` env gate.
 
-**Archive gates (ES9):** both `docs/council/2026-05-28_paper-trade-exit-philosophy.md` and `docs/strategies/csp_nifty_v1.md` are archived via `git mv` when ES9 closes. The code is the spec after this story ships.
+**Archive gates (ES9 — must run last):** `docs/council/2026-05-28_paper-trade-exit-philosophy.md`
+and `docs/strategies/csp_nifty_v1.md` archived via `git mv` only after all ES stories are committed.
+
+**What remains manual after full story completion:**
+- R5 re-entry execution (eligibility automated; strike + record is manual)
+- Base roll execution (detection automated; close + open commands are manual paste)
+- R4 event filter (Budget/RBI/elections) — separate story, requires `events.yaml`
+- Collateral leg (`long_niftybees`) per cycle — separate lifecycle story
+- Transaction cost model in paper P&L — separate analytics story
+
+**Priority order:**
+
+| Priority | Phase | Rationale |
+|---|---|---|
+| **P0** | Prereq gate | Must verify `StrategyMonitor` + `PaperExecutor` exist before ES0 |
+| **P1** | ES0 → ES1 → ES2 | Foundation: schema + rule engine + CSP threshold fix. Everything depends on these. |
+| **P2** | ES10 → ES12 | CSP lifecycle (Cycle 2 open now); entry discipline (prevents repeat of 75u bug class) |
+| **P3** | ES3 → ES4 → ES5 → ES6 | Overlay strategy classes + OverlayCloser |
+| **P4** | ES7 → ES8 | EOD + daemon wiring — needs P1 + P3 |
+| **P5** | ES11 | Base roll detection — next event 2026-06-30 |
+| **P6** | ES9 | Docs close — always last |
 
 | Phase | Files | Status |
 |---|---|---|
-| ES0 | `paper_exit_events` DDL in `PaperStore.__init__`; `PaperStore.insert_exit_event`, `get_open_exit_events`, `update_exit_event_status`; tests | ⬜ Not started |
-| ES1 | `src/strategy/exit_signal_engine.py` — `ExitSignalEngine` (pure/stateless, no DB/async); `ExitSignal` enum; `ExitEvent` dataclass; all CSP/CC/PP/Collar rules; tests | ⬜ Not started |
-| ES2 | Fix `CSPNiftyV1` thresholds: `DELTA_STOP` 0.35 → 0.45, `DELTA_WARN` new at 0.35, `LOSS_STOP` 2.0× → 1.75×; re-run tests | ⬜ Not started |
-| ES3 | `src/strategy/cc_overlay_v1.py` — `CCOverlayV1` implementing `PaperStrategy` protocol; `check_signals()` calls engine; dual-signal audit fields populated; tests | ⬜ Not started |
-| ES4 | `src/strategy/pp_overlay_v1.py` — `PPOverlayV1`; `CRASH_MONETIZE` rule + bid/ask liquidity gate; `DTE_REVIEW` INFO; tests | ⬜ Not started |
-| ES5 | `src/strategy/collar_overlay_v1.py` — `CollarOverlayV1`; `COLLAR_CALL_DECAY` (25% remaining), `COLLAR_CALL_WARN`, `COLLAR_PUT_CRASH`, `DTE_FORCED`; tests | ⬜ Not started |
-| ES6 | `src/strategy/overlay_closer.py` — `OverlayCloser`; atomic Collar close (buy call → sell put) with rollback on leg 2 failure; re-sell call to restore on abort; tests | ⬜ Not started |
-| ES7 | `scripts/paper_3track_snapshot.py` — Tier 1 EOD signal write: call `ExitSignalEngine.evaluate()` per open leg; deduplication guard (skip if `OPEN` event already exists for same trade_id + signal); write `paper_exit_events` row with `detected_by=EOD`; Telegram ACTION alert; tests | ⬜ Not started |
-| ES8 | `scripts/paper_daemon.py` — register `CCOverlayV1`, `PPOverlayV1`, `CollarOverlayV1` in `StrategyMonitor`; `MONITOR_OVERLAYS=0` gate; README update | ⬜ Not started |
-| ES9 | Docs close: 10 rows in `DECISIONS.md` (council 2026-05-28); update `CONTEXT.md` module tree; `TODOS.md` session log; `git mv` council file → `docs/council/archive/strategy/`; `git mv` csp spec → `docs/strategies/archive/` with deprecation notice | ⬜ Not started |
+| ES0 | `paper_exit_events` DDL in `PaperStore.__init__`; store methods + tests | ⬜ Not started |
+| ES1 | `src/strategy/exit_signals.py` — `ExitSignalEngine` (pure/stateless); all CSP/CC/PP/Collar rules; tests | ⬜ Not started |
+| ES2 | Fix `CSPNiftyV1` thresholds: `DELTA_STOP` 0.35→0.45, `DELTA_WARN` 0.35, `LOSS_STOP` 2.0×→1.75×; re-test | ⬜ Not started |
+| ES3 | `src/strategy/cc_overlay_v1.py` — `CCOverlayV1`; dual-signal audit; tests | ⬜ Not started |
+| ES4 | `src/strategy/pp_overlay_v1.py` — `PPOverlayV1`; `CRASH_MONETIZE` + bid/ask gate; tests | ⬜ Not started |
+| ES5 | `src/strategy/collar_overlay_v1.py` — `CollarOverlayV1`; 4-path closure routing; tests | ⬜ Not started |
+| ES6 | `src/strategy/overlay_closer.py` — `OverlayCloser`; atomic Collar close + rollback; tests | ⬜ Not started |
+| ES7 | `scripts/paper_3track_snapshot.py` — Tier 1 EOD signal write + Telegram alert + deduplication; tests | ⬜ Not started |
+| ES8 | `scripts/monitor_daemon.py` — register CC/PP/Collar overlays; `MONITOR_OVERLAYS` gate | ⬜ Not started |
+| ES10 | `src/strategy/csp_nifty_v1.py` — R5 re-entry eligibility check post profit-target; Telegram alert; tests | ⬜ Not started |
+| ES11 | `scripts/paper_3track_snapshot.py` + `InstrumentLookup.get_next_contract()` — base expiry alert; tests | ⬜ Not started |
+| ES12 | `find_strike_by_delta.py` liquidity gate enforcement; `record_paper_trade.py` R3 hard block + `--force-entry`; tests | ⬜ Not started |
+| ES9 | Docs close (LAST): DECISIONS.md, CONTEXT.md, TODOS.md; `git mv` council + csp_nifty_v1 to archive | ⬜ Not started |
+
+**Known gaps deferred to separate stories (not blocked on this task):**
+
+| Gap | Story needed | Priority |
+|---|---|---|
+| R4 event filter (Budget/RBI/elections) | `docs/plan/entry-event-filter/` — needs `events.yaml` design | After ES12 |
+| Collateral leg (`long_niftybees`) per cycle | `docs/plan/csp-collateral-leg/` | Before Phase 0.8 gate |
+| Transaction cost model in paper P&L | `docs/plan/paper-cost-model/` | Phase 1 |
+| IVR at entry NULL for Cycle 1 (data gap) | Manual note — permanent gap, log in gate criteria | Accepted |
+
+---
+
+## Pending — Immediate + Near-Term Actions (as of 2026-05-28)
+
+> Concrete items that are not yet captured in any story or are waiting for a commit/edit.
+> Sorted by urgency. Each item has a clear DoD so it can be ticked off immediately.
+
+---
+
+### P0 — Must Do Before Next Session
+
+**P0-1: Commit `find_strike_by_delta.py` DEBT-4 fix**
+- What: `DEFAULT_LOT_SIZE = 75` → `from src.paper.constants import LOT_SIZE as DEFAULT_LOT_SIZE`
+- Code change is live in working tree but uncommitted. Run tests first.
+- DoD: `python -m pytest tests/unit/ --tb=no -q` green → `git add scripts/find_strike_by_delta.py && git commit`
+- Commit message: `fix(scripts): import LOT_SIZE from constants in find_strike_by_delta (was hardcoded 75)`
+
+**P0-2: Fix stale R3 caveat in `docs/strategies/csp_nifty_v1.md`**
+- What: Line 54 reads `"R3 not yet enforced"`. IVR warnings shipped in sha `8449cbf` (2026-05-14).
+- Change to: `"R3 warning enforced at entry via record_paper_trade.py (sha 8449cbf, 2026-05-14). Hard block deferred to ES12."`
+- DoD: targeted `Edit` call on that paragraph; no test required; commit as `docs(strategy): update R3 caveat — warnings live since 8449cbf`.
+
+---
+
+### P1 — Data Integrity Fixes
+
+**P1-1: Fix corrupt `paper_nifty_futures` snapshots for 2026-05-27**
+- What: `paper_leg_snapshots` for `base_futures` on 2026-05-27 has `ltp=NULL`, causing
+  `total_pnl = -₹15,56,457` (full notional treated as loss). Same corruption in `paper_nav_snapshots`.
+- Root cause: `paper_3track_snapshot.py` fetched LTP for an expired contract (May futures expired 2026-05-26)
+  and got `None`; the P&L calculation did not guard against `None` LTP.
+- Fix: directly UPDATE the two corrupt rows to `ltp=NULL, unrealized_pnl=0, total_pnl=0`
+  with a note "expiry day — LTP unavailable; zeroed to avoid corruption". This is audit-accurate:
+  the contract had zero value on its expiry day.
+- Commands:
+  ```sql
+  UPDATE paper_leg_snapshots
+  SET unrealized_pnl='0', realized_pnl='0', total_pnl='0',
+      ltp=NULL
+  WHERE strategy_name='paper_nifty_futures' AND leg_role='base_futures'
+    AND snapshot_date='2026-05-27';
+
+  UPDATE paper_nav_snapshots
+  SET unrealized_pnl='0', realized_pnl='0', total_pnl='0'
+  WHERE strategy_name='paper_nifty_futures' AND snapshot_date='2026-05-27';
+  ```
+- DoD: run the two UPDATEs; verify the row shows 0 P&L.
+
+**P1-2: Guard `paper_3track_snapshot.py` against None LTP on expired legs**
+- What: When a base position expires, any subsequent snapshot run will fetch `ltp=None`
+  and corrupt the P&L. Need a guard in the snapshot MTM calculation.
+- Fix: in the LTP fetch / P&L computation path, if `ltp is None` for a base leg, log a
+  WARNING (`"LTP unavailable for {key} — likely expired. Skipping MTM for this leg."`)
+  and write `unrealized_pnl=0` rather than propagating `None` into arithmetic.
+- Files: `scripts/paper_3track_snapshot.py` (or the underlying `PaperTracker.compute_pnl`)
+- DoD: unit test — mock LTP returns `None` for one leg → snapshot writes `unrealized_pnl=0`;
+  no exception; WARNING logged.
+
+**P1-3: Accept IVR-at-entry NULL for CSP Cycle 1 (data gap)**
+- Cycle 1 (id=14, entered 2026-05-11): `ivr_at_entry=NULL` — VIX history pipeline was not
+  yet live at entry time. This is a permanent data gap; do not attempt to back-fill.
+- Cycle 2 (id=32, entered 2026-05-28): `ivr_at_entry=NULL` — IVR was available from the
+  intraday snapshot (VIX=14.98) but insufficient history (0/252 days) blocked computation.
+  This is also a permanent gap for this entry.
+- Action: document both gaps in Phase 0.8 gate evaluation. Criterion A ("IVR at entry
+  recorded") will be marked PARTIAL for Cycles 1 and 2, satisfied from Cycle 3 onwards
+  once `vix_ingest.py` bootstraps ≥252 days of history.
+- DoD: add a note to `BACKTEST_PLAN.md` Phase 0.8 gate criterion A: "IVR NULL for Cycles 1
+  and 2 — accepted data gap; criterion A satisfied from Cycle 3 onward."
+
+---
+
+### P2 — New Story Files Needed
+
+**P2-1: Create `docs/plan/entry-event-filter/` — R4 event filter story**
+- What: R4 in `csp_nifty_v1.md` skips cycles when Budget / RBI MPC / election-result day
+  falls inside the trade DTE window. Currently not enforced anywhere.
+- Requires: `src/market_calendar/events.yaml` — annual list of tail-risk events (Budget date,
+  RBI MPC dates, election result dates). Design decision needed: (a) what counts as "inside
+  the window", (b) how far in advance is the event list updated, (c) how does the check
+  integrate with `record_paper_trade.py`.
+- Story scope: `events.yaml` schema + loader function + integration into `record_paper_trade.py`
+  as a soft warning (Phase 0) with hard block option (Phase 1).
+- DoD: story dir created with `prompt.md` + `tasks.md`. No code yet.
+- Dependency: ES12 must be committed first (shares `record_paper_trade.py`).
+
+**P2-2: Create `docs/plan/csp-collateral-leg/` — collateral leg tracking story**
+- What: `csp_nifty_v1.md` specifies a `long_niftybees` leg recorded once per strategy year
+  to track the combined P&L (short put + ETF collateral). Not recorded for current cycles.
+- Missing for: Cycles 1 and 2 (entered 2026-05-11 and 2026-05-28).
+- Story scope: (a) back-fill the `long_niftybees` entry for 2026-05-11 at NiftyBees price
+  on that date, (b) add `long_niftybees` to `paper_snapshot.py` LTP batch so it appears
+  in `paper_nav_snapshots`, (c) annual reset procedure.
+- DoD: story dir created. Back-fill command for Cycle 1 documented.
+- Formula: `qty = floor((65 × nifty_spot) / niftybees_ltp)` at strategy inception date.
+
+---
+
+### P3 — ES Prerequisite Gate
+
+**P3-1: Verify paper-backbone prerequisites before ES0**
+- What: ES0 cannot start until `StrategyMonitor` (PB1.2) and `PaperExecutor` (PB1.3) are
+  committed. These are from Task 4c (paper-backbone) which is listed as "Not started".
+- Action: before opening any ES story file, run:
+  ```
+  search_graph("StrategyMonitor")   # must return results
+  search_graph("PaperExecutor")     # must return results
+  search_graph("CCOverlayV1")       # must return zero results
+  ```
+  If `StrategyMonitor` / `PaperExecutor` do NOT exist, Task 4c must be completed first.
+  Do not start ES0 without this check.
+
+---
+
+### P4 — Operational Calendar (paper trading)
+
+**P4-1: CSP Cycle 2 — time stop fires 2026-06-19**
+- Entry date: 2026-05-29. Time stop: 21 calendar days → fires on **2026-06-19**.
+- Monitor daily via `paper_snapshot.py --strategy paper_csp_nifty_v1`.
+- Profit target: mark ≤ 50% of ₹158.6 = ₹79.30. Delta stop: |delta| ≥ 0.45.
+- If profit target fires before June 19: run R5 eligibility check (DTE ≥ 14, IVR ≥ 0.25).
+
+**P4-2: June 30 expiry — all overlays and bases roll**
+- All June 30 contracts (NSE_FO|58627, NSE_FO|71474, NSE_FO|37805, NSE_FO|79509,
+  NSE_FO|62329, NSE_FO|79653) expire on **2026-06-30**.
+- `paper_3track_overlay_roll.py` handles overlay legs at DTE ≤ 5 (circa **2026-06-23**).
+- Base positions (futures `NSE_FO|62329`, DITM call `NSE_FO|79509`) need manual rolls
+  at expiry — see ES11 for the automated alert (not yet implemented).
+- CSP Cycle 2 (`NSE_FO|79653`) rolls via `paper_csp_roll.py` at DTE ≤ 5.
+- Mark your calendar: **week of 2026-06-23** is the roll week.
+
+**P4-3: Verify `paper_3track_snapshot.py` cron is running for June futures**
+- The May futures base expired; the June futures base (`NSE_FO|62329`) was opened 2026-05-29.
+- The cron fetches LTP for all open `paper_trades` positions. Confirm that the new June
+  futures row is picked up in the next EOD snapshot run (2026-05-29 evening).
+- Run manually first: `python scripts/paper_3track_snapshot.py --no-save` and verify
+  `base_futures` shows a non-None LTP.
 
 ---
 
@@ -497,16 +670,11 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 License decision needed before automation. Every file should carry a header once the license is chosen.
 
-### DEBT-4: `find_strike_by_delta.py` — `DEFAULT_LOT_SIZE = 75` vs `constants.LOT_SIZE = 65`
+### ~~DEBT-4~~: `find_strike_by_delta.py` — `DEFAULT_LOT_SIZE = 75` vs `constants.LOT_SIZE = 65` ✅ RESOLVED 2026-05-28
 
-`scripts/find_strike_by_delta.py` line 40 defines `DEFAULT_LOT_SIZE = 75`. All 3-track scripts use
-`LOT_SIZE = 65` (centralised in `src/paper/constants.py`). Running `find_strike_by_delta.py` without
-`--qty` produces dry-run commands with the wrong quantity.
-
-**Fix when touching `find_strike_by_delta.py` next:**
-1. Confirm correct lot size against NSE circular.
-2. Replace `DEFAULT_LOT_SIZE = 75` with `from src.paper.constants import LOT_SIZE as DEFAULT_LOT_SIZE`.
-3. Update the `--qty` help string.
+Fixed: replaced `DEFAULT_LOT_SIZE = 75` with `from src.paper.constants import LOT_SIZE as DEFAULT_LOT_SIZE`
+in `scripts/find_strike_by_delta.py`. DB rows id=31,32 corrected from 75u → 65u directly.
+Discovered via Cycle 2 CSP entry producing wrong quantity in production.
 
 ### DEBT-5: `test_bhavcopy_ingest.py` — Missing test coverage for `write_to_parquet` append path
 
@@ -537,6 +705,7 @@ and missing data that must be resolved before executing backtests at scale:
 
 | Date | What Changed |
 |---|---|
+| 2026-05-28 | Session: CSP Cycle 1 closed (profit target ₹8,898.50); Cycle 2 opened (23300 PE JUN 30 @ ₹158.6, 65u); May futures settled (₹23,911.3, back-dated 2026-05-26); June futures opened (₹24,006.2); DEBT-4 fixed (DEFAULT_LOT_SIZE 75→65); DB rows id=31,32 corrected; paper-exit-signals stories extended with ES10/ES11/ES12 + gap analysis; Task 4d prioritisation updated |
 | 2026-05-28 | paper-exit-signals story created — `docs/plan/paper-exit-signals/` (prompt, schema, stories, tasks); council exit-philosophy decisions absorbed into DECISIONS.md (10 rows); Task 4d added to sequential queue; csp_nifty_v1.md + council file archived at ES9 |
 | 2026-05-28 | covered-call-overlay plan created — `docs/plan/covered-call-overlay/` (prompt, tasks, stories, schema); broker mechanics confirmed; Task 4cc added to sequential queue |
 | 2026-05-27 | variance-gate story created — `docs/plan/variance-gate/` (prompt, tasks, stories, spec); `docs/plan/variance_gate.md` archived; README.md + TODOS.md updated |

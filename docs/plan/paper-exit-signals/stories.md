@@ -721,6 +721,248 @@ Add one integration smoke test: daemon registers overlays when `MONITOR_OVERLAYS
 
 ---
 
+## ES10 — CSP R5 re-entry: post-profit-target eligibility check + execution
+
+**Files to change:**
+- `src/strategy/csp_nifty_v1.py` — add `_check_r5_reentry()` called from `apply_action(PROFIT_TARGET)`
+- `tests/unit/strategy/test_csp_nifty_v1.py` — extend with R5 re-entry cases
+
+**Before any code:**
+- `get_code_snippet("CSPNiftyV1")` — confirm ES2 committed; `apply_action` signature
+- `get_code_snippet("IntradayMarketStore")` — VIX / IVR fetch path for current session
+- `get_code_snippet("PaperStore")` — confirm `get_open_positions()` method exists
+
+**What to implement:**
+
+After `apply_action(PROFIT_TARGET)` closes the short put, call `_check_r5_reentry()`:
+
+```python
+def _check_r5_reentry(
+    self,
+    store: PaperStore,
+    notifier: TelegramGateway,
+    expiry: date,
+    today: date,
+    vix_data_dir: Path,
+) -> None:
+    """
+    Evaluate R5 re-entry eligibility after a profit-target close.
+    Eligibility: DTE to current expiry ≥ 14 AND IVR ≥ 0.25 AND no open CSP position.
+    Sends Telegram alert with outcome. Does NOT auto-enter — approval-gated.
+    """
+```
+
+Eligibility logic (all three must pass):
+1. `dte = (expiry - today).days` ≥ 14
+2. IVR from `compute_ivr(vix_today, load_vix_series(vix_data_dir))` ≥ 0.25; if IVR is
+   `None` (insufficient history) → treat as blocked (conservative)
+3. No open `short_put` row in `paper_trades` for `paper_csp_nifty_v1`
+
+If eligible:
+- Create `paper_exit_events` row: `exit_signal=R5_REENTRY_ELIGIBLE`, `severity=INFO`,
+  `detected_by=MANUAL`, `dte=dte`
+- Send Telegram message (non-blocking):
+  `"✅ R5 re-entry eligible — DTE={dte}, IVR={ivr:.2f}. Run find_strike_by_delta.py to select strike."`
+
+If blocked:
+- Create `paper_exit_events` row: `exit_signal=R5_REENTRY_BLOCKED`, `severity=INFO`,
+  `notes=reason string`
+- Send Telegram: `"⛔ R5 blocked — {reason}. No re-entry this cycle."`
+
+Re-entry execution itself remains a **manual step** (run `find_strike_by_delta.py` then
+`record_paper_trade.py`). This story only automates the eligibility check and alert —
+it does not auto-record the new trade. Full automation deferred to Phase 1.
+
+**Tests (`tests/unit/strategy/test_csp_nifty_v1.py` — new test cases):**
+
+Use `tmp_path` PaperStore, mock `TelegramGateway`, mock VIX series.
+
+- DTE = 15, IVR = 0.30, no open position → `R5_REENTRY_ELIGIBLE` event written; notifier called
+- DTE = 13 → `R5_REENTRY_BLOCKED`; reason contains "DTE"
+- IVR = 0.22 → `R5_REENTRY_BLOCKED`; reason contains "IVR"
+- IVR = None (empty VIX history) → `R5_REENTRY_BLOCKED`; reason contains "IVR history"
+- Open `short_put` already exists in store → `R5_REENTRY_BLOCKED`; reason contains "open position"
+- `apply_action(PROFIT_TARGET)` integration: close recorded → `_check_r5_reentry()` called
+- Notifier failure (raises) → event still written; does not propagate exception
+
+**Commit:** `feat(strategy): add R5 re-entry eligibility check to CSPNiftyV1 post-profit-target close`
+
+---
+
+## ES11 — Base position expiry roll: detection + Telegram alert
+
+**Files to change:**
+- `scripts/paper_3track_snapshot.py` — add `_check_base_expiry()` after MTM fetch
+- `src/instruments/lookup.py` — add `get_next_contract(instrument_key)` — finds next
+  expiry contract for the same underlying and instrument type from BOD
+- `tests/unit/paper/test_base_expiry_detection.py` — new test file
+
+**Before any code:**
+- `get_code_snippet("paper_3track_snapshot")` — where MTM fetch ends; where to insert
+- `get_code_snippet("InstrumentLookup")` — existing BOD methods; confirm `from_file` path
+- `get_code_snippet("PaperStore")` — confirm how open positions are fetched
+
+**What to implement:**
+
+```python
+def _check_base_expiry(
+    positions: list[PaperPosition],
+    instruments: list[dict],        # raw BOD instrument list
+    today: date,
+    store: PaperStore,
+    notifier: TelegramGateway,
+) -> None:
+    """
+    For any open base position with leg_role in BASE_ROLL_ROLES and DTE ≤ 5,
+    look up the next expiry contract for the same underlying + type,
+    write a paper_exit_events row (BASE_EXPIRY_ALERT), and send a Telegram alert
+    containing pre-computed settlement-close and roll-open commands.
+    ETF base (base_etf) is excluded — no roll needed.
+    Idempotent: skips if an OPEN BASE_EXPIRY_ALERT already exists for this
+    trade today.
+    """
+
+BASE_ROLL_ROLES = {"base_futures", "base_ditm_call"}
+```
+
+`get_next_contract(instrument_key, instruments)`:
+- Find current contract in BOD by key → extract `underlying_symbol`, `instrument_type`,
+  `expiry` (epoch ms)
+- Find all BOD entries with same underlying + type, expiry > current expiry
+- Return the one with the smallest expiry greater than current (i.e., next monthly)
+- Returns `None` if no next contract found in BOD (log WARNING — BOD may be stale)
+
+Telegram alert format:
+```
+⏳ Base expiry alert: NIFTY FUT 26 MAY 26 expires in 3 days (2026-05-26).
+Next contract: NIFTY FUT 30 JUN 26 (NSE_FO|62329)
+
+Settlement close command:
+  python scripts/record_paper_trade.py --strategy paper_nifty_futures \
+    --leg base_futures --action SELL --key 'NSE_FO|66071' \
+    --price <SETTLEMENT_LTP> --date <EXPIRY_DATE> \
+    --notes "Settlement close: expired"
+
+Roll open command (run on next trading day with live LTP):
+  python scripts/record_paper_trade.py --strategy paper_nifty_futures \
+    --leg base_futures --action BUY --key 'NSE_FO|62329' \
+    --price <JUNE_FUT_LTP> --date <ROLL_DATE> \
+    --notes "Base roll: June futures, Cycle continuation"
+```
+
+**Tests (`tests/unit/paper/test_base_expiry_detection.py`):**
+
+- `base_futures` DTE = 4 → `BASE_EXPIRY_ALERT` event written; notifier called with both commands
+- `base_futures` DTE = 6 → no event, notifier silent
+- `base_ditm_call` DTE = 4 → alert written
+- `base_etf` DTE = 4 → no alert (excluded from `BASE_ROLL_ROLES`)
+- `get_next_contract` returns correct next-expiry key from BOD fixture
+- `get_next_contract` when no next expiry exists → returns `None`; alert includes "WARNING: next contract not found in BOD"
+- Idempotency: second snapshot run same day → no duplicate `BASE_EXPIRY_ALERT` event
+- Notifier failure → event still written; exception not propagated
+
+**Commit:** `feat(scripts): add base position expiry detection and Telegram roll alert to paper_3track_snapshot`
+
+---
+
+## ES12 — Entry discipline: liquidity gate enforcement + R3 hard block
+
+**Files to change:**
+- `scripts/find_strike_by_delta.py` — enforce bid/ask ≤ 5% gate; try adjacent delta
+  candidates before failing
+- `scripts/record_paper_trade.py` — R3 hard block on SELL when IVR < 0.25; add
+  `--force-entry` escape hatch
+- `tests/unit/scripts/test_find_strike_liquidity_gate.py` — new test file
+- `tests/unit/scripts/test_record_paper_trade_r3.py` — new test file
+
+**Before any code:**
+- `get_code_snippet("filter_strikes_by_delta")` — current selection logic; confirm
+  `spread_pct` field is already computed
+- `get_code_snippet("_get_ivr_and_warn")` in `record_paper_trade.py` — current IVR path
+- Read `docs/strategies/csp_nifty_v1.md` liquidity gate section — exact 5% threshold
+  and fallback-delta logic
+
+**Liquidity gate in `find_strike_by_delta.py`:**
+
+Current behaviour: computes `spread_pct` in the table but selects the best delta match
+regardless of spread.
+
+New behaviour:
+```python
+LIQUIDITY_GATE_PCT = Decimal("0.05")   # 5% of mid — from csp_nifty_v1 spec
+
+def _apply_liquidity_gate(
+    ranked: list[dict],
+    gate_pct: Decimal = LIQUIDITY_GATE_PCT,
+) -> list[dict]:
+    """
+    Filter out strikes where bid/ask spread > gate_pct × mid.
+    Returns the filtered list (may be empty).
+    """
+```
+
+In the main selection loop, after `rank_strikes()`:
+1. Filter via `_apply_liquidity_gate(ranked)`
+2. If filtered list is empty: try next delta candidate (e.g., 22 → 25 → 20)
+3. If all candidates empty after gate: print
+   `"GATE FAIL: no strike with bid/ask ≤ 5% of mid across all delta candidates."`
+   `"Skip this cycle per csp_nifty_v1 R spec."` and `sys.exit(1)`
+4. If a fallback candidate was used: print WARNING with the selected delta vs. requested
+
+**R3 hard block in `record_paper_trade.py`:**
+
+Rename `_get_ivr_and_warn()` to `_get_ivr_and_enforce()`. New logic:
+
+```python
+def _get_ivr_and_enforce(
+    trade_date: date,
+    action: TradeAction,
+    vix_data_dir: Path,
+    db_path: Path,
+    force_entry: bool = False,
+) -> float | None:
+    """
+    Compute IVR and enforce R3 gate on SELL entries.
+    Raises SystemExit(1) if IVR < 0.25 and not force_entry.
+    Logs force-entry override to paper_exit_events with MANUAL signal.
+    """
+```
+
+On SELL with IVR < 0.25 and not `--force-entry`:
+```
+ERROR: R3 blocked — IVR={ivr:.2f} (threshold 0.25). Low vol; skip this cycle.
+       Use --force-entry to override with documented reason.
+```
+`sys.exit(1)`
+
+On SELL with `--force-entry` + IVR < 0.25:
+```
+WARNING: R3 override — IVR={ivr:.2f} < 0.25. Proceeding under --force-entry.
+```
+Write `paper_exit_events` row: `exit_signal=MANUAL_OVERRIDE`, `notes="R3 bypassed via --force-entry"`
+
+Add `--force-entry` argument to `record_paper_trade.py` argparse.
+
+**Tests:**
+
+`test_find_strike_liquidity_gate.py`:
+- Spread ≤ 5% on primary delta → selected (gate passes)
+- Spread > 5% on primary delta, ≤ 5% on fallback → fallback selected; WARNING printed
+- All candidates > 5% → `sys.exit(1)`; no command emitted
+- `_apply_liquidity_gate` with empty input → returns `[]`
+
+`test_record_paper_trade_r3.py`:
+- IVR = 0.30, action=SELL → no block; proceeds normally
+- IVR = 0.22, action=SELL → `sys.exit(1)`; error message contains "R3 blocked"
+- IVR = 0.22, action=SELL, `--force-entry` → records trade; override event written to store
+- IVR = None (no VIX history), action=SELL → no block (cannot enforce without data;
+  warning logged — consistent with current soft-warn behaviour)
+- action=BUY, IVR = 0.10 → no block (gate only applies to SELL / new entries)
+
+**Commit:** `feat(scripts): enforce liquidity gate in find_strike_by_delta and R3 hard block in record_paper_trade`
+
+---
+
 ## ES9 — Docs close + archive
 
 **Files to change:**
