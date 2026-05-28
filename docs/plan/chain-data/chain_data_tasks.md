@@ -13,11 +13,11 @@
 ## Phase CD1 — EOD snapshot writer + cron
 
 - [x] **CD1.1** — `src/backtest/chain_writer.py`: Parquet writer for chain snapshots (write + idempotent overwrite) + tests | SHA: ce57240
-- [ ] **CD1.2** — `scripts/upstox_chain_snapshot.py`: EOD snapshot cron (3 expiries, holiday guard, 3:30 PM IST) + tests
+- [x] **CD1.2** — `scripts/upstox_chain_snapshot.py`: EOD snapshot cron (3 expiries, holiday guard, 3:30 PM IST) + tests | SHA: 0db8767
 
 ## Phase CD2 — Intraday 5-min snapshot
 
-- [ ] **CD2.1** — `scripts/upstox_chain_intraday.py`: 5-min intraday cron (same schema, `--mode` flag optional) + tests
+- [x] **CD2.1** — `scripts/upstox_chain_intraday.py`: 5-min intraday cron (same schema, `--mode` flag optional) + tests | SHA: 086c330
 
 ## Phase CD3 — Query utilities
 

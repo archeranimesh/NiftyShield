@@ -234,6 +234,8 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-05-28 | chain-data CD2.1 — upstox_chain_intraday — 5-min intraday option chain snapshot — 086c330 |
+| 2026-05-28 | chain-data CD1.2 — upstox_chain_snapshot — EOD option chain snapshot cron — 0db8767 |
 | 2026-05-28 | chain-data CD1.1 — ChainWriter — Parquet EOD and intraday chain snapshot writer — ce57240 |
 | 2026-05-28 | TODOS.md reordered — immediate actions + calendar at top, build queue + phases below |
 | 2026-05-28 | TODOS.md restructured — unified numbering, removed P-label clashes, P0-2 removed (done) |
