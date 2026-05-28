@@ -25,3 +25,5 @@ pandas>=2.0.0
 pyarrow>=12.0.0
 jugaad-data>=0.30
 aiohttp==3.10.5
+duckdb>=0.9.0
+
