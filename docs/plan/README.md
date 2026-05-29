@@ -5,6 +5,14 @@
 
 ---
 
+## Active Epics
+
+| Folder | What it covers | Status |
+|--------|---------------|--------|
+| `dev-foundation/` | Engineering excellence epic — tooling, CI, code health (3 sub-stories) | ⬜ Not started |
+
+---
+
 ## Active Stories
 
 | Folder | What it covers | Next task | Status |
