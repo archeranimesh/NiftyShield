@@ -17,3 +17,6 @@ docs/strategies/csp_v1_revision_prompt.md
 
 # Scratch files from council question drafting
 tmp/
+
+# Python packaging build artifacts
+*.egg-info/
