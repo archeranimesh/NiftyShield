@@ -138,6 +138,13 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+## Developer setup
+
+```bash
+pip install -e ".[dev]"
+bash scripts/dev/install_hooks.sh
+```
+
 ### Configure
 
 ```bash
