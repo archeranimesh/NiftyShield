@@ -1,15 +1,19 @@
-from datetime import datetime, date, timezone, timedelta
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from pathlib import Path
-import pandas as pd
+
 import pytest
 
-from src.backtest.chain_writer import ChainWriter
 from src.backtest.chain_reader import ChainReader
+from src.backtest.chain_writer import ChainWriter
 from src.models.options import OptionChain, OptionChainStrike, OptionLeg
 
+pytestmark = pytest.mark.slow
 
-def _make_dummy_leg(strike: Decimal, delta: Decimal = Decimal("-0.25"), iv: Decimal = Decimal("15.5")) -> OptionLeg:
+
+def _make_dummy_leg(
+    strike: Decimal, delta: Decimal = Decimal("-0.25"), iv: Decimal = Decimal("15.5")
+) -> OptionLeg:
     return OptionLeg(
         ltp=Decimal("123.45"),
         bid=Decimal("123.00"),
@@ -29,7 +33,7 @@ def test_get_eod_snapshots_happy_path(tmp_path: Path) -> None:
     """Write fixture Parquet files via ChainWriter, read back with ChainReader; assert row count and columns."""
     eod_dir = tmp_path / "eod"
     writer = ChainWriter(str(eod_dir))
-    
+
     chain = OptionChain(
         underlying_spot=Decimal("22000.00"),
         expiry=date(2026, 5, 28),
@@ -40,7 +44,7 @@ def test_get_eod_snapshots_happy_path(tmp_path: Path) -> None:
             )
         },
     )
-    
+
     ts = datetime(2026, 5, 27, 10, 0, tzinfo=timezone.utc)
     writer.write_eod_snapshot(chain, ts)
 
@@ -50,12 +54,12 @@ def test_get_eod_snapshots_happy_path(tmp_path: Path) -> None:
         end_date=date(2026, 5, 28),
         underlying="NIFTY_50",
     )
-    
+
     assert len(df) == 2
     assert set(df.columns) == set(ChainReader.EMPTY_COLS)
     assert df["option_type"].tolist() == ["CE", "PE"]
     assert df["underlying"].tolist() == ["NIFTY_50"] * 2
-    
+
     # Verify close method cleans up without error
     reader.close()
 
@@ -64,7 +68,7 @@ def test_get_eod_snapshots_date_filter(tmp_path: Path) -> None:
     """Two files for different dates; filter by range; assert only correct date returned."""
     eod_dir = tmp_path / "eod"
     writer = ChainWriter(str(eod_dir))
-    
+
     chain = OptionChain(
         underlying_spot=Decimal("22000.00"),
         expiry=date(2026, 5, 28),
@@ -74,17 +78,17 @@ def test_get_eod_snapshots_date_filter(tmp_path: Path) -> None:
             )
         },
     )
-    
+
     # Write for May 26
     ts1 = datetime(2026, 5, 26, 10, 0, tzinfo=timezone.utc)
     writer.write_eod_snapshot(chain, ts1)
-    
+
     # Write for May 27
     ts2 = datetime(2026, 5, 27, 10, 0, tzinfo=timezone.utc)
     writer.write_eod_snapshot(chain, ts2)
 
     reader = ChainReader(str(eod_dir))
-    
+
     # Query only for May 27
     df = reader.get_eod_snapshots(
         start_date=date(2026, 5, 27),
@@ -98,7 +102,7 @@ def test_get_eod_snapshots_option_type_filter(tmp_path: Path) -> None:
     """Write CE and PE legs; assert query with option_type='CE' filters out PE."""
     eod_dir = tmp_path / "eod"
     writer = ChainWriter(str(eod_dir))
-    
+
     chain = OptionChain(
         underlying_spot=Decimal("22000.00"),
         expiry=date(2026, 5, 28),
@@ -126,7 +130,7 @@ def test_get_eod_snapshots_empty_dir(tmp_path: Path) -> None:
     """Non-existent dir -> empty DataFrame with correct columns."""
     non_existent = tmp_path / "does_not_exist"
     reader = ChainReader(str(non_existent))
-    
+
     df = reader.get_eod_snapshots(
         start_date=date(2026, 5, 27),
         end_date=date(2026, 5, 27),
@@ -139,26 +143,26 @@ def test_get_eod_snapshots_delta_filter(tmp_path: Path) -> None:
     """Assert only rows with delta in range returned."""
     eod_dir = tmp_path / "eod"
     writer = ChainWriter(str(eod_dir))
-    
+
     chain = OptionChain(
         underlying_spot=Decimal("22000.00"),
         expiry=date(2026, 5, 28),
         strikes={
             Decimal("22000"): OptionChainStrike(
-                ce=_make_dummy_leg(Decimal("22000"), Decimal("0.35")), # In range
-                pe=_make_dummy_leg(Decimal("22000"), Decimal("-0.15")), # Out of range
+                ce=_make_dummy_leg(Decimal("22000"), Decimal("0.35")),  # In range
+                pe=_make_dummy_leg(Decimal("22000"), Decimal("-0.15")),  # Out of range
             ),
             Decimal("22100"): OptionChainStrike(
-                ce=_make_dummy_leg(Decimal("22100"), Decimal("0.55")), # Out of range
-                pe=_make_dummy_leg(Decimal("22100"), Decimal("-0.35")), # Out of range
-            )
+                ce=_make_dummy_leg(Decimal("22100"), Decimal("0.55")),  # Out of range
+                pe=_make_dummy_leg(Decimal("22100"), Decimal("-0.35")),  # Out of range
+            ),
         },
     )
     ts = datetime(2026, 5, 27, 10, 0, tzinfo=timezone.utc)
     writer.write_eod_snapshot(chain, ts)
 
     reader = ChainReader(str(eod_dir))
-    
+
     df = reader.get_eod_snapshots(
         start_date=date(2026, 5, 27),
         end_date=date(2026, 5, 27),
@@ -173,7 +177,7 @@ def test_get_intraday_snapshots_happy_path(tmp_path: Path) -> None:
     """Write intraday Parquet, read back; assert row count."""
     intraday_dir = tmp_path / "intraday"
     writer = ChainWriter(str(intraday_dir))
-    
+
     chain = OptionChain(
         underlying_spot=Decimal("22000.00"),
         expiry=date(2026, 5, 28),
@@ -189,7 +193,7 @@ def test_get_intraday_snapshots_happy_path(tmp_path: Path) -> None:
     writer.write_intraday_snapshot(chain, ts)
 
     reader = ChainReader(eod_dir=str(tmp_path / "eod"), intraday_dir=str(intraday_dir))
-    
+
     df = reader.get_intraday_snapshots(
         trade_date=date(2026, 5, 27),
         expiry_date=date(2026, 5, 28),
@@ -202,7 +206,7 @@ def test_get_intraday_snapshots_strike_filter(tmp_path: Path) -> None:
     """Write multiple strikes in intraday snapshot, query with strike filter."""
     intraday_dir = tmp_path / "intraday"
     writer = ChainWriter(str(intraday_dir))
-    
+
     chain = OptionChain(
         underlying_spot=Decimal("22000.00"),
         expiry=date(2026, 5, 28),
@@ -212,7 +216,7 @@ def test_get_intraday_snapshots_strike_filter(tmp_path: Path) -> None:
             ),
             Decimal("22100"): OptionChainStrike(
                 ce=_make_dummy_leg(Decimal("22100"), Decimal("0.4")),
-            )
+            ),
         },
     )
     ts = datetime(2026, 5, 27, 9, 0, tzinfo=timezone.utc)
@@ -241,7 +245,7 @@ def test_get_strike_delta_series(tmp_path: Path) -> None:
     """Assert columns = [snapshot_ts, delta, iv, ltp]; one row per file."""
     eod_dir = tmp_path / "eod"
     writer = ChainWriter(str(eod_dir))
-    
+
     chain_26 = OptionChain(
         underlying_spot=Decimal("22000.00"),
         expiry=date(2026, 5, 28),
@@ -260,7 +264,7 @@ def test_get_strike_delta_series(tmp_path: Path) -> None:
             )
         },
     )
-    
+
     writer.write_eod_snapshot(chain_26, datetime(2026, 5, 26, 10, 0, tzinfo=timezone.utc))
     writer.write_eod_snapshot(chain_27, datetime(2026, 5, 27, 10, 0, tzinfo=timezone.utc))
 
@@ -271,7 +275,7 @@ def test_get_strike_delta_series(tmp_path: Path) -> None:
         strike=Decimal("22000"),
         option_type="CE",
     )
-    
+
     assert len(df) == 2
     assert list(df.columns) == ["snapshot_ts", "delta", "iv", "ltp"]
     assert Decimal(str(df["delta"].iloc[0])) == Decimal("0.45")
@@ -284,7 +288,7 @@ def test_get_strike_delta_series_expiry_filter(tmp_path: Path) -> None:
     """Verify that get_strike_delta_series works with expiry_date filter."""
     eod_dir = tmp_path / "eod"
     writer = ChainWriter(str(eod_dir))
-    
+
     # Expiry 1
     chain_exp1 = OptionChain(
         underlying_spot=Decimal("22000.00"),
@@ -305,11 +309,11 @@ def test_get_strike_delta_series_expiry_filter(tmp_path: Path) -> None:
             )
         },
     )
-    
+
     # Write both expiries on the same date/snapshot_ts
     ts = datetime(2026, 5, 27, 10, 0, tzinfo=timezone.utc)
     writer.write_eod_snapshot(chain_exp1, ts)
-    
+
     # Note: EOD writer overwrites files for the same date. So if we want to write both
     # expiries for the same snapshot, we can merge strikes in a single OptionChain or
     # write to separate files. Wait, OptionChain represents a single underlying + expiry.
@@ -320,7 +324,7 @@ def test_get_strike_delta_series_expiry_filter(tmp_path: Path) -> None:
     writer.write_eod_snapshot(chain_exp2, datetime(2026, 5, 27, 10, 0, tzinfo=timezone.utc))
 
     reader = ChainReader(str(eod_dir))
-    
+
     # Query with expiry_date matching exp1
     df = reader.get_strike_delta_series(
         start_date=date(2026, 5, 25),

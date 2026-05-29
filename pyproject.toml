@@ -25,6 +25,7 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests/unit"]
 asyncio_mode = "auto"
+addopts = "-n auto"
 markers = [
     "slow: marks tests as slow (deselect with '-m not slow')",
     "sandbox: marks tests requiring Upstox sandbox token",

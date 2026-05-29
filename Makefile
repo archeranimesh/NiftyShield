@@ -1,7 +1,10 @@
 .PHONY: test coverage lint fmt security ci dead-code help
 
 test: ## Run offline unit tests (fast)
-	python -m pytest tests/unit/ --tb=short -q
+	python -m pytest tests/unit/ --tb=short -q -n auto
+
+test-serial: ## Run offline unit tests serially
+	python -m pytest tests/unit/ --tb=short -q -p no:randomly -o addopts=""
 
 coverage: ## Run tests with coverage report + enforce threshold
 	python -m pytest tests/unit/ --cov=src --cov-report=term-missing \

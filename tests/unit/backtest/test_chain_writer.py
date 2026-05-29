@@ -1,11 +1,14 @@
-from datetime import datetime, date, timezone, timedelta
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from pathlib import Path
+
 import pandas as pd
 import pytest
 
 from src.backtest.chain_writer import ChainWriter
 from src.models.options import OptionChain, OptionChainStrike, OptionLeg
+
+pytestmark = pytest.mark.slow
 
 
 def _make_dummy_leg(strike: Decimal, delta: Decimal = Decimal("-0.25")) -> OptionLeg:
@@ -60,7 +63,7 @@ def test_write_eod_idempotent(tmp_path: Path) -> None:
     )
     ts = datetime(2026, 5, 27, 9, 30, tzinfo=timezone.utc)
     path1 = writer.write_eod_snapshot(chain, ts)
-    
+
     # Write a slightly modified one
     chain2 = OptionChain(
         underlying_spot=Decimal("22100.00"),
@@ -74,10 +77,10 @@ def test_write_eod_idempotent(tmp_path: Path) -> None:
     )
     path2 = writer.write_eod_snapshot(chain2, ts)
     assert path1 == path2
-    
+
     df = pd.read_parquet(path2)
     assert Decimal(str(df["spot"].iloc[0])) == Decimal("22100.000000")
-    
+
     # Check that there is only 1 file in the directory
     dir_files = list((tmp_path / "2026" / "05").glob("*.parquet"))
     assert len(dir_files) == 1
@@ -96,13 +99,13 @@ def test_write_eod_roundtrip(tmp_path: Path) -> None:
             ),
             Decimal("22100"): OptionChainStrike(
                 ce=_make_dummy_leg(Decimal("22100"), Decimal("0.4")),
-                pe=None, # Only CE leg present
+                pe=None,  # Only CE leg present
             ),
         },
     )
     ts = datetime(2026, 5, 27, 10, 0, tzinfo=timezone.utc)
     path = writer.write_eod_snapshot(chain, ts)
-    
+
     df = pd.read_parquet(path)
     # Total legs: 2 from strike 22000 (CE+PE) and 1 from strike 22100 (CE) = 3 rows
     assert len(df) == 3
@@ -158,11 +161,11 @@ def test_write_intraday_idempotent(tmp_path: Path) -> None:
     ts = datetime(2026, 5, 27, 9, 0, tzinfo=timezone.utc)
     path1 = writer.write_intraday_snapshot(chain1, ts)
     path2 = writer.write_intraday_snapshot(chain2, ts)
-    
+
     assert path1 == path2
     df = pd.read_parquet(path2)
     assert Decimal(str(df["spot"].iloc[0])) == Decimal("22050.000000")
-    
+
     dir_files = list((tmp_path / "2026" / "05" / "27").glob("*.parquet"))
     assert len(dir_files) == 1
 
@@ -177,10 +180,10 @@ def test_naive_ts_raises(tmp_path: Path) -> None:
     )
     # Using timezone-naive datetime
     naive_ts = datetime.utcnow()
-    
+
     with pytest.raises(ValueError, match="snapshot_ts must be timezone-aware UTC"):
         writer.write_eod_snapshot(chain, naive_ts)
-        
+
     with pytest.raises(ValueError, match="snapshot_ts must be timezone-aware UTC"):
         writer.write_intraday_snapshot(chain, naive_ts)
 
@@ -195,7 +198,7 @@ def test_empty_chain_writes_zero_rows(tmp_path: Path) -> None:
     )
     ts = datetime(2026, 5, 27, 9, 30, tzinfo=timezone.utc)
     path = writer.write_eod_snapshot(chain, ts)
-    
+
     assert path.exists()
     df = pd.read_parquet(path)
     assert len(df) == 0
@@ -219,7 +222,7 @@ def test_decimal_precision(tmp_path: Path) -> None:
     )
     ts = datetime(2026, 5, 27, 9, 30, tzinfo=timezone.utc)
     path = writer.write_eod_snapshot(chain, ts)
-    
+
     df = pd.read_parquet(path)
     assert len(df) == 1
     retrieved_delta = Decimal(str(df["delta"].iloc[0]))
