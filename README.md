@@ -135,12 +135,12 @@ git clone https://github.com/archeranimesh/NiftyShield.git
 cd NiftyShield
 python -m venv .venv
 source .venv/bin/activate
+
+# Choose one:
+# A. For runtime/production only:
 pip install -r requirements.txt
-```
 
-## Developer setup
-
-```bash
+# B. For development (runs tests, linters, pre-commit):
 pip install -e ".[dev]"
 bash scripts/dev/install_hooks.sh
 ```
