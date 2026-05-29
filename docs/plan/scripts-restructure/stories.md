@@ -1,7 +1,8 @@
 # Scripts Restructure — Design & Story Specs
 
-> Status: **SR0 closed 2026-05-29** — layout finalised, open questions resolved.
-> Implementation starts at SR1 (post-market hours only for SR7+).
+> Status: **SR0 closed 2026-05-29** — scripts/ layout finalised.
+> **SS0 closed 2026-05-29** — src/ audit complete; SS1–SS5 stories ready.
+> Implementation starts at SR1 / SS1 (cron-sensitive moves post-market only).
 > Full implementation rules in `CLAUDE.md`, `REVIEW.md`, and `prompt.md`.
 
 ---
@@ -382,3 +383,348 @@ Update cron in same commit.
 ```
 
 **Commit:** `docs(scripts): update CONTEXT.md and DECISIONS.md for restructured scripts layout`
+
+---
+
+---
+
+## `src/` Structure Stories (SS series)
+
+> **Governing principle:** `src/` is the importable library package. The rule is simple:
+> *anything you wouldn't ship in a `pip install` doesn't belong in `src/`.*
+> Exploratory scripts, dev diagnostics, and test files are not library code.
+
+---
+
+### SS0 — Audit (closed 2026-05-29)
+
+Full audit of `src/` against the above principle. Five issues identified:
+
+1. `src/analytics/` and `src/sandbox/` — exploratory, non-importable; belong in `scripts/dev/`
+2. `test_*.py` files inside `src/` — misnamed vs CONTEXT_TREE; picked up by pytest if run from root
+3. Five files undocumented in CONTEXT_TREE: `src/backtest/{bhavcopy_loader.py,constants.py}`,
+   `src/dhan/positions.py`, `src/portfolio/service.py`, `src/intraday/market_store.py`;
+   plus `src/nuvama/mock_client.py` whose CONTEXT_TREE entry is stale (says it's in `protocol.py`)
+4. `src/portfolio/service.py` — `SnapshotService` adds no protocol boundary over `PortfolioStore`;
+   may be a dead layer; needs an import audit before deciding fold vs keep
+5. `src/gamma/` and `src/nuvama/` missing CLAUDE.md; model placement convention never documented
+
+---
+
+### SS1 — Evict exploratory code from `src/`
+
+**What and why:**
+`src/analytics/` and `src/sandbox/` are not importable modules — they exist for manual exploration
+and API probing. Keeping them in `src/` means codebase-memory-mcp indexes them as library code,
+and `python -m pytest` (without `tests/unit/` scoped) collects the `test_*.py` files inside them.
+
+**Before any move:**
+- `grep -r "from src.analytics\|from src.sandbox\|import src.analytics\|import src.sandbox" .` — must return zero. If any caller exists, remove the import first.
+- `crontab -l | grep -E "analytics|sandbox"` — expect zero.
+- Confirm target exists: `scripts/dev/` is created in SR5. SS1 must run after SR5.
+
+**Files to move:**
+- `src/analytics/test_analytics_apis.py` → `scripts/dev/verify_analytics.py`
+  (rename: drop `test_` prefix; align with CONTEXT_TREE documented name `verify_analytics.py`)
+- `src/analytics/__init__.py` — delete after move (empty package gone)
+- `src/analytics/` directory — remove once empty
+- `src/sandbox/test_sandbox_order_lifecycle.py` → `scripts/dev/sandbox_order_lifecycle.py`
+  (rename: drop `test_` prefix; align with CONTEXT_TREE documented name `order_lifecycle.py`)
+- `src/sandbox/__init__.py` — delete after move
+- `src/sandbox/` directory — remove once empty
+
+**Test gate:** `python -m pytest tests/unit/ --tb=no -q` — all green.
+
+**Commit:** `refactor(src): move exploratory scripts out of src/ into scripts/dev/`
+
+---
+
+### SS2 — Document the five undocumented src/ files
+
+**What and why:**
+Five files exist in `src/` that are not in CONTEXT_TREE.md — the authoritative module index.
+One additional entry (`src/nuvama/mock_client.py`) exists on disk but CONTEXT_TREE wrongly says
+`MockNuvamaClient` lives in `protocol.py`. No code changes in this task — documentation only.
+
+**Files to document in CONTEXT_TREE.md (targeted `Edit` calls, one per module):**
+
+1. `src/backtest/constants.py` — add entry: `constants.py — DEFAULT_DATA_DIR path constant; `_ROOT`-relative path to `data/offline/options_ohlcv/`; imported by `bhavcopy_loader.py`.`
+2. `src/backtest/bhavcopy_loader.py` — add entry: `bhavcopy_loader.py — `load_options_ohlcv(underlying, start, end, data_dir, columns)`: reads options OHLCV Parquet from `DEFAULT_DATA_DIR`; returns `pd.DataFrame`; used by backtest engine.`
+3. `src/dhan/positions.py` — add entry: `positions.py — Pure Dhan intraday options position parsing and formatting. `fetch_positions_raw` / `fetch_fund_limit_raw` (I/O). All parsers are pure functions. Decimal(str(v)) rule enforced. Maps Dhan's `availabelBalance` typo explicitly.`
+4. `src/portfolio/service.py` — add entry: `service.py — `SnapshotService`: thin orchestration wrapper around `PortfolioStore` for daily snapshot persistence. No protocol boundary; under review (see SS3).`
+5. `src/intraday/market_store.py` — add entry after confirming what it does (run `head -40` before writing).
+6. `src/nuvama/mock_client.py` — fix stale CONTEXT_TREE entry in `protocol.py` description: remove "MockNuvamaClient provides offline testing (AR-9)" from `protocol.py` line; add separate `mock_client.py` entry: `mock_client.py — `MockNuvamaClient`: offline NuvamaClient implementation for unit tests (AR-9). Implements `protocol.NuvamaClient`.`
+
+**Before editing:** `head -40 src/intraday/market_store.py` — read actual content before writing the description.
+
+**No code changes. No test gate needed (docs only).**
+
+**Commit:** `docs(src): add missing CONTEXT_TREE entries for 5 undocumented files; fix nuvama mock_client entry`
+
+---
+
+### SS3 — Audit and resolve `src/portfolio/service.py` and `src/intraday/market_store.py`
+
+**What and why:**
+Two modules have unclear ownership and no tests. Before deciding to keep or delete each,
+run an import audit and confirm whether any production path uses them.
+
+**Audit steps (run before any code change):**
+
+For `src/portfolio/service.py`:
+```bash
+grep -r "from src.portfolio.service\|from src.portfolio import service\|portfolio\.service" . --include="*.py"
+```
+- If zero callers → delete the file; it's a dead layer that contradicts the tracker.py orchestration.
+- If callers exist → elevate: add a `SnapshotServiceProtocol` to `protocol.py` or merge the logic into `tracker.py`.
+
+For `src/intraday/market_store.py`:
+```bash
+grep -r "from src.intraday\|from src.intraday.market_store\|market_store" . --include="*.py"
+```
+- If zero callers → delete file + `src/intraday/__init__.py` + directory. Re-index graph.
+- If callers exist → document fully in CONTEXT_TREE (SS2 entry will need update) and write tests.
+
+**Test gate:** `python -m pytest tests/unit/ --tb=no -q` — all green after any deletion.
+
+**Commit (if deleting both):** `refactor(src): delete dead service.py and market_store.py modules`
+**Commit (if keeping either):** `refactor(src): <describe specific action> for <module>`
+
+**After:** Re-index: `mcp__codebase-memory-mcp__index_repository`.
+
+---
+
+### SS4 — Write missing CLAUDE.md files; codify model placement convention
+
+**What and why:**
+`src/gamma/` and `src/nuvama/` both have significant invariants but no CLAUDE.md.
+The model placement convention (shared types in `src/models/`, domain-local types in their module)
+is followed but never documented — next person to add a module will guess wrong.
+
+**Files to create:**
+
+`src/gamma/CLAUDE.md` — must cover:
+- Module purpose: Near-Expiry Gamma Buy scaffolding; `GammaChainSnapshot` + `GammaWatchlistEntry` frozen dataclasses
+- `GammaStore` SQLite operations; table name; primary key / upsert semantics
+- What does NOT yet exist: `gamma_daily_watch.py` script (planned, Phase A next)
+- Any Decimal invariant or Greeks field constraints
+
+`src/nuvama/CLAUDE.md` — must cover:
+- `NuvamaClient` protocol + `MockNuvamaClient` (in `mock_client.py`, not `protocol.py`)
+- `_EXCLUDE_ISINS` exclusion list in `reader.py` and why it exists
+- `availabelBalance` Dhan API typo mapped in `positions_reader.py` (note: this is in dhan, not nuvama — double-check)
+- `record_all_options_snapshots` atomicity guarantee (executemany in single transaction — AR-7)
+- `get_cumulative_realized_pnl` — SQL GROUP BY aggregation, not in-memory
+
+**`docs/plan/` addition — model placement convention (add to stories.md SR11 or DECISIONS.md):**
+
+Convention to codify in DECISIONS.md:
+```
+| 2026-05-29 | src/ model placement rule: types shared across two or more modules go into
+  src/models/ (portfolio.py, mf.py, options.py). Types used only within one domain stay
+  in that domain's models.py (dhan, nuvama, paper, risk). New shared types must land in
+  src/models/ from day one — do not create src/<module>/models.py and later migrate.
+  | src-restructure SS4 |
+```
+
+**Test gate:** `python -m pytest tests/unit/ --tb=no -q` — all green (no code changes, but verify).
+
+**Commit:** `docs(src): add CLAUDE.md for gamma and nuvama; codify model placement rule in DECISIONS.md`
+
+---
+
+### SS5 — CONTEXT_TREE.md sync after src/ restructure
+
+**What and why:**
+SS1 and SS3 move or delete files from `src/`. CONTEXT_TREE.md is the authoritative module index
+and must reflect the post-restructure state exactly. This story is a dedicated docs-close pass
+after both SS1 and SS3 are committed — do not run it mid-migration.
+
+**Depends on:** SS1 closed + SS3 closed.
+
+**Files to update (targeted `Edit` calls only — never `Write` on CONTEXT_TREE.md):**
+
+After SS1 (evict analytics/ and sandbox/):
+- Remove `├── analytics/` block entirely — files moved to `scripts/dev/`
+- Remove `├── sandbox/` block entirely — files moved to `scripts/dev/`
+- Verify `scripts/dev/` entry in the scripts section accurately reflects the two renamed files:
+  `verify_analytics.py` (was `test_analytics_apis.py`) and `sandbox_order_lifecycle.py`
+  (was `test_sandbox_order_lifecycle.py`)
+
+After SS3 (resolve service.py and market_store.py):
+- If `src/portfolio/service.py` was deleted: remove its `service.py` line from the portfolio block
+- If `src/portfolio/service.py` was kept and refactored: update the description to reflect actual state
+- If `src/intraday/` was deleted: remove the entire `├── intraday/` block
+- If `src/intraday/` was kept: ensure `market_store.py` description is accurate
+
+**Verification step — run before committing:**
+```bash
+# Every file in src/ must have a CONTEXT_TREE entry; every entry must match a real file
+python -c "
+import os, re
+from pathlib import Path
+
+tree = Path('CONTEXT_TREE.md').read_text()
+src_files = {
+    str(p.relative_to('src/')).replace(os.sep, '/')
+    for p in Path('src').rglob('*.py')
+    if '__pycache__' not in str(p)
+}
+missing = [f for f in sorted(src_files) if Path(f).name not in tree]
+if missing:
+    print('MISSING from CONTEXT_TREE:', *missing, sep='\n  ')
+else:
+    print('OK — all src/ files present in CONTEXT_TREE')
+"
+```
+
+**No code changes. No test gate needed (docs only).**
+
+**Commit:** `docs(src): sync CONTEXT_TREE.md after SS1 and SS3 src/ restructure`
+
+---
+
+---
+
+## `docs/archive/` Restructure Stories (DA series)
+
+> **Governing principle:** `docs/archive/` is a read-only graveyard — once a file lands
+> here it is never edited, only read. The folder structure must make it obvious what type of
+> content is in each subfolder without opening any file.
+>
+> **Two files are permanently pinned at archive root** — do not move them:
+> - `BACKTEST_PLAN_ARCHIVE.md` — path-linked from `BACKTEST_PLAN.md` and `BACKTEST_PLAN_PHASE1.md`
+> - `TODOS_ARCHIVE.md` — path-linked from `TODOS.md` and `.claude/skills/md-cleanup/SKILL.md`
+> Moving either breaks live root-doc references and the md-cleanup skill.
+
+---
+
+### DA0 — Audit (closed 2026-05-29)
+
+Full inventory of `docs/archive/` completed. Issues found:
+
+1. **8 files loose at archive root** with no categorisation — workflow logs, plan docs,
+   strategy guides, and a dead stub all mixed together.
+2. **`docs/archive/plan/` has mixed content** — retired story folders (correct) alongside
+   strategy research docs (`INVESTMENT_STRATEGY_RESEARCH.md`, `SWING_STRATEGY_RESEARCH.md`,
+   `signal_pipeline_spec.md`) that belong in a `research/` folder.
+3. **`docs/archive/reco_tracker.md`** is a dead stub ("renamed to MVP; see
+   `docs/plan/mvp_tracker.md`" — that path no longer exists). Safe to delete.
+4. **`docs/antigravity/gamma_implementation_plan.md`** (live folder) is a completed
+   Antigravity task plan, not a workflow-collaboration doc. Belongs in archive.
+5. **`docs/analysis/`** (live folder) is completely empty. Delete.
+6. **Two new subfolders needed:** `process/` for workflow/session docs; `research/` for
+   strategy research that never shipped into a spec.
+
+**Final target layout:**
+```
+docs/archive/
+├── BACKTEST_PLAN_ARCHIVE.md   ← PINNED — do not move (path-linked from root docs)
+├── TODOS_ARCHIVE.md           ← PINNED — do not move (path-linked from root docs + md-cleanup skill)
+├── analysis/                  # Quantitative analysis, tool probes, sizing studies
+│   ├── overlay_lot_sizing_2026-05-12.md
+│   └── tv_mcp_testing_framework.md        ← from archive root
+├── antigravity/               # Completed Antigravity session plans
+│   ├── audit_13_implementation_plan.md
+│   └── gamma_implementation_plan.md       ← from docs/antigravity/ (live)
+├── council/                   # Completed council decisions (research/risk/strategy subdirs)
+│   ├── research/
+│   ├── risk/
+│   └── strategy/
+├── plan/                      # Retired story folders + pre-story-folder plan docs
+│   ├── README.md
+│   ├── chain-data/            ← already correct
+│   ├── 0_3_finideas_roll.md
+│   ├── 1_10_dhan_chain_client.md
+│   ├── 1_5b_analytics_module.md
+│   ├── mvp_tracker.md                     ← from archive root
+│   ├── PAPER_TRADING_PLAN.md
+│   ├── paper_3track_overlay.md
+│   ├── paper_3track_roll.md
+│   ├── story_audit_remediation.md
+│   ├── story_paper_impl_tasks.md          ← from archive root
+│   ├── story_risk_gamma_phase_a.md
+│   └── variance_gate.md
+├── process/                   ← NEW: workflow docs, session logs, operator guides
+│   ├── 2026-05-08_workflow-improvements.md  ← from archive root
+│   └── paper_trading.md                     ← from archive root
+├── research/                  ← NEW: strategy research that never shipped into a spec
+│   ├── INVESTMENT_STRATEGY_RESEARCH.md    ← from archive/plan/
+│   ├── SWING_STRATEGY_RESEARCH.md         ← from archive/plan/
+│   └── signal_pipeline_spec.md            ← from archive/plan/
+├── reviews/                   # Code and plan review outputs — no changes needed
+│   ├── audit_2026-05-15.md
+│   └── backtest_plan_pm_review_2026-04-27.md
+└── strategies/                # Superseded strategy specs — no changes needed
+    ├── covered_call_overlay_v1.md
+    └── csp_v1_revision_prompt.md
+```
+
+**Files to delete:**
+- `docs/archive/reco_tracker.md` — dead stub pointing to a path that no longer exists
+- `docs/analysis/` — empty directory (live folder, not archive)
+
+---
+
+### DA1 — Implement archive restructure
+
+**No code. No tests. Pure file moves and deletes.**
+This is safe to run any time — archive files are never imported or path-referenced in code.
+Exception: the two pinned root files — do not touch them.
+
+**Before starting:** confirm pinned files are NOT in the move list:
+```bash
+grep -r "BACKTEST_PLAN_ARCHIVE\|TODOS_ARCHIVE" \
+  /path/to/NiftyShield --include="*.md" | grep -v "^docs/archive/"
+# Must show hits in BACKTEST_PLAN.md, TODOS.md, and the skill — confirms they are live-linked
+```
+
+**Step 1 — Create new subfolders:**
+```bash
+mkdir -p docs/archive/process
+mkdir -p docs/archive/research
+# antigravity/ already exists in archive
+```
+
+**Step 2 — Move loose root files:**
+```bash
+git mv docs/archive/tv_mcp_testing_framework.md  docs/archive/analysis/
+git mv docs/archive/mvp_tracker.md               docs/archive/plan/
+git mv docs/archive/story_paper_impl_tasks.md    docs/archive/plan/
+git mv docs/archive/2026-05-08_workflow-improvements.md  docs/archive/process/
+git mv docs/archive/paper_trading.md             docs/archive/process/
+```
+
+**Step 3 — Move misplaced plan/ files to research/:**
+```bash
+git mv docs/archive/plan/INVESTMENT_STRATEGY_RESEARCH.md  docs/archive/research/
+git mv docs/archive/plan/SWING_STRATEGY_RESEARCH.md       docs/archive/research/
+git mv docs/archive/plan/signal_pipeline_spec.md          docs/archive/research/
+```
+
+**Step 4 — Move live docs/antigravity/ plan into archive:**
+```bash
+git mv docs/antigravity/gamma_implementation_plan.md  docs/archive/antigravity/
+```
+
+**Step 5 — Delete dead files and empty directories:**
+```bash
+git rm docs/archive/reco_tracker.md
+rmdir docs/analysis  # remove empty live directory (not tracked by git if empty)
+```
+
+**Step 6 — Verify final state:**
+```bash
+# Nothing loose at archive root except the two pinned files + README
+ls docs/archive/*.md
+# Should show: BACKTEST_PLAN_ARCHIVE.md  TODOS_ARCHIVE.md  (+ README.md if present)
+
+# No broken internal links in archive (spot-check the dead stub is gone)
+grep -r "reco_tracker\|mvp_tracker" docs/ --include="*.md"
+
+# docs/antigravity/ should now have only 2 files
+ls docs/antigravity/
+# Expected: ai_collaboration_plan.md  antigravity_best_practices.md
+```
+
+**Commit:** `refactor(docs): restructure docs/archive/ — add process/ and research/ folders; evict gamma plan from live antigravity/`

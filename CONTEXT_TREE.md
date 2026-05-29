@@ -15,17 +15,19 @@ src/
 │   └── nuvama_verify.py      # Nuvama connectivity check — loads APIConnect from settings_file, calls Holdings(), prints holding count + ltp. parse_holdings() is a pure function (testable independently).
 │   ├── dhan_login.py          # Dhan manual token flow — opens web.dhan.co, prompts for token, validates, saves DHAN_ACCESS_TOKEN to .env via dotenv.set_key(). Pure functions: build_login_url(), validate_token(), save_token(). No SDK dependency.
 │   └── dhan_verify.py         # Dhan connectivity check — loads DHAN_CLIENT_ID + DHAN_ACCESS_TOKEN, calls GET /v2/profile + /v2/holdings via raw requests. parse_holdings() pure function. Returns True/False.
-├── analytics/                # Exploratory scripts (not production modules)
-│   └── verify_analytics.py   # Tests LTP, option chain, Greeks, historical candles via Analytics Token
+├── analytics/                # Exploratory scripts (not production modules; move to scripts/dev/ per SS1)
+│   └── test_analytics_apis.py   # Tests LTP, option chain, Greeks, historical candles via Analytics Token. Note: filename mismatched vs docs — should be verify_analytics.py; tracked in SS1.
 ├── backtest/
 │   ├── __init__.py           # Package marker
 │   ├── chain_writer.py       # ChainWriter: writes EOD and 5-min intraday option chain snapshots to PyArrow Parquet
 │   ├── chain_reader.py       # ChainReader: DuckDB-based scanning and filtering of chain snapshots
 │   ├── bhavcopy_ingest.py    # Downloads and parses NSE F&O bhavcopy (both legacy and UDiFF formats) to Parquet
+│   ├── bhavcopy_loader.py    # load_options_ohlcv(underlying, start, end, data_dir, columns): reads options OHLCV Parquet partitioned by year/month from DEFAULT_DATA_DIR. Returns pd.DataFrame; empty DataFrame if no data found. Used by backtest engine.
+│   ├── constants.py          # DEFAULT_DATA_DIR: Path to data/offline/options_ohlcv/ (repo-root-relative). Imported by bhavcopy_loader.py.
 │   ├── vix_ingest.py         # India VIX historical ingestion pipeline (NSE CSV / Upstox API)
 │   └── ivr.py                # Trailing 252-day India VIX Implied Volatility Rank (IVR) calculation
-├── sandbox/                  # Exploratory scripts
-│   └── order_lifecycle.py    # Place → Modify → Cancel via V3 Order API (sandbox=True)
+├── sandbox/                  # Exploratory scripts (not production; move to scripts/dev/ per SS1)
+│   └── test_sandbox_order_lifecycle.py    # Place → Modify → Cancel via V3 Order API (sandbox=True). Note: filename mismatched vs docs — should be order_lifecycle.py; tracked in SS1.
 ├── models/
 │   ├── __init__.py           # Re-exports all shared models from portfolio.py + mf.py for convenience.
 │   ├── portfolio.py          # Canonical home for all portfolio domain types: Leg, Strategy, DailySnapshot, Trade, TradeAction, Direction, ProductType, AssetType, PortfolioSummary. Monetary fields Decimal; P&L methods accept float|Decimal. PortfolioSummary refactored (AR-4): 16 flat cross-source fields + four typed Optional source references: mf_pnl (PortfolioPnL|None), dhan (DhanPortfolioSummary|None), nuvama_bonds (NuvamaBondSummary|None), nuvama_options (NuvamaOptionsSummary|None). Availability exposed via computed @property (dhan_available, nuvama_available, nuvama_options_available, mf_available). String-literal TYPE_CHECKING annotations on source fields avoid circular imports.
@@ -36,6 +38,7 @@ src/
 │   ├── tracker.py            # PortfolioTracker: loads strategies, fetches LTPs, records snapshots. Trade overlay applied internally via _get_overlaid_strategy()/_get_all_overlaid_strategies() — compute_pnl, record_daily_snapshot, record_all_strategies all use trade-derived qty/entry_price automatically. Trade-only legs (e.g. LIQUIDBEES) with no DB id are auto-persisted via store.ensure_leg(). compute_pnl() returns StrategyPnL with Decimal total_pnl. Float LTPs from API converted via Decimal(str()) at boundary. apply_trade_positions() module-level pure function: overlays trade-derived qty/entry_price onto strategy Leg objects; appends trade-only legs as EQUITY/CNC; drops zero-net-qty legs.
 │   ├── summary.py            # Pure computation (AR-4/5): _etf_current_value, _etf_cost_basis, _build_prev_prices, _compute_prev_mf_pnl, _compute_strategy_pnl_from_prices, _build_portfolio_summary. No I/O. TYPE_CHECKING guards replace object|None params; all 14 # type: ignore[union-attr] suppressions removed (AR-5). _build_portfolio_summary computes only cross-source aggregates (total_value/invested/pnl/day_delta) and passes source summary objects directly into PortfolioSummary — no dead intermediate extraction variables.
 │   ├── formatting.py         # Pure formatting (AR-4): _format_protection_stats, _format_combined_summary. Depends on summary.py + PortfolioSummary. No I/O. All double-guards (if summary.dhan else Decimal("0") nested inside if summary.dhan_available blocks) removed — source object guaranteed non-None inside its available check by @property construction. mf_pnl guards retained (mf_available not checked before inline mf_pnl access).
+│   ├── service.py            # SnapshotService: thin orchestration wrapper — persist_snapshots(strategy_name, strategy, snap_date, prices, greeks_map, underlying_price) builds DailySnapshot list and calls store.record_snapshots_bulk(). Auto-persists trade-only legs via store.ensure_leg() when leg.id is None. Under review (SS3): no protocol boundary beyond PortfolioStore; may be folded into tracker.py.
 │   └── strategies/
 │       ├── __init__.py       # ALL_STRATEGIES registry
 │       └── finideas/
@@ -66,14 +69,19 @@ src/
 ├── dhan/
 │   ├── CLAUDE.md             # Module context: classification config, data flow, Dhan API quirks
 │   ├── __init__.py           # Package marker
-│   ├── models.py             # Frozen dataclasses: DhanHolding (EQUITY/BOND, LTP, cost/pnl properties), DhanPortfolioSummary (split by classification, Decimal fields, day deltas)
+│   ├── models.py             # Frozen dataclasses: DhanHolding (EQUITY/BOND, LTP, cost/pnl properties), DhanPortfolioSummary (split by classification, Decimal fields, day deltas). Also: DhanOptionPosition (security_id/trading_symbol/exchange_segment/product_type/position_type/buy_qty/sell_qty/net_qty/buy_avg/sell_avg/realized_pnl/unrealized_pnl), DhanOptionsSummary (realized_pnl/unrealized_pnl/total_pnl/charges/brokerage/position_count/snapshot_ts; net_pnl property), DhanFundLimit (available_balance/utilized_amount/collateral_amount/withdrawable_balance/snapshot_ts).
 │   ├── reader.py             # Pure + HTTP functions. fetch_holdings_raw/fetch_ltp_raw (I/O). classify_holding, build_dhan_holdings (filter+classify), build_security_id_map, enrich_with_ltp (Dhan API — paid tier), enrich_with_upstox_prices (preferred), upstox_keys_for_holdings, build_dhan_summary (pure). fetch_dhan_holdings() + fetch_dhan_portfolio() orchestrators.
+│   ├── positions.py          # Intraday Dhan options position fetching, parsing, and formatting. I/O: fetch_positions_raw, fetch_fund_limit_raw. Pure: parse_option_positions, filter_intraday_options (keeps NSE_FNO INTRADAY+MARGIN), compute_charges (exchange/SEBI/stamp/STT/GST; ITM expiry STT path), build_options_summary, parse_fund_limit, format_options_section (Telegram). Decimal(str(v)) enforced throughout. Maps Dhan's 'availabelBalance' typo explicitly.
 │   └── store.py              # DhanStore: dhan_holdings_snapshots table. record_snapshot (upsert), get_snapshot_for_date, get_prev_snapshot (MAX date < d, keyed by ISIN).
 ├── market_calendar/
 │   ├── __init__.py           # Package marker.
 │   ├── data/nse_2026.yaml    # NSE 2026 equity holiday list — version-controlled config (src/ not data/ because data/ is gitignored). Update each January.
 │   └── holidays.py           # NSE equity holiday detection. load_holidays(year) → frozenset[date] (cached, fail-open on missing YAML). is_trading_day(d) → bool (weekday AND not in holiday set). prev_trading_day(d) → date (walks back to nearest prior trading day).
+├── intraday/
+│   ├── __init__.py           # Package marker
+│   └── market_store.py       # IntradayMarketStore: broker-agnostic SQLite store for intraday_market_snapshots table. record_market_snapshot(timestamp, nifty_spot, india_vix) — one row per tracker tick; timestamp must be timezone-aware. purge_old(days=30). get_latest() → (nifty_spot, india_vix) | None. get_latest_vix_today() → float | None — guards against stale prior-session rows using IST date comparison. Shared by Dhan + Nuvama intraday tracker orchestrator.
 ├── instruments/
+│   ├── __init__.py           # Package marker
 │   ├── lot_size.py           # DateAwareLotSizeResolver: resolves market lot sizes for underlying symbols (like NIFTY, BANKNIFTY) based on date.
 │   └── lookup.py             # Offline BOD search (NSE.json.gz). CLI: --find-legs mode. search() uses ranked exact>prefix>fuzzy scoring via _score_query()/_best_score() (rapidfuzz; difflib fallback). min_score param added.
 ├── notifications/
@@ -85,7 +93,8 @@ src/
 │   ├── models.py             # Frozen dataclasses: NuvamaBondHolding (isin/qty/avg_price/ltp/chg_pct/hair_cut; cost_basis/current_value/pnl/pnl_pct/day_delta properties), NuvamaBondSummary (total_value/basis/pnl/pnl_pct/total_day_delta). All BOND classification. NuvamaOptionPosition (trade_symbol/instrument_name/net_qty/avg_price/ltp/unrealized_pnl/realized_pnl_today). NuvamaOptionsSummary (snapshot_date/positions tuple/total_unrealized_pnl/total_realized_pnl_today/cumulative_realized_pnl/intraday_high/low/nifty_high/low; net_pnl property = unrealized + cumulative_realized).
 │   ├── reader.py             # parse_bond_holdings() (pure, joins positions dict for avg_price, skips _EXCLUDE_ISINS + missing positions with WARNING, catches InvalidOperation), build_nuvama_summary() (pure aggregation), fetch_nuvama_portfolio() (I/O orchestrator). _extract_rms_hdg() handles both resp.data.rmsHdg and eq.data.rmsHdg response paths.
 │   ├── options_reader.py     # parse_options_positions() (pure) — filters OPTIDX/OPTSTK from NetPosition() JSON, resolves avg_price from cfAvgSlPrc/cfAvgByPrc, skips non-option rows and malformed records. build_options_summary() (pure) — aggregates positions list + cumulative_realized_pnl_map + optional intraday/nifty bounds → NuvamaOptionsSummary.
-│   ├── protocol.py           # NuvamaClient protocol. Abstracts the Nuvama SDK (Holdings, NetPosition) for testability. MockNuvamaClient provides offline testing (AR-9).
+│   ├── protocol.py           # NuvamaClient protocol. Abstracts the Nuvama SDK (Holdings, NetPosition) for testability.
+│   ├── mock_client.py        # MockNuvamaClient: offline NuvamaClient implementation for unit tests (AR-9). Lives in src/nuvama/ (not tests/) so scripts + integration tests can import without coupling to the test tree. Same convention as src/client/mock_client.py.
 │   └── store.py              # NuvamaStore: nuvama_positions (ISIN PK, avg_price TEXT, qty, label — seed once), nuvama_holdings_snapshots (UNIQUE(isin, snapshot_date) upsert; get_snapshot_for_date returns dict[str,dict] with qty/ltp/current_value keys — AR-6; record_all_snapshots uses executemany in single transaction — AR-7; get_prev_total_value() calendar-agnostic), nuvama_options_snapshots (PRIMARY KEY (trade_symbol, snapshot_date) upsert — record_all_options_snapshots atomic via executemany — AR-7; get_cumulative_realized_pnl aggregates realized_pnl_today across all historical rows per symbol via single SQL GROUP BY — AR-8), nuvama_intraday_snapshots (record_intraday_positions/purge_old_intraday 30-day retention/get_intraday_extremes — sums unrealized+realized per timestamp, returns max_pnl/min_pnl/nifty_high/nifty_low).
 ├── utils/
 │   ├── __init__.py           # Package marker.
