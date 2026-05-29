@@ -1,0 +1,384 @@
+# Scripts Restructure — Design & Story Specs
+
+> Status: **SR0 closed 2026-05-29** — layout finalised, open questions resolved.
+> Implementation starts at SR1 (post-market hours only for SR7+).
+> Full implementation rules in `CLAUDE.md`, `REVIEW.md`, and `prompt.md`.
+
+---
+
+## Background
+
+`scripts/` has 36 files in a flat layout. As strategies and infra have grown, three distinct
+functional roles have emerged. The flat layout makes it impossible to reason about which scripts
+are shared infrastructure vs strategy-specific vs one-off tooling.
+
+---
+
+## Classification Axes (apply to every new script, forever)
+
+Before placing a new script, answer these three questions in order:
+
+**1. Is it shared — called by more than one strategy or daemon?**
+→ Yes: it belongs in `pipeline/`, `lookup/`, or `record/` (see below).
+→ No: it belongs in `strategies/<name>/` or a domain folder.
+
+**2. If shared, what is its runtime model?**
+
+| Runtime model | Folder | Examples |
+|---|---|---|
+| Cron-driven, produces data or snapshots | `pipeline/` | chain snapshots, gamma watch, bhavcopy ingest |
+| On-demand query, called by humans or entry scripts | `lookup/` | find_strike_by_delta, instrument_lookup |
+| Human-facing CLI that writes to DB (called once per action) | `record/` | record_paper_trade, record_trade |
+
+**3. If strategy-specific, which strategy owns it?**
+→ Goes into `strategies/<strategy-name>/`. One subfolder per strategy, permanently.
+
+**Supporting categories (non-strategy, non-shared):**
+
+| Folder | Contents |
+|---|---|
+| `portfolio/` | Live portfolio P&L crons and snapshot scripts |
+| `intraday/` | Intraday position monitoring crons |
+| `seed/` | One-time DB seed scripts — never in cron |
+| `council/` | Council workflow tooling + templates — used during planning, not trading |
+| `dev/` | Diagnostics, smoke tests, one-off migrations — throwaway or rarely run |
+
+---
+
+## Migration Principle
+
+**New scripts:** Land in the correct folder immediately. No exceptions.
+**Existing scripts:** Move folder-by-folder, one commit per folder, only when there is an
+adjacent reason to touch that area. No big-bang refactor.
+**Cron-sensitive moves (SR7, SR8):** Do post-market only. Update crontab in the same commit.
+
+---
+
+## Final Directory Layout
+
+```
+scripts/
+├── __init__.py
+│
+├── pipeline/               # cron-driven; produces data or snapshots; shared across strategies
+│   ├── __init__.py
+│   ├── upstox_chain_snapshot.py    # EOD option chain → Parquet
+│   ├── upstox_chain_intraday.py    # 5-min intraday chain → Parquet
+│   ├── gamma_daily_watch.py        # Greeks monitoring from chain snapshots
+│   └── bhavcopy_bootstrap.py       # NSE bhavcopy bulk ingest
+│
+├── lookup/                 # on-demand queries; called by humans or entry scripts
+│   ├── __init__.py
+│   ├── find_strike_by_delta.py     # live chain → filter by delta range
+│   ├── find_overlay_strikes.py     # overlay-specific strike finder
+│   └── instrument_lookup.py        # BOD JSON instrument key resolver
+│
+├── record/                 # human-facing write CLIs; one action per invocation
+│   ├── __init__.py
+│   ├── record_paper_trade.py       # entry/close for any paper strategy
+│   └── record_trade.py             # live trade recording
+│
+├── strategies/             # strategy-specific scripts; one subfolder per strategy
+│   ├── __init__.py
+│   ├── csp/
+│   │   ├── __init__.py
+│   │   └── paper_csp_roll.py       # profit-target / time-stop / delta-stop exit
+│   ├── three_track/
+│   │   ├── __init__.py
+│   │   ├── paper_3track_entry.py
+│   │   ├── paper_3track_overlay.py
+│   │   ├── paper_3track_overlay_entry.py
+│   │   ├── paper_3track_overlay_roll.py
+│   │   └── paper_3track_snapshot.py    # EOD cron — mark-to-market for 3 tracks
+│   └── cc_calibration/             # NiftyBees lot-sizing probe (retire after 3 cycles)
+│       ├── __init__.py
+│       ├── paper_cc_entry.py
+│       └── paper_cc_roll.py            # CC3 — not yet built
+│
+├── portfolio/              # live portfolio P&L — not paper, not strategy-specific
+│   ├── __init__.py
+│   ├── daily_snapshot.py           # EOD portfolio snapshot cron
+│   ├── morning_nav.py              # pre-market NAV fetch
+│   ├── paper_snapshot.py           # paper mark-to-market (standalone, non-3track)
+│   └── roll_leg.py                 # live leg roll CLI
+│
+├── intraday/               # intraday monitoring crons (*/15 9-15 * * 1-5)
+│   ├── __init__.py
+│   ├── intraday_tracker.py         # combined Dhan+Nuvama orchestrator
+│   ├── nuvama_intraday_tracker.py
+│   └── dhan_intraday_tracker.py
+│
+├── seed/                   # one-time DB seeds; never in cron
+│   ├── __init__.py
+│   ├── seed_mf_holdings.py
+│   ├── seed_nuvama_positions.py
+│   ├── seed_portfolio.py
+│   └── seed_trades.py
+│
+├── council/                # council workflow tooling; used during planning, not trading
+│   ├── __init__.py
+│   ├── ask_council.py
+│   └── council_templates/
+│
+└── dev/                    # diagnostics, smoke tests, one-off migrations
+    ├── __init__.py
+    ├── send_test_telegram.py       # Telegram token/chat-id smoke test
+    ├── validate_strategy_spec.py   # strategy spec linter
+    ├── probe_nuvama_schema.py
+    ├── migrate_strike_to_text.py
+    ├── test_api_version.py
+    └── paper_track_snapshot.py     # confirm superseded before moving (see SR0 below)
+```
+
+---
+
+## SR0 — Open Questions (resolved 2026-05-29)
+
+1. **`paper_track_snapshot.py`** — move to `dev/` pending confirmation it is superseded
+   by `paper_3track_snapshot.py`. Confirm with `git log` + crontab before SR5.
+
+2. **Cron path strategy** — clean cut per folder. Update crontab in the same commit as
+   each folder move. No shim re-exports.
+
+3. **`find_overlay_strikes.py` vs `find_strike_by_delta.py`** — both active; both go into
+   `lookup/`. Overlap audit deferred to SR6 — resolve before moving.
+
+4. **`paper_3track_overlay.py` vs `paper_3track_overlay_entry.py`** — both active. Confirm
+   with `git log` before SR8. Move both.
+
+5. **`src/` → `scripts/` imports** — `grep -r "from scripts\." src/` must return zero before
+   any move. Run this check at SR1.
+
+6. **`validate_strategy_spec.py`** — goes into `dev/` (not `council/`). It is a linting tool,
+   not a workflow gate.
+
+---
+
+## Story Specs
+
+---
+
+### SR1 — Scaffold new directories + `__init__.py` files
+
+**Files to create** (one `__init__.py` per directory, content: `# <package name>`):
+```
+scripts/pipeline/__init__.py
+scripts/lookup/__init__.py
+scripts/record/__init__.py
+scripts/strategies/__init__.py
+scripts/strategies/csp/__init__.py
+scripts/strategies/three_track/__init__.py
+scripts/strategies/cc_calibration/__init__.py
+scripts/portfolio/__init__.py
+scripts/intraday/__init__.py
+scripts/seed/__init__.py
+scripts/council/__init__.py
+scripts/dev/__init__.py
+```
+
+**Before any code:**
+- `grep -r "from scripts\." src/` — must return zero. If not, stop and report.
+- `crontab -l` — save current cron state for reference throughout this task.
+
+No file moves in SR1. Scaffold only.
+
+**After:** `mcp__codebase-memory-mcp__index_repository` — re-index so graph sees new packages.
+
+**Test gate:** `python -m pytest tests/unit/ --tb=no -q` — all green.
+
+**Commit:** `chore(scripts): scaffold subdirectory structure with __init__.py files`
+
+---
+
+### SR2 — Move `pipeline/` scripts (chain + gamma + bhavcopy)
+
+**Before any move:**
+- `crontab -l | grep -E "chain|gamma|bhavcopy"` — note exact entries.
+- `grep -r "upstox_chain\|gamma_daily\|bhavcopy" scripts/ src/` — find all callers.
+
+**Files to move:**
+- `scripts/upstox_chain_snapshot.py` → `scripts/pipeline/upstox_chain_snapshot.py`
+- `scripts/upstox_chain_intraday.py` → `scripts/pipeline/upstox_chain_intraday.py`
+- `scripts/gamma_daily_watch.py` → `scripts/pipeline/gamma_daily_watch.py`
+- `scripts/bhavcopy_bootstrap.py` → `scripts/pipeline/bhavcopy_bootstrap.py`
+
+Update cron entries in same commit.
+
+**Test gate:** Full suite green.
+
+**Commit:** `refactor(scripts): move pipeline scripts into scripts/pipeline/`
+
+---
+
+### SR3 — Move `lookup/` scripts
+
+**Before any move:**
+- `crontab -l | grep -E "find_strike|find_overlay|instrument_lookup"` — expect zero or minimal.
+- `grep -r "find_strike_by_delta\|find_overlay\|instrument_lookup" scripts/ src/` — callers.
+- Resolve SR0 question #3: confirm `find_overlay_strikes.py` and `find_strike_by_delta.py`
+  are both active and non-overlapping before moving both.
+
+**Files to move:**
+- `scripts/find_strike_by_delta.py` → `scripts/lookup/find_strike_by_delta.py`
+- `scripts/find_overlay_strikes.py` → `scripts/lookup/find_overlay_strikes.py`
+- `scripts/instrument_lookup.py` → `scripts/lookup/instrument_lookup.py`
+
+**Test gate:** Full suite green.
+
+**Commit:** `refactor(scripts): move lookup scripts into scripts/lookup/`
+
+---
+
+### SR4 — Move `record/` scripts
+
+**Before any move:**
+- `crontab -l | grep -E "record_paper|record_trade"` — expect zero (human-invoked).
+- `grep -r "record_paper_trade\|record_trade" scripts/ src/` — high caller count expected;
+  update every reference in the same commit.
+
+**Files to move:**
+- `scripts/record_paper_trade.py` → `scripts/record/record_paper_trade.py`
+- `scripts/record_trade.py` → `scripts/record/record_trade.py`
+
+**Test gate:** Full suite green.
+
+**Commit:** `refactor(scripts): move record CLIs into scripts/record/`
+
+---
+
+### SR5 — Move `seed/` and `dev/` scripts
+
+**seed/ — no cron, no callers in src/:**
+- `scripts/seed_mf_holdings.py` → `scripts/seed/seed_mf_holdings.py`
+- `scripts/seed_nuvama_positions.py` → `scripts/seed/seed_nuvama_positions.py`
+- `scripts/seed_portfolio.py` → `scripts/seed/seed_portfolio.py`
+- `scripts/seed_trades.py` → `scripts/seed/seed_trades.py`
+
+**dev/:**
+- Resolve SR0 question #1: `git log --oneline -5 scripts/paper_track_snapshot.py` + check
+  crontab. Delete if superseded; move to `dev/` if still referenced anywhere.
+- `scripts/send_test_telegram.py` → `scripts/dev/send_test_telegram.py`
+- `scripts/validate_strategy_spec.py` → `scripts/dev/validate_strategy_spec.py`
+- `scripts/probe_nuvama_schema.py` → `scripts/dev/probe_nuvama_schema.py`
+- `scripts/migrate_strike_to_text.py` → `scripts/dev/migrate_strike_to_text.py`
+- `scripts/test_api_version.py` → `scripts/dev/test_api_version.py`
+
+**Test gate:** Full suite green.
+
+**Commit:** `refactor(scripts): move seed and dev scripts into scripts/seed/ and scripts/dev/`
+
+---
+
+### SR6 — Move `council/` scripts
+
+**Files to move:**
+- `scripts/ask_council.py` → `scripts/council/ask_council.py`
+- `scripts/council_templates/` → `scripts/council/council_templates/`
+
+**Test gate:** Full suite green.
+
+**Commit:** `refactor(scripts): move council tooling into scripts/council/`
+
+---
+
+### SR7 — Move `intraday/` scripts
+
+**High cron sensitivity — do post-market (Friday evening preferred).**
+
+**Before any move:**
+- `crontab -l | grep intraday` — note all three cron entries precisely.
+- Smoke test new path before updating cron:
+  `python -m scripts.intraday.intraday_tracker --help`
+
+**Files to move:**
+- `scripts/intraday_tracker.py` → `scripts/intraday/intraday_tracker.py`
+- `scripts/nuvama_intraday_tracker.py` → `scripts/intraday/nuvama_intraday_tracker.py`
+- `scripts/dhan_intraday_tracker.py` → `scripts/intraday/dhan_intraday_tracker.py`
+
+Update cron in same commit.
+
+**Test gate:** Full suite green. Smoke: `python -m scripts.intraday.intraday_tracker --dry-run`.
+
+**Commit:** `refactor(scripts): move intraday tracker scripts into scripts/intraday/`
+
+---
+
+### SR8 — Move `strategies/three_track/` scripts
+
+**High cron sensitivity — do post-market. `paper_3track_snapshot.py` is the canonical EOD cron.**
+
+**Before any move:**
+- `crontab -l | grep 3track` — note all entries.
+- Resolve SR0 question #4: `git log --oneline -5 scripts/paper_3track_overlay.py` and
+  `scripts/paper_3track_overlay_entry.py` — confirm both active.
+
+**Files to move:**
+- `scripts/paper_3track_entry.py` → `scripts/strategies/three_track/paper_3track_entry.py`
+- `scripts/paper_3track_overlay.py` → `scripts/strategies/three_track/paper_3track_overlay.py`
+- `scripts/paper_3track_overlay_entry.py` → `scripts/strategies/three_track/paper_3track_overlay_entry.py`
+- `scripts/paper_3track_overlay_roll.py` → `scripts/strategies/three_track/paper_3track_overlay_roll.py`
+- `scripts/paper_3track_snapshot.py` → `scripts/strategies/three_track/paper_3track_snapshot.py`
+
+Update cron in same commit.
+
+**Test gate:** Full suite green. Smoke: `python -m scripts.strategies.three_track.paper_3track_snapshot --no-save`.
+
+**Commit:** `refactor(scripts): move 3-track strategy scripts into scripts/strategies/three_track/`
+
+---
+
+### SR9 — Move `strategies/csp/` and `strategies/cc_calibration/` scripts
+
+**Before any move:**
+- `crontab -l | grep -E "paper_csp|paper_cc"` — note entries.
+
+**Files to move:**
+- `scripts/paper_csp_roll.py` → `scripts/strategies/csp/paper_csp_roll.py`
+- `scripts/paper_cc_entry.py` → `scripts/strategies/cc_calibration/paper_cc_entry.py`
+- `scripts/paper_cc_roll.py` → `scripts/strategies/cc_calibration/paper_cc_roll.py`
+  (move once CC3 is built)
+
+**Test gate:** Full suite green.
+
+**Commit:** `refactor(scripts): move csp and cc_calibration strategy scripts`
+
+---
+
+### SR10 — Move `portfolio/` scripts
+
+**Before any move:**
+- `crontab -l | grep -E "daily_snapshot|morning_nav|paper_snapshot|roll_leg"` — note entries.
+- `grep -r "roll_leg\|daily_snapshot\|morning_nav\|paper_snapshot" scripts/ src/` — callers.
+
+**Files to move:**
+- `scripts/daily_snapshot.py` → `scripts/portfolio/daily_snapshot.py`
+- `scripts/morning_nav.py` → `scripts/portfolio/morning_nav.py`
+- `scripts/paper_snapshot.py` → `scripts/portfolio/paper_snapshot.py`
+- `scripts/roll_leg.py` → `scripts/portfolio/roll_leg.py`
+
+Update cron in same commit.
+
+**Test gate:** Full suite green.
+
+**Commit:** `refactor(scripts): move portfolio scripts into scripts/portfolio/`
+
+---
+
+### SR11 — Docs close
+
+**Files to change** (targeted `Edit` only):
+- `CONTEXT.md` — update scripts block to reflect new paths and folder taxonomy
+- `DECISIONS.md` — one entry: pipeline/lookup/record axis decision + rationale
+- `TODOS.md` — session log entry + mark scripts-restructure complete in build queue
+
+**DECISIONS.md entry:**
+```
+| 2026-05-29 | scripts/ restructured from flat layout into functional axis:
+  pipeline/ (cron, produces data), lookup/ (on-demand query), record/ (human write CLI),
+  strategies/<name>/ (strategy-specific), plus portfolio/, intraday/, seed/, council/, dev/.
+  Axis chosen because paper-backbone daemon and future strategies need to distinguish
+  shared infra from strategy-owned scripts. New scripts must be classified by this axis
+  before placement. | scripts-restructure |
+```
+
+**Commit:** `docs(scripts): update CONTEXT.md and DECISIONS.md for restructured scripts layout`
