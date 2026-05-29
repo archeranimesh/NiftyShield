@@ -55,6 +55,13 @@ Prerequisite for Phase 1 task 1.7 (`CSPStrategy` calibration). Stockmock UI — 
 
 ## Active Tasks
 
+> **Priority rule:** Infrastructure that blocks other stories runs before strategy-specific work.
+> `paper-backbone` blocks `paper-exit-signals` — these two are the critical path.
+> `covered-call-overlay` and `MVP` are independent and slot in around the critical path.
+> `scripts-restructure SR1` (scaffold only) runs before `paper-backbone` so new daemon scripts land in the correct folder structure from day one.
+
+---
+
 ### Build queue #1 — June 2026 Finideas Roll
 
 **Hard deadline: 2026-06-30** (NIFTY_JUN 23000 CE and PE legs expire — see [REFERENCES.md](REFERENCES.md)).
@@ -72,40 +79,20 @@ Invoke `roll-validator` agent ≥1 week before deadline.
 
 ---
 
-### Build queue #3 — Covered Call Overlay Scripts
+### Build queue #3 — scripts-restructure SR1 (scaffold only)
 
-**Story:** [docs/plan/covered-call-overlay/](docs/plan/covered-call-overlay/) (prompt, tasks, stories, schema)
-**Strategy doc:** `docs/strategies/covered_call_overlay_v1.md` (not yet written — broker mechanics confirmed 2026-05-28; see [stories.md](docs/plan/covered-call-overlay/stories.md))
-**Note:** First paper trade can be entered manually via `find_strike_by_delta.py` + `record_paper_trade.py` in the interim.
+**Story:** [docs/plan/scripts-restructure/](docs/plan/scripts-restructure/)
+**Why now:** SR1 is scaffold-only (`__init__.py` files, no file moves, ~30 min). Must run before `paper-backbone` writes new daemon scripts so those land in `pipeline/`, `strategies/`, etc. from day one — not born flat and needing migration later. Full migration (SR2+) is post-market and lower urgency.
 
-| Step | Files | Status |
-|---|---|---|
-| CC1 | `src/paper/constants.py` — `STRATEGY_CC_OVERLAY` + `compute_max_lots` + tests | ✅ Shipped |
-| CC2 | `scripts/paper_cc_entry.py` — delta selection + IVR gate + qty constraint + dry-run | ✅ Shipped |
-| CC3 | `scripts/paper_cc_roll.py` — profit-target / time-stop / delta-stop exit handler + tests | ⬜ Not started |
-| CC4 | Docs close | ⬜ Not started |
+- [ ] Run SR1: create all `__init__.py` files per `stories.md`, re-index graph, verify tests green.
 
 ---
 
-### Build queue #4 — MVP: Multi-bagger Value Picks Tracker
-
-**Story:** [docs/plan/mvp/](docs/plan/mvp/) (prompt, tasks, stories, schema)
-**CLI surface and cron spec:** [docs/plan/mvp/mvp_tasks.md](docs/plan/mvp/mvp_tasks.md)
-
-| Step | Files | Status |
-|---|---|---|
-| M1 | `src/mvp/models.py`, `src/mvp/store.py`, `tests/unit/mvp/` | ⬜ Not started |
-| M2 | `src/mvp/tracker.py` | ⬜ Not started |
-| M3 | `scripts/mvp.py` (full CLI) | ⬜ Not started |
-| M4 | `scripts/mvp_watch.py` (hourly cron) | ⬜ Not started |
-| M5 | Docs close + cron entry | ⬜ Not started |
-
----
-
-### Build queue #5 — paper-backbone: Strategy Monitor Daemon
+### Build queue #4 — paper-backbone: Strategy Monitor Daemon
 
 **Story:** [docs/plan/paper-backbone/](docs/plan/paper-backbone/) (prompt, tasks, stories, schema)
-**Prerequisite:** PortfolioDeltaTracker ✅ shipped 2026-05-26
+**Prerequisite:** PortfolioDeltaTracker ✅ shipped 2026-05-26 | scripts-restructure SR1 ✅ (run first)
+**Blocks:** paper-exit-signals (#5) — `StrategyMonitor` + `PaperExecutor` must exist before ES0.
 
 | Step | What | Deadline | Status |
 |---|---|---|---|
@@ -118,7 +105,54 @@ Invoke `roll-validator` agent ≥1 week before deadline.
 
 ---
 
-### Build queue #6 — paper-exit-signals: Automated Exit Detection + Closure
+### Build queue #5 — paper-exit-signals: Automated Exit Detection + Closure
+
+**Story:** [docs/plan/paper-exit-signals/](docs/plan/paper-exit-signals/) (prompt, schema, stories, tasks)
+**Blocked by:** Build queue #4 PT-0 (`StrategyMonitor` + `PaperExecutor` must exist before starting)
+**Council authority:** `docs/council/2026-05-28_paper-trade-exit-philosophy.md` — all 10 thresholds binding; no changes without a new council decision.
+**Archive gate (ES9 — must run last):** council file + `csp_nifty_v1.md` archived via `git mv` only after all stories committed.
+
+| Step | Files | Status |
+|---|---|---|
+| CC1 | `src/paper/constants.py` — `STRATEGY_CC_OVERLAY` + `compute_max_lots` + tests | ✅ Shipped |
+| CC2 | `scripts/paper_cc_entry.py` — delta selection + IVR gate + qty constraint + dry-run | ✅ Shipped |
+| CC3 | `scripts/paper_cc_roll.py` — profit-target / time-stop / delta-stop exit handler + tests | ⬜ Not started |
+| CC4 | Docs close | ⬜ Not started |
+
+---
+
+### Build queue #6 — Covered Call Overlay Scripts (CC3+CC4 remaining)
+
+**Story:** [docs/plan/covered-call-overlay/](docs/plan/covered-call-overlay/) (prompt, tasks, stories, schema)
+**Purpose:** NiftyBees lot-sizing calibration experiment — not a permanent strategy. Findings fold into 3-track NiftyBees CC after 3 cycles.
+**Note:** Independent — does not block any other queue item. Slot in around critical path.
+
+| Step | Files | Status |
+|---|---|---|
+| CC1 | `src/paper/constants.py` — `STRATEGY_CC_OVERLAY` + `compute_max_lots` + tests | ✅ Shipped |
+| CC2 | `scripts/paper_cc_entry.py` — delta selection + IVR gate + qty constraint + dry-run | ✅ Shipped |
+| CC3 | `scripts/paper_cc_roll.py` — profit-target / time-stop / delta-stop exit handler + tests | ⬜ Not started |
+| CC4 | Docs close | ⬜ Not started |
+
+---
+
+### Build queue #7 — MVP: Multi-bagger Value Picks Tracker
+
+**Story:** [docs/plan/mvp/](docs/plan/mvp/) (prompt, tasks, stories, schema)
+**CLI surface and cron spec:** [docs/plan/mvp/mvp_tasks.md](docs/plan/mvp/mvp_tasks.md)
+**Note:** Independent — does not block any other queue item.
+
+| Step | Files | Status |
+|---|---|---|
+| M1 | `src/mvp/models.py`, `src/mvp/store.py`, `tests/unit/mvp/` | ⬜ Not started |
+| M2 | `src/mvp/tracker.py` | ⬜ Not started |
+| M3 | `scripts/mvp.py` (full CLI) | ⬜ Not started |
+| M4 | `scripts/mvp_watch.py` (hourly cron) | ⬜ Not started |
+| M5 | Docs close + cron entry | ⬜ Not started |
+
+---
+
+### Build queue #5 — paper-exit-signals: Automated Exit Detection + Closure
 
 **Story:** [docs/plan/paper-exit-signals/](docs/plan/paper-exit-signals/) (prompt, schema, stories, tasks)
 **Blocked by:** Build queue #5 PT-0 (`StrategyMonitor` + `PaperExecutor` must exist before starting)
@@ -166,20 +200,48 @@ Invoke `roll-validator` agent ≥1 week before deadline.
 
 ## Build Queue
 
-Tasks run in order. Do not start the next until the current ships and tests are green.
+Tasks run in priority order. Infrastructure that blocks other stories runs first. Independent strategy work slots in around the critical path.
 
-| # | Task | Owner | Deadline | Status |
-|---|---|---|---|---|
-| 1 | June 2026 Finideas roll | Animesh + Cowork | **2026-06-30** | Execution pending — awaiting Finideas instructions |
-| 2 | chain-data: EOD + intraday chain snapshot cron | Cowork | **ASAP** — data cannot be back-filled | ✅ Shipped — [story](docs/archive/plan/chain-data/) |
-| 3 | covered-call-overlay: entry helper + exit handler | Cowork | **ASAP** — each skipped cycle loses a data point | ⬜ Not started — [story](docs/plan/covered-call-overlay/) |
-| 4 | MVP: Multi-bagger Value Picks Tracker | Cowork | After #1 | ⬜ Not started — [story](docs/plan/mvp/) |
-| 5 | paper-backbone: Strategy Monitor daemon | Cowork | **Jun–Jul 2026** | ⬜ Not started — [story](docs/plan/paper-backbone/) |
-| 6 | paper-exit-signals: automated exit detection + closure | Cowork | After #5 | ⬜ Not started — [story](docs/plan/paper-exit-signals/) — **blocked by #5 PT-0** |
-| 7 | backtest-eval-core: `BacktestStore` + `src/analytics/` | Cowork | Aug 2026 | ⬜ Not started — [story](docs/plan/backtest-eval-core/) — **blocked by tasks 1.3 + 1.4** |
-| 8 | signals-eval-core: regime engine + signal generators + validation | Cowork | Q4 2026 | ⬜ Not started — [story](docs/plan/signals-eval-core/) — **blocked by #7 + Phase 1.12 gate** |
+| # | Task | Owner | Deadline | Blocks | Status |
+|---|---|---|---|---|---|
+| 1 | June 2026 Finideas roll | Animesh + Cowork | **2026-06-30** | — | Execution pending — awaiting Finideas instructions |
+| 2 | chain-data: EOD + intraday chain snapshot cron | Cowork | — | — | ✅ Shipped — [story](docs/archive/plan/chain-data/) |
+| 3 | scripts-restructure SR1 (scaffold only) | Cowork | Before #4 | #4 script placement | ⬜ Ready — [story](docs/plan/scripts-restructure/) |
+| 4 | paper-backbone: Strategy Monitor daemon | Cowork | **Jun–Jul 2026** | #5 | ⬜ Not started — [story](docs/plan/paper-backbone/) |
+| 5 | paper-exit-signals: automated exit detection + closure | Cowork | After #4 | — | ⬜ Not started — [story](docs/plan/paper-exit-signals/) — **blocked by #4 PT-0** |
+| 6 | covered-call-overlay CC3+CC4 (calibration experiment) | Cowork | Any cycle | — | ⬜ CC3 not started — [story](docs/plan/covered-call-overlay/) |
+| 7 | MVP: Multi-bagger Value Picks Tracker | Cowork | After #1 | — | ⬜ Not started — [story](docs/plan/mvp/) |
+| 8 | backtest-eval-core: `BacktestStore` + `src/analytics/` | Cowork | Aug 2026 | #9 | ⬜ Not started — [story](docs/plan/backtest-eval-core/) — **blocked by tasks 1.3 + 1.4** |
+| 9 | signals-eval-core: regime engine + signal generators + validation | Cowork | Q4 2026 | — | ⬜ Not started — [story](docs/plan/signals-eval-core/) — **blocked by #8 + Phase 1.12 gate** |
 
-Story folder IDs: chain-data=4a, covered-call-overlay=4cc, mvp=4b, paper-backbone=4c, paper-exit-signals=4d.
+Story folder IDs: chain-data=4a, covered-call-overlay=4cc, mvp=4b, paper-backbone=4c, paper-exit-signals=4d, scripts-restructure=4e.
+
+---
+
+### Backlog — Scripts Restructure
+
+**Story:** [docs/plan/scripts-restructure/](docs/plan/scripts-restructure/) (prompt, tasks, stories)
+**SR0 closed 2026-05-29.** Layout finalised on pipeline/lookup/record axis.
+**Principle:** New scripts must be classified by the axis in stories.md before placement.
+Existing scripts migrate folder-by-folder, one commit per folder, post-market only for cron-sensitive moves.
+
+**Axis summary:**
+- `pipeline/` — cron-driven, produces data or snapshots, shared across strategies
+- `lookup/` — on-demand queries called by humans or entry scripts
+- `record/` — human-facing write CLIs, one action per invocation
+- `strategies/<name>/` — strategy-specific entry/exit/roll scripts
+- `portfolio/`, `intraday/` — domain operational crons
+- `seed/`, `council/`, `dev/` — supporting tooling
+
+| Step | Scope | Status |
+|---|---|---|
+| SR0 | Layout sign-off | ✅ Closed 2026-05-29 |
+| SR1 | Scaffold subdirectories + `__init__.py` files | ⬜ Ready |
+| SR2–SR6 | Move pipeline, lookup, record, seed, dev, council (low cron risk) | 🔒 Locked |
+| SR7 | Move intraday/ — post-market only | 🔒 Locked |
+| SR8 | Move strategies/three_track/ — post-market only (EOD cron) | 🔒 Locked |
+| SR9–SR10 | Move strategies/csp+cc_calibration/, portfolio/ | 🔒 Locked |
+| SR11 | Docs close | 🔒 Locked |
 
 ---
 
