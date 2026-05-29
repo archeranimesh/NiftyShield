@@ -298,6 +298,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-05-29 | CI CI-3 — Add pytest-randomly to test config + verify no order-dependent failures — 0af6cfb |
 | 2026-05-29 | CI CI-2 — Add pytest-xdist parallel config + @pytest.mark.slow — 0fed45b |
 | 2026-05-29 | CI CI-1 — Create .github/workflows/ci.yml — d6e9899 |
 | 2026-05-29 | dx-foundation DX-7 — Docs close: CONTEXT.md tooling section, DECISIONS.md mypy/ruff/pre-commit entries, TODOS.md session log — docs commit |
