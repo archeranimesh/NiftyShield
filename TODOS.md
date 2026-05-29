@@ -298,6 +298,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-05-29 | CI CI-1 — Create .github/workflows/ci.yml — d6e9899 |
 | 2026-05-29 | dx-foundation DX-7 — Docs close: CONTEXT.md tooling section, DECISIONS.md mypy/ruff/pre-commit entries, TODOS.md session log — docs commit |
 | 2026-05-29 | dx-foundation DX-6 — post-commit hook and installer — 1b94b5c, cc5c78c |
 | 2026-05-29 | dx-foundation DX-5 — Create Makefile with standard dev targets — 7d4976e |
