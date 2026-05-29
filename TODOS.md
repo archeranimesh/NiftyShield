@@ -298,6 +298,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-05-29 | dx-foundation DX-6 — post-commit hook and installer — 1b94b5c |
 | 2026-05-29 | dx-foundation DX-5 — Create Makefile with standard dev targets — 7d4976e |
 | 2026-05-29 | dx-foundation DX-4 — pre-commit hooks configuration — 7f728e0 |
 | 2026-05-29 | dx-foundation DX-2 — configure ruff lint and format rules — 83e4abf |
