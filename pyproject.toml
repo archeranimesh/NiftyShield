@@ -29,3 +29,26 @@ markers = [
     "slow: marks tests as slow (deselect with '-m not slow')",
     "sandbox: marks tests requiring Upstox sandbox token",
 ]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+exclude = ["docs/", "data/", ".git/"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long — ruff format handles this
+    "B008",  # do not perform function calls in default args (Pydantic validators)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
+
