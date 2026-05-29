@@ -1,0 +1,31 @@
+[project]
+name = "niftyshield"
+version = "0.1.0"
+requires-python = ">=3.10"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "pytest-xdist>=3.0",
+    "pytest-randomly>=3.0",
+    "hypothesis>=6.0",
+    "ruff>=0.4",
+    "mypy>=1.10",
+    "pre-commit>=3.0",
+    "detect-secrets>=1.4",
+    "commitizen>=3.0",
+    "vulture>=2.0",
+    "bandit>=1.7",
+    "pylint>=3.0",
+    "structlog>=24.0",
+    "pydantic-settings>=2.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/unit"]
+asyncio_mode = "auto"
+markers = [
+    "slow: marks tests as slow (deselect with '-m not slow')",
+    "sandbox: marks tests requiring Upstox sandbox token",
+]
