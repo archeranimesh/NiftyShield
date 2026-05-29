@@ -4,7 +4,7 @@ test: ## Run offline unit tests (fast)
 	python -m pytest tests/unit/ --tb=short -q -n auto
 
 test-serial: ## Run offline unit tests serially
-	python -m pytest tests/unit/ --tb=short -q -p no:randomly -o addopts=""
+	python -m pytest tests/unit/ --tb=short -q -p no:randomly -n 0
 
 coverage: ## Run tests with coverage report + enforce threshold
 	python -m pytest tests/unit/ --cov=src --cov-report=term-missing \
