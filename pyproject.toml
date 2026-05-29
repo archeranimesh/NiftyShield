@@ -86,3 +86,17 @@ no_implicit_optional = true
 strict_equality = true
 extra_checks = true
 
+[tool.coverage.run]
+source = ["src"]
+omit = ["src/analytics/*", "src/sandbox/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@abstractmethod",
+]
+fail_under = 80
+
+

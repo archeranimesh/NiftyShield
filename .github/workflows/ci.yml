@@ -27,10 +27,23 @@ jobs:
       - name: Install dependencies
         run: pip install -e ".[dev]" --break-system-packages
 
-      - name: Run CI
-        run: make ci
+      - name: Run tests with coverage
+        run: |
+          python -m pytest tests/unit/ --cov=src --cov-report=xml \
+              --cov-report=term-missing -n auto -q
         env:
-          UPSTOX_ENV: test   # forces MockBrokerClient — no live API calls
+          UPSTOX_ENV: test
+
+      - name: Coverage summary
+        uses: irongut/CodeCoverageSummary@v1.3.0
+        with:
+          filename: coverage.xml
+          badge: true
+          fail_below_min: true
+          thresholds: "70 80"
+          output: both
+          format: markdown
+          hide_complexity: true
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
