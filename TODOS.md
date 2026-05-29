@@ -298,7 +298,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
-| 2026-05-29 | dx-foundation DX-5 — Create Makefile with standard dev targets — 5d391ac |
+| 2026-05-29 | dx-foundation DX-5 — Create Makefile with standard dev targets — 4036641 |
 | 2026-05-29 | dx-foundation DX-4 — pre-commit hooks configuration — 7f728e0 |
 | 2026-05-29 | dx-foundation DX-2 — configure ruff lint and format rules — 83e4abf |
 | 2026-05-29 | dx-foundation DX-1 — pyproject.toml dev dependencies — 0671073 |
