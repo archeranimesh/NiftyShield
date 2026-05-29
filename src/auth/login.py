@@ -2,8 +2,8 @@
 
 import os
 import webbrowser
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse, parse_qs
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import parse_qs, urlparse
 
 import upstox_client
 from dotenv import load_dotenv
@@ -62,7 +62,7 @@ def exchange_code_for_token(auth_code: str) -> str:
 
 def save_token(token: str):
     """Append access token to .env file."""
-    with open(".env", "r") as f:
+    with open(".env") as f:
         content = f.read()
 
     # Ensure file ends with newline

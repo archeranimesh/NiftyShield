@@ -54,23 +54,23 @@ def compute_cycle_max_drawdown(
     """
     if not nav_history:
         return Decimal("0"), Decimal("0")
-        
+
     peak = nav_history[0]
     max_dd = Decimal("0")
-    
+
     for val in nav_history:
         if val > peak:
             peak = val
-        
+
         current_dd = val - peak
         if current_dd < max_dd:
             max_dd = current_dd
-            
+
     if nee == Decimal("0"):
         max_dd_pct = Decimal("0")
     else:
         max_dd_pct = (max_dd / nee) * Decimal("100")
-        
+
     return max_dd, max_dd_pct
 
 
@@ -88,5 +88,5 @@ def compute_annualised_overlay_cost(premium_paid: Decimal, dte_at_entry: int) ->
     """
     if dte_at_entry <= 0:
         return Decimal("0")
-    
+
     return (premium_paid / Decimal(str(dte_at_entry))) * Decimal("365")

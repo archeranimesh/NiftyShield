@@ -26,10 +26,10 @@ from __future__ import annotations
 
 import argparse
 import sys
-from typing import Any
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
@@ -37,10 +37,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from dotenv import load_dotenv
 
-from src.instruments.lookup import InstrumentLookup
-from src.models.portfolio import TradeAction
-from src.paper.models import PaperTrade
-from src.paper.store import PaperStore
 from scripts.find_strike_by_delta import (
     DEFAULT_LOT_SIZE,
     UNDERLYING_DEFAULT,
@@ -50,10 +46,14 @@ from scripts.find_strike_by_delta import (
 )
 from src.backtest.ivr import compute_ivr
 from src.backtest.vix_ingest import fetch_vix_latest, load_vix_series
-from src.intraday.market_store import IntradayMarketStore
 from src.client.upstox_market import UpstoxMarketClient
-from src.paper.constants import DEFAULT_BOD_PATH, DEFAULT_DB_PATH, STRATEGY_CSP, LOT_SIZE
+from src.instruments.lookup import InstrumentLookup
+from src.intraday.market_store import IntradayMarketStore
+from src.models.portfolio import TradeAction
 from src.paper._utils import safe_float
+from src.paper.constants import DEFAULT_BOD_PATH, DEFAULT_DB_PATH, LOT_SIZE, STRATEGY_CSP
+from src.paper.models import PaperTrade
+from src.paper.store import PaperStore
 from src.risk.delta_tracker import PortfolioDeltaTracker
 from src.risk.entry_gate import check_entry_allowed
 
@@ -285,7 +285,7 @@ def _resolve_from_chain(args: argparse.Namespace) -> tuple[str, str] | None:
             for r in rows:
                 r["expiry"] = expiry
                 r["expiry_label"] = label
-            
+
             all_rows.extend(rows)
 
         # Intentional: prevent a single processing failure from crashing the sweep.
@@ -629,7 +629,7 @@ def main() -> None:
                 if instrument_key not in ltp_dict:
                     print(f"ERROR: LTP not found for {instrument_key}", file=sys.stderr)
                     sys.exit(1)
-                
+
                 price = ltp_dict[instrument_key]
                 rounded_price = round(price, 2)
                 print(f"Auto-price: LTP=₹{rounded_price}")

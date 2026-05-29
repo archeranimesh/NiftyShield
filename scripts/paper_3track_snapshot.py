@@ -45,8 +45,20 @@ load_dotenv()
 
 from src.client.upstox_market import UpstoxMarketClient
 from src.instruments.lookup import InstrumentLookup
-from src.models.portfolio import TradeAction
 from src.notifications.telegram import TelegramNotifier
+from src.paper._display import (
+    BASE_LABELS,
+    OVERLAY_LABELS,
+)
+from src.paper._display import (
+    delta_arrow as _delta_arrow,
+)
+from src.paper._display import (
+    fmt_decimal as _fmt,
+)
+from src.paper._display import (
+    hedge_verdict as _hedge_verdict,
+)
 from src.paper.constants import (
     DEFAULT_BOD_PATH,
     DEFAULT_DB_PATH,
@@ -55,20 +67,12 @@ from src.paper.constants import (
     STRATEGY_PROXY,
     STRATEGY_SPOT,
 )
+from src.paper.formatting import format_track_summary
 from src.paper.metrics import compute_nee
 from src.paper.models import PaperLegSnapshot, PaperNavSnapshot
 from src.paper.proxy_monitor import ProxyDeltaMonitor
 from src.paper.store import PaperStore
-from src.paper.formatting import format_track_summary
-from src.paper.track_snapshot import TrackPnL, TrackSnapshot, generate_track_snapshot
-from src.paper._utils import safe_float
-from src.paper._display import (
-    BASE_LABELS,
-    OVERLAY_LABELS,
-    fmt_decimal as _fmt,
-    delta_arrow as _delta_arrow,
-    hedge_verdict as _hedge_verdict,
-)
+from src.paper.track_snapshot import TrackSnapshot, generate_track_snapshot
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -433,7 +437,7 @@ async def _run(args: argparse.Namespace) -> None:
             leg_deltas[base_role] = _leg_delta(store, track_name, base_role, base_total, snap_date)
             for role, role_pnl in pnl.overlay_pnls.items():
                 leg_deltas[role] = _leg_delta(store, track_name, role, role_pnl, snap_date)
-            
+
             _print_track_block(track_name, snapshot, leg_deltas, snap_date)
 
     if save:

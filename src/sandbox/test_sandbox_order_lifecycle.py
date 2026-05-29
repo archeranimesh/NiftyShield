@@ -21,10 +21,9 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from dotenv import load_dotenv
 import upstox_client
+from dotenv import load_dotenv
 from upstox_client.rest import ApiException
-
 
 # ---------------------------------------------------------------------------
 # Fixture Recorder
@@ -194,7 +193,7 @@ def step_modify_order(
         print(f"Status  : {response.status}")
         print(f"Order ID: {response.data.order_id}")
         print(f"Latency : {response.metadata.latency}ms")
-        print(f"\n>> Order modified successfully.")
+        print("\n>> Order modified successfully.")
 
         recorder.save("modify_order_success", request_params, response)
 
@@ -221,7 +220,7 @@ def step_cancel_order(
         print(f"Status  : {response.status}")
         print(f"Order ID: {response.data.order_id}")
         print(f"Latency : {response.metadata.latency}ms")
-        print(f"\n>> Order cancelled successfully.")
+        print("\n>> Order cancelled successfully.")
 
         recorder.save("cancel_order_success", request_params, response)
 
@@ -268,8 +267,8 @@ def main() -> None:
     print("ALL STEPS PASSED")
     print("=" * 60)
     print(f"  Place  → order_id: {order_id}")
-    print(f"  Modify → price changed to 1.5")
-    print(f"  Cancel → order cancelled")
+    print("  Modify → price changed to 1.5")
+    print("  Cancel → order cancelled")
 
     if recorder.enabled:
         print(f"\n  Fixtures saved to: {fixtures_dir}/")

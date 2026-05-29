@@ -124,7 +124,7 @@ class InstrumentLookup:
             with gzip.open(path, "rt", encoding="utf-8") as f:
                 data = json.load(f)
         else:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 data = json.load(f)
         return cls(data)
 
@@ -332,12 +332,12 @@ class InstrumentLookup:
             dte = (d - today).days
             if dte < 15:
                 continue
-            
+
             is_monthly = (d == last_of_month[(d.year, d.month)])
             is_quarterly = is_monthly and (d.month in (3, 6, 9, 12))
             # NSE's long-dated options (yearly/half-yearly) expire in June and December.
             is_yearly = is_monthly and (d.month in (6, 12))
-            
+
             label = None
             if 15 <= dte <= 45 and is_monthly:
                 label = "monthly"
@@ -345,7 +345,7 @@ class InstrumentLookup:
                 label = "quarterly"
             elif 201 <= dte <= 420 and is_yearly:
                 label = "yearly"
-            
+
             if label and label not in mapping:
                 mapping[label] = exp
 
@@ -354,7 +354,7 @@ class InstrumentLookup:
         for label in pref_order:
             if label in mapping:
                 result.append((label, mapping[label]))
-        
+
         return result
 
     @property

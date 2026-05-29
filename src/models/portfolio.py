@@ -14,15 +14,15 @@ to preserve sub-rupee precision through P&L calculations and SQLite round-trips.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.mf.tracker import PortfolioPnL
     from src.dhan.models import DhanPortfolioSummary
+    from src.mf.tracker import PortfolioPnL
     from src.nuvama.models import NuvamaBondSummary, NuvamaOptionsSummary
 from enum import Enum
 
@@ -265,19 +265,19 @@ class Leg(BaseModel):
                             self.expiry.year, self.expiry.month + 1, 1
                         )
                     last_day_of_month = next_month_1st - timedelta(days=1)
-                    
+
                     # Find last Thursday of the month
                     offset = (last_day_of_month.weekday() - 3) % 7
                     last_thursday = (
                         last_day_of_month - timedelta(days=offset)
                     )
-                    
+
                     if self.expiry > last_thursday:
                         raise ValueError(
                             f"Expiry date {self.expiry} is after the last "
                             f"Thursday {last_thursday} of the month"
                         )
-                    
+
                     # All days from expiry + 1 to last_thursday
                     # must not be trading days.
                     curr = self.expiry + timedelta(days=1)
@@ -293,7 +293,7 @@ class Leg(BaseModel):
                                 f"{self.expiry} in the same month."
                             )
                         curr += timedelta(days=1)
-                        
+
         return self
 
     @computed_field
@@ -488,10 +488,10 @@ class PortfolioSummary:
     total_pnl: Decimal
     total_pnl_pct: Decimal  # quantized to 2 dp
 
-    mf_pnl: "PortfolioPnL | None" = None
-    dhan: "DhanPortfolioSummary | None" = None
-    nuvama_bonds: "NuvamaBondSummary | None" = None
-    nuvama_options: "NuvamaOptionsSummary | None" = None
+    mf_pnl: PortfolioPnL | None = None
+    dhan: DhanPortfolioSummary | None = None
+    nuvama_bonds: NuvamaBondSummary | None = None
+    nuvama_options: NuvamaOptionsSummary | None = None
 
     # Day-change deltas — None when prior-day data is unavailable
     mf_day_delta: Decimal | None = None

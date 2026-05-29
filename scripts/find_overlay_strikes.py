@@ -498,9 +498,9 @@ def main() -> None:
     )
 
     print(
-        f"\n  Next step:\n"
-        f"    python scripts/paper_3track_overlay_entry.py --dry-run\n"
-        f"    python scripts/paper_3track_overlay_entry.py\n"
+        "\n  Next step:\n"
+        "    python scripts/paper_3track_overlay_entry.py --dry-run\n"
+        "    python scripts/paper_3track_overlay_entry.py\n"
     )
 
 

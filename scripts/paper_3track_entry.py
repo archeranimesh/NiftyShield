@@ -46,6 +46,7 @@ load_dotenv()
 from src.client.upstox_market import UpstoxMarketClient
 from src.instruments.lookup import InstrumentLookup, parse_expiry
 from src.models.portfolio import TradeAction
+from src.paper._display import BASE_LABELS
 from src.paper._utils import safe_float
 from src.paper.constants import (
     DEFAULT_BOD_PATH,
@@ -59,7 +60,6 @@ from src.paper.constants import (
 )
 from src.paper.models import PaperTrade
 from src.paper.store import PaperStore
-from src.paper._display import BASE_LABELS
 
 # ── Constants ────────────────────────────────────────────────────────────────
 

@@ -1,9 +1,11 @@
 import glob
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
-import pandas as pd
+
 import duckdb
+import pandas as pd
+
 
 class ChainReader:
     """Reader for querying OptionChain snapshots stored in Parquet format via DuckDB."""

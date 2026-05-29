@@ -36,7 +36,6 @@ import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Optional
 
 # ---------------------------------------------------------------------------
 # Paths — resolved relative to project root so the script can be run from
@@ -98,8 +97,8 @@ def build_prompt(
     question: str,
     context_md: Path,
     templates_dir: Path,
-    template_name: Optional[str] = None,
-    extra_files: Optional[list[Path]] = None,
+    template_name: str | None = None,
+    extra_files: list[Path] | None = None,
 ) -> str:
     """Assemble the full context-enriched prompt string.
 
@@ -387,9 +386,9 @@ def main() -> None:
         pending_path = make_pending_path(args.topic, PENDING_DIR)
         pending_path.write_text(prompt)
         print(f"Council backend is not running at {COUNCIL_URL}.")
-        print(f"  Start it:  cd tools/llm-council && ./start.sh")
+        print("  Start it:  cd tools/llm-council && ./start.sh")
         print(f"  Prompt saved to: {pending_path.relative_to(PROJECT_ROOT)}")
-        print(f"  Re-run this command once the server is up.")
+        print("  Re-run this command once the server is up.")
         sys.exit(0)
 
     # Submit to council

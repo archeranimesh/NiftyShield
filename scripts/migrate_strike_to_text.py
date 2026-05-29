@@ -27,7 +27,6 @@ import sqlite3
 import sys
 from pathlib import Path
 
-
 DEFAULT_DB = Path(__file__).parent.parent / "data" / "portfolio" / "portfolio.sqlite"
 
 

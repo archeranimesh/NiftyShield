@@ -26,7 +26,6 @@ from pathlib import Path
 import requests
 from dotenv import load_dotenv
 
-
 # ---------------------------------------------------------------------------
 # Constants — Instruments relevant to NiftyShield
 # ---------------------------------------------------------------------------
@@ -254,8 +253,8 @@ def step_historical_candles(
         print(f"  Candles returned: {len(candles)}")
 
         if candles:
-            print(f"\n  Format: [timestamp, open, high, low, close, volume, oi]")
-            print(f"  Latest 3:")
+            print("\n  Format: [timestamp, open, high, low, close, volume, oi]")
+            print("  Latest 3:")
             for candle in candles[:3]:
                 ts = candle[0][:10] if candle[0] else "?"
                 o, h, l, c, v = candle[1], candle[2], candle[3], candle[4], candle[5]

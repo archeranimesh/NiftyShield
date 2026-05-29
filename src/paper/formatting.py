@@ -19,7 +19,7 @@ def fmt_inr(value: Decimal, sign_always: bool = False) -> str:
     """
     if value is None:
         return "₹-"
-    
+
     fmt = "+," if sign_always else ","
     return f"₹{value:{fmt}.0f}"
 
@@ -38,30 +38,30 @@ def format_pnl_table(
         Formatted table string.
     """
     lines = []
-    
+
     # Title line
     prefix = "[DRY RUN] " if is_dry_run else ""
     if title:
         lines.append(f"{prefix}{title}")
-    
+
     # Header
     # Column widths: strategy 30, others 14
     header = f"{'Strategy':<30} {'Unrealized':>14} {'Realized':>14} {'Total P&L':>14}"
     lines.append(header)
     lines.append("─" * len(header))
-    
+
     if not rows:
         lines.append("No active strategies found.")
         return "\n".join(lines)
-    
+
     for row in rows:
         strategy = row.get("strategy", "Unknown")[:30]
         unrealized = fmt_inr(row.get("unrealized", Decimal("0")), sign_always=True)
         realized = fmt_inr(row.get("realized", Decimal("0")), sign_always=True)
         total = fmt_inr(row.get("total", Decimal("0")), sign_always=True)
-        
+
         lines.append(f"{strategy:<30} {unrealized:>14} {realized:>14} {total:>14}")
-        
+
     return "\n".join(lines)
 
 

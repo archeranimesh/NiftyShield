@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import dataclass
 from decimal import Decimal
-import logging
 from typing import Literal
 
 logger = logging.getLogger(__name__)
@@ -43,22 +43,22 @@ def _find_strike_by_delta(chain: OptionChain, side: Literal["CE", "PE"], target_
     target_abs = abs(target_delta)
     best_strike = None
     min_diff = Decimal("1000")
-    
+
     for strike_price, strike_data in chain.strikes.items():
         leg = strike_data.ce if side == "CE" else strike_data.pe
         if leg is None:
             continue
-            
+
         leg_abs_delta = abs(leg.delta)
         # Assuming delta 0 means missing or bad data in most cases unless deep OTM
         if leg_abs_delta == Decimal("0"):
             continue
-            
+
         diff = abs(leg_abs_delta - target_abs)
         if diff < min_diff:
             min_diff = diff
             best_strike = strike_price
-            
+
     return best_strike
 
 
@@ -102,7 +102,7 @@ async def select_overlay_expiry(
         and an optional fallback reason.
     """
     profiles: list[LegSpreadProfile | CollarSpreadProfile] = []
-    
+
     for expiry in candidate_expiries:
         try:
             # We enforce timeout on the broker call using asyncio.wait_for
@@ -120,16 +120,16 @@ async def select_overlay_expiry(
             else:
                 profiles.append(LegSpreadProfile(expiry, None, None))
             continue
-            
+
         # Determine actual strikes
         p_strike = put_target_strike
         if p_strike is None and put_target_delta is not None:
             p_strike = _find_strike_by_delta(chain, "PE", put_target_delta)
-            
+
         c_strike = call_target_strike
         if c_strike is None and call_target_delta is not None:
             c_strike = _find_strike_by_delta(chain, "CE", call_target_delta)
-            
+
         if option_type == "COLLAR":
             put_spread = None
             put_oi = None
@@ -146,21 +146,21 @@ async def select_overlay_expiry(
                 mid = (leg.bid + leg.ask) / Decimal("2") if leg.bid > Decimal("0") and leg.ask > Decimal("0") else leg.ltp
                 call_spread = _compute_spread_pct(leg.bid, leg.ask, mid)
                 call_oi = leg.oi
-                
+
             profiles.append(CollarSpreadProfile(expiry, put_spread, call_spread, put_oi, call_oi))
-        
+
         else: # CE or PE
             target_strike = c_strike if option_type == "CE" else p_strike
             spread = None
             oi = None
-            
+
             if target_strike is not None and target_strike in chain.strikes:
                 leg = chain.strikes[target_strike].ce if option_type == "CE" else chain.strikes[target_strike].pe
                 if leg is not None:
                     mid = (leg.bid + leg.ask) / Decimal("2") if leg.bid > Decimal("0") and leg.ask > Decimal("0") else leg.ltp
                     spread = _compute_spread_pct(leg.bid, leg.ask, mid)
                     oi = leg.oi
-            
+
             profiles.append(LegSpreadProfile(expiry, spread, oi))
 
     # Evaluate against gate
@@ -177,7 +177,7 @@ async def select_overlay_expiry(
                 if profile.spread_pct <= GATE:
                     reason = f"Gate passed ({profile.spread_pct:.2f}% <= 3%) at preference rank {i+1}" if i > 0 else None
                     return OverlaySelection(profile.expiry, profiles, reason)
-                    
+
     # Fallback to the last available expiry (monthly)
     fallback_expiry = candidate_expiries[-1] if candidate_expiries else None
     return OverlaySelection(fallback_expiry, profiles, "All candidate expiries failed the 3% spread gate.")

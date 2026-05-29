@@ -44,7 +44,6 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -52,8 +51,19 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Re-use constants and pure helpers from the entry script — single source of truth.
+from scripts.paper_3track_overlay import (
+    _ACTION_FOR_ROLE,
+    _CC_BLOCKED_TRACKS,
+    _OPTION_TYPE_FOR_ROLE,
+    ALL_TRACKS,
+    _build_trade,
+    _collect_expiry_candidates,
+    _fetch_candidates_for_expiries,
+    _select_best_candidate,
+)
 from src.client.upstox_market import UpstoxMarketClient
-from src.instruments.lookup import InstrumentLookup, parse_expiry as _pe
+from src.instruments.lookup import InstrumentLookup
 from src.models.portfolio import TradeAction
 from src.paper.constants import (
     DEFAULT_BOD_PATH,
@@ -66,21 +76,6 @@ from src.paper.constants import (
 )
 from src.paper.models import PaperTrade
 from src.paper.store import PaperStore
-from src.paper._utils import safe_float
-
-# Re-use constants and pure helpers from the entry script — single source of truth.
-from scripts.paper_3track_overlay import (
-    ALL_TRACKS,
-    _ACTION_FOR_ROLE,
-    _CC_BLOCKED_TRACKS,
-    _OPTION_TYPE_FOR_ROLE,
-    _build_trade,
-    _collect_expiry_candidates,
-    _fetch_candidates_for_expiries,
-    _select_best_candidate,
-)
-
-
 
 logger = logging.getLogger(__name__)
 
@@ -613,7 +608,7 @@ async def _run(args: argparse.Namespace) -> None:
     if not args.yes:
         results = await _do_rolls(is_dry=True)
         _print_roll_report(results, roll_date, dry_run=True)
-        
+
         if not results or dry_run:
             return
 
@@ -626,7 +621,7 @@ async def _run(args: argparse.Namespace) -> None:
         except (KeyboardInterrupt, EOFError):
             print("\nAborted.")
             sys.exit(0)
-        
+
         # Now execute for real
         results = await _do_rolls(is_dry=False)
         _print_roll_report(results, roll_date, dry_run=False)

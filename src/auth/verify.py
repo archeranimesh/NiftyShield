@@ -1,6 +1,7 @@
 """Quick verification that the access token works."""
 
 import os
+
 import upstox_client
 from dotenv import load_dotenv
 

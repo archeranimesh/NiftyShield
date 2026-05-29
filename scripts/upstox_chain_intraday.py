@@ -46,6 +46,7 @@ _NIFTY_UNDERLYING = "NIFTY_50"
 
 import argparse
 
+
 def main(args: list[str] | None = None) -> int:
     """Fetch intraday option chain for 3 Nifty expiries and persist to Parquet.
 

@@ -14,7 +14,6 @@ API note: Dhan's /v2/fundlimit response uses 'availabelBalance' (missing an 'l')
 from __future__ import annotations
 
 import re
-
 from datetime import datetime
 from decimal import Decimal
 from typing import Any
@@ -23,7 +22,6 @@ import requests
 
 from src.dhan.models import DhanFundLimit, DhanOptionPosition, DhanOptionsSummary
 from src.dhan.reader import DHAN_API_BASE, _build_headers
-
 
 # ── HTTP callers ──────────────────────────────────────────────────────────────
 
@@ -205,10 +203,10 @@ def compute_charges(
     exchange_charges = Decimal("0.000530") * total_turnover
     sebi_charges = Decimal("0.000010") * total_turnover
     stamp_duty = Decimal("0.000030") * buy_turnover
-    
+
     # 1. Standard STT on premium for sell trades
     stt = Decimal("0.001000") * sell_turnover
-    
+
     # 2. Additional STT for ITM expiry: if option is exercised (net_qty > 0)
     if is_itm_expiry:
         for p in positions:

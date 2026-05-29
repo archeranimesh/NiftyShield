@@ -31,12 +31,14 @@ async def main() -> int:
     """
     import logging
     from datetime import datetime, timezone
+
     from dotenv import load_dotenv
-    from src.client.factory import create_client
-    from src.client.exceptions import DataFetchError
-    from src.intraday.market_store import IntradayMarketStore
+
     from scripts.dhan_intraday_tracker import main as dhan_main
     from scripts.nuvama_intraday_tracker import main as nuvama_main
+    from src.client.exceptions import DataFetchError
+    from src.client.factory import create_client
+    from src.intraday.market_store import IntradayMarketStore
 
     load_dotenv()
     logging.basicConfig(
@@ -57,9 +59,9 @@ async def main() -> int:
         prices = await client.get_ltp([NIFTY_KEY, VIX_KEY])
         nifty_spot = float(prices.get(NIFTY_KEY, 0.0))
         india_vix = float(prices.get(VIX_KEY, 0.0))
-        
+
         logger.info(f"Nifty: {nifty_spot:,.2f} | VIX: {india_vix:.2f}")
-        
+
         store = IntradayMarketStore()
         now = datetime.now(timezone.utc)
         store.record_market_snapshot(now, nifty_spot, india_vix)

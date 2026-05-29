@@ -25,8 +25,8 @@ from pathlib import Path
 # Allow ``python scripts/seed_mf_holdings.py`` from repo root
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.models.mf import MFTransaction, TransactionType
 from src.mf.store import MFStore
+from src.models.mf import MFTransaction, TransactionType
 
 # ---------------------------------------------------------------------------
 # Portfolio data — locked in on 2026-04-01 (entry baseline)

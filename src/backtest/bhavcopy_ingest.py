@@ -1,18 +1,17 @@
+import calendar
 import csv
 import logging
 import os
+import re
+import subprocess
 import zipfile
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from pathlib import Path
-import re
-import calendar
-import subprocess
-
-import requests
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+import requests
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -58,20 +57,20 @@ def parse_option_symbol(symbol: str) -> dict[str, str | date | Decimal]:
     """
     if len(symbol) < 6:
         raise ValueError(f"Invalid symbol format: {symbol}")
-        
+
     option_type = symbol[-2:]
     if option_type not in ("CE", "PE"):
         raise ValueError(f"Invalid option type in symbol: {symbol}")
-        
+
     core = symbol[:-2]
-    
+
     first_digit_match = re.search(r'\d', core)
     if not first_digit_match:
         raise ValueError(f"No expiry token found in symbol: {symbol}")
-        
+
     underlying = core[:first_digit_match.start()]
     rest = core[first_digit_match.start():]
-    
+
     # Try YYMDD (weekly)
     m_weekly = re.match(r'^(\d{2}[1-9OND]\d{2})(\d+)$', rest)
     if m_weekly and Decimal(m_weekly.group(2)) > 0:
@@ -90,7 +89,7 @@ def parse_option_symbol(symbol: str) -> dict[str, str | date | Decimal]:
             "strike": Decimal(strike_str),
             "option_type": option_type
         }
-        
+
     # Try YYMON (monthly)
     m_monthly = re.match(r'^(\d{2}[A-Z]{3})(\d+)$', rest)
     if m_monthly:
@@ -105,7 +104,7 @@ def parse_option_symbol(symbol: str) -> dict[str, str | date | Decimal]:
             "strike": Decimal(strike_str),
             "option_type": option_type
         }
-        
+
     raise ValueError(f"Unrecognized expiry format in symbol: {symbol}")
 
 def _parse_legacy(
@@ -288,12 +287,12 @@ def download_bhavcopy(trade_date: date, dest_dir: Path) -> Path:
     try:
         resp = session.get(udiff_url, timeout=30)
     except Exception as e:
-        raise IOError(f"Error downloading {trade_date}: {e}") from e
+        raise OSError(f"Error downloading {trade_date}: {e}") from e
 
     if resp.status_code == 200:
         content = resp.content
         if content[:4] != _ZIP_MAGIC:
-            raise IOError(
+            raise OSError(
                 f"UDiFF response for {trade_date} is not a ZIP — Akamai bot-check "
                 f"returned HTML. Set NSE_COOKIE env-var with a browser session cookie."
             )
@@ -303,7 +302,7 @@ def download_bhavcopy(trade_date: date, dest_dir: Path) -> Path:
         return dest_path
 
     if resp.status_code != 404:
-        raise IOError(f"UDiFF HTTP {resp.status_code} for {trade_date}")
+        raise OSError(f"UDiFF HTTP {resp.status_code} for {trade_date}")
 
     # UDiFF 404 — fall back to legacy archive URL
     logger.debug("UDiFF 404 for %s — trying legacy URL", trade_date)
@@ -318,16 +317,16 @@ def download_bhavcopy(trade_date: date, dest_dir: Path) -> Path:
     try:
         legacy_resp = session.get(legacy_url, timeout=30)
     except Exception as e:
-        raise IOError(f"Error downloading {trade_date} (legacy): {e}") from e
+        raise OSError(f"Error downloading {trade_date} (legacy): {e}") from e
 
     if legacy_resp.status_code == 404:
         raise FileNotFoundError(f"NSE returned 404 for {trade_date} — likely a holiday")
     if legacy_resp.status_code != 200:
-        raise IOError(f"Legacy HTTP {legacy_resp.status_code} for {trade_date}")
+        raise OSError(f"Legacy HTTP {legacy_resp.status_code} for {trade_date}")
 
     content = legacy_resp.content
     if content[:4] != _ZIP_MAGIC:
-        raise IOError(
+        raise OSError(
             f"Legacy response for {trade_date} is not a ZIP — Akamai bot-check "
             f"returned HTML. Set NSE_COOKIE env-var with a browser session cookie."
         )
@@ -344,18 +343,18 @@ def write_to_parquet(records: list[BhavRecord], month_date: date, dest_dir: Path
     """
     if not records:
         return
-        
+
     year = month_date.strftime("%Y")
     month = month_date.strftime("%m")
-    
+
     partition_dir = dest_dir / year / month
     partition_dir.mkdir(parents=True, exist_ok=True)
-    
+
     parquet_path = partition_dir / f"nifty_{year}_{month}.parquet"
-    
+
     # Convert records to list of dicts
     data = [r.model_dump() for r in records]
-    
+
     # Schema must strictly use decimal128(18,4) for price fields to prevent float64 inference
     schema = pa.schema([
         ('trade_date', pa.date32()),
@@ -373,44 +372,44 @@ def write_to_parquet(records: list[BhavRecord], month_date: date, dest_dir: Path
         ('volume', pa.int64()),
         ('oi', pa.int64()),
     ])
-    
+
     metadata = schema.metadata or {}
     try:
         git_commit = subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], 
-            text=True, 
-            stderr=subprocess.DEVNULL, 
+            ["git", "rev-parse", "HEAD"],
+            text=True,
+            stderr=subprocess.DEVNULL,
             timeout=2
         ).strip()
     except Exception:
         git_commit = "unknown"
-        
+
     metadata.update({
         b"git_commit": git_commit.encode('utf-8'),
         b"run_timestamp": datetime.now(timezone.utc).isoformat().encode('utf-8')
     })
     schema = schema.with_metadata(metadata)
-    
+
     new_table = pa.Table.from_pylist(data, schema=schema)
-    
+
     if parquet_path.exists():
         existing_table = pq.read_table(parquet_path)
-        
+
         # Idempotency check: if trade_date already in existing data, skip append
         existing_dates = set(existing_table.column('trade_date').to_pylist())
         new_dates = set(new_table.column('trade_date').to_pylist())
-        
+
         # If any of the new dates are already in the existing dates, we assume it's already written.
-        # Note: This batch behavior is conservative — if any date in a batch overlaps, the whole 
-        # batch is skipped rather than just the duplicates. For the bootstrap use case (one day 
+        # Note: This batch behavior is conservative — if any date in a batch overlaps, the whole
+        # batch is skipped rather than just the duplicates. For the bootstrap use case (one day
         # at a time) this is correct. Downstream callers passing multi-day batches need to know about it.
         if any(d in existing_dates for d in new_dates):
             return
-            
+
         final_table = pa.concat_tables([existing_table, new_table])
         final_table = final_table.replace_schema_metadata(schema.metadata)
     else:
         final_table = new_table
-        
+
     pq.write_table(final_table, parquet_path)
 

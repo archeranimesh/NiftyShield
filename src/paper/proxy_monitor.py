@@ -40,7 +40,7 @@ class ProxyDeltaMonitor:
         # Convert to absolute delta just in case a signed value is passed
         abs_delta = abs(current_delta)
         is_below = abs_delta < self.THRESHOLD
-        
+
         # Record the log
         self.store.record_proxy_delta_log(
             strategy_name=self.strategy_name,
@@ -48,18 +48,18 @@ class ProxyDeltaMonitor:
             delta=abs_delta,
             is_below_threshold=is_below
         )
-        
+
         # Retrieve consecutive days
         consecutive_days = self.store.get_proxy_delta_consecutive_days(
             strategy_name=self.strategy_name,
             current_date=current_date
         )
-        
+
         if consecutive_days >= self.CRITICAL_DAYS:
             state_label = "CRITICAL"
         elif abs_delta < self.WARNING_THRESHOLD:
             state_label = "WARNING"
         else:
             state_label = "OK"
-            
+
         return state_label, consecutive_days

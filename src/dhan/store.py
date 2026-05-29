@@ -402,10 +402,10 @@ class DhanStore:
                    WHERE is_eod = 1 AND trade_date LIKE ?""",
                 (prefix,),
             ).fetchone()
-        
+
         charges = row["total_charges"] if row and row["total_charges"] is not None else 0
         brokerage = row["total_brokerage"] if row and row["total_brokerage"] is not None else 0
-        
+
         return (Decimal(str(charges)), Decimal(str(brokerage)))
 
     # ── Margin snapshots ──────────────────────────────────────────────────────

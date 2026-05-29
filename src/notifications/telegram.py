@@ -94,7 +94,7 @@ class TelegramNotifier:
             )
             return False
 
-        # Increment before the API call so that network timeouts or HTTP errors 
+        # Increment before the API call so that network timeouts or HTTP errors
         # still burn a budget slot, preventing rapid retry loops on broken endpoints.
         self._messages_sent += 1
         html_text = _html_escape(text)
@@ -136,7 +136,7 @@ def build_notifier() -> TelegramNotifier | None:
     chat_id = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
     if not token or not chat_id:
         return None
-        
+
     try:
         budget = int(os.environ.get("TELEGRAM_MESSAGE_BUDGET", "10"))
     except ValueError:

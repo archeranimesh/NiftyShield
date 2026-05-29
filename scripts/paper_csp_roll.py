@@ -40,6 +40,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from scripts.find_strike_by_delta import filter_strikes_by_delta, rank_strikes
 from src.client.factory import create_client
 from src.client.protocol import BrokerClient
 from src.instruments.lookup import InstrumentLookup
@@ -47,13 +48,11 @@ from src.models.portfolio import TradeAction
 from src.paper.constants import (
     DEFAULT_BOD_PATH,
     DEFAULT_DB_PATH,
-    LOT_SIZE,
     NIFTY_UNDERLYING,
     STRATEGY_CSP,
 )
 from src.paper.models import PaperTrade
 from src.paper.store import PaperStore
-from scripts.find_strike_by_delta import filter_strikes_by_delta, rank_strikes
 
 logger = logging.getLogger(__name__)
 

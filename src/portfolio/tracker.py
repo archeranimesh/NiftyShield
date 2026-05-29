@@ -16,15 +16,14 @@ from src.client.upstox_market import parse_upstox_option_chain
 from src.models.options import OptionChain
 from src.models.portfolio import (
     AssetType,
-    DailySnapshot,
     Direction,
     Leg,
+    Position,
     ProductType,
     Strategy,
-    Position,
 )
-from src.portfolio.store import PortfolioStore
 from src.portfolio.service import SnapshotService
+from src.portfolio.store import PortfolioStore
 
 logger = logging.getLogger(__name__)
 

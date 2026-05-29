@@ -47,15 +47,10 @@ from src.market_calendar.holidays import is_trading_day, prev_trading_day
 from src.models.portfolio import DailySnapshot, Strategy
 from src.portfolio.formatting import (
     _format_combined_summary,
-    _format_protection_stats,
 )
 from src.portfolio.summary import (
-    _build_portfolio_summary,
-    _build_prev_prices,
     _compute_prev_mf_pnl,
     _compute_strategy_pnl_from_prices,
-    _etf_cost_basis,
-    _etf_current_value,
 )
 
 
@@ -200,8 +195,8 @@ def _historical_main(snap_date: date, db_path: Path) -> int:
     # ── Dhan portfolio from stored snapshots (non-fatal) ──────────
     dhan_summary = None
     try:
-        from src.dhan.store import DhanStore
         from src.dhan.reader import build_dhan_summary
+        from src.dhan.store import DhanStore
         dhan_store = DhanStore(db_path)
         dhan_holdings = dhan_store.get_snapshot_for_date(snap_date)
         if dhan_holdings:
@@ -216,9 +211,9 @@ def _historical_main(snap_date: date, db_path: Path) -> int:
     # ── Nuvama bonds from stored snapshots (non-fatal) ───────────
     nuvama_summary = None
     try:
-        from src.nuvama.store import NuvamaStore
-        from src.nuvama.reader import build_nuvama_summary
         from src.nuvama.models import NuvamaBondHolding
+        from src.nuvama.reader import build_nuvama_summary
+        from src.nuvama.store import NuvamaStore
 
         nuvama_store = NuvamaStore(db_path)
         nuvama_snaps = nuvama_store.get_snapshot_for_date(snap_date)
@@ -559,7 +554,7 @@ async def _async_main(snap_date: date, db_path: Path, dhan_trade_count: int = 0)
         # ── Nuvama options portfolio snapshot (non-fatal) ─────────────
         nuvama_options_summary = None
         try:
-            from src.nuvama.options_reader import parse_options_positions, build_options_summary
+            from src.nuvama.options_reader import build_options_summary, parse_options_positions
 
             if nuvama_api_instance is None:
                 from src.auth.nuvama_verify import load_api_connect
@@ -602,6 +597,7 @@ async def _async_main(snap_date: date, db_path: Path, dhan_trade_count: int = 0)
         dhan_options_section = "[unavailable]"
         try:
             from datetime import timezone
+
             from src.dhan.positions import format_options_section
             from src.dhan.store import DhanStore
 
@@ -633,6 +629,8 @@ async def _async_main(snap_date: date, db_path: Path, dhan_trade_count: int = 0)
                 # ── Live path — fetch from Dhan API, store EOD row ────
                 from src.dhan.positions import (
                     build_options_summary as _build_dhan_opts_summary,
+                )
+                from src.dhan.positions import (
                     fetch_fund_limit_raw,
                     fetch_positions_raw,
                     filter_intraday_options,

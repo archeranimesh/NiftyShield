@@ -30,12 +30,9 @@ from __future__ import annotations
 from decimal import Decimal
 
 from src.client.protocol import (
-    BrokerClient,
     CandleRequest,
-    Contract,
     Holding,
     MarginResponse,
-    MarketDataProvider,
     OrderModify,
     OrderRequest,
     OrderResponse,
@@ -112,7 +109,7 @@ class UpstoxLiveClient:
     # ── Not yet implemented (constraints documented above) ────────
 
     async def get_historical_candles(
-        self, params: "CandleRequest"
+        self, params: CandleRequest
     ) -> list:
         """Not yet implemented.
 
@@ -141,7 +138,7 @@ class UpstoxLiveClient:
 
     # ── Order execution (blocked — static IP required) ────────────
 
-    async def place_order(self, order: "OrderRequest") -> "OrderResponse":
+    async def place_order(self, order: OrderRequest) -> OrderResponse:
         """Not available — order execution blocked by static IP constraint.
 
         Raises:
@@ -150,8 +147,8 @@ class UpstoxLiveClient:
         self._raise_order_blocked()
 
     async def modify_order(
-        self, order_id: str, changes: "OrderModify"
-    ) -> "OrderResponse":
+        self, order_id: str, changes: OrderModify
+    ) -> OrderResponse:
         """Not available — order execution blocked by static IP constraint.
 
         Raises:
@@ -159,7 +156,7 @@ class UpstoxLiveClient:
         """
         self._raise_order_blocked()
 
-    async def cancel_order(self, order_id: str) -> "OrderResponse":
+    async def cancel_order(self, order_id: str) -> OrderResponse:
         """Not available — order execution blocked by static IP constraint.
 
         Raises:
@@ -169,7 +166,7 @@ class UpstoxLiveClient:
 
     # ── Portfolio read (blocked — Daily OAuth token required) ─────
 
-    async def get_positions(self) -> list["Position"]:
+    async def get_positions(self) -> list[Position]:
         """Not available — requires Daily OAuth token.
 
         Raises:
@@ -179,7 +176,7 @@ class UpstoxLiveClient:
             "Requires Daily OAuth token — see CONTEXT.md"
         )
 
-    async def get_holdings(self) -> list["Holding"]:
+    async def get_holdings(self) -> list[Holding]:
         """Not available — requires Daily OAuth token.
 
         Raises:
@@ -189,7 +186,7 @@ class UpstoxLiveClient:
             "Requires Daily OAuth token — see CONTEXT.md"
         )
 
-    async def get_margins(self) -> "MarginResponse":
+    async def get_margins(self) -> MarginResponse:
         """Not available — requires Daily OAuth token.
 
         Raises:

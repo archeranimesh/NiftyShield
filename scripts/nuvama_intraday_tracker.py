@@ -29,8 +29,8 @@ async def main(nifty_spot: float = 0.0, india_vix: float = 0.0) -> int:
 
     from src.auth.nuvama_verify import load_api_connect
     from src.nuvama.options_reader import parse_options_positions
-    from src.nuvama.store import NuvamaStore
     from src.nuvama.protocol import NuvamaClient
+    from src.nuvama.store import NuvamaStore
 
     load_dotenv()
     logging.basicConfig(
@@ -90,13 +90,13 @@ async def main(nifty_spot: float = 0.0, india_vix: float = 0.0) -> int:
     # 3. Save to database
     try:
         store.record_intraday_positions(now, positions)
-        
+
         # Calculate PnL Breakdown
         unrealized = sum((p.unrealized_pnl for p in positions), Decimal("0"))
         realized_today = sum((p.realized_pnl_today for p in positions), Decimal("0"))
         historical_map = store.get_cumulative_realized_pnl(before_date=now.date())
         historical_total = sum(historical_map.values(), Decimal("0"))
-        
+
         total_pnl = unrealized + realized_today
 
         logger.info(
@@ -113,6 +113,7 @@ async def main(nifty_spot: float = 0.0, india_vix: float = 0.0) -> int:
 
 if __name__ == "__main__":
     from dotenv import load_dotenv
+
     from src.client.factory import create_client
 
     async def run_standalone():

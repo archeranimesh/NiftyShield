@@ -3,11 +3,11 @@
 
 import argparse
 import asyncio
+import os
+import sys
 from datetime import date
 from decimal import Decimal
-import os
 from pathlib import Path
-import sys
 
 # Ensure src/ is in PYTHONPATH
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -15,6 +15,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.client.upstox_market import UpstoxMarketClient
 from src.instruments.lookup import InstrumentLookup
 from src.notifications.telegram import TelegramNotifier
+from src.paper._display import BASE_LABELS, OVERLAY_LABELS
+from src.paper._display import fmt_decimal as _fmt
+from src.paper._display import hedge_verdict as _hedge_verdict
 from src.paper.constants import (
     DEFAULT_BOD_PATH,
     DEFAULT_DB_PATH,
@@ -23,13 +26,10 @@ from src.paper.constants import (
     STRATEGY_PROXY,
     STRATEGY_SPOT,
 )
-from src.paper.store import PaperStore
-from src.paper.proxy_monitor import ProxyDeltaMonitor
-from src.paper.track_snapshot import TrackPnL, generate_track_snapshot
 from src.paper.metrics import compute_nee
-from src.paper._utils import safe_float
-from src.paper._display import BASE_LABELS, OVERLAY_LABELS, fmt_decimal as _fmt, hedge_verdict as _hedge_verdict
-
+from src.paper.proxy_monitor import ProxyDeltaMonitor
+from src.paper.store import PaperStore
+from src.paper.track_snapshot import TrackPnL, generate_track_snapshot
 
 # --- Overlay display helpers -------------------------------------------------
 
@@ -80,20 +80,20 @@ class MockNotifier:
 async def main() -> None:
     parser = argparse.ArgumentParser(description="Daily 3-Track Comparison Snapshot")
     parser.add_argument(
-        "--date", 
-        type=str, 
+        "--date",
+        type=str,
         default=date.today().isoformat(),
         help="Date of the snapshot (YYYY-MM-DD)."
     )
     parser.add_argument(
-        "--underlying-price", 
-        type=float, 
+        "--underlying-price",
+        type=float,
         required=True,
         help="Current Nifty 50 spot price."
     )
     parser.add_argument(
-        "--dry-run", 
-        action="store_true", 
+        "--dry-run",
+        action="store_true",
         help="Generate report without saving nav snapshot to DB."
     )
     args = parser.parse_args()
@@ -131,11 +131,11 @@ async def main() -> None:
     print("-" * 75)
 
     track_results = []
-    
+
     for track_name in tracks:
         # Determine if we should pass the proxy monitor
         monitor = proxy_monitor if track_name == STRATEGY_PROXY else None
-        
+
         snapshot = await generate_track_snapshot(
             store=store,
             broker=broker,
@@ -146,9 +146,9 @@ async def main() -> None:
             snapshot_date=snapshot_date,
             proxy_monitor=monitor
         )
-        
+
         track_results.append(snapshot)
-        
+
         # Save snapshot to DB if not dry run
         if not args.dry_run and snapshot.pnl.net_pnl != Decimal("0"):
             from src.paper.models import PaperNavSnapshot
@@ -168,7 +168,7 @@ async def main() -> None:
             print(line)
         print(f"  GREEKS : Δ={snapshot.greeks.net_delta:.2f} | Θ={snapshot.greeks.net_theta:.2f} | V={snapshot.greeks.net_vega:.2f}")
         print(f"  METRICS: Max DD={snapshot.max_drawdown_pct:.2f}% (₹{snapshot.max_drawdown_abs:,.2f}) | Ret/NEE={snapshot.return_on_nee:.2f}%")
-        
+
         if track_name == STRATEGY_PROXY and snapshot.proxy_delta_alert:
             print(f"  ALERT  : Proxy Delta State -> {snapshot.proxy_delta_alert}")
             if "CRITICAL" in snapshot.proxy_delta_alert:

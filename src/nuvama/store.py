@@ -585,21 +585,21 @@ class NuvamaStore:
                 """,
                 (snap_date.isoformat(),)
             ).fetchall()
-            
+
         if not rows:
             return None, None, None, None
-            
+
         pnl_by_ts: dict[str, Decimal] = {}
-        
+
         for row in rows:
             ts = row["timestamp"]
             urlz = Decimal(str(row["unrealized_pnl"]))
             rlz = Decimal(str(row["realized_pnl_today"]))
-            
+
             pnl_by_ts[ts] = pnl_by_ts.get(ts, Decimal("0")) + urlz + rlz
-                
+
         pnls = list(pnl_by_ts.values())
         max_pnl = max(pnls) if pnls else None
         min_pnl = min(pnls) if pnls else None
-        
+
         return max_pnl, min_pnl, None, None

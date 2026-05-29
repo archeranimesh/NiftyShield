@@ -1,5 +1,4 @@
 import datetime
-from typing import Optional
 
 from src.db import connect
 
@@ -50,11 +49,11 @@ class IntradayMarketStore:
         """
         if timestamp.tzinfo is None:
             raise ValueError("timestamp must be timezone-aware (preferably UTC)")
-            
+
         # Explicit conversion to UTC ISO string to prevent string sort issues in SQLite
         # and to avoid Python 3.12+ sqlite3 default adapter deprecation warnings.
         timestamp_iso = timestamp.astimezone(datetime.timezone.utc).isoformat()
-        
+
         with connect(self._db_path) as db:
             db.execute(
                 """
@@ -82,7 +81,7 @@ class IntradayMarketStore:
             )
             return cursor.rowcount
 
-    def get_latest(self) -> Optional[tuple[float, float]]:
+    def get_latest(self) -> tuple[float, float] | None:
         """Return the most recent (nifty_spot, india_vix) pair.
 
         Returns:
@@ -98,7 +97,7 @@ class IntradayMarketStore:
                 return (row["nifty_spot"], row["india_vix"])
             return None
 
-    def get_latest_vix_today(self) -> Optional[float]:
+    def get_latest_vix_today(self) -> float | None:
         """Return today's most recent India VIX from intraday snapshots.
 
         Checks the latest snapshot timestamp against today's IST date so

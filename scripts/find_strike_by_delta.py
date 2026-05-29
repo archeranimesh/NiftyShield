@@ -503,7 +503,7 @@ def main() -> None:
             for r in rows:
                 r["expiry"] = expiry
                 r["expiry_label"] = label
-            
+
             all_rows.extend(rows)
 
         except Exception as exc:

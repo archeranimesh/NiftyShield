@@ -134,7 +134,7 @@ class NuvamaOptionsSummary:
     """Aggregated Nuvama Options PnL status."""
     snapshot_date: date
     positions: tuple[NuvamaOptionPosition, ...]
-    
+
     total_unrealized_pnl: Decimal
     total_realized_pnl_today: Decimal
     # Calendar-month realized P&L: today's realized + stored EOD rows earlier this month
@@ -146,7 +146,7 @@ class NuvamaOptionsSummary:
     intraday_low: Decimal | None = None
     nifty_high: float | None = None
     nifty_low: float | None = None
-    
+
     @property
     def net_pnl(self) -> Decimal:
         """Total PnL matching Nuvama UI: unrealized + today's realized only.

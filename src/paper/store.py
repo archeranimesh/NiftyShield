@@ -21,8 +21,8 @@ from decimal import Decimal
 from pathlib import Path
 
 from src.db import connect as _connect
-from src.paper.models import PaperLegSnapshot, PaperNavSnapshot, PaperPosition, PaperTrade
 from src.models.portfolio import TradeAction
+from src.paper.models import PaperLegSnapshot, PaperNavSnapshot, PaperPosition, PaperTrade
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS paper_trades (
@@ -527,7 +527,7 @@ class PaperStore:
                 "ORDER BY log_date DESC",
                 (strategy_name, current_date.isoformat()),
             ).fetchall()
-            
+
         consecutive = 0
         last_date = None
         for row in rows:

@@ -19,11 +19,11 @@ from src.models.portfolio import (
     DailySnapshot,
     Direction,
     Leg,
+    Position,
     ProductType,
     Strategy,
     Trade,
     TradeAction,
-    Position,
     create_strategy_instance,
 )
 

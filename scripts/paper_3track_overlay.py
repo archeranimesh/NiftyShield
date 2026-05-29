@@ -49,9 +49,12 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from src.client.upstox_market import UpstoxMarketClient
-from src.instruments.lookup import InstrumentLookup, parse_expiry as _pe
+from src.instruments.lookup import InstrumentLookup
+from src.instruments.lookup import parse_expiry as _pe
 from src.models.options import calculate_otm_pct, rank_overlay_key
 from src.models.portfolio import TradeAction
+from src.paper._display import BASE_LABELS, OVERLAY_LABELS
+from src.paper._utils import safe_float
 from src.paper.constants import (
     CC_OTM_MAX,
     CC_OTM_MIN,
@@ -60,7 +63,6 @@ from src.paper.constants import (
     DEFAULT_DB_PATH,
     LOT_SIZE,
     NIFTY_UNDERLYING,
-    OVERLAY_ROLL_DTE,
     PP_OTM_MAX,
     PP_OTM_MIN,
     PP_TARGET_OTM,
@@ -71,8 +73,6 @@ from src.paper.constants import (
 )
 from src.paper.models import PaperTrade
 from src.paper.store import PaperStore
-from src.paper._utils import safe_float
-from src.paper._display import BASE_LABELS, OVERLAY_LABELS
 
 # ── Constants ────────────────────────────────────────────────────────────────
 

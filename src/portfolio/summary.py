@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from src.models.portfolio import (
     AssetType,
@@ -27,10 +28,9 @@ from src.models.portfolio import (
     Strategy,
 )
 
-from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from src.mf.tracker import PortfolioPnL
     from src.dhan.models import DhanPortfolioSummary
+    from src.mf.tracker import PortfolioPnL
     from src.nuvama.models import NuvamaBondSummary, NuvamaOptionsSummary
     from src.portfolio.tracker import StrategyPnL
 
@@ -111,7 +111,7 @@ def _build_prev_prices(
 def _compute_prev_mf_pnl(
     prev_nav_snaps: list,  # list[MFNavSnapshot]
     holdings: dict,        # dict[str, MFHolding]
-) -> "PortfolioPnL | None":
+) -> PortfolioPnL | None:
     """Reconstruct a PortfolioPnL from stored NAV snapshots and current holdings.
 
     Used by both live and historical paths to compute the previous day's MF
@@ -140,8 +140,8 @@ def _compute_prev_mf_pnl(
 
 
 def _compute_strategy_pnl_from_prices(
-    strategy: "Strategy", prices: "dict[str, Decimal]"
-) -> "StrategyPnL":
+    strategy: Strategy, prices: dict[str, Decimal]
+) -> StrategyPnL:
     """Compute StrategyPnL from a pre-built prices dict (no live fetch).
 
     Used by the historical query path to reconstruct P&L from stored LTPs
@@ -175,13 +175,13 @@ def _build_portfolio_summary(
     snap_date: date,
     strategies: list[Strategy],
     prices: dict[str, Decimal],
-    strategy_pnls: dict[str, "StrategyPnL"],
-    mf_pnl: "PortfolioPnL | None",
+    strategy_pnls: dict[str, StrategyPnL],
+    mf_pnl: PortfolioPnL | None,
     prev_snapshots: dict[int, DailySnapshot] | None = None,
-    prev_mf_pnl: "PortfolioPnL | None" = None,
-    dhan_summary: "DhanPortfolioSummary | None" = None,
-    nuvama_summary: "NuvamaBondSummary | None" = None,
-    nuvama_options_summary: "NuvamaOptionsSummary | None" = None,
+    prev_mf_pnl: PortfolioPnL | None = None,
+    dhan_summary: DhanPortfolioSummary | None = None,
+    nuvama_summary: NuvamaBondSummary | None = None,
+    nuvama_options_summary: NuvamaOptionsSummary | None = None,
 ) -> PortfolioSummary:
     """Compute combined portfolio values into a PortfolioSummary.
 
@@ -234,7 +234,7 @@ def _build_portfolio_summary(
         mf_invested + etf_basis
         + dhan_eq_basis + dhan_bd_basis + nuvama_bd_basis
     )
-    
+
     total_pnl = (
         (mf_pnl.total_pnl if mf_pnl else Decimal("0"))
         + (etf_value - etf_basis)
@@ -248,7 +248,7 @@ def _build_portfolio_summary(
             else Decimal("0")
         )
     )
-    
+
     total_pnl_pct = (
         (total_pnl / total_invested * 100).quantize(Decimal("0.01"))
         if total_invested

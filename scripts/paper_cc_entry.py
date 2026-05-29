@@ -18,11 +18,12 @@ from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from scripts.find_strike_by_delta import filter_strikes_by_delta
 from src.backtest.ivr import compute_ivr
 from src.backtest.vix_ingest import fetch_vix_latest, load_vix_series
 from src.client.upstox_market import UpstoxMarketClient
-from src.intraday.market_store import IntradayMarketStore
 from src.instruments.lookup import InstrumentLookup
+from src.intraday.market_store import IntradayMarketStore
 from src.paper.constants import (
     DEFAULT_BOD_PATH,
     DEFAULT_DB_PATH,
@@ -31,7 +32,6 @@ from src.paper.constants import (
     STRATEGY_CC_OVERLAY,
     compute_max_lots,
 )
-from scripts.find_strike_by_delta import filter_strikes_by_delta
 
 load_dotenv()
 
@@ -213,7 +213,7 @@ async def run() -> None:
     # 4. Print command
     ivr_str = f"{ivr:.2f}" if ivr is not None else "None"
     notes = f"15d CC entry; IVR={ivr_str}; delta={selected['delta']:.3f}; NiftyBees={niftybees_ltp:.2f}"
-    
+
     cmd_parts = [
         "python -m scripts.record_paper_trade",
         f"  --strategy {STRATEGY_CC_OVERLAY}",

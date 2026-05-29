@@ -15,15 +15,15 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from src.models.portfolio import DailySnapshot, PortfolioSummary, Strategy
 from src.portfolio.summary import _build_portfolio_summary
 from src.utils.number_formatting import fmt_inr
 
-from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from src.mf.tracker import PortfolioPnL
     from src.dhan.models import DhanPortfolioSummary
+    from src.mf.tracker import PortfolioPnL
     from src.nuvama.models import NuvamaBondSummary, NuvamaOptionsSummary
     from src.portfolio.tracker import StrategyPnL
 
@@ -62,14 +62,14 @@ def _format_protection_stats(summary: PortfolioSummary) -> list[str]:
 def _format_combined_summary(
     strategies: list[Strategy],
     prices: dict[str, Decimal],
-    strategy_pnls: dict[str, "StrategyPnL"],
-    mf_pnl: "PortfolioPnL | None",
+    strategy_pnls: dict[str, StrategyPnL],
+    mf_pnl: PortfolioPnL | None,
     prev_snapshots: dict[int, DailySnapshot] | None = None,
-    prev_mf_pnl: "PortfolioPnL | None" = None,
+    prev_mf_pnl: PortfolioPnL | None = None,
     snap_date: date | None = None,
-    dhan_summary: "DhanPortfolioSummary | None" = None,
-    nuvama_summary: "NuvamaBondSummary | None" = None,
-    nuvama_options_summary: "NuvamaOptionsSummary | None" = None,
+    dhan_summary: DhanPortfolioSummary | None = None,
+    nuvama_summary: NuvamaBondSummary | None = None,
+    nuvama_options_summary: NuvamaOptionsSummary | None = None,
 ) -> str:
     """Build the combined portfolio summary as a formatted string.
 
@@ -223,13 +223,13 @@ def _format_combined_summary(
             if summary.nuvama_options_available:
                 lines.append("")
                 lines.append(f"  Nuvama M2M P&L      {fmt_inr(summary.nuvama_options.total_unrealized_pnl, sign=True, width=14)}")
-                
+
                 n_opt_high = summary.nuvama_options.intraday_high
                 n_opt_low = summary.nuvama_options.intraday_low
                 if n_opt_high is not None and n_opt_low is not None:
                     hl_str = f"{fmt_inr(n_opt_high, sign=True)} / {fmt_inr(n_opt_low, sign=True)}"
                     lines.append(f"   ├ M2M High/Low   {hl_str:>16}")
-                
+
                 n_nifty_high = summary.nuvama_options.nifty_high
                 n_nifty_low = summary.nuvama_options.nifty_low
                 if n_nifty_high is not None and n_nifty_low is not None:

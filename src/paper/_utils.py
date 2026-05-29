@@ -1,6 +1,7 @@
 # src/paper/_utils.py
 from typing import Any
 
+
 def safe_float(val: Any, default: float = 0.0) -> float:
     """Safely convert a value to float.
     
