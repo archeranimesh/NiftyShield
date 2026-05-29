@@ -20,3 +20,4 @@ tmp/
 
 # Python packaging build artifacts
 *.egg-info/
+.mypy_cache/
