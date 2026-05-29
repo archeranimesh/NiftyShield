@@ -8,7 +8,7 @@
 
 ---
 
-- [ ] **DX-1** — Create `pyproject.toml` (project metadata + all dev dependencies declared) — **Antigravity**
+- [x] **DX-1** — Create `pyproject.toml` (project metadata + all dev dependencies declared) — **Antigravity** | SHA: 0671073
 - [ ] **DX-2** — Configure `ruff` in `pyproject.toml` (lint rules + format settings) — **Antigravity**
 - [ ] **DX-3** — Configure `mypy` in `pyproject.toml` (strict on `src/client/` + `src/paper/` first; permissive elsewhere) — **Claude**
 - [ ] **DX-4** — Create `.pre-commit-config.yaml` (ruff, mypy, detect-secrets hooks) — **Antigravity**
