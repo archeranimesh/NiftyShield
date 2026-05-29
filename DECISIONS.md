@@ -5,6 +5,16 @@
 
 ---
 
+## Developer Tooling
+
+**mypy phased strict rollout (2026-05-29, DX-3):** `src/client.*` and `src/paper.*` run under strict mypy (`disallow_untyped_defs`, `disallow_any_generics`, `strict_equality`). All other modules use permissive defaults (`warn_return_any`, `warn_unused_ignores`, `no_implicit_optional` only). Rationale: `src/client/` owns the `BrokerClient` protocol boundary and all order/auth logic; `src/paper/` owns `Decimal` monetary fields and `PaperTrade` invariants — both are highest-risk for silent type drift. A wall of errors on day one would kill adoption; phased rollout lets the team fix errors module-by-module. Baseline error counts in `docs/plan/dev-foundation/dx-foundation/mypy_baseline.md`. Expanding strict coverage to other modules is a post-baseline task.
+
+**ruff over flake8/black (2026-05-29, DX-2):** Single tool replaces flake8, isort, and black. Line length 100 (wider than black's 88 — matches existing codebase style). `E501` ignored (ruff format handles line length). `B008` ignored (Pydantic validators call functions in default args by design).
+
+**pre-commit scoped to client/paper only for mypy (2026-05-29, DX-4):** mypy hook in `.pre-commit-config.yaml` uses `files: ^src/(client|paper)/` to match DX-3 strictness boundaries. Expanding the hook to other modules is gated on fixing their baseline errors first.
+
+---
+
 ## Data Layer
 
 **UTC-only timestamps in intraday_market_snapshots:** `record_market_snapshot` raises ValueError on naive datetime; stores as UTC ISO string. Prevents SQLite string-sort breakage when naive local and UTC-aware strings coexist. Ref: commit a259115.
