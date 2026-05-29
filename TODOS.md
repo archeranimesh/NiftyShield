@@ -290,6 +290,8 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 2. Holiday YAML datasets for 2017–2025 missing in `src/market_calendar/data/` — historical `Leg` construction pre-2026 fails open.
 3. Formalise `is_nifty` check: replace denylist with an `instrument_key`-based predicate.
 
+**DEBT-7:** Refactor dynamic dispatch in `daily_snapshot.py` to eliminate `noqa: F401` unused import suppressions (which hide broken imports if helpers are renamed/moved).
+
 ---
 
 ## Session Log

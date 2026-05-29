@@ -176,9 +176,7 @@ def _historical_main(snap_date: date, db_path: Path) -> int:
     for strategy in strategies:
         pnl = _compute_strategy_pnl_from_prices(strategy, prices)
         strategy_pnls[strategy.name] = pnl
-        print(
-            f"    {strategy.name}: " f"P&L: {pnl.total_pnl:+,.0f} ({pnl.total_pnl_percent:+.2f}%)"
-        )
+        print(f"    {strategy.name}: P&L: {pnl.total_pnl:+,.0f} ({pnl.total_pnl_percent:+.2f}%)")
 
     # MF P&L from stored NAV snapshots
     mf_pnl: PortfolioPnL | None = None
