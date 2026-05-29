@@ -27,10 +27,6 @@ dead-code: ## Dead code report (advisory, does not fail)
 
 ci: lint test coverage security ## Full CI sequence (what GitHub Actions runs)
 
-# Re-index codebase graph. Note: This is a manual target since indexing is handled
-# via the codebase-memory-mcp tool in your AI assistant session.
-index:
-	python -c "print('Re-index via codebase-memory-mcp in your AI session')"
 
 help: ## Show help messages for Makefile targets
 	@grep -E '^[a-zA-Z_-]+:.*?##' Makefile | awk 'BEGIN {FS = ":.*?## "}; {printf "%-15s %s\n", $$1, $$2}'
