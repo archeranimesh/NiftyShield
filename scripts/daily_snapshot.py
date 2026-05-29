@@ -47,10 +47,15 @@ from src.market_calendar.holidays import is_trading_day, prev_trading_day
 from src.models.portfolio import DailySnapshot, Strategy
 from src.portfolio.formatting import (
     _format_combined_summary,
+    _format_protection_stats,  # noqa: F401
 )
 from src.portfolio.summary import (
+    _build_portfolio_summary,  # noqa: F401
+    _build_prev_prices,  # noqa: F401
     _compute_prev_mf_pnl,
     _compute_strategy_pnl_from_prices,
+    _etf_cost_basis,  # noqa: F401
+    _etf_current_value,  # noqa: F401
 )
 
 
@@ -82,10 +87,20 @@ def _print_combined_summary(
         nuvama_summary: NuvamaBondSummary, or None if unavailable.
         nuvama_options_summary: NuvamaOptionsSummary, or None if unavailable.
     """
-    print(_format_combined_summary(
-        strategies, prices, strategy_pnls, mf_pnl, prev_snapshots, prev_mf_pnl,
-        snap_date, dhan_summary, nuvama_summary, nuvama_options_summary,
-    ))
+    print(
+        _format_combined_summary(
+            strategies,
+            prices,
+            strategy_pnls,
+            mf_pnl,
+            prev_snapshots,
+            prev_mf_pnl,
+            snap_date,
+            dhan_summary,
+            nuvama_summary,
+            nuvama_options_summary,
+        )
+    )
 
 
 # ── Historical query path — reads from DB, no API calls ──────────
@@ -122,8 +137,7 @@ def _historical_main(snap_date: date, db_path: Path) -> int:
 
     # ── Overlay trade-derived positions onto strategy leg definitions ─
     strategies = [
-        apply_trade_positions(s, store.get_all_positions_for_strategy(s.name))
-        for s in strategies
+        apply_trade_positions(s, store.get_all_positions_for_strategy(s.name)) for s in strategies
     ]
 
     snapshots_by_leg = store.get_snapshots_for_date(snap_date)
@@ -163,8 +177,7 @@ def _historical_main(snap_date: date, db_path: Path) -> int:
         pnl = _compute_strategy_pnl_from_prices(strategy, prices)
         strategy_pnls[strategy.name] = pnl
         print(
-            f"    {strategy.name}: "
-            f"P&L: {pnl.total_pnl:+,.0f} ({pnl.total_pnl_percent:+.2f}%)"
+            f"    {strategy.name}: " f"P&L: {pnl.total_pnl:+,.0f} ({pnl.total_pnl_percent:+.2f}%)"
         )
 
     # MF P&L from stored NAV snapshots
@@ -197,6 +210,7 @@ def _historical_main(snap_date: date, db_path: Path) -> int:
     try:
         from src.dhan.reader import build_dhan_summary
         from src.dhan.store import DhanStore
+
         dhan_store = DhanStore(db_path)
         dhan_holdings = dhan_store.get_snapshot_for_date(snap_date)
         if dhan_holdings:
@@ -280,9 +294,7 @@ def _historical_main(snap_date: date, db_path: Path) -> int:
         _stored = _dhan_opts_store.get_eod_options_snapshot(snap_date)
         if _stored is not None:
             _dhan_opts_summary, _ = _stored
-            _month_pnl = _dhan_opts_store.get_monthly_realized_pnl(
-                snap_date.year, snap_date.month
-            )
+            _month_pnl = _dhan_opts_store.get_monthly_realized_pnl(snap_date.year, snap_date.month)
             _month_charges, _month_brokerage = _dhan_opts_store.get_monthly_charges(
                 snap_date.year, snap_date.month
             )
@@ -301,7 +313,10 @@ def _historical_main(snap_date: date, db_path: Path) -> int:
         print(f"  WARNING: Dhan options historical lookup failed — {e}")
 
     summary_text = _format_combined_summary(
-        strategies, prices, strategy_pnls, mf_pnl,
+        strategies,
+        prices,
+        strategy_pnls,
+        mf_pnl,
         prev_snapshots=prev_snapshots,
         prev_mf_pnl=prev_mf_pnl,
         snap_date=snap_date,
@@ -402,7 +417,8 @@ async def _async_main(snap_date: date, db_path: Path, dhan_trade_count: int = 0)
             _dhan_client_id, _dhan_token = load_dhan_credentials()
             _dhan_tracked_isins = {
                 leg.instrument_key.split("|", 1)[1]
-                for s in strategies for leg in s.legs
+                for s in strategies
+                for leg in s.legs
                 if leg.instrument_key.startswith("NSE_EQ|")
             }
             _dhan_holdings_prefetched = fetch_dhan_holdings(
@@ -472,9 +488,7 @@ async def _async_main(snap_date: date, db_path: Path, dhan_trade_count: int = 0)
                     f"P&L {mf_pnl.total_pnl:+,.0f} ({mf_pnl.total_pnl_pct:+}%)"
                 )
             else:
-                print(
-                    "  MF portfolio: no holdings — skipped (run seed_mf_holdings.py first)"
-                )
+                print("  MF portfolio: no holdings — skipped (run seed_mf_holdings.py first)")
             # Previous day's MF value for day-change delta (non-fatal).
             # We look back to prev_trading_day(snap_date), not snap_date itself.
             # morning_nav.py corrects yesterday's row to yesterday's actual NAV;
@@ -523,6 +537,7 @@ async def _async_main(snap_date: date, db_path: Path, dhan_trade_count: int = 0)
         # ── Nuvama bond portfolio snapshot (non-fatal) ────────────────
         nuvama_summary = None
         from src.nuvama.protocol import NuvamaClient
+
         nuvama_api_instance: NuvamaClient | None = None
         try:
             from src.auth.nuvama_verify import load_api_connect
@@ -534,8 +549,11 @@ async def _async_main(snap_date: date, db_path: Path, dhan_trade_count: int = 0)
             if positions:
                 try:
                     from src.auth.nuvama_verify import load_api_connect
+
                     nuvama_api_instance = load_api_connect()
-                    nuvama_summary = fetch_nuvama_portfolio(nuvama_api_instance, positions, snap_date)
+                    nuvama_summary = fetch_nuvama_portfolio(
+                        nuvama_api_instance, positions, snap_date
+                    )
                     nuvama_store.record_all_snapshots(list(nuvama_summary.holdings), snap_date)
                     print(
                         f"  Nuvama bonds: {len(nuvama_summary.holdings)} holding(s)  "
@@ -558,6 +576,7 @@ async def _async_main(snap_date: date, db_path: Path, dhan_trade_count: int = 0)
 
             if nuvama_api_instance is None:
                 from src.auth.nuvama_verify import load_api_connect
+
                 nuvama_api_instance = load_api_connect()
 
             raw_netpos = nuvama_api_instance.NetPosition()
@@ -673,6 +692,7 @@ async def _async_main(snap_date: date, db_path: Path, dhan_trade_count: int = 0)
                 )
         except Exception:  # noqa: BLE001
             import logging as _logging
+
             _logging.getLogger(__name__).exception(
                 "Dhan Options fetch failed — continuing without it"
             )
@@ -680,7 +700,10 @@ async def _async_main(snap_date: date, db_path: Path, dhan_trade_count: int = 0)
 
         # ── Combined portfolio summary ────────────────────────────────
         summary_text = _format_combined_summary(
-            strategies, prices, strategy_pnls, mf_pnl,
+            strategies,
+            prices,
+            strategy_pnls,
+            mf_pnl,
             prev_snapshots=prev_snapshots,
             prev_mf_pnl=prev_mf_pnl,
             snap_date=snap_date,
@@ -703,6 +726,7 @@ async def _async_main(snap_date: date, db_path: Path, dhan_trade_count: int = 0)
                 print("  WARNING: Telegram notification failed (see logs).")
         else:
             import logging as _logging
+
             _logging.getLogger(__name__).debug(
                 "Telegram notifier not configured — skipping (set TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID)"
             )
@@ -765,5 +789,6 @@ if __name__ == "__main__":
     # otherwise block process exit indefinitely after a Nuvama fetch.
     # Same pattern as nuvama_verify.py and nuvama_login.py.
     import os as _os
+
     _code = main()
     _os._exit(_code)
