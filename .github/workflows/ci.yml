@@ -27,10 +27,16 @@ jobs:
       - name: Install dependencies
         run: pip install -e ".[dev]" --break-system-packages
 
+      - name: Run linting and type checking
+        run: make lint
+
+      - name: Run security check
+        run: make security
+
       - name: Run tests with coverage
         run: |
           python -m pytest tests/unit/ --cov=src --cov-report=xml \
-              --cov-report=term-missing -n auto -q
+              --cov-report=html --cov-report=term-missing -n auto -q
         env:
           UPSTOX_ENV: test
 
@@ -40,7 +46,7 @@ jobs:
           filename: coverage.xml
           badge: true
           fail_below_min: true
-          thresholds: "70 80"
+          thresholds: "80 80"
           output: both
           format: markdown
           hide_complexity: true
