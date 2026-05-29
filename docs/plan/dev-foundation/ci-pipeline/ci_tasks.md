@@ -12,5 +12,5 @@
 - [x] **CI-1** — Create `.github/workflows/ci.yml` (push/PR to main, Python 3.10, `make ci`) — **Antigravity** | SHA: d6e9899
 - [x] **CI-2** — Add `pytest-xdist` parallel config + `@pytest.mark.slow` on known slow tests — **Antigravity** | SHA: 0fed45b
 - [x] **CI-3** — Add `pytest-randomly` to test config + verify no order-dependent failures — **Antigravity** | SHA: 0af6cfb
-- [ ] **CI-4** — Wire coverage upload to GitHub Actions summary (artifact + PR comment) — **Antigravity**
+- [x] **CI-4** — Wire coverage upload to GitHub Actions summary (artifact + PR comment) — **Antigravity** | SHA: 4f3ee8a
 - [ ] **CI-5** — Docs close: `CONTEXT.md` CI section, `DECISIONS.md` entry, `TODOS.md` log — **Claude**
