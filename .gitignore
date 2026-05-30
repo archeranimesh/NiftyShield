@@ -21,3 +21,8 @@ tmp/
 # Python packaging build artifacts
 *.egg-info/
 .mypy_cache/
+
+# Coverage artifacts
+.coverage
+coverage.xml
+htmlcov/
