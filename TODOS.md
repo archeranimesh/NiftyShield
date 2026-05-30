@@ -299,6 +299,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-05-30 | refactor(src,scripts): replace direct environment access with Settings singleton — fe69612 |
 | 2026-05-30 | CH-7a — Define Settings model in src/config.py mapping all env vars — 0222885 |
 | 2026-05-30 | CH-6 — Central structlog logging setup + wire to scripts — 75f499b |
 | 2026-05-30 | CH-5 — docs/architecture.md Mermaid C4 container diagram — 37b77bc |
