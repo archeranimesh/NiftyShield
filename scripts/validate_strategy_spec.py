@@ -41,13 +41,13 @@ from typing import NamedTuple
 #   label   — human-readable description used in error output.
 # ---------------------------------------------------------------------------
 REQUIRED_SECTIONS: list[tuple[str, str]] = [
-    ("entry",              "Entry Rule / Entry Rules"),
-    ("exit",               "Exit Rule / Exit Rules"),
-    ("adjustment",         "Adjustment Rule"),
-    ("position sizing",    "Position Sizing"),
-    ("p&l distribution",   "Expected P&L Distribution Prior"),
-    ("regimes",            "Regimes (work in / fail in)"),
-    ("kill criteria",      "Kill Criteria"),
+    ("entry", "Entry Rule / Entry Rules"),
+    ("exit", "Exit Rule / Exit Rules"),
+    ("adjustment", "Adjustment Rule"),
+    ("position sizing", "Position Sizing"),
+    ("p&l distribution", "Expected P&L Distribution Prior"),
+    ("regimes", "Regimes (work in / fail in)"),
+    ("kill criteria", "Kill Criteria"),
     ("variance threshold", "Variance Threshold for Live Deployment"),
 ]
 
@@ -60,9 +60,9 @@ _SPEC_MARKER_RE = re.compile(r"^\|\s*Name\s*\|", re.MULTILINE)
 
 # ``**DEPRECATED`` in a blockquote, OR a Status table row containing the word.
 _DEPRECATED_RE = re.compile(
-    r"\*\*DEPRECATED"                       # blockquote marker (csp_niftybees_v1 style)
+    r"\*\*DEPRECATED"  # blockquote marker (csp_niftybees_v1 style)
     r"|"
-    r"^\|\s*Status\s*\|[^|]*DEPRECATED",   # Status field in metadata table
+    r"^\|\s*Status\s*\|[^|]*DEPRECATED",  # Status field in metadata table
     re.MULTILINE | re.IGNORECASE,
 )
 
@@ -78,13 +78,14 @@ _DEPRECATED_SCAN_CHARS = 2_000
 # Data model
 # ---------------------------------------------------------------------------
 
+
 class SpecResult(NamedTuple):
     """Validation outcome for a single file."""
 
     path: Path
-    deprecated: bool       # True → file is deprecated; skip
-    is_spec: bool          # False → file is not a strategy spec; skip
-    missing: list[str]     # human-readable labels of missing required sections
+    deprecated: bool  # True → file is deprecated; skip
+    is_spec: bool  # False → file is not a strategy spec; skip
+    missing: list[str]  # human-readable labels of missing required sections
 
     @property
     def passed(self) -> bool:
@@ -95,6 +96,7 @@ class SpecResult(NamedTuple):
 # ---------------------------------------------------------------------------
 # Core logic
 # ---------------------------------------------------------------------------
+
 
 def check_file(path: Path) -> SpecResult:
     """Validate a single ``.md`` file.
@@ -177,6 +179,7 @@ def validate(paths: list[Path]) -> int:
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     """CLI entry point."""

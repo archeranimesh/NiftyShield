@@ -90,7 +90,10 @@ async def run() -> None:
         except Exception as exc:
             print(f"WARNING: failed to load VIX or compute IVR: {exc}", file=sys.stderr)
     else:
-        print(f"WARNING: VIX data directory not found at {vix_data_dir}. IVR skipped.", file=sys.stderr)
+        print(
+            f"WARNING: VIX data directory not found at {vix_data_dir}. IVR skipped.",
+            file=sys.stderr,
+        )
 
     if ivr is not None:
         if ivr < 0.25:
@@ -188,7 +191,9 @@ async def run() -> None:
         print(f"ERROR: option chain empty for {monthly_expiry}", file=sys.stderr)
         sys.exit(1)
 
-    candidates = filter_strikes_by_delta(raw_chain, option_type="CE", delta_min=0.12, delta_max=0.18)
+    candidates = filter_strikes_by_delta(
+        raw_chain, option_type="CE", delta_min=0.12, delta_max=0.18
+    )
     if not candidates:
         print(
             "ERROR: No CE strikes found in 12–18 delta range. Market may be closed or IVR/chain data stale.",
@@ -201,7 +206,7 @@ async def run() -> None:
 
     print(f"\nTop {min(3, len(candidates))} candidates (closest to 15Δ CE):")
     print(f"{'Strike':<10} {'Delta':<8} {'IV':<8} {'LTP':<8} {'Key'}")
-    print(f"{'-'*6:<10} {'-'*5:<8} {'-'*2:<8} {'-'*3:<8} {'-'*3}")
+    print(f"{'-' * 6:<10} {'-' * 5:<8} {'-' * 2:<8} {'-' * 3:<8} {'-' * 3}")
     for c in candidates[:3]:
         print(
             f"{int(c['strike']):<10d} {c['delta']:<8.3f} {c['iv']:>5.1f}%  {c['ltp']:<8.2f} {c['instrument_key']}"
@@ -212,7 +217,9 @@ async def run() -> None:
 
     # 4. Print command
     ivr_str = f"{ivr:.2f}" if ivr is not None else "None"
-    notes = f"15d CC entry; IVR={ivr_str}; delta={selected['delta']:.3f}; NiftyBees={niftybees_ltp:.2f}"
+    notes = (
+        f"15d CC entry; IVR={ivr_str}; delta={selected['delta']:.3f}; NiftyBees={niftybees_ltp:.2f}"
+    )
 
     cmd_parts = [
         "python -m scripts.record_paper_trade",
@@ -236,19 +243,29 @@ async def run() -> None:
     ans = input("\nExecute? [y/N]: ").strip().lower()
     if ans == "y":
         import subprocess
+
         exec_cmd = [
             sys.executable,
             "-m",
             "scripts.record_paper_trade",
-            "--strategy", STRATEGY_CC_OVERLAY,
-            "--leg-role", "covered_call",
-            "--underlying", "NSE_INDEX|Nifty 50",
-            "--option-type", "CE",
-            "--strike", str(int(selected["strike"])),
-            "--expiry", monthly_expiry,
-            "--action", "SELL",
-            "--qty", str(LOT_SIZE),
-            "--notes", notes,
+            "--strategy",
+            STRATEGY_CC_OVERLAY,
+            "--leg-role",
+            "covered_call",
+            "--underlying",
+            "NSE_INDEX|Nifty 50",
+            "--option-type",
+            "CE",
+            "--strike",
+            str(int(selected["strike"])),
+            "--expiry",
+            monthly_expiry,
+            "--action",
+            "SELL",
+            "--qty",
+            str(LOT_SIZE),
+            "--notes",
+            notes,
             "--no-dry-run",
         ]
         print(f"Executing: {' '.join(exec_cmd)}")

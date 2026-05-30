@@ -53,7 +53,7 @@ _CC_BLOCKED = {STRATEGY_FUTURES}  # Futures + standalone CC is permanently block
 class OverlayConfig:
     """Validated overlay entry config."""
 
-    overlay_type: str       # 'pp', 'cc', 'collar'
+    overlay_type: str  # 'pp', 'cc', 'collar'
     entry_date: date
     cycle: int
     lot_size: int
@@ -100,9 +100,7 @@ def load_overlay_config(path: Path) -> OverlayConfig:
 
     overlay_type = str(_get("type")).lower()
     if overlay_type not in ("pp", "cc", "collar"):
-        raise ValueError(
-            f"[overlay].type must be 'pp', 'cc', or 'collar', got {overlay_type!r}"
-        )
+        raise ValueError(f"[overlay].type must be 'pp', 'cc', or 'collar', got {overlay_type!r}")
 
     date_str = str(_get("date"))
     entry_date = date.fromisoformat(date_str)
@@ -191,7 +189,9 @@ def build_overlay_trades(cfg: OverlayConfig) -> tuple[list[OverlayTrade], list[s
     """
     trades: list[OverlayTrade] = []
     warnings: list[str] = []
-    cycle_tag = f"Cycle {cfg.cycle}. Expiry={cfg.expiry} ({cfg.expiry_type}, DTE={cfg.dte_at_entry})."
+    cycle_tag = (
+        f"Cycle {cfg.cycle}. Expiry={cfg.expiry} ({cfg.expiry_type}, DTE={cfg.dte_at_entry})."
+    )
 
     for strategy in _TRACKS:
         # Enforce blocked combo: Futures + standalone CC
@@ -203,79 +203,87 @@ def build_overlay_trades(cfg: OverlayConfig) -> tuple[list[OverlayTrade], list[s
             continue
 
         if cfg.overlay_type == "pp":
-            trades.append(OverlayTrade(
-                trade=PaperTrade(
-                    strategy_name=strategy,
-                    leg_role="overlay_pp",
-                    instrument_key=cfg.put_instrument_key,
-                    trade_date=cfg.entry_date,
-                    action=TradeAction.BUY,
-                    quantity=cfg.lot_size,
-                    price=cfg.put_price,
-                    notes=(
-                        f"Overlay PP: strike={cfg.put_strike:.0f}, "
-                        f"spread={cfg.put_spread_pct}%, OI={cfg.put_oi:,}. {cycle_tag}"
+            trades.append(
+                OverlayTrade(
+                    trade=PaperTrade(
+                        strategy_name=strategy,
+                        leg_role="overlay_pp",
+                        instrument_key=cfg.put_instrument_key,
+                        trade_date=cfg.entry_date,
+                        action=TradeAction.BUY,
+                        quantity=cfg.lot_size,
+                        price=cfg.put_price,
+                        notes=(
+                            f"Overlay PP: strike={cfg.put_strike:.0f}, "
+                            f"spread={cfg.put_spread_pct}%, OI={cfg.put_oi:,}. {cycle_tag}"
+                        ),
                     ),
-                ),
-                strategy=strategy,
-                leg_role="overlay_pp",
-            ))
+                    strategy=strategy,
+                    leg_role="overlay_pp",
+                )
+            )
 
         elif cfg.overlay_type == "cc":
-            trades.append(OverlayTrade(
-                trade=PaperTrade(
-                    strategy_name=strategy,
-                    leg_role="overlay_cc",
-                    instrument_key=cfg.call_instrument_key,
-                    trade_date=cfg.entry_date,
-                    action=TradeAction.SELL,
-                    quantity=cfg.lot_size,
-                    price=cfg.call_price,
-                    notes=(
-                        f"Overlay CC: strike={cfg.call_strike:.0f}, "
-                        f"spread={cfg.call_spread_pct}%, OI={cfg.call_oi:,}. {cycle_tag}"
+            trades.append(
+                OverlayTrade(
+                    trade=PaperTrade(
+                        strategy_name=strategy,
+                        leg_role="overlay_cc",
+                        instrument_key=cfg.call_instrument_key,
+                        trade_date=cfg.entry_date,
+                        action=TradeAction.SELL,
+                        quantity=cfg.lot_size,
+                        price=cfg.call_price,
+                        notes=(
+                            f"Overlay CC: strike={cfg.call_strike:.0f}, "
+                            f"spread={cfg.call_spread_pct}%, OI={cfg.call_oi:,}. {cycle_tag}"
+                        ),
                     ),
-                ),
-                strategy=strategy,
-                leg_role="overlay_cc",
-            ))
+                    strategy=strategy,
+                    leg_role="overlay_cc",
+                )
+            )
 
         elif cfg.overlay_type == "collar":
             # Collar — both legs must be entered together per spec
-            trades.append(OverlayTrade(
-                trade=PaperTrade(
-                    strategy_name=strategy,
+            trades.append(
+                OverlayTrade(
+                    trade=PaperTrade(
+                        strategy_name=strategy,
+                        leg_role="overlay_collar_put",
+                        instrument_key=cfg.put_instrument_key,
+                        trade_date=cfg.entry_date,
+                        action=TradeAction.BUY,
+                        quantity=cfg.lot_size,
+                        price=cfg.put_price,
+                        notes=(
+                            f"Collar put: strike={cfg.put_strike:.0f}, "
+                            f"spread={cfg.put_spread_pct}%, OI={cfg.put_oi:,}. {cycle_tag}"
+                        ),
+                    ),
+                    strategy=strategy,
                     leg_role="overlay_collar_put",
-                    instrument_key=cfg.put_instrument_key,
-                    trade_date=cfg.entry_date,
-                    action=TradeAction.BUY,
-                    quantity=cfg.lot_size,
-                    price=cfg.put_price,
-                    notes=(
-                        f"Collar put: strike={cfg.put_strike:.0f}, "
-                        f"spread={cfg.put_spread_pct}%, OI={cfg.put_oi:,}. {cycle_tag}"
+                )
+            )
+            trades.append(
+                OverlayTrade(
+                    trade=PaperTrade(
+                        strategy_name=strategy,
+                        leg_role="overlay_collar_call",
+                        instrument_key=cfg.call_instrument_key,
+                        trade_date=cfg.entry_date,
+                        action=TradeAction.SELL,
+                        quantity=cfg.lot_size,
+                        price=cfg.call_price,
+                        notes=(
+                            f"Collar call: strike={cfg.call_strike:.0f}, "
+                            f"spread={cfg.call_spread_pct}%, OI={cfg.call_oi:,}. {cycle_tag}"
+                        ),
                     ),
-                ),
-                strategy=strategy,
-                leg_role="overlay_collar_put",
-            ))
-            trades.append(OverlayTrade(
-                trade=PaperTrade(
-                    strategy_name=strategy,
+                    strategy=strategy,
                     leg_role="overlay_collar_call",
-                    instrument_key=cfg.call_instrument_key,
-                    trade_date=cfg.entry_date,
-                    action=TradeAction.SELL,
-                    quantity=cfg.lot_size,
-                    price=cfg.call_price,
-                    notes=(
-                        f"Collar call: strike={cfg.call_strike:.0f}, "
-                        f"spread={cfg.call_spread_pct}%, OI={cfg.call_oi:,}. {cycle_tag}"
-                    ),
-                ),
-                strategy=strategy,
-                leg_role="overlay_collar_call",
-            ))
+                )
+            )
 
     return trades, warnings
 
@@ -310,10 +318,7 @@ def print_summary(
 
     for ot in overlay_trades:
         t = ot.trade
-        print(
-            f"  {t.strategy_name:<24} {t.leg_role:<22} "
-            f"{t.action.value:>4} {t.price:>10.2f}"
-        )
+        print(f"  {t.strategy_name:<24} {t.leg_role:<22} {t.action.value:>4} {t.price:>10.2f}")
 
     if warnings:
         print()

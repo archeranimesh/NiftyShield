@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import logging
 import os
 import re
 import sys
@@ -33,6 +32,10 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
+
+import structlog
+
+from src.utils.logging import setup_logging
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -54,13 +57,14 @@ from src.paper.constants import (
 from src.paper.models import PaperTrade
 from src.paper.store import PaperStore
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Regex for parsing expiry from Nifty FO instrument keys.
 _EXPIRY_RE = re.compile(r"NSE_FO\|NIFTY(\d{2}[A-Z]{3}\d{4})(PE|CE)", re.IGNORECASE)
 
 
 # ── Result container ──────────────────────────────────────────────────────────
+
 
 @dataclass
 class RollResult:
@@ -79,6 +83,7 @@ class RollResult:
 
 
 # ── Pure helpers ──────────────────────────────────────────────────────────────
+
 
 def _parse_expiry_from_key(instrument_key: str) -> date | None:
     """Parse the option expiry date from a Nifty FO instrument key.
@@ -161,6 +166,7 @@ def _find_expiring_csp(
 
 # ── Closing leg builder ───────────────────────────────────────────────────────
 
+
 async def _close_csp_leg(
     broker: BrokerClient,
     store: PaperStore,
@@ -211,6 +217,7 @@ async def _close_csp_leg(
 
 
 # ── New leg builder ───────────────────────────────────────────────────────────
+
 
 async def _open_new_csp_leg(
     broker: BrokerClient,
@@ -288,6 +295,7 @@ async def _open_new_csp_leg(
 
 # ── Atomic roll helper ────────────────────────────────────────────────────────
 
+
 async def _roll_csp(
     broker: BrokerClient,
     store: PaperStore,
@@ -316,8 +324,14 @@ async def _roll_csp(
     close_trade = await _close_csp_leg(broker, store, existing, roll_date, dry_run)
     try:
         open_trade = await _open_new_csp_leg(
-            broker, store, lookup, existing.strategy_name, roll_date, dry_run,
-            quantity=existing.quantity, index=index
+            broker,
+            store,
+            lookup,
+            existing.strategy_name,
+            roll_date,
+            dry_run,
+            quantity=existing.quantity,
+            index=index,
         )
     except Exception as e:
         if not dry_run:
@@ -350,6 +364,7 @@ async def _roll_csp(
 
 
 # ── Report display ────────────────────────────────────────────────────────────
+
 
 def _print_roll_report(results: list[RollResult], roll_date: date, dry_run: bool) -> None:
     """Print a formatted roll summary to stdout.
@@ -396,11 +411,9 @@ def _print_roll_report(results: list[RollResult], roll_date: date, dry_run: bool
 
 # ── Main orchestration ────────────────────────────────────────────────────────
 
+
 async def _run(args: argparse.Namespace) -> None:
     """Async entry point — detect and execute CSP rolls."""
-    log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
-    logging.basicConfig(level=log_level, format="%(levelname)s %(name)s %(message)s")
-
     roll_date: date = args.date or date.today()
     dry_run: bool = args.dry_run
 
@@ -511,4 +524,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()
     main()

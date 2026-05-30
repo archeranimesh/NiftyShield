@@ -27,7 +27,6 @@ Diagnostics:
     LOG_LEVEL=DEBUG python scripts/paper_3track_entry.py   # full trace
 """
 
-import logging
 import math
 import os
 import sys
@@ -36,6 +35,10 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
+
+import structlog
+
+from src.utils.logging import setup_logging
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -70,19 +73,21 @@ PROXY_OI_MIN = 5_000
 PROXY_SPREAD_MAX = 5.0
 
 # DTE bands for multi-expiry proxy search
-PROXY_MONTHLY_DTE = (15, 45)       # front-month expiry
-PROXY_QUARTERLY_DTE = (46, 200)    # next quarterly (Jun / Sep)
-PROXY_YEARLY_DTE = (201, 420)      # year-end expiry (Dec)
+PROXY_MONTHLY_DTE = (15, 45)  # front-month expiry
+PROXY_QUARTERLY_DTE = (46, 200)  # next quarterly (Jun / Sep)
+PROXY_YEARLY_DTE = (201, 420)  # year-end expiry (Dec)
 SPAN_MARGIN_ESTIMATE = Decimal("150000")
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 # ── Data model ───────────────────────────────────────────────────────────────
 
+
 @dataclass(frozen=True)
 class LivePrices:
     """All live-fetched prices for one 3-track entry cycle."""
+
     entry_date: date
     expiry: str
     nifty_spot: Decimal
@@ -93,7 +98,7 @@ class LivePrices:
     futures_key: str
     futures_price: Decimal
     proxy_strike: float
-    proxy_price: Decimal        # mid + slippage (recorded price)
+    proxy_price: Decimal  # mid + slippage (recorded price)
     proxy_actual_delta: Decimal
     proxy_instrument_key: str
     proxy_oi: int
@@ -103,6 +108,7 @@ class LivePrices:
 
 
 # ── Step A: derive expiry from BOD ───────────────────────────────────────────
+
 
 def derive_expiry(lookup: InstrumentLookup, today: date) -> str:
     """Derive the target monthly expiry from BOD futures. Prefers 30-45 DTE."""
@@ -152,14 +158,13 @@ def derive_expiry(lookup: InstrumentLookup, today: date) -> str:
         "No expiry in 30-45 DTE window found. "
         "Falling back to nearest future expiry %s (DTE=%d). "
         "Use --expiry YYYY-MM-DD to override.",
-        parsed, dte,
+        parsed,
+        dte,
     )
     return parsed
 
 
 # ── Step B: proxy candidate selection ────────────────────────────────────────
-
-
 
 
 def filter_proxy_candidates(raw_chain: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -185,16 +190,27 @@ def filter_proxy_candidates(raw_chain: list[dict[str, Any]]) -> list[dict[str, A
         mid = (bid + ask) / 2.0 if (bid > 0 and ask > 0) else ltp
         oi = int(safe_float(mktdata.get("oi")))
 
-        rows.append({
-            "strike": strike, "delta": delta,
-            "iv": safe_float(greeks.get("iv")),
-            "ltp": ltp, "mid": mid, "bid": bid, "ask": ask,
-            "oi": oi, "instrument_key": key,
-            "option_type": "CE",
-        })
+        rows.append(
+            {
+                "strike": strike,
+                "delta": delta,
+                "iv": safe_float(greeks.get("iv")),
+                "ltp": ltp,
+                "mid": mid,
+                "bid": bid,
+                "ask": ask,
+                "oi": oi,
+                "instrument_key": key,
+                "option_type": "CE",
+            }
+        )
         logger.debug(
             "Proxy candidate: strike=%.0f delta=%.4f OI=%d spread=%.2f mid=%.2f",
-            strike, delta, oi, ask - bid, mid,
+            strike,
+            delta,
+            oi,
+            ask - bid,
+            mid,
         )
 
     rows.sort(key=lambda r: abs(r["delta"]), reverse=True)
@@ -230,7 +246,14 @@ def auto_select_proxy(rows: list[dict[str, Any]]) -> dict[str, Any]:
         spread_bucket = int(spread / 2)
         delta_dist = abs(abs(safe_float(r.get("delta"))) - PROXY_TARGET_DELTA)
         # Final tiebreaker: prefer deeper ITM (higher delta) on tied distance.
-        return (is_non_round, spread_bucket, -int(safe_float(r.get("oi"))), spread, delta_dist, -abs(safe_float(r.get("delta"))))
+        return (
+            is_non_round,
+            spread_bucket,
+            -int(safe_float(r.get("oi"))),
+            spread,
+            delta_dist,
+            -abs(safe_float(r.get("delta"))),
+        )
 
     rows.sort(key=_rank_key)
     for i, r in enumerate(rows):
@@ -239,8 +262,11 @@ def auto_select_proxy(rows: list[dict[str, Any]]) -> dict[str, Any]:
     best = rows[0]
     logger.info(
         "Auto-selected proxy: strike=%.0f delta=%.4f OI=%d spread=%.2f key=%s",
-        best["strike"], best["delta"], best["oi"],
-        best["ask"] - best["bid"], best["instrument_key"],
+        best["strike"],
+        best["delta"],
+        best["oi"],
+        best["ask"] - best["bid"],
+        best["instrument_key"],
     )
     return best
 
@@ -252,12 +278,18 @@ def compute_proxy_entry_price(row: dict[str, Any]) -> Decimal:
     price = Decimal(str(round(row["mid"] + slippage, 2)))
     logger.debug(
         "Proxy entry price: mid=%.2f bid=%.2f ask=%.2f spread=%.2f slippage=%.2f → ₹%s",
-        row["mid"], row["bid"], row["ask"], spread, slippage, price,
+        row["mid"],
+        row["bid"],
+        row["ask"],
+        spread,
+        slippage,
+        price,
     )
     return price
 
 
 # ── Step C: orchestrate all live fetches ─────────────────────────────────────
+
 
 def collect_candidate_expiries(lookup: InstrumentLookup, today: date) -> dict[str, str]:
     """Identify candidates for monthly, quarterly, and yearly proxy expiries.
@@ -273,12 +305,10 @@ def collect_candidate_expiries(lookup: InstrumentLookup, today: date) -> dict[st
     result = dict(candidates)
 
     # Log results with DTE for operator clarity
-    log_map = {
-        k: f"{v} DTE={(date.fromisoformat(v) - today).days}"
-        for k, v in result.items()
-    }
+    log_map = {k: f"{v} DTE={(date.fromisoformat(v) - today).days}" for k, v in result.items()}
     logger.info("Proxy expiry candidates: %s", log_map)
     return result
+
 
 def fetch_live_prices(
     client: UpstoxMarketClient,
@@ -320,7 +350,9 @@ def fetch_live_prices(
         dte = (date.fromisoformat(exp_date) - today).days
         logger.info(
             "Fetching option chain: type=%-10s expiry=%s DTE=%d",
-            exp_type, exp_date, dte,
+            exp_type,
+            exp_date,
+            dte,
         )
         try:
             raw_chain = client.get_option_chain_sync(NIFTY_UNDERLYING, exp_date)
@@ -329,7 +361,10 @@ def fetch_live_prices(
         except Exception as exc:
             logger.warning(
                 "Chain fetch failed for %s (%s, DTE=%d): %s — skipping",
-                exp_type, exp_date, dte, exc,
+                exp_type,
+                exp_date,
+                dte,
+                exc,
             )
             continue
 
@@ -375,9 +410,7 @@ def fetch_live_prices(
     # 3. Futures key from BOD (always front-month, independent of proxy expiry)
     logger.info("Looking up NIFTY futures key from BOD (expiry=%s)", futures_expiry)
     fut_list = lookup.search_futures("NIFTY", expiry=futures_expiry, max_results=5)
-    logger.debug(
-        "search_futures('NIFTY', expiry=%s) → %d results", futures_expiry, len(fut_list)
-    )
+    logger.debug("search_futures('NIFTY', expiry=%s) → %d results", futures_expiry, len(fut_list))
 
     if not fut_list:
         raise ValueError(
@@ -426,7 +459,10 @@ def fetch_live_prices(
     niftybees_qty = math.floor((lot_size * float(nifty_spot)) / float(niftybees_ltp))
     logger.info(
         "NiftyBees qty: floor(%d × %.2f / %.2f) = %d",
-        lot_size, float(nifty_spot), float(niftybees_ltp), niftybees_qty,
+        lot_size,
+        float(nifty_spot),
+        float(niftybees_ltp),
+        niftybees_qty,
     )
     if niftybees_qty <= 0:
         raise ValueError(
@@ -436,10 +472,15 @@ def fetch_live_prices(
         )
 
     return LivePrices(
-        entry_date=today, expiry=proxy_row["expiry"],
-        nifty_spot=nifty_spot, lot_size=lot_size, cycle=cycle,
-        niftybees_ltp=niftybees_ltp, niftybees_qty=niftybees_qty,
-        futures_key=futures_key, futures_price=futures_price,
+        entry_date=today,
+        expiry=proxy_row["expiry"],
+        nifty_spot=nifty_spot,
+        lot_size=lot_size,
+        cycle=cycle,
+        niftybees_ltp=niftybees_ltp,
+        niftybees_qty=niftybees_qty,
+        futures_key=futures_key,
+        futures_price=futures_price,
         proxy_strike=proxy_row["strike"],
         proxy_price=proxy_price,
         proxy_actual_delta=Decimal(str(round(proxy_row["delta"], 4))),
@@ -453,6 +494,7 @@ def fetch_live_prices(
 
 # ── Gates ────────────────────────────────────────────────────────────────────
 
+
 def compute_gate_results(p: LivePrices) -> dict[str, str]:
     """Return OI and spread gate display strings (warn-only, not blocking)."""
     spread = p.proxy_ask - p.proxy_bid
@@ -463,13 +505,15 @@ def compute_gate_results(p: LivePrices) -> dict[str, str]:
         logger.warning(
             "Proxy OI gate WARN: OI=%d < minimum %d. "
             "Liquidity may be thin — verify the order book before confirming.",
-            p.proxy_oi, PROXY_OI_MIN,
+            p.proxy_oi,
+            PROXY_OI_MIN,
         )
     if not spread_ok:
         logger.warning(
             "Proxy spread gate WARN: spread=₹%.2f > maximum ₹%.2f. "
             "Wide spread increases slippage cost — verify before confirming.",
-            spread, PROXY_SPREAD_MAX,
+            spread,
+            PROXY_SPREAD_MAX,
         )
 
     return {
@@ -479,6 +523,7 @@ def compute_gate_results(p: LivePrices) -> dict[str, str]:
 
 
 # ── Build trades ─────────────────────────────────────────────────────────────
+
 
 def build_trades(p: LivePrices) -> list[PaperTrade]:
     """Build the three base-leg PaperTrade objects from live prices."""
@@ -533,6 +578,7 @@ def build_trades(p: LivePrices) -> list[PaperTrade]:
 
 # ── Preview output ────────────────────────────────────────────────────────────
 
+
 def print_preview(p: LivePrices, gates: dict[str, str], confirmed: bool) -> None:
     """Print the formatted confirmation / recorded table."""
     nee = p.nifty_spot * Decimal(str(p.lot_size))
@@ -548,12 +594,27 @@ def print_preview(p: LivePrices, gates: dict[str, str], confirmed: bool) -> None
     print(f"  {'─' * 70}")
 
     rows = [
-        (f"A  {BASE_LABELS['paper_nifty_spot']}", "base_etf",
-         p.niftybees_qty, p.niftybees_ltp, p.niftybees_ltp * p.niftybees_qty),
-        (f"B  {BASE_LABELS['paper_nifty_futures']}", "base_futures",
-         p.lot_size, p.futures_price, p.futures_price * p.lot_size),
-        (f"C  {BASE_LABELS['paper_nifty_proxy']} δ={p.proxy_actual_delta}", "base_ditm_call",
-         p.lot_size, p.proxy_price, p.proxy_price * p.lot_size),
+        (
+            f"A  {BASE_LABELS['paper_nifty_spot']}",
+            "base_etf",
+            p.niftybees_qty,
+            p.niftybees_ltp,
+            p.niftybees_ltp * p.niftybees_qty,
+        ),
+        (
+            f"B  {BASE_LABELS['paper_nifty_futures']}",
+            "base_futures",
+            p.lot_size,
+            p.futures_price,
+            p.futures_price * p.lot_size,
+        ),
+        (
+            f"C  {BASE_LABELS['paper_nifty_proxy']} δ={p.proxy_actual_delta}",
+            "base_ditm_call",
+            p.lot_size,
+            p.proxy_price,
+            p.proxy_price * p.lot_size,
+        ),
     ]
     for track, leg, qty, price, notional in rows:
         print(f"  {track:<22} {leg:<18} {qty:>6} {float(price):>10.2f} ₹{float(notional):>12,.0f}")
@@ -561,10 +622,14 @@ def print_preview(p: LivePrices, gates: dict[str, str], confirmed: bool) -> None
     # Ranked proxy candidate table (top 10)
     print(f"{'═' * W}")
     total = len(p.proxy_candidates)
-    print(f"  Proxy candidates — delta {PROXY_DELTA_MIN}–{PROXY_DELTA_MAX} "
-          f"(showing top 10 of {total}, ranked: round-100 first, spread↑ OI↓)")
-    print(f"  {'Rk':>3}  {'Expiry':<12}  {'Strike':>7}  {'Type':>4}  {'Delta':>6}  "
-          f"{'OI':>9}  {'Bid':>8}  {'Ask':>8}  {'Sprd':>6}  {'R':>2}")
+    print(
+        f"  Proxy candidates — delta {PROXY_DELTA_MIN}–{PROXY_DELTA_MAX} "
+        f"(showing top 10 of {total}, ranked: round-100 first, spread↑ OI↓)"
+    )
+    print(
+        f"  {'Rk':>3}  {'Expiry':<12}  {'Strike':>7}  {'Type':>4}  {'Delta':>6}  "
+        f"{'OI':>9}  {'Bid':>8}  {'Ask':>8}  {'Sprd':>6}  {'R':>2}"
+    )
     print(f"  {'─' * 76}")
     for c in p.proxy_candidates[:10]:
         c_spread = c["ask"] - c["bid"]
@@ -594,17 +659,15 @@ def print_preview(p: LivePrices, gates: dict[str, str], confirmed: bool) -> None
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
+
 def main() -> None:
     """CLI entry point."""
     # Logging setup: respect LOG_LEVEL env var
     log_level = os.getenv("LOG_LEVEL", "INFO").upper()
-    logging.basicConfig(
-        level=getattr(logging, log_level, logging.INFO),
-        format="%(asctime)s %(levelname)-8s %(name)s — %(message)s",
-        datefmt="%H:%M:%S",
-    )
+    pass
 
     import argparse
+
     parser = argparse.ArgumentParser(
         description=(
             "3-Track Nifty Long Comparison — live auto entry.\n"
@@ -616,27 +679,40 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
-        "--confirm", action="store_true",
+        "--confirm",
+        action="store_true",
         help="Write all three base legs to DB. Default: preview only.",
     )
     parser.add_argument(
-        "--expiry", type=str, default=None, metavar="YYYY-MM-DD",
+        "--expiry",
+        type=str,
+        default=None,
+        metavar="YYYY-MM-DD",
         help="Pin proxy search to this single expiry. Futures always uses front-month.",
     )
     parser.add_argument(
-        "--cycle", type=int, default=1,
+        "--cycle",
+        type=int,
+        default=1,
         help="Cycle number tag for the notes field (default: 1).",
     )
     parser.add_argument(
-        "--bod-path", type=Path, default=DEFAULT_BOD_PATH,
+        "--bod-path",
+        type=Path,
+        default=DEFAULT_BOD_PATH,
         help=f"BOD instruments JSON path (default: {DEFAULT_BOD_PATH})",
     )
     parser.add_argument(
-        "--db-path", type=Path, default=DEFAULT_DB_PATH,
+        "--db-path",
+        type=Path,
+        default=DEFAULT_DB_PATH,
         help=f"SQLite DB path (default: {DEFAULT_DB_PATH})",
     )
     parser.add_argument(
-        "--config", type=Path, default=None, metavar="CONFIG",
+        "--config",
+        type=Path,
+        default=None,
+        metavar="CONFIG",
         help=(
             "YAML config file path — NOT YET IMPLEMENTED. "
             "Raises NotImplementedError. Config files must live in config/paper/."
@@ -689,12 +765,20 @@ def main() -> None:
             logger.error("--expiry must be YYYY-MM-DD, got: %r", args.expiry)
             sys.exit(1)
         force_proxy_expiry = args.expiry
-        logger.info("Proxy expiry forced to: %s (monthly/quarterly/yearly scan disabled)", force_proxy_expiry)
+        logger.info(
+            "Proxy expiry forced to: %s (monthly/quarterly/yearly scan disabled)",
+            force_proxy_expiry,
+        )
 
     # Fetch all live prices (proxy searched across monthly + quarterly + yearly unless forced)
     try:
         prices = fetch_live_prices(
-            client, lookup, futures_expiry, today, args.cycle, LOT_SIZE,
+            client,
+            lookup,
+            futures_expiry,
+            today,
+            args.cycle,
+            LOT_SIZE,
             force_proxy_expiry=force_proxy_expiry,
         )
     # Intentional: top-level catch for price fetching failure.
@@ -712,7 +796,10 @@ def main() -> None:
             store.record_trade(trade)
             logger.info(
                 "Recorded: strategy=%s leg=%s qty=%d price=%s",
-                trade.strategy_name, trade.leg_role, trade.quantity, trade.price,
+                trade.strategy_name,
+                trade.leg_role,
+                trade.quantity,
+                trade.price,
             )
         logger.info("All 3 base legs written to %s", args.db_path)
 
@@ -720,4 +807,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()
     main()

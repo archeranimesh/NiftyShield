@@ -57,7 +57,9 @@ def _parse_args() -> argparse.Namespace:
         choices=["BUY", "SELL"],
         help="BUY or SELL",
     )
-    parser.add_argument("--qty", required=True, type=int, help="Units transacted (positive integer)")
+    parser.add_argument(
+        "--qty", required=True, type=int, help="Units transacted (positive integer)"
+    )
     parser.add_argument("--price", required=True, help="Execution price per unit")
     parser.add_argument("--notes", default="", help="Optional annotation (contract note ref, etc.)")
     parser.add_argument(
@@ -116,10 +118,7 @@ def main() -> None:
     store.record_trade(trade)
 
     net_qty, avg_price = store.get_position(trade.strategy_name, trade.leg_role)
-    print(
-        f"{trade.strategy_name} / {trade.leg_role}: "
-        f"{net_qty} units @ avg ₹{avg_price:.2f}"
-    )
+    print(f"{trade.strategy_name} / {trade.leg_role}: {net_qty} units @ avg ₹{avg_price:.2f}")
 
 
 if __name__ == "__main__":

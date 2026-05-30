@@ -85,19 +85,14 @@ def find_strategy_legs(lookup: InstrumentLookup) -> None:
                 if "expiry" in r:
                     parsed = lookup._parse_expiry(r["expiry"])
                     expiry_str = f"  expiry={parsed}"
-                print(
-                    f"    → {r['instrument_key']:<25} "
-                    f"{r.get('trading_symbol', '')}{expiry_str}"
-                )
+                print(f"    → {r['instrument_key']:<25} {r.get('trading_symbol', '')}{expiry_str}")
         else:
             print("    → NOT FOUND — check expiry date or BOD file freshness")
         print()
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Look up Upstox instrument keys from BOD JSON"
-    )
+    parser = argparse.ArgumentParser(description="Look up Upstox instrument keys from BOD JSON")
     parser.add_argument(
         "--bod-path",
         type=Path,
@@ -110,17 +105,13 @@ def main() -> None:
         "--type", dest="option_type", type=str, help="Instrument type: CE, PE, FUT, EQ"
     )
     parser.add_argument("--expiry", type=str, help="Expiry date YYYY-MM-DD")
-    parser.add_argument(
-        "--segment", type=str, help="Segment filter: NSE_EQ, NSE_FO"
-    )
+    parser.add_argument("--segment", type=str, help="Segment filter: NSE_EQ, NSE_FO")
     parser.add_argument(
         "--find-legs",
         action="store_true",
         help="Look up all strategy leg instrument keys at once",
     )
-    parser.add_argument(
-        "--max-results", type=int, default=10, help="Max results to show"
-    )
+    parser.add_argument("--max-results", type=int, default=10, help="Max results to show")
     args = parser.parse_args()
 
     if not args.bod_path.exists():

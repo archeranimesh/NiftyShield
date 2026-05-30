@@ -32,7 +32,7 @@ ENDPOINTS = {
 }
 
 for label, url in ENDPOINTS.items():
-    print(f"\n{'='*50}")
+    print(f"\n{'=' * 50}")
     print(f"Testing {label}")
     print(f"  URL: {url}")
     try:
@@ -46,5 +46,5 @@ for label, url in ENDPOINTS.items():
     except Exception as e:
         print(f"  Exception: {e}")
 
-print(f"\n{'='*50}")
+print(f"\n{'=' * 50}")
 print("Done. Use whichever version returns status 200.")

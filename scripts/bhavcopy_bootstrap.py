@@ -1,26 +1,30 @@
 import argparse
-import logging
 import tempfile
 import time
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+import structlog
 from dotenv import load_dotenv
+
+from src.utils.logging import setup_logging
 
 load_dotenv()
 
 from src.backtest.bhavcopy_ingest import download_bhavcopy, parse_bhavcopy, write_to_parquet
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-logger = logging.getLogger(__name__)
+pass
+logger = structlog.get_logger(__name__)
 
 # Try importing holidays; fallback to empty set if not found
 try:
     from src.market_calendar.holidays import get_nse_holidays
 except ImportError:
+
     def get_nse_holidays() -> set[date]:
         return set()
+
 
 def main(args_list=None):
     parser = argparse.ArgumentParser(description="Bootstrap NSE F&O Bhavcopy data")
@@ -49,7 +53,12 @@ def main(args_list=None):
         while current_date <= end_date:
             month_key = current_date.strftime("%Y-%m")
             if last_month and last_month != month_key:
-                logger.info("[%s] downloaded %s/%s trading days", last_month, downloaded_by_month[last_month], total_days_by_month[last_month])
+                logger.info(
+                    "[%s] downloaded %s/%s trading days",
+                    last_month,
+                    downloaded_by_month[last_month],
+                    total_days_by_month[last_month],
+                )
 
             last_month = month_key
 
@@ -67,7 +76,9 @@ def main(args_list=None):
             try:
                 zip_path = download_bhavcopy(current_date, dest_dir=tmp_path)
 
-                records = parse_bhavcopy(zip_path, underlying=args.underlying, include_futures=args.include_futures)
+                records = parse_bhavcopy(
+                    zip_path, underlying=args.underlying, include_futures=args.include_futures
+                )
 
                 options_records = [r for r in records if r.instrument in ("OPTIDX", "OPTSTK")]
                 options_dest = args.dest / "options_ohlcv"
@@ -89,7 +100,14 @@ def main(args_list=None):
             current_date += timedelta(days=1)
 
         if last_month:
-            logger.info("[%s] downloaded %s/%s trading days", last_month, downloaded_by_month[last_month], total_days_by_month[last_month])
+            logger.info(
+                "[%s] downloaded %s/%s trading days",
+                last_month,
+                downloaded_by_month[last_month],
+                total_days_by_month[last_month],
+            )
+
 
 if __name__ == "__main__":
+    setup_logging()
     main()

@@ -36,7 +36,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import logging
 import os
 import re
 import sys
@@ -44,6 +43,10 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
+
+import structlog
+
+from src.utils.logging import setup_logging
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -77,7 +80,7 @@ from src.paper.constants import (
 from src.paper.models import PaperTrade
 from src.paper.store import PaperStore
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Regex for parsing expiry from Nifty FO instrument keys.
 # Matches: NSE_FO|NIFTY29MAY2026PE   or   NSE_FO|NIFTY29MAY2026CE
@@ -93,6 +96,7 @@ _OVERLAY_ROLES: list[str] = [
 
 
 # ── Result container ──────────────────────────────────────────────────────────
+
 
 @dataclass
 class RollResult:
@@ -111,6 +115,7 @@ class RollResult:
 
 
 # ── Pure helpers ──────────────────────────────────────────────────────────────
+
 
 def _parse_expiry_from_key(instrument_key: str) -> date | None:
     """Parse the option expiry date from a Nifty FO instrument key.
@@ -202,6 +207,7 @@ def _find_expiring_overlay(
 
 # ── OTM band helpers ──────────────────────────────────────────────────────────
 
+
 def _otm_band(leg_role: str) -> tuple[float, float, float]:
     """Return (otm_min, otm_max, target_otm) for a given leg role.
 
@@ -218,6 +224,7 @@ def _otm_band(leg_role: str) -> tuple[float, float, float]:
 
 
 # ── Closing leg builder ───────────────────────────────────────────────────────
+
 
 async def _close_leg(
     broker: UpstoxMarketClient,
@@ -271,6 +278,7 @@ async def _close_leg(
 
 
 # ── New leg builder ───────────────────────────────────────────────────────────
+
 
 async def _open_new_leg(
     broker: UpstoxMarketClient,
@@ -331,6 +339,7 @@ async def _open_new_leg(
 
 # ── Atomic roll helpers ───────────────────────────────────────────────────────
 
+
 async def _roll_single(
     broker: UpstoxMarketClient,
     store: PaperStore,
@@ -359,7 +368,13 @@ async def _roll_single(
     close_trade = await _close_leg(broker, store, existing, roll_date, dry_run)
     try:
         open_trade = await _open_new_leg(
-            broker, store, lookup, existing.leg_role, existing.strategy_name, roll_date, dry_run,
+            broker,
+            store,
+            lookup,
+            existing.leg_role,
+            existing.strategy_name,
+            roll_date,
+            dry_run,
             index=index,
         )
     # Intentional: isolate per-strategy roll processing failures.
@@ -425,7 +440,13 @@ async def _roll_collar(
 
     try:
         open_put = await _open_new_leg(
-            broker, store, lookup, "overlay_collar_put", put_leg.strategy_name, roll_date, dry_run,
+            broker,
+            store,
+            lookup,
+            "overlay_collar_put",
+            put_leg.strategy_name,
+            roll_date,
+            dry_run,
             index=index,
         )
     # Intentional: catch failure to open new leg and rollback both closed legs.
@@ -437,7 +458,13 @@ async def _roll_collar(
 
     try:
         open_call = await _open_new_leg(
-            broker, store, lookup, "overlay_collar_call", call_leg.strategy_name, roll_date, dry_run,
+            broker,
+            store,
+            lookup,
+            "overlay_collar_call",
+            call_leg.strategy_name,
+            roll_date,
+            dry_run,
             index=index,
         )
     # Intentional: catch failure to open final leg and rollback all previous steps.
@@ -467,6 +494,7 @@ async def _roll_collar(
 
 
 # ── Report display ────────────────────────────────────────────────────────────
+
 
 def _print_roll_report(results: list[RollResult], roll_date: date, dry_run: bool) -> None:
     """Print a formatted roll summary to stdout.
@@ -513,10 +541,11 @@ def _print_roll_report(results: list[RollResult], roll_date: date, dry_run: bool
 
 # ── Main orchestration ────────────────────────────────────────────────────────
 
+
 async def _run(args: argparse.Namespace) -> None:
     """Async entry point — detect and execute overlay rolls."""
     log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
-    logging.basicConfig(level=log_level, format="%(levelname)s %(name)s %(message)s")
+    pass
 
     roll_date: date = args.date or date.today()
     dry_run: bool = args.dry_run
@@ -568,21 +597,31 @@ async def _run(args: argparse.Namespace) -> None:
 
             # Collar: only attempt if filter allows both collar legs (or no filter set)
             collar_allowed = _OVERLAY_FILTER is None or (
-                "overlay_collar_put" in _OVERLAY_FILTER and
-                "overlay_collar_call" in _OVERLAY_FILTER
+                "overlay_collar_put" in _OVERLAY_FILTER and "overlay_collar_call" in _OVERLAY_FILTER
             )
             if collar_allowed:
-                collar_put_candidates  = _find_expiring_overlay(
-                    trades_by_role["overlay_collar_put"], roll_date, "overlay_collar_put", args.force
+                collar_put_candidates = _find_expiring_overlay(
+                    trades_by_role["overlay_collar_put"],
+                    roll_date,
+                    "overlay_collar_put",
+                    args.force,
                 )
                 collar_call_candidates = _find_expiring_overlay(
-                    trades_by_role["overlay_collar_call"], roll_date, "overlay_collar_call", args.force
+                    trades_by_role["overlay_collar_call"],
+                    roll_date,
+                    "overlay_collar_call",
+                    args.force,
                 )
                 if collar_put_candidates and collar_call_candidates:
                     collar_results = await _roll_collar(
-                        broker, store, lookup,
-                        collar_put_candidates[0], collar_call_candidates[0],
-                        roll_date, is_dry, index=candidate_index,
+                        broker,
+                        store,
+                        lookup,
+                        collar_put_candidates[0],
+                        collar_call_candidates[0],
+                        roll_date,
+                        is_dry,
+                        index=candidate_index,
                     )
                     roll_results.extend(collar_results)
                     continue
@@ -598,7 +637,12 @@ async def _run(args: argparse.Namespace) -> None:
                 if not candidates:
                     continue
                 result = await _roll_single(
-                    broker, store, lookup, candidates[0], roll_date, is_dry,
+                    broker,
+                    store,
+                    lookup,
+                    candidates[0],
+                    roll_date,
+                    is_dry,
                     index=candidate_index,
                 )
                 roll_results.append(result)
@@ -699,4 +743,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()
     main()

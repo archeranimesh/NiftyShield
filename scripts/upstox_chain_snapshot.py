@@ -17,11 +17,14 @@ Environment variables:
 
 from __future__ import annotations
 
-import logging
 import os
 import sys
 from datetime import date, datetime, timezone
 from pathlib import Path
+
+import structlog
+
+from src.utils.logging import setup_logging
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -35,7 +38,7 @@ from src.client.upstox_market import UpstoxMarketClient, parse_upstox_option_cha
 from src.instruments.lookup import InstrumentLookup
 from src.market_calendar.holidays import is_trading_day
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 _NIFTY_INSTRUMENT = "NSE_INDEX|Nifty 50"
 _DEFAULT_SNAPSHOT_DIR = "data/offline/chain_snapshots"
@@ -50,7 +53,7 @@ def main() -> int:
     Returns 0 on success, 1 on any error.
     Designed to run as: 30 15 * * 1-5 (3:30 PM IST, Mon–Fri).
     """
-    _setup_logging()
+    pass
 
     today = date.today()
 
@@ -114,15 +117,6 @@ def main() -> int:
     return 0
 
 
-def _setup_logging() -> None:
-    """Configure root logger from LOG_LEVEL env var (default: INFO)."""
-    log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
-    logging.basicConfig(
-        level=getattr(logging, log_level, logging.INFO),
-        format="%(asctime)s %(levelname)-8s %(name)s — %(message)s",
-        datefmt="%H:%M:%S",
-    )
-
-
 if __name__ == "__main__":
+    setup_logging()
     sys.exit(main())

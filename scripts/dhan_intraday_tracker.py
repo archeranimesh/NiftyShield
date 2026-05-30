@@ -16,16 +16,17 @@ No os._exit() needed here — no Nuvama SDK thread is involved.
 
 from __future__ import annotations
 
-import logging
 import sys
 from datetime import date, datetime
 
 import requests.exceptions
+import structlog
 
 # Pure-computation helper only — no I/O on import.
 from src.market_calendar.holidays import is_trading_day
+from src.utils.logging import setup_logging
 
-logger = logging.getLogger("dhan")
+logger = structlog.get_logger(__name__)
 
 
 def main(nifty_spot: float = 0.0, india_vix: float = 0.0) -> int:
@@ -59,12 +60,7 @@ def main(nifty_spot: float = 0.0, india_vix: float = 0.0) -> int:
     from src.dhan.store import DhanStore
 
     load_dotenv()
-    logging.basicConfig(
-        level=logging.INFO,
-        force=True,
-        format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
+    pass
 
     now = datetime.now()
     logger.info("dhan_intraday_tracker starting time=%s", now.strftime("%H:%M"))
@@ -131,4 +127,5 @@ def main(nifty_spot: float = 0.0, india_vix: float = 0.0) -> int:
 
 
 if __name__ == "__main__":
+    setup_logging()
     sys.exit(main())

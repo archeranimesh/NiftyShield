@@ -339,7 +339,7 @@ def main() -> None:
         default=[],
         metavar="FILE",
         help="Additional project file to include as context (repeatable). "
-             "Paths relative to project root.",
+        "Paths relative to project root.",
     )
     parser.add_argument(
         "--dry-run",
@@ -352,7 +352,7 @@ def main() -> None:
         default=600.0,
         metavar="SECONDS",
         help="Seconds to wait for the council to complete all stages (default: 600). "
-             "Raise to 900+ for large multi-context prompts.",
+        "Raise to 900+ for large multi-context prompts.",
     )
     args = parser.parse_args()
 

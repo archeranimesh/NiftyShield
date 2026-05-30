@@ -20,6 +20,7 @@ Idempotent:
   - Opens with DROP TABLE IF EXISTS legs_new, so a partial prior run
     that left legs_new behind does not block a retry.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -131,9 +132,7 @@ def migrate(db_path: Path) -> None:
             # Step 3: swap old table out, new table in.
             conn.execute("DROP TABLE legs")
             conn.execute("ALTER TABLE legs_new RENAME TO legs")
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_legs_strategy ON legs(strategy_id)"
-            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_legs_strategy ON legs(strategy_id)")
 
         # Verify.
         new_type = _col_type(conn, "legs", "strike")

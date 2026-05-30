@@ -119,9 +119,7 @@ def main() -> None:
     args = _parse_args()
     positions = build_positions()
 
-    total_invested = sum(
-        p["avg_price"] * p["qty"] for p in positions
-    )
+    total_invested = sum(p["avg_price"] * p["qty"] for p in positions)
 
     print(f"\nNuvama bond positions to seed ({len(positions)} instruments):\n")
     for p in positions:

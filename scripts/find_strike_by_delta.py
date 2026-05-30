@@ -154,18 +154,20 @@ def filter_strikes_by_delta(
             ask = _safe_float(mktdata.get("ask_price"))
             mid = (bid + ask) / 2.0 if (bid > 0 and ask > 0) else ltp
 
-            rows.append({
-                "side": side,
-                "strike": strike,
-                "delta": delta,
-                "iv": _safe_float(greeks.get("iv")),
-                "ltp": ltp,
-                "mid": mid,
-                "bid": bid,
-                "ask": ask,
-                "oi": int(_safe_float(mktdata.get("oi"))),
-                "instrument_key": instrument_key,
-            })
+            rows.append(
+                {
+                    "side": side,
+                    "strike": strike,
+                    "delta": delta,
+                    "iv": _safe_float(greeks.get("iv")),
+                    "ltp": ltp,
+                    "mid": mid,
+                    "bid": bid,
+                    "ask": ask,
+                    "oi": int(_safe_float(mktdata.get("oi"))),
+                    "instrument_key": instrument_key,
+                }
+            )
 
     rows.sort(key=lambda r: abs(r["delta"]), reverse=True)
     return rows
@@ -223,9 +225,7 @@ def format_table(
         header_parts.append(f"expiry: {expiry}")
     if underlying_spot:
         header_parts.append(f"spot: ₹{underlying_spot:,.2f}")
-    header_line = (
-        "  Nifty 50  " + "  |  ".join(header_parts) if header_parts else ""
-    )
+    header_line = "  Nifty 50  " + "  |  ".join(header_parts) if header_parts else ""
 
     col_hdr = (
         f"  {'Rk':>3}  {'EXPIRY':<12} {'LABEL':<10} {'SIDE':<5} {'STRIKE':>8}  "
@@ -461,13 +461,12 @@ def main() -> None:
         expiries = [("manual", str(args.expiry))]
     else:
         from src.instruments.lookup import InstrumentLookup
+
         try:
             lookup = InstrumentLookup.from_file(args.bod_path)
             # Preference for CSP: monthly -> quarterly -> yearly
             # TODO: derive symbol from args.underlying
-            expiries = lookup.get_expiry_candidates(
-                underlying="NIFTY", today=date.today()
-            )
+            expiries = lookup.get_expiry_candidates(underlying="NIFTY", today=date.today())
         except Exception as exc:
             print(f"ERROR: failed to load BOD or resolve expiries — {exc}", file=sys.stderr)
             sys.exit(1)
@@ -511,7 +510,9 @@ def main() -> None:
             continue
 
     if not all_rows:
-        print("ERROR: no strikes found across all candidate expiries (empty data).", file=sys.stderr)
+        print(
+            "ERROR: no strikes found across all candidate expiries (empty data).", file=sys.stderr
+        )
         sys.exit(1)
 
     ranked = rank_strikes(all_rows)
@@ -521,8 +522,7 @@ def main() -> None:
         pick_idx = min(args.index - 1, len(ranked) - 1)
         if args.index - 1 > len(ranked) - 1:
             print(
-                f"WARNING: --index {args.index} out of range; "
-                f"clamping to rank {len(ranked)}.",
+                f"WARNING: --index {args.index} out of range; clamping to rank {len(ranked)}.",
                 file=sys.stderr,
             )
 
@@ -542,9 +542,7 @@ def main() -> None:
 
     # Infer leg per-row when BOTH sides are shown and no explicit --leg given
     fixed_leg = args.leg or (
-        _infer_leg(args.option_type, args.action)
-        if args.option_type != "BOTH"
-        else None
+        _infer_leg(args.option_type, args.action) if args.option_type != "BOTH" else None
     )
 
     print()

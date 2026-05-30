@@ -7,8 +7,7 @@ Mocks: is_trading_day, InstrumentLookup, UpstoxMarketClient,
 
 from __future__ import annotations
 
-import logging
-from datetime import date, datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -16,7 +15,6 @@ import pytest
 
 from scripts.upstox_chain_snapshot import main
 from src.client.exceptions import DataFetchError
-
 
 # ── Shared fixtures ───────────────────────────────────────────────────────────
 
@@ -105,9 +103,7 @@ def test_single_expiry_failure_continues() -> None:
         patch(f"{_SCRIPT_MODULE}.ChainWriter") as mock_writer_cls,
     ):
         mock_lu_cls.from_file.return_value = mock_lookup
-        mock_client_cls.return_value.get_option_chain_sync.side_effect = (
-            client_side_effects
-        )
+        mock_client_cls.return_value.get_option_chain_sync.side_effect = client_side_effects
         mock_writer_cls.return_value.write_eod_snapshot.return_value = Path("/tmp/x.parquet")
 
         result = main()
@@ -129,9 +125,7 @@ def test_all_expiries_fail_returns_one() -> None:
         patch(f"{_SCRIPT_MODULE}.ChainWriter") as mock_writer_cls,
     ):
         mock_lu_cls.from_file.return_value = mock_lookup
-        mock_client_cls.return_value.get_option_chain_sync.side_effect = (
-            DataFetchError("all down")
-        )
+        mock_client_cls.return_value.get_option_chain_sync.side_effect = DataFetchError("all down")
 
         result = main()
 
@@ -151,7 +145,7 @@ def test_fewer_than_three_expiries_ok() -> None:
     with (
         patch(f"{_SCRIPT_MODULE}.is_trading_day", return_value=True),
         patch(f"{_SCRIPT_MODULE}.InstrumentLookup") as mock_lu_cls,
-        patch(f"{_SCRIPT_MODULE}.UpstoxMarketClient") as mock_client_cls,
+        patch(f"{_SCRIPT_MODULE}.UpstoxMarketClient"),
         patch(f"{_SCRIPT_MODULE}.parse_upstox_option_chain", return_value=mock_chain),
         patch(f"{_SCRIPT_MODULE}.ChainWriter") as mock_writer_cls,
     ):
@@ -212,32 +206,32 @@ def test_base_dir_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_log_output_includes_expiry_and_rows(
-    caplog: pytest.LogCaptureFixture,
+    capsys,
 ) -> None:
     """INFO log entry per expiry includes expiry date and row count."""
     mock_chain = _make_mock_chain(n_strikes=4)
     mock_lookup = _make_mock_lookup(THREE_EXPIRIES)
 
-    with caplog.at_level(logging.INFO, logger=_SCRIPT_MODULE):
-        with (
-            patch(f"{_SCRIPT_MODULE}.is_trading_day", return_value=True),
-            patch(f"{_SCRIPT_MODULE}.InstrumentLookup") as mock_lu_cls,
-            patch(f"{_SCRIPT_MODULE}.UpstoxMarketClient"),
-            patch(
-                f"{_SCRIPT_MODULE}.parse_upstox_option_chain",
-                return_value=mock_chain,
-            ),
-            patch(f"{_SCRIPT_MODULE}.ChainWriter") as mock_writer_cls,
-        ):
-            mock_lu_cls.from_file.return_value = mock_lookup
-            mock_writer_cls.return_value.write_eod_snapshot.return_value = Path(
-                "/tmp/upstox_2026-06-26.parquet"
-            )
-            result = main()
+    with (
+        patch(f"{_SCRIPT_MODULE}.is_trading_day", return_value=True),
+        patch(f"{_SCRIPT_MODULE}.InstrumentLookup") as mock_lu_cls,
+        patch(f"{_SCRIPT_MODULE}.UpstoxMarketClient"),
+        patch(
+            f"{_SCRIPT_MODULE}.parse_upstox_option_chain",
+            return_value=mock_chain,
+        ),
+        patch(f"{_SCRIPT_MODULE}.ChainWriter") as mock_writer_cls,
+    ):
+        mock_lu_cls.from_file.return_value = mock_lookup
+        mock_writer_cls.return_value.write_eod_snapshot.return_value = Path(
+            "/tmp/upstox_2026-06-26.parquet"
+        )
+        result = main()
 
     assert result == 0
     # At least one log record per expiry mentioning expiry date and rows
-    log_text = caplog.text
+    captured = capsys.readouterr()
+    log_text = captured.out
     for _, expiry_str in THREE_EXPIRIES:
         assert expiry_str in log_text, f"Expected expiry {expiry_str} in log"
     assert "rows=" in log_text

@@ -37,11 +37,14 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import logging
 import os
 import sys
 from datetime import date
 from pathlib import Path
+
+import structlog
+
+from src.utils.logging import setup_logging
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -51,11 +54,8 @@ from src.paper.formatting import format_pnl_table
 from src.paper.store import PaperStore
 from src.paper.tracker import PaperTracker
 
-logging.basicConfig(
-    level=logging.WARNING,
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-)
-logger = logging.getLogger(__name__)
+pass
+logger = structlog.get_logger(__name__)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -142,12 +142,14 @@ async def _run(args: argparse.Namespace) -> int:
             continue
 
         unrealized, realized, total = pnl
-        pnl_rows.append({
-            "strategy": name,
-            "unrealized": unrealized,
-            "realized": realized,
-            "total": total,
-        })
+        pnl_rows.append(
+            {
+                "strategy": name,
+                "unrealized": unrealized,
+                "realized": realized,
+                "total": total,
+            }
+        )
         any_printed = True
 
         # Collect notes from open trades/legs (only the most recent trade per open leg)
@@ -175,11 +177,14 @@ async def _run(args: argparse.Namespace) -> int:
                 underlying_price=args.spot,
             )
             if snap:
-                print(
-                    f"  ✅  {name}: recorded to DB (P&L: ₹{float(total):+,.2f})"
-                )
+                print(f"  ✅  {name}: recorded to DB (P&L: ₹{float(total):+,.2f})")
     if pnl_rows:
-        print("\n" + format_pnl_table(pnl_rows, title=f"Snapshots for {snap_date}", is_dry_run=args.dry_run))
+        print(
+            "\n"
+            + format_pnl_table(
+                pnl_rows, title=f"Snapshots for {snap_date}", is_dry_run=args.dry_run
+            )
+        )
         if all_notes:
             seen = set()
             deduped_notes = []
@@ -203,4 +208,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()
     main()

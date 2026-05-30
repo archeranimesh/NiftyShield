@@ -44,14 +44,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.client.upstox_market import UpstoxMarketClient
 
 UNDERLYING = "NSE_INDEX|Nifty 50"
-SPREAD_GATE = 3.0          # percent
-STRIKE_STEP = 50           # Nifty strikes move in 50-point increments
+SPREAD_GATE = 3.0  # percent
+STRIKE_STEP = 50  # Nifty strikes move in 50-point increments
 DEFAULT_PUT_OTM_PCT = 9.0  # 9% OTM for protective put
-DEFAULT_CALL_OTM_PCT = 4.0 # 4% OTM for covered call
+DEFAULT_CALL_OTM_PCT = 4.0  # 4% OTM for covered call
 DEFAULT_OUTPUT = Path("data/paper/overlay_entry.yaml")
 
 
 # ── Pure helpers (importable, no I/O) ─────────────────────────────────────────
+
 
 def compute_target_strike(spot: float, otm_pct: float, side: str) -> float:
     """Compute the nearest STRIKE_STEP-multiple OTM strike.
@@ -123,9 +124,7 @@ def find_chain_entry(
                 "iv": _safe(g.get("iv")),
                 "delta": _safe(g.get("delta")),
                 "spread_pct": (
-                    round((ask - bid) / mid * 100, 2)
-                    if mid > 0 and bid > 0 and ask > 0
-                    else None
+                    round((ask - bid) / mid * 100, 2) if mid > 0 and bid > 0 and ask > 0 else None
                 ),
             }
     return best
@@ -137,9 +136,9 @@ class ExpiryEval:
 
     expiry: str
     dte: int
-    put: dict[str, Any] | None    # find_chain_entry result
-    call: dict[str, Any] | None   # find_chain_entry result (None for PP-only)
-    gate_spread: float | None     # max(put_spread, call_spread) or single spread
+    put: dict[str, Any] | None  # find_chain_entry result
+    call: dict[str, Any] | None  # find_chain_entry result (None for PP-only)
+    gate_spread: float | None  # max(put_spread, call_spread) or single spread
     passes_gate: bool
 
 
@@ -198,6 +197,7 @@ def evaluate_expiry(
 
 # ── Table formatting ──────────────────────────────────────────────────────────
 
+
 def format_eval_table(
     evals: list[ExpiryEval],
     overlay_type: str,
@@ -245,7 +245,11 @@ def format_eval_table(
                 row += "  " + " " * 42
         if has_call:
             if ev.call:
-                sp = f"{ev.call['spread_pct']:.1f}%" if ev.call["spread_pct"] is not None else "  N/A"
+                sp = (
+                    f"{ev.call['spread_pct']:.1f}%"
+                    if ev.call["spread_pct"] is not None
+                    else "  N/A"
+                )
                 row += f"  {ev.call['strike']:>8.0f}  {sp:>7}  {ev.call['mid']:>8.2f}  {ev.call['oi']:>7,}"
             else:
                 row += "  " + " " * 42
@@ -256,6 +260,7 @@ def format_eval_table(
 
 
 # ── YAML writer ───────────────────────────────────────────────────────────────
+
 
 def write_overlay_yaml(
     path: Path,
@@ -290,32 +295,46 @@ def write_overlay_yaml(
     }
 
     if chosen.put:
-        data["overlay"].update({
-            "put_strike": chosen.put["strike"],
-            "put_instrument_key": chosen.put["instrument_key"],
-            "put_price": round(chosen.put["mid"], 2),
-            "put_spread_pct": chosen.put["spread_pct"],
-            "put_oi": chosen.put["oi"],
-        })
+        data["overlay"].update(
+            {
+                "put_strike": chosen.put["strike"],
+                "put_instrument_key": chosen.put["instrument_key"],
+                "put_price": round(chosen.put["mid"], 2),
+                "put_spread_pct": chosen.put["spread_pct"],
+                "put_oi": chosen.put["oi"],
+            }
+        )
     else:
-        data["overlay"].update({
-            "put_strike": 0, "put_instrument_key": "", "put_price": 0.0,
-            "put_spread_pct": None, "put_oi": 0,
-        })
+        data["overlay"].update(
+            {
+                "put_strike": 0,
+                "put_instrument_key": "",
+                "put_price": 0.0,
+                "put_spread_pct": None,
+                "put_oi": 0,
+            }
+        )
 
     if chosen.call:
-        data["overlay"].update({
-            "call_strike": chosen.call["strike"],
-            "call_instrument_key": chosen.call["instrument_key"],
-            "call_price": round(chosen.call["mid"], 2),
-            "call_spread_pct": chosen.call["spread_pct"],
-            "call_oi": chosen.call["oi"],
-        })
+        data["overlay"].update(
+            {
+                "call_strike": chosen.call["strike"],
+                "call_instrument_key": chosen.call["instrument_key"],
+                "call_price": round(chosen.call["mid"], 2),
+                "call_spread_pct": chosen.call["spread_pct"],
+                "call_oi": chosen.call["oi"],
+            }
+        )
     else:
-        data["overlay"].update({
-            "call_strike": 0, "call_instrument_key": "", "call_price": 0.0,
-            "call_spread_pct": None, "call_oi": 0,
-        })
+        data["overlay"].update(
+            {
+                "call_strike": 0,
+                "call_instrument_key": "",
+                "call_price": 0.0,
+                "call_spread_pct": None,
+                "call_oi": 0,
+            }
+        )
 
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w") as f:
@@ -330,6 +349,7 @@ def write_overlay_yaml(
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
+
 
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
@@ -452,16 +472,18 @@ def main() -> None:
         except Exception as exc:
             print(f"  WARNING: fetch failed — {exc}")
             # Push a blank eval so the table shows the gap
-            evals.append(ExpiryEval(expiry=expiry, dte=0, put=None, call=None,
-                                    gate_spread=None, passes_gate=False))
+            evals.append(
+                ExpiryEval(
+                    expiry=expiry, dte=0, put=None, call=None, gate_spread=None, passes_gate=False
+                )
+            )
             continue
 
         if chain_data:
             spot = _safe(chain_data[0].get("underlying_spot_price")) or spot
 
         ev = evaluate_expiry(
-            chain_data, expiry, args.overlay_type,
-            target_put, target_call, entry_date
+            chain_data, expiry, args.overlay_type, target_put, target_call, entry_date
         )
         evals.append(ev)
 

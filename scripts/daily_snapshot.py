@@ -57,6 +57,7 @@ from src.portfolio.summary import (
     _etf_cost_basis,  # noqa: F401
     _etf_current_value,  # noqa: F401
 )
+from src.utils.logging import setup_logging
 
 
 def _print_combined_summary(
@@ -782,6 +783,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    setup_logging()
     # os._exit bypasses atexit and threading cleanup — necessary to kill the
     # APIConnect SDK's background Feed thread, which is non-daemon and would
     # otherwise block process exit indefinitely after a Nuvama fetch.

@@ -8,20 +8,21 @@ Usage:
 """
 
 import json
-import logging
 import os
 from pathlib import Path
 
 from dotenv import load_dotenv
 
+from src.utils.logging import setup_logging
+
 # Suppress APIConnect's module-level basicConfig
-logging.root.addHandler(logging.NullHandler())
+pass
 
 try:
     from APIConnect.APIConnect import APIConnect  # type: ignore[import]
 except ImportError:
     print("✗ APIConnect not installed. Run: .venv/bin/pip install APIConnect")
-    raise SystemExit(1)
+    raise SystemExit(1) from None
 
 NUVAMA_CONF_FILE = "data/nuvama/settings.ini"
 
@@ -77,4 +78,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()
     main()

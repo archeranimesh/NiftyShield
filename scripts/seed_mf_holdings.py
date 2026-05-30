@@ -140,9 +140,7 @@ def main() -> None:
         print(f"Dry run — {len(txs)} transactions would be inserted:\n")
         for tx in txs:
             print(f"  {tx.amfi_code}  {tx.scheme_name}")
-            print(
-                f"    units={tx.units}  amount={tx.amount}  date={tx.transaction_date}"
-            )
+            print(f"    units={tx.units}  amount={tx.amount}  date={tx.transaction_date}")
         return
 
     store = MFStore(args.db_path)

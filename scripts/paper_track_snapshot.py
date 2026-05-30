@@ -35,6 +35,7 @@ from src.paper.track_snapshot import TrackPnL, generate_track_snapshot
 
 # Collar has two leg roles that merge into one display line.
 
+
 def _format_pnl_block(track_name: str, pnl: TrackPnL) -> list[str]:
     """Build the 🛡 Hedge block lines for a track's PnL.
 
@@ -71,10 +72,14 @@ def _format_pnl_block(track_name: str, pnl: TrackPnL) -> list[str]:
 class MockBrokerClientDryRun:
     async def get_ltp(self, keys: list[str]) -> dict[str, Decimal]:
         return {k: Decimal("100.0") for k in keys}
-    async def get_option_chain(self, u, e): return {"data": []}
+
+    async def get_option_chain(self, u, e):
+        return {"data": []}
+
 
 class MockNotifier:
-    async def send(self, text): print(f"[MOCK TELEGRAM] {text}")
+    async def send(self, text):
+        print(f"[MOCK TELEGRAM] {text}")
 
 
 async def main() -> None:
@@ -83,18 +88,13 @@ async def main() -> None:
         "--date",
         type=str,
         default=date.today().isoformat(),
-        help="Date of the snapshot (YYYY-MM-DD)."
+        help="Date of the snapshot (YYYY-MM-DD).",
     )
     parser.add_argument(
-        "--underlying-price",
-        type=float,
-        required=True,
-        help="Current Nifty 50 spot price."
+        "--underlying-price", type=float, required=True, help="Current Nifty 50 spot price."
     )
     parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Generate report without saving nav snapshot to DB."
+        "--dry-run", action="store_true", help="Generate report without saving nav snapshot to DB."
     )
     args = parser.parse_args()
 
@@ -144,7 +144,7 @@ async def main() -> None:
             nifty_spot=nifty_spot,
             nee=nee,
             snapshot_date=snapshot_date,
-            proxy_monitor=monitor
+            proxy_monitor=monitor,
         )
 
         track_results.append(snapshot)
@@ -152,13 +152,14 @@ async def main() -> None:
         # Save snapshot to DB if not dry run
         if not args.dry_run and snapshot.pnl.net_pnl != Decimal("0"):
             from src.paper.models import PaperNavSnapshot
+
             db_snap = PaperNavSnapshot(
                 strategy_name=track_name,
                 snapshot_date=snapshot_date,
                 unrealized_pnl=snapshot.pnl.unrealized_pnl,
                 realized_pnl=snapshot.pnl.realized_pnl,
                 total_pnl=snapshot.pnl.net_pnl,
-                underlying_price=nifty_spot
+                underlying_price=nifty_spot,
             )
             store.record_nav_snapshot(db_snap)
 
@@ -166,13 +167,19 @@ async def main() -> None:
         print(f"\n[{track_name.upper()}]")
         for line in _format_pnl_block(track_name, snapshot.pnl):
             print(line)
-        print(f"  GREEKS : Δ={snapshot.greeks.net_delta:.2f} | Θ={snapshot.greeks.net_theta:.2f} | V={snapshot.greeks.net_vega:.2f}")
-        print(f"  METRICS: Max DD={snapshot.max_drawdown_pct:.2f}% (₹{snapshot.max_drawdown_abs:,.2f}) | Ret/NEE={snapshot.return_on_nee:.2f}%")
+        print(
+            f"  GREEKS : Δ={snapshot.greeks.net_delta:.2f} | Θ={snapshot.greeks.net_theta:.2f} | V={snapshot.greeks.net_vega:.2f}"
+        )
+        print(
+            f"  METRICS: Max DD={snapshot.max_drawdown_pct:.2f}% (₹{snapshot.max_drawdown_abs:,.2f}) | Ret/NEE={snapshot.return_on_nee:.2f}%"
+        )
 
         if track_name == STRATEGY_PROXY and snapshot.proxy_delta_alert:
             print(f"  ALERT  : Proxy Delta State -> {snapshot.proxy_delta_alert}")
             if "CRITICAL" in snapshot.proxy_delta_alert:
-                await notifier.send(f"🚨 **CRITICAL**: Proxy Delta Monitor triggered: {snapshot.proxy_delta_alert}\nDelta: {snapshot.greeks.net_delta:.2f}")
+                await notifier.send(
+                    f"🚨 **CRITICAL**: Proxy Delta Monitor triggered: {snapshot.proxy_delta_alert}\nDelta: {snapshot.greeks.net_delta:.2f}"
+                )
 
     print("\n" + "-" * 75)
     print("Snapshot Generation Complete.")

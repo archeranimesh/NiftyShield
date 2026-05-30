@@ -61,7 +61,9 @@ def _parse_args() -> argparse.Namespace:
         help="Execution date in YYYY-MM-DD format (applies to both trades)",
     )
     # Close (old) leg
-    parser.add_argument("--old-leg", required=True, help="Leg role being closed, e.g. NIFTY_MAY_PE_ATM")
+    parser.add_argument(
+        "--old-leg", required=True, help="Leg role being closed, e.g. NIFTY_MAY_PE_ATM"
+    )
     parser.add_argument("--old-key", required=True, help="Upstox instrument key for the old leg")
     parser.add_argument(
         "--old-action",
@@ -69,10 +71,14 @@ def _parse_args() -> argparse.Namespace:
         choices=["BUY", "SELL"],
         help="Action to close the old position (BUY to cover a short, SELL to exit a long)",
     )
-    parser.add_argument("--old-qty", required=True, type=int, help="Units to close (positive integer)")
+    parser.add_argument(
+        "--old-qty", required=True, type=int, help="Units to close (positive integer)"
+    )
     parser.add_argument("--old-price", required=True, help="Execution price for the closing trade")
     # Open (new) leg
-    parser.add_argument("--new-leg", required=True, help="Leg role being opened, e.g. NIFTY_JUN_PE_ATM")
+    parser.add_argument(
+        "--new-leg", required=True, help="Leg role being opened, e.g. NIFTY_JUN_PE_ATM"
+    )
     parser.add_argument("--new-key", required=True, help="Upstox instrument key for the new leg")
     parser.add_argument(
         "--new-action",
@@ -80,7 +86,9 @@ def _parse_args() -> argparse.Namespace:
         choices=["BUY", "SELL"],
         help="Action to open the new position (BUY for long, SELL for short)",
     )
-    parser.add_argument("--new-qty", required=True, type=int, help="Units to open (positive integer)")
+    parser.add_argument(
+        "--new-qty", required=True, type=int, help="Units to open (positive integer)"
+    )
     parser.add_argument("--new-price", required=True, help="Execution price for the opening trade")
     # Shared / meta
     parser.add_argument("--notes", default="", help="Optional annotation applied to both trades")

@@ -10,16 +10,18 @@ The cron fires from 9:00 but the script exits early for ticks before 9:15
 from __future__ import annotations
 
 import asyncio
-import logging
 import os
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
 
+import structlog
+
 # Pure-computation helper only — no I/O on import.
 from src.market_calendar.holidays import is_trading_day
+from src.utils.logging import setup_logging
 
-logger = logging.getLogger("nuvama")
+logger = structlog.get_logger(__name__)
 
 
 async def main(nifty_spot: float = 0.0, india_vix: float = 0.0) -> int:
@@ -33,12 +35,7 @@ async def main(nifty_spot: float = 0.0, india_vix: float = 0.0) -> int:
     from src.nuvama.store import NuvamaStore
 
     load_dotenv()
-    logging.basicConfig(
-        level=logging.INFO,
-        force=True,
-        format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
+    pass
     run_id = uuid.uuid4().hex[:8]
     now = datetime.now()
     logger.info("run_id=%s starting intraday tracker", run_id)
@@ -48,7 +45,9 @@ async def main(nifty_spot: float = 0.0, india_vix: float = 0.0) -> int:
         return 0
 
     if now.hour == 9 and now.minute < 15:
-        logger.info("before_market_open time=%s — skipping (tracker starts at 09:15)", now.strftime("%H:%M"))
+        logger.info(
+            "before_market_open time=%s — skipping (tracker starts at 09:15)", now.strftime("%H:%M")
+        )
         return 0
 
     store = NuvamaStore()
@@ -59,12 +58,7 @@ async def main(nifty_spot: float = 0.0, india_vix: float = 0.0) -> int:
     try:
         api: NuvamaClient = load_api_connect()
         # Nuvama SDK removes all standard logging handlers on __init__. We must restore it.
-        logging.basicConfig(
-            level=logging.INFO,
-            force=True,
-            format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
-        )
+        pass
         logger.info("Starting intraday nuvama options tracking loop...")
 
         logger.info("Fetching NetPosition()...")
@@ -112,6 +106,7 @@ async def main(nifty_spot: float = 0.0, india_vix: float = 0.0) -> int:
 
 
 if __name__ == "__main__":
+    setup_logging()
     from dotenv import load_dotenv
 
     from src.client.factory import create_client

@@ -8,26 +8,16 @@ manage the watchlist, calibrate percentiles, and send Telegram updates.
 from __future__ import annotations
 
 import argparse
-import logging
-import os
 import sys
 from datetime import date, datetime, timedelta
 from typing import Any
 
+import structlog
+
 from src.market_calendar.holidays import is_trading_day
+from src.utils.logging import setup_logging
 
-logger = logging.getLogger(__name__)
-
-
-def setup_logging() -> None:
-    """Configure logging for the script.
-
-    By default, logging is at INFO level. If UPSTOX_DEBUG is set to '1' in the
-    environment, the logging level is set to DEBUG.
-    """
-    level = logging.DEBUG if os.getenv("UPSTOX_DEBUG") == "1" else logging.INFO
-    log_format = "%(asctime)s %(levelname)s %(message)s"
-    logging.basicConfig(level=level, format=log_format)
+logger = structlog.get_logger(__name__)
 
 
 def resolve_expiries(today: date) -> tuple[date, date]:
@@ -111,11 +101,9 @@ def _update_watchlist(
 
 def main() -> None:
     """Main execution entry point."""
-    setup_logging()
+    pass
 
-    parser = argparse.ArgumentParser(
-        description="Near-Expiry Gamma Buy Strategy Daily Watch"
-    )
+    parser = argparse.ArgumentParser(description="Near-Expiry Gamma Buy Strategy Daily Watch")
     parser.add_argument(
         "--morning",
         action="store_true",
@@ -177,4 +165,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()
     main()

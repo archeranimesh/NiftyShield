@@ -22,6 +22,8 @@ from __future__ import annotations
 import asyncio
 import os
 
+from src.utils.logging import setup_logging
+
 
 async def main() -> int:
     """Run Dhan tracker then Nuvama tracker in sequence.
@@ -41,12 +43,7 @@ async def main() -> int:
     from src.intraday.market_store import IntradayMarketStore
 
     load_dotenv()
-    logging.basicConfig(
-        level=logging.INFO,
-        force=True,
-        format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
+    pass
     logger = logging.getLogger("market")
 
     nifty_spot = 0.0
@@ -81,6 +78,7 @@ async def main() -> int:
 
 
 if __name__ == "__main__":
+    setup_logging()
     code = asyncio.run(main())
     # os._exit is required: kills the Nuvama SDK non-daemon background thread
     # that would otherwise block process exit indefinitely.

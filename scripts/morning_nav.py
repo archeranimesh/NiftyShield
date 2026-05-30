@@ -25,21 +25,20 @@ Cron (weekdays at 09:15 IST):
 from __future__ import annotations
 
 import argparse
-import logging
 import sys
 from datetime import date, datetime
 from pathlib import Path
+
+import structlog
+
+from src.utils.logging import setup_logging
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.market_calendar.holidays import prev_trading_day  # noqa: E402
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
-logger = logging.getLogger(__name__)
+pass
+logger = structlog.get_logger(__name__)
 
 
 def run_morning_nav(target_date: date, db_path: Path) -> int:
@@ -113,4 +112,5 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    setup_logging()
     sys.exit(main())

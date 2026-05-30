@@ -33,7 +33,6 @@ Diagnostics:
 from __future__ import annotations
 
 import argparse
-import logging
 import os
 import sys
 from dataclasses import dataclass
@@ -41,6 +40,10 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
+
+import structlog
+
+from src.utils.logging import setup_logging
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -81,29 +84,32 @@ ALL_TRACKS = [STRATEGY_SPOT, STRATEGY_FUTURES, STRATEGY_PROXY]
 # Futures track is permanently blocked from standalone covered calls
 _CC_BLOCKED_TRACKS = {STRATEGY_FUTURES}
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 # ── Overlay candidate row ────────────────────────────────────────────────────
 
+
 @dataclass
 class OverlayRow:
     """One selected overlay leg ready to display and record."""
+
     strategy: str
     leg_role: str
-    option_type: str     # "PE" or "CE"
+    option_type: str  # "PE" or "CE"
     action: TradeAction
     strike: float
     instrument_key: str
-    price: Decimal       # mid price at fetch time
+    price: Decimal  # mid price at fetch time
     spread_pct: float | None
     oi: int
     expiry: str
-    expiry_label: str    # "quarterly", "yearly", "monthly", "fallback"
+    expiry_label: str  # "quarterly", "yearly", "monthly", "fallback"
     dte: int
 
 
 # ── Pure helpers ─────────────────────────────────────────────────────────────
+
 
 def _safe(val: Any, default: float = 0.0) -> float:
     try:
@@ -142,7 +148,7 @@ def _rank_overlay_key(r: dict, target_otm: float) -> tuple:
 
 def _extract_chain_candidates(
     chain_data: list[dict],
-    option_type: str,    # "PE" or "CE"
+    option_type: str,  # "PE" or "CE"
     spot: float,
     otm_min: float,
     otm_max: float,
@@ -165,34 +171,39 @@ def _extract_chain_candidates(
             continue
 
         md = opt.get("market_data") or {}
-        g  = opt.get("option_greeks") or {}
+        g = opt.get("option_greeks") or {}
         bid = _safe(md.get("bid_price"))
         ask = _safe(md.get("ask_price"))
         ltp = _safe(md.get("ltp"))
         mid = (bid + ask) / 2.0 if (bid > 0 and ask > 0) else ltp
-        oi  = int(_safe(md.get("oi")))
-        spread_pct = (
-            round((ask - bid) / mid * 100, 2)
-            if mid > 0 and bid > 0 and ask > 0
-            else None
-        )
+        oi = int(_safe(md.get("oi")))
+        spread_pct = round((ask - bid) / mid * 100, 2) if mid > 0 and bid > 0 and ask > 0 else None
 
-        rows.append({
-            "strike": strike,
-            "instrument_key": key,
-            "option_type": option_type,
-            "bid": bid, "ask": ask, "ltp": ltp, "mid": mid,
-            "oi": oi,
-            "otm_pct": otm,
-            "spread_pct": spread_pct,
-            "delta": _safe(g.get("delta")),
-            "expiry": expiry,
-            "expiry_label": expiry_label,
-        })
+        rows.append(
+            {
+                "strike": strike,
+                "instrument_key": key,
+                "option_type": option_type,
+                "bid": bid,
+                "ask": ask,
+                "ltp": ltp,
+                "mid": mid,
+                "oi": oi,
+                "otm_pct": otm,
+                "spread_pct": spread_pct,
+                "delta": _safe(g.get("delta")),
+                "expiry": expiry,
+                "expiry_label": expiry_label,
+            }
+        )
 
     logger.debug(
         "Chain candidates (%s, %s): %d in OTM %.0f%%–%.0f%% band",
-        option_type, expiry, len(rows), otm_min * 100, otm_max * 100,
+        option_type,
+        expiry,
+        len(rows),
+        otm_min * 100,
+        otm_max * 100,
     )
     return rows
 
@@ -221,21 +232,28 @@ def _select_best_candidate(
     if idx != index:
         logger.warning(
             "--index %d out of range for %s (%d candidates) — using index %d",
-            index + 1, option_type, len(candidates), idx + 1,
+            index + 1,
+            option_type,
+            len(candidates),
+            idx + 1,
         )
     best = candidates[idx]
     logger.info(
         "Selected %s rank=%d: strike=%.0f expiry=%s spread_pct=%s OI=%d",
-        option_type, idx + 1, best["strike"], best["expiry"], best["spread_pct"], best["oi"],
+        option_type,
+        idx + 1,
+        best["strike"],
+        best["expiry"],
+        best["spread_pct"],
+        best["oi"],
     )
     return best
 
 
 # ── Expiry selection ─────────────────────────────────────────────────────────
 
-def _collect_expiry_candidates(
-    lookup: InstrumentLookup, today: date
-) -> list[tuple[str, str]]:
+
+def _collect_expiry_candidates(lookup: InstrumentLookup, today: date) -> list[tuple[str, str]]:
     """Return (label, expiry_date) pairs in preference order: quarterly → yearly → monthly.
 
     Delegates to get_expiry_candidates with preference [quarterly, yearly, monthly].
@@ -281,14 +299,19 @@ async def _fetch_candidates_for_expiries(
         rows = _extract_chain_candidates(chain, option_type, spot, otm_min, otm_max, expiry, label)
         all_candidates.extend(rows)
 
-        passers = [r for r in rows if r["spread_pct"] is not None and r["spread_pct"] <= SPREAD_PCT_MAX]
+        passers = [
+            r for r in rows if r["spread_pct"] is not None and r["spread_pct"] <= SPREAD_PCT_MAX
+        ]
         gate_passers.extend(passers)
-        logger.info("  → %d rows, %d pass spread gate (≤%.1f%%)", len(rows), len(passers), SPREAD_PCT_MAX)
+        logger.info(
+            "  → %d rows, %d pass spread gate (≤%.1f%%)", len(rows), len(passers), SPREAD_PCT_MAX
+        )
 
     return gate_passers, all_candidates
 
 
 # ── Safety check ─────────────────────────────────────────────────────────────
+
 
 def _check_existing_overlay(
     store: PaperStore,
@@ -320,23 +343,23 @@ def _check_existing_overlay(
 # ── Trade building ───────────────────────────────────────────────────────────
 
 _LEG_ROLES: dict[str, list[str]] = {
-    "pp":     ["overlay_pp"],
-    "cc":     ["overlay_cc"],
+    "pp": ["overlay_pp"],
+    "cc": ["overlay_cc"],
     "collar": ["overlay_collar_put", "overlay_collar_call"],
 }
 
 _OPTION_TYPE_FOR_ROLE: dict[str, str] = {
-    "overlay_pp":           "PE",
-    "overlay_cc":           "CE",
-    "overlay_collar_put":   "PE",
-    "overlay_collar_call":  "CE",
+    "overlay_pp": "PE",
+    "overlay_cc": "CE",
+    "overlay_collar_put": "PE",
+    "overlay_collar_call": "CE",
 }
 
 _ACTION_FOR_ROLE: dict[str, TradeAction] = {
-    "overlay_pp":           TradeAction.BUY,
-    "overlay_cc":           TradeAction.SELL,
-    "overlay_collar_put":   TradeAction.BUY,
-    "overlay_collar_call":  TradeAction.SELL,
+    "overlay_pp": TradeAction.BUY,
+    "overlay_cc": TradeAction.SELL,
+    "overlay_collar_put": TradeAction.BUY,
+    "overlay_collar_call": TradeAction.SELL,
 }
 
 
@@ -370,6 +393,7 @@ def _build_trade(
 
 # ── Confirmation display ─────────────────────────────────────────────────────
 
+
 def _print_candidate_table(
     leg_role: str,
     option_type: str,
@@ -386,7 +410,7 @@ def _print_candidate_table(
     W = 96
     print(
         f"\n  Overlay candidates ({option_type}, {leg_role}) — "
-        f"OTM {otm_min*100:.0f}%–{otm_max*100:.0f}%  "
+        f"OTM {otm_min * 100:.0f}%–{otm_max * 100:.0f}%  "
         f"(showing top 10 of {total}, ranked: round-100 first, spread↑ OI↓)"
     )
     print(
@@ -402,7 +426,7 @@ def _print_candidate_table(
         sprd_str = f"{spread_pct:.1f}%" if spread_pct is not None else "  N/A"
         print(
             f"  {i:>3}  {c['expiry']:<12}  {c['expiry_label']:<12}  {c['strike']:>7.0f}  "
-            f"{c['otm_pct']*100:>4.1f}%  {c['oi']:>9,}  "
+            f"{c['otm_pct'] * 100:>4.1f}%  {c['oi']:>9,}  "
             f"{c['bid']:>8.2f}  {c['ask']:>8.2f}  {sprd_str:>6}  {gate}{marker}"
         )
 
@@ -439,6 +463,7 @@ def _print_confirmation_table(
 
 
 # ── Main orchestration ───────────────────────────────────────────────────────
+
 
 async def _run(args: argparse.Namespace) -> None:
     """Core async logic — separated for testability."""
@@ -485,8 +510,7 @@ async def _run(args: argparse.Namespace) -> None:
     expiry_candidates = _collect_expiry_candidates(lookup, entry_date)
     if not expiry_candidates:
         logger.error(
-            "No NIFTY option expiries found in BOD (DTE 15–420). "
-            "Is %s current?", args.bod_path
+            "No NIFTY option expiries found in BOD (DTE 15–420). Is %s current?", args.bod_path
         )
         sys.exit(1)
 
@@ -524,13 +548,16 @@ async def _run(args: argparse.Namespace) -> None:
         if not pool:
             logger.error(
                 "No %s candidates found in OTM %.0f%%–%.0f%% band across all expiries.",
-                option_type, otm_min * 100, otm_max * 100,
+                option_type,
+                otm_min * 100,
+                otm_max * 100,
             )
             sys.exit(1)
         if not gate_passers:
             logger.warning(
                 "No expiry passed the %.1f%% spread gate for %s — using monthly fallback.",
-                SPREAD_PCT_MAX, option_type,
+                SPREAD_PCT_MAX,
+                option_type,
             )
             # Mark all as fallback
             for r in pool:
@@ -569,23 +596,28 @@ async def _run(args: argparse.Namespace) -> None:
                         sys.exit(1)
                     logger.warning(
                         "--force: overriding existing %s %s (expiry=%s) with %s",
-                        strategy, leg_role, existing_expiry, best_expiry,
+                        strategy,
+                        leg_role,
+                        existing_expiry,
+                        best_expiry,
                     )
 
-            overlay_rows.append(OverlayRow(
-                strategy=strategy,
-                leg_role=leg_role,
-                option_type=option_type,
-                action=_ACTION_FOR_ROLE[leg_role],
-                strike=best["strike"],
-                instrument_key=best["instrument_key"],
-                price=Decimal(str(round(best["mid"], 2))),
-                spread_pct=best["spread_pct"],
-                oi=best["oi"],
-                expiry=best_expiry,
-                expiry_label=best["expiry_label"],
-                dte=best_dte,
-            ))
+            overlay_rows.append(
+                OverlayRow(
+                    strategy=strategy,
+                    leg_role=leg_role,
+                    option_type=option_type,
+                    action=_ACTION_FOR_ROLE[leg_role],
+                    strike=best["strike"],
+                    instrument_key=best["instrument_key"],
+                    price=Decimal(str(round(best["mid"], 2))),
+                    spread_pct=best["spread_pct"],
+                    oi=best["oi"],
+                    expiry=best_expiry,
+                    expiry_label=best["expiry_label"],
+                    dte=best_dte,
+                )
+            )
 
     if not overlay_rows:
         print("ERROR: No trades to record — all tracks produced no candidates.", file=sys.stderr)
@@ -593,10 +625,12 @@ async def _run(args: argparse.Namespace) -> None:
 
     # Representative expiry for header (first row — all same for PP/CC; collar may differ)
     header_expiry = overlay_rows[0].expiry
-    header_dte    = overlay_rows[0].dte
+    header_dte = overlay_rows[0].dte
     mode = "DRY RUN — nothing written to DB" if args.dry_run else "PREVIEW"
 
-    _print_confirmation_table(overlay_type, overlay_rows, entry_date, header_expiry, header_dte, mode)
+    _print_confirmation_table(
+        overlay_type, overlay_rows, entry_date, header_expiry, header_dte, mode
+    )
 
     # Proceed?
     if not args.dry_run:
@@ -610,24 +644,42 @@ async def _run(args: argparse.Namespace) -> None:
         # If writing the Nth trade fails, all previously written trades are deleted.
         trades_to_write: list[PaperTrade] = []
         for r in overlay_rows:
-            trades_to_write.append(_build_trade(r.strategy, r.leg_role, {
-                "mid": float(r.price), "instrument_key": r.instrument_key,
-                "strike": r.strike, "expiry": r.expiry, "expiry_label": r.expiry_label,
-                "dte": r.dte, "spread_pct": r.spread_pct, "oi": r.oi,
-            }, entry_date, LOT_SIZE))
+            trades_to_write.append(
+                _build_trade(
+                    r.strategy,
+                    r.leg_role,
+                    {
+                        "mid": float(r.price),
+                        "instrument_key": r.instrument_key,
+                        "strike": r.strike,
+                        "expiry": r.expiry,
+                        "expiry_label": r.expiry_label,
+                        "dte": r.dte,
+                        "spread_pct": r.spread_pct,
+                        "oi": r.oi,
+                    },
+                    entry_date,
+                    LOT_SIZE,
+                )
+            )
 
         try:
             inserted_trades, skipped_trades = store.record_trades(trades_to_write)
             for trade in inserted_trades:
                 logger.info(
                     "Recorded: %s %s %s qty=%d price=%s",
-                    trade.strategy_name, trade.leg_role, trade.action.value,
-                    trade.quantity, trade.price,
+                    trade.strategy_name,
+                    trade.leg_role,
+                    trade.action.value,
+                    trade.quantity,
+                    trade.price,
                 )
             for trade in skipped_trades:
                 logger.warning(
                     "SKIPPED (duplicate): %s %s %s — already exists for %s",
-                    trade.strategy_name, trade.leg_role, trade.action.value,
+                    trade.strategy_name,
+                    trade.leg_role,
+                    trade.action.value,
                     trade.trade_date,
                 )
         # Intentional: top-level catch for trade recording failure.
@@ -650,11 +702,7 @@ async def _run(args: argparse.Namespace) -> None:
 def main() -> None:
     """CLI entry point."""
     log_level = os.getenv("LOG_LEVEL", "INFO").upper()
-    logging.basicConfig(
-        level=getattr(logging, log_level, logging.INFO),
-        format="%(asctime)s %(levelname)-8s %(name)s — %(message)s",
-        datefmt="%H:%M:%S",
-    )
+    pass
 
     parser = argparse.ArgumentParser(
         description=(
@@ -665,15 +713,21 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
-        "--overlay", required=True, choices=["pp", "cc", "collar"],
+        "--overlay",
+        required=True,
+        choices=["pp", "cc", "collar"],
         help="Overlay type: pp (protective put), cc (covered call), collar (both).",
     )
     parser.add_argument(
-        "--date", default=None, type=date.fromisoformat, metavar="YYYY-MM-DD",
+        "--date",
+        default=None,
+        type=date.fromisoformat,
+        metavar="YYYY-MM-DD",
         help="Entry date (default: today).",
     )
     parser.add_argument(
-        "--tracks", nargs="+",
+        "--tracks",
+        nargs="+",
         choices=["spot", "futures", "proxy"],
         metavar="TRACK",
         help=(
@@ -683,46 +737,58 @@ def main() -> None:
         ),
     )
     parser.add_argument(
-        "--yes", action="store_true",
+        "--yes",
+        action="store_true",
         help="Skip interactive confirmation prompt (blocked-combo checks still run).",
     )
     parser.add_argument(
-        "--dry-run", action="store_true",
+        "--dry-run",
+        action="store_true",
         help="Print proposed trades; do not write to DB.",
     )
     parser.add_argument(
-        "--force", action="store_true",
+        "--force",
+        action="store_true",
         help="Override existing open overlay with a different expiry.",
     )
     parser.add_argument(
-        "--index", type=int, default=1, metavar="N",
+        "--index",
+        type=int,
+        default=1,
+        metavar="N",
         help=(
             "Select the Nth-ranked candidate from the dry-run table (default: 1). "
             "For collar, the same rank N is applied to both PE and CE legs independently."
         ),
     )
     parser.add_argument(
-        "--db-path", type=Path, default=DEFAULT_DB_PATH,
+        "--db-path",
+        type=Path,
+        default=DEFAULT_DB_PATH,
         help=f"SQLite DB path (default: {DEFAULT_DB_PATH})",
     )
     parser.add_argument(
-        "--bod-path", type=Path, default=DEFAULT_BOD_PATH,
+        "--bod-path",
+        type=Path,
+        default=DEFAULT_BOD_PATH,
         help=f"BOD instruments JSON path (default: {DEFAULT_BOD_PATH})",
     )
     args = parser.parse_args()
 
     # Map short track names → strategy names
     _TRACK_MAP = {
-        "spot":    STRATEGY_SPOT,
+        "spot": STRATEGY_SPOT,
         "futures": STRATEGY_FUTURES,
-        "proxy":   STRATEGY_PROXY,
+        "proxy": STRATEGY_PROXY,
     }
     if args.tracks:
         args.tracks = [_TRACK_MAP[t] for t in args.tracks]
 
     import asyncio
+
     asyncio.run(_run(args))
 
 
 if __name__ == "__main__":
+    setup_logging()
     main()

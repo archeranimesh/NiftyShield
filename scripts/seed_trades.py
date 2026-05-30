@@ -38,38 +38,73 @@ from src.portfolio.store import PortfolioStore
 # Each tuple: (strategy_name, leg_role, instrument_key, trade_date, action, qty, price)
 _ILTS_TRADES: list[tuple[str, str, str, date, TradeAction, int, str]] = [
     (
-        "finideas_ilts", "EBBETF0431", "NSE_EQ|INF754K01LE1",
-        date(2026, 1, 15), TradeAction.BUY, 438, "1388.12",
+        "finideas_ilts",
+        "EBBETF0431",
+        "NSE_EQ|INF754K01LE1",
+        date(2026, 1, 15),
+        TradeAction.BUY,
+        438,
+        "1388.12",
     ),
     (
-        "finideas_ilts", "EBBETF0431", "NSE_EQ|INF754K01LE1",
-        date(2026, 4, 8), TradeAction.BUY, 27, "1386.20",
+        "finideas_ilts",
+        "EBBETF0431",
+        "NSE_EQ|INF754K01LE1",
+        date(2026, 4, 8),
+        TradeAction.BUY,
+        27,
+        "1386.20",
     ),
     (
         # LIQUIDBEES instrument key verified against NSE.json.gz BOD file
         # on 2026-04-08 via InstrumentLookup.search_equity('LIQUIDBEES').
-        "finideas_ilts", "LIQUIDBEES", "NSE_EQ|INF732E01037",
-        date(2026, 4, 8), TradeAction.BUY, 22, "1000.00",
+        "finideas_ilts",
+        "LIQUIDBEES",
+        "NSE_EQ|INF732E01037",
+        date(2026, 4, 8),
+        TradeAction.BUY,
+        22,
+        "1000.00",
     ),
     (
-        "finideas_ilts", "NIFTY_DEC_PE", "NSE_FO|37810",
-        date(2026, 1, 15), TradeAction.BUY, 65, "975.00",
+        "finideas_ilts",
+        "NIFTY_DEC_PE",
+        "NSE_FO|37810",
+        date(2026, 1, 15),
+        TradeAction.BUY,
+        65,
+        "975.00",
     ),
     (
-        "finideas_ilts", "NIFTY_JUN_CE", "NSE_FO|37799",
-        date(2026, 1, 15), TradeAction.BUY, 65, "1082.00",
+        "finideas_ilts",
+        "NIFTY_JUN_CE",
+        "NSE_FO|37799",
+        date(2026, 1, 15),
+        TradeAction.BUY,
+        65,
+        "1082.00",
     ),
     (
         # SELL = short leg; premium received, not paid.
-        "finideas_ilts", "NIFTY_JUN_PE", "NSE_FO|37805",
-        date(2026, 1, 15), TradeAction.SELL, 65, "840.00",
+        "finideas_ilts",
+        "NIFTY_JUN_PE",
+        "NSE_FO|37805",
+        date(2026, 1, 15),
+        TradeAction.SELL,
+        65,
+        "840.00",
     ),
 ]
 
 _FINRAKSHAK_TRADES: list[tuple[str, str, str, date, TradeAction, int, str]] = [
     (
-        "finrakshak", "NIFTY_DEC_PE", "NSE_FO|37810",
-        date(2026, 1, 15), TradeAction.BUY, 65, "962.15",
+        "finrakshak",
+        "NIFTY_DEC_PE",
+        "NSE_FO|37810",
+        date(2026, 1, 15),
+        TradeAction.BUY,
+        65,
+        "962.15",
     ),
 ]
 

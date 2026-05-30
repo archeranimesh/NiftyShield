@@ -62,8 +62,6 @@ load_dotenv()
 DEFAULT_VIX_DIR = Path("data/historical/ohlc/india_vix")
 
 
-
-
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -245,9 +243,7 @@ def _resolve_from_chain(args: argparse.Namespace) -> tuple[str, str] | None:
             lookup = InstrumentLookup.from_file(args.bod_path)
             # Preference for CSP: monthly -> quarterly -> yearly
             # TODO: derive symbol from args.underlying
-            expiries = lookup.get_expiry_candidates(
-                underlying="NIFTY", today=date.today()
-            )
+            expiries = lookup.get_expiry_candidates(underlying="NIFTY", today=date.today())
         # Intentional: catch all API connectivity issues during chain fetch.
         except Exception as exc:
             print(f"ERROR: failed to load BOD or resolve expiries — {exc}", file=sys.stderr)
@@ -294,7 +290,9 @@ def _resolve_from_chain(args: argparse.Namespace) -> tuple[str, str] | None:
             continue
 
     if not all_rows:
-        print("ERROR: no strikes found across all candidate expiries (empty data).", file=sys.stderr)
+        print(
+            "ERROR: no strikes found across all candidate expiries (empty data).", file=sys.stderr
+        )
         return None
 
     ranked = rank_strikes(all_rows)
@@ -451,8 +449,7 @@ def _resolve_instrument_key(args: argparse.Namespace) -> str | None:
 
     # Multiple matches — print them and ask user to be more specific
     print(
-        f"Multiple instruments matched for {args.underlying!r} "
-        f"(showing up to {len(results)}):\n",
+        f"Multiple instruments matched for {args.underlying!r} (showing up to {len(results)}):\n",
         file=sys.stderr,
     )
     for i, inst in enumerate(results, 1):
@@ -520,8 +517,7 @@ def _get_ivr_and_warn(
         # Back-dated trade — look up Parquet for that specific date.
         if not vix_data_dir.exists():
             print(
-                f"WARNING: VIX data directory not found at {vix_data_dir}. "
-                "IVR skipped.",
+                f"WARNING: VIX data directory not found at {vix_data_dir}. IVR skipped.",
                 file=sys.stderr,
             )
             return None
@@ -559,8 +555,7 @@ def _get_ivr_and_warn(
             )
         elif ivr < 0.25:
             print(
-                f"WARNING: Low IVR ({ivr:.2f}). "
-                "Risk of volatility expansion is high.",
+                f"WARNING: Low IVR ({ivr:.2f}). Risk of volatility expansion is high.",
                 file=sys.stderr,
             )
         else:
@@ -659,7 +654,10 @@ def main() -> None:
             if "NSE_INDEX|Nifty 50" in ltp_dict:
                 nifty_spot = ltp_dict["NSE_INDEX|Nifty 50"]
             else:
-                print("ERROR: failed to fetch live Nifty spot price (key missing in LTP response).", file=sys.stderr)
+                print(
+                    "ERROR: failed to fetch live Nifty spot price (key missing in LTP response).",
+                    file=sys.stderr,
+                )
                 sys.exit(1)
         except Exception as exc:
             print(f"ERROR: failed to fetch live Nifty spot price — {exc}", file=sys.stderr)
@@ -726,9 +724,7 @@ def main() -> None:
 
     pos = store.get_position(trade.strategy_name, trade.leg_role)
     if pos.net_qty == 0:
-        print(
-            f"{trade.strategy_name} / {trade.leg_role}: position closed (net qty = 0)"
-        )
+        print(f"{trade.strategy_name} / {trade.leg_role}: position closed (net qty = 0)")
     else:
         direction = "short" if pos.net_qty < 0 else "long"
         ref_price = pos.avg_sell_price if pos.net_qty < 0 else pos.avg_cost

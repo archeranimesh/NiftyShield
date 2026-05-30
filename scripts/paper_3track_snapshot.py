@@ -30,12 +30,15 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import logging
 import os
 import sys
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+
+import structlog
+
+from src.utils.logging import setup_logging
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -79,14 +82,11 @@ from src.paper.track_snapshot import TrackSnapshot, generate_track_snapshot
 ALL_TRACKS = [STRATEGY_SPOT, STRATEGY_FUTURES, STRATEGY_PROXY]
 
 
-
-logger = logging.getLogger(__name__)
-
-
-
+logger = structlog.get_logger(__name__)
 
 
 # ── Per-leg delta calculation ─────────────────────────────────────────────────
+
 
 def _leg_delta(
     store: PaperStore,
@@ -106,6 +106,7 @@ def _leg_delta(
 
 
 # ── Display blocks ────────────────────────────────────────────────────────────
+
 
 def _print_track_block(
     track_name: str,
@@ -148,10 +149,7 @@ def _print_track_block(
                     rd = leg_deltas.get(role)
                     if rd is not None:
                         overlay_delta_sum = (overlay_delta_sum or Decimal("0")) + rd
-            print(
-                f"  {display:<20} {_fmt(amount):>12}"
-                f"{_delta_arrow(overlay_delta_sum)}"
-            )
+            print(f"  {display:<20} {_fmt(amount):>12}{_delta_arrow(overlay_delta_sum)}")
         print(f"  {'─' * 38}")
         verdict = _hedge_verdict(pnl.base_pnl, overlay_total)
         print(f"  {'Net':<20} {_fmt(pnl.net_pnl):>12}   {verdict}")
@@ -160,9 +158,7 @@ def _print_track_block(
 
     # Greeks + metrics
     g = snapshot.greeks
-    print(
-        f"  Greeks : Δ={g.net_delta:.3f}  Θ={g.net_theta:.2f}  V={g.net_vega:.2f}"
-    )
+    print(f"  Greeks : Δ={g.net_delta:.3f}  Θ={g.net_theta:.2f}  V={g.net_vega:.2f}")
     print(
         f"  Metrics: MaxDD={snapshot.max_drawdown_pct:.2f}%"
         f"  (₹{snapshot.max_drawdown_abs:,.0f})"
@@ -176,15 +172,13 @@ def _print_track_block(
 def _base_leg_role(track_name: str) -> str:
     """Return the base leg_role for a track."""
     return {
-        STRATEGY_SPOT:    "base_etf",
+        STRATEGY_SPOT: "base_etf",
         STRATEGY_FUTURES: "base_futures",
-        STRATEGY_PROXY:   "base_ditm_call",
+        STRATEGY_PROXY: "base_ditm_call",
     }.get(track_name, "base_etf")
 
 
-def _overlay_roles_for_track(
-    store: PaperStore, track_name: str, snap_date: date
-) -> list[str]:
+def _overlay_roles_for_track(store: PaperStore, track_name: str, snap_date: date) -> list[str]:
     """Return all overlay leg_roles that have open or recently closed positions."""
     trades = store.get_trades(track_name)
     roles = {t.leg_role for t in trades if t.leg_role.startswith("overlay_")}
@@ -192,6 +186,7 @@ def _overlay_roles_for_track(
 
 
 # ── Persistence ───────────────────────────────────────────────────────────────
+
 
 def _save_nav_snapshot(
     store: PaperStore,
@@ -255,7 +250,7 @@ def _save_leg_snapshots(
             leg_role=role,
             snapshot_date=snap_date,
             unrealized_pnl=overlay_pnl,
-            realized_pnl=Decimal("0"),   # realized only after close — updated by roll
+            realized_pnl=Decimal("0"),  # realized only after close — updated by roll
             total_pnl=overlay_pnl,
             ltp=overlay_ltp,
         )
@@ -264,6 +259,7 @@ def _save_leg_snapshots(
 
 
 # ── Summary table ─────────────────────────────────────────────────────────────
+
 
 def _print_summary_table(
     results: list[tuple[str, TrackSnapshot]],
@@ -287,14 +283,15 @@ def _print_summary_table(
 
 # ── Main async orchestration ──────────────────────────────────────────────────
 
+
 async def _run(args: argparse.Namespace) -> None:
     snap_date: date = args.date or date.today()
     save: bool = not args.dry_run
 
     _TRACK_MAP = {
-        "spot":    STRATEGY_SPOT,
+        "spot": STRATEGY_SPOT,
         "futures": STRATEGY_FUTURES,
-        "proxy":   STRATEGY_PROXY,
+        "proxy": STRATEGY_PROXY,
     }
     tracks = [_TRACK_MAP[t] for t in args.tracks] if args.tracks else list(ALL_TRACKS)
 
@@ -310,13 +307,14 @@ async def _run(args: argparse.Namespace) -> None:
             class _MockBroker:
                 async def get_ltp(self, keys: list[str]) -> dict[str, Decimal]:
                     return {k: Decimal("0.0") for k in keys}
+
                 async def get_option_chain(self, u, e):
                     return []
+
             broker = _MockBroker()
         else:
             logger.error(
-                "UPSTOX_ANALYTICS_TOKEN not set. "
-                "Use --dry-run for a dry-run without live prices."
+                "UPSTOX_ANALYTICS_TOKEN not set. Use --dry-run for a dry-run without live prices."
             )
             sys.exit(1)
 
@@ -342,9 +340,7 @@ async def _run(args: argparse.Namespace) -> None:
             logger.error("Live spot fetch failed: %s — pass --spot <price> to override.", exc)
             sys.exit(1)
         if nifty_spot <= 0:
-            logger.error(
-                "Live spot fetch returned 0. Pass --spot <price> to override."
-            )
+            logger.error("Live spot fetch returned 0. Pass --spot <price> to override.")
             sys.exit(1)
         logger.info("Live spot fetched: %.2f", float(nifty_spot))
 
@@ -378,13 +374,15 @@ async def _run(args: argparse.Namespace) -> None:
 
         pnl = snapshot.pnl
         overlay_total = sum(pnl.overlay_pnls.values()) if pnl.overlay_pnls else Decimal("0")
-        summary_rows.append({
-            "track": BASE_LABELS.get(track_name, track_name),
-            "base_pnl": pnl.base_pnl,
-            "overlay_pnl": overlay_total,
-            "net_pnl": pnl.net_pnl,
-            "return_on_nee": snapshot.return_on_nee,
-        })
+        summary_rows.append(
+            {
+                "track": BASE_LABELS.get(track_name, track_name),
+                "base_pnl": pnl.base_pnl,
+                "overlay_pnl": overlay_total,
+                "net_pnl": pnl.net_pnl,
+                "return_on_nee": snapshot.return_on_nee,
+            }
+        )
 
         # Collect LTP map from positions (needed for leg snapshot ltp field)
         trades = store.get_trades(track_name)
@@ -398,9 +396,7 @@ async def _run(args: argparse.Namespace) -> None:
             # Intentional: catch all snapshot generation errors.
             except Exception as exc:
                 logger.warning("LTP fetch for leg snapshots failed: %s", exc)
-        ltp_map: dict[str, Decimal] = {
-            k: Decimal(str(v)) for k, v in raw_ltps.items() if v
-        }
+        ltp_map: dict[str, Decimal] = {k: Decimal(str(v)) for k, v in raw_ltps.items() if v}
 
         # Telegram critical alert
         if snapshot.proxy_delta_alert and "CRITICAL" in snapshot.proxy_delta_alert:
@@ -423,7 +419,12 @@ async def _run(args: argparse.Namespace) -> None:
 
     # Print summary table at the TOP (as requested)
     if summary_rows:
-        print("\n" + format_track_summary(summary_rows, title=f"Comparison Summary — {snap_date}", is_dry_run=args.dry_run))
+        print(
+            "\n"
+            + format_track_summary(
+                summary_rows, title=f"Comparison Summary — {snap_date}", is_dry_run=args.dry_run
+            )
+        )
 
     # Print detailed blocks only if verbose
     if args.verbose:
@@ -449,11 +450,7 @@ async def _run(args: argparse.Namespace) -> None:
 def main() -> None:
     """CLI entry point."""
     log_level = os.getenv("LOG_LEVEL", "INFO").upper()
-    logging.basicConfig(
-        level=getattr(logging, log_level, logging.INFO),
-        format="%(asctime)s %(levelname)-8s %(name)s — %(message)s",
-        datefmt="%H:%M:%S",
-    )
+    pass
 
     parser = argparse.ArgumentParser(
         description=(
@@ -464,32 +461,47 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
-        "--date", default=None, type=date.fromisoformat, metavar="YYYY-MM-DD",
+        "--date",
+        default=None,
+        type=date.fromisoformat,
+        metavar="YYYY-MM-DD",
         help="Snapshot date (default: today).",
     )
     parser.add_argument(
-        "--spot", type=float, default=None, metavar="PRICE",
+        "--spot",
+        type=float,
+        default=None,
+        metavar="PRICE",
         help="Nifty 50 spot price (default: live fetch via UpstoxMarketClient).",
     )
     parser.add_argument(
-        "--dry-run", action=argparse.BooleanOptionalAction, default=True,
+        "--dry-run",
+        action=argparse.BooleanOptionalAction,
+        default=True,
         help="Print report only — do not write to DB (default: on).",
     )
     parser.add_argument(
-        "--verbose", action="store_true",
+        "--verbose",
+        action="store_true",
         help="Print detailed per-leg P&L tables and Greeks.",
     )
     parser.add_argument(
-        "--tracks", nargs="+", choices=["spot", "futures", "proxy"],
+        "--tracks",
+        nargs="+",
+        choices=["spot", "futures", "proxy"],
         metavar="TRACK",
         help="Restrict to specific tracks (default: all three).",
     )
     parser.add_argument(
-        "--db-path", type=Path, default=DEFAULT_DB_PATH,
+        "--db-path",
+        type=Path,
+        default=DEFAULT_DB_PATH,
         help=f"SQLite DB path (default: {DEFAULT_DB_PATH})",
     )
     parser.add_argument(
-        "--bod-path", type=Path, default=DEFAULT_BOD_PATH,
+        "--bod-path",
+        type=Path,
+        default=DEFAULT_BOD_PATH,
         help=f"BOD instruments JSON path (default: {DEFAULT_BOD_PATH})",
     )
     args = parser.parse_args()
@@ -498,4 +510,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()
     main()
