@@ -7,6 +7,14 @@
 
 ## Developer Tooling
 
+**No CD pipeline (2026-05-30, CI-5):** GitHub Actions CI handles lint, test, coverage, and security on every push/PR. Continuous deployment is deliberately omitted. NiftyShield is a live trading system — automated deploys without a manual review gate risk pushing broken logic to production during market hours. Deploy is a conscious, human-executed step: `git pull` on the host + cron restart. This decision is revisited only after a paper-trading phase validates strategy stability.
+
+**`pytest-xdist` parallel by default (2026-05-30, CI-2):** `addopts = "-n auto"` in `pyproject.toml` runs all tests in parallel. Serial fallback: `make test-serial`. Tests that write to `data/` use `tmp_path` and are isolation-safe. If a test fails only with `-n auto`, it is order/state-dependent — fix isolation before marking slow.
+
+**`pytest-randomly` seed logged in CI (2026-05-30, CI-3):** `make ci` passes `--randomly-seed=last` so the seed used in any failing CI run is visible in the Actions log and reproducible locally.
+
+**Coverage gate at 80% (2026-05-30, CI-4):** `fail_under = 80` in `[tool.coverage.report]`. Threshold chosen as the floor that forces meaningful test coverage without blocking incremental feature work. `irongut/CodeCoverageSummary` posts the coverage table to the GitHub Actions summary on every CI run.
+
 **mypy phased strict rollout (2026-05-29, DX-3):** `src/client.*` and `src/paper.*` run under strict mypy (`disallow_untyped_defs`, `disallow_any_generics`, `strict_equality`). All other modules use permissive defaults (`warn_return_any`, `warn_unused_ignores`, `no_implicit_optional` only). Rationale: `src/client/` owns the `BrokerClient` protocol boundary and all order/auth logic; `src/paper/` owns `Decimal` monetary fields and `PaperTrade` invariants — both are highest-risk for silent type drift. A wall of errors on day one would kill adoption; phased rollout lets the team fix errors module-by-module. Baseline error counts in `docs/plan/dev-foundation/dx-foundation/mypy_baseline.md`. Expanding strict coverage to other modules is a post-baseline task.
 
 **ruff over flake8/black (2026-05-29, DX-2):** Single tool replaces flake8, isort, and black. Line length 100 (wider than black's 88 — matches existing codebase style). `E501` ignored (ruff format handles line length). `B008` ignored (Pydantic validators call functions in default args by design).
