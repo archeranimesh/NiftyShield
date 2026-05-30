@@ -17,7 +17,7 @@
 
 - [x] **CH-3** — Create `GLOSSARY.md` at repo root (~40 domain terms) — **Claude** | SHA: 10a5d22
 - [ ] **CH-4** — Add `__all__` to all `src/` `__init__.py` files — **Antigravity**
-- [ ] **CH-5** — Create `docs/architecture.md` with Mermaid C4 container diagram — **Claude**
+- [x] **CH-5** — Create `docs/architecture.md` with Mermaid C4 container diagram — **Claude** | SHA: 37b77bc
 
 ## Runtime quality tasks
 
