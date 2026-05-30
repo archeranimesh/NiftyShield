@@ -1,7 +1,8 @@
 import logging
-import os
 
 import structlog
+
+from src.config import settings
 
 
 def add_logger_name(logger, method_name, event_dict):
@@ -23,10 +24,10 @@ def setup_logging(*, json: bool | None = None, level: str | None = None) -> None
                else defaults to "INFO".
     """
     if json is None:
-        json = os.getenv("UPSTOX_ENV", "test") == "prod"
+        json = settings.upstox_env == "prod"
 
     if level is None:
-        level = "DEBUG" if os.getenv("UPSTOX_DEBUG") == "1" else "INFO"
+        level = "DEBUG" if settings.upstox_debug else "INFO"
 
     shared_processors = [
         structlog.contextvars.merge_contextvars,

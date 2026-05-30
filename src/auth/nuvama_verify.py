@@ -15,6 +15,8 @@ from typing import Any
 
 from dotenv import load_dotenv
 
+from src.config import settings
+
 # APIConnect.py has a module-level logging.basicConfig(filename='apiconnect.log')
 # that fires at import time and creates a stray file in CWD (project root).
 # basicConfig is a no-op when handlers already exist, so adding NullHandler first
@@ -49,9 +51,9 @@ def load_api_connect(env_path: Path = Path(".env")) -> Any:
     """
     load_dotenv(env_path)
 
-    api_key = os.getenv("NUVAMA_API_KEY", "").strip()
-    api_secret = os.getenv("NUVAMA_API_SECRET", "").strip()
-    settings_file = os.getenv("NUVAMA_SETTINGS_FILE", DEFAULT_SETTINGS_FILE)
+    api_key = (settings.nuvama_api_key or "").strip()
+    api_secret = (settings.nuvama_api_secret or "").strip()
+    settings_file = settings.nuvama_settings_file
 
     if not api_key or not api_secret:
         raise ValueError(
@@ -83,6 +85,7 @@ def load_api_connect(env_path: Path = Path(".env")) -> Any:
     os.chdir(session_dir)
     try:
         import urllib3
+
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
         # download_contract=False: never download instruments.zip during a connectivity
@@ -97,6 +100,7 @@ def load_api_connect(env_path: Path = Path(".env")) -> Any:
             # Re-raise as DataFetchError so callers can log it cleanly without
             # the full 15-frame urllib3→requests traceback.
             from src.client.exceptions import DataFetchError
+
             raise DataFetchError(
                 f"Nuvama SDK init failed (network unavailable): {sdk_exc}"
             ) from sdk_exc

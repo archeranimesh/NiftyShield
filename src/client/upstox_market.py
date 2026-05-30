@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from datetime import date
 from decimal import Decimal
 from typing import Any
@@ -26,6 +25,7 @@ from typing import Any
 import requests
 
 from src.client.exceptions import DataFetchError, LTPFetchError
+from src.config import settings
 from src.models.options import OptionChain, OptionChainStrike, OptionLeg
 
 logger = logging.getLogger(__name__)
@@ -61,17 +61,19 @@ class UpstoxMarketClient:
             token: Upstox Analytics Token. Falls back to
                    UPSTOX_ANALYTICS_TOKEN env var if not provided.
         """
-        self.token = token or os.getenv("UPSTOX_ANALYTICS_TOKEN", "")
+        self.token = token or settings.upstox_analytics_token or ""
         if not self.token:
             raise ValueError(
                 "No token provided. Set UPSTOX_ANALYTICS_TOKEN in .env "
                 "or pass token= to constructor."
             )
         self._session = requests.Session()
-        self._session.headers.update({
-            "Accept": "application/json",
-            "Authorization": f"Bearer {self.token}",
-        })
+        self._session.headers.update(
+            {
+                "Accept": "application/json",
+                "Authorization": f"Bearer {self.token}",
+            }
+        )
 
     # ── Sync methods (used directly by CLI scripts) ──────────────
 
@@ -92,7 +94,7 @@ class UpstoxMarketClient:
 
         # Batch into chunks of 500
         for i in range(0, len(instruments), MAX_INSTRUMENTS_PER_REQUEST):
-            batch = instruments[i:i + MAX_INSTRUMENTS_PER_REQUEST]
+            batch = instruments[i : i + MAX_INSTRUMENTS_PER_REQUEST]
             batch_results = self._fetch_ltp_batch(batch)
             results.update(batch_results)
 
@@ -129,9 +131,7 @@ class UpstoxMarketClient:
         except requests.RequestException as e:
             raise DataFetchError(f"OHLC fetch failed: {e}") from e
 
-    def get_option_chain_sync(
-        self, instrument: str, expiry: str
-    ) -> dict[str, Any]:
+    def get_option_chain_sync(self, instrument: str, expiry: str) -> dict[str, Any]:
         """Fetch option chain for an underlying + expiry.
 
         Args:
@@ -161,13 +161,9 @@ class UpstoxMarketClient:
         """Async wrapper around get_ltp_sync."""
         return await asyncio.to_thread(self.get_ltp_sync, instruments)
 
-    async def get_option_chain(
-        self, instrument: str, expiry: str
-    ) -> dict[str, Any]:
+    async def get_option_chain(self, instrument: str, expiry: str) -> dict[str, Any]:
         """Async wrapper around get_option_chain_sync."""
-        return await asyncio.to_thread(
-            self.get_option_chain_sync, instrument, expiry
-        )
+        return await asyncio.to_thread(self.get_option_chain_sync, instrument, expiry)
 
     # ── Internal helpers ─────────────────────────────────────────
 
@@ -191,9 +187,7 @@ class UpstoxMarketClient:
 
         data = resp.json().get("data", {})
         if not data:
-            raise LTPFetchError(
-                f"LTP batch returned empty data for {len(instruments)} instruments"
-            )
+            raise LTPFetchError(f"LTP batch returned empty data for {len(instruments)} instruments")
 
         results: dict[str, Decimal] = {}
         for _resp_key, quote in data.items():

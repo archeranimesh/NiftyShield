@@ -1,6 +1,5 @@
 """OAuth login flow for Upstox API. Opens browser, captures auth code, exchanges for token."""
 
-import os
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
@@ -8,11 +7,13 @@ from urllib.parse import parse_qs, urlparse
 import upstox_client
 from dotenv import load_dotenv
 
+from src.config import settings
+
 load_dotenv()
 
-API_KEY = os.getenv("UPSTOX_API_KEY")
-API_SECRET = os.getenv("UPSTOX_API_SECRET")
-REDIRECT_URI = os.getenv("UPSTOX_REDIRECT_URI")
+API_KEY = settings.upstox_api_key
+API_SECRET = settings.upstox_api_secret
+REDIRECT_URI = settings.upstox_redirect_uri
 
 AUTH_URL = (
     f"https://api.upstox.com/v2/login/authorization/dialog"
@@ -71,7 +72,7 @@ def save_token(token: str):
 
     # Remove existing token line if present
     lines = content.splitlines(keepends=True)
-    lines = [l for l in lines if not l.startswith("UPSTOX_ACCESS_TOKEN=")]
+    lines = [line for line in lines if not line.startswith("UPSTOX_ACCESS_TOKEN=")]
 
     lines.append(f"UPSTOX_ACCESS_TOKEN={token}\n")
 

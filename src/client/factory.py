@@ -8,12 +8,12 @@ never import concrete client classes directly.
 
 from __future__ import annotations
 
-import os
 from typing import Any, Final
 
 from src.client.mock_client import MockBrokerClient
 from src.client.protocol import BrokerClient
 from src.client.upstox_live import UpstoxLiveClient
+from src.config import settings
 
 VALID_ENVS: Final = ("prod", "sandbox", "test")
 
@@ -50,7 +50,7 @@ def create_client(env: str, **kwargs: Any) -> BrokerClient:
         return UpstoxLiveClient(token=kwargs.get("token"))
 
     if env == "sandbox":
-        token = kwargs.get("token") or os.getenv("UPSTOX_SANDBOX_TOKEN")
+        token = kwargs.get("token") or settings.upstox_sandbox_token
         return UpstoxLiveClient(token=token)
 
     if env == "test":
@@ -60,4 +60,3 @@ def create_client(env: str, **kwargs: Any) -> BrokerClient:
         )
 
     raise ValueError(f"Unknown env '{env}'. Valid values: {VALID_ENVS}")
-

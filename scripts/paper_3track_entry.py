@@ -28,7 +28,6 @@ Diagnostics:
 """
 
 import math
-import os
 import sys
 from dataclasses import dataclass
 from datetime import date
@@ -38,6 +37,7 @@ from typing import Any
 
 import structlog
 
+from src.config import settings
 from src.utils.logging import setup_logging
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -663,7 +663,7 @@ def print_preview(p: LivePrices, gates: dict[str, str], confirmed: bool) -> None
 def main() -> None:
     """CLI entry point."""
     # Logging setup: respect LOG_LEVEL env var
-    log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+    log_level = settings.log_level.upper()
     pass
 
     import argparse

@@ -27,10 +27,11 @@ Design notes:
 from __future__ import annotations
 
 import logging
-import os
 import re
 
 import aiohttp
+
+from src.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -89,8 +90,7 @@ class TelegramNotifier:
         """
         if self._messages_sent >= self._budget:
             logger.warning(
-                "Telegram notification budget exceeded (%d messages). Suppressing.",
-                self._budget
+                "Telegram notification budget exceeded (%d messages). Suppressing.", self._budget
             )
             return False
 
@@ -110,10 +110,7 @@ class TelegramNotifier:
                     resp.raise_for_status()
                     data = await resp.json()
                     if not data.get("ok"):
-                        logger.warning(
-                            "Telegram API error: %s",
-                            data.get("description")
-                        )
+                        logger.warning("Telegram API error: %s", data.get("description"))
                         return False
                     return True
         except Exception as exc:  # Intentional: isolate all API failures
@@ -132,16 +129,12 @@ def build_notifier() -> TelegramNotifier | None:
     Returns:
         Configured TelegramNotifier, or None if env vars are not set.
     """
-    token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
-    chat_id = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+    token = (settings.telegram_bot_token or "").strip()
+    chat_id = (settings.telegram_chat_id or "").strip()
     if not token or not chat_id:
         return None
 
-    try:
-        budget = int(os.environ.get("TELEGRAM_MESSAGE_BUDGET", "10"))
-    except ValueError:
-        logger.warning("Invalid TELEGRAM_MESSAGE_BUDGET. Defaulting to 10.")
-        budget = 10
+    budget = settings.telegram_message_budget
 
     return TelegramNotifier(bot_token=token, chat_id=chat_id, budget=budget)
 

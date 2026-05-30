@@ -37,13 +37,13 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import os
 import sys
 from datetime import date
 from pathlib import Path
 
 import structlog
 
+from src.config import settings
 from src.utils.logging import setup_logging
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -111,7 +111,7 @@ async def _run(args: argparse.Namespace) -> int:
 
     snap_date = args.date or date.today()
 
-    env = os.environ.get("UPSTOX_ENV", "prod")
+    env = settings.upstox_env
     client = create_client(env=env)
     store = PaperStore(args.db_path)
     tracker = PaperTracker(store=store, market=client)

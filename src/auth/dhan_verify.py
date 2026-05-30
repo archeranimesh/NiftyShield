@@ -7,12 +7,13 @@ Usage:
     python -m src.auth.dhan_verify
 """
 
-import os
 from pathlib import Path
 from typing import Any
 
 import requests
 from dotenv import load_dotenv
+
+from src.config import settings
 
 DHAN_API_BASE = "https://api.dhan.co/v2"
 
@@ -31,13 +32,12 @@ def load_dhan_credentials(env_path: Path = Path(".env")) -> tuple[str, str]:
     """
     load_dotenv(env_path)
 
-    client_id = os.getenv("DHAN_CLIENT_ID", "").strip()
-    access_token = os.getenv("DHAN_ACCESS_TOKEN", "").strip()
+    client_id = (settings.dhan_client_id or "").strip()
+    access_token = (settings.dhan_access_token or "").strip()
 
     if not client_id:
         raise ValueError(
-            "DHAN_CLIENT_ID must be set in .env. "
-            "Run 'python -m src.auth.dhan_login' first."
+            "DHAN_CLIENT_ID must be set in .env. Run 'python -m src.auth.dhan_login' first."
         )
     if not access_token:
         raise ValueError(
@@ -120,11 +120,13 @@ def parse_holdings(raw_holdings: list[dict[str, Any]]) -> list[dict[str, Any]]:
     result = []
     for h in raw_holdings:
         try:
-            result.append({
-                "trading_symbol": h.get("tradingSymbol", "UNKNOWN").strip(),
-                "total_qty": h.get("totalQty", 0),
-                "avg_cost_price": h.get("avgCostPrice", 0.0),
-            })
+            result.append(
+                {
+                    "trading_symbol": h.get("tradingSymbol", "UNKNOWN").strip(),
+                    "total_qty": h.get("totalQty", 0),
+                    "avg_cost_price": h.get("avgCostPrice", 0.0),
+                }
+            )
         except (AttributeError, TypeError):
             # Skip malformed entries
             continue

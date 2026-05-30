@@ -17,13 +17,13 @@ Environment variables:
 
 from __future__ import annotations
 
-import os
 import sys
 from datetime import date, datetime, timezone
 from pathlib import Path
 
 import structlog
 
+from src.config import settings
 from src.utils.logging import setup_logging
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -63,10 +63,10 @@ def main() -> int:
 
     snapshot_ts = datetime.now(timezone.utc)
 
-    base_dir = os.environ.get("CHAIN_SNAPSHOT_DIR", _DEFAULT_SNAPSHOT_DIR)
+    base_dir = settings.chain_snapshot_dir
     writer = ChainWriter(base_dir)
 
-    bod_path = Path(os.environ.get("BOD_INSTRUMENTS_PATH", str(_DEFAULT_BOD_PATH)))
+    bod_path = Path(settings.bod_instruments_path)
     try:
         lookup = InstrumentLookup.from_file(bod_path)
     except (FileNotFoundError, OSError) as exc:

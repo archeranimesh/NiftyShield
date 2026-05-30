@@ -17,6 +17,8 @@ from decimal import Decimal
 
 import structlog
 
+from src.config import settings
+
 # Pure-computation helper only — no I/O on import.
 from src.market_calendar.holidays import is_trading_day
 from src.utils.logging import setup_logging
@@ -113,7 +115,7 @@ if __name__ == "__main__":
 
     async def run_standalone():
         load_dotenv()
-        env = os.getenv("UPSTOX_ENV", "prod")
+        env = settings.upstox_env
         client = create_client(env)
         try:
             prices = await client.get_ltp(["NSE_INDEX|Nifty 50", "NSE_INDEX|India VIX"])

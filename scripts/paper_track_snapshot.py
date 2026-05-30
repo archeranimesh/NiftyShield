@@ -3,11 +3,12 @@
 
 import argparse
 import asyncio
-import os
 import sys
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+
+from src.config import settings
 
 # Ensure src/ is in PYTHONPATH
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -113,8 +114,8 @@ async def main() -> None:
             raise
     lookup = InstrumentLookup.from_file(DEFAULT_BOD_PATH)
     proxy_monitor = ProxyDeltaMonitor(store)
-    bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
-    chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
+    bot_token = settings.telegram_bot_token or ""
+    chat_id = settings.telegram_chat_id or ""
     if bot_token and chat_id:
         notifier = TelegramNotifier(bot_token, chat_id)
     else:

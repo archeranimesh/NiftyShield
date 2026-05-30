@@ -10,7 +10,9 @@ Usage::
     token = settings.upstox_analytics_token
 """
 
-from pydantic import Field
+from typing import Any
+
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -82,6 +84,14 @@ class Settings(BaseSettings):
         description="Max Telegram messages per cron run before suppression.",
     )
 
+    @field_validator("telegram_message_budget", mode="before")
+    @classmethod
+    def validate_telegram_message_budget(cls, v):
+        try:
+            return int(v)
+        except (ValueError, TypeError):
+            return 10
+
     # ------------------------------------------------------------------
     # Nuvama
     # ------------------------------------------------------------------
@@ -150,4 +160,43 @@ class Settings(BaseSettings):
 # ---------------------------------------------------------------------------
 # Module-level singleton — ``from src.config import settings``
 # ---------------------------------------------------------------------------
-settings = Settings()
+class _DynamicSettings:
+    """A wrapper around Settings that automatically re-instantiates it if os.environ changes.
+
+    This ensures that mock environments in unit tests and dynamic dotenv loading
+    in scripts/ are transparently supported without stale cached values.
+    """
+
+    _cached_settings: Settings | None
+    _environ_hash: int | None
+
+    def __init__(self) -> None:
+        self._cached_settings = None
+        self._environ_hash = None
+
+    def _get_settings(self) -> Settings:
+        import os
+        import sys
+
+        # frozenset of os.environ is stable and hashable since all keys/values are strings.
+        current_hash = hash(frozenset(os.environ.items()))
+        if self._cached_settings is None or self._environ_hash != current_hash:
+            kwargs: dict[str, Any] = {}
+            if os.environ.get("UPSTOX_ENV", "test") == "test" or "pytest" in sys.modules:
+                kwargs["_env_file"] = None
+            self._cached_settings = Settings(**kwargs)
+            self._environ_hash = current_hash
+        assert self._cached_settings is not None
+        return self._cached_settings
+
+    def __getattr__(self, name: str):
+        return getattr(self._get_settings(), name)
+
+    def __dir__(self) -> list[str]:
+        return dir(self._get_settings())
+
+    def __repr__(self) -> str:
+        return repr(self._get_settings())
+
+
+settings: Any = _DynamicSettings()

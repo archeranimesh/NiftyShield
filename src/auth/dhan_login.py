@@ -15,11 +15,12 @@ Usage:
     python -m src.auth.dhan_login
 """
 
-import os
 import webbrowser
 from pathlib import Path
 
 from dotenv import load_dotenv, set_key
+
+from src.config import settings
 
 DHAN_WEB_URL = "https://web.dhan.co"
 
@@ -73,7 +74,7 @@ def login(env_path: Path = Path(".env")) -> None:
     """
     load_dotenv(env_path)
 
-    client_id = os.getenv("DHAN_CLIENT_ID", "").strip()
+    client_id = (settings.dhan_client_id or "").strip()
     if not client_id:
         raise ValueError(
             "DHAN_CLIENT_ID must be set in .env before running login.\n"

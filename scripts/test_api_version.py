@@ -7,15 +7,16 @@ Usage:
     python scripts/test_api_version.py
 """
 
-import os
 import sys
 
 import requests
 from dotenv import load_dotenv
 
+from src.config import settings
+
 load_dotenv()
 
-TOKEN = os.getenv("UPSTOX_ANALYTICS_TOKEN")
+TOKEN = settings.upstox_analytics_token
 if not TOKEN:
     print("Error: UPSTOX_ANALYTICS_TOKEN not set in .env")
     sys.exit(1)

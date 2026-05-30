@@ -36,7 +36,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import os
 import re
 import sys
 from dataclasses import dataclass
@@ -46,6 +45,7 @@ from pathlib import Path
 
 import structlog
 
+from src.config import settings
 from src.utils.logging import setup_logging
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -544,7 +544,7 @@ def _print_roll_report(results: list[RollResult], roll_date: date, dry_run: bool
 
 async def _run(args: argparse.Namespace) -> None:
     """Async entry point — detect and execute overlay rolls."""
-    log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
+    log_level = settings.log_level.upper()
     pass
 
     roll_date: date = args.date or date.today()
@@ -568,7 +568,7 @@ async def _run(args: argparse.Namespace) -> None:
     store = PaperStore(args.db_path)
     lookup = InstrumentLookup(args.bod_path)
 
-    token = os.environ.get("UPSTOX_ANALYTICS_TOKEN", "")
+    token = settings.upstox_analytics_token or ""
     if not token and not dry_run:
         print("ERROR: UPSTOX_ANALYTICS_TOKEN not set.", file=sys.stderr)
         sys.exit(1)

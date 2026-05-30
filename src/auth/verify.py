@@ -1,16 +1,16 @@
 """Quick verification that the access token works."""
 
-import os
-
 import upstox_client
 from dotenv import load_dotenv
+
+from src.config import settings
 
 load_dotenv()
 
 
 def main():
     configuration = upstox_client.Configuration()
-    configuration.access_token = os.getenv("UPSTOX_ACCESS_TOKEN")
+    configuration.access_token = settings.upstox_access_token
 
     api = upstox_client.UserApi(upstox_client.ApiClient(configuration))
     response = api.get_profile(api_version="2.0")

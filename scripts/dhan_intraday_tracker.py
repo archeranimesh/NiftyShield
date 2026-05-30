@@ -43,7 +43,6 @@ def main(nifty_spot: float = 0.0, india_vix: float = 0.0) -> int:
     """
     # All I/O-triggering imports deferred so this module is importable
     # without a live .env. Follows the daily_snapshot.py pattern.
-    import os
     from datetime import timezone
     from pathlib import Path
 
@@ -85,10 +84,13 @@ def main(nifty_spot: float = 0.0, india_vix: float = 0.0) -> int:
         )
         return 0
 
-    # ── Credentials + store ───────────────────────────────────────
-    client_id = os.environ["DHAN_CLIENT_ID"]
-    access_token = os.environ["DHAN_ACCESS_TOKEN"]
-    db_path = Path(os.getenv("DB_PATH", "data/portfolio/portfolio.sqlite"))
+    from src.config import settings
+
+    if not settings.dhan_client_id or not settings.dhan_access_token:
+        raise KeyError("DHAN_CLIENT_ID and DHAN_ACCESS_TOKEN must be set")
+    client_id = settings.dhan_client_id
+    access_token = settings.dhan_access_token
+    db_path = Path(settings.db_path)
     ts = datetime.now(tz=timezone.utc)
 
     try:

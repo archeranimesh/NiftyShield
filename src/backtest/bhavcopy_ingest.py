@@ -1,7 +1,6 @@
 import calendar
 import csv
 import logging
-import os
 import re
 import subprocess
 import zipfile
@@ -14,6 +13,8 @@ import pyarrow.parquet as pq
 import requests
 from pydantic import BaseModel, Field
 
+from src.config import settings
+
 logger = logging.getLogger(__name__)
 
 # UDiFF (Dec 2024+) instrument type codes → canonical instrument strings
@@ -23,6 +24,7 @@ _UDIFF_FI_MAP: dict[str, str] = {
     "IDF": "FUTIDX",
     "SDF": "FUTSTK",
 }
+
 
 class BhavRecord(BaseModel, frozen=True):
     trade_date: date
@@ -36,7 +38,9 @@ class BhavRecord(BaseModel, frozen=True):
     high: Decimal
     low: Decimal
     close: Decimal
-    settle_price: Decimal  # Note: NSE bhavcopy settle_price is a 30-min VWAP (3:00-3:30 PM), not EOD LTP.
+    settle_price: (
+        Decimal  # Note: NSE bhavcopy settle_price is a 30-min VWAP (3:00-3:30 PM), not EOD LTP.
+    )
     volume: int
     oi: int
 
@@ -64,34 +68,38 @@ def parse_option_symbol(symbol: str) -> dict[str, str | date | Decimal]:
 
     core = symbol[:-2]
 
-    first_digit_match = re.search(r'\d', core)
+    first_digit_match = re.search(r"\d", core)
     if not first_digit_match:
         raise ValueError(f"No expiry token found in symbol: {symbol}")
 
-    underlying = core[:first_digit_match.start()]
-    rest = core[first_digit_match.start():]
+    underlying = core[: first_digit_match.start()]
+    rest = core[first_digit_match.start() :]
 
     # Try YYMDD (weekly)
-    m_weekly = re.match(r'^(\d{2}[1-9OND]\d{2})(\d+)$', rest)
+    m_weekly = re.match(r"^(\d{2}[1-9OND]\d{2})(\d+)$", rest)
     if m_weekly and Decimal(m_weekly.group(2)) > 0:
         expiry_token, strike_str = m_weekly.groups()
         yy = int(expiry_token[:2])
         m_char = expiry_token[2]
         dd = int(expiry_token[3:])
         year = 2000 + yy
-        if m_char == 'O': month = 10
-        elif m_char == 'N': month = 11
-        elif m_char == 'D': month = 12
-        else: month = int(m_char)
+        if m_char == "O":
+            month = 10
+        elif m_char == "N":
+            month = 11
+        elif m_char == "D":
+            month = 12
+        else:
+            month = int(m_char)
         return {
             "underlying": underlying,
             "expiry": date(year, month, dd),
             "strike": Decimal(strike_str),
-            "option_type": option_type
+            "option_type": option_type,
         }
 
     # Try YYMON (monthly)
-    m_monthly = re.match(r'^(\d{2}[A-Z]{3})(\d+)$', rest)
+    m_monthly = re.match(r"^(\d{2}[A-Z]{3})(\d+)$", rest)
     if m_monthly:
         expiry_token, strike_str = m_monthly.groups()
         yy = int(expiry_token[:2])
@@ -102,10 +110,11 @@ def parse_option_symbol(symbol: str) -> dict[str, str | date | Decimal]:
             "underlying": underlying,
             "expiry": get_last_thursday(year, month),
             "strike": Decimal(strike_str),
-            "option_type": option_type
+            "option_type": option_type,
         }
 
     raise ValueError(f"Unrecognized expiry format in symbol: {symbol}")
+
 
 def _parse_legacy(
     reader: csv.DictReader,
@@ -128,25 +137,27 @@ def _parse_legacy(
             continue
         trade_date = datetime.strptime(row["TIMESTAMP"], "%d-%b-%Y").date()
         expiry = datetime.strptime(row["EXPIRY_DT"], "%d-%b-%Y").date()
-        records.append(BhavRecord(
-            trade_date=trade_date,
-            symbol=sym,
-            underlying=sym,
-            instrument=instrument,
-            expiry=expiry,
-            strike=strike,
-            option_type=opt_type,
-            open=Decimal(row["OPEN"]),
-            high=Decimal(row["HIGH"]),
-            low=Decimal(row["LOW"]),
-            close=Decimal(row["CLOSE"]),
-            # Note: SETTLE_PR in legacy bhavcopy is the 30-minute VWAP settlement price.
-            # IV reconstruction using settle_price will diverge from live Greeks on volatile close days.
-            # Refer to T1-B.1 in docs/reviews/audit_2026-05-15.md.
-            settle_price=Decimal(row["SETTLE_PR"]),
-            volume=int(row["CONTRACTS"]),
-            oi=int(row["OPEN_INT"]),
-        ))
+        records.append(
+            BhavRecord(
+                trade_date=trade_date,
+                symbol=sym,
+                underlying=sym,
+                instrument=instrument,
+                expiry=expiry,
+                strike=strike,
+                option_type=opt_type,
+                open=Decimal(row["OPEN"]),
+                high=Decimal(row["HIGH"]),
+                low=Decimal(row["LOW"]),
+                close=Decimal(row["CLOSE"]),
+                # Note: SETTLE_PR in legacy bhavcopy is the 30-minute VWAP settlement price.
+                # IV reconstruction using settle_price will diverge from live Greeks on volatile close days.
+                # Refer to T1-B.1 in docs/reviews/audit_2026-05-15.md.
+                settle_price=Decimal(row["SETTLE_PR"]),
+                volume=int(row["CONTRACTS"]),
+                oi=int(row["OPEN_INT"]),
+            )
+        )
     return records
 
 
@@ -177,29 +188,33 @@ def _parse_udiff(
             continue
         trade_date = date.fromisoformat(row["TradDt"].strip())
         expiry = date.fromisoformat(row["XpryDt"].strip())
-        records.append(BhavRecord(
-            trade_date=trade_date,
-            symbol=sym,
-            underlying=sym,
-            instrument=instrument,
-            expiry=expiry,
-            strike=strike,
-            option_type=opt_type,
-            open=Decimal(row["OpnPric"]),
-            high=Decimal(row["HghPric"]),
-            low=Decimal(row["LwPric"]),
-            close=Decimal(row["ClsPric"]),
-            # Note: SttlmPric in UDiFF bhavcopy is the 30-minute VWAP settlement price.
-            # IV reconstruction using settle_price will diverge from live Greeks on volatile close days.
-            # Refer to T1-B.1 in docs/reviews/audit_2026-05-15.md.
-            settle_price=Decimal(row["SttlmPric"]),
-            volume=int(row["TtlTradgVol"]),
-            oi=int(row["OpnIntrst"]),
-        ))
+        records.append(
+            BhavRecord(
+                trade_date=trade_date,
+                symbol=sym,
+                underlying=sym,
+                instrument=instrument,
+                expiry=expiry,
+                strike=strike,
+                option_type=opt_type,
+                open=Decimal(row["OpnPric"]),
+                high=Decimal(row["HghPric"]),
+                low=Decimal(row["LwPric"]),
+                close=Decimal(row["ClsPric"]),
+                # Note: SttlmPric in UDiFF bhavcopy is the 30-minute VWAP settlement price.
+                # IV reconstruction using settle_price will diverge from live Greeks on volatile close days.
+                # Refer to T1-B.1 in docs/reviews/audit_2026-05-15.md.
+                settle_price=Decimal(row["SttlmPric"]),
+                volume=int(row["TtlTradgVol"]),
+                oi=int(row["OpnIntrst"]),
+            )
+        )
     return records
 
 
-def parse_bhavcopy(csv_path: Path, underlying: str = "NIFTY", include_futures: bool = False) -> list[BhavRecord]:
+def parse_bhavcopy(
+    csv_path: Path, underlying: str = "NIFTY", include_futures: bool = False
+) -> list[BhavRecord]:
     """Parse an NSE F&O Bhavcopy ZIP and return matching BhavRecords.
 
     Detects legacy vs UDiFF format automatically by inspecting CSV headers.
@@ -230,10 +245,7 @@ _NSE_HEADERS = {
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/134.0.0.0 Safari/537.36"
     ),
-    "accept": (
-        "text/html,application/xhtml+xml,application/xml;"
-        "q=0.9,image/webp,*/*;q=0.8"
-    ),
+    "accept": ("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"),
     "accept-language": "en-US,en;q=0.9",
     "accept-encoding": "gzip, deflate, br",
     "Referer": "https://www.nseindia.com/",
@@ -251,7 +263,7 @@ def _build_session() -> requests.Session:
     """Build a requests.Session with NSE headers and optional cookie injection."""
     session = requests.Session()
     session.headers.update(_NSE_HEADERS)
-    nse_cookie = os.environ.get("NSE_COOKIE", "").strip()
+    nse_cookie = (settings.nse_cookie or "").strip()
     if nse_cookie:
         session.headers["Cookie"] = nse_cookie
         logger.info("NSE_COOKIE found in env — using browser session cookie")
@@ -356,38 +368,39 @@ def write_to_parquet(records: list[BhavRecord], month_date: date, dest_dir: Path
     data = [r.model_dump() for r in records]
 
     # Schema must strictly use decimal128(18,4) for price fields to prevent float64 inference
-    schema = pa.schema([
-        ('trade_date', pa.date32()),
-        ('symbol', pa.string()),
-        ('underlying', pa.string()),
-        ('instrument', pa.string()),
-        ('expiry', pa.date32()),
-        ('strike', pa.decimal128(18, 4)),
-        ('option_type', pa.string()),
-        ('open', pa.decimal128(18, 4)),
-        ('high', pa.decimal128(18, 4)),
-        ('low', pa.decimal128(18, 4)),
-        ('close', pa.decimal128(18, 4)),
-        ('settle_price', pa.decimal128(18, 4)),
-        ('volume', pa.int64()),
-        ('oi', pa.int64()),
-    ])
+    schema = pa.schema(
+        [
+            ("trade_date", pa.date32()),
+            ("symbol", pa.string()),
+            ("underlying", pa.string()),
+            ("instrument", pa.string()),
+            ("expiry", pa.date32()),
+            ("strike", pa.decimal128(18, 4)),
+            ("option_type", pa.string()),
+            ("open", pa.decimal128(18, 4)),
+            ("high", pa.decimal128(18, 4)),
+            ("low", pa.decimal128(18, 4)),
+            ("close", pa.decimal128(18, 4)),
+            ("settle_price", pa.decimal128(18, 4)),
+            ("volume", pa.int64()),
+            ("oi", pa.int64()),
+        ]
+    )
 
     metadata = schema.metadata or {}
     try:
         git_commit = subprocess.check_output(
-            ["git", "rev-parse", "HEAD"],
-            text=True,
-            stderr=subprocess.DEVNULL,
-            timeout=2
+            ["git", "rev-parse", "HEAD"], text=True, stderr=subprocess.DEVNULL, timeout=2
         ).strip()
     except Exception:
         git_commit = "unknown"
 
-    metadata.update({
-        b"git_commit": git_commit.encode('utf-8'),
-        b"run_timestamp": datetime.now(timezone.utc).isoformat().encode('utf-8')
-    })
+    metadata.update(
+        {
+            b"git_commit": git_commit.encode("utf-8"),
+            b"run_timestamp": datetime.now(timezone.utc).isoformat().encode("utf-8"),
+        }
+    )
     schema = schema.with_metadata(metadata)
 
     new_table = pa.Table.from_pylist(data, schema=schema)
@@ -396,8 +409,8 @@ def write_to_parquet(records: list[BhavRecord], month_date: date, dest_dir: Path
         existing_table = pq.read_table(parquet_path)
 
         # Idempotency check: if trade_date already in existing data, skip append
-        existing_dates = set(existing_table.column('trade_date').to_pylist())
-        new_dates = set(new_table.column('trade_date').to_pylist())
+        existing_dates = set(existing_table.column("trade_date").to_pylist())
+        new_dates = set(new_table.column("trade_date").to_pylist())
 
         # If any of the new dates are already in the existing dates, we assume it's already written.
         # Note: This batch behavior is conservative — if any date in a batch overlaps, the whole
@@ -412,4 +425,3 @@ def write_to_parquet(records: list[BhavRecord], month_date: date, dest_dir: Path
         final_table = new_table
 
     pq.write_table(final_table, parquet_path)
-

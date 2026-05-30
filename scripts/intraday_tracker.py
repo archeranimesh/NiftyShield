@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import os
 
+from src.config import settings
 from src.utils.logging import setup_logging
 
 
@@ -49,7 +50,7 @@ async def main() -> int:
     nifty_spot = 0.0
     india_vix = 0.0
     try:
-        env = os.getenv("UPSTOX_ENV", "prod")
+        env = settings.upstox_env
         client = create_client(env)
         NIFTY_KEY = "NSE_INDEX|Nifty 50"
         VIX_KEY = "NSE_INDEX|India VIX"

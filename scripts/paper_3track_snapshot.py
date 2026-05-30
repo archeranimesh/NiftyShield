@@ -30,7 +30,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import os
 import sys
 from datetime import date
 from decimal import Decimal
@@ -38,6 +37,7 @@ from pathlib import Path
 
 import structlog
 
+from src.config import settings
 from src.utils.logging import setup_logging
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -322,8 +322,8 @@ async def _run(args: argparse.Namespace) -> None:
     proxy_monitor = ProxyDeltaMonitor(store)
 
     # Telegram notifier (optional)
-    bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
-    chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
+    bot_token = settings.telegram_bot_token or ""
+    chat_id = settings.telegram_chat_id or ""
     notifier = TelegramNotifier(bot_token, chat_id) if (bot_token and chat_id) else None
 
     # Fetch Nifty spot — from --spot override if provided, else live LTP fetch.
@@ -449,7 +449,7 @@ async def _run(args: argparse.Namespace) -> None:
 
 def main() -> None:
     """CLI entry point."""
-    log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+    log_level = settings.log_level.upper()
     pass
 
     parser = argparse.ArgumentParser(

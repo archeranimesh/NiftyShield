@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import os
 import re
 import sys
 from dataclasses import dataclass
@@ -35,6 +34,7 @@ from pathlib import Path
 
 import structlog
 
+from src.config import settings
 from src.utils.logging import setup_logging
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -428,12 +428,12 @@ async def _run(args: argparse.Namespace) -> None:
     store = PaperStore(args.db_path)
     lookup = InstrumentLookup(args.bod_path)
 
-    env = os.environ.get("UPSTOX_ENV", "prod")
+    env = settings.upstox_env
     token = ""
     if env in ("prod", "sandbox"):
-        token_env = "UPSTOX_ANALYTICS_TOKEN" if env == "prod" else "UPSTOX_SANDBOX_TOKEN"
-        token = os.environ.get(token_env, "")
+        token = settings.upstox_analytics_token if env == "prod" else settings.upstox_sandbox_token
         if not token and not dry_run:
+            token_env = "UPSTOX_ANALYTICS_TOKEN" if env == "prod" else "UPSTOX_SANDBOX_TOKEN"
             print(f"ERROR: {token_env} not set.", file=sys.stderr)
             sys.exit(1)
 

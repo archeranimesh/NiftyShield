@@ -33,7 +33,6 @@ Diagnostics:
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from dataclasses import dataclass
 from datetime import date
@@ -43,6 +42,7 @@ from typing import Any
 
 import structlog
 
+from src.config import settings
 from src.utils.logging import setup_logging
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -701,7 +701,7 @@ async def _run(args: argparse.Namespace) -> None:
 
 def main() -> None:
     """CLI entry point."""
-    log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+    log_level = settings.log_level.upper()
     pass
 
     parser = argparse.ArgumentParser(

@@ -8,7 +8,6 @@ pandas Series for IVR computation.
 from __future__ import annotations
 
 import logging
-import os
 from datetime import date, timedelta
 from pathlib import Path
 from urllib.parse import quote
@@ -17,6 +16,7 @@ import pandas as pd
 import requests
 
 from src.client.exceptions import DataFetchError
+from src.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -70,12 +70,9 @@ def ingest_vix_from_api(
     Raises:
         DataFetchError: On HTTP errors or API failures.
     """
-    token = token or os.getenv("UPSTOX_ANALYTICS_TOKEN")
+    token = token or settings.upstox_analytics_token
     if not token:
-        raise ValueError(
-            "Upstox token not provided and "
-            "UPSTOX_ANALYTICS_TOKEN env var not set."
-        )
+        raise ValueError("Upstox token not provided and UPSTOX_ANALYTICS_TOKEN env var not set.")
 
     # Resumability check: find the gap
     existing_series = load_vix_series(out_dir)
@@ -91,20 +88,13 @@ def ingest_vix_from_api(
 
     instrument_key = "NSE_INDEX|India VIX"
     encoded_key = quote(instrument_key, safe="")
-    url = (
-        f"https://api.upstox.com/v2/historical-candle/{encoded_key}/"
-        f"day/{to_date.isoformat()}"
-    )
+    url = f"https://api.upstox.com/v2/historical-candle/{encoded_key}/day/{to_date.isoformat()}"
     params = {"from_date": from_date.isoformat()}
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
 
-    logger.debug(
-        "Fetching VIX candles from_date=%s to_date=%s", from_date, to_date
-    )
+    logger.debug("Fetching VIX candles from_date=%s to_date=%s", from_date, to_date)
     try:
-        response = requests.get(
-            url, params=params, headers=headers, timeout=10
-        )
+        response = requests.get(url, params=params, headers=headers, timeout=10)
         response.raise_for_status()
     except requests.RequestException as e:
         raise DataFetchError(f"VIX candle fetch failed: {e}") from e
@@ -153,7 +143,7 @@ def fetch_vix_latest(token: str | None = None) -> float | None:
         Most recent VIX close, or None if the token is missing, the network
         call fails, or the API returns no candles.
     """
-    token = token or os.getenv("UPSTOX_ANALYTICS_TOKEN")
+    token = token or settings.upstox_analytics_token
     if not token:
         logger.warning("UPSTOX_ANALYTICS_TOKEN not set — cannot fetch live VIX.")
         return None
@@ -162,10 +152,7 @@ def fetch_vix_latest(token: str | None = None) -> float | None:
     from_date = today - timedelta(days=5)
     instrument_key = "NSE_INDEX|India VIX"
     encoded_key = quote(instrument_key, safe="")
-    url = (
-        f"https://api.upstox.com/v2/historical-candle/{encoded_key}/"
-        f"day/{today.isoformat()}"
-    )
+    url = f"https://api.upstox.com/v2/historical-candle/{encoded_key}/day/{today.isoformat()}"
     params = {"from_date": from_date.isoformat()}
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
 
@@ -225,12 +212,8 @@ def _merge_and_save(df: pd.DataFrame, out_dir: Path) -> int:
         if parquet_path.exists():
             existing = pd.read_parquet(parquet_path)
             # Filter incoming rows to only those not already present
-            combined = pd.concat(
-                [existing, group[["date", "open", "high", "low", "close"]]]
-            )
-            combined = combined.drop_duplicates(subset=["date"]).sort_values(
-                "date"
-            )
+            combined = pd.concat([existing, group[["date", "open", "high", "low", "close"]]])
+            combined = combined.drop_duplicates(subset=["date"]).sort_values("date")
             added = len(combined) - len(existing)
             if added > 0:
                 combined.to_parquet(parquet_path)

@@ -37,12 +37,12 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import os
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 
+from src.config import settings
 from src.market_calendar.holidays import is_trading_day, prev_trading_day
 from src.models.portfolio import DailySnapshot, Strategy
 from src.portfolio.formatting import (
@@ -390,7 +390,7 @@ async def _async_main(snap_date: date, db_path: Path, dhan_trade_count: int = 0)
 
         # ── Initialize market client ─────────────────────────────────
         try:
-            env = os.getenv("UPSTOX_ENV", "prod")
+            env = settings.upstox_env
             client = create_client(env)
         except ValueError as e:
             print(f"  ERROR: {e}")
@@ -656,8 +656,10 @@ async def _async_main(snap_date: date, db_path: Path, dhan_trade_count: int = 0)
                     parse_option_positions,
                 )
 
-                _dhan_client_id = os.environ["DHAN_CLIENT_ID"]
-                _dhan_access_token = os.environ["DHAN_ACCESS_TOKEN"]
+                if not settings.dhan_client_id or not settings.dhan_access_token:
+                    raise KeyError("DHAN_CLIENT_ID and DHAN_ACCESS_TOKEN must be set")
+                _dhan_client_id = settings.dhan_client_id
+                _dhan_access_token = settings.dhan_access_token
                 _dhan_opts_ts = datetime.now(tz=timezone.utc)
 
                 _raw_pos = fetch_positions_raw(_dhan_client_id, _dhan_access_token)

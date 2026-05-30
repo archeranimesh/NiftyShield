@@ -13,6 +13,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from src.config import settings
 from src.utils.logging import setup_logging
 
 # Suppress APIConnect's module-level basicConfig
@@ -29,15 +30,15 @@ NUVAMA_CONF_FILE = "data/nuvama/settings.ini"
 
 def main() -> None:
     load_dotenv()
-    api_key = os.getenv("NUVAMA_API_KEY", "").strip()
-    api_secret = os.getenv("NUVAMA_API_SECRET", "").strip()
-    settings = os.getenv("NUVAMA_SETTINGS_FILE", "data/nuvama/settings.json")
+    api_key = (settings.nuvama_api_key or "").strip()
+    api_secret = (settings.nuvama_api_secret or "").strip()
+    settings_file = settings.nuvama_settings_file
 
     if not api_key or not api_secret:
         print("✗ NUVAMA_API_KEY / NUVAMA_API_SECRET missing from .env")
         raise SystemExit(1)
 
-    session_dir = Path(settings).resolve().parent
+    session_dir = Path(settings_file).resolve().parent
     conf_path = Path(NUVAMA_CONF_FILE).resolve()
     conf_arg: str | None = str(conf_path) if conf_path.exists() else None
 

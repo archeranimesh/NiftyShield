@@ -23,6 +23,8 @@ from urllib.parse import parse_qs, urlparse
 
 from dotenv import load_dotenv, set_key
 
+from src.config import settings
+
 # Suppress stray 'apiconnect.log' created by APIConnect's module-level basicConfig.
 # See nuvama_verify.py for full explanation.
 logging.root.addHandler(logging.NullHandler())
@@ -156,6 +158,7 @@ def initialize_session(
         import warnings
 
         import urllib3
+
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", urllib3.exceptions.InsecureRequestWarning)
             api = APIConnect(api_key, api_secret, request_id, download_contract, str(conf_abs))
@@ -185,26 +188,22 @@ def login(env_path: Path = Path(".env")) -> None:
     """
     load_dotenv(env_path)
 
-    api_key = os.getenv("NUVAMA_API_KEY", "").strip()
-    api_secret = os.getenv("NUVAMA_API_SECRET", "").strip()
+    api_key = (settings.nuvama_api_key or "").strip()
+    api_secret = (settings.nuvama_api_secret or "").strip()
 
     if not api_key or not api_secret:
         raise ValueError(
             "NUVAMA_API_KEY and NUVAMA_API_SECRET must be set in .env before running login."
         )
 
-    settings_file = os.getenv("NUVAMA_SETTINGS_FILE", DEFAULT_SETTINGS_FILE)
+    settings_file = settings.nuvama_settings_file
 
     login_url = build_login_url(api_key)
     print(f"\nOpening Nuvama login page...\n{login_url}\n")
     webbrowser.open(login_url)
 
-    print(
-        "After login you'll be redirected to your callback URL (e.g. https://127.0.0.1/)."
-    )
-    print(
-        "Copy the full redirect URL (or just the request_id value from the address bar).\n"
-    )
+    print("After login you'll be redirected to your callback URL (e.g. https://127.0.0.1/).")
+    print("Copy the full redirect URL (or just the request_id value from the address bar).\n")
     redirect_input = input("Paste redirect URL or request_id: ").strip()
 
     if not redirect_input:
