@@ -299,6 +299,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-05-30 | CH-6 — Central structlog logging setup + wire to scripts — 75f499b |
 | 2026-05-30 | CH-5 — docs/architecture.md Mermaid C4 container diagram — 37b77bc |
 | 2026-05-30 | CH-2 — vulture dead code scan across src/ + scripts/; dead_code_report.md produced and classified (10 safe-to-delete, 13 needs investigation, 47 false positives) — 55eef02 |
 | 2026-05-30 | CH-1 — pylint similarity scan across src/; duplication_report.md produced and classified — 11b7e36 |
