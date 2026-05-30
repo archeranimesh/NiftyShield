@@ -26,6 +26,7 @@ python scripts/paper_3track_snapshot.py --no-save
 
 Small items: no story file yet, or waiting for a single edit/commit.
 
+- [ ] **CH-4 redo — Populate `__all__` in all `src/` `__init__.py` files** — CH-4 (d97c099) was reverted: empty `__all__ = []` is worse than no `__all__` (hides symbols, contradicts explicit import pattern). When revisiting: use `search_graph` per module to enumerate actual public symbols, then populate each `__init__.py`. Only do this if the codebase shifts toward re-exporting from package roots (i.e., `from src.portfolio import PortfolioStore` style). Until then, leave `__init__.py` files as comment-only stubs.
 - [ ] **Add IVR NULL note to BACKTEST_PLAN.md** — Phase 0.8 gate criterion A: *"IVR NULL for Cycles 1 and 2 — accepted data gap; criterion A satisfied from Cycle 3 onward."* Cycle 1 (id=14, 2026-05-11): pipeline not live. Cycle 2 (id=32, 2026-05-28): 0/252 days VIX history blocked computation.
 - [ ] **Create `docs/plan/entry-event-filter/`** — R4 event filter (Budget/RBI MPC/elections). Scope: `src/market_calendar/events.yaml` schema + loader + soft-warning integration into `record_paper_trade.py`. Dependency: ES12 must ship first. DoD: `prompt.md` + `tasks.md`, no code.
 - [ ] **Create `docs/plan/csp-collateral-leg/`** — `long_niftybees` collateral leg. Back-fill Cycle 1 (2026-05-11); add to `paper_snapshot.py` LTP batch; annual reset. Formula: `qty = floor((65 × nifty_spot) / niftybees_ltp)`. DoD: story dir + back-fill command documented.
@@ -305,6 +306,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 | 2026-05-29 | CI CI-3 — Add pytest-randomly to test config + verify no order-dependent failures — 0af6cfb |
 | 2026-05-29 | CI CI-2 — Add pytest-xdist parallel config + @pytest.mark.slow — 0fed45b |
 | 2026-05-29 | CI CI-1 — Create .github/workflows/ci.yml — d6e9899 |
+| 2026-05-30 | code-health CH-3 — Create GLOSSARY.md with ~42 domain and project terms — 10a5d22 |
 | 2026-05-29 | dx-foundation DX-7 — Docs close: CONTEXT.md tooling section, DECISIONS.md mypy/ruff/pre-commit entries, TODOS.md session log — docs commit |
 | 2026-05-29 | dx-foundation DX-6 — post-commit hook and installer — 1b94b5c, cc5c78c |
 | 2026-05-29 | dx-foundation DX-5 — Create Makefile with standard dev targets — 7d4976e |
