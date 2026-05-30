@@ -10,8 +10,8 @@
 
 ## Scan tasks (one-time, advisory — run before starting implementation tasks)
 
-- [ ] **CH-1** — Run `pylint --enable=similarities` across `src/`; produce `docs/plan/dev-foundation/code-health/duplication_report.md` — **Claude**
-- [ ] **CH-2** — Run `vulture src/`; produce `docs/plan/dev-foundation/code-health/dead_code_report.md` — **Claude**
+- [x] **CH-1** — Run `pylint --enable=similarities` across `src/`; produce `docs/plan/dev-foundation/code-health/duplication_report.md` — **Claude** | SHA: 11b7e36
+- [x] **CH-2** — Run `vulture src/`; produce `docs/plan/dev-foundation/code-health/dead_code_report.md` — **Claude** | SHA: pending
 
 ## Docs / structure tasks
 

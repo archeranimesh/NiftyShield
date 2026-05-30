@@ -298,6 +298,8 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-05-30 | CH-2 — vulture dead code scan across src/ + scripts/; dead_code_report.md produced and classified (10 safe-to-delete, 13 needs investigation, 47 false positives) — SHA pending |
+| 2026-05-30 | CH-1 — pylint similarity scan across src/; duplication_report.md produced and classified — 11b7e36 |
 | 2026-05-30 | CI CI-5 — Docs close: CONTEXT.md CI section, DECISIONS.md no-CD + parallel + coverage entries, ci_tasks.md ticked — docs commit |
 | 2026-05-29 | CI CI-4 — Wire coverage upload to GitHub Actions summary — 4f3ee8a |
 | 2026-05-29 | CI CI-3 — Add pytest-randomly to test config + verify no order-dependent failures — 0af6cfb |
