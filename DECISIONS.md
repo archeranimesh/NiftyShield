@@ -594,6 +594,15 @@ Full gate specification: `docs/plan/variance_gate.md`.
 
 ---
 
+## src/ Model Placement Rule (2026-05-31)
+
+| Rule | Detail | Source |
+|---|---|---|
+| Shared types → `src/models/` | Types used by two or more modules go into `src/models/` (currently: `portfolio.py`, `mf.py`, `options.py`). Do not create a domain `models.py` and migrate later. | src-restructure SS4 |
+| Domain-local types → `src/<module>/models.py` | Types used only within one domain stay local (dhan, nuvama, paper, risk). | src-restructure SS4 |
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty

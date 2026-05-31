@@ -306,6 +306,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 | 2026-05-31 | scripts-restructure SR5 — Move seed/ and dev/ scripts to scripts/seed/ and scripts/dev/ and fix test imports — 16ca1e1 |
 | 2026-05-31 | scripts-restructure SR4 — Move record/ scripts (record_paper_trade, record_trade) to scripts/record/, update references and test mock patches — 5acd9fe |
 | 2026-05-31 | scripts-restructure SR3 — Move lookup/ scripts (find_strike_by_delta, find_overlay_strikes, instrument_lookup) and update imports in record_paper_trade, paper_cc_entry, paper_csp_roll, and tests — 3fac186 |
+| 2026-05-31 | scripts-restructure SS4 — src/gamma/CLAUDE.md + src/nuvama/CLAUDE.md written; model placement rule codified in DECISIONS.md |
 | 2026-05-31 | scripts-restructure SS5 — CONTEXT_TREE.md full sync: added config.py, models/options.py, risk/ block (models/delta_tracker/entry_gate), utils/logging.py; verification script clean |
 | 2026-05-31 | scripts-restructure SS3 — Audit complete: service.py protocol boundary added (5986948); market_store.py has 3 callers + 9 tests green; CONTEXT_TREE documented — SS3 closed, SS5 now unblocked |
 | 2026-05-31 | scripts-restructure SR2 — Move pipeline/ scripts (chain snapshot, intraday, gamma watch, bhavcopy) and update test imports + crontab — a6ca253 |
