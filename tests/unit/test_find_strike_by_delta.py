@@ -62,7 +62,7 @@ import pytest
 # Ensure project root is on path for direct `pytest` invocations
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from scripts.find_strike_by_delta import (
+from scripts.lookup.find_strike_by_delta import (
     _infer_leg,
     _safe_float,
     build_record_command,
@@ -73,9 +73,7 @@ from scripts.find_strike_by_delta import (
 
 # ── Fixture loading ───────────────────────────────────────────────────────────
 
-_FIXTURE_PATH = Path(
-    "tests/fixtures/responses/option_chain/nifty_chain_2026-04-07.json"
-)
+_FIXTURE_PATH = Path("tests/fixtures/responses/option_chain/nifty_chain_2026-04-07.json")
 
 
 def _load_chain() -> list[dict]:
@@ -148,22 +146,26 @@ def test_filter_no_match_returns_empty() -> None:
 
 def test_filter_row_has_required_fields() -> None:
     required = {
-        "side", "strike", "delta", "iv", "ltp", "mid",
-        "bid", "ask", "oi", "instrument_key",
+        "side",
+        "strike",
+        "delta",
+        "iv",
+        "ltp",
+        "mid",
+        "bid",
+        "ask",
+        "oi",
+        "instrument_key",
     }
     rows = filter_strikes_by_delta(_load_chain(), "CE", 0.10, 0.90)
     for r in rows:
-        assert required.issubset(r.keys()), (
-            f"Row missing keys: {required - r.keys()}"
-        )
+        assert required.issubset(r.keys()), f"Row missing keys: {required - r.keys()}"
 
 
 def test_filter_instrument_keys_nonempty() -> None:
     rows = filter_strikes_by_delta(_load_chain(), "BOTH", 0.10, 0.90)
     for r in rows:
-        assert r["instrument_key"], (
-            f"Empty instrument_key at strike {r['strike']} side {r['side']}"
-        )
+        assert r["instrument_key"], f"Empty instrument_key at strike {r['strike']} side {r['side']}"
 
 
 # ── format_table ──────────────────────────────────────────────────────────────

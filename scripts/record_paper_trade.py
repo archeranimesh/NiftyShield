@@ -37,7 +37,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from dotenv import load_dotenv
 
-from scripts.find_strike_by_delta import (
+from scripts.lookup.find_strike_by_delta import (
     DEFAULT_LOT_SIZE,
     UNDERLYING_DEFAULT,
     filter_strikes_by_delta,

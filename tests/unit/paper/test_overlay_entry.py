@@ -7,20 +7,20 @@ from pathlib import Path
 import pytest
 import yaml
 
+from scripts.lookup.find_overlay_strikes import (
+    compute_target_strike,
+    evaluate_expiry,
+    find_chain_entry,
+)
 from scripts.paper_3track_overlay_entry import (
     OverlayConfig,
     build_overlay_trades,
     load_overlay_config,
 )
-from scripts.find_overlay_strikes import (
-    compute_target_strike,
-    find_chain_entry,
-    evaluate_expiry,
-)
 from src.models.portfolio import TradeAction
 
-
 # ── helpers ────────────────────────────────────────────────────────────────────
+
 
 def _write_yaml(tmp_path: Path, data: dict) -> Path:
     p = tmp_path / "overlay_entry.yaml"
@@ -100,6 +100,7 @@ def _make_overlay_config(**overrides) -> OverlayConfig:
 
 # ── compute_target_strike ──────────────────────────────────────────────────────
 
+
 def test_compute_target_strike_put_rounds_to_nearest_50():
     # 24000 × (1 - 0.09) = 21840 → nearest 50 = 21850
     result = compute_target_strike(24000.0, 9.0, "PE")
@@ -120,23 +121,28 @@ def test_compute_target_strike_put_exact():
 
 # ── find_chain_entry ──────────────────────────────────────────────────────────
 
+
 def _make_chain(strike: float, side: str, bid: float, ask: float, oi: int = 1000) -> list[dict]:
     raw_key = "call_options" if side == "CE" else "put_options"
-    return [{
-        "strike_price": strike,
-        raw_key: {
-            "instrument_key": f"NSE_FO|TEST{strike:.0f}{side}",
-            "market_data": {"ltp": (bid + ask) / 2, "bid_price": bid, "ask_price": ask, "oi": oi},
-            "option_greeks": {"delta": 0.3, "iv": 15.0},
+    return [
+        {
+            "strike_price": strike,
+            raw_key: {
+                "instrument_key": f"NSE_FO|TEST{strike:.0f}{side}",
+                "market_data": {
+                    "ltp": (bid + ask) / 2,
+                    "bid_price": bid,
+                    "ask_price": ask,
+                    "oi": oi,
+                },
+                "option_greeks": {"delta": 0.3, "iv": 15.0},
+            },
         }
-    }]
+    ]
 
 
 def test_find_chain_entry_returns_closest_strike():
-    chain = (
-        _make_chain(21800.0, "PE", 280.0, 290.0) +
-        _make_chain(22000.0, "PE", 200.0, 210.0)
-    )
+    chain = _make_chain(21800.0, "PE", 280.0, 290.0) + _make_chain(22000.0, "PE", 200.0, 210.0)
     result = find_chain_entry(chain, "PE", 21850.0)  # closer to 21800
     assert result is not None
     assert result["strike"] == 21800.0
@@ -165,6 +171,7 @@ def test_find_chain_entry_computes_mid():
 
 # ── evaluate_expiry ───────────────────────────────────────────────────────────
 
+
 def test_evaluate_expiry_passes_gate():
     chain = _make_chain(21800.0, "PE", 285.0, 287.0)  # spread~0.7% → passes
     ev = evaluate_expiry(chain, "2026-06-26", "pp", 21800.0, 25000.0, date(2026, 5, 7))
@@ -180,7 +187,7 @@ def test_evaluate_expiry_fails_gate():
 
 def test_evaluate_expiry_collar_uses_max_spread():
     # Put spread=1%, Call spread=4% → max=4% → fails gate
-    put_chain = _make_chain(21800.0, "PE", 286.0, 289.0)   # spread~1%
+    put_chain = _make_chain(21800.0, "PE", 286.0, 289.0)  # spread~1%
     call_chain = _make_chain(25000.0, "CE", 200.0, 209.0)  # spread~4.4%
     chain = put_chain + call_chain
     ev = evaluate_expiry(chain, "2026-06-26", "collar", 21800.0, 25000.0, date(2026, 5, 7))
@@ -189,7 +196,7 @@ def test_evaluate_expiry_collar_uses_max_spread():
 
 
 def test_evaluate_expiry_collar_passes_when_both_legs_tight():
-    put_chain = _make_chain(21800.0, "PE", 286.0, 289.0)   # spread~1%
+    put_chain = _make_chain(21800.0, "PE", 286.0, 289.0)  # spread~1%
     call_chain = _make_chain(25000.0, "CE", 205.0, 208.0)  # spread~1.5%
     chain = put_chain + call_chain
     ev = evaluate_expiry(chain, "2026-06-26", "collar", 21800.0, 25000.0, date(2026, 5, 7))
@@ -197,6 +204,7 @@ def test_evaluate_expiry_collar_passes_when_both_legs_tight():
 
 
 # ── load_overlay_config ───────────────────────────────────────────────────────
+
 
 def test_load_overlay_config_pp_happy_path(tmp_path):
     path = _write_yaml(tmp_path, _valid_pp_raw())
@@ -241,6 +249,7 @@ def test_load_overlay_config_cc_bad_call_key_raises(tmp_path):
 
 
 # ── build_overlay_trades ──────────────────────────────────────────────────────
+
 
 def test_build_overlay_trades_pp_records_all_three_tracks():
     cfg = _make_overlay_config(overlay_type="pp")

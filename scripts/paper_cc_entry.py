@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from scripts.find_strike_by_delta import filter_strikes_by_delta
+from scripts.lookup.find_strike_by_delta import filter_strikes_by_delta
 from src.backtest.ivr import compute_ivr
 from src.backtest.vix_ingest import fetch_vix_latest, load_vix_series
 from src.client.upstox_market import UpstoxMarketClient

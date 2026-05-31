@@ -7,16 +7,16 @@ Download the BOD file first:
 
 Usage:
     # Search by symbol
-    python -m scripts.instrument_lookup --query EBBETF0431
+    python -m scripts.lookup.instrument_lookup --query EBBETF0431
 
     # Search options by underlying, strike, type, expiry
-    python -m scripts.instrument_lookup --query NIFTY --strike 23000 --type PE --expiry 2026-12-31
+    python -m scripts.lookup.instrument_lookup --query NIFTY --strike 23000 --type PE --expiry 2026-12-31
 
     # Search equity only
-    python -m scripts.instrument_lookup --query EBBETF0431 --segment NSE_EQ
+    python -m scripts.lookup.instrument_lookup --query EBBETF0431 --segment NSE_EQ
 
     # Find all our strategy legs at once
-    python -m scripts.instrument_lookup --find-legs
+    python -m scripts.lookup.instrument_lookup --find-legs
 """
 
 from __future__ import annotations

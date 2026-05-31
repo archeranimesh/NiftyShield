@@ -21,6 +21,8 @@ Usage:
     python -m scripts.paper_csp_roll --date 2026-05-07 --no-dry-run --yes --force
 """
 
+# ruff: noqa: E402
+
 from __future__ import annotations
 
 import argparse
@@ -43,7 +45,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from scripts.find_strike_by_delta import filter_strikes_by_delta, rank_strikes
+from scripts.lookup.find_strike_by_delta import filter_strikes_by_delta, rank_strikes
 from src.client.factory import create_client
 from src.client.protocol import BrokerClient
 from src.instruments.lookup import InstrumentLookup

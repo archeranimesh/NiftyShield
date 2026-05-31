@@ -8,20 +8,23 @@ Works on the raw Upstox V2 option chain response so that ``instrument_key``
 (not preserved by the parsed ``OptionChain`` model) is available in the output.
 
 Usage — CSP Nifty v1 entry (all defaults apply, one arg needed):
-    python scripts/find_strike_by_delta.py --expiry 2026-05-29
+    python -m scripts.lookup.find_strike_by_delta --expiry 2026-05-29
 
 Table only (no command block):
-    python scripts/find_strike_by_delta.py --expiry 2026-05-29 --no-dry-run
+    python -m scripts.lookup.find_strike_by_delta \
+        --expiry 2026-05-29 --no-dry-run
 
 Override option side or strategy:
-    python scripts/find_strike_by_delta.py \\
-        --expiry 2026-05-29 \\
+    python -m scripts.lookup.find_strike_by_delta \
+        --expiry 2026-05-29 \
         --option-type CE --strategy paper_other_v1 --action SELL
 
 Underlying defaults to ``NSE_INDEX|Nifty 50``; override with ``--underlying``.
 Delta range is always expressed as absolute (positive) values — sign is inferred
 from the option side.
 """
+
+# ruff: noqa: E402
 
 from __future__ import annotations
 

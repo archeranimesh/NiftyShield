@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Record overlay legs across all three tracks from a pre-filled overlay_entry.yaml.
 
-Reads the YAML written by find_overlay_strikes.py, validates it, enforces blocked
+Reads the YAML written by scripts/lookup/find_overlay_strikes.py, validates it, enforces blocked
 combinations (Futures + standalone Covered Call), and records the appropriate legs
 for paper_nifty_spot, paper_nifty_futures, and paper_nifty_proxy.
 
@@ -78,7 +78,7 @@ def load_overlay_config(path: Path) -> OverlayConfig:
     """Load and validate the overlay YAML config.
 
     Args:
-        path: Path to overlay_entry.yaml (written by find_overlay_strikes.py).
+        path: Path to overlay_entry.yaml (written by scripts/lookup/find_overlay_strikes.py).
 
     Returns:
         Validated OverlayConfig.
@@ -336,7 +336,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
             "Record overlay legs across all three tracks from overlay_entry.yaml. "
-            "Run find_overlay_strikes.py first to generate the YAML."
+            "Run scripts/lookup/find_overlay_strikes.py first to generate the YAML."
         )
     )
     parser.add_argument(
