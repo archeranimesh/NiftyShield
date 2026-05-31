@@ -15,8 +15,6 @@ src/
 │   └── nuvama_verify.py      # Nuvama connectivity check — loads APIConnect from settings_file, calls Holdings(), prints holding count + ltp. parse_holdings() is a pure function (testable independently).
 │   ├── dhan_login.py          # Dhan manual token flow — opens web.dhan.co, prompts for token, validates, saves DHAN_ACCESS_TOKEN to .env via dotenv.set_key(). Pure functions: build_login_url(), validate_token(), save_token(). No SDK dependency.
 │   └── dhan_verify.py         # Dhan connectivity check — loads DHAN_CLIENT_ID + DHAN_ACCESS_TOKEN, calls GET /v2/profile + /v2/holdings via raw requests. parse_holdings() pure function. Returns True/False.
-├── analytics/                # Exploratory scripts (not production modules; move to scripts/dev/ per SS1)
-│   └── test_analytics_apis.py   # Tests LTP, option chain, Greeks, historical candles via Analytics Token. Note: filename mismatched vs docs — should be verify_analytics.py; tracked in SS1.
 ├── backtest/
 │   ├── __init__.py           # Package marker
 │   ├── chain_writer.py       # ChainWriter: writes EOD and 5-min intraday option chain snapshots to PyArrow Parquet
@@ -26,8 +24,6 @@ src/
 │   ├── constants.py          # DEFAULT_DATA_DIR: Path to data/offline/options_ohlcv/ (repo-root-relative). Imported by bhavcopy_loader.py.
 │   ├── vix_ingest.py         # India VIX historical ingestion pipeline (NSE CSV / Upstox API)
 │   └── ivr.py                # Trailing 252-day India VIX Implied Volatility Rank (IVR) calculation
-├── sandbox/                  # Exploratory scripts (not production; move to scripts/dev/ per SS1)
-│   └── test_sandbox_order_lifecycle.py    # Place → Modify → Cancel via V3 Order API (sandbox=True). Note: filename mismatched vs docs — should be order_lifecycle.py; tracked in SS1.
 ├── models/
 │   ├── __init__.py           # Re-exports all shared models from portfolio.py + mf.py for convenience.
 │   ├── portfolio.py          # Canonical home for all portfolio domain types: Leg, Strategy, DailySnapshot, Trade, TradeAction, Direction, ProductType, AssetType, PortfolioSummary. Monetary fields Decimal; P&L methods accept float|Decimal. PortfolioSummary refactored (AR-4): 16 flat cross-source fields + four typed Optional source references: mf_pnl (PortfolioPnL|None), dhan (DhanPortfolioSummary|None), nuvama_bonds (NuvamaBondSummary|None), nuvama_options (NuvamaOptionsSummary|None). Availability exposed via computed @property (dhan_available, nuvama_available, nuvama_options_available, mf_available). String-literal TYPE_CHECKING annotations on source fields avoid circular imports.
@@ -38,7 +34,7 @@ src/
 │   ├── tracker.py            # PortfolioTracker: loads strategies, fetches LTPs, records snapshots. Trade overlay applied internally via _get_overlaid_strategy()/_get_all_overlaid_strategies() — compute_pnl, record_daily_snapshot, record_all_strategies all use trade-derived qty/entry_price automatically. Trade-only legs (e.g. LIQUIDBEES) with no DB id are auto-persisted via store.ensure_leg(). compute_pnl() returns StrategyPnL with Decimal total_pnl. Float LTPs from API converted via Decimal(str()) at boundary. apply_trade_positions() module-level pure function: overlays trade-derived qty/entry_price onto strategy Leg objects; appends trade-only legs as EQUITY/CNC; drops zero-net-qty legs.
 │   ├── summary.py            # Pure computation (AR-4/5): _etf_current_value, _etf_cost_basis, _build_prev_prices, _compute_prev_mf_pnl, _compute_strategy_pnl_from_prices, _build_portfolio_summary. No I/O. TYPE_CHECKING guards replace object|None params; all 14 # type: ignore[union-attr] suppressions removed (AR-5). _build_portfolio_summary computes only cross-source aggregates (total_value/invested/pnl/day_delta) and passes source summary objects directly into PortfolioSummary — no dead intermediate extraction variables.
 │   ├── formatting.py         # Pure formatting (AR-4): _format_protection_stats, _format_combined_summary. Depends on summary.py + PortfolioSummary. No I/O. All double-guards (if summary.dhan else Decimal("0") nested inside if summary.dhan_available blocks) removed — source object guaranteed non-None inside its available check by @property construction. mf_pnl guards retained (mf_available not checked before inline mf_pnl access).
-│   ├── service.py            # SnapshotService: thin orchestration wrapper — persist_snapshots(strategy_name, strategy, snap_date, prices, greeks_map, underlying_price) builds DailySnapshot list and calls store.record_snapshots_bulk(). Auto-persists trade-only legs via store.ensure_leg() when leg.id is None. Under review (SS3): no protocol boundary beyond PortfolioStore; may be folded into tracker.py.
+│   ├── service.py            # SnapshotServiceProtocol (Protocol) + SnapshotService (concrete). persist_snapshots(strategy_name, strategy, snap_date, prices, greeks_map, underlying_price) builds DailySnapshot list and calls store.record_snapshots_bulk(). Auto-persists trade-only legs via store.ensure_leg() when leg.id is None. PortfolioTracker accepts SnapshotServiceProtocol for constructor injection.
 │   └── strategies/
 │       ├── __init__.py       # ALL_STRATEGIES registry
 │       └── finideas/
@@ -169,7 +165,9 @@ scripts/
     ├── probe_nuvama_schema.py # Diagnostic script (not production). Dumps all rmsHdg fields from live Holdings() response.
     ├── migrate_strike_to_text.py
     ├── test_api_version.py
-    └── paper_track_snapshot.py # Legacy snapshot script (preserved for compatibility).
+    ├── paper_track_snapshot.py # Legacy snapshot script (preserved for compatibility).
+    ├── verify_analytics.py     # Smoke-tests LTP, option chain, Greeks, historical candles via Analytics Token. Moved from src/analytics/ (SS1).
+    └── sandbox_order_lifecycle.py # Place → Modify → Cancel via V3 Order API (sandbox=True). Moved from src/sandbox/ (SS1).
 
 .claude/
 ├── settings.json             # PreToolUse hook: warns on Read targeting src/ or scripts/
