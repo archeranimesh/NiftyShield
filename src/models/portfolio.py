@@ -159,13 +159,9 @@ class Leg(BaseModel):
         # 1. Asset type specific expiry and strike checks
         if self.asset_type in {AssetType.EQUITY, AssetType.BOND}:
             if self.expiry is not None:
-                raise ValueError(
-                    f"Expiry must be None for {self.asset_type.name}"
-                )
+                raise ValueError(f"Expiry must be None for {self.asset_type.name}")
             if self.strike is not None:
-                raise ValueError(
-                    f"Strike must be None for {self.asset_type.name}"
-                )
+                raise ValueError(f"Strike must be None for {self.asset_type.name}")
         elif self.asset_type == AssetType.FUTURES:
             if self.expiry is None:
                 raise ValueError("Expiry must not be None for FUTURES")
@@ -173,30 +169,17 @@ class Leg(BaseModel):
                 raise ValueError("Strike must be None for FUTURES")
         elif self.asset_type in {AssetType.CE, AssetType.PE}:
             if self.expiry is None:
-                raise ValueError(
-                    f"Expiry must not be None for option "
-                    f"type {self.asset_type.name}"
-                )
+                raise ValueError(f"Expiry must not be None for option type {self.asset_type.name}")
             if self.strike is None:
-                raise ValueError(
-                    f"Strike must not be None for option "
-                    f"type {self.asset_type.name}"
-                )
+                raise ValueError(f"Strike must not be None for option type {self.asset_type.name}")
 
         # 2. Strike grid validation for Nifty options
-        if (
-            self.asset_type in {AssetType.CE, AssetType.PE}
-            and self.strike is not None
-        ):
+        if self.asset_type in {AssetType.CE, AssetType.PE} and self.strike is not None:
             # Check if Nifty 50 option (exclude BANK/FIN/MIDCPNIFTY)
             key_upper = self.instrument_key.upper()
             name_upper = self.display_name.upper()
-            is_nifty = (
-                ("NIFTY" in key_upper or "NIFTY" in name_upper)
-                and not any(
-                    x in key_upper or x in name_upper
-                    for x in {"BANK", "FIN", "MIDCP"}
-                )
+            is_nifty = ("NIFTY" in key_upper or "NIFTY" in name_upper) and not any(
+                x in key_upper or x in name_upper for x in {"BANK", "FIN", "MIDCP"}
             )
             if is_nifty:
                 # strike < 18000: multiple of 50
@@ -205,10 +188,7 @@ class Leg(BaseModel):
                 is_low = strike_dec < Decimal("18000")
                 grid = Decimal("50") if is_low else Decimal("100")
                 if strike_dec % grid != Decimal("0"):
-                    raise ValueError(
-                        f"Nifty strike {self.strike} must be a "
-                        f"multiple of {grid}"
-                    )
+                    raise ValueError(f"Nifty strike {self.strike} must be a multiple of {grid}")
 
         # 3. Expiry validations (only for F&O legs where expiry is not None)
         if self.expiry is not None:
@@ -217,9 +197,7 @@ class Leg(BaseModel):
 
             # Check 1: Expiry must be a trading day
             if not is_trading_day(self.expiry):
-                raise ValueError(
-                    f"Expiry date {self.expiry} is not a valid trading day"
-                )
+                raise ValueError(f"Expiry date {self.expiry} is not a valid trading day")
 
             # Check 2: Day-of-week constraint.
             # NSE moved Nifty (and other index) expiry from Thursday to
@@ -232,14 +210,11 @@ class Leg(BaseModel):
                 # Pre-cutoff: expiry must be Thursday, or the preceding
                 # trading day if Thursday is a holiday.
                 weekday_diff = 3 - self.expiry.weekday()
-                nominal_thursday = (
-                    self.expiry + timedelta(days=weekday_diff)
-                )
+                nominal_thursday = self.expiry + timedelta(days=weekday_diff)
 
                 if self.expiry > nominal_thursday:
                     raise ValueError(
-                        f"Expiry date {self.expiry} cannot be after "
-                        f"Thursday of its week"
+                        f"Expiry date {self.expiry} cannot be after Thursday of its week"
                     )
 
                 curr = self.expiry + timedelta(days=1)
@@ -261,16 +236,12 @@ class Leg(BaseModel):
                     if self.expiry.month == 12:
                         next_month_1st = date(self.expiry.year + 1, 1, 1)
                     else:
-                        next_month_1st = date(
-                            self.expiry.year, self.expiry.month + 1, 1
-                        )
+                        next_month_1st = date(self.expiry.year, self.expiry.month + 1, 1)
                     last_day_of_month = next_month_1st - timedelta(days=1)
 
                     # Find last Thursday of the month
                     offset = (last_day_of_month.weekday() - 3) % 7
-                    last_thursday = (
-                        last_day_of_month - timedelta(days=offset)
-                    )
+                    last_thursday = last_day_of_month - timedelta(days=offset)
 
                     if self.expiry > last_thursday:
                         raise ValueError(
@@ -357,9 +328,11 @@ class Strategy(BaseModel):
             prices: Mapping of leg.id -> current LTP (float or Decimal).
         """
         return sum(
-            (leg.pnl(prices[leg.id])
-             for leg in self.legs
-             if leg.id is not None and leg.id in prices),
+            (
+                leg.pnl(prices[leg.id])
+                for leg in self.legs
+                if leg.id is not None and leg.id in prices
+            ),
             Decimal("0"),
         )
 
@@ -411,6 +384,7 @@ def create_strategy_instance(
         # directories are added under strategies/, they should be appended to the provider list.
         try:
             import importlib
+
             for provider in ["finideas"]:
                 try:
                     importlib.import_module(f"src.portfolio.strategies.{provider}.{name.lower()}")

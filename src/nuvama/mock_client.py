@@ -4,6 +4,7 @@ Lives in src/nuvama/ (not tests/) so scripts and integration tests can import
 it without coupling to the test directory tree. Follows the same convention
 as MockBrokerClient in src/client/mock_client.py.
 """
+
 from __future__ import annotations
 
 import json

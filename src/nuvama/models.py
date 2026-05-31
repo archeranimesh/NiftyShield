@@ -82,9 +82,7 @@ class NuvamaBondHolding:
         Derived directly from the chgP field in the Holdings() response.
         No prior snapshot required. Accurate for bonds (stable intraday price).
         """
-        return (self.current_value * self.chg_pct / 100).quantize(
-            _TWO_DP, ROUND_HALF_UP
-        )
+        return (self.current_value * self.chg_pct / 100).quantize(_TWO_DP, ROUND_HALF_UP)
 
 
 @dataclass(frozen=True)
@@ -120,6 +118,7 @@ class NuvamaOptionPosition:
         unrealized_pnl: Unrealized profit/loss.
         realized_pnl_today: Profit/loss realized today.
     """
+
     trade_symbol: str
     instrument_name: str
     net_qty: int
@@ -132,6 +131,7 @@ class NuvamaOptionPosition:
 @dataclass(frozen=True)
 class NuvamaOptionsSummary:
     """Aggregated Nuvama Options PnL status."""
+
     snapshot_date: date
     positions: tuple[NuvamaOptionPosition, ...]
 

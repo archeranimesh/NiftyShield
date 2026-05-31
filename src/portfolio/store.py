@@ -130,9 +130,7 @@ def _row_to_snapshot(row: sqlite3.Row) -> DailySnapshot:
         oi=row["oi"],
         volume=row["volume"],
         underlying_price=(
-            Decimal(row["underlying_price"])
-            if row["underlying_price"] is not None
-            else None
+            Decimal(row["underlying_price"]) if row["underlying_price"] is not None else None
         ),
     )
 
@@ -281,9 +279,7 @@ class PortfolioStore:
     def get_strategy(self, name: str) -> Strategy | None:
         """Load a strategy with all its legs by name."""
         with _connect(self.db_path) as conn:
-            row = conn.execute(
-                "SELECT * FROM strategies WHERE name = ?", (name,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM strategies WHERE name = ?", (name,)).fetchone()
             if not row:
                 return None
 
@@ -403,11 +399,17 @@ class PortfolioStore:
                        underlying_price = excluded.underlying_price""",
                 [
                     (
-                        s.leg_id, s.snapshot_date.isoformat(),
+                        s.leg_id,
+                        s.snapshot_date.isoformat(),
                         str(s.ltp),
                         str(s.close) if s.close is not None else None,
-                        s.iv, s.delta, s.theta, s.gamma, s.vega,
-                        s.oi, s.volume,
+                        s.iv,
+                        s.delta,
+                        s.theta,
+                        s.gamma,
+                        s.vega,
+                        s.oi,
+                        s.volume,
                         str(s.underlying_price) if s.underlying_price is not None else None,
                     )
                     for s in snapshots
@@ -611,9 +613,7 @@ class PortfolioStore:
             rows = conn.execute(query, params).fetchall()
             return [_row_to_trade(r) for r in rows]
 
-    def get_position(
-        self, strategy_name: str, leg_role: str
-    ) -> Position:
+    def get_position(self, strategy_name: str, leg_role: str) -> Position:
         """Derive net quantity and weighted average buy price from the ledger.
 
         Net quantity = SUM(qty for BUY) - SUM(qty for SELL).
@@ -661,9 +661,7 @@ class PortfolioStore:
             average_price=avg_price,
         )
 
-    def get_all_positions_for_strategy(
-        self, strategy_name: str
-    ) -> dict[str, Position]:
+    def get_all_positions_for_strategy(self, strategy_name: str) -> dict[str, Position]:
         """Derive net position for every leg in a single DB round-trip.
 
         Replaces the previous N+1 pattern (1 DISTINCT query + 1 get_position()
@@ -720,9 +718,7 @@ class PortfolioStore:
 
     # ── Cron heartbeats ──────────────────────────────────────────
 
-    def record_heartbeat(
-        self, service: str, status: str, message: str | None = None
-    ) -> None:
+    def record_heartbeat(self, service: str, status: str, message: str | None = None) -> None:
         """Record the heartbeat of a cron service.
 
         Args:
@@ -731,6 +727,7 @@ class PortfolioStore:
             message: Optional additional metadata or error message.
         """
         from datetime import timezone
+
         now = datetime.now(tz=timezone.utc).isoformat()
         with _connect(self.db_path) as conn:
             conn.execute(

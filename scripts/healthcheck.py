@@ -17,7 +17,7 @@ import argparse
 import asyncio
 import shutil
 import sys
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 import structlog
@@ -46,60 +46,40 @@ def run_checks(target_date: date, db_path: Path, vix_dir: Path) -> tuple[bool, l
     has_issue = False
     messages = []
 
-    # Check 1: DB Accessibility
-    db_ok = False
+    # Check 1: DB Accessibility & Snapshot Recency
     try:
         with connect(db_path) as conn:
             conn.execute("SELECT 1").fetchone()
-            db_ok = True
             messages.append("✅ DB: accessible")
+
+            # Check 2: Snapshot recency (daily_snapshots) - Mandatory/Production data (❌ if missing)
+            row_daily = conn.execute(
+                "SELECT 1 FROM daily_snapshots WHERE snapshot_date = ? LIMIT 1",
+                (target_date.isoformat(),),
+            ).fetchone()
+            if row_daily:
+                messages.append("✅ daily_snapshots: ok")
+            else:
+                messages.append("❌ daily_snapshots: no row for today")
+                has_issue = True
+
+            # Check 3: Paper snapshot recency (paper_nav_snapshots) - Advisory/Paper-only data (⚠️ if missing)
+            row_paper = conn.execute(
+                "SELECT 1 FROM paper_nav_snapshots WHERE snapshot_date = ? LIMIT 1",
+                (target_date.isoformat(),),
+            ).fetchone()
+            if row_paper:
+                messages.append("✅ paper_nav_snapshots: ok")
+            else:
+                messages.append("⚠️ paper_nav_snapshots: no row for today")
+                has_issue = True
+
     except Exception as e:
-        db_ok = False
         has_issue = True
-        logger.error("Database connection failed", error=str(e), db_path=str(db_path))
+        logger.exception("Database access or query failed", error=str(e), db_path=str(db_path))
         messages.append("❌ DB: inaccessible")
-
-    # Check 2: Snapshot recency (daily_snapshots)
-    if not db_ok:
-        messages.append("❌ daily_snapshots: skip (DB inaccessible)")
-        has_issue = True
-    else:
-        try:
-            with connect(db_path) as conn:
-                row = conn.execute(
-                    "SELECT 1 FROM daily_snapshots WHERE snapshot_date = ? LIMIT 1",
-                    (target_date.isoformat(),),
-                ).fetchone()
-                if row:
-                    messages.append("✅ daily_snapshots: ok")
-                else:
-                    messages.append("❌ daily_snapshots: no row for today")
-                    has_issue = True
-        except Exception as e:
-            logger.exception("Failed to query daily_snapshots", error=str(e))
-            messages.append("❌ daily_snapshots: error")
-            has_issue = True
-
-    # Check 3: Paper snapshot recency (paper_nav_snapshots)
-    if not db_ok:
-        messages.append("⚠️ paper_nav_snapshots: skip (DB inaccessible)")
-        has_issue = True
-    else:
-        try:
-            with connect(db_path) as conn:
-                row = conn.execute(
-                    "SELECT 1 FROM paper_nav_snapshots WHERE snapshot_date = ? LIMIT 1",
-                    (target_date.isoformat(),),
-                ).fetchone()
-                if row:
-                    messages.append("✅ paper_nav_snapshots: ok")
-                else:
-                    messages.append("⚠️ paper_nav_snapshots: no row for today")
-                    has_issue = True
-        except Exception as e:
-            logger.exception("Failed to query paper_nav_snapshots", error=str(e))
-            messages.append("⚠️ paper_nav_snapshots: error")
-            has_issue = True
+        messages.append("❌ daily_snapshots: skip (DB error)")
+        messages.append("⚠️ paper_nav_snapshots: skip (DB error)")
 
     # Check 4: VIX data recency
     try:
@@ -109,6 +89,8 @@ def run_checks(target_date: date, db_path: Path, vix_dir: Path) -> tuple[bool, l
             has_issue = True
         else:
             latest_vix_date = vix_series.index[-1]
+            if hasattr(latest_vix_date, "date"):
+                latest_vix_date = latest_vix_date.date()
             stale_days = (target_date - latest_vix_date).days
             if stale_days > 2:
                 messages.append(f"⚠️ VIX data: {stale_days} days stale")
@@ -185,7 +167,8 @@ async def main() -> int:
     if has_issue:
         # Build status alert message
         alert_body = "\n".join(messages)
-        alert_msg = f"⚠️ NiftyShield Healthcheck — {today.isoformat()} 16:30 IST\n{alert_body}"
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+        alert_msg = f"⚠️ NiftyShield Healthcheck — {now_str} IST\n{alert_body}"
 
         logger.warning("System healthcheck failed or warned", alert=alert_msg)
 

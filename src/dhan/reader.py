@@ -42,14 +42,16 @@ _TWO_DP = Decimal("0.01")
 # Everything else defaults to "EQUITY".
 # This is instrument *metadata* (what kind of asset), not position data.
 # Update when a new bond/liquid instrument is added to the Dhan portfolio.
-_BOND_SYMBOLS: frozenset[str] = frozenset({
-    "LIQUIDCASE",
-    "LIQUIDBEES",
-    "LIQUIDIETF",
-    "CASHIETF",
-    "LIQUIDADD",
-    "LIQUIDSHRI",
-})
+_BOND_SYMBOLS: frozenset[str] = frozenset(
+    {
+        "LIQUIDCASE",
+        "LIQUIDBEES",
+        "LIQUIDIETF",
+        "CASHIETF",
+        "LIQUIDADD",
+        "LIQUIDSHRI",
+    }
+)
 
 
 # ── HTTP callers (I/O) ──────────────────────────────────────────
@@ -73,9 +75,7 @@ def _build_headers(client_id: str, access_token: str) -> dict[str, str]:
     }
 
 
-def fetch_holdings_raw(
-    client_id: str, access_token: str
-) -> list[dict[str, Any]]:
+def fetch_holdings_raw(client_id: str, access_token: str) -> list[dict[str, Any]]:
     """Fetch raw holdings from Dhan API.
 
     Args:
@@ -177,16 +177,18 @@ def build_dhan_holdings(
             if total_qty <= 0:
                 continue  # zero or negative holdings — skip
 
-            result.append(DhanHolding(
-                trading_symbol=symbol,
-                isin=isin,
-                security_id=str(h.get("securityId", "")).strip(),
-                exchange=h.get("exchange", "NSE_EQ").strip(),
-                total_qty=total_qty,
-                collateral_qty=int(h.get("collateralQty", 0)),
-                avg_cost_price=Decimal(str(h.get("avgCostPrice", 0))),
-                classification=classify_holding(symbol),
-            ))
+            result.append(
+                DhanHolding(
+                    trading_symbol=symbol,
+                    isin=isin,
+                    security_id=str(h.get("securityId", "")).strip(),
+                    exchange=h.get("exchange", "NSE_EQ").strip(),
+                    total_qty=total_qty,
+                    collateral_qty=int(h.get("collateralQty", 0)),
+                    avg_cost_price=Decimal(str(h.get("avgCostPrice", 0))),
+                    classification=classify_holding(symbol),
+                )
+            )
         except (AttributeError, TypeError, ValueError) as e:
             logger.warning("Skipping malformed Dhan holding: %s — %s", h, e)
             continue
@@ -299,9 +301,7 @@ def enrich_with_upstox_prices(
                 ltp=last_price,
             )
         else:
-            logger.warning(
-                "No Upstox LTP for %s (key=%s)", h.trading_symbol, upstox_key
-            )
+            logger.warning("No Upstox LTP for %s (key=%s)", h.trading_symbol, upstox_key)
             new_h = h
         enriched.append(new_h)
     return enriched
@@ -331,10 +331,7 @@ def build_dhan_summary(
         value = sum((h.current_value or h.cost_basis for h in group), Decimal("0"))
         basis = sum((h.cost_basis for h in group), Decimal("0"))
         pnl = value - basis
-        pnl_pct = (
-            (pnl / basis * 100).quantize(_TWO_DP, ROUND_HALF_UP)
-            if basis else None
-        )
+        pnl_pct = (pnl / basis * 100).quantize(_TWO_DP, ROUND_HALF_UP) if basis else None
         return value, basis, pnl, pnl_pct
 
     eq_value, eq_basis, eq_pnl, eq_pnl_pct = _subtotal(equity)
@@ -346,13 +343,19 @@ def build_dhan_summary(
 
     if prev_holdings:
         prev_eq_value = sum(
-            (h.current_value or h.cost_basis for h in prev_holdings.values()
-             if h.classification == AssetType.EQUITY),
+            (
+                h.current_value or h.cost_basis
+                for h in prev_holdings.values()
+                if h.classification == AssetType.EQUITY
+            ),
             Decimal("0"),
         )
         prev_bd_value = sum(
-            (h.current_value or h.cost_basis for h in prev_holdings.values()
-             if h.classification == AssetType.BOND),
+            (
+                h.current_value or h.cost_basis
+                for h in prev_holdings.values()
+                if h.classification == AssetType.BOND
+            ),
             Decimal("0"),
         )
         if prev_eq_value > 0 or eq_value > 0:

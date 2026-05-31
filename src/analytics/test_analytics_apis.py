@@ -174,9 +174,7 @@ def step_option_contracts(
         return nearest_expiry
     else:
         print("  FAILED — see response above")
-        recorder.save(
-            "option_chain", "nifty_option_contracts_error", endpoint, params, data
-        )
+        recorder.save("option_chain", "nifty_option_contracts_error", endpoint, params, data)
         return None
 
 
@@ -267,9 +265,7 @@ def step_historical_candles(
             "to_date": today,
             "from_date": "2026-03-01",
         }
-        recorder.save(
-            "historical_candles", "niftybees_daily_30d", endpoint, params, data
-        )
+        recorder.save("historical_candles", "niftybees_daily_30d", endpoint, params, data)
     else:
         print("  FAILED — see response above")
         recorder.save("historical_candles", "niftybees_daily_error", endpoint, {}, data)

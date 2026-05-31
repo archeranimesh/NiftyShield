@@ -34,6 +34,7 @@ CC_OTM_MIN = 0.03
 CC_OTM_MAX = 0.05
 CC_TARGET_OTM = 0.04
 
+
 def compute_max_lots(
     niftybees_units: int,
     nifty_spot: Decimal,

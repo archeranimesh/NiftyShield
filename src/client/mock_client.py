@@ -350,9 +350,7 @@ class MockBrokerClient:
         # Fixtures recorded from the real API wrap candles under a ``data`` key.
         return data.get("data", data.get("candles", []))
 
-    async def get_expired_option_contracts(
-        self, instrument: str, expiry: str
-    ) -> list:
+    async def get_expired_option_contracts(self, instrument: str, expiry: str) -> list:
         """Return an empty list — expired instruments API not yet available.
 
         Args:

@@ -26,12 +26,8 @@ class DateAwareLotSizeResolver:
         if "BEES" in symbol_upper or "EQ|" in symbol_upper or "INF" in symbol_upper:
             return 1
 
-        is_nifty = (
-            ("NIFTY" in symbol_upper)
-            and not any(
-                x in symbol_upper
-                for x in {"BANK", "FIN", "MIDCP", "NEXT"}
-            )
+        is_nifty = ("NIFTY" in symbol_upper) and not any(
+            x in symbol_upper for x in {"BANK", "FIN", "MIDCP", "NEXT"}
         )
 
         if is_nifty:

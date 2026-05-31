@@ -24,9 +24,7 @@ def fmt_inr(value: Decimal, sign_always: bool = False) -> str:
     return f"₹{value:{fmt}.0f}"
 
 
-def format_pnl_table(
-    rows: list[dict[str, Any]], title: str = "", is_dry_run: bool = False
-) -> str:
+def format_pnl_table(rows: list[dict[str, Any]], title: str = "", is_dry_run: bool = False) -> str:
     """Render a compact P&L table: Strategy | Unrealized | Realized | Total P&L.
 
     Args:

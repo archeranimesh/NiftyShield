@@ -61,24 +61,26 @@ def _chain_to_table(
             cols["theta"].append(q6(leg.theta))
             cols["vega"].append(q6(leg.vega))
 
-    schema = pa.schema([
-        ("snapshot_ts", pa.timestamp("us", tz="UTC")),
-        ("underlying", pa.string()),
-        ("expiry_date", pa.date32()),
-        ("strike", pa.decimal128(18, 6)),
-        ("option_type", pa.string()),
-        ("spot", pa.decimal128(18, 6)),
-        ("ltp", pa.decimal128(18, 6)),
-        ("bid", pa.decimal128(18, 6)),
-        ("ask", pa.decimal128(18, 6)),
-        ("oi", pa.int64()),
-        ("volume", pa.int64()),
-        ("iv", pa.decimal128(18, 6)),
-        ("delta", pa.decimal128(18, 6)),
-        ("gamma", pa.decimal128(18, 6)),
-        ("theta", pa.decimal128(18, 6)),
-        ("vega", pa.decimal128(18, 6)),
-    ])
+    schema = pa.schema(
+        [
+            ("snapshot_ts", pa.timestamp("us", tz="UTC")),
+            ("underlying", pa.string()),
+            ("expiry_date", pa.date32()),
+            ("strike", pa.decimal128(18, 6)),
+            ("option_type", pa.string()),
+            ("spot", pa.decimal128(18, 6)),
+            ("ltp", pa.decimal128(18, 6)),
+            ("bid", pa.decimal128(18, 6)),
+            ("ask", pa.decimal128(18, 6)),
+            ("oi", pa.int64()),
+            ("volume", pa.int64()),
+            ("iv", pa.decimal128(18, 6)),
+            ("delta", pa.decimal128(18, 6)),
+            ("gamma", pa.decimal128(18, 6)),
+            ("theta", pa.decimal128(18, 6)),
+            ("vega", pa.decimal128(18, 6)),
+        ]
+    )
     return pa.Table.from_pydict(cols, schema=schema)
 
 

@@ -52,9 +52,9 @@ class SchemePnL:
     current_nav: Decimal
     total_units: Decimal
     total_invested: Decimal
-    current_value: Decimal   # total_units × current_nav, rounded to 2 dp
-    pnl: Decimal             # current_value − total_invested (exact)
-    pnl_pct: Decimal         # pnl / total_invested × 100, rounded to 2 dp
+    current_value: Decimal  # total_units × current_nav, rounded to 2 dp
+    pnl: Decimal  # current_value − total_invested (exact)
+    pnl_pct: Decimal  # pnl / total_invested × 100, rounded to 2 dp
 
 
 @dataclass(frozen=True)
@@ -66,7 +66,7 @@ class PortfolioPnL:
     total_invested: Decimal
     total_current_value: Decimal
     total_pnl: Decimal
-    total_pnl_pct: Decimal   # rounded to 2 dp
+    total_pnl_pct: Decimal  # rounded to 2 dp
 
 
 # ---------------------------------------------------------------------------

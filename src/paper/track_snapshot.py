@@ -89,10 +89,10 @@ async def generate_track_snapshot(
     nifty_spot: Decimal,
     nee: Decimal,
     snapshot_date: date,
-    proxy_monitor: ProxyDeltaMonitor | None = None
+    proxy_monitor: ProxyDeltaMonitor | None = None,
 ) -> TrackSnapshot:
     """Generate the structured daily snapshot for a track.
-    
+
     Separates base vs overlay P&L by filtering leg_role prefixes,
     fetches live Greeks from Upstox chain, assigns base NiftyBees/Futures deltas,
     and computes return on NEE and max DD.
@@ -105,7 +105,7 @@ async def generate_track_snapshot(
             greeks=TrackGreeks(Decimal("0"), Decimal("0"), Decimal("0")),
             max_drawdown_abs=Decimal("0"),
             max_drawdown_pct=Decimal("0"),
-            return_on_nee=Decimal("0")
+            return_on_nee=Decimal("0"),
         )
 
     leg_roles = {t.leg_role for t in trades}
@@ -159,7 +159,9 @@ async def generate_track_snapshot(
         if is_base:
             base_pnl += leg_total_pnl
         elif is_overlay:
-            overlay_pnls[pos.leg_role] = overlay_pnls.get(pos.leg_role, Decimal("0")) + leg_total_pnl
+            overlay_pnls[pos.leg_role] = (
+                overlay_pnls.get(pos.leg_role, Decimal("0")) + leg_total_pnl
+            )
 
         leg_delta = Decimal("0")
         leg_theta = Decimal("0")
@@ -179,7 +181,7 @@ async def generate_track_snapshot(
 
                 if parsed_expiry and strike > Decimal("0"):
                     if parsed_expiry not in fetched_chains:
-                        underlying = "NSE_INDEX|Nifty 50" # assumption for Nifty 50 options
+                        underlying = "NSE_INDEX|Nifty 50"  # assumption for Nifty 50 options
                         try:
                             raw_chain = await broker.get_option_chain(underlying, parsed_expiry)
                             fetched_chains[parsed_expiry] = parse_upstox_option_chain(raw_chain)
@@ -206,7 +208,9 @@ async def generate_track_snapshot(
             proxy_base_leg_delta = leg_delta
 
     if proxy_monitor and proxy_base_leg_delta is not None:
-        state_label, consecutive = proxy_monitor.update_and_check(proxy_base_leg_delta, snapshot_date)
+        state_label, consecutive = proxy_monitor.update_and_check(
+            proxy_base_leg_delta, snapshot_date
+        )
         proxy_state = state_label
         if state_label == "CRITICAL":
             proxy_alert = f"CRITICAL (<0.40, day {consecutive} of 3+)"
@@ -234,5 +238,5 @@ async def generate_track_snapshot(
         max_drawdown_pct=max_dd_pct,
         return_on_nee=ret_on_nee,
         proxy_delta_state=proxy_state,
-        proxy_delta_alert=proxy_alert
+        proxy_delta_alert=proxy_alert,
     )

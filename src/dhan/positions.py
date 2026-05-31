@@ -124,8 +124,7 @@ def filter_intraday_options(
     return [
         p
         for p in positions
-        if p.exchange_segment == "NSE_FNO"
-        and p.product_type in ("INTRADAY", "MARGIN")
+        if p.exchange_segment == "NSE_FNO" and p.product_type in ("INTRADAY", "MARGIN")
     ]
 
 
@@ -143,12 +142,16 @@ def _parse_strike_from_symbol(symbol: str) -> Decimal:
         return Decimal(match.group(1))
 
     # 2. Try NSE weekly option format (e.g. NIFTY2550523500CE, NIFTY25O1523500CE)
-    match = re.search(r"^[A-Z]+(?:\d{2})([1-9ONDond])(?:\d{2})(\d+(?:\.\d+)?)(?:CE|PE)$", symbol, re.IGNORECASE)
+    match = re.search(
+        r"^[A-Z]+(?:\d{2})([1-9ONDond])(?:\d{2})(\d+(?:\.\d+)?)(?:CE|PE)$", symbol, re.IGNORECASE
+    )
     if match:
         return Decimal(match.group(2))
 
     # 3. Try NSE monthly option format (e.g. NIFTY25MAY23500CE)
-    match = re.search(r"^[A-Z]+(?:\d{2})(?:[A-Z]{3})(\d+(?:\.\d+)?)(?:CE|PE)$", symbol, re.IGNORECASE)
+    match = re.search(
+        r"^[A-Z]+(?:\d{2})(?:[A-Z]{3})(\d+(?:\.\d+)?)(?:CE|PE)$", symbol, re.IGNORECASE
+    )
     if match:
         return Decimal(match.group(1))
 

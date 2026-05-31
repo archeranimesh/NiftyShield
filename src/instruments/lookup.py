@@ -273,10 +273,7 @@ class InstrumentLookup:
     # ── Expiry parsing (module-level: parse_expiry) ──
 
     def get_expiry_candidates(
-        self,
-        underlying: str,
-        today: date,
-        preference: list[str] | None = None
+        self, underlying: str, today: date, preference: list[str] | None = None
     ) -> list[tuple[str, str]]:
         """Return (label, expiry_date) pairs in preference order.
 
@@ -333,7 +330,7 @@ class InstrumentLookup:
             if dte < 15:
                 continue
 
-            is_monthly = (d == last_of_month[(d.year, d.month)])
+            is_monthly = d == last_of_month[(d.year, d.month)]
             is_quarterly = is_monthly and (d.month in (3, 6, 9, 12))
             # NSE's long-dated options (yearly/half-yearly) expire in June and December.
             is_yearly = is_monthly and (d.month in (6, 12))
@@ -436,8 +433,13 @@ def format_results(results: list[dict[str, Any]], fields: list[str] | None = Non
 
     if fields is None:
         fields = [
-            "instrument_key", "trading_symbol", "instrument_type",
-            "strike_price", "expiry", "lot_size", "segment",
+            "instrument_key",
+            "trading_symbol",
+            "instrument_type",
+            "strike_price",
+            "expiry",
+            "lot_size",
+            "segment",
         ]
 
     # Filter to fields that exist in results

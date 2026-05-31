@@ -120,13 +120,9 @@ class PortfolioDeltaTracker:
         # Thresholds compare signed delta — negative (net-short) books never breach.
         # See module docstring for design rationale.
         warning_breached = (
-            options_delta > self._options_warning
-            or total_delta > self._combined_warning
+            options_delta > self._options_warning or total_delta > self._combined_warning
         )
-        cap_breached = (
-            options_delta > self._options_cap
-            or total_delta > self._combined_cap
-        )
+        cap_breached = options_delta > self._options_cap or total_delta > self._combined_cap
 
         return PortfolioDelta(
             options_delta_lots=options_delta,

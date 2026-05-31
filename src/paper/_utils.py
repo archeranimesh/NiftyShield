@@ -4,7 +4,7 @@ from typing import Any
 
 def safe_float(val: Any, default: float = 0.0) -> float:
     """Safely convert a value to float.
-    
+
     Returns:
         float: The converted value if successful, else `default`.
         - Numeric strings and numbers are converted.

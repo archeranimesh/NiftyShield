@@ -124,9 +124,7 @@ def build_nuvama_summary(
 
     total_pnl_pct: Decimal | None = None
     if total_basis > 0:
-        total_pnl_pct = (total_pnl / total_basis * 100).quantize(
-            _TWO_DP, rounding="ROUND_HALF_UP"
-        )
+        total_pnl_pct = (total_pnl / total_basis * 100).quantize(_TWO_DP, rounding="ROUND_HALF_UP")
 
     return NuvamaBondSummary(
         snapshot_date=snapshot_date,

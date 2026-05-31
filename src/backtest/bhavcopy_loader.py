@@ -11,12 +11,13 @@ from src.backtest.constants import DEFAULT_DATA_DIR
 
 logger = logging.getLogger(__name__)
 
+
 def load_options_ohlcv(
     underlying: str,
     start: date,
     end: date,
     data_dir: Path = DEFAULT_DATA_DIR,
-    columns: list[str] | None = None
+    columns: list[str] | None = None,
 ) -> pd.DataFrame:
     """
     Reads Parquet partitions covering [start, end] for the given underlying.
@@ -69,7 +70,11 @@ def load_options_ohlcv(
         df = table.to_pandas()
 
         # Filter by exact date range and underlying
-        mask = (df['trade_date'] >= start) & (df['trade_date'] <= end) & (df['underlying'] == underlying)
+        mask = (
+            (df["trade_date"] >= start)
+            & (df["trade_date"] <= end)
+            & (df["underlying"] == underlying)
+        )
         filtered_df = df[mask]
 
         return filtered_df

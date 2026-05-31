@@ -3,6 +3,7 @@
 Pure functions for parsing NetPosition() API responses and building portfolio
 summaries for F&O Options.
 """
+
 from __future__ import annotations
 
 import json
@@ -22,9 +23,7 @@ def parse_options_positions(raw_response: str) -> list[NuvamaOptionPosition]:
     try:
         raw_records = data["resp"]["data"]["pos"]
     except KeyError:
-        logger.warning(
-            "NetPosition() response missing 'resp.data.pos'. Returning empty list."
-        )
+        logger.warning("NetPosition() response missing 'resp.data.pos'. Returning empty list.")
         return []
 
     positions: list[NuvamaOptionPosition] = []
@@ -56,9 +55,7 @@ def parse_options_positions(raw_response: str) -> list[NuvamaOptionPosition]:
             exp_dt = rec.get("dpExpDt", "")
             op_typ = rec.get("opTyp", "")
             stk_prc = rec.get("stkPrc", "")
-            instrument_name = f"{dp_name} {exp_dt} {op_typ} {stk_prc}".strip().replace(
-                "'", ""
-            )
+            instrument_name = f"{dp_name} {exp_dt} {op_typ} {stk_prc}".strip().replace("'", "")
 
             pos = NuvamaOptionPosition(
                 trade_symbol=rec["trdSym"],
@@ -71,9 +68,7 @@ def parse_options_positions(raw_response: str) -> list[NuvamaOptionPosition]:
             )
             positions.append(pos)
         except (KeyError, ValueError, InvalidOperation) as exc:
-            logger.warning(
-                "Skipping malformed options record %r: %s", rec.get("trdSym"), exc
-            )
+            logger.warning("Skipping malformed options record %r: %s", rec.get("trdSym"), exc)
 
     return positions
 
@@ -105,9 +100,7 @@ def build_options_summary(
     total_unrealized = sum((p.unrealized_pnl for p in positions), Decimal("0"))
     total_realized_today = sum((p.realized_pnl_today for p in positions), Decimal("0"))
 
-    total_cumulative_realized = sum(
-        cumulative_realized_pnl_map.values(), Decimal("0")
-    )
+    total_cumulative_realized = sum(cumulative_realized_pnl_map.values(), Decimal("0"))
 
     monthly_realized = monthly_historical_pnl + total_realized_today
 

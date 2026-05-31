@@ -72,9 +72,7 @@ class PaperTrade(BaseModel):
             ValueError: If the name does not start with ``paper_``.
         """
         if not v.startswith("paper_"):
-            raise ValueError(
-                f"PaperTrade strategy_name must start with 'paper_', got: {v!r}"
-            )
+            raise ValueError(f"PaperTrade strategy_name must start with 'paper_', got: {v!r}")
         return v
 
     @field_validator("price", mode="before")

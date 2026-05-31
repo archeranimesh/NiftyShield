@@ -123,9 +123,7 @@ class DhanStore:
                     "ALTER TABLE dhan_options_snapshots ADD COLUMN brokerage TEXT NOT NULL DEFAULT '0'"
                 )
 
-    def record_snapshot(
-        self, holdings: list[DhanHolding], snapshot_date: date
-    ) -> int:
+    def record_snapshot(self, holdings: list[DhanHolding], snapshot_date: date) -> int:
         """Persist a snapshot of Dhan holdings.
 
         Uses upsert on (isin, snapshot_date) — safe to call multiple
@@ -238,9 +236,7 @@ class DhanStore:
             positions: Individual position objects to store as JSON blob.
             is_eod: True for the final 3:45 PM EOD snapshot; False for intraday ticks.
         """
-        positions_json = json.dumps(
-            [dataclasses.asdict(p) for p in positions], default=str
-        )
+        positions_json = json.dumps([dataclasses.asdict(p) for p in positions], default=str)
         trade_date = ts.date().isoformat()
         with _connect(self.db_path) as conn:
             if is_eod:

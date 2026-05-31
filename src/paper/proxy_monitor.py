@@ -16,7 +16,7 @@ class ProxyDeltaMonitor:
 
     def __init__(self, store: PaperStore, strategy_name: str = STRATEGY_PROXY) -> None:
         """Initialize the monitor.
-        
+
         Args:
             store: PaperStore for persisting delta logs.
             strategy_name: The strategy namespace to monitor.
@@ -24,15 +24,13 @@ class ProxyDeltaMonitor:
         self.store = store
         self.strategy_name = strategy_name
 
-    def update_and_check(
-        self, current_delta: Decimal, current_date: date
-    ) -> tuple[str, int]:
+    def update_and_check(self, current_delta: Decimal, current_date: date) -> tuple[str, int]:
         """Record the current delta and check threshold state.
-        
+
         Args:
             current_delta: Current delta of the proxy position.
             current_date: The date of the snapshot.
-            
+
         Returns:
             Tuple of (state_label, consecutive_days).
             state_label is one of 'OK', 'WARNING', or 'CRITICAL'.
@@ -46,13 +44,12 @@ class ProxyDeltaMonitor:
             strategy_name=self.strategy_name,
             log_date=current_date,
             delta=abs_delta,
-            is_below_threshold=is_below
+            is_below_threshold=is_below,
         )
 
         # Retrieve consecutive days
         consecutive_days = self.store.get_proxy_delta_consecutive_days(
-            strategy_name=self.strategy_name,
-            current_date=current_date
+            strategy_name=self.strategy_name, current_date=current_date
         )
 
         if consecutive_days >= self.CRITICAL_DAYS:

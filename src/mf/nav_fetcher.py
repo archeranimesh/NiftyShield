@@ -71,9 +71,7 @@ def _load_source(source: str | Path) -> str:
         FileNotFoundError: If a local path does not exist.
         urllib.error.URLError: If the HTTP request fails.
     """
-    if isinstance(source, Path) or (
-        isinstance(source, str) and not source.startswith("http")
-    ):
+    if isinstance(source, Path) or (isinstance(source, str) and not source.startswith("http")):
         return Path(source).read_text(encoding="utf-8")
 
     with urllib.request.urlopen(str(source)) as resp:

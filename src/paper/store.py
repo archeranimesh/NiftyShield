@@ -130,9 +130,7 @@ class PaperStore:
             conn.executescript(_SCHEMA)
             # Migration: add ivr_at_entry to paper_trades if missing
             try:
-                conn.execute(
-                    "ALTER TABLE paper_trades ADD COLUMN ivr_at_entry REAL DEFAULT NULL"
-                )
+                conn.execute("ALTER TABLE paper_trades ADD COLUMN ivr_at_entry REAL DEFAULT NULL")
             except sqlite3.OperationalError:
                 pass  # Column already exists
 
@@ -295,15 +293,9 @@ class PaperStore:
                     sell_total_qty += qty
                     sell_total_cost += price * qty
 
-            avg_cost = (
-                buy_total_cost / buy_total_qty
-                if buy_total_qty > 0
-                else Decimal("0")
-            )
+            avg_cost = buy_total_cost / buy_total_qty if buy_total_qty > 0 else Decimal("0")
             avg_sell_price = (
-                sell_total_cost / sell_total_qty
-                if sell_total_qty > 0
-                else Decimal("0")
+                sell_total_cost / sell_total_qty if sell_total_qty > 0 else Decimal("0")
             )
 
             positions.append(
@@ -415,9 +407,7 @@ class PaperStore:
                 realized_pnl=Decimal(r["realized_pnl"]),
                 total_pnl=Decimal(r["total_pnl"]),
                 underlying_price=(
-                    Decimal(r["underlying_price"])
-                    if r["underlying_price"] is not None
-                    else None
+                    Decimal(r["underlying_price"]) if r["underlying_price"] is not None else None
                 ),
             )
             for r in rows
@@ -455,9 +445,7 @@ class PaperStore:
             realized_pnl=Decimal(row["realized_pnl"]),
             total_pnl=Decimal(row["total_pnl"]),
             underlying_price=(
-                Decimal(row["underlying_price"])
-                if row["underlying_price"] is not None
-                else None
+                Decimal(row["underlying_price"]) if row["underlying_price"] is not None else None
             ),
         )
 
@@ -503,20 +491,18 @@ class PaperStore:
                 ),
             )
 
-    def get_proxy_delta_consecutive_days(
-        self, strategy_name: str, current_date: date
-    ) -> int:
+    def get_proxy_delta_consecutive_days(self, strategy_name: str, current_date: date) -> int:
         """Get the number of consecutive trading days where delta was below threshold.
-        
+
         Counts backward from current_date. Stops if there's a gap of more than
         3 calendar days between two entries, implying a break in the sequence.
-        
+
         Args:
             strategy_name: Strategy name.
             current_date: The date to start counting backwards from.
-            
+
         Returns:
-            Number of consecutive days immediately preceding (and including) 
+            Number of consecutive days immediately preceding (and including)
             current_date where is_below_threshold was True.
         """
         with _connect(self.db_path) as conn:

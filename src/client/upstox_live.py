@@ -87,9 +87,7 @@ class UpstoxLiveClient:
         """
         return await self._market.get_ltp(instruments)
 
-    async def get_option_chain(
-        self, instrument: str, expiry: str
-    ) -> dict:
+    async def get_option_chain(self, instrument: str, expiry: str) -> dict:
         """Fetch option chain for an underlying + expiry date.
 
         Delegates to UpstoxMarketClient.
@@ -108,9 +106,7 @@ class UpstoxLiveClient:
 
     # ── Not yet implemented (constraints documented above) ────────
 
-    async def get_historical_candles(
-        self, params: CandleRequest
-    ) -> list:
+    async def get_historical_candles(self, params: CandleRequest) -> list:
         """Not yet implemented.
 
         Raises:
@@ -123,9 +119,7 @@ class UpstoxLiveClient:
             "Add a sync fetcher to UpstoxMarketClient first."
         )
 
-    async def get_expired_option_contracts(
-        self, instrument: str, expiry: str
-    ) -> list:
+    async def get_expired_option_contracts(self, instrument: str, expiry: str) -> list:
         """Not available — requires a paid Upstox subscription.
 
         Raises:
@@ -146,9 +140,7 @@ class UpstoxLiveClient:
         """
         self._raise_order_blocked()
 
-    async def modify_order(
-        self, order_id: str, changes: OrderModify
-    ) -> OrderResponse:
+    async def modify_order(self, order_id: str, changes: OrderModify) -> OrderResponse:
         """Not available — order execution blocked by static IP constraint.
 
         Raises:
@@ -172,9 +164,7 @@ class UpstoxLiveClient:
         Raises:
             NotImplementedError: Always. See CONTEXT.md → Tokens & Auth.
         """
-        raise NotImplementedError(
-            "Requires Daily OAuth token — see CONTEXT.md"
-        )
+        raise NotImplementedError("Requires Daily OAuth token — see CONTEXT.md")
 
     async def get_holdings(self) -> list[Holding]:
         """Not available — requires Daily OAuth token.
@@ -182,9 +172,7 @@ class UpstoxLiveClient:
         Raises:
             NotImplementedError: Always. See CONTEXT.md → Tokens & Auth.
         """
-        raise NotImplementedError(
-            "Requires Daily OAuth token — see CONTEXT.md"
-        )
+        raise NotImplementedError("Requires Daily OAuth token — see CONTEXT.md")
 
     async def get_margins(self) -> MarginResponse:
         """Not available — requires Daily OAuth token.
@@ -192,9 +180,7 @@ class UpstoxLiveClient:
         Raises:
             NotImplementedError: Always. See CONTEXT.md → Tokens & Auth.
         """
-        raise NotImplementedError(
-            "Requires Daily OAuth token — see CONTEXT.md"
-        )
+        raise NotImplementedError("Requires Daily OAuth token — see CONTEXT.md")
 
     # ── Private helpers ───────────────────────────────────────────
 

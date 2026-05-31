@@ -24,8 +24,8 @@ from pydantic import BaseModel, Field, model_validator
 class TransactionType(str, Enum):
     """Classification for entries in mf_transactions."""
 
-    INITIAL = "INITIAL"      # Lump-sum entry at the start of tracking
-    SIP = "SIP"              # Monthly systematic instalment
+    INITIAL = "INITIAL"  # Lump-sum entry at the start of tracking
+    SIP = "SIP"  # Monthly systematic instalment
     REDEMPTION = "REDEMPTION"  # Partial or full exit
 
 

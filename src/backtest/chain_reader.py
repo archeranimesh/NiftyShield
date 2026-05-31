@@ -11,9 +11,22 @@ class ChainReader:
     """Reader for querying OptionChain snapshots stored in Parquet format via DuckDB."""
 
     EMPTY_COLS = [
-        "snapshot_ts", "underlying", "expiry_date", "strike", "option_type",
-        "spot", "ltp", "bid", "ask", "oi", "volume", "iv", "delta", "gamma",
-        "theta", "vega"
+        "snapshot_ts",
+        "underlying",
+        "expiry_date",
+        "strike",
+        "option_type",
+        "spot",
+        "ltp",
+        "bid",
+        "ask",
+        "oi",
+        "volume",
+        "iv",
+        "delta",
+        "gamma",
+        "theta",
+        "vega",
     ]
 
     def __init__(self, eod_dir: str, intraday_dir: str | None = None) -> None:

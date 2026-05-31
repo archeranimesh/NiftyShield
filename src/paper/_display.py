@@ -17,12 +17,14 @@ OVERLAY_LABELS = {
     "overlay_collar_call": "Collar",
 }
 
+
 def fmt_decimal(value: Decimal | None, precision: int = 0) -> str:
     """Format a Decimal with comma separators and a sign for non-zero values."""
     if value is None:
         return "-"
     sign = "+" if value > 0 else ""
     return f"{sign}{value:,.{precision}f}"
+
 
 def delta_arrow(delta: Decimal | None) -> str:
     """Return a coloured delta-from-yesterday arrow string."""
@@ -33,6 +35,7 @@ def delta_arrow(delta: Decimal | None) -> str:
     if delta < 0:
         return f"  Δ {fmt_decimal(delta)} ▼"
     return "  Δ ±0"
+
 
 def hedge_verdict(base: Decimal, overlay_total: Decimal) -> str:
     """Return a human-readable effectiveness verdict for a hedge overlay."""

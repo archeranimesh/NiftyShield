@@ -144,9 +144,7 @@ class NuvamaStore:
                     ).fetchall()
                 }
                 if "nifty_spot" in existing_cols:
-                    conn.execute(
-                        "ALTER TABLE nuvama_intraday_snapshots DROP COLUMN nifty_spot"
-                    )
+                    conn.execute("ALTER TABLE nuvama_intraday_snapshots DROP COLUMN nifty_spot")
                 conn.execute("PRAGMA user_version = 3")
             conn.execute(_CREATE_INTRADAY_SNAPSHOTS)
 
@@ -154,9 +152,7 @@ class NuvamaStore:
     # Positions (cost basis)
     # ------------------------------------------------------------------
 
-    def seed_positions(
-        self, positions: list[dict], *, overwrite: bool = False
-    ) -> int:
+    def seed_positions(self, positions: list[dict], *, overwrite: bool = False) -> int:
         """Insert cost-basis positions.  Idempotent by default.
 
         Args:
@@ -191,9 +187,7 @@ class NuvamaStore:
             Dict mapping ISIN to Decimal avg_price. Empty if no positions seeded.
         """
         with connect(self._db_path) as conn:
-            rows = conn.execute(
-                "SELECT isin, avg_price FROM nuvama_positions"
-            ).fetchall()
+            rows = conn.execute("SELECT isin, avg_price FROM nuvama_positions").fetchall()
         return {row["isin"]: Decimal(row["avg_price"]) for row in rows}
 
     def get_position(self, isin: str) -> dict | None:
@@ -462,7 +456,7 @@ class NuvamaStore:
 
     def get_cumulative_realized_pnl(self, before_date: date | None = None) -> dict[str, Decimal]:
         """Return cumulative realized PnL grouped by trade_symbol across all snapshots.
-        
+
         Args:
             before_date: If provided, only returns PnL from snapshots BEFORE this date.
                 Defaults to date.today() to exclude current session tracking.
@@ -518,9 +512,7 @@ class NuvamaStore:
         total = row[0] if row and row[0] is not None else "0"
         return Decimal(str(total))
 
-    def get_options_snapshot_for_date(
-        self, snapshot_date: date
-    ) -> list[NuvamaOptionPosition]:
+    def get_options_snapshot_for_date(self, snapshot_date: date) -> list[NuvamaOptionPosition]:
         """Return all options snapshot rows for a given date."""
         with connect(self._db_path) as conn:
             rows = conn.execute(
@@ -540,8 +532,7 @@ class NuvamaStore:
         cutoff = datetime.now() - timedelta(days=days)
         with connect(self._db_path) as conn:
             conn.execute(
-                "DELETE FROM nuvama_intraday_snapshots WHERE timestamp < ?",
-                (cutoff.isoformat(),)
+                "DELETE FROM nuvama_intraday_snapshots WHERE timestamp < ?", (cutoff.isoformat(),)
             )
 
     def record_intraday_positions(
@@ -583,7 +574,7 @@ class NuvamaStore:
                 FROM nuvama_intraday_snapshots
                 WHERE date(timestamp) = ?
                 """,
-                (snap_date.isoformat(),)
+                (snap_date.isoformat(),),
             ).fetchall()
 
         if not rows:

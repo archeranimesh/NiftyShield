@@ -75,27 +75,15 @@ def _compute_realized_pnl(store: PaperStore, strategy_name: str) -> Decimal:
 
     for leg_role in sorted({t.leg_role for t in trades}):
         leg_trades = [t for t in trades if t.leg_role == leg_role]
-        total_buy_qty = sum(
-            t.quantity for t in leg_trades if t.action == TradeAction.BUY
-        )
-        total_sell_qty = sum(
-            t.quantity for t in leg_trades if t.action == TradeAction.SELL
-        )
+        total_buy_qty = sum(t.quantity for t in leg_trades if t.action == TradeAction.BUY)
+        total_sell_qty = sum(t.quantity for t in leg_trades if t.action == TradeAction.SELL)
         closed_qty = min(total_buy_qty, total_sell_qty)
 
         if closed_qty == 0:
             continue
 
-        buy_total = sum(
-            t.price * t.quantity
-            for t in leg_trades
-            if t.action == TradeAction.BUY
-        )
-        sell_total = sum(
-            t.price * t.quantity
-            for t in leg_trades
-            if t.action == TradeAction.SELL
-        )
+        buy_total = sum(t.price * t.quantity for t in leg_trades if t.action == TradeAction.BUY)
+        sell_total = sum(t.price * t.quantity for t in leg_trades if t.action == TradeAction.SELL)
 
         buy_avg = buy_total / total_buy_qty if total_buy_qty else Decimal("0")
         sell_avg = sell_total / total_sell_qty if total_sell_qty else Decimal("0")
@@ -121,9 +109,7 @@ class PaperTracker:
         self.store = store
         self.market = market
 
-    async def compute_pnl(
-        self, strategy_name: str
-    ) -> tuple[Decimal, Decimal, Decimal] | None:
+    async def compute_pnl(self, strategy_name: str) -> tuple[Decimal, Decimal, Decimal] | None:
         """Fetch current LTPs and compute live P&L for a paper strategy.
 
         Queries open positions, fetches LTPs, computes unrealized P&L per leg,
@@ -181,15 +167,11 @@ class PaperTracker:
         pnl = await self.compute_pnl(strategy_name)
 
         if pnl is None:
-            logger.warning(
-                "Skipping NAV snapshot for '%s' — no trades found", strategy_name
-            )
+            logger.warning("Skipping NAV snapshot for '%s' — no trades found", strategy_name)
             return None
 
         unrealized, realized, total = pnl
-        underlying = (
-            Decimal(str(underlying_price)) if underlying_price is not None else None
-        )
+        underlying = Decimal(str(underlying_price)) if underlying_price is not None else None
 
         snapshot = PaperNavSnapshot(
             strategy_name=strategy_name,
@@ -225,9 +207,7 @@ class PaperTracker:
         strategy_names = self.store.get_strategy_names()
         results: dict[str, PaperNavSnapshot | None] = {}
         for name in strategy_names:
-            results[name] = await self.record_daily_snapshot(
-                name, snapshot_date, underlying_price
-            )
+            results[name] = await self.record_daily_snapshot(name, snapshot_date, underlying_price)
         return results
 
     # ── Private helpers ─────────────────────────────��─────────────────────────

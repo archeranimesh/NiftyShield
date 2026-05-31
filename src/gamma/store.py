@@ -114,70 +114,28 @@ def _row_to_chain_snapshot(row: sqlite3.Row) -> GammaChainSnapshot:
         dte_calendar=row["dte_calendar"],
         nifty_spot=decimal.Decimal(row["nifty_spot"]),
         nifty_futures=(
-            decimal.Decimal(row["nifty_futures"])
-            if row["nifty_futures"] is not None
-            else None
+            decimal.Decimal(row["nifty_futures"]) if row["nifty_futures"] is not None else None
         ),
-        india_vix=(
-            decimal.Decimal(row["india_vix"])
-            if row["india_vix"] is not None
-            else None
-        ),
-        delta_val=(
-            decimal.Decimal(row["delta_val"])
-            if row["delta_val"] is not None
-            else None
-        ),
-        gamma_val=(
-            decimal.Decimal(row["gamma_val"])
-            if row["gamma_val"] is not None
-            else None
-        ),
-        vega_val=(
-            decimal.Decimal(row["vega_val"])
-            if row["vega_val"] is not None
-            else None
-        ),
-        theta_val=(
-            decimal.Decimal(row["theta_val"])
-            if row["theta_val"] is not None
-            else None
-        ),
-        iv_val=(
-            decimal.Decimal(row["iv_val"])
-            if row["iv_val"] is not None
-            else None
-        ),
+        india_vix=(decimal.Decimal(row["india_vix"]) if row["india_vix"] is not None else None),
+        delta_val=(decimal.Decimal(row["delta_val"]) if row["delta_val"] is not None else None),
+        gamma_val=(decimal.Decimal(row["gamma_val"]) if row["gamma_val"] is not None else None),
+        vega_val=(decimal.Decimal(row["vega_val"]) if row["vega_val"] is not None else None),
+        theta_val=(decimal.Decimal(row["theta_val"]) if row["theta_val"] is not None else None),
+        iv_val=(decimal.Decimal(row["iv_val"]) if row["iv_val"] is not None else None),
         gamma_gearing=(
-            decimal.Decimal(row["gamma_gearing"])
-            if row["gamma_gearing"] is not None
-            else None
+            decimal.Decimal(row["gamma_gearing"]) if row["gamma_gearing"] is not None else None
         ),
         distance_pct=(
-            decimal.Decimal(row["distance_pct"])
-            if row["distance_pct"] is not None
-            else None
+            decimal.Decimal(row["distance_pct"]) if row["distance_pct"] is not None else None
         ),
-        best_bid=(
-            decimal.Decimal(row["best_bid"])
-            if row["best_bid"] is not None
-            else None
-        ),
-        best_ask=(
-            decimal.Decimal(row["best_ask"])
-            if row["best_ask"] is not None
-            else None
-        ),
+        best_bid=(decimal.Decimal(row["best_bid"]) if row["best_bid"] is not None else None),
+        best_ask=(decimal.Decimal(row["best_ask"]) if row["best_ask"] is not None else None),
         bid_ask_spread=(
-            decimal.Decimal(row["bid_ask_spread"])
-            if row["bid_ask_spread"] is not None
-            else None
+            decimal.Decimal(row["bid_ask_spread"]) if row["bid_ask_spread"] is not None else None
         ),
         oi=row["oi"],
         oi_change_1d=(
-            decimal.Decimal(row["oi_change_1d"])
-            if row["oi_change_1d"] is not None
-            else None
+            decimal.Decimal(row["oi_change_1d"]) if row["oi_change_1d"] is not None else None
         ),
         volume_day=row["volume_day"],
         strike_iv_pctile_20d=(
@@ -208,20 +166,14 @@ def _row_to_watchlist_entry(row: sqlite3.Row) -> GammaWatchlistEntry:
         ),
         removal_reason=row["removal_reason"],
         distance_pct=(
-            decimal.Decimal(row["distance_pct"])
-            if row["distance_pct"] is not None
-            else None
+            decimal.Decimal(row["distance_pct"]) if row["distance_pct"] is not None else None
         ),
         gamma_gearing=(
-            decimal.Decimal(row["gamma_gearing"])
-            if row["gamma_gearing"] is not None
-            else None
+            decimal.Decimal(row["gamma_gearing"]) if row["gamma_gearing"] is not None else None
         ),
         oi=row["oi"],
         oi_change_1d=(
-            decimal.Decimal(row["oi_change_1d"])
-            if row["oi_change_1d"] is not None
-            else None
+            decimal.Decimal(row["oi_change_1d"]) if row["oi_change_1d"] is not None else None
         ),
         days_on_watchlist=row["days_on_watchlist"],
         elevated=bool(row["elevated"]),
@@ -245,9 +197,7 @@ class GammaStore:
         """
         conn.executescript(_SCHEMA)
 
-    def insert_chain_snapshot(
-        self, conn: sqlite3.Connection, snap: GammaChainSnapshot
-    ) -> None:
+    def insert_chain_snapshot(self, conn: sqlite3.Connection, snap: GammaChainSnapshot) -> None:
         """Insert or update a chain snapshot in the database.
 
         Preserves the original created_at timestamp on conflict updates.
@@ -383,9 +333,7 @@ class GammaStore:
         ).fetchone()
         return _row_to_chain_snapshot(row) if row is not None else None
 
-    def upsert_watchlist(
-        self, conn: sqlite3.Connection, entry: GammaWatchlistEntry
-    ) -> None:
+    def upsert_watchlist(self, conn: sqlite3.Connection, entry: GammaWatchlistEntry) -> None:
         """Insert or update a watchlist entry.
 
         Args:
@@ -420,11 +368,7 @@ class GammaStore:
                 entry.option_type,
                 entry.added_date.isoformat(),
                 entry.last_seen_date.isoformat(),
-                (
-                    entry.removed_date.isoformat()
-                    if entry.removed_date is not None
-                    else None
-                ),
+                (entry.removed_date.isoformat() if entry.removed_date is not None else None),
                 entry.removal_reason,
                 _dec(entry.distance_pct),
                 _dec(entry.gamma_gearing),

@@ -29,6 +29,7 @@ from upstox_client.rest import ApiException
 # Fixture Recorder
 # ---------------------------------------------------------------------------
 
+
 class FixtureRecorder:
     """Records API request/response pairs as JSON fixture files.
 
@@ -100,6 +101,7 @@ class FixtureRecorder:
 # Configuration
 # ---------------------------------------------------------------------------
 
+
 def load_sandbox_token() -> str:
     """Load sandbox token from .env file."""
     load_dotenv()
@@ -121,6 +123,7 @@ def create_sandbox_client(token: str) -> upstox_client.OrderApiV3:
 # ---------------------------------------------------------------------------
 # Order Lifecycle Steps
 # ---------------------------------------------------------------------------
+
 
 def step_place_order(
     client: upstox_client.OrderApiV3,
@@ -233,6 +236,7 @@ def step_cancel_order(
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     """Run full order lifecycle: Place → Modify → Cancel."""

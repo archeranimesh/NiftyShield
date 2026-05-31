@@ -110,7 +110,7 @@ def _build_prev_prices(
 
 def _compute_prev_mf_pnl(
     prev_nav_snaps: list,  # list[MFNavSnapshot]
-    holdings: dict,        # dict[str, MFHolding]
+    holdings: dict,  # dict[str, MFHolding]
 ) -> PortfolioPnL | None:
     """Reconstruct a PortfolioPnL from stored NAV snapshots and current holdings.
 
@@ -219,21 +219,13 @@ def _build_portfolio_summary(
     dhan_bd_value = dhan_summary.bond_value if dhan_summary else Decimal("0")
     dhan_bd_basis = dhan_summary.bond_basis if dhan_summary else Decimal("0")
 
-    nuvama_bd_value = (
-        nuvama_summary.total_value if nuvama_summary else Decimal("0")
-    )
-    nuvama_bd_basis = (
-        nuvama_summary.total_basis if nuvama_summary else Decimal("0")
-    )
+    nuvama_bd_value = nuvama_summary.total_value if nuvama_summary else Decimal("0")
+    nuvama_bd_basis = nuvama_summary.total_basis if nuvama_summary else Decimal("0")
 
     total_value = (
-        mf_value + etf_value + options_pnl
-        + dhan_eq_value + dhan_bd_value + nuvama_bd_value
+        mf_value + etf_value + options_pnl + dhan_eq_value + dhan_bd_value + nuvama_bd_value
     )
-    total_invested = (
-        mf_invested + etf_basis
-        + dhan_eq_basis + dhan_bd_basis + nuvama_bd_basis
-    )
+    total_invested = mf_invested + etf_basis + dhan_eq_basis + dhan_bd_basis + nuvama_bd_basis
 
     total_pnl = (
         (mf_pnl.total_pnl if mf_pnl else Decimal("0"))
@@ -242,11 +234,7 @@ def _build_portfolio_summary(
         + (dhan_summary.equity_pnl if dhan_summary else Decimal("0"))
         + (dhan_summary.bond_pnl if dhan_summary else Decimal("0"))
         + (nuvama_summary.total_pnl if nuvama_summary else Decimal("0"))
-        + (
-            nuvama_options_summary.net_pnl
-            if nuvama_options_summary
-            else Decimal("0")
-        )
+        + (nuvama_options_summary.net_pnl if nuvama_options_summary else Decimal("0"))
     )
 
     total_pnl_pct = (
@@ -265,8 +253,7 @@ def _build_portfolio_summary(
         prev_prices = _build_prev_prices(strategies, prev_snapshots)
         prev_etf_value = _etf_current_value(strategies, prev_prices)
         prev_options_pnl = sum(
-            (_compute_strategy_pnl_from_prices(s, prev_prices).total_pnl
-             for s in strategies),
+            (_compute_strategy_pnl_from_prices(s, prev_prices).total_pnl for s in strategies),
             Decimal("0"),
         )
         etf_day_delta = etf_value - prev_etf_value
@@ -291,15 +278,9 @@ def _build_portfolio_summary(
     any_delta = (
         etf_day_delta is not None
         or mf_day_delta is not None
-        or (
-            dhan_summary.equity_day_delta if dhan_summary else None
-        ) is not None
-        or (
-            dhan_summary.bond_day_delta if dhan_summary else None
-        ) is not None
-        or (
-            nuvama_summary.total_day_delta if nuvama_summary else None
-        ) is not None
+        or (dhan_summary.equity_day_delta if dhan_summary else None) is not None
+        or (dhan_summary.bond_day_delta if dhan_summary else None) is not None
+        or (nuvama_summary.total_day_delta if nuvama_summary else None) is not None
     )
     total_day_delta: Decimal | None = None
     if any_delta:
@@ -307,18 +288,9 @@ def _build_portfolio_summary(
             (mf_day_delta or Decimal("0"))
             + (etf_day_delta or Decimal("0"))
             + (options_day_delta or Decimal("0"))
-            + (
-                (dhan_summary.equity_day_delta or Decimal("0"))
-                if dhan_summary else Decimal("0")
-            )
-            + (
-                (dhan_summary.bond_day_delta or Decimal("0"))
-                if dhan_summary else Decimal("0")
-            )
-            + (
-                (nuvama_summary.total_day_delta or Decimal("0"))
-                if nuvama_summary else Decimal("0")
-            )
+            + ((dhan_summary.equity_day_delta or Decimal("0")) if dhan_summary else Decimal("0"))
+            + ((dhan_summary.bond_day_delta or Decimal("0")) if dhan_summary else Decimal("0"))
+            + ((nuvama_summary.total_day_delta or Decimal("0")) if nuvama_summary else Decimal("0"))
         )
 
     return PortfolioSummary(

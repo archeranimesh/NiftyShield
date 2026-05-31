@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 
 # ── P&L summary dataclasses ─────────────────────────────────────
 
+
 @dataclass(frozen=True)
 class LegPnL:
     """P&L summary for a single leg."""
@@ -104,10 +105,7 @@ def apply_trade_positions(
         New Strategy instance with trade-derived quantities where available.
     """
     # Build instrument_key → Position for O(1) lookup
-    by_instrument_key: dict[str, Position] = {
-        pos.instrument_key: pos
-        for pos in positions.values()
-    }
+    by_instrument_key: dict[str, Position] = {pos.instrument_key: pos for pos in positions.values()}
 
     updated_legs: list[Leg] = []
     matched_keys: set[str] = set()
@@ -118,10 +116,14 @@ def apply_trade_positions(
             pos = by_instrument_key[leg.instrument_key]
             if pos.quantity == 0:
                 continue  # fully closed — drop from active P&L
-            updated_legs.append(leg.model_copy(update={
-                "quantity": pos.quantity,
-                "entry_price": pos.average_price,
-            }))
+            updated_legs.append(
+                leg.model_copy(
+                    update={
+                        "quantity": pos.quantity,
+                        "entry_price": pos.average_price,
+                    }
+                )
+            )
         else:
             updated_legs.append(leg)
 
@@ -132,19 +134,21 @@ def apply_trade_positions(
             continue
         if pos.quantity == 0:
             continue  # fully closed — skip
-        updated_legs.append(Leg(
-            instrument_key=pos.instrument_key,
-            display_name=leg_role,
-            asset_type=AssetType.EQUITY,
-            direction=Direction.BUY,
-            quantity=pos.quantity,
-            lot_size=1,
-            entry_price=pos.average_price,
-            entry_date=entry_date,
-            expiry=None,
-            strike=None,
-            product_type=ProductType.CNC,
-        ))
+        updated_legs.append(
+            Leg(
+                instrument_key=pos.instrument_key,
+                display_name=leg_role,
+                asset_type=AssetType.EQUITY,
+                direction=Direction.BUY,
+                quantity=pos.quantity,
+                lot_size=1,
+                entry_price=pos.average_price,
+                entry_date=entry_date,
+                expiry=None,
+                strike=None,
+                product_type=ProductType.CNC,
+            )
+        )
 
     return strategy.__class__(
         id=strategy.id,
@@ -166,7 +170,9 @@ class PortfolioTracker:
     ) -> None:
         self.store = store
         self.market = market
-        self.snapshot_service = snapshot_service if snapshot_service is not None else SnapshotService(store)
+        self.snapshot_service = (
+            snapshot_service if snapshot_service is not None else SnapshotService(store)
+        )
 
     def _get_overlaid_strategy(self, strategy_name: str) -> Strategy | None:
         """Load a strategy from the store and overlay trade-derived positions.
@@ -199,9 +205,7 @@ class PortfolioTracker:
             result.append(s)
         return result
 
-    def _build_strategy_pnl(
-        self, strategy: Strategy, prices: dict[str, Decimal]
-    ) -> StrategyPnL:
+    def _build_strategy_pnl(self, strategy: Strategy, prices: dict[str, Decimal]) -> StrategyPnL:
         """Compute StrategyPnL from an already-fetched prices dict."""
         leg_pnls = []
         for leg in strategy.legs:
@@ -214,10 +218,7 @@ class PortfolioTracker:
                 )
                 ltp: Decimal = leg.entry_price
             else:
-                ltp = (
-                    raw_ltp if isinstance(raw_ltp, Decimal)
-                    else Decimal(str(raw_ltp))
-                )
+                ltp = raw_ltp if isinstance(raw_ltp, Decimal) else Decimal(str(raw_ltp))
 
             leg_pnls.append(
                 LegPnL(
@@ -323,9 +324,9 @@ class PortfolioTracker:
             equity/bond/futures or the chain call failed.
         """
         option_legs = [
-            leg for leg in legs
-            if leg.asset_type in {AssetType.CE, AssetType.PE}
-            and leg.expiry is not None
+            leg
+            for leg in legs
+            if leg.asset_type in {AssetType.CE, AssetType.PE} and leg.expiry is not None
         ]
         if not option_legs:
             return {}
@@ -338,9 +339,7 @@ class PortfolioTracker:
         result: dict[str, dict] = {}
         for expiry, exp_legs in by_expiry.items():
             try:
-                raw = await self.market.get_option_chain(
-                    "NSE_INDEX|Nifty 50", expiry.isoformat()
-                )
+                raw = await self.market.get_option_chain("NSE_INDEX|Nifty 50", expiry.isoformat())
                 chain = parse_upstox_option_chain(raw if isinstance(raw, list) else [])
             except Exception as exc:
                 # Intentional: Broad catch to prevent a single failed expiry fetch from blocking
@@ -357,9 +356,7 @@ class PortfolioTracker:
 # ── Greeks extraction (module-level: _extract_greeks_from_chain) ──
 
 
-def _extract_greeks_from_chain(
-    chain: OptionChain, leg: Leg
-) -> dict[str, Decimal]:
+def _extract_greeks_from_chain(chain: OptionChain, leg: Leg) -> dict[str, Decimal]:
     """Extract Greeks for a single option leg from a parsed OptionChain.
 
     Looks up the leg's strike in ``chain.strikes`` by ``Decimal(str(leg.strike))``
