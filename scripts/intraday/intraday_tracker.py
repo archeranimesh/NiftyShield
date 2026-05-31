@@ -37,8 +37,8 @@ async def main() -> int:
 
     from dotenv import load_dotenv
 
-    from scripts.dhan_intraday_tracker import main as dhan_main
-    from scripts.nuvama_intraday_tracker import main as nuvama_main
+    from scripts.intraday.dhan_intraday_tracker import main as dhan_main
+    from scripts.intraday.nuvama_intraday_tracker import main as nuvama_main
     from src.client.exceptions import DataFetchError
     from src.client.factory import create_client
     from src.intraday.market_store import IntradayMarketStore
