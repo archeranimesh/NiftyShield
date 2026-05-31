@@ -15,7 +15,7 @@
 - [x] **SR2** — Move `pipeline/` scripts (chain snapshots, gamma watch, bhavcopy) | SHA: a6ca253
 - [x] **SR3** — Move `lookup/` scripts (find_strike, find_overlay, instrument_lookup) | SHA: 3fac186
 - [x] **SR4** — Move `record/` scripts (record_paper_trade, record_trade) | SHA: 5acd9fe
-- [x] **SR5** — Move `seed/` and `dev/` scripts; resolve paper_track_snapshot fate | SHA: 16ca1e1
+- [x] **SR5** — Move `seed/` and `dev/` scripts; resolve paper_track_snapshot fate | SHA: 16ca1e1, test fix SHA: 66f9edd
 - [ ] **SR6** — [LOCKED until SR5] Move `council/` scripts + council_templates/
 - [ ] **SR7** — [LOCKED until SR6] Move `intraday/` scripts — post-market only (high cron sensitivity)
 - [ ] **SR8** — [LOCKED until SR7] Move `strategies/three_track/` scripts — post-market only (EOD cron)
