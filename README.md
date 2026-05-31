@@ -226,7 +226,7 @@ Fetches Nifty option chains for up to 3 expiries (monthly / quarterly / yearly) 
 
 ```bash
 # EOD option chain snapshot — 3:30 PM IST, Mon–Fri
-30 15 * * 1-5  cd /path/to/NiftyShield && python -m scripts.upstox_chain_snapshot >> logs/chain_snapshot.log 2>&1
+30 15 * * 1-5  cd /path/to/NiftyShield && python -m scripts.pipeline.upstox_chain_snapshot >> logs/chain_snapshot.log 2>&1
 ```
 
 Output path: `data/offline/chain_snapshots/{year}/{month}/upstox_{date}.parquet` (override with `CHAIN_SNAPSHOT_DIR`).
@@ -238,7 +238,7 @@ Fetches Nifty option chains for up to 3 expiries every 5 minutes during market h
 
 ```bash
 # Intraday 5-min option chain snapshot — 9:00 AM to 3:55 PM IST, Mon–Fri
-*/5 9-15 * * 1-5  cd /path/to/NiftyShield && python -m scripts.upstox_chain_intraday >> logs/chain_intraday.log 2>&1
+*/5 9-15 * * 1-5  cd /path/to/NiftyShield && python -m scripts.pipeline.upstox_chain_intraday >> logs/chain_intraday.log 2>&1
 ```
 
 Output path: `data/offline/chain_snapshots_5min/{year}/{month}/{day}/upstox_{HHMM}.parquet` (override with `CHAIN_INTRADAY_DIR`).

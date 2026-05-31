@@ -5,8 +5,8 @@ Fetches Nifty option chains for up to 3 expiries (monthly / quarterly / yearly)
 and writes each to Parquet via ChainWriter.
 
 Designed to run daily at 3:30 PM IST (Mon–Fri):
-    30 15 * * 1-5  cd /path/to/NiftyShield && \\
-        python -m scripts.upstox_chain_snapshot >> logs/chain_snapshot.log 2>&1
+    30 15 * * 1-5  cd /path/to/NiftyShield && \
+        python -m scripts.pipeline.upstox_chain_snapshot >> logs/chain_snapshot.log 2>&1
 
 Environment variables:
     CHAIN_SNAPSHOT_DIR      — Parquet output root (default: data/offline/chain_snapshots)
