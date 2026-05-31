@@ -299,6 +299,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-05-31 | CH-9b — Implement @given tests for IVR, delta, and P&L arithmetic — 771db60 |
 | 2026-05-31 | feat(scripts): add healthcheck.py dead man's switch for cron validation — fe1e123 |
 | 2026-05-30 | refactor(src,scripts): replace direct environment access with Settings singleton — fe69612 |
 | 2026-05-30 | CH-7a — Define Settings model in src/config.py mapping all env vars — 0222885 |
@@ -310,6 +311,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 | 2026-05-29 | CI CI-4 — Wire coverage upload to GitHub Actions summary — 4f3ee8a |
 | 2026-05-29 | CI CI-3 — Add pytest-randomly to test config + verify no order-dependent failures — 0af6cfb |
 | 2026-05-29 | CI CI-2 — Add pytest-xdist parallel config + @pytest.mark.slow — 0fed45b |
+| 2026-05-31 | code-health CH-9a — Design hypothesis edge cases for compute_ivr, aggregate_delta, P&L arithmetic — 57418a7 |
 | 2026-05-29 | CI CI-1 — Create .github/workflows/ci.yml — d6e9899 |
 | 2026-05-30 | code-health CH-3 — Create GLOSSARY.md with ~42 domain and project terms — 10a5d22 |
 | 2026-05-29 | dx-foundation DX-7 — Docs close: CONTEXT.md tooling section, DECISIONS.md mypy/ruff/pre-commit entries, TODOS.md session log — docs commit |
