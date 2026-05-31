@@ -300,6 +300,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-05-31 | scripts-restructure SR6 — Move council/ scripts + templates to scripts/council/ and update test imports and path references — 55bb02c |
 | 2026-05-31 | scripts-restructure SR5 — Move seed/ and dev/ scripts to scripts/seed/ and scripts/dev/ and fix test imports — 16ca1e1 |
 | 2026-05-31 | scripts-restructure SR4 — Move record/ scripts (record_paper_trade, record_trade) to scripts/record/, update references and test mock patches — 5acd9fe |
 | 2026-05-31 | scripts-restructure SR3 — Move lookup/ scripts (find_strike_by_delta, find_overlay_strikes, instrument_lookup) and update imports in record_paper_trade, paper_cc_entry, paper_csp_roll, and tests — 3fac186 |
