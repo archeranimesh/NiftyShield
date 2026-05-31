@@ -300,6 +300,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-05-31 | scripts-restructure SR7 — Move intraday/ scripts (intraday_tracker, nuvama_intraday_tracker, dhan_intraday_tracker) to scripts/intraday/ and update crontab — 20b3834 |
 | 2026-05-31 | scripts-restructure SR6 — Move council/ scripts + templates to scripts/council/ and update test imports and path references — 55bb02c |
 | 2026-05-31 | scripts-restructure SR5 — Move seed/ and dev/ scripts to scripts/seed/ and scripts/dev/ and fix test imports — 16ca1e1 |
 | 2026-05-31 | scripts-restructure SR4 — Move record/ scripts (record_paper_trade, record_trade) to scripts/record/, update references and test mock patches — 5acd9fe |
