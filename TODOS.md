@@ -296,6 +296,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-05-31 | scripts-restructure SS1 — Move exploratory scripts out of src/ into scripts/dev/ and rename test_ prefixes — 4fd2e19 |
 | 2026-05-31 | scripts-restructure SR11 — Docs close: CONTEXT.md, DECISIONS.md, and TODOS.md updated to finalize restructured layout — 4777759 |
 | 2026-05-31 | scripts-restructure SR10 — Move portfolio/ scripts (daily_snapshot, morning_nav, paper_snapshot, roll_leg) to scripts/portfolio/ and update crontab — 13b7285 |
 | 2026-05-31 | scripts-restructure SR9 — Move csp and cc_calibration strategy scripts to scripts/strategies/csp/ and scripts/strategies/cc_calibration/, update test imports — e161cc9 |

@@ -28,7 +28,7 @@
 ## src/ restructure (SS series)
 
 - [x] **SS0** — src/ audit complete 2026-05-29. 5 issues identified; SS1–SS4 stories written. | 2026-05-29 discussion closed
-- [ ] **SS1** — [LOCKED until SR5] Evict `src/analytics/` and `src/sandbox/` into `scripts/dev/`; fix test_ naming
+- [x] **SS1** — [LOCKED until SR5] Evict `src/analytics/` and `src/sandbox/` into `scripts/dev/`; fix test_ naming | SHA: 4fd2e19
 - [x] **SS2** — Document 5 undocumented files in CONTEXT_TREE.md; fix stale nuvama mock_client entry | 2026-05-29 done
 - [ ] **SS3** — [LOCKED until SS2] Audit and resolve `src/portfolio/service.py` and `src/intraday/market_store.py`
 - [ ] **SS4** — Write `src/gamma/CLAUDE.md` and `src/nuvama/CLAUDE.md`; codify model placement rule in DECISIONS.md
