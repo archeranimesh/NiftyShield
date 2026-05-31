@@ -13,7 +13,7 @@
 - [x] **SR0** — Layout sign-off: resolved 2026-05-29. pipeline/lookup/record axis confirmed. 5 open questions documented in stories.md. | 2026-05-29 discussion closed
 - [x] **SR1** — Scaffold all subdirectories with `__init__.py` files; verify no src/→scripts imports | SHA: 72cb528
 - [x] **SR2** — [LOCKED until SR1] Move `pipeline/` scripts (chain snapshots, gamma watch, bhavcopy) | SHA: a6ca253
-- [ ] **SR3** — [LOCKED until SR2] Move `lookup/` scripts (find_strike, find_overlay, instrument_lookup)
+- [x] **SR3** — [LOCKED until SR2] Move `lookup/` scripts (find_strike, find_overlay, instrument_lookup) | SHA: da444bc
 - [ ] **SR4** — [LOCKED until SR3] Move `record/` scripts (record_paper_trade, record_trade)
 - [ ] **SR5** — [LOCKED until SR4] Move `seed/` and `dev/` scripts; resolve paper_track_snapshot fate
 - [ ] **SR6** — [LOCKED until SR5] Move `council/` scripts + council_templates/

@@ -300,6 +300,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-05-31 | scripts-restructure SR3 — Move lookup/ scripts (find_strike_by_delta, find_overlay_strikes, instrument_lookup) and update imports in record_paper_trade, paper_cc_entry, paper_csp_roll, and tests — da444bc |
 | 2026-05-31 | scripts-restructure SR2 — Move pipeline/ scripts (chain snapshot, intraday, gamma watch, bhavcopy) and update test imports + crontab — a6ca253 |
 | 2026-05-31 | scripts-restructure SR1 — Scaffold scripts/ subdirectories with __init__.py files — 72cb528 |
 | 2026-05-31 | code-health CH-10 — Docs close: CONTEXT.md (config.py/logging.py/healthcheck.py entries, test count), DECISIONS.md (3 decisions), TODOS.md (healthcheck cron action, session log) — health sprint complete |
