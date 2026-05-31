@@ -223,7 +223,7 @@ _CMD_KWARGS: dict = dict(
 
 def test_build_command_starts_with_record_paper_trade() -> None:
     cmd = build_record_command(_SAMPLE_ROW, **_CMD_KWARGS)
-    assert "python scripts/record_paper_trade.py" in cmd
+    assert "python -m scripts.record.record_paper_trade" in cmd
 
 
 def test_build_command_contains_instrument_key() -> None:

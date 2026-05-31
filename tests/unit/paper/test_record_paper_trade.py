@@ -1,4 +1,4 @@
-"""Unit tests for scripts/record_paper_trade.py.
+"""Unit tests for scripts/record/record_paper_trade.py.
 
 Tests use subprocess.run to exercise the CLI as a real process, or import
 and call main() directly with sys.argv patched (for speed).
@@ -16,20 +16,16 @@ Coverage:
 
 from __future__ import annotations
 
-import sys
-from datetime import date, datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
-from src.paper.store import PaperStore
-
 # Import the module under test — sys.path already has repo root from conftest
-import scripts.record_paper_trade as cli_module
-
+import scripts.record.record_paper_trade as cli_module
+from src.paper.store import PaperStore
+from src.risk.models import PortfolioDelta
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -65,13 +61,20 @@ def _run(
 
 def _base_args(action: str = "SELL") -> list[str]:
     return [
-        "--strategy", _STRATEGY,
-        "--leg", _LEG,
-        "--key", _KEY,
-        "--date", _DATE,
-        "--action", action,
-        "--qty", _QTY,
-        "--price", _PRICE,
+        "--strategy",
+        _STRATEGY,
+        "--leg",
+        _LEG,
+        "--key",
+        _KEY,
+        "--date",
+        _DATE,
+        "--action",
+        action,
+        "--qty",
+        _QTY,
+        "--price",
+        _PRICE,
     ]
 
 
@@ -80,8 +83,22 @@ def _base_args(action: str = "SELL") -> list[str]:
 
 def test_rejects_missing_paper_prefix(tmp_path: Path) -> None:
     code, _, err = _run(
-        ["--strategy", "csp_nifty_v1", "--leg", _LEG, "--key", _KEY,
-         "--date", _DATE, "--action", "SELL", "--qty", _QTY, "--price", _PRICE],
+        [
+            "--strategy",
+            "csp_nifty_v1",
+            "--leg",
+            _LEG,
+            "--key",
+            _KEY,
+            "--date",
+            _DATE,
+            "--action",
+            "SELL",
+            "--qty",
+            _QTY,
+            "--price",
+            _PRICE,
+        ],
         tmp_path / "db.sqlite",
     )
     assert code == 1
@@ -90,8 +107,22 @@ def test_rejects_missing_paper_prefix(tmp_path: Path) -> None:
 
 def test_rejects_live_strategy_name(tmp_path: Path) -> None:
     code, _, err = _run(
-        ["--strategy", "finideas_ilts", "--leg", _LEG, "--key", _KEY,
-         "--date", _DATE, "--action", "SELL", "--qty", _QTY, "--price", _PRICE],
+        [
+            "--strategy",
+            "finideas_ilts",
+            "--leg",
+            _LEG,
+            "--key",
+            _KEY,
+            "--date",
+            _DATE,
+            "--action",
+            "SELL",
+            "--qty",
+            _QTY,
+            "--price",
+            _PRICE,
+        ],
         tmp_path / "db.sqlite",
     )
     assert code == 1
@@ -238,7 +269,7 @@ _FAKE_CHAIN = [
 ]
 
 
-@patch("scripts.record_paper_trade.UpstoxMarketClient")
+@patch("scripts.record.record_paper_trade.UpstoxMarketClient")
 def test_chain_mode_dry_run_prints_table(mock_client_cls, tmp_path: Path) -> None:
     """--expiry triggers chain fetch; table printed; no DB insert."""
     db = tmp_path / "db.sqlite"
@@ -255,7 +286,7 @@ def test_chain_mode_dry_run_prints_table(mock_client_cls, tmp_path: Path) -> Non
     mock_client.get_option_chain_sync.assert_called_once()
 
 
-@patch("scripts.record_paper_trade.UpstoxMarketClient")
+@patch("scripts.record.record_paper_trade.UpstoxMarketClient")
 def test_chain_mode_resolves_key_and_price(mock_client_cls, tmp_path: Path) -> None:
     """Resolved key + mid-price injected; correct instrument recorded."""
     db = tmp_path / "db.sqlite"
@@ -274,16 +305,14 @@ def test_chain_mode_resolves_key_and_price(mock_client_cls, tmp_path: Path) -> N
     assert trades[0].price == Decimal("149.12")
 
 
-@patch("scripts.record_paper_trade.UpstoxMarketClient")
+@patch("scripts.record.record_paper_trade.UpstoxMarketClient")
 def test_chain_mode_index_2_picks_second_rank(mock_client_cls, tmp_path: Path) -> None:
     """--index 2 selects second-ranked row."""
     db = tmp_path / "db.sqlite"
     mock_client = mock_client_cls.return_value
     mock_client.get_option_chain_sync.return_value = _FAKE_CHAIN
 
-    code, out, err = _run(
-        ["--expiry", "2026-05-26", "--index", "2", "--no-dry-run"], db
-    )
+    code, out, err = _run(["--expiry", "2026-05-26", "--index", "2", "--no-dry-run"], db)
 
     assert code == 0, f"stderr: {err}"
     store = PaperStore(db)
@@ -295,7 +324,7 @@ def test_chain_mode_index_2_picks_second_rank(mock_client_cls, tmp_path: Path) -
     assert trades[0].price == Decimal("175.3")
 
 
-@patch("scripts.record_paper_trade.UpstoxMarketClient")
+@patch("scripts.record.record_paper_trade.UpstoxMarketClient")
 def test_chain_mode_empty_chain_exits_1(mock_client_cls, tmp_path: Path) -> None:
     """Empty chain → exit code 1, no insert."""
     db = tmp_path / "db.sqlite"
@@ -326,12 +355,18 @@ def test_close_flag_is_buy_to_close(tmp_path: Path) -> None:
     _run(_base_args("SELL") + ["--no-dry-run"], db)
     # Close with --close flag; no --action needed
     close_args = [
-        "--strategy", _STRATEGY,
-        "--leg", _LEG,
-        "--key", _KEY,
-        "--date", _DATE,
-        "--qty", _QTY,
-        "--price", "12.50",
+        "--strategy",
+        _STRATEGY,
+        "--leg",
+        _LEG,
+        "--key",
+        _KEY,
+        "--date",
+        _DATE,
+        "--qty",
+        _QTY,
+        "--price",
+        "12.50",
         "--close",
         "--no-dry-run",
     ]
@@ -348,12 +383,18 @@ def test_close_flag_dry_run_shows_buy_action(tmp_path: Path) -> None:
     """--close in dry-run mode must display action=BUY in the preview."""
     db = tmp_path / "db.sqlite"
     close_args = [
-        "--strategy", _STRATEGY,
-        "--leg", _LEG,
-        "--key", _KEY,
-        "--date", _DATE,
-        "--qty", _QTY,
-        "--price", "12.50",
+        "--strategy",
+        _STRATEGY,
+        "--leg",
+        _LEG,
+        "--key",
+        _KEY,
+        "--date",
+        _DATE,
+        "--qty",
+        _QTY,
+        "--price",
+        "12.50",
         "--close",
     ]
     code, out, err = _run(close_args, db)
@@ -379,13 +420,17 @@ def test_close_auto_resolves_key_from_position(tmp_path: Path) -> None:
     db = tmp_path / "db.sqlite"
     # Seed short position (net_qty = -75)
     _run(_base_args("SELL") + ["--no-dry-run"], db)
-    
+
     # Close without --key
     close_args = [
-        "--strategy", _STRATEGY,
-        "--leg", _LEG,
-        "--qty", _QTY,
-        "--price", "10.00",
+        "--strategy",
+        _STRATEGY,
+        "--leg",
+        _LEG,
+        "--qty",
+        _QTY,
+        "--price",
+        "10.00",
         "--close",
         "--no-dry-run",
     ]
@@ -393,7 +438,7 @@ def test_close_auto_resolves_key_from_position(tmp_path: Path) -> None:
     assert code == 0, f"stderr: {err}"
     assert "Resolved key from position" in out
     assert _KEY in out
-    
+
     store = PaperStore(db)
     pos = store.get_position(_STRATEGY, _LEG)
     assert pos.net_qty == 0
@@ -404,9 +449,12 @@ def test_close_auto_key_flat_position_exits_1(tmp_path: Path) -> None:
     db = tmp_path / "db.sqlite"
     # No seeding -> flat position
     close_args = [
-        "--strategy", _STRATEGY,
-        "--leg", _LEG,
-        "--price", "10.00",
+        "--strategy",
+        _STRATEGY,
+        "--leg",
+        _LEG,
+        "--price",
+        "10.00",
         "--close",
     ]
     code, out, err = _run(close_args, db)
@@ -414,24 +462,27 @@ def test_close_auto_key_flat_position_exits_1(tmp_path: Path) -> None:
     assert "no open short position" in err
 
 
-@patch("scripts.record_paper_trade.UpstoxMarketClient")
+@patch("scripts.record.record_paper_trade.UpstoxMarketClient")
 def test_close_auto_fetches_ltp_when_no_price(mock_client_cls, tmp_path: Path) -> None:
     """--close and no --price: fetches LTP and uses it as rounded Decimal."""
     db = tmp_path / "db.sqlite"
     mock_client = mock_client_cls.return_value
     mock_client.get_ltp_sync.return_value = {_KEY: 12.506}  # Should round to 12.51
-    
+
     close_args = [
-        "--strategy", _STRATEGY,
-        "--leg", _LEG,
-        "--key", _KEY,
+        "--strategy",
+        _STRATEGY,
+        "--leg",
+        _LEG,
+        "--key",
+        _KEY,
         "--close",
         "--no-dry-run",
     ]
     code, out, err = _run(close_args, db)
     assert code == 0, f"stderr: {err}"
     assert "Auto-price: LTP=₹12.51" in out
-    
+
     store = PaperStore(db)
     trades = store.get_trades(_STRATEGY)
     buy_trades = [t for t in trades if t.action.value == "BUY"]
@@ -439,37 +490,39 @@ def test_close_auto_fetches_ltp_when_no_price(mock_client_cls, tmp_path: Path) -
     assert buy_trades[0].price == Decimal("12.51")
 
 
-@patch("scripts.record_paper_trade.PaperStore")
+@patch("scripts.record.record_paper_trade.PaperStore")
 def test_close_explicit_key_skips_db_lookup(mock_store_cls, tmp_path: Path) -> None:
     """--close with explicit --key skips the PaperStore.get_position call in resolver."""
     db = tmp_path / "db.sqlite"
     # We don't care about the return value, just that it's not called during resolution.
-    # Note: main() calls get_position at the end for the summary, so we can't just 
+    # Note: main() calls get_position at the end for the summary, so we can't just
     # assert_not_called() if we run the whole main().
     # But _resolve_from_position is the ONLY thing that calls it before the price guard.
     # Actually, let's just check that get_position was NOT called.
-    
+
     close_args = [
-        "--strategy", _STRATEGY,
-        "--leg", _LEG,
-        "--key", _KEY,
-        "--price", "10.00",
+        "--strategy",
+        _STRATEGY,
+        "--leg",
+        _LEG,
+        "--key",
+        _KEY,
+        "--price",
+        "10.00",
         "--close",
         "--no-dry-run",
     ]
     # We must mock the return value for the summary call in main() to avoid errors
     mock_store_cls.return_value.get_position.return_value.net_qty = 0
-    
+
     _run(close_args, db)
-    
+
     # It should only be called ONCE (for the summary in main), not TWICE.
     assert mock_store_cls.return_value.get_position.call_count == 1
 
 
 # ── Delta gate tests ──────────────────────────────────────────────────────────
 
-from src.risk.models import PortfolioDelta
-from datetime import timezone
 
 def _make_mock_delta(
     options: Decimal = Decimal(0),
@@ -486,8 +539,9 @@ def _make_mock_delta(
         as_of=datetime.now(tz=timezone.utc),
     )
 
-@patch("scripts.record_paper_trade.UpstoxMarketClient")
-@patch("scripts.record_paper_trade.PortfolioDeltaTracker.aggregate_delta")
+
+@patch("scripts.record.record_paper_trade.UpstoxMarketClient")
+@patch("scripts.record.record_paper_trade.PortfolioDeltaTracker.aggregate_delta")
 def test_gate_blocks_on_cap_breached(mock_aggregate, mock_client_cls, tmp_path: Path) -> None:
     """Gate blocks when cap_breached=True, exit code 1."""
     db = tmp_path / "db.sqlite"
@@ -496,13 +550,20 @@ def test_gate_blocks_on_cap_breached(mock_aggregate, mock_client_cls, tmp_path: 
     mock_aggregate.return_value = _make_mock_delta(cap=True)
 
     args = [
-        "--strategy", _STRATEGY,
-        "--leg", _LEG,
-        "--key", _KEY,
-        "--date", _DATE,
-        "--action", "BUY",
-        "--qty", _QTY,
-        "--price", _PRICE,
+        "--strategy",
+        _STRATEGY,
+        "--leg",
+        _LEG,
+        "--key",
+        _KEY,
+        "--date",
+        _DATE,
+        "--action",
+        "BUY",
+        "--qty",
+        _QTY,
+        "--price",
+        _PRICE,
         "--no-dry-run",
     ]
     code, out, err = _run(args, db)
@@ -510,8 +571,8 @@ def test_gate_blocks_on_cap_breached(mock_aggregate, mock_client_cls, tmp_path: 
     assert "hard cap breached" in err.lower()
 
 
-@patch("scripts.record_paper_trade.UpstoxMarketClient")
-@patch("scripts.record_paper_trade.PortfolioDeltaTracker.aggregate_delta")
+@patch("scripts.record.record_paper_trade.UpstoxMarketClient")
+@patch("scripts.record.record_paper_trade.PortfolioDeltaTracker.aggregate_delta")
 def test_gate_warns_on_warning_breached(mock_aggregate, mock_client_cls, tmp_path: Path) -> None:
     """Gate warns but trade proceeds when warning_breached=True, exit code 0."""
     db = tmp_path / "db.sqlite"
@@ -520,26 +581,33 @@ def test_gate_warns_on_warning_breached(mock_aggregate, mock_client_cls, tmp_pat
     mock_aggregate.return_value = _make_mock_delta(warning=True)
 
     args = [
-        "--strategy", _STRATEGY,
-        "--leg", _LEG,
-        "--key", _KEY,
-        "--date", _DATE,
-        "--action", "BUY",
-        "--qty", _QTY,
-        "--price", _PRICE,
+        "--strategy",
+        _STRATEGY,
+        "--leg",
+        _LEG,
+        "--key",
+        _KEY,
+        "--date",
+        _DATE,
+        "--action",
+        "BUY",
+        "--qty",
+        _QTY,
+        "--price",
+        _PRICE,
         "--no-dry-run",
     ]
     code, out, err = _run(args, db)
     assert code == 0
     assert "WARNING: portfolio delta near cap" in out
-    
+
     # Assert trade is recorded
     store = PaperStore(db)
     assert len(store.get_trades(_STRATEGY)) == 1
 
 
-@patch("scripts.record_paper_trade.UpstoxMarketClient")
-@patch("scripts.record_paper_trade.PortfolioDeltaTracker.aggregate_delta")
+@patch("scripts.record.record_paper_trade.UpstoxMarketClient")
+@patch("scripts.record.record_paper_trade.PortfolioDeltaTracker.aggregate_delta")
 def test_gate_passes_silently_on_no_breach(mock_aggregate, mock_client_cls, tmp_path: Path) -> None:
     """Gate passes silently on no breach, exit code 0."""
     db = tmp_path / "db.sqlite"
@@ -548,13 +616,20 @@ def test_gate_passes_silently_on_no_breach(mock_aggregate, mock_client_cls, tmp_
     mock_aggregate.return_value = _make_mock_delta()
 
     args = [
-        "--strategy", _STRATEGY,
-        "--leg", _LEG,
-        "--key", _KEY,
-        "--date", _DATE,
-        "--action", "BUY",
-        "--qty", _QTY,
-        "--price", _PRICE,
+        "--strategy",
+        _STRATEGY,
+        "--leg",
+        _LEG,
+        "--key",
+        _KEY,
+        "--date",
+        _DATE,
+        "--action",
+        "BUY",
+        "--qty",
+        _QTY,
+        "--price",
+        _PRICE,
         "--no-dry-run",
     ]
     code, out, err = _run(args, db)
@@ -566,8 +641,8 @@ def test_gate_passes_silently_on_no_breach(mock_aggregate, mock_client_cls, tmp_
     assert len(store.get_trades(_STRATEGY)) == 1
 
 
-@patch("scripts.record_paper_trade.UpstoxMarketClient")
-@patch("scripts.record_paper_trade.PortfolioDeltaTracker.aggregate_delta")
+@patch("scripts.record.record_paper_trade.UpstoxMarketClient")
+@patch("scripts.record.record_paper_trade.PortfolioDeltaTracker.aggregate_delta")
 def test_gate_skipped_on_sell(mock_aggregate, mock_client_cls, tmp_path: Path) -> None:
     """Gate is skipped on SELL, exit code 0."""
     db = tmp_path / "db.sqlite"
@@ -575,13 +650,20 @@ def test_gate_skipped_on_sell(mock_aggregate, mock_client_cls, tmp_path: Path) -
     mock_aggregate.return_value = _make_mock_delta(cap=True)
 
     args = [
-        "--strategy", _STRATEGY,
-        "--leg", _LEG,
-        "--key", _KEY,
-        "--date", _DATE,
-        "--action", "SELL",
-        "--qty", _QTY,
-        "--price", _PRICE,
+        "--strategy",
+        _STRATEGY,
+        "--leg",
+        _LEG,
+        "--key",
+        _KEY,
+        "--date",
+        _DATE,
+        "--action",
+        "SELL",
+        "--qty",
+        _QTY,
+        "--price",
+        _PRICE,
         "--no-dry-run",
     ]
     code, out, err = _run(args, db)
@@ -589,27 +671,33 @@ def test_gate_skipped_on_sell(mock_aggregate, mock_client_cls, tmp_path: Path) -
     mock_aggregate.assert_not_called()
 
 
-@patch("scripts.record_paper_trade.UpstoxMarketClient")
-@patch("scripts.record_paper_trade.PortfolioDeltaTracker.aggregate_delta")
+@patch("scripts.record.record_paper_trade.UpstoxMarketClient")
+@patch("scripts.record.record_paper_trade.PortfolioDeltaTracker.aggregate_delta")
 def test_gate_skipped_on_close(mock_aggregate, mock_client_cls, tmp_path: Path) -> None:
     """Gate is skipped on --close path (even though it implies action=BUY), exit code 0."""
     db = tmp_path / "db.sqlite"
     mock_client = mock_client_cls.return_value
     mock_client.get_ltp_sync.return_value = {_KEY: 12.50}
-    
+
     # Seed short position
     _run(_base_args("SELL") + ["--no-dry-run"], db)
-    
+
     # Even if cap is breached, close skips the gate
     mock_aggregate.return_value = _make_mock_delta(cap=True)
 
     args = [
-        "--strategy", _STRATEGY,
-        "--leg", _LEG,
-        "--key", _KEY,
-        "--date", _DATE,
-        "--qty", _QTY,
-        "--price", "12.50",
+        "--strategy",
+        _STRATEGY,
+        "--leg",
+        _LEG,
+        "--key",
+        _KEY,
+        "--date",
+        _DATE,
+        "--qty",
+        _QTY,
+        "--price",
+        "12.50",
         "--close",
         "--no-dry-run",
     ]
@@ -618,8 +706,8 @@ def test_gate_skipped_on_close(mock_aggregate, mock_client_cls, tmp_path: Path) 
     mock_aggregate.assert_not_called()
 
 
-@patch("scripts.record_paper_trade.UpstoxMarketClient")
-@patch("scripts.record_paper_trade.PortfolioDeltaTracker.aggregate_delta")
+@patch("scripts.record.record_paper_trade.UpstoxMarketClient")
+@patch("scripts.record.record_paper_trade.PortfolioDeltaTracker.aggregate_delta")
 def test_gate_protective_put_bypasses_cap(mock_aggregate, mock_client_cls, tmp_path: Path) -> None:
     """BUY PE is protective and bypasses cap check, exit code 0."""
     db = tmp_path / "db.sqlite"
@@ -628,17 +716,24 @@ def test_gate_protective_put_bypasses_cap(mock_aggregate, mock_client_cls, tmp_p
     mock_aggregate.return_value = _make_mock_delta(cap=True)
 
     args = [
-        "--strategy", _STRATEGY,
-        "--leg", _LEG,
-        "--key", "NSE_FO|NIFTY26MAY22000PE",  # PE key triggers protective put bypass
-        "--date", _DATE,
-        "--action", "BUY",
-        "--qty", _QTY,
-        "--price", _PRICE,
+        "--strategy",
+        _STRATEGY,
+        "--leg",
+        _LEG,
+        "--key",
+        "NSE_FO|NIFTY26MAY22000PE",  # PE key triggers protective put bypass
+        "--date",
+        _DATE,
+        "--action",
+        "BUY",
+        "--qty",
+        _QTY,
+        "--price",
+        _PRICE,
         "--no-dry-run",
     ]
     code, out, err = _run(args, db)
     assert code == 0
-    
+
     store = PaperStore(db)
     assert len(store.get_trades(_STRATEGY)) == 1

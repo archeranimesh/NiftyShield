@@ -1,6 +1,6 @@
 """CLI: live Nifty option chain → filter by |delta| range → strike/IV/key table.
 
-Prints ready-to-paste ``record_paper_trade.py`` commands by default (``--dry-run``
+Prints ready-to-paste ``scripts.record.record_paper_trade`` commands by default (``--dry-run``
 is on by default).  Use ``--no-dry-run`` to suppress the command block and show
 the strike table only.
 
@@ -46,7 +46,7 @@ from src.paper.constants import LOT_SIZE, STRATEGY_CSP
 UNDERLYING_DEFAULT = "NSE_INDEX|Nifty 50"
 DEFAULT_LOT_SIZE = LOT_SIZE  # single source of truth: src/paper/constants.py
 
-# Defaults that mirror record_paper_trade.py — used to emit minimal commands.
+# Defaults that mirror scripts.record.record_paper_trade — used to emit minimal commands.
 DEFAULT_STRATEGY = STRATEGY_CSP
 DEFAULT_ACTION = "SELL"
 DEFAULT_LEG = "short_put"
@@ -267,12 +267,12 @@ def build_record_command(
     qty: int,
     trade_date: str,
 ) -> str:
-    """Build a ready-to-paste ``record_paper_trade.py`` CLI command for one row.
+    """Build a ready-to-paste ``scripts.record.record_paper_trade`` CLI command for one row.
 
     Uses mid-price (bid+ask)/2 when both are non-zero; falls back to ltp.
     Price is rounded to 2 decimal places.
 
-    Emits a minimal command — args that match ``record_paper_trade.py`` defaults
+    Emits a minimal command — args that match ``scripts.record.record_paper_trade`` defaults
     (``DEFAULT_STRATEGY``, ``DEFAULT_ACTION``, ``DEFAULT_LEG``, ``DEFAULT_LOT_SIZE``)
     are omitted; ``--date`` is always omitted (defaults to today).  ``--no-dry-run``
     is always appended so the pasted command writes to the DB.
@@ -309,7 +309,7 @@ def build_record_command(
     cmd_body = " \\\n    ".join(arg_parts)
     return (
         f"# {row['side']} {row['strike']:.0f} | delta={delta_str} | iv={iv_str}\n"
-        f"python scripts/record_paper_trade.py \\\n    {cmd_body}"
+        f"python -m scripts.record.record_paper_trade \\\n    {cmd_body}"
     )
 
 
@@ -321,7 +321,7 @@ def _parse_args() -> argparse.Namespace:
         description=(
             "Fetch a live Nifty option chain and filter strikes by |delta| range. "
             "Prints a strike/IV/key table and, with --dry-run, ready-to-paste "
-            "record_paper_trade.py commands."
+            "scripts.record.record_paper_trade commands."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -372,7 +372,7 @@ def _parse_args() -> argparse.Namespace:
 
     dry_grp = p.add_argument_group(
         "dry-run options",
-        "Provide these to emit ready-to-paste record_paper_trade.py commands.",
+        "Provide these to emit ready-to-paste scripts.record.record_paper_trade commands.",
     )
     dry_grp.add_argument(
         "--strategy",
@@ -416,7 +416,7 @@ def _parse_args() -> argparse.Namespace:
         action=argparse.BooleanOptionalAction,
         default=True,
         help=(
-            "Print ready-to-paste record_paper_trade.py commands below the table "
+            "Print ready-to-paste scripts.record.record_paper_trade commands below the table "
             "(default: on). Use --no-dry-run to suppress."
         ),
     )

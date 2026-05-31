@@ -2,22 +2,22 @@ import pytest
 import pandas as pd
 from datetime import date
 from unittest.mock import patch
-from scripts.record_paper_trade import main
+from scripts.record.record_paper_trade import main
 
 @pytest.fixture
 def mock_vix():
     """Mock for back-dated trade tests (trade_date != today)."""
-    with patch("scripts.record_paper_trade.load_vix_series") as mock_load, \
-         patch("scripts.record_paper_trade.compute_ivr") as mock_ivr:
+    with patch("scripts.record.record_paper_trade.load_vix_series") as mock_load, \
+         patch("scripts.record.record_paper_trade.compute_ivr") as mock_ivr:
         yield mock_load, mock_ivr
 
 
 @pytest.fixture
 def mock_vix_today():
     """Mock for today's trade tests — patches fetch_vix_latest instead of load."""
-    with patch("scripts.record_paper_trade.fetch_vix_latest") as mock_live, \
-         patch("scripts.record_paper_trade.load_vix_series") as mock_load, \
-         patch("scripts.record_paper_trade.compute_ivr") as mock_ivr:
+    with patch("scripts.record.record_paper_trade.fetch_vix_latest") as mock_live, \
+         patch("scripts.record.record_paper_trade.load_vix_series") as mock_load, \
+         patch("scripts.record.record_paper_trade.compute_ivr") as mock_ivr:
         yield mock_live, mock_load, mock_ivr
 
 
@@ -27,13 +27,13 @@ def test_record_trade_uses_intraday_db_vix_when_available(mock_vix_today, capsys
     mock_ivr.return_value = 0.35
 
     argv = [
-        "scripts/record_paper_trade.py",
+        "scripts/record/record_paper_trade.py",
         "--key", "KEY",
         "--price", "100",
         "--strategy", "paper_test",
     ]
     with patch(
-        "scripts.record_paper_trade.IntradayMarketStore"
+        "scripts.record.record_paper_trade.IntradayMarketStore"
     ) as mock_store_cls:
         mock_store_cls.return_value.get_latest_vix_today.return_value = 14.8
         with patch("sys.argv", argv):
@@ -52,13 +52,13 @@ def test_record_trade_falls_back_to_api_when_db_has_no_today_snapshot(mock_vix_t
     mock_ivr.return_value = 0.35
 
     argv = [
-        "scripts/record_paper_trade.py",
+        "scripts/record/record_paper_trade.py",
         "--key", "KEY",
         "--price", "100",
         "--strategy", "paper_test",
     ]
     with patch(
-        "scripts.record_paper_trade.IntradayMarketStore"
+        "scripts.record.record_paper_trade.IntradayMarketStore"
     ) as mock_store_cls:
         mock_store_cls.return_value.get_latest_vix_today.return_value = None
         with patch("sys.argv", argv):
@@ -75,13 +75,13 @@ def test_record_trade_skips_ivr_when_db_and_api_both_fail(mock_vix_today, capsys
     mock_live.return_value = None  # API also down
 
     argv = [
-        "scripts/record_paper_trade.py",
+        "scripts/record/record_paper_trade.py",
         "--key", "KEY",
         "--price", "100",
         "--strategy", "paper_test",
     ]
     with patch(
-        "scripts.record_paper_trade.IntradayMarketStore"
+        "scripts.record.record_paper_trade.IntradayMarketStore"
     ) as mock_store_cls:
         mock_store_cls.return_value.get_latest_vix_today.return_value = None
         with patch("sys.argv", argv):
@@ -98,7 +98,7 @@ def test_record_trade_includes_ivr_in_dry_run(mock_vix, capsys):
     mock_ivr.return_value = 0.42
     
     argv = [
-        "scripts/record_paper_trade.py",
+        "scripts/record/record_paper_trade.py",
         "--key", "KEY",
         "--price", "100",
         "--date", "2024-01-01",
@@ -117,7 +117,7 @@ def test_record_trade_warns_on_low_ivr(mock_vix, capsys):
     mock_ivr.return_value = 0.15
     
     argv = [
-        "scripts/record_paper_trade.py",
+        "scripts/record/record_paper_trade.py",
         "--key", "KEY",
         "--price", "100",
         "--date", "2024-01-01",
@@ -136,7 +136,7 @@ def test_record_trade_warns_on_high_ivr(mock_vix, capsys):
     mock_ivr.return_value = 0.75
     
     argv = [
-        "scripts/record_paper_trade.py",
+        "scripts/record/record_paper_trade.py",
         "--key", "KEY",
         "--price", "100",
         "--date", "2024-01-01",
@@ -156,7 +156,7 @@ def test_record_trade_skips_ivr_on_insufficient_data(mock_vix, capsys):
     mock_ivr.return_value = None  # Insufficient data
     
     argv = [
-        "scripts/record_paper_trade.py",
+        "scripts/record/record_paper_trade.py",
         "--key", "KEY",
         "--price", "100",
         "--date", "2024-01-01",
@@ -174,7 +174,7 @@ def test_record_trade_skips_ivr_on_missing_date(mock_vix, capsys):
     mock_load.return_value = pd.Series({date(2024, 1, 2): 15.0}) # Different date
 
     argv = [
-        "scripts/record_paper_trade.py",
+        "scripts/record/record_paper_trade.py",
         "--key", "KEY",
         "--price", "100",
         "--date", "2024-01-01",

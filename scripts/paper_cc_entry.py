@@ -222,7 +222,7 @@ async def run() -> None:
     )
 
     cmd_parts = [
-        "python -m scripts.record_paper_trade",
+        "python -m scripts.record.record_paper_trade",
         f"  --strategy {STRATEGY_CC_OVERLAY}",
         "  --leg-role covered_call",
         '  --underlying "NSE_INDEX|Nifty 50"',
@@ -247,7 +247,7 @@ async def run() -> None:
         exec_cmd = [
             sys.executable,
             "-m",
-            "scripts.record_paper_trade",
+            "scripts.record.record_paper_trade",
             "--strategy",
             STRATEGY_CC_OVERLAY,
             "--leg-role",
