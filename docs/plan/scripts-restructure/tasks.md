@@ -39,4 +39,4 @@
 ## docs/archive/ restructure (DA series)
 
 - [x] **DA0** — Archive audit complete 2026-05-29. Layout designed; two new subfolders (process/, research/); 8 moves + 2 deletes identified. | 2026-05-29 discussion closed
-- [x] **DA1** — Implement archive restructure: create process/ and research/; move 8 files; delete reco_tracker.md + empty docs/analysis/; evict gamma_implementation_plan.md from live docs/antigravity/ | SHA: pending (reco_tracker.md delete requires manual git rm — sandbox permission block)
+- [x] **DA1** — Implement archive restructure: create process/ and research/; move 8 files; delete reco_tracker.md + empty docs/analysis/; evict gamma_implementation_plan.md from live docs/antigravity/ | SHA: d3aa6a3, 851edef
