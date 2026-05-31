@@ -1,7 +1,7 @@
 """Background script to track Nuvama Options PnL at 5-minute intervals.
 
 Intended to run via cron:
-*/5 9-15 * * 1-5 python -m scripts.nuvama_intraday_tracker
+*/5 9-15 * * 1-5 python -m scripts.intraday.nuvama_intraday_tracker
 
 The cron fires from 9:00 but the script exits early for ticks before 9:15
 (Nuvama NetPosition data is stale / unreliable during the opening auction window).

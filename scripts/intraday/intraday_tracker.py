@@ -1,7 +1,7 @@
 """Combined intraday tracker — Dhan options + Nuvama options.
 
 Replaces the previous Nuvama-only */5 cron with a single combined entry:
-    */15 9-15 * * 1-5  cd /path/to/NiftyShield && python -m scripts.intraday_tracker >> logs/intraday.log 2>&1
+    */15 9-15 * * 1-5  cd /path/to/NiftyShield && python -m scripts.intraday.intraday_tracker >> logs/intraday.log 2>&1
 
 Execution order:
     1. Dhan  — sync, no SDK side-effects, safe to run first.

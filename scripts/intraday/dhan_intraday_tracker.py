@@ -1,7 +1,7 @@
 """Dhan intraday options tracker — records positions every 15 minutes.
 
 Standalone Dhan-only tracker. Can be run directly for manual invocation
-or debugging. Also importable by scripts/intraday_tracker.py (combined
+or debugging. Also importable by scripts/intraday/intraday_tracker.py (combined
 orchestrator) which replaces the individual cron entries.
 
 Time window: 09:15–15:29. Before 09:15 Dhan position data is unreliable
@@ -9,7 +9,7 @@ during the opening auction. After 15:29 the market is closed; the final
 EOD snapshot is recorded by daily_snapshot.py at 3:45 PM.
 
 Standalone cron (if running without combined orchestrator):
-    */15 9-15 * * 1-5  cd /path && python -m scripts.dhan_intraday_tracker >> logs/intraday.log 2>&1
+    */15 9-15 * * 1-5  cd /path && python -m scripts.intraday.dhan_intraday_tracker >> logs/intraday.log 2>&1
 
 No os._exit() needed here — no Nuvama SDK thread is involved.
 """
