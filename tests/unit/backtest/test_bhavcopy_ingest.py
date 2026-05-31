@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pyarrow.parquet as pq
 import pytest
 
-from scripts.bhavcopy_bootstrap import main as bootstrap_main
+from scripts.pipeline.bhavcopy_bootstrap import main as bootstrap_main
 from src.backtest.bhavcopy_ingest import (
     download_bhavcopy,
     parse_bhavcopy,
@@ -137,8 +137,8 @@ def test_load_options_ohlcv_empty_on_no_data(tmp_path):
     assert len(df) == 0
 
 
-@patch("scripts.bhavcopy_bootstrap.download_bhavcopy")
-@patch("scripts.bhavcopy_bootstrap.time.sleep")
+@patch("scripts.pipeline.bhavcopy_bootstrap.download_bhavcopy")
+@patch("scripts.pipeline.bhavcopy_bootstrap.time.sleep")
 def test_bhavcopy_bootstrap_404_handling(mock_sleep, mock_download, tmp_path):
     mock_download.side_effect = FileNotFoundError("NSE returned 404")
 
@@ -151,8 +151,8 @@ def test_bhavcopy_bootstrap_404_handling(mock_sleep, mock_download, tmp_path):
     mock_sleep.assert_called_once_with(1.0)
 
 
-@patch("scripts.bhavcopy_bootstrap.download_bhavcopy")
-@patch("scripts.bhavcopy_bootstrap.time.sleep")
+@patch("scripts.pipeline.bhavcopy_bootstrap.download_bhavcopy")
+@patch("scripts.pipeline.bhavcopy_bootstrap.time.sleep")
 def test_bhavcopy_bootstrap_error_handling(mock_sleep, mock_download, tmp_path):
     mock_download.side_effect = OSError("HTTP Error 500")
 
@@ -302,8 +302,8 @@ def test_download_bhavcopy_udiff_akamai_block_raises(mock_session_cls, tmp_path)
         download_bhavcopy(date(2025, 1, 2), tmp_path)
 
 
-@patch("scripts.bhavcopy_bootstrap.download_bhavcopy")
-@patch("scripts.bhavcopy_bootstrap.time.sleep")
+@patch("scripts.pipeline.bhavcopy_bootstrap.download_bhavcopy")
+@patch("scripts.pipeline.bhavcopy_bootstrap.time.sleep")
 def test_bhavcopy_integration_end_to_end(mock_sleep, mock_download, bhavcopy_zip, tmp_path):
     mock_download.return_value = bhavcopy_zip
 

@@ -7,16 +7,14 @@ Mocks: is_trading_day, InstrumentLookup, UpstoxMarketClient,
 
 from __future__ import annotations
 
-import logging
-from datetime import date, datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from scripts.upstox_chain_intraday import main
+from scripts.pipeline.upstox_chain_intraday import main
 from src.client.exceptions import DataFetchError
-
 
 # ── Shared fixtures ───────────────────────────────────────────────────────────
 
@@ -26,7 +24,7 @@ THREE_EXPIRIES = [
     ("yearly", "2026-12-31"),
 ]
 
-_SCRIPT_MODULE = "scripts.upstox_chain_intraday"
+_SCRIPT_MODULE = "scripts.pipeline.upstox_chain_intraday"
 
 
 def _make_mock_chain(n_strikes: int = 3) -> MagicMock:
@@ -105,9 +103,7 @@ def test_single_expiry_failure_continues() -> None:
         patch(f"{_SCRIPT_MODULE}.ChainWriter") as mock_writer_cls,
     ):
         mock_lu_cls.from_file.return_value = mock_lookup
-        mock_client_cls.return_value.get_option_chain_sync.side_effect = (
-            client_side_effects
-        )
+        mock_client_cls.return_value.get_option_chain_sync.side_effect = client_side_effects
         mock_writer_cls.return_value.write_intraday_snapshot.return_value = Path("/tmp/x.parquet")
 
         result = main()
@@ -129,9 +125,7 @@ def test_all_expiries_fail_returns_one() -> None:
         patch(f"{_SCRIPT_MODULE}.ChainWriter") as mock_writer_cls,
     ):
         mock_lu_cls.from_file.return_value = mock_lookup
-        mock_client_cls.return_value.get_option_chain_sync.side_effect = (
-            DataFetchError("all down")
-        )
+        mock_client_cls.return_value.get_option_chain_sync.side_effect = DataFetchError("all down")
 
         result = main()
 

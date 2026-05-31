@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from scripts.upstox_chain_snapshot import main
+from scripts.pipeline.upstox_chain_snapshot import main
 from src.client.exceptions import DataFetchError
 
 # ── Shared fixtures ───────────────────────────────────────────────────────────
@@ -24,7 +24,7 @@ THREE_EXPIRIES = [
     ("yearly", "2026-12-31"),
 ]
 
-_SCRIPT_MODULE = "scripts.upstox_chain_snapshot"
+_SCRIPT_MODULE = "scripts.pipeline.upstox_chain_snapshot"
 
 
 def _make_mock_chain(n_strikes: int = 3) -> MagicMock:

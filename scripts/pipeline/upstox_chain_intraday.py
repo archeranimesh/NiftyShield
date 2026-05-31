@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""EOD option chain snapshot cron for NiftyShield.
+"""Intraday 5-min option chain snapshot cron for NiftyShield.
 
 Fetches Nifty option chains for up to 3 expiries (monthly / quarterly / yearly)
-and writes each to Parquet via ChainWriter.
+and writes each to Parquet via ChainWriter.write_intraday_snapshot.
 
-Designed to run daily at 3:30 PM IST (Mon–Fri):
-    30 15 * * 1-5  cd /path/to/NiftyShield && \\
-        python -m scripts.upstox_chain_snapshot >> logs/chain_snapshot.log 2>&1
+Designed to run every 5 minutes during market hours (Mon–Fri):
+    */5 9-15 * * 1-5  cd /path/to/NiftyShield && \\
+        python -m scripts.upstox_chain_intraday >> logs/chain_intraday.log 2>&1
 
 Environment variables:
-    CHAIN_SNAPSHOT_DIR      — Parquet output root (default: data/offline/chain_snapshots)
+    CHAIN_INTRADAY_DIR      — Parquet output root (default: data/offline/chain_snapshots_5min)
     BOD_INSTRUMENTS_PATH    — Path to NSE.json.gz BOD file (default: data/instruments/NSE.json.gz)
     UPSTOX_ANALYTICS_TOKEN  — Required for live fetch (loaded from .env)
     LOG_LEVEL               — Logging verbosity (default: INFO)
@@ -17,6 +17,7 @@ Environment variables:
 
 from __future__ import annotations
 
+import argparse
 import sys
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -32,28 +33,37 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from src.backtest.chain_writer import ChainWriter
-from src.client.exceptions import DataFetchError
-from src.client.upstox_market import UpstoxMarketClient, parse_upstox_option_chain
-from src.instruments.lookup import InstrumentLookup
-from src.market_calendar.holidays import is_trading_day
+from src.backtest.chain_writer import ChainWriter  # noqa: E402
+from src.client.exceptions import DataFetchError  # noqa: E402
+from src.client.upstox_market import UpstoxMarketClient, parse_upstox_option_chain  # noqa: E402
+from src.instruments.lookup import InstrumentLookup  # noqa: E402
+from src.market_calendar.holidays import is_trading_day  # noqa: E402
 
 logger = structlog.get_logger(__name__)
 
 _NIFTY_INSTRUMENT = "NSE_INDEX|Nifty 50"
-_DEFAULT_SNAPSHOT_DIR = "data/offline/chain_snapshots"
+_DEFAULT_INTRADAY_DIR = "data/offline/chain_snapshots_5min"
 _DEFAULT_BOD_PATH = Path("data/instruments/NSE.json.gz")
 _PREFERENCE = ["monthly", "quarterly", "yearly"]
 _NIFTY_UNDERLYING = "NIFTY_50"
 
 
-def main() -> int:
-    """Fetch EOD option chain for 3 Nifty expiries and persist to Parquet.
+def main(args: list[str] | None = None) -> int:
+    """Fetch intraday option chain for 3 Nifty expiries and persist to Parquet.
 
     Returns 0 on success, 1 on any error.
-    Designed to run as: 30 15 * * 1-5 (3:30 PM IST, Mon–Fri).
+    Designed to run as: */5 9-15 * * 1-5 (Mon–Fri).
     """
     pass
+
+    parser = argparse.ArgumentParser(description="Intraday chain snapshot")
+    parser.add_argument(
+        "--mode",
+        choices=["intraday", "eod"],
+        default="intraday",
+        help="Optional mode flag",
+    )
+    parsed_args = parser.parse_args(args if args is not None else [])
 
     today = date.today()
 
@@ -63,7 +73,7 @@ def main() -> int:
 
     snapshot_ts = datetime.now(timezone.utc)
 
-    base_dir = settings.chain_snapshot_dir
+    base_dir = settings.chain_intraday_dir
     writer = ChainWriter(base_dir)
 
     bod_path = Path(settings.bod_instruments_path)
@@ -79,7 +89,7 @@ def main() -> int:
         logger.warning(
             "only %d expiry candidates found (expected 3): %s",
             len(expiries),
-            [exp for _, exp in expiries],
+            expiries,
         )
 
     if not expiries:
@@ -93,14 +103,15 @@ def main() -> int:
         try:
             raw = client.get_option_chain_sync(_NIFTY_INSTRUMENT, expiry_str)
             chain = parse_upstox_option_chain(raw)
-            path = writer.write_eod_snapshot(chain, snapshot_ts, _NIFTY_UNDERLYING)
-            row_count = len(chain.strikes) * 2
+            if parsed_args.mode == "eod":
+                path = writer.write_eod_snapshot(chain, snapshot_ts, _NIFTY_UNDERLYING)
+            else:
+                path = writer.write_intraday_snapshot(chain, snapshot_ts, _NIFTY_UNDERLYING)
             logger.info(
-                "snapshot written: expiry=%s label=%s strikes=%d rows=%d path=%s",
+                "snapshot written: expiry=%s label=%s strikes=%d path=%s",
                 expiry_str,
                 label,
                 len(chain.strikes),
-                row_count,
                 path,
             )
         except DataFetchError as exc:
@@ -119,4 +130,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     setup_logging()
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))

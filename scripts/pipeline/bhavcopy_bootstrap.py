@@ -12,7 +12,11 @@ from src.utils.logging import setup_logging
 
 load_dotenv()
 
-from src.backtest.bhavcopy_ingest import download_bhavcopy, parse_bhavcopy, write_to_parquet
+from src.backtest.bhavcopy_ingest import (  # noqa: E402
+    download_bhavcopy,
+    parse_bhavcopy,
+    write_to_parquet,
+)
 
 pass
 logger = structlog.get_logger(__name__)
