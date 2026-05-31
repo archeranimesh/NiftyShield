@@ -20,11 +20,10 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
-import scripts.paper_csp_roll as roll_mod
+import scripts.strategies.csp.paper_csp_roll as roll_mod
 from src.models.portfolio import TradeAction
 from src.paper.models import PaperTrade
 from src.paper.store import PaperStore
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -59,6 +58,7 @@ def _make_csp_trade(
 
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
+
 
 def test_parse_expiry_from_key() -> None:
     assert roll_mod._parse_expiry_from_key("NSE_FO|NIFTY12MAY2026PE") == date(2026, 5, 12)
@@ -125,7 +125,7 @@ def test_roll_csp_happy_path(tmp_path: Path) -> None:
 
     mock_broker = AsyncMock()
     mock_broker.get_ltp = AsyncMock(return_value={existing.instrument_key: Decimal("90.00")})
-    
+
     # Mock get_option_chain
     dummy_chain = [
         {
@@ -135,7 +135,7 @@ def test_roll_csp_happy_path(tmp_path: Path) -> None:
                 "instrument_key": "NSE_FO|NIFTY28MAY2026PE",
                 "option_greeks": {"delta": -0.22, "iv": 15.0},
                 "market_data": {"bid_price": 100.0, "ask_price": 102.0, "oi": 5000, "ltp": 101.0},
-            }
+            },
         }
     ]
     mock_broker.get_option_chain = AsyncMock(return_value=dummy_chain)
@@ -173,7 +173,7 @@ def test_roll_csp_dry_run(tmp_path: Path) -> None:
 
     mock_broker = AsyncMock()
     mock_broker.get_ltp = AsyncMock(return_value={existing.instrument_key: Decimal("90.00")})
-    
+
     dummy_chain = [
         {
             "strike_price": 22000.0,
@@ -182,7 +182,7 @@ def test_roll_csp_dry_run(tmp_path: Path) -> None:
                 "instrument_key": "NSE_FO|NIFTY28MAY2026PE",
                 "option_greeks": {"delta": -0.22, "iv": 15.0},
                 "market_data": {"bid_price": 100.0, "ask_price": 102.0, "oi": 5000, "ltp": 101.0},
-            }
+            },
         }
     ]
     mock_broker.get_option_chain = AsyncMock(return_value=dummy_chain)
@@ -214,7 +214,7 @@ def test_roll_csp_preserves_quantity(tmp_path: Path) -> None:
 
     mock_broker = AsyncMock()
     mock_broker.get_ltp = AsyncMock(return_value={existing.instrument_key: Decimal("90.00")})
-    
+
     dummy_chain = [
         {
             "strike_price": 22000.0,
@@ -223,7 +223,7 @@ def test_roll_csp_preserves_quantity(tmp_path: Path) -> None:
                 "instrument_key": "NSE_FO|NIFTY28MAY2026PE",
                 "option_greeks": {"delta": -0.22, "iv": 15.0},
                 "market_data": {"bid_price": 100.0, "ask_price": 102.0, "oi": 5000, "ltp": 101.0},
-            }
+            },
         }
     ]
     mock_broker.get_option_chain = AsyncMock(return_value=dummy_chain)
@@ -288,8 +288,9 @@ def test_close_csp_leg_ltp_fallback(tmp_path: Path) -> None:
     mock_broker.get_ltp = AsyncMock(return_value={existing.instrument_key: Decimal("0.00")})
 
     async def _run() -> None:
-        close = await roll_mod._close_csp_leg(mock_broker, store, existing, _ROLL_DATE, dry_run=False)
+        close = await roll_mod._close_csp_leg(
+            mock_broker, store, existing, _ROLL_DATE, dry_run=False
+        )
         assert close.price == Decimal("150.00")
 
     asyncio.run(_run())
-
