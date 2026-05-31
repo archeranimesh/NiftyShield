@@ -507,6 +507,43 @@ No unit tests for this script.
 
 ---
 
+## M6 — Historical backfill + retrospective SL/target detection (Good-to-Have)
+
+> **Not part of core story. Implement only after M5 is complete.**
+> Useful when adding picks that were issued in the past (e.g. a tip from 1 Jan 2026
+> recorded today). Without this, `mvp_snapshots` will only have data from the day of
+> recording forward.
+
+**What it adds:**
+
+1. **`MVPStore.backfill_snapshots(pick_id, daily_closes: list[tuple[date, Decimal]]) → None`**
+   — bulk-inserts historical daily close prices into `mvp_snapshots` for dates between
+   `pick_date` and today. Skips dates already present (INSERT OR IGNORE keyed on
+   `pick_id + captured_at date`). Monetary values follow TEXT/Decimal invariant.
+
+2. **`src/mvp/backfill.py` — `fetch_historical_closes(symbol, from_date, to_date) → list[tuple[date, Decimal]]`**
+   — fetches daily EOD close prices from NSE Bhavcopy Parquet (already ingested at
+   `data/historical/bhavcopy/`). Falls back to a warning + empty list if data not available.
+   No live API calls — Bhavcopy only.
+
+3. **`scripts/mvp.py backfill <pick_id>`** subcommand:
+   - Loads pick; derives `from_date = pick_date.date()`, `to_date = date.today()`.
+   - Calls `fetch_historical_closes` → `backfill_snapshots`.
+   - Then calls `check_prices` over the historical series in chronological order; stops at
+     the **first breach** (SL or target) and calls `close_pick` at that date/price.
+   - Prints: `Backfilled N days. SL hit on 2026-02-14 at ₹1,050.` or
+     `Backfilled N days. No SL/target breach detected.`
+
+**Tests (`tests/unit/mvp/test_mvp_backfill.py`):**
+- `backfill_snapshots` with 5 dates → 5 rows in `mvp_snapshots`.
+- Duplicate call → no duplicate rows (INSERT OR IGNORE).
+- Historical series with SL breach on day 3 → `close_pick` called at day 3 price.
+- Historical series with no breach → pick stays OPEN.
+
+**Commit:** `feat(mvp): historical backfill + retrospective SL/target detection`
+
+---
+
 ## M5 — Docs close
 
 **Files to change:**
