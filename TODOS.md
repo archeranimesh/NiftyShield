@@ -238,12 +238,8 @@ Existing scripts migrate folder-by-folder, one commit per folder, post-market on
 | Step | Scope | Status |
 |---|---|---|
 | SR0 | Layout sign-off | ✅ Closed 2026-05-29 |
-| SR1–SR4 | Scaffold structure and move pipeline, lookup, and record scripts | ✅ Shipped |
-| SR5–SR6 | Move seed, dev, and council scripts | 🔒 Locked |
-| SR7 | Move intraday/ — post-market only | 🔒 Locked |
-| SR8 | Move strategies/three_track/ — post-market only (EOD cron) | 🔒 Locked |
-| SR9–SR10 | Move strategies/csp+cc_calibration/, portfolio/ | 🔒 Locked |
-| SR11 | Docs close | 🔒 Locked |
+| SR1–SR10 | Subdirectory scaffold, helper audit, and script migrations (pipeline, lookup, record, seed, dev, council, intraday, strategies, portfolio) | ✅ Shipped |
+| SR11 | Docs close | ✅ Shipped |
 
 ---
 
@@ -300,6 +296,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-05-31 | scripts-restructure SR11 — Docs close: CONTEXT.md, DECISIONS.md, and TODOS.md updated to finalize restructured layout — 4777759 |
 | 2026-05-31 | scripts-restructure SR10 — Move portfolio/ scripts (daily_snapshot, morning_nav, paper_snapshot, roll_leg) to scripts/portfolio/ and update crontab — 13b7285 |
 | 2026-05-31 | scripts-restructure SR9 — Move csp and cc_calibration strategy scripts to scripts/strategies/csp/ and scripts/strategies/cc_calibration/, update test imports — e161cc9 |
 | 2026-05-31 | scripts-restructure SR8 — Move strategies/three_track/ scripts to scripts/strategies/three_track/, update test imports, and update crontab — 28894d2 |
