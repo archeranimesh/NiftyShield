@@ -1,4 +1,4 @@
-"""Unit tests for scripts/paper_csp_roll.py.
+"""Unit tests for scripts/strategies/csp/paper_csp_roll.py.
 
 Coverage:
 - Happy path: open CSP leg at DTE 4 -> close + open roundtrip succeeds.
