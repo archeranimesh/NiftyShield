@@ -23,12 +23,10 @@ from pathlib import Path
 
 import pytest
 
-from scripts.seed_mf_holdings import seed_holdings
-from src.models.mf import MFHolding
+from scripts.seed.seed_mf_holdings import seed_holdings
 from src.mf.store import MFStore
 from src.mf.tracker import MFTracker, PortfolioPnL
 from src.portfolio.store import PortfolioStore
-
 
 # ── Fixtures ──────────────────────────────────────────────────────
 
@@ -111,7 +109,7 @@ def test_record_snapshot_persists_nav_snapshots(seeded_mf_store: MFStore) -> Non
 
 def test_record_snapshot_total_invested_matches_seed(seeded_mf_store: MFStore) -> None:
     """Total invested in PortfolioPnL must equal the sum of all seeded amounts."""
-    from scripts.seed_mf_holdings import _HOLDINGS
+    from scripts.seed.seed_mf_holdings import _HOLDINGS
 
     expected = sum(Decimal(row[3]) for row in _HOLDINGS)
     tracker = MFTracker(seeded_mf_store, nav_fetcher=_nav_fetcher_for_all_11)

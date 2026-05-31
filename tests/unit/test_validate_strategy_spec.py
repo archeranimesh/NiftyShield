@@ -10,17 +10,16 @@ from pathlib import Path
 
 import pytest
 
-from scripts.validate_strategy_spec import (
+from scripts.dev.validate_strategy_spec import (
     REQUIRED_SECTIONS,
-    SpecResult,
     check_file,
     validate,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _all_sections() -> str:
     """Return a minimal but complete strategy spec markdown string."""
@@ -33,8 +32,7 @@ def _all_sections() -> str:
         "| Status  | Active    |\n\n"
     )
     sections = "\n".join(
-        f"## {label.split('/')[0].strip()}\n\nContent here.\n"
-        for _, label in REQUIRED_SECTIONS
+        f"## {label.split('/')[0].strip()}\n\nContent here.\n" for _, label in REQUIRED_SECTIONS
     )
     return metadata + sections
 
@@ -48,6 +46,7 @@ def _write(tmp_path: Path, name: str, content: str) -> Path:
 # ---------------------------------------------------------------------------
 # check_file — happy path
 # ---------------------------------------------------------------------------
+
 
 class TestCheckFileHappyPath:
     def test_valid_spec_passes(self, tmp_path: Path) -> None:
@@ -87,6 +86,7 @@ class TestCheckFileHappyPath:
 # check_file — not a spec
 # ---------------------------------------------------------------------------
 
+
 class TestCheckFileNotSpec:
     def test_file_without_name_table_row_is_skipped(self, tmp_path: Path) -> None:
         content = "# Revision Prompt\n\nSome notes about strategy revision.\n"
@@ -105,6 +105,7 @@ class TestCheckFileNotSpec:
 # ---------------------------------------------------------------------------
 # check_file — deprecated
 # ---------------------------------------------------------------------------
+
 
 class TestCheckFileDeprecated:
     def test_blockquote_deprecated_marker_skips(self, tmp_path: Path) -> None:
@@ -133,10 +134,7 @@ class TestCheckFileDeprecated:
         assert result.deprecated
 
     def test_deprecated_flag_case_insensitive(self, tmp_path: Path) -> None:
-        content = (
-            "| Name   | X |\n"
-            "> **deprecated** — old spec.\n"
-        )
+        content = "| Name   | X |\n> **deprecated** — old spec.\n"
         path = _write(tmp_path, "lower_depr.md", content)
         result = check_file(path)
         assert result.deprecated
@@ -146,19 +144,16 @@ class TestCheckFileDeprecated:
 # check_file — missing sections (one per required section)
 # ---------------------------------------------------------------------------
 
+
 class TestCheckFileMissingSections:
     @pytest.mark.parametrize("pattern,label", REQUIRED_SECTIONS)
-    def test_missing_section_reported(
-        self, tmp_path: Path, pattern: str, label: str
-    ) -> None:
+    def test_missing_section_reported(self, tmp_path: Path, pattern: str, label: str) -> None:
         """Removing the heading that matches *pattern* surfaces *label* in missing."""
         # Build a spec with all sections, then strip the one we want to test.
         lines = _all_sections().splitlines(keepends=True)
         # Drop any line whose lower-cased content contains the pattern.
         filtered = [
-            line
-            for line in lines
-            if not (line.startswith("##") and pattern in line.lower())
+            line for line in lines if not (line.startswith("##") and pattern in line.lower())
         ]
         content = "".join(filtered)
         path = _write(tmp_path, f"missing_{pattern.replace(' ', '_')}.md", content)
@@ -177,13 +172,14 @@ class TestCheckFileMissingSections:
         path = _write(tmp_path, "two_missing.md", "".join(filtered))
         result = check_file(path)
         labels = result.missing
-        assert any("Entry" in l for l in labels)
-        assert any("Exit" in l for l in labels)
+        assert any("Entry" in label for label in labels)
+        assert any("Exit" in label for label in labels)
 
 
 # ---------------------------------------------------------------------------
 # validate — directory scan
 # ---------------------------------------------------------------------------
+
 
 class TestValidateDirectoryScan:
     def test_all_pass_returns_zero(self, tmp_path: Path) -> None:
@@ -198,10 +194,7 @@ class TestValidateDirectoryScan:
         assert validate([tmp_path]) == 1
 
     def test_deprecated_files_do_not_count_as_failures(self, tmp_path: Path) -> None:
-        deprecated = (
-            "| Name | X |\n"
-            "> **DEPRECATED**\n\n"
-        )
+        deprecated = "| Name | X |\n> **DEPRECATED**\n\n"
         _write(tmp_path, "old.md", deprecated)
         _write(tmp_path, "good.md", _all_sections())
         assert validate([tmp_path]) == 0
@@ -216,10 +209,7 @@ class TestValidateDirectoryScan:
 
     def test_directory_of_only_deprecated_returns_zero(self, tmp_path: Path) -> None:
         """All specs deprecated → no active specs → all-pass (nothing to fail)."""
-        deprecated = (
-            "| Name | Old Strat |\n"
-            "> **DEPRECATED**\n\n"
-        )
+        deprecated = "| Name | Old Strat |\n> **DEPRECATED**\n\n"
         _write(tmp_path, "old.md", deprecated)
         assert validate([tmp_path]) == 0
 
@@ -236,6 +226,7 @@ class TestValidateDirectoryScan:
 # ---------------------------------------------------------------------------
 # validate — live docs/strategies/ smoke test (read-only, no writes)
 # ---------------------------------------------------------------------------
+
 
 class TestLiveStrategiesDirectory:
     """Smoke-test against the actual docs/strategies/ folder.

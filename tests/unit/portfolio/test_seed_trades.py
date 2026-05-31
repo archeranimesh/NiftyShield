@@ -20,10 +20,9 @@ from pathlib import Path
 
 import pytest
 
-from scripts.seed_trades import _FINRAKSHAK_TRADES, _ILTS_TRADES, build_trades, seed_trades
+from scripts.seed.seed_trades import _FINRAKSHAK_TRADES, _ILTS_TRADES, build_trades, seed_trades
 from src.models.portfolio import TradeAction
 from src.portfolio.store import PortfolioStore
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -65,7 +64,8 @@ def test_build_trades_all_finrakshak_are_buy() -> None:
 
 def test_build_trades_ebbetf0431_has_two_buys() -> None:
     ebbetf = [
-        t for t in build_trades()
+        t
+        for t in build_trades()
         if t.strategy_name == "finideas_ilts" and t.leg_role == "EBBETF0431"
     ]
     assert len(ebbetf) == 2
@@ -97,7 +97,8 @@ def test_build_trades_decimal_precision_ebbetf() -> None:
 
 def test_build_trades_decimal_precision_nifty_jun_pe() -> None:
     pe = [
-        t for t in build_trades()
+        t
+        for t in build_trades()
         if t.strategy_name == "finideas_ilts" and t.leg_role == "NIFTY_JUN_PE"
     ]
     assert pe[0].price == Decimal("840.00")

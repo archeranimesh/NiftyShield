@@ -12,10 +12,10 @@
 
 - [x] **SR0** — Layout sign-off: resolved 2026-05-29. pipeline/lookup/record axis confirmed. 5 open questions documented in stories.md. | 2026-05-29 discussion closed
 - [x] **SR1** — Scaffold all subdirectories with `__init__.py` files; verify no src/→scripts imports | SHA: 72cb528
-- [x] **SR2** — [LOCKED until SR1] Move `pipeline/` scripts (chain snapshots, gamma watch, bhavcopy) | SHA: a6ca253
-- [x] **SR3** — [LOCKED until SR2] Move `lookup/` scripts (find_strike, find_overlay, instrument_lookup) | SHA: 3fac186
+- [x] **SR2** — Move `pipeline/` scripts (chain snapshots, gamma watch, bhavcopy) | SHA: a6ca253
+- [x] **SR3** — Move `lookup/` scripts (find_strike, find_overlay, instrument_lookup) | SHA: 3fac186
 - [x] **SR4** — Move `record/` scripts (record_paper_trade, record_trade) | SHA: 5acd9fe
-- [ ] **SR5** — [LOCKED until SR4] Move `seed/` and `dev/` scripts; resolve paper_track_snapshot fate
+- [x] **SR5** — Move `seed/` and `dev/` scripts; resolve paper_track_snapshot fate | SHA: 16ca1e1
 - [ ] **SR6** — [LOCKED until SR5] Move `council/` scripts + council_templates/
 - [ ] **SR7** — [LOCKED until SR6] Move `intraday/` scripts — post-market only (high cron sensitivity)
 - [ ] **SR8** — [LOCKED until SR7] Move `strategies/three_track/` scripts — post-market only (EOD cron)

@@ -9,7 +9,6 @@ All tests are fully offline.  No Upstox token, no AMFI fetch, no asyncio.
 
 from __future__ import annotations
 
-import tempfile
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -21,8 +20,8 @@ from scripts.daily_snapshot import (
     _compute_strategy_pnl_from_prices,
     _historical_main,
 )
-from src.models.mf import MFNavSnapshot
 from src.mf.store import MFStore
+from src.models.mf import MFNavSnapshot
 from src.models.portfolio import (
     AssetType,
     DailySnapshot,
@@ -32,7 +31,6 @@ from src.models.portfolio import (
     Strategy,
 )
 from src.portfolio.store import PortfolioStore
-
 
 # ── Factories ────────────────────────────────────────────────────
 
@@ -70,17 +68,13 @@ class TestComputeStrategyPnlFromPrices:
     def test_buy_leg_profit(self) -> None:
         leg = _make_leg("A|1", Direction.BUY, "100.00", 10)
         strategy = Strategy(name="test", legs=[leg])
-        pnl = _compute_strategy_pnl_from_prices(
-            strategy, {"A|1": Decimal("110.00")}
-        )
+        pnl = _compute_strategy_pnl_from_prices(strategy, {"A|1": Decimal("110.00")})
         assert pnl.total_pnl == Decimal("100")  # (110−100)×10
 
     def test_sell_leg_profit(self) -> None:
         leg = _make_leg("B|2", Direction.SELL, "200.00", 5)
         strategy = Strategy(name="test", legs=[leg])
-        pnl = _compute_strategy_pnl_from_prices(
-            strategy, {"B|2": Decimal("180.00")}
-        )
+        pnl = _compute_strategy_pnl_from_prices(strategy, {"B|2": Decimal("180.00")})
         assert pnl.total_pnl == Decimal("100")  # (200−180)×5
 
     def test_falls_back_to_entry_price_when_ltp_missing(self) -> None:
@@ -137,9 +131,7 @@ def db_path(tmp_path: Path) -> Path:
 def seeded_store(db_path: Path) -> PortfolioStore:
     """PortfolioStore with one strategy, one leg, one snapshot on 2026-04-06."""
     store = PortfolioStore(db_path)
-    legs = _seed_strategy(
-        store, "ILTS", [_make_leg("NSE_FO|99", Direction.SELL, "840.00", 65)]
-    )
+    legs = _seed_strategy(store, "ILTS", [_make_leg("NSE_FO|99", Direction.SELL, "840.00", 65)])
     store.record_snapshot(
         DailySnapshot(
             leg_id=legs[0].id,
@@ -198,7 +190,7 @@ class TestHistoricalMain:
         self, seeded_store: PortfolioStore, db_path: Path, capsys: pytest.CaptureFixture
     ) -> None:
         """When MF NAV snapshots exist, P&L appears in output."""
-        from scripts.seed_mf_holdings import seed_holdings
+        from scripts.seed.seed_mf_holdings import seed_holdings
 
         mf_store = MFStore(db_path)
         seed_holdings(mf_store)
@@ -269,7 +261,9 @@ class TestBuildPrevPrices:
         )
         leg_id = legs[0].id
 
-        prev = {leg_id: DailySnapshot(leg_id=leg_id, snapshot_date=date(2026, 4, 6), ltp=Decimal("490"))}
+        prev = {
+            leg_id: DailySnapshot(leg_id=leg_id, snapshot_date=date(2026, 4, 6), ltp=Decimal("490"))
+        }
         strategies = store.get_all_strategies()
         result = _build_prev_prices(strategies, prev)
         assert result == {"NSE_FO|999": 490.0}
@@ -279,7 +273,11 @@ class TestBuildPrevPrices:
         store = PortfolioStore(db_path)
         _seed_strategy(store, "bp_ignore", [_make_leg("NSE_FO|1", Direction.BUY, "100.00", 10)])
         orphan_id = 9999  # not a real leg in the DB
-        prev = {orphan_id: DailySnapshot(leg_id=orphan_id, snapshot_date=date(2026, 4, 6), ltp=Decimal("50"))}
+        prev = {
+            orphan_id: DailySnapshot(
+                leg_id=orphan_id, snapshot_date=date(2026, 4, 6), ltp=Decimal("50")
+            )
+        }
         strategies = store.get_all_strategies()
         result = _build_prev_prices(strategies, prev)
         assert result == {}
@@ -302,25 +300,37 @@ class TestTradeOverlayInHistoricalMain:
         seeded_legs = _seed_strategy(store, "ILTS", [etf_leg])
 
         # Record a snapshot for the leg
-        store.record_snapshot(DailySnapshot(
-            leg_id=seeded_legs[0].id,
-            snapshot_date=date(2026, 4, 8),
-            ltp=Decimal("1400.00"),
-        ))
+        store.record_snapshot(
+            DailySnapshot(
+                leg_id=seeded_legs[0].id,
+                snapshot_date=date(2026, 4, 8),
+                ltp=Decimal("1400.00"),
+            )
+        )
 
         # Record trades: 438 + 27 = 465 total qty, weighted avg ~1388.01
-        store.record_trade(Trade(
-            strategy_name="ILTS", leg_role="EBBETF0431",
-            instrument_key="NSE_EQ|INF754K01LE1",
-            trade_date=date(2026, 1, 15), action=TradeAction.BUY,
-            quantity=438, price=Decimal("1388.12"),
-        ))
-        store.record_trade(Trade(
-            strategy_name="ILTS", leg_role="EBBETF0431",
-            instrument_key="NSE_EQ|INF754K01LE1",
-            trade_date=date(2026, 4, 8), action=TradeAction.BUY,
-            quantity=27, price=Decimal("1386.20"),
-        ))
+        store.record_trade(
+            Trade(
+                strategy_name="ILTS",
+                leg_role="EBBETF0431",
+                instrument_key="NSE_EQ|INF754K01LE1",
+                trade_date=date(2026, 1, 15),
+                action=TradeAction.BUY,
+                quantity=438,
+                price=Decimal("1388.12"),
+            )
+        )
+        store.record_trade(
+            Trade(
+                strategy_name="ILTS",
+                leg_role="EBBETF0431",
+                instrument_key="NSE_EQ|INF754K01LE1",
+                trade_date=date(2026, 4, 8),
+                action=TradeAction.BUY,
+                quantity=27,
+                price=Decimal("1386.20"),
+            )
+        )
 
         _historical_main(date(2026, 4, 8), db_path)
         out = capsys.readouterr().out
@@ -329,7 +339,9 @@ class TestTradeOverlayInHistoricalMain:
         # (1400 - 1388.01) * 465 ≈ 5570, certainly > static 438*(1400-1388.12) ≈ 5203
         assert "Done" in out
 
-    def test_overlay_appends_liquidbees_to_etf_value(self, db_path: Path, capsys: pytest.CaptureFixture) -> None:
+    def test_overlay_appends_liquidbees_to_etf_value(
+        self, db_path: Path, capsys: pytest.CaptureFixture
+    ) -> None:
         """LIQUIDBEES trade (no Leg in strategy) → its value flows into ETF component."""
         from src.models.portfolio import Trade, TradeAction
 
@@ -338,19 +350,26 @@ class TestTradeOverlayInHistoricalMain:
         etf_leg = etf_leg.model_copy(update={"display_name": "EBBETF0431"})
         seeded_legs = _seed_strategy(store, "ILTS", [etf_leg])
 
-        store.record_snapshot(DailySnapshot(
-            leg_id=seeded_legs[0].id,
-            snapshot_date=date(2026, 4, 8),
-            ltp=Decimal("1400.00"),
-        ))
+        store.record_snapshot(
+            DailySnapshot(
+                leg_id=seeded_legs[0].id,
+                snapshot_date=date(2026, 4, 8),
+                ltp=Decimal("1400.00"),
+            )
+        )
 
         # Only LIQUIDBEES trade — no Leg for it in the strategy
-        store.record_trade(Trade(
-            strategy_name="ILTS", leg_role="LIQUIDBEES",
-            instrument_key="NSE_EQ|INF732E01037",
-            trade_date=date(2026, 4, 8), action=TradeAction.BUY,
-            quantity=22, price=Decimal("1000.00"),
-        ))
+        store.record_trade(
+            Trade(
+                strategy_name="ILTS",
+                leg_role="LIQUIDBEES",
+                instrument_key="NSE_EQ|INF732E01037",
+                trade_date=date(2026, 4, 8),
+                action=TradeAction.BUY,
+                quantity=22,
+                price=Decimal("1000.00"),
+            )
+        )
 
         _historical_main(date(2026, 4, 8), db_path)
         # Should complete without error — LIQUIDBEES appended as EQUITY leg

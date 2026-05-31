@@ -2,10 +2,7 @@
 
 from decimal import Decimal
 
-import pytest
-
-from scripts.seed_nuvama_positions import build_positions, seed_positions
-
+from scripts.seed.seed_nuvama_positions import build_positions, seed_positions
 
 _KNOWN_ISINS = {
     "INE532F07FD3",  # EFSL 10% NCD 2034

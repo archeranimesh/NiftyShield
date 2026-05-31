@@ -17,15 +17,14 @@ from pathlib import Path
 
 import pytest
 
-from scripts.seed_mf_holdings import (
-    ENTRY_DATE,
+from scripts.seed.seed_mf_holdings import (
     _HOLDINGS,
+    ENTRY_DATE,
     build_transactions,
     seed_holdings,
 )
-from src.models.mf import MFHolding, TransactionType
 from src.mf.store import MFStore
-
+from src.models.mf import MFHolding, TransactionType
 
 # ── Fixtures ──────────────────────────────────────────────────────
 
