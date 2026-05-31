@@ -27,7 +27,8 @@ src/
 ├── models/
 │   ├── __init__.py           # Re-exports all shared models from portfolio.py + mf.py for convenience.
 │   ├── portfolio.py          # Canonical home for all portfolio domain types: Leg, Strategy, DailySnapshot, Trade, TradeAction, Direction, ProductType, AssetType, PortfolioSummary. Monetary fields Decimal; P&L methods accept float|Decimal. PortfolioSummary refactored (AR-4): 16 flat cross-source fields + four typed Optional source references: mf_pnl (PortfolioPnL|None), dhan (DhanPortfolioSummary|None), nuvama_bonds (NuvamaBondSummary|None), nuvama_options (NuvamaOptionsSummary|None). Availability exposed via computed @property (dhan_available, nuvama_available, nuvama_options_available, mf_available). String-literal TYPE_CHECKING annotations on source fields avoid circular imports.
-│   └── mf.py                 # Canonical home for all MF domain types: MFTransaction, MFNavSnapshot, TransactionType, MFHolding. Migrated from src/mf/models.py (TODO 4, 2026-04-16).
+│   ├── mf.py                 # Canonical home for all MF domain types: MFTransaction, MFNavSnapshot, TransactionType, MFHolding. Migrated from src/mf/models.py (TODO 4, 2026-04-16).
+│   └── options.py            # OptionLeg, OptionChainStrike, OptionChain (all frozen=True Pydantic). Source-agnostic field names. Upstox parser: parse_upstox_option_chain() in src/client/upstox_market.py. Dhan parser not implemented.
 ├── portfolio/
 │   ├── CLAUDE.md             # Module context: Leg/Trade distinction, Decimal invariant, apply_trade_positions() overlay, strategy_name constraint
 │   ├── store.py              # SQLite: strategies, legs, daily_snapshots, trades. Trades methods: record_trade (idempotent), get_trades (strategy/leg filter, date ASC), get_position (net qty + weighted avg buy price), get_all_positions_for_strategy (all leg_roles → (net_qty, avg_price, instrument_key)), ensure_leg (auto-persist trade-only legs to get a DB id for snapshot recording; idempotent). entry_price/ltp/close/underlying_price/price stored as TEXT for Decimal precision. WAL + upsert semantics.
@@ -76,6 +77,11 @@ src/
 ├── intraday/
 │   ├── __init__.py           # Package marker
 │   └── market_store.py       # IntradayMarketStore: broker-agnostic SQLite store for intraday_market_snapshots table. record_market_snapshot(timestamp, nifty_spot, india_vix) — one row per tracker tick; timestamp must be timezone-aware. purge_old(days=30). get_latest() → (nifty_spot, india_vix) | None. get_latest_vix_today() → float | None — guards against stale prior-session rows using IST date comparison. Shared by Dhan + Nuvama intraday tracker orchestrator.
+├── risk/
+│   ├── __init__.py           # Package marker
+│   ├── models.py             # PortfolioDelta frozen dataclass: options_delta_lots, niftybees_delta_lots, total_delta_lots, warning_breached, cap_breached, as_of. Computed on demand — never stored in DB.
+│   ├── delta_tracker.py      # PortfolioDeltaTracker: aggregate_delta(paper_positions, nifty_spot, lot_size) → PortfolioDelta. Options-only thresholds warning=0.75/cap=1.0 lots; combined thresholds warning=1.5/cap=2.0 lots; parameterised via constructor. CE/futures = net_qty/lot_size; PE = -net_qty/lot_size; NiftyBees = qty×avg_cost/(spot×lot_size).
+│   └── entry_gate.py         # check_entry_allowed(delta, action) → (allowed, message). Protective entries always allowed; cap breached → block; warning breached → allow with message.
 ├── instruments/
 │   ├── __init__.py           # Package marker
 │   ├── lot_size.py           # DateAwareLotSizeResolver: resolves market lot sizes for underlying symbols (like NIFTY, BANKNIFTY) based on date.
@@ -94,7 +100,9 @@ src/
 │   └── store.py              # NuvamaStore: nuvama_positions (ISIN PK, avg_price TEXT, qty, label — seed once), nuvama_holdings_snapshots (UNIQUE(isin, snapshot_date) upsert; get_snapshot_for_date returns dict[str,dict] with qty/ltp/current_value keys — AR-6; record_all_snapshots uses executemany in single transaction — AR-7; get_prev_total_value() calendar-agnostic), nuvama_options_snapshots (PRIMARY KEY (trade_symbol, snapshot_date) upsert — record_all_options_snapshots atomic via executemany — AR-7; get_cumulative_realized_pnl aggregates realized_pnl_today across all historical rows per symbol via single SQL GROUP BY — AR-8), nuvama_intraday_snapshots (record_intraday_positions/purge_old_intraday 30-day retention/get_intraday_extremes — sums unrealized+realized per timestamp, returns max_pnl/min_pnl/nifty_high/nifty_low).
 ├── utils/
 │   ├── __init__.py           # Package marker.
+│   ├── logging.py            # setup_logging(*, json, level): configures structlog with shared processors (contextvars merge, log level, logger name, ISO timestamp). JSON renderer in prod (upstox_env == "prod"); ConsoleRenderer otherwise. Wired at entry point of every script.
 │   └── number_formatting.py  # fmt_inr(value, *, decimals, sign, width) — Indian numbering system (Lakhs/Crores). _group_indian() private helper. No I/O or dependencies beyond stdlib.
+├── config.py                 # Settings(BaseSettings) singleton (pydantic-settings). Declares every env var across src/ and scripts/: Upstox tokens, Telegram, Nuvama, Dhan, data paths. Loads from .env + environment. Import the settings singleton — never call os.getenv() directly.
 ├── db.py                     # Shared SQLite context manager — WAL mode, row_factory, FK enforcement, auto commit/rollback.
 └── client/
     ├── CLAUDE.md             # Module context: BrokerClient protocol rule, 4 implementations, active constraints
