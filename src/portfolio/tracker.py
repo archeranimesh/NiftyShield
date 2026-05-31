@@ -22,7 +22,7 @@ from src.models.portfolio import (
     ProductType,
     Strategy,
 )
-from src.portfolio.service import SnapshotService
+from src.portfolio.service import SnapshotService, SnapshotServiceProtocol
 from src.portfolio.store import PortfolioStore
 
 logger = logging.getLogger(__name__)
@@ -166,11 +166,11 @@ class PortfolioTracker:
         self,
         store: PortfolioStore,
         market: MarketDataProvider,
-        snapshot_service: SnapshotService | None = None,
+        snapshot_service: SnapshotServiceProtocol | None = None,
     ) -> None:
         self.store = store
         self.market = market
-        self.snapshot_service = (
+        self.snapshot_service: SnapshotServiceProtocol = (
             snapshot_service if snapshot_service is not None else SnapshotService(store)
         )
 

@@ -5,11 +5,44 @@ from __future__ import annotations
 import logging
 from datetime import date
 from decimal import Decimal
+from typing import Protocol
 
 from src.models.portfolio import DailySnapshot, Strategy
 from src.portfolio.store import PortfolioStore
 
 logger = logging.getLogger(__name__)
+
+
+class SnapshotServiceProtocol(Protocol):
+    """Structural protocol for snapshot persistence services.
+
+    Allows ``PortfolioTracker`` to accept any compatible implementation
+    (e.g. a test double) without importing the concrete class.
+    """
+
+    def persist_snapshots(
+        self,
+        strategy_name: str,
+        strategy: Strategy,
+        snap_date: date,
+        prices: dict[str, Decimal],
+        greeks_map: dict[str, dict],
+        underlying_price: Decimal | None = None,
+    ) -> int:
+        """Persist daily snapshots for all legs in a strategy.
+
+        Args:
+            strategy_name: Name of the strategy.
+            strategy: Strategy model with overlaid trade positions.
+            snap_date: Date of the snapshot.
+            prices: dict mapping instrument_key -> price.
+            greeks_map: dict mapping instrument_key -> greeks dict.
+            underlying_price: Optional Nifty spot price.
+
+        Returns:
+            Number of snapshots recorded.
+        """
+        ...
 
 
 class SnapshotService:
