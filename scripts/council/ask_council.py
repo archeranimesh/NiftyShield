@@ -42,9 +42,9 @@ from pathlib import Path
 # any working directory.
 # ---------------------------------------------------------------------------
 
-PROJECT_ROOT: Path = Path(__file__).parent.parent
+PROJECT_ROOT: Path = Path(__file__).parent.parent.parent
 CONTEXT_MD: Path = PROJECT_ROOT / "CONTEXT.md"
-TEMPLATES_DIR: Path = PROJECT_ROOT / "scripts" / "council_templates"
+TEMPLATES_DIR: Path = PROJECT_ROOT / "scripts" / "council" / "council_templates"
 COUNCIL_DIR: Path = PROJECT_ROOT / "docs" / "council"
 PENDING_DIR: Path = COUNCIL_DIR / "pending"
 

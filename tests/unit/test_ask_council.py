@@ -18,9 +18,7 @@ from __future__ import annotations
 import datetime
 from pathlib import Path
 
-import pytest
-
-from scripts.ask_council import (
+from scripts.council.ask_council import (
     _slugify,
     build_prompt,
     format_decision,
@@ -29,7 +27,6 @@ from scripts.ask_council import (
     make_pending_path,
     read_context_file,
 )
-
 
 # ---------------------------------------------------------------------------
 # read_context_file
@@ -197,9 +194,7 @@ class TestBuildPrompt:
         idx_extra = prompt.index("=== ADDITIONAL CONTEXT: extra.md ===")
         assert idx_state < idx_extra
 
-    def test_template_appears_after_extra_files_and_before_question(
-        self, tmp_path: Path
-    ) -> None:
+    def test_template_appears_after_extra_files_and_before_question(self, tmp_path: Path) -> None:
         ctx = self._make_context(tmp_path)
         extra = tmp_path / "extra.md"
         extra.write_text("extra")
