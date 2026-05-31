@@ -31,7 +31,7 @@
 - [x] **SS1** — [LOCKED until SR5] Evict `src/analytics/` and `src/sandbox/` into `scripts/dev/`; fix test_ naming | SHA: 4fd2e19
 - [x] **SS2** — Document 5 undocumented files in CONTEXT_TREE.md; fix stale nuvama mock_client entry | 2026-05-29 done
 - [x] **SS3** — [LOCKED until SS2] Audit and resolve `src/portfolio/service.py` and `src/intraday/market_store.py` | SHA: 5986948 (service.py: SnapshotServiceProtocol added; market_store.py: callers confirmed, tests green, CONTEXT_TREE documented)
-- [x] **SS4** — Write `src/gamma/CLAUDE.md` and `src/nuvama/CLAUDE.md`; codify model placement rule in DECISIONS.md | SHA: pending
+- [x] **SS4** — Write `src/gamma/CLAUDE.md` and `src/nuvama/CLAUDE.md`; codify model placement rule in DECISIONS.md | SHA: 7b2a60b
 - [x] **SS5** — [LOCKED until SS1 + SS3] Sync CONTEXT_TREE.md: remove evicted src/ blocks, verify all remaining files have entries | SHA: 46a9b92
 
 ---
@@ -39,4 +39,4 @@
 ## docs/archive/ restructure (DA series)
 
 - [x] **DA0** — Archive audit complete 2026-05-29. Layout designed; two new subfolders (process/, research/); 8 moves + 2 deletes identified. | 2026-05-29 discussion closed
-- [ ] **DA1** — Implement archive restructure: create process/ and research/; move 8 files; delete reco_tracker.md + empty docs/analysis/; evict gamma_implementation_plan.md from live docs/antigravity/
+- [x] **DA1** — Implement archive restructure: create process/ and research/; move 8 files; delete reco_tracker.md + empty docs/analysis/; evict gamma_implementation_plan.md from live docs/antigravity/ | SHA: pending (reco_tracker.md delete requires manual git rm — sandbox permission block)
