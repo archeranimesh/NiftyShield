@@ -19,13 +19,15 @@ Usage:
     python -m scripts.lookup.instrument_lookup --find-legs
 """
 
+# ruff: noqa: E402
+
 from __future__ import annotations
 
 import argparse
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from src.instruments.lookup import InstrumentLookup, format_results
 

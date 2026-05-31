@@ -25,6 +25,8 @@ Output is written to data/paper/overlay_entry.yaml (override with --output).
 Review the prices before recording — they are mid prices at the time of this query.
 """
 
+# ruff: noqa: E402
+
 from __future__ import annotations
 
 import argparse
@@ -36,7 +38,7 @@ from typing import Any
 
 import yaml
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from src.client.upstox_market import UpstoxMarketClient
 
