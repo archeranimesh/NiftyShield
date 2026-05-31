@@ -108,25 +108,68 @@ src/
     ├── upstox_live.py        # UpstoxLiveClient: production BrokerClient. Delegates get_ltp + get_option_chain to UpstoxMarketClient (Analytics Token). Order execution raises NotImplementedError (static IP blocked). Portfolio read raises NotImplementedError (Daily OAuth token required). Expired instruments + historical candles raise NotImplementedError.
     └── factory.py            # Composition root. create_client(env) → BrokerClient. env: "prod" → UpstoxLiveClient (UPSTOX_ANALYTICS_TOKEN), "sandbox" → UpstoxLiveClient (UPSTOX_SANDBOX_TOKEN), "test" → MockBrokerClient. ONLY file in src/ that imports concrete clients.
 
-scripts/
-├── daily_snapshot.py         # Thin I/O orchestration only. Live mode: holiday guard (is_trading_day) exits early on NSE holidays before any API call; fetches LTPs, records snapshots, prints P&L, sends Telegram (non-fatal). Historical mode (--date YYYY-MM-DD): reads stored snapshots, computes P&L offline — no holiday guard, no API call. Pure computation in src/portfolio/summary.py; pure formatting in src/portfolio/formatting.py. Live mode: create_client(UPSTOX_ENV) — UPSTOX_ENV=test → MockBrokerClient. _historical_main reconstructs NuvamaBondHolding objects using actual qty+ltp from NuvamaStore.get_snapshot_for_date() (AR-6 — no more qty=1 stub).
-├── morning_nav.py            # MF NAV backfill cron (09:15 IST, weekdays). Fetches AMFI and upserts MFNavSnapshot for prev_trading_day(today) — fixes stale T-2 NAV written by the 15:45 daily_snapshot run (AMFI not yet published at that time). --date override for manual recovery. Exit 0/1. Cron: 15 9 * * 1-5.
-├── nuvama_intraday_tracker.py # Invoked every 5 minutes by Cron (*/5 9-15 * * 1-5). Holiday guard (is_trading_day) exits early on NSE holidays. Fetches Nuvama NetPosition() for options positions + Nifty 50 spot from Upstox batch LTP. Records per-leg intraday state via store.record_intraday_positions() (auto-purges rows > 30 days). os._exit() required — Nuvama SDK spawns a non-daemon background thread that hangs sys.exit().
-├── send_test_telegram.py     # Smoke-test script. Reads TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID from .env, sends a sample P&L message. Exit code 0/1. Run before first cron to verify credentials.
-├── seed_mf_holdings.py       # One-time CLI. Inserts 11 INITIAL MF transactions. Idempotent. --dry-run flag.
-├── seed_trades.py            # Idempotent backfill of all finideas_ilts + finrakshak executions as Trade rows. build_trades() (pure) + seed_trades() (I/O). --dry-run flag. 7 trades total. strategy_name must match strategies table (finideas_ilts, finrakshak).
-├── find_strike_by_delta.py    # CLI: live Nifty option chain → filter by |delta| range → strike/IV/key table. Prints ready-to-paste record_paper_trade.py commands. --expiry and --date use type=date.fromisoformat. Added --track shortcut.
-├── paper_3track_entry.py      # Base leg entry for 3-Track comparison. Auto-selects DITM CE proxy + futures + NiftyBees. --confirm required to write.
-├── paper_3track_overlay.py    # Live-fetch overlay entry for all 3 tracks (spot/futures/proxy). PP/CC/collar types. CC permanently blocked on paper_nifty_futures (synthetic short put). _check_existing_overlay detects open SELL positions correctly. Atomicity: failed writes rolled back via store.delete_trade(). Imports: ALL_TRACKS, _ACTION_FOR_ROLE, _OPTION_TYPE_FOR_ROLE, _build_trade, _collect_expiry_candidates, _fetch_candidates_for_expiries, _select_best_candidate reused by roll script.
-├── paper_3track_snapshot.py   # Canonical EOD cron for 3-track comparison (15:45 IST). Live spot fetch (--spot to override). Per-leg delta-from-yesterday via get_prev_leg_snapshot. Writes paper_nav_snapshots + paper_leg_snapshots (--no-save for dry-run). _hedge_verdict shows overlay protection ratio. Uses format_track_summary() for summary-first reporting; --verbose for leg details.
-├── paper_snapshot.py          # EOD mark-to-market for CSP Nifty. Dry-run by default; --no-dry-run to write. Integrated format_pnl_table() for standardized output.
-├── paper_track_snapshot.py    # Legacy snapshot script (preserved for compatibility).
-├── record_paper_trade.py      # Automated CSP/overlay trade recorder. Resolves instrument keys/prices from live chain or existing DB position. Dry-run by default.
-├── record_trade.py            # CLI for recording future trades. Validates via Trade model; inserts; prints updated net position + avg price. --dry-run prints without touching DB. --strategy takes DB strategy name (e.g. finideas_ilts, not ILTS).
-├── roll_leg.py                # CLI for atomic option leg rolls. Closes old leg + opens new leg in a single DB transaction. Pure _build_trades() validates both Trade objects before any DB write. --old-*/--new-* flag pairs. --dry-run. Calls store.record_roll().
-├── seed_nuvama_positions.py  # One-time seed of Nuvama bond cost-basis. build_positions() pure (6 instruments). seed_positions() I/O wrapper. --write (required to commit), --overwrite, --db. Dry-run by default.
-├── probe_nuvama_schema.py    # Diagnostic script (not production). Dumps all rmsHdg fields from live Holdings() response.
-└── paper_3track_overlay_roll.py # Rolls expiring overlay legs at DTE ≤ OVERLAY_ROLL_DTE (5). _parse_expiry_from_key extracts date from NSE_FO key regex. _find_expiring_overlay: Phase-B fix applied (last_trade tracks SELL direction). _roll_single: 2-trade atomic (close written first; open failure → delete_trade rollback). --force bypasses DTE gate. --yes skips interactive confirmation (TTY-aware). Imports constants + helpers from paper_3track_overlay.py.
+111: scripts/
+112: ├── __init__.py           # Package marker
+113: ├── pipeline/             # cron-driven; produces data or snapshots; shared across strategies
+114: │   ├── __init__.py       # Package marker
+115: │   ├── upstox_chain_snapshot.py # EOD option chain snapshot cron. Writes to PyArrow Parquet.
+116: │   ├── upstox_chain_intraday.py # 5-min intraday option chain snapshot. Writes to Parquet.
+117: │   ├── gamma_daily_watch.py     # Greeks monitoring from chain snapshots.
+118: │   └── bhavcopy_bootstrap.py    # Resumable bulk NSE bhavcopy download 2016–present.
+119: ├── lookup/               # on-demand queries; called by humans or entry scripts
+120: │   ├── __init__.py       # Package marker
+121: │   ├── find_strike_by_delta.py  # CLI: live Nifty option chain → filter by |delta| range → strike/IV/key table. Prints ready-to-paste record_paper_trade.py commands. --expiry and --date use type=date.fromisoformat. Added --track shortcut.
+122: │   ├── find_overlay_strikes.py  # overlay-specific strike finder.
+123: │   └── instrument_lookup.py     # Offline BOD search (NSE.json.gz). CLI: --find-legs mode. search() uses ranked exact>prefix>fuzzy scoring.
+124: ├── record/               # human-facing write CLIs; one action per invocation
+125: │   ├── __init__.py       # Package marker
+126: │   ├── record_paper_trade.py    # Automated CSP/overlay trade recorder. Resolves instrument keys/prices from live chain or existing DB position. Dry-run by default.
+127: │   └── record_trade.py          # CLI for recording future trades. Validates via Trade model; inserts; prints updated net position + avg price. --dry-run prints without touching DB. --strategy takes DB strategy name (e.g. finideas_ilts, not ILTS).
+128: ├── strategies/           # strategy-specific scripts; one subfolder per strategy
+129: │   ├── __init__.py       # Package marker
+130: │   ├── csp/
+131: │   │   ├── __init__.py   # Package marker
+132: │   │   └── paper_csp_roll.py # profit-target / time-stop / delta-stop exit.
+133: │   ├── three_track/
+134: │   │   ├── __init__.py   # Package marker
+135: │   │   ├── paper_3track_entry.py    # Base leg entry for 3-Track comparison. Auto-selects DITM CE proxy + futures + NiftyBees. --confirm required to write.
+136: │   │   ├── paper_3track_overlay.py  # Live-fetch overlay entry for all 3 tracks (spot/futures/proxy). PP/CC/collar types. CC permanently blocked on paper_nifty_futures (synthetic short put). _check_existing_overlay detects open SELL positions correctly. Atomicity: failed writes rolled back via store.delete_trade(). Imports: ALL_TRACKS, _ACTION_FOR_ROLE, _OPTION_TYPE_FOR_ROLE, _build_trade, _collect_expiry_candidates, _fetch_candidates_for_expiries, _select_best_candidate.
+137: │   │   ├── paper_3track_overlay_entry.py # overlay-specific entry script.
+138: │   │   ├── paper_3track_overlay_roll.py  # Rolls expiring overlay legs at DTE ≤ OVERLAY_ROLL_DTE (5). _parse_expiry_from_key extracts date from NSE_FO key regex. _find_expiring_overlay: Phase-B fix applied (last_trade tracks SELL direction). _roll_single: 2-trade atomic (close written first; open failure → delete_trade rollback). --force bypasses DTE gate. --yes skips interactive confirmation (TTY-aware). Imports constants + helpers from paper_3track_overlay.py.
+139: │   │   └── paper_3track_snapshot.py      # Canonical EOD cron for 3-track comparison (15:45 IST). Live spot fetch (--spot to override). Per-leg delta-from-yesterday via get_prev_leg_snapshot. Writes paper_nav_snapshots + paper_leg_snapshots (--no-save for dry-run). _hedge_verdict shows overlay protection ratio. Uses format_track_summary() for summary-first reporting; --verbose for leg details.
+140: │   └── cc_calibration/   # NiftyBees lot-sizing probe (retire after 3 cycles)
+141: │       ├── __init__.py   # Package marker
+142: │       ├── paper_cc_entry.py
+143: │       └── paper_cc_roll.py
+144: ├── portfolio/            # live portfolio P&L — not paper, not strategy-specific
+145: │   ├── __init__.py       # Package marker
+146: │   ├── daily_snapshot.py # Thin I/O orchestration only. Live mode: holiday guard (is_trading_day) exits early on NSE holidays before any API call; fetches LTPs, records snapshots, prints P&L, sends Telegram (non-fatal). Historical mode (--date YYYY-MM-DD): reads stored snapshots, computes P&L offline — no holiday guard, no API call. Pure computation in src/portfolio/summary.py; pure formatting in src/portfolio/formatting.py. Live mode: create_client(UPSTOX_ENV) — UPSTOX_ENV=test → MockBrokerClient. _historical_main reconstructs NuvamaBondHolding objects using actual qty+ltp from NuvamaStore.get_snapshot_for_date() (AR-6 — no more qty=1 stub).
+147: │   ├── morning_nav.py    # MF NAV backfill cron (09:15 IST, weekdays). Fetches AMFI and upserts MFNavSnapshot for prev_trading_day(today) — fixes stale T-2 NAV written by the 15:45 daily_snapshot run (AMFI not yet published at that time). --date override for manual recovery. Exit 0/1. Cron: 15 9 * * 1-5.
+148: │   ├── paper_snapshot.py # EOD mark-to-market for CSP Nifty. Dry-run by default; --no-dry-run to write. Integrated format_pnl_table() for standardized output.
+149: │   └── roll_leg.py       # CLI for atomic option leg rolls. Closes old leg + opens new leg in a single DB transaction. Pure _build_trades() validates both Trade objects before any DB write. --old-*/--new-* flag pairs. --dry-run. Calls store.record_roll().
+150: ├── intraday/             # intraday monitoring crons (*/15 9-15 * * 1-5)
+151: │   ├── __init__.py       # Package marker
+152: │   ├── intraday_tracker.py # combined Dhan+Nuvama orchestrator.
+153: │   ├── nuvama_intraday_tracker.py # Invoked every 5 minutes by Cron (*/5 9-15 * * 1-5). Holiday guard (is_trading_day) exits early on NSE holidays. Fetches Nuvama NetPosition() for options positions + Nifty 50 spot from Upstox batch LTP. Records per-leg intraday state via store.record_intraday_positions() (auto-purges rows > 30 days). os._exit() required — Nuvama SDK spawns a non-daemon background thread that hangs sys.exit().
+154: │   └── dhan_intraday_tracker.py
+155: ├── seed/                 # one-time DB seeds; never in cron
+156: │   ├── __init__.py       # Package marker
+157: │   ├── seed_mf_holdings.py # One-time CLI. Inserts 11 INITIAL MF transactions. Idempotent. --dry-run flag.
+158: │   ├── seed_nuvama_positions.py # One-time seed of Nuvama bond cost-basis. build_positions() pure (6 instruments). seed_positions() I/O wrapper. --write (required to commit), --overwrite, --db. Dry-run by default.
+159: │   ├── seed_portfolio.py
+160: │   └── seed_trades.py    # Idempotent backfill of all finideas_ilts + finrakshak executions as Trade rows. build_trades() (pure) + seed_trades() (I/O). --dry-run flag. 7 trades total. strategy_name must match strategies table (finideas_ilts, finrakshak).
+161: ├── council/              # council workflow tooling; used during planning, not trading
+162: │   ├── __init__.py       # Package marker
+163: │   ├── ask_council.py
+164: │   └── council_templates/
+165: └── dev/                  # diagnostics, smoke tests, one-off migrations
+166:     ├── __init__.py       # Package marker
+167:     ├── send_test_telegram.py # Smoke-test script. Reads TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID from .env, sends a sample P&L message. Exit code 0/1. Run before first cron to verify credentials.
+168:     ├── validate_strategy_spec.py # strategy spec linter.
+169:     ├── probe_nuvama_schema.py # Diagnostic script (not production). Dumps all rmsHdg fields from live Holdings() response.
+170:     ├── migrate_strike_to_text.py
+171:     ├── test_api_version.py
+172:     └── paper_track_snapshot.py # Legacy snapshot script (preserved for compatibility).
 
 .claude/
 ├── settings.json             # PreToolUse hook: warns on Read targeting src/ or scripts/

@@ -348,6 +348,7 @@ options are traded in the future.
 | 2026-05-28 | Collar sequencing: in a crash, buy back cheap short call first, then sell long put to monetise. Rationale: restores uncapped upside before monetising downside; avoids being short a call with no protection if put sale executes first. | `docs/council/2026-05-28_paper-trade-exit-philosophy.md` — Chairman Synthesis |
 | 2026-05-28 | Dual-signal audit mandate (Q2 council): on every sell-leg exit event (CC + Collar short call), always record `delta_stop_would_fire`, `premium_stop_would_fire`, and `actual_rule_used` in `paper_exit_events`. Evaluate after 6–12 cycles which mechanism produces better exit timing. | `docs/council/2026-05-28_paper-trade-exit-philosophy.md` — Chairman Synthesis |
 | 2026-05-28 | Automation tier: Tier 1 (EOD via `paper_3track_snapshot.py`) mandatory for Phase 0. Tier 2 (intraday `StrategyMonitor` 90s tick) wired but disabled via `MONITOR_OVERLAYS=0` env gate; opt-in after Tier 1 validation. | `docs/council/2026-05-28_paper-trade-exit-philosophy.md` — Chairman Synthesis |
+| 2026-05-29 | scripts/ restructured from flat layout into functional axis: pipeline/ (cron, produces data), lookup/ (on-demand query), record/ (human write CLI), strategies/<name>/ (strategy-specific), plus portfolio/, intraday/, seed/, council/, dev/. Axis chosen because paper-backbone daemon and future strategies need to distinguish shared infra from strategy-owned scripts. New scripts must be classified by this axis before placement. | scripts-restructure |
 
 ### Dissenting Notes (council 2026-05-28)
 
