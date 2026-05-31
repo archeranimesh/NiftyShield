@@ -29,7 +29,7 @@
 ## Test quality tasks
 
 - [x] **CH-9a** — Claude: design `hypothesis` edge cases for `compute_ivr`, `aggregate_delta`, P&L arithmetic — **Claude** | SHA: 57418a7
-- [x] **CH-9b** — Implement `@given` tests from CH-9a design — **Antigravity** | SHA: 771db60
+- [x] **CH-9b** — Implement `@given` tests from CH-9a design — **Antigravity** | SHA: 7157010
 
 ## Close
 
