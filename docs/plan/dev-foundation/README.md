@@ -10,9 +10,42 @@
 
 | Folder | What it covers | Owner | Status |
 |--------|---------------|-------|--------|
-| `dx-foundation/` | pyproject.toml, ruff, mypy, pre-commit, Makefile, post-commit hook | Mixed (see story) | ⬜ Not started |
-| `ci-pipeline/` | GitHub Actions CI, pytest-cov threshold, pytest-xdist, pytest-randomly | Antigravity | ⬜ Not started |
-| `code-health/` | Duplicate scan, dead code, GLOSSARY.md, __all__, Mermaid C4, structlog, pydantic-settings, healthcheck.py, hypothesis | Mixed (see story) | ⬜ Not started |
+| `dx-foundation/` | pyproject.toml, ruff, mypy, pre-commit, Makefile, post-commit hook | Mixed (see story) | ✅ Complete (DX-1 → DX-7 all shipped) |
+| `ci-pipeline/` | GitHub Actions CI, pytest-cov threshold, pytest-xdist, pytest-randomly | Antigravity | ✅ Complete (CI-1 → CI-5 all shipped) |
+| `code-health/` | Duplicate scan, dead code, GLOSSARY.md, __all__, Mermaid C4, structlog, pydantic-settings, healthcheck.py, hypothesis | Mixed (see story) | ✅ Complete (CH-1 → CH-10 shipped; CH-4 permanently skipped — see note) |
+
+**CH-4 skip note:** Empty `__all__ = []` is worse than no `__all__` — it hides symbols and contradicts the codebase's explicit import pattern. Revisit only if the codebase shifts to re-exporting from package roots. See TODOS.md backlog for conditions.
+
+---
+
+## Epic Completion Summary
+
+**Closed 2026-05-31.** All 21 tasks shipped across three sub-epics (1 permanently skipped by design).
+
+| Sub-epic | Tasks | Shipped | Skipped | Key deliverables |
+|----------|-------|---------|---------|-----------------|
+| dx-foundation | 7 | 7 | 0 | `pyproject.toml`, ruff, mypy phased strict, pre-commit, Makefile, post-commit graph hook |
+| ci-pipeline | 5 | 5 | 0 | GitHub Actions CI, pytest-xdist parallel, pytest-randomly, coverage gate 80%, PR summary action |
+| code-health | 10 | 9 | 1 (CH-4) | `GLOSSARY.md`, `docs/architecture.md`, `src/config.py` (Settings), `src/utils/logging.py` (structlog), `scripts/healthcheck.py`, hypothesis tests on financial math |
+
+**Remaining operational step:** Wire `scripts/healthcheck.py` cron — `30 16 * * 1-5`. See TODOS.md near-term actions.
+
+---
+
+## Next Implementation
+
+The `dev-foundation` epic is the prerequisite for everything that follows. The next items in priority order:
+
+**1. Build queue #3 — scripts-restructure SR1** (`docs/plan/scripts-restructure/`)
+Scaffold only: create subdirectory `__init__.py` files under `scripts/` (`pipeline/`, `lookup/`, `record/`, `strategies/`, `seed/`, `council/`, `dev/`). ~30 min. Must run before paper-backbone so new daemon scripts land in the correct folder from day one. No file moves — SR2+ is post-market and lower urgency.
+
+**2. Build queue #4 — paper-backbone: Strategy Monitor Daemon** (`docs/plan/paper-backbone/`)
+Prerequisite for paper-exit-signals (#5). Core deliverables: `PaperStrategy` protocol, `StrategyMonitor`, `PaperExecutor`, `RapidCouncil`, `TelegramGateway`, DB migrations, daemon scripts. Hard deadline: Jun–Jul 2026.
+
+**3. Build queue #5 — paper-exit-signals: Automated Exit Detection + Closure** (`docs/plan/paper-exit-signals/`)
+Blocked by #4 PT-0. Council authority: `docs/council/2026-05-28_paper-trade-exit-philosophy.md` — all 10 thresholds binding.
+
+**Start point:** Run SR1 first (scaffold is 1 commit, zero risk), then begin paper-backbone PT-0.
 
 ---
 
