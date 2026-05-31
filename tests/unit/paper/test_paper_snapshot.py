@@ -12,15 +12,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from scripts.portfolio.paper_snapshot import _run
 from src.models.portfolio import TradeAction
 from src.paper.models import PaperPosition, PaperTrade
-from scripts.paper_snapshot import _run
 
 
 @pytest.mark.asyncio
-@patch("scripts.paper_snapshot.create_client")
-@patch("scripts.paper_snapshot.PaperStore")
-@patch("scripts.paper_snapshot.PaperTracker")
+@patch("scripts.portfolio.paper_snapshot.create_client")
+@patch("scripts.portfolio.paper_snapshot.PaperStore")
+@patch("scripts.portfolio.paper_snapshot.PaperTracker")
 async def test_notes_printed_for_open_legs_with_notes(
     mock_tracker_cls: MagicMock,
     mock_store_cls: MagicMock,
@@ -36,7 +36,9 @@ async def test_notes_printed_for_open_legs_with_notes(
 
     # Setup strategies and mock calls
     mock_store.get_strategy_names.return_value = ["paper_strategy_1"]
-    mock_tracker.compute_pnl = AsyncMock(return_value=(Decimal("100"), Decimal("50"), Decimal("150")))
+    mock_tracker.compute_pnl = AsyncMock(
+        return_value=(Decimal("100"), Decimal("50"), Decimal("150"))
+    )
 
     # Set up mock trades:
     # 1. Open leg with notes
@@ -124,9 +126,9 @@ async def test_notes_printed_for_open_legs_with_notes(
 
 
 @pytest.mark.asyncio
-@patch("scripts.paper_snapshot.create_client")
-@patch("scripts.paper_snapshot.PaperStore")
-@patch("scripts.paper_snapshot.PaperTracker")
+@patch("scripts.portfolio.paper_snapshot.create_client")
+@patch("scripts.portfolio.paper_snapshot.PaperStore")
+@patch("scripts.portfolio.paper_snapshot.PaperTracker")
 async def test_no_notes_printed_when_empty_or_null(
     mock_tracker_cls: MagicMock,
     mock_store_cls: MagicMock,
@@ -141,7 +143,9 @@ async def test_no_notes_printed_when_empty_or_null(
     mock_tracker_cls.return_value = mock_tracker
 
     mock_store.get_strategy_names.return_value = ["paper_strategy_1"]
-    mock_tracker.compute_pnl = AsyncMock(return_value=(Decimal("100"), Decimal("50"), Decimal("150")))
+    mock_tracker.compute_pnl = AsyncMock(
+        return_value=(Decimal("100"), Decimal("50"), Decimal("150"))
+    )
 
     # Trades with only empty notes
     trades = [
@@ -186,9 +190,9 @@ async def test_no_notes_printed_when_empty_or_null(
 
 
 @pytest.mark.asyncio
-@patch("scripts.paper_snapshot.create_client")
-@patch("scripts.paper_snapshot.PaperStore")
-@patch("scripts.paper_snapshot.PaperTracker")
+@patch("scripts.portfolio.paper_snapshot.create_client")
+@patch("scripts.portfolio.paper_snapshot.PaperStore")
+@patch("scripts.portfolio.paper_snapshot.PaperTracker")
 async def test_most_recent_note_only_for_multiple_trades_per_leg(
     mock_tracker_cls: MagicMock,
     mock_store_cls: MagicMock,
@@ -203,7 +207,9 @@ async def test_most_recent_note_only_for_multiple_trades_per_leg(
     mock_tracker_cls.return_value = mock_tracker
 
     mock_store.get_strategy_names.return_value = ["paper_strategy_1"]
-    mock_tracker.compute_pnl = AsyncMock(return_value=(Decimal("100"), Decimal("50"), Decimal("150")))
+    mock_tracker.compute_pnl = AsyncMock(
+        return_value=(Decimal("100"), Decimal("50"), Decimal("150"))
+    )
 
     # Two trades on the same open leg:
     # 1. First trade (older): notes = "initial entry note"
@@ -236,7 +242,7 @@ async def test_most_recent_note_only_for_multiple_trades_per_leg(
         PaperPosition(
             strategy_name="paper_strategy_1",
             leg_role="leg_open_multi_trade",
-            net_qty=65, # net qty is open
+            net_qty=65,  # net qty is open
             avg_cost=Decimal("140.00"),
             avg_sell_price=Decimal("150.00"),
             instrument_key="NSE_FO|NIFTY26500CE",

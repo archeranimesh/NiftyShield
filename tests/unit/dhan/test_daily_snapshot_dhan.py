@@ -17,14 +17,12 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
-import pytest
-
-from scripts.daily_snapshot import (
+from scripts.portfolio.daily_snapshot import (
     _build_portfolio_summary,
     _format_combined_summary,
 )
 from src.dhan.models import DhanHolding, DhanPortfolioSummary
-from src.models.portfolio import AssetType, PortfolioSummary
+from src.models.portfolio import AssetType
 
 # ── Shared test constants ────────────────────────────────────────────
 
@@ -33,7 +31,7 @@ _SNAP_DATE = date(2026, 4, 14)
 # ISINs for the fixture instruments
 _NIFTYIETF_ISIN = "INF109K012R6"
 _LIQUIDCASE_ISIN = "INF0R8F01034"
-_EBBETF_ISIN = "INF754K01LE1"   # already tracked by finideas_ilts
+_EBBETF_ISIN = "INF754K01LE1"  # already tracked by finideas_ilts
 _LIQUIDBEES_ISIN = "INF732E01037"  # already tracked by finideas_ilts
 
 
@@ -116,8 +114,8 @@ def _make_dhan_summary(
     """Build a realistic DhanPortfolioSummary with NIFTYIETF (equity) + LIQUIDCASE (bond)."""
     eq = _niftyietf_holding(eq_ltp)
     bd = _liquidcase_holding(bd_ltp)
-    eq_value = (eq.current_value or eq.cost_basis)
-    bd_value = (bd.current_value or bd.cost_basis)
+    eq_value = eq.current_value or eq.cost_basis
+    bd_value = bd.current_value or bd.cost_basis
     eq_pnl = eq_value - eq.cost_basis
     bd_pnl = bd_value - bd.cost_basis
     return DhanPortfolioSummary(
@@ -126,12 +124,16 @@ def _make_dhan_summary(
         equity_value=eq_value,
         equity_basis=eq.cost_basis,
         equity_pnl=eq_pnl,
-        equity_pnl_pct=(eq_pnl / eq.cost_basis * 100).quantize(Decimal("0.01")) if eq.cost_basis else None,
+        equity_pnl_pct=(eq_pnl / eq.cost_basis * 100).quantize(Decimal("0.01"))
+        if eq.cost_basis
+        else None,
         bond_holdings=(bd,),
         bond_value=bd_value,
         bond_basis=bd.cost_basis,
         bond_pnl=bd_pnl,
-        bond_pnl_pct=(bd_pnl / bd.cost_basis * 100).quantize(Decimal("0.01")) if bd.cost_basis else None,
+        bond_pnl_pct=(bd_pnl / bd.cost_basis * 100).quantize(Decimal("0.01"))
+        if bd.cost_basis
+        else None,
         equity_day_delta=equity_day_delta,
         bond_day_delta=bond_day_delta,
     )
@@ -143,56 +145,74 @@ def _make_dhan_summary(
 class TestBuildPortfolioSummaryDhanFields:
     def test_dhan_available_true_when_summary_provided(self) -> None:
         dhan = _make_dhan_summary()
-        result = _build_portfolio_summary(_SNAP_DATE, _ETF_STRATS, _ETF_PRICES, {}, None, dhan_summary=dhan)
+        result = _build_portfolio_summary(
+            _SNAP_DATE, _ETF_STRATS, _ETF_PRICES, {}, None, dhan_summary=dhan
+        )
         assert result.dhan_available is True
 
     def test_dhan_available_false_when_none(self) -> None:
-        result = _build_portfolio_summary(_SNAP_DATE, _ETF_STRATS, _ETF_PRICES, {}, None, dhan_summary=None)
+        result = _build_portfolio_summary(
+            _SNAP_DATE, _ETF_STRATS, _ETF_PRICES, {}, None, dhan_summary=None
+        )
         assert result.dhan_available is False
         assert result.dhan is None
 
     def test_equity_value_populated(self) -> None:
         dhan = _make_dhan_summary()
-        result = _build_portfolio_summary(_SNAP_DATE, _ETF_STRATS, _ETF_PRICES, {}, None, dhan_summary=dhan)
+        result = _build_portfolio_summary(
+            _SNAP_DATE, _ETF_STRATS, _ETF_PRICES, {}, None, dhan_summary=dhan
+        )
         # NIFTYIETF: 500 × 275.40 = 137_700
         assert result.dhan is not None
         assert result.dhan.equity_value == Decimal("275.40") * 500
 
     def test_bond_value_populated(self) -> None:
         dhan = _make_dhan_summary()
-        result = _build_portfolio_summary(_SNAP_DATE, _ETF_STRATS, _ETF_PRICES, {}, None, dhan_summary=dhan)
+        result = _build_portfolio_summary(
+            _SNAP_DATE, _ETF_STRATS, _ETF_PRICES, {}, None, dhan_summary=dhan
+        )
         # LIQUIDCASE: 200 × 1005.50 = 201_100
         assert result.dhan is not None
         assert result.dhan.bond_value == Decimal("1005.50") * 200
 
     def test_dhan_included_in_total_value(self) -> None:
         dhan = _make_dhan_summary()
-        result = _build_portfolio_summary(_SNAP_DATE, _ETF_STRATS, _ETF_PRICES, {}, None, dhan_summary=dhan)
+        result = _build_portfolio_summary(
+            _SNAP_DATE, _ETF_STRATS, _ETF_PRICES, {}, None, dhan_summary=dhan
+        )
         expected_dhan = dhan.equity_value + dhan.bond_value
         # total_value = etf_value(140_000) + options_pnl(0) + dhan components
         assert result.total_value == Decimal("140000") + expected_dhan
 
     def test_dhan_excluded_from_total_when_unavailable(self) -> None:
-        result_no_dhan = _build_portfolio_summary(_SNAP_DATE, _ETF_STRATS, _ETF_PRICES, {}, None, dhan_summary=None)
+        result_no_dhan = _build_portfolio_summary(
+            _SNAP_DATE, _ETF_STRATS, _ETF_PRICES, {}, None, dhan_summary=None
+        )
         assert result_no_dhan.total_value == Decimal("140000")
 
     def test_dhan_pnl_included_in_total_pnl(self) -> None:
         dhan = _make_dhan_summary()
-        result = _build_portfolio_summary(_SNAP_DATE, _ETF_STRATS, _ETF_PRICES, {}, None, dhan_summary=dhan)
+        result = _build_portfolio_summary(
+            _SNAP_DATE, _ETF_STRATS, _ETF_PRICES, {}, None, dhan_summary=dhan
+        )
         # ETF P&L: 140_000 − 138_800 = 1_200
         etf_pnl = Decimal("140000") - Decimal("138800")
         assert result.total_pnl == etf_pnl + dhan.equity_pnl + dhan.bond_pnl
 
     def test_dhan_day_deltas_propagated(self) -> None:
         dhan = _make_dhan_summary(equity_day_delta=Decimal("3450"), bond_day_delta=Decimal("450"))
-        result = _build_portfolio_summary(_SNAP_DATE, _ETF_STRATS, _ETF_PRICES, {}, None, dhan_summary=dhan)
+        result = _build_portfolio_summary(
+            _SNAP_DATE, _ETF_STRATS, _ETF_PRICES, {}, None, dhan_summary=dhan
+        )
         assert result.dhan is not None
         assert result.dhan.equity_day_delta == Decimal("3450")
         assert result.dhan.bond_day_delta == Decimal("450")
 
     def test_total_day_delta_includes_dhan_when_present(self) -> None:
         dhan = _make_dhan_summary(equity_day_delta=Decimal("2000"), bond_day_delta=Decimal("100"))
-        result = _build_portfolio_summary(_SNAP_DATE, _ETF_STRATS, _ETF_PRICES, {}, None, dhan_summary=dhan)
+        result = _build_portfolio_summary(
+            _SNAP_DATE, _ETF_STRATS, _ETF_PRICES, {}, None, dhan_summary=dhan
+        )
         # total_day_delta = (mf:None→0) + (etf:None→0) + (options:None→0) + 2000 + 100
         # any_delta is True because dhan deltas are not None
         assert result.total_day_delta == Decimal("2100")

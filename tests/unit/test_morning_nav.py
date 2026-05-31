@@ -7,17 +7,15 @@ run_morning_nav() using unittest.mock.patch.
 
 from __future__ import annotations
 
-import tempfile
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
-from scripts.morning_nav import main, run_morning_nav
+from scripts.portfolio.morning_nav import main, run_morning_nav
 from src.mf.tracker import PortfolioPnL, SchemePnL
-
 
 # ── Helpers ──────────────────────────────────────────────────────
 
@@ -51,9 +49,7 @@ def _make_pnl(n_schemes: int = 2) -> PortfolioPnL:
 
 
 class TestRunMorningNav:
-    def test_happy_path_calls_record_snapshot_with_correct_date(
-        self, tmp_path: Path
-    ) -> None:
+    def test_happy_path_calls_record_snapshot_with_correct_date(self, tmp_path: Path) -> None:
         """record_snapshot must be called with the exact target_date."""
         db = tmp_path / "portfolio.sqlite"
         db.touch()
@@ -61,7 +57,7 @@ class TestRunMorningNav:
         mock_pnl = _make_pnl()
 
         with (
-            patch("src.mf.store.MFStore") as MockStore,
+            patch("src.mf.store.MFStore"),
             patch("src.mf.tracker.MFTracker") as MockTracker,
             patch("dotenv.load_dotenv"),
         ):
@@ -69,9 +65,7 @@ class TestRunMorningNav:
             result = run_morning_nav(target, db)
 
         assert result == 0
-        MockTracker.return_value.record_snapshot.assert_called_once_with(
-            snapshot_date=target
-        )
+        MockTracker.return_value.record_snapshot.assert_called_once_with(snapshot_date=target)
 
     def test_returns_1_when_db_missing(self, tmp_path: Path) -> None:
         """Missing DB must return exit code 1 without touching MFTracker."""
@@ -92,9 +86,7 @@ class TestRunMorningNav:
             patch("src.mf.tracker.MFTracker") as MockTracker,
             patch("dotenv.load_dotenv"),
         ):
-            MockTracker.return_value.record_snapshot.side_effect = RuntimeError(
-                "AMFI unreachable"
-            )
+            MockTracker.return_value.record_snapshot.side_effect = RuntimeError("AMFI unreachable")
             result = run_morning_nav(date(2026, 4, 21), db)
 
         assert result == 1
@@ -107,50 +99,42 @@ class TestMain:
     def _patch_run(self, mock_pnl: PortfolioPnL | None = None):
         """Context manager that patches run_morning_nav to return 0."""
         return patch(
-            "scripts.morning_nav.run_morning_nav",
+            "scripts.portfolio.morning_nav.run_morning_nav",
             return_value=0,
         )
 
-    def test_no_date_arg_uses_prev_trading_day(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_no_date_arg_uses_prev_trading_day(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Without --date, main must pass prev_trading_day(today) to run_morning_nav."""
         today = date(2026, 4, 22)  # Wednesday
         expected = date(2026, 4, 21)  # Tuesday
 
-        monkeypatch.setattr("scripts.morning_nav.date", _FakeDate(today))
+        monkeypatch.setattr("scripts.portfolio.morning_nav.date", _FakeDate(today))
 
-        with patch("scripts.morning_nav.run_morning_nav", return_value=0) as mock_run:
+        with patch("scripts.portfolio.morning_nav.run_morning_nav", return_value=0) as mock_run:
             monkeypatch.setattr("sys.argv", ["morning_nav"])
             main()
 
         called_date = mock_run.call_args[0][0]
         assert called_date == expected
 
-    def test_no_date_arg_monday_uses_friday(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_no_date_arg_monday_uses_friday(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Monday morning must resolve to previous Friday."""
         today = date(2026, 4, 20)  # Monday
         expected = date(2026, 4, 17)  # Friday
 
-        monkeypatch.setattr("scripts.morning_nav.date", _FakeDate(today))
+        monkeypatch.setattr("scripts.portfolio.morning_nav.date", _FakeDate(today))
 
-        with patch("scripts.morning_nav.run_morning_nav", return_value=0) as mock_run:
+        with patch("scripts.portfolio.morning_nav.run_morning_nav", return_value=0) as mock_run:
             monkeypatch.setattr("sys.argv", ["morning_nav"])
             main()
 
         called_date = mock_run.call_args[0][0]
         assert called_date == expected
 
-    def test_explicit_date_arg_passes_through(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_explicit_date_arg_passes_through(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """--date YYYY-MM-DD must pass that exact date to run_morning_nav."""
-        with patch("scripts.morning_nav.run_morning_nav", return_value=0) as mock_run:
-            monkeypatch.setattr(
-                "sys.argv", ["morning_nav", "--date", "2026-04-15"]
-            )
+        with patch("scripts.portfolio.morning_nav.run_morning_nav", return_value=0) as mock_run:
+            monkeypatch.setattr("sys.argv", ["morning_nav", "--date", "2026-04-15"])
             main()
 
         called_date = mock_run.call_args[0][0]

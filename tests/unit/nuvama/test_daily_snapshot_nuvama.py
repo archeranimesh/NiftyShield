@@ -15,12 +15,11 @@ import pytest
 
 pytest.importorskip("pydantic", reason="pydantic required for PortfolioSummary")
 
-from scripts.daily_snapshot import (  # noqa: E402
+from scripts.portfolio.daily_snapshot import (  # noqa: E402
     _build_portfolio_summary,
     _format_combined_summary,
 )
-from src.nuvama.models import NuvamaBondHolding, NuvamaBondSummary  # noqa: E402
-
+from src.nuvama.models import NuvamaBondSummary  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -222,5 +221,5 @@ class TestFormatCombinedSummaryNuvamaBondsSection:
         # A non-None nuvama_bond_day_delta makes total_day_delta non-None, which
         # triggers the waterfall path (not the fallback). Confirm both the path
         # taken and the value.
-        assert "📊 Today:" in out        # waterfall path confirmed
-        assert "-12,345" in out          # Nuvama Bonds contribution line
+        assert "📊 Today:" in out  # waterfall path confirmed
+        assert "-12,345" in out  # Nuvama Bonds contribution line

@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.daily_snapshot import (
+from scripts.portfolio.daily_snapshot import (
     _build_prev_prices,
     _compute_strategy_pnl_from_prices,
     _historical_main,

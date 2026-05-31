@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
-from scripts.daily_snapshot import (
+from scripts.portfolio.daily_snapshot import (
     _build_portfolio_summary,
     _etf_cost_basis,
     _etf_current_value,
@@ -109,9 +109,9 @@ def test_etf_current_value_excludes_fo_legs() -> None:
 
 
 def test_etf_current_value_no_etf_legs_returns_zero() -> None:
-    assert _etf_current_value(
-        _strats(_fo_leg(FO_KEY, 975.00, 65)), {FO_KEY: 900.00}
-    ) == Decimal("0")
+    assert _etf_current_value(_strats(_fo_leg(FO_KEY, 975.00, 65)), {FO_KEY: 900.00}) == Decimal(
+        "0"
+    )
 
 
 def test_etf_current_value_ltp_higher_than_basis() -> None:
@@ -134,12 +134,14 @@ def test_etf_current_value_ltp_lower_than_basis() -> None:
 @dataclass
 class _FakePnL:
     """Minimal stand-in for StrategyPnL — only total_pnl consumed."""
+
     total_pnl: Decimal
 
 
 @dataclass
 class _FakeMFPnL:
     """Minimal stand-in for PortfolioPnL — only top-level fields consumed."""
+
     total_current_value: Decimal
     total_invested: Decimal
     total_pnl: Decimal
@@ -148,7 +150,7 @@ class _FakeMFPnL:
 
 _SNAP_DATE = date(2026, 4, 8)
 _ETF_STRATS = _strats(_etf_leg(ETF_KEY, 1388.00, 100))  # cost basis = 138_800
-_ETF_PRICES = {ETF_KEY: 1400.00}                          # current value = 140_000
+_ETF_PRICES = {ETF_KEY: 1400.00}  # current value = 140_000
 
 
 class TestBuildPortfolioSummary:
@@ -209,7 +211,9 @@ class TestBuildPortfolioSummary:
 
     def test_mf_day_delta_computed_when_prev_mf_provided(self) -> None:
         mf = _FakeMFPnL(Decimal("500000"), Decimal("450000"), Decimal("50000"), Decimal("11.11"))
-        prev_mf = _FakeMFPnL(Decimal("495000"), Decimal("450000"), Decimal("45000"), Decimal("10.00"))
+        prev_mf = _FakeMFPnL(
+            Decimal("495000"), Decimal("450000"), Decimal("45000"), Decimal("10.00")
+        )
         result = _build_portfolio_summary(
             _SNAP_DATE, _ETF_STRATS, _ETF_PRICES, {}, mf, prev_mf_pnl=prev_mf
         )
@@ -223,8 +227,8 @@ class TestBuildPortfolioSummary:
         assert result.total_day_delta is None
 
     def test_finrakshak_day_delta_computed_with_hedge_strategy(self) -> None:
-        from src.models.portfolio import HedgeStrategy, Leg, AssetType, Direction, ProductType
-        from scripts.daily_snapshot import DailySnapshot
+        from scripts.portfolio.daily_snapshot import DailySnapshot
+        from src.models.portfolio import AssetType, Direction, HedgeStrategy, Leg, ProductType
         from src.portfolio.tracker import LegPnL, StrategyPnL
 
         # Current hedge strategy with 1 leg
@@ -245,7 +249,7 @@ class TestBuildPortfolioSummary:
                     strike=Decimal("23000"),
                     product_type=ProductType.NRML,
                 )
-            ]
+            ],
         )
 
         # Current prices & current StrategyPnL
@@ -261,7 +265,7 @@ class TestBuildPortfolioSummary:
                         pnl=leg_pnl,
                         pnl_percent=Decimal("0"),
                     )
-                ]
+                ],
             )
         }
 

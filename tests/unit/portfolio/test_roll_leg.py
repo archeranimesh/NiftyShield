@@ -16,10 +16,10 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
+from pydantic import ValidationError
 
-from scripts.roll_leg import _build_trades
+from scripts.portfolio.roll_leg import _build_trades
 from src.models.portfolio import TradeAction
-
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -99,25 +99,25 @@ def test_build_trades_legs_are_independent() -> None:
 
 
 def test_build_trades_rejects_zero_old_qty() -> None:
-    with pytest.raises(Exception):  # Pydantic ValidationError
+    with pytest.raises(ValidationError):  # Pydantic ValidationError
         _build_trades(**_valid_kwargs(old_qty=0))
 
 
 def test_build_trades_rejects_zero_new_qty() -> None:
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         _build_trades(**_valid_kwargs(new_qty=0))
 
 
 def test_build_trades_rejects_negative_old_qty() -> None:
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         _build_trades(**_valid_kwargs(old_qty=-10))
 
 
 def test_build_trades_rejects_zero_old_price() -> None:
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         _build_trades(**_valid_kwargs(old_price="0"))
 
 
 def test_build_trades_rejects_zero_new_price() -> None:
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         _build_trades(**_valid_kwargs(new_price="0.00"))
