@@ -26,6 +26,7 @@ python scripts/paper_3track_snapshot.py --no-save
 
 Small items: no story file yet, or waiting for a single edit/commit.
 
+- [ ] **Add healthcheck cron** — wire `scripts/healthcheck.py` into crontab: `30 16 * * 1-5 python /path/to/scripts/healthcheck.py`. Run once manually first to confirm Telegram alert fires correctly. (CH-8 shipped — cron entry is the remaining operational step.)
 - [ ] **CH-4 redo — Populate `__all__` in all `src/` `__init__.py` files** — CH-4 (d97c099) was reverted: empty `__all__ = []` is worse than no `__all__` (hides symbols, contradicts explicit import pattern). When revisiting: use `search_graph` per module to enumerate actual public symbols, then populate each `__init__.py`. Only do this if the codebase shifts toward re-exporting from package roots (i.e., `from src.portfolio import PortfolioStore` style). Until then, leave `__init__.py` files as comment-only stubs.
 - [ ] **Add IVR NULL note to BACKTEST_PLAN.md** — Phase 0.8 gate criterion A: *"IVR NULL for Cycles 1 and 2 — accepted data gap; criterion A satisfied from Cycle 3 onward."* Cycle 1 (id=14, 2026-05-11): pipeline not live. Cycle 2 (id=32, 2026-05-28): 0/252 days VIX history blocked computation.
 - [ ] **Create `docs/plan/entry-event-filter/`** — R4 event filter (Budget/RBI MPC/elections). Scope: `src/market_calendar/events.yaml` schema + loader + soft-warning integration into `record_paper_trade.py`. Dependency: ES12 must ship first. DoD: `prompt.md` + `tasks.md`, no code.
@@ -299,6 +300,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-05-31 | code-health CH-10 — Docs close: CONTEXT.md (config.py/logging.py/healthcheck.py entries, test count), DECISIONS.md (3 decisions), TODOS.md (healthcheck cron action, session log) — health sprint complete |
 | 2026-05-31 | CH-9b — Implement @given tests for IVR, delta, and P&L arithmetic — 7157010 |
 | 2026-05-31 | feat(scripts): add healthcheck.py dead man's switch for cron validation — fe1e123 |
 | 2026-05-30 | refactor(src,scripts): replace direct environment access with Settings singleton — fe69612 |

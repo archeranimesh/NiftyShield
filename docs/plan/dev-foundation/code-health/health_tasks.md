@@ -33,4 +33,4 @@
 
 ## Close
 
-- [ ] **CH-10** — Docs close: `CONTEXT.md`, `DECISIONS.md`, `TODOS.md` — **Claude**
+- [x] **CH-10** — Docs close: `CONTEXT.md`, `DECISIONS.md`, `TODOS.md` — **Claude** | SHA: pending-commit
