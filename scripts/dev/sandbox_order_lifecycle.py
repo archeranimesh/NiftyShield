@@ -11,7 +11,7 @@ Fixture Recording:
     as JSON fixtures to tests/fixtures/responses/orders/.
 
 Usage:
-    python -m src.sandbox.test_sandbox_order_lifecycle
+    python -m scripts.dev.sandbox_order_lifecycle
 """
 
 import json

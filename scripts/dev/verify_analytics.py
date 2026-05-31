@@ -14,7 +14,7 @@ Fixture Recording:
     fixtures to tests/fixtures/responses/<category>/.
 
 Usage:
-    python -m src.analytics.test_analytics_apis
+    python -m scripts.dev.verify_analytics
 """
 
 import json
@@ -255,8 +255,8 @@ def step_historical_candles(
             print("  Latest 3:")
             for candle in candles[:3]:
                 ts = candle[0][:10] if candle[0] else "?"
-                o, h, l, c, v = candle[1], candle[2], candle[3], candle[4], candle[5]
-                print(f"    {ts}  O:{o}  H:{h}  L:{l}  C:{c}  Vol:{v}")
+                o, h, low, c, v = candle[1], candle[2], candle[3], candle[4], candle[5]
+                print(f"    {ts}  O:{o}  H:{h}  L:{low}  C:{c}  Vol:{v}")
 
         params = {
             "instrument_key": NIFTYBEES,
