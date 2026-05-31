@@ -1,4 +1,5 @@
 # PB1.2 — `src/strategy/monitor.py`: StrategyMonitor + tests
+> **Assigned to: Claude** — IST window logic and broker error handling require inline judgment.
 
 **Files to change:**
 - `src/strategy/monitor.py` — `StrategyMonitor` class

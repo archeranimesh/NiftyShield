@@ -1,4 +1,5 @@
 # PB5 — Docs close
+> **Assigned to: Claude** — targeted Edit calls on CONTEXT.md, DECISIONS.md, TODOS.md.
 
 **Files to change:**
 - `CONTEXT.md` — add `src/strategy/` and `src/council/` to module tree; add

@@ -1,4 +1,5 @@
 # PB1.4 — `src/council/rapid.py`: RapidCouncil + tests
+> **Assigned to: Antigravity** — 5 files, fully spec'd, mechanical multi-model API wiring.
 
 **Files to change:**
 - `src/council/__init__.py` — new package, single comment line only

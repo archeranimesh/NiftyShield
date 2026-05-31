@@ -1,4 +1,5 @@
 # PB1.5 — `src/notifications/telegram_gateway.py`: TelegramGateway + tests
+> **Assigned to: Claude** — async polling loop, auth guard, and timeout scanner require inline judgment.
 
 **Files to change:**
 - `src/notifications/telegram_gateway.py` — `TelegramGateway`

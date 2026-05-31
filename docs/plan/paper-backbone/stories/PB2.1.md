@@ -1,4 +1,5 @@
 # PB2.1 — `src/strategy/csp_nifty_v1.py`: CSPNiftyV1 + tests
+> **Assigned to: Claude** — signal thresholds require reading and interpreting csp_nifty_v1.md spec.
 
 **Files to change:**
 - `src/strategy/csp_nifty_v1.py` — `CSPNiftyV1` implements `PaperStrategy`

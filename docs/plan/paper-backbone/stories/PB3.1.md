@@ -1,4 +1,5 @@
 # PB3.1 — `src/strategy/ic_nifty_v1.py`: IronCondorV1 + tests
+> **Assigned to: Claude** — council ruling affects allowed action_types; requires spec + council doc interpretation.
 
 **Files to change:**
 - `src/strategy/ic_nifty_v1.py` — `IronCondorV1` implements `PaperStrategy`

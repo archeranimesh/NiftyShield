@@ -1,4 +1,5 @@
 # PB1.3 — `src/strategy/executor.py`: PaperExecutor + PaperFillSimulator + tests
+> **Assigned to: Claude** — slippage model from DECISIONS.md requires interpretation; judgment calls on fill logic.
 
 **Files to change:**
 - `src/strategy/executor.py` — `PaperFillSimulator` + `PaperExecutor`

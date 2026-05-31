@@ -1,4 +1,5 @@
 # PB4.1 — `src/strategy/nifty_track_comparison_v1.py`: NiftyTrackComparisonV1 + tests
+> **Assigned to: Claude** — live leg_role values must be verified mid-impl from existing paper_trades data.
 
 **Files to change:**
 - `src/strategy/nifty_track_comparison_v1.py` — `NiftyTrackComparisonV1` implements `PaperStrategy`

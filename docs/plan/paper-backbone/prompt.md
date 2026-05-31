@@ -11,7 +11,10 @@ The pre-baked context block at the bottom of each story file contains pre-run gr
 
 **Implementation:** Follow all rules in `CLAUDE.md` and `REVIEW.md`. Every public function needs one happy-path test and one edge/error test. No network calls in tests. Monetary fields are always `Decimal`, stored as TEXT in SQLite — never float.
 
-**Antigravity routing (Step 3b gate):** After stating the plan, check: does this task span 3+ files with a clear non-ambiguous spec? If yes → invoke the `handoff-antigravity` skill and produce the structured handoff prompt. Stop — do not write any code. If no (single or 2-file task, exploratory, or inline judgment required) → proceed to implement directly.
+**Agent routing (mandatory check):** The story file opens with `> Assigned to: Claude` or `> Assigned to: Antigravity`.
+- If you are **Claude** and the story says `Antigravity` → invoke the `handoff-antigravity` skill and stop. Do not write any code.
+- If you are **Antigravity** and the story says `Claude` → stop immediately and notify the user that this task is reserved for Claude.
+- If the assignment matches you → proceed to implement.
 
 **Test gate — blocking:** After implementation, before touching anything else, run:
 `python -m pytest tests/unit/ --tb=no -q`

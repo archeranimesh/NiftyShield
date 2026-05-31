@@ -1,4 +1,5 @@
 # PB1.7 — Daemon + cron scripts + requirements.txt
+> **Assigned to: Antigravity** — 6 files, fully spec'd, mechanical script wiring; no design decisions.
 
 **Files to change:**
 - `scripts/monitor_daemon.py` — persistent daemon process

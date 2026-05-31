@@ -1,4 +1,5 @@
 # PB1.6 — `src/paper/store.py`: DB migrations + approval store methods + tests
+> **Assigned to: Antigravity** — pure DB migrations + CRUD, zero ambiguity, fully spec'd DDL in schema.md.
 
 **Files to change:**
 - `src/paper/store.py` — add three table migrations + approval CRUD methods

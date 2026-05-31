@@ -1,4 +1,5 @@
 # PB1.1 — `src/strategy/protocol.py`: PaperStrategy protocol + models + tests
+> **Assigned to: Antigravity** — 4 files, fully spec'd, no inline judgment required.
 
 **Files to change:**
 - `src/strategy/__init__.py` — new package, single comment line only
