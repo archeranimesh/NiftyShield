@@ -27,6 +27,8 @@
 
 **pre-commit scoped to client/paper only for mypy (2026-05-29, DX-4):** mypy hook in `.pre-commit-config.yaml` uses `files: ^src/(client|paper)/` to match DX-3 strictness boundaries. Expanding the hook to other modules is gated on fixing their baseline errors first.
 
+**`paper_track_snapshot.py` status (2026-05-31, SR5):** `paper_track_snapshot.py` is confirmed superseded by `paper_3track_snapshot.py` as the canonical EOD cron snapshot script. It has been moved to `scripts/dev/paper_track_snapshot.py` to be preserved purely for backward-compatible operator use (ad-hoc runs) and is excluded from `crontab`.
+
 ---
 
 ## Data Layer
