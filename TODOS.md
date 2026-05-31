@@ -86,7 +86,7 @@ Invoke `roll-validator` agent ≥1 week before deadline.
 **Story:** [docs/plan/scripts-restructure/](docs/plan/scripts-restructure/)
 **Why now:** SR1 is scaffold-only (`__init__.py` files, no file moves, ~30 min). Must run before `paper-backbone` writes new daemon scripts so those land in `pipeline/`, `strategies/`, etc. from day one — not born flat and needing migration later. Full migration (SR2+) is post-market and lower urgency.
 
-- [ ] Run SR1: create all `__init__.py` files per `stories.md`, re-index graph, verify tests green.
+- [x] Run SR1: create all `__init__.py` files per `stories.md`, re-index graph, verify tests green.
 
 ---
 
@@ -208,7 +208,7 @@ Tasks run in priority order. Infrastructure that blocks other stories runs first
 |---|---|---|---|---|---|
 | 1 | June 2026 Finideas roll | Animesh + Cowork | **2026-06-30** | — | Execution pending — awaiting Finideas instructions |
 | 2 | chain-data: EOD + intraday chain snapshot cron | Cowork | — | — | ✅ Shipped — [story](docs/archive/plan/chain-data/) |
-| 3 | scripts-restructure SR1 (scaffold only) | Cowork | Before #4 | #4 script placement | ⬜ Ready — [story](docs/plan/scripts-restructure/) |
+| 3 | scripts-restructure SR1 (scaffold only) | Cowork | Before #4 | #4 script placement | ✅ Shipped — [story](docs/plan/scripts-restructure/) |
 | 4 | paper-backbone: Strategy Monitor daemon | Cowork | **Jun–Jul 2026** | #5 | ⬜ Not started — [story](docs/plan/paper-backbone/) |
 | 5 | paper-exit-signals: automated exit detection + closure | Cowork | After #4 | — | ⬜ Not started — [story](docs/plan/paper-exit-signals/) — **blocked by #4 PT-0** |
 | 6 | covered-call-overlay CC3+CC4 (calibration experiment) | Cowork | Any cycle | — | ⬜ CC3 not started — [story](docs/plan/covered-call-overlay/) |
@@ -300,6 +300,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-05-31 | scripts-restructure SR1 — Scaffold scripts/ subdirectories with __init__.py files — 72cb528 |
 | 2026-05-31 | code-health CH-10 — Docs close: CONTEXT.md (config.py/logging.py/healthcheck.py entries, test count), DECISIONS.md (3 decisions), TODOS.md (healthcheck cron action, session log) — health sprint complete |
 | 2026-05-31 | CH-9b — Implement @given tests for IVR, delta, and P&L arithmetic — 7157010 |
 | 2026-05-31 | feat(scripts): add healthcheck.py dead man's switch for cron validation — fe1e123 |
