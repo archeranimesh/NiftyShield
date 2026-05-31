@@ -20,7 +20,7 @@
 - [x] **SR7** — Move `intraday/` scripts — post-market only (high cron sensitivity) | SHA: 20b3834
 - [x] **SR8** — Move `strategies/three_track/` scripts — post-market only (EOD cron) | SHA: 28894d2
 - [x] **SR9** — Move `strategies/csp/` and `strategies/cc_calibration/` scripts | SHA: e161cc9
-- [ ] **SR10** — [LOCKED until SR9] Move `portfolio/` scripts — post-market only (EOD cron)
+- [x] **SR10** — [LOCKED until SR9] Move `portfolio/` scripts — post-market only (EOD cron) | SHA: 13b7285
 - [ ] **SR11** — Docs close: CONTEXT.md, DECISIONS.md, TODOS.md
 
 ---
