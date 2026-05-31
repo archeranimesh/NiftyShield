@@ -23,7 +23,7 @@ Key top-level packages: `src/auth`, `src/client`, `src/models`, `src/portfolio`,
 
 `src/models/options.py` — `OptionLeg`, `OptionChainStrike`, `OptionChain` (all `frozen=True` Pydantic). Source-agnostic field names; Upstox parser in `src/client/upstox_market.py` (`parse_upstox_option_chain`). Dhan parser not implemented (chain-data story complete; Dhan approach not pursued).
 `src/paper/` — paper trading module. `PaperTrade` model (frozen Pydantic, `paper_` prefix enforced, includes `ivr_at_entry: float | None`), `PaperPosition` + `PaperNavSnapshot` + `PaperLegSnapshot` (frozen dataclasses), `PaperStore` (`paper_trades` + `paper_nav_snapshots` + `paper_leg_snapshots` tables in shared SQLite), `PaperTracker` (compute_pnl + record_daily_snapshot). `PaperStore` API: `record_leg_snapshot` (upsert; enforces `total_pnl == unrealized_pnl + realized_pnl`), `get_leg_snapshot`, `get_prev_leg_snapshot`, `delete_trade` (no-op if missing). See `src/paper/CLAUDE.md` for full invariants.
-26: Scripts (under `scripts/` structured into functional axis):
+Scripts (under `scripts/` structured into functional axis):
    - `pipeline/`: `upstox_chain_snapshot.py` (EOD option chain → Parquet), `upstox_chain_intraday.py` (5-min intraday chain → Parquet), `gamma_daily_watch.py` (Greeks monitoring), `bhavcopy_bootstrap.py` (resumable bulk NSE bhavcopy download 2016–present).
    - `lookup/`: `find_strike_by_delta.py` (live chain → filter by delta range), `find_overlay_strikes.py` (overlay-specific strike finder), `instrument_lookup.py` (BOD JSON key resolver).
    - `record/`: `record_paper_trade.py` (entry/close for paper strategy), `record_trade.py` (live trade recording).
