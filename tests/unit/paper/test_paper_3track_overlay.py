@@ -30,12 +30,10 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
+# Import the module under test
+import scripts.strategies.three_track.paper_3track_overlay as overlay
 from src.models.portfolio import TradeAction
 from src.paper.models import PaperTrade
-
-# Import the module under test
-import scripts.paper_3track_overlay as overlay
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -48,7 +46,10 @@ def _candidate(**kwargs: Any) -> dict:
         "strike": 22000.0,
         "instrument_key": "NSE_FO|NIFTY22000PE",
         "option_type": "PE",
-        "bid": 300.0, "ask": 304.0, "ltp": 302.0, "mid": 302.0,
+        "bid": 300.0,
+        "ask": 304.0,
+        "ltp": 302.0,
+        "mid": 302.0,
         "oi": 10_000,
         "otm_pct": 0.09,
         "spread_pct": 1.3,
@@ -84,9 +85,9 @@ def _make_trade(
 def test_rank_overlay_key_round_strike_wins() -> None:
     """is_non_round=0 (multiple of 100) beats is_non_round=1 in the same spread bucket."""
     round_cand = _candidate(strike=22000.0, bid=300.0, ask=302.0, oi=8_000)
-    non_round   = _candidate(strike=21950.0, bid=300.0, ask=302.0, oi=12_000)
+    non_round = _candidate(strike=21950.0, bid=300.0, ask=302.0, oi=12_000)
 
-    round_key    = overlay._rank_overlay_key(round_cand, 0.09)
+    round_key = overlay._rank_overlay_key(round_cand, 0.09)
     non_round_key = overlay._rank_overlay_key(non_round, 0.09)
 
     # round strike should sort BEFORE non-round (lower key wins)
@@ -98,14 +99,12 @@ def test_rank_overlay_key_round_strike_wins() -> None:
 def test_rank_overlay_key_higher_oi_wins_in_same_bucket() -> None:
     """Within the same (is_non_round, spread_bucket), higher OI wins."""
     high_oi = _candidate(strike=22000.0, bid=300.0, ask=302.0, oi=20_000)
-    low_oi  = _candidate(strike=22000.0, bid=300.0, ask=302.0, oi=5_000)
+    low_oi = _candidate(strike=22000.0, bid=300.0, ask=302.0, oi=5_000)
 
     high_key = overlay._rank_overlay_key(high_oi, 0.09)
-    low_key  = overlay._rank_overlay_key(low_oi, 0.09)
+    low_key = overlay._rank_overlay_key(low_oi, 0.09)
 
-    assert high_key < low_key, (
-        f"High OI key {high_key} should be < low OI key {low_key}"
-    )
+    assert high_key < low_key, f"High OI key {high_key} should be < low OI key {low_key}"
 
 
 # ── _otm_pct ─────────────────────────────────────────────────────────────────
@@ -122,6 +121,7 @@ def test_otm_pct_ce_above_spot() -> None:
 
 
 # ── _extract_chain_candidates ─────────────────────────────────────────────────
+
 
 def _chain_entry(strike: float, bid: float, ask: float, oi: int, key: str = "NSE_FO|X") -> dict:
     ltp = (bid + ask) / 2
@@ -187,6 +187,7 @@ def test_cc_futures_auto_excluded_leaves_spot_and_proxy() -> None:
 def test_cc_exits_when_all_tracks_blocked(tmp_path: Path) -> None:
     """CC must exit(1) only when every requested track is blocked (futures-only list)."""
     import asyncio
+
     db = tmp_path / "p.db"
     args = _make_args(
         overlay="cc",
@@ -226,13 +227,15 @@ def test_build_trade_cc_leg_role() -> None:
 
 
 def test_build_trade_collar_both_legs() -> None:
-    put_best  = _candidate(mid=310.0, option_type="PE")
+    put_best = _candidate(mid=310.0, option_type="PE")
     call_best = _candidate(mid=120.0, option_type="CE")
-    put_trade  = overlay._build_trade("paper_nifty_spot", "overlay_collar_put",  put_best,  _DATE, 65)
-    call_trade = overlay._build_trade("paper_nifty_spot", "overlay_collar_call", call_best, _DATE, 65)
-    assert put_trade.action  == TradeAction.BUY
+    put_trade = overlay._build_trade("paper_nifty_spot", "overlay_collar_put", put_best, _DATE, 65)
+    call_trade = overlay._build_trade(
+        "paper_nifty_spot", "overlay_collar_call", call_best, _DATE, 65
+    )
+    assert put_trade.action == TradeAction.BUY
     assert call_trade.action == TradeAction.SELL
-    assert put_trade.leg_role  == "overlay_collar_put"
+    assert put_trade.leg_role == "overlay_collar_put"
     assert call_trade.leg_role == "overlay_collar_call"
 
 
@@ -241,6 +244,7 @@ def test_build_trade_collar_both_legs() -> None:
 
 def test_check_existing_overlay_no_trades_returns_none(tmp_path: Path) -> None:
     from src.paper.store import PaperStore
+
     store = PaperStore(tmp_path / "p.db")
     result = overlay._check_existing_overlay(store, _STRATEGY, "overlay_pp")
     assert result is None
@@ -248,6 +252,7 @@ def test_check_existing_overlay_no_trades_returns_none(tmp_path: Path) -> None:
 
 def test_check_existing_overlay_open_position_returns_last_buy(tmp_path: Path) -> None:
     from src.paper.store import PaperStore
+
     store = PaperStore(tmp_path / "p.db")
     trade = _make_trade(action=TradeAction.BUY)
     store.record_trade(trade)
@@ -260,6 +265,7 @@ def test_check_existing_overlay_open_sell_position_returns_trade(tmp_path: Path)
     """CC/collar_call positions are opened via SELL. The bug was that last_trade was
     only updated on BUY, so open SELL positions returned None as if no position existed."""
     from src.paper.store import PaperStore
+
     store = PaperStore(tmp_path / "p.db")
     trade = _make_trade(action=TradeAction.SELL, leg_role="overlay_cc")
     store.record_trade(trade)
@@ -273,6 +279,7 @@ def test_check_existing_overlay_open_sell_position_returns_trade(tmp_path: Path)
 
 def test_check_existing_overlay_closed_position_returns_none(tmp_path: Path) -> None:
     from src.paper.store import PaperStore
+
     store = PaperStore(tmp_path / "p.db")
     buy = _make_trade(action=TradeAction.BUY, trade_date=date(2026, 5, 1))
     sell = _make_trade(action=TradeAction.SELL, trade_date=date(2026, 5, 20))
@@ -286,6 +293,7 @@ def test_check_existing_overlay_closed_position_returns_none(tmp_path: Path) -> 
 def test_check_existing_overlay_same_expiry_no_force_needed(tmp_path: Path) -> None:
     """Existing open with SAME expiry as selected — no --force required."""
     from src.paper.store import PaperStore
+
     store = PaperStore(tmp_path / "p.db")
     trade = _make_trade(action=TradeAction.BUY)
     store.record_trade(trade)
@@ -303,8 +311,8 @@ def test_check_existing_overlay_diff_expiry_requires_force(tmp_path: Path) -> No
     must exit(1) rather than silently stacking a second overlay on the same leg.
     """
     import asyncio
+
     from src.paper.store import PaperStore
-    from unittest.mock import AsyncMock, MagicMock, patch
 
     db = tmp_path / "p.db"
     store = PaperStore(db)
@@ -332,26 +340,30 @@ def test_check_existing_overlay_diff_expiry_requires_force(tmp_path: Path) -> No
     )
 
     # Minimal chain with one PE candidate in 8-10% OTM band (spot=24000, target ~21600-22080)
-    dummy_chain = [{
-        "strike_price": 22000.0,
-        "underlying_spot_price": 24000.0,
-        "put_options": {
-            "instrument_key": "NSE_FO|NIFTY22000PE26JUN2026",
-            "market_data": {"bid_price": 300.0, "ask_price": 302.0, "ltp": 301.0, "oi": 10000},
-            "option_greeks": {"delta": -0.25, "iv": 0.18},
-        },
-        "call_options": {"instrument_key": "", "market_data": {}, "option_greeks": {}},
-    }]
+    dummy_chain = [
+        {
+            "strike_price": 22000.0,
+            "underlying_spot_price": 24000.0,
+            "put_options": {
+                "instrument_key": "NSE_FO|NIFTY22000PE26JUN2026",
+                "market_data": {"bid_price": 300.0, "ask_price": 302.0, "ltp": 301.0, "oi": 10000},
+                "option_greeks": {"delta": -0.25, "iv": 0.18},
+            },
+            "call_options": {"instrument_key": "", "market_data": {}, "option_greeks": {}},
+        }
+    ]
 
     # Stub BOD so _collect_expiry_candidates returns a quarterly (2026-06-26)
-    dummy_lookup = type("L", (), {
-        "get_expiry_candidates": MagicMock(return_value=[("quarterly", "2026-06-26")])
-    })()
+    dummy_lookup = type(
+        "L", (), {"get_expiry_candidates": MagicMock(return_value=[("quarterly", "2026-06-26")])}
+    )()
 
     with (
-        patch("scripts.paper_3track_overlay.UpstoxMarketClient") as MockClient,
-        patch("scripts.paper_3track_overlay.InstrumentLookup") as MockLookup,
-        patch("scripts.paper_3track_overlay._pe", return_value="2026-05-29"),
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay.UpstoxMarketClient"
+        ) as MockClient,
+        patch("scripts.strategies.three_track.paper_3track_overlay.InstrumentLookup") as MockLookup,
+        patch("scripts.strategies.three_track.paper_3track_overlay._pe", return_value="2026-05-29"),
     ):
         mock_instance = MockClient.return_value
         mock_instance.get_option_chain = AsyncMock(return_value=dummy_chain)
@@ -381,20 +393,22 @@ def _make_args(
     index: int = 1,
 ) -> object:
     import argparse
+
     ns = argparse.Namespace()
-    ns.overlay  = overlay
-    ns.tracks   = tracks
-    ns.db_path  = db_path
-    ns.dry_run  = dry_run
-    ns.yes      = yes
-    ns.force    = force
-    ns.date     = date.fromisoformat(date_str) if isinstance(date_str, str) else date_str
+    ns.overlay = overlay
+    ns.tracks = tracks
+    ns.db_path = db_path
+    ns.dry_run = dry_run
+    ns.yes = yes
+    ns.force = force
+    ns.date = date.fromisoformat(date_str) if isinstance(date_str, str) else date_str
     ns.bod_path = bod_path
-    ns.index    = index
+    ns.index = index
     return ns
 
 
 # ── CLI --date default ────────────────────────────────────────────────────────
+
 
 def test_overlay_date_defaults_to_today() -> None:
     """Omitting --date should default entry_date to date.today()."""
@@ -429,7 +443,7 @@ def _pool_of(n: int, best_index: int = 0) -> tuple[list[dict], str]:
     pool = [
         _candidate(
             strike=22000.0 - i * 50,
-            instrument_key=f"NSE_FO|NIFTY{int(22000 - i*50)}PE",
+            instrument_key=f"NSE_FO|NIFTY{int(22000 - i * 50)}PE",
             oi=10_000 - i * 500,
             bid=300.0 - i,
             ask=302.0 - i,
@@ -509,10 +523,7 @@ def test_print_candidate_table_caps_at_ten_rows(capsys: pytest.CaptureFixture) -
     out = capsys.readouterr().out
     # Data lines are those containing ₹-free numeric content in the strike column;
     # the simplest proxy: count lines that have a rank number at position 2–4.
-    data_lines = [
-        line for line in out.splitlines()
-        if line.strip() and line.strip()[0].isdigit()
-    ]
+    data_lines = [line for line in out.splitlines() if line.strip() and line.strip()[0].isdigit()]
     assert len(data_lines) <= 10, f"Expected ≤10 data rows, got {len(data_lines)}"
 
 
@@ -524,7 +535,7 @@ def _ranked_pool(n: int) -> list[dict]:
     return [
         _candidate(
             strike=22000.0 - i * 100,
-            instrument_key=f"NSE_FO|NIFTY{int(22000 - i*100)}PE",
+            instrument_key=f"NSE_FO|NIFTY{int(22000 - i * 100)}PE",
             oi=10_000 - i * 500,
             bid=300.0,
             ask=302.0,
@@ -557,8 +568,12 @@ def test_select_best_candidate_index_clamped_when_out_of_range() -> None:
 
 def test_confirmation_table_shows_type_column(capsys: pytest.CaptureFixture) -> None:
     """Type (PE/CE) column must appear in the confirmation table header and rows."""
-    from scripts.paper_3track_overlay import OverlayRow, _print_confirmation_table
     from decimal import Decimal
+
+    from scripts.strategies.three_track.paper_3track_overlay import (
+        OverlayRow,
+        _print_confirmation_table,
+    )
     from src.models.portfolio import TradeAction
 
     rows = [
@@ -585,24 +600,42 @@ def test_confirmation_table_shows_type_column(capsys: pytest.CaptureFixture) -> 
 
 def test_confirmation_table_collar_shows_pe_and_ce(capsys: pytest.CaptureFixture) -> None:
     """Collar confirmation table must show both PE and CE in the Type column."""
-    from scripts.paper_3track_overlay import OverlayRow, _print_confirmation_table
     from decimal import Decimal
+
+    from scripts.strategies.three_track.paper_3track_overlay import (
+        OverlayRow,
+        _print_confirmation_table,
+    )
     from src.models.portfolio import TradeAction
 
     rows = [
         OverlayRow(
-            strategy="paper_nifty_spot", leg_role="overlay_collar_put",
-            option_type="PE", action=TradeAction.BUY,
-            strike=22000.0, instrument_key="NSE_FO|NIFTY22000PE",
-            price=Decimal("310.00"), spread_pct=1.3, oi=10_000,
-            expiry="2026-06-26", expiry_label="quarterly", dte=47,
+            strategy="paper_nifty_spot",
+            leg_role="overlay_collar_put",
+            option_type="PE",
+            action=TradeAction.BUY,
+            strike=22000.0,
+            instrument_key="NSE_FO|NIFTY22000PE",
+            price=Decimal("310.00"),
+            spread_pct=1.3,
+            oi=10_000,
+            expiry="2026-06-26",
+            expiry_label="quarterly",
+            dte=47,
         ),
         OverlayRow(
-            strategy="paper_nifty_spot", leg_role="overlay_collar_call",
-            option_type="CE", action=TradeAction.SELL,
-            strike=25000.0, instrument_key="NSE_FO|NIFTY25000CE",
-            price=Decimal("120.00"), spread_pct=1.1, oi=8_000,
-            expiry="2026-06-26", expiry_label="quarterly", dte=47,
+            strategy="paper_nifty_spot",
+            leg_role="overlay_collar_call",
+            option_type="CE",
+            action=TradeAction.SELL,
+            strike=25000.0,
+            instrument_key="NSE_FO|NIFTY25000CE",
+            price=Decimal("120.00"),
+            spread_pct=1.1,
+            oi=8_000,
+            expiry="2026-06-26",
+            expiry_label="quarterly",
+            dte=47,
         ),
     ]
     _print_confirmation_table("collar", rows, date(2026, 5, 7), "2026-06-26", 47, "DRY RUN")
@@ -613,9 +646,9 @@ def test_confirmation_table_collar_shows_pe_and_ce(capsys: pytest.CaptureFixture
 
 def test_collect_expiry_candidates_calls_get_expiry_candidates() -> None:
     """Test that _collect_expiry_candidates calls get_expiry_candidates on lookup."""
-    from scripts.paper_3track_overlay import _collect_expiry_candidates
-    from unittest.mock import MagicMock
     from datetime import date
+
+    from scripts.strategies.three_track.paper_3track_overlay import _collect_expiry_candidates
 
     mock_lookup = MagicMock()
     mock_lookup.get_expiry_candidates.return_value = [("quarterly", "2026-06-26")]
@@ -624,8 +657,6 @@ def test_collect_expiry_candidates_calls_get_expiry_candidates() -> None:
     res = _collect_expiry_candidates(mock_lookup, today)
 
     mock_lookup.get_expiry_candidates.assert_called_once_with(
-        underlying="NIFTY",
-        today=today,
-        preference=["quarterly", "yearly", "monthly"]
+        underlying="NIFTY", today=today, preference=["quarterly", "yearly", "monthly"]
     )
     assert res == [("quarterly", "2026-06-26")]

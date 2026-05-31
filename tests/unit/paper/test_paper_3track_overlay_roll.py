@@ -20,11 +20,10 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
-import scripts.paper_3track_overlay_roll as roll_mod
+import scripts.strategies.three_track.paper_3track_overlay_roll as roll_mod
 from src.models.portfolio import TradeAction
 from src.paper.models import PaperTrade
 from src.paper.store import PaperStore
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -103,7 +102,9 @@ def test_find_expiring_overlay_filters_by_dte() -> None:
     # Instrument key: 29MAY2026 — DTE from 2026-05-07 = 22 days, well above threshold=5
     trade = _make_pp_trade(instrument_key="NSE_FO|NIFTY29MAY2026PE")
 
-    result_no_force = roll_mod._find_expiring_overlay([trade], _ROLL_DATE, "overlay_pp", force=False)
+    result_no_force = roll_mod._find_expiring_overlay(
+        [trade], _ROLL_DATE, "overlay_pp", force=False
+    )
     assert result_no_force == []
 
     result_forced = roll_mod._find_expiring_overlay([trade], _ROLL_DATE, "overlay_pp", force=True)
@@ -135,7 +136,7 @@ def test_find_expiring_overlay_near_expiry_returned() -> None:
 
 def test_find_expiring_overlay_closed_position_returns_empty() -> None:
     """Buy followed by equal sell → net=0 → no open position."""
-    open_trade  = _make_pp_trade(action=TradeAction.BUY)
+    open_trade = _make_pp_trade(action=TradeAction.BUY)
     close_trade = _make_pp_trade(action=TradeAction.SELL, trade_date=date(2026, 4, 15))
     result = roll_mod._find_expiring_overlay(
         [open_trade, close_trade], _ROLL_DATE, "overlay_pp", force=True
@@ -184,9 +185,7 @@ def test_roll_single_open_failure_deletes_close_trade(tmp_path: Path) -> None:
 
     # Broker mock: LTP for close is 280
     mock_broker = AsyncMock()
-    mock_broker.get_ltp = AsyncMock(
-        return_value={"NSE_FO|NIFTY12MAY2026PE": 280.0}
-    )
+    mock_broker.get_ltp = AsyncMock(return_value={"NSE_FO|NIFTY12MAY2026PE": 280.0})
 
     mock_lookup = MagicMock()
 

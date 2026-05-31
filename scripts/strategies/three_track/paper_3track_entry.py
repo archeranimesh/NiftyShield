@@ -27,6 +27,9 @@ Diagnostics:
     LOG_LEVEL=DEBUG python scripts/paper_3track_entry.py   # full trace
 """
 
+from __future__ import annotations
+
+# ruff: noqa: E402
 import math
 import sys
 from dataclasses import dataclass
@@ -37,10 +40,9 @@ from typing import Any
 
 import structlog
 
-from src.config import settings
 from src.utils.logging import setup_logging
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from dotenv import load_dotenv
 
@@ -644,7 +646,6 @@ def print_preview(p: LivePrices, gates: dict[str, str], confirmed: bool) -> None
             f"{opt_type:>4}  {c['delta']:>6.4f}  {c['oi']:>9,}  "
             f"{c['bid']:>8.2f}  {c['ask']:>8.2f}  ₹{c_spread:>5.2f}  {round_tag:>2}{marker}"
         )
-    spread = p.proxy_ask - p.proxy_bid
     print(f"{'─' * W}")
     print(f"  Selected  expiry={p.expiry}  key={p.proxy_instrument_key}")
     print(f"  OI gate    : {gates['oi']}")
@@ -662,8 +663,6 @@ def print_preview(p: LivePrices, gates: dict[str, str], confirmed: bool) -> None
 
 def main() -> None:
     """CLI entry point."""
-    # Logging setup: respect LOG_LEVEL env var
-    log_level = settings.log_level.upper()
     pass
 
     import argparse

@@ -22,6 +22,8 @@ Usage:
 """
 
 import argparse
+
+# ruff: noqa: E402
 import sys
 from dataclasses import dataclass
 from datetime import date
@@ -30,7 +32,7 @@ from pathlib import Path
 
 import yaml
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from src.models.portfolio import TradeAction
 from src.paper.constants import (

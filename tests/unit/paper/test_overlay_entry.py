@@ -12,7 +12,7 @@ from scripts.lookup.find_overlay_strikes import (
     evaluate_expiry,
     find_chain_entry,
 )
-from scripts.paper_3track_overlay_entry import (
+from scripts.strategies.three_track.paper_3track_overlay_entry import (
     OverlayConfig,
     build_overlay_trades,
     load_overlay_config,

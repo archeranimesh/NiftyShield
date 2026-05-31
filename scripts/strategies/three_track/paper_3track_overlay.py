@@ -32,6 +32,7 @@ Diagnostics:
 
 from __future__ import annotations
 
+# ruff: noqa: E402
 import argparse
 import sys
 from dataclasses import dataclass
@@ -42,10 +43,9 @@ from typing import Any
 
 import structlog
 
-from src.config import settings
 from src.utils.logging import setup_logging
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from dotenv import load_dotenv
 
@@ -701,7 +701,6 @@ async def _run(args: argparse.Namespace) -> None:
 
 def main() -> None:
     """CLI entry point."""
-    log_level = settings.log_level.upper()
     pass
 
     parser = argparse.ArgumentParser(

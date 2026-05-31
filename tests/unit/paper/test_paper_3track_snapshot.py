@@ -20,16 +20,13 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
-import pytest
-
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
-import scripts.paper_3track_snapshot as snap_mod
+import scripts.strategies.three_track.paper_3track_snapshot as snap_mod
 from src.models.portfolio import TradeAction
-from src.paper.models import PaperLegSnapshot, PaperNavSnapshot, PaperTrade
+from src.paper.models import PaperLegSnapshot, PaperTrade
 from src.paper.store import PaperStore
 from src.paper.track_snapshot import TrackGreeks, TrackPnL, TrackSnapshot
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -90,7 +87,7 @@ def _leg_snap(
     total_pnl: Decimal = Decimal("500"),
 ) -> PaperLegSnapshot:
     unrealized = total_pnl - Decimal("100")
-    realized   = Decimal("100")
+    realized = Decimal("100")
     return PaperLegSnapshot(
         strategy_name=strategy,
         leg_role=leg_role,
@@ -234,14 +231,18 @@ def test_save_nav_snapshot_roundtrip(tmp_path: Path) -> None:
 def test_save_nav_snapshot_upsert(tmp_path: Path) -> None:
     store = _make_store(tmp_path)
     snap_mod._save_nav_snapshot(
-        store, _STRATEGY,
+        store,
+        _STRATEGY,
         _make_snapshot(base_pnl=Decimal("100"), unrealized=Decimal("100"), realized=Decimal("0")),
-        _DATE, Decimal("24000"),
+        _DATE,
+        Decimal("24000"),
     )
     snap_mod._save_nav_snapshot(
-        store, _STRATEGY,
+        store,
+        _STRATEGY,
         _make_snapshot(base_pnl=Decimal("999"), unrealized=Decimal("999"), realized=Decimal("0")),
-        _DATE, Decimal("24000"),
+        _DATE,
+        Decimal("24000"),
     )
     snaps = store.get_nav_snapshots(_STRATEGY)
     assert len(snaps) == 1
@@ -272,15 +273,17 @@ def test_save_leg_snapshots_base_only(tmp_path: Path) -> None:
 def test_save_leg_snapshots_with_overlay(tmp_path: Path) -> None:
     store = _make_store(tmp_path)
     store.record_trade(_make_trade(leg_role="base_etf"))
-    store.record_trade(PaperTrade(
-        strategy_name=_STRATEGY,
-        leg_role="overlay_pp",
-        instrument_key="NSE_FO|NIFTY22000PE",
-        trade_date=_DATE,
-        action=TradeAction.BUY,
-        quantity=65,
-        price=Decimal("300.00"),
-    ))
+    store.record_trade(
+        PaperTrade(
+            strategy_name=_STRATEGY,
+            leg_role="overlay_pp",
+            instrument_key="NSE_FO|NIFTY22000PE",
+            trade_date=_DATE,
+            action=TradeAction.BUY,
+            quantity=65,
+            price=Decimal("300.00"),
+        )
+    )
 
     snapshot = _make_snapshot(
         base_pnl=Decimal("1000"),
@@ -289,7 +292,10 @@ def test_save_leg_snapshots_with_overlay(tmp_path: Path) -> None:
         realized=Decimal("0"),
     )
     snap_mod._save_leg_snapshots(
-        store, _STRATEGY, snapshot, _DATE,
+        store,
+        _STRATEGY,
+        snapshot,
+        _DATE,
         ltp_map={"NSE_FO|NIFTY22000PE": Decimal("280.00")},
     )
 
@@ -322,10 +328,10 @@ def test_save_leg_snapshots_total_pnl_invariant_holds(tmp_path: Path) -> None:
 
 # ── CLI --date default ────────────────────────────────────────────────────────
 
+
 def test_snapshot_date_defaults_to_today() -> None:
     """Omitting --date should default snap_date to date.today() in _run()."""
     import argparse
-    from unittest.mock import AsyncMock, MagicMock, patch
     from datetime import date as _date
 
     ns = argparse.Namespace(
@@ -344,6 +350,7 @@ def test_snapshot_date_defaults_to_today() -> None:
         captured.append(snap_date)
 
     import asyncio
+
     asyncio.run(_fake_run(ns))
 
     assert len(captured) == 1

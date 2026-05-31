@@ -28,25 +28,25 @@ Diagnostics:
 
 from __future__ import annotations
 
-import argparse
-import asyncio
+# ruff: noqa: E402
 import sys
-from datetime import date
-from decimal import Decimal
 from pathlib import Path
 
-import structlog
-
-from src.config import settings
-from src.utils.logging import setup_logging
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
+import argparse
+import asyncio
+from datetime import date
+from decimal import Decimal
+
+import structlog
+
 from src.client.upstox_market import UpstoxMarketClient
+from src.config import settings
 from src.instruments.lookup import InstrumentLookup
 from src.notifications.telegram import TelegramNotifier
 from src.paper._display import (
@@ -76,6 +76,7 @@ from src.paper.models import PaperLegSnapshot, PaperNavSnapshot
 from src.paper.proxy_monitor import ProxyDeltaMonitor
 from src.paper.store import PaperStore
 from src.paper.track_snapshot import TrackSnapshot, generate_track_snapshot
+from src.utils.logging import setup_logging
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -144,7 +145,7 @@ def _print_track_block(
         for display, amount in grouped_overlay.items():
             # Sum per-leg deltas for merged groups (collar)
             overlay_delta_sum: Decimal | None = None
-            for role, role_pnl in pnl.overlay_pnls.items():
+            for role, _role_pnl in pnl.overlay_pnls.items():
                 if OVERLAY_LABELS.get(role, role) == display:
                     rd = leg_deltas.get(role)
                     if rd is not None:
@@ -449,7 +450,6 @@ async def _run(args: argparse.Namespace) -> None:
 
 def main() -> None:
     """CLI entry point."""
-    log_level = settings.log_level.upper()
     pass
 
     parser = argparse.ArgumentParser(

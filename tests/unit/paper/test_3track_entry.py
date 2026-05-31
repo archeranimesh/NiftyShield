@@ -1,14 +1,15 @@
 """Unit tests for scripts/paper_3track_entry.py (live-fetch auto mode)."""
 
+import sys
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
-import sys
+
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
-from scripts.paper_3track_entry import (
+from scripts.strategies.three_track.paper_3track_entry import (
     LivePrices,
     auto_select_proxy,
     build_trades,
@@ -23,21 +24,34 @@ from src.paper.constants import (
     STRATEGY_SPOT,
 )
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _make_row(strike: float, delta: float, bid: float = 10.0, ask: float = 12.0,
-              oi: int = 10_000) -> dict:
+
+def _make_row(
+    strike: float, delta: float, bid: float = 10.0, ask: float = 12.0, oi: int = 10_000
+) -> dict:
     mid = (bid + ask) / 2.0
     return {
-        "strike": strike, "delta": delta, "iv": 15.0,
-        "ltp": mid, "mid": mid, "bid": bid, "ask": ask,
-        "oi": oi, "instrument_key": f"NSE_FO|NIFTY_{int(strike)}CE",
+        "strike": strike,
+        "delta": delta,
+        "iv": 15.0,
+        "ltp": mid,
+        "mid": mid,
+        "bid": bid,
+        "ask": ask,
+        "oi": oi,
+        "instrument_key": f"NSE_FO|NIFTY_{int(strike)}CE",
     }
 
 
-def _make_chain_entry(strike: float, delta: float, spot: float = 24000.0,
-                      bid: float = 10.0, ask: float = 12.0, oi: int = 10_000) -> dict:
+def _make_chain_entry(
+    strike: float,
+    delta: float,
+    spot: float = 24000.0,
+    bid: float = 10.0,
+    ask: float = 12.0,
+    oi: int = 10_000,
+) -> dict:
     """Build a minimal raw Upstox option chain entry."""
     return {
         "strike_price": strike,
@@ -47,7 +61,9 @@ def _make_chain_entry(strike: float, delta: float, spot: float = 24000.0,
             "option_greeks": {"delta": delta, "iv": 15.0},
             "market_data": {
                 "ltp": (bid + ask) / 2,
-                "bid_price": bid, "ask_price": ask, "oi": oi,
+                "bid_price": bid,
+                "ask_price": ask,
+                "oi": oi,
             },
         },
         "put_options": {},
@@ -56,15 +72,22 @@ def _make_chain_entry(strike: float, delta: float, spot: float = 24000.0,
 
 def _make_prices(**kwargs) -> LivePrices:
     defaults = dict(
-        entry_date=date(2026, 5, 7), expiry="2026-05-29",
-        nifty_spot=Decimal("24000"), lot_size=65, cycle=1,
-        niftybees_ltp=Decimal("384.50"), niftybees_qty=4055,
+        entry_date=date(2026, 5, 7),
+        expiry="2026-05-29",
+        nifty_spot=Decimal("24000"),
+        lot_size=65,
+        cycle=1,
+        niftybees_ltp=Decimal("384.50"),
+        niftybees_qty=4055,
         futures_key="NSE_FO|NIFTY29MAY2026FUT",
         futures_price=Decimal("24100"),
-        proxy_strike=21500.0, proxy_price=Decimal("2720.25"),
+        proxy_strike=21500.0,
+        proxy_price=Decimal("2720.25"),
         proxy_actual_delta=Decimal("0.9050"),
         proxy_instrument_key="NSE_FO|NIFTY21500CE",
-        proxy_oi=12_000, proxy_bid=2715.0, proxy_ask=2723.0,
+        proxy_oi=12_000,
+        proxy_bid=2715.0,
+        proxy_ask=2723.0,
         proxy_candidates=(),
     )
     defaults.update(kwargs)
@@ -73,13 +96,14 @@ def _make_prices(**kwargs) -> LivePrices:
 
 # ── filter_proxy_candidates ───────────────────────────────────────────────────
 
+
 class TestFilterProxyCandidates:
     def test_filters_to_delta_band(self):
         chain = [
-            _make_chain_entry(21000, 0.95),   # edge of band
-            _make_chain_entry(22000, 0.90),   # in band
-            _make_chain_entry(23000, 0.70),   # out of band
-            _make_chain_entry(24000, 0.50),   # out of band
+            _make_chain_entry(21000, 0.95),  # edge of band
+            _make_chain_entry(22000, 0.90),  # in band
+            _make_chain_entry(23000, 0.70),  # out of band
+            _make_chain_entry(24000, 0.50),  # out of band
         ]
         rows = filter_proxy_candidates(chain)
         strikes = {r["strike"] for r in rows}
@@ -108,6 +132,7 @@ class TestFilterProxyCandidates:
 
 
 # ── auto_select_proxy ─────────────────────────────────────────────────────────
+
 
 class TestAutoSelectProxy:
     def test_picks_nearest_to_0_90(self):
@@ -146,6 +171,7 @@ class TestAutoSelectProxy:
 
 # ── compute_proxy_entry_price ─────────────────────────────────────────────────
 
+
 class TestComputeProxyEntryPrice:
     def test_min_slippage_applied(self):
         # spread=1.0 → slippage=max(0.50, 0.50)=0.50; mid=100.50
@@ -166,6 +192,7 @@ class TestComputeProxyEntryPrice:
 
 
 # ── build_trades ──────────────────────────────────────────────────────────────
+
 
 class TestBuildTrades:
     def test_returns_three_trades(self):
@@ -208,6 +235,7 @@ class TestBuildTrades:
 
 # ── compute_gate_results ──────────────────────────────────────────────────────
 
+
 class TestComputeGateResults:
     def test_both_pass(self):
         p = _make_prices(proxy_oi=10_000, proxy_bid=2715.0, proxy_ask=2718.0)
@@ -234,19 +262,22 @@ class TestComputeGateResults:
 
 # ── derive_expiry ─────────────────────────────────────────────────────────────
 
+
 class TestDeriveExpiry:
     def _make_lookup(self, expiry_dates: list[str]) -> object:
         """Stub InstrumentLookup that returns futures for given expiry dates."""
         from unittest.mock import MagicMock
+
         lookup = MagicMock()
         lookup.search_futures.return_value = [
-            {"instrument_key": f"NSE_FO|NIFTY{d.replace('-','')}FUT", "expiry": d}
+            {"instrument_key": f"NSE_FO|NIFTY{d.replace('-', '')}FUT", "expiry": d}
             for d in expiry_dates
         ]
         return lookup
 
     def test_prefers_30_to_45_dte(self):
         from datetime import timedelta
+
         today = date(2026, 5, 7)
         target = (today + timedelta(days=35)).isoformat()
         far = (today + timedelta(days=70)).isoformat()
@@ -256,6 +287,7 @@ class TestDeriveExpiry:
 
     def test_fallback_to_nearest_future_when_no_30_45(self):
         from datetime import timedelta
+
         today = date(2026, 5, 7)
         near = (today + timedelta(days=10)).isoformat()
         far = (today + timedelta(days=60)).isoformat()
@@ -265,6 +297,7 @@ class TestDeriveExpiry:
 
     def test_raises_when_no_futures_in_bod(self):
         from unittest.mock import MagicMock
+
         lookup = MagicMock()
         lookup.search_futures.return_value = []
         with pytest.raises(ValueError, match="No NIFTY futures found in BOD"):
@@ -272,6 +305,7 @@ class TestDeriveExpiry:
 
     def test_raises_when_all_expiries_are_past(self):
         from unittest.mock import MagicMock
+
         lookup = MagicMock()
         lookup.search_futures.return_value = [
             {"instrument_key": "NSE_FO|NIFTY2020FUT", "expiry": "2020-01-01"}

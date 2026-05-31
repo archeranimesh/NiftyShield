@@ -34,6 +34,7 @@ Diagnostics:
 
 from __future__ import annotations
 
+# ruff: noqa: E402
 import argparse
 import asyncio
 import re
@@ -48,14 +49,14 @@ import structlog
 from src.config import settings
 from src.utils.logging import setup_logging
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
 # Re-use constants and pure helpers from the entry script — single source of truth.
-from scripts.paper_3track_overlay import (
+from scripts.strategies.three_track.paper_3track_overlay import (
     _ACTION_FOR_ROLE,
     _CC_BLOCKED_TRACKS,
     _OPTION_TYPE_FOR_ROLE,
@@ -69,10 +70,17 @@ from src.client.upstox_market import UpstoxMarketClient
 from src.instruments.lookup import InstrumentLookup
 from src.models.portfolio import TradeAction
 from src.paper.constants import (
+    CC_OTM_MAX,
+    CC_OTM_MIN,
+    CC_TARGET_OTM,
     DEFAULT_BOD_PATH,
     DEFAULT_DB_PATH,
     LOT_SIZE,
+    NIFTY_UNDERLYING,
     OVERLAY_ROLL_DTE,
+    PP_OTM_MAX,
+    PP_OTM_MIN,
+    PP_TARGET_OTM,
     STRATEGY_FUTURES,
     STRATEGY_PROXY,
     STRATEGY_SPOT,
@@ -544,7 +552,6 @@ def _print_roll_report(results: list[RollResult], roll_date: date, dry_run: bool
 
 async def _run(args: argparse.Namespace) -> None:
     """Async entry point — detect and execute overlay rolls."""
-    log_level = settings.log_level.upper()
     pass
 
     roll_date: date = args.date or date.today()
