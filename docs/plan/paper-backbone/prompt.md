@@ -1,6 +1,7 @@
 Read `CONTEXT.md` and state `CONTEXT.md ✓` before doing anything else. Then read `docs/plan/paper-backbone/paper_backbone_tasks.md` and find the first unchecked box — the first `- [ ]` line. That is your **only task** for this session. Do not look at any other unchecked item. Do not attempt to batch or combine tasks. One task. Complete it fully. Move on to nothing else.
 
-**Story spec:** Read the matching story in `docs/plan/paper-backbone/paper_backbone_stories.md` (same task ID) for the full implementation spec, "Before any code" graph queries, test list, and commit message. Follow it exactly.
+**Story spec:** Read `docs/plan/paper-backbone/stories/<TASK_ID>.md` (e.g. `stories/PB1.1.md` for task PB1.1) for the full implementation spec, pre-baked graph context, test list, and commit message. Follow it exactly.
+The pre-baked context block at the bottom of each story file contains pre-run graph query results — **skip all "Before any code" graph calls listed in the story and use those results directly** to save tokens.
 
 **Pre-implementation gate:** State in one sentence: which task you are implementing (ID + one-line description), which files will change, and which test file covers it. Do not write any code until this plan is stated.
 
