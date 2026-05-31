@@ -24,7 +24,7 @@
 - [x] **CH-6** — Create `src/utils/logging.py` with `setup_logging()` (structlog JSON); wire into all scripts — **Antigravity** | SHA: 75f499b
 - [x] **CH-7a** — Claude: define `Settings` model in `src/config.py` mapping all env vars — **Claude** | SHA: 0222885
 - [x] **CH-7b** — Replace all `os.getenv()` calls in `scripts/` and `src/` with `Settings` — **Antigravity** | SHA: fe69612
-- [ ] **CH-8** — Create `scripts/healthcheck.py` (snapshot recency + DB + Telegram alert) — **Antigravity**
+- [x] **CH-8** — Create `scripts/healthcheck.py` (snapshot recency + DB + Telegram alert) — **Antigravity** | SHA: fe1e123
 
 ## Test quality tasks
 
