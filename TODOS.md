@@ -238,8 +238,8 @@ Existing scripts migrate folder-by-folder, one commit per folder, post-market on
 | Step | Scope | Status |
 |---|---|---|
 | SR0 | Layout sign-off | ✅ Closed 2026-05-29 |
-| SR1 | Scaffold subdirectories + `__init__.py` files | ⬜ Ready |
-| SR2–SR6 | Move pipeline, lookup, record, seed, dev, council (low cron risk) | 🔒 Locked |
+| SR1–SR4 | Scaffold structure and move pipeline, lookup, and record scripts | ✅ Shipped |
+| SR5–SR6 | Move seed, dev, and council scripts | 🔒 Locked |
 | SR7 | Move intraday/ — post-market only | 🔒 Locked |
 | SR8 | Move strategies/three_track/ — post-market only (EOD cron) | 🔒 Locked |
 | SR9–SR10 | Move strategies/csp+cc_calibration/, portfolio/ | 🔒 Locked |
