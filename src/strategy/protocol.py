@@ -33,10 +33,12 @@ class ApprovedAction:
     """An action approved by the council and user via Telegram."""
 
     action_type: str
-    legs_to_close: list[str]  # leg_role values of positions to close
+    legs_to_close: list[
+        str
+    ]  # leg_role values of positions to close. NOTE: leg_role must be unique within a position to be unambiguous.
     legs_to_open: list[LegSpec]
     rationale: str
-    council_rank: int  # 1 = top pick
+    council_rank: int  # 1 = top pick (Note: rank could be decoupled from action if multi-action objects are supported)
 
 
 @runtime_checkable
@@ -50,7 +52,7 @@ class PaperStrategy(Protocol):
     logged silently.
     """
 
-    strategy_name: str  # must start with "paper_"
+    strategy_name: str  # must start with "paper_" prefix (enforced by convention/tests)
 
     async def check_signals(
         self,

@@ -60,6 +60,12 @@ def test_protocol_conformance():
     """Test runtime_checkable conformance of PaperStrategy."""
     mock_strategy = MockStrategy()
     assert isinstance(mock_strategy, PaperStrategy)
+    assert hasattr(mock_strategy, "strategy_name"), (
+        "PaperStrategy must have strategy_name attribute"
+    )
+    assert mock_strategy.strategy_name.startswith("paper_"), (
+        "strategy_name must start with 'paper_' prefix"
+    )
 
     invalid_strategy = MissingMethodStrategy()
     assert not isinstance(invalid_strategy, PaperStrategy)
@@ -81,7 +87,7 @@ def test_leg_spec_model():
     assert leg.notes == "Hedge leg"
 
     with pytest.raises(FrozenInstanceError):
-        leg.quantity = 100  # type: ignore
+        leg.quantity = 100
 
 
 def test_signal_event_model():
@@ -98,7 +104,7 @@ def test_signal_event_model():
     assert event.payload == {"vix": 12.5}
 
     with pytest.raises(FrozenInstanceError):
-        event.severity = "WARN"  # type: ignore
+        event.severity = "WARN"
 
 
 def test_approved_action_model():
@@ -125,7 +131,7 @@ def test_approved_action_model():
     assert action.council_rank == 1
 
     with pytest.raises(FrozenInstanceError):
-        action.rationale = "New rationale"  # type: ignore
+        action.rationale = "New rationale"
 
 
 def test_approved_action_empty():
