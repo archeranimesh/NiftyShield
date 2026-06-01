@@ -8,10 +8,13 @@ from collections.abc import Callable
 from typing import Any
 
 import aiohttp
+import structlog
 
-from src.client.exceptions import BrokerError
+from src.client.exceptions import BrokerError, DataFetchError
 from src.council.models import CouncilOutput, PersonaResponse
 from src.strategy.protocol import ApprovedAction, LegSpec, SignalEvent
+
+logger = structlog.get_logger()
 
 
 class CouncilTimeoutError(BrokerError):
@@ -42,11 +45,13 @@ class RapidCouncil:
         payload: dict[str, Any],
         headers: dict[str, str],
         parser_fn: Callable[[dict[str, Any]], str],
-    ) -> str:
+    ) -> tuple[str, int, str | None]:
         async with session.post(url, json=payload, headers=headers) as resp:
+            status_code = resp.status
+            request_id = resp.headers.get("x-request-id") or resp.headers.get("request-id")
             resp.raise_for_status()
             data = await resp.json()
-            return parser_fn(data)
+            return parser_fn(data), status_code, request_id
 
     async def _call_persona(
         self,
@@ -60,12 +65,23 @@ class RapidCouncil:
         timeout: float = 25.0,
     ) -> PersonaResponse:
         start_time = time.perf_counter()
+        status_code = None
+        request_id = None
         try:
-            response_text = await asyncio.wait_for(
+            response_text, status_code, request_id = await asyncio.wait_for(
                 self._post_request(session, url, payload, headers, parser_fn),
                 timeout=timeout,
             )
             latency_ms = int((time.perf_counter() - start_time) * 1000)
+            logger.info(
+                "Council Stage 1 persona call completed",
+                persona=persona,
+                model=model,
+                url=url,
+                status_code=status_code,
+                request_id=request_id,
+                latency_ms=latency_ms,
+            )
             return PersonaResponse(
                 persona=persona,
                 model=model,
@@ -73,9 +89,20 @@ class RapidCouncil:
                 latency_ms=latency_ms,
                 timed_out=False,
             )
-        except Exception as e:
+        except (aiohttp.ClientError, asyncio.TimeoutError, TimeoutError) as e:
             latency_ms = int((time.perf_counter() - start_time) * 1000)
             is_timeout = isinstance(e, (asyncio.TimeoutError, TimeoutError))
+            err_status = getattr(e, "status", None) or status_code
+            logger.warning(
+                "Council Stage 1 persona call failed",
+                persona=persona,
+                model=model,
+                url=url,
+                status_code=err_status,
+                latency_ms=latency_ms,
+                error=str(e),
+                timed_out=is_timeout,
+            )
             return PersonaResponse(
                 persona=persona,
                 model=model,
@@ -300,7 +327,8 @@ class RapidCouncil:
             }
 
             try:
-                chairman_response_text = await asyncio.wait_for(
+                start_time_chairman = time.perf_counter()
+                chairman_response_text, status_code, request_id = await asyncio.wait_for(
                     self._post_request(
                         session=session,
                         url="https://api.anthropic.com/v1/messages",
@@ -310,11 +338,36 @@ class RapidCouncil:
                     ),
                     timeout=15.0,
                 )
+                latency_ms_chairman = int((time.perf_counter() - start_time_chairman) * 1000)
+                logger.info(
+                    "Council Chairman call completed",
+                    model="claude-sonnet-4-6",
+                    status_code=status_code,
+                    request_id=request_id,
+                    latency_ms=latency_ms_chairman,
+                )
             except (asyncio.TimeoutError, TimeoutError) as e:
+                logger.error(
+                    "Council Chairman call timed out",
+                    model="claude-sonnet-4-6",
+                    error=str(e),
+                )
                 raise CouncilTimeoutError("Chairman request timed out after 15 seconds.") from e
-            except Exception as e:
-                # Other errors can also raise CouncilTimeoutError or be handled
-                raise CouncilTimeoutError(f"Chairman request failed: {e}") from e
+            except aiohttp.ClientResponseError as e:
+                logger.error(
+                    "Council Chairman HTTP error",
+                    model="claude-sonnet-4-6",
+                    status_code=e.status,
+                    error=str(e),
+                )
+                raise DataFetchError(f"Chairman request HTTP error ({e.status}): {e}") from e
+            except aiohttp.ClientError as e:
+                logger.error(
+                    "Council Chairman client error",
+                    model="claude-sonnet-4-6",
+                    error=str(e),
+                )
+                raise DataFetchError(f"Chairman request client error: {e}") from e
 
             actions, rationale, dissenting = self._parse_chairman_response(chairman_response_text)
 

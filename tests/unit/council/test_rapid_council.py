@@ -229,11 +229,24 @@ async def test_rapid_council_chairman_timeout(
 
         if "api.anthropic.com" in url and model == "claude-sonnet-4-6":
             mock_resp.__aenter__ = AsyncMock(side_effect=asyncio.TimeoutError("Chairman timeout"))
+            mock_resp.__aexit__ = AsyncMock(return_value=None)
             return mock_resp
 
-        mock_resp.json = AsyncMock(return_value={})
+        if "openrouter.ai" in url:
+            if model == "deepseek/deepseek-r1-0528":
+                resp_data = {"choices": [{"message": {"content": "QuantAnalyst response"}}]}
+            else:
+                resp_data = {"choices": [{"message": {"content": "RiskManager response"}}]}
+        elif "api.anthropic.com" in url:
+            resp_data = {"content": [{"text": "SpecGuardian response"}]}
+        elif "api.x.ai" in url:
+            resp_data = {"choices": [{"message": {"content": "OptionsStrategist response"}}]}
+        else:
+            resp_data = {}
+
+        mock_resp.json = AsyncMock(return_value=resp_data)
         mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
-        mock_resp.__aexit__ = MagicMock(return_value=None)
+        mock_resp.__aexit__ = AsyncMock(return_value=None)
         return mock_resp
 
     with patch("aiohttp.ClientSession.post", side_effect=mock_post):
