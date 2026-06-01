@@ -14,7 +14,7 @@ from src.client.exceptions import BrokerError, DataFetchError
 from src.council.models import CouncilOutput, PersonaResponse
 from src.strategy.protocol import ApprovedAction, LegSpec, SignalEvent
 
-logger = structlog.get_logger()
+logger = structlog.get_logger(__name__)
 
 
 class CouncilTimeoutError(BrokerError):
