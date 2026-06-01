@@ -19,7 +19,7 @@
 - [x] **PB1.4** `[Antigravity]` — `src/council/rapid.py`: `RapidCouncil` (parallel Stage 1 + chairman synthesis + timeout handling) + tests | SHA: 6b71c9e, 845f1e0, 275e1bb
 - [x] **PB1.5** `[Claude]` — `src/notifications/telegram_gateway.py`: `TelegramGateway` (approval request + inbound polling + auth guard + timeout scan) + tests | SHA: fde2b3b
 - [x] **PB1.6** `[Antigravity]` — `src/paper/store.py`: DB migrations for `pending_approvals` + `council_outputs` + `daemon_heartbeat` + store methods + tests | SHA: 60408cf, 436982e
-- [x] **PB1.7** `[Antigravity]` — Scripts: `monitor_daemon.py` + `start_monitor.py` + `stop_monitor.py` + `pre_market_brief.py` + `eod_summary.py` + `requirements.txt` | SHA: 9191c02
+- [x] **PB1.7** `[Antigravity]` — Scripts: `monitor_daemon.py` + `start_monitor.py` + `stop_monitor.py` + `pre_market_brief.py` + `eod_summary.py` + `requirements.txt` | SHA: 9191c02, 0e51357
 
 ## Phase PT-S0 — CSP v1 (Backbone Integration)
 

@@ -300,6 +300,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-06-01 | paper-backbone PB1.7 CR — Code review fixes: tests, logging, date mismatch, layering — 0e51357 |
 | 2026-06-01 | paper-backbone PB1.7 — Scripts: monitor_daemon.py + start_monitor.py + stop_monitor.py + pre_market_brief.py + eod_summary.py + requirements.txt — 9191c02 |
 | 2026-06-01 | paper-backbone PB1.6 — DB migrations for pending_approvals + council_outputs + daemon_heartbeat + store methods — 60408cf, 436982e |
 | 2026-06-01 | paper-backbone PB1.5 — TelegramGateway with approval flow, inbound polling, auth guard, timeout scanner — fde2b3b |
