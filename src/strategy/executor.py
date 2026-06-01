@@ -1,0 +1,302 @@
+"""Paper trading execution layer.
+
+PaperFillSimulator: computes synthetic fills via the VIX-regime slippage
+model defined in DECISIONS.md §Slippage Model.
+
+PaperExecutor: thin orchestration layer that applies an ApprovedAction
+against PaperStore — closing requested legs and opening new ones — then
+returns the updated position list.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import date
+from decimal import Decimal
+from typing import Literal
+
+import sqlite3
+
+from src.db import connect
+from src.models.options import OptionChain
+from src.models.portfolio import TradeAction
+from src.paper.models import PaperPosition, PaperTrade
+from src.paper.store import PaperStore
+from src.strategy.protocol import ApprovedAction, LegSpec
+
+# VIX-regime slippage bands (absolute INR) — DECISIONS.md §Slippage Model
+# Tuple: (upper_bound_exclusive, slippage_INR)
+_VIX_BANDS: list[tuple[float, Decimal]] = [
+    (20.0, Decimal("1.0")),
+    (25.0, Decimal("1.5")),
+    (30.0, Decimal("3.0")),
+    (float("inf"), Decimal("4.0")),
+]
+
+# Default slippage when VIX is unknown — mid-range band (VIX 20–25)
+_DEFAULT_SLIPPAGE = Decimal("1.5")
+
+
+@dataclass(frozen=True)
+class FillResult:
+    """Result of a synthetic fill computation.
+
+    Attributes:
+        instrument_key: Upstox instrument key for this leg.
+        action: "BUY" or "SELL".
+        quantity: Units transacted. Always positive.
+        fill_price: Simulated execution price (mid ± slippage).
+        slippage: Absolute INR slippage applied.
+    """
+
+    instrument_key: str
+    action: Literal["BUY", "SELL"]
+    quantity: int
+    fill_price: Decimal
+    slippage: Decimal
+
+
+class PaperFillSimulator:
+    """Synthetic fill engine using a VIX-regime slippage model.
+
+    Slippage is absolute INR, regime-aware:
+    - VIX ≤ 20  → ₹1.0
+    - VIX 20–25 → ₹1.5
+    - VIX 25–30 → ₹3.0
+    - VIX > 30  → ₹4.0
+    - VIX None  → ₹1.5 (default, mid-range)
+
+    BUY fills at mid + slippage (paid more than mid).
+    SELL fills at mid − slippage (received less than mid).
+    """
+
+    def simulate_fill(
+        self,
+        instrument_key: str,
+        action: Literal["BUY", "SELL"],
+        quantity: int,
+        mid_price: Decimal,
+        vix: float | None = None,
+    ) -> FillResult:
+        """Compute synthetic fill using VIX-regime slippage model.
+
+        Args:
+            instrument_key: Upstox instrument key.
+            action: "BUY" or "SELL".
+            quantity: Units. Always positive.
+            mid_price: Current mid price of the option leg.
+            vix: India VIX value; None → default slippage band.
+
+        Returns:
+            FillResult with fill_price and slippage applied.
+        """
+        slippage = self._slippage_for_vix(vix)
+        if action == "BUY":
+            fill_price = mid_price + slippage
+        else:
+            fill_price = mid_price - slippage
+        # Option prices cannot be negative; clamp to minimum tick
+        fill_price = max(fill_price, Decimal("0.01"))
+        return FillResult(
+            instrument_key=instrument_key,
+            action=action,
+            quantity=quantity,
+            fill_price=fill_price,
+            slippage=slippage,
+        )
+
+    def _slippage_for_vix(self, vix: float | None) -> Decimal:
+        """Return absolute INR slippage for a given VIX level.
+
+        Args:
+            vix: India VIX; None → default.
+
+        Returns:
+            Slippage as Decimal INR.
+        """
+        if vix is None:
+            return _DEFAULT_SLIPPAGE
+        for upper, slip in _VIX_BANDS:
+            if vix <= upper:
+                return slip
+        return _VIX_BANDS[-1][1]  # unreachable; inf band catches all
+
+
+class PaperExecutor:
+    """Orchestration layer that applies an ApprovedAction to PaperStore.
+
+    Responsibilities:
+    1. Close requested legs (reverse-action trade at simulated fill).
+    2. Open new legs (forward trade at simulated fill).
+    3. Write an audit row to council_outputs (PB1.6 schema; best-effort).
+    4. Return the updated list[PaperPosition] for the strategy.
+    """
+
+    def __init__(
+        self,
+        store: PaperStore,
+        simulator: PaperFillSimulator,
+        db_path: str,
+    ) -> None:
+        """Initialise the executor.
+
+        Args:
+            store: PaperStore instance for trade persistence.
+            simulator: PaperFillSimulator for fill price computation.
+            db_path: SQLite DB path (used for audit writes).
+        """
+        self._store = store
+        self._simulator = simulator
+        self._db_path = db_path
+
+    def apply(
+        self,
+        strategy_name: str,
+        action: ApprovedAction,
+        market: OptionChain,
+        approval_id: int,
+        vix: float | None = None,
+    ) -> list[PaperPosition]:
+        """Execute an approved action and return the updated position list.
+
+        Steps:
+        1. For each leg_role in action.legs_to_close: record a closing trade
+           via PaperStore.record_trade (action = opposite of net position).
+        2. For each LegSpec in action.legs_to_open: simulate fill and record
+           an opening trade via PaperStore.record_trade.
+        3. Write a row to council_outputs for audit (approval_id FK).
+        4. Return updated list[PaperPosition] from PaperStore.get_positions().
+
+        Args:
+            strategy_name: Paper strategy name (must start with "paper_").
+            action: Approved action describing legs to close and open.
+            market: Current option chain snapshot (context / future price lookup).
+            approval_id: FK to pending_approvals record for audit trail.
+            vix: India VIX at execution time; None → default slippage band.
+
+        Returns:
+            Updated open positions for the strategy after applying the action.
+        """
+        today = date.today()
+
+        # 1. Close legs
+        for leg_role in action.legs_to_close:
+            position = self._store.get_position(strategy_name, leg_role)
+            if position.net_qty == 0:
+                continue  # nothing open for this leg
+            close_action = (
+                TradeAction.SELL if position.net_qty > 0 else TradeAction.BUY
+            )
+            mid_price = self._resolve_mid_price(position.instrument_key, market)
+            fill = self._simulator.simulate_fill(
+                instrument_key=position.instrument_key,
+                action=close_action.value,
+                quantity=abs(position.net_qty),
+                mid_price=mid_price,
+                vix=vix,
+            )
+            trade = PaperTrade(
+                strategy_name=strategy_name,
+                leg_role=leg_role,
+                instrument_key=position.instrument_key,
+                trade_date=today,
+                action=close_action,
+                quantity=fill.quantity,
+                price=fill.fill_price,
+                notes=f"executor_close approval_id={approval_id}",
+                ivr_at_entry=None,
+                is_paper=True,
+            )
+            self._store.record_trade(trade)
+
+        # 2. Open legs
+        for leg_spec in action.legs_to_open:
+            trade_action = TradeAction(leg_spec.action)
+            mid_price = self._resolve_mid_price(leg_spec.instrument_key, market)
+            fill = self._simulator.simulate_fill(
+                instrument_key=leg_spec.instrument_key,
+                action=leg_spec.action,
+                quantity=leg_spec.quantity,
+                mid_price=mid_price,
+                vix=vix,
+            )
+            trade = PaperTrade(
+                strategy_name=strategy_name,
+                leg_role=leg_spec.leg_role,
+                instrument_key=leg_spec.instrument_key,
+                trade_date=today,
+                action=trade_action,
+                quantity=fill.quantity,
+                price=fill.fill_price,
+                notes=leg_spec.notes or f"executor_open approval_id={approval_id}",
+                ivr_at_entry=None,
+                is_paper=True,
+            )
+            self._store.record_trade(trade)
+
+        # 3. Audit log — best-effort; council_outputs table added in PB1.6
+        self._write_audit(approval_id, strategy_name, action)
+
+        # 4. Return updated positions
+        return self._store.get_positions(strategy_name)
+
+    # ── Private helpers ───────────────────────────────────────────────────────
+
+    def _resolve_mid_price(
+        self, instrument_key: str, market: OptionChain
+    ) -> Decimal:
+        """Resolve mid price for an instrument from the option chain.
+
+        OptionLeg does not carry an instrument_key field in this model
+        version, so a direct lookup is not possible. Returns Decimal("0")
+        as fallback. When OptionLeg gains instrument_key support, this
+        method should perform a chain scan.
+
+        Args:
+            instrument_key: Upstox instrument key.
+            market: Current option chain snapshot.
+
+        Returns:
+            Mid price, or Decimal("0") when not resolvable.
+        """
+        # TODO(PB-future): implement proper lookup once OptionLeg carries
+        # instrument_key. For now, callers must pass pre-resolved mid prices
+        # via the simulator if price accuracy is required.
+        return Decimal("0")
+
+    def _write_audit(
+        self,
+        approval_id: int,
+        strategy_name: str,
+        action: ApprovedAction,
+    ) -> None:
+        """Write an audit row to council_outputs.
+
+        Fails silently if the table does not yet exist (schema added in
+        PB1.6 migration). Never raises — audit failure must not block
+        execution.
+
+        Args:
+            approval_id: FK to pending_approvals.
+            strategy_name: Strategy executing the action.
+            action: The approved action for audit logging.
+        """
+        try:
+            with connect(self._db_path) as conn:
+                conn.execute(
+                    """
+                    INSERT INTO council_outputs
+                        (approval_id, strategy_name, action_type, rationale, council_rank)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        approval_id,
+                        strategy_name,
+                        action.action_type,
+                        action.rationale,
+                        action.council_rank,
+                    ),
+                )
+        except sqlite3.OperationalError:
+            # council_outputs table added in PB1.6 migration — tolerate missing table
+            pass
