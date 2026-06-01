@@ -755,6 +755,17 @@ class PaperStore:
             if cur.rowcount != 1:
                 raise ValueError(f"No pending_approval row with id={approval_id}")
 
+    def expire_all_pending_approvals(self) -> None:
+        """Set all PENDING approvals to EXPIRED with resolved_at set to now."""
+        resolved_at = datetime.now(timezone.utc).isoformat()
+        with _connect(self.db_path) as conn:
+            conn.execute(
+                """UPDATE pending_approvals
+                   SET status = 'EXPIRED', resolved_at = ?
+                   WHERE status = 'PENDING'""",
+                (resolved_at,),
+            )
+
     def get_pending_approvals(self) -> list[dict[str, Any]]:
         """SELECT all PENDING approvals ordered by created_at ASC."""
         with _connect(self.db_path) as conn:
