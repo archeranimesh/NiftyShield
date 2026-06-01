@@ -38,7 +38,8 @@ from src.client.upstox_market import UpstoxMarketClient, parse_upstox_option_cha
 from src.instruments.lookup import InstrumentLookup  # noqa: E402
 from src.market_calendar.holidays import is_trading_day  # noqa: E402
 
-logger = structlog.get_logger(__name__)
+_SCRIPT_NAME = "scripts.pipeline.upstox_chain_snapshot"
+logger = structlog.get_logger(_SCRIPT_NAME)
 
 _NIFTY_INSTRUMENT = "NSE_INDEX|Nifty 50"
 _DEFAULT_SNAPSHOT_DIR = "data/offline/chain_snapshots"

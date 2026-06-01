@@ -71,13 +71,14 @@ def setup_logging(*, json: bool | None = None, level: str | None = None) -> None
     the prepend_logger_name processor (PrintLogger has no .name attribute).
 
     Args:
-        json: If True, emit JSON (production). If False, plain text console (dev).
-              If None, auto-detects from UPSTOX_ENV == "prod".
+        json: If True, emit JSON. If False, plain text. If None, auto-detects
+              from UPSTOX_LOG_JSON=1 (defaults to False — plain text always,
+              regardless of UPSTOX_ENV).
         level: Log level string. If None, auto-detects from UPSTOX_DEBUG == "1" (DEBUG)
                else defaults to "INFO".
     """
     if json is None:
-        json = settings.upstox_env == "prod"
+        json = settings.upstox_log_json
 
     if level is None:
         level = "DEBUG" if settings.upstox_debug else "INFO"
@@ -109,9 +110,12 @@ def setup_logging(*, json: bool | None = None, level: str | None = None) -> None
         shared_processors.append(structlog.processors.format_exc_info)
         shared_processors.append(structlog.processors.JSONRenderer())
     else:
-        # Use custom renderer: avoids ConsoleRenderer's fixed-width level padding
-        # and ANSI escape codes when stdout is not a TTY.
-        if sys.stdout.isatty():
+        # Color only when explicitly opted in via UPSTOX_LOG_COLOR=1.
+        # sys.stdout.isatty() is unreliable under launchd/cron (pseudo-TTY
+        # stays open), causing ANSI escape codes to bleed into log files.
+        import os
+
+        if os.environ.get("UPSTOX_LOG_COLOR") == "1":
             shared_processors.append(plain_renderer_color)
         else:
             shared_processors.append(plain_renderer)

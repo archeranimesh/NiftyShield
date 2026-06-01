@@ -83,7 +83,8 @@ from src.utils.logging import setup_logging
 ALL_TRACKS = [STRATEGY_SPOT, STRATEGY_FUTURES, STRATEGY_PROXY]
 
 
-logger = structlog.get_logger(__name__)
+_SCRIPT_NAME = "scripts.strategies.three_track.paper_3track_snapshot"
+logger = structlog.get_logger(_SCRIPT_NAME)
 
 
 # ── Per-leg delta calculation ─────────────────────────────────────────────────

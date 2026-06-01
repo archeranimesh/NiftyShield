@@ -19,7 +19,8 @@ from src.backtest.bhavcopy_ingest import (  # noqa: E402
 )
 
 pass
-logger = structlog.get_logger(__name__)
+_SCRIPT_NAME = "scripts.pipeline.bhavcopy_bootstrap"
+logger = structlog.get_logger(_SCRIPT_NAME)
 
 # Try importing holidays; fallback to empty set if not found
 try:

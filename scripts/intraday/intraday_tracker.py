@@ -29,7 +29,8 @@ from src.utils.logging import setup_logging
 
 setup_logging()
 
-logger = structlog.get_logger(__name__)
+_SCRIPT_NAME = "scripts.intraday.intraday_tracker"
+logger = structlog.get_logger(_SCRIPT_NAME)
 
 
 async def main() -> int:

@@ -84,7 +84,8 @@ ALL_TRACKS = [STRATEGY_SPOT, STRATEGY_FUTURES, STRATEGY_PROXY]
 # Futures track is permanently blocked from standalone covered calls
 _CC_BLOCKED_TRACKS = {STRATEGY_FUTURES}
 
-logger = structlog.get_logger(__name__)
+_SCRIPT_NAME = "scripts.strategies.three_track.paper_3track_overlay"
+logger = structlog.get_logger(_SCRIPT_NAME)
 
 
 # ── Overlay candidate row ────────────────────────────────────────────────────

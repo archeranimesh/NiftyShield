@@ -55,7 +55,8 @@ from src.paper.store import PaperStore
 from src.paper.tracker import PaperTracker
 
 pass
-logger = structlog.get_logger(__name__)
+_SCRIPT_NAME = "scripts.portfolio.paper_snapshot"
+logger = structlog.get_logger(_SCRIPT_NAME)
 
 
 def _parse_args() -> argparse.Namespace:

@@ -26,7 +26,8 @@ import structlog
 from src.market_calendar.holidays import is_trading_day
 from src.utils.logging import setup_logging
 
-logger = structlog.get_logger(__name__)
+_SCRIPT_NAME = "scripts.intraday.dhan_intraday_tracker"
+logger = structlog.get_logger(_SCRIPT_NAME)
 
 
 def main(nifty_spot: float = 0.0, india_vix: float = 0.0) -> int:

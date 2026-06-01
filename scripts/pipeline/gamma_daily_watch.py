@@ -17,7 +17,8 @@ import structlog
 from src.market_calendar.holidays import is_trading_day
 from src.utils.logging import setup_logging
 
-logger = structlog.get_logger(__name__)
+_SCRIPT_NAME = "scripts.pipeline.gamma_daily_watch"
+logger = structlog.get_logger(_SCRIPT_NAME)
 
 
 def resolve_expiries(today: date) -> tuple[date, date]:

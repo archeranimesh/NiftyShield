@@ -63,6 +63,22 @@ Every new Python package directory — whether under `src/`, `scripts/`, or `tes
 
 Reminder: after adding a new package, re-index: `mcp__codebase-memory-mcp__index_repository`.
 
+## Logging standard (scripts/)
+
+**Never** use `structlog.get_logger(__name__)` in `scripts/`. When a script is run directly,
+`__name__ == "__main__"` and every log line shows `[__main__]` — losing all module context.
+
+Always declare an explicit name:
+
+```python
+_SCRIPT_NAME = "scripts.<subdir>.<module>"   # mirrors the file path with dots
+logger = structlog.get_logger(_SCRIPT_NAME)
+```
+
+Pre-commit hook `no-script-main-logger` enforces this — any `get_logger(__name__)` in `scripts/` fails the commit.
+
+`src/` modules are fine with `__name__` because they are always imported (never run as `__main__`).
+
 ## Step 2 — Confirm scope
 
 If the prompt does not name specific files, ask before starting. One clarifying question beats building the wrong thing.

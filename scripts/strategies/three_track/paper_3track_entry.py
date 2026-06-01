@@ -80,7 +80,8 @@ PROXY_QUARTERLY_DTE = (46, 200)  # next quarterly (Jun / Sep)
 PROXY_YEARLY_DTE = (201, 420)  # year-end expiry (Dec)
 SPAN_MARGIN_ESTIMATE = Decimal("150000")
 
-logger = structlog.get_logger(__name__)
+_SCRIPT_NAME = "scripts.strategies.three_track.paper_3track_entry"
+logger = structlog.get_logger(_SCRIPT_NAME)
 
 
 # ── Data model ───────────────────────────────────────────────────────────────

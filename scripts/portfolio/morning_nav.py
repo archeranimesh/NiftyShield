@@ -38,7 +38,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.market_calendar.holidays import prev_trading_day  # noqa: E402
 
 pass
-logger = structlog.get_logger(__name__)
+_SCRIPT_NAME = "scripts.portfolio.morning_nav"
+logger = structlog.get_logger(_SCRIPT_NAME)
 
 
 def run_morning_nav(target_date: date, db_path: Path) -> int:

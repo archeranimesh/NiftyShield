@@ -88,7 +88,8 @@ from src.paper.constants import (
 from src.paper.models import PaperTrade
 from src.paper.store import PaperStore
 
-logger = structlog.get_logger(__name__)
+_SCRIPT_NAME = "scripts.strategies.three_track.paper_3track_overlay_roll"
+logger = structlog.get_logger(_SCRIPT_NAME)
 
 # Regex for parsing expiry from Nifty FO instrument keys.
 # Matches: NSE_FO|NIFTY29MAY2026PE   or   NSE_FO|NIFTY29MAY2026CE

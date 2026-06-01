@@ -67,6 +67,10 @@ class Settings(BaseSettings):
         default=False,
         description="Set UPSTOX_DEBUG=1 for verbose request/response logging.",
     )
+    upstox_log_json: bool = Field(
+        default=False,
+        description="Set UPSTOX_LOG_JSON=1 to emit structured JSON logs. Defaults to plain text regardless of UPSTOX_ENV.",
+    )
 
     # ------------------------------------------------------------------
     # Telegram
@@ -140,7 +144,7 @@ class Settings(BaseSettings):
         description="Base directory for intraday option chain Parquet snapshots.",
     )
     bod_instruments_path: str = Field(
-        default="data/instruments/NSE.json",
+        default="data/instruments/NSE.json.gz",
         description="Path to the Beginning-of-Day instrument JSON from Upstox.",
     )
 

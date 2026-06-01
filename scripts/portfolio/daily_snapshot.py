@@ -61,7 +61,8 @@ from src.portfolio.summary import (
 )
 from src.utils.logging import setup_logging
 
-logger = structlog.get_logger(__name__)
+_SCRIPT_NAME = "scripts.portfolio.daily_snapshot"
+logger = structlog.get_logger(_SCRIPT_NAME)
 
 
 def _print_combined_summary(
