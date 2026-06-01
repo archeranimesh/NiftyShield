@@ -14,11 +14,20 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+import structlog
+from dotenv import load_dotenv
+
 # Ensure the root of the project is in path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+# Load environment before local imports
+load_dotenv()
+
 from src.config import settings  # noqa: E402
 from src.paper.store import PaperStore  # noqa: E402
+from src.utils.logging import setup_logging  # noqa: E402
+
+logger = structlog.get_logger("scripts.start_monitor")
 
 
 def main() -> int:
@@ -35,7 +44,7 @@ def main() -> int:
 
     should_start = False
     if heartbeat is None:
-        print("No heartbeat record found. Starting daemon...")
+        logger.info("No heartbeat record found. Starting daemon...")
         should_start = True
     else:
         # Check if heartbeat is stale (> 5 minutes old)
@@ -61,36 +70,49 @@ def main() -> int:
             is_stale = age_seconds > 300
             is_shutdown = heartbeat.get("last_event") == "SHUTDOWN"
             if is_stale or not process_exists or is_shutdown:
-                print(
-                    f"Stale heartbeat or dead process "
-                    f"(age: {age_seconds:.1f}s, pid: {pid}, "
-                    f"exists: {process_exists}). Starting daemon..."
+                logger.info(
+                    "Stale heartbeat or dead process starting daemon",
+                    age_seconds=age_seconds,
+                    pid=pid,
+                    process_exists=process_exists,
                 )
                 should_start = True
             else:
-                print(
-                    f"Daemon is already running "
-                    + f"(age: {age_seconds:.1f}s, pid: {pid})."
+                logger.info(
+                    "Daemon is already running",
+                    age_seconds=age_seconds,
+                    pid=pid,
                 )
         except Exception as e:  # Intentional: Ignore errors, start daemon
-            print(
-                f"Error checking heartbeat: {e}. "
-                + "Defaulting to start daemon..."
+            logger.warning(
+                "Error checking heartbeat. Defaulting to start daemon...",
+                error=str(e),
             )
             should_start = True
 
     if should_start:
         cmd = [sys.executable, "-m", "scripts.monitor_daemon"]
-        subprocess.Popen(
-            cmd,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            close_fds=True,
-            start_new_session=True,
-        )
-        print("Daemon launched.")
+        # Ensure logs directory exists
+        log_dir = Path("logs")
+        log_dir.mkdir(exist_ok=True)
+        err_log_path = log_dir / "monitor_daemon.err"
+        try:
+            with open(err_log_path, "a") as err_file:
+                subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.DEVNULL,
+                    stderr=err_file,
+                    close_fds=True,
+                    start_new_session=True,
+                )
+            logger.info("Daemon launched.")
+        except Exception as e:
+            # Intentional: Log launcher failures
+            logger.error("Failed to launch daemon process", error=str(e))
+            return 1
     return 0
 
 
 if __name__ == "__main__":
+    setup_logging()
     sys.exit(main())

@@ -75,10 +75,17 @@ monitor_task: asyncio.Task | None = None
 gateway_task: asyncio.Task | None = None
 store_ref: PaperStore | None = None
 strategies_ref: list[str] = []
+_shutdown_started: bool = False
 
 
 async def shutdown():
     """Cancel background tasks, clean up DB, write heartbeat, and exit."""
+    global _shutdown_started
+    if _shutdown_started:
+        logger.info("Shutdown already in progress, ignoring duplicate signal.")
+        return
+    _shutdown_started = True
+
     logger.info("Cancelling running tasks...")
 
     # 1. Cancel concurrent tasks
@@ -284,16 +291,10 @@ async def main() -> int:
             rank=rank,
         )
 
-        def _get_pending_approval():
-            with _connect(store.db_path) as conn:
-                return conn.execute(
-                    "SELECT id, strategy_name, council_output "
-                    "FROM pending_approvals "
-                    "WHERE telegram_msg_id = ? AND status = 'PENDING'",
-                    (telegram_msg_id,),
-                ).fetchone()
-
-        row = await asyncio.to_thread(_get_pending_approval)
+        row = await asyncio.to_thread(
+            store.get_pending_approval_by_msg_id,
+            telegram_msg_id,
+        )
         if not row:
             logger.warning(
                 "No pending approval found for Telegram message ID",
@@ -303,7 +304,7 @@ async def main() -> int:
 
         approval_id = row["id"]
         strategy_name = row["strategy_name"]
-        council_output_json = row["council_output"]
+        council_output = row["council_output"]
 
         try:
             await asyncio.to_thread(
@@ -328,7 +329,7 @@ async def main() -> int:
 
         # Reconstruct ApprovedAction
         try:
-            data = json.loads(council_output_json)
+            data = council_output
             actions_list = data.get("actions", [])
             action_dict = next(
                 (a for a in actions_list if a.get("council_rank") == rank),
@@ -369,7 +370,7 @@ async def main() -> int:
         # Fetch live option chain at execution time
         market = parse_upstox_option_chain([])
         try:
-            expiry_str = await asyncio.to_thread(get_expiry)
+            expiry_str = get_expiry()
             if expiry_str:
                 raw = await broker.get_option_chain(
                     "NSE_INDEX|Nifty 50",

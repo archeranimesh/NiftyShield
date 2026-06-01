@@ -229,3 +229,60 @@ def test_council_outputs_crud(tmp_path):
     assert row["latency_ms"] == 2500
     assert row["response"] == "Approved entries"
     assert row["created_at"] is not None
+
+
+def test_expire_all_pending_approvals(tmp_path):
+    db_path = tmp_path / "portfolio.sqlite"
+    store = PaperStore(db_path)
+
+    # Edge Case: No pending approvals -> no-op, no exception
+    store.expire_all_pending_approvals()
+
+    expires_at = (datetime.now(timezone.utc) + timedelta(minutes=30)).isoformat()
+    app_id1 = store.create_approval("paper_csp_nifty", "ENTRY", "{}", None, expires_at)
+    app_id2 = store.create_approval("paper_csp_nifty", "EXIT", "{}", None, expires_at)
+
+    # Resolve one to APPROVED first so we make sure only PENDING ones expire
+    store.resolve_approval(app_id1, "APPROVED", approved_rank=1)
+
+    # Happy Path: expire_all_pending_approvals
+    store.expire_all_pending_approvals()
+
+    # Retrieve approvals directly to verify
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    row1 = conn.execute("SELECT * FROM pending_approvals WHERE id = ?", (app_id1,)).fetchone()
+    row2 = conn.execute("SELECT * FROM pending_approvals WHERE id = ?", (app_id2,)).fetchone()
+    conn.close()
+
+    assert row1["status"] == "APPROVED"
+    assert row2["status"] == "EXPIRED"
+    assert row2["resolved_at"] is not None
+
+
+def test_get_pending_approval_by_msg_id(tmp_path):
+    db_path = tmp_path / "portfolio.sqlite"
+    store = PaperStore(db_path)
+
+    # None case
+    assert store.get_pending_approval_by_msg_id(99999) is None
+
+    expires_at = (datetime.now(timezone.utc) + timedelta(minutes=30)).isoformat()
+    app_id = store.create_approval(
+        strategy_name="paper_csp_nifty",
+        event_type="ENTRY",
+        council_output_json='{"decision": "GO"}',
+        telegram_msg_id=77777,
+        expires_at=expires_at,
+    )
+
+    # Found case
+    row = store.get_pending_approval_by_msg_id(77777)
+    assert row is not None
+    assert row["id"] == app_id
+    assert row["strategy_name"] == "paper_csp_nifty"
+    assert row["council_output"] == {"decision": "GO"}
+
+    # Resolve and verify it is no longer pending
+    store.resolve_approval(app_id, "APPROVED", approved_rank=1)
+    assert store.get_pending_approval_by_msg_id(77777) is None

@@ -79,14 +79,12 @@ async def main() -> int:
     strategy_names = await asyncio.to_thread(store.get_strategy_names)
     if not strategy_names:
         logger.info("No paper strategies with trades found in database.")
-        # Fallback to standard names just in case
-        strategy_names = [
-            "paper_csp_nifty_v1",
-            "paper_ic_nifty_v1",
-            "paper_nifty_spot",
-            "paper_nifty_futures",
-            "paper_nifty_proxy",
-        ]
+        msg = (
+            "☀️ <b>NiftyShield Pre-Market Brief</b>\n"
+            + "No active paper trading strategies found in database."
+        )
+        await gateway.send_plain_message(msg)
+        return 0
 
     broker = create_client(settings.upstox_env)
     tracker = PaperTracker(store=store, market=broker)

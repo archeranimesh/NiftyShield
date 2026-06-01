@@ -45,7 +45,6 @@ async def main() -> int:
     )
 
     today_str = date.today().isoformat()
-    today_utc = datetime.now(timezone.utc).date().isoformat()
 
     def _fetch_data():
         with _connect(store.db_path) as conn:
@@ -59,8 +58,10 @@ async def main() -> int:
             ).fetchall()
 
             count_query = "SELECT COUNT(*) FROM pending_approvals "
-            count_query += "WHERE date(created_at) = ?"
-            count_row = conn.execute(count_query, (today_utc,)).fetchone()
+            count_query += (
+                "WHERE date(created_at, '+5 hours', '+30 minutes') = ?"
+            )
+            count_row = conn.execute(count_query, (today_str,)).fetchone()
             council_count = count_row[0] if count_row else 0
 
             # Convert rows to plain dicts to avoid SQLite thread-safety issues

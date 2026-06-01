@@ -784,6 +784,26 @@ class PaperStore:
             results.append(d)
         return results
 
+    def get_pending_approval_by_msg_id(
+        self,
+        telegram_msg_id: int,
+    ) -> dict[str, Any] | None:
+        """SELECT a PENDING approval by Telegram message ID."""
+        with _connect(self.db_path) as conn:
+            row = conn.execute(
+                """SELECT id, strategy_name, event_type, council_output, status,
+                          approved_rank, expires_at, telegram_msg_id,
+                          created_at, resolved_at
+                   FROM pending_approvals
+                   WHERE telegram_msg_id = ? AND status = 'PENDING'""",
+                (telegram_msg_id,),
+            ).fetchone()
+        if not row:
+            return None
+        d = dict(row)
+        d["council_output"] = json.loads(d["council_output"])
+        return d
+
     def write_heartbeat(
         self,
         pid: int,
