@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
 
 import structlog
@@ -99,14 +99,12 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
     if args.date:
         target_date = date.fromisoformat(args.date)
-        print(f"[{now}] Manual NAV backfill for {target_date.isoformat()}")
+        logger.info("Manual NAV backfill for %s", target_date.isoformat())
     else:
         target_date = prev_trading_day(date.today())
-        print(f"[{now}] Morning NAV backfill — target date: {target_date.isoformat()}")
+        logger.info("Morning NAV backfill — target date: %s", target_date.isoformat())
 
     return run_morning_nav(target_date, args.db_path)
 

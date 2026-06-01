@@ -42,6 +42,8 @@ from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 
+import structlog
+
 from src.config import settings
 from src.market_calendar.holidays import is_trading_day, prev_trading_day
 from src.models.portfolio import DailySnapshot, Strategy
@@ -58,6 +60,8 @@ from src.portfolio.summary import (
     _etf_current_value,  # noqa: F401
 )
 from src.utils.logging import setup_logging
+
+logger = structlog.get_logger(__name__)
 
 
 def _print_combined_summary(
@@ -692,11 +696,7 @@ async def _async_main(snap_date: date, db_path: Path, dhan_trade_count: int = 0)
                     f"Month {_month_pnl:+,.0f}"
                 )
         except Exception:  # noqa: BLE001
-            import logging as _logging
-
-            _logging.getLogger(__name__).exception(
-                "Dhan Options fetch failed — continuing without it"
-            )
+            logger.exception("Dhan Options fetch failed — continuing without it")
             print(f"  WARNING [{run_id}]: Dhan Options fetch failed — showing [unavailable]")
 
         # ── Combined portfolio summary ────────────────────────────────
@@ -726,9 +726,7 @@ async def _async_main(snap_date: date, db_path: Path, dhan_trade_count: int = 0)
             if not await notifier.send(summary_text):
                 print("  WARNING: Telegram notification failed (see logs).")
         else:
-            import logging as _logging
-
-            _logging.getLogger(__name__).debug(
+            logger.debug(
                 "Telegram notifier not configured — skipping (set TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID)"
             )
 
