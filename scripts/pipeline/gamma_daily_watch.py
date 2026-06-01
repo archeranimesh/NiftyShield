@@ -24,12 +24,13 @@ logger = structlog.get_logger(_SCRIPT_NAME)
 def resolve_expiries(today: date) -> tuple[date, date]:
     """Resolve the current-week and next-week expiry dates.
 
-    NSE Nifty weekly options expire on Thursdays. Current-week expiry is the
-    Thursday of the current week (or the preceding trading day if Thursday is a
-    holiday). If today is Thursday and the market is open, today is used. If
-    today is Thursday but it is a holiday, or if today is after Thursday
-    (Fri/Sat/Sun), current-week expiry shifts to the next week's Thursday.
-    Next-week expiry is the Thursday (or preceding trading day) after that.
+    NSE Nifty weekly options expire on Tuesdays (effective April 2026, SEBI
+    circular). Current-week expiry is the Tuesday of the current week (or the
+    preceding trading day if Tuesday is a holiday). If today is Tuesday and
+    the market is open, today is used. If today is Tuesday but it is a
+    holiday, or if today is after Tuesday (Wed–Sun), current-week expiry
+    shifts to the next week's Tuesday. Next-week expiry is the Tuesday (or
+    preceding trading day) after that.
 
     Args:
         today: The reference date to resolve expiries for.
@@ -38,30 +39,25 @@ def resolve_expiries(today: date) -> tuple[date, date]:
         A tuple of (current_week_expiry, next_week_expiry).
     """
     # weekday(): 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat, 6=Sun
-    weekday_diff = 3 - today.weekday()  # days to reach Thursday (may be negative)
-    nominal_thursday = today + timedelta(days=weekday_diff)
+    weekday_diff = 1 - today.weekday()  # days to reach Tuesday (may be negative)
+    nominal_tuesday = today + timedelta(days=weekday_diff)
 
-    if today.weekday() == 3:
-        if is_trading_day(today):
-            # Today is Thursday and the market is open — use today
-            current_week_nominal = today
-            next_week_nominal = today + timedelta(weeks=1)
-        else:
-            # Thursday is a holiday — skip to next week
-            current_week_nominal = nominal_thursday + timedelta(weeks=1)
-            next_week_nominal = nominal_thursday + timedelta(weeks=2)
-    elif today.weekday() < 3:
-        # Mon / Tue / Wed — this week's Thursday is still ahead
-        current_week_nominal = nominal_thursday
-        next_week_nominal = nominal_thursday + timedelta(weeks=1)
+    if today.weekday() == 1 and is_trading_day(today):
+        # Today is Tuesday and market is open — use today
+        current_week_nominal = today
+        next_week_nominal = today + timedelta(weeks=1)
+    elif today.weekday() < 1:
+        # Monday — this week's Tuesday is still ahead
+        current_week_nominal = nominal_tuesday
+        next_week_nominal = nominal_tuesday + timedelta(weeks=1)
     else:
-        # Fri / Sat / Sun — this week's expiry has passed, use next week
-        current_week_nominal = nominal_thursday + timedelta(weeks=1)
-        next_week_nominal = nominal_thursday + timedelta(weeks=2)
+        # Tuesday (holiday) or Wed–Sun — use next week's Tuesday
+        current_week_nominal = nominal_tuesday + timedelta(weeks=1)
+        next_week_nominal = nominal_tuesday + timedelta(weeks=2)
 
-    def _adjust_expiry(nom_thu: date) -> date:
-        """Roll back to the nearest preceding trading day if Thursday is a holiday."""
-        curr = nom_thu
+    def _adjust_expiry(nom_tue: date) -> date:
+        """Roll back to the nearest preceding trading day if Tuesday is a holiday."""
+        curr = nom_tue
         while not is_trading_day(curr):
             curr -= timedelta(days=1)
         return curr

@@ -205,17 +205,9 @@ def test_buy_inserts_row_and_prints_summary(tmp_path: Path) -> None:
     db = tmp_path / "db.sqlite"
     # First SELL to open
     _run(_base_args("SELL") + ["--no-dry-run"], db)
-    # Then BUY to close — use --close (not --action BUY) to avoid live Nifty spot fetch
-    buy_args = [
-        "--strategy", _STRATEGY,
-        "--leg", _LEG,
-        "--key", _KEY,
-        "--date", _DATE,
-        "--close",
-        "--qty", _QTY,
-        "--price", "60.00",
-        "--no-dry-run",
-    ]
+    # Then BUY to close
+    buy_args = list(_base_args("BUY")) + ["--no-dry-run"]
+    buy_args[buy_args.index(_PRICE)] = "60.00"
     code, out, err = _run(buy_args, db)
     assert code == 0, f"stderr: {err}"
     store = PaperStore(db)
@@ -234,17 +226,7 @@ def test_idempotent_rerun(tmp_path: Path) -> None:
 def test_closed_position_prints_closed_message(tmp_path: Path) -> None:
     db = tmp_path / "db.sqlite"
     _run(_base_args("SELL") + ["--no-dry-run"], db)
-    # --close implies BUY and skips the live Nifty spot fetch
-    buy_args = [
-        "--strategy", _STRATEGY,
-        "--leg", _LEG,
-        "--key", _KEY,
-        "--date", _DATE,
-        "--close",
-        "--qty", _QTY,
-        "--price", _PRICE,
-        "--no-dry-run",
-    ]
+    buy_args = list(_base_args("BUY")) + ["--no-dry-run"]
     code, out, _ = _run(buy_args, db)
     assert code == 0
     assert "closed" in out or "net qty" in out
