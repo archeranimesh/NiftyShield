@@ -31,6 +31,10 @@ Small items: no story file yet, or waiting for a single edit/commit.
 - [ ] **Add IVR NULL note to BACKTEST_PLAN.md** — Phase 0.8 gate criterion A: *"IVR NULL for Cycles 1 and 2 — accepted data gap; criterion A satisfied from Cycle 3 onward."* Cycle 1 (id=14, 2026-05-11): pipeline not live. Cycle 2 (id=32, 2026-05-28): 0/252 days VIX history blocked computation.
 - [ ] **Create `docs/plan/entry-event-filter/`** — R4 event filter (Budget/RBI MPC/elections). Scope: `src/market_calendar/events.yaml` schema + loader + soft-warning integration into `record_paper_trade.py`. Dependency: ES12 must ship first. DoD: `prompt.md` + `tasks.md`, no code.
 - [ ] **Create `docs/plan/csp-collateral-leg/`** — `long_niftybees` collateral leg. Back-fill Cycle 1 (2026-05-11); add to `paper_snapshot.py` LTP batch; annual reset. Formula: `qty = floor((65 × nifty_spot) / niftybees_ltp)`. DoD: story dir + back-fill command documented.
+- [ ] **PB1.1 Post-Review: `strategy_name` constraint enforcement** — Validate that strategies use the required `paper_` prefix. Add comment/guard on the field or concrete implementations and assert in tests.
+- [ ] **PB1.1 Post-Review: `legs_to_close: list[str]` ambiguity** — Document that `leg_role` must be unique within a position for unambiguous closure by `leg_role`.
+- [ ] **PB1.1 Post-Review: Reconsider `council_rank: int` on `ApprovedAction`** — Evaluate decoupling council rank from the action model to support a single canonical action object before building the executor.
+- [ ] **PB1.1 Post-Review: Add `strategy_name` presence check to protocol conformance test** — Assert `hasattr(mock_strategy, "strategy_name")` in test to document intent.
 
 **Before build queue #6 starts** — verify paper-backbone prerequisites:
 ```bash
