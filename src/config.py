@@ -73,6 +73,22 @@ class Settings(BaseSettings):
     )
 
     # ------------------------------------------------------------------
+    # Council
+    # ------------------------------------------------------------------
+    openrouter_api_key: str | None = Field(
+        default=None,
+        description="OpenRouter API Key for QuantAnalyst / RiskManager.",
+    )
+    anthropic_api_key: str | None = Field(
+        default=None,
+        description="Anthropic API Key for SpecGuardian / Chairman.",
+    )
+    xai_api_key: str | None = Field(
+        default=None,
+        description="xAI API Key for OptionsStrategist.",
+    )
+
+    # ------------------------------------------------------------------
     # Telegram
     # ------------------------------------------------------------------
     telegram_bot_token: str | None = Field(
