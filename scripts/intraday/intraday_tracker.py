@@ -22,10 +22,14 @@ from __future__ import annotations
 import asyncio
 import os
 
+import structlog
+
 from src.config import settings
 from src.utils.logging import setup_logging
 
 setup_logging()
+
+logger = structlog.get_logger(__name__)
 
 
 async def main() -> int:
@@ -36,7 +40,6 @@ async def main() -> int:
     """
     from datetime import datetime, timezone
 
-    import structlog
     from dotenv import load_dotenv
 
     from scripts.intraday.dhan_intraday_tracker import main as dhan_main
@@ -46,7 +49,6 @@ async def main() -> int:
     from src.intraday.market_store import IntradayMarketStore
 
     load_dotenv()
-    logger = structlog.get_logger(__name__)
 
     nifty_spot = 0.0
     india_vix = 0.0

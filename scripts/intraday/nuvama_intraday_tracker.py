@@ -59,8 +59,9 @@ async def main(nifty_spot: float = 0.0, india_vix: float = 0.0) -> int:
 
     try:
         api: NuvamaClient = load_api_connect()
-        # Nuvama SDK removes all standard logging handlers on __init__. We must restore it.
-        pass
+        # Nuvama SDK removes all stdlib logging handlers on __init__.
+        # Re-run setup_logging() to restore the structlog handler chain.
+        setup_logging()
         logger.info("Starting intraday nuvama options tracking loop...")
 
         logger.info("Fetching NetPosition()...")
