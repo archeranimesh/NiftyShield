@@ -1,8 +1,9 @@
-import sqlite3
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+
 import pytest
 
+from src.db import connect as _connect  # noqa: E402
 from src.models.portfolio import TradeAction
 from src.paper.models import PaperTrade
 from src.paper.store import PaperStore
@@ -55,11 +56,11 @@ def test_resolve_approval_approved(tmp_path):
     pending = store.get_pending_approvals()
     assert len(pending) == 0
 
-    # Query database directly to verify resolution fields
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    row = conn.execute("SELECT * FROM pending_approvals WHERE id = ?", (app_id,)).fetchone()
-    conn.close()
+    with _connect(db_path) as conn:
+        row = conn.execute(
+            "SELECT * FROM pending_approvals WHERE id = ?",
+            (app_id,),
+        ).fetchone()
 
     assert row is not None
     assert row["status"] == "APPROVED"
@@ -94,10 +95,11 @@ def test_resolve_approval_expired(tmp_path):
     assert len(pending) == 0
 
     # Query database directly
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    row = conn.execute("SELECT * FROM pending_approvals WHERE id = ?", (app_id,)).fetchone()
-    conn.close()
+    with _connect(db_path) as conn:
+        row = conn.execute(
+            "SELECT * FROM pending_approvals WHERE id = ?",
+            (app_id,),
+        ).fetchone()
 
     assert row is not None
     assert row["status"] == "EXPIRED"
@@ -147,9 +149,10 @@ def test_daemon_heartbeat_roundtrip(tmp_path):
     store.write_heartbeat(pid=8888, strategies=["paper_csp_nifty"], last_event=None)
 
     # Check that there is still only 1 row
-    conn = sqlite3.connect(db_path)
-    count = conn.execute("SELECT count(*) FROM daemon_heartbeat").fetchone()[0]
-    conn.close()
+    with _connect(db_path) as conn:
+        count = conn.execute(
+            "SELECT count(*) FROM daemon_heartbeat"
+        ).fetchone()[0]
     assert count == 1
 
     hb2 = store.get_heartbeat()
@@ -249,11 +252,15 @@ def test_expire_all_pending_approvals(tmp_path):
     store.expire_all_pending_approvals()
 
     # Retrieve approvals directly to verify
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    row1 = conn.execute("SELECT * FROM pending_approvals WHERE id = ?", (app_id1,)).fetchone()
-    row2 = conn.execute("SELECT * FROM pending_approvals WHERE id = ?", (app_id2,)).fetchone()
-    conn.close()
+    with _connect(db_path) as conn:
+        row1 = conn.execute(
+            "SELECT * FROM pending_approvals WHERE id = ?",
+            (app_id1,),
+        ).fetchone()
+        row2 = conn.execute(
+            "SELECT * FROM pending_approvals WHERE id = ?",
+            (app_id2,),
+        ).fetchone()
 
     assert row1["status"] == "APPROVED"
     assert row2["status"] == "EXPIRED"
