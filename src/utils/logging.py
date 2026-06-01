@@ -85,12 +85,17 @@ def setup_logging(*, json: bool | None = None, level: str | None = None) -> None
     # Route stdlib logging through structlog so third-party libraries (requests,
     # aiohttp, etc.) appear in the same format. Only WARNING+ from stdlib to avoid
     # noise from verbose third-party DEBUG output.
+    # Set stdlib root logger to the same level as structlog so INFO messages
+    # are not silently dropped when stdlib.LoggerFactory routes through stdlib.
+    # Third-party library noise (urllib3, aiohttp, etc.) is suppressed separately.
     logging.basicConfig(
         format="%(message)s",
-        level=logging.WARNING,
+        level=getattr(logging, level.upper(), logging.INFO),
         stream=sys.stdout,
         force=True,
     )
+    for noisy_lib in ("urllib3", "aiohttp", "asyncio", "httpx"):
+        logging.getLogger(noisy_lib).setLevel(logging.WARNING)
 
     shared_processors = [
         structlog.contextvars.merge_contextvars,
