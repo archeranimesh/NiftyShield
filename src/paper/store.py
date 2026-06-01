@@ -14,11 +14,13 @@ as UTC; IST conversion at display layer only.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from collections import defaultdict
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from pathlib import Path
+from typing import Any, Literal
 
 from src.db import connect as _connect
 from src.models.portfolio import TradeAction
@@ -78,10 +80,49 @@ CREATE TABLE IF NOT EXISTS paper_leg_snapshots (
     ltp            TEXT,
     PRIMARY KEY (strategy_name, leg_role, snapshot_date)
 ) STRICT;
+
+CREATE TABLE IF NOT EXISTS pending_approvals (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    strategy_name   TEXT    NOT NULL,
+    event_type      TEXT    NOT NULL,
+    council_output  TEXT    NOT NULL,   -- JSON blob (CouncilOutput serialised)
+    status          TEXT    NOT NULL,   -- PENDING | APPROVED | REJECTED | EXPIRED
+    approved_rank   INTEGER,            -- rank of the action the user approved (NULL until resolved)
+    expires_at      TEXT    NOT NULL,   -- ISO UTC; set to +30 min at creation
+    telegram_msg_id INTEGER,            -- message_id returned by Telegram API
+    created_at      TEXT    NOT NULL,   -- ISO UTC
+    resolved_at     TEXT                -- ISO UTC; NULL until APPROVED/REJECTED/EXPIRED
+);
+
+CREATE TABLE IF NOT EXISTS council_outputs (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    approval_id     INTEGER NOT NULL REFERENCES pending_approvals(id),
+    persona         TEXT    NOT NULL,   -- "QuantAnalyst" | "SpecGuardian" | "RiskManager" | "OptionsStrategist" | "Chairman"
+    model           TEXT    NOT NULL,   -- e.g. "deepseek/deepseek-r1-0528"
+    prompt_tokens   INTEGER,
+    output_tokens   INTEGER,
+    latency_ms      INTEGER,
+    response        TEXT    NOT NULL,   -- raw model response text
+    created_at      TEXT    NOT NULL    -- ISO UTC
+);
+
+CREATE TABLE IF NOT EXISTS daemon_heartbeat (
+    id          INTEGER PRIMARY KEY CHECK (id = 1),   -- single-row table
+    pid         INTEGER NOT NULL,
+    last_beat   TEXT    NOT NULL,   -- ISO UTC; updated every monitor tick
+    strategies  TEXT    NOT NULL,   -- JSON array of registered strategy_name strings
+    last_event  TEXT                -- last SignalEvent.event_type seen; NULL if none yet
+);
+
+CREATE INDEX IF NOT EXISTS idx_pending_approvals_status
+    ON pending_approvals (status, strategy_name);
+
+CREATE INDEX IF NOT EXISTS idx_council_outputs_approval
+    ON council_outputs (approval_id);
 """
 
 
-def _row_to_trade(row) -> PaperTrade:
+def _row_to_trade(row: sqlite3.Row) -> PaperTrade:
     return PaperTrade(
         strategy_name=row["strategy_name"],
         leg_role=row["leg_role"],
@@ -95,7 +136,7 @@ def _row_to_trade(row) -> PaperTrade:
     )
 
 
-def _row_to_leg_snapshot(row) -> PaperLegSnapshot:
+def _row_to_leg_snapshot(row: sqlite3.Row) -> PaperLegSnapshot:
     return PaperLegSnapshot(
         strategy_name=row["strategy_name"],
         leg_role=row["leg_role"],
@@ -666,3 +707,92 @@ class PaperStore:
                     trade.action.value,
                 ),
             )
+
+    def create_approval(
+        self,
+        strategy_name: str,
+        event_type: str,
+        council_output_json: str,
+        telegram_msg_id: int | None,
+        expires_at: str,
+    ) -> int:
+        """INSERT into pending_approvals, status=PENDING. Returns new row id."""
+        created_at = datetime.now(timezone.utc).isoformat()
+        with _connect(self.db_path) as conn:
+            cur = conn.execute(
+                """INSERT INTO pending_approvals
+                   (strategy_name, event_type, council_output, status,
+                    expires_at, telegram_msg_id, created_at)
+                   VALUES (?, ?, ?, 'PENDING', ?, ?, ?)""",
+                (
+                    strategy_name,
+                    event_type,
+                    council_output_json,
+                    expires_at,
+                    telegram_msg_id,
+                    created_at,
+                ),
+            )
+            if cur.lastrowid is None:
+                raise ValueError("Failed to insert pending approval")
+            return cur.lastrowid
+
+    def resolve_approval(
+        self,
+        approval_id: int,
+        status: Literal["APPROVED", "REJECTED", "EXPIRED"],
+        approved_rank: int | None = None,
+    ) -> None:
+        """UPDATE pending_approvals status and approved_rank."""
+        resolved_at = datetime.now(timezone.utc).isoformat()
+        with _connect(self.db_path) as conn:
+            conn.execute(
+                """UPDATE pending_approvals
+                   SET status = ?, resolved_at = ?, approved_rank = ?
+                   WHERE id = ?""",
+                (status, resolved_at, approved_rank, approval_id),
+            )
+
+    def get_pending_approvals(self) -> list[dict[str, Any]]:
+        """SELECT all PENDING approvals ordered by created_at ASC."""
+        with _connect(self.db_path) as conn:
+            rows = conn.execute(
+                """SELECT id, strategy_name, event_type, council_output, status,
+                          approved_rank, expires_at, telegram_msg_id,
+                          created_at, resolved_at
+                   FROM pending_approvals
+                   WHERE status = 'PENDING'
+                   ORDER BY created_at ASC"""
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def write_heartbeat(
+        self,
+        pid: int,
+        strategies: list[str],
+        last_event: str | None = None,
+    ) -> None:
+        """INSERT OR REPLACE into daemon_heartbeat (id=1) with UTC timestamp."""
+        last_beat = datetime.now(timezone.utc).isoformat()
+        strategies_json = json.dumps(strategies)
+        with _connect(self.db_path) as conn:
+            conn.execute(
+                """INSERT OR REPLACE INTO daemon_heartbeat
+                   (id, pid, last_beat, strategies, last_event)
+                   VALUES (1, ?, ?, ?, ?)""",
+                (pid, last_beat, strategies_json, last_event),
+            )
+
+    def get_heartbeat(self) -> dict[str, Any] | None:
+        """SELECT the daemon_heartbeat row. Returns None if absent."""
+        with _connect(self.db_path) as conn:
+            row = conn.execute(
+                """SELECT id, pid, last_beat, strategies, last_event
+                   FROM daemon_heartbeat
+                   WHERE id = 1"""
+            ).fetchone()
+        if row is None:
+            return None
+        res = dict(row)
+        res["strategies"] = json.loads(res["strategies"])
+        return res
