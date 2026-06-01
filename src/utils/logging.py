@@ -1,4 +1,5 @@
 import logging
+import sys
 
 import structlog
 
@@ -26,6 +27,10 @@ def setup_logging(*, json: bool | None = None, level: str | None = None) -> None
     if json is None:
         json = settings.upstox_env == "prod"
 
+    # Disable ANSI colours when stdout is not a TTY (e.g. cron redirecting to a log file).
+    # ConsoleRenderer with colors=True writes escape sequences that show as junk in files.
+    _use_colors = sys.stdout.isatty()
+
     if level is None:
         level = "DEBUG" if settings.upstox_debug else "INFO"
 
@@ -39,7 +44,7 @@ def setup_logging(*, json: bool | None = None, level: str | None = None) -> None
         shared_processors.append(structlog.processors.format_exc_info)
         shared_processors.append(structlog.processors.JSONRenderer())
     else:
-        shared_processors.append(structlog.dev.ConsoleRenderer())
+        shared_processors.append(structlog.dev.ConsoleRenderer(colors=_use_colors))
 
     structlog.configure(
         processors=shared_processors,
