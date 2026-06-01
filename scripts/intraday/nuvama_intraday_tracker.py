@@ -58,14 +58,31 @@ async def main(nifty_spot: float = 0.0, india_vix: float = 0.0) -> int:
     from src.client.exceptions import DataFetchError
 
     try:
-        api: NuvamaClient = load_api_connect()
+        import os
+        import sys
+
+        # Nuvama SDK prints debug noise (method names, IP, full response JSON)
+        # directly to stdout. Suppress it by redirecting stdout to /dev/null
+        # during SDK init and the API call, then restore immediately after.
+        _devnull = open(os.devnull, "w")  # noqa: SIM115
+        _real_stdout = sys.stdout
+        sys.stdout = _devnull
+        try:
+            api: NuvamaClient = load_api_connect()
+            response = api.NetPosition()
+        finally:
+            sys.stdout = _real_stdout
+            _devnull.close()
+
         # Nuvama SDK removes all stdlib logging handlers on __init__.
-        # Re-run setup_logging() to restore the structlog handler chain.
-        setup_logging()
+        # Re-run setup_logging(json=False) to restore the structlog handler chain.
+        # json=False is explicit: by this point load_dotenv() has run and
+        # UPSTOX_ENV=prod is visible, so auto-detection would switch to JSON
+        # renderer mid-session, breaking the plain-text log format.
+        setup_logging(json=False)
         logger.info("Starting intraday nuvama options tracking loop...")
 
         logger.info("Fetching NetPosition()...")
-        response = api.NetPosition()
 
         positions = parse_options_positions(response)
         if not positions:
