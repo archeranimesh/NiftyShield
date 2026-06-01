@@ -15,7 +15,7 @@
 
 - [x] **PB1.1** `[Antigravity]` — `src/strategy/protocol.py`: `PaperStrategy` protocol + `SignalEvent` + `ApprovedAction` + `LegSpec` models + tests | SHA: 6c527c2
 - [x] **PB1.2** `[Claude]` — `src/strategy/monitor.py`: `StrategyMonitor` (registry + tick + signal routing + heartbeat) + tests | SHA: 35b3099
-- [ ] **PB1.3** `[Claude]` — `src/strategy/executor.py`: `PaperExecutor` + `PaperFillSimulator` (VIX-regime slippage) + tests
+- [x] **PB1.3** `[Claude]` — `src/strategy/executor.py`: `PaperExecutor` + `PaperFillSimulator` (VIX-regime slippage) + tests | SHA: 46e58ba
 - [ ] **PB1.4** `[Antigravity]` — `src/council/rapid.py`: `RapidCouncil` (parallel Stage 1 + chairman synthesis + timeout handling) + tests
 - [ ] **PB1.5** `[Claude]` — `src/notifications/telegram_gateway.py`: `TelegramGateway` (approval request + inbound polling + auth guard + timeout scan) + tests
 - [ ] **PB1.6** `[Antigravity]` — `src/paper/store.py`: DB migrations for `pending_approvals` + `council_outputs` + `daemon_heartbeat` + store methods + tests
