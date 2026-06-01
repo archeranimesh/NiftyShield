@@ -300,6 +300,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-06-01 | paper-backbone PB1.4 — RapidCouncil parallel Stage 1 advisors and Chairman synthesis — 6b71c9e |
 | 2026-06-01 | paper-backbone PB1.3 — PaperFillSimulator (VIX-regime slippage) + PaperExecutor (close/open legs via PaperStore) — 46e58ba |
 | 2026-06-01 | paper-backbone PB1.2 — StrategyMonitor daemon loop with registry and signal routing — 35b3099 |
 | 2026-05-31 | paper-backbone PB1.1 — PaperStrategy protocol + SignalEvent + ApprovedAction + LegSpec models — 6c527c2 |
