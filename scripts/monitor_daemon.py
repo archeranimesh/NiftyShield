@@ -133,7 +133,8 @@ async def shutdown():
 async def main() -> int:
     global monitor_task, gateway_task, store_ref, strategies_ref
 
-    parser = argparse.ArgumentParser(description="Paper Trading Monitor Daemon")
+    desc = "Paper Trading Monitor Daemon"
+    parser = argparse.ArgumentParser(description=desc)
     parser.add_argument(
         "--db-path",
         default=settings.db_path,
@@ -155,7 +156,10 @@ async def main() -> int:
 
     # Build Telegram gateway
     if not settings.telegram_bot_token or not settings.telegram_chat_id:
-        logger.error("TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID missing. Exiting.")
+        logger.error(
+            "TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID missing. "
+            + "Exiting."
+        )
         return 1
 
     gateway = TelegramGateway(
