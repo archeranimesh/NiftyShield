@@ -1,5 +1,7 @@
+import sqlite3
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+import pytest
 
 from src.models.portfolio import TradeAction
 from src.paper.models import PaperTrade
@@ -26,7 +28,8 @@ def test_create_and_get_pending_approvals(tmp_path):
     assert row["id"] == app_id
     assert row["strategy_name"] == "paper_csp_nifty"
     assert row["event_type"] == "ENTRY"
-    assert row["council_output"] == '{"decision": "GO"}'
+    # Verify council_output is deserialized as a dict / JSON object
+    assert row["council_output"] == {"decision": "GO"}
     assert row["status"] == "PENDING"
     assert row["telegram_msg_id"] == 12345
     assert row["expires_at"] == expires_at
@@ -53,8 +56,6 @@ def test_resolve_approval_approved(tmp_path):
     assert len(pending) == 0
 
     # Query database directly to verify resolution fields
-    import sqlite3
-
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     row = conn.execute("SELECT * FROM pending_approvals WHERE id = ?", (app_id,)).fetchone()
@@ -64,6 +65,14 @@ def test_resolve_approval_approved(tmp_path):
     assert row["status"] == "APPROVED"
     assert row["approved_rank"] == 1
     assert row["resolved_at"] is not None
+
+
+def test_resolve_approval_invalid_id_raises(tmp_path):
+    db_path = tmp_path / "portfolio.sqlite"
+    store = PaperStore(db_path)
+
+    with pytest.raises(ValueError, match="No pending_approval row with id=99999"):
+        store.resolve_approval(99999, "APPROVED", approved_rank=1)
 
 
 def test_resolve_approval_expired(tmp_path):
@@ -85,8 +94,6 @@ def test_resolve_approval_expired(tmp_path):
     assert len(pending) == 0
 
     # Query database directly
-    import sqlite3
-
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     row = conn.execute("SELECT * FROM pending_approvals WHERE id = ?", (app_id,)).fetchone()
@@ -140,8 +147,6 @@ def test_daemon_heartbeat_roundtrip(tmp_path):
     store.write_heartbeat(pid=8888, strategies=["paper_csp_nifty"], last_event=None)
 
     # Check that there is still only 1 row
-    import sqlite3
-
     conn = sqlite3.connect(db_path)
     count = conn.execute("SELECT count(*) FROM daemon_heartbeat").fetchone()[0]
     conn.close()
@@ -154,7 +159,7 @@ def test_daemon_heartbeat_roundtrip(tmp_path):
     assert hb2["last_event"] is None
 
 
-def test_migration_leaves_existing_trades_unaffected(tmp_path):
+def test_reinit_preserves_existing_trades(tmp_path):
     # Setup database with paper_trades first using old schema/manually or verify via store
     db_path = tmp_path / "portfolio.sqlite"
 
@@ -181,3 +186,46 @@ def test_migration_leaves_existing_trades_unaffected(tmp_path):
     assert trades[0].instrument_key == "NIFTY26JUN2422000PE"
     assert trades[0].quantity == 50
     assert trades[0].price == Decimal("150.50")
+
+
+def test_council_outputs_crud(tmp_path):
+    db_path = tmp_path / "portfolio.sqlite"
+    store = PaperStore(db_path)
+
+    expires_at = (datetime.now(timezone.utc) + timedelta(minutes=30)).isoformat()
+    app_id = store.create_approval(
+        strategy_name="paper_csp_nifty",
+        event_type="ENTRY",
+        council_output_json='{"decision": "GO"}',
+        telegram_msg_id=12345,
+        expires_at=expires_at,
+    )
+
+    # Empty list initially
+    assert len(store.get_council_outputs(app_id)) == 0
+
+    # Write
+    out_id = store.create_council_output(
+        approval_id=app_id,
+        persona="Chairman",
+        model="deepseek/deepseek-r1-0528",
+        prompt_tokens=100,
+        output_tokens=120,
+        latency_ms=2500,
+        response="Approved entries",
+    )
+    assert isinstance(out_id, int)
+
+    # Read back
+    outputs = store.get_council_outputs(app_id)
+    assert len(outputs) == 1
+    row = outputs[0]
+    assert row["id"] == out_id
+    assert row["approval_id"] == app_id
+    assert row["persona"] == "Chairman"
+    assert row["model"] == "deepseek/deepseek-r1-0528"
+    assert row["prompt_tokens"] == 100
+    assert row["output_tokens"] == 120
+    assert row["latency_ms"] == 2500
+    assert row["response"] == "Approved entries"
+    assert row["created_at"] is not None

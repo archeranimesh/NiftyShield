@@ -92,7 +92,7 @@ CREATE TABLE IF NOT EXISTS pending_approvals (
     telegram_msg_id INTEGER,            -- message_id returned by Telegram API
     created_at      TEXT    NOT NULL,   -- ISO UTC
     resolved_at     TEXT                -- ISO UTC; NULL until APPROVED/REJECTED/EXPIRED
-);
+) STRICT;
 
 CREATE TABLE IF NOT EXISTS council_outputs (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -104,7 +104,7 @@ CREATE TABLE IF NOT EXISTS council_outputs (
     latency_ms      INTEGER,
     response        TEXT    NOT NULL,   -- raw model response text
     created_at      TEXT    NOT NULL    -- ISO UTC
-);
+) STRICT;
 
 CREATE TABLE IF NOT EXISTS daemon_heartbeat (
     id          INTEGER PRIMARY KEY CHECK (id = 1),   -- single-row table
@@ -112,7 +112,7 @@ CREATE TABLE IF NOT EXISTS daemon_heartbeat (
     last_beat   TEXT    NOT NULL,   -- ISO UTC; updated every monitor tick
     strategies  TEXT    NOT NULL,   -- JSON array of registered strategy_name strings
     last_event  TEXT                -- last SignalEvent.event_type seen; NULL if none yet
-);
+) STRICT;
 
 CREATE INDEX IF NOT EXISTS idx_pending_approvals_status
     ON pending_approvals (status, strategy_name);
@@ -746,12 +746,14 @@ class PaperStore:
         """UPDATE pending_approvals status and approved_rank."""
         resolved_at = datetime.now(timezone.utc).isoformat()
         with _connect(self.db_path) as conn:
-            conn.execute(
+            cur = conn.execute(
                 """UPDATE pending_approvals
                    SET status = ?, resolved_at = ?, approved_rank = ?
                    WHERE id = ?""",
                 (status, resolved_at, approved_rank, approval_id),
             )
+            if cur.rowcount != 1:
+                raise ValueError(f"No pending_approval row with id={approval_id}")
 
     def get_pending_approvals(self) -> list[dict[str, Any]]:
         """SELECT all PENDING approvals ordered by created_at ASC."""
@@ -764,7 +766,12 @@ class PaperStore:
                    WHERE status = 'PENDING'
                    ORDER BY created_at ASC"""
             ).fetchall()
-        return [dict(r) for r in rows]
+        results = []
+        for r in rows:
+            d = dict(r)
+            d["council_output"] = json.loads(d["council_output"])
+            results.append(d)
+        return results
 
     def write_heartbeat(
         self,
@@ -796,3 +803,49 @@ class PaperStore:
         res = dict(row)
         res["strategies"] = json.loads(res["strategies"])
         return res
+
+    def create_council_output(
+        self,
+        approval_id: int,
+        persona: str,
+        model: str,
+        prompt_tokens: int | None,
+        output_tokens: int | None,
+        latency_ms: int | None,
+        response: str,
+    ) -> int:
+        """INSERT into council_outputs. Returns new row id."""
+        created_at = datetime.now(timezone.utc).isoformat()
+        with _connect(self.db_path) as conn:
+            cur = conn.execute(
+                """INSERT INTO council_outputs
+                   (approval_id, persona, model, prompt_tokens, output_tokens,
+                    latency_ms, response, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    approval_id,
+                    persona,
+                    model,
+                    prompt_tokens,
+                    output_tokens,
+                    latency_ms,
+                    response,
+                    created_at,
+                ),
+            )
+            if cur.lastrowid is None:
+                raise ValueError("Failed to insert council output")
+            return cur.lastrowid
+
+    def get_council_outputs(self, approval_id: int) -> list[dict[str, Any]]:
+        """SELECT all council outputs for an approval ordered by created_at ASC."""
+        with _connect(self.db_path) as conn:
+            rows = conn.execute(
+                """SELECT id, approval_id, persona, model, prompt_tokens,
+                          output_tokens, latency_ms, response, created_at
+                   FROM council_outputs
+                   WHERE approval_id = ?
+                   ORDER BY created_at ASC""",
+                (approval_id,),
+            ).fetchall()
+        return [dict(r) for r in rows]
