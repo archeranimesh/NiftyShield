@@ -22,6 +22,19 @@ def uppercase_level(logger, method_name, event_dict):
     return event_dict
 
 
+def prepend_logger_name(logger, method_name, event_dict):
+    """Prepend [logger_name] to the event string to match legacy log format.
+
+    Removes the 'logger' key so ConsoleRenderer doesn't also print logger=name
+    as a trailing key=value pair.
+    """
+    name = event_dict.pop("logger", None)
+    if name:
+        bracketed = " ".join(f"[{part}]" for part in name.split("."))
+        event_dict["event"] = f"{bracketed} {event_dict.get('event', '')}"
+    return event_dict
+
+
 def setup_logging(*, json: bool | None = None, level: str | None = None) -> None:
     """Configure structlog for the application.
 
@@ -46,19 +59,14 @@ def setup_logging(*, json: bool | None = None, level: str | None = None) -> None
         structlog.stdlib.add_log_level,
         uppercase_level,
         add_logger_name,
+        prepend_logger_name,
         structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S", utc=False),
     ]
     if json:
         shared_processors.append(structlog.processors.format_exc_info)
         shared_processors.append(structlog.processors.JSONRenderer())
     else:
-        shared_processors.append(
-            structlog.dev.ConsoleRenderer(
-                colors=_use_colors,
-                # Render logger name before the event to match legacy format: [dhan] message
-                logger_name_key="logger",
-            )
-        )
+        shared_processors.append(structlog.dev.ConsoleRenderer(colors=_use_colors))
 
     structlog.configure(
         processors=shared_processors,
