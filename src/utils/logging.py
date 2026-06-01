@@ -38,7 +38,7 @@ def setup_logging(*, json: bool | None = None, level: str | None = None) -> None
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
         add_logger_name,
-        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.TimeStamper(fmt="iso", utc=False),
     ]
     if json:
         shared_processors.append(structlog.processors.format_exc_info)
