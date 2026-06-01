@@ -6,15 +6,6 @@ import structlog
 from src.config import settings
 
 
-def add_logger_name(logger, method_name, event_dict):
-    """Safely add logger name if available, without failing on PrintLogger."""
-    try:
-        event_dict["logger"] = logger.name
-    except AttributeError:
-        pass
-    return event_dict
-
-
 def uppercase_level(logger, method_name, event_dict):
     """Uppercase the log level string for readability (INFO vs info)."""
     if "level" in event_dict:
@@ -23,10 +14,10 @@ def uppercase_level(logger, method_name, event_dict):
 
 
 def prepend_logger_name(logger, method_name, event_dict):
-    """Prepend [logger_name] to the event string to match legacy log format.
+    """Prepend [pkg] [sub] [module] to the event string.
 
-    Removes the 'logger' key so ConsoleRenderer doesn't also print logger=name
-    as a trailing key=value pair.
+    Pops the 'logger' key (set by structlog.stdlib.add_logger_name) so it
+    doesn't also appear as a trailing key=value pair.
     """
     name = event_dict.pop("logger", None)
     if name:
@@ -35,11 +26,52 @@ def prepend_logger_name(logger, method_name, event_dict):
     return event_dict
 
 
+def plain_renderer(logger, method_name, event_dict):
+    """Format a log line as: TIMESTAMP [LEVEL] event key=value ...
+
+    Replaces ConsoleRenderer to avoid fixed-width level padding and give full
+    control over the output format regardless of TTY state.
+    """
+    timestamp = event_dict.pop("timestamp", "")
+    level = event_dict.pop("level", "")
+    event = event_dict.pop("event", "")
+    extras = " ".join(f"{k}={v}" for k, v in event_dict.items() if not k.startswith("_"))
+    line = f"{timestamp} [{level}] {event}"
+    if extras:
+        line += f" {extras}"
+    return line
+
+
+def plain_renderer_color(logger, method_name, event_dict):
+    """Coloured variant of plain_renderer for interactive TTY sessions."""
+    timestamp = event_dict.pop("timestamp", "")
+    level = event_dict.pop("level", "")
+    event = event_dict.pop("event", "")
+    extras = " ".join(f"{k}={v}" for k, v in event_dict.items() if not k.startswith("_"))
+
+    _level_colors = {
+        "DEBUG": "\033[36m",  # cyan
+        "INFO": "\033[32m",  # green
+        "WARNING": "\033[33m",  # yellow
+        "ERROR": "\033[31m",  # red
+        "CRITICAL": "\033[35m",  # magenta
+    }
+    reset = "\033[0m"
+    color = _level_colors.get(level, "")
+    line = f"\033[2m{timestamp}{reset} [{color}{level}{reset}] {event}"
+    if extras:
+        line += f" \033[2m{extras}{reset}"
+    return line
+
+
 def setup_logging(*, json: bool | None = None, level: str | None = None) -> None:
     """Configure structlog for the application.
 
+    Uses structlog.stdlib.LoggerFactory so that logger.name is available to
+    the prepend_logger_name processor (PrintLogger has no .name attribute).
+
     Args:
-        json: If True, emit JSON (production). If False, emit coloured console (dev).
+        json: If True, emit JSON (production). If False, plain text console (dev).
               If None, auto-detects from UPSTOX_ENV == "prod".
         level: Log level string. If None, auto-detects from UPSTOX_DEBUG == "1" (DEBUG)
                else defaults to "INFO".
@@ -47,18 +79,24 @@ def setup_logging(*, json: bool | None = None, level: str | None = None) -> None
     if json is None:
         json = settings.upstox_env == "prod"
 
-    # Disable ANSI colours when stdout is not a TTY (e.g. cron redirecting to a log file).
-    # ConsoleRenderer with colors=True writes escape sequences that show as junk in files.
-    _use_colors = sys.stdout.isatty()
-
     if level is None:
         level = "DEBUG" if settings.upstox_debug else "INFO"
+
+    # Route stdlib logging through structlog so third-party libraries (requests,
+    # aiohttp, etc.) appear in the same format. Only WARNING+ from stdlib to avoid
+    # noise from verbose third-party DEBUG output.
+    logging.basicConfig(
+        format="%(message)s",
+        level=logging.WARNING,
+        stream=sys.stdout,
+        force=True,
+    )
 
     shared_processors = [
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
         uppercase_level,
-        add_logger_name,
+        structlog.stdlib.add_logger_name,  # requires stdlib.LoggerFactory — sets event_dict["logger"]
         prepend_logger_name,
         structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S", utc=False),
     ]
@@ -66,7 +104,12 @@ def setup_logging(*, json: bool | None = None, level: str | None = None) -> None
         shared_processors.append(structlog.processors.format_exc_info)
         shared_processors.append(structlog.processors.JSONRenderer())
     else:
-        shared_processors.append(structlog.dev.ConsoleRenderer(colors=_use_colors))
+        # Use custom renderer: avoids ConsoleRenderer's fixed-width level padding
+        # and ANSI escape codes when stdout is not a TTY.
+        if sys.stdout.isatty():
+            shared_processors.append(plain_renderer_color)
+        else:
+            shared_processors.append(plain_renderer)
 
     structlog.configure(
         processors=shared_processors,
@@ -74,5 +117,5 @@ def setup_logging(*, json: bool | None = None, level: str | None = None) -> None
             getattr(logging, level.upper(), logging.INFO)
         ),
         context_class=dict,
-        logger_factory=structlog.PrintLoggerFactory(),  # Resolves sys.stdout dynamically at log-time
+        logger_factory=structlog.stdlib.LoggerFactory(),  # gives logger.name to processors
     )
