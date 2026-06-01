@@ -10,39 +10,39 @@ from scripts.pipeline.gamma_daily_watch import main, resolve_expiries
 
 
 def test_resolve_expiries_mid_week() -> None:
-    """On Monday, resolve_expiries returns this Thursday and next Thursday."""
-    # 2026-04-20 is Monday
-    # 2026-04-23 is Thursday
-    # 2026-04-30 is Thursday
+    """On Monday, resolve_expiries returns this Tuesday and next Tuesday."""
+    # 2026-04-20 is Monday; Nifty weekly expiry is Tuesday (SEBI, April 2026)
+    # 2026-04-21 is Tuesday
+    # 2026-04-28 is Tuesday
     today = date(2026, 4, 20)
 
     with patch("scripts.pipeline.gamma_daily_watch.is_trading_day", return_value=True):
         curr_exp, next_exp = resolve_expiries(today)
-        assert curr_exp == date(2026, 4, 23)
-        assert next_exp == date(2026, 4, 30)
+        assert curr_exp == date(2026, 4, 21)
+        assert next_exp == date(2026, 4, 28)
 
 
 def test_resolve_expiries_on_thursday_open() -> None:
-    """On Thursday when market is open, resolve_expiries returns today and next Thursday."""
-    # 2026-04-23 is Thursday
-    # 2026-04-30 is Thursday
-    today = date(2026, 4, 23)
+    """On Tuesday when market is open, resolve_expiries returns today and next Tuesday."""
+    # 2026-04-21 is Tuesday
+    # 2026-04-28 is Tuesday
+    today = date(2026, 4, 21)
 
     with patch("scripts.pipeline.gamma_daily_watch.is_trading_day", return_value=True):
         curr_exp, next_exp = resolve_expiries(today)
-        assert curr_exp == date(2026, 4, 23)
-        assert next_exp == date(2026, 4, 30)
+        assert curr_exp == date(2026, 4, 21)
+        assert next_exp == date(2026, 4, 28)
 
 
 def test_resolve_expiries_on_thursday_holiday() -> None:
-    """On Thursday when market is closed, resolve_expiries returns next Thursday and week after next Thursday."""
-    # 2026-04-02 is Thursday (holiday)
-    # 2026-04-09 is Thursday
-    # 2026-04-16 is Thursday
-    today = date(2026, 4, 2)
+    """On Tuesday when market is closed, resolve_expiries returns next Tuesday and the one after."""
+    # 2026-04-07 is Tuesday (holiday)
+    # 2026-04-14 is Tuesday
+    # 2026-04-21 is Tuesday
+    today = date(2026, 4, 7)
 
     def mock_is_trading_day(d: date) -> bool:
-        if d == date(2026, 4, 2):
+        if d == date(2026, 4, 7):
             return False
         return True
 
@@ -50,20 +50,19 @@ def test_resolve_expiries_on_thursday_holiday() -> None:
         "scripts.pipeline.gamma_daily_watch.is_trading_day", side_effect=mock_is_trading_day
     ):
         curr_exp, next_exp = resolve_expiries(today)
-        assert curr_exp == date(2026, 4, 9)
-        assert next_exp == date(2026, 4, 16)
+        assert curr_exp == date(2026, 4, 14)
+        assert next_exp == date(2026, 4, 21)
 
 
 def test_resolve_expiries_thursday_is_holiday_adjusted() -> None:
-    """If Thursday is a holiday, the expiry is adjusted to Wednesday (or preceding trading day)."""
-    # 2026-04-02 is Thursday (holiday)
-    # 2026-04-01 is Wednesday (trading day)
-    # today is 2026-03-30 (Monday)
-    today = date(2026, 3, 30)
+    """If Tuesday is a holiday, the expiry is adjusted to Monday (or preceding trading day)."""
+    # 2026-04-07 is Tuesday (holiday)
+    # 2026-04-06 is Monday (trading day)
+    # today is 2026-04-06 (Monday)
+    today = date(2026, 4, 6)
 
     def mock_is_trading_day(d: date) -> bool:
-        # April 2 is holiday
-        if d == date(2026, 4, 2):
+        if d == date(2026, 4, 7):
             return False
         return True
 
@@ -71,14 +70,14 @@ def test_resolve_expiries_thursday_is_holiday_adjusted() -> None:
         "scripts.pipeline.gamma_daily_watch.is_trading_day", side_effect=mock_is_trading_day
     ):
         curr_exp, next_exp = resolve_expiries(today)
-        assert curr_exp == date(2026, 4, 1)  # adjusted from April 2 to April 1
-        assert next_exp == date(2026, 4, 9)
+        assert curr_exp == date(2026, 4, 6)  # adjusted from Tuesday 7 to Monday 6
+        assert next_exp == date(2026, 4, 14)
 
 
 def test_resolve_expiries_friday_weekend() -> None:
-    """On Friday or weekend, resolve_expiries returns next Thursday and week after next Thursday."""
-    # Friday 2026-04-24 -> current-week expiry is next Thursday 2026-04-30
-    # Next-week expiry is Thursday after next 2026-05-07
+    """On Wednesday or later, resolve_expiries returns next Tuesday and the Tuesday after."""
+    # Friday 2026-04-24 -> current-week expiry is next Tuesday 2026-04-28
+    # Next-week expiry is Tuesday after next 2026-05-05
     today_fri = date(2026, 4, 24)
     today_sat = date(2026, 4, 25)
     today_sun = date(2026, 4, 26)
@@ -86,19 +85,22 @@ def test_resolve_expiries_friday_weekend() -> None:
     with patch("scripts.pipeline.gamma_daily_watch.is_trading_day", return_value=True):
         for today in [today_fri, today_sat, today_sun]:
             curr_exp, next_exp = resolve_expiries(today)
-            assert curr_exp == date(2026, 4, 30)
-            assert next_exp == date(2026, 5, 7)
+            assert curr_exp == date(2026, 4, 28)
+            assert next_exp == date(2026, 5, 5)
 
 
 def test_resolve_expiries_multi_day_holiday_rollback() -> None:
-    """If Thursday and Wednesday are holidays, expiry rolls back to Tuesday."""
-    # Thursday 2026-04-02 is holiday
-    # Wednesday 2026-04-01 is holiday
-    # Tuesday 2026-03-31 is open
+    """If Tuesday and Monday are holidays, expiry rolls back to Friday."""
+    # Tuesday 2026-03-31 is holiday
+    # Monday 2026-03-30 is holiday
+    # Friday 2026-03-27 is open
+    # today is 2026-03-30 (Monday)
     today = date(2026, 3, 30)
 
     def mock_is_trading_day(d: date) -> bool:
-        if d in {date(2026, 4, 2), date(2026, 4, 1)}:
+        if d.weekday() >= 5:  # Saturday / Sunday are never trading days
+            return False
+        if d in {date(2026, 3, 31), date(2026, 3, 30)}:
             return False
         return True
 
@@ -106,8 +108,8 @@ def test_resolve_expiries_multi_day_holiday_rollback() -> None:
         "scripts.pipeline.gamma_daily_watch.is_trading_day", side_effect=mock_is_trading_day
     ):
         curr_exp, next_exp = resolve_expiries(today)
-        assert curr_exp == date(2026, 3, 31)  # adjusted past Wednesday to Tuesday
-        assert next_exp == date(2026, 4, 9)
+        assert curr_exp == date(2026, 3, 27)  # rolled back Tue→Mon(holiday)→Sun→Sat→Fri
+        assert next_exp == date(2026, 4, 7)
 
 
 def test_morning_flag_skips_watchlist() -> None:

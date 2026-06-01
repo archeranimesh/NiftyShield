@@ -101,15 +101,17 @@ def setup_logging(*, json: bool | None = None, level: str | None = None) -> None
     shared_processors = [
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
-        uppercase_level,
         structlog.stdlib.add_logger_name,  # requires stdlib.LoggerFactory — sets event_dict["logger"]
-        prepend_logger_name,
         structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S", utc=False),
     ]
     if json:
+        # JSON mode: level stays lowercase (machine-readable); logger kept as separate key.
         shared_processors.append(structlog.processors.format_exc_info)
         shared_processors.append(structlog.processors.JSONRenderer())
     else:
+        # Console mode: uppercase level and prepend [module] to event for human readability.
+        shared_processors.append(uppercase_level)
+        shared_processors.append(prepend_logger_name)
         # Color only when explicitly opted in via UPSTOX_LOG_COLOR=1.
         # sys.stdout.isatty() is unreliable under launchd/cron (pseudo-TTY
         # stays open), causing ANSI escape codes to bleed into log files.

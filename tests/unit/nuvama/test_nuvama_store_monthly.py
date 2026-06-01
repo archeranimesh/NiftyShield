@@ -28,7 +28,7 @@ def _snap(
         snapshot_date,
         symbol,
         f"Instrument {symbol}",
-        0,           # net_qty
+        0,  # net_qty
         Decimal("0"),  # avg_price
         Decimal("0"),  # ltp
         Decimal("0"),  # unrealized_pnl
@@ -49,8 +49,8 @@ class TestGetMonthlyRealizedPnl:
     def test_before_date_excludes_on_and_after(self, store) -> None:
         """Rows on or after before_date are excluded — matches cumulative boundary."""
         _snap(store, date(2026, 5, 1), "A", "1000")
-        _snap(store, date(2026, 5, 5), "A", "500")   # excluded: on before_date
-        _snap(store, date(2026, 5, 6), "A", "200")   # excluded: after before_date
+        _snap(store, date(2026, 5, 5), "A", "500")  # excluded: on before_date
+        _snap(store, date(2026, 5, 6), "A", "200")  # excluded: after before_date
 
         result = store.get_monthly_realized_pnl(2026, 5, before_date=date(2026, 5, 5))
         assert result == Decimal("1000")
@@ -58,8 +58,8 @@ class TestGetMonthlyRealizedPnl:
     def test_excludes_rows_from_other_months(self, store) -> None:
         """Prior and next month rows are not counted for the queried month."""
         _snap(store, date(2026, 4, 30), "A", "9999")  # April — excluded
-        _snap(store, date(2026, 5, 15), "A", "500")   # May — included
-        _snap(store, date(2026, 6, 1), "A", "9999")   # June — excluded
+        _snap(store, date(2026, 5, 15), "A", "500")  # May — included
+        _snap(store, date(2026, 6, 1), "A", "9999")  # June — excluded
 
         result = store.get_monthly_realized_pnl(2026, 5)
         assert result == Decimal("500")
@@ -71,10 +71,14 @@ class TestGetMonthlyRealizedPnl:
         assert isinstance(result, Decimal)
 
     def test_before_date_none_includes_all_rows_in_month(self, store) -> None:
-        """No before_date → all rows in month included (including 'today')."""
+        """No before_date → all rows in month included (including 'today').
+
+        Uses distinct symbols so the UPSERT key (snapshot_date, symbol) never
+        collides even when today == the 1st of the month.
+        """
         today = date.today()
         _snap(store, date(today.year, today.month, 1), "A", "400")
-        _snap(store, today, "A", "100")
+        _snap(store, today, "B", "100")  # different symbol → always a separate row
 
         result = store.get_monthly_realized_pnl(today.year, today.month)
         assert result == Decimal("500")
