@@ -25,6 +25,8 @@ import os
 from src.config import settings
 from src.utils.logging import setup_logging
 
+setup_logging()
+
 
 async def main() -> int:
     """Run Dhan tracker then Nuvama tracker in sequence.
@@ -32,9 +34,9 @@ async def main() -> int:
     Returns:
         max(dhan_exit, nuvama_exit) — non-zero if either tracker failed.
     """
-    import logging
     from datetime import datetime, timezone
 
+    import structlog
     from dotenv import load_dotenv
 
     from scripts.intraday.dhan_intraday_tracker import main as dhan_main
@@ -44,8 +46,7 @@ async def main() -> int:
     from src.intraday.market_store import IntradayMarketStore
 
     load_dotenv()
-    pass
-    logger = logging.getLogger("market")
+    logger = structlog.get_logger(__name__)
 
     nifty_spot = 0.0
     india_vix = 0.0
@@ -79,7 +80,6 @@ async def main() -> int:
 
 
 if __name__ == "__main__":
-    setup_logging()
     code = asyncio.run(main())
     # os._exit is required: kills the Nuvama SDK non-daemon background thread
     # that would otherwise block process exit indefinitely.
