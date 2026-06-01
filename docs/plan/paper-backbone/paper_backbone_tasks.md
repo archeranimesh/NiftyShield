@@ -17,8 +17,8 @@
 - [x] **PB1.2** `[Claude]` — `src/strategy/monitor.py`: `StrategyMonitor` (registry + tick + signal routing + heartbeat) + tests | SHA: 35b3099
 - [x] **PB1.3** `[Claude]` — `src/strategy/executor.py`: `PaperExecutor` + `PaperFillSimulator` (VIX-regime slippage) + tests | SHA: 46e58ba
 - [x] **PB1.4** `[Antigravity]` — `src/council/rapid.py`: `RapidCouncil` (parallel Stage 1 + chairman synthesis + timeout handling) + tests | SHA: 6b71c9e, 845f1e0, 275e1bb
-- [ ] **PB1.5** `[Claude]` — `src/notifications/telegram_gateway.py`: `TelegramGateway` (approval request + inbound polling + auth guard + timeout scan) + tests
-- [ ] **PB1.6** `[Antigravity]` — `src/paper/store.py`: DB migrations for `pending_approvals` + `council_outputs` + `daemon_heartbeat` + store methods + tests
+- [x] **PB1.5** `[Claude]` — `src/notifications/telegram_gateway.py`: `TelegramGateway` (approval request + inbound polling + auth guard + timeout scan) + tests | SHA: fde2b3b
+- [x] **PB1.6** `[Antigravity]` — `src/paper/store.py`: DB migrations for `pending_approvals` + `council_outputs` + `daemon_heartbeat` + store methods + tests | SHA: 60408cf
 - [ ] **PB1.7** `[Antigravity]` — Scripts: `monitor_daemon.py` + `start_monitor.py` + `stop_monitor.py` + `pre_market_brief.py` + `eod_summary.py` + `requirements.txt`
 
 ## Phase PT-S0 — CSP v1 (Backbone Integration)

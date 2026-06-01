@@ -300,6 +300,8 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-06-01 | paper-backbone PB1.6 — DB migrations for pending_approvals + council_outputs + daemon_heartbeat + store methods — 60408cf |
+| 2026-06-01 | paper-backbone PB1.5 — TelegramGateway with approval flow, inbound polling, auth guard, timeout scanner — fde2b3b |
 | 2026-06-01 | paper-backbone PB1.4 — RapidCouncil parallel Stage 1 advisors and Chairman synthesis — 6b71c9e, 845f1e0, 275e1bb |
 | 2026-06-01 | paper-backbone PB1.3 — PaperFillSimulator (VIX-regime slippage) + PaperExecutor (close/open legs via PaperStore) — 46e58ba |
 | 2026-06-01 | paper-backbone PB1.2 — StrategyMonitor daemon loop with registry and signal routing — 35b3099 |
