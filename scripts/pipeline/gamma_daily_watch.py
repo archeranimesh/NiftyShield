@@ -23,11 +23,13 @@ logger = structlog.get_logger(__name__)
 def resolve_expiries(today: date) -> tuple[date, date]:
     """Resolve the current-week and next-week expiry dates.
 
-    Current-week expiry is the current week's Thursday (or preceding trading
-    day if Thursday is a holiday). If today is Thursday and the market is open,
-    today is used. If today is Thursday but the market is closed, or if today is
-    after Thursday, current-week expiry shifts to the next week's Thursday.
-    Next-week expiry is the Thursday (or preceding trading day) after that.
+    NSE moved Nifty weekly/monthly expiry from Thursday to Tuesday effective
+    April 2026 (SEBI circular). Current-week expiry is the current week's
+    Tuesday (or preceding trading day if Tuesday is a holiday). If today is
+    Tuesday and the market is open, today is used. If today is Tuesday but the
+    market is closed, or if today is after Tuesday, current-week expiry shifts
+    to the next week's Tuesday. Next-week expiry is the Tuesday (or preceding
+    trading day) after that.
 
     Args:
         today: The reference date to resolve expiries for.
@@ -35,23 +37,23 @@ def resolve_expiries(today: date) -> tuple[date, date]:
     Returns:
         A tuple of (current_week_expiry, next_week_expiry).
     """
-    # weekday() is 0 for Monday, ..., 3 for Thursday
-    weekday_diff = 3 - today.weekday()
-    nominal_thursday = today + timedelta(days=weekday_diff)
+    # weekday() is 0 for Monday, 1 for Tuesday
+    weekday_diff = 1 - today.weekday()
+    nominal_tuesday = today + timedelta(days=weekday_diff)
 
-    if today.weekday() == 3 and is_trading_day(today):
+    if today.weekday() == 1 and is_trading_day(today):
         current_week_nominal = today
         next_week_nominal = today + timedelta(weeks=1)
     else:
-        if today.weekday() < 3:
-            current_week_nominal = nominal_thursday
-            next_week_nominal = nominal_thursday + timedelta(weeks=1)
+        if today.weekday() < 1:
+            current_week_nominal = nominal_tuesday
+            next_week_nominal = nominal_tuesday + timedelta(weeks=1)
         else:
-            current_week_nominal = nominal_thursday + timedelta(weeks=1)
-            next_week_nominal = nominal_thursday + timedelta(weeks=2)
+            current_week_nominal = nominal_tuesday + timedelta(weeks=1)
+            next_week_nominal = nominal_tuesday + timedelta(weeks=2)
 
-    def _adjust_expiry(nom_thu: date) -> date:
-        curr = nom_thu
+    def _adjust_expiry(nom_tue: date) -> date:
+        curr = nom_tue
         while not is_trading_day(curr):
             curr -= timedelta(days=1)
         return curr

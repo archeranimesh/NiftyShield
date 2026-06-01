@@ -45,14 +45,47 @@ class BhavRecord(BaseModel, frozen=True):
     oi: int
 
 
-def get_last_thursday(year: int, month: int) -> date:
+_NSE_TUESDAY_EXPIRY_CUTOFF = date(2026, 4, 1)
+"""NSE moved Nifty index monthly expiry from Thursday to Tuesday effective April 2026
+(SEBI circular). Bhavcopy records from April 2026 onwards use Tuesday expiries;
+pre-cutoff records use Thursday expiries."""
+
+
+def get_last_expiry_day(year: int, month: int) -> date:
+    """Return the last monthly expiry day for Nifty options in the given month.
+
+    Pre-April 2026: last Thursday of the month (old NSE rule).
+    April 2026 onwards: last Tuesday of the month (SEBI circular, effective Apr 2026).
+
+    Args:
+        year: Calendar year.
+        month: Calendar month (1–12).
+
+    Returns:
+        The last expiry day for the given month.
+    """
     c = calendar.Calendar(firstweekday=calendar.MONDAY)
     monthcal = c.monthdatescalendar(year, month)
+    target_date = date(year, month, 1)
+    if target_date >= _NSE_TUESDAY_EXPIRY_CUTOFF:
+        weekday = calendar.TUESDAY
+    else:
+        weekday = calendar.THURSDAY
     for week in reversed(monthcal):
-        thursday = week[calendar.THURSDAY]
-        if thursday.month == month:
-            return thursday
+        day = week[weekday]
+        if day.month == month:
+            return day
     return date(year, month, 1)
+
+
+def get_last_thursday(year: int, month: int) -> date:
+    """Return the last Thursday of the given month.
+
+    .. deprecated::
+        Use :func:`get_last_expiry_day` instead. NSE moved Nifty monthly expiry
+        from Thursday to Tuesday effective April 2026.
+    """
+    return get_last_expiry_day(year, month)
 
 
 def parse_option_symbol(symbol: str) -> dict[str, str | date | Decimal]:
@@ -108,7 +141,7 @@ def parse_option_symbol(symbol: str) -> dict[str, str | date | Decimal]:
         month = datetime.strptime(mon_str, "%b").month
         return {
             "underlying": underlying,
-            "expiry": get_last_thursday(year, month),
+            "expiry": get_last_expiry_day(year, month),
             "strike": Decimal(strike_str),
             "option_type": option_type,
         }

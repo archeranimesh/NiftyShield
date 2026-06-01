@@ -39,7 +39,7 @@ These have already been decided by a prior council or architectural review:
 ## Primary Strategy
 
 Monthly Cash Secured Put (CSP) on Nifty 50 index options:
-- Entry: 25-delta short put, 30–45 DTE, monthly expiry (last Thursday)
+- Entry: 25-delta short put, 30–45 DTE, monthly expiry (last Tuesday; pre-Apr 2026 bhavcopy: last Thursday)
 - Exit: 50% profit target / 21 DTE time stop / 2× credit loss stop / −0.45 delta stop
 - 1 lot = 50 units. No intra-trade adjustments in v1 spec.
 - NiftyBees ETF collateral leg must be included in P&L alongside the short put.

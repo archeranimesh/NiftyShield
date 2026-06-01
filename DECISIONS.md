@@ -31,6 +31,12 @@
 
 ---
 
+## Market Calendar
+
+**NSE Nifty monthly expiry moved from Thursday to Tuesday (2026-06-01, MKT-1):** SEBI circular effective April 2026 moved all Nifty index option expiries from the last Thursday to the last Tuesday of each month. This affects: `src/models/portfolio.py` (Leg validator — `_NSE_TUESDAY_EXPIRY_CUTOFF = 2026-04-01`; Thursday check skipped for post-cutoff expiries), `src/backtest/bhavcopy_ingest.py` (`get_last_expiry_day()` replaces `get_last_thursday()`; old function kept as deprecated shim), `scripts/pipeline/gamma_daily_watch.py` (`resolve_expiries()` targets Tuesday). Historical bhavcopy records pre-April 2026 still use Thursday expiries — the cutoff is enforced in `get_last_expiry_day()` by comparing against the cutoff date.
+
+---
+
 ## Data Layer
 
 **UTC-only timestamps in intraday_market_snapshots:** `record_market_snapshot` raises ValueError on naive datetime; stores as UTC ISO string. Prevents SQLite string-sort breakage when naive local and UTC-aware strings coexist. Ref: commit a259115.
