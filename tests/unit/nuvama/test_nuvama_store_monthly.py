@@ -71,10 +71,14 @@ class TestGetMonthlyRealizedPnl:
         assert isinstance(result, Decimal)
 
     def test_before_date_none_includes_all_rows_in_month(self, store) -> None:
-        """No before_date → all rows in month included (including 'today')."""
+        """No before_date → all rows in month included (including 'today').
+
+        Uses distinct symbols so the UPSERT key (snapshot_date, symbol) never
+        collides even when today == the 1st of the month.
+        """
         today = date.today()
         _snap(store, date(today.year, today.month, 1), "A", "400")
-        _snap(store, today, "A", "100")
+        _snap(store, today, "B", "100")  # different symbol → always a separate row
 
         result = store.get_monthly_realized_pnl(today.year, today.month)
         assert result == Decimal("500")
