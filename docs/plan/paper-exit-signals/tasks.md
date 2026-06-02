@@ -4,9 +4,9 @@
 > After completing: tick the box, append `| SHA: <sha>`, add one line to TODOS.md.
 
 **Prerequisite gate (check before ES0):**
-- [ ] `search_graph("StrategyMonitor")` returns results (PB1.2 committed)
-- [ ] `search_graph("PaperExecutor")` returns results (PB1.3 committed)
-- [ ] `search_graph("CCOverlayV1")` returns zero results (not yet built)
+- [x] `search_graph("StrategyMonitor")` returns results (PB1.2 committed) | verified 2026-06-02 → `src/strategy/monitor.py`
+- [x] `search_graph("PaperExecutor")` returns results (PB1.3 committed) | verified 2026-06-02 → `src/strategy/executor.py`
+- [x] `search_graph("CCOverlayV1")` returns zero results (not yet built) | verified 2026-06-02 → 0 results
 
 ---
 
