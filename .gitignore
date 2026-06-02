@@ -26,3 +26,5 @@ tmp/
 .coverage
 coverage.xml
 htmlcov/
+.vscode/*
+.vscode/settings.json

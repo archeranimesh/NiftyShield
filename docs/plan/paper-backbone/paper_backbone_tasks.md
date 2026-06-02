@@ -23,7 +23,7 @@
 
 ## Phase PT-S0 — CSP v1 (Backbone Integration)
 
-- [ ] **PB2.1** `[Claude]` — `src/strategy/csp_nifty_v1.py`: `CSPNiftyV1` implements `PaperStrategy` — `check_signals` + `apply_action` + tests
+- [x] **PB2.1** `[Claude]` — `src/strategy/csp_nifty_v1.py`: `CSPNiftyV1` implements `PaperStrategy` — `check_signals` + `apply_action` + tests | SHA: fbc1b56
 
 ## Phase PT-S1 — Iron Condor v1 (Backbone Integration)
 

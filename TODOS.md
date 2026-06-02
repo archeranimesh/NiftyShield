@@ -355,6 +355,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 | 2026-05-28 | chain-data CD1.1 — ChainWriter — Parquet EOD and intraday chain snapshot writer — ce57240 |
 | 2026-05-28 | TODOS.md reordered — immediate actions + calendar at top, build queue + phases below |
 | 2026-05-28 | TODOS.md restructured — unified numbering, removed P-label clashes, P0-2 removed (done) |
+| 2026-06-02 | paper-backbone PB2.1 — CSPNiftyV1 backbone integration (check_signals, apply_action, describe_context, 15 tests) — fbc1b56 |
 | 2026-05-28 | P0-2 + Task 3b: R3 caveat updated; CSP v1 spec reconciled (lot size, time stop, R-numbers, R4) |
 | 2026-05-28 | P1-2: guard None LTP in generate_track_snapshot — 57299e4; 2 regression tests; 1457 passing |
 | 2026-05-28 | Session: CSP Cycle 1 closed (₹8,898.50); Cycle 2 opened (23300 PE JUN 30 @ ₹158.6, 65u); May futures settled; June futures opened; DEBT-4 fixed (75→65); DB rows id=31,32 corrected |
