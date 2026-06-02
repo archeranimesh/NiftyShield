@@ -25,12 +25,15 @@ from __future__ import annotations
 
 import re
 from datetime import date, datetime
-from decimal import Decimal
-from typing import Any
+from decimal import Decimal, InvalidOperation
+
+import structlog
 
 from src.models.options import OptionChain, OptionLeg
 from src.paper.models import PaperPosition
 from src.strategy.protocol import ApprovedAction, SignalEvent
+
+log = structlog.get_logger(__name__)
 
 # ── Regexes ───────────────────────────────────────────────────────────────────
 
@@ -46,8 +49,8 @@ _STRIKE_RE = re.compile(r"NIFTY(\d+)(PE|CE)", re.IGNORECASE)
 
 # ── Thresholds ────────────────────────────────────────────────────────────────
 
-_PROFIT_TARGET_PCT = Decimal("0.50")   # mark ≤ 50% of entry credit
-_LOSS_STOP_PCT = Decimal("2.0")        # mark ≥ 200% of entry credit
+_PROFIT_TARGET_PCT = Decimal("0.50")   # fraction: mark/entry_credit ≤ 0.50 (50% remaining)
+_LOSS_STOP_PCT = Decimal("2.0")        # fraction: mark/entry_credit ≥ 2.0 (200% of entry — 2× loss)
 _DECAY_WARN_PCT = Decimal("0.25")      # mark ≤ 25% of entry credit
 _DELTA_STOP = Decimal("0.35")          # |delta| ≥ 0.35
 _DELTA_WARN = Decimal("0.25")          # |delta| ≥ 0.25
@@ -314,6 +317,11 @@ class CSPNiftyV1:
                 f"got {action.action_type!r}"
             )
         closed: set[str] = set(action.legs_to_close)
+        log.info(
+            "csp_nifty_v1.apply_action",
+            action_type=action.action_type,
+            legs_to_close=list(closed),
+        )
         return [p for p in positions if p.leg_role not in closed]
 
     # ── Private helpers ───────────────────────────────────────────────────────
@@ -343,12 +351,24 @@ class CSPNiftyV1:
                 strike_data = market.strikes.get(strike)
                 if strike_data is not None and strike_data.pe is not None:
                     return strike_data.pe
-            except Exception:
-                pass
+            except InvalidOperation:
+                log.warning(
+                    "csp_nifty_v1.strike_parse_failed",
+                    instrument_key=instrument_key,
+                )
 
-        # Fallback: scan for first PE with non-zero LTP
+        # Fallback: scan for first PE with non-zero LTP.
+        # Used when instrument_key carries no parseable strike (e.g. numeric
+        # Upstox IDs like "NSE_FO|47196").  Safe for Phase 0 where at most
+        # one CSP position is open at a time; incorrect in a multi-position
+        # context.  Returns None when no PE leg is found.
         for strike_data in market.strikes.values():
             if strike_data.pe is not None and strike_data.pe.ltp > Decimal("0"):
+                log.debug(
+                    "csp_nifty_v1.put_leg_fallback_used",
+                    instrument_key=instrument_key,
+                    fallback_strike=str(strike_data.pe.strike),
+                )
                 return strike_data.pe
 
         return None
