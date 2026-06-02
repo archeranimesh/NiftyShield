@@ -102,10 +102,10 @@ Invoke `roll-validator` agent ≥1 week before deadline.
 
 | Step | What | Deadline | Status |
 |---|---|---|---|
-| PT-0 — Common Infrastructure | PB1.1–PB1.7: `PaperStrategy` protocol, `StrategyMonitor`, `PaperExecutor`, `RapidCouncil`, `TelegramGateway`, DB migrations, daemon scripts | Jun–Jul 2026 | ⬜ Not started |
-| PT-S0 — CSP v1 | PB2.1: `CSPNiftyV1` — adds auto-signal detection | After PT-0 | ⬜ Not started |
-| PT-S1 — Iron Condor v1 | PB3.1: `IronCondorV1` — entry via `paper_ic_entry.py` | Aug 2026 | ⬜ Not started |
-| PT-S3 — 3-Track | PB4.1: `NiftyTrackComparisonV1` — adds WARN roll reminders | After PT-0 | ⬜ Not started |
+| PT-0 — Common Infrastructure | PB1.1–PB1.7: `PaperStrategy` protocol, `StrategyMonitor`, `PaperExecutor`, `RapidCouncil`, `TelegramGateway`, DB migrations, daemon scripts | Jun–Jul 2026 | ✅ Done |
+| PT-S0 — CSP v1 | PB2.1: `CSPNiftyV1` — adds auto-signal detection | After PT-0 | ✅ Done |
+| PT-S1 — Iron Condor v1 | PB3.1: `IronCondorV1` — entry via `paper_ic_entry.py` | Aug 2026 | ✅ Done |
+| PT-S3 — 3-Track | PB4.1: `NiftyTrackComparisonV1` — adds WARN roll reminders | After PT-0 | ✅ Done |
 | PT-S2 — Signal Pipeline | Blocked on [signals story](docs/plan/signals/) + OpenRouter API key | Aug–Sep 2026 | ⬜ Blocked |
 | PT-B — Backtesting mode | Historical replayer + AutoApprover swap-in | After Phase 0.8 gate | ⬜ Blocked |
 
@@ -213,8 +213,8 @@ Tasks run in priority order. Infrastructure that blocks other stories runs first
 | 1 | June 2026 Finideas roll | Animesh + Cowork | **2026-06-30** | — | Execution pending — awaiting Finideas instructions |
 | 2 | chain-data: EOD + intraday chain snapshot cron | Cowork | — | — | ✅ Shipped — [story](docs/archive/plan/chain-data/) |
 | 3 | scripts-restructure SR1 (scaffold only) | Cowork | Before #4 | #4 script placement | ✅ Shipped — [story](docs/plan/scripts-restructure/) |
-| 4 | paper-backbone: Strategy Monitor daemon | Cowork | **Jun–Jul 2026** | #5 | ⬜ Not started — [story](docs/plan/paper-backbone/) |
-| 5 | paper-exit-signals: automated exit detection + closure | Cowork | After #4 | — | ⬜ Not started — [story](docs/plan/paper-exit-signals/) — **blocked by #4 PT-0** |
+| 4 | paper-backbone: Strategy Monitor daemon | Cowork | **Jun–Jul 2026** | #5 | ✅ Shipped — [story](docs/plan/paper-backbone/) |
+| 5 | paper-exit-signals: automated exit detection + closure | Cowork | After #4 | — | ⬜ Not started — [story](docs/plan/paper-exit-signals/) — **#4 PT-0 now unblocked** |
 | 6 | covered-call-overlay CC3+CC4 (calibration experiment) | Cowork | Any cycle | — | ⬜ CC3 not started — [story](docs/plan/covered-call-overlay/) |
 | 7 | MVP: Multi-bagger Value Picks Tracker | Cowork | After #1 | — | ⬜ Not started — [story](docs/plan/mvp/) |
 | 8 | backtest-eval-core: `BacktestStore` + `src/analytics/` | Cowork | Aug 2026 | #9 | ⬜ Not started — [story](docs/plan/backtest-eval-core/) — **blocked by tasks 1.3 + 1.4** |
@@ -300,6 +300,9 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-06-02 | paper-backbone PB5 — Docs close: CONTEXT.md (src/strategy/, src/council/, TelegramGateway, daemon scripts, What Does NOT Exist Yet), DECISIONS.md (paper-backbone entry), TODOS.md (build queue status) |
+| 2026-06-02 | paper-backbone PB4.1 — NiftyTrackComparisonV1 backbone integration: WARN-only check_signals (ROLL_DUE_DTE, ROLL_DUE_DECAY, OVERLAY_EXPIRED) + apply_action no-op + 14 tests — 2567c04 |
+| 2026-06-02 | paper-backbone PB3.1 — IronCondorV1 backbone integration: check_signals + apply_action (CLOSE_FULL/CLOSE_CALL_SPREAD/CLOSE_PUT_SPREAD; ADJUST_* raises ValueError per council) + 13 tests — 0937b60 |
 | 2026-06-01 | paper-backbone PB1.7 CR — Code review fixes: tests, logging, date mismatch, layering — 0e51357 |
 | 2026-06-01 | paper-backbone PB1.7 — Scripts: monitor_daemon.py + start_monitor.py + stop_monitor.py + pre_market_brief.py + eod_summary.py + requirements.txt — 9191c02 |
 | 2026-06-01 | paper-backbone PB1.6 — DB migrations for pending_approvals + council_outputs + daemon_heartbeat + store methods — 60408cf, 436982e |

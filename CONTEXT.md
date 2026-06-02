@@ -13,7 +13,7 @@
 
 Full file-level module tree: **[CONTEXT_TREE.md](CONTEXT_TREE.md)**
 Load that file when adding new modules or doing a full structural survey.
-Key top-level packages: `src/auth`, `src/client`, `src/models`, `src/portfolio`, `src/paper`, `src/mf`, `src/dhan`, `src/nuvama`, `src/intraday`, `src/instruments`, `src/market_calendar`, `src/notifications`, `src/utils`, `src/backtest`, `src/risk`, `src/gamma`, `src/db.py`
+Key top-level packages: `src/auth`, `src/client`, `src/models`, `src/portfolio`, `src/paper`, `src/mf`, `src/dhan`, `src/nuvama`, `src/intraday`, `src/instruments`, `src/market_calendar`, `src/notifications`, `src/utils`, `src/backtest`, `src/risk`, `src/gamma`, `src/strategy`, `src/council`, `src/db.py`
 `src/risk/` — portfolio-level delta risk controls. `PortfolioDelta` frozen dataclass (`src/risk/models.py`): `options_delta_lots`, `niftybees_delta_lots`, `total_delta_lots`, `warning_breached`, `cap_breached`, `as_of`. `PortfolioDeltaTracker` (`src/risk/delta_tracker.py`): `aggregate_delta(paper_positions, nifty_spot, lot_size) → PortfolioDelta`; options-only thresholds warning=0.75/cap=1.0 lots, combined thresholds warning=1.5/cap=2.0 lots; parameterised via constructor. CE/futures = `net_qty/lot_size`; PE = `-net_qty/lot_size`; NiftyBees = `qty×avg_cost/(spot×lot_size)`. `check_entry_allowed` (`src/risk/entry_gate.py`): protective entries always allowed; cap → block; warning → allow with message. 20 unit tests in `tests/unit/risk/test_delta_tracker.py`.
 `src/gamma/` — scaffolding, data models (`GammaChainSnapshot` and `GammaWatchlistEntry` frozen dataclasses), and persistence (`GammaStore` SQLite operations) for Near-Expiry Gamma Buy strategy.
 `src/backtest/ivr.py` — `compute_ivr(vix_today, vix_series)`: IVR formula over trailing 252-day VIX window; returns `float | None`; clamps to `[0.0, 1.0]`; flat-window safe (returns 0.5). 11 unit tests in `tests/unit/backtest/test_ivr.py`.
@@ -22,7 +22,9 @@ Key top-level packages: `src/auth`, `src/client`, `src/models`, `src/portfolio`,
 `src/backtest/chain_reader.py` — `ChainReader` class for DuckDB-based option chain EOD and intraday query scan utilities. 8 unit tests in `tests/unit/backtest/test_chain_reader.py`.
 
 `src/models/options.py` — `OptionLeg`, `OptionChainStrike`, `OptionChain` (all `frozen=True` Pydantic). Source-agnostic field names; Upstox parser in `src/client/upstox_market.py` (`parse_upstox_option_chain`). Dhan parser not implemented (chain-data story complete; Dhan approach not pursued).
-`src/paper/` — paper trading module. `PaperTrade` model (frozen Pydantic, `paper_` prefix enforced, includes `ivr_at_entry: float | None`), `PaperPosition` + `PaperNavSnapshot` + `PaperLegSnapshot` (frozen dataclasses), `PaperStore` (`paper_trades` + `paper_nav_snapshots` + `paper_leg_snapshots` tables in shared SQLite), `PaperTracker` (compute_pnl + record_daily_snapshot). `PaperStore` API: `record_leg_snapshot` (upsert; enforces `total_pnl == unrealized_pnl + realized_pnl`), `get_leg_snapshot`, `get_prev_leg_snapshot`, `delete_trade` (no-op if missing). See `src/paper/CLAUDE.md` for full invariants.
+`src/paper/` — paper trading module. `PaperTrade` model (frozen Pydantic, `paper_` prefix enforced, includes `ivr_at_entry: float | None`), `PaperPosition` + `PaperNavSnapshot` + `PaperLegSnapshot` (frozen dataclasses), `PaperStore` (`paper_trades` + `paper_nav_snapshots` + `paper_leg_snapshots` + `pending_approvals` + `council_outputs` + `daemon_heartbeat` tables in shared SQLite), `PaperTracker` (compute_pnl + record_daily_snapshot). `PaperStore` API: `record_leg_snapshot` (upsert; enforces `total_pnl == unrealized_pnl + realized_pnl`), `get_leg_snapshot`, `get_prev_leg_snapshot`, `delete_trade` (no-op if missing). See `src/paper/CLAUDE.md` for full invariants.
+`src/strategy/` — paper-backbone strategy layer. `PaperStrategy` protocol (`protocol.py`) + `SignalEvent` + `ApprovedAction` + `LegSpec` models. `StrategyMonitor` (`monitor.py`): registry + tick loop + signal routing + heartbeat. `PaperExecutor` (`executor.py`): action dispatch + `PaperFillSimulator` (VIX-regime slippage model). Concrete strategies: `CSPNiftyV1` (`csp_nifty_v1.py`), `IronCondorV1` (`ic_nifty_v1.py`), `NiftyTrackComparisonV1` (`nifty_track_comparison_v1.py`). All implement `PaperStrategy` protocol.
+`src/council/` — AI council infrastructure. `RapidCouncil` (`rapid.py`): parallel Stage-1 fan-out (5 heterogeneous personas) + chairman synthesis + timeout handling.
 Scripts (under `scripts/` structured into functional axis):
    - `pipeline/`: `upstox_chain_snapshot.py` (EOD option chain → Parquet), `upstox_chain_intraday.py` (5-min intraday chain → Parquet), `gamma_daily_watch.py` (Greeks monitoring), `bhavcopy_bootstrap.py` (resumable bulk NSE bhavcopy download 2016–present).
    - `lookup/`: `find_strike_by_delta.py` (live chain → filter by delta range), `find_overlay_strikes.py` (overlay-specific strike finder), `instrument_lookup.py` (BOD JSON key resolver).
@@ -32,7 +34,9 @@ Scripts (under `scripts/` structured into functional axis):
    - `intraday/`: intraday monitoring crons (e.g. `intraday_tracker.py` combined Dhan+Nuvama orchestrator, `nuvama_intraday_tracker.py`, `dhan_intraday_tracker.py`).
    - `seed/`: one-time DB seed scripts (`seed_mf_holdings.py`, `seed_nuvama_positions.py`, `seed_portfolio.py`, `seed_trades.py`).
    - `council/`: council workflow tooling (`ask_council.py`, templates).
+   - `daemon/`: monitor daemon scripts (`monitor_daemon.py` main loop, `start_monitor.py` launcher, `stop_monitor.py` shutdown, `pre_market_brief.py` pre-market summary cron, `eod_summary.py` EOD P&L summary cron).
    - `dev/`: diagnostics/migrations (`send_test_telegram.py`, `validate_strategy_spec.py`, `probe_nuvama_schema.py`, `migrate_strike_to_text.py`, `test_api_version.py`, `paper_track_snapshot.py`).
+`src/notifications/telegram_gateway.py` — `TelegramGateway`: approval request dispatch + inbound callback polling + auth guard (chat-ID allowlist) + timeout scan for stale pending approvals. Non-fatal contract: errors logged and suppressed, never raise to caller.
 `src/instruments/lookup.py` — `get_expiry_candidates(underlying, today, preference)`: enumerates NIFTY expiries from BOD JSON into monthly (DTE 15–45) / quarterly (46–200) / yearly (201–420) buckets; default preference `["monthly","quarterly","yearly"]`; custom order accepted for hedge use.
 
 `src/config.py` — `Settings(BaseSettings)` singleton (pydantic-settings). Declares every env var used across `src/` and `scripts/`: Upstox tokens (`upstox_env`, `upstox_analytics_token`, `upstox_access_token`, `upstox_sandbox_token`, `upstox_debug`), Telegram (`telegram_bot_token`, `telegram_chat_id`), Nuvama (`nuvama_settings_file`), Dhan (`dhan_client_id`, `dhan_access_token`), data paths (`vix_data_dir`). Loads from `.env` + environment. Import the `settings` singleton — never call `os.getenv()` directly. 3 unit tests in `tests/unit/test_config.py`.
@@ -55,8 +59,9 @@ Scripts (under `scripts/` structured into functional axis):
 ### What Does NOT Exist Yet
 
 - `src/nuvama/CLAUDE.md` — module context file not yet written
-- `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/`, `src/streaming/` — all empty (planned per BACKTEST_PLAN.md Phase 1–2)
+- `src/execution/`, `src/streaming/` — empty (planned per BACKTEST_PLAN.md Phase 1–2)
 - `src/gamma/` script logic (`gamma_daily_watch.py`) — planned for Phase A next (scaffolding and store implemented in Task B1)
+- PT-S2 Signal Pipeline (`src/strategy/signal_pipeline.py`) — blocked on signals story + OpenRouter API key
 
 ### Live Data
 

@@ -29,6 +29,8 @@
 
 **`paper_track_snapshot.py` status (2026-05-31, SR5):** `paper_track_snapshot.py` is confirmed superseded by `paper_3track_snapshot.py` as the canonical EOD cron snapshot script. It has been moved to `scripts/dev/paper_track_snapshot.py` to be preserved purely for backward-compatible operator use (ad-hoc runs) and is excluded from `crontab`.
 
+**paper-backbone architecture shipped (2026-06-02, PB):** `PaperStrategy` protocol (`src/strategy/protocol.py`) is the sole interface between strategies and the monitor daemon — `check_signals` returns `list[SignalEvent]`, `apply_action` executes an `ApprovedAction`. `StrategyMonitor` (`src/strategy/monitor.py`) owns the tick loop, strategy registry, and heartbeat writes to `daemon_heartbeat` table. `PaperExecutor` (`src/strategy/executor.py`) dispatches approved actions and simulates fills via `PaperFillSimulator` (VIX-regime slippage: high VIX → wider spread). `RapidCouncil` (`src/council/rapid.py`) provides parallel Stage-1 fan-out (5 heterogeneous LLM personas) with chairman synthesis and per-call timeout — used by the executor for ambiguous sizing decisions. `TelegramGateway` (`src/notifications/telegram_gateway.py`) handles human-approval flow: sends approval request with inline keyboard, polls inbound callbacks, enforces chat-ID allowlist, and scans for stale pending approvals. DB migrations add `pending_approvals`, `council_outputs`, `daemon_heartbeat` tables to shared SQLite. Integrated strategies: `CSPNiftyV1` (PT-S0), `IronCondorV1` (PT-S1), `NiftyTrackComparisonV1` (PT-S3, WARN-only). PT-S2 Signal Pipeline blocked on signals story + OpenRouter API key.
+
 ---
 
 ## Market Calendar
