@@ -27,12 +27,12 @@
 
 ## Phase PT-S1 — Iron Condor v1 (Backbone Integration)
 
-- [ ] **PB3.1** `[Claude]` — `src/strategy/ic_nifty_v1.py`: `IronCondorV1` implements `PaperStrategy` — `check_signals` + `apply_action` + tests
+- [x] **PB3.1** `[Claude]` — `src/strategy/ic_nifty_v1.py`: `IronCondorV1` implements `PaperStrategy` — `check_signals` + `apply_action` + tests | SHA: 0937b60
 
 ## Phase PT-S3 — 3-Track Comparison (Backbone Integration)
 
-- [ ] **PB4.1** `[Claude]` — `src/strategy/nifty_track_comparison_v1.py`: `NiftyTrackComparisonV1` implements `PaperStrategy` — `check_signals` (WARN only) + tests
+- [x] **PB4.1** `[Claude]` — `src/strategy/nifty_track_comparison_v1.py`: `NiftyTrackComparisonV1` implements `PaperStrategy` — `check_signals` (WARN only) + tests | SHA: 2567c04
 
 ## Docs Close
 
-- [ ] **PB5** `[Claude]` — Docs close: `CONTEXT.md` tree, `DECISIONS.md` entry, `TODOS.md` session log
+- [x] **PB5** `[Claude]` — Docs close: `CONTEXT.md` tree, `DECISIONS.md` entry, `TODOS.md` session log | SHA: 565b660

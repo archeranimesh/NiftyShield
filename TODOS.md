@@ -300,7 +300,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
-| 2026-06-02 | paper-backbone PB5 — Docs close: CONTEXT.md (src/strategy/, src/council/, TelegramGateway, daemon scripts, What Does NOT Exist Yet), DECISIONS.md (paper-backbone entry), TODOS.md (build queue status) |
+| 2026-06-02 | paper-backbone PB5 — Docs close: CONTEXT.md (src/strategy/, src/council/, TelegramGateway, daemon scripts, What Does NOT Exist Yet), DECISIONS.md (paper-backbone entry), TODOS.md (build queue status) — 565b660 |
 | 2026-06-02 | paper-backbone PB4.1 — NiftyTrackComparisonV1 backbone integration: WARN-only check_signals (ROLL_DUE_DTE, ROLL_DUE_DECAY, OVERLAY_EXPIRED) + apply_action no-op + 14 tests — 2567c04 |
 | 2026-06-02 | paper-backbone PB3.1 — IronCondorV1 backbone integration: check_signals + apply_action (CLOSE_FULL/CLOSE_CALL_SPREAD/CLOSE_PUT_SPREAD; ADJUST_* raises ValueError per council) + 13 tests — 0937b60 |
 | 2026-06-01 | paper-backbone PB1.7 CR — Code review fixes: tests, logging, date mismatch, layering — 0e51357 |
