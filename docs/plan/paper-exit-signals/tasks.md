@@ -14,7 +14,7 @@
 
 ## Phase ES0 — Schema
 
-- [ ] **ES0** `[Antigravity]` — `paper_exit_events` table + `PaperStore` methods + tests | SHA: ___
+- [x] **ES0** `[Antigravity]` — `paper_exit_events` table + `PaperStore` methods + tests | SHA: 7cd8212
 
 ## Phase ES1 — Rule Engine
 

@@ -181,7 +181,7 @@ Invoke `roll-validator` agent ≥1 week before deadline.
 
 | Story | Files | Status |
 |---|---|---|
-| ES0 | `paper_exit_events` DDL in `PaperStore.__init__`; store methods + tests | ⬜ Not started |
+| ES0 | `paper_exit_events` DDL in `PaperStore.__init__`; store methods + tests | ✅ Shipped |
 | ES1 | `src/strategy/exit_signals.py` — `ExitSignalEngine` (pure/stateless); CSP/CC/PP/Collar rules; tests | ⬜ Not started |
 | ES2 | Fix `CSPNiftyV1` thresholds: `DELTA_STOP` 0.35→0.45, `DELTA_WARN` 0.35, `LOSS_STOP` 2.0×→1.75× | ⬜ Not started |
 | ES3 | `src/strategy/cc_overlay_v1.py` — `CCOverlayV1`; dual-signal audit; tests | ⬜ Not started |
@@ -304,6 +304,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-06-03 | paper-exit-signals ES0 — paper_exit_events DDL migration + PaperStore create/get/ack/resolve methods + Pydantic model + 6 tests — 7cd8212 |
 | 2026-06-02 | paper-backbone PB5 — Docs close: CONTEXT.md (src/strategy/, src/council/, TelegramGateway, daemon scripts, What Does NOT Exist Yet), DECISIONS.md (paper-backbone entry), TODOS.md (build queue status) — 565b660 |
 | 2026-06-02 | paper-backbone PB4.1 — NiftyTrackComparisonV1 backbone integration: WARN-only check_signals (ROLL_DUE_DTE, ROLL_DUE_DECAY, OVERLAY_EXPIRED) + apply_action no-op + 14 tests — 2567c04 |
 | 2026-06-02 | paper-backbone PB3.1 — IronCondorV1 backbone integration: check_signals + apply_action (CLOSE_FULL/CLOSE_CALL_SPREAD/CLOSE_PUT_SPREAD; ADJUST_* raises ValueError per council) + 13 tests — 0937b60 |
