@@ -162,7 +162,7 @@ class ExitSignalEngine:
             results.append(
                 ExitSignalResult(
                     exit_signal="DTE_REVIEW",
-                    severity="INFO",
+                    severity="WARN",
                     threshold_value=5.0,
                     delta_stop_would_fire=delta_stop,
                     premium_stop_would_fire=premium_stop,

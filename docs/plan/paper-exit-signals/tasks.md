@@ -22,7 +22,7 @@
 
 ## Phase ES2 — CSP Fix
 
-- [ ] **ES2** `[Claude]` — Fix `CSPNiftyV1` thresholds (delta 0.45, loss 1.75×) + re-test | SHA: ___
+- [x] **ES2** `[Claude]` — Fix `CSPNiftyV1` thresholds (delta 0.45, loss 1.75×) + re-test | SHA: 5115371
 
 ## Phase ES3–ES5 — Strategy Classes
 

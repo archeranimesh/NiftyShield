@@ -74,7 +74,7 @@ def test_evaluate_csp_dte_review():
     )
     assert len(results) == 1
     assert results[0].exit_signal == "DTE_REVIEW"
-    assert results[0].severity == "INFO"
+    assert results[0].severity == "WARN"
 
 
 def test_evaluate_csp_healthy():

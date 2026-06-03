@@ -374,6 +374,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 | 2026-05-26 | gamma script scaffold b68bb3d; `src/gamma/` store d8c2e69; delta gate wired b9c0014; CLI-12 notes in paper_snapshot c71331b; instrument loop migration 13b3daa; paper_csp_roll.py 3063fbf |
 | 2026-05-26 | `src/risk/` PortfolioDeltaTracker + entry gate; 20 tests; 1471+20 suite green |
 | 2026-05-25 | Audit findings [28–31]: Decimal enforcement across protocol, tracker, summary, pricing |
+| 2026-06-03 | ES2 closed — CSPNiftyV1 thresholds corrected (DELTA_STOP 0.35→0.45, LOSS_STOP 2.0→1.75×, DELTA_WARN 0.25→0.35); TIME_STOP fixed to days_held≥21; entry_date added to PaperPosition; SHA 5115371 |
 | 2026-05-24 | Audit findings [19–27]: Leg validation, STT branching, lot size resolver, expiry cadence, Decimal strike, strategy name constants |
 | 2026-05-23 | TradingView MCP regime probe validated (Phase 3/3C). Weekly veto rule established |
 | 2026-05-15–22 | Audit findings [12–18]: async Telegram, PortfolioStore factory, message budget, rollback, Parquet lineage, cron heartbeat, protocol stubs |
