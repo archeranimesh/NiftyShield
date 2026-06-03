@@ -28,7 +28,7 @@
 
 - [x] **ES3** `[Antigravity]` — `CCOverlayV1` + tests | SHA: 9ed05fb
 - [x] **ES4** `[Antigravity]` — `PPOverlayV1` + tests | SHA: 681f7db
-- [ ] **ES5** `[Antigravity]` — `CollarOverlayV1` + tests | SHA: ___
+- [x] **ES5** `[Antigravity]` — `CollarOverlayV1` + tests | SHA: d25abf7
 
 ## Phase ES6 — Closure
 
