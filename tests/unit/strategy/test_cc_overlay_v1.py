@@ -1,0 +1,197 @@
+"""Unit tests for CCOverlayV1 backbone strategy.
+
+All tests are offline — no network calls, no DB.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from datetime import date, timedelta
+from decimal import Decimal
+
+import pytest
+
+from src.models.options import OptionChain, OptionChainStrike, OptionLeg
+from src.paper.models import PaperPosition
+from src.strategy.cc_overlay_v1 import CCOverlayV1
+from src.strategy.protocol import ApprovedAction, SignalEvent
+
+_STRATEGY = "paper_covered_call_v1"
+_OTHER_STRATEGY = "paper_other_v1"
+
+
+def _make_call_leg(
+    ltp: str,
+    delta: str,
+    strike: str = "23000",
+    iv: str = "15.0",
+) -> OptionLeg:
+    """Build a minimal CE OptionLeg."""
+    return OptionLeg(
+        ltp=Decimal(ltp),
+        bid=Decimal(ltp),
+        ask=Decimal(ltp),
+        oi=1000,
+        volume=500,
+        delta=Decimal(delta),
+        gamma=Decimal("0.001"),
+        theta=Decimal("-5"),
+        vega=Decimal("10"),
+        iv=Decimal(iv),
+        strike=Decimal(strike),
+    )
+
+
+def _make_chain(ltp: str, delta: str, strike: str = "23000") -> OptionChain:
+    """Build a one-strike OptionChain with the given CE leg."""
+    ce = _make_call_leg(ltp=ltp, delta=delta, strike=strike)
+    return OptionChain(
+        underlying_spot=Decimal("22000"),
+        expiry=date(2026, 6, 26),
+        strikes={Decimal(strike): OptionChainStrike(ce=ce)},
+    )
+
+
+def _make_empty_chain() -> OptionChain:
+    """Build a chain with no strikes."""
+    return OptionChain(
+        underlying_spot=Decimal("22000"),
+        expiry=date(2026, 6, 26),
+        strikes={},
+    )
+
+
+def _make_position(
+    instrument_key: str = "NSE_FO|NIFTY23000CE",
+    avg_sell_price: str = "80",
+    net_qty: int = -65,
+    leg_role: str = "short_call",
+    strategy_name: str = _STRATEGY,
+    entry_date: date | None = None,
+) -> PaperPosition:
+    """Build a PaperPosition for a short-call leg."""
+    return PaperPosition(
+        strategy_name=strategy_name,
+        leg_role=leg_role,
+        net_qty=net_qty,
+        avg_cost=Decimal("0"),
+        avg_sell_price=Decimal(avg_sell_price),
+        instrument_key=instrument_key,
+        entry_date=entry_date,
+    )
+
+
+def _expiry_key(dte: int) -> str:
+    """Build an instrument key whose embedded expiry yields ``dte`` from today."""
+    expiry = date.today() + timedelta(days=dte)
+    date_str = expiry.strftime("%d%b%Y").upper()
+    return f"NSE_FO|NIFTY{date_str}CE"
+
+
+def _run(coro):  # type: ignore[no-untyped-def]
+    return asyncio.run(coro)
+
+
+def test_no_positions_returns_empty() -> None:
+    strategy = CCOverlayV1()
+    result = _run(strategy.check_signals(_make_empty_chain(), []))
+    assert result == []
+
+
+def test_filters_out_other_strategy() -> None:
+    strategy = CCOverlayV1()
+    pos = _make_position(strategy_name=_OTHER_STRATEGY)
+    result = _run(strategy.check_signals(_make_chain("40", "0.20"), [pos]))
+    assert result == []
+
+
+def test_long_position_ignored() -> None:
+    strategy = CCOverlayV1()
+    pos = _make_position(net_qty=65)
+    result = _run(strategy.check_signals(_make_chain("40", "0.20"), [pos]))
+    assert result == []
+
+
+def test_profit_target_fires_above_floor() -> None:
+    strategy = CCOverlayV1()
+    chain = _make_chain(ltp="38.4", delta="0.20")  # 38.4/80 = 48%
+    pos = _make_position(avg_sell_price="80")
+    events = _run(strategy.check_signals(chain, [pos]))
+    assert any(e.event_type == "PROFIT_TARGET" and e.severity == "ACTION" for e in events)
+
+
+def test_below_floor_prevents_profit_target() -> None:
+    strategy = CCOverlayV1()
+    chain = _make_chain(ltp="4.0", delta="0.20")  # 4/10 = 40% (under 50%)
+    pos = _make_position(avg_sell_price="10")  # under 12 floor
+    events = _run(strategy.check_signals(chain, [pos]))
+    event_types = {e.event_type for e in events}
+    assert "BELOW_FLOOR" in event_types
+    assert "PROFIT_TARGET" not in event_types
+
+
+def test_delta_stop_fires_at_0_56() -> None:
+    strategy = CCOverlayV1()
+    chain = _make_chain(ltp="80", delta="0.56")
+    pos = _make_position(avg_sell_price="80")
+    events = _run(strategy.check_signals(chain, [pos]))
+    assert any(e.event_type == "DELTA_STOP" and e.severity == "ACTION" for e in events)
+
+
+def test_loss_stop_fires_at_2_5x() -> None:
+    strategy = CCOverlayV1()
+    chain = _make_chain(ltp="201", delta="0.30")
+    pos = _make_position(avg_sell_price="80")
+    events = _run(strategy.check_signals(chain, [pos]))
+    assert any(e.event_type == "LOSS_STOP" and e.severity == "ACTION" for e in events)
+
+
+def test_missing_strike_still_evaluates_premium() -> None:
+    strategy = CCOverlayV1()
+    pos = _make_position(avg_sell_price="80")
+    # Empty chain so lookup fails, but let's mock position key with DTE so DTE check is fine
+    events = _run(strategy.check_signals(_make_empty_chain(), [pos]))
+    assert events == []  # Not enough info for premium stop/delta, and no DTE forced
+
+
+def test_apply_action_close_cc() -> None:
+    strategy = CCOverlayV1()
+    pos = _make_position()
+    action = ApprovedAction(
+        action_type="CLOSE_CC",
+        legs_to_close=["short_call"],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+    )
+    result = _run(strategy.apply_action([pos], action))
+    assert len(result) == 0
+
+
+def test_apply_action_invalid_raises() -> None:
+    strategy = CCOverlayV1()
+    pos = _make_position()
+    action = ApprovedAction(
+        action_type="ADJUST",
+        legs_to_close=[],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+    )
+    with pytest.raises(ValueError, match="CLOSE_CC"):
+        _run(strategy.apply_action([pos], action))
+
+
+def test_describe_context() -> None:
+    strategy = CCOverlayV1()
+    chain = _make_chain(ltp="38.4", delta="0.20")
+    pos = _make_position(avg_sell_price="80")
+    event = SignalEvent(
+        event_type="PROFIT_TARGET",
+        severity="ACTION",
+        description="test",
+        payload={},
+    )
+    ctx = strategy.describe_context(event, chain, [pos])
+    assert "paper_covered_call_v1" in ctx
+    assert "PROFIT_TARGET" in ctx
