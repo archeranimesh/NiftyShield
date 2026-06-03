@@ -144,11 +144,12 @@ def test_record_trade_warns_on_low_ivr(mock_vix, capsys):
         "paper_test",
     ]
     with patch("sys.argv", argv):
-        main()
+        with pytest.raises(SystemExit) as excinfo:
+            main()
+        assert excinfo.value.code == 1
 
     captured = capsys.readouterr()
-    assert "ivr_entry : 0.15" in captured.out
-    assert "WARNING: Low IVR (0.15)" in captured.err
+    assert "ERROR: R3 blocked — low IVR (0.15)" in captured.err
 
 
 def test_record_trade_warns_on_high_ivr(mock_vix, capsys):

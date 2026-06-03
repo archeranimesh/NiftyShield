@@ -46,6 +46,9 @@ from src.paper.constants import LOT_SIZE, STRATEGY_CSP
 UNDERLYING_DEFAULT = "NSE_INDEX|Nifty 50"
 DEFAULT_LOT_SIZE = LOT_SIZE  # single source of truth: src/paper/constants.py
 
+# Fallback sequence of absolute target deltas tried in order (ES12)
+DELTA_CANDIDATES = [0.22, 0.25, 0.20]
+
 # Defaults that mirror scripts.record.record_paper_trade — used to emit minimal commands.
 DEFAULT_STRATEGY = STRATEGY_CSP
 DEFAULT_ACTION = "SELL"
@@ -174,6 +177,31 @@ def filter_strikes_by_delta(
 
     rows.sort(key=lambda r: abs(r["delta"]), reverse=True)
     return rows
+
+
+def _apply_liquidity_gate(
+    ranked: list[dict[str, Any]], gate_pct: float = 0.05
+) -> list[dict[str, Any]]:
+    """Filter out strikes with a bid/ask spread > gate_pct of mid price.
+
+    Args:
+        ranked: List of ranked strikes.
+        gate_pct: Maximum spread as a fraction of mid price (default: 0.05 for 5%).
+
+    Returns:
+        Filtered list of strikes.
+    """
+    filtered: list[dict[str, Any]] = []
+    for r in ranked:
+        bid = r.get("bid", 0.0)
+        ask = r.get("ask", 0.0)
+        mid = r.get("mid", 0.0)
+        if mid > 0.0:
+            spread = ask - bid
+            spread_pct = spread / mid
+            if spread_pct <= gate_pct:
+                filtered.append(r)
+    return filtered
 
 
 def rank_strikes(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -480,6 +508,7 @@ def main() -> None:
 
     all_rows: list[dict[str, Any]] = []
     underlying_spot = 0.0
+    raw_data_by_expiry = {}
 
     for label, expiry in expiries:
         print(
@@ -491,6 +520,8 @@ def main() -> None:
             if not raw_data:
                 print(f"  WARNING: API returned empty data for {expiry} — skipping.")
                 continue
+
+            raw_data_by_expiry[expiry] = raw_data
 
             if underlying_spot == 0.0:
                 underlying_spot = _safe_float(raw_data[0].get("underlying_spot_price"))
@@ -518,29 +549,72 @@ def main() -> None:
         )
         sys.exit(1)
 
-    ranked = rank_strikes(all_rows)
+    # ── Candidate Selection Flow with Liquidity Gate (ES12) ──
+    selected_row = None
+    requested_delta = DELTA_CANDIDATES[0]
+    fallback_used = False
 
-    pick_idx = 0
-    if ranked:
-        pick_idx = min(args.index - 1, len(ranked) - 1)
-        if args.index - 1 > len(ranked) - 1:
-            print(
-                f"WARNING: --index {args.index} out of range; clamping to rank {len(ranked)}.",
-                file=sys.stderr,
+    for candidate in DELTA_CANDIDATES:
+        candidate_rows = []
+        for label, expiry in expiries:
+            raw_data = raw_data_by_expiry.get(expiry)
+            if not raw_data:
+                continue
+            delta_min = max(0.0, candidate - 0.02)
+            delta_max = candidate + 0.02
+            rows = filter_strikes_by_delta(
+                raw_data,
+                option_type=args.option_type,
+                delta_min=delta_min,
+                delta_max=delta_max,
             )
+            for r in rows:
+                r["expiry"] = expiry
+                r["expiry_label"] = label
+            candidate_rows.extend(rows)
+
+        if not candidate_rows:
+            continue
+
+        ranked_candidate = rank_strikes(candidate_rows)
+        filtered_candidate = _apply_liquidity_gate(ranked_candidate)
+        if filtered_candidate:
+            pick_idx = min(args.index - 1, len(filtered_candidate) - 1)
+            if args.index - 1 > len(filtered_candidate) - 1:
+                print(
+                    f"WARNING: --index {args.index} out of range; clamping to rank {len(filtered_candidate)}.",
+                    file=sys.stderr,
+                )
+            selected_row = filtered_candidate[pick_idx]
+            if candidate != requested_delta:
+                fallback_used = True
+            break
+
+    if not selected_row:
+        print("ERROR: GATE FAIL — no candidate strikes passed the liquidity gate.", file=sys.stderr)
+        sys.exit(1)
+
+    if fallback_used:
+        print(
+            f"WARNING: Fallback used. Selected delta {abs(selected_row['delta']):.4f} "
+            f"vs requested delta {requested_delta:.4f}",
+            file=sys.stderr,
+        )
+
+    ranked_all = rank_strikes(all_rows)
 
     print()
-    selected_key = ranked[pick_idx]["instrument_key"] if ranked else ""
+    selected_key = selected_row["instrument_key"]
     print(
         format_table(
-            ranked,
+            ranked_all,
             underlying_spot=underlying_spot,
             expiry=args.expiry or "Multiple (auto)",
             selected_key=selected_key,
         )
     )
 
-    if not all_rows or not args.dry_run:
+    if not args.dry_run:
         sys.exit(0)
 
     # Infer leg per-row when BOTH sides are shown and no explicit --leg given
@@ -552,12 +626,11 @@ def main() -> None:
     banner = f"─── Rank {args.index} selected ({args.action} · {args.strategy}) "
     print(banner + "─" * max(0, 72 - len(banner)))
 
-    selected = ranked[pick_idx]
-    row_leg = fixed_leg or _infer_leg(selected["side"], args.action)
+    row_leg = fixed_leg or _infer_leg(selected_row["side"], args.action)
     print()
     print(
         build_record_command(
-            selected,
+            selected_row,
             strategy=args.strategy,
             leg=row_leg,
             action=args.action,

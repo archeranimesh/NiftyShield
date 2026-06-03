@@ -211,6 +211,12 @@ def _parse_args() -> argparse.Namespace:
             "Use --no-dry-run to write."
         ),
     )
+    parser.add_argument(
+        "--force-entry",
+        action="store_true",
+        default=False,
+        help="Force execution even if IVR checks fail the entry gate (R3 block override).",
+    )
     return parser.parse_args()
 
 
@@ -470,10 +476,14 @@ def _resolve_instrument_key(args: argparse.Namespace) -> str | None:
     return None
 
 
-def _get_ivr_and_warn(
-    trade_date: date, action: TradeAction, vix_data_dir: Path, db_path: Path
+def _get_ivr_and_enforce(
+    trade_date: date,
+    action: TradeAction,
+    vix_data_dir: Path,
+    db_path: Path,
+    force_entry: bool = False,
 ) -> float | None:
-    """Fetch live VIX, load historical window, compute IVR, warn on R3 gates.
+    """Fetch live VIX, load historical window, compute IVR, enforce R3 gates.
 
     For today's trades: checks intraday_market_snapshots first (already fetched
     by the intraday tracker every 15 min — no duplicate API call). Falls back to
@@ -483,13 +493,15 @@ def _get_ivr_and_warn(
     The 252-day historical window always comes from the Parquet. If the Parquet
     has insufficient history, IVR returns None — bootstrap with vix_ingest.py.
 
-    Warnings are printed to stderr but do not block execution.
+    On SELL with IVR < 0.25 and no force_entry, prints error to stderr and exits 1.
+    On SELL with IVR < 0.25 and force_entry, prints warning to stderr and returns IVR.
 
     Args:
         trade_date: Date of the trade execution.
         action: BUY or SELL.
         vix_data_dir: Path to the India VIX Parquet directory.
         db_path: Path to the shared SQLite database (for intraday snapshots).
+        force_entry: If True, override low IVR block.
 
     Returns:
         Computed IVR value or None if data is insufficient.
@@ -545,17 +557,24 @@ def _get_ivr_and_warn(
         )
         return None
 
-    # ── R3 Entry Gate Warnings (SELL only) ───────────────────────────────────
+    # ── R3 Entry Gate Warnings & Enforcement (SELL only) ──────────────────────
     if action == TradeAction.SELL:
-        if 0.25 <= ivr <= 0.50:
+        if ivr < 0.25:
+            if not force_entry:
+                print(
+                    f"ERROR: R3 blocked — low IVR ({ivr:.2f}). Use --force-entry to override.",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+            else:
+                print(
+                    f"WARNING: R3 override — Low IVR ({ivr:.2f}) forced.",
+                    file=sys.stderr,
+                )
+        elif 0.25 <= ivr <= 0.50:
             print(
                 f"ATTENTION: IVR is {ivr:.2f} (R3 Entry Window). "
                 "Ensure sufficient premium/margin for potential expansion.",
-                file=sys.stderr,
-            )
-        elif ivr < 0.25:
-            print(
-                f"WARNING: Low IVR ({ivr:.2f}). Risk of volatility expansion is high.",
                 file=sys.stderr,
             )
         else:
@@ -643,8 +662,12 @@ def main() -> None:
             )
             sys.exit(1)
 
-    ivr_at_entry = _get_ivr_and_warn(
-        trade_date, TradeAction(args.action), args.vix_data_dir, args.db_path
+    ivr_at_entry = _get_ivr_and_enforce(
+        trade_date,
+        TradeAction(args.action),
+        args.vix_data_dir,
+        args.db_path,
+        force_entry=args.force_entry,
     )
 
     if args.action == "BUY" and not args.close:
@@ -720,7 +743,26 @@ def main() -> None:
         return
 
     store = PaperStore(args.db_path)
-    store.record_trade(trade)
+    if store.record_trade(trade):
+        if ivr_at_entry is not None and ivr_at_entry < 0.25 and args.force_entry:
+            try:
+                from datetime import datetime
+
+                from src.paper.models import ExitSignal
+
+                store.create_exit_event(
+                    strategy_name=trade.strategy_name,
+                    leg_name=trade.leg_role,
+                    trade_id=trade.instrument_key or "unknown",
+                    event_time=datetime.utcnow(),
+                    detected_by="MANUAL",
+                    exit_signal=ExitSignal.MANUAL_OVERRIDE,
+                    severity="WARNING",
+                    entry_price=trade.price,
+                    notes=f"R3 override: forced entry at low IVR {ivr_at_entry:.2f}",
+                )
+            except Exception as exc:
+                print(f"WARNING: failed to write MANUAL_OVERRIDE event — {exc}", file=sys.stderr)
 
     pos = store.get_position(trade.strategy_name, trade.leg_role)
     if pos.net_qty == 0:
