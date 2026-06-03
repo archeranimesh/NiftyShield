@@ -304,7 +304,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
-| 2026-06-03 | paper-exit-signals ES6 — OverlayCloser class with single leg and collar closure routing + tests — 4b99766 |
+| 2026-06-03 | paper-exit-signals ES6 — OverlayCloser class with single leg and collar closure routing + tests (adjusted for review findings) — 3dafad9 |
 | 2026-06-03 | paper-exit-signals ES5 — CollarOverlayV1 strategy class + 11 unit tests — d25abf7 |
 | 2026-06-03 | paper-exit-signals ES4 — PPOverlayV1 strategy class + 10 unit tests — 681f7db |
 | 2026-06-03 | paper-exit-signals ES3 — CCOverlayV1 strategy class + 11 unit tests — 9ed05fb |
