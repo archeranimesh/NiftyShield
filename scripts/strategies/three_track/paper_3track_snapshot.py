@@ -41,15 +41,15 @@ load_dotenv()
 import argparse
 import asyncio
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
 import structlog
 
 from src.client.upstox_market import UpstoxMarketClient, parse_upstox_option_chain
-from src.models.options import OptionChain, OptionLeg
 from src.config import settings
-from src.instruments.lookup import InstrumentLookup
+from src.instruments.lookup import InstrumentLookup, parse_expiry
+from src.models.options import OptionChain, OptionLeg
 from src.notifications.telegram import TelegramNotifier
 from src.paper._display import (
     BASE_LABELS,
@@ -103,8 +103,18 @@ _OVERLAY_OPTION_TYPE: dict[str, str] = {
 _KEY_EXPIRY_RE = re.compile(r"NIFTY(\d{2})([A-Za-z]{3})(\d{4})(CE|PE)", re.IGNORECASE)
 _KEY_STRIKE_RE = re.compile(r"NIFTY(\d+)(CE|PE)", re.IGNORECASE)
 _MONTH_ABBR: dict[str, int] = {
-    "JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6,
-    "JUL": 7, "AUG": 8, "SEP": 9, "OCT": 10, "NOV": 11, "DEC": 12,
+    "JAN": 1,
+    "FEB": 2,
+    "MAR": 3,
+    "APR": 4,
+    "MAY": 5,
+    "JUN": 6,
+    "JUL": 7,
+    "AUG": 8,
+    "SEP": 9,
+    "OCT": 10,
+    "NOV": 11,
+    "DEC": 12,
 }
 
 
@@ -260,6 +270,207 @@ def _dispatch_evaluate(
         )
 
     return []
+
+    return []
+
+
+def _get_expiry_date(instrument_key: str, instruments: InstrumentLookup) -> date | None:
+    """Resolve the expiry date of an instrument from BOD or by parsing its key."""
+    inst = instruments.get_by_key(instrument_key)
+    if inst:
+        exp_str = inst.get("expiry")
+        if exp_str:
+            expiry_str = parse_expiry(exp_str)
+            if expiry_str:
+                try:
+                    return date.fromisoformat(expiry_str)
+                except ValueError:
+                    pass
+
+    # Fallback: parse options style keys, e.g. NSE_FO|NIFTY29MAY2026PE or NSE_FO|NIFTY26JUN23000CE
+    m = re.search(r"NIFTY(\d{2})([A-Z]{3})(\d{4})", instrument_key, re.IGNORECASE)
+    if m:
+        day = int(m.group(1))
+        mon_str = m.group(2).upper()
+        year = int(m.group(3))
+        month = _MONTH_ABBR.get(mon_str)
+        if month:
+            try:
+                return date(year, month, day)
+            except ValueError:
+                pass
+
+    # Fallback: parse futures style keys, e.g. NSE_FO|NIFTY26JUNFUT or NSE_FO|NIFTYJUN2026FUT
+    m = re.search(r"NIFTY(\d{2})([A-Z]{3})FUT", instrument_key, re.IGNORECASE)
+    if m:
+        try:
+            yy = int(m.group(1))
+            mon_str = m.group(2).upper()
+            month = _MONTH_ABBR.get(mon_str)
+            if month:
+                import calendar
+
+                last_day = calendar.monthrange(2000 + yy, month)[1]
+                d = date(2000 + yy, month, last_day)
+                while d.weekday() != 3:  # Thursday
+                    d -= timedelta(days=1)
+                return d
+        except (ValueError, IndexError):
+            pass
+
+    m = re.search(r"NIFTY([A-Z]{3})(\d{4})FUT", instrument_key, re.IGNORECASE)
+    if m:
+        try:
+            mon_str = m.group(1).upper()
+            year = int(m.group(2))
+            month = _MONTH_ABBR.get(mon_str)
+            if month:
+                import calendar
+
+                last_day = calendar.monthrange(year, month)[1]
+                d = date(year, month, last_day)
+                while d.weekday() != 3:  # Thursday
+                    d -= timedelta(days=1)
+                return d
+        except (ValueError, IndexError):
+            pass
+
+    return None
+
+
+async def _check_base_expiry(
+    positions: list[PaperPosition],
+    instruments: InstrumentLookup,
+    today: date,
+    store: PaperStore,
+    notifier: TelegramNotifier | None,
+) -> None:
+    """Check base futures/DITM options expiry within 5 DTE, log to DB and notify."""
+    # Build dedup set from already-open events dated today
+    today_iso = today.isoformat()
+    existing_events = {
+        (ev["trade_id"], ev["exit_signal"])
+        for ev in store.get_open_exit_events()
+        if ev["event_time"][:10] == today_iso
+    }
+
+    for pos in positions:
+        if pos.leg_role not in {"base_futures", "base_ditm_call"}:
+            continue
+        if pos.net_qty == 0:
+            continue
+
+        # Check idempotency
+        if (pos.instrument_key, "BASE_EXPIRY_ALERT") in existing_events:
+            logger.debug(
+                "base_expiry.dedup_skip",
+                trade_id=pos.instrument_key,
+                exit_signal="BASE_EXPIRY_ALERT",
+            )
+            continue
+
+        expiry_date = _get_expiry_date(pos.instrument_key, instruments)
+        if expiry_date is None:
+            logger.warning("base_expiry.expiry_not_found", instrument_key=pos.instrument_key)
+            continue
+
+        dte = (expiry_date - today).days
+        if dte > 5:
+            continue
+
+        # DTE <= 5: Base position is expiring!
+        next_inst = instruments.get_next_contract(pos.instrument_key)
+        warning_suffix = ""
+        if not next_inst:
+            logger.warning("base_expiry.next_contract_not_found", instrument_key=pos.instrument_key)
+            warning_suffix = "\n\n⚠️ WARNING: BOD may be stale"
+            next_key = "<NEXT_CONTRACT_KEY>"
+            next_symbol = "<NEXT_CONTRACT_SYMBOL>"
+        else:
+            next_key = next_inst.get("instrument_key", "<NEXT_CONTRACT_KEY>")
+            next_symbol = next_inst.get("trading_symbol", "<NEXT_CONTRACT_SYMBOL>")
+
+        # Record event in paper_exit_events
+        event_time = datetime.combine(today, datetime.min.time())
+        is_short = pos.net_qty < 0
+        entry_price = pos.avg_sell_price if is_short else pos.avg_cost
+
+        try:
+            store.create_exit_event(
+                strategy_name=pos.strategy_name,
+                leg_name=pos.leg_role,
+                trade_id=pos.instrument_key,
+                event_time=event_time,
+                detected_by="EOD",
+                exit_signal=ExitSignal("BASE_EXPIRY_ALERT"),
+                severity="WARNING",
+                entry_price=entry_price,
+                snapshot_id=None,
+                ltp=None,
+                bid=None,
+                ask=None,
+                delta=None,
+                dte=dte,
+                threshold_value=5.0,
+                notes=f"Next contract: {next_symbol} ({next_key})",
+            )
+        except Exception as exc:
+            logger.warning("base_expiry.db_write_failed", error=str(exc))
+
+        # Calculate next trading day
+        from src.market_calendar.holidays import is_trading_day
+
+        next_trading_date = today + timedelta(days=1)
+        while not is_trading_day(next_trading_date):
+            next_trading_date += timedelta(days=1)
+
+        # Pre-computed commands
+        close_cmd = (
+            f"python scripts/record/record_paper_trade.py "
+            f"--strategy {pos.strategy_name} "
+            f"--leg {pos.leg_role} "
+            f"--action SELL "
+            f"--qty {abs(pos.net_qty)} "
+            f"--key {pos.instrument_key} "
+            f"--price <SETTLEMENT_LTP> "
+            f"--date {today.isoformat()} "
+            f"--no-dry-run"
+        )
+
+        roll_cmd = (
+            f"python scripts/record/record_paper_trade.py "
+            f"--strategy {pos.strategy_name} "
+            f"--leg {pos.leg_role} "
+            f"--action BUY "
+            f"--qty {abs(pos.net_qty)} "
+            f"--key {next_key} "
+            f"--price <ROLL_LTP> "
+            f"--date {next_trading_date.isoformat()} "
+            f"--no-dry-run"
+        )
+
+        expiring_inst = instruments.get_by_key(pos.instrument_key)
+        expiring_symbol = (
+            expiring_inst.get("trading_symbol", pos.instrument_key)
+            if expiring_inst
+            else pos.instrument_key
+        )
+
+        msg = (
+            f"⚠️ *BASE POSITION EXPIRY ALERT*\n"
+            f"Strategy: {pos.strategy_name}\n"
+            f"Leg: {pos.leg_role}\n"
+            f"Expiring Contract: {expiring_symbol} ({dte} DTE)\n"
+            f"Next Contract: {next_symbol} (Key: {next_key}){warning_suffix}\n\n"
+            f"Settlement Close:\n`{close_cmd}`\n\n"
+            f"Roll Open:\n`{roll_cmd}`"
+        )
+
+        if notifier:
+            try:
+                await notifier.send(msg)
+            except Exception as exc:
+                logger.warning("base_expiry.notification_failed", error=str(exc))
 
 
 async def compute_and_record_exit_signals(
@@ -791,6 +1002,18 @@ async def _run(args: argparse.Namespace) -> None:
                 notifier=notifier,
                 save=save,
             )
+
+        # Check base position expiries (ES11)
+        try:
+            await _check_base_expiry(
+                positions=all_positions,
+                instruments=lookup,
+                today=snap_date,
+                store=store,
+                notifier=notifier,
+            )
+        except Exception as exc:
+            logger.warning("base_expiry.check_failed", error=str(exc))
 
     # Print summary table at the TOP (as requested)
     if summary_rows:

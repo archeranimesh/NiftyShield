@@ -22,6 +22,10 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import structlog
+
+logger = structlog.get_logger()
+
 # Optional fast fuzzy; difflib is stdlib fallback — no hard dependency on rapidfuzz.
 try:
     from rapidfuzz import fuzz as _fuzz  # type: ignore
@@ -353,6 +357,54 @@ class InstrumentLookup:
                 result.append((label, mapping[label]))
 
         return result
+
+    def get_next_contract(self, instrument_key: str) -> dict[str, Any] | None:
+        """Find the next contract in BOD with the same underlying, type, and strike (for options).
+
+        Args:
+            instrument_key: The instrument key of the current contract.
+
+        Returns:
+            The instrument dictionary of the next contract, or None if not found.
+        """
+        current = self.get_by_key(instrument_key)
+        if not current:
+            logger.warning("get_next_contract.current_not_found", instrument_key=instrument_key)
+            return None
+
+        current_expiry_str = parse_expiry(current.get("expiry"))
+        if not current_expiry_str:
+            return None
+
+        underlying = current.get("underlying_symbol")
+        inst_type = current.get("instrument_type")
+        strike = current.get("strike_price") if inst_type in ("CE", "PE") else None
+
+        candidates = []
+        for inst in self._instruments:
+            if inst.get("underlying_symbol") != underlying:
+                continue
+            if inst.get("instrument_type") != inst_type:
+                continue
+            if inst_type in ("CE", "PE") and inst.get("strike_price") != strike:
+                continue
+
+            exp_str = parse_expiry(inst.get("expiry"))
+            if exp_str and exp_str > current_expiry_str:
+                candidates.append((exp_str, inst))
+
+        if not candidates:
+            logger.warning(
+                "get_next_contract.next_not_found",
+                instrument_key=instrument_key,
+                underlying=underlying,
+                inst_type=inst_type,
+            )
+            return None
+
+        # Sort by expiry ascending
+        candidates.sort(key=lambda x: x[0])
+        return candidates[0][1]
 
     @property
     def count(self) -> int:
