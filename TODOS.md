@@ -193,7 +193,7 @@ Invoke `roll-validator` agent ≥1 week before deadline.
 | ES10 | `src/strategy/csp_nifty_v1.py` — R5 re-entry eligibility post profit-target; Telegram alert; tests | ✅ Shipped — c9625e1 |
 | ES11 | `scripts/paper_3track_snapshot.py` + `InstrumentLookup.get_next_contract()` — base expiry alert | ✅ Shipped — 16c7f23 |
 | ES12 | `find_strike_by_delta.py` liquidity gate; `record_paper_trade.py` R3 hard block + `--force-entry` | ✅ Shipped — b86925a |
-| ES9 | Docs close (LAST): DECISIONS.md, CONTEXT.md, TODOS.md; `git mv` council + csp_nifty_v1 to archive | ✅ Shipped — pending |
+| ES9 | Docs close (LAST): DECISIONS.md, CONTEXT.md, TODOS.md; `git mv` council + csp_nifty_v1 to archive | ✅ Shipped — e32b862 |
 
 **Deferred gaps (separate stories — not blocking this task):**
 
@@ -304,7 +304,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
-| 2026-06-03 | paper-exit-signals ES9 — Docs close: DECISIONS.md verification, CONTEXT.md sync, TODOS.md updated; archive council exit-philosophy and csp_nifty_v1 spec — pending |
+| 2026-06-03 | paper-exit-signals ES9 — Docs close: DECISIONS.md verification, CONTEXT.md sync, TODOS.md updated; archive council exit-philosophy and csp_nifty_v1 spec — e32b862 |
 | 2026-06-03 | paper-exit-signals ES12 — Enforce liquidity gate in find_strike_by_delta.py and R3 hard block in record_paper_trade.py + 11 tests — b86925a |
 | 2026-06-03 | paper-exit-signals ES11 — Base position expiry detection (DTE <= 5), get_next_contract in InstrumentLookup, roll commands Telegram alert + 5 tests — 16c7f23 |
 | 2026-06-03 | paper-exit-signals ES10 — CSPNiftyV1 R5 re-entry eligibility: __init__, PROFIT_TARGET action_type, _check_r5_reentry (DTE/IVR/open-pos gates), paper_exit_events write + Telegram + 9 tests — c9625e1 |
