@@ -18,7 +18,7 @@
 
 ## Phase ES1 — Rule Engine
 
-- [ ] **ES1** `[Antigravity]` — `ExitSignalEngine` (CSP, CC, PP, Collar rules) + tests | SHA: ___
+- [x] **ES1** `[Antigravity]` — `ExitSignalEngine` (CSP, CC, PP, Collar rules) + tests | SHA: 2de33eb
 
 ## Phase ES2 — CSP Fix
 
