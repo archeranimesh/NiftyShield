@@ -340,7 +340,7 @@ class PaperStore:
         """
         with _connect(self.db_path) as conn:
             rows = conn.execute(
-                "SELECT leg_role, action, quantity, price, instrument_key"
+                "SELECT leg_role, action, quantity, price, instrument_key, trade_date"
                 " FROM paper_trades"
                 " WHERE strategy_name = ?"
                 " ORDER BY trade_date ASC, id ASC",
@@ -362,6 +362,7 @@ class PaperStore:
             sell_total_qty = 0
             sell_total_cost = Decimal("0")
             instrument_key = ""
+            first_sell_date: date | None = None
 
             for row in rows_for_leg:
                 instrument_key = row["instrument_key"]
@@ -375,6 +376,11 @@ class PaperStore:
                     net_qty -= qty
                     sell_total_qty += qty
                     sell_total_cost += price * qty
+                    if first_sell_date is None:
+                        raw = row["trade_date"]
+                        first_sell_date = (
+                            date.fromisoformat(raw) if isinstance(raw, str) else raw
+                        )
 
             avg_cost = buy_total_cost / buy_total_qty if buy_total_qty > 0 else Decimal("0")
             avg_sell_price = (
@@ -389,6 +395,7 @@ class PaperStore:
                     avg_cost=avg_cost,
                     avg_sell_price=avg_sell_price,
                     instrument_key=instrument_key,
+                    entry_date=first_sell_date,
                 )
             )
         return positions

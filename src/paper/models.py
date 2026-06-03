@@ -106,6 +106,8 @@ class PaperPosition:
         avg_cost: Weighted average price of BUY trades. Zero if no BUYs.
         avg_sell_price: Weighted average price of SELL trades. Zero if no SELLs.
         instrument_key: Upstox key for the current open position.
+        entry_date: Date of first SELL trade for the leg. None for purely long
+            legs or positions recorded before this field was added.
     """
 
     strategy_name: str
@@ -114,6 +116,7 @@ class PaperPosition:
     avg_cost: Decimal
     avg_sell_price: Decimal
     instrument_key: str
+    entry_date: date | None = None
 
 
 @dataclass(frozen=True)

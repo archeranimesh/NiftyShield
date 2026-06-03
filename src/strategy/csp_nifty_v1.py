@@ -4,21 +4,24 @@ Implements PaperStrategy protocol so StrategyMonitor can auto-detect exit
 signals for the paper_csp_nifty_v1 strategy.  Entry remains manual via
 ``record_paper_trade.py``.
 
-Signal table
-------------
-| Event type    | Severity | Trigger                              |
-|---------------|----------|--------------------------------------|
-| PROFIT_TARGET | ACTION   | mark ≤ 50% of entry credit           |
-| LOSS_STOP     | ACTION   | mark ≥ 2.0× entry credit             |
-| DELTA_STOP    | ACTION   | short put |delta| ≥ 0.35             |
-| TIME_STOP     | ACTION   | DTE ≤ 21                             |
-| ROLL_DUE_DTE  | WARN     | DTE ≤ 5                              |
-| ROLL_DUE_DECAY| WARN     | current premium ≤ 25% of entry credit|
-| DELTA_WARN    | WARN     | short put |delta| ≥ 0.25             |
+Signal table (council-spec 2026-05-28)
+---------------------------------------
+| Event type    | Severity | Trigger                                       |
+|---------------|----------|-----------------------------------------------|
+| PROFIT_TARGET | ACTION   | mark ≤ 50% of entry credit                    |
+| LOSS_STOP     | ACTION   | mark ≥ 1.75× entry credit                     |
+| DELTA_STOP    | ACTION   | short put |delta| ≥ 0.45                      |
+| TIME_STOP     | ACTION   | 21 calendar days elapsed since entry          |
+| DTE_REVIEW    | WARN     | DTE ≤ 5                                       |
+| DELTA_WARN    | WARN     | short put |delta| ≥ 0.35                      |
 
-Multiple signals may fire in a single tick (e.g. DELTA_STOP also triggers
-DELTA_WARN).  ACTION signals gate a council + Telegram approval flow;
-WARN signals send a plain Telegram message.
+Multiple signals may fire in a single tick.  ACTION signals gate a council +
+Telegram approval flow; WARN signals send a plain Telegram message.
+
+Note: TIME_STOP is ``days_held ≥ 21`` (calendar days since first SELL trade),
+NOT ``DTE ≤ 21``.  These are different: a position entered with 5 DTE remaining
+would never trigger a DTE-based check; the days-held check fires 21 days after
+entry regardless of expiry distance.
 """
 
 from __future__ import annotations
@@ -31,6 +34,7 @@ import structlog
 
 from src.models.options import OptionChain, OptionLeg
 from src.paper.models import PaperPosition
+from src.strategy.exit_signals import ExitSignalEngine
 from src.strategy.protocol import ApprovedAction, SignalEvent
 
 log = structlog.get_logger(__name__)
@@ -47,15 +51,10 @@ _EXPIRY_RE = re.compile(
 # Does NOT match date-embedded keys (digit run broken by alpha month chars).
 _STRIKE_RE = re.compile(r"NIFTY(\d+)(PE|CE)", re.IGNORECASE)
 
-# ── Thresholds ────────────────────────────────────────────────────────────────
-
-_PROFIT_TARGET_PCT = Decimal("0.50")   # fraction: mark/entry_credit ≤ 0.50 (50% remaining)
-_LOSS_STOP_PCT = Decimal("2.0")        # fraction: mark/entry_credit ≥ 2.0 (200% of entry — 2× loss)
-_DECAY_WARN_PCT = Decimal("0.25")      # mark ≤ 25% of entry credit
-_DELTA_STOP = Decimal("0.35")          # |delta| ≥ 0.35
-_DELTA_WARN = Decimal("0.25")          # |delta| ≥ 0.25
-_TIME_STOP_DTE = 21                    # DTE ≤ 21
-_ROLL_DTE = 5                          # DTE ≤ 5
+# Thresholds are owned by ExitSignalEngine (exit_signals.py).
+# Constants here are kept only for docstring / describe_context reference.
+_TIME_STOP_DAYS = 21   # days_held ≥ 21 (calendar days since entry SELL trade)
+_ROLL_DTE = 5          # DTE_REVIEW WARN threshold
 
 
 class CSPNiftyV1:
@@ -75,13 +74,13 @@ class CSPNiftyV1:
         market: OptionChain,
         positions: list[PaperPosition],
     ) -> list[SignalEvent]:
-        """Evaluate exit and roll signals for all open short-put positions.
+        """Evaluate exit and warning signals for all open short-put positions.
 
         Filters positions to ``strategy_name == "paper_csp_nifty_v1"`` and
         ``net_qty < 0`` (short).  Returns ``[]`` when no open positions exist.
 
-        Multiple signals may fire simultaneously; callers should not assume
-        exclusivity.
+        Delegates threshold evaluation to ``ExitSignalEngine.evaluate_csp()``.
+        Multiple signals may fire simultaneously.
 
         Args:
             market: Current Nifty 50 option chain snapshot.
@@ -91,6 +90,7 @@ class CSPNiftyV1:
             List of detected SignalEvents; empty list when nothing to act on.
         """
         events: list[SignalEvent] = []
+        today = date.today()
 
         for pos in positions:
             if pos.strategy_name != self.strategy_name:
@@ -98,121 +98,47 @@ class CSPNiftyV1:
             if pos.net_qty >= 0:
                 continue  # only short legs trigger signals
 
-            entry_credit = pos.avg_sell_price
             put_leg = self._find_put_leg(market, pos.instrument_key)
             expiry = self._parse_expiry(pos.instrument_key)
-            dte = (expiry - date.today()).days if expiry is not None else None
+            dte = (expiry - today).days if expiry is not None else 9999
 
-            # ── DTE signals ──────────────────────────────────────────────────
-            if dte is not None:
-                if dte <= _TIME_STOP_DTE:
-                    events.append(
-                        SignalEvent(
-                            event_type="TIME_STOP",
-                            severity="ACTION",
-                            description=(
-                                f"DTE {dte} ≤ {_TIME_STOP_DTE} — time stop triggered"
-                            ),
-                            payload={"dte": dte, "leg_role": pos.leg_role},
-                        )
-                    )
-                if dte <= _ROLL_DTE:
-                    events.append(
-                        SignalEvent(
-                            event_type="ROLL_DUE_DTE",
-                            severity="WARN",
-                            description=f"DTE {dte} ≤ {_ROLL_DTE} — consider rolling",
-                            payload={"dte": dte, "leg_role": pos.leg_role},
-                        )
-                    )
+            days_held = (today - pos.entry_date).days if pos.entry_date is not None else 0
 
-            # ── Delta signals ─────────────────────────────────────────────────
-            if put_leg is not None:
-                abs_delta = abs(put_leg.delta)
-                if abs_delta >= _DELTA_STOP:
-                    events.append(
-                        SignalEvent(
-                            event_type="DELTA_STOP",
-                            severity="ACTION",
-                            description=(
-                                f"|delta| {abs_delta} ≥ {_DELTA_STOP} — delta stop triggered"
-                            ),
-                            payload={
-                                "delta": str(put_leg.delta),
-                                "leg_role": pos.leg_role,
-                            },
-                        )
-                    )
-                if abs_delta >= _DELTA_WARN:
-                    events.append(
-                        SignalEvent(
-                            event_type="DELTA_WARN",
-                            severity="WARN",
-                            description=(
-                                f"|delta| {abs_delta} ≥ {_DELTA_WARN} — delta warning"
-                            ),
-                            payload={
-                                "delta": str(put_leg.delta),
-                                "leg_role": pos.leg_role,
-                            },
-                        )
-                    )
+            delta = float(put_leg.delta) if put_leg is not None else None
+            current_mark = float(put_leg.ltp) if put_leg is not None else 0.0
+            entry_price = float(pos.avg_sell_price)
 
-            # ── Mark-based signals ────────────────────────────────────────────
-            if put_leg is not None and entry_credit > Decimal("0"):
-                mark = put_leg.ltp
-                pct = mark / entry_credit
-                if pct <= _PROFIT_TARGET_PCT:
-                    events.append(
-                        SignalEvent(
-                            event_type="PROFIT_TARGET",
-                            severity="ACTION",
-                            description=(
-                                f"Mark {mark} ≤ {int(_PROFIT_TARGET_PCT * 100)}%"
-                                f" of entry credit {entry_credit}"
-                            ),
-                            payload={
-                                "mark": str(mark),
-                                "entry_credit": str(entry_credit),
-                                "pct_captured": str(
-                                    (Decimal("1") - pct).quantize(Decimal("0.01"))
-                                ),
-                                "leg_role": pos.leg_role,
-                            },
-                        )
+            results = ExitSignalEngine.evaluate_csp(
+                entry_price=entry_price,
+                current_mark=current_mark,
+                delta=delta,
+                days_held=days_held,
+                dte=dte,
+            )
+
+            for result in results:
+                payload: dict = {"leg_role": pos.leg_role}
+                if put_leg is not None:
+                    payload["delta"] = str(put_leg.delta)
+                    payload["mark"] = str(put_leg.ltp)
+                    payload["entry_credit"] = str(pos.avg_sell_price)
+                if result.delta_stop_would_fire is not None:
+                    payload["delta_stop_would_fire"] = result.delta_stop_would_fire
+                if result.premium_stop_would_fire is not None:
+                    payload["premium_stop_would_fire"] = result.premium_stop_would_fire
+                if result.actual_rule_used is not None:
+                    payload["actual_rule_used"] = result.actual_rule_used
+                payload["days_held"] = days_held
+                payload["dte"] = dte
+
+                events.append(
+                    SignalEvent(
+                        event_type=result.exit_signal,
+                        severity=result.severity,
+                        description=result.notes or result.exit_signal,
+                        payload=payload,
                     )
-                if pct >= _LOSS_STOP_PCT:
-                    events.append(
-                        SignalEvent(
-                            event_type="LOSS_STOP",
-                            severity="ACTION",
-                            description=(
-                                f"Mark {mark} ≥ {int(_LOSS_STOP_PCT * 100)}%"
-                                f" of entry credit {entry_credit}"
-                            ),
-                            payload={
-                                "mark": str(mark),
-                                "entry_credit": str(entry_credit),
-                                "leg_role": pos.leg_role,
-                            },
-                        )
-                    )
-                if pct <= _DECAY_WARN_PCT:
-                    events.append(
-                        SignalEvent(
-                            event_type="ROLL_DUE_DECAY",
-                            severity="WARN",
-                            description=(
-                                f"Mark {mark} ≤ {int(_DECAY_WARN_PCT * 100)}%"
-                                f" of entry credit {entry_credit} — consider rolling"
-                            ),
-                            payload={
-                                "mark": str(mark),
-                                "entry_credit": str(entry_credit),
-                                "leg_role": pos.leg_role,
-                            },
-                        )
-                    )
+                )
 
         return events
 
