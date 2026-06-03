@@ -52,7 +52,7 @@
 
 ## Phase ES12 — Entry Discipline
 
-- [ ] **ES12** `[Antigravity]` — Liquidity gate enforcement in `find_strike_by_delta.py`; R3 hard block + `--force-entry` in `record_paper_trade.py` + tests | SHA: ___
+- [x] **ES12** `[Antigravity]` — Liquidity gate enforcement in `find_strike_by_delta.py`; R3 hard block + `--force-entry` in `record_paper_trade.py` + tests | SHA: b86925a
 
 ## Phase ES9 — Docs Close + Archive (MUST BE LAST)
 
