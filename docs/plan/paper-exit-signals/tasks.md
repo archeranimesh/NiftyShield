@@ -1,6 +1,8 @@
 # paper-exit-signals — Task Checklist
 
-> Find the first unchecked item. That is your only task for this session.
+> Find the first unchecked item **assigned to you**. That is your only task for this session.
+> Each task is tagged `[Claude]` or `[Antigravity]` — only pick up tasks tagged for you.
+> If the next unchecked task is tagged for the other agent, stop and hand off.
 > After completing: tick the box, append `| SHA: <sha>`, add one line to TODOS.md.
 
 **Prerequisite gate (check before ES0):**
@@ -12,49 +14,49 @@
 
 ## Phase ES0 — Schema
 
-- [ ] ES0 — `paper_exit_events` table + PaperStore methods + tests | SHA: ___
+- [ ] **ES0** `[Antigravity]` — `paper_exit_events` table + `PaperStore` methods + tests | SHA: ___
 
 ## Phase ES1 — Rule Engine
 
-- [ ] ES1 — `ExitSignalEngine` (CSP, CC, PP, Collar rules) + tests | SHA: ___
+- [ ] **ES1** `[Antigravity]` — `ExitSignalEngine` (CSP, CC, PP, Collar rules) + tests | SHA: ___
 
 ## Phase ES2 — CSP Fix
 
-- [ ] ES2 — Fix `CSPNiftyV1` thresholds (delta 0.45, loss 1.75×) + re-test | SHA: ___
+- [ ] **ES2** `[Claude]` — Fix `CSPNiftyV1` thresholds (delta 0.45, loss 1.75×) + re-test | SHA: ___
 
 ## Phase ES3–ES5 — Strategy Classes
 
-- [ ] ES3 — `CCOverlayV1` + tests | SHA: ___
-- [ ] ES4 — `PPOverlayV1` + tests | SHA: ___
-- [ ] ES5 — `CollarOverlayV1` + tests | SHA: ___
+- [ ] **ES3** `[Antigravity]` — `CCOverlayV1` + tests | SHA: ___
+- [ ] **ES4** `[Antigravity]` — `PPOverlayV1` + tests | SHA: ___
+- [ ] **ES5** `[Antigravity]` — `CollarOverlayV1` + tests | SHA: ___
 
 ## Phase ES6 — Closure
 
-- [ ] ES6 — `OverlayCloser` (atomic Collar close + rollback) + tests | SHA: ___
+- [ ] **ES6** `[Antigravity]` — `OverlayCloser` (atomic Collar close + rollback) + tests | SHA: ___
 
 ## Phase ES7 — EOD Integration
 
-- [ ] ES7 — Tier 1 EOD signal write in `paper_3track_snapshot.py` + tests | SHA: ___
+- [ ] **ES7** `[Claude]` — Tier 1 EOD signal write in `paper_3track_snapshot.py` + tests | SHA: ___
 
 ## Phase ES8 — Daemon Integration
 
-- [ ] ES8 — Register overlay strategies in daemon; `MONITOR_OVERLAYS` gate | SHA: ___
+- [ ] **ES8** `[Claude]` — Register overlay strategies in daemon; `MONITOR_OVERLAYS` gate | SHA: ___
 
 ## Phase ES10 — CSP Lifecycle: R5 Re-entry
 
-- [ ] ES10 — R5 re-entry eligibility check in `CSPNiftyV1.apply_action(PROFIT_TARGET)` + Telegram alert + tests | SHA: ___
+- [ ] **ES10** `[Claude]` — R5 re-entry eligibility check in `CSPNiftyV1.apply_action(PROFIT_TARGET)` + Telegram alert + tests | SHA: ___
 
 ## Phase ES11 — Base Expiry Roll Detection
 
-- [ ] ES11 — Base expiry detection in `paper_3track_snapshot.py`; `get_next_contract()` in `InstrumentLookup`; Telegram alert with roll commands + tests | SHA: ___
+- [ ] **ES11** `[Antigravity]` — Base expiry detection in `paper_3track_snapshot.py`; `get_next_contract()` in `InstrumentLookup`; Telegram alert with roll commands + tests | SHA: ___
 
 ## Phase ES12 — Entry Discipline
 
-- [ ] ES12 — Liquidity gate enforcement in `find_strike_by_delta.py`; R3 hard block + `--force-entry` in `record_paper_trade.py` + tests | SHA: ___
+- [ ] **ES12** `[Antigravity]` — Liquidity gate enforcement in `find_strike_by_delta.py`; R3 hard block + `--force-entry` in `record_paper_trade.py` + tests | SHA: ___
 
 ## Phase ES9 — Docs Close + Archive (MUST BE LAST)
 
-- [ ] ES9 — DECISIONS.md (10 rows), CONTEXT.md, TODOS.md; archive council + csp_nifty_v1 spec | SHA: ___
+- [ ] **ES9** `[Claude]` — `DECISIONS.md` (10 rows), `CONTEXT.md`, `TODOS.md`; archive council + `csp_nifty_v1` spec | SHA: ___
 
 ---
 

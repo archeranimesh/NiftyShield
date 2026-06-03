@@ -19,7 +19,7 @@ import pytest
 from src.models.options import OptionChain, OptionChainStrike, OptionLeg
 from src.paper.models import PaperPosition
 from src.strategy.csp_nifty_v1 import CSPNiftyV1
-from src.strategy.protocol import ApprovedAction, LegSpec
+from src.strategy.protocol import ApprovedAction
 
 _STRATEGY = "paper_csp_nifty_v1"
 _OTHER_STRATEGY = "paper_other_v1"
@@ -94,7 +94,7 @@ def _expiry_key(dte: int) -> str:
 
 
 def _run(coro):  # type: ignore[no-untyped-def]
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return asyncio.run(coro)
 
 
 # ── check_signals — no positions ──────────────────────────────────────────────
@@ -227,8 +227,6 @@ def test_no_events_when_healthy() -> None:
     """No signals when mark = 60%, |delta| = 0.20, DTE = 30."""
     strategy = CSPNiftyV1()
     # Build key with expiry 30 days out AND strike embedded
-    expiry = date.today() + timedelta(days=30)
-    date_str = expiry.strftime("%d%b%Y").upper()
     # Use a numeric key (no expiry encoded) paired with a chain strike for mark/delta
     chain = _make_chain(ltp="48", delta="-0.20")  # 48/80 = 0.60
     pos = _make_position(

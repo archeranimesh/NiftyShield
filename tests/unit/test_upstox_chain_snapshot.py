@@ -205,14 +205,17 @@ def test_base_dir_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     mock_writer_cls.assert_called_once_with(custom_dir)
 
 
-def test_log_output_includes_expiry_and_rows(
-    capsys,
-) -> None:
-    """INFO log entry per expiry includes expiry date and row count."""
+def test_log_output_includes_expiry_and_rows() -> None:
+    """INFO log entry per expiry includes expiry date and row count.
+
+    Patches the module-level logger directly: avoids the structlog/stdlib/caplog
+    interaction where basicConfig(force=True) strips pytest's LogCaptureHandler.
+    """
     mock_chain = _make_mock_chain(n_strikes=4)
     mock_lookup = _make_mock_lookup(THREE_EXPIRIES)
 
     with (
+        patch(f"{_SCRIPT_MODULE}.logger") as mock_logger,
         patch(f"{_SCRIPT_MODULE}.is_trading_day", return_value=True),
         patch(f"{_SCRIPT_MODULE}.InstrumentLookup") as mock_lu_cls,
         patch(f"{_SCRIPT_MODULE}.UpstoxMarketClient"),
@@ -229,9 +232,10 @@ def test_log_output_includes_expiry_and_rows(
         result = main()
 
     assert result == 0
-    # At least one log record per expiry mentioning expiry date and rows
-    captured = capsys.readouterr()
-    log_text = captured.out
+    # Flatten all positional args from every logger.info() call into one string.
+    all_args = [str(arg) for call in mock_logger.info.call_args_list for arg in call.args]
+    logged = " ".join(all_args)
     for _, expiry_str in THREE_EXPIRIES:
-        assert expiry_str in log_text, f"Expected expiry {expiry_str} in log"
-    assert "rows=" in log_text
+        assert expiry_str in logged, f"Expected expiry {expiry_str} in logger.info args"
+    # "rows=%d" is in the format string — confirms the snapshot-written branch ran.
+    assert any("rows=" in str(call.args[0]) for call in mock_logger.info.call_args_list)
