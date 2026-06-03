@@ -40,11 +40,11 @@
 
 ## Phase ES8 — Daemon Integration
 
-- [ ] **ES8** `[Claude]` — Register overlay strategies in daemon; `MONITOR_OVERLAYS` gate | SHA: ___
+- [x] **ES8** `[Claude]` — Register overlay strategies in daemon; `MONITOR_OVERLAYS` gate | SHA: 7c23864
 
 ## Phase ES10 — CSP Lifecycle: R5 Re-entry
 
-- [ ] **ES10** `[Claude]` — R5 re-entry eligibility check in `CSPNiftyV1.apply_action(PROFIT_TARGET)` + Telegram alert + tests | SHA: ___
+- [x] **ES10** `[Claude]` — R5 re-entry eligibility check in `CSPNiftyV1.apply_action(PROFIT_TARGET)` + Telegram alert + tests | SHA: ___
 
 ## Phase ES11 — Base Expiry Roll Detection
 

@@ -19,11 +19,16 @@ from __future__ import annotations
 import asyncio
 from datetime import date, timedelta
 from decimal import Decimal
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import numpy as np
+import pandas as pd
 import pytest
 
 from src.models.options import OptionChain, OptionChainStrike, OptionLeg
-from src.paper.models import PaperPosition
+from src.paper.models import PaperPosition, PaperTrade, TradeAction
+from src.paper.store import PaperStore
 from src.strategy.csp_nifty_v1 import CSPNiftyV1
 from src.strategy.protocol import ApprovedAction
 
@@ -340,7 +345,7 @@ def test_apply_action_adjust_raises_value_error() -> None:
         rationale="test",
         council_rank=1,
     )
-    with pytest.raises(ValueError, match="CLOSE_FULL"):
+    with pytest.raises(ValueError, match="CLOSE_FULL or PROFIT_TARGET"):
         _run(strategy.apply_action([pos], action))
 
 
@@ -379,3 +384,201 @@ def test_describe_context_handles_no_positions() -> None:
     )
     ctx = strategy.describe_context(event, _make_empty_chain(), [])
     assert "No open short-put positions" in ctx
+
+
+# ── ES10: R5 re-entry eligibility ────────────────────────────────────────────
+
+
+def _make_vix_series(ivr: float, length: int = 252) -> pd.Series:
+    """Build a VIX series of ``length`` elements that yields ``ivr`` exactly.
+
+    Uses vix_low=10, vix_high=30 → vix_today = 10 + ivr * 20.
+    Last element of the series is vix_today.
+    """
+    vix_today = 10.0 + ivr * 20.0
+    values = np.linspace(10.0, 30.0, length - 1).tolist() + [vix_today]
+    return pd.Series(values, dtype="float64")
+
+
+def _make_profit_target_action(legs: list[str] | None = None) -> ApprovedAction:
+    return ApprovedAction(
+        action_type="PROFIT_TARGET",
+        legs_to_close=legs or ["short_put"],
+        legs_to_open=[],
+        rationale="profit target hit",
+        council_rank=1,
+    )
+
+
+def _r5_expiry_key(dte: int) -> str:
+    """Build an instrument key with an embedded expiry ``dte`` days from today."""
+    expiry = date.today() + timedelta(days=dte)
+    date_str = expiry.strftime("%d%b%Y").upper()
+    return f"NSE_FO|NIFTY{date_str}PE"
+
+
+# ── R5 gate 1: DTE ───────────────────────────────────────────────────────────
+
+
+def test_r5_eligible_when_all_gates_pass(tmp_path: Path) -> None:
+    """R5_REENTRY_ELIGIBLE written and notifier called when DTE=15, IVR=0.30, no open pos."""
+    store = PaperStore(str(tmp_path / "db.sqlite"))
+    notifier = MagicMock()
+    notifier.send_plain_message = AsyncMock(return_value=True)
+    strategy = CSPNiftyV1(store=store, notifier=notifier)
+
+    vix_series = _make_vix_series(ivr=0.30)
+    with patch("src.strategy.csp_nifty_v1.load_vix_series", return_value=vix_series):
+        pos = _make_position(instrument_key=_r5_expiry_key(15), avg_sell_price="80")
+        _run(strategy.apply_action([pos], _make_profit_target_action()))
+
+    events = store.get_open_exit_events(strategy_name="paper_csp_nifty_v1")
+    signals = [e["exit_signal"] for e in events]
+    assert "R5_REENTRY_ELIGIBLE" in signals
+    notifier.send_plain_message.assert_awaited_once()
+
+
+def test_r5_blocked_when_dte_less_than_14(tmp_path: Path) -> None:
+    """R5_REENTRY_BLOCKED when DTE=13 (< 14)."""
+    store = PaperStore(str(tmp_path / "db.sqlite"))
+    strategy = CSPNiftyV1(store=store)
+
+    vix_series = _make_vix_series(ivr=0.30)
+    with patch("src.strategy.csp_nifty_v1.load_vix_series", return_value=vix_series):
+        pos = _make_position(instrument_key=_r5_expiry_key(13), avg_sell_price="80")
+        _run(strategy.apply_action([pos], _make_profit_target_action()))
+
+    events = store.get_open_exit_events(strategy_name="paper_csp_nifty_v1")
+    blocked = [e for e in events if e["exit_signal"] == "R5_REENTRY_BLOCKED"]
+    assert blocked
+    assert "DTE" in blocked[0]["notes"]
+
+
+# ── R5 gate 2: IVR ───────────────────────────────────────────────────────────
+
+
+def test_r5_blocked_when_ivr_below_floor(tmp_path: Path) -> None:
+    """R5_REENTRY_BLOCKED when IVR=0.22 (< 0.25)."""
+    store = PaperStore(str(tmp_path / "db.sqlite"))
+    strategy = CSPNiftyV1(store=store)
+
+    vix_series = _make_vix_series(ivr=0.22)
+    with patch("src.strategy.csp_nifty_v1.load_vix_series", return_value=vix_series):
+        pos = _make_position(instrument_key=_r5_expiry_key(20), avg_sell_price="80")
+        _run(strategy.apply_action([pos], _make_profit_target_action()))
+
+    events = store.get_open_exit_events(strategy_name="paper_csp_nifty_v1")
+    blocked = [e for e in events if e["exit_signal"] == "R5_REENTRY_BLOCKED"]
+    assert blocked
+    assert "IVR" in blocked[0]["notes"]
+
+
+def test_r5_blocked_when_ivr_history_insufficient(tmp_path: Path) -> None:
+    """R5_REENTRY_BLOCKED when VIX series has < 252 entries (IVR returns None)."""
+    store = PaperStore(str(tmp_path / "db.sqlite"))
+    strategy = CSPNiftyV1(store=store)
+
+    short_series = pd.Series([15.0, 18.0, 20.0], dtype="float64")  # < 252 entries
+    with patch("src.strategy.csp_nifty_v1.load_vix_series", return_value=short_series):
+        pos = _make_position(instrument_key=_r5_expiry_key(20), avg_sell_price="80")
+        _run(strategy.apply_action([pos], _make_profit_target_action()))
+
+    events = store.get_open_exit_events(strategy_name="paper_csp_nifty_v1")
+    blocked = [e for e in events if e["exit_signal"] == "R5_REENTRY_BLOCKED"]
+    assert blocked
+    assert "IVR history" in blocked[0]["notes"]
+
+
+def test_r5_blocked_when_vix_series_empty(tmp_path: Path) -> None:
+    """R5_REENTRY_BLOCKED when VIX series is empty (IVR history unavailable)."""
+    store = PaperStore(str(tmp_path / "db.sqlite"))
+    strategy = CSPNiftyV1(store=store)
+
+    with patch(
+        "src.strategy.csp_nifty_v1.load_vix_series", return_value=pd.Series(dtype="float64")
+    ):
+        pos = _make_position(instrument_key=_r5_expiry_key(20), avg_sell_price="80")
+        _run(strategy.apply_action([pos], _make_profit_target_action()))
+
+    events = store.get_open_exit_events(strategy_name="paper_csp_nifty_v1")
+    blocked = [e for e in events if e["exit_signal"] == "R5_REENTRY_BLOCKED"]
+    assert blocked
+    assert "IVR history" in blocked[0]["notes"]
+
+
+# ── R5 gate 3: open position guard ───────────────────────────────────────────
+
+
+def test_r5_blocked_when_short_put_already_open(tmp_path: Path) -> None:
+    """R5_REENTRY_BLOCKED when another short_put position is already open."""
+    store = PaperStore(str(tmp_path / "db.sqlite"))
+    strategy = CSPNiftyV1(store=store)
+
+    # Record an open short_put in the store so gate 3 fires.
+    store.record_trade(
+        PaperTrade(
+            strategy_name="paper_csp_nifty_v1",
+            leg_role="short_put",
+            action=TradeAction.SELL,
+            quantity=65,
+            price="100",
+            instrument_key="NSE_FO|NIFTY23000PE",
+            trade_date=date.today(),
+        )
+    )
+
+    vix_series = _make_vix_series(ivr=0.30)
+    with patch("src.strategy.csp_nifty_v1.load_vix_series", return_value=vix_series):
+        pos = _make_position(instrument_key=_r5_expiry_key(20), avg_sell_price="80")
+        _run(strategy.apply_action([pos], _make_profit_target_action()))
+
+    events = store.get_open_exit_events(strategy_name="paper_csp_nifty_v1")
+    blocked = [e for e in events if e["exit_signal"] == "R5_REENTRY_BLOCKED"]
+    assert blocked
+    assert "open position" in blocked[0]["notes"]
+
+
+# ── Integration: apply_action(PROFIT_TARGET) ─────────────────────────────────
+
+
+def test_apply_action_profit_target_closes_and_runs_r5(tmp_path: Path) -> None:
+    """apply_action(PROFIT_TARGET) filters positions AND writes an R5 event."""
+    store = PaperStore(str(tmp_path / "db.sqlite"))
+    notifier = MagicMock()
+    notifier.send_plain_message = AsyncMock(return_value=True)
+    strategy = CSPNiftyV1(store=store, notifier=notifier)
+
+    vix_series = _make_vix_series(ivr=0.30)
+    with patch("src.strategy.csp_nifty_v1.load_vix_series", return_value=vix_series):
+        pos = _make_position(instrument_key=_r5_expiry_key(20), avg_sell_price="80")
+        remaining = _run(strategy.apply_action([pos], _make_profit_target_action()))
+
+    # Close was recorded in positions list.
+    assert all(p.leg_role != "short_put" for p in remaining)
+
+    # R5 eligibility event was written.
+    events = store.get_open_exit_events(strategy_name="paper_csp_nifty_v1")
+    assert any(e["exit_signal"] in ("R5_REENTRY_ELIGIBLE", "R5_REENTRY_BLOCKED") for e in events)
+
+    # Notifier was called.
+    notifier.send_plain_message.assert_awaited_once()
+
+
+# ── Non-fatal: notifier raises ────────────────────────────────────────────────
+
+
+def test_r5_event_written_even_when_notifier_raises(tmp_path: Path) -> None:
+    """Exit event is written to DB even when notifier.send_plain_message raises."""
+    store = PaperStore(str(tmp_path / "db.sqlite"))
+    notifier = MagicMock()
+    notifier.send_plain_message = AsyncMock(side_effect=RuntimeError("telegram down"))
+    strategy = CSPNiftyV1(store=store, notifier=notifier)
+
+    vix_series = _make_vix_series(ivr=0.30)
+    with patch("src.strategy.csp_nifty_v1.load_vix_series", return_value=vix_series):
+        pos = _make_position(instrument_key=_r5_expiry_key(20), avg_sell_price="80")
+        # Must not raise even though notifier throws.
+        _run(strategy.apply_action([pos], _make_profit_target_action()))
+
+    events = store.get_open_exit_events(strategy_name="paper_csp_nifty_v1")
+    assert any(e["exit_signal"] in ("R5_REENTRY_ELIGIBLE", "R5_REENTRY_BLOCKED") for e in events)

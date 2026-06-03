@@ -187,9 +187,9 @@ Invoke `roll-validator` agent ≥1 week before deadline.
 | ES3 | `src/strategy/cc_overlay_v1.py` — `CCOverlayV1`; dual-signal audit; tests | ⬜ Not started |
 | ES4 | `src/strategy/pp_overlay_v1.py` — `PPOverlayV1`; `CRASH_MONETIZE` + bid/ask gate; tests | ⬜ Not started |
 | ES5 | `src/strategy/collar_overlay_v1.py` — `CollarOverlayV1`; 4-path closure routing; tests | ⬜ Not started |
-| ES6 | `src/strategy/overlay_closer.py` — `OverlayCloser`; atomic Collar close + rollback; tests | ⬜ Not started |
+| ES6 | `src/strategy/overlay_closer.py` — `OverlayCloser`; atomic Collar close + rollback; tests | ✅ Shipped — 3dafad9 |
 | ES7 | `scripts/paper_3track_snapshot.py` — Tier 1 EOD signal write + Telegram alert + deduplication | ✅ Shipped — 1d40d8f |
-| ES8 | `scripts/monitor_daemon.py` — register CC/PP/Collar overlays; `MONITOR_OVERLAYS` gate | ⬜ Not started |
+| ES8 | `scripts/monitor_daemon.py` — register CC/PP/Collar overlays; `MONITOR_OVERLAYS` gate | ✅ Shipped — 7c23864 |
 | ES10 | `src/strategy/csp_nifty_v1.py` — R5 re-entry eligibility post profit-target; Telegram alert; tests | ⬜ Not started |
 | ES11 | `scripts/paper_3track_snapshot.py` + `InstrumentLookup.get_next_contract()` — base expiry alert | ⬜ Not started |
 | ES12 | `find_strike_by_delta.py` liquidity gate; `record_paper_trade.py` R3 hard block + `--force-entry` | ⬜ Not started |
@@ -304,6 +304,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-06-03 | paper-exit-signals ES10 — CSPNiftyV1 R5 re-entry eligibility: __init__, PROFIT_TARGET action_type, _check_r5_reentry (DTE/IVR/open-pos gates), paper_exit_events write + Telegram + 9 tests — SHA: pending |
 | 2026-06-03 | paper-exit-signals ES7 — compute_and_record_exit_signals() in paper_3track_snapshot.py: Tier 1 EOD exit signal dispatch (CSP/CC/PP/Collar), dedup, paper_exit_events write, Telegram alerts + 10 tests — 1d40d8f |
 | 2026-06-03 | paper-exit-signals ES6 — OverlayCloser class with single leg and collar closure routing + tests (adjusted for review findings) — 3dafad9 |
 | 2026-06-03 | paper-exit-signals ES5 — CollarOverlayV1 strategy class + 11 unit tests — d25abf7 |
