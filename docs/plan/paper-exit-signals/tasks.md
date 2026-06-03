@@ -44,11 +44,11 @@
 
 ## Phase ES10 — CSP Lifecycle: R5 Re-entry
 
-- [x] **ES10** `[Claude]` — R5 re-entry eligibility check in `CSPNiftyV1.apply_action(PROFIT_TARGET)` + Telegram alert + tests | SHA: ___
+- [x] **ES10** `[Claude]` — R5 re-entry eligibility check in `CSPNiftyV1.apply_action(PROFIT_TARGET)` + Telegram alert + tests | SHA: c9625e1
 
 ## Phase ES11 — Base Expiry Roll Detection
 
-- [ ] **ES11** `[Antigravity]` — Base expiry detection in `paper_3track_snapshot.py`; `get_next_contract()` in `InstrumentLookup`; Telegram alert with roll commands + tests | SHA: ___
+- [x] **ES11** `[Antigravity]` — Base expiry detection in `paper_3track_snapshot.py`; `get_next_contract()` in `InstrumentLookup`; Telegram alert with roll commands + tests | SHA: 16c7f23
 
 ## Phase ES12 — Entry Discipline
 

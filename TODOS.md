@@ -304,7 +304,8 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
-| 2026-06-03 | paper-exit-signals ES10 — CSPNiftyV1 R5 re-entry eligibility: __init__, PROFIT_TARGET action_type, _check_r5_reentry (DTE/IVR/open-pos gates), paper_exit_events write + Telegram + 9 tests — SHA: pending |
+| 2026-06-03 | paper-exit-signals ES11 — Base position expiry detection (DTE <= 5), get_next_contract in InstrumentLookup, roll commands Telegram alert + 5 tests — 16c7f23 |
+| 2026-06-03 | paper-exit-signals ES10 — CSPNiftyV1 R5 re-entry eligibility: __init__, PROFIT_TARGET action_type, _check_r5_reentry (DTE/IVR/open-pos gates), paper_exit_events write + Telegram + 9 tests — c9625e1 |
 | 2026-06-03 | paper-exit-signals ES7 — compute_and_record_exit_signals() in paper_3track_snapshot.py: Tier 1 EOD exit signal dispatch (CSP/CC/PP/Collar), dedup, paper_exit_events write, Telegram alerts + 10 tests — 1d40d8f |
 | 2026-06-03 | paper-exit-signals ES6 — OverlayCloser class with single leg and collar closure routing + tests (adjusted for review findings) — 3dafad9 |
 | 2026-06-03 | paper-exit-signals ES5 — CollarOverlayV1 strategy class + 11 unit tests — d25abf7 |
