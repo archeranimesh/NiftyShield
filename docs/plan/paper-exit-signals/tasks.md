@@ -36,7 +36,7 @@
 
 ## Phase ES7 — EOD Integration
 
-- [ ] **ES7** `[Claude]` — Tier 1 EOD signal write in `paper_3track_snapshot.py` + tests | SHA: ___
+- [x] **ES7** `[Claude]` — Tier 1 EOD signal write in `paper_3track_snapshot.py` + tests | SHA: 1d40d8f
 
 ## Phase ES8 — Daemon Integration
 

@@ -188,7 +188,7 @@ Invoke `roll-validator` agent ≥1 week before deadline.
 | ES4 | `src/strategy/pp_overlay_v1.py` — `PPOverlayV1`; `CRASH_MONETIZE` + bid/ask gate; tests | ⬜ Not started |
 | ES5 | `src/strategy/collar_overlay_v1.py` — `CollarOverlayV1`; 4-path closure routing; tests | ⬜ Not started |
 | ES6 | `src/strategy/overlay_closer.py` — `OverlayCloser`; atomic Collar close + rollback; tests | ⬜ Not started |
-| ES7 | `scripts/paper_3track_snapshot.py` — Tier 1 EOD signal write + Telegram alert + deduplication | ⬜ Not started |
+| ES7 | `scripts/paper_3track_snapshot.py` — Tier 1 EOD signal write + Telegram alert + deduplication | ✅ Shipped — 1d40d8f |
 | ES8 | `scripts/monitor_daemon.py` — register CC/PP/Collar overlays; `MONITOR_OVERLAYS` gate | ⬜ Not started |
 | ES10 | `src/strategy/csp_nifty_v1.py` — R5 re-entry eligibility post profit-target; Telegram alert; tests | ⬜ Not started |
 | ES11 | `scripts/paper_3track_snapshot.py` + `InstrumentLookup.get_next_contract()` — base expiry alert | ⬜ Not started |
@@ -304,6 +304,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-06-03 | paper-exit-signals ES7 — compute_and_record_exit_signals() in paper_3track_snapshot.py: Tier 1 EOD exit signal dispatch (CSP/CC/PP/Collar), dedup, paper_exit_events write, Telegram alerts + 10 tests — 1d40d8f |
 | 2026-06-03 | paper-exit-signals ES6 — OverlayCloser class with single leg and collar closure routing + tests (adjusted for review findings) — 3dafad9 |
 | 2026-06-03 | paper-exit-signals ES5 — CollarOverlayV1 strategy class + 11 unit tests — d25abf7 |
 | 2026-06-03 | paper-exit-signals ES4 — PPOverlayV1 strategy class + 10 unit tests — 681f7db |
