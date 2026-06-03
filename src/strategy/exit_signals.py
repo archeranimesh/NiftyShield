@@ -212,6 +212,7 @@ class ExitSignalEngine:
                 )
             )
         # 2. PROFIT_TARGET: mark <= 50% of entry credit AND entry credit >= 15
+        # Note: 12 <= entry_price < 15 is an acceptable entry but below profit-target floor — no early exit.
         elif entry_dec >= Decimal("15") and mark_dec / entry_dec <= Decimal("0.50"):
             results.append(
                 ExitSignalResult(
