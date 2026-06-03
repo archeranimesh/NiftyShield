@@ -56,7 +56,7 @@
 
 ## Phase ES9 — Docs Close + Archive (MUST BE LAST)
 
-- [ ] **ES9** `[Claude]` — `DECISIONS.md` (10 rows), `CONTEXT.md`, `TODOS.md`; archive council + `csp_nifty_v1` spec | SHA: ___
+- [x] **ES9** `[Claude]` — `DECISIONS.md` (10 rows), `CONTEXT.md`, `TODOS.md`; archive council + `csp_nifty_v1` spec | SHA: pending
 
 ---
 

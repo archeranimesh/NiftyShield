@@ -190,10 +190,10 @@ Invoke `roll-validator` agent ≥1 week before deadline.
 | ES6 | `src/strategy/overlay_closer.py` — `OverlayCloser`; atomic Collar close + rollback; tests | ✅ Shipped — 3dafad9 |
 | ES7 | `scripts/paper_3track_snapshot.py` — Tier 1 EOD signal write + Telegram alert + deduplication | ✅ Shipped — 1d40d8f |
 | ES8 | `scripts/monitor_daemon.py` — register CC/PP/Collar overlays; `MONITOR_OVERLAYS` gate | ✅ Shipped — 7c23864 |
-| ES10 | `src/strategy/csp_nifty_v1.py` — R5 re-entry eligibility post profit-target; Telegram alert; tests | ⬜ Not started |
-| ES11 | `scripts/paper_3track_snapshot.py` + `InstrumentLookup.get_next_contract()` — base expiry alert | ⬜ Not started |
-| ES12 | `find_strike_by_delta.py` liquidity gate; `record_paper_trade.py` R3 hard block + `--force-entry` | ⬜ Not started |
-| ES9 | Docs close (LAST): DECISIONS.md, CONTEXT.md, TODOS.md; `git mv` council + csp_nifty_v1 to archive | ⬜ Not started |
+| ES10 | `src/strategy/csp_nifty_v1.py` — R5 re-entry eligibility post profit-target; Telegram alert; tests | ✅ Shipped — c9625e1 |
+| ES11 | `scripts/paper_3track_snapshot.py` + `InstrumentLookup.get_next_contract()` — base expiry alert | ✅ Shipped — 16c7f23 |
+| ES12 | `find_strike_by_delta.py` liquidity gate; `record_paper_trade.py` R3 hard block + `--force-entry` | ✅ Shipped — b86925a |
+| ES9 | Docs close (LAST): DECISIONS.md, CONTEXT.md, TODOS.md; `git mv` council + csp_nifty_v1 to archive | ✅ Shipped — pending |
 
 **Deferred gaps (separate stories — not blocking this task):**
 
@@ -216,7 +216,7 @@ Tasks run in priority order. Infrastructure that blocks other stories runs first
 | 2 | chain-data: EOD + intraday chain snapshot cron | Cowork | — | — | ✅ Shipped — [story](docs/archive/plan/chain-data/) |
 | 3 | scripts-restructure SR1 (scaffold only) | Cowork | Before #4 | #4 script placement | ✅ Shipped — [story](docs/plan/scripts-restructure/) |
 | 4 | paper-backbone: Strategy Monitor daemon | Cowork | **Jun–Jul 2026** | #5 | ✅ Shipped — [story](docs/plan/paper-backbone/) |
-| 5 | paper-exit-signals: automated exit detection + closure | Cowork | After #4 | — | ⬜ Not started — [story](docs/plan/paper-exit-signals/) — **#4 PT-0 now unblocked** |
+| 5 | paper-exit-signals: automated exit detection + closure | Cowork | After #4 | — | ✅ Shipped — [story](docs/plan/paper-exit-signals/) |
 | 6 | covered-call-overlay CC3+CC4 (calibration experiment) | Cowork | Any cycle | — | ⬜ CC3 not started — [story](docs/plan/covered-call-overlay/) |
 | 7 | MVP: Multi-bagger Value Picks Tracker | Cowork | After #1 | — | ⬜ Not started — [story](docs/plan/mvp/) |
 | 8 | backtest-eval-core: `BacktestStore` + `src/analytics/` | Cowork | Aug 2026 | #9 | ⬜ Not started — [story](docs/plan/backtest-eval-core/) — **blocked by tasks 1.3 + 1.4** |
@@ -304,6 +304,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-06-03 | paper-exit-signals ES9 — Docs close: DECISIONS.md verification, CONTEXT.md sync, TODOS.md updated; archive council exit-philosophy and csp_nifty_v1 spec — pending |
 | 2026-06-03 | paper-exit-signals ES12 — Enforce liquidity gate in find_strike_by_delta.py and R3 hard block in record_paper_trade.py + 11 tests — b86925a |
 | 2026-06-03 | paper-exit-signals ES11 — Base position expiry detection (DTE <= 5), get_next_contract in InstrumentLookup, roll commands Telegram alert + 5 tests — 16c7f23 |
 | 2026-06-03 | paper-exit-signals ES10 — CSPNiftyV1 R5 re-entry eligibility: __init__, PROFIT_TARGET action_type, _check_r5_reentry (DTE/IVR/open-pos gates), paper_exit_events write + Telegram + 9 tests — c9625e1 |

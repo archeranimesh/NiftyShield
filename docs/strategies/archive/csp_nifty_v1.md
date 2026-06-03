@@ -1,5 +1,8 @@
 # Cash-Secured Put — Nifty 50 v1
 
+> [!WARNING]
+> **DEPRECATED**: This specification is obsolete. The canonical implementation of the CSP strategy and exit rules is now defined in `src/strategy/csp_nifty_v1.py` (file:///Users/abhadra/myWork/myCode/python/NiftyShield/src/strategy/csp_nifty_v1.py) and governed by the `ExitSignalEngine` rules implemented in the `paper-exit-signals` story.
+
 | Field                    | Value                                                                        |
 |--------------------------|------------------------------------------------------------------------------|
 | Name                     | Cash-Secured Put on Nifty 50                                                 |
