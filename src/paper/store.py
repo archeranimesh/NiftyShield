@@ -24,7 +24,13 @@ from typing import Any, Literal
 
 from src.db import connect as _connect
 from src.models.portfolio import TradeAction
-from src.paper.models import PaperLegSnapshot, PaperNavSnapshot, PaperPosition, PaperTrade
+from src.paper.models import (
+    ExitSignal,
+    PaperLegSnapshot,
+    PaperNavSnapshot,
+    PaperPosition,
+    PaperTrade,
+)
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS paper_trades (
@@ -119,6 +125,42 @@ CREATE INDEX IF NOT EXISTS idx_pending_approvals_status
 
 CREATE INDEX IF NOT EXISTS idx_council_outputs_approval
     ON council_outputs (approval_id);
+
+CREATE TABLE IF NOT EXISTS paper_exit_events (
+    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+    strategy_name           TEXT    NOT NULL,
+    leg_name                TEXT    NOT NULL,
+    trade_id                TEXT    NOT NULL,
+    snapshot_id             INTEGER,
+    event_time              TEXT    NOT NULL,
+    detected_by             TEXT    NOT NULL,
+    exit_signal             TEXT    NOT NULL,
+    severity                TEXT    NOT NULL,
+    ltp                     REAL,
+    mid                     REAL,
+    bid                     REAL,
+    ask                     REAL,
+    delta                   REAL,
+    dte                     INTEGER,
+    entry_price             REAL    NOT NULL,
+    threshold_value         REAL,
+    delta_stop_would_fire   INTEGER,
+    premium_stop_would_fire INTEGER,
+    actual_rule_used        TEXT,
+    status                  TEXT    NOT NULL DEFAULT 'OPEN',
+    notes                   TEXT,
+    created_at              TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_exit_events_strategy_leg
+    ON paper_exit_events (strategy_name, leg_name, status);
+
+CREATE INDEX IF NOT EXISTS idx_exit_events_trade
+    ON paper_exit_events (trade_id, exit_signal);
+
+CREATE INDEX IF NOT EXISTS idx_exit_events_open
+    ON paper_exit_events (status, event_time)
+    WHERE status = 'OPEN';
 """
 
 
@@ -880,3 +922,134 @@ class PaperStore:
                 (approval_id,),
             ).fetchall()
         return [dict(r) for r in rows]
+
+    # ── Exit events ───────────────────────────────────────────────────────────
+
+    def create_exit_event(
+        self,
+        strategy_name: str,
+        leg_name: str,
+        trade_id: str,
+        event_time: datetime,
+        detected_by: str,
+        exit_signal: ExitSignal,
+        severity: str,
+        entry_price: Decimal | float,
+        *,
+        snapshot_id: int | None = None,
+        ltp: float | None = None,
+        mid: float | None = None,
+        bid: float | None = None,
+        ask: float | None = None,
+        delta: float | None = None,
+        dte: int | None = None,
+        threshold_value: float | None = None,
+        delta_stop_would_fire: int | None = None,
+        premium_stop_would_fire: int | None = None,
+        actual_rule_used: str | None = None,
+        notes: str | None = None,
+    ) -> int:
+        """Insert an exit event with status='OPEN' and return the generated row ID."""
+        with _connect(self.db_path) as conn:
+            cur = conn.execute(
+                """INSERT INTO paper_exit_events
+                   (strategy_name, leg_name, trade_id, snapshot_id, event_time,
+                    detected_by, exit_signal, severity, ltp, mid, bid, ask,
+                    delta, dte, entry_price, threshold_value, delta_stop_would_fire,
+                    premium_stop_would_fire, actual_rule_used, status, notes)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?)""",
+                (
+                    strategy_name,
+                    leg_name,
+                    trade_id,
+                    snapshot_id,
+                    event_time.isoformat(),
+                    detected_by,
+                    exit_signal.value,
+                    severity,
+                    ltp,
+                    mid,
+                    bid,
+                    ask,
+                    delta,
+                    dte,
+                    float(entry_price),
+                    threshold_value,
+                    delta_stop_would_fire,
+                    premium_stop_would_fire,
+                    actual_rule_used,
+                    notes,
+                ),
+            )
+            if cur.lastrowid is None:
+                raise ValueError("Failed to insert paper exit event")
+            return cur.lastrowid
+
+    def get_open_exit_events(
+        self,
+        strategy_name: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Retrieve open/acknowledged events ordered by event_time ASC."""
+        with _connect(self.db_path) as conn:
+            if strategy_name is not None:
+                rows = conn.execute(
+                    """SELECT id, strategy_name, leg_name, trade_id, snapshot_id,
+                              event_time, detected_by, exit_signal, severity,
+                              ltp, mid, bid, ask, delta, dte, entry_price,
+                              threshold_value, delta_stop_would_fire,
+                              premium_stop_would_fire, actual_rule_used, status,
+                              notes, created_at
+                       FROM paper_exit_events
+                       WHERE strategy_name = ? AND status IN ('OPEN', 'ACKNOWLEDGED')
+                       ORDER BY event_time ASC, id ASC""",
+                    (strategy_name,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """SELECT id, strategy_name, leg_name, trade_id, snapshot_id,
+                              event_time, detected_by, exit_signal, severity,
+                              ltp, mid, bid, ask, delta, dte, entry_price,
+                              threshold_value, delta_stop_would_fire,
+                              premium_stop_would_fire, actual_rule_used, status,
+                              notes, created_at
+                       FROM paper_exit_events
+                       WHERE status IN ('OPEN', 'ACKNOWLEDGED')
+                       ORDER BY event_time ASC, id ASC"""
+                ).fetchall()
+        return [dict(r) for r in rows]
+
+    def acknowledge_exit_event(self, event_id: int) -> None:
+        """Update event status to 'ACKNOWLEDGED' if status is 'OPEN'."""
+        with _connect(self.db_path) as conn:
+            cur = conn.execute(
+                """UPDATE paper_exit_events
+                   SET status = 'ACKNOWLEDGED'
+                   WHERE id = ? AND status = 'OPEN'""",
+                (event_id,),
+            )
+            if cur.rowcount == 0:
+                raise ValueError(f"No open paper_exit_events row with id={event_id}")
+
+    def resolve_exit_event(
+        self,
+        event_id: int,
+        status: Literal["ACTED", "DISMISSED"],
+        notes: str | None = None,
+    ) -> None:
+        """Resolve event and append notes if provided."""
+        with _connect(self.db_path) as conn:
+            cur = conn.execute(
+                """UPDATE paper_exit_events
+                   SET status = ?,
+                       notes = CASE
+                           WHEN ? IS NULL THEN notes
+                           WHEN notes IS NULL OR notes = '' THEN ?
+                           ELSE notes || '\n' || ?
+                       END
+                   WHERE id = ? AND status IN ('OPEN', 'ACKNOWLEDGED')""",
+                (status, notes, notes, notes, event_id),
+            )
+            if cur.rowcount == 0:
+                raise ValueError(
+                    f"No open or acknowledged paper_exit_events row with id={event_id}"
+                )

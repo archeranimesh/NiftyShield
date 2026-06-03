@@ -16,8 +16,9 @@ as the live Trade and MFTransaction models.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
+from enum import Enum
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
@@ -166,3 +167,54 @@ class PaperLegSnapshot:
     realized_pnl: Decimal
     total_pnl: Decimal
     ltp: Decimal | None = None
+
+
+class ExitSignal(str, Enum):
+    PROFIT_TARGET = "PROFIT_TARGET"
+    TIME_STOP = "TIME_STOP"
+    DTE_FORCED = "DTE_FORCED"
+    DTE_REVIEW = "DTE_REVIEW"
+    LOSS_STOP = "LOSS_STOP"
+    DELTA_STOP = "DELTA_STOP"
+    DELTA_WARN = "DELTA_WARN"
+    BELOW_FLOOR = "BELOW_FLOOR"
+    CRASH_MONETIZE = "CRASH_MONETIZE"
+    COLLAR_CALL_DECAY = "COLLAR_CALL_DECAY"
+    COLLAR_CALL_WARN = "COLLAR_CALL_WARN"
+    COLLAR_PUT_CRASH = "COLLAR_PUT_CRASH"
+    COLLAR_CLOSE_ALL = "COLLAR_CLOSE_ALL"
+    COLLAR_REBALANCE = "COLLAR_REBALANCE"
+    R5_REENTRY_ELIGIBLE = "R5_REENTRY_ELIGIBLE"
+    R5_REENTRY_BLOCKED = "R5_REENTRY_BLOCKED"
+    BASE_EXPIRY_ALERT = "BASE_EXPIRY_ALERT"
+    MANUAL = "MANUAL"
+    MANUAL_OVERRIDE = "MANUAL_OVERRIDE"
+    NONE = "NONE"
+
+
+class PaperExitEvent(BaseModel):
+    id: int | None = None
+    strategy_name: str = Field(..., min_length=1)
+    leg_name: str = Field(..., min_length=1)
+    trade_id: str = Field(..., min_length=1)
+    snapshot_id: int | None = None
+    event_time: datetime
+    detected_by: Literal["EOD", "INTRADAY", "MANUAL"]
+    exit_signal: ExitSignal
+    severity: Literal["INFO", "WARNING", "ACTION"]
+    ltp: float | None = None
+    mid: float | None = None
+    bid: float | None = None
+    ask: float | None = None
+    delta: float | None = None
+    dte: int | None = None
+    entry_price: float
+    threshold_value: float | None = None
+    delta_stop_would_fire: Literal[0, 1] | None = None
+    premium_stop_would_fire: Literal[0, 1] | None = None
+    actual_rule_used: str | None = None
+    status: Literal["OPEN", "ACKNOWLEDGED", "ACTED", "DISMISSED"] = "OPEN"
+    notes: str | None = None
+    created_at: str | None = None
+
+    model_config = {"frozen": True}

@@ -22,7 +22,7 @@ DDL and field definitions: `docs/plan/paper-exit-signals/schema.md` (exact DDL).
 
 **Store methods to add:**
 - `create_exit_event(strategy_name, leg_name, trade_id, event_time, detected_by, exit_signal, severity, entry_price, *, snapshot_id, ltp, mid, bid, ask, delta, dte, threshold_value, delta_stop_would_fire, premium_stop_would_fire, actual_rule_used, notes) -> int` — INSERT, status=OPEN, returns row id.
-- `get_open_exit_events(strategy_name=None) -> list[dict]` — SELECT status=OPEN, optional filter.
+- `get_open_exit_events(strategy_name=None) -> list[dict]` — SELECT status IN ('OPEN', 'ACKNOWLEDGED'), optional filter.
 - `acknowledge_exit_event(event_id) -> None` — UPDATE status=ACKNOWLEDGED.
 - `resolve_exit_event(event_id, status: Literal["ACTED","DISMISSED"], notes=None) -> None` — UPDATE status, append notes.
 
