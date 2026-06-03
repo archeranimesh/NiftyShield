@@ -1,0 +1,421 @@
+# src/strategy/overlay_closer.py
+"""OverlayCloser — Atomic multi-leg close orchestrator with rollback on failure.
+
+Handles atomic execution of close actions for CC, PP, and Collar overlays.
+"""
+
+from __future__ import annotations
+
+import re
+from datetime import date, datetime, timezone
+from decimal import Decimal
+from typing import Any
+
+import structlog
+
+from src.models.options import OptionChain, OptionLeg
+from src.paper.models import ExitSignal, PaperPosition, PaperTrade, TradeAction
+from src.paper.store import PaperStore
+from src.strategy.executor import PaperFillSimulator
+from src.strategy.protocol import ApprovedAction
+
+log = structlog.get_logger(__name__)
+
+# Matches keys like "NSE_FO|NIFTY23000PE" → group 1 = "23000"
+_STRIKE_RE = re.compile(r"NIFTY(\d+)(PE|CE)", re.IGNORECASE)
+
+# Matches keys like "NSE_FO|NIFTY29MAY2026PE" → group 1 = "29MAY2026"
+_EXPIRY_RE = re.compile(
+    r"NSE_FO\|NIFTY(\d{2}[A-Za-z]{3}\d{4})(PE|CE)",
+    re.IGNORECASE,
+)
+
+SHORT_CALL_ROLE = "collar_short_call"
+LONG_PUT_ROLE = "collar_long_put"
+
+
+class OverlayCloser:
+    """Orchestrates overlay leg closure with rollback capabilities."""
+
+    def __init__(
+        self,
+        store: PaperStore,
+        simulator: PaperFillSimulator,
+        notifier: Any = None,
+    ) -> None:
+        """Initialise OverlayCloser.
+
+        Args:
+            store: PaperStore for database operations.
+            simulator: PaperFillSimulator for fill pricing.
+            notifier: Optional notifier (e.g. TelegramGateway) to alert on failure.
+        """
+        self._store = store
+        self._simulator = simulator
+        self._notifier = notifier
+
+    def close_single_leg(
+        self,
+        strategy_name: str,
+        leg_role: str,
+        market: OptionChain,
+        event_id: int | None,
+        vix: float | None = None,
+        is_loss_stop: bool = False,
+        dual_signal_audit: dict | None = None,
+    ) -> None:
+        """Close a single option position leg.
+
+        Applies 1.5x slippage multiplier if is_loss_stop is True.
+        """
+        position = self._store.get_position(strategy_name, leg_role)
+        if position.net_qty == 0:
+            return
+
+        close_action = TradeAction.SELL if position.net_qty > 0 else TradeAction.BUY
+        mid_price = self._resolve_mid_price(position.instrument_key, market)
+
+        fill = self._simulator.simulate_fill(
+            instrument_key=position.instrument_key,
+            action=close_action.value,
+            quantity=abs(position.net_qty),
+            mid_price=mid_price,
+            vix=vix,
+        )
+
+        fill_price = fill.fill_price
+        if is_loss_stop:
+            slippage = fill.slippage
+            if close_action == TradeAction.BUY:
+                fill_price = mid_price + Decimal("1.5") * slippage
+            else:
+                fill_price = mid_price - Decimal("1.5") * slippage
+            fill_price = max(fill_price, Decimal("0.01"))
+
+        trade = PaperTrade(
+            strategy_name=strategy_name,
+            leg_role=leg_role,
+            instrument_key=position.instrument_key,
+            trade_date=date.today(),
+            action=close_action,
+            quantity=fill.quantity,
+            price=fill_price,
+            notes=f"overlay_close event_id={event_id}",
+            ivr_at_entry=None,
+            is_paper=True,
+        )
+        self._store.record_trade(trade)
+
+        if event_id is not None:
+            delta_stop_would_fire = None
+            premium_stop_would_fire = None
+            actual_rule_used = None
+            if dual_signal_audit:
+                delta_stop_would_fire = 1 if dual_signal_audit.get("delta_stop_would_fire") else 0
+                premium_stop_would_fire = (
+                    1 if dual_signal_audit.get("premium_stop_would_fire") else 0
+                )
+                actual_rule_used = dual_signal_audit.get("actual_rule_used")
+
+            self._store.resolve_exit_event_with_audit(
+                event_id=event_id,
+                status="ACTED",
+                delta_stop_would_fire=delta_stop_would_fire,
+                premium_stop_would_fire=premium_stop_would_fire,
+                actual_rule_used=actual_rule_used,
+            )
+
+    def close_collar_call_only(
+        self,
+        strategy_name: str,
+        market: OptionChain,
+        event_id: int | None,
+        vix: float | None = None,
+    ) -> None:
+        """Close Collar short call leg only (e.g. on COLLAR_CALL_DECAY)."""
+        dual_audit = None
+        if event_id is not None:
+            events = self._store.get_open_exit_events(strategy_name)
+            event = next((e for e in events if e["id"] == event_id), None)
+            if event:
+                dual_audit = {
+                    "delta_stop_would_fire": event.get("delta_stop_would_fire"),
+                    "premium_stop_would_fire": event.get("premium_stop_would_fire"),
+                    "actual_rule_used": event.get("actual_rule_used"),
+                }
+        self.close_single_leg(
+            strategy_name=strategy_name,
+            leg_role=SHORT_CALL_ROLE,
+            market=market,
+            event_id=event_id,
+            vix=vix,
+            is_loss_stop=False,
+            dual_signal_audit=dual_audit,
+        )
+
+    def close_collar_all(
+        self,
+        strategy_name: str,
+        market: OptionChain,
+        event_id: int | None,
+        vix: float | None = None,
+    ) -> None:
+        """Atomically close both Collar legs (short call and long put) with rollback."""
+        today = date.today()
+        call_pos = self._store.get_position(strategy_name, SHORT_CALL_ROLE)
+        put_pos = self._store.get_position(strategy_name, LONG_PUT_ROLE)
+
+        call_close_trade = None
+        if call_pos and call_pos.net_qty < 0:
+            mid = self._resolve_mid_price(call_pos.instrument_key, market)
+            fill = self._simulator.simulate_fill(
+                call_pos.instrument_key, "BUY", abs(call_pos.net_qty), mid, vix
+            )
+            call_close_trade = PaperTrade(
+                strategy_name=strategy_name,
+                leg_role=SHORT_CALL_ROLE,
+                instrument_key=call_pos.instrument_key,
+                trade_date=today,
+                action=TradeAction.BUY,
+                quantity=fill.quantity,
+                price=fill.fill_price,
+                notes=f"collar_close_all call event_id={event_id}",
+                ivr_at_entry=None,
+                is_paper=True,
+            )
+            try:
+                success = self._store.record_trade(call_close_trade)
+                if not success:
+                    raise RuntimeError("Call close trade insertion skipped (duplicate)")
+            except Exception as e:
+                log.error("collar_close_all.call_failed", error=str(e))
+                if self._notifier:
+                    self._notifier.send(
+                        f"Collar close failed: call leg could not be closed. Error: {e}"
+                    )
+                return
+
+        if put_pos and put_pos.net_qty > 0:
+            mid = self._resolve_mid_price(put_pos.instrument_key, market)
+            fill = self._simulator.simulate_fill(
+                put_pos.instrument_key, "SELL", abs(put_pos.net_qty), mid, vix
+            )
+            put_close_trade = PaperTrade(
+                strategy_name=strategy_name,
+                leg_role=LONG_PUT_ROLE,
+                instrument_key=put_pos.instrument_key,
+                trade_date=today,
+                action=TradeAction.SELL,
+                quantity=fill.quantity,
+                price=fill.fill_price,
+                notes=f"collar_close_all put event_id={event_id}",
+                ivr_at_entry=None,
+                is_paper=True,
+            )
+            try:
+                success = self._store.record_trade(put_close_trade)
+                if not success:
+                    raise RuntimeError("Put close trade insertion skipped (duplicate)")
+            except Exception as e:
+                log.error("collar_close_all.put_failed_rolling_back", error=str(e))
+                if call_close_trade:
+                    try:
+                        self._store.delete_trade(call_close_trade)
+                        log.info("collar_close_all.rollback_success")
+                    except Exception as rollback_err:
+                        log.critical("collar_close_all.rollback_failed", error=str(rollback_err))
+                if self._notifier:
+                    self._notifier.send(
+                        "Collar close failed: put leg could not be closed. "
+                        f"Call leg close rolled back to restore Collar. Error: {e}"
+                    )
+                return
+
+        if event_id is not None:
+            self._store.resolve_exit_event_with_audit(event_id=event_id, status="ACTED")
+        else:
+            eid = self._store.create_exit_event(
+                strategy_name=strategy_name,
+                leg_name=SHORT_CALL_ROLE,
+                trade_id="0",
+                event_time=datetime.now(timezone.utc),
+                detected_by="MANUAL",
+                exit_signal=ExitSignal.COLLAR_CLOSE_ALL,
+                severity="ACTION",
+                entry_price=Decimal("0"),
+                notes="MANUAL_OVERRIDE",
+            )
+            self._store.resolve_exit_event(eid, "ACTED")
+
+    def monetize_collar_put(
+        self,
+        strategy_name: str,
+        market: OptionChain,
+        event_id: int | None,
+        vix: float | None = None,
+    ) -> None:
+        """Monetise Collar put leg, buying back short call first if near-worthless."""
+        today = date.today()
+        call_pos = self._store.get_position(strategy_name, SHORT_CALL_ROLE)
+        put_pos = self._store.get_position(strategy_name, LONG_PUT_ROLE)
+
+        if call_pos and call_pos.net_qty < 0:
+            call_leg = self._find_option_leg(market, call_pos.instrument_key)
+            residual = float(call_leg.ltp) if call_leg is not None else 0.0
+            if residual < 5.0:
+                mid = self._resolve_mid_price(call_pos.instrument_key, market)
+                fill = self._simulator.simulate_fill(
+                    call_pos.instrument_key, "BUY", abs(call_pos.net_qty), mid, vix
+                )
+                call_trade = PaperTrade(
+                    strategy_name=strategy_name,
+                    leg_role=SHORT_CALL_ROLE,
+                    instrument_key=call_pos.instrument_key,
+                    trade_date=today,
+                    action=TradeAction.BUY,
+                    quantity=fill.quantity,
+                    price=fill.fill_price,
+                    notes=f"collar_put_monetize call close event_id={event_id}",
+                    ivr_at_entry=None,
+                    is_paper=True,
+                )
+                self._store.record_trade(call_trade)
+
+        if put_pos and put_pos.net_qty > 0:
+            mid = self._resolve_mid_price(put_pos.instrument_key, market)
+            fill = self._simulator.simulate_fill(
+                put_pos.instrument_key, "SELL", abs(put_pos.net_qty), mid, vix
+            )
+            put_trade = PaperTrade(
+                strategy_name=strategy_name,
+                leg_role=LONG_PUT_ROLE,
+                instrument_key=put_pos.instrument_key,
+                trade_date=today,
+                action=TradeAction.SELL,
+                quantity=fill.quantity,
+                price=fill.fill_price,
+                notes=f"collar_put_monetize put close event_id={event_id}",
+                ivr_at_entry=None,
+                is_paper=True,
+            )
+            self._store.record_trade(put_trade)
+
+        expiry = self._parse_expiry(put_pos.instrument_key) if put_pos else None
+        dte = (expiry - today).days if expiry is not None else 0
+        notes = "Evaluate replacement" if dte >= 14 else ""
+
+        if event_id is not None:
+            self._store.resolve_exit_event_with_audit(
+                event_id=event_id,
+                status="ACTED",
+                notes=notes if notes else None,
+            )
+        else:
+            eid = self._store.create_exit_event(
+                strategy_name=strategy_name,
+                leg_name=LONG_PUT_ROLE,
+                trade_id="0",
+                event_time=datetime.now(timezone.utc),
+                detected_by="MANUAL",
+                exit_signal=ExitSignal.COLLAR_PUT_CRASH,
+                severity="ACTION",
+                entry_price=Decimal("0"),
+                notes=notes if notes else None,
+            )
+            self._store.resolve_exit_event(eid, "ACTED")
+
+    async def route(
+        self,
+        strategy_name: str,
+        action: ApprovedAction,
+        market: OptionChain,
+        event_id: int | None,
+        vix: float | None = None,
+    ) -> list[PaperPosition]:
+        """Route the approved action to the appropriate overlay closer logic."""
+        if action.action_type == "CLOSE_CC":
+            is_loss_stop = False
+            dual_audit = None
+            if event_id is not None:
+                events = self._store.get_open_exit_events(strategy_name)
+                event = next((e for e in events if e["id"] == event_id), None)
+                if event:
+                    is_loss_stop = event["exit_signal"] in ("LOSS_STOP", "DELTA_STOP")
+                    dual_audit = {
+                        "delta_stop_would_fire": event.get("delta_stop_would_fire"),
+                        "premium_stop_would_fire": event.get("premium_stop_would_fire"),
+                        "actual_rule_used": event.get("actual_rule_used"),
+                    }
+            self.close_single_leg(
+                strategy_name=strategy_name,
+                leg_role="short_call",
+                market=market,
+                event_id=event_id,
+                vix=vix,
+                is_loss_stop=is_loss_stop,
+                dual_signal_audit=dual_audit,
+            )
+        elif action.action_type == "MONETIZE_PP":
+            self.close_single_leg(
+                strategy_name=strategy_name,
+                leg_role="protective_put",
+                market=market,
+                event_id=event_id,
+                vix=vix,
+                is_loss_stop=False,
+            )
+        elif action.action_type == "CLOSE_CALL_ONLY":
+            self.close_collar_call_only(strategy_name, market, event_id, vix)
+        elif action.action_type == "MONETIZE_PUT":
+            self.monetize_collar_put(strategy_name, market, event_id, vix)
+        elif action.action_type == "CLOSE_ALL_OVERLAY":
+            self.close_collar_all(strategy_name, market, event_id, vix)
+        else:
+            raise ValueError(f"Unknown action type for OverlayCloser: {action.action_type}")
+
+        return self._store.get_positions(strategy_name)
+
+    # ── Private helpers ───────────────────────────────────────────────────────
+
+    def _resolve_mid_price(self, instrument_key: str, market: OptionChain) -> Decimal:
+        """Resolve mid price of option leg in chain."""
+        m = _STRIKE_RE.search(instrument_key)
+        if m:
+            try:
+                strike = Decimal(m.group(1))
+                strike_data = market.strikes.get(strike)
+                if strike_data is not None:
+                    option_type = m.group(2).upper()
+                    leg = strike_data.ce if option_type == "CE" else strike_data.pe
+                    if leg is not None:
+                        if leg.bid > 0 and leg.ask > 0:
+                            return (leg.bid + leg.ask) / 2
+                        return leg.ltp
+            except Exception:
+                pass
+        return Decimal("0")
+
+    def _find_option_leg(self, market: OptionChain, instrument_key: str) -> OptionLeg | None:
+        """Locate option leg in chain."""
+        m = _STRIKE_RE.search(instrument_key)
+        if not m:
+            return None
+        try:
+            strike = Decimal(m.group(1))
+            option_type = m.group(2).upper()
+            strike_data = market.strikes.get(strike)
+            if strike_data is None:
+                return None
+            return strike_data.ce if option_type == "CE" else strike_data.pe
+        except Exception:
+            return None
+
+    def _parse_expiry(self, instrument_key: str) -> date | None:
+        """Extract expiry date."""
+        m = _EXPIRY_RE.search(instrument_key)
+        if not m:
+            return None
+        try:
+            return datetime.strptime(m.group(1).upper(), "%d%b%Y").date()
+        except ValueError:
+            return None

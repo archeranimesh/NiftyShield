@@ -378,9 +378,7 @@ class PaperStore:
                     sell_total_cost += price * qty
                     if first_sell_date is None:
                         raw = row["trade_date"]
-                        first_sell_date = (
-                            date.fromisoformat(raw) if isinstance(raw, str) else raw
-                        )
+                        first_sell_date = date.fromisoformat(raw) if isinstance(raw, str) else raw
 
             avg_cost = buy_total_cost / buy_total_qty if buy_total_qty > 0 else Decimal("0")
             avg_sell_price = (
@@ -1104,6 +1102,46 @@ class PaperStore:
                        END
                    WHERE id = ? AND status IN ('OPEN', 'ACKNOWLEDGED')""",
                 (status, notes, notes, notes, event_id),
+            )
+            if cur.rowcount == 0:
+                raise ValueError(
+                    f"No open or acknowledged paper_exit_events row with id={event_id}"
+                )
+
+    def resolve_exit_event_with_audit(
+        self,
+        event_id: int,
+        status: Literal["ACTED", "DISMISSED"],
+        *,
+        delta_stop_would_fire: int | None = None,
+        premium_stop_would_fire: int | None = None,
+        actual_rule_used: str | None = None,
+        notes: str | None = None,
+    ) -> None:
+        """Resolve event, update audit fields, and append notes if provided."""
+        with _connect(self.db_path) as conn:
+            cur = conn.execute(
+                """UPDATE paper_exit_events
+                   SET status = ?,
+                       delta_stop_would_fire = COALESCE(?, delta_stop_would_fire),
+                       premium_stop_would_fire = COALESCE(?, premium_stop_would_fire),
+                       actual_rule_used = COALESCE(?, actual_rule_used),
+                       notes = CASE
+                           WHEN ? IS NULL THEN notes
+                           WHEN notes IS NULL OR notes = '' THEN ?
+                           ELSE notes || '\n' || ?
+                       END
+                   WHERE id = ? AND status IN ('OPEN', 'ACKNOWLEDGED')""",
+                (
+                    status,
+                    delta_stop_would_fire,
+                    premium_stop_would_fire,
+                    actual_rule_used,
+                    notes,
+                    notes,
+                    notes,
+                    event_id,
+                ),
             )
             if cur.rowcount == 0:
                 raise ValueError(
