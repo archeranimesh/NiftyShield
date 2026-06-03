@@ -24,6 +24,8 @@ def test_apply_liquidity_gate_filtering() -> None:
         {"strike": 22200.0, "bid": 48.75, "ask": 51.25, "mid": 50.0},
         # mid = 0 (fails)
         {"strike": 22300.0, "bid": 0.0, "ask": 0.0, "mid": 0.0},
+        # mid = 50, but bid/ask are 0 (fails) — liquidity ghost
+        {"strike": 22400.0, "bid": 0.0, "ask": 0.0, "mid": 50.0},
     ]
     filtered = _apply_liquidity_gate(rows)
     assert len(filtered) == 2

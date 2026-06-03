@@ -40,6 +40,7 @@ from dotenv import load_dotenv
 from scripts.lookup.find_strike_by_delta import (
     DEFAULT_LOT_SIZE,
     UNDERLYING_DEFAULT,
+    _apply_liquidity_gate,
     filter_strikes_by_delta,
     format_table,
     rank_strikes,
@@ -302,19 +303,24 @@ def _resolve_from_chain(args: argparse.Namespace) -> tuple[str, str] | None:
         return None
 
     ranked = rank_strikes(all_rows)
-    pick_idx = min(args.index - 1, len(ranked) - 1)
-    if args.index - 1 > len(ranked) - 1:
+    filtered = _apply_liquidity_gate(ranked)
+    if not filtered:
+        print("ERROR: GATE FAIL — no candidate strikes passed the liquidity gate.", file=sys.stderr)
+        return None
+
+    pick_idx = min(args.index - 1, len(filtered) - 1)
+    if args.index - 1 > len(filtered) - 1:
         print(
-            f"WARNING: --index {args.index} out of range; clamping to rank {len(ranked)}.",
+            f"WARNING: --index {args.index} out of range; clamping to rank {len(filtered)}.",
             file=sys.stderr,
         )
 
-    selected = ranked[pick_idx]
+    selected = filtered[pick_idx]
 
     print()
     print(
         format_table(
-            ranked,
+            filtered,
             underlying_spot=underlying_spot,
             expiry=args.expiry or "Multiple (auto)",
             selected_key=selected["instrument_key"],
@@ -323,7 +329,7 @@ def _resolve_from_chain(args: argparse.Namespace) -> tuple[str, str] | None:
 
     price = round(selected["mid"] if selected["mid"] > 0 else selected["ltp"], 2)
     print(
-        f"\n# Rank {args.index}: {selected['side']} {selected['strike']:.0f} | "
+        f"\n# Selected: {selected['side']} {selected['strike']:.0f} | "
         f"delta={selected['delta']:+.4f} | iv={selected['iv']:.2f}% | "
         f"expiry={selected['expiry']} ({selected['expiry_label']}) | price=₹{price}"
     )

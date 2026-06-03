@@ -196,7 +196,7 @@ def _apply_liquidity_gate(
         bid = r.get("bid", 0.0)
         ask = r.get("ask", 0.0)
         mid = r.get("mid", 0.0)
-        if mid > 0.0:
+        if bid > 0.0 and ask > 0.0 and mid > 0.0:
             spread = ask - bid
             spread_pct = spread / mid
             if spread_pct <= gate_pct:
