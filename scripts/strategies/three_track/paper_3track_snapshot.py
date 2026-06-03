@@ -40,12 +40,14 @@ load_dotenv()
 
 import argparse
 import asyncio
-from datetime import date
-from decimal import Decimal
+import re
+from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 
 import structlog
 
-from src.client.upstox_market import UpstoxMarketClient
+from src.client.upstox_market import UpstoxMarketClient, parse_upstox_option_chain
+from src.models.options import OptionChain, OptionLeg
 from src.config import settings
 from src.instruments.lookup import InstrumentLookup
 from src.notifications.telegram import TelegramNotifier
@@ -72,10 +74,11 @@ from src.paper.constants import (
 )
 from src.paper.formatting import format_track_summary
 from src.paper.metrics import compute_nee
-from src.paper.models import PaperLegSnapshot, PaperNavSnapshot
+from src.paper.models import ExitSignal, PaperLegSnapshot, PaperNavSnapshot, PaperPosition
 from src.paper.proxy_monitor import ProxyDeltaMonitor
 from src.paper.store import PaperStore
 from src.paper.track_snapshot import TrackSnapshot, generate_track_snapshot
+from src.strategy.exit_signals import ExitSignalEngine
 from src.utils.logging import setup_logging
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -85,6 +88,341 @@ ALL_TRACKS = [STRATEGY_SPOT, STRATEGY_FUTURES, STRATEGY_PROXY]
 
 _SCRIPT_NAME = "scripts.strategies.three_track.paper_3track_snapshot"
 logger = structlog.get_logger(_SCRIPT_NAME)
+
+_CSP_STRATEGY = "paper_csp_nifty_v1"
+
+# leg_role → option type (CE/PE) for chain lookups
+_OVERLAY_OPTION_TYPE: dict[str, str] = {
+    "overlay_cc": "CE",
+    "overlay_collar_call": "CE",
+    "overlay_pp": "PE",
+    "overlay_collar_put": "PE",
+}
+
+# Instrument key parsing — matches "NIFTY29MAY2026CE23000" or "NIFTY23000CE"
+_KEY_EXPIRY_RE = re.compile(r"NIFTY(\d{2})([A-Za-z]{3})(\d{4})(CE|PE)", re.IGNORECASE)
+_KEY_STRIKE_RE = re.compile(r"NIFTY(\d+)(CE|PE)", re.IGNORECASE)
+_MONTH_ABBR: dict[str, int] = {
+    "JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6,
+    "JUL": 7, "AUG": 8, "SEP": 9, "OCT": 10, "NOV": 11, "DEC": 12,
+}
+
+
+def _parse_expiry_from_key(instrument_key: str) -> date | None:
+    """Return expiry date from instrument key, or None if unparseable."""
+    m = _KEY_EXPIRY_RE.search(instrument_key)
+    if not m:
+        return None
+    try:
+        day, mon_str, year = int(m.group(1)), m.group(2).upper(), int(m.group(3))
+        month = _MONTH_ABBR.get(mon_str)
+        return date(year, month, day) if month else None
+    except (ValueError, TypeError):
+        return None
+
+
+def _compute_dte(instrument_key: str, today: date) -> int | None:
+    """Return days-to-expiry for the key's embedded expiry, or None."""
+    expiry = _parse_expiry_from_key(instrument_key)
+    return (expiry - today).days if expiry is not None else None
+
+
+def _parse_strike_from_key(instrument_key: str) -> Decimal | None:
+    """Extract strike price from instrument key, or None if unparseable.
+
+    Matches 'NIFTY23000CE' style keys.  Date-embedded keys like
+    'NIFTY29MAY2026CE23000' are NOT matched (alpha chars break the digit run).
+    Returns None for numeric-ID keys like 'NSE_FO|47196'.
+    """
+    m = _KEY_STRIKE_RE.search(instrument_key)
+    if not m:
+        return None
+    try:
+        return Decimal(m.group(1))
+    except InvalidOperation:
+        return None
+
+
+def _find_chain_leg(
+    chain: OptionChain,
+    instrument_key: str,
+    option_type: str,
+) -> OptionLeg | None:
+    """Look up CE or PE leg from the chain by strike parsed from instrument_key.
+
+    Falls back to scanning all strikes for the first leg with non-zero LTP when
+    the key carries no parseable strike (e.g. numeric BOD IDs like 'NSE_FO|47196').
+
+    Args:
+        chain: Parsed Nifty option chain.
+        instrument_key: Position's instrument key.
+        option_type: 'CE' or 'PE'.
+
+    Returns:
+        Matching OptionLeg or None when unavailable.
+    """
+    strike = _parse_strike_from_key(instrument_key)
+    if strike is not None:
+        strike_data = chain.strikes.get(strike)
+        if strike_data is not None:
+            return strike_data.ce if option_type == "CE" else strike_data.pe
+
+    # Fallback: scan all strikes for first leg with non-zero LTP
+    for strike_data in chain.strikes.values():
+        leg = strike_data.ce if option_type == "CE" else strike_data.pe
+        if leg is not None and leg.ltp > 0:
+            return leg
+
+    return None
+
+
+def _dispatch_evaluate(
+    pos: PaperPosition,
+    chain: OptionChain,
+    underlying_price: float,
+    today: date,
+) -> list:
+    """Dispatch a position to the correct ExitSignalEngine.evaluate_* method.
+
+    Returns [] for positions that are not signal-eligible (base legs, closed,
+    or unrecognised strategy/role combinations).
+
+    Args:
+        pos: Open paper position.
+        chain: Current Nifty option chain.
+        underlying_price: Nifty spot price as float.
+        today: Evaluation date (for DTE and days_held calculations).
+
+    Returns:
+        List of ExitSignalResult objects (may be empty).
+    """
+    role = pos.leg_role
+    dte = _compute_dte(pos.instrument_key, today) or 9999
+
+    if pos.strategy_name == _CSP_STRATEGY and pos.net_qty < 0:
+        # Short put — CSP
+        leg = _find_chain_leg(chain, pos.instrument_key, "PE")
+        delta = float(leg.delta) if leg is not None else None
+        current_mark = float(leg.ltp) if leg is not None else 0.0
+        days_held = (today - pos.entry_date).days if pos.entry_date else 0
+        return ExitSignalEngine.evaluate_csp(
+            entry_price=float(pos.avg_sell_price),
+            current_mark=current_mark,
+            delta=delta,
+            days_held=days_held,
+            dte=dte,
+        )
+
+    if role == "overlay_cc" and pos.net_qty < 0:
+        leg = _find_chain_leg(chain, pos.instrument_key, "CE")
+        strike = _parse_strike_from_key(pos.instrument_key)
+        return ExitSignalEngine.evaluate_cc(
+            entry_price=float(pos.avg_sell_price),
+            current_mark=float(leg.ltp) if leg is not None else 0.0,
+            delta=float(leg.delta) if leg is not None else None,
+            dte=dte,
+            underlying_price=underlying_price,
+            strike_price=float(strike) if strike is not None else 0.0,
+        )
+
+    if role == "overlay_pp" and pos.net_qty > 0:
+        leg = _find_chain_leg(chain, pos.instrument_key, "PE")
+        return ExitSignalEngine.evaluate_pp(
+            entry_price=float(pos.avg_cost),
+            current_mark=float(leg.ltp) if leg is not None else 0.0,
+            delta=float(leg.delta) if leg is not None else None,
+            dte=dte,
+            bid=float(leg.bid) if leg is not None else None,
+            ask=float(leg.ask) if leg is not None else None,
+        )
+
+    if role == "overlay_collar_call" and pos.net_qty < 0:
+        leg = _find_chain_leg(chain, pos.instrument_key, "CE")
+        strike = _parse_strike_from_key(pos.instrument_key)
+        return ExitSignalEngine.evaluate_collar_call(
+            entry_price=float(pos.avg_sell_price),
+            current_mark=float(leg.ltp) if leg is not None else 0.0,
+            delta=float(leg.delta) if leg is not None else None,
+            dte=dte,
+            underlying_price=underlying_price,
+            strike_price=float(strike) if strike is not None else 0.0,
+        )
+
+    if role == "overlay_collar_put" and pos.net_qty > 0:
+        leg = _find_chain_leg(chain, pos.instrument_key, "PE")
+        return ExitSignalEngine.evaluate_collar_put(
+            entry_price=float(pos.avg_cost),
+            current_mark=float(leg.ltp) if leg is not None else 0.0,
+            delta=float(leg.delta) if leg is not None else None,
+            dte=dte,
+            bid=float(leg.bid) if leg is not None else None,
+            ask=float(leg.ask) if leg is not None else None,
+        )
+
+    return []
+
+
+async def compute_and_record_exit_signals(
+    store: PaperStore,
+    positions: list[PaperPosition],
+    chain: OptionChain,
+    snapshot_id: int | None,
+    engine: type[ExitSignalEngine],
+    today: date,
+    notifier: TelegramNotifier | None = None,
+    *,
+    save: bool = True,
+) -> None:
+    """Evaluate exit signals for all open positions and persist ACTION/WARN events.
+
+    Dispatches each open position to the correct ``ExitSignalEngine.evaluate_*``
+    method by ``leg_role`` / ``strategy_name``.  Writes ACTION and WARN results
+    to ``paper_exit_events`` with ``detected_by='EOD'``.  INFO signals are
+    engine-internal only — never persisted.
+
+    Deduplication: skips insert when an OPEN row already exists for the same
+    ``(trade_id, exit_signal)`` dated today.
+
+    Telegram: ACTION → one message per signal; WARN → batched per strategy;
+    no signals → silence.  Notifier failures are logged but never propagate.
+
+    Args:
+        store: PaperStore for reads/writes.
+        positions: All open paper positions across all strategies.
+        chain: Parsed Nifty option chain (for delta, bid, ask, LTP lookups).
+        snapshot_id: Optional NAV snapshot row id to link events.
+        engine: ExitSignalEngine class (all methods are classmethods).
+        today: Evaluation date.
+        notifier: Optional TelegramNotifier; None suppresses Telegram alerts.
+        save: When False (dry-run), skip DB writes and Telegram entirely.
+    """
+    if not save:
+        return
+
+    # Build dedup set from already-open events dated today
+    today_iso = today.isoformat()
+    existing: set[tuple[str, str]] = {
+        (ev["trade_id"], ev["exit_signal"])
+        for ev in store.get_open_exit_events()
+        if ev["event_time"][:10] == today_iso
+    }
+
+    underlying_price = float(chain.underlying_spot)
+    event_time = datetime.combine(today, datetime.min.time())
+
+    action_messages: list[str] = []
+    warn_by_strategy: dict[str, list[str]] = {}
+
+    for pos in positions:
+        if pos.net_qty == 0:
+            continue
+
+        results = _dispatch_evaluate(pos, chain, underlying_price, today)
+
+        for result in results:
+            if result.severity == "INFO":
+                # INFO is engine-internal only — not written to DB
+                continue
+
+            key = (pos.instrument_key, result.exit_signal)
+            if key in existing:
+                logger.debug(
+                    "exit_signal.dedup_skip",
+                    trade_id=pos.instrument_key,
+                    exit_signal=result.exit_signal,
+                )
+                continue
+
+            is_short = pos.net_qty < 0
+            entry_price = pos.avg_sell_price if is_short else pos.avg_cost
+            opt_type = _OVERLAY_OPTION_TYPE.get(pos.leg_role, "PE" if is_short else "CE")
+            opt_leg = _find_chain_leg(chain, pos.instrument_key, opt_type)
+
+            # ExitSignalResult uses "WARN"; create_exit_event expects "WARNING"
+            severity_store = "WARNING" if result.severity == "WARN" else result.severity
+
+            try:
+                event_id = store.create_exit_event(
+                    strategy_name=pos.strategy_name,
+                    leg_name=pos.leg_role,
+                    trade_id=pos.instrument_key,
+                    event_time=event_time,
+                    detected_by="EOD",
+                    exit_signal=ExitSignal(result.exit_signal),
+                    severity=severity_store,
+                    entry_price=entry_price,
+                    snapshot_id=snapshot_id,
+                    ltp=float(opt_leg.ltp) if opt_leg is not None else None,
+                    bid=float(opt_leg.bid) if opt_leg is not None else None,
+                    ask=float(opt_leg.ask) if opt_leg is not None else None,
+                    delta=float(opt_leg.delta) if opt_leg is not None else None,
+                    dte=_compute_dte(pos.instrument_key, today),
+                    threshold_value=result.threshold_value,
+                    delta_stop_would_fire=(
+                        int(result.delta_stop_would_fire)
+                        if result.delta_stop_would_fire is not None
+                        else None
+                    ),
+                    premium_stop_would_fire=(
+                        int(result.premium_stop_would_fire)
+                        if result.premium_stop_would_fire is not None
+                        else None
+                    ),
+                    actual_rule_used=result.actual_rule_used,
+                    notes=result.notes,
+                )
+            # Intentional broad catch: DB write failure must not crash the snapshot.
+            except Exception as exc:
+                logger.error(
+                    "exit_signal.db_write_failed",
+                    strategy=pos.strategy_name,
+                    leg=pos.leg_role,
+                    signal=result.exit_signal,
+                    error=str(exc),
+                )
+                continue
+
+            existing.add(key)
+            logger.info(
+                "exit_signal.written",
+                event_id=event_id,
+                strategy=pos.strategy_name,
+                leg=pos.leg_role,
+                signal=result.exit_signal,
+                severity=result.severity,
+            )
+
+            msg = (
+                f"🚨 EXIT SIGNAL [{result.severity}] — {pos.strategy_name} / {pos.leg_role}\n"
+                f"Signal: {result.exit_signal}\n"
+                f"{result.notes or ''}"
+            )
+            if result.severity == "ACTION":
+                action_messages.append(msg)
+            else:  # WARN
+                warn_by_strategy.setdefault(pos.strategy_name, []).append(
+                    f"  • {pos.leg_role}: {result.exit_signal} — {result.notes or ''}"
+                )
+
+    if notifier is None:
+        return
+
+    for msg in action_messages:
+        try:
+            await notifier.send(msg)
+        except Exception as exc:
+            logger.warning("exit_signal.telegram_action_failed", error=str(exc))
+
+    for strategy_name, warns in warn_by_strategy.items():
+        batch = f"⚠️ EXIT WARN — {strategy_name}\n" + "\n".join(warns)
+        try:
+            await notifier.send(batch)
+        except Exception as exc:
+            logger.warning(
+                "exit_signal.telegram_warn_failed",
+                strategy=strategy_name,
+                error=str(exc),
+            )
 
 
 # ── Per-leg delta calculation ─────────────────────────────────────────────────
@@ -418,6 +756,41 @@ async def _run(args: argparse.Namespace) -> None:
         if save:
             _save_nav_snapshot(store, track_name, snapshot, snap_date, nifty_spot)
             _save_leg_snapshots(store, track_name, snapshot, snap_date, ltp_map)
+
+    # ── EOD exit signal evaluation (Tier 1) ──────────────────────────────────
+    # Collect open positions across all tracks + CSP strategy, then fetch the
+    # nearest monthly option chain and evaluate exit signals for each leg.
+    # Skipped in dry-run mode (save=False) — no DB writes or Telegram alerts.
+    if save:
+        all_positions: list[PaperPosition] = []
+        for sname in [*tracks, _CSP_STRATEGY]:
+            all_positions.extend(store.get_positions(sname))
+
+        eod_chain: OptionChain | None = None
+        try:
+            candidates = lookup.get_expiry_candidates(
+                "NIFTY", snap_date, preference=["monthly", "quarterly"]
+            )
+            if candidates:
+                _label, expiry_str = candidates[0]
+                raw_chain = await broker.get_option_chain("NSE_INDEX|Nifty 50", expiry_str)
+                chain_data = raw_chain if isinstance(raw_chain, list) else []
+                eod_chain = parse_upstox_option_chain(chain_data)
+        # Intentional: chain fetch failure must not crash the snapshot.
+        except Exception as exc:
+            logger.warning("exit_signals.chain_fetch_failed", error=str(exc))
+
+        if eod_chain is not None:
+            await compute_and_record_exit_signals(
+                store=store,
+                positions=all_positions,
+                chain=eod_chain,
+                snapshot_id=None,
+                engine=ExitSignalEngine,
+                today=snap_date,
+                notifier=notifier,
+                save=save,
+            )
 
     # Print summary table at the TOP (as requested)
     if summary_rows:
