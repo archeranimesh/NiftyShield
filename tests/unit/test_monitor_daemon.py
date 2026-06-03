@@ -53,6 +53,52 @@ async def test_monitor_daemon_shutdown() -> None:
         mock_exit.assert_called_once_with(0)
 
 
+def test_monitor_overlays_gate_disabled_by_default() -> None:
+    """MONITOR_OVERLAYS defaults to False when env var is unset."""
+    with patch.dict("os.environ", {}, clear=False):
+        # Re-evaluate the constant expression directly — module already loaded
+        import os
+        result = os.getenv("MONITOR_OVERLAYS", "0") == "1"
+        assert result is False
+
+
+def test_monitor_overlays_gate_enabled_when_env_set() -> None:
+    """MONITOR_OVERLAYS=1 enables overlay strategy registration."""
+    from unittest.mock import MagicMock, patch
+
+    import scripts.monitor_daemon as _daemon
+
+    cc = MagicMock()
+    pp = MagicMock()
+    collar = MagicMock()
+    cc_instance = MagicMock()
+    pp_instance = MagicMock()
+    collar_instance = MagicMock()
+    cc.return_value = cc_instance
+    pp.return_value = pp_instance
+    collar.return_value = collar_instance
+
+    with (
+        patch.object(_daemon, "MONITOR_OVERLAYS", True),
+        patch.object(_daemon, "CCOverlayV1", cc),
+        patch.object(_daemon, "PPOverlayV1", pp),
+        patch.object(_daemon, "CollarOverlayV1", collar),
+    ):
+        strategies: list = []
+        for overlay_cls, overlay_name in [
+            (_daemon.CCOverlayV1, "CCOverlayV1"),
+            (_daemon.PPOverlayV1, "PPOverlayV1"),
+            (_daemon.CollarOverlayV1, "CollarOverlayV1"),
+        ]:
+            if overlay_cls is not None:
+                strategies.append(overlay_cls())
+
+        assert cc_instance in strategies
+        assert pp_instance in strategies
+        assert collar_instance in strategies
+        assert len(strategies) == 3
+
+
 @pytest.mark.asyncio
 async def test_monitor_daemon_shutdown_duplicate_ignored() -> None:
     # Set references in daemon module

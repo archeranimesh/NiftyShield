@@ -68,7 +68,39 @@ except ImportError:
     # Intentional: Ignore import errors for unimplemented strategies
     NiftyTrackComparisonV1 = None
 
+try:
+    from src.strategy.cc_overlay_v1 import CCOverlayV1  # noqa: E402
+except ImportError:
+    # Intentional: Ignore import errors for unimplemented strategies
+    CCOverlayV1 = None
+
+try:
+    from src.strategy.pp_overlay_v1 import PPOverlayV1  # noqa: E402
+except ImportError:
+    # Intentional: Ignore import errors for unimplemented strategies
+    PPOverlayV1 = None
+
+try:
+    from src.strategy.collar_overlay_v1 import CollarOverlayV1  # noqa: E402
+except ImportError:
+    # Intentional: Ignore import errors for unimplemented strategies
+    CollarOverlayV1 = None
+
+try:
+    from src.strategy.overlay_closer import OverlayCloser  # noqa: E402
+except ImportError:
+    # Intentional: Ignore import errors for unimplemented strategies
+    OverlayCloser = None
+
 logger = structlog.get_logger("scripts.monitor_daemon")
+
+# Intraday overlay monitoring gate — disabled by default in Phase 0
+MONITOR_OVERLAYS: bool = os.getenv("MONITOR_OVERLAYS", "0") == "1"
+
+# Overlay action types routed to OverlayCloser (not PaperExecutor)
+_OVERLAY_ACTION_TYPES: frozenset[str] = frozenset(
+    {"CLOSE_CC", "MONETIZE_PP", "CLOSE_CALL_ONLY", "MONETIZE_PUT", "CLOSE_ALL_OVERLAY"}
+)
 
 # Global task references for signal handling
 monitor_task: asyncio.Task | None = None
@@ -263,6 +295,32 @@ async def main() -> int:
             + "skipping registration"
         )
 
+    if MONITOR_OVERLAYS:
+        logger.info("MONITOR_OVERLAYS=1 — registering overlay strategies")
+        for overlay_cls, overlay_name in [
+            (CCOverlayV1, "CCOverlayV1"),
+            (PPOverlayV1, "PPOverlayV1"),
+            (CollarOverlayV1, "CollarOverlayV1"),
+        ]:
+            if overlay_cls is not None:
+                try:
+                    strategies.append(overlay_cls())
+                    logger.info("Registered overlay strategy", name=overlay_name)
+                except Exception as e:
+                    # Intentional: Safe overlay init guard
+                    logger.error(
+                        "Failed to initialize overlay strategy",
+                        name=overlay_name,
+                        error=str(e),
+                    )
+            else:
+                logger.warning(
+                    "Overlay module not found; skipping registration",
+                    name=overlay_name,
+                )
+    else:
+        logger.info("MONITOR_OVERLAYS=0 — overlay strategies disabled (Phase 0)")
+
     strategies_ref = [s.strategy_name for s in strategies]
 
     # Initialize StrategyMonitor
@@ -281,6 +339,13 @@ async def main() -> int:
         store=store,
         simulator=simulator,
         db_path=str(store.db_path),
+    )
+
+    # Initialize OverlayCloser for overlay action routing
+    overlay_closer = (
+        OverlayCloser(store=store, simulator=simulator, notifier=gateway)
+        if OverlayCloser is not None
+        else None
     )
 
     # Define callbacks for Telegram long polling
@@ -386,20 +451,38 @@ async def main() -> int:
                 error=str(e),
             )
 
-        # Apply action
+        # Apply action — overlay types routed to OverlayCloser
         try:
-            await asyncio.to_thread(
-                executor.apply,
-                strategy_name=strategy_name,
-                action=approved_action,
-                market=market,
-                approval_id=approval_id,
-            )
-            logger.info(
-                "Successfully executed approved action",
-                strategy_name=strategy_name,
-                approval_id=approval_id,
-            )
+            if (
+                approved_action.action_type in _OVERLAY_ACTION_TYPES
+                and overlay_closer is not None
+            ):
+                await asyncio.to_thread(
+                    overlay_closer.route,
+                    strategy_name=strategy_name,
+                    action=approved_action,
+                    market=market,
+                    event_id=None,
+                )
+                logger.info(
+                    "Successfully executed overlay action via OverlayCloser",
+                    strategy_name=strategy_name,
+                    action_type=approved_action.action_type,
+                    approval_id=approval_id,
+                )
+            else:
+                await asyncio.to_thread(
+                    executor.apply,
+                    strategy_name=strategy_name,
+                    action=approved_action,
+                    market=market,
+                    approval_id=approval_id,
+                )
+                logger.info(
+                    "Successfully executed approved action",
+                    strategy_name=strategy_name,
+                    approval_id=approval_id,
+                )
         except Exception as e:
             # Intentional: Isolate execution errors from crashing the daemon
             logger.exception(
