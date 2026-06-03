@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from src.db import connect as _connect
 from src.models.portfolio import TradeAction
 from src.paper.models import ExitSignal, PaperTrade
 from src.paper.store import PaperStore
@@ -158,6 +159,22 @@ def test_state_transitions_and_guards(store: PaperStore) -> None:
     with pytest.raises(ValueError, match="No open or acknowledged paper_exit_events row"):
         store.resolve_exit_event(ev_id, "ACTED")
 
+    # Test DISMISSED path independently
+    ev_id_dismissed = store.create_exit_event(
+        "paper_csp_nifty_v1", "short_put", "t2", t_now, "EOD", ExitSignal.TIME_STOP, "ACTION", 10.0
+    )
+    store.resolve_exit_event(ev_id_dismissed, "DISMISSED", "dismissed notes")
+    events = store.get_open_exit_events()
+    assert len(events) == 0  # removed from open list
+
+    # Check status is DISMISSED in DB
+    with _connect(store.db_path) as conn:
+        row = conn.execute(
+            "SELECT status, notes FROM paper_exit_events WHERE id = ?", (ev_id_dismissed,)
+        ).fetchone()
+        assert row["status"] == "DISMISSED"
+        assert row["notes"] == "dismissed notes"
+
 
 def test_notes_appending_semantics(store: PaperStore) -> None:
     t_now = datetime(2026, 6, 3, 10, 0, 0, tzinfo=timezone.utc)
@@ -177,14 +194,11 @@ def test_notes_appending_semantics(store: PaperStore) -> None:
     store.resolve_exit_event(ev_id_1, "ACTED", "resolved note")
 
     # Verify via custom query or fetching from database
-    with store.db_path.open() as _:
-        from src.db import connect as _connect
-
-        with _connect(store.db_path) as conn:
-            row = conn.execute(
-                "SELECT notes FROM paper_exit_events WHERE id = ?", (ev_id_1,)
-            ).fetchone()
-            assert row["notes"] == "initial notes\nresolved note"
+    with _connect(store.db_path) as conn:
+        row = conn.execute(
+            "SELECT notes FROM paper_exit_events WHERE id = ?", (ev_id_1,)
+        ).fetchone()
+        assert row["notes"] == "initial notes\nresolved note"
 
     # 2. Event created with empty notes
     ev_id_2 = store.create_exit_event(

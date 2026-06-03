@@ -931,9 +931,9 @@ class PaperStore:
         leg_name: str,
         trade_id: str,
         event_time: datetime,
-        detected_by: str,
+        detected_by: Literal["EOD", "INTRADAY", "MANUAL"],
         exit_signal: ExitSignal,
-        severity: str,
+        severity: Literal["INFO", "WARNING", "ACTION"],
         entry_price: Decimal | float,
         *,
         snapshot_id: int | None = None,
@@ -949,7 +949,33 @@ class PaperStore:
         actual_rule_used: str | None = None,
         notes: str | None = None,
     ) -> int:
-        """Insert an exit event with status='OPEN' and return the generated row ID."""
+        """Insert an exit event with status='OPEN' and return the generated row ID.
+
+        Args:
+            strategy_name: Name of the paper strategy.
+            leg_name: Leg identifier within the strategy.
+            trade_id: Paper trade ID referencing the trigger trade.
+            event_time: Time when the exit event was detected.
+            detected_by: How the signal was detected (EOD, INTRADAY, MANUAL).
+            exit_signal: The specific exit signal enum value.
+            severity: Severity level (INFO, WARNING, ACTION).
+            entry_price: Original entry price.
+            snapshot_id: Optional snapshot reference ID.
+            ltp: Last traded price of the option at detection.
+            mid: Mid price of the option at detection.
+            bid: Bid price of the option at detection.
+            ask: Ask price of the option at detection.
+            delta: Delta of the option at detection.
+            dte: Days to expiry at detection.
+            threshold_value: Fired threshold value.
+            delta_stop_would_fire: 1 if delta stop would have fired, 0 if not.
+            premium_stop_would_fire: 1 if premium multiple stop would have fired, 0 if not.
+            actual_rule_used: The rule that fired the event (DELTA, PREMIUM, BOTH, NEITHER).
+            notes: Qualitative notes to save.
+
+        Returns:
+            The generated ID of the inserted event row.
+        """
         with _connect(self.db_path) as conn:
             cur = conn.execute(
                 """INSERT INTO paper_exit_events
@@ -989,7 +1015,14 @@ class PaperStore:
         self,
         strategy_name: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Retrieve open/acknowledged events ordered by event_time ASC."""
+        """Retrieve open/acknowledged events ordered by event_time ASC.
+
+        Args:
+            strategy_name: Optional strategy name to filter by.
+
+        Returns:
+            List of open or acknowledged exit events.
+        """
         with _connect(self.db_path) as conn:
             if strategy_name is not None:
                 rows = conn.execute(
@@ -1019,7 +1052,14 @@ class PaperStore:
         return [dict(r) for r in rows]
 
     def acknowledge_exit_event(self, event_id: int) -> None:
-        """Update event status to 'ACKNOWLEDGED' if status is 'OPEN'."""
+        """Update event status to 'ACKNOWLEDGED' if status is 'OPEN'.
+
+        Args:
+            event_id: The ID of the event to acknowledge.
+
+        Raises:
+            ValueError: If the event row is not found or is not in 'OPEN' state.
+        """
         with _connect(self.db_path) as conn:
             cur = conn.execute(
                 """UPDATE paper_exit_events
@@ -1036,7 +1076,16 @@ class PaperStore:
         status: Literal["ACTED", "DISMISSED"],
         notes: str | None = None,
     ) -> None:
-        """Resolve event and append notes if provided."""
+        """Resolve event and append notes if provided.
+
+        Args:
+            event_id: The ID of the event to resolve.
+            status: The resolution status (ACTED, DISMISSED).
+            notes: Optional notes to append.
+
+        Raises:
+            ValueError: If the event row is not found or is not in open/acknowledged state.
+        """
         with _connect(self.db_path) as conn:
             cur = conn.execute(
                 """UPDATE paper_exit_events
