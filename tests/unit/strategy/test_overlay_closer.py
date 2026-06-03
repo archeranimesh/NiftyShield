@@ -1,4 +1,3 @@
-import asyncio
 import sqlite3
 from datetime import date, datetime, timezone
 from decimal import Decimal
@@ -110,10 +109,6 @@ def closer(
     store: PaperStore, simulator: PaperFillSimulator, notifier: MockNotifier
 ) -> OverlayCloser:
     return OverlayCloser(store, simulator, notifier)
-
-
-def _run(coro: Any) -> Any:
-    return asyncio.run(coro)
 
 
 def test_close_single_leg_happy_path(store: PaperStore, closer: OverlayCloser) -> None:
@@ -386,6 +381,92 @@ def test_route(store: PaperStore, closer: OverlayCloser) -> None:
         council_rank=1,
     )
     chain = _make_chain("35", "0.20", "20", "-0.10")
-    result = _run(closer.route("paper_covered_call_v1", action, chain, None, 15.0))
+    result = closer.route("paper_covered_call_v1", action, chain, None, 15.0)
     # verify position is closed
     assert all(p.leg_role != "short_call" for p in result if p.net_qty != 0)
+
+
+def test_monetize_collar_put_rollback(
+    store: PaperStore, closer: OverlayCloser, notifier: MockNotifier
+) -> None:
+    t1 = PaperTrade(
+        strategy_name="paper_collar_v1",
+        leg_role="collar_short_call",
+        instrument_key="NSE_FO|NIFTY24500CE",
+        trade_date=date.today(),
+        action=TradeAction.SELL,
+        quantity=65,
+        price=Decimal("80"),
+        is_paper=True,
+    )
+    t2 = PaperTrade(
+        strategy_name="paper_collar_v1",
+        leg_role="collar_long_put",
+        instrument_key="NSE_FO|NIFTY21500PE",
+        trade_date=date.today(),
+        action=TradeAction.BUY,
+        quantity=65,
+        price=Decimal("50"),
+        is_paper=True,
+    )
+    store.record_trade(t1)
+    store.record_trade(t2)
+
+    # Mock store to fail on put record_trade
+    original_record = store.record_trade
+
+    def mock_record(trade: PaperTrade) -> bool:
+        if trade.leg_role == "collar_long_put":
+            raise ValueError("Simulated DB error")
+        return original_record(trade)
+
+    store.record_trade = mock_record  # type: ignore[method-assign]
+
+    chain = _make_chain("4.0", "0.05", "250", "-0.85")
+    closer.monetize_collar_put("paper_collar_v1", chain, None, 15.0)
+
+    # Verify call leg was rolled back (is still open)
+    pos = store.get_position("paper_collar_v1", "collar_short_call")
+    assert pos.net_qty == -65
+    assert len(notifier.sent_messages) == 1
+    assert "Collar monetize failed" in notifier.sent_messages[0]
+
+
+def test_close_collar_already_flat(store: PaperStore, closer: OverlayCloser, caplog: Any) -> None:
+    # Seed an open exit event
+    event_id = store.create_exit_event(
+        strategy_name="paper_collar_v1",
+        leg_name="collar_short_call",
+        trade_id="123",
+        event_time=datetime.now(timezone.utc),
+        detected_by="EOD",
+        exit_signal=ExitSignal.COLLAR_CLOSE_ALL,
+        severity="ACTION",
+        entry_price=Decimal("80"),
+    )
+
+    chain = _make_chain("10", "0.05", "20", "-0.10")
+    closer.close_collar_all("paper_collar_v1", chain, event_id, 15.0)
+
+    # Verify event is DISMISSED
+    events = store.get_open_exit_events("paper_collar_v1")
+    assert not any(e["id"] == event_id for e in events)
+
+    # Check database status is DISMISSED
+    with sqlite3.connect(store.db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT status, notes FROM paper_exit_events WHERE id = ?", (event_id,)
+        ).fetchone()
+        assert row["status"] == "DISMISSED"
+        assert "Already flat" in row["notes"]
+
+
+def test_resolve_mid_price_warning(closer: OverlayCloser) -> None:
+    from unittest.mock import patch
+
+    chain = _make_chain("10", "0.05", "20", "-0.10")
+    with patch("src.strategy.overlay_closer.log.warning") as mock_warn:
+        price = closer._resolve_mid_price("NSE_FO|73539", chain)
+        assert price == Decimal("0")
+        mock_warn.assert_called_once_with("resolve_mid_price.key_not_parseable", key="NSE_FO|73539")

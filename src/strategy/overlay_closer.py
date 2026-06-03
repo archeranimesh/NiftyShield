@@ -164,6 +164,15 @@ class OverlayCloser:
         today = date.today()
         call_pos = self._store.get_position(strategy_name, SHORT_CALL_ROLE)
         put_pos = self._store.get_position(strategy_name, LONG_PUT_ROLE)
+        call_qty = abs(call_pos.net_qty) if call_pos else 0
+        put_qty = abs(put_pos.net_qty) if put_pos else 0
+        if call_qty == 0 and put_qty == 0:
+            log.warning("close_collar_all.already_flat", strategy_name=strategy_name)
+            if event_id is not None:
+                self._store.resolve_exit_event_with_audit(
+                    event_id=event_id, status="DISMISSED", notes="Already flat"
+                )
+            return
 
         call_close_trade = None
         if call_pos and call_pos.net_qty < 0:
@@ -259,6 +268,17 @@ class OverlayCloser:
         call_pos = self._store.get_position(strategy_name, SHORT_CALL_ROLE)
         put_pos = self._store.get_position(strategy_name, LONG_PUT_ROLE)
 
+        call_qty = abs(call_pos.net_qty) if call_pos else 0
+        put_qty = abs(put_pos.net_qty) if put_pos else 0
+        if call_qty == 0 and put_qty == 0:
+            log.warning("monetize_collar_put.already_flat", strategy_name=strategy_name)
+            if event_id is not None:
+                self._store.resolve_exit_event_with_audit(
+                    event_id=event_id, status="DISMISSED", notes="Already flat"
+                )
+            return
+
+        call_close_trade = None
         if call_pos and call_pos.net_qty < 0:
             call_leg = self._find_option_leg(market, call_pos.instrument_key)
             residual = float(call_leg.ltp) if call_leg is not None else 0.0
@@ -267,7 +287,7 @@ class OverlayCloser:
                 fill = self._simulator.simulate_fill(
                     call_pos.instrument_key, "BUY", abs(call_pos.net_qty), mid, vix
                 )
-                call_trade = PaperTrade(
+                call_close_trade = PaperTrade(
                     strategy_name=strategy_name,
                     leg_role=SHORT_CALL_ROLE,
                     instrument_key=call_pos.instrument_key,
@@ -279,14 +299,24 @@ class OverlayCloser:
                     ivr_at_entry=None,
                     is_paper=True,
                 )
-                self._store.record_trade(call_trade)
+                try:
+                    success = self._store.record_trade(call_close_trade)
+                    if not success:
+                        raise RuntimeError("Call close trade insertion skipped (duplicate)")
+                except Exception as e:
+                    log.error("collar_put_monetize.call_failed", error=str(e))
+                    if self._notifier:
+                        self._notifier.send(
+                            f"Collar monetize failed: call leg could not be closed. Error: {e}"
+                        )
+                    return
 
         if put_pos and put_pos.net_qty > 0:
             mid = self._resolve_mid_price(put_pos.instrument_key, market)
             fill = self._simulator.simulate_fill(
                 put_pos.instrument_key, "SELL", abs(put_pos.net_qty), mid, vix
             )
-            put_trade = PaperTrade(
+            put_close_trade = PaperTrade(
                 strategy_name=strategy_name,
                 leg_role=LONG_PUT_ROLE,
                 instrument_key=put_pos.instrument_key,
@@ -298,7 +328,24 @@ class OverlayCloser:
                 ivr_at_entry=None,
                 is_paper=True,
             )
-            self._store.record_trade(put_trade)
+            try:
+                success = self._store.record_trade(put_close_trade)
+                if not success:
+                    raise RuntimeError("Put close trade insertion skipped (duplicate)")
+            except Exception as e:
+                log.error("collar_put_monetize.put_failed_rolling_back", error=str(e))
+                if call_close_trade:
+                    try:
+                        self._store.delete_trade(call_close_trade)
+                        log.info("collar_put_monetize.rollback_success")
+                    except Exception as rollback_err:
+                        log.critical("collar_put_monetize.rollback_failed", error=str(rollback_err))
+                if self._notifier:
+                    self._notifier.send(
+                        "Collar monetize failed: put leg could not be closed. "
+                        f"Call leg close rolled back to restore Collar. Error: {e}"
+                    )
+                return
 
         expiry = self._parse_expiry(put_pos.instrument_key) if put_pos else None
         dte = (expiry - today).days if expiry is not None else 0
@@ -324,7 +371,7 @@ class OverlayCloser:
             )
             self._store.resolve_exit_event(eid, "ACTED")
 
-    async def route(
+    def route(
         self,
         strategy_name: str,
         action: ApprovedAction,
@@ -393,6 +440,8 @@ class OverlayCloser:
                         return leg.ltp
             except Exception:
                 pass
+        else:
+            log.warning("resolve_mid_price.key_not_parseable", key=instrument_key)
         return Decimal("0")
 
     def _find_option_leg(self, market: OptionChain, instrument_key: str) -> OptionLeg | None:
