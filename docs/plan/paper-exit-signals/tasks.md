@@ -32,7 +32,7 @@
 
 ## Phase ES6 — Closure
 
-- [ ] **ES6** `[Antigravity]` — `OverlayCloser` (atomic Collar close + rollback) + tests | SHA: ___
+- [x] **ES6** `[Antigravity]` — `OverlayCloser` (atomic Collar close + rollback) + tests | SHA: 4b99766
 
 ## Phase ES7 — EOD Integration
 
