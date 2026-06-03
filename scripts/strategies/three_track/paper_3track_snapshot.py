@@ -40,6 +40,7 @@ load_dotenv()
 
 import argparse
 import asyncio
+import calendar
 import re
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
@@ -49,6 +50,7 @@ import structlog
 from src.client.upstox_market import UpstoxMarketClient, parse_upstox_option_chain
 from src.config import settings
 from src.instruments.lookup import InstrumentLookup, parse_expiry
+from src.market_calendar.holidays import is_trading_day
 from src.models.options import OptionChain, OptionLeg
 from src.notifications.telegram import TelegramNotifier
 from src.paper._display import (
@@ -271,8 +273,6 @@ def _dispatch_evaluate(
 
     return []
 
-    return []
-
 
 def _get_expiry_date(instrument_key: str, instruments: InstrumentLookup) -> date | None:
     """Resolve the expiry date of an instrument from BOD or by parsing its key."""
@@ -308,11 +308,11 @@ def _get_expiry_date(instrument_key: str, instruments: InstrumentLookup) -> date
             mon_str = m.group(2).upper()
             month = _MONTH_ABBR.get(mon_str)
             if month:
-                import calendar
-
                 last_day = calendar.monthrange(2000 + yy, month)[1]
                 d = date(2000 + yy, month, last_day)
-                while d.weekday() != 3:  # Thursday
+                while (
+                    d.weekday() != 1
+                ):  # Tuesday (SEBI change: NIFTY monthly expiry moved from Thu→Tue, Apr 2026)
                     d -= timedelta(days=1)
                 return d
         except (ValueError, IndexError):
@@ -325,11 +325,11 @@ def _get_expiry_date(instrument_key: str, instruments: InstrumentLookup) -> date
             year = int(m.group(2))
             month = _MONTH_ABBR.get(mon_str)
             if month:
-                import calendar
-
                 last_day = calendar.monthrange(year, month)[1]
                 d = date(year, month, last_day)
-                while d.weekday() != 3:  # Thursday
+                while (
+                    d.weekday() != 1
+                ):  # Tuesday (SEBI change: NIFTY monthly expiry moved from Thu→Tue, Apr 2026)
                     d -= timedelta(days=1)
                 return d
         except (ValueError, IndexError):
@@ -418,8 +418,6 @@ async def _check_base_expiry(
             logger.warning("base_expiry.db_write_failed", error=str(exc))
 
         # Calculate next trading day
-        from src.market_calendar.holidays import is_trading_day
-
         next_trading_date = today + timedelta(days=1)
         while not is_trading_day(next_trading_date):
             next_trading_date += timedelta(days=1)
