@@ -304,6 +304,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-06-03 | paper-exit-signals ES3 — CCOverlayV1 strategy class + 11 unit tests — 9ed05fb |
 | 2026-06-03 | paper-exit-signals ES1 — stateless ExitSignalEngine class with CSP, CC, PP, Collar exit & warning rules + 20 unit tests — 2de33eb |
 | 2026-06-03 | paper-exit-signals ES0 — paper_exit_events DDL migration + PaperStore create/get/ack/resolve methods + Pydantic model + 6 tests — 7cd8212 |
 | 2026-06-02 | paper-backbone PB5 — Docs close: CONTEXT.md (src/strategy/, src/council/, TelegramGateway, daemon scripts, What Does NOT Exist Yet), DECISIONS.md (paper-backbone entry), TODOS.md (build queue status) — 565b660 |

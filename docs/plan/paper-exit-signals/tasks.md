@@ -26,7 +26,7 @@
 
 ## Phase ES3–ES5 — Strategy Classes
 
-- [ ] **ES3** `[Antigravity]` — `CCOverlayV1` + tests | SHA: ___
+- [x] **ES3** `[Antigravity]` — `CCOverlayV1` + tests | SHA: 9ed05fb
 - [ ] **ES4** `[Antigravity]` — `PPOverlayV1` + tests | SHA: ___
 - [ ] **ES5** `[Antigravity]` — `CollarOverlayV1` + tests | SHA: ___
 
