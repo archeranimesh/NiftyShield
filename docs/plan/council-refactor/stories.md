@@ -98,160 +98,315 @@ reconstructs the `ApprovedAction` directly — no council reconstruction step.
 
 ---
 
-## CR1 `[Claude]` — `evaluate_roll_csp()` in `ExitSignalEngine` + `RollSignalResult`
+## CR1a `[Antigravity]` — Extract `strike_selector.py` from `find_strike_by_delta.py`
 
-**Files:** `src/strategy/exit_signals.py`, `tests/unit/strategy/test_exit_signals_roll.py`
+**Files:**
+- `src/instruments/strike_selector.py` (new)
+- `scripts/lookup/find_strike_by_delta.py` (update imports)
+- `scripts/strategies/csp/paper_csp_roll.py` (update imports)
+- `tests/unit/instruments/test_strike_selector.py` (new)
 
 **Before any code:**
-- `get_code_snippet("ExitSignalEngine")` — confirm existing evaluate_* method pattern
-- `get_code_snippet("ExitSignalResult")` — field list; `RollSignalResult` follows same pattern
-- `get_code_snippet("get_expiry_candidates")` — confirm signature and return shape
-- `search_graph("RollSignalResult")` — confirm does NOT yet exist
+- `get_code_snippet("filter_strikes_by_delta")` — exact signature + return shape
+- `get_code_snippet("rank_strikes")` — exact signature + return shape
+- `get_code_snippet("_apply_liquidity_gate")` — confirm it is a private helper called by `filter_strikes_by_delta`
+- `search_graph("strike_selector")` — confirm does NOT yet exist
 
-**What to implement:**
+**What to extract into `src/instruments/strike_selector.py`:**
 
-Add to `src/strategy/exit_signals.py`:
+Move these three functions verbatim from `scripts/lookup/find_strike_by_delta.py`:
+- `filter_strikes_by_delta(chain_data, option_type, delta_min, delta_max) -> list[dict]`
+- `_apply_liquidity_gate(rows) -> list[dict]`
+- `rank_strikes(rows) -> list[dict]`
+
+`find_strike_by_delta.py` becomes a thin CLI wrapper — replace the three function bodies
+with imports:
+```python
+from src.instruments.strike_selector import (
+    filter_strikes_by_delta,
+    _apply_liquidity_gate,
+    rank_strikes,
+)
+```
+
+`paper_csp_roll.py` line 48 currently imports from the script:
+```python
+from scripts.lookup.find_strike_by_delta import filter_strikes_by_delta, rank_strikes
+```
+Change to:
+```python
+from src.instruments.strike_selector import filter_strikes_by_delta, rank_strikes
+```
+
+**Tests (`tests/unit/instruments/test_strike_selector.py`):**
+
+Use `get_code_snippet("filter_strikes_by_delta")` to read the exact interface before writing fixtures.
+
+- `filter_strikes_by_delta` with valid PE rows in range → returns subset
+- `filter_strikes_by_delta` with no rows in delta range → returns `[]`
+- `_apply_liquidity_gate` with low-OI row → filtered out
+- `rank_strikes` with multiple rows → sorted; first row is best candidate
+- `rank_strikes` with empty input → returns `[]`
+
+**Commit:** `refactor(instruments): extract strike_selector from find_strike_by_delta; update imports`
+
+---
+
+## CR1b `[Claude]` — `evaluate_roll_csp` + `CSPRollExecutor` + full CSP automation
+
+**Files:**
+- `src/strategy/exit_signals.py` (add `evaluate_roll_csp`)
+- `src/strategy/csp_roll_executor.py` (new)
+- `src/strategy/csp_nifty_v1.py` (store broker; wire `CLOSE_AND_ROLL`)
+- `tests/unit/strategy/test_exit_signals.py` (extend)
+- `tests/unit/strategy/test_csp_roll_executor.py` (new)
+- `tests/unit/strategy/test_csp_nifty_v1.py` (extend)
+
+**Prerequisite:** CR1a committed — `src/instruments/strike_selector.py` must exist.
+
+**Before any code:**
+- `get_code_snippet("ExitSignalEngine")` — confirm existing `evaluate_*` pattern
+- `get_code_snippet("ExitSignalResult")` — field list; roll reuses this type
+- `get_code_snippet("CSPNiftyV1.__init__")` — confirm `broker` param accepted but not stored
+- `get_code_snippet("_close_csp_leg")` — exact signature from `paper_csp_roll.py`
+- `get_code_snippet("_open_new_csp_leg")` — exact signature from `paper_csp_roll.py`
+- `search_graph("CSPRollExecutor")` — confirm does NOT yet exist
+
+**Part 1 — `evaluate_roll_csp` in `ExitSignalEngine`:**
 
 ```python
-@dataclass(frozen=True)
-class RollSignalResult:
-    """Deterministic roll recommendation from ExitSignalEngine.
+@classmethod
+def evaluate_roll_csp(cls, *, dte: int) -> list[ExitSignalResult]:
+    """Evaluate whether the CSP leg is eligible to roll.
 
-    Returned by evaluate_roll_csp and evaluate_roll_overlay.
-    None is returned (not this dataclass) when a roll is blocked.
+    Triggers when dte <= 5. Returns a single ROLL_ELIGIBLE ACTION result.
+    Returns [] when dte > 5 — no roll needed yet.
+
+    Strike and expiry selection are delegated to CSPRollExecutor at
+    execution time. This function only detects the trigger condition.
+
+    Args:
+        dte: Days to expiry of the short put leg.
+
+    Returns:
+        List with one ROLL_ELIGIBLE result, or empty list.
     """
-    signal: str          # "ROLL_ELIGIBLE" | "ROLL_BASE_FIRST"
-    severity: str        # "ACTION" | "WARN"
-    proposed_strike: int | None      # None when signal == "ROLL_BASE_FIRST"
-    proposed_expiry: str | None      # ISO date string; None when blocked
-    ivr_tier: str | None # "low" | "standard" | "aggressive" | None
-    reason: str          # human-readable rationale for Telegram message
+    if dte <= 5:
+        return [
+            ExitSignalResult(
+                exit_signal="ROLL_ELIGIBLE",
+                severity="ACTION",
+                threshold_value=5.0,
+                notes=f"DTE {dte} ≤ 5 — close and reopen via strike_selector",
+            )
+        ]
+    return []
 ```
 
-Add to `ExitSignalEngine`:
+**Part 2 — `src/strategy/csp_roll_executor.py`:**
+
+Extract `_close_csp_leg` and `_open_new_csp_leg` from `paper_csp_roll.py` as public
+functions `close_csp_leg` and `open_new_csp_leg`. Signatures unchanged — just made
+public (remove leading underscore) and moved to `src/strategy/`.
 
 ```python
-IVR_TIER_THRESHOLDS = {
-    "low":        (0.25, 0.35),   # ATM
-    "standard":   (0.35, 0.50),   # ATM - 50
-    "aggressive": (0.50, None),   # ATM - 100
-}
+async def close_csp_leg(
+    broker: BrokerClient,
+    store: PaperStore,
+    existing: PaperTrade,
+    roll_date: date,
+    dry_run: bool,
+) -> PaperTrade: ...
 
-CSP_ROLL_DELTA_FLOOR = Decimal("0.30")   # never roll below this delta
-
-def evaluate_roll_csp(
-    self,
-    days_held: int,
-    dte: int,
-    ivr: float | None,
-    spot: Decimal,
-    atm_strike: int,
-    expiry_candidates: list[dict],  # from get_expiry_candidates(); each has "expiry" and "dte"
-) -> RollSignalResult | None:
-    """Return deterministic CSP roll recommendation, or None if R3 blocks.
-
-    Triggers when days_held >= 21 OR dte <= 5.
-    IVR < 0.25 → return None (R3 blocks roll; caller emits no signal).
-    IVR None   → return None with reason "IVR unavailable — cannot verify R3".
-
-    Strike selection is IVR-tiered. Delta floor (0.30) overrides tier if needed.
-    Expiry selection: first candidate with DTE in [21, 35]; expand to [35, 50] if none.
-    """
+async def open_new_csp_leg(
+    broker: BrokerClient,
+    store: PaperStore,
+    lookup: InstrumentLookup,
+    strategy: str,
+    roll_date: date,
+    dry_run: bool,
+    quantity: int,
+    index: int = 0,
+) -> PaperTrade: ...
 ```
 
-**IVR tier → strike offset mapping:**
+**Part 3 — `CSPNiftyV1` changes:**
+
+In `__init__`, store broker: `self._broker = broker` (currently accepted but discarded).
+
+In `check_signals()`, after the existing `evaluate_csp` loop, call `evaluate_roll_csp`:
+```python
+roll_results = ExitSignalEngine.evaluate_roll_csp(dte=dte)
+for result in roll_results:
+    events.append(
+        SignalEvent(
+            event_type=result.exit_signal,
+            severity=result.severity,
+            description=result.notes or result.exit_signal,
+            payload={"leg_role": pos.leg_role, "dte": dte, "valid_actions": ["CLOSE_AND_ROLL", "CLOSE_FULL"]},
+        )
+    )
+```
+
+In `apply_action`, handle `CLOSE_AND_ROLL`:
+```python
+if action.action_type == "CLOSE_AND_ROLL":
+    # atomically close existing leg and open new one
+    await close_csp_leg(self._broker, self._store, existing_trade, today, dry_run=False)
+    await open_new_csp_leg(self._broker, self._store, self._lookup, self.strategy_name, today, dry_run=False, quantity=existing_trade.quantity)
+```
+Rollback on failure: if `open_new_csp_leg` raises, call `self._store.delete_trade(close_trade)`.
+
+**Tests:**
+
+`test_exit_signals.py` additions:
+- `evaluate_roll_csp(dte=5)` → one `ROLL_ELIGIBLE` ACTION result
+- `evaluate_roll_csp(dte=4)` → one `ROLL_ELIGIBLE` ACTION result
+- `evaluate_roll_csp(dte=6)` → `[]`
+- `evaluate_roll_csp(dte=0)` → one `ROLL_ELIGIBLE` ACTION result (edge: expiry day)
+
+`test_csp_roll_executor.py`:
+- `close_csp_leg` with `dry_run=True` → returns trade, does not call `store.record_trade`
+- `close_csp_leg` with `dry_run=False` → calls `store.record_trade` once
+- `open_new_csp_leg` with `dry_run=True` → returns trade, does not call `store.record_trade`
+- `open_new_csp_leg` with no expiry candidates → raises `ValueError`
+
+`test_csp_nifty_v1.py` additions:
+- `dte=4` position → `ROLL_ELIGIBLE` in signals alongside any exit signals
+- `dte=6` position → no `ROLL_ELIGIBLE`
+- `apply_action("CLOSE_AND_ROLL")` → calls `close_csp_leg` then `open_new_csp_leg`
+- `open_new_csp_leg` raises → `delete_trade` called (rollback)
+
+**Commit:** `feat(strategy): evaluate_roll_csp + CSPRollExecutor + CLOSE_AND_ROLL in CSPNiftyV1`
+
+---
+
+## CR1c `[Antigravity]` — Refactor `paper_csp_roll.py` to thin CLI wrapper
+
+**Files:**
+- `scripts/strategies/csp/paper_csp_roll.py`
+- `tests/unit/scripts/test_paper_csp_roll.py` (update imports if needed)
+
+**Prerequisite:** CR1b committed — `src/strategy/csp_roll_executor.py` must exist.
+
+**Before any code:**
+- `get_code_snippet("_close_csp_leg")` — confirm it is still in `paper_csp_roll.py` (CR1b moved it to executor but the script still has the old copy until this task)
+- `get_code_snippet("_open_new_csp_leg")` — same
+- `get_code_snippet("close_csp_leg")` — confirm CR1b's public version exists in `csp_roll_executor.py`
+
+**What to change:**
+
+Replace `_close_csp_leg` and `_open_new_csp_leg` function bodies in `paper_csp_roll.py`
+with imports and delegation:
 
 ```python
-_IVR_STRIKE_OFFSET: list[tuple[float, int, str]] = [
-    # (ivr_floor, strike_offset_from_atm, tier_label)
-    (0.50, -100, "aggressive"),
-    (0.35,  -50, "standard"),
-    (0.25,    0, "low"),
-]
-# IVR < 0.25 → return None (blocked)
+from src.strategy.csp_roll_executor import close_csp_leg, open_new_csp_leg
+
+async def _close_csp_leg(...):   # thin wrapper kept for backward compat
+    return await close_csp_leg(...)
+
+async def _open_new_csp_leg(...):
+    return await open_new_csp_leg(...)
 ```
 
-Walk the list top-down; first threshold where `ivr >= ivr_floor` wins.
-After selecting the raw strike, verify `|delta_at_strike| ≤ CSP_ROLL_DELTA_FLOOR`.
-If breached, step the strike up by 50 until the constraint is satisfied or ATM is reached.
-(Delta lookup is not performed inside this engine — pass `None` for now; document that
-callers should validate delta post-recommendation before recording the trade. This keeps
-the engine pure and avoids requiring a live chain reference.)
+Or remove the wrappers entirely and update all callers in the script to use the imported
+names directly — whichever is cleaner given the call sites.
 
-**Tests (`tests/unit/strategy/test_exit_signals_roll.py`):**
+Also update the import at line 48 (already changed by CR1a):
+```python
+# Already done in CR1a — no change needed here
+from src.instruments.strike_selector import filter_strikes_by_delta, rank_strikes
+```
 
-Build a minimal `expiry_candidates` fixture: list of dicts with `expiry` (ISO date) and
-`dte` (int). Use `get_code_snippet("get_expiry_candidates")` first — confirm actual return shape.
+**Tests:** existing `paper_csp_roll.py` tests must remain green — no behaviour change.
 
-- `days_held=21, dte=20, ivr=0.40` → `ROLL_ELIGIBLE` ACTION; tier=`standard`; strike = ATM − 50
-- `days_held=10, dte=4, ivr=0.40` → `ROLL_ELIGIBLE` ACTION; DTE ≤ 5 triggers
-- `days_held=10, dte=10, ivr=0.40` → `None` (no trigger condition met)
-- `ivr=0.60, days_held=21` → tier=`aggressive`; strike = ATM − 100
-- `ivr=0.28, days_held=21` → tier=`low`; strike = ATM (no offset)
-- `ivr=0.22, days_held=21` → `None` (R3 blocks)
-- `ivr=None, days_held=21` → `None`; reason contains "IVR unavailable"
-- `proposed_expiry` is within the 21–35 DTE window from candidates
-- No candidate in 21–35 DTE → picks from 35–50 DTE window
-- `RollSignalResult` is frozen — mutation raises
-
-**Commit:** `feat(strategy): add evaluate_roll_csp to ExitSignalEngine with IVR-tiered strike selection`
+**Commit:** `refactor(scripts): paper_csp_roll delegates close/open to csp_roll_executor`
 
 ---
 
 ## CR2 `[Antigravity]` — `evaluate_roll_overlay()` in `ExitSignalEngine`
 
-**Files:** `src/strategy/exit_signals.py`, `tests/unit/strategy/test_exit_signals_roll.py`
+**Files:** `src/strategy/exit_signals.py`, `tests/unit/strategy/test_exit_signals.py`
+
+**Prerequisite:** CR1b committed — confirm `evaluate_roll_csp` pattern before implementing.
 
 **Before any code:**
-- `get_code_snippet("ExitSignalEngine")` — confirm CR1 is committed first
-- `get_code_snippet("RollSignalResult")` — field list from CR1
-- `search_code("BASE_ROLL_ROLES")` in `scripts/` — confirm `{"base_futures", "base_ditm_call"}`
-- `get_code_snippet("get_expiry_candidates")` — confirm import path
+- `get_code_snippet("ExitSignalEngine")` — confirm CR1b pattern: `evaluate_roll_csp` returns `list[ExitSignalResult]`
+- `get_code_snippet("ExitSignalResult")` — field list; roll reuses this type
+- `search_code("BASE_ROLL_ROLES")` in `scripts/` — confirm base role names
 
 **What to implement:**
 
 ```python
-OVERLAY_STRIKE_OFFSET = 50      # points; CC = ATM + offset, PP = ATM - offset
-BASE_DTE_GUARD = 10             # if base DTE <= this, block overlay roll
+_OVERLAY_SHORT_CALL_ROLES = {"cc_short_call", "collar_short_call"}
+_OVERLAY_LONG_PUT_ROLES = {"pp_long_put", "collar_long_put"}
+_OVERLAY_STRIKE_OFFSET = 50   # points
+_BASE_DTE_GUARD = 10          # if base DTE <= this, block overlay roll
 
+@classmethod
 def evaluate_roll_overlay(
-    self,
-    leg_role: str,              # "cc_short_call" | "pp_long_put" | "collar_short_call" | "collar_long_put"
-    dte: int,                   # DTE of the overlay leg
-    base_dte: int,              # DTE of the base position (futures / DITM call)
+    cls,
+    *,
+    leg_role: str,
+    dte: int,
+    base_dte: int,
     atm_strike: int,
-    expiry_candidates: list[dict],
-) -> RollSignalResult | None:
-    """Return deterministic overlay roll recommendation.
+) -> list[ExitSignalResult]:
+    """Evaluate whether an overlay leg is eligible to roll.
 
     Triggers when dte <= 5.
-    If base_dte <= BASE_DTE_GUARD: return RollSignalResult(signal="ROLL_BASE_FIRST",
-    severity="WARN", proposed_strike=None, proposed_expiry=None, ivr_tier=None,
-    reason="Base DTE={base_dte} — roll base first before rolling overlay").
+    If base_dte <= _BASE_DTE_GUARD: returns ROLL_BASE_FIRST WARN.
+    Otherwise: returns ROLL_ELIGIBLE ACTION with suggested strike in notes.
 
-    Strike offsets:
-      - short call roles: ATM + OVERLAY_STRIKE_OFFSET
-      - long put roles:   ATM - OVERLAY_STRIKE_OFFSET
+    Strike suggestion (advisory — actual selection via strike_selector):
+      short call roles: ATM + 50
+      long put roles:   ATM - 50
 
-    Expiry: next monthly Tuesday from expiry_candidates.
-    If base DTE <= 60: align overlay expiry to base expiry (not next monthly).
+    Args:
+        leg_role: One of the known overlay leg roles.
+        dte: Days to expiry of the overlay leg.
+        base_dte: Days to expiry of the base position.
+        atm_strike: Current ATM strike (nearest 50-point to spot).
+
+    Returns:
+        List with one result, or [] when dte > 5.
+
+    Raises:
+        ValueError: When leg_role is not a known overlay role.
     """
 ```
 
-Short call roles: `{"cc_short_call", "collar_short_call"}`.
-Long put roles: `{"pp_long_put", "collar_long_put"}`.
-Unknown `leg_role` → raise `ValueError`.
+If `leg_role` not in `_OVERLAY_SHORT_CALL_ROLES | _OVERLAY_LONG_PUT_ROLES` → raise `ValueError`.
 
-**Tests (extend `test_exit_signals_roll.py`):**
-- CC leg, DTE=4, base_dte=25 → `ROLL_ELIGIBLE` ACTION; strike = ATM + 50
-- PP leg, DTE=4, base_dte=25 → `ROLL_ELIGIBLE` ACTION; strike = ATM − 50
-- DTE=6 → `None` (not triggered)
-- base_dte=8 → `ROLL_BASE_FIRST` WARN; `proposed_strike=None`
-- base_dte=45 → overlay expiry = next monthly Tuesday
-- base_dte=50 → overlay expiry aligned to base expiry (base DTE ≤ 60)
+Base-DTE guard result:
+```python
+ExitSignalResult(
+    exit_signal="ROLL_BASE_FIRST",
+    severity="WARN",
+    threshold_value=float(_BASE_DTE_GUARD),
+    notes=f"Base DTE {base_dte} ≤ {_BASE_DTE_GUARD} — roll base first",
+)
+```
+
+Roll eligible result (short call):
+```python
+ExitSignalResult(
+    exit_signal="ROLL_ELIGIBLE",
+    severity="ACTION",
+    threshold_value=5.0,
+    notes=f"DTE {dte} ≤ 5 — suggested strike {atm_strike + _OVERLAY_STRIKE_OFFSET}",
+)
+```
+
+**Tests (extend `tests/unit/strategy/test_exit_signals.py`):**
+- CC leg, `dte=4`, `base_dte=25` → `ROLL_ELIGIBLE` ACTION; notes contains `atm_strike + 50`
+- PP leg, `dte=4`, `base_dte=25` → `ROLL_ELIGIBLE` ACTION; notes contains `atm_strike - 50`
+- `dte=6` → `[]`
+- `base_dte=8` → `ROLL_BASE_FIRST` WARN
+- `base_dte=11` → `ROLL_ELIGIBLE` (guard does not fire)
 - Unknown `leg_role` → `ValueError`
-- Collar short call → same as CC (ATM + 50)
-- Collar long put → same as PP (ATM − 50)
+- Collar short call → same result as CC
+- Collar long put → same result as PP
 
 **Commit:** `feat(strategy): add evaluate_roll_overlay to ExitSignalEngine with base-DTE guard`
 
@@ -259,80 +414,32 @@ Unknown `leg_role` → raise `ValueError`.
 
 ## CR3 `[Claude]` — Wire roll signals into strategies
 
-**Files:** `src/strategy/csp_nifty_v1.py`, `src/strategy/nifty_track_comparison_v1.py`,
-`tests/unit/strategy/test_csp_nifty_v1.py`,
+**Files:** `src/strategy/csp_nifty_v1.py` (already done in CR1b for CSP),
+`src/strategy/nifty_track_comparison_v1.py`,
 `tests/unit/strategy/test_nifty_track_comparison_v1.py`
 
+**Prerequisite:** CR2 committed — `evaluate_roll_overlay` must exist.
+
 **Before any code:**
-- `get_code_snippet("CSPNiftyV1.check_signals")` — insertion point after existing signal checks
-- `get_code_snippet("NiftyTrackComparisonV1.check_signals")` — current WARN emit logic
-- `get_code_snippet("evaluate_roll_csp")` — CR1 must be committed
-- `get_code_snippet("evaluate_roll_overlay")` — CR2 must be committed
-
-**CSP changes (`csp_nifty_v1.py`):**
-
-In `check_signals()`, after the existing exit signal evaluation, call
-`engine.evaluate_roll_csp(days_held, dte, ivr, spot, atm_strike, expiry_candidates)`.
-
-If result is not `None` and `result.signal == "ROLL_ELIGIBLE"`:
-```python
-SignalEvent(
-    event_type="ROLL_ELIGIBLE",
-    severity="ACTION",
-    description=result.reason,
-    payload={
-        "proposed_strike": result.proposed_strike,
-        "proposed_expiry": result.proposed_expiry,
-        "ivr_tier": result.ivr_tier,
-        "action_options": ["RECORD_ROLL"],   # CR0 convention
-    },
-)
-```
-
-Note: `evaluate_roll_csp` requires `expiry_candidates` — call
-`get_expiry_candidates("NIFTY", today)` once in `check_signals` and pass through.
-If `get_expiry_candidates` raises or returns empty, log WARNING and skip roll check.
+- `get_code_snippet("NiftyTrackComparisonV1.check_signals")` — current WARN emit logic for `ROLL_DUE_DTE`
+- `get_code_snippet("evaluate_roll_overlay")` — CR2 signature
 
 **3-track changes (`nifty_track_comparison_v1.py`):**
 
-Existing behaviour: `ROLL_DUE_DTE` is emitted as WARN for DTE ≤ 5.
-Change: when DTE ≤ 5, call `engine.evaluate_roll_overlay(leg_role, dte, base_dte,
-atm_strike, expiry_candidates)` and emit the result as ACTION:
+When DTE ≤ 5, replace `ROLL_DUE_DTE` WARN emission with a call to
+`ExitSignalEngine.evaluate_roll_overlay(leg_role, dte, base_dte, atm_strike)`:
 
-```python
-SignalEvent(
-    event_type="ROLL_ELIGIBLE",
-    severity="ACTION",
-    description=result.reason,
-    payload={
-        "proposed_strike": result.proposed_strike,
-        "proposed_expiry": result.proposed_expiry,
-        "leg_role": leg_role,
-        "action_options": ["RECORD_ROLL"],
-    },
-)
-```
+- If `ROLL_ELIGIBLE` ACTION → emit `SignalEvent(event_type="ROLL_ELIGIBLE", severity="ACTION", ..., payload={..., "valid_actions": ["RECORD_ROLL"]})`
+- If `ROLL_BASE_FIRST` WARN → keep as WARN (same as current `ROLL_DUE_DTE`)
+- DTE 6–10: keep existing `ROLL_DUE_DTE` WARN unchanged
 
-If result is `ROLL_BASE_FIRST`, keep it as WARN (severity unchanged from current WARN).
-DTE 6–10 range: keep `ROLL_DUE_DTE` as WARN (no roll recommendation yet — advisory only).
+**Tests:**
+- Overlay leg `dte=4`, `base_dte=25` → `ROLL_ELIGIBLE` ACTION in signals
+- Overlay leg `dte=8` → `ROLL_DUE_DTE` WARN (unchanged)
+- `base_dte=8` → `ROLL_BASE_FIRST` WARN; no `ROLL_ELIGIBLE`
+- Healthy overlay (`dte=20`) → `[]`
 
-`ExitSignalEngine` instance: inject at construction time via `CSPNiftyV1(engine=ExitSignalEngine())`
-and `NiftyTrackComparisonV1(engine=ExitSignalEngine())`. Do not instantiate inside `check_signals`.
-Update daemon startup in `monitor_daemon.py` accordingly.
-
-**Tests — CSP:**
-- `days_held=21, dte=20, ivr=0.40` → `ROLL_ELIGIBLE` ACTION in returned signals
-- `ivr=0.22` → no `ROLL_ELIGIBLE` (R3 blocks); other exit signals unaffected
-- `days_held=10, dte=4, ivr=0.40` → `ROLL_ELIGIBLE` ACTION (DTE trigger)
-- `get_expiry_candidates` raises → `ROLL_ELIGIBLE` absent; no exception propagated
-
-**Tests — 3-track:**
-- Overlay leg DTE=4, base_dte=25 → `ROLL_ELIGIBLE` ACTION replaces `ROLL_DUE_DTE` WARN
-- Overlay leg DTE=8 → `ROLL_DUE_DTE` WARN (unchanged)
-- base_dte=8 → `ROLL_BASE_FIRST` WARN; no `ROLL_ELIGIBLE`
-- Healthy overlay (DTE 20) → `[]`
-
-**Commit:** `feat(strategy): wire evaluate_roll_csp and evaluate_roll_overlay into CSPNiftyV1 and NiftyTrackComparisonV1`
+**Commit:** `feat(strategy): wire evaluate_roll_overlay into NiftyTrackComparisonV1`
 
 ---
 

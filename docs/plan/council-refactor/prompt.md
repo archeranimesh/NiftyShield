@@ -12,11 +12,16 @@ expects `(CouncilOutput, SignalEvent, str)` — a signature mismatch that would 
 
 When this story is complete:
 1. The daemon approval path has no LLM API calls — signals go directly to Telegram
-2. CSP roll strike + expiry are chosen deterministically from IVR tier and BOD data
-3. 3-track overlay roll strike + expiry are chosen deterministically from spot + BOD
-4. All roll rules are pure functions in `ExitSignalEngine` — replayable against
-   historical data in the same way exit rules already are
-5. `RapidCouncil` remains as a module but is **not wired** anywhere in Phase 0
+2. CSP roll: DTE ≤ 5 fires `ROLL_ELIGIBLE` ACTION; `csp_roll_executor` closes current
+   leg and reopens via `strike_selector` (first ranked candidate); fully automated via daemon
+3. 3-track overlay roll: DTE ≤ 5 fires `ROLL_ELIGIBLE` with suggested ATM±50 strike;
+   base-DTE guard blocks overlay roll when base DTE ≤ 10
+4. `evaluate_roll_csp` and `evaluate_roll_overlay` are pure functions in `ExitSignalEngine`
+   returning `list[ExitSignalResult]` — replayable against historical data
+5. `strike_selector.py` lives in `src/instruments/` — importable by any module that needs
+   delta-filtered, liquidity-gated strike selection
+6. `csp_roll_executor.py` lives in `src/strategy/` — shared by the daemon and CLI script
+7. `RapidCouncil` remains as a module but is **not wired** anywhere in Phase 0
 
 ---
 
@@ -38,8 +43,7 @@ inputs so they can be replayed against historical data. An LLM council call is:
 - Incapable of time-travel (replaying 2025 data through a 2026 model leaks hindsight)
 
 A roll decision driven by the council cannot be statistically validated via backtest.
-A roll decision driven by `evaluate_roll_csp(days_held, dte, ivr, spot, atm_strike)`
-can be.
+A roll decision driven by `evaluate_roll_csp(dte)` — "roll when DTE ≤ 5" — can be.
 
 ### The council belongs in live trading for genuinely ambiguous decisions
 
@@ -56,50 +60,83 @@ every paper trade ACTION event.
 
 ## Deterministic Roll Rules
 
+### Design decisions (finalised 2026-06-04)
+
+**No `RollSignalResult`.** Roll signals are returned as `list[ExitSignalResult]` — the
+same type as every other `ExitSignalEngine` evaluator. `exit_signal="ROLL_ELIGIBLE"` or
+`"ROLL_BASE_FIRST"` is what distinguishes them. This keeps return types uniform and
+lets `CSPNiftyV1.check_signals` merge exit + roll results without type juggling.
+
+**No IVR-tiered strike selection in the engine.** Strike selection is delegated to
+`src/instruments/strike_selector.py` (extracted from `find_strike_by_delta.py`) which
+already applies delta filter, liquidity gate, and ranking. The engine stays pure — it
+detects *when* to roll, not *what* strike to roll to.
+
+**Execution layer: `src/strategy/csp_roll_executor.py`.** Contains importable
+`close_csp_leg()` and `open_new_csp_leg()` functions, extracted from
+`scripts/strategies/csp/paper_csp_roll.py`. Both the CLI script and `CSPNiftyV1.apply_action`
+import from this module. `paper_csp_roll.py` becomes a thin CLI wrapper.
+
+---
+
 ### CSP — `ExitSignalEngine.evaluate_roll_csp()`
 
-Triggers when `days_held ≥ 21` (TIME_STOP) OR `dte ≤ 5` on the short put leg.
+**Trigger:** `dte ≤ 5` on the short put leg.
 
-**IVR-tiered strike selection:**
+(TIME_STOP at `days_held ≥ 21` already fires as `CLOSE_FULL` via `evaluate_csp`. The
+roll trigger is expiry proximity only — the operator decides whether to re-enter.)
 
-| IVR range | Roll strike | Rationale |
-|-----------|-------------|-----------|
-| < 0.25 | No roll (blocked) | R3 floor — low vol, skip cycle |
-| 0.25 – 0.35 | ATM | Cautious — premium thin, stay at money |
-| 0.35 – 0.50 | ATM − 50 | Standard — one strike below ATM |
-| > 0.50 | ATM − 100 | Aggressive — rich premium environment |
+**Output:** `list[ExitSignalResult]` with one element:
+```python
+ExitSignalResult(
+    exit_signal="ROLL_ELIGIBLE",
+    severity="ACTION",
+    threshold_value=5.0,
+    notes="DTE {dte} ≤ 5 — close and reopen via strike_selector",
+)
+```
+Returns `[]` when `dte > 5`.
 
-Override: if the selected strike has `|delta| > 0.30`, move up one strike (closer to ATM)
-until delta constraint is satisfied. Never roll below delta 0.30 — that is too directional.
+**Execution path when user approves `CLOSE_AND_ROLL`:**
+1. `CSPNiftyV1.apply_action("CLOSE_AND_ROLL")` calls `csp_roll_executor.close_csp_leg()`
+2. Then calls `strike_selector.filter_strikes_by_delta()` + `rank_strikes()` — picks index 0
+3. Then calls `csp_roll_executor.open_new_csp_leg()` with the selected strike
+4. Atomicity: if open fails, close is rolled back via `store.delete_trade()`
 
-**Expiry selection:** call `get_expiry_candidates(underlying, today, preference=["monthly"])`
-and pick the first candidate with DTE between 21 and 35 days. If none found in that window,
-expand to 35–50 days. Log WARNING if no candidate found.
+`CSPNiftyV1.__init__` stores `self._broker = broker` (parameter already accepted but
+previously discarded).
 
-**Output:** `RollSignalResult(signal="ROLL_ELIGIBLE", severity="ACTION", proposed_strike,
-proposed_expiry, ivr_tier, reason)` — or `None` when IVR < 0.25.
+---
 
 ### 3-Track Overlays — `ExitSignalEngine.evaluate_roll_overlay()`
 
-Triggers when `dte ≤ 5` on any overlay leg.
+**Trigger:** `dte ≤ 5` on any overlay leg.
 
-**Guard:** if the base position DTE is ≤ 10, block the overlay roll — the base rolls first.
-Emit `ROLL_BASE_FIRST` WARN instead.
+**Guard:** if `base_dte ≤ 10`, block overlay roll — base rolls first.
+Returns `ROLL_BASE_FIRST` WARN:
+```python
+ExitSignalResult(
+    exit_signal="ROLL_BASE_FIRST",
+    severity="WARN",
+    threshold_value=10.0,
+    notes="Base DTE={base_dte} ≤ 10 — roll base first",
+)
+```
 
-**Strike selection (all tracks):**
+**Strike selection (advisory only — actual selection via `strike_selector`):**
 
-| Overlay leg | Roll strike | Rationale |
-|-------------|-------------|-----------|
-| Short call (CC) | ATM + 50 | Slightly OTM — avoid early assignment on roll day |
-| Long put (PP) | ATM − 50 | Slightly OTM — cost-effective protection |
-| Collar short call | ATM + 50 | Same as CC |
-| Collar long put | ATM − 50 | Same as PP |
+| Overlay leg | Suggested offset | Rationale |
+|---|---|---|
+| Short call (CC / Collar) | ATM + 50 | Slightly OTM — avoid early assignment on roll day |
+| Long put (PP / Collar) | ATM − 50 | Slightly OTM — cost-effective protection |
 
-**Expiry selection:** next monthly Tuesday expiry from BOD. If base DTE ≤ 60, match
-overlay expiry to base expiry (keep them aligned).
+The `notes` field carries the suggested strike for the Telegram message. The roll script
+makes the final selection via `strike_selector`.
 
-**Output:** `RollSignalResult` per leg, or `RollSignalResult(signal="ROLL_BASE_FIRST",
-severity="WARN")` when base guard fires.
+**Expiry selection:** next monthly Tuesday expiry from BOD. If `base_dte ≤ 60`, align
+overlay expiry to base expiry.
+
+Returns `[]` when `dte > 5`.
 
 ---
 
