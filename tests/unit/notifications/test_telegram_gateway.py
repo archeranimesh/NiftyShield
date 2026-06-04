@@ -52,39 +52,15 @@ def _make_http_mock(resp_data: dict, status: int = 200) -> MagicMock:
     return mock_session
 
 
-def _make_signal_event() -> object:
-    """Return a minimal SignalEvent-like object."""
+def _make_signal_event(valid_actions: list[str] | None = None) -> object:
+    """Return a minimal SignalEvent with optional valid_actions payload."""
     from src.strategy.protocol import SignalEvent
 
     return SignalEvent(
-        event_type="ENTRY",
+        event_type="TIME_STOP",
         severity="ACTION",
         description="Test signal",
-        payload={},
-    )
-
-
-def _make_council_output(num_actions: int = 2) -> object:
-    """Return a minimal CouncilOutput with num_actions ApprovedActions."""
-    from src.council.models import CouncilOutput
-    from src.strategy.protocol import ApprovedAction
-
-    actions = [
-        ApprovedAction(
-            action_type=f"OPEN_PUT_{i}",
-            legs_to_close=[],
-            legs_to_open=[],
-            rationale=f"Rationale number {i} for testing",
-            council_rank=i,
-        )
-        for i in range(1, num_actions + 1)
-    ]
-    return CouncilOutput(
-        actions=actions,
-        chairman_rationale="Chairman chose the best action.",
-        dissenting_notes=None,
-        stage1_responses=[],
-        latency_ms=100,
+        payload={"valid_actions": valid_actions if valid_actions is not None else ["CLOSE_FULL"]},
     )
 
 
@@ -117,46 +93,28 @@ def _make_pending_approvals_db() -> tuple[str, sqlite3.Connection]:
 
 
 def test_build_keyboard_creates_one_row_per_action_plus_reject() -> None:
-    from src.strategy.protocol import ApprovedAction
-
-    actions = [
-        ApprovedAction(
-            action_type="OPEN_PUT",
-            legs_to_close=[],
-            legs_to_open=[],
-            rationale="Buy the dip",
-            council_rank=1,
-        ),
-        ApprovedAction(
-            action_type="OPEN_CALL",
-            legs_to_close=[],
-            legs_to_open=[],
-            rationale="Sell the rip",
-            council_rank=2,
-        ),
-    ]
-    keyboard = _build_keyboard(actions)
+    keyboard = _build_keyboard(["CLOSE_FULL", "CLOSE_CALL_SPREAD"])
     assert len(keyboard) == 3  # 2 actions + Reject All
     assert keyboard[-1][0]["callback_data"] == "reject"
 
 
-def test_build_keyboard_truncates_rationale_at_40_chars() -> None:
-    from src.strategy.protocol import ApprovedAction
+def test_build_keyboard_assigns_1indexed_ranks() -> None:
+    keyboard = _build_keyboard(["CLOSE_FULL", "CLOSE_CALL_SPREAD", "CLOSE_PUT_SPREAD"])
+    assert keyboard[0][0]["callback_data"] == "approve:1"
+    assert keyboard[1][0]["callback_data"] == "approve:2"
+    assert keyboard[2][0]["callback_data"] == "approve:3"
+    assert keyboard[3][0]["callback_data"] == "reject"
 
-    long_rationale = "x" * 60
-    actions = [
-        ApprovedAction(
-            action_type="OPEN",
-            legs_to_close=[],
-            legs_to_open=[],
-            rationale=long_rationale,
-            council_rank=1,
-        )
-    ]
-    keyboard = _build_keyboard(actions)
-    label = keyboard[0][0]["text"]
-    # "OPEN: " + 40 chars = 46 chars max
-    assert len(label) <= len("OPEN: ") + 40
+
+def test_build_keyboard_uses_action_type_as_button_label() -> None:
+    keyboard = _build_keyboard(["MONETIZE_PP"])
+    assert keyboard[0][0]["text"] == "MONETIZE_PP"
+
+
+def test_build_keyboard_empty_actions_returns_only_reject() -> None:
+    keyboard = _build_keyboard([])
+    assert len(keyboard) == 1
+    assert keyboard[0][0]["callback_data"] == "reject"
 
 
 # ── send_plain_message ───────────────────────────────────────────────
@@ -202,15 +160,14 @@ async def test_send_approval_request_returns_message_id_on_success() -> None:
         return_value=mock_session,
     ):
         result = await gw.send_approval_request(
-            council_output=_make_council_output(2),
-            event=_make_signal_event(),
-            strategy_name="csp_nifty_v1",
+            event=_make_signal_event(["CLOSE_FULL"]),
+            context_str="Strategy: paper_csp_nifty_v1\nSignal: TIME_STOP",
         )
     assert result == 42
 
 
-async def test_send_approval_request_sends_three_buttons_for_two_actions() -> None:
-    """2 ApprovedActions → 3 keyboard buttons (2 action + Reject All)."""
+async def test_send_approval_request_sends_buttons_for_valid_actions() -> None:
+    """2 valid_actions → 3 keyboard buttons (2 action + Reject All)."""
     gw = _make_gateway()
     mock_session = _make_http_mock({"ok": True, "result": {"message_id": 1}})
     with patch(
@@ -218,14 +175,12 @@ async def test_send_approval_request_sends_three_buttons_for_two_actions() -> No
         return_value=mock_session,
     ):
         await gw.send_approval_request(
-            council_output=_make_council_output(2),
-            event=_make_signal_event(),
-            strategy_name="test_strategy",
+            event=_make_signal_event(["CLOSE_FULL", "CLOSE_CALL_SPREAD"]),
+            context_str="context",
         )
     payload = mock_session.post.call_args[1]["json"]
     keyboard = payload["reply_markup"]["inline_keyboard"]
-    assert len(keyboard) == 3
-    # Last row must be the Reject All button
+    assert len(keyboard) == 3  # 2 actions + Reject All
     assert keyboard[-1][0]["callback_data"] == "reject"
 
 
@@ -237,9 +192,8 @@ async def test_send_approval_request_returns_none_on_api_failure() -> None:
         return_value=mock_session,
     ):
         result = await gw.send_approval_request(
-            council_output=_make_council_output(1),
             event=_make_signal_event(),
-            strategy_name="test",
+            context_str="context",
         )
     assert result is None
 
@@ -252,11 +206,26 @@ async def test_send_approval_request_returns_none_on_http_exception() -> None:
         return_value=mock_session,
     ):
         result = await gw.send_approval_request(
-            council_output=_make_council_output(1),
             event=_make_signal_event(),
-            strategy_name="test",
+            context_str="context",
         )
     assert result is None
+
+
+async def test_send_approval_request_returns_none_on_empty_valid_actions() -> None:
+    """Missing/empty valid_actions → return None without posting to Telegram."""
+    gw = _make_gateway()
+    mock_session = _make_http_mock({"ok": True, "result": {"message_id": 7}})
+    with patch(
+        "src.notifications.telegram_gateway.aiohttp.ClientSession",
+        return_value=mock_session,
+    ):
+        result = await gw.send_approval_request(
+            event=_make_signal_event([]),
+            context_str="context",
+        )
+    assert result is None
+    mock_session.post.assert_not_called()
 
 
 # ── Auth guard ───────────────────────────────────────────────────────

@@ -87,6 +87,7 @@ class PPOverlayV1:
                     payload["bid"] = str(put_leg.bid)
                     payload["ask"] = str(put_leg.ask)
                 payload["dte"] = dte
+                payload["valid_actions"] = ["MONETIZE_PP"]
 
                 events.append(
                     SignalEvent(

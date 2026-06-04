@@ -100,6 +100,7 @@ class CCOverlayV1:
                 if result.actual_rule_used is not None:
                     payload["actual_rule_used"] = result.actual_rule_used
                 payload["dte"] = dte
+                payload["valid_actions"] = ["CLOSE_CC"]
 
                 events.append(
                     SignalEvent(

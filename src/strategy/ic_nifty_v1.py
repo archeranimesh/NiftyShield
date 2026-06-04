@@ -117,7 +117,10 @@ class IronCondorV1:
                         event_type="TIME_STOP",
                         severity="ACTION",
                         description=f"DTE {dte} ≤ {_TIME_STOP_DTE} — time stop triggered",
-                        payload={"dte": dte},
+                        payload={
+                            "dte": dte,
+                            "valid_actions": ["CLOSE_FULL", "CLOSE_CALL_SPREAD", "CLOSE_PUT_SPREAD"],
+                        },
                     )
                 )
             if dte <= _DTE_WARN:
@@ -149,6 +152,7 @@ class IronCondorV1:
                         payload={
                             "leg_role": pos.leg_role,
                             "delta": str(opt_leg.delta),
+                            "valid_actions": ["CLOSE_FULL", "CLOSE_CALL_SPREAD", "CLOSE_PUT_SPREAD"],
                         },
                     )
                 )
@@ -185,6 +189,7 @@ class IronCondorV1:
                             "combined_mark": str(combined_mark),
                             "entry_credit": str(entry_credit),
                             "pct_remaining": str(pct.quantize(Decimal("0.01"))),
+                            "valid_actions": ["CLOSE_FULL", "CLOSE_CALL_SPREAD", "CLOSE_PUT_SPREAD"],
                         },
                     )
                 )
@@ -202,6 +207,7 @@ class IronCondorV1:
                             "combined_mark": str(combined_mark),
                             "entry_credit": str(entry_credit),
                             "pct_of_credit": str(pct.quantize(Decimal("0.01"))),
+                            "valid_actions": ["CLOSE_FULL", "CLOSE_CALL_SPREAD", "CLOSE_PUT_SPREAD"],
                         },
                     )
                 )

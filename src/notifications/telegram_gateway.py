@@ -8,6 +8,11 @@ Wraps TelegramNotifier for plain text and adds:
 
 Non-fatal contract: all Telegram API calls are wrapped in try/except.
 Failures return False / None and log WARNING. Never raise.
+
+Approval flow (council-free):
+  SignalEvent.payload["valid_actions"] carries the list of allowed action_type
+  strings for this signal.  send_approval_request builds one keyboard button per
+  action — no LLM call, no CouncilOutput required.
 """
 
 from __future__ import annotations
@@ -20,10 +25,9 @@ from pathlib import Path
 
 import aiohttp
 
-from src.council.models import CouncilOutput
 from src.db import connect
 from src.notifications.telegram import TelegramNotifier
-from src.strategy.protocol import ApprovedAction, SignalEvent
+from src.strategy.protocol import SignalEvent
 
 logger = logging.getLogger(__name__)
 
@@ -34,8 +38,8 @@ class TelegramGateway:
     """Approval-flow gateway over the Telegram Bot API.
 
     Wraps TelegramNotifier for plain messages and extends it with:
-    - send_approval_request: posts an inline-keyboard message for council
-      action selection.
+    - send_approval_request: posts an inline-keyboard message for direct
+      action selection (no council/LLM call).
     - start_polling: long-polling loop that dispatches CallbackQuery events
       to registered callbacks.
     - scan_expired_approvals: marks stale pending_approvals rows as EXPIRED;
@@ -76,34 +80,45 @@ class TelegramGateway:
 
     async def send_approval_request(
         self,
-        council_output: CouncilOutput,
         event: SignalEvent,
-        strategy_name: str,
+        context_str: str,
     ) -> int | None:
-        """Send an inline-keyboard message listing council-ranked actions.
+        """Send an inline-keyboard message listing valid actions for a signal.
 
-        One button per ApprovedAction (action_type + rationale[:40]), plus
-        a "Reject All" button. callback_data for approve buttons is
-        ``approve:{rank}``; for reject: ``reject``.
+        One button per action_type drawn from
+        ``event.payload["valid_actions"]``, plus a "Reject All" button.
+        callback_data for action buttons is ``approve:{rank}`` (1-indexed);
+        for reject: ``reject``.
+
+        No LLM or council call is made — actions are fixed per strategy and
+        embedded in the signal payload by the emitting strategy.
 
         The caller should record the returned message_id as the approval
-        identifier in the pending_approvals table (added in PB1.6).
+        identifier in the pending_approvals table.
 
         Args:
-            council_output: Council output with chairman-ranked actions.
-            event: Signal that triggered the council call.
-            strategy_name: Name of the strategy that raised the signal.
+            event: Signal that triggered the request.  Must carry
+                ``valid_actions`` in its payload (list of action_type strings).
+            context_str: Plain-text context block from
+                ``strategy.describe_context()``; rendered in a <pre> block.
 
         Returns:
             Telegram message_id on success, None on any failure.
         """
+        valid_actions: list[str] = event.payload.get("valid_actions") or []
+        if not valid_actions:
+            logger.error(
+                "send_approval_request: no valid_actions in payload for event_type=%s — cannot build keyboard",
+                event.event_type,
+            )
+            return None
         header = (
-            f"<b>Approval request — {strategy_name}</b>\n"
-            f"Event: {event.event_type} ({event.severity})\n"
+            f"<b>⚡ Action required — {event.event_type}</b>\n"
+            f"Severity: {event.severity}\n"
             f"{event.description}\n\n"
-            f"<i>{council_output.chairman_rationale[:200]}</i>"
+            f"<pre>{context_str[:400]}</pre>"
         )
-        keyboard = _build_keyboard(council_output.actions)
+        keyboard = _build_keyboard(valid_actions)
         payload: dict = {
             "chat_id": self._chat_id,
             "text": header,
@@ -283,24 +298,24 @@ class TelegramGateway:
 # ── Module-level helpers ──────────────────────────────────────────
 
 
-def _build_keyboard(actions: list[ApprovedAction]) -> list[list[dict]]:
-    """Build a Telegram inline_keyboard from council-ranked actions.
+def _build_keyboard(actions: list[str]) -> list[list[dict]]:
+    """Build a Telegram inline_keyboard from a list of action_type strings.
 
-    Each action produces one row with a single button labelled
-    ``{action_type}: {rationale[:40]}``. A final "Reject All" row is
-    appended unconditionally.
+    Each action produces one row with a single button labelled by the
+    action_type string.  A final "Reject All" row is appended unconditionally.
+    callback_data for action buttons is ``approve:{rank}`` (1-indexed);
+    for reject: ``reject``.
 
     Args:
-        actions: Chairman-ranked actions (rank 1 = top pick).
+        actions: Ordered list of action_type strings, e.g.
+            ``["CLOSE_FULL"]`` or
+            ``["CLOSE_FULL", "CLOSE_CALL_SPREAD", "CLOSE_PUT_SPREAD"]``.
 
     Returns:
         Telegram inline_keyboard structure: list of button rows.
     """
     rows: list[list[dict]] = []
-    for action in actions:
-        label = f"{action.action_type}: {action.rationale[:40]}"
-        rows.append(
-            [{"text": label, "callback_data": f"approve:{action.council_rank}"}]
-        )
+    for rank, action_type in enumerate(actions, start=1):
+        rows.append([{"text": action_type, "callback_data": f"approve:{rank}"}])
     rows.append([{"text": "❌ Reject All", "callback_data": "reject"}])
     return rows

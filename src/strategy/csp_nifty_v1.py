@@ -159,6 +159,7 @@ class CSPNiftyV1:
                     payload["actual_rule_used"] = result.actual_rule_used
                 payload["days_held"] = days_held
                 payload["dte"] = dte
+                payload["valid_actions"] = ["CLOSE_FULL"]
 
                 events.append(
                     SignalEvent(

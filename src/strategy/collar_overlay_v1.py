@@ -137,6 +137,7 @@ class CollarOverlayV1:
                 if result.actual_rule_used is not None:
                     payload["actual_rule_used"] = result.actual_rule_used
                 payload["dte"] = dte
+                payload["valid_actions"] = ["CLOSE_CALL_ONLY", "CLOSE_ALL_OVERLAY"]
 
                 events.append(
                     SignalEvent(
@@ -182,6 +183,7 @@ class CollarOverlayV1:
                     payload["entry_debit"] = str(long_put_pos.avg_cost)
                     payload["bid"] = str(put_leg.bid)
                     payload["ask"] = str(put_leg.ask)
+                payload["valid_actions"] = ["MONETIZE_PUT", "CLOSE_ALL_OVERLAY"]
 
                 events.append(
                     SignalEvent(
