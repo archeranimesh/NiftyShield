@@ -221,6 +221,7 @@ Tasks run in priority order. Infrastructure that blocks other stories runs first
 | 7 | MVP: Multi-bagger Value Picks Tracker | Cowork | After #1 | — | ⬜ Not started — [story](docs/plan/mvp/) |
 | 8 | backtest-eval-core: `BacktestStore` + `src/analytics/` | Cowork | Aug 2026 | #9 | ⬜ Not started — [story](docs/plan/backtest-eval-core/) — **blocked by tasks 1.3 + 1.4** |
 | 9 | signals-eval-core: regime engine + signal generators + validation | Cowork | Q4 2026 | — | ⬜ Not started — [story](docs/plan/signals-eval-core/) — **blocked by #8 + Phase 1.12 gate** |
+| 10 | council-refactor: remove RapidCouncil from daemon path; fix approval bug; add deterministic roll rules | Cowork | Before 2026-06-23 roll week | — | ⬜ Not started — [story](docs/plan/council-refactor/) |
 | 10 | broker-abstraction: multi-broker parser/adapter layer (Dhan, Kite) | Cowork | LOW — after Phase 0.8 gate | — | ⬜ Not started — [story](docs/plan/broker-abstraction/) — 16 tasks BA-0→BA-15; start with BA-0 analysis; BA-14/15 blocked on Phase 1 |
 | 11 | historical-data-abstraction: `HistoricalCandleFetcher` protocol + vendor implementations | Cowork | LOW — after Phase 0.8 gate | — | ⬜ Not started — [story](docs/plan/historical-data-abstraction/) — 11 tasks HD-0→HD-10; start with HD-0 cost evaluation (paid APIs); HD-6/HD-7 conditional on HD-0 decision matrix |
 
@@ -304,6 +305,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-06-04 | council-refactor story created — docs/plan/council-refactor/ (prompt, stories, tasks); README, TODOS, DECISIONS updated. Covers: RapidCouncil removal from daemon path, send_approval_request bug fix, deterministic IVR-tiered CSP roll rules, overlay roll rules with base-DTE guard. 4 tasks (CR0–CR4). Deadline: before 2026-06-23 roll week. |
 | 2026-06-03 | paper-exit-signals ES9 — Docs close: DECISIONS.md verification, CONTEXT.md sync, TODOS.md updated; archive council exit-philosophy and csp_nifty_v1 spec — e32b862 |
 | 2026-06-03 | paper-exit-signals ES12 — Enforce liquidity gate in find_strike_by_delta.py and R3 hard block in record_paper_trade.py + 11 tests — b86925a |
 | 2026-06-03 | paper-exit-signals ES11 — Base position expiry detection (DTE <= 5), get_next_contract in InstrumentLookup, roll commands Telegram alert + 5 tests — 16c7f23 |
