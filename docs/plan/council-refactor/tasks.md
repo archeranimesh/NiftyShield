@@ -11,6 +11,7 @@
 > | CR0 | `stories_infra.md` |
 > | CR1a, CR1b, CR1c, CR1d | `stories_csp.md` |
 > | CC-1, CC-2, CC-3, CC-4 | `stories_cc.md` |
+> | PP-1, PP-2, PP-3 | `stories_pp.md` |
 > | CR2, CR3 | `stories_overlay.md` |
 > | CR4 | `stories_close.md` |
 >
@@ -41,6 +42,11 @@
 - [ ] **CC-3** `[Claude]` — Migrate `CSPNiftyV1` to `ReEntryMixin`: inherit mixin, add class attrs, remove `_check_r5_reentry`, call `_check_reentry` on PROFIT_TARGET **and** TIME_STOP in `apply_action` (TIME_STOP was missing — regression fix)
 - [ ] **CC-4** `[Antigravity]` — `CCOverlayV1` full automation: `auto_execute=True`, inherit `ReEntryMixin`, add `__init__` with store/notifier/vix_data_dir, handle `CLOSE_CC` in `apply_action`, `_send_close_notification` via `send_notification`; re-entry check on PROFIT_TARGET + TIME_STOP only
 
+## Phase PP — PP Automation
+
+- [ ] **PP-1** `[Antigravity]` — Update `evaluate_pp()`: remove bid/ask spread guard from CRASH_MONETIZE; promote DTE_REVIEW INFO → ROLL_ELIGIBLE ACTION; remove bid/ask params from signature; update PPOverlayV1 caller; tests
+- [ ] **PP-2** `[Antigravity]` — `PPOverlayV1` full automation: `auto_execute=True`, inject store/broker/lookup/notifier, OPEN ↔ RE_ENTRY_PENDING state machine, three action types (MONETIZE_PP / ROLL_PP / OPEN_NEW_PP), IVR ≤ 0.60 re-entry gate, Telegram notifications; tests
+
 ## Phase CR2 — Overlay Roll Signal
 
 - [ ] **CR2** `[Antigravity]` — Add `evaluate_roll_overlay(leg_role, dte, base_dte, atm_strike)` to `ExitSignalEngine` returning `list[ExitSignalResult]`; no `RollSignalResult`; base-DTE guard → `ROLL_BASE_FIRST` WARN; tests extend `test_exit_signals.py`
@@ -51,7 +57,8 @@
 
 ## Phase CR4 — Docs Close (MUST BE LAST)
 
-- [ ] **CR4** `[Claude]` — `DECISIONS.md`, `CONTEXT.md`, `TODOS.md`; update `ExitSignalEngine` description; update `CSPNiftyV1` and `NiftyTrackComparisonV1` descriptions
+- [ ] **CR4** `[Claude]` — `DECISIONS.md`, `CONTEXT.md`, `TODOS.md`; update `ExitSignalEngine` description; update `CSPNiftyV1`, `CCOverlayV1`, `PPOverlayV1`, and `NiftyTrackComparisonV1` descriptions
+- [ ] **PP-3** `[Claude]` — `DECISIONS.md`, `CONTEXT.md`, `README.md`, `tasks.md`; document PP always-reprotect design, IVR re-entry gate, spread guard removal
 
 ---
 
@@ -60,17 +67,19 @@
 | Priority | Task | Owner | Rationale |
 |---|---|---|---|
 | P0 | CR0 | Claude | ✅ Done — fixes live runtime TypeError |
-| P1 | CR1a | Antigravity | `strike_selector.py` unblocks CR1b |
+| P1 | CR1a | Antigravity | `strike_selector.py` unblocks CR1b and PP-2 |
 | P1 | CC-2 | Antigravity | `ReEntryMixin` — independent, run in parallel with CR1a |
-| P2 | CR1b | Claude | DB migration + CSP signals; introduces `_PROFIT_TARGET_RETENTION` |
+| P2 | CR1b | Claude | DB migration + CSP signals; introduces `_PROFIT_TARGET_RETENTION` + `TradeState` |
 | P3 | CC-1 | Antigravity | Align `evaluate_cc()` — needs `_PROFIT_TARGET_RETENTION` from CR1b |
-| P3 | CC-3 | Claude | Migrate CSPNiftyV1 to mixin — needs CC-2; run parallel with CC-1 |
-| P4 | CR1c | Antigravity | CSPRollExecutor — needs CR1b; run parallel with CC-1, CC-3 |
+| P3 | PP-1 | Antigravity | Update `evaluate_pp()` — needs CR1b for ExitSignalResult; run parallel with CC-1 |
+| P3 | CC-3 | Claude | Migrate CSPNiftyV1 to mixin — needs CC-2; run parallel with CC-1, PP-1 |
+| P4 | CR1c | Antigravity | CSPRollExecutor — needs CR1b; run parallel with CC-1, CC-3, PP-1 |
 | P5 | CR1d | Claude | CSPNiftyV1 full automation — needs CR1c + CC-3 |
 | P6 | CC-4 | Antigravity | CCOverlayV1 automation — needs CC-1 + CC-2 + CR1d |
+| P6 | PP-2 | Antigravity | PPOverlayV1 automation — needs CR1a + CR1b + PP-1; parallel with CC-4 |
 | P7 | CR2 | Antigravity | evaluate_roll_overlay — needs CR1b; can run after P4 |
 | P8 | CR3 | Claude | Wire overlay roll — needs CR2 |
-| P9 | CR4 | Claude | Always last |
+| P9 | CR4 + PP-3 | Claude | Always last — docs close for all automation stories |
 
 ---
 
@@ -87,7 +96,9 @@ search_graph("close_csp_leg")                     # exists in csp_roll_executor
 search_graph("filter_strikes_by_delta")           # exists in strike_selector
 search_graph("ReEntryMixin")                      # exists in reentry_mixin
 search_graph("CCOverlayV1.auto_execute")          # True
+search_graph("PPOverlayV1.auto_execute")          # True
 search_graph("_PROFIT_TARGET_RETENTION")          # single constant, used by CSP + CC
+search_graph("_evaluate_pp_reentry")             # exists in PPOverlayV1
 ```
 
 ## Regression Gate

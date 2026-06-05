@@ -8,6 +8,7 @@
 | `stories_infra.md` | Approval flow bug fix | CR0 |
 | `stories_csp.md` | CSP roll automation | CR1a, CR1b, CR1c, CR1d |
 | `stories_cc.md` | CC signal alignment + automation + ReEntryMixin | CC-1, CC-2, CC-3, CC-4 |
+| `stories_pp.md` | PP automation + RE_ENTRY_PENDING state machine | PP-1, PP-2, PP-3 |
 | `stories_overlay.md` | 3-track overlay roll signal | CR2, CR3 |
 | `stories_close.md` | Docs close (always last) | CR4 |
 
@@ -15,18 +16,21 @@
 
 ```
 CR0 ✅
-  └─► CR1a ──────────────────────────► CR1b ──► CC-1
-                                          │         └─► CC-4 (needs CC-1 + CC-2 + CR1d)
+  └─► CR1a ──────────────────────────► CR1b ──► CC-1 ──► CC-4 (needs CC-1 + CC-2 + CR1d)
+                                          │                       │
+                                          └─► PP-1 ──► PP-2 ──────┘ (parallel with CC-4)
   └─► CC-2 ──► CC-3 ──────────────────► CR1d
                           └─► CR1c ──► CR1d
                                           └─► CR2 ──► CR3
-                                                         └─► CR4
+                                                         └─► CR4 + PP-3
 ```
 
 Parallel lanes:
 - `CC-2` (ReEntryMixin) is independent — can run any time before `CC-3`
-- `CR1c` (CSPRollExecutor) can run in parallel with `CC-1`, `CC-2`, `CC-3`
-- `CR2` (evaluate_roll_overlay) can run after `CR1b`, parallel to `CC-4`
+- `CR1c` (CSPRollExecutor) can run in parallel with `CC-1`, `CC-2`, `CC-3`, `PP-1`
+- `PP-1` (evaluate_pp update) can run in parallel with `CC-1` after `CR1b`
+- `PP-2` (PPOverlayV1 automation) runs parallel with `CC-4` — both need CR1a + CR1b
+- `CR2` (evaluate_roll_overlay) can run after `CR1b`, parallel to `CC-4` and `PP-2`
 
 ## Shared Context
 
@@ -67,6 +71,35 @@ RE_ENTRY_PENDING ◄────────────────────
   ▼
 OPEN
 ```
+
+### Signal Table (PP, evaluated each EOD)
+
+| Priority | Signal | Trigger | Action | Severity | Valid state |
+|---|---|---|---|---|---|
+| 1 | `CRASH_MONETIZE` | delta ≤ −0.80 OR value ≥ 5× entry debit (no spread guard) | MONETIZE_PP | ACTION | OPEN |
+| 2 | `ROLL_ELIGIBLE` | DTE ≤ 5 | ROLL_PP | ACTION | OPEN |
+| — | `PP_REENTRY_ELIGIBLE` | IVR ≤ 0.60 AND DTE ≥ 14 | OPEN_NEW_PP | ACTION | RE_ENTRY_PENDING |
+| — | `PP_REENTRY_BLOCKED` | any re-entry gate fails | — | INFO | RE_ENTRY_PENDING |
+
+When both CRASH_MONETIZE and ROLL_ELIGIBLE fire (crash at DTE ≤ 5), only CRASH_MONETIZE
+is emitted — `check_signals` breaks after first result from `_sort_results` (list order
+for equal-severity results preserves CRASH_MONETIZE first by insertion order).
+
+### PP State Machine
+
+```
+OPEN ──── CRASH_MONETIZE ──────────────────────────────► RE_ENTRY_PENDING
+  │                                                            │
+  │  ROLL_ELIGIBLE (DTE ≤ 5)                                  │  IVR ≤ 0.60 AND DTE ≥ 14
+  │  close current + open new PP (same delta 0.20–0.30)       │  AND no open position
+  │  stays OPEN                                               │
+  └────────────────────────────────────────────────────────► OPEN
+```
+
+No DEFENDED state — there is no defensive roll for a long put.
+Re-entry IVR gate is inverted vs CSP: buy protection when IV is LOW (≤ 0.60),
+not high. This prevents buying expensive protection immediately after a crash spike.
+Fixed delta range 0.20–0.30 for PP re-entry/roll — coverage depth, not IV-driven.
 
 ### ReEntryMixin Contract
 
