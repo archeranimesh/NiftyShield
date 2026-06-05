@@ -4,6 +4,18 @@
 > Each task is tagged `[Claude]` or `[Antigravity]` — only pick up tasks tagged for you.
 > If the next unchecked task is tagged for the other agent, stop and hand off.
 > After completing: tick the box, append `| SHA: <sha>`, add one line to TODOS.md.
+>
+> **Story file to load based on task prefix:**
+> | Task prefix | Story file |
+> |---|---|
+> | CR0 | `stories_infra.md` |
+> | CR1a, CR1b, CR1c, CR1d | `stories_csp.md` |
+> | CC-1, CC-2, CC-3, CC-4 | `stories_cc.md` |
+> | CR2, CR3 | `stories_overlay.md` |
+> | CR4 | `stories_close.md` |
+>
+> Also load `README.md` for shared context (signal tables, state machine, dependency order).
+> Do NOT load `stories.md` — it is a historical archive.
 
 **Prerequisite gate (run before CR0):**
 - [x] `search_graph("ExitSignalEngine")` returns results (ES1 committed)
@@ -21,6 +33,13 @@
 - [ ] **CR1a** `[Antigravity]` — Extract `filter_strikes_by_delta`, `_apply_liquidity_gate`, `rank_strikes` from `find_strike_by_delta.py` → `src/instruments/strike_selector.py`; update imports in `find_strike_by_delta.py` and `paper_csp_roll.py`; tests in `test_strike_selector.py`
 - [ ] **CR1b** `[Claude]` — `ExitSignalEngine.evaluate_roll_csp(dte)` returns `list[ExitSignalResult]`; `src/strategy/csp_roll_executor.py` (extract `close_csp_leg` + `open_new_csp_leg` from `paper_csp_roll.py`); store `self._broker = broker` in `CSPNiftyV1.__init__`; wire `CLOSE_AND_ROLL` into `check_signals` + `apply_action`; tests
 - [ ] **CR1c** `[Antigravity]` — Refactor `paper_csp_roll.py` to thin CLI wrapper around `csp_roll_executor.py`; existing tests must stay green
+
+## Phase CC — CC Signal Alignment + Automation
+
+- [ ] **CC-1** `[Antigravity]` — Align `evaluate_cc()` to CSP structure: add `days_held` param, `TIME_STOP` signal, replace `DTE_FORCED` with `DTE_REVIEW` WARN, use `_PROFIT_TARGET_RETENTION` constant, add `_CC_MIN_ENTRY_CREDIT`; update `CCOverlayV1` caller; tests
+- [ ] **CC-2** `[Antigravity]` — `ReEntryMixin` in `src/strategy/reentry_mixin.py`: three-gate check (DTE ≥ 14, IVR ≥ 0.25, no open position); `reentry_leg_role` + `reentry_script_hint` class attrs; writes paper_exit_events; Telegram notification
+- [ ] **CC-3** `[Claude]` — Migrate `CSPNiftyV1` to `ReEntryMixin`: inherit mixin, add class attrs, remove `_check_r5_reentry`, call `_check_reentry` on PROFIT_TARGET **and** TIME_STOP in `apply_action` (TIME_STOP was missing — regression fix)
+- [ ] **CC-4** `[Antigravity]` — `CCOverlayV1` full automation: `auto_execute=True`, inherit `ReEntryMixin`, add `__init__` with store/notifier/vix_data_dir, handle `CLOSE_CC` in `apply_action`, `_send_close_notification` via `send_notification`; re-entry check on PROFIT_TARGET + TIME_STOP only
 
 ## Phase CR2 — Overlay Roll Signal
 
@@ -42,11 +61,16 @@
 |---|---|---|---|
 | P0 | CR0 | Claude | ✅ Done — fixes live runtime TypeError |
 | P1 | CR1a | Antigravity | `strike_selector.py` unblocks CR1b |
-| P2 | CR1b | Claude | Core roll signal + executor — needed before 2026-06-23 roll week |
-| P3 | CR1c | Antigravity | Thin wrapper cleanup — can run in parallel with CR2 |
-| P4 | CR2 | Antigravity | Overlay roll signal — same roll week deadline |
-| P5 | CR3 | Claude | Wire overlay roll into 3-track — needs CR2 |
-| P6 | CR4 | Claude | Always last |
+| P1 | CC-2 | Antigravity | `ReEntryMixin` — independent, run in parallel with CR1a |
+| P2 | CR1b | Claude | DB migration + CSP signals; introduces `_PROFIT_TARGET_RETENTION` |
+| P3 | CC-1 | Antigravity | Align `evaluate_cc()` — needs `_PROFIT_TARGET_RETENTION` from CR1b |
+| P3 | CC-3 | Claude | Migrate CSPNiftyV1 to mixin — needs CC-2; run parallel with CC-1 |
+| P4 | CR1c | Antigravity | CSPRollExecutor — needs CR1b; run parallel with CC-1, CC-3 |
+| P5 | CR1d | Claude | CSPNiftyV1 full automation — needs CR1c + CC-3 |
+| P6 | CC-4 | Antigravity | CCOverlayV1 automation — needs CC-1 + CC-2 + CR1d |
+| P7 | CR2 | Antigravity | evaluate_roll_overlay — needs CR1b; can run after P4 |
+| P8 | CR3 | Claude | Wire overlay roll — needs CR2 |
+| P9 | CR4 | Claude | Always last |
 
 ---
 
@@ -57,11 +81,13 @@ All tasks above checked. Then verify:
 ```bash
 python -m pytest tests/unit/ --tb=no -q          # all green
 search_code("RapidCouncil")                       # zero results in monitor_daemon.py
-search_graph("evaluate_roll_csp")                 # exists in ExitSignalEngine
+search_graph("evaluate_profit_target_csp")        # exists in ExitSignalEngine
 search_graph("evaluate_roll_overlay")             # exists in ExitSignalEngine
-search_graph("CSPRollExecutor")                   # not needed — functions, not class
 search_graph("close_csp_leg")                     # exists in csp_roll_executor
 search_graph("filter_strikes_by_delta")           # exists in strike_selector
+search_graph("ReEntryMixin")                      # exists in reentry_mixin
+search_graph("CCOverlayV1.auto_execute")          # True
+search_graph("_PROFIT_TARGET_RETENTION")          # single constant, used by CSP + CC
 ```
 
 ## Regression Gate

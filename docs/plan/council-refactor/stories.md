@@ -1,8 +1,18 @@
 # council-refactor — Story Specs
 
-> One task per session. Find the first unchecked item in `tasks.md` **tagged for you**.
-> Implementation rules: `CLAUDE.md` and `REVIEW.md`. After each task: tick `tasks.md`,
-> append `| SHA: <sha>`, add one line to `TODOS.md`.
+> **SPLIT:** Stories have been moved to domain-specific files. This file is kept for
+> historical reference only. Do NOT add new stories here.
+>
+> Load the relevant file instead:
+> - `README.md` — index + dependency order + shared context
+> - `stories_infra.md` — CR0
+> - `stories_csp.md` — CR1a, CR1b, CR1c, CR1d
+> - `stories_cc.md` — CC-1, CC-2, CC-3, CC-4
+> - `stories_overlay.md` — CR2, CR3
+> - `stories_close.md` — CR4
+
+---
+<!-- Historical content below — do not edit -->
 
 **Prerequisite check (run before CR0):**
 ```
