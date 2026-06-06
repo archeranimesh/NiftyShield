@@ -34,7 +34,7 @@
 
 - [x] **CR1a** `[Antigravity]` — Extract `filter_strikes_by_delta`, `_apply_liquidity_gate`, `rank_strikes` from `find_strike_by_delta.py` → `src/instruments/strike_selector.py`; update imports in `find_strike_by_delta.py` and `paper_csp_roll.py`; tests in `test_strike_selector.py` | SHA: 0a6b3bd
 - [x] **CR1b** `[Claude]` — `TradeState` enum + `state` field on `PaperTrade`; `PaperStore.update_trade_state`; remove `evaluate_csp`, add 5 independent CSP classmethods (`evaluate_profit_target_csp`, `evaluate_hard_stop_csp`, `evaluate_delta_breach_csp`, `evaluate_time_stop_csp`, `evaluate_roll_eligible_csp`); `_PROFIT_TARGET_RETENTION` constant; migrate `CSPNiftyV1.check_signals` + `paper_3track_snapshot.py`; idempotent migration script; 20+ tests | SHA: 8fd58d4
-- [x] **CR1c** `[Antigravity]` — Refactor `paper_csp_roll.py` to thin CLI wrapper around `csp_roll_executor.py`; existing tests must stay green
+- [x] **CR1c** `[Antigravity]` — Refactor `paper_csp_roll.py` to thin CLI wrapper around `csp_roll_executor.py`; existing tests must stay green | SHA: 154a64c
 
 ## Phase CC — CC Signal Alignment + Automation
 
