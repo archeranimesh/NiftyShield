@@ -45,10 +45,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from scripts.lookup.find_strike_by_delta import filter_strikes_by_delta, rank_strikes
 from src.client.factory import create_client
 from src.client.protocol import BrokerClient
 from src.instruments.lookup import InstrumentLookup
+from src.instruments.strike_selector import filter_strikes_by_delta, rank_strikes
 from src.models.portfolio import TradeAction
 from src.paper.constants import (
     DEFAULT_BOD_PATH,

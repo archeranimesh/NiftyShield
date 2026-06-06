@@ -18,11 +18,11 @@ from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from scripts.lookup.find_strike_by_delta import filter_strikes_by_delta
 from src.backtest.ivr import compute_ivr
 from src.backtest.vix_ingest import fetch_vix_latest, load_vix_series
 from src.client.upstox_market import UpstoxMarketClient
 from src.instruments.lookup import InstrumentLookup
+from src.instruments.strike_selector import filter_strikes_by_delta
 from src.intraday.market_store import IntradayMarketStore
 from src.paper.constants import (
     DEFAULT_BOD_PATH,

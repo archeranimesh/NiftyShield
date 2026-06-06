@@ -32,7 +32,7 @@
 
 ## Phase CR1 — CSP Roll: Extract + Signal + Executor + Automation
 
-- [ ] **CR1a** `[Antigravity]` — Extract `filter_strikes_by_delta`, `_apply_liquidity_gate`, `rank_strikes` from `find_strike_by_delta.py` → `src/instruments/strike_selector.py`; update imports in `find_strike_by_delta.py` and `paper_csp_roll.py`; tests in `test_strike_selector.py`
+- [x] **CR1a** `[Antigravity]` — Extract `filter_strikes_by_delta`, `_apply_liquidity_gate`, `rank_strikes` from `find_strike_by_delta.py` → `src/instruments/strike_selector.py`; update imports in `find_strike_by_delta.py` and `paper_csp_roll.py`; tests in `test_strike_selector.py`
 - [ ] **CR1b** `[Claude]` — `ExitSignalEngine.evaluate_roll_csp(dte)` returns `list[ExitSignalResult]`; `src/strategy/csp_roll_executor.py` (extract `close_csp_leg` + `open_new_csp_leg` from `paper_csp_roll.py`); store `self._broker = broker` in `CSPNiftyV1.__init__`; wire `CLOSE_AND_ROLL` into `check_signals` + `apply_action`; tests
 - [ ] **CR1c** `[Antigravity]` — Refactor `paper_csp_roll.py` to thin CLI wrapper around `csp_roll_executor.py`; existing tests must stay green
 

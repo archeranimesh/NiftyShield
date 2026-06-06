@@ -40,15 +40,17 @@ from dotenv import load_dotenv
 from scripts.lookup.find_strike_by_delta import (
     DEFAULT_LOT_SIZE,
     UNDERLYING_DEFAULT,
-    _apply_liquidity_gate,
-    filter_strikes_by_delta,
     format_table,
-    rank_strikes,
 )
 from src.backtest.ivr import compute_ivr
 from src.backtest.vix_ingest import fetch_vix_latest, load_vix_series
 from src.client.upstox_market import UpstoxMarketClient
 from src.instruments.lookup import InstrumentLookup
+from src.instruments.strike_selector import (
+    _apply_liquidity_gate,
+    filter_strikes_by_delta,
+    rank_strikes,
+)
 from src.intraday.market_store import IntradayMarketStore
 from src.models.portfolio import TradeAction
 from src.paper._utils import safe_float

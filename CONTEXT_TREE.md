@@ -85,6 +85,7 @@ src/
 ├── instruments/
 │   ├── __init__.py           # Package marker
 │   ├── lot_size.py           # DateAwareLotSizeResolver: resolves market lot sizes for underlying symbols (like NIFTY, BANKNIFTY) based on date.
+│   ├── strike_selector.py    # Core strike selection logic (filter, gate, rank) extracted from find_strike_by_delta CLI.
 │   └── lookup.py             # Offline BOD search (NSE.json.gz). CLI: --find-legs mode. search() uses ranked exact>prefix>fuzzy scoring via _score_query()/_best_score() (rapidfuzz; difflib fallback). min_score param added.
 ├── notifications/
 │   ├── CLAUDE.md             # Module context: non-fatal contract, build_notifier() → None, HTML parse_mode
