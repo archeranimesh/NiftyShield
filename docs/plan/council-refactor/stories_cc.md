@@ -94,6 +94,11 @@ days_held = (today - pos.entry_date).days if pos.entry_date is not None else 0
 `evaluate_cc` — DTE_FORCED gone:
 - `dte=3, delta=0.70, underlying > strike` → no DTE_FORCED signal; DELTA_STOP fires instead
 
+`evaluate_cc` — DELTA_WARN suppressed when DELTA_STOP fires (elif coupling):
+- `delta=0.60, entry=20.0, mark=15.0, days_held=5, dte=20` → `[DELTA_STOP]` only; no DELTA_WARN
+  *(DELTA_WARN uses `elif`, so it is skipped when DELTA_STOP fires. Lock this in a test to prevent drift.)*
+- `delta=0.47, entry=20.0, mark=15.0, days_held=5, dte=20` → `[DELTA_WARN]` only (below DELTA_STOP threshold)
+
 `evaluate_cc` — sort order:
 - LOSS_STOP + DELTA_STOP both true → both returned; ACTION before WARN
 
@@ -270,7 +275,7 @@ class _TestStrategy(ReEntryMixin):
 2. Add class attributes:
    ```python
    auto_execute: bool = True
-   reentry_leg_role: str = "cc_short_call"
+   reentry_leg_role: str = "overlay_cc"
    reentry_script_hint: str = "run find_overlay_strikes.py --overlay-type cc"
    ```
 
@@ -319,10 +324,10 @@ class _TestStrategy(ReEntryMixin):
 
        # Close the CC leg via OverlayCloser
        closed_pos = next(
-           (p for p in positions if p.leg_role in SHORT_CALL_ROLES and p.net_qty < 0),
+           (p for p in positions if p.leg_role == "overlay_cc" and p.net_qty < 0),
            None,
        )
-       updated = [p for p in positions if p.leg_role not in SHORT_CALL_ROLES]
+       updated = [p for p in positions if p.leg_role != "overlay_cc"]
 
        # Re-entry check for PROFIT_TARGET and TIME_STOP only
        triggering_signal = action.metadata.get("triggering_signal") if action.metadata else None
@@ -382,7 +387,8 @@ Re-entry notification:
 > exit outside the daemon cycle. Thresholds must match `evaluate_cc()` exactly.
 
 **Files to change:**
-- `scripts/paper_cc_roll.py` — new script
+- `scripts/strategies/cc_calibration/paper_cc_roll.py` — new script
+  (mirrors `scripts/strategies/csp/paper_csp_roll.py` path convention)
 
 **Prerequisite:** CC-1 committed (corrected signal thresholds in `evaluate_cc`).
 
@@ -393,7 +399,7 @@ Re-entry notification:
 - `get_code_snippet("PaperTrade")` — get exact field list (entry_price, net_qty, leg_role, closed_at, expiry, entry_date)
 - `search_code("paper_csp_roll")` in `scripts/` — mirror the CSP roll CLI pattern
 
-**Entry point:** `python -m scripts.paper_cc_roll [--dry-run] [--force]`
+**Entry point:** `python -m scripts.strategies.cc_calibration.paper_cc_roll [--dry-run] [--force]`
 
 ```
 Flags:

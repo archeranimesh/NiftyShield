@@ -388,6 +388,14 @@ async def _dispatch_event(self, strategy, event):
         action = ApprovedAction(
             action_type=event.payload["auto_action"],
             rationale="auto-execute",
+            # Propagate triggering_signal so apply_action can gate re-entry checks.
+            # CC-4 and COLLAR-1 read action.metadata.get("triggering_signal") —
+            # if this key is missing, re-entry never fires for PROFIT_TARGET/TIME_STOP.
+            metadata={
+                k: event.payload[k]
+                for k in ("triggering_signal",)
+                if k in event.payload
+            },
         )
         await strategy.apply_action(action)
         logger.info("auto_execute_dispatched", ...)

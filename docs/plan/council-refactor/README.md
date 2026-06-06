@@ -55,11 +55,17 @@ Parallel lanes:
 |---|---|---|---|---|
 | 1 | `LOSS_STOP` | mark ≥ 2.5× entry | CLOSE_CC | ACTION |
 | 2 | `DELTA_STOP` | delta ≥ 0.55 | CLOSE_CC | ACTION |
-| 3 | `PROFIT_TARGET` | mark ≤ 30% of entry, entry ≥ ₹15 | CLOSE_CC + re-entry check | ACTION |
+| 3 | `PROFIT_TARGET` | mark ≤ 30% of entry (`_PROFIT_TARGET_RETENTION`), entry ≥ ₹15 (`_CC_MIN_ENTRY_CREDIT`) | CLOSE_CC + re-entry check | ACTION |
 | 4 | `TIME_STOP` | days_held ≥ 21 | CLOSE_CC + re-entry check | ACTION |
 | 5 | `DELTA_WARN` | delta ≥ 0.45 | — | WARN |
 | 6 | `DTE_REVIEW` | DTE ≤ 5 | — | WARN |
 | — | `BELOW_FLOOR` | entry < ₹12 | — | INFO |
+
+> **Two distinct thresholds — do not conflate:**
+> `BELOW_FLOOR` fires at entry < ₹12 (INFO only — position too cheap to actively manage).
+> `PROFIT_TARGET` has a separate minimum floor at ₹15 (`_CC_MIN_ENTRY_CREDIT`): if entry < ₹15,
+> PROFIT_TARGET never fires regardless of mark decay — ride to DTE_REVIEW instead.
+> Both constants live in `exit_signals.py`; `_CC_MIN_ENTRY_CREDIT` is introduced in CC-1.
 
 ### CSP State Machine
 

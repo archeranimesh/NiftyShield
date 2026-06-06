@@ -54,8 +54,11 @@ CC-2 committed (`ReEntryMixin`), CR1d committed (StrategyMonitor auto-execute di
 
 **Before any code:**
 - `get_code_snippet("CollarOverlayV1")` — current implementation; confirm only 75% signal, no __init__
-- `get_code_snippet("evaluate_collar")` — exact current signature; will be removed
-- `get_code_snippet("evaluate_cc")` — confirm CC-1 committed; uses `_PROFIT_TARGET_RETENTION`
+- `get_code_snippet("evaluate_collar_call")` — **this is the real function name** (not `evaluate_collar`);
+  note its current thresholds: profit target 25% decay (not 30%), DTE_FORCED branch present.
+  Both will be removed — calling `evaluate_cc` directly is a **behavioral change**, not a no-op refactor.
+- `get_code_snippet("evaluate_collar_put")` — also present; will also be removed.
+- `get_code_snippet("evaluate_cc")` — confirm CC-1 committed; uses `_PROFIT_TARGET_RETENTION` (30%)
 - `get_code_snippet("OverlayCloser.close_collar")` — confirm call-first sequencing exists
 - `get_code_snippet("ReEntryMixin")` — confirm CC-2 committed; class attr names + `_check_reentry` signature
 - `get_code_snippet("CCOverlayV1")` — reference implementation for CC-4 pattern
@@ -65,9 +68,17 @@ CC-2 committed (`ReEntryMixin`), CR1d committed (StrategyMonitor auto-execute di
 
 ### Changes to `exit_signals.py`
 
-Remove `evaluate_collar()` entirely. The collar short call exit logic is identical to a
-standalone CC — `CollarOverlayV1.check_signals()` calls `evaluate_cc()` directly.
-Keeping a wrapper adds indirection with no benefit.
+Remove `evaluate_collar_call()` and `evaluate_collar_put()` entirely. The collar short call
+exit logic is now handled by `evaluate_cc()` directly in `CollarOverlayV1.check_signals()`.
+
+**This is a behavioral change — not a no-op refactor:**
+- Old `evaluate_collar_call`: profit target at 25% decay (LTP ≤ 75% of entry); DTE_FORCED branch
+  with ITM/delta/residual sub-conditions.
+- New (via `evaluate_cc`): profit target at 30% decay (`_PROFIT_TARGET_RETENTION`); no DTE_FORCED;
+  DTE_REVIEW flat WARN at DTE ≤ 5; DELTA_STOP at 0.55; TIME_STOP at 21 days.
+
+Document this threshold change in `DECISIONS.md` when closing (CR4). Verify no other caller
+references `evaluate_collar_call` or `evaluate_collar_put` — use `search_graph` before deleting.
 
 ---
 
@@ -83,7 +94,7 @@ class CollarOverlayV1(ReEntryMixin):
 
 ```python
 auto_execute: ClassVar[bool] = True
-reentry_leg_role: ClassVar[str] = "collar_short_call"
+reentry_leg_role: ClassVar[str] = "overlay_collar_call"
 reentry_script_hint: ClassVar[str] = "run find_overlay_strikes.py --overlay-type collar"
 ```
 
@@ -131,7 +142,7 @@ WARN and INFO results: payload unchanged — no `auto_execute` key.
 days_held = (today - pos.entry_date).days if pos.entry_date is not None else 0
 ```
 
-`pos` here is the short call leg (`collar_short_call`).
+`pos` here is the short call leg (`overlay_collar_call`).
 
 **6. `apply_action()`** — handle `CLOSE_COLLAR`:
 
@@ -146,11 +157,11 @@ async def apply_action(
 
     # Find both legs (used for notification data)
     call_pos = next(
-        (p for p in positions if p.leg_role == "collar_short_call"),
+        (p for p in positions if p.leg_role == "overlay_collar_call"),
         None,
     )
     put_pos = next(
-        (p for p in positions if p.leg_role == "collar_long_put"),
+        (p for p in positions if p.leg_role == "overlay_collar_put"),
         None,
     )
 
@@ -158,7 +169,7 @@ async def apply_action(
     # OverlayCloser.close_collar handles rollback if put close fails after call close
     updated = [
         p for p in positions
-        if p.leg_role not in {"collar_short_call", "collar_long_put"}
+        if p.leg_role not in {"overlay_collar_call", "overlay_collar_put"}
     ]
 
     # Re-entry check for PROFIT_TARGET and TIME_STOP only

@@ -19,8 +19,8 @@
 **What to implement:**
 
 ```python
-_OVERLAY_SHORT_CALL_ROLES = {"cc_short_call", "collar_short_call"}
-_OVERLAY_LONG_PUT_ROLES = {"pp_long_put", "collar_long_put"}
+_OVERLAY_SHORT_CALL_ROLES = {"overlay_cc", "overlay_collar_call"}
+_OVERLAY_LONG_PUT_ROLES = {"overlay_pp", "overlay_collar_put"}
 _OVERLAY_STRIKE_OFFSET = 50   # points
 _BASE_DTE_GUARD = 10          # if base DTE <= this, block overlay roll
 
@@ -80,6 +80,12 @@ ExitSignalResult(
 - Collar short call → same result as CC
 - Collar long put → same result as PP
 
+> **Signal name note:** `ROLL_ELIGIBLE` is reused from the CSP signal set (CSP fires at DTE ≤ 7;
+> overlay fires at DTE ≤ 5). They are separate classmethods and separate strategies, so there is
+> no runtime collision. However, log analysis across strategies will see both under the same name —
+> if this causes confusion in post-trade review, rename to `OVERLAY_ROLL_ELIGIBLE` here and in CR3.
+> Decision deferred to post-implementation.
+
 **Commit:** `feat(strategy): add evaluate_roll_overlay to ExitSignalEngine with base-DTE guard`
 
 ---
@@ -127,6 +133,7 @@ human confirmation. Leg selection order (which overlay to roll first) is not det
 - `src/strategy/exit_signals.py`
 - `src/strategy/nifty_track_comparison_v1.py`
 - `src/paper/store.py` (add `get_proxy_delta_breach_count` + `set_proxy_delta_breach_count`)
+- `scripts/dev/migrate_paper_strategies.py` (new — creates `paper_strategies` table; idempotent)
 - `tests/unit/strategy/test_exit_signals.py`
 - `tests/unit/strategy/test_nifty_track_comparison_v1.py`
 
@@ -137,6 +144,10 @@ human confirmation. Leg selection order (which overlay to roll first) is not det
 - `get_code_snippet("NiftyTrackComparisonV1.check_signals")` — current signal emit structure post-CR3
 - `get_code_snippet("PaperStore")` — get public API for state storage; confirm no existing delta breach counter
 - `search_graph("proxy_delta_breach_count")` — confirm does NOT yet exist
+- `get_code_snippet("ProxyDeltaMonitor")` — **read before implementing**: there is an existing class
+  in `src/paper/proxy_monitor.py` that may already track delta breach state. If it does, extend it
+  rather than adding a new `paper_strategies` table. If it does not persist state across restarts,
+  decide whether to extend it or use the migration approach below.
 
 **What to add to `exit_signals.py`:**
 
@@ -239,17 +250,43 @@ def set_proxy_delta_breach_count(self, strategy_name: str, count: int) -> None:
     """
 ```
 
-Storage: add a `proxy_delta_breach_count INTEGER DEFAULT 0` column to the
-`paper_strategies` table (or create the table if it does not exist). Use `INSERT OR REPLACE`.
+Storage: add a `proxy_delta_breach_count INTEGER DEFAULT 0` column to a new
+`paper_strategies` table (this table does not yet exist — confirm with `search_code("paper_strategies")`).
+
+**Migration script required (mirrors CR1b pattern):**
+
+Create `scripts/dev/migrate_paper_strategies.py`:
+```python
+# Idempotent — checks if table exists before creating.
+CREATE TABLE IF NOT EXISTS paper_strategies (
+    strategy_name TEXT PRIMARY KEY,
+    proxy_delta_breach_count INTEGER NOT NULL DEFAULT 0
+);
+```
+
+This script must be run once before NT-1 code is used in any environment. Add it to the
+same migration runbook as `migrate_paper_trades_state.py` (CR1b). Do NOT use `ALTER TABLE`
+on `paper_trades` — this is a separate, new table for per-strategy metadata.
 
 **Wiring into `NiftyTrackComparisonV1.check_signals()`:**
 
+**Day-counting convention:** `days_below_critical` is the count of *prior* sessions where delta
+was below 0.40, loaded from the DB before signal evaluation. After today's session:
+- If delta is still below critical, the count is incremented (stored count + 1).
+- If delta has recovered, the count is reset to 0.
+- PROXY_DELTA_CRITICAL fires when the *stored input count* reaches `_PROXY_DELTA_CONSECUTIVE` (3),
+  meaning it has been below 0.40 on 3 prior sessions. Today is session 4 of the breach.
+  The WARN note `{_PROXY_DELTA_CONSECUTIVE - days_below_critical} more days` is therefore
+  correct: at days_below_critical=2, one more session triggers CRITICAL.
+
 For any position with `leg_role == "base_ditm_call"`:
 1. Fetch `days_below_critical = store.get_proxy_delta_breach_count(strategy_name)`.
+   (Returns 0 on first run or after a reset.)
 2. Call `ExitSignalEngine.evaluate_proxy_delta(current_delta, current_mark, dte, days_below_critical)`.
-3. If delta < `_PROXY_DELTA_CRITICAL`: call `store.set_proxy_delta_breach_count(strategy_name, days_below_critical + 1)`.
-4. Else: call `store.set_proxy_delta_breach_count(strategy_name, 0)` (reset on recovery).
-5. Emit all returned signals as `SignalEvent` entries (ACTION payloads include `"valid_actions": ["RECORD_REENTRY"]`).
+3. **Unconditionally** update the counter after signal evaluation:
+   - If delta < `_PROXY_DELTA_CRITICAL`: `store.set_proxy_delta_breach_count(strategy_name, days_below_critical + 1)`.
+   - Else (delta recovered): `store.set_proxy_delta_breach_count(strategy_name, 0)`.
+4. Emit all returned signals as `SignalEvent` entries (ACTION payloads include `"valid_actions": ["RECORD_REENTRY"]`).
 
 `NiftyTrackComparisonV1` does NOT set `auto_execute = True` — Proxy re-entry requires
 human confirmation (strike selection via `find_strike_by_delta.py`).
@@ -267,10 +304,11 @@ human confirmation (strike selection via `find_strike_by_delta.py`).
 
 **Tests (`tests/unit/strategy/test_nifty_track_comparison_v1.py`):**
 
-- Proxy leg with `delta=0.62`: `get_proxy_delta_breach_count` not called (only called when `leg_role == "base_ditm_call"`); PROXY_DELTA_WARN in events.
+- Proxy leg with `delta=0.62` (`leg_role == "base_ditm_call"`): `get_proxy_delta_breach_count` called; PROXY_DELTA_WARN in events; `set_proxy_delta_breach_count(strategy_name, 0)` called (delta above critical — reset).
+- Proxy leg `delta=0.38`, breach count returns 0 (first breach) → PROXY_DELTA_WARN; `set_proxy_delta_breach_count` called with `count=1`. *(Establishes day-counting convention: first breach stores 1.)*
 - Proxy leg `delta=0.38`, breach count returns 2 → PROXY_DELTA_WARN; `set_proxy_delta_breach_count` called with `count=3`.
-- Proxy leg `delta=0.38`, breach count returns 3 → PROXY_DELTA_CRITICAL ACTION; `set_proxy_delta_breach_count` called with `count=4`.
-- Proxy leg `delta=0.90` (recovered), breach count was 2 → `set_proxy_delta_breach_count` called with `count=0`.
+- Proxy leg `delta=0.38`, breach count returns 3 → PROXY_DELTA_CRITICAL ACTION; `set_proxy_delta_breach_count` called with `count=4`. *(CRITICAL fires on 4th session — stored count=3 means 3 prior breaches.)*
+- Proxy leg `delta=0.90` (recovered), breach count was 2 → PROXY_DELTA_WARN suppressed (delta above 0.65 too); `set_proxy_delta_breach_count` called with `count=0`.
 - `store=None` → no crash; signals still emitted without persistence.
 
 **Commit:** `feat(strategy): evaluate_proxy_delta — consecutive-day critical/warn/premium-decay signals; PaperStore breach counter`
@@ -299,12 +337,11 @@ Add module-level constant:
 ```python
 _FUTURES_BLOCKED_ROLES: frozenset[str] = frozenset({
     "overlay_cc",
-    "cc_short_call",
-    "collar_short_call",   # collar on futures IS allowed — guard must not fire for collar
+    "overlay_collar_call",   # collar on futures IS allowed — guard fires only when no paired put
 })
-# Collar short call is present in a collar (paired with overlay_collar_put).
-# Block only STANDALONE short calls — a collar call paired without a put is also blocked.
-# Guard logic: short call role present AND no paired long put in the same position set.
+# Block logic: short call role present AND no paired long put in the same position set.
+# A collar (overlay_collar_call + overlay_collar_put together) is explicitly permitted.
+# A degenerate collar (call without put, e.g., put closed early) is also blocked.
 ```
 
 Add a private helper:
@@ -320,7 +357,7 @@ def _check_futures_cc_block(
     Collar (short call + long put together) is explicitly permitted.
 
     A short call is considered standalone if no position in the same strategy_name
-    has leg_role in {'overlay_collar_put', 'pp_long_put'}.
+    has leg_role in {'overlay_collar_put', 'overlay_pp'}.
 
     Args:
         positions: All open positions for this strategy track.
@@ -335,7 +372,7 @@ Guard logic:
 1. If `strategy_name != "paper_nifty_futures"`: return `[]` immediately (guard only applies to Futures track).
 2. Collect all short call positions: `[p for p in positions if p.leg_role in _FUTURES_BLOCKED_ROLES]`.
 3. If none: return `[]`.
-4. Check for paired long put: `any(p.leg_role in {"overlay_collar_put", "pp_long_put"} for p in positions)`.
+4. Check for paired long put: `any(p.leg_role in {"overlay_collar_put", "overlay_pp"} for p in positions)`.
 5. If a short call exists AND no long put paired: emit:
 
 ```python
@@ -356,8 +393,8 @@ Call `_check_futures_cc_block` at the top of `check_signals()` before any other 
 
 - Futures base + `overlay_cc` leg, no long put → `BLOCKED_COMBINATION` ERROR in events
 - Futures base + `overlay_cc` + `overlay_collar_put` (collar) → no `BLOCKED_COMBINATION` (collar is allowed)
-- Futures base + `collar_short_call` + `overlay_collar_put` → no block
-- Futures base + `collar_short_call`, no paired put → `BLOCKED_COMBINATION` (degenerate collar — put missing)
+- Futures base + `overlay_collar_call` + `overlay_collar_put` → no block (proper collar)
+- Futures base + `overlay_collar_call`, no paired put → `BLOCKED_COMBINATION` (degenerate collar — put missing)
 - Spot base + `overlay_cc` → no `BLOCKED_COMBINATION` (guard only fires on Futures namespace)
 - Proxy base + `overlay_cc` → no `BLOCKED_COMBINATION`
 - Futures base, no overlays → no `BLOCKED_COMBINATION`

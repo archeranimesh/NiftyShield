@@ -208,7 +208,10 @@ elif result.exit_signal == "ROLL_ELIGIBLE":
 class PPOverlayV1:
     strategy_name: str = STRATEGY_PP_OVERLAY
     auto_execute: ClassVar[bool] = True
-    reentry_leg_role: ClassVar[str] = "pp_long_put"
+    reentry_leg_role: ClassVar[str] = "overlay_pp"  # gate 3: no open position with this role
+    # Note: PPOverlayV1 does NOT inherit ReEntryMixin — PP re-entry uses an inverted IVR gate
+    # (≤ 0.60, not ≥ 0.25) and is implemented in _evaluate_pp_reentry. reentry_leg_role is used
+    # only internally in gate 3; it is not a mixin class attribute.
 
     def __init__(
         self,

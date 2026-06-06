@@ -60,6 +60,13 @@ inherit it. Class attributes (reentry_leg_role, reentry_script_hint) customise b
 per strategy. Future strategies add re-entry gates by inheriting the mixin and overriding
 two attributes. Gate changes (e.g., add ATR or regime filter) made once in the mixin.
 
+**_CC_MIN_ENTRY_CREDIT and _PROFIT_TARGET_RETENTION are distinct thresholds (council-refactor, CC-1):**
+Two separate constants in `exit_signals.py`. `BELOW_FLOOR` (INFO) fires at entry < ₹12 — position
+too cheap to manage. `PROFIT_TARGET` has an independent floor at `_CC_MIN_ENTRY_CREDIT = Decimal("15")`:
+if entry credit < ₹15 at entry, PROFIT_TARGET never fires — the call decays to worthless without
+active management. The ₹12 BELOW_FLOOR and ₹15 PROFIT_TARGET floor solve different problems and
+must not be collapsed into one threshold.
+
 **_PROFIT_TARGET_RETENTION shared constant (council-refactor, CR):**
 Decimal("0.30") extracted as module constant in exit_signals.py. Shared by evaluate_csp
 and evaluate_cc. Rationale: 70% decay threshold is strategy-agnostic for short premium
@@ -94,7 +101,7 @@ Add the two CC overlay scripts (shipped under covered-call-overlay plan, absorbe
   chain, filters CE strikes with |delta| ∈ [0.12, 0.18], ranks by proximity to 15Δ target. IVR gate
   (warn if IVR < 0.25). Quantity constraint via `compute_max_lots`. Outputs dry-run
   `record_paper_trade` command; prompts for execution.
-- `scripts/paper_cc_roll.py`: manual override exit handler for CC overlay. Four triggers matching
+- `scripts/strategies/cc_calibration/paper_cc_roll.py`: manual override exit handler for CC overlay. Four triggers matching
   `evaluate_cc()` thresholds: loss_stop (2.5×), delta_stop (0.55), profit_target (30% remaining,
   entry ≥ ₹15), time_stop (21d). `--dry-run` and `--force` flags. Complements CCOverlayV1
   auto-execute for mid-session manual closes.
