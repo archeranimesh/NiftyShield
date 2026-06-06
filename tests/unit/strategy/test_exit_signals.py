@@ -1,112 +1,10 @@
+from decimal import Decimal
+
+from src.paper.models import TradeState
 from src.strategy.exit_signals import ExitSignalEngine
 
-
-def test_evaluate_csp_profit_target():
-    # profit target: mark <= 50% of entry credit
-    results = ExitSignalEngine.evaluate_csp(
-        entry_price=20.0, current_mark=9.8, delta=-0.20, days_held=10, dte=20
-    )
-    assert len(results) == 1
-    assert results[0].exit_signal == "PROFIT_TARGET"
-    assert results[0].severity == "ACTION"
-
-    results = ExitSignalEngine.evaluate_csp(
-        entry_price=20.0, current_mark=10.2, delta=-0.20, days_held=10, dte=20
-    )
-    assert not any(r.exit_signal == "PROFIT_TARGET" for r in results)
-
-
-def test_evaluate_csp_loss_stop():
-    # loss stop: mark >= 1.75x entry credit
-    results = ExitSignalEngine.evaluate_csp(
-        entry_price=20.0, current_mark=35.2, delta=-0.20, days_held=10, dte=20
-    )
-    assert len(results) == 1
-    assert results[0].exit_signal == "LOSS_STOP"
-    assert results[0].severity == "ACTION"
-    assert results[0].premium_stop_would_fire is True
-
-    results = ExitSignalEngine.evaluate_csp(
-        entry_price=20.0, current_mark=34.8, delta=-0.20, days_held=10, dte=20
-    )
-    assert not any(r.exit_signal == "LOSS_STOP" for r in results)
-
-
-def test_evaluate_csp_delta_stop_and_warn():
-    # delta stop: |delta| >= 0.45
-    results = ExitSignalEngine.evaluate_csp(
-        entry_price=20.0, current_mark=22.0, delta=-0.46, days_held=10, dte=20
-    )
-    assert len(results) == 1
-    assert results[0].exit_signal == "DELTA_STOP"
-    assert results[0].severity == "ACTION"
-    assert results[0].delta_stop_would_fire is True
-
-    # delta warn: |delta| >= 0.35
-    results = ExitSignalEngine.evaluate_csp(
-        entry_price=20.0, current_mark=22.0, delta=-0.36, days_held=10, dte=20
-    )
-    assert len(results) == 1
-    assert results[0].exit_signal == "DELTA_WARN"
-    assert results[0].severity == "WARN"
-    assert results[0].delta_stop_would_fire is False
-
-
-def test_evaluate_csp_time_stop():
-    # time stop: days_held >= 21
-    results = ExitSignalEngine.evaluate_csp(
-        entry_price=20.0, current_mark=15.0, delta=-0.20, days_held=21, dte=20
-    )
-    assert len(results) == 1
-    assert results[0].exit_signal == "TIME_STOP"
-    assert results[0].severity == "ACTION"
-
-    results = ExitSignalEngine.evaluate_csp(
-        entry_price=20.0, current_mark=15.0, delta=-0.20, days_held=20, dte=20
-    )
-    assert not any(r.exit_signal == "TIME_STOP" for r in results)
-
-
-def test_evaluate_csp_dte_review():
-    # dte review: dte <= 5
-    results = ExitSignalEngine.evaluate_csp(
-        entry_price=20.0, current_mark=15.0, delta=-0.20, days_held=10, dte=4
-    )
-    assert len(results) == 1
-    assert results[0].exit_signal == "DTE_REVIEW"
-    assert results[0].severity == "WARN"
-
-
-def test_evaluate_csp_healthy():
-    results = ExitSignalEngine.evaluate_csp(
-        entry_price=20.0, current_mark=12.0, delta=-0.20, days_held=10, dte=15
-    )
-    assert results == []
-
-
-def test_evaluate_csp_dual_signals():
-    results = ExitSignalEngine.evaluate_csp(
-        entry_price=20.0, current_mark=36.0, delta=-0.46, days_held=10, dte=15
-    )
-    # both DELTA_STOP and LOSS_STOP should fire, sorted by ACTION first (both are ACTION, so order is ok)
-    signals = {r.exit_signal for r in results}
-    assert "DELTA_STOP" in signals
-    assert "LOSS_STOP" in signals
-    for r in results:
-        assert r.delta_stop_would_fire is True
-        assert r.premium_stop_would_fire is True
-        assert r.actual_rule_used == "BOTH"
-
-
-def test_evaluate_csp_delta_none():
-    results = ExitSignalEngine.evaluate_csp(
-        entry_price=20.0, current_mark=36.0, delta=None, days_held=10, dte=15
-    )
-    assert len(results) == 1
-    assert results[0].exit_signal == "LOSS_STOP"
-    assert results[0].delta_stop_would_fire is False
-    assert results[0].premium_stop_would_fire is True
-    assert results[0].actual_rule_used == "PREMIUM"
+# evaluate_csp was removed in CR1b and replaced with five independent classmethods.
+# New CSP evaluator tests are at the bottom of this file (CR1b section).
 
 
 def test_evaluate_cc_below_floor():
@@ -329,3 +227,141 @@ def test_evaluate_collar_call_healthy():
         strike_price=22500.0,
     )
     assert results == []
+
+
+# ── CR1b: five independent CSP evaluators ─────────────────────────────────────
+
+# evaluate_profit_target_csp
+
+
+def test_evaluate_profit_target_csp_fires_at_70_percent_captured():
+    # 47 < 158.6 * 0.30 = 47.58 → fires
+    results = ExitSignalEngine.evaluate_profit_target_csp(
+        ltp=Decimal("47"), entry_credit=Decimal("158.6")
+    )
+    assert len(results) == 1
+    assert results[0].exit_signal == "PROFIT_TARGET"
+    assert results[0].severity == "ACTION"
+
+
+def test_evaluate_profit_target_csp_no_fire_above_threshold():
+    # 48 > 47.58 → does not fire
+    results = ExitSignalEngine.evaluate_profit_target_csp(
+        ltp=Decimal("48"), entry_credit=Decimal("158.6")
+    )
+    assert results == []
+
+
+def test_evaluate_profit_target_csp_zero_ltp_fires():
+    results = ExitSignalEngine.evaluate_profit_target_csp(
+        ltp=Decimal("0"), entry_credit=Decimal("100")
+    )
+    assert len(results) == 1
+    assert results[0].exit_signal == "PROFIT_TARGET"
+
+
+def test_evaluate_profit_target_csp_at_exact_threshold_fires():
+    # ltp == entry_credit * 0.30 → boundary inclusive (≤)
+    results = ExitSignalEngine.evaluate_profit_target_csp(
+        ltp=Decimal("30"), entry_credit=Decimal("100")
+    )
+    assert len(results) == 1
+
+
+# evaluate_hard_stop_csp
+
+
+def test_evaluate_hard_stop_csp_fires_at_2x():
+    # 320 >= 158.6 * 2 = 317.2 → fires
+    results = ExitSignalEngine.evaluate_hard_stop_csp(
+        ltp=Decimal("320"), entry_credit=Decimal("158.6")
+    )
+    assert len(results) == 1
+    assert results[0].exit_signal == "HARD_STOP"
+    assert results[0].severity == "ACTION"
+
+
+def test_evaluate_hard_stop_csp_no_fire_below_2x():
+    # 316 < 317.2 → does not fire
+    results = ExitSignalEngine.evaluate_hard_stop_csp(
+        ltp=Decimal("316"), entry_credit=Decimal("158.6")
+    )
+    assert results == []
+
+
+# evaluate_delta_breach_csp
+
+
+def test_evaluate_delta_breach_csp_open_state_fires_delta_breach():
+    results = ExitSignalEngine.evaluate_delta_breach_csp(delta=-0.41, state=TradeState.OPEN)
+    assert len(results) == 1
+    assert results[0].exit_signal == "DELTA_BREACH"
+    assert results[0].severity == "ACTION"
+
+
+def test_evaluate_delta_breach_csp_defended_state_fires_delta_breach_final():
+    results = ExitSignalEngine.evaluate_delta_breach_csp(delta=-0.41, state=TradeState.DEFENDED)
+    assert len(results) == 1
+    assert results[0].exit_signal == "DELTA_BREACH_FINAL"
+    assert results[0].severity == "ACTION"
+
+
+def test_evaluate_delta_breach_csp_no_fire_below_threshold():
+    results = ExitSignalEngine.evaluate_delta_breach_csp(delta=-0.39, state=TradeState.OPEN)
+    assert results == []
+
+
+def test_evaluate_delta_breach_csp_boundary_inclusive():
+    # |delta| == 0.40 → fires
+    results = ExitSignalEngine.evaluate_delta_breach_csp(delta=-0.40, state=TradeState.OPEN)
+    assert len(results) == 1
+    assert results[0].exit_signal == "DELTA_BREACH"
+
+
+def test_evaluate_delta_breach_csp_defended_below_threshold_no_fire():
+    # DEFENDED state but |delta| < 0.40 → no signal
+    results = ExitSignalEngine.evaluate_delta_breach_csp(delta=-0.39, state=TradeState.DEFENDED)
+    assert results == []
+
+
+def test_evaluate_delta_breach_csp_re_entry_pending_raises():
+    import pytest
+
+    with pytest.raises(ValueError, match="RE_ENTRY_PENDING"):
+        ExitSignalEngine.evaluate_delta_breach_csp(delta=-0.50, state=TradeState.RE_ENTRY_PENDING)
+
+
+# evaluate_time_stop_csp
+
+
+def test_evaluate_time_stop_csp_fires_at_21():
+    results = ExitSignalEngine.evaluate_time_stop_csp(days_held=21)
+    assert len(results) == 1
+    assert results[0].exit_signal == "TIME_STOP"
+    assert results[0].severity == "ACTION"
+
+
+def test_evaluate_time_stop_csp_no_fire_at_20():
+    results = ExitSignalEngine.evaluate_time_stop_csp(days_held=20)
+    assert results == []
+
+
+# evaluate_roll_eligible_csp
+
+
+def test_evaluate_roll_eligible_csp_fires_at_7():
+    results = ExitSignalEngine.evaluate_roll_eligible_csp(dte=7)
+    assert len(results) == 1
+    assert results[0].exit_signal == "ROLL_ELIGIBLE"
+    assert results[0].severity == "ACTION"
+
+
+def test_evaluate_roll_eligible_csp_no_fire_at_8():
+    results = ExitSignalEngine.evaluate_roll_eligible_csp(dte=8)
+    assert results == []
+
+
+def test_evaluate_roll_eligible_csp_fires_at_expiry_day():
+    results = ExitSignalEngine.evaluate_roll_eligible_csp(dte=0)
+    assert len(results) == 1
+    assert results[0].exit_signal == "ROLL_ELIGIBLE"

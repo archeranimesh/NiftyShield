@@ -4,24 +4,23 @@ Implements PaperStrategy protocol so StrategyMonitor can auto-detect exit
 signals for the paper_csp_nifty_v1 strategy.  Entry remains manual via
 ``record_paper_trade.py``.
 
-Signal table (council-spec 2026-05-28)
+Signal table (CR1b 2026-06-06)
 ---------------------------------------
-| Event type    | Severity | Trigger                                       |
-|---------------|----------|-----------------------------------------------|
-| PROFIT_TARGET | ACTION   | mark ≤ 50% of entry credit                    |
-| LOSS_STOP     | ACTION   | mark ≥ 1.75× entry credit                     |
-| DELTA_STOP    | ACTION   | short put |delta| ≥ 0.45                      |
-| TIME_STOP     | ACTION   | 21 calendar days elapsed since entry          |
-| DTE_REVIEW    | WARN     | DTE ≤ 5                                       |
-| DELTA_WARN    | WARN     | short put |delta| ≥ 0.35                      |
+| Event type         | Severity | Trigger                                  |
+|--------------------|----------|------------------------------------------|
+| PROFIT_TARGET      | ACTION   | LTP ≤ 30% of entry credit (70% captured) |
+| HARD_STOP          | ACTION   | LTP ≥ 2× entry credit                    |
+| DELTA_BREACH       | ACTION   | |delta| ≥ 0.40 (OPEN state)              |
+| DELTA_BREACH_FINAL | ACTION   | |delta| ≥ 0.40 (DEFENDED state)          |
+| TIME_STOP          | ACTION   | 21 calendar days elapsed since entry     |
+| ROLL_ELIGIBLE      | ACTION   | DTE ≤ 7                                  |
 
-Multiple signals may fire in a single tick.  ACTION signals gate a council +
-Telegram approval flow; WARN signals send a plain Telegram message.
+Each evaluator is an independent classmethod returning list[ExitSignalResult].
+All ACTION signals gate a Telegram approval flow. Multiple may fire per tick.
 
 Note: TIME_STOP is ``days_held ≥ 21`` (calendar days since first SELL trade),
-NOT ``DTE ≤ 21``.  These are different: a position entered with 5 DTE remaining
-would never trigger a DTE-based check; the days-held check fires 21 days after
-entry regardless of expiry distance.
+NOT ``DTE ≤ 21``.  A position entered with 5 DTE remaining would never trigger
+a DTE-based check; the days-held check fires 21 days after entry regardless.
 """
 
 from __future__ import annotations
@@ -39,7 +38,7 @@ from src.backtest.ivr import compute_ivr
 from src.backtest.vix_ingest import load_vix_series
 from src.config import settings
 from src.models.options import OptionChain, OptionLeg
-from src.paper.models import ExitSignal, PaperPosition
+from src.paper.models import ExitSignal, PaperPosition, TradeState
 from src.strategy.exit_signals import ExitSignalEngine
 from src.strategy.protocol import ApprovedAction, SignalEvent
 
@@ -60,7 +59,6 @@ _STRIKE_RE = re.compile(r"NIFTY(\d+)(PE|CE)", re.IGNORECASE)
 # Thresholds are owned by ExitSignalEngine (exit_signals.py).
 # Constants here are kept only for docstring / describe_context reference.
 _TIME_STOP_DAYS = 21  # days_held ≥ 21 (calendar days since entry SELL trade)
-_ROLL_DTE = 5  # DTE_REVIEW WARN threshold
 
 
 class CSPNiftyV1:
@@ -108,8 +106,17 @@ class CSPNiftyV1:
         Filters positions to ``strategy_name == "paper_csp_nifty_v1"`` and
         ``net_qty < 0`` (short).  Returns ``[]`` when no open positions exist.
 
-        Delegates threshold evaluation to ``ExitSignalEngine.evaluate_csp()``.
-        Multiple signals may fire simultaneously.
+        Delegates to five independent ExitSignalEngine classmethods (CR1b):
+        evaluate_profit_target_csp, evaluate_hard_stop_csp,
+        evaluate_delta_breach_csp, evaluate_time_stop_csp,
+        evaluate_roll_eligible_csp. Multiple signals may fire simultaneously.
+
+        Note: ``evaluate_delta_breach_csp`` receives ``TradeState.OPEN``
+        unconditionally. The ``DELTA_BREACH_FINAL`` path (DEFENDED state) is
+        wired in CR1d when ``PaperPosition`` exposes ``state``.
+        Until then, a leg that was already rolled once still receives
+        ``DELTA_BREACH`` on a second breach — operator approval gate prevents
+        an automatic double-roll.
 
         Args:
             market: Current Nifty 50 option chain snapshot.
@@ -133,30 +140,28 @@ class CSPNiftyV1:
 
             days_held = (today - pos.entry_date).days if pos.entry_date is not None else 0
 
-            delta = float(put_leg.delta) if put_leg is not None else None
-            current_mark = float(put_leg.ltp) if put_leg is not None else 0.0
-            entry_price = float(pos.avg_sell_price)
+            ltp = Decimal(str(put_leg.ltp)) if put_leg is not None else Decimal("0")
+            delta = float(put_leg.delta) if put_leg is not None else 0.0
+            entry_credit = Decimal(str(pos.avg_sell_price))
 
-            results = ExitSignalEngine.evaluate_csp(
-                entry_price=entry_price,
-                current_mark=current_mark,
-                delta=delta,
-                days_held=days_held,
-                dte=dte,
+            results = []
+            results += ExitSignalEngine.evaluate_profit_target_csp(
+                ltp=ltp, entry_credit=entry_credit
             )
+            results += ExitSignalEngine.evaluate_hard_stop_csp(ltp=ltp, entry_credit=entry_credit)
+            results += ExitSignalEngine.evaluate_delta_breach_csp(
+                delta=delta, state=TradeState.OPEN
+            )
+            results += ExitSignalEngine.evaluate_time_stop_csp(days_held=days_held)
+            results += ExitSignalEngine.evaluate_roll_eligible_csp(dte=dte)
+            results = ExitSignalEngine._sort_results(results)
 
             for result in results:
                 payload: dict = {"leg_role": pos.leg_role}
                 if put_leg is not None:
                     payload["delta"] = str(put_leg.delta)
-                    payload["mark"] = str(put_leg.ltp)
+                    payload["ltp"] = str(put_leg.ltp)
                     payload["entry_credit"] = str(pos.avg_sell_price)
-                if result.delta_stop_would_fire is not None:
-                    payload["delta_stop_would_fire"] = result.delta_stop_would_fire
-                if result.premium_stop_would_fire is not None:
-                    payload["premium_stop_would_fire"] = result.premium_stop_would_fire
-                if result.actual_rule_used is not None:
-                    payload["actual_rule_used"] = result.actual_rule_used
                 payload["days_held"] = days_held
                 payload["dte"] = dte
                 payload["valid_actions"] = ["CLOSE_FULL"]

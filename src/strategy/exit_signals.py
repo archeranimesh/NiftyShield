@@ -4,6 +4,12 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Literal
 
+from src.paper.models import TradeState
+
+# Shared profit-target retention ratio: fire when LTP ≤ 30% of entry credit (70% captured).
+# Used by CSP and CC evaluators.
+_PROFIT_TARGET_RETENTION = Decimal("0.30")
+
 
 @dataclass(frozen=True)
 class ExitSignalResult:
@@ -65,113 +71,157 @@ class ExitSignalEngine:
         return delta_stop_would_fire, premium_stop_would_fire, actual_rule_used
 
     @classmethod
-    def evaluate_csp(
+    def evaluate_profit_target_csp(
         cls,
         *,
-        entry_price: float,
-        current_mark: float,
-        delta: float | None,
-        days_held: int,
-        dte: int,
+        ltp: Decimal,
+        entry_credit: Decimal,
     ) -> list[ExitSignalResult]:
-        """Evaluate exit signals for a Cash-Secured Put (CSP) leg."""
-        entry_dec = Decimal(str(entry_price))
-        mark_dec = Decimal(str(current_mark))
+        """Fire when 70% of entry credit has been captured (LTP ≤ 30% of entry credit).
 
-        delta_stop, premium_stop, rule_used = cls._get_sell_audit_fields(
-            delta=delta,
-            current_mark=mark_dec,
-            entry_price=entry_dec,
-            delta_threshold=-0.45,
-            premium_threshold_mult=Decimal("1.75"),
-        )
+        Args:
+            ltp: Current last-traded price of the short put.
+            entry_credit: Premium received at entry (positive Decimal).
 
-        results: list[ExitSignalResult] = []
-
-        # 1. PROFIT_TARGET: mark <= 50% of entry credit
-        if entry_dec > 0 and mark_dec / entry_dec <= Decimal("0.50"):
-            results.append(
+        Returns:
+            Single-element list when signal fires; empty list otherwise.
+        """
+        threshold = entry_credit * _PROFIT_TARGET_RETENTION
+        if ltp <= threshold:
+            return [
                 ExitSignalResult(
                     exit_signal="PROFIT_TARGET",
                     severity="ACTION",
-                    threshold_value=0.50,
-                    delta_stop_would_fire=delta_stop,
-                    premium_stop_would_fire=premium_stop,
-                    actual_rule_used=rule_used,
-                    notes=f"Mark {current_mark} <= 50% of entry credit {entry_price}",
+                    threshold_value=float(threshold),
+                    notes=f"LTP {ltp} ≤ 30% of entry credit {entry_credit} (70% captured)",
                 )
-            )
+            ]
+        return []
 
-        # 2. LOSS_STOP: mark >= 1.75x entry credit
-        if premium_stop:
-            results.append(
+    @classmethod
+    def evaluate_hard_stop_csp(
+        cls,
+        *,
+        ltp: Decimal,
+        entry_credit: Decimal,
+    ) -> list[ExitSignalResult]:
+        """Fire when LTP ≥ 2× entry credit (position doubled against us).
+
+        Args:
+            ltp: Current last-traded price of the short put.
+            entry_credit: Premium received at entry (positive Decimal).
+
+        Returns:
+            Single-element list when signal fires; empty list otherwise.
+        """
+        threshold = entry_credit * Decimal("2.0")
+        if ltp >= threshold:
+            return [
                 ExitSignalResult(
-                    exit_signal="LOSS_STOP",
+                    exit_signal="HARD_STOP",
                     severity="ACTION",
-                    threshold_value=1.75,
-                    delta_stop_would_fire=delta_stop,
-                    premium_stop_would_fire=premium_stop,
-                    actual_rule_used=rule_used,
-                    notes=f"Mark {current_mark} >= 1.75x entry credit {entry_price}",
+                    threshold_value=float(threshold),
+                    notes=f"LTP {ltp} ≥ 2× entry credit {entry_credit}",
                 )
-            )
+            ]
+        return []
 
-        # 3. DELTA_STOP: |delta| >= 0.45
-        if delta is not None and abs(delta) >= 0.45:
-            results.append(
-                ExitSignalResult(
-                    exit_signal="DELTA_STOP",
-                    severity="ACTION",
-                    threshold_value=0.45,
-                    delta_stop_would_fire=delta_stop,
-                    premium_stop_would_fire=premium_stop,
-                    actual_rule_used=rule_used,
-                    notes=f"Short put |delta| {abs(delta)} >= 0.45",
-                )
-            )
-        # 4. DELTA_WARN: |delta| >= 0.35 (only if DELTA_STOP did not fire)
-        elif delta is not None and abs(delta) >= 0.35:
-            results.append(
-                ExitSignalResult(
-                    exit_signal="DELTA_WARN",
-                    severity="WARN",
-                    threshold_value=0.35,
-                    delta_stop_would_fire=delta_stop,
-                    premium_stop_would_fire=premium_stop,
-                    actual_rule_used=rule_used,
-                    notes=f"Short put |delta| {abs(delta)} >= 0.35",
-                )
-            )
+    @classmethod
+    def evaluate_delta_breach_csp(
+        cls,
+        *,
+        delta: float,
+        state: TradeState,
+    ) -> list[ExitSignalResult]:
+        """Fire when |delta| ≥ 0.40.
 
-        # 5. TIME_STOP: 21 calendar days elapsed since entry
+        OPEN state → DELTA_BREACH (roll down and out).
+        DEFENDED state → DELTA_BREACH_FINAL (close and wait — second breach).
+
+        Args:
+            delta: Current delta of the short put (negative float).
+            state: Current lifecycle state of the trade.
+
+        Returns:
+            Single-element list when signal fires; empty list otherwise.
+
+        Raises:
+            ValueError: If state is RE_ENTRY_PENDING (no open leg to evaluate).
+        """
+        if state == TradeState.RE_ENTRY_PENDING:
+            raise ValueError(
+                "evaluate_delta_breach_csp called on RE_ENTRY_PENDING state — no open leg"
+            )
+        if abs(delta) >= 0.40:
+            if state == TradeState.OPEN:
+                return [
+                    ExitSignalResult(
+                        exit_signal="DELTA_BREACH",
+                        severity="ACTION",
+                        threshold_value=0.40,
+                        notes=f"delta {delta:.4f}: |δ| ≥ 0.40 — roll down and out",
+                    )
+                ]
+            else:  # DEFENDED
+                return [
+                    ExitSignalResult(
+                        exit_signal="DELTA_BREACH_FINAL",
+                        severity="ACTION",
+                        threshold_value=0.40,
+                        notes=f"delta {delta:.4f}: second breach in DEFENDED state — close and wait",
+                    )
+                ]
+        return []
+
+    @classmethod
+    def evaluate_time_stop_csp(
+        cls,
+        *,
+        days_held: int,
+    ) -> list[ExitSignalResult]:
+        """Fire when days_held ≥ 21 calendar days since entry.
+
+        Args:
+            days_held: Number of calendar days since the trade was opened.
+
+        Returns:
+            Single-element list when signal fires; empty list otherwise.
+        """
         if days_held >= 21:
-            results.append(
+            return [
                 ExitSignalResult(
                     exit_signal="TIME_STOP",
                     severity="ACTION",
                     threshold_value=21.0,
-                    delta_stop_would_fire=delta_stop,
-                    premium_stop_would_fire=premium_stop,
-                    actual_rule_used=rule_used,
-                    notes=f"Days held {days_held} >= 21",
+                    notes=f"Days held {days_held} ≥ 21",
                 )
-            )
+            ]
+        return []
 
-        # 6. DTE_REVIEW: DTE <= 5
-        if dte <= 5:
-            results.append(
+    @classmethod
+    def evaluate_roll_eligible_csp(
+        cls,
+        *,
+        dte: int,
+    ) -> list[ExitSignalResult]:
+        """Fire when DTE ≤ 7 — position approaching expiry and should be rolled.
+
+        Args:
+            dte: Days to expiry of the current short put leg.
+
+        Returns:
+            Single-element list when signal fires; empty list otherwise.
+        """
+        if dte <= 7:
+            return [
                 ExitSignalResult(
-                    exit_signal="DTE_REVIEW",
-                    severity="WARN",
-                    threshold_value=5.0,
-                    delta_stop_would_fire=delta_stop,
-                    premium_stop_would_fire=premium_stop,
-                    actual_rule_used=rule_used,
-                    notes=f"DTE {dte} <= 5",
+                    exit_signal="ROLL_ELIGIBLE",
+                    severity="ACTION",
+                    threshold_value=7.0,
+                    notes=f"DTE {dte} ≤ 7 — close and reopen via strike_selector",
                 )
-            )
-
-        return cls._sort_results(results)
+            ]
+        return []
 
     @classmethod
     def evaluate_cc(

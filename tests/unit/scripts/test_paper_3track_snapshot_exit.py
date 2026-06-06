@@ -15,10 +15,10 @@ Coverage:
 from __future__ import annotations
 
 import sys
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -26,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 import scripts.strategies.three_track.paper_3track_snapshot as snap_mod
 from src.models.options import OptionChain, OptionChainStrike, OptionLeg
-from src.paper.models import ExitSignal, PaperPosition
+from src.paper.models import PaperPosition
 from src.paper.store import PaperStore
 from src.strategy.exit_signals import ExitSignalEngine
 
@@ -138,10 +138,10 @@ async def _run_eval(
 
 @pytest.mark.asyncio
 async def test_csp_profit_target_written(tmp_path: Path) -> None:
-    """CSP mark ≤ 50% of entry credit → PROFIT_TARGET written with detected_by=EOD."""
+    """CSP LTP ≤ 30% of entry credit → PROFIT_TARGET written with detected_by=EOD."""
     store = _make_store(tmp_path)
-    # Entry credit=100, mark=49 → 49% of credit → PROFIT_TARGET fires
-    pe_leg = _make_leg(ltp=49.0, delta=-0.20)
+    # Entry credit=100, LTP=29 → 29% of credit (≤ 30%) → PROFIT_TARGET fires
+    pe_leg = _make_leg(ltp=29.0, delta=-0.20)
     chain = _make_chain(pe_leg=pe_leg)
     pos = _make_csp_position(avg_sell_price=100.0)
 
@@ -214,7 +214,7 @@ async def test_healthy_position_no_event(tmp_path: Path) -> None:
 async def test_deduplication_no_duplicate(tmp_path: Path) -> None:
     """Same signal evaluated twice on the same day → only one DB row."""
     store = _make_store(tmp_path)
-    pe_leg = _make_leg(ltp=49.0, delta=-0.20)
+    pe_leg = _make_leg(ltp=29.0, delta=-0.20)
     chain = _make_chain(pe_leg=pe_leg)
     pos = _make_csp_position(avg_sell_price=100.0)
 
@@ -280,8 +280,8 @@ async def test_only_breaching_position_creates_event(tmp_path: Path) -> None:
 async def test_notifier_called_for_action_and_warn(tmp_path: Path) -> None:
     """ACTION → one Telegram per signal; WARN → batched per strategy."""
     store = _make_store(tmp_path)
-    # ACTION: CSP profit target (mark=49%)
-    pe_action = _make_leg(ltp=49.0, delta=-0.20)
+    # ACTION: CSP profit target (LTP=29 ≤ 30% of entry credit 100)
+    pe_action = _make_leg(ltp=29.0, delta=-0.20)
     # WARN: CC delta=0.47 → DELTA_WARN
     ce_warn = _make_leg(ltp=22.0, delta=0.47)
 
@@ -316,7 +316,7 @@ async def test_notifier_called_for_action_and_warn(tmp_path: Path) -> None:
 async def test_notifier_raises_event_still_written(tmp_path: Path) -> None:
     """Notifier failure is non-fatal — exit event still persisted to DB."""
     store = _make_store(tmp_path)
-    pe_leg = _make_leg(ltp=49.0, delta=-0.20)
+    pe_leg = _make_leg(ltp=29.0, delta=-0.20)
     chain = _make_chain(pe_leg=pe_leg)
     pos = _make_csp_position(avg_sell_price=100.0)
 

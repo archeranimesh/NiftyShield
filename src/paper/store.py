@@ -30,6 +30,7 @@ from src.paper.models import (
     PaperNavSnapshot,
     PaperPosition,
     PaperTrade,
+    TradeState,
 )
 
 _SCHEMA = """
@@ -44,6 +45,8 @@ CREATE TABLE IF NOT EXISTS paper_trades (
     price          TEXT NOT NULL,
     notes          TEXT NOT NULL DEFAULT '',
     ivr_at_entry   REAL DEFAULT NULL,
+    state          TEXT NOT NULL DEFAULT 'OPEN'
+                       CHECK(state IN ('OPEN','DEFENDED','RE_ENTRY_PENDING')),
     UNIQUE(strategy_name, leg_role, trade_date, action)
 );
 
@@ -175,6 +178,7 @@ def _row_to_trade(row: sqlite3.Row) -> PaperTrade:
         price=Decimal(row["price"]),
         notes=row["notes"],
         ivr_at_entry=row["ivr_at_entry"],
+        state=TradeState(row["state"]) if row["state"] else TradeState.OPEN,
     )
 
 
@@ -216,6 +220,14 @@ class PaperStore:
                 conn.execute("ALTER TABLE paper_trades ADD COLUMN ivr_at_entry REAL DEFAULT NULL")
             except sqlite3.OperationalError:
                 pass  # Column already exists
+            # Migration: add state to paper_trades if missing
+            try:
+                conn.execute(
+                    "ALTER TABLE paper_trades ADD COLUMN state TEXT NOT NULL DEFAULT 'OPEN'"
+                    " CHECK(state IN ('OPEN','DEFENDED','RE_ENTRY_PENDING'))"
+                )
+            except sqlite3.OperationalError:
+                pass  # Column already exists
 
     # ── Trades ledger ─────────────────────────────────────────────────────────
 
@@ -235,8 +247,8 @@ class PaperStore:
             cur = conn.execute(
                 """INSERT INTO paper_trades
                    (strategy_name, leg_role, instrument_key, trade_date,
-                    action, quantity, price, notes, ivr_at_entry)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    action, quantity, price, notes, ivr_at_entry, state)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                    ON CONFLICT(strategy_name, leg_role, trade_date, action)
                    DO NOTHING""",
                 (
@@ -249,6 +261,7 @@ class PaperStore:
                     str(trade.price),
                     trade.notes,
                     trade.ivr_at_entry,
+                    trade.state.value,
                 ),
             )
             return cur.rowcount == 1
@@ -272,8 +285,8 @@ class PaperStore:
                 cur = conn.execute(
                     """INSERT INTO paper_trades
                        (strategy_name, leg_role, instrument_key, trade_date,
-                        action, quantity, price, notes, ivr_at_entry)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        action, quantity, price, notes, ivr_at_entry, state)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                        ON CONFLICT(strategy_name, leg_role, trade_date, action)
                        DO NOTHING""",
                     (
@@ -286,6 +299,7 @@ class PaperStore:
                         str(trade.price),
                         trade.notes,
                         trade.ivr_at_entry,
+                        trade.state.value,
                     ),
                 )
                 if cur.rowcount == 1:
@@ -293,6 +307,24 @@ class PaperStore:
                 else:
                     skipped_trades.append(trade)
         return inserted_trades, skipped_trades
+
+    def update_trade_state(self, trade_id: int, state: TradeState) -> None:
+        """Update the lifecycle state of an existing paper trade.
+
+        Args:
+            trade_id: Primary key of the paper_trades row to update.
+            state: New TradeState value to persist.
+
+        Raises:
+            ValueError: If no trade with the given trade_id exists.
+        """
+        with _connect(self.db_path) as conn:
+            cur = conn.execute(
+                "UPDATE paper_trades SET state = ? WHERE id = ?",
+                (state.value, trade_id),
+            )
+            if cur.rowcount == 0:
+                raise ValueError(f"No paper trade found with id={trade_id}")
 
     def get_trades(
         self,
@@ -312,7 +344,7 @@ class PaperStore:
             if leg_role is not None:
                 rows = conn.execute(
                     "SELECT strategy_name, leg_role, instrument_key, trade_date,"
-                    " action, quantity, price, notes, ivr_at_entry"
+                    " action, quantity, price, notes, ivr_at_entry, state"
                     " FROM paper_trades"
                     " WHERE strategy_name = ? AND leg_role = ?"
                     " ORDER BY trade_date ASC, id ASC",
@@ -321,7 +353,7 @@ class PaperStore:
             else:
                 rows = conn.execute(
                     "SELECT strategy_name, leg_role, instrument_key, trade_date,"
-                    " action, quantity, price, notes, ivr_at_entry"
+                    " action, quantity, price, notes, ivr_at_entry, state"
                     " FROM paper_trades"
                     " WHERE strategy_name = ?"
                     " ORDER BY trade_date ASC, id ASC",

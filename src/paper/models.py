@@ -26,6 +26,20 @@ from pydantic import BaseModel, Field, field_validator
 from src.models.portfolio import TradeAction
 
 
+class TradeState(str, Enum):
+    """Lifecycle state of an open paper trade leg.
+
+    OPEN: Normal operation — no defensive action taken yet.
+    DEFENDED: A DELTA_BREACH roll was executed; one defensive roll consumed.
+    RE_ENTRY_PENDING: Position was closed (HARD_STOP or DELTA_BREACH_FINAL);
+        waiting for re-entry conditions (IVR + delta range) to be met.
+    """
+
+    OPEN = "OPEN"
+    DEFENDED = "DEFENDED"
+    RE_ENTRY_PENDING = "RE_ENTRY_PENDING"
+
+
 class PaperTrade(BaseModel):
     """A single simulated trade execution for paper trading.
 
@@ -54,6 +68,7 @@ class PaperTrade(BaseModel):
     price: Decimal = Field(..., gt=0)
     notes: str = ""
     ivr_at_entry: float | None = None
+    state: TradeState = TradeState.OPEN
     is_paper: Literal[True] = True
 
     model_config = {"frozen": True}

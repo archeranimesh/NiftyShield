@@ -7,11 +7,12 @@ Instrument key conventions used here:
   "NSE_FO|NIFTY{date}PE"       — expiry embedded, no strike (DTE tests)
   "NSE_FO|12345"                — numeric key, nothing parseable
 
-Threshold changes vs PB2.1 (council 2026-05-28):
-  LOSS_STOP:  2.0× → 1.75×
-  DELTA_STOP: 0.35 → 0.45
-  DELTA_WARN: 0.25 → 0.35
-  TIME_STOP:  DTE ≤ 21 → days_held ≥ 21 (calendar days elapsed since entry)
+Signal table (CR1b 2026-06-06):
+  PROFIT_TARGET  ACTION  LTP ≤ 30% of entry credit (70% captured)
+  HARD_STOP      ACTION  LTP ≥ 2× entry credit
+  DELTA_BREACH   ACTION  |delta| ≥ 0.40 (OPEN state)
+  TIME_STOP      ACTION  days_held ≥ 21
+  ROLL_ELIGIBLE  ACTION  DTE ≤ 7
 """
 
 from __future__ import annotations
@@ -139,11 +140,11 @@ def test_long_position_ignored() -> None:
 # ── check_signals — mark-based signals ───────────────────────────────────────
 
 
-def test_profit_target_fires_at_48_pct() -> None:
-    """PROFIT_TARGET ACTION when mark = 48% of entry credit (< 50%)."""
+def test_profit_target_fires_at_70_pct_captured() -> None:
+    """PROFIT_TARGET ACTION when LTP ≤ 30% of entry credit (70% captured)."""
     strategy = CSPNiftyV1()
-    # entry credit = 80, mark = 38.4  →  38.4/80 = 0.48
-    chain = _make_chain(ltp="38.4", delta="-0.20")
+    # entry credit = 80, LTP = 23 → 23/80 = 0.2875 ≤ 0.30 → fires
+    chain = _make_chain(ltp="23", delta="-0.20")
     pos = _make_position(avg_sell_price="80")
     events = _run(strategy.check_signals(chain, [pos]))
     event_types = {e.event_type for e in events}
@@ -152,43 +153,33 @@ def test_profit_target_fires_at_48_pct() -> None:
     assert pt.severity == "ACTION"
 
 
-def test_loss_stop_fires_at_176_pct() -> None:
-    """LOSS_STOP ACTION when mark = 176% of entry credit (≥ 175%)."""
+def test_hard_stop_fires_at_200_pct() -> None:
+    """HARD_STOP ACTION when LTP = 200% of entry credit (≥ 2×)."""
     strategy = CSPNiftyV1()
-    # entry credit = 80, mark = 140.8  →  140.8/80 = 1.76
-    chain = _make_chain(ltp="140.8", delta="-0.50")
+    # entry credit = 80, LTP = 161 → 161/80 = 2.0125 ≥ 2.0 → fires
+    chain = _make_chain(ltp="161", delta="-0.55")
     pos = _make_position(avg_sell_price="80")
     events = _run(strategy.check_signals(chain, [pos]))
     event_types = {e.event_type for e in events}
-    assert "LOSS_STOP" in event_types
-    ls = next(e for e in events if e.event_type == "LOSS_STOP")
-    assert ls.severity == "ACTION"
+    assert "HARD_STOP" in event_types
+    hs = next(e for e in events if e.event_type == "HARD_STOP")
+    assert hs.severity == "ACTION"
 
 
-def test_loss_stop_fires_at_old_threshold_too() -> None:
-    """LOSS_STOP also fires at ≥ 200% — threshold lowered, not removed."""
+def test_hard_stop_does_not_fire_below_200_pct() -> None:
+    """HARD_STOP does NOT fire when LTP = 199% of entry credit (< 2×)."""
     strategy = CSPNiftyV1()
-    # mark = 168 → 168/80 = 2.10 — still above 1.75× threshold
-    chain = _make_chain(ltp="168", delta="-0.50")
+    # entry credit = 80, LTP = 159 → 159/80 = 1.9875 < 2.0
+    chain = _make_chain(ltp="159", delta="-0.30")
     pos = _make_position(avg_sell_price="80")
     events = _run(strategy.check_signals(chain, [pos]))
-    assert any(e.event_type == "LOSS_STOP" for e in events)
-
-
-def test_loss_stop_does_not_fire_below_175_pct() -> None:
-    """LOSS_STOP does NOT fire when mark = 174% of entry credit (< 175%)."""
-    strategy = CSPNiftyV1()
-    # entry credit = 80, mark = 139.2  →  139.2/80 = 1.74
-    chain = _make_chain(ltp="139.2", delta="-0.30")
-    pos = _make_position(avg_sell_price="80")
-    events = _run(strategy.check_signals(chain, [pos]))
-    assert not any(e.event_type == "LOSS_STOP" for e in events)
+    assert not any(e.event_type == "HARD_STOP" for e in events)
 
 
 def test_profit_target_fires_at_24_pct() -> None:
-    """PROFIT_TARGET fires at 24% mark (< 50%) — no ROLL_DUE_DECAY in council spec."""
+    """PROFIT_TARGET fires at 24% mark (≤ 30%) — no ROLL_DUE_DECAY in spec."""
     strategy = CSPNiftyV1()
-    # entry credit = 80, mark = 19.2  →  19.2/80 = 0.24
+    # entry credit = 80, LTP = 19.2 → 19.2/80 = 0.24 ≤ 0.30 → fires
     chain = _make_chain(ltp="19.2", delta="-0.10")
     pos = _make_position(avg_sell_price="80")
     events = _run(strategy.check_signals(chain, [pos]))
@@ -200,52 +191,37 @@ def test_profit_target_fires_at_24_pct() -> None:
 # ── check_signals — delta signals ────────────────────────────────────────────
 
 
-def test_delta_stop_fires_at_0_46() -> None:
-    """DELTA_STOP ACTION when |delta| = 0.46 (≥ 0.45, council-corrected threshold)."""
+def test_delta_breach_fires_at_0_40() -> None:
+    """DELTA_BREACH ACTION when |delta| = 0.41 (≥ 0.40 threshold)."""
     strategy = CSPNiftyV1()
-    chain = _make_chain(ltp="80", delta="-0.46")
+    chain = _make_chain(ltp="80", delta="-0.41")
     pos = _make_position(avg_sell_price="80")
     events = _run(strategy.check_signals(chain, [pos]))
     event_types = {e.event_type for e in events}
-    assert "DELTA_STOP" in event_types
-    ds = next(e for e in events if e.event_type == "DELTA_STOP")
-    assert ds.severity == "ACTION"
+    assert "DELTA_BREACH" in event_types
+    db = next(e for e in events if e.event_type == "DELTA_BREACH")
+    assert db.severity == "ACTION"
 
 
-def test_delta_stop_does_not_fire_at_0_36() -> None:
-    """DELTA_STOP does NOT fire at |delta| = 0.36 (was wrong threshold in PB2.1)."""
+def test_delta_breach_does_not_fire_at_0_39() -> None:
+    """DELTA_BREACH does NOT fire at |delta| = 0.39 (< 0.40)."""
     strategy = CSPNiftyV1()
-    chain = _make_chain(ltp="80", delta="-0.36")
+    chain = _make_chain(ltp="80", delta="-0.39")
     pos = _make_position(avg_sell_price="80")
     events = _run(strategy.check_signals(chain, [pos]))
     event_types = {e.event_type for e in events}
+    assert "DELTA_BREACH" not in event_types
     assert "DELTA_STOP" not in event_types
-    # Instead DELTA_WARN fires (0.35 ≤ 0.36 < 0.45)
-    assert "DELTA_WARN" in event_types
-
-
-def test_delta_warn_fires_at_0_36() -> None:
-    """DELTA_WARN WARN when |delta| = 0.36 (≥ 0.35, council-corrected threshold)."""
-    strategy = CSPNiftyV1()
-    chain = _make_chain(ltp="80", delta="-0.36")
-    pos = _make_position(avg_sell_price="80")
-    events = _run(strategy.check_signals(chain, [pos]))
-    event_types = {e.event_type for e in events}
-    assert "DELTA_WARN" in event_types
-    assert "DELTA_STOP" not in event_types
-    dw = next(e for e in events if e.event_type == "DELTA_WARN")
-    assert dw.severity == "WARN"
-
-
-def test_delta_warn_does_not_fire_at_0_27() -> None:
-    """DELTA_WARN does NOT fire at |delta| = 0.27 (below corrected 0.35 floor)."""
-    strategy = CSPNiftyV1()
-    chain = _make_chain(ltp="80", delta="-0.27")
-    pos = _make_position(avg_sell_price="80")
-    events = _run(strategy.check_signals(chain, [pos]))
-    event_types = {e.event_type for e in events}
     assert "DELTA_WARN" not in event_types
-    assert "DELTA_STOP" not in event_types
+
+
+def test_no_delta_warn_signal_exists() -> None:
+    """DELTA_WARN is removed in CR1b — no such signal fires at any delta level."""
+    strategy = CSPNiftyV1()
+    chain = _make_chain(ltp="80", delta="-0.36")
+    pos = _make_position(avg_sell_price="80")
+    events = _run(strategy.check_signals(chain, [pos]))
+    assert not any(e.event_type == "DELTA_WARN" for e in events)
 
 
 # ── check_signals — DTE signals ───────────────────────────────────────────────
@@ -282,17 +258,17 @@ def test_time_stop_does_not_fire_on_dte_alone() -> None:
     assert not any(e.event_type == "TIME_STOP" for e in events)
 
 
-def test_dte_review_fires_at_dte_4() -> None:
-    """DTE_REVIEW WARN when DTE = 4 (≤ 5); replaces ROLL_DUE_DTE."""
+def test_roll_eligible_fires_at_dte_4() -> None:
+    """ROLL_ELIGIBLE ACTION when DTE = 4 (≤ 7); replaces DTE_REVIEW WARN."""
     strategy = CSPNiftyV1()
     key = _expiry_key(dte=4)
     pos = _make_position(instrument_key=key, avg_sell_price="80")
     events = _run(strategy.check_signals(_make_empty_chain(), [pos]))
     event_types = {e.event_type for e in events}
-    assert "DTE_REVIEW" in event_types
-    assert "ROLL_DUE_DTE" not in event_types
-    rd = next(e for e in events if e.event_type == "DTE_REVIEW")
-    assert rd.severity == "WARN"
+    assert "ROLL_ELIGIBLE" in event_types
+    assert "DTE_REVIEW" not in event_types
+    re_event = next(e for e in events if e.event_type == "ROLL_ELIGIBLE")
+    assert re_event.severity == "ACTION"
 
 
 # ── check_signals — no events ─────────────────────────────────────────────────

@@ -76,7 +76,13 @@ from src.paper.constants import (
 )
 from src.paper.formatting import format_track_summary
 from src.paper.metrics import compute_nee
-from src.paper.models import ExitSignal, PaperLegSnapshot, PaperNavSnapshot, PaperPosition
+from src.paper.models import (
+    ExitSignal,
+    PaperLegSnapshot,
+    PaperNavSnapshot,
+    PaperPosition,
+    TradeState,
+)
 from src.paper.proxy_monitor import ProxyDeltaMonitor
 from src.paper.store import PaperStore
 from src.paper.track_snapshot import TrackSnapshot, generate_track_snapshot
@@ -212,18 +218,19 @@ def _dispatch_evaluate(
     dte = _compute_dte(pos.instrument_key, today) or 9999
 
     if pos.strategy_name == _CSP_STRATEGY and pos.net_qty < 0:
-        # Short put — CSP
+        # Short put — CSP: five independent evaluators (CR1b)
         leg = _find_chain_leg(chain, pos.instrument_key, "PE")
-        delta = float(leg.delta) if leg is not None else None
-        current_mark = float(leg.ltp) if leg is not None else 0.0
+        ltp = Decimal(str(leg.ltp)) if leg is not None else Decimal("0")
+        delta = float(leg.delta) if leg is not None else 0.0
+        entry_credit = Decimal(str(pos.avg_sell_price))
         days_held = (today - pos.entry_date).days if pos.entry_date else 0
-        return ExitSignalEngine.evaluate_csp(
-            entry_price=float(pos.avg_sell_price),
-            current_mark=current_mark,
-            delta=delta,
-            days_held=days_held,
-            dte=dte,
-        )
+        results: list = []
+        results += ExitSignalEngine.evaluate_profit_target_csp(ltp=ltp, entry_credit=entry_credit)
+        results += ExitSignalEngine.evaluate_hard_stop_csp(ltp=ltp, entry_credit=entry_credit)
+        results += ExitSignalEngine.evaluate_delta_breach_csp(delta=delta, state=TradeState.OPEN)
+        results += ExitSignalEngine.evaluate_time_stop_csp(days_held=days_held)
+        results += ExitSignalEngine.evaluate_roll_eligible_csp(dte=dte)
+        return ExitSignalEngine._sort_results(results)
 
     if role == "overlay_cc" and pos.net_qty < 0:
         leg = _find_chain_leg(chain, pos.instrument_key, "CE")

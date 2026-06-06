@@ -34,9 +34,8 @@ from pathlib import Path
 import pytest
 
 from src.models.portfolio import TradeAction
-from src.paper.models import PaperNavSnapshot, PaperTrade
+from src.paper.models import PaperLegSnapshot, PaperNavSnapshot, PaperTrade, TradeState
 from src.paper.store import PaperStore
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -143,7 +142,7 @@ def test_record_trades_duplicate_skip(store: PaperStore) -> None:
     t1 = _sell_trade(leg_role="short_put", trade_date=date(2026, 6, 1))
     t2 = _sell_trade(leg_role="short_call", trade_date=date(2026, 6, 1))
     store.record_trade(t1)  # Insert t1 first
-    
+
     inserted, skipped = store.record_trades([t1, t2])
     assert len(inserted) == 1
     assert inserted[0].leg_role == "short_call"
@@ -153,35 +152,39 @@ def test_record_trades_duplicate_skip(store: PaperStore) -> None:
     assert len(trades) == 2
 
 
-def test_record_trades_atomicity_rollback(store: PaperStore, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_record_trades_atomicity_rollback(
+    store: PaperStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
     import contextlib
+
     from src.db import connect as real_connect
 
     t1 = _sell_trade(leg_role="short_put", trade_date=date(2026, 6, 1))
     t2 = _sell_trade(leg_role="short_call", trade_date=date(2026, 6, 1))
-    
+
     @contextlib.contextmanager
     def exploding_connect(db_path):
         with real_connect(db_path) as real_conn:
+
             class Wrapper:
                 def __init__(self, conn):
                     self.conn = conn
                     self.call_count = 0
-                
+
                 def execute(self, sql, params=None):
                     if "INSERT INTO paper_trades" in sql:
                         self.call_count += 1
                         if self.call_count == 2:
                             raise RuntimeError("Mocked error")
                     return self.conn.execute(sql, params)
-                    
+
             yield Wrapper(real_conn)
-            
+
     monkeypatch.setattr("src.paper.store._connect", exploding_connect)
 
     with pytest.raises(RuntimeError, match="Mocked error"):
         store.record_trades([t1, t2])
-        
+
     # Verify rollback: t1 should not be in the DB
     trades = store.get_trades(_STRATEGY)
     assert len(trades) == 0
@@ -236,8 +239,11 @@ def test_get_position_buy_then_sell_net(store: PaperStore) -> None:
 
 def test_get_position_weighted_avg_cost(store: PaperStore) -> None:
     store.record_trade(_buy_trade(trade_date=date(2026, 5, 1), quantity=50, price=Decimal("100")))
-    store.record_trade(_buy_trade(trade_date=date(2026, 5, 2), quantity=50, price=Decimal("120"),
-                                  action=TradeAction.BUY))
+    store.record_trade(
+        _buy_trade(
+            trade_date=date(2026, 5, 2), quantity=50, price=Decimal("120"), action=TradeAction.BUY
+        )
+    )
     pos = store.get_position(_STRATEGY, _LEG)
     assert pos.net_qty == 100
     # (50*100 + 50*120) / 100 = 110
@@ -256,18 +262,18 @@ def test_get_positions_bulk(store: PaperStore) -> None:
     # Record trades for different legs
     store.record_trade(_sell_trade(leg_role="leg_1", quantity=75, price=Decimal("120.50")))
     store.record_trade(_buy_trade(leg_role="leg_2", quantity=75, price=Decimal("60.00")))
-    
+
     positions = store.get_positions(_STRATEGY)
     assert len(positions) == 2
-    
+
     # Map by leg_role
     pos_map = {p.leg_role: p for p in positions}
     assert "leg_1" in pos_map
     assert "leg_2" in pos_map
-    
+
     assert pos_map["leg_1"].net_qty == -75
     assert pos_map["leg_1"].avg_sell_price == Decimal("120.50")
-    
+
     assert pos_map["leg_2"].net_qty == 75
     assert pos_map["leg_2"].avg_cost == Decimal("60.00")
 
@@ -361,8 +367,7 @@ def test_get_latest_nav_snapshot_none_when_empty(store: PaperStore) -> None:
 def test_get_strategy_names_returns_distinct_sorted(store: PaperStore) -> None:
     store.record_trade(_sell_trade(strategy_name="paper_ic_nifty_v1"))
     store.record_trade(_sell_trade(strategy_name="paper_csp_nifty_v1"))
-    store.record_trade(_sell_trade(strategy_name="paper_csp_nifty_v1",
-                                   trade_date=date(2026, 6, 1)))
+    store.record_trade(_sell_trade(strategy_name="paper_csp_nifty_v1", trade_date=date(2026, 6, 1)))
     names = store.get_strategy_names()
     assert names == ["paper_csp_nifty_v1", "paper_ic_nifty_v1"]
 
@@ -387,9 +392,6 @@ def test_paper_tables_coexist_with_portfolio_tables(db_path: Path) -> None:
 
 
 # ── TestLegSnapshots ──────────────────────────────────────────────────────────
-
-
-from src.paper.models import PaperLegSnapshot
 
 
 def _leg_snap(**overrides) -> PaperLegSnapshot:
@@ -421,16 +423,18 @@ class TestLegSnapshots:
         assert retrieved.ltp == original.ltp
 
     def test_record_leg_snapshot_upsert(self, store: PaperStore) -> None:
-        store.record_leg_snapshot(_leg_snap(unrealized_pnl=Decimal("100"), total_pnl=Decimal("200")))
-        store.record_leg_snapshot(_leg_snap(unrealized_pnl=Decimal("999"), total_pnl=Decimal("1099")))
+        store.record_leg_snapshot(
+            _leg_snap(unrealized_pnl=Decimal("100"), total_pnl=Decimal("200"))
+        )
+        store.record_leg_snapshot(
+            _leg_snap(unrealized_pnl=Decimal("999"), total_pnl=Decimal("1099"))
+        )
         retrieved = store.get_leg_snapshot(_STRATEGY, "overlay_pp", date(2026, 5, 1))
         assert retrieved is not None
         assert retrieved.unrealized_pnl == Decimal("999")
         assert retrieved.total_pnl == Decimal("1099")
 
-    def test_record_leg_snapshot_inconsistent_total_pnl_raises(
-        self, store: PaperStore
-    ) -> None:
+    def test_record_leg_snapshot_inconsistent_total_pnl_raises(self, store: PaperStore) -> None:
         # total_pnl=999 but unrealized(300) + realized(100) = 400 — mismatch
         bad = _leg_snap(total_pnl=Decimal("999"))
         with pytest.raises(ValueError, match="total_pnl invariant violated"):
@@ -440,15 +444,15 @@ class TestLegSnapshots:
         result = store.get_leg_snapshot(_STRATEGY, "overlay_pp", date(2026, 5, 1))
         assert result is None
 
-    def test_get_prev_leg_snapshot_returns_max_before_date(
-        self, store: PaperStore
-    ) -> None:
+    def test_get_prev_leg_snapshot_returns_max_before_date(self, store: PaperStore) -> None:
         store.record_leg_snapshot(_leg_snap(snapshot_date=date(2026, 5, 1)))
-        store.record_leg_snapshot(_leg_snap(
-            snapshot_date=date(2026, 5, 2),
-            unrealized_pnl=Decimal("400"),
-            total_pnl=Decimal("500"),
-        ))
+        store.record_leg_snapshot(
+            _leg_snap(
+                snapshot_date=date(2026, 5, 2),
+                unrealized_pnl=Decimal("400"),
+                total_pnl=Decimal("500"),
+            )
+        )
         # before_date=2026-05-03 → should return the 2026-05-02 row (MAX < 2026-05-03)
         prev = store.get_prev_leg_snapshot(_STRATEGY, "overlay_pp", date(2026, 5, 3))
         assert prev is not None
@@ -479,3 +483,51 @@ class TestLegSnapshots:
         ghost = _sell_trade(leg_role="overlay_pp", trade_date=date(2026, 1, 1))
         store.delete_trade(ghost)  # should be silent no-op
         assert store.get_trades(_STRATEGY) == []
+
+
+# ── CR1b: update_trade_state ──────────────────────────────────────────────────
+
+
+def test_update_trade_state_changes_state(store: PaperStore) -> None:
+    trade = _sell_trade()
+    store.record_trade(trade)
+    # Fetch the id directly from SQLite
+    import sqlite3
+
+    conn = sqlite3.connect(store.db_path)
+    row = conn.execute(
+        "SELECT id FROM paper_trades WHERE strategy_name=? AND leg_role=? AND trade_date=? AND action=?",
+        (_STRATEGY, _LEG, _DATE.isoformat(), "SELL"),
+    ).fetchone()
+    conn.close()
+    trade_id = row[0]
+
+    store.update_trade_state(trade_id, TradeState.DEFENDED)
+
+    trades = store.get_trades(_STRATEGY, _LEG)
+    assert trades[0].state == TradeState.DEFENDED
+
+
+def test_update_trade_state_unknown_id_raises(store: PaperStore) -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="No paper trade found"):
+        store.update_trade_state(99999, TradeState.DEFENDED)
+
+
+def test_record_trade_persists_state_field(store: PaperStore) -> None:
+    from src.models.portfolio import TradeAction
+
+    trade = PaperTrade(
+        strategy_name=_STRATEGY,
+        leg_role=_LEG,
+        instrument_key=_KEY,
+        trade_date=_DATE,
+        action=TradeAction.SELL,
+        quantity=50,
+        price=Decimal("120.00"),
+        state=TradeState.DEFENDED,
+    )
+    store.record_trade(trade)
+    trades = store.get_trades(_STRATEGY, _LEG)
+    assert trades[0].state == TradeState.DEFENDED

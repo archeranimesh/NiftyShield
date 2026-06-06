@@ -221,7 +221,7 @@ Tasks run in priority order. Infrastructure that blocks other stories runs first
 | 7 | MVP: Multi-bagger Value Picks Tracker | Cowork | After #1 | — | ⬜ Not started — [story](docs/plan/mvp/) |
 | 8 | backtest-eval-core: `BacktestStore` + `src/analytics/` | Cowork | Aug 2026 | #9 | ⬜ Not started — [story](docs/plan/backtest-eval-core/) — **blocked by tasks 1.3 + 1.4** |
 | 9 | signals-eval-core: regime engine + signal generators + validation | Cowork | Q4 2026 | — | ⬜ Not started — [story](docs/plan/signals-eval-core/) — **blocked by #8 + Phase 1.12 gate** |
-| 10 | council-refactor: remove RapidCouncil from daemon path; fix approval bug; add deterministic roll rules | Cowork | Before 2026-06-23 roll week | — | 🔄 CR0+CR1a shipped — CR1 (evaluate_roll_csp) + CR2 (evaluate_roll_overlay) pending — [story](docs/plan/council-refactor/) |
+| 10 | council-refactor: remove RapidCouncil from daemon path; fix approval bug; add deterministic roll rules | Cowork | Before 2026-06-23 roll week | — | 🔄 CR0+CR1a+CR1b shipped — CR1c (CSPRollExecutor) + CR1d (CSPNiftyV1 auto-execute) pending — [story](docs/plan/council-refactor/) |
 | 10 | broker-abstraction: multi-broker parser/adapter layer (Dhan, Kite) | Cowork | LOW — after Phase 0.8 gate | — | ⬜ Not started — [story](docs/plan/broker-abstraction/) — 16 tasks BA-0→BA-15; start with BA-0 analysis; BA-14/15 blocked on Phase 1 |
 | 11 | historical-data-abstraction: `HistoricalCandleFetcher` protocol + vendor implementations | Cowork | LOW — after Phase 0.8 gate | — | ⬜ Not started — [story](docs/plan/historical-data-abstraction/) — 11 tasks HD-0→HD-10; start with HD-0 cost evaluation (paid APIs); HD-6/HD-7 conditional on HD-0 decision matrix |
 
@@ -305,6 +305,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-06-06 | council-refactor CR1b — TradeState enum + state field on PaperTrade; PaperStore update_trade_state; ExitSignalEngine: remove evaluate_csp, add 5 independent CSP classmethods (70% profit target, 2× hard stop, 0.40 delta breach, 21-day time stop, DTE≤7 roll eligible); CSPNiftyV1.check_signals migrated; paper_3track_snapshot.py migrated; idempotent DB migration script; 20+ new tests |
 | 2026-06-06 | council-refactor CR1a — Extract strike_selector.py from find_strike_by_delta.py, update all imports in 4 scripts, and add unit tests |
 | 2026-06-04 | council-refactor CR0 — Fix send_approval_request signature mismatch (TypeError on first live ACTION); remove CouncilOutput from approval path; wire valid_actions in 5 strategy payloads; _build_keyboard(list[str]); guard returns None+logs ERROR on empty valid_actions — 4ce6d99 |
 | 2026-06-04 | council-refactor story created — docs/plan/council-refactor/ (prompt, stories, tasks); README, TODOS, DECISIONS updated. Covers: RapidCouncil removal from daemon path, send_approval_request bug fix, deterministic IVR-tiered CSP roll rules, overlay roll rules with base-DTE guard. 4 tasks (CR0–CR4). Deadline: before 2026-06-23 roll week. |
