@@ -7,7 +7,7 @@
 |---|---|---|
 | `stories_infra.md` | Approval flow bug fix | CR0 |
 | `stories_csp.md` | CSP roll automation | CR1a, CR1b, CR1c, CR1d |
-| `stories_cc.md` | CC signal alignment + automation + ReEntryMixin | CC-1, CC-2, CC-3, CC-4 |
+| `stories_cc.md` | CC signal alignment + automation + ReEntryMixin + manual CLI | CC-1, CC-2, CC-3, CC-4, CC-5 |
 | `stories_pp.md` | PP automation + RE_ENTRY_PENDING state machine | PP-1, PP-2, PP-3 |
 | `stories_overlay.md` | 3-track overlay roll signal | CR2, CR3 |
 | `stories_collar.md` | Collar overlay automation | COLLAR-1 |

@@ -10,7 +10,7 @@
 > |---|---|
 > | CR0 | `stories_infra.md` |
 > | CR1a, CR1b, CR1c, CR1d | `stories_csp.md` |
-> | CC-1, CC-2, CC-3, CC-4 | `stories_cc.md` |
+> | CC-1, CC-2, CC-3, CC-4, CC-5 | `stories_cc.md` |
 > | PP-1, PP-2, PP-3 | `stories_pp.md` |
 > | COLLAR-1 | `stories_collar.md` |
 | CR2, CR3 | `stories_overlay.md` |
@@ -42,6 +42,7 @@
 - [ ] **CC-2** `[Antigravity]` — `ReEntryMixin` in `src/strategy/reentry_mixin.py`: three-gate check (DTE ≥ 14, IVR ≥ 0.25, no open position); `reentry_leg_role` + `reentry_script_hint` class attrs; writes paper_exit_events; Telegram notification
 - [ ] **CC-3** `[Claude]` — Migrate `CSPNiftyV1` to `ReEntryMixin`: inherit mixin, add class attrs, remove `_check_r5_reentry`, call `_check_reentry` on PROFIT_TARGET **and** TIME_STOP in `apply_action` (TIME_STOP was missing — regression fix)
 - [ ] **CC-4** `[Antigravity]` — `CCOverlayV1` full automation: `auto_execute=True`, inherit `ReEntryMixin`, add `__init__` with store/notifier/vix_data_dir, handle `CLOSE_CC` in `apply_action`, `_send_close_notification` via `send_notification`; re-entry check on PROFIT_TARGET + TIME_STOP only
+- [ ] **CC-5** `[Antigravity]` — `scripts/paper_cc_roll.py`: manual override exit handler with four triggers (loss_stop 2.5×, delta_stop 0.55, profit_target 30%, time_stop 21d) matching `evaluate_cc()` thresholds; dry-run mode; tests in `tests/unit/paper/test_cc_roll.py`
 
 ## Phase PP — PP Automation
 
@@ -83,6 +84,7 @@
 | P6 | CC-4 | Antigravity | CCOverlayV1 automation — needs CC-1 + CC-2 + CR1d |
 | P6 | PP-2 | Antigravity | PPOverlayV1 automation — needs CR1a + CR1b + PP-1; parallel with CC-4 |
 | P6 | COLLAR-1 | Antigravity | CollarOverlayV1 automation — needs CC-1 + CC-2 + CR1d; parallel with CC-4 and PP-2 |
+| P6 | CC-5 | Antigravity | paper_cc_roll.py — needs CC-1 (aligned thresholds); parallel with CC-4 |
 | P7 | CR2 | Antigravity | evaluate_roll_overlay — needs CR1b; can run after P4 |
 | P8 | CR3 | Claude | Wire overlay roll — needs CR2 |
 | P9 | CR4 + PP-3 | Claude | Always last — docs close for all automation stories |

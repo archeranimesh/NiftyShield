@@ -25,6 +25,14 @@
 ### DECISIONS.md — add new entries:
 
 ```
+**CC overlay scripts implemented as standalone CLI tools (covered-call-overlay plan, absorbed into CR):**
+Entry (`paper_cc_entry.py`) and manual exit (`paper_cc_roll.py`) kept separate from `CCOverlayV1`
+strategy engine. Rationale: strike selection is delta-based (15Δ) vs OTM-based (3–5%) in 3-track;
+quantity constraint is NiftyBees-unit-driven (`compute_max_lots`); strategy name namespace separate
+(`paper_covered_call_v1`). CLI tools serve as manual override / dry-run path alongside automated
+EOD evaluation via `CCOverlayV1`. `compute_max_lots` lives in `src/paper/constants.py` — recompute
+at each annual NiftyBees leg reset.
+
 **RapidCouncil removed from paper trading path (council-refactor, CR):**
 Not called in any Phase 0 paper trading flow. Reasons:
 (1) CSP/CC exits are single-option decisions — action determined by ExitSignalEngine before
@@ -77,6 +85,19 @@ positions — separating CSP and CC constants would allow accidental drift.
   auto_execute=False (overlay rolls require human confirmation).
 - `StrategyMonitor`: auto-execute dispatch path for strategies with auto_execute=True.
   send_notification added to TelegramGateway for post-action informational messages.
+
+### CONTEXT.md — update `scripts/` entry:
+
+Add the two CC overlay scripts (shipped under covered-call-overlay plan, absorbed here):
+
+- `scripts/paper_cc_entry.py`: delta-based CE selection for CC overlay entry. Fetches live option
+  chain, filters CE strikes with |delta| ∈ [0.12, 0.18], ranks by proximity to 15Δ target. IVR gate
+  (warn if IVR < 0.25). Quantity constraint via `compute_max_lots`. Outputs dry-run
+  `record_paper_trade` command; prompts for execution.
+- `scripts/paper_cc_roll.py`: manual override exit handler for CC overlay. Four triggers matching
+  `evaluate_cc()` thresholds: loss_stop (2.5×), delta_stop (0.55), profit_target (30% remaining,
+  entry ≥ ₹15), time_stop (21d). `--dry-run` and `--force` flags. Complements CCOverlayV1
+  auto-execute for mid-session manual closes.
 
 ### CONTEXT.md — update `src/paper/` entry:
 
