@@ -104,7 +104,9 @@ def test_roll_csp_rollback_on_open_failure(tmp_path: Path) -> None:
     mock_lookup = MagicMock()
 
     async def _run() -> None:
-        with patch.object(roll_mod, "_open_new_csp_leg", side_effect=RuntimeError("API Error")):
+        with patch(
+            "src.strategy.csp_roll_executor.open_new_csp_leg", side_effect=RuntimeError("API Error")
+        ):
             with pytest.raises(RuntimeError, match="API Error"):
                 await roll_mod._roll_csp(
                     mock_broker, store, mock_lookup, existing, _ROLL_DATE, dry_run=False
@@ -260,7 +262,10 @@ def test_roll_csp_rollback_failure_handling(tmp_path: Path) -> None:
     store.delete_trade = MagicMock(side_effect=RuntimeError("DB Lock"))
 
     async def _run() -> None:
-        with patch.object(roll_mod, "_open_new_csp_leg", side_effect=ValueError("Open API Failed")):
+        with patch(
+            "src.strategy.csp_roll_executor.open_new_csp_leg",
+            side_effect=ValueError("Open API Failed"),
+        ):
             with pytest.raises(ValueError, match="Open API Failed"):
                 await roll_mod._roll_csp(
                     mock_broker, store, mock_lookup, existing, _ROLL_DATE, dry_run=False

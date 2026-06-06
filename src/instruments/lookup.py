@@ -406,6 +406,32 @@ class InstrumentLookup:
         candidates.sort(key=lambda x: x[0])
         return candidates[0][1]
 
+    def get_all_option_expiries(self, underlying: str) -> list[str]:
+        """Return all unique option expiries for an underlying chronologically.
+
+        No DTE filter is applied. Only option instruments (CE/PE) in the NSE_FO
+        segment are checked.
+
+        Args:
+            underlying: Underlying symbol (e.g. 'NIFTY').
+
+        Returns:
+            List of sorted expiry date strings (YYYY-MM-DD).
+        """
+        seen: set[str] = set()
+        for inst in self._instruments:
+            if inst.get("segment") != "NSE_FO":
+                continue
+            if inst.get("instrument_type") not in ("CE", "PE"):
+                continue
+            underlying_sym = inst.get("underlying_symbol", "")
+            if underlying_sym.upper() != underlying.upper():
+                continue
+            exp = parse_expiry(inst.get("expiry"))
+            if exp:
+                seen.add(exp)
+        return sorted(seen)
+
     @property
     def count(self) -> int:
         """Total number of instruments loaded."""

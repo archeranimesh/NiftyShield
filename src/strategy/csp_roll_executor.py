@@ -9,6 +9,7 @@ import re
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 
 import structlog
 
@@ -74,6 +75,16 @@ def _cycle_pnl(existing: PaperTrade, close: PaperTrade) -> Decimal:
         Realised cycle P&L as Decimal.
     """
     return (existing.price - close.price) * existing.quantity
+
+
+def _ivr_to_delta_range(ivr: float | None) -> tuple[float, float]:
+    """Map IVR to delta bounds. If IVR is None, default to the mid-tier."""
+    if ivr is None or (0.25 <= ivr <= 0.50):
+        return 0.20, 0.27
+    elif ivr < 0.25:
+        return 0.18, 0.24
+    else:  # ivr > 0.50
+        return 0.22, 0.30
 
 
 async def close_csp_leg(
@@ -143,45 +154,55 @@ async def open_new_csp_leg(
     roll_date: date,
     dry_run: bool,
     quantity: int,
+    ivr: float | None = None,
     index: int = 0,
+    expiry_override: str | None = None,
 ) -> PaperTrade:
     """Select and record the replacement CSP leg.
 
     Args:
-        broker:    BrokerClient protocol implementation.
-        store:     PaperStore.
-        lookup:    Instrument lookup for expiry candidates.
-        strategy:  Strategy name for the new trade.
-        roll_date: Date to record the new trade.
-        dry_run:   If True, build the trade but do not write it.
-        quantity:  Number of contracts to open.
-        index:     0-based rank index for candidate selection.
+        broker:          BrokerClient protocol implementation.
+        store:           PaperStore.
+        lookup:          Instrument lookup for expiry candidates.
+        strategy:        Strategy name for the new trade.
+        roll_date:       Date to record the new trade.
+        dry_run:         If True, build the trade but do not write it.
+        quantity:        Number of contracts to open.
+        ivr:             Implied Volatility Rank (IVR) to adjust delta bounds.
+        index:           0-based rank index for candidate selection.
+        expiry_override: Direct expiry override to bypass lookup candidates.
 
     Returns:
         The newly built PaperTrade.
     """
-    expiries = lookup.get_expiry_candidates(
-        underlying="NIFTY", today=roll_date, preference=["monthly"]
-    )
-    if not expiries:
-        expiries = lookup.get_expiry_candidates(underlying="NIFTY", today=roll_date)
-    if not expiries:
-        raise ValueError("No valid expiry candidates found in BOD instrument list.")
-
-    expiry_label, expiry_str = expiries[0]
+    if expiry_override:
+        # Performance optimization: skip scanner entirely when override is passed
+        expiry_label, expiry_str = "override", expiry_override
+    else:
+        expiries = lookup.get_expiry_candidates(
+            underlying="NIFTY", today=roll_date, preference=["monthly"]
+        )
+        if not expiries:
+            expiries = lookup.get_expiry_candidates(underlying="NIFTY", today=roll_date)
+        if not expiries:
+            raise ValueError("No valid expiry candidates found in BOD instrument list.")
+        expiry_label, expiry_str = expiries[0]
 
     raw_data = await broker.get_option_chain(NIFTY_UNDERLYING, expiry_str)
     if not raw_data:
         raise ValueError(f"No option chain data returned for {expiry_str}")
 
+    delta_min, delta_max = _ivr_to_delta_range(ivr)
     rows = filter_strikes_by_delta(
         raw_data,
         option_type="PE",
-        delta_min=0.20,
-        delta_max=0.35,
+        delta_min=delta_min,
+        delta_max=delta_max,
     )
     if not rows:
-        raise ValueError(f"No PE strikes found in delta range [0.20, 0.35] for expiry {expiry_str}")
+        raise ValueError(
+            f"No PE strikes found in delta range [{delta_min:.2f}, {delta_max:.2f}] for expiry {expiry_str}"
+        )
 
     for r in rows:
         r["expiry"] = expiry_str
@@ -212,7 +233,7 @@ async def open_new_csp_leg(
         price=str(new_trade.price),
         quantity=new_trade.quantity,
         delta=selected.get("delta"),
-        ivr=None,
+        ivr=ivr,
         dry_run=dry_run,
     )
 
@@ -269,6 +290,173 @@ async def roll_csp(
                     exc_info=True,
                 )
         raise e
+
+    expiry_from_key = _parse_expiry_from_key(open_trade.instrument_key)
+    new_dte = (expiry_from_key - roll_date).days if expiry_from_key else -1
+
+    return RollResult(
+        strategy=existing.strategy_name,
+        leg_role=existing.leg_role,
+        old_instrument_key=existing.instrument_key,
+        old_price=existing.price,
+        close_price=close_trade.price,
+        new_instrument_key=open_trade.instrument_key,
+        new_price=open_trade.price,
+        new_expiry=str(expiry_from_key or "?"),
+        new_dte=new_dte,
+        cycle_pnl=_cycle_pnl(existing, close_trade),
+    )
+
+
+async def roll_down_and_out(
+    broker: BrokerClient,
+    store: PaperStore,
+    lookup: InstrumentLookup,
+    existing: PaperTrade,
+    roll_date: date,
+    ivr: float | None = None,
+    dry_run: bool = False,
+) -> RollResult:
+    """Defensive roll: close existing leg, open new leg on next weekly expiry.
+
+    Selects next weekly expiry (7-14 DTE from roll_date) and falls back to
+    the second candidate if no valid strike is found on Candidate 1.
+
+    Args:
+        broker:    BrokerClient protocol.
+        store:     PaperStore.
+        lookup:    InstrumentLookup.
+        existing:  The trade being closed/rolled.
+        roll_date: Date to record/evaluate.
+        ivr:       Implied Volatility Rank (IVR).
+        dry_run:   Simulate only if True.
+
+    Returns:
+        RollResult of the completed roll.
+    """
+    # 1. Retrieve and filter all unique option expiries
+    expiries = lookup.get_all_option_expiries("NIFTY")
+    valid_candidates: list[tuple[int, str]] = []
+
+    for exp_str in expiries:
+        exp_date = date.fromisoformat(exp_str)
+        dte = (exp_date - roll_date).days
+        if dte >= 7:
+            valid_candidates.append((dte, exp_str))
+
+    valid_candidates.sort(key=lambda x: x[0])
+    if not valid_candidates:
+        raise ValueError("No valid weekly expiry candidates found.")
+
+    # Candidate 1 (Next Weekly Expiry)
+    c1_dte, c1_expiry = valid_candidates[0]
+    if c1_dte > 21:
+        raise ValueError(f"Next weekly expiry exceeds 21 DTE (found DTE={c1_dte}).")
+
+    resolved_strike_row: dict[str, Any] | None = None
+    using_fallback = False
+
+    delta_min, delta_max = _ivr_to_delta_range(ivr)
+
+    # Resolve Candidate 1
+    raw_data = await broker.get_option_chain(NIFTY_UNDERLYING, c1_expiry)
+    if not raw_data:
+        raise ValueError(f"No option chain data returned for {c1_expiry}")
+
+    try:
+        rows = filter_strikes_by_delta(
+            raw_data,
+            option_type="PE",
+            delta_min=delta_min,
+            delta_max=delta_max,
+        )
+        if not rows:
+            raise ValueError("No strikes in range")
+        ranked = rank_strikes(rows)
+        resolved_strike_row = ranked[0]
+    except ValueError as err:
+        # Catch strike selection empty range failures specifically to trigger Candidate 2 fallback
+        if len(valid_candidates) < 2:
+            raise ValueError("No fallback weekly expiry candidate available.") from err
+
+        c2_dte, c2_expiry = valid_candidates[1]
+        if c2_dte > 21:
+            logger.warning(
+                "roll_down_and_out.monthly_fallback",
+                candidate_2=c2_expiry,
+                dte=c2_dte,
+            )
+
+        # Resolve Candidate 2
+        raw_data_c2 = await broker.get_option_chain(NIFTY_UNDERLYING, c2_expiry)
+        if not raw_data_c2:
+            raise ValueError(f"No option chain data returned for fallback {c2_expiry}") from err
+
+        rows_c2 = filter_strikes_by_delta(
+            raw_data_c2,
+            option_type="PE",
+            delta_min=delta_min,
+            delta_max=delta_max,
+        )
+        if not rows_c2:
+            raise ValueError(
+                f"No PE strikes found in delta range [{delta_min:.2f}, {delta_max:.2f}] for fallback expiry {c2_expiry}"
+            ) from err
+        ranked_c2 = rank_strikes(rows_c2)
+        resolved_strike_row = ranked_c2[0]
+        using_fallback = True
+
+    # 2. Strike resolved, record both trades atomically
+    close_trade = await close_csp_leg(broker, store, existing, roll_date, dry_run)
+    try:
+        # Open replacement using our resolved strike row details
+        open_trade = PaperTrade(
+            strategy_name=existing.strategy_name,
+            leg_role="short_put",
+            instrument_key=resolved_strike_row["instrument_key"],
+            trade_date=roll_date,
+            action=TradeAction.SELL,
+            quantity=existing.quantity,
+            price=Decimal(str(resolved_strike_row["mid"])).quantize(Decimal("0.01")),
+            notes=f"Roll open: replacement {resolved_strike_row['instrument_key']}",
+        )
+        if not dry_run:
+            store.record_trade(open_trade)
+
+        logger.info(
+            "csp_leg_opened",
+            instrument_key=open_trade.instrument_key,
+            leg_role=open_trade.leg_role,
+            price=str(open_trade.price),
+            quantity=open_trade.quantity,
+            delta=resolved_strike_row.get("delta"),
+            ivr=ivr,
+            dry_run=dry_run,
+        )
+    except Exception as e:
+        if not dry_run:
+            try:
+                store.delete_trade(close_trade)
+            except Exception as rollback_err:
+                logger.error(
+                    "CRITICAL: Failed to rollback close trade %s during roll failure: %s",
+                    close_trade.instrument_key,
+                    rollback_err,
+                    exc_info=True,
+                )
+        raise e
+
+    logger.info(
+        "csp_roll_down_and_out",
+        closed_instrument=existing.instrument_key,
+        closed_price=str(close_trade.price),
+        new_instrument=open_trade.instrument_key,
+        new_price=str(open_trade.price),
+        new_delta=resolved_strike_row.get("delta"),
+        ivr=ivr,
+        using_fallback=using_fallback,
+        dry_run=dry_run,
+    )
 
     expiry_from_key = _parse_expiry_from_key(open_trade.instrument_key)
     new_dte = (expiry_from_key - roll_date).days if expiry_from_key else -1

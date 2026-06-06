@@ -63,7 +63,14 @@ _EXPIRY_RE = re.compile(r"NSE_FO\|NIFTY(\d{2}[A-Z]{3}\d{4})(PE|CE)", re.IGNORECA
 
 from src.strategy.csp_roll_executor import (
     RollResult,
+    _cycle_pnl,  # noqa: F401
     _parse_expiry_from_key,
+)
+from src.strategy.csp_roll_executor import (
+    close_csp_leg as _close_csp_leg,  # noqa: F401
+)
+from src.strategy.csp_roll_executor import (
+    open_new_csp_leg as _open_new_csp_leg,  # noqa: F401
 )
 from src.strategy.csp_roll_executor import (
     roll_csp as _roll_csp,
