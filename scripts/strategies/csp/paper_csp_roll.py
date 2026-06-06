@@ -81,6 +81,7 @@ def _find_expiring_csp(
     trades: list[PaperTrade],
     roll_date: date,
     force: bool = False,
+    lookup: InstrumentLookup | None = None,
 ) -> list[PaperTrade]:
     """Return [existing_open_trade] if the CSP is open and qualifies for rolling.
 
@@ -93,6 +94,7 @@ def _find_expiring_csp(
         trades:    All trades for the strategy and leg_role.
         roll_date: Date used to compute DTE.
         force:     If True, bypass the DTE threshold check.
+        lookup:    Optional InstrumentLookup to resolve numeric keys in production.
 
     Returns:
         ``[last_open_trade]`` if eligible, ``[]`` otherwise.
@@ -109,7 +111,7 @@ def _find_expiring_csp(
     if net >= 0 or last_trade is None:
         return []
 
-    expiry = _parse_expiry_from_key(last_trade.instrument_key)
+    expiry = _parse_expiry_from_key(last_trade.instrument_key, lookup=lookup)
     if expiry is None:
         logger.debug("CSP: equity leg — skipping roll check")
         return []
@@ -203,7 +205,7 @@ async def _run(args: argparse.Namespace) -> None:
     async def _do_rolls(is_dry: bool) -> list[RollResult]:
         roll_results = []
         trades = store.get_trades(STRATEGY_CSP, "short_put")
-        candidates = _find_expiring_csp(trades, roll_date, args.force)
+        candidates = _find_expiring_csp(trades, roll_date, args.force, lookup)
         if candidates:
             res = await _roll_csp(
                 broker, store, lookup, candidates[0], roll_date, is_dry, index=candidate_index

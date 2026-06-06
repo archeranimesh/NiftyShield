@@ -44,17 +44,31 @@ class RollResult:
     cycle_pnl: Decimal
 
 
-def _parse_expiry_from_key(instrument_key: str) -> date | None:
+def _parse_expiry_from_key(
+    instrument_key: str, lookup: InstrumentLookup | None = None
+) -> date | None:
     """Parse the option expiry date from a Nifty FO instrument key.
 
     Args:
         instrument_key: e.g. ``"NSE_FO|NIFTY29MAY2026PE"``.
+        lookup: Optionally provide InstrumentLookup to resolve numeric keys in production.
 
     Returns:
         Parsed expiry date, or ``None`` if the key is not a Nifty FO option.
     """
     m = _EXPIRY_RE.search(instrument_key)
     if not m:
+        if lookup:
+            from src.instruments.lookup import parse_expiry
+
+            inst = lookup.get_by_key(instrument_key)
+            if inst:
+                exp_str = parse_expiry(inst.get("expiry"))
+                if exp_str:
+                    try:
+                        return datetime.strptime(exp_str, "%Y-%m-%d").date()
+                    except ValueError:
+                        return None
         return None
     try:
         return datetime.strptime(m.group(1).upper(), "%d%b%Y").date()
@@ -291,7 +305,7 @@ async def roll_csp(
                 )
         raise e
 
-    expiry_from_key = _parse_expiry_from_key(open_trade.instrument_key)
+    expiry_from_key = _parse_expiry_from_key(open_trade.instrument_key, lookup)
     new_dte = (expiry_from_key - roll_date).days if expiry_from_key else -1
 
     return RollResult(
@@ -458,7 +472,7 @@ async def roll_down_and_out(
         dry_run=dry_run,
     )
 
-    expiry_from_key = _parse_expiry_from_key(open_trade.instrument_key)
+    expiry_from_key = _parse_expiry_from_key(open_trade.instrument_key, lookup)
     new_dte = (expiry_from_key - roll_date).days if expiry_from_key else -1
 
     return RollResult(
