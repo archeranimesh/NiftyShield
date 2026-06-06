@@ -18,7 +18,6 @@ import pytest
 from src.dhan.models import DhanFundLimit, DhanOptionPosition, DhanOptionsSummary
 from src.dhan.store import DhanStore
 
-
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
 _TS = datetime(2026, 5, 6, 10, 0, 0, tzinfo=timezone.utc)
@@ -88,10 +87,9 @@ class TestRecordOptionsSnapshot:
         store.record_options_snapshot(_TS, summary, positions, is_eod=False)
 
         from src.db import connect as _connect
+
         with _connect(store.db_path) as conn:
-            rows = conn.execute(
-                "SELECT * FROM dhan_options_snapshots"
-            ).fetchall()
+            rows = conn.execute("SELECT * FROM dhan_options_snapshots").fetchall()
         assert len(rows) == 1
         row = rows[0]
         assert Decimal(row["realized_pnl"]) == Decimal("3000.00")
@@ -108,6 +106,7 @@ class TestRecordOptionsSnapshot:
         store.record_options_snapshot(_TS, summary, [], is_eod=False)
 
         from src.db import connect as _connect
+
         with _connect(store.db_path) as conn:
             row = conn.execute("SELECT realized_pnl FROM dhan_options_snapshots").fetchone()
         assert Decimal(row["realized_pnl"]) == Decimal("1234.56")
@@ -117,6 +116,7 @@ class TestRecordOptionsSnapshot:
         store.record_options_snapshot(_TS, summary, [], is_eod=True)
 
         from src.db import connect as _connect
+
         with _connect(store.db_path) as conn:
             row = conn.execute("SELECT is_eod FROM dhan_options_snapshots").fetchone()
         assert row["is_eod"] == 1
@@ -127,10 +127,9 @@ class TestRecordOptionsSnapshot:
             store.record_options_snapshot(_TS, _make_summary(), [], is_eod=False)
 
         from src.db import connect as _connect
+
         with _connect(store.db_path) as conn:
-            count = conn.execute(
-                "SELECT COUNT(*) AS n FROM dhan_options_snapshots"
-            ).fetchone()["n"]
+            count = conn.execute("SELECT COUNT(*) AS n FROM dhan_options_snapshots").fetchone()["n"]
         assert count == 3
 
     def test_eod_is_idempotent(self, store: DhanStore) -> None:
@@ -143,6 +142,7 @@ class TestRecordOptionsSnapshot:
         store.record_options_snapshot(ts2, summary2, [], is_eod=True)
 
         from src.db import connect as _connect
+
         with _connect(store.db_path) as conn:
             rows = conn.execute(
                 "SELECT COUNT(*) AS n, SUM(CAST(realized_pnl AS REAL)) AS total "
@@ -209,6 +209,7 @@ class TestRecordMarginSnapshot:
         store.record_margin_snapshot(_TS, fl)
 
         from src.db import connect as _connect
+
         with _connect(store.db_path) as conn:
             row = conn.execute("SELECT * FROM dhan_margin_snapshots").fetchone()
         assert row is not None
@@ -223,6 +224,7 @@ class TestRecordMarginSnapshot:
         store.record_margin_snapshot(_TS, fl)
 
         from src.db import connect as _connect
+
         with _connect(store.db_path) as conn:
             row = conn.execute("SELECT available_balance FROM dhan_margin_snapshots").fetchone()
         assert Decimal(row["available_balance"]) == Decimal("99999.99")
@@ -233,8 +235,11 @@ class TestRecordMarginSnapshot:
 
 class TestPurgeOldIntraday:
     def test_removes_old_rows_keeps_recent(self, store: DhanStore) -> None:
-        old_ts = datetime(2026, 3, 1, 10, 0, 0, tzinfo=timezone.utc)
-        recent_ts = _TS  # 2026-05-06
+        from datetime import timedelta
+
+        now_dt = datetime.now(timezone.utc)
+        old_ts = now_dt - timedelta(days=35)
+        recent_ts = now_dt - timedelta(days=5)
 
         store.record_options_snapshot(old_ts, _make_summary(), [], is_eod=False)
         store.record_options_snapshot(old_ts, _make_summary(), [], is_eod=False)
@@ -244,14 +249,16 @@ class TestPurgeOldIntraday:
         assert deleted == 2
 
         from src.db import connect as _connect
+
         with _connect(store.db_path) as conn:
-            count = conn.execute(
-                "SELECT COUNT(*) AS n FROM dhan_options_snapshots"
-            ).fetchone()["n"]
+            count = conn.execute("SELECT COUNT(*) AS n FROM dhan_options_snapshots").fetchone()["n"]
         assert count == 1
 
     def test_nothing_to_purge_returns_zero(self, store: DhanStore) -> None:
-        store.record_options_snapshot(_TS, _make_summary(), [], is_eod=False)
+        from datetime import timedelta
+
+        recent_ts = datetime.now(timezone.utc) - timedelta(days=5)
+        store.record_options_snapshot(recent_ts, _make_summary(), [], is_eod=False)
         deleted = store.purge_old_intraday(days=30)
         assert deleted == 0
 
@@ -314,7 +321,9 @@ class TestGetMonthlyRealizedPnl:
 
 
 class TestGetMonthlyCharges:
-    def _insert_eod(self, store: DhanStore, charges: Decimal, brokerage: Decimal, ts: datetime) -> None:
+    def _insert_eod(
+        self, store: DhanStore, charges: Decimal, brokerage: Decimal, ts: datetime
+    ) -> None:
         summary = _make_summary(charges=charges, brokerage=brokerage)
         store.record_options_snapshot(ts, summary, [], is_eod=True)
 
@@ -322,7 +331,7 @@ class TestGetMonthlyCharges:
         for day in (6, 7):
             ts = datetime(2026, 5, day, 15, 45, 0, tzinfo=timezone.utc)
             self._insert_eod(store, Decimal("100"), Decimal("40"), ts)
-        
+
         c, b = store.get_monthly_charges(2026, 5)
         assert c == Decimal("200")
         assert b == Decimal("80")
