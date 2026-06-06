@@ -12,7 +12,8 @@
 > | CR1a, CR1b, CR1c, CR1d | `stories_csp.md` |
 > | CC-1, CC-2, CC-3, CC-4 | `stories_cc.md` |
 > | PP-1, PP-2, PP-3 | `stories_pp.md` |
-> | CR2, CR3 | `stories_overlay.md` |
+> | COLLAR-1 | `stories_collar.md` |
+| CR2, CR3 | `stories_overlay.md` |
 > | CR4 | `stories_close.md` |
 >
 > Also load `README.md` for shared context (signal tables, state machine, dependency order).
@@ -47,6 +48,10 @@
 - [ ] **PP-1** `[Antigravity]` — Update `evaluate_pp()`: remove bid/ask spread guard from CRASH_MONETIZE; promote DTE_REVIEW INFO → ROLL_ELIGIBLE ACTION; remove bid/ask params from signature; update PPOverlayV1 caller; tests
 - [ ] **PP-2** `[Antigravity]` — `PPOverlayV1` full automation: `auto_execute=True`, inject store/broker/lookup/notifier, OPEN ↔ RE_ENTRY_PENDING state machine, three action types (MONETIZE_PP / ROLL_PP / OPEN_NEW_PP), IVR ≤ 0.60 re-entry gate, Telegram notifications; tests
 
+## Phase COLLAR — Collar Automation
+
+- [ ] **COLLAR-1** `[Antigravity]` — `CollarOverlayV1` full automation: `auto_execute=True`, inherit `ReEntryMixin`, add `__init__` with store/notifier/vix_data_dir, remove `evaluate_collar` from `exit_signals.py` (call `evaluate_cc` directly), handle `CLOSE_COLLAR` in `apply_action` (both legs via `OverlayCloser.close_collar`), `_send_close_notification` showing call + put; re-entry check on PROFIT_TARGET + TIME_STOP only
+
 ## Phase CR2 — Overlay Roll Signal
 
 - [ ] **CR2** `[Antigravity]` — Add `evaluate_roll_overlay(leg_role, dte, base_dte, atm_strike)` to `ExitSignalEngine` returning `list[ExitSignalResult]`; no `RollSignalResult`; base-DTE guard → `ROLL_BASE_FIRST` WARN; tests extend `test_exit_signals.py`
@@ -77,6 +82,7 @@
 | P5 | CR1d | Claude | CSPNiftyV1 full automation — needs CR1c + CC-3 |
 | P6 | CC-4 | Antigravity | CCOverlayV1 automation — needs CC-1 + CC-2 + CR1d |
 | P6 | PP-2 | Antigravity | PPOverlayV1 automation — needs CR1a + CR1b + PP-1; parallel with CC-4 |
+| P6 | COLLAR-1 | Antigravity | CollarOverlayV1 automation — needs CC-1 + CC-2 + CR1d; parallel with CC-4 and PP-2 |
 | P7 | CR2 | Antigravity | evaluate_roll_overlay — needs CR1b; can run after P4 |
 | P8 | CR3 | Claude | Wire overlay roll — needs CR2 |
 | P9 | CR4 + PP-3 | Claude | Always last — docs close for all automation stories |

@@ -10,6 +10,7 @@
 | `stories_cc.md` | CC signal alignment + automation + ReEntryMixin | CC-1, CC-2, CC-3, CC-4 |
 | `stories_pp.md` | PP automation + RE_ENTRY_PENDING state machine | PP-1, PP-2, PP-3 |
 | `stories_overlay.md` | 3-track overlay roll signal | CR2, CR3 |
+| `stories_collar.md` | Collar overlay automation | COLLAR-1 |
 | `stories_close.md` | Docs close (always last) | CR4 |
 
 ## Dependency Order
@@ -21,7 +22,10 @@ CR0 ✅
                                           └─► PP-1 ──► PP-2 ──────┘ (parallel with CC-4)
   └─► CC-2 ──► CC-3 ──────────────────► CR1d
                           └─► CR1c ──► CR1d
-                                          └─► CR2 ──► CR3
+                                          └─► CC-4 ──┐
+  └─► PP-2 ──┼──► (docs close CR4 + PP-3)
+  └─► COLLAR-1 ──┘  (parallel with CC-4, PP-2; needs CC-1 + CC-2 + CR1d)
+  └─► CR2 ──► CR3
                                                          └─► CR4 + PP-3
 ```
 
