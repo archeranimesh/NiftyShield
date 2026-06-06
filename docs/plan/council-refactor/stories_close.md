@@ -99,6 +99,46 @@ Add the two CC overlay scripts (shipped under covered-call-overlay plan, absorbe
   entry ≥ ₹15), time_stop (21d). `--dry-run` and `--force` flags. Complements CCOverlayV1
   auto-execute for mid-session manual closes.
 
+### CONTEXT.md — update `src/strategy/nifty_track_comparison_v1.py` entry:
+
+- `NiftyTrackComparisonV1`: `auto_execute=False` (all overlay and Proxy actions require human
+  confirmation). Wires `evaluate_roll_overlay` (DTE ≤ 5 → ROLL_ELIGIBLE ACTION, base-DTE guard →
+  ROLL_BASE_FIRST WARN). Proxy delta monitoring via `evaluate_proxy_delta` for `base_ditm_call`
+  legs — three signals: PROXY_DELTA_CRITICAL (δ<0.40 for 3 consecutive days), PROXY_PREMIUM_DECAY
+  (mark<₹0.50 with DTE≥5), PROXY_DELTA_WARN (δ<0.65). Futures+CC block: `_check_futures_cc_block`
+  emits BLOCKED_COMBINATION ERROR for standalone short call on Futures namespace; collar
+  (short call + paired long put) is explicitly exempted.
+
+### CONTEXT.md — update `src/paper/store.py` entry:
+
+- `PaperStore`: add `get_proxy_delta_breach_count(strategy_name)` and
+  `set_proxy_delta_breach_count(strategy_name, count)` — persist consecutive days the Proxy
+  deep ITM call delta has been below 0.40. Stored in `paper_strategies` table
+  (`proxy_delta_breach_count INTEGER DEFAULT 0`). Reset to 0 on delta recovery.
+
+### DECISIONS.md — add new entries:
+
+```
+**Proxy delta consecutive-day tracking (council-refactor, NT-1):**
+ExitSignalEngine.evaluate_proxy_delta() requires caller to maintain consecutive-day breach
+count across sessions. Stored in PaperStore (paper_strategies table) rather than in-memory,
+so the count survives daemon restarts. Caller resets to 0 when delta recovers above 0.40.
+PROXY_DELTA_WARN (δ<0.65) is suppressed when PROXY_DELTA_CRITICAL fires — CRITICAL subsumes
+WARN to avoid redundant signal noise.
+
+**PROXY_PREMIUM_DECAY fires only at DTE ≥ 5 (council-refactor, NT-1):**
+If mark < ₹0.50 and DTE < 5, the position is near expiry and rides to settlement.
+Closing at DTE < 5 for a near-worthless deep ITM call creates unnecessary slippage and
+STT cost; let it settle. Guard is DTE >= 5 only.
+
+**Futures + standalone CC permanently blocked in NiftyTrackComparisonV1 (council-refactor, NT-2):**
+Guard fires when: Futures namespace has a short call role AND no paired long put exists.
+Collar exemption is structural — not a flag — because a collar is defined as short call + long put
+together. A degenerate collar (short call without a put, e.g., put closed while call remains)
+also triggers the block. Guard is called at the top of check_signals, before any other signal
+evaluation, so the ERROR is always visible even when other signals also fire.
+```
+
 ### CONTEXT.md — update `src/paper/` entry:
 
 - `PaperTrade`: `state: TradeState` field added.

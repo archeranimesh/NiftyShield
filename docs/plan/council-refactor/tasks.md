@@ -13,7 +13,7 @@
 > | CC-1, CC-2, CC-3, CC-4, CC-5 | `stories_cc.md` |
 > | PP-1, PP-2, PP-3 | `stories_pp.md` |
 > | COLLAR-1 | `stories_collar.md` |
-| CR2, CR3 | `stories_overlay.md` |
+| CR2, CR3, NT-1, NT-2 | `stories_overlay.md` |
 > | CR4 | `stories_close.md` |
 >
 > Also load `README.md` for shared context (signal tables, state machine, dependency order).
@@ -61,6 +61,11 @@
 
 - [ ] **CR3** `[Claude]` — Wire `evaluate_roll_overlay` into `NiftyTrackComparisonV1.check_signals`; promote DTE ≤ 5 WARN to ACTION for `ROLL_ELIGIBLE`; keep `ROLL_BASE_FIRST` as WARN; tests
 
+## Phase NT — NiftyTrack Proxy + Safety Signals
+
+- [ ] **NT-1** `[Antigravity]` — `evaluate_proxy_delta()` in `ExitSignalEngine`: three signals (PROXY_DELTA_CRITICAL ACTION at δ<0.40 for 3 consecutive days, PROXY_PREMIUM_DECAY ACTION at mark<₹0.50 with DTE≥5, PROXY_DELTA_WARN WARN at δ<0.65); consecutive-day counter via `PaperStore.get/set_proxy_delta_breach_count`; wire into `NiftyTrackComparisonV1.check_signals` for `base_ditm_call` legs; tests
+- [ ] **NT-2** `[Claude]` — `NiftyTrackComparisonV1._check_futures_cc_block()`: emit `BLOCKED_COMBINATION` ERROR when Futures namespace has standalone short call with no paired long put; collar (short call + long put together) explicitly exempted; called at top of `check_signals`; tests
+
 ## Phase CR4 — Docs Close (MUST BE LAST)
 
 - [ ] **CR4** `[Claude]` — `DECISIONS.md`, `CONTEXT.md`, `TODOS.md`; update `ExitSignalEngine` description; update `CSPNiftyV1`, `CCOverlayV1`, `PPOverlayV1`, and `NiftyTrackComparisonV1` descriptions
@@ -87,6 +92,8 @@
 | P6 | CC-5 | Antigravity | paper_cc_roll.py — needs CC-1 (aligned thresholds); parallel with CC-4 |
 | P7 | CR2 | Antigravity | evaluate_roll_overlay — needs CR1b; can run after P4 |
 | P8 | CR3 | Claude | Wire overlay roll — needs CR2 |
+| P8 | NT-1 | Antigravity | Proxy delta signals + breach counter — needs CR3; parallel with NT-2 |
+| P8 | NT-2 | Claude | Futures+CC block guard — needs CR3; parallel with NT-1 |
 | P9 | CR4 + PP-3 | Claude | Always last — docs close for all automation stories |
 
 ---

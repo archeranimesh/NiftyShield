@@ -9,7 +9,7 @@
 | `stories_csp.md` | CSP roll automation | CR1a, CR1b, CR1c, CR1d |
 | `stories_cc.md` | CC signal alignment + automation + ReEntryMixin + manual CLI | CC-1, CC-2, CC-3, CC-4, CC-5 |
 | `stories_pp.md` | PP automation + RE_ENTRY_PENDING state machine | PP-1, PP-2, PP-3 |
-| `stories_overlay.md` | 3-track overlay roll signal | CR2, CR3 |
+| `stories_overlay.md` | 3-track overlay roll signal + Proxy delta signals + Futures block | CR2, CR3, NT-1, NT-2 |
 | `stories_collar.md` | Collar overlay automation | COLLAR-1 |
 | `stories_close.md` | Docs close (always last) | CR4 |
 
