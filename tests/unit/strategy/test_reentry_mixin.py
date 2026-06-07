@@ -1,0 +1,172 @@
+import asyncio
+from datetime import date, timedelta
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import numpy as np
+import pandas as pd
+
+from src.paper.models import PaperTrade, TradeAction
+from src.paper.store import PaperStore
+from src.strategy.reentry_mixin import ReEntryMixin
+
+
+class DummyStrategy(ReEntryMixin):
+    strategy_name = "paper_dummy_strategy"
+    reentry_leg_role = "dummy_role"
+    reentry_script_hint = "dummy_script.py"
+
+    def __init__(self, store=None, notifier=None, vix_data_dir=None):
+        self._store = store
+        self._notifier = notifier
+        self._vix_data_dir = vix_data_dir or Path("/tmp")
+
+
+def _run(coro):
+    return asyncio.run(coro)
+
+
+def _make_vix_series(ivr: float, length: int = 252) -> pd.Series:
+    vix_today = 10.0 + ivr * 20.0
+    values = np.linspace(10.0, 30.0, length - 1).tolist() + [vix_today]
+    return pd.Series(values, dtype="float64")
+
+
+def test_reentry_skipped_when_no_store():
+    # If self._store is None, reentry check is skipped.
+    strategy = DummyStrategy(store=None)
+    _run(strategy._check_reentry(expiry=date.today(), today=date.today(), instrument_key="TEST"))
+
+
+def test_reentry_eligible_when_all_gates_pass(tmp_path: Path):
+    store = PaperStore(str(tmp_path / "db.sqlite"))
+    notifier = MagicMock()
+    notifier.send_plain_message = AsyncMock(return_value=True)
+    strategy = DummyStrategy(store=store, notifier=notifier, vix_data_dir=tmp_path)
+
+    vix_series = _make_vix_series(ivr=0.30)
+    with patch("src.strategy.reentry_mixin.load_vix_series", return_value=vix_series):
+        _run(
+            strategy._check_reentry(
+                expiry=date.today() + timedelta(days=15),
+                today=date.today(),
+                instrument_key="TEST",
+            )
+        )
+
+    events = store.get_open_exit_events(strategy_name="paper_dummy_strategy")
+    signals = [e["exit_signal"] for e in events]
+    assert "R5_REENTRY_ELIGIBLE" in signals
+    notifier.send_plain_message.assert_awaited_once()
+
+
+def test_reentry_blocked_when_dte_less_than_14(tmp_path: Path):
+    store = PaperStore(str(tmp_path / "db.sqlite"))
+    strategy = DummyStrategy(store=store, vix_data_dir=tmp_path)
+
+    vix_series = _make_vix_series(ivr=0.30)
+    with patch("src.strategy.reentry_mixin.load_vix_series", return_value=vix_series):
+        _run(
+            strategy._check_reentry(
+                expiry=date.today() + timedelta(days=13),
+                today=date.today(),
+                instrument_key="TEST",
+            )
+        )
+
+    events = store.get_open_exit_events(strategy_name="paper_dummy_strategy")
+    blocked = [e for e in events if e["exit_signal"] == "R5_REENTRY_BLOCKED"]
+    assert blocked
+    assert "DTE" in blocked[0]["notes"]
+
+
+def test_reentry_blocked_when_ivr_below_floor(tmp_path: Path):
+    store = PaperStore(str(tmp_path / "db.sqlite"))
+    strategy = DummyStrategy(store=store, vix_data_dir=tmp_path)
+
+    vix_series = _make_vix_series(ivr=0.22)
+    with patch("src.strategy.reentry_mixin.load_vix_series", return_value=vix_series):
+        _run(
+            strategy._check_reentry(
+                expiry=date.today() + timedelta(days=20),
+                today=date.today(),
+                instrument_key="TEST",
+            )
+        )
+
+    events = store.get_open_exit_events(strategy_name="paper_dummy_strategy")
+    blocked = [e for e in events if e["exit_signal"] == "R5_REENTRY_BLOCKED"]
+    assert blocked
+    assert "IVR" in blocked[0]["notes"]
+
+
+def test_reentry_blocked_when_ivr_history_insufficient(tmp_path: Path):
+    store = PaperStore(str(tmp_path / "db.sqlite"))
+    strategy = DummyStrategy(store=store, vix_data_dir=tmp_path)
+
+    short_series = pd.Series([15.0, 18.0, 20.0], dtype="float64")
+    with patch("src.strategy.reentry_mixin.load_vix_series", return_value=short_series):
+        _run(
+            strategy._check_reentry(
+                expiry=date.today() + timedelta(days=20),
+                today=date.today(),
+                instrument_key="TEST",
+            )
+        )
+
+    events = store.get_open_exit_events(strategy_name="paper_dummy_strategy")
+    blocked = [e for e in events if e["exit_signal"] == "R5_REENTRY_BLOCKED"]
+    assert blocked
+    assert "IVR history" in blocked[0]["notes"]
+
+
+def test_reentry_blocked_when_position_already_open(tmp_path: Path):
+    store = PaperStore(str(tmp_path / "db.sqlite"))
+    strategy = DummyStrategy(store=store, vix_data_dir=tmp_path)
+
+    store.record_trade(
+        PaperTrade(
+            strategy_name="paper_dummy_strategy",
+            leg_role="dummy_role",
+            action=TradeAction.SELL,
+            quantity=65,
+            price="100",
+            instrument_key="NSE_FO|NIFTY23000PE",
+            trade_date=date.today(),
+        )
+    )
+
+    vix_series = _make_vix_series(ivr=0.30)
+    with patch("src.strategy.reentry_mixin.load_vix_series", return_value=vix_series):
+        _run(
+            strategy._check_reentry(
+                expiry=date.today() + timedelta(days=20),
+                today=date.today(),
+                instrument_key="TEST",
+            )
+        )
+
+    events = store.get_open_exit_events(strategy_name="paper_dummy_strategy")
+    blocked = [e for e in events if e["exit_signal"] == "R5_REENTRY_BLOCKED"]
+    assert blocked
+    assert "open position" in blocked[0]["notes"]
+
+
+def test_reentry_event_written_even_when_notifier_raises(tmp_path: Path):
+    store = PaperStore(str(tmp_path / "db.sqlite"))
+    notifier = MagicMock()
+    notifier.send_plain_message = AsyncMock(side_effect=RuntimeError("telegram down"))
+    strategy = DummyStrategy(store=store, notifier=notifier, vix_data_dir=tmp_path)
+
+    vix_series = _make_vix_series(ivr=0.30)
+    with patch("src.strategy.reentry_mixin.load_vix_series", return_value=vix_series):
+        _run(
+            strategy._check_reentry(
+                expiry=date.today() + timedelta(days=20),
+                today=date.today(),
+                instrument_key="TEST",
+            )
+        )
+
+    events = store.get_open_exit_events(strategy_name="paper_dummy_strategy")
+    assert any(e["exit_signal"] in ("R5_REENTRY_ELIGIBLE", "R5_REENTRY_BLOCKED") for e in events)
