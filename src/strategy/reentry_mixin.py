@@ -39,6 +39,7 @@ class ReEntryMixin:
         expiry: date | None,
         today: date,
         instrument_key: str,
+        trade_id: int,
     ) -> None:
         """Evaluate re-entry eligibility and write a paper_exit_events row.
 
@@ -89,6 +90,7 @@ class ReEntryMixin:
         if blocked_reason is None:
             try:
                 existing = self._store.get_positions(self.strategy_name)
+                # Note: net_qty < 0 restricts check to open short premium positions.
                 if any(p.leg_role == self.reentry_leg_role and p.net_qty < 0 for p in existing):
                     blocked_reason = (
                         f"open position: {self.reentry_leg_role} already active "
@@ -113,12 +115,13 @@ class ReEntryMixin:
             self._store.create_exit_event(
                 strategy_name=self.strategy_name,
                 leg_name=self.reentry_leg_role,
-                trade_id=instrument_key or "unknown",
+                trade_id=str(trade_id),
                 event_time=datetime.utcnow(),
                 detected_by="MANUAL",
                 exit_signal=signal,
                 severity="INFO",
                 entry_price=0.0,
+                dte=dte,
                 notes=notes,
             )
             log.info(

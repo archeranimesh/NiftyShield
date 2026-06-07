@@ -35,7 +35,14 @@ def _make_vix_series(ivr: float, length: int = 252) -> pd.Series:
 def test_reentry_skipped_when_no_store():
     # If self._store is None, reentry check is skipped.
     strategy = DummyStrategy(store=None)
-    _run(strategy._check_reentry(expiry=date.today(), today=date.today(), instrument_key="TEST"))
+    _run(
+        strategy._check_reentry(
+            expiry=date.today(),
+            today=date.today(),
+            instrument_key="TEST",
+            trade_id=123,
+        )
+    )
 
 
 def test_reentry_eligible_when_all_gates_pass(tmp_path: Path):
@@ -51,12 +58,15 @@ def test_reentry_eligible_when_all_gates_pass(tmp_path: Path):
                 expiry=date.today() + timedelta(days=15),
                 today=date.today(),
                 instrument_key="TEST",
+                trade_id=123,
             )
         )
 
     events = store.get_open_exit_events(strategy_name="paper_dummy_strategy")
     signals = [e["exit_signal"] for e in events]
     assert "R5_REENTRY_ELIGIBLE" in signals
+    assert events[0]["dte"] == 15
+    assert events[0]["trade_id"] == "123"
     notifier.send_plain_message.assert_awaited_once()
 
 
@@ -71,6 +81,7 @@ def test_reentry_blocked_when_dte_less_than_14(tmp_path: Path):
                 expiry=date.today() + timedelta(days=13),
                 today=date.today(),
                 instrument_key="TEST",
+                trade_id=123,
             )
         )
 
@@ -78,6 +89,7 @@ def test_reentry_blocked_when_dte_less_than_14(tmp_path: Path):
     blocked = [e for e in events if e["exit_signal"] == "R5_REENTRY_BLOCKED"]
     assert blocked
     assert "DTE" in blocked[0]["notes"]
+    assert blocked[0]["dte"] == 13
 
 
 def test_reentry_blocked_when_ivr_below_floor(tmp_path: Path):
@@ -91,6 +103,7 @@ def test_reentry_blocked_when_ivr_below_floor(tmp_path: Path):
                 expiry=date.today() + timedelta(days=20),
                 today=date.today(),
                 instrument_key="TEST",
+                trade_id=123,
             )
         )
 
@@ -111,6 +124,7 @@ def test_reentry_blocked_when_ivr_history_insufficient(tmp_path: Path):
                 expiry=date.today() + timedelta(days=20),
                 today=date.today(),
                 instrument_key="TEST",
+                trade_id=123,
             )
         )
 
@@ -143,6 +157,7 @@ def test_reentry_blocked_when_position_already_open(tmp_path: Path):
                 expiry=date.today() + timedelta(days=20),
                 today=date.today(),
                 instrument_key="TEST",
+                trade_id=123,
             )
         )
 
@@ -165,6 +180,7 @@ def test_reentry_event_written_even_when_notifier_raises(tmp_path: Path):
                 expiry=date.today() + timedelta(days=20),
                 today=date.today(),
                 instrument_key="TEST",
+                trade_id=123,
             )
         )
 

@@ -306,7 +306,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
-| 2026-06-07 | feat(strategy): ReEntryMixin with three-gate re-entry check; Telegram notification — [uncommitted] |
+| 2026-06-07 | feat(strategy): ReEntryMixin with three-gate re-entry check; Telegram notification — fb38dde |
 | 2026-06-07 | council-refactor CC-1 — Align evaluate_cc() to CSP structure: add days_held, TIME_STOP signal, DTE_REVIEW WARN, use _PROFIT_TARGET_RETENTION, add _CC_MIN_ENTRY_CREDIT; update CCOverlayV1 caller; 15+ new tests — 5314ec0 |
 | 2026-06-07 | council-refactor CR1c — Refactor paper_csp_roll.py to thin CLI wrapper around csp_roll_executor.py; existing tests stay green — 154a64c |
 | 2026-06-06 | council-refactor CR1b — TradeState enum + state field on PaperTrade; PaperStore update_trade_state; ExitSignalEngine: remove evaluate_csp, add 5 independent CSP classmethods (70% profit target, 2× hard stop, 0.40 delta breach, 21-day time stop, DTE≤7 roll eligible); CSPNiftyV1.check_signals migrated; paper_3track_snapshot.py migrated; idempotent DB migration script; 20+ new tests — 8fd58d4 |
