@@ -62,29 +62,17 @@ class CCOverlayV1:
             expiry = self._parse_expiry(pos.instrument_key)
             dte = (expiry - today).days if expiry is not None else 9999
 
-            # Parse strike price from leg or key
-            strike_price = 0.0
-            if call_leg is not None:
-                strike_price = float(call_leg.strike)
-            else:
-                m = _STRIKE_RE.search(pos.instrument_key)
-                if m:
-                    try:
-                        strike_price = float(m.group(1))
-                    except ValueError:
-                        pass
-
             delta = float(call_leg.delta) if call_leg is not None else None
             entry_price = float(pos.avg_sell_price)
             current_mark = float(call_leg.ltp) if call_leg is not None else entry_price
+            days_held = (today - pos.entry_date).days if pos.entry_date is not None else 0
 
             results = ExitSignalEngine.evaluate_cc(
                 entry_price=entry_price,
                 current_mark=current_mark,
                 delta=delta,
                 dte=dte,
-                underlying_price=float(market.underlying_spot),
-                strike_price=strike_price,
+                days_held=days_held,
             )
 
             for result in results:

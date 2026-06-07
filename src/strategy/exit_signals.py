@@ -9,6 +9,7 @@ from src.paper.models import TradeState
 # Shared profit-target retention ratio: fire when LTP ≤ 30% of entry credit (70% captured).
 # Used by CSP and CC evaluators.
 _PROFIT_TARGET_RETENTION = Decimal("0.30")
+_CC_MIN_ENTRY_CREDIT = Decimal("15")  # CC: below this floor, no early exit — ride to DTE_REVIEW
 
 
 @dataclass(frozen=True)
@@ -231,10 +232,13 @@ class ExitSignalEngine:
         current_mark: float,
         delta: float | None,
         dte: int,
-        underlying_price: float,
-        strike_price: float,
+        days_held: int,
     ) -> list[ExitSignalResult]:
-        """Evaluate exit signals for a Covered Call (CC) leg."""
+        """Evaluate exit signals for a Covered Call (CC) short call leg.
+
+        Signal set mirrors CSP structure — same signal names, same severity pattern.
+        Thresholds differ where direction or covered nature requires it.
+        """
         entry_dec = Decimal(str(entry_price))
         mark_dec = Decimal(str(current_mark))
 
@@ -261,18 +265,17 @@ class ExitSignalEngine:
                     notes=f"Entry credit {entry_price} < 12/unit",
                 )
             )
-        # 2. PROFIT_TARGET: mark <= 50% of entry credit AND entry credit >= 15
-        # Note: 12 <= entry_price < 15 is an acceptable entry but below profit-target floor — no early exit.
-        elif entry_dec >= Decimal("15") and mark_dec / entry_dec <= Decimal("0.50"):
+        # 2. PROFIT_TARGET: mark <= 30% of entry credit AND entry credit >= 15
+        elif entry_dec >= _CC_MIN_ENTRY_CREDIT and mark_dec <= entry_dec * _PROFIT_TARGET_RETENTION:
             results.append(
                 ExitSignalResult(
                     exit_signal="PROFIT_TARGET",
                     severity="ACTION",
-                    threshold_value=0.50,
+                    threshold_value=float(_PROFIT_TARGET_RETENTION),
                     delta_stop_would_fire=delta_stop,
                     premium_stop_would_fire=premium_stop,
                     actual_rule_used=rule_used,
-                    notes=f"Mark {current_mark} <= 50% of entry credit {entry_price}",
+                    notes=f"Mark {current_mark} <= 30% of entry credit {entry_price}",
                 )
             )
 
@@ -317,24 +320,33 @@ class ExitSignalEngine:
                 )
             )
 
-        # 6. DTE_FORCED: DTE <= 5 AND (call ITM OR delta >= 0.30 OR residual >= 5.0)
-        # Call ITM = underlying_price > strike_price
-        if dte <= 5:
-            is_itm = underlying_price > strike_price
-            delta_breached = delta >= 0.30 if delta is not None else False
-            residual_breached = current_mark >= 5.0
-            if is_itm or delta_breached or residual_breached:
-                results.append(
-                    ExitSignalResult(
-                        exit_signal="DTE_FORCED",
-                        severity="ACTION",
-                        threshold_value=5.0,
-                        delta_stop_would_fire=delta_stop,
-                        premium_stop_would_fire=premium_stop,
-                        actual_rule_used=rule_used,
-                        notes=f"DTE {dte} <= 5 with ITM={is_itm}, delta={delta}, residual={current_mark}",
-                    )
+        # 6. TIME_STOP: days_held >= 21
+        if days_held >= 21:
+            results.append(
+                ExitSignalResult(
+                    exit_signal="TIME_STOP",
+                    severity="ACTION",
+                    threshold_value=21.0,
+                    delta_stop_would_fire=delta_stop,
+                    premium_stop_would_fire=premium_stop,
+                    actual_rule_used=rule_used,
+                    notes=f"Days held {days_held} >= 21",
                 )
+            )
+
+        # 7. DTE_REVIEW: DTE <= 5 (always fires at DTE <= 5, replacing DTE_FORCED)
+        if dte <= 5:
+            results.append(
+                ExitSignalResult(
+                    exit_signal="DTE_REVIEW",
+                    severity="WARN",
+                    threshold_value=5.0,
+                    delta_stop_would_fire=delta_stop,
+                    premium_stop_would_fire=premium_stop,
+                    actual_rule_used=rule_used,
+                    notes=f"DTE {dte} <= 5",
+                )
+            )
 
         return cls._sort_results(results)
 

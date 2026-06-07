@@ -14,8 +14,7 @@ def test_evaluate_cc_below_floor():
         current_mark=4.0,
         delta=0.15,
         dte=15,
-        underlying_price=22000.0,
-        strike_price=22500.0,
+        days_held=5,
     )
     assert len(results) == 1
     assert results[0].exit_signal == "BELOW_FLOOR"
@@ -23,17 +22,48 @@ def test_evaluate_cc_below_floor():
 
 
 def test_evaluate_cc_profit_target():
+    # entry=20.0, mark=5.9, days_held=5, dte=20 -> fires (5.9 <= 20 * 0.30 = 6.0)
     results = ExitSignalEngine.evaluate_cc(
-        entry_price=15.0,
-        current_mark=7.0,
+        entry_price=20.0,
+        current_mark=5.9,
         delta=0.15,
-        dte=15,
-        underlying_price=22000.0,
-        strike_price=22500.0,
+        dte=20,
+        days_held=5,
     )
     assert len(results) == 1
     assert results[0].exit_signal == "PROFIT_TARGET"
     assert results[0].severity == "ACTION"
+
+    # entry=20.0, mark=6.1, days_held=5, dte=20 -> [] (6.1 > 6.0)
+    results = ExitSignalEngine.evaluate_cc(
+        entry_price=20.0,
+        current_mark=6.1,
+        delta=0.15,
+        dte=20,
+        days_held=5,
+    )
+    assert results == []
+
+    # entry=14.0, mark=3.0, days_held=5, dte=20 -> [] (entry < _CC_MIN_ENTRY_CREDIT of 15)
+    results = ExitSignalEngine.evaluate_cc(
+        entry_price=14.0,
+        current_mark=3.0,
+        delta=0.15,
+        dte=20,
+        days_held=5,
+    )
+    assert results == []
+
+    # entry=15.0, mark=4.5, days_held=5, dte=20 -> fires (boundary inclusive)
+    results = ExitSignalEngine.evaluate_cc(
+        entry_price=15.0,
+        current_mark=4.5,
+        delta=0.15,
+        dte=20,
+        days_held=5,
+    )
+    assert len(results) == 1
+    assert results[0].exit_signal == "PROFIT_TARGET"
 
 
 def test_evaluate_cc_loss_stop():
@@ -42,8 +72,7 @@ def test_evaluate_cc_loss_stop():
         current_mark=38.0,
         delta=0.40,
         dte=15,
-        underlying_price=22000.0,
-        strike_price=22500.0,
+        days_held=5,
     )
     assert len(results) == 1
     assert results[0].exit_signal == "LOSS_STOP"
@@ -57,8 +86,7 @@ def test_evaluate_cc_delta_stop_and_warn():
         current_mark=20.0,
         delta=0.56,
         dte=15,
-        underlying_price=22000.0,
-        strike_price=22500.0,
+        days_held=5,
     )
     assert len(results) == 1
     assert results[0].exit_signal == "DELTA_STOP"
@@ -70,38 +98,121 @@ def test_evaluate_cc_delta_stop_and_warn():
         current_mark=20.0,
         delta=0.46,
         dte=15,
-        underlying_price=22000.0,
-        strike_price=22500.0,
+        days_held=5,
     )
     assert len(results) == 1
     assert results[0].exit_signal == "DELTA_WARN"
     assert results[0].severity == "WARN"
 
-
-def test_evaluate_cc_dte_forced():
-    # DTE <= 5 and call ITM
+    # DELTA_WARN suppressed when DELTA_STOP fires (elif coupling)
+    # delta=0.60, entry=20.0, mark=15.0, days_held=5, dte=20 -> [DELTA_STOP] only
     results = ExitSignalEngine.evaluate_cc(
-        entry_price=15.0,
-        current_mark=8.0,
-        delta=0.25,
-        dte=4,
-        underlying_price=22600.0,
-        strike_price=22500.0,
+        entry_price=20.0,
+        current_mark=15.0,
+        delta=0.60,
+        dte=20,
+        days_held=5,
     )
     assert len(results) == 1
-    assert results[0].exit_signal == "DTE_FORCED"
+    assert results[0].exit_signal == "DELTA_STOP"
+
+    # delta=0.47, entry=20.0, mark=15.0, days_held=5, dte=20 -> [DELTA_WARN] only
+    results = ExitSignalEngine.evaluate_cc(
+        entry_price=20.0,
+        current_mark=15.0,
+        delta=0.47,
+        dte=20,
+        days_held=5,
+    )
+    assert len(results) == 1
+    assert results[0].exit_signal == "DELTA_WARN"
+
+
+def test_evaluate_cc_time_stop():
+    # entry=20.0, mark=15.0, days_held=21, dte=20 -> TIME_STOP ACTION
+    results = ExitSignalEngine.evaluate_cc(
+        entry_price=20.0,
+        current_mark=15.0,
+        delta=0.20,
+        dte=20,
+        days_held=21,
+    )
+    assert len(results) == 1
+    assert results[0].exit_signal == "TIME_STOP"
     assert results[0].severity == "ACTION"
 
-    # DTE <= 5 and not ITM, delta/residual low -> no DTE_FORCED
+    # days_held=20 -> []
     results = ExitSignalEngine.evaluate_cc(
-        entry_price=15.0,
-        current_mark=3.0,
-        delta=0.10,
-        dte=4,
-        underlying_price=22400.0,
-        strike_price=22500.0,
+        entry_price=20.0,
+        current_mark=15.0,
+        delta=0.20,
+        dte=20,
+        days_held=20,
     )
-    assert not any(r.exit_signal == "DTE_FORCED" for r in results)
+    assert results == []
+
+    # days_held=21, dte=4 -> both TIME_STOP and DTE_REVIEW fire
+    results = ExitSignalEngine.evaluate_cc(
+        entry_price=20.0,
+        current_mark=15.0,
+        delta=0.20,
+        dte=4,
+        days_held=21,
+    )
+    signals = {r.exit_signal for r in results}
+    assert "TIME_STOP" in signals
+    assert "DTE_REVIEW" in signals
+
+
+def test_evaluate_cc_dte_review():
+    # dte=5 -> DTE_REVIEW WARN
+    results = ExitSignalEngine.evaluate_cc(
+        entry_price=20.0,
+        current_mark=15.0,
+        delta=0.20,
+        dte=5,
+        days_held=5,
+    )
+    assert len(results) == 1
+    assert results[0].exit_signal == "DTE_REVIEW"
+    assert results[0].severity == "WARN"
+
+    # dte=6 -> []
+    results = ExitSignalEngine.evaluate_cc(
+        entry_price=20.0,
+        current_mark=15.0,
+        delta=0.20,
+        dte=6,
+        days_held=5,
+    )
+    assert results == []
+
+    # dte=4, delta=0.70 -> DTE_REVIEW WARN, DELTA_STOP fires (fires separately)
+    results = ExitSignalEngine.evaluate_cc(
+        entry_price=20.0,
+        current_mark=15.0,
+        delta=0.70,
+        dte=4,
+        days_held=5,
+    )
+    signals = {r.exit_signal for r in results}
+    assert "DTE_REVIEW" in signals
+    assert "DELTA_STOP" in signals
+    assert "DTE_FORCED" not in signals
+
+
+def test_evaluate_cc_sort_order():
+    # LOSS_STOP + DELTA_STOP both true -> ACTION first, sort order verified
+    results = ExitSignalEngine.evaluate_cc(
+        entry_price=20.0,
+        current_mark=51.0,  # > 2.5x
+        delta=0.60,
+        dte=15,
+        days_held=5,
+    )
+    signals = [r.exit_signal for r in results]
+    assert "LOSS_STOP" in signals
+    assert "DELTA_STOP" in signals
 
 
 def test_evaluate_pp_crash_monetize():

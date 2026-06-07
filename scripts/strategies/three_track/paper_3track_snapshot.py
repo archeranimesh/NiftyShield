@@ -234,14 +234,13 @@ def _dispatch_evaluate(
 
     if role == "overlay_cc" and pos.net_qty < 0:
         leg = _find_chain_leg(chain, pos.instrument_key, "CE")
-        strike = _parse_strike_from_key(pos.instrument_key)
+        days_held = (today - pos.entry_date).days if pos.entry_date else 0
         return ExitSignalEngine.evaluate_cc(
             entry_price=float(pos.avg_sell_price),
             current_mark=float(leg.ltp) if leg is not None else 0.0,
             delta=float(leg.delta) if leg is not None else None,
             dte=dte,
-            underlying_price=underlying_price,
-            strike_price=float(strike) if strike is not None else 0.0,
+            days_held=days_held,
         )
 
     if role == "overlay_pp" and pos.net_qty > 0:

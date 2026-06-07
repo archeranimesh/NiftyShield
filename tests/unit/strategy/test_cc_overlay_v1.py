@@ -114,7 +114,7 @@ def test_long_position_ignored() -> None:
 
 def test_profit_target_fires_above_floor() -> None:
     strategy = CCOverlayV1()
-    chain = _make_chain(ltp="38.4", delta="0.20")  # 38.4/80 = 48%
+    chain = _make_chain(ltp="24.0", delta="0.20")  # 24.0/80 = 30%
     pos = _make_position(avg_sell_price="80")
     events = _run(strategy.check_signals(chain, [pos]))
     assert any(e.event_type == "PROFIT_TARGET" and e.severity == "ACTION" for e in events)
@@ -122,7 +122,7 @@ def test_profit_target_fires_above_floor() -> None:
 
 def test_below_floor_prevents_profit_target() -> None:
     strategy = CCOverlayV1()
-    chain = _make_chain(ltp="4.0", delta="0.20")  # 4/10 = 40% (under 50%)
+    chain = _make_chain(ltp="3.0", delta="0.20")  # 3/10 = 30% (under 30%)
     pos = _make_position(avg_sell_price="10")  # under 12 floor
     events = _run(strategy.check_signals(chain, [pos]))
     event_types = {e.event_type for e in events}
@@ -146,12 +146,33 @@ def test_loss_stop_fires_at_2_5x() -> None:
     assert any(e.event_type == "LOSS_STOP" and e.severity == "ACTION" for e in events)
 
 
+def test_time_stop_fires_at_21_days() -> None:
+    strategy = CCOverlayV1()
+    chain = _make_chain(ltp="80", delta="0.20")
+    # 21 days ago
+    entry_date = date.today() - timedelta(days=21)
+    pos = _make_position(avg_sell_price="80", entry_date=entry_date)
+    events = _run(strategy.check_signals(chain, [pos]))
+    assert any(e.event_type == "TIME_STOP" and e.severity == "ACTION" for e in events)
+
+
+def test_check_signals_with_entry_date_none() -> None:
+    strategy = CCOverlayV1()
+    chain = _make_chain(ltp="80", delta="0.20")
+    pos = _make_position(avg_sell_price="80", entry_date=None)
+    events = _run(strategy.check_signals(chain, [pos]))
+    # No crash, should evaluate as days_held = 0
+    assert not any(e.event_type == "TIME_STOP" for e in events)
+
+
 def test_missing_strike_still_evaluates_premium() -> None:
     strategy = CCOverlayV1()
     pos = _make_position(avg_sell_price="80")
     # Empty chain so lookup fails, but let's mock position key with DTE so DTE check is fine
     events = _run(strategy.check_signals(_make_empty_chain(), [pos]))
-    assert events == []  # Not enough info for premium stop/delta, and no DTE forced
+    assert (
+        events == []
+    )  # Not enough info for premium stop/delta, and no DTE review (since empty chain expiry is not matched)
 
 
 def test_apply_action_close_cc() -> None:
