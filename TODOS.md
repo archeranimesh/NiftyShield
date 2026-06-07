@@ -306,6 +306,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-06-07 | council-refactor CC-5 — manual Covered Call roll/exit override CLI wrapper paper_cc_roll.py and unit tests in test_cc_roll.py — afd8a9a |
 | 2026-06-07 | council-refactor CC-4 — CCOverlayV1 full automation: auto_execute=True, inherit ReEntryMixin, add __init__ with store/notifier/vix_data_dir, handle CLOSE_CC in apply_action, _send_close_notification via send_notification; re-entry check on PROFIT_TARGET + TIME_STOP only — 3058108 |
 | 2026-06-07 | covered-call-overlay CC-3 — Migrate CSPNiftyV1 to ReEntryMixin: inherit mixin, add reentry_leg_role/reentry_script_hint class attrs, remove _check_r5_reentry (125 lines), call _check_reentry on PROFIT_TARGET and TIME_STOP (TIME_STOP regression fix), re-target 8 test VIX patches, add TIME_STOP happy-path + edge-case tests — 269c08e |
 | 2026-06-07 | feat(strategy): ReEntryMixin with three-gate re-entry check; Telegram notification — fb38dde |
