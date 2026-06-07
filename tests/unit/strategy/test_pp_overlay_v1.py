@@ -169,6 +169,20 @@ def test_apply_action_monetize_pp() -> None:
     assert len(result) == 0
 
 
+def test_apply_action_roll_pp() -> None:
+    strategy = PPOverlayV1()
+    pos = _make_position()
+    action = ApprovedAction(
+        action_type="ROLL_PP",
+        legs_to_close=["protective_put"],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+    )
+    result = _run(strategy.apply_action([pos], action))
+    assert len(result) == 0
+
+
 def test_apply_action_invalid_raises() -> None:
     strategy = PPOverlayV1()
     pos = _make_position()
@@ -179,7 +193,7 @@ def test_apply_action_invalid_raises() -> None:
         rationale="test",
         council_rank=1,
     )
-    with pytest.raises(ValueError, match="MONETIZE_PP"):
+    with pytest.raises(ValueError, match="MONETIZE_PP and ROLL_PP"):
         _run(strategy.apply_action([pos], action))
 
 

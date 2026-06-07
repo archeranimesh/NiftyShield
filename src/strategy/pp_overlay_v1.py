@@ -155,10 +155,10 @@ class PPOverlayV1:
         positions: list[PaperPosition],
         action: ApprovedAction,
     ) -> list[PaperPosition]:
-        """Apply approved action MONETIZE_PP."""
-        if action.action_type != "MONETIZE_PP":
+        """Apply approved action MONETIZE_PP or ROLL_PP."""
+        if action.action_type not in {"MONETIZE_PP", "ROLL_PP"}:
             raise ValueError(
-                f"PPOverlayV1 only accepts MONETIZE_PP actions; got {action.action_type!r}"
+                f"PPOverlayV1 only accepts MONETIZE_PP and ROLL_PP actions; got {action.action_type!r}"
             )
         closed = set(action.legs_to_close)
         log.info(
