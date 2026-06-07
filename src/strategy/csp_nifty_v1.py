@@ -31,16 +31,14 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
 import structlog
 
-from src.backtest.ivr import compute_ivr
-from src.backtest.vix_ingest import load_vix_series
 from src.config import settings
 from src.models.options import OptionChain, OptionLeg
-from src.paper.models import ExitSignal, PaperPosition, TradeState
+from src.paper.models import PaperPosition, TradeState
 from src.strategy.exit_signals import ExitSignalEngine
 from src.strategy.protocol import ApprovedAction, SignalEvent
+from src.strategy.reentry_mixin import ReEntryMixin
 
 log = structlog.get_logger(__name__)
 
@@ -61,7 +59,7 @@ _STRIKE_RE = re.compile(r"NIFTY(\d+)(PE|CE)", re.IGNORECASE)
 _TIME_STOP_DAYS = 21  # days_held ≥ 21 (calendar days since entry SELL trade)
 
 
-class CSPNiftyV1:
+class CSPNiftyV1(ReEntryMixin):
     """Backbone-compatible wrapper for the paper_csp_nifty_v1 strategy.
 
     Registers with StrategyMonitor to emit exit/roll signals on every tick.
@@ -70,6 +68,8 @@ class CSPNiftyV1:
     """
 
     strategy_name: str = "paper_csp_nifty_v1"
+    reentry_leg_role: str = "short_put"
+    reentry_script_hint: str = "find_strike_by_delta.py"
 
     def __init__(
         self,
@@ -271,9 +271,9 @@ class CSPNiftyV1:
             ValueError: When ``action_type`` is anything other than
                 ``"CLOSE_FULL"`` or ``"PROFIT_TARGET"``.
         """
-        if action.action_type not in ("CLOSE_FULL", "PROFIT_TARGET"):
+        if action.action_type not in ("CLOSE_FULL", "PROFIT_TARGET", "TIME_STOP"):
             raise ValueError(
-                f"CSPNiftyV1 only accepts CLOSE_FULL or PROFIT_TARGET actions; "
+                f"CSPNiftyV1 only accepts CLOSE_FULL, PROFIT_TARGET, or TIME_STOP actions; "
                 f"got {action.action_type!r}"
             )
         closed: set[str] = set(action.legs_to_close)
@@ -283,135 +283,31 @@ class CSPNiftyV1:
             legs_to_close=list(closed),
         )
 
-        # Capture closed short-put position before filtering for R5 check.
+        # Capture closed short-put position before filtering for re-entry check.
         closed_pos = next(
             (p for p in positions if p.leg_role in closed and p.net_qty < 0),
             None,
         )
         updated = [p for p in positions if p.leg_role not in closed]
 
-        if action.action_type == "PROFIT_TARGET":
+        if action.action_type in ("PROFIT_TARGET", "TIME_STOP"):
             if closed_pos is not None:
                 expiry = self._parse_expiry(closed_pos.instrument_key)
-                await self._check_r5_reentry(
+                await self._check_reentry(
                     expiry=expiry,
                     today=date.today(),
                     instrument_key=closed_pos.instrument_key,
+                    trade_id=0,  # PaperPosition has no numeric ID; one leg at a time in Phase 0
                 )
             else:
                 log.warning(
-                    "csp_nifty_v1.r5_check_skipped",
+                    "csp_nifty_v1.reentry_check_skipped",
                     reason="no short_put position found in legs_to_close",
                 )
 
         return updated
 
     # ── Private helpers ───────────────────────────────────────────────────────
-
-    async def _check_r5_reentry(
-        self,
-        expiry: date | None,
-        today: date,
-        instrument_key: str,
-    ) -> None:
-        """Evaluate R5 re-entry eligibility and write a paper_exit_events row.
-
-        Three gates — all must pass for ELIGIBLE:
-        1. ``(expiry - today).days ≥ 14`` calendar days to expiry.
-        2. Trailing 252-day IVR ≥ 0.25 (None history → blocked conservatively).
-        3. No open ``short_put`` position in store for this strategy.
-
-        Always writes to ``paper_exit_events`` (ELIGIBLE or BLOCKED) and sends
-        a Telegram notification.  Notifier failure is non-fatal — the event is
-        written regardless.
-
-        Args:
-            expiry: Expiry date parsed from the closed instrument key, or
-                ``None`` if the key carried no parseable date.
-            today: Reference date (injectable for testing).
-            instrument_key: Instrument key of the closed short-put position.
-                Used as ``trade_id`` in the exit event row.
-        """
-        if self._store is None:
-            log.warning("csp_nifty_v1.r5_check_skipped", reason="no store configured")
-            return
-
-        blocked_reason: str | None = None
-
-        # ── Gate 1: DTE ≥ 14 ─────────────────────────────────────────────────
-        dte = (expiry - today).days if expiry is not None else 0
-        if expiry is None or dte < 14:
-            blocked_reason = f"DTE={dte} < 14 — too close to expiry for re-entry"
-
-        # ── Gate 2: IVR ≥ 0.25 ───────────────────────────────────────────────
-        if blocked_reason is None:
-            try:
-                vix_series: pd.Series = load_vix_series(self._vix_data_dir)
-                if vix_series.empty or len(vix_series) < 252:
-                    blocked_reason = "IVR history insufficient — cannot verify R3"
-                else:
-                    vix_today = float(vix_series.iloc[-1])
-                    ivr = compute_ivr(vix_today, vix_series)
-                    if ivr is None:
-                        blocked_reason = "IVR history insufficient — cannot verify R3"
-                    elif ivr < 0.25:
-                        blocked_reason = f"IVR={ivr:.2f} < 0.25 — low vol, skip cycle"
-            except Exception as exc:
-                log.warning("csp_nifty_v1.r5_ivr_load_failed", error=str(exc))
-                blocked_reason = "IVR history insufficient — cannot verify R3"
-
-        # ── Gate 3: No open short_put ─────────────────────────────────────────
-        if blocked_reason is None:
-            try:
-                existing = self._store.get_positions(self.strategy_name)
-                if any(p.leg_role == "short_put" and p.net_qty < 0 for p in existing):
-                    blocked_reason = (
-                        "open position: short_put already active for paper_csp_nifty_v1"
-                    )
-            except Exception as exc:
-                log.warning("csp_nifty_v1.r5_positions_check_failed", error=str(exc))
-                blocked_reason = "open position check failed — cannot verify gate 3"
-
-        signal = (
-            ExitSignal.R5_REENTRY_ELIGIBLE
-            if blocked_reason is None
-            else ExitSignal.R5_REENTRY_BLOCKED
-        )
-        notes = blocked_reason or "All R5 re-entry gates passed"
-
-        # ── Write exit event ──────────────────────────────────────────────────
-        try:
-            self._store.create_exit_event(
-                strategy_name=self.strategy_name,
-                leg_name="short_put",
-                trade_id=instrument_key or "unknown",
-                event_time=datetime.utcnow(),
-                detected_by="MANUAL",
-                exit_signal=signal,
-                severity="INFO",
-                entry_price=0.0,
-                notes=notes,
-            )
-            log.info(
-                "csp_nifty_v1.r5_reentry_event_written",
-                signal=signal.value,
-                notes=notes,
-            )
-        except Exception as exc:
-            log.error("csp_nifty_v1.r5_reentry_event_write_failed", error=str(exc))
-
-        # ── Notify ────────────────────────────────────────────────────────────
-        if self._notifier is not None:
-            status_line = (
-                "✅ CSP R5 Re-entry ELIGIBLE — run find_strike_by_delta.py"
-                if signal == ExitSignal.R5_REENTRY_ELIGIBLE
-                else "⛔ CSP R5 Re-entry BLOCKED"
-            )
-            msg = f"{status_line}\n{notes}"
-            try:
-                await self._notifier.send_plain_message(msg)
-            except Exception as exc:
-                log.warning("csp_nifty_v1.r5_reentry_notify_failed", error=str(exc))
 
     def _find_put_leg(self, market: OptionChain, instrument_key: str) -> OptionLeg | None:
         """Locate the PE leg in the chain for the given position.

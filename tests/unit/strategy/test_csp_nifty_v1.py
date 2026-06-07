@@ -404,7 +404,7 @@ def test_r5_eligible_when_all_gates_pass(tmp_path: Path) -> None:
     strategy = CSPNiftyV1(store=store, notifier=notifier)
 
     vix_series = _make_vix_series(ivr=0.30)
-    with patch("src.strategy.csp_nifty_v1.load_vix_series", return_value=vix_series):
+    with patch("src.strategy.reentry_mixin.load_vix_series", return_value=vix_series):
         pos = _make_position(instrument_key=_r5_expiry_key(15), avg_sell_price="80")
         _run(strategy.apply_action([pos], _make_profit_target_action()))
 
@@ -420,7 +420,7 @@ def test_r5_blocked_when_dte_less_than_14(tmp_path: Path) -> None:
     strategy = CSPNiftyV1(store=store)
 
     vix_series = _make_vix_series(ivr=0.30)
-    with patch("src.strategy.csp_nifty_v1.load_vix_series", return_value=vix_series):
+    with patch("src.strategy.reentry_mixin.load_vix_series", return_value=vix_series):
         pos = _make_position(instrument_key=_r5_expiry_key(13), avg_sell_price="80")
         _run(strategy.apply_action([pos], _make_profit_target_action()))
 
@@ -439,7 +439,7 @@ def test_r5_blocked_when_ivr_below_floor(tmp_path: Path) -> None:
     strategy = CSPNiftyV1(store=store)
 
     vix_series = _make_vix_series(ivr=0.22)
-    with patch("src.strategy.csp_nifty_v1.load_vix_series", return_value=vix_series):
+    with patch("src.strategy.reentry_mixin.load_vix_series", return_value=vix_series):
         pos = _make_position(instrument_key=_r5_expiry_key(20), avg_sell_price="80")
         _run(strategy.apply_action([pos], _make_profit_target_action()))
 
@@ -455,7 +455,7 @@ def test_r5_blocked_when_ivr_history_insufficient(tmp_path: Path) -> None:
     strategy = CSPNiftyV1(store=store)
 
     short_series = pd.Series([15.0, 18.0, 20.0], dtype="float64")  # < 252 entries
-    with patch("src.strategy.csp_nifty_v1.load_vix_series", return_value=short_series):
+    with patch("src.strategy.reentry_mixin.load_vix_series", return_value=short_series):
         pos = _make_position(instrument_key=_r5_expiry_key(20), avg_sell_price="80")
         _run(strategy.apply_action([pos], _make_profit_target_action()))
 
@@ -471,7 +471,7 @@ def test_r5_blocked_when_vix_series_empty(tmp_path: Path) -> None:
     strategy = CSPNiftyV1(store=store)
 
     with patch(
-        "src.strategy.csp_nifty_v1.load_vix_series", return_value=pd.Series(dtype="float64")
+        "src.strategy.reentry_mixin.load_vix_series", return_value=pd.Series(dtype="float64")
     ):
         pos = _make_position(instrument_key=_r5_expiry_key(20), avg_sell_price="80")
         _run(strategy.apply_action([pos], _make_profit_target_action()))
@@ -504,7 +504,7 @@ def test_r5_blocked_when_short_put_already_open(tmp_path: Path) -> None:
     )
 
     vix_series = _make_vix_series(ivr=0.30)
-    with patch("src.strategy.csp_nifty_v1.load_vix_series", return_value=vix_series):
+    with patch("src.strategy.reentry_mixin.load_vix_series", return_value=vix_series):
         pos = _make_position(instrument_key=_r5_expiry_key(20), avg_sell_price="80")
         _run(strategy.apply_action([pos], _make_profit_target_action()))
 
@@ -525,7 +525,7 @@ def test_apply_action_profit_target_closes_and_runs_r5(tmp_path: Path) -> None:
     strategy = CSPNiftyV1(store=store, notifier=notifier)
 
     vix_series = _make_vix_series(ivr=0.30)
-    with patch("src.strategy.csp_nifty_v1.load_vix_series", return_value=vix_series):
+    with patch("src.strategy.reentry_mixin.load_vix_series", return_value=vix_series):
         pos = _make_position(instrument_key=_r5_expiry_key(20), avg_sell_price="80")
         remaining = _run(strategy.apply_action([pos], _make_profit_target_action()))
 
@@ -551,10 +551,55 @@ def test_r5_event_written_even_when_notifier_raises(tmp_path: Path) -> None:
     strategy = CSPNiftyV1(store=store, notifier=notifier)
 
     vix_series = _make_vix_series(ivr=0.30)
-    with patch("src.strategy.csp_nifty_v1.load_vix_series", return_value=vix_series):
+    with patch("src.strategy.reentry_mixin.load_vix_series", return_value=vix_series):
         pos = _make_position(instrument_key=_r5_expiry_key(20), avg_sell_price="80")
         # Must not raise even though notifier throws.
         _run(strategy.apply_action([pos], _make_profit_target_action()))
 
     events = store.get_open_exit_events(strategy_name="paper_csp_nifty_v1")
     assert any(e["exit_signal"] in ("R5_REENTRY_ELIGIBLE", "R5_REENTRY_BLOCKED") for e in events)
+
+
+# ── TIME_STOP regression: reentry check was missing ──────────────────────────
+
+
+def test_apply_action_time_stop_runs_reentry(tmp_path: Path) -> None:
+    """TIME_STOP action triggers reentry eligibility check (regression fix)."""
+    store = PaperStore(str(tmp_path / "db.sqlite"))
+    notifier = MagicMock()
+    notifier.send_plain_message = AsyncMock(return_value=True)
+    strategy = CSPNiftyV1(store=store, notifier=notifier)
+
+    vix_series = _make_vix_series(ivr=0.30)
+    time_stop_action = ApprovedAction(
+        action_type="TIME_STOP",
+        legs_to_close=["short_put"],
+        legs_to_open=[],
+        rationale="21 days elapsed",
+        council_rank=1,
+    )
+    with patch("src.strategy.reentry_mixin.load_vix_series", return_value=vix_series):
+        pos = _make_position(instrument_key=_r5_expiry_key(20), avg_sell_price="80")
+        remaining = _run(strategy.apply_action([pos], time_stop_action))
+
+    # Leg was closed.
+    assert all(p.leg_role != "short_put" for p in remaining)
+
+    # Re-entry event written — TIME_STOP now triggers same check as PROFIT_TARGET.
+    events = store.get_open_exit_events(strategy_name="paper_csp_nifty_v1")
+    assert any(e["exit_signal"] in ("R5_REENTRY_ELIGIBLE", "R5_REENTRY_BLOCKED") for e in events)
+    notifier.send_plain_message.assert_awaited_once()
+
+
+def test_apply_action_time_stop_rejects_unknown_action() -> None:
+    """apply_action raises ValueError for unrecognised action_type."""
+    strategy = CSPNiftyV1()
+    bad_action = ApprovedAction(
+        action_type="ROLL_DOWN",
+        legs_to_close=["short_put"],
+        legs_to_open=[],
+        rationale="unknown",
+        council_rank=1,
+    )
+    with pytest.raises(ValueError, match="ROLL_DOWN"):
+        _run(strategy.apply_action([], bad_action))
