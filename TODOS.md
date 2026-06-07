@@ -218,7 +218,7 @@ Tasks run in priority order. Infrastructure that blocks other stories runs first
 | 3 | scripts-restructure SR1 (scaffold only) | Cowork | Before #4 | #4 script placement | ✅ Shipped — [story](docs/plan/scripts-restructure/) |
 | 4 | paper-backbone: Strategy Monitor daemon | Cowork | **Jun–Jul 2026** | #5 | ✅ Shipped — [story](docs/plan/paper-backbone/) |
 | 5 | paper-exit-signals: automated exit detection + closure | Cowork | After #4 | — | ✅ Shipped — [story](docs/plan/paper-exit-signals/) |
-| 6 | covered-call-overlay CC3+CC4 (calibration experiment) | Cowork | Any cycle | — | ⬜ CC3 not started — [story](docs/plan/covered-call-overlay/) |
+| 6 | covered-call-overlay CC3+CC4 (calibration experiment) | Cowork | Any cycle | — | 🔄 CC3 shipped — CC4 pending — [story](docs/plan/covered-call-overlay/) |
 | 7 | MVP: Multi-bagger Value Picks Tracker | Cowork | After #1 | — | ⬜ Not started — [story](docs/plan/mvp/) |
 | 8 | backtest-eval-core: `BacktestStore` + `src/analytics/` | Cowork | Aug 2026 | #9 | ⬜ Not started — [story](docs/plan/backtest-eval-core/) — **blocked by tasks 1.3 + 1.4** |
 | 9 | signals-eval-core: regime engine + signal generators + validation | Cowork | Q4 2026 | — | ⬜ Not started — [story](docs/plan/signals-eval-core/) — **blocked by #8 + Phase 1.12 gate** |
@@ -306,6 +306,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-06-07 | covered-call-overlay CC-3 — Migrate CSPNiftyV1 to ReEntryMixin: inherit mixin, add reentry_leg_role/reentry_script_hint class attrs, remove _check_r5_reentry (125 lines), call _check_reentry on PROFIT_TARGET and TIME_STOP (TIME_STOP regression fix), re-target 8 test VIX patches, add TIME_STOP happy-path + edge-case tests — 269c08e |
 | 2026-06-07 | feat(strategy): ReEntryMixin with three-gate re-entry check; Telegram notification — fb38dde |
 | 2026-06-07 | council-refactor CC-1 — Align evaluate_cc() to CSP structure: add days_held, TIME_STOP signal, DTE_REVIEW WARN, use _PROFIT_TARGET_RETENTION, add _CC_MIN_ENTRY_CREDIT; update CCOverlayV1 caller; 15+ new tests — 5314ec0 |
 | 2026-06-07 | council-refactor CR1c — Refactor paper_csp_roll.py to thin CLI wrapper around csp_roll_executor.py; existing tests stay green — 154a64c |
