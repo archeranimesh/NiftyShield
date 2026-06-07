@@ -33,7 +33,7 @@ _EXPIRY_RE = re.compile(
 # Matches keys like "NSE_FO|NIFTY23000PE" → group 1 = "23000"
 _STRIKE_RE = re.compile(r"NIFTY(\d+)(PE|CE)", re.IGNORECASE)
 
-SHORT_CALL_ROLES = {"short_call", "cc_short_call"}
+SHORT_CALL_ROLES = {"short_call", "cc_short_call", "covered_call"}
 
 
 class CCOverlayV1(ReEntryMixin):
@@ -41,7 +41,7 @@ class CCOverlayV1(ReEntryMixin):
 
     strategy_name: str = STRATEGY_CC_OVERLAY
     auto_execute: bool = True
-    reentry_leg_role: str = "overlay_cc"
+    reentry_leg_role: str = "covered_call"
     reentry_script_hint: str = "run find_overlay_strikes.py --overlay-type cc"
 
     def __init__(
@@ -210,11 +210,7 @@ class CCOverlayV1(ReEntryMixin):
         )
         updated = [p for p in positions if p.leg_role not in closed]
 
-        triggering_signal = (
-            action.metadata.get("triggering_signal")
-            if (hasattr(action, "metadata") and action.metadata)
-            else None
-        )
+        triggering_signal = action.metadata.get("triggering_signal") if action.metadata else None
 
         if triggering_signal in ("PROFIT_TARGET", "TIME_STOP") and closed_pos is not None:
             expiry = self._parse_expiry(closed_pos.instrument_key)
@@ -239,7 +235,7 @@ class CCOverlayV1(ReEntryMixin):
             return
 
         try:
-            metadata = action.metadata if (hasattr(action, "metadata") and action.metadata) else {}
+            metadata = action.metadata or {}
             exit_price = (
                 Decimal(str(metadata.get("mark")))
                 if metadata.get("mark") is not None
@@ -263,7 +259,10 @@ class CCOverlayV1(ReEntryMixin):
                 f"📤 Closed: {pos.instrument_key} @ ₹{exit_price:.2f}\n"
                 f"   Entry ₹{entry_credit:.2f} · Delta {delta:.3f} · DTE {dte}"
             )
-            await self._notifier.send_notification(msg)
+            if hasattr(self._notifier, "send_notification"):
+                await self._notifier.send_notification(msg)
+            else:
+                await self._notifier.send_plain_message(msg)
         except Exception as exc:
             log.error(
                 "cc_overlay_v1.send_close_notification_failed",
