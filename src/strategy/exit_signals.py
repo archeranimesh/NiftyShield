@@ -358,37 +358,47 @@ class ExitSignalEngine:
         current_mark: float,
         delta: float | None,
         dte: int,
-        bid: float | None = None,
-        ask: float | None = None,
     ) -> list[ExitSignalResult]:
-        """Evaluate exit signals for a Protective Put (PP) leg."""
+        """Evaluate exit signals for a Protective Put (PP) long put leg.
+
+        Signal priority (both may fire; caller takes first only):
+          1. CRASH_MONETIZE — delta ≤ -0.80 OR value ≥ 5× entry debit
+          2. ROLL_ELIGIBLE  — DTE ≤ 5 (auto-roll to next expiry)
+
+        No spread guard: paper mode slippage is handled by PaperFillSimulator.
+
+        Args:
+            entry_price: Debit paid at entry (positive value).
+            current_mark: Current LTP / mark of the long put.
+            delta: Current delta of the long put (negative, e.g. -0.85).
+            dte: Days to expiry.
+
+        Returns:
+            List of ExitSignalResult, sorted ACTION-first. Empty list if no signal.
+        """
         results: list[ExitSignalResult] = []
 
-        # 1. CRASH_MONETIZE: put delta <= -0.80 OR value >= 5x entry debit AND bid/ask spread <= 10% of mid
-        if bid is not None and ask is not None:
-            spread = ask - bid
-            mid = (bid + ask) / 2
-            if mid > 0 and spread <= 0.10 * mid:
-                delta_breached = delta <= -0.80 if delta is not None else False
-                value_breached = current_mark >= 5.0 * entry_price
-                if delta_breached or value_breached:
-                    results.append(
-                        ExitSignalResult(
-                            exit_signal="CRASH_MONETIZE",
-                            severity="ACTION",
-                            threshold_value=5.0,
-                            notes=f"Crash monetise triggered with delta={delta}, value={current_mark}, spread={spread / mid:.2%}",
-                        )
-                    )
+        # 1. CRASH_MONETIZE: put delta <= -0.80 OR value >= 5x entry debit
+        delta_breached = delta <= -0.80 if delta is not None else False
+        value_breached = current_mark >= 5.0 * entry_price
+        if delta_breached or value_breached:
+            results.append(
+                ExitSignalResult(
+                    exit_signal="CRASH_MONETIZE",
+                    severity="ACTION",
+                    threshold_value=5.0,
+                    notes=f"Crash monetise: delta={delta}, value={current_mark:.2f}, 5x_threshold={5.0 * entry_price:.2f}",
+                )
+            )
 
-        # 2. DTE_REVIEW: DTE <= 5 (informational only)
+        # 2. ROLL_ELIGIBLE: DTE <= 5 (auto-roll to next expiry)
         if dte <= 5:
             results.append(
                 ExitSignalResult(
-                    exit_signal="DTE_REVIEW",
-                    severity="INFO",
+                    exit_signal="ROLL_ELIGIBLE",
+                    severity="ACTION",
                     threshold_value=5.0,
-                    notes=f"DTE {dte} <= 5",
+                    notes=f"DTE {dte} ≤ 5 — roll PP to next expiry",
                 )
             )
 

@@ -258,8 +258,6 @@ def _dispatch_evaluate(
             current_mark=float(leg.ltp) if leg is not None else 0.0,
             delta=float(leg.delta) if leg is not None else None,
             dte=dte,
-            bid=float(leg.bid) if leg is not None else None,
-            ask=float(leg.ask) if leg is not None else None,
         )
 
     if role == "overlay_collar_call" and pos.net_qty < 0:

@@ -216,47 +216,65 @@ def test_evaluate_cc_sort_order():
 
 
 def test_evaluate_pp_crash_monetize():
-    # delta <= -0.80 and spread <= 10%
-    results = ExitSignalEngine.evaluate_pp(
-        entry_price=50.0, current_mark=250.0, delta=-0.81, dte=15, bid=245.0, ask=255.0
-    )
+    # delta <= -0.81 -> CRASH_MONETIZE ACTION
+    results = ExitSignalEngine.evaluate_pp(entry_price=20.0, current_mark=50.0, delta=-0.81, dte=20)
     assert len(results) == 1
     assert results[0].exit_signal == "CRASH_MONETIZE"
     assert results[0].severity == "ACTION"
 
-    # value >= 5x entry and spread <= 10%
+    # delta == -0.80 -> CRASH_MONETIZE ACTION (boundary inclusive)
+    results = ExitSignalEngine.evaluate_pp(entry_price=20.0, current_mark=50.0, delta=-0.80, dte=20)
+    assert len(results) == 1
+    assert results[0].exit_signal == "CRASH_MONETIZE"
+
+    # delta == -0.79 -> [] (neither fires)
+    results = ExitSignalEngine.evaluate_pp(entry_price=20.0, current_mark=50.0, delta=-0.79, dte=20)
+    assert results == []
+
+    # value >= 5x entry debit (101 >= 5 * 20) -> CRASH_MONETIZE ACTION
     results = ExitSignalEngine.evaluate_pp(
-        entry_price=50.0, current_mark=251.0, delta=-0.75, dte=15, bid=248.0, ask=254.0
+        entry_price=20.0, current_mark=101.0, delta=-0.30, dte=20
     )
     assert len(results) == 1
     assert results[0].exit_signal == "CRASH_MONETIZE"
 
-    # value >= 5x but spread > 10% -> no CRASH_MONETIZE
-    results = ExitSignalEngine.evaluate_pp(
-        entry_price=50.0, current_mark=251.0, delta=-0.75, dte=15, bid=220.0, ask=280.0
-    )
+    # value < 5x entry debit (99 < 5 * 20) -> []
+    results = ExitSignalEngine.evaluate_pp(entry_price=20.0, current_mark=99.0, delta=-0.30, dte=20)
     assert results == []
 
-    # bid/ask unavailable -> no CRASH_MONETIZE
-    results = ExitSignalEngine.evaluate_pp(
-        entry_price=50.0, current_mark=251.0, delta=-0.81, dte=15, bid=None, ask=None
-    )
-    assert results == []
-
-
-def test_evaluate_pp_dte_review():
-    results = ExitSignalEngine.evaluate_pp(
-        entry_price=50.0, current_mark=40.0, delta=-0.30, dte=4, bid=None, ask=None
-    )
+    # delta=None, value >= 5x entry -> CRASH_MONETIZE ACTION
+    results = ExitSignalEngine.evaluate_pp(entry_price=20.0, current_mark=105.0, delta=None, dte=20)
     assert len(results) == 1
-    assert results[0].exit_signal == "DTE_REVIEW"
-    assert results[0].severity == "INFO"
+    assert results[0].exit_signal == "CRASH_MONETIZE"
+
+
+def test_evaluate_pp_roll_eligible():
+    # dte <= 5 -> ROLL_ELIGIBLE ACTION
+    results = ExitSignalEngine.evaluate_pp(entry_price=20.0, current_mark=10.0, delta=-0.20, dte=5)
+    assert len(results) == 1
+    assert results[0].exit_signal == "ROLL_ELIGIBLE"
+    assert results[0].severity == "ACTION"
+
+    # dte == 6 -> []
+    results = ExitSignalEngine.evaluate_pp(entry_price=20.0, current_mark=10.0, delta=-0.20, dte=6)
+    assert results == []
+
+    # dte == 0 -> ROLL_ELIGIBLE ACTION
+    results = ExitSignalEngine.evaluate_pp(entry_price=20.0, current_mark=10.0, delta=-0.20, dte=0)
+    assert len(results) == 1
+    assert results[0].exit_signal == "ROLL_ELIGIBLE"
+
+
+def test_evaluate_pp_both_fire_crash_first():
+    # both fire (delta=-0.85, value=110 >= 5 * 20, dte=3) -> both returned, CRASH_MONETIZE first
+    results = ExitSignalEngine.evaluate_pp(entry_price=20.0, current_mark=110.0, delta=-0.85, dte=3)
+    assert len(results) == 2
+    assert results[0].exit_signal == "CRASH_MONETIZE"
+    assert results[1].exit_signal == "ROLL_ELIGIBLE"
 
 
 def test_evaluate_pp_healthy():
-    results = ExitSignalEngine.evaluate_pp(
-        entry_price=50.0, current_mark=60.0, delta=-0.15, dte=20, bid=58.0, ask=62.0
-    )
+    results = ExitSignalEngine.evaluate_pp(entry_price=20.0, current_mark=25.0, delta=-0.15, dte=20)
     assert results == []
 
 

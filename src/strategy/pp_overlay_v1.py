@@ -62,8 +62,6 @@ class PPOverlayV1:
             expiry = self._parse_expiry(pos.instrument_key)
             dte = (expiry - today).days if expiry is not None else 9999
 
-            bid = float(put_leg.bid) if put_leg is not None else None
-            ask = float(put_leg.ask) if put_leg is not None else None
             delta = float(put_leg.delta) if put_leg is not None else None
 
             entry_price = float(pos.avg_cost)
@@ -74,8 +72,6 @@ class PPOverlayV1:
                 current_mark=current_mark,
                 delta=delta,
                 dte=dte,
-                bid=bid,
-                ask=ask,
             )
 
             for result in results:
@@ -84,10 +80,12 @@ class PPOverlayV1:
                     payload["delta"] = str(put_leg.delta)
                     payload["mark"] = str(put_leg.ltp)
                     payload["entry_debit"] = str(pos.avg_cost)
-                    payload["bid"] = str(put_leg.bid)
-                    payload["ask"] = str(put_leg.ask)
                 payload["dte"] = dte
-                payload["valid_actions"] = ["MONETIZE_PP"]
+
+                if result.exit_signal == "CRASH_MONETIZE":
+                    payload["valid_actions"] = ["MONETIZE_PP"]
+                elif result.exit_signal == "ROLL_ELIGIBLE":
+                    payload["valid_actions"] = ["ROLL_PP"]
 
                 events.append(
                     SignalEvent(

@@ -122,39 +122,37 @@ def test_short_position_ignored() -> None:
     assert result == []
 
 
-def test_crash_monetize_fires_delta_and_spread() -> None:
+def test_crash_monetize_fires_delta() -> None:
     strategy = PPOverlayV1()
-    chain = _make_chain(ltp="400", delta="-0.85", bid="395", ask="405")
+    chain = _make_chain(ltp="400", delta="-0.85")
     pos = _make_position(avg_cost="80")
     events = _run(strategy.check_signals(chain, [pos]))
-    assert any(e.event_type == "CRASH_MONETIZE" and e.severity == "ACTION" for e in events)
+    assert len(events) == 1
+    assert events[0].event_type == "CRASH_MONETIZE"
+    assert events[0].severity == "ACTION"
+    assert events[0].payload["valid_actions"] == ["MONETIZE_PP"]
 
 
-def test_crash_monetize_fires_value_and_spread() -> None:
+def test_crash_monetize_fires_value() -> None:
     strategy = PPOverlayV1()
-    chain = _make_chain(
-        ltp="405", delta="-0.50", bid="400", ask="410"
-    )  # 405/80 > 5x, spread (10/405) <= 10%
+    chain = _make_chain(ltp="405", delta="-0.50")  # 405/80 > 5x
     pos = _make_position(avg_cost="80")
     events = _run(strategy.check_signals(chain, [pos]))
-    assert any(e.event_type == "CRASH_MONETIZE" and e.severity == "ACTION" for e in events)
+    assert len(events) == 1
+    assert events[0].event_type == "CRASH_MONETIZE"
+    assert events[0].severity == "ACTION"
+    assert events[0].payload["valid_actions"] == ["MONETIZE_PP"]
 
 
-def test_no_crash_monetize_if_spread_is_wide() -> None:
-    strategy = PPOverlayV1()
-    # spread is 80 (360-440), mid is 400. spread/mid = 80/400 = 20% > 10%
-    chain = _make_chain(ltp="400", delta="-0.85", bid="360", ask="440")
-    pos = _make_position(avg_cost="80")
-    events = _run(strategy.check_signals(chain, [pos]))
-    assert not any(e.event_type == "CRASH_MONETIZE" for e in events)
-
-
-def test_dte_review_fires_at_dte_4() -> None:
+def test_roll_eligible_fires_at_dte_4() -> None:
     strategy = PPOverlayV1()
     key = _expiry_key(dte=4)
     pos = _make_position(instrument_key=key)
     events = _run(strategy.check_signals(_make_empty_chain(), [pos]))
-    assert any(e.event_type == "DTE_REVIEW" and e.severity == "INFO" for e in events)
+    assert len(events) == 1
+    assert events[0].event_type == "ROLL_ELIGIBLE"
+    assert events[0].severity == "ACTION"
+    assert events[0].payload["valid_actions"] == ["ROLL_PP"]
 
 
 def test_apply_action_monetize_pp() -> None:
