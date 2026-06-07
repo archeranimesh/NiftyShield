@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 from src.client.factory import create_client
 from src.client.upstox_market import parse_upstox_option_chain
 from src.config import settings
-from src.instruments.lookup import InstrumentLookup
+from src.instruments.lookup import InstrumentLookup, parse_expiry
 from src.paper.constants import (
     DEFAULT_BOD_PATH,
     DEFAULT_DB_PATH,
@@ -123,8 +123,6 @@ async def _run(args: argparse.Namespace) -> None:
             strike = Decimal(str(resolved.get("strike_price", 0)))
             expiry_str = resolved.get("expiry")
             if expiry_str:
-                from src.instruments.lookup import parse_expiry
-
                 exp_date_str = parse_expiry(expiry_str)
                 expiry = date.fromisoformat(exp_date_str) if exp_date_str else today
             else:

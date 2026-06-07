@@ -124,28 +124,31 @@ async def test_run_script_flow_trigger_profit_target_dry_run() -> None:
     # Setup broker mock
     mock_broker = MagicMock()
     mock_broker.get_ltp = AsyncMock(return_value={"NSE_FO|NIFTY26JUN2026CE24500": Decimal("18.00")})
-    # Mock get_option_chain response
-    from src.models.options import OptionChain, OptionChainStrike, OptionLeg
-
-    ce_leg = OptionLeg(
-        ltp=Decimal("18.00"),  # <= 30% of 62.00 -> profit target hit
-        bid=Decimal("17.50"),
-        ask=Decimal("18.50"),
-        oi=1000,
-        volume=100,
-        delta=Decimal("0.38"),
-        gamma=Decimal("0.0001"),
-        theta=Decimal("-1.0"),
-        vega=Decimal("2.0"),
-        iv=Decimal("12.0"),
-        strike=Decimal("24500"),
-    )
-    chain = OptionChain(
-        underlying_spot=Decimal("24000"),
-        expiry=date(2026, 6, 26),
-        strikes={Decimal("24500"): OptionChainStrike(ce=ce_leg)},
-    )
-    mock_broker.get_option_chain = AsyncMock(return_value=chain)
+    # Mock raw get_option_chain response list
+    raw_chain = [
+        {
+            "underlying_spot_price": 24000.0,
+            "expiry": "2026-06-26",
+            "strike_price": 24500.0,
+            "call_options": {
+                "market_data": {
+                    "ltp": 18.00,
+                    "bid_price": 17.50,
+                    "ask_price": 18.50,
+                    "oi": 1000.0,
+                    "volume": 100.0,
+                },
+                "option_greeks": {
+                    "delta": 0.38,
+                    "gamma": 0.0001,
+                    "theta": -1.0,
+                    "vega": 2.0,
+                    "iv": 12.0,
+                },
+            },
+        }
+    ]
+    mock_broker.get_option_chain = AsyncMock(return_value=raw_chain)
 
     args = MagicMock()
     args.date = date(2026, 6, 7)
@@ -162,10 +165,6 @@ async def test_run_script_flow_trigger_profit_target_dry_run() -> None:
         patch(
             "scripts.strategies.cc_calibration.paper_cc_roll.create_client",
             return_value=mock_broker,
-        ),
-        patch(
-            "scripts.strategies.cc_calibration.paper_cc_roll.parse_upstox_option_chain",
-            return_value=chain,
         ),
     ):
         with patch("builtins.print") as mock_print:
