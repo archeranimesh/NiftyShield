@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 from datetime import date, timedelta
 from decimal import Decimal
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -201,6 +202,126 @@ def test_apply_action_invalid_raises() -> None:
     )
     with pytest.raises(ValueError, match="CLOSE_CC"):
         _run(strategy.apply_action([pos], action))
+
+
+def test_check_signals_payload_auto_execute() -> None:
+    strategy = CCOverlayV1()
+
+    # PROFIT_TARGET fires
+    chain = _make_chain(ltp="24.0", delta="0.20")
+    pos = _make_position(avg_sell_price="80")
+    events = _run(strategy.check_signals(chain, [pos]))
+    profit_target_event = next(e for e in events if e.event_type == "PROFIT_TARGET")
+    assert profit_target_event.payload.get("auto_execute") is True
+    assert profit_target_event.payload.get("auto_action") == "CLOSE_CC"
+    assert profit_target_event.payload.get("triggering_signal") == "PROFIT_TARGET"
+
+    # TIME_STOP fires
+    entry_date = date.today() - timedelta(days=21)
+    pos_time = _make_position(avg_sell_price="80", entry_date=entry_date)
+    chain_time = _make_chain(ltp="80", delta="0.20")
+    events_time = _run(strategy.check_signals(chain_time, [pos_time]))
+    time_stop_event = next(e for e in events_time if e.event_type == "TIME_STOP")
+    assert time_stop_event.payload.get("auto_execute") is True
+    assert time_stop_event.payload.get("auto_action") == "CLOSE_CC"
+    assert time_stop_event.payload.get("triggering_signal") == "TIME_STOP"
+
+    # DELTA_WARN fires (no auto_execute)
+    chain_warn = _make_chain(ltp="80", delta="0.46")
+    pos_warn = _make_position(avg_sell_price="80")
+    events_warn = _run(strategy.check_signals(chain_warn, [pos_warn]))
+    delta_warn_event = next(e for e in events_warn if e.event_type == "DELTA_WARN")
+    assert "auto_execute" not in delta_warn_event.payload
+
+
+def test_apply_action_triggering_signals() -> None:
+    # Set up mock notifier and store
+    mock_notifier = AsyncMock()
+    mock_store = MagicMock()
+
+    strategy = CCOverlayV1(store=mock_store, notifier=mock_notifier)
+    pos = _make_position(avg_sell_price="80", leg_role="short_call")
+
+    # Check that check_reentry is mockable on strategy
+    strategy._check_reentry = AsyncMock()
+
+    # 1. PROFIT_TARGET trigger -> check_reentry called
+    action_pt = ApprovedAction(
+        action_type="CLOSE_CC",
+        legs_to_close=["short_call"],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+        metadata={"triggering_signal": "PROFIT_TARGET", "mark": "24.0", "delta": "0.20"},
+    )
+    _run(strategy.apply_action([pos], action_pt))
+    strategy._check_reentry.assert_called_once()
+    mock_notifier.send_notification.assert_called_once()
+
+    strategy._check_reentry.reset_mock()
+    mock_notifier.send_notification.reset_mock()
+
+    # 2. TIME_STOP trigger -> check_reentry called
+    action_ts = ApprovedAction(
+        action_type="CLOSE_CC",
+        legs_to_close=["short_call"],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+        metadata={"triggering_signal": "TIME_STOP", "mark": "80", "delta": "0.20"},
+    )
+    _run(strategy.apply_action([pos], action_ts))
+    strategy._check_reentry.assert_called_once()
+    mock_notifier.send_notification.assert_called_once()
+
+    strategy._check_reentry.reset_mock()
+    mock_notifier.send_notification.reset_mock()
+
+    # 3. LOSS_STOP trigger -> check_reentry NOT called
+    action_ls = ApprovedAction(
+        action_type="CLOSE_CC",
+        legs_to_close=["short_call"],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+        metadata={"triggering_signal": "LOSS_STOP", "mark": "201", "delta": "0.30"},
+    )
+    _run(strategy.apply_action([pos], action_ls))
+    strategy._check_reentry.assert_not_called()
+    mock_notifier.send_notification.assert_called_once()
+
+    strategy._check_reentry.reset_mock()
+    mock_notifier.send_notification.reset_mock()
+
+    # 4. DELTA_STOP trigger -> check_reentry NOT called
+    action_ds = ApprovedAction(
+        action_type="CLOSE_CC",
+        legs_to_close=["short_call"],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+        metadata={"triggering_signal": "DELTA_STOP", "mark": "80", "delta": "0.56"},
+    )
+    _run(strategy.apply_action([pos], action_ds))
+    strategy._check_reentry.assert_not_called()
+    mock_notifier.send_notification.assert_called_once()
+
+
+def test_apply_action_null_dependencies() -> None:
+    # notifier = None, store = None -> execute without crash
+    strategy = CCOverlayV1(store=None, notifier=None)
+    pos = _make_position()
+    action = ApprovedAction(
+        action_type="CLOSE_CC",
+        legs_to_close=["short_call"],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+        metadata={"triggering_signal": "PROFIT_TARGET"},
+    )
+    # This should run without raising any exceptions
+    result = _run(strategy.apply_action([pos], action))
+    assert len(result) == 0
 
 
 def test_describe_context() -> None:

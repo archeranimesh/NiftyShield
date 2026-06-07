@@ -321,7 +321,7 @@ def test_apply_action_adjust_raises_value_error() -> None:
         rationale="test",
         council_rank=1,
     )
-    with pytest.raises(ValueError, match="CLOSE_FULL or PROFIT_TARGET"):
+    with pytest.raises(ValueError, match="CLOSE_FULL, PROFIT_TARGET, or TIME_STOP"):
         _run(strategy.apply_action([pos], action))
 
 

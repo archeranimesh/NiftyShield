@@ -127,15 +127,11 @@ class TelegramGateway:
         }
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{self._base_url}/sendMessage", json=payload
-                ) as resp:
+                async with session.post(f"{self._base_url}/sendMessage", json=payload) as resp:
                     resp.raise_for_status()
                     data = await resp.json()
                     if not data.get("ok"):
-                        logger.warning(
-                            "send_approval_request failed: %s", data.get("description")
-                        )
+                        logger.warning("send_approval_request failed: %s", data.get("description"))
                         return None
                     return int(data["result"]["message_id"])
         except Exception as exc:  # Intentional: isolate all API failures
@@ -205,6 +201,24 @@ class TelegramGateway:
         except Exception as exc:  # Intentional: non-fatal; table may not exist yet (PB1.6)
             logger.warning("Timeout scanner error: %s", exc)
 
+    async def send_notification(self, message: str) -> None:
+        """Send plain HTML informational message; no keyboard. Non-fatal.
+
+        Args:
+            message: HTML formatted message.
+        """
+        payload = {
+            "chat_id": self._chat_id,
+            "text": message,
+            "parse_mode": "HTML",
+        }
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(f"{self._base_url}/sendMessage", json=payload) as resp:
+                    resp.raise_for_status()
+        except Exception as exc:
+            logger.warning("send_notification error: %s", exc)
+
     # ── Private helpers ──────────────────────────────────────────────
 
     async def _get_updates(self, offset: int) -> list[dict]:
@@ -223,9 +237,7 @@ class TelegramGateway:
         }
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    f"{self._base_url}/getUpdates", params=params
-                ) as resp:
+                async with session.get(f"{self._base_url}/getUpdates", params=params) as resp:
                     resp.raise_for_status()
                     data = await resp.json()
                     if not data.get("ok"):
@@ -234,7 +246,9 @@ class TelegramGateway:
                     return list(data.get("result", []))
         except asyncio.CancelledError:
             raise
-        except Exception as exc:  # Intentional: isolate transient network failures; retry after delay
+        except (
+            Exception
+        ) as exc:  # Intentional: isolate transient network failures; retry after delay
             logger.warning("getUpdates failed: %s", exc)
             await asyncio.sleep(5)
             return []
@@ -256,9 +270,7 @@ class TelegramGateway:
             on_rejected: Callback for reject button presses.
         """
         sender_id = str(cq.get("from", {}).get("id", ""))
-        chat_id_from_msg = str(
-            cq.get("message", {}).get("chat", {}).get("id", "")
-        )
+        chat_id_from_msg = str(cq.get("message", {}).get("chat", {}).get("id", ""))
         if sender_id != self._chat_id and chat_id_from_msg != self._chat_id:
             logger.warning(
                 "Auth guard: dropping callback from sender=%s chat=%s",

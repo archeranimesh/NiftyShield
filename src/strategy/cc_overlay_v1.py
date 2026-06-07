@@ -10,6 +10,8 @@ from __future__ import annotations
 import re
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
+from pathlib import Path
+from typing import Any
 
 import structlog
 
@@ -18,6 +20,7 @@ from src.paper.constants import STRATEGY_CC_OVERLAY
 from src.paper.models import PaperPosition
 from src.strategy.exit_signals import ExitSignalEngine
 from src.strategy.protocol import ApprovedAction, SignalEvent
+from src.strategy.reentry_mixin import ReEntryMixin
 
 log = structlog.get_logger(__name__)
 
@@ -33,10 +36,28 @@ _STRIKE_RE = re.compile(r"NIFTY(\d+)(PE|CE)", re.IGNORECASE)
 SHORT_CALL_ROLES = {"short_call", "cc_short_call"}
 
 
-class CCOverlayV1:
+class CCOverlayV1(ReEntryMixin):
     """Covered Call overlay strategy implementation."""
 
     strategy_name: str = STRATEGY_CC_OVERLAY
+    auto_execute: bool = True
+    reentry_leg_role: str = "overlay_cc"
+    reentry_script_hint: str = "run find_overlay_strikes.py --overlay-type cc"
+
+    def __init__(
+        self,
+        store: Any = None,
+        notifier: Any = None,
+        vix_data_dir: Path | str | None = None,
+    ) -> None:
+        """Initialise CCOverlayV1."""
+        self._store = store
+        self._notifier = notifier
+        from src.config import settings
+
+        self._vix_data_dir = (
+            Path(vix_data_dir) if vix_data_dir is not None else Path(settings.vix_data_dir)
+        )
 
     async def check_signals(
         self,
@@ -97,6 +118,11 @@ class CCOverlayV1:
                     payload["actual_rule_used"] = result.actual_rule_used
                 payload["dte"] = dte
                 payload["valid_actions"] = ["CLOSE_CC"]
+
+                if result.severity == "ACTION":
+                    payload["auto_execute"] = True
+                    payload["auto_action"] = "CLOSE_CC"
+                    payload["triggering_signal"] = result.exit_signal
 
                 events.append(
                     SignalEvent(
@@ -177,7 +203,72 @@ class CCOverlayV1:
             action_type=action.action_type,
             legs_to_close=list(closed),
         )
-        return [p for p in positions if p.leg_role not in closed]
+
+        closed_pos = next(
+            (p for p in positions if p.leg_role in closed and p.net_qty < 0),
+            None,
+        )
+        updated = [p for p in positions if p.leg_role not in closed]
+
+        triggering_signal = (
+            action.metadata.get("triggering_signal")
+            if (hasattr(action, "metadata") and action.metadata)
+            else None
+        )
+
+        if triggering_signal in ("PROFIT_TARGET", "TIME_STOP") and closed_pos is not None:
+            expiry = self._parse_expiry(closed_pos.instrument_key)
+            await self._check_reentry(
+                expiry=expiry,
+                today=date.today(),
+                instrument_key=closed_pos.instrument_key,
+                trade_id=0,
+            )
+
+        await self._send_close_notification(closed_pos, triggering_signal, action)
+        return updated
+
+    async def _send_close_notification(
+        self,
+        pos: PaperPosition | None,
+        signal: str | None,
+        action: ApprovedAction,
+    ) -> None:
+        """Send HTML notification for closed CC leg. Non-fatal."""
+        if pos is None or self._notifier is None:
+            return
+
+        try:
+            metadata = action.metadata if (hasattr(action, "metadata") and action.metadata) else {}
+            exit_price = (
+                Decimal(str(metadata.get("mark")))
+                if metadata.get("mark") is not None
+                else pos.avg_sell_price
+            )
+            delta = float(metadata.get("delta")) if metadata.get("delta") is not None else 0.0
+
+            expiry = self._parse_expiry(pos.instrument_key)
+            dte = (expiry - date.today()).days if expiry is not None else 0
+            if metadata.get("dte") is not None:
+                try:
+                    dte = int(metadata.get("dte"))
+                except (ValueError, TypeError):
+                    pass
+
+            entry_credit = pos.avg_sell_price
+            signal_name = signal or "UNKNOWN"
+
+            msg = (
+                f"✅ <b>CC: CLOSE ({signal_name})</b>\n"
+                f"📤 Closed: {pos.instrument_key} @ ₹{exit_price:.2f}\n"
+                f"   Entry ₹{entry_credit:.2f} · Delta {delta:.3f} · DTE {dte}"
+            )
+            await self._notifier.send_notification(msg)
+        except Exception as exc:
+            log.error(
+                "cc_overlay_v1.send_close_notification_failed",
+                error=str(exc),
+            )
 
     def _find_call_leg(self, market: OptionChain, instrument_key: str) -> OptionLeg | None:
         """Locate the CE leg in the chain for the position."""

@@ -39,6 +39,7 @@ class ApprovedAction:
     legs_to_open: list[LegSpec]
     rationale: str
     council_rank: int  # 1 = top pick (Note: rank could be decoupled from action if multi-action objects are supported)
+    metadata: dict[str, Any] | None = None
 
 
 @runtime_checkable
