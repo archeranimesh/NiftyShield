@@ -65,7 +65,15 @@ class CCOverlayV1:
             delta = float(call_leg.delta) if call_leg is not None else None
             entry_price = float(pos.avg_sell_price)
             current_mark = float(call_leg.ltp) if call_leg is not None else entry_price
-            days_held = (today - pos.entry_date).days if pos.entry_date is not None else 0
+            if pos.entry_date is not None:
+                days_held = (today - pos.entry_date).days
+            else:
+                log.warning(
+                    "check_signals: entry_date is None for position leg_role=%s instrument_key=%s — TIME_STOP will not fire",
+                    pos.leg_role,
+                    pos.instrument_key,
+                )
+                days_held = 0
 
             results = ExitSignalEngine.evaluate_cc(
                 entry_price=entry_price,

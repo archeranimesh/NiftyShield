@@ -364,6 +364,9 @@ options are traded in the future.
 | 2026-06-02 | Shared roll utility: `src/strategy/roll_utils.py` — `find_strike_by_delta(chain, option_type, delta_range, target_delta)` used by all strategy `_select_*_roll_target()` helpers. No duplication across strategy files. | `docs/council/2026-06-02_strategy-monitor-watchlist-design.md` — Implementation Guidance |
 | 2026-06-02 | Multi-expiry fetching for overlay rolls: NiftyTrackComparisonV1 targets next expiry for overlay rolls. Strategy fetches next-expiry chain immediately during ACTION construction inside `check_signals`. Not a watchlist architecture — targeted second chain fetch only when a roll-qualifying signal fires. | `docs/council/2026-06-02_strategy-monitor-watchlist-design.md` — Architectural Note |
 | 2026-06-02 | Phase 1 protocol upgrade path: when watchlist optimisation is introduced, use mandatory `PaperStrategyV2` protocol with `market_requirements() -> MarketDataRequest` — not backward-compatible optional `watchlist()`. Avoids conditional fetch logic in monitor. | `docs/council/2026-06-02_strategy-monitor-watchlist-design.md` — Chairman Synthesis |
+| 2026-06-07 | Covered Call profit target aligned to 30% retention (70% captured) instead of 50% capture, to match CSP symmetrical exit engine architecture. | council-refactor |
+| 2026-06-07 | DTE_FORCED ACTION exit removed and replaced with a flat DTE_REVIEW WARN at DTE ≤ 5, letting human/automated roll workflows handle the expiry instead of auto-closing. | council-refactor |
+| 2026-06-07 | entry_date is None fallback to days_held = 0 with a warning log to prevent silent gaps. | council-refactor |
 
 ### Dissenting Notes (council 2026-06-02)
 

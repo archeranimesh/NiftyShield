@@ -234,7 +234,15 @@ def _dispatch_evaluate(
 
     if role == "overlay_cc" and pos.net_qty < 0:
         leg = _find_chain_leg(chain, pos.instrument_key, "CE")
-        days_held = (today - pos.entry_date).days if pos.entry_date else 0
+        if pos.entry_date:
+            days_held = (today - pos.entry_date).days
+        else:
+            logger.warning(
+                "dispatch_evaluate: entry_date is None for CC position leg_role=%s instrument_key=%s — TIME_STOP will not fire",
+                pos.leg_role,
+                pos.instrument_key,
+            )
+            days_held = 0
         return ExitSignalEngine.evaluate_cc(
             entry_price=float(pos.avg_sell_price),
             current_mark=float(leg.ltp) if leg is not None else 0.0,
