@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import re
 import sys
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -20,6 +21,7 @@ import structlog
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from src.client.factory import create_client
+from src.client.upstox_market import parse_upstox_option_chain
 from src.config import settings
 from src.instruments.lookup import InstrumentLookup
 from src.paper.constants import (
@@ -60,6 +62,11 @@ def delta_stop_hit(current_delta: float, threshold: float = 0.55) -> bool:
     return current_delta >= threshold
 
 
+def _get_close_price(current_ltp: Decimal) -> Decimal:
+    """Return a valid positive close price (> 0) even if current LTP is 0."""
+    return max(current_ltp, Decimal("0.01"))
+
+
 def loss_stop_hit(entry_credit: Decimal, current_ltp: Decimal, multiplier: float = 2.5) -> bool:
     """Return True if current mark has exceeded multiplier × entry credit (loss stop)."""
     return current_ltp >= entry_credit * Decimal(str(multiplier))
@@ -68,25 +75,23 @@ def loss_stop_hit(entry_credit: Decimal, current_ltp: Decimal, multiplier: float
 async def _run(args: argparse.Namespace) -> None:
     today: date = args.date or date.today()
     store = PaperStore(args.db_path)
-    lookup = InstrumentLookup(args.bod_path)
 
-    # 1. Load open CC trades
-    all_trades = store.get_trades(STRATEGY_CC_OVERLAY, "covered_call")
-    # Filter for active open trades: net_qty < 0 (short call) and no closing trade recorded
-    # Let's aggregate trades to see if position is open
-    net_qty = 0
-    open_trade: PaperTrade | None = None
-    for t in all_trades:
-        if t.action.value == "BUY":
-            net_qty += t.quantity
-        else:
-            net_qty -= t.quantity
-            open_trade = t
+    # 1. Load open CC trade using authoritative store helper
+    pos = store.get_position(STRATEGY_CC_OVERLAY, "covered_call")
+    if pos.net_qty >= 0:
+        # Load the last trade for notes fallback or check history
+        all_trades = store.get_trades(STRATEGY_CC_OVERLAY, "covered_call")
+        open_trade = all_trades[-1] if all_trades else None
+    else:
+        # Find the open trade (last SELL trade)
+        all_trades = store.get_trades(STRATEGY_CC_OVERLAY, "covered_call")
+        open_trade = next((t for t in reversed(all_trades) if t.action.value == "SELL"), None)
 
-    if (net_qty >= 0 or open_trade is None) and not args.force:
+    if (pos.net_qty >= 0 or open_trade is None) and not args.force:
         print("No open covered_call leg for paper_covered_call_v1.")
         return
 
+    # In case --force is passed and there's no open position, fallback to last trade in history
     if open_trade is None:
         print("ERROR: --force specified but no history of covered_call trade exists to override.")
         sys.exit(1)
@@ -103,22 +108,27 @@ async def _run(args: argparse.Namespace) -> None:
 
     broker = create_client(env, token=token)
 
-    # Fetch live option chain to retrieve LTP and delta for the call leg.
-    # Note: we need to parse strike and expiry from instrument_key.
-    # We can fetch via broker.get_option_chain or get_ltp. Let's fetch get_ltp first,
-    # but evaluate_cc needs delta. We can fetch the option chain for the given expiry.
-    # Expiry parsing:
-    import re
-
-    # Key format: e.g. NSE_FO|NIFTY26JUN2026CE or numeric in mock tests
-    m = re.search(r"NIFTY(\d+)(CE|PE)", open_trade.instrument_key, re.IGNORECASE)
+    # Key format check: e.g. NSE_FO|NIFTY26JUN2026CE24500 or numeric key
+    m = re.search(
+        r"NIFTY\d{2}[A-Za-z]{3}\d{4}(?:CE|PE)(\d+)", open_trade.instrument_key, re.IGNORECASE
+    )
     if not m:
-        # Check if we can get it via lookup
-        resolved = lookup.get_contract_by_key(open_trade.instrument_key)
+        # Check if we can get it via lookup (Lazy initialize BOD lookup)
+        if not args.bod_path.exists():
+            print(f"ERROR: BOD lookup file required but not found at {args.bod_path}")
+            sys.exit(1)
+        lookup = InstrumentLookup.from_file(args.bod_path)
+        resolved = lookup.get_by_key(open_trade.instrument_key)
         if resolved:
             strike = Decimal(str(resolved.get("strike_price", 0)))
             expiry_str = resolved.get("expiry")
-            expiry = date.fromisoformat(expiry_str) if expiry_str else today
+            if expiry_str:
+                from src.instruments.lookup import parse_expiry
+
+                exp_date_str = parse_expiry(expiry_str)
+                expiry = date.fromisoformat(exp_date_str) if exp_date_str else today
+            else:
+                expiry = today
         else:
             print(f"ERROR: Could not parse instrument key {open_trade.instrument_key}")
             sys.exit(1)
@@ -129,8 +139,6 @@ async def _run(args: argparse.Namespace) -> None:
             r"NIFTY(\d{2}[A-Za-z]{3}\d{4})(CE|PE)", open_trade.instrument_key, re.IGNORECASE
         )
         if exp_m:
-            from datetime import datetime
-
             expiry = datetime.strptime(exp_m.group(1).upper(), "%d%b%Y").date()
         else:
             # Fallback
@@ -138,7 +146,8 @@ async def _run(args: argparse.Namespace) -> None:
 
     print(f"Fetching live market data for {open_trade.instrument_key} ...")
     try:
-        chain = await broker.get_option_chain("NSE_INDEX|Nifty 50", expiry.isoformat())
+        raw_chain = await broker.get_option_chain("NSE_INDEX|Nifty 50", expiry.isoformat())
+        chain = parse_upstox_option_chain(raw_chain)
     except Exception as exc:
         print(f"ERROR: failed to fetch option chain — {exc}", file=sys.stderr)
         sys.exit(1)
@@ -176,7 +185,9 @@ async def _run(args: argparse.Namespace) -> None:
     loss = loss_stop_hit(entry_credit, current_ltp_dec)
     delta_stop = delta_stop_hit(current_delta)
     profit = profit_target_hit(entry_credit, current_ltp_dec)
-    time_stop = time_stop_hit(open_trade.trade_date, today)
+    # Use real trade_date or fall back to pos.entry_date
+    entry_d = open_trade.trade_date if open_trade else (pos.entry_date or today)
+    time_stop = time_stop_hit(entry_d, today)
 
     # Print Report
     loss_status = "✅ HIT " if loss else "⬜ not hit"
@@ -194,7 +205,7 @@ async def _run(args: argparse.Namespace) -> None:
     print(
         f"Profit target:  {profit_status}  (LTP ₹{current_ltp_dec:.2f} ≤ 30% of entry ₹{entry_credit * Decimal('0.3'):.2f})"
     )
-    days_held = (today - open_trade.trade_date).days
+    days_held = (today - entry_d).days
     print(f"Time stop:      {time_status}  ({days_held} days held / 21 limit)")
 
     if current_delta >= 0.45:
@@ -215,6 +226,9 @@ async def _run(args: argparse.Namespace) -> None:
         print(f"\nTrigger: {trigger_name}")
         notes = f"exit: {trigger_name}; LTP={current_ltp_dec:.2f}; entry={entry_credit:.2f}; delta={current_delta:.2f}"
 
+        # Enforce positive price > 0 for PaperTrade validation
+        validated_close_price = _get_close_price(current_ltp_dec)
+
         # Build closing command representation
         close_cmd = (
             f"python -m scripts.record_paper_trade \\\n"
@@ -222,8 +236,8 @@ async def _run(args: argparse.Namespace) -> None:
             f"  --leg covered_call \\\n"
             f"  --action BUY \\\n"
             f"  --key {open_trade.instrument_key} \\\n"
-            f"  --qty {open_trade.quantity} \\\n"
-            f"  --price {current_ltp_dec:.2f} \\\n"
+            f"  --qty {-pos.net_qty if pos.net_qty < 0 else open_trade.quantity} \\\n"
+            f"  --price {validated_close_price:.2f} \\\n"
             f"  --no-dry-run \\\n"
             f"  --notes {notes!r}"
         )
@@ -251,8 +265,8 @@ async def _run(args: argparse.Namespace) -> None:
             instrument_key=open_trade.instrument_key,
             trade_date=today,
             action="BUY",
-            quantity=open_trade.quantity,
-            price=current_ltp_dec,
+            quantity=-pos.net_qty if pos.net_qty < 0 else open_trade.quantity,
+            price=validated_close_price,
             notes=notes,
         )
         if store.record_trade(close_trade):
