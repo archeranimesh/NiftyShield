@@ -27,6 +27,16 @@
 
 ---
 
+## Phase OPS — Operational Fixes (discovered during manual trading)
+
+- [ ] **OPS-1** `[Claude]` — `paper_3track_overlay_entry.py`: add insert/skip logging. `store.record_trade()` returns `bool` but the entry script silently ignores it. After each call, log `INSERTED` or `SKIPPED (conflict on strategy/leg/date/action)` at INFO level using structlog. Helps diagnose silent no-ops when same-day close + open hit the unique constraint. Tests: mock `record_trade` returning True/False and assert log output.
+
+- [ ] **OPS-2** `[Claude]` — Atomic collar open/close: collar entry and exit must be treated as a paired unit, never as independent legs. Two sub-tasks:
+  (a) **Close**: `paper_3track_overlay_entry.py` and `close_*` scripts must validate that closing `overlay_collar_call` also closes `overlay_collar_put` in the same transaction (and vice versa). Block partial-collar close at the script level — raise an error if only one leg is requested.
+  (b) **Open**: `paper_3track_overlay_entry.py` must use a single atomic DB transaction for all collar legs (put + call across all tracks). If any leg insert fails or conflicts, roll back all. Currently the put legs can succeed while call legs silently conflict, leaving a half-open collar in the DB. Use `store.record_trades()` (already exists — `records_trades` does atomic multi-insert) instead of calling `store.record_trade()` in a loop.
+
+---
+
 ## Phase BF — Bug Fixes
 
 - [x] **CR0** `[Claude]` — Fix `send_approval_request` signature mismatch; remove `CouncilOutput` requirement from daemon approval path | SHA: 4ce6d99

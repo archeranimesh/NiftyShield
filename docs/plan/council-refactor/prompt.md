@@ -188,6 +188,7 @@ The criterion for wiring council into any future story:
 | `paper-exit-signals` | Provides `ExitSignalEngine` — this story extends it with `evaluate_roll_csp` and `evaluate_roll_overlay` |
 | `signals` | Signal pipeline has its own purpose-built multi-model consensus — independent of `RapidCouncil`, unaffected by this story |
 | `broker-abstraction` | Phase 1 live trading — correct place to re-evaluate council wiring |
+| **OD-1→OD-4** (`stories_db_decouple.md`) | Overlay DB decoupling — removes per-track overlay replication; overlays stored once under `paper_overlays`, track association in code via `track_overlay_config.py`. **NT-2 must be updated after OD-2 ships**: replace hardcoded `_FUTURES_BLOCKED_ROLES` frozenset with `is_overlay_allowed(Track.FUTURES, role)` call. Sequence: OD-1 → OD-2 → OD-3 → OD-4 → NT-2 update. |
 
 ---
 
