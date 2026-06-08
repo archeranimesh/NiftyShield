@@ -10,6 +10,8 @@ from __future__ import annotations
 import re
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
+from pathlib import Path
+from typing import Any
 
 import structlog
 
@@ -18,6 +20,7 @@ from src.paper.constants import STRATEGY_PP_OVERLAY
 from src.paper.models import PaperPosition
 from src.strategy.exit_signals import ExitSignalEngine
 from src.strategy.protocol import ApprovedAction, SignalEvent
+from src.strategy.reentry_mixin import ReEntryMixin
 
 log = structlog.get_logger(__name__)
 
@@ -33,10 +36,38 @@ _STRIKE_RE = re.compile(r"NIFTY(\d+)(PE|CE)", re.IGNORECASE)
 LONG_PUT_ROLES = {"long_put", "pp_long_put", "protective_put"}
 
 
-class PPOverlayV1:
+class PPOverlayV1(ReEntryMixin):
     """Protective Put overlay strategy implementation."""
 
     strategy_name: str = STRATEGY_PP_OVERLAY
+    auto_execute: bool = True
+    reentry_leg_role: str = "protective_put"
+    reentry_script_hint: str = "run find_overlay_strikes.py --overlay-type pp"
+    reentry_ivr_threshold: float = 0.60
+
+    def __init__(
+        self,
+        store: Any = None,
+        notifier: Any = None,
+        vix_data_dir: Path | str | None = None,
+    ) -> None:
+        """Initialise PPOverlayV1."""
+        self._store = store
+        self._notifier = notifier
+        from src.config import settings
+
+        self._vix_data_dir = (
+            Path(vix_data_dir) if vix_data_dir is not None else Path(settings.vix_data_dir)
+        )
+
+    def _ivr_passes(self, ivr: float) -> tuple[bool, str]:
+        if ivr > self.reentry_ivr_threshold:
+            return False, f"IVR={ivr:.2f} > {self.reentry_ivr_threshold:.2f} — high vol, skip cycle"
+        return True, ""
+
+    def _reentry_position_active(self, p: PaperPosition) -> bool:
+        # Checks against the set LONG_PUT_ROLES to be robust to role variations
+        return p.leg_role in LONG_PUT_ROLES and p.net_qty > 0
 
     async def check_signals(
         self,
@@ -86,6 +117,13 @@ class PPOverlayV1:
                     payload["valid_actions"] = ["MONETIZE_PP"]
                 elif result.exit_signal == "ROLL_ELIGIBLE":
                     payload["valid_actions"] = ["ROLL_PP"]
+
+                if result.severity == "ACTION":
+                    payload["auto_execute"] = True
+                    payload["auto_action"] = (
+                        "MONETIZE_PP" if result.exit_signal == "CRASH_MONETIZE" else "ROLL_PP"
+                    )
+                    payload["triggering_signal"] = result.exit_signal
 
                 events.append(
                     SignalEvent(
@@ -166,7 +204,69 @@ class PPOverlayV1:
             action_type=action.action_type,
             legs_to_close=list(closed),
         )
-        return [p for p in positions if p.leg_role not in closed]
+
+        closed_pos = next(
+            (p for p in positions if p.leg_role in closed and p.net_qty > 0),
+            None,
+        )
+        updated = [p for p in positions if p.leg_role not in closed]
+
+        if action.action_type == "MONETIZE_PP" and closed_pos is not None:
+            expiry = self._parse_expiry(closed_pos.instrument_key)
+            await self._check_reentry(
+                expiry=expiry,
+                today=date.today(),
+                instrument_key=closed_pos.instrument_key,
+                trade_id=0,  # Design choice: overlay positions are aggregated and lack unique trade IDs
+            )
+
+        await self._send_close_notification(closed_pos, action)
+        return updated
+
+    async def _send_close_notification(
+        self,
+        pos: PaperPosition | None,
+        action: ApprovedAction,
+    ) -> None:
+        """Send HTML notification for closed PP leg. Non-fatal."""
+        if pos is None or self._notifier is None:
+            return
+
+        try:
+            metadata = action.metadata or {}
+            exit_price = (
+                Decimal(str(metadata.get("mark")))
+                if metadata.get("mark") is not None
+                else pos.avg_cost
+            )
+            delta = float(metadata.get("delta")) if metadata.get("delta") is not None else 0.0
+
+            expiry = self._parse_expiry(pos.instrument_key)
+            dte = (expiry - date.today()).days if expiry is not None else 0
+            if metadata.get("dte") is not None:
+                try:
+                    dte = int(metadata.get("dte"))
+                except (ValueError, TypeError):
+                    pass
+
+            entry_debit = pos.avg_cost
+            emoji = "🔄" if action.action_type == "ROLL_PP" else "💰"
+            action_name = action.action_type
+
+            msg = (
+                f"{emoji} <b>PP: {action_name}</b>\n"
+                f"📤 Closed: {pos.instrument_key} @ ₹{exit_price:.2f}\n"
+                f"   Entry ₹{entry_debit:.2f} · Delta {delta:.3f} · DTE {dte}"
+            )
+            if hasattr(self._notifier, "send_notification"):
+                await self._notifier.send_notification(msg)
+            else:
+                await self._notifier.send_plain_message(msg)
+        except Exception as exc:
+            log.error(
+                "pp_overlay_v1.send_close_notification_failed",
+                error=str(exc),
+            )
 
     def _find_put_leg(self, market: OptionChain, instrument_key: str) -> OptionLeg | None:
         """Locate the PE leg in the chain for the position."""

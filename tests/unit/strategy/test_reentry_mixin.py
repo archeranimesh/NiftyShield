@@ -186,3 +186,94 @@ def test_reentry_event_written_even_when_notifier_raises(tmp_path: Path):
 
     events = store.get_open_exit_events(strategy_name="paper_dummy_strategy")
     assert any(e["exit_signal"] in ("R5_REENTRY_ELIGIBLE", "R5_REENTRY_BLOCKED") for e in events)
+
+
+class CustomPPStrategy(ReEntryMixin):
+    strategy_name = "paper_custom_pp"
+    reentry_leg_role = "protective_put"
+    reentry_script_hint = "hint.py"
+    reentry_ivr_threshold = 0.60
+
+    def __init__(self, store, vix_data_dir):
+        self._store = store
+        self._vix_data_dir = vix_data_dir
+        self._notifier = None
+
+    def _ivr_passes(self, ivr: float) -> tuple[bool, str]:
+        if ivr > self.reentry_ivr_threshold:
+            return False, f"IVR={ivr:.2f} > {self.reentry_ivr_threshold:.2f} — high vol"
+        return True, ""
+
+    def _reentry_position_active(self, p):
+        return p.leg_role == self.reentry_leg_role and p.net_qty > 0
+
+
+def test_custom_ivr_passes_override(tmp_path: Path):
+    store = PaperStore(str(tmp_path / "db.sqlite"))
+    strategy = CustomPPStrategy(store=store, vix_data_dir=tmp_path)
+
+    # IVR=0.70 should fail the check for CustomPPStrategy (which wants <= 0.60)
+    vix_series_high = _make_vix_series(ivr=0.70)
+    with patch("src.strategy.reentry_mixin.load_vix_series", return_value=vix_series_high):
+        _run(
+            strategy._check_reentry(
+                expiry=date.today() + timedelta(days=20),
+                today=date.today(),
+                instrument_key="TEST",
+                trade_id=123,
+            )
+        )
+
+    events = store.get_open_exit_events(strategy_name="paper_custom_pp")
+    assert events[0]["exit_signal"] == "R5_REENTRY_BLOCKED"
+    assert "IVR" in events[0]["notes"]
+
+    # IVR=0.50 should pass the check
+    store.acknowledge_exit_event(events[0]["id"])  # clean up or just fetch latest
+    vix_series_low = _make_vix_series(ivr=0.50)
+    with patch("src.strategy.reentry_mixin.load_vix_series", return_value=vix_series_low):
+        _run(
+            strategy._check_reentry(
+                expiry=date.today() + timedelta(days=20),
+                today=date.today(),
+                instrument_key="TEST",
+                trade_id=124,
+            )
+        )
+
+    events2 = store.get_open_exit_events(strategy_name="paper_custom_pp")
+    assert any(e["exit_signal"] == "R5_REENTRY_ELIGIBLE" for e in events2)
+
+
+def test_custom_reentry_position_active_long_position_match(tmp_path: Path):
+    store = PaperStore(str(tmp_path / "db.sqlite"))
+    strategy = CustomPPStrategy(store=store, vix_data_dir=tmp_path)
+
+    # Store a long put position (net_qty > 0)
+    store.record_trade(
+        PaperTrade(
+            strategy_name="paper_custom_pp",
+            leg_role="protective_put",
+            action=TradeAction.BUY,
+            quantity=65,
+            price="100",
+            instrument_key="NSE_FO|NIFTY23000PE",
+            trade_date=date.today(),
+        )
+    )
+
+    vix_series = _make_vix_series(ivr=0.50)
+    with patch("src.strategy.reentry_mixin.load_vix_series", return_value=vix_series):
+        _run(
+            strategy._check_reentry(
+                expiry=date.today() + timedelta(days=20),
+                today=date.today(),
+                instrument_key="TEST",
+                trade_id=125,
+            )
+        )
+
+    events = store.get_open_exit_events(strategy_name="paper_custom_pp")
+    blocked = [e for e in events if e["exit_signal"] == "R5_REENTRY_BLOCKED"]
+    assert blocked
+    assert "open position" in blocked[0]["notes"]

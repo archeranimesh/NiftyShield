@@ -7,7 +7,7 @@ import structlog
 
 from src.backtest.ivr import compute_ivr
 from src.backtest.vix_ingest import load_vix_series
-from src.paper.models import ExitSignal
+from src.paper.models import ExitSignal, PaperPosition
 from src.paper.store import PaperStore
 
 log = structlog.get_logger(__name__)
@@ -29,10 +29,27 @@ class ReEntryMixin:
     strategy_name: str
     reentry_leg_role: str
     reentry_script_hint: str
+    reentry_ivr_threshold: float = 0.25
 
     _store: PaperStore | None
     _notifier: Any | None
     _vix_data_dir: Path
+
+    def _ivr_passes(self, ivr: float) -> tuple[bool, str]:
+        """Verify if the IVR passes the strategy criteria.
+
+        Subclasses can override this method to change comparison logic.
+        """
+        if ivr < self.reentry_ivr_threshold:
+            return False, f"IVR={ivr:.2f} < {self.reentry_ivr_threshold:.2f} — low vol, skip cycle"
+        return True, ""
+
+    def _reentry_position_active(self, p: PaperPosition) -> bool:
+        """Determine if a position leg is active for the strategy.
+
+        Subclasses can override this method to customize leg role/direction matching.
+        """
+        return p.leg_role == self.reentry_leg_role and p.net_qty < 0
 
     async def _check_reentry(
         self,
@@ -66,7 +83,7 @@ class ReEntryMixin:
         if expiry is None or dte < 14:
             blocked_reason = f"DTE={dte} < 14 — too close to expiry for re-entry"
 
-        # ── Gate 2: IVR ≥ 0.25 ───────────────────────────────────────────────
+        # ── Gate 2: IVR passes ───────────────────────────────────────────────
         if blocked_reason is None:
             try:
                 vix_series: pd.Series = load_vix_series(self._vix_data_dir)
@@ -77,8 +94,10 @@ class ReEntryMixin:
                     ivr = compute_ivr(vix_today, vix_series)
                     if ivr is None:
                         blocked_reason = "IVR history insufficient — cannot verify R3"
-                    elif ivr < 0.25:
-                        blocked_reason = f"IVR={ivr:.2f} < 0.25 — low vol, skip cycle"
+                    else:
+                        passed, reason = self._ivr_passes(ivr)
+                        if not passed:
+                            blocked_reason = reason
             except Exception as exc:
                 log.warning(
                     f"{self.strategy_name}.reentry_ivr_load_failed",
@@ -86,12 +105,11 @@ class ReEntryMixin:
                 )
                 blocked_reason = "IVR history insufficient — cannot verify R3"
 
-        # ── Gate 3: No open position with leg_role == self.reentry_leg_role ──
+        # ── Gate 3: No open active position ──────────────────────────────────
         if blocked_reason is None:
             try:
                 existing = self._store.get_positions(self.strategy_name)
-                # Note: net_qty < 0 restricts check to open short premium positions.
-                if any(p.leg_role == self.reentry_leg_role and p.net_qty < 0 for p in existing):
+                if any(self._reentry_position_active(p) for p in existing):
                     blocked_reason = (
                         f"open position: {self.reentry_leg_role} already active "
                         f"for {self.strategy_name}"

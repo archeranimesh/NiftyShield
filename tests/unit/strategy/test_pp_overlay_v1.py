@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 from datetime import date, timedelta
 from decimal import Decimal
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -131,6 +132,8 @@ def test_crash_monetize_fires_delta() -> None:
     assert events[0].event_type == "CRASH_MONETIZE"
     assert events[0].severity == "ACTION"
     assert events[0].payload["valid_actions"] == ["MONETIZE_PP"]
+    assert events[0].payload["auto_execute"] is True
+    assert events[0].payload["auto_action"] == "MONETIZE_PP"
 
 
 def test_crash_monetize_fires_value() -> None:
@@ -153,11 +156,19 @@ def test_roll_eligible_fires_at_dte_4() -> None:
     assert events[0].event_type == "ROLL_ELIGIBLE"
     assert events[0].severity == "ACTION"
     assert events[0].payload["valid_actions"] == ["ROLL_PP"]
+    assert events[0].payload["auto_execute"] is True
+    assert events[0].payload["auto_action"] == "ROLL_PP"
 
 
 def test_apply_action_monetize_pp() -> None:
-    strategy = PPOverlayV1()
-    pos = _make_position()
+    mock_store = MagicMock()
+    mock_notifier = AsyncMock()
+    strategy = PPOverlayV1(store=mock_store, notifier=mock_notifier)
+    strategy._check_reentry = AsyncMock()
+
+    # Using DTE=15
+    key = _expiry_key(dte=15)
+    pos = _make_position(instrument_key=key)
     action = ApprovedAction(
         action_type="MONETIZE_PP",
         legs_to_close=["protective_put"],
@@ -167,10 +178,17 @@ def test_apply_action_monetize_pp() -> None:
     )
     result = _run(strategy.apply_action([pos], action))
     assert len(result) == 0
+    strategy._check_reentry.assert_awaited_once()
+    mock_notifier.send_notification.assert_called_once()
+    assert "💰 <b>PP: MONETIZE_PP</b>" in mock_notifier.send_notification.call_args[0][0]
 
 
 def test_apply_action_roll_pp() -> None:
-    strategy = PPOverlayV1()
+    mock_store = MagicMock()
+    mock_notifier = AsyncMock()
+    strategy = PPOverlayV1(store=mock_store, notifier=mock_notifier)
+    strategy._check_reentry = AsyncMock()
+
     pos = _make_position()
     action = ApprovedAction(
         action_type="ROLL_PP",
@@ -181,6 +199,10 @@ def test_apply_action_roll_pp() -> None:
     )
     result = _run(strategy.apply_action([pos], action))
     assert len(result) == 0
+    # Rolling shouldn't trigger check_reentry
+    strategy._check_reentry.assert_not_called()
+    mock_notifier.send_notification.assert_called_once()
+    assert "🔄 <b>PP: ROLL_PP</b>" in mock_notifier.send_notification.call_args[0][0]
 
 
 def test_apply_action_invalid_raises() -> None:
