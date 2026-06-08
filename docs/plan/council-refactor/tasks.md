@@ -15,6 +15,7 @@
 > | COLLAR-1 | `stories_collar.md` |
 | CR2, CR3, NT-1, NT-2 | `stories_overlay.md` |
 > | CR4 | `stories_close.md` |
+| AUTO-1 | `stories_auto.md` |
 >
 > Also load `README.md` for shared context (signal tables, state machine, dependency order).
 > Do NOT load `stories.md` — it is a historical archive.
@@ -26,9 +27,14 @@
 
 ---
 
-## Phase CR0 — Bug Fix: Approval Flow Signature
+## Phase BF — Bug Fixes
 
 - [x] **CR0** `[Claude]` — Fix `send_approval_request` signature mismatch; remove `CouncilOutput` requirement from daemon approval path | SHA: 4ce6d99
+- [x] **BF-1** `[Claude]` — Fix `_find_chain_leg` fallback in `paper_3track_snapshot.py`: numeric BOD keys (`NSE_FO|71474`) could not be parsed by `_parse_strike_from_key`, causing fallback to scan all chain strikes and return the first non-zero LTP leg — always the deepest ITM contract (ltp≈8690, delta≈1.0). Fix: resolve strike via `InstrumentLookup.get_by_key()` when parse fails; remove the scan fallback entirely. Thread `lookup: InstrumentLookup | None` through `_dispatch_evaluate` and `compute_and_record_exit_signals`; `_run` already owns `lookup` and now passes it through. Affected: CC, PP, Collar overlay exit signals and CSP when using numeric BOD keys. | SHA: pending
+
+## Phase AUTO — EOD Snapshot Auto-Execution
+
+- [ ] **AUTO-1** `[Antigravity]` — EOD snapshot auto-close path: after `compute_and_record_exit_signals` writes an ACTION event for a leg whose strategy has `auto_execute=True`, call `OverlayCloser` (for CC single-leg, PP single-leg) or `PaperFillSimulator` directly to paper-execute the close in the same script run. Mark the event status `ACTED` instead of leaving it `OPEN`. Send a Telegram close-confirmation notification (not an approval request). Requires: injecting strategy registry or `auto_execute` flag lookup into the snapshot context; `OverlayCloser` already handles CC/PP single-leg and Collar. See `stories_auto.md` for full spec.
 
 ## Phase CR1 — CSP Roll: Extract + Signal + Executor + Automation
 
@@ -95,7 +101,8 @@
 | P8 | CR3 | Claude | Wire overlay roll — needs CR2 |
 | P8 | NT-1 | Antigravity | Proxy delta signals + breach counter — needs CR3; parallel with NT-2 |
 | P8 | NT-2 | Claude | Futures+CC block guard — needs CR3; parallel with NT-1 |
-| P9 | CR4 + PP-3 | Claude | Always last — docs close for all automation stories |
+| P9 | AUTO-1 | Antigravity | EOD snapshot auto-close — needs CC-4 + PP-2 done; run after COLLAR-1 |
+| P10 | CR4 + PP-3 | Claude | Always last — docs close for all automation stories |
 
 ---
 

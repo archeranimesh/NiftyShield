@@ -165,32 +165,51 @@ def _find_chain_leg(
     chain: OptionChain,
     instrument_key: str,
     option_type: str,
+    lookup: InstrumentLookup | None = None,
 ) -> OptionLeg | None:
-    """Look up CE or PE leg from the chain by strike parsed from instrument_key.
+    """Look up CE or PE leg from the chain by strike.
 
-    Falls back to scanning all strikes for the first leg with non-zero LTP when
-    the key carries no parseable strike (e.g. numeric BOD IDs like 'NSE_FO|47196').
+    Resolution order:
+    1. Parse strike directly from a named key (e.g. 'NIFTY29MAY2026CE23000').
+    2. Resolve strike via BOD lookup when ``lookup`` is provided (handles numeric
+       keys like 'NSE_FO|71474').
+    3. Return None — the old fallback of scanning all strikes for the first
+       non-zero LTP leg is intentionally removed; it always returned the wrong
+       (deepest ITM) contract for numeric keys.
 
     Args:
         chain: Parsed Nifty option chain.
         instrument_key: Position's instrument key.
         option_type: 'CE' or 'PE'.
+        lookup: Optional BOD instrument lookup for resolving numeric keys.
 
     Returns:
         Matching OptionLeg or None when unavailable.
     """
     strike = _parse_strike_from_key(instrument_key)
+
+    # For numeric BOD keys, resolve strike via the instrument lookup.
+    if strike is None and lookup is not None:
+        inst = lookup.get_by_key(instrument_key)
+        if inst is not None:
+            raw_strike = inst.get("strike_price")
+            if raw_strike is not None:
+                try:
+                    strike = Decimal(str(raw_strike))
+                except Exception:
+                    pass
+
     if strike is not None:
         strike_data = chain.strikes.get(strike)
         if strike_data is not None:
             return strike_data.ce if option_type == "CE" else strike_data.pe
 
-    # Fallback: scan all strikes for first leg with non-zero LTP
-    for strike_data in chain.strikes.values():
-        leg = strike_data.ce if option_type == "CE" else strike_data.pe
-        if leg is not None and leg.ltp > 0:
-            return leg
-
+    logger.warning(
+        "_find_chain_leg.strike_not_resolved",
+        instrument_key=instrument_key,
+        option_type=option_type,
+        has_lookup=lookup is not None,
+    )
     return None
 
 
@@ -199,6 +218,7 @@ def _dispatch_evaluate(
     chain: OptionChain,
     underlying_price: float,
     today: date,
+    lookup: InstrumentLookup | None = None,
 ) -> list:
     """Dispatch a position to the correct ExitSignalEngine.evaluate_* method.
 
@@ -210,6 +230,7 @@ def _dispatch_evaluate(
         chain: Current Nifty option chain.
         underlying_price: Nifty spot price as float.
         today: Evaluation date (for DTE and days_held calculations).
+        lookup: Optional BOD instrument lookup for resolving numeric keys.
 
     Returns:
         List of ExitSignalResult objects (may be empty).
@@ -219,7 +240,7 @@ def _dispatch_evaluate(
 
     if pos.strategy_name == _CSP_STRATEGY and pos.net_qty < 0:
         # Short put — CSP: five independent evaluators (CR1b)
-        leg = _find_chain_leg(chain, pos.instrument_key, "PE")
+        leg = _find_chain_leg(chain, pos.instrument_key, "PE", lookup)
         ltp = Decimal(str(leg.ltp)) if leg is not None else Decimal("0")
         delta = float(leg.delta) if leg is not None else 0.0
         entry_credit = Decimal(str(pos.avg_sell_price))
@@ -233,7 +254,7 @@ def _dispatch_evaluate(
         return ExitSignalEngine._sort_results(results)
 
     if role == "overlay_cc" and pos.net_qty < 0:
-        leg = _find_chain_leg(chain, pos.instrument_key, "CE")
+        leg = _find_chain_leg(chain, pos.instrument_key, "CE", lookup)
         if pos.entry_date:
             days_held = (today - pos.entry_date).days
         else:
@@ -252,7 +273,7 @@ def _dispatch_evaluate(
         )
 
     if role == "overlay_pp" and pos.net_qty > 0:
-        leg = _find_chain_leg(chain, pos.instrument_key, "PE")
+        leg = _find_chain_leg(chain, pos.instrument_key, "PE", lookup)
         return ExitSignalEngine.evaluate_pp(
             entry_price=float(pos.avg_cost),
             current_mark=float(leg.ltp) if leg is not None else 0.0,
@@ -261,8 +282,15 @@ def _dispatch_evaluate(
         )
 
     if role == "overlay_collar_call" and pos.net_qty < 0:
-        leg = _find_chain_leg(chain, pos.instrument_key, "CE")
+        leg = _find_chain_leg(chain, pos.instrument_key, "CE", lookup)
         strike = _parse_strike_from_key(pos.instrument_key)
+        if strike is None and lookup is not None:
+            inst = lookup.get_by_key(pos.instrument_key)
+            if inst is not None and inst.get("strike_price") is not None:
+                try:
+                    strike = Decimal(str(inst["strike_price"]))
+                except Exception:
+                    pass
         return ExitSignalEngine.evaluate_collar_call(
             entry_price=float(pos.avg_sell_price),
             current_mark=float(leg.ltp) if leg is not None else 0.0,
@@ -273,7 +301,7 @@ def _dispatch_evaluate(
         )
 
     if role == "overlay_collar_put" and pos.net_qty > 0:
-        leg = _find_chain_leg(chain, pos.instrument_key, "PE")
+        leg = _find_chain_leg(chain, pos.instrument_key, "PE", lookup)
         return ExitSignalEngine.evaluate_collar_put(
             entry_price=float(pos.avg_cost),
             current_mark=float(leg.ltp) if leg is not None else 0.0,
@@ -493,6 +521,7 @@ async def compute_and_record_exit_signals(
     notifier: TelegramNotifier | None = None,
     *,
     save: bool = True,
+    lookup: InstrumentLookup | None = None,
 ) -> None:
     """Evaluate exit signals for all open positions and persist ACTION/WARN events.
 
@@ -516,6 +545,7 @@ async def compute_and_record_exit_signals(
         today: Evaluation date.
         notifier: Optional TelegramNotifier; None suppresses Telegram alerts.
         save: When False (dry-run), skip DB writes and Telegram entirely.
+        lookup: BOD instrument lookup for resolving numeric keys to strikes.
     """
     if not save:
         return
@@ -538,7 +568,7 @@ async def compute_and_record_exit_signals(
         if pos.net_qty == 0:
             continue
 
-        results = _dispatch_evaluate(pos, chain, underlying_price, today)
+        results = _dispatch_evaluate(pos, chain, underlying_price, today, lookup)
 
         for result in results:
             if result.severity == "INFO":
@@ -557,7 +587,7 @@ async def compute_and_record_exit_signals(
             is_short = pos.net_qty < 0
             entry_price = pos.avg_sell_price if is_short else pos.avg_cost
             opt_type = _OVERLAY_OPTION_TYPE.get(pos.leg_role, "PE" if is_short else "CE")
-            opt_leg = _find_chain_leg(chain, pos.instrument_key, opt_type)
+            opt_leg = _find_chain_leg(chain, pos.instrument_key, opt_type, lookup)
 
             # ExitSignalResult uses "WARN"; create_exit_event expects "WARNING"
             severity_store = "WARNING" if result.severity == "WARN" else result.severity
@@ -1011,6 +1041,7 @@ async def _run(args: argparse.Namespace) -> None:
                 today=snap_date,
                 notifier=notifier,
                 save=save,
+                lookup=lookup,
             )
 
         # Check base position expiries (ES11)
