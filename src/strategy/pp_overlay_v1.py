@@ -61,6 +61,11 @@ class PPOverlayV1(ReEntryMixin):
         )
 
     def _ivr_passes(self, ivr: float) -> tuple[bool, str]:
+        """Verify if the IVR passes the strategy criteria.
+
+        Overridden for PP (long premium): blocks when IVR is too high (above threshold)
+        to avoid buying protection when volatility is already elevated.
+        """
         if ivr > self.reentry_ivr_threshold:
             return False, f"IVR={ivr:.2f} > {self.reentry_ivr_threshold:.2f} — high vol, skip cycle"
         return True, ""
@@ -245,7 +250,7 @@ class PPOverlayV1(ReEntryMixin):
             dte = (expiry - date.today()).days if expiry is not None else 0
             if metadata.get("dte") is not None:
                 try:
-                    dte = int(metadata.get("dte"))
+                    dte = int(float(metadata.get("dte")))
                 except (ValueError, TypeError):
                     pass
 
@@ -258,10 +263,16 @@ class PPOverlayV1(ReEntryMixin):
                 f"📤 Closed: {pos.instrument_key} @ ₹{exit_price:.2f}\n"
                 f"   Entry ₹{entry_debit:.2f} · Delta {delta:.3f} · DTE {dte}"
             )
-            if hasattr(self._notifier, "send_notification"):
-                await self._notifier.send_notification(msg)
-            else:
-                await self._notifier.send_plain_message(msg)
+            if self._notifier is not None:
+                if hasattr(self._notifier, "send_notification"):
+                    await self._notifier.send_notification(msg)
+                elif hasattr(self._notifier, "send_plain_message"):
+                    await self._notifier.send_plain_message(msg)
+                else:
+                    log.warning(
+                        "pp_overlay_v1.notifier_method_missing",
+                        notifier_type=type(self._notifier).__name__,
+                    )
         except Exception as exc:
             log.error(
                 "pp_overlay_v1.send_close_notification_failed",

@@ -39,6 +39,10 @@ class ReEntryMixin:
         """Verify if the IVR passes the strategy criteria.
 
         Subclasses can override this method to change comparison logic.
+
+        Default (short premium, e.g. CSP/CC): blocks when IVR is too low (below threshold).
+        PP (long premium): blocks when IVR is too high (above threshold) to avoid buying
+        protection when volatility is already elevated.
         """
         if ivr < self.reentry_ivr_threshold:
             return False, f"IVR={ivr:.2f} < {self.reentry_ivr_threshold:.2f} — low vol, skip cycle"

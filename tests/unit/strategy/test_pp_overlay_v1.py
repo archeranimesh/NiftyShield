@@ -232,3 +232,70 @@ def test_describe_context() -> None:
     ctx = strategy.describe_context(event, chain, [pos])
     assert "paper_protective_put_v1" in ctx
     assert "CRASH_MONETIZE" in ctx
+
+
+def test_apply_action_send_plain_message_fallback() -> None:
+    mock_store = MagicMock()
+    mock_notifier = AsyncMock()
+    del mock_notifier.send_notification  # Remove send_notification to force fallback
+    mock_notifier.send_plain_message = AsyncMock()
+
+    strategy = PPOverlayV1(store=mock_store, notifier=mock_notifier)
+    strategy._check_reentry = AsyncMock()
+
+    pos = _make_position()
+    action = ApprovedAction(
+        action_type="ROLL_PP",
+        legs_to_close=["protective_put"],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+    )
+    result = _run(strategy.apply_action([pos], action))
+    assert len(result) == 0
+    mock_notifier.send_plain_message.assert_called_once()
+    assert "🔄 <b>PP: ROLL_PP</b>" in mock_notifier.send_plain_message.call_args[0][0]
+
+
+def test_apply_action_notifier_missing_methods_non_fatal() -> None:
+    mock_store = MagicMock()
+
+    # A dummy object with neither send_notification nor send_plain_message
+    class StubbierNotifier:
+        pass
+
+    strategy = PPOverlayV1(store=mock_store, notifier=StubbierNotifier())
+    strategy._check_reentry = AsyncMock()
+
+    pos = _make_position()
+    action = ApprovedAction(
+        action_type="ROLL_PP",
+        legs_to_close=["protective_put"],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+    )
+    # This should not raise any exceptions
+    result = _run(strategy.apply_action([pos], action))
+    assert len(result) == 0
+
+
+def test_apply_action_dte_float_casting() -> None:
+    mock_store = MagicMock()
+    mock_notifier = AsyncMock()
+    strategy = PPOverlayV1(store=mock_store, notifier=mock_notifier)
+    strategy._check_reentry = AsyncMock()
+
+    pos = _make_position()
+    action = ApprovedAction(
+        action_type="ROLL_PP",
+        legs_to_close=["protective_put"],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+        metadata={"dte": "4.5", "mark": "40.0"},
+    )
+    result = _run(strategy.apply_action([pos], action))
+    assert len(result) == 0
+    mock_notifier.send_notification.assert_called_once()
+    assert "DTE 4" in mock_notifier.send_notification.call_args[0][0]
