@@ -164,7 +164,10 @@ class CSPNiftyV1(ReEntryMixin):
                     payload["entry_credit"] = str(pos.avg_sell_price)
                 payload["days_held"] = days_held
                 payload["dte"] = dte
-                payload["valid_actions"] = ["CLOSE_FULL"]
+                if result.exit_signal in ("PROFIT_TARGET", "TIME_STOP"):
+                    payload["valid_actions"] = [result.exit_signal, "CLOSE_FULL"]
+                else:
+                    payload["valid_actions"] = ["CLOSE_FULL"]
 
                 events.append(
                     SignalEvent(

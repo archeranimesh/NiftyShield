@@ -239,6 +239,36 @@ def test_time_stop_fires_at_days_held_21() -> None:
     assert ts.severity == "ACTION"
 
 
+def test_profit_target_valid_actions_includes_signal_type() -> None:
+    """PROFIT_TARGET event carries ['PROFIT_TARGET', 'CLOSE_FULL'] in valid_actions."""
+    strategy = CSPNiftyV1()
+    chain = _make_chain(ltp="23", delta="-0.20")
+    pos = _make_position(avg_sell_price="80")
+    events = _run(strategy.check_signals(chain, [pos]))
+    pt = next(e for e in events if e.event_type == "PROFIT_TARGET")
+    assert pt.payload["valid_actions"] == ["PROFIT_TARGET", "CLOSE_FULL"]
+
+
+def test_time_stop_valid_actions_includes_signal_type() -> None:
+    """TIME_STOP event carries ['TIME_STOP', 'CLOSE_FULL'] in valid_actions."""
+    strategy = CSPNiftyV1()
+    entry = date.today() - timedelta(days=21)
+    pos = _make_position(avg_sell_price="80", entry_date=entry)
+    events = _run(strategy.check_signals(_make_empty_chain(), [pos]))
+    ts = next(e for e in events if e.event_type == "TIME_STOP")
+    assert ts.payload["valid_actions"] == ["TIME_STOP", "CLOSE_FULL"]
+
+
+def test_hard_stop_valid_actions_is_close_full_only() -> None:
+    """HARD_STOP event carries only ['CLOSE_FULL'] — no re-entry on hard stop."""
+    strategy = CSPNiftyV1()
+    chain = _make_chain(ltp="161", delta="-0.55")
+    pos = _make_position(avg_sell_price="80")
+    events = _run(strategy.check_signals(chain, [pos]))
+    hs = next(e for e in events if e.event_type == "HARD_STOP")
+    assert hs.payload["valid_actions"] == ["CLOSE_FULL"]
+
+
 def test_time_stop_does_not_fire_at_days_held_20() -> None:
     """TIME_STOP does NOT fire when days_held = 20 (< 21)."""
     strategy = CSPNiftyV1()
