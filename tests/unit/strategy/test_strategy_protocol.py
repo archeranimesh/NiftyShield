@@ -11,6 +11,7 @@ class MockStrategy:
     """A strategy class implementing the PaperStrategy protocol for testing."""
 
     strategy_name: str = "paper_mock_strategy"
+    auto_execute: bool = False
 
     async def check_signals(
         self,

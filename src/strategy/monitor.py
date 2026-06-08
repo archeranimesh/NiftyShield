@@ -4,7 +4,10 @@ One instance per process. Registered strategies are polled on every tick.
 Signal routing:
     INFO   → structlog DEBUG, no Telegram
     WARN   → plain Telegram message
-    ACTION → Telegram approval request + pending_approvals DB row
+    ACTION + strategy.auto_execute + payload["auto_execute"]
+           → apply_action() called directly; send_notification() on completion
+    ACTION (otherwise)
+           → Telegram approval request + pending_approvals DB row
 
 The monitor never knows about IC, CSP, or 3-track — those are plugged in
 as PaperStrategy instances via register() or the constructor.
@@ -13,10 +16,9 @@ as PaperStrategy instances via register() or the constructor.
 from __future__ import annotations
 
 import asyncio
-import logging
 import os
-from datetime import date, datetime, timedelta, timezone
-from typing import Callable
+from collections.abc import Callable
+from datetime import datetime, timedelta, timezone
 
 import structlog
 
@@ -27,7 +29,7 @@ from src.market_calendar.holidays import is_trading_day
 from src.models.options import OptionChain
 from src.paper.models import PaperPosition
 from src.paper.store import PaperStore
-from src.strategy.protocol import PaperStrategy, SignalEvent
+from src.strategy.protocol import ApprovedAction, PaperStrategy, SignalEvent
 
 log = structlog.get_logger(__name__)
 
@@ -141,7 +143,12 @@ class StrategyMonitor:
         chain: OptionChain,
         positions: list[PaperPosition],
     ) -> None:
-        """Dispatch a SignalEvent based on severity.
+        """Dispatch a SignalEvent based on severity and strategy auto_execute flag.
+
+        For ACTION events on an auto-execute strategy (``strategy.auto_execute``
+        is True and ``event.payload["auto_execute"]`` is True), ``apply_action``
+        is called directly and a plain notification is sent.  All other ACTION
+        events route to the Telegram approval flow.
 
         Args:
             event: The signal emitted by the strategy.
@@ -160,9 +167,41 @@ class StrategyMonitor:
             text = f"[{strategy.strategy_name}] {event.event_type}: {event.description}"
             await self._notifier.send_plain_message(text)  # type: ignore[attr-defined]
         elif event.severity == "ACTION":
-            context_str = strategy.describe_context(event, chain, positions)
-            await self._notifier.send_approval_request(event, context_str)  # type: ignore[attr-defined]
-            self._store.add_pending_approval(strategy.strategy_name, event)  # type: ignore[attr-defined]
+            auto_execute_strategy = getattr(strategy, "auto_execute", False)
+            auto_execute_payload = event.payload.get("auto_execute", False)
+
+            if auto_execute_strategy and auto_execute_payload:
+                action_type: str = event.payload.get("auto_action", "CLOSE_AND_WAIT")
+                metadata = {
+                    k: event.payload[k] for k in ("triggering_signal",) if k in event.payload
+                }
+                action = ApprovedAction(
+                    action_type=action_type,
+                    legs_to_close=[event.payload.get("leg_role", "short_put")],
+                    legs_to_open=[],
+                    rationale="auto-execute",
+                    council_rank=1,
+                    metadata=metadata,
+                )
+                try:
+                    await strategy.apply_action(positions, action)
+                    log.info(
+                        "strategy_monitor.auto_execute_dispatched",
+                        strategy=strategy.strategy_name,
+                        event_type=event.event_type,
+                        action_type=action_type,
+                    )
+                except Exception:
+                    log.exception(
+                        "strategy_monitor.auto_execute_failed",
+                        strategy=strategy.strategy_name,
+                        event_type=event.event_type,
+                        action_type=action_type,
+                    )
+            else:
+                context_str = strategy.describe_context(event, chain, positions)
+                await self._notifier.send_approval_request(event, context_str)  # type: ignore[attr-defined]
+                self._store.add_pending_approval(strategy.strategy_name, event)  # type: ignore[attr-defined]
 
     async def _fetch_chain(self) -> OptionChain | None:
         """Fetch and parse the live NIFTY option chain.

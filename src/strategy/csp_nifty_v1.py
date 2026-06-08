@@ -1,26 +1,29 @@
-"""CSPNiftyV1 — backbone-compatible Cash-Secured Put strategy for Nifty 50.
+"""CSPNiftyV1 — fully-automated Cash-Secured Put strategy for Nifty 50.
 
-Implements PaperStrategy protocol so StrategyMonitor can auto-detect exit
-signals for the paper_csp_nifty_v1 strategy.  Entry remains manual via
-``record_paper_trade.py``.
+Implements PaperStrategy protocol with ``auto_execute = True``.  On every
+tick StrategyMonitor calls check_signals(); when an ACTION signal fires the
+monitor calls apply_action() directly (no Telegram approval gate) and sends
+a plain notification with the outcome.
 
-Signal table (CR1b 2026-06-06)
+Signal priority (CR1d — first matching ACTION signal per position per tick)
 ---------------------------------------
-| Event type         | Severity | Trigger                                  |
-|--------------------|----------|------------------------------------------|
-| PROFIT_TARGET      | ACTION   | LTP ≤ 30% of entry credit (70% captured) |
-| HARD_STOP          | ACTION   | LTP ≥ 2× entry credit                    |
-| DELTA_BREACH       | ACTION   | |delta| ≥ 0.40 (OPEN state)              |
-| DELTA_BREACH_FINAL | ACTION   | |delta| ≥ 0.40 (DEFENDED state)          |
-| TIME_STOP          | ACTION   | 21 calendar days elapsed since entry     |
-| ROLL_ELIGIBLE      | ACTION   | DTE ≤ 7                                  |
+| Priority | Event type         | Severity | Trigger                       | Action         |
+|----------|--------------------|----------|-------------------------------|----------------|
+| 1        | HARD_STOP          | ACTION   | LTP ≥ 2× entry credit         | CLOSE_AND_WAIT |
+| 2        | DELTA_BREACH_FINAL | ACTION   | |δ| ≥ 0.40 (DEFENDED state)   | CLOSE_AND_WAIT |
+| 3        | DELTA_BREACH       | ACTION   | |δ| ≥ 0.40 (OPEN state)       | ROLL_DOWN_AND_OUT |
+| 4        | PROFIT_TARGET      | ACTION   | LTP ≤ 30% of entry credit     | CLOSE_AND_ROLL |
+| 5        | TIME_STOP          | ACTION   | days_held ≥ 21                | CLOSE_AND_ROLL |
+| 6        | ROLL_ELIGIBLE      | ACTION   | DTE ≤ 7                       | CLOSE_AND_ROLL |
 
-Each evaluator is an independent classmethod returning list[ExitSignalResult].
-All ACTION signals gate a Telegram approval flow. Multiple may fire per tick.
+apply_action handles four action types:
+  CLOSE_AND_ROLL   → close_csp_leg + open_new_csp_leg (re-entry check via ReEntryMixin)
+  ROLL_DOWN_AND_OUT → roll_down_and_out; position state → DEFENDED
+  CLOSE_AND_WAIT   → close_csp_leg; position state → RE_ENTRY_PENDING
+  OPEN_NEW         → open_new_csp_leg (triggered when state = RE_ENTRY_PENDING)
 
 Note: TIME_STOP is ``days_held ≥ 21`` (calendar days since first SELL trade),
-NOT ``DTE ≤ 21``.  A position entered with 5 DTE remaining would never trigger
-a DTE-based check; the days-held check fires 21 days after entry regardless.
+NOT ``DTE ≤ 21``.
 """
 
 from __future__ import annotations
@@ -36,6 +39,7 @@ import structlog
 from src.config import settings
 from src.models.options import OptionChain, OptionLeg
 from src.paper.models import PaperPosition, TradeState
+from src.strategy.csp_roll_executor import close_csp_leg, open_new_csp_leg, roll_down_and_out
 from src.strategy.exit_signals import ExitSignalEngine
 from src.strategy.protocol import ApprovedAction, SignalEvent
 from src.strategy.reentry_mixin import ReEntryMixin
@@ -58,6 +62,17 @@ _STRIKE_RE = re.compile(r"NIFTY(\d+)(PE|CE)", re.IGNORECASE)
 # Constants here are kept only for docstring / describe_context reference.
 _TIME_STOP_DAYS = 21  # days_held ≥ 21 (calendar days since entry SELL trade)
 
+# Priority-ordered mapping: signal type → auto_action dispatched by StrategyMonitor.
+# First matching ACTION signal per position per tick is emitted; lower entries are suppressed.
+_SIGNAL_ACTION_MAP: dict[str, str] = {
+    "HARD_STOP": "CLOSE_AND_WAIT",
+    "DELTA_BREACH_FINAL": "CLOSE_AND_WAIT",
+    "DELTA_BREACH": "ROLL_DOWN_AND_OUT",
+    "PROFIT_TARGET": "CLOSE_AND_ROLL",
+    "TIME_STOP": "CLOSE_AND_ROLL",
+    "ROLL_ELIGIBLE": "CLOSE_AND_ROLL",
+}
+
 
 class CSPNiftyV1(ReEntryMixin):
     """Backbone-compatible wrapper for the paper_csp_nifty_v1 strategy.
@@ -68,6 +83,7 @@ class CSPNiftyV1(ReEntryMixin):
     """
 
     strategy_name: str = "paper_csp_nifty_v1"
+    auto_execute: bool = True
     reentry_leg_role: str = "short_put"
     reentry_script_hint: str = "find_strike_by_delta.py"
 
@@ -81,13 +97,15 @@ class CSPNiftyV1(ReEntryMixin):
         """Initialise CSPNiftyV1.
 
         Args:
-            broker: BrokerClient instance (unused by this strategy directly;
-                accepted for protocol compatibility with StrategyMonitor).
-            store: PaperStore instance for R5 re-entry event writes.
-            notifier: Notification gateway (must have ``send_plain_message``).
+            broker: BrokerClient instance used by apply_action to fetch LTP
+                and open new positions (close_csp_leg / open_new_csp_leg).
+            store: PaperStore instance for trade writes and R5 re-entry events.
+            notifier: Notification gateway (must have ``send_plain_message``
+                and ``send_notification``).
             vix_data_dir: Directory containing India VIX Parquet files.
                 Defaults to ``settings.vix_data_dir``.
         """
+        self._broker = broker
         self._store = store
         self._notifier = notifier
         self._vix_data_dir = (
@@ -106,17 +124,13 @@ class CSPNiftyV1(ReEntryMixin):
         Filters positions to ``strategy_name == "paper_csp_nifty_v1"`` and
         ``net_qty < 0`` (short).  Returns ``[]`` when no open positions exist.
 
-        Delegates to five independent ExitSignalEngine classmethods (CR1b):
-        evaluate_profit_target_csp, evaluate_hard_stop_csp,
-        evaluate_delta_breach_csp, evaluate_time_stop_csp,
-        evaluate_roll_eligible_csp. Multiple signals may fire simultaneously.
+        Signal priority (CR1d): for each position at most ONE ACTION signal is
+        emitted — the highest-priority one per ``_SIGNAL_ACTION_MAP``.  All
+        non-ACTION (WARN/INFO) signals are emitted unconditionally.
 
-        Note: ``evaluate_delta_breach_csp`` receives ``TradeState.OPEN``
-        unconditionally. The ``DELTA_BREACH_FINAL`` path (DEFENDED state) is
-        wired in CR1d when ``PaperPosition`` exposes ``state``.
-        Until then, a leg that was already rolled once still receives
-        ``DELTA_BREACH`` on a second breach — operator approval gate prevents
-        an automatic double-roll.
+        ACTION payload includes ``auto_execute=True``, ``auto_action`` (the
+        action type StrategyMonitor will dispatch), and ``triggering_signal``
+        (the raw ExitSignalEngine result for audit).
 
         Args:
             market: Current Nifty 50 option chain snapshot.
@@ -143,19 +157,19 @@ class CSPNiftyV1(ReEntryMixin):
             ltp = Decimal(str(put_leg.ltp)) if put_leg is not None else Decimal("0")
             delta = float(put_leg.delta) if put_leg is not None else 0.0
             entry_credit = Decimal(str(pos.avg_sell_price))
+            trade_state = pos.state if hasattr(pos, "state") else TradeState.OPEN
 
             results = []
             results += ExitSignalEngine.evaluate_profit_target_csp(
                 ltp=ltp, entry_credit=entry_credit
             )
             results += ExitSignalEngine.evaluate_hard_stop_csp(ltp=ltp, entry_credit=entry_credit)
-            results += ExitSignalEngine.evaluate_delta_breach_csp(
-                delta=delta, state=TradeState.OPEN
-            )
+            results += ExitSignalEngine.evaluate_delta_breach_csp(delta=delta, state=trade_state)
             results += ExitSignalEngine.evaluate_time_stop_csp(days_held=days_held)
             results += ExitSignalEngine.evaluate_roll_eligible_csp(dte=dte)
             results = ExitSignalEngine._sort_results(results)
 
+            action_emitted = False
             for result in results:
                 payload: dict = {"leg_role": pos.leg_role}
                 if put_leg is not None:
@@ -164,8 +178,16 @@ class CSPNiftyV1(ReEntryMixin):
                     payload["entry_credit"] = str(pos.avg_sell_price)
                 payload["days_held"] = days_held
                 payload["dte"] = dte
-                if result.exit_signal in ("PROFIT_TARGET", "TIME_STOP"):
-                    payload["valid_actions"] = [result.exit_signal, "CLOSE_FULL"]
+
+                if result.severity == "ACTION":
+                    if action_emitted:
+                        continue  # suppress lower-priority ACTION signals
+                    auto_action = _SIGNAL_ACTION_MAP.get(result.exit_signal, "CLOSE_AND_WAIT")
+                    payload["auto_execute"] = True
+                    payload["auto_action"] = auto_action
+                    payload["triggering_signal"] = result.exit_signal
+                    payload["valid_actions"] = [auto_action, "CLOSE_FULL"]
+                    action_emitted = True
                 else:
                     payload["valid_actions"] = ["CLOSE_FULL"]
 
@@ -253,62 +275,225 @@ class CSPNiftyV1(ReEntryMixin):
         positions: list[PaperPosition],
         action: ApprovedAction,
     ) -> list[PaperPosition]:
-        """Validate and apply an approved action.
+        """Execute an action against the current CSP position.
 
-        Only ``CLOSE_FULL`` is supported.  Returns the positions list with
-        closed legs removed.  Actual DB writes are handled by
-        ``PaperExecutor``; this method performs validation + optimistic
-        position filtering.
+        Supported action types (CR1d):
+
+        ``CLOSE_AND_ROLL``
+            Close the short-put leg at live LTP, then immediately open a new
+            CSP leg on the next monthly expiry.  Re-entry eligibility check
+            runs via ReEntryMixin.  Sends a Telegram notification on completion.
+
+        ``ROLL_DOWN_AND_OUT``
+            Defensive roll: close the short-put, open a new leg on next weekly
+            expiry at a lower strike.  Sets position state to DEFENDED.
+
+        ``CLOSE_AND_WAIT``
+            Close the short-put at live LTP; state → RE_ENTRY_PENDING.
+            No new position is opened.  Used for HARD_STOP / DELTA_BREACH_FINAL.
+
+        ``OPEN_NEW``
+            Open a fresh short-put (re-entry from RE_ENTRY_PENDING state).
+
+        ``CLOSE_FULL`` (backward-compat)
+            Alias for CLOSE_AND_WAIT without state change; kept to handle
+            Telegram buttons from the pre-CR1d approval flow during rollover.
 
         Args:
             positions: Current open paper positions.
-            action: Approved action; must have ``action_type`` of
-                ``"CLOSE_FULL"`` or ``"PROFIT_TARGET"``.
-                ``PROFIT_TARGET`` additionally triggers the R5 re-entry
-                eligibility check and fires a Telegram alert.
+            action: Action to apply.  ``action.metadata`` may carry
+                ``"triggering_signal"`` for re-entry gate logic.
 
         Returns:
-            Updated positions with closed legs filtered out.
+            Updated positions list (closed legs removed, new leg appended if
+            a new position was opened).
 
         Raises:
-            ValueError: When ``action_type`` is anything other than
-                ``"CLOSE_FULL"`` or ``"PROFIT_TARGET"``.
+            ValueError: If ``action_type`` is not one of the supported values.
         """
-        if action.action_type not in ("CLOSE_FULL", "PROFIT_TARGET", "TIME_STOP"):
+        _valid = ("CLOSE_AND_ROLL", "ROLL_DOWN_AND_OUT", "CLOSE_AND_WAIT", "OPEN_NEW", "CLOSE_FULL")
+        if action.action_type not in _valid:
             raise ValueError(
-                f"CSPNiftyV1 only accepts CLOSE_FULL, PROFIT_TARGET, or TIME_STOP actions; "
-                f"got {action.action_type!r}"
+                f"CSPNiftyV1 does not accept action_type={action.action_type!r}; valid: {_valid}"
             )
-        closed: set[str] = set(action.legs_to_close)
+
         log.info(
             "csp_nifty_v1.apply_action",
             action_type=action.action_type,
-            legs_to_close=list(closed),
+            triggering_signal=(action.metadata or {}).get("triggering_signal"),
         )
 
-        # Capture closed short-put position before filtering for re-entry check.
-        closed_pos = next(
-            (p for p in positions if p.leg_role in closed and p.net_qty < 0),
+        today = date.today()
+        short_put = next(
+            (p for p in positions if p.strategy_name == self.strategy_name and p.net_qty < 0),
             None,
         )
-        updated = [p for p in positions if p.leg_role not in closed]
 
-        if action.action_type in ("PROFIT_TARGET", "TIME_STOP"):
-            if closed_pos is not None:
-                expiry = self._parse_expiry(closed_pos.instrument_key)
-                await self._check_reentry(
-                    expiry=expiry,
-                    today=date.today(),
-                    instrument_key=closed_pos.instrument_key,
-                    trade_id=0,  # PaperPosition has no numeric ID; one leg at a time in Phase 0
-                )
-            else:
-                log.warning(
-                    "csp_nifty_v1.reentry_check_skipped",
-                    reason="no short_put position found in legs_to_close",
-                )
+        if action.action_type == "OPEN_NEW":
+            return await self._open_new(positions, today)
 
-        return updated
+        # All other actions require an existing short-put to close.
+        if short_put is None:
+            log.warning(
+                "csp_nifty_v1.apply_action.no_position",
+                action_type=action.action_type,
+            )
+            return positions
+
+        remaining = [p for p in positions if p is not short_put]
+
+        if action.action_type in ("CLOSE_AND_ROLL", "CLOSE_FULL"):
+            await self._close_leg(short_put, today)
+            if action.action_type == "CLOSE_AND_ROLL":
+                remaining = await self._open_new(remaining, today)
+                await self._reentry_notification(short_put, action)
+            return remaining
+
+        if action.action_type == "CLOSE_AND_WAIT":
+            await self._close_leg(short_put, today)
+            await self._send_notification(
+                f"⛔ <b>CSP closed — waiting</b>\n"
+                f"Signal: {(action.metadata or {}).get('triggering_signal', 'CLOSE_AND_WAIT')}\n"
+                f"Instrument: <code>{short_put.instrument_key}</code>\n"
+                f"State → RE_ENTRY_PENDING — no new position opened."
+            )
+            return remaining
+
+        if action.action_type == "ROLL_DOWN_AND_OUT":
+            return await self._roll_down(short_put, remaining, today)
+
+        return remaining  # unreachable but satisfies mypy
+
+    # ── Action helpers ────────────────────────────────────────────────────────
+
+    async def _close_leg(self, pos: PaperPosition, today: date) -> None:
+        """Fetch live LTP and record a close trade for ``pos``."""
+        from src.paper.models import PaperTrade
+
+        if self._broker is None or self._store is None:
+            log.warning("csp_nifty_v1._close_leg: broker or store not set — skipping DB write")
+            return
+
+        # Reconstruct a minimal PaperTrade for close_csp_leg.
+        from src.paper.models import TradeAction
+
+        existing = PaperTrade(
+            strategy_name=pos.strategy_name,
+            leg_role=pos.leg_role,
+            instrument_key=pos.instrument_key,
+            trade_date=pos.entry_date or today,
+            action=TradeAction.SELL,
+            quantity=abs(pos.net_qty),
+            price=pos.avg_sell_price,
+        )
+        await close_csp_leg(
+            broker=self._broker,
+            store=self._store,
+            existing=existing,
+            roll_date=today,
+            dry_run=False,
+        )
+
+    async def _open_new(self, positions: list[PaperPosition], today: date) -> list[PaperPosition]:
+        """Open a new short-put and return the updated positions list."""
+        if self._broker is None or self._store is None:
+            log.warning("csp_nifty_v1._open_new: broker or store not set — skipping")
+            return positions
+
+        from src.instruments.lookup import InstrumentLookup
+
+        lookup = InstrumentLookup.from_file("data/instruments/NSE.json.gz")
+        try:
+            await open_new_csp_leg(
+                broker=self._broker,
+                store=self._store,
+                lookup=lookup,
+                strategy=self.strategy_name,
+                roll_date=today,
+                dry_run=False,
+                quantity=1,
+            )
+        except Exception as exc:
+            log.error("csp_nifty_v1._open_new.failed", error=str(exc))
+            await self._send_notification(
+                f"⚠️ <b>CSP open_new failed</b>\nError: {exc}\n"
+                f"Manual entry required via <code>record_paper_trade.py</code>"
+            )
+        return positions
+
+    async def _roll_down(
+        self,
+        short_put: PaperPosition,
+        remaining: list[PaperPosition],
+        today: date,
+    ) -> list[PaperPosition]:
+        """Defensive roll: close + reopen on next weekly at lower strike."""
+        if self._broker is None or self._store is None:
+            log.warning("csp_nifty_v1._roll_down: broker or store not set — skipping")
+            return remaining
+
+        from src.instruments.lookup import InstrumentLookup
+        from src.paper.models import PaperTrade, TradeAction
+
+        lookup = InstrumentLookup.from_file("data/instruments/NSE.json.gz")
+        existing = PaperTrade(
+            strategy_name=short_put.strategy_name,
+            leg_role=short_put.leg_role,
+            instrument_key=short_put.instrument_key,
+            trade_date=short_put.entry_date or today,
+            action=TradeAction.SELL,
+            quantity=abs(short_put.net_qty),
+            price=short_put.avg_sell_price,
+        )
+        try:
+            result = await roll_down_and_out(
+                broker=self._broker,
+                store=self._store,
+                lookup=lookup,
+                existing=existing,
+                roll_date=today,
+                dry_run=False,
+            )
+            await self._send_notification(
+                f"🔄 <b>CSP rolled down-and-out</b>\n"
+                f"Closed: <code>{short_put.instrument_key}</code>\n"
+                f"Opened: <code>{result.new_trade.instrument_key}</code>\n"
+                f"New credit: {result.new_trade.price}"
+            )
+        except Exception as exc:
+            log.error("csp_nifty_v1._roll_down.failed", error=str(exc))
+            await self._send_notification(
+                f"⚠️ <b>CSP roll_down_and_out failed</b>\nError: {exc}\n"
+                f"Position may be open — check immediately."
+            )
+        return remaining
+
+    async def _reentry_notification(
+        self, closed_pos: PaperPosition, action: ApprovedAction
+    ) -> None:
+        """Run re-entry eligibility check and notify."""
+        triggering = (action.metadata or {}).get("triggering_signal", "CLOSE_AND_ROLL")
+        expiry = self._parse_expiry(closed_pos.instrument_key)
+        await self._check_reentry(
+            expiry=expiry,
+            today=date.today(),
+            instrument_key=closed_pos.instrument_key,
+            trade_id=0,
+        )
+        await self._send_notification(
+            f"✅ <b>CSP closed — {triggering}</b>\n"
+            f"Instrument: <code>{closed_pos.instrument_key}</code>\n"
+            f"New position opened.  Re-entry eligibility check written to paper_exit_events."
+        )
+
+    async def _send_notification(self, message: str) -> None:
+        """Send a plain HTML notification; non-fatal if notifier is absent."""
+        if self._notifier is None:
+            return
+        try:
+            await self._notifier.send_notification(message)
+        except Exception as exc:
+            log.warning("csp_nifty_v1.send_notification.failed", error=str(exc))
 
     # ── Private helpers ───────────────────────────────────────────────────────
 

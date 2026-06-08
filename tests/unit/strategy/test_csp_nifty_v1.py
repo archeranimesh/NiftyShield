@@ -31,7 +31,7 @@ from src.models.options import OptionChain, OptionChainStrike, OptionLeg
 from src.paper.models import PaperPosition, PaperTrade, TradeAction
 from src.paper.store import PaperStore
 from src.strategy.csp_nifty_v1 import CSPNiftyV1
-from src.strategy.protocol import ApprovedAction
+from src.strategy.protocol import ApprovedAction, SignalEvent
 
 _STRATEGY = "paper_csp_nifty_v1"
 _OTHER_STRATEGY = "paper_other_v1"
@@ -239,34 +239,39 @@ def test_time_stop_fires_at_days_held_21() -> None:
     assert ts.severity == "ACTION"
 
 
-def test_profit_target_valid_actions_includes_signal_type() -> None:
-    """PROFIT_TARGET event carries ['PROFIT_TARGET', 'CLOSE_FULL'] in valid_actions."""
+def test_profit_target_payload_has_auto_execute_and_action() -> None:
+    """PROFIT_TARGET ACTION payload carries auto_execute=True and auto_action=CLOSE_AND_ROLL."""
     strategy = CSPNiftyV1()
     chain = _make_chain(ltp="23", delta="-0.20")
     pos = _make_position(avg_sell_price="80")
     events = _run(strategy.check_signals(chain, [pos]))
     pt = next(e for e in events if e.event_type == "PROFIT_TARGET")
-    assert pt.payload["valid_actions"] == ["PROFIT_TARGET", "CLOSE_FULL"]
+    assert pt.payload["auto_execute"] is True
+    assert pt.payload["auto_action"] == "CLOSE_AND_ROLL"
+    assert pt.payload["triggering_signal"] == "PROFIT_TARGET"
+    assert "CLOSE_AND_ROLL" in pt.payload["valid_actions"]
 
 
-def test_time_stop_valid_actions_includes_signal_type() -> None:
-    """TIME_STOP event carries ['TIME_STOP', 'CLOSE_FULL'] in valid_actions."""
+def test_time_stop_payload_has_auto_execute_and_action() -> None:
+    """TIME_STOP ACTION payload carries auto_execute=True and auto_action=CLOSE_AND_ROLL."""
     strategy = CSPNiftyV1()
     entry = date.today() - timedelta(days=21)
     pos = _make_position(avg_sell_price="80", entry_date=entry)
     events = _run(strategy.check_signals(_make_empty_chain(), [pos]))
     ts = next(e for e in events if e.event_type == "TIME_STOP")
-    assert ts.payload["valid_actions"] == ["TIME_STOP", "CLOSE_FULL"]
+    assert ts.payload["auto_execute"] is True
+    assert ts.payload["auto_action"] == "CLOSE_AND_ROLL"
 
 
-def test_hard_stop_valid_actions_is_close_full_only() -> None:
-    """HARD_STOP event carries only ['CLOSE_FULL'] — no re-entry on hard stop."""
+def test_hard_stop_payload_auto_action_is_close_and_wait() -> None:
+    """HARD_STOP ACTION carries auto_action=CLOSE_AND_WAIT — no re-entry."""
     strategy = CSPNiftyV1()
     chain = _make_chain(ltp="161", delta="-0.55")
     pos = _make_position(avg_sell_price="80")
     events = _run(strategy.check_signals(chain, [pos]))
     hs = next(e for e in events if e.event_type == "HARD_STOP")
-    assert hs.payload["valid_actions"] == ["CLOSE_FULL"]
+    assert hs.payload["auto_execute"] is True
+    assert hs.payload["auto_action"] == "CLOSE_AND_WAIT"
 
 
 def test_time_stop_does_not_fire_at_days_held_20() -> None:
@@ -351,7 +356,7 @@ def test_apply_action_adjust_raises_value_error() -> None:
         rationale="test",
         council_rank=1,
     )
-    with pytest.raises(ValueError, match="CLOSE_FULL, PROFIT_TARGET, or TIME_STOP"):
+    with pytest.raises(ValueError, match="ADJUST"):
         _run(strategy.apply_action([pos], action))
 
 
@@ -406,13 +411,15 @@ def _make_vix_series(ivr: float, length: int = 252) -> pd.Series:
     return pd.Series(values, dtype="float64")
 
 
-def _make_profit_target_action(legs: list[str] | None = None) -> ApprovedAction:
+def _make_close_and_roll_action(triggering: str = "PROFIT_TARGET") -> ApprovedAction:
+    """CLOSE_AND_ROLL is the CR1d action type for profit-target / time-stop exits."""
     return ApprovedAction(
-        action_type="PROFIT_TARGET",
-        legs_to_close=legs or ["short_put"],
+        action_type="CLOSE_AND_ROLL",
+        legs_to_close=["short_put"],
         legs_to_open=[],
         rationale="profit target hit",
         council_rank=1,
+        metadata={"triggering_signal": triggering},
     )
 
 
@@ -427,21 +434,21 @@ def _r5_expiry_key(dte: int) -> str:
 
 
 def test_r5_eligible_when_all_gates_pass(tmp_path: Path) -> None:
-    """R5_REENTRY_ELIGIBLE written and notifier called when DTE=15, IVR=0.30, no open pos."""
+    """R5_REENTRY_ELIGIBLE written when DTE=15, IVR=0.30, no open pos."""
     store = PaperStore(str(tmp_path / "db.sqlite"))
     notifier = MagicMock()
     notifier.send_plain_message = AsyncMock(return_value=True)
+    notifier.send_notification = AsyncMock(return_value=None)
     strategy = CSPNiftyV1(store=store, notifier=notifier)
 
     vix_series = _make_vix_series(ivr=0.30)
     with patch("src.strategy.reentry_mixin.load_vix_series", return_value=vix_series):
         pos = _make_position(instrument_key=_r5_expiry_key(15), avg_sell_price="80")
-        _run(strategy.apply_action([pos], _make_profit_target_action()))
+        _run(strategy.apply_action([pos], _make_close_and_roll_action()))
 
     events = store.get_open_exit_events(strategy_name="paper_csp_nifty_v1")
     signals = [e["exit_signal"] for e in events]
     assert "R5_REENTRY_ELIGIBLE" in signals
-    notifier.send_plain_message.assert_awaited_once()
 
 
 def test_r5_blocked_when_dte_less_than_14(tmp_path: Path) -> None:
@@ -452,7 +459,7 @@ def test_r5_blocked_when_dte_less_than_14(tmp_path: Path) -> None:
     vix_series = _make_vix_series(ivr=0.30)
     with patch("src.strategy.reentry_mixin.load_vix_series", return_value=vix_series):
         pos = _make_position(instrument_key=_r5_expiry_key(13), avg_sell_price="80")
-        _run(strategy.apply_action([pos], _make_profit_target_action()))
+        _run(strategy.apply_action([pos], _make_close_and_roll_action()))
 
     events = store.get_open_exit_events(strategy_name="paper_csp_nifty_v1")
     blocked = [e for e in events if e["exit_signal"] == "R5_REENTRY_BLOCKED"]
@@ -471,7 +478,7 @@ def test_r5_blocked_when_ivr_below_floor(tmp_path: Path) -> None:
     vix_series = _make_vix_series(ivr=0.22)
     with patch("src.strategy.reentry_mixin.load_vix_series", return_value=vix_series):
         pos = _make_position(instrument_key=_r5_expiry_key(20), avg_sell_price="80")
-        _run(strategy.apply_action([pos], _make_profit_target_action()))
+        _run(strategy.apply_action([pos], _make_close_and_roll_action()))
 
     events = store.get_open_exit_events(strategy_name="paper_csp_nifty_v1")
     blocked = [e for e in events if e["exit_signal"] == "R5_REENTRY_BLOCKED"]
@@ -487,7 +494,7 @@ def test_r5_blocked_when_ivr_history_insufficient(tmp_path: Path) -> None:
     short_series = pd.Series([15.0, 18.0, 20.0], dtype="float64")  # < 252 entries
     with patch("src.strategy.reentry_mixin.load_vix_series", return_value=short_series):
         pos = _make_position(instrument_key=_r5_expiry_key(20), avg_sell_price="80")
-        _run(strategy.apply_action([pos], _make_profit_target_action()))
+        _run(strategy.apply_action([pos], _make_close_and_roll_action()))
 
     events = store.get_open_exit_events(strategy_name="paper_csp_nifty_v1")
     blocked = [e for e in events if e["exit_signal"] == "R5_REENTRY_BLOCKED"]
@@ -504,7 +511,7 @@ def test_r5_blocked_when_vix_series_empty(tmp_path: Path) -> None:
         "src.strategy.reentry_mixin.load_vix_series", return_value=pd.Series(dtype="float64")
     ):
         pos = _make_position(instrument_key=_r5_expiry_key(20), avg_sell_price="80")
-        _run(strategy.apply_action([pos], _make_profit_target_action()))
+        _run(strategy.apply_action([pos], _make_close_and_roll_action()))
 
     events = store.get_open_exit_events(strategy_name="paper_csp_nifty_v1")
     blocked = [e for e in events if e["exit_signal"] == "R5_REENTRY_BLOCKED"]
@@ -536,7 +543,7 @@ def test_r5_blocked_when_short_put_already_open(tmp_path: Path) -> None:
     vix_series = _make_vix_series(ivr=0.30)
     with patch("src.strategy.reentry_mixin.load_vix_series", return_value=vix_series):
         pos = _make_position(instrument_key=_r5_expiry_key(20), avg_sell_price="80")
-        _run(strategy.apply_action([pos], _make_profit_target_action()))
+        _run(strategy.apply_action([pos], _make_close_and_roll_action()))
 
     events = store.get_open_exit_events(strategy_name="paper_csp_nifty_v1")
     blocked = [e for e in events if e["exit_signal"] == "R5_REENTRY_BLOCKED"]
@@ -547,44 +554,40 @@ def test_r5_blocked_when_short_put_already_open(tmp_path: Path) -> None:
 # ── Integration: apply_action(PROFIT_TARGET) ─────────────────────────────────
 
 
-def test_apply_action_profit_target_closes_and_runs_r5(tmp_path: Path) -> None:
-    """apply_action(PROFIT_TARGET) filters positions AND writes an R5 event."""
+def test_apply_action_close_and_roll_writes_r5_event(tmp_path: Path) -> None:
+    """CLOSE_AND_ROLL writes an R5 re-entry eligibility event."""
     store = PaperStore(str(tmp_path / "db.sqlite"))
     notifier = MagicMock()
     notifier.send_plain_message = AsyncMock(return_value=True)
+    notifier.send_notification = AsyncMock(return_value=None)
     strategy = CSPNiftyV1(store=store, notifier=notifier)
 
     vix_series = _make_vix_series(ivr=0.30)
     with patch("src.strategy.reentry_mixin.load_vix_series", return_value=vix_series):
         pos = _make_position(instrument_key=_r5_expiry_key(20), avg_sell_price="80")
-        remaining = _run(strategy.apply_action([pos], _make_profit_target_action()))
-
-    # Close was recorded in positions list.
-    assert all(p.leg_role != "short_put" for p in remaining)
+        _run(strategy.apply_action([pos], _make_close_and_roll_action()))
 
     # R5 eligibility event was written.
     events = store.get_open_exit_events(strategy_name="paper_csp_nifty_v1")
     assert any(e["exit_signal"] in ("R5_REENTRY_ELIGIBLE", "R5_REENTRY_BLOCKED") for e in events)
-
-    # Notifier was called.
-    notifier.send_plain_message.assert_awaited_once()
 
 
 # ── Non-fatal: notifier raises ────────────────────────────────────────────────
 
 
 def test_r5_event_written_even_when_notifier_raises(tmp_path: Path) -> None:
-    """Exit event is written to DB even when notifier.send_plain_message raises."""
+    """Exit event is written to DB even when notifier raises."""
     store = PaperStore(str(tmp_path / "db.sqlite"))
     notifier = MagicMock()
     notifier.send_plain_message = AsyncMock(side_effect=RuntimeError("telegram down"))
+    notifier.send_notification = AsyncMock(side_effect=RuntimeError("telegram down"))
     strategy = CSPNiftyV1(store=store, notifier=notifier)
 
     vix_series = _make_vix_series(ivr=0.30)
     with patch("src.strategy.reentry_mixin.load_vix_series", return_value=vix_series):
         pos = _make_position(instrument_key=_r5_expiry_key(20), avg_sell_price="80")
         # Must not raise even though notifier throws.
-        _run(strategy.apply_action([pos], _make_profit_target_action()))
+        _run(strategy.apply_action([pos], _make_close_and_roll_action()))
 
     events = store.get_open_exit_events(strategy_name="paper_csp_nifty_v1")
     assert any(e["exit_signal"] in ("R5_REENTRY_ELIGIBLE", "R5_REENTRY_BLOCKED") for e in events)
@@ -593,35 +596,33 @@ def test_r5_event_written_even_when_notifier_raises(tmp_path: Path) -> None:
 # ── TIME_STOP regression: reentry check was missing ──────────────────────────
 
 
-def test_apply_action_time_stop_runs_reentry(tmp_path: Path) -> None:
-    """TIME_STOP action triggers reentry eligibility check (regression fix)."""
+def test_apply_action_close_and_roll_time_stop_runs_reentry(tmp_path: Path) -> None:
+    """CLOSE_AND_ROLL with triggering_signal=TIME_STOP triggers re-entry check."""
     store = PaperStore(str(tmp_path / "db.sqlite"))
     notifier = MagicMock()
     notifier.send_plain_message = AsyncMock(return_value=True)
+    notifier.send_notification = AsyncMock(return_value=None)
     strategy = CSPNiftyV1(store=store, notifier=notifier)
 
     vix_series = _make_vix_series(ivr=0.30)
     time_stop_action = ApprovedAction(
-        action_type="TIME_STOP",
+        action_type="CLOSE_AND_ROLL",
         legs_to_close=["short_put"],
         legs_to_open=[],
         rationale="21 days elapsed",
         council_rank=1,
+        metadata={"triggering_signal": "TIME_STOP"},
     )
     with patch("src.strategy.reentry_mixin.load_vix_series", return_value=vix_series):
         pos = _make_position(instrument_key=_r5_expiry_key(20), avg_sell_price="80")
-        remaining = _run(strategy.apply_action([pos], time_stop_action))
+        _run(strategy.apply_action([pos], time_stop_action))
 
-    # Leg was closed.
-    assert all(p.leg_role != "short_put" for p in remaining)
-
-    # Re-entry event written — TIME_STOP now triggers same check as PROFIT_TARGET.
+    # Re-entry event written — CLOSE_AND_ROLL always triggers re-entry check.
     events = store.get_open_exit_events(strategy_name="paper_csp_nifty_v1")
     assert any(e["exit_signal"] in ("R5_REENTRY_ELIGIBLE", "R5_REENTRY_BLOCKED") for e in events)
-    notifier.send_plain_message.assert_awaited_once()
 
 
-def test_apply_action_time_stop_rejects_unknown_action() -> None:
+def test_apply_action_rejects_unknown_action_type() -> None:
     """apply_action raises ValueError for unrecognised action_type."""
     strategy = CSPNiftyV1()
     bad_action = ApprovedAction(
@@ -633,3 +634,213 @@ def test_apply_action_time_stop_rejects_unknown_action() -> None:
     )
     with pytest.raises(ValueError, match="ROLL_DOWN"):
         _run(strategy.apply_action([], bad_action))
+
+
+# ── CR1d: signal priority ─────────────────────────────────────────────────────
+
+
+def test_only_highest_priority_action_emitted_when_multiple_fire() -> None:
+    """When HARD_STOP and PROFIT_TARGET both fire, only HARD_STOP is emitted as ACTION."""
+    strategy = CSPNiftyV1()
+    # LTP=161 → HARD_STOP (≥2×80); LTP=161 also ≤ 30% of 80? No, 161/80=2.01 — HARD_STOP only.
+    # Use a price that triggers both HARD_STOP and PROFIT_TARGET: impossible with same LTP.
+    # Instead test HARD_STOP + TIME_STOP (days_held=21).
+    chain = _make_chain(ltp="161", delta="-0.55")  # HARD_STOP fires
+    entry = date.today() - timedelta(days=21)  # TIME_STOP also fires
+    pos = _make_position(avg_sell_price="80", entry_date=entry)
+    events = _run(strategy.check_signals(chain, [pos]))
+    action_events = [e for e in events if e.severity == "ACTION"]
+    assert len(action_events) == 1
+    assert action_events[0].event_type == "HARD_STOP"
+    assert action_events[0].payload["auto_action"] == "CLOSE_AND_WAIT"
+
+
+def test_delta_breach_suppresses_profit_target_when_both_fire() -> None:
+    """DELTA_BREACH (priority 3) suppresses PROFIT_TARGET (priority 4) when both fire."""
+    strategy = CSPNiftyV1()
+    # LTP=23 → PROFIT_TARGET (23/80=0.29 ≤ 0.30); delta=-0.41 → DELTA_BREACH
+    chain = _make_chain(ltp="23", delta="-0.41")
+    pos = _make_position(avg_sell_price="80")
+    events = _run(strategy.check_signals(chain, [pos]))
+    action_events = [e for e in events if e.severity == "ACTION"]
+    assert len(action_events) == 1
+    assert action_events[0].event_type == "DELTA_BREACH"
+    assert action_events[0].payload["auto_action"] == "ROLL_DOWN_AND_OUT"
+
+
+def test_auto_execute_class_attribute_is_true() -> None:
+    """CSPNiftyV1.auto_execute is True (CR1d requirement)."""
+    assert CSPNiftyV1.auto_execute is True
+
+
+# ── CR1d: StrategyMonitor auto-execute dispatch ───────────────────────────────
+
+
+def test_monitor_calls_apply_action_for_auto_execute_strategy() -> None:
+    """StrategyMonitor calls apply_action directly when strategy.auto_execute=True."""
+    from src.strategy.monitor import StrategyMonitor
+
+    strategy = MagicMock()
+    strategy.strategy_name = "paper_csp_nifty_v1"
+    strategy.auto_execute = True
+    strategy.check_signals = AsyncMock(
+        return_value=[
+            SignalEvent(
+                event_type="PROFIT_TARGET",
+                severity="ACTION",
+                description="70% decay",
+                payload={
+                    "auto_execute": True,
+                    "auto_action": "CLOSE_AND_ROLL",
+                    "triggering_signal": "PROFIT_TARGET",
+                    "leg_role": "short_put",
+                },
+            )
+        ]
+    )
+    strategy.apply_action = AsyncMock(return_value=[])
+
+    store = MagicMock()
+    store.get_positions.return_value = []
+    store.write_heartbeat = MagicMock()
+
+    notifier = MagicMock()
+    notifier.send_plain_message = AsyncMock()
+    notifier.send_approval_request = AsyncMock()
+
+    monitor = StrategyMonitor(
+        broker=MagicMock(),
+        store=store,
+        notifier=notifier,
+        strategies=[strategy],
+        expiry_fn=lambda: "2026-06-26",
+    )
+
+    from datetime import timedelta, timezone
+
+    ist = timezone(timedelta(hours=5, minutes=30))
+    import datetime as dt
+
+    fake_dt = dt.datetime(2026, 6, 9, 10, 30, tzinfo=ist)
+    with (
+        patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.datetime") as mock_dt,
+    ):
+        mock_dt.now.return_value = fake_dt
+        mock_dt.side_effect = lambda *a, **kw: dt.datetime(*a, **kw)
+        _run(monitor._tick())
+
+    strategy.apply_action.assert_awaited_once()
+    notifier.send_approval_request.assert_not_awaited()
+
+
+def test_monitor_routes_to_approval_when_auto_execute_false() -> None:
+    """StrategyMonitor uses approval flow when strategy.auto_execute=False."""
+    from src.strategy.monitor import StrategyMonitor
+
+    strategy = MagicMock()
+    strategy.strategy_name = "paper_mock"
+    strategy.auto_execute = False
+    strategy.check_signals = AsyncMock(
+        return_value=[
+            SignalEvent(
+                event_type="PROFIT_TARGET",
+                severity="ACTION",
+                description="test",
+                payload={
+                    "auto_execute": True,
+                    "auto_action": "CLOSE_AND_ROLL",
+                    "leg_role": "short_put",
+                },
+            )
+        ]
+    )
+    strategy.describe_context = MagicMock(return_value="ctx")
+    strategy.apply_action = AsyncMock(return_value=[])
+
+    store = MagicMock()
+    store.get_positions.return_value = []
+    store.write_heartbeat = MagicMock()
+    store.add_pending_approval = MagicMock()
+
+    notifier = MagicMock()
+    notifier.send_plain_message = AsyncMock()
+    notifier.send_approval_request = AsyncMock()
+
+    monitor = StrategyMonitor(
+        broker=MagicMock(),
+        store=store,
+        notifier=notifier,
+        strategies=[strategy],
+        expiry_fn=lambda: "2026-06-26",
+    )
+
+    import datetime as dt
+    from datetime import timedelta, timezone
+
+    ist = timezone(timedelta(hours=5, minutes=30))
+    fake_dt = dt.datetime(2026, 6, 9, 10, 30, tzinfo=ist)
+    with (
+        patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.datetime") as mock_dt,
+    ):
+        mock_dt.now.return_value = fake_dt
+        mock_dt.side_effect = lambda *a, **kw: dt.datetime(*a, **kw)
+        _run(monitor._tick())
+
+    strategy.apply_action.assert_not_awaited()
+    notifier.send_approval_request.assert_awaited_once()
+
+
+def test_monitor_falls_back_to_approval_when_payload_auto_execute_false() -> None:
+    """auto_execute=True strategy but payload missing auto_execute → approval path."""
+    from src.strategy.monitor import StrategyMonitor
+
+    strategy = MagicMock()
+    strategy.strategy_name = "paper_csp_nifty_v1"
+    strategy.auto_execute = True
+    strategy.check_signals = AsyncMock(
+        return_value=[
+            SignalEvent(
+                event_type="ROLL_ELIGIBLE",
+                severity="ACTION",
+                description="DTE≤7",
+                payload={"leg_role": "short_put"},  # no auto_execute key
+            )
+        ]
+    )
+    strategy.describe_context = MagicMock(return_value="ctx")
+    strategy.apply_action = AsyncMock(return_value=[])
+
+    store = MagicMock()
+    store.get_positions.return_value = []
+    store.write_heartbeat = MagicMock()
+    store.add_pending_approval = MagicMock()
+
+    notifier = MagicMock()
+    notifier.send_plain_message = AsyncMock()
+    notifier.send_approval_request = AsyncMock()
+
+    monitor = StrategyMonitor(
+        broker=MagicMock(),
+        store=store,
+        notifier=notifier,
+        strategies=[strategy],
+        expiry_fn=lambda: "2026-06-26",
+    )
+
+    import datetime as dt
+    from datetime import timedelta, timezone
+
+    ist = timezone(timedelta(hours=5, minutes=30))
+    fake_dt = dt.datetime(2026, 6, 9, 10, 30, tzinfo=ist)
+    with (
+        patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.datetime") as mock_dt,
+    ):
+        mock_dt.now.return_value = fake_dt
+        mock_dt.side_effect = lambda *a, **kw: dt.datetime(*a, **kw)
+        _run(monitor._tick())
+
+    strategy.apply_action.assert_not_awaited()
+    notifier.send_approval_request.assert_awaited_once()

@@ -47,13 +47,17 @@ class PaperStrategy(Protocol):
     """Contract every pluggable strategy must satisfy.
 
     The StrategyMonitor calls check_signals() on every tick for
-    every registered strategy. Only ACTION severity events trigger
-    council consultation + Telegram approval. WARN events send a
-    plain Telegram message with no approval flow. INFO events are
-    logged silently.
+    every registered strategy.
+
+    When ``auto_execute`` is True, ACTION events whose payload carries
+    ``auto_execute=True`` are dispatched directly to ``apply_action``
+    without a Telegram approval gate.  A plain notification is sent
+    afterward.  Strategies that leave ``auto_execute=False`` (the
+    default) still route through the Telegram approval flow.
     """
 
     strategy_name: str  # must start with "paper_" prefix (enforced by convention/tests)
+    auto_execute: bool  # True → StrategyMonitor calls apply_action directly for ACTION events
 
     async def check_signals(
         self,
