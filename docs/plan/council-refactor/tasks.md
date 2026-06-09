@@ -19,6 +19,7 @@
 > | AUTO-1 | `stories_auto.md` |
 > | BUG-1 … BUG-5 | `stories_bugs_jun09.md` |
 > | BUG-6, BUG-7 | `stories_bugs_overlay_state.md` |
+| RPT-1, RPT-2, RPT-3 | `stories_track_report.md` |
 >
 > Also load `README.md` for shared context (signal tables, state machine, dependency order).
 > Do NOT load `stories.md` — it is a historical archive.
@@ -27,6 +28,18 @@
 - [x] `search_graph("ExitSignalEngine")` returns results (ES1 committed)
 - [x] `search_graph("StrategyMonitor")` returns results (PB1.2 committed)
 - [x] `search_code("send_approval_request")` in `monitor.py` — confirm mismatch
+
+---
+
+## Phase RPT — Track Report Fixes + CLI Redesign
+
+> Story file: `stories_track_report.md`. Fix RPT-1 before RPT-2 (inception mode depends on it).
+
+- [ ] **RPT-1** `[Claude]` — Fix closed overlay legs excluded from summary table: `src/paper/track_snapshot.py`, `generate_track_snapshot`. After the open-positions loop, add a second pass over all overlay roles with `net_qty == 0` and fold their `realized_by_leg` amounts into `overlay_pnls`. No model changes, no new queries — `_compute_realized_pnl_by_leg` already returns closed-leg entries; they were just unused. Tests: expired CC leg included in overlay total; multiple closed cycles summed correctly; all-open behaviour unchanged.
+
+- [ ] **RPT-2** `[Claude]` — CLI redesign + daily P&L mode: `scripts/strategies/three_track/paper_3track_snapshot.py` + `src/paper/formatting.py`. Replace future `--mode` string with `argparse.add_mutually_exclusive_group()`: `--daily`/`-d` (default), `--monthly`/`-m` (guard: exits with error — RPT-3 not built yet), `--inception`/`-i`. Daily mode: both Base and Overlay columns show 1-day delta via `get_prev_leg_snapshot`; computed in `_run` as post-processing, not inside `generate_track_snapshot`. Column headers change per period ("Day Base"/"Day Overlay" for daily, "Base P&L"/"Overlay" for inception). Tests: daily delta with/without prior snapshot; mutual exclusion enforced; `-m` guard exits cleanly; header strings correct per period.
+
+- [ ] **RPT-3** `[Claude]` — Monthly mode implementation (deferred): remove guard from RPT-2, resolve reference date to first NSE trading day of current month via `src/market_calendar/`, fetch nearest prior `paper_leg_snapshots` row, compute delta as in daily mode. Prerequisite: RPT-2 committed + `market_calendar` holiday list confirmed stable.
 
 ---
 
