@@ -277,15 +277,45 @@ WHERE leg_role = 'overlay_cc'
 ORDER BY strategy_name, trade_date;
 ```
 
-**After BUG-6 migration is deployed**, additionally run:
+**After BUG-6 migration is deployed**, run this backfill + verification block:
 
 ```sql
--- Mark May11 SELL and Jun8 BUY (the legitimate close) as CLOSED
+-- Backfill: mark all closed cycles on 71474 as CLOSED (overlay_cc + overlay_collar_call)
 UPDATE paper_trades
 SET state = 'CLOSED'
-WHERE leg_role = 'overlay_cc'
-  AND instrument_key LIKE '%71474%';
--- Both the May11 SELL and the Jun8 BUY should be CLOSED; Jun9 SELL stays OPEN.
+WHERE instrument_key LIKE '%71474%'
+  AND leg_role IN ('overlay_cc', 'overlay_collar_call');
+
+-- Backfill: mark closed cycle on 58627 as CLOSED (overlay_collar_put)
+UPDATE paper_trades
+SET state = 'CLOSED'
+WHERE instrument_key LIKE '%58627%'
+  AND leg_role = 'overlay_collar_put';
+
+-- Verify: only live positions remain OPEN (expected: 65900 SELL + 65894 BUY per track)
+SELECT strategy_name, leg_role, instrument_key, trade_date, action, quantity,
+       CAST(price AS REAL) AS price, state
+FROM paper_trades
+WHERE leg_role IN ('overlay_cc', 'overlay_collar_call', 'overlay_collar_put', 'overlay_pp')
+ORDER BY strategy_name, leg_role, state, trade_date;
+-- Expected state distribution:
+--   CLOSED: 71474 rows (overlay_cc + overlay_collar_call, all tracks)
+--   CLOSED: 58627 rows (overlay_collar_put, all tracks)
+--   OPEN:   65900 SELL 65 — overlay_cc + overlay_collar_call live short call
+--   OPEN:   65894 BUY  65 — overlay_collar_put live long put
+--   OPEN:   58627 BUY  65 — overlay_pp (no roll yet, still in first cycle)
+
+-- Sanity: no OPEN rows should exist on instrument 71474 or 58627 after backfill
+SELECT COUNT(*) AS should_be_zero
+FROM paper_trades
+WHERE instrument_key LIKE '%71474%'
+  AND state = 'OPEN';
+
+SELECT COUNT(*) AS should_be_zero
+FROM paper_trades
+WHERE instrument_key LIKE '%58627%'
+  AND leg_role = 'overlay_collar_put'
+  AND state = 'OPEN';
 ```
 
 ---
