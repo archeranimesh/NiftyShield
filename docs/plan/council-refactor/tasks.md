@@ -18,6 +18,7 @@
 > | CR4 | `stories_close.md` |
 > | AUTO-1 | `stories_auto.md` |
 > | BUG-1 … BUG-5 | `stories_bugs_jun09.md` |
+> | BUG-6, BUG-7 | `stories_bugs_overlay_state.md` |
 >
 > Also load `README.md` for shared context (signal tables, state machine, dependency order).
 > Do NOT load `stories.md` — it is a historical archive.
@@ -53,6 +54,15 @@
 - [ ] **BUG-4** `[Claude]` — `record_trade` unique key too broad: `src/paper/store.py` schema + `scripts/dev/migrate_paper_trades_unique.py`. Add `instrument_key` to UNIQUE constraint: `(strategy_name, leg_role, instrument_key, trade_date, action)`. Current key allowed second close of same day (different instrument) to silently no-op, causing `_close_leg` to return normally and `_reentry_notification` to fire every 90 s. Tests: same instrument+date+action → no-op; different instrument same date+action → both inserted. **Introduced: `69c7a49`**
 
 - [ ] **BUG-5** `[Claude]` — `_check_reentry` dedup: `src/strategy/reentry_mixin.py`. Before writing event + notifying, call `get_open_exit_events` and skip if an R5_REENTRY_BLOCKED/ELIGIBLE event already exists today for same strategy+leg. Produced 13 identical Telegram messages on 2026-06-09. Tests: called twice same day → 1 DB row, 1 Telegram; called on two different days → 2 rows, 2 messages. **Introduced: `c9625e1` / `fb38dde`**
+
+## Phase BUG-OVL — Overlay State Bugs (discovered 2026-06-09 via DB audit)
+
+> Story file: `stories_bugs_overlay_state.md`. Fix BUG-6 before BUG-7.
+> BUG-6 migration should be combined with the BUG-4 migration (both touch `paper_trades` schema).
+
+- [ ] **BUG-6** `[Claude]` — `TradeState` missing `CLOSED`; `_close_leg` never transitions state: (a) add `CLOSED = "CLOSED"` to `TradeState` enum in `src/paper/models.py`; (b) add `PaperStore.mark_trade_closed(strategy_name, leg_role, instrument_key)` in `src/paper/store.py`; (c) call it from `_close_leg` in `paper_3track_overlay_roll.py` after `store.record_trade(close_trade)`; (d) write idempotent migration `scripts/dev/migrate_add_closed_state.py` to extend CHECK constraint. Combine with BUG-4 migration if BUG-4 not yet done. Tests: `mark_trade_closed` happy/error paths; `_close_leg` dry_run=False marks original SELL CLOSED. **Discovered: 2026-06-09**
+
+- [ ] **BUG-7** `[Claude]` — Jun8 data corruption on instrument 71474: delete spurious SELL 65 @ 12.6 on Jun8; fix BUY 130 → BUY 65; mark remaining 71474 rows as CLOSED post-BUG-6 migration. Run cleanup SQL from `stories_bugs_overlay_state.md` against live DB. No code change. **Discovered: 2026-06-09**
 
 ---
 
