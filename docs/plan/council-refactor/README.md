@@ -9,32 +9,85 @@
 | `stories_csp.md` | CSP roll automation | CR1a, CR1b, CR1c, CR1d |
 | `stories_cc.md` | CC signal alignment + automation + ReEntryMixin + manual CLI | CC-1, CC-2, CC-3, CC-4, CC-5 |
 | `stories_pp.md` | PP automation + RE_ENTRY_PENDING state machine | PP-1, PP-2, PP-3 |
+| `stories_collar.md` | Collar overlay automation + leg role unification + dispatch fix | COLLAR-1 |
+| `stories_daemon.md` | Overlay registration + dependency injection fix in daemon | DAEMON-FIX |
+| `stories_auto.md` | EOD snapshot auto-execution for all overlays | AUTO-1 |
 | `stories_overlay.md` | 3-track overlay roll signal + Proxy delta signals + Futures block | CR2, CR3, NT-1, NT-2 |
-| `stories_collar.md` | Collar overlay automation | COLLAR-1 |
 | `stories_close.md` | Docs close (always last) | CR4 |
 
 ## Dependency Order
 
 ```
 CR0 ✅
-  └─► CR1a ──────────────────────────► CR1b ──► CC-1 ──► CC-4 (needs CC-1 + CC-2 + CR1d)
-                                          │                       │
-                                          └─► PP-1 ──► PP-2 ──────┘ (parallel with CC-4)
-  └─► CC-2 ──► CC-3 ──────────────────► CR1d
-                          └─► CR1c ──► CR1d
-                                          └─► CC-4 ──┐
-  └─► PP-2 ──┼──► (docs close CR4 + PP-3)
-  └─► COLLAR-1 ──┘  (parallel with CC-4, PP-2; needs CC-1 + CC-2 + CR1d)
-  └─► CR2 ──► CR3
-                                                         └─► CR4 + PP-3
+  └─► CR1a ──────────────────────────► CR1b ──► CC-1 ──► CC-4 ──┐
+                                          │                        │
+                                          └─► PP-1 ──► PP-2 ───────┤ all needed for DAEMON-FIX
+  └─► CC-2 ──► CC-3 ──────────────────► CR1d                      │
+                          └─► CR1c ──► CR1d ──► COLLAR-1 ──────────┤
+                                                                    │
+                                                        DAEMON-FIX ─┤
+                                                                    │
+                                                            AUTO-1 ─┤
+                                                                    │
+                                                       CR4 + PP-3 ──┘ (always last)
+  └─► CR2 ──► CR3 ──► NT-1 / NT-2 (parallel; feeds into CR4)
 ```
+
+Sequential for automation: **COLLAR-1 → DAEMON-FIX → AUTO-1**
 
 Parallel lanes:
 - `CC-2` (ReEntryMixin) is independent — can run any time before `CC-3`
 - `CR1c` (CSPRollExecutor) can run in parallel with `CC-1`, `CC-2`, `CC-3`, `PP-1`
 - `PP-1` (evaluate_pp update) can run in parallel with `CC-1` after `CR1b`
 - `PP-2` (PPOverlayV1 automation) runs parallel with `CC-4` — both need CR1a + CR1b
+- `COLLAR-1` runs parallel with `CC-4` and `PP-2` — all three needed before `DAEMON-FIX`
 - `CR2` (evaluate_roll_overlay) can run after `CR1b`, parallel to `CC-4` and `PP-2`
+
+## Execution Path Gap (why AUTO-1 exists)
+
+Two signal-detection paths that never share state:
+
+| Path | When | Signal detection | Auto-execute? |
+|---|---|---|---|
+| `StrategyMonitor` daemon | 09:15–15:30 (live WebSocket ticks) | `strategy.check_signals()` per tick | Yes — if `auto_execute=True` |
+| EOD snapshot cron | 15:35 (after daemon is dead) | `_dispatch_evaluate()` per position | **No** — writes event + plain Telegram only |
+
+The daemon stops at 15:30. The EOD snapshot starts at 15:35. They never overlap.
+
+**MONITOR_OVERLAYS=0 (current default):** CC, PP, Collar are never registered in the daemon at
+all — signals are only detected and logged at EOD. No auto-execution happens. The "approval
+request" Telegram message is dead code for overlays (no monitor_daemon to process it).
+
+**After DAEMON-FIX (MONITOR_OVERLAYS=1):** Overlay strategies register in the daemon with
+correct dependency injection. Intraday signals fire `apply_action` automatically.
+
+**After AUTO-1:** EOD snapshot itself calls `OverlayCloser` immediately after recording an
+ACTION event. Both paths (intraday daemon + EOD) now auto-execute. Zero manual intervention.
+
+## Two-Phase Execution Design (resolved 2026-06-08)
+
+Overlay auto-execution uses a **daemon-first, EOD-fallback** model:
+
+| Phase | Path | When | Condition |
+|---|---|---|---|
+| Phase 1 | `StrategyMonitor` daemon (intraday) | Any tick 09:15–15:30 | `auto_execute=True` + signal fires during session |
+| Phase 2 | EOD snapshot cron (15:35) | After market close | Signal not yet acted (event status ≠ `ACTED`) |
+
+**How it works:**
+
+- If the daemon catches the signal intraday (e.g. PROFIT_TARGET at 14:22), `apply_action` executes immediately. The exit event is written with status `ACTED`.
+- At 15:35, the EOD snapshot checks each ACTION event. If status is already `ACTED`, skip. If `OPEN`, execute via `OverlayCloser` and mark `ACTED`.
+- This means EOD is a safety net, not the primary path. Positions exit as soon as the condition is met, not 45 minutes later at 15:35.
+
+**Implementation note for AUTO-1:** `compute_and_record_exit_signals` must check event status before calling `OverlayCloser`. The guard: `if event.status != "ACTED": _auto_close(...)`.
+
+**Implementation note for DAEMON-FIX:** After DAEMON-FIX, `StrategyMonitor` processes overlays intraday. The daemon writes the event + calls `apply_action` in one path. No separate "acted" flag needed in the daemon — `apply_action` is the execution.
+
+## Resolved Decisions
+
+1. **Collar leg roles in DB:** `overlay_collar_call` / `overlay_collar_put` (verified 2026-06-08). No DB migration needed. COLLAR-1 Addition A is a source-only constants rename.
+
+2. **Execution timing:** Daemon-first (intraday) with EOD fallback. Both paths active after DAEMON-FIX + AUTO-1.
 
 ## Shared Context
 

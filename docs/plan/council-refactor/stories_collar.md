@@ -2,6 +2,10 @@
 
 > Shared context, signal tables, ReEntryMixin contract: `README.md`
 > Prerequisite: CC-1 + CC-2 + CR1d committed.
+>
+> **COLLAR-1 scope updated 2026-06-08:** Two additional changes are required beyond the original
+> spec — leg role unification and `_dispatch_evaluate` fix. Both are documented at the end of
+> this file under "COLLAR-1 Additions". AUTO-1 depends on both being done first.
 
 ---
 
@@ -240,3 +244,106 @@ send a degraded notification with available data rather than crashing.
   NO re-entry notification
 
 **Commit:** `feat(strategy): CollarOverlayV1 full automation — auto_execute, ReEntryMixin, CLOSE_COLLAR unit exit`
+
+---
+
+## COLLAR-1 Additions (required for AUTO-1 compatibility)
+
+These two changes are part of COLLAR-1 scope — implement them in the same commit or
+immediately after before AUTO-1 starts.
+
+---
+
+### Addition A — Unify Collar Leg Role Names
+
+**The problem:**
+
+`OverlayCloser` uses `SHORT_CALL_ROLE = "collar_short_call"` and `LONG_PUT_ROLE = "collar_long_put"`.
+`CollarOverlayV1` also uses these constants. But `_dispatch_evaluate` in `paper_3track_snapshot.py`
+routes by `"overlay_collar_call"` and `"overlay_collar_put"` — the `_OVERLAY_OPTION_TYPE` dict
+and the dispatch branches use these names.
+
+Result: `OverlayCloser.close_collar_all` queries `store.get_position(strategy_name, "collar_short_call")`
+but the DB row has `leg_role = "overlay_collar_call"`. The position is never found. Close silently
+no-ops (position is already flat from OverlayCloser's perspective). No error is raised.
+
+**Canonical names (pick one and apply everywhere):**
+
+Use `overlay_collar_call` / `overlay_collar_put` — consistent with `overlay_cc` / `overlay_pp`.
+
+**Files to update:**
+
+- `src/strategy/overlay_closer.py`:
+  ```python
+  SHORT_CALL_ROLE = "overlay_collar_call"   # was "collar_short_call"
+  LONG_PUT_ROLE   = "overlay_collar_put"    # was "collar_long_put"
+  ```
+
+- `src/strategy/collar_overlay_v1.py`:
+  ```python
+  SHORT_CALL_ROLE = "overlay_collar_call"   # was "collar_short_call"
+  LONG_PUT_ROLE   = "overlay_collar_put"    # was "collar_long_put"
+  ```
+
+- `scripts/strategies/three_track/paper_3track_snapshot.py`:
+  Verify `_OVERLAY_OPTION_TYPE` already uses `"overlay_collar_call"` and `"overlay_collar_put"`.
+  If so, no change needed in the snapshot.
+
+**DB migration:** Not needed. Verified 2026-06-08: `paper_trades` already contains
+`overlay_collar_call` and `overlay_collar_put`. Only source code constants need updating.
+
+**Tests — two files need updating:**
+
+`tests/unit/strategy/test_overlay_closer.py` — 17 occurrences of `"collar_short_call"` /
+`"collar_long_put"` in mock store setup and assertions. Replace all with `"overlay_collar_call"` /
+`"overlay_collar_put"`. These tests will fail at collection time once the constants change —
+they are mechanical find-replace, no logic change.
+
+`tests/unit/strategy/test_collar_overlay_v1.py` — 5 occurrences in helper fixtures. These
+are being fully rewritten by COLLAR-1 anyway (old `apply_action` contract is gone), so update
+as part of the rewrite rather than patching separately.
+
+---
+
+### Addition B — Fix `_dispatch_evaluate` in `paper_3track_snapshot.py`
+
+**The problem:**
+
+`_dispatch_evaluate` currently evaluates `overlay_collar_put` independently using
+`ExitSignalEngine.evaluate_collar_put()` (which still has the spread guard, 25% profit target,
+and DTE_REVIEW INFO — all stale). This produces a separate `ExitSignalResult` for the put leg,
+which becomes a separate DB event, and potentially a separate auto-close attempt on just the
+put leg — leaving the call open. The collar is never closed as a unit.
+
+**The fix:** Two changes in `_dispatch_evaluate`:
+
+1. For `overlay_collar_call`: replace `evaluate_collar_call(...)` with `evaluate_cc(...)`.
+   The collar short call exit logic is now identical to CC — `evaluate_collar_call` is being
+   removed from `exit_signals.py` by COLLAR-1.
+
+   ```python
+   if role == "overlay_collar_call" and pos.net_qty < 0:
+       leg = _find_chain_leg(chain, pos.instrument_key, "CE", lookup)
+       days_held = (today - pos.entry_date).days if pos.entry_date else 0
+       return ExitSignalEngine.evaluate_cc(
+           entry_price=float(pos.avg_sell_price),
+           current_mark=float(leg.ltp) if leg is not None else 0.0,
+           delta=float(leg.delta) if leg is not None else None,
+           dte=dte,
+           days_held=days_held,
+       )
+   ```
+
+2. For `overlay_collar_put`: **return `[]` immediately**. The put has no independent exit signal.
+   It is closed atomically when the call fires, via `OverlayCloser.close_collar_all`.
+
+   ```python
+   if role == "overlay_collar_put":
+       return []   # no independent exit — closed atomically with call via close_collar_all
+   ```
+
+**Tests:** In `test_paper_3track_snapshot_exit.py` or `test_dispatch_evaluate.py`:
+- `overlay_collar_call` position → returns `evaluate_cc` results (PROFIT_TARGET at 30%, etc.)
+- `overlay_collar_put` position → returns `[]` regardless of mark/delta/DTE
+
+**Commit:** `fix(strategies/three_track): collar dispatch — use evaluate_cc for call, skip put evaluation; unify leg role names`

@@ -12,10 +12,12 @@
 > | CR1a, CR1b, CR1c, CR1d | `stories_csp.md` |
 > | CC-1, CC-2, CC-3, CC-4, CC-5 | `stories_cc.md` |
 > | PP-1, PP-2, PP-3 | `stories_pp.md` |
-> | COLLAR-1 | `stories_collar.md` |
-| CR2, CR3, NT-1, NT-2 | `stories_overlay.md` |
+> | COLLAR-1 | `stories_collar.md` (includes Addition A + B at end of file) |
+> | DAEMON-FIX | `stories_daemon.md` |
+> | CR2, CR3, NT-1, NT-2 | `stories_overlay.md` |
 > | CR4 | `stories_close.md` |
-| AUTO-1 | `stories_auto.md` |
+> | AUTO-1 | `stories_auto.md` |
+> | BUG-1 … BUG-5 | `stories_bugs_jun09.md` |
 >
 > Also load `README.md` for shared context (signal tables, state machine, dependency order).
 > Do NOT load `stories.md` — it is a historical archive.
@@ -37,6 +39,23 @@
 
 ---
 
+## Phase BUG — Critical Bug Fixes (2026-06-09 signal flood post-mortem)
+
+> All five bugs interact. Fix in order BUG-1 → BUG-2 → BUG-3 → BUG-4 → BUG-5.
+> Story file: `stories_bugs_jun09.md`. DB cleanup SQL is in that file.
+
+- [ ] **BUG-1** `[Claude]` — `get_positions` cross-cycle aggregation: `src/paper/store.py`. Reset `avg_sell_price`, `entry_date`, `instrument_key` accumulators when `net_qty` returns to 0 mid-loop so only the current open cycle contributes. Root cause of false TIME_STOP (days_held=28 for a same-day entry) and distorted avg_sell_price (210.51 vs 231.68). Idempotent migration not required (logic fix only). Tests: multi-cycle fixture asserting correct avg_sell_price and entry_date. **Introduced: `69c7a49`**
+
+- [ ] **BUG-2** `[Claude]` — Position-driven chain fetch: the chain expiry must be derived from the open position's instrument, not from a hardcoded `preference=["monthly"]`. Two parts: (a) **Immediate guard** — in `_dispatch_evaluate` (all branches) and `CSPNiftyV1.check_signals`, when `_find_chain_leg` / `_find_put_leg` returns `None`, `return []` / `continue` with WARNING — never default to `ltp=0`. (b) **Structural fix** — EOD snapshot and daemon must resolve each open position's expiry via `InstrumentLookup.get_by_key`, then call `broker.get_option_chain` for THAT expiry. Cache by expiry date if multiple positions share one. `OptionChain.expiry: date` already exists. Root cause: CSP in NIFTY 22500 PE 28 JUL 26 evaluated against June 30 chain → not found → ltp=0 → PROFIT_TARGET always fires. Tests: position in quarterly expiry → chain fetched for that expiry; leg=None → []; two positions in different expiries → two chain fetches. **Introduced: `8fd58d4` + `9191c02`**
+
+- [ ] **BUG-3** `[Claude]` — `_open_new` hardcodes `quantity=1`: `src/strategy/csp_nifty_v1.py` line 414. Change to `quantity=abs(short_put.net_qty)` (pass through from `apply_action`). Opened 1-lot position instead of 65 on 2026-06-09. Tests: CLOSE_AND_ROLL on 65-lot position → new trade qty=65. **Introduced: `e62aee9`**
+
+- [ ] **BUG-4** `[Claude]` — `record_trade` unique key too broad: `src/paper/store.py` schema + `scripts/dev/migrate_paper_trades_unique.py`. Add `instrument_key` to UNIQUE constraint: `(strategy_name, leg_role, instrument_key, trade_date, action)`. Current key allowed second close of same day (different instrument) to silently no-op, causing `_close_leg` to return normally and `_reentry_notification` to fire every 90 s. Tests: same instrument+date+action → no-op; different instrument same date+action → both inserted. **Introduced: `69c7a49`**
+
+- [ ] **BUG-5** `[Claude]` — `_check_reentry` dedup: `src/strategy/reentry_mixin.py`. Before writing event + notifying, call `get_open_exit_events` and skip if an R5_REENTRY_BLOCKED/ELIGIBLE event already exists today for same strategy+leg. Produced 13 identical Telegram messages on 2026-06-09. Tests: called twice same day → 1 DB row, 1 Telegram; called on two different days → 2 rows, 2 messages. **Introduced: `c9625e1` / `fb38dde`**
+
+---
+
 ## Phase BF — Bug Fixes
 
 - [x] **CR0** `[Claude]` — Fix `send_approval_request` signature mismatch; remove `CouncilOutput` requirement from daemon approval path | SHA: 4ce6d99
@@ -44,7 +63,7 @@
 
 ## Phase AUTO — EOD Snapshot Auto-Execution
 
-- [ ] **AUTO-1** `[Antigravity]` — EOD snapshot auto-close path: after `compute_and_record_exit_signals` writes an ACTION event for a leg whose strategy has `auto_execute=True`, call `OverlayCloser` (for CC single-leg, PP single-leg) or `PaperFillSimulator` directly to paper-execute the close in the same script run. Mark the event status `ACTED` instead of leaving it `OPEN`. Send a Telegram close-confirmation notification (not an approval request). Requires: injecting strategy registry or `auto_execute` flag lookup into the snapshot context; `OverlayCloser` already handles CC/PP single-leg and Collar. See `stories_auto.md` for full spec.
+- [ ] **AUTO-1** `[Antigravity]` — EOD snapshot auto-close for ALL overlays (CC, PP, Collar): after `compute_and_record_exit_signals` writes an ACTION event, immediately call `OverlayCloser` to paper-execute the close in the same script run. Mark the event `ACTED`. Send structured Telegram notification: leg closed, leg P&L, overlay total P&L. Part 0 prerequisite: add `PaperStore.get_strategy_realized_pnl`. All overlay signals auto-execute — no manual approvals anywhere. Signature change: adds `simulator` and `vix` params. See `stories_auto.md` for full spec. Prerequisites: CC-4 + PP-2 + COLLAR-1 + DAEMON-FIX.
 
 ## Phase CR1 — CSP Roll: Extract + Signal + Executor + Automation
 
@@ -68,7 +87,11 @@
 
 ## Phase COLLAR — Collar Automation
 
-- [ ] **COLLAR-1** `[Antigravity]` — `CollarOverlayV1` full automation: `auto_execute=True`, inherit `ReEntryMixin`, add `__init__` with store/notifier/vix_data_dir, remove `evaluate_collar` from `exit_signals.py` (call `evaluate_cc` directly), handle `CLOSE_COLLAR` in `apply_action` (both legs via `OverlayCloser.close_collar`), `_send_close_notification` showing call + put; re-entry check on PROFIT_TARGET + TIME_STOP only
+- [ ] **COLLAR-1** `[Antigravity]` — `CollarOverlayV1` full automation: `auto_execute=True`, inherit `ReEntryMixin`, add `__init__` with store/notifier/vix_data_dir, remove `evaluate_collar_call`/`evaluate_collar_put` from `exit_signals.py` (call `evaluate_cc` directly), handle `CLOSE_COLLAR` in `apply_action` (both legs via `OverlayCloser.close_collar_all`), `_send_close_notification` showing call + put; re-entry check on PROFIT_TARGET + TIME_STOP only. Also includes Addition A (unify `collar_short_call`/`collar_long_put` → `overlay_collar_call`/`overlay_collar_put` in `OverlayCloser` + DB migration if needed) and Addition B (`_dispatch_evaluate` fix: use `evaluate_cc` for call, skip put leg entirely). See `stories_collar.md` "COLLAR-1 Additions" section.
+
+## Phase DAEMON — Overlay Registration Fix
+
+- [ ] **DAEMON-FIX** `[Claude]` — Fix overlay dependency injection in `scripts/monitor_daemon.py`: replace `overlay_cls()` zero-arg instantiation with `overlay_cls(**kwargs)` passing broker/store/gateway/vix_data_dir; set `MONITOR_OVERLAYS=1` in `.env`. Prerequisite: CC-4 + PP-2 + COLLAR-1 all committed. See `stories_daemon.md`.
 
 ## Phase CR2 — Overlay Roll Signal
 
@@ -105,13 +128,14 @@
 | P5 | CR1d | Claude | CSPNiftyV1 full automation — needs CR1c + CC-3 |
 | P6 | CC-4 | Antigravity | CCOverlayV1 automation — needs CC-1 + CC-2 + CR1d |
 | P6 | PP-2 | Antigravity | PPOverlayV1 automation — needs CR1a + CR1b + PP-1; parallel with CC-4 |
-| P6 | COLLAR-1 | Antigravity | CollarOverlayV1 automation — needs CC-1 + CC-2 + CR1d; parallel with CC-4 and PP-2 |
+| P6 | COLLAR-1 | Antigravity | CollarOverlayV1 automation + leg role unification + dispatch fix — needs CC-1 + CC-2 + CR1d; parallel with CC-4 and PP-2 |
 | P6 | CC-5 | Antigravity | paper_cc_roll.py — needs CC-1 (aligned thresholds); parallel with CC-4 |
+| P7 | DAEMON-FIX | Claude | Fix overlay DI in daemon — needs CC-4 + PP-2 + COLLAR-1 all done |
 | P7 | CR2 | Antigravity | evaluate_roll_overlay — needs CR1b; can run after P4 |
 | P8 | CR3 | Claude | Wire overlay roll — needs CR2 |
 | P8 | NT-1 | Antigravity | Proxy delta signals + breach counter — needs CR3; parallel with NT-2 |
 | P8 | NT-2 | Claude | Futures+CC block guard — needs CR3; parallel with NT-1 |
-| P9 | AUTO-1 | Antigravity | EOD snapshot auto-close — needs CC-4 + PP-2 done; run after COLLAR-1 |
+| P9 | AUTO-1 | Antigravity | EOD snapshot auto-close (all overlays) — needs CC-4 + PP-2 + COLLAR-1 + DAEMON-FIX |
 | P10 | CR4 + PP-3 | Claude | Always last — docs close for all automation stories |
 
 ---
@@ -145,4 +169,5 @@ python -m pytest tests/unit/paper/ --tb=short -q
 
 ## Environment Variables
 
-No new env vars. `MONITOR_OVERLAYS` behaviour unchanged.
+`MONITOR_OVERLAYS=1` set by DAEMON-FIX. `AUTO-1` works regardless (EOD path is independent).
+New in AUTO-1: no new env vars — `simulator` and `vix` are injected at call site.

@@ -116,9 +116,18 @@ human confirmation. Leg selection order (which overlay to roll first) is not det
 
 **Tests:**
 - Overlay leg `dte=4`, `base_dte=25` → `ROLL_ELIGIBLE` ACTION in signals
-- Overlay leg `dte=8` → `ROLL_DUE_DTE` WARN (unchanged)
+- Overlay leg `dte=8` → `ROLL_DUE_DTE` WARN (unchanged — DTE 6-10 path not touched)
 - `base_dte=8` → `ROLL_BASE_FIRST` WARN; no `ROLL_ELIGIBLE`
 - Healthy overlay (`dte=20`) → `[]`
+
+**⚠️ Existing tests that will break — must update in same commit:**
+
+Three tests in `test_nifty_track_comparison_v1.py` filter on `event_type == "ROLL_DUE_DTE"`:
+- `test_overlay_dte_4_emits_roll_due_dte` — `dte=4` now emits `ROLL_ELIGIBLE` (ACTION), not `ROLL_DUE_DTE`. Filter and assertion must change to `event_type == "ROLL_ELIGIBLE"` and `severity == "ACTION"`.
+- `test_overlay_dte_exactly_5_emits_roll_due_dte` — same: `dte=5` now triggers `evaluate_roll_overlay`; filter changes to `ROLL_ELIGIBLE`.
+- `test_all_three_tracks_trigger_simultaneously` — currently asserts `len(roll_events) == 3` where `roll_events` filters on `ROLL_DUE_DTE`. After CR3, that filter returns 0. Update to filter on `ROLL_ELIGIBLE`; also rename the test to `test_all_three_tracks_roll_eligible_simultaneously`.
+
+These are 3 test renames/updates, not regressions. Run `python -m pytest tests/unit/strategy/test_nifty_track_comparison_v1.py --tb=short` after CR3 to confirm 0 failures before committing.
 
 **Commit:** `feat(strategy): wire evaluate_roll_overlay into NiftyTrackComparisonV1`
 
