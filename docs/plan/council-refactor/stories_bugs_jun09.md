@@ -304,6 +304,83 @@ if already_sent:
 
 ---
 
+---
+
+## BUG-6 — `_compute_realized_pnl` cross-cycle averaging inflates realized P&L
+
+**Discovered:** 2026-06-09 — P&L analysis session
+
+**File:** `src/paper/tracker.py` — `_compute_realized_pnl()`
+
+**Problem:**
+The function buckets all trades for a `leg_role` together and computes realized P&L as
+`(weighted_avg_sell - weighted_avg_buy) × closed_qty`, where `closed_qty = min(total_buy_qty, total_sell_qty)`.
+
+When a leg has been through multiple cycles (close cycle 1, open cycle 2), the new open SELL
+is averaged together with the closed cycle's SELL into a single `sell_avg`.  The function
+cannot distinguish "this SELL closed a position" from "this SELL opened a new position".
+
+**Concrete impact (2026-06-09):**
+- `overlay_cc` for `paper_nifty_spot`:
+  - Cycle 1: SELL 65 @ 221.38 (2026-05-11), BUY 65 @ 12.60 (2026-06-08) → correct realized = **+13,571**
+  - Cycle 2: SELL 65 @ 543.90 (2026-06-09) — still open, no close yet
+  - Bug: sell_avg = (221.38 + 543.90) / 2 = 382.64; realized = (382.64 − 12.60) × 65 = **+24,053** (wrong)
+- Same error on `overlay_collar_call`: +24,028 reported vs +13,521 correct
+- `overlay_collar_put`: similar mis-attribution
+- Per-strategy reported realized: ~44,960 vs correct ~25,589
+- Across two identical tracks (spot + proxy): apparent ~90k vs correct ~51k
+
+The bug also causes the `paper_nav_snapshots` `realized_pnl` column to be wrong whenever
+any overlay has been rolled (i.e. cycle 1 closed and cycle 2 opened on the same leg_role).
+
+**Fix (`src/paper/tracker.py` — `_compute_realized_pnl`):**
+
+Replace the aggregate-then-divide approach with FIFO round-trip matching.  Walk trades in
+chronological order; for short-first legs each SELL opens a round-trip and the next BUY
+closes it; for long-first legs vice versa.  Only fully closed round-trips contribute to
+realized P&L.  An open position's entry price must never enter the realized calculation.
+
+```python
+def _compute_realized_pnl(store: PaperStore, strategy_name: str) -> Decimal:
+    trades = store.get_trades(strategy_name)
+    if not trades:
+        return Decimal("0")
+
+    total_realized = Decimal("0")
+
+    for leg_role in sorted({t.leg_role for t in trades}):
+        leg_trades = sorted(
+            [t for t in trades if t.leg_role == leg_role],
+            key=lambda t: t.trade_date,
+        )
+        # Determine open direction from first trade
+        first_action = leg_trades[0].action
+        opens  = [t for t in leg_trades if t.action == first_action]
+        closes = [t for t in leg_trades if t.action != first_action]
+
+        for open_trade, close_trade in zip(opens, closes):
+            if first_action == TradeAction.SELL:
+                # Short leg: profit = sell_price - buy_price
+                realized = (open_trade.price - close_trade.price) * open_trade.quantity
+            else:
+                # Long leg: profit = sell_price - buy_price
+                realized = (close_trade.price - open_trade.price) * open_trade.quantity
+            total_realized += realized
+
+    return total_realized
+```
+
+Note: this assumes each round-trip uses the same quantity per leg.  If partial closes are
+ever supported, replace `zip` with a proper FIFO queue consuming qty from both sides.
+
+**Tests to add (`tests/unit/paper/test_tracker_realized_pnl.py`):**
+- Single closed cycle (short leg): realized = (sell − buy) × qty.
+- Two cycles, second still open: realized reflects only cycle 1; cycle 2 SELL not included.
+- Long-first leg (PP): closed cycle realized = (exit_sell − entry_buy) × qty.
+- No trades: returns Decimal("0").
+
+---
+
 ## Fix Dependency Order
 
 ```
@@ -312,6 +389,7 @@ BUG-2 (ltp=0 guard)       ← fix second; independent of BUG-1 but blocks false 
 BUG-3 (_open_new qty=1)   ← fix third; safe standalone change
 BUG-4 (unique key)        ← requires migration script; coordinate with BUG-1 fix
 BUG-5 (reentry dedup)     ← fix last; lowest blast radius
+BUG-6 (_compute_realized_pnl) ← fix after BUG-1; both touch tracker.py / realized P&L path
 ```
 
 ## DB Cleanup Required (2026-06-09)

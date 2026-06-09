@@ -374,6 +374,64 @@ visually verify the delta column in the daily `--no-save` dry-run if the alert i
 
 ---
 
+## Reading P&L — Overlays Are Comparison Experiments, Not Additive Positions
+
+### The core invariant
+
+Each track runs **all three overlay types simultaneously** (CC, PP, Collar) on the same base
+position. This is intentional — it lets you compare outcomes over the same market period.
+It does **not** mean the track holds three overlay positions at once for combined protection.
+
+The three overlays on a single track are **mutually exclusive in interpretation**:
+
+> "If I had used CC only on this base, what would my P&L be?"
+> "If I had used PP only on this base, what would my P&L be?"
+> "If I had used Collar only on this base, what would my P&L be?"
+
+**Never sum the three overlay P&Ls together.** Summing them produces a number that
+corresponds to no real-world strategy — it would mean you sold two calls and bought one put
+on the same base lot, which is not what is being tested.
+
+### Correct P&L attribution
+
+When analysing overlay performance, always report **per overlay type** in isolation:
+
+| What to compute | How |
+|---|---|
+| CC contribution | `overlay_cc` P&L only |
+| PP contribution | `overlay_pp` P&L only |
+| Collar contribution | `overlay_collar_call` + `overlay_collar_put` combined |
+
+Then compare each to the base-only P&L to measure the protection or drag each overlay adds.
+
+Example (2026-05-11 inception to 2026-06-09, paper_nifty_spot, Nifty declined ~23900→23350):
+
+| Overlay | Realized | Unrealized MTM | Net vs base-only |
+|---|---|---|---|
+| CC only | +13,571 | −2,447 | base −40k → −28.9k |
+| PP only | 0 | −3,658 | base −40k → −43.7k (drag) |
+| Collar | +12,018 | −4,492 | base −40k → −32.5k |
+| No overlay | 0 | 0 | −40.0k |
+
+### Cross-track comparison
+
+The three tracks (Spot / Futures / Proxy) each run the same overlays. When comparing tracks,
+compare the **same overlay type across tracks** — do not mix overlay types across tracks.
+
+### `paper_nav_snapshots` is not per-overlay
+
+`paper_nav_snapshots.realized_pnl` is the strategy-level total — it aggregates all leg_roles.
+To get per-overlay realized P&L, query `paper_leg_snapshots` and filter by `leg_role`.
+
+⚠ **Known bug (BUG-6 in `stories_bugs_jun09.md`):** `_compute_realized_pnl` inflates realized
+P&L when an overlay has been rolled (cycle 1 closed, cycle 2 opened on the same `leg_role`).
+The function averages the new open SELL into the closed cycle's realized calculation, producing
+a phantom gain. Do not trust `paper_nav_snapshots.realized_pnl` or `paper_leg_snapshots.realized_pnl`
+for any overlay that has completed ≥ 1 full cycle until BUG-6 is fixed. Use FIFO trade-level
+calculation from the `paper_trades` table directly.
+
+---
+
 ## Framework Kill Criteria
 
 Triggers an **immediate pause on new entries** (existing positions managed to completion):
