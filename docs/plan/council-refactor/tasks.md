@@ -20,9 +20,109 @@
 > | BUG-1 … BUG-5 | `stories_bugs_jun09.md` |
 > | BUG-6, BUG-7 | `stories_bugs_overlay_state.md` |
 | RPT-1, RPT-2, RPT-3 | `stories_track_report.md` |
+> | DAEMON-S1 | `stories_bugs_audit_jun09.md` |
+> | DBI-1 … DBI-3 | `stories_bugs_audit_jun09.md` |
+> | SIG-1, SIG-2 | `stories_bugs_audit_jun09.md` |
+> | SM-1, SM-2 | `stories_bugs_audit_jun09.md` |
+> | LOG-1 | `stories_bugs_audit_jun09.md` |
+> | RPT-0, RPT-SNAP | `stories_bugs_audit_jun09.md` |
 >
 > Also load `README.md` for shared context (signal tables, state machine, dependency order).
 > Do NOT load `stories.md` — it is a historical archive.
+
+---
+
+## Phase DAEMON-STABLE — Daemon must not die on a single bad event (P0)
+
+> Fix before re-enabling the daemon. Story file: `stories_bugs_audit_jun09.md`.
+
+- [ ] **DAEMON-S1** `[Claude]` — Two fixes in `scripts/daemon/monitor_daemon.py` and `src/strategy/monitor.py`:
+  (a) `add_pending_approval` doesn't exist on `PaperStore` — every manual-approval ACTION event raises `AttributeError` and kills the daemon. Either implement `PaperStore.add_pending_approval(strategy_name, event)` delegating to `create_approval`, or inline the correct `create_approval` call at the call site. Remove the `# type: ignore[attr-defined]` masking it.
+  (b) `run()` loop has no exception guard — any unhandled exception in `_fetch_chain`, `_write_heartbeat`, or `_route_event` is terminal. Wrap the `while True` body in `try/except Exception` that logs the error and continues to the next `asyncio.sleep`. A single bad tick must never stop the monitor.
+  Tests: mock `create_approval` raising `RuntimeError` → daemon continues; mock nonexistent method → `add_pending_approval` delegates correctly.
+
+---
+
+## Phase DB-INTEGRITY — Every write must be correct and atomic (P1)
+
+> Fix as a unit — all three tasks share the same root cause. Story file: `stories_bugs_audit_jun09.md`.
+> Combine DBI-1 migration with BUG-4 migration if BUG-4 is not yet done.
+
+- [ ] **DBI-1** `[Claude]` — Make `overlay_closer.py` and `paper_3track_overlay_roll.py` genuinely atomic, and fix the destructive rollback key:
+  (a) `src/paper/overlay_closer.py`: replace per-leg `_connect()` calls with a single shared connection passed to all `record_trade` calls; commit once after all legs succeed; on failure roll back the DB transaction (no application-level delete needed).
+  (b) `scripts/strategies/three_track/paper_3track_overlay_roll.py`: same — wrap close+open per roll in a single transaction. `_roll_collar` must commit both legs together or neither.
+  (c) `src/paper/store.py` `delete_trade`: add `instrument_key` to the WHERE predicate (same root cause as BUG-4); expose `delete_trade_by_id(trade_id)` as the preferred rollback primitive going forward.
+  (d) `overlay_closer.py` `monetize_collar_put`: validate both put and call positions exist before mutating either; abort with an error if the collar structure is incomplete (avoids leaving a naked call).
+  Tests: collar close — second leg write raises → first leg rolled back; `delete_trade` with different `instrument_key` same tuple → does not delete wrong row.
+
+- [ ] **DBI-2** `[Claude]` — All three overlay `apply_action` methods record no closing trade to the DB, so positions reappear from the ledger next tick and signals re-fire indefinitely. Fix in `src/strategy/cc_overlay_v1.py`, `src/strategy/pp_overlay_v1.py`, `src/strategy/collar_overlay_v1.py`:
+  Each `apply_action` that closes a leg must call `self._store.record_trade(closing_trade)` (BUY for a short leg, SELL for a long leg) at the resolved exit price before returning the filtered positions list. Use `PaperFillSimulator` for the exit price (already available via executor). For collar, record both legs.
+  Tests: `apply_action(CLOSE_CC)` → closing BUY trade written to DB; next `get_positions` call returns empty for that leg; idempotent (second call is a no-op via unique key).
+
+- [ ] **DBI-3** `[Claude]` — Two `get_positions` data quality fixes in `src/paper/store.py`:
+  (a) `entry_date` is never set for long-first legs (PP, base ETF, deep ITM proxy) — `entry_date` is populated only from the first SELL. Set `entry_date` from the opening trade regardless of action (first row for the leg in the current cycle after last flat point).
+  (b) `instrument_key` is taken from the last loop row — on a rolled leg this is the old contract. Take `instrument_key` from the most recent opening trade in the current cycle instead.
+  Tests: long-only leg (BUY-opened) → `entry_date` equals BUY trade date; rolled leg → `instrument_key` equals new contract key, not old.
+
+---
+
+## Phase SIGNAL-HARDENING — Zero/missing prices must never fire a signal (P2)
+
+> Story file: `stories_bugs_audit_jun09.md`. Fix SIG-1 before SIG-2 (shared price-resolution path).
+
+- [ ] **SIG-1** `[Claude]` — `src/strategy/executor.py` `_resolve_mid_price` is a TODO stub returning `Decimal("0")`. Every fill through it is priced at zero, corrupting P&L and feeding false-signal paths:
+  Implement real mid-price resolution: `(bid + ask) / 2` from the chain leg if both are present; fall back to `ltp` if spread is unavailable; raise `ValueError` (do not return 0) if no price can be resolved so the caller can abort rather than record a zero-price fill.
+  Also fix `_write_audit` which inserts wrong columns into `council_outputs` under a swallowed `OperationalError` — add a dedicated `paper_action_audit` table with columns `(id, strategy_name, action_type, leg_role, price, qty, rationale, executed_at)` and write there instead.
+  Tests: `_resolve_mid_price` with bid+ask → returns mid; ltp-only → returns ltp; no price → raises; `_write_audit` → row in `paper_action_audit`.
+
+- [ ] **SIG-2** `[Claude]` — Two false-signal fixes in `src/strategy/exit_signals.py`:
+  (a) `evaluate_pp`: `value_breached = current_mark >= 5.0 * entry_price` fires when `entry_price == 0` (`0 >= 0` → True). Guard: `if entry_price <= 0: return result with no signals` with a WARN logged.
+  (b) `evaluate_collar_put`: silently returns no result when `bid` or `ask` is `None` (illiquid strike). Fall back to `ltp` when either is missing; emit an INFO diagnostic when falling back so the operator knows the evaluation used ltp not mid.
+  Also convert float monetary comparisons throughout `exit_signals.py` to `Decimal` (REVIEW.md §5).
+  Tests: `evaluate_pp` with `entry_price=0` → no signal emitted, WARN logged; `evaluate_collar_put` with missing bid → uses ltp, INFO logged.
+
+---
+
+## Phase STATE-MACHINE — State transitions must actually execute (P3)
+
+> Story file: `stories_bugs_audit_jun09.md`.
+
+- [ ] **SM-1** `[Claude]` — `src/strategy/csp_nifty_v1.py`: `DELTA_BREACH_FINAL` / DEFENDED escalation is dead code. `trade_state = pos.state if hasattr(pos, "state") else TradeState.OPEN` — `pos` is `PaperPosition` which has no `state` field, so `hasattr` is always False and the escalation branch (`OPEN→DEFENDED→DELTA_BREACH_FINAL`) never executes. Fix: read `TradeState` from the trade ledger — call `self._store.get_trade_state(strategy_name, leg_role)` (add this method to `PaperStore` if not present), then use that value instead of `hasattr`. Also fix `_find_put_leg` fallback: when the strike regex fails, skip the position with a WARN rather than returning an arbitrary PE from the chain.
+  Tests: position in DEFENDED state → `check_signals` emits `DELTA_BREACH_FINAL`; `_find_put_leg` with no matching strike → returns None, WARN logged.
+
+- [ ] **SM-2** `[Claude]` — `src/strategy/collar_overlay_v1.py` does not inherit `ReEntryMixin` — after a collar leg is closed, re-entry eligibility is never evaluated, breaking the fair-comparison invariant vs CC and PP. Add `ReEntryMixin` to `CollarOverlayV1`, set `reentry_leg_role = "overlay_collar_call"` and `reentry_script_hint`, wire `_check_reentry` into the close path in `apply_action` (same pattern as `CCOverlayV1`). Prerequisite: BUG-5 fixed (dedup), otherwise re-entry notification will flood.
+  Tests: `apply_action(CLOSE_COLLAR)` → `_check_reentry` called once; eligibility gated on DTE/IVR/no-open-position.
+
+---
+
+## Phase LOG — Structured logging with correlation ID (P2, can run in parallel with SIGNAL-HARDENING)
+
+> Every execution flow (daemon tick, snapshot run, roll, action dispatch) must be traceable
+> end-to-end from a single ID in the log. Story file: `stories_bugs_audit_jun09.md`.
+
+- [ ] **LOG-1** `[Claude]` — Add `trace_id` correlation to all structured log flows across the daemon, snapshot, and roll scripts:
+  (a) `src/utils/logging.py`: add `generate_trace_id() -> str` returning an 8-char hex string (`secrets.token_hex(4)`). Add `bind_trace_id(trace_id: str)` that calls `structlog.contextvars.bind_contextvars(trace_id=trace_id)` so the ID appears in every subsequent log call within the same async context or function call stack.
+  (b) `src/strategy/monitor.py` `_tick()`: call `bind_trace_id(generate_trace_id())` at the top of each tick. All logs within a tick (chain fetch, signal check, route event, approval write, heartbeat) will carry `trace_id`. Log `tick.start` and `tick.end` with the ID.
+  (c) `scripts/strategies/three_track/paper_3track_snapshot.py` `main()`: bind a trace ID at script entry. All leg P&L computations, chain fetches, exit signal evaluations, and DB writes within a single snapshot run share the same ID.
+  (d) `scripts/strategies/three_track/paper_3track_overlay_roll.py` `_run()`: same — bind at entry, all roll operations (close, open, DB write) carry the ID.
+  (e) `src/strategy/executor.py` `execute_action()`: bind a fresh trace ID per action dispatch, or inherit the calling tick's ID if already bound. Log `action.dispatch`, `action.fill`, `action.complete` with `strategy_name`, `action_type`, `leg_role`, `price`, `qty`.
+  This means: if a signal fires and a wrong trade is executed, you can `grep trace_id=abc123ef logs/` and see the full chain: tick start → chain fetch → signal evaluated → action dispatched → fill recorded → DB write.
+  Tests: `bind_trace_id` binds to structlog context; log output for a tick includes `trace_id`; two concurrent ticks have different IDs; `generate_trace_id` returns 8-char hex.
+
+---
+
+## Phase RPT-FIX — Reporting correctness (P4)
+
+> Story file: `stories_bugs_audit_jun09.md`. Fix after DB-INTEGRITY (realized P&L attribution depends on correct closing trades).
+
+- [ ] **RPT-0** `[Claude]` — `src/strategy/executor.py` `_write_audit` writes wrong columns and is silently failing for every executed action (no audit trail exists). Part of SIG-1 above — see SIG-1 for the combined fix.
+
+- [ ] **RPT-SNAP** `[Claude]` — `scripts/strategies/three_track/paper_3track_snapshot.py` `_save_leg_snapshots` attributes all strategy-level `realized_pnl` to the base leg and records `realized_pnl=0` for every overlay leg. This is the exact metric the 3-track comparison is measuring. Fix: compute per-`leg_role` realized P&L using FIFO round-trip matching from `paper_trades` (same logic as BUG-6 fix in tracker.py — extract a shared `_compute_realized_pnl_by_leg(trades) -> dict[str, Decimal]` helper and call it from both). The base leg's `realized_pnl` should reflect only the base position's realized amount.
+  Prerequisite: DBI-2 committed (closing trades written to DB).
+  Tests: closed CC overlay → `paper_leg_snapshots.realized_pnl` for `overlay_cc` equals `(sell − buy) × qty`; base leg realized excludes overlay amounts.
+
+- [ ] **RPT-ROLL** `[Claude]` — `scripts/strategies/three_track/paper_3track_overlay_roll.py` `_find_expiring_overlay` computes net quantity from the full trade history, so a closed-then-reopened leg can net incorrectly and the wrong leg is selected for rolling. Scope the net computation to the current open cycle only (same fix class as BUG-1 / DBI-3).
+  Tests: leg with 2 completed cycles + 1 open → net qty reflects only open cycle; all-closed leg → net_qty=0, not selected for roll.
 
 **Prerequisite gate (run before CR0):**
 - [x] `search_graph("ExitSignalEngine")` returns results (ES1 committed)
@@ -138,28 +238,55 @@
 
 ## Implementation Order
 
+> ⚠ AUDIT FINDINGS (2026-06-09) inserted at P0–P4. Daemon must not be re-enabled until
+> DAEMON-S1 is done. Existing automation stories (CC-4, PP-2, COLLAR-1, AUTO-1) unblocked
+> only after DB-INTEGRITY phase complete.
+
 | Priority | Task | Owner | Rationale |
 |---|---|---|---|
 | P0 | CR0 | Claude | ✅ Done — fixes live runtime TypeError |
-| P1 | CR1a | Antigravity | `strike_selector.py` unblocks CR1b and PP-2 |
-| P1 | CC-2 | Antigravity | `ReEntryMixin` — independent, run in parallel with CR1a |
-| P2 | CR1b | Claude | DB migration + CSP signals; introduces `_PROFIT_TARGET_RETENTION` + `TradeState` |
-| P3 | CC-1 | Antigravity | Align `evaluate_cc()` — needs `_PROFIT_TARGET_RETENTION` from CR1b |
-| P3 | PP-1 | Antigravity | Update `evaluate_pp()` — needs CR1b for ExitSignalResult; run parallel with CC-1 |
-| P3 | CC-3 | Claude | Migrate CSPNiftyV1 to mixin — needs CC-2; run parallel with CC-1, PP-1 |
-| P4 | CR1c | Antigravity | CSPRollExecutor — needs CR1b; run parallel with CC-1, CC-3, PP-1 |
-| P5 | CR1d | Claude | CSPNiftyV1 full automation — needs CR1c + CC-3 |
-| P6 | CC-4 | Antigravity | CCOverlayV1 automation — needs CC-1 + CC-2 + CR1d |
-| P6 | PP-2 | Antigravity | PPOverlayV1 automation — needs CR1a + CR1b + PP-1; parallel with CC-4 |
-| P6 | COLLAR-1 | Antigravity | CollarOverlayV1 automation + leg role unification + dispatch fix — needs CC-1 + CC-2 + CR1d; parallel with CC-4 and PP-2 |
-| P6 | CC-5 | Antigravity | paper_cc_roll.py — needs CC-1 (aligned thresholds); parallel with CC-4 |
-| P7 | DAEMON-FIX | Claude | Fix overlay DI in daemon — needs CC-4 + PP-2 + COLLAR-1 all done |
-| P7 | CR2 | Antigravity | evaluate_roll_overlay — needs CR1b; can run after P4 |
-| P8 | CR3 | Claude | Wire overlay roll — needs CR2 |
-| P8 | NT-1 | Antigravity | Proxy delta signals + breach counter — needs CR3; parallel with NT-2 |
-| P8 | NT-2 | Claude | Futures+CC block guard — needs CR3; parallel with NT-1 |
-| P9 | AUTO-1 | Antigravity | EOD snapshot auto-close (all overlays) — needs CC-4 + PP-2 + COLLAR-1 + DAEMON-FIX |
-| P10 | CR4 + PP-3 | Claude | Always last — docs close for all automation stories |
+| P0 | DAEMON-S1 | Claude | `add_pending_approval` missing + `run()` no guard — daemon kills itself on first approval signal |
+| P1 | LOG-1 | Claude | Correlation ID — add first so all subsequent fixes emit traceable logs |
+| P1 | DBI-1 | Claude | Atomic overlay close/roll + destructive rollback key fix — root cause of data corruption |
+| P1 | DBI-2 | Claude | `apply_action` must write closing trades — positions reappear every tick without this |
+| P1 | DBI-3 | Claude | `get_positions` entry_date + instrument_key — downstream DTE/age logic is broken without this |
+| P2 | BUG-1 | Claude | `get_positions` cross-cycle aggregation — needs DBI-3 in same file, do together |
+| P2 | BUG-4 | Claude | Unique key missing `instrument_key` — combine migration with DBI-1 |
+| P2 | SIG-1 | Claude | `_resolve_mid_price` stub + `_write_audit` wrong columns |
+| P2 | SIG-2 | Claude | `evaluate_pp` zero-entry false signal + `evaluate_collar_put` silent skip |
+| P2 | BUG-2 | Claude | Position-driven chain fetch — blocks all correct signal evaluation |
+| P2 | BUG-6 | Claude | `_compute_realized_pnl` cross-cycle inflation — combine with BUG-1 fix in tracker.py |
+| P3 | BUG-3 | Claude | `_open_new` qty=1 hardcoded |
+| P3 | BUG-5 | Claude | `_check_reentry` dedup |
+| P3 | SM-1 | Claude | `DELTA_BREACH_FINAL` dead code + `_find_put_leg` arbitrary fallback |
+| P3 | SM-2 | Claude | `CollarOverlayV1` missing `ReEntryMixin` — needs BUG-5 first |
+| P4 | RPT-SNAP | Claude | Per-leg realized P&L attribution — needs DBI-2 (closing trades must exist) |
+| P4 | RPT-ROLL | Claude | `_find_expiring_overlay` scoped to current cycle — needs BUG-1 fix |
+| P4 | BUG-7 | Claude | DB cleanup for Jun8 data corruption |
+| P4 | RPT-1 | Claude | Closed overlay legs excluded from summary table |
+| P4 | RPT-2 | Claude | CLI redesign + daily P&L mode |
+| P5 | CR1a | Antigravity | `strike_selector.py` — unblocks CR1b and PP-2 |
+| P5 | CC-2 | Antigravity | `ReEntryMixin` — independent, run in parallel with CR1a |
+| P6 | CR1b | Claude | DB migration + CSP signals |
+| P7 | CC-1 | Antigravity | Align `evaluate_cc()` — needs CR1b |
+| P7 | PP-1 | Antigravity | Update `evaluate_pp()` — needs CR1b; parallel with CC-1 |
+| P7 | CC-3 | Claude | Migrate CSPNiftyV1 to mixin — needs CC-2; parallel with CC-1, PP-1 |
+| P8 | CR1c | Antigravity | CSPRollExecutor — needs CR1b |
+| P9 | CR1d | Claude | CSPNiftyV1 full automation — needs CR1c + CC-3 |
+| P10 | CC-4 | Antigravity | CCOverlayV1 automation — needs CC-1 + CC-2 + CR1d + DBI-2 |
+| P10 | PP-2 | Antigravity | PPOverlayV1 automation — needs CR1a + CR1b + PP-1 + DBI-2; parallel with CC-4 |
+| P10 | COLLAR-1 | Antigravity | CollarOverlayV1 automation — needs CC-1 + CC-2 + CR1d + SM-2 + DBI-2; parallel with CC-4 |
+| P10 | CC-5 | Antigravity | paper_cc_roll.py — needs CC-1; parallel with CC-4 |
+| P11 | DAEMON-FIX | Claude | Overlay DI in daemon — needs CC-4 + PP-2 + COLLAR-1 + DAEMON-S1 |
+| P11 | CR2 | Antigravity | evaluate_roll_overlay — needs CR1b |
+| P12 | CR3 | Claude | Wire overlay roll — needs CR2 |
+| P12 | NT-1 | Antigravity | Proxy delta signals — needs CR3; parallel with NT-2 |
+| P12 | NT-2 | Claude | Futures+CC block guard — needs CR3; parallel with NT-1 |
+| P13 | AUTO-1 | Antigravity | EOD snapshot auto-close — needs CC-4 + PP-2 + COLLAR-1 + DAEMON-FIX |
+| P13 | OPS-1 | Claude | insert/skip logging in overlay entry |
+| P13 | OPS-2 | Claude | Atomic collar open/close in entry script |
+| P13 | RPT-3 | Claude | Monthly mode — needs RPT-2 + market_calendar |
+| P14 | CR4 + PP-3 | Claude | Always last — docs close |
 
 ---
 
