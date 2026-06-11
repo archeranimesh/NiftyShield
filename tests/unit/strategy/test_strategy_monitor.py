@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 from decimal import Decimal
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -18,15 +18,15 @@ from src.client.exceptions import DataFetchError
 from src.models.options import OptionChain
 from src.paper.models import PaperPosition
 from src.strategy.monitor import StrategyMonitor
-from src.strategy.protocol import ApprovedAction, SignalEvent
+from src.strategy.protocol import SignalEvent
 
 # Import MockStrategy defined alongside the protocol tests.
 from tests.unit.strategy.test_strategy_protocol import MockStrategy
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_empty_chain() -> OptionChain:
     """Minimal OptionChain with no strikes — safe as a test market snapshot."""
@@ -218,7 +218,7 @@ async def test_tick_warn_signal_sends_plain_message() -> None:
 
 @pytest.mark.asyncio
 async def test_tick_action_signal_sends_approval_and_creates_pending_row() -> None:
-    """ACTION signal → send_approval_request called once, add_pending_approval called once."""
+    """ACTION signal → send_approval_request called, create_approval written with msg_id."""
     strategy = MockStrategy()
     action_event = SignalEvent(
         event_type="ENTRY_CSP",
@@ -230,6 +230,7 @@ async def test_tick_action_signal_sends_approval_and_creates_pending_row() -> No
 
     store = _make_store()
     notifier = _make_notifier()
+    notifier.send_approval_request = AsyncMock(return_value=42)
     monitor = _make_monitor(store=store, notifier=notifier, strategies=[strategy])
 
     with (
@@ -242,10 +243,78 @@ async def test_tick_action_signal_sends_approval_and_creates_pending_row() -> No
         await monitor._tick()
 
     notifier.send_approval_request.assert_called_once()
-    store.add_pending_approval.assert_called_once_with(
-        strategy.strategy_name, action_event
-    )
+    store.create_approval.assert_called_once()
+    call_args = store.create_approval.call_args
+    assert call_args[0][0] == strategy.strategy_name  # strategy_name
+    assert call_args[0][1] == "ENTRY_CSP"  # event_type
+    assert call_args[0][3] == 42  # telegram msg_id
     notifier.send_plain_message.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_run_continues_after_tick_exception() -> None:
+    """Exception in _tick must not stop the run() loop — next sleep still fires."""
+    monitor = StrategyMonitor(
+        broker=_make_broker(),
+        store=_make_store(),
+        notifier=_make_notifier(),
+        poll_interval_s=0,
+    )
+    tick_calls: list[int] = []
+
+    async def _bad_tick() -> None:
+        tick_calls.append(1)
+        if len(tick_calls) == 1:
+            raise RuntimeError("simulated tick failure")
+
+    monitor._tick = _bad_tick  # type: ignore[method-assign]
+
+    async def _run_two_ticks() -> None:
+        task = asyncio.create_task(monitor.run())
+        # Wait long enough for two ticks at poll_interval_s=0.
+        await asyncio.sleep(0.05)
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    await _run_two_ticks()
+    assert len(tick_calls) >= 2, "run() should have continued after the first tick raised"
+
+
+@pytest.mark.asyncio
+async def test_tick_action_create_approval_delegates_to_store() -> None:
+    """create_approval is called with correct positional args; add_pending_approval absent."""
+    strategy = MockStrategy()
+    event = SignalEvent(
+        event_type="TIME_STOP",
+        severity="ACTION",
+        description="21 days held",
+        payload={"days_held": 21},
+    )
+    strategy.check_signals = AsyncMock(return_value=[event])
+
+    store = _make_store()
+    notifier = _make_notifier()
+    notifier.send_approval_request = AsyncMock(return_value=99)
+    monitor = _make_monitor(store=store, notifier=notifier, strategies=[strategy])
+
+    with (
+        patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch(
+            "src.strategy.monitor.datetime",
+            **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
+        ),
+    ):
+        await monitor._tick()
+
+    assert not hasattr(store, "add_pending_approval") or not store.add_pending_approval.called
+    store.create_approval.assert_called_once()
+    args = store.create_approval.call_args[0]
+    assert args[0] == strategy.strategy_name
+    assert args[1] == "TIME_STOP"
+    assert args[3] == 99  # msg_id propagated from send_approval_request
 
 
 # ---------------------------------------------------------------------------
@@ -322,7 +391,7 @@ async def test_tick_skips_if_outside_market_hours() -> None:
 
 def _fake_ist_time(hour: int, minute: int) -> MagicMock:
     """Return a mock datetime with .hour, .minute, and .date() set for IST."""
-    from datetime import date, datetime, timedelta, timezone
+    from datetime import date, timedelta, timezone
 
     _IST = timezone(timedelta(hours=5, minutes=30))
     dt = MagicMock()

@@ -16,6 +16,7 @@ as PaperStrategy instances via register() or the constructor.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
@@ -45,9 +46,8 @@ class StrategyMonitor:
 
     Args:
         broker: Live or mock broker client (BrokerClient protocol).
-        store: PaperStore for reading positions and writing heartbeat /
-            pending_approvals rows (write_heartbeat + add_pending_approval
-            are added by PB1.6).
+        store: PaperStore for reading positions, writing heartbeat, and
+            persisting pending_approvals rows via create_approval.
         notifier: Any object with send_plain_message and send_approval_request
             coroutines (TelegramGateway from PB1.5 satisfies this structurally).
         strategies: Pre-registered strategies; more can be added via register().
@@ -85,7 +85,10 @@ class StrategyMonitor:
     async def run(self) -> None:
         """Main daemon loop. Runs until cancelled via asyncio.CancelledError."""
         while True:
-            await self._tick()
+            try:
+                await self._tick()
+            except Exception:
+                log.exception("strategy_monitor.tick_unhandled_error")
             await asyncio.sleep(self._poll_interval_s)
 
     async def _tick(self) -> None:
@@ -200,8 +203,15 @@ class StrategyMonitor:
                     )
             else:
                 context_str = strategy.describe_context(event, chain, positions)
-                await self._notifier.send_approval_request(event, context_str)  # type: ignore[attr-defined]
-                self._store.add_pending_approval(strategy.strategy_name, event)  # type: ignore[attr-defined]
+                msg_id = await self._notifier.send_approval_request(event, context_str)  # type: ignore[attr-defined]
+                expires_at = (datetime.now(tz=timezone.utc) + timedelta(hours=1)).isoformat()
+                self._store.create_approval(
+                    strategy.strategy_name,
+                    event.event_type,
+                    json.dumps(event.payload),
+                    msg_id,
+                    expires_at,
+                )
 
     async def _fetch_chain(self) -> OptionChain | None:
         """Fetch and parse the live NIFTY option chain.
