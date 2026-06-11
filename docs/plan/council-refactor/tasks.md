@@ -19,7 +19,8 @@
 > | AUTO-1 | `stories_auto.md` |
 > | BUG-1 … BUG-5 | `stories_bugs_jun09.md` |
 > | BUG-6, BUG-7 | `stories_bugs_overlay_state.md` |
-| RPT-1, RPT-2, RPT-3 | `stories_track_report.md` |
+> | RPT-1, RPT-2, RPT-3 | `stories_track_report.md` |
+> | FR-1 … FR-10 | `docs/reviews/2026-06-11_fable_codebase_review.md` |
 > | DAEMON-S1 | `stories_bugs_audit_jun09.md` |
 > | DBI-1 … DBI-3 | `stories_bugs_audit_jun09.md` |
 > | SIG-1, SIG-2 | `stories_bugs_audit_jun09.md` |
@@ -184,6 +185,44 @@
 - [x] **CR0** `[Claude]` — Fix `send_approval_request` signature mismatch; remove `CouncilOutput` requirement from daemon approval path | SHA: 4ce6d99
 - [x] **BF-1** `[Claude]` — Fix `_find_chain_leg` fallback in `paper_3track_snapshot.py`: numeric BOD keys (`NSE_FO|71474`) could not be parsed by `_parse_strike_from_key`, causing fallback to scan all chain strikes and return the first non-zero LTP leg — always the deepest ITM contract (ltp≈8690, delta≈1.0). Fix: resolve strike via `InstrumentLookup.get_by_key()` when parse fails; remove the scan fallback entirely. Thread `lookup: InstrumentLookup | None` through `_dispatch_evaluate` and `compute_and_record_exit_signals`; `_run` already owns `lookup` and now passes it through. Affected: CC, PP, Collar overlay exit signals and CSP when using numeric BOD keys. | SHA: pending
 
+## Phase FR — Fable Review Findings (2026-06-11)
+
+> Independent `src/` audit. CRITICAL/ERROR must be fixed before AUTO-1. WARNING/INFO can run in parallel with existing phases.
+> Story file: `docs/reviews/2026-06-11_fable_codebase_review.md`.
+
+- [ ] **FR-1** `[Claude]` — `OverlayCloser._resolve_mid_price` (lines 427–446) returns `Decimal("0")` on any failure — strike absent, key regex miss, or swallowed `except Exception: pass`. Every overlay close (collar, put monetize, AUTO-1 EOD path) records a zero-price fill, corrupting realized P&L. Also fix `_find_option_leg` (459–460) broad `except Exception: return None` (root cause path): catch specific exceptions (`InvalidOperation`, `KeyError`), log WARNING, add intent comment. Extract a shared `_resolve_price(leg) -> Decimal` helper (raises `ValueError` on no-price) used by both `overlay_closer.py` and `executor.py`, eliminating the duplicate stub.
+  Tests: `_resolve_mid_price` with absent strike → `ValueError`; with valid chain leg → correct mid; `_find_option_leg` key error → WARNING logged, returns None.
+
+- [ ] **FR-2** `[Claude]` — `PaperExitEvent` monetary fields (`ltp`, `mid`, `bid`, `ask`, `entry_price`, `threshold_value`) are `float` on the model and SQLite `REAL` in the schema — violates the Decimal-as-TEXT invariant on the table that drives exit decisions. Blocks SIG-2's Decimal conversion end-to-end. Fix: change model fields to `Decimal | None`, columns to TEXT, read back with `Decimal(row[...])`. Combine schema migration with BUG-4/BUG-6 migration script.
+  Tests: `create_exit_event` with Decimal inputs → TEXT in DB; read back equals original Decimal; None fields stored as NULL.
+
+- [ ] **FR-3** `[Claude]` — Three `ClientSession()` calls in `src/notifications/telegram_gateway.py` (lines 129, 216, 239) lack `ClientTimeout`. `getUpdates` at line 239 is worst: server-side long-poll `timeout=30` with client default 300 s stalls the daemon ~5 min on a dead connection. Pattern: `aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=...))` already used correctly in `telegram.py:107`. Fix all three: `getUpdates` → `total=40`; `sendMessage`/other sends → `total=10`.
+  Tests: `send_approval_request` → session created with `ClientTimeout(total=10)`; `_get_updates` → `ClientTimeout(total=40)`.
+
+- [ ] **FR-4** `[Claude]` — `src/instruments/lookup.py:492–493` `search_api` creates `ClientSession()` with no timeout — stalled Upstox search hangs caller for ~300 s. Fix: `aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10))`.
+  Tests: session constructed with explicit timeout.
+
+- [ ] **FR-5** `[Claude]` — `src/client/upstox_market.py` three `_session.get` calls (lines 123–131, 148–155, 179–185) emit zero structured logging — no endpoint, latency_ms, status_code, or request_id. Direct violation of project logging standard; made Jun-09 post-mortem slow. Fix: wrap each call with `t0 = perf_counter()` + `log.info("upstox.api_call", endpoint=..., status_code=..., latency_ms=...)` after response.
+  Tests: mock HTTP call → log record contains `latency_ms` and `status_code`.
+
+- [ ] **FR-6** `[Claude]` — `src/strategy/reentry_mixin.py:93` `load_vix_series` (Parquet disk read, 252+ rows) runs synchronously inside `async _check_reentry`, blocking the event loop on the daemon's apply_action path. Fix: `await asyncio.to_thread(load_vix_series, self._vix_data_dir)` (pattern already in `upstox_market.py:160–167`). Also fix lines 107/123/156/172: replace dynamic f-string structlog event names (`f"{self.strategy_name}.reentry_ivr_load_failed"`) with constant names (`"reentry.ivr_load_failed"`) and `strategy=` as a bound field.
+  Tests: `_check_reentry` awaits `asyncio.to_thread`; log event name is constant string.
+
+- [ ] **FR-7** `[Claude]` — `src/client/upstox_market.py:212–231` `_safe_decimal` coerces `None`/non-numeric Greeks to `Decimal("0")`. A strike with stale/missing Greeks silently gets `delta=0`, suppressing DELTA_BREACH and DELTA_STOP exits without any trace. Fix: make Greeks `Decimal | None` on `OptionLeg`; evaluators treat `None` as "cannot evaluate" → emit WARN, never as 0.
+  Tests: `_safe_decimal(None)` → `None`; evaluator with `delta=None` → WARN signal, not DELTA_BREACH.
+
+- [ ] **FR-8** `[Claude]` — `src/instruments/strike_selector.py` `_safe_float` silently defaults unparseable `ltp`/`bid`/`ask` to `0.0`. A bad chain row becomes a strike with ltp=0 rather than being excluded. Same defect family as Jun-09. Fix: return `None` on coercion failure; skip the entry with a WARN log; keep prices as `Decimal` through ranking.
+  Tests: `_safe_float` with garbage input → WARN logged, entry excluded from candidates.
+
+- [ ] **FR-9** `[Claude]` — All DTE, `days_held`, and `trade_date` computations across strategies use `date.today()` — server-locale-dependent. On any UTC host the date is wrong between 00:00–05:30 UTC, shifting DTE by one exactly when ≤5/7 roll gates fire. Add `market_today() -> date` to `src/market_calendar/` (IST-aware via `datetime.now(tz=IST).date()`) and replace all call sites.
+  Files: `csp_nifty_v1.py`, `cc_overlay_v1.py`, `pp_overlay_v1.py`, `collar_overlay_v1.py`, `ic_nifty_v1.py`, `nifty_track_comparison_v1.py`, `overlay_closer.py`.
+  Tests: `market_today()` returns IST date; UTC midnight → IST-correct date (not UTC date).
+
+- [ ] **FR-10** `[Claude]` — `src/strategy/monitor.py:168,203` `self._notifier` accessed via `# type: ignore[attr-defined]` ×2 — identical masking that hid the DAEMON-S1 crash. Fix: introduce a `NotifierProtocol` with `send_plain_message` and `send_approval_request`, type `_notifier` as `NotifierProtocol`, remove both ignores.
+  Tests: existing monitor tests pass unchanged (MagicMock satisfies structural protocol).
+
+---
+
 ## Phase AUTO — EOD Snapshot Auto-Execution
 
 - [ ] **AUTO-1** `[Antigravity]` — EOD snapshot auto-close for ALL overlays (CC, PP, Collar): after `compute_and_record_exit_signals` writes an ACTION event, immediately call `OverlayCloser` to paper-execute the close in the same script run. Mark the event `ACTED`. Send structured Telegram notification: leg closed, leg P&L, overlay total P&L. Part 0 prerequisite: add `PaperStore.get_strategy_realized_pnl`. All overlay signals auto-execute — no manual approvals anywhere. Signature change: adds `simulator` and `vix` params. See `stories_auto.md` for full spec. Prerequisites: CC-4 + PP-2 + COLLAR-1 + DAEMON-FIX.
@@ -241,48 +280,61 @@
 > ⚠ AUDIT FINDINGS (2026-06-09) inserted at P0–P4. Daemon must not be re-enabled until
 > DAEMON-S1 is done. Existing automation stories (CC-4, PP-2, COLLAR-1, AUTO-1) unblocked
 > only after DB-INTEGRITY phase complete.
+> ⚠ FABLE REVIEW (2026-06-11): FR-1 is P0 — AUTO-1 records zero-price fills until fixed.
+> FR-2 must combine with BUG-4/BUG-6 migration. FR-3/FR-4/FR-5 can run in parallel.
 
 | Priority | Task | Owner | Rationale |
 |---|---|---|---|
-| P0 | CR0 | Claude | ✅ Done — fixes live runtime TypeError |
-| P0 | DAEMON-S1 | Claude | `add_pending_approval` missing + `run()` no guard — daemon kills itself on first approval signal |
+| Priority | Task | Owner | Rationale |
+| P0 | CR0 | Claude | ✅ Done |
+| P0 | DAEMON-S1 | Claude | ✅ Done — `add_pending_approval` + `run()` guard |
+| P0 | FR-1 | Claude | `overlay_closer._resolve_mid_price` zero-price — AUTO-1 records corrupt P&L until fixed |
 | P1 | LOG-1 | Claude | Correlation ID — add first so all subsequent fixes emit traceable logs |
-| P1 | DBI-1 | Claude | Atomic overlay close/roll + destructive rollback key fix — root cause of data corruption |
-| P1 | DBI-2 | Claude | `apply_action` must write closing trades — positions reappear every tick without this |
-| P1 | DBI-3 | Claude | `get_positions` entry_date + instrument_key — downstream DTE/age logic is broken without this |
-| P2 | BUG-1 | Claude | `get_positions` cross-cycle aggregation — needs DBI-3 in same file, do together |
+| P1 | DBI-1 | Claude | Atomic overlay close/roll + destructive rollback key fix |
+| P1 | DBI-2 | Claude | `apply_action` must write closing trades — positions reappear every tick |
+| P1 | DBI-3 | Claude | `get_positions` entry_date + instrument_key |
+| P1 | FR-2 | Claude | `PaperExitEvent` Decimal invariant — combine migration with BUG-4/BUG-6 |
+| P2 | BUG-1 | Claude | `get_positions` cross-cycle aggregation — needs DBI-3 |
 | P2 | BUG-4 | Claude | Unique key missing `instrument_key` — combine migration with DBI-1 |
 | P2 | SIG-1 | Claude | `_resolve_mid_price` stub + `_write_audit` wrong columns |
 | P2 | SIG-2 | Claude | `evaluate_pp` zero-entry false signal + `evaluate_collar_put` silent skip |
-| P2 | BUG-2 | Claude | Position-driven chain fetch — blocks all correct signal evaluation |
-| P2 | BUG-6 | Claude | `_compute_realized_pnl` cross-cycle inflation — combine with BUG-1 fix in tracker.py |
+| P2 | BUG-2 | Claude | Position-driven chain fetch — blocks correct signal evaluation |
+| P2 | BUG-6 | Claude | `_compute_realized_pnl` cross-cycle inflation |
+| P2 | FR-3 | Claude | `telegram_gateway` missing `ClientTimeout` — daemon stall risk |
+| P2 | FR-4 | Claude | `lookup.search_api` missing `ClientTimeout` |
+| P2 | FR-5 | Claude | `upstox_market` missing structured HTTP logging |
 | P3 | BUG-3 | Claude | `_open_new` qty=1 hardcoded |
 | P3 | BUG-5 | Claude | `_check_reentry` dedup |
 | P3 | SM-1 | Claude | `DELTA_BREACH_FINAL` dead code + `_find_put_leg` arbitrary fallback |
 | P3 | SM-2 | Claude | `CollarOverlayV1` missing `ReEntryMixin` — needs BUG-5 first |
-| P4 | RPT-SNAP | Claude | Per-leg realized P&L attribution — needs DBI-2 (closing trades must exist) |
-| P4 | RPT-ROLL | Claude | `_find_expiring_overlay` scoped to current cycle — needs BUG-1 fix |
-| P4 | BUG-7 | Claude | DB cleanup for Jun8 data corruption |
-| P4 | RPT-1 | Claude | Closed overlay legs excluded from summary table |
+| P3 | FR-6 | Claude | `reentry_mixin` event loop block + f-string log names |
+| P3 | FR-7 | Claude | `_safe_decimal` coerces None Greeks to 0 — silently disables delta exits |
+| P3 | FR-8 | Claude | `strike_selector._safe_float` zero-coercion — same defect family as Jun-09 |
+| P3 | FR-9 | Claude | `date.today()` locale-dependent across all strategies |
+| P4 | RPT-SNAP | Claude | Per-leg realized P&L — needs DBI-2 |
+| P4 | RPT-ROLL | Claude | `_find_expiring_overlay` scoped to current cycle |
+| P4 | BUG-7 | Claude | DB cleanup Jun-08 data corruption |
+| P4 | RPT-1 | Claude | Closed overlay legs excluded from summary |
 | P4 | RPT-2 | Claude | CLI redesign + daily P&L mode |
-| P5 | CR1a | Antigravity | `strike_selector.py` — unblocks CR1b and PP-2 |
-| P5 | CC-2 | Antigravity | `ReEntryMixin` — independent, run in parallel with CR1a |
-| P6 | CR1b | Claude | DB migration + CSP signals |
-| P7 | CC-1 | Antigravity | Align `evaluate_cc()` — needs CR1b |
-| P7 | PP-1 | Antigravity | Update `evaluate_pp()` — needs CR1b; parallel with CC-1 |
-| P7 | CC-3 | Claude | Migrate CSPNiftyV1 to mixin — needs CC-2; parallel with CC-1, PP-1 |
-| P8 | CR1c | Antigravity | CSPRollExecutor — needs CR1b |
-| P9 | CR1d | Claude | CSPNiftyV1 full automation — needs CR1c + CC-3 |
-| P10 | CC-4 | Antigravity | CCOverlayV1 automation — needs CC-1 + CC-2 + CR1d + DBI-2 |
-| P10 | PP-2 | Antigravity | PPOverlayV1 automation — needs CR1a + CR1b + PP-1 + DBI-2; parallel with CC-4 |
-| P10 | COLLAR-1 | Antigravity | CollarOverlayV1 automation — needs CC-1 + CC-2 + CR1d + SM-2 + DBI-2; parallel with CC-4 |
-| P10 | CC-5 | Antigravity | paper_cc_roll.py — needs CC-1; parallel with CC-4 |
+| P4 | FR-10 | Claude | `_notifier` type: ignore masking — extract `NotifierProtocol` |
+| P5 | CR1a | Antigravity | ✅ Done |
+| P5 | CC-2 | Antigravity | ✅ Done |
+| P6 | CR1b | Claude | ✅ Done |
+| P7 | CC-1 | Antigravity | ✅ Done |
+| P7 | PP-1 | Antigravity | ✅ Done |
+| P7 | CC-3 | Claude | ✅ Done |
+| P8 | CR1c | Antigravity | ✅ Done |
+| P9 | CR1d | Claude | ✅ Done |
+| P10 | CC-4 | Antigravity | ✅ Done |
+| P10 | PP-2 | Antigravity | ✅ Done |
+| P10 | COLLAR-1 | Antigravity | CollarOverlayV1 automation — needs CC-1 + CC-2 + CR1d + SM-2 + DBI-2 |
+| P10 | CC-5 | Antigravity | ✅ Done |
 | P11 | DAEMON-FIX | Claude | Overlay DI in daemon — needs CC-4 + PP-2 + COLLAR-1 + DAEMON-S1 |
 | P11 | CR2 | Antigravity | evaluate_roll_overlay — needs CR1b |
 | P12 | CR3 | Claude | Wire overlay roll — needs CR2 |
-| P12 | NT-1 | Antigravity | Proxy delta signals — needs CR3; parallel with NT-2 |
-| P12 | NT-2 | Claude | Futures+CC block guard — needs CR3; parallel with NT-1 |
-| P13 | AUTO-1 | Antigravity | EOD snapshot auto-close — needs CC-4 + PP-2 + COLLAR-1 + DAEMON-FIX |
+| P12 | NT-1 | Antigravity | Proxy delta signals — needs CR3 |
+| P12 | NT-2 | Claude | Futures+CC block guard — needs CR3 |
+| P13 | AUTO-1 | Antigravity | EOD snapshot auto-close — needs FR-1 + CC-4 + PP-2 + COLLAR-1 + DAEMON-FIX |
 | P13 | OPS-1 | Claude | insert/skip logging in overlay entry |
 | P13 | OPS-2 | Claude | Atomic collar open/close in entry script |
 | P13 | RPT-3 | Claude | Monthly mode — needs RPT-2 + market_calendar |
