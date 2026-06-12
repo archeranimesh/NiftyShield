@@ -10,12 +10,13 @@ returns the updated position list.
 
 from __future__ import annotations
 
+import sqlite3
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from typing import Literal
 
-import sqlite3
+import structlog
 
 from src.db import connect
 from src.models.options import OptionChain
@@ -23,7 +24,10 @@ from src.models.portfolio import TradeAction
 from src.paper.models import PaperPosition, PaperTrade
 from src.paper.store import PaperStore
 from src.strategy._price_utils import find_option_leg, resolve_price
-from src.strategy.protocol import ApprovedAction, LegSpec
+from src.strategy.protocol import ApprovedAction
+from src.utils.logging import bind_trace_id, generate_trace_id
+
+log = structlog.get_logger(__name__)
 
 # VIX-regime slippage bands (absolute INR) — DECISIONS.md §Slippage Model
 # Tuple: (upper_bound_exclusive, slippage_INR)
@@ -178,6 +182,16 @@ class PaperExecutor:
         Returns:
             Updated open positions for the strategy after applying the action.
         """
+        trace_id = generate_trace_id()
+        bind_trace_id(trace_id)
+        log.info(
+            "action.dispatch",
+            strategy=strategy_name,
+            action_type=action.action_type,
+            legs_to_close=action.legs_to_close,
+            legs_to_open=[s.leg_role for s in action.legs_to_open],
+            trace_id=trace_id,
+        )
         today = date.today()
 
         # 1. Close legs
@@ -185,9 +199,7 @@ class PaperExecutor:
             position = self._store.get_position(strategy_name, leg_role)
             if position.net_qty == 0:
                 continue  # nothing open for this leg
-            close_action = (
-                TradeAction.SELL if position.net_qty > 0 else TradeAction.BUY
-            )
+            close_action = TradeAction.SELL if position.net_qty > 0 else TradeAction.BUY
             mid_price = self._resolve_mid_price(position.instrument_key, market)
             fill = self._simulator.simulate_fill(
                 instrument_key=position.instrument_key,
@@ -209,6 +221,14 @@ class PaperExecutor:
                 is_paper=True,
             )
             self._store.record_trade(trade)
+            log.info(
+                "action.fill",
+                strategy=strategy_name,
+                action_type="close",
+                leg_role=leg_role,
+                price=str(fill.fill_price),
+                qty=fill.quantity,
+            )
 
         # 2. Open legs
         for leg_spec in action.legs_to_open:
@@ -234,18 +254,32 @@ class PaperExecutor:
                 is_paper=True,
             )
             self._store.record_trade(trade)
+            log.info(
+                "action.fill",
+                strategy=strategy_name,
+                action_type="open",
+                leg_role=leg_spec.leg_role,
+                price=str(fill.fill_price),
+                qty=fill.quantity,
+            )
 
         # 3. Audit log — best-effort; council_outputs table added in PB1.6
         self._write_audit(approval_id, strategy_name, action)
+
+        log.info(
+            "action.complete",
+            strategy=strategy_name,
+            action_type=action.action_type,
+            approval_id=approval_id,
+            trace_id=trace_id,
+        )
 
         # 4. Return updated positions
         return self._store.get_positions(strategy_name)
 
     # ── Private helpers ───────────────────────────────────────────────────────
 
-    def _resolve_mid_price(
-        self, instrument_key: str, market: OptionChain
-    ) -> Decimal:
+    def _resolve_mid_price(self, instrument_key: str, market: OptionChain) -> Decimal:
         """Resolve mid price for an instrument from the option chain.
 
         Args:
@@ -261,9 +295,7 @@ class PaperExecutor:
         """
         leg = find_option_leg(instrument_key, market)
         if leg is None:
-            raise ValueError(
-                f"resolve_mid_price: leg absent from chain for {instrument_key}"
-            )
+            raise ValueError(f"resolve_mid_price: leg absent from chain for {instrument_key}")
         return resolve_price(leg)
 
     def _write_audit(

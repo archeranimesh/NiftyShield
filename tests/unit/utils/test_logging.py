@@ -1,8 +1,9 @@
 import json
+import re
 
 import structlog
 
-from src.utils.logging import setup_logging
+from src.utils.logging import bind_trace_id, generate_trace_id, setup_logging
 
 
 def test_setup_logging_console(capsys):
@@ -56,3 +57,58 @@ def test_setup_logging_env_override(monkeypatch):
     # Check default levels without debug
     monkeypatch.setenv("UPSTOX_DEBUG", "0")
     setup_logging(json=None, level=None)
+
+
+# ── generate_trace_id / bind_trace_id ─────────────────────────────────────────
+
+
+def test_generate_trace_id_format():
+    """generate_trace_id returns an 8-character lowercase hex string."""
+    tid = generate_trace_id()
+    assert len(tid) == 8
+    assert re.fullmatch(r"[0-9a-f]{8}", tid), f"Not lowercase hex: {tid!r}"
+
+
+def test_generate_trace_id_unique():
+    """Successive calls return different IDs."""
+    ids = {generate_trace_id() for _ in range(20)}
+    assert len(ids) == 20, "Expected all 20 IDs to be unique"
+
+
+def test_bind_trace_id_appears_in_log(capsys):
+    """bind_trace_id causes trace_id to appear in subsequent JSON log output."""
+    setup_logging(json=True, level="INFO")
+    structlog.contextvars.clear_contextvars()
+
+    tid = generate_trace_id()
+    bind_trace_id(tid)
+
+    logger = structlog.get_logger("test_bind")
+    logger.info("trace test event")
+    structlog.contextvars.clear_contextvars()
+
+    captured = capsys.readouterr()
+    parsed = json.loads(captured.out.strip())
+    assert parsed["trace_id"] == tid
+
+
+def test_two_bind_trace_ids_are_independent(capsys):
+    """Each bind_trace_id call replaces the previous value in the context."""
+    setup_logging(json=True, level="INFO")
+    structlog.contextvars.clear_contextvars()
+
+    tid1 = generate_trace_id()
+    bind_trace_id(tid1)
+    logger = structlog.get_logger("test_independent")
+    logger.info("first event")
+
+    tid2 = generate_trace_id()
+    bind_trace_id(tid2)
+    logger.info("second event")
+    structlog.contextvars.clear_contextvars()
+
+    captured = capsys.readouterr()
+    lines = [json.loads(line) for line in captured.out.strip().splitlines()]
+    assert lines[0]["trace_id"] == tid1
+    assert lines[1]["trace_id"] == tid2
+    assert tid1 != tid2

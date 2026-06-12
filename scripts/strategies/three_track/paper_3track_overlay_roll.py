@@ -47,7 +47,7 @@ from pathlib import Path
 import structlog
 
 from src.config import settings
-from src.utils.logging import setup_logging
+from src.utils.logging import bind_trace_id, generate_trace_id, setup_logging
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
@@ -553,7 +553,7 @@ def _print_roll_report(results: list[RollResult], roll_date: date, dry_run: bool
 
 async def _run(args: argparse.Namespace) -> None:
     """Async entry point — detect and execute overlay rolls."""
-    pass
+    bind_trace_id(generate_trace_id())
 
     roll_date: date = args.date or date.today()
     dry_run: bool = args.dry_run

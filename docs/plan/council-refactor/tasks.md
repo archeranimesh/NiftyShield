@@ -46,8 +46,8 @@
   Tests: mock `create_approval` raising `RuntimeError` → daemon continues; mock nonexistent method → `add_pending_approval` delegates correctly.
   | SHA: 6e72d1c
 
-- [ ] **FR-1** `[Claude]` — `OverlayCloser._resolve_mid_price` (lines 427–446) returns `Decimal("0")` on any failure — strike absent, key regex miss, or swallowed `except Exception: pass`. Every overlay close (collar, put monetize, AUTO-1 EOD path) records a zero-price fill, corrupting realized P&L. Also fix `_find_option_leg` (459–460) broad `except Exception: return None` (root cause path): catch specific exceptions (`InvalidOperation`, `KeyError`), log WARNING, add intent comment. Extract a shared `_resolve_price(leg) -> Decimal` helper (raises `ValueError` on no-price) used by both `overlay_closer.py` and `executor.py`, eliminating the duplicate stub.
-  Tests: `_resolve_mid_price` with absent strike → `ValueError`; with valid chain leg → correct mid; `_find_option_leg` key error → WARNING logged, returns None.
+- [x] **FR-1** `[Claude]` — `OverlayCloser._resolve_mid_price` (lines 427–446) returns `Decimal("0")` on any failure — strike absent, key regex miss, or swallowed `except Exception: pass`. Every overlay close (collar, put monetize, AUTO-1 EOD path) records a zero-price fill, corrupting realized P&L. Also fix `_find_option_leg` (459–460) broad `except Exception: return None` (root cause path): catch specific exceptions (`InvalidOperation`, `KeyError`), log WARNING, add intent comment. Extract a shared `_resolve_price(leg) -> Decimal` helper (raises `ValueError` on no-price) used by both `overlay_closer.py` and `executor.py`, eliminating the duplicate stub.
+  Tests: `_resolve_mid_price` with absent strike → `ValueError`; with valid chain leg → correct mid; `_find_option_leg` key error → WARNING logged, returns None. | SHA: 611d5b5
 
 ---
 
@@ -56,7 +56,7 @@
 > Fix as a unit — DBI-1/DBI-2/DBI-3 share the same root cause. Combine DBI-1 migration
 > with BUG-4 migration if BUG-4 is not yet done. FR-2 migration must combine with BUG-4/BUG-6.
 
-- [ ] **LOG-1** `[Claude]` — Add `trace_id` correlation to all structured log flows across the daemon, snapshot, and roll scripts:
+- [x] **LOG-1** `[Claude]` — Add `trace_id` correlation to all structured log flows across the daemon, snapshot, and roll scripts:
   (a) `src/utils/logging.py`: add `generate_trace_id() -> str` returning an 8-char hex string (`secrets.token_hex(4)`). Add `bind_trace_id(trace_id: str)` that calls `structlog.contextvars.bind_contextvars(trace_id=trace_id)` so the ID appears in every subsequent log call within the same async context or function call stack.
   (b) `src/strategy/monitor.py` `_tick()`: call `bind_trace_id(generate_trace_id())` at the top of each tick. All logs within a tick (chain fetch, signal check, route event, approval write, heartbeat) will carry `trace_id`. Log `tick.start` and `tick.end` with the ID.
   (c) `scripts/strategies/three_track/paper_3track_snapshot.py` `main()`: bind a trace ID at script entry. All leg P&L computations, chain fetches, exit signal evaluations, and DB writes within a single snapshot run share the same ID.
@@ -64,6 +64,7 @@
   (e) `src/strategy/executor.py` `execute_action()`: bind a fresh trace ID per action dispatch, or inherit the calling tick's ID if already bound. Log `action.dispatch`, `action.fill`, `action.complete` with `strategy_name`, `action_type`, `leg_role`, `price`, `qty`.
   This means: if a signal fires and a wrong trade is executed, you can `grep trace_id=abc123ef logs/` and see the full chain: tick start → chain fetch → signal evaluated → action dispatched → fill recorded → DB write.
   Tests: `bind_trace_id` binds to structlog context; log output for a tick includes `trace_id`; two concurrent ticks have different IDs; `generate_trace_id` returns 8-char hex.
+  | SHA: pending
 
 - [ ] **DBI-1** `[Claude]` — Make `overlay_closer.py` and `paper_3track_overlay_roll.py` genuinely atomic, and fix the destructive rollback key:
   (a) `src/paper/overlay_closer.py`: replace per-leg `_connect()` calls with a single shared connection passed to all `record_trade` calls; commit once after all legs succeed; on failure roll back the DB transaction (no application-level delete needed).

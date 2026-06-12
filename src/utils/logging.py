@@ -1,4 +1,5 @@
 import logging
+import secrets
 import sys
 
 import structlog
@@ -130,3 +131,27 @@ def setup_logging(*, json: bool | None = None, level: str | None = None) -> None
         context_class=dict,
         logger_factory=structlog.stdlib.LoggerFactory(),  # gives logger.name to processors
     )
+
+
+def generate_trace_id() -> str:
+    """Return a fresh 8-character hex correlation ID.
+
+    Uses ``secrets.token_hex`` so each call is cryptographically random.
+
+    Returns:
+        8-character lowercase hex string, e.g. ``"a3f1c8b0"``.
+    """
+    return secrets.token_hex(4)
+
+
+def bind_trace_id(trace_id: str) -> None:
+    """Bind *trace_id* to the current structlog contextvars context.
+
+    All subsequent log calls in the same async task or call stack will
+    include ``trace_id=<value>`` automatically.
+
+    Args:
+        trace_id: The correlation ID to bind (typically from
+            ``generate_trace_id()``).
+    """
+    structlog.contextvars.bind_contextvars(trace_id=trace_id)

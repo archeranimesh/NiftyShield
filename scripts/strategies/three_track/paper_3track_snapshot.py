@@ -87,7 +87,7 @@ from src.paper.proxy_monitor import ProxyDeltaMonitor
 from src.paper.store import PaperStore
 from src.paper.track_snapshot import TrackSnapshot, generate_track_snapshot
 from src.strategy.exit_signals import ExitSignalEngine
-from src.utils.logging import setup_logging
+from src.utils.logging import bind_trace_id, generate_trace_id, setup_logging
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -1149,4 +1149,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     setup_logging()
+    bind_trace_id(generate_trace_id())
     main()

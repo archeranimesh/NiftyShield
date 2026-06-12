@@ -31,6 +31,7 @@ from src.models.options import OptionChain
 from src.paper.models import PaperPosition
 from src.paper.store import PaperStore
 from src.strategy.protocol import ApprovedAction, PaperStrategy, SignalEvent
+from src.utils.logging import bind_trace_id, generate_trace_id
 
 log = structlog.get_logger(__name__)
 
@@ -95,11 +96,15 @@ class StrategyMonitor:
         """Single tick — extracted for testability.
 
         Sequence:
-          1. Guard: skip if not a trading day or outside 09:15–15:30 IST.
-          2. Fetch live OptionChain (shared across all strategies).
-          3. For each strategy: load positions → check_signals → route events.
-          4. Write heartbeat.
+          1. Bind a fresh trace_id to the structlog context for this tick.
+          2. Guard: skip if not a trading day or outside 09:15–15:30 IST.
+          3. Fetch live OptionChain (shared across all strategies).
+          4. For each strategy: load positions → check_signals → route events.
+          5. Write heartbeat.
         """
+        trace_id = generate_trace_id()
+        bind_trace_id(trace_id)
+        log.info("tick.start", trace_id=trace_id)
         now_ist = datetime.now(tz=_IST)
         today = now_ist.date()
 
@@ -137,6 +142,7 @@ class StrategyMonitor:
             for event in events:
                 await self._route_event(event, strategy, chain, positions)
 
+        log.info("tick.end", trace_id=trace_id)
         self._write_heartbeat(os.getpid())
 
     async def _route_event(
