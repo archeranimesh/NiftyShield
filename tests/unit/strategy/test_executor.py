@@ -234,7 +234,8 @@ class TestPaperExecutorCloseLeg:
             council_rank=1,
         )
 
-        with patch.object(executor, "_write_audit"):
+        with patch.object(executor, "_resolve_mid_price", return_value=Decimal("100")), \
+             patch.object(executor, "_write_audit"):
             executor.apply("paper_csp", action, chain, approval_id=3, vix=18.0)
 
         store.record_trade.assert_called_once()

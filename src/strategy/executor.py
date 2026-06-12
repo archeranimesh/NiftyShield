@@ -22,6 +22,7 @@ from src.models.options import OptionChain
 from src.models.portfolio import TradeAction
 from src.paper.models import PaperPosition, PaperTrade
 from src.paper.store import PaperStore
+from src.strategy._price_utils import find_option_leg, resolve_price
 from src.strategy.protocol import ApprovedAction, LegSpec
 
 # VIX-regime slippage bands (absolute INR) — DECISIONS.md §Slippage Model
@@ -247,22 +248,23 @@ class PaperExecutor:
     ) -> Decimal:
         """Resolve mid price for an instrument from the option chain.
 
-        OptionLeg does not carry an instrument_key field in this model
-        version, so a direct lookup is not possible. Returns Decimal("0")
-        as fallback. When OptionLeg gains instrument_key support, this
-        method should perform a chain scan.
-
         Args:
             instrument_key: Upstox instrument key.
             market: Current option chain snapshot.
 
         Returns:
-            Mid price, or Decimal("0") when not resolvable.
+            Mid price as ``Decimal``.
+
+        Raises:
+            ValueError: When the leg is absent from the chain or carries no
+                positive price. Callers must not proceed with a zero-price fill.
         """
-        # TODO(PB-future): implement proper lookup once OptionLeg carries
-        # instrument_key. For now, callers must pass pre-resolved mid prices
-        # via the simulator if price accuracy is required.
-        return Decimal("0")
+        leg = find_option_leg(instrument_key, market)
+        if leg is None:
+            raise ValueError(
+                f"resolve_mid_price: leg absent from chain for {instrument_key}"
+            )
+        return resolve_price(leg)
 
     def _write_audit(
         self,

@@ -16,13 +16,11 @@ import structlog
 from src.models.options import OptionChain, OptionLeg
 from src.paper.models import ExitSignal, PaperPosition, PaperTrade, TradeAction
 from src.paper.store import PaperStore
+from src.strategy._price_utils import find_option_leg, resolve_price
 from src.strategy.executor import PaperFillSimulator
 from src.strategy.protocol import ApprovedAction
 
 log = structlog.get_logger(__name__)
-
-# Matches keys like "NSE_FO|NIFTY23000PE" → group 1 = "23000"
-_STRIKE_RE = re.compile(r"NIFTY(\d+)(PE|CE)", re.IGNORECASE)
 
 # Matches keys like "NSE_FO|NIFTY29MAY2026PE" → group 1 = "29MAY2026"
 _EXPIRY_RE = re.compile(
@@ -425,39 +423,33 @@ class OverlayCloser:
     # ── Private helpers ───────────────────────────────────────────────────────
 
     def _resolve_mid_price(self, instrument_key: str, market: OptionChain) -> Decimal:
-        """Resolve mid price of option leg in chain."""
-        m = _STRIKE_RE.search(instrument_key)
-        if m:
-            try:
-                strike = Decimal(m.group(1))
-                strike_data = market.strikes.get(strike)
-                if strike_data is not None:
-                    option_type = m.group(2).upper()
-                    leg = strike_data.ce if option_type == "CE" else strike_data.pe
-                    if leg is not None:
-                        if leg.bid > 0 and leg.ask > 0:
-                            return (leg.bid + leg.ask) / 2
-                        return leg.ltp
-            except Exception:
-                pass
-        else:
-            log.warning("resolve_mid_price.key_not_parseable", key=instrument_key)
-        return Decimal("0")
+        """Resolve mid price of option leg in chain.
+
+        Args:
+            instrument_key: Upstox instrument key.
+            market: Current option chain snapshot.
+
+        Returns:
+            Mid price as ``Decimal``.
+
+        Raises:
+            ValueError: When the leg is absent from the chain or carries no
+                positive price. Callers must not proceed with a zero-price fill.
+        """
+        leg = find_option_leg(instrument_key, market)
+        if leg is None:
+            raise ValueError(
+                f"resolve_mid_price: leg absent from chain for {instrument_key}"
+            )
+        return resolve_price(leg)
 
     def _find_option_leg(self, market: OptionChain, instrument_key: str) -> OptionLeg | None:
-        """Locate option leg in chain."""
-        m = _STRIKE_RE.search(instrument_key)
-        if not m:
-            return None
-        try:
-            strike = Decimal(m.group(1))
-            option_type = m.group(2).upper()
-            strike_data = market.strikes.get(strike)
-            if strike_data is None:
-                return None
-            return strike_data.ce if option_type == "CE" else strike_data.pe
-        except Exception:
-            return None
+        """Locate option leg in chain.
+
+        Delegates to the shared ``find_option_leg`` utility so that key-parse
+        and lookup errors are logged at WARNING rather than silently swallowed.
+        """
+        return find_option_leg(instrument_key, market)
 
     def _parse_expiry(self, instrument_key: str) -> date | None:
         """Extract expiry date."""

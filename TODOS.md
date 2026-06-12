@@ -306,6 +306,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-06-12 | FR-1 — Extract shared _price_utils.py (find_option_leg + resolve_price); fix OverlayCloser._resolve_mid_price to raise ValueError instead of returning Decimal("0"); fix executor._resolve_mid_price stub; update 2 existing tests, add 10 new tests in test_price_utils.py — SHA pending |
 | 2026-06-07 | council-refactor PP-1 — Update evaluate_pp() to remove spread guard, promote DTE_REVIEW INFO to ROLL_ELIGIBLE ACTION, and simplify callers and tests — 8fd7f68 |
 | 2026-06-07 | council-refactor CC-5 — manual Covered Call roll/exit override CLI wrapper paper_cc_roll.py and unit tests in test_cc_roll.py — afd8a9a |
 | 2026-06-07 | council-refactor CC-4 — CCOverlayV1 full automation: auto_execute=True, inherit ReEntryMixin, add __init__ with store/notifier/vix_data_dir, handle CLOSE_CC in apply_action, _send_close_notification via send_notification; re-entry check on PROFIT_TARGET + TIME_STOP only — 3058108 |

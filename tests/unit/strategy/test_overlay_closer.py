@@ -462,11 +462,15 @@ def test_close_collar_already_flat(store: PaperStore, closer: OverlayCloser, cap
         assert "Already flat" in row["notes"]
 
 
-def test_resolve_mid_price_warning(closer: OverlayCloser) -> None:
-    from unittest.mock import patch
-
+def test_resolve_mid_price_raises_for_unparseable_key(closer: OverlayCloser) -> None:
+    """Unparseable key → ValueError (no silent zero-price fill)."""
     chain = _make_chain("10", "0.05", "20", "-0.10")
-    with patch("src.strategy.overlay_closer.log.warning") as mock_warn:
-        price = closer._resolve_mid_price("NSE_FO|73539", chain)
-        assert price == Decimal("0")
-        mock_warn.assert_called_once_with("resolve_mid_price.key_not_parseable", key="NSE_FO|73539")
+    with pytest.raises(ValueError, match="leg absent from chain"):
+        closer._resolve_mid_price("NSE_FO|73539", chain)
+
+
+def test_resolve_mid_price_raises_for_absent_strike(closer: OverlayCloser) -> None:
+    """Strike present in key but absent from chain → ValueError."""
+    chain = _make_chain("10", "0.05", "20", "-0.10")
+    with pytest.raises(ValueError, match="leg absent from chain"):
+        closer._resolve_mid_price("NSE_FO|NIFTY99999PE29MAY2026", chain)
