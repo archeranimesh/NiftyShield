@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS paper_trades (
     ivr_at_entry   REAL DEFAULT NULL,
     state          TEXT NOT NULL DEFAULT 'OPEN'
                        CHECK(state IN ('OPEN','DEFENDED','RE_ENTRY_PENDING')),
-    UNIQUE(strategy_name, leg_role, trade_date, action)
+    UNIQUE(strategy_name, leg_role, instrument_key, trade_date, action)
 );
 
 CREATE INDEX IF NOT EXISTS idx_paper_trades_strategy_leg
@@ -228,13 +228,49 @@ class PaperStore:
                 )
             except sqlite3.OperationalError:
                 pass  # Column already exists
+            # Migration: add instrument_key to UNIQUE constraint (BUG-4)
+            row = conn.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='paper_trades'"
+            ).fetchone()
+            if row and "instrument_key, trade_date" not in row[0]:
+                conn.executescript(
+                    """
+                    PRAGMA foreign_keys = OFF;
+                    BEGIN;
+                    CREATE TABLE paper_trades_new (
+                        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                        strategy_name  TEXT NOT NULL,
+                        leg_role       TEXT NOT NULL,
+                        instrument_key TEXT NOT NULL,
+                        trade_date     TEXT NOT NULL,
+                        action         TEXT NOT NULL,
+                        quantity       INTEGER NOT NULL,
+                        price          TEXT NOT NULL,
+                        notes          TEXT NOT NULL DEFAULT '',
+                        ivr_at_entry   REAL DEFAULT NULL,
+                        state          TEXT NOT NULL DEFAULT 'OPEN'
+                                           CHECK(state IN ('OPEN','DEFENDED','RE_ENTRY_PENDING')),
+                        UNIQUE(strategy_name, leg_role, instrument_key, trade_date, action)
+                    );
+                    INSERT OR IGNORE INTO paper_trades_new
+                        SELECT id, strategy_name, leg_role, instrument_key, trade_date,
+                               action, quantity, price, notes, ivr_at_entry, state
+                        FROM paper_trades;
+                    DROP TABLE paper_trades;
+                    ALTER TABLE paper_trades_new RENAME TO paper_trades;
+                    CREATE INDEX IF NOT EXISTS idx_paper_trades_strategy_leg
+                        ON paper_trades(strategy_name, leg_role, trade_date);
+                    COMMIT;
+                    PRAGMA foreign_keys = ON;
+                    """
+                )
 
     # ── Trades ledger ─────────────────────────────────────────────────────────
 
     def record_trade(self, trade: PaperTrade) -> bool:
         """Insert a paper trade into the ledger. Silently skips exact duplicates.
 
-        Uniqueness is on (strategy_name, leg_role, trade_date, action).
+        Uniqueness is on (strategy_name, leg_role, instrument_key, trade_date, action).
         Re-running record_paper_trade.py with the same args is always safe.
 
         Args:
@@ -249,7 +285,7 @@ class PaperStore:
                    (strategy_name, leg_role, instrument_key, trade_date,
                     action, quantity, price, notes, ivr_at_entry, state)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                   ON CONFLICT(strategy_name, leg_role, trade_date, action)
+                   ON CONFLICT(strategy_name, leg_role, instrument_key, trade_date, action)
                    DO NOTHING""",
                 (
                     trade.strategy_name,
@@ -287,7 +323,7 @@ class PaperStore:
                        (strategy_name, leg_role, instrument_key, trade_date,
                         action, quantity, price, notes, ivr_at_entry, state)
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                       ON CONFLICT(strategy_name, leg_role, trade_date, action)
+                       ON CONFLICT(strategy_name, leg_role, instrument_key, trade_date, action)
                        DO NOTHING""",
                     (
                         trade.strategy_name,

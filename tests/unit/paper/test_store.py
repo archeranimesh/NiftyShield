@@ -125,6 +125,31 @@ def test_record_trade_different_legs_both_stored(store: PaperStore) -> None:
     assert len(store.get_trades(_STRATEGY)) == 2
 
 
+def test_record_trade_same_instrument_idempotent(store: PaperStore) -> None:
+    """BUG-4: identical (strategy, leg, instrument_key, date, action) is a no-op."""
+    t = _sell_trade()
+    assert store.record_trade(t) is True
+    assert store.record_trade(t) is False
+    assert len(store.get_trades(_STRATEGY)) == 1
+
+
+def test_record_trade_different_instrument_same_day_both_inserted(store: PaperStore) -> None:
+    """BUG-4: different instrument_key on same day/action must insert a second row.
+
+    Scenario: leg rolled on the same calendar day — old contract closed,
+    new contract opened.  Old constraint (without instrument_key) silently
+    dropped the second insert.
+    """
+    original_key = "NSE_FO|12345"
+    rolled_key = "NSE_FO|67890"
+    assert store.record_trade(_sell_trade(instrument_key=original_key)) is True
+    assert store.record_trade(_sell_trade(instrument_key=rolled_key)) is True
+    trades = store.get_trades(_STRATEGY)
+    assert len(trades) == 2
+    keys = {t.instrument_key for t in trades}
+    assert keys == {original_key, rolled_key}
+
+
 # ── record_trades (batch) ─────────────────────────────────────────────────────
 
 
@@ -643,9 +668,7 @@ def test_get_positions_multi_cycle_avg_sell_price_current_cycle_only(
     store.record_trade(
         _sell_trade(trade_date=date(2026, 5, 1), instrument_key=key_a, price=cycle1_sell_price)
     )
-    store.record_trade(
-        _buy_trade(trade_date=date(2026, 5, 8), instrument_key=key_a)
-    )
+    store.record_trade(_buy_trade(trade_date=date(2026, 5, 8), instrument_key=key_a))
     # Cycle 2: reopen @ 231.68 (current open)
     store.record_trade(
         _sell_trade(trade_date=date(2026, 5, 9), instrument_key=key_b, price=cycle2_sell_price)

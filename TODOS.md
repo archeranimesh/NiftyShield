@@ -306,6 +306,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-06-13 | BUG-1 — get_positions multi-cycle: logic fix confirmed in DBI-3; added 2 regression tests (avg_sell_price current-cycle-only, fully-closed net-zero) — 77b6082 |
 | 2026-06-13 | FR-2 — PaperExitEvent monetary fields (ltp, mid, bid, ask, entry_price, threshold_value): float→Decimal, REAL→TEXT; _parse_exit_event_row helper; migrate_exit_events_decimal.py; 3 new tests — 05a4e49 |
 | 2026-06-13 | DBI-3 — get_positions: entry_date now set from opening trade regardless of BUY/SELL (fixes long-first PP/ETF legs); instrument_key now from cycle-opening contract not last loop row (fixes rolled legs); 4 new tests in test_store.py |
 | 2026-06-13 | DBI-2 — cc_overlay_v1, pp_overlay_v1, collar_overlay_v1: each apply_action now records a closing PaperTrade to the DB (BUY for short call, SELL for long put); CollarOverlayV1 gets __init__(store=None); 14 new tests across the three overlay test files |

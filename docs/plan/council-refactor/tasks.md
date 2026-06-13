@@ -92,8 +92,8 @@
 > Fix SIG-1 before SIG-2 (shared price-resolution path). BUG-1 needs DBI-3 first.
 > BUG-4 migration should be combined with DBI-1. FR-3/FR-4/FR-5 can run in parallel.
 
-- [ ] **BUG-1** `[Claude]` — `get_positions` cross-cycle aggregation: `src/paper/store.py`. Reset `avg_sell_price`, `entry_date`, `instrument_key` accumulators when `net_qty` returns to 0 mid-loop so only the current open cycle contributes. Root cause of false TIME_STOP (days_held=28 for a same-day entry) and distorted avg_sell_price (210.51 vs 231.68). Idempotent migration not required (logic fix only).
-  Tests: multi-cycle fixture asserting correct avg_sell_price and entry_date. **Introduced: `69c7a49`**
+- [x] **BUG-1** `[Claude]` — `get_positions` cross-cycle aggregation: `src/paper/store.py`. Reset `avg_sell_price`, `entry_date`, `instrument_key` accumulators when `net_qty` returns to 0 mid-loop so only the current open cycle contributes. Root cause of false TIME_STOP (days_held=28 for a same-day entry) and distorted avg_sell_price (210.51 vs 231.68). Idempotent migration not required (logic fix only).
+  Tests: multi-cycle fixture asserting correct avg_sell_price and entry_date. **Introduced: `69c7a49`** | SHA: 77b6082
 
 - [ ] **BUG-4** `[Claude]` — `record_trade` unique key too broad: `src/paper/store.py` schema + `scripts/dev/migrate_paper_trades_unique.py`. Add `instrument_key` to UNIQUE constraint: `(strategy_name, leg_role, instrument_key, trade_date, action)`. Current key allowed second close of same day (different instrument) to silently no-op, causing `_close_leg` to return normally and `_reentry_notification` to fire every 90 s.
   Tests: same instrument+date+action → no-op; different instrument same date+action → both inserted. **Introduced: `69c7a49`**
