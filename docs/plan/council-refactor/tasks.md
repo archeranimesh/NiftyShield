@@ -82,8 +82,8 @@
   (b) `instrument_key` is taken from the last loop row — on a rolled leg this is the old contract. Take `instrument_key` from the most recent opening trade in the current cycle instead.
   Tests: long-only leg (BUY-opened) → `entry_date` equals BUY trade date; rolled leg → `instrument_key` equals new contract key, not old. | SHA: 425e054
 
-- [ ] **FR-2** `[Claude]` — `PaperExitEvent` monetary fields (`ltp`, `mid`, `bid`, `ask`, `entry_price`, `threshold_value`) are `float` on the model and SQLite `REAL` in the schema — violates the Decimal-as-TEXT invariant on the table that drives exit decisions. Blocks SIG-2's Decimal conversion end-to-end. Fix: change model fields to `Decimal | None`, columns to TEXT, read back with `Decimal(row[...])`. Combine schema migration with BUG-4/BUG-6 migration script.
-  Tests: `create_exit_event` with Decimal inputs → TEXT in DB; read back equals original Decimal; None fields stored as NULL.
+- [x] **FR-2** `[Claude]` — `PaperExitEvent` monetary fields (`ltp`, `mid`, `bid`, `ask`, `entry_price`, `threshold_value`) are `float` on the model and SQLite `REAL` in the schema — violates the Decimal-as-TEXT invariant on the table that drives exit decisions. Blocks SIG-2's Decimal conversion end-to-end. Fix: change model fields to `Decimal | None`, columns to TEXT, read back with `Decimal(row[...])`. Combine schema migration with BUG-4/BUG-6 migration script.
+  Tests: `create_exit_event` with Decimal inputs → TEXT in DB; read back equals original Decimal; None fields stored as NULL. | SHA: 05a4e49
 
 ---
 
