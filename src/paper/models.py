@@ -220,14 +220,14 @@ class PaperExitEvent(BaseModel):
     detected_by: Literal["EOD", "INTRADAY", "MANUAL"]
     exit_signal: ExitSignal
     severity: Literal["INFO", "WARNING", "ACTION"]
-    ltp: float | None = None
-    mid: float | None = None
-    bid: float | None = None
-    ask: float | None = None
+    ltp: Decimal | None = None
+    mid: Decimal | None = None
+    bid: Decimal | None = None
+    ask: Decimal | None = None
     delta: float | None = None
     dte: int | None = None
-    entry_price: float
-    threshold_value: float | None = None
+    entry_price: Decimal
+    threshold_value: Decimal | None = None
     delta_stop_would_fire: Literal[0, 1] | None = None
     premium_stop_would_fire: Literal[0, 1] | None = None
     actual_rule_used: str | None = None

@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -142,7 +143,7 @@ class ReEntryMixin:
                 detected_by="MANUAL",
                 exit_signal=signal,
                 severity="INFO",
-                entry_price=0.0,
+                entry_price=Decimal("0"),
                 dte=dte,
                 notes=notes,
             )

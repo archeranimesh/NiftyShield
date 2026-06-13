@@ -139,14 +139,14 @@ CREATE TABLE IF NOT EXISTS paper_exit_events (
     detected_by             TEXT    NOT NULL,
     exit_signal             TEXT    NOT NULL,
     severity                TEXT    NOT NULL,
-    ltp                     REAL,
-    mid                     REAL,
-    bid                     REAL,
-    ask                     REAL,
+    ltp                     TEXT,
+    mid                     TEXT,
+    bid                     TEXT,
+    ask                     TEXT,
     delta                   REAL,
     dte                     INTEGER,
-    entry_price             REAL    NOT NULL,
-    threshold_value         REAL,
+    entry_price             TEXT    NOT NULL,
+    threshold_value         TEXT,
     delta_stop_would_fire   INTEGER,
     premium_stop_would_fire INTEGER,
     actual_rule_used        TEXT,
@@ -987,6 +987,20 @@ class PaperStore:
 
     # ── Exit events ───────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _parse_exit_event_row(row: Any) -> dict[str, Any]:
+        """Convert a raw DB row from paper_exit_events to a typed dict.
+
+        Monetary TEXT columns (ltp, mid, bid, ask, entry_price, threshold_value)
+        are read back as Decimal; None values remain None.
+        All other columns are returned as-is.
+        """
+        d = dict(row)
+        for field in ("ltp", "mid", "bid", "ask", "entry_price", "threshold_value"):
+            raw = d.get(field)
+            d[field] = Decimal(raw) if raw is not None else None
+        return d
+
     def create_exit_event(
         self,
         strategy_name: str,
@@ -996,16 +1010,16 @@ class PaperStore:
         detected_by: Literal["EOD", "INTRADAY", "MANUAL"],
         exit_signal: ExitSignal,
         severity: Literal["INFO", "WARNING", "ACTION"],
-        entry_price: Decimal | float,
+        entry_price: Decimal,
         *,
         snapshot_id: int | None = None,
-        ltp: float | None = None,
-        mid: float | None = None,
-        bid: float | None = None,
-        ask: float | None = None,
+        ltp: Decimal | None = None,
+        mid: Decimal | None = None,
+        bid: Decimal | None = None,
+        ask: Decimal | None = None,
         delta: float | None = None,
         dte: int | None = None,
-        threshold_value: float | None = None,
+        threshold_value: Decimal | None = None,
         delta_stop_would_fire: int | None = None,
         premium_stop_would_fire: int | None = None,
         actual_rule_used: str | None = None,
@@ -1055,14 +1069,14 @@ class PaperStore:
                     detected_by,
                     exit_signal.value,
                     severity,
-                    ltp,
-                    mid,
-                    bid,
-                    ask,
+                    str(ltp) if ltp is not None else None,
+                    str(mid) if mid is not None else None,
+                    str(bid) if bid is not None else None,
+                    str(ask) if ask is not None else None,
                     delta,
                     dte,
-                    float(entry_price),
-                    threshold_value,
+                    str(entry_price),
+                    str(threshold_value) if threshold_value is not None else None,
                     delta_stop_would_fire,
                     premium_stop_would_fire,
                     actual_rule_used,
@@ -1111,7 +1125,7 @@ class PaperStore:
                        WHERE status IN ('OPEN', 'ACKNOWLEDGED')
                        ORDER BY event_time ASC, id ASC"""
                 ).fetchall()
-        return [dict(r) for r in rows]
+        return [self._parse_exit_event_row(r) for r in rows]
 
     def acknowledge_exit_event(self, event_id: int) -> None:
         """Update event status to 'ACKNOWLEDGED' if status is 'OPEN'.

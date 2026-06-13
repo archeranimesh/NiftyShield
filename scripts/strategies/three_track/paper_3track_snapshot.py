@@ -451,7 +451,7 @@ async def _check_base_expiry(
                 ask=None,
                 delta=None,
                 dte=dte,
-                threshold_value=5.0,
+                threshold_value=Decimal("5"),
                 notes=f"Next contract: {next_symbol} ({next_key})",
             )
         except Exception as exc:
@@ -603,12 +603,16 @@ async def compute_and_record_exit_signals(
                     severity=severity_store,
                     entry_price=entry_price,
                     snapshot_id=snapshot_id,
-                    ltp=float(opt_leg.ltp) if opt_leg is not None else None,
-                    bid=float(opt_leg.bid) if opt_leg is not None else None,
-                    ask=float(opt_leg.ask) if opt_leg is not None else None,
+                    ltp=opt_leg.ltp if opt_leg is not None else None,
+                    bid=opt_leg.bid if opt_leg is not None else None,
+                    ask=opt_leg.ask if opt_leg is not None else None,
                     delta=float(opt_leg.delta) if opt_leg is not None else None,
                     dte=_compute_dte(pos.instrument_key, today),
-                    threshold_value=result.threshold_value,
+                    threshold_value=(
+                        Decimal(str(result.threshold_value))
+                        if result.threshold_value is not None
+                        else None
+                    ),
                     delta_stop_would_fire=(
                         int(result.delta_stop_would_fire)
                         if result.delta_stop_would_fire is not None
