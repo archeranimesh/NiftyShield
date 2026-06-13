@@ -306,6 +306,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-06-13 | SIG-2 — evaluate_pp zero-entry guard (WARN + early return); evaluate_collar_put ltp fallback when bid/ask None (INFO); Decimal conversion in both + evaluate_collar_call residual_breached; 7 new tests — f99a4cb |
 | 2026-06-13 | SIG-1 — paper_action_audit table + record_action_audit(); _write_audit rewired to store per-leg fills; migrate_paper_action_audit.py; 6 new tests (TestResolveMidPrice + TestWriteAudit) — 580c0e8 |
 | 2026-06-13 | BUG-4 — paper_trades UNIQUE constraint extended to include instrument_key; __init__ migration rebuilds constraint on stale DBs; migrate_paper_trades_unique.py for live DB; 2 new tests — 50c4e56 |
 | 2026-06-13 | BUG-1 — get_positions multi-cycle: logic fix confirmed in DBI-3; added 2 regression tests (avg_sell_price current-cycle-only, fully-closed net-zero) — 77b6082 |
@@ -415,3 +416,4 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 | 2026-05-14 | Task 1 closed — VIX ingestion, PaperTrade ivr_at_entry, R3 gate; Task 0 closed — UDiFF fix |
 
 Full log: [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md)
+| 2026-06-13 | BUG-2 closed — multi-expiry chain fetch in snapshot + daemon; None-leg guard in CSPNiftyV1 and _dispatch_evaluate skips only LTP/delta signals (TIME_STOP/ROLL_ELIGIBLE still fire); signal priority reordered (HARD_STOP→DELTA_BREACH→PROFIT_TARGET→TIME_STOP→ROLL_ELIGIBLE); _KEY_DATE_STRIKE_RE added for date-embedded keys; 10 new tests; SHA 61f4690 |

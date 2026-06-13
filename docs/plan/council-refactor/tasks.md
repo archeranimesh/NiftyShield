@@ -103,17 +103,17 @@
   Also fix `_write_audit` which inserts wrong columns into `council_outputs` under a swallowed `OperationalError` — add a dedicated `paper_action_audit` table with columns `(id, strategy_name, action_type, leg_role, price, qty, rationale, executed_at)` and write there instead. (This fix subsumes **RPT-0**.)
   Tests: `_resolve_mid_price` with bid+ask → returns mid; ltp-only → returns ltp; no price → raises; `_write_audit` → row in `paper_action_audit`. | SHA: 580c0e8
 
-- [ ] **SIG-2** `[Claude]` — Two false-signal fixes in `src/strategy/exit_signals.py`:
+- [x] **SIG-2** `[Claude]` — Two false-signal fixes in `src/strategy/exit_signals.py`:
   (a) `evaluate_pp`: `value_breached = current_mark >= 5.0 * entry_price` fires when `entry_price == 0` (`0 >= 0` → True). Guard: `if entry_price <= 0: return result with no signals` with a WARN logged.
   (b) `evaluate_collar_put`: silently returns no result when `bid` or `ask` is `None` (illiquid strike). Fall back to `ltp` when either is missing; emit an INFO diagnostic when falling back so the operator knows the evaluation used ltp not mid.
   Also convert float monetary comparisons throughout `exit_signals.py` to `Decimal` (REVIEW.md §5).
-  Tests: `evaluate_pp` with `entry_price=0` → no signal emitted, WARN logged; `evaluate_collar_put` with missing bid → uses ltp, INFO logged.
+  Tests: `evaluate_pp` with `entry_price=0` → no signal emitted, WARN logged; `evaluate_collar_put` with missing bid → uses ltp, INFO logged. | SHA: f99a4cb
 
-- [ ] **BUG-2** `[Claude]` — Position-driven chain fetch: the chain expiry must be derived from the open position's instrument, not from a hardcoded `preference=["monthly"]`. Two parts:
+- [x] **BUG-2** `[Claude]` — Position-driven chain fetch: the chain expiry must be derived from the open position's instrument, not from a hardcoded `preference=["monthly"]`. Two parts:
   (a) **Immediate guard** — in `_dispatch_evaluate` (all branches) and `CSPNiftyV1.check_signals`, when `_find_chain_leg` / `_find_put_leg` returns `None`, `return []` / `continue` with WARNING — never default to `ltp=0`.
   (b) **Structural fix** — EOD snapshot and daemon must resolve each open position's expiry via `InstrumentLookup.get_by_key`, then call `broker.get_option_chain` for THAT expiry. Cache by expiry date if multiple positions share one. `OptionChain.expiry: date` already exists.
   Root cause: CSP in NIFTY 22500 PE 28 JUL 26 evaluated against June 30 chain → not found → ltp=0 → PROFIT_TARGET always fires.
-  Tests: position in quarterly expiry → chain fetched for that expiry; leg=None → []; two positions in different expiries → two chain fetches. **Introduced: `8fd58d4` + `9191c02`**
+  Tests: position in quarterly expiry → chain fetched for that expiry; leg=None → []; two positions in different expiries → two chain fetches. **Introduced: `8fd58d4` + `9191c02`** | SHA: 61f4690
 
 - [ ] **BUG-6** `[Claude]` — `TradeState` missing `CLOSED`; `_close_leg` never transitions state:
   (a) add `CLOSED = "CLOSED"` to `TradeState` enum in `src/paper/models.py`;
