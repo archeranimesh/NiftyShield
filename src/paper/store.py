@@ -393,13 +393,27 @@ class PaperStore:
             buy_total_cost = Decimal("0")
             sell_total_qty = 0
             sell_total_cost = Decimal("0")
-            instrument_key = ""
-            first_sell_date: date | None = None
+            # DBI-3: track the opening trade of the current cycle (after net_qty last hit 0).
+            # cycle_start_date: entry date regardless of BUY/SELL action (fixes long-first legs).
+            # cycle_instrument_key: contract that opened the current cycle (fixes rolled legs).
+            cycle_start_date: date | None = None
+            cycle_instrument_key: str = ""
 
             for row in rows_for_leg:
-                instrument_key = row["instrument_key"]
                 qty = row["quantity"]
                 price = Decimal(row["price"])
+                raw_date = row["trade_date"]
+                trade_date = date.fromisoformat(raw_date) if isinstance(raw_date, str) else raw_date
+
+                # New cycle: net_qty was flat going into this trade — record the opener.
+                if net_qty == 0:
+                    cycle_start_date = trade_date
+                    cycle_instrument_key = row["instrument_key"]
+                    buy_total_qty = 0
+                    buy_total_cost = Decimal("0")
+                    sell_total_qty = 0
+                    sell_total_cost = Decimal("0")
+
                 if TradeAction(row["action"]) == TradeAction.BUY:
                     net_qty += qty
                     buy_total_qty += qty
@@ -408,9 +422,6 @@ class PaperStore:
                     net_qty -= qty
                     sell_total_qty += qty
                     sell_total_cost += price * qty
-                    if first_sell_date is None:
-                        raw = row["trade_date"]
-                        first_sell_date = date.fromisoformat(raw) if isinstance(raw, str) else raw
 
             avg_cost = buy_total_cost / buy_total_qty if buy_total_qty > 0 else Decimal("0")
             avg_sell_price = (
@@ -424,8 +435,8 @@ class PaperStore:
                     net_qty=net_qty,
                     avg_cost=avg_cost,
                     avg_sell_price=avg_sell_price,
-                    instrument_key=instrument_key,
-                    entry_date=first_sell_date,
+                    instrument_key=cycle_instrument_key,
+                    entry_date=cycle_start_date,
                 )
             )
         return positions

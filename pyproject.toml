@@ -76,6 +76,12 @@ no_implicit_optional = true
 strict_equality = true
 extra_checks = true
 
+# yaml has no bundled stubs; suppress [import-untyped] until types-PyYAML is
+# added to pre-commit additional_dependencies (requires hook cache rebuild).
+[[tool.mypy.overrides]]
+module = ["yaml"]
+ignore_missing_imports = true
+
 # Strict on src/paper
 [[tool.mypy.overrides]]
 module = ["src.paper.*"]

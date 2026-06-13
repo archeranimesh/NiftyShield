@@ -571,3 +571,56 @@ def test_record_trade_persists_state_field(store: PaperStore) -> None:
     store.record_trade(trade)
     trades = store.get_trades(_STRATEGY, _LEG)
     assert trades[0].state == TradeState.DEFENDED
+
+
+# ── DBI-3: get_positions entry_date and instrument_key fixes ─────────────────
+
+
+def test_get_positions_entry_date_for_buy_first_leg(store: PaperStore) -> None:
+    """Long-first (BUY-opened) leg must populate entry_date from the BUY trade."""
+    buy_date = date(2026, 5, 5)
+    store.record_trade(_buy_trade(trade_date=buy_date, leg_role="long_put"))
+    positions = store.get_positions(_STRATEGY)
+    pos = next(p for p in positions if p.leg_role == "long_put")
+    assert pos.entry_date == buy_date
+
+
+def test_get_positions_entry_date_for_sell_first_leg(store: PaperStore) -> None:
+    """Short (SELL-opened) leg entry_date must equal the SELL trade date."""
+    sell_date = date(2026, 5, 10)
+    store.record_trade(_sell_trade(trade_date=sell_date))
+    positions = store.get_positions(_STRATEGY)
+    pos = next(p for p in positions if p.leg_role == _LEG)
+    assert pos.entry_date == sell_date
+
+
+def test_get_positions_entry_date_tracks_current_cycle(store: PaperStore) -> None:
+    """After a full close+reopen, entry_date must reflect the reopen date, not the first-ever trade."""
+    key_a = "NSE_FO|NIFTY22500PE"
+    key_b = "NSE_FO|NIFTY23000PE"
+    # Cycle 1: open and close
+    store.record_trade(_sell_trade(trade_date=date(2026, 5, 1), instrument_key=key_a))
+    store.record_trade(_buy_trade(trade_date=date(2026, 5, 10), instrument_key=key_a))
+    # Cycle 2: reopen on a later date
+    reopen_date = date(2026, 5, 15)
+    store.record_trade(_sell_trade(trade_date=reopen_date, instrument_key=key_b))
+
+    positions = store.get_positions(_STRATEGY)
+    pos = next(p for p in positions if p.leg_role == _LEG)
+    assert pos.net_qty == -75
+    assert pos.entry_date == reopen_date
+
+
+def test_get_positions_instrument_key_from_current_cycle(store: PaperStore) -> None:
+    """After a roll (close contract A, reopen contract B), instrument_key must equal B not A."""
+    key_a = "NSE_FO|NIFTY22500PE"
+    key_b = "NSE_FO|NIFTY23000PE"
+    # Cycle 1: open and close A
+    store.record_trade(_sell_trade(trade_date=date(2026, 5, 1), instrument_key=key_a))
+    store.record_trade(_buy_trade(trade_date=date(2026, 5, 10), instrument_key=key_a))
+    # Cycle 2: open B
+    store.record_trade(_sell_trade(trade_date=date(2026, 5, 15), instrument_key=key_b))
+
+    positions = store.get_positions(_STRATEGY)
+    pos = next(p for p in positions if p.leg_role == _LEG)
+    assert pos.instrument_key == key_b

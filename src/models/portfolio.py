@@ -267,13 +267,13 @@ class Leg(BaseModel):
 
         return self
 
-    @computed_field
+    @computed_field  # type: ignore[misc]
     @property
     def total_lots(self) -> int:
         """Number of lots (quantity / lot_size)."""
         return self.quantity // self.lot_size if self.lot_size > 0 else self.quantity
 
-    @computed_field
+    @computed_field  # type: ignore[misc]
     @property
     def entry_value(self) -> Decimal:
         """Total capital deployed at entry."""
@@ -309,7 +309,7 @@ class Strategy(BaseModel):
     legs: list[Leg] = Field(default_factory=list)
     created_at: datetime | None = None
 
-    @computed_field
+    @computed_field  # type: ignore[misc]
     @property
     def total_entry_value(self) -> Decimal:
         """Net capital deployed across all legs (buys positive, sells negative)."""

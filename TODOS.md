@@ -306,6 +306,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-06-13 | DBI-3 — get_positions: entry_date now set from opening trade regardless of BUY/SELL (fixes long-first PP/ETF legs); instrument_key now from cycle-opening contract not last loop row (fixes rolled legs); 4 new tests in test_store.py |
 | 2026-06-13 | DBI-2 — cc_overlay_v1, pp_overlay_v1, collar_overlay_v1: each apply_action now records a closing PaperTrade to the DB (BUY for short call, SELL for long put); CollarOverlayV1 gets __init__(store=None); 14 new tests across the three overlay test files |
 | 2026-06-12 | LOG-1 — Add generate_trace_id/bind_trace_id to logging.py; wire into monitor._tick (tick.start/end), paper_3track_snapshot main, paper_3track_overlay_roll _run, executor.apply (action.dispatch/fill/complete); 4 new tests — 74371a3 |
 | 2026-06-12 | FR-1 — Extract shared _price_utils.py (find_option_leg + resolve_price); fix OverlayCloser._resolve_mid_price to raise ValueError instead of returning Decimal("0"); fix executor._resolve_mid_price stub; update 2 existing tests, add 10 new tests in test_price_utils.py — 611d5b5 |

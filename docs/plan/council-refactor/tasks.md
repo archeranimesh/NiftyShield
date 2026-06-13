@@ -75,9 +75,9 @@
 
 - [x] **DBI-2** `[Claude]` — All three overlay `apply_action` methods record no closing trade to the DB, so positions reappear from the ledger next tick and signals re-fire indefinitely. Fix in `src/strategy/cc_overlay_v1.py`, `src/strategy/pp_overlay_v1.py`, `src/strategy/collar_overlay_v1.py`:
   Each `apply_action` that closes a leg must call `self._store.record_trade(closing_trade)` (BUY for a short leg, SELL for a long leg) at the resolved exit price before returning the filtered positions list. Use `PaperFillSimulator` for the exit price (already available via executor). For collar, record both legs.
-  Tests: `apply_action(CLOSE_CC)` → closing BUY trade written to DB; next `get_positions` call returns empty for that leg; idempotent (second call is a no-op via unique key).
+  Tests: `apply_action(CLOSE_CC)` → closing BUY trade written to DB; next `get_positions` call returns empty for that leg; idempotent (second call is a no-op via unique key). | SHA: e3c612a
 
-- [ ] **DBI-3** `[Claude]` — Two `get_positions` data quality fixes in `src/paper/store.py`:
+- [x] **DBI-3** `[Claude]` — Two `get_positions` data quality fixes in `src/paper/store.py`:
   (a) `entry_date` is never set for long-first legs (PP, base ETF, deep ITM proxy) — `entry_date` is populated only from the first SELL. Set `entry_date` from the opening trade regardless of action (first row for the leg in the current cycle after last flat point).
   (b) `instrument_key` is taken from the last loop row — on a rolled leg this is the old contract. Take `instrument_key` from the most recent opening trade in the current cycle instead.
   Tests: long-only leg (BUY-opened) → `entry_date` equals BUY trade date; rolled leg → `instrument_key` equals new contract key, not old.
