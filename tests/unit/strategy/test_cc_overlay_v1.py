@@ -337,3 +337,93 @@ def test_describe_context() -> None:
     ctx = strategy.describe_context(event, chain, [pos])
     assert "paper_covered_call_v1" in ctx
     assert "PROFIT_TARGET" in ctx
+
+
+# ---------------------------------------------------------------------------
+# DBI-2: record_close_trade tests
+# ---------------------------------------------------------------------------
+
+
+def test_apply_action_records_closing_trade_to_store() -> None:
+    """apply_action(CLOSE_CC) must write a BUY closing trade to the store."""
+    mock_store = MagicMock()
+    mock_store.record_trade.return_value = True
+    strategy = CCOverlayV1(store=mock_store, notifier=None)
+    strategy._check_reentry = AsyncMock()
+
+    pos = _make_position(avg_sell_price="80", leg_role="short_call", net_qty=-65)
+    action = ApprovedAction(
+        action_type="CLOSE_CC",
+        legs_to_close=["short_call"],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+        metadata={"mark": "25.0"},
+    )
+    _run(strategy.apply_action([pos], action))
+
+    mock_store.record_trade.assert_called_once()
+    trade = mock_store.record_trade.call_args[0][0]
+    assert trade.action.value == "BUY"
+    assert trade.quantity == 65
+    assert trade.price == Decimal("25.0")
+    assert trade.leg_role == "short_call"
+
+
+def test_apply_action_recording_idempotent_on_duplicate() -> None:
+    """store.record_trade returning False (duplicate) must not raise."""
+    mock_store = MagicMock()
+    mock_store.record_trade.return_value = False  # second call = duplicate
+    strategy = CCOverlayV1(store=mock_store, notifier=None)
+    strategy._check_reentry = AsyncMock()
+
+    pos = _make_position(avg_sell_price="80")
+    action = ApprovedAction(
+        action_type="CLOSE_CC",
+        legs_to_close=["short_call"],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+        metadata={"mark": "25.0"},
+    )
+    # Should not raise even when store says duplicate
+    result = _run(strategy.apply_action([pos], action))
+    assert result == []
+
+
+def test_apply_action_no_store_does_not_raise() -> None:
+    """store=None must not raise — write is skipped silently."""
+    strategy = CCOverlayV1(store=None, notifier=None)
+    strategy._check_reentry = AsyncMock()
+
+    pos = _make_position()
+    action = ApprovedAction(
+        action_type="CLOSE_CC",
+        legs_to_close=["short_call"],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+    )
+    result = _run(strategy.apply_action([pos], action))
+    assert result == []
+
+
+def test_record_close_trade_falls_back_to_avg_sell_price_when_mark_missing() -> None:
+    """No mark in metadata → closing trade priced at avg_sell_price."""
+    mock_store = MagicMock()
+    mock_store.record_trade.return_value = True
+    strategy = CCOverlayV1(store=mock_store, notifier=None)
+    strategy._check_reentry = AsyncMock()
+
+    pos = _make_position(avg_sell_price="80")
+    action = ApprovedAction(
+        action_type="CLOSE_CC",
+        legs_to_close=["short_call"],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+    )
+    _run(strategy.apply_action([pos], action))
+
+    trade = mock_store.record_trade.call_args[0][0]
+    assert trade.price == Decimal("80")

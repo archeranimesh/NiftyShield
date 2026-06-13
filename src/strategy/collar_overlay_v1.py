@@ -10,12 +10,14 @@ from __future__ import annotations
 import re
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
+from typing import Any
 
 import structlog
 
 from src.models.options import OptionChain, OptionLeg
+from src.models.portfolio import TradeAction
 from src.paper.constants import STRATEGY_COLLAR_OVERLAY
-from src.paper.models import PaperPosition
+from src.paper.models import PaperPosition, PaperTrade
 from src.strategy.exit_signals import ExitSignalEngine
 from src.strategy.protocol import ApprovedAction, SignalEvent
 
@@ -38,6 +40,14 @@ class CollarOverlayV1:
     """Collar overlay strategy implementation."""
 
     strategy_name: str = STRATEGY_COLLAR_OVERLAY
+
+    def __init__(self, store: Any = None) -> None:
+        """Initialise CollarOverlayV1.
+
+        Args:
+            store: PaperStore instance for persisting closing trades. None → writes skipped.
+        """
+        self._store = store
 
     async def check_signals(
         self,
@@ -265,7 +275,78 @@ class CollarOverlayV1:
             action_type=action.action_type,
             legs_to_close=list(closed),
         )
+        mark = action.metadata.get("mark") if action.metadata else None
+
+        # Persist closing trades before filtering from in-memory list.
+        short_call_pos = next(
+            (p for p in positions if p.leg_role == SHORT_CALL_ROLE and p.net_qty < 0),
+            None,
+        )
+        long_put_pos = next(
+            (p for p in positions if p.leg_role == LONG_PUT_ROLE and p.net_qty > 0),
+            None,
+        )
+        if (
+            action.action_type in ("CLOSE_CALL_ONLY", "CLOSE_ALL_OVERLAY")
+            and short_call_pos is not None
+            and SHORT_CALL_ROLE in closed
+        ):
+            self._record_close_trade(short_call_pos, TradeAction.BUY, mark)
+        if (
+            action.action_type in ("MONETIZE_PUT", "CLOSE_ALL_OVERLAY")
+            and long_put_pos is not None
+            and LONG_PUT_ROLE in closed
+        ):
+            self._record_close_trade(long_put_pos, TradeAction.SELL, mark)
+
         return [p for p in positions if p.leg_role not in closed]
+
+    def _record_close_trade(
+        self,
+        pos: PaperPosition,
+        close_action: TradeAction,
+        mark: object | None,
+    ) -> None:
+        """Persist a closing trade for a collar leg.
+
+        Args:
+            pos: Position being closed.
+            close_action: BUY (short call) or SELL (long put).
+            mark: Mark price from metadata; None → fallback to position avg price.
+        """
+        if self._store is None:
+            return
+        try:
+            price = Decimal(str(mark)) if mark is not None else Decimal("0")
+        except Exception:
+            price = Decimal("0")
+        if price <= Decimal("0"):
+            price = pos.avg_sell_price if close_action == TradeAction.BUY else pos.avg_cost
+        if price <= Decimal("0"):
+            log.warning(
+                "collar_overlay_v1.record_close_trade.zero_price_skip",
+                leg_role=pos.leg_role,
+                instrument_key=pos.instrument_key,
+            )
+            return
+        trade = PaperTrade(
+            strategy_name=pos.strategy_name,
+            leg_role=pos.leg_role,
+            instrument_key=pos.instrument_key,
+            trade_date=date.today(),
+            action=close_action,
+            quantity=abs(pos.net_qty),
+            price=price,
+            notes="close via apply_action",
+        )
+        inserted = self._store.record_trade(trade)
+        log.info(
+            "collar_overlay_v1.record_close_trade",
+            leg_role=pos.leg_role,
+            close_action=close_action.value,
+            price=str(price),
+            inserted=inserted,
+        )
 
     def _find_call_leg(self, market: OptionChain, instrument_key: str) -> OptionLeg | None:
         """Locate the CE leg in the chain."""

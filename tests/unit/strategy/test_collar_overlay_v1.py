@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 from datetime import date, timedelta
 from decimal import Decimal
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -272,3 +273,124 @@ def test_describe_context() -> None:
     ctx = strategy.describe_context(event, chain, [pos1, pos2])
     assert "paper_collar_v1" in ctx
     assert "COLLAR_CALL_DECAY" in ctx
+
+
+# ---------------------------------------------------------------------------
+# DBI-2: record_close_trade tests
+# ---------------------------------------------------------------------------
+
+
+def test_apply_action_close_all_records_both_legs() -> None:
+    """CLOSE_ALL_OVERLAY must write BUY (call) and SELL (put) closing trades."""
+    mock_store = MagicMock()
+    mock_store.record_trade.return_value = True
+    strategy = CollarOverlayV1(store=mock_store)
+
+    call_pos = _make_short_call_position(avg_sell_price="80")
+    put_pos = _make_long_put_position(avg_cost="50")
+    action = ApprovedAction(
+        action_type="CLOSE_ALL_OVERLAY",
+        legs_to_close=["collar_short_call", "collar_long_put"],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+        metadata={"mark": "30.0"},
+    )
+    result = _run(strategy.apply_action([call_pos, put_pos], action))
+
+    assert result == []
+    assert mock_store.record_trade.call_count == 2
+    calls = {c[0][0].action.value: c[0][0] for c in mock_store.record_trade.call_args_list}
+    assert "BUY" in calls
+    assert "SELL" in calls
+    assert calls["BUY"].leg_role == "collar_short_call"
+    assert calls["SELL"].leg_role == "collar_long_put"
+
+
+def test_apply_action_close_call_only_records_buy() -> None:
+    """CLOSE_CALL_ONLY must write exactly one BUY trade."""
+    mock_store = MagicMock()
+    mock_store.record_trade.return_value = True
+    strategy = CollarOverlayV1(store=mock_store)
+
+    call_pos = _make_short_call_position(avg_sell_price="80")
+    put_pos = _make_long_put_position(avg_cost="50")
+    action = ApprovedAction(
+        action_type="CLOSE_CALL_ONLY",
+        legs_to_close=["collar_short_call"],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+        metadata={"mark": "25.0"},
+    )
+    result = _run(strategy.apply_action([call_pos, put_pos], action))
+
+    assert len(result) == 1  # put still in positions
+    mock_store.record_trade.assert_called_once()
+    trade = mock_store.record_trade.call_args[0][0]
+    assert trade.action.value == "BUY"
+    assert trade.price == Decimal("25.0")
+
+
+def test_apply_action_monetize_put_records_sell() -> None:
+    """MONETIZE_PUT must write exactly one SELL trade."""
+    mock_store = MagicMock()
+    mock_store.record_trade.return_value = True
+    strategy = CollarOverlayV1(store=mock_store)
+
+    call_pos = _make_short_call_position()
+    put_pos = _make_long_put_position(avg_cost="50")
+    action = ApprovedAction(
+        action_type="MONETIZE_PUT",
+        legs_to_close=["collar_long_put"],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+        metadata={"mark": "210.0"},
+    )
+    result = _run(strategy.apply_action([call_pos, put_pos], action))
+
+    assert len(result) == 1  # call still in positions
+    mock_store.record_trade.assert_called_once()
+    trade = mock_store.record_trade.call_args[0][0]
+    assert trade.action.value == "SELL"
+    assert trade.price == Decimal("210.0")
+
+
+def test_apply_action_no_store_does_not_raise() -> None:
+    """store=None must not raise — write is skipped silently."""
+    strategy = CollarOverlayV1(store=None)
+    call_pos = _make_short_call_position()
+    put_pos = _make_long_put_position()
+    action = ApprovedAction(
+        action_type="CLOSE_ALL_OVERLAY",
+        legs_to_close=["collar_short_call", "collar_long_put"],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+    )
+    result = _run(strategy.apply_action([call_pos, put_pos], action))
+    assert result == []
+
+
+def test_record_close_trade_falls_back_to_avg_price_when_mark_missing() -> None:
+    """No mark in metadata → call uses avg_sell_price, put uses avg_cost."""
+    mock_store = MagicMock()
+    mock_store.record_trade.return_value = True
+    strategy = CollarOverlayV1(store=mock_store)
+
+    call_pos = _make_short_call_position(avg_sell_price="80")
+    put_pos = _make_long_put_position(avg_cost="50")
+    action = ApprovedAction(
+        action_type="CLOSE_ALL_OVERLAY",
+        legs_to_close=["collar_short_call", "collar_long_put"],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+        # no mark in metadata
+    )
+    _run(strategy.apply_action([call_pos, put_pos], action))
+
+    calls = {c[0][0].action.value: c[0][0] for c in mock_store.record_trade.call_args_list}
+    assert calls["BUY"].price == Decimal("80")
+    assert calls["SELL"].price == Decimal("50")

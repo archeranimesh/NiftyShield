@@ -299,3 +299,93 @@ def test_apply_action_dte_float_casting() -> None:
     assert len(result) == 0
     mock_notifier.send_notification.assert_called_once()
     assert "DTE 4" in mock_notifier.send_notification.call_args[0][0]
+
+
+# ---------------------------------------------------------------------------
+# DBI-2: record_close_trade tests
+# ---------------------------------------------------------------------------
+
+
+def test_apply_action_records_closing_trade_to_store() -> None:
+    """apply_action(MONETIZE_PP) must write a SELL closing trade to the store."""
+    mock_store = MagicMock()
+    mock_store.record_trade.return_value = True
+    strategy = PPOverlayV1(store=mock_store, notifier=None)
+    strategy._check_reentry = AsyncMock()
+
+    key = _expiry_key(dte=15)
+    pos = _make_position(instrument_key=key, avg_cost="50", net_qty=65)
+    action = ApprovedAction(
+        action_type="MONETIZE_PP",
+        legs_to_close=["protective_put"],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+        metadata={"mark": "210.0"},
+    )
+    _run(strategy.apply_action([pos], action))
+
+    mock_store.record_trade.assert_called_once()
+    trade = mock_store.record_trade.call_args[0][0]
+    assert trade.action.value == "SELL"
+    assert trade.quantity == 65
+    assert trade.price == Decimal("210.0")
+    assert trade.leg_role == "protective_put"
+
+
+def test_apply_action_recording_idempotent_on_duplicate() -> None:
+    """store.record_trade returning False must not raise."""
+    mock_store = MagicMock()
+    mock_store.record_trade.return_value = False
+    strategy = PPOverlayV1(store=mock_store, notifier=None)
+    strategy._check_reentry = AsyncMock()
+
+    pos = _make_position(instrument_key=_expiry_key(15))
+    action = ApprovedAction(
+        action_type="MONETIZE_PP",
+        legs_to_close=["protective_put"],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+        metadata={"mark": "50.0"},
+    )
+    result = _run(strategy.apply_action([pos], action))
+    assert result == []
+
+
+def test_apply_action_no_store_does_not_raise() -> None:
+    """store=None must not raise."""
+    strategy = PPOverlayV1(store=None, notifier=None)
+    strategy._check_reentry = AsyncMock()
+
+    pos = _make_position()
+    action = ApprovedAction(
+        action_type="MONETIZE_PP",
+        legs_to_close=["protective_put"],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+    )
+    result = _run(strategy.apply_action([pos], action))
+    assert result == []
+
+
+def test_record_close_trade_falls_back_to_avg_cost_when_mark_missing() -> None:
+    """No mark in metadata → closing trade priced at avg_cost."""
+    mock_store = MagicMock()
+    mock_store.record_trade.return_value = True
+    strategy = PPOverlayV1(store=mock_store, notifier=None)
+    strategy._check_reentry = AsyncMock()
+
+    pos = _make_position(avg_cost="50")
+    action = ApprovedAction(
+        action_type="MONETIZE_PP",
+        legs_to_close=["protective_put"],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+    )
+    _run(strategy.apply_action([pos], action))
+
+    trade = mock_store.record_trade.call_args[0][0]
+    assert trade.price == Decimal("50")

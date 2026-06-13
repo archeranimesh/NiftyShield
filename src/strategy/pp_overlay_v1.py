@@ -16,8 +16,9 @@ from typing import Any
 import structlog
 
 from src.models.options import OptionChain, OptionLeg
+from src.models.portfolio import TradeAction
 from src.paper.constants import STRATEGY_PP_OVERLAY
-from src.paper.models import PaperPosition
+from src.paper.models import PaperPosition, PaperTrade
 from src.strategy.exit_signals import ExitSignalEngine
 from src.strategy.protocol import ApprovedAction, SignalEvent
 from src.strategy.reentry_mixin import ReEntryMixin
@@ -225,8 +226,56 @@ class PPOverlayV1(ReEntryMixin):
                 trade_id=0,  # Design choice: overlay positions are aggregated and lack unique trade IDs
             )
 
+        if closed_pos is not None:
+            mark = action.metadata.get("mark") if action.metadata else None
+            self._record_close_trade(closed_pos, mark)
+
         await self._send_close_notification(closed_pos, action)
         return updated
+
+    def _record_close_trade(
+        self,
+        pos: PaperPosition,
+        mark: object | None,
+    ) -> None:
+        """Write a SELL closing trade to the ledger for a long-put position.
+
+        Args:
+            pos: The position being closed.
+            mark: Current mark price from action metadata. None → fallback to avg_cost.
+        """
+        if self._store is None:
+            return
+        try:
+            price = Decimal(str(mark)) if mark is not None else Decimal("0")
+        except Exception:
+            price = Decimal("0")
+        if price <= Decimal("0"):
+            price = pos.avg_cost
+        if price <= Decimal("0"):
+            log.warning(
+                "pp_overlay_v1.record_close_trade.zero_price_skip",
+                leg_role=pos.leg_role,
+                instrument_key=pos.instrument_key,
+            )
+            return
+        trade = PaperTrade(
+            strategy_name=pos.strategy_name,
+            leg_role=pos.leg_role,
+            instrument_key=pos.instrument_key,
+            trade_date=date.today(),
+            action=TradeAction.SELL,
+            quantity=abs(pos.net_qty),
+            price=price,
+            notes="close via apply_action",
+        )
+        inserted = self._store.record_trade(trade)
+        log.info(
+            "pp_overlay_v1.record_close_trade",
+            leg_role=pos.leg_role,
+            price=str(price),
+            inserted=inserted,
+        )
 
     async def _send_close_notification(
         self,

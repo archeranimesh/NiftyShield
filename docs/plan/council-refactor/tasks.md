@@ -64,16 +64,16 @@
   (e) `src/strategy/executor.py` `execute_action()`: bind a fresh trace ID per action dispatch, or inherit the calling tick's ID if already bound. Log `action.dispatch`, `action.fill`, `action.complete` with `strategy_name`, `action_type`, `leg_role`, `price`, `qty`.
   This means: if a signal fires and a wrong trade is executed, you can `grep trace_id=abc123ef logs/` and see the full chain: tick start → chain fetch → signal evaluated → action dispatched → fill recorded → DB write.
   Tests: `bind_trace_id` binds to structlog context; log output for a tick includes `trace_id`; two concurrent ticks have different IDs; `generate_trace_id` returns 8-char hex.
-  | SHA: pending
+  | SHA: 74371a3
 
-- [ ] **DBI-1** `[Claude]` — Make `overlay_closer.py` and `paper_3track_overlay_roll.py` genuinely atomic, and fix the destructive rollback key:
+- [x] **DBI-1** `[Claude]` — Make `overlay_closer.py` and `paper_3track_overlay_roll.py` genuinely atomic, and fix the destructive rollback key:
   (a) `src/paper/overlay_closer.py`: replace per-leg `_connect()` calls with a single shared connection passed to all `record_trade` calls; commit once after all legs succeed; on failure roll back the DB transaction (no application-level delete needed).
   (b) `scripts/strategies/three_track/paper_3track_overlay_roll.py`: same — wrap close+open per roll in a single transaction. `_roll_collar` must commit both legs together or neither.
   (c) `src/paper/store.py` `delete_trade`: add `instrument_key` to the WHERE predicate (same root cause as BUG-4); expose `delete_trade_by_id(trade_id)` as the preferred rollback primitive going forward.
   (d) `overlay_closer.py` `monetize_collar_put`: validate both put and call positions exist before mutating either; abort with an error if the collar structure is incomplete (avoids leaving a naked call).
-  Tests: collar close — second leg write raises → first leg rolled back; `delete_trade` with different `instrument_key` same tuple → does not delete wrong row.
+  Tests: collar close — second leg write raises → first leg rolled back; `delete_trade` with different `instrument_key` same tuple → does not delete wrong row. | SHA: c43ef46
 
-- [ ] **DBI-2** `[Claude]` — All three overlay `apply_action` methods record no closing trade to the DB, so positions reappear from the ledger next tick and signals re-fire indefinitely. Fix in `src/strategy/cc_overlay_v1.py`, `src/strategy/pp_overlay_v1.py`, `src/strategy/collar_overlay_v1.py`:
+- [x] **DBI-2** `[Claude]` — All three overlay `apply_action` methods record no closing trade to the DB, so positions reappear from the ledger next tick and signals re-fire indefinitely. Fix in `src/strategy/cc_overlay_v1.py`, `src/strategy/pp_overlay_v1.py`, `src/strategy/collar_overlay_v1.py`:
   Each `apply_action` that closes a leg must call `self._store.record_trade(closing_trade)` (BUY for a short leg, SELL for a long leg) at the resolved exit price before returning the filtered positions list. Use `PaperFillSimulator` for the exit price (already available via executor). For collar, record both legs.
   Tests: `apply_action(CLOSE_CC)` → closing BUY trade written to DB; next `get_positions` call returns empty for that leg; idempotent (second call is a no-op via unique key).
 
