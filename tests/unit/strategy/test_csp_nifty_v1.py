@@ -708,8 +708,10 @@ def test_monitor_calls_apply_action_for_auto_execute_strategy() -> None:
     notifier.send_plain_message = AsyncMock()
     notifier.send_approval_request = AsyncMock()
 
+    broker = MagicMock()
+    broker.get_option_chain = AsyncMock(return_value=[])
     monitor = StrategyMonitor(
-        broker=MagicMock(),
+        broker=broker,
         store=store,
         notifier=notifier,
         strategies=[strategy],
@@ -767,8 +769,10 @@ def test_monitor_routes_to_approval_when_auto_execute_false() -> None:
     notifier.send_plain_message = AsyncMock()
     notifier.send_approval_request = AsyncMock()
 
+    broker = MagicMock()
+    broker.get_option_chain = AsyncMock(return_value=[])
     monitor = StrategyMonitor(
-        broker=MagicMock(),
+        broker=broker,
         store=store,
         notifier=notifier,
         strategies=[strategy],
@@ -821,8 +825,10 @@ def test_monitor_falls_back_to_approval_when_payload_auto_execute_false() -> Non
     notifier.send_plain_message = AsyncMock()
     notifier.send_approval_request = AsyncMock()
 
+    broker = MagicMock()
+    broker.get_option_chain = AsyncMock(return_value=[])
     monitor = StrategyMonitor(
-        broker=MagicMock(),
+        broker=broker,
         store=store,
         notifier=notifier,
         strategies=[strategy],
@@ -844,3 +850,46 @@ def test_monitor_falls_back_to_approval_when_payload_auto_execute_false() -> Non
 
     strategy.apply_action.assert_not_awaited()
     notifier.send_approval_request.assert_awaited_once()
+
+
+# ── BUG-2: put_leg not found guard ───────────────────────────────────────────
+
+
+def test_check_signals_put_leg_not_found_skips_position() -> None:
+    """When put_leg is None (expiry mismatch), position is skipped — no false signal."""
+    strategy = CSPNiftyV1()
+    chain_no_pe = OptionChain(
+        underlying_spot=Decimal("24000"),
+        expiry=date(2026, 6, 26),
+        strikes={Decimal("23000"): OptionChainStrike(ce=None, pe=None)},
+    )
+    pos = _make_position(avg_sell_price="100")
+
+    result = _run(strategy.check_signals(chain_no_pe, [pos]))
+
+    # No signal emitted — guard returned early instead of evaluating ltp=0
+    assert result == []
+
+
+def test_check_signals_two_positions_one_found_one_not() -> None:
+    """One position has a matching chain leg; the other does not.
+    Only the found position emits signals — no false signal from the missing one."""
+    strategy = CSPNiftyV1()
+    # Chain has PE at 23000 (ltp=10 → PROFIT_TARGET on entry=100) but NOT at 22500
+    chain = _make_chain(ltp="10", delta="-0.05", strike="23000")
+    pos_found = _make_position(
+        instrument_key="NSE_FO|NIFTY23000PE",
+        avg_sell_price="100",
+        entry_date=date(2026, 6, 1),
+    )
+    pos_missing = _make_position(
+        instrument_key="NSE_FO|NIFTY22500PE",  # strike 22500 absent from chain
+        avg_sell_price="100",
+        entry_date=date(2026, 6, 1),
+    )
+
+    result = _run(strategy.check_signals(chain, [pos_found, pos_missing]))
+
+    # Exactly one signal from pos_found; pos_missing emits nothing (no false PROFIT_TARGET)
+    assert len(result) >= 1
+    assert any(e.event_type == "PROFIT_TARGET" for e in result)

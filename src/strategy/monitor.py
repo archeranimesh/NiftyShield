@@ -26,6 +26,7 @@ import structlog
 from src.client.exceptions import DataFetchError
 from src.client.protocol import BrokerClient
 from src.client.upstox_market import parse_upstox_option_chain
+from src.instruments.lookup import InstrumentLookup, parse_expiry
 from src.market_calendar.holidays import is_trading_day
 from src.models.options import OptionChain
 from src.paper.models import PaperPosition
@@ -55,8 +56,12 @@ class StrategyMonitor:
         poll_interval_s: Seconds between ticks (default 90).
         expiry_fn: Zero-arg callable returning the target expiry date string
             (YYYY-MM-DD) for the NIFTY option chain fetch on each tick.
-            Production callers should wire this to InstrumentLookup.get_expiry_candidates.
-            If None, _fetch_chain returns an empty OptionChain (safe for testing).
+            Used as a fallback when no positions carry a parseable expiry.
+            If None and no positions are open, _fetch_chains returns {}.
+        lookup: Optional BOD instrument lookup for resolving numeric instrument
+            keys (e.g. NSE_FO|71474) to their expiry dates.  Required for
+            accurate multi-expiry chain fetch; without it, only named-key
+            positions (e.g. NIFTY29MAY2026PE22500) have their expiry resolved.
     """
 
     def __init__(
@@ -67,6 +72,7 @@ class StrategyMonitor:
         strategies: list[PaperStrategy] | None = None,
         poll_interval_s: int = 90,
         expiry_fn: Callable[[], str] | None = None,
+        lookup: InstrumentLookup | None = None,
     ) -> None:
         self._broker = broker
         self._store = store
@@ -74,6 +80,7 @@ class StrategyMonitor:
         self._strategies: list[PaperStrategy] = list(strategies or [])
         self._poll_interval_s = poll_interval_s
         self._expiry_fn = expiry_fn
+        self._lookup = lookup
 
     def register(self, strategy: PaperStrategy) -> None:
         """Add a strategy to the registry after construction.
@@ -98,9 +105,11 @@ class StrategyMonitor:
         Sequence:
           1. Bind a fresh trace_id to the structlog context for this tick.
           2. Guard: skip if not a trading day or outside 09:15–15:30 IST.
-          3. Fetch live OptionChain (shared across all strategies).
-          4. For each strategy: load positions → check_signals → route events.
-          5. Write heartbeat.
+          3. Collect all positions; derive unique expiry dates.
+          4. Fetch one OptionChain per unique expiry (cached by date).
+          5. For each strategy: call check_signals with the chain matching
+             each position's expiry subset → route events.
+          6. Write heartbeat.
         """
         trace_id = generate_trace_id()
         bind_trace_id(trace_id)
@@ -123,24 +132,48 @@ class StrategyMonitor:
             self._write_heartbeat(os.getpid())
             return
 
-        chain = await self._fetch_chain()
-        if chain is None:
+        # Collect positions for all strategies up-front so we can derive expiries.
+        per_strategy_positions: dict[str, list[PaperPosition]] = {}
+        all_positions: list[PaperPosition] = []
+        for strategy in self._strategies:
+            positions = self._store.get_positions(strategy.strategy_name)
+            per_strategy_positions[strategy.strategy_name] = positions
+            all_positions.extend(positions)
+
+        chains = await self._fetch_chains(all_positions)
+        if not chains:
+            log.warning("strategy_monitor.no_chains_available")
             self._write_heartbeat(os.getpid())
             return
 
         for strategy in self._strategies:
-            positions = self._store.get_positions(strategy.strategy_name)
-            try:
-                events = await strategy.check_signals(chain, positions)
-            except Exception:
-                log.exception(
-                    "strategy_monitor.check_signals_error",
-                    strategy=strategy.strategy_name,
-                )
-                continue
+            positions = per_strategy_positions[strategy.strategy_name]
+            # Group this strategy's positions by expiry; call check_signals once
+            # per expiry subset so each position is evaluated against the right chain.
+            expiry_groups = self._group_positions_by_expiry(positions)
+            if not expiry_groups:
+                # No resolvable expiry — fall back to first available chain.
+                expiry_groups = {next(iter(chains)): positions}
+            for expiry_date, expiry_positions in expiry_groups.items():
+                chain = chains.get(expiry_date)
+                if chain is None:
+                    log.warning(
+                        "strategy_monitor.no_chain_for_expiry",
+                        strategy=strategy.strategy_name,
+                        expiry=str(expiry_date),
+                    )
+                    continue
+                try:
+                    events = await strategy.check_signals(chain, expiry_positions)
+                except Exception:
+                    log.exception(
+                        "strategy_monitor.check_signals_error",
+                        strategy=strategy.strategy_name,
+                    )
+                    continue
 
-            for event in events:
-                await self._route_event(event, strategy, chain, positions)
+                for event in events:
+                    await self._route_event(event, strategy, chain, expiry_positions)
 
         log.info("tick.end", trace_id=trace_id)
         self._write_heartbeat(os.getpid())
@@ -219,29 +252,134 @@ class StrategyMonitor:
                     expires_at,
                 )
 
-    async def _fetch_chain(self) -> OptionChain | None:
-        """Fetch and parse the live NIFTY option chain.
+    def _get_position_expiry(self, pos: PaperPosition) -> date | None:
+        """Resolve expiry date from a position's instrument key.
 
-        Returns None on DataFetchError so the caller skips the tick gracefully.
-        Returns an empty-strikes OptionChain if expiry_fn is not configured
-        (safe for testing without BOD data).
+        Tries named-key regex first (e.g. NIFTY29MAY2026PE22500 → 2026-05-29),
+        then BOD lookup for numeric keys (e.g. NSE_FO|71474) if lookup is wired.
+
+        Args:
+            pos: Open paper position.
 
         Returns:
-            Parsed OptionChain or None on fetch failure.
+            Expiry date or None when unresolvable.
         """
-        if self._expiry_fn is None:
-            log.debug("strategy_monitor.expiry_fn_not_set")
-            return parse_upstox_option_chain([])
+        import re as _re
 
-        expiry_str = self._expiry_fn()
-        try:
-            raw = await self._broker.get_option_chain(_NIFTY_INSTRUMENT, expiry_str)
-        except DataFetchError as exc:
-            log.warning("strategy_monitor.chain_fetch_error", error=str(exc))
-            return None
+        _KEY_EXPIRY_RE = _re.compile(
+            r"NIFTY(\d{2})([A-Za-z]{3})(\d{4})(CE|PE)", _re.IGNORECASE
+        )
+        _MONTH_ABBR = {
+            "JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6,
+            "JUL": 7, "AUG": 8, "SEP": 9, "OCT": 10, "NOV": 11, "DEC": 12,
+        }
+        m = _KEY_EXPIRY_RE.search(pos.instrument_key)
+        if m:
+            try:
+                day = int(m.group(1))
+                month = _MONTH_ABBR.get(m.group(2).upper())
+                year = int(m.group(3))
+                if month:
+                    from datetime import date as _date
+                    return _date(year, month, day)
+            except (ValueError, TypeError):
+                pass
 
-        data = raw if isinstance(raw, list) else []
-        return parse_upstox_option_chain(data)
+        if self._lookup is not None:
+            inst = self._lookup.get_by_key(pos.instrument_key)
+            if inst is not None:
+                expiry_str = parse_expiry(inst.get("expiry"))
+                if expiry_str:
+                    try:
+                        from datetime import date as _date
+                        return _date.fromisoformat(expiry_str)
+                    except ValueError:
+                        pass
+        return None
+
+    def _group_positions_by_expiry(
+        self, positions: list[PaperPosition]
+    ) -> dict[date, list[PaperPosition]]:
+        """Group positions by their resolved expiry date.
+
+        Positions whose expiry cannot be resolved are collected under None
+        and excluded from the returned dict (they trigger the fallback path).
+
+        Args:
+            positions: List of open paper positions.
+
+        Returns:
+            Dict mapping expiry date → positions sharing that expiry.
+        """
+        groups: dict[date, list[PaperPosition]] = {}
+        for pos in positions:
+            if pos.net_qty == 0:
+                continue
+            exp = self._get_position_expiry(pos)
+            if exp is not None:
+                groups.setdefault(exp, []).append(pos)
+        return groups
+
+    async def _fetch_chains(
+        self, positions: list[PaperPosition]
+    ) -> dict[date, OptionChain]:
+        """Fetch one OptionChain per unique expiry found in positions.
+
+        Positions are examined to derive their expiry dates; one API call is
+        made per unique expiry.  Falls back to ``expiry_fn`` when no positions
+        carry a resolvable expiry (or when the list is empty).  Returns ``{}``
+        if no chain can be fetched.
+
+        Args:
+            positions: All open positions across all registered strategies.
+
+        Returns:
+            Dict mapping expiry date → parsed OptionChain.
+        """
+        unique_expiries: set[date] = set()
+        for pos in positions:
+            if pos.net_qty == 0:
+                continue
+            exp = self._get_position_expiry(pos)
+            if exp is not None:
+                unique_expiries.add(exp)
+
+        # Fallback: use expiry_fn when positions carry no parseable expiry.
+        if not unique_expiries and self._expiry_fn is not None:
+            expiry_str = self._expiry_fn()
+            try:
+                from datetime import date as _date
+                unique_expiries.add(_date.fromisoformat(expiry_str))
+            except ValueError:
+                pass
+
+        if not unique_expiries:
+            log.debug("strategy_monitor.expiry_fn_not_set_and_no_positions")
+            # Return a single empty chain so test strategies without BOD still work.
+            from datetime import date as _date
+            return {_date.today(): parse_upstox_option_chain([])}
+
+        chains: dict[date, OptionChain] = {}
+        for expiry_date in unique_expiries:
+            expiry_str = expiry_date.isoformat()
+            try:
+                raw = await self._broker.get_option_chain(_NIFTY_INSTRUMENT, expiry_str)
+            except DataFetchError as exc:
+                log.warning(
+                    "strategy_monitor.chain_fetch_error",
+                    expiry=expiry_str,
+                    error=str(exc),
+                )
+                continue
+            data = raw if isinstance(raw, list) else []
+            chains[expiry_date] = parse_upstox_option_chain(data)
+            log.debug(
+                "strategy_monitor.chain_fetched",
+                expiry=expiry_str,
+                strikes=len(chains[expiry_date].strikes),
+            )
+
+        return chains
 
     def _write_heartbeat(self, pid: int) -> None:
         """Upsert daemon_heartbeat row (id=1).

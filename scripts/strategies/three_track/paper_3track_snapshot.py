@@ -110,6 +110,8 @@ _OVERLAY_OPTION_TYPE: dict[str, str] = {
 # Instrument key parsing — matches "NIFTY29MAY2026CE23000" or "NIFTY23000CE"
 _KEY_EXPIRY_RE = re.compile(r"NIFTY(\d{2})([A-Za-z]{3})(\d{4})(CE|PE)", re.IGNORECASE)
 _KEY_STRIKE_RE = re.compile(r"NIFTY(\d+)(CE|PE)", re.IGNORECASE)
+# Matches strike that follows the option type in date-embedded keys: "NIFTY29JUL2026PE22500" → "22500"
+_KEY_DATE_STRIKE_RE = re.compile(r"NIFTY\d{2}[A-Za-z]{3}\d{4}(?:CE|PE)(\d+)", re.IGNORECASE)
 _MONTH_ABBR: dict[str, int] = {
     "JAN": 1,
     "FEB": 2,
@@ -154,6 +156,13 @@ def _parse_strike_from_key(instrument_key: str) -> Decimal | None:
     """
     m = _KEY_STRIKE_RE.search(instrument_key)
     if not m:
+        # Fallback: date-embedded key like "NIFTY29JUL2026PE22500" where strike follows option type.
+        m2 = _KEY_DATE_STRIKE_RE.search(instrument_key)
+        if m2:
+            try:
+                return Decimal(m2.group(1))
+            except InvalidOperation:
+                pass
         return None
     try:
         return Decimal(m.group(1))
@@ -215,7 +224,7 @@ def _find_chain_leg(
 
 def _dispatch_evaluate(
     pos: PaperPosition,
-    chain: OptionChain,
+    chains: dict[date, OptionChain],
     underlying_price: float,
     today: date,
     lookup: InstrumentLookup | None = None,
@@ -227,7 +236,8 @@ def _dispatch_evaluate(
 
     Args:
         pos: Open paper position.
-        chain: Current Nifty option chain.
+        chains: Map of expiry date → parsed OptionChain.  The correct chain
+            is selected per position by resolving the position's expiry.
         underlying_price: Nifty spot price as float.
         today: Evaluation date (for DTE and days_held calculations).
         lookup: Optional BOD instrument lookup for resolving numeric keys.
@@ -238,23 +248,49 @@ def _dispatch_evaluate(
     role = pos.leg_role
     dte = _compute_dte(pos.instrument_key, today) or 9999
 
+    # Resolve the chain that covers this position's expiry.
+    pos_expiry = _get_expiry_date(pos.instrument_key, lookup) if lookup is not None else _parse_expiry_from_key(pos.instrument_key)
+    chain = chains.get(pos_expiry) if pos_expiry is not None else None
+    if chain is None:
+        # Fall back to any chain when expiry is unresolvable (e.g. non-option legs).
+        chain = next(iter(chains.values()), None) if chains else None
+    if chain is None:
+        logger.warning(
+            "dispatch_evaluate.no_chain_available",
+            instrument_key=pos.instrument_key,
+            expiry=str(pos_expiry),
+        )
+        return []
+
     if pos.strategy_name == _CSP_STRATEGY and pos.net_qty < 0:
         # Short put — CSP: five independent evaluators (CR1b)
         leg = _find_chain_leg(chain, pos.instrument_key, "PE", lookup)
-        ltp = Decimal(str(leg.ltp)) if leg is not None else Decimal("0")
-        delta = float(leg.delta) if leg is not None else 0.0
+        if leg is None:
+            logger.warning(
+                "dispatch_evaluate.csp_leg_not_found",
+                instrument_key=pos.instrument_key,
+                reason="chain_expiry_mismatch_or_unresolved_strike",
+            )
+            return []
         entry_credit = Decimal(str(pos.avg_sell_price))
         days_held = (today - pos.entry_date).days if pos.entry_date else 0
         results: list = []
-        results += ExitSignalEngine.evaluate_profit_target_csp(ltp=ltp, entry_credit=entry_credit)
-        results += ExitSignalEngine.evaluate_hard_stop_csp(ltp=ltp, entry_credit=entry_credit)
-        results += ExitSignalEngine.evaluate_delta_breach_csp(delta=delta, state=TradeState.OPEN)
+        results += ExitSignalEngine.evaluate_profit_target_csp(ltp=Decimal(str(leg.ltp)), entry_credit=entry_credit)
+        results += ExitSignalEngine.evaluate_hard_stop_csp(ltp=Decimal(str(leg.ltp)), entry_credit=entry_credit)
+        results += ExitSignalEngine.evaluate_delta_breach_csp(delta=float(leg.delta), state=TradeState.OPEN)
         results += ExitSignalEngine.evaluate_time_stop_csp(days_held=days_held)
         results += ExitSignalEngine.evaluate_roll_eligible_csp(dte=dte)
         return ExitSignalEngine._sort_results(results)
 
     if role == "overlay_cc" and pos.net_qty < 0:
         leg = _find_chain_leg(chain, pos.instrument_key, "CE", lookup)
+        if leg is None:
+            logger.warning(
+                "dispatch_evaluate.cc_leg_not_found",
+                instrument_key=pos.instrument_key,
+                reason="chain_expiry_mismatch_or_unresolved_strike",
+            )
+            return []
         if pos.entry_date:
             days_held = (today - pos.entry_date).days
         else:
@@ -266,23 +302,37 @@ def _dispatch_evaluate(
             days_held = 0
         return ExitSignalEngine.evaluate_cc(
             entry_price=float(pos.avg_sell_price),
-            current_mark=float(leg.ltp) if leg is not None else 0.0,
-            delta=float(leg.delta) if leg is not None else None,
+            current_mark=float(leg.ltp),
+            delta=float(leg.delta),
             dte=dte,
             days_held=days_held,
         )
 
     if role == "overlay_pp" and pos.net_qty > 0:
         leg = _find_chain_leg(chain, pos.instrument_key, "PE", lookup)
+        if leg is None:
+            logger.warning(
+                "dispatch_evaluate.pp_leg_not_found",
+                instrument_key=pos.instrument_key,
+                reason="chain_expiry_mismatch_or_unresolved_strike",
+            )
+            return []
         return ExitSignalEngine.evaluate_pp(
             entry_price=float(pos.avg_cost),
-            current_mark=float(leg.ltp) if leg is not None else 0.0,
-            delta=float(leg.delta) if leg is not None else None,
+            current_mark=float(leg.ltp),
+            delta=float(leg.delta),
             dte=dte,
         )
 
     if role == "overlay_collar_call" and pos.net_qty < 0:
         leg = _find_chain_leg(chain, pos.instrument_key, "CE", lookup)
+        if leg is None:
+            logger.warning(
+                "dispatch_evaluate.collar_call_leg_not_found",
+                instrument_key=pos.instrument_key,
+                reason="chain_expiry_mismatch_or_unresolved_strike",
+            )
+            return []
         strike = _parse_strike_from_key(pos.instrument_key)
         if strike is None and lookup is not None:
             inst = lookup.get_by_key(pos.instrument_key)
@@ -293,8 +343,8 @@ def _dispatch_evaluate(
                     pass
         return ExitSignalEngine.evaluate_collar_call(
             entry_price=float(pos.avg_sell_price),
-            current_mark=float(leg.ltp) if leg is not None else 0.0,
-            delta=float(leg.delta) if leg is not None else None,
+            current_mark=float(leg.ltp),
+            delta=float(leg.delta),
             dte=dte,
             underlying_price=underlying_price,
             strike_price=float(strike) if strike is not None else 0.0,
@@ -302,10 +352,17 @@ def _dispatch_evaluate(
 
     if role == "overlay_collar_put" and pos.net_qty > 0:
         leg = _find_chain_leg(chain, pos.instrument_key, "PE", lookup)
+        if leg is None:
+            logger.warning(
+                "dispatch_evaluate.collar_put_leg_not_found",
+                instrument_key=pos.instrument_key,
+                reason="chain_expiry_mismatch_or_unresolved_strike",
+            )
+            return []
         return ExitSignalEngine.evaluate_collar_put(
             entry_price=float(pos.avg_cost),
-            current_mark=float(leg.ltp) if leg is not None else 0.0,
-            delta=float(leg.delta) if leg is not None else None,
+            current_mark=float(leg.ltp),
+            delta=float(leg.delta),
             dte=dte,
             bid=float(leg.bid) if leg is not None else None,
             ask=float(leg.ask) if leg is not None else None,
@@ -514,7 +571,7 @@ async def _check_base_expiry(
 async def compute_and_record_exit_signals(
     store: PaperStore,
     positions: list[PaperPosition],
-    chain: OptionChain,
+    chains: dict[date, OptionChain],
     snapshot_id: int | None,
     engine: type[ExitSignalEngine],
     today: date,
@@ -539,7 +596,9 @@ async def compute_and_record_exit_signals(
     Args:
         store: PaperStore for reads/writes.
         positions: All open paper positions across all strategies.
-        chain: Parsed Nifty option chain (for delta, bid, ask, LTP lookups).
+        chains: Map of expiry date → parsed OptionChain.  Each position is
+            evaluated against the chain matching its own expiry, preventing
+            cross-expiry false signals (e.g. July CSP vs June chain → ltp=0).
         snapshot_id: Optional NAV snapshot row id to link events.
         engine: ExitSignalEngine class (all methods are classmethods).
         today: Evaluation date.
@@ -550,6 +609,10 @@ async def compute_and_record_exit_signals(
     if not save:
         return
 
+    if not chains:
+        logger.warning("compute_and_record_exit_signals.no_chains_available")
+        return
+
     # Build dedup set from already-open events dated today
     today_iso = today.isoformat()
     existing: set[tuple[str, str]] = {
@@ -558,7 +621,8 @@ async def compute_and_record_exit_signals(
         if ev["event_time"][:10] == today_iso
     }
 
-    underlying_price = float(chain.underlying_spot)
+    first_chain = next(iter(chains.values()))
+    underlying_price = float(first_chain.underlying_spot)
     event_time = datetime.combine(today, datetime.min.time())
 
     action_messages: list[str] = []
@@ -568,7 +632,7 @@ async def compute_and_record_exit_signals(
         if pos.net_qty == 0:
             continue
 
-        results = _dispatch_evaluate(pos, chain, underlying_price, today, lookup)
+        results = _dispatch_evaluate(pos, chains, underlying_price, today, lookup)
 
         for result in results:
             if result.severity == "INFO":
@@ -587,7 +651,10 @@ async def compute_and_record_exit_signals(
             is_short = pos.net_qty < 0
             entry_price = pos.avg_sell_price if is_short else pos.avg_cost
             opt_type = _OVERLAY_OPTION_TYPE.get(pos.leg_role, "PE" if is_short else "CE")
-            opt_leg = _find_chain_leg(chain, pos.instrument_key, opt_type, lookup)
+            # Use the position's expiry-specific chain for the opt_leg lookup.
+            pos_expiry = _get_expiry_date(pos.instrument_key, lookup) if lookup is not None else _parse_expiry_from_key(pos.instrument_key)
+            pos_chain = chains.get(pos_expiry) if pos_expiry is not None else first_chain
+            opt_leg = _find_chain_leg(pos_chain or first_chain, pos.instrument_key, opt_type, lookup)
 
             # ExitSignalResult uses "WARN"; create_exit_event expects "WARNING"
             severity_store = "WARNING" if result.severity == "WARN" else result.severity
@@ -1013,33 +1080,61 @@ async def _run(args: argparse.Namespace) -> None:
             _save_leg_snapshots(store, track_name, snapshot, snap_date, ltp_map)
 
     # ── EOD exit signal evaluation (Tier 1) ──────────────────────────────────
-    # Collect open positions across all tracks + CSP strategy, then fetch the
-    # nearest monthly option chain and evaluate exit signals for each leg.
+    # Collect open positions across all tracks + CSP strategy, derive unique
+    # expiry dates, fetch one chain per expiry, and evaluate each position
+    # against the chain that matches its own expiry.  This prevents cross-
+    # expiry false signals (e.g. a Jul CSP evaluated against the Jun chain
+    # returning ltp=0 and triggering a false PROFIT_TARGET).
     # Skipped in dry-run mode (save=False) — no DB writes or Telegram alerts.
     if save:
         all_positions: list[PaperPosition] = []
         for sname in [*tracks, _CSP_STRATEGY]:
             all_positions.extend(store.get_positions(sname))
 
-        eod_chain: OptionChain | None = None
-        try:
-            candidates = lookup.get_expiry_candidates(
-                "NIFTY", snap_date, preference=["monthly", "quarterly"]
-            )
-            if candidates:
-                _label, expiry_str = candidates[0]
+        # Collect unique expiry dates from open option positions.
+        unique_expiries: set[date] = set()
+        for pos in all_positions:
+            if pos.net_qty == 0:
+                continue
+            exp = _get_expiry_date(pos.instrument_key, lookup)
+            if exp is not None:
+                unique_expiries.add(exp)
+
+        # Fallback: if no positions carry a parseable expiry, use nearest monthly.
+        if not unique_expiries:
+            try:
+                candidates = lookup.get_expiry_candidates(
+                    "NIFTY", snap_date, preference=["monthly", "quarterly"]
+                )
+                if candidates:
+                    _label, expiry_str = candidates[0]
+                    unique_expiries.add(date.fromisoformat(expiry_str))
+            except Exception as exc:
+                logger.warning("exit_signals.fallback_expiry_failed", error=str(exc))
+
+        eod_chains: dict[date, OptionChain] = {}
+        for expiry_date in unique_expiries:
+            expiry_str = expiry_date.isoformat()
+            try:
                 raw_chain = await broker.get_option_chain("NSE_INDEX|Nifty 50", expiry_str)
                 chain_data = raw_chain if isinstance(raw_chain, list) else []
-                eod_chain = parse_upstox_option_chain(chain_data)
-        # Intentional: chain fetch failure must not crash the snapshot.
-        except Exception as exc:
-            logger.warning("exit_signals.chain_fetch_failed", error=str(exc))
+                eod_chains[expiry_date] = parse_upstox_option_chain(chain_data)
+                logger.info(
+                    "exit_signals.chain_fetched",
+                    expiry=expiry_str,
+                    strikes=len(eod_chains[expiry_date].strikes),
+                )
+            # Intentional: per-expiry chain fetch failure must not crash the snapshot.
+            except Exception as exc:
+                logger.warning(
+                    "exit_signals.chain_fetch_failed", expiry=expiry_str, error=str(exc)
+                )
 
-        if eod_chain is not None:
+        if eod_chains:
             await compute_and_record_exit_signals(
                 store=store,
                 positions=all_positions,
-                chain=eod_chain,
+                chains=eod_chains,
                 snapshot_id=None,
                 engine=ExitSignalEngine,
                 today=snap_date,

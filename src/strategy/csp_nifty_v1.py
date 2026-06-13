@@ -149,22 +149,37 @@ class CSPNiftyV1(ReEntryMixin):
                 continue  # only short legs trigger signals
 
             put_leg = self._find_put_leg(market, pos.instrument_key)
+            if put_leg is None:
+                log.warning(
+                    "csp_nifty_v1.check_signals.put_leg_not_found",
+                    instrument_key=pos.instrument_key,
+                    reason="chain_expiry_mismatch_or_unresolved_strike",
+                )
+
             expiry = self._parse_expiry(pos.instrument_key)
             dte = (expiry - today).days if expiry is not None else 9999
 
             days_held = (today - pos.entry_date).days if pos.entry_date is not None else 0
 
-            ltp = Decimal(str(put_leg.ltp)) if put_leg is not None else Decimal("0")
-            delta = float(put_leg.delta) if put_leg is not None else 0.0
             entry_credit = Decimal(str(pos.avg_sell_price))
             trade_state = pos.state if hasattr(pos, "state") else TradeState.OPEN
 
+            # Evaluate in priority order (highest priority first) so the action_emitted
+            # suppression loop emits the most critical signal per position per tick.
             results = []
-            results += ExitSignalEngine.evaluate_profit_target_csp(
-                ltp=ltp, entry_credit=entry_credit
-            )
-            results += ExitSignalEngine.evaluate_hard_stop_csp(ltp=ltp, entry_credit=entry_credit)
-            results += ExitSignalEngine.evaluate_delta_breach_csp(delta=delta, state=trade_state)
+            if put_leg is not None:
+                ltp = Decimal(str(put_leg.ltp))
+                delta = float(put_leg.delta)
+                results += ExitSignalEngine.evaluate_hard_stop_csp(
+                    ltp=ltp, entry_credit=entry_credit
+                )
+                results += ExitSignalEngine.evaluate_delta_breach_csp(
+                    delta=delta, state=trade_state
+                )
+                results += ExitSignalEngine.evaluate_profit_target_csp(
+                    ltp=ltp, entry_credit=entry_credit
+                )
+            # Time-based signals fire even when the chain does not carry this expiry.
             results += ExitSignalEngine.evaluate_time_stop_csp(days_held=days_held)
             results += ExitSignalEngine.evaluate_roll_eligible_csp(dte=dte)
             results = ExitSignalEngine._sort_results(results)

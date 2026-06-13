@@ -385,6 +385,143 @@ async def test_tick_skips_if_outside_market_hours() -> None:
 
 
 # ---------------------------------------------------------------------------
+# BUG-2: multi-expiry chain fetch
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_tick_fetches_chain_per_unique_expiry() -> None:
+    """Two positions in different expiries → broker.get_option_chain called twice."""
+    from datetime import date
+
+    pos_monthly = PaperPosition(
+        strategy_name="paper_csp_nifty_v1",
+        leg_role="short_put",
+        net_qty=-65,
+        avg_cost=Decimal("0"),
+        avg_sell_price=Decimal("100"),
+        instrument_key="NIFTY30JUN2026PE23000",
+        entry_date=date(2026, 6, 1),
+    )
+    pos_quarterly = PaperPosition(
+        strategy_name="paper_csp_nifty_v1",
+        leg_role="short_put",
+        net_qty=-65,
+        avg_cost=Decimal("0"),
+        avg_sell_price=Decimal("80"),
+        instrument_key="NIFTY29JUL2026PE22500",
+        entry_date=date(2026, 6, 1),
+    )
+
+    strategy = MockStrategy()
+    strategy.check_signals = AsyncMock(return_value=[])
+    store = _make_store(positions=[pos_monthly, pos_quarterly])
+
+    broker = MagicMock()
+    broker.get_option_chain = AsyncMock(return_value=[])
+
+    monitor = _make_monitor(broker=broker, store=store, strategies=[strategy])
+
+    with (
+        patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch(
+            "src.strategy.monitor.datetime",
+            **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
+        ),
+    ):
+        await monitor._tick()
+
+    # Two distinct expiry dates → two get_option_chain calls
+    assert broker.get_option_chain.call_count == 2
+    called_expiries = {call.args[1] for call in broker.get_option_chain.call_args_list}
+    assert "2026-06-30" in called_expiries
+    assert "2026-07-29" in called_expiries
+
+
+@pytest.mark.asyncio
+async def test_tick_single_expiry_single_chain_fetch() -> None:
+    """All positions share one expiry → exactly one get_option_chain call."""
+    from datetime import date
+
+    positions = [
+        PaperPosition(
+            strategy_name="paper_csp_nifty_v1",
+            leg_role="short_put",
+            net_qty=-65,
+            avg_cost=Decimal("0"),
+            avg_sell_price=Decimal("100"),
+            instrument_key="NIFTY30JUN2026PE23000",
+            entry_date=date(2026, 6, 1),
+        ),
+        PaperPosition(
+            strategy_name="paper_csp_nifty_v1",
+            leg_role="short_put",
+            net_qty=-65,
+            avg_cost=Decimal("0"),
+            avg_sell_price=Decimal("80"),
+            instrument_key="NIFTY30JUN2026PE22500",  # same expiry
+            entry_date=date(2026, 6, 1),
+        ),
+    ]
+
+    strategy = MockStrategy()
+    strategy.check_signals = AsyncMock(return_value=[])
+    store = _make_store(positions=positions)
+
+    broker = MagicMock()
+    broker.get_option_chain = AsyncMock(return_value=[])
+
+    monitor = _make_monitor(broker=broker, store=store, strategies=[strategy])
+
+    with (
+        patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch(
+            "src.strategy.monitor.datetime",
+            **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
+        ),
+    ):
+        await monitor._tick()
+
+    assert broker.get_option_chain.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_tick_all_chains_fail_skips_gracefully() -> None:
+    """All chain fetches raise DataFetchError → tick skips signal eval, heartbeat written."""
+    from datetime import date
+
+    pos = PaperPosition(
+        strategy_name="paper_csp_nifty_v1",
+        leg_role="short_put",
+        net_qty=-65,
+        avg_cost=Decimal("0"),
+        avg_sell_price=Decimal("100"),
+        instrument_key="NIFTY30JUN2026PE23000",
+        entry_date=date(2026, 6, 1),
+    )
+    strategy = MockStrategy()
+    strategy.check_signals = AsyncMock(return_value=[])
+    store = _make_store(positions=[pos])
+
+    broker = MagicMock()
+    broker.get_option_chain = AsyncMock(side_effect=DataFetchError("timeout"))
+
+    monitor = _make_monitor(broker=broker, store=store, strategies=[strategy])
+
+    with (
+        patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch(
+            "src.strategy.monitor.datetime",
+            **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
+        ),
+    ):
+        await monitor._tick()
+
+    strategy.check_signals.assert_not_called()
+    store.write_heartbeat.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
 # Helpers (private to this module)
 # ---------------------------------------------------------------------------
 

@@ -121,10 +121,12 @@ async def _run_eval(
     notifier=None,
     save: bool = True,
 ) -> None:
+    # Wrap single chain in dict keyed by _TODAY so compute_and_record_exit_signals
+    # receives the new chains: dict[date, OptionChain] signature.
     await snap_mod.compute_and_record_exit_signals(
         store=store,
         positions=positions,
-        chain=chain,
+        chains={_TODAY: chain},
         snapshot_id=None,
         engine=ExitSignalEngine,
         today=_TODAY,
@@ -345,3 +347,120 @@ async def test_dry_run_no_events_written(tmp_path: Path) -> None:
 
     assert store.get_open_exit_events() == []
     notifier.send.assert_not_called()
+
+
+# ── BUG-2 guard tests ────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_dispatch_evaluate_csp_leg_not_found_returns_empty(tmp_path: Path) -> None:
+    """CSP position not found in chain (expiry mismatch) → [] and no DB event written."""
+    store = _make_store(tmp_path)
+    # Chain has ONLY a CE leg — the PE leg is absent (simulates expiry mismatch)
+    ce_leg = _make_leg(ltp=50.0, delta=0.20)
+    chain = _make_chain(ce_leg=ce_leg, pe_leg=None)  # no PE
+    pos = _make_csp_position(avg_sell_price=100.0)
+
+    await _run_eval(store, [pos], chain)
+
+    # No events: CSP guard returns [] when PE leg not found
+    assert store.get_open_exit_events() == []
+
+
+@pytest.mark.asyncio
+async def test_dispatch_evaluate_cc_leg_not_found_returns_empty(tmp_path: Path) -> None:
+    """CC overlay not found in chain → [] and no DB event written."""
+    store = _make_store(tmp_path)
+    # Chain has only a PE leg — no CE for the CC position
+    pe_leg = _make_leg(ltp=50.0, delta=-0.20)
+    chain = _make_chain(pe_leg=pe_leg, ce_leg=None)
+    pos = _make_overlay_position(
+        leg_role="overlay_cc",
+        net_qty=-65,
+        avg_sell_price=20.0,
+        instrument_key="NSE_FO|NIFTY23000CE",
+    )
+
+    await _run_eval(store, [pos], chain)
+
+    assert store.get_open_exit_events() == []
+
+
+@pytest.mark.asyncio
+async def test_dispatch_evaluate_pp_leg_not_found_returns_empty(tmp_path: Path) -> None:
+    """PP overlay not found in chain → [] and no DB event written."""
+    store = _make_store(tmp_path)
+    ce_leg = _make_leg(ltp=50.0, delta=0.20)
+    chain = _make_chain(ce_leg=ce_leg, pe_leg=None)
+    pos = _make_overlay_position(
+        leg_role="overlay_pp",
+        net_qty=65,
+        avg_cost=20.0,
+        instrument_key="NSE_FO|NIFTY23000PE",
+    )
+
+    await _run_eval(store, [pos], chain)
+
+    assert store.get_open_exit_events() == []
+
+
+@pytest.mark.asyncio
+async def test_dispatch_evaluate_quarterly_expiry_uses_correct_chain(tmp_path: Path) -> None:
+    """Position in a quarterly expiry is evaluated against the quarterly chain, not the monthly."""
+    store = _make_store(tmp_path)
+    _MONTHLY = date(2026, 6, 30)
+    _QUARTERLY = date(2026, 7, 29)
+
+    # Monthly chain has NO PE at 22500 (different strike)
+    monthly_chain = OptionChain(
+        underlying_spot=Decimal("24000"),
+        expiry=_MONTHLY,
+        strikes={Decimal("23000"): OptionChainStrike(ce=None, pe=_make_leg(ltp=200.0))},
+    )
+    # Quarterly chain DOES have a PE at 22500 that triggers PROFIT_TARGET
+    quarterly_pe = _make_leg(ltp=10.0, delta=-0.05)  # 10 ≤ 30% of 50 → PROFIT_TARGET
+    quarterly_chain = OptionChain(
+        underlying_spot=Decimal("24000"),
+        expiry=_QUARTERLY,
+        strikes={Decimal("22500"): OptionChainStrike(ce=None, pe=quarterly_pe)},
+    )
+
+    # CSP position in the July quarterly contract
+    pos = _make_csp_position(
+        avg_sell_price=50.0,
+        instrument_key="NIFTY29JUL2026PE22500",  # named key — expiry parseable
+    )
+
+    await snap_mod.compute_and_record_exit_signals(
+        store=store,
+        positions=[pos],
+        chains={_MONTHLY: monthly_chain, _QUARTERLY: quarterly_chain},
+        snapshot_id=None,
+        engine=ExitSignalEngine,
+        today=_TODAY,
+        save=True,
+    )
+
+    events = store.get_open_exit_events()
+    # PROFIT_TARGET fired — confirms the quarterly chain was used, not the monthly
+    assert any(ev["exit_signal"] == "PROFIT_TARGET" for ev in events)
+
+
+@pytest.mark.asyncio
+async def test_compute_no_chains_returns_early(tmp_path: Path) -> None:
+    """Empty chains dict → early return, no DB writes."""
+    store = _make_store(tmp_path)
+    pe_leg = _make_leg(ltp=10.0, delta=-0.05)
+    pos = _make_csp_position(avg_sell_price=50.0)
+
+    await snap_mod.compute_and_record_exit_signals(
+        store=store,
+        positions=[pos],
+        chains={},
+        snapshot_id=None,
+        engine=ExitSignalEngine,
+        today=_TODAY,
+        save=True,
+    )
+
+    assert store.get_open_exit_events() == []
