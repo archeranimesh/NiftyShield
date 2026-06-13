@@ -306,6 +306,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-06-13 | BUG-4 — paper_trades UNIQUE constraint extended to include instrument_key; __init__ migration rebuilds constraint on stale DBs; migrate_paper_trades_unique.py for live DB; 2 new tests — 50c4e56 |
 | 2026-06-13 | BUG-1 — get_positions multi-cycle: logic fix confirmed in DBI-3; added 2 regression tests (avg_sell_price current-cycle-only, fully-closed net-zero) — 77b6082 |
 | 2026-06-13 | FR-2 — PaperExitEvent monetary fields (ltp, mid, bid, ask, entry_price, threshold_value): float→Decimal, REAL→TEXT; _parse_exit_event_row helper; migrate_exit_events_decimal.py; 3 new tests — 05a4e49 |
 | 2026-06-13 | DBI-3 — get_positions: entry_date now set from opening trade regardless of BUY/SELL (fixes long-first PP/ETF legs); instrument_key now from cycle-opening contract not last loop row (fixes rolled legs); 4 new tests in test_store.py |

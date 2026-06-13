@@ -10,7 +10,6 @@ returns the updated position list.
 
 from __future__ import annotations
 
-import sqlite3
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -18,7 +17,6 @@ from typing import Literal
 
 import structlog
 
-from src.db import connect
 from src.models.options import OptionChain
 from src.models.portfolio import TradeAction
 from src.paper.models import PaperPosition, PaperTrade
@@ -169,7 +167,7 @@ class PaperExecutor:
            via PaperStore.record_trade (action = opposite of net position).
         2. For each LegSpec in action.legs_to_open: simulate fill and record
            an opening trade via PaperStore.record_trade.
-        3. Write a row to council_outputs for audit (approval_id FK).
+        3. Write per-leg audit rows to paper_action_audit (best-effort).
         4. Return updated list[PaperPosition] from PaperStore.get_positions().
 
         Args:
@@ -221,6 +219,14 @@ class PaperExecutor:
                 is_paper=True,
             )
             self._store.record_trade(trade)
+            self._write_audit(
+                strategy_name,
+                action.action_type,
+                leg_role,
+                fill.fill_price,
+                fill.quantity,
+                action.rationale,
+            )
             log.info(
                 "action.fill",
                 strategy=strategy_name,
@@ -254,6 +260,14 @@ class PaperExecutor:
                 is_paper=True,
             )
             self._store.record_trade(trade)
+            self._write_audit(
+                strategy_name,
+                action.action_type,
+                leg_spec.leg_role,
+                fill.fill_price,
+                fill.quantity,
+                action.rationale,
+            )
             log.info(
                 "action.fill",
                 strategy=strategy_name,
@@ -263,8 +277,7 @@ class PaperExecutor:
                 qty=fill.quantity,
             )
 
-        # 3. Audit log — best-effort; council_outputs table added in PB1.6
-        self._write_audit(approval_id, strategy_name, action)
+        # 3. (audit written inline per leg above)
 
         log.info(
             "action.complete",
@@ -300,37 +313,38 @@ class PaperExecutor:
 
     def _write_audit(
         self,
-        approval_id: int,
         strategy_name: str,
-        action: ApprovedAction,
+        action_type: str,
+        leg_role: str,
+        price: Decimal,
+        qty: int,
+        rationale: str | None,
     ) -> None:
-        """Write an audit row to council_outputs.
+        """Write one per-leg audit row to paper_action_audit.
 
-        Fails silently if the table does not yet exist (schema added in
-        PB1.6 migration). Never raises — audit failure must not block
-        execution.
+        Best-effort: never raises. Audit failure must not block execution.
 
         Args:
-            approval_id: FK to pending_approvals.
-            strategy_name: Strategy executing the action.
-            action: The approved action for audit logging.
+            strategy_name: Strategy that executed the action.
+            action_type: e.g. ``"CLOSE_FULL"``, ``"PROFIT_TARGET"``.
+            leg_role: e.g. ``"short_put"``.
+            price: Fill price as Decimal.
+            qty: Absolute quantity filled.
+            rationale: Free-text rationale from the approved action.
         """
         try:
-            with connect(self._db_path) as conn:
-                conn.execute(
-                    """
-                    INSERT INTO council_outputs
-                        (approval_id, strategy_name, action_type, rationale, council_rank)
-                    VALUES (?, ?, ?, ?, ?)
-                    """,
-                    (
-                        approval_id,
-                        strategy_name,
-                        action.action_type,
-                        action.rationale,
-                        action.council_rank,
-                    ),
-                )
-        except sqlite3.OperationalError:
-            # council_outputs table added in PB1.6 migration — tolerate missing table
-            pass
+            self._store.record_action_audit(
+                strategy_name=strategy_name,
+                action_type=action_type,
+                leg_role=leg_role,
+                price=price,
+                qty=qty,
+                rationale=rationale,
+            )
+        except Exception:
+            log.warning(
+                "action.audit_failed",
+                strategy=strategy_name,
+                action_type=action_type,
+                leg_role=leg_role,
+            )

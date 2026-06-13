@@ -95,8 +95,8 @@
 - [x] **BUG-1** `[Claude]` — `get_positions` cross-cycle aggregation: `src/paper/store.py`. Reset `avg_sell_price`, `entry_date`, `instrument_key` accumulators when `net_qty` returns to 0 mid-loop so only the current open cycle contributes. Root cause of false TIME_STOP (days_held=28 for a same-day entry) and distorted avg_sell_price (210.51 vs 231.68). Idempotent migration not required (logic fix only).
   Tests: multi-cycle fixture asserting correct avg_sell_price and entry_date. **Introduced: `69c7a49`** | SHA: 77b6082
 
-- [ ] **BUG-4** `[Claude]` — `record_trade` unique key too broad: `src/paper/store.py` schema + `scripts/dev/migrate_paper_trades_unique.py`. Add `instrument_key` to UNIQUE constraint: `(strategy_name, leg_role, instrument_key, trade_date, action)`. Current key allowed second close of same day (different instrument) to silently no-op, causing `_close_leg` to return normally and `_reentry_notification` to fire every 90 s.
-  Tests: same instrument+date+action → no-op; different instrument same date+action → both inserted. **Introduced: `69c7a49`**
+- [x] **BUG-4** `[Claude]` — `record_trade` unique key too broad: `src/paper/store.py` schema + `scripts/dev/migrate_paper_trades_unique.py`. Add `instrument_key` to UNIQUE constraint: `(strategy_name, leg_role, instrument_key, trade_date, action)`. Current key allowed second close of same day (different instrument) to silently no-op, causing `_close_leg` to return normally and `_reentry_notification` to fire every 90 s.
+  Tests: same instrument+date+action → no-op; different instrument same date+action → both inserted. **Introduced: `69c7a49`** | SHA: 50c4e56
 
 - [ ] **SIG-1** `[Claude]` — `src/strategy/executor.py` `_resolve_mid_price` is a TODO stub returning `Decimal("0")`. Every fill through it is priced at zero, corrupting P&L and feeding false-signal paths:
   Implement real mid-price resolution: `(bid + ask) / 2` from the chain leg if both are present; fall back to `ltp` if spread is unavailable; raise `ValueError` (do not return 0) if no price can be resolved so the caller can abort rather than record a zero-price fill.

@@ -11,20 +11,18 @@ Covers:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Literal
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.models.options import OptionChain, OptionChainStrike
+from src.models.options import OptionChain, OptionLeg
 from src.models.portfolio import TradeAction
 from src.paper.models import PaperPosition, PaperTrade
-from src.strategy.executor import FillResult, PaperExecutor, PaperFillSimulator
+from src.strategy._price_utils import resolve_price
+from src.strategy.executor import PaperExecutor, PaperFillSimulator
 from src.strategy.protocol import ApprovedAction, LegSpec
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -62,6 +60,7 @@ def _make_store(
     store = MagicMock()
     positions = positions or []
     store.get_positions.return_value = positions
+
     # get_position: find matching leg_role or return a zero-qty default
     def _get_position(strategy_name: str, leg_role: str) -> PaperPosition:
         for p in positions:
@@ -181,8 +180,10 @@ class TestPaperExecutorOpenLeg:
             council_rank=1,
         )
 
-        with patch.object(executor, "_resolve_mid_price", return_value=Decimal("50")), \
-             patch.object(executor, "_write_audit"):
+        with (
+            patch.object(executor, "_resolve_mid_price", return_value=Decimal("50")),
+            patch.object(executor, "_write_audit"),
+        ):
             executor.apply("paper_csp", action, chain, approval_id=7, vix=18.0)
 
         store.record_trade.assert_called_once()
@@ -207,8 +208,10 @@ class TestPaperExecutorOpenLeg:
         )
 
         # Patch _resolve_mid_price to return a known mid so arithmetic is predictable
-        with patch.object(executor, "_resolve_mid_price", return_value=Decimal("100")), \
-             patch.object(executor, "_write_audit"):
+        with (
+            patch.object(executor, "_resolve_mid_price", return_value=Decimal("100")),
+            patch.object(executor, "_write_audit"),
+        ):
             executor.apply("paper_csp", action, chain, approval_id=1, vix=18.0)
 
         recorded: PaperTrade = store.record_trade.call_args[0][0]
@@ -234,8 +237,10 @@ class TestPaperExecutorCloseLeg:
             council_rank=1,
         )
 
-        with patch.object(executor, "_resolve_mid_price", return_value=Decimal("100")), \
-             patch.object(executor, "_write_audit"):
+        with (
+            patch.object(executor, "_resolve_mid_price", return_value=Decimal("100")),
+            patch.object(executor, "_write_audit"),
+        ):
             executor.apply("paper_csp", action, chain, approval_id=3, vix=18.0)
 
         store.record_trade.assert_called_once()
@@ -261,8 +266,10 @@ class TestPaperExecutorCloseLeg:
             council_rank=1,
         )
 
-        with patch.object(executor, "_resolve_mid_price", return_value=Decimal("80")), \
-             patch.object(executor, "_write_audit"):
+        with (
+            patch.object(executor, "_resolve_mid_price", return_value=Decimal("80")),
+            patch.object(executor, "_write_audit"),
+        ):
             executor.apply("paper_csp", action, chain, approval_id=5, vix=18.0)
 
         recorded: PaperTrade = store.record_trade.call_args[0][0]
@@ -310,3 +317,93 @@ class TestPaperExecutorEmptyAction:
 
         store.record_trade.assert_not_called()
         assert result == [existing]
+
+
+# ── _resolve_mid_price / resolve_price tests ──────────────────────────────────
+
+
+def _make_leg(
+    ltp: str = "0",
+    bid: str = "0",
+    ask: str = "0",
+) -> OptionLeg:
+    return OptionLeg(
+        ltp=Decimal(ltp),
+        bid=Decimal(bid),
+        ask=Decimal(ask),
+        oi=0,
+        volume=0,
+        delta=Decimal("0"),
+        gamma=Decimal("0"),
+        theta=Decimal("0"),
+        vega=Decimal("0"),
+        iv=Decimal("0"),
+        strike=Decimal("24000"),
+    )
+
+
+class TestResolveMidPrice:
+    def test_bid_ask_returns_mid(self) -> None:
+        """When both bid and ask are positive, returns (bid+ask)/2."""
+        leg = _make_leg(bid="100", ask="120", ltp="105")
+        assert resolve_price(leg) == Decimal("110")
+
+    def test_ltp_fallback_when_no_spread(self) -> None:
+        """Falls back to ltp when bid or ask is zero."""
+        leg = _make_leg(ltp="95", bid="0", ask="0")
+        assert resolve_price(leg) == Decimal("95")
+
+    def test_ltp_fallback_when_only_bid(self) -> None:
+        """Falls back to ltp when ask is zero (half-spread)."""
+        leg = _make_leg(ltp="90", bid="88", ask="0")
+        assert resolve_price(leg) == Decimal("90")
+
+    def test_raises_when_no_price_available(self) -> None:
+        """Raises ValueError when no positive price exists."""
+        leg = _make_leg(ltp="0", bid="0", ask="0")
+        with pytest.raises(ValueError, match="No valid price"):
+            resolve_price(leg)
+
+
+# ── _write_audit tests ────────────────────────────────────────────────────────
+
+
+class TestWriteAudit:
+    def test_write_audit_calls_record_action_audit(self) -> None:
+        """_write_audit delegates to store.record_action_audit with correct args."""
+        store = _make_store()
+        executor = _make_executor(store=store)
+
+        executor._write_audit(
+            strategy_name="paper_csp",
+            action_type="CLOSE_FULL",
+            leg_role="short_put",
+            price=Decimal("45.50"),
+            qty=65,
+            rationale="profit target hit",
+        )
+
+        store.record_action_audit.assert_called_once_with(
+            strategy_name="paper_csp",
+            action_type="CLOSE_FULL",
+            leg_role="short_put",
+            price=Decimal("45.50"),
+            qty=65,
+            rationale="profit target hit",
+        )
+
+    def test_write_audit_suppresses_exception(self) -> None:
+        """Audit failure is swallowed — never propagates to caller."""
+        store = _make_store()
+        store.record_action_audit.side_effect = RuntimeError("DB unavailable")
+        executor = _make_executor(store=store)
+
+        # Must not raise
+        executor._write_audit(
+            strategy_name="paper_csp",
+            action_type="CLOSE_FULL",
+            leg_role="short_put",
+            price=Decimal("50"),
+            qty=65,
+            rationale=None,
+        )

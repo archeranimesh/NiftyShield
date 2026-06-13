@@ -164,6 +164,17 @@ CREATE INDEX IF NOT EXISTS idx_exit_events_trade
 CREATE INDEX IF NOT EXISTS idx_exit_events_open
     ON paper_exit_events (status, event_time)
     WHERE status = 'OPEN';
+
+CREATE TABLE IF NOT EXISTS paper_action_audit (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    strategy_name   TEXT    NOT NULL,
+    action_type     TEXT    NOT NULL,
+    leg_role        TEXT    NOT NULL,
+    price           TEXT    NOT NULL,   -- Decimal stored as TEXT
+    qty             INTEGER NOT NULL,
+    rationale       TEXT,
+    executed_at     TEXT    NOT NULL    -- ISO UTC
+) STRICT;
 """
 
 
@@ -1020,6 +1031,51 @@ class PaperStore:
                 (approval_id,),
             ).fetchall()
         return [dict(r) for r in rows]
+
+    def record_action_audit(
+        self,
+        strategy_name: str,
+        action_type: str,
+        leg_role: str,
+        price: Decimal,
+        qty: int,
+        rationale: str | None,
+    ) -> int:
+        """INSERT one row into paper_action_audit. Returns new row id.
+
+        Records each leg fill for audit purposes. Never raises — callers
+        must treat failure as non-fatal.
+
+        Args:
+            strategy_name: Strategy that executed the action.
+            action_type: e.g. ``"CLOSE_FULL"``, ``"PROFIT_TARGET"``.
+            leg_role: e.g. ``"short_put"``.
+            price: Fill price as Decimal.
+            qty: Absolute quantity filled.
+            rationale: Free-text rationale from the approved action.
+
+        Returns:
+            Inserted row id.
+        """
+        executed_at = datetime.now(timezone.utc).isoformat()
+        with _connect(self.db_path) as conn:
+            cur = conn.execute(
+                """INSERT INTO paper_action_audit
+                   (strategy_name, action_type, leg_role, price, qty, rationale, executed_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    strategy_name,
+                    action_type,
+                    leg_role,
+                    str(price),
+                    qty,
+                    rationale,
+                    executed_at,
+                ),
+            )
+            if cur.lastrowid is None:
+                raise ValueError("Failed to insert action audit row")
+            return cur.lastrowid
 
     # ── Exit events ───────────────────────────────────────────────────────────
 
