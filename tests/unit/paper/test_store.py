@@ -484,6 +484,46 @@ class TestLegSnapshots:
         store.delete_trade(ghost)  # should be silent no-op
         assert store.get_trades(_STRATEGY) == []
 
+    def test_delete_trade_respects_instrument_key(self, store: PaperStore) -> None:
+        """delete_trade must not delete a row with a different instrument_key
+        even when (strategy, leg_role, trade_date, action) all match."""
+        key_a = "NSE_FO|NIFTY25000PE"
+        key_b = "NSE_FO|NIFTY24500PE"
+        t_a = _sell_trade(leg_role="short_put", trade_date=date(2026, 6, 1), instrument_key=key_a)
+        t_b = _sell_trade(leg_role="short_put", trade_date=date(2026, 6, 1), instrument_key=key_b)
+        # These share the same (strategy, leg_role, trade_date, action) — different instrument.
+        # The unique constraint is on those 4 fields, so only one can be inserted.
+        # Record t_a first; t_b will be skipped as a duplicate by the unique constraint.
+        store.record_trade(t_a)
+        # Now attempt to delete using t_b's instrument_key — should be a no-op.
+        store.delete_trade(t_b)
+        trades = store.get_trades(_STRATEGY, leg_role="short_put")
+        assert len(trades) == 1
+        assert trades[0].instrument_key == key_a
+
+    def test_delete_trade_by_id_removes_correct_row(self, store: PaperStore) -> None:
+        import sqlite3
+
+        t1 = _sell_trade(leg_role="overlay_cc", trade_date=date(2026, 5, 1))
+        t2 = _buy_trade(leg_role="overlay_cc", trade_date=date(2026, 5, 28))
+        store.record_trade(t1)
+        store.record_trade(t2)
+        # Fetch the id of t1
+        with sqlite3.connect(store.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT id FROM paper_trades WHERE action = 'SELL' AND leg_role = 'overlay_cc'"
+            ).fetchone()
+        assert row is not None
+        store.delete_trade_by_id(row["id"])
+        remaining = store.get_trades(_STRATEGY, leg_role="overlay_cc")
+        assert len(remaining) == 1
+        assert remaining[0].action == TradeAction.BUY
+
+    def test_delete_trade_by_id_noop_on_missing_id(self, store: PaperStore) -> None:
+        store.delete_trade_by_id(999999)  # must not raise
+        assert store.get_trades(_STRATEGY) == []
+
 
 # ── CR1b: update_trade_state ──────────────────────────────────────────────────
 

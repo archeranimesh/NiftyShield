@@ -307,20 +307,17 @@ def test_close_collar_all_rollback(
     store.record_trade(t1)
     store.record_trade(t2)
 
-    # Mock store to fail on put record_trade
-    original_record = store.record_trade
+    # Mock store.record_trades to raise — simulates atomic write failure.
+    # record_trades rolls back the entire batch, so both legs stay open.
+    def mock_record_trades(trades: list[PaperTrade]) -> tuple:
+        raise ValueError("Simulated DB error")
 
-    def mock_record(trade: PaperTrade) -> bool:
-        if trade.leg_role == "collar_long_put":
-            raise ValueError("Simulated DB error")
-        return original_record(trade)
-
-    store.record_trade = mock_record  # type: ignore[method-assign]
+    store.record_trades = mock_record_trades  # type: ignore[method-assign]
 
     chain = _make_chain("10", "0.05", "20", "-0.10")
     closer.close_collar_all("paper_collar_v1", chain, None, 15.0)
 
-    # Verify call leg was rolled back (is still open)
+    # Verify both legs are still open (no partial write committed)
     pos = store.get_position("paper_collar_v1", "collar_short_call")
     assert pos.net_qty == -65
     assert len(notifier.sent_messages) == 1
@@ -412,20 +409,16 @@ def test_monetize_collar_put_rollback(
     store.record_trade(t1)
     store.record_trade(t2)
 
-    # Mock store to fail on put record_trade
-    original_record = store.record_trade
+    # Mock store.record_trades to raise — simulates atomic write failure.
+    def mock_record_trades(trades: list[PaperTrade]) -> tuple:
+        raise ValueError("Simulated DB error")
 
-    def mock_record(trade: PaperTrade) -> bool:
-        if trade.leg_role == "collar_long_put":
-            raise ValueError("Simulated DB error")
-        return original_record(trade)
-
-    store.record_trade = mock_record  # type: ignore[method-assign]
+    store.record_trades = mock_record_trades  # type: ignore[method-assign]
 
     chain = _make_chain("4.0", "0.05", "250", "-0.85")
     closer.monetize_collar_put("paper_collar_v1", chain, None, 15.0)
 
-    # Verify call leg was rolled back (is still open)
+    # Verify call leg is still open (atomic write rolled back both)
     pos = store.get_position("paper_collar_v1", "collar_short_call")
     assert pos.net_qty == -65
     assert len(notifier.sent_messages) == 1
@@ -474,3 +467,33 @@ def test_resolve_mid_price_raises_for_absent_strike(closer: OverlayCloser) -> No
     chain = _make_chain("10", "0.05", "20", "-0.10")
     with pytest.raises(ValueError, match="leg absent from chain"):
         closer._resolve_mid_price("NSE_FO|NIFTY99999PE29MAY2026", chain)
+
+
+def test_monetize_collar_put_aborts_when_put_leg_missing(
+    store: PaperStore, closer: OverlayCloser, notifier: MockNotifier
+) -> None:
+    """monetize_collar_put must abort and notify when the put leg is flat.
+
+    Proceeding would close the call leg without the put — leaving a naked
+    short call, a dangerous uncovered position.
+    """
+    # Only the call leg is open; put leg has no trades.
+    call_entry = PaperTrade(
+        strategy_name="paper_collar_v1",
+        leg_role="collar_short_call",
+        instrument_key="NSE_FO|NIFTY24500CE",
+        trade_date=date.today(),
+        action=TradeAction.SELL,
+        quantity=65,
+        price=Decimal("80"),
+        is_paper=True,
+    )
+    store.record_trade(call_entry)
+
+    chain = _make_chain("4.0", "0.05", "250", "-0.85")
+    closer.monetize_collar_put("paper_collar_v1", chain, None, 15.0)
+
+    # Call leg must remain untouched — no write should have occurred.
+    pos = store.get_position("paper_collar_v1", "collar_short_call")
+    assert pos.net_qty == -65
+    assert any("Collar monetize aborted" in m for m in notifier.sent_messages)

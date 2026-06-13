@@ -172,13 +172,14 @@ class OverlayCloser:
                 )
             return
 
-        call_close_trade = None
+        # Build both close trades before any write so we can commit atomically.
+        trades_to_write: list[PaperTrade] = []
         if call_pos and call_pos.net_qty < 0:
             mid = self._resolve_mid_price(call_pos.instrument_key, market)
             fill = self._simulator.simulate_fill(
                 call_pos.instrument_key, "BUY", abs(call_pos.net_qty), mid, vix
             )
-            call_close_trade = PaperTrade(
+            trades_to_write.append(PaperTrade(
                 strategy_name=strategy_name,
                 leg_role=SHORT_CALL_ROLE,
                 instrument_key=call_pos.instrument_key,
@@ -189,25 +190,14 @@ class OverlayCloser:
                 notes=f"collar_close_all call event_id={event_id}",
                 ivr_at_entry=None,
                 is_paper=True,
-            )
-            try:
-                success = self._store.record_trade(call_close_trade)
-                if not success:
-                    raise RuntimeError("Call close trade insertion skipped (duplicate)")
-            except Exception as e:
-                log.error("collar_close_all.call_failed", error=str(e))
-                if self._notifier:
-                    self._notifier.send(
-                        f"Collar close failed: call leg could not be closed. Error: {e}"
-                    )
-                return
+            ))
 
         if put_pos and put_pos.net_qty > 0:
             mid = self._resolve_mid_price(put_pos.instrument_key, market)
             fill = self._simulator.simulate_fill(
                 put_pos.instrument_key, "SELL", abs(put_pos.net_qty), mid, vix
             )
-            put_close_trade = PaperTrade(
+            trades_to_write.append(PaperTrade(
                 strategy_name=strategy_name,
                 leg_role=LONG_PUT_ROLE,
                 instrument_key=put_pos.instrument_key,
@@ -218,23 +208,22 @@ class OverlayCloser:
                 notes=f"collar_close_all put event_id={event_id}",
                 ivr_at_entry=None,
                 is_paper=True,
-            )
+            ))
+
+        if trades_to_write:
             try:
-                success = self._store.record_trade(put_close_trade)
-                if not success:
-                    raise RuntimeError("Put close trade insertion skipped (duplicate)")
+                inserted, skipped = self._store.record_trades(trades_to_write)
+                if skipped:
+                    raise RuntimeError(
+                        f"Collar close: {len(skipped)} trade(s) skipped as duplicates"
+                    )
             except Exception as e:
-                log.error("collar_close_all.put_failed_rolling_back", error=str(e))
-                if call_close_trade:
-                    try:
-                        self._store.delete_trade(call_close_trade)
-                        log.info("collar_close_all.rollback_success")
-                    except Exception as rollback_err:
-                        log.critical("collar_close_all.rollback_failed", error=str(rollback_err))
+                # record_trades rolls back the entire batch on any exception;
+                # no application-level delete is needed.
+                log.error("collar_close_all.write_failed", error=str(e))
                 if self._notifier:
                     self._notifier.send(
-                        "Collar close failed: put leg could not be closed. "
-                        f"Call leg close rolled back to restore Collar. Error: {e}"
+                        f"Collar close failed: could not write close trades. Error: {e}"
                     )
                 return
 
@@ -276,7 +265,27 @@ class OverlayCloser:
                 )
             return
 
-        call_close_trade = None
+        # Guard: put leg must exist. Closing the call without the put would
+        # leave a naked short call — an uncovered loss position.
+        if put_qty == 0:
+            log.error(
+                "monetize_collar_put.incomplete_collar",
+                strategy_name=strategy_name,
+                call_qty=call_qty,
+                put_qty=put_qty,
+                note="Aborting — put leg missing, cannot monetize without leaving naked call",
+            )
+            if self._notifier:
+                self._notifier.send(
+                    f"Collar monetize aborted for {strategy_name}: "
+                    "put leg is flat but call leg is open — incomplete collar structure."
+                )
+            return
+
+        # Build all close trades first, then write atomically so a failure on
+        # any leg rolls back the entire batch without application-level deletes.
+        trades_to_write: list[PaperTrade] = []
+
         if call_pos and call_pos.net_qty < 0:
             call_leg = self._find_option_leg(market, call_pos.instrument_key)
             residual = float(call_leg.ltp) if call_leg is not None else 0.0
@@ -285,7 +294,7 @@ class OverlayCloser:
                 fill = self._simulator.simulate_fill(
                     call_pos.instrument_key, "BUY", abs(call_pos.net_qty), mid, vix
                 )
-                call_close_trade = PaperTrade(
+                trades_to_write.append(PaperTrade(
                     strategy_name=strategy_name,
                     leg_role=SHORT_CALL_ROLE,
                     instrument_key=call_pos.instrument_key,
@@ -296,25 +305,14 @@ class OverlayCloser:
                     notes=f"collar_put_monetize call close event_id={event_id}",
                     ivr_at_entry=None,
                     is_paper=True,
-                )
-                try:
-                    success = self._store.record_trade(call_close_trade)
-                    if not success:
-                        raise RuntimeError("Call close trade insertion skipped (duplicate)")
-                except Exception as e:
-                    log.error("collar_put_monetize.call_failed", error=str(e))
-                    if self._notifier:
-                        self._notifier.send(
-                            f"Collar monetize failed: call leg could not be closed. Error: {e}"
-                        )
-                    return
+                ))
 
         if put_pos and put_pos.net_qty > 0:
             mid = self._resolve_mid_price(put_pos.instrument_key, market)
             fill = self._simulator.simulate_fill(
                 put_pos.instrument_key, "SELL", abs(put_pos.net_qty), mid, vix
             )
-            put_close_trade = PaperTrade(
+            trades_to_write.append(PaperTrade(
                 strategy_name=strategy_name,
                 leg_role=LONG_PUT_ROLE,
                 instrument_key=put_pos.instrument_key,
@@ -325,23 +323,21 @@ class OverlayCloser:
                 notes=f"collar_put_monetize put close event_id={event_id}",
                 ivr_at_entry=None,
                 is_paper=True,
-            )
+            ))
+
+        if trades_to_write:
             try:
-                success = self._store.record_trade(put_close_trade)
-                if not success:
-                    raise RuntimeError("Put close trade insertion skipped (duplicate)")
+                inserted, skipped = self._store.record_trades(trades_to_write)
+                if skipped:
+                    raise RuntimeError(
+                        f"Collar monetize: {len(skipped)} trade(s) skipped as duplicates"
+                    )
             except Exception as e:
-                log.error("collar_put_monetize.put_failed_rolling_back", error=str(e))
-                if call_close_trade:
-                    try:
-                        self._store.delete_trade(call_close_trade)
-                        log.info("collar_put_monetize.rollback_success")
-                    except Exception as rollback_err:
-                        log.critical("collar_put_monetize.rollback_failed", error=str(rollback_err))
+                # record_trades rolls back the entire batch on any exception.
+                log.error("collar_put_monetize.write_failed", error=str(e))
                 if self._notifier:
                     self._notifier.send(
-                        "Collar monetize failed: put leg could not be closed. "
-                        f"Call leg close rolled back to restore Collar. Error: {e}"
+                        f"Collar monetize failed: could not write close trades. Error: {e}"
                     )
                 return
 

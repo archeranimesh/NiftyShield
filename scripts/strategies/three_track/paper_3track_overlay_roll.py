@@ -421,10 +421,16 @@ async def _roll_collar(
 ) -> list[RollResult]:
     """Roll a collar atomically (4-trade: close put, close call, open put, open call).
 
+    Close pair and open pair each commit in a single DB transaction via
+    ``record_trades``.  If the open pair fails, both close trades are deleted.
+    ``delete_trade`` now includes ``instrument_key`` in its WHERE predicate so
+    rollback cannot target the wrong row.
+
     Rollback order on failure:
-      - If close_call fails:  delete close_put → raise
-      - If open_put fails:    delete close_call, delete close_put → raise
-      - If open_call fails:   delete open_put, delete close_call, delete close_put → raise
+      - close pair write fails:  record_trades rolls back both — raise
+      - open pair fetch fails:   delete close_put, delete close_call → raise
+      - open pair write fails:   record_trades rolls back both opens;
+                                 delete close_put, delete close_call → raise
 
     Args:
         broker:    Upstox market client.
@@ -438,15 +444,15 @@ async def _roll_collar(
     Returns:
         List of two RollResults (put, call).
     """
-    close_put = await _close_leg(broker, store, put_leg, roll_date, dry_run)
-    try:
-        close_call = await _close_leg(broker, store, call_leg, roll_date, dry_run)
-    # Intentional: catch failure to close second leg of a collar and rollback first.
-    except Exception:
-        if not dry_run:
-            store.delete_trade(close_put)
-        raise
+    # Build close trades (fetch prices) without writing to DB.
+    close_put = await _close_leg(broker, store, put_leg, roll_date, dry_run=True)
+    close_call = await _close_leg(broker, store, call_leg, roll_date, dry_run=True)
 
+    # Commit both close trades atomically.
+    if not dry_run:
+        store.record_trades([close_put, close_call])
+
+    # Build open trades (fetch strikes) without writing to DB.
     try:
         open_put = await _open_new_leg(
             broker,
@@ -455,17 +461,9 @@ async def _roll_collar(
             "overlay_collar_put",
             put_leg.strategy_name,
             roll_date,
-            dry_run,
+            dry_run=True,
             index=index,
         )
-    # Intentional: catch failure to open new leg and rollback both closed legs.
-    except Exception:
-        if not dry_run:
-            store.delete_trade(close_call)
-            store.delete_trade(close_put)
-        raise
-
-    try:
         open_call = await _open_new_leg(
             broker,
             store,
@@ -473,16 +471,25 @@ async def _roll_collar(
             "overlay_collar_call",
             call_leg.strategy_name,
             roll_date,
-            dry_run,
+            dry_run=True,
             index=index,
         )
-    # Intentional: catch failure to open final leg and rollback all previous steps.
     except Exception:
+        # Fetch failed before any open write — roll back the close writes.
         if not dry_run:
-            store.delete_trade(open_put)
-            store.delete_trade(close_call)
             store.delete_trade(close_put)
+            store.delete_trade(close_call)
         raise
+
+    # Commit both open trades atomically.
+    if not dry_run:
+        try:
+            store.record_trades([open_put, open_call])
+        except Exception:
+            # Open batch rolled back by record_trades; undo the close writes too.
+            store.delete_trade(close_put)
+            store.delete_trade(close_call)
+            raise
 
     def _result(existing: PaperTrade, close: PaperTrade, opened: PaperTrade) -> RollResult:
         exp = _parse_expiry_from_key(opened.instrument_key)

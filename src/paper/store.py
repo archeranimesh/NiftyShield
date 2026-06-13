@@ -766,10 +766,10 @@ class PaperStore:
     def delete_trade(self, trade: PaperTrade) -> None:
         """Delete a single paper trade by its unique constraint fields.
 
-        Keyed on (strategy_name, leg_role, trade_date, action) — the same
-        unique constraint enforced by the paper_trades table. No-op if the
-        row does not exist; safe to call in a rollback path where the write
-        may not have committed.
+        Keyed on (strategy_name, leg_role, instrument_key, trade_date, action)
+        so that a roll on a different instrument on the same day cannot
+        accidentally delete the wrong row.  No-op if the row does not exist;
+        safe to call in a rollback path where the write may not have committed.
 
         Args:
             trade: The PaperTrade to delete.
@@ -778,14 +778,28 @@ class PaperStore:
             conn.execute(
                 "DELETE FROM paper_trades"
                 " WHERE strategy_name = ? AND leg_role = ?"
-                " AND trade_date = ? AND action = ?",
+                " AND instrument_key = ? AND trade_date = ? AND action = ?",
                 (
                     trade.strategy_name,
                     trade.leg_role,
+                    trade.instrument_key,
                     trade.trade_date.isoformat(),
                     trade.action.value,
                 ),
             )
+
+    def delete_trade_by_id(self, trade_id: int) -> None:
+        """Delete a paper trade by its primary-key ``id``.
+
+        Preferred rollback primitive when the exact ``PaperTrade`` object is not
+        available but the row ``id`` (e.g. from ``lastrowid``) is known.
+        No-op if the id does not exist.
+
+        Args:
+            trade_id: The ``id`` column value of the row to delete.
+        """
+        with _connect(self.db_path) as conn:
+            conn.execute("DELETE FROM paper_trades WHERE id = ?", (trade_id,))
 
     def create_approval(
         self,

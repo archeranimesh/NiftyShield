@@ -306,7 +306,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
-| 2026-06-12 | LOG-1 — Add generate_trace_id/bind_trace_id to logging.py; wire into monitor._tick (tick.start/end), paper_3track_snapshot main, paper_3track_overlay_roll _run, executor.apply (action.dispatch/fill/complete); 4 new tests — SHA pending |
+| 2026-06-12 | LOG-1 — Add generate_trace_id/bind_trace_id to logging.py; wire into monitor._tick (tick.start/end), paper_3track_snapshot main, paper_3track_overlay_roll _run, executor.apply (action.dispatch/fill/complete); 4 new tests — 74371a3 |
 | 2026-06-12 | FR-1 — Extract shared _price_utils.py (find_option_leg + resolve_price); fix OverlayCloser._resolve_mid_price to raise ValueError instead of returning Decimal("0"); fix executor._resolve_mid_price stub; update 2 existing tests, add 10 new tests in test_price_utils.py — 611d5b5 |
 | 2026-06-07 | council-refactor PP-1 — Update evaluate_pp() to remove spread guard, promote DTE_REVIEW INFO to ROLL_ELIGIBLE ACTION, and simplify callers and tests — 8fd7f68 |
 | 2026-06-07 | council-refactor CC-5 — manual Covered Call roll/exit override CLI wrapper paper_cc_roll.py and unit tests in test_cc_roll.py — afd8a9a |
@@ -398,6 +398,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 | 2026-05-26 | gamma script scaffold b68bb3d; `src/gamma/` store d8c2e69; delta gate wired b9c0014; CLI-12 notes in paper_snapshot c71331b; instrument loop migration 13b3daa; paper_csp_roll.py 3063fbf |
 | 2026-05-26 | `src/risk/` PortfolioDeltaTracker + entry gate; 20 tests; 1471+20 suite green |
 | 2026-05-25 | Audit findings [28–31]: Decimal enforcement across protocol, tracker, summary, pricing |
+| 2026-06-13 | DBI-1 closed — `delete_trade` adds `instrument_key` to WHERE; `delete_trade_by_id` added; `close_collar_all` + `monetize_collar_put` use `record_trades` for atomic 2-leg writes; `_roll_collar` uses `record_trades` for close pair and open pair; incomplete-collar guard in `monetize_collar_put`; 5 new tests |
 | 2026-06-11 | DAEMON-S1 closed — replace `add_pending_approval` with `create_approval`; guard `run()` loop; 2 new tests; SHA pending |
 | 2026-06-11 | Fable codebase review — 17 findings (1 CRITICAL, 5 ERROR, 8 WARNING, 3 INFO); FR-1..FR-10 added to tasks.md; review at `docs/reviews/2026-06-11_fable_codebase_review.md` |
 | 2026-06-03 | ES2 closed — CSPNiftyV1 thresholds corrected (DELTA_STOP 0.35→0.45, LOSS_STOP 2.0→1.75×, DELTA_WARN 0.25→0.35); TIME_STOP fixed to days_held≥21; entry_date added to PaperPosition; SHA 5115371. Review fix: DTE_REVIEW severity corrected INFO→WARN in ExitSignalEngine.evaluate_csp (ES1 gap); 1720 tests green; SHA ae12814 |
