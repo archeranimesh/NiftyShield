@@ -98,10 +98,10 @@
 - [x] **BUG-4** `[Claude]` — `record_trade` unique key too broad: `src/paper/store.py` schema + `scripts/dev/migrate_paper_trades_unique.py`. Add `instrument_key` to UNIQUE constraint: `(strategy_name, leg_role, instrument_key, trade_date, action)`. Current key allowed second close of same day (different instrument) to silently no-op, causing `_close_leg` to return normally and `_reentry_notification` to fire every 90 s.
   Tests: same instrument+date+action → no-op; different instrument same date+action → both inserted. **Introduced: `69c7a49`** | SHA: 50c4e56
 
-- [ ] **SIG-1** `[Claude]` — `src/strategy/executor.py` `_resolve_mid_price` is a TODO stub returning `Decimal("0")`. Every fill through it is priced at zero, corrupting P&L and feeding false-signal paths:
+- [x] **SIG-1** `[Claude]` — `src/strategy/executor.py` `_resolve_mid_price` is a TODO stub returning `Decimal("0")`. Every fill through it is priced at zero, corrupting P&L and feeding false-signal paths:
   Implement real mid-price resolution: `(bid + ask) / 2` from the chain leg if both are present; fall back to `ltp` if spread is unavailable; raise `ValueError` (do not return 0) if no price can be resolved so the caller can abort rather than record a zero-price fill.
   Also fix `_write_audit` which inserts wrong columns into `council_outputs` under a swallowed `OperationalError` — add a dedicated `paper_action_audit` table with columns `(id, strategy_name, action_type, leg_role, price, qty, rationale, executed_at)` and write there instead. (This fix subsumes **RPT-0**.)
-  Tests: `_resolve_mid_price` with bid+ask → returns mid; ltp-only → returns ltp; no price → raises; `_write_audit` → row in `paper_action_audit`.
+  Tests: `_resolve_mid_price` with bid+ask → returns mid; ltp-only → returns ltp; no price → raises; `_write_audit` → row in `paper_action_audit`. | SHA: 580c0e8
 
 - [ ] **SIG-2** `[Claude]` — Two false-signal fixes in `src/strategy/exit_signals.py`:
   (a) `evaluate_pp`: `value_breached = current_mark >= 5.0 * entry_price` fires when `entry_price == 0` (`0 >= 0` → True). Guard: `if entry_price <= 0: return result with no signals` with a WARN logged.

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Literal
 
 from src.paper.models import TradeState
+
+_log = logging.getLogger(__name__)
 
 # Shared profit-target retention ratio: fire when LTP ≤ 30% of entry credit (70% captured).
 # Used by CSP and CC evaluators.
@@ -376,18 +379,29 @@ class ExitSignalEngine:
         Returns:
             List of ExitSignalResult, sorted ACTION-first. Empty list if no signal.
         """
+        entry_dec = Decimal(str(entry_price))
+        mark_dec = Decimal(str(current_mark))
         results: list[ExitSignalResult] = []
+
+        # Guard: entry_price == 0 makes value_breached always True (0 >= 0*0).
+        if entry_dec <= 0:
+            _log.warning(
+                "evaluate_pp.zero_entry_price — skipping evaluation",
+                extra={"entry_price": entry_price, "current_mark": current_mark},
+            )
+            return []
 
         # 1. CRASH_MONETIZE: put delta <= -0.80 OR value >= 5x entry debit
         delta_breached = delta <= -0.80 if delta is not None else False
-        value_breached = current_mark >= 5.0 * entry_price
+        value_breached = mark_dec >= Decimal("5.0") * entry_dec
         if delta_breached or value_breached:
+            threshold_5x = Decimal("5.0") * entry_dec
             results.append(
                 ExitSignalResult(
                     exit_signal="CRASH_MONETIZE",
                     severity="ACTION",
                     threshold_value=5.0,
-                    notes=f"Crash monetise: delta={delta}, value={current_mark:.2f}, 5x_threshold={5.0 * entry_price:.2f}",
+                    notes=f"Crash monetise: delta={delta}, value={mark_dec:.2f}, 5x_threshold={threshold_5x:.2f}",
                 )
             )
 
@@ -432,7 +446,7 @@ class ExitSignalEngine:
         # 1. COLLAR_CALL_DECAY: short call mark <= 25% of entry credit OR residual <= 3/unit AND DTE > 7
         if dte > 7:
             decay_breached = entry_dec > 0 and mark_dec / entry_dec <= Decimal("0.25")
-            residual_breached = current_mark <= 3.0
+            residual_breached = mark_dec <= Decimal("3")
             if decay_breached or residual_breached:
                 results.append(
                     ExitSignalResult(
@@ -491,23 +505,36 @@ class ExitSignalEngine:
         ask: float | None = None,
     ) -> list[ExitSignalResult]:
         """Evaluate exit signals for a Collar long put leg."""
+        entry_dec = Decimal(str(entry_price))
+        mark_dec = Decimal(str(current_mark))
         results: list[ExitSignalResult] = []
 
-        # 1. COLLAR_PUT_CRASH: put delta <= -0.80 OR value >= 5x entry debit AND spread <= 10% of mid
+        # Liquidity gate: require tight spread when bid/ask available.
+        # Fall back to ltp when bid or ask is missing — emit INFO so operator knows.
         if bid is not None and ask is not None:
-            spread = ask - bid
-            mid = (bid + ask) / 2
-            if mid > 0 and spread <= 0.10 * mid:
-                delta_breached = delta <= -0.80 if delta is not None else False
-                value_breached = current_mark >= 5.0 * entry_price
-                if delta_breached or value_breached:
-                    results.append(
-                        ExitSignalResult(
-                            exit_signal="COLLAR_PUT_CRASH",
-                            severity="ACTION",
-                            threshold_value=5.0,
-                            notes=f"Collar put crash monetise triggered with delta={delta}, value={current_mark}",
-                        )
-                    )
+            bid_dec = Decimal(str(bid))
+            ask_dec = Decimal(str(ask))
+            spread = ask_dec - bid_dec
+            mid_dec = (bid_dec + ask_dec) / 2
+            if mid_dec <= 0 or spread > Decimal("0.10") * mid_dec:
+                return results  # spread too wide — skip evaluation
+        else:
+            _log.info(
+                "evaluate_collar_put.ltp_fallback — bid or ask missing, using ltp for evaluation",
+                extra={"entry_price": entry_price, "current_mark": current_mark},
+            )
+
+        # 1. COLLAR_PUT_CRASH: put delta <= -0.80 OR value >= 5x entry debit
+        delta_breached = delta <= -0.80 if delta is not None else False
+        value_breached = mark_dec >= Decimal("5.0") * entry_dec
+        if delta_breached or value_breached:
+            results.append(
+                ExitSignalResult(
+                    exit_signal="COLLAR_PUT_CRASH",
+                    severity="ACTION",
+                    threshold_value=5.0,
+                    notes=f"Collar put crash monetise triggered with delta={delta}, value={current_mark}",
+                )
+            )
 
         return cls._sort_results(results)

@@ -1,4 +1,7 @@
+import logging
 from decimal import Decimal
+
+import pytest
 
 from src.paper.models import TradeState
 from src.strategy.exit_signals import ExitSignalEngine
@@ -494,3 +497,85 @@ def test_evaluate_roll_eligible_csp_fires_at_expiry_day():
     results = ExitSignalEngine.evaluate_roll_eligible_csp(dte=0)
     assert len(results) == 1
     assert results[0].exit_signal == "ROLL_ELIGIBLE"
+
+
+# SIG-2: evaluate_pp zero-entry guard
+
+
+def test_evaluate_pp_zero_entry_price_returns_empty(caplog: pytest.LogCaptureFixture) -> None:
+    """entry_price=0 must not fire CRASH_MONETIZE — 0 >= 0*0 is always True."""
+    with caplog.at_level(logging.WARNING, logger="src.strategy.exit_signals"):
+        results = ExitSignalEngine.evaluate_pp(
+            entry_price=0.0, current_mark=0.0, delta=-0.50, dte=20
+        )
+    assert results == [], "zero entry_price must produce no signals"
+    assert any("zero_entry_price" in r.message for r in caplog.records), (
+        "Expected a WARNING about zero entry_price"
+    )
+
+
+def test_evaluate_pp_zero_entry_price_with_nonzero_mark(caplog: pytest.LogCaptureFixture) -> None:
+    """entry_price=0, current_mark>0 must still return empty (not CRASH_MONETIZE)."""
+    with caplog.at_level(logging.WARNING, logger="src.strategy.exit_signals"):
+        results = ExitSignalEngine.evaluate_pp(
+            entry_price=0.0, current_mark=150.0, delta=None, dte=10
+        )
+    assert results == []
+
+
+# SIG-2: evaluate_collar_put ltp fallback
+
+
+def test_evaluate_collar_put_missing_bid_falls_back_to_ltp(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """bid=None → fall back to ltp; crash signal still fires if conditions met."""
+    with caplog.at_level(logging.INFO, logger="src.strategy.exit_signals"):
+        results = ExitSignalEngine.evaluate_collar_put(
+            entry_price=20.0,
+            current_mark=110.0,  # >= 5 * 20 = 100
+            delta=-0.30,
+            dte=20,
+            bid=None,
+            ask=5.0,
+        )
+    assert len(results) == 1
+    assert results[0].exit_signal == "COLLAR_PUT_CRASH"
+    assert any("ltp_fallback" in r.message for r in caplog.records), (
+        "Expected INFO about ltp fallback when bid is missing"
+    )
+
+
+def test_evaluate_collar_put_missing_ask_falls_back_to_ltp(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """ask=None, delta below threshold → COLLAR_PUT_CRASH fires via ltp fallback."""
+    with caplog.at_level(logging.INFO, logger="src.strategy.exit_signals"):
+        results = ExitSignalEngine.evaluate_collar_put(
+            entry_price=20.0,
+            current_mark=50.0,
+            delta=-0.85,  # <= -0.80 triggers
+            dte=20,
+            bid=3.0,
+            ask=None,
+        )
+    assert len(results) == 1
+    assert results[0].exit_signal == "COLLAR_PUT_CRASH"
+    assert any("ltp_fallback" in r.message for r in caplog.records)
+
+
+def test_evaluate_collar_put_both_missing_no_signal_when_value_below_threshold(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """bid=None, ask=None, value < 5x → no signal (ltp fallback, value guard not met)."""
+    with caplog.at_level(logging.INFO, logger="src.strategy.exit_signals"):
+        results = ExitSignalEngine.evaluate_collar_put(
+            entry_price=20.0,
+            current_mark=50.0,  # < 5 * 20 = 100
+            delta=-0.30,
+            dte=20,
+            bid=None,
+            ask=None,
+        )
+    assert results == []
+    assert any("ltp_fallback" in r.message for r in caplog.records)
