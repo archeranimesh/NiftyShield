@@ -624,3 +624,48 @@ def test_get_positions_instrument_key_from_current_cycle(store: PaperStore) -> N
     positions = store.get_positions(_STRATEGY)
     pos = next(p for p in positions if p.leg_role == _LEG)
     assert pos.instrument_key == key_b
+
+
+def test_get_positions_multi_cycle_avg_sell_price_current_cycle_only(
+    store: PaperStore,
+) -> None:
+    """BUG-1: avg_sell_price must reflect only the current open cycle, not prior cycles.
+
+    Regression: before the cycle-reset fix, avg_sell_price blended all historical
+    SELL prices (e.g. 210.51 instead of 231.68 for the current cycle).
+    """
+    key_a = "NSE_FO|NIFTY22500PE"
+    key_b = "NSE_FO|NIFTY23000PE"
+    cycle1_sell_price = Decimal("210.51")
+    cycle2_sell_price = Decimal("231.68")
+
+    # Cycle 1: open @ 210.51, close
+    store.record_trade(
+        _sell_trade(trade_date=date(2026, 5, 1), instrument_key=key_a, price=cycle1_sell_price)
+    )
+    store.record_trade(
+        _buy_trade(trade_date=date(2026, 5, 8), instrument_key=key_a)
+    )
+    # Cycle 2: reopen @ 231.68 (current open)
+    store.record_trade(
+        _sell_trade(trade_date=date(2026, 5, 9), instrument_key=key_b, price=cycle2_sell_price)
+    )
+
+    positions = store.get_positions(_STRATEGY)
+    pos = next(p for p in positions if p.leg_role == _LEG)
+    assert pos.net_qty == -75
+    assert pos.avg_sell_price == cycle2_sell_price, (
+        f"avg_sell_price should be {cycle2_sell_price} (current cycle only), got {pos.avg_sell_price}"
+    )
+
+
+def test_get_positions_fully_closed_cycle_returns_net_zero(store: PaperStore) -> None:
+    """A leg that was opened and fully closed has net_qty=0 — no open position."""
+    # Open and close a full cycle
+    store.record_trade(_sell_trade(trade_date=date(2026, 5, 1)))
+    store.record_trade(_buy_trade(trade_date=date(2026, 5, 8)))
+
+    positions = store.get_positions(_STRATEGY)
+    pos = next((p for p in positions if p.leg_role == _LEG), None)
+    assert pos is not None
+    assert pos.net_qty == 0
