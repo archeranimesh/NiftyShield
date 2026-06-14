@@ -115,12 +115,12 @@
   Root cause: CSP in NIFTY 22500 PE 28 JUL 26 evaluated against June 30 chain → not found → ltp=0 → PROFIT_TARGET always fires.
   Tests: position in quarterly expiry → chain fetched for that expiry; leg=None → []; two positions in different expiries → two chain fetches. **Introduced: `8fd58d4` + `9191c02`** | SHA: 61f4690
 
-- [ ] **BUG-6** `[Claude]` — `TradeState` missing `CLOSED`; `_close_leg` never transitions state:
+- [x] **BUG-6** `[Claude]` — `TradeState` missing `CLOSED`; `_close_leg` never transitions state:
   (a) add `CLOSED = "CLOSED"` to `TradeState` enum in `src/paper/models.py`;
   (b) add `PaperStore.mark_trade_closed(strategy_name, leg_role, instrument_key)` in `src/paper/store.py`;
   (c) call it from `_close_leg` in `paper_3track_overlay_roll.py` after `store.record_trade(close_trade)`;
   (d) write idempotent migration `scripts/dev/migrate_add_closed_state.py` to extend CHECK constraint. Combine with BUG-4 migration if BUG-4 not yet done.
-  Tests: `mark_trade_closed` happy/error paths; `_close_leg` dry_run=False marks original SELL CLOSED. **Discovered: 2026-06-09**
+  Tests: `mark_trade_closed` happy/error paths; `_close_leg` dry_run=False marks original SELL CLOSED. **Discovered: 2026-06-09** | SHA: ceefeb8
 
 - [ ] **FR-3** `[Claude]` — Three `ClientSession()` calls in `src/notifications/telegram_gateway.py` (lines 129, 216, 239) lack `ClientTimeout`. `getUpdates` at line 239 is worst: server-side long-poll `timeout=30` with client default 300 s stalls the daemon ~5 min on a dead connection. Pattern: `aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=...))` already used correctly in `telegram.py:107`. Fix all three: `getUpdates` → `total=40`; `sendMessage`/other sends → `total=10`.
   Tests: `send_approval_request` → session created with `ClientTimeout(total=10)`; `_get_updates` → `ClientTimeout(total=40)`.

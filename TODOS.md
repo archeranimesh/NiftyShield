@@ -416,4 +416,5 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 | 2026-05-14 | Task 1 closed — VIX ingestion, PaperTrade ivr_at_entry, R3 gate; Task 0 closed — UDiFF fix |
 
 Full log: [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md)
+| 2026-06-14 | BUG-6 closed — TradeState.CLOSED added; PaperStore.mark_trade_closed() by (strategy, leg_role, instrument_key); _close_leg calls it after record_trade (dry_run=False only); CHECK constraint widened in schema + migration script; 6 new tests; SHA ceefeb8 |
 | 2026-06-13 | BUG-2 closed — multi-expiry chain fetch in snapshot + daemon; None-leg guard in CSPNiftyV1 and _dispatch_evaluate skips only LTP/delta signals (TIME_STOP/ROLL_ELIGIBLE still fire); signal priority reordered (HARD_STOP→DELTA_BREACH→PROFIT_TARGET→TIME_STOP→ROLL_ELIGIBLE); _KEY_DATE_STRIKE_RE added for date-embedded keys; 10 new tests; SHA 61f4690 |
