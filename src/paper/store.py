@@ -399,6 +399,63 @@ class PaperStore:
                 (strategy_name, leg_role, instrument_key),
             )
 
+    def mark_trade_defended(
+        self,
+        strategy_name: str,
+        leg_role: str,
+        instrument_key: str,
+    ) -> None:
+        """Transition an OPEN trade to DEFENDED state after a defensive roll.
+
+        Called by ``CSPNiftyV1._roll_down`` after a successful roll_down_and_out
+        so that the next delta breach escalates to DELTA_BREACH_FINAL instead
+        of firing another ROLL_DOWN_AND_OUT.  No-op if the row is not OPEN.
+
+        Args:
+            strategy_name: Strategy that owns the trade.
+            leg_role: Leg role identifier.
+            instrument_key: Instrument key of the newly-opened rolled position.
+        """
+        with _connect(self.db_path) as conn:
+            conn.execute(
+                """UPDATE paper_trades SET state = 'DEFENDED'
+                   WHERE strategy_name = ? AND leg_role = ? AND instrument_key = ?
+                   AND state = 'OPEN'""",
+                (strategy_name, leg_role, instrument_key),
+            )
+
+    def get_trade_state(
+        self,
+        strategy_name: str,
+        leg_role: str,
+    ) -> TradeState:
+        """Return the lifecycle state of the currently open trade for a leg.
+
+        Queries the most recent non-CLOSED SELL trade for the given
+        (strategy_name, leg_role) pair.  Defaults to ``TradeState.OPEN``
+        when no active trade exists (safe fallback — never blocks an evaluation).
+
+        Args:
+            strategy_name: Strategy that owns the trade.
+            leg_role: Leg role identifier (e.g. ``short_put``).
+
+        Returns:
+            Current TradeState for the active trade; ``TradeState.OPEN``
+            when no non-CLOSED trade is found.
+        """
+        with _connect(self.db_path) as conn:
+            row = conn.execute(
+                """SELECT state FROM paper_trades
+                   WHERE strategy_name = ? AND leg_role = ?
+                   AND action = 'SELL'
+                   AND state NOT IN ('CLOSED')
+                   ORDER BY trade_date DESC, id DESC LIMIT 1""",
+                (strategy_name, leg_role),
+            ).fetchone()
+        if row is None:
+            return TradeState.OPEN
+        return TradeState(row["state"])
+
     def get_trades(
         self,
         strategy_name: str,

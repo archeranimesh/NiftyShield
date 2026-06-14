@@ -897,7 +897,9 @@ def test_close_and_roll_passes_qty_to_open_new_csp_leg() -> None:
         patch("src.strategy.csp_nifty_v1.close_csp_leg", new_callable=AsyncMock) as mock_close,
         patch("src.strategy.csp_nifty_v1.open_new_csp_leg", new_callable=AsyncMock) as mock_open,
         patch("src.instruments.lookup.InstrumentLookup") as mock_lu,
-        patch("src.strategy.reentry_mixin.load_vix_series", return_value=pd.Series(dtype="float64")),
+        patch(
+            "src.strategy.reentry_mixin.load_vix_series", return_value=pd.Series(dtype="float64")
+        ),
     ):
         mock_lu.from_file.return_value = MagicMock()
         _run(strategy.apply_action([pos], action))
@@ -958,3 +960,67 @@ def test_check_signals_two_positions_one_found_one_not() -> None:
     # Exactly one signal from pos_found; pos_missing emits nothing (no false PROFIT_TARGET)
     assert len(result) >= 1
     assert any(e.event_type == "PROFIT_TARGET" for e in result)
+
+
+# ── SM-1: DEFENDED state read from store + _find_put_leg no-fallback ─────────
+
+
+def test_check_signals_defended_state_fires_delta_breach_final(tmp_path: Path) -> None:
+    """DEFENDED position with |delta|≥0.40 must emit DELTA_BREACH_FINAL, not DELTA_BREACH.
+
+    Before SM-1 the trade_state was always OPEN (hasattr fallback), so the
+    escalation branch never fired.  Now it reads from the store.
+    """
+    db_path = tmp_path / "test.db"
+    store = PaperStore(db_path)
+    # Insert an OPEN trade and mark it DEFENDED (one roll already consumed)
+    from src.paper.models import PaperTrade
+
+    store.record_trade(
+        PaperTrade(
+            strategy_name=_STRATEGY,
+            leg_role="short_put",
+            instrument_key="NSE_FO|NIFTY23000PE",
+            trade_date=date(2026, 6, 1),
+            action=TradeAction.SELL,
+            quantity=65,
+            price=Decimal("120"),
+        )
+    )
+    store.mark_trade_defended(_STRATEGY, "short_put", "NSE_FO|NIFTY23000PE")
+
+    strategy = CSPNiftyV1(store=store)
+    chain = _make_chain(ltp="120", delta="-0.50", strike="23000")  # |delta|=0.50 ≥ 0.40
+    pos = _make_position(
+        instrument_key="NSE_FO|NIFTY23000PE",
+        avg_sell_price="120",
+        entry_date=date(2026, 6, 1),
+    )
+
+    result = _run(strategy.check_signals(chain, [pos]))
+
+    assert any(e.event_type == "DELTA_BREACH_FINAL" for e in result), (
+        "Expected DELTA_BREACH_FINAL for DEFENDED position — got: "
+        + str([e.event_type for e in result])
+    )
+
+
+def test_find_put_leg_returns_none_for_numeric_key_no_fallback() -> None:
+    """Numeric instrument_key has no parseable strike → returns None (no scan fallback).
+
+    Before SM-1 the fallback scan returned the deepest-ITM PE (always non-zero
+    LTP), which caused PROFIT_TARGET to fire on every tick for numeric keys.
+    After SM-1 the method returns None immediately and logs a warning via structlog
+    (not routed through Python logging, so not assertable via caplog).
+    """
+    strategy = CSPNiftyV1()
+    # Chain has a PE at 23000 — if the old scan fallback were active it would
+    # return this leg for any instrument_key, including the numeric one.
+    chain = _make_chain(ltp="100", delta="-0.10", strike="23000")
+
+    result = strategy._find_put_leg(chain, "NSE_FO|47196")
+
+    assert result is None, (
+        "Expected None for numeric key with no parseable strike, "
+        "got a chain leg — scan fallback was not removed"
+    )

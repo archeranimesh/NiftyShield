@@ -162,7 +162,11 @@ class CSPNiftyV1(ReEntryMixin):
             days_held = (today - pos.entry_date).days if pos.entry_date is not None else 0
 
             entry_credit = Decimal(str(pos.avg_sell_price))
-            trade_state = pos.state if hasattr(pos, "state") else TradeState.OPEN
+            trade_state = (
+                self._store.get_trade_state(self.strategy_name, pos.leg_role)
+                if self._store is not None
+                else TradeState.OPEN
+            )
 
             # Evaluate in priority order (highest priority first) so the action_emitted
             # suppression loop emits the most critical signal per position per tick.
@@ -478,6 +482,13 @@ class CSPNiftyV1(ReEntryMixin):
                 roll_date=today,
                 dry_run=False,
             )
+            # Transition new leg to DEFENDED so the next delta breach
+            # escalates to DELTA_BREACH_FINAL instead of rolling again.
+            self._store.mark_trade_defended(
+                short_put.strategy_name,
+                short_put.leg_role,
+                result.new_trade.instrument_key,
+            )
             await self._send_notification(
                 f"🔄 <b>CSP rolled down-and-out</b>\n"
                 f"Closed: <code>{short_put.instrument_key}</code>\n"
@@ -524,46 +535,42 @@ class CSPNiftyV1(ReEntryMixin):
     def _find_put_leg(self, market: OptionChain, instrument_key: str) -> OptionLeg | None:
         """Locate the PE leg in the chain for the given position.
 
-        Tries a direct strike lookup by parsing ``instrument_key`` first.
-        Falls back to scanning chain strikes for the first PE with non-zero
-        LTP when the key carries no parseable strike (e.g. numeric Upstox
-        IDs like ``NSE_FO|47196``).
+        Performs a direct strike lookup by parsing the strike digits from
+        ``instrument_key``.  Returns ``None`` when the key carries no
+        parseable strike (e.g. numeric Upstox IDs like ``NSE_FO|47196``) so
+        that the caller can skip evaluation rather than use an arbitrary leg.
+
+        The scan-all fallback that was present before SM-1 has been removed.
+        It returned the deepest-ITM contract (ltp≈8690, delta≈1.0) whenever
+        the key was a numeric ID, producing PROFIT_TARGET false positives on
+        every tick.
 
         Args:
             market: Current option chain.
             instrument_key: Position's Upstox instrument key.
 
         Returns:
-            Matching ``OptionLeg`` (PE side), or ``None`` when unavailable.
+            Matching ``OptionLeg`` (PE side), or ``None`` when the strike
+            cannot be parsed from the key or is absent from the chain.
         """
-        # Direct lookup: extract strike digits from key
         m = _STRIKE_RE.search(instrument_key)
-        if m:
-            try:
-                strike = Decimal(m.group(1))
-                strike_data = market.strikes.get(strike)
-                if strike_data is not None and strike_data.pe is not None:
-                    return strike_data.pe
-            except InvalidOperation:
-                log.warning(
-                    "csp_nifty_v1.strike_parse_failed",
-                    instrument_key=instrument_key,
-                )
-
-        # Fallback: scan for first PE with non-zero LTP.
-        # Used when instrument_key carries no parseable strike (e.g. numeric
-        # Upstox IDs like "NSE_FO|47196").  Safe for Phase 0 where at most
-        # one CSP position is open at a time; incorrect in a multi-position
-        # context.  Returns None when no PE leg is found.
-        for strike_data in market.strikes.values():
-            if strike_data.pe is not None and strike_data.pe.ltp > Decimal("0"):
-                log.debug(
-                    "csp_nifty_v1.put_leg_fallback_used",
-                    instrument_key=instrument_key,
-                    fallback_strike=str(strike_data.pe.strike),
-                )
+        if not m:
+            log.warning(
+                "csp_nifty_v1.put_leg_no_strike",
+                instrument_key=instrument_key,
+                reason="no_parseable_strike_in_key",
+            )
+            return None
+        try:
+            strike = Decimal(m.group(1))
+            strike_data = market.strikes.get(strike)
+            if strike_data is not None and strike_data.pe is not None:
                 return strike_data.pe
-
+        except InvalidOperation:
+            log.warning(
+                "csp_nifty_v1.strike_parse_failed",
+                instrument_key=instrument_key,
+            )
         return None
 
     def _parse_expiry(self, instrument_key: str) -> date | None:

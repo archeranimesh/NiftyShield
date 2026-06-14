@@ -649,6 +649,50 @@ def test_record_trade_persists_state_field(store: PaperStore) -> None:
     assert trades[0].state == TradeState.DEFENDED
 
 
+# ── SM-1: get_trade_state + mark_trade_defended ───────────────────────────────
+
+
+def test_get_trade_state_returns_open_when_no_trade(store: PaperStore) -> None:
+    """No trades present → defaults to OPEN (safe fallback)."""
+    state = store.get_trade_state(_STRATEGY, _LEG)
+    assert state == TradeState.OPEN
+
+
+def test_get_trade_state_returns_open_for_open_trade(store: PaperStore) -> None:
+    """OPEN trade present → returns OPEN."""
+    store.record_trade(_sell_trade())
+    assert store.get_trade_state(_STRATEGY, _LEG) == TradeState.OPEN
+
+
+def test_get_trade_state_returns_defended_after_mark(store: PaperStore) -> None:
+    """DEFENDED state is persisted and readable via get_trade_state."""
+    store.record_trade(_sell_trade())
+    store.mark_trade_defended(_STRATEGY, _LEG, _KEY)
+    assert store.get_trade_state(_STRATEGY, _LEG) == TradeState.DEFENDED
+
+
+def test_get_trade_state_ignores_closed_trades(store: PaperStore) -> None:
+    """CLOSED trade is invisible to get_trade_state → defaults to OPEN."""
+    store.record_trade(_sell_trade())
+    store.mark_trade_closed(_STRATEGY, _LEG, _KEY)
+    assert store.get_trade_state(_STRATEGY, _LEG) == TradeState.OPEN
+
+
+def test_mark_trade_defended_only_transitions_open(store: PaperStore) -> None:
+    """mark_trade_defended is a no-op when the trade is already DEFENDED."""
+    store.record_trade(_sell_trade())
+    store.mark_trade_defended(_STRATEGY, _LEG, _KEY)
+    store.mark_trade_defended(_STRATEGY, _LEG, _KEY)  # idempotent second call
+    assert store.get_trade_state(_STRATEGY, _LEG) == TradeState.DEFENDED
+
+
+def test_mark_trade_defended_unknown_key_is_noop(store: PaperStore) -> None:
+    """Non-existent instrument_key → no error, original trade unchanged."""
+    store.record_trade(_sell_trade())
+    store.mark_trade_defended(_STRATEGY, _LEG, "NSE_FO|NONEXISTENT")
+    assert store.get_trade_state(_STRATEGY, _LEG) == TradeState.OPEN
+
+
 # ── DBI-3: get_positions entry_date and instrument_key fixes ─────────────────
 
 
