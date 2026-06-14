@@ -117,17 +117,17 @@ def test_parse_chain_atm_pe_greeks() -> None:
 
 
 def test_parse_chain_all_decimal_types() -> None:
-    """underlying_spot, CE delta, and CE gamma are all Decimal instances."""
+    """underlying_spot, CE delta, and CE gamma are Decimal (non-None) for valid fixture data."""
     chain = parse_upstox_option_chain(_load_chain_data())
     assert isinstance(chain.underlying_spot, Decimal)
     ce = chain.strikes[Decimal("22250.0")].ce
     assert ce is not None
-    assert isinstance(ce.delta, Decimal)
-    assert isinstance(ce.gamma, Decimal)
+    assert ce.delta is not None and isinstance(ce.delta, Decimal)
+    assert ce.gamma is not None and isinstance(ce.gamma, Decimal)
 
 
-def test_parse_chain_null_greek_coerces_to_zero() -> None:
-    """A null Greek value in the response must coerce to Decimal('0')."""
+def test_parse_chain_null_greek_returns_none() -> None:
+    """A null Greek value in the response must be stored as None, not Decimal('0')."""
     data = _load_chain_data()
     # Inject null delta into the first strike's CE greeks
     injected = copy.deepcopy(data[:1])
@@ -136,11 +136,11 @@ def test_parse_chain_null_greek_coerces_to_zero() -> None:
     strike_key = Decimal(str(injected[0]["strike_price"]))
     ce = chain.strikes[strike_key].ce
     assert ce is not None
-    assert ce.delta == Decimal("0")
+    assert ce.delta is None
 
 
-def test_parse_chain_nonnumeric_greek_coerces_to_zero() -> None:
-    """A non-numeric Greek string in the response must coerce to Decimal('0')."""
+def test_parse_chain_nonnumeric_greek_returns_none() -> None:
+    """A non-numeric Greek string in the response must be stored as None."""
     data = _load_chain_data()
     injected = copy.deepcopy(data[:1])
     injected[0]["call_options"]["option_greeks"]["delta"] = "N/A"
@@ -148,7 +148,7 @@ def test_parse_chain_nonnumeric_greek_coerces_to_zero() -> None:
     strike_key = Decimal(str(injected[0]["strike_price"]))
     ce = chain.strikes[strike_key].ce
     assert ce is not None
-    assert ce.delta == Decimal("0")
+    assert ce.delta is None
 
 
 def test_parse_chain_empty_data() -> None:

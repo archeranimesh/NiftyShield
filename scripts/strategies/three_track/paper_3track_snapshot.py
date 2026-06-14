@@ -277,7 +277,7 @@ def _dispatch_evaluate(
         results: list = []
         results += ExitSignalEngine.evaluate_profit_target_csp(ltp=Decimal(str(leg.ltp)), entry_credit=entry_credit)
         results += ExitSignalEngine.evaluate_hard_stop_csp(ltp=Decimal(str(leg.ltp)), entry_credit=entry_credit)
-        results += ExitSignalEngine.evaluate_delta_breach_csp(delta=float(leg.delta), state=TradeState.OPEN)
+        results += ExitSignalEngine.evaluate_delta_breach_csp(delta=float(leg.delta) if leg.delta is not None else None, state=TradeState.OPEN)
         results += ExitSignalEngine.evaluate_time_stop_csp(days_held=days_held)
         results += ExitSignalEngine.evaluate_roll_eligible_csp(dte=dte)
         return ExitSignalEngine._sort_results(results)
@@ -303,7 +303,7 @@ def _dispatch_evaluate(
         return ExitSignalEngine.evaluate_cc(
             entry_price=float(pos.avg_sell_price),
             current_mark=float(leg.ltp),
-            delta=float(leg.delta),
+            delta=float(leg.delta) if leg.delta is not None else None,
             dte=dte,
             days_held=days_held,
         )
@@ -320,7 +320,7 @@ def _dispatch_evaluate(
         return ExitSignalEngine.evaluate_pp(
             entry_price=float(pos.avg_cost),
             current_mark=float(leg.ltp),
-            delta=float(leg.delta),
+            delta=float(leg.delta) if leg.delta is not None else None,
             dte=dte,
         )
 
@@ -344,7 +344,7 @@ def _dispatch_evaluate(
         return ExitSignalEngine.evaluate_collar_call(
             entry_price=float(pos.avg_sell_price),
             current_mark=float(leg.ltp),
-            delta=float(leg.delta),
+            delta=float(leg.delta) if leg.delta is not None else None,
             dte=dte,
             underlying_price=underlying_price,
             strike_price=float(strike) if strike is not None else 0.0,
@@ -362,7 +362,7 @@ def _dispatch_evaluate(
         return ExitSignalEngine.evaluate_collar_put(
             entry_price=float(pos.avg_cost),
             current_mark=float(leg.ltp),
-            delta=float(leg.delta),
+            delta=float(leg.delta) if leg.delta is not None else None,
             dte=dte,
             bid=float(leg.bid) if leg is not None else None,
             ask=float(leg.ask) if leg is not None else None,
@@ -673,7 +673,7 @@ async def compute_and_record_exit_signals(
                     ltp=opt_leg.ltp if opt_leg is not None else None,
                     bid=opt_leg.bid if opt_leg is not None else None,
                     ask=opt_leg.ask if opt_leg is not None else None,
-                    delta=float(opt_leg.delta) if opt_leg is not None else None,
+                    delta=float(opt_leg.delta) if (opt_leg is not None and opt_leg.delta is not None) else None,
                     dte=_compute_dte(pos.instrument_key, today),
                     threshold_value=(
                         Decimal(str(result.threshold_value))

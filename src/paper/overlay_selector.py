@@ -51,6 +51,8 @@ def _find_strike_by_delta(
         if leg is None:
             continue
 
+        if leg.delta is None:
+            continue  # Greek absent — cannot evaluate delta proximity
         leg_abs_delta = abs(leg.delta)
         # Assuming delta 0 means missing or bad data in most cases unless deep OTM
         if leg_abs_delta == Decimal("0"):

@@ -235,10 +235,11 @@ class UpstoxMarketClient:
 
 
 def _safe_decimal(val: Any) -> Decimal:
-    """Coerce a value to Decimal, returning Decimal("0") on any failure.
+    """Coerce a price value to Decimal, returning Decimal("0") on any failure.
 
-    Emits a WARNING log when coercion is needed so callers can diagnose
-    data quality issues without crashing.
+    Use for price fields (ltp, bid, ask) where Decimal("0") is a safe sentinel.
+    For Greek fields (delta, gamma, theta, vega, iv) use _safe_decimal_greek
+    so that missing data is represented as None rather than silently zeroed.
 
     Args:
         val: Raw value from the broker response (float, str, None, …).
@@ -247,13 +248,33 @@ def _safe_decimal(val: Any) -> Decimal:
         Decimal representation of val, or Decimal("0") if conversion fails.
     """
     if val is None:
-        logger.warning("Greek value is None — coercing to Decimal('0')")
         return Decimal("0")
     try:
         return Decimal(str(val))
     except Exception:
-        logger.warning("Non-numeric Greek value %r — coercing to Decimal('0')", val)
         return Decimal("0")
+
+
+def _safe_decimal_greek(val: Any) -> Decimal | None:
+    """Coerce a Greek value to Decimal | None.
+
+    Returns None when the value is absent or non-numeric so callers can
+    distinguish "Greek not available" from a genuine zero (e.g. delta exactly
+    0.0 on a far-OTM strike vs. a stale/missing API field).
+
+    Args:
+        val: Raw value from the broker response (float, str, None, …).
+
+    Returns:
+        Decimal representation of val, or None if conversion fails or val is None.
+    """
+    if val is None:
+        return None
+    try:
+        return Decimal(str(val))
+    except Exception:
+        logger.warning("Non-numeric Greek value %r — storing as None", val)
+        return None
 
 
 def _parse_option_leg(options_dict: dict[str, Any], strike: Decimal) -> OptionLeg | None:
@@ -293,11 +314,11 @@ def _parse_option_leg(options_dict: dict[str, Any], strike: Decimal) -> OptionLe
         ask=_safe_decimal(market_data.get("ask_price")),
         oi=oi,
         volume=volume,
-        delta=_safe_decimal(option_greeks.get("delta")),
-        gamma=_safe_decimal(option_greeks.get("gamma")),
-        theta=_safe_decimal(option_greeks.get("theta")),
-        vega=_safe_decimal(option_greeks.get("vega")),
-        iv=_safe_decimal(option_greeks.get("iv")),
+        delta=_safe_decimal_greek(option_greeks.get("delta")),
+        gamma=_safe_decimal_greek(option_greeks.get("gamma")),
+        theta=_safe_decimal_greek(option_greeks.get("theta")),
+        vega=_safe_decimal_greek(option_greeks.get("vega")),
+        iv=_safe_decimal_greek(option_greeks.get("iv")),
         strike=strike,
     )
 

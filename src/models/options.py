@@ -20,9 +20,11 @@ from pydantic import BaseModel
 class OptionLeg(BaseModel, frozen=True):
     """Market data and Greeks for one side (CE or PE) of a strike.
 
-    All monetary fields are Decimal.  Null or non-numeric values from the
-    broker response are coerced to Decimal("0") by the parser — consumers
-    can treat missing data as zero without special-casing.
+    Price fields (ltp, bid, ask) are always Decimal — a missing price is
+    represented by Decimal("0").  Greek fields (delta, gamma, theta, vega,
+    iv) are Decimal | None — None means the broker did not supply a value
+    (stale snapshot, deep OTM strike, etc.).  Consumers must guard for None
+    before comparing Greeks rather than treating absence as zero.
 
     Attributes:
         ltp: Last traded price.
@@ -30,11 +32,11 @@ class OptionLeg(BaseModel, frozen=True):
         ask: Best ask price.
         oi: Open interest (contracts).
         volume: Traded volume (contracts) for the session.
-        delta: Option delta (signed; PE deltas are negative).
-        gamma: Option gamma.
-        theta: Option theta (daily decay; typically negative).
-        vega: Option vega.
-        iv: Implied volatility (annualised, as a percentage, e.g. 27.4).
+        delta: Option delta (signed; PE deltas are negative). None if missing.
+        gamma: Option gamma. None if missing.
+        theta: Option theta (daily decay; typically negative). None if missing.
+        vega: Option vega. None if missing.
+        iv: Implied volatility (annualised, as a percentage). None if missing.
         strike: Strike price.
     """
 
@@ -43,11 +45,11 @@ class OptionLeg(BaseModel, frozen=True):
     ask: Decimal
     oi: int
     volume: int
-    delta: Decimal
-    gamma: Decimal
-    theta: Decimal
-    vega: Decimal
-    iv: Decimal
+    delta: Decimal | None
+    gamma: Decimal | None
+    theta: Decimal | None
+    vega: Decimal | None
+    iv: Decimal | None
     strike: Decimal
 
 

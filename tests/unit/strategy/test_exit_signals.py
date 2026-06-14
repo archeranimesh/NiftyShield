@@ -463,6 +463,22 @@ def test_evaluate_delta_breach_csp_re_entry_pending_raises():
         ExitSignalEngine.evaluate_delta_breach_csp(delta=-0.50, state=TradeState.RE_ENTRY_PENDING)
 
 
+def test_evaluate_delta_breach_csp_none_delta_returns_warn():
+    """None delta (missing/stale Greek) → DELTA_MISSING WARN, not empty, not raised."""
+    results = ExitSignalEngine.evaluate_delta_breach_csp(delta=None, state=TradeState.OPEN)
+    assert len(results) == 1
+    assert results[0].exit_signal == "DELTA_MISSING"
+    assert results[0].severity == "WARN"
+
+
+def test_evaluate_delta_breach_csp_none_delta_defended_state_also_warns():
+    """None delta is handled the same in DEFENDED state (no ValueError)."""
+    results = ExitSignalEngine.evaluate_delta_breach_csp(delta=None, state=TradeState.DEFENDED)
+    assert len(results) == 1
+    assert results[0].exit_signal == "DELTA_MISSING"
+    assert results[0].severity == "WARN"
+
+
 # evaluate_time_stop_csp
 
 

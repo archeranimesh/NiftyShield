@@ -99,7 +99,7 @@ class PPOverlayV1(ReEntryMixin):
             expiry = self._parse_expiry(pos.instrument_key)
             dte = (expiry - today).days if expiry is not None else 9999
 
-            delta = float(put_leg.delta) if put_leg is not None else None
+            delta = float(put_leg.delta) if (put_leg is not None and put_leg.delta is not None) else None
 
             entry_price = float(pos.avg_cost)
             current_mark = float(put_leg.ltp) if put_leg is not None else entry_price

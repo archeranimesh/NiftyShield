@@ -84,7 +84,7 @@ class CCOverlayV1(ReEntryMixin):
             expiry = self._parse_expiry(pos.instrument_key)
             dte = (expiry - today).days if expiry is not None else 9999
 
-            delta = float(call_leg.delta) if call_leg is not None else None
+            delta = float(call_leg.delta) if (call_leg is not None and call_leg.delta is not None) else None
             entry_price = float(pos.avg_sell_price)
             current_mark = float(call_leg.ltp) if call_leg is not None else entry_price
             if pos.entry_date is not None:

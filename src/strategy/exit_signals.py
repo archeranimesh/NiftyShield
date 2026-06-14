@@ -134,16 +134,18 @@ class ExitSignalEngine:
     def evaluate_delta_breach_csp(
         cls,
         *,
-        delta: float,
+        delta: float | None,
         state: TradeState,
     ) -> list[ExitSignalResult]:
         """Fire when |delta| ≥ 0.40.
 
         OPEN state → DELTA_BREACH (roll down and out).
         DEFENDED state → DELTA_BREACH_FINAL (close and wait — second breach).
+        None delta → DELTA_MISSING WARN (Greek absent or stale; cannot evaluate).
 
         Args:
-            delta: Current delta of the short put (negative float).
+            delta: Current delta of the short put (negative float), or None when
+                the broker did not return a Greek value for this strike.
             state: Current lifecycle state of the trade.
 
         Returns:
@@ -156,6 +158,14 @@ class ExitSignalEngine:
             raise ValueError(
                 "evaluate_delta_breach_csp called on RE_ENTRY_PENDING state — no open leg"
             )
+        if delta is None:
+            return [
+                ExitSignalResult(
+                    exit_signal="DELTA_MISSING",
+                    severity="WARN",
+                    notes="delta is None — Greek missing or stale; delta breach cannot be evaluated",
+                )
+            ]
         if abs(delta) >= 0.40:
             if state == TradeState.OPEN:
                 return [

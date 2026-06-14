@@ -173,7 +173,7 @@ class CSPNiftyV1(ReEntryMixin):
             results = []
             if put_leg is not None:
                 ltp = Decimal(str(put_leg.ltp))
-                delta = float(put_leg.delta)
+                delta = float(put_leg.delta) if put_leg.delta is not None else None
                 results += ExitSignalEngine.evaluate_hard_stop_csp(
                     ltp=ltp, entry_credit=entry_credit
                 )

@@ -134,7 +134,7 @@ class CollarOverlayV1(ReEntryMixin):
                     except ValueError:
                         pass
 
-            delta = float(call_leg.delta) if call_leg is not None else None
+            delta = float(call_leg.delta) if (call_leg is not None and call_leg.delta is not None) else None
             entry_price = float(short_call_pos.avg_sell_price)
             current_mark = float(call_leg.ltp) if call_leg is not None else entry_price
 
@@ -183,7 +183,7 @@ class CollarOverlayV1(ReEntryMixin):
 
             bid = float(put_leg.bid) if put_leg is not None else None
             ask = float(put_leg.ask) if put_leg is not None else None
-            delta = float(put_leg.delta) if put_leg is not None else None
+            delta = float(put_leg.delta) if (put_leg is not None and put_leg.delta is not None) else None
 
             entry_price = float(long_put_pos.avg_cost)
             current_mark = float(put_leg.ltp) if put_leg is not None else entry_price

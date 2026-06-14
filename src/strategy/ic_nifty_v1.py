@@ -139,6 +139,8 @@ class IronCondorV1:
             opt_leg = self._find_leg(market, pos.instrument_key)
             if opt_leg is None:
                 continue
+            if opt_leg.delta is None:
+                continue  # Greek missing — cannot evaluate delta signals
             abs_delta = abs(opt_leg.delta)
             if abs_delta >= _DELTA_STOP:
                 events.append(
