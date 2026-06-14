@@ -137,11 +137,11 @@
 
 > SM-2 needs BUG-5 first (dedup prevents re-entry notification flood).
 
-- [ ] **BUG-3** `[Claude]` — `_open_new` hardcodes `quantity=1`: `src/strategy/csp_nifty_v1.py` line 414. Change to `quantity=abs(short_put.net_qty)` (pass through from `apply_action`). Opened 1-lot position instead of 65 on 2026-06-09.
-  Tests: CLOSE_AND_ROLL on 65-lot position → new trade qty=65. **Introduced: `e62aee9`**
+- [x] **BUG-3** `[Claude]` — `_open_new` hardcodes `quantity=1`: `src/strategy/csp_nifty_v1.py` line 414. Change to `quantity=abs(short_put.net_qty)` (pass through from `apply_action`). Opened 1-lot position instead of 65 on 2026-06-09.
+  Tests: CLOSE_AND_ROLL on 65-lot position → new trade qty=65. **Introduced: `e62aee9`** | SHA: 5d1c8eb
 
-- [ ] **BUG-5** `[Claude]` — `_check_reentry` dedup: `src/strategy/reentry_mixin.py`. Before writing event + notifying, call `get_open_exit_events` and skip if an R5_REENTRY_BLOCKED/ELIGIBLE event already exists today for same strategy+leg. Produced 13 identical Telegram messages on 2026-06-09.
-  Tests: called twice same day → 1 DB row, 1 Telegram; called on two different days → 2 rows, 2 messages. **Introduced: `c9625e1` / `fb38dde`**
+- [x] **BUG-5** `[Claude]` — `_check_reentry` dedup: `src/strategy/reentry_mixin.py`. Before writing event + notifying, call `get_open_exit_events` and skip if an R5_REENTRY_BLOCKED/ELIGIBLE event already exists today for same strategy+leg. Produced 13 identical Telegram messages on 2026-06-09.
+  Tests: called twice same day → 1 DB row, 1 Telegram; called on two different days → 2 rows, 2 messages. **Introduced: `c9625e1` / `fb38dde`** | SHA: pending
 
 - [ ] **SM-1** `[Claude]` — `src/strategy/csp_nifty_v1.py`: `DELTA_BREACH_FINAL` / DEFENDED escalation is dead code. `trade_state = pos.state if hasattr(pos, "state") else TradeState.OPEN` — `pos` is `PaperPosition` which has no `state` field, so `hasattr` is always False and the escalation branch (`OPEN→DEFENDED→DELTA_BREACH_FINAL`) never executes. Fix: read `TradeState` from the trade ledger — call `self._store.get_trade_state(strategy_name, leg_role)` (add this method to `PaperStore` if not present), then use that value instead of `hasattr`. Also fix `_find_put_leg` fallback: when the strike regex fails, skip the position with a WARN rather than returning an arbitrary PE from the chain.
   Tests: position in DEFENDED state → `check_signals` emits `DELTA_BREACH_FINAL`; `_find_put_leg` with no matching strike → returns None, WARN logged.

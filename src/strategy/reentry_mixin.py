@@ -81,6 +81,36 @@ class ReEntryMixin:
             )
             return
 
+        # ── Dedup: skip if already evaluated today for this leg ───────────────
+        _reentry_signals = {
+            ExitSignal.R5_REENTRY_ELIGIBLE.value,
+            ExitSignal.R5_REENTRY_BLOCKED.value,
+        }
+        try:
+            existing_events = self._store.get_open_exit_events(self.strategy_name)
+            today_str = today.isoformat()
+            for ev in existing_events:
+                ev_date = str(ev.get("event_time", ""))[:10]
+                if (
+                    ev.get("leg_name") == self.reentry_leg_role
+                    and ev.get("exit_signal") in _reentry_signals
+                    and ev_date == today_str
+                ):
+                    log.info(
+                        "reentry_check_skipped",
+                        reason="already evaluated today",
+                        strategy=self.strategy_name,
+                        leg=self.reentry_leg_role,
+                        existing_signal=ev.get("exit_signal"),
+                    )
+                    return
+        except Exception as exc:
+            log.warning(
+                "reentry_dedup_check_failed",
+                strategy=self.strategy_name,
+                error=str(exc),
+            )
+
         blocked_reason: str | None = None
 
         # ── Gate 1: DTE ≥ 14 ─────────────────────────────────────────────────

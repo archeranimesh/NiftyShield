@@ -209,16 +209,25 @@ class CustomPPStrategy(ReEntryMixin):
 
 
 def test_custom_ivr_passes_override(tmp_path: Path):
+    """PP strategy blocks when IVR is high and allows when IVR is low.
+
+    Two separate days are used so the dedup guard does not suppress the second
+    call — each day is an independent eligibility evaluation.
+    """
     store = PaperStore(str(tmp_path / "db.sqlite"))
     strategy = CustomPPStrategy(store=store, vix_data_dir=tmp_path)
+
+    day1 = date(2025, 1, 10)
+    day2 = date(2025, 1, 11)
+    expiry = date(2025, 2, 5)  # DTE >= 14 from both days
 
     # IVR=0.70 should fail the check for CustomPPStrategy (which wants <= 0.60)
     vix_series_high = _make_vix_series(ivr=0.70)
     with patch("src.strategy.reentry_mixin.load_vix_series", return_value=vix_series_high):
         _run(
             strategy._check_reentry(
-                expiry=date.today() + timedelta(days=20),
-                today=date.today(),
+                expiry=expiry,
+                today=day1,
                 instrument_key="TEST",
                 trade_id=123,
             )
@@ -228,14 +237,13 @@ def test_custom_ivr_passes_override(tmp_path: Path):
     assert events[0]["exit_signal"] == "R5_REENTRY_BLOCKED"
     assert "IVR" in events[0]["notes"]
 
-    # IVR=0.50 should pass the check
-    store.acknowledge_exit_event(events[0]["id"])  # clean up or just fetch latest
+    # IVR=0.50 should pass the check (different day — dedup does not block)
     vix_series_low = _make_vix_series(ivr=0.50)
     with patch("src.strategy.reentry_mixin.load_vix_series", return_value=vix_series_low):
         _run(
             strategy._check_reentry(
-                expiry=date.today() + timedelta(days=20),
-                today=date.today(),
+                expiry=expiry,
+                today=day2,
                 instrument_key="TEST",
                 trade_id=124,
             )
@@ -277,3 +285,73 @@ def test_custom_reentry_position_active_long_position_match(tmp_path: Path):
     blocked = [e for e in events if e["exit_signal"] == "R5_REENTRY_BLOCKED"]
     assert blocked
     assert "open position" in blocked[0]["notes"]
+
+
+def test_reentry_dedup_same_day_writes_once(tmp_path: Path):
+    """Calling _check_reentry twice on the same day → 1 DB row, 1 Telegram message."""
+    store = PaperStore(str(tmp_path / "db.sqlite"))
+    notifier = MagicMock()
+    notifier.send_plain_message = AsyncMock(return_value=True)
+    strategy = DummyStrategy(store=store, notifier=notifier, vix_data_dir=tmp_path)
+
+    today = date.today()
+    expiry = today + timedelta(days=20)
+    vix_series = _make_vix_series(ivr=0.40)
+
+    with patch("src.strategy.reentry_mixin.load_vix_series", return_value=vix_series):
+        _run(
+            strategy._check_reentry(
+                expiry=expiry,
+                today=today,
+                instrument_key="TEST",
+                trade_id=1,
+            )
+        )
+        # Second call same day — must be deduped
+        _run(
+            strategy._check_reentry(
+                expiry=expiry,
+                today=today,
+                instrument_key="TEST",
+                trade_id=1,
+            )
+        )
+
+    events = store.get_open_exit_events(strategy_name="paper_dummy_strategy")
+    assert len(events) == 1, f"Expected 1 event, got {len(events)}"
+    notifier.send_plain_message.assert_awaited_once()
+
+
+def test_reentry_dedup_different_days_writes_twice(tmp_path: Path):
+    """Calling _check_reentry on two different days → 2 DB rows, 2 Telegram messages."""
+    store = PaperStore(str(tmp_path / "db.sqlite"))
+    notifier = MagicMock()
+    notifier.send_plain_message = AsyncMock(return_value=True)
+    strategy = DummyStrategy(store=store, notifier=notifier, vix_data_dir=tmp_path)
+
+    day1 = date(2025, 1, 10)
+    day2 = date(2025, 1, 11)
+    expiry = date(2025, 2, 1)
+    vix_series = _make_vix_series(ivr=0.40)
+
+    with patch("src.strategy.reentry_mixin.load_vix_series", return_value=vix_series):
+        _run(
+            strategy._check_reentry(
+                expiry=expiry,
+                today=day1,
+                instrument_key="TEST",
+                trade_id=1,
+            )
+        )
+        _run(
+            strategy._check_reentry(
+                expiry=expiry,
+                today=day2,
+                instrument_key="TEST",
+                trade_id=2,
+            )
+        )
+
+    events = store.get_open_exit_events(strategy_name="paper_dummy_strategy")
+    assert len(events) == 2, f"Expected 2 events, got {len(events)}"
+    assert notifier.send_plain_message.await_count == 2
