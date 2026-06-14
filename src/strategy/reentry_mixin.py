@@ -1,3 +1,4 @@
+import asyncio
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -76,7 +77,8 @@ class ReEntryMixin:
         """
         if self._store is None:
             log.warning(
-                f"{self.strategy_name}.reentry_check_skipped",
+                "reentry.check_skipped",
+                strategy=self.strategy_name,
                 reason="no store configured",
             )
             return
@@ -121,7 +123,7 @@ class ReEntryMixin:
         # ── Gate 2: IVR passes ───────────────────────────────────────────────
         if blocked_reason is None:
             try:
-                vix_series: pd.Series = load_vix_series(self._vix_data_dir)
+                vix_series: pd.Series = await asyncio.to_thread(load_vix_series, self._vix_data_dir)
                 if vix_series.empty or len(vix_series) < 252:
                     blocked_reason = "IVR history insufficient — cannot verify R3"
                 else:
@@ -135,7 +137,8 @@ class ReEntryMixin:
                             blocked_reason = reason
             except Exception as exc:
                 log.warning(
-                    f"{self.strategy_name}.reentry_ivr_load_failed",
+                    "reentry.ivr_load_failed",
+                    strategy=self.strategy_name,
                     error=str(exc),
                 )
                 blocked_reason = "IVR history insufficient — cannot verify R3"
@@ -151,7 +154,8 @@ class ReEntryMixin:
                     )
             except Exception as exc:
                 log.warning(
-                    f"{self.strategy_name}.reentry_positions_check_failed",
+                    "reentry.positions_check_failed",
+                    strategy=self.strategy_name,
                     error=str(exc),
                 )
                 blocked_reason = "open position check failed — cannot verify gate 3"
@@ -178,13 +182,15 @@ class ReEntryMixin:
                 notes=notes,
             )
             log.info(
-                f"{self.strategy_name}.reentry_event_written",
+                "reentry.event_written",
+                strategy=self.strategy_name,
                 signal=signal.value,
                 notes=notes,
             )
         except Exception as exc:
             log.error(
-                f"{self.strategy_name}.reentry_event_write_failed",
+                "reentry.event_write_failed",
+                strategy=self.strategy_name,
                 error=str(exc),
             )
 
@@ -200,6 +206,7 @@ class ReEntryMixin:
                 await self._notifier.send_plain_message(msg)
             except Exception as exc:
                 log.warning(
-                    f"{self.strategy_name}.reentry_notify_failed",
+                    "reentry.notify_failed",
+                    strategy=self.strategy_name,
                     error=str(exc),
                 )

@@ -3,6 +3,8 @@ from datetime import date, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from src.backtest.vix_ingest import load_vix_series
+
 import numpy as np
 import pandas as pd
 
@@ -320,6 +322,51 @@ def test_reentry_dedup_same_day_writes_once(tmp_path: Path):
     events = store.get_open_exit_events(strategy_name="paper_dummy_strategy")
     assert len(events) == 1, f"Expected 1 event, got {len(events)}"
     notifier.send_plain_message.assert_awaited_once()
+
+
+def test_vix_series_load_uses_asyncio_to_thread(tmp_path: Path):
+    """load_vix_series must be dispatched via asyncio.to_thread, not called directly."""
+    store = PaperStore(str(tmp_path / "db.sqlite"))
+    strategy = DummyStrategy(store=store, vix_data_dir=tmp_path)
+    vix_series = _make_vix_series(ivr=0.30)
+
+    with patch("src.strategy.reentry_mixin.asyncio") as mock_asyncio:
+        mock_asyncio.to_thread = AsyncMock(return_value=vix_series)
+        _run(
+            strategy._check_reentry(
+                expiry=date.today() + timedelta(days=20),
+                today=date.today(),
+                instrument_key="TEST",
+                trade_id=1,
+            )
+        )
+
+    mock_asyncio.to_thread.assert_awaited_once()
+    load_fn, vix_dir = mock_asyncio.to_thread.call_args[0]
+    assert load_fn is load_vix_series
+    assert vix_dir == tmp_path
+
+
+def test_vix_to_thread_exception_results_in_blocked(tmp_path: Path):
+    """asyncio.to_thread raising must produce R5_REENTRY_BLOCKED, not propagate."""
+    store = PaperStore(str(tmp_path / "db.sqlite"))
+    strategy = DummyStrategy(store=store, vix_data_dir=tmp_path)
+
+    with patch("src.strategy.reentry_mixin.asyncio") as mock_asyncio:
+        mock_asyncio.to_thread = AsyncMock(side_effect=RuntimeError("disk read failed"))
+        _run(
+            strategy._check_reentry(
+                expiry=date.today() + timedelta(days=20),
+                today=date.today(),
+                instrument_key="TEST",
+                trade_id=1,
+            )
+        )
+
+    events = store.get_open_exit_events(strategy_name="paper_dummy_strategy")
+    blocked = [e for e in events if e["exit_signal"] == "R5_REENTRY_BLOCKED"]
+    assert blocked, "Expected BLOCKED event when to_thread raises"
+    assert "IVR history" in blocked[0]["notes"]
 
 
 def test_reentry_dedup_different_days_writes_twice(tmp_path: Path):
