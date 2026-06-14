@@ -306,7 +306,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
-| 2026-06-14 | BUG-5 — _check_reentry dedup: skip if R5_REENTRY_BLOCKED/ELIGIBLE event already exists today for same strategy+leg; fixed test_custom_ivr_passes_override to use different days; 2 new tests — pending |
+| 2026-06-14 | BUG-5 — _check_reentry dedup: skip if R5_REENTRY_BLOCKED/ELIGIBLE event already exists today for same strategy+leg; fixed test_custom_ivr_passes_override to use different days; 2 new tests — 80784c0 |
 | 2026-06-14 | BUG-3 — _open_new quantity=1 hardcode fixed; CLOSE_AND_ROLL now passes abs(short_put.net_qty); 2 new tests — 5d1c8eb |
 | 2026-06-13 | SIG-2 — evaluate_pp zero-entry guard (WARN + early return); evaluate_collar_put ltp fallback when bid/ask None (INFO); Decimal conversion in both + evaluate_collar_call residual_breached; 7 new tests — f99a4cb |
 | 2026-06-13 | SIG-1 — paper_action_audit table + record_action_audit(); _write_audit rewired to store per-leg fills; migrate_paper_action_audit.py; 6 new tests (TestResolveMidPrice + TestWriteAudit) — 580c0e8 |
