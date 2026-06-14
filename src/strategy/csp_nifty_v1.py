@@ -360,7 +360,7 @@ class CSPNiftyV1(ReEntryMixin):
         if action.action_type in ("CLOSE_AND_ROLL", "CLOSE_FULL"):
             await self._close_leg(short_put, today)
             if action.action_type == "CLOSE_AND_ROLL":
-                remaining = await self._open_new(remaining, today)
+                remaining = await self._open_new(remaining, today, quantity=abs(short_put.net_qty))
                 await self._reentry_notification(short_put, action)
             return remaining
 
@@ -409,8 +409,17 @@ class CSPNiftyV1(ReEntryMixin):
             dry_run=False,
         )
 
-    async def _open_new(self, positions: list[PaperPosition], today: date) -> list[PaperPosition]:
-        """Open a new short-put and return the updated positions list."""
+    async def _open_new(
+        self, positions: list[PaperPosition], today: date, quantity: int = 1
+    ) -> list[PaperPosition]:
+        """Open a new short-put and return the updated positions list.
+
+        Args:
+            positions: Current open positions (new leg appended on success).
+            today: Roll date passed to ``open_new_csp_leg``.
+            quantity: Lots to open.  Pass ``abs(short_put.net_qty)`` when
+                rolling an existing leg so lot size is preserved.
+        """
         if self._broker is None or self._store is None:
             log.warning("csp_nifty_v1._open_new: broker or store not set — skipping")
             return positions
@@ -426,7 +435,7 @@ class CSPNiftyV1(ReEntryMixin):
                 strategy=self.strategy_name,
                 roll_date=today,
                 dry_run=False,
-                quantity=1,
+                quantity=quantity,
             )
         except Exception as exc:
             log.error("csp_nifty_v1._open_new.failed", error=str(exc))

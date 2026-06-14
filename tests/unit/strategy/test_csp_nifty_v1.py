@@ -871,6 +871,71 @@ def test_check_signals_put_leg_not_found_skips_position() -> None:
     assert result == []
 
 
+# ── BUG-3: _open_new must preserve lot size from the existing position ────────
+
+
+def test_close_and_roll_passes_qty_to_open_new_csp_leg() -> None:
+    """CLOSE_AND_ROLL on a 65-lot position opens the new leg with quantity=65, not 1."""
+    broker = MagicMock()
+    store = MagicMock()
+    store.get_open_exit_events.return_value = []
+    notifier = MagicMock()
+    notifier.send_notification = AsyncMock()
+
+    strategy = CSPNiftyV1(broker=broker, store=store, notifier=notifier)
+    pos = _make_position(net_qty=-65, avg_sell_price="100")
+    action = ApprovedAction(
+        action_type="CLOSE_AND_ROLL",
+        legs_to_close=["short_put"],
+        legs_to_open=[],
+        rationale="profit target",
+        council_rank=1,
+        metadata={"triggering_signal": "PROFIT_TARGET"},
+    )
+
+    with (
+        patch("src.strategy.csp_nifty_v1.close_csp_leg", new_callable=AsyncMock) as mock_close,
+        patch("src.strategy.csp_nifty_v1.open_new_csp_leg", new_callable=AsyncMock) as mock_open,
+        patch("src.instruments.lookup.InstrumentLookup") as mock_lu,
+        patch("src.strategy.reentry_mixin.load_vix_series", return_value=pd.Series(dtype="float64")),
+    ):
+        mock_lu.from_file.return_value = MagicMock()
+        _run(strategy.apply_action([pos], action))
+
+    mock_close.assert_awaited_once()
+    mock_open.assert_awaited_once()
+    _, kwargs = mock_open.call_args
+    assert kwargs["quantity"] == 65
+
+
+def test_open_new_action_defaults_to_qty_1_when_no_prior_position() -> None:
+    """OPEN_NEW (re-entry from RE_ENTRY_PENDING) uses quantity=1 — no prior position."""
+    broker = MagicMock()
+    store = MagicMock()
+    notifier = MagicMock()
+    notifier.send_notification = AsyncMock()
+
+    strategy = CSPNiftyV1(broker=broker, store=store, notifier=notifier)
+    action = ApprovedAction(
+        action_type="OPEN_NEW",
+        legs_to_close=[],
+        legs_to_open=["short_put"],
+        rationale="re-entry",
+        council_rank=1,
+    )
+
+    with (
+        patch("src.strategy.csp_nifty_v1.open_new_csp_leg", new_callable=AsyncMock) as mock_open,
+        patch("src.instruments.lookup.InstrumentLookup") as mock_lu,
+    ):
+        mock_lu.from_file.return_value = MagicMock()
+        _run(strategy.apply_action([], action))
+
+    mock_open.assert_awaited_once()
+    _, kwargs = mock_open.call_args
+    assert kwargs["quantity"] == 1
+
+
 def test_check_signals_two_positions_one_found_one_not() -> None:
     """One position has a matching chain leg; the other does not.
     Only the found position emits signals — no false signal from the missing one."""
