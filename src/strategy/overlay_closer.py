@@ -13,6 +13,7 @@ from typing import Any
 
 import structlog
 
+from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
 from src.paper.models import ExitSignal, PaperPosition, PaperTrade, TradeAction
 from src.paper.store import PaperStore
@@ -94,7 +95,7 @@ class OverlayCloser:
             strategy_name=strategy_name,
             leg_role=leg_role,
             instrument_key=position.instrument_key,
-            trade_date=date.today(),
+            trade_date=market_today(),
             action=close_action,
             quantity=fill.quantity,
             price=fill_price,
@@ -159,7 +160,7 @@ class OverlayCloser:
         vix: float | None = None,
     ) -> None:
         """Atomically close both Collar legs (short call and long put) with rollback."""
-        today = date.today()
+        today = market_today()
         call_pos = self._store.get_position(strategy_name, SHORT_CALL_ROLE)
         put_pos = self._store.get_position(strategy_name, LONG_PUT_ROLE)
         call_qty = abs(call_pos.net_qty) if call_pos else 0
@@ -179,36 +180,40 @@ class OverlayCloser:
             fill = self._simulator.simulate_fill(
                 call_pos.instrument_key, "BUY", abs(call_pos.net_qty), mid, vix
             )
-            trades_to_write.append(PaperTrade(
-                strategy_name=strategy_name,
-                leg_role=SHORT_CALL_ROLE,
-                instrument_key=call_pos.instrument_key,
-                trade_date=today,
-                action=TradeAction.BUY,
-                quantity=fill.quantity,
-                price=fill.fill_price,
-                notes=f"collar_close_all call event_id={event_id}",
-                ivr_at_entry=None,
-                is_paper=True,
-            ))
+            trades_to_write.append(
+                PaperTrade(
+                    strategy_name=strategy_name,
+                    leg_role=SHORT_CALL_ROLE,
+                    instrument_key=call_pos.instrument_key,
+                    trade_date=today,
+                    action=TradeAction.BUY,
+                    quantity=fill.quantity,
+                    price=fill.fill_price,
+                    notes=f"collar_close_all call event_id={event_id}",
+                    ivr_at_entry=None,
+                    is_paper=True,
+                )
+            )
 
         if put_pos and put_pos.net_qty > 0:
             mid = self._resolve_mid_price(put_pos.instrument_key, market)
             fill = self._simulator.simulate_fill(
                 put_pos.instrument_key, "SELL", abs(put_pos.net_qty), mid, vix
             )
-            trades_to_write.append(PaperTrade(
-                strategy_name=strategy_name,
-                leg_role=LONG_PUT_ROLE,
-                instrument_key=put_pos.instrument_key,
-                trade_date=today,
-                action=TradeAction.SELL,
-                quantity=fill.quantity,
-                price=fill.fill_price,
-                notes=f"collar_close_all put event_id={event_id}",
-                ivr_at_entry=None,
-                is_paper=True,
-            ))
+            trades_to_write.append(
+                PaperTrade(
+                    strategy_name=strategy_name,
+                    leg_role=LONG_PUT_ROLE,
+                    instrument_key=put_pos.instrument_key,
+                    trade_date=today,
+                    action=TradeAction.SELL,
+                    quantity=fill.quantity,
+                    price=fill.fill_price,
+                    notes=f"collar_close_all put event_id={event_id}",
+                    ivr_at_entry=None,
+                    is_paper=True,
+                )
+            )
 
         if trades_to_write:
             try:
@@ -251,7 +256,7 @@ class OverlayCloser:
         vix: float | None = None,
     ) -> None:
         """Monetise Collar put leg, buying back short call first if near-worthless."""
-        today = date.today()
+        today = market_today()
         call_pos = self._store.get_position(strategy_name, SHORT_CALL_ROLE)
         put_pos = self._store.get_position(strategy_name, LONG_PUT_ROLE)
 
@@ -294,36 +299,40 @@ class OverlayCloser:
                 fill = self._simulator.simulate_fill(
                     call_pos.instrument_key, "BUY", abs(call_pos.net_qty), mid, vix
                 )
-                trades_to_write.append(PaperTrade(
-                    strategy_name=strategy_name,
-                    leg_role=SHORT_CALL_ROLE,
-                    instrument_key=call_pos.instrument_key,
-                    trade_date=today,
-                    action=TradeAction.BUY,
-                    quantity=fill.quantity,
-                    price=fill.fill_price,
-                    notes=f"collar_put_monetize call close event_id={event_id}",
-                    ivr_at_entry=None,
-                    is_paper=True,
-                ))
+                trades_to_write.append(
+                    PaperTrade(
+                        strategy_name=strategy_name,
+                        leg_role=SHORT_CALL_ROLE,
+                        instrument_key=call_pos.instrument_key,
+                        trade_date=today,
+                        action=TradeAction.BUY,
+                        quantity=fill.quantity,
+                        price=fill.fill_price,
+                        notes=f"collar_put_monetize call close event_id={event_id}",
+                        ivr_at_entry=None,
+                        is_paper=True,
+                    )
+                )
 
         if put_pos and put_pos.net_qty > 0:
             mid = self._resolve_mid_price(put_pos.instrument_key, market)
             fill = self._simulator.simulate_fill(
                 put_pos.instrument_key, "SELL", abs(put_pos.net_qty), mid, vix
             )
-            trades_to_write.append(PaperTrade(
-                strategy_name=strategy_name,
-                leg_role=LONG_PUT_ROLE,
-                instrument_key=put_pos.instrument_key,
-                trade_date=today,
-                action=TradeAction.SELL,
-                quantity=fill.quantity,
-                price=fill.fill_price,
-                notes=f"collar_put_monetize put close event_id={event_id}",
-                ivr_at_entry=None,
-                is_paper=True,
-            ))
+            trades_to_write.append(
+                PaperTrade(
+                    strategy_name=strategy_name,
+                    leg_role=LONG_PUT_ROLE,
+                    instrument_key=put_pos.instrument_key,
+                    trade_date=today,
+                    action=TradeAction.SELL,
+                    quantity=fill.quantity,
+                    price=fill.fill_price,
+                    notes=f"collar_put_monetize put close event_id={event_id}",
+                    ivr_at_entry=None,
+                    is_paper=True,
+                )
+            )
 
         if trades_to_write:
             try:
@@ -434,9 +443,7 @@ class OverlayCloser:
         """
         leg = find_option_leg(instrument_key, market)
         if leg is None:
-            raise ValueError(
-                f"resolve_mid_price: leg absent from chain for {instrument_key}"
-            )
+            raise ValueError(f"resolve_mid_price: leg absent from chain for {instrument_key}")
         return resolve_price(leg)
 
     def _find_option_leg(self, market: OptionChain, instrument_key: str) -> OptionLeg | None:

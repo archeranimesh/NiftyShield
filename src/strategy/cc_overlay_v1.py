@@ -15,6 +15,7 @@ from typing import Any
 
 import structlog
 
+from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
 from src.models.portfolio import TradeAction
 from src.paper.constants import STRATEGY_CC_OVERLAY
@@ -70,7 +71,7 @@ class CCOverlayV1(ReEntryMixin):
         Filters positions to matching strategy name and leg roles.
         """
         events: list[SignalEvent] = []
-        today = date.today()
+        today = market_today()
 
         for pos in positions:
             if pos.strategy_name != self.strategy_name:
@@ -84,7 +85,11 @@ class CCOverlayV1(ReEntryMixin):
             expiry = self._parse_expiry(pos.instrument_key)
             dte = (expiry - today).days if expiry is not None else 9999
 
-            delta = float(call_leg.delta) if (call_leg is not None and call_leg.delta is not None) else None
+            delta = (
+                float(call_leg.delta)
+                if (call_leg is not None and call_leg.delta is not None)
+                else None
+            )
             entry_price = float(pos.avg_sell_price)
             current_mark = float(call_leg.ltp) if call_leg is not None else entry_price
             if pos.entry_date is not None:
@@ -159,7 +164,7 @@ class CCOverlayV1(ReEntryMixin):
         for pos in cc_positions:
             call_leg = self._find_call_leg(market, pos.instrument_key)
             expiry = self._parse_expiry(pos.instrument_key)
-            dte = (expiry - date.today()).days if expiry is not None else None
+            dte = (expiry - market_today()).days if expiry is not None else None
             entry_credit = pos.avg_sell_price
 
             lines.append(f"Leg: {pos.leg_role} | key: {pos.instrument_key}")
@@ -217,7 +222,7 @@ class CCOverlayV1(ReEntryMixin):
             expiry = self._parse_expiry(closed_pos.instrument_key)
             await self._check_reentry(
                 expiry=expiry,
-                today=date.today(),
+                today=market_today(),
                 instrument_key=closed_pos.instrument_key,
                 trade_id=0,
             )
@@ -259,7 +264,7 @@ class CCOverlayV1(ReEntryMixin):
             strategy_name=pos.strategy_name,
             leg_role=pos.leg_role,
             instrument_key=pos.instrument_key,
-            trade_date=date.today(),
+            trade_date=market_today(),
             action=TradeAction.BUY,
             quantity=abs(pos.net_qty),
             price=price,
@@ -293,7 +298,7 @@ class CCOverlayV1(ReEntryMixin):
             delta = float(metadata.get("delta")) if metadata.get("delta") is not None else 0.0
 
             expiry = self._parse_expiry(pos.instrument_key)
-            dte = (expiry - date.today()).days if expiry is not None else 0
+            dte = (expiry - market_today()).days if expiry is not None else 0
             if metadata.get("dte") is not None:
                 try:
                     dte = int(metadata.get("dte"))

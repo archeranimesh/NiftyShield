@@ -28,6 +28,7 @@ from decimal import Decimal, InvalidOperation
 
 import structlog
 
+from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
 from src.paper.models import PaperPosition
 from src.strategy.protocol import ApprovedAction, SignalEvent
@@ -108,7 +109,7 @@ class IronCondorV1:
             (self._parse_expiry(p.instrument_key) for p in ic_positions),
             None,
         )
-        dte = (expiry - date.today()).days if expiry is not None else None
+        dte = (expiry - market_today()).days if expiry is not None else None
 
         if dte is not None:
             if dte <= _TIME_STOP_DTE:
@@ -119,7 +120,11 @@ class IronCondorV1:
                         description=f"DTE {dte} ≤ {_TIME_STOP_DTE} — time stop triggered",
                         payload={
                             "dte": dte,
-                            "valid_actions": ["CLOSE_FULL", "CLOSE_CALL_SPREAD", "CLOSE_PUT_SPREAD"],
+                            "valid_actions": [
+                                "CLOSE_FULL",
+                                "CLOSE_CALL_SPREAD",
+                                "CLOSE_PUT_SPREAD",
+                            ],
                         },
                     )
                 )
@@ -154,7 +159,11 @@ class IronCondorV1:
                         payload={
                             "leg_role": pos.leg_role,
                             "delta": str(opt_leg.delta),
-                            "valid_actions": ["CLOSE_FULL", "CLOSE_CALL_SPREAD", "CLOSE_PUT_SPREAD"],
+                            "valid_actions": [
+                                "CLOSE_FULL",
+                                "CLOSE_CALL_SPREAD",
+                                "CLOSE_PUT_SPREAD",
+                            ],
                         },
                     )
                 )
@@ -191,7 +200,11 @@ class IronCondorV1:
                             "combined_mark": str(combined_mark),
                             "entry_credit": str(entry_credit),
                             "pct_remaining": str(pct.quantize(Decimal("0.01"))),
-                            "valid_actions": ["CLOSE_FULL", "CLOSE_CALL_SPREAD", "CLOSE_PUT_SPREAD"],
+                            "valid_actions": [
+                                "CLOSE_FULL",
+                                "CLOSE_CALL_SPREAD",
+                                "CLOSE_PUT_SPREAD",
+                            ],
                         },
                     )
                 )
@@ -209,7 +222,11 @@ class IronCondorV1:
                             "combined_mark": str(combined_mark),
                             "entry_credit": str(entry_credit),
                             "pct_of_credit": str(pct.quantize(Decimal("0.01"))),
-                            "valid_actions": ["CLOSE_FULL", "CLOSE_CALL_SPREAD", "CLOSE_PUT_SPREAD"],
+                            "valid_actions": [
+                                "CLOSE_FULL",
+                                "CLOSE_CALL_SPREAD",
+                                "CLOSE_PUT_SPREAD",
+                            ],
                         },
                     )
                 )
@@ -237,7 +254,7 @@ class IronCondorV1:
         """
         ic_positions = [p for p in positions if p.strategy_name == self.strategy_name]
         expiry = next((self._parse_expiry(p.instrument_key) for p in ic_positions), None)
-        dte = (expiry - date.today()).days if expiry is not None else None
+        dte = (expiry - market_today()).days if expiry is not None else None
         combined_mark, entry_credit = self._compute_combined_pnl(market, ic_positions)
 
         lines: list[str] = [

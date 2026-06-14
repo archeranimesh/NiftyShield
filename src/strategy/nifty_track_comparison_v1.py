@@ -26,6 +26,7 @@ from decimal import Decimal, InvalidOperation
 
 import structlog
 
+from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
 from src.paper.models import PaperPosition
 from src.strategy.protocol import ApprovedAction, SignalEvent
@@ -91,7 +92,7 @@ class NiftyTrackComparisonV1:
             List of WARN SignalEvents; empty list when no overlays are open.
         """
         events: list[SignalEvent] = []
-        today = date.today()
+        today = market_today()
 
         for pos in positions:
             if pos.strategy_name not in self.TRACK_STRATEGY_NAMES:
@@ -187,7 +188,7 @@ class NiftyTrackComparisonV1:
         Returns:
             Multi-line plain-text context string; no HTML markup.
         """
-        today = date.today()
+        today = market_today()
         lines: list[str] = [
             f"Strategy: {self.strategy_name}",
             f"Signal: {event.event_type} ({event.severity})",

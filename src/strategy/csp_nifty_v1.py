@@ -37,6 +37,7 @@ from typing import Any
 import structlog
 
 from src.config import settings
+from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
 from src.paper.models import PaperPosition, TradeState
 from src.strategy.csp_roll_executor import close_csp_leg, open_new_csp_leg, roll_down_and_out
@@ -140,7 +141,7 @@ class CSPNiftyV1(ReEntryMixin):
             List of detected SignalEvents; empty list when nothing to act on.
         """
         events: list[SignalEvent] = []
-        today = date.today()
+        today = market_today()
 
         for pos in positions:
             if pos.strategy_name != self.strategy_name:
@@ -252,7 +253,7 @@ class CSPNiftyV1(ReEntryMixin):
         for pos in short_puts:
             put_leg = self._find_put_leg(market, pos.instrument_key)
             expiry = self._parse_expiry(pos.instrument_key)
-            dte = (expiry - date.today()).days if expiry is not None else None
+            dte = (expiry - market_today()).days if expiry is not None else None
             entry_credit = pos.avg_sell_price
 
             lines.append(f"Leg: {pos.leg_role} | key: {pos.instrument_key}")
@@ -342,7 +343,7 @@ class CSPNiftyV1(ReEntryMixin):
             triggering_signal=(action.metadata or {}).get("triggering_signal"),
         )
 
-        today = date.today()
+        today = market_today()
         short_put = next(
             (p for p in positions if p.strategy_name == self.strategy_name and p.net_qty < 0),
             None,
@@ -511,7 +512,7 @@ class CSPNiftyV1(ReEntryMixin):
         expiry = self._parse_expiry(closed_pos.instrument_key)
         await self._check_reentry(
             expiry=expiry,
-            today=date.today(),
+            today=market_today(),
             instrument_key=closed_pos.instrument_key,
             trade_id=0,
         )

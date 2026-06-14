@@ -19,7 +19,8 @@ import asyncio
 import json
 import os
 from collections.abc import Callable
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
+from datetime import date as _date
 
 import structlog
 
@@ -27,7 +28,7 @@ from src.client.exceptions import DataFetchError
 from src.client.protocol import BrokerClient
 from src.client.upstox_market import parse_upstox_option_chain
 from src.instruments.lookup import InstrumentLookup, parse_expiry
-from src.market_calendar.holidays import is_trading_day
+from src.market_calendar.holidays import is_trading_day, market_today
 from src.models.options import OptionChain
 from src.paper.models import PaperPosition
 from src.paper.store import PaperStore
@@ -266,12 +267,20 @@ class StrategyMonitor:
         """
         import re as _re
 
-        _KEY_EXPIRY_RE = _re.compile(
-            r"NIFTY(\d{2})([A-Za-z]{3})(\d{4})(CE|PE)", _re.IGNORECASE
-        )
+        _KEY_EXPIRY_RE = _re.compile(r"NIFTY(\d{2})([A-Za-z]{3})(\d{4})(CE|PE)", _re.IGNORECASE)
         _MONTH_ABBR = {
-            "JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6,
-            "JUL": 7, "AUG": 8, "SEP": 9, "OCT": 10, "NOV": 11, "DEC": 12,
+            "JAN": 1,
+            "FEB": 2,
+            "MAR": 3,
+            "APR": 4,
+            "MAY": 5,
+            "JUN": 6,
+            "JUL": 7,
+            "AUG": 8,
+            "SEP": 9,
+            "OCT": 10,
+            "NOV": 11,
+            "DEC": 12,
         }
         m = _KEY_EXPIRY_RE.search(pos.instrument_key)
         if m:
@@ -280,7 +289,6 @@ class StrategyMonitor:
                 month = _MONTH_ABBR.get(m.group(2).upper())
                 year = int(m.group(3))
                 if month:
-                    from datetime import date as _date
                     return _date(year, month, day)
             except (ValueError, TypeError):
                 pass
@@ -291,7 +299,6 @@ class StrategyMonitor:
                 expiry_str = parse_expiry(inst.get("expiry"))
                 if expiry_str:
                     try:
-                        from datetime import date as _date
                         return _date.fromisoformat(expiry_str)
                     except ValueError:
                         pass
@@ -320,9 +327,7 @@ class StrategyMonitor:
                 groups.setdefault(exp, []).append(pos)
         return groups
 
-    async def _fetch_chains(
-        self, positions: list[PaperPosition]
-    ) -> dict[date, OptionChain]:
+    async def _fetch_chains(self, positions: list[PaperPosition]) -> dict[date, OptionChain]:
         """Fetch one OptionChain per unique expiry found in positions.
 
         Positions are examined to derive their expiry dates; one API call is
@@ -348,7 +353,6 @@ class StrategyMonitor:
         if not unique_expiries and self._expiry_fn is not None:
             expiry_str = self._expiry_fn()
             try:
-                from datetime import date as _date
                 unique_expiries.add(_date.fromisoformat(expiry_str))
             except ValueError:
                 pass
@@ -356,8 +360,7 @@ class StrategyMonitor:
         if not unique_expiries:
             log.debug("strategy_monitor.expiry_fn_not_set_and_no_positions")
             # Return a single empty chain so test strategies without BOD still work.
-            from datetime import date as _date
-            return {_date.today(): parse_upstox_option_chain([])}
+            return {market_today(): parse_upstox_option_chain([])}
 
         chains: dict[date, OptionChain] = {}
         for expiry_date in unique_expiries:

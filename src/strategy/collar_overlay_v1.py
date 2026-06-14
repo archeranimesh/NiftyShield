@@ -15,6 +15,7 @@ from typing import Any
 
 import structlog
 
+from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
 from src.models.portfolio import TradeAction
 from src.paper.constants import STRATEGY_COLLAR_OVERLAY
@@ -76,7 +77,7 @@ class CollarOverlayV1(ReEntryMixin):
         Filters positions to matching strategy name and leg roles.
         """
         events: list[SignalEvent] = []
-        today = date.today()
+        today = market_today()
 
         short_call_pos = next(
             (
@@ -134,7 +135,11 @@ class CollarOverlayV1(ReEntryMixin):
                     except ValueError:
                         pass
 
-            delta = float(call_leg.delta) if (call_leg is not None and call_leg.delta is not None) else None
+            delta = (
+                float(call_leg.delta)
+                if (call_leg is not None and call_leg.delta is not None)
+                else None
+            )
             entry_price = float(short_call_pos.avg_sell_price)
             current_mark = float(call_leg.ltp) if call_leg is not None else entry_price
 
@@ -183,7 +188,11 @@ class CollarOverlayV1(ReEntryMixin):
 
             bid = float(put_leg.bid) if put_leg is not None else None
             ask = float(put_leg.ask) if put_leg is not None else None
-            delta = float(put_leg.delta) if (put_leg is not None and put_leg.delta is not None) else None
+            delta = (
+                float(put_leg.delta)
+                if (put_leg is not None and put_leg.delta is not None)
+                else None
+            )
 
             entry_price = float(long_put_pos.avg_cost)
             current_mark = float(put_leg.ltp) if put_leg is not None else entry_price
@@ -246,7 +255,7 @@ class CollarOverlayV1(ReEntryMixin):
 
         for pos in collar_positions:
             expiry = self._parse_expiry(pos.instrument_key)
-            dte = (expiry - date.today()).days if expiry is not None else None
+            dte = (expiry - market_today()).days if expiry is not None else None
 
             if pos.leg_role == SHORT_CALL_ROLE:
                 call_leg = self._find_call_leg(market, pos.instrument_key)
@@ -317,7 +326,7 @@ class CollarOverlayV1(ReEntryMixin):
                 expiry = self._parse_expiry(short_call_pos.instrument_key)
                 await self._check_reentry(
                     expiry=expiry,
-                    today=date.today(),
+                    today=market_today(),
                     instrument_key=short_call_pos.instrument_key,
                     trade_id=0,
                 )
@@ -363,7 +372,7 @@ class CollarOverlayV1(ReEntryMixin):
             strategy_name=pos.strategy_name,
             leg_role=pos.leg_role,
             instrument_key=pos.instrument_key,
-            trade_date=date.today(),
+            trade_date=market_today(),
             action=close_action,
             quantity=abs(pos.net_qty),
             price=price,

@@ -12,9 +12,10 @@ silently block a valid trading day.
 from __future__ import annotations
 
 import logging
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Final
+from zoneinfo import ZoneInfo
 
 import yaml
 
@@ -115,3 +116,20 @@ def prev_trading_day(d: date, *, data_dir: Path = _DATA_DIR) -> date:
     while not is_trading_day(candidate, data_dir=data_dir):
         candidate -= timedelta(days=1)
     return candidate
+
+
+_IST: Final[ZoneInfo] = ZoneInfo("Asia/Kolkata")
+
+
+def market_today() -> date:
+    """Return the current date in IST (Asia/Kolkata).
+
+    Use this instead of ``date.today()`` in all strategy and roll logic.
+    ``date.today()`` is server-locale-dependent: on a UTC host the date flips
+    at 00:00 UTC (05:30 IST), causing DTE to be off by one exactly when the
+    ≤5/≤7 roll gates fire.
+
+    Returns:
+        The current calendar date in the IST timezone.
+    """
+    return datetime.now(tz=_IST).date()

@@ -11,12 +11,12 @@ returns the updated position list.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
 from decimal import Decimal
 from typing import Literal
 
 import structlog
 
+from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain
 from src.models.portfolio import TradeAction
 from src.paper.models import PaperPosition, PaperTrade
@@ -190,7 +190,7 @@ class PaperExecutor:
             legs_to_open=[s.leg_role for s in action.legs_to_open],
             trace_id=trace_id,
         )
-        today = date.today()
+        today = market_today()
 
         # 1. Close legs
         for leg_role in action.legs_to_close:

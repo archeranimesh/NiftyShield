@@ -15,7 +15,12 @@ from pathlib import Path
 import pytest
 
 import src.market_calendar.holidays as _mod
-from src.market_calendar.holidays import is_trading_day, load_holidays, prev_trading_day
+from src.market_calendar.holidays import (
+    is_trading_day,
+    load_holidays,
+    market_today,
+    prev_trading_day,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -69,6 +74,7 @@ class TestLoadHolidays:
 
     def test_missing_file_logs_warning(self, tmp_path: Path, caplog) -> None:
         import logging
+
         with caplog.at_level(logging.WARNING, logger="src.market_calendar.holidays"):
             load_holidays(1900, data_dir=tmp_path)
         assert "fail-open" in caplog.text
@@ -85,6 +91,7 @@ class TestLoadHolidays:
 
     def test_skips_entry_with_no_date_field(self, tmp_path: Path, caplog) -> None:
         import logging
+
         (tmp_path / "nse_2099.yaml").write_text("holidays:\n  - name: 'Bogus'\n")
         with caplog.at_level(logging.WARNING, logger="src.market_calendar.holidays"):
             result = load_holidays(2099, data_dir=tmp_path)
@@ -93,6 +100,7 @@ class TestLoadHolidays:
 
     def test_skips_entry_with_bad_date_format(self, tmp_path: Path, caplog) -> None:
         import logging
+
         (tmp_path / "nse_2099.yaml").write_text(
             "holidays:\n  - date: 'not-a-date'\n    name: 'Bad'\n"
         )
@@ -162,9 +170,7 @@ class TestPrevTradingDay:
         result = prev_trading_day(date(2099, 4, 13), data_dir=holiday_dir)
         assert result == date(2099, 4, 10)
 
-    def test_prev_from_saturday_skips_weekend_and_holiday(
-        self, holiday_dir: Path
-    ) -> None:
+    def test_prev_from_saturday_skips_weekend_and_holiday(self, holiday_dir: Path) -> None:
         # 2099-04-18 Sat → candidate=Fri(17, holiday) → skip → Thu(16) ✓
         result = prev_trading_day(date(2099, 4, 18), data_dir=holiday_dir)
         assert result == date(2099, 4, 16)
@@ -226,3 +232,43 @@ class TestReal2026Yaml:
         # NSE typically declares 14–18 equity holidays per year
         holidays = load_holidays(2026)
         assert 12 <= len(holidays) <= 20
+
+
+class TestMarketToday:
+    """market_today() must always return the IST calendar date."""
+
+    def test_returns_date_instance(self) -> None:
+        result = market_today()
+        assert isinstance(result, date)
+
+    def test_matches_ist_date(self) -> None:
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        ist = ZoneInfo("Asia/Kolkata")
+        expected = datetime.now(tz=ist).date()
+        assert market_today() == expected
+
+    def test_utc_midnight_gives_ist_date(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """At 00:01 UTC the UTC date is D but IST date is D (IST = UTC+5:30).
+        At 23:59 UTC the UTC date is D but IST date is D+1.
+        Verify market_today() uses IST, not UTC.
+        """
+        from datetime import datetime, timezone
+        from unittest.mock import patch
+        from zoneinfo import ZoneInfo
+
+        ist = ZoneInfo("Asia/Kolkata")
+        # 2026-06-14 23:59 UTC = 2026-06-15 05:29 IST → IST date is 2026-06-15
+        fake_utc = datetime(2026, 6, 14, 23, 59, tzinfo=timezone.utc)
+        expected_ist_date = fake_utc.astimezone(ist).date()  # 2026-06-15
+
+        import src.market_calendar.holidays as _holidays_mod
+
+        with patch.object(_holidays_mod, "_IST", ist):
+            with patch("src.market_calendar.holidays.datetime") as mock_dt:
+                mock_dt.now.return_value = fake_utc.astimezone(ist)
+                result = market_today()
+
+        assert result == expected_ist_date
+        assert result != fake_utc.date()  # must differ from UTC date
