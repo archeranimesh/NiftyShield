@@ -394,3 +394,58 @@ def test_record_close_trade_falls_back_to_avg_price_when_mark_missing() -> None:
     calls = {c[0][0].action.value: c[0][0] for c in mock_store.record_trade.call_args_list}
     assert calls["BUY"].price == Decimal("80")
     assert calls["SELL"].price == Decimal("50")
+
+
+# ---------------------------------------------------------------------------
+# SM-2 — ReEntryMixin wiring
+# ---------------------------------------------------------------------------
+
+
+def test_apply_action_close_all_with_profit_target_calls_check_reentry() -> None:
+    """CLOSE_ALL_OVERLAY with triggering_signal=PROFIT_TARGET → _check_reentry called once."""
+    from unittest.mock import AsyncMock, patch
+
+    mock_store = MagicMock()
+    mock_store.record_trade.return_value = True
+    strategy = CollarOverlayV1(store=mock_store)
+
+    call_pos = _make_short_call_position(
+        instrument_key=_expiry_key(dte=30, option_type="CE"),
+        avg_sell_price="80",
+    )
+    put_pos = _make_long_put_position(avg_cost="50")
+    action = ApprovedAction(
+        action_type="CLOSE_ALL_OVERLAY",
+        legs_to_close=["collar_short_call", "collar_long_put"],
+        legs_to_open=[],
+        rationale="profit target",
+        council_rank=1,
+        metadata={"triggering_signal": "PROFIT_TARGET", "mark": "24"},
+    )
+
+    with patch.object(strategy, "_check_reentry", new=AsyncMock()) as mock_reentry:
+        _run(strategy.apply_action([call_pos, put_pos], action))
+        mock_reentry.assert_awaited_once()
+
+
+def test_apply_action_monetize_put_does_not_call_check_reentry() -> None:
+    """MONETIZE_PUT (no short call closed) → _check_reentry never called."""
+    from unittest.mock import AsyncMock, patch
+
+    mock_store = MagicMock()
+    mock_store.record_trade.return_value = True
+    strategy = CollarOverlayV1(store=mock_store)
+
+    put_pos = _make_long_put_position(avg_cost="50")
+    action = ApprovedAction(
+        action_type="MONETIZE_PUT",
+        legs_to_close=["collar_long_put"],
+        legs_to_open=[],
+        rationale="crash monetize",
+        council_rank=1,
+        metadata={"triggering_signal": "COLLAR_PUT_CRASH", "mark": "250"},
+    )
+
+    with patch.object(strategy, "_check_reentry", new=AsyncMock()) as mock_reentry:
+        _run(strategy.apply_action([put_pos], action))
+        mock_reentry.assert_not_awaited()

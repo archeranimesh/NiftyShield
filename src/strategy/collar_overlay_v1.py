@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
+from pathlib import Path
 from typing import Any
 
 import structlog
@@ -20,6 +21,7 @@ from src.paper.constants import STRATEGY_COLLAR_OVERLAY
 from src.paper.models import PaperPosition, PaperTrade
 from src.strategy.exit_signals import ExitSignalEngine
 from src.strategy.protocol import ApprovedAction, SignalEvent
+from src.strategy.reentry_mixin import ReEntryMixin
 
 log = structlog.get_logger(__name__)
 
@@ -36,18 +38,33 @@ SHORT_CALL_ROLE = "collar_short_call"
 LONG_PUT_ROLE = "collar_long_put"
 
 
-class CollarOverlayV1:
+class CollarOverlayV1(ReEntryMixin):
     """Collar overlay strategy implementation."""
 
     strategy_name: str = STRATEGY_COLLAR_OVERLAY
+    reentry_leg_role: str = "overlay_collar_call"
+    reentry_script_hint: str = "run find_overlay_strikes.py --overlay-type collar"
 
-    def __init__(self, store: Any = None) -> None:
+    def __init__(
+        self,
+        store: Any = None,
+        notifier: Any = None,
+        vix_data_dir: Path | str | None = None,
+    ) -> None:
         """Initialise CollarOverlayV1.
 
         Args:
             store: PaperStore instance for persisting closing trades. None → writes skipped.
+            notifier: TelegramGateway for re-entry notifications. None → notifications skipped.
+            vix_data_dir: Path to Parquet VIX data directory for IVR gating. None → settings default.
         """
         self._store = store
+        self._notifier = notifier
+        from src.config import settings
+
+        self._vix_data_dir = (
+            Path(vix_data_dir) if vix_data_dir is not None else Path(settings.vix_data_dir)
+        )
 
     async def check_signals(
         self,
@@ -292,6 +309,19 @@ class CollarOverlayV1:
             and SHORT_CALL_ROLE in closed
         ):
             self._record_close_trade(short_call_pos, TradeAction.BUY, mark)
+
+            triggering_signal = (
+                action.metadata.get("triggering_signal") if action.metadata else None
+            )
+            if triggering_signal in ("PROFIT_TARGET", "TIME_STOP"):
+                expiry = self._parse_expiry(short_call_pos.instrument_key)
+                await self._check_reentry(
+                    expiry=expiry,
+                    today=date.today(),
+                    instrument_key=short_call_pos.instrument_key,
+                    trade_id=0,
+                )
+
         if (
             action.action_type in ("MONETIZE_PUT", "CLOSE_ALL_OVERLAY")
             and long_put_pos is not None
