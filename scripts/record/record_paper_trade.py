@@ -754,7 +754,7 @@ def main() -> None:
     if store.record_trade(trade):
         if ivr_at_entry is not None and ivr_at_entry < 0.25 and args.force_entry:
             try:
-                from datetime import datetime
+                from datetime import datetime, timezone
 
                 from src.paper.models import ExitSignal
 
@@ -762,7 +762,7 @@ def main() -> None:
                     strategy_name=trade.strategy_name,
                     leg_name=trade.leg_role,
                     trade_id=trade.instrument_key or "unknown",
-                    event_time=datetime.utcnow(),
+                    event_time=datetime.now(timezone.utc),
                     detected_by="MANUAL",
                     exit_signal=ExitSignal.MANUAL_OVERRIDE,
                     severity="WARNING",

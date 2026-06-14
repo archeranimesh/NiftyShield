@@ -122,14 +122,14 @@
   (d) write idempotent migration `scripts/dev/migrate_add_closed_state.py` to extend CHECK constraint. Combine with BUG-4 migration if BUG-4 not yet done.
   Tests: `mark_trade_closed` happy/error paths; `_close_leg` dry_run=False marks original SELL CLOSED. **Discovered: 2026-06-09** | SHA: ceefeb8
 
-- [ ] **FR-3** `[Claude]` — Three `ClientSession()` calls in `src/notifications/telegram_gateway.py` (lines 129, 216, 239) lack `ClientTimeout`. `getUpdates` at line 239 is worst: server-side long-poll `timeout=30` with client default 300 s stalls the daemon ~5 min on a dead connection. Pattern: `aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=...))` already used correctly in `telegram.py:107`. Fix all three: `getUpdates` → `total=40`; `sendMessage`/other sends → `total=10`.
-  Tests: `send_approval_request` → session created with `ClientTimeout(total=10)`; `_get_updates` → `ClientTimeout(total=40)`.
+- [x] **FR-3** `[Claude]` — Three `ClientSession()` calls in `src/notifications/telegram_gateway.py` (lines 129, 216, 239) lack `ClientTimeout`. `getUpdates` at line 239 is worst: server-side long-poll `timeout=30` with client default 300 s stalls the daemon ~5 min on a dead connection. Pattern: `aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=...))` already used correctly in `telegram.py:107`. Fix all three: `getUpdates` → `total=40`; `sendMessage`/other sends → `total=10`.
+  Tests: `send_approval_request` → session created with `ClientTimeout(total=10)`; `_get_updates` → `ClientTimeout(total=40)`. | SHA: b6f00de
 
 - [ ] **FR-4** `[Claude]` — `src/instruments/lookup.py:492–493` `search_api` creates `ClientSession()` with no timeout — stalled Upstox search hangs caller for ~300 s. Fix: `aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10))`.
   Tests: session constructed with explicit timeout.
 
-- [ ] **FR-5** `[Claude]` — `src/client/upstox_market.py` three `_session.get` calls (lines 123–131, 148–155, 179–185) emit zero structured logging — no endpoint, latency_ms, status_code, or request_id. Direct violation of project logging standard; made Jun-09 post-mortem slow. Fix: wrap each call with `t0 = perf_counter()` + `log.info("upstox.api_call", endpoint=..., status_code=..., latency_ms=...)` after response.
-  Tests: mock HTTP call → log record contains `latency_ms` and `status_code`.
+- [x] **FR-5** `[Claude]` — `src/client/upstox_market.py` three `_session.get` calls (lines 123–131, 148–155, 179–185) emit zero structured logging — no endpoint, latency_ms, status_code, or request_id. Direct violation of project logging standard; made Jun-09 post-mortem slow. Fix: wrap each call with `t0 = perf_counter()` + `log.info("upstox.api_call", endpoint=..., status_code=..., latency_ms=...)` after response.
+  Tests: mock HTTP call → log record contains `latency_ms` and `status_code`. | SHA: d469e71
 
 ---
 

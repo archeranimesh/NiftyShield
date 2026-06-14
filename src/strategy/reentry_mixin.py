@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -139,7 +139,7 @@ class ReEntryMixin:
                 strategy_name=self.strategy_name,
                 leg_name=self.reentry_leg_role,
                 trade_id=str(trade_id),
-                event_time=datetime.utcnow(),
+                event_time=datetime.now(timezone.utc),
                 detected_by="MANUAL",
                 exit_signal=signal,
                 severity="INFO",

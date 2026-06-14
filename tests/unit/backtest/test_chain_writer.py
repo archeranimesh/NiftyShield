@@ -178,8 +178,8 @@ def test_naive_ts_raises(tmp_path: Path) -> None:
         expiry=date(2026, 5, 28),
         strikes={},
     )
-    # Using timezone-naive datetime
-    naive_ts = datetime.utcnow()
+    # Using timezone-naive datetime (intentionally — tests the guard)
+    naive_ts = datetime.now()
 
     with pytest.raises(ValueError, match="snapshot_ts must be timezone-aware UTC"):
         writer.write_eod_snapshot(chain, naive_ts)

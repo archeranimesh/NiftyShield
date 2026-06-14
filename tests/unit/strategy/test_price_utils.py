@@ -7,12 +7,13 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
+from structlog.testing import capture_logs
 
 from src.models.options import OptionChain, OptionChainStrike, OptionLeg
 from src.strategy._price_utils import find_option_leg, resolve_price
 
-
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
 
 def _make_leg(
     ltp: str = "100",
@@ -50,6 +51,7 @@ def _make_chain(pe_strike: str = "23000", ce_strike: str = "24000") -> OptionCha
 
 # ── resolve_price ─────────────────────────────────────────────────────────────
 
+
 def test_resolve_price_uses_mid_when_bid_ask_positive() -> None:
     leg = _make_leg(bid="99", ask="101", ltp="95")
     assert resolve_price(leg) == Decimal("100")  # (99+101)/2
@@ -79,6 +81,7 @@ def test_resolve_price_raises_when_ltp_zero_and_no_spread() -> None:
 
 # ── find_option_leg ───────────────────────────────────────────────────────────
 
+
 def test_find_option_leg_returns_pe_for_put_key() -> None:
     market = _make_chain(pe_strike="23000")
     leg = find_option_leg("NSE_FO|NIFTY23000PE29MAY2026", market)
@@ -100,13 +103,12 @@ def test_find_option_leg_returns_none_for_absent_strike() -> None:
     assert leg is None
 
 
-def test_find_option_leg_returns_none_and_logs_warning_for_unparseable_key(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
+def test_find_option_leg_returns_none_and_logs_warning_for_unparseable_key() -> None:
     market = _make_chain()
-    leg = find_option_leg("NSE_EQ|RELIANCE", market)
+    with capture_logs() as cap:
+        leg = find_option_leg("NSE_EQ|RELIANCE", market)
     assert leg is None
-    assert "key_not_parseable" in capsys.readouterr().out
+    assert any("key_not_parseable" in e.get("event", "") for e in cap)
 
 
 def test_find_option_leg_case_insensitive() -> None:
