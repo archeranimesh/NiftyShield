@@ -489,7 +489,7 @@ async def search_api(
     if strike_price is not None:
         params["strike_price"] = strike_price
 
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
         async with session.get(SEARCH_API_URL, headers=headers, params=params) as resp:
             resp.raise_for_status()
             data = await resp.json()

@@ -10,16 +10,20 @@ Covers:
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import aiohttp
 import pytest
 
 from src.instruments.lookup import (
     InstrumentLookup,
     _best_score,
     _score_query,
+    search_api,
 )
 
-
 # ── Fixtures ──────────────────────────────────────────────────────────────────
+
 
 def _inst(
     trading_symbol: str = "",
@@ -43,24 +47,38 @@ def _inst(
 
 RELIANCE = _inst("RELIANCE", "Reliance Industries Ltd", instrument_key="NSE_EQ|RELIANCE")
 HDFCBANK = _inst("HDFCBANK", "HDFC Bank Limited", instrument_key="NSE_EQ|HDFCBANK")
-EBBETF = _inst("EBBETF0431", "EDELWEISS BHARAT BOND ETF - APRIL 2031", instrument_key="NSE_EQ|EBBETF0431")
+EBBETF = _inst(
+    "EBBETF0431", "EDELWEISS BHARAT BOND ETF - APRIL 2031", instrument_key="NSE_EQ|EBBETF0431"
+)
 NIFTY_PE = _inst(
-    "NIFTY2562523000PE", "NIFTY 23000 PE", underlying_symbol="NIFTY",
-    segment="NSE_FO", instrument_type="PE", instrument_key="NSE_FO|NIFTY25JUN23000PE"
+    "NIFTY2562523000PE",
+    "NIFTY 23000 PE",
+    underlying_symbol="NIFTY",
+    segment="NSE_FO",
+    instrument_type="PE",
+    instrument_key="NSE_FO|NIFTY25JUN23000PE",
 )
 NIFTY_CE = _inst(
-    "NIFTY2562523000CE", "NIFTY 23000 CE", underlying_symbol="NIFTY",
-    segment="NSE_FO", instrument_type="CE", instrument_key="NSE_FO|NIFTY25JUN23000CE"
+    "NIFTY2562523000CE",
+    "NIFTY 23000 CE",
+    underlying_symbol="NIFTY",
+    segment="NSE_FO",
+    instrument_type="CE",
+    instrument_key="NSE_FO|NIFTY25JUN23000CE",
 )
 NIFTY_FUT = _inst(
-    "NIFTYJUN2025FUT", "NIFTY FUT JUN", underlying_symbol="NIFTY",
-    segment="NSE_FO", instrument_type="FUT",
+    "NIFTYJUN2025FUT",
+    "NIFTY FUT JUN",
+    underlying_symbol="NIFTY",
+    segment="NSE_FO",
+    instrument_type="FUT",
 )
 
 ALL_INSTRUMENTS = [RELIANCE, HDFCBANK, EBBETF, NIFTY_PE, NIFTY_CE, NIFTY_FUT]
 
 
 # ── _score_query tests ────────────────────────────────────────────────────────
+
 
 class TestScoreQuery:
     def test_exact_match_returns_one(self):
@@ -107,6 +125,7 @@ class TestScoreQuery:
 
 # ── _best_score tests ─────────────────────────────────────────────────────────
 
+
 class TestBestScore:
     def test_exact_on_trading_symbol(self):
         score, reason = _best_score("reliance", RELIANCE)
@@ -132,6 +151,7 @@ class TestBestScore:
 
 
 # ── InstrumentLookup.search tests ─────────────────────────────────────────────
+
 
 class TestInstrumentLookupSearch:
     @pytest.fixture
@@ -216,3 +236,37 @@ class TestInstrumentLookupSearch:
         lower = lookup.search("reliance")
         upper = lookup.search("RELIANCE")
         assert [r["trading_symbol"] for r in lower] == [r["trading_symbol"] for r in upper]
+
+
+# ── search_api timeout tests ──────────────────────────────────────────────────
+
+
+class TestSearchApiTimeout:
+    @pytest.mark.asyncio
+    async def test_search_api_session_has_timeout(self):
+        """search_api must create ClientSession with ClientTimeout(total=10).
+
+        A missing timeout causes the caller to stall ~300 s on dead Upstox
+        connections (FR-4).  No network is used — ClientSession is mocked.
+        """
+        mock_resp = AsyncMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json = AsyncMock(return_value={"data": []})
+        mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
+        mock_resp.__aexit__ = AsyncMock(return_value=False)
+
+        mock_session = MagicMock()
+        mock_session.get = MagicMock(return_value=mock_resp)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("aiohttp.ClientSession") as mock_cls:
+            mock_cls.return_value = mock_session
+            await search_api(query="NIFTY", token="tok")
+
+        mock_cls.assert_called_once()
+        _, kwargs = mock_cls.call_args
+        timeout = kwargs.get("timeout")
+        assert timeout is not None, "ClientSession must be called with timeout="
+        assert isinstance(timeout, aiohttp.ClientTimeout)
+        assert timeout.total == 10

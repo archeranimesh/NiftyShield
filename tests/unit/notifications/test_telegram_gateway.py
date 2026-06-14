@@ -9,14 +9,12 @@ from __future__ import annotations
 import datetime
 import sqlite3
 import tempfile
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp
 import pytest
 
 from src.notifications.telegram_gateway import TelegramGateway, _build_keyboard
-
 
 # ── Test fixtures / helpers ──────────────────────────────────────────
 
@@ -297,8 +295,7 @@ async def test_auth_guard_routes_reject_from_correct_sender() -> None:
 async def test_timeout_scanner_expires_stale_pending_row() -> None:
     db_path, conn = _make_pending_approvals_db()
     past_iso = (
-        datetime.datetime.now(datetime.timezone.utc)
-        - datetime.timedelta(minutes=10)
+        datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=10)
     ).isoformat()
     conn.execute(
         "INSERT INTO pending_approvals (status, expires_at) VALUES ('PENDING', ?)",
@@ -323,8 +320,7 @@ async def test_timeout_scanner_expires_stale_pending_row() -> None:
 async def test_timeout_scanner_leaves_non_expired_rows_untouched() -> None:
     db_path, conn = _make_pending_approvals_db()
     future_iso = (
-        datetime.datetime.now(datetime.timezone.utc)
-        + datetime.timedelta(hours=1)
+        datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=1)
     ).isoformat()
     conn.execute(
         "INSERT INTO pending_approvals (status, expires_at) VALUES ('PENDING', ?)",
@@ -337,9 +333,7 @@ async def test_timeout_scanner_leaves_non_expired_rows_untouched() -> None:
     await gw.scan_expired_approvals()
 
     check_conn = sqlite3.connect(db_path)
-    row = check_conn.execute(
-        "SELECT status FROM pending_approvals WHERE id = 1"
-    ).fetchone()
+    row = check_conn.execute("SELECT status FROM pending_approvals WHERE id = 1").fetchone()
     check_conn.close()
 
     assert row[0] == "PENDING"
@@ -352,3 +346,54 @@ async def test_timeout_scanner_non_fatal_on_missing_table() -> None:
     gw = TelegramGateway(bot_token="tok", chat_id="1", db_path=db_path)
     # Should complete without raising
     await gw.scan_expired_approvals()
+
+
+# ── ClientTimeout assertions ─────────────────────────────────────────
+
+
+async def test_send_approval_request_session_has_timeout() -> None:
+    """ClientSession for sendMessage in send_approval_request must use total=10."""
+    gw = _make_gateway()
+    mock_session = _make_http_mock({"ok": True, "result": {"message_id": 1}})
+    with patch(
+        "src.notifications.telegram_gateway.aiohttp.ClientSession",
+        return_value=mock_session,
+    ) as mock_cls:
+        await gw.send_approval_request(
+            event=_make_signal_event(["CLOSE_FULL"]),
+            context_str="context",
+        )
+    _, kwargs = mock_cls.call_args
+    timeout = kwargs.get("timeout")
+    assert isinstance(timeout, aiohttp.ClientTimeout)
+    assert timeout.total == 10
+
+
+async def test_get_updates_session_has_timeout() -> None:
+    """ClientSession for getUpdates in _get_updates must use total=40."""
+    gw = _make_gateway()
+    mock_session = _make_http_mock({"ok": True, "result": []})
+    with patch(
+        "src.notifications.telegram_gateway.aiohttp.ClientSession",
+        return_value=mock_session,
+    ) as mock_cls:
+        await gw._get_updates(0)
+    _, kwargs = mock_cls.call_args
+    timeout = kwargs.get("timeout")
+    assert isinstance(timeout, aiohttp.ClientTimeout)
+    assert timeout.total == 40
+
+
+async def test_send_notification_session_has_timeout() -> None:
+    """ClientSession for sendMessage in send_notification must use total=10."""
+    gw = _make_gateway()
+    mock_session = _make_http_mock({"ok": True})
+    with patch(
+        "src.notifications.telegram_gateway.aiohttp.ClientSession",
+        return_value=mock_session,
+    ) as mock_cls:
+        await gw.send_notification("hello")
+    _, kwargs = mock_cls.call_args
+    timeout = kwargs.get("timeout")
+    assert isinstance(timeout, aiohttp.ClientTimeout)
+    assert timeout.total == 10

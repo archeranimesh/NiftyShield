@@ -126,7 +126,7 @@ class TelegramGateway:
             "reply_markup": {"inline_keyboard": keyboard},
         }
         try:
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
                 async with session.post(f"{self._base_url}/sendMessage", json=payload) as resp:
                     resp.raise_for_status()
                     data = await resp.json()
@@ -213,7 +213,7 @@ class TelegramGateway:
             "parse_mode": "HTML",
         }
         try:
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
                 async with session.post(f"{self._base_url}/sendMessage", json=payload) as resp:
                     resp.raise_for_status()
         except Exception as exc:
@@ -236,7 +236,7 @@ class TelegramGateway:
             "allowed_updates": ["callback_query"],
         }
         try:
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=40)) as session:
                 async with session.get(f"{self._base_url}/getUpdates", params=params) as resp:
                     resp.raise_for_status()
                     data = await resp.json()
