@@ -306,6 +306,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-06-14 | SM-1 — DELTA_BREACH_FINAL state machine wired: get_trade_state + mark_trade_defended added to PaperStore; check_signals reads TradeState from DB (not hasattr); _roll_down transitions new leg to DEFENDED; _find_put_leg scan fallback removed (numeric keys now return None + WARN); 8 new tests — 37c38d0 |
 | 2026-06-14 | BUG-5 — _check_reentry dedup: skip if R5_REENTRY_BLOCKED/ELIGIBLE event already exists today for same strategy+leg; fixed test_custom_ivr_passes_override to use different days; 2 new tests — 80784c0 |
 | 2026-06-14 | BUG-3 — _open_new quantity=1 hardcode fixed; CLOSE_AND_ROLL now passes abs(short_put.net_qty); 2 new tests — 5d1c8eb |
 | 2026-06-13 | SIG-2 — evaluate_pp zero-entry guard (WARN + early return); evaluate_collar_put ltp fallback when bid/ask None (INFO); Decimal conversion in both + evaluate_collar_call residual_breached; 7 new tests — f99a4cb |
@@ -420,3 +421,4 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 Full log: [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md)
 | 2026-06-14 | BUG-6 closed — TradeState.CLOSED added; PaperStore.mark_trade_closed() by (strategy, leg_role, instrument_key); _close_leg calls it after record_trade (dry_run=False only); CHECK constraint widened in schema + migration script; 6 new tests; SHA ceefeb8 |
 | 2026-06-13 | BUG-2 closed — multi-expiry chain fetch in snapshot + daemon; None-leg guard in CSPNiftyV1 and _dispatch_evaluate skips only LTP/delta signals (TIME_STOP/ROLL_ELIGIBLE still fire); signal priority reordered (HARD_STOP→DELTA_BREACH→PROFIT_TARGET→TIME_STOP→ROLL_ELIGIBLE); _KEY_DATE_STRIKE_RE added for date-embedded keys; 10 new tests; SHA 61f4690 |
+| 2026-06-14 | SM-2 closed — CollarOverlayV1 inherits ReEntryMixin; reentry_leg_role='overlay_collar_call'; __init__ extended with notifier/vix_data_dir; _check_reentry wired in apply_action for PROFIT_TARGET/TIME_STOP on short call close; 2 new tests; SHA 7e4527b |
