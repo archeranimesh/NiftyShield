@@ -580,6 +580,57 @@ def test_update_trade_state_unknown_id_raises(store: PaperStore) -> None:
         store.update_trade_state(99999, TradeState.DEFENDED)
 
 
+# ── BUG-6: mark_trade_closed ──────────────────────────────────────────────────
+
+
+def test_mark_trade_closed_transitions_open_to_closed(store: PaperStore) -> None:
+    """Happy path: OPEN trade becomes CLOSED after mark_trade_closed."""
+    store.record_trade(_sell_trade())
+    store.mark_trade_closed(_STRATEGY, _LEG, _KEY)
+    trades = store.get_trades(_STRATEGY, _LEG)
+    assert len(trades) == 1
+    assert trades[0].state == TradeState.CLOSED
+
+
+def test_mark_trade_closed_transitions_defended_to_closed(store: PaperStore) -> None:
+    """DEFENDED trade (one roll consumed) also transitions to CLOSED."""
+    import sqlite3
+
+    store.record_trade(_sell_trade())
+    with sqlite3.connect(store.db_path) as conn:
+        conn.execute(
+            "UPDATE paper_trades SET state = 'DEFENDED' WHERE strategy_name=? AND leg_role=? AND instrument_key=?",
+            (_STRATEGY, _LEG, _KEY),
+        )
+    store.mark_trade_closed(_STRATEGY, _LEG, _KEY)
+    trades = store.get_trades(_STRATEGY, _LEG)
+    assert trades[0].state == TradeState.CLOSED
+
+
+def test_mark_trade_closed_unknown_combination_is_noop(store: PaperStore) -> None:
+    """No matching row → no error, no state change."""
+    store.record_trade(_sell_trade())
+    store.mark_trade_closed(_STRATEGY, _LEG, "NSE_FO|NONEXISTENT")
+    # Original trade must be untouched
+    trades = store.get_trades(_STRATEGY, _LEG)
+    assert trades[0].state == TradeState.OPEN
+
+
+def test_mark_trade_closed_does_not_touch_re_entry_pending(store: PaperStore) -> None:
+    """RE_ENTRY_PENDING is terminal — mark_trade_closed must not change it."""
+    import sqlite3
+
+    store.record_trade(_sell_trade())
+    with sqlite3.connect(store.db_path) as conn:
+        conn.execute(
+            "UPDATE paper_trades SET state = 'RE_ENTRY_PENDING' WHERE strategy_name=? AND leg_role=? AND instrument_key=?",
+            (_STRATEGY, _LEG, _KEY),
+        )
+    store.mark_trade_closed(_STRATEGY, _LEG, _KEY)
+    trades = store.get_trades(_STRATEGY, _LEG)
+    assert trades[0].state == TradeState.RE_ENTRY_PENDING
+
+
 def test_record_trade_persists_state_field(store: PaperStore) -> None:
     from src.models.portfolio import TradeAction
 

@@ -33,11 +33,15 @@ class TradeState(str, Enum):
     DEFENDED: A DELTA_BREACH roll was executed; one defensive roll consumed.
     RE_ENTRY_PENDING: Position was closed (HARD_STOP or DELTA_BREACH_FINAL);
         waiting for re-entry conditions (IVR + delta range) to be met.
+    CLOSED: Position fully exited (roll close, profit target, or stop).
+        Terminal state — set on the opening trade row after the corresponding
+        close trade is recorded. Prevents re-signal on already-closed legs.
     """
 
     OPEN = "OPEN"
     DEFENDED = "DEFENDED"
     RE_ENTRY_PENDING = "RE_ENTRY_PENDING"
+    CLOSED = "CLOSED"
 
 
 class PaperTrade(BaseModel):

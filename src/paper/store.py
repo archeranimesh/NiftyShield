@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS paper_trades (
     notes          TEXT NOT NULL DEFAULT '',
     ivr_at_entry   REAL DEFAULT NULL,
     state          TEXT NOT NULL DEFAULT 'OPEN'
-                       CHECK(state IN ('OPEN','DEFENDED','RE_ENTRY_PENDING')),
+                       CHECK(state IN ('OPEN','DEFENDED','RE_ENTRY_PENDING','CLOSED')),
     UNIQUE(strategy_name, leg_role, instrument_key, trade_date, action)
 );
 
@@ -260,7 +260,7 @@ class PaperStore:
                         notes          TEXT NOT NULL DEFAULT '',
                         ivr_at_entry   REAL DEFAULT NULL,
                         state          TEXT NOT NULL DEFAULT 'OPEN'
-                                           CHECK(state IN ('OPEN','DEFENDED','RE_ENTRY_PENDING')),
+                                           CHECK(state IN ('OPEN','DEFENDED','RE_ENTRY_PENDING','CLOSED')),
                         UNIQUE(strategy_name, leg_role, instrument_key, trade_date, action)
                     );
                     INSERT OR IGNORE INTO paper_trades_new
@@ -372,6 +372,32 @@ class PaperStore:
             )
             if cur.rowcount == 0:
                 raise ValueError(f"No paper trade found with id={trade_id}")
+
+    def mark_trade_closed(
+        self,
+        strategy_name: str,
+        leg_role: str,
+        instrument_key: str,
+    ) -> None:
+        """Transition the opening trade for a leg to CLOSED state.
+
+        Called after a close trade has been successfully recorded to prevent
+        the position from re-appearing in signal evaluation on the next tick.
+        Only transitions rows currently in OPEN or DEFENDED state — does not
+        touch RE_ENTRY_PENDING or already-CLOSED rows.
+
+        Args:
+            strategy_name: Strategy that owns the trade.
+            leg_role: Leg role identifier (e.g. ``overlay_cc``).
+            instrument_key: Instrument key of the position being closed.
+        """
+        with _connect(self.db_path) as conn:
+            conn.execute(
+                """UPDATE paper_trades SET state = 'CLOSED'
+                   WHERE strategy_name = ? AND leg_role = ? AND instrument_key = ?
+                   AND state IN ('OPEN', 'DEFENDED')""",
+                (strategy_name, leg_role, instrument_key),
+            )
 
     def get_trades(
         self,

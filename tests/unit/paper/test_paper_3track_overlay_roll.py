@@ -5,6 +5,7 @@ Coverage:
 - _find_expiring_overlay: filters by DTE threshold; skips equity legs.
 - _cycle_pnl: BUY-to-open (PP) and SELL-to-open (CC) P&L directions.
 - _roll_single: open-failure triggers delete_trade rollback.
+- _close_leg: dry_run=False calls mark_trade_closed on the original trade.
 """
 
 from __future__ import annotations
@@ -203,3 +204,57 @@ def test_roll_single_open_failure_deletes_close_trade(tmp_path: Path) -> None:
     assert len(remaining) == 1
     assert remaining[0].action == TradeAction.BUY
     assert remaining[0].price == Decimal("300.00")
+
+
+# ── BUG-6: _close_leg marks original trade CLOSED ────────────────────────────
+
+
+def test_close_leg_dry_run_false_marks_original_closed(tmp_path: Path) -> None:
+    """_close_leg with dry_run=False must call mark_trade_closed on the existing trade."""
+    from src.paper.models import TradeState
+
+    store = _make_store(tmp_path)
+    open_trade = _make_pp_trade(
+        instrument_key="NSE_FO|NIFTY12MAY2026PE",
+        price=Decimal("300.00"),
+    )
+    store.record_trade(open_trade)
+
+    mock_broker = AsyncMock()
+    mock_broker.get_ltp = AsyncMock(return_value={"NSE_FO|NIFTY12MAY2026PE": 280.0})
+
+    async def _run() -> None:
+        await roll_mod._close_leg(mock_broker, store, open_trade, _ROLL_DATE, dry_run=False)
+
+    asyncio.run(_run())
+
+    # Opening trade row must now be CLOSED
+    trades = store.get_trades(_STRATEGY, "overlay_pp")
+    open_rows = [t for t in trades if t.action == TradeAction.BUY and t.price == Decimal("300.00")]
+    assert len(open_rows) == 1
+    assert open_rows[0].state == TradeState.CLOSED
+
+
+def test_close_leg_dry_run_true_does_not_mark_closed(tmp_path: Path) -> None:
+    """_close_leg with dry_run=True must not write to DB or change state."""
+    from src.paper.models import TradeState
+
+    store = _make_store(tmp_path)
+    open_trade = _make_pp_trade(
+        instrument_key="NSE_FO|NIFTY12MAY2026PE",
+        price=Decimal("300.00"),
+    )
+    store.record_trade(open_trade)
+
+    mock_broker = AsyncMock()
+    mock_broker.get_ltp = AsyncMock(return_value={"NSE_FO|NIFTY12MAY2026PE": 280.0})
+
+    async def _run() -> None:
+        await roll_mod._close_leg(mock_broker, store, open_trade, _ROLL_DATE, dry_run=True)
+
+    asyncio.run(_run())
+
+    # DB must be untouched — only the original open trade
+    trades = store.get_trades(_STRATEGY, "overlay_pp")
+    assert len(trades) == 1
+    assert trades[0].state == TradeState.OPEN

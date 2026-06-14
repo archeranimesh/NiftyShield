@@ -282,6 +282,11 @@ async def _close_leg(
 
     if not dry_run:
         store.record_trade(close_trade)
+        store.mark_trade_closed(
+            existing.strategy_name,
+            existing.leg_role,
+            existing.instrument_key,
+        )
 
     return close_trade
 
