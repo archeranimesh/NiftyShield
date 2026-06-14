@@ -59,6 +59,7 @@ def test_ltp_raises_on_http_500(client: UpstoxMarketClient, monkeypatch) -> None
 
     class _Resp:
         status_code = 500
+
         def raise_for_status(self):
             raise requests.HTTPError("500 Server Error")
 
@@ -74,8 +75,13 @@ def test_ltp_raises_on_empty_data(client: UpstoxMarketClient, monkeypatch) -> No
     """An API response with empty 'data' must raise LTPFetchError."""
 
     class _Resp:
-        def raise_for_status(self): pass
-        def json(self): return {"status": "success", "data": {}}
+        status_code = 200
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"status": "success", "data": {}}
 
     monkeypatch.setattr(client._session, "get", lambda *a, **kw: _Resp())
     with pytest.raises(LTPFetchError, match="empty data"):
@@ -86,7 +92,11 @@ def test_ltp_raises_when_no_instrument_token(client: UpstoxMarketClient, monkeyp
     """Response data present but no instrument_token fields → LTPFetchError."""
 
     class _Resp:
-        def raise_for_status(self): pass
+        status_code = 200
+
+        def raise_for_status(self):
+            pass
+
         def json(self):
             # Entries exist but instrument_token is missing — can't remap
             return {"data": {"NSE_FO:NIFTY26D2923000PE": {"last_price": 975.0}}}
@@ -112,7 +122,11 @@ def test_ltp_maps_instrument_token_to_price(client: UpstoxMarketClient, monkeypa
     """Successful response must be keyed by pipe-format instrument_token."""
 
     class _Resp:
-        def raise_for_status(self): pass
+        status_code = 200
+
+        def raise_for_status(self):
+            pass
+
         def json(self):
             return {
                 "data": {
@@ -128,6 +142,93 @@ def test_ltp_maps_instrument_token_to_price(client: UpstoxMarketClient, monkeypa
     assert result == {"NSE_FO|37810": Decimal("975.0")}
 
 
+# ── Structured latency logging (FR-5) ────────────────────────────
+
+
+class _OkResp:
+    """Minimal successful response stub shared by logging tests."""
+
+    status_code = 200
+
+    def raise_for_status(self) -> None:
+        pass
+
+    def json(self) -> dict:
+        return {
+            "data": {
+                "NSE_FO:NIFTY26D2923000PE": {
+                    "instrument_token": "NSE_FO|37810",
+                    "last_price": 100.0,
+                }
+            }
+        }
+
+
+def test_ltp_logs_latency_ms_and_status_code(
+    client: UpstoxMarketClient, monkeypatch, caplog
+) -> None:
+    """_fetch_ltp_batch must emit endpoint, status_code, and latency_ms."""
+    monkeypatch.setattr(client._session, "get", lambda *a, **kw: _OkResp())
+    import logging
+
+    with caplog.at_level(logging.INFO, logger="src.client.upstox_market"):
+        client.get_ltp_sync(["NSE_FO|37810"])
+
+    combined = " ".join(r.getMessage() for r in caplog.records)
+    assert "latency_ms" in combined
+    assert "status_code" in combined
+
+
+def test_ohlc_logs_latency_ms_and_status_code(
+    client: UpstoxMarketClient, monkeypatch, caplog
+) -> None:
+    """get_ohlc_sync must emit endpoint, status_code, and latency_ms."""
+
+    class _OhlcResp:
+        status_code = 200
+
+        def raise_for_status(self) -> None:
+            pass
+
+        def json(self) -> dict:
+            return {"data": {}}
+
+    monkeypatch.setattr(client._session, "get", lambda *a, **kw: _OhlcResp())
+    import logging
+
+    with caplog.at_level(logging.INFO, logger="src.client.upstox_market"):
+        client.get_ohlc_sync(["NSE_FO|37810"], interval="1d")
+
+    combined = " ".join(r.getMessage() for r in caplog.records)
+    assert "latency_ms" in combined
+    assert "status_code" in combined
+
+
+def test_option_chain_logs_latency_ms_and_status_code(
+    client: UpstoxMarketClient, monkeypatch, caplog
+) -> None:
+    """get_option_chain_sync must emit endpoint, status_code, and latency_ms."""
+
+    class _ChainResp:
+        status_code = 200
+
+        def raise_for_status(self) -> None:
+            pass
+
+        def json(self) -> dict:
+            return {"data": {}}
+
+    monkeypatch.setattr(client._session, "get", lambda *a, **kw: _ChainResp())
+    import logging
+
+    with caplog.at_level(logging.INFO, logger="src.client.upstox_market"):
+        client.get_option_chain_sync("NSE_INDEX|Nifty 50", "2026-06-19")
+
+    combined = " ".join(r.getMessage() for r in caplog.records)
+    assert "latency_ms" in combined
+    assert "status_code" in combined
+
+
 @pytest.mark.asyncio
 async def test_async_get_ltp_maps_correctly(
     client: UpstoxMarketClient, monkeypatch: pytest.MonkeyPatch
@@ -135,6 +236,8 @@ async def test_async_get_ltp_maps_correctly(
     """Async get_ltp must correctly return remapped Decimal prices."""
 
     class _Resp:
+        status_code = 200
+
         def raise_for_status(self) -> None:
             pass
 
@@ -160,6 +263,8 @@ async def test_async_get_ltp_raises_on_empty_data(
     """Async get_ltp must raise LTPFetchError on empty response."""
 
     class _Resp:
+        status_code = 200
+
         def raise_for_status(self) -> None:
             pass
 
@@ -169,5 +274,3 @@ async def test_async_get_ltp_raises_on_empty_data(
     monkeypatch.setattr(client._session, "get", lambda *a, **kw: _Resp())
     with pytest.raises(LTPFetchError, match="empty data"):
         await client.get_ltp(["NSE_FO|37810"])
-
-

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from datetime import date
 from decimal import Decimal
 from typing import Any
@@ -120,10 +121,18 @@ class UpstoxMarketClient:
 
         keys_param = ",".join(instruments)
         try:
+            t0 = time.perf_counter()
             resp = self._session.get(
                 V3_OHLC_URL,
                 params={"instrument_key": keys_param, "interval": interval},
                 timeout=10,
+            )
+            latency_ms = int((time.perf_counter() - t0) * 1000)
+            logger.info(
+                "upstox.api_call endpoint=%s status_code=%s latency_ms=%s",
+                V3_OHLC_URL,
+                resp.status_code,
+                latency_ms,
             )
             resp.raise_for_status()
             data = resp.json().get("data", {})
@@ -145,13 +154,21 @@ class UpstoxMarketClient:
             DataFetchError: If the HTTP request fails.
         """
         try:
+            t0 = time.perf_counter()
             resp = self._session.get(
                 V2_OPTION_CHAIN_URL,
                 params={"instrument_key": instrument, "expiry_date": expiry},
                 timeout=10,
             )
+            latency_ms = int((time.perf_counter() - t0) * 1000)
+            logger.info(
+                "upstox.api_call endpoint=%s status_code=%s latency_ms=%s",
+                V2_OPTION_CHAIN_URL,
+                resp.status_code,
+                latency_ms,
+            )
             resp.raise_for_status()
-            return resp.json().get("data", {})
+            return dict(resp.json().get("data", {}))
         except requests.RequestException as e:
             raise DataFetchError(f"Option chain fetch failed: {e}") from e
 
@@ -176,10 +193,18 @@ class UpstoxMarketClient:
         """
         keys_param = ",".join(instruments)
         try:
+            t0 = time.perf_counter()
             resp = self._session.get(
                 V3_LTP_URL,
                 params={"instrument_key": keys_param},
                 timeout=10,
+            )
+            latency_ms = int((time.perf_counter() - t0) * 1000)
+            logger.info(
+                "upstox.api_call endpoint=%s status_code=%s latency_ms=%s",
+                V3_LTP_URL,
+                resp.status_code,
+                latency_ms,
             )
             resp.raise_for_status()
         except requests.RequestException as e:
@@ -231,7 +256,7 @@ def _safe_decimal(val: Any) -> Decimal:
         return Decimal("0")
 
 
-def _parse_option_leg(options_dict: dict, strike: Decimal) -> OptionLeg | None:
+def _parse_option_leg(options_dict: dict[str, Any], strike: Decimal) -> OptionLeg | None:
     """Parse one side (CE or PE) of a strike entry into an OptionLeg.
 
     Returns None when either the ``market_data`` or ``option_greeks``
@@ -277,7 +302,7 @@ def _parse_option_leg(options_dict: dict, strike: Decimal) -> OptionLeg | None:
     )
 
 
-def parse_upstox_option_chain(data: list[dict]) -> OptionChain:
+def parse_upstox_option_chain(data: list[dict[str, Any]]) -> OptionChain:
     """Parse the Upstox option chain response into a source-agnostic OptionChain.
 
     Accepts the raw list returned by ``get_option_chain_sync`` (the value of
