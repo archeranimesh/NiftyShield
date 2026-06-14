@@ -7,15 +7,18 @@ from __future__ import annotations
 
 import json
 import sys
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from structlog.testing import capture_logs
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from src.instruments.strike_selector import (
     _apply_liquidity_gate,
     _safe_float,
+    _safe_price,
     _sides_for,
     filter_strikes_by_delta,
     rank_strikes,
@@ -43,6 +46,26 @@ def test_safe_float_valid_string() -> None:
 
 def test_safe_float_invalid_returns_custom_default() -> None:
     assert _safe_float("N/A", default=-1.0) == -1.0
+
+
+# ── _safe_price ───────────────────────────────────────────────────────────────
+
+
+def test_safe_price_none_returns_none() -> None:
+    assert _safe_price(None) is None
+
+
+def test_safe_price_garbage_returns_none() -> None:
+    assert _safe_price("N/A") is None
+
+
+def test_safe_price_valid_string_returns_decimal() -> None:
+    assert _safe_price("100.50") == Decimal("100.50")
+
+
+def test_safe_price_valid_float_returns_decimal() -> None:
+    result = _safe_price(3.14)
+    assert isinstance(result, Decimal)
 
 
 # ── _sides_for ────────────────────────────────────────────────────────────────
@@ -94,6 +117,40 @@ def test_filter_no_match_returns_empty() -> None:
     assert rows == []
 
 
+def test_filter_garbage_ltp_entry_excluded() -> None:
+    """Chain entry with un-coerceable ltp is excluded and a WARN is logged."""
+    chain = [
+        {
+            "strike_price": 22000,
+            "put_options": {
+                "instrument_key": "NSE_FO|12345",
+                "option_greeks": {"delta": -0.30, "iv": 15.0},
+                "market_data": {
+                    "ltp": "N/A",
+                    "bid_price": 100.0,
+                    "ask_price": 101.0,
+                    "oi": 5000,
+                },
+            },
+        }
+    ]
+    with capture_logs() as log_entries:
+        rows = filter_strikes_by_delta(chain, "PE", 0.20, 0.40)
+    assert rows == []
+    assert any("ltp_missing" in e.get("event", "") for e in log_entries)
+
+
+def test_filter_prices_are_decimal() -> None:
+    """Price fields in output rows must be Decimal, not float."""
+    rows = filter_strikes_by_delta(_load_chain(), "PE", 0.20, 0.40)
+    assert len(rows) > 0
+    for r in rows:
+        assert isinstance(r["ltp"], Decimal), f"ltp is {type(r['ltp'])}"
+        assert isinstance(r["mid"], Decimal), f"mid is {type(r['mid'])}"
+        assert isinstance(r["bid"], Decimal), f"bid is {type(r['bid'])}"
+        assert isinstance(r["ask"], Decimal), f"ask is {type(r['ask'])}"
+
+
 # ── _apply_liquidity_gate ─────────────────────────────────────────────────────
 
 
@@ -101,8 +158,20 @@ def test_apply_liquidity_gate_filters_wide_spread() -> None:
     # Spread is (2.0 - 1.0) / 1.5 = 0.66 (> 0.05) -> should filter out
     # Spread is (1.02 - 1.0) / 1.01 = 0.019 (< 0.05) -> should keep
     ranked = [
-        {"bid": 1.0, "ask": 2.0, "mid": 1.5, "oi": 100, "instrument_key": "K1"},
-        {"bid": 1.0, "ask": 1.02, "mid": 1.01, "oi": 500, "instrument_key": "K2"},
+        {
+            "bid": Decimal("1.0"),
+            "ask": Decimal("2.0"),
+            "mid": Decimal("1.5"),
+            "oi": 100,
+            "instrument_key": "K1",
+        },
+        {
+            "bid": Decimal("1.0"),
+            "ask": Decimal("1.02"),
+            "mid": Decimal("1.01"),
+            "oi": 500,
+            "instrument_key": "K2",
+        },
     ]
     filtered = _apply_liquidity_gate(ranked, gate_pct=0.05)
     assert len(filtered) == 1

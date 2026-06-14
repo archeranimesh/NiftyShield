@@ -6,7 +6,16 @@ based on delta and liquidity parameters.
 
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
 from typing import Any
+
+import structlog
+
+log = structlog.get_logger(__name__)
+
+_ZERO = Decimal("0")
+_TWO = Decimal("2")
+_FALLBACK_SPREAD = Decimal("9999")
 
 
 def _safe_float(val: Any, default: float = 0.0) -> float:
@@ -25,6 +34,27 @@ def _safe_float(val: Any, default: float = 0.0) -> float:
         return float(val)
     except (TypeError, ValueError):
         return default
+
+
+def _safe_price(val: Any) -> Decimal | None:
+    """Coerce *val* to Decimal; return None on any failure.
+
+    Used for monetary fields (ltp, bid, ask) where a silent zero default
+    would produce a phantom strike with ltp=0 that bypasses downstream guards.
+    Returns None so callers can explicitly reject or degrade gracefully.
+
+    Args:
+        val: Raw value from the option chain dict.
+
+    Returns:
+        Decimal on success, None if val is None or coercion fails.
+    """
+    if val is None:
+        return None
+    try:
+        return Decimal(str(val))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
 
 
 def _sides_for(option_type: str) -> list[str]:
@@ -64,7 +94,8 @@ def filter_strikes_by_delta(
     Returns:
         List of flat row dicts sorted by |delta| descending.  Each row has keys:
         ``side``, ``strike``, ``delta``, ``iv``, ``ltp``, ``mid``, ``bid``,
-        ``ask``, ``oi``, ``instrument_key``.
+        ``ask``, ``oi``, ``instrument_key``.  Price fields (ltp, mid, bid, ask)
+        are ``Decimal``; numeric fields (delta, iv, strike, oi) remain ``float``/``int``.
     """
     sides = _sides_for(option_type)
     rows: list[dict[str, Any]] = []
@@ -84,10 +115,19 @@ def filter_strikes_by_delta(
             if not instrument_key:
                 continue
 
-            ltp = _safe_float(mktdata.get("ltp"))
-            bid = _safe_float(mktdata.get("bid_price"))
-            ask = _safe_float(mktdata.get("ask_price"))
-            mid = (bid + ask) / 2.0 if (bid > 0 and ask > 0) else ltp
+            ltp = _safe_price(mktdata.get("ltp"))
+            if ltp is None:
+                log.warning(
+                    "strike_selector.ltp_missing",
+                    side=side,
+                    strike=strike,
+                    instrument_key=instrument_key,
+                )
+                continue
+
+            bid = _safe_price(mktdata.get("bid_price")) or _ZERO
+            ask = _safe_price(mktdata.get("ask_price")) or _ZERO
+            mid = (bid + ask) / _TWO if (bid > _ZERO and ask > _ZERO) else ltp
 
             rows.append(
                 {
@@ -123,15 +163,16 @@ def _apply_liquidity_gate(
     Returns:
         Filtered list of strikes.
     """
+    gate = Decimal(str(gate_pct))
     filtered: list[dict[str, Any]] = []
     for r in ranked:
-        bid = r.get("bid", 0.0)
-        ask = r.get("ask", 0.0)
-        mid = r.get("mid", 0.0)
-        if bid > 0.0 and ask > 0.0 and mid > 0.0:
+        bid = Decimal(str(r.get("bid", 0)))
+        ask = Decimal(str(r.get("ask", 0)))
+        mid = Decimal(str(r.get("mid", 0)))
+        if bid > _ZERO and ask > _ZERO and mid > _ZERO:
             spread = ask - bid
             spread_pct = spread / mid
-            if spread_pct <= gate_pct:
+            if spread_pct <= gate:
                 filtered.append(r)
     return filtered
 
@@ -154,9 +195,11 @@ def rank_strikes(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
 
     def _key(r: dict[str, Any]) -> tuple:
-        spread = r["ask"] - r["bid"] if (r["ask"] > 0 and r["bid"] > 0) else 9_999.0
+        ask = Decimal(str(r["ask"]))
+        bid = Decimal(str(r["bid"]))
+        spread = ask - bid if (ask > _ZERO and bid > _ZERO) else _FALLBACK_SPREAD
         is_non_round = int(r["strike"]) % 100 != 0
-        spread_bucket = int(spread / 2)
+        spread_bucket = int(spread / _TWO)
         return (is_non_round, spread_bucket, -r["oi"], spread)
 
     sorted_rows = sorted(rows, key=_key)
