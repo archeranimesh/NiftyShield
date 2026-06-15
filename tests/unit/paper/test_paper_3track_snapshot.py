@@ -306,6 +306,60 @@ def test_save_leg_snapshots_with_overlay(tmp_path: Path) -> None:
     assert overlay_snap.total_pnl == Decimal("-200")
 
 
+def test_save_leg_snapshots_closed_overlay_shows_realized_pnl(tmp_path: Path) -> None:
+    """Closed overlay leg must show non-zero realized P&L, not Decimal("0").
+
+    This is the core invariant of RPT-SNAP: overlay legs that have been closed
+    (SELL + BUY round-trip) must carry their realized P&L in paper_leg_snapshots,
+    not the zero placeholder that existed before the fix.
+    """
+    store = _make_store(tmp_path)
+    # Base leg: open (BUY, still held)
+    store.record_trade(_make_trade(leg_role="base_etf", action=TradeAction.BUY))
+    # Overlay CC leg: closed round-trip SELL 50 → BUY 20 → realized = (50-20)*65 = 1950
+    store.record_trade(
+        PaperTrade(
+            strategy_name=_STRATEGY,
+            leg_role="overlay_cc",
+            instrument_key="NSE_FO|NIFTY25000CE",
+            trade_date=_DATE,
+            action=TradeAction.SELL,
+            quantity=65,
+            price=Decimal("50.00"),
+        )
+    )
+    store.record_trade(
+        PaperTrade(
+            strategy_name=_STRATEGY,
+            leg_role="overlay_cc",
+            instrument_key="NSE_FO|NIFTY25000CE",
+            trade_date=_DATE,
+            action=TradeAction.BUY,
+            quantity=65,
+            price=Decimal("20.00"),
+        )
+    )
+
+    snapshot = _make_snapshot(
+        base_pnl=Decimal("500"),
+        overlay_pnls={"overlay_cc": Decimal("0")},  # currently flat (closed)
+        unrealized=Decimal("500"),
+        realized=Decimal("1950"),
+    )
+    snap_mod._save_leg_snapshots(store, _STRATEGY, snapshot, _DATE, ltp_map={})
+
+    overlay_snap = store.get_leg_snapshot(_STRATEGY, "overlay_cc", _DATE)
+    assert overlay_snap is not None
+    # Pre-fix: realized_pnl would be Decimal("0"); post-fix: must be Decimal("1950")
+    assert overlay_snap.realized_pnl == Decimal("1950.00")
+    assert overlay_snap.total_pnl == overlay_snap.unrealized_pnl + overlay_snap.realized_pnl
+
+    # Base leg realized must reflect only base leg trades (open BUY, no round-trip → 0)
+    base_snap = store.get_leg_snapshot(_STRATEGY, "base_etf", _DATE)
+    assert base_snap is not None
+    assert base_snap.realized_pnl == Decimal("0")
+
+
 def test_save_leg_snapshots_total_pnl_invariant_holds(tmp_path: Path) -> None:
     """All saved leg snapshots must satisfy total_pnl == unrealized + realized.
 

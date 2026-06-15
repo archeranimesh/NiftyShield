@@ -24,8 +24,7 @@ from src.client.mock_client import MockBrokerClient
 from src.models.portfolio import TradeAction
 from src.paper.models import PaperTrade
 from src.paper.store import PaperStore
-from src.paper.tracker import PaperTracker, _compute_realized_pnl
-
+from src.paper.tracker import PaperTracker, _compute_realized_pnl, _compute_realized_pnl_by_leg
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -54,8 +53,9 @@ def tracker(store: PaperStore, market: MockBrokerClient) -> PaperTracker:
     return PaperTracker(store, market)
 
 
-def _sell(qty: int = 75, price: str = "120.00", leg: str = "short_put",
-          trade_date: date = _DATE) -> PaperTrade:
+def _sell(
+    qty: int = 75, price: str = "120.00", leg: str = "short_put", trade_date: date = _DATE
+) -> PaperTrade:
     return PaperTrade(
         strategy_name=_STRATEGY,
         leg_role=leg,
@@ -67,8 +67,9 @@ def _sell(qty: int = 75, price: str = "120.00", leg: str = "short_put",
     )
 
 
-def _buy(qty: int = 75, price: str = "60.00", leg: str = "short_put",
-         trade_date: date = _DATE) -> PaperTrade:
+def _buy(
+    qty: int = 75, price: str = "60.00", leg: str = "short_put", trade_date: date = _DATE
+) -> PaperTrade:
     return PaperTrade(
         strategy_name=_STRATEGY,
         leg_role=leg,
@@ -207,15 +208,17 @@ async def test_record_all_strategies(
     tracker: PaperTracker, store: PaperStore, market: MockBrokerClient
 ) -> None:
     store.record_trade(_sell(leg="short_put"))
-    store.record_trade(PaperTrade(
-        strategy_name="paper_ic_nifty_v1",
-        leg_role="short_call",
-        instrument_key="NSE_FO|99999",
-        trade_date=_DATE,
-        action=TradeAction.SELL,
-        quantity=75,
-        price=Decimal("80.00"),
-    ))
+    store.record_trade(
+        PaperTrade(
+            strategy_name="paper_ic_nifty_v1",
+            leg_role="short_call",
+            instrument_key="NSE_FO|99999",
+            trade_date=_DATE,
+            action=TradeAction.SELL,
+            quantity=75,
+            price=Decimal("80.00"),
+        )
+    )
     market.set_price(_KEY, 100.0)
     market.set_price("NSE_FO|99999", 50.0)
 
@@ -239,3 +242,56 @@ def test_compute_realized_pnl_no_closed_position(store: PaperStore) -> None:
 def test_compute_realized_pnl_empty_strategy(store: PaperStore) -> None:
     realized = _compute_realized_pnl(store, "paper_unknown")
     assert realized == Decimal("0")
+
+
+# ── _compute_realized_pnl_by_leg (unit, no DB) ────────────────────────────────
+
+
+def test_compute_realized_pnl_by_leg_single_closed_leg() -> None:
+    """Closed short position returns correct realized P&L for its leg_role."""
+    trades = [
+        _sell(qty=75, price="120.00", leg="short_put"),
+        _buy(qty=75, price="60.00", leg="short_put"),
+    ]
+    result = _compute_realized_pnl_by_leg(trades)
+    # sell_avg=120, buy_avg=60, closed_qty=75 → (120-60)*75=4500
+    assert result == {"short_put": Decimal("4500.00")}
+
+
+def test_compute_realized_pnl_by_leg_two_legs_independent() -> None:
+    """Closed CC overlay and closed base leg each get their own realized amount."""
+    trades = [
+        # base leg: SELL 120, BUY 60 → +60 per unit, 75 units = +4500
+        _sell(qty=75, price="120.00", leg="short_put"),
+        _buy(qty=75, price="60.00", leg="short_put"),
+        # overlay leg: SELL 50, BUY 20 → +30 per unit, 75 units = +2250
+        _sell(qty=75, price="50.00", leg="overlay_cc"),
+        _buy(qty=75, price="20.00", leg="overlay_cc"),
+    ]
+    result = _compute_realized_pnl_by_leg(trades)
+    assert result["short_put"] == Decimal("4500.00")
+    assert result["overlay_cc"] == Decimal("2250.00")
+
+
+def test_compute_realized_pnl_by_leg_open_leg_omitted() -> None:
+    """An open leg (SELL only, no matching BUY) must not appear in the result."""
+    trades = [
+        _sell(qty=75, price="120.00", leg="short_put"),
+    ]
+    result = _compute_realized_pnl_by_leg(trades)
+    assert result == {}
+
+
+def test_compute_realized_pnl_by_leg_empty_trades() -> None:
+    """Empty trade list returns empty dict."""
+    assert _compute_realized_pnl_by_leg([]) == {}
+
+
+def test_compute_realized_pnl_refactored_total_unchanged(store: PaperStore) -> None:
+    """_compute_realized_pnl still returns correct total after refactor."""
+    store.record_trade(_sell(qty=75, price="120.00", leg="short_put"))
+    store.record_trade(_buy(qty=75, price="60.00", leg="short_put"))
+    store.record_trade(_sell(qty=75, price="50.00", leg="overlay_cc"))
+    store.record_trade(_buy(qty=75, price="20.00", leg="overlay_cc"))
+    realized = _compute_realized_pnl(store, _STRATEGY)
+    assert realized == Decimal("6750.00")  # 4500 + 2250

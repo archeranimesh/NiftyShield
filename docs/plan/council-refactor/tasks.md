@@ -155,12 +155,12 @@
 - [x] **FR-7** `[Claude]` — `src/client/upstox_market.py:212–231` `_safe_decimal` coerces `None`/non-numeric Greeks to `Decimal("0")`. A strike with stale/missing Greeks silently gets `delta=0`, suppressing DELTA_BREACH and DELTA_STOP exits without any trace. Fix: make Greeks `Decimal | None` on `OptionLeg`; evaluators treat `None` as "cannot evaluate" → emit WARN, never as 0. | SHA: ac1c7fa
   Tests: `_safe_decimal(None)` → `None`; evaluator with `delta=None` → WARN signal, not DELTA_BREACH.
 
-- [ ] **FR-8** `[Claude]` — `src/instruments/strike_selector.py` `_safe_float` silently defaults unparseable `ltp`/`bid`/`ask` to `0.0`. A bad chain row becomes a strike with ltp=0 rather than being excluded. Same defect family as Jun-09. Fix: return `None` on coercion failure; skip the entry with a WARN log; keep prices as `Decimal` through ranking.
-  Tests: `_safe_float` with garbage input → WARN logged, entry excluded from candidates.
+- [x] **FR-8** `[Claude]` — `src/instruments/strike_selector.py` `_safe_float` silently defaults unparseable `ltp`/`bid`/`ask` to `0.0`. A bad chain row becomes a strike with ltp=0 rather than being excluded. Same defect family as Jun-09. Fix: return `None` on coercion failure; skip the entry with a WARN log; keep prices as `Decimal` through ranking.
+  Tests: `_safe_float` with garbage input → WARN logged, entry excluded from candidates. | SHA: 699d074
 
-- [ ] **FR-9** `[Claude]` — All DTE, `days_held`, and `trade_date` computations across strategies use `date.today()` — server-locale-dependent. On any UTC host the date is wrong between 00:00–05:30 UTC, shifting DTE by one exactly when ≤5/7 roll gates fire. Add `market_today() -> date` to `src/market_calendar/` (IST-aware via `datetime.now(tz=IST).date()`) and replace all call sites.
+- [x] **FR-9** `[Claude]` — All DTE, `days_held`, and `trade_date` computations across strategies use `date.today()` — server-locale-dependent. On any UTC host the date is wrong between 00:00–05:30 UTC, shifting DTE by one exactly when ≤5/7 roll gates fire. Add `market_today() -> date` to `src/market_calendar/` (IST-aware via `datetime.now(tz=IST).date()`) and replace all call sites.
   Files: `csp_nifty_v1.py`, `cc_overlay_v1.py`, `pp_overlay_v1.py`, `collar_overlay_v1.py`, `ic_nifty_v1.py`, `nifty_track_comparison_v1.py`, `overlay_closer.py`.
-  Tests: `market_today()` returns IST date; UTC midnight → IST-correct date (not UTC date).
+  Tests: `market_today()` returns IST date; UTC midnight → IST-correct date (not UTC date). | SHA: fd89ab3
 
 ---
 

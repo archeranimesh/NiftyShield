@@ -15,7 +15,7 @@ from decimal import Decimal
 
 from src.client.protocol import MarketDataProvider
 from src.models.portfolio import TradeAction
-from src.paper.models import PaperNavSnapshot, PaperPosition
+from src.paper.models import PaperNavSnapshot, PaperPosition, PaperTrade
 from src.paper.store import PaperStore
 
 logger = logging.getLogger(__name__)
@@ -47,17 +47,53 @@ def _compute_leg_unrealized_pnl(
     return (ltp - position.avg_cost) * position.net_qty
 
 
+def _compute_realized_pnl_by_leg(trades: list[PaperTrade]) -> dict[str, Decimal]:
+    """Compute cumulative realized P&L per leg_role from a list of trades.
+
+    Approximation: total SELL proceeds − total BUY cost, weighted by closed
+    quantity.  Works correctly for both short-first (SELL→BUY) and long-first
+    (BUY→SELL) legs.  For partial closes the full weighted average is used
+    rather than strict FIFO — acceptable for paper-trading analysis.
+
+    Args:
+        trades: List of PaperTrade objects (all legs, any strategy).
+
+    Returns:
+        Mapping of leg_role → realized P&L in rupees.  Legs with no closed
+        quantity are omitted from the dict.
+    """
+    by_leg: dict[str, Decimal] = {}
+    for leg_role in sorted({t.leg_role for t in trades}):
+        leg_trades = [t for t in trades if t.leg_role == leg_role]
+        total_buy_qty = sum(t.quantity for t in leg_trades if t.action == TradeAction.BUY)
+        total_sell_qty = sum(t.quantity for t in leg_trades if t.action == TradeAction.SELL)
+        closed_qty = min(total_buy_qty, total_sell_qty)
+
+        if closed_qty == 0:
+            continue
+
+        buy_total = sum(
+            (t.price * t.quantity for t in leg_trades if t.action == TradeAction.BUY),
+            Decimal("0"),
+        )
+        sell_total = sum(
+            (t.price * t.quantity for t in leg_trades if t.action == TradeAction.SELL),
+            Decimal("0"),
+        )
+
+        buy_avg = buy_total / total_buy_qty if total_buy_qty else Decimal("0")
+        sell_avg = sell_total / total_sell_qty if total_sell_qty else Decimal("0")
+
+        by_leg[leg_role] = (sell_avg - buy_avg) * Decimal(closed_qty)
+
+    return by_leg
+
+
 def _compute_realized_pnl(store: PaperStore, strategy_name: str) -> Decimal:
     """Compute cumulative realized P&L for a paper strategy from closed trades.
 
-    Realized P&L = sum of (sell_price - buy_avg_cost) * qty for each completed
-    round-trip.  Approximated here as: total SELL proceeds - total BUY cost.
-
-    This is a simple implementation that works correctly for strategies that
-    open a position via SELL (options writer) and close via BUY, or open via
-    BUY (long) and close via SELL.  For partial closes the approximation uses
-    the full weighted average cost rather than FIFO — acceptable for
-    paper-trading analysis purposes.
+    Delegates per-leg calculation to :func:`_compute_realized_pnl_by_leg` and
+    sums across all legs.
 
     Args:
         store: PaperStore instance.
@@ -69,29 +105,7 @@ def _compute_realized_pnl(store: PaperStore, strategy_name: str) -> Decimal:
     trades = store.get_trades(strategy_name)
     if not trades:
         return Decimal("0")
-
-    # Bucket by leg_role
-    total_realized = Decimal("0")
-
-    for leg_role in sorted({t.leg_role for t in trades}):
-        leg_trades = [t for t in trades if t.leg_role == leg_role]
-        total_buy_qty = sum(t.quantity for t in leg_trades if t.action == TradeAction.BUY)
-        total_sell_qty = sum(t.quantity for t in leg_trades if t.action == TradeAction.SELL)
-        closed_qty = min(total_buy_qty, total_sell_qty)
-
-        if closed_qty == 0:
-            continue
-
-        buy_total = sum(t.price * t.quantity for t in leg_trades if t.action == TradeAction.BUY)
-        sell_total = sum(t.price * t.quantity for t in leg_trades if t.action == TradeAction.SELL)
-
-        buy_avg = buy_total / total_buy_qty if total_buy_qty else Decimal("0")
-        sell_avg = sell_total / total_sell_qty if total_sell_qty else Decimal("0")
-
-        # Realized per closed qty: (sell_avg - buy_avg) * closed_qty
-        total_realized += (sell_avg - buy_avg) * closed_qty
-
-    return total_realized
+    return sum(_compute_realized_pnl_by_leg(trades).values(), Decimal("0"))
 
 
 class PaperTracker:

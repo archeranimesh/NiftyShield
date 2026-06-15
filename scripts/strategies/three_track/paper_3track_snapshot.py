@@ -86,6 +86,7 @@ from src.paper.models import (
 from src.paper.proxy_monitor import ProxyDeltaMonitor
 from src.paper.store import PaperStore
 from src.paper.track_snapshot import TrackSnapshot, generate_track_snapshot
+from src.paper.tracker import _compute_realized_pnl_by_leg
 from src.strategy.exit_signals import ExitSignalEngine
 from src.utils.logging import bind_trace_id, generate_trace_id, setup_logging
 
@@ -249,7 +250,11 @@ def _dispatch_evaluate(
     dte = _compute_dte(pos.instrument_key, today) or 9999
 
     # Resolve the chain that covers this position's expiry.
-    pos_expiry = _get_expiry_date(pos.instrument_key, lookup) if lookup is not None else _parse_expiry_from_key(pos.instrument_key)
+    pos_expiry = (
+        _get_expiry_date(pos.instrument_key, lookup)
+        if lookup is not None
+        else _parse_expiry_from_key(pos.instrument_key)
+    )
     chain = chains.get(pos_expiry) if pos_expiry is not None else None
     if chain is None:
         # Fall back to any chain when expiry is unresolvable (e.g. non-option legs).
@@ -275,9 +280,15 @@ def _dispatch_evaluate(
         entry_credit = Decimal(str(pos.avg_sell_price))
         days_held = (today - pos.entry_date).days if pos.entry_date else 0
         results: list = []
-        results += ExitSignalEngine.evaluate_profit_target_csp(ltp=Decimal(str(leg.ltp)), entry_credit=entry_credit)
-        results += ExitSignalEngine.evaluate_hard_stop_csp(ltp=Decimal(str(leg.ltp)), entry_credit=entry_credit)
-        results += ExitSignalEngine.evaluate_delta_breach_csp(delta=float(leg.delta) if leg.delta is not None else None, state=TradeState.OPEN)
+        results += ExitSignalEngine.evaluate_profit_target_csp(
+            ltp=Decimal(str(leg.ltp)), entry_credit=entry_credit
+        )
+        results += ExitSignalEngine.evaluate_hard_stop_csp(
+            ltp=Decimal(str(leg.ltp)), entry_credit=entry_credit
+        )
+        results += ExitSignalEngine.evaluate_delta_breach_csp(
+            delta=float(leg.delta) if leg.delta is not None else None, state=TradeState.OPEN
+        )
         results += ExitSignalEngine.evaluate_time_stop_csp(days_held=days_held)
         results += ExitSignalEngine.evaluate_roll_eligible_csp(dte=dte)
         return ExitSignalEngine._sort_results(results)
@@ -652,9 +663,15 @@ async def compute_and_record_exit_signals(
             entry_price = pos.avg_sell_price if is_short else pos.avg_cost
             opt_type = _OVERLAY_OPTION_TYPE.get(pos.leg_role, "PE" if is_short else "CE")
             # Use the position's expiry-specific chain for the opt_leg lookup.
-            pos_expiry = _get_expiry_date(pos.instrument_key, lookup) if lookup is not None else _parse_expiry_from_key(pos.instrument_key)
+            pos_expiry = (
+                _get_expiry_date(pos.instrument_key, lookup)
+                if lookup is not None
+                else _parse_expiry_from_key(pos.instrument_key)
+            )
             pos_chain = chains.get(pos_expiry) if pos_expiry is not None else first_chain
-            opt_leg = _find_chain_leg(pos_chain or first_chain, pos.instrument_key, opt_type, lookup)
+            opt_leg = _find_chain_leg(
+                pos_chain or first_chain, pos.instrument_key, opt_type, lookup
+            )
 
             # ExitSignalResult uses "WARN"; create_exit_event expects "WARNING"
             severity_store = "WARNING" if result.severity == "WARN" else result.severity
@@ -673,7 +690,9 @@ async def compute_and_record_exit_signals(
                     ltp=opt_leg.ltp if opt_leg is not None else None,
                     bid=opt_leg.bid if opt_leg is not None else None,
                     ask=opt_leg.ask if opt_leg is not None else None,
-                    delta=float(opt_leg.delta) if (opt_leg is not None and opt_leg.delta is not None) else None,
+                    delta=float(opt_leg.delta)
+                    if (opt_leg is not None and opt_leg.delta is not None)
+                    else None,
                     dte=_compute_dte(pos.instrument_key, today),
                     threshold_value=(
                         Decimal(str(result.threshold_value))
@@ -881,12 +900,15 @@ def _save_leg_snapshots(
     """Persist per-leg snapshots (paper_leg_snapshots table) for all open legs."""
     pnl = snapshot.pnl
 
+    # Compute per-leg realized P&L from the full trade ledger so that closed
+    # overlay legs carry their actual realized amount rather than Decimal("0").
+    all_trades = store.get_trades(track_name)
+    realized_by_leg = _compute_realized_pnl_by_leg(all_trades)
+
     # Base leg
     base_role = _base_leg_role(track_name)
     base_unrealized = pnl.unrealized_pnl - sum(pnl.overlay_pnls.values())
-    # realized for base leg — approximation: realized_pnl minus overlay realized
-    # (overlay realized is 0 while open; once closed it's tracked via overlay_pnls)
-    base_realized = pnl.realized_pnl  # overlay realized captured separately below
+    base_realized = realized_by_leg.get(base_role, Decimal("0"))
     base_total = base_unrealized + base_realized
 
     pos = store.get_position(track_name, base_role)
@@ -907,13 +929,14 @@ def _save_leg_snapshots(
     for role, overlay_pnl in pnl.overlay_pnls.items():
         overlay_pos = store.get_position(track_name, role)
         overlay_ltp = ltp_map.get(overlay_pos.instrument_key) if overlay_pos else None
+        overlay_realized = realized_by_leg.get(role, Decimal("0"))
         snap = PaperLegSnapshot(
             strategy_name=track_name,
             leg_role=role,
             snapshot_date=snap_date,
             unrealized_pnl=overlay_pnl,
-            realized_pnl=Decimal("0"),  # realized only after close — updated by roll
-            total_pnl=overlay_pnl,
+            realized_pnl=overlay_realized,
+            total_pnl=overlay_pnl + overlay_realized,
             ltp=overlay_ltp,
         )
         store.record_leg_snapshot(snap)
@@ -1126,9 +1149,7 @@ async def _run(args: argparse.Namespace) -> None:
                 )
             # Intentional: per-expiry chain fetch failure must not crash the snapshot.
             except Exception as exc:
-                logger.warning(
-                    "exit_signals.chain_fetch_failed", expiry=expiry_str, error=str(exc)
-                )
+                logger.warning("exit_signals.chain_fetch_failed", expiry=expiry_str, error=str(exc))
 
         if eod_chains:
             await compute_and_record_exit_signals(
