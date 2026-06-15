@@ -14,6 +14,11 @@ _log = logging.getLogger(__name__)
 _PROFIT_TARGET_RETENTION = Decimal("0.30")
 _CC_MIN_ENTRY_CREDIT = Decimal("15")  # CC: below this floor, no early exit — ride to DTE_REVIEW
 
+_OVERLAY_SHORT_CALL_ROLES = {"overlay_cc", "overlay_collar_call"}
+_OVERLAY_LONG_PUT_ROLES = {"overlay_pp", "overlay_collar_put"}
+_OVERLAY_STRIKE_OFFSET = 50  # points
+_BASE_DTE_GUARD = 10  # if base DTE <= this, block overlay roll
+
 
 @dataclass(frozen=True)
 class ExitSignalResult:
@@ -450,11 +455,6 @@ class ExitSignalEngine:
         Raises:
             ValueError: When leg_role is not a known overlay role.
         """
-        _OVERLAY_SHORT_CALL_ROLES = {"overlay_cc", "overlay_collar_call"}
-        _OVERLAY_LONG_PUT_ROLES = {"overlay_pp", "overlay_collar_put"}
-        _OVERLAY_STRIKE_OFFSET = 50  # points
-        _BASE_DTE_GUARD = 10  # if base DTE <= this, block overlay roll
-
         if leg_role not in (_OVERLAY_SHORT_CALL_ROLES | _OVERLAY_LONG_PUT_ROLES):
             raise ValueError(f"Unknown leg_role: {leg_role}")
 
