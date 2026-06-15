@@ -210,7 +210,7 @@
 
 - [x] **DAEMON-FIX** `[Claude]` — Fix overlay dependency injection in `scripts/monitor_daemon.py`: replace `overlay_cls()` zero-arg instantiation with `overlay_cls(**kwargs)` passing store/gateway/vix_data_dir; set `MONITOR_OVERLAYS=1` in `.env`. Note: PPOverlayV1 broker/lookup params in spec were stale — actual __init__ is (store, notifier, vix_data_dir) same as CC/Collar. | SHA: c68250c
 
-- [ ] **CR2** `[Antigravity]` — Add `evaluate_roll_overlay(leg_role, dte, base_dte, atm_strike)` to `ExitSignalEngine` returning `list[ExitSignalResult]`; no `RollSignalResult`; base-DTE guard → `ROLL_BASE_FIRST` WARN; tests extend `test_exit_signals.py`. Prerequisite: CR1b.
+- [x] **CR2** `[Antigravity]` — Add `evaluate_roll_overlay(leg_role, dte, base_dte, atm_strike)` to `ExitSignalEngine` returning `list[ExitSignalResult]`; no `RollSignalResult`; base-DTE guard → `ROLL_BASE_FIRST` WARN; tests extend `test_exit_signals.py`. Prerequisite: CR1b. | SHA: 689662f, 76504bf, ddd1fae
 
 ---
 
@@ -302,7 +302,7 @@
 | P10 | COLLAR-1 | Antigravity | CollarOverlayV1 automation — needs CC-1 + CC-2 + CR1d + SM-2 + DBI-2 |
 | P10 | CC-5 | Antigravity | ✅ Done |
 | P11 | DAEMON-FIX | Claude | Overlay DI in daemon — needs CC-4 + PP-2 + COLLAR-1 + DAEMON-S1 |
-| P11 | CR2 | Antigravity | evaluate_roll_overlay — needs CR1b |
+| P11 | CR2 | Antigravity | ✅ Done |
 | P12 | CR3 | Claude | Wire overlay roll — needs CR2 |
 | P12 | NT-1 | Antigravity | Proxy delta signals — needs CR3 |
 | P12 | NT-2 | Claude | Futures+CC block guard — needs CR3 |
