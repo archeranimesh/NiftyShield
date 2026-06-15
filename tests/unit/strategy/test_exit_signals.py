@@ -597,7 +597,7 @@ def test_evaluate_proxy_delta_critical_under_3_days():
     assert len(results) == 1
     assert results[0].exit_signal == "PROXY_DELTA_WARN"
     assert results[0].severity == "WARN"
-    assert "1 more days" in results[0].notes
+    assert "1 more day" in results[0].notes
 
 
 def test_evaluate_proxy_delta_critical_at_or_above_3_days():
@@ -645,3 +645,14 @@ def test_evaluate_proxy_delta_both():
     signals = {r.exit_signal for r in results}
     assert signals == {"PROXY_DELTA_CRITICAL", "PROXY_PREMIUM_DECAY"}
     assert all(r.severity == "ACTION" for r in results)
+
+
+def test_evaluate_proxy_delta_recovery_no_negative_countdown():
+    # delta = 0.50 (WARN threshold 0.65, not CRITICAL 0.40)
+    # days_below_critical = 4 (e.g. from previous breach before reset)
+    results = ExitSignalEngine.evaluate_proxy_delta(
+        current_delta=0.50, current_mark=Decimal("80"), dte=20, days_below_critical=4
+    )
+    assert len(results) == 1
+    assert results[0].exit_signal == "PROXY_DELTA_WARN"
+    assert "0 more days" in results[0].notes

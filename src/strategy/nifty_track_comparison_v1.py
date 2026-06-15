@@ -81,7 +81,14 @@ class NiftyTrackComparisonV1:
         broker: Any = None,
         **kwargs: Any,
     ) -> None:
-        """Initialise NiftyTrackComparisonV1."""
+        """Initialise NiftyTrackComparisonV1.
+
+        Args:
+            store: SQLite-backed store for paper trading records.
+            notifier: Notifier for sending Telegram alerts.
+            broker: Broker client interface.
+            **kwargs: Additional keyword arguments.
+        """
         self._store = store
         self._notifier = notifier
         self._broker = broker
@@ -155,6 +162,7 @@ class NiftyTrackComparisonV1:
                         pos.strategy_name
                     )
 
+                # Default DTE to 999 if parsing fails so premium decay triggers if mark < 0.50 (rather than suppressing it)
                 val_dte = dte if dte is not None else 999
                 proxy_results = ExitSignalEngine.evaluate_proxy_delta(
                     current_delta=current_delta,

@@ -554,12 +554,14 @@ class ExitSignalEngine:
 
         # 3. PROXY_DELTA_WARN: delta < 0.65 (suppressed if PROXY_DELTA_CRITICAL fires)
         if current_delta < _PROXY_DELTA_WARN and not critical_fired:
+            days_remaining = max(0, _PROXY_DELTA_CONSECUTIVE - days_below_critical)
+            day_word = "day" if days_remaining == 1 else "days"
             results.append(
                 ExitSignalResult(
                     exit_signal="PROXY_DELTA_WARN",
                     severity="WARN",
                     threshold_value=_PROXY_DELTA_WARN,
-                    notes=f"delta {current_delta:.3f} < {_PROXY_DELTA_WARN} — monitor; {_PROXY_DELTA_CONSECUTIVE - days_below_critical} more days below {_PROXY_DELTA_CRITICAL} triggers close",
+                    notes=f"delta {current_delta:.3f} < {_PROXY_DELTA_WARN} — monitor; {days_remaining} more {day_word} below {_PROXY_DELTA_CRITICAL} triggers close",
                 )
             )
 
