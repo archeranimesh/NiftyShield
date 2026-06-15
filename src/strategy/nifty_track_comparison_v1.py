@@ -54,6 +54,11 @@ _ROLL_ELIGIBLE_DTE = 5  # DTE ≤ 5 → delegate to ExitSignalEngine.evaluate_ro
 _ROLL_DUE_DTE_MAX = 10  # DTE 6–10 → ROLL_DUE_DTE WARN (advance notice)
 _DECAY_WARN_PCT = Decimal("0.25")  # remaining premium ≤ 25% of entry → ROLL_DUE_DECAY
 
+# Short call roles that are blocked when paired with a Futures base and no long put.
+# overlay_cc   — standalone covered call: always blocked on Futures.
+# overlay_collar_call — blocked only when the paired put is missing (degenerate collar).
+_FUTURES_BLOCKED_ROLES: frozenset[str] = frozenset({"overlay_cc", "overlay_collar_call"})
+
 
 class NiftyTrackComparisonV1:
     """Backbone wrapper for the 3-Track Nifty Long Instrument Comparison.
@@ -93,6 +98,57 @@ class NiftyTrackComparisonV1:
         self._notifier = notifier
         self._broker = broker
 
+    # ── Guard helpers ─────────────────────────────────────────────────────────
+
+    def _check_futures_cc_block(
+        self,
+        positions: list[PaperPosition],
+        strategy_name: str,
+    ) -> list[SignalEvent]:
+        """Emit BLOCKED_COMBINATION ACTION if a standalone covered call exists on a Futures base.
+
+        Futures + standalone short call = synthetic short put (unlimited downside).
+        A collar (short call + long put together) is explicitly permitted.
+        A degenerate collar (call without its paired put, e.g. put closed early) is blocked.
+
+        Args:
+            positions: All open positions for this strategy track.
+            strategy_name: The futures strategy namespace (e.g. 'paper_nifty_futures').
+
+        Returns:
+            List containing one BLOCKED_COMBINATION SignalEvent if the block fires, else [].
+        """
+        if strategy_name != "paper_nifty_futures":
+            return []
+
+        short_call_positions = [p for p in positions if p.leg_role in _FUTURES_BLOCKED_ROLES]
+        if not short_call_positions:
+            return []
+
+        has_long_put = any(
+            p.leg_role in {"overlay_collar_put", "overlay_pp"} for p in positions
+        )
+        if has_long_put:
+            return []
+
+        return [
+            SignalEvent(
+                event_type="BLOCKED_COMBINATION",
+                severity="ACTION",
+                description=(
+                    "Futures + standalone short call detected — "
+                    "synthetic short put (unlimited downside). "
+                    "Close the short call leg immediately."
+                ),
+                payload={
+                    "track": strategy_name,
+                    "violating_roles": [p.leg_role for p in short_call_positions],
+                    "action_required": "CLOSE_LEG",
+                    "valid_actions": ["CLOSE_LEG"],
+                },
+            )
+        ]
+
     # ── PaperStrategy protocol ────────────────────────────────────────────────
 
     async def check_signals(
@@ -116,6 +172,12 @@ class NiftyTrackComparisonV1:
             List of WARN SignalEvents; empty list when no overlays are open.
         """
         events: list[SignalEvent] = []
+
+        # ── Futures + standalone CC block guard (checked once per strategy track) ──
+        for track in self.TRACK_STRATEGY_NAMES:
+            track_positions = [p for p in positions if p.strategy_name == track]
+            events.extend(self._check_futures_cc_block(track_positions, track))
+
         today = market_today()
 
         for pos in positions:
