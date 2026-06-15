@@ -306,9 +306,10 @@ def _dispatch_evaluate(
             days_held = (today - pos.entry_date).days
         else:
             logger.warning(
-                "dispatch_evaluate: entry_date is None for CC position leg_role=%s instrument_key=%s — TIME_STOP will not fire",
-                pos.leg_role,
-                pos.instrument_key,
+                "dispatch_evaluate.entry_date_missing",
+                leg_role=pos.leg_role,
+                instrument_key=pos.instrument_key,
+                reason="CC position entry_date is None, TIME_STOP will not fire",
             )
             days_held = 0
         return ExitSignalEngine.evaluate_cc(
@@ -348,9 +349,10 @@ def _dispatch_evaluate(
             days_held = (today - pos.entry_date).days
         else:
             logger.warning(
-                "dispatch_evaluate: entry_date is None for Collar position leg_role=%s instrument_key=%s — TIME_STOP will not fire",
-                pos.leg_role,
-                pos.instrument_key,
+                "dispatch_evaluate.entry_date_missing",
+                leg_role=pos.leg_role,
+                instrument_key=pos.instrument_key,
+                reason="Collar position entry_date is None, TIME_STOP will not fire",
             )
             days_held = 0
         return ExitSignalEngine.evaluate_cc(
@@ -362,6 +364,14 @@ def _dispatch_evaluate(
         )
 
     if role == "overlay_collar_put":
+        if pos.net_qty <= 0:
+            logger.warning(
+                "dispatch_evaluate.collar_put_invalid_qty",
+                leg_role=pos.leg_role,
+                instrument_key=pos.instrument_key,
+                net_qty=pos.net_qty,
+                reason="Collar put leg must have net_qty > 0 (long); short put will not be evaluated",
+            )
         return []
 
     return []

@@ -121,9 +121,15 @@ class CollarOverlayV1(ReEntryMixin):
         call_leg = self._find_call_leg(market, short_call_pos.instrument_key)
         expiry = self._parse_expiry(short_call_pos.instrument_key)
         dte = (expiry - today).days if expiry is not None else 9999
-        days_held = (
-            (today - short_call_pos.entry_date).days if short_call_pos.entry_date is not None else 0
-        )
+        if short_call_pos.entry_date is not None:
+            days_held = (today - short_call_pos.entry_date).days
+        else:
+            log.warning(
+                "collar_overlay_v1.check_signals.entry_date_missing",
+                leg_role=short_call_pos.leg_role,
+                instrument_key=short_call_pos.instrument_key,
+            )
+            days_held = 0
 
         entry_price = float(short_call_pos.avg_sell_price)
         current_mark = float(call_leg.ltp) if call_leg is not None else entry_price
@@ -297,7 +303,7 @@ class CollarOverlayV1(ReEntryMixin):
                 trade_id=0,
             )
 
-        await self._send_close_notification(short_call_pos, long_put_pos, triggering_signal)
+        await self._send_close_notification(short_call_pos, long_put_pos, action)
         return updated
 
     def _build_close_trade(
@@ -335,27 +341,47 @@ class CollarOverlayV1(ReEntryMixin):
         self,
         call_pos: PaperPosition | None,
         put_pos: PaperPosition | None,
-        signal: str | None,
+        action: ApprovedAction,
     ) -> None:
         """Send HTML notification for closed Collar legs. Non-fatal."""
         if self._notifier is None:
             return
 
         try:
+            metadata = action.metadata or {}
+            triggering_signal = metadata.get("triggering_signal")
+
             call_key = call_pos.instrument_key if call_pos else "None"
             call_entry = call_pos.avg_sell_price if call_pos else Decimal("0")
-            call_exit = call_pos.avg_sell_price if call_pos else Decimal("0")
-            call_delta = Decimal("0")
-            call_dte = 0
 
-            if call_pos:
+            call_exit = (
+                Decimal(str(metadata.get("mark")))
+                if metadata.get("mark") is not None
+                else call_entry
+            )
+            call_exit_str = (
+                f"₹{call_exit:.2f}" if metadata.get("mark") is not None else f"~₹{call_entry:.2f}"
+            )
+
+            call_delta_val = metadata.get("delta")
+            call_delta_str = (
+                f"{Decimal(str(call_delta_val)):.3f}" if call_delta_val is not None else "N/A"
+            )
+
+            call_dte = 0
+            if metadata.get("dte") is not None:
+                try:
+                    call_dte = int(float(metadata.get("dte")))
+                except (ValueError, TypeError):
+                    pass
+            elif call_pos:
                 call_expiry = self._parse_expiry(call_pos.instrument_key)
                 call_dte = (call_expiry - market_today()).days if call_expiry else 0
 
             put_key = put_pos.instrument_key if put_pos else "None"
             put_entry = put_pos.avg_cost if put_pos else Decimal("0")
-            put_exit = put_pos.avg_cost if put_pos else Decimal("0")
-            put_delta = Decimal("0")
+            put_exit = put_entry
+            put_exit_str = f"~₹{put_exit:.2f}" if put_pos else f"₹{put_exit:.2f}"
 
             call_pnl = (
                 (call_entry - call_exit) * abs(call_pos.net_qty) if call_pos else Decimal("0")
@@ -363,13 +389,15 @@ class CollarOverlayV1(ReEntryMixin):
             put_pnl = (put_exit - put_entry) * abs(put_pos.net_qty) if put_pos else Decimal("0")
             net_pnl = call_pnl + put_pnl
 
+            pnl_prefix = "~" if (call_pos is not None or put_pos is not None) else ""
+
             msg = (
-                f"✅ <b>Collar: CLOSE ({signal or 'MANUAL'})</b>\n"
-                f"📤 Short Call: {call_key} @ ₹{call_exit:.2f}\n"
-                f"   Entry ₹{call_entry:.2f} · Delta {call_delta:.3f} · DTE {call_dte}\n"
-                f"📤 Long Put: {put_key} @ ₹{put_exit:.2f}\n"
-                f"   Entry ₹{put_entry:.2f} · Delta {put_delta:.3f}\n"
-                f"Net P&amp;L: <b>₹{net_pnl:+,.0f}</b>"
+                f"✅ <b>Collar: CLOSE ({triggering_signal or 'MANUAL'})</b>\n"
+                f"📤 Short Call: {call_key} @ {call_exit_str}\n"
+                f"   Entry ₹{call_entry:.2f} · Delta {call_delta_str} · DTE {call_dte}\n"
+                f"📤 Long Put: {put_key} @ {put_exit_str}\n"
+                f"   Entry ₹{put_entry:.2f}\n"
+                f"Net P&amp;L: <b>{pnl_prefix}₹{net_pnl:+,.0f}</b>"
             )
 
             if hasattr(self._notifier, "send_notification"):

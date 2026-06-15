@@ -217,7 +217,9 @@ class StrategyMonitor:
             if auto_execute_strategy and auto_execute_payload:
                 action_type: str = event.payload.get("auto_action", "CLOSE_AND_WAIT")
                 metadata = {
-                    k: event.payload[k] for k in ("triggering_signal",) if k in event.payload
+                    k: event.payload[k]
+                    for k in ("triggering_signal", "mark", "delta", "dte")
+                    if k in event.payload
                 }
                 action = ApprovedAction(
                     action_type=action_type,

@@ -96,9 +96,9 @@ class CCOverlayV1(ReEntryMixin):
                 days_held = (today - pos.entry_date).days
             else:
                 log.warning(
-                    "check_signals: entry_date is None for position leg_role=%s instrument_key=%s — TIME_STOP will not fire",
-                    pos.leg_role,
-                    pos.instrument_key,
+                    "cc_overlay_v1.check_signals.entry_date_missing",
+                    leg_role=pos.leg_role,
+                    instrument_key=pos.instrument_key,
                 )
                 days_held = 0
 
