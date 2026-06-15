@@ -307,6 +307,8 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-06-15 | NT-1 fix — negative countdown clamped (max(0,...)), singular day grammar, recovery test added — 9acc1e3 |
+| 2026-06-15 | NT-2 — _check_futures_cc_block(): BLOCKED_COMBINATION ACTION on Futures+standalone CC; collar exempted; degenerate collar blocked; 7 tests — da837b5 |
 | 2026-06-15 | DAEMON-FIX — overlay_cls() zero-arg → overlay_cls(**overlay_kwargs) with store/gateway/vix_data_dir; MONITOR_OVERLAYS=1 in .env — c68250c |
 | 2026-06-15 | FR-10 — NotifierProtocol added to src/notifications/protocol.py; _notifier typed as NotifierProtocol in StrategyMonitor; both # type: ignore[attr-defined] removed — b32cf55 |
 | 2026-06-15 | RPT-2 — CLI period redesign: --daily/-d (default), --monthly/-m (guard), --inception/-i; _compute_daily_deltas helper; format_track_summary period param with Day Base/Day Overlay/Day Net headers; 11 new tests — cabf2ba |

@@ -220,7 +220,7 @@
 
 - [x] **NT-1** `[Antigravity]` — `evaluate_proxy_delta()` in `ExitSignalEngine`: three signals (PROXY_DELTA_CRITICAL ACTION at δ<0.40 for 3 consecutive days, PROXY_PREMIUM_DECAY ACTION at mark<₹0.50 with DTE≥5, PROXY_DELTA_WARN WARN at δ<0.65); consecutive-day counter via `PaperStore.get/set_proxy_delta_breach_count`; wire into `NiftyTrackComparisonV1.check_signals` for `base_ditm_call` legs; tests. Prerequisite: CR3. | SHA: 70d4a9b + fix 9acc1e3
 
-- [ ] **NT-2** `[Claude]` — `NiftyTrackComparisonV1._check_futures_cc_block()`: emit `BLOCKED_COMBINATION` ERROR when Futures namespace has standalone short call with no paired long put; collar (short call + long put together) explicitly exempted; called at top of `check_signals`; tests. Prerequisite: CR3.
+- [x] **NT-2** `[Claude]` — `NiftyTrackComparisonV1._check_futures_cc_block()`: emit `BLOCKED_COMBINATION` ERROR when Futures namespace has standalone short call with no paired long put; collar (short call + long put together) explicitly exempted; called at top of `check_signals`; tests. Prerequisite: CR3. | SHA: da837b5
 
 ---
 
