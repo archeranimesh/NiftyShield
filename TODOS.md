@@ -204,6 +204,7 @@ Invoke `roll-validator` agent ≥1 week before deadline.
 | Collateral leg (`long_niftybees`) per cycle | `docs/plan/csp-collateral-leg/` | Before Phase 0.8 gate |
 | Transaction cost model in paper P&L | `docs/plan/paper-cost-model/` | Phase 1 |
 | IVR at entry NULL for Cycles 1 + 2 | Permanent gap — log in Phase 0.8 gate evaluation | Accepted |
+| Collar long put exit MTM divergence at close (diverges during adverse call moves) | Permanent gap — pull put LTP in notification helper | Post Phase 0.8 |
 
 ---
 
@@ -435,5 +436,6 @@ Full log: [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md)
 | 2026-06-15 | CR1d SHA annotated — tasks.md had stale SHA:pending; actual commit is e62aee9 |
 | 2026-06-15 | RPT-1 closed — generate_track_snapshot second pass folds closed overlay legs (net_qty==0) into overlay_pnls + total_realized; 2 new tests; SHA bce1d4a |
 | 2026-06-15 | COLLAR-1 closed — CollarOverlayV1 automated with ReEntryMixin, evaluate_cc, CLOSE_COLLAR atomic closing via record_trades, unified collar role names, and dispatch evaluate fixes; 14 tests updated; SHA: 906c0a7 |
-| 2026-06-15 | COLLAR-1-FIX closed — Refined close notification exit prices (approximate call exit indicator, omitted put delta, approximate net P&L prefix), fixed log warnings format mismatch in snapshot/CC/Collar strategies, and added invalid qty warning for passive collar put; 47 unit tests passed |
+| 2026-06-15 | COLLAR-1-FIX closed — Refined close notification exit prices (approximate call exit indicator, omitted put delta, approximate net P&L prefix), fixed log warnings format mismatch in snapshot/CC/Collar strategies, and added invalid qty warning for passive collar put; documented collar long put exit MTM divergence gap; 47 unit tests passed |
+
 
