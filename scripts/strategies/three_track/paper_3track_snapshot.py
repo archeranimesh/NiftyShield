@@ -786,6 +786,49 @@ def _leg_delta(
     return today_pnl - prev.total_pnl
 
 
+def _compute_daily_deltas(
+    results: list[tuple[str, TrackSnapshot]],
+    store: PaperStore,
+    snap_date: date,
+) -> list[dict]:
+    """Compute 1-day P&L delta fields for each track in the summary table.
+
+    For each track: reads the prior leg snapshot for base and each overlay leg,
+    computes today − prior.  Returns Decimal("0") when no prior snapshot exists.
+
+    Args:
+        results: List of (track_name, TrackSnapshot) pairs from the snapshot loop.
+        store: PaperStore for reading prior leg snapshots.
+        snap_date: Today's snapshot date.
+
+    Returns:
+        List of dicts with keys ``base_pnl``, ``overlay_pnl``, ``net_pnl``
+        holding 1-day deltas; one dict per result entry (same order).
+    """
+    rows: list[dict] = []
+    for track_name, snapshot in results:
+        pnl = snapshot.pnl
+        base_role = _base_leg_role(track_name)
+        base_unrealized = pnl.unrealized_pnl - sum(pnl.overlay_pnls.values())
+        base_total = base_unrealized + pnl.realized_pnl
+        base_day = _leg_delta(store, track_name, base_role, base_total, snap_date) or Decimal("0")
+
+        overlay_day = Decimal("0")
+        for role, role_pnl in pnl.overlay_pnls.items():
+            d = _leg_delta(store, track_name, role, role_pnl, snap_date)
+            if d is not None:
+                overlay_day += d
+
+        rows.append(
+            {
+                "base_pnl": base_day,
+                "overlay_pnl": overlay_day,
+                "net_pnl": base_day + overlay_day,
+            }
+        )
+    return rows
+
+
 # ── Display blocks ────────────────────────────────────────────────────────────
 
 
@@ -972,6 +1015,11 @@ def _print_summary_table(
 async def _run(args: argparse.Namespace) -> None:
     snap_date: date = args.date or date.today()
     save: bool = not args.dry_run
+    period: str = args.period
+
+    if period == "monthly":
+        print("Monthly mode not yet implemented (RPT-3). Use --daily or --inception.")
+        sys.exit(1)
 
     _TRACK_MAP = {
         "spot": STRATEGY_SPOT,
@@ -1178,10 +1226,18 @@ async def _run(args: argparse.Namespace) -> None:
 
     # Print summary table at the TOP (as requested)
     if summary_rows:
+        display_rows = list(summary_rows)
+        if period == "daily":
+            daily_deltas = _compute_daily_deltas(results, store, snap_date)
+            for i, delta_row in enumerate(daily_deltas):
+                display_rows[i] = {**display_rows[i], **delta_row}
         print(
             "\n"
             + format_track_summary(
-                summary_rows, title=f"Comparison Summary — {snap_date}", is_dry_run=args.dry_run
+                display_rows,
+                title=f"Comparison Summary — {snap_date}",
+                is_dry_run=args.dry_run,
+                period=period,
             )
         )
 
@@ -1208,8 +1264,6 @@ async def _run(args: argparse.Namespace) -> None:
 
 def main() -> None:
     """CLI entry point."""
-    pass
-
     parser = argparse.ArgumentParser(
         description=(
             "Canonical daily snapshot for the 3-Track Nifty Long Comparison framework.\n"
@@ -1262,8 +1316,36 @@ def main() -> None:
         default=DEFAULT_BOD_PATH,
         help=f"BOD instruments JSON path (default: {DEFAULT_BOD_PATH})",
     )
-    args = parser.parse_args()
 
+    # Mutually exclusive period flags (default: daily)
+    period_group = parser.add_mutually_exclusive_group()
+    period_group.add_argument(
+        "--daily",
+        "-d",
+        dest="period",
+        action="store_const",
+        const="daily",
+        help="Show 1-day P&L delta in the summary table (default).",
+    )
+    period_group.add_argument(
+        "--monthly",
+        "-m",
+        dest="period",
+        action="store_const",
+        const="monthly",
+        help="Show month-to-date P&L delta (not yet implemented — RPT-3).",
+    )
+    period_group.add_argument(
+        "--inception",
+        "-i",
+        dest="period",
+        action="store_const",
+        const="inception",
+        help="Show since-inception cumulative P&L in the summary table.",
+    )
+    parser.set_defaults(period="daily")
+
+    args = parser.parse_args()
     asyncio.run(_run(args))
 
 

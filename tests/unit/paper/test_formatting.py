@@ -1,5 +1,6 @@
 # tests/unit/paper/test_formatting.py
 from decimal import Decimal
+
 from src.paper.formatting import fmt_inr, format_pnl_table, format_track_summary
 
 
@@ -8,12 +9,12 @@ def test_fmt_inr():
     assert fmt_inr(Decimal("1234.56")) == "₹1,235"
     assert fmt_inr(Decimal("-1234.56")) == "₹-1,235"
     assert fmt_inr(Decimal("0")) == "₹0"
-    
+
     # sign_always=True
     assert fmt_inr(Decimal("1234.56"), sign_always=True) == "₹+1,235"
     assert fmt_inr(Decimal("-1234.56"), sign_always=True) == "₹-1,235"
     assert fmt_inr(Decimal("0"), sign_always=True) == "₹+0"
-    
+
     # None case
     assert fmt_inr(None) == "₹-"
 
@@ -33,7 +34,7 @@ def test_format_pnl_table():
             "total": Decimal("2000"),
         },
     ]
-    
+
     # Dry run
     output = format_pnl_table(rows, title="My Snapshot", is_dry_run=True)
     assert "[DRY RUN] My Snapshot" in output
@@ -41,7 +42,7 @@ def test_format_pnl_table():
     assert "paper_csp_nifty_v1" in output
     assert "₹+5,000" in output
     assert "₹-1,000" in output
-    
+
     # No dry run
     output = format_pnl_table(rows, title="Live Snapshot", is_dry_run=False)
     assert "Live Snapshot" in output
@@ -85,8 +86,15 @@ def test_format_track_summary():
 
 
 def test_format_track_summary_dry_run_prefix():
-    rows = [{"track": "Spot", "base_pnl": Decimal("0"), "overlay_pnl": Decimal("0"),
-             "net_pnl": Decimal("0"), "return_on_nee": 0.0}]
+    rows = [
+        {
+            "track": "Spot",
+            "base_pnl": Decimal("0"),
+            "overlay_pnl": Decimal("0"),
+            "net_pnl": Decimal("0"),
+            "return_on_nee": 0.0,
+        }
+    ]
     output = format_track_summary(rows, title="Test", is_dry_run=True)
     assert "[DRY RUN] Test" in output
 
@@ -95,3 +103,54 @@ def test_format_track_summary_empty():
     output = format_track_summary([], title="No data")
     assert "No data" in output
     assert "═" * 88 in output
+
+
+def test_format_track_summary_inception_headers():
+    """Default period='inception' uses cumulative P&L column headers."""
+    rows = [
+        {
+            "track": "Spot",
+            "base_pnl": Decimal("1000"),
+            "overlay_pnl": Decimal("0"),
+            "net_pnl": Decimal("1000"),
+            "return_on_nee": 0.5,
+        }
+    ]
+    output = format_track_summary(rows, period="inception")
+    assert "Base P&L" in output
+    assert "Overlay" in output
+    assert "Net P&L" in output
+    assert "Day Base" not in output
+
+
+def test_format_track_summary_daily_headers():
+    """period='daily' uses 1-day delta column headers."""
+    rows = [
+        {
+            "track": "Spot",
+            "base_pnl": Decimal("500"),
+            "overlay_pnl": Decimal("-100"),
+            "net_pnl": Decimal("400"),
+            "return_on_nee": 0.2,
+        }
+    ]
+    output = format_track_summary(rows, period="daily")
+    assert "Day Base" in output
+    assert "Day Overlay" in output
+    assert "Day Net" in output
+    assert "Base P&L" not in output
+
+
+def test_format_track_summary_default_period_is_inception():
+    """Omitting period= defaults to inception headers."""
+    rows = [
+        {
+            "track": "Spot",
+            "base_pnl": Decimal("0"),
+            "overlay_pnl": Decimal("0"),
+            "net_pnl": Decimal("0"),
+            "return_on_nee": 0.0,
+        }
+    ]
+    output = format_track_summary(rows)
+    assert "Base P&L" in output

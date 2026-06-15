@@ -63,8 +63,17 @@ def format_pnl_table(rows: list[dict[str, Any]], title: str = "", is_dry_run: bo
     return "\n".join(lines)
 
 
+_PERIOD_HEADERS: dict[str, tuple[str, str, str]] = {
+    "daily": ("Day Base", "Day Overlay", "Day Net"),
+    "inception": ("Base P&L", "Overlay", "Net P&L"),
+}
+
+
 def format_track_summary(
-    rows: list[dict[str, Any]], title: str = "", is_dry_run: bool = False
+    rows: list[dict[str, Any]],
+    title: str = "",
+    is_dry_run: bool = False,
+    period: str = "inception",
 ) -> str:
     """Render the 3-track cross-comparison summary table.
 
@@ -73,17 +82,20 @@ def format_track_summary(
             'return_on_nee'.
         title: Optional title line printed above the table.
         is_dry_run: If True, prefix the title with [DRY RUN].
+        period: Display period — 'daily' shows 1-day delta headers; 'inception' shows
+            since-inception totals (default).
 
     Returns:
         Formatted table string.
     """
     W = 88
+    h_base, h_overlay, h_net = _PERIOD_HEADERS.get(period, _PERIOD_HEADERS["inception"])
     lines = []
     if title:
         prefix = "[DRY RUN] " if is_dry_run else ""
         lines.append(f"{prefix}{title}")
     lines.append("═" * W)
-    lines.append(f"  {'Track':<28} {'Base P&L':>12} {'Overlay':>12} {'Net P&L':>12} {'Ret/NEE':>9}")
+    lines.append(f"  {'Track':<28} {h_base:>12} {h_overlay:>12} {h_net:>12} {'Ret/NEE':>9}")
     lines.append(f"  {'─' * (W - 4)}")
 
     for row in rows:
