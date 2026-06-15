@@ -427,3 +427,60 @@ class ExitSignalEngine:
             )
 
         return cls._sort_results(results)
+
+    @classmethod
+    def evaluate_roll_overlay(
+        cls,
+        *,
+        leg_role: str,
+        dte: int,
+        base_dte: int,
+        atm_strike: int,
+    ) -> list[ExitSignalResult]:
+        """Evaluate whether an overlay leg is eligible to roll.
+
+        Triggers when dte <= 5.
+        If base_dte <= 10: returns ROLL_BASE_FIRST WARN.
+        Otherwise: returns ROLL_ELIGIBLE ACTION with suggested strike in notes.
+
+        Strike suggestion (advisory — actual selection via strike_selector):
+          short call roles: ATM + 50
+          long put roles:   ATM - 50
+
+        Raises:
+            ValueError: When leg_role is not a known overlay role.
+        """
+        _OVERLAY_SHORT_CALL_ROLES = {"overlay_cc", "overlay_collar_call"}
+        _OVERLAY_LONG_PUT_ROLES = {"overlay_pp", "overlay_collar_put"}
+        _OVERLAY_STRIKE_OFFSET = 50  # points
+        _BASE_DTE_GUARD = 10  # if base DTE <= this, block overlay roll
+
+        if leg_role not in (_OVERLAY_SHORT_CALL_ROLES | _OVERLAY_LONG_PUT_ROLES):
+            raise ValueError(f"Unknown leg_role: {leg_role}")
+
+        if dte > 5:
+            return []
+
+        if base_dte <= _BASE_DTE_GUARD:
+            return [
+                ExitSignalResult(
+                    exit_signal="ROLL_BASE_FIRST",
+                    severity="WARN",
+                    threshold_value=float(_BASE_DTE_GUARD),
+                    notes=f"Base DTE {base_dte} ≤ {_BASE_DTE_GUARD} — roll base first",
+                )
+            ]
+
+        if leg_role in _OVERLAY_SHORT_CALL_ROLES:
+            suggested_strike = atm_strike + _OVERLAY_STRIKE_OFFSET
+        else:
+            suggested_strike = atm_strike - _OVERLAY_STRIKE_OFFSET
+
+        return [
+            ExitSignalResult(
+                exit_signal="ROLL_ELIGIBLE",
+                severity="ACTION",
+                threshold_value=5.0,
+                notes=f"DTE {dte} ≤ 5 — suggested strike {suggested_strike}",
+            )
+        ]
