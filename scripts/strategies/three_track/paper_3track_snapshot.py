@@ -44,10 +44,11 @@ import calendar
 import re
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
+from typing import Any
 
 import structlog
 
-from src.client.upstox_market import UpstoxMarketClient, parse_upstox_option_chain
+from src.client.upstox_market import parse_upstox_option_chain
 from src.config import settings
 from src.instruments.lookup import InstrumentLookup, parse_expiry
 from src.market_calendar.holidays import is_trading_day
@@ -585,6 +586,9 @@ async def compute_and_record_exit_signals(
     *,
     save: bool = True,
     lookup: InstrumentLookup | None = None,
+    broker: Any | None = None,
+    simulator: Any | None = None,
+    vix: float | None = None,
 ) -> None:
     """Evaluate exit signals for all open positions and persist ACTION/WARN events.
 
@@ -611,6 +615,9 @@ async def compute_and_record_exit_signals(
         notifier: Optional TelegramNotifier; None suppresses Telegram alerts.
         save: When False (dry-run), skip DB writes and Telegram entirely.
         lookup: BOD instrument lookup for resolving numeric keys to strikes.
+        broker: Optional BrokerClient.
+        simulator: Optional PaperFillSimulator for auto-close fills.
+        vix: Optional VIX LTP value.
     """
     if not save:
         return
@@ -727,6 +734,42 @@ async def compute_and_record_exit_signals(
                 signal=result.exit_signal,
                 severity=result.severity,
             )
+
+            # Auto-close path for overlay ACTION signals (AUTO-1)
+            event_row = store.get_exit_event(event_id)
+            already_acted = event_row and event_row.get("status") == "ACTED"
+
+            from src.strategy.auto_close import (
+                AUTO_CLOSE_SIGNALS,
+                OVERLAY_ROLES,
+                auto_close_overlay,
+            )
+
+            if (
+                (pos.leg_role, result.exit_signal) in AUTO_CLOSE_SIGNALS
+                and simulator is not None
+                and not already_acted
+            ):
+                # Find position's correct chain
+                act_chain = pos_chain if pos_chain is not None else first_chain
+                await auto_close_overlay(
+                    store=store,
+                    simulator=simulator,
+                    pos=pos,
+                    event_id=event_id,
+                    chain=act_chain,
+                    notifier=notifier,
+                    lookup=lookup,
+                    vix=vix,
+                    exit_signal=result.exit_signal,
+                )
+                continue
+            elif already_acted:
+                continue
+
+            # Suppress WARN for overlay roles — no noise for overlay monitoring signals
+            if pos.leg_role in OVERLAY_ROLES:
+                continue
 
             msg = (
                 f"🚨 EXIT SIGNAL [{result.severity}] — {pos.strategy_name} / {pos.leg_role}\n"
@@ -1025,12 +1068,14 @@ async def _run(args: argparse.Namespace) -> None:
 
     store = PaperStore(args.db_path)
 
-    # Broker — graceful fallback for dry-run without token
+    from src.client.factory import create_client
+
+    # Broker — resolved via standard factory composition root (AUTO-1)
     try:
-        broker = UpstoxMarketClient()
+        broker = create_client(settings.upstox_env)
     except ValueError:
         if args.dry_run:
-            logger.warning("UPSTOX_ANALYTICS_TOKEN not set — using mock broker (dry-run mode).")
+            logger.warning("Upstox client initialization failed — using mock broker (dry-run).")
 
             class _MockBroker:
                 async def get_ltp(self, keys: list[str]) -> dict[str, Decimal]:
@@ -1042,7 +1087,7 @@ async def _run(args: argparse.Namespace) -> None:
             broker = _MockBroker()
         else:
             logger.error(
-                "UPSTOX_ANALYTICS_TOKEN not set. Use --dry-run for a dry-run without live prices."
+                "Upstox client initialization failed. Use --dry-run for a dry-run without live prices."
             )
             sys.exit(1)
 
@@ -1194,6 +1239,17 @@ async def _run(args: argparse.Namespace) -> None:
             except Exception as exc:
                 logger.warning("exit_signals.chain_fetch_failed", expiry=expiry_str, error=str(exc))
 
+        vix: float | None = None
+        try:
+            vix_resp = await broker.get_ltp(["NSE_INDEX|India VIX"])
+            vix = float(vix_resp.get("NSE_INDEX|India VIX", 0.0))
+        except Exception as exc:
+            logger.warning("exit_signals.vix_fetch_failed", error=str(exc))
+
+        from src.strategy.executor import PaperFillSimulator
+
+        simulator = PaperFillSimulator()
+
         if eod_chains:
             await compute_and_record_exit_signals(
                 store=store,
@@ -1205,7 +1261,26 @@ async def _run(args: argparse.Namespace) -> None:
                 notifier=notifier,
                 save=save,
                 lookup=lookup,
+                broker=broker,
+                simulator=simulator,
+                vix=vix,
             )
+
+            from src.strategy.auto_close import evaluate_pp_reentry_eod
+
+            try:
+                first_expiry_chain = next(iter(eod_chains.values()))
+                await evaluate_pp_reentry_eod(
+                    store=store,
+                    simulator=simulator,
+                    chain=first_expiry_chain,
+                    lookup=lookup,
+                    notifier=notifier,
+                    vix_data_dir=Path(settings.vix_data_dir) if settings.vix_data_dir else None,
+                    today=snap_date,
+                )
+            except Exception as exc:
+                logger.warning("exit_signals.pp_reentry_failed", error=str(exc))
 
         # Check base position expiries (ES11)
         try:

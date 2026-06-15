@@ -306,12 +306,14 @@ async def test_notifier_called_for_action_and_warn(tmp_path: Path) -> None:
 
     await _run_eval(store, [csp_pos, cc_pos], chain, notifier=notifier)
 
-    # One ACTION send (PROFIT_TARGET) + one WARN batch send (DELTA_WARN)
-    assert notifier.send.call_count == 2
+    # One ACTION send (PROFIT_TARGET); CC warning is suppressed for overlay roles (no Telegram warn)
+    assert notifier.send.call_count == 1
     action_calls = [c for c in notifier.send.call_args_list if "EXIT SIGNAL [ACTION]" in c.args[0]]
-    warn_calls = [c for c in notifier.send.call_args_list if "EXIT WARN" in c.args[0]]
     assert len(action_calls) == 1
-    assert len(warn_calls) == 1
+    # Verify CC warning event is still written in DB
+    events = store.get_open_exit_events("paper_nifty_spot")
+    assert len(events) == 1
+    assert events[0]["exit_signal"] == "DELTA_WARN"
 
 
 @pytest.mark.asyncio
@@ -450,7 +452,6 @@ async def test_dispatch_evaluate_quarterly_expiry_uses_correct_chain(tmp_path: P
 async def test_compute_no_chains_returns_early(tmp_path: Path) -> None:
     """Empty chains dict → early return, no DB writes."""
     store = _make_store(tmp_path)
-    pe_leg = _make_leg(ltp=10.0, delta=-0.05)
     pos = _make_csp_position(avg_sell_price=50.0)
 
     await snap_mod.compute_and_record_exit_signals(
@@ -464,3 +465,54 @@ async def test_compute_no_chains_returns_early(tmp_path: Path) -> None:
     )
 
     assert store.get_open_exit_events() == []
+
+
+@pytest.mark.asyncio
+async def test_eod_auto_close_integration(tmp_path: Path) -> None:
+    """EOD snapshot executes auto-close for CC profit target."""
+    store = _make_store(tmp_path)
+    from src.paper.models import PaperTrade, TradeAction
+
+    store.record_trade(
+        PaperTrade(
+            strategy_name=_STRATEGY_SPOT,
+            leg_role="overlay_cc",
+            instrument_key="NSE_FO|NIFTY23000CE",
+            trade_date=_TODAY,
+            action=TradeAction.SELL,
+            quantity=65,
+            price=Decimal("100.0"),
+            is_paper=True,
+        )
+    )
+
+    ce_leg = _make_leg(ltp=20.0, delta=0.15, bid=19.5, ask=20.5)
+    chain = _make_chain(ce_leg=ce_leg)
+    pos = _make_overlay_position(
+        leg_role="overlay_cc",
+        net_qty=-65,
+        avg_sell_price=100.0,
+        instrument_key="NSE_FO|NIFTY23000CE",
+    )
+
+    from src.strategy.executor import PaperFillSimulator
+
+    simulator = PaperFillSimulator()
+    notifier = AsyncMock()
+
+    await snap_mod.compute_and_record_exit_signals(
+        store=store,
+        positions=[pos],
+        chains={_TODAY: chain},
+        snapshot_id=None,
+        engine=ExitSignalEngine,
+        today=_TODAY,
+        notifier=notifier,
+        save=True,
+        simulator=simulator,
+        vix=15.0,
+    )
+
+    # Position is flat
+    pos_after = store.get_position(_STRATEGY_SPOT, "overlay_cc")
+    assert pos_after.net_qty == 0

@@ -115,13 +115,34 @@ def test_ordering_by_event_time(store: PaperStore) -> None:
     t3 = datetime(2026, 6, 3, 11, 0, 0, tzinfo=timezone.utc)
 
     store.create_exit_event(
-        "paper_csp_nifty_v1", "short_put", "t1", t1, "EOD", ExitSignal.TIME_STOP, "ACTION", Decimal("10")
+        "paper_csp_nifty_v1",
+        "short_put",
+        "t1",
+        t1,
+        "EOD",
+        ExitSignal.TIME_STOP,
+        "ACTION",
+        Decimal("10"),
     )
     store.create_exit_event(
-        "paper_csp_nifty_v1", "short_put", "t2", t2, "EOD", ExitSignal.TIME_STOP, "ACTION", Decimal("10")
+        "paper_csp_nifty_v1",
+        "short_put",
+        "t2",
+        t2,
+        "EOD",
+        ExitSignal.TIME_STOP,
+        "ACTION",
+        Decimal("10"),
     )
     store.create_exit_event(
-        "paper_csp_nifty_v1", "short_put", "t3", t3, "EOD", ExitSignal.TIME_STOP, "ACTION", Decimal("10")
+        "paper_csp_nifty_v1",
+        "short_put",
+        "t3",
+        t3,
+        "EOD",
+        ExitSignal.TIME_STOP,
+        "ACTION",
+        Decimal("10"),
     )
 
     events = store.get_open_exit_events()
@@ -134,7 +155,14 @@ def test_ordering_by_event_time(store: PaperStore) -> None:
 def test_state_transitions_and_guards(store: PaperStore) -> None:
     t_now = datetime(2026, 6, 3, 10, 0, 0, tzinfo=timezone.utc)
     ev_id = store.create_exit_event(
-        "paper_csp_nifty_v1", "short_put", "t1", t_now, "EOD", ExitSignal.TIME_STOP, "ACTION", Decimal("10")
+        "paper_csp_nifty_v1",
+        "short_put",
+        "t1",
+        t_now,
+        "EOD",
+        ExitSignal.TIME_STOP,
+        "ACTION",
+        Decimal("10"),
     )
 
     # Transition to ACKNOWLEDGED
@@ -161,7 +189,14 @@ def test_state_transitions_and_guards(store: PaperStore) -> None:
 
     # Test DISMISSED path independently
     ev_id_dismissed = store.create_exit_event(
-        "paper_csp_nifty_v1", "short_put", "t2", t_now, "EOD", ExitSignal.TIME_STOP, "ACTION", Decimal("10")
+        "paper_csp_nifty_v1",
+        "short_put",
+        "t2",
+        t_now,
+        "EOD",
+        ExitSignal.TIME_STOP,
+        "ACTION",
+        Decimal("10"),
     )
     store.resolve_exit_event(ev_id_dismissed, "DISMISSED", "dismissed notes")
     events = store.get_open_exit_events()
@@ -379,3 +414,26 @@ def test_none_monetary_fields_stored_as_null(store: PaperStore) -> None:
     assert row["bid"] is None
     assert row["ask"] is None
     assert row["threshold_value"] is None
+
+
+def test_get_exit_event(store: PaperStore) -> None:
+    t_now = datetime(2026, 6, 3, 10, 0, 0, tzinfo=timezone.utc)
+    event_id = store.create_exit_event(
+        strategy_name="paper_csp_nifty_v1",
+        leg_name="short_put",
+        trade_id="trade_123",
+        event_time=t_now,
+        detected_by="EOD",
+        exit_signal=ExitSignal.PROFIT_TARGET,
+        severity="ACTION",
+        entry_price=Decimal("150.50"),
+    )
+    # Check present event
+    ev = store.get_exit_event(event_id)
+    assert ev is not None
+    assert ev["id"] == event_id
+    assert ev["strategy_name"] == "paper_csp_nifty_v1"
+    assert ev["entry_price"] == Decimal("150.50")
+
+    # Check non-existent event
+    assert store.get_exit_event(99999) is None

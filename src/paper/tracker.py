@@ -108,6 +108,11 @@ def _compute_realized_pnl(store: PaperStore, strategy_name: str) -> Decimal:
     return sum(_compute_realized_pnl_by_leg(trades).values(), Decimal("0"))
 
 
+def get_strategy_realized_pnl(store: PaperStore, strategy_name: str) -> Decimal:
+    """Public helper to get strategy realized P&L."""
+    return _compute_realized_pnl(store, strategy_name)
+
+
 class PaperTracker:
     """Computes P&L and records daily NAV snapshots for paper strategies.
 

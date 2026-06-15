@@ -295,3 +295,15 @@ def test_compute_realized_pnl_refactored_total_unchanged(store: PaperStore) -> N
     store.record_trade(_buy(qty=75, price="20.00", leg="overlay_cc"))
     realized = _compute_realized_pnl(store, _STRATEGY)
     assert realized == Decimal("6750.00")  # 4500 + 2250
+
+
+def test_get_strategy_realized_pnl(store: PaperStore) -> None:
+    from src.paper.tracker import get_strategy_realized_pnl
+
+    # Verify behavior on empty store
+    assert get_strategy_realized_pnl(store, _STRATEGY) == Decimal("0")
+
+    # Add trades and check realized pnl summation
+    store.record_trade(_sell(qty=10, price="100.00", leg="short_put"))
+    store.record_trade(_buy(qty=10, price="40.00", leg="short_put"))
+    assert get_strategy_realized_pnl(store, _STRATEGY) == Decimal("600.00")

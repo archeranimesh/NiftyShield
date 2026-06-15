@@ -1343,6 +1343,22 @@ class PaperStore:
                 ).fetchall()
         return [self._parse_exit_event_row(r) for r in rows]
 
+    def get_exit_event(self, event_id: int) -> dict[str, Any] | None:
+        """Fetch a single exit event row by ID."""
+        with _connect(self.db_path) as conn:
+            row = conn.execute(
+                """SELECT id, strategy_name, leg_name, trade_id, snapshot_id,
+                          event_time, detected_by, exit_signal, severity,
+                          ltp, mid, bid, ask, delta, dte, entry_price,
+                          threshold_value, delta_stop_would_fire,
+                          premium_stop_would_fire, actual_rule_used, status,
+                          notes, created_at
+                   FROM paper_exit_events
+                   WHERE id = ?""",
+                (event_id,),
+            ).fetchone()
+        return self._parse_exit_event_row(row) if row is not None else None
+
     def acknowledge_exit_event(self, event_id: int) -> None:
         """Update event status to 'ACKNOWLEDGED' if status is 'OPEN'.
 
