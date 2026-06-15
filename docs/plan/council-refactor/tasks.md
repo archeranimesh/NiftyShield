@@ -235,15 +235,15 @@
   (a) **Close**: `paper_3track_overlay_entry.py` and `close_*` scripts must validate that closing `overlay_collar_call` also closes `overlay_collar_put` in the same transaction (and vice versa). Block partial-collar close at the script level — raise an error if only one leg is requested.
   (b) **Open**: `paper_3track_overlay_entry.py` must use a single atomic DB transaction for all collar legs (put + call across all tracks). If any leg insert fails or conflicts, roll back all. Currently the put legs can succeed while call legs silently conflict, leaving a half-open collar in the DB. Use `store.record_trades()` (already exists — `records_trades` does atomic multi-insert) instead of calling `store.record_trade()` in a loop.
 
-- [ ] **RPT-3** `[Claude]` — Monthly mode implementation (deferred): remove guard from RPT-2, resolve reference date to first NSE trading day of current month via `src/market_calendar/`, fetch nearest prior `paper_leg_snapshots` row, compute delta as in daily mode. Prerequisite: RPT-2 committed + `market_calendar` holiday list confirmed stable.
+- [x] **RPT-3** `[Claude]` — Monthly mode implementation (deferred): remove guard from RPT-2, resolve reference date to first NSE trading day of current month via `src/market_calendar/`, fetch nearest prior `paper_leg_snapshots` row, compute delta as in daily mode. Prerequisite: RPT-2 committed + `market_calendar` holiday list confirmed stable. | SHA: e199d43
 
 ---
 
 ## P14 — Docs close (always last)
 
-- [ ] **CR4** `[Claude]` — `DECISIONS.md`, `CONTEXT.md`, `TODOS.md`; update `ExitSignalEngine` description; update `CSPNiftyV1`, `CCOverlayV1`, `PPOverlayV1`, and `NiftyTrackComparisonV1` descriptions.
+- [x] **CR4** `[Claude]` — `DECISIONS.md`, `CONTEXT.md`, `TODOS.md`; update `ExitSignalEngine` description; update `CSPNiftyV1`, `CCOverlayV1`, `PPOverlayV1`, and `NiftyTrackComparisonV1` descriptions.
 
-- [ ] **PP-3** `[Claude]` — `DECISIONS.md`, `CONTEXT.md`, `README.md`, `tasks.md`; document PP always-reprotect design, IVR re-entry gate, spread guard removal.
+- [x] **PP-3** `[Claude]` — `DECISIONS.md`, `CONTEXT.md`, `README.md`, `tasks.md`; document PP always-reprotect design, IVR re-entry gate, spread guard removal.
 
 ---
 
