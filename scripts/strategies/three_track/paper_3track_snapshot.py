@@ -43,7 +43,7 @@ import asyncio
 import calendar
 import re
 from datetime import date, datetime, timedelta
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any
 
 import structlog
@@ -52,7 +52,7 @@ from src.client.upstox_market import parse_upstox_option_chain
 from src.config import settings
 from src.instruments.lookup import InstrumentLookup, parse_expiry
 from src.market_calendar.holidays import is_trading_day
-from src.models.options import OptionChain, OptionLeg
+from src.models.options import OptionChain
 from src.notifications.telegram import TelegramNotifier
 from src.paper._display import (
     BASE_LABELS,
@@ -109,11 +109,6 @@ _OVERLAY_OPTION_TYPE: dict[str, str] = {
     "overlay_collar_put": "PE",
 }
 
-# Instrument key parsing — matches "NIFTY29MAY2026CE23000" or "NIFTY23000CE"
-_KEY_EXPIRY_RE = re.compile(r"NIFTY(\d{2})([A-Za-z]{3})(\d{4})(CE|PE)", re.IGNORECASE)
-_KEY_STRIKE_RE = re.compile(r"NIFTY(\d+)(CE|PE)", re.IGNORECASE)
-# Matches strike that follows the option type in date-embedded keys: "NIFTY29JUL2026PE22500" → "22500"
-_KEY_DATE_STRIKE_RE = re.compile(r"NIFTY\d{2}[A-Za-z]{3}\d{4}(?:CE|PE)(\d+)", re.IGNORECASE)
 _MONTH_ABBR: dict[str, int] = {
     "JAN": 1,
     "FEB": 2,
@@ -129,99 +124,18 @@ _MONTH_ABBR: dict[str, int] = {
     "DEC": 12,
 }
 
-
-def _parse_expiry_from_key(instrument_key: str) -> date | None:
-    """Return expiry date from instrument key, or None if unparseable."""
-    m = _KEY_EXPIRY_RE.search(instrument_key)
-    if not m:
-        return None
-    try:
-        day, mon_str, year = int(m.group(1)), m.group(2).upper(), int(m.group(3))
-        month = _MONTH_ABBR.get(mon_str)
-        return date(year, month, day) if month else None
-    except (ValueError, TypeError):
-        return None
+from src.paper.chain_utils import (
+    find_chain_leg as _find_chain_leg,
+)
+from src.paper.chain_utils import (
+    parse_expiry_from_key as _parse_expiry_from_key,
+)
 
 
 def _compute_dte(instrument_key: str, today: date) -> int | None:
     """Return days-to-expiry for the key's embedded expiry, or None."""
     expiry = _parse_expiry_from_key(instrument_key)
     return (expiry - today).days if expiry is not None else None
-
-
-def _parse_strike_from_key(instrument_key: str) -> Decimal | None:
-    """Extract strike price from instrument key, or None if unparseable.
-
-    Matches 'NIFTY23000CE' style keys.  Date-embedded keys like
-    'NIFTY29MAY2026CE23000' are NOT matched (alpha chars break the digit run).
-    Returns None for numeric-ID keys like 'NSE_FO|47196'.
-    """
-    m = _KEY_STRIKE_RE.search(instrument_key)
-    if not m:
-        # Fallback: date-embedded key like "NIFTY29JUL2026PE22500" where strike follows option type.
-        m2 = _KEY_DATE_STRIKE_RE.search(instrument_key)
-        if m2:
-            try:
-                return Decimal(m2.group(1))
-            except InvalidOperation:
-                pass
-        return None
-    try:
-        return Decimal(m.group(1))
-    except InvalidOperation:
-        return None
-
-
-def _find_chain_leg(
-    chain: OptionChain,
-    instrument_key: str,
-    option_type: str,
-    lookup: InstrumentLookup | None = None,
-) -> OptionLeg | None:
-    """Look up CE or PE leg from the chain by strike.
-
-    Resolution order:
-    1. Parse strike directly from a named key (e.g. 'NIFTY29MAY2026CE23000').
-    2. Resolve strike via BOD lookup when ``lookup`` is provided (handles numeric
-       keys like 'NSE_FO|71474').
-    3. Return None — the old fallback of scanning all strikes for the first
-       non-zero LTP leg is intentionally removed; it always returned the wrong
-       (deepest ITM) contract for numeric keys.
-
-    Args:
-        chain: Parsed Nifty option chain.
-        instrument_key: Position's instrument key.
-        option_type: 'CE' or 'PE'.
-        lookup: Optional BOD instrument lookup for resolving numeric keys.
-
-    Returns:
-        Matching OptionLeg or None when unavailable.
-    """
-    strike = _parse_strike_from_key(instrument_key)
-
-    # For numeric BOD keys, resolve strike via the instrument lookup.
-    if strike is None and lookup is not None:
-        inst = lookup.get_by_key(instrument_key)
-        if inst is not None:
-            raw_strike = inst.get("strike_price")
-            if raw_strike is not None:
-                try:
-                    strike = Decimal(str(raw_strike))
-                except Exception:
-                    pass
-
-    if strike is not None:
-        strike_data = chain.strikes.get(strike)
-        if strike_data is not None:
-            return strike_data.ce if option_type == "CE" else strike_data.pe
-
-    logger.warning(
-        "_find_chain_leg.strike_not_resolved",
-        instrument_key=instrument_key,
-        option_type=option_type,
-        has_lookup=lookup is not None,
-    )
-    return None
 
 
 def _dispatch_evaluate(

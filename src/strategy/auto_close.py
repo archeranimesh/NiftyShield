@@ -81,13 +81,12 @@ async def auto_close_overlay(
     try:
         is_loss = _is_loss_stop_signal(store, event_id)
 
-        # Retrieve closing LTP and Delta for notification context
         opt_type = "CE" if is_short else "PE"
         # Since OverlayCloser.route or close_single_leg reads ltp from market chain:
         # We find OptionLeg for notification details
-        from scripts.strategies.three_track.paper_3track_snapshot import _find_chain_leg
+        from src.paper.chain_utils import find_chain_leg
 
-        opt_leg = _find_chain_leg(chain, pos.instrument_key, opt_type, lookup)
+        opt_leg = find_chain_leg(chain, pos.instrument_key, opt_type, lookup)
         exit_ltp = opt_leg.ltp if opt_leg is not None else Decimal("0")
         exit_delta = (
             float(opt_leg.delta) if (opt_leg is not None and opt_leg.delta is not None) else None
@@ -113,7 +112,7 @@ async def auto_close_overlay(
                     "pnl": leg_pnl,
                 }
             ]
-            _send_close_notification(
+            await _send_close_notification(
                 notifier, strategy_name, legs_notif, exit_signal, store, is_collar=False
             )
 
@@ -132,7 +131,7 @@ async def auto_close_overlay(
             put_key = put_pos.instrument_key if put_pos else "overlay_collar_put"
             put_qty = abs(put_pos.net_qty) if put_pos else 0
 
-            put_leg = _find_chain_leg(chain, put_key, "PE", lookup) if put_pos else None
+            put_leg = find_chain_leg(chain, put_key, "PE", lookup) if put_pos else None
             put_exit = put_leg.ltp if put_leg is not None else Decimal("0")
             put_pnl = (put_exit - put_entry) * put_qty if put_pos else Decimal("0")
 
@@ -156,7 +155,7 @@ async def auto_close_overlay(
                     "pnl": put_pnl,
                 },
             ]
-            _send_close_notification(
+            await _send_close_notification(
                 notifier, strategy_name, legs_notif, exit_signal, store, is_collar=True
             )
 
@@ -180,7 +179,7 @@ async def auto_close_overlay(
                     "pnl": leg_pnl,
                 }
             ]
-            _send_close_notification(
+            await _send_close_notification(
                 notifier, strategy_name, legs_notif, exit_signal, store, is_collar=False
             )
 
@@ -198,14 +197,11 @@ async def auto_close_overlay(
         )
         if notifier is not None:
             try:
-                loop = asyncio.get_event_loop()
-                loop.create_task(
-                    notifier.send(
-                        f"⚠️ AUTO-CLOSE FAILED — {strategy_name} / {leg_role}\n"
-                        f"Signal: {exit_signal}  Event: {event_id}\n"
-                        f"Error: {exc}\n"
-                        f"Close manually via paper_cc_roll.py or record_paper_trade.py"
-                    )
+                await notifier.send(
+                    f"⚠️ AUTO-CLOSE FAILED — {strategy_name} / {leg_role}\n"
+                    f"Signal: {exit_signal}  Event: {event_id}\n"
+                    f"Error: {exc}\n"
+                    f"Close manually via paper_cc_roll.py or record_paper_trade.py"
                 )
             except Exception:
                 pass
@@ -221,7 +217,7 @@ async def auto_close_overlay(
     return True
 
 
-def _send_close_notification(
+async def _send_close_notification(
     notifier: Any | None,
     strategy_name: str,
     legs: list[dict[str, Any]],
@@ -277,8 +273,7 @@ def _send_close_notification(
                         f"Overlay P&L (total realized): ₹{realized_pnl:+,.0f}"
                     )
 
-        loop = asyncio.get_event_loop()
-        loop.create_task(notifier.send(msg))
+        await notifier.send(msg)
     except Exception as exc:
         log.warning("auto_close.notification_failed", error=str(exc))
 

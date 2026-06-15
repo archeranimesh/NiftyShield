@@ -120,7 +120,7 @@ async def test_auto_close_overlay_cc_profit_target(
 
     # Run auto-close
     with patch(
-        "scripts.strategies.three_track.paper_3track_snapshot._find_chain_leg",
+        "src.paper.chain_utils.find_chain_leg",
         return_value=option_leg,
     ):
         success = await auto_close_overlay(

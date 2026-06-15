@@ -28,16 +28,16 @@ logger = structlog.get_logger()
 
 # Optional fast fuzzy; difflib is stdlib fallback — no hard dependency on rapidfuzz.
 try:
-    from rapidfuzz import fuzz as _fuzz  # type: ignore
+    from rapidfuzz import fuzz as _fuzz  # type: ignore[import-not-found, unused-ignore]
 
     def _fuzzy_ratio(a: str, b: str) -> float:
         """Token-set ratio normalised to 0.0–1.0."""
         return _fuzz.token_set_ratio(a, b) / 100.0
 
 except ImportError:  # pragma: no cover
-    from difflib import SequenceMatcher as _SM  # type: ignore
+    from difflib import SequenceMatcher as _SM
 
-    def _fuzzy_ratio(a: str, b: str) -> float:  # type: ignore[misc]
+    def _fuzzy_ratio(a: str, b: str) -> float:  # type: ignore[no-redef, unused-ignore]
         return _SM(None, a, b).ratio()
 
 
