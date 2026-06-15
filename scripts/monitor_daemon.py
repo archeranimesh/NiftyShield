@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import json
 import os
 import signal
 import sys
@@ -195,10 +194,7 @@ async def main() -> int:
 
     # Build Telegram gateway
     if not settings.telegram_bot_token or not settings.telegram_chat_id:
-        logger.error(
-            "TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID missing. "
-            + "Exiting."
-        )
+        logger.error("TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID missing. " + "Exiting.")
         return 1
 
     gateway = TelegramGateway(
@@ -290,13 +286,12 @@ async def main() -> int:
                 error=str(e),
             )
     else:
-        logger.warning(
-            "NiftyTrackComparisonV1 module not found; "
-            + "skipping registration"
-        )
+        logger.warning("NiftyTrackComparisonV1 module not found; " + "skipping registration")
 
     if MONITOR_OVERLAYS:
         logger.info("MONITOR_OVERLAYS=1 — registering overlay strategies")
+        vix_data_dir = Path(settings.vix_data_dir) if settings.vix_data_dir else None
+        overlay_kwargs = {"store": store, "notifier": gateway, "vix_data_dir": vix_data_dir}
         for overlay_cls, overlay_name in [
             (CCOverlayV1, "CCOverlayV1"),
             (PPOverlayV1, "PPOverlayV1"),
@@ -304,7 +299,7 @@ async def main() -> int:
         ]:
             if overlay_cls is not None:
                 try:
-                    strategies.append(overlay_cls())
+                    strategies.append(overlay_cls(**overlay_kwargs))
                     logger.info("Registered overlay strategy", name=overlay_name)
                 except Exception as e:
                     # Intentional: Safe overlay init guard
@@ -453,10 +448,7 @@ async def main() -> int:
 
         # Apply action — overlay types routed to OverlayCloser
         try:
-            if (
-                approved_action.action_type in _OVERLAY_ACTION_TYPES
-                and overlay_closer is not None
-            ):
+            if approved_action.action_type in _OVERLAY_ACTION_TYPES and overlay_closer is not None:
                 await asyncio.to_thread(
                     overlay_closer.route,
                     strategy_name=strategy_name,
