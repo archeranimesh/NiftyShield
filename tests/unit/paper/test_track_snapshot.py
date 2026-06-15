@@ -85,6 +85,138 @@ async def test_generate_track_snapshot_base_etf():
     assert snap.return_on_nee == Decimal("1.0")
 
 
+@pytest.mark.asyncio
+async def test_closed_overlay_leg_included_in_snapshot() -> None:
+    """Closed overlay leg (net_qty == 0) must contribute realized P&L to overlay_pnls.
+
+    Regression guard for RPT-1: prior to the second-pass fix, a fully closed
+    CC/PP/Collar leg was invisible in overlay_pnls — net_pnl showed base only.
+    """
+    trades = [
+        # Base leg: open ETF position
+        PaperTrade(
+            strategy_name="paper_nifty_spot",
+            leg_role="base_etf",
+            instrument_key="NIFTYBEES",
+            trade_date=date(2026, 6, 1),
+            action=TradeAction.BUY,
+            quantity=100,
+            price=Decimal("240.0"),
+            notes="",
+        ),
+        # Overlay CC: opened (SELL) and closed (BUY) — net_qty == 0
+        PaperTrade(
+            strategy_name="paper_nifty_spot",
+            leg_role="overlay_cc",
+            instrument_key="NIFTY_OPT",
+            trade_date=date(2026, 6, 1),
+            action=TradeAction.SELL,
+            quantity=1,
+            price=Decimal("100.0"),
+            notes="",
+        ),
+        PaperTrade(
+            strategy_name="paper_nifty_spot",
+            leg_role="overlay_cc",
+            instrument_key="NIFTY_OPT",
+            trade_date=date(2026, 6, 10),
+            action=TradeAction.BUY,
+            quantity=1,
+            price=Decimal("30.0"),
+            notes="",
+        ),
+    ]
+    positions = [
+        # base_etf open
+        PaperPosition(
+            strategy_name="paper_nifty_spot",
+            leg_role="base_etf",
+            instrument_key="NIFTYBEES",
+            net_qty=100,
+            avg_cost=Decimal("240.0"),
+            avg_sell_price=Decimal("0"),
+        ),
+        # overlay_cc fully closed — net_qty == 0, must not enter open_positions loop
+        PaperPosition(
+            strategy_name="paper_nifty_spot",
+            leg_role="overlay_cc",
+            instrument_key="NIFTY_OPT",
+            net_qty=0,
+            avg_cost=Decimal("30.0"),
+            avg_sell_price=Decimal("100.0"),
+        ),
+    ]
+
+    store = MockPaperStore(trades, positions, [])
+    broker = MockBrokerClient()
+    lookup = MockInstrumentLookup()
+
+    snap = await generate_track_snapshot(
+        store, broker, lookup, "paper_nifty_spot", Decimal("24000"), Decimal("100000"), date.today()
+    )
+
+    # overlay_cc realized = (100 - 30) * 1 = 70
+    assert "overlay_cc" in snap.pnl.overlay_pnls
+    assert snap.pnl.overlay_pnls["overlay_cc"] == Decimal("70")
+    # base_pnl = (250 - 240) * 100 = 1000; net_pnl = 1000 + 70 = 1070
+    assert snap.pnl.base_pnl == Decimal("1000")
+    assert snap.pnl.net_pnl == Decimal("1070")
+
+
+@pytest.mark.asyncio
+async def test_all_closed_overlay_no_open_positions() -> None:
+    """Track with only closed overlay legs (base also closed) must return their
+    realized P&L — not zero — in overlay_pnls.
+
+    Edge case: open_positions is empty so the main loop does nothing, but
+    the second pass must still pick up closed overlay realized P&L.
+    """
+    trades = [
+        PaperTrade(
+            strategy_name="paper_nifty_spot",
+            leg_role="overlay_cc",
+            instrument_key="NIFTY_OPT",
+            trade_date=date(2026, 6, 1),
+            action=TradeAction.SELL,
+            quantity=2,
+            price=Decimal("50.0"),
+            notes="",
+        ),
+        PaperTrade(
+            strategy_name="paper_nifty_spot",
+            leg_role="overlay_cc",
+            instrument_key="NIFTY_OPT",
+            trade_date=date(2026, 6, 10),
+            action=TradeAction.BUY,
+            quantity=2,
+            price=Decimal("20.0"),
+            notes="",
+        ),
+    ]
+    # Explicit flat position — net_qty=0 so it must NOT enter open_positions loop
+    positions = [
+        PaperPosition(
+            strategy_name="paper_nifty_spot",
+            leg_role="overlay_cc",
+            instrument_key="NIFTY_OPT",
+            net_qty=0,
+            avg_cost=Decimal("20.0"),
+            avg_sell_price=Decimal("50.0"),
+        ),
+    ]
+    store = MockPaperStore(trades, positions, [])
+    broker = MockBrokerClient()
+    lookup = MockInstrumentLookup()
+
+    snap = await generate_track_snapshot(
+        store, broker, lookup, "paper_nifty_spot", Decimal("24000"), Decimal("100000"), date.today()
+    )
+
+    # realized = (50 - 20) * 2 = 60
+    assert snap.pnl.overlay_pnls.get("overlay_cc") == Decimal("60")
+    assert snap.pnl.net_pnl == Decimal("60")
+
+
 def test_compute_realized_pnl_by_leg():
     trades = [
         PaperTrade(strategy_name="paper_strat", leg_role="base", instrument_key="A", trade_date=date(2023,1,1), action=TradeAction.BUY, quantity=100, price=Decimal("100"), notes=""),

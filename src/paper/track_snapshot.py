@@ -207,6 +207,19 @@ async def generate_track_snapshot(
         if pos.leg_role == "base_ditm_call":
             proxy_base_leg_delta = leg_delta
 
+    # Second pass: fold realized P&L for closed overlay legs (net_qty == 0).
+    # _compute_realized_pnl_by_leg returns all leg_roles including fully closed
+    # ones, but the open_positions loop above only visits legs still open.
+    # Without this pass, a CC/PP/Collar closed mid-cycle is invisible in
+    # overlay_pnls and the track summary shows zero for that leg.
+    open_leg_roles = {pos.leg_role for pos in open_positions}
+    for leg_role, realized_amt in realized_by_leg.items():
+        if leg_role.startswith("overlay_") and leg_role not in open_leg_roles:
+            overlay_pnls[leg_role] = (
+                overlay_pnls.get(leg_role, Decimal("0")) + realized_amt
+            )
+            total_realized += realized_amt
+
     if proxy_monitor and proxy_base_leg_delta is not None:
         state_label, consecutive = proxy_monitor.update_and_check(
             proxy_base_leg_delta, snapshot_date
