@@ -30,6 +30,7 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+import structlog
 import yaml
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
@@ -43,6 +44,10 @@ from src.paper.constants import (
 )
 from src.paper.models import PaperTrade
 from src.paper.store import PaperStore
+from src.utils.logging import setup_logging
+
+_SCRIPT_NAME = "scripts.strategies.three_track.paper_3track_overlay_entry"
+logger = structlog.get_logger(_SCRIPT_NAME)
 
 DEFAULT_CONFIG = Path("data/paper/overlay_entry.yaml")
 
@@ -359,6 +364,7 @@ def main() -> None:
         help="Preview without writing to DB.",
     )
     args = parser.parse_args()
+    setup_logging()
 
     cfg = load_overlay_config(args.config)
     overlay_trades, warnings = build_overlay_trades(cfg)
@@ -370,7 +376,20 @@ def main() -> None:
     if not args.dry_run:
         store = PaperStore(args.db_path)
         for ot in overlay_trades:
-            store.record_trade(ot.trade)
+            inserted = store.record_trade(ot.trade)
+            if inserted:
+                logger.info(
+                    "trade.INSERTED",
+                    strategy=ot.trade.strategy_name,
+                    leg=ot.trade.leg_role,
+                )
+            else:
+                logger.info(
+                    "trade.SKIPPED",
+                    reason="conflict on strategy/leg/date/action",
+                    strategy=ot.trade.strategy_name,
+                    leg=ot.trade.leg_role,
+                )
 
     print_summary(cfg, overlay_trades, warnings, args.dry_run)
 
