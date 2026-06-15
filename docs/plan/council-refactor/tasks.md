@@ -208,7 +208,7 @@
 
 ## P11 — Daemon wiring + overlay roll signal
 
-- [ ] **DAEMON-FIX** `[Claude]` — Fix overlay dependency injection in `scripts/monitor_daemon.py`: replace `overlay_cls()` zero-arg instantiation with `overlay_cls(**kwargs)` passing broker/store/gateway/vix_data_dir; set `MONITOR_OVERLAYS=1` in `.env`. Prerequisite: CC-4 + PP-2 + COLLAR-1 + DAEMON-S1 all committed. See `stories_daemon.md`.
+- [x] **DAEMON-FIX** `[Claude]` — Fix overlay dependency injection in `scripts/monitor_daemon.py`: replace `overlay_cls()` zero-arg instantiation with `overlay_cls(**kwargs)` passing store/gateway/vix_data_dir; set `MONITOR_OVERLAYS=1` in `.env`. Note: PPOverlayV1 broker/lookup params in spec were stale — actual __init__ is (store, notifier, vix_data_dir) same as CC/Collar. | SHA: c68250c
 
 - [ ] **CR2** `[Antigravity]` — Add `evaluate_roll_overlay(leg_role, dte, base_dte, atm_strike)` to `ExitSignalEngine` returning `list[ExitSignalResult]`; no `RollSignalResult`; base-DTE guard → `ROLL_BASE_FIRST` WARN; tests extend `test_exit_signals.py`. Prerequisite: CR1b.
 

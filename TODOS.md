@@ -307,6 +307,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-06-15 | DAEMON-FIX — overlay_cls() zero-arg → overlay_cls(**overlay_kwargs) with store/gateway/vix_data_dir; MONITOR_OVERLAYS=1 in .env — c68250c |
 | 2026-06-15 | FR-10 — NotifierProtocol added to src/notifications/protocol.py; _notifier typed as NotifierProtocol in StrategyMonitor; both # type: ignore[attr-defined] removed — b32cf55 |
 | 2026-06-15 | RPT-2 — CLI period redesign: --daily/-d (default), --monthly/-m (guard), --inception/-i; _compute_daily_deltas helper; format_track_summary period param with Day Base/Day Overlay/Day Net headers; 11 new tests — cabf2ba |
 | 2026-06-15 | RPT-ROLL — _find_expiring_overlay: reset last_trade=None when net reaches 0; only current open cycle contributes; 2 new tests (multi-cycle + all-closed) — 46d4848 |
