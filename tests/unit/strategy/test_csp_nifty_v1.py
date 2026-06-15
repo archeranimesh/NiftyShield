@@ -31,7 +31,7 @@ from src.models.options import OptionChain, OptionChainStrike, OptionLeg
 from src.paper.models import PaperPosition, PaperTrade, TradeAction
 from src.paper.store import PaperStore
 from src.strategy.csp_nifty_v1 import CSPNiftyV1
-from src.strategy.protocol import ApprovedAction, SignalEvent
+from src.strategy.protocol import ApprovedAction, LegSpec, SignalEvent
 
 _STRATEGY = "paper_csp_nifty_v1"
 _OTHER_STRATEGY = "paper_other_v1"
@@ -1003,6 +1003,177 @@ def test_check_signals_defended_state_fires_delta_breach_final(tmp_path: Path) -
         "Expected DELTA_BREACH_FINAL for DEFENDED position — got: "
         + str([e.event_type for e in result])
     )
+
+
+# ── PA1.1: ROLL signal + _select_roll_target + apply_action ROLL branch ────────
+
+
+def _make_roll_candidate_leg(
+    strike: str = "22000",
+    delta: str = "-0.22",
+    ltp: str = "50",
+) -> OptionLeg:
+    """Build a PE leg that passes the 22-delta roll filter ([0.18, 0.28] band)."""
+    return OptionLeg(
+        ltp=Decimal(ltp),
+        bid=Decimal(ltp),
+        ask=Decimal(ltp),
+        oi=2000,
+        volume=1000,
+        delta=Decimal(delta),
+        gamma=Decimal("0.001"),
+        theta=Decimal("-5"),
+        vega=Decimal("10"),
+        iv=Decimal("15.0"),
+        strike=Decimal(strike),
+    )
+
+
+def _make_chain_with_roll_candidate(
+    current_ltp: str = "80",
+    current_delta: str = "-0.20",
+    current_strike: str = "23000",
+) -> OptionChain:
+    """Chain with two strikes: current position strike + a 22-delta roll candidate."""
+    current_pe = _make_put_leg(ltp=current_ltp, delta=current_delta, strike=current_strike)
+    roll_pe = _make_roll_candidate_leg()
+    return OptionChain(
+        underlying_spot=Decimal("24000"),
+        expiry=date(2026, 6, 26),
+        strikes={
+            Decimal(current_strike): OptionChainStrike(pe=current_pe),
+            Decimal("22000"): OptionChainStrike(pe=roll_pe),
+        },
+    )
+
+
+def test_roll_signal_fires_when_days_held_21_and_replacement_available() -> None:
+    """ROLL ACTION fires alongside TIME_STOP when days_held ≥ 21 and candidate exists.
+
+    The ROLL "DTE" condition mirrors TIME_STOP: days_held ≥ 21.  Strike-embedded
+    keys (needed for put_leg lookup) carry no expiry, so dte is always 9999 for
+    them — using days_held is the only viable trigger for this condition.
+    """
+    strategy = CSPNiftyV1()
+    expiry_date = date(2026, 6, 26)
+    chain = _make_chain_with_roll_candidate(current_ltp="60", current_delta="-0.20")
+    pos = _make_position(
+        instrument_key="NSE_FO|NIFTY23000PE",
+        avg_sell_price="80",
+        entry_date=date.today() - timedelta(days=21),
+    )
+    events = _run(strategy.check_signals(chain, [pos]))
+    event_types = {e.event_type for e in events}
+    assert "ROLL" in event_types, f"Expected ROLL signal, got: {event_types}"
+    roll_ev = next(e for e in events if e.event_type == "ROLL")
+    assert roll_ev.severity == "ACTION"
+    # TIME_STOP also fires (days_held=21 ≥ 21)
+    assert "TIME_STOP" in event_types
+
+
+def test_roll_signal_fires_when_delta_breach_and_replacement_available() -> None:
+    """ROLL ACTION fires when |delta| ≥ 0.35 and roll candidate exists.
+
+    DELTA_BREACH (|delta| ≥ 0.40) fires separately; ROLL fires in addition
+    when the delta crosses the lower 0.35 ROLL threshold.
+    """
+    strategy = CSPNiftyV1()
+    chain = _make_chain_with_roll_candidate(current_ltp="80", current_delta="-0.36")
+    pos = _make_position(avg_sell_price="80")
+    events = _run(strategy.check_signals(chain, [pos]))
+    event_types = {e.event_type for e in events}
+    assert "ROLL" in event_types, f"Expected ROLL signal, got: {event_types}"
+    roll_ev = next(e for e in events if e.event_type == "ROLL")
+    assert roll_ev.severity == "ACTION"
+
+
+def test_roll_signal_fires_when_profit_target_and_replacement_available() -> None:
+    """ROLL ACTION fires when mark ≤ 50% of entry credit and roll candidate exists."""
+    strategy = CSPNiftyV1()
+    # entry=80, ltp=39 → 39/80=0.4875 ≤ 0.50 → ROLL profit condition
+    chain = _make_chain_with_roll_candidate(current_ltp="39", current_delta="-0.15")
+    pos = _make_position(avg_sell_price="80")
+    events = _run(strategy.check_signals(chain, [pos]))
+    event_types = {e.event_type for e in events}
+    assert "ROLL" in event_types, f"Expected ROLL signal, got: {event_types}"
+
+
+def test_apply_action_roll_removes_closed_leg() -> None:
+    """apply_action with ROLL + LegSpec in legs_to_open removes the closed leg."""
+    strategy = CSPNiftyV1()
+    pos = _make_position()
+    roll_spec = LegSpec(
+        instrument_key="NSE_FO|NIFTY22000PE",
+        action="SELL",
+        quantity=1,
+        leg_role="short_put",
+        notes="roll_target delta=-0.22",
+    )
+    action = ApprovedAction(
+        action_type="ROLL",
+        legs_to_close=["short_put"],
+        legs_to_open=[roll_spec],
+        rationale="ROLL signal",
+        council_rank=1,
+    )
+    result = _run(strategy.apply_action([pos], action))
+    assert all(p.leg_role != "short_put" for p in result)
+
+
+def test_roll_signal_does_not_fire_when_no_candidate_in_chain() -> None:
+    """ROLL does NOT fire when chain has no PE leg in the 22-delta [0.18, 0.28] band."""
+    strategy = CSPNiftyV1()
+    # Chain only has the current position's leg; no 22-delta candidate.
+    chain = _make_chain(ltp="48", delta="-0.20")  # 48/80 = 0.60 > 0.50; delta < 0.35; dte=9999
+    # Trigger ROLL profit condition: mark = 39 (≤ 50% of 80) but no roll candidate in range.
+    chain_no_candidate = OptionChain(
+        underlying_spot=Decimal("24000"),
+        expiry=date(2026, 6, 26),
+        strikes={
+            # PE at 23000 has delta=0.10 — outside [0.18, 0.28] band
+            Decimal("23000"): OptionChainStrike(
+                pe=_make_put_leg(ltp="39", delta="-0.10", strike="23000")
+            ),
+        },
+    )
+    pos = _make_position(avg_sell_price="80")
+    events = _run(strategy.check_signals(chain_no_candidate, [pos]))
+    event_types = {e.event_type for e in events}
+    assert "ROLL" not in event_types, f"ROLL should not fire when no candidate: {event_types}"
+    # The PROFIT_TARGET signal fires (39/80 = 0.4875 ≤ 0.30? No — 0.4875 > 0.30, so no PT either)
+    # 39/80 = 0.4875 which is > 0.30, so PROFIT_TARGET won't fire.
+    # ROLL condition: 39/80 = 0.4875 ≤ 0.50 → roll profit condition MET, but no candidate.
+    assert "PROFIT_TARGET" not in event_types  # 39 > 30% of 80 (24)
+
+
+def test_apply_action_roll_raises_when_legs_to_open_empty() -> None:
+    """apply_action ROLL with empty legs_to_open raises ValueError."""
+    strategy = CSPNiftyV1()
+    pos = _make_position()
+    action = ApprovedAction(
+        action_type="ROLL",
+        legs_to_close=["short_put"],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+    )
+    with pytest.raises(ValueError, match="legs_to_open"):
+        _run(strategy.apply_action([pos], action))
+
+
+def test_apply_action_adjust_raises_value_error_still_works() -> None:
+    """apply_action still raises ValueError for unsupported action_type ADJUST."""
+    strategy = CSPNiftyV1()
+    pos = _make_position()
+    action = ApprovedAction(
+        action_type="ADJUST",
+        legs_to_close=[],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+    )
+    with pytest.raises(ValueError, match="ADJUST"):
+        _run(strategy.apply_action([pos], action))
 
 
 def test_find_put_leg_returns_none_for_numeric_key_no_fallback() -> None:

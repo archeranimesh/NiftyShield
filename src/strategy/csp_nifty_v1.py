@@ -42,8 +42,9 @@ from src.models.options import OptionChain, OptionLeg
 from src.paper.models import PaperPosition, TradeState
 from src.strategy.csp_roll_executor import close_csp_leg, open_new_csp_leg, roll_down_and_out
 from src.strategy.exit_signals import ExitSignalEngine
-from src.strategy.protocol import ApprovedAction, SignalEvent
+from src.strategy.protocol import ApprovedAction, LegSpec, SignalEvent
 from src.strategy.reentry_mixin import ReEntryMixin
+from src.strategy.roll_utils import find_strike_by_delta
 
 log = structlog.get_logger(__name__)
 
@@ -63,6 +64,17 @@ _STRIKE_RE = re.compile(r"NIFTY(\d+)(PE|CE)", re.IGNORECASE)
 # Constants here are kept only for docstring / describe_context reference.
 _TIME_STOP_DAYS = 21  # days_held ≥ 21 (calendar days since entry SELL trade)
 
+# ROLL meta-signal thresholds (PA1.1)
+# days_held threshold mirrors TIME_STOP (_TIME_STOP_DAYS) — story calls this "DTE≤21"
+# but the implementation uses days_held because DTE only resolves from expiry-embedded
+# keys which are mutually exclusive with strike-embedded keys (where put_leg is found).
+_ROLL_DELTA_THRESHOLD = Decimal("0.35")   # |delta| ≥ 0.35 → roll condition
+_ROLL_PROFIT_THRESHOLD = Decimal("0.50")  # mark ≤ 50% of entry credit → roll condition
+# Roll target: PE strike closest to 22-delta within [0.18, 0.28] band
+_ROLL_TARGET_DELTA = Decimal("0.22")
+_ROLL_DELTA_LO = Decimal("0.18")
+_ROLL_DELTA_HI = Decimal("0.28")
+
 # Priority-ordered mapping: signal type → auto_action dispatched by StrategyMonitor.
 # First matching ACTION signal per position per tick is emitted; lower entries are suppressed.
 _SIGNAL_ACTION_MAP: dict[str, str] = {
@@ -73,6 +85,10 @@ _SIGNAL_ACTION_MAP: dict[str, str] = {
     "TIME_STOP": "CLOSE_AND_ROLL",
     "ROLL_ELIGIBLE": "CLOSE_AND_ROLL",
 }
+
+# ROLL is emitted independently (outside priority suppression) when a replacement strike
+# is available.  It maps to the ROLL action handled by apply_action.
+_ROLL_AUTO_ACTION = "ROLL"
 
 
 class CSPNiftyV1(ReEntryMixin):
@@ -220,6 +236,46 @@ class CSPNiftyV1(ReEntryMixin):
                     )
                 )
 
+            # ROLL meta-signal: emitted independently of priority suppression when any roll
+            # condition is met AND a replacement strike is available in the current chain.
+            # Note: dte comes from _parse_expiry(instrument_key); for strike-embedded keys
+            # (e.g. NIFTY23000PE) _parse_expiry returns None → dte=9999.  Use days_held≥21
+            # to align with TIME_STOP (same semantic threshold the story calls "DTE≤21").
+            if put_leg is not None:
+                _delta_breached = (
+                    put_leg.delta is not None
+                    and abs(put_leg.delta) >= _ROLL_DELTA_THRESHOLD
+                )
+                roll_condition = (
+                    days_held >= _TIME_STOP_DAYS
+                    or _delta_breached
+                    or put_leg.ltp <= entry_credit * _ROLL_PROFIT_THRESHOLD
+                )
+                if roll_condition:
+                    roll_leg = self._find_roll_leg(market)
+                    if roll_leg is not None:
+                        roll_key = self._build_roll_key(market.expiry, roll_leg.strike)
+                        events.append(
+                            SignalEvent(
+                                event_type="ROLL",
+                                severity="ACTION",
+                                description="ROLL: replacement strike available",
+                                payload={
+                                    "leg_role": pos.leg_role,
+                                    "current_instrument_key": pos.instrument_key,
+                                    "current_dte": dte,
+                                    "suggested_instrument_key": roll_key,
+                                    "suggested_strike": str(roll_leg.strike),
+                                    "suggested_expiry": market.expiry.isoformat(),
+                                    "suggested_delta": str(roll_leg.delta) if roll_leg.delta is not None else None,
+                                    "suggested_mid_price": str(roll_leg.ltp),
+                                    "auto_execute": True,
+                                    "auto_action": _ROLL_AUTO_ACTION,
+                                    "valid_actions": [_ROLL_AUTO_ACTION, "CLOSE_FULL"],
+                                },
+                            )
+                        )
+
         return events
 
     def describe_context(
@@ -331,7 +387,7 @@ class CSPNiftyV1(ReEntryMixin):
         Raises:
             ValueError: If ``action_type`` is not one of the supported values.
         """
-        _valid = ("CLOSE_AND_ROLL", "ROLL_DOWN_AND_OUT", "CLOSE_AND_WAIT", "OPEN_NEW", "CLOSE_FULL")
+        _valid = ("CLOSE_AND_ROLL", "ROLL_DOWN_AND_OUT", "CLOSE_AND_WAIT", "OPEN_NEW", "CLOSE_FULL", "ROLL")
         if action.action_type not in _valid:
             raise ValueError(
                 f"CSPNiftyV1 does not accept action_type={action.action_type!r}; valid: {_valid}"
@@ -381,6 +437,16 @@ class CSPNiftyV1(ReEntryMixin):
 
         if action.action_type == "ROLL_DOWN_AND_OUT":
             return await self._roll_down(short_put, remaining, today)
+
+        if action.action_type == "ROLL":
+            if not action.legs_to_open:
+                raise ValueError("ROLL action requires at least one leg in legs_to_open")
+            closed: set[str] = set(action.legs_to_close)
+            # Remove the closed leg from the in-memory list.  The new leg is NOT appended
+            # here because it has not been filled yet — PaperExecutor.dispatch handles the
+            # DB close + open via action.legs_to_open at fill time.  The next tick's
+            # store.get_positions() call will reflect the new leg once the executor writes it.
+            return [p for p in positions if p.leg_role not in closed]
 
         return remaining  # unreachable but satisfies mypy
 
@@ -532,6 +598,86 @@ class CSPNiftyV1(ReEntryMixin):
             log.warning("csp_nifty_v1.send_notification.failed", error=str(exc))
 
     # ── Private helpers ───────────────────────────────────────────────────────
+
+    def _find_roll_leg(self, market: OptionChain) -> OptionLeg | None:
+        """Return the raw OptionLeg for the CSP roll target, or None.
+
+        Scans the current chain for a PE strike closest to 22-delta within
+        the [0.18, 0.28] absolute-delta band.  Delegates to
+        ``roll_utils.find_strike_by_delta`` — no inline filtering.
+
+        Args:
+            market: Current Nifty 50 option chain snapshot.
+
+        Returns:
+            Best candidate ``OptionLeg`` (PE), or ``None`` when no strike
+            passes the delta filter.
+        """
+        return find_strike_by_delta(
+            market,
+            "PE",
+            (_ROLL_DELTA_LO, _ROLL_DELTA_HI),
+            _ROLL_TARGET_DELTA,
+        )
+
+    @staticmethod
+    def _build_roll_key(expiry: date, strike: Decimal) -> str:
+        """Construct a symbolic instrument key for the roll target.
+
+        Format: ``NSE_FO|NIFTY{DDMMMYYYY}{strike}PE``.  This is a
+        best-effort key derived from chain data alone (no InstrumentLookup
+        call).  The executor resolves the authoritative key at trade time.
+
+        Args:
+            expiry: Expiry date from the option chain.
+            strike: Strike price of the roll target leg.
+
+        Returns:
+            Synthetic NSE_FO instrument key string.
+        """
+        expiry_str = expiry.strftime("%d%b%Y").upper()
+        return f"NSE_FO|NIFTY{expiry_str}{int(strike)}PE"
+
+    def _select_roll_target(
+        self,
+        market: OptionChain,
+        expiry_preference: list[str] | None = None,
+    ) -> LegSpec | None:
+        """Select a CSP roll target and return it as a LegSpec.
+
+        Wraps ``_find_roll_leg`` and packages the result as a ``LegSpec``
+        suitable for embedding in ``ApprovedAction.legs_to_open``.
+
+        The instrument key is constructed from ``market.expiry`` and the
+        selected leg's strike — no additional network or file I/O.
+
+        This method is the public interface for obtaining a ``LegSpec`` from
+        external callers (e.g. scripts, tests, or other strategies).
+        ``check_signals`` calls ``_find_roll_leg`` and ``_build_roll_key``
+        directly to also access the raw ``OptionLeg`` for payload building.
+
+        The ``expiry_preference`` parameter is accepted for interface consistency
+        but is not used (this method operates purely on the passed chain).
+
+        Args:
+            market: Current Nifty 50 option chain snapshot.
+            expiry_preference: Ignored; present for interface symmetry with
+                other strategy helpers.
+
+        Returns:
+            ``LegSpec`` for the roll target with ``action="SELL"`` and
+            ``leg_role="short_put"``, or ``None`` when no candidate found.
+        """
+        leg = self._find_roll_leg(market)
+        if leg is None:
+            return None
+        return LegSpec(
+            instrument_key=self._build_roll_key(market.expiry, leg.strike),
+            action="SELL",
+            quantity=1,
+            leg_role="short_put",
+            notes=f"roll_target delta={leg.delta}",
+        )
 
     def _find_put_leg(self, market: OptionChain, instrument_key: str) -> OptionLeg | None:
         """Locate the PE leg in the chain for the given position.
