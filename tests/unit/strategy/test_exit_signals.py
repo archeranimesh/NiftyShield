@@ -569,3 +569,79 @@ def test_evaluate_roll_overlay_collar_put_roll_eligible():
     assert results[0].exit_signal == "ROLL_ELIGIBLE"
     assert results[0].severity == "ACTION"
     assert "suggested strike 22950" in results[0].notes
+
+
+def test_evaluate_proxy_delta_healthy():
+    results = ExitSignalEngine.evaluate_proxy_delta(
+        current_delta=0.88, current_mark=Decimal("120"), dte=20, days_below_critical=0
+    )
+    assert results == []
+
+
+def test_evaluate_proxy_delta_warn():
+    results = ExitSignalEngine.evaluate_proxy_delta(
+        current_delta=0.62, current_mark=Decimal("80"), dte=20, days_below_critical=0
+    )
+    assert len(results) == 1
+    assert results[0].exit_signal == "PROXY_DELTA_WARN"
+    assert results[0].severity == "WARN"
+    assert results[0].threshold_value == 0.65
+    assert "delta 0.620 < 0.65" in results[0].notes
+    assert "3 more days" in results[0].notes
+
+
+def test_evaluate_proxy_delta_critical_under_3_days():
+    results = ExitSignalEngine.evaluate_proxy_delta(
+        current_delta=0.38, current_mark=Decimal("80"), dte=20, days_below_critical=2
+    )
+    assert len(results) == 1
+    assert results[0].exit_signal == "PROXY_DELTA_WARN"
+    assert results[0].severity == "WARN"
+    assert "1 more days" in results[0].notes
+
+
+def test_evaluate_proxy_delta_critical_at_or_above_3_days():
+    results = ExitSignalEngine.evaluate_proxy_delta(
+        current_delta=0.38, current_mark=Decimal("80"), dte=20, days_below_critical=3
+    )
+    assert len(results) == 1
+    assert results[0].exit_signal == "PROXY_DELTA_CRITICAL"
+    assert results[0].severity == "ACTION"
+    assert results[0].threshold_value == 0.40
+    assert "delta 0.380 < 0.4 for 3 consecutive days" in results[0].notes
+
+    # 5 days consecutive
+    results = ExitSignalEngine.evaluate_proxy_delta(
+        current_delta=0.38, current_mark=Decimal("80"), dte=20, days_below_critical=5
+    )
+    assert len(results) == 1
+    assert results[0].exit_signal == "PROXY_DELTA_CRITICAL"
+    assert results[0].severity == "ACTION"
+
+
+def test_evaluate_proxy_delta_premium_decay():
+    # dte >= 5
+    results = ExitSignalEngine.evaluate_proxy_delta(
+        current_delta=0.88, current_mark=Decimal("0.40"), dte=8, days_below_critical=0
+    )
+    assert len(results) == 1
+    assert results[0].exit_signal == "PROXY_PREMIUM_DECAY"
+    assert results[0].severity == "ACTION"
+    assert results[0].threshold_value == 0.50
+
+    # dte < 5 -> no premium decay
+    results = ExitSignalEngine.evaluate_proxy_delta(
+        current_delta=0.88, current_mark=Decimal("0.40"), dte=4, days_below_critical=0
+    )
+    assert results == []
+
+
+def test_evaluate_proxy_delta_both():
+    results = ExitSignalEngine.evaluate_proxy_delta(
+        current_delta=0.38, current_mark=Decimal("0.40"), dte=8, days_below_critical=3
+    )
+    assert len(results) == 2
+    # ACTIONs sorted first
+    signals = {r.exit_signal for r in results}
+    assert signals == {"PROXY_DELTA_CRITICAL", "PROXY_PREMIUM_DECAY"}
+    assert all(r.severity == "ACTION" for r in results)

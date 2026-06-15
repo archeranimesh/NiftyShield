@@ -787,3 +787,20 @@ def test_get_positions_fully_closed_cycle_returns_net_zero(store: PaperStore) ->
     pos = next((p for p in positions if p.leg_role == _LEG), None)
     assert pos is not None
     assert pos.net_qty == 0
+
+
+def test_proxy_delta_breach_count_methods(store: PaperStore) -> None:
+    # Get count for non-existent strategy
+    assert store.get_proxy_delta_breach_count("paper_nonexistent") == 0
+
+    # Set count to 1
+    store.set_proxy_delta_breach_count("paper_nonexistent", 1)
+    assert store.get_proxy_delta_breach_count("paper_nonexistent") == 1
+
+    # Update count to 2
+    store.set_proxy_delta_breach_count("paper_nonexistent", 2)
+    assert store.get_proxy_delta_breach_count("paper_nonexistent") == 2
+
+    # Reset count to 0
+    store.set_proxy_delta_breach_count("paper_nonexistent", 0)
+    assert store.get_proxy_delta_breach_count("paper_nonexistent") == 0

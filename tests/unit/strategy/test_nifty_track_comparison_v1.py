@@ -383,3 +383,130 @@ def test_apply_action_any_action_type_no_error() -> None:
     )
     result = _run(strategy.apply_action([_make_position()], action))
     assert len(result) == 1
+
+
+class MockStore:
+    def __init__(self, count: int = 0) -> None:
+        self.count = count
+        self.set_called_with = None
+
+    def get_proxy_delta_breach_count(self, strategy_name: str) -> int:
+        return self.count
+
+    def set_proxy_delta_breach_count(self, strategy_name: str, count: int) -> None:
+        self.set_called_with = (strategy_name, count)
+
+
+def test_proxy_delta_warn_signal() -> None:
+    # delta = 0.62 -> PROXY_DELTA_WARN
+    store = MockStore(count=0)
+    strategy = NiftyTrackComparisonV1(store=store)
+
+    ce = _make_leg(ltp="80", delta="0.62", option_type="CE")
+    market = OptionChain(
+        underlying_spot=Decimal("24000"),
+        expiry=date(2026, 6, 26),
+        strikes={Decimal("24000"): OptionChainStrike(ce=ce, pe=None)},
+    )
+    positions = [
+        PaperPosition(
+            strategy_name=_PROXY,
+            leg_role="base_ditm_call",
+            instrument_key="NSE_FO|NIFTY24000CE",
+            net_qty=65,
+            avg_cost=Decimal("120"),
+            avg_sell_price=Decimal("0"),
+        )
+    ]
+
+    result = _run(strategy.check_signals(market, positions))
+    assert len(result) == 1
+    assert result[0].event_type == "PROXY_DELTA_WARN"
+    assert result[0].severity == "WARN"
+    # delta recovered/not below 0.40 -> resets to 0
+    assert store.set_called_with == (_PROXY, 0)
+
+
+def test_proxy_delta_first_breach() -> None:
+    # delta = 0.38, count = 0 -> PROXY_DELTA_WARN, stores count = 1
+    store = MockStore(count=0)
+    strategy = NiftyTrackComparisonV1(store=store)
+
+    ce = _make_leg(ltp="80", delta="0.38", option_type="CE")
+    market = OptionChain(
+        underlying_spot=Decimal("24000"),
+        expiry=date(2026, 6, 26),
+        strikes={Decimal("24000"): OptionChainStrike(ce=ce, pe=None)},
+    )
+    positions = [
+        PaperPosition(
+            strategy_name=_PROXY,
+            leg_role="base_ditm_call",
+            instrument_key="NSE_FO|NIFTY24000CE",
+            net_qty=65,
+            avg_cost=Decimal("120"),
+            avg_sell_price=Decimal("0"),
+        )
+    ]
+
+    result = _run(strategy.check_signals(market, positions))
+    assert len(result) == 1
+    assert result[0].event_type == "PROXY_DELTA_WARN"
+    assert result[0].severity == "WARN"
+    assert store.set_called_with == (_PROXY, 1)
+
+
+def test_proxy_delta_critical_breach() -> None:
+    # delta = 0.38, count = 3 -> PROXY_DELTA_CRITICAL ACTION, stores count = 4
+    store = MockStore(count=3)
+    strategy = NiftyTrackComparisonV1(store=store)
+
+    ce = _make_leg(ltp="80", delta="0.38", option_type="CE")
+    market = OptionChain(
+        underlying_spot=Decimal("24000"),
+        expiry=date(2026, 6, 26),
+        strikes={Decimal("24000"): OptionChainStrike(ce=ce, pe=None)},
+    )
+    positions = [
+        PaperPosition(
+            strategy_name=_PROXY,
+            leg_role="base_ditm_call",
+            instrument_key="NSE_FO|NIFTY24000CE",
+            net_qty=65,
+            avg_cost=Decimal("120"),
+            avg_sell_price=Decimal("0"),
+        )
+    ]
+
+    result = _run(strategy.check_signals(market, positions))
+    assert len(result) == 1
+    assert result[0].event_type == "PROXY_DELTA_CRITICAL"
+    assert result[0].severity == "ACTION"
+    assert result[0].payload["valid_actions"] == ["RECORD_REENTRY"]
+    assert store.set_called_with == (_PROXY, 4)
+
+
+def test_proxy_delta_no_store() -> None:
+    # store is None -> no crash, warning signals still emitted
+    strategy = NiftyTrackComparisonV1(store=None)
+
+    ce = _make_leg(ltp="80", delta="0.62", option_type="CE")
+    market = OptionChain(
+        underlying_spot=Decimal("24000"),
+        expiry=date(2026, 6, 26),
+        strikes={Decimal("24000"): OptionChainStrike(ce=ce, pe=None)},
+    )
+    positions = [
+        PaperPosition(
+            strategy_name=_PROXY,
+            leg_role="base_ditm_call",
+            instrument_key="NSE_FO|NIFTY24000CE",
+            net_qty=65,
+            avg_cost=Decimal("120"),
+            avg_sell_price=Decimal("0"),
+        )
+    ]
+
+    result = _run(strategy.check_signals(market, positions))
+    assert len(result) == 1
+    assert result[0].event_type == "PROXY_DELTA_WARN"

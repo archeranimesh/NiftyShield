@@ -25,6 +25,7 @@ from __future__ import annotations
 import re
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
+from typing import Any
 
 import structlog
 
@@ -73,6 +74,18 @@ class NiftyTrackComparisonV1:
         "paper_nifty_proxy",
     ]
 
+    def __init__(
+        self,
+        store: Any = None,
+        notifier: Any = None,
+        broker: Any = None,
+        **kwargs: Any,
+    ) -> None:
+        """Initialise NiftyTrackComparisonV1."""
+        self._store = store
+        self._notifier = notifier
+        self._broker = broker
+
     # ── PaperStrategy protocol ────────────────────────────────────────────────
 
     async def check_signals(
@@ -101,7 +114,10 @@ class NiftyTrackComparisonV1:
         for pos in positions:
             if pos.strategy_name not in self.TRACK_STRATEGY_NAMES:
                 continue
-            if not pos.leg_role.startswith("overlay_"):
+
+            is_overlay = pos.leg_role.startswith("overlay_")
+            is_proxy_base = pos.leg_role == "base_ditm_call"
+            if not (is_overlay or is_proxy_base):
                 continue
 
             expiry = self._parse_expiry(pos.instrument_key)
@@ -112,6 +128,67 @@ class NiftyTrackComparisonV1:
                 "leg_role": pos.leg_role,
                 "dte": dte,
             }
+
+            if is_proxy_base:
+                option_leg = self._find_option_leg(market, pos.instrument_key)
+                if option_leg is None:
+                    log.warning(
+                        "nifty_track_comparison_v1.check_signals.proxy_option_leg_missing",
+                        leg_role=pos.leg_role,
+                        instrument_key=pos.instrument_key,
+                    )
+                    continue
+
+                if option_leg.delta is None:
+                    log.warning(
+                        "nifty_track_comparison_v1.check_signals.proxy_delta_missing",
+                        leg_role=pos.leg_role,
+                        instrument_key=pos.instrument_key,
+                    )
+                    continue
+
+                current_delta = float(option_leg.delta)
+                current_mark = option_leg.ltp
+                days_below_critical = 0
+                if self._store is not None:
+                    days_below_critical = self._store.get_proxy_delta_breach_count(
+                        pos.strategy_name
+                    )
+
+                val_dte = dte if dte is not None else 999
+                proxy_results = ExitSignalEngine.evaluate_proxy_delta(
+                    current_delta=current_delta,
+                    current_mark=current_mark,
+                    dte=val_dte,
+                    days_below_critical=days_below_critical,
+                )
+
+                if self._store is not None:
+                    if current_delta < 0.40:
+                        self._store.set_proxy_delta_breach_count(
+                            pos.strategy_name, days_below_critical + 1
+                        )
+                    else:
+                        self._store.set_proxy_delta_breach_count(pos.strategy_name, 0)
+
+                for res in proxy_results:
+                    payload = {
+                        **payload_base,
+                        "delta": str(option_leg.delta),
+                        "mark": str(option_leg.ltp),
+                    }
+                    if res.severity == "ACTION":
+                        payload["valid_actions"] = ["RECORD_REENTRY"]
+
+                    events.append(
+                        SignalEvent(
+                            event_type=res.exit_signal,
+                            severity=res.severity,
+                            description=res.notes or res.exit_signal,
+                            payload=payload,
+                        )
+                    )
+                continue
 
             # ── Expired overlay (no roll recorded) ───────────────────────────
             if expiry is not None and expiry < today:

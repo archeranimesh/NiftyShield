@@ -175,6 +175,11 @@ CREATE TABLE IF NOT EXISTS paper_action_audit (
     rationale       TEXT,
     executed_at     TEXT    NOT NULL    -- ISO UTC
 ) STRICT;
+
+CREATE TABLE IF NOT EXISTS paper_strategies (
+    strategy_name            TEXT PRIMARY KEY,
+    proxy_delta_breach_count INTEGER NOT NULL DEFAULT 0
+) STRICT;
 """
 
 
@@ -790,6 +795,42 @@ class PaperStore:
                 break
 
         return consecutive
+
+    def get_proxy_delta_breach_count(self, strategy_name: str) -> int:
+        """Return the number of consecutive trading days the Proxy delta has been below
+        _PROXY_DELTA_CRITICAL (0.40). Returns 0 if no record exists.
+
+        Args:
+            strategy_name: Strategy namespace (e.g. 'paper_nifty_proxy').
+
+        Returns:
+            Non-negative integer.
+        """
+        with _connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT proxy_delta_breach_count FROM paper_strategies WHERE strategy_name = ?",
+                (strategy_name,),
+            ).fetchone()
+        if row is None:
+            return 0
+        return int(row["proxy_delta_breach_count"])
+
+    def set_proxy_delta_breach_count(self, strategy_name: str, count: int) -> None:
+        """Persist the consecutive Proxy delta breach count.
+        Resets to 0 when delta recovers above _PROXY_DELTA_CRITICAL.
+
+        Args:
+            strategy_name: Strategy namespace.
+            count: New breach count (0 to reset, N to increment).
+        """
+        with _connect(self.db_path) as conn:
+            conn.execute(
+                """INSERT INTO paper_strategies (strategy_name, proxy_delta_breach_count)
+                   VALUES (?, ?)
+                   ON CONFLICT(strategy_name)
+                   DO UPDATE SET proxy_delta_breach_count = excluded.proxy_delta_breach_count""",
+                (strategy_name, count),
+            )
 
     # ── Leg snapshots ─────────────────────────────────────────────────────────
 

@@ -19,6 +19,11 @@ _OVERLAY_LONG_PUT_ROLES = {"overlay_pp", "overlay_collar_put"}
 _OVERLAY_STRIKE_OFFSET = 50  # points
 _BASE_DTE_GUARD = 10  # if base DTE <= this, block overlay roll
 
+_PROXY_DELTA_WARN = 0.65  # warning threshold — emit WARN, do not close
+_PROXY_DELTA_CRITICAL = 0.40  # critical threshold — close after 3 consecutive days
+_PROXY_DELTA_CONSECUTIVE = 3  # consecutive days below critical before ACTION fires
+_PROXY_PREMIUM_FLOOR = Decimal("0.50")  # premium decay kill — close if mark < this with DTE >= 5
+
 
 @dataclass(frozen=True)
 class ExitSignalResult:
@@ -484,3 +489,78 @@ class ExitSignalEngine:
                 notes=f"DTE {dte} ≤ 5 — suggested strike {suggested_strike}",
             )
         ]
+
+    @classmethod
+    def evaluate_proxy_delta(
+        cls,
+        *,
+        current_delta: float,
+        current_mark: Decimal,
+        dte: int,
+        days_below_critical: int = 0,
+    ) -> list[ExitSignalResult]:
+        """Evaluate exit signals for the Proxy deep ITM call leg.
+
+        Three independent signals in priority order:
+
+        1. PROXY_DELTA_CRITICAL (ACTION): delta < 0.40 AND days_below_critical >= 3.
+           Close immediately and re-enter at delta ≈ 0.90.
+        2. PROXY_PREMIUM_DECAY (ACTION): current_mark < 0.50 AND dte >= 5.
+           Deep ITM call has lost virtually all optionality — carry risk is too high.
+        3. PROXY_DELTA_WARN (WARN): delta < 0.65. Flag for monitoring; no close.
+
+        PROXY_DELTA_CRITICAL and PROXY_PREMIUM_DECAY are independent — both can fire
+        simultaneously. PROXY_DELTA_WARN is suppressed if PROXY_DELTA_CRITICAL fires
+        (CRITICAL subsumes WARN).
+
+        Args:
+            current_delta: Current delta of the deep ITM call (positive float, 0–1).
+            current_mark: Current mark-to-market price of the call (positive Decimal).
+            dte: Calendar days to expiry.
+            days_below_critical: Consecutive trading days delta has been < 0.40.
+                Caller is responsible for maintaining this count across sessions.
+
+        Returns:
+            List of ExitSignalResult ordered ACTION before WARN.
+        """
+        results: list[ExitSignalResult] = []
+        critical_fired = False
+
+        # 1. PROXY_DELTA_CRITICAL: delta < 0.40 AND days_below_critical >= 3
+        if (
+            current_delta < _PROXY_DELTA_CRITICAL
+            and days_below_critical >= _PROXY_DELTA_CONSECUTIVE
+        ):
+            results.append(
+                ExitSignalResult(
+                    exit_signal="PROXY_DELTA_CRITICAL",
+                    severity="ACTION",
+                    threshold_value=_PROXY_DELTA_CRITICAL,
+                    notes=f"delta {current_delta:.3f} < {_PROXY_DELTA_CRITICAL} for {days_below_critical} consecutive days — close and re-enter at δ≈0.90",
+                )
+            )
+            critical_fired = True
+
+        # 2. PROXY_PREMIUM_DECAY: current_mark < 0.50 AND dte >= 5
+        if current_mark < _PROXY_PREMIUM_FLOOR and dte >= 5:
+            results.append(
+                ExitSignalResult(
+                    exit_signal="PROXY_PREMIUM_DECAY",
+                    severity="ACTION",
+                    threshold_value=float(_PROXY_PREMIUM_FLOOR),
+                    notes=f"mark ₹{current_mark} < ₹{_PROXY_PREMIUM_FLOOR} with DTE {dte} — optionality exhausted",
+                )
+            )
+
+        # 3. PROXY_DELTA_WARN: delta < 0.65 (suppressed if PROXY_DELTA_CRITICAL fires)
+        if current_delta < _PROXY_DELTA_WARN and not critical_fired:
+            results.append(
+                ExitSignalResult(
+                    exit_signal="PROXY_DELTA_WARN",
+                    severity="WARN",
+                    threshold_value=_PROXY_DELTA_WARN,
+                    notes=f"delta {current_delta:.3f} < {_PROXY_DELTA_WARN} — monitor; {_PROXY_DELTA_CONSECUTIVE - days_below_critical} more days below {_PROXY_DELTA_CRITICAL} triggers close",
+                )
+            )
+
+        return cls._sort_results(results)
