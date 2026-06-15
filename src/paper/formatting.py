@@ -65,6 +65,7 @@ def format_pnl_table(rows: list[dict[str, Any]], title: str = "", is_dry_run: bo
 
 _PERIOD_HEADERS: dict[str, tuple[str, str, str]] = {
     "daily": ("Day Base", "Day Overlay", "Day Net"),
+    "monthly": ("MTD Base", "MTD Overlay", "MTD Net"),
     "inception": ("Base P&L", "Overlay", "Net P&L"),
 }
 

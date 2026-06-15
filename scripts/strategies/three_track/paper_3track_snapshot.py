@@ -781,6 +781,74 @@ def _compute_daily_deltas(
     return rows
 
 
+def _first_trading_day_of_month(ref_date: date) -> date:
+    """Return the first NSE trading day of ref_date's month.
+
+    Walks forward from the 1st until a trading day is found.
+
+    Args:
+        ref_date: Any date within the target month.
+
+    Returns:
+        The first NSE trading day of that calendar month.
+    """
+    candidate = date(ref_date.year, ref_date.month, 1)
+    while not is_trading_day(candidate):
+        candidate += timedelta(days=1)
+    return candidate
+
+
+def _compute_monthly_deltas(
+    results: list[tuple[str, TrackSnapshot]],
+    store: PaperStore,
+    snap_date: date,
+) -> list[dict]:
+    """Compute month-to-date P&L delta fields for each track in the summary table.
+
+    The MTD reference is the nearest prior leg snapshot on or before the first
+    NSE trading day of snap_date's month.  Returns Decimal("0") when no such
+    snapshot exists (e.g., first trading day of month with no prior data).
+
+    Args:
+        results: List of (track_name, TrackSnapshot) pairs from the snapshot loop.
+        store: PaperStore for reading leg snapshots.
+        snap_date: Today's snapshot date.
+
+    Returns:
+        List of dicts with keys ``base_pnl``, ``overlay_pnl``, ``net_pnl``
+        holding MTD deltas; one dict per result entry (same order).
+    """
+    first_td = _first_trading_day_of_month(snap_date)
+    # Use first_td + 1 day as exclusive upper bound so the snapshot ON first_td
+    # is included (get_prev_leg_snapshot uses strict <).
+    ref_date = first_td + timedelta(days=1)
+
+    rows: list[dict] = []
+    for track_name, snapshot in results:
+        pnl = snapshot.pnl
+        base_role = _base_leg_role(track_name)
+        base_unrealized = pnl.unrealized_pnl - sum(pnl.overlay_pnls.values())
+        base_total = base_unrealized + pnl.realized_pnl
+
+        prev_base = store.get_prev_leg_snapshot(track_name, base_role, before_date=ref_date)
+        base_day = (base_total - prev_base.total_pnl) if prev_base is not None else Decimal("0")
+
+        overlay_day = Decimal("0")
+        for role, role_pnl in pnl.overlay_pnls.items():
+            prev = store.get_prev_leg_snapshot(track_name, role, before_date=ref_date)
+            if prev is not None:
+                overlay_day += role_pnl - prev.total_pnl
+
+        rows.append(
+            {
+                "base_pnl": base_day,
+                "overlay_pnl": overlay_day,
+                "net_pnl": base_day + overlay_day,
+            }
+        )
+    return rows
+
+
 # ── Display blocks ────────────────────────────────────────────────────────────
 
 
@@ -968,10 +1036,6 @@ async def _run(args: argparse.Namespace) -> None:
     snap_date: date = args.date or date.today()
     save: bool = not args.dry_run
     period: str = args.period
-
-    if period == "monthly":
-        print("Monthly mode not yet implemented (RPT-3). Use --daily or --inception.")
-        sys.exit(1)
 
     _TRACK_MAP = {
         "spot": STRATEGY_SPOT,
@@ -1214,6 +1278,10 @@ async def _run(args: argparse.Namespace) -> None:
         if period == "daily":
             daily_deltas = _compute_daily_deltas(results, store, snap_date)
             for i, delta_row in enumerate(daily_deltas):
+                display_rows[i] = {**display_rows[i], **delta_row}
+        elif period == "monthly":
+            monthly_deltas = _compute_monthly_deltas(results, store, snap_date)
+            for i, delta_row in enumerate(monthly_deltas):
                 display_rows[i] = {**display_rows[i], **delta_row}
         print(
             "\n"

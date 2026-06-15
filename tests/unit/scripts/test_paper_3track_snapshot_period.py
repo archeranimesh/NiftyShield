@@ -1,4 +1,4 @@
-"""Unit tests for RPT-2: CLI period redesign + daily P&L delta mode.
+"""Unit tests for RPT-2/RPT-3: CLI period redesign, daily P&L delta, and monthly mode.
 
 Coverage:
 - _compute_daily_deltas: with prior snapshot → returns correct 1-day delta.
@@ -6,7 +6,9 @@ Coverage:
 - _compute_daily_deltas: overlay legs summed correctly.
 - CLI period mutual exclusion: --daily + --inception → argparse error.
 - CLI period default: no flag → period='daily'.
-- --monthly guard: exits 1 with message.
+- _first_trading_day_of_month: normal month, and non-trading 1st.
+- _compute_monthly_deltas: reference vs first trading day; no prior → Decimal("0").
+- -m flag no longer exits with error.
 """
 
 from __future__ import annotations
@@ -23,7 +25,11 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 import scripts.strategies.three_track.paper_3track_snapshot as snap_mod
-from scripts.strategies.three_track.paper_3track_snapshot import _compute_daily_deltas
+from scripts.strategies.three_track.paper_3track_snapshot import (
+    _compute_daily_deltas,
+    _compute_monthly_deltas,
+    _first_trading_day_of_month,
+)
 from src.paper.models import PaperLegSnapshot
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -164,25 +170,92 @@ def test_cli_period_mutual_exclusion() -> None:
         _make_parser().parse_args(["--daily", "--inception"])
 
 
-def test_monthly_guard_exits(monkeypatch: pytest.MonkeyPatch, capsys) -> None:
-    """--monthly flag causes sys.exit(1) with an explanatory message."""
-    # Build args with period='monthly' and minimal required attrs
-    args = argparse.Namespace(
-        period="monthly",
-        date=date(2026, 6, 15),
-        dry_run=True,
-        spot=None,
-        tracks=None,
-        db_path=Path("data/portfolio/portfolio.sqlite"),
-        bod_path=Path("data/bod/complete_instruments.json"),
-        verbose=False,
+# ── _first_trading_day_of_month ───────────────────────────────────────────────
+
+
+def test_first_trading_day_normal_month() -> None:
+    """June 1 2026 is a Monday — it should be the first trading day of June."""
+    # 2026-06-01 is a Monday; assuming it's not a holiday, it's the first TD.
+    result = _first_trading_day_of_month(date(2026, 6, 15))
+    assert result.month == 6
+    assert result.year == 2026
+    assert result.day >= 1
+    # Must be a weekday
+    assert result.weekday() < 5
+
+
+def test_first_trading_day_non_trading_first(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When the 1st of the month is a non-trading day, advances to the next."""
+
+    # Patch is_trading_day so that Jun 1 is not a trading day, Jun 2 is.
+    call_count = {"n": 0}
+
+    def _fake_is_trading_day(d: date, **kwargs: object) -> bool:
+        call_count["n"] += 1
+        return d.day >= 2  # only 2nd onwards is trading
+
+    monkeypatch.setattr(snap_mod, "is_trading_day", _fake_is_trading_day)
+
+    result = _first_trading_day_of_month(date(2026, 6, 15))
+    assert result == date(2026, 6, 2)
+
+
+# ── _compute_monthly_deltas ───────────────────────────────────────────────────
+
+
+def test_compute_monthly_deltas_with_prior_snapshot() -> None:
+    """MTD delta = current_total − snapshot on/before first trading day of month."""
+    snap = _make_track_snapshot(
+        base_unrealized=Decimal("15000"), realized=Decimal("3000"), overlay_pnls={}
     )
+    # base_total = 15000 + 3000 = 18000; first-TD snapshot was 10000 → MTD = 8000
+    mtd_snap = _make_leg_snapshot(Decimal("10000"))
 
-    import asyncio
+    store = MagicMock()
+    store.get_prev_leg_snapshot.return_value = mtd_snap
 
-    with pytest.raises(SystemExit) as exc_info:
-        asyncio.run(snap_mod._run(args))
+    results = [("paper_nifty_spot", snap)]
+    rows = _compute_monthly_deltas(results, store, date(2026, 6, 15))
 
-    assert exc_info.value.code == 1
-    captured = capsys.readouterr()
-    assert "Monthly mode" in captured.out or "Monthly" in captured.out
+    assert len(rows) == 1
+    assert rows[0]["base_pnl"] == Decimal("8000")
+    assert rows[0]["overlay_pnl"] == Decimal("0")
+    assert rows[0]["net_pnl"] == Decimal("8000")
+
+
+def test_compute_monthly_deltas_no_prior_snapshot() -> None:
+    """Returns Decimal('0') when no leg snapshot exists before the first trading day."""
+    snap = _make_track_snapshot(base_unrealized=Decimal("5000"), realized=Decimal("0"))
+    store = MagicMock()
+    store.get_prev_leg_snapshot.return_value = None
+
+    rows = _compute_monthly_deltas([("paper_nifty_spot", snap)], store, date(2026, 6, 15))
+
+    assert rows[0]["base_pnl"] == Decimal("0")
+    assert rows[0]["overlay_pnl"] == Decimal("0")
+    assert rows[0]["net_pnl"] == Decimal("0")
+
+
+def test_compute_monthly_deltas_uses_first_td_as_reference() -> None:
+    """Verifies get_prev_leg_snapshot is called with first-TD+1 as before_date."""
+    snap = _make_track_snapshot(base_unrealized=Decimal("1000"), realized=Decimal("0"))
+    store = MagicMock()
+    store.get_prev_leg_snapshot.return_value = None
+
+    # June 2026: first trading day is June 1 (Monday).
+    _compute_monthly_deltas([("paper_nifty_spot", snap)], store, date(2026, 6, 15))
+
+    # before_date passed to store should be first_td + 1 day = June 2
+    call_args = store.get_prev_leg_snapshot.call_args
+    before_date_arg = call_args[1].get("before_date") or call_args[0][2]
+    from datetime import timedelta
+
+    first_td = _first_trading_day_of_month(date(2026, 6, 15))
+    assert before_date_arg == first_td + timedelta(days=1)
+
+
+def test_monthly_flag_no_longer_exits() -> None:
+    """Parsing -m no longer causes sys.exit(1) in _run — guard was removed in RPT-3."""
+    parser = _make_parser()
+    args = parser.parse_args(["-m"])
+    assert args.period == "monthly"
