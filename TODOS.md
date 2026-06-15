@@ -434,4 +434,4 @@ Full log: [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md)
 
 | 2026-06-15 | CR1d SHA annotated — tasks.md had stale SHA:pending; actual commit is e62aee9 |
 | 2026-06-15 | RPT-1 closed — generate_track_snapshot second pass folds closed overlay legs (net_qty==0) into overlay_pnls + total_realized; 2 new tests; SHA bce1d4a |
-| 2026-06-15 | COLLAR-1 closed — CollarOverlayV1 automated with ReEntryMixin, evaluate_cc, CLOSE_COLLAR atomic closing via record_trades, unified collar role names, and dispatch evaluate fixes; 14 tests updated; SHA: pending |
+| 2026-06-15 | COLLAR-1 closed — CollarOverlayV1 automated with ReEntryMixin, evaluate_cc, CLOSE_COLLAR atomic closing via record_trades, unified collar role names, and dispatch evaluate fixes; 14 tests updated; SHA: 906c0a7 |
