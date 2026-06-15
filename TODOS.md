@@ -438,5 +438,5 @@ Full log: [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md)
 | 2026-06-15 | RPT-1 closed — generate_track_snapshot second pass folds closed overlay legs (net_qty==0) into overlay_pnls + total_realized; 2 new tests; SHA bce1d4a |
 | 2026-06-15 | COLLAR-1 closed — CollarOverlayV1 automated with ReEntryMixin, evaluate_cc, CLOSE_COLLAR atomic closing via record_trades, unified collar role names, and dispatch evaluate fixes; 14 tests updated; SHA: 906c0a7 |
 | 2026-06-15 | COLLAR-1-FIX closed — Refined close notification exit prices (approximate call exit indicator, omitted put delta, approximate net P&L prefix), fixed log warnings format mismatch in snapshot/CC/Collar strategies, and added invalid qty warning for passive collar put; documented collar long put exit MTM divergence gap; 47 unit tests passed |
-
+| 2026-06-15 | NT-1 closed — evaluate_proxy_delta() added to ExitSignalEngine; proxy delta consecutive days breach count methods added to PaperStore; wired into NiftyTrackComparisonV1; migrate_paper_strategies.py added; unit tests green; SHA 70d4a9b |
 
