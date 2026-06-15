@@ -223,7 +223,7 @@ Tasks run in priority order. Infrastructure that blocks other stories runs first
 | 7 | MVP: Multi-bagger Value Picks Tracker | Cowork | After #1 | — | ⬜ Not started — [story](docs/plan/mvp/) |
 | 8 | backtest-eval-core: `BacktestStore` + `src/analytics/` | Cowork | Aug 2026 | #9 | ⬜ Not started — [story](docs/plan/backtest-eval-core/) — **blocked by tasks 1.3 + 1.4** |
 | 9 | signals-eval-core: regime engine + signal generators + validation | Cowork | Q4 2026 | — | ⬜ Not started — [story](docs/plan/signals-eval-core/) — **blocked by #8 + Phase 1.12 gate** |
-| 10 | council-refactor: remove RapidCouncil from daemon path; fix approval bug; add deterministic roll rules | Cowork | Before 2026-06-23 roll week | — | 🔄 CR0+CR1a+CR1b shipped — CR1c (CSPRollExecutor) + CR1d (CSPNiftyV1 auto-execute) pending — [story](docs/plan/council-refactor/) |
+| 10 | council-refactor: remove RapidCouncil from daemon path; fix approval bug; add deterministic roll rules | Cowork | Before 2026-06-23 roll week | — | ✅ Shipped — [story](docs/plan/council-refactor/) |
 | 10 | broker-abstraction: multi-broker parser/adapter layer (Dhan, Kite) | Cowork | LOW — after Phase 0.8 gate | — | ⬜ Not started — [story](docs/plan/broker-abstraction/) — 16 tasks BA-0→BA-15; start with BA-0 analysis; BA-14/15 blocked on Phase 1 |
 | 11 | historical-data-abstraction: `HistoricalCandleFetcher` protocol + vendor implementations | Cowork | LOW — after Phase 0.8 gate | — | ⬜ Not started — [story](docs/plan/historical-data-abstraction/) — 11 tasks HD-0→HD-10; start with HD-0 cost evaluation (paid APIs); HD-6/HD-7 conditional on HD-0 decision matrix |
 
@@ -441,4 +441,4 @@ Full log: [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md)
 | 2026-06-15 | COLLAR-1 closed — CollarOverlayV1 automated with ReEntryMixin, evaluate_cc, CLOSE_COLLAR atomic closing via record_trades, unified collar role names, and dispatch evaluate fixes; 14 tests updated; SHA: 906c0a7 |
 | 2026-06-15 | COLLAR-1-FIX closed — Refined close notification exit prices (approximate call exit indicator, omitted put delta, approximate net P&L prefix), fixed log warnings format mismatch in snapshot/CC/Collar strategies, and added invalid qty warning for passive collar put; documented collar long put exit MTM divergence gap; 47 unit tests passed |
 | 2026-06-15 | NT-1 closed — evaluate_proxy_delta() added to ExitSignalEngine; proxy delta consecutive days breach count methods added to PaperStore; wired into NiftyTrackComparisonV1; migrate_paper_strategies.py added; unit tests green; SHA 70d4a9b |
-
+| 2026-06-15 | AUTO-1 closed — EOD snapshot auto-close implemented for all overlays: auto_close_overlay routing via OverlayCloser, status resolution to ACTED, unified Telegram close notification dispatch, and EOD PP re-entry eligibility checks evaluation; tests green; SHA bbd9368 |

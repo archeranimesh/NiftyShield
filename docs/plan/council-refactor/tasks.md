@@ -226,7 +226,7 @@
 
 ## P13 — EOD auto-execution + operational fixes
 
-- [ ] **AUTO-1** `[Antigravity]` — EOD snapshot auto-close for ALL overlays (CC, PP, Collar): after `compute_and_record_exit_signals` writes an ACTION event, immediately call `OverlayCloser` to paper-execute the close in the same script run. Mark the event `ACTED`. Send structured Telegram notification: leg closed, leg P&L, overlay total P&L. Part 0 prerequisite: add `PaperStore.get_strategy_realized_pnl`. All overlay signals auto-execute — no manual approvals anywhere. Signature change: adds `simulator` and `vix` params. See `stories_auto.md` for full spec. Prerequisites: FR-1 + CC-4 + PP-2 + COLLAR-1 + DAEMON-FIX.
+- [x] **AUTO-1** `[Antigravity]` — EOD snapshot auto-close for ALL overlays (CC, PP, Collar): after `compute_and_record_exit_signals` writes an ACTION event, immediately call `OverlayCloser` to paper-execute the close in the same script run. Mark the event `ACTED`. Send structured Telegram notification: leg closed, leg P&L, overlay total P&L. Part 0 prerequisite: add `PaperStore.get_strategy_realized_pnl`. All overlay signals auto-execute — no manual approvals anywhere. Signature change: adds `simulator` and `vix` params. See `stories_auto.md` for full spec. Prerequisites: FR-1 + CC-4 + PP-2 + COLLAR-1 + DAEMON-FIX. | SHA: bbd9368
 
 - [ ] **OPS-1** `[Claude]` — `paper_3track_overlay_entry.py`: add insert/skip logging. `store.record_trade()` returns `bool` but the entry script silently ignores it. After each call, log `INSERTED` or `SKIPPED (conflict on strategy/leg/date/action)` at INFO level using structlog. Helps diagnose silent no-ops when same-day close + open hit the unique constraint.
   Tests: mock `record_trade` returning True/False and assert log output.
