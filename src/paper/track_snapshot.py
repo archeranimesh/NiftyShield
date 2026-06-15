@@ -6,6 +6,7 @@ import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
+from typing import Any, cast
 
 from src.client.protocol import BrokerClient
 from src.client.upstox_market import parse_upstox_option_chain
@@ -50,6 +51,50 @@ class TrackSnapshot:
     return_on_nee: Decimal
     proxy_delta_state: str | None = None
     proxy_delta_alert: str | None = None
+
+
+def _normalize_overlay_pnls(overlay_pnls: dict[str, Decimal]) -> dict[str, Decimal]:
+    """Merge collar legs into one unit and deduplicate CC vs collar_call.
+
+    Rules (applied in order):
+    - ``overlay_collar_call`` is the canonical short-call role.  If both
+      ``overlay_cc`` and ``overlay_collar_call`` exist for a strategy (same
+      physical contract recorded under two roles), ``overlay_cc`` is dropped.
+    - ``overlay_collar_call + overlay_collar_put`` → ``"collar"`` (one unit).
+    - If only ``overlay_collar_call`` exists (no put), it surfaces as ``"cc"``.
+    - If only ``overlay_cc`` exists (no collar tracking), it surfaces as ``"cc"``.
+    - ``overlay_pp`` → ``"pp"``.
+
+    This means net_pnl never double-counts the short call, regardless of whether
+    it was originally recorded as overlay_cc, overlay_collar_call, or both.
+
+    Args:
+        overlay_pnls: Raw per-leg-role P&L dict from the snapshot loop.
+
+    Returns:
+        Normalized dict with keys in ``{"cc", "collar", "pp"}``.
+    """
+    call_pnl = overlay_pnls.get("overlay_collar_call")
+    put_pnl = overlay_pnls.get("overlay_collar_put")
+    cc_pnl = overlay_pnls.get("overlay_cc")
+    pp_pnl = overlay_pnls.get("overlay_pp")
+
+    result: dict[str, Decimal] = {}
+
+    # overlay_collar_call takes precedence over overlay_cc (same physical contract).
+    if call_pnl is not None:
+        if put_pnl is not None:
+            result["collar"] = call_pnl + put_pnl  # collar = call + put as one unit
+        else:
+            result["cc"] = call_pnl  # call-only → CC scenario
+        # overlay_cc, if present, is a duplicate — silently dropped.
+    elif cc_pnl is not None:
+        result["cc"] = cc_pnl  # standalone CC, no collar tracking
+
+    if pp_pnl is not None:
+        result["pp"] = pp_pnl
+
+    return result
 
 
 def _compute_realized_pnl_by_leg(store: PaperStore, strategy_name: str) -> dict[str, Decimal]:
@@ -184,7 +229,9 @@ async def generate_track_snapshot(
                         underlying = "NSE_INDEX|Nifty 50"  # assumption for Nifty 50 options
                         try:
                             raw_chain = await broker.get_option_chain(underlying, parsed_expiry)
-                            fetched_chains[parsed_expiry] = parse_upstox_option_chain(raw_chain)
+                            fetched_chains[parsed_expiry] = parse_upstox_option_chain(
+                                cast(list[dict[str, Any]], raw_chain)
+                            )
                         # Intentional: isolate LTP fetch errors for single legs.
                         except Exception:
                             fetched_chains[parsed_expiry] = None
@@ -194,9 +241,9 @@ async def generate_track_snapshot(
                         strike_data = chain.strikes[strike]
                         leg_data = strike_data.ce if opt_type == "CE" else strike_data.pe
                         if leg_data:
-                            leg_delta = leg_data.delta
-                            leg_theta = leg_data.theta
-                            leg_vega = leg_data.vega
+                            leg_delta = leg_data.delta or Decimal("0")
+                            leg_theta = leg_data.theta or Decimal("0")
+                            leg_vega = leg_data.vega or Decimal("0")
 
         qty_d = Decimal(str(pos.net_qty))
 
@@ -215,9 +262,7 @@ async def generate_track_snapshot(
     open_leg_roles = {pos.leg_role for pos in open_positions}
     for leg_role, realized_amt in realized_by_leg.items():
         if leg_role.startswith("overlay_") and leg_role not in open_leg_roles:
-            overlay_pnls[leg_role] = (
-                overlay_pnls.get(leg_role, Decimal("0")) + realized_amt
-            )
+            overlay_pnls[leg_role] = overlay_pnls.get(leg_role, Decimal("0")) + realized_amt
             total_realized += realized_amt
 
     if proxy_monitor and proxy_base_leg_delta is not None:
@@ -232,6 +277,9 @@ async def generate_track_snapshot(
         else:
             proxy_alert = "OK"
 
+    # Merge collar legs into one unit and deduplicate CC/collar_call before
+    # computing net_pnl — prevents double-counting the short call.
+    overlay_pnls = _normalize_overlay_pnls(overlay_pnls)
     net_pnl = base_pnl + sum(overlay_pnls.values())
 
     # Calculate Max DD and Return on NEE

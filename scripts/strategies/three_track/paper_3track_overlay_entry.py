@@ -60,21 +60,29 @@ _COLLAR_CALL_ROLE = "overlay_collar_call"
 _COLLAR_ROLES = frozenset({_COLLAR_PUT_ROLE, _COLLAR_CALL_ROLE})
 
 
-def _validate_collar_pairs(overlay_trades: list["OverlayTrade"]) -> None:
+def _validate_collar_pairs(
+    overlay_trades: list["OverlayTrade"],
+    open_call_roles: dict[str, str] | None = None,
+) -> None:
     """Ensure every strategy with a collar leg has both put and call present.
 
     A partial collar (put without call or call without put) is never permitted
-    at the entry/close layer. This guard catches any code path that would
-    produce a half-collar before any DB write occurs.
+    at the entry/close layer.  Exception: if the call leg was intentionally
+    omitted because an open overlay_cc already exists for that strategy on the
+    same key (dedup guard), the put-only entry is valid — the existing CC
+    serves as the collar call.
 
     Args:
         overlay_trades: Trades about to be submitted.
+        open_call_roles: Mapping returned by ``_query_open_call_roles``.  Used
+            to exempt strategies where the call was skipped due to dedup.
 
     Raises:
-        SystemExit: If any strategy has only one collar leg.
+        SystemExit: If any strategy has only one collar leg with no dedup exemption.
     """
     from collections import defaultdict
 
+    open_call_roles = open_call_roles or {}
     by_strategy: dict[str, set[str]] = defaultdict(set)
     for ot in overlay_trades:
         if ot.trade.leg_role in _COLLAR_ROLES:
@@ -83,6 +91,9 @@ def _validate_collar_pairs(overlay_trades: list["OverlayTrade"]) -> None:
     for strategy, roles in by_strategy.items():
         if roles != _COLLAR_ROLES:
             missing = _COLLAR_ROLES - roles
+            # Exempt: put-only because call was skipped (existing overlay_cc covers it)
+            if missing == {_COLLAR_CALL_ROLE} and open_call_roles.get(strategy) == "overlay_cc":
+                continue
             print(
                 f"ERROR: partial collar for {strategy} — missing {missing}. "
                 "Both overlay_collar_put and overlay_collar_call must be submitted together.",
@@ -217,18 +228,75 @@ class OverlayTrade:
     leg_role: str
 
 
-def build_overlay_trades(cfg: OverlayConfig) -> tuple[list[OverlayTrade], list[str]]:
+def _query_open_call_roles(db_path: Path, call_instrument_key: str) -> dict[str, str]:
+    """Return strategies that already have an open short call on *call_instrument_key*.
+
+    A "short call" is any leg with a net negative quantity whose leg_role is
+    ``overlay_cc`` or ``overlay_collar_call``.
+
+    Args:
+        db_path: Path to the SQLite portfolio DB.
+        call_instrument_key: The instrument key of the call leg about to be entered.
+
+    Returns:
+        Mapping of ``{strategy_name: existing_leg_role}`` for strategies that
+        already hold an open short call on this key.  Empty dict if none.
+    """
+    import sqlite3
+
+    result: dict[str, str] = {}
+    try:
+        conn = sqlite3.connect(str(db_path))
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT strategy_name, leg_role,
+                   SUM(CASE WHEN action='SELL' THEN -quantity ELSE quantity END) AS net_qty
+            FROM paper_trades
+            WHERE instrument_key = ?
+              AND leg_role IN ('overlay_cc', 'overlay_collar_call')
+            GROUP BY strategy_name, leg_role
+            HAVING net_qty < 0
+            """,
+            (call_instrument_key,),
+        )
+        for row in cur.fetchall():
+            strategy_name, leg_role, _ = row
+            result[strategy_name] = leg_role
+        conn.close()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "open_call_role.query_failed",
+            instrument_key=call_instrument_key,
+            error=str(exc),
+        )
+    return result
+
+
+def build_overlay_trades(
+    cfg: OverlayConfig,
+    open_call_roles: dict[str, str] | None = None,
+) -> tuple[list[OverlayTrade], list[str]]:
     """Build PaperTrade objects for all applicable tracks, enforcing blocked combos.
 
     Futures + standalone Covered Call is permanently blocked. When overlay_type='cc',
     paper_nifty_futures is skipped and a warning is returned.
 
+    Collar/CC deduplication: if *open_call_roles* reports that a strategy already
+    holds an open short call on the same call instrument key (under overlay_cc or
+    overlay_collar_call), inserting a second call leg for that strategy is skipped.
+    Collar put legs are still inserted — the existing call serves as the collar call.
+    This prevents the same physical contract appearing under two leg_roles.
+
     Args:
         cfg: Validated OverlayConfig.
+        open_call_roles: Optional mapping ``{strategy_name: existing_leg_role}`` from
+            ``_query_open_call_roles``.  If None, no deduplication check is performed.
 
     Returns:
         Tuple of (list of OverlayTrade, list of warning strings).
     """
+    open_call_roles = open_call_roles or {}
     trades: list[OverlayTrade] = []
     warnings: list[str] = []
     cycle_tag = (
@@ -266,6 +334,14 @@ def build_overlay_trades(cfg: OverlayConfig) -> tuple[list[OverlayTrade], list[s
             )
 
         elif cfg.overlay_type == "cc":
+            # Dedup guard: skip if overlay_collar_call already open on same key
+            existing = open_call_roles.get(strategy)
+            if existing == "overlay_collar_call":
+                warnings.append(
+                    f"  ⚠  SKIPPED: {strategy} overlay_cc — overlay_collar_call already "
+                    f"open on {cfg.call_instrument_key}. Collar call serves as CC."
+                )
+                continue
             trades.append(
                 OverlayTrade(
                     trade=PaperTrade(
@@ -287,7 +363,7 @@ def build_overlay_trades(cfg: OverlayConfig) -> tuple[list[OverlayTrade], list[s
             )
 
         elif cfg.overlay_type == "collar":
-            # Collar — both legs must be entered together per spec
+            # Always enter the put leg.
             trades.append(
                 OverlayTrade(
                     trade=PaperTrade(
@@ -307,25 +383,35 @@ def build_overlay_trades(cfg: OverlayConfig) -> tuple[list[OverlayTrade], list[s
                     leg_role="overlay_collar_put",
                 )
             )
-            trades.append(
-                OverlayTrade(
-                    trade=PaperTrade(
-                        strategy_name=strategy,
-                        leg_role="overlay_collar_call",
-                        instrument_key=cfg.call_instrument_key,
-                        trade_date=cfg.entry_date,
-                        action=TradeAction.SELL,
-                        quantity=cfg.lot_size,
-                        price=cfg.call_price,
-                        notes=(
-                            f"Collar call: strike={cfg.call_strike:.0f}, "
-                            f"spread={cfg.call_spread_pct}%, OI={cfg.call_oi:,}. {cycle_tag}"
-                        ),
-                    ),
-                    strategy=strategy,
-                    leg_role="overlay_collar_call",
+            # Dedup guard: skip collar_call if overlay_cc already open on same key.
+            # The existing CC serves as the collar call — recording a second SELL on
+            # the same contract would double-count the short position.
+            existing = open_call_roles.get(strategy)
+            if existing == "overlay_cc":
+                warnings.append(
+                    f"  ⚠  SKIPPED: {strategy} overlay_collar_call — overlay_cc already "
+                    f"open on {cfg.call_instrument_key}. Existing CC serves as collar call."
                 )
-            )
+            else:
+                trades.append(
+                    OverlayTrade(
+                        trade=PaperTrade(
+                            strategy_name=strategy,
+                            leg_role="overlay_collar_call",
+                            instrument_key=cfg.call_instrument_key,
+                            trade_date=cfg.entry_date,
+                            action=TradeAction.SELL,
+                            quantity=cfg.lot_size,
+                            price=cfg.call_price,
+                            notes=(
+                                f"Collar call: strike={cfg.call_strike:.0f}, "
+                                f"spread={cfg.call_spread_pct}%, OI={cfg.call_oi:,}. {cycle_tag}"
+                            ),
+                        ),
+                        strategy=strategy,
+                        leg_role="overlay_collar_call",
+                    )
+                )
 
     return trades, warnings
 
@@ -434,16 +520,29 @@ def main() -> None:
     setup_logging()
 
     cfg = load_overlay_config(args.config)
-    overlay_trades, warnings = build_overlay_trades(cfg)
+
+    # Check for existing open short calls on the same instrument to prevent
+    # recording overlay_cc and overlay_collar_call on the same contract.
+    open_call_roles: dict[str, str] = {}
+    if cfg.overlay_type in ("cc", "collar") and cfg.call_instrument_key:
+        open_call_roles = _query_open_call_roles(args.db_path, cfg.call_instrument_key)
+        if open_call_roles:
+            logger.info(
+                "open_call_roles.found",
+                instrument_key=cfg.call_instrument_key,
+                strategies=open_call_roles,
+            )
+
+    overlay_trades, warnings = build_overlay_trades(cfg, open_call_roles=open_call_roles)
 
     if not overlay_trades:
         print("ERROR: no trades to record — all tracks were blocked.", file=sys.stderr)
         sys.exit(1)
 
-    # Guard: collar legs must always be submitted as a complete pair per strategy.
-    # Raises SystemExit before any DB write if only one collar leg is present.
+    # Guard: collar legs must always be submitted as a complete pair per strategy,
+    # unless the call was intentionally skipped because overlay_cc already exists.
     if cfg.overlay_type == "collar":
-        _validate_collar_pairs(overlay_trades)
+        _validate_collar_pairs(overlay_trades, open_call_roles=open_call_roles)
 
     if not args.dry_run:
         store = PaperStore(args.db_path)
