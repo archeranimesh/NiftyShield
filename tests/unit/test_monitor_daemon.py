@@ -34,7 +34,7 @@ async def test_monitor_daemon_shutdown() -> None:
 
     with (
         patch("sys.exit") as mock_exit,
-        patch("asyncio.gather", new_callable=AsyncMock) as mock_gather,
+        patch("asyncio.gather", new_callable=AsyncMock),
         patch("os.getpid", return_value=12345),
     ):
         await daemon.shutdown()
@@ -55,9 +55,10 @@ async def test_monitor_daemon_shutdown() -> None:
 
 def test_monitor_overlays_gate_disabled_by_default() -> None:
     """MONITOR_OVERLAYS defaults to False when env var is unset."""
-    with patch.dict("os.environ", {}, clear=False):
+    with patch.dict("os.environ", {}, clear=True):
         # Re-evaluate the constant expression directly — module already loaded
         import os
+
         result = os.getenv("MONITOR_OVERLAYS", "0") == "1"
         assert result is False
 
@@ -85,7 +86,7 @@ def test_monitor_overlays_gate_enabled_when_env_set() -> None:
         patch.object(_daemon, "CollarOverlayV1", collar),
     ):
         strategies: list = []
-        for overlay_cls, overlay_name in [
+        for overlay_cls, _overlay_name in [
             (_daemon.CCOverlayV1, "CCOverlayV1"),
             (_daemon.PPOverlayV1, "PPOverlayV1"),
             (_daemon.CollarOverlayV1, "CollarOverlayV1"),

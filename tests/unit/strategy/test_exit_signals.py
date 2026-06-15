@@ -457,3 +457,115 @@ def test_evaluate_pp_zero_entry_price_with_nonzero_mark(caplog: pytest.LogCaptur
             entry_price=0.0, current_mark=150.0, delta=None, dte=10
         )
     assert results == []
+
+
+# CR2: evaluate_roll_overlay
+
+
+def test_evaluate_roll_overlay_cc_roll_eligible():
+    """CC leg, dte=4, base_dte=25 -> ROLL_ELIGIBLE ACTION, suggested strike atm_strike + 50."""
+    results = ExitSignalEngine.evaluate_roll_overlay(
+        leg_role="overlay_cc", dte=4, base_dte=25, atm_strike=23000
+    )
+    assert len(results) == 1
+    assert results[0].exit_signal == "ROLL_ELIGIBLE"
+    assert results[0].severity == "ACTION"
+    assert results[0].threshold_value == 5.0
+    assert "suggested strike 23050" in results[0].notes
+
+
+def test_evaluate_roll_overlay_pp_roll_eligible():
+    """PP leg, dte=4, base_dte=25 -> ROLL_ELIGIBLE ACTION, suggested strike atm_strike - 50."""
+    results = ExitSignalEngine.evaluate_roll_overlay(
+        leg_role="overlay_pp", dte=4, base_dte=25, atm_strike=23000
+    )
+    assert len(results) == 1
+    assert results[0].exit_signal == "ROLL_ELIGIBLE"
+    assert results[0].severity == "ACTION"
+    assert results[0].threshold_value == 5.0
+    assert "suggested strike 22950" in results[0].notes
+
+
+def test_evaluate_roll_overlay_cc_dte_boundary_fire():
+    """CC leg, dte=5 (boundary), base_dte=25 -> ROLL_ELIGIBLE ACTION."""
+    results = ExitSignalEngine.evaluate_roll_overlay(
+        leg_role="overlay_cc", dte=5, base_dte=25, atm_strike=23000
+    )
+    assert len(results) == 1
+    assert results[0].exit_signal == "ROLL_ELIGIBLE"
+    assert results[0].severity == "ACTION"
+    assert "suggested strike 23050" in results[0].notes
+
+
+def test_evaluate_roll_overlay_cc_dte_no_fire():
+    """CC leg, dte=6 -> no signal."""
+    results = ExitSignalEngine.evaluate_roll_overlay(
+        leg_role="overlay_cc", dte=6, base_dte=25, atm_strike=23000
+    )
+    assert results == []
+
+
+def test_evaluate_roll_overlay_base_dte_guard_fire():
+    """base_dte=8 -> ROLL_BASE_FIRST WARN."""
+    results = ExitSignalEngine.evaluate_roll_overlay(
+        leg_role="overlay_cc", dte=4, base_dte=8, atm_strike=23000
+    )
+    assert len(results) == 1
+    assert results[0].exit_signal == "ROLL_BASE_FIRST"
+    assert results[0].severity == "WARN"
+    assert results[0].threshold_value == 10.0
+    assert "Base DTE 8 ≤ 10" in results[0].notes
+
+
+def test_evaluate_roll_overlay_base_dte_boundary_guard_fire():
+    """base_dte=10 (boundary) -> ROLL_BASE_FIRST WARN."""
+    results = ExitSignalEngine.evaluate_roll_overlay(
+        leg_role="overlay_cc", dte=5, base_dte=10, atm_strike=23000
+    )
+    assert len(results) == 1
+    assert results[0].exit_signal == "ROLL_BASE_FIRST"
+    assert results[0].severity == "WARN"
+    assert results[0].threshold_value == 10.0
+    assert "Base DTE 10 ≤ 10" in results[0].notes
+
+
+def test_evaluate_roll_overlay_base_dte_boundary_no_guard_fire():
+    """base_dte=11 -> ROLL_ELIGIBLE ACTION."""
+    results = ExitSignalEngine.evaluate_roll_overlay(
+        leg_role="overlay_cc", dte=5, base_dte=11, atm_strike=23000
+    )
+    assert len(results) == 1
+    assert results[0].exit_signal == "ROLL_ELIGIBLE"
+    assert results[0].severity == "ACTION"
+    assert "suggested strike 23050" in results[0].notes
+
+
+def test_evaluate_roll_overlay_unknown_leg_role():
+    """Unknown leg_role -> ValueError."""
+    with pytest.raises(ValueError) as excinfo:
+        ExitSignalEngine.evaluate_roll_overlay(
+            leg_role="invalid_role", dte=4, base_dte=25, atm_strike=23000
+        )
+    assert "Unknown leg_role: invalid_role" in str(excinfo.value)
+
+
+def test_evaluate_roll_overlay_collar_call_roll_eligible():
+    """Collar short call, dte=5, base_dte=25 -> ROLL_ELIGIBLE ACTION, suggested strike atm_strike + 50."""
+    results = ExitSignalEngine.evaluate_roll_overlay(
+        leg_role="overlay_collar_call", dte=5, base_dte=25, atm_strike=23000
+    )
+    assert len(results) == 1
+    assert results[0].exit_signal == "ROLL_ELIGIBLE"
+    assert results[0].severity == "ACTION"
+    assert "suggested strike 23050" in results[0].notes
+
+
+def test_evaluate_roll_overlay_collar_put_roll_eligible():
+    """Collar long put, dte=5, base_dte=25 -> ROLL_ELIGIBLE ACTION, suggested strike atm_strike - 50."""
+    results = ExitSignalEngine.evaluate_roll_overlay(
+        leg_role="overlay_collar_put", dte=5, base_dte=25, atm_strike=23000
+    )
+    assert len(results) == 1
+    assert results[0].exit_signal == "ROLL_ELIGIBLE"
+    assert results[0].severity == "ACTION"
+    assert "suggested strike 22950" in results[0].notes
