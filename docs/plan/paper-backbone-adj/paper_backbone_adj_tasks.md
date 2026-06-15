@@ -17,7 +17,7 @@
 
 ## Phase PA-0 — Shared Roll Utility
 
-- [ ] **PA0** `[Claude]` — `src/strategy/roll_utils.py`: `find_strike_by_delta(chain, option_type, delta_range, target_delta)` shared helper + tests
+- [x] **PA0** `[Claude]` — `src/strategy/roll_utils.py`: `find_strike_by_delta(chain, option_type, delta_range, target_delta)` shared helper + tests | SHA: eef6cca
 
 ## Phase PA-S0 — CSP Full Adjustment
 
