@@ -1124,12 +1124,18 @@ async def _run(args: argparse.Namespace) -> None:
         results.append((track_name, snapshot))
 
         pnl = snapshot.pnl
+        # overlay_pnls is normalized by generate_track_snapshot: keys are
+        # "cc", "collar", "pp" — collar = call+put as one unit, no double-count.
         overlay_total = sum(pnl.overlay_pnls.values()) if pnl.overlay_pnls else Decimal("0")
         summary_rows.append(
             {
                 "track": BASE_LABELS.get(track_name, track_name),
                 "base_pnl": pnl.base_pnl,
                 "overlay_pnl": overlay_total,
+                # Per-overlay breakdown (collar = call+put as 1 unit)
+                "cc_pnl": pnl.overlay_pnls.get("cc", Decimal("0")),
+                "collar_pnl": pnl.overlay_pnls.get("collar", Decimal("0")),
+                "pp_pnl": pnl.overlay_pnls.get("pp", Decimal("0")),
                 "net_pnl": pnl.net_pnl,
                 "return_on_nee": snapshot.return_on_nee,
             }
