@@ -2,7 +2,12 @@
 
 > **Status as of 2026-06-15.** Original design rationale archived at the bottom.
 > Most of the story is shipped. This prompt covers only the remaining pending tasks.
-> Pick up CR3 first. Complete in order. Do not skip to a later task.
+>
+> **How to find your next task:**
+> Open `docs/plan/council-refactor/tasks.md` and find the **first unchecked `[ ]` item
+> assigned to you** (`[Claude]` or `[Antigravity]`). That is the only task for this session.
+> If the first unchecked item belongs to the other agent, stop and hand off.
+> Complete in checklist order — do not skip ahead.
 
 ---
 
@@ -22,11 +27,14 @@
 | P0/P1/P2 bug fixes | various | DBI-1→3, BUG-1/4, FR-1→10, SIG-1/2, SM-1/2, LOG-1 |
 | RPT-1, RPT-2 | various | Track report; daily P&L delta mode |
 | CR2 | 689662f + | `evaluate_roll_overlay()` added to ExitSignalEngine; base-DTE guard; tests |
+| CR3 | 5ac623f | Wire `evaluate_roll_overlay` into `NiftyTrackComparisonV1`; DTE ≤ 5 → ACTION |
 
 **Invariants established by shipped code — do not re-derive, just use:**
 - `evaluate_roll_overlay(leg_role, dte, base_dte, atm_strike)` lives in `ExitSignalEngine`.
   Returns `list[ExitSignalResult]`. `ROLL_ELIGIBLE` ACTION at DTE ≤ 5 (when base_dte > 10);
   `ROLL_BASE_FIRST` WARN when base_dte ≤ 10. Raises `ValueError` for unknown leg roles.
+- `NiftyTrackComparisonV1.check_signals`: DTE ≤ 5 → `evaluate_roll_overlay`; DTE 6–10 → `ROLL_DUE_DTE` WARN.
+  `_get_base_dte(positions, strategy_name, today)` returns base leg DTE or 999 (ETF/no base).
 - `csp_roll_executor.py` is in `src/strategy/`. `paper_csp_roll.py` is a thin wrapper.
 - `strike_selector.py` is in `src/instruments/`. Used by executor and lookup scripts.
 - `TelegramGateway.send_approval_request(event, context_str)` — no CouncilOutput anywhere.
@@ -39,45 +47,9 @@
 
 > **Agent assignments:** `[Claude]` = you. `[Antigravity]` = other agent — do NOT implement,
 > hand off when you reach one. Resume from the next `[Claude]` task after Antigravity returns.
-
----
-
-### CR3 `[Claude]` — Wire `evaluate_roll_overlay` into `NiftyTrackComparisonV1`
-
-**Files:** `src/strategy/nifty_track_comparison_v1.py`, `tests/unit/strategy/test_nifty_track_comparison_v1.py`
-
-**Prerequisite graph checks (run before touching code):**
-```python
-get_code_snippet("NiftyTrackComparisonV1.check_signals")  # current WARN emit logic post-CR2
-get_code_snippet("evaluate_roll_overlay")                  # confirm CR2 signature committed
-```
-
-**What changes:**
-
-When DTE ≤ 5 on an overlay leg, replace the existing `ROLL_DUE_DTE` WARN emission with a
-call to `ExitSignalEngine.evaluate_roll_overlay(leg_role, dte, base_dte, atm_strike)`:
-
-- Result `ROLL_ELIGIBLE` ACTION → emit `SignalEvent(severity="ACTION", payload={..., "valid_actions": ["RECORD_ROLL"]})`
-- Result `ROLL_BASE_FIRST` WARN → emit as WARN (replaces `ROLL_DUE_DTE` for this DTE range)
-- DTE 6–10: keep existing `ROLL_DUE_DTE` WARN unchanged — do not touch this path
-
-`NiftyTrackComparisonV1` does NOT set `auto_execute = True`. Overlay rolls require human
-confirmation (leg ordering is not deterministic).
-
-**Tests to add:**
-- Overlay leg `dte=4`, `base_dte=25` → `ROLL_ELIGIBLE` ACTION in signals
-- Overlay leg `dte=8` → `ROLL_DUE_DTE` WARN (existing path — unchanged)
-- Overlay leg `dte=4`, `base_dte=8` → `ROLL_BASE_FIRST` WARN; no `ROLL_ELIGIBLE`
-- Healthy overlay `dte=20` → `[]`
-
-**Existing tests that MUST be updated in the same commit (not regressions — expected changes):**
-- `test_overlay_dte_4_emits_roll_due_dte` → filter changes to `ROLL_ELIGIBLE`, severity `ACTION`
-- `test_overlay_dte_exactly_5_emits_roll_due_dte` → same update
-- `test_all_three_tracks_trigger_simultaneously` → filter changes to `ROLL_ELIGIBLE`; rename test
-
-Run `python -m pytest tests/unit/strategy/test_nifty_track_comparison_v1.py --tb=short` before committing — 0 failures required.
-
-**Commit:** `feat(strategy): wire evaluate_roll_overlay into NiftyTrackComparisonV1`
+>
+> **Source of truth:** `docs/plan/council-refactor/tasks.md` — find the first unchecked `[ ]`
+> item for your agent tag. The task specs below match that checklist order.
 
 ---
 

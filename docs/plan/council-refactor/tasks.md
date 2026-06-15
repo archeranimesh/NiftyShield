@@ -216,7 +216,7 @@
 
 ## P12 — NiftyTrack proxy delta signals + futures block guard
 
-- [ ] **CR3** `[Claude]` — Wire `evaluate_roll_overlay` into `NiftyTrackComparisonV1.check_signals`; promote DTE ≤ 5 WARN to ACTION for `ROLL_ELIGIBLE`; keep `ROLL_BASE_FIRST` as WARN; tests. Prerequisite: CR2.
+- [x] **CR3** `[Claude]` — Wire `evaluate_roll_overlay` into `NiftyTrackComparisonV1.check_signals`; promote DTE ≤ 5 WARN to ACTION for `ROLL_ELIGIBLE`; keep `ROLL_BASE_FIRST` as WARN; tests. Prerequisite: CR2. | SHA: 5ac623f
 
 - [ ] **NT-1** `[Antigravity]` — `evaluate_proxy_delta()` in `ExitSignalEngine`: three signals (PROXY_DELTA_CRITICAL ACTION at δ<0.40 for 3 consecutive days, PROXY_PREMIUM_DECAY ACTION at mark<₹0.50 with DTE≥5, PROXY_DELTA_WARN WARN at δ<0.65); consecutive-day counter via `PaperStore.get/set_proxy_delta_breach_count`; wire into `NiftyTrackComparisonV1.check_signals` for `base_ditm_call` legs; tests. Prerequisite: CR3.
 
@@ -303,7 +303,7 @@
 | P10 | CC-5 | Antigravity | ✅ Done |
 | P11 | DAEMON-FIX | Claude | Overlay DI in daemon — needs CC-4 + PP-2 + COLLAR-1 + DAEMON-S1 |
 | P11 | CR2 | Antigravity | ✅ Done |
-| P12 | CR3 | Claude | Wire overlay roll — needs CR2 |
+| P12 | CR3 | Claude | ✅ Done — 5ac623f |
 | P12 | NT-1 | Antigravity | Proxy delta signals — needs CR3 |
 | P12 | NT-2 | Claude | Futures+CC block guard — needs CR3 |
 | P13 | AUTO-1 | Antigravity | EOD snapshot auto-close — needs FR-1 + CC-4 + PP-2 + COLLAR-1 + DAEMON-FIX |
