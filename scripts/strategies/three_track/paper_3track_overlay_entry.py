@@ -55,6 +55,41 @@ DEFAULT_CONFIG = Path("data/paper/overlay_entry.yaml")
 _TRACKS = [STRATEGY_SPOT, STRATEGY_FUTURES, STRATEGY_PROXY]
 _CC_BLOCKED = {STRATEGY_FUTURES}  # Futures + standalone CC is permanently blocked
 
+_COLLAR_PUT_ROLE = "overlay_collar_put"
+_COLLAR_CALL_ROLE = "overlay_collar_call"
+_COLLAR_ROLES = frozenset({_COLLAR_PUT_ROLE, _COLLAR_CALL_ROLE})
+
+
+def _validate_collar_pairs(overlay_trades: list["OverlayTrade"]) -> None:
+    """Ensure every strategy with a collar leg has both put and call present.
+
+    A partial collar (put without call or call without put) is never permitted
+    at the entry/close layer. This guard catches any code path that would
+    produce a half-collar before any DB write occurs.
+
+    Args:
+        overlay_trades: Trades about to be submitted.
+
+    Raises:
+        SystemExit: If any strategy has only one collar leg.
+    """
+    from collections import defaultdict
+
+    by_strategy: dict[str, set[str]] = defaultdict(set)
+    for ot in overlay_trades:
+        if ot.trade.leg_role in _COLLAR_ROLES:
+            by_strategy[ot.trade.strategy_name].add(ot.trade.leg_role)
+
+    for strategy, roles in by_strategy.items():
+        if roles != _COLLAR_ROLES:
+            missing = _COLLAR_ROLES - roles
+            print(
+                f"ERROR: partial collar for {strategy} — missing {missing}. "
+                "Both overlay_collar_put and overlay_collar_call must be submitted together.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
 
 @dataclass
 class OverlayConfig:
@@ -338,6 +373,38 @@ def print_summary(
     print()
 
 
+def _record_collar_trades(store: PaperStore, overlay_trades: list["OverlayTrade"]) -> None:
+    """Record collar legs per strategy using a single atomic transaction per pair.
+
+    Each strategy's put + call are committed together. If either leg conflicts with
+    the unique constraint, both are skipped (ON CONFLICT DO NOTHING semantics via
+    record_trades). A partial insert — put committed, call skipped — cannot occur.
+
+    Args:
+        store: PaperStore instance.
+        overlay_trades: Must contain complete put+call pairs (validated before call).
+    """
+    from collections import defaultdict
+
+    # Group by strategy, preserving put-before-call order from build_overlay_trades
+    by_strategy: dict[str, list[OverlayTrade]] = defaultdict(list)
+    for ot in overlay_trades:
+        by_strategy[ot.trade.strategy_name].append(ot)
+
+    for _strategy, ots in by_strategy.items():
+        trades = [ot.trade for ot in ots]
+        inserted, skipped = store.record_trades(trades)
+        for t in inserted:
+            logger.info("trade.INSERTED", strategy=t.strategy_name, leg=t.leg_role)
+        for t in skipped:
+            logger.info(
+                "trade.SKIPPED",
+                reason="conflict on strategy/leg/date/action",
+                strategy=t.strategy_name,
+                leg=t.leg_role,
+            )
+
+
 def main() -> None:
     """CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -373,23 +440,32 @@ def main() -> None:
         print("ERROR: no trades to record — all tracks were blocked.", file=sys.stderr)
         sys.exit(1)
 
+    # Guard: collar legs must always be submitted as a complete pair per strategy.
+    # Raises SystemExit before any DB write if only one collar leg is present.
+    if cfg.overlay_type == "collar":
+        _validate_collar_pairs(overlay_trades)
+
     if not args.dry_run:
         store = PaperStore(args.db_path)
-        for ot in overlay_trades:
-            inserted = store.record_trade(ot.trade)
-            if inserted:
-                logger.info(
-                    "trade.INSERTED",
-                    strategy=ot.trade.strategy_name,
-                    leg=ot.trade.leg_role,
-                )
-            else:
-                logger.info(
-                    "trade.SKIPPED",
-                    reason="conflict on strategy/leg/date/action",
-                    strategy=ot.trade.strategy_name,
-                    leg=ot.trade.leg_role,
-                )
+
+        if cfg.overlay_type == "collar":
+            _record_collar_trades(store, overlay_trades)
+        else:
+            for ot in overlay_trades:
+                inserted = store.record_trade(ot.trade)
+                if inserted:
+                    logger.info(
+                        "trade.INSERTED",
+                        strategy=ot.trade.strategy_name,
+                        leg=ot.trade.leg_role,
+                    )
+                else:
+                    logger.info(
+                        "trade.SKIPPED",
+                        reason="conflict on strategy/leg/date/action",
+                        strategy=ot.trade.strategy_name,
+                        leg=ot.trade.leg_role,
+                    )
 
     print_summary(cfg, overlay_trades, warnings, args.dry_run)
 
