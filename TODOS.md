@@ -306,6 +306,9 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 
 | Date | What Changed |
 |---|---|
+| 2026-06-15 | FR-10 — NotifierProtocol added to src/notifications/protocol.py; _notifier typed as NotifierProtocol in StrategyMonitor; both # type: ignore[attr-defined] removed — b32cf55 |
+| 2026-06-15 | RPT-2 — CLI period redesign: --daily/-d (default), --monthly/-m (guard), --inception/-i; _compute_daily_deltas helper; format_track_summary period param with Day Base/Day Overlay/Day Net headers; 11 new tests — cabf2ba |
+| 2026-06-15 | RPT-ROLL — _find_expiring_overlay: reset last_trade=None when net reaches 0; only current open cycle contributes; 2 new tests (multi-cycle + all-closed) — 46d4848 |
 | 2026-06-14 | SM-1 — DELTA_BREACH_FINAL state machine wired: get_trade_state + mark_trade_defended added to PaperStore; check_signals reads TradeState from DB (not hasattr); _roll_down transitions new leg to DEFENDED; _find_put_leg scan fallback removed (numeric keys now return None + WARN); 8 new tests — 37c38d0 |
 | 2026-06-14 | BUG-5 — _check_reentry dedup: skip if R5_REENTRY_BLOCKED/ELIGIBLE event already exists today for same strategy+leg; fixed test_custom_ivr_passes_override to use different days; 2 new tests — 80784c0 |
 | 2026-06-14 | BUG-3 — _open_new quantity=1 hardcode fixed; CLOSE_AND_ROLL now passes abs(short_put.net_qty); 2 new tests — 5d1c8eb |
@@ -426,3 +429,8 @@ Full log: [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md)
 | 2026-06-14 | FR-7 closed — OptionLeg Greeks (delta/gamma/theta/vega/iv) changed to Decimal | None; _safe_decimal_greek added to upstox_market.py; evaluate_delta_breach_csp emits DELTA_MISSING WARN on None; 10 call sites guarded; 4 tests updated/added; SHA ac1c7fa |
 | 2026-06-14 | FR-8 closed — _safe_price() added to strike_selector.py; ltp/bid/ask/mid stored as Decimal; entries with un-coerceable ltp skipped with WARN log; _apply_liquidity_gate and rank_strikes updated for Decimal comparisons; 6 new tests; SHA 699d074 |
 | 2026-06-14 | FR-9 closed — market_today() added to src/market_calendar/holidays.py using ZoneInfo('Asia/Kolkata'); exported from __init__.py; 25 date.today() call sites replaced across csp_nifty_v1, cc_overlay_v1, pp_overlay_v1, collar_overlay_v1, ic_nifty_v1, nifty_track_comparison_v1, overlay_closer, executor, monitor; 3 new tests; SHA fd89ab3 |
+| 2026-06-15 | RPT-SNAP closed — extract _compute_realized_pnl_by_leg from tracker.py; _save_leg_snapshots uses per-leg realized for base and overlay legs; mypy fixes (sum start=Decimal("0"), protocol.py dict[str,Any]); 6 new tests; SHA 7914994 |
+| 2026-06-15 | BUG-7 closed — DB-only cleanup: ran migrate_add_closed_state.py to widen CHECK constraint; backfilled 71474 rows (overlay_cc + overlay_collar_call, 10 rows) and 58627 collar_put rows (6 rows) to CLOSED; spurious Jun8 SELL and wrong BUY qty already resolved by UNIQUE constraint from BUG-4; sanity checks pass |
+
+| 2026-06-15 | CR1d SHA annotated — tasks.md had stale SHA:pending; actual commit is e62aee9 |
+| 2026-06-15 | RPT-1 closed — generate_track_snapshot second pass folds closed overlay legs (net_qty==0) into overlay_pnls + total_realized; 2 new tests; SHA bce1d4a |
