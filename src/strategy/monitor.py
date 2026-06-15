@@ -30,6 +30,7 @@ from src.client.upstox_market import parse_upstox_option_chain
 from src.instruments.lookup import InstrumentLookup, parse_expiry
 from src.market_calendar.holidays import is_trading_day, market_today
 from src.models.options import OptionChain
+from src.notifications.protocol import NotifierProtocol
 from src.paper.models import PaperPosition
 from src.paper.store import PaperStore
 from src.strategy.protocol import ApprovedAction, PaperStrategy, SignalEvent
@@ -69,7 +70,7 @@ class StrategyMonitor:
         self,
         broker: BrokerClient,
         store: PaperStore,
-        notifier: object,
+        notifier: NotifierProtocol,
         strategies: list[PaperStrategy] | None = None,
         poll_interval_s: int = 90,
         expiry_fn: Callable[[], str] | None = None,
@@ -77,7 +78,7 @@ class StrategyMonitor:
     ) -> None:
         self._broker = broker
         self._store = store
-        self._notifier = notifier
+        self._notifier: NotifierProtocol = notifier
         self._strategies: list[PaperStrategy] = list(strategies or [])
         self._poll_interval_s = poll_interval_s
         self._expiry_fn = expiry_fn
@@ -208,7 +209,7 @@ class StrategyMonitor:
             )
         elif event.severity == "WARN":
             text = f"[{strategy.strategy_name}] {event.event_type}: {event.description}"
-            await self._notifier.send_plain_message(text)  # type: ignore[attr-defined]
+            await self._notifier.send_plain_message(text)
         elif event.severity == "ACTION":
             auto_execute_strategy = getattr(strategy, "auto_execute", False)
             auto_execute_payload = event.payload.get("auto_execute", False)
@@ -243,7 +244,7 @@ class StrategyMonitor:
                     )
             else:
                 context_str = strategy.describe_context(event, chain, positions)
-                msg_id = await self._notifier.send_approval_request(event, context_str)  # type: ignore[attr-defined]
+                msg_id = await self._notifier.send_approval_request(event, context_str)
                 expires_at = (datetime.now(tz=timezone.utc) + timedelta(hours=1)).isoformat()
                 self._store.create_approval(
                     strategy.strategy_name,
