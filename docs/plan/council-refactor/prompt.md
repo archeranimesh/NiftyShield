@@ -1,202 +1,303 @@
-# council-refactor — Design Prompt
+# council-refactor — Continuation Prompt
 
-## What This Story Builds
-
-Removes `RapidCouncil` from the paper trading daemon approval path and replaces it
-with deterministic, backtestable roll rules baked into `ExitSignalEngine`.
-
-Fixes a latent runtime bug where `StrategyMonitor` calls
-`send_approval_request(event, context_str)` but `TelegramGateway.send_approval_request`
-expects `(CouncilOutput, SignalEvent, str)` — a signature mismatch that would raise
-`TypeError` the first time any ACTION event fires in a live daemon run.
-
-When this story is complete:
-1. The daemon approval path has no LLM API calls — signals go directly to Telegram
-2. CSP roll: DTE ≤ 5 fires `ROLL_ELIGIBLE` ACTION; `csp_roll_executor` closes current
-   leg and reopens via `strike_selector` (first ranked candidate); fully automated via daemon
-3. 3-track overlay roll: DTE ≤ 5 fires `ROLL_ELIGIBLE` with suggested ATM±50 strike;
-   base-DTE guard blocks overlay roll when base DTE ≤ 10
-4. `evaluate_roll_csp` and `evaluate_roll_overlay` are pure functions in `ExitSignalEngine`
-   returning `list[ExitSignalResult]` — replayable against historical data
-5. `strike_selector.py` lives in `src/instruments/` — importable by any module that needs
-   delta-filtered, liquidity-gated strike selection
-6. `csp_roll_executor.py` lives in `src/strategy/` — shared by the daemon and CLI script
-7. `RapidCouncil` remains as a module but is **not wired** anywhere in Phase 0
+> **Status as of 2026-06-15.** Original design rationale archived at the bottom.
+> Most of the story is shipped. This prompt covers only the remaining pending tasks.
+> Pick up CR3 first. Complete in order. Do not skip to a later task.
 
 ---
 
-## Why the Council Does Not Belong Here
+## What Is Already Shipped
 
-### Paper trading exits are single-option decisions
-
-`ExitSignalEngine` already determines whether to exit and why. Each strategy's
-`apply_action()` accepts a fixed set of action types — `CLOSE_FULL` for CSP, `CLOSE_CC`
-for CC, `MONETIZE_PP` for PP. There is nothing to deliberate: the action is determined
-before the council would be asked.
-
-### Roll decisions must be backtestable
-
-Roll decisions (what strike, what expiry) must be deterministic given the same market
-inputs so they can be replayed against historical data. An LLM council call is:
-- Non-deterministic across runs
-- Model-version-dependent (GPT-4o today ≠ GPT-4o in six months)
-- Incapable of time-travel (replaying 2025 data through a 2026 model leaks hindsight)
-
-A roll decision driven by the council cannot be statistically validated via backtest.
-A roll decision driven by `evaluate_roll_csp(dte)` — "roll when DTE ≤ 5" — can be.
-
-### The council belongs in live trading for genuinely ambiguous decisions
-
-The council earns its place when:
-- Real capital is at stake (wrong decision is not reversible)
-- The action space has multiple defensible options (IC leg-selective exit, live sizing)
-- The strategy spec does not resolve the choice
-
-None of these conditions hold during Phase 0 paper trading exits. The council should be
-wired in at Phase 1 (live trading) for specific scenarios — not as a blanket gate on
-every paper trade ACTION event.
-
----
-
-## Deterministic Roll Rules
-
-### Design decisions (finalised 2026-06-04)
-
-**No `RollSignalResult`.** Roll signals are returned as `list[ExitSignalResult]` — the
-same type as every other `ExitSignalEngine` evaluator. `exit_signal="ROLL_ELIGIBLE"` or
-`"ROLL_BASE_FIRST"` is what distinguishes them. This keeps return types uniform and
-lets `CSPNiftyV1.check_signals` merge exit + roll results without type juggling.
-
-**No IVR-tiered strike selection in the engine.** Strike selection is delegated to
-`src/instruments/strike_selector.py` (extracted from `find_strike_by_delta.py`) which
-already applies delta filter, liquidity gate, and ranking. The engine stays pure — it
-detects *when* to roll, not *what* strike to roll to.
-
-**Execution layer: `src/strategy/csp_roll_executor.py`.** Contains importable
-`close_csp_leg()` and `open_new_csp_leg()` functions, extracted from
-`scripts/strategies/csp/paper_csp_roll.py`. Both the CLI script and `CSPNiftyV1.apply_action`
-import from this module. `paper_csp_roll.py` becomes a thin CLI wrapper.
-
----
-
-### CSP — `ExitSignalEngine.evaluate_roll_csp()`
-
-**Trigger:** `dte ≤ 5` on the short put leg.
-
-(TIME_STOP at `days_held ≥ 21` already fires as `CLOSE_FULL` via `evaluate_csp`. The
-roll trigger is expiry proximity only — the operator decides whether to re-enter.)
-
-**Output:** `list[ExitSignalResult]` with one element:
-```python
-ExitSignalResult(
-    exit_signal="ROLL_ELIGIBLE",
-    severity="ACTION",
-    threshold_value=5.0,
-    notes="DTE {dte} ≤ 5 — close and reopen via strike_selector",
-)
-```
-Returns `[]` when `dte > 5`.
-
-**Execution path when user approves `CLOSE_AND_ROLL`:**
-1. `CSPNiftyV1.apply_action("CLOSE_AND_ROLL")` calls `csp_roll_executor.close_csp_leg()`
-2. Then calls `strike_selector.filter_strikes_by_delta()` + `rank_strikes()` — picks index 0
-3. Then calls `csp_roll_executor.open_new_csp_leg()` with the selected strike
-4. Atomicity: if open fails, close is rolled back via `store.delete_trade()`
-
-`CSPNiftyV1.__init__` stores `self._broker = broker` (parameter already accepted but
-previously discarded).
-
----
-
-### 3-Track Overlays — `ExitSignalEngine.evaluate_roll_overlay()`
-
-**Trigger:** `dte ≤ 5` on any overlay leg.
-
-**Guard:** if `base_dte ≤ 10`, block overlay roll — base rolls first.
-Returns `ROLL_BASE_FIRST` WARN:
-```python
-ExitSignalResult(
-    exit_signal="ROLL_BASE_FIRST",
-    severity="WARN",
-    threshold_value=10.0,
-    notes="Base DTE={base_dte} ≤ 10 — roll base first",
-)
-```
-
-**Strike selection (advisory only — actual selection via `strike_selector`):**
-
-| Overlay leg | Suggested offset | Rationale |
+| Task | SHA | Summary |
 |---|---|---|
-| Short call (CC / Collar) | ATM + 50 | Slightly OTM — avoid early assignment on roll day |
-| Long put (PP / Collar) | ATM − 50 | Slightly OTM — cost-effective protection |
+| CR0 | 4ce6d99 | Fix `send_approval_request` signature mismatch; remove CouncilOutput from approval path |
+| CR1a | 0a6b3bd | Extract `strike_selector.py` from `find_strike_by_delta.py` |
+| CR1b | 8fd58d4 | TradeState enum; 5 independent CSP classmethods; DTE≤7 roll eligible |
+| CR1c | 154a64c | Refactor `paper_csp_roll.py` to thin CLI wrapper around `csp_roll_executor.py` |
+| CR1d | e62aee9 | CSPNiftyV1 full automation: auto_execute, state machine, CLOSE_AND_ROLL |
+| CC-1→CC-5 | various | CCOverlayV1 full automation; ReEntryMixin; paper_cc_roll.py |
+| PP-1, PP-2 | various | PPOverlayV1 updates; always-reprotect design |
+| COLLAR-1 | various | CollarOverlayV1 + Addition A+B |
+| DAEMON-FIX, BF-1, DAEMON-S1 | various | Daemon crash guards; chain-leg fallback fix |
+| P0/P1/P2 bug fixes | various | DBI-1→3, BUG-1/4, FR-1→10, SIG-1/2, SM-1/2, LOG-1 |
+| RPT-1, RPT-2 | various | Track report; daily P&L delta mode |
+| CR2 | 689662f + | `evaluate_roll_overlay()` added to ExitSignalEngine; base-DTE guard; tests |
 
-The `notes` field carries the suggested strike for the Telegram message. The roll script
-makes the final selection via `strike_selector`.
-
-**Expiry selection:** next monthly Tuesday expiry from BOD. If `base_dte ≤ 60`, align
-overlay expiry to base expiry.
-
-Returns `[]` when `dte > 5`.
-
----
-
-## Approval Flow After Refactor
-
-```
-Signal detected (EOD cron or daemon tick)
-        ↓
-ExitSignalEngine evaluates rules
-        ↓
-Single valid action? ──────────────────────────────────────────→ Telegram message
-  (CSP CLOSE_FULL, CC CLOSE_CC, PP MONETIZE_PP, ROLL_ELIGIBLE)    with pre-built
-        ↓                                                           action options
-Multiple valid actions?                                                   ↓
-  (IC CLOSE_FULL / CLOSE_CALL_SPREAD / CLOSE_PUT_SPREAD)         You tap approve
-        ↓                                                                 ↓
-  Telegram with all valid options listed                          PaperExecutor
-  You choose one
-        ↓
-  PaperExecutor
-```
-
-No LLM call in any path. `CouncilOutput` is not required by `send_approval_request`.
-The action options come from the strategy's known action space, not from council deliberation.
+**Invariants established by shipped code — do not re-derive, just use:**
+- `evaluate_roll_overlay(leg_role, dte, base_dte, atm_strike)` lives in `ExitSignalEngine`.
+  Returns `list[ExitSignalResult]`. `ROLL_ELIGIBLE` ACTION at DTE ≤ 5 (when base_dte > 10);
+  `ROLL_BASE_FIRST` WARN when base_dte ≤ 10. Raises `ValueError` for unknown leg roles.
+- `csp_roll_executor.py` is in `src/strategy/`. `paper_csp_roll.py` is a thin wrapper.
+- `strike_selector.py` is in `src/instruments/`. Used by executor and lookup scripts.
+- `TelegramGateway.send_approval_request(event, context_str)` — no CouncilOutput anywhere.
+- `NotifierProtocol` in `src/notifications/protocol.py` — `_notifier` typed against it in monitor.
+- `RapidCouncil` in `src/council/rapid.py` — retained, not wired anywhere.
 
 ---
 
-## Where RapidCouncil Stays (Future)
+## Pending Tasks — Complete In This Order
 
-`src/council/rapid.py` is **retained but unwired**. It belongs in:
-
-- **IC leg-selective exits in live trading** — when real capital is at stake and the
-  choice between CLOSE_FULL vs. CLOSE_CALL_SPREAD has meaningful P&L consequences
-- **Roll parameter decisions in live trading** — if the deterministic rules prove
-  insufficient over paper observation cycles and require context-sensitive override
-- **Novel signals outside the codified rule set** — situations the spec does not cover
-
-The criterion for wiring council into any future story:
-> The action space has ≥ 2 defensible options AND real capital is at stake AND the strategy
-> spec does not resolve the choice.
+> **Agent assignments:** `[Claude]` = you. `[Antigravity]` = other agent — do NOT implement,
+> hand off when you reach one. Resume from the next `[Claude]` task after Antigravity returns.
 
 ---
 
-## Relationship to Other Stories
+### CR3 `[Claude]` — Wire `evaluate_roll_overlay` into `NiftyTrackComparisonV1`
 
-| Story | Relationship |
-|---|---|
-| `paper-backbone` | Provides `PaperStrategy`, `StrategyMonitor`, `TelegramGateway` — this story fixes the bug those introduced |
-| `paper-exit-signals` | Provides `ExitSignalEngine` — this story extends it with `evaluate_roll_csp` and `evaluate_roll_overlay` |
-| `signals` | Signal pipeline has its own purpose-built multi-model consensus — independent of `RapidCouncil`, unaffected by this story |
-| `broker-abstraction` | Phase 1 live trading — correct place to re-evaluate council wiring |
-| **OD-1→OD-4** (`stories_db_decouple.md`) | Overlay DB decoupling — removes per-track overlay replication; overlays stored once under `paper_overlays`, track association in code via `track_overlay_config.py`. **NT-2 must be updated after OD-2 ships**: replace hardcoded `_FUTURES_BLOCKED_ROLES` frozenset with `is_overlay_allowed(Track.FUTURES, role)` call. Sequence: OD-1 → OD-2 → OD-3 → OD-4 → NT-2 update. |
+**Files:** `src/strategy/nifty_track_comparison_v1.py`, `tests/unit/strategy/test_nifty_track_comparison_v1.py`
+
+**Prerequisite graph checks (run before touching code):**
+```python
+get_code_snippet("NiftyTrackComparisonV1.check_signals")  # current WARN emit logic post-CR2
+get_code_snippet("evaluate_roll_overlay")                  # confirm CR2 signature committed
+```
+
+**What changes:**
+
+When DTE ≤ 5 on an overlay leg, replace the existing `ROLL_DUE_DTE` WARN emission with a
+call to `ExitSignalEngine.evaluate_roll_overlay(leg_role, dte, base_dte, atm_strike)`:
+
+- Result `ROLL_ELIGIBLE` ACTION → emit `SignalEvent(severity="ACTION", payload={..., "valid_actions": ["RECORD_ROLL"]})`
+- Result `ROLL_BASE_FIRST` WARN → emit as WARN (replaces `ROLL_DUE_DTE` for this DTE range)
+- DTE 6–10: keep existing `ROLL_DUE_DTE` WARN unchanged — do not touch this path
+
+`NiftyTrackComparisonV1` does NOT set `auto_execute = True`. Overlay rolls require human
+confirmation (leg ordering is not deterministic).
+
+**Tests to add:**
+- Overlay leg `dte=4`, `base_dte=25` → `ROLL_ELIGIBLE` ACTION in signals
+- Overlay leg `dte=8` → `ROLL_DUE_DTE` WARN (existing path — unchanged)
+- Overlay leg `dte=4`, `base_dte=8` → `ROLL_BASE_FIRST` WARN; no `ROLL_ELIGIBLE`
+- Healthy overlay `dte=20` → `[]`
+
+**Existing tests that MUST be updated in the same commit (not regressions — expected changes):**
+- `test_overlay_dte_4_emits_roll_due_dte` → filter changes to `ROLL_ELIGIBLE`, severity `ACTION`
+- `test_overlay_dte_exactly_5_emits_roll_due_dte` → same update
+- `test_all_three_tracks_trigger_simultaneously` → filter changes to `ROLL_ELIGIBLE`; rename test
+
+Run `python -m pytest tests/unit/strategy/test_nifty_track_comparison_v1.py --tb=short` before committing — 0 failures required.
+
+**Commit:** `feat(strategy): wire evaluate_roll_overlay into NiftyTrackComparisonV1`
 
 ---
 
-## Prerequisites
+### NT-1 `[Antigravity]` — `evaluate_proxy_delta()` + consecutive-day state
 
-Before CR0:
+> **Hand off to Antigravity.** Full spec in `stories_overlay.md` under NT-1.
+> Resume from NT-2 after Antigravity returns the NT-1 SHA.
+
+---
+
+### NT-2 `[Claude]` — Futures + standalone CC block guard
+
+**Files:** `src/strategy/nifty_track_comparison_v1.py`, `tests/unit/strategy/test_nifty_track_comparison_v1.py`
+
+**Prerequisite:** CR3 committed. NT-1 committed (Antigravity).
+
+**Prerequisite graph checks:**
+```python
+get_code_snippet("NiftyTrackComparisonV1.check_signals")  # post-CR3+NT-1 structure
+search_graph("SHORT_CALL_ROLES")                           # existing short call role constants
+search_code("paper_nifty_futures")                         # confirm strategy namespace string
 ```
-search_graph("ExitSignalEngine")      # must exist (ES1 committed)
-search_graph("StrategyMonitor")       # must exist (PB1.2 committed)
-search_code("send_approval_request")  # confirm signature mismatch in monitor.py
+
+**What to implement:**
+
+Add module-level constant:
+```python
+_FUTURES_BLOCKED_ROLES: frozenset[str] = frozenset({
+    "overlay_cc",
+    "overlay_collar_call",  # blocked when no paired long put; collar with put IS allowed
+})
 ```
+
+Add private helper `_check_futures_cc_block(self, positions, strategy_name) -> list[SignalEvent]`:
+1. If `strategy_name != "paper_nifty_futures"`: return `[]`
+2. Find short call positions: `leg_role in _FUTURES_BLOCKED_ROLES`
+3. If none: return `[]`
+4. Check for paired long put: `any(p.leg_role in {"overlay_collar_put", "overlay_pp"} for p in positions)`
+5. If short call exists AND no paired long put → emit `SignalEvent(severity="ERROR", event_type="BLOCKED_COMBINATION", payload={"message": "...", "violating_roles": [...], "action_required": "CLOSE_LEG"})`
+
+Call `_check_futures_cc_block` at the top of `check_signals()` — prepend its events, then
+continue with remaining signal evaluation (do not short-circuit on block).
+
+**Tests:**
+- Futures + `overlay_cc`, no long put → `BLOCKED_COMBINATION` ERROR
+- Futures + `overlay_cc` + `overlay_collar_put` → no block (collar allowed)
+- Futures + `overlay_collar_call` + `overlay_collar_put` → no block
+- Futures + `overlay_collar_call`, no put (degenerate collar) → `BLOCKED_COMBINATION`
+- Spot + `overlay_cc` → no block (Futures namespace only)
+- Proxy + `overlay_cc` → no block
+- Futures, no overlays → no block
+
+**Commit:** `feat(strategy): NiftyTrackComparisonV1 — Futures+CC block guard with collar exemption`
+
+---
+
+### AUTO-1 `[Antigravity]` — EOD snapshot auto-close for all overlays
+
+> **Hand off to Antigravity.** Full spec in `stories_auto.md`.
+> Prerequisites: FR-1 + CC-4 + PP-2 + COLLAR-1 + DAEMON-FIX (all shipped).
+> Resume from OPS-1 after Antigravity returns the AUTO-1 SHA.
+
+---
+
+### OPS-1 `[Claude]` — Insert/skip logging in `paper_3track_overlay_entry.py`
+
+**Files:** `scripts/strategies/three_track/paper_3track_overlay_entry.py`
+
+**Prerequisite graph checks:**
+```python
+search_code("record_trade", file_pattern="paper_3track_overlay_entry.py")  # find all call sites
+```
+
+`store.record_trade()` returns `bool` but the return value is currently discarded. After
+each call, log at INFO:
+- `True` → `"trade.INSERTED strategy=%s leg=%s"` (structlog key-value)
+- `False` → `"trade.SKIPPED conflict on strategy/leg/date/action strategy=%s leg=%s"`
+
+Use the module-level logger (already present). Do not change any logic — logging only.
+
+**Tests:** mock `record_trade` returning `True` → assert INFO log contains `INSERTED`;
+returning `False` → assert INFO log contains `SKIPPED`.
+
+**Commit:** `feat(strategies): OPS-1 insert/skip logging in paper_3track_overlay_entry`
+
+---
+
+### OPS-2 `[Claude]` — Atomic collar open/close in `paper_3track_overlay_entry.py`
+
+**Files:** `scripts/strategies/three_track/paper_3track_overlay_entry.py`
+
+**Two sub-tasks:**
+
+**(a) Open:** replace per-leg `store.record_trade()` loop for collar legs with a single
+`store.record_trades([put_trade, call_trade])` call (already exists — atomic multi-insert).
+If any leg conflicts, the whole collar open is rolled back. Currently the put can succeed
+while the call silently conflicts, leaving a half-open collar.
+
+**(b) Close:** validate that any script invocation targeting `overlay_collar_call` also
+closes `overlay_collar_put` in the same transaction (and vice versa). Raise `SystemExit`
+with an error message if only one collar leg is requested — partial collar close is not
+permitted at the CLI level.
+
+**Tests:**
+- Open path: second leg raises `IntegrityError` → first leg rolled back; no record in DB
+- Close path: requesting `overlay_collar_call` without `overlay_collar_put` → `SystemExit`
+- Close path: requesting both → succeeds
+
+**Commit:** `fix(strategies): OPS-2 atomic collar open/close in paper_3track_overlay_entry`
+
+---
+
+### RPT-3 `[Claude]` — Monthly mode in track snapshot
+
+**Files:** `scripts/strategies/three_track/paper_3track_snapshot.py`, `src/paper/formatting.py`
+
+**Prerequisite:** RPT-2 committed (✓). Verify `src/market_calendar/` holiday list is stable
+before implementing (`search_code("is_trading_day", path_filter="market_calendar")`).
+
+Remove the `--monthly` guard added in RPT-2 (`exits with error — RPT-3 not built yet`).
+Resolve the reference date to the first NSE trading day of the current month via
+`src/market_calendar/`. Fetch the nearest prior `paper_leg_snapshots` row. Compute
+month-to-date delta using the same logic as daily mode (`get_prev_leg_snapshot`). Column
+headers: `"MTD Base"` / `"MTD Overlay"`.
+
+**Tests:**
+- Monthly mode: reference date resolves to first trading day of month; delta computed vs that snapshot
+- Non-trading-day first of month → advances to next trading day
+- No prior snapshot for the month → renders `N/A` (not a crash)
+- `-m` flag no longer exits with error
+
+**Commit:** `feat(strategies): RPT-3 monthly mode in paper_3track_snapshot`
+
+---
+
+### CR4 `[Claude]` — Docs close (ALWAYS LAST)
+
+**Files:** `DECISIONS.md`, `CONTEXT.md`, `TODOS.md`, `docs/plan/council-refactor/tasks.md`
+
+**No code changes. Run only after all story SHAs are committed and tests are green.**
+
+**Before writing:**
+```bash
+git log --oneline -20          # verify all story SHAs present
+python -m pytest tests/unit/ --tb=no -q   # must be 0 failures
+```
+
+Full list of entries to add/update: see `stories_close.md` — it is the canonical spec for
+this task. Do not summarise here to avoid drift.
+
+**Commit:** `docs(council-refactor): close CR4 — DECISIONS, CONTEXT, TODOS updated`
+
+---
+
+### PP-3 `[Claude]` — PP docs close (can run in parallel with CR4)
+
+**Files:** `DECISIONS.md`, `CONTEXT.md`, `docs/plan/council-refactor/README.md`, `docs/plan/council-refactor/tasks.md`
+
+Document PP always-reprotect design, IVR re-entry gate, spread guard removal (introduced in PP-1/PP-2).
+Full entry list: see `stories_pp.md`.
+
+**Commit:** `docs(council-refactor): PP-3 — PP design decisions and CONTEXT update`
+
+---
+
+## Execution Order Summary
+
+```
+CR3  [Claude]      ← start here
+  ↓
+NT-1 [Antigravity] ← hand off; wait for SHA
+  ↓
+NT-2 [Claude]
+  ↓
+AUTO-1 [Antigravity] ← hand off; wait for SHA
+  ↓
+OPS-1 [Claude]     ← can run in parallel with OPS-2 and RPT-3
+OPS-2 [Claude]
+RPT-3 [Claude]
+  ↓
+CR4 + PP-3 [Claude]  ← always last; after all other SHAs confirmed
+```
+
+---
+
+## Archived: Original Design Rationale
+
+> The following sections explain WHY this story was structured as it is.
+> They remain here for reference. Do not re-implement anything described here —
+> it is all shipped. See the SHA table above.
+
+### Why the Council Does Not Belong Here
+
+**Paper trading exits are single-option decisions.** `ExitSignalEngine` already determines
+whether to exit and why. Each strategy's `apply_action()` accepts a fixed set of action
+types — `CLOSE_FULL` for CSP, `CLOSE_CC` for CC, `MONETIZE_PP` for PP. There is nothing
+to deliberate: the action is determined before the council would be asked.
+
+**Roll decisions must be backtestable.** A roll decision driven by `evaluate_roll_csp(dte)`
+can be replayed deterministically. An LLM council call cannot — non-deterministic across runs,
+model-version-dependent, leaks hindsight when replaying historical data.
+
+**The council belongs in live trading for genuinely ambiguous decisions** — when real
+capital is at stake, ≥ 2 defensible options exist, and the strategy spec does not resolve
+the choice. None of these hold in Phase 0 paper trading.
+
+### Where RapidCouncil Stays (Future)
+
+`src/council/rapid.py` is retained but unwired. Future use: IC leg-selective exits in live
+trading; roll parameter decisions if deterministic rules prove insufficient; novel signals
+outside the codified rule set. Wiring criterion: action space ≥ 2 defensible options AND
+real capital at stake AND strategy spec does not resolve the choice.
+
+### Approval Flow (shipped)
+
+```
+Signal detected → ExitSignalEngine evaluates rules → Telegram message with action keyboard
+         ↓
+You tap approve → PaperExecutor dispatches action
+```
+
+No LLM call in any path. `valid_actions` list embedded in each strategy's signal payload
+drives the keyboard. `CouncilOutput` not required anywhere.

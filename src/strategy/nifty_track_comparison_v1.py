@@ -1,16 +1,18 @@
 """NiftyTrackComparisonV1 — backbone integration for the 3-Track Nifty Comparison.
 
 Covers all three tracks (spot / futures / proxy) as a single registered strategy.
-Emits WARN events only; rolls remain manual via ``paper_3track_overlay_roll.py``.
+Emits WARN and ACTION events; rolls remain manual via ``paper_3track_overlay_roll.py``.
 ``apply_action`` is a documented no-op.
 
 Signal table
 ------------
-| Event type     | Severity | Trigger                                       |
-|----------------|----------|-----------------------------------------------|
-| ROLL_DUE_DTE   | WARN     | any overlay leg with DTE ≤ 5                  |
-| ROLL_DUE_DECAY | WARN     | any short overlay premium ≤ 25% of entry      |
-| OVERLAY_EXPIRED| WARN     | overlay expiry has passed with no roll         |
+| Event type     | Severity | Trigger                                              |
+|----------------|----------|------------------------------------------------------|
+| ROLL_ELIGIBLE  | ACTION   | overlay DTE ≤ 5 and base DTE > 10                   |
+| ROLL_BASE_FIRST| WARN     | overlay DTE ≤ 5 but base DTE ≤ 10 (roll base first) |
+| ROLL_DUE_DTE   | WARN     | overlay DTE 6–10 (advance notice)                    |
+| ROLL_DUE_DECAY | WARN     | any short overlay premium ≤ 25% of entry             |
+| OVERLAY_EXPIRED| WARN     | overlay expiry has passed with no roll               |
 
 Overlay legs are identified by ``leg_role.startswith("overlay_")``.
 Base legs (``base_etf``, ``base_futures``, ``base_ditm_call``) are not evaluated.
@@ -29,6 +31,7 @@ import structlog
 from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
 from src.paper.models import PaperPosition
+from src.strategy.exit_signals import ExitSignalEngine
 from src.strategy.protocol import ApprovedAction, SignalEvent
 
 log = structlog.get_logger(__name__)
@@ -46,7 +49,8 @@ _STRIKE_RE = re.compile(r"NIFTY(\d+)(PE|CE)", re.IGNORECASE)
 
 # ── Thresholds ────────────────────────────────────────────────────────────────
 
-_ROLL_DTE = 5  # DTE ≤ 5 → ROLL_DUE_DTE
+_ROLL_ELIGIBLE_DTE = 5  # DTE ≤ 5 → delegate to ExitSignalEngine.evaluate_roll_overlay
+_ROLL_DUE_DTE_MAX = 10  # DTE 6–10 → ROLL_DUE_DTE WARN (advance notice)
 _DECAY_WARN_PCT = Decimal("0.25")  # remaining premium ≤ 25% of entry → ROLL_DUE_DECAY
 
 
@@ -125,14 +129,65 @@ class NiftyTrackComparisonV1:
                 continue  # no further checks for an already-expired leg
 
             # ── DTE check ────────────────────────────────────────────────────
-            if dte is not None and dte <= _ROLL_DTE:
+            if dte is not None and dte <= _ROLL_ELIGIBLE_DTE:
+                # DTE ≤ 5: delegate to ExitSignalEngine for structured roll decision
+                base_dte = self._get_base_dte(positions, pos.strategy_name, today)
+                atm_strike = int(round(float(market.underlying_spot) / 50) * 50)
+                try:
+                    roll_results = ExitSignalEngine.evaluate_roll_overlay(
+                        leg_role=pos.leg_role,
+                        dte=dte,
+                        base_dte=base_dte,
+                        atm_strike=atm_strike,
+                    )
+                except ValueError:
+                    # Unknown overlay role — fall back to generic advance warning
+                    roll_results = []
+                    events.append(
+                        SignalEvent(
+                            event_type="ROLL_DUE_DTE",
+                            severity="WARN",
+                            description=(
+                                f"Overlay {pos.leg_role} on {pos.strategy_name} "
+                                f"DTE {dte} ≤ {_ROLL_ELIGIBLE_DTE} — roll due"
+                            ),
+                            payload=payload_base,
+                        )
+                    )
+                for res in roll_results:
+                    if res.exit_signal == "ROLL_ELIGIBLE":
+                        events.append(
+                            SignalEvent(
+                                event_type="ROLL_ELIGIBLE",
+                                severity="ACTION",
+                                description=(
+                                    f"Overlay {pos.leg_role} on {pos.strategy_name} "
+                                    f"DTE {dte} ≤ {_ROLL_ELIGIBLE_DTE} — roll eligible"
+                                ),
+                                payload={**payload_base, "valid_actions": ["RECORD_ROLL"]},
+                            )
+                        )
+                    elif res.exit_signal == "ROLL_BASE_FIRST":
+                        events.append(
+                            SignalEvent(
+                                event_type="ROLL_BASE_FIRST",
+                                severity="WARN",
+                                description=(
+                                    f"Overlay {pos.leg_role} on {pos.strategy_name} "
+                                    f"DTE {dte} — roll base first (base DTE {base_dte} ≤ 10)"
+                                ),
+                                payload=payload_base,
+                            )
+                        )
+            elif dte is not None and dte <= _ROLL_DUE_DTE_MAX:
+                # DTE 6–10: advance notice — manual roll due soon
                 events.append(
                     SignalEvent(
                         event_type="ROLL_DUE_DTE",
                         severity="WARN",
                         description=(
                             f"Overlay {pos.leg_role} on {pos.strategy_name} "
-                            f"DTE {dte} ≤ {_ROLL_DTE} — roll due"
+                            f"DTE {dte} ≤ {_ROLL_DUE_DTE_MAX} — roll due soon"
                         ),
                         payload=payload_base,
                     )
@@ -265,6 +320,36 @@ class NiftyTrackComparisonV1:
         return positions
 
     # ── Private helpers ───────────────────────────────────────────────────────
+
+    def _get_base_dte(
+        self,
+        positions: list[PaperPosition],
+        strategy_name: str,
+        today: date,
+    ) -> int:
+        """Return DTE of the base leg for the given track.
+
+        Scans positions for a non-overlay leg in ``strategy_name`` with a
+        parseable expiry date.  Returns 999 when no base leg is found or the
+        base has no expiry (e.g. base_etf — ETF has no maturity).
+
+        Args:
+            positions: All open paper positions.
+            strategy_name: Track strategy namespace to search.
+            today: Reference date for DTE computation.
+
+        Returns:
+            Integer DTE of the base leg, or 999 when unavailable.
+        """
+        for pos in positions:
+            if pos.strategy_name != strategy_name:
+                continue
+            if pos.leg_role.startswith("overlay_"):
+                continue
+            expiry = self._parse_expiry(pos.instrument_key)
+            if expiry is not None:
+                return (expiry - today).days
+        return 999  # base has no expiry (ETF) or base not in positions
 
     def _parse_expiry(self, instrument_key: str) -> date | None:
         """Extract the option expiry date from an instrument key.

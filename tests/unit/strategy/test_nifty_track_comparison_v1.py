@@ -147,11 +147,11 @@ def test_other_strategy_positions_ignored() -> None:
     assert result == []
 
 
-# ── ROLL_DUE_DTE ─────────────────────────────────────────────────────────────
+# ── ROLL_ELIGIBLE / ROLL_BASE_FIRST / ROLL_DUE_DTE ───────────────────────────
 
 
-def test_overlay_dte_4_emits_roll_due_dte() -> None:
-    """Overlay leg with DTE = 4 → ROLL_DUE_DTE WARN; payload contains track name."""
+def test_overlay_dte_4_no_base_emits_roll_eligible_action() -> None:
+    """Overlay DTE=4, no base leg (base_dte defaults to 999) → ROLL_ELIGIBLE ACTION."""
     strategy = NiftyTrackComparisonV1()
     pos = _make_position(
         strategy_name=_SPOT,
@@ -159,20 +159,84 @@ def test_overlay_dte_4_emits_roll_due_dte() -> None:
         instrument_key=_expiry_key(4),
     )
     result = _run(strategy.check_signals(_make_empty_chain(), [pos]))
-    roll_events = [e for e in result if e.event_type == "ROLL_DUE_DTE"]
+    roll_events = [e for e in result if e.event_type == "ROLL_ELIGIBLE"]
     assert len(roll_events) == 1
     ev = roll_events[0]
-    assert ev.severity == "WARN"
+    assert ev.severity == "ACTION"
     assert ev.payload["track"] == _SPOT
     assert ev.payload["dte"] == 4
+    assert "RECORD_ROLL" in ev.payload["valid_actions"]
 
 
-def test_overlay_dte_exactly_5_emits_roll_due_dte() -> None:
-    """DTE = 5 is on the boundary — should still trigger ROLL_DUE_DTE."""
+def test_overlay_dte_exactly_5_emits_roll_eligible_action() -> None:
+    """DTE = 5 is the boundary — should trigger ROLL_ELIGIBLE ACTION (not ROLL_DUE_DTE)."""
     strategy = NiftyTrackComparisonV1()
     pos = _make_position(instrument_key=_expiry_key(5))
     result = _run(strategy.check_signals(_make_empty_chain(), [pos]))
-    assert any(e.event_type == "ROLL_DUE_DTE" for e in result)
+    assert any(e.event_type == "ROLL_ELIGIBLE" and e.severity == "ACTION" for e in result)
+    assert not any(e.event_type == "ROLL_DUE_DTE" for e in result)
+
+
+def test_overlay_dte_4_base_dte_25_emits_roll_eligible() -> None:
+    """Overlay DTE=4, base DTE=25 → ROLL_ELIGIBLE ACTION."""
+    strategy = NiftyTrackComparisonV1()
+    overlay = _make_position(
+        strategy_name=_FUTURES,
+        leg_role="overlay_cc",
+        instrument_key=_expiry_key(4, "CE"),
+    )
+    base = _make_position(
+        strategy_name=_FUTURES,
+        leg_role="base_futures",
+        instrument_key=_expiry_key(25, "CE"),
+        net_qty=65,
+        avg_sell_price="0",
+    )
+    result = _run(strategy.check_signals(_make_empty_chain(), [overlay, base]))
+    roll_events = [e for e in result if e.event_type == "ROLL_ELIGIBLE"]
+    assert len(roll_events) == 1
+    assert roll_events[0].severity == "ACTION"
+
+
+def test_overlay_dte_4_base_dte_8_emits_roll_base_first() -> None:
+    """Overlay DTE=4, base DTE=8 (≤ 10) → ROLL_BASE_FIRST WARN; no ROLL_ELIGIBLE."""
+    strategy = NiftyTrackComparisonV1()
+    overlay = _make_position(
+        strategy_name=_PROXY,
+        leg_role="overlay_collar_put",
+        instrument_key=_expiry_key(4),
+    )
+    base = _make_position(
+        strategy_name=_PROXY,
+        leg_role="base_ditm_call",
+        instrument_key=_expiry_key(8, "CE"),
+        net_qty=65,
+        avg_sell_price="0",
+    )
+    result = _run(strategy.check_signals(_make_empty_chain(), [overlay, base]))
+    assert any(e.event_type == "ROLL_BASE_FIRST" and e.severity == "WARN" for e in result)
+    assert not any(e.event_type == "ROLL_ELIGIBLE" for e in result)
+
+
+def test_overlay_dte_8_emits_roll_due_dte_warn() -> None:
+    """Overlay DTE=8 (range 6-10) → ROLL_DUE_DTE WARN (advance notice path)."""
+    strategy = NiftyTrackComparisonV1()
+    pos = _make_position(instrument_key=_expiry_key(8))
+    result = _run(strategy.check_signals(_make_empty_chain(), [pos]))
+    roll_events = [e for e in result if e.event_type == "ROLL_DUE_DTE"]
+    assert len(roll_events) == 1
+    assert roll_events[0].severity == "WARN"
+
+
+def test_overlay_dte_20_no_dte_signals() -> None:
+    """Overlay DTE=20 → no DTE-triggered signals."""
+    strategy = NiftyTrackComparisonV1()
+    pos = _make_position(instrument_key=_expiry_key(20))
+    result = _run(strategy.check_signals(_make_empty_chain(), [pos]))
+    dte_events = [
+        e for e in result if e.event_type in ("ROLL_ELIGIBLE", "ROLL_BASE_FIRST", "ROLL_DUE_DTE")
+    ]
+    assert dte_events == []
 
 
 def test_healthy_overlay_dte_only_no_signals() -> None:
@@ -270,8 +334,8 @@ def test_expired_overlay_does_not_also_emit_dte_warn() -> None:
 # ── All three tracks trigger simultaneously ───────────────────────────────────
 
 
-def test_all_three_tracks_trigger_simultaneously() -> None:
-    """Each track with an overlay at DTE 4 → three separate ROLL_DUE_DTE WARN events."""
+def test_all_three_tracks_roll_eligible_simultaneously() -> None:
+    """Each track with an overlay at DTE 4, no base legs → three ROLL_ELIGIBLE ACTION events."""
     strategy = NiftyTrackComparisonV1()
     positions = [
         _make_position(strategy_name=_SPOT, leg_role="overlay_pp", instrument_key=_expiry_key(4)),
@@ -285,8 +349,9 @@ def test_all_three_tracks_trigger_simultaneously() -> None:
         ),
     ]
     result = _run(strategy.check_signals(_make_empty_chain(), positions))
-    roll_events = [e for e in result if e.event_type == "ROLL_DUE_DTE"]
+    roll_events = [e for e in result if e.event_type == "ROLL_ELIGIBLE"]
     assert len(roll_events) == 3
+    assert all(e.severity == "ACTION" for e in roll_events)
     tracks_seen = {e.payload["track"] for e in roll_events}
     assert tracks_seen == {_SPOT, _FUTURES, _PROXY}
 
