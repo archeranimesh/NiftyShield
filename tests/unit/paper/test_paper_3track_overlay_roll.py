@@ -145,6 +145,38 @@ def test_find_expiring_overlay_closed_position_returns_empty() -> None:
     assert result == []
 
 
+def test_find_expiring_overlay_multi_cycle_uses_current_open() -> None:
+    """2 completed cycles + 1 open → last_trade reflects the open cycle instrument."""
+    old_key = "NSE_FO|NIFTY29APR2026PE"
+    new_key = "NSE_FO|NIFTY12MAY2026PE"  # DTE=5, within roll threshold
+
+    # Cycle 1: open + close (different instrument from cycle 2)
+    c1_open = _make_pp_trade(instrument_key=old_key, trade_date=date(2026, 3, 1), action=TradeAction.BUY)
+    c1_close = _make_pp_trade(instrument_key=old_key, trade_date=date(2026, 3, 20), action=TradeAction.SELL)
+    # Current open cycle
+    c2_open = _make_pp_trade(instrument_key=new_key, trade_date=date(2026, 4, 20), action=TradeAction.BUY)
+
+    result = roll_mod._find_expiring_overlay(
+        [c1_open, c1_close, c2_open], _ROLL_DATE, "overlay_pp", force=False
+    )
+    assert len(result) == 1
+    assert result[0].instrument_key == new_key
+
+
+def test_find_expiring_overlay_all_cycles_closed_returns_empty() -> None:
+    """2 completed cycles with net=0 → no position → returns []."""
+    key = "NSE_FO|NIFTY12MAY2026PE"
+    c1_open = _make_pp_trade(instrument_key=key, trade_date=date(2026, 3, 1), action=TradeAction.BUY)
+    c1_close = _make_pp_trade(instrument_key=key, trade_date=date(2026, 3, 20), action=TradeAction.SELL)
+    c2_open = _make_pp_trade(instrument_key=key, trade_date=date(2026, 4, 1), action=TradeAction.BUY)
+    c2_close = _make_pp_trade(instrument_key=key, trade_date=date(2026, 4, 20), action=TradeAction.SELL)
+
+    result = roll_mod._find_expiring_overlay(
+        [c1_open, c1_close, c2_open, c2_close], _ROLL_DATE, "overlay_pp", force=True
+    )
+    assert result == []
+
+
 # ── _cycle_pnl ────────────────────────────────────────────────────────────────
 
 

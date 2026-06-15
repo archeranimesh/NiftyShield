@@ -196,6 +196,8 @@ def _find_expiring_overlay(
         else:
             net -= t.quantity
         last_trade = t  # track regardless of direction (Phase B lesson)
+        if net == 0:
+            last_trade = None  # cycle closed — reset so only the current cycle contributes
 
     if net == 0 or last_trade is None:
         return []
