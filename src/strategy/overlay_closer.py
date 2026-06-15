@@ -29,8 +29,8 @@ _EXPIRY_RE = re.compile(
     re.IGNORECASE,
 )
 
-SHORT_CALL_ROLE = "collar_short_call"
-LONG_PUT_ROLE = "collar_long_put"
+SHORT_CALL_ROLE = "overlay_collar_call"
+LONG_PUT_ROLE = "overlay_collar_put"
 
 
 class OverlayCloser:

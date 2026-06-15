@@ -24,7 +24,7 @@ _OTHER_STRATEGY = "paper_other_v1"
 def _make_call_leg(
     ltp: str,
     delta: str,
-    strike: str = "23000",
+    strike: str = "24500",
     iv: str = "15.0",
 ) -> OptionLeg:
     """Build a minimal CE OptionLeg."""
@@ -48,7 +48,7 @@ def _make_put_leg(
     delta: str,
     bid: str | None = None,
     ask: str | None = None,
-    strike: str = "23000",
+    strike: str = "21500",
     iv: str = "15.0",
 ) -> OptionLeg:
     """Build a minimal PE OptionLeg."""
@@ -105,8 +105,9 @@ def _make_short_call_position(
     instrument_key: str = "NSE_FO|NIFTY24500CE",
     avg_sell_price: str = "80",
     net_qty: int = -65,
-    leg_role: str = "collar_short_call",
+    leg_role: str = "overlay_collar_call",
     strategy_name: str = _STRATEGY,
+    entry_date: date | None = None,
 ) -> PaperPosition:
     return PaperPosition(
         strategy_name=strategy_name,
@@ -115,7 +116,7 @@ def _make_short_call_position(
         avg_cost=Decimal("0"),
         avg_sell_price=Decimal(avg_sell_price),
         instrument_key=instrument_key,
-        entry_date=None,
+        entry_date=entry_date or date.today(),
     )
 
 
@@ -123,8 +124,9 @@ def _make_long_put_position(
     instrument_key: str = "NSE_FO|NIFTY21500PE",
     avg_cost: str = "50",
     net_qty: int = 65,
-    leg_role: str = "collar_long_put",
+    leg_role: str = "overlay_collar_put",
     strategy_name: str = _STRATEGY,
+    entry_date: date | None = None,
 ) -> PaperPosition:
     return PaperPosition(
         strategy_name=strategy_name,
@@ -133,7 +135,7 @@ def _make_long_put_position(
         avg_cost=Decimal(avg_cost),
         avg_sell_price=Decimal("0"),
         instrument_key=instrument_key,
-        entry_date=None,
+        entry_date=entry_date or date.today(),
     )
 
 
@@ -156,66 +158,90 @@ def test_no_positions_returns_empty() -> None:
 def test_filters_out_other_strategy() -> None:
     strategy = CollarOverlayV1()
     pos1 = _make_short_call_position(strategy_name=_OTHER_STRATEGY)
-    pos2 = _make_long_put_position(strategy_name=_OTHER_STRATEGY)
-    result = _run(strategy.check_signals(_make_chain("20", "0.20", "20", "-0.20"), [pos1, pos2]))
+    result = _run(strategy.check_signals(_make_chain("20", "0.20", "20", "-0.20"), [pos1]))
     assert result == []
 
 
-def test_decay_fires_for_short_call() -> None:
+def test_profit_target_fires_for_short_call() -> None:
     strategy = CollarOverlayV1()
-    # mark 19 <= 25% of 80 (20)
-    chain = _make_chain("19", "0.15", "30", "-0.10")
-    pos1 = _make_short_call_position(avg_sell_price="80")
-    pos2 = _make_long_put_position(avg_cost="50")
-    events = _run(strategy.check_signals(chain, [pos1, pos2]))
-    assert any(e.event_type == "COLLAR_CALL_DECAY" and e.severity == "ACTION" for e in events)
-
-
-def test_decay_does_not_fire_above_25_pct() -> None:
-    strategy = CollarOverlayV1()
-    # mark 21 > 25% of 80 (20)
-    chain = _make_chain("21", "0.15", "30", "-0.10")
+    # profit target: ltp <= 30% of entry 80 (24) AND entry >= 15
+    chain = _make_chain("24", "0.15", "30", "-0.10")
     pos1 = _make_short_call_position(avg_sell_price="80")
     events = _run(strategy.check_signals(chain, [pos1]))
-    assert not any(e.event_type == "COLLAR_CALL_DECAY" for e in events)
+    assert any(
+        e.event_type == "PROFIT_TARGET"
+        and e.severity == "ACTION"
+        and e.payload.get("auto_execute") is True
+        for e in events
+    )
 
 
-def test_residual_value_fires_decay() -> None:
+def test_loss_stop_fires_for_short_call() -> None:
     strategy = CollarOverlayV1()
-    # mark 2 <= 3
-    chain = _make_chain("2.5", "0.05", "30", "-0.10")
+    # loss stop: ltp >= 2.5x of 80 (200)
+    chain = _make_chain("200", "0.40", "30", "-0.10")
     pos1 = _make_short_call_position(avg_sell_price="80")
     events = _run(strategy.check_signals(chain, [pos1]))
-    assert any(e.event_type == "COLLAR_CALL_DECAY" and e.severity == "ACTION" for e in events)
+    assert any(
+        e.event_type == "LOSS_STOP"
+        and e.severity == "ACTION"
+        and e.payload.get("auto_execute") is True
+        for e in events
+    )
 
 
-def test_collar_call_warn_fires() -> None:
+def test_delta_stop_fires_for_short_call() -> None:
     strategy = CollarOverlayV1()
+    # delta stop: delta >= 0.55
     chain = _make_chain("100", "0.56", "30", "-0.10")
     pos1 = _make_short_call_position(avg_sell_price="80")
     events = _run(strategy.check_signals(chain, [pos1]))
-    assert any(e.event_type == "COLLAR_CALL_WARN" and e.severity == "WARN" for e in events)
-    assert not any(e.event_type == "COLLAR_CALL_WARN" and e.severity == "ACTION" for e in events)
+    assert any(
+        e.event_type == "DELTA_STOP"
+        and e.severity == "ACTION"
+        and e.payload.get("auto_execute") is True
+        for e in events
+    )
 
 
-def test_collar_put_crash_fires() -> None:
+def test_delta_warn_fires_for_short_call() -> None:
     strategy = CollarOverlayV1()
-    chain = _make_chain(
-        "10", "0.10", "260", "-0.85", put_bid="255", put_ask="265"
-    )  # put value 260 >= 5x of 50
-    pos1 = _make_short_call_position()
-    pos2 = _make_long_put_position(avg_cost="50")
-    events = _run(strategy.check_signals(chain, [pos1, pos2]))
-    assert any(e.event_type == "COLLAR_PUT_CRASH" and e.severity == "ACTION" for e in events)
+    # delta warn: delta >= 0.45 but < 0.55
+    chain = _make_chain("100", "0.48", "30", "-0.10")
+    pos1 = _make_short_call_position(avg_sell_price="80")
+    events = _run(strategy.check_signals(chain, [pos1]))
+    assert any(
+        e.event_type == "DELTA_WARN" and e.severity == "WARN" and "auto_execute" not in e.payload
+        for e in events
+    )
 
 
-def test_dte_forced_fires_for_short_call() -> None:
+def test_time_stop_fires_for_short_call() -> None:
     strategy = CollarOverlayV1()
-    chain = _make_chain("100", "0.55", "30", "-0.10")
+    # time stop: days held >= 21
+    chain = _make_chain("50", "0.20", "30", "-0.10")
+    pos1 = _make_short_call_position(
+        avg_sell_price="80", entry_date=date.today() - timedelta(days=21)
+    )
+    events = _run(strategy.check_signals(chain, [pos1]))
+    assert any(
+        e.event_type == "TIME_STOP"
+        and e.severity == "ACTION"
+        and e.payload.get("auto_execute") is True
+        for e in events
+    )
+
+
+def test_dte_review_warns_for_short_call() -> None:
+    strategy = CollarOverlayV1()
+    chain = _make_chain("50", "0.20", "30", "-0.10")
     key = _expiry_key(dte=4, option_type="CE")
     pos1 = _make_short_call_position(instrument_key=key, avg_sell_price="80")
     events = _run(strategy.check_signals(chain, [pos1]))
-    assert any(e.event_type == "DTE_FORCED" and e.severity == "ACTION" for e in events)
+    assert any(
+        e.event_type == "DTE_REVIEW" and e.severity == "WARN" and "auto_execute" not in e.payload
+        for e in events
+    )
 
 
 def test_apply_action_valid() -> None:
@@ -223,39 +249,28 @@ def test_apply_action_valid() -> None:
     pos1 = _make_short_call_position()
     pos2 = _make_long_put_position()
 
-    action1 = ApprovedAction(
-        action_type="CLOSE_CALL_ONLY",
-        legs_to_close=["collar_short_call"],
+    action = ApprovedAction(
+        action_type="CLOSE_COLLAR",
+        legs_to_close=["overlay_collar_call", "overlay_collar_put"],
         legs_to_open=[],
         rationale="test",
         council_rank=1,
     )
-    result1 = _run(strategy.apply_action([pos1, pos2], action1))
-    assert len(result1) == 1
-    assert result1[0].leg_role == "collar_long_put"
-
-    action2 = ApprovedAction(
-        action_type="CLOSE_ALL_OVERLAY",
-        legs_to_close=["collar_short_call", "collar_long_put"],
-        legs_to_open=[],
-        rationale="test",
-        council_rank=1,
-    )
-    result2 = _run(strategy.apply_action([pos1, pos2], action2))
-    assert len(result2) == 0
+    result = _run(strategy.apply_action([pos1, pos2], action))
+    assert len(result) == 0
 
 
 def test_apply_action_invalid_raises() -> None:
     strategy = CollarOverlayV1()
     pos1 = _make_short_call_position()
     action = ApprovedAction(
-        action_type="ROLL_COLLAR",
+        action_type="CLOSE_CALL_ONLY",
         legs_to_close=[],
         legs_to_open=[],
         rationale="test",
         council_rank=1,
     )
-    with pytest.raises(ValueError, match="CollarOverlayV1 only accepts actions"):
+    with pytest.raises(ValueError, match="CollarOverlayV1 only accepts CLOSE_COLLAR"):
         _run(strategy.apply_action([pos1], action))
 
 
@@ -265,32 +280,26 @@ def test_describe_context() -> None:
     pos1 = _make_short_call_position()
     pos2 = _make_long_put_position()
     event = SignalEvent(
-        event_type="COLLAR_CALL_DECAY",
+        event_type="PROFIT_TARGET",
         severity="ACTION",
         description="test",
         payload={},
     )
     ctx = strategy.describe_context(event, chain, [pos1, pos2])
     assert "paper_collar_v1" in ctx
-    assert "COLLAR_CALL_DECAY" in ctx
+    assert "PROFIT_TARGET" in ctx
 
 
-# ---------------------------------------------------------------------------
-# DBI-2: record_close_trade tests
-# ---------------------------------------------------------------------------
-
-
-def test_apply_action_close_all_records_both_legs() -> None:
-    """CLOSE_ALL_OVERLAY must write BUY (call) and SELL (put) closing trades."""
+def test_apply_action_records_both_legs_atomically() -> None:
+    """CLOSE_COLLAR must write trades using record_trades."""
     mock_store = MagicMock()
-    mock_store.record_trade.return_value = True
     strategy = CollarOverlayV1(store=mock_store)
 
     call_pos = _make_short_call_position(avg_sell_price="80")
     put_pos = _make_long_put_position(avg_cost="50")
     action = ApprovedAction(
-        action_type="CLOSE_ALL_OVERLAY",
-        legs_to_close=["collar_short_call", "collar_long_put"],
+        action_type="CLOSE_COLLAR",
+        legs_to_close=["overlay_collar_call", "overlay_collar_put"],
         legs_to_open=[],
         rationale="test",
         council_rank=1,
@@ -299,124 +308,71 @@ def test_apply_action_close_all_records_both_legs() -> None:
     result = _run(strategy.apply_action([call_pos, put_pos], action))
 
     assert result == []
-    assert mock_store.record_trade.call_count == 2
-    calls = {c[0][0].action.value: c[0][0] for c in mock_store.record_trade.call_args_list}
-    assert "BUY" in calls
-    assert "SELL" in calls
-    assert calls["BUY"].leg_role == "collar_short_call"
-    assert calls["SELL"].leg_role == "collar_long_put"
+    mock_store.record_trades.assert_called_once()
+    trades = mock_store.record_trades.call_args[0][0]
+    assert len(trades) == 2
+    assert any(
+        t.action.value == "BUY"
+        and t.leg_role == "overlay_collar_call"
+        and t.price == Decimal("30.0")
+        for t in trades
+    )
+    assert any(
+        t.action.value == "SELL"
+        and t.leg_role == "overlay_collar_put"
+        and t.price == Decimal("50.0")
+        for t in trades
+    )
 
 
-def test_apply_action_close_call_only_records_buy() -> None:
-    """CLOSE_CALL_ONLY must write exactly one BUY trade."""
+def test_apply_action_handles_missing_put_leg_gracefully() -> None:
+    """If put leg is missing, only record the call close and do not raise."""
     mock_store = MagicMock()
-    mock_store.record_trade.return_value = True
     strategy = CollarOverlayV1(store=mock_store)
 
     call_pos = _make_short_call_position(avg_sell_price="80")
-    put_pos = _make_long_put_position(avg_cost="50")
     action = ApprovedAction(
-        action_type="CLOSE_CALL_ONLY",
-        legs_to_close=["collar_short_call"],
+        action_type="CLOSE_COLLAR",
+        legs_to_close=["overlay_collar_call"],
         legs_to_open=[],
         rationale="test",
         council_rank=1,
-        metadata={"mark": "25.0"},
+        metadata={"mark": "30.0"},
     )
-    result = _run(strategy.apply_action([call_pos, put_pos], action))
+    result = _run(strategy.apply_action([call_pos], action))
 
-    assert len(result) == 1  # put still in positions
-    mock_store.record_trade.assert_called_once()
-    trade = mock_store.record_trade.call_args[0][0]
-    assert trade.action.value == "BUY"
-    assert trade.price == Decimal("25.0")
-
-
-def test_apply_action_monetize_put_records_sell() -> None:
-    """MONETIZE_PUT must write exactly one SELL trade."""
-    mock_store = MagicMock()
-    mock_store.record_trade.return_value = True
-    strategy = CollarOverlayV1(store=mock_store)
-
-    call_pos = _make_short_call_position()
-    put_pos = _make_long_put_position(avg_cost="50")
-    action = ApprovedAction(
-        action_type="MONETIZE_PUT",
-        legs_to_close=["collar_long_put"],
-        legs_to_open=[],
-        rationale="test",
-        council_rank=1,
-        metadata={"mark": "210.0"},
-    )
-    result = _run(strategy.apply_action([call_pos, put_pos], action))
-
-    assert len(result) == 1  # call still in positions
-    mock_store.record_trade.assert_called_once()
-    trade = mock_store.record_trade.call_args[0][0]
-    assert trade.action.value == "SELL"
-    assert trade.price == Decimal("210.0")
+    assert result == []
+    mock_store.record_trades.assert_called_once()
+    trades = mock_store.record_trades.call_args[0][0]
+    assert len(trades) == 1
+    assert trades[0].action.value == "BUY"
+    assert trades[0].leg_role == "overlay_collar_call"
 
 
 def test_apply_action_no_store_does_not_raise() -> None:
-    """store=None must not raise — write is skipped silently."""
     strategy = CollarOverlayV1(store=None)
     call_pos = _make_short_call_position()
-    put_pos = _make_long_put_position()
     action = ApprovedAction(
-        action_type="CLOSE_ALL_OVERLAY",
-        legs_to_close=["collar_short_call", "collar_long_put"],
+        action_type="CLOSE_COLLAR",
+        legs_to_close=["overlay_collar_call"],
         legs_to_open=[],
         rationale="test",
         council_rank=1,
     )
-    result = _run(strategy.apply_action([call_pos, put_pos], action))
+    result = _run(strategy.apply_action([call_pos], action))
     assert result == []
 
 
-def test_record_close_trade_falls_back_to_avg_price_when_mark_missing() -> None:
-    """No mark in metadata → call uses avg_sell_price, put uses avg_cost."""
-    mock_store = MagicMock()
-    mock_store.record_trade.return_value = True
-    strategy = CollarOverlayV1(store=mock_store)
-
-    call_pos = _make_short_call_position(avg_sell_price="80")
-    put_pos = _make_long_put_position(avg_cost="50")
-    action = ApprovedAction(
-        action_type="CLOSE_ALL_OVERLAY",
-        legs_to_close=["collar_short_call", "collar_long_put"],
-        legs_to_open=[],
-        rationale="test",
-        council_rank=1,
-        # no mark in metadata
-    )
-    _run(strategy.apply_action([call_pos, put_pos], action))
-
-    calls = {c[0][0].action.value: c[0][0] for c in mock_store.record_trade.call_args_list}
-    assert calls["BUY"].price == Decimal("80")
-    assert calls["SELL"].price == Decimal("50")
-
-
-# ---------------------------------------------------------------------------
-# SM-2 — ReEntryMixin wiring
-# ---------------------------------------------------------------------------
-
-
-def test_apply_action_close_all_with_profit_target_calls_check_reentry() -> None:
-    """CLOSE_ALL_OVERLAY with triggering_signal=PROFIT_TARGET → _check_reentry called once."""
+def test_apply_action_calls_check_reentry_for_eligible_signals() -> None:
     from unittest.mock import AsyncMock, patch
 
     mock_store = MagicMock()
-    mock_store.record_trade.return_value = True
     strategy = CollarOverlayV1(store=mock_store)
 
-    call_pos = _make_short_call_position(
-        instrument_key=_expiry_key(dte=30, option_type="CE"),
-        avg_sell_price="80",
-    )
-    put_pos = _make_long_put_position(avg_cost="50")
+    call_pos = _make_short_call_position(avg_sell_price="80")
     action = ApprovedAction(
-        action_type="CLOSE_ALL_OVERLAY",
-        legs_to_close=["collar_short_call", "collar_long_put"],
+        action_type="CLOSE_COLLAR",
+        legs_to_close=["overlay_collar_call"],
         legs_to_open=[],
         rationale="profit target",
         council_rank=1,
@@ -424,28 +380,5 @@ def test_apply_action_close_all_with_profit_target_calls_check_reentry() -> None
     )
 
     with patch.object(strategy, "_check_reentry", new=AsyncMock()) as mock_reentry:
-        _run(strategy.apply_action([call_pos, put_pos], action))
+        _run(strategy.apply_action([call_pos], action))
         mock_reentry.assert_awaited_once()
-
-
-def test_apply_action_monetize_put_does_not_call_check_reentry() -> None:
-    """MONETIZE_PUT (no short call closed) → _check_reentry never called."""
-    from unittest.mock import AsyncMock, patch
-
-    mock_store = MagicMock()
-    mock_store.record_trade.return_value = True
-    strategy = CollarOverlayV1(store=mock_store)
-
-    put_pos = _make_long_put_position(avg_cost="50")
-    action = ApprovedAction(
-        action_type="MONETIZE_PUT",
-        legs_to_close=["collar_long_put"],
-        legs_to_open=[],
-        rationale="crash monetize",
-        council_rank=1,
-        metadata={"triggering_signal": "COLLAR_PUT_CRASH", "mark": "250"},
-    )
-
-    with patch.object(strategy, "_check_reentry", new=AsyncMock()) as mock_reentry:
-        _run(strategy.apply_action([put_pos], action))
-        mock_reentry.assert_not_awaited()

@@ -344,40 +344,25 @@ def _dispatch_evaluate(
                 reason="chain_expiry_mismatch_or_unresolved_strike",
             )
             return []
-        strike = _parse_strike_from_key(pos.instrument_key)
-        if strike is None and lookup is not None:
-            inst = lookup.get_by_key(pos.instrument_key)
-            if inst is not None and inst.get("strike_price") is not None:
-                try:
-                    strike = Decimal(str(inst["strike_price"]))
-                except Exception:
-                    pass
-        return ExitSignalEngine.evaluate_collar_call(
+        if pos.entry_date:
+            days_held = (today - pos.entry_date).days
+        else:
+            logger.warning(
+                "dispatch_evaluate: entry_date is None for Collar position leg_role=%s instrument_key=%s — TIME_STOP will not fire",
+                pos.leg_role,
+                pos.instrument_key,
+            )
+            days_held = 0
+        return ExitSignalEngine.evaluate_cc(
             entry_price=float(pos.avg_sell_price),
             current_mark=float(leg.ltp),
             delta=float(leg.delta) if leg.delta is not None else None,
             dte=dte,
-            underlying_price=underlying_price,
-            strike_price=float(strike) if strike is not None else 0.0,
+            days_held=days_held,
         )
 
-    if role == "overlay_collar_put" and pos.net_qty > 0:
-        leg = _find_chain_leg(chain, pos.instrument_key, "PE", lookup)
-        if leg is None:
-            logger.warning(
-                "dispatch_evaluate.collar_put_leg_not_found",
-                instrument_key=pos.instrument_key,
-                reason="chain_expiry_mismatch_or_unresolved_strike",
-            )
-            return []
-        return ExitSignalEngine.evaluate_collar_put(
-            entry_price=float(pos.avg_cost),
-            current_mark=float(leg.ltp),
-            delta=float(leg.delta) if leg.delta is not None else None,
-            dte=dte,
-            bid=float(leg.bid) if leg is not None else None,
-            ask=float(leg.ask) if leg is not None else None,
-        )
+    if role == "overlay_collar_put":
+        return []
 
     return []
 

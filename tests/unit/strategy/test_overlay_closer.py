@@ -251,7 +251,7 @@ def test_close_collar_all_happy_path(store: PaperStore, closer: OverlayCloser) -
     # Seed short call and long put
     t1 = PaperTrade(
         strategy_name="paper_collar_v1",
-        leg_role="collar_short_call",
+        leg_role="overlay_collar_call",
         instrument_key="NSE_FO|NIFTY24500CE",
         trade_date=date.today(),
         action=TradeAction.SELL,
@@ -261,7 +261,7 @@ def test_close_collar_all_happy_path(store: PaperStore, closer: OverlayCloser) -
     )
     t2 = PaperTrade(
         strategy_name="paper_collar_v1",
-        leg_role="collar_long_put",
+        leg_role="overlay_collar_put",
         instrument_key="NSE_FO|NIFTY21500PE",
         trade_date=date.today(),
         action=TradeAction.BUY,
@@ -276,8 +276,8 @@ def test_close_collar_all_happy_path(store: PaperStore, closer: OverlayCloser) -
     closer.close_collar_all("paper_collar_v1", chain, None, 15.0)
 
     # Verify both legs are closed
-    assert store.get_position("paper_collar_v1", "collar_short_call").net_qty == 0
-    assert store.get_position("paper_collar_v1", "collar_long_put").net_qty == 0
+    assert store.get_position("paper_collar_v1", "overlay_collar_call").net_qty == 0
+    assert store.get_position("paper_collar_v1", "overlay_collar_put").net_qty == 0
 
 
 def test_close_collar_all_rollback(
@@ -286,7 +286,7 @@ def test_close_collar_all_rollback(
     # Seed short call and long put
     t1 = PaperTrade(
         strategy_name="paper_collar_v1",
-        leg_role="collar_short_call",
+        leg_role="overlay_collar_call",
         instrument_key="NSE_FO|NIFTY24500CE",
         trade_date=date.today(),
         action=TradeAction.SELL,
@@ -296,7 +296,7 @@ def test_close_collar_all_rollback(
     )
     t2 = PaperTrade(
         strategy_name="paper_collar_v1",
-        leg_role="collar_long_put",
+        leg_role="overlay_collar_put",
         instrument_key="NSE_FO|NIFTY21500PE",
         trade_date=date.today(),
         action=TradeAction.BUY,
@@ -318,7 +318,7 @@ def test_close_collar_all_rollback(
     closer.close_collar_all("paper_collar_v1", chain, None, 15.0)
 
     # Verify both legs are still open (no partial write committed)
-    pos = store.get_position("paper_collar_v1", "collar_short_call")
+    pos = store.get_position("paper_collar_v1", "overlay_collar_call")
     assert pos.net_qty == -65
     assert len(notifier.sent_messages) == 1
     assert "Collar close failed" in notifier.sent_messages[0]
@@ -327,7 +327,7 @@ def test_close_collar_all_rollback(
 def test_monetize_collar_put(store: PaperStore, closer: OverlayCloser) -> None:
     t1 = PaperTrade(
         strategy_name="paper_collar_v1",
-        leg_role="collar_short_call",
+        leg_role="overlay_collar_call",
         instrument_key="NSE_FO|NIFTY24500CE",
         trade_date=date.today(),
         action=TradeAction.SELL,
@@ -337,7 +337,7 @@ def test_monetize_collar_put(store: PaperStore, closer: OverlayCloser) -> None:
     )
     t2 = PaperTrade(
         strategy_name="paper_collar_v1",
-        leg_role="collar_long_put",
+        leg_role="overlay_collar_put",
         instrument_key="NSE_FO|NIFTY21500PE",
         trade_date=date.today(),
         action=TradeAction.BUY,
@@ -352,8 +352,8 @@ def test_monetize_collar_put(store: PaperStore, closer: OverlayCloser) -> None:
     chain = _make_chain("4.0", "0.05", "250", "-0.85")
     closer.monetize_collar_put("paper_collar_v1", chain, None, 15.0)
 
-    assert store.get_position("paper_collar_v1", "collar_short_call").net_qty == 0
-    assert store.get_position("paper_collar_v1", "collar_long_put").net_qty == 0
+    assert store.get_position("paper_collar_v1", "overlay_collar_call").net_qty == 0
+    assert store.get_position("paper_collar_v1", "overlay_collar_put").net_qty == 0
 
 
 def test_route(store: PaperStore, closer: OverlayCloser) -> None:
@@ -388,7 +388,7 @@ def test_monetize_collar_put_rollback(
 ) -> None:
     t1 = PaperTrade(
         strategy_name="paper_collar_v1",
-        leg_role="collar_short_call",
+        leg_role="overlay_collar_call",
         instrument_key="NSE_FO|NIFTY24500CE",
         trade_date=date.today(),
         action=TradeAction.SELL,
@@ -398,7 +398,7 @@ def test_monetize_collar_put_rollback(
     )
     t2 = PaperTrade(
         strategy_name="paper_collar_v1",
-        leg_role="collar_long_put",
+        leg_role="overlay_collar_put",
         instrument_key="NSE_FO|NIFTY21500PE",
         trade_date=date.today(),
         action=TradeAction.BUY,
@@ -419,7 +419,7 @@ def test_monetize_collar_put_rollback(
     closer.monetize_collar_put("paper_collar_v1", chain, None, 15.0)
 
     # Verify call leg is still open (atomic write rolled back both)
-    pos = store.get_position("paper_collar_v1", "collar_short_call")
+    pos = store.get_position("paper_collar_v1", "overlay_collar_call")
     assert pos.net_qty == -65
     assert len(notifier.sent_messages) == 1
     assert "Collar monetize failed" in notifier.sent_messages[0]
@@ -429,7 +429,7 @@ def test_close_collar_already_flat(store: PaperStore, closer: OverlayCloser, cap
     # Seed an open exit event
     event_id = store.create_exit_event(
         strategy_name="paper_collar_v1",
-        leg_name="collar_short_call",
+        leg_name="overlay_collar_call",
         trade_id="123",
         event_time=datetime.now(timezone.utc),
         detected_by="EOD",
@@ -480,7 +480,7 @@ def test_monetize_collar_put_aborts_when_put_leg_missing(
     # Only the call leg is open; put leg has no trades.
     call_entry = PaperTrade(
         strategy_name="paper_collar_v1",
-        leg_role="collar_short_call",
+        leg_role="overlay_collar_call",
         instrument_key="NSE_FO|NIFTY24500CE",
         trade_date=date.today(),
         action=TradeAction.SELL,
@@ -494,6 +494,6 @@ def test_monetize_collar_put_aborts_when_put_leg_missing(
     closer.monetize_collar_put("paper_collar_v1", chain, None, 15.0)
 
     # Call leg must remain untouched — no write should have occurred.
-    pos = store.get_position("paper_collar_v1", "collar_short_call")
+    pos = store.get_position("paper_collar_v1", "overlay_collar_call")
     assert pos.net_qty == -65
     assert any("Collar monetize aborted" in m for m in notifier.sent_messages)
