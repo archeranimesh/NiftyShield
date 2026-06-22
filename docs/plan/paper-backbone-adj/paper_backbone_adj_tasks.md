@@ -21,11 +21,11 @@
 
 ## Phase PA-S0 — CSP Full Adjustment
 
-- [ ] **PA1.1** `[Claude]` — `src/strategy/csp_nifty_v1.py`: add `ROLL` signal emission with strike selection + `apply_action` ROLL branch + tests
+- [x] **PA1.1** `[Claude]` — `src/strategy/csp_nifty_v1.py`: add `ROLL` signal emission with strike selection + `apply_action` ROLL branch + tests | SHA: 4d8e81e
 
 ## Phase PA-S1 — Iron Condor Adjustment
 
-- [ ] **PA1.2** `[Claude]` — `src/strategy/ic_nifty_v1.py`: add wing-roll adjustment signals + `apply_action` ROLL branch + tests
+- [x] **PA1.2** `[Claude]` — `src/strategy/ic_nifty_v1.py`: add wing-roll adjustment signals + `apply_action` ROLL branch + tests | SHA: 355bf3c
 
 ## Phase PA-S3 — 3-Track Overlay Adjustment
 

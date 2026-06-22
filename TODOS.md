@@ -13,7 +13,7 @@ Date-locked events — act before the date, not on it.
 |---|---|---|
 | **2026-06-19** | CSP Cycle 2 time stop | Entry 2026-05-29 + 21 days. Profit target ≤ ₹79.30; delta stop ≥ 0.45. If profit target fires early, run R5 eligibility check (DTE ≥ 14, IVR ≥ 0.25). Monitor via `paper_snapshot.py --strategy paper_csp_nifty_v1`. |
 | **2026-06-23** | Roll week begins | `paper_3track_overlay_roll.py` handles overlay legs at DTE ≤ 5. `paper_csp_roll.py` handles CSP Cycle 2 (`NSE_FO|79653`). |
-| **2026-06-30** | All June contracts expire | Finideas roll (build queue #1). Base positions (`NSE_FO|62329` futures, `NSE_FO|79509` DITM call) need manual rolls — ES11 will automate the alert once built. |
+| **2026-06-30** | All June contracts expire | Finideas roll ✅ done 2026-06-17. Base positions (`NSE_FO|62329` futures, `NSE_FO|79509` DITM call) still need manual rolls — ES11 will automate the alert once built. |
 
 **Verify soon:** June futures base (`NSE_FO|62329`) opened 2026-05-29 — confirm non-None LTP in the next EOD snapshot:
 ```bash
@@ -313,7 +313,10 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 | 2026-06-15 | FR-10 — NotifierProtocol added to src/notifications/protocol.py; _notifier typed as NotifierProtocol in StrategyMonitor; both # type: ignore[attr-defined] removed — b32cf55 |
 | 2026-06-15 | RPT-2 — CLI period redesign: --daily/-d (default), --monthly/-m (guard), --inception/-i; _compute_daily_deltas helper; format_track_summary period param with Day Base/Day Overlay/Day Net headers; 11 new tests — cabf2ba |
 | 2026-06-15 | RPT-ROLL — _find_expiring_overlay: reset last_trade=None when net reaches 0; only current open cycle contributes; 2 new tests (multi-cycle + all-closed) — 46d4848 |
+| 2026-06-17 | finideas_ilts roll JUN→JUL: closed JUN CE @ ₹1065.15, JUN PE @ ₹18.25; opened JUL CE (NSE_FO\|63895) @ ₹1245.00, JUL PE (NSE_FO\|63896) @ ₹90.95; 65 lots each; fixed record_trade.py get_position unpacking (Position dataclass) |
 | 2026-06-15 | paper-backbone-adj PA0 — roll_utils.find_strike_by_delta shared helper + 8 tests — eef6cca |
+| 2026-06-15 | paper-backbone-adj PA1.1 — CSPNiftyV1 ROLL signal + _select_roll_target + apply_action ROLL branch + 7 tests — 4d8e81e |
+| 2026-06-22 | paper-backbone-adj PA1.2 — IronCondorV1 ROLL_WING signal + _select_wing_roll_target() + apply_action ROLL_WING branch + 6 tests (incl. directional guard) — 355bf3c |
 | 2026-06-14 | SM-1 — DELTA_BREACH_FINAL state machine wired: get_trade_state + mark_trade_defended added to PaperStore; check_signals reads TradeState from DB (not hasattr); _roll_down transitions new leg to DEFENDED; _find_put_leg scan fallback removed (numeric keys now return None + WARN); 8 new tests — 37c38d0 |
 | 2026-06-14 | BUG-5 — _check_reentry dedup: skip if R5_REENTRY_BLOCKED/ELIGIBLE event already exists today for same strategy+leg; fixed test_custom_ivr_passes_override to use different days; 2 new tests — 80784c0 |
 | 2026-06-14 | BUG-3 — _open_new quantity=1 hardcode fixed; CLOSE_AND_ROLL now passes abs(short_put.net_qty); 2 new tests — 5d1c8eb |
