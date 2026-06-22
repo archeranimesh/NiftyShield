@@ -78,9 +78,9 @@ _NIFTY_LOT_SIZE: int = 75
 class NiftyTrackComparisonV1:
     """Backbone wrapper for the 3-Track Nifty Long Instrument Comparison.
 
-    Monitors overlay legs across all three tracks and emits WARN signals when
-    a roll is due. All actual rolls are executed manually via
-    ``paper_3track_overlay_roll.py``.
+    Monitors overlay legs across all three tracks and emits roll signals
+    (ROLL_OVERLAY, ROLL_COLLAR) via ``apply_action``; executor handles
+    legs_to_open. ``paper_3track_overlay_roll.py`` retired (PA2).
 
     Registered under the umbrella ``strategy_name`` below; the per-track
     strategy namespaces in ``TRACK_STRATEGY_NAMES`` are filtered internally.

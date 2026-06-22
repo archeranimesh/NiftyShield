@@ -29,7 +29,7 @@
 
 ## Phase PA-S3 — 3-Track Overlay Adjustment
 
-- [ ] **PA1.3** `[Claude]` — `src/strategy/nifty_track_comparison_v1.py`: upgrade WARN→ACTION for roll signals, add `_select_overlay_roll_target()`, implement `apply_action` (ROLL_OVERLAY, ROLL_COLLAR) + tests
+- [x] **PA1.3** `[Claude]` — `src/strategy/nifty_track_comparison_v1.py`: upgrade WARN→ACTION for roll signals, add `_select_overlay_roll_target()`, implement `apply_action` (ROLL_OVERLAY, ROLL_COLLAR) + tests | SHA: 58b488a
 
 ## Phase PA-X — Cleanup
 
