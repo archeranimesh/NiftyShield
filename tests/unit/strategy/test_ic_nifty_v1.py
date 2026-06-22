@@ -356,9 +356,187 @@ def test_apply_action_close_call_spread_succeeds() -> None:
 
 
 def test_apply_action_adjust_wings_raises_value_error() -> None:
-    """ADJUST_WINGS raises ValueError — adjustments forbidden in v1."""
+    """ADJUST_WINGS raises ValueError — not in allowed set."""
     strat = IronCondorV1()
     positions = _make_ic_positions()
     action = _make_approved_action("ADJUST_WINGS")
     with pytest.raises(ValueError, match="ADJUST_WINGS"):
+        asyncio.run(strat.apply_action(positions, action))
+
+
+# ── PA1.2 — ROLL_WING signal tests ───────────────────────────────────────────
+
+
+def _make_chain_with_roll_targets(
+    short_call_delta: str = "0.10",
+    short_put_delta: str = "-0.10",
+    include_ce_target: bool = True,
+    include_pe_target: bool = True,
+) -> OptionChain:
+    """Build a chain that includes (or omits) farther OTM roll-target legs.
+
+    Short call at 25000 (threatened), long call hedge at 25500.
+    Short put at 22000 (threatened), long put hedge at 21500.
+    CE roll target at 26000 with |delta|=0.14 (inside 0.10–0.20 band).
+    PE roll target at 21000 with |delta|=0.12 (inside 0.10–0.20 band).
+    """
+    strikes: dict = {
+        Decimal("21500"): OptionChainStrike(pe=_make_leg(ltp="3", delta="-0.05", strike="21500")),
+        Decimal("22000"): OptionChainStrike(
+            pe=_make_leg(ltp="30", delta=short_put_delta, strike="22000")
+        ),
+        Decimal("25000"): OptionChainStrike(
+            ce=_make_leg(ltp="25", delta=short_call_delta, strike="25000")
+        ),
+        Decimal("25500"): OptionChainStrike(ce=_make_leg(ltp="2", delta="0.04", strike="25500")),
+    }
+    if include_ce_target:
+        strikes[Decimal("26000")] = OptionChainStrike(
+            ce=_make_leg(ltp="8", delta="0.14", strike="26000")
+        )
+    if include_pe_target:
+        strikes[Decimal("21000")] = OptionChainStrike(
+            pe=_make_leg(ltp="6", delta="-0.12", strike="21000")
+        )
+    return OptionChain(
+        underlying_spot=Decimal("24000"),
+        expiry=date(2026, 6, 26),
+        strikes=strikes,
+    )
+
+
+def test_roll_wing_fires_on_short_call_breach_with_target() -> None:
+    """Short call |delta|=0.36 + CE target at 26000 → ROLL_WING ACTION fires alongside DELTA_STOP."""
+    strat = IronCondorV1()
+    chain = _make_chain_with_roll_targets(short_call_delta="0.36")
+    positions = _make_ic_positions()
+    events = asyncio.run(strat.check_signals(chain, positions))
+    types = [e.event_type for e in events]
+    assert "DELTA_STOP" in types
+    assert "ROLL_WING" in types
+    rw = next(e for e in events if e.event_type == "ROLL_WING")
+    assert rw.severity == "ACTION"
+    assert rw.payload["leg_role"] == "short_call"
+    assert "26000" in rw.payload["suggested_instrument_key"]
+    assert rw.payload["current_instrument_key"] == _SHORT_CALL_KEY
+
+
+def test_roll_wing_fires_on_short_put_breach_with_target() -> None:
+    """Short put |delta|=0.37 + PE target at 21000 → ROLL_WING ACTION fires alongside DELTA_STOP."""
+    strat = IronCondorV1()
+    chain = _make_chain_with_roll_targets(short_put_delta="-0.37")
+    positions = _make_ic_positions()
+    events = asyncio.run(strat.check_signals(chain, positions))
+    types = [e.event_type for e in events]
+    assert "DELTA_STOP" in types
+    assert "ROLL_WING" in types
+    rw = next(e for e in events if e.event_type == "ROLL_WING")
+    assert rw.severity == "ACTION"
+    assert rw.payload["leg_role"] == "short_put"
+    assert "21000" in rw.payload["suggested_instrument_key"]
+
+
+def test_roll_wing_not_fired_when_no_ce_target_in_range() -> None:
+    """Short call |delta|=0.36 but no CE in 0.10–0.20 range → only DELTA_STOP fires."""
+    strat = IronCondorV1()
+    chain = _make_chain_with_roll_targets(
+        short_call_delta="0.36",
+        include_ce_target=False,  # no farther OTM CE available
+    )
+    positions = _make_ic_positions()
+    events = asyncio.run(strat.check_signals(chain, positions))
+    types = [e.event_type for e in events]
+    assert "DELTA_STOP" in types
+    assert "ROLL_WING" not in types
+
+
+def test_roll_wing_blocked_by_directional_guard() -> None:
+    """CE target exists in delta range but is at a strike below current short_call
+    strike → directional guard blocks it → no ROLL_WING (only DELTA_STOP fires).
+
+    Short call is at 25000 (delta 0.36).  A CE at 24500 with |delta|=0.14
+    is inside the 0.10–0.20 band but sits below 25000, so the guard correctly
+    rejects it as a backward roll.
+    """
+    strat = IronCondorV1()
+    # Build chain: short call at 25000 (threatened), CE roll candidate at 24500
+    # (below current strike — must be blocked by directional guard).
+    below_strike_chain = OptionChain(
+        underlying_spot=Decimal("24000"),
+        expiry=date(2026, 6, 26),
+        strikes={
+            Decimal("21500"): OptionChainStrike(
+                pe=_make_leg(ltp="3", delta="-0.05", strike="21500")
+            ),
+            Decimal("22000"): OptionChainStrike(
+                pe=_make_leg(ltp="30", delta="-0.15", strike="22000")
+            ),
+            Decimal("24500"): OptionChainStrike(
+                # CE below current short_call at 25000; |delta|=0.14 is in range
+                # but directional guard should block this as a backward roll.
+                ce=_make_leg(ltp="40", delta="0.14", strike="24500")
+            ),
+            Decimal("25000"): OptionChainStrike(
+                ce=_make_leg(ltp="25", delta="0.36", strike="25000")
+            ),
+            Decimal("25500"): OptionChainStrike(
+                ce=_make_leg(ltp="2", delta="0.04", strike="25500")
+            ),
+        },
+    )
+    positions = _make_ic_positions()
+    events = asyncio.run(strat.check_signals(below_strike_chain, positions))
+    types = [e.event_type for e in events]
+    assert "DELTA_STOP" in types
+    assert "ROLL_WING" not in types
+
+
+def test_apply_action_roll_wing_with_leg_to_open_succeeds() -> None:
+    """ROLL_WING + one LegSpec in legs_to_open → closed leg removed from positions.
+
+    apply_action only handles the close side (backbone design: PaperExecutor
+    handles new-leg DB writes for legs_to_open; they are not appended here).
+    """
+    from src.strategy.protocol import LegSpec
+
+    strat = IronCondorV1()
+    positions = _make_ic_positions()
+    action = ApprovedAction(
+        action_type="ROLL_WING",
+        legs_to_close=["short_call"],
+        legs_to_open=[
+            LegSpec(
+                instrument_key="NSE_FO|NIFTY26000CE",
+                action="SELL",
+                quantity=1,
+                leg_role="short_call",
+                notes="roll_wing delta=0.14",
+            )
+        ],
+        rationale="roll call wing farther OTM",
+        council_rank=1,
+    )
+    result = asyncio.run(strat.apply_action(positions, action))
+    remaining_roles = {p.leg_role for p in result}
+    # Closed wing is gone; other three legs survive.
+    assert "short_call" not in remaining_roles
+    assert "short_put" in remaining_roles
+    assert "long_put_hedge" in remaining_roles
+    assert "long_call_hedge" in remaining_roles
+    # legs_to_open is intentionally not in result — executor handles the new leg.
+    assert len(result) == 3
+
+
+def test_apply_action_roll_wing_empty_legs_to_open_raises() -> None:
+    """ROLL_WING with empty legs_to_open → ValueError."""
+    strat = IronCondorV1()
+    positions = _make_ic_positions()
+    action = ApprovedAction(
+        action_type="ROLL_WING",
+        legs_to_close=["short_call"],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+    )
+    with pytest.raises(ValueError, match="legs_to_open"):
         asyncio.run(strat.apply_action(positions, action))

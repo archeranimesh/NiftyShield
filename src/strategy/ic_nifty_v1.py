@@ -11,13 +11,14 @@ Signal table
 | PROFIT_TARGET | ACTION   | combined mark ≤ 50% of entry credit            |
 | LOSS_STOP     | ACTION   | combined mark ≥ 2.0× entry credit              |
 | DELTA_STOP    | ACTION   | either short leg |delta| ≥ 0.35                |
+| ROLL_WING     | ACTION   | short leg |delta| ≥ 0.35 AND roll target found  |
 | TIME_STOP     | ACTION   | DTE ≤ 14                                       |
 | DELTA_WARN    | WARN     | either short leg |delta| ≥ 0.25                |
 | DTE_WARN      | INFO     | DTE ≤ 21                                       |
 
 Council ruling (2026-05-02): no adjustments in v1.  ``apply_action`` only
-accepts CLOSE_FULL, CLOSE_CALL_SPREAD, CLOSE_PUT_SPREAD.  Any other
-action_type raises ValueError immediately.
+accepts CLOSE_FULL, CLOSE_CALL_SPREAD, CLOSE_PUT_SPREAD, and ROLL_WING.
+Any other action_type raises ValueError immediately.
 """
 
 from __future__ import annotations
@@ -25,13 +26,15 @@ from __future__ import annotations
 import re
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
+from typing import Literal
 
 import structlog
 
 from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
 from src.paper.models import PaperPosition
-from src.strategy.protocol import ApprovedAction, SignalEvent
+from src.strategy import roll_utils
+from src.strategy.protocol import ApprovedAction, LegSpec, SignalEvent
 
 log = structlog.get_logger(__name__)
 
@@ -61,9 +64,16 @@ _SHORT_ROLES = {"short_call", "short_put"}
 _LONG_ROLES = {"long_call_hedge", "long_put_hedge"}
 _ALL_ROLES = _SHORT_ROLES | _LONG_ROLES
 
-# ── Allowed action types (council ruling: no adjustments in v1) ───────────────
+# ── Allowed action types ─────────────────────────────────────────────────────
+# ROLL_WING added in PA1.2: per-wing roll to farther OTM strike when threatened.
 
-_ALLOWED_ACTIONS = {"CLOSE_FULL", "CLOSE_CALL_SPREAD", "CLOSE_PUT_SPREAD"}
+_ALLOWED_ACTIONS = {"CLOSE_FULL", "CLOSE_CALL_SPREAD", "CLOSE_PUT_SPREAD", "ROLL_WING"}
+
+# ── Roll utility constants ────────────────────────────────────────────────────
+
+_ROLL_WING_DELTA_LO = Decimal("0.10")
+_ROLL_WING_DELTA_HI = Decimal("0.20")
+_ROLL_WING_TARGET_DELTA = Decimal("0.15")
 
 
 class IronCondorV1:
@@ -167,6 +177,49 @@ class IronCondorV1:
                         },
                     )
                 )
+                # Attempt roll: fire ROLL_WING alongside DELTA_STOP when a
+                # farther OTM replacement is available.
+                roll_target = self._select_wing_roll_target(market, pos.leg_role, opt_leg.strike)
+                if roll_target is not None:
+                    candidate_leg = self._find_leg(market, roll_target.instrument_key)
+                    if candidate_leg is None:
+                        log.warning(
+                            "ic_nifty_v1.roll_wing_chain_lookup_failed",
+                            instrument_key=roll_target.instrument_key,
+                        )
+                    suggested_strike = (
+                        str(candidate_leg.strike) if candidate_leg is not None else ""
+                    )
+                    suggested_delta = str(candidate_leg.delta) if candidate_leg is not None else ""
+                    suggested_mid_price = (
+                        str(candidate_leg.ltp) if candidate_leg is not None else ""
+                    )
+                    events.append(
+                        SignalEvent(
+                            event_type="ROLL_WING",
+                            severity="ACTION",
+                            description=(
+                                f"{pos.leg_role} roll target available: "
+                                f"{roll_target.instrument_key} "
+                                f"(δ≈{suggested_delta})"
+                            ),
+                            payload={
+                                "leg_role": pos.leg_role,
+                                "current_instrument_key": pos.instrument_key,
+                                "current_delta": str(opt_leg.delta),
+                                "suggested_instrument_key": roll_target.instrument_key,
+                                "suggested_strike": suggested_strike,
+                                "suggested_delta": suggested_delta,
+                                "suggested_mid_price": suggested_mid_price,
+                                "valid_actions": [
+                                    "ROLL_WING",
+                                    "CLOSE_FULL",
+                                    "CLOSE_CALL_SPREAD",
+                                    "CLOSE_PUT_SPREAD",
+                                ],
+                            },
+                        )
+                    )
             if abs_delta >= _DELTA_WARN:
                 events.append(
                     SignalEvent(
@@ -287,9 +340,9 @@ class IronCondorV1:
     ) -> list[PaperPosition]:
         """Validate and apply an approved action.
 
-        Only ``CLOSE_FULL``, ``CLOSE_CALL_SPREAD``, and ``CLOSE_PUT_SPREAD``
-        are accepted.  Any other action_type raises ``ValueError`` — the spec
-        forbids adjustments in v1 (council ruling 2026-05-02).
+        Accepted action types: ``CLOSE_FULL``, ``CLOSE_CALL_SPREAD``,
+        ``CLOSE_PUT_SPREAD``, and ``ROLL_WING`` (PA1.2).  Any other
+        action_type raises ``ValueError``.
 
         Args:
             positions: Current open paper positions.
@@ -304,8 +357,7 @@ class IronCondorV1:
         if action.action_type not in _ALLOWED_ACTIONS:
             raise ValueError(
                 f"IronCondorV1 does not permit {action.action_type!r} — "
-                f"v1 allows only: {sorted(_ALLOWED_ACTIONS)}. "
-                "Adjustments are deferred to IC v2."
+                f"allowed: {sorted(_ALLOWED_ACTIONS)}."
             )
         closed: set[str] = set(action.legs_to_close)
         log.info(
@@ -313,9 +365,63 @@ class IronCondorV1:
             action_type=action.action_type,
             legs_to_close=list(closed),
         )
+        if action.action_type == "ROLL_WING":
+            if not action.legs_to_open:
+                raise ValueError("ROLL_WING action requires at least one leg in legs_to_open")
+            # Note: legs_to_open is intentionally not consumed here.
+            # PaperExecutor (backbone) handles the new-leg DB write.
+            # apply_action only removes the closed wing from positions.
         return [p for p in positions if p.leg_role not in closed]
 
     # ── Private helpers ───────────────────────────────────────────────────────
+
+    def _select_wing_roll_target(
+        self,
+        market: OptionChain,
+        leg_role: str,
+        current_strike: Decimal,
+    ) -> LegSpec | None:
+        """Find a farther OTM replacement leg for the threatened short wing.
+
+        Delegates delta-range filtering to ``roll_utils.find_strike_by_delta``
+        then enforces the directional constraint: the replacement CE must be
+        above ``current_strike``; the replacement PE must be below it.
+
+        Args:
+            market: Current Nifty 50 option chain snapshot.
+            leg_role: ``"short_call"`` or ``"short_put"``.
+            current_strike: Strike price of the existing short leg.
+
+        Returns:
+            ``LegSpec`` for the best replacement, or ``None`` when no suitable
+            strike exists or the chain data is insufficient.
+        """
+        option_type: Literal["CE", "PE"] = (
+            "CE" if leg_role == "short_call" else "PE"  # caller guarantees short_put
+        )
+        candidate = roll_utils.find_strike_by_delta(
+            market,
+            option_type,
+            (_ROLL_WING_DELTA_LO, _ROLL_WING_DELTA_HI),
+            _ROLL_WING_TARGET_DELTA,
+        )
+        if candidate is None:
+            return None
+
+        # Directional guard: roll must move the wing farther OTM.
+        if option_type == "CE" and candidate.strike <= current_strike:
+            return None
+        if option_type == "PE" and candidate.strike >= current_strike:
+            return None
+
+        instrument_key = f"NSE_FO|NIFTY{int(candidate.strike)}{option_type}"
+        return LegSpec(
+            instrument_key=instrument_key,
+            action="SELL",
+            quantity=1,
+            leg_role=leg_role,
+            notes=f"roll_wing delta={candidate.delta}",
+        )
 
     def _find_leg(self, market: OptionChain, instrument_key: str) -> OptionLeg | None:
         """Locate a CE or PE leg in the chain for the given instrument key.
