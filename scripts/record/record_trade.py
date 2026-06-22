@@ -117,8 +117,10 @@ def main() -> None:
     store = PortfolioStore(args.db_path)
     store.record_trade(trade)
 
-    net_qty, avg_price = store.get_position(trade.strategy_name, trade.leg_role)
-    print(f"{trade.strategy_name} / {trade.leg_role}: {net_qty} units @ avg ₹{avg_price:.2f}")
+    pos = store.get_position(trade.strategy_name, trade.leg_role)
+    print(
+        f"{trade.strategy_name} / {trade.leg_role}: {pos.quantity} units @ avg ₹{pos.average_price:.2f}"
+    )
 
 
 if __name__ == "__main__":
