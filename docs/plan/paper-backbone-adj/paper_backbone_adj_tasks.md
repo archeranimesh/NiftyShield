@@ -33,4 +33,4 @@
 
 ## Phase PA-X — Cleanup
 
-- [ ] **PA2** `[Claude]` — Retire `scripts/strategies/csp/paper_csp_roll.py` + `scripts/strategies/three_track/paper_3track_overlay_roll.py`; update `CONTEXT.md`, `DECISIONS.md`, `TODOS.md`
+- [x] **PA2** `[Claude]` — Retire `scripts/strategies/csp/paper_csp_roll.py` + `scripts/strategies/three_track/paper_3track_overlay_roll.py`; update `CONTEXT.md`, `DECISIONS.md`, `TODOS.md` | SHA: 2eea225

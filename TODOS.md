@@ -317,7 +317,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 | 2026-06-15 | paper-backbone-adj PA0 — roll_utils.find_strike_by_delta shared helper + 8 tests — eef6cca |
 | 2026-06-15 | paper-backbone-adj PA1.1 — CSPNiftyV1 ROLL signal + _select_roll_target + apply_action ROLL branch + 7 tests — 4d8e81e |
 | 2026-06-22 | paper-backbone-adj PA1.2 — IronCondorV1 ROLL_WING signal + _select_wing_roll_target() + apply_action ROLL_WING branch + 6 tests (incl. directional guard) — 355bf3c |
-| 2026-06-22 | paper-backbone-adj PA2 — retire paper_csp_roll.py + paper_3track_overlay_roll.py + their test files; update CONTEXT.md, DECISIONS.md, NiftyTrackComparisonV1 docstring — SHA: TBD |
+| 2026-06-22 | paper-backbone-adj PA2 — retire paper_csp_roll.py + paper_3track_overlay_roll.py + their test files; update CONTEXT.md, DECISIONS.md, NiftyTrackComparisonV1 docstring — 2eea225 |
 | 2026-06-14 | SM-1 — DELTA_BREACH_FINAL state machine wired: get_trade_state + mark_trade_defended added to PaperStore; check_signals reads TradeState from DB (not hasattr); _roll_down transitions new leg to DEFENDED; _find_put_leg scan fallback removed (numeric keys now return None + WARN); 8 new tests — 37c38d0 |
 | 2026-06-14 | BUG-5 — _check_reentry dedup: skip if R5_REENTRY_BLOCKED/ELIGIBLE event already exists today for same strategy+leg; fixed test_custom_ivr_passes_override to use different days; 2 new tests — 80784c0 |
 | 2026-06-14 | BUG-3 — _open_new quantity=1 hardcode fixed; CLOSE_AND_ROLL now passes abs(short_put.net_qty); 2 new tests — 5d1c8eb |
