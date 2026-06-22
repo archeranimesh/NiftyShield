@@ -1,18 +1,18 @@
 """NiftyTrackComparisonV1 — backbone integration for the 3-Track Nifty Comparison.
 
 Covers all three tracks (spot / futures / proxy) as a single registered strategy.
-Emits WARN and ACTION events; rolls remain manual via ``paper_3track_overlay_roll.py``.
-``apply_action`` is a documented no-op.
+Emits WARN and ACTION events; overlay rolls are executed via ``apply_action`` when
+a replacement target is available, or remain WARN-only when no target can be found.
 
 Signal table
 ------------
-| Event type     | Severity | Trigger                                              |
-|----------------|----------|------------------------------------------------------|
-| ROLL_ELIGIBLE  | ACTION   | overlay DTE ≤ 5 and base DTE > 10                   |
-| ROLL_BASE_FIRST| WARN     | overlay DTE ≤ 5 but base DTE ≤ 10 (roll base first) |
-| ROLL_DUE_DTE   | WARN     | overlay DTE 6–10 (advance notice)                    |
-| ROLL_DUE_DECAY | WARN     | any short overlay premium ≤ 25% of entry             |
-| OVERLAY_EXPIRED| WARN     | overlay expiry has passed with no roll               |
+| Event type     | Severity         | Trigger                                          |
+|----------------|------------------|--------------------------------------------------|
+| ROLL_ELIGIBLE  | ACTION           | overlay DTE ≤ 5 and base DTE > 10               |
+| ROLL_BASE_FIRST| WARN             | overlay DTE ≤ 5 but base DTE ≤ 10               |
+| ROLL_DUE_DTE   | ACTION or WARN   | overlay DTE 6–10; ACTION when target available   |
+| ROLL_DUE_DECAY | ACTION or WARN   | short overlay ≤ 25% of entry; ACTION when target |
+| OVERLAY_EXPIRED| WARN             | overlay expiry has passed with no roll           |
 
 Overlay legs are identified by ``leg_role.startswith("overlay_")``.
 Base legs (``base_etf``, ``base_futures``, ``base_ditm_call``) are not evaluated.
@@ -25,7 +25,7 @@ from __future__ import annotations
 import re
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
-from typing import Any
+from typing import Any, Literal
 
 import structlog
 
@@ -33,7 +33,8 @@ from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
 from src.paper.models import PaperPosition
 from src.strategy.exit_signals import ExitSignalEngine
-from src.strategy.protocol import ApprovedAction, SignalEvent
+from src.strategy.protocol import ApprovedAction, LegSpec, SignalEvent
+from src.strategy.roll_utils import find_strike_by_delta
 
 log = structlog.get_logger(__name__)
 
@@ -58,6 +59,20 @@ _DECAY_WARN_PCT = Decimal("0.25")  # remaining premium ≤ 25% of entry → ROLL
 # overlay_cc   — standalone covered call: always blocked on Futures.
 # overlay_collar_call — blocked only when the paired put is missing (degenerate collar).
 _FUTURES_BLOCKED_ROLES: frozenset[str] = frozenset({"overlay_cc", "overlay_collar_call"})
+
+# Delta parameters for overlay roll target selection (next-expiry chain).
+# PP / collar-put: 8–10% OTM put, target 20Δ.
+# CC / collar-call: 3–5% OTM call, target 20Δ.
+_PP_DELTA_RANGE: tuple[Decimal, Decimal] = (Decimal("0.15"), Decimal("0.25"))
+_PP_TARGET_DELTA: Decimal = Decimal("0.20")
+_CC_DELTA_RANGE: tuple[Decimal, Decimal] = (Decimal("0.15"), Decimal("0.25"))
+_CC_TARGET_DELTA: Decimal = Decimal("0.20")
+
+# Roll action types handled by apply_action.
+_ALLOWED_ACTIONS: frozenset[str] = frozenset({"ROLL_OVERLAY", "ROLL_COLLAR"})
+
+# Default lot size for Nifty overlay legs (SEBI standard as of 2024).
+_NIFTY_LOT_SIZE: int = 75
 
 
 class NiftyTrackComparisonV1:
@@ -327,18 +342,42 @@ class NiftyTrackComparisonV1:
                             )
                         )
             elif dte is not None and dte <= _ROLL_DUE_DTE_MAX:
-                # DTE 6–10: advance notice — manual roll due soon
-                events.append(
-                    SignalEvent(
-                        event_type="ROLL_DUE_DTE",
-                        severity="WARN",
-                        description=(
-                            f"Overlay {pos.leg_role} on {pos.strategy_name} "
-                            f"DTE {dte} ≤ {_ROLL_DUE_DTE_MAX} — roll due soon"
-                        ),
-                        payload=payload_base,
+                # DTE 6–10: advance notice — upgrade to ACTION when a roll target is available.
+                target = await self._select_overlay_roll_target(pos.leg_role, pos.strategy_name)
+                if target is not None:
+                    events.append(
+                        SignalEvent(
+                            event_type="ROLL_DUE_DTE",
+                            severity="ACTION",
+                            description=(
+                                f"Overlay {pos.leg_role} on {pos.strategy_name} "
+                                f"DTE {dte} ≤ {_ROLL_DUE_DTE_MAX} — roll target ready"
+                            ),
+                            payload={
+                                **payload_base,
+                                "strategy_name": pos.strategy_name,
+                                "suggested_instrument_key": target.instrument_key,
+                                "suggested_strike": target.notes,
+                                "suggested_expiry": "",
+                                "suggested_delta": "",
+                                "suggested_mid_price": "",
+                                "valid_actions": ["ROLL_OVERLAY"],
+                                "legs_to_open": [target],
+                            },
+                        )
                     )
-                )
+                else:
+                    events.append(
+                        SignalEvent(
+                            event_type="ROLL_DUE_DTE",
+                            severity="WARN",
+                            description=(
+                                f"Overlay {pos.leg_role} on {pos.strategy_name} "
+                                f"DTE {dte} ≤ {_ROLL_DUE_DTE_MAX} — roll due soon"
+                            ),
+                            payload=payload_base,
+                        )
+                    )
 
             # ── Premium decay check (short overlay legs only) ─────────────────
             if pos.net_qty < 0:
@@ -349,23 +388,39 @@ class NiftyTrackComparisonV1:
                         mark = option_leg.ltp
                         pct_remaining = mark / entry_credit
                         if pct_remaining <= _DECAY_WARN_PCT:
+                            decay_payload: dict[str, object] = {
+                                **payload_base,
+                                "mark": str(mark),
+                                "entry_credit": str(entry_credit),
+                                "pct_remaining": str(
+                                    pct_remaining.quantize(Decimal("0.01"))
+                                ),
+                            }
+                            target = await self._select_overlay_roll_target(
+                                pos.leg_role, pos.strategy_name
+                            )
+                            if target is not None:
+                                decay_payload["strategy_name"] = pos.strategy_name
+                                decay_payload["suggested_instrument_key"] = target.instrument_key
+                                decay_payload["suggested_strike"] = target.notes
+                                decay_payload["suggested_expiry"] = ""
+                                decay_payload["suggested_delta"] = ""
+                                decay_payload["suggested_mid_price"] = ""
+                                decay_payload["valid_actions"] = ["ROLL_OVERLAY"]
+                                decay_payload["legs_to_open"] = [target]
+                                severity = "ACTION"
+                            else:
+                                severity = "WARN"
                             events.append(
                                 SignalEvent(
                                     event_type="ROLL_DUE_DECAY",
-                                    severity="WARN",
+                                    severity=severity,
                                     description=(
                                         f"Overlay {pos.leg_role} on {pos.strategy_name} "
                                         f"mark {mark} ≤ {int(_DECAY_WARN_PCT * 100)}% "
                                         f"of entry {entry_credit} — consider rolling"
                                     ),
-                                    payload={
-                                        **payload_base,
-                                        "mark": str(mark),
-                                        "entry_credit": str(entry_credit),
-                                        "pct_remaining": str(
-                                            pct_remaining.quantize(Decimal("0.01"))
-                                        ),
-                                    },
+                                    payload=decay_payload,
                                 )
                             )
 
@@ -445,26 +500,155 @@ class NiftyTrackComparisonV1:
         positions: list[PaperPosition],
         action: ApprovedAction,
     ) -> list[PaperPosition]:
-        """No-op — rolls for 3-track overlays are executed manually.
+        """Execute ROLL_OVERLAY or ROLL_COLLAR — optimistic in-memory position update.
 
-        This strategy emits WARN events only and has no automated action flow.
-        Rolls are performed via ``scripts/strategies/three_track/paper_3track_overlay_roll.py``.
+        Closes legs listed in ``action.legs_to_close`` by removing matching
+        positions from the list.  The executor handles all DB writes; this method
+        only returns the post-roll in-memory position state.
 
-        Calling ``apply_action`` is a no-op: positions are returned unchanged.
+        ROLL_OVERLAY: one leg closed + one LegSpec in ``legs_to_open``.
+        ROLL_COLLAR:  two legs closed (collar_put + collar_call) + two LegSpecs.
 
         Args:
             positions: Current open paper positions.
-            action: Approved action (ignored — no automated rolls in this strategy).
+            action: Approved action with ``action_type`` in {ROLL_OVERLAY, ROLL_COLLAR}.
 
         Returns:
-            ``positions`` unchanged.
+            Updated positions list with closed legs removed.
+
+        Raises:
+            ValueError: Unknown ``action_type`` or empty ``legs_to_open``.
         """
-        log.info(
-            "nifty_track_comparison_v1.apply_action.noop",
-            action_type=action.action_type,
-            note="Rolls are manual via paper_3track_overlay_roll.py",
+        if action.action_type not in _ALLOWED_ACTIONS:
+            raise ValueError(
+                f"NiftyTrackComparisonV1 does not permit {action.action_type!r} — "
+                f"allowed: {_ALLOWED_ACTIONS}"
+            )
+        if not action.legs_to_open:
+            raise ValueError(f"{action.action_type} requires at least one leg in legs_to_open")
+
+        closed: set[str] = set(action.legs_to_close)
+        return [p for p in positions if p.leg_role not in closed]
+
+    # ── Roll target selection ─────────────────────────────────────────────────
+
+    async def _select_overlay_roll_target(
+        self,
+        leg_role: str,
+        strategy_name: str,
+    ) -> LegSpec | None:
+        """Fetch the next-expiry chain and select a replacement overlay leg.
+
+        Uses the broker client to fetch the next-expiry option chain.  Applies
+        ``find_strike_by_delta`` with role-specific delta targets.  Returns
+        ``None`` when no broker client is set, the chain fetch fails, or no
+        candidate exists within the delta band.
+
+        Blocked combination: ``paper_nifty_futures`` + ``overlay_cc`` always
+        returns ``None`` (synthetic short-put risk).
+
+        The broker's ``get_option_chain`` may return either a raw Upstox dict
+        (production) or an ``OptionChain`` instance (tests / mock brokers).
+        Both forms are handled.
+
+        Args:
+            leg_role: Overlay leg role being rolled.
+            strategy_name: Track strategy namespace (e.g. 'paper_nifty_futures').
+
+        Returns:
+            ``LegSpec`` for the replacement leg, or ``None``.
+        """
+        # Hard block: Futures + standalone CC.
+        if strategy_name == "paper_nifty_futures" and leg_role == "overlay_cc":
+            log.debug(
+                "nifty_track_comparison_v1._select_overlay_roll_target.futures_cc_blocked",
+                strategy_name=strategy_name,
+                leg_role=leg_role,
+            )
+            return None
+
+        if self._broker is None:
+            return None
+
+        # Determine option type and delta parameters by role.
+        if leg_role in ("overlay_pp", "overlay_collar_put"):
+            option_type: str = "PE"
+            delta_range = _PP_DELTA_RANGE
+            target_delta = _PP_TARGET_DELTA
+            leg_action: str = "BUY"
+        elif leg_role in ("overlay_cc", "overlay_collar_call"):
+            option_type = "CE"
+            delta_range = _CC_DELTA_RANGE
+            target_delta = _CC_TARGET_DELTA
+            leg_action = "SELL"
+        else:
+            log.warning(
+                "nifty_track_comparison_v1._select_overlay_roll_target.unknown_role",
+                leg_role=leg_role,
+            )
+            return None
+
+        next_chain = await self._fetch_next_chain()
+        if next_chain is None:
+            return None
+
+        # Literal cast required by find_strike_by_delta — safe because we set it above.
+        ot: Literal["CE", "PE"] = option_type  # type: ignore[assignment]
+        leg = find_strike_by_delta(next_chain, ot, delta_range, target_delta)
+        if leg is None:
+            return None
+
+        # Build instrument key: NSE_FO|NIFTY{DDMMMYYYY}{strike}{CE|PE}
+        expiry_str = next_chain.expiry.strftime("%d%b%Y").upper()
+        instrument_key = f"NSE_FO|NIFTY{expiry_str}{int(leg.strike)}{option_type}"
+
+        return LegSpec(
+            instrument_key=instrument_key,
+            action=leg_action,  # type: ignore[arg-type]
+            quantity=_NIFTY_LOT_SIZE,
+            leg_role=leg_role,
+            notes=str(leg.strike),
         )
-        return positions
+
+    async def _fetch_next_chain(self) -> OptionChain | None:
+        """Fetch and parse the next-expiry Nifty option chain via the broker.
+
+        Handles two broker return shapes:
+        - ``OptionChain`` instance (mock / test brokers) — used directly.
+        - Raw Upstox dict with ``"data"`` key — parsed via
+          ``parse_upstox_option_chain``.
+
+        Returns ``None`` on any error.
+        """
+        from src.client.upstox_market import parse_upstox_option_chain
+
+        try:
+            raw = await self._broker.get_option_chain(  # type: ignore[union-attr]
+                "NSE_INDEX|Nifty 50",
+                "next",
+            )
+        except Exception:
+            log.warning(
+                "nifty_track_comparison_v1._fetch_next_chain.broker_error",
+                exc_info=True,
+            )
+            return None
+
+        if isinstance(raw, OptionChain):
+            return raw
+
+        # Production path: raw is the full Upstox response dict.
+        try:
+            data = raw.get("data", raw) if isinstance(raw, dict) else raw
+            if not isinstance(data, list):
+                return None
+            return parse_upstox_option_chain(data)
+        except Exception:
+            log.warning(
+                "nifty_track_comparison_v1._fetch_next_chain.parse_error",
+                exc_info=True,
+            )
+            return None
 
     # ── Private helpers ───────────────────────────────────────────────────────
 

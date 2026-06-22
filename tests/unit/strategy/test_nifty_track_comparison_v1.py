@@ -15,10 +15,12 @@ import asyncio
 from datetime import date, timedelta
 from decimal import Decimal
 
+import pytest
+
 from src.models.options import OptionChain, OptionChainStrike, OptionLeg
 from src.paper.models import PaperPosition
 from src.strategy.nifty_track_comparison_v1 import NiftyTrackComparisonV1
-from src.strategy.protocol import ApprovedAction
+from src.strategy.protocol import ApprovedAction, LegSpec
 
 _SPOT = "paper_nifty_spot"
 _FUTURES = "paper_nifty_futures"
@@ -106,13 +108,77 @@ def _make_position(
     )
 
 
-def _make_approved_action() -> ApprovedAction:
+def _make_approved_action(
+    action_type: str = "ROLL_OVERLAY",
+    legs_to_close: list[str] | None = None,
+    legs_to_open: list[LegSpec] | None = None,
+) -> ApprovedAction:
     return ApprovedAction(
-        action_type="CLOSE_FULL",
-        legs_to_close=["overlay_pp"],
-        legs_to_open=[],
+        action_type=action_type,
+        legs_to_close=legs_to_close if legs_to_close is not None else ["overlay_pp"],
+        legs_to_open=legs_to_open if legs_to_open is not None else [
+            LegSpec(
+                instrument_key="NSE_FO|NIFTY01JUL202624000PE",
+                action="BUY",
+                quantity=75,
+                leg_role="overlay_pp",
+            )
+        ],
         rationale="test",
         council_rank=1,
+    )
+
+
+class MockBroker:
+    """Minimal broker mock that returns a pre-built OptionChain from get_option_chain."""
+
+    def __init__(self, chain: OptionChain | None = None) -> None:
+        self._chain = chain
+
+    async def get_option_chain(self, *args: object, **kwargs: object) -> OptionChain:
+        if self._chain is None:
+            raise ValueError("MockBroker: no chain configured")
+        return self._chain
+
+
+def _make_next_chain(
+    option_type: str = "PE",
+    strike: str = "23500",
+    delta: str = "-0.20",
+    ltp: str = "80",
+) -> OptionChain:
+    """Build a minimal next-expiry OptionChain with one candidate strike."""
+    expiry = date.today() + timedelta(days=21)
+    pe_leg = OptionLeg(
+        ltp=Decimal(ltp),
+        bid=Decimal(ltp),
+        ask=Decimal(ltp),
+        oi=5000,
+        volume=1000,
+        delta=Decimal(delta),
+        gamma=Decimal("0.001"),
+        theta=Decimal("-3"),
+        vega=Decimal("10"),
+        iv=Decimal("18"),
+        strike=Decimal(strike),
+    )
+    ce_leg = OptionLeg(
+        ltp=Decimal(ltp),
+        bid=Decimal(ltp),
+        ask=Decimal(ltp),
+        oi=5000,
+        volume=1000,
+        delta=Decimal("0.20"),
+        gamma=Decimal("0.001"),
+        theta=Decimal("-3"),
+        vega=Decimal("10"),
+        iv=Decimal("18"),
+        strike=Decimal(strike),
+    )
+    return OptionChain(
+        underlying_spot=Decimal("24000"),
+        expiry=expiry,
+        strikes={Decimal(strike): OptionChainStrike(pe=pe_leg, ce=ce_leg)},
     )
 
 
@@ -356,33 +422,62 @@ def test_all_three_tracks_roll_eligible_simultaneously() -> None:
     assert tracks_seen == {_SPOT, _FUTURES, _PROXY}
 
 
-# ── apply_action — no-op ──────────────────────────────────────────────────────
+# ── apply_action ──────────────────────────────────────────────────────────────
 
 
-def test_apply_action_returns_positions_unchanged() -> None:
-    """apply_action is a no-op — returns positions list unchanged regardless of action."""
+def test_apply_action_roll_overlay_removes_closed_leg() -> None:
+    """ROLL_OVERLAY + one LegSpec → closed leg removed from positions."""
     strategy = NiftyTrackComparisonV1()
     positions = [
         _make_position(leg_role="overlay_pp"),
         _make_position(leg_role="base_etf", net_qty=650),
     ]
-    action = _make_approved_action()
-    result = _run(strategy.apply_action(positions, action))
-    assert result == positions
-
-
-def test_apply_action_any_action_type_no_error() -> None:
-    """apply_action does not raise for any action_type."""
-    strategy = NiftyTrackComparisonV1()
-    action = ApprovedAction(
-        action_type="ROLL",
+    action = _make_approved_action(
+        action_type="ROLL_OVERLAY",
         legs_to_close=["overlay_pp"],
-        legs_to_open=[],
-        rationale="test",
-        council_rank=1,
+        legs_to_open=[
+            LegSpec(
+                instrument_key="NSE_FO|NIFTY01JUL202624000PE",
+                action="BUY",
+                quantity=75,
+                leg_role="overlay_pp",
+            )
+        ],
     )
-    result = _run(strategy.apply_action([_make_position()], action))
+    result = _run(strategy.apply_action(positions, action))
     assert len(result) == 1
+    assert result[0].leg_role == "base_etf"
+
+
+def test_apply_action_roll_collar_removes_both_collar_legs() -> None:
+    """ROLL_COLLAR + two LegSpecs → both collar legs removed, base_etf kept."""
+    strategy = NiftyTrackComparisonV1()
+    positions = [
+        _make_position(leg_role="overlay_collar_put"),
+        _make_position(leg_role="overlay_collar_call", net_qty=-65),
+        _make_position(leg_role="base_etf", net_qty=650),
+    ]
+    action = _make_approved_action(
+        action_type="ROLL_COLLAR",
+        legs_to_close=["overlay_collar_put", "overlay_collar_call"],
+        legs_to_open=[
+            LegSpec(
+                instrument_key="NSE_FO|NIFTY01JUL202623500PE",
+                action="BUY",
+                quantity=75,
+                leg_role="overlay_collar_put",
+            ),
+            LegSpec(
+                instrument_key="NSE_FO|NIFTY01JUL202625000CE",
+                action="SELL",
+                quantity=75,
+                leg_role="overlay_collar_call",
+            ),
+        ],
+    )
+    result = _run(strategy.apply_action(positions, action))
+    assert len(result) == 1
+    assert result[0].leg_role == "base_etf"
 
 
 class MockStore:
@@ -608,3 +703,118 @@ def test_futures_no_overlays_no_block() -> None:
     ]
     result = _run(strategy.check_signals(_empty_market(), positions))
     assert not any(e.event_type == "BLOCKED_COMBINATION" for e in result)
+
+
+# ── PA1.3: ROLL_DUE_DTE ACTION upgrade (DTE 6–10) ────────────────────────────
+
+
+def test_roll_due_dte_action_when_broker_has_replacement() -> None:
+    """Overlay DTE=8 + broker returns a next-expiry chain → ROLL_DUE_DTE fires as ACTION."""
+    next_chain = _make_next_chain(option_type="PE", strike="23500", delta="-0.20")
+    broker = MockBroker(chain=next_chain)
+    strategy = NiftyTrackComparisonV1(broker=broker)
+    pos = _make_position(
+        strategy_name=_SPOT,
+        leg_role="overlay_pp",
+        instrument_key=_expiry_key(8),
+    )
+    result = _run(strategy.check_signals(_make_empty_chain(), [pos]))
+    dte_events = [e for e in result if e.event_type == "ROLL_DUE_DTE"]
+    assert len(dte_events) == 1
+    assert dte_events[0].severity == "ACTION"
+    assert dte_events[0].payload.get("suggested_instrument_key") != ""
+    assert dte_events[0].payload.get("valid_actions") == ["ROLL_OVERLAY"]
+
+
+def test_roll_due_dte_warn_when_no_replacement() -> None:
+    """Overlay DTE=8 + broker returns empty chain → ROLL_DUE_DTE fires as WARN."""
+    empty_chain = OptionChain(
+        underlying_spot=Decimal("24000"),
+        expiry=date.today() + timedelta(days=21),
+        strikes={},
+    )
+    broker = MockBroker(chain=empty_chain)
+    strategy = NiftyTrackComparisonV1(broker=broker)
+    pos = _make_position(
+        strategy_name=_SPOT,
+        leg_role="overlay_pp",
+        instrument_key=_expiry_key(8),
+    )
+    result = _run(strategy.check_signals(_make_empty_chain(), [pos]))
+    dte_events = [e for e in result if e.event_type == "ROLL_DUE_DTE"]
+    assert len(dte_events) == 1
+    assert dte_events[0].severity == "WARN"
+
+
+# ── PA1.3: ROLL_DUE_DECAY ACTION upgrade ─────────────────────────────────────
+
+
+def test_roll_due_decay_action_when_broker_has_replacement() -> None:
+    """Short overlay at 20% of entry + broker returns chain → ROLL_DUE_DECAY fires as ACTION."""
+    next_chain = _make_next_chain(option_type="PE", strike="23500", delta="-0.20")
+    broker = MockBroker(chain=next_chain)
+    strategy = NiftyTrackComparisonV1(broker=broker)
+    pos = _make_position(
+        strategy_name=_SPOT,
+        leg_role="overlay_pp",
+        instrument_key="NSE_FO|NIFTY24000PE",
+        avg_sell_price="100",
+        net_qty=-65,
+    )
+    chain = _make_chain(pe_ltp="20", strike="24000")  # 20% remaining < 25% threshold
+    result = _run(strategy.check_signals(chain, [pos]))
+    decay_events = [e for e in result if e.event_type == "ROLL_DUE_DECAY"]
+    assert len(decay_events) == 1
+    assert decay_events[0].severity == "ACTION"
+    assert decay_events[0].payload.get("valid_actions") == ["ROLL_OVERLAY"]
+
+
+# ── PA1.3: futures+CC block → ROLL_DUE_DTE stays WARN ─────────────────────────
+
+
+def test_futures_cc_block_causes_roll_due_dte_warn() -> None:
+    """paper_nifty_futures + overlay_cc → _select_overlay_roll_target returns None → WARN."""
+    next_chain = _make_next_chain(option_type="CE", strike="25000", delta="0.20")
+    broker = MockBroker(chain=next_chain)
+    strategy = NiftyTrackComparisonV1(broker=broker)
+    pos = _make_position(
+        strategy_name=_FUTURES,
+        leg_role="overlay_cc",
+        instrument_key=_expiry_key(8, "CE"),
+        net_qty=-65,
+    )
+    result = _run(strategy.check_signals(_empty_market(), [pos]))
+    dte_events = [e for e in result if e.event_type == "ROLL_DUE_DTE"]
+    assert len(dte_events) == 1
+    assert dte_events[0].severity == "WARN"
+
+
+# ── PA1.3: apply_action error cases ──────────────────────────────────────────
+
+
+def test_apply_action_unknown_type_raises_value_error() -> None:
+    """Unknown action_type raises ValueError."""
+    strategy = NiftyTrackComparisonV1()
+    action = ApprovedAction(
+        action_type="CLOSE_FULL",
+        legs_to_close=["overlay_pp"],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+    )
+    with pytest.raises(ValueError, match="does not permit"):
+        _run(strategy.apply_action([_make_position()], action))
+
+
+def test_apply_action_roll_overlay_empty_legs_to_open_raises_value_error() -> None:
+    """ROLL_OVERLAY with empty legs_to_open raises ValueError."""
+    strategy = NiftyTrackComparisonV1()
+    action = ApprovedAction(
+        action_type="ROLL_OVERLAY",
+        legs_to_close=["overlay_pp"],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+    )
+    with pytest.raises(ValueError, match="requires at least one leg"):
+        _run(strategy.apply_action([_make_position()], action))
