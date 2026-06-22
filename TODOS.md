@@ -64,10 +64,7 @@ Prerequisite for Phase 1 task 1.7 (`CSPStrategy` calibration). Stockmock UI — 
 
 ## Active Tasks
 
-> **Priority rule:** Infrastructure that blocks other stories runs before strategy-specific work.
-> `paper-backbone` blocks `paper-exit-signals` — these two are the critical path.
-> `covered-call-overlay` and `MVP` are independent and slot in around the critical path.
-> `scripts-restructure SR1` (scaffold only) runs before `paper-backbone` so new daemon scripts land in the correct folder structure from day one.
+> **Priority rule:** #1 (Finideas roll) is the immediate hard deadline. #2 (MVP) is independent and slots in any cycle.
 
 ---
 
@@ -88,64 +85,7 @@ Invoke `roll-validator` agent ≥1 week before deadline.
 
 ---
 
-### Build queue #3 — scripts-restructure SR1 (scaffold only)
-
-**Story:** [docs/plan/scripts-restructure/](docs/plan/scripts-restructure/)
-**Why now:** SR1 is scaffold-only (`__init__.py` files, no file moves, ~30 min). Must run before `paper-backbone` writes new daemon scripts so those land in `pipeline/`, `strategies/`, etc. from day one — not born flat and needing migration later. Full migration (SR2+) is post-market and lower urgency.
-
-- [x] Run SR1: create all `__init__.py` files per `stories.md`, re-index graph, verify tests green.
-
----
-
-### Build queue #4 — paper-backbone: Strategy Monitor Daemon
-
-**Story:** [docs/plan/paper-backbone/](docs/plan/paper-backbone/) (prompt, tasks, stories, schema)
-**Prerequisite:** PortfolioDeltaTracker ✅ shipped 2026-05-26 | scripts-restructure SR1 ✅ (run first)
-**Blocks:** paper-exit-signals (#5) — `StrategyMonitor` + `PaperExecutor` must exist before ES0.
-
-| Step | What | Deadline | Status |
-|---|---|---|---|
-| PT-0 — Common Infrastructure | PB1.1–PB1.7: `PaperStrategy` protocol, `StrategyMonitor`, `PaperExecutor`, `RapidCouncil`, `TelegramGateway`, DB migrations, daemon scripts | Jun–Jul 2026 | ✅ Done |
-| PT-S0 — CSP v1 | PB2.1: `CSPNiftyV1` — adds auto-signal detection | After PT-0 | ✅ Done |
-| PT-S1 — Iron Condor v1 | PB3.1: `IronCondorV1` — entry via `paper_ic_entry.py` | Aug 2026 | ✅ Done |
-| PT-S3 — 3-Track | PB4.1: `NiftyTrackComparisonV1` — adds WARN roll reminders | After PT-0 | ✅ Done |
-| PT-S2 — Signal Pipeline | Blocked on [signals story](docs/plan/signals/) + OpenRouter API key | Aug–Sep 2026 | ⬜ Blocked |
-| PT-B — Backtesting mode | Historical replayer + AutoApprover swap-in | After Phase 0.8 gate | ⬜ Blocked |
-
----
-
-### Build queue #5 — paper-exit-signals: Automated Exit Detection + Closure
-
-**Story:** [docs/plan/paper-exit-signals/](docs/plan/paper-exit-signals/) (prompt, schema, stories, tasks)
-**Blocked by:** Build queue #4 PT-0 (`StrategyMonitor` + `PaperExecutor` must exist before starting)
-**Council authority:** `docs/council/2026-05-28_paper-trade-exit-philosophy.md` — all 10 thresholds binding; no changes without a new council decision.
-**Archive gate (ES9 — must run last):** council file + `csp_nifty_v1.md` archived via `git mv` only after all stories committed.
-
-| Step | Files | Status |
-|---|---|---|
-| CC1 | `src/paper/constants.py` — `STRATEGY_CC_OVERLAY` + `compute_max_lots` + tests | ✅ Shipped |
-| CC2 | `scripts/paper_cc_entry.py` — delta selection + IVR gate + qty constraint + dry-run | ✅ Shipped |
-| CC3 | `scripts/paper_cc_roll.py` — profit-target / time-stop / delta-stop exit handler + tests | ⬜ Not started |
-| CC4 | Docs close | ⬜ Not started |
-
----
-
-### Build queue #6 — Covered Call Overlay Scripts (CC3+CC4 remaining)
-
-**Story:** [docs/plan/covered-call-overlay/](docs/plan/covered-call-overlay/) (prompt, tasks, stories, schema)
-**Purpose:** NiftyBees lot-sizing calibration experiment — not a permanent strategy. Findings fold into 3-track NiftyBees CC after 3 cycles.
-**Note:** Independent — does not block any other queue item. Slot in around critical path.
-
-| Step | Files | Status |
-|---|---|---|
-| CC1 | `src/paper/constants.py` — `STRATEGY_CC_OVERLAY` + `compute_max_lots` + tests | ✅ Shipped |
-| CC2 | `scripts/paper_cc_entry.py` — delta selection + IVR gate + qty constraint + dry-run | ✅ Shipped |
-| CC3 | `scripts/paper_cc_roll.py` — profit-target / time-stop / delta-stop exit handler + tests | ⬜ Not started |
-| CC4 | Docs close | ⬜ Not started |
-
----
-
-### Build queue #7 — MVP: Multi-bagger Value Picks Tracker
+### Build queue #2 — MVP: Multi-bagger Value Picks Tracker
 
 **Story:** [docs/plan/mvp/](docs/plan/mvp/) (prompt, tasks, stories, schema)
 **CLI surface and cron spec:** [docs/plan/mvp/mvp_tasks.md](docs/plan/mvp/mvp_tasks.md)
@@ -161,53 +101,6 @@ Invoke `roll-validator` agent ≥1 week before deadline.
 
 ---
 
-### Build queue #5 — paper-exit-signals: Automated Exit Detection + Closure
-
-**Story:** [docs/plan/paper-exit-signals/](docs/plan/paper-exit-signals/) (prompt, schema, stories, tasks)
-**Blocked by:** Build queue #5 PT-0 (`StrategyMonitor` + `PaperExecutor` must exist before starting)
-**Council authority:** `docs/council/2026-05-28_paper-trade-exit-philosophy.md` — all 10 thresholds binding; no changes without a new council decision.
-**Archive gate (ES9 — must run last):** council file + `csp_nifty_v1.md` archived via `git mv` only after all stories committed.
-
-**Run order:**
-
-| Step | Stories | Rationale |
-|---|---|---|
-| 1 | Prereq gate | Verify `StrategyMonitor` + `PaperExecutor` exist before ES0 |
-| 2 | ES0 → ES1 → ES2 | Foundation: schema + rule engine + CSP threshold fix |
-| 3 | ES10 → ES12 | CSP lifecycle (Cycle 2 open); entry discipline |
-| 4 | ES3 → ES4 → ES5 → ES6 | Overlay strategy classes + OverlayCloser |
-| 5 | ES7 → ES8 | EOD + daemon wiring |
-| 6 | ES11 | Base roll detection — next event 2026-06-30 |
-| 7 | ES9 | Docs close — always last |
-
-| Story | Files | Status |
-|---|---|---|
-| ES0 | `paper_exit_events` DDL in `PaperStore.__init__`; store methods + tests | ✅ Shipped |
-| ES1 | `src/strategy/exit_signals.py` — `ExitSignalEngine` (pure/stateless); CSP/CC/PP/Collar rules; tests | ✅ Shipped |
-| ES2 | Fix `CSPNiftyV1` thresholds: `DELTA_STOP` 0.35→0.45, `DELTA_WARN` 0.35, `LOSS_STOP` 2.0×→1.75× | ⬜ Not started |
-| ES3 | `src/strategy/cc_overlay_v1.py` — `CCOverlayV1`; dual-signal audit; tests | ⬜ Not started |
-| ES4 | `src/strategy/pp_overlay_v1.py` — `PPOverlayV1`; `CRASH_MONETIZE` + bid/ask gate; tests | ⬜ Not started |
-| ES5 | `src/strategy/collar_overlay_v1.py` — `CollarOverlayV1`; 4-path closure routing; tests | ⬜ Not started |
-| ES6 | `src/strategy/overlay_closer.py` — `OverlayCloser`; atomic Collar close + rollback; tests | ✅ Shipped — 3dafad9 |
-| ES7 | `scripts/paper_3track_snapshot.py` — Tier 1 EOD signal write + Telegram alert + deduplication | ✅ Shipped — 1d40d8f |
-| ES8 | `scripts/monitor_daemon.py` — register CC/PP/Collar overlays; `MONITOR_OVERLAYS` gate | ✅ Shipped — 7c23864 |
-| ES10 | `src/strategy/csp_nifty_v1.py` — R5 re-entry eligibility post profit-target; Telegram alert; tests | ✅ Shipped — c9625e1 |
-| ES11 | `scripts/paper_3track_snapshot.py` + `InstrumentLookup.get_next_contract()` — base expiry alert | ✅ Shipped — 16c7f23 |
-| ES12 | `find_strike_by_delta.py` liquidity gate; `record_paper_trade.py` R3 hard block + `--force-entry` | ✅ Shipped — b86925a |
-| ES9 | Docs close (LAST): DECISIONS.md, CONTEXT.md, TODOS.md; `git mv` council + csp_nifty_v1 to archive | ✅ Shipped — e32b862 |
-
-**Deferred gaps (separate stories — not blocking this task):**
-
-| Gap | Story needed | When |
-|---|---|---|
-| R4 event filter (Budget/RBI/elections) | `docs/plan/entry-event-filter/` — needs `events.yaml` | After ES12 |
-| Collateral leg (`long_niftybees`) per cycle | `docs/plan/csp-collateral-leg/` | Before Phase 0.8 gate |
-| Transaction cost model in paper P&L | `docs/plan/paper-cost-model/` | Phase 1 |
-| IVR at entry NULL for Cycles 1 + 2 | Permanent gap — log in Phase 0.8 gate evaluation | Accepted |
-| Collar long put exit MTM divergence at close (diverges during adverse call moves) | Permanent gap — pull put LTP in notification helper | Post Phase 0.8 |
-
----
-
 ## Build Queue
 
 Tasks run in priority order. Infrastructure that blocks other stories runs first. Independent strategy work slots in around the critical path.
@@ -216,41 +109,17 @@ Tasks run in priority order. Infrastructure that blocks other stories runs first
 |---|---|---|---|---|---|
 | 1 | June 2026 Finideas roll | Animesh + Cowork | **2026-06-30** | — | Execution pending — awaiting Finideas instructions |
 | 2 | chain-data: EOD + intraday chain snapshot cron | Cowork | — | — | ✅ Shipped — [story](docs/archive/plan/chain-data/) |
-| 3 | scripts-restructure SR1 (scaffold only) | Cowork | Before #4 | #4 script placement | ✅ Shipped — [story](docs/plan/scripts-restructure/) |
-| 4 | paper-backbone: Strategy Monitor daemon | Cowork | **Jun–Jul 2026** | #5 | ✅ Shipped — [story](docs/plan/paper-backbone/) |
-| 5 | paper-exit-signals: automated exit detection + closure | Cowork | After #4 | — | ✅ Shipped — [story](docs/plan/paper-exit-signals/) |
-| 6 | covered-call-overlay CC3+CC4 (calibration experiment) | Cowork | Any cycle | — | 🔄 CC3 shipped — CC4 pending — [story](docs/plan/covered-call-overlay/) |
-| 7 | MVP: Multi-bagger Value Picks Tracker | Cowork | After #1 | — | ⬜ Not started — [story](docs/plan/mvp/) |
-| 8 | backtest-eval-core: `BacktestStore` + `src/analytics/` | Cowork | Aug 2026 | #9 | ⬜ Not started — [story](docs/plan/backtest-eval-core/) — **blocked by tasks 1.3 + 1.4** |
-| 9 | signals-eval-core: regime engine + signal generators + validation | Cowork | Q4 2026 | — | ⬜ Not started — [story](docs/plan/signals-eval-core/) — **blocked by #8 + Phase 1.12 gate** |
-| 10 | council-refactor: remove RapidCouncil from daemon path; fix approval bug; add deterministic roll rules | Cowork | Before 2026-06-23 roll week | — | ✅ Shipped — [story](docs/plan/council-refactor/) |
-| 10 | broker-abstraction: multi-broker parser/adapter layer (Dhan, Kite) | Cowork | LOW — after Phase 0.8 gate | — | ⬜ Not started — [story](docs/plan/broker-abstraction/) — 16 tasks BA-0→BA-15; start with BA-0 analysis; BA-14/15 blocked on Phase 1 |
-| 11 | historical-data-abstraction: `HistoricalCandleFetcher` protocol + vendor implementations | Cowork | LOW — after Phase 0.8 gate | — | ⬜ Not started — [story](docs/plan/historical-data-abstraction/) — 11 tasks HD-0→HD-10; start with HD-0 cost evaluation (paid APIs); HD-6/HD-7 conditional on HD-0 decision matrix |
-
-Story folder IDs: chain-data=4a, covered-call-overlay=4cc, mvp=4b, paper-backbone=4c, paper-exit-signals=4d, scripts-restructure=4e.
-
----
-
-### Backlog — Scripts Restructure
-
-**Story:** [docs/plan/scripts-restructure/](docs/plan/scripts-restructure/) (prompt, tasks, stories)
-**SR0 closed 2026-05-29.** Layout finalised on pipeline/lookup/record axis.
-**Principle:** New scripts must be classified by the axis in stories.md before placement.
-Existing scripts migrate folder-by-folder, one commit per folder, post-market only for cron-sensitive moves.
-
-**Axis summary:**
-- `pipeline/` — cron-driven, produces data or snapshots, shared across strategies
-- `lookup/` — on-demand queries called by humans or entry scripts
-- `record/` — human-facing write CLIs, one action per invocation
-- `strategies/<name>/` — strategy-specific entry/exit/roll scripts
-- `portfolio/`, `intraday/` — domain operational crons
-- `seed/`, `council/`, `dev/` — supporting tooling
-
-| Step | Scope | Status |
-|---|---|---|
-| SR0 | Layout sign-off | ✅ Closed 2026-05-29 |
-| SR1–SR10 | Subdirectory scaffold, helper audit, and script migrations (pipeline, lookup, record, seed, dev, council, intraday, strategies, portfolio) | ✅ Shipped |
-| SR11 | Docs close | ✅ Shipped |
+| 3 | scripts-restructure SR0–SR11 | Cowork | — | — | ✅ Shipped — [story](docs/archive/plan/scripts-restructure/) |
+| 4 | paper-backbone: Strategy Monitor daemon | Cowork | — | — | ✅ Shipped — [story](docs/archive/plan/paper-backbone/) |
+| 5 | paper-backbone-adj: roll signals + strategy adjustments | Cowork | — | — | ✅ Shipped — [story](docs/archive/plan/paper-backbone-adj/) |
+| 6 | paper-exit-signals: automated exit detection + closure | Cowork | — | — | ✅ Shipped — [story](docs/archive/plan/paper-exit-signals/) |
+| 7 | council-refactor: remove RapidCouncil from daemon path; deterministic roll rules | Cowork | — | — | ✅ Shipped — [story](docs/archive/plan/council-refactor/) |
+| 8 | covered-call-overlay: NiftyBees CC calibration experiment | Cowork | — | — | ✅ Shipped — [story](docs/archive/covered-call-overlay/) |
+| 9 | MVP: Multi-bagger Value Picks Tracker | Cowork | After #1 | — | ⬜ Not started — [story](docs/plan/mvp/) |
+| 10 | backtest-eval-core: `BacktestStore` + `src/analytics/` | Cowork | Aug 2026 | #11 | ⬜ Not started — [story](docs/plan/backtest-eval-core/) — **blocked by tasks 1.3 + 1.4** |
+| 11 | signals-eval-core: regime engine + signal generators + validation | Cowork | Q4 2026 | — | ⬜ Not started — [story](docs/plan/signals-eval-core/) — **blocked by #10 + Phase 1.12 gate** |
+| 12 | broker-abstraction: multi-broker parser/adapter layer (Dhan, Kite) | Cowork | LOW — after Phase 0.8 gate | — | ⬜ Not started — [story](docs/plan/broker-abstraction/) — 16 tasks BA-0→BA-15; start with BA-0; BA-14/15 blocked on Phase 1 |
+| 13 | historical-data-abstraction: `HistoricalCandleFetcher` protocol + vendor implementations | Cowork | LOW — after Phase 0.8 gate | — | ⬜ Not started — [story](docs/plan/historical-data-abstraction/) — 11 tasks HD-0→HD-10; start with HD-0 cost probe; HD-6/HD-7 conditional on HD-0 decision matrix |
 
 ---
 
