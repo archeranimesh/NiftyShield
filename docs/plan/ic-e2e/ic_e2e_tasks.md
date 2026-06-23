@@ -17,7 +17,7 @@
 
 ## Phase IC-F1 — Protocol Compliance
 
-- [ ] **IC-E1** `[Claude]` — `src/strategy/ic_nifty_v1.py`: add `auto_execute: bool = False` class attribute + `STRATEGY_IC` constant to `src/paper/constants.py` + tests
+- [x] **IC-E1** `[Claude]` — `src/strategy/ic_nifty_v1.py`: add `auto_execute: bool = False` class attribute + `STRATEGY_IC` constant to `src/paper/constants.py` + tests | SHA: 17a9744
 
 ## Phase IC-F2 — Entry Script
 
