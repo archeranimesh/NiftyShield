@@ -28,7 +28,7 @@ Usage in tests
 
     client = MockBrokerClient(fixtures_dir=FIXTURES)
     client.set_price("NSE_FO|12345", 150.0)
-    client.set_margin(1_000_000.0)
+    client.set_margin(Decimal("1000000"))
 
     order = {"instrument_key": "NSE_FO|12345", "quantity": 50,
              "price": 150.0, "direction": "SELL"}
@@ -47,6 +47,16 @@ from typing import Any
 from uuid import uuid4
 
 from src.client.exceptions import InsufficientMarginError, OrderRejectedError
+from src.client.protocol import (
+    Candle,
+    CandleRequest,
+    Holding,
+    MarginResponse,
+    OrderModify,
+    OrderRequest,
+    OrderResponse,
+    Position,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -71,8 +81,8 @@ class MockBrokerClient:
     ) -> None:
         self._fixtures_dir: Path | None = fixtures_dir
         self._margin_available: Decimal = Decimal(str(initial_margin))
-        self._orders: list[dict] = []
-        self._positions: list[dict] = []
+        self._orders: list[dict[str, Any]] = []
+        self._positions: list[dict[str, Any]] = []
         self._price_map: dict[str, Decimal] = {}
         self._error_queue: dict[str, Exception] = {}
 
@@ -89,13 +99,13 @@ class MockBrokerClient:
         """
         self._price_map[instrument_key] = Decimal(str(price))
 
-    def set_margin(self, amount: float) -> None:
+    def set_margin(self, amount: Decimal) -> None:
         """Override available margin.
 
         Args:
             amount: New available margin in rupees.
         """
-        self._margin_available = Decimal(str(amount))
+        self._margin_available = amount
 
     def simulate_error(self, method_name: str, exc: Exception) -> None:
         """Queue a one-shot exception for the named method.
@@ -177,7 +187,7 @@ class MockBrokerClient:
         self._raise_if_queued("get_ltp")
         return {k: self._price_map[k] for k in instruments if k in self._price_map}
 
-    async def get_option_chain(self, instrument: str, expiry: str) -> dict:
+    async def get_option_chain(self, instrument: str, expiry: str) -> dict[str, Any]:
         """Load an option chain fixture from disk.
 
         Fixture path: ``option_chain/{instrument}_{expiry}.json`` where
@@ -197,13 +207,13 @@ class MockBrokerClient:
         data = self._load_fixture(path)
         if data is None:
             return {}
-        return data
+        return dict(data)  # cast Any → dict[str, Any]
 
     # ------------------------------------------------------------------
     # BrokerClient — OrderExecutor surface
     # ------------------------------------------------------------------
 
-    async def place_order(self, order: dict) -> dict:
+    async def place_order(self, order: OrderRequest) -> OrderResponse:
         """Place an order, update internal state, return a completion response.
 
         Validates:
@@ -241,13 +251,13 @@ class MockBrokerClient:
                 "instrument_key": order.get("instrument_key"),
                 "quantity": int(quantity),
                 "direction": order.get("direction"),
-                "entry_price": float(price),
+                "entry_price": price,
                 "order_id": order_id,
             }
         )
         return response
 
-    async def modify_order(self, order_id: str, changes: dict) -> dict:
+    async def modify_order(self, order_id: str, changes: OrderModify) -> OrderResponse:
         """Apply ``changes`` to an existing order in ``_orders``.
 
         Args:
@@ -267,7 +277,7 @@ class MockBrokerClient:
                 return {**order}
         raise OrderRejectedError(f"Mock: order not found: {order_id}")
 
-    async def cancel_order(self, order_id: str) -> dict:
+    async def cancel_order(self, order_id: str) -> OrderResponse:
         """Mark an order as ``cancelled`` in ``_orders``.
 
         Args:
@@ -290,7 +300,7 @@ class MockBrokerClient:
     # BrokerClient — PortfolioReader surface
     # ------------------------------------------------------------------
 
-    async def get_positions(self) -> list[dict]:
+    async def get_positions(self) -> list[Position]:
         """Return a copy of current positions accumulated from ``place_order`` calls.
 
         Returns:
@@ -299,7 +309,7 @@ class MockBrokerClient:
         self._raise_if_queued("get_positions")
         return list(self._positions)
 
-    async def get_holdings(self) -> list:
+    async def get_holdings(self) -> list[Holding]:
         """Return an empty list — equity leg tracking not yet simulated.
 
         Returns:
@@ -308,7 +318,7 @@ class MockBrokerClient:
         self._raise_if_queued("get_holdings")
         return []
 
-    async def get_margins(self) -> dict:
+    async def get_margins(self) -> MarginResponse:
         """Return current available margin.
 
         Returns:
@@ -321,7 +331,7 @@ class MockBrokerClient:
     # BrokerClient — additional methods
     # ------------------------------------------------------------------
 
-    async def get_historical_candles(self, params: Any) -> list:
+    async def get_historical_candles(self, params: CandleRequest) -> list[Candle]:
         """Load candle data from a fixture file or return an empty list.
 
         Fixture path is built from ``params`` if it is a dict with
@@ -346,11 +356,11 @@ class MockBrokerClient:
         if data is None:
             return []
         if isinstance(data, list):
-            return data
+            return list(data)  # cast Any → list[Candle]
         # Fixtures recorded from the real API wrap candles under a ``data`` key.
-        return data.get("data", data.get("candles", []))
+        return list(data.get("data", data.get("candles", [])))  # cast Any → list[Candle]
 
-    async def get_expired_option_contracts(self, instrument: str, expiry: str) -> list:
+    async def get_expired_option_contracts(self, instrument: str, expiry: str) -> list[Candle]:
         """Return an empty list — expired instruments API not yet available.
 
         Args:

@@ -11,7 +11,7 @@ repos:
     hooks:
       - id: mypy
         args: [--config-file=pyproject.toml]
-        additional_dependencies: [pydantic>=2.0, types-requests]
+        additional_dependencies: [pydantic>=2.0, pydantic-settings, types-requests, types-PyYAML]
         files: ^src/(client|paper)/
 
   - repo: local

@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 from src.db import connect
@@ -529,7 +529,7 @@ class NuvamaStore:
 
     def purge_old_intraday(self, days: int = 30) -> None:
         """Delete intraday snapshots older than the retention limit."""
-        cutoff = datetime.now() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
         with connect(self._db_path) as conn:
             conn.execute(
                 "DELETE FROM nuvama_intraday_snapshots WHERE timestamp < ?", (cutoff.isoformat(),)
