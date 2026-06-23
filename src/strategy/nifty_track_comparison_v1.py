@@ -140,9 +140,7 @@ class NiftyTrackComparisonV1:
         if not short_call_positions:
             return []
 
-        has_long_put = any(
-            p.leg_role in {"overlay_collar_put", "overlay_pp"} for p in positions
-        )
+        has_long_put = any(p.leg_role in {"overlay_collar_put", "overlay_pp"} for p in positions)
         if has_long_put:
             return []
 
@@ -392,9 +390,7 @@ class NiftyTrackComparisonV1:
                                 **payload_base,
                                 "mark": str(mark),
                                 "entry_credit": str(entry_credit),
-                                "pct_remaining": str(
-                                    pct_remaining.quantize(Decimal("0.01"))
-                                ),
+                                "pct_remaining": str(pct_remaining.quantize(Decimal("0.01"))),
                             }
                             target = await self._select_overlay_roll_target(
                                 pos.leg_role, pos.strategy_name
@@ -637,10 +633,10 @@ class NiftyTrackComparisonV1:
         if isinstance(raw, OptionChain):
             return raw
 
-        # Production path: raw is the full Upstox response dict.
+        # Production path: raw is the Upstox response list of strike dicts.
         try:
-            data = raw.get("data", raw) if isinstance(raw, dict) else raw
-            if not isinstance(data, list):
+            data = raw if isinstance(raw, list) else []
+            if not data:
                 return None
             return parse_upstox_option_chain(data)
         except Exception:

@@ -140,7 +140,7 @@ class UpstoxMarketClient:
         except requests.RequestException as e:
             raise DataFetchError(f"OHLC fetch failed: {e}") from e
 
-    def get_option_chain_sync(self, instrument: str, expiry: str) -> dict[str, Any]:
+    def get_option_chain_sync(self, instrument: str, expiry: str) -> list[dict[str, Any]]:
         """Fetch option chain for an underlying + expiry.
 
         Args:
@@ -148,7 +148,7 @@ class UpstoxMarketClient:
             expiry: Expiry date as YYYY-MM-DD.
 
         Returns:
-            Raw option chain response dict.
+            Raw option chain response as a list of strike dicts.
 
         Raises:
             DataFetchError: If the HTTP request fails.
@@ -168,7 +168,8 @@ class UpstoxMarketClient:
                 latency_ms,
             )
             resp.raise_for_status()
-            return dict(resp.json().get("data", {}))
+            data = resp.json().get("data", [])
+            return data if isinstance(data, list) else []
         except requests.RequestException as e:
             raise DataFetchError(f"Option chain fetch failed: {e}") from e
 
@@ -178,7 +179,7 @@ class UpstoxMarketClient:
         """Async wrapper around get_ltp_sync."""
         return await asyncio.to_thread(self.get_ltp_sync, instruments)
 
-    async def get_option_chain(self, instrument: str, expiry: str) -> dict[str, Any]:
+    async def get_option_chain(self, instrument: str, expiry: str) -> list[dict[str, Any]]:
         """Async wrapper around get_option_chain_sync."""
         return await asyncio.to_thread(self.get_option_chain_sync, instrument, expiry)
 

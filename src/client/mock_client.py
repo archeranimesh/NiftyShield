@@ -187,7 +187,7 @@ class MockBrokerClient:
         self._raise_if_queued("get_ltp")
         return {k: self._price_map[k] for k in instruments if k in self._price_map}
 
-    async def get_option_chain(self, instrument: str, expiry: str) -> dict[str, Any]:
+    async def get_option_chain(self, instrument: str, expiry: str) -> list[dict[str, Any]]:
         """Load an option chain fixture from disk.
 
         Fixture path: ``option_chain/{instrument}_{expiry}.json`` where
@@ -206,8 +206,8 @@ class MockBrokerClient:
         path = f"option_chain/{safe_instrument}_{expiry}.json"
         data = self._load_fixture(path)
         if data is None:
-            return {}
-        return dict(data)  # cast Any → dict[str, Any]
+            return []
+        return data if isinstance(data, list) else []
 
     # ------------------------------------------------------------------
     # BrokerClient — OrderExecutor surface
