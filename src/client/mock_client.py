@@ -199,7 +199,7 @@ class MockBrokerClient:
             expiry: Expiry date string (e.g. ``"2026-04-07"``).
 
         Returns:
-            Full fixture dict on success; empty dict if fixture is missing.
+            List of strike dicts on success; empty list if fixture is missing.
         """
         self._raise_if_queued("get_option_chain")
         safe_instrument = instrument.replace("|", "_").replace(" ", "_")

@@ -8,7 +8,7 @@ Coverage:
     PortfolioReader (all four isinstance checks)
   - Test-setup API: set_price, set_margin, simulate_error (one-shot), reset
   - get_ltp: known keys, unknown keys omitted, price_map empty
-  - get_option_chain: fixture found, fixture missing (returns {})
+  - get_option_chain: fixture found, fixture missing (returns [])
   - place_order: success + margin deduction, InsufficientMarginError
   - modify_order: success, OrderRejectedError on unknown order_id
   - cancel_order: success, OrderRejectedError on unknown order_id
@@ -127,12 +127,12 @@ class TestGetLtp:
 
 
 class TestGetOptionChain:
-    async def test_returns_empty_dict_when_fixture_missing(self) -> None:
+    async def test_returns_empty_list_when_fixture_missing(self) -> None:
         client = make_client()
         result = await client.get_option_chain("NSE_INDEX|Nifty 50", "2099-01-01")
-        assert result == {}
+        assert result == []
 
-    async def test_returns_dict_when_fixture_present(self, tmp_path: Path) -> None:
+    async def test_returns_list_when_fixture_present(self, tmp_path: Path) -> None:
         # get_option_chain generates the path:
         #   option_chain/{instrument}_{expiry}.json
         # where pipe and spaces are replaced with underscores.
@@ -140,17 +140,17 @@ class TestGetOptionChain:
         chain_dir = tmp_path / "option_chain"
         chain_dir.mkdir()
         fixture_file = chain_dir / "NSE_INDEX_Nifty_50_2026-04-07.json"
-        fixture_file.write_text('{"status": "success", "data": [{"strike_price": 24000}]}')
+        fixture_file.write_text('[{"strike_price": 24000, "call_options": {}, "put_options": {}}]')
         client = MockBrokerClient(fixtures_dir=tmp_path)
         result = await client.get_option_chain("NSE_INDEX|Nifty 50", "2026-04-07")
-        assert isinstance(result, dict)
-        assert len(result) > 0
-        assert result["status"] == "success"
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert result[0]["strike_price"] == 24000
 
-    async def test_returns_empty_dict_without_fixtures_dir(self) -> None:
+    async def test_returns_empty_list_without_fixtures_dir(self) -> None:
         client = MockBrokerClient(fixtures_dir=None)
         result = await client.get_option_chain("NSE_INDEX|Nifty 50", "2026-04-07")
-        assert result == {}
+        assert result == []
 
 
 # ---------------------------------------------------------------------------
