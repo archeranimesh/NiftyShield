@@ -26,6 +26,7 @@ STRATEGY_CSP = "paper_csp_nifty_v1"
 STRATEGY_CC_OVERLAY = "paper_covered_call_v1"
 STRATEGY_PP_OVERLAY = "paper_protective_put_v1"
 STRATEGY_COLLAR_OVERLAY = "paper_collar_v1"
+STRATEGY_IC = "paper_ic_nifty_v1"
 
 # 3-Track Targeting Thresholds (Extracted from paper_3track_overlay.py)
 PP_OTM_MIN = 0.08

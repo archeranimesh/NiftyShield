@@ -87,6 +87,7 @@ class IronCondorV1:
     """
 
     strategy_name: str = "paper_ic_nifty_v1"
+    auto_execute: bool = False
 
     # ── PaperStrategy protocol ────────────────────────────────────────────────
 

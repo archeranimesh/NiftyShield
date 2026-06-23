@@ -540,3 +540,17 @@ def test_apply_action_roll_wing_empty_legs_to_open_raises() -> None:
     )
     with pytest.raises(ValueError, match="legs_to_open"):
         asyncio.run(strat.apply_action(positions, action))
+
+
+def test_auto_execute_is_false() -> None:
+    """IronCondorV1 must declare auto_execute=False (human-approval-only intent)."""
+    strat = IronCondorV1()
+    assert strat.auto_execute is False
+    assert strat.strategy_name == "paper_ic_nifty_v1"
+
+
+def test_strategy_ic_constant_matches_class() -> None:
+    """STRATEGY_IC constant must stay in sync with IronCondorV1.strategy_name."""
+    from src.paper.constants import STRATEGY_IC
+
+    assert STRATEGY_IC == IronCondorV1.strategy_name
