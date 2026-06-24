@@ -37,7 +37,8 @@ def ingest_vix_from_csv(csv_path: Path, out_dir: Path) -> int:
     if not csv_path.exists():
         raise ValueError(f"CSV file not found: {csv_path}")
 
-    df = pd.read_csv(csv_path)
+    df = pd.read_csv(csv_path, encoding="utf-8-sig")
+    df.columns = df.columns.str.strip()
     # NSE CSV date format: DD-Mon-YYYY (e.g. "01-Jan-2024")
     df["date"] = pd.to_datetime(df["Date"], format="%d-%b-%Y")
     df = df.rename(
