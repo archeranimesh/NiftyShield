@@ -95,12 +95,13 @@ def main() -> int:
         # Ensure logs directory exists
         log_dir = Path("logs")
         log_dir.mkdir(exist_ok=True)
+        log_path = log_dir / "monitor_daemon.log"
         err_log_path = log_dir / "monitor_daemon.err"
         try:
-            with open(err_log_path, "a") as err_file:
+            with open(log_path, "a") as log_file, open(err_log_path, "a") as err_file:
                 subprocess.Popen(
                     cmd,
-                    stdout=subprocess.DEVNULL,
+                    stdout=log_file,
                     stderr=err_file,
                     close_fds=True,
                     start_new_session=True,
