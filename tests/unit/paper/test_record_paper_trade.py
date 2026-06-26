@@ -27,6 +27,11 @@ import scripts.record.record_paper_trade as cli_module
 from src.paper.store import PaperStore
 from src.risk.models import PortfolioDelta
 
+# Patch target for live VIX API calls — used in tests whose trade_date defaults
+# to today (no --date flag). Without this, fetch_vix_latest() succeeds in dev
+# environments (real token set), returns a low IVR, and the R3 gate exits(1).
+_PATCH_VIX = "scripts.record.record_paper_trade.fetch_vix_latest"
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 _STRATEGY = "paper_csp_nifty_v1"
@@ -174,7 +179,8 @@ def test_dry_run_prints_fields(tmp_path: Path) -> None:
         assert store.get_trades(_STRATEGY) == []
 
 
-def test_defaults_produce_dry_run_with_csp_strategy(tmp_path: Path) -> None:
+@patch(_PATCH_VIX, return_value=None)
+def test_defaults_produce_dry_run_with_csp_strategy(_mock_vix, tmp_path: Path) -> None:
     """Only --key + --price → defaults to paper_csp_nifty_v1, short_put, SELL, dry-run."""
     db = tmp_path / "db.sqlite"
     code, out, err = _run(["--key", _KEY, "--price", _PRICE], db)
@@ -299,8 +305,9 @@ _FAKE_CHAIN = [
 ]
 
 
+@patch(_PATCH_VIX, return_value=None)
 @patch("scripts.record.record_paper_trade.UpstoxMarketClient")
-def test_chain_mode_dry_run_prints_table(mock_client_cls, tmp_path: Path) -> None:
+def test_chain_mode_dry_run_prints_table(mock_client_cls, _mock_vix, tmp_path: Path) -> None:
     """--expiry triggers chain fetch; table printed; no DB insert."""
     db = tmp_path / "db.sqlite"
     mock_client = mock_client_cls.return_value
@@ -316,8 +323,9 @@ def test_chain_mode_dry_run_prints_table(mock_client_cls, tmp_path: Path) -> Non
     mock_client.get_option_chain_sync.assert_called_once()
 
 
+@patch(_PATCH_VIX, return_value=None)
 @patch("scripts.record.record_paper_trade.UpstoxMarketClient")
-def test_chain_mode_resolves_key_and_price(mock_client_cls, tmp_path: Path) -> None:
+def test_chain_mode_resolves_key_and_price(mock_client_cls, _mock_vix, tmp_path: Path) -> None:
     """Resolved key + mid-price injected; correct instrument recorded."""
     db = tmp_path / "db.sqlite"
     mock_client = mock_client_cls.return_value
@@ -335,8 +343,9 @@ def test_chain_mode_resolves_key_and_price(mock_client_cls, tmp_path: Path) -> N
     assert trades[0].price == Decimal("149.12")
 
 
+@patch(_PATCH_VIX, return_value=None)
 @patch("scripts.record.record_paper_trade.UpstoxMarketClient")
-def test_chain_mode_index_2_picks_second_rank(mock_client_cls, tmp_path: Path) -> None:
+def test_chain_mode_index_2_picks_second_rank(mock_client_cls, _mock_vix, tmp_path: Path) -> None:
     """--index 2 selects second-ranked row."""
     db = tmp_path / "db.sqlite"
     mock_client = mock_client_cls.return_value
