@@ -343,9 +343,9 @@ class IronCondorV1:
                             action_emitted = True
                 events = filtered_events
             else:
-                # If auto-execute is enabled but no action was selected (e.g. no ACTION events
-                # present, or none matched the priority rules), strip all ACTION events to prevent
-                # them from entering the manual Telegram approval flow.
+                # If auto-execute is enabled but no action was selected (because no ACTION
+                # events were present), strip any residual ACTION events as a safety fallback
+                # to prevent them from entering the manual Telegram approval flow.
                 events = [e for e in events if e.severity != "ACTION"]
 
         return events
