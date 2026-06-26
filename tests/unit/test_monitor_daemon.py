@@ -110,3 +110,127 @@ async def test_monitor_daemon_shutdown_duplicate_ignored() -> None:
         await daemon.shutdown()
         # Verify duplicate shutdown was ignored and did not call exit
         mock_exit.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_four_ic_strategies_registered() -> None:
+    # Setup mocks for main dependencies
+    mock_store = MagicMock()
+    mock_gateway = MagicMock()
+    mock_gateway.start_polling = AsyncMock()
+    mock_broker = MagicMock()
+
+    mock_monitor = MagicMock()
+    mock_monitor.run = AsyncMock()
+
+    mock_ic_cls = MagicMock()
+    instances = []
+
+    def create_ic(*args, **kwargs):
+        config = kwargs.get("config")
+        inst = MagicMock()
+        inst.strategy_name = config.strategy_name if config else "IC"
+        instances.append(inst)
+        return inst
+
+    mock_ic_cls.side_effect = create_ic
+
+    from src.config import settings
+
+    with (
+        patch("scripts.monitor_daemon.PaperStore", return_value=mock_store),
+        patch("scripts.monitor_daemon.TelegramGateway", return_value=mock_gateway),
+        patch("scripts.monitor_daemon.create_client", return_value=mock_broker),
+        patch("scripts.monitor_daemon.StrategyMonitor", return_value=mock_monitor),
+        patch("scripts.monitor_daemon.IronCondorV1", mock_ic_cls),
+        patch("scripts.monitor_daemon.CSPNiftyV1", None),
+        patch("scripts.monitor_daemon.NiftyTrackComparisonV1", None),
+        patch("scripts.monitor_daemon.MONITOR_OVERLAYS", False),
+        patch("sys.argv", ["monitor_daemon.py"]),
+        patch("asyncio.gather", side_effect=asyncio.CancelledError),
+        patch.object(settings, "telegram_bot_token", "fake_token"),
+        patch.object(settings, "telegram_chat_id", "fake_chat_id"),
+    ):
+        await daemon.main()
+
+        # Assert four IronCondorV1 instances were successfully registered
+        assert len(instances) == 4
+        registered_names = [inst.strategy_name for inst in instances]
+        assert "paper_ic_nifty_v1_weekly" in registered_names
+        assert "paper_ic_nifty_v1_monthly" in registered_names
+        assert "paper_ic_nifty_v1_leaps" in registered_names
+        assert "paper_ic_nifty_v1_yearly" in registered_names
+
+        # Assert daemon's strategies_ref has all 4 strategy names
+        assert len(daemon.strategies_ref) == 4
+        assert "paper_ic_nifty_v1_weekly" in daemon.strategies_ref
+        assert "paper_ic_nifty_v1_monthly" in daemon.strategies_ref
+        assert "paper_ic_nifty_v1_leaps" in daemon.strategies_ref
+        assert "paper_ic_nifty_v1_yearly" in daemon.strategies_ref
+
+
+@pytest.mark.asyncio
+async def test_one_ic_failure_does_not_block_others() -> None:
+    # Setup mocks for main dependencies
+    mock_store = MagicMock()
+    mock_gateway = MagicMock()
+    mock_gateway.start_polling = AsyncMock()
+    mock_broker = MagicMock()
+
+    mock_monitor = MagicMock()
+    mock_monitor.run = AsyncMock()
+
+    mock_ic_cls = MagicMock()
+    instances = []
+
+    def create_ic(*args, **kwargs):
+        config = kwargs.get("config")
+        if config and config.expiry_type == "weekly":
+            raise Exception("Weekly initialization failed")
+        inst = MagicMock()
+        inst.strategy_name = config.strategy_name if config else "IC"
+        instances.append(inst)
+        return inst
+
+    mock_ic_cls.side_effect = create_ic
+
+    from src.config import settings
+
+    with (
+        patch("scripts.monitor_daemon.PaperStore", return_value=mock_store),
+        patch("scripts.monitor_daemon.TelegramGateway", return_value=mock_gateway),
+        patch("scripts.monitor_daemon.create_client", return_value=mock_broker),
+        patch("scripts.monitor_daemon.StrategyMonitor", return_value=mock_monitor),
+        patch("scripts.monitor_daemon.IronCondorV1", mock_ic_cls),
+        patch("scripts.monitor_daemon.CSPNiftyV1", None),
+        patch("scripts.monitor_daemon.NiftyTrackComparisonV1", None),
+        patch("scripts.monitor_daemon.MONITOR_OVERLAYS", False),
+        patch("sys.argv", ["monitor_daemon.py"]),
+        patch("asyncio.gather", side_effect=asyncio.CancelledError),
+        patch.object(settings, "telegram_bot_token", "fake_token"),
+        patch.object(settings, "telegram_chat_id", "fake_chat_id"),
+        patch("scripts.monitor_daemon.logger.error") as mock_log_error,
+    ):
+        await daemon.main()
+
+        # Assert three IronCondorV1 instances were successfully registered (excluding weekly)
+        assert len(instances) == 3
+        registered_names = [inst.strategy_name for inst in instances]
+        assert "paper_ic_nifty_v1_weekly" not in registered_names
+        assert "paper_ic_nifty_v1_monthly" in registered_names
+        assert "paper_ic_nifty_v1_leaps" in registered_names
+        assert "paper_ic_nifty_v1_yearly" in registered_names
+
+        # Assert daemon's strategies_ref has 3 strategy names
+        assert len(daemon.strategies_ref) == 3
+        assert "paper_ic_nifty_v1_weekly" not in daemon.strategies_ref
+        assert "paper_ic_nifty_v1_monthly" in daemon.strategies_ref
+        assert "paper_ic_nifty_v1_leaps" in daemon.strategies_ref
+        assert "paper_ic_nifty_v1_yearly" in daemon.strategies_ref
+
+        # Assert logger.error was called with weekly initialization failure details
+        mock_log_error.assert_called_with(
+            "Failed to initialize IronCondorV1",
+            expiry_type="weekly",
+            error="Weekly initialization failed",
+        )

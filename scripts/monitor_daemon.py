@@ -254,20 +254,32 @@ async def main() -> int:
         logger.warning("CSPNiftyV1 module not found; skipping registration")
 
     if IronCondorV1 is not None:
-        try:
-            strategies.append(
-                IronCondorV1(
-                    broker=broker,
-                    store=store,
-                    notifier=gateway,
+        from src.strategy.ic_expiry_config import CONFIGS as IC_CONFIGS
+
+        for expiry_type, ic_config in IC_CONFIGS.items():
+            try:
+                strategies.append(
+                    IronCondorV1(
+                        broker=broker,
+                        store=store,
+                        notifier=gateway,
+                        config=ic_config,
+                    )
                 )
-            )
-            logger.info("Registered IronCondorV1 strategy")
-        except Exception as e:
-            # Intentional: Safe strategy init guard
-            logger.error("Failed to initialize IronCondorV1", error=str(e))
+                logger.info(
+                    "Registered IronCondorV1",
+                    expiry_type=expiry_type,
+                    strategy_name=ic_config.strategy_name,
+                )
+            except Exception as e:
+                # Intentional: Safe strategy init guard
+                logger.error(
+                    "Failed to initialize IronCondorV1",
+                    expiry_type=expiry_type,
+                    error=str(e),
+                )
     else:
-        logger.warning("IronCondorV1 module not found; skipping registration")
+        logger.warning("IronCondorV1 module not found; skipping IC registration")
 
     if NiftyTrackComparisonV1 is not None:
         try:
