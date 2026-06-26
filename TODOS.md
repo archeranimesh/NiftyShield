@@ -326,3 +326,5 @@ Full log: [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md)
 | 2026-06-26 | ic-full IC-F1 fix — stub fetch_vix_latest in 4 record_paper_trade tests that default trade_date to today; R3 gate no longer fires in dev env — 1d4b0cb |
 | 2026-06-26 | ic-full IC-F2 — ICExpiryConfig frozen dataclass + CONFIGS presets (weekly/monthly/leaps/yearly) + STRATEGY_IC_* constants + 6 structural invariant tests — 5921426 |
 | 2026-06-26 | ic-full IC-F3 — parameterise IronCondorV1; auto_execute=True; action priority — 6296328 |
+| 2026-06-26 | ic-full IC-F4 — weekly Tuesday DTE≤14 bucket in get_expiry_candidates; docstring updated; 6 new tests — 1dc9d3c |
+| 2026-06-26 | ic-full IC-F5 — register all four IronCondorV1 strategy configurations in monitor daemon; 2 registration tests — bf093eb |

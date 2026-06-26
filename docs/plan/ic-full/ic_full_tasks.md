@@ -43,11 +43,11 @@ IC-F8 (Claude)    ← scheduled crons    → final story; requires IC-F6 committ
 
 ## Phase F4 — Weekly Expiry Bucket
 
-- [ ] **IC-F4** `[Claude]` — `src/instruments/lookup.py`: `"weekly"` DTE≤14 Tuesday bucket in `get_expiry_candidates()`; docstring updated + 6 tests
+- [x] **IC-F4** `[Claude]` — `src/instruments/lookup.py`: `"weekly"` DTE≤14 Tuesday bucket in `get_expiry_candidates()`; docstring updated + 6 tests | SHA: 1dc9d3c
 
 ## Phase F5 — Daemon Registration
 
-- [ ] **IC-F5** `[Antigravity]` — `scripts/monitor_daemon.py`: replace single IC registration with loop over all four `CONFIGS` presets; per-instance guard preserved + 2 tests
+- [x] **IC-F5** `[Antigravity]` — `scripts/monitor_daemon.py`: replace single IC registration with loop over all four `CONFIGS` presets; per-instance guard preserved + 2 tests | SHA: bf093eb
 
 ## Phase F6 — Entry Script
 
