@@ -23,7 +23,7 @@ from src.paper.models import PaperPosition
 from src.strategy.ic_nifty_v1 import IronCondorV1
 from src.strategy.protocol import ApprovedAction
 
-_STRATEGY = "paper_ic_nifty_v1"
+_STRATEGY = "paper_ic_nifty_v1_monthly"
 _OTHER_STRATEGY = "paper_other_v1"
 
 # ── Default instrument keys ───────────────────────────────────────────────────
@@ -233,6 +233,7 @@ def test_loss_stop_fires_when_mark_at_200_pct() -> None:
 def test_delta_stop_fires_on_short_call_breach() -> None:
     """Short call |delta| = 0.36 ≥ 0.35 → DELTA_STOP ACTION."""
     strat = IronCondorV1()
+    strat.auto_execute = False
     chain = _make_chain(short_call_delta="0.36")
     positions = _make_ic_positions()
     events = asyncio.run(strat.check_signals(chain, positions))
@@ -246,6 +247,7 @@ def test_delta_stop_fires_on_short_call_breach() -> None:
 def test_delta_stop_fires_on_short_put_breach() -> None:
     """Short put |delta| = 0.36 ≥ 0.35 → DELTA_STOP ACTION (either leg)."""
     strat = IronCondorV1()
+    strat.auto_execute = False
     chain = _make_chain(short_put_delta="-0.36")
     positions = _make_ic_positions()
     events = asyncio.run(strat.check_signals(chain, positions))
@@ -408,6 +410,7 @@ def _make_chain_with_roll_targets(
 def test_roll_wing_fires_on_short_call_breach_with_target() -> None:
     """Short call |delta|=0.36 + CE target at 26000 → ROLL_WING ACTION fires alongside DELTA_STOP."""
     strat = IronCondorV1()
+    strat.auto_execute = False
     chain = _make_chain_with_roll_targets(short_call_delta="0.36")
     positions = _make_ic_positions()
     events = asyncio.run(strat.check_signals(chain, positions))
@@ -424,6 +427,7 @@ def test_roll_wing_fires_on_short_call_breach_with_target() -> None:
 def test_roll_wing_fires_on_short_put_breach_with_target() -> None:
     """Short put |delta|=0.37 + PE target at 21000 → ROLL_WING ACTION fires alongside DELTA_STOP."""
     strat = IronCondorV1()
+    strat.auto_execute = False
     chain = _make_chain_with_roll_targets(short_put_delta="-0.37")
     positions = _make_ic_positions()
     events = asyncio.run(strat.check_signals(chain, positions))
@@ -439,6 +443,7 @@ def test_roll_wing_fires_on_short_put_breach_with_target() -> None:
 def test_roll_wing_not_fired_when_no_ce_target_in_range() -> None:
     """Short call |delta|=0.36 but no CE in 0.10–0.20 range → only DELTA_STOP fires."""
     strat = IronCondorV1()
+    strat.auto_execute = False
     chain = _make_chain_with_roll_targets(
         short_call_delta="0.36",
         include_ce_target=False,  # no farther OTM CE available
@@ -459,6 +464,7 @@ def test_roll_wing_blocked_by_directional_guard() -> None:
     rejects it as a backward roll.
     """
     strat = IronCondorV1()
+    strat.auto_execute = False
     # Build chain: short call at 25000 (threatened), CE roll candidate at 24500
     # (below current strike — must be blocked by directional guard).
     below_strike_chain = OptionChain(
@@ -542,18 +548,110 @@ def test_apply_action_roll_wing_empty_legs_to_open_raises() -> None:
         asyncio.run(strat.apply_action(positions, action))
 
 
-def test_auto_execute_is_false() -> None:
-    """IronCondorV1 must declare auto_execute=False (human-approval-only intent)."""
+def test_auto_execute_is_true() -> None:
+    """IronCondorV1 must declare auto_execute=True (exits are rule-based)."""
     strat = IronCondorV1()
-    assert strat.auto_execute is False
-    assert strat.strategy_name == "paper_ic_nifty_v1"
+    assert strat.auto_execute is True
 
 
 def test_strategy_ic_constant_matches_class() -> None:
-    """STRATEGY_IC constant must stay in sync with IronCondorV1.strategy_name."""
-    from src.paper.constants import STRATEGY_IC
+    """STRATEGY_IC_MONTHLY constant must stay in sync with IronCondorV1().strategy_name."""
+    from src.paper.constants import STRATEGY_IC_MONTHLY
 
-    assert STRATEGY_IC == IronCondorV1.strategy_name
+    assert STRATEGY_IC_MONTHLY == IronCondorV1().strategy_name
+
+
+def test_strategy_name_from_config() -> None:
+    """Four presets must produce four distinct strategy_name values."""
+    from src.strategy.ic_expiry_config import CONFIGS
+
+    for config in CONFIGS.values():
+        strat = IronCondorV1(config=config)
+        assert strat.strategy_name == config.strategy_name
+
+
+def test_auto_select_loss_stop_wins() -> None:
+    """LOSS_STOP + PROFIT_TARGET both in events → CLOSE_FULL from LOSS_STOP priority."""
+    from src.strategy.protocol import SignalEvent
+
+    strat = IronCondorV1()
+    events = [
+        SignalEvent(event_type="PROFIT_TARGET", severity="ACTION", description="", payload={}),
+        SignalEvent(event_type="LOSS_STOP", severity="ACTION", description="", payload={}),
+    ]
+    action = strat._auto_select_action(events)
+    assert action is not None
+    assert action.action_type == "CLOSE_FULL"
+    assert set(action.legs_to_close) == {
+        "short_call",
+        "short_put",
+        "long_call_hedge",
+        "long_put_hedge",
+    }
+
+
+def test_auto_select_roll_over_delta_stop() -> None:
+    """ROLL_WING + DELTA_STOP both in events → ROLL_WING action returned."""
+    from src.strategy.protocol import SignalEvent
+
+    strat = IronCondorV1()
+    events = [
+        SignalEvent(
+            event_type="DELTA_STOP",
+            severity="ACTION",
+            description="",
+            payload={"leg_role": "short_call"},
+        ),
+        SignalEvent(
+            event_type="ROLL_WING",
+            severity="ACTION",
+            description="",
+            payload={
+                "leg_role": "short_call",
+                "suggested_instrument_key": "NSE_FO|NIFTY26000CE",
+                "suggested_delta": "0.15",
+            },
+        ),
+    ]
+    action = strat._auto_select_action(events)
+    assert action is not None
+    assert action.action_type == "ROLL_WING"
+    assert action.legs_to_close == ["short_call"]
+    assert len(action.legs_to_open) == 1
+    assert action.legs_to_open[0].instrument_key == "NSE_FO|NIFTY26000CE"
+    assert action.legs_to_open[0].leg_role == "short_call"
+
+
+def test_auto_select_delta_stop_call_spread() -> None:
+    """DELTA_STOP on short_call only → CLOSE_CALL_SPREAD."""
+    from src.strategy.protocol import SignalEvent
+
+    strat = IronCondorV1()
+    events = [
+        SignalEvent(
+            event_type="DELTA_STOP",
+            severity="ACTION",
+            description="",
+            payload={"leg_role": "short_call"},
+        )
+    ]
+    action = strat._auto_select_action(events)
+    assert action is not None
+    assert action.action_type == "CLOSE_CALL_SPREAD"
+    assert set(action.legs_to_close) == {"short_call", "long_call_hedge"}
+
+
+def test_auto_select_none_when_no_action() -> None:
+    """Only WARN/INFO events → returns None."""
+    from src.strategy.protocol import SignalEvent
+
+    strat = IronCondorV1()
+    events = [
+        SignalEvent(event_type="DELTA_WARN", severity="WARN", description="", payload={}),
+        SignalEvent(event_type="DTE_WARN", severity="INFO", description="", payload={}),
+    ]
+    action = strat._auto_select_action(events)
+    assert action is None
 
 
 # ── IC-F1: IVR wiring tests ───────────────────────────────────────────────────

@@ -26,7 +26,7 @@ from __future__ import annotations
 import re
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import structlog
 
@@ -35,6 +35,12 @@ from src.models.options import OptionChain, OptionLeg
 from src.paper.models import PaperPosition
 from src.strategy import roll_utils
 from src.strategy.protocol import ApprovedAction, LegSpec, SignalEvent
+
+if TYPE_CHECKING:
+    from src.client.protocol import BrokerClient
+    from src.notifications.telegram_gateway import TelegramGateway
+    from src.paper.store import PaperStore
+    from src.strategy.ic_expiry_config import ICExpiryConfig
 
 log = structlog.get_logger(__name__)
 
@@ -49,15 +55,6 @@ _EXPIRY_RE = re.compile(
 # Matches keys like "NSE_FO|NIFTY23000PE" or "NSE_FO|NIFTY23000CE"
 _STRIKE_RE = re.compile(r"NIFTY(\d+)(PE|CE)", re.IGNORECASE)
 
-# ── Thresholds ────────────────────────────────────────────────────────────────
-
-_PROFIT_TARGET_PCT = Decimal("0.50")  # combined mark ≤ 50% of entry credit
-_LOSS_STOP_PCT = Decimal("2.0")  # combined mark ≥ 2.0× entry credit
-_DELTA_STOP = Decimal("0.35")  # |delta| ≥ 0.35 on either short leg
-_DELTA_WARN = Decimal("0.25")  # |delta| ≥ 0.25 on either short leg
-_TIME_STOP_DTE = 14  # DTE ≤ 14
-_DTE_WARN = 21  # DTE ≤ 21
-
 # ── Leg role sets ─────────────────────────────────────────────────────────────
 
 _SHORT_ROLES = {"short_call", "short_put"}
@@ -68,12 +65,6 @@ _ALL_ROLES = _SHORT_ROLES | _LONG_ROLES
 # ROLL_WING added in PA1.2: per-wing roll to farther OTM strike when threatened.
 
 _ALLOWED_ACTIONS = {"CLOSE_FULL", "CLOSE_CALL_SPREAD", "CLOSE_PUT_SPREAD", "ROLL_WING"}
-
-# ── Roll utility constants ────────────────────────────────────────────────────
-
-_ROLL_WING_DELTA_LO = Decimal("0.10")
-_ROLL_WING_DELTA_HI = Decimal("0.20")
-_ROLL_WING_TARGET_DELTA = Decimal("0.15")
 
 
 class IronCondorV1:
@@ -86,8 +77,26 @@ class IronCondorV1:
     No adjustments are permitted in v1 — council mandate (2026-05-02).
     """
 
-    strategy_name: str = "paper_ic_nifty_v1"
-    auto_execute: bool = False
+    auto_execute: bool = True
+
+    def __init__(
+        self,
+        broker: BrokerClient | None = None,
+        store: PaperStore | None = None,
+        notifier: TelegramGateway | None = None,
+        config: ICExpiryConfig | None = None,
+    ) -> None:
+        from src.strategy.ic_expiry_config import CONFIGS
+
+        self._config = config if config is not None else CONFIGS["monthly"]
+        self._broker = broker
+        self._store = store
+        self._notifier = notifier
+
+    @property
+    def strategy_name(self) -> str:
+        """DB discriminator derived from injected config."""
+        return self._config.strategy_name
 
     # ── PaperStrategy protocol ────────────────────────────────────────────────
 
@@ -123,12 +132,12 @@ class IronCondorV1:
         dte = (expiry - market_today()).days if expiry is not None else None
 
         if dte is not None:
-            if dte <= _TIME_STOP_DTE:
+            if dte <= self._config.time_stop_dte:
                 events.append(
                     SignalEvent(
                         event_type="TIME_STOP",
                         severity="ACTION",
-                        description=f"DTE {dte} ≤ {_TIME_STOP_DTE} — time stop triggered",
+                        description=f"DTE {dte} ≤ {self._config.time_stop_dte} — time stop triggered",
                         payload={
                             "dte": dte,
                             "valid_actions": [
@@ -139,12 +148,12 @@ class IronCondorV1:
                         },
                     )
                 )
-            if dte <= _DTE_WARN:
+            if dte <= self._config.dte_warn:
                 events.append(
                     SignalEvent(
                         event_type="DTE_WARN",
                         severity="INFO",
-                        description=f"DTE {dte} ≤ {_DTE_WARN} — approaching expiry",
+                        description=f"DTE {dte} ≤ {self._config.dte_warn} — approaching expiry",
                         payload={"dte": dte},
                     )
                 )
@@ -158,13 +167,13 @@ class IronCondorV1:
             if opt_leg.delta is None:
                 continue  # Greek missing — cannot evaluate delta signals
             abs_delta = abs(opt_leg.delta)
-            if abs_delta >= _DELTA_STOP:
+            if abs_delta >= self._config.delta_stop:
                 events.append(
                     SignalEvent(
                         event_type="DELTA_STOP",
                         severity="ACTION",
                         description=(
-                            f"{pos.leg_role} |delta| {abs_delta} ≥ {_DELTA_STOP}"
+                            f"{pos.leg_role} |delta| {abs_delta} ≥ {self._config.delta_stop}"
                             " — delta stop triggered"
                         ),
                         payload={
@@ -221,13 +230,13 @@ class IronCondorV1:
                             },
                         )
                     )
-            if abs_delta >= _DELTA_WARN:
+            if abs_delta >= self._config.delta_warn:
                 events.append(
                     SignalEvent(
                         event_type="DELTA_WARN",
                         severity="WARN",
                         description=(
-                            f"{pos.leg_role} |delta| {abs_delta} ≥ {_DELTA_WARN} — delta warning"
+                            f"{pos.leg_role} |delta| {abs_delta} ≥ {self._config.delta_warn} — delta warning"
                         ),
                         payload={
                             "leg_role": pos.leg_role,
@@ -240,14 +249,14 @@ class IronCondorV1:
         combined_mark, entry_credit = self._compute_combined_pnl(market, ic_positions)
         if combined_mark is not None and entry_credit > Decimal("0"):
             pct = combined_mark / entry_credit
-            if pct <= _PROFIT_TARGET_PCT:
+            if pct <= self._config.profit_target_pct:
                 events.append(
                     SignalEvent(
                         event_type="PROFIT_TARGET",
                         severity="ACTION",
                         description=(
                             f"Combined mark {combined_mark} ≤ "
-                            f"{int(_PROFIT_TARGET_PCT * 100)}% of entry credit "
+                            f"{int(self._config.profit_target_pct * 100)}% of entry credit "
                             f"{entry_credit}"
                         ),
                         payload={
@@ -262,14 +271,14 @@ class IronCondorV1:
                         },
                     )
                 )
-            if pct >= _LOSS_STOP_PCT:
+            if pct >= self._config.loss_stop_pct:
                 events.append(
                     SignalEvent(
                         event_type="LOSS_STOP",
                         severity="ACTION",
                         description=(
                             f"Combined mark {combined_mark} ≥ "
-                            f"{int(_LOSS_STOP_PCT * 100)}% of entry credit "
+                            f"{int(self._config.loss_stop_pct * 100)}% of entry credit "
                             f"{entry_credit}"
                         ),
                         payload={
@@ -284,6 +293,58 @@ class IronCondorV1:
                         },
                     )
                 )
+
+        # Wire _auto_select_action logic
+        if self.auto_execute:
+            selected_action = self._auto_select_action(events)
+            if selected_action is not None:
+                filtered_events: list[SignalEvent] = []
+                action_emitted = False
+                for e in events:
+                    if e.severity != "ACTION":
+                        filtered_events.append(e)
+                    else:
+                        is_match = False
+                        if selected_action.action_type == "CLOSE_FULL" and e.event_type in (
+                            "LOSS_STOP",
+                            "TIME_STOP",
+                            "PROFIT_TARGET",
+                        ):
+                            is_match = True
+                        elif (
+                            selected_action.action_type == "ROLL_WING"
+                            and e.event_type == "ROLL_WING"
+                        ):
+                            is_match = True
+                        elif (
+                            selected_action.action_type in ("CLOSE_CALL_SPREAD", "CLOSE_PUT_SPREAD")
+                            and e.event_type == "DELTA_STOP"
+                        ):
+                            leg_role = e.payload.get("leg_role")
+                            if (
+                                selected_action.action_type == "CLOSE_CALL_SPREAD"
+                                and leg_role == "short_call"
+                            ):
+                                is_match = True
+                            elif (
+                                selected_action.action_type == "CLOSE_PUT_SPREAD"
+                                and leg_role == "short_put"
+                            ):
+                                is_match = True
+
+                        if is_match and not action_emitted:
+                            from dataclasses import replace
+
+                            new_payload = {
+                                **e.payload,
+                                "auto_execute": True,
+                                "auto_action": selected_action.action_type,
+                            }
+                            filtered_events.append(replace(e, payload=new_payload))
+                            action_emitted = True
+                events = filtered_events
+            else:
+                events = [e for e in events if e.severity != "ACTION"]
 
         return events
 
@@ -303,7 +364,7 @@ class IronCondorV1:
         if vix_dir.exists():
             try:
                 vix_series = load_vix_series(vix_dir)
-                vix_today = fetch_vix_latest(vix_dir)
+                vix_today = fetch_vix_latest()
                 if vix_today is not None:
                     ivr = compute_ivr(vix_today, vix_series)
                     ivr_str = f"{ivr:.2f}" if ivr is not None else "unavailable"
@@ -384,14 +445,24 @@ class IronCondorV1:
                 f"IronCondorV1 does not permit {action.action_type!r} — "
                 f"allowed: {sorted(_ALLOWED_ACTIONS)}."
             )
-        closed: set[str] = set(action.legs_to_close)
+
+        # Override legs to close if called via auto-execute (where legs_to_close is not fully populated)
+        closed = set(action.legs_to_close)
+        if action.rationale == "auto-execute":
+            if action.action_type == "CLOSE_FULL":
+                closed = _SHORT_ROLES | _LONG_ROLES
+            elif action.action_type == "CLOSE_CALL_SPREAD":
+                closed = {"short_call", "long_call_hedge"}
+            elif action.action_type == "CLOSE_PUT_SPREAD":
+                closed = {"short_put", "long_put_hedge"}
+
         log.info(
             "ic_nifty_v1.apply_action",
             action_type=action.action_type,
             legs_to_close=list(closed),
         )
         if action.action_type == "ROLL_WING":
-            if not action.legs_to_open:
+            if not action.legs_to_open and action.rationale != "auto-execute":
                 raise ValueError("ROLL_WING action requires at least one leg in legs_to_open")
             # Note: legs_to_open is intentionally not consumed here.
             # PaperExecutor (backbone) handles the new-leg DB write.
@@ -399,6 +470,93 @@ class IronCondorV1:
         return [p for p in positions if p.leg_role not in closed]
 
     # ── Private helpers ───────────────────────────────────────────────────────
+
+    def _auto_select_action(self, events: list[SignalEvent]) -> ApprovedAction | None:
+        """Select one action from a list of fired signals using priority rules.
+
+        Priority (highest first):
+          1. LOSS_STOP   → CLOSE_FULL
+          2. TIME_STOP   → CLOSE_FULL
+          3. PROFIT_TARGET → CLOSE_FULL
+          4. ROLL_WING   → ROLL_WING (use suggested_instrument_key from payload)
+          5. DELTA_STOP  → CLOSE_CALL_SPREAD or CLOSE_PUT_SPREAD (from leg_role)
+
+        Returns None when no ACTION-severity events are present.
+
+        Args:
+            events: All SignalEvents returned by check_signals for this tick.
+
+        Returns:
+            Single ApprovedAction to execute, or None.
+        """
+        action_events = [e for e in events if e.severity == "ACTION"]
+        if not action_events:
+            return None
+
+        types = {e.event_type for e in action_events}
+
+        if "LOSS_STOP" in types:
+            return ApprovedAction(
+                action_type="CLOSE_FULL",
+                legs_to_close=list(_SHORT_ROLES | _LONG_ROLES),
+                legs_to_open=[],
+                rationale="auto-execute",
+                council_rank=1,
+            )
+
+        if "TIME_STOP" in types:
+            return ApprovedAction(
+                action_type="CLOSE_FULL",
+                legs_to_close=list(_SHORT_ROLES | _LONG_ROLES),
+                legs_to_open=[],
+                rationale="auto-execute",
+                council_rank=1,
+            )
+
+        if "PROFIT_TARGET" in types:
+            return ApprovedAction(
+                action_type="CLOSE_FULL",
+                legs_to_close=list(_SHORT_ROLES | _LONG_ROLES),
+                legs_to_open=[],
+                rationale="auto-execute",
+                council_rank=1,
+            )
+
+        roll_event = next((e for e in action_events if e.event_type == "ROLL_WING"), None)
+        if roll_event is not None:
+            new_leg = LegSpec(
+                instrument_key=roll_event.payload["suggested_instrument_key"],
+                action="SELL",
+                quantity=1,
+                leg_role=roll_event.payload["leg_role"],
+                notes=f"auto_roll delta={roll_event.payload['suggested_delta']}",
+            )
+            return ApprovedAction(
+                action_type="ROLL_WING",
+                legs_to_close=[roll_event.payload["leg_role"]],
+                legs_to_open=[new_leg],
+                rationale="auto-execute",
+                council_rank=1,
+            )
+
+        delta_event = next((e for e in action_events if e.event_type == "DELTA_STOP"), None)
+        if delta_event is not None:
+            leg_role = delta_event.payload["leg_role"]
+            action_type = "CLOSE_CALL_SPREAD" if leg_role == "short_call" else "CLOSE_PUT_SPREAD"
+            spread_roles = (
+                {"short_call", "long_call_hedge"}
+                if leg_role == "short_call"
+                else {"short_put", "long_put_hedge"}
+            )
+            return ApprovedAction(
+                action_type=action_type,
+                legs_to_close=list(spread_roles),
+                legs_to_open=[],
+                rationale="auto-execute",
+                council_rank=1,
+            )
+
+        return None
 
     def _select_wing_roll_target(
         self,
@@ -427,8 +585,8 @@ class IronCondorV1:
         candidate = roll_utils.find_strike_by_delta(
             market,
             option_type,
-            (_ROLL_WING_DELTA_LO, _ROLL_WING_DELTA_HI),
-            _ROLL_WING_TARGET_DELTA,
+            (self._config.roll_wing_delta_lo, self._config.roll_wing_delta_hi),
+            self._config.roll_wing_target_delta,
         )
         if candidate is None:
             return None
