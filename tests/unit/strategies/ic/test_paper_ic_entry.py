@@ -1,6 +1,7 @@
 # tests/unit/strategies/ic/test_paper_ic_entry.py
 """Unit tests for scripts/strategies/ic/paper_ic_entry.py."""
 
+# fmt: off
 from __future__ import annotations
 
 import sys
@@ -208,7 +209,7 @@ def mock_telegram():
     """Mock TelegramGateway."""
     with patch("scripts.strategies.ic.paper_ic_entry.TelegramGateway") as mock_cls:
         inst = MagicMock()
-        inst.send_text = AsyncMock()
+        inst.send_notification = AsyncMock()
         mock_cls.return_value = inst
         yield inst
 
@@ -266,7 +267,7 @@ async def test_weekly_standalone(
     assert called_cmds[1][10] == "BUY"
 
     # Verify Telegram notification was sent
-    assert mock_telegram.send_text.call_count == 1
+    assert mock_telegram.send_notification.call_count == 1
 
 
 @pytest.mark.asyncio
@@ -418,7 +419,9 @@ async def test_telegram_failure_non_fatal(
     mock_telegram,
 ):
     """Test that Telegram failures are logged and do not crash the script."""
-    mock_telegram.send_text.side_effect = Exception("Telegram Gateway error")
+    mock_telegram.send_notification.side_effect = Exception(
+        "Telegram Gateway error"
+    )
     test_args = [
         "paper_ic_entry.py",
         "--expiry-type",

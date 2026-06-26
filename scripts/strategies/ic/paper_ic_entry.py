@@ -7,6 +7,7 @@ portfolio delta gates, prints/executes record_paper_trade commands, and
 sends a Telegram notification.
 """
 
+# fmt: off
 from __future__ import annotations
 
 import argparse
@@ -517,8 +518,12 @@ async def run() -> None:
             f"(₹{net_credit * LOT_SIZE:,.0f} for {LOT_SIZE} units)"
         )
         try:
-            tg = TelegramGateway()
-            await tg.send_text(msg)
+            tg = TelegramGateway(
+                bot_token=settings.telegram_bot_token,
+                chat_id=settings.telegram_chat_id,
+                db_path=str(args.db_path),
+            )
+            await tg.send_notification(msg)
         except Exception as exc:
             # Intentional: telegram delivery failure is non-fatal; log warning and
             # proceed without failing the script.

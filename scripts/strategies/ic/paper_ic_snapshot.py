@@ -358,7 +358,11 @@ async def _run(args: argparse.Namespace) -> None:
     bot_token = settings.telegram_bot_token or ""
     chat_id = settings.telegram_chat_id or ""
     notifier = (
-        TelegramGateway(bot_token, chat_id)
+        TelegramGateway(
+            bot_token=bot_token,
+            chat_id=chat_id,
+            db_path=str(args.db_path),
+        )
         if (bot_token and chat_id)
         else None
     )
@@ -406,7 +410,7 @@ async def _run(args: argparse.Namespace) -> None:
         print(msg)
         if notifier and save:
             try:
-                await notifier.send(msg)
+                await notifier.send_notification(msg)
             except Exception as exc:  # Intentional: fail-safe delivery
                 logger.warning(
                     "ic_snapshot.telegram_failed", error=str(exc)
@@ -418,7 +422,7 @@ async def _run(args: argparse.Namespace) -> None:
         print(f"\n{r}\n")
         if notifier and save:
             try:
-                await notifier.send(r)
+                await notifier.send_notification(r)
             except Exception as exc:  # Intentional: fail-safe delivery
                 logger.warning(
                     "ic_snapshot.telegram_failed", error=str(exc)

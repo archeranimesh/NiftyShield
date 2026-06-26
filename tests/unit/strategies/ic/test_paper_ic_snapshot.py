@@ -45,7 +45,7 @@ def mock_telegram():
     target = "scripts.strategies.ic.paper_ic_snapshot.TelegramGateway"
     with patch(target) as mock_cls:
         inst = MagicMock()
-        inst.send = AsyncMock()
+        inst.send_notification = AsyncMock()
         mock_cls.return_value = inst
         yield inst
 
@@ -110,7 +110,7 @@ async def test_no_active_variants(
         bod_path="dummy.json",
     )
     await _run(args)
-    mock_telegram.send.assert_called_once_with(
+    mock_telegram.send_notification.assert_called_once_with(
         "IC EOD: no open positions across all expiry types."
     )
 
@@ -155,8 +155,8 @@ async def test_one_variant_active(
 
         await _run(args)
 
-    assert mock_telegram.send.call_count == 1
-    call_arg = mock_telegram.send.call_args[0][0]
+    assert mock_telegram.send_notification.call_count == 1
+    call_arg = mock_telegram.send_notification.call_args[0][0]
     assert "📋 IC EOD Audit — monthly" in call_arg
     assert "DTE: 0" in call_arg
     assert "Short Put" in call_arg
@@ -205,7 +205,7 @@ async def test_all_four_active(
 
         await _run(args)
 
-    assert mock_telegram.send.call_count == 4
+    assert mock_telegram.send_notification.call_count == 4
 
 
 @pytest.mark.asyncio
@@ -255,7 +255,7 @@ async def test_intraday_acted_event(
 
         await _run(args)
 
-    call_arg = mock_telegram.send.call_args[0][0]
+    call_arg = mock_telegram.send_notification.call_args[0][0]
     expected = "Intraday actions: PROFIT_TARGET → CLOSE_FULL executed at 11:42"
     assert expected in call_arg
 
@@ -310,7 +310,7 @@ async def test_unresolved_action_signal_at_eod(
 
         await _run(args)
 
-    call_arg = mock_telegram.send.call_args[0][0]
+    call_arg = mock_telegram.send_notification.call_args[0][0]
     assert "⚠️  Unresolved ACTION signals:" in call_arg
     expected = "TIME_STOP 🔴  DTE 14 — position should have been closed today"
     assert expected in call_arg
@@ -358,7 +358,7 @@ async def test_dte_warning_noted(
 
         await _run(args)
 
-    call_arg = mock_telegram.send.call_args[0][0]
+    call_arg = mock_telegram.send_notification.call_args[0][0]
     assert "Today's signals: DTE_WARN ℹ️" in call_arg
 
 
@@ -425,8 +425,10 @@ async def test_chain_fetch_fails_for_one_variant(
 
         await _run(args)
 
-    assert mock_telegram.send.call_count == 2
-    calls = [call[0][0] for call in mock_telegram.send.call_args_list]
+    assert mock_telegram.send_notification.call_count == 2
+    calls = [
+        call[0][0] for call in mock_telegram.send_notification.call_args_list
+    ]
     assert any("Error: Failed to fetch live option chain" in c for c in calls)
     assert any(
         "📋 IC EOD Audit — monthly" in c and "Error" not in c
@@ -496,8 +498,10 @@ async def test_check_signals_raises_for_one_variant(
 
         await _run(args)
 
-    assert mock_telegram.send.call_count == 2
-    calls = [call[0][0] for call in mock_telegram.send.call_args_list]
+    assert mock_telegram.send_notification.call_count == 2
+    calls = [
+        call[0][0] for call in mock_telegram.send_notification.call_args_list
+    ]
     assert any("Error: Signal evaluation failed" in c for c in calls)
     assert any(
         "📋 IC EOD Audit — monthly" in c and "Error" not in c
