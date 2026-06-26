@@ -51,11 +51,11 @@ IC-F8 (Claude)    ← scheduled crons    → final story; requires IC-F6 committ
 
 ## Phase F6 — Entry Script
 
-- [ ] **IC-F6** `[Antigravity]` — `scripts/strategies/ic/paper_ic_entry.py`: `--expiry-type [weekly|monthly|leaps|yearly]`; all gates (IVR, duplicate, DTE-window, liquidity, portfolio-delta); entry delta + wing width from config; Telegram entry notification + 12 tests
+- [x] **IC-F6** `[Antigravity]` — `scripts/strategies/ic/paper_ic_entry.py`: `--expiry-type [weekly|monthly|leaps|yearly]`; all gates (IVR, duplicate, DTE-window, liquidity, portfolio-delta); entry delta + wing width from config; Telegram entry notification + 12 tests | SHA: 261b906
 
 ## Phase F7 — EOD Snapshot
 
-- [ ] **IC-F7** `[Antigravity]` — `scripts/strategies/ic/paper_ic_snapshot.py`: EOD audit cron; iterates all four variants; informational Telegram report (auto-execute handles exits — snapshot is audit log only) + 8 tests
+- [x] **IC-F7** `[Antigravity]` — `scripts/strategies/ic/paper_ic_snapshot.py`: EOD audit cron; iterates all four variants; informational Telegram report (auto-execute handles exits — snapshot is audit log only) + 8 tests | SHA: 90bdd29
 
 ## Phase F8 — Scheduled Entry Crons
 

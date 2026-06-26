@@ -328,3 +328,5 @@ Full log: [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md)
 | 2026-06-26 | ic-full IC-F3 — parameterise IronCondorV1; auto_execute=True; action priority — 6296328 |
 | 2026-06-26 | ic-full IC-F4 — weekly Tuesday DTE≤14 bucket in get_expiry_candidates; docstring updated; 6 new tests — 1dc9d3c |
 | 2026-06-26 | ic-full IC-F5 — register all four IronCondorV1 strategy configurations in monitor daemon; 2 registration tests — bf093eb |
+| 2026-06-26 | ic-full IC-F6 — paper_ic_entry.py config-driven multi-expiry IC entry helper; 12 new tests — 261b906 |
+| 2026-06-26 | ic-full IC-F7 — paper_ic_snapshot.py EOD audit cron for all IC variants; 8 new tests — 90bdd29 |
