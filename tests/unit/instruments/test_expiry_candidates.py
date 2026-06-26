@@ -121,6 +121,87 @@ def test_expiry_candidates_no_network_mock_bod():
     assert len(candidates) == 1
     assert candidates[0] == ("monthly", "2026-05-28")
 
+def test_weekly_nearest_tuesday():
+    """Two Tuesdays and one non-Tuesday in DTE≤14; preference=["weekly"] picks the nearer Tuesday."""
+    # June 25, 2026 = Thursday
+    today = date(2026, 6, 25)
+    instruments = [
+        # Tuesday DTE 5 — nearest Tuesday
+        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": "2026-06-30"},
+        # Tuesday DTE 12
+        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": "2026-07-07"},
+        # Sunday DTE 3 — not Tuesday, must be ignored
+        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": "2026-06-28"},
+    ]
+    lookup = InstrumentLookup(instruments)
+    candidates = lookup.get_expiry_candidates("NIFTY", today, preference=["weekly"])
+    assert candidates == [("weekly", "2026-06-30")]
+
+
+def test_weekly_not_in_default_preference():
+    """Default preference ["monthly","quarterly","yearly"] does not include "weekly"."""
+    today = date(2026, 6, 25)
+    instruments = [
+        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": "2026-06-30"},
+    ]
+    lookup = InstrumentLookup(instruments)
+    candidates = lookup.get_expiry_candidates("NIFTY", today)
+    labels = [label for label, _ in candidates]
+    assert "weekly" not in labels
+
+
+def test_weekly_and_monthly_coexist():
+    """Tuesday at DTE≤14 and last-of-month at DTE 15–45 both returned when preference includes both."""
+    # June 10, 2026 = Wednesday
+    today = date(2026, 6, 10)
+    instruments = [
+        # June 16 = Tuesday, DTE 6 → weekly
+        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": "2026-06-16"},
+        # June 30 = Tuesday and last-of-month, DTE 20 → monthly (DTE > 14, not weekly)
+        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": "2026-06-30"},
+    ]
+    lookup = InstrumentLookup(instruments)
+    candidates = lookup.get_expiry_candidates("NIFTY", today, preference=["weekly", "monthly"])
+    assert candidates == [("weekly", "2026-06-16"), ("monthly", "2026-06-30")]
+
+
+def test_weekly_no_tuesday_in_window():
+    """Only non-Tuesday expiries at DTE≤14; preference=["weekly"] returns empty list."""
+    # June 25, 2026 = Thursday
+    today = date(2026, 6, 25)
+    instruments = [
+        # July 2 = Thursday, DTE 7 — not Tuesday
+        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": "2026-07-02"},
+    ]
+    lookup = InstrumentLookup(instruments)
+    candidates = lookup.get_expiry_candidates("NIFTY", today, preference=["weekly"])
+    assert candidates == []
+
+
+def test_weekly_boundary_inclusive_14():
+    """Tuesday at exactly DTE 14 is included in the weekly bucket."""
+    # June 16, 2026 = Tuesday; June 30 = Tuesday, DTE 14
+    today = date(2026, 6, 16)
+    instruments = [
+        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": "2026-06-30"},
+    ]
+    lookup = InstrumentLookup(instruments)
+    candidates = lookup.get_expiry_candidates("NIFTY", today, preference=["weekly"])
+    assert candidates == [("weekly", "2026-06-30")]
+
+
+def test_weekly_boundary_exclusive_15():
+    """Tuesday at DTE 15 is NOT in the weekly bucket (DTE > 14)."""
+    # June 15, 2026 = Monday; June 30 = Tuesday, DTE 15
+    today = date(2026, 6, 15)
+    instruments = [
+        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": "2026-06-30"},
+    ]
+    lookup = InstrumentLookup(instruments)
+    candidates = lookup.get_expiry_candidates("NIFTY", today, preference=["weekly"])
+    assert candidates == []
+
+
 def test_expiry_candidates_ignores_weeklies():
     """Verify that weekly expiries (not the last of the month) are ignored, choosing only monthly."""
     today = date(2026, 5, 10)

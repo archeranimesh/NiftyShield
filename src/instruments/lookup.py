@@ -282,11 +282,13 @@ class InstrumentLookup:
         """Return (label, expiry_date) pairs in preference order.
 
         DTE bands:
-          monthly:   DTE 15–45
-          quarterly: DTE 46–200
-          yearly:    DTE 201–420
+          weekly:    DTE ≤ 14, nearest Tuesday (Nifty weekly post-April 2026)
+          monthly:   DTE 15–45, last expiry of the calendar month
+          quarterly: DTE 46–200, last expiry of Mar/Jun/Sep/Dec
+          yearly:    DTE 201–420, last expiry of Jun/Dec
 
-        Preference order: monthly → quarterly → yearly (default for CSP).
+        Default preference order: ["monthly", "quarterly", "yearly"] — weekly is opt-in.
+        Pass preference=["weekly"] for IC weekly entry.
 
         Args:
             underlying: Underlying symbol (e.g. 'NIFTY').
@@ -331,6 +333,16 @@ class InstrumentLookup:
                 continue
 
             dte = (d - today).days
+            if dte < 1:
+                continue
+
+            # Weekly: nearest Tuesday expiry with DTE ≤ 14
+            # Nifty weekly expiry is Tuesday post April 2026 (NSE/SEBI change)
+            is_tuesday = d.weekday() == 1  # Mon=0 … Sun=6
+            if dte <= 14 and is_tuesday and "weekly" not in mapping:
+                mapping["weekly"] = exp
+                continue  # do not also classify this date as monthly
+
             if dte < 15:
                 continue
 
