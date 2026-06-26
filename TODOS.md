@@ -330,3 +330,6 @@ Full log: [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md)
 | 2026-06-26 | ic-full IC-F5 — register all four IronCondorV1 strategy configurations in monitor daemon; 2 registration tests — bf093eb |
 | 2026-06-26 | ic-full IC-F6 — paper_ic_entry.py config-driven multi-expiry IC entry helper; 12 new tests — 261b906 |
 | 2026-06-26 | ic-full IC-F7 — paper_ic_snapshot.py EOD audit cron for all IC variants; 8 new tests — 90bdd29 |
+| 2026-06-26 | ic-full IC-F8 — IC entry crons installed as system cron jobs (crontab); Wed 10:30 IST × 4 expiry types + EOD snapshot 15:45 IST Mon–Fri |
+| 2026-06-26 | ic-full IC-F9 — widen _EXPIRY_RE in ic_nifty_v1.py; remove snapshot monkey-patch; 3 tests — ee5b99a |
+| 2026-06-26 | ic-full complete — all 9 stories (F1–F9) shipped; docs/plan/ic-full archived to docs/archive/ic-full; CONTEXT.md updated (ICExpiryConfig, IronCondorV1 parameterisation, paper_ic_snapshot.py); intraday holiday guard fix — 8bd5660 |

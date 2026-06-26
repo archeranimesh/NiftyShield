@@ -59,4 +59,8 @@ IC-F8 (Claude)    ← scheduled crons    → final story; requires IC-F6 committ
 
 ## Phase F8 — Scheduled Entry Crons
 
-- [ ] **IC-F8** `[Claude]` — four scheduled tasks via `schedule` skill: every Wednesday 10:30 IST, one per expiry type; each calls `paper_ic_entry.py --expiry-type X --no-dry-run`; DTE gate in entry script handles "right Wednesday" logic
+- [x] **IC-F8** `[Claude]` — four scheduled tasks via `schedule` skill: every Wednesday 10:30 IST, one per expiry type; each calls `paper_ic_entry.py --expiry-type X --no-dry-run`; DTE gate in entry script handles "right Wednesday" logic | installed as system cron jobs (crontab)
+
+## Phase F9 — Remove `_parse_expiry` Monkey-Patch
+
+- [x] **IC-F9** `[Claude]` — `src/strategy/ic_nifty_v1.py`: widen `_EXPIRY_RE` to handle both live key formats; `scripts/strategies/ic/paper_ic_snapshot.py`: remove monkey-patch block (lines 160–169) + 2 tests | SHA: ee5b99a
