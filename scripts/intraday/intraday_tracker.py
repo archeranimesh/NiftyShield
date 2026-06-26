@@ -21,10 +21,12 @@ from __future__ import annotations
 
 import asyncio
 import os
+from datetime import date
 
 import structlog
 
 from src.config import settings
+from src.market_calendar.holidays import is_trading_day
 from src.utils.logging import setup_logging
 
 setup_logging()
@@ -40,6 +42,10 @@ async def main() -> int:
         max(dhan_exit, nuvama_exit) — non-zero if either tracker failed.
     """
     from datetime import datetime, timezone
+
+    if not is_trading_day(date.today()):
+        logger.info("market_holiday date=%s — skipping intraday tracker", date.today())
+        return 0
 
     from dotenv import load_dotenv
 
