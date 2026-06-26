@@ -157,16 +157,6 @@ async def process_variant(
 
     # Evaluate signals
     try:
-        # Override _parse_expiry temporarily to use robust parser
-        # in check_signals
-        ic._parse_expiry = lambda key: (
-            datetime.strptime(
-                _EXPIRY_RE_ROBUST.search(key).group(1).upper(),
-                "%d%b%Y",
-            ).date()
-            if _EXPIRY_RE_ROBUST.search(key)
-            else None
-        )
         events = await ic.check_signals(chain, positions)
     except Exception as exc:  # Intentional: fail-safe signal checks
         logger.error(

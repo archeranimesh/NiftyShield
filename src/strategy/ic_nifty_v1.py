@@ -46,9 +46,11 @@ log = structlog.get_logger(__name__)
 
 # ── Regexes ───────────────────────────────────────────────────────────────────
 
-# Matches keys like "NSE_FO|NIFTY29MAY2026PE" → group 1 = "29MAY2026", group 2 = "PE"/"CE"
+# Matches both live key formats:
+#   "NSE_FO|NIFTY26JUN2026PE24000" → group 1 = "26JUN2026"  (date before strike)
+#   "NSE_FO|NIFTY26JUN202624000PE" → group 1 = "26JUN2026"  (date before PE/CE suffix)
 _EXPIRY_RE = re.compile(
-    r"NSE_FO\|NIFTY(\d{2}[A-Za-z]{3}\d{4})(PE|CE)",
+    r"NSE_FO\|NIFTY(\d{2}[A-Za-z]{3}\d{4})",
     re.IGNORECASE,
 )
 

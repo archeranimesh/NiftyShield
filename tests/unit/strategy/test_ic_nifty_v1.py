@@ -823,3 +823,29 @@ def test_is_auto_execute() -> None:
         council_rank=1,
     )
     assert strat._is_auto_execute(act3) is False
+
+
+# ---------------------------------------------------------------------------
+# IC-F9 — _parse_expiry handles both live key formats
+# ---------------------------------------------------------------------------
+
+def test_parse_expiry_date_before_pe_suffix() -> None:
+    """Key format: date immediately before PE/CE — NSE_FO|NIFTY26JUN2026PE24000."""
+    from datetime import date
+    strat = IronCondorV1()
+    result = strat._parse_expiry("NSE_FO|NIFTY26JUN2026PE24000")
+    assert result == date(2026, 6, 26)
+
+
+def test_parse_expiry_date_before_strike() -> None:
+    """Key format: date followed by numeric strike — NSE_FO|NIFTY26JUN202624000PE."""
+    from datetime import date
+    strat = IronCondorV1()
+    result = strat._parse_expiry("NSE_FO|NIFTY26JUN202624000PE")
+    assert result == date(2026, 6, 26)
+
+
+def test_parse_expiry_unrecognised_returns_none() -> None:
+    """Unrecognised key format must return None without raising."""
+    strat = IronCondorV1()
+    assert strat._parse_expiry("NSE_EQ|INFY") is None
