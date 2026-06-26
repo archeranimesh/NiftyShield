@@ -322,3 +322,7 @@ Full log: [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md)
 | 2026-06-15 | CR4 + PP-3 closed — docs close for council-refactor story: DECISIONS.md (11 new entries: CC CLI tools, CSP always-open, CC automation, ReEntryMixin, threshold constants, PP always-reprotect, proxy delta tracking, PROXY_PREMIUM_DECAY guard, Futures+CC block); CONTEXT.md (src/strategy/ full rewrite, PaperStore proxy_delta methods, cc_calibration scripts); TODOS.md session log |
 | 2026-06-22 | paper-backbone-adj PA1.3 — NiftyTrackComparisonV1 overlay roll ACTION signals: ROLL_DUE_DTE/DECAY upgraded to ACTION when broker returns next-expiry chain target; _select_overlay_roll_target(); _fetch_next_chain(); apply_action ROLL_OVERLAY + ROLL_COLLAR; 8 new tests — 58b488a |
 | 2026-06-23 | ic-e2e IC-E1 — auto_execute=False to IronCondorV1 + STRATEGY_IC constant in constants.py + 2 protocol-compliance tests — 17a9744 |
+| 2026-06-26 | ic-full IC-F1 — wire IVR into IronCondorV1.describe_context via VIX Parquet; _compute_ivr_str() helper; 2 new tests — cd8415a |
+| 2026-06-26 | ic-full IC-F1 fix — stub fetch_vix_latest in 4 record_paper_trade tests that default trade_date to today; R3 gate no longer fires in dev env — 1d4b0cb |
+| 2026-06-26 | ic-full IC-F2 — ICExpiryConfig frozen dataclass + CONFIGS presets (weekly/monthly/leaps/yearly) + STRATEGY_IC_* constants + 6 structural invariant tests — 5921426 |
+| 2026-06-26 | ic-full IC-F3 — parameterise IronCondorV1; auto_execute=True; action priority — 6296328 |

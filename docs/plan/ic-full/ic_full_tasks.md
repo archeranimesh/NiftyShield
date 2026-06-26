@@ -31,15 +31,15 @@ IC-F8 (Claude)    ← scheduled crons    → final story; requires IC-F6 committ
 
 ## Phase F1 — IVR Wiring
 
-- [ ] **IC-F1** `[Claude]` — `src/strategy/ic_nifty_v1.py`: wire IVR into `describe_context` from VIX Parquet (same pattern as `paper_cc_entry.py`) + 2 tests
+- [x] **IC-F1** `[Claude]` — `src/strategy/ic_nifty_v1.py`: wire IVR into `describe_context` from VIX Parquet (same pattern as `paper_cc_entry.py`) + 2 tests | SHA: cd8415a
 
 ## Phase F2 — Config Model
 
-- [ ] **IC-F2** `[Claude]` — `src/strategy/ic_expiry_config.py`: `ICExpiryConfig` frozen dataclass with entry + exit thresholds per expiry type; `CONFIGS` presets for weekly/monthly/leaps/yearly; four `STRATEGY_IC_*` constants in `src/paper/constants.py` + 6 tests
+- [x] **IC-F2** `[Claude]` — `src/strategy/ic_expiry_config.py`: `ICExpiryConfig` frozen dataclass with entry + exit thresholds per expiry type; `CONFIGS` presets for weekly/monthly/leaps/yearly; four `STRATEGY_IC_*` constants in `src/paper/constants.py` + 6 tests | SHA: 5921426
 
 ## Phase F3 — Parameterise IronCondorV1
 
-- [ ] **IC-F3** `[Antigravity]` — `src/strategy/ic_nifty_v1.py`: constructor accepts `ICExpiryConfig`; `strategy_name` → property; `auto_execute = True`; all hardcoded thresholds → config fields; `_auto_select_action()` priority method; existing + 4 new tests
+- [x] **IC-F3** `[Antigravity]` — `src/strategy/ic_nifty_v1.py`: constructor accepts `ICExpiryConfig`; `strategy_name` → property; `auto_execute = True`; all hardcoded thresholds → config fields; `_auto_select_action()` priority method; existing + 4 new tests | SHA: 6296328
 
 ## Phase F4 — Weekly Expiry Bucket
 
