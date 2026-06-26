@@ -16,14 +16,14 @@ Signal table
 | DELTA_WARN    | WARN     | either short leg |delta| ≥ 0.25                |
 | DTE_WARN      | INFO     | DTE ≤ 21                                       |
 
-Council ruling (2026-05-02): no adjustments in v1.  ``apply_action`` only
-accepts CLOSE_FULL, CLOSE_CALL_SPREAD, CLOSE_PUT_SPREAD, and ROLL_WING.
-Any other action_type raises ValueError immediately.
+No adjustments are permitted in v1 except ROLL_WING rolls, which
+are auto-executed when OTM replacements exist.
 """
 
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING, Literal
@@ -74,7 +74,8 @@ class IronCondorV1:
     The strategy name must match the ``strategy_name`` column used by
     ``record_paper_trade.py`` when recording IC trades.
 
-    No adjustments are permitted in v1 — council mandate (2026-05-02).
+    No adjustments are permitted in v1 except ROLL_WING rolls, which
+    are auto-executed when OTM replacements exist.
     """
 
     auto_execute: bool = True
@@ -333,8 +334,6 @@ class IronCondorV1:
                                 is_match = True
 
                         if is_match and not action_emitted:
-                            from dataclasses import replace
-
                             new_payload = {
                                 **e.payload,
                                 "auto_execute": True,
@@ -344,6 +343,9 @@ class IronCondorV1:
                             action_emitted = True
                 events = filtered_events
             else:
+                # If auto-execute is enabled but no action was selected (e.g. no ACTION events
+                # present, or none matched the priority rules), strip all ACTION events to prevent
+                # them from entering the manual Telegram approval flow.
                 events = [e for e in events if e.severity != "ACTION"]
 
         return events
@@ -448,7 +450,7 @@ class IronCondorV1:
 
         # Override legs to close if called via auto-execute (where legs_to_close is not fully populated)
         closed = set(action.legs_to_close)
-        if action.rationale == "auto-execute":
+        if self._is_auto_execute(action):
             if action.action_type == "CLOSE_FULL":
                 closed = _SHORT_ROLES | _LONG_ROLES
             elif action.action_type == "CLOSE_CALL_SPREAD":
@@ -462,7 +464,7 @@ class IronCondorV1:
             legs_to_close=list(closed),
         )
         if action.action_type == "ROLL_WING":
-            if not action.legs_to_open and action.rationale != "auto-execute":
+            if not action.legs_to_open and not self._is_auto_execute(action):
                 raise ValueError("ROLL_WING action requires at least one leg in legs_to_open")
             # Note: legs_to_open is intentionally not consumed here.
             # PaperExecutor (backbone) handles the new-leg DB write.
@@ -470,6 +472,12 @@ class IronCondorV1:
         return [p for p in positions if p.leg_role not in closed]
 
     # ── Private helpers ───────────────────────────────────────────────────────
+
+    def _is_auto_execute(self, action: ApprovedAction) -> bool:
+        """Determine if an action was initiated automatically or manually."""
+        if action.metadata and action.metadata.get("auto_selected"):
+            return True
+        return action.rationale == "auto-execute"
 
     def _auto_select_action(self, events: list[SignalEvent]) -> ApprovedAction | None:
         """Select one action from a list of fired signals using priority rules.
@@ -495,33 +503,21 @@ class IronCondorV1:
 
         types = {e.event_type for e in action_events}
 
-        if "LOSS_STOP" in types:
+        # Priority 1, 2, 3: Full position exits
+        full_close_trigger = next(
+            (t for t in ("LOSS_STOP", "TIME_STOP", "PROFIT_TARGET") if t in types), None
+        )
+        if full_close_trigger is not None:
             return ApprovedAction(
                 action_type="CLOSE_FULL",
                 legs_to_close=list(_SHORT_ROLES | _LONG_ROLES),
                 legs_to_open=[],
                 rationale="auto-execute",
                 council_rank=1,
+                metadata={"auto_selected": True},
             )
 
-        if "TIME_STOP" in types:
-            return ApprovedAction(
-                action_type="CLOSE_FULL",
-                legs_to_close=list(_SHORT_ROLES | _LONG_ROLES),
-                legs_to_open=[],
-                rationale="auto-execute",
-                council_rank=1,
-            )
-
-        if "PROFIT_TARGET" in types:
-            return ApprovedAction(
-                action_type="CLOSE_FULL",
-                legs_to_close=list(_SHORT_ROLES | _LONG_ROLES),
-                legs_to_open=[],
-                rationale="auto-execute",
-                council_rank=1,
-            )
-
+        # Priority 4: Roll threatened short wing
         roll_event = next((e for e in action_events if e.event_type == "ROLL_WING"), None)
         if roll_event is not None:
             new_leg = LegSpec(
@@ -537,8 +533,10 @@ class IronCondorV1:
                 legs_to_open=[new_leg],
                 rationale="auto-execute",
                 council_rank=1,
+                metadata={"auto_selected": True},
             )
 
+        # Priority 5: Close single spread (delta breach without roll target)
         delta_event = next((e for e in action_events if e.event_type == "DELTA_STOP"), None)
         if delta_event is not None:
             leg_role = delta_event.payload["leg_role"]
@@ -554,6 +552,7 @@ class IronCondorV1:
                 legs_to_open=[],
                 rationale="auto-execute",
                 council_rank=1,
+                metadata={"auto_selected": True},
             )
 
         return None

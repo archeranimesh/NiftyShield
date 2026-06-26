@@ -689,3 +689,137 @@ def test_describe_context_ivr_unavailable() -> None:
         result = strat._compute_ivr_str()
 
     assert result == "IVR: unavailable"
+
+
+# ── Integration tests for auto_execute=True check_signals pipeline ────────────
+
+
+def test_check_signals_auto_execute_loss_stop() -> None:
+    """LOSS_STOP fires, filters out others, and gets marked auto_execute."""
+    strat = IronCondorV1()
+    chain = _make_chain(
+        short_put_ltp="105",
+        long_put_ltp="5",
+        short_call_ltp="105",
+        long_call_ltp="5",
+    )
+    positions = _make_ic_positions()
+    events = asyncio.run(strat.check_signals(chain, positions))
+    action_events = [e for e in events if e.severity == "ACTION"]
+    assert len(action_events) == 1
+    ev = action_events[0]
+    assert ev.event_type == "LOSS_STOP"
+    assert ev.payload["auto_execute"] is True
+    assert ev.payload["auto_action"] == "CLOSE_FULL"
+
+
+def test_check_signals_auto_execute_profit_target() -> None:
+    """PROFIT_TARGET fires, filters out others, and gets marked auto_execute."""
+    strat = IronCondorV1()
+    chain = _make_chain(
+        short_put_ltp="25",
+        long_put_ltp="5",
+        short_call_ltp="25",
+        long_call_ltp="5",
+    )
+    positions = _make_ic_positions()
+    events = asyncio.run(strat.check_signals(chain, positions))
+    action_events = [e for e in events if e.severity == "ACTION"]
+    assert len(action_events) == 1
+    ev = action_events[0]
+    assert ev.event_type == "PROFIT_TARGET"
+    assert ev.payload["auto_execute"] is True
+    assert ev.payload["auto_action"] == "CLOSE_FULL"
+
+
+def test_check_signals_auto_execute_delta_stop_with_roll() -> None:
+    """DELTA_STOP fires with a roll target -> ROLL_WING action auto_executed."""
+    from unittest.mock import patch
+
+    from src.strategy.protocol import LegSpec
+
+    strat = IronCondorV1()
+    chain = _make_chain(
+        short_call_delta="0.36",
+        short_put_ltp="40",
+        short_call_ltp="35",
+    )
+    positions = _make_ic_positions()
+
+    roll_target = LegSpec(
+        instrument_key="NSE_FO|NIFTY26000CE",
+        action="SELL",
+        quantity=1,
+        leg_role="short_call",
+        notes="roll_wing delta=0.15",
+    )
+    with patch.object(strat, "_select_wing_roll_target", return_value=roll_target):
+        events = asyncio.run(strat.check_signals(chain, positions))
+
+    action_events = [e for e in events if e.severity == "ACTION"]
+    assert len(action_events) == 1
+    ev = action_events[0]
+    assert ev.event_type == "ROLL_WING"
+    assert ev.payload["auto_execute"] is True
+    assert ev.payload["auto_action"] == "ROLL_WING"
+
+
+def test_check_signals_auto_execute_delta_stop_no_roll() -> None:
+    """DELTA_STOP fires without a roll target -> CLOSE_CALL_SPREAD action auto_executed."""
+    from unittest.mock import patch
+
+    strat = IronCondorV1()
+    chain = _make_chain(
+        short_call_delta="0.36",
+        short_put_ltp="40",
+        short_call_ltp="35",
+    )
+    positions = _make_ic_positions()
+
+    with patch.object(strat, "_select_wing_roll_target", return_value=None):
+        events = asyncio.run(strat.check_signals(chain, positions))
+
+    action_events = [e for e in events if e.severity == "ACTION"]
+    assert len(action_events) == 1
+    ev = action_events[0]
+    assert ev.event_type == "DELTA_STOP"
+    assert ev.payload["auto_execute"] is True
+    assert ev.payload["auto_action"] == "CLOSE_CALL_SPREAD"
+
+
+def test_is_auto_execute() -> None:
+    """_is_auto_execute identifies auto-execution correctly."""
+    from src.strategy.protocol import ApprovedAction
+
+    strat = IronCondorV1()
+
+    # Metadata-based
+    act1 = ApprovedAction(
+        action_type="CLOSE_FULL",
+        legs_to_close=[],
+        legs_to_open=[],
+        rationale="foo",
+        council_rank=1,
+        metadata={"auto_selected": True},
+    )
+    assert strat._is_auto_execute(act1) is True
+
+    # Rationale fallback
+    act2 = ApprovedAction(
+        action_type="CLOSE_FULL",
+        legs_to_close=[],
+        legs_to_open=[],
+        rationale="auto-execute",
+        council_rank=1,
+    )
+    assert strat._is_auto_execute(act2) is True
+
+    # Normal manual action
+    act3 = ApprovedAction(
+        action_type="CLOSE_FULL",
+        legs_to_close=[],
+        legs_to_open=[],
+        rationale="foo",
+        council_rank=1,
+    )
+    assert strat._is_auto_execute(act3) is False
