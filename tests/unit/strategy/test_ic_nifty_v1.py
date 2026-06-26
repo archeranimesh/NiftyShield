@@ -554,3 +554,40 @@ def test_strategy_ic_constant_matches_class() -> None:
     from src.paper.constants import STRATEGY_IC
 
     assert STRATEGY_IC == IronCondorV1.strategy_name
+
+
+# ── IC-F1: IVR wiring tests ───────────────────────────────────────────────────
+
+
+def test_describe_context_ivr_present() -> None:
+    """describe_context emits IVR value when VIX Parquet data is available."""
+    from pathlib import Path
+    from unittest.mock import patch
+
+    import pandas as pd
+
+    strat = IronCondorV1()
+    mock_series = pd.Series([15.0, 16.0, 14.5])
+
+    with (
+        patch.object(Path, "exists", return_value=True),
+        patch("src.backtest.vix_ingest.load_vix_series", return_value=mock_series),
+        patch("src.backtest.vix_ingest.fetch_vix_latest", return_value=16.0),
+        patch("src.backtest.ivr.compute_ivr", return_value=0.42),
+    ):
+        result = strat._compute_ivr_str()
+
+    assert result == "IVR: 0.42"
+
+
+def test_describe_context_ivr_unavailable() -> None:
+    """_compute_ivr_str returns 'IVR: unavailable' when VIX directory is missing."""
+    from pathlib import Path
+    from unittest.mock import patch
+
+    strat = IronCondorV1()
+
+    with patch.object(Path, "exists", return_value=False):
+        result = strat._compute_ivr_str()
+
+    assert result == "IVR: unavailable"

@@ -287,6 +287,30 @@ class IronCondorV1:
 
         return events
 
+    def _compute_ivr_str(self) -> str:
+        """Load VIX Parquet series and compute IVR; returns formatted string.
+
+        Returns:
+            ``"IVR: 0.42"`` on success, ``"IVR: unavailable"`` on any data gap.
+        """
+        from pathlib import Path
+
+        from src.backtest.ivr import compute_ivr
+        from src.backtest.vix_ingest import fetch_vix_latest, load_vix_series
+
+        vix_dir = Path("data/historical/ohlc/india_vix")
+        ivr_str = "unavailable"
+        if vix_dir.exists():
+            try:
+                vix_series = load_vix_series(vix_dir)
+                vix_today = fetch_vix_latest(vix_dir)
+                if vix_today is not None:
+                    ivr = compute_ivr(vix_today, vix_series)
+                    ivr_str = f"{ivr:.2f}" if ivr is not None else "unavailable"
+            except Exception:
+                pass  # non-fatal: VIX data gap
+        return f"IVR: {ivr_str}"
+
     def describe_context(
         self,
         event: SignalEvent,
@@ -296,7 +320,7 @@ class IronCondorV1:
         """Build a plain-text context block for the council prompt.
 
         Summarises: call spread delta, put spread delta, combined credit,
-        mark-to-market, DTE, IVR (not yet wired — logged as N/A), Nifty spot.
+        mark-to-market, DTE, IVR (from VIX Parquet; "unavailable" on data gap), Nifty spot.
 
         Args:
             event: The signal event that triggered the context request.
@@ -316,7 +340,7 @@ class IronCondorV1:
             f"Signal: {event.event_type} ({event.severity})",
             f"Nifty spot: {market.underlying_spot}",
             f"DTE: {dte if dte is not None else 'unavailable'}",
-            "IVR: N/A (not yet wired)",
+            self._compute_ivr_str(),
             f"Entry credit: {entry_credit}",
             f"Combined mark: {combined_mark if combined_mark is not None else 'unavailable'}",
         ]
