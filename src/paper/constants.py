@@ -28,6 +28,12 @@ STRATEGY_PP_OVERLAY = "paper_protective_put_v1"
 STRATEGY_COLLAR_OVERLAY = "paper_collar_v1"
 STRATEGY_IC = "paper_ic_nifty_v1"
 
+# Per-expiry IC variants
+STRATEGY_IC_WEEKLY  = "paper_ic_nifty_v1_weekly"
+STRATEGY_IC_MONTHLY = "paper_ic_nifty_v1_monthly"
+STRATEGY_IC_LEAPS   = "paper_ic_nifty_v1_leaps"
+STRATEGY_IC_YEARLY  = "paper_ic_nifty_v1_yearly"
+
 # 3-Track Targeting Thresholds (Extracted from paper_3track_overlay.py)
 PP_OTM_MIN = 0.08
 PP_OTM_MAX = 0.10
