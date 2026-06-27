@@ -650,6 +650,53 @@ Full gate specification: `docs/plan/variance_gate.md`.
 
 ---
 
+## Iron Condor V2 Core Design (2026-06-26, council q10)
+
+| Decision | Ruling |
+|---|---|
+| Entry deltas | `short_put_delta=0.25`, `short_call_delta=0.22`, `delta_range=0.03` (skew-adjusted, not symmetric) |
+| Wing sizing | 10Δ long wing (primary); floors: monthly min ₹15, weekly min ₹10, min delta 5Δ; SD-width as sanity guard only (warn if >1.5× or <0.4×) |
+| Adjustment mechanism | Partial roll of challenged vertical only (close+reopen 4-leg atomic); leave profitable side untouched; max 1 roll per side per cycle; roll debit ≤ 50% of original IC credit; inverted condor guard |
+| Weekly DTE cutoff | DTE≥6 normal roll; DTE 4–5 strict guards; DTE≤3 CLOSE_FULL (both sides); DTE≤1 CLOSE_FULL no discretion |
+| Architecture | Separate class `ic_nifty_v2.py` + `ic_expiry_config_v2.py`; strategy names `paper_ic_nifty_v2_weekly` / `paper_ic_nifty_v2_monthly` |
+
+Source: `docs/council/2026-06-26_ic-v2-core-design.md`
+
+---
+
+## Paper-Trade Exit Philosophy — Codification (2026-06-26, council q11)
+
+Confirmed that existing codebase already implements the canonical rules. Codification only.
+
+| Decision | Ruling |
+|---|---|
+| CC profit target | 70% captured (LTP ≤ 30% of entry credit); floor: entry_credit ≥ ₹15 — already `_PROFIT_TARGET_RETENTION=0.30`, `_CC_MIN_ENTRY_CREDIT=15` |
+| CC loss stop | Delta ≥ 0.55 (primary) OR LTP ≥ 2.5× entry credit (backstop) — already implemented; `delta_threshold=0.55` in `_get_sell_audit_fields` |
+| PP exit | Hold to expiry; CRASH_MONETIZE at δ≤−0.80 OR mark≥5× debit — already implemented |
+| Collar exit | Atomic via `OverlayCloser.close_collar_all`; `monetize_collar_put` for crash scenario — already implemented |
+| Phase 0 exit regime | Strictly static mechanical; log IVR/VIX/regime but do not condition on them |
+| Automation tier | Tier 1 (EOD signal detection) mandatory; Tier 2 intraday deferred to Phase 1 |
+| Exit signal storage | Separate `paper_exit_events` table (already exists) with OPEN→ACKNOWLEDGED→ACTED/DISMISSED lifecycle |
+| Open gap | TIME_STOP vs DTE_REVIEW priority ordering in `evaluate_cc` — minor fix pending (story EC-1) |
+
+Source: `docs/council/2026-06-26_paper-trade-exit-philosophy.md`
+
+---
+
+## Strategy Monitor Fetch Architecture (2026-06-26, council q12)
+
+| Decision | Ruling |
+|---|---|
+| Fetch architecture | Keep Option A — full chain every 90s; no protocol change |
+| Roll target timing | Immediate selection inside `check_signals()` (strategy-side); executor revalidates at execution |
+| `watchlist()` versioning | Deferred to Phase 1 (>20 legs or >1.5s/tick or rate limits) |
+| Observability | Add two structured log lines: `strategy_monitor.chain_fetch_complete` (latency, strike_count, strategy_name) and `strategy_monitor.tick_summary` (signals emitted per tick) |
+
+Noted, deferred: Hybrid split-fetch (LTP every tick + periodic Greeks) for Phase 1 when scale warrants it.
+Source: `docs/council/2026-06-26_strategy-monitor-watchlist-design.md`
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty
