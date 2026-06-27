@@ -56,6 +56,28 @@ src/
 │   ├── proxy_monitor.py      # Track C delta monitor. ProxyDeltaMonitor tracks DITM call delta drift for the proxy track and flags rebalance triggers.
 │   ├── _display.py           # Legacy labels (BASE_LABELS, OVERLAY_LABELS) and hedge_verdict. Kept for backward compat with older snapshot scripts.
 │   └── _utils.py             # Paper-local utilities: safe_float(val, default) — converts any value to float without raising.
+├── strategy/
+│   ├── CLAUDE.md             # Module context: BrokerClient protocol, factory pattern, action dispatch
+│   ├── __init__.py           # Package marker
+│   ├── protocol.py           # PaperStrategy protocol, SignalEvent, ApprovedAction, LegSpec models
+│   ├── ic_expiry_config.py   # ICExpiryConfig frozen dataclass; CONFIGS dict with 4 presets (weekly/monthly/leaps/yearly)
+│   ├── ic_expiry_config_v2.py # IronCondorV2ExpiryConfig frozen dataclass; delta-based config (D1/D2/D3/D4); CONFIGS_V2 dict (monthly only, Phase 1)
+│   ├── ic_nifty_v1.py        # IronCondorV1 strategy class: 15Δ/10Δ entry, fixed wing points, roll-wing only adjustment
+│   ├── ic_nifty_v2.py        # IronCondorV2 strategy class: 25Δ/22Δ entry, 10Δ wings with floors, partial vertical roll, DTE-tiered exits; council ruling 2026-06-26
+│   ├── csp_nifty_v1.py       # CSPNiftyV1 strategy: always-open short call selling with automated roll/re-entry
+│   ├── cc_overlay_v1.py      # CCOverlayV1 strategy: covered call protective overlay with delta gates
+│   ├── pp_overlay_v1.py      # PPOverlayV1 strategy: protective put rebalance overlay (IVR ≤ 0.60 gate)
+│   ├── collar_overlay_v1.py  # CollarOverlayV1 strategy: short call + long put atomic collar
+│   ├── nifty_track_comparison_v1.py # NiftyTrackComparisonV1: manual-approval multi-leg comparison strategy
+│   ├── exit_signals.py       # ExitSignalEngine: static rule engine for CSP/CC/PP/Collar exit signals (INFO/WARN/ACTION)
+│   ├── overlay_closer.py     # OverlayCloser: atomic multi-leg close orchestrator (record_trades via store)
+│   ├── monitor.py            # StrategyMonitor daemon: polls registered strategies, routes signals, handles approvals
+│   ├── executor.py           # PaperExecutor: action dispatch + PaperFillSimulator (VIX-regime slippage)
+│   ├── reentry_mixin.py      # ReEntryMixin: three-gate re-entry check (DTE/IVR/position)
+│   ├── auto_close.py         # EOD auto-close orchestrator for overlays via OverlayCloser; status → ACTED
+│   ├── roll_utils.py         # Shared helpers: find_strike_by_delta, apply_liquidity_gate
+│   ├── csp_roll_executor.py  # Legacy CSP roll executor (retained for compatibility)
+│   └── profit_lock_engine.py # ProfitLockEngine: stateless 3-zone profit-lock evaluator; ProfitLockState + ProfitLockDecision frozen dataclasses; floor formula max(W,W)+D_cum+D_lock+K ≤ 0.75×C₀; Zone 1 log-only, Zone 2 wing contraction to ~19Δ, Zone 3 CLOSE_FULL; council ruling 2026-06-27
 ├── mf/
 │   ├── CLAUDE.md             # Module context: transaction ledger model, AMFI source, Decimal TEXT invariant, MFHolding location
 │   ├── __init__.py           # Package marker
@@ -142,6 +164,11 @@ scripts/
 │   │   ├── paper_3track_overlay_entry.py # overlay-specific entry script.
 │   │   ├── paper_3track_overlay_roll.py  # Rolls expiring overlay legs at DTE ≤ OVERLAY_ROLL_DTE (5). _parse_expiry_from_key extracts date from NSE_FO key regex. _find_expiring_overlay: Phase-B fix applied (last_trade tracks SELL direction). _roll_single: 2-trade atomic (close written first; open failure → delete_trade rollback). --force bypasses DTE gate. --yes skips interactive confirmation (TTY-aware). Imports constants + helpers from paper_3track_overlay.py.
 │   │   └── paper_3track_snapshot.py      # Canonical EOD cron for 3-track comparison (15:45 IST). Live spot fetch (--spot to override). Per-leg delta-from-yesterday via get_prev_leg_snapshot. Writes paper_nav_snapshots + paper_leg_snapshots (--no-save for dry-run). _hedge_verdict shows overlay protection ratio. Uses format_track_summary() for summary-first reporting; --verbose for leg details.
+│   ├── ic/
+│   │   ├── __init__.py   # Package marker
+│   │   ├── paper_ic_entry.py    # Config-driven IC entry helper for all four variants (weekly/monthly/leaps/yearly); IVR/duplicate/DTE/liquidity/portfolio-delta gates; --dry-run default.
+│   │   ├── paper_ic_snapshot.py # EOD audit cron for all four IC variants; per-leg Greeks snapshot; Telegram summary; cron 45 15 * * 1-5.
+│   │   └── paper_ic_monthly_comparison.py # EOD V1 vs V2 monthly comparison cron; ICMonthlyStats dataclass; side-by-side Telegram report (entry credit / captured % / deltas / P&L / profit-lock zone / adjustments); cron 45 15 * * 1-5.
 │   └── cc_calibration/   # NiftyBees lot-sizing probe (retire after 3 cycles)
 │       ├── __init__.py   # Package marker
 │       ├── paper_cc_entry.py
