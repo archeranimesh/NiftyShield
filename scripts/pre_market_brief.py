@@ -23,10 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 load_dotenv()
 
 from src.backtest.ivr import compute_ivr  # noqa: E402
-from src.backtest.vix_ingest import (  # noqa: E402
-    fetch_vix_latest,
-    load_vix_series,
-)
+from src.backtest.vix_ingest import load_vix_series  # noqa: E402
 from src.client.factory import create_client  # noqa: E402
 from src.config import settings  # noqa: E402
 from src.notifications.telegram_gateway import TelegramGateway  # noqa: E402
@@ -47,12 +44,8 @@ async def get_current_ivr() -> float | None:
         if series.empty:
             return None
 
-        vix_today = await fetch_vix_latest()
-        if vix_today is None:
-            vix_today = float(series.iloc[-1])
-            historical = series.iloc[:-1]
-        else:
-            historical = series
+        vix_today = float(series.iloc[-1])
+        historical = series.iloc[:-1]
 
         return compute_ivr(vix_today, historical)
     except Exception as e:
