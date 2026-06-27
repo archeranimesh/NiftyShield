@@ -26,6 +26,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import Literal
 
 
 @dataclass(frozen=True)
@@ -78,9 +79,20 @@ class IronCondorV2ExpiryConfig:
         monthly_close_full_dte : int
             DTE ≤ this value → CLOSE_FULL default for monthly expiry.
             Hard force-close at DTE ≤ 1 is unconditional (see ic_nifty_v2.py).
+            Naming note: when weekly config lands (close_full_dte=3 per D4), rename
+            to expiry-agnostic ``close_full_dte`` or keep per-expiry fields with
+            dispatch on ``expiry_type``. See TODOS.md entry 2026-06-27.
+
+    Omitted fields (Phase 1)
+    ------------------------
+    profit_target_fraction : deferred to Phase 2 (profit-lock engine story IC-V2-8).
+        V1's ICExpiryConfig carries this; V2 replaces it with the three-zone
+        profit-lock mechanism (ProfitLockConfig). Not an oversight.
     """
 
-    expiry_type: str  # "monthly"
+    # Phase 1: monthly only. Expand to Literal["monthly", "weekly", "leaps", "yearly"]
+    # as each preset is added.  Keeps mypy honest on cfg.expiry_type dispatch.
+    expiry_type: Literal["monthly"]
 
     # Entry — short leg deltas (D1 ruling)
     short_put_delta_target: Decimal = Decimal("0.25")
@@ -105,6 +117,9 @@ class IronCondorV2ExpiryConfig:
     max_rolls_per_side_per_cycle: int = 1
 
     # DTE-tiered exit (D4)
+    # Naming decision pending: when weekly preset adds weekly_close_full_dte=3,
+    # decide between per-expiry fields vs. a single expiry-agnostic close_full_dte.
+    # See TODOS.md entry 2026-06-27 and docstring above.
     monthly_close_full_dte: int = 7  # DTE≤7 → CLOSE_FULL default (refineable during backtest)
 
 
@@ -114,5 +129,7 @@ class IronCondorV2ExpiryConfig:
 
 IC_V2_MONTHLY = IronCondorV2ExpiryConfig(
     expiry_type="monthly",
-    long_wing_min_premium=Decimal("15"),  # ₹15 floor for monthly (D2 ruling)
+    # Explicit per D2 ruling: ₹15 monthly floor.  When weekly preset is added it will
+    # use ₹10, so the kwarg stays here to document the per-expiry divergence clearly.
+    long_wing_min_premium=Decimal("15"),
 )

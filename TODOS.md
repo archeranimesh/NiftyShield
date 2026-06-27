@@ -333,3 +333,6 @@ Full log: [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md)
 | 2026-06-26 | ic-full IC-F8 — IC entry crons installed as system cron jobs (crontab); Wed 10:30 IST × 4 expiry types + EOD snapshot 15:45 IST Mon–Fri |
 | 2026-06-26 | ic-full IC-F9 — widen _EXPIRY_RE in ic_nifty_v1.py; remove snapshot monkey-patch; 3 tests — ee5b99a |
 | 2026-06-26 | ic-full complete — all 9 stories (F1–F9) shipped; docs/plan/ic-full archived to docs/archive/ic-full; CONTEXT.md updated (ICExpiryConfig, IronCondorV1 parameterisation, paper_ic_snapshot.py); intraday holiday guard fix — 8bd5660 |
+| 2026-06-27 | ic-nifty-v2 IC-V2-0 — IronCondorV2ExpiryConfig frozen dataclass; delta-based config replacing V1 wing_width_points; D1/D2/D3/D4 fields; IC_V2_MONTHLY preset; 8 tests — 9bcb838 |
+| 2026-06-27 | ic-nifty-v2 IC-V2-0 review fixes — expiry_type: Literal["monthly"]; IC_V2_MONTHLY kwarg comment; monthly_close_full_dte naming-decision note; profit_target_fraction deferred note; 2 new invariant tests (roll_debit_cap_fraction, long_wing_min_premium); 10 tests green |
+| 2026-06-27 | DEFERRED DESIGN — ic-nifty-v2 weekly story: when weekly preset lands, decide whether monthly_close_full_dte stays as per-expiry field (alongside weekly_close_full_dte=3) or both collapse to a single expiry-agnostic close_full_dte. See ic_expiry_config_v2.py docstring. |

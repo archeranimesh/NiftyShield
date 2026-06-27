@@ -110,3 +110,22 @@ def test_roll_trigger_delta_below_forced_close() -> None:
     roll_trigger_delta must be strictly less than forced_close_delta.
     """
     assert IC_V2_MONTHLY.roll_trigger_delta < IC_V2_MONTHLY.forced_close_delta
+
+
+def test_roll_debit_cap_fraction_in_valid_range() -> None:
+    """roll_debit_cap_fraction must be in (0, 1].
+
+    A fraction > 1 would allow rolling at a debit larger than the original IC
+    credit, which is nonsensical — the strategy would be paying more to roll
+    than it collected in the first place.  Zero would block all rolls entirely.
+    """
+    assert Decimal("0") < IC_V2_MONTHLY.roll_debit_cap_fraction <= Decimal("1")
+
+
+def test_long_wing_min_premium_positive() -> None:
+    """long_wing_min_premium must be strictly positive.
+
+    A zero or negative floor would accept dead / worthless wings, defeating
+    the D2 ruling's requirement for real convexity protection.
+    """
+    assert IC_V2_MONTHLY.long_wing_min_premium > Decimal("0")
