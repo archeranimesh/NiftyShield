@@ -12,7 +12,7 @@ Phase 2 (IC-V2-2): adjustment logic — implemented here.
   - 7 roll guards (DTE, candidate, width, debit-cap, max-rolls, inverted-condor, wing-floor)
   - State: _rolls_executed dict + _original_ic_credit per strategy_name
 
-Phase 3 (IC-V2-3): _evaluate_dte_action, _roll_allowed_by_dte.
+Phase 3 (IC-V2-3): _evaluate_dte_action, _should_close_full, _roll_allowed_by_dte — implemented.
 Phase 4 (IC-V2-4): check_signals, apply_action — PaperStrategy protocol compliance.
 
 Council ruling (authoritative): docs/archive/council/strategy/2026-06-26_ic-v2-core-design.md
@@ -960,6 +960,88 @@ class IronCondorV2:
         # rolling aggressively OTM; guard 5 caps this at 50% of original credit).
         roll_net = (old_short_leg.ltp - old_long_leg.ltp) - (new_short.ltp - new_long.ltp)
         return PositionUpdate(legs=legs, total_credit_pts=roll_net), ""
+
+    # ── DTE-tiered exit (IC-V2-3) ────────────────────────────────────────────
+
+    def _evaluate_dte_action(
+        self,
+        dte: int,
+        *,
+        trade_id: str = "",
+        expiry: str = "",
+    ) -> Literal["NORMAL", "CLOSE_FULL", "FORCE_CLOSE"]:
+        """Return the DTE-tiered exit decision for the current IC.
+
+        Decision table (monthly, D4 ruling):
+            dte ≤ 1  →  FORCE_CLOSE  (unconditional; logs dte_force_close)
+            dte ≤ 7  →  CLOSE_FULL   (hard-close threshold; logs dte_close_full)
+            dte > 7  →  NORMAL        (normal roll rules apply)
+
+        The force-close threshold (DTE ≤ 1) supersedes CLOSE_FULL regardless of
+        all other conditions. Both checks emit their own log event before returning
+        so that the caller never needs to log the DTE decision separately.
+
+        Args:
+            dte: Days to expiry for the current monthly IC.
+            trade_id: Trade ID for structured logging context (omit if unknown).
+            expiry: ISO expiry string for structured logging context.
+
+        Returns:
+            One of ``"NORMAL"``, ``"CLOSE_FULL"``, or ``"FORCE_CLOSE"``.
+        """
+        if dte <= 1:
+            log.warning(
+                "ic_nifty_v2.dte_force_close",
+                strategy_name=self.strategy_name,
+                trade_id=trade_id,
+                expiry=expiry,
+                dte=dte,
+            )
+            return "FORCE_CLOSE"
+
+        if dte <= self._config.monthly_close_full_dte:
+            log.warning(
+                "ic_nifty_v2.dte_close_full",
+                strategy_name=self.strategy_name,
+                trade_id=trade_id,
+                expiry=expiry,
+                dte=dte,
+                threshold=self._config.monthly_close_full_dte,
+            )
+            return "CLOSE_FULL"
+
+        return "NORMAL"
+
+    def _should_close_full(self, dte: int) -> bool:
+        """Return True when DTE triggers CLOSE_FULL or FORCE_CLOSE.
+
+        Convenience predicate for callers that only need a boolean close decision
+        and do not need to distinguish between CLOSE_FULL and FORCE_CLOSE.
+
+        Args:
+            dte: Days to expiry.
+
+        Returns:
+            True when DTE is at or below the monthly hard-close threshold (DTE ≤ 7),
+            including the force-close boundary (DTE ≤ 1).
+        """
+        return dte <= self._config.monthly_close_full_dte
+
+    def _roll_allowed_by_dte(self, dte: int) -> bool:
+        """Return True only when the DTE level permits a partial roll.
+
+        A roll is blocked whenever the DTE action is CLOSE_FULL or FORCE_CLOSE.
+        This predicate is injected as ``roll_allowed_by_dte`` into
+        ``_evaluate_adjustment()`` (implemented in IC-V2-2).
+
+        Args:
+            dte: Days to expiry.
+
+        Returns:
+            True when dte > monthly_close_full_dte (i.e., dte > 7 by default);
+            False otherwise.
+        """
+        return dte > self._config.monthly_close_full_dte
 
     # ── Protocol stubs (implemented in IC-V2-4) ──────────────────────────────
 
