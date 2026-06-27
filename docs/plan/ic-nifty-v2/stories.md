@@ -8,7 +8,7 @@
 
 ## IC-V2-0 — Config Dataclass
 
-**Goal:** New config dataclass `IronCondorV2ExpiryConfig` replacing `wing_width_points: int` with delta-based wing fields. Both weekly and monthly presets.
+**Goal:** New config dataclass `IronCondorV2ExpiryConfig` replacing `wing_width_points: int` with delta-based wing fields. Monthly preset only.
 
 **Files to change:**
 - `src/strategy/ic_expiry_config_v2.py` — new file (new module)
@@ -31,7 +31,7 @@ class IronCondorV2ExpiryConfig:
     Replaces V1's fixed wing_width_points with 10Δ long-wing placement.
     Council ruling: docs/archive/council/strategy/2026-06-26_ic-v2-core-design.md Stage 3.
     """
-    expiry_type: str                              # "weekly" | "monthly"
+    expiry_type: str                              # "monthly"
 
     # Entry — short leg deltas (D1 ruling)
     short_put_delta_target: Decimal = Decimal("0.25")
@@ -41,7 +41,7 @@ class IronCondorV2ExpiryConfig:
     # Wing sizing — long leg deltas (D2 ruling)
     long_wing_delta_target: Decimal = Decimal("0.10")
     long_wing_delta_floor: Decimal = Decimal("0.05")   # absolute minimum; skip entry if not met
-    long_wing_min_premium: Decimal = Decimal("15")     # ₹ per unit; ₹10 for weekly
+    long_wing_min_premium: Decimal = Decimal("15")     # ₹ per unit
 
     # SD sanity guard (D2) — warn thresholds, not hard blocks
     sd_width_warn_upper_multiplier: Decimal = Decimal("1.5")
@@ -55,21 +55,11 @@ class IronCondorV2ExpiryConfig:
     roll_debit_cap_fraction: Decimal = Decimal("0.50") # roll debit ≤ 50% of original IC credit
     max_rolls_per_side_per_cycle: int = 1
 
-    # DTE-tiered exit for weekly (D4)
-    weekly_close_full_dte: int = 3     # DTE≤3 → CLOSE_FULL
-    weekly_strict_guard_dte: int = 5   # DTE 4–5 → roll with strict debit+liquidity guard
-    weekly_hard_close_dte: int = 1     # DTE≤1 → CLOSE_FULL, no discretion
-
-    # DTE-tiered exit for monthly (D4)
+    # DTE-tiered exit (D4)
     monthly_close_full_dte: int = 7    # DTE≤7 → CLOSE_FULL default (refineable during backtest)
 
 
-# Canonical presets
-IC_V2_WEEKLY = IronCondorV2ExpiryConfig(
-    expiry_type="weekly",
-    long_wing_min_premium=Decimal("10"),   # ₹10 floor for weekly (D2 ruling)
-)
-
+# Canonical preset
 IC_V2_MONTHLY = IronCondorV2ExpiryConfig(
     expiry_type="monthly",
     long_wing_min_premium=Decimal("15"),   # ₹15 floor for monthly (D2 ruling)
@@ -77,14 +67,12 @@ IC_V2_MONTHLY = IronCondorV2ExpiryConfig(
 ```
 
 **Tests (test_ic_expiry_config_v2.py):**
-- `test_weekly_preset_defaults` — verify IC_V2_WEEKLY fields match D1/D2 rulings
 - `test_monthly_preset_defaults` — verify IC_V2_MONTHLY fields, especially long_wing_min_premium=15
 - `test_immutability` — frozen=True; assignment raises FrozenInstanceError
-- `test_delta_range_positive` — delta_range > 0 on both presets
-- `test_max_rolls_is_one` — max_rolls_per_side_per_cycle == 1 on both presets
-- `test_weekly_close_full_dte_lte_strict_guard` — close_full_dte < strict_guard_dte (invariant)
+- `test_delta_range_positive` — delta_range > 0 on monthly preset
+- `test_max_rolls_is_one` — max_rolls_per_side_per_cycle == 1 on monthly preset
 
-**Commit:** `feat(strategy): IronCondorV2ExpiryConfig — delta-based config, D1/D2/D3/D4 fields`
+**Commit:** `feat(strategy): IronCondorV2ExpiryConfig — delta-based config, D1/D2/D3/D4 fields, monthly only`
 
 ---
 
@@ -145,7 +133,7 @@ class IronCondorV2:
 
 3. `_select_long_wing(chain, short_delta_target, side)` — find the OTM wing at ~10Δ. Enforce:
    - `abs(delta) ≥ long_wing_delta_floor` (0.05)
-   - `mid_premium ≥ long_wing_min_premium` (₹10 weekly / ₹15 monthly)
+   - `mid_premium ≥ long_wing_min_premium` (₹15)
    - Passes `_apply_liquidity_gate()` (reuse from V1 or shared utility)
    - If no candidate satisfies all three: log `ic_v2.wing_floor_miss`, skip entry.
 
@@ -235,7 +223,7 @@ get_code_snippet("IronCondorV2ExpiryConfig.max_rolls_per_side_per_cycle")  # gua
 
 ## IC-V2-3 — DTE-Tiered Exit
 
-**Goal:** Weekly DTE table logic and CLOSE_FULL escalation. Monthly hard-close at DTE≤7. Integrate as predicate injected into IC-V2-2's roll guards.
+**Goal:** Monthly DTE exit logic: hard-close at DTE≤7, force-close at DTE≤1. Integrate as predicate injected into IC-V2-2's roll guards.
 
 **Files to change:**
 - `src/strategy/ic_nifty_v2.py` — add `_evaluate_dte_action()`, `_should_close_full()`, `_roll_allowed_by_dte()`
@@ -243,44 +231,31 @@ get_code_snippet("IronCondorV2ExpiryConfig.max_rolls_per_side_per_cycle")  # gua
 
 **Before any code:**
 ```
-get_code_snippet("IronCondorV2ExpiryConfig.weekly_close_full_dte")  # confirm config values
+get_code_snippet("IronCondorV2ExpiryConfig.monthly_close_full_dte")  # confirm config value
 get_code_snippet("IronCondorV2._evaluate_adjustment")  # see where DTE predicate is consumed
 ```
 
-**DTE logic (D4 ruling):**
+**DTE logic (D4 ruling, monthly only):**
 
-For weekly expiry:
 ```
-dte ≤ 1    →  CLOSE_FULL immediately, no discretion
-dte ≤ 3    →  CLOSE_FULL if any delta stop condition fires
-dte 4–5    →  ROLL_WING with strict guards (enforce both debit cap AND premium floor with tighter tolerance)
-dte ≥ 6    →  normal roll rules apply
-```
-
-For monthly expiry:
-```
-dte ≤ 7    →  CLOSE_FULL default; same behavior as weekly dte≤3
+dte ≤ 1    →  FORCE_CLOSE immediately, no discretion
+dte ≤ 7    →  CLOSE_FULL default
 dte > 7    →  normal roll rules apply
 ```
 
-`_roll_allowed_by_dte(dte, expiry_type)` → `bool` — returns False when CLOSE_FULL is forced.
-`_evaluate_dte_action(dte, expiry_type)` → one of `{"NORMAL", "STRICT_GUARD", "CLOSE_FULL", "FORCE_CLOSE"}`.
+`_roll_allowed_by_dte(dte)` → `bool` — returns False when CLOSE_FULL is forced.
+`_evaluate_dte_action(dte)` → one of `{"NORMAL", "CLOSE_FULL", "FORCE_CLOSE"}`.
 
 **Tests (test_ic_nifty_v2_dte.py):**
-- `test_weekly_dte_ge_6_normal` — NORMAL
-- `test_weekly_dte_5_strict` — STRICT_GUARD
-- `test_weekly_dte_4_strict` — STRICT_GUARD
-- `test_weekly_dte_3_close_full` — CLOSE_FULL
-- `test_weekly_dte_1_force_close` — FORCE_CLOSE (overrides even no delta stop)
 - `test_monthly_dte_gt_7_normal` — NORMAL
 - `test_monthly_dte_7_close_full` — CLOSE_FULL
 - `test_monthly_dte_1_force_close` — FORCE_CLOSE
-- `test_roll_allowed_by_dte_weekly` — False for dte≤3, True for dte≥6
+- `test_roll_allowed_by_dte_monthly` — False for dte≤7, True for dte>7
 - `test_dte_0_is_force_close` — boundary: DTE=0 → FORCE_CLOSE
 
 **greeks-analyst gate:** Mandatory before code-reviewer.
 
-**Commit:** `feat(strategy): IronCondorV2 DTE-tiered exit — weekly table, monthly hard-close, CLOSE_FULL`
+**Commit:** `feat(strategy): IronCondorV2 DTE-tiered exit — monthly hard-close DTE≤7, FORCE_CLOSE DTE≤1`
 
 ---
 
@@ -318,7 +293,7 @@ get_code_snippet("IronCondorV2._evaluate_adjustment")   # confirm IC-V2-2 done
 - `test_full_pipeline_delta_warn` — |short_delta| 0.31 → DELTA_WARN, no action
 - `test_full_pipeline_roll_wing` — |short_delta| 0.36, guards pass → ROLL_WING signal
 - `test_full_pipeline_forced_close_delta` — |short_delta| 0.46 → FORCED_CLOSE
-- `test_full_pipeline_forced_close_dte` — weekly DTE=1 → FORCED_CLOSE regardless of deltas
+- `test_full_pipeline_forced_close_dte` — monthly DTE=1 → FORCED_CLOSE regardless of deltas
 - `test_full_pipeline_profit_target` — both spreads decayed to 30% of credit → CLOSE_FULL
 - `test_protocol_compliance` — IronCondorV2 satisfies isinstance check for PaperStrategy protocol
 
@@ -330,7 +305,7 @@ get_code_snippet("IronCondorV2._evaluate_adjustment")   # confirm IC-V2-2 done
 
 ## IC-V2-5 — Registration
 
-**Goal:** Register the two V2 strategies in the factory / entry script so they appear in the daemon and can be tracked in the DB.
+**Goal:** Register the V2 monthly strategy in the factory / entry script so it appears in the daemon and can be tracked in the DB.
 
 **Files to change:**
 - Strategy factory or registry file (confirm via `search_graph("strategy_factory")` or `search_graph("STRATEGY_REGISTRY")`)
@@ -345,18 +320,16 @@ search_code("paper_ic_nifty_v1")          # locate all registration points
 get_code_snippet("IronCondorV2")          # confirm IC-V2-4 is complete
 ```
 
-**Strategy names (exact strings — must match DB):**
+**Strategy name (exact string — must match DB):**
 ```
-paper_ic_nifty_v2_weekly
 paper_ic_nifty_v2_monthly
 ```
 
 **Tests:**
-- `test_v2_weekly_strategy_name` — assert `IronCondorV2(IC_V2_WEEKLY).strategy_name == "paper_ic_nifty_v2_weekly"`
 - `test_v2_monthly_strategy_name` — assert `IronCondorV2(IC_V2_MONTHLY).strategy_name == "paper_ic_nifty_v2_monthly"`
-- `test_v2_not_same_as_v1_name` — V2 names do not collide with V1 names
+- `test_v2_not_same_as_v1_name` — V2 name does not collide with V1 names
 
-**Commit:** `feat(strategy): register paper_ic_nifty_v2_weekly and paper_ic_nifty_v2_monthly`
+**Commit:** `feat(strategy): register paper_ic_nifty_v2_monthly`
 
 ---
 
@@ -371,7 +344,7 @@ paper_ic_nifty_v2_monthly
 
 **What to add to CONTEXT.md module tree (under `src/strategy/`):**
 ```
-ic_expiry_config_v2.py  — IronCondorV2ExpiryConfig dataclass; IC_V2_WEEKLY / IC_V2_MONTHLY presets
+ic_expiry_config_v2.py  — IronCondorV2ExpiryConfig dataclass; IC_V2_MONTHLY preset
 ic_nifty_v2.py          — IronCondorV2 strategy: 25Δ/22Δ entry, 10Δ wings, partial roll adjustment, DTE-tiered exits
 ```
 
@@ -448,10 +421,6 @@ class ProfitLockConfig:
     monthly_lock_dte_lo: int = 10   # do not restructure below this DTE
     monthly_lock_dte_hi: int = 22   # prefer restructure window; above this restructure only if cheap
 
-    # DTE guards (weekly)
-    weekly_lock_dte_lo: int = 4
-    weekly_lock_dte_hi: int = 6
-
     # IV/VIX guards (secondary — mathematical formula is primary)
     min_vix: Decimal = Decimal("11")
     min_ivr: Decimal = Decimal("0.20")
@@ -462,13 +431,11 @@ Add to `IronCondorV2ExpiryConfig`:
     profit_lock: ProfitLockConfig = field(default_factory=ProfitLockConfig)
 ```
 
-Update `IC_V2_MONTHLY` and `IC_V2_WEEKLY` presets to include `profit_lock=ProfitLockConfig(...)` with
-weekly overriding `zone2_long_wing_min_premium=Decimal("10")` and DTE guards.
+Update `IC_V2_MONTHLY` preset to include `profit_lock=ProfitLockConfig(...)`.
 
 **Tests (append to test_ic_expiry_config_v2.py):**
 - `test_profit_lock_config_defaults` — zone triggers at 0.25/0.50/0.75, floor_budget 0.75
 - `test_profit_lock_monthly_preset` — min_premium=₹15, monthly DTE lo=10/hi=22
-- `test_profit_lock_weekly_preset` — min_premium=₹10, weekly DTE lo=4/hi=6
 - `test_profit_lock_frozen` — ProfitLockConfig is frozen=True
 - `test_floor_budget_plus_zone3_equals_one` — floor_budget(z2)=0.75; if Zone 3 were implemented: 0.35
 
@@ -552,7 +519,7 @@ class ProfitLockEngine:
         entry_credit_pts: Decimal,       # C₀ in option points per unit
         current_mark_pts: Decimal,
         dte: int,
-        expiry_type: str,                # "weekly" | "monthly"
+        expiry_type: str,                # "monthly"
         vix: Decimal | None,
         ivr: Decimal | None,
         state: ProfitLockState,
