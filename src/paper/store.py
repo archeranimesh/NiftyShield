@@ -32,6 +32,7 @@ from src.paper.models import (
     PaperTrade,
     TradeState,
 )
+from src.strategy.profit_lock_engine import ProfitLockState
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS paper_trades (
@@ -178,7 +179,14 @@ CREATE TABLE IF NOT EXISTS paper_action_audit (
 
 CREATE TABLE IF NOT EXISTS paper_strategies (
     strategy_name            TEXT PRIMARY KEY,
-    proxy_delta_breach_count INTEGER NOT NULL DEFAULT 0
+    proxy_delta_breach_count INTEGER NOT NULL DEFAULT 0,
+    profit_lock_zone         INTEGER NOT NULL DEFAULT 0,
+    zone2_lock_executed      INTEGER NOT NULL DEFAULT 0,
+    zone3_lock_executed      INTEGER NOT NULL DEFAULT 0,
+    cumulative_lock_debit    TEXT    NOT NULL DEFAULT '0',
+    active_put_width_pts     INTEGER NOT NULL DEFAULT 0,
+    active_call_width_pts    INTEGER NOT NULL DEFAULT 0,
+    cycle_id                 TEXT    NOT NULL DEFAULT ''
 ) STRICT;
 """
 
@@ -244,6 +252,31 @@ class PaperStore:
                 )
             except sqlite3.OperationalError:
                 pass  # Column already exists
+            # Migration: add profit_lock fields to paper_strategies
+            try:
+                conn.execute(
+                    "ALTER TABLE paper_strategies ADD COLUMN profit_lock_zone INTEGER NOT NULL DEFAULT 0"
+                )
+                conn.execute(
+                    "ALTER TABLE paper_strategies ADD COLUMN zone2_lock_executed INTEGER NOT NULL DEFAULT 0"
+                )
+                conn.execute(
+                    "ALTER TABLE paper_strategies ADD COLUMN zone3_lock_executed INTEGER NOT NULL DEFAULT 0"
+                )
+                conn.execute(
+                    "ALTER TABLE paper_strategies ADD COLUMN cumulative_lock_debit TEXT NOT NULL DEFAULT '0'"
+                )
+                conn.execute(
+                    "ALTER TABLE paper_strategies ADD COLUMN active_put_width_pts INTEGER NOT NULL DEFAULT 0"
+                )
+                conn.execute(
+                    "ALTER TABLE paper_strategies ADD COLUMN active_call_width_pts INTEGER NOT NULL DEFAULT 0"
+                )
+                conn.execute(
+                    "ALTER TABLE paper_strategies ADD COLUMN cycle_id TEXT NOT NULL DEFAULT ''"
+                )
+            except sqlite3.OperationalError:
+                pass  # Columns already exist
             # Migration: add instrument_key to UNIQUE constraint (BUG-4)
             row = conn.execute(
                 "SELECT sql FROM sqlite_master WHERE type='table' AND name='paper_trades'"
@@ -831,6 +864,81 @@ class PaperStore:
                    DO UPDATE SET proxy_delta_breach_count = excluded.proxy_delta_breach_count""",
                 (strategy_name, count),
             )
+
+    def get_profit_lock_state(self, strategy_name: str) -> ProfitLockState:
+        """Return current profit-lock state; inserts default row if missing."""
+        with _connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT profit_lock_zone, zone2_lock_executed, zone3_lock_executed, "
+                "cumulative_lock_debit, active_put_width_pts, active_call_width_pts, cycle_id "
+                "FROM paper_strategies WHERE strategy_name = ?",
+                (strategy_name,),
+            ).fetchone()
+
+            if row is None:
+                conn.execute(
+                    "INSERT INTO paper_strategies (strategy_name) VALUES (?)", (strategy_name,)
+                )
+                return ProfitLockState(
+                    profit_lock_zone=0,
+                    zone2_lock_executed=False,
+                    zone3_lock_executed=False,
+                    cumulative_lock_debit_pts=Decimal("0"),
+                    active_put_width_pts=0,
+                    active_call_width_pts=0,
+                    cycle_id="",
+                )
+
+            return ProfitLockState(
+                profit_lock_zone=row["profit_lock_zone"],
+                zone2_lock_executed=bool(row["zone2_lock_executed"]),
+                zone3_lock_executed=bool(row["zone3_lock_executed"]),
+                cumulative_lock_debit_pts=Decimal(row["cumulative_lock_debit"]),
+                active_put_width_pts=row["active_put_width_pts"],
+                active_call_width_pts=row["active_call_width_pts"],
+                cycle_id=row["cycle_id"],
+            )
+
+    def set_profit_lock_state(self, strategy_name: str, state: ProfitLockState) -> None:
+        """Upsert all profit-lock state fields atomically."""
+        with _connect(self.db_path) as conn:
+            conn.execute(
+                """INSERT INTO paper_strategies (
+                       strategy_name, profit_lock_zone, zone2_lock_executed, zone3_lock_executed,
+                       cumulative_lock_debit, active_put_width_pts, active_call_width_pts, cycle_id
+                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(strategy_name) DO UPDATE SET
+                       profit_lock_zone = excluded.profit_lock_zone,
+                       zone2_lock_executed = excluded.zone2_lock_executed,
+                       zone3_lock_executed = excluded.zone3_lock_executed,
+                       cumulative_lock_debit = excluded.cumulative_lock_debit,
+                       active_put_width_pts = excluded.active_put_width_pts,
+                       active_call_width_pts = excluded.active_call_width_pts,
+                       cycle_id = excluded.cycle_id""",
+                (
+                    strategy_name,
+                    state.profit_lock_zone,
+                    1 if state.zone2_lock_executed else 0,
+                    1 if state.zone3_lock_executed else 0,
+                    str(state.cumulative_lock_debit_pts),
+                    state.active_put_width_pts,
+                    state.active_call_width_pts,
+                    state.cycle_id,
+                ),
+            )
+
+    def reset_profit_lock_state(self, strategy_name: str, cycle_id: str) -> None:
+        """Reset all fields to defaults for a new entry cycle."""
+        default_state = ProfitLockState(
+            profit_lock_zone=0,
+            zone2_lock_executed=False,
+            zone3_lock_executed=False,
+            cumulative_lock_debit_pts=Decimal("0"),
+            active_put_width_pts=0,
+            active_call_width_pts=0,
+            cycle_id=cycle_id,
+        )
+        self.set_profit_lock_state(strategy_name, default_state)
 
     # ── Leg snapshots ─────────────────────────────────────────────────────────
 
