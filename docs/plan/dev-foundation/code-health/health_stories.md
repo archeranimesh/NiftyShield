@@ -444,6 +444,56 @@ Ref: dev-foundation/code-health CH-9b
 
 ---
 
+## CH-11 — `scripts/pipeline/vix_daily_ingest.py`
+
+**Owner:** Antigravity
+
+**Context:**
+`healthcheck.py` warns when VIX data is > 2 days stale, but nothing writes fresh data.
+`ingest_vix_from_api` in `src/backtest/vix_ingest.py` is resumable — it auto-detects the
+gap from the last Parquet date — but it has no caller in the cron stack. `pre_market_brief.py`
+computes IVR purely from the local Parquet (no live fetch); if the Parquet is stale, the IVR
+percentile is stale too.
+
+**Root cause surfaced 2026-06-26:** `pre_market_brief.py` was `await`-ing `fetch_vix_latest`
+(a sync function), causing a silent `TypeError` → IVR always showed `N/A`. Fixed by removing
+the live fetch entirely and computing from Parquet. The fix exposed that the Parquet itself
+needs a daily update cron.
+
+**What to implement:**
+
+`scripts/pipeline/vix_daily_ingest.py` — thin EOD cron script:
+1. Calls `ingest_vix_from_api(from_date=<gap_start>, to_date=date.today(), out_dir=vix_data_dir)`.
+   Resumability is handled inside `ingest_vix_from_api` — no gap logic needed here.
+2. Logs rows written via structlog (`_SCRIPT_NAME = "scripts.pipeline.vix_daily_ingest"`).
+3. Exits 0 on success (including 0 new rows — already up to date), 1 on `DataFetchError`.
+4. No Telegram notification — healthcheck will catch staleness if this cron fails.
+
+**Cron entry** (add to `TODOS.md`):
+```
+15 16 * * 1-5  cd /path/to/NiftyShield && python -m scripts.pipeline.vix_daily_ingest
+```
+Run at 16:15 IST — after market close, before healthcheck at 16:30.
+
+**Tests:** `tests/unit/pipeline/test_vix_daily_ingest.py`:
+1. Happy path — `ingest_vix_from_api` returns 1 row → exits 0
+2. Already up to date — `ingest_vix_from_api` returns 0 rows → exits 0
+3. `DataFetchError` raised → exits 1
+
+**Commit message:**
+```
+feat(pipeline): add vix_daily_ingest.py EOD cron for Parquet freshness
+
+Why: healthcheck warns on stale VIX but nothing was writing daily updates;
+     pre_market_brief IVR depends entirely on local Parquet being current
+What:
+- scripts/pipeline/vix_daily_ingest.py: thin cron wrapper for ingest_vix_from_api
+- tests/unit/pipeline/test_vix_daily_ingest.py: 3 unit tests
+Ref: dev-foundation/code-health CH-11
+```
+
+---
+
 ## CH-10 — Docs close
 
 **Owner:** Claude

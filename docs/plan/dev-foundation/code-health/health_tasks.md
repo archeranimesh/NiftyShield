@@ -4,7 +4,7 @@
 > Tick the box and append `| SHA: <sha>` when done. Add one line to `TODOS.md`.
 > Full story spec: `health_stories.md`.
 >
-> CH-1/2/3/5/7(define)/9(design) → Claude | CH-4/6/7(implement)/8/9(implement) → Antigravity
+> CH-1/2/3/5/7(define)/9(design) → Claude | CH-4/6/7(implement)/8/9(implement)/11 → Antigravity
 
 ---
 
@@ -30,6 +30,10 @@
 
 - [x] **CH-9a** — Claude: design `hypothesis` edge cases for `compute_ivr`, `aggregate_delta`, P&L arithmetic — **Claude** | SHA: 57418a7
 - [x] **CH-9b** — Implement `@given` tests from CH-9a design — **Antigravity** | SHA: 7157010
+
+## Pipeline tasks
+
+- [ ] **CH-11** — Create `scripts/pipeline/vix_daily_ingest.py` EOD cron + 3 unit tests — **Antigravity**
 
 ## Close
 
