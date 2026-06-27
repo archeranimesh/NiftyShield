@@ -100,11 +100,27 @@ IC_V2_MONTHLY = IronCondorV2ExpiryConfig(
 ```
 search_graph("IronCondorV1")             # see V1 class structure
 get_code_snippet("IronCondorV1")         # exact fields, method signatures
-get_code_snippet("IronCondorV1._select_short_put")  # V1 strike selection pattern
-get_code_snippet("IronCondorV1._apply_liquidity_gate")  # reuse liquidity gate
+get_code_snippet("IronCondorV1._parse_expiry")       # copy verbatim — regex, no V1 config dep
+get_code_snippet("IronCondorV1._find_leg")           # copy verbatim — pure chain lookup
+get_code_snippet("IronCondorV1._compute_combined_pnl")  # copy verbatim — same 4-leg structure
+get_code_snippet("IronCondorV1._compute_ivr_str")    # copy verbatim — VIX/IVR load, no V1 dep
+get_code_snippet("IronCondorV1._is_auto_execute")    # copy verbatim — util check on ApprovedAction
+search_graph("find_strike_by_delta")     # use roll_utils.find_strike_by_delta for delta selection
+search_graph("_apply_liquidity_gate")    # use src/instruments/strike_selector._apply_liquidity_gate
 search_graph("PaperStrategy")            # protocol signature
 get_code_snippet("IronCondorV2ExpiryConfig")  # confirm IC-V2-0 is done
 ```
+
+**Reuse policy (copy, do not inherit from V1):**
+- `_parse_expiry`, `_find_leg`, `_compute_combined_pnl`, `_compute_ivr_str`, `_is_auto_execute`,
+  `_EXPIRY_RE`, `_STRIKE_RE`, `_SHORT_ROLES`, `_LONG_ROLES` — copy verbatim from `ic_nifty_v1.py`.
+  These have zero V1-specific config dependency.
+- `_select_short_put` / `_select_short_call` — call `roll_utils.find_strike_by_delta()` directly;
+  do not copy V1's implementation (V1 uses a different delta range + config shape).
+- `_select_long_wing` — call `roll_utils.find_strike_by_delta()` + `_apply_liquidity_gate()`;
+  enforce V2-specific delta floor and premium floor from `IronCondorV2ExpiryConfig`.
+- Do NOT copy `_auto_select_action` or `_select_wing_roll_target` from V1 — both encode V1-specific
+  priority ordering and config references that differ in V2.
 
 **What to implement:**
 
@@ -477,9 +493,21 @@ Council ruling: Q1 (A=only valid approach), Q2 (complete formula), Q4 (automatio
 search_graph("IronCondorV2ExpiryConfig")           # confirm IC-V2-7 done
 get_code_snippet("ProfitLockConfig")               # exact fields
 search_graph("OptionChain")                        # chain data model
-get_code_snippet("filter_strikes_by_delta")        # reuse wing selector pattern
-search_graph("_apply_liquidity_gate")              # liquidity gate signature
+get_code_snippet("find_strike_by_delta")           # use roll_utils.find_strike_by_delta for wing selection
+search_graph("_apply_liquidity_gate")              # use src/instruments/strike_selector._apply_liquidity_gate
+get_code_snippet("IronCondorV2._find_leg")         # confirm IC-V2-1 done — reuse for chain lookup in engine
 ```
+
+**Reuse policy:**
+- `_select_inward_wing()` must call `roll_utils.find_strike_by_delta()` for delta-range filtering —
+  do not reimplement delta scanning. Pass `delta_range=(config.zone2_long_wing_delta_lo,
+  config.zone2_long_wing_delta_hi)` and `target_delta=config.zone2_long_wing_delta_target`.
+- After `find_strike_by_delta()` returns a candidate, apply the three additional floors inline:
+  `abs(delta) ≥ long_wing_delta_floor`, `mid_premium ≥ long_wing_min_premium`, `_apply_liquidity_gate()`.
+- Chain lookup within the engine (finding current wing marks for debit calculation) must use
+  `IronCondorV2._find_leg()` — do not re-implement strike parsing. The engine receives the chain
+  and delegates lookup to the strategy's existing helper via the caller (IC-V2-10 wires this).
+- `_evaluate_floor_formula()` is pure arithmetic — no external calls, no chain access.
 
 **What to implement:**
 
