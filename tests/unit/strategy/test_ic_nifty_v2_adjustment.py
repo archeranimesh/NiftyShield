@@ -307,11 +307,15 @@ class TestDeltaStop:
                 "23900": (None, _leg("23900", "-0.36", ltp="160", bid="159", ask="161")),
                 # Replacement put SHORT at 25200 — above existing call short (25100) → inverted
                 "25200": (None, _leg("25200", "-0.25", ltp="200", bid="199", ask="201")),
-                # Long put wing
-                "24900": (None, _leg("24900", "-0.10", ltp="50", bid="49", ask="51")),
+                # Long put wing (passes floors: ltp=50, spread=2/50=4% < 5%)
+                "24900": (None, _leg("24900", "-0.10", ltp="50", bid="48.75", ask="51.25")),
+                # Old long put hedge — MUST be present so guard 5 can price the roll.
+                # ltp=30 → close_debit=160-30=130; open_credit=200-50=150; roll_debit=-20 (net credit)
+                # → roll_debit well within 50% cap → guard 5 passes → guard 7 fires.
+                "23200": (None, _leg("23200", "-0.04", ltp="30", bid="29.25", ask="30.75")),
                 # Call short and long — both OTM
                 "25100": (_leg("25100", "0.18", ltp="70", bid="69", ask="71"), None),
-                "25800": (_leg("25800", "0.10", ltp="30", bid="29", ask="31"), None),
+                "25800": (_leg("25800", "0.10", ltp="30", bid="29.25", ask="30.75"), None),
             }
         )
 
@@ -426,3 +430,98 @@ class TestForcedClose:
         assert result.signal_type == "DELTA_STOP"
         guard_fails = [e for e in cap if e.get("event") == "ic_nifty_v2.roll_guard_failed"]
         assert any(e.get("guard") == "dte_cutoff" for e in guard_fails)
+
+
+# ---------------------------------------------------------------------------
+# Tests — chain_data_missing guard (stale / partial snapshot)
+# ---------------------------------------------------------------------------
+
+
+class TestChainDataMissingGuard:
+    def test_roll_blocked_when_old_short_absent_from_chain(self) -> None:
+        """Old short leg not in live chain → chain_data_missing guard fires → DELTA_STOP.
+
+        This covers the stale-snapshot scenario where the position's instrument
+        key is valid but the broker snapshot is partial (near-expiry, circuit, etc.).
+        """
+        strategy = IronCondorV2(config=IC_V2_MONTHLY)
+        strategy.set_original_credit(Decimal("150"))
+        positions = _standard_ic_positions()  # short_put at NSE_FO|NIFTY23900PE
+        # Build a full challenged chain (23900 present for delta signal lookup),
+        # then drop 23900 to simulate a stale snapshot for the debit-cap guard.
+        trigger_chain = _challenged_put_chain(put_delta="-0.36")
+        # Omit 23900 from the debit-cap lookup chain (simulate stale snapshot)
+        stale_chain = _chain(
+            {
+                k: (ce, pe)
+                for k, ocs in trigger_chain.strikes.items()
+                for ce, pe in [(ocs.ce, ocs.pe)]
+                if k != Decimal("23900")
+            }
+        )
+        # Call _execute_partial_roll directly with:
+        #  - positions that include short_put at 23900
+        #  - stale_chain that omits 23900 (so _find_leg returns None)
+        update, block = strategy._execute_partial_roll(
+            side="put",
+            positions=positions,
+            market=stale_chain,
+            dte=20,
+            expiry="2026-07-31",
+            roll_allowed_by_dte=True,
+            baseline={
+                "strategy_name": "test",
+                "trade_id": "",
+                "expiry": "",
+                "dte": 20,
+                "roll_count_put": 0,
+                "roll_count_call": 0,
+                "profit_lock_zone": 0,
+            },
+        )
+        assert update is None
+        assert block == "chain_data_missing"
+
+
+# ---------------------------------------------------------------------------
+# Tests — state helpers
+# ---------------------------------------------------------------------------
+
+
+class TestStateHelpers:
+    def test_reset_roll_state_clears_counters_and_credit(self) -> None:
+        """reset_roll_state() returns _rolls_executed to zero and _original_ic_credit to 0.
+
+        A missed call between entry cycles would carry roll counts forward,
+        causing the first ROLL_WING of a new trade to immediately hit FORCED_CLOSE.
+        """
+        strategy = IronCondorV2(config=IC_V2_MONTHLY)
+        # Simulate a completed cycle: one roll on each side
+        strategy._rolls_executed["put"] = 1
+        strategy._rolls_executed["call"] = 1
+        strategy.set_original_credit(Decimal("200"))
+
+        strategy.reset_roll_state()
+
+        assert strategy._rolls_executed == {"put": 0, "call": 0}
+        assert strategy._original_ic_credit == Decimal("0")
+
+    def test_set_original_credit_zero_skips_debit_cap_guard(self) -> None:
+        """set_original_credit(0) causes guard 5 to pass unconditionally (no cap).
+
+        This is the correct behaviour when the original credit was never set
+        (e.g. position opened before IC-V2-2 was deployed) — the guard skips
+        rather than blocking all rolls for legacy positions.
+        """
+        strategy = IronCondorV2(config=IC_V2_MONTHLY)
+        strategy.set_original_credit(Decimal("0"))  # credit=0 → cap guard skips
+        positions = _standard_ic_positions()
+        chain = _challenged_put_chain(put_delta="-0.36")
+
+        result = strategy._evaluate_adjustment(positions, chain, dte=20, expiry="2026-07-31")
+
+        # Roll should succeed (ROLL_WING) despite huge potential debit,
+        # because the guard condition is `original_ic_credit > 0`.
+        assert result is not None
+        assert result.signal_type == "ROLL_WING"
+        assert result.roll_update is not None

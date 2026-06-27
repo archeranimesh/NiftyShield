@@ -106,16 +106,20 @@ class RollResult:
 
     Attributes:
         signal_type: One of DELTA_WARN / ROLL_WING / DELTA_STOP / FORCED_CLOSE.
-        side: "put" or "call" — which vertical was challenged. None for DELTA_WARN
-            when no single side is clearly dominant (both may be warned).
+        side: "put" or "call" — which vertical was challenged.
+            For DELTA_WARN the field always contains the first side (in iteration order
+            "put" then "call") whose |delta| reached the warn threshold.  Both sides
+            can reach the warn zone simultaneously in a low-IV aggressively-entered IC;
+            the current implementation breaks on the first match.  A future dual-warn
+            path could emit two separate events — not implemented in Phase 1.
         roll_update: 4-leg PositionUpdate when signal_type == ROLL_WING and roll
             executes successfully. None for all other signal types.
         block_reason: Guard name that blocked the roll (for logging). None unless
-            the roll was attempted but blocked.
+            the roll was attempted but blocked by a guard.
     """
 
     signal_type: Literal["DELTA_WARN", "ROLL_WING", "DELTA_STOP", "FORCED_CLOSE"]
-    side: Literal["put", "call"] | None
+    side: Literal["put", "call"]
     roll_update: PositionUpdate | None
     block_reason: str | None
 
@@ -615,7 +619,7 @@ class IronCondorV2:
                 original_long_strike=str(self._long_wing_strike(positions, side)),
             )
 
-            roll_result = self._execute_partial_roll(
+            roll_result, block_reason = self._execute_partial_roll(
                 side=side,  # type: ignore[arg-type]
                 positions=positions,
                 market=market,
@@ -653,13 +657,12 @@ class IronCondorV2:
                 )
             else:
                 # Roll blocked → escalate to DELTA_STOP
-                block_reason = getattr(self, "_last_block_reason", "unknown")
                 log.warning(
                     "ic_nifty_v2.delta_stop",
                     **baseline,
                     side=side,
                     short_delta=str(delta_val),
-                    block_reason="roll_guard_failed",
+                    block_reason=block_reason,
                 )
                 return RollResult(
                     signal_type="DELTA_STOP",
@@ -708,18 +711,22 @@ class IronCondorV2:
         *,
         roll_allowed_by_dte: bool,
         baseline: dict,
-    ) -> PositionUpdate | None:
+    ) -> tuple[PositionUpdate | None, str]:
         """Attempt a 4-leg atomic close+reopen of the challenged vertical.
 
-        All 7 guards are checked in order. Any guard failure sets
-        self._last_block_reason and returns None.
+        Returns a ``(update, block_reason)`` tuple so callers never read
+        instance state for the outcome.  When the roll succeeds ``update`` is
+        the 4-leg ``PositionUpdate`` and ``block_reason`` is an empty string.
+        When any guard fails ``update`` is ``None`` and ``block_reason`` is the
+        name of the guard that rejected the roll.
 
         Guard order (D3 ruling):
           1. DTE above expiry-specific cutoff (injected predicate roll_allowed_by_dte)
           2. Replacement short exists in delta range on current chain
           3. Replacement long wing satisfies delta/premium/liquidity floors
           4. replacement_width ≤ original_spread_width (no max-loss expansion)
-          5. roll_debit ≤ roll_debit_cap_fraction × original_ic_credit
+          5. roll_debit ≤ roll_debit_cap_fraction × original_ic_credit;
+             guard fails (chain_data_missing) when old legs absent from snapshot
           6. rolls_executed_this_side < max_rolls_per_side_per_cycle
           7. New short does not cross opposite side's short strike (no inverted condor)
 
@@ -733,8 +740,8 @@ class IronCondorV2:
             baseline: Shared log kwargs dict.
 
         Returns:
-            PositionUpdate with 4 LegSpec objects on success, or None if any
-            guard fails.
+            ``(PositionUpdate, "")`` on success, or ``(None, guard_name)`` on
+            any guard failure.
         """
         cfg = self._config
         option_type: Literal["CE", "PE"] = "CE" if side == "call" else "PE"
@@ -748,15 +755,13 @@ class IronCondorV2:
         opposite_short_pos = next((p for p in positions if p.leg_role == opposite_short_role), None)
 
         if old_short_pos is None or old_long_pos is None:
-            self._last_block_reason = "no_short_candidate"
-            return None
+            return None, "no_short_candidate"
 
         # Derive original spread width from stored strikes
         old_short_strike = self._position_strike(old_short_pos)
         old_long_strike = self._position_strike(old_long_pos)
         if old_short_strike is None or old_long_strike is None:
-            self._last_block_reason = "no_short_candidate"
-            return None
+            return None, "no_short_candidate"
         original_width = abs(old_short_strike - old_long_strike)
 
         # Locate opposite short strike (for inverted-condor guard)
@@ -773,8 +778,7 @@ class IronCondorV2:
                 guard="dte_cutoff",
                 detail=f"dte={dte} at or below close_full threshold",
             )
-            self._last_block_reason = "dte_cutoff"
-            return None
+            return None, "dte_cutoff"
 
         # ── Guard 6 (checked early for efficiency): max_rolls ─────────────────
         # Already checked in _evaluate_adjustment before calling this method,
@@ -787,8 +791,7 @@ class IronCondorV2:
                 guard="max_rolls_exhausted",
                 detail=f"rolls_executed={self._rolls_executed[side]}",
             )
-            self._last_block_reason = "max_rolls_exhausted"
-            return None
+            return None, "max_rolls_exhausted"
 
         # ── Guard 2: replacement short exists in delta range ───────────────────
         new_short = roll_utils.find_strike_by_delta(
@@ -812,8 +815,7 @@ class IronCondorV2:
                 guard="no_short_candidate",
                 detail="no replacement short in delta range",
             )
-            self._last_block_reason = "no_short_candidate"
-            return None
+            return None, "no_short_candidate"
 
         # ── Guard 3: replacement long wing passes all floors ───────────────────
         new_long = self._select_long_wing(market, side, expiry=expiry, dte=dte)
@@ -825,8 +827,7 @@ class IronCondorV2:
                 guard="wing_floor_miss",
                 detail="replacement long fails delta/premium/liquidity floor",
             )
-            self._last_block_reason = "wing_floor_miss"
-            return None
+            return None, "wing_floor_miss"
 
         # ── Guard 4: replacement width ≤ original spread width ─────────────────
         new_width = abs(new_short.strike - new_long.strike)
@@ -838,33 +839,45 @@ class IronCondorV2:
                 guard="width_expansion",
                 detail=f"new_width={new_width} > original_width={original_width}",
             )
-            self._last_block_reason = "width_expansion"
-            return None
+            return None, "width_expansion"
 
         # ── Guard 5: roll debit ≤ roll_debit_cap_fraction × original_ic_credit ─
+        # Fail-close when chain data is stale: absent legs mean we cannot price
+        # the roll, and proceeding without the guard is riskier than aborting.
         old_short_leg = self._find_leg(market, old_short_pos.instrument_key)
         old_long_leg = self._find_leg(market, old_long_pos.instrument_key)
-        if old_short_leg is not None and old_long_leg is not None:
-            # Debit to close old spread + open new spread (approximate from mid prices)
-            close_debit = old_short_leg.ltp - old_long_leg.ltp  # buy back short, sell long
-            open_debit = new_short.ltp - new_long.ltp  # sell new short, buy new long (net credit)
-            roll_debit = close_debit - open_debit  # net debit of the entire 4-leg transaction
-            if (
-                self._original_ic_credit > Decimal("0")
-                and roll_debit > cfg.roll_debit_cap_fraction * self._original_ic_credit
-            ):
-                log.warning(
-                    "ic_nifty_v2.roll_guard_failed",
-                    **baseline,
-                    side=side,
-                    guard="debit_cap",
-                    detail=(
-                        f"roll_debit={roll_debit} > "
-                        f"{cfg.roll_debit_cap_fraction}×{self._original_ic_credit}"
-                    ),
-                )
-                self._last_block_reason = "debit_cap"
-                return None
+        if old_short_leg is None or old_long_leg is None:
+            log.warning(
+                "ic_nifty_v2.roll_guard_failed",
+                **baseline,
+                side=side,
+                guard="chain_data_missing",
+                detail=(
+                    f"old_short_in_chain={old_short_leg is not None} "
+                    f"old_long_in_chain={old_long_leg is not None}"
+                ),
+            )
+            return None, "chain_data_missing"
+
+        # Both legs resolved — compute roll debit and check cap.
+        close_debit = old_short_leg.ltp - old_long_leg.ltp  # buy back short, sell long
+        open_credit = new_short.ltp - new_long.ltp  # sell new short, buy new long
+        roll_debit = close_debit - open_credit  # net debit of entire 4-leg transaction
+        if (
+            self._original_ic_credit > Decimal("0")
+            and roll_debit > cfg.roll_debit_cap_fraction * self._original_ic_credit
+        ):
+            log.warning(
+                "ic_nifty_v2.roll_guard_failed",
+                **baseline,
+                side=side,
+                guard="debit_cap",
+                detail=(
+                    f"roll_debit={roll_debit} > "
+                    f"{cfg.roll_debit_cap_fraction}×{self._original_ic_credit}"
+                ),
+            )
+            return None, "debit_cap"
 
         # ── Guard 7: no inverted condor ────────────────────────────────────────
         if opposite_short_strike is not None:
@@ -879,8 +892,7 @@ class IronCondorV2:
                         f"existing call short {opposite_short_strike}"
                     ),
                 )
-                self._last_block_reason = "inverted_condor"
-                return None
+                return None, "inverted_condor"
             if side == "call" and new_short.strike <= opposite_short_strike:
                 log.warning(
                     "ic_nifty_v2.roll_guard_failed",
@@ -892,8 +904,7 @@ class IronCondorV2:
                         f"existing put short {opposite_short_strike}"
                     ),
                 )
-                self._last_block_reason = "inverted_condor"
-                return None
+                return None, "inverted_condor"
 
         # ── All guards pass — build 4-leg atomic PositionUpdate ───────────────
         # Leg 1: Buy back old short (close challenged short)
@@ -943,11 +954,12 @@ class IronCondorV2:
                 notes=f"roll_open_long delta={new_long.delta}",
             ),
         ]
-        # net_credit here is the roll's net P&L (could be debit)
-        old_short_ltp = old_short_leg.ltp if old_short_leg is not None else Decimal("0")
-        old_long_ltp = old_long_leg.ltp if old_long_leg is not None else Decimal("0")
-        roll_net = (old_short_ltp - old_long_ltp) - (new_short.ltp - new_long.ltp)
-        return PositionUpdate(legs=legs, total_credit_pts=roll_net)
+        # total_credit_pts = net option points received for the roll.
+        # Positive = net credit (roll collects more than it costs).
+        # Negative = net debit (roll costs more than it returns — possible when
+        # rolling aggressively OTM; guard 5 caps this at 50% of original credit).
+        roll_net = (old_short_leg.ltp - old_long_leg.ltp) - (new_short.ltp - new_long.ltp)
+        return PositionUpdate(legs=legs, total_credit_pts=roll_net), ""
 
     # ── Protocol stubs (implemented in IC-V2-4) ──────────────────────────────
 
