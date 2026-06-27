@@ -33,11 +33,11 @@
 > Council ruling: `docs/archive/council/strategy/2026-06-27_ic-v2-profit-lock-adjustment.md` Stage 3.
 > All profit-lock actions are auto_execute=True. No Telegram approval gate — notification only after execution.
 
-- [ ] **IC-V2-7** `[A:sonnet]` — Profit-lock config: `ProfitLockConfig` dataclass + zone thresholds + DTE/IV/debit guards added to `ic_expiry_config_v2.py` + tests
-- [ ] **IC-V2-8** `[A:sonnet]` — Profit-lock engine: `src/strategy/profit_lock_engine.py` — stateless evaluator; floor formula `max(W,W)+D_cum+D_lock+K ≤ 0.75×C₀`; wing selector; 3-zone decision; 14 tests including exact numeric spot-checks
-- [ ] **IC-V2-9** `[A:sonnet]` — State persistence: `paper_strategies` schema migration + `PaperStore.get/set/reset_profit_lock_state()` + tests
-- [ ] **IC-V2-10** `[C:sonnet]` — Signal wiring: profit-lock into `IronCondorV2.check_signals()` — 8-level precedence ladder, auto_execute path, post-execution Telegram notification (not approval) + tests
-- [ ] **IC-V2-11** `[A:sonnet]` — V1 vs V2 monthly comparison: `scripts/strategies/ic/paper_ic_monthly_comparison.py` — `ICMonthlyStats`, side-by-side Telegram report, cron `45 15 * * 1-5` + tests
+- [x] **IC-V2-7** `[A:sonnet]` — Profit-lock config: `ProfitLockConfig` dataclass + zone thresholds + DTE/IV/debit guards added to `ic_expiry_config_v2.py` + tests | SHA: a4f70d1
+- [x] **IC-V2-8** `[A:sonnet]` — Profit-lock engine: `src/strategy/profit_lock_engine.py` — stateless evaluator; floor formula `max(W,W)+D_cum+D_lock+K ≤ 0.75×C₀`; wing selector; 3-zone decision; 14 tests including exact numeric spot-checks
+- [x] **IC-V2-9** `[A:sonnet]` — State persistence: `paper_strategies` schema migration + `PaperStore.get/set/reset_profit_lock_state()` + tests | SHA: b0485e7
+- [x] **IC-V2-10** `[C:sonnet]` — Signal wiring: profit-lock into `IronCondorV2.check_signals()` — 8-level precedence ladder, auto_execute path, post-execution Telegram notification (not approval) + tests | SHA: f737ee5
+- [x] **IC-V2-11** `[A:sonnet]` — V1 vs V2 monthly comparison: `scripts/strategies/ic/paper_ic_monthly_comparison.py` — `ICMonthlyStats`, side-by-side Telegram report, cron `45 15 * * 1-5` + tests | SHA: a555c6c
 
 ## Phase 3 — Docs Close (after Phase 2)
 

@@ -343,3 +343,6 @@ Full log: [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md)
 | 2026-06-27 | ic-nifty-v2 IC-V2-5 — IronCondorV2 registration: add CONFIGS_V2 dict to ic_expiry_config_v2.py; wire IronCondorV2 import + registration loop into monitor_daemon.py; 6 registration tests — 91d0bc7 |
 | 2026-06-27 | ic-nifty-v2 IC-V2-6 — Docs close: CONTEXT.md add V2 config + strategy description (D1/D2/D3/D4 council ruling); CONTEXT_TREE.md add entire src/strategy/ section (20 files); TODOS.md session log entries — commit pending (git lock) |
 | 2026-06-27 | ic-nifty-v2 IC-V2-7 — ProfitLockConfig dataclass (zone triggers, floor formula constants, DTE guards); added profit_lock field to IronCondorV2ExpiryConfig; IC_V2_MONTHLY override; 4 tests; daemon test mock fix |
+| 2026-06-27 | ic-nifty-v2 IC-V2-9 — State persistence: paper_strategies schema migration + PaperStore.get/set/reset_profit_lock_state() + tests — b0485e7 |
+| 2026-06-27 | ic-nifty-v2 IC-V2-10 — profit-lock signal wiring into check_signals() (8-level precedence, PROFIT_LOCK_ZONE2 auto-execute, Zone1 INFO, monitor.py metadata fix, 9 tests) — f737ee5 |
+| 2026-06-27 | ic-nifty-v2 IC-V2-11 — paper_ic_monthly_comparison.py script comparing V1 and V2 paper monthly ICs; extracts ICMonthlyStats; 6 tests — a555c6c |
