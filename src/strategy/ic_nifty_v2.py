@@ -78,6 +78,15 @@ _LIQUIDITY_GATE_PCT = Decimal("0.05")  # max bid/ask spread as fraction of mid
 # near-ATM strikes (>20Δ).
 _LONG_WING_DELTA_CEILING = Decimal("0.20")
 
+# ── Protocol constants (IC-V2-4) ──────────────────────────────────────────────
+# Profit target: close when mark ≤ 30% of entry credit (70% captured).
+_PROFIT_TARGET_RETENTION = Decimal("0.30")
+
+# Allowed action types for apply_action.
+_ALLOWED_V2_ACTIONS = frozenset(
+    {"CLOSE_FULL", "CLOSE_CALL_SPREAD", "CLOSE_PUT_SPREAD", "ROLL_WING"}
+)
+
 
 # ── Position update ───────────────────────────────────────────────────────────
 
@@ -1050,16 +1059,326 @@ class IronCondorV2:
         market: OptionChain,
         positions: list[PaperPosition],
     ) -> list[SignalEvent]:
-        """Not yet implemented — wired in IC-V2-4."""
-        raise NotImplementedError("IronCondorV2.check_signals implemented in IC-V2-4")
+        """Evaluate exit/adjustment signals for the open IronCondorV2 position.
+
+        Signal evaluation order (D3/D4 council ruling):
+          1. DTE FORCE_CLOSE (dte≤1) → FORCED_CLOSE, return immediately.
+          2. Delta evaluation via _evaluate_adjustment:
+               FORCED_CLOSE / DELTA_STOP / ROLL_WING / DELTA_WARN
+               When DTE==CLOSE_FULL, roll is blocked; dte_cutoff DELTA_STOP
+               escalates to FORCED_CLOSE.
+          3. DTE CLOSE_FULL with no delta breach → FORCED_CLOSE (DTE-based).
+          4. Profit target (mark ≤ 30% of entry credit) → CLOSE_FULL.
+          5. Otherwise → [] (hold).
+
+        Args:
+            market: Current Nifty 50 option chain snapshot.
+            positions: All open paper positions (may include other strategies).
+
+        Returns:
+            List of SignalEvents; empty when no action is warranted.
+        """
+        ic_positions = [p for p in positions if p.strategy_name == self.strategy_name]
+        if not ic_positions:
+            return []
+
+        # ── DTE / expiry ─────────────────────────────────────────────────────
+        # Use first position whose key carries a parseable expiry date.
+        expiry = next(
+            (
+                self._parse_expiry(p.instrument_key)
+                for p in ic_positions
+                if self._parse_expiry(p.instrument_key) is not None
+            ),
+            None,
+        )
+        if expiry is None:
+            return []
+        dte = (expiry - market_today()).days
+        expiry_str = str(expiry)
+
+        # ── Step 1: DTE hard stops ────────────────────────────────────────────
+        dte_action = self._evaluate_dte_action(dte, expiry=expiry_str)
+
+        if dte_action == "FORCE_CLOSE":
+            return [
+                SignalEvent(
+                    event_type="FORCED_CLOSE",
+                    severity="ACTION",
+                    description=f"DTE {dte} ≤ 1 — force close; expiry imminent",
+                    payload={
+                        "dte": dte,
+                        "reason": "dte_force_close",
+                        "auto_execute": True,
+                        "auto_action": "CLOSE_FULL",
+                        "valid_actions": ["CLOSE_FULL"],
+                    },
+                )
+            ]
+
+        # ── Step 2: Delta evaluation ──────────────────────────────────────────
+        roll_allowed = self._roll_allowed_by_dte(dte)
+        roll_result = self._evaluate_adjustment(
+            ic_positions,
+            market,
+            dte,
+            expiry_str,
+            roll_allowed_by_dte=roll_allowed,
+        )
+
+        if roll_result is not None:
+            signal = self._roll_result_to_signal(roll_result, dte, expiry_str, dte_action)
+            return [signal]
+
+        # ── Step 3: DTE CLOSE_FULL with no delta breach ───────────────────────
+        if dte_action == "CLOSE_FULL":
+            return [
+                SignalEvent(
+                    event_type="FORCED_CLOSE",
+                    severity="ACTION",
+                    description=(
+                        f"DTE {dte} ≤ {self._config.monthly_close_full_dte} — monthly hard close"
+                    ),
+                    payload={
+                        "dte": dte,
+                        "reason": "dte_close_full",
+                        "auto_execute": True,
+                        "auto_action": "CLOSE_FULL",
+                        "valid_actions": ["CLOSE_FULL"],
+                    },
+                )
+            ]
+
+        # ── Step 4: Profit target ─────────────────────────────────────────────
+        combined_mark, entry_credit = self._compute_combined_pnl(market, ic_positions)
+        if combined_mark is not None and entry_credit > Decimal("0"):
+            captured_fraction = (entry_credit - combined_mark) / entry_credit
+            if combined_mark <= _PROFIT_TARGET_RETENTION * entry_credit:
+                log.info(
+                    "ic_nifty_v2.profit_target_close",
+                    strategy_name=self.strategy_name,
+                    trade_id="",
+                    expiry=expiry_str,
+                    dte=dte,
+                    captured_fraction=str(captured_fraction.quantize(Decimal("0.01"))),
+                    current_mark_pts=str(combined_mark),
+                    entry_credit_pts=str(entry_credit),
+                )
+                return [
+                    SignalEvent(
+                        event_type="CLOSE_FULL",
+                        severity="ACTION",
+                        description=(
+                            f"Profit target: {float(captured_fraction):.0%} of entry credit captured"
+                        ),
+                        payload={
+                            "captured_fraction": str(captured_fraction.quantize(Decimal("0.01"))),
+                            "current_mark_pts": str(combined_mark),
+                            "entry_credit_pts": str(entry_credit),
+                            "auto_execute": True,
+                            "auto_action": "CLOSE_FULL",
+                            "valid_actions": ["CLOSE_FULL"],
+                        },
+                    )
+                ]
+
+        # ── Step 5: Hold ──────────────────────────────────────────────────────
+        return []
+
+    def _roll_result_to_signal(
+        self,
+        roll_result: RollResult,
+        dte: int,
+        expiry_str: str,
+        dte_action: str,
+    ) -> SignalEvent:
+        """Convert a RollResult from _evaluate_adjustment to a SignalEvent.
+
+        DELTA_STOP with block_reason=="dte_cutoff" escalates to FORCED_CLOSE when
+        DTE action is CLOSE_FULL, because the whole IC must close rather than
+        just the challenged spread.
+
+        Args:
+            roll_result: Output of _evaluate_adjustment.
+            dte: Days to expiry (for payload logging).
+            expiry_str: ISO expiry string.
+            dte_action: Output of _evaluate_dte_action ("NORMAL"/"CLOSE_FULL"/"FORCE_CLOSE").
+
+        Returns:
+            The appropriate SignalEvent for this roll result.
+        """
+        sig = roll_result.signal_type
+        side = roll_result.side
+
+        if sig == "DELTA_WARN":
+            return SignalEvent(
+                event_type="DELTA_WARN",
+                severity="WARN",
+                description=f"{side} leg |delta| ≥ {self._config.roll_warn_delta} — delta warning",
+                payload={"side": side, "dte": dte, "expiry": expiry_str},
+            )
+
+        if sig == "ROLL_WING":
+            return SignalEvent(
+                event_type="ROLL_WING",
+                severity="ACTION",
+                description=f"{side} spread rolled farther OTM",
+                payload={
+                    "side": side,
+                    "dte": dte,
+                    "expiry": expiry_str,
+                    "auto_execute": True,
+                    "auto_action": "ROLL_WING",
+                    "valid_actions": ["ROLL_WING", "CLOSE_FULL"],
+                },
+            )
+
+        if sig == "DELTA_STOP":
+            # dte_cutoff guard with CLOSE_FULL DTE → escalate to full close
+            if roll_result.block_reason == "dte_cutoff" and dte_action == "CLOSE_FULL":
+                return SignalEvent(
+                    event_type="FORCED_CLOSE",
+                    severity="ACTION",
+                    description=(
+                        f"{side} delta breached roll threshold but DTE {dte} blocks roll"
+                        " — forcing full close"
+                    ),
+                    payload={
+                        "side": side,
+                        "dte": dte,
+                        "reason": "delta_breach_dte_cutoff",
+                        "auto_execute": True,
+                        "auto_action": "CLOSE_FULL",
+                        "valid_actions": ["CLOSE_FULL"],
+                    },
+                )
+            close_action = "CLOSE_CALL_SPREAD" if side == "call" else "CLOSE_PUT_SPREAD"
+            return SignalEvent(
+                event_type="DELTA_STOP",
+                severity="ACTION",
+                description=f"{side} spread delta stop — roll blocked ({roll_result.block_reason})",
+                payload={
+                    "side": side,
+                    "block_reason": roll_result.block_reason,
+                    "dte": dte,
+                    "auto_execute": True,
+                    "auto_action": close_action,
+                    "valid_actions": [close_action, "CLOSE_FULL"],
+                },
+            )
+
+        # sig == "FORCED_CLOSE"
+        return SignalEvent(
+            event_type="FORCED_CLOSE",
+            severity="ACTION",
+            description=f"{side} |delta| ≥ {self._config.forced_close_delta} — forced full close",
+            payload={
+                "side": side,
+                "dte": dte,
+                "reason": roll_result.block_reason or "extreme_delta",
+                "auto_execute": True,
+                "auto_action": "CLOSE_FULL",
+                "valid_actions": ["CLOSE_FULL"],
+            },
+        )
+
+    def describe_context(
+        self,
+        event: SignalEvent,
+        market: OptionChain,
+        positions: list[PaperPosition],
+    ) -> str:
+        """Build a plain-text context block for the council prompt.
+
+        Summarises: spot, DTE, IVR, entry credit, combined mark, per-leg Greeks.
+
+        Args:
+            event: Signal event that triggered the context request.
+            market: Current Nifty 50 option chain snapshot.
+            positions: All open paper positions.
+
+        Returns:
+            Multi-line plain-text context string; no HTML markup.
+        """
+        ic_positions = [p for p in positions if p.strategy_name == self.strategy_name]
+        expiry = next(
+            (self._parse_expiry(p.instrument_key) for p in ic_positions),
+            None,
+        )
+        dte = (expiry - market_today()).days if expiry is not None else None
+        combined_mark, entry_credit = self._compute_combined_pnl(market, ic_positions)
+
+        lines: list[str] = [
+            f"Strategy: {self.strategy_name}",
+            f"Signal: {event.event_type} ({event.severity})",
+            f"Nifty spot: {market.underlying_spot}",
+            f"DTE: {dte if dte is not None else 'unavailable'}",
+            self._compute_ivr_str(),
+            f"Entry credit: {entry_credit}",
+            f"Combined mark: {combined_mark if combined_mark is not None else 'unavailable'}",
+            f"Roll counts: put={self._rolls_executed['put']} call={self._rolls_executed['call']}",
+        ]
+        for pos in ic_positions:
+            opt_leg = self._find_leg(market, pos.instrument_key)
+            lines.append(f"Leg: {pos.leg_role} | key: {pos.instrument_key}")
+            if opt_leg is not None:
+                lines.append(f"  Delta: {opt_leg.delta}  IV: {opt_leg.iv}  LTP: {opt_leg.ltp}")
+            else:
+                lines.append("  Chain lookup: unavailable")
+
+        if not ic_positions:
+            lines.append("No open IC V2 positions found.")
+
+        return "\n".join(lines)
 
     async def apply_action(
         self,
         positions: list[PaperPosition],
         action: ApprovedAction,
     ) -> list[PaperPosition]:
-        """Not yet implemented — wired in IC-V2-4."""
-        raise NotImplementedError("IronCondorV2.apply_action implemented in IC-V2-4")
+        """Validate and apply an approved action for IronCondorV2.
+
+        Accepted action types: ``CLOSE_FULL``, ``CLOSE_CALL_SPREAD``,
+        ``CLOSE_PUT_SPREAD``, and ``ROLL_WING``.  Any other action_type
+        raises ``ValueError``.
+
+        For auto-executed actions the legs_to_close set is derived from
+        the action_type rather than relying on caller-populated legs_to_close.
+
+        Args:
+            positions: Current open paper positions.
+            action: Approved action; must have an allowed action_type.
+
+        Returns:
+            Updated positions with closed legs filtered out.
+
+        Raises:
+            ValueError: When action_type is not in the allowed set.
+        """
+        if action.action_type not in _ALLOWED_V2_ACTIONS:
+            raise ValueError(
+                f"IronCondorV2 does not permit {action.action_type!r} — "
+                f"allowed: {sorted(_ALLOWED_V2_ACTIONS)}."
+            )
+
+        closed = set(action.legs_to_close)
+        if self._is_auto_execute(action):
+            if action.action_type == "CLOSE_FULL":
+                closed = _SHORT_ROLES | _LONG_ROLES
+            elif action.action_type == "CLOSE_CALL_SPREAD":
+                closed = {"short_call", "long_call_hedge"}
+            elif action.action_type == "CLOSE_PUT_SPREAD":
+                closed = {"short_put", "long_put_hedge"}
+            # ROLL_WING: legs_to_close comes from the payload; PaperExecutor
+            # handles new-leg writes.
+
+        log.info(
+            "ic_nifty_v2.apply_action",
+            strategy_name=self.strategy_name,
+            action_type=action.action_type,
+            legs_to_close=list(closed),
+        )
+        return [p for p in positions if p.leg_role not in closed]
 
     # ── Private helpers (copied verbatim from ic_nifty_v1) ───────────────────
 
