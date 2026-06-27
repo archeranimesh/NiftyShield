@@ -49,7 +49,8 @@ def test_comparison_report_format():
         realized_pnl_month=Decimal("1500"),
         unrealized_pnl=Decimal("7500"),
         signals_fired_today=["DELTA_WARN"],
-        adjustment_count=1,
+        roll_count=1,
+        lock_count=0,
     )
     v2 = ICMonthlyStats(
         strategy_name="paper_ic_nifty_v2_monthly",
@@ -63,7 +64,8 @@ def test_comparison_report_format():
         realized_pnl_month=Decimal("2500"),
         unrealized_pnl=Decimal("8000"),
         signals_fired_today=[],
-        adjustment_count=2,
+        roll_count=1,
+        lock_count=1,
     )
 
     report = build_comparison_report(v1, v2, date(2026, 6, 27))
@@ -88,7 +90,8 @@ def test_comparison_report_one_missing():
         realized_pnl_month=Decimal("1500"),
         unrealized_pnl=Decimal("7500"),
         signals_fired_today=["DELTA_WARN"],
-        adjustment_count=1,
+        roll_count=1,
+        lock_count=0,
     )
     v2 = ICMonthlyStats(
         strategy_name="paper_ic_nifty_v2_monthly",
@@ -102,7 +105,8 @@ def test_comparison_report_one_missing():
         realized_pnl_month=Decimal("2500"),
         unrealized_pnl=Decimal("0"),
         signals_fired_today=[],
-        adjustment_count=0,
+        roll_count=0,
+        lock_count=0,
     )
 
     report = build_comparison_report(v1, v2, date(2026, 6, 27))
@@ -126,7 +130,8 @@ def test_edge_calculation():
         realized_pnl_month=Decimal("100"),
         unrealized_pnl=Decimal("100"),
         signals_fired_today=[],
-        adjustment_count=0,
+        roll_count=0,
+        lock_count=0,
     )
     v2 = ICMonthlyStats(
         strategy_name="paper_ic_nifty_v2_monthly",
@@ -140,7 +145,8 @@ def test_edge_calculation():
         realized_pnl_month=Decimal("150"),
         unrealized_pnl=Decimal("100"),
         signals_fired_today=[],
-        adjustment_count=0,
+        roll_count=0,
+        lock_count=0,
     )
 
     report = build_comparison_report(v1, v2, date(2026, 6, 27))

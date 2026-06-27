@@ -3,10 +3,11 @@
 
 import argparse
 import asyncio
+import re
 import sqlite3
 import sys
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -49,7 +50,8 @@ class ICMonthlyStats:
     realized_pnl_month: Decimal
     unrealized_pnl: Decimal
     signals_fired_today: list[str]
-    adjustment_count: int
+    roll_count: int
+    lock_count: int
 
 
 def _get_monthly_realized_pnl(store: PaperStore, strategy_name: str, today: date) -> Decimal:
@@ -88,19 +90,27 @@ def _get_cycle_start_date(store: PaperStore, strategy_name: str) -> str | None:
 
 def _get_adjustment_count(
     store: PaperStore, strategy_name: str, cycle_start_str: str | None
-) -> int:
+) -> tuple[int, int]:
     if not cycle_start_str:
-        return 0
+        return 0, 0
     with sqlite3.connect(store.db_path) as conn:
-        row = conn.execute(
+        rolls = conn.execute(
             """SELECT COUNT(*) as cnt FROM paper_exit_events
                WHERE strategy_name = ?
                  AND status = 'ACTED'
                  AND event_time >= ?
-                 AND exit_signal IN ('ROLL_WING', 'PROFIT_LOCK_ZONE2')""",
+                 AND exit_signal = 'ROLL_WING'""",
             (strategy_name, cycle_start_str),
         ).fetchone()
-        return row[0] if row else 0
+        locks = conn.execute(
+            """SELECT COUNT(*) as cnt FROM paper_exit_events
+               WHERE strategy_name = ?
+                 AND status = 'ACTED'
+                 AND event_time >= ?
+                 AND exit_signal = 'PROFIT_LOCK_ZONE2'""",
+            (strategy_name, cycle_start_str),
+        ).fetchone()
+        return (rolls[0] if rolls else 0), (locks[0] if locks else 0)
 
 
 def _get_signals_today(store: PaperStore, strategy_name: str, today: date) -> list[str]:
@@ -162,7 +172,7 @@ async def build_stats(
     unrealized = _get_unrealized_pnl(store, strategy_name, today)
     signals_today = _get_signals_today(store, strategy_name, today)
     cycle_start = _get_cycle_start_date(store, strategy_name)
-    adj_count = _get_adjustment_count(store, strategy_name, cycle_start)
+    roll_count, lock_count = _get_adjustment_count(store, strategy_name, cycle_start)
     lock_zone = _get_profit_lock_zone(store, strategy_name)
 
     if not open_pos:
@@ -178,15 +188,13 @@ async def build_stats(
             realized_pnl_month=realized_month,
             unrealized_pnl=unrealized,
             signals_fired_today=signals_today,
-            adjustment_count=0,
+            roll_count=0,
+            lock_count=0,
         )
 
     ic = strategy_cls(broker, store, None, config)
 
     # Determine expiry date
-    import re
-    from datetime import datetime
-
     _EXPIRY_RE = re.compile(r"NIFTY(\d{2}[A-Za-z]{3}\d{4})", re.IGNORECASE)
     expiry = None
     for p in open_pos:
@@ -254,7 +262,8 @@ async def build_stats(
         realized_pnl_month=realized_month,
         unrealized_pnl=unrealized,
         signals_fired_today=signals_today,
-        adjustment_count=adj_count,
+        roll_count=roll_count,
+        lock_count=lock_count,
     )
 
 
@@ -281,12 +290,11 @@ def build_comparison_report(v1: ICMonthlyStats, v2: ICMonthlyStats, report_date:
             return "N/A"
         return f"Zone {z} ✓" if z > 0 else "None"
 
-    def fmt_adj(v1_stat: bool, count: int, zone: int) -> str:
+    def fmt_adj(v1_stat: bool, rolls: int, locks: int) -> str:
         if v1_stat:
-            return f"{count} rolls"
+            return f"{rolls} rolls"
         else:
-            locks = 1 if zone >= 2 else 0
-            return f"{count - locks} rolls + {locks} locks"
+            return f"{rolls} rolls + {locks} locks"
 
     def fmt_sigs(sigs: list[str]) -> str:
         if not sigs:
@@ -325,7 +333,7 @@ def build_comparison_report(v1: ICMonthlyStats, v2: ICMonthlyStats, report_date:
         f"Unrealized P&L      {fmt_pnl(v1.unrealized_pnl):<15} {fmt_pnl(v2.unrealized_pnl)}",
         f"Realized (month)    {fmt_pnl(v1.realized_pnl_month):<15} {fmt_pnl(v2.realized_pnl_month)}",
         f"Profit-lock zone    {safe_col(fmt_zone(v1.profit_lock_zone, False), v1_open):<15} {safe_col(fmt_zone(v2.profit_lock_zone, True), v2_open)}",
-        f"Adjustments         {safe_col(fmt_adj(True, v1.adjustment_count, v1.profit_lock_zone), v1_open):<15} {safe_col(fmt_adj(False, v2.adjustment_count, v2.profit_lock_zone), v2_open)}",
+        f"Adjustments         {safe_col(fmt_adj(True, v1.roll_count, v1.lock_count), v1_open):<15} {safe_col(fmt_adj(False, v2.roll_count, v2.lock_count), v2_open)}",
         f"Signals today       {fmt_sigs(v1.signals_fired_today):<15} {fmt_sigs(v2.signals_fired_today)}",
         "",
         edge_line,
