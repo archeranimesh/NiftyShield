@@ -216,11 +216,9 @@ class StrategyMonitor:
 
             if auto_execute_strategy and auto_execute_payload:
                 action_type: str = event.payload.get("auto_action", "CLOSE_AND_WAIT")
-                metadata = {
-                    k: event.payload[k]
-                    for k in ("triggering_signal", "mark", "delta", "dte")
-                    if k in event.payload
-                }
+                # Pass full payload so apply_action() receives all state-update keys
+                # (e.g. cumulative_lock_debit_pts, new_put_width_pts for PROFIT_LOCK_ZONE2).
+                metadata = dict(event.payload)
                 action = ApprovedAction(
                     action_type=action_type,
                     legs_to_close=[event.payload.get("leg_role", "short_put")],

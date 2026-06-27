@@ -252,31 +252,20 @@ class PaperStore:
                 )
             except sqlite3.OperationalError:
                 pass  # Column already exists
-            # Migration: add profit_lock fields to paper_strategies
-            try:
-                conn.execute(
-                    "ALTER TABLE paper_strategies ADD COLUMN profit_lock_zone INTEGER NOT NULL DEFAULT 0"
-                )
-                conn.execute(
-                    "ALTER TABLE paper_strategies ADD COLUMN zone2_lock_executed INTEGER NOT NULL DEFAULT 0"
-                )
-                conn.execute(
-                    "ALTER TABLE paper_strategies ADD COLUMN zone3_lock_executed INTEGER NOT NULL DEFAULT 0"
-                )
-                conn.execute(
-                    "ALTER TABLE paper_strategies ADD COLUMN cumulative_lock_debit TEXT NOT NULL DEFAULT '0'"
-                )
-                conn.execute(
-                    "ALTER TABLE paper_strategies ADD COLUMN active_put_width_pts INTEGER NOT NULL DEFAULT 0"
-                )
-                conn.execute(
-                    "ALTER TABLE paper_strategies ADD COLUMN active_call_width_pts INTEGER NOT NULL DEFAULT 0"
-                )
-                conn.execute(
-                    "ALTER TABLE paper_strategies ADD COLUMN cycle_id TEXT NOT NULL DEFAULT ''"
-                )
-            except sqlite3.OperationalError:
-                pass  # Columns already exist
+            # Migration: add profit_lock fields to paper_strategies (each column independent)
+            for _ddl in (
+                "ALTER TABLE paper_strategies ADD COLUMN profit_lock_zone INTEGER NOT NULL DEFAULT 0",
+                "ALTER TABLE paper_strategies ADD COLUMN zone2_lock_executed INTEGER NOT NULL DEFAULT 0",
+                "ALTER TABLE paper_strategies ADD COLUMN zone3_lock_executed INTEGER NOT NULL DEFAULT 0",
+                "ALTER TABLE paper_strategies ADD COLUMN cumulative_lock_debit TEXT NOT NULL DEFAULT '0'",
+                "ALTER TABLE paper_strategies ADD COLUMN active_put_width_pts INTEGER NOT NULL DEFAULT 0",
+                "ALTER TABLE paper_strategies ADD COLUMN active_call_width_pts INTEGER NOT NULL DEFAULT 0",
+                "ALTER TABLE paper_strategies ADD COLUMN cycle_id TEXT NOT NULL DEFAULT ''",
+            ):
+                try:
+                    conn.execute(_ddl)
+                except sqlite3.OperationalError:
+                    pass  # Column already exists
             # Migration: add instrument_key to UNIQUE constraint (BUG-4)
             row = conn.execute(
                 "SELECT sql FROM sqlite_master WHERE type='table' AND name='paper_trades'"

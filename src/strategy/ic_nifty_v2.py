@@ -47,6 +47,8 @@ from src.paper.models import PaperPosition
 from src.strategy import roll_utils
 from src.strategy.protocol import ApprovedAction, LegSpec, SignalEvent
 
+from src.strategy.profit_lock_engine import ProfitLockDecision, ProfitLockEngine, ProfitLockState
+
 if TYPE_CHECKING:
     from src.client.protocol import BrokerClient
     from src.notifications.telegram_gateway import TelegramGateway
@@ -84,7 +86,7 @@ _PROFIT_TARGET_RETENTION = Decimal("0.30")
 
 # Allowed action types for apply_action.
 _ALLOWED_V2_ACTIONS = frozenset(
-    {"CLOSE_FULL", "CLOSE_CALL_SPREAD", "CLOSE_PUT_SPREAD", "ROLL_WING"}
+    {"CLOSE_FULL", "CLOSE_CALL_SPREAD", "CLOSE_PUT_SPREAD", "ROLL_WING", "PROFIT_LOCK_ZONE2"}
 )
 
 
@@ -1052,7 +1054,7 @@ class IronCondorV2:
         """
         return dte > self._config.monthly_close_full_dte
 
-    # ── Protocol stubs (implemented in IC-V2-4) ──────────────────────────────
+    # ── Signal evaluation (IC-V2-4 + IC-V2-10) ──────────────────────────────
 
     async def check_signals(
         self,
@@ -1061,15 +1063,16 @@ class IronCondorV2:
     ) -> list[SignalEvent]:
         """Evaluate exit/adjustment signals for the open IronCondorV2 position.
 
-        Signal evaluation order (D3/D4 council ruling):
-          1. DTE FORCE_CLOSE (dte≤1) → FORCED_CLOSE, return immediately.
-          2. Delta evaluation via _evaluate_adjustment:
-               FORCED_CLOSE / DELTA_STOP / ROLL_WING / DELTA_WARN
-               When DTE==CLOSE_FULL, roll is blocked; dte_cutoff DELTA_STOP
-               escalates to FORCED_CLOSE.
-          3. DTE CLOSE_FULL with no delta breach → FORCED_CLOSE (DTE-based).
-          4. Profit target (mark ≤ 30% of entry credit) → CLOSE_FULL.
-          5. Otherwise → [] (hold).
+        8-level precedence ladder (council ruling IC-V2-4 + IC-V2-10):
+          1. DTE ≤ hard-close cutoff → FORCED_CLOSE (FORCE_CLOSE or CLOSE_FULL both fire here)
+          2. |short_delta| ≥ 0.45   → FORCED_CLOSE (extreme delta)
+          3. D3 roll budget exhausted + delta breach → FORCED_CLOSE
+          4. captured ≥ 70%          → CLOSE_FULL (profit target)
+          5. captured ≥ 50% (Zone 2) → PROFIT_LOCK_ZONE2 / FORCED_CLOSE / continue
+          6. captured ≥ 25% (Zone 1) → PROFIT_LOCK_ZONE1 INFO (log-only milestone)
+          7. |short_delta| ≥ 0.35   → D3 roll (ROLL_WING / DELTA_STOP)
+          8. |short_delta| ≥ 0.30   → DELTA_WARN
+          Hold → []
 
         Args:
             market: Current Nifty 50 option chain snapshot.
@@ -1083,7 +1086,6 @@ class IronCondorV2:
             return []
 
         # ── DTE / expiry ─────────────────────────────────────────────────────
-        # Use first position whose key carries a parseable expiry date.
         expiry = next(
             (
                 self._parse_expiry(p.instrument_key)
@@ -1097,18 +1099,23 @@ class IronCondorV2:
         dte = (expiry - market_today()).days
         expiry_str = str(expiry)
 
-        # ── Step 1: DTE hard stops ────────────────────────────────────────────
+        # ── Priority 1: DTE hard-close (FORCE_CLOSE or CLOSE_FULL) ───────────
         dte_action = self._evaluate_dte_action(dte, expiry=expiry_str)
-
-        if dte_action == "FORCE_CLOSE":
+        if dte_action in ("FORCE_CLOSE", "CLOSE_FULL"):
+            reason = "dte_force_close" if dte_action == "FORCE_CLOSE" else "dte_close_full"
+            desc = (
+                f"DTE {dte} ≤ 1 — force close; expiry imminent"
+                if dte_action == "FORCE_CLOSE"
+                else f"DTE {dte} ≤ {self._config.monthly_close_full_dte} — monthly hard close"
+            )
             return [
                 SignalEvent(
                     event_type="FORCED_CLOSE",
                     severity="ACTION",
-                    description=f"DTE {dte} ≤ 1 — force close; expiry imminent",
+                    description=desc,
                     payload={
                         "dte": dte,
-                        "reason": "dte_force_close",
+                        "reason": reason,
                         "auto_execute": True,
                         "auto_action": "CLOSE_FULL",
                         "valid_actions": ["CLOSE_FULL"],
@@ -1116,43 +1123,86 @@ class IronCondorV2:
                 )
             ]
 
-        # ── Step 2: Delta evaluation ──────────────────────────────────────────
-        roll_allowed = self._roll_allowed_by_dte(dte)
-        roll_result = self._evaluate_adjustment(
-            ic_positions,
-            market,
-            dte,
-            expiry_str,
-            roll_allowed_by_dte=roll_allowed,
-        )
-
-        if roll_result is not None:
-            signal = self._roll_result_to_signal(roll_result, dte, expiry_str, dte_action)
-            return [signal]
-
-        # ── Step 3: DTE CLOSE_FULL with no delta breach ───────────────────────
-        if dte_action == "CLOSE_FULL":
-            return [
-                SignalEvent(
-                    event_type="FORCED_CLOSE",
-                    severity="ACTION",
-                    description=(
-                        f"DTE {dte} ≤ {self._config.monthly_close_full_dte} — monthly hard close"
-                    ),
-                    payload={
-                        "dte": dte,
-                        "reason": "dte_close_full",
-                        "auto_execute": True,
-                        "auto_action": "CLOSE_FULL",
-                        "valid_actions": ["CLOSE_FULL"],
-                    },
+        # ── Priority 2 & 3: Hard delta signals → FORCED_CLOSE ────────────────
+        _baseline = {
+            "strategy_name": self.strategy_name,
+            "trade_id": "",
+            "expiry": expiry_str,
+            "dte": dte,
+            "roll_count_put": self._rolls_executed["put"],
+            "roll_count_call": self._rolls_executed["call"],
+            "profit_lock_zone": 0,
+        }
+        short_put_pos = next((p for p in ic_positions if p.leg_role == "short_put"), None)
+        short_call_pos = next((p for p in ic_positions if p.leg_role == "short_call"), None)
+        for side, pos in (("put", short_put_pos), ("call", short_call_pos)):
+            delta_val = self._get_short_delta(market, pos)
+            if delta_val is None:
+                continue
+            abs_delta = abs(delta_val)
+            # Priority 2: extreme delta ≥ 0.45
+            if abs_delta >= self._config.forced_close_delta:
+                log.warning(
+                    "ic_nifty_v2.forced_close_delta",
+                    **_baseline,
+                    side=side,
+                    short_delta=str(delta_val),
+                    threshold=str(self._config.forced_close_delta),
                 )
-            ]
+                return [
+                    SignalEvent(
+                        event_type="FORCED_CLOSE",
+                        severity="ACTION",
+                        description=(
+                            f"{side} |delta| ≥ {self._config.forced_close_delta} — forced full close"
+                        ),
+                        payload={
+                            "side": side,
+                            "dte": dte,
+                            "reason": "extreme_delta",
+                            "auto_execute": True,
+                            "auto_action": "CLOSE_FULL",
+                            "valid_actions": ["CLOSE_FULL"],
+                        },
+                    )
+                ]
+            # Priority 3: rolls exhausted + delta breach ≥ 0.35
+            if (
+                abs_delta >= self._config.roll_trigger_delta
+                and self._rolls_executed[side] >= self._config.max_rolls_per_side_per_cycle
+            ):
+                log.warning(
+                    "ic_nifty_v2.forced_close_rolls_exhausted",
+                    **_baseline,
+                    side=side,
+                    roll_count=self._rolls_executed[side],
+                )
+                return [
+                    SignalEvent(
+                        event_type="FORCED_CLOSE",
+                        severity="ACTION",
+                        description=(
+                            f"{side} rolls exhausted ({self._rolls_executed[side]}) — forced full close"
+                        ),
+                        payload={
+                            "side": side,
+                            "dte": dte,
+                            "reason": "rolls_exhausted",
+                            "auto_execute": True,
+                            "auto_action": "CLOSE_FULL",
+                            "valid_actions": ["CLOSE_FULL"],
+                        },
+                    )
+                ]
 
-        # ── Step 4: Profit target ─────────────────────────────────────────────
+        # ── Compute PnL (needed for priorities 4–6) ───────────────────────────
         combined_mark, entry_credit = self._compute_combined_pnl(market, ic_positions)
+        captured_fraction: Decimal | None = None
         if combined_mark is not None and entry_credit > Decimal("0"):
             captured_fraction = (entry_credit - combined_mark) / entry_credit
+
+        # ── Priority 4: Profit target ≥ 70% → CLOSE_FULL ─────────────────────
+        if captured_fraction is not None and combined_mark is not None:
             if combined_mark <= _PROFIT_TARGET_RETENTION * entry_credit:
                 log.info(
                     "ic_nifty_v2.profit_target_close",
@@ -1182,7 +1232,271 @@ class IronCondorV2:
                     )
                 ]
 
-        # ── Step 5: Hold ──────────────────────────────────────────────────────
+        # ── Priorities 5 & 6: Profit-lock zones ───────────────────────────────
+        if captured_fraction is not None and self._store is not None:
+            pl_signals = self._check_profit_lock(
+                captured_fraction=captured_fraction,
+                entry_credit_pts=entry_credit,
+                combined_mark=combined_mark if combined_mark is not None else Decimal("0"),
+                dte=dte,
+                expiry_str=expiry_str,
+                market=market,
+                ic_positions=ic_positions,
+            )
+            if pl_signals:
+                return pl_signals
+
+        # ── Priorities 7 & 8: Soft delta signals — D3 roll / DELTA_WARN ───────
+        # At this point priorities 2+3 have already caught all FORCED_CLOSE cases.
+        # _evaluate_adjustment may still return FORCED_CLOSE as belt-and-suspenders;
+        # if so, the signal is correct.
+        roll_allowed = self._roll_allowed_by_dte(dte)
+        roll_result = self._evaluate_adjustment(
+            ic_positions, market, dte, expiry_str, roll_allowed_by_dte=roll_allowed
+        )
+        if roll_result is not None:
+            return [self._roll_result_to_signal(roll_result, dte, expiry_str, dte_action)]
+
+        # ── Hold ──────────────────────────────────────────────────────────────
+        return []
+
+    def _check_profit_lock(
+        self,
+        captured_fraction: Decimal,
+        entry_credit_pts: Decimal,
+        combined_mark: Decimal,
+        dte: int,
+        expiry_str: str,
+        market: OptionChain,
+        ic_positions: list[PaperPosition],
+    ) -> list[SignalEvent]:
+        """Evaluate profit-lock priorities 5 (Zone 2) and 6 (Zone 1).
+
+        Priority 5: Zone 2 (≥ 50%) — attempt wing contraction or CLOSE_FULL.
+        Priority 6: Zone 1 (≥ 25%) — emit INFO milestone, log and persist state.
+
+        Returns [] when no profit-lock signal fires (zone not yet reached, guards
+        blocked it, or zone already acted upon).
+
+        Council ruling: docs/archive/council/strategy/2026-06-27_ic-v2-profit-lock-adjustment.md Stage 3.
+
+        Args:
+            captured_fraction: (entry_credit - current_mark) / entry_credit.
+            entry_credit_pts: Original IC entry credit in option points per unit.
+            combined_mark: Current combined mark in option points.
+            dte: Days to expiry.
+            expiry_str: ISO expiry string for structured logging.
+            market: Live option chain snapshot.
+            ic_positions: IC positions for this strategy.
+
+        Returns:
+            List of SignalEvents; empty when no profit-lock action is warranted.
+        """
+        # self._store is not None — guarded by caller (check_signals line 1236)
+        pl_state = self._store.get_profit_lock_state(self.strategy_name)
+        pl_config = self._config.profit_lock
+        _plog = {
+            "strategy_name": self.strategy_name,
+            "trade_id": "",
+            "expiry": expiry_str,
+            "dte": dte,
+            "roll_count_put": self._rolls_executed["put"],
+            "roll_count_call": self._rolls_executed["call"],
+        }
+
+        # ── Priority 5: Zone 2 (≥ 50%) ───────────────────────────────────────
+        if captured_fraction >= pl_config.zone2_trigger:
+            if not pl_state.zone2_lock_executed:
+                short_put_pos = next((p for p in ic_positions if p.leg_role == "short_put"), None)
+                short_call_pos = next((p for p in ic_positions if p.leg_role == "short_call"), None)
+                short_put_strike = self._position_strike(short_put_pos)
+                short_call_strike = self._position_strike(short_call_pos)
+
+                if short_put_strike is None or short_call_strike is None:
+                    log.warning(
+                        "ic_nifty_v2.chain_lookup_failed",
+                        **_plog,
+                        profit_lock_zone=pl_state.profit_lock_zone,
+                        instrument_key="short_strikes",
+                    )
+                    return []
+
+                long_put_pos = next(
+                    (p for p in ic_positions if p.leg_role == "long_put_hedge"), None
+                )
+                long_call_pos = next(
+                    (p for p in ic_positions if p.leg_role == "long_call_hedge"), None
+                )
+                old_long_put = (
+                    self._find_leg(market, long_put_pos.instrument_key) if long_put_pos else None
+                )
+                old_long_call = (
+                    self._find_leg(market, long_call_pos.instrument_key) if long_call_pos else None
+                )
+                vix, ivr = self._load_vix_ivr()
+
+                decision: ProfitLockDecision = ProfitLockEngine().evaluate(
+                    captured_fraction=captured_fraction,
+                    entry_credit_pts=entry_credit_pts,
+                    current_mark_pts=combined_mark,
+                    dte=dte,
+                    expiry_type=self._config.expiry_type,
+                    vix=vix,
+                    ivr=ivr,
+                    state=pl_state,
+                    chain=market,
+                    config=pl_config,
+                    short_put_strike=short_put_strike,
+                    short_call_strike=short_call_strike,
+                    old_long_put=old_long_put,
+                    old_long_call=old_long_call,
+                )
+
+                if decision.action == "ZONE2_LOCK":
+                    new_put_wing = decision.new_put_wing
+                    new_call_wing = decision.new_call_wing
+                    new_put_width = (
+                        int(short_put_strike - new_put_wing.strike) if new_put_wing else 0
+                    )
+                    new_call_width = (
+                        int(new_call_wing.strike - short_call_strike) if new_call_wing else 0
+                    )
+                    log.info(
+                        "ic_nifty_v2.profit_lock_zone2_executed",
+                        **_plog,
+                        profit_lock_zone=2,
+                        new_put_wing_strike=str(new_put_wing.strike) if new_put_wing else "",
+                        new_call_wing_strike=str(new_call_wing.strike) if new_call_wing else "",
+                        net_debit_pts=str(decision.net_debit_pts),
+                        guaranteed_floor_fraction=str(decision.guaranteed_floor_fraction),
+                    )
+                    old_long_put_key = long_put_pos.instrument_key if long_put_pos else ""
+                    old_long_call_key = long_call_pos.instrument_key if long_call_pos else ""
+                    new_put_key = (
+                        f"NSE_FO|NIFTY{int(new_put_wing.strike)}PE" if new_put_wing else ""
+                    )
+                    new_call_key = (
+                        f"NSE_FO|NIFTY{int(new_call_wing.strike)}CE" if new_call_wing else ""
+                    )
+                    new_cum_debit = pl_state.cumulative_lock_debit_pts + (
+                        decision.net_debit_pts or Decimal("0")
+                    )
+                    return [
+                        SignalEvent(
+                            event_type="PROFIT_LOCK_ZONE2",
+                            severity="ACTION",
+                            description=(
+                                f"Zone 2 profit-lock: {float(captured_fraction):.0%} captured — "
+                                f"rolling wings inward; floor "
+                                f"≥{float(decision.guaranteed_floor_fraction or 0):.0%}"
+                            ),
+                            payload={
+                                "zone": 2,
+                                "captured_fraction": str(
+                                    captured_fraction.quantize(Decimal("0.01"))
+                                ),
+                                "new_put_wing_strike": (
+                                    str(new_put_wing.strike) if new_put_wing else ""
+                                ),
+                                "new_call_wing_strike": (
+                                    str(new_call_wing.strike) if new_call_wing else ""
+                                ),
+                                "new_put_width_pts": new_put_width,
+                                "new_call_width_pts": new_call_width,
+                                "net_debit_pts": str(decision.net_debit_pts),
+                                "guaranteed_floor_fraction": str(decision.guaranteed_floor_fraction),
+                                "entry_credit_pts": str(entry_credit_pts),
+                                "old_long_put_key": old_long_put_key,
+                                "old_long_call_key": old_long_call_key,
+                                "new_put_wing_key": new_put_key,
+                                "new_call_wing_key": new_call_key,
+                                "dte": dte,
+                                "auto_execute": True,
+                                "auto_action": "PROFIT_LOCK_ZONE2",
+                                "valid_actions": ["PROFIT_LOCK_ZONE2", "CLOSE_FULL"],
+                                # State update fields consumed by apply_action
+                                "new_profit_lock_zone": 2,
+                                "zone2_lock_executed": True,
+                                "cumulative_lock_debit_pts": str(new_cum_debit),
+                                "cycle_id": pl_state.cycle_id,
+                            },
+                        )
+                    ]
+
+                if decision.action == "CLOSE_FULL":
+                    log.warning(
+                        "ic_nifty_v2.profit_lock_close_full",
+                        **_plog,
+                        profit_lock_zone=pl_state.profit_lock_zone,
+                        reason=decision.skip_reason or "formula_failed",
+                        captured_fraction=str(captured_fraction.quantize(Decimal("0.01"))),
+                    )
+                    return [
+                        SignalEvent(
+                            event_type="FORCED_CLOSE",
+                            severity="ACTION",
+                            description=(
+                                f"Zone 2 profit-lock formula failed "
+                                f"({decision.skip_reason}) — closing full IC"
+                            ),
+                            payload={
+                                "reason": f"profit_lock_close_full:{decision.skip_reason}",
+                                "captured_fraction": str(
+                                    captured_fraction.quantize(Decimal("0.01"))
+                                ),
+                                "dte": dte,
+                                "auto_execute": True,
+                                "auto_action": "CLOSE_FULL",
+                                "valid_actions": ["CLOSE_FULL"],
+                            },
+                        )
+                    ]
+
+                # action == "NONE": guard blocked lock — log and fall through
+                if decision.skip_reason:
+                    log.warning(
+                        "ic_nifty_v2.profit_lock_zone2_skipped",
+                        **_plog,
+                        profit_lock_zone=pl_state.profit_lock_zone,
+                        skip_reason=decision.skip_reason,
+                        captured_fraction=str(captured_fraction.quantize(Decimal("0.01"))),
+                    )
+            # zone2_lock_executed=True or NONE guard: fall through without signal
+
+        # ── Priority 6: Zone 1 (≥ 25%) — log INFO milestone ──────────────────
+        elif captured_fraction >= pl_config.zone1_trigger:
+            if pl_state.profit_lock_zone < 1:
+                log.info(
+                    "ic_nifty_v2.profit_lock_zone1",
+                    **_plog,
+                    profit_lock_zone=1,
+                    captured_fraction=str(captured_fraction.quantize(Decimal("0.01"))),
+                    zone=1,
+                )
+                new_state = ProfitLockState(
+                    profit_lock_zone=1,
+                    zone2_lock_executed=pl_state.zone2_lock_executed,
+                    zone3_lock_executed=pl_state.zone3_lock_executed,
+                    cumulative_lock_debit_pts=pl_state.cumulative_lock_debit_pts,
+                    active_put_width_pts=pl_state.active_put_width_pts,
+                    active_call_width_pts=pl_state.active_call_width_pts,
+                    cycle_id=pl_state.cycle_id,
+                )
+                self._store.set_profit_lock_state(self.strategy_name, new_state)
+                return [
+                    SignalEvent(
+                        event_type="PROFIT_LOCK_ZONE1",
+                        severity="INFO",
+                        description=(
+                            f"Zone 1 reached: {float(captured_fraction):.0%} of entry credit captured"
+                        ),
+                        payload={
+                            "zone": 1,
+                            "captured_fraction": str(captured_fraction.quantize(Decimal("0.01"))),
+                        },
+                    )
+                ]
+
         return []
 
     def _roll_result_to_signal(
@@ -1369,8 +1683,30 @@ class IronCondorV2:
                 closed = {"short_call", "long_call_hedge"}
             elif action.action_type == "CLOSE_PUT_SPREAD":
                 closed = {"short_put", "long_put_hedge"}
-            # ROLL_WING: legs_to_close comes from the payload; PaperExecutor
-            # handles new-leg writes.
+            elif action.action_type == "PROFIT_LOCK_ZONE2":
+                closed = {"long_put_hedge", "long_call_hedge"}
+                # Persist updated profit-lock state atomically with the leg close
+                if self._store is not None:
+                    meta = action.metadata or {}
+                    new_state = ProfitLockState(
+                        profit_lock_zone=int(meta.get("new_profit_lock_zone", 2)),
+                        zone2_lock_executed=True,
+                        zone3_lock_executed=False,
+                        cumulative_lock_debit_pts=Decimal(
+                            meta.get("cumulative_lock_debit_pts", "0")
+                        ),
+                        active_put_width_pts=int(meta.get("new_put_width_pts", 0)),
+                        active_call_width_pts=int(meta.get("new_call_width_pts", 0)),
+                        cycle_id=str(meta.get("cycle_id", "")),
+                    )
+                    self._store.set_profit_lock_state(self.strategy_name, new_state)
+                # Send post-execution Telegram notification (non-fatal)
+                if self._notifier is not None:
+                    try:
+                        await self._send_profit_lock_notification(action.metadata or {})
+                    except Exception as exc:
+                        log.error("ic_nifty_v2.send_notification_failed", error=str(exc))
+            # ROLL_WING: legs_to_close comes from the payload; PaperExecutor handles new-leg writes.
 
         log.info(
             "ic_nifty_v2.apply_action",
@@ -1502,6 +1838,86 @@ class IronCondorV2:
                 # IVR is logged as "unavailable" and entry proceeds without it.
                 pass
         return f"IVR: {ivr_str}"
+
+    def _load_vix_ivr(self) -> tuple[Decimal | None, Decimal | None]:
+        """Load current VIX and IVR from Parquet store. Returns (None, None) on failure.
+
+        Non-fatal: any IO or parsing error returns (None, None) so the profit-lock
+        engine falls back to its IV-guard bypass path (formula with K ≥ 15 pts).
+
+        Returns:
+            Tuple of (vix as Decimal, ivr as Decimal); either may be None.
+        """
+        from pathlib import Path
+
+        from src.backtest.ivr import compute_ivr
+        from src.backtest.vix_ingest import fetch_vix_latest, load_vix_series
+
+        vix_dir = Path("data/historical/ohlc/india_vix")
+        if not vix_dir.exists():
+            return None, None
+        try:
+            vix_series = load_vix_series(vix_dir)
+            vix_today = fetch_vix_latest()
+            if vix_today is None:
+                return None, None
+            vix_decimal = Decimal(str(vix_today))
+            ivr_raw = compute_ivr(vix_today, vix_series)
+            ivr_decimal = Decimal(str(ivr_raw)) if ivr_raw is not None else None
+            return vix_decimal, ivr_decimal
+        except Exception:
+            return None, None
+
+    async def _send_profit_lock_notification(self, meta: dict) -> None:
+        """Send post-execution Zone 2 profit-lock Telegram notification. Non-fatal.
+
+        Fires via TelegramGateway.send_notification() (not send_approval_request —
+        this is a confirmation, not an approval gate).
+
+        Args:
+            meta: ApprovedAction.metadata dict from the PROFIT_LOCK_ZONE2 payload.
+        """
+        if self._notifier is None:
+            return
+        text = self._build_profit_lock_notification_text(meta)
+        try:
+            await self._notifier.send_notification(text)
+        except Exception as exc:
+            log.error("ic_nifty_v2.send_notification_failed", error=str(exc))
+
+    def _build_profit_lock_notification_text(self, meta: dict) -> str:
+        """Format the Zone 2 profit-lock Telegram confirmation message.
+
+        Args:
+            meta: ApprovedAction.metadata dict containing new wing strikes, widths,
+                net debit, guaranteed floor fraction, and DTE.
+
+        Returns:
+            HTML-formatted Telegram message string.
+        """
+        captured_pct = float(Decimal(meta.get("captured_fraction", "0"))) * 100
+        net_debit = meta.get("net_debit_pts", "?")
+        floor_fraction_raw = meta.get("guaranteed_floor_fraction", "0")
+        try:
+            floor_pct = float(Decimal(str(floor_fraction_raw))) * 100
+        except Exception:
+            floor_pct = 0.0
+        new_put_strike = meta.get("new_put_wing_strike", "?")
+        new_call_strike = meta.get("new_call_wing_strike", "?")
+        new_put_w = meta.get("new_put_width_pts", "?")
+        new_call_w = meta.get("new_call_width_pts", "?")
+        dte = meta.get("dte", "?")
+        return (
+            f"🔒 <b>IC V2 Profit-Lock Executed — Zone 2</b>\n"
+            f"Strategy: {self.strategy_name}\n"
+            f"Captured: {captured_pct:.1f}% of entry credit\n"
+            f"Action: Long wings rolled inward\n"
+            f"  PUT:  → {new_put_strike}PE (width {new_put_w} pts)\n"
+            f"  CALL: → {new_call_strike}CE (width {new_call_w} pts)\n"
+            f"Net debit: {net_debit} pts\n"
+            f"Floor locked: ≥{floor_pct:.0f}% guaranteed\n"
+            f"DTE: {dte}"
+        )
 
     # ── Private helpers (V2-specific) ─────────────────────────────────────────
 

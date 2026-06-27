@@ -20,7 +20,7 @@ log = structlog.get_logger(__name__)
 
 @dataclass(frozen=True)
 class ProfitLockState:
-    """Mutable profit-lock state for one IC cycle. Persisted in PaperStore."""
+    """Immutable snapshot of profit-lock state for one IC cycle. Persisted in PaperStore."""
 
     profit_lock_zone: int
     zone2_lock_executed: bool
