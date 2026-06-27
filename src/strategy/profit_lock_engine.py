@@ -111,10 +111,20 @@ class ProfitLockEngine:
                     "already_executed",
                 )
 
-            if not self._check_dte_guard(dte, expiry_type, config):
-                return ProfitLockDecision(
-                    "NONE", 2, captured_fraction, False, None, None, None, None, None, "dte_guard"
-                )
+            if expiry_type == "monthly":
+                if dte <= 7:
+                    return ProfitLockDecision(
+                        "CLOSE_FULL",
+                        2,
+                        captured_fraction,
+                        False,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        "dte_too_low",
+                    )
 
             new_put = self._select_inward_wing(chain, "put", short_put_strike, config)
             new_call = self._select_inward_wing(chain, "call", short_call_strike, config)
@@ -198,6 +208,21 @@ class ProfitLockEngine:
                     "debit_cap",
                 )
 
+            if expiry_type == "monthly":
+                if dte > 22 and d_lock >= Decimal("20"):
+                    return ProfitLockDecision(
+                        "NONE",
+                        2,
+                        captured_fraction,
+                        False,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        "dte_too_high",
+                    )
+
             new_put_width = short_put_strike - new_put.strike
             new_call_width = new_call.strike - short_call_strike
             max_width = max(new_put_width, new_call_width)
@@ -251,27 +276,18 @@ class ProfitLockEngine:
                         "iv_guard",
                     )
             else:
-                final_passes = self._evaluate_floor_formula(
-                    int(max_width),
-                    state.cumulative_lock_debit_pts,
-                    d_lock,
-                    max(config.cost_buffer_pts, Decimal("15")),
-                    entry_credit_pts,
-                    config.floor_budget_zone2,
+                return ProfitLockDecision(
+                    "CLOSE_FULL",
+                    2,
+                    captured_fraction,
+                    False,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    "formula_failed",
                 )
-                if not final_passes:
-                    return ProfitLockDecision(
-                        "CLOSE_FULL",
-                        2,
-                        captured_fraction,
-                        False,
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                        "formula_failed",
-                    )
 
             required_max_width = int(
                 config.floor_budget_zone2 * entry_credit_pts
@@ -337,7 +353,7 @@ class ProfitLockEngine:
         short_strike: Decimal,
         config: ProfitLockConfig,
     ) -> OptionLeg | None:
-        """Find replacement long wing at ~19Δ satisfying delta/premium/liquidity floors."""
+        """Find replacement long wing at ~19Δ within 16-22Δ range, satisfying premium/liquidity floors."""
         option_type: Literal["CE", "PE"] = "CE" if side == "call" else "PE"
 
         # We need to filter candidates satisfying 19Δ and floors.
@@ -373,17 +389,6 @@ class ProfitLockEngine:
             return None
 
         return candidate
-
-    def _check_dte_guard(self, dte: int, expiry_type: str, config: ProfitLockConfig) -> bool:
-        if expiry_type == "monthly":
-            if dte < config.monthly_lock_dte_lo:
-                return False
-            # We can allow dte > hi if it's very cheap, but the rules say "do not restructure below this DTE".
-            # The spec says:
-            # Monthly DTE > 22 | Only if formula passes very cheaply (D_lock < 20 pts) -> we won't strictly enforce > 22 block here, rely on formula.
-            # Actually, just returning True if dte >= monthly_lock_dte_lo.
-            return True
-        return True
 
     def _check_iv_guard(
         self, vix: Decimal | None, ivr: Decimal | None, config: ProfitLockConfig

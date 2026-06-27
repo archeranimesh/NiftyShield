@@ -169,10 +169,7 @@ def test_zone2_formula_passes(config, state, chain):
     # D_lock = 81 - 18 = 63
     # W = 100
     # W + D_lock + K = 100 + 63 + 10 = 173
-    # Wait! 173 <= 0.75 * 200 (which is 150) ? NO.
-    # Ah, the formula in this test would fail because W+D_lock+K is 173 which is > 150.
-    # Let's adjust entry_credit_pts to make it pass.
-    # We need 173 <= 0.75 * C0 -> C0 >= 230.6
+    # 173 <= 0.75 * 260 (which is 195) -> PASS
 
 
 def test_zone2_formula_passes_correct_numbers(config, chain):
@@ -300,8 +297,8 @@ def test_zone2_dte_guard_blocks(config, chain):
         short_put_strike=Decimal("24300"),
         short_call_strike=Decimal("24700"),
     )
-    assert decision.action == "NONE"
-    assert decision.skip_reason == "dte_guard"
+    assert decision.action == "CLOSE_FULL"
+    assert decision.skip_reason == "dte_too_low"
 
 
 def test_zone2_iv_guard_bypass_when_formula_has_buffer(config, chain):
@@ -474,3 +471,161 @@ def test_guaranteed_floor_fraction(config, chain):
     # worst_pnl = 260 - 0 - 63 - 10 - 100 = 87
     # floor_fraction = 87 / 260
     assert decision.guaranteed_floor_fraction == Decimal("87") / Decimal("260")
+
+
+def test_zone3_trigger_close_full(config, state, chain):
+    engine = ProfitLockEngine()
+    decision = engine.evaluate(
+        captured_fraction=Decimal("0.85"),  # >= 0.80
+        entry_credit_pts=Decimal("260"),
+        current_mark_pts=Decimal("39"),
+        dte=15,
+        expiry_type="monthly",
+        vix=Decimal("12"),
+        ivr=Decimal("0.30"),
+        state=state,
+        chain=chain,
+        config=config,
+        short_put_strike=Decimal("24300"),
+        short_call_strike=Decimal("24700"),
+    )
+    assert decision.action == "CLOSE_FULL"
+    assert decision.zone == 3
+    assert decision.skip_reason == "zone3_reached"
+
+
+def test_zone2_dte_too_high_blocks(config, chain):
+    engine = ProfitLockEngine()
+    state = ProfitLockState(
+        profit_lock_zone=1,
+        zone2_lock_executed=False,
+        zone3_lock_executed=False,
+        cumulative_lock_debit_pts=Decimal("0"),
+        active_put_width_pts=300,
+        active_call_width_pts=300,
+        cycle_id="test",
+    )
+    decision = engine.evaluate(
+        captured_fraction=Decimal("0.55"),
+        entry_credit_pts=Decimal("260"),
+        current_mark_pts=Decimal("117"),
+        dte=25,  # > 22
+        expiry_type="monthly",
+        vix=Decimal("12"),
+        ivr=Decimal("0.30"),
+        state=state,
+        chain=chain,
+        config=config,
+        short_put_strike=Decimal("24300"),
+        short_call_strike=Decimal("24700"),
+    )
+    # d_lock is 63 >= 20
+    assert decision.action == "NONE"
+    assert decision.skip_reason == "dte_too_high"
+
+
+def test_zone2_wing_not_found(config, state, chain):
+    engine = ProfitLockEngine()
+    strict_config = ProfitLockConfig(
+        zone2_long_wing_delta_lo=Decimal("0.30"), zone2_long_wing_delta_hi=Decimal("0.40")
+    )
+    decision = engine.evaluate(
+        captured_fraction=Decimal("0.55"),
+        entry_credit_pts=Decimal("260"),
+        current_mark_pts=Decimal("117"),
+        dte=15,
+        expiry_type="monthly",
+        vix=Decimal("12"),
+        ivr=Decimal("0.30"),
+        state=state,
+        chain=chain,
+        config=strict_config,
+        short_put_strike=Decimal("24300"),
+        short_call_strike=Decimal("24700"),
+    )
+    assert decision.action == "CLOSE_FULL"
+    assert decision.skip_reason == "wing_not_found"
+
+
+def test_zone2_old_leg_not_found(config, chain):
+    engine = ProfitLockEngine()
+    state = ProfitLockState(
+        profit_lock_zone=1,
+        zone2_lock_executed=False,
+        zone3_lock_executed=False,
+        cumulative_lock_debit_pts=Decimal("0"),
+        active_put_width_pts=1000,  # 24300 - 1000 = 23300 (not in chain)
+        active_call_width_pts=300,
+        cycle_id="test",
+    )
+    decision = engine.evaluate(
+        captured_fraction=Decimal("0.55"),
+        entry_credit_pts=Decimal("260"),
+        current_mark_pts=Decimal("117"),
+        dte=15,
+        expiry_type="monthly",
+        vix=Decimal("12"),
+        ivr=Decimal("0.30"),
+        state=state,
+        chain=chain,
+        config=config,
+        short_put_strike=Decimal("24300"),
+        short_call_strike=Decimal("24700"),
+    )
+    assert decision.action == "CLOSE_FULL"
+    assert decision.skip_reason == "old_leg_not_found"
+
+
+def test_zone2_invalid_prices(config, chain):
+    engine = ProfitLockEngine()
+    state = ProfitLockState(
+        profit_lock_zone=1,
+        zone2_lock_executed=False,
+        zone3_lock_executed=False,
+        cumulative_lock_debit_pts=Decimal("0"),
+        active_put_width_pts=300,
+        active_call_width_pts=300,
+        cycle_id="test",
+    )
+    # mock chain where old put bid is 0
+    bad_chain = OptionChain(
+        underlying_spot=chain.underlying_spot, expiry=chain.expiry, strikes=dict(chain.strikes)
+    )
+    old_pe = bad_chain.strikes[Decimal("24000")].pe
+    if hasattr(old_pe, "model_copy"):
+        new_pe = old_pe.model_copy(update={"bid": Decimal("0")})
+    elif hasattr(old_pe, "copy"):
+        new_pe = old_pe.copy(update={"bid": Decimal("0")})
+    else:
+        # replace manually if it's a raw dataclass with replace
+        from dataclasses import replace
+
+        new_pe = replace(old_pe, bid=Decimal("0"))
+
+    # Actually wait, let's just make a new OptionChainStrike
+    old_strike = bad_chain.strikes[Decimal("24000")]
+    if hasattr(old_strike, "model_copy"):
+        new_strike = old_strike.model_copy(update={"pe": new_pe})
+    else:
+        from dataclasses import replace
+
+        new_strike = replace(old_strike, pe=new_pe)
+
+    bad_chain.strikes[Decimal("24000")] = new_strike
+
+    decision = engine.evaluate(
+        captured_fraction=Decimal("0.55"),
+        entry_credit_pts=Decimal("260"),
+        current_mark_pts=Decimal("117"),
+        dte=15,
+        expiry_type="monthly",
+        vix=Decimal("12"),
+        ivr=Decimal("0.30"),
+        state=state,
+        chain=bad_chain,
+        config=config,
+        short_put_strike=Decimal("24300"),
+        short_call_strike=Decimal("24700"),
+    )
+    assert decision.action == "CLOSE_FULL"
+    assert decision.skip_reason == "invalid_prices"
