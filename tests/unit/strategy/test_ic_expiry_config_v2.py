@@ -10,7 +10,11 @@ from decimal import Decimal
 
 import pytest
 
-from src.strategy.ic_expiry_config_v2 import IC_V2_MONTHLY, IronCondorV2ExpiryConfig
+from src.strategy.ic_expiry_config_v2 import (
+    IC_V2_MONTHLY,
+    IronCondorV2ExpiryConfig,
+    ProfitLockConfig,
+)
 
 # ---------------------------------------------------------------------------
 # IC_V2_MONTHLY preset — field values
@@ -129,3 +133,38 @@ def test_long_wing_min_premium_positive() -> None:
     the D2 ruling's requirement for real convexity protection.
     """
     assert IC_V2_MONTHLY.long_wing_min_premium > Decimal("0")
+
+
+# ---------------------------------------------------------------------------
+# ProfitLockConfig tests
+# ---------------------------------------------------------------------------
+
+
+def test_profit_lock_config_defaults() -> None:
+    """Profit-lock defaults for zone triggers and floor budget."""
+    pl = ProfitLockConfig()
+    assert pl.zone1_trigger == Decimal("0.25")
+    assert pl.zone2_trigger == Decimal("0.50")
+    assert pl.zone3_trigger == Decimal("0.75")
+    assert pl.floor_budget_zone2 == Decimal("0.75")
+
+
+def test_profit_lock_monthly_preset() -> None:
+    """IC_V2_MONTHLY must have correct profit-lock overrides."""
+    pl = IC_V2_MONTHLY.profit_lock
+    assert pl.zone2_long_wing_min_premium == Decimal("15")
+    assert pl.monthly_lock_dte_lo == 10
+    assert pl.monthly_lock_dte_hi == 22
+
+
+def test_profit_lock_frozen() -> None:
+    """ProfitLockConfig must be frozen=True."""
+    pl = ProfitLockConfig()
+    with pytest.raises((FrozenInstanceError, AttributeError)):
+        pl.zone1_trigger = Decimal("0.99")  # type: ignore[misc]
+
+
+def test_floor_budget_plus_zone3_equals_one() -> None:
+    """floor_budget(z2)=0.75; if Zone 3 were implemented: 0.35."""
+    pl = ProfitLockConfig()
+    assert pl.floor_budget_zone2 == Decimal("0.75")

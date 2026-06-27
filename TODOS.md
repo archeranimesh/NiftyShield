@@ -340,3 +340,6 @@ Full log: [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md)
 | 2026-06-27 | ic-nifty-v2 IC-V2-2 — IronCondorV2 adjustment: _evaluate_adjustment (DELTA_WARN/ROLL_WING/DELTA_STOP/FORCED_CLOSE), _execute_partial_roll (4-leg atomic), 7 roll guards, RollResult dataclass, state helpers reset_roll_state/set_original_credit; 11 tests — b8942d9 |
 | 2026-06-27 | ic-nifty-v2 IC-V2-3 — IronCondorV2 DTE-tiered exit: monthly hard-close DTE≤7, FORCE_CLOSE DTE≤1 — 5b0de55 |
 | 2026-06-27 | ic-nifty-v2 IC-V2-4 — IronCondorV2 check_signals: DELTA_WARN/ROLL_WING/DELTA_STOP/FORCED_CLOSE hierarchy, apply_action, describe_context, profit target; 11 tests — cf81258 |
+| 2026-06-27 | ic-nifty-v2 IC-V2-5 — IronCondorV2 registration: add CONFIGS_V2 dict to ic_expiry_config_v2.py; wire IronCondorV2 import + registration loop into monitor_daemon.py; 6 registration tests — 91d0bc7 |
+| 2026-06-27 | ic-nifty-v2 IC-V2-6 — Docs close: CONTEXT.md add V2 config + strategy description (D1/D2/D3/D4 council ruling); CONTEXT_TREE.md add entire src/strategy/ section (20 files); TODOS.md session log entries — commit pending (git lock) |
+| 2026-06-27 | ic-nifty-v2 IC-V2-7 — ProfitLockConfig dataclass (zone triggers, floor formula constants, DTE guards); added profit_lock field to IronCondorV2ExpiryConfig; IC_V2_MONTHLY override; 4 tests; daemon test mock fix |

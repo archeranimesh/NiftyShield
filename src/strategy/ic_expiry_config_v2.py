@@ -24,9 +24,54 @@ presets will be added in a later story after backtesting.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Literal
+
+
+@dataclass(frozen=True)
+class ProfitLockConfig:
+    """Profit-lock thresholds for IronCondorV2.
+
+    Council ruling: docs/archive/council/strategy/2026-06-27_ic-v2-profit-lock-adjustment.md Stage 3.
+
+    Three zones:
+      Zone 1 (25% captured): log-only, no structural change.
+      Zone 2 (50% captured): roll long wings inward — structural guarantee required.
+      Zone 3 (75% captured): CLOSE_FULL — formula too tight for Nifty execution.
+
+    Floor guarantee formula (Zone 2, enforced before execution):
+      max(W_put, W_call) + D_cum + D_lock + K <= 0.75 * C0
+
+    If formula cannot be satisfied: CLOSE_FULL (no exceptions).
+    """
+
+    # Zone trigger thresholds (fraction of entry credit captured)
+    zone1_trigger: Decimal = Decimal("0.25")
+    zone2_trigger: Decimal = Decimal("0.50")
+    zone3_trigger: Decimal = Decimal("0.75")
+
+    # Zone 2 — wing inward roll config
+    zone2_long_wing_delta_target: Decimal = Decimal("0.19")  # target delta for inward wings
+    zone2_long_wing_delta_lo: Decimal = Decimal("0.16")  # acceptable range lo
+    zone2_long_wing_delta_hi: Decimal = Decimal("0.22")  # acceptable range hi
+    zone2_long_wing_min_premium: Decimal = Decimal("15")  # ₹ min mid-price on new longs
+
+    # Floor formula constants
+    floor_budget_zone2: Decimal = Decimal("0.75")  # (1 - F) where F=0.25
+    cost_buffer_pts: Decimal = Decimal("10")  # K: conservative slippage + STT buffer (points)
+    max_debit_fraction: Decimal = Decimal("0.25")  # D_lock <= 25% of C0
+
+    # Minimum restructured width to bother (below this → CLOSE_FULL is cleaner)
+    min_viable_width_pts: int = 100  # 100-point minimum on Nifty grid
+
+    # DTE guards (monthly)
+    monthly_lock_dte_lo: int = 10  # do not restructure below this DTE
+    monthly_lock_dte_hi: int = 22  # prefer restructure window; above this restructure only if cheap
+
+    # IV/VIX guards (secondary — mathematical formula is primary)
+    min_vix: Decimal = Decimal("11")
+    min_ivr: Decimal = Decimal("0.20")
 
 
 @dataclass(frozen=True)
@@ -122,6 +167,9 @@ class IronCondorV2ExpiryConfig:
     # See TODOS.md entry 2026-06-27 and docstring above.
     monthly_close_full_dte: int = 7  # DTE≤7 → CLOSE_FULL default (refineable during backtest)
 
+    # Profit-lock config
+    profit_lock: ProfitLockConfig = field(default_factory=ProfitLockConfig)
+
 
 # ---------------------------------------------------------------------------
 # Canonical preset — monthly only (Phase 1)
@@ -132,6 +180,11 @@ IC_V2_MONTHLY = IronCondorV2ExpiryConfig(
     # Explicit per D2 ruling: ₹15 monthly floor.  When weekly preset is added it will
     # use ₹10, so the kwarg stays here to document the per-expiry divergence clearly.
     long_wing_min_premium=Decimal("15"),
+    profit_lock=ProfitLockConfig(
+        zone2_long_wing_min_premium=Decimal("15"),
+        monthly_lock_dte_lo=10,
+        monthly_lock_dte_hi=22,
+    ),
 )
 
 # ---------------------------------------------------------------------------
