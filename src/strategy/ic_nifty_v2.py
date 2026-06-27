@@ -1,12 +1,17 @@
 """IronCondorV2 — high-delta IC with 10Δ wings and partial-roll adjustments.
 
-Phase 1 (this file: IC-V2-1): entry logic only.
+Phase 1 (IC-V2-1): entry logic.
   - _select_short_put / _select_short_call: 25Δ/22Δ via find_strike_by_delta
   - _select_long_wing: 10Δ with delta/premium/liquidity floors
   - _sd_sanity_check: warn-only SD guard (never blocks entry)
   - enter(): assemble 4-leg IC; returns PositionUpdate or None
 
-Phase 2 (IC-V2-2): _evaluate_adjustment, _execute_partial_roll, roll guards.
+Phase 2 (IC-V2-2): adjustment logic — implemented here.
+  - _evaluate_adjustment(): detects DELTA_WARN / ROLL_WING / DELTA_STOP / FORCED_CLOSE
+  - _execute_partial_roll(): builds 4-leg atomic PositionUpdate for challenged vertical
+  - 7 roll guards (DTE, candidate, width, debit-cap, max-rolls, inverted-condor, wing-floor)
+  - State: _rolls_executed dict + _original_ic_credit per strategy_name
+
 Phase 3 (IC-V2-3): _evaluate_dte_action, _roll_allowed_by_dte.
 Phase 4 (IC-V2-4): check_signals, apply_action — PaperStrategy protocol compliance.
 
@@ -92,6 +97,29 @@ class PositionUpdate:
     total_credit_pts: Decimal
 
 
+# ── Roll result ───────────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class RollResult:
+    """Output of _evaluate_adjustment().
+
+    Attributes:
+        signal_type: One of DELTA_WARN / ROLL_WING / DELTA_STOP / FORCED_CLOSE.
+        side: "put" or "call" — which vertical was challenged. None for DELTA_WARN
+            when no single side is clearly dominant (both may be warned).
+        roll_update: 4-leg PositionUpdate when signal_type == ROLL_WING and roll
+            executes successfully. None for all other signal types.
+        block_reason: Guard name that blocked the roll (for logging). None unless
+            the roll was attempted but blocked.
+    """
+
+    signal_type: Literal["DELTA_WARN", "ROLL_WING", "DELTA_STOP", "FORCED_CLOSE"]
+    side: Literal["put", "call"] | None
+    roll_update: PositionUpdate | None
+    block_reason: str | None
+
+
 # ── Strategy class ────────────────────────────────────────────────────────────
 
 
@@ -117,6 +145,13 @@ class IronCondorV2:
         self._broker = broker
         self._store = store
         self._notifier = notifier
+
+        # ── Adjustment state (reset on new entry cycle via reset_roll_state()) ──
+        # Keyed by side ("put" | "call"). Counts partial rolls executed this cycle.
+        self._rolls_executed: dict[str, int] = {"put": 0, "call": 0}
+        # Original total IC credit at entry (option points per unit).
+        # Set by the caller after a successful enter() via set_original_credit().
+        self._original_ic_credit: Decimal = Decimal("0")
 
     @property
     def strategy_name(self) -> str:
@@ -454,6 +489,466 @@ class IronCondorV2:
                 multiplier=str(cfg.sd_width_warn_lower_multiplier),
             )
 
+    # ── Adjustment state helpers ──────────────────────────────────────────────
+
+    def reset_roll_state(self) -> None:
+        """Reset per-cycle roll counters and original credit. Call on new entry.
+
+        Must be called by the orchestrator (IC-V2-4) immediately after a
+        successful enter() so that _rolls_executed starts at zero and
+        the debit-cap guard uses the correct reference credit.
+        """
+        self._rolls_executed = {"put": 0, "call": 0}
+        self._original_ic_credit = Decimal("0")
+
+    def set_original_credit(self, credit_pts: Decimal) -> None:
+        """Store the original IC credit for debit-cap guard evaluation.
+
+        Args:
+            credit_pts: Total IC credit at entry in option index points per unit.
+        """
+        self._original_ic_credit = credit_pts
+
+    # ── Adjustment evaluation ─────────────────────────────────────────────────
+
+    def _evaluate_adjustment(
+        self,
+        positions: list[PaperPosition],
+        market: OptionChain,
+        dte: int,
+        expiry: str,
+        *,
+        roll_allowed_by_dte: bool = True,
+    ) -> RollResult | None:
+        """Evaluate delta signals on current IC positions and decide adjustment.
+
+        Signal hierarchy (D3 ruling):
+            |short_delta| ≥ 0.30  → DELTA_WARN (log only, no roll)
+            |short_delta| ≥ 0.35  → ROLL_WING  (attempt partial roll)
+            |short_delta| ≥ 0.35 AND roll blocked → DELTA_STOP (close challenged spread)
+            |short_delta| ≥ 0.45 OR max_rolls exhausted → FORCED_CLOSE (close full IC)
+
+        Args:
+            positions: Current open IC paper positions.
+            market: Live Nifty 50 option chain snapshot.
+            dte: Days to expiry (used for roll-guard context).
+            expiry: ISO expiry string for structured logging.
+            roll_allowed_by_dte: Injected predicate from IC-V2-3. When False the
+                DTE-tiered exit has already determined no roll is permitted; this
+                guard is checked first inside ROLL_WING escalation.
+
+        Returns:
+            RollResult describing the signal and any roll update, or None when
+            delta levels are below all thresholds (healthy IC — hold).
+        """
+        cfg = self._config
+        baseline = {
+            "strategy_name": self.strategy_name,
+            "trade_id": "",
+            "expiry": expiry,
+            "dte": dte,
+            "roll_count_put": self._rolls_executed["put"],
+            "roll_count_call": self._rolls_executed["call"],
+            "profit_lock_zone": 0,
+        }
+
+        # Locate short legs in current positions
+        short_put_pos = next((p for p in positions if p.leg_role == "short_put"), None)
+        short_call_pos = next((p for p in positions if p.leg_role == "short_call"), None)
+
+        # Collect delta readings for each short leg from the live chain
+        deltas: dict[str, Decimal | None] = {
+            "put": self._get_short_delta(market, short_put_pos),
+            "call": self._get_short_delta(market, short_call_pos),
+        }
+
+        # ── FORCED_CLOSE: extreme delta (≥ 0.45) — skip all guards ────────────
+        for side, delta_val in deltas.items():
+            if delta_val is None:
+                continue
+            if abs(delta_val) >= cfg.forced_close_delta:
+                log.warning(
+                    "ic_nifty_v2.forced_close_delta",
+                    **baseline,
+                    side=side,
+                    short_delta=str(delta_val),
+                    threshold=str(cfg.forced_close_delta),
+                )
+                return RollResult(
+                    signal_type="FORCED_CLOSE",
+                    side=side,  # type: ignore[arg-type]
+                    roll_update=None,
+                    block_reason=None,
+                )
+
+        # ── ROLL_WING / DELTA_STOP: trigger delta (≥ 0.35) ───────────────────
+        for side in ("put", "call"):
+            delta_val = deltas[side]
+            if delta_val is None:
+                continue
+            if abs(delta_val) < cfg.roll_trigger_delta:
+                continue
+
+            # Check max_rolls guard first — exhausted → immediate FORCED_CLOSE
+            if self._rolls_executed[side] >= cfg.max_rolls_per_side_per_cycle:
+                log.warning(
+                    "ic_nifty_v2.forced_close_rolls_exhausted",
+                    **baseline,
+                    side=side,
+                    roll_count=self._rolls_executed[side],
+                )
+                return RollResult(
+                    signal_type="FORCED_CLOSE",
+                    side=side,  # type: ignore[arg-type]
+                    roll_update=None,
+                    block_reason="max_rolls_exhausted",
+                )
+
+            log.info(
+                "ic_nifty_v2.roll_wing_attempt",
+                **baseline,
+                side=side,
+                short_delta=str(delta_val),
+                original_short_strike=str(
+                    self._position_strike(short_put_pos if side == "put" else short_call_pos)
+                ),
+                original_long_strike=str(self._long_wing_strike(positions, side)),
+            )
+
+            roll_result = self._execute_partial_roll(
+                side=side,  # type: ignore[arg-type]
+                positions=positions,
+                market=market,
+                dte=dte,
+                expiry=expiry,
+                roll_allowed_by_dte=roll_allowed_by_dte,
+                baseline=baseline,
+            )
+
+            if roll_result is not None:
+                # Roll succeeded — update counter and return ROLL_WING
+                self._rolls_executed[side] += 1
+                log.info(
+                    "ic_nifty_v2.roll_wing_executed",
+                    **baseline,
+                    side=side,
+                    old_short_strike=str(
+                        self._position_strike(short_put_pos if side == "put" else short_call_pos)
+                    ),
+                    old_long_strike=str(self._long_wing_strike(positions, side)),
+                    new_short_strike=str(
+                        self._leg_strike_from_update(roll_result, "new_short", side)
+                    ),
+                    new_long_strike=str(
+                        self._leg_strike_from_update(roll_result, "new_long", side)
+                    ),
+                    roll_debit_pts=str(self._compute_roll_debit(positions, roll_result, market)),
+                    roll_count_after=self._rolls_executed[side],
+                )
+                return RollResult(
+                    signal_type="ROLL_WING",
+                    side=side,  # type: ignore[arg-type]
+                    roll_update=roll_result,
+                    block_reason=None,
+                )
+            else:
+                # Roll blocked → escalate to DELTA_STOP
+                block_reason = getattr(self, "_last_block_reason", "unknown")
+                log.warning(
+                    "ic_nifty_v2.delta_stop",
+                    **baseline,
+                    side=side,
+                    short_delta=str(delta_val),
+                    block_reason="roll_guard_failed",
+                )
+                return RollResult(
+                    signal_type="DELTA_STOP",
+                    side=side,  # type: ignore[arg-type]
+                    roll_update=None,
+                    block_reason=block_reason,
+                )
+
+        # ── DELTA_WARN: warn delta (≥ 0.30 but < 0.35) ───────────────────────
+        warn_side: Literal["put", "call"] | None = None
+        warn_delta: Decimal | None = None
+        for side in ("put", "call"):
+            delta_val = deltas[side]
+            if delta_val is None:
+                continue
+            if abs(delta_val) >= cfg.roll_warn_delta:
+                warn_side = side  # type: ignore[assignment]
+                warn_delta = delta_val
+                break
+
+        if warn_side is not None and warn_delta is not None:
+            log.warning(
+                "ic_nifty_v2.delta_warn",
+                **baseline,
+                side=warn_side,
+                short_delta=str(warn_delta),
+                threshold=str(cfg.roll_warn_delta),
+            )
+            return RollResult(
+                signal_type="DELTA_WARN",
+                side=warn_side,
+                roll_update=None,
+                block_reason=None,
+            )
+
+        # Below all thresholds — healthy IC, hold
+        return None
+
+    def _execute_partial_roll(
+        self,
+        side: Literal["put", "call"],
+        positions: list[PaperPosition],
+        market: OptionChain,
+        dte: int,
+        expiry: str,
+        *,
+        roll_allowed_by_dte: bool,
+        baseline: dict,
+    ) -> PositionUpdate | None:
+        """Attempt a 4-leg atomic close+reopen of the challenged vertical.
+
+        All 7 guards are checked in order. Any guard failure sets
+        self._last_block_reason and returns None.
+
+        Guard order (D3 ruling):
+          1. DTE above expiry-specific cutoff (injected predicate roll_allowed_by_dte)
+          2. Replacement short exists in delta range on current chain
+          3. Replacement long wing satisfies delta/premium/liquidity floors
+          4. replacement_width ≤ original_spread_width (no max-loss expansion)
+          5. roll_debit ≤ roll_debit_cap_fraction × original_ic_credit
+          6. rolls_executed_this_side < max_rolls_per_side_per_cycle
+          7. New short does not cross opposite side's short strike (no inverted condor)
+
+        Args:
+            side: "put" or "call" — which vertical is challenged.
+            positions: Current open IC paper positions.
+            market: Live Nifty 50 option chain snapshot.
+            dte: Days to expiry.
+            expiry: ISO expiry string for structured logging.
+            roll_allowed_by_dte: False blocks roll immediately (guard 1).
+            baseline: Shared log kwargs dict.
+
+        Returns:
+            PositionUpdate with 4 LegSpec objects on success, or None if any
+            guard fails.
+        """
+        cfg = self._config
+        option_type: Literal["CE", "PE"] = "CE" if side == "call" else "PE"
+        role_short = f"short_{side}"
+        role_long = f"long_{side}_hedge"
+
+        # Locate old positions
+        old_short_pos = next((p for p in positions if p.leg_role == role_short), None)
+        old_long_pos = next((p for p in positions if p.leg_role == role_long), None)
+        opposite_short_role = "short_call" if side == "put" else "short_put"
+        opposite_short_pos = next((p for p in positions if p.leg_role == opposite_short_role), None)
+
+        if old_short_pos is None or old_long_pos is None:
+            self._last_block_reason = "no_short_candidate"
+            return None
+
+        # Derive original spread width from stored strikes
+        old_short_strike = self._position_strike(old_short_pos)
+        old_long_strike = self._position_strike(old_long_pos)
+        if old_short_strike is None or old_long_strike is None:
+            self._last_block_reason = "no_short_candidate"
+            return None
+        original_width = abs(old_short_strike - old_long_strike)
+
+        # Locate opposite short strike (for inverted-condor guard)
+        opposite_short_strike: Decimal | None = None
+        if opposite_short_pos is not None:
+            opposite_short_strike = self._position_strike(opposite_short_pos)
+
+        # ── Guard 1: DTE cutoff ────────────────────────────────────────────────
+        if not roll_allowed_by_dte:
+            log.warning(
+                "ic_nifty_v2.roll_guard_failed",
+                **baseline,
+                side=side,
+                guard="dte_cutoff",
+                detail=f"dte={dte} at or below close_full threshold",
+            )
+            self._last_block_reason = "dte_cutoff"
+            return None
+
+        # ── Guard 6 (checked early for efficiency): max_rolls ─────────────────
+        # Already checked in _evaluate_adjustment before calling this method,
+        # so this is a defensive double-check only.
+        if self._rolls_executed[side] >= cfg.max_rolls_per_side_per_cycle:
+            log.warning(
+                "ic_nifty_v2.roll_guard_failed",
+                **baseline,
+                side=side,
+                guard="max_rolls_exhausted",
+                detail=f"rolls_executed={self._rolls_executed[side]}",
+            )
+            self._last_block_reason = "max_rolls_exhausted"
+            return None
+
+        # ── Guard 2: replacement short exists in delta range ───────────────────
+        new_short = roll_utils.find_strike_by_delta(
+            market,
+            option_type,
+            (
+                cfg.short_put_delta_target - cfg.delta_range
+                if side == "put"
+                else cfg.short_call_delta_target - cfg.delta_range,
+                cfg.short_put_delta_target + cfg.delta_range
+                if side == "put"
+                else cfg.short_call_delta_target + cfg.delta_range,
+            ),
+            cfg.short_put_delta_target if side == "put" else cfg.short_call_delta_target,
+        )
+        if new_short is None:
+            log.warning(
+                "ic_nifty_v2.roll_guard_failed",
+                **baseline,
+                side=side,
+                guard="no_short_candidate",
+                detail="no replacement short in delta range",
+            )
+            self._last_block_reason = "no_short_candidate"
+            return None
+
+        # ── Guard 3: replacement long wing passes all floors ───────────────────
+        new_long = self._select_long_wing(market, side, expiry=expiry, dte=dte)
+        if new_long is None:
+            log.warning(
+                "ic_nifty_v2.roll_guard_failed",
+                **baseline,
+                side=side,
+                guard="wing_floor_miss",
+                detail="replacement long fails delta/premium/liquidity floor",
+            )
+            self._last_block_reason = "wing_floor_miss"
+            return None
+
+        # ── Guard 4: replacement width ≤ original spread width ─────────────────
+        new_width = abs(new_short.strike - new_long.strike)
+        if new_width > original_width:
+            log.warning(
+                "ic_nifty_v2.roll_guard_failed",
+                **baseline,
+                side=side,
+                guard="width_expansion",
+                detail=f"new_width={new_width} > original_width={original_width}",
+            )
+            self._last_block_reason = "width_expansion"
+            return None
+
+        # ── Guard 5: roll debit ≤ roll_debit_cap_fraction × original_ic_credit ─
+        old_short_leg = self._find_leg(market, old_short_pos.instrument_key)
+        old_long_leg = self._find_leg(market, old_long_pos.instrument_key)
+        if old_short_leg is not None and old_long_leg is not None:
+            # Debit to close old spread + open new spread (approximate from mid prices)
+            close_debit = old_short_leg.ltp - old_long_leg.ltp  # buy back short, sell long
+            open_debit = new_short.ltp - new_long.ltp  # sell new short, buy new long (net credit)
+            roll_debit = close_debit - open_debit  # net debit of the entire 4-leg transaction
+            if (
+                self._original_ic_credit > Decimal("0")
+                and roll_debit > cfg.roll_debit_cap_fraction * self._original_ic_credit
+            ):
+                log.warning(
+                    "ic_nifty_v2.roll_guard_failed",
+                    **baseline,
+                    side=side,
+                    guard="debit_cap",
+                    detail=(
+                        f"roll_debit={roll_debit} > "
+                        f"{cfg.roll_debit_cap_fraction}×{self._original_ic_credit}"
+                    ),
+                )
+                self._last_block_reason = "debit_cap"
+                return None
+
+        # ── Guard 7: no inverted condor ────────────────────────────────────────
+        if opposite_short_strike is not None:
+            if side == "put" and new_short.strike >= opposite_short_strike:
+                log.warning(
+                    "ic_nifty_v2.roll_guard_failed",
+                    **baseline,
+                    side=side,
+                    guard="inverted_condor",
+                    detail=(
+                        f"new put short {new_short.strike} >= "
+                        f"existing call short {opposite_short_strike}"
+                    ),
+                )
+                self._last_block_reason = "inverted_condor"
+                return None
+            if side == "call" and new_short.strike <= opposite_short_strike:
+                log.warning(
+                    "ic_nifty_v2.roll_guard_failed",
+                    **baseline,
+                    side=side,
+                    guard="inverted_condor",
+                    detail=(
+                        f"new call short {new_short.strike} <= "
+                        f"existing put short {opposite_short_strike}"
+                    ),
+                )
+                self._last_block_reason = "inverted_condor"
+                return None
+
+        # ── All guards pass — build 4-leg atomic PositionUpdate ───────────────
+        # Leg 1: Buy back old short (close challenged short)
+        close_short_key = old_short_pos.instrument_key
+        # Leg 2: Sell back old long hedge (close challenged long)
+        close_long_key = old_long_pos.instrument_key
+        # Leg 3: Sell new replacement short
+        new_short_key = (
+            f"NSE_FO|NIFTY{int(new_short.strike)}PE"
+            if side == "put"
+            else f"NSE_FO|NIFTY{int(new_short.strike)}CE"
+        )
+        # Leg 4: Buy new replacement long wing
+        new_long_key = (
+            f"NSE_FO|NIFTY{int(new_long.strike)}PE"
+            if side == "put"
+            else f"NSE_FO|NIFTY{int(new_long.strike)}CE"
+        )
+
+        legs = [
+            LegSpec(
+                instrument_key=close_short_key,
+                action="BUY",
+                quantity=1,
+                leg_role=role_short,
+                notes=f"roll_close_short delta={new_short.delta}",
+            ),
+            LegSpec(
+                instrument_key=close_long_key,
+                action="SELL",
+                quantity=1,
+                leg_role=role_long,
+                notes="roll_close_long",
+            ),
+            LegSpec(
+                instrument_key=new_short_key,
+                action="SELL",
+                quantity=1,
+                leg_role=role_short,
+                notes=f"roll_open_short delta={new_short.delta}",
+            ),
+            LegSpec(
+                instrument_key=new_long_key,
+                action="BUY",
+                quantity=1,
+                leg_role=role_long,
+                notes=f"roll_open_long delta={new_long.delta}",
+            ),
+        ]
+        # net_credit here is the roll's net P&L (could be debit)
+        old_short_ltp = old_short_leg.ltp if old_short_leg is not None else Decimal("0")
+        old_long_ltp = old_long_leg.ltp if old_long_leg is not None else Decimal("0")
+        roll_net = (old_short_ltp - old_long_ltp) - (new_short.ltp - new_long.ltp)
+        return PositionUpdate(legs=legs, total_credit_pts=roll_net)
+
     # ── Protocol stubs (implemented in IC-V2-4) ──────────────────────────────
 
     async def check_signals(
@@ -596,6 +1091,100 @@ class IronCondorV2:
         return f"IVR: {ivr_str}"
 
     # ── Private helpers (V2-specific) ─────────────────────────────────────────
+
+    def _get_short_delta(self, market: OptionChain, pos: PaperPosition | None) -> Decimal | None:
+        """Look up the live delta of a short position from the chain.
+
+        PE deltas are negative by convention; we return the raw signed value.
+        Returns None when the position is missing, not in the chain, or delta
+        is not available in the snapshot.
+
+        Args:
+            market: Current option chain snapshot.
+            pos: Paper position to look up (short_put or short_call).
+
+        Returns:
+            Signed delta (Decimal) or None.
+        """
+        if pos is None:
+            return None
+        leg = self._find_leg(market, pos.instrument_key)
+        if leg is None:
+            return None
+        return leg.delta  # None when Greeks unavailable
+
+    def _position_strike(self, pos: PaperPosition | None) -> Decimal | None:
+        """Extract strike price from the instrument key of a position.
+
+        Args:
+            pos: Paper position.
+
+        Returns:
+            Strike as Decimal, or None if key cannot be parsed.
+        """
+        if pos is None:
+            return None
+        m = _STRIKE_RE.search(pos.instrument_key)
+        if not m:
+            return None
+        try:
+            return Decimal(m.group(1))
+        except InvalidOperation:
+            return None
+
+    def _long_wing_strike(self, positions: list[PaperPosition], side: str) -> Decimal | None:
+        """Return the strike of the existing long wing for the given side.
+
+        Args:
+            positions: Current IC paper positions.
+            side: "put" or "call".
+
+        Returns:
+            Strike as Decimal, or None if position not found.
+        """
+        role = f"long_{side}_hedge"
+        pos = next((p for p in positions if p.leg_role == role), None)
+        return self._position_strike(pos)
+
+    def _leg_strike_from_update(self, update: PositionUpdate, which: str, side: str) -> str:
+        """Extract strike string from a roll PositionUpdate for logging.
+
+        Args:
+            update: The 4-leg PositionUpdate returned by _execute_partial_roll.
+            which: "new_short" or "new_long" — which of the two new legs to inspect.
+            side: "put" or "call".
+
+        Returns:
+            Strike string, or "?" if extraction fails.
+        """
+        action = "SELL" if which == "new_short" else "BUY"
+        option_type = "PE" if side == "put" else "CE"
+        for leg in update.legs:
+            if leg.action == action and "open" in leg.notes:
+                m = _STRIKE_RE.search(leg.instrument_key)
+                if m and leg.instrument_key.endswith(option_type):
+                    return m.group(1)
+        return "?"
+
+    def _compute_roll_debit(
+        self,
+        positions: list[PaperPosition],
+        roll_update: PositionUpdate,
+        market: OptionChain,
+    ) -> str:
+        """Return string representation of roll net debit for logging.
+
+        Approximated from the roll_update's total_credit_pts (negative = debit).
+
+        Args:
+            positions: Current IC paper positions.
+            roll_update: The 4-leg PositionUpdate.
+            market: Live chain (unused here; kept for future mark-to-market).
+
+        Returns:
+            String of net debit points.
+        """
+        return str(abs(roll_update.total_credit_pts))
 
     def _mid_price(self, leg: OptionLeg) -> Decimal:
         """Compute mid price from bid/ask; fall back to ltp when spread missing.
