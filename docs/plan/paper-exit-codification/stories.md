@@ -1,8 +1,8 @@
 # Paper Exit Codification — Story Specs
 
 > One task per session. Find the first unchecked item in `tasks.md`. That is your only task.
-> Council ruling q11: `docs/council/2026-06-26_paper-trade-exit-philosophy.md` Stage 3.
-> Council ruling q12: `docs/council/2026-06-26_strategy-monitor-watchlist-design.md` Stage 3.
+> Council ruling q11: `docs/archive/council/strategy/2026-06-26_paper-trade-exit-philosophy.md` Stage 3.
+> Council ruling q12: `docs/archive/council/data_architecture/2026-06-26_strategy-monitor-watchlist-design.md` Stage 3.
 
 ---
 

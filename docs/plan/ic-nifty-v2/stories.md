@@ -1,7 +1,7 @@
 # Iron Condor V2 — Story Specs
 
 > One task per session. Find the first unchecked item in `tasks.md`. That is your only task.
-> Full council ruling: `docs/council/2026-06-26_ic-v2-core-design.md` Stage 3 (authoritative).
+> Full council ruling: `docs/archive/council/strategy/2026-06-26_ic-v2-core-design.md` Stage 3 (authoritative).
 > After each task: tick `tasks.md`, append `| SHA: <sha>`, add one line to `TODOS.md`.
 
 ---
@@ -29,7 +29,7 @@ class IronCondorV2ExpiryConfig:
     """Delta-based config for IronCondorV2.
 
     Replaces V1's fixed wing_width_points with 10Δ long-wing placement.
-    Council ruling: docs/council/2026-06-26_ic-v2-core-design.md Stage 3.
+    Council ruling: docs/archive/council/strategy/2026-06-26_ic-v2-core-design.md Stage 3.
     """
     expiry_type: str                              # "weekly" | "monthly"
 

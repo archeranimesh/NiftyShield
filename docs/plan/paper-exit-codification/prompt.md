@@ -1,8 +1,8 @@
 Read `CONTEXT.md` and state `CONTEXT.md ✓` before doing anything else. Then read `docs/plan/paper-exit-codification/tasks.md` and find the first unchecked box. That is your **only task** for this session. Do not look at any other unchecked item. One task. Complete it fully. Stop.
 
 **Council rulings:**
-- q11 exit philosophy: `docs/council/2026-06-26_paper-trade-exit-philosophy.md` Stage 3
-- q12 monitor observability: `docs/council/2026-06-26_strategy-monitor-watchlist-design.md` Stage 3
+- q11 exit philosophy: `docs/archive/council/strategy/2026-06-26_paper-trade-exit-philosophy.md` Stage 3
+- q12 monitor observability: `docs/archive/council/data_architecture/2026-06-26_strategy-monitor-watchlist-design.md` Stage 3
 
 **Story spec:** Read the matching story in `docs/plan/paper-exit-codification/stories.md` for the full spec.
 

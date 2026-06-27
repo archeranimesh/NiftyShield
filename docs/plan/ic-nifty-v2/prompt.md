@@ -1,6 +1,6 @@
 Read `CONTEXT.md` and state `CONTEXT.md ✓` before doing anything else. Then read `docs/plan/ic-nifty-v2/tasks.md` and find the first unchecked box — the first `- [ ]` line. That is your **only task** for this session. Do not look at any other unchecked item. One task. Complete it fully. Stop.
 
-**Council ruling (authoritative spec):** `docs/council/2026-06-26_ic-v2-core-design.md` — Stage 3 is the implementation spec. All implementation must trace directly to a ruling there.
+**Council ruling (authoritative spec):** `docs/archive/council/strategy/2026-06-26_ic-v2-core-design.md` — Stage 3 is the implementation spec. All implementation must trace directly to a ruling there.
 
 **Story spec:** Read the matching story in `docs/plan/ic-nifty-v2/stories.md` (same task ID) for the full implementation spec, "Before any code" graph queries, test list, and commit message. Follow it exactly.
 

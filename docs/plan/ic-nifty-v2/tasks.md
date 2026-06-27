@@ -3,7 +3,7 @@
 > Antigravity: find the first unchecked `- [ ]` line. That is your only task for this session.
 > Tick the box and append `| SHA: <sha>` when done. Add one line to `TODOS.md`.
 > Full story spec for each task: `docs/plan/ic-nifty-v2/stories.md`.
-> Council ruling (authoritative): `docs/council/2026-06-26_ic-v2-core-design.md` Stage 3.
+> Council ruling (authoritative): `docs/archive/council/strategy/2026-06-26_ic-v2-core-design.md` Stage 3.
 
 ---
 

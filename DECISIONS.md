@@ -660,7 +660,7 @@ Full gate specification: `docs/plan/variance_gate.md`.
 | Weekly DTE cutoff | DTE≥6 normal roll; DTE 4–5 strict guards; DTE≤3 CLOSE_FULL (both sides); DTE≤1 CLOSE_FULL no discretion |
 | Architecture | Separate class `ic_nifty_v2.py` + `ic_expiry_config_v2.py`; strategy names `paper_ic_nifty_v2_weekly` / `paper_ic_nifty_v2_monthly` |
 
-Source: `docs/council/2026-06-26_ic-v2-core-design.md`
+Source: `docs/archive/council/strategy/2026-06-26_ic-v2-core-design.md`
 
 ---
 
@@ -679,7 +679,7 @@ Confirmed that existing codebase already implements the canonical rules. Codific
 | Exit signal storage | Separate `paper_exit_events` table (already exists) with OPEN→ACKNOWLEDGED→ACTED/DISMISSED lifecycle |
 | Open gap | TIME_STOP vs DTE_REVIEW priority ordering in `evaluate_cc` — minor fix pending (story EC-1) |
 
-Source: `docs/council/2026-06-26_paper-trade-exit-philosophy.md`
+Source: `docs/archive/council/strategy/2026-06-26_paper-trade-exit-philosophy.md`
 
 ---
 
@@ -693,7 +693,7 @@ Source: `docs/council/2026-06-26_paper-trade-exit-philosophy.md`
 | Observability | Add two structured log lines: `strategy_monitor.chain_fetch_complete` (latency, strike_count, strategy_name) and `strategy_monitor.tick_summary` (signals emitted per tick) |
 
 Noted, deferred: Hybrid split-fetch (LTP every tick + periodic Greeks) for Phase 1 when scale warrants it.
-Source: `docs/council/2026-06-26_strategy-monitor-watchlist-design.md`
+Source: `docs/archive/council/data_architecture/2026-06-26_strategy-monitor-watchlist-design.md`
 
 ---
 
