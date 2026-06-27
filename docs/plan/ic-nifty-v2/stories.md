@@ -294,7 +294,7 @@ get_code_snippet("IronCondorV2._evaluate_adjustment")   # confirm IC-V2-2 done
      - If DTE action == CLOSE_FULL → emit `FORCED_CLOSE` instead
      - Try partial roll; if guards fail → `DELTA_STOP`
    - ≥ 0.30 → `DELTA_WARN` (log, no action)
-3. No delta stop → evaluate profit target (if both spreads at ≤20% of original credit → CLOSE_FULL)
+3. No delta stop → evaluate profit target (if both spreads at ≤30% of original credit → CLOSE_FULL)
 4. No exit → return empty signals (hold)
 
 **Tests (test_ic_nifty_v2_signals.py):**
@@ -303,7 +303,7 @@ get_code_snippet("IronCondorV2._evaluate_adjustment")   # confirm IC-V2-2 done
 - `test_full_pipeline_roll_wing` — |short_delta| 0.36, guards pass → ROLL_WING signal
 - `test_full_pipeline_forced_close_delta` — |short_delta| 0.46 → FORCED_CLOSE
 - `test_full_pipeline_forced_close_dte` — weekly DTE=1 → FORCED_CLOSE regardless of deltas
-- `test_full_pipeline_profit_target` — both spreads decayed to 20% of credit → CLOSE_FULL
+- `test_full_pipeline_profit_target` — both spreads decayed to 30% of credit → CLOSE_FULL
 - `test_protocol_compliance` — IronCondorV2 satisfies isinstance check for PaperStrategy protocol
 
 **greeks-analyst gate:** Mandatory before code-reviewer.
@@ -362,3 +362,470 @@ ic_nifty_v2.py          — IronCondorV2 strategy: 25Δ/22Δ entry, 10Δ wings, 
 **No tests.** Docs-only commit:
 
 **Commit:** `docs: add IronCondorV2 to CONTEXT.md, CONTEXT_TREE.md, TODOS.md`
+
+---
+
+## Phase 2 — Profit-Lock Adjustment
+
+> Council ruling (authoritative): `docs/archive/council/strategy/2026-06-27_ic-v2-profit-lock-adjustment.md` Stage 3.
+>
+> Design principle: profit-lock is **fully auto_execute=True**. No Telegram approval gate.
+> Telegram notification fires **after** execution (confirmation only). If the formula cannot be
+> satisfied, CLOSE_FULL executes automatically. No human decision point.
+
+---
+
+## IC-V2-7 — Profit-Lock Config
+
+**Goal:** Add `ProfitLockConfig` dataclass and profit-lock state fields to `ic_expiry_config_v2.py`.
+Council ruling: Q4 state fields + Q5 zone table.
+
+**Files to change:**
+- `src/strategy/ic_expiry_config_v2.py` — add `ProfitLockConfig` dataclass + update `IronCondorV2ExpiryConfig` with profit-lock fields
+- `tests/unit/strategy/test_ic_expiry_config_v2.py` — extend existing test file
+
+**Before any code:**
+```
+get_code_snippet("IronCondorV2ExpiryConfig")   # current V2 config fields
+get_code_snippet("ICExpiryConfig")             # V1 config for comparison reference
+```
+
+**What to implement:**
+
+```python
+@dataclass(frozen=True)
+class ProfitLockConfig:
+    """Profit-lock thresholds for IronCondorV2.
+
+    Council ruling: docs/archive/council/strategy/2026-06-27_ic-v2-profit-lock-adjustment.md Stage 3.
+
+    Three zones:
+      Zone 1 (25% captured): log-only, no structural change.
+      Zone 2 (50% captured): roll long wings inward — structural guarantee required.
+      Zone 3 (75% captured): CLOSE_FULL — formula too tight for Nifty execution.
+
+    Floor guarantee formula (Zone 2, enforced before execution):
+      max(W_put, W_call) + D_cum + D_lock + K ≤ 0.75 × C₀
+
+    If formula cannot be satisfied: CLOSE_FULL (no exceptions).
+    """
+    # Zone trigger thresholds (fraction of entry credit captured)
+    zone1_trigger: Decimal = Decimal("0.25")
+    zone2_trigger: Decimal = Decimal("0.50")
+    zone3_trigger: Decimal = Decimal("0.75")
+
+    # Zone 2 — wing inward roll config
+    zone2_long_wing_delta_target: Decimal = Decimal("0.19")   # target delta for inward wings
+    zone2_long_wing_delta_lo: Decimal = Decimal("0.16")       # acceptable range lo
+    zone2_long_wing_delta_hi: Decimal = Decimal("0.22")       # acceptable range hi
+    zone2_long_wing_min_premium: Decimal = Decimal("15")      # ₹ min mid-price on new longs
+
+    # Floor formula constants
+    floor_budget_zone2: Decimal = Decimal("0.75")             # (1 - F) where F=0.25
+    cost_buffer_pts: Decimal = Decimal("10")                  # K: conservative slippage + STT buffer (points)
+    max_debit_fraction: Decimal = Decimal("0.25")             # D_lock ≤ 25% of C₀
+
+    # Minimum restructured width to bother (below this → CLOSE_FULL is cleaner)
+    min_viable_width_pts: int = 100                           # 100-point minimum on Nifty grid
+
+    # DTE guards (monthly)
+    monthly_lock_dte_lo: int = 10   # do not restructure below this DTE
+    monthly_lock_dte_hi: int = 22   # prefer restructure window; above this restructure only if cheap
+
+    # DTE guards (weekly)
+    weekly_lock_dte_lo: int = 4
+    weekly_lock_dte_hi: int = 6
+
+    # IV/VIX guards (secondary — mathematical formula is primary)
+    min_vix: Decimal = Decimal("11")
+    min_ivr: Decimal = Decimal("0.20")
+```
+
+Add to `IronCondorV2ExpiryConfig`:
+```python
+    profit_lock: ProfitLockConfig = field(default_factory=ProfitLockConfig)
+```
+
+Update `IC_V2_MONTHLY` and `IC_V2_WEEKLY` presets to include `profit_lock=ProfitLockConfig(...)` with
+weekly overriding `zone2_long_wing_min_premium=Decimal("10")` and DTE guards.
+
+**Tests (append to test_ic_expiry_config_v2.py):**
+- `test_profit_lock_config_defaults` — zone triggers at 0.25/0.50/0.75, floor_budget 0.75
+- `test_profit_lock_monthly_preset` — min_premium=₹15, monthly DTE lo=10/hi=22
+- `test_profit_lock_weekly_preset` — min_premium=₹10, weekly DTE lo=4/hi=6
+- `test_profit_lock_frozen` — ProfitLockConfig is frozen=True
+- `test_floor_budget_plus_zone3_equals_one` — floor_budget(z2)=0.75; if Zone 3 were implemented: 0.35
+
+**Commit:** `feat(strategy): ProfitLockConfig — zone thresholds, floor formula constants, DTE/IV guards`
+
+---
+
+## IC-V2-8 — Profit-Lock Engine
+
+**Goal:** Pure, stateless formula engine for profit-lock decisions.
+Encapsulates: trigger detection, floor formula evaluation, wing selector, guard checker, PositionUpdate builder.
+No I/O, no DB, fully testable offline.
+
+Council ruling: Q1 (A=only valid approach), Q2 (complete formula), Q4 (automation feasibility).
+
+**Files to change:**
+- `src/strategy/profit_lock_engine.py` — new module
+- `tests/unit/strategy/test_profit_lock_engine.py` — new test file
+
+**Before any code:**
+```
+search_graph("IronCondorV2ExpiryConfig")           # confirm IC-V2-7 done
+get_code_snippet("ProfitLockConfig")               # exact fields
+search_graph("OptionChain")                        # chain data model
+get_code_snippet("filter_strikes_by_delta")        # reuse wing selector pattern
+search_graph("_apply_liquidity_gate")              # liquidity gate signature
+```
+
+**What to implement:**
+
+```python
+@dataclass(frozen=True)
+class ProfitLockState:
+    """Mutable profit-lock state for one IC cycle. Persisted in PaperStore (IC-V2-9)."""
+    profit_lock_zone: int                    # highest zone reached: 0/1/2/3
+    zone2_lock_executed: bool
+    zone3_lock_executed: bool                # reserved; always CLOSE_FULL for now
+    cumulative_lock_debit_pts: Decimal       # D_cum running total (option points)
+    active_put_width_pts: int                # current put spread width post any restructure
+    active_call_width_pts: int               # current call spread width post any restructure
+    cycle_id: str                            # resets on new entry
+
+
+@dataclass(frozen=True)
+class ProfitLockDecision:
+    """Output of ProfitLockEngine.evaluate(). Consumed by IronCondorV2.check_signals()."""
+    action: Literal["NONE", "ZONE1_LOG", "ZONE2_LOCK", "CLOSE_FULL"]
+    zone: int                                # zone that triggered (0 if NONE)
+    captured_fraction: Decimal
+    formula_passes: bool                     # True if floor constraint satisfied
+    required_max_width_pts: int | None       # W constraint from formula (None if NONE/CLOSE_FULL)
+    new_put_wing: OptionLeg | None           # selected replacement put long wing
+    new_call_wing: OptionLeg | None          # selected replacement call long wing
+    net_debit_pts: Decimal | None            # D_lock (per-unit points)
+    guaranteed_floor_fraction: Decimal | None  # worst-case retained profit / C₀
+    skip_reason: str | None                  # human-readable if action==NONE due to guard
+
+
+class ProfitLockEngine:
+    """Stateless evaluator for IC V2 profit-lock decisions.
+
+    All inputs are pure values (no DB, no I/O). Caller (IronCondorV2) provides
+    current state; this engine returns a ProfitLockDecision.
+    """
+
+    def evaluate(
+        self,
+        captured_fraction: Decimal,
+        entry_credit_pts: Decimal,       # C₀ in option points per unit
+        current_mark_pts: Decimal,
+        dte: int,
+        expiry_type: str,                # "weekly" | "monthly"
+        vix: Decimal | None,
+        ivr: Decimal | None,
+        state: ProfitLockState,
+        chain: OptionChain,
+        config: ProfitLockConfig,
+        short_put_strike: Decimal,       # to enforce width ≥ min_viable_width
+        short_call_strike: Decimal,
+    ) -> ProfitLockDecision: ...
+
+    def _detect_zone(self, captured_fraction: Decimal, config: ProfitLockConfig) -> int:
+        """Return highest un-acted zone: 0 if nothing new to act on."""
+        ...
+
+    def _evaluate_floor_formula(
+        self,
+        new_width_pts: int,
+        d_cum_pts: Decimal,
+        d_lock_pts: Decimal,
+        k_pts: Decimal,
+        entry_credit_pts: Decimal,
+        floor_budget: Decimal,
+    ) -> bool:
+        """max(W_put, W_call) + D_cum + D_lock + K ≤ floor_budget × C₀."""
+        ...
+
+    def _select_inward_wing(
+        self,
+        chain: OptionChain,
+        side: Literal["put", "call"],
+        short_strike: Decimal,
+        config: ProfitLockConfig,
+    ) -> OptionLeg | None:
+        """Find replacement long wing at ~19Δ satisfying delta/premium/liquidity floors."""
+        ...
+
+    def _check_dte_guard(self, dte: int, expiry_type: str, config: ProfitLockConfig) -> bool: ...
+    def _check_iv_guard(self, vix: Decimal | None, ivr: Decimal | None, config: ProfitLockConfig) -> bool: ...
+    def _check_debit_guard(self, d_lock_pts: Decimal, entry_credit_pts: Decimal, config: ProfitLockConfig) -> bool: ...
+```
+
+**Formula implementation (verbatim from council Q2):**
+```python
+def _evaluate_floor_formula(self, new_width_pts, d_cum_pts, d_lock_pts, k_pts,
+                             entry_credit_pts, floor_budget) -> bool:
+    return (Decimal(new_width_pts) + d_cum_pts + d_lock_pts + k_pts
+            <= floor_budget * entry_credit_pts)
+```
+
+Note: `new_width_pts = max(new_put_width, new_call_width)`. Use worst side.
+
+**Tests (test_profit_lock_engine.py):**
+- `test_zone_detection_none_below_25pct` — captured=0.20 → zone=0, action=NONE
+- `test_zone1_log_only` — captured=0.30, zone1 not yet acted → action=ZONE1_LOG, no wings selected
+- `test_zone2_formula_passes` — valid chain, formula satisfied → action=ZONE2_LOCK, formula_passes=True
+- `test_zone2_formula_fails_close_full` — debit too high, required width < 100pts → action=CLOSE_FULL
+- `test_zone2_skips_if_already_executed` — zone2_lock_executed=True → action=NONE
+- `test_zone2_dte_guard_blocks` — DTE=6 monthly → action=NONE, skip_reason set
+- `test_zone2_iv_guard_bypass_when_formula_has_buffer` — VIX=9 but K≥15pts → still executes
+- `test_zone2_debit_cap_blocks` — D_lock > 25% of C₀ → action=CLOSE_FULL
+- `test_zone2_width_below_100pts_prefers_close` — required width=50pts → action=CLOSE_FULL
+- `test_formula_evaluation_exact` — numeric spot-check: C₀=200, D_cum=0, D_lock=34, K=10, W=100 → 144 ≤ 150 ✓
+- `test_formula_evaluation_fails` — W=120, D_lock=40, K=10 → 170 > 150 ✗
+- `test_select_inward_wing_happy` — chain has 19Δ put/call with OI>50k → returns OptionLeg
+- `test_select_inward_wing_no_candidate` — no strike in 16–22Δ band → returns None → CLOSE_FULL
+- `test_guaranteed_floor_fraction` — verify output field = worst_pnl / C₀
+
+**greeks-analyst gate:** Mandatory before code-reviewer.
+
+**Commit:** `feat(strategy): ProfitLockEngine — floor formula, wing selector, 3-zone evaluation`
+
+---
+
+## IC-V2-9 — State Persistence
+
+**Goal:** Persist `ProfitLockState` in `paper_strategies` table. Add `get/set_profit_lock_state()` to `PaperStore`.
+Council ruling: Q4 state fields.
+
+**Files to change:**
+- `src/paper/store.py` — add `get_profit_lock_state()`, `set_profit_lock_state()`, migration SQL
+- `tests/unit/paper/test_profit_lock_state.py` — new test file
+
+**Before any code:**
+```
+get_code_snippet("PaperStore.get_proxy_delta_breach_count")   # existing pattern for paper_strategies table
+get_code_snippet("PaperStore.set_proxy_delta_breach_count")   # setter pattern
+search_graph("paper_strategies")                               # current schema
+get_code_snippet("ProfitLockState")                           # confirm IC-V2-8 done
+```
+
+**Schema additions to `paper_strategies` table:**
+
+```sql
+ALTER TABLE paper_strategies ADD COLUMN profit_lock_zone       INTEGER  DEFAULT 0;
+ALTER TABLE paper_strategies ADD COLUMN zone2_lock_executed    INTEGER  DEFAULT 0;   -- BOOLEAN
+ALTER TABLE paper_strategies ADD COLUMN zone3_lock_executed    INTEGER  DEFAULT 0;   -- BOOLEAN
+ALTER TABLE paper_strategies ADD COLUMN cumulative_lock_debit  TEXT     DEFAULT '0'; -- Decimal as TEXT
+ALTER TABLE paper_strategies ADD COLUMN active_put_width_pts   INTEGER  DEFAULT 0;
+ALTER TABLE paper_strategies ADD COLUMN active_call_width_pts  INTEGER  DEFAULT 0;
+ALTER TABLE paper_strategies ADD COLUMN cycle_id               TEXT     DEFAULT '';
+```
+
+**API:**
+
+```python
+def get_profit_lock_state(self, strategy_name: str) -> ProfitLockState:
+    """Return current profit-lock state; inserts default row if missing."""
+    ...
+
+def set_profit_lock_state(self, strategy_name: str, state: ProfitLockState) -> None:
+    """Upsert all profit-lock state fields atomically."""
+    ...
+
+def reset_profit_lock_state(self, strategy_name: str, cycle_id: str) -> None:
+    """Reset all fields to defaults for a new entry cycle."""
+    ...
+```
+
+**Tests (test_profit_lock_state.py):**
+- `test_get_default_state_when_missing` — no row → returns zero-state ProfitLockState
+- `test_set_and_get_roundtrip` — set zone2_lock_executed=True, cumulative_debit=34 → retrieve matches
+- `test_decimal_stored_as_text` — cumulative_lock_debit persisted as TEXT, read back as Decimal
+- `test_reset_clears_all_fields` — after set, reset_profit_lock_state → all fields zero/False
+- `test_upsert_does_not_duplicate` — set twice → only one row per strategy_name
+
+**Commit:** `feat(paper): profit-lock state persistence — PaperStore get/set/reset + schema migration`
+
+---
+
+## IC-V2-10 — Signal Integration
+
+**Goal:** Wire `ProfitLockEngine` into `IronCondorV2.check_signals()`. Auto-execute all profit-lock
+actions. Send Telegram notification after execution (confirmation only — no approval gate).
+Council ruling: Q3 precedence ladder + Q4 automation.
+
+**Files to change:**
+- `src/strategy/ic_nifty_v2.py` — integrate profit-lock evaluation into `check_signals()` + `apply_action()`
+- `tests/unit/strategy/test_ic_nifty_v2_profit_lock.py` — new test file
+
+**Before any code:**
+```
+get_code_snippet("IronCondorV2.check_signals")     # confirm IC-V2-4 done
+get_code_snippet("ProfitLockEngine.evaluate")      # confirm IC-V2-8 done
+get_code_snippet("PaperStore.get_profit_lock_state")  # confirm IC-V2-9 done
+search_graph("TelegramGateway.send_message")       # notification (not approval) method
+```
+
+**Precedence ladder in `check_signals()` (full, after IC-V2-4 signals):**
+
+```
+Priority 1: DTE ≤ hard-close cutoff → FORCED_CLOSE (existing IC-V2-3)
+Priority 2: |short_delta| ≥ 0.45   → FORCED_CLOSE (existing IC-V2-2)
+Priority 3: D3 roll budget exhausted + delta breached → FORCED_CLOSE (existing IC-V2-2)
+Priority 4: captured ≥ 70%          → CLOSE_FULL via existing profit target (existing IC-V2-4)
+Priority 5: captured ≥ 50% (Zone 2) → ProfitLockEngine.evaluate():
+              ZONE2_LOCK  → emit PROFIT_LOCK_ZONE2 (ACTION, auto_execute=True); notify Telegram
+              CLOSE_FULL  → emit FORCED_CLOSE (formula failed); auto-execute
+              NONE        → log skip_reason, continue
+Priority 6: captured ≥ 25% (Zone 1) → emit PROFIT_LOCK_ZONE1 (INFO); log only
+Priority 7: |short_delta| ≥ 0.35   → D3 roll (existing IC-V2-2)
+Priority 8: |short_delta| ≥ 0.30   → DELTA_WARN (existing IC-V2-2)
+```
+
+**Key automability rules:**
+- `PROFIT_LOCK_ZONE2` signal has `auto_execute=True` in payload — `StrategyMonitor` dispatches
+  to `PaperExecutor` without Telegram approval gate.
+- After execution, `_send_profit_lock_notification()` fires via `TelegramGateway.send_message()`
+  (not `send_approval_request`). Message includes: zone, new widths, guaranteed floor %, net debit.
+- `apply_action()` handles `PROFIT_LOCK_ZONE2`: closes old longs, opens new longs, calls
+  `store.set_profit_lock_state()` with updated state. All in one atomic DB transaction.
+- On new IC entry (detected by new `cycle_id`): call `store.reset_profit_lock_state()`.
+
+**Profit-lock notification format (Telegram):**
+
+```
+🔒 IC V2 Profit-Lock Executed — Zone 2
+Strategy: paper_ic_nifty_v2_monthly
+Captured: 52.3% of entry credit
+Action: Long wings rolled inward
+  PUT:  23,500PE → 23,850PE (width 500→150 pts)
+  CALL: 25,500CE → 25,150CE (width 500→150 pts)
+Net debit: ₹34 pts (₹2,550/lot)
+Floor locked: ≥25% of ₹15,000 (≥₹3,750) guaranteed
+DTE: 16  VIX: 13.2  IVR: 0.34
+```
+
+**Tests (test_ic_nifty_v2_profit_lock.py):**
+- `test_zone1_emits_info_no_action` — captured=0.28 → PROFIT_LOCK_ZONE1 INFO, no auto_execute
+- `test_zone2_executes_automatically` — captured=0.52, formula passes → PROFIT_LOCK_ZONE2 ACTION, auto_execute=True
+- `test_zone2_close_full_when_formula_fails` — engine returns CLOSE_FULL → FORCED_CLOSE emitted
+- `test_zone2_not_repeated` — zone2_lock_executed=True → zone2 branch skipped, no duplicate signal
+- `test_zone2_precedence_below_forced_close` — |delta|≥0.45 fires first → no zone2 signal
+- `test_zone2_precedence_below_profit_target` — captured=0.72 → profit target fires, not zone2
+- `test_zone2_precedence_above_d3_roll` — captured=0.52 AND |delta|=0.36 → profit-lock first, then re-evaluate D3
+- `test_notification_payload` — PROFIT_LOCK_ZONE2 payload has guaranteed_floor_fraction, new widths, net_debit
+- `test_apply_action_updates_state` — after PROFIT_LOCK_ZONE2 apply_action, store state has zone2_lock_executed=True
+
+**greeks-analyst gate:** Mandatory before code-reviewer.
+
+**Commit:** `feat(strategy): IronCondorV2 profit-lock signal integration — auto-execute, Telegram notify`
+
+---
+
+## IC-V2-11 — V1 vs V2 Monthly Comparison Script
+
+**Goal:** EOD cron script comparing `paper_ic_nifty_v1_monthly` vs `paper_ic_nifty_v2_monthly`
+side-by-side. Runs after `paper_ic_snapshot.py`. Sends a Telegram report showing which strategy
+is performing better on all key dimensions.
+
+**Files to change:**
+- `scripts/strategies/ic/paper_ic_monthly_comparison.py` — new script
+- `tests/unit/strategies/ic/test_paper_ic_monthly_comparison.py` — new test file
+
+**Before any code:**
+```
+search_code("paper_ic_snapshot.py")               # understand existing snapshot pattern
+get_code_snippet("PaperStore.get_open_exit_events") # signal event queries
+search_graph("PaperNavSnapshot")                   # NAV snapshot model for P&L
+search_code("paper_ic_nifty_v1_monthly")           # find all DB references
+```
+
+**What to implement:**
+
+```python
+_SCRIPT_NAME = "scripts.strategies.ic.paper_ic_monthly_comparison"
+
+@dataclass
+class ICMonthlyStats:
+    strategy_name: str
+    entry_credit_pts: Decimal | None       # avg across open cycles
+    current_mark_pts: Decimal | None
+    captured_fraction: Decimal | None      # (entry_credit - mark) / entry_credit
+    dte: int | None
+    short_put_delta: Decimal | None
+    short_call_delta: Decimal | None
+    profit_lock_zone: int                  # 0 if V1 (no profit-lock)
+    realized_pnl_month: Decimal            # this calendar month's realized P&L
+    unrealized_pnl: Decimal
+    signals_fired_today: list[str]         # signal types from paper_exit_events
+    adjustment_count: int                  # rolls + profit-locks executed this cycle
+
+
+def build_comparison_report(v1: ICMonthlyStats, v2: ICMonthlyStats) -> str:
+    """Build a Telegram-formatted plain-text comparison table."""
+    ...
+```
+
+**Telegram report format:**
+
+```
+📊 IC Monthly Comparison — {date}
+
+                    V1 Monthly      V2 Monthly
+─────────────────────────────────────────────
+Entry credit        ₹X,XXX          ₹X,XXX
+Captured            XX%             XX%
+Short put Δ         0.18            0.27
+Short call Δ        0.12            0.24
+DTE                 XX              XX
+Unrealized P&L      ₹X,XXX          ₹X,XXX
+Realized (month)    ₹X,XXX          ₹X,XXX
+Profit-lock zone    N/A             Zone 2 ✓
+Adjustments         X rolls         X rolls + X locks
+Signals today       DELTA_WARN      —
+
+Edge so far:  V2 +₹X,XXX vs V1
+```
+
+**Run cadence:** `45 15 * * 1-5` (after `paper_ic_snapshot.py`).
+**Handles gracefully:** one or both strategies have no open position → reports "No open position".
+
+**Tests (test_paper_ic_monthly_comparison.py):**
+- `test_build_stats_no_open_position` — no paper positions → ICMonthlyStats with None fields
+- `test_build_stats_happy_path` — 4-leg IC in store → populated ICMonthlyStats
+- `test_captured_fraction_formula` — verify (entry - mark) / entry arithmetic
+- `test_comparison_report_format` — both stats populated → output string contains both strategy names
+- `test_comparison_report_one_missing` — V2 not open → report shows "No open position" for V2
+- `test_edge_calculation` — V2 unrealized > V1 unrealized → edge line shows V2 leading
+
+**Commit:** `feat(scripts/ic): paper_ic_monthly_comparison — V1 vs V2 EOD Telegram report`
+
+---
+
+## IC-V2-12 — Final Docs Close
+
+**Goal:** Update all doc files to reflect the complete IC V2 module including profit-lock and comparison.
+No code changes.
+
+**Files to change (targeted `Edit` calls only):**
+- `CONTEXT.md` — add new files to module tree under `src/strategy/` and `scripts/strategies/ic/`
+- `CONTEXT_TREE.md` — file-level descriptions for all new modules
+- `DECISIONS.md` — add profit-lock council ruling as architecture decision
+- `TODOS.md` — session log entry for IC V2 completion
+
+**What to add to CONTEXT.md:**
+```
+src/strategy/profit_lock_engine.py  — ProfitLockEngine: zone detection, floor formula, wing selector;
+                                      ProfitLockState + ProfitLockDecision frozen dataclasses
+scripts/strategies/ic/paper_ic_monthly_comparison.py
+                                    — EOD V1 vs V2 monthly comparison cron; ICMonthlyStats; Telegram report
+```
+
+**No tests.** Docs-only commit:
+
+**Commit:** `docs: IC V2 complete — profit-lock + comparison modules in CONTEXT.md, DECISIONS.md`

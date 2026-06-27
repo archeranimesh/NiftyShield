@@ -697,6 +697,27 @@ Source: `docs/archive/council/data_architecture/2026-06-26_strategy-monitor-watc
 
 ---
 
+## IC V2 Profit-Lock Adjustment (2026-06-27, council q13)
+
+| Decision | Ruling |
+|---|---|
+| Zone 1 (25% captured) | Log-only. Record `profit_lock_zone=1`. No structural change, no debit. |
+| Zone 2 (50% captured) | **Option A: spread-width contraction.** Roll both long wings inward to ~18–20Δ via atomic 4-leg wing-only restructure. Hard floor formula: `max(W_put,W_call) + D_cum + D_lock + K ≤ 0.75 × C₀`. If formula fails or required width < 100pts → CLOSE_FULL. |
+| Zone 3 (75% captured) | CLOSE_FULL. Formula `W + debits + costs ≤ 0.35 × C₀` too tight for Nifty chains. State tracking retained for future use. |
+| Floor guarantee mechanism | Defined-risk payoff geometry only — spread width is the hard bound. Greeks are probabilistic and cannot guarantee a floor. |
+| D3 roll budget | Profit-lock wing rolls do **not** consume D3 defensive-roll budget (longs only; shorts untouched). After profit-lock, D3 width reference resets to new active width. |
+| Simultaneous D3 + Zone 2 | Profit-lock executes first (risk-reducing); re-evaluate D3 on next tick with updated width reference. |
+| Automation | `auto_execute=True`. No Telegram approval gate. Telegram notification fires after execution (confirmation only). CLOSE_FULL path also auto-executes. |
+| IV/VIX guards | Secondary only. Allow Zone 2 if VIX≥11 and IVR≥0.20, OR if formula passes with K≥15pts buffer. Never override the mathematical formula. |
+| DTE guards (monthly) | Lock window: DTE 10–22. Below 10 → skip lock. Above 22 → allow only if very cheap (D_lock<20pts). Below 7 → CLOSE_FULL already fires. |
+| Debit cap | D_lock ≤ 25% of original entry credit. |
+| Rejected approaches | B (short-leg inward roll): no floor guarantee. C (delta-neutral hedge): requires continuous rebalancing, undefined risk. D (IV-conditional only): secondary guard, not primary mechanism. |
+
+Noted, deferred: Delta-neutral futures overlay for Phase 2+ when live execution infrastructure exists.
+Source: `docs/archive/council/strategy/2026-06-27_ic-v2-profit-lock-adjustment.md`
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty
