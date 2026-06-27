@@ -98,3 +98,17 @@ def test_dte_0_is_force_close() -> None:
     strategy = _make_strategy()
     result = strategy._evaluate_dte_action(dte=0)
     assert result == "FORCE_CLOSE"
+
+
+def test_should_close_full_monthly() -> None:
+    """_should_close_full returns True for dte≤7, False for dte>7."""
+    strategy = _make_strategy()
+
+    # Close full triggered at or below the threshold
+    assert strategy._should_close_full(dte=7) is True
+    assert strategy._should_close_full(dte=5) is True
+    assert strategy._should_close_full(dte=1) is True
+
+    # Close full NOT triggered above the threshold
+    assert strategy._should_close_full(dte=8) is False
+    assert strategy._should_close_full(dte=15) is False
