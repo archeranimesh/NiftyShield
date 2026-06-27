@@ -6,6 +6,133 @@
 
 ---
 
+## Logging Contract
+
+> All `ic_nifty_v2.*` log events must follow this contract. Implementors: read this section
+> before writing any `log.*` call. Do not invent event names; use only the keys listed here.
+
+### Logger declaration (every file that logs)
+
+```python
+import structlog
+log = structlog.get_logger(__name__)
+```
+
+### Event key namespace
+
+All events use the prefix `ic_nifty_v2.` followed by an underscore-separated suffix — matching
+the convention in `ic_nifty_v1`, `cc_overlay_v1`, `collar_overlay_v1`.
+
+Examples of the pattern:
+```
+ic_nifty_v2.entry_skip_no_short_put        # good
+ic_nifty_v2.roll_guard_failed              # good
+ic_nifty_v2.sd_warn.wide                   # ✗  — dotted sub-namespace, not used here
+```
+
+### Baseline context fields
+
+Every `ic_nifty_v2.*` log call must include these kwargs (where available at the call site).
+Omit only when the value is genuinely unavailable (e.g., `trade_id` before a trade exists).
+
+| Field | Type | Example |
+|---|---|---|
+| `strategy_name` | `str` | `"paper_ic_nifty_v2_monthly"` |
+| `trade_id` | `str` | `"ic_v2_monthly_20260627"` |
+| `expiry` | `str` | `"2026-07-31"` |
+| `dte` | `int` | `16` |
+
+Adjustment and profit-lock events must also include:
+
+| Field | Type | Example |
+|---|---|---|
+| `roll_count_put` | `int` | `0` |
+| `roll_count_call` | `int` | `0` |
+| `profit_lock_zone` | `int` | `0` |
+
+### Log level guide
+
+| Level | When to use |
+|---|---|
+| `log.debug` | Intermediate values, chain scans, candidate lists — high volume, dev-only |
+| `log.info` | Normal business events: entry recorded, action applied, profit-lock executed |
+| `log.warning` | Recoverable skip or guard block: entry skipped, roll blocked, guard failed |
+| `log.error` | Unrecoverable failure: notification send failed, DB write failed |
+
+### Event table
+
+#### IC-V2-1 — Entry
+
+| Event key | Level | Required kwargs (beyond baseline) |
+|---|---|---|
+| `ic_nifty_v2.entry_skip_no_short_put` | warning | `delta_range`, `best_available_delta` |
+| `ic_nifty_v2.entry_skip_no_short_call` | warning | `delta_range`, `best_available_delta` |
+| `ic_nifty_v2.entry_skip_wing_floor_miss` | warning | `side` (`"put"`/`"call"`), `reason` (`"delta"`/`"premium"`/`"liquidity"`), `floor_value`, `actual_value` |
+| `ic_nifty_v2.entry_sd_warn_wide` | warning | `actual_width_pts`, `sd_width_pts`, `multiplier` |
+| `ic_nifty_v2.entry_sd_warn_tight` | warning | `actual_width_pts`, `sd_width_pts`, `multiplier` |
+| `ic_nifty_v2.entry_recorded` | info | `short_put_strike`, `short_call_strike`, `long_put_strike`, `long_call_strike`, `total_credit_pts`, `ivr` |
+
+#### IC-V2-2 — Adjustment
+
+| Event key | Level | Required kwargs (beyond baseline) |
+|---|---|---|
+| `ic_nifty_v2.delta_warn` | warning | `side`, `short_delta`, `threshold` |
+| `ic_nifty_v2.roll_wing_attempt` | info | `side`, `short_delta`, `original_short_strike`, `original_long_strike` |
+| `ic_nifty_v2.roll_guard_failed` | warning | `side`, `guard` (one of the values below), `detail` |
+| `ic_nifty_v2.delta_stop` | warning | `side`, `short_delta`, `block_reason` (`"roll_guard_failed"` / `"no_roll_candidate"`) |
+| `ic_nifty_v2.forced_close_delta` | warning | `side`, `short_delta`, `threshold` |
+| `ic_nifty_v2.forced_close_rolls_exhausted` | warning | `side`, `roll_count` |
+| `ic_nifty_v2.roll_wing_executed` | info | `side`, `old_short_strike`, `old_long_strike`, `new_short_strike`, `new_long_strike`, `roll_debit_pts`, `roll_count_after` |
+
+Valid `guard` values for `ic_nifty_v2.roll_guard_failed`:
+
+```
+"dte_cutoff"          — DTE at or below close_full threshold
+"no_short_candidate"  — no replacement short in delta range
+"wing_floor_miss"     — replacement long fails delta/premium/liquidity floor
+"width_expansion"     — replacement width > original spread width
+"debit_cap"           — roll debit > roll_debit_cap_fraction × original IC credit
+"max_rolls_exhausted" — rolls_executed_this_side >= max_rolls_per_side_per_cycle
+"inverted_condor"     — new short would cross the opposite side's short strike
+```
+
+#### IC-V2-3 — DTE-tiered exit
+
+| Event key | Level | Required kwargs (beyond baseline) |
+|---|---|---|
+| `ic_nifty_v2.dte_close_full` | warning | `dte`, `threshold` |
+| `ic_nifty_v2.dte_force_close` | warning | `dte` |
+
+#### IC-V2-4 — Signal integration / apply_action
+
+| Event key | Level | Required kwargs (beyond baseline) |
+|---|---|---|
+| `ic_nifty_v2.apply_action` | info | `action_type`, `legs_to_close` |
+| `ic_nifty_v2.profit_target_close` | info | `captured_fraction`, `current_mark_pts`, `entry_credit_pts` |
+
+#### IC-V2-8 — Profit-lock engine
+
+These are emitted by the *caller* (IC-V2-10), not inside the pure engine. The engine returns
+`ProfitLockDecision`; the strategy logs the outcome.
+
+| Event key | Level | Required kwargs (beyond baseline) |
+|---|---|---|
+| `ic_nifty_v2.profit_lock_zone1` | info | `captured_fraction`, `zone` |
+| `ic_nifty_v2.profit_lock_zone2_attempt` | info | `captured_fraction`, `zone`, `formula_passes` |
+| `ic_nifty_v2.profit_lock_zone2_skipped` | warning | `skip_reason`, `captured_fraction` |
+| `ic_nifty_v2.profit_lock_zone2_executed` | info | `new_put_wing_strike`, `new_call_wing_strike`, `net_debit_pts`, `guaranteed_floor_fraction` |
+| `ic_nifty_v2.profit_lock_close_full` | warning | `reason` (`"formula_failed"` / `"wing_not_found"` / `"debit_cap"`), `captured_fraction` |
+
+#### IC-V2-10 / IC-V2-2 / IC-V2-4 — Infra errors (emit in any story that triggers them)
+
+| Event key | Level | Required kwargs |
+|---|---|---|
+| `ic_nifty_v2.send_notification_failed` | error | `error` |
+| `ic_nifty_v2.strike_parse_failed` | warning | `instrument_key` |
+| `ic_nifty_v2.chain_lookup_failed` | warning | `instrument_key` |
+
+---
+
 ## IC-V2-0 — Config Dataclass
 
 **Goal:** New config dataclass `IronCondorV2ExpiryConfig` replacing `wing_width_points: int` with delta-based wing fields. Monthly preset only.
@@ -135,13 +262,13 @@ class IronCondorV2:
    - `abs(delta) ≥ long_wing_delta_floor` (0.05)
    - `mid_premium ≥ long_wing_min_premium` (₹15)
    - Passes `_apply_liquidity_gate()` (reuse from V1 or shared utility)
-   - If no candidate satisfies all three: log `ic_v2.wing_floor_miss`, skip entry.
+   - If no candidate satisfies all three: log `ic_nifty_v2.entry_skip_wing_floor_miss`, skip entry.
 
 4. `_sd_sanity_check(spot, atm_iv, dte, actual_wing_width)` — compute:
    ```
    sd_width = spot × atm_iv × sqrt(dte / 365) × 1.25
-   if actual_wing_width > 1.5 × sd_width: warn "ic_v2.sd_warn.wide"
-   if actual_wing_width < 0.4 × sd_width: warn "ic_v2.sd_warn.tight"
+   if actual_wing_width > 1.5 × sd_width: warn "ic_nifty_v2.entry_sd_warn_wide"
+   if actual_wing_width < 0.4 × sd_width: warn "ic_nifty_v2.entry_sd_warn_tight"
    ```
    Warnings only — never block entry.
 
@@ -152,8 +279,8 @@ class IronCondorV2:
 - `test_enter_skips_when_no_put_in_delta_range` — no put within ±0.03 of 0.25Δ
 - `test_enter_skips_when_wing_premium_below_floor` — put wing mid < ₹15
 - `test_enter_skips_when_wing_delta_below_floor` — available OTM put delta < 0.05
-- `test_sd_sanity_check_wide_wing_emits_warn` — logs ic_v2.sd_warn.wide, does not skip entry
-- `test_sd_sanity_check_tight_wing_emits_warn` — logs ic_v2.sd_warn.tight
+- `test_sd_sanity_check_wide_wing_emits_warn` — logs ic_nifty_v2.entry_sd_warn_wide, does not skip entry
+- `test_sd_sanity_check_tight_wing_emits_warn` — logs ic_nifty_v2.entry_sd_warn_tight
 - `test_enter_short_put_closer_to_money_than_call` — structural invariant: short put strike < short call strike
 
 **Commit:** `feat(strategy): IronCondorV2 entry — 25Δ/22Δ shorts, 10Δ wings with floors, SD guard`

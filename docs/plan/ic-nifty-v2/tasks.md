@@ -21,7 +21,7 @@
 
 ## Phase 1 — Core IC V2
 
-- [ ] **IC-V2-0** `[A:sonnet]` — Config dataclass: `src/strategy/ic_expiry_config_v2.py` — delta-based config replacing fixed wing_width_points + tests
+- [x] **IC-V2-0** `[A:sonnet]` — Config dataclass: `src/strategy/ic_expiry_config_v2.py` — delta-based config replacing fixed wing_width_points + tests | SHA: 9bcb838
 - [ ] **IC-V2-1** `[C:sonnet]` — Entry logic: `src/strategy/ic_nifty_v2.py` — 25Δ/22Δ short selection, 10Δ wing placement, SD sanity guard, liquidity floors + tests
 - [ ] **IC-V2-2** `[A:sonnet]` — Adjustment logic: partial roll of challenged vertical — 4-leg atomic close+reopen, 7 roll guards (debit cap, inverted condor, max_rolls, width expansion) + tests
 - [ ] **IC-V2-3** `[A:sonnet]` — DTE-tiered exit: monthly hard-close DTE≤7, FORCE_CLOSE DTE≤1 + tests
