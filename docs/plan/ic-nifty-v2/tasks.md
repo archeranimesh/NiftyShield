@@ -24,8 +24,8 @@
 - [x] **IC-V2-0** `[A:sonnet]` — Config dataclass: `src/strategy/ic_expiry_config_v2.py` — delta-based config replacing fixed wing_width_points + tests | SHA: 9bcb838
 - [x] **IC-V2-1** `[C:sonnet]` — Entry logic: `src/strategy/ic_nifty_v2.py` — 25Δ/22Δ short selection, 10Δ wing placement, SD sanity guard, liquidity floors + tests | SHA: f3e0423
 - [x] **IC-V2-2** `[A:sonnet]` — Adjustment logic: partial roll of challenged vertical — 4-leg atomic close+reopen, 7 roll guards (debit cap, inverted condor, max_rolls, width expansion) + tests | SHA: b8942d9
-- [ ] **IC-V2-3** `[A:sonnet]` — DTE-tiered exit: monthly hard-close DTE≤7, FORCE_CLOSE DTE≤1 + tests
-- [ ] **IC-V2-4** `[C:sonnet]` — Signal integration: wire `DELTA_WARN / ROLL_WING / DELTA_STOP / FORCED_CLOSE` signal hierarchy into `check_signals()`, PaperStrategy protocol compliance + tests
+- [x] **IC-V2-3** `[A:sonnet]` — DTE-tiered exit: monthly hard-close DTE≤7, FORCE_CLOSE DTE≤1 + tests | SHA: 5b0de55
+- [x] **IC-V2-4** `[C:sonnet]` — Signal integration: wire `DELTA_WARN / ROLL_WING / DELTA_STOP / FORCED_CLOSE` signal hierarchy into `check_signals()`, PaperStrategy protocol compliance + tests | SHA: cf81258
 - [ ] **IC-V2-5** `[C:haiku]` — Registration: add `paper_ic_nifty_v2_monthly` to strategy factory / entry script; verify strategy name persists in DB schema + tests
 - [ ] **IC-V2-6** `[C:haiku]` — Docs close: CONTEXT.md module tree, CONTEXT_TREE.md, TODOS.md session log — no code
 

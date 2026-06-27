@@ -338,3 +338,5 @@ Full log: [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md)
 | 2026-06-27 | DEFERRED DESIGN — ic-nifty-v2 weekly story: when weekly preset lands, decide whether monthly_close_full_dte stays as per-expiry field (alongside weekly_close_full_dte=3) or both collapse to a single expiry-agnostic close_full_dte. See ic_expiry_config_v2.py docstring. |
 | 2026-06-27 | ic-nifty-v2 IC-V2-1 — IronCondorV2 entry: 25Δ/22Δ shorts, 10Δ wings with delta/premium/liquidity floors, SD sanity guard (warn-only); 11 tests — f3e0423 |
 | 2026-06-27 | ic-nifty-v2 IC-V2-2 — IronCondorV2 adjustment: _evaluate_adjustment (DELTA_WARN/ROLL_WING/DELTA_STOP/FORCED_CLOSE), _execute_partial_roll (4-leg atomic), 7 roll guards, RollResult dataclass, state helpers reset_roll_state/set_original_credit; 11 tests — b8942d9 |
+| 2026-06-27 | ic-nifty-v2 IC-V2-3 — IronCondorV2 DTE-tiered exit: monthly hard-close DTE≤7, FORCE_CLOSE DTE≤1 — 5b0de55 |
+| 2026-06-27 | ic-nifty-v2 IC-V2-4 — IronCondorV2 check_signals: DELTA_WARN/ROLL_WING/DELTA_STOP/FORCED_CLOSE hierarchy, apply_action, describe_context, profit target; 11 tests — cf81258 |
