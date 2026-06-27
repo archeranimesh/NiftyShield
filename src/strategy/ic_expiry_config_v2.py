@@ -133,3 +133,13 @@ IC_V2_MONTHLY = IronCondorV2ExpiryConfig(
     # use ₹10, so the kwarg stays here to document the per-expiry divergence clearly.
     long_wing_min_premium=Decimal("15"),
 )
+
+# ---------------------------------------------------------------------------
+# CONFIGS_V2 registry — for daemon and entry script registration
+# ---------------------------------------------------------------------------
+# Keyed by expiry_type; values are instantiated IronCondorV2ExpiryConfig presets.
+# Phase 1: monthly only. Weekly, leaps, yearly will be added after backtesting.
+
+CONFIGS_V2: dict[str, IronCondorV2ExpiryConfig] = {
+    "monthly": IC_V2_MONTHLY,
+}

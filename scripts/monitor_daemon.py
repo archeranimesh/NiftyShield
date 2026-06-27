@@ -68,6 +68,12 @@ except ImportError:
     NiftyTrackComparisonV1 = None
 
 try:
+    from src.strategy.ic_nifty_v2 import IronCondorV2  # noqa: E402
+except ImportError:
+    # Intentional: Ignore import errors for unimplemented strategies
+    IronCondorV2 = None
+
+try:
     from src.strategy.cc_overlay_v1 import CCOverlayV1  # noqa: E402
 except ImportError:
     # Intentional: Ignore import errors for unimplemented strategies
@@ -280,6 +286,33 @@ async def main() -> int:
                 )
     else:
         logger.warning("IronCondorV1 module not found; skipping IC registration")
+
+    if IronCondorV2 is not None:
+        from src.strategy.ic_expiry_config_v2 import CONFIGS_V2 as IC_V2_CONFIGS
+
+        for expiry_type, ic_v2_config in IC_V2_CONFIGS.items():
+            try:
+                strategy_v2 = IronCondorV2(
+                    broker=broker,
+                    store=store,
+                    notifier=gateway,
+                    config=ic_v2_config,
+                )
+                strategies.append(strategy_v2)
+                logger.info(
+                    "Registered IronCondorV2",
+                    expiry_type=expiry_type,
+                    strategy_name=strategy_v2.strategy_name,
+                )
+            except Exception as e:
+                # Intentional: Safe strategy init guard
+                logger.error(
+                    "Failed to initialize IronCondorV2",
+                    expiry_type=expiry_type,
+                    error=str(e),
+                )
+    else:
+        logger.warning("IronCondorV2 module not found; skipping IC V2 registration")
 
     if NiftyTrackComparisonV1 is not None:
         try:
