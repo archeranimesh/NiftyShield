@@ -45,9 +45,8 @@ from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
 from src.paper.models import PaperPosition
 from src.strategy import roll_utils
-from src.strategy.protocol import ApprovedAction, LegSpec, SignalEvent
-
 from src.strategy.profit_lock_engine import ProfitLockDecision, ProfitLockEngine, ProfitLockState
+from src.strategy.protocol import ApprovedAction, LegSpec, SignalEvent
 
 if TYPE_CHECKING:
     from src.client.protocol import BrokerClient
@@ -1352,6 +1351,15 @@ class IronCondorV2:
                     old_long_call=old_long_call,
                 )
 
+                # Log Zone 2 attempt evaluation
+                log.info(
+                    "ic_nifty_v2.profit_lock_zone2_attempt",
+                    **_plog,
+                    captured_fraction=str(captured_fraction.quantize(Decimal("0.01"))),
+                    zone=2,
+                    formula_passes=(decision.action in ("ZONE2_LOCK", "CLOSE_FULL")),
+                )
+
                 if decision.action == "ZONE2_LOCK":
                     new_put_wing = decision.new_put_wing
                     new_call_wing = decision.new_call_wing
@@ -1404,7 +1412,9 @@ class IronCondorV2:
                                 "new_put_width_pts": new_put_width,
                                 "new_call_width_pts": new_call_width,
                                 "net_debit_pts": str(decision.net_debit_pts),
-                                "guaranteed_floor_fraction": str(decision.guaranteed_floor_fraction),
+                                "guaranteed_floor_fraction": str(
+                                    decision.guaranteed_floor_fraction
+                                ),
                                 "entry_credit_pts": str(entry_credit_pts),
                                 "old_long_put_key": old_long_put_key,
                                 "old_long_call_key": old_long_call_key,
