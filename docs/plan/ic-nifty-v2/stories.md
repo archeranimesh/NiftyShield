@@ -959,10 +959,10 @@ scripts/strategies/ic/paper_ic_monthly_comparison.py
 > failures are silent. Stories are independent; any order is fine.
 >
 > **Calendar reality (important — read before IC-V2-13):**
-> Nifty monthly expiry is the last Thursday of each month. First Wednesday after expiry gives
-> only 22–29 DTE to the *next* monthly expiry (verified across May–Oct 2026). This is below
-> the current `_V2_MONTHLY_DTE_WARN_LO=30`. IC-V2-13 recalibrates the DTE window to 20–32
-> to match the actual post-expiry entry pattern.
+> Nifty monthly expiry is the last Tuesday of each month (SEBI moved from Thursday, effective
+> April 2026). First Wednesday after expiry gives only 22–29 DTE to the *next* monthly expiry
+> (verified across May–Oct 2026). This is below the current `_V2_MONTHLY_DTE_WARN_LO=30`.
+> IC-V2-13 recalibrates the DTE window to 20–32 to match the actual post-expiry entry pattern.
 
 ---
 
@@ -993,7 +993,7 @@ The DTE check remains a WARNING (not a hard block) — `--force-entry` bypasses 
 
 **Before any code:**
 ```
-search_code("last_thursday")       # check if InstrumentLookup or instruments module already has this
+search_code("last_tuesday")       # check if InstrumentLookup or instruments module already has this
 search_code("monthly_expiry")      # any existing expiry calendar helpers
 get_code_snippet("resolve_expiry") # ic_entry_gates — understand how expiry_str is obtained
 ```
@@ -1004,8 +1004,8 @@ get_code_snippet("resolve_expiry") # ic_entry_gates — understand how expiry_st
 def _post_expiry_gate(force_entry: bool) -> None:
     """Block entry if current month's Nifty monthly expiry has not yet passed.
 
-    Nifty monthly expiry = last Thursday of the current calendar month.
-    Entry is only valid after that date has passed (i.e. today > last_thursday(today)).
+    Nifty monthly expiry = last Tuesday of the current calendar month (SEBI, April 2026).
+    Entry is only valid after that date has passed (i.e. today > last_tuesday(today)).
 
     Args:
         force_entry: When True, log WARNING and continue instead of sys.exit(1).
@@ -1017,7 +1017,7 @@ def _post_expiry_gate(force_entry: bool) -> None:
 ```
 
 Implementation notes:
-- `_last_thursday_of_month(year, month)`: find the last Thursday using
+- `_last_tuesday_of_month(year, month)`: find the last Tuesday using
   `calendar.monthrange` — do not rely on hardcoded offsets.
 - If `today == last_thursday(today.year, today.month)`: expiry day itself → block
   (settlement is not complete intraday).
@@ -1028,10 +1028,10 @@ Implementation notes:
 in `run()`, before IVR gate.
 
 **Tests to add (append to `test_paper_ic_entry_v2.py`):**
-- `test_post_expiry_gate_blocks_before_expiry` — today < last Thursday → `SystemExit(1)`
-- `test_post_expiry_gate_blocks_on_expiry_day` — today == last Thursday → `SystemExit(1)`
-- `test_post_expiry_gate_passes_after_expiry` — today > last Thursday → no exit
-- `test_post_expiry_gate_force_entry_bypasses` — today < last Thursday + force_entry=True → no exit
+- `test_post_expiry_gate_blocks_before_expiry` — today < last Tuesday → `SystemExit(1)`
+- `test_post_expiry_gate_blocks_on_expiry_day` — today == last Tuesday → `SystemExit(1)`
+- `test_post_expiry_gate_passes_after_expiry` — today > last Tuesday → no exit
+- `test_post_expiry_gate_force_entry_bypasses` — today < last Tuesday + force_entry=True → no exit
 
 **Commit:** `feat(scripts/ic): add post-expiry entry gate + recalibrate DTE window to 20-32`
 

@@ -53,6 +53,7 @@ Module tree (file-level descriptions): **`CONTEXT_TREE.md`** — load only when 
 - Working a specific story → load ONLY that story file + `CONTEXT.md` + module `CLAUDE.md`
 - Working inside `src/<module>/` → that module's `CLAUDE.md` loads automatically
 - Reviewing or building on Antigravity's work → also read `ANTIGRAVITY.md`
+- Authoring or reviewing any task/story/spec mentioning expiry, DTE, or calendar logic → also read `REFERENCES.md` (expiry day changed Thursday→Tuesday, April 2026)
 
 ## Python Standards (new module checklist)
 
