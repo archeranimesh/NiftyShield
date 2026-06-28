@@ -51,4 +51,4 @@
 - [x] **IC-V2-13** `[C:sonnet]` — Post-expiry entry gate: `_post_expiry_gate()` blocks entry before current month's last-Tuesday expiry passes; recalibrate `_V2_MONTHLY_DTE_WARN_LO` 30→20, `_V2_MONTHLY_DTE_WARN_HI` 45→32; 4 gate tests | SHA: 23e8e93
 - [x] **IC-V2-14** `[A:sonnet]` — EOD snapshot V2 coverage: refactor `process_variant` to accept `strategy_cls`; add V2 loop over `CONFIGS_V2` / `IronCondorV2` in `paper_ic_snapshot.py`; 3 tests | SHA: 3c2deef
 - [x] **IC-V2-15** `[C:sonnet]` — Entry failure alerting: Telegram notification on gate failures (post-expiry, duplicate, IVR below gate, wing floor, portfolio delta); notifier param added to shared gate helpers; 3 tests | SHA: c2cce55
-- [x] **IC-V2-16** `[C:haiku]` — Phase 4 docs close: CONTEXT.md, TODOS.md — no code | SHA: pending-git-lock
+- [x] **IC-V2-16** `[C:haiku]` — Phase 4 docs close: CONTEXT.md, TODOS.md — no code | SHA: a8a2149
