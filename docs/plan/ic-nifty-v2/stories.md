@@ -950,4 +950,226 @@ scripts/strategies/ic/paper_ic_monthly_comparison.py
 
 **No tests.** Docs-only commit:
 
+---
+
+## Phase 4 — Operational Hardening
+
+> Covers three automation gaps identified after Phase 1+2 shipped:
+> (1) entry cadence is calendar-unaware, (2) V2 is invisible to the EOD snapshot, (3) entry
+> failures are silent. Stories are independent; any order is fine.
+>
+> **Calendar reality (important — read before IC-V2-13):**
+> Nifty monthly expiry is the last Thursday of each month. First Wednesday after expiry gives
+> only 22–29 DTE to the *next* monthly expiry (verified across May–Oct 2026). This is below
+> the current `_V2_MONTHLY_DTE_WARN_LO=30`. IC-V2-13 recalibrates the DTE window to 20–32
+> to match the actual post-expiry entry pattern.
+
+---
+
+## IC-V2-13 — Post-expiry entry gate + DTE recalibration
+
+**Goal:** Make `paper_ic_entry_v2.py` calendar-aware: block entry if the current month's
+Nifty monthly expiry has NOT yet passed, and adjust the DTE warning window to match the
+22–29 DTE range that first-Wednesday-after-expiry naturally produces.
+
+**Why this matters:** Without the gate, the Wednesday cron could enter mid-cycle (e.g. day 10
+of a live position) if the duplicate guard somehow misses. With the gate, the script is
+self-documenting about its intended cadence: one position per expiry cycle, entered after
+settlement.
+
+**DTE recalibration:**
+
+| Constant | Current value | New value | Reason |
+|---|---|---|---|
+| `_V2_MONTHLY_DTE_WARN_LO` | 30 | 20 | First Wed after expiry → 22–29 DTE |
+| `_V2_MONTHLY_DTE_WARN_HI` | 45 | 32 | Upper bound; warn if stale entry |
+
+The DTE check remains a WARNING (not a hard block) — `--force-entry` bypasses it as before.
+
+**Files to change:**
+- `scripts/strategies/ic/paper_ic_entry_v2.py` — add `_post_expiry_gate()` helper +
+  update `_V2_MONTHLY_DTE_WARN_LO` / `_V2_MONTHLY_DTE_WARN_HI`
+- `tests/unit/strategies/ic/test_paper_ic_entry_v2.py` — add gate tests
+
+**Before any code:**
+```
+search_code("last_thursday")       # check if InstrumentLookup or instruments module already has this
+search_code("monthly_expiry")      # any existing expiry calendar helpers
+get_code_snippet("resolve_expiry") # ic_entry_gates — understand how expiry_str is obtained
+```
+
+**`_post_expiry_gate()` spec:**
+
+```python
+def _post_expiry_gate(force_entry: bool) -> None:
+    """Block entry if current month's Nifty monthly expiry has not yet passed.
+
+    Nifty monthly expiry = last Thursday of the current calendar month.
+    Entry is only valid after that date has passed (i.e. today > last_thursday(today)).
+
+    Args:
+        force_entry: When True, log WARNING and continue instead of sys.exit(1).
+
+    Raises:
+        SystemExit(1): If today is on or before the current month's expiry date
+                       and force_entry is False.
+    """
+```
+
+Implementation notes:
+- `_last_thursday_of_month(year, month)`: find the last Thursday using
+  `calendar.monthrange` — do not rely on hardcoded offsets.
+- If `today == last_thursday(today.year, today.month)`: expiry day itself → block
+  (settlement is not complete intraday).
+- If `today > last_thursday(today.year, today.month)`: past expiry → allow.
+- `--force-entry` bypasses with a logged WARNING (same pattern as IVR bypass).
+
+**Call site:** invoke `_post_expiry_gate(args.force_entry)` immediately after `check_duplicate`
+in `run()`, before IVR gate.
+
+**Tests to add (append to `test_paper_ic_entry_v2.py`):**
+- `test_post_expiry_gate_blocks_before_expiry` — today < last Thursday → `SystemExit(1)`
+- `test_post_expiry_gate_blocks_on_expiry_day` — today == last Thursday → `SystemExit(1)`
+- `test_post_expiry_gate_passes_after_expiry` — today > last Thursday → no exit
+- `test_post_expiry_gate_force_entry_bypasses` — today < last Thursday + force_entry=True → no exit
+
+**Commit:** `feat(scripts/ic): add post-expiry entry gate + recalibrate DTE window to 20-32`
+
+---
+
+## IC-V2-14 — EOD snapshot V2 coverage
+
+**Goal:** Extend `paper_ic_snapshot.py` so V2 positions are included in the daily audit loop.
+Currently the script only iterates `CONFIGS` (V1) and hardcodes `IronCondorV1`. V2 positions
+get no EOD exit-signal evaluation — if the daemon crashes intraday, V2 has no safety net.
+
+**Files to change:**
+- `scripts/strategies/ic/paper_ic_snapshot.py` — add V2 loop after V1 loop
+- `tests/unit/strategies/ic/test_paper_ic_snapshot.py` — add V2 coverage tests
+
+**Before any code:**
+```
+get_code_snippet("process_variant")          # understand the existing per-config handler
+search_code("IronCondorV1")                  # find every hardcoded V1 reference in snapshot
+get_code_snippet("IronCondorV2.__init__")    # confirm constructor signature matches V1
+search_graph("CONFIGS_V2")                   # confirm registry location
+```
+
+**What to change:**
+
+The existing `process_variant` function hardcodes `IronCondorV1` instantiation. Refactor to
+accept a `strategy_cls` parameter:
+
+```python
+async def process_variant(
+    expiry_type: str,
+    config: Any,                  # ICExpiryConfig or IronCondorV2ExpiryConfig
+    store: PaperStore,
+    broker: Any,
+    lookup: InstrumentLookup,
+    notifier: TelegramGateway | None,
+    snap_date: date,
+    save: bool,
+    strategy_cls: type = IronCondorV1,   # injected; default preserves V1 behaviour
+) -> str | None:
+```
+
+Then in `run()`, after the V1 loop add a V2 loop:
+
+```python
+from src.strategy.ic_expiry_config_v2 import CONFIGS_V2
+from src.strategy.ic_nifty_v2 import IronCondorV2
+
+for expiry_type, config in CONFIGS_V2.items():
+    positions = store.get_positions(config.strategy_name)
+    active = [p for p in positions if p.net_qty != 0]
+    if active:
+        has_any_positions = True
+    try:
+        report = await process_variant(
+            expiry_type, config, store, broker, lookup,
+            notifier, snap_date, save,
+            strategy_cls=IronCondorV2,
+        )
+        if report is not None:
+            reports.append(report)
+    except Exception as exc:
+        logger.error("ic_snapshot.v2_variant_failed", strategy=config.strategy_name, error=str(exc))
+        reports.append(f"📋 IC EOD Audit — {expiry_type} ({config.strategy_name})\nError: Snapshot failed.")
+```
+
+**Important:** `process_variant` calls `ic._compute_ivr_str()`. Verify this method exists on
+`IronCondorV2` before implementing — if not, add it or guard with `getattr(..., lambda: "IVR: N/A")`.
+
+**Tests to add:**
+- `test_v2_monthly_included_in_audit` — V2 position in store → `process_variant` called with
+  `strategy_cls=IronCondorV2`
+- `test_v2_no_position_skipped` — no V2 positions → no V2 report, no error
+- `test_v1_loop_unchanged` — V2 addition does not alter V1 report output
+
+**Commit:** `feat(scripts/ic): include IronCondorV2 in paper_ic_snapshot EOD audit loop`
+
+---
+
+## IC-V2-15 — Entry failure Telegram alerting
+
+**Goal:** When `paper_ic_entry_v2.py` exits due to a gate failure, send a Telegram notification
+before exiting. Currently all gate failures are silent — the cron writes to `logs/ic_v2_monthly.log`
+but no inbound alert fires.
+
+**Files to change:**
+- `scripts/strategies/ic/paper_ic_entry_v2.py` — wrap gate exits with Telegram send
+- `scripts/strategies/ic/ic_entry_gates.py` — add optional `notifier` param to
+  `resolve_ivr` and `check_duplicate` (nullable; non-fatal if None)
+- `tests/unit/strategies/ic/test_paper_ic_entry_v2.py` — alert tests
+
+**Design:** add a `_build_notifier()` call at the top of `run()` (same pattern as
+`src/notifications/__init__.py:build_notifier()`). Pass `notifier` into the gate helpers
+that can fail. Gate helpers call `notifier.send_notification(msg)` wrapped in a bare
+`except Exception` (non-fatal — telegram failure must never block the gate exit).
+
+**Alert message format:**
+```
+⚠️ IC V2 Entry BLOCKED — {strategy_name}
+Gate: {gate_name}
+Reason: {reason}
+IVR: {ivr:.2f} / Gate: {ivr_gate:.2f}    ← IVR gate only
+```
+
+**Gates that must alert:**
+
+| Gate | Alert on |
+|---|---|
+| `_post_expiry_gate` | Blocked — expiry not yet passed |
+| `check_duplicate` | Blocked — active position exists |
+| `resolve_ivr` | IVR below gate (not on None / data-missing) |
+| Long wing floor | No wing candidate passes delta + premium floors |
+| Portfolio delta | Projected delta outside [-0.05, 0.25] after adjustment attempt |
+
+**Gates that must NOT alert** (infra failures; surface via healthcheck, not entry alert):
+- `resolve_expiry` BOD-missing / no candidate
+- Chain fetch failure (Upstox API issue)
+
+**Tests to add:**
+- `test_ivr_gate_failure_sends_telegram` — IVR below gate → notifier called with ⚠️ message
+- `test_duplicate_gate_failure_sends_telegram` — open position → notifier called
+- `test_telegram_failure_does_not_block_exit` — notifier raises → script still exits 1
+
+**Commit:** `feat(scripts/ic): Telegram alert on entry gate failures in paper_ic_entry_v2`
+
+---
+
+## IC-V2-16 — Phase 4 docs close
+
+**Goal:** Update docs to reflect Phase 4 additions. No code changes.
+
+**Files to change (targeted `Edit` calls only):**
+- `CONTEXT.md` — note post-expiry gate + DTE window in `paper_ic_entry_v2.py` description;
+  note V2 loop in `paper_ic_snapshot.py` description
+- `TODOS.md` — session log entry
+
+**No tests.** Docs-only commit:
+
+**Commit:** `docs: IC V2 Phase 4 ops hardening in CONTEXT.md, TODOS.md`
+
 **Commit:** `docs: IC V2 complete — profit-lock + comparison modules in CONTEXT.md, DECISIONS.md`
