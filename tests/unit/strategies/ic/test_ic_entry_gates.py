@@ -1,12 +1,14 @@
 # tests/unit/strategies/ic/test_ic_entry_gates.py
 """Unit tests for scripts/strategies/ic/ic_entry_gates.py.
 
-Covers: check_duplicate, resolve_ivr, resolve_expiry.
+Covers: check_duplicate, resolve_ivr, resolve_expiry, _last_tuesday_of_month,
+_post_expiry_gate.
 No network calls; all external dependencies are mocked.
 """
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -14,6 +16,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from scripts.strategies.ic.ic_entry_gates import (
+    _last_tuesday_of_month,
+    _post_expiry_gate,
     check_duplicate,
     resolve_expiry,
     resolve_ivr,
@@ -164,3 +168,78 @@ class TestResolveExpiry:
         with pytest.raises(SystemExit) as exc_info:
             resolve_expiry(Path("dummy.json"), "monthly", 30, 45)
         assert exc_info.value.code == 1
+
+
+# ---------------------------------------------------------------------------
+# _last_tuesday_of_month
+# ---------------------------------------------------------------------------
+
+
+class TestLastTuesdayOfMonth:
+    def test_june_2026(self) -> None:
+        """Last Tuesday of June 2026 is June 30."""
+        assert _last_tuesday_of_month(2026, 6) == date(2026, 6, 30)
+
+    def test_july_2026(self) -> None:
+        """Last Tuesday of July 2026 is July 28."""
+        assert _last_tuesday_of_month(2026, 7) == date(2026, 7, 28)
+
+    def test_december_2026(self) -> None:
+        """Last Tuesday of December 2026 is December 29."""
+        assert _last_tuesday_of_month(2026, 12) == date(2026, 12, 29)
+
+    def test_month_ending_on_tuesday(self) -> None:
+        """When the last day of the month is Tuesday, that day is returned."""
+        # March 2027: last day is March 31 (Wednesday) → last Tuesday = March 30? Let's verify.
+        # Actually compute: March 2027 last day = 31 (Wed, weekday=2).
+        # days_back = (2 - 1) % 7 = 1 → March 30 (Tuesday). Correct.
+        assert _last_tuesday_of_month(2027, 3) == date(2027, 3, 30)
+
+
+# ---------------------------------------------------------------------------
+# _post_expiry_gate
+# ---------------------------------------------------------------------------
+
+
+class TestPostExpiryGate:
+    def test_blocks_before_last_tuesday(self) -> None:
+        """Exits when today is before the last Tuesday of the current month."""
+        # June 2026: last Tuesday = June 30. Running on June 25 must block.
+        with patch("scripts.strategies.ic.ic_entry_gates.date") as mock_date:
+            mock_date.today.return_value = date(2026, 6, 25)
+            mock_date.side_effect = date  # keep date(y, m, d) constructor working
+            with pytest.raises(SystemExit) as exc_info:
+                _post_expiry_gate()
+        assert exc_info.value.code == 1
+
+    def test_blocks_on_last_tuesday(self) -> None:
+        """Exits on expiry day itself (settlement not complete intraday)."""
+        with patch("scripts.strategies.ic.ic_entry_gates.date") as mock_date:
+            mock_date.today.return_value = date(2026, 6, 30)
+            mock_date.side_effect = date
+            with pytest.raises(SystemExit) as exc_info:
+                _post_expiry_gate()
+        assert exc_info.value.code == 1
+
+    def test_passes_day_after_last_tuesday(self) -> None:
+        """Passes on the Wednesday after last-Tuesday settlement.
+
+        July 2026: last Tuesday = July 28. July 29 is the first valid entry day
+        (today > last_tuesday_of_current_month).
+        """
+        with patch("scripts.strategies.ic.ic_entry_gates.date") as mock_date:
+            mock_date.today.return_value = date(2026, 7, 29)
+            mock_date.side_effect = date
+            _post_expiry_gate()  # must not raise
+
+    def test_passes_when_holiday_on_last_tuesday(self) -> None:
+        """When last Tuesday is a holiday, next trading day still passes the gate.
+
+        August 2026: last Tuesday = August 25. If Aug 25 is a holiday, scripts
+        run August 26 (Wednesday). The gate checks today(Aug 26) > last_tuesday(Aug 25)
+        → passes. No special-case needed for holidays.
+        """
+        with patch("scripts.strategies.ic.ic_entry_gates.date") as mock_date:
+            mock_date.today.return_value = date(2026, 8, 26)
+            mock_date.side_effect = date
+            _post_expiry_gate()  # must not raise

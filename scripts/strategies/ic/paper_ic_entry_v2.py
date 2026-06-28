@@ -24,7 +24,6 @@ import argparse
 import asyncio
 import subprocess
 import sys
-from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
@@ -36,6 +35,7 @@ from dotenv import load_dotenv
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from scripts.strategies.ic.ic_entry_gates import (
+    _post_expiry_gate,
     check_duplicate,
     resolve_expiry,
     resolve_ivr,
@@ -174,38 +174,6 @@ def _find_long_wing(
 
 
 # ---------------------------------------------------------------------------
-# Post-expiry gate
-# ---------------------------------------------------------------------------
-
-
-def _post_expiry_gate(expiry_str: str) -> None:
-    """Block entry if the BOD-resolved monthly expiry has not yet passed.
-
-    Uses the BOD-resolved expiry date rather than computing the calendar last-Tuesday.
-    This handles NSE holiday adjustments automatically: when the last Tuesday is a
-    holiday, NSE moves expiry to Monday and the BOD reflects that shift.
-
-    Entry is valid only AFTER the expiry date has passed (``today > expiry_date``).
-    Entry on expiry day itself is blocked — settlement is not complete intraday.
-
-    Args:
-        expiry_str: ISO-format expiry date from ``resolve_expiry`` (``"YYYY-MM-DD"``).
-
-    Raises:
-        SystemExit(1): If today is on or before *expiry_str*.
-    """
-    today = date.today()
-    expiry = date.fromisoformat(expiry_str)
-    if today <= expiry:
-        print(
-            f"ERROR: post_expiry_gate: expiry {expiry} has not yet passed "
-            f"(today={today}). Entry is only valid after settlement.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-
-
-# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -260,16 +228,16 @@ async def run() -> None:
     store = PaperStore(args.db_path)
     check_duplicate(store, strategy_name)
 
-    # Step 2b: Expiry resolution — needed by post-expiry gate (BOD is holiday-aware)
+    # Step 2b: Post-expiry gate — calendar-based (last Tuesday of current month)
+    _post_expiry_gate()
+
+    # Step 2c: Expiry resolution + DTE window check (shared gate)
     _, expiry_str, dte = resolve_expiry(
         args.bod_path,
         expiry_bucket=config.expiry_type,
         dte_warn_lo=_V2_MONTHLY_DTE_WARN_LO,
         dte_warn_hi=_V2_MONTHLY_DTE_WARN_HI,
     )
-
-    # Step 2c: Post-expiry gate — uses BOD expiry date (handles holiday adjustments)
-    _post_expiry_gate(expiry_str)
 
     # Step 3: IVR gate (shared gate)
     ivr = resolve_ivr(args.db_path, _V2_MONTHLY_IVR_GATE, args.force_entry)

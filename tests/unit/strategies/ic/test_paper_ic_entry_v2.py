@@ -21,10 +21,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from scripts.strategies.ic.paper_ic_entry_v2 import (
-    _post_expiry_gate,
-    run,
-)
+from scripts.strategies.ic.ic_entry_gates import _post_expiry_gate
+from scripts.strategies.ic.paper_ic_entry_v2 import run
 
 # ---------------------------------------------------------------------------
 # Shared chain fixture
@@ -402,44 +400,55 @@ async def test_portfolio_delta_adjustment_shifts_short_put(
 # ---------------------------------------------------------------------------
 
 
-def test_post_expiry_gate_blocks_before_expiry() -> None:
-    """Gate exits when today is before the BOD expiry date."""
-    with patch("scripts.strategies.ic.paper_ic_entry_v2.date") as mock_date:
-        mock_date.today.return_value = date(2026, 6, 25)
-        mock_date.fromisoformat = date.fromisoformat
-        with pytest.raises(SystemExit) as exc:
-            _post_expiry_gate("2026-06-30")
-    assert exc.value.code == 1
+def test_post_expiry_gate_blocks_before_last_tuesday() -> None:
+    """Gate exits when today is before the last Tuesday of the current month.
 
-
-def test_post_expiry_gate_blocks_on_expiry_day() -> None:
-    """Gate exits when today IS the expiry date (settlement not complete intraday)."""
-    with patch("scripts.strategies.ic.paper_ic_entry_v2.date") as mock_date:
-        mock_date.today.return_value = date(2026, 6, 30)
-        mock_date.fromisoformat = date.fromisoformat
-        with pytest.raises(SystemExit) as exc:
-            _post_expiry_gate("2026-06-30")
-    assert exc.value.code == 1
-
-
-def test_post_expiry_gate_passes_after_expiry() -> None:
-    """Gate does not exit when today is strictly after the BOD expiry date."""
-    with patch("scripts.strategies.ic.paper_ic_entry_v2.date") as mock_date:
-        mock_date.today.return_value = date(2026, 7, 1)
-        mock_date.fromisoformat = date.fromisoformat
-        _post_expiry_gate("2026-06-30")  # should not raise
-
-
-def test_post_expiry_gate_holiday_adjusted_expiry() -> None:
-    """BOD expiry on Monday (holiday-adjusted) — Tuesday entry is correctly allowed.
-
-    If last Tuesday is a trading holiday, NSE moves expiry to Monday and the BOD
-    reflects that. On Tuesday (the calendar last-Tuesday), settlement is already done
-    — gate must pass. The old calendar-based gate would have blocked this.
+    June 2026: last Tuesday = June 30. On June 25 (Wednesday before),
+    entry is blocked.
     """
-    with patch("scripts.strategies.ic.paper_ic_entry_v2.date") as mock_date:
-        # Last Tuesday June 30 is a holiday; NSE expiry moved to June 29 (Monday).
-        # On June 30 (Tuesday, day after settlement), entry should be allowed.
+    with patch("scripts.strategies.ic.ic_entry_gates.date") as mock_date:
+        mock_date.today.return_value = date(2026, 6, 25)
+        mock_date.side_effect = date  # keep date(y, m, d) constructor working
+        with pytest.raises(SystemExit) as exc:
+            _post_expiry_gate()
+    assert exc.value.code == 1
+
+
+def test_post_expiry_gate_blocks_on_last_tuesday() -> None:
+    """Gate exits when today IS the last Tuesday (settlement not complete intraday).
+
+    June 2026: last Tuesday = June 30. Running on expiry day itself must block.
+    """
+    with patch("scripts.strategies.ic.ic_entry_gates.date") as mock_date:
         mock_date.today.return_value = date(2026, 6, 30)
-        mock_date.fromisoformat = date.fromisoformat
-        _post_expiry_gate("2026-06-29")  # expiry was yesterday — should not raise
+        mock_date.side_effect = date
+        with pytest.raises(SystemExit) as exc:
+            _post_expiry_gate()
+    assert exc.value.code == 1
+
+
+def test_post_expiry_gate_passes_day_after_last_tuesday() -> None:
+    """Gate passes on the Wednesday immediately after last-Tuesday settlement.
+
+    July 2026: last Tuesday = July 28. July 29 (Wednesday) is the first valid
+    entry day — today > last_tuesday_of_current_month.
+    """
+    with patch("scripts.strategies.ic.ic_entry_gates.date") as mock_date:
+        mock_date.today.return_value = date(2026, 7, 29)
+        mock_date.side_effect = date
+        _post_expiry_gate()  # should not raise
+
+
+def test_post_expiry_gate_holiday_on_last_tuesday() -> None:
+    """If last Tuesday is a public holiday, no scripts run that day.
+
+    By Wednesday (next trading day), today > last_tuesday → gate passes.
+    This test simulates today = last_tuesday + 1 (the next trading day after
+    a holiday-on-Tuesday scenario) and confirms the gate does not block.
+    """
+    # July 2026: last Tuesday = July 28. If July 28 were a holiday,
+    # entry scripts run on July 29 (Wednesday) — must pass.
+    with patch("scripts.strategies.ic.ic_entry_gates.date") as mock_date:
+        mock_date.today.return_value = date(2026, 7, 29)
+        mock_date.side_effect = date
+        _post_expiry_gate()  # should not raise

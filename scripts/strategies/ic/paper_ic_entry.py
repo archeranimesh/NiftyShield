@@ -25,6 +25,7 @@ from dotenv import load_dotenv
 # Add project root to sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 
+from scripts.strategies.ic.ic_entry_gates import _post_expiry_gate
 from src.backtest.ivr import compute_ivr
 from src.backtest.vix_ingest import fetch_vix_latest, load_vix_series
 from src.client.upstox_market import UpstoxMarketClient
@@ -168,6 +169,10 @@ async def run() -> None:
             file=sys.stderr,
         )
         sys.exit(1)
+
+    # Step 2b: Post-expiry gate (monthly only) — block entry before last-Tuesday settlement
+    if args.expiry_type == "monthly":
+        _post_expiry_gate()
 
     # Step 3: Mode detection
     csp_positions = store.get_positions(STRATEGY_CSP)

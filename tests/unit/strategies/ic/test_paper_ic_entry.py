@@ -25,6 +25,13 @@ def mock_path_exists():
         yield mock_exists
 
 
+@pytest.fixture(autouse=True)
+def mock_post_expiry_gate():
+    """Stub _post_expiry_gate so monthly tests are not blocked by calendar date."""
+    with patch("scripts.strategies.ic.paper_ic_entry._post_expiry_gate") as m:
+        yield m
+
+
 @pytest.fixture
 def mock_vix_data():
     """Mock VIX loading/computing functions."""

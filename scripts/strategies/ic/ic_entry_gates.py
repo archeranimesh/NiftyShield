@@ -22,8 +22,9 @@ Usage::
 
 from __future__ import annotations
 
+import calendar
 import sys
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 
@@ -35,6 +36,63 @@ from src.instruments.lookup import InstrumentLookup
 from src.intraday.market_store import IntradayMarketStore
 
 _log = structlog.get_logger("scripts.strategies.ic.ic_entry_gates")
+
+
+# ---------------------------------------------------------------------------
+# Calendar helper
+# ---------------------------------------------------------------------------
+
+
+def _last_tuesday_of_month(year: int, month: int) -> date:
+    """Return the last Tuesday of *month* in *year*.
+
+    Nifty monthly expiry falls on the last Tuesday of each calendar month
+    (SEBI change effective April 2026). This function computes that date
+    purely from the calendar — no market-data dependency.
+
+    Args:
+        year: Calendar year (e.g. 2026).
+        month: Calendar month (1–12).
+
+    Returns:
+        The last Tuesday as a ``datetime.date``.
+    """
+    _, last_day = calendar.monthrange(year, month)
+    last = date(year, month, last_day)
+    # weekday(): Monday=0 … Sunday=6; Tuesday=1
+    days_back = (last.weekday() - 1) % 7
+    return last - timedelta(days=days_back)
+
+
+# ---------------------------------------------------------------------------
+# Gate 0 — Post-expiry guard (monthly cadence)
+# ---------------------------------------------------------------------------
+
+
+def _post_expiry_gate() -> None:
+    """Block entry if the current month's Nifty monthly expiry has not yet passed.
+
+    Computes the last Tuesday of the current calendar month and exits with
+    code 1 if today is on or before that date. Entry is valid only on the
+    Wednesday after monthly settlement (today > last_tuesday).
+
+    Holiday handling: if the last Tuesday is a trading holiday, no one runs
+    entry scripts that day. The next trading day (Wednesday or later) will
+    always satisfy ``today > last_tuesday`` — so the calendar gate passes
+    without any special-case code.
+
+    Raises:
+        SystemExit(1): If today ≤ last Tuesday of the current month.
+    """
+    today = date.today()
+    expiry = _last_tuesday_of_month(today.year, today.month)
+    if today <= expiry:
+        print(
+            f"ERROR: post_expiry_gate: current month expiry {expiry} has not yet "
+            f"passed (today={today}). Entry is only valid after settlement.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
 
 # ---------------------------------------------------------------------------
