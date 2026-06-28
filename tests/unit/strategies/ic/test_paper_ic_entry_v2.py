@@ -439,6 +439,134 @@ def test_post_expiry_gate_passes_day_after_last_tuesday() -> None:
         _post_expiry_gate()  # should not raise
 
 
+# ---------------------------------------------------------------------------
+# IC-V2-15 — Entry failure Telegram alerting
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_ivr_gate_failure_sends_telegram(
+    mock_gates, mock_store, mock_client, mock_delta_tracker
+) -> None:
+    """IVR below gate → Telegram notifier called with ⚠️ blocked message."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    tg_mock = MagicMock()
+    tg_mock.send = AsyncMock()
+
+    # Simulate resolve_ivr calling its notifier and exiting
+    def _fake_ivr(db_path, gate, force_entry, notifier=None):
+        if notifier is not None:
+            notifier(
+                f"⚠️ IC V2 Entry BLOCKED\nGate: ivr\nIVR: 0.10 / Gate: {gate:.2f}"
+            )
+        sys.exit(1)
+
+    mock_gates["ivr"].side_effect = _fake_ivr
+
+    with patch("scripts.strategies.ic.paper_ic_entry_v2.build_notifier", return_value=tg_mock):
+        with patch.object(
+            sys,
+            "argv",
+            [
+                "paper_ic_entry_v2.py",
+                "--expiry-type",
+                "monthly",
+                "--no-dry-run",
+                "--bod-path",
+                "dummy.json",
+            ],
+        ):
+            with pytest.raises(SystemExit) as exc_info:
+                await run()
+
+    assert exc_info.value.code == 1
+    assert tg_mock.send.call_count == 1
+    msg_sent = tg_mock.send.call_args[0][0]
+    assert "BLOCKED" in msg_sent
+    assert "ivr" in msg_sent
+
+
+@pytest.mark.asyncio
+async def test_duplicate_gate_failure_sends_telegram(
+    mock_gates, mock_store, mock_client, mock_delta_tracker
+) -> None:
+    """Open position → Telegram notifier called with ⚠️ blocked message."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    tg_mock = MagicMock()
+    tg_mock.send = AsyncMock()
+
+    def _fake_dup(store, strategy_name, notifier=None):
+        if notifier is not None:
+            notifier(
+                f"⚠️ IC V2 Entry BLOCKED — {strategy_name}\n"
+                f"Gate: duplicate\nReason: Active position already exists"
+            )
+        sys.exit(1)
+
+    mock_gates["dup"].side_effect = _fake_dup
+
+    with patch("scripts.strategies.ic.paper_ic_entry_v2.build_notifier", return_value=tg_mock):
+        with patch.object(
+            sys,
+            "argv",
+            [
+                "paper_ic_entry_v2.py",
+                "--expiry-type",
+                "monthly",
+                "--no-dry-run",
+                "--bod-path",
+                "dummy.json",
+            ],
+        ):
+            with pytest.raises(SystemExit) as exc_info:
+                await run()
+
+    assert exc_info.value.code == 1
+    assert tg_mock.send.call_count == 1
+    msg_sent = tg_mock.send.call_args[0][0]
+    assert "duplicate" in msg_sent
+
+
+@pytest.mark.asyncio
+async def test_telegram_failure_does_not_block_exit(
+    mock_gates, mock_store, mock_client, mock_delta_tracker
+) -> None:
+    """Telegram send raises → gate still exits with code 1; error is swallowed."""
+    from unittest.mock import MagicMock
+
+    tg_mock = MagicMock()
+    # Sync side_effect: raises immediately when called inside _gate_alert
+    tg_mock.send = MagicMock(side_effect=Exception("Telegram down"))
+
+    def _fake_dup(store, strategy_name, notifier=None):
+        if notifier is not None:
+            notifier("⚠️ IC V2 Entry BLOCKED — duplicate")
+        sys.exit(1)
+
+    mock_gates["dup"].side_effect = _fake_dup
+
+    with patch("scripts.strategies.ic.paper_ic_entry_v2.build_notifier", return_value=tg_mock):
+        with patch.object(
+            sys,
+            "argv",
+            [
+                "paper_ic_entry_v2.py",
+                "--expiry-type",
+                "monthly",
+                "--no-dry-run",
+                "--bod-path",
+                "dummy.json",
+            ],
+        ):
+            with pytest.raises(SystemExit) as exc_info:
+                await run()
+
+    # Gate exit must happen regardless of Telegram failure
+    assert exc_info.value.code == 1
+
+
 def test_post_expiry_gate_holiday_on_last_tuesday() -> None:
     """If last Tuesday is a public holiday, no scripts run that day.
 

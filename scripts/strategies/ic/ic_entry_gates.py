@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import calendar
 import sys
+from collections.abc import Callable
 from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -100,15 +101,30 @@ def _post_expiry_gate() -> None:
 # ---------------------------------------------------------------------------
 
 
-def check_duplicate(store: object, strategy_name: str) -> None:
+def check_duplicate(
+    store: object,
+    strategy_name: str,
+    notifier: Callable[[str], None] | None = None,
+) -> None:
     """Exit with code 1 if an active position already exists for *strategy_name*.
 
     Args:
         store: Open PaperStore instance.
         strategy_name: Exact DB strategy name (e.g. ``paper_ic_nifty_v2_monthly``).
+        notifier: Optional sync callable for gate-failure Telegram alerts.
+            Called before sys.exit(1); any exception it raises is swallowed.
     """
     open_positions = store.get_positions(strategy_name)
     if any(pos.net_qty != 0 for pos in open_positions):
+        if notifier is not None:
+            try:
+                notifier(
+                    f"⚠️ IC V2 Entry BLOCKED — {strategy_name}\n"
+                    f"Gate: duplicate\n"
+                    f"Reason: Active position already exists"
+                )
+            except Exception:  # noqa: BLE001
+                pass
         print(
             f"ERROR: active position already exists for {strategy_name}",
             file=sys.stderr,
@@ -125,6 +141,7 @@ def resolve_ivr(
     db_path: Path,
     ivr_gate: Decimal,
     force_entry: bool,
+    notifier: Callable[[str], None] | None = None,
 ) -> float | None:
     """Load VIX series, compute IVR, apply gate.
 
@@ -136,6 +153,9 @@ def resolve_ivr(
         db_path: Path to paper trading SQLite DB (used by IntradayMarketStore).
         ivr_gate: Minimum acceptable IVR for entry.
         force_entry: When True, bypass the gate with a warning.
+        notifier: Optional sync callable for gate-failure Telegram alerts.
+            Called only when IVR is below the gate threshold (not on data-missing).
+            Any exception it raises is swallowed.
 
     Returns:
         Computed IVR as float, or None if VIX data is unavailable.
@@ -164,6 +184,15 @@ def resolve_ivr(
             )
             sys.exit(1)
         if ivr < float(ivr_gate):
+            if notifier is not None:
+                try:
+                    notifier(
+                        f"⚠️ IC V2 Entry BLOCKED\n"
+                        f"Gate: ivr\n"
+                        f"IVR: {ivr:.2f} / Gate: {ivr_gate:.2f}"
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
             print(
                 f"ERROR: India VIX IVR = {ivr:.2f} below gate threshold of {ivr_gate:.2f}.",
                 file=sys.stderr,

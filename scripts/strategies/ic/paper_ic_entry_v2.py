@@ -47,6 +47,7 @@ from src.instruments.strike_selector import (
     filter_strikes_by_delta,
     rank_strikes,
 )
+from src.notifications.telegram import build_notifier
 from src.notifications.telegram_gateway import TelegramGateway
 from src.paper.constants import (
     DEFAULT_BOD_PATH,
@@ -224,12 +225,36 @@ async def run() -> None:
     config = CONFIGS_V2[args.expiry_type]
     strategy_name = f"paper_ic_nifty_v2_{config.expiry_type}"
 
+    # Build a Telegram notifier for gate-failure alerts (non-fatal).
+    _tg = build_notifier()
+
+    def _gate_alert(msg: str) -> None:
+        """Fire a Telegram gate-failure alert (sync wrapper, non-fatal).
+
+        Schedules ``_tg.send`` as an asyncio task.  Any exception — including
+        network failures — is swallowed so that telegram never blocks a gate exit.
+        """
+        if _tg is None:
+            return
+        try:
+            asyncio.get_running_loop().create_task(_tg.send(msg))
+        except Exception:  # noqa: BLE001
+            pass
+
     # Step 2: Duplicate guard (shared gate)
     store = PaperStore(args.db_path)
-    check_duplicate(store, strategy_name)
+    check_duplicate(store, strategy_name, notifier=_gate_alert)
 
     # Step 2b: Post-expiry gate — calendar-based (last Tuesday of current month)
-    _post_expiry_gate()
+    try:
+        _post_expiry_gate()
+    except SystemExit:
+        _gate_alert(
+            f"⚠️ IC V2 Entry BLOCKED — {strategy_name}\n"
+            f"Gate: post_expiry_gate\n"
+            f"Reason: Current month expiry not yet passed"
+        )
+        sys.exit(1)
 
     # Step 2c: Expiry resolution + DTE window check (shared gate)
     _, expiry_str, dte = resolve_expiry(
@@ -240,7 +265,7 @@ async def run() -> None:
     )
 
     # Step 3: IVR gate (shared gate)
-    ivr = resolve_ivr(args.db_path, _V2_MONTHLY_IVR_GATE, args.force_entry)
+    ivr = resolve_ivr(args.db_path, _V2_MONTHLY_IVR_GATE, args.force_entry, notifier=_gate_alert)
 
     # Step 5: Live chain fetch
     try:
@@ -280,6 +305,12 @@ async def run() -> None:
     # Step 7: Long wing selection (10Δ delta-based, D2 ruling)
     long_put = _find_long_wing(raw_chain, "PE", config)
     if long_put is None:
+        _gate_alert(
+            f"⚠️ IC V2 Entry BLOCKED — {strategy_name}\n"
+            f"Gate: long_wing_floor\n"
+            f"Reason: No put wing passes delta + premium floors "
+            f"(floor=₹{config.long_wing_min_premium}, delta_floor={config.long_wing_delta_floor})"
+        )
         print(
             "ERROR: short_put long wing — no candidate passes delta + premium floors "
             f"(floor=₹{config.long_wing_min_premium}, delta_floor={config.long_wing_delta_floor})",
@@ -289,6 +320,12 @@ async def run() -> None:
 
     long_call = _find_long_wing(raw_chain, "CE", config)
     if long_call is None:
+        _gate_alert(
+            f"⚠️ IC V2 Entry BLOCKED — {strategy_name}\n"
+            f"Gate: long_wing_floor\n"
+            f"Reason: No call wing passes delta + premium floors "
+            f"(floor=₹{config.long_wing_min_premium}, delta_floor={config.long_wing_delta_floor})"
+        )
         print(
             "ERROR: short_call long wing — no candidate passes delta + premium floors "
             f"(floor=₹{config.long_wing_min_premium}, delta_floor={config.long_wing_delta_floor})",
@@ -379,6 +416,11 @@ async def run() -> None:
                     pass
 
             if not adjusted:
+                _gate_alert(
+                    f"⚠️ IC V2 Entry BLOCKED — {strategy_name}\n"
+                    f"Gate: portfolio_delta\n"
+                    f"Reason: Projected delta {projected_total:.3f} lots outside [-0.05, 0.25]"
+                )
                 print(
                     f"ERROR: Portfolio delta check failed. "
                     f"Projected={projected_total:.3f} lots (outside [-0.05, 0.25]). Stop.",
