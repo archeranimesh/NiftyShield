@@ -14,6 +14,7 @@ import pytest
 from scripts.strategies.ic.paper_ic_snapshot import _run
 from src.paper.models import PaperPosition
 from src.strategy.ic_expiry_config import CONFIGS
+from src.strategy.ic_expiry_config_v2 import CONFIGS_V2
 from src.strategy.protocol import SignalEvent
 
 
@@ -205,7 +206,7 @@ async def test_all_four_active(
 
         await _run(args)
 
-    assert mock_telegram.send_notification.call_count == 4
+    assert mock_telegram.send_notification.call_count == 5
 
 
 @pytest.mark.asyncio
@@ -507,3 +508,135 @@ async def test_check_signals_raises_for_one_variant(
         "📋 IC EOD Audit — monthly" in c and "Error" not in c
         for c in calls
     )
+
+@pytest.fixture
+def mock_v2_class():
+    """Mock IronCondorV2 wrapper."""
+    target = "scripts.strategies.ic.paper_ic_snapshot.IronCondorV2"
+    with patch(target) as mock_cls:
+        ic_inst = MagicMock()
+        ic_inst.strategy_name = "paper_ic_nifty_v2_monthly"
+        ic_inst.check_signals = AsyncMock(return_value=[])
+        ic_inst._compute_ivr_str.return_value = "IVR: 0.42"
+        leg = MagicMock()
+        leg.ltp = Decimal("50.0")
+        leg.delta = Decimal("0.10")
+        ic_inst._find_leg.return_value = leg
+        ic_inst._compute_combined_pnl.return_value = (
+            Decimal("100.0"),
+            Decimal("150.0"),
+        )
+        mock_cls.return_value = ic_inst
+        yield mock_cls
+
+
+
+@pytest.mark.asyncio
+async def test_v2_monthly_included_in_audit(
+    mock_store,
+    mock_telegram,
+    mock_create_client,
+    mock_parse_chain,
+    mock_ic_class,
+    mock_v2_class,
+):
+    """test_v2_monthly_included_in_audit — V2 position in store → process_variant called with strategy_cls=IronCondorV2."""
+    v2_monthly_name = CONFIGS_V2["monthly"].strategy_name
+    positions = [
+        PaperPosition(
+            strategy_name=v2_monthly_name,
+            leg_role="short_put",
+            net_qty=-1,
+            avg_cost=Decimal("0.0"),
+            avg_sell_price=Decimal("80.0"),
+            instrument_key="NSE_FO|NIFTY26JUN202624000PE",
+            entry_date=date(2026, 6, 1),
+        )
+    ]
+    mock_store.get_positions.side_effect = (
+        lambda name: positions if name == v2_monthly_name else []
+    )
+
+    args = argparse.Namespace(
+        date=date(2026, 6, 26),
+        dry_run=False,
+        db_path="dummy.db",
+        bod_path="dummy.json",
+    )
+
+    with patch("sqlite3.connect") as mock_conn:
+        mock_cursor = MagicMock()
+        mock_cursor.fetchall.return_value = []
+        exe = mock_conn.return_value.__enter__.return_value.execute
+        exe.return_value = mock_cursor
+
+        await _run(args)
+
+    assert mock_telegram.send_notification.call_count == 1
+    call_arg = mock_telegram.send_notification.call_args[0][0]
+    assert "📋 IC EOD Audit — monthly (paper_ic_nifty_v2_monthly)" in call_arg
+    mock_v2_class.assert_called_once()
+
+@pytest.mark.asyncio
+async def test_v2_no_position_skipped(
+    mock_store, mock_telegram, mock_create_client, mock_v2_class, mock_ic_class
+):
+    """test_v2_no_position_skipped — no V2 positions → no V2 report, no error."""
+    mock_store.get_positions.return_value = []
+    args = argparse.Namespace(
+        date=date(2026, 6, 26),
+        dry_run=False,
+        db_path="dummy.db",
+        bod_path="dummy.json",
+    )
+    await _run(args)
+    mock_v2_class.assert_not_called()
+    mock_telegram.send_notification.assert_called_once_with(
+        "IC EOD: no open positions across all expiry types."
+    )
+
+@pytest.mark.asyncio
+async def test_v1_loop_unchanged(
+    mock_store,
+    mock_telegram,
+    mock_create_client,
+    mock_parse_chain,
+    mock_ic_class,
+    mock_v2_class,
+):
+    """test_v1_loop_unchanged — V2 addition does not alter V1 report output."""
+    v1_monthly_name = CONFIGS["monthly"].strategy_name
+    positions = [
+        PaperPosition(
+            strategy_name=v1_monthly_name,
+            leg_role="short_put",
+            net_qty=-1,
+            avg_cost=Decimal("0.0"),
+            avg_sell_price=Decimal("80.0"),
+            instrument_key="NSE_FO|NIFTY26JUN202624000PE",
+            entry_date=date(2026, 6, 1),
+        )
+    ]
+    mock_store.get_positions.side_effect = (
+        lambda name: positions if name == v1_monthly_name else []
+    )
+
+    args = argparse.Namespace(
+        date=date(2026, 6, 26),
+        dry_run=False,
+        db_path="dummy.db",
+        bod_path="dummy.json",
+    )
+
+    with patch("sqlite3.connect") as mock_conn:
+        mock_cursor = MagicMock()
+        mock_cursor.fetchall.return_value = []
+        exe = mock_conn.return_value.__enter__.return_value.execute
+        exe.return_value = mock_cursor
+
+        await _run(args)
+
+    assert mock_telegram.send_notification.call_count == 1
+    call_arg = mock_telegram.send_notification.call_args[0][0]
+    assert "📋 IC EOD Audit — monthly (paper_ic_nifty_v1_monthly)" in call_arg
+    mock_v2_class.assert_not_called()

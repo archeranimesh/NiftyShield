@@ -32,7 +32,9 @@ from src.notifications.telegram_gateway import TelegramGateway
 from src.paper.constants import DEFAULT_BOD_PATH, DEFAULT_DB_PATH
 from src.paper.store import PaperStore
 from src.strategy.ic_expiry_config import CONFIGS
+from src.strategy.ic_expiry_config_v2 import CONFIGS_V2
 from src.strategy.ic_nifty_v1 import IronCondorV1
+from src.strategy.ic_nifty_v2 import IronCondorV2
 
 load_dotenv()
 
@@ -97,8 +99,11 @@ async def process_variant(
     notifier: TelegramGateway | None,
     snap_date: date,
     save: bool,
+    strategy_cls: type | None = None,
 ) -> str | None:
     """Process a single IC variant and return the generated report string."""
+    if strategy_cls is None:
+        strategy_cls = IronCondorV1
     positions = store.get_positions(config.strategy_name)
     ic_positions = [
         p for p in positions
@@ -153,7 +158,7 @@ async def process_variant(
     nifty_spot = chain.underlying_spot
 
     # Instantiate strategy
-    ic = IronCondorV1(broker, store, notifier, config)
+    ic = strategy_cls(broker, store, notifier, config)
 
     # Evaluate signals
     try:
@@ -248,8 +253,9 @@ async def process_variant(
         sig_strs.append(f"{ev.event_type} {emoji}")
 
     # Add DTE_WARN if DTE <= config.dte_warn and not already in sigs
+    dte_warn_threshold = getattr(config, "dte_warn", -1)
     has_dte_warn = any(s.startswith("DTE_WARN") for s in sig_strs)
-    if dte <= config.dte_warn and not has_dte_warn:
+    if dte <= dte_warn_threshold and not has_dte_warn:
         sig_strs.append("DTE_WARN ℹ️")
 
     sigs_str = ", ".join(sig_strs) if sig_strs else "none"
@@ -394,6 +400,23 @@ async def _run(args: argparse.Namespace) -> None:
                 f"Error: Snapshot generation failed due to "
                 f"unexpected error."
             )
+
+    for expiry_type, config in CONFIGS_V2.items():
+        positions = store.get_positions(config.strategy_name)
+        active = [p for p in positions if p.net_qty != 0]
+        if active:
+            has_any_positions = True
+        try:
+            report = await process_variant(
+                expiry_type, config, store, broker, lookup,
+                notifier, snap_date, save,
+                strategy_cls=IronCondorV2,
+            )
+            if report is not None:
+                reports.append(report)
+        except Exception as exc:
+            logger.error("ic_snapshot.v2_variant_failed", strategy=config.strategy_name, error=str(exc))
+            reports.append(f"📋 IC EOD Audit — {expiry_type} ({config.strategy_name})\nError: Snapshot failed.")
 
     if not has_any_positions:
         msg = "IC EOD: no open positions across all expiry types."

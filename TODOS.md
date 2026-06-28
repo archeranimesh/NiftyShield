@@ -178,6 +178,9 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 ## Session Log
 
 | Date | What Changed |
+| 2026-06-28 | ic-nifty-v2 IC-V2-13 final — _post_expiry_gate() moved to ic_entry_gates (calendar-based, no params); V1 monthly gate added; fixed c18baae always-block bug (was comparing today vs future expiry); 6 test files updated — 23e8e93 |
+| 2026-06-28 | ic-nifty-v2 IC-V2-13 fix — post-expiry gate switched to BOD expiry date (holiday-aware); _last_tuesday_of_month removed; force_entry param dropped; holiday test added — c18baae |
+| 2026-06-28 | ic-nifty-v2 IC-V2-13 — post-expiry entry gate: _post_expiry_gate() + _last_tuesday_of_month() in paper_ic_entry_v2.py; DTE window recalibrated 30→20 / 45→32; 4 gate tests; mock_gates fixture updated — 6868dd7 |
 | 2026-06-28 | ic-nifty-v2 IC-V2-12 — final docs close: ProfitLockEngine + ProfitLockConfig in CONTEXT.md; profit_lock_engine.py + ic/ scripts subfolder in CONTEXT_TREE.md; profit-lock council ruling in DECISIONS.md — d4dbdf7 |
 |---|---|
 | 2026-06-15 | NT-1 fix — negative countdown clamped (max(0,...)), singular day grammar, recovery test added — 9acc1e3 |
@@ -348,3 +351,4 @@ Full log: [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md)
 | 2026-06-27 | ic-nifty-v2 IC-V2-10 — profit-lock signal wiring into check_signals() (8-level precedence, PROFIT_LOCK_ZONE2 auto-execute, Zone1 INFO, monitor.py metadata fix, 9 tests) — f737ee5 |
 | 2026-06-27 | ic-nifty-v2 IC-V2-11 — paper_ic_monthly_comparison.py script comparing V1 and V2 paper monthly ICs; extracts ICMonthlyStats; 6 tests — a555c6c |
 | 2026-06-28 | ic-nifty-v2 cron gap — paper_ic_entry_v2.py: V2 entry helper with delta-based 10Δ wing placement, long_wing_min_premium floor, portfolio-delta check; ic_entry_gates.py: shared check_duplicate/resolve_ivr/resolve_expiry helpers; 14 tests (test_ic_entry_gates.py + test_paper_ic_entry_v2.py); cron entries added for V2 monthly entry (Wed 10:30) + paper_ic_monthly_comparison (15:50 Mon–Fri) |
+| 2026-06-28 | ic-nifty-v2 IC-V2-14 — EOD snapshot V2 coverage: refactor process_variant to accept strategy_cls; add V2 loop over CONFIGS_V2 / IronCondorV2 in paper_ic_snapshot.py; 3 tests |

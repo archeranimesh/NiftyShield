@@ -139,6 +139,10 @@ class IronCondorV2ExpiryConfig:
     # as each preset is added.  Keeps mypy honest on cfg.expiry_type dispatch.
     expiry_type: Literal["monthly"]
 
+    @property
+    def strategy_name(self) -> str:
+        return f"paper_ic_nifty_v2_{self.expiry_type}"
+
     # Entry — short leg deltas (D1 ruling)
     short_put_delta_target: Decimal = Decimal("0.25")
     short_call_delta_target: Decimal = Decimal("0.22")
