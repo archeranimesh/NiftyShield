@@ -22,10 +22,9 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import calendar
 import subprocess
 import sys
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
@@ -179,57 +178,31 @@ def _find_long_wing(
 # ---------------------------------------------------------------------------
 
 
-def _last_tuesday_of_month(year: int, month: int) -> date:
-    """Return the last Tuesday of *month* in *year*.
+def _post_expiry_gate(expiry_str: str) -> None:
+    """Block entry if the BOD-resolved monthly expiry has not yet passed.
 
-    Uses ``calendar.monthrange`` — no hardcoded offsets.
+    Uses the BOD-resolved expiry date rather than computing the calendar last-Tuesday.
+    This handles NSE holiday adjustments automatically: when the last Tuesday is a
+    holiday, NSE moves expiry to Monday and the BOD reflects that shift.
 
-    Args:
-        year: Calendar year (e.g. 2026).
-        month: Calendar month (1–12).
-
-    Returns:
-        The ``date`` of the last Tuesday in that month.
-    """
-    _, last_day = calendar.monthrange(year, month)
-    last = date(year, month, last_day)
-    # weekday(): Monday=0, Tuesday=1, ..., Sunday=6
-    days_back = (last.weekday() - 1) % 7
-    return last - timedelta(days=days_back)
-
-
-def _post_expiry_gate(force_entry: bool) -> None:
-    """Block entry if current month's Nifty monthly expiry has not yet passed.
-
-    Nifty monthly expiry = last Tuesday of the current calendar month
-    (SEBI change effective April 2026).
-
-    Entry is valid only AFTER that date has passed (``today > last_tuesday``).
+    Entry is valid only AFTER the expiry date has passed (``today > expiry_date``).
     Entry on expiry day itself is blocked — settlement is not complete intraday.
 
     Args:
-        force_entry: When True, log WARNING and continue instead of sys.exit(1).
+        expiry_str: ISO-format expiry date from ``resolve_expiry`` (``"YYYY-MM-DD"``).
 
     Raises:
-        SystemExit(1): If today is on or before the current month's expiry date
-                       and *force_entry* is False.
+        SystemExit(1): If today is on or before *expiry_str*.
     """
     today = date.today()
-    expiry = _last_tuesday_of_month(today.year, today.month)
+    expiry = date.fromisoformat(expiry_str)
     if today <= expiry:
-        if force_entry:
-            logger.warning(
-                "ic_nifty_v2.post_expiry_gate_bypassed",
-                today=str(today),
-                expiry=str(expiry),
-            )
-        else:
-            print(
-                f"ERROR: post_expiry_gate: current month expiry {expiry} has not yet "
-                f"passed (today={today}). Entry blocked. Use --force-entry to override.",
-                file=sys.stderr,
-            )
-            sys.exit(1)
+        print(
+            f"ERROR: post_expiry_gate: expiry {expiry} has not yet passed "
+            f"(today={today}). Entry is only valid after settlement.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
 
 # ---------------------------------------------------------------------------
@@ -287,19 +260,19 @@ async def run() -> None:
     store = PaperStore(args.db_path)
     check_duplicate(store, strategy_name)
 
-    # Step 2b: Post-expiry gate — block entry before current month's last Tuesday passes
-    _post_expiry_gate(args.force_entry)
-
-    # Step 3: IVR gate (shared gate)
-    ivr = resolve_ivr(args.db_path, _V2_MONTHLY_IVR_GATE, args.force_entry)
-
-    # Step 4: Expiry resolution + DTE check (shared gate)
+    # Step 2b: Expiry resolution — needed by post-expiry gate (BOD is holiday-aware)
     _, expiry_str, dte = resolve_expiry(
         args.bod_path,
         expiry_bucket=config.expiry_type,
         dte_warn_lo=_V2_MONTHLY_DTE_WARN_LO,
         dte_warn_hi=_V2_MONTHLY_DTE_WARN_HI,
     )
+
+    # Step 2c: Post-expiry gate — uses BOD expiry date (handles holiday adjustments)
+    _post_expiry_gate(expiry_str)
+
+    # Step 3: IVR gate (shared gate)
+    ivr = resolve_ivr(args.db_path, _V2_MONTHLY_IVR_GATE, args.force_entry)
 
     # Step 5: Live chain fetch
     try:
