@@ -178,6 +178,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 ## Session Log
 
 | Date | What Changed |
+| 2026-06-28 | ic-nifty-v2 IC-V2-12 — final docs close: ProfitLockEngine + ProfitLockConfig in CONTEXT.md; profit_lock_engine.py + ic/ scripts subfolder in CONTEXT_TREE.md; profit-lock council ruling in DECISIONS.md — d4dbdf7 |
 |---|---|
 | 2026-06-15 | NT-1 fix — negative countdown clamped (max(0,...)), singular day grammar, recovery test added — 9acc1e3 |
 | 2026-06-15 | NT-2 — _check_futures_cc_block(): BLOCKED_COMBINATION ACTION on Futures+standalone CC; collar exempted; degenerate collar blocked; 7 tests — da837b5 |
@@ -346,3 +347,4 @@ Full log: [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md)
 | 2026-06-27 | ic-nifty-v2 IC-V2-9 — State persistence: paper_strategies schema migration + PaperStore.get/set/reset_profit_lock_state() + tests — b0485e7 |
 | 2026-06-27 | ic-nifty-v2 IC-V2-10 — profit-lock signal wiring into check_signals() (8-level precedence, PROFIT_LOCK_ZONE2 auto-execute, Zone1 INFO, monitor.py metadata fix, 9 tests) — f737ee5 |
 | 2026-06-27 | ic-nifty-v2 IC-V2-11 — paper_ic_monthly_comparison.py script comparing V1 and V2 paper monthly ICs; extracts ICMonthlyStats; 6 tests — a555c6c |
+| 2026-06-28 | ic-nifty-v2 cron gap — paper_ic_entry_v2.py: V2 entry helper with delta-based 10Δ wing placement, long_wing_min_premium floor, portfolio-delta check; ic_entry_gates.py: shared check_duplicate/resolve_ivr/resolve_expiry helpers; 14 tests (test_ic_entry_gates.py + test_paper_ic_entry_v2.py); cron entries added for V2 monthly entry (Wed 10:30) + paper_ic_monthly_comparison (15:50 Mon–Fri) |
