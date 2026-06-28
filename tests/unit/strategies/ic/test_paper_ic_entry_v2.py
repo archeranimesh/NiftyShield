@@ -15,12 +15,17 @@ No network calls; all external dependencies are mocked.
 from __future__ import annotations
 
 import sys
+from datetime import date
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from scripts.strategies.ic.paper_ic_entry_v2 import run
+from scripts.strategies.ic.paper_ic_entry_v2 import (
+    _last_tuesday_of_month,
+    _post_expiry_gate,
+    run,
+)
 
 # ---------------------------------------------------------------------------
 # Shared chain fixture
@@ -138,9 +143,10 @@ def mock_bod_exists():
 
 @pytest.fixture
 def mock_gates():
-    """Stub out all three shared gate helpers."""
+    """Stub out all shared gate helpers (including post-expiry gate)."""
     with (
         patch("scripts.strategies.ic.paper_ic_entry_v2.check_duplicate") as m_dup,
+        patch("scripts.strategies.ic.paper_ic_entry_v2._post_expiry_gate") as m_gate,
         patch("scripts.strategies.ic.paper_ic_entry_v2.resolve_ivr") as m_ivr,
         patch("scripts.strategies.ic.paper_ic_entry_v2.resolve_expiry") as m_expiry,
     ):
@@ -148,7 +154,7 @@ def mock_gates():
         lookup.search_options.return_value = [{"instrument_key": "NSE_FO|MOCK_LONG"}]
         m_ivr.return_value = 0.35
         m_expiry.return_value = (lookup, "2026-07-31", 35)
-        yield {"dup": m_dup, "ivr": m_ivr, "expiry": m_expiry, "lookup": lookup}
+        yield {"dup": m_dup, "gate": m_gate, "ivr": m_ivr, "expiry": m_expiry, "lookup": lookup}
 
 
 @pytest.fixture
@@ -390,3 +396,60 @@ async def test_portfolio_delta_adjustment_shifts_short_put(
 
     # Should still complete (adjustment found) and execute 4 legs
     assert mock_subprocess.call_count == 4
+
+
+# ---------------------------------------------------------------------------
+# Post-expiry gate tests (IC-V2-13)
+# ---------------------------------------------------------------------------
+
+
+def test_post_expiry_gate_blocks_before_expiry() -> None:
+    """Gate exits with code 1 when today is strictly before the last Tuesday."""
+    # June 2026: last Tuesday is June 30 → any date ≤ June 30 is blocked.
+    # Use June 25 (Wednesday, 5 days before last Tuesday June 30).
+    with patch("scripts.strategies.ic.paper_ic_entry_v2.date") as mock_date:
+        mock_date.today.return_value = date(2026, 6, 25)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        # last_tuesday_of_month uses calendar, not date.today, so compute reference
+        assert _last_tuesday_of_month(2026, 6) == date(2026, 6, 30)
+        with pytest.raises(SystemExit) as exc:
+            _post_expiry_gate(force_entry=False)
+    assert exc.value.code == 1
+
+
+def test_post_expiry_gate_blocks_on_expiry_day() -> None:
+    """Gate exits with code 1 when today IS the last Tuesday (settlement intraday)."""
+    # June 2026: last Tuesday = June 30.
+    with patch("scripts.strategies.ic.paper_ic_entry_v2.date") as mock_date:
+        mock_date.today.return_value = date(2026, 6, 30)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        with pytest.raises(SystemExit) as exc:
+            _post_expiry_gate(force_entry=False)
+    assert exc.value.code == 1
+
+
+def test_post_expiry_gate_passes_after_expiry() -> None:
+    """Gate does NOT exit when today is strictly after the last Tuesday."""
+    # July 1 2026 (Wednesday) — one day after last Tuesday June 30.
+    # But wait — July 1 is in July, not June. The gate checks the CURRENT month's
+    # last Tuesday. For July 2026, last Tuesday = July 28.
+    # July 1 < July 28 → would still block. We need a date in July after July's expiry.
+    # July 2026: last Tuesday = July 29.
+    # Use July 30 (Wednesday after expiry).
+    with patch("scripts.strategies.ic.paper_ic_entry_v2.date") as mock_date:
+        mock_date.today.return_value = date(2026, 7, 30)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        # Verify our fixture: last Tuesday of July 2026 must be < July 30
+        assert _last_tuesday_of_month(2026, 7) == date(2026, 7, 28)
+        # Should NOT raise
+        _post_expiry_gate(force_entry=False)
+
+
+def test_post_expiry_gate_force_entry_bypasses() -> None:
+    """With force_entry=True, gate logs WARNING but does not exit."""
+    # Today before last Tuesday — would normally block.
+    with patch("scripts.strategies.ic.paper_ic_entry_v2.date") as mock_date:
+        mock_date.today.return_value = date(2026, 6, 25)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        # Should NOT raise even though today < expiry
+        _post_expiry_gate(force_entry=True)

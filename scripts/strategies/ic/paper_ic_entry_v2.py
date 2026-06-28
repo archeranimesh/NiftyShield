@@ -22,8 +22,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import calendar
 import subprocess
 import sys
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
@@ -66,8 +68,11 @@ logger = structlog.get_logger(_SCRIPT_NAME)
 # market-regime requirements.  Kept here (not in IronCondorV2ExpiryConfig)
 # to avoid polluting the strategy config with script-level gate concepts.
 _V2_MONTHLY_IVR_GATE: Decimal = Decimal("0.25")
-_V2_MONTHLY_DTE_WARN_LO: int = 30
-_V2_MONTHLY_DTE_WARN_HI: int = 45
+# DTE window recalibrated for post-Tuesday-expiry entry cadence.
+# First Wednesday after last-Tuesday monthly expiry → 22–29 DTE to next expiry.
+# IC-V2-13: changed from 30/45 → 20/32.
+_V2_MONTHLY_DTE_WARN_LO: int = 20
+_V2_MONTHLY_DTE_WARN_HI: int = 32
 
 
 # ---------------------------------------------------------------------------
@@ -170,6 +175,64 @@ def _find_long_wing(
 
 
 # ---------------------------------------------------------------------------
+# Post-expiry gate
+# ---------------------------------------------------------------------------
+
+
+def _last_tuesday_of_month(year: int, month: int) -> date:
+    """Return the last Tuesday of *month* in *year*.
+
+    Uses ``calendar.monthrange`` — no hardcoded offsets.
+
+    Args:
+        year: Calendar year (e.g. 2026).
+        month: Calendar month (1–12).
+
+    Returns:
+        The ``date`` of the last Tuesday in that month.
+    """
+    _, last_day = calendar.monthrange(year, month)
+    last = date(year, month, last_day)
+    # weekday(): Monday=0, Tuesday=1, ..., Sunday=6
+    days_back = (last.weekday() - 1) % 7
+    return last - timedelta(days=days_back)
+
+
+def _post_expiry_gate(force_entry: bool) -> None:
+    """Block entry if current month's Nifty monthly expiry has not yet passed.
+
+    Nifty monthly expiry = last Tuesday of the current calendar month
+    (SEBI change effective April 2026).
+
+    Entry is valid only AFTER that date has passed (``today > last_tuesday``).
+    Entry on expiry day itself is blocked — settlement is not complete intraday.
+
+    Args:
+        force_entry: When True, log WARNING and continue instead of sys.exit(1).
+
+    Raises:
+        SystemExit(1): If today is on or before the current month's expiry date
+                       and *force_entry* is False.
+    """
+    today = date.today()
+    expiry = _last_tuesday_of_month(today.year, today.month)
+    if today <= expiry:
+        if force_entry:
+            logger.warning(
+                "ic_nifty_v2.post_expiry_gate_bypassed",
+                today=str(today),
+                expiry=str(expiry),
+            )
+        else:
+            print(
+                f"ERROR: post_expiry_gate: current month expiry {expiry} has not yet "
+                f"passed (today={today}). Entry blocked. Use --force-entry to override.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -223,6 +286,9 @@ async def run() -> None:
     # Step 2: Duplicate guard (shared gate)
     store = PaperStore(args.db_path)
     check_duplicate(store, strategy_name)
+
+    # Step 2b: Post-expiry gate — block entry before current month's last Tuesday passes
+    _post_expiry_gate(args.force_entry)
 
     # Step 3: IVR gate (shared gate)
     ivr = resolve_ivr(args.db_path, _V2_MONTHLY_IVR_GATE, args.force_entry)
