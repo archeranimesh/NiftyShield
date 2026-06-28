@@ -178,6 +178,8 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 ## Session Log
 
 | Date | What Changed |
+| 2026-06-28 | ic-nifty-v2 IC-V2-16 — Phase 4 docs close: CONTEXT.md (post-expiry gate + DTE window in paper_ic_entry_v2.py; V2 loop in paper_ic_snapshot.py); TODOS.md session log — no code | SHA: pending-git-lock |
+| 2026-06-28 | ic-nifty-v2 IC-V2-15 — Telegram alert on gate failures: notifier Callable param added to check_duplicate + resolve_ivr; _gate_alert wrapper in run(); post_expiry + wing floor + delta exits also alert; 3 tests — c2cce55 |
 | 2026-06-28 | ic-nifty-v2 IC-V2-13 final — _post_expiry_gate() moved to ic_entry_gates (calendar-based, no params); V1 monthly gate added; fixed c18baae always-block bug (was comparing today vs future expiry); 6 test files updated — 23e8e93 |
 | 2026-06-28 | ic-nifty-v2 IC-V2-13 fix — post-expiry gate switched to BOD expiry date (holiday-aware); _last_tuesday_of_month removed; force_entry param dropped; holiday test added — c18baae |
 | 2026-06-28 | ic-nifty-v2 IC-V2-13 — post-expiry entry gate: _post_expiry_gate() + _last_tuesday_of_month() in paper_ic_entry_v2.py; DTE window recalibrated 30→20 / 45→32; 4 gate tests; mock_gates fixture updated — 6868dd7 |
