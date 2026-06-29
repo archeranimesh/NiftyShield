@@ -678,7 +678,7 @@ def main() -> None:
         force_entry=args.force_entry,
     )
 
-    if args.action == "BUY" and not args.close:
+    if args.action == "BUY" and not args.close and not args.force_entry:
         try:
             market_client = UpstoxMarketClient()
             ltp_dict = market_client.get_ltp_sync(["NSE_INDEX|Nifty 50"])
