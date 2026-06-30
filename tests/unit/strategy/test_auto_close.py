@@ -179,4 +179,51 @@ async def test_evaluate_pp_reentry_eligible(
 
     # Re-entry should be flagged as ELIGIBLE and send notification
     notifier.send.assert_called_once()
-    assert "PP RE-ENTRY ELIGIBLE" in notifier.send.call_args[0][0]
+    msg = notifier.send.call_args[0][0]
+    assert "PP RE-ENTRY ELIGIBLE" in msg
+    assert "3-track overlay" in msg
+
+
+@pytest.mark.asyncio
+async def test_evaluate_pp_reentry_suppressed_when_active(
+    store: PaperStore, simulator: PaperFillSimulator, chain: OptionChain
+) -> None:
+    """No notification when an overlay_pp leg is already open on any track strategy."""
+    from src.paper.constants import STRATEGY_SPOT
+
+    # Seed an open overlay_pp BUY on the spot track
+    store.record_trade(
+        PaperTrade(
+            strategy_name=STRATEGY_SPOT,
+            leg_role="overlay_pp",
+            instrument_key="NSE_FO|63848",
+            trade_date=date.today(),
+            action=TradeAction.BUY,
+            quantity=65,
+            price=Decimal("15.40"),
+            is_paper=True,
+        )
+    )
+
+    notifier = AsyncMock()
+    vix_series = MagicMock()
+    vix_series.empty = False
+    vix_series.iloc = ["15.0"] * 300
+    vix_series.__len__ = MagicMock(return_value=300)
+
+    with (
+        patch("src.strategy.auto_close.load_vix_series", return_value=vix_series),
+        patch("src.strategy.auto_close.compute_ivr", return_value=0.20),
+    ):
+        await evaluate_pp_reentry_eod(
+            store=store,
+            simulator=simulator,
+            chain=chain,
+            lookup=None,
+            notifier=notifier,
+            vix_data_dir=None,
+            today=date.today(),
+        )
+
+    # Active position detected — no notification should fire
+    notifier.send.assert_not_called()

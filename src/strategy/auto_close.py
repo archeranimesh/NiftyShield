@@ -6,7 +6,7 @@ import asyncio
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
@@ -14,7 +14,8 @@ from src.backtest.ivr import compute_ivr
 from src.backtest.vix_ingest import load_vix_series
 from src.models.options import OptionChain
 from src.paper.models import PaperPosition
-from src.paper.store import PaperStore
+if TYPE_CHECKING:
+    from src.paper.store import PaperStore
 from src.paper.tracker import get_strategy_realized_pnl
 from src.strategy.executor import PaperFillSimulator
 from src.strategy.overlay_closer import OverlayCloser
@@ -287,53 +288,54 @@ async def evaluate_pp_reentry_eod(
     vix_data_dir: Path | None,
     today: date,
 ) -> None:
-    """Evaluate PP re-entry eligibility and notify if eligible (no auto-opening)."""
-    # Import PPOverlayV1 dynamically to avoid structural coupling / circular imports
-    # Retrieve all PP strategies from constants if possible, or filter
-    from src.paper.constants import STRATEGY_PP_OVERLAY
+    """Evaluate PP re-entry eligibility and notify if eligible (no auto-opening).
+
+    PP is always an overlay on the three track strategies (paper_nifty_spot,
+    paper_nifty_futures, paper_nifty_proxy) — never a standalone strategy.
+    We check for an active overlay_pp leg across all three tracks and notify
+    once if none is found and IVR passes the re-entry gate.
+    """
+    from src.paper.constants import STRATEGY_FUTURES, STRATEGY_PROXY, STRATEGY_SPOT
     from src.strategy.pp_overlay_v1 import PPOverlayV1
 
-    strategies = [STRATEGY_PP_OVERLAY]  # Standard PP Strategy
+    track_strategies = [STRATEGY_SPOT, STRATEGY_FUTURES, STRATEGY_PROXY]
 
-    for strat_name in strategies:
-        try:
-            # Check if active PP position exists
-            existing_pos = store.get_positions(strat_name)
-            active_pp = [p for p in existing_pos if p.leg_role == "overlay_pp" and p.net_qty > 0]
-            if active_pp:
-                continue  # already has active position
+    try:
+        # Active if ANY track carries a live overlay_pp position
+        active_pp = [
+            p
+            for strat_name in track_strategies
+            for p in store.get_positions(strat_name)
+            if p.leg_role == "overlay_pp" and p.net_qty > 0
+        ]
+        if active_pp:
+            return  # position already open across tracks — nothing to do
 
-            # PP strategy expects reentry_leg_role = 'protective_put' but we check overlay_pp in track comparison context.
-            # To be absolutely sure, check if there's any open position at all
-            if any(p.net_qty != 0 for p in existing_pos):
-                # Wait, CC/Collar tracks are separate strategies. A PP strategy track has its own strat_name.
-                pass
+        # Calculate IVR
+        vix_series = await asyncio.to_thread(load_vix_series, vix_data_dir)
+        if vix_series.empty or len(vix_series) < 252:
+            return
 
-            # Calculate IVR
-            vix_series = await asyncio.to_thread(load_vix_series, vix_data_dir)
-            if vix_series.empty or len(vix_series) < 252:
-                continue
+        vix_today = float(vix_series.iloc[-1])
+        ivr = compute_ivr(vix_today, vix_series)
+        if ivr is None:
+            return
 
-            vix_today = float(vix_series.iloc[-1])
-            ivr = compute_ivr(vix_today, vix_series)
-            if ivr is None:
-                continue
+        pp_strategy = PPOverlayV1(store=store, notifier=notifier, vix_data_dir=vix_data_dir)
+        passed, _ = pp_strategy._ivr_passes(ivr)
 
-            # Check if IVR passes using PPOverlayV1's method
-            pp_strategy = PPOverlayV1(store=store, notifier=notifier, vix_data_dir=vix_data_dir)
-            passed, reason = pp_strategy._ivr_passes(ivr)
-
-            if passed:
-                # Target next weekly expiry DTE >= 14
-                if notifier is not None:
-                    realized_pnl = get_strategy_realized_pnl(store, strat_name)
-                    msg = (
-                        f"🟢 PP RE-ENTRY ELIGIBLE — {strat_name}\n"
-                        f"IVR    : {ivr:.2f} (passes reentry threshold)\n"
-                        f"Status : RE_ENTRY_PENDING → ELIGIBLE\n"
-                        f"Action : Run find_overlay_strikes.py --overlay-type pp to initiate manually\n"
-                        f"Overlay P&L (total realized): ₹{realized_pnl:+,.0f}"
-                    )
-                    await notifier.send(msg)
-        except Exception as exc:
-            log.warning("evaluate_pp_reentry_eod.failed", strategy=strat_name, error=str(exc))
+        if passed and notifier is not None:
+            # Aggregate realized P&L across all three track strategies
+            realized_pnl = sum(
+                get_strategy_realized_pnl(store, s) for s in track_strategies
+            )
+            msg = (
+                f"🟢 PP RE-ENTRY ELIGIBLE — 3-track overlay\n"
+                f"IVR    : {ivr:.2f} (passes reentry threshold)\n"
+                f"Status : No open PP → ELIGIBLE\n"
+                f"Action : Run find_overlay_strikes.py --overlay-type pp to initiate manually\n"
+                f"Overlay P&L (total realized): ₹{realized_pnl:+,.0f}"
+            )
+            await notifier.send(msg)
+    except Exception as exc:
+        log.warning("evaluate_pp_reentry_eod.failed", error=str(exc))
