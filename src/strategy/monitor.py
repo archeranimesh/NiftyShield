@@ -21,6 +21,7 @@ import os
 from collections.abc import Callable
 from datetime import date, datetime, timedelta, timezone
 from datetime import date as _date
+from typing import TYPE_CHECKING
 
 import structlog
 
@@ -32,7 +33,9 @@ from src.market_calendar.holidays import is_trading_day, market_today
 from src.models.options import OptionChain
 from src.notifications.protocol import NotifierProtocol
 from src.paper.models import PaperPosition
-from src.paper.store import PaperStore
+
+if TYPE_CHECKING:
+    from src.paper.store import PaperStore
 from src.strategy.protocol import ApprovedAction, PaperStrategy, SignalEvent
 from src.utils.logging import bind_trace_id, generate_trace_id
 

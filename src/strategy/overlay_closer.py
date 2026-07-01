@@ -9,14 +9,16 @@ from __future__ import annotations
 import re
 from datetime import date, datetime, timezone
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
 from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
 from src.paper.models import ExitSignal, PaperPosition, PaperTrade, TradeAction
-from src.paper.store import PaperStore
+
+if TYPE_CHECKING:
+    from src.paper.store import PaperStore
 from src.strategy._price_utils import find_option_leg, resolve_price
 from src.strategy.executor import PaperFillSimulator
 from src.strategy.protocol import ApprovedAction

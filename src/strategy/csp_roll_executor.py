@@ -9,7 +9,7 @@ import re
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
@@ -19,7 +19,9 @@ from src.instruments.strike_selector import filter_strikes_by_delta, rank_strike
 from src.models.portfolio import TradeAction
 from src.paper.constants import NIFTY_UNDERLYING
 from src.paper.models import PaperTrade
-from src.paper.store import PaperStore
+
+if TYPE_CHECKING:
+    from src.paper.store import PaperStore
 
 # Explicit logger for the execution module
 logger = structlog.get_logger("src.strategy.csp_roll_executor")

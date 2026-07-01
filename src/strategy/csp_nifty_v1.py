@@ -37,8 +37,10 @@ from typing import Any
 import structlog
 
 from src.config import settings
+from src.instruments.lookup import InstrumentLookup
 from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
+from src.paper.constants import DEFAULT_BOD_PATH
 from src.paper.models import PaperPosition, TradeState
 from src.strategy.csp_roll_executor import close_csp_leg, open_new_csp_leg, roll_down_and_out
 from src.strategy.exit_signals import ExitSignalEngine
@@ -68,7 +70,7 @@ _TIME_STOP_DAYS = 21  # days_held ≥ 21 (calendar days since entry SELL trade)
 # days_held threshold mirrors TIME_STOP (_TIME_STOP_DAYS) — story calls this "DTE≤21"
 # but the implementation uses days_held because DTE only resolves from expiry-embedded
 # keys which are mutually exclusive with strike-embedded keys (where put_leg is found).
-_ROLL_DELTA_THRESHOLD = Decimal("0.35")   # |delta| ≥ 0.35 → roll condition
+_ROLL_DELTA_THRESHOLD = Decimal("0.35")  # |delta| ≥ 0.35 → roll condition
 _ROLL_PROFIT_THRESHOLD = Decimal("0.50")  # mark ≤ 50% of entry credit → roll condition
 # Roll target: PE strike closest to 22-delta within [0.18, 0.28] band
 _ROLL_TARGET_DELTA = Decimal("0.22")
@@ -243,8 +245,7 @@ class CSPNiftyV1(ReEntryMixin):
             # to align with TIME_STOP (same semantic threshold the story calls "DTE≤21").
             if put_leg is not None:
                 _delta_breached = (
-                    put_leg.delta is not None
-                    and abs(put_leg.delta) >= _ROLL_DELTA_THRESHOLD
+                    put_leg.delta is not None and abs(put_leg.delta) >= _ROLL_DELTA_THRESHOLD
                 )
                 roll_condition = (
                     days_held >= _TIME_STOP_DAYS
@@ -267,7 +268,9 @@ class CSPNiftyV1(ReEntryMixin):
                                     "suggested_instrument_key": roll_key,
                                     "suggested_strike": str(roll_leg.strike),
                                     "suggested_expiry": market.expiry.isoformat(),
-                                    "suggested_delta": str(roll_leg.delta) if roll_leg.delta is not None else None,
+                                    "suggested_delta": str(roll_leg.delta)
+                                    if roll_leg.delta is not None
+                                    else None,
                                     "suggested_mid_price": str(roll_leg.ltp),
                                     "auto_execute": True,
                                     "auto_action": _ROLL_AUTO_ACTION,
@@ -387,7 +390,14 @@ class CSPNiftyV1(ReEntryMixin):
         Raises:
             ValueError: If ``action_type`` is not one of the supported values.
         """
-        _valid = ("CLOSE_AND_ROLL", "ROLL_DOWN_AND_OUT", "CLOSE_AND_WAIT", "OPEN_NEW", "CLOSE_FULL", "ROLL")
+        _valid = (
+            "CLOSE_AND_ROLL",
+            "ROLL_DOWN_AND_OUT",
+            "CLOSE_AND_WAIT",
+            "OPEN_NEW",
+            "CLOSE_FULL",
+            "ROLL",
+        )
         if action.action_type not in _valid:
             raise ValueError(
                 f"CSPNiftyV1 does not accept action_type={action.action_type!r}; valid: {_valid}"
@@ -702,12 +712,35 @@ class CSPNiftyV1(ReEntryMixin):
         """
         m = _STRIKE_RE.search(instrument_key)
         if not m:
-            log.warning(
-                "csp_nifty_v1.put_leg_no_strike",
-                instrument_key=instrument_key,
-                reason="no_parseable_strike_in_key",
-            )
-            return None
+            # Numeric Upstox key (e.g. NSE_FO|63916) — resolve strike via BOD file.
+            try:
+                lookup = InstrumentLookup.from_file(DEFAULT_BOD_PATH)
+                inst = lookup.get_by_key(instrument_key)
+                if inst is None or inst.get("strike_price") is None:
+                    log.warning(
+                        "csp_nifty_v1.put_leg_no_strike",
+                        instrument_key=instrument_key,
+                        reason="not_found_in_bod",
+                    )
+                    return None
+                strike = Decimal(str(inst["strike_price"]))
+                strike_data = market.strikes.get(strike)
+                if strike_data is not None and strike_data.pe is not None:
+                    log.debug(
+                        "csp_nifty_v1.put_leg_resolved_via_bod",
+                        instrument_key=instrument_key,
+                        strike=str(strike),
+                    )
+                    return strike_data.pe
+                return None
+            except Exception as exc:
+                log.warning(
+                    "csp_nifty_v1.put_leg_no_strike",
+                    instrument_key=instrument_key,
+                    reason="bod_lookup_failed",
+                    error=str(exc),
+                )
+                return None
         try:
             strike = Decimal(m.group(1))
             strike_data = market.strikes.get(strike)

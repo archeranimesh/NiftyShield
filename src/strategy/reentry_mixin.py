@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import asyncio
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 import structlog
@@ -10,7 +12,9 @@ import structlog
 from src.backtest.ivr import compute_ivr
 from src.backtest.vix_ingest import load_vix_series
 from src.paper.models import ExitSignal, PaperPosition
-from src.paper.store import PaperStore
+
+if TYPE_CHECKING:
+    from src.paper.store import PaperStore
 
 log = structlog.get_logger(__name__)
 

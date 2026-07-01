@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import structlog
 
@@ -20,7 +20,9 @@ from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain
 from src.models.portfolio import TradeAction
 from src.paper.models import PaperPosition, PaperTrade
-from src.paper.store import PaperStore
+
+if TYPE_CHECKING:
+    from src.paper.store import PaperStore
 from src.strategy._price_utils import find_option_leg, resolve_price
 from src.strategy.protocol import ApprovedAction
 from src.utils.logging import bind_trace_id, generate_trace_id
