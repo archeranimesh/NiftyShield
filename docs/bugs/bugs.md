@@ -90,7 +90,7 @@ if today <= expiry:
 | Field | Value |
 |---|---|
 | Severity | **MEDIUM** — currently benign (VIX mid-range, unlikely to have crossed the 1-year band in the missing days) but silently wrong under a vol spike/crush |
-| Status | 🟡 Fix in progress (code fix committed; B004.7 recheck of last week's IVR-gated entries still open) |
+| Status | ✅ Fixed (2026-07-02, SHA 143335e) |
 | Discovered | 2026-07-02, verifying IVR=0.24 reading behind `ic_leaps.log` / `ic_yearly.log` rejections |
 | Location | `src/backtest/ivr.py::compute_ivr`; `scripts/strategies/ic/ic_entry_gates.py::resolve_ivr` |
 
@@ -104,7 +104,9 @@ if today <= expiry:
 
 **Fix summary (B004.2–B004.5):** B004.2 investigation ruled out a missing/broken cron — `crontab -l` on the live host confirmed the entry is installed exactly as documented (`45 15 * * 1`). Root cause of the staleness was instead: Upstox's `from_date` query param on the historical-candle endpoint appears not to filter the response (`rows=2475`, essentially full decade history, returned on both the original Jun-29 cron run and a manual Jul-2 re-run) combined with an observed ~1-2 trading-day publish lag on VIX EOD candles — the Jun-29 fetch genuinely had 0 new rows available to write at that exact fetch time; the manual Jul-2 re-run picked up 3 rows (Jun 26/29/30) once published. The `from_date`-not-honored behavior is wasteful (full-history refetch weekly) but not itself the cause of staleness and is tracked as a separate follow-on, not part of this fix. B004.3 added `_is_vix_window_stale(series, today)` in `scripts/strategies/ic/ic_entry_gates.py` (kept out of `src/backtest/ivr.py::compute_ivr` deliberately — `compute_ivr`'s existing test suite uses plain RangeIndex series with no dates, and `resolve_ivr` is the only layer holding the date-indexed series). Threshold: 7 calendar days (Animesh-approved — tolerates one missed/late Monday cron run plus observed publish lag without false-positiving on routine gaps). When stale, `resolve_ivr` logs a WARNING and leaves `ivr = None`, reusing the existing `ivr is None` hard-block path rather than adding new blocking logic. B004.5: reviewed via `general-purpose` agent substituting for `code-reviewer` (not exposed in this environment) against `REVIEW.md` — 2 ERROR findings (import ordering, docstring line length) fixed; no CRITICAL logic defects.
 
-**Remaining:** B004.6 (commit) and B004.7 (recheck IVR-gated entries from 2026-06-26 onward against the now-current window — not yet done) are still open.
+**B004.6:** Committed by Animesh on the live host (SHA `143335e`) — this Cowork sandbox had no disk space / `.venv` to run the project's pre-commit hooks itself.
+
+**B004.7 recheck (2026-07-02):** Recomputed the trailing-252-day window as-of each date in the stale period (06-26, 06-29, 06-30, 07-01, 07-02) against the now-caught-up VIX series. Window low/high (9.15 / 27.89) is identical across all five dates — none of the missing days set a new 1-year high or low, so IVR is invariant to the staleness here. Confirms the logged decisions during the stale window were correct: `ic_leaps`/`ic_yearly` rejections (IVR=0.24 < 0.25 gate) and `ic_weekly` pass (IVR=0.24 ≥ 0.15 gate) all stand — no entry was wrongly blocked or wrongly allowed. BUG-004 closed.
 
 **Once fixed, recalculate last week's IVR-gated entries:** any IC entry/rejection decision made between 2026-06-26 and whenever the cron gap is closed was evaluated against this same stale window. After the fix lands (both the recency check and the actual cron/data catch-up), re-run the IVR gate for that period and confirm no entry was wrongly blocked or wrongly allowed — do not assume last week's readings were fine just because this week's happened to be.
 
