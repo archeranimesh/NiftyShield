@@ -13,9 +13,11 @@ from decimal import Decimal
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pandas as pd
 import pytest
 
 from scripts.strategies.ic.ic_entry_gates import (
+    _is_vix_window_stale,
     _last_tuesday_of_month,
     _most_recently_settled_expiry,
     _post_expiry_gate,
@@ -117,6 +119,70 @@ class TestResolveIvr:
         with pytest.raises(SystemExit) as exc_info:
             resolve_ivr(Path("dummy.db"), Decimal("0.25"), force_entry=False)
         assert exc_info.value.code == 1
+
+    def test_stale_window_skips_compute_and_exits(self, mock_vix_stack) -> None:
+        """BUG-004: window >7 days stale is treated as gate-data-unavailable.
+
+        compute_ivr must not even be called — staleness is checked before
+        the IVR calculation, not after.
+        """
+        stale_dates = pd.date_range("2025-01-01", periods=252, freq="D").date
+        mock_vix_stack["load"].return_value = pd.Series([15.0] * 252, index=stale_dates)
+        with pytest.raises(SystemExit) as exc_info:
+            resolve_ivr(Path("dummy.db"), Decimal("0.25"), force_entry=False)
+        assert exc_info.value.code == 1
+        mock_vix_stack["ivr"].assert_not_called()
+
+    def test_fresh_window_still_computes(self, mock_vix_stack) -> None:
+        """A window whose max date is within the threshold computes normally."""
+        fresh_dates = pd.date_range(end=date.today(), periods=252, freq="D").date
+        mock_vix_stack["load"].return_value = pd.Series([15.0] * 252, index=fresh_dates)
+        result = resolve_ivr(Path("dummy.db"), Decimal("0.25"), force_entry=False)
+        assert result == pytest.approx(0.35)
+        mock_vix_stack["ivr"].assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# _is_vix_window_stale
+# ---------------------------------------------------------------------------
+
+
+class TestIsVixWindowStale:
+    def test_fresh_window_not_stale(self) -> None:
+        """Max date within threshold → not stale."""
+        today = date(2026, 7, 2)
+        series = pd.Series([15.0, 16.0], index=[date(2026, 6, 30), date(2026, 7, 1)])
+        assert _is_vix_window_stale(series, today) is False
+
+    def test_window_beyond_threshold_is_stale(self) -> None:
+        """Max date more than 7 days behind today → stale."""
+        today = date(2026, 7, 2)
+        series = pd.Series([15.0], index=[date(2026, 6, 20)])  # 12 days behind
+        assert _is_vix_window_stale(series, today) is True
+
+    def test_window_exactly_at_threshold_not_stale(self) -> None:
+        """Boundary: exactly 7 days behind is still within tolerance."""
+        today = date(2026, 7, 2)
+        series = pd.Series([15.0], index=[date(2026, 6, 25)])  # exactly 7 days
+        assert _is_vix_window_stale(series, today) is False
+
+    def test_window_one_day_past_threshold_is_stale(self) -> None:
+        """Boundary: 8 days behind crosses the threshold."""
+        today = date(2026, 7, 2)
+        series = pd.Series([15.0], index=[date(2026, 6, 24)])  # 8 days
+        assert _is_vix_window_stale(series, today) is True
+
+    def test_empty_series_not_stale(self) -> None:
+        """Empty series can't determine a max date — not flagged stale here.
+
+        compute_ivr's own length check (len < 252) is what handles this
+        case; staleness detection stays out of its way.
+        """
+        assert _is_vix_window_stale(pd.Series(dtype="float64"), date.today()) is False
+
+    def test_plain_list_not_stale(self) -> None:
+        """Non-Series input (e.g. mocked `[]` in other tests) doesn't crash."""
+        assert _is_vix_window_stale([], date.today()) is False
 
 
 # ---------------------------------------------------------------------------

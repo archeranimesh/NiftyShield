@@ -29,6 +29,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 
+import pandas as pd
 import structlog
 
 from src.backtest.ivr import compute_ivr
@@ -162,6 +163,41 @@ def check_duplicate(
 # Gate 2 — IVR gate
 # ---------------------------------------------------------------------------
 
+# BUG-004: weekly refresh_vix.py cron + observed ~1-2 trading-day VIX EOD
+# publish lag means a few days of gap is routine, not a failure. 7 days
+# tolerates a missed/late Monday run plus publish lag without crying wolf;
+# anything beyond that is treated as gate-data-unavailable (same as ivr=None).
+_MAX_VIX_WINDOW_STALENESS_DAYS = 7
+
+
+def _is_vix_window_stale(series: pd.Series, today: date) -> bool:
+    """Return True if the VIX window's most recent date lags *today* too far.
+
+    Args:
+        series: VIX daily-close series, date-indexed (as returned by
+            ``load_vix_series``). May be empty or a non-Series stand-in in
+            tests — treated as "cannot determine staleness", not stale.
+        today: Reference date to compare the window's max date against.
+
+    Returns:
+        True if the window's max date lags *today* by more than
+        ``_MAX_VIX_WINDOW_STALENESS_DAYS``. False if the window is fresh
+        enough, or if its max date can't be determined (empty series, or a
+        non-date index) — that case is already handled separately by
+        ``compute_ivr``'s own length check.
+    """
+    try:
+        if len(series) == 0:
+            return False
+        max_date = series.index.max()
+    except (AttributeError, TypeError):
+        return False
+    if isinstance(max_date, pd.Timestamp):
+        max_date = max_date.date()
+    if not isinstance(max_date, date):
+        return False
+    return (today - max_date).days > _MAX_VIX_WINDOW_STALENESS_DAYS
+
 
 def resolve_ivr(
     db_path: Path,
@@ -192,11 +228,18 @@ def resolve_ivr(
     if vix_data_dir.exists():
         try:
             series = load_vix_series(vix_data_dir)
-            vix_today = IntradayMarketStore(db_path).get_latest_vix_today()
-            if vix_today is None:
-                vix_today = fetch_vix_latest()
-            if vix_today is not None:
-                ivr = compute_ivr(vix_today, series)
+            if _is_vix_window_stale(series, date.today()):
+                _log.warning(
+                    "vix.window_stale",
+                    window_max_date=str(series.index.max()),
+                    threshold_days=_MAX_VIX_WINDOW_STALENESS_DAYS,
+                )
+            else:
+                vix_today = IntradayMarketStore(db_path).get_latest_vix_today()
+                if vix_today is None:
+                    vix_today = fetch_vix_latest()
+                if vix_today is not None:
+                    ivr = compute_ivr(vix_today, series)
         except Exception as exc:  # noqa: BLE001 — broad catch by design; IVR is non-fatal
             _log.warning("vix.load_failed", error=str(exc))
     else:
