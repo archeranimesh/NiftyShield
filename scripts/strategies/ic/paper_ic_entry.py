@@ -25,7 +25,7 @@ from dotenv import load_dotenv
 # Add project root to sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 
-from scripts.strategies.ic.ic_entry_gates import _post_expiry_gate
+from scripts.strategies.ic.ic_entry_gates import _post_expiry_gate, ic_relevant_strategy_names
 from src.backtest.ivr import compute_ivr
 from src.backtest.vix_ingest import fetch_vix_latest, load_vix_series
 from src.client.upstox_market import UpstoxMarketClient
@@ -356,7 +356,7 @@ async def run() -> None:
         )
         sys.exit(1)
 
-    strategies_list = store.get_strategy_names()
+    strategies_list = ic_relevant_strategy_names(store.get_strategy_names())
     all_open_pos = []
     for strat in strategies_list:
         all_open_pos.extend([p for p in store.get_positions(strat) if p.net_qty != 0])

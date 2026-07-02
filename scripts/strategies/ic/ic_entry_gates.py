@@ -36,6 +36,7 @@ from src.backtest.ivr import compute_ivr
 from src.backtest.vix_ingest import fetch_vix_latest, load_vix_series
 from src.instruments.lookup import InstrumentLookup
 from src.intraday.market_store import IntradayMarketStore
+from src.paper.constants import STRATEGY_FUTURES, STRATEGY_PROXY, STRATEGY_SPOT
 
 _log = structlog.get_logger("scripts.strategies.ic.ic_entry_gates")
 
@@ -346,3 +347,32 @@ def resolve_expiry(
         print(f"INFO: selected expiry = {expiry_str} (DTE={dte})")
 
     return lookup, expiry_str, dte
+
+
+# ---------------------------------------------------------------------------
+# Gate 4 — Portfolio-delta scope filter (BUG-005 / B002.2)
+# ---------------------------------------------------------------------------
+
+# Proxy/hedge books that run in parallel to the IC strategies. BUG-002's
+# root-cause investigation flagged pooling their delta into the IC
+# delta-neutral gate as an open scope question; B002.2 decided to exclude
+# them (Animesh, 2026-07-02) but the decision was never wired into the two
+# entry scripts until BUG-005. See docs/bugs/bugs.md BUG-002 / BUG-005.
+_NON_IC_STRATEGIES = frozenset({STRATEGY_SPOT, STRATEGY_FUTURES, STRATEGY_PROXY})
+
+
+def ic_relevant_strategy_names(all_strategy_names: list[str]) -> list[str]:
+    """Filter out proxy/hedge-book strategies from the IC portfolio-delta gate.
+
+    Args:
+        all_strategy_names: Every open strategy name, as returned by
+            ``PaperStore.get_strategy_names()``.
+
+    Returns:
+        The subset of *all_strategy_names* that should count toward an IC
+        strategy's own delta-neutral gate — excludes
+        ``paper_nifty_futures``, ``paper_nifty_proxy``, and
+        ``paper_nifty_spot``, which are separate proxy/hedge books whose
+        overlay legs are not the IC's own risk.
+    """
+    return [name for name in all_strategy_names if name not in _NON_IC_STRATEGIES]

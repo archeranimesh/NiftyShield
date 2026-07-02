@@ -111,3 +111,31 @@ if today <= expiry:
 **Once fixed, recalculate last week's IVR-gated entries:** any IC entry/rejection decision made between 2026-06-26 and whenever the cron gap is closed was evaluated against this same stale window. After the fix lands (both the recency check and the actual cron/data catch-up), re-run the IVR gate for that period and confirm no entry was wrongly blocked or wrongly allowed — do not assume last week's readings were fine just because this week's happened to be.
 
 **Related:** `BUG-003`'s post-expiry gate and this bug are both in the same "gate evaluated the wrong reference window" family — worth a shared regression-test pattern (assert gate references a *current* or *most-recently-completed* reference point, never a frozen one) once both are fixed.
+
+---
+
+## BUG-005 — B002.2 cross-strategy pooling exclusion was decided but never implemented
+
+| Field | Value |
+|---|---|
+| Severity | **HIGH** — blocks legitimate IC weekly entries with a fabricated delta figure; portfolio-delta gate is otherwise correctly signed post-BUG-002 |
+| Status | 🔴 Open |
+| Discovered | 2026-07-02, dry-run of `paper_ic_entry.py --expiry-type weekly` |
+| Location | `scripts/strategies/ic/paper_ic_entry.py` (line ~359-365); `scripts/strategies/ic/paper_ic_entry_v2.py` (line ~351-357) |
+
+**Symptom:** Dry-run of V1 weekly entry: `ERROR: Portfolio delta check failed. Projected=-8.098 lots (outside [-0.05, 0.25]). Stop.` Debug trace shows the only IC-relevant position contributing is `paper_csp_nifty_v1`'s short put (`net_qty=-65`, ~+1 lot even under the crude approximation). Every other position dragging the aggregate to -8.098 belongs to `paper_nifty_futures`, `paper_nifty_proxy`, or `paper_nifty_spot` — overlay PP/collar/ditm-call legs from parallel proxy/hedge books, not the IC's own risk.
+
+**Root cause:** BUG-002's root-cause investigation (B002 root cause section) explicitly flagged this pooling as an open scope question, and **B002.2 recorded a decision to resolve it**: *"scope `aggregate_delta` to IC-relevant positions only; exclude `paper_nifty_futures`/`paper_nifty_proxy`/`paper_nifty_spot` from the IC delta-neutral gate. Decided by Animesh 2026-07-02 (no code change this step)."* The "no code change this step" note implied implementation would land in a later B002.x task. It never did — B002.3 added `option_type` resolution, B002.4 added chain-delta sign/magnitude plus the fallback path, B002.5-7 were tests/review/commit for those two. None of them touch `store.get_strategy_names()` / the loop that builds `all_open_pos` in the two entry scripts. The decision was recorded in `bugs.md` and closed out as part of BUG-002 without the corresponding code ever being written — caught only because this dry run happened to exercise the weekly aggregate-delta path, which B002's own test suite (`tests/unit/risk/`) never did (those tests exercise `_position_delta`/`aggregate_delta` directly with hand-built position lists, not the caller-side strategy-name loop in the entry scripts).
+
+```python
+strategies_list = store.get_strategy_names()
+all_open_pos = []
+for strat in strategies_list:
+    all_open_pos.extend([p for p in store.get_positions(strat) if p.net_qty != 0])
+```
+
+Both `paper_ic_entry.py` (line ~359) and `paper_ic_entry_v2.py` (line ~351) have the identical unfiltered loop.
+
+**Suggested fix:** Exclude `STRATEGY_SPOT`/`STRATEGY_FUTURES`/`STRATEGY_PROXY` (`src/paper/constants.py`) from `strategies_list` before the loop, in both entry scripts. A shared helper in `ic_entry_gates.py` (even though the portfolio-delta gate itself isn't shared between V1/V2 per the module's documented divergence) avoids duplicating the exclusion set inline in two places.
+
+**Related:** `BUG-002` (this is the un-implemented remainder of that bug's B002.2 decision, not a new independent defect).

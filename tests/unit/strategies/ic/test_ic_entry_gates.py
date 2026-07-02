@@ -22,6 +22,7 @@ from scripts.strategies.ic.ic_entry_gates import (
     _most_recently_settled_expiry,
     _post_expiry_gate,
     check_duplicate,
+    ic_relevant_strategy_names,
     resolve_expiry,
     resolve_ivr,
 )
@@ -183,6 +184,39 @@ class TestIsVixWindowStale:
     def test_plain_list_not_stale(self) -> None:
         """Non-Series input (e.g. mocked `[]` in other tests) doesn't crash."""
         assert _is_vix_window_stale([], date.today()) is False
+
+
+# ---------------------------------------------------------------------------
+# ic_relevant_strategy_names
+# ---------------------------------------------------------------------------
+
+
+class TestIcRelevantStrategyNames:
+    def test_excludes_proxy_hedge_books(self) -> None:
+        """BUG-005: proxy/hedge-book strategies are filtered out."""
+        all_strategies = [
+            "paper_csp_nifty_v1",
+            "paper_nifty_futures",
+            "paper_nifty_proxy",
+            "paper_nifty_spot",
+            "paper_ic_nifty_v1_weekly",
+        ]
+        result = ic_relevant_strategy_names(all_strategies)
+        assert result == ["paper_csp_nifty_v1", "paper_ic_nifty_v1_weekly"]
+
+    def test_only_proxy_books_open_returns_empty(self) -> None:
+        """Edge case: nothing IC-relevant open — empty list, not an error."""
+        all_strategies = ["paper_nifty_futures", "paper_nifty_proxy", "paper_nifty_spot"]
+        assert ic_relevant_strategy_names(all_strategies) == []
+
+    def test_empty_input_returns_empty(self) -> None:
+        """No open strategies at all → empty list."""
+        assert ic_relevant_strategy_names([]) == []
+
+    def test_no_proxy_books_present_unaffected(self) -> None:
+        """When no proxy/hedge books are open, the list passes through unchanged."""
+        all_strategies = ["paper_csp_nifty_v1", "paper_ic_nifty_v2_monthly"]
+        assert ic_relevant_strategy_names(all_strategies) == all_strategies
 
 
 # ---------------------------------------------------------------------------

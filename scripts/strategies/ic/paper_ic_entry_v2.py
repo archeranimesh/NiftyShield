@@ -37,6 +37,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 from scripts.strategies.ic.ic_entry_gates import (
     _post_expiry_gate,
     check_duplicate,
+    ic_relevant_strategy_names,
     resolve_expiry,
     resolve_ivr,
 )
@@ -348,7 +349,7 @@ async def run() -> None:
         print("ERROR: failed to fetch live Nifty 50 spot price.", file=sys.stderr)
         sys.exit(1)
 
-    strategies_list = store.get_strategy_names()
+    strategies_list = ic_relevant_strategy_names(store.get_strategy_names())
     all_open_pos = []
     for strat in strategies_list:
         all_open_pos.extend([p for p in store.get_positions(strat) if p.net_qty != 0])
