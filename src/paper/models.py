@@ -127,6 +127,15 @@ class PaperPosition:
         instrument_key: Upstox key for the current open position.
         entry_date: Date of first SELL trade for the leg. None for purely long
             legs or positions recorded before this field was added.
+        option_type: Instrument classification resolved lazily at read time by
+            ``PaperStore.get_position``/``get_positions`` via ``InstrumentLookup``.
+            ``"EQ"`` for the NiftyBees equity leg, ``"CE"``/``"PE"`` for options,
+            ``"FUT"`` for futures contracts. ``None`` if the instrument_key could
+            not be resolved (unrecognised/legacy key), the resolved instrument
+            is none of CE/PE/FUT (e.g. an equity/index key other than
+            NiftyBees), or the BOD JSON file itself could not be loaded
+            (missing/corrupt) — all cases are logged as a warning and never
+            raise.
     """
 
     strategy_name: str
@@ -136,6 +145,7 @@ class PaperPosition:
     avg_sell_price: Decimal
     instrument_key: str
     entry_date: date | None = None
+    option_type: Literal["PE", "CE", "FUT", "EQ"] | None = None
 
 
 @dataclass(frozen=True)

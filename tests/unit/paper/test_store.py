@@ -33,7 +33,9 @@ from pathlib import Path
 
 import pytest
 
+from src.instruments.lookup import InstrumentLookup
 from src.models.portfolio import TradeAction
+from src.paper.constants import NIFTYBEES_KEY
 from src.paper.models import PaperLegSnapshot, PaperNavSnapshot, PaperTrade, TradeState
 from src.paper.store import PaperStore
 
@@ -281,6 +283,113 @@ def test_get_position_unknown_returns_zero(store: PaperStore) -> None:
     assert pos.avg_cost == Decimal("0")
     assert pos.avg_sell_price == Decimal("0")
     assert pos.instrument_key == ""
+    assert pos.option_type is None
+
+
+# ── get_position / get_positions: option_type resolution (B002.3) ─────────────
+
+
+def test_get_position_resolves_niftybees_as_eq(db_path: Path) -> None:
+    """NiftyBees key short-circuits to EQ without touching InstrumentLookup at all."""
+    store = PaperStore(db_path)  # no instrument_lookup injected — must not be needed
+    store.record_trade(_sell_trade(instrument_key=NIFTYBEES_KEY))
+    pos = store.get_position(_STRATEGY, _LEG)
+    assert pos.option_type == "EQ"
+
+
+def test_get_position_resolves_short_put_as_pe(db_path: Path) -> None:
+    """Happy path: short put resolves to PE via the injected InstrumentLookup."""
+    lookup = InstrumentLookup([{"instrument_key": _KEY, "instrument_type": "PE"}])
+    store = PaperStore(db_path, instrument_lookup=lookup)
+    store.record_trade(_sell_trade(instrument_key=_KEY, quantity=65))
+    pos = store.get_position(_STRATEGY, _LEG)
+    assert pos.option_type == "PE"
+    assert pos.net_qty == -65
+
+
+def test_get_position_resolves_call_as_ce(db_path: Path) -> None:
+    lookup = InstrumentLookup([{"instrument_key": _KEY, "instrument_type": "CE"}])
+    store = PaperStore(db_path, instrument_lookup=lookup)
+    store.record_trade(_sell_trade(instrument_key=_KEY))
+    pos = store.get_position(_STRATEGY, _LEG)
+    assert pos.option_type == "CE"
+
+
+def test_get_position_resolves_future_as_fut(db_path: Path) -> None:
+    """Resolved instrument with no CE/PE instrument_type (e.g. a future) → FUT."""
+    lookup = InstrumentLookup([{"instrument_key": _KEY, "instrument_type": "FUT"}])
+    store = PaperStore(db_path, instrument_lookup=lookup)
+    store.record_trade(_sell_trade(instrument_key=_KEY))
+    pos = store.get_position(_STRATEGY, _LEG)
+    assert pos.option_type == "FUT"
+
+
+def test_get_position_unrecognised_key_falls_back_to_none_with_warning(
+    db_path: Path,
+) -> None:
+    """Edge case: key not in BOD JSON must not raise — falls back to None + warning.
+
+    Warning is logged via structlog, not routed through Python logging, so not
+    assertable via caplog (same constraint documented in
+    test_csp_nifty_v1.py::test_find_put_leg_numeric_key_returns_none). Only the
+    behavioral contract (no raise, option_type falls back to None) is asserted here.
+    """
+    lookup = InstrumentLookup([])  # empty — _KEY will never resolve
+    store = PaperStore(db_path, instrument_lookup=lookup)
+    store.record_trade(_sell_trade(instrument_key=_KEY))
+    pos = store.get_position(_STRATEGY, _LEG)
+    assert pos.option_type is None
+
+
+def test_get_position_unresolvable_bod_file_falls_back_to_none(
+    db_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """BOD JSON missing/corrupt must not raise — get_position degrades to option_type=None.
+
+    Regression guard: get_position/get_positions had zero dependency on the BOD
+    file before B002.3 (see code-reviewer findings C1/C2). A stale cron job or
+    missing download must not take down position reads.
+    """
+    import src.paper.store as store_module
+
+    monkeypatch.setattr(store_module, "DEFAULT_BOD_PATH", db_path.parent / "does-not-exist.json.gz")
+    store = PaperStore(db_path)  # no instrument_lookup injected — forces lazy load
+    store.record_trade(_sell_trade(instrument_key=_KEY))
+    pos = store.get_position(_STRATEGY, _LEG)
+    assert pos.option_type is None
+
+
+def test_get_position_resolved_non_option_type_falls_back_to_none(db_path: Path) -> None:
+    """Resolved instrument_type outside CE/PE/FUT (e.g. EQ) must not be mislabeled FUT.
+
+    Regression guard for the reviewer's W1 finding: the original fallback
+    returned "FUT" for *any* non-CE/PE resolved type, which would mis-classify
+    an equity/index key (anything but NiftyBees, which short-circuits earlier).
+    """
+    lookup = InstrumentLookup([{"instrument_key": _KEY, "instrument_type": "EQ"}])
+    store = PaperStore(db_path, instrument_lookup=lookup)
+    store.record_trade(_sell_trade(instrument_key=_KEY))
+    pos = store.get_position(_STRATEGY, _LEG)
+    assert pos.option_type is None
+
+
+def test_get_positions_bulk_resolves_option_type_per_leg(db_path: Path) -> None:
+    lookup = InstrumentLookup(
+        [
+            {"instrument_key": "NSE_FO|11111", "instrument_type": "PE"},
+            {"instrument_key": "NSE_FO|22222", "instrument_type": "CE"},
+        ]
+    )
+    store = PaperStore(db_path, instrument_lookup=lookup)
+    store.record_trade(
+        _sell_trade(leg_role="short_put", instrument_key="NSE_FO|11111", quantity=75)
+    )
+    store.record_trade(
+        _sell_trade(leg_role="short_call", instrument_key="NSE_FO|22222", quantity=75)
+    )
+    pos_map = {p.leg_role: p for p in store.get_positions(_STRATEGY)}
+    assert pos_map["short_put"].option_type == "PE"
+    assert pos_map["short_call"].option_type == "CE"
 
 
 def test_get_positions_bulk(store: PaperStore) -> None:

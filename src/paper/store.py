@@ -22,8 +22,12 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, Literal
 
+import structlog
+
 from src.db import connect as _connect
+from src.instruments.lookup import InstrumentLookup
 from src.models.portfolio import TradeAction
+from src.paper.constants import DEFAULT_BOD_PATH, NIFTYBEES_KEY
 from src.paper.models import (
     ExitSignal,
     PaperLegSnapshot,
@@ -33,6 +37,8 @@ from src.paper.models import (
     TradeState,
 )
 from src.strategy.profit_lock_engine import ProfitLockState
+
+logger = structlog.get_logger(__name__)
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS paper_trades (
@@ -229,12 +235,23 @@ class PaperStore:
         db_path: Path to the shared portfolio SQLite database.
     """
 
-    def __init__(self, db_path: Path | str) -> None:
+    def __init__(
+        self,
+        db_path: Path | str,
+        instrument_lookup: InstrumentLookup | None = None,
+    ) -> None:
         """Initialize store, creating tables if needed.
 
         Args:
             db_path: Path to SQLite database file (str or Path).
+            instrument_lookup: Optional pre-built InstrumentLookup, used to
+                resolve ``PaperPosition.option_type`` at read time. If not
+                supplied, one is lazily constructed from ``DEFAULT_BOD_PATH``
+                on first call to `get_position`/`get_positions` (mirrors the
+                ``lookup: InstrumentLookup | None = None`` pattern used
+                elsewhere, e.g. `src/strategy/csp_nifty_v1.py`).
         """
+        self._instrument_lookup = instrument_lookup
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         with _connect(self.db_path) as conn:
@@ -594,6 +611,7 @@ class PaperStore:
                     avg_sell_price=avg_sell_price,
                     instrument_key=cycle_instrument_key,
                     entry_date=cycle_start_date,
+                    option_type=self._resolve_option_type(cycle_instrument_key),
                 )
             )
         return positions
@@ -627,8 +645,94 @@ class PaperStore:
                 avg_cost=Decimal("0"),
                 avg_sell_price=Decimal("0"),
                 instrument_key="",
+                option_type=None,
             ),
         )
+
+    def _resolve_instrument_lookup(self) -> InstrumentLookup | None:
+        """Lazily construct and cache the InstrumentLookup used for option_type resolution.
+
+        Not called from `__init__` — BOD JSON is only loaded on first actual need
+        (`get_position`/`get_positions`), consistent with the lazy-resolution
+        decision for B002.3 (read-time, not write-time).
+
+        `option_type` is a read-time classification signal, not a hard gate: a
+        missing, truncated, or corrupt BOD file must never take down position
+        reads (`get_position`/`get_positions` had zero dependency on this file
+        before B002.3, and callers like monitor/executor/snapshot scripts must
+        keep working even if the BOD download job failed). Failure is logged
+        and `None` is returned so callers degrade to `option_type=None` for the
+        batch rather than raising. The failure is not cached, so a subsequent
+        call can pick up the file once it becomes available again.
+
+        Not thread-safe: concurrent calls on the same PaperStore instance can
+        both pass the "is None" check and construct duplicate InstrumentLookup
+        objects (wasteful, not corrupting — last write wins). Construct one
+        PaperStore per thread/process, or inject a shared InstrumentLookup via
+        the constructor, if this is ever used from a threaded/async context.
+        """
+        if self._instrument_lookup is None:
+            try:
+                self._instrument_lookup = InstrumentLookup.from_file(DEFAULT_BOD_PATH)
+            except (OSError, ValueError) as exc:
+                # OSError covers FileNotFoundError/gzip's BadGzipFile/EOFError;
+                # ValueError covers json.JSONDecodeError.
+                logger.warning(
+                    "instrument_lookup_load_failed",
+                    bod_path=str(DEFAULT_BOD_PATH),
+                    error=str(exc),
+                    error_type=type(exc).__name__,
+                )
+                return None
+        return self._instrument_lookup
+
+    def _resolve_option_type(
+        self, instrument_key: str
+    ) -> Literal["PE", "CE", "FUT", "EQ"] | None:
+        """Classify an instrument_key as PE/CE/FUT/EQ for PaperPosition.option_type.
+
+        NiftyBees short-circuits to "EQ" without a lookup. Everything else is
+        resolved via `InstrumentLookup.get_by_key`: CE/PE/FUT pass through
+        as-is; any other resolved `instrument_type` (e.g. "EQ", "INDEX") or an
+        unresolved key logs a warning and returns None rather than raising or
+        mis-labelling — this is a read-time classification signal, not a hard
+        gate.
+
+        Args:
+            instrument_key: Upstox instrument key from the open position.
+
+        Returns:
+            "PE" / "CE" / "FUT" / "EQ", or None if the key could not be
+            resolved or classified (BOD file unavailable, key not found, or
+            resolved type is not one of CE/PE/FUT).
+        """
+        if instrument_key == NIFTYBEES_KEY:
+            return "EQ"
+
+        lookup = self._resolve_instrument_lookup()
+        if lookup is None:
+            return None
+
+        inst = lookup.get_by_key(instrument_key)
+        if inst is None:
+            logger.warning(
+                "option_type_resolution_failed",
+                instrument_key=instrument_key,
+                reason="instrument_key not found in BOD JSON",
+            )
+            return None
+
+        instrument_type = inst.get("instrument_type")
+        if instrument_type in ("CE", "PE", "FUT"):
+            return instrument_type
+
+        logger.warning(
+            "option_type_resolution_unrecognised_type",
+            instrument_key=instrument_key,
+            instrument_type=instrument_type,
+            reason="resolved instrument_type is not CE/PE/FUT",
+        )
+        return None
 
     # ── NAV snapshots ─────────────────────────────────────────────────────────
 
