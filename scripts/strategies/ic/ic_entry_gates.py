@@ -36,7 +36,7 @@ from src.backtest.ivr import compute_ivr
 from src.backtest.vix_ingest import fetch_vix_latest, load_vix_series
 from src.instruments.lookup import InstrumentLookup
 from src.intraday.market_store import IntradayMarketStore
-from src.paper.constants import STRATEGY_FUTURES, STRATEGY_PROXY, STRATEGY_SPOT
+from src.paper.constants import STRATEGY_CSP, STRATEGY_FUTURES, STRATEGY_PROXY, STRATEGY_SPOT
 
 _log = structlog.get_logger("scripts.strategies.ic.ic_entry_gates")
 
@@ -353,16 +353,29 @@ def resolve_expiry(
 # Gate 4 — Portfolio-delta scope filter (BUG-005 / B002.2)
 # ---------------------------------------------------------------------------
 
-# Proxy/hedge books that run in parallel to the IC strategies. BUG-002's
+# Non-IC strategies excluded from the IC portfolio-delta gate.
+#
+# paper_nifty_futures/proxy/spot: separate proxy/hedge books. BUG-002's
 # root-cause investigation flagged pooling their delta into the IC
 # delta-neutral gate as an open scope question; B002.2 decided to exclude
 # them (Animesh, 2026-07-02) but the decision was never wired into the two
 # entry scripts until BUG-005. See docs/bugs/bugs.md BUG-002 / BUG-005.
-_NON_IC_STRATEGIES = frozenset({STRATEGY_SPOT, STRATEGY_FUTURES, STRATEGY_PROXY})
+#
+# paper_csp_nifty_v1 (STRATEGY_CSP): a separate, independently-managed
+# strategy. It IS deliberately coupled into strike *selection* elsewhere in
+# this module's callers (mode detection tilts put/call targets when CSP is
+# open) — but as of 2026-07-02 there is no chain-derived delta wired into
+# the portfolio-delta *gate* for it, only the crude net_qty/lot_size
+# fallback, which overstates a short put's real delta ~3x and produces
+# false blocks. Animesh (2026-07-02): during the paper-trading/data-
+# collection phase, ICs should run independently of CSP for gating
+# purposes — excluded here. Revisit before live money, once real
+# chain-derived cross-strategy delta is wired (see DECISIONS.md).
+_NON_IC_STRATEGIES = frozenset({STRATEGY_SPOT, STRATEGY_FUTURES, STRATEGY_PROXY, STRATEGY_CSP})
 
 
 def ic_relevant_strategy_names(all_strategy_names: list[str]) -> list[str]:
-    """Filter out proxy/hedge-book strategies from the IC portfolio-delta gate.
+    """Filter non-IC strategies out of the IC portfolio-delta gate.
 
     Args:
         all_strategy_names: Every open strategy name, as returned by
@@ -370,9 +383,9 @@ def ic_relevant_strategy_names(all_strategy_names: list[str]) -> list[str]:
 
     Returns:
         The subset of *all_strategy_names* that should count toward an IC
-        strategy's own delta-neutral gate — excludes
-        ``paper_nifty_futures``, ``paper_nifty_proxy``, and
-        ``paper_nifty_spot``, which are separate proxy/hedge books whose
-        overlay legs are not the IC's own risk.
+        strategy's own delta-neutral gate — excludes ``paper_nifty_futures``,
+        ``paper_nifty_proxy``, ``paper_nifty_spot`` (separate proxy/hedge
+        books), and ``paper_csp_nifty_v1`` (separate strategy; paper-phase
+        scope decision, see module comment above and ``DECISIONS.md``).
     """
     return [name for name in all_strategy_names if name not in _NON_IC_STRATEGIES]

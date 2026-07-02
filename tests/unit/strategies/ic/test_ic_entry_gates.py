@@ -195,27 +195,39 @@ class TestIcRelevantStrategyNames:
     def test_excludes_proxy_hedge_books(self) -> None:
         """BUG-005: proxy/hedge-book strategies are filtered out."""
         all_strategies = [
-            "paper_csp_nifty_v1",
             "paper_nifty_futures",
             "paper_nifty_proxy",
             "paper_nifty_spot",
             "paper_ic_nifty_v1_weekly",
         ]
         result = ic_relevant_strategy_names(all_strategies)
-        assert result == ["paper_csp_nifty_v1", "paper_ic_nifty_v1_weekly"]
+        assert result == ["paper_ic_nifty_v1_weekly"]
 
-    def test_only_proxy_books_open_returns_empty(self) -> None:
+    def test_excludes_csp_paper_phase_scope(self) -> None:
+        """Paper-phase scope decision (2026-07-02): CSP excluded from the IC
+        delta gate too, so ICs run independently of CSP during data
+        collection. Revisit before live money (see DECISIONS.md)."""
+        all_strategies = ["paper_csp_nifty_v1", "paper_ic_nifty_v1_weekly"]
+        result = ic_relevant_strategy_names(all_strategies)
+        assert result == ["paper_ic_nifty_v1_weekly"]
+
+    def test_only_non_ic_strategies_open_returns_empty(self) -> None:
         """Edge case: nothing IC-relevant open — empty list, not an error."""
-        all_strategies = ["paper_nifty_futures", "paper_nifty_proxy", "paper_nifty_spot"]
+        all_strategies = [
+            "paper_nifty_futures",
+            "paper_nifty_proxy",
+            "paper_nifty_spot",
+            "paper_csp_nifty_v1",
+        ]
         assert ic_relevant_strategy_names(all_strategies) == []
 
     def test_empty_input_returns_empty(self) -> None:
         """No open strategies at all → empty list."""
         assert ic_relevant_strategy_names([]) == []
 
-    def test_no_proxy_books_present_unaffected(self) -> None:
-        """When no proxy/hedge books are open, the list passes through unchanged."""
-        all_strategies = ["paper_csp_nifty_v1", "paper_ic_nifty_v2_monthly"]
+    def test_no_excluded_strategies_present_unaffected(self) -> None:
+        """When no proxy/hedge/CSP books are open, the list passes through unchanged."""
+        all_strategies = ["paper_ic_nifty_v1_weekly", "paper_ic_nifty_v2_monthly"]
         assert ic_relevant_strategy_names(all_strategies) == all_strategies
 
 
