@@ -726,6 +726,15 @@ Source: `docs/archive/council/strategy/2026-06-27_ic-v2-profit-lock-adjustment.m
 
 ---
 
+## B002.3 — `PaperPosition.option_type` resolution strategy (2026-07-02)
+
+Read-time lazy resolution in `PaperStore.get_position`/`get_positions` via `InstrumentLookup`, not a write-time column on `paper_trades` and not a `legs` table join. Rejected: (b) `legs` join — couples `src/paper/` to `src/portfolio/` schema, and paper positions aren't reliably `legs`-backed anyway; (c) resolve inside `src/risk/delta_tracker.py` directly — adds a BOD-JSON filesystem dependency to a module whose tests are currently pure-data; write-time population — `PaperPosition` is documented as reconstructed on demand, never stored, so a write-time column would need a schema migration + backfill for zero benefit over read-time resolution.
+Failure mode: BOD JSON missing/corrupt, unresolved key, or a resolved `instrument_type` outside CE/PE/FUT all degrade to `option_type=None` + WARNING — never raises (added after code-reviewer C1/C2/W1 findings; `get_position`/`get_positions` had zero BOD-file dependency before this and must not become a hard failure point for callers like `monitor.py`/`executor.py`/snapshot scripts).
+Full rationale: `docs/bugs/task.md` B002.3. Consumed by B002.4 (delta calc), not yet implemented.
+Source: this session, SHA 96398b4.
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty

@@ -183,6 +183,7 @@ Fix alongside adjacent refactoring only. Never a standalone commit.
 ## Session Log
 
 | Date | What Changed |
+| 2026-07-02 | BUG-002 B002.3 — PaperPosition.option_type (CE/PE/FUT/EQ) resolved lazily in get_position/get_positions via InstrumentLookup; NiftyBees short-circuits to EQ; code-reviewer C1/C2 (unhandled BOD load I/O errors) + W1 (bad FUT fallback for non-CE/PE/FUT types) fixed pre-commit; 9 new tests (69/69 in test_store.py) — 96398b4 |
 | 2026-06-28 | ic-nifty-v2 IC-V2-16 — Phase 4 docs close: CONTEXT.md (post-expiry gate + DTE window in paper_ic_entry_v2.py; V2 loop in paper_ic_snapshot.py); TODOS.md session log — no code | SHA: a8a2149 |
 | 2026-06-28 | ic-nifty-v2 IC-V2-15 — Telegram alert on gate failures: notifier Callable param added to check_duplicate + resolve_ivr; _gate_alert wrapper in run(); post_expiry + wing floor + delta exits also alert; 3 tests — c2cce55 |
 | 2026-06-28 | ic-nifty-v2 IC-V2-13 final — _post_expiry_gate() moved to ic_entry_gates (calendar-based, no params); V1 monthly gate added; fixed c18baae always-block bug (was comparing today vs future expiry); 6 test files updated — 23e8e93 |

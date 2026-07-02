@@ -9,8 +9,29 @@
 ## BUG-002 — Delta sign/magnitude corrupted by put-call misclassification
 
 - [x] **B002.1** — Root-cause confirmed: `_position_delta` substring-matches `"PE"`/`"CE"` against numeric `instrument_key`, dead code, all options priced as full-delta futures | Confirmed 2026-07-02 (no code change, investigation only)
-- [ ] **B002.2** — Decision needed from Animesh: should `aggregate_delta` in `paper_ic_entry.py` stay cross-strategy (pool `paper_nifty_futures` / `paper_nifty_proxy` / `paper_nifty_spot` into the same gate as the IC book), or scope to IC-relevant positions only? Blocks B002.3.
-- [ ] **B002.3** — Add option-type signal to position data: either extend `PaperPosition` with `option_type` populated from `InstrumentLookup` at trade-record time, or join `legs.asset_type`/`legs.direction` in `PaperStore.get_position`. Depends on B002.2 scope decision.
+- [x] **B002.2** — Decision: scope `aggregate_delta` to IC-relevant positions only; exclude `paper_nifty_futures`/`paper_nifty_proxy`/`paper_nifty_spot` from the IC delta-neutral gate. Decided by Animesh 2026-07-02 (no code change this step).
+- [x] **B002.3** — Add option-type signal to position data | Implemented, code-reviewed (C1/C2/W1 findings resolved), 69/69 tests pass, committed 2026-07-02 | SHA 96398b4
+
+  **Decision: option (a) — extend `PaperPosition`, resolved lazily in `PaperStore.get_position`/`get_positions` at read time (NOT at `record_trade` write time, and NOT a `legs` table join).**
+
+  Rejected alternatives and why:
+  - (b) join `legs` table — rejected: couples `src/paper/` to `src/portfolio/` schema; bugs.md notes paper positions aren't reliably `legs`-backed, so it'd need an InstrumentLookup fallback anyway, making it strictly more code than (a) for the same result.
+  - (c) lazy-resolve inside `src/risk/delta_tracker.py` (no schema change, `_position_delta` calls `InstrumentLookup.get_by_key` directly) — rejected: adds a new `src/risk/` → `src/instruments/` + BOD-JSON-file dependency to a module whose tests (`tests/unit/risk/test_delta_tracker.py`) are currently pure-data with no filesystem dependency; would require mocking `InstrumentLookup` in every delta test for something that's really just a field on the position.
+  - Write-time population (populate `option_type` inside `record_trade`, persist to `paper_trades` table) — rejected: `PaperPosition` docstring already states it is "never stored directly — reconstructed on demand"; write-time population would require a `paper_trades` schema migration (new column) and backfilling historical rows. Read-time resolution fits the existing reconstruction pattern with zero migration.
+
+  **Implementation spec:**
+  1. `src/paper/models.py` — add to `PaperPosition` (frozen dataclass, `strategy_name`/`leg_role`/`net_qty`/`avg_cost`/`avg_sell_price`/`instrument_key`/`entry_date: date | None = None` are the existing fields, lines 115–138):
+     `option_type: Literal["PE", "CE", "FUT", "EQ"] | None = None` — appended AFTER `entry_date` (must stay last / keep a default; existing constructor call in `store.py` uses keyword args so field order doesn't matter there, but any positional test construction depends on it being last).
+  2. `src/paper/store.py` — in `get_position` (lines 579–609) and `get_positions` (lines 499–577), resolve `option_type` per position via `InstrumentLookup.get_by_key(instrument_key)`:
+     - `NIFTYBEES_KEY` (`NSE_EQ|INF204KB14I2`, from `src.paper.constants`) → `"EQ"` (no lookup needed, short-circuit).
+     - Else call `InstrumentLookup.get_by_key(instrument_key)` → dict with `"instrument_type"` key (values `"CE"` / `"PE"` confirmed via `search_options`, `src/instruments/lookup.py` lines 188–233; `get_by_key` impl at lines 270–275, currently O(n) linear scan over `self._instruments` — acceptable at current position counts, don't over-engineer an index for this task).
+     - If `instrument_type` is `"CE"`/`"PE"` → use as-is. If lookup returns a dict but `instrument_type` is something else (e.g. a plain future contract has no CE/PE type) → `"FUT"`. If `get_by_key` returns `None` (key not found in BOD JSON — unrecognised/legacy key) → `option_type=None` + `logger.warning(...)`, do NOT raise. This is the required edge-case behavior per B002.5.
+     - `PaperStore` needs an `InstrumentLookup` instance — check constructor (`PaperStore.__init__`, `src/paper/store.py` lines 224–282) for whether one is already injected/available, or whether it needs to be constructed/passed in (likely needs a new constructor param or lazy singleton — confirm via graph before writing code, per Rule 0).
+  3. Do NOT touch `src/risk/delta_tracker.py::_position_delta` in this step — that's B002.4 (replace `net_qty/lot_size` approximation with real delta once `option_type` is available on the position). B002.3 only adds the signal to the data; B002.4 consumes it.
+
+  **Confirmed non-impact (verified 2026-07-02):** `PaperPosition` is only constructed in `src/paper/store.py` (`get_position`/`get_positions`); all other call sites (`csp_nifty_v1.py`, `overlay_closer.py`, `executor.py`, `reentry_mixin.py`, `monitor.py`, `paper_ic_entry.py`, `track_snapshot.py`, `tracker.py`, `auto_close.py`, etc.) only consume `PaperPosition` — none construct it. New field has a default and is appended last, so it's additive: no existing production or test call site breaks. CSP/CC/PP/Collar/futures behavior is unchanged since none of them branch on `option_type` yet.
+
+  Depends on B002.2 scope decision (done, no code change).
 - [ ] **B002.4** — Replace `net_qty / lot_size` full-delta approximation in `_position_delta` with actual option delta from chain snapshot where available (short 1-lot put ≠ short 1-lot future)
 - [ ] **B002.5** — Tests: happy-path (short put → positive delta, correct magnitude), edge case (unrecognised/legacy `instrument_key` still falls back safely with a warning, does not silently misclassify)
 - [ ] **B002.6** — Run real `@code-reviewer` subagent against `git diff HEAD` (financial-logic gate, mandatory per root `CLAUDE.md`) — resolve CRITICAL/ERROR before commit
