@@ -400,18 +400,17 @@ async def test_portfolio_delta_adjustment_shifts_short_put(
 # ---------------------------------------------------------------------------
 
 
-def test_post_expiry_gate_blocks_before_last_tuesday() -> None:
-    """Gate exits when today is before the last Tuesday of the current month.
+def test_post_expiry_gate_passes_mid_cycle_before_current_month_expiry() -> None:
+    """Gate passes mid-month, before the current cycle's own expiry (BUG-003).
 
-    June 2026: last Tuesday = June 30. On June 25 (Wednesday before),
-    entry is blocked.
+    June 2026: current month's own expiry = June 30, but the prior settled
+    cycle (May 26) is long past — a fresh June series is already open, so
+    June 25 must be allowed, not blocked.
     """
     with patch("scripts.strategies.ic.ic_entry_gates.date") as mock_date:
         mock_date.today.return_value = date(2026, 6, 25)
         mock_date.side_effect = date  # keep date(y, m, d) constructor working
-        with pytest.raises(SystemExit) as exc:
-            _post_expiry_gate()
-    assert exc.value.code == 1
+        _post_expiry_gate()  # must not raise
 
 
 def test_post_expiry_gate_blocks_on_last_tuesday() -> None:
@@ -457,9 +456,7 @@ async def test_ivr_gate_failure_sends_telegram(
     # Simulate resolve_ivr calling its notifier and exiting
     def _fake_ivr(db_path, gate, force_entry, notifier=None):
         if notifier is not None:
-            notifier(
-                f"⚠️ IC V2 Entry BLOCKED\nGate: ivr\nIVR: 0.10 / Gate: {gate:.2f}"
-            )
+            notifier(f"⚠️ IC V2 Entry BLOCKED\nGate: ivr\nIVR: 0.10 / Gate: {gate:.2f}")
         sys.exit(1)
 
     mock_gates["ivr"].side_effect = _fake_ivr

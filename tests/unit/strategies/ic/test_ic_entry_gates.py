@@ -17,6 +17,7 @@ import pytest
 
 from scripts.strategies.ic.ic_entry_gates import (
     _last_tuesday_of_month,
+    _most_recently_settled_expiry,
     _post_expiry_gate,
     check_duplicate,
     resolve_expiry,
@@ -196,21 +197,76 @@ class TestLastTuesdayOfMonth:
         assert _last_tuesday_of_month(2027, 3) == date(2027, 3, 30)
 
 
+class TestMostRecentlySettledExpiry:
+    def test_current_month_expiry_already_passed(self) -> None:
+        """When today is on/after the current month's expiry, that IS the reference."""
+        assert _most_recently_settled_expiry(date(2026, 6, 30)) == date(2026, 6, 30)
+
+    def test_current_month_expiry_not_yet_reached_falls_back(self) -> None:
+        """Mid-month, before the current cycle's own expiry, falls back to prior month."""
+        assert _most_recently_settled_expiry(date(2026, 6, 25)) == date(2026, 5, 26)
+
+    def test_year_rollover(self) -> None:
+        """January, before its own expiry, falls back to December of the prior year."""
+        assert _most_recently_settled_expiry(date(2026, 1, 1)) == date(2025, 12, 30)
+
+
 # ---------------------------------------------------------------------------
 # _post_expiry_gate
 # ---------------------------------------------------------------------------
 
 
 class TestPostExpiryGate:
-    def test_blocks_before_last_tuesday(self) -> None:
-        """Exits when today is before the last Tuesday of the current month."""
-        # June 2026: last Tuesday = June 30. Running on June 25 must block.
+    def test_passes_mid_cycle_before_current_month_expiry(self) -> None:
+        """Passes mid-month, before the *current* cycle's own expiry.
+
+        Regression test for BUG-003: June 2026's own expiry (June 30) has not
+        yet happened on June 25, but the prior settled cycle (May 26) is long
+        past — a fresh June series is already open, so entry must be allowed.
+        The old buggy gate referenced the current month's expiry and blocked
+        the entire cycle here.
+        """
         with patch("scripts.strategies.ic.ic_entry_gates.date") as mock_date:
             mock_date.today.return_value = date(2026, 6, 25)
             mock_date.side_effect = date  # keep date(y, m, d) constructor working
+            _post_expiry_gate()  # must not raise
+
+    def test_passes_day_after_prior_settlement(self) -> None:
+        """Passes the day immediately after the prior cycle's settlement.
+
+        Symptom case from bugs.md: today=2026-07-01, June cycle settled
+        2026-06-30, a fresh July series just opened. Entry must be allowed.
+        """
+        with patch("scripts.strategies.ic.ic_entry_gates.date") as mock_date:
+            mock_date.today.return_value = date(2026, 7, 1)
+            mock_date.side_effect = date
+            _post_expiry_gate()  # must not raise
+
+    def test_blocks_same_day_as_prior_settlement(self) -> None:
+        """Blocks re-entry on the same day the prior cycle settles.
+
+        June 2026: last Tuesday = June 30 — settlement is not complete
+        intraday, so entry on June 30 itself must still be blocked.
+        """
+        with patch("scripts.strategies.ic.ic_entry_gates.date") as mock_date:
+            mock_date.today.return_value = date(2026, 6, 30)
+            mock_date.side_effect = date
             with pytest.raises(SystemExit) as exc_info:
                 _post_expiry_gate()
         assert exc_info.value.code == 1
+
+    def test_year_rollover_passes_after_december_settlement(self) -> None:
+        """Handles Dec → Jan rollover when resolving the prior settled cycle.
+
+        January 2026's own expiry (Jan 27) is far in the future on Jan 1, so
+        the gate must fall back to December 2025's last Tuesday (Dec 30,
+        2025) as the prior settled cycle, cross a year boundary correctly,
+        and allow entry on Jan 1, 2026.
+        """
+        with patch("scripts.strategies.ic.ic_entry_gates.date") as mock_date:
+            mock_date.today.return_value = date(2026, 1, 1)
+            mock_date.side_effect = date
+            _post_expiry_gate()  # must not raise
 
     def test_blocks_on_last_tuesday(self) -> None:
         """Exits on expiry day itself (settlement not complete intraday)."""

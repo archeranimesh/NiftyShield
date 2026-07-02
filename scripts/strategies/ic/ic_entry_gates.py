@@ -70,27 +70,53 @@ def _last_tuesday_of_month(year: int, month: int) -> date:
 # ---------------------------------------------------------------------------
 
 
-def _post_expiry_gate() -> None:
-    """Block entry if the current month's Nifty monthly expiry has not yet passed.
+def _most_recently_settled_expiry(today: date) -> date:
+    """Return the last Nifty monthly expiry that has settled on or before *today*.
 
-    Computes the last Tuesday of the current calendar month and exits with
-    code 1 if today is on or before that date. Entry is valid only on the
-    Wednesday after monthly settlement (today > last_tuesday).
+    Checks the current calendar month's last Tuesday first; if that date is
+    still in the future relative to *today*, the settled cycle is the
+    previous calendar month's last Tuesday instead. This is the reference
+    point for the same-day settlement guard — never the expiry of the cycle
+    being entered.
+
+    Args:
+        today: The date to evaluate against.
+
+    Returns:
+        The most recently settled (or currently settling) expiry date.
+    """
+    current = _last_tuesday_of_month(today.year, today.month)
+    if current <= today:
+        return current
+    year, month = today.year, today.month - 1
+    if month == 0:
+        year, month = year - 1, 12
+    return _last_tuesday_of_month(year, month)
+
+
+def _post_expiry_gate() -> None:
+    """Block entry only on the same day the most recent monthly expiry settles.
+
+    Computes the most recently settled Nifty monthly expiry (current month's
+    last Tuesday if it has already occurred, otherwise the previous month's)
+    and exits with code 1 only if today is on or before that settlement date.
+    A fresh new-cycle entry (today > last settled expiry) is always allowed,
+    even on the very next day after settlement.
 
     Holiday handling: if the last Tuesday is a trading holiday, no one runs
-    entry scripts that day. The next trading day (Wednesday or later) will
-    always satisfy ``today > last_tuesday`` — so the calendar gate passes
-    without any special-case code.
+    entry scripts that day. The next trading day will always satisfy
+    ``today > settled_expiry`` — so the calendar gate passes without any
+    special-case code.
 
     Raises:
-        SystemExit(1): If today ≤ last Tuesday of the current month.
+        SystemExit(1): If today ≤ the most recently settled expiry.
     """
     today = date.today()
-    expiry = _last_tuesday_of_month(today.year, today.month)
+    expiry = _most_recently_settled_expiry(today)
     if today <= expiry:
         print(
-            f"ERROR: post_expiry_gate: current month expiry {expiry} has not yet "
-            f"passed (today={today}). Entry is only valid after settlement.",
+            f"ERROR: post_expiry_gate: settlement for {expiry} has not yet "
+            f"completed (today={today}). Entry is only valid after settlement.",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -187,9 +213,7 @@ def resolve_ivr(
             if notifier is not None:
                 try:
                     notifier(
-                        f"⚠️ IC V2 Entry BLOCKED\n"
-                        f"Gate: ivr\n"
-                        f"IVR: {ivr:.2f} / Gate: {ivr_gate:.2f}"
+                        f"⚠️ IC V2 Entry BLOCKED\nGate: ivr\nIVR: {ivr:.2f} / Gate: {ivr_gate:.2f}"
                     )
                 except Exception:  # noqa: BLE001
                     pass
