@@ -27,3 +27,15 @@
 - [ ] **B003.5** — Tests: happy-path (first trading day after prior settlement → entry allowed), edge case (same day as prior settlement → still blocked), edge case (year rollover, e.g. Dec → Jan)
 - [ ] **B003.6** — Run real `@code-reviewer` subagent against `git diff HEAD` before commit
 - [ ] **B003.7** — Commit, update `bugs.md` status to ✅ Fixed + SHA
+
+---
+
+## BUG-004 — `resolve_ivr` gates on a stale 252-day window with no recency check
+
+- [x] **B004.1** — Root-cause confirmed: `compute_ivr` validates window row-count (≥252) but never window recency; VIX parquet series stops at 2026-06-25, `mtime` 2026-06-26 21:16, untouched since — 5 trading days stale as of 2026-07-02 despite a documented weekly refresh cron | Confirmed 2026-07-02 (no code change, investigation only)
+- [ ] **B004.2** — Investigate why the 2026-06-29 (Monday) `refresh_vix.py` cron run didn't advance the file past 2026-06-25: check cron logs, confirm the cron is actually installed on the live host (not just documented in `TODOS.md`), re-run manually and observe whether it succeeds
+- [ ] **B004.3** — Add a recency check to `compute_ivr` (`src/backtest/ivr.py`) or `resolve_ivr` (`scripts/strategies/ic/ic_entry_gates.py`): if `window.index.max()` is more than N trading days behind `today`, log a WARNING (or treat as gate-data-unavailable, consistent with the existing `ivr is None` hard-block path) instead of silently gating on a stale window
+- [ ] **B004.4** — Tests: happy-path (fresh window → no warning), edge case (stale window past threshold → warning/block fires), edge case (window exactly at threshold boundary)
+- [ ] **B004.5** — Run real `@code-reviewer` subagent against `git diff HEAD` before commit
+- [ ] **B004.6** — Commit, update `bugs.md` status to ✅ Fixed + SHA
+- [ ] **B004.7** — **Once B004.2 + B004.3 are both done:** recalculate IVR for every IC entry decision (allowed or rejected) made between 2026-06-26 and the cron-fix date using the now-current window. Confirm no entry was wrongly blocked or wrongly allowed during the stale-data period. Log findings in `bugs.md` under B004 — do not close this bug until that recheck is done, even after the code fix lands.
