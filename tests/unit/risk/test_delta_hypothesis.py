@@ -46,6 +46,7 @@ def option_position_strategy(draw, option_type: str | None = None):
         avg_cost=avg_cost,
         avg_sell_price=avg_sell_price,
         instrument_key=instrument_key,
+        option_type=opt_type,  # type: ignore[arg-type]
     )
 
 
