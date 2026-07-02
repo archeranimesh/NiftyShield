@@ -5,6 +5,12 @@
 
 ---
 
+## Process
+
+**`docs/bugs/` for defect tracking, story conventions applied (2026-07-02):** Bugs found in live/shipped code now get a dedicated folder (`prompt.md` orientation + `bugs.md` registry + `task.md` checklist) mirroring `docs/plan/<story>/` structure, rather than living only in the flat root `BUGS.md`. Rationale: `docs/plan/` stories assume linear forward spec work; once code is live and generating real defects (confirmed 2026-07-02 during IC entry log triage — `BUG-002` delta misclassification, `BUG-003` inverted post-expiry gate), a bug needs severity/root-cause/impact fields a story task line doesn't carry, and a session-start protocol distinct from "find the next spec item." Root `BUGS.md` is not replaced — it stays until its one open entry (`BUG-001`, unrelated `daily_snapshot.py` backfill gap) is fixed and deleted per its own rule. ID numbering is one shared sequence across both files.
+
+---
+
 ## Developer Tooling
 
 **pydantic-settings singleton for all env vars (2026-05-30, CH-7a):** `Settings(BaseSettings)` in `src/config.py` is the sole place where environment variables are read. Import the `settings` singleton everywhere else — never call `os.getenv()` directly. Rationale: single validation point at startup catches missing credentials immediately rather than failing silently mid-run; pydantic-settings handles `.env` loading, type coercion, and pattern validation in one place. All fields are optional (None by default) so the codebase starts in test mode without credentials; callers that require a specific token guard against None themselves.

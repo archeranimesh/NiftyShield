@@ -3,6 +3,12 @@
 > Defects that are understood but not yet fixed. Each entry has enough context to
 > implement a fix without re-investigation. Reference the entry in commit messages
 > when the fix lands, then delete the entry here.
+>
+> **New bugs go to [docs/bugs/](docs/bugs/) instead of here** (added 2026-07-02) — that
+> folder follows `docs/plan/` story conventions (`prompt.md`/`bugs.md`/`task.md`) with
+> severity, root-cause, and fix-checklist structure this flat file doesn't have. ID
+> numbering is a single shared sequence across both files — `docs/bugs/` continues from
+> `BUG-002`. This file stays until `BUG-001` is fixed and deleted per the rule above.
 
 ---
 

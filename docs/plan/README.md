@@ -2,6 +2,9 @@
 
 > Each story folder is self-contained. Start from its `prompt.md`.
 > Archived original files: `docs/archive/plan/`.
+> Confirmed defects in shipped code (not forward spec work): [`docs/bugs/`](../bugs/) — same
+> folder conventions, separate registry. See also root [`BUGS.md`](../../BUGS.md) (legacy,
+> superseded).
 
 ---
 
