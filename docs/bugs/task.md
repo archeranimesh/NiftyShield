@@ -1,9 +1,8 @@
 # docs/bugs/ — Task Checklist
 
 > Find the first unchecked `- [ ]` line. That is your only task for this session.
-> Tick the box and append `| SHA: <sha>` when done. Add one line to `TODOS.md` session log.
-> Full bug detail for each item: `docs/bugs/bugs.md`. ID numbering continues from root
-> `BUGS.md` (`BUG-001`) — see `docs/bugs/prompt.md`.
+> Tick the box and append `| SHA <commit_sha>` when done. Add one line to `TODOS.md`
+> session log. Full bug detail for each item: `docs/bugs/bugs.md`.
 
 ---
 

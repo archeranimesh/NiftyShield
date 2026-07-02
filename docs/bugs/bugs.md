@@ -3,6 +3,16 @@
 > One entry per confirmed defect. Do not log speculative issues here — confirm root cause
 > first (graph trace / repro), then log. Suspicions belong in `TODOS.md` until confirmed.
 > Status values: `🔴 Open` → `🟡 Fix in progress` → `✅ Fixed` (link commit SHA) → `⚪ Won't fix` (with reason).
+>
+> **Scope:** confirmed defects in live/shipped code (paper trading, cron scripts, live
+> gates) — not unimplemented spec items, those are `docs/plan/` story tasks.
+>
+> **Relationship to root `BUGS.md`:** a bug registry already existed at the repo root
+> (`BUGS.md`, single open entry `BUG-001` — `daily_snapshot.py` backfill gap, unrelated,
+> low severity). This folder is the canonical home for *new* entries going forward; root
+> `BUGS.md` is not migrated, it stays until `BUG-001` is fixed and deleted per its own
+> convention. ID numbering is one shared sequence across both files — this registry
+> starts at `BUG-002`.
 
 ---
 
