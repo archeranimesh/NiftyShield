@@ -7,8 +7,23 @@
 
 ## Session start protocol
 
-1. Read `task.md`. Find the first unchecked `- [ ]` line. That is your only task —
-   do not look at any other unchecked item.
+1. Read `task.md`. Find the first unchecked `- [ ]` line **that belongs to a
+   `BUG-ID` checklist** (a line under a `## BUG-NNN — ...` heading, formatted
+   `**BNNN.x**`). That is your only task — do not look at any other unchecked
+   item, and do not substitute a different one.
+
+   Skip over — but do not silently ignore — any unchecked line that sits
+   outside a `BUG-ID` section (e.g. under a "decision"/"scope" heading like
+   "Paper-phase scope decision") or whose text says it's blocked on a human/
+   live-host action (e.g. "pending Animesh", "pending live host", "SHA
+   pending"). Those are not Claude-actionable implementation steps; mention
+   them once at session start as still-open ("also outstanding: <line>,
+   blocked on X") so they don't get lost, then move on to the next
+   `BUG-ID` item.
+
+   If a `BUG-ID` section has every `B<N>.x` line checked, treat it as closed
+   and move to the next `BUG-ID` section in file order — do not stop on a
+   checked box.
 2. Read that task's `bugs.md` entry (matching `BUG-ID`) before writing any code.
    Re-confirm root cause against current code first — `bugs.md` is a snapshot at
    discovery time. Use the graph (`search_graph` / `get_code_snippet` / `trace_path`),

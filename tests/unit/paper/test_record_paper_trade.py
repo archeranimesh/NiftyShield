@@ -22,6 +22,8 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 # Import the module under test — sys.path already has repo root from conftest
 import scripts.record.record_paper_trade as cli_module
 from src.paper.store import PaperStore
@@ -40,6 +42,22 @@ _KEY = "NSE_FO|12345"
 _DATE = "2026-05-01"
 _PRICE = "120.50"
 _QTY = "75"
+
+
+@pytest.fixture(autouse=True)
+def _no_network_price_drift_check():
+    """Safety net for BUG-008's live-LTP price-drift re-check (no network in tests).
+
+    Tests that care about a specific LTP value still patch UpstoxMarketClient
+    themselves via @patch — that per-test patch takes precedence within the
+    test body (mock.patch.start() layers on top of this fixture's patch and
+    is restored first on teardown). This fixture only protects tests that pass
+    an explicit --price with --no-dry-run and don't care about the drift
+    check at all, so it would otherwise hit a real UpstoxMarketClient().
+    """
+    with patch("scripts.record.record_paper_trade.UpstoxMarketClient") as mock_cls:
+        mock_cls.return_value.get_ltp_sync.return_value = {}
+        yield
 
 
 def _run(
@@ -776,3 +794,118 @@ def test_gate_protective_put_bypasses_cap(mock_aggregate, mock_client_cls, tmp_p
 
     store = PaperStore(db)
     assert len(store.get_trades(_STRATEGY)) == 1
+
+
+# ── Price drift re-check (BUG-008) ─────────────────────────────────────────────
+
+
+def test_evaluate_price_drift_within_tolerance_is_silent() -> None:
+    """Happy-path: live price within tolerance → allowed, no message."""
+    allowed, message = cli_module._evaluate_price_drift(Decimal("120.00"), Decimal("122.00"))
+    assert allowed is True
+    assert message == ""
+
+
+def test_evaluate_price_drift_elevated_but_allowed_warns() -> None:
+    """Drift above half-tolerance but under the hard limit → allowed, WARNING."""
+    allowed, message = cli_module._evaluate_price_drift(Decimal("100.00"), Decimal("107.00"))
+    assert allowed is True
+    assert message.startswith("WARNING:")
+
+
+def test_evaluate_price_drift_past_tolerance_blocks() -> None:
+    """Edge case: drift exceeds tolerance → not allowed, ERROR message."""
+    allowed, message = cli_module._evaluate_price_drift(Decimal("120.00"), Decimal("150.00"))
+    assert allowed is False
+    assert message.startswith("ERROR:")
+    assert "--force-entry" in message
+
+
+def test_evaluate_price_drift_zero_claimed_price_is_noop() -> None:
+    """Malformed/zero claimed price: skip drift math, defer to model validation."""
+    allowed, message = cli_module._evaluate_price_drift(Decimal("0"), Decimal("100.00"))
+    assert allowed is True
+    assert message == ""
+
+
+@patch("scripts.record.record_paper_trade.UpstoxMarketClient")
+def test_main_blocks_on_stale_price_at_execution(mock_client_cls, tmp_path: Path) -> None:
+    """A dry-run-frozen --price that has drifted past tolerance blocks at --no-dry-run time."""
+    db = tmp_path / "db.sqlite"
+    mock_client = mock_client_cls.return_value
+    # Claimed price 120.50, live price 200.00 → ~66% drift, well past the 10% tolerance.
+    mock_client.get_ltp_sync.return_value = {_KEY: Decimal("200.00")}
+
+    code, out, err = _run(_base_args("SELL") + ["--no-dry-run"], db)
+    assert code == 1
+    assert "price drift" in err.lower()
+    assert "exceeds tolerance" in err.lower()
+
+    store = PaperStore(db)
+    assert store.get_trades(_STRATEGY) == []
+
+
+@patch("scripts.record.record_paper_trade.UpstoxMarketClient")
+def test_main_force_entry_overrides_price_drift_block(mock_client_cls, tmp_path: Path) -> None:
+    """--force-entry overrides the drift block and the trade still records."""
+    db = tmp_path / "db.sqlite"
+    mock_client = mock_client_cls.return_value
+    mock_client.get_ltp_sync.return_value = {_KEY: Decimal("200.00")}
+
+    code, out, err = _run(_base_args("SELL") + ["--no-dry-run", "--force-entry"], db)
+    assert code == 0, f"stderr: {err}"
+    assert "overridden via --force-entry" in err
+
+    store = PaperStore(db)
+    assert len(store.get_trades(_STRATEGY)) == 1
+
+
+@patch("scripts.record.record_paper_trade.UpstoxMarketClient")
+def test_main_proceeds_within_price_tolerance(mock_client_cls, tmp_path: Path) -> None:
+    """Live price close to claimed --price (within tolerance) proceeds without blocking."""
+    db = tmp_path / "db.sqlite"
+    mock_client = mock_client_cls.return_value
+    # Claimed 120.50, live 122.00 → ~1.2% drift, well within tolerance.
+    mock_client.get_ltp_sync.return_value = {_KEY: Decimal("122.00")}
+
+    code, out, err = _run(_base_args("SELL") + ["--no-dry-run"], db)
+    assert code == 0, f"stderr: {err}"
+
+    store = PaperStore(db)
+    assert len(store.get_trades(_STRATEGY)) == 1
+
+
+def test_main_skips_drift_check_in_dry_run(tmp_path: Path) -> None:
+    """Dry-run preview never triggers the live drift re-check (no network call)."""
+    db = tmp_path / "db.sqlite"
+    # No UpstoxMarketClient patch needed here beyond the autouse fixture — if the
+    # code path attempted a real network call, this would hang/fail in CI.
+    code, out, _ = _run(_base_args("SELL"), db)  # no --no-dry-run
+    assert code == 0
+    assert "Dry run" in out
+
+
+def test_main_skips_drift_check_on_close(tmp_path: Path) -> None:
+    """--close is exempt from the drift check — it already fetches a live LTP itself."""
+    db = tmp_path / "db.sqlite"
+    # Seed a short position first (mirrors test_close_flag_is_buy_to_close).
+    _run(_base_args("SELL") + ["--no-dry-run"], db)
+
+    close_args = [
+        "--strategy",
+        _STRATEGY,
+        "--leg",
+        _LEG,
+        "--key",
+        _KEY,
+        "--date",
+        _DATE,
+        "--qty",
+        _QTY,
+        "--price",
+        "12.50",
+        "--close",
+        "--no-dry-run",
+    ]
+    code, out, err = _run(close_args, db)
+    assert code == 0, f"stderr: {err}"

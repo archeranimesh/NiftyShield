@@ -3,6 +3,24 @@
 > Find the first unchecked `- [ ]` line. That is your only task for this session.
 > Tick the box and append `| SHA <commit_sha>` when done. Add one line to `TODOS.md`
 > session log. Full bug detail for each item: `docs/bugs/bugs.md`.
+>
+> **Priority note:** `BUG-010` is pinned first below (out of ID sequence), mirroring
+> `bugs.md`'s own priority note — fixing it makes every other entry in this checklist
+> faster to triage going forward. Pick it up first.
+
+---
+
+## BUG-010 — Six incompatible log output formats coexist in `logs/`, no enforced logging entrypoint
+
+- [x] **B010.1** — Root-cause confirmed: `setup_logging()` exists and is correctly built but nothing enforces every entrypoint script calls it, and nothing prevents `print()` or raw stdlib `logging.getLogger()` in place of it; three compounding failure modes (scripts never calling `setup_logging()`, code reaching for stdlib `logging` instead of `structlog`, human-facing report/notification text dumped as if it were a log line) — 6 distinct line formats found across 19 sampled log files, `logs/apiconnect.log` is a documented third-party (Nuvama SDK) exception, not in scope | Confirmed 2026-07-03 (no code change, investigation only)
+- [ ] **B010.2** — Migrate `src/client/upstox_market.py` (3 call sites, ~lines 131/165/205) off bare stdlib `logging.getLogger(__name__)` onto `structlog.stdlib.get_logger(__name__)`
+- [ ] **B010.3** — Migrate the five `scripts/strategies/ic/*.py` files: add the missing `setup_logging()` call at entrypoint, and convert raw `print(f"ERROR: ...")`/`print(f"INFO: ...")` calls to `logger.error/info(...)` with keyword args (per `LOGGING.md`)
+- [ ] **B010.4** — Migrate `scripts/portfolio/daily_snapshot.py` off its bespoke `[timestamp] message` format onto the shared `setup_logging()` pipeline
+- [ ] **B010.5** — Keep emoji/table report strings (`paper_ic_snapshot.py`, `paper_ic_monthly_comparison.py`, the Rich-style table in `paper_snapshot.log`) but wrap each as a single structured log event (e.g. `logger.info("report.sent", channel="telegram", strategy=..., body=report_text)`) instead of a bare unlevelled `print()`
+- [ ] **B010.6** — Document `logs/apiconnect.log` (Nuvama APIConnect SDK's own internal logger) as an intentional third-party exception in `LOGGING.md` — not to be reformatted
+- [ ] **B010.7** — Tests: happy-path (entrypoint script emits structlog-pipeline-shaped lines after migration), edge case (a log call made before `setup_logging()` — if that's even reachable post-fix — doesn't crash, degrades gracefully)
+- [ ] **B010.8** — Run real `@code-reviewer` subagent (or `general-purpose` + `REVIEW.md` substitute) against `git diff HEAD` — note per bugs.md this should also become a `code-reviewer` checklist item going forward (verify every entrypoint script calls `setup_logging()`), not just a one-time fix
+- [ ] **B010.9** — Commit, update `bugs.md` status to ✅ Fixed + SHA
 
 ---
 
@@ -87,11 +105,11 @@
 ## BUG-006 — Intraday chain writer only persists yearly-expiry bucket
 
 - [x] **B006.1** — Root-cause confirmed: `data/historical/option_chain/intraday/2026/07/03/upstox_*.parquet` (every 5-min file, incl. 10:25/10:30 bracketing the weekly IC dry-run) contains only `expiry_date=2027-06-29` (yearly bucket); the weekly 07-Jul-26 expiry actually traded was never snapshotted | Confirmed 2026-07-03 (no code change, investigation only)
-- [ ] **B006.2** — Trace exact hardcode/config in `scripts/pipeline/upstox_chain_intraday.py` that limits snapshot to one expiry
-- [ ] **B006.3** — Fix: snapshot every expiry bucket referenced by `CONFIGS`/`CONFIGS_V2` (weekly/monthly/leaps/yearly), not just yearly gamma-watch expiry
-- [ ] **B006.4** — Tests: happy-path (multiple configured expiries → multiple expiries written to snapshot), edge case (expiry with no chain data available → skip without crashing whole run)
-- [ ] **B006.5** — Run real `@code-reviewer` subagent (or `general-purpose` + `REVIEW.md` substitute) against `git diff HEAD`
-- [ ] **B006.6** — Commit, update `bugs.md` status to ✅ Fixed + SHA
+- [x] **B006.2** — Trace exact hardcode/config in `scripts/pipeline/upstox_chain_intraday.py` that limits snapshot to one expiry | Root cause was not in `_PREFERENCE`/`main()` (already loops all 3 expiries) — it's in `ChainWriter.write_intraday_snapshot`/`write_eod_snapshot` (`src/backtest/chain_writer.py`): output path keyed only by HHMM/date, so 3 expiries fetched in the same run overwrite the same file; `yearly` (last in loop order) always wins | Confirmed 2026-07-03 (no code change, investigation only)
+- [x] **B006.3** — Fix: snapshot every expiry bucket referenced by `CONFIGS`/`CONFIGS_V2` (weekly/monthly/leaps/yearly), not just yearly gamma-watch expiry | Added `label` param to both `ChainWriter` writers, appended to filename (`upstox_{HHMM}_{label}.parquet` / `upstox_{date}_{label}.parquet`); wired `label` through from both entry scripts' per-expiry loop | SHA 7e0801c
+- [x] **B006.4** — Tests: happy-path (multiple configured expiries → multiple expiries written to snapshot), edge case (expiry with no chain data available → skip without crashing whole run) | Added distinct-label no-collision + same-label idempotency tests (intraday + eod) in `test_chain_writer.py`; label-passthrough assertions in both script test files; 29/29 pass | SHA 7e0801c
+- [x] **B006.5** — Run real `@code-reviewer` subagent (or `general-purpose` + `REVIEW.md` substitute) against `git diff HEAD` | `code-reviewer` subagent not exposed in this Cowork environment — manual review substitute against `REVIEW.md` checklist. 1 G2 line-length violation (6 lines >100 chars in new tests) found and fixed; pre-commit hook separately caught a pre-existing ruff B007 (unused loop var `strike_price`) in the touched file, fixed alongside. `ruff check`/`ruff format` both clean after fixes. | SHA 7e0801c
+- [x] **B006.6** — Commit, update `bugs.md` status to ✅ Fixed + SHA | Committed by Animesh on live host (this Cowork sandbox's `.git` mount hit repeated lock contention from a concurrent process — same class of limitation as B004.6) | SHA 7e0801c
 
 ---
 
@@ -108,8 +126,19 @@
 ## BUG-008 — Dry-run output bakes in stale price/IVR with no re-validation at execution time
 
 - [x] **B008.1** — Root-cause confirmed: `record_paper_trade.py:645` only fetches live LTP when `--price` is omitted; the dry-run always emits an explicit frozen `--price`, and none of `paper_ic_entry.py`'s entry gates (IVR/DTE/delta/portfolio-delta) re-run if the printed commands are executed later | Confirmed 2026-07-03 (no code change, investigation only)
-- [ ] **B008.2** — Decision needed (Animesh): (a) `record_paper_trade.py` re-fetches live LTP and warns/blocks on drift vs. passed `--price`, or (b) dry-run commands omit `--price` entirely, relying on the existing live-fetch path
-- [ ] **B008.3** — Implement chosen option; re-run IVR/DTE/delta gates at actual execution time, not just dry-run generation time
-- [ ] **B008.4** — Tests: happy-path (price within tolerance → proceeds), edge case (price drifted past tolerance → warns/blocks per decision)
-- [ ] **B008.5** — Run real `@code-reviewer` subagent (financial-logic gate, mandatory) against `git diff HEAD`
+- [x] **B008.2** — Decision needed (Animesh): (a) `record_paper_trade.py` re-fetches live LTP and warns/blocks on drift vs. passed `--price`, or (b) dry-run commands omit `--price` entirely, relying on the existing live-fetch path | Decided: option (a). Animesh, 2026-07-03 (no code change this step)
+- [x] **B008.3** — Implement chosen option; re-run IVR/DTE/delta gates at actual execution time, not just dry-run generation time | `_evaluate_price_drift()` (pure) + wired into `main()`, gated on caller-supplied `--price` + `--no-dry-run` + not `--close`; 10%/5% block/warn tolerance, `--force-entry` overrides. IVR gate already re-runs independently at execution time (pre-existing); DTE/portfolio-delta re-validation out of scope per this decision — see bugs.md fix summary | SHA pending
+- [x] **B008.4** — Tests: happy-path (price within tolerance → proceeds), edge case (price drifted past tolerance → warns/blocks per decision) | 4 unit tests on `_evaluate_price_drift` + 5 `main()` integration tests (block/override/within-tolerance/dry-run-skip/close-skip); autouse network-isolation fixture added. 43/43 `tests/unit/paper/test_record_paper_trade.py` pass | SHA pending
+- [x] **B008.5** — Run real `@code-reviewer` subagent (financial-logic gate, mandatory) against `git diff HEAD` | `code-reviewer` subagent not exposed in this Cowork environment — `general-purpose` + `REVIEW.md` substitute against real `git diff HEAD`. No CRITICAL/ERROR; 1 WARNING (exception-catch breadth, G5-compliant/documented, not blocking) | SHA pending
 - [ ] **B008.6** — Commit, update `bugs.md` status to ✅ Fixed + SHA
+
+---
+
+## BUG-009 — `paper_ic_snapshot.py` can never resolve expiry from `instrument_key`
+
+- [x] **B009.1** — Root-cause confirmed: `_EXPIRY_RE_ROBUST` regex expects a trading-symbol string (`NIFTY28JUL2026...`) embedded in `p.instrument_key`; actual stored keys are Upstox's numeric form (`NSE_FO|63930`) with no date substring — regex can never match, `expiry` stays `None` for every leg, `no_expiry_found` branch always fires regardless of position health | Confirmed 2026-07-03 (no code change, investigation only)
+- [ ] **B009.2** — Decision needed (Animesh): (a) reverse-lookup the numeric `instrument_key` against the offline instrument master (`src/instruments/`) to recover the real trading symbol/expiry, or (b) store expiry directly on the position/trade row at entry time (`paper_trades`/`PaperPosition`) so downstream snapshot code doesn't need to reconstruct it — bugs.md leans toward (b) to avoid adding an instrument-master lookup dependency to a reporting-only script, but flag for confirmation since (b) implies a schema/write-path change vs. (a)'s read-only fix
+- [ ] **B009.3** — Implement chosen option in `scripts/strategies/ic/paper_ic_snapshot.py::process_variant` (and the write path if (b) is chosen)
+- [ ] **B009.4** — Tests: happy-path (numeric `instrument_key` → expiry correctly resolved, real audit report generated), edge case (unresolvable/legacy key → falls back to `no_expiry_found` without crashing, same as today's safe-but-wrong behavior)
+- [ ] **B009.5** — Run real `@code-reviewer` subagent (or `general-purpose` + `REVIEW.md` substitute) against `git diff HEAD`
+- [ ] **B009.6** — Commit, update `bugs.md` status to ✅ Fixed + SHA

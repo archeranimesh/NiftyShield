@@ -484,6 +484,48 @@ def _resolve_instrument_key(args: argparse.Namespace) -> str | None:
     return None
 
 
+_PRICE_DRIFT_TOLERANCE_PCT = Decimal("0.10")  # 10% — Animesh-approved (BUG-008)
+
+
+def _evaluate_price_drift(
+    claimed_price: Decimal,
+    live_price: Decimal,
+    tolerance_pct: Decimal = _PRICE_DRIFT_TOLERANCE_PCT,
+) -> tuple[bool, str]:
+    """Compare a caller-supplied ``--price`` against a freshly fetched live price.
+
+    Pure function — no I/O. Re-validates a price that may have been frozen at
+    dry-run generation time (BUG-008: a dry-run's printed ``--price`` can be
+    stale by the time the command is actually executed).
+
+    Args:
+        claimed_price: Price passed via --price (what the trade will be recorded at).
+        live_price: Freshly fetched LTP for the same instrument.
+        tolerance_pct: Fractional tolerance (0.10 = 10%) before drift hard-blocks.
+
+    Returns:
+        (allowed, message). allowed=False means drift exceeded tolerance — the
+        caller must sys.exit(1) unless --force-entry overrides. message is ""
+        when drift is negligible (< half of tolerance), a WARNING string when
+        drift is elevated but still allowed, or an ERROR string when blocked.
+    """
+    if claimed_price <= 0:
+        # Malformed/zero price — handled by PaperTrade model validation downstream.
+        return True, ""
+    drift_pct = abs(live_price - claimed_price) / claimed_price
+    if drift_pct > tolerance_pct:
+        return False, (
+            f"ERROR: price drift {drift_pct:.1%} exceeds tolerance "
+            f"({tolerance_pct:.0%}) — claimed=₹{claimed_price}, live=₹{live_price}. "
+            "Use --force-entry to override."
+        )
+    if drift_pct > tolerance_pct / 2:
+        return True, (
+            f"WARNING: price drift {drift_pct:.1%} — claimed=₹{claimed_price}, live=₹{live_price}."
+        )
+    return True, ""
+
+
 def _get_ivr_and_enforce(
     trade_date: date,
     action: TradeAction,
@@ -642,6 +684,11 @@ def main() -> None:
             )
             sys.exit(1)
 
+    # BUG-008: track whether --price was caller-supplied (vs. auto-fetched from
+    # live LTP below) — only a caller-supplied price can be *stale*, so only
+    # that case needs a drift re-check against a fresh LTP fetch.
+    price_was_explicit = args.price is not None
+
     if args.price is None:
         if args.close:
             # Auto-price from LTP
@@ -669,6 +716,47 @@ def main() -> None:
                 file=sys.stderr,
             )
             sys.exit(1)
+
+    # BUG-008: re-validate a caller-supplied --price against a fresh live LTP.
+    # A dry-run's printed --price is a snapshot taken at generation time; if the
+    # printed command is executed later, that price may no longer reflect the
+    # market. Only matters at actual execution (--no-dry-run) — a dry-run
+    # preview never writes to the DB, so there is nothing to protect yet, and
+    # skipping it here avoids a live network call on every preview. --close
+    # already fetches a live LTP above, so it's exempt too.
+    if price_was_explicit and not args.close and not args.dry_run:
+        live_price: Decimal | None = None
+        try:
+            drift_client = UpstoxMarketClient()
+            drift_ltp_dict = drift_client.get_ltp_sync([instrument_key])
+            raw_live_price = drift_ltp_dict.get(instrument_key)
+            if raw_live_price is not None:
+                live_price = Decimal(str(raw_live_price))
+        # Intentional: an unverifiable live price warns, it does not block —
+        # unlike the --close auto-price path, a price was already supplied here.
+        # Also catches malformed LTP responses (non-numeric value → Decimal
+        # conversion failure), not just fetch/network failures.
+        except Exception as exc:
+            print(f"WARNING: could not verify live price for drift check — {exc}", file=sys.stderr)
+
+        if live_price is None:
+            print(
+                "WARNING: live LTP unavailable — proceeding with caller-supplied "
+                "--price unverified.",
+                file=sys.stderr,
+            )
+        else:
+            allowed, message = _evaluate_price_drift(Decimal(args.price), live_price)
+            if message:
+                print(message, file=sys.stderr)
+            if not allowed:
+                if args.force_entry:
+                    print(
+                        "WARNING: price drift block overridden via --force-entry.",
+                        file=sys.stderr,
+                    )
+                else:
+                    sys.exit(1)
 
     ivr_at_entry = _get_ivr_and_enforce(
         trade_date,
