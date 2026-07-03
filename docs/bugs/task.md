@@ -81,3 +81,35 @@
 - [x] **Tests** — Existing `test_excludes_proxy_hedge_books` updated (CSP no longer expected to pass through); new `test_excludes_csp_paper_phase_scope`; edge-case tests updated to include CSP in the all-excluded/none-excluded boundaries. 110/110 `tests/unit/strategies/ic/` + `tests/unit/risk/` pass. | SHA pending
 - [x] **Review** — `general-purpose` + `REVIEW.md` substitute. No CRITICAL/ERROR. DECISIONS.md paper trail confirmed adequate (dated, named decision-maker, explicit revisit-before-live flag). Test coverage confirmed adequate. | SHA pending
 - [ ] **Commit** — pending Animesh, live host
+
+---
+
+## BUG-006 — Intraday chain writer only persists yearly-expiry bucket
+
+- [x] **B006.1** — Root-cause confirmed: `data/historical/option_chain/intraday/2026/07/03/upstox_*.parquet` (every 5-min file, incl. 10:25/10:30 bracketing the weekly IC dry-run) contains only `expiry_date=2027-06-29` (yearly bucket); the weekly 07-Jul-26 expiry actually traded was never snapshotted | Confirmed 2026-07-03 (no code change, investigation only)
+- [ ] **B006.2** — Trace exact hardcode/config in `scripts/pipeline/upstox_chain_intraday.py` that limits snapshot to one expiry
+- [ ] **B006.3** — Fix: snapshot every expiry bucket referenced by `CONFIGS`/`CONFIGS_V2` (weekly/monthly/leaps/yearly), not just yearly gamma-watch expiry
+- [ ] **B006.4** — Tests: happy-path (multiple configured expiries → multiple expiries written to snapshot), edge case (expiry with no chain data available → skip without crashing whole run)
+- [ ] **B006.5** — Run real `@code-reviewer` subagent (or `general-purpose` + `REVIEW.md` substitute) against `git diff HEAD`
+- [ ] **B006.6** — Commit, update `bugs.md` status to ✅ Fixed + SHA
+
+---
+
+## BUG-007 — Portfolio-delta strike adjustment doesn't re-validate shifted leg
+
+- [x] **B007.1** — Root-cause confirmed: `paper_ic_entry.py` lines ~437-530 (and `paper_ic_entry_v2.py` ~417-467) accept a portfolio-delta-driven strike shift on liquidity check alone — no re-check of the strategy's own delta-target band, IVR, DTE, or recomputed structure economics (net credit/max loss/R:R) for the new leg | Confirmed 2026-07-03 (no code change, investigation only)
+- [ ] **B007.2** — Fix: after any strike shift in the adjustment block, re-run the same delta-band check used for original selection; recompute basic structure economics before accepting; fall through to existing gate-violation/log-only path if the shifted leg fails
+- [ ] **B007.3** — Tests: happy-path (adjustment lands on a leg still within delta band → accepted), edge case (adjustment lands outside delta band → treated as adjustment-failed, not silently accepted)
+- [ ] **B007.4** — Run real `@code-reviewer` subagent (financial-logic gate, mandatory) against `git diff HEAD`
+- [ ] **B007.5** — Commit, update `bugs.md` status to ✅ Fixed + SHA
+
+---
+
+## BUG-008 — Dry-run output bakes in stale price/IVR with no re-validation at execution time
+
+- [x] **B008.1** — Root-cause confirmed: `record_paper_trade.py:645` only fetches live LTP when `--price` is omitted; the dry-run always emits an explicit frozen `--price`, and none of `paper_ic_entry.py`'s entry gates (IVR/DTE/delta/portfolio-delta) re-run if the printed commands are executed later | Confirmed 2026-07-03 (no code change, investigation only)
+- [ ] **B008.2** — Decision needed (Animesh): (a) `record_paper_trade.py` re-fetches live LTP and warns/blocks on drift vs. passed `--price`, or (b) dry-run commands omit `--price` entirely, relying on the existing live-fetch path
+- [ ] **B008.3** — Implement chosen option; re-run IVR/DTE/delta gates at actual execution time, not just dry-run generation time
+- [ ] **B008.4** — Tests: happy-path (price within tolerance → proceeds), edge case (price drifted past tolerance → warns/blocks per decision)
+- [ ] **B008.5** — Run real `@code-reviewer` subagent (financial-logic gate, mandatory) against `git diff HEAD`
+- [ ] **B008.6** — Commit, update `bugs.md` status to ✅ Fixed + SHA

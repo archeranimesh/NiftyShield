@@ -23,6 +23,7 @@ import pytest
 
 from scripts.strategies.ic.ic_entry_gates import _post_expiry_gate
 from scripts.strategies.ic.paper_ic_entry_v2 import run
+from src.paper.models import PaperPosition
 
 # ---------------------------------------------------------------------------
 # Shared chain fixture
@@ -156,10 +157,22 @@ def mock_gates():
 
 @pytest.fixture
 def mock_store():
+    """``get_position`` defaults to a confirmed (non-zero net_qty) position so
+    the post-execution DB-verification step (added 2026-07-03) passes by
+    default in tests not specifically exercising that check.
+    """
     with patch("scripts.strategies.ic.paper_ic_entry_v2.PaperStore") as m_cls:
         inst = MagicMock()
         inst.get_positions.return_value = []
         inst.get_strategy_names.return_value = []
+        inst.get_position.return_value = PaperPosition(
+            strategy_name="paper_ic_nifty_v2_monthly",
+            leg_role="mock_leg",
+            net_qty=-65,
+            avg_cost=Decimal("0"),
+            avg_sell_price=Decimal("50.0"),
+            instrument_key="NSE_FO|MOCK",
+        )
         m_cls.return_value = inst
         yield inst
 
@@ -247,9 +260,12 @@ async def test_happy_path_executes_four_legs(
 
     # record_paper_trade.py has no --ivr flag, and IVR here (0.35) is above
     # the 0.25 gate, so no --force-entry forwarding should occur on any leg.
+    # --no-dry-run must always be forwarded, otherwise record_paper_trade.py's
+    # own dry-run default (True) silently no-ops every leg (2026-07-03 defect).
     for cmd in cmds:
         assert "--ivr" not in cmd
         assert "--force-entry" not in cmd
+        assert "--no-dry-run" in cmd
 
 
 @pytest.mark.asyncio
@@ -292,6 +308,93 @@ async def test_ivr_below_gate_forwards_force_entry_to_sell_legs_only(
     assert "--force-entry" not in long_put_cmd
     assert long_call_cmd[10] == "BUY"
     assert "--force-entry" not in long_call_cmd
+
+
+@pytest.mark.asyncio
+async def test_leg_not_persisted_blocks_success_notification(
+    mock_gates, mock_store, mock_client, mock_subprocess, mock_telegram, mock_delta_tracker
+) -> None:
+    """DB-verification gate: subprocess exit 0 alone must not be trusted.
+
+    Regression test for the 2026-07-03 defect where record_paper_trade.py's
+    own --dry-run default (True) meant every IC entry ever "executed" by this
+    script silently no-op'd at the DB layer while still exiting 0 and
+    triggering a false-positive "✅ IC V2 Entry" Telegram message. Simulates
+    that exact failure mode: subprocess.run succeeds for all 4 legs, but
+    store.get_position reports net_qty=0 for one of them. The script must
+    exit 1, send only a ⚠️ warning notification, and never send ✅.
+    """
+    mock_store.get_position.return_value = PaperPosition(
+        strategy_name="paper_ic_nifty_v2_monthly",
+        leg_role="mock_leg",
+        net_qty=0,  # not persisted
+        avg_cost=Decimal("0"),
+        avg_sell_price=Decimal("0"),
+        instrument_key="NSE_FO|MOCK",
+    )
+
+    with (
+        patch.object(
+            sys,
+            "argv",
+            [
+                "paper_ic_entry_v2.py",
+                "--expiry-type",
+                "monthly",
+                "--no-dry-run",
+                "--bod-path",
+                "dummy.json",
+            ],
+        ),
+        pytest.raises(SystemExit) as excinfo,
+    ):
+        await run()
+
+    assert excinfo.value.code == 1
+    assert mock_subprocess.call_count == 4  # all 4 legs were still attempted
+    assert mock_telegram.send_notification.call_count == 1
+    sent_msg = mock_telegram.send_notification.call_args[0][0]
+    assert "⚠️" in sent_msg
+    assert "✅" not in sent_msg
+
+
+@pytest.mark.asyncio
+async def test_db_verification_query_failure_blocks_success_notification(
+    mock_gates, mock_store, mock_client, mock_subprocess, mock_telegram, mock_delta_tracker
+) -> None:
+    """DB-verification gate must itself fail safe.
+
+    If store.get_position() raises (e.g. transient SQLite lock) AFTER the 4
+    subprocess calls already ran, the script must not crash silently with no
+    notification at all — it must catch the error, send a ⚠️ warning
+    explaining verification itself failed, and exit 1.
+    """
+    mock_store.get_position.side_effect = RuntimeError("database is locked")
+
+    with (
+        patch.object(
+            sys,
+            "argv",
+            [
+                "paper_ic_entry_v2.py",
+                "--expiry-type",
+                "monthly",
+                "--no-dry-run",
+                "--bod-path",
+                "dummy.json",
+            ],
+        ),
+        pytest.raises(SystemExit) as excinfo,
+    ):
+        await run()
+
+    assert excinfo.value.code == 1
+    assert mock_subprocess.call_count == 4  # all 4 legs were still attempted
+    assert mock_telegram.send_notification.call_count == 1
+    sent_msg = mock_telegram.send_notification.call_args[0][0]
+    assert "⚠️" in sent_msg
+    assert "✅" not in sent_msg
+    assert "database is locked" in sent_msg
 
 
 @pytest.mark.asyncio

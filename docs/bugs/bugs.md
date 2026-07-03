@@ -139,3 +139,77 @@ Both `paper_ic_entry.py` (line ~359) and `paper_ic_entry_v2.py` (line ~351) have
 **Suggested fix:** Exclude `STRATEGY_SPOT`/`STRATEGY_FUTURES`/`STRATEGY_PROXY` (`src/paper/constants.py`) from `strategies_list` before the loop, in both entry scripts. A shared helper in `ic_entry_gates.py` (even though the portfolio-delta gate itself isn't shared between V1/V2 per the module's documented divergence) avoids duplicating the exclusion set inline in two places.
 
 **Related:** `BUG-002` (this is the un-implemented remainder of that bug's B002.2 decision, not a new independent defect).
+
+---
+
+## BUG-006 — Intraday chain snapshot writer only persists the yearly-expiry bucket, not actively-traded expiries
+
+| Field | Value |
+|---|---|
+| Severity | **MEDIUM** — no functional impact on live gates, but destroys the ability to reconstruct/audit what a strategy actually saw at entry time |
+| Status | 🔴 Open |
+| Discovered | 2026-07-03, trying to reconstruct the weekly IC's 10:29 AM strike-selection delta from historical data |
+| Location | intraday chain snapshot pipeline (`scripts/pipeline/upstox_chain_intraday.py`) → `data/historical/option_chain/intraday/YYYY/MM/DD/upstox_HHMM.parquet` |
+
+**Symptom:** Manually validated a weekly IC entry's live delta post-hoc (short_put 23500 PE showing `delta=0.0243`, well outside the config's `[0.06,0.14]` target band) and tried to check whether it was in-band at the actual 10:29 AM selection time using the persisted 5-min intraday snapshots. Every snapshot file for 2026-07-03 (`upstox_0900.parquet` through `upstox_1040.parquet`, including the 10:25/10:30 files bracketing the dry-run) contains **only** `expiry_date == 2027-06-29` (the yearly bucket) at sparse strikes (16500–31500, ~1500 pt spacing). The weekly 07-Jul-26 expiry — the one actually being traded — was never snapshotted.
+
+**Root cause (not yet traced to exact line — needs graph/code confirmation before fix):** the intraday writer appears hardcoded or configured to snapshot a single expiry (consistent with its use for `gamma_daily_watch.py` / yearly gamma-buy monitoring) rather than the full set of expiries actively traded across strategies (weekly/monthly/leaps/yearly IC all read live chains but only yearly gets an intraday audit trail).
+
+**Impact:** any post-hoc question of the form "was gate X's input actually valid at decision time, or did it decay before/after" cannot be answered for weekly/monthly/leaps IC entries — only for the yearly bucket. This already blocked a debugging session (this one) from confirming whether BUG-candidate delta drift was a selection-time defect or normal DTE-4 convexity after the fact.
+
+**Suggested fix:** parameterize the intraday writer to snapshot every expiry bucket actually referenced by `CONFIGS`/`CONFIGS_V2` (weekly/monthly/leaps/yearly), not just the yearly gamma-watch expiry — or at minimum, snapshot whichever expiry each `paper_ic_entry*.py` cron is about to act on, keyed by run, so every entry decision has a reconstructable input snapshot.
+
+**Related:** none yet — first entry in the "audit trail gap" family.
+
+---
+
+## BUG-007 — Portfolio-delta strike adjustment doesn't re-validate the shifted leg's own delta-target band, IVR, or structure economics
+
+| Field | Value |
+|---|---|
+| Severity | **HIGH** — can silently accept a structure whose standalone risk/reward was never checked after portfolio-delta correction |
+| Status | 🔴 Open |
+| Discovered | 2026-07-03, tracing why weekly IC dry-run selected 24750 CE / 24950 CE for the call wing |
+| Location | `scripts/strategies/ic/paper_ic_entry.py` lines ~437–530 (`paper_ic_entry_v2.py` lines ~417–467 has the same pattern) |
+
+**Symptom:** none directly logged as an error — found while explaining why the portfolio-delta gate printed `INFO: Portfolio delta gate adjusted short_call to 24750.0`. Traced the adjustment code path and confirmed: when `projected_total` (existing book delta + this IC's delta) falls outside `[-0.05, 0.25]`, the script shifts the offending short leg **one strike further OTM** and re-derives its wing hedge at `strike ± wing_width_points`. The only check applied to the shifted leg before accepting it is `_apply_liquidity_gate([adj_call])` (or `adj_put`) — there is no re-check that the new strike still satisfies `config.short_call_delta ± config.delta_range` (or the put equivalent), no re-check of DTE/IVR gates against the now-different structure, and no recomputation of max-profit/max-loss/POP/R:R for the adjusted four-leg structure before accepting it.
+
+**Root cause:**
+
+```python
+if adj_call and _apply_liquidity_gate([adj_call]):
+    new_ic_delta = Decimal(str(abs(short_put["delta"]))) - Decimal(str(abs(adj_call["delta"])))
+    if Decimal("-0.05") <= (current_delta_lots + new_ic_delta) <= Decimal("0.25"):
+        # Success — accepted with no further validation of adj_call itself
+        short_call = adj_call
+        ...
+```
+
+The adjustment loop optimizes for exactly one objective (portfolio delta back in band) and treats that as sufficient justification to accept the new strike. It does not re-run the same delta-target/IVR/DTE checks that gated the *original* strike selection — so a portfolio-delta-driven shift can land on a strike with a delta well outside the strategy's own designed band, or on a structure with materially worse R:R/POP than the one that was originally evaluated, and the script has no way to detect or flag that.
+
+**Impact:** the dry-run this surfaced in produced a structure (23500PE/23300PE/24750CE/24950CE, DTE=4) that independent payoff analysis (Stockmock) showed as negative expected value against its own POP estimate (POP 92.2% vs 97.8% breakeven requirement). The delta-adjustment step is not the sole cause of that (DTE=4 and sub-floor IVR both predate it), but it is a second, independent point where the structure's quality could have been re-checked and wasn't.
+
+**Suggested fix:** after any strike shift in this block, re-run the same delta-band check used for original selection against the new leg, and recompute basic structure economics (net credit, max loss, R:R) before accepting — if the shifted leg now fails those, treat it the same as "adjustment failed" (falls through to the existing `if not adjusted:` gate-violation/log-only path) rather than silently accepting a structure that was never fully vetted.
+
+**Related:** `BUG-006` — without a persisted intraday snapshot at decision time, verifying whether this adjustment path fired at a *reasonable* delta vs. an already-degraded one is harder to audit after the fact.
+
+---
+
+## BUG-008 — Dry-run output bakes in point-in-time price/IVR with no re-validation if executed later
+
+| Field | Value |
+|---|---|
+| Severity | **HIGH** — a paper trade can be recorded against stale price/IVR/delta data if the printed dry-run commands are executed even a short time after generation |
+| Status | 🔴 Open |
+| Discovered | 2026-07-03, checking whether `record_paper_trade.py` re-validates anything when the dry-run's printed commands are pasted and run |
+| Location | `scripts/strategies/ic/paper_ic_entry.py` (dry-run command generation) → `scripts/record/record_paper_trade.py` line ~645 |
+
+**Symptom:** none logged — found by code inspection while assessing how safe it would be to copy-paste the dry-run's `[DRY-RUN] Commands to execute:` block and run it later. `record_paper_trade.py:645` only fetches live LTP **when `--price` is omitted** (`if args.price is None: ... fetch LTP`). The dry-run always emits an explicit `--price <value>` taken from the chain snapshot at the moment `paper_ic_entry.py` ran. If those commands are executed minutes or hours later — the realistic workflow, since a human is meant to review the dry-run before acting — the recorded trade uses the original snapshot's price, not the current market, and none of the entry gates (IVR floor, DTE window, delta band, portfolio delta) are re-evaluated at execution time; those only run inside `paper_ic_entry.py`, not `record_paper_trade.py`.
+
+**Root cause:** the gate-check/strike-selection step and the trade-recording step are two separate scripts connected only by a printed shell command containing frozen values — there is no re-validation boundary at execution time, and no timestamp/staleness check on the embedded price before it's written to `paper_trades`.
+
+**Impact:** directly relevant to this session — DTE and IVR were already found to be outside their target windows at generation time (log-only, so the dry-run still printed commands); if those commands are executed later, the DB will record a paper trade whose entry price no longer reflects the market, with no warning surfaced anywhere in the pipeline.
+
+**Suggested fix:** either (a) have `record_paper_trade.py` re-fetch live LTP and compare against the passed `--price` within some tolerance, warning or blocking on material drift, or (b) have the dry-run commands omit `--price` entirely and let `record_paper_trade.py`'s existing live-fetch path (already there for the no-price case) be the only path — accepting that the reviewed dry-run numbers are illustrative, not literal execution instructions. Either way, re-running the IVR/DTE/delta gates at actual execution time (not just at dry-run generation time) closes the real gap.
+
+**Related:** `BUG-007` (same family — decisions made at one point in the pipeline are not re-checked at the point where they actually take effect).

@@ -598,6 +598,13 @@ async def run() -> None:
         # check still runs on them.
         if action == "SELL" and ivr_below_gate:
             cmd.append("--force-entry")
+        # record_paper_trade.py's own --dry-run defaults to True (BooleanOptionalAction).
+        # This script's --dry-run/--no-dry-run only controls whether *this* script
+        # previews vs. executes the subprocess call — it must be forwarded explicitly,
+        # otherwise every "executed" leg silently no-ops in the child process (found
+        # 2026-07-03: zero rows ever written to paper_trades for any paper_ic_* strategy
+        # despite Telegram reporting success on every run).
+        cmd.append("--no-dry-run")
         cmds.append(cmd)
 
     if args.dry_run:
@@ -609,7 +616,66 @@ async def run() -> None:
             print(f"Executing: {' '.join(cmd)}")
             subprocess.run(cmd, check=True)
 
-        # Step 12: Telegram notification (live mode only)
+        # Step 12: Verify legs actually landed in the DB before reporting success.
+        # subprocess exit code 0 is necessary but not sufficient — record_paper_trade.py
+        # exits 0 on its own dry-run no-op path too, so a clean subprocess run alone
+        # cannot distinguish "recorded" from "previewed and discarded" (the exact
+        # failure mode that silently no-op'd every prior IC entry). Re-query each leg's
+        # position from the DB directly. Relies on the duplicate-entry guard earlier in
+        # run() — these are fresh legs with no prior fills, so net_qty==0 unambiguously
+        # means "not persisted" here (would need re-deriving for a reused-in-rolls context).
+        missing_legs: list[str] = []
+        verification_error: str | None = None
+        try:
+            for role, _action, _key, _price in legs:
+                pos = store.get_position(config.strategy_name, role)
+                if pos.net_qty == 0:
+                    missing_legs.append(role)
+        except Exception as exc:  # noqa: BLE001 — a DB read failure here must not be
+            # silently swallowed: without this catch, an exception raised after the 4
+            # subprocess calls already ran would crash the script with no Telegram
+            # notification at all (neither ✅ nor ⚠️), leaving the operator blind to
+            # whether legs were actually persisted — the same blind spot this
+            # verification step exists to close, just moved one line later.
+            verification_error = str(exc)
+            logger.error("ic_entry.verification_failed", error=verification_error)
+
+        if missing_legs or verification_error is not None:
+            if verification_error is not None:
+                detail = f"Post-execution DB verification itself failed: {verification_error}"
+            else:
+                detail = (
+                    f"Subprocess calls exited 0 but {len(missing_legs)}/4 legs were "
+                    f"NOT persisted to the DB: {', '.join(missing_legs)}."
+                )
+            print(
+                f"ERROR: {detail} Check --no-dry-run wiring and per-leg logs above. "
+                f"NOT sending success notification.",
+                file=sys.stderr,
+            )
+            logger.error(
+                "ic_entry.legs_not_persisted",
+                strategy_name=config.strategy_name,
+                missing_legs=missing_legs,
+                verification_error=verification_error,
+            )
+            try:
+                tg = TelegramGateway(
+                    bot_token=settings.telegram_bot_token,
+                    chat_id=settings.telegram_chat_id,
+                    db_path=str(args.db_path),
+                )
+                await tg.send_notification(
+                    f"⚠️ IC Entry — {args.expiry_type} ({config.strategy_name})\n"
+                    f"{detail}\n"
+                    f"Check logs immediately — position state may be inconsistent."
+                )
+            except Exception as exc:  # noqa: BLE001 — telegram delivery is non-fatal
+                logger.warning("telegram.send_failed", error=str(exc))
+            sys.exit(1)
+
+        # Step 13: Telegram notification — only reached once all 4 legs are
+        # confirmed present in the DB.
         net_credit = (short_put["mid"] + short_call["mid"]) - (long_put["mid"] + long_call["mid"])
         msg = (
             f"✅ IC Entry — {args.expiry_type} ({config.strategy_name})\n"
