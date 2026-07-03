@@ -28,6 +28,7 @@ from src.strategy.ic_expiry_config import CONFIGS as V1_CONFIGS
 from src.strategy.ic_expiry_config_v2 import IC_V2_MONTHLY as V2_CONFIG
 from src.strategy.ic_nifty_v1 import IronCondorV1
 from src.strategy.ic_nifty_v2 import IronCondorV2
+from src.utils.logging import setup_logging
 
 V1_CONFIG = V1_CONFIGS["monthly"]
 
@@ -343,6 +344,7 @@ def build_comparison_report(v1: ICMonthlyStats, v2: ICMonthlyStats, report_date:
 
 
 async def _run(args: argparse.Namespace) -> None:
+    setup_logging()
     report_date: date = args.date or date.today()
     save: bool = not args.dry_run
 
@@ -364,7 +366,7 @@ async def _run(args: argparse.Namespace) -> None:
 
             broker = _MockBroker()
         else:
-            logger.error("Upstox client init failed. Use --dry-run.")
+            logger.error("ic_monthly_comparison.broker_init_failed")
             sys.exit(1)
 
     bot_token = settings.telegram_bot_token or ""
@@ -395,6 +397,13 @@ async def _run(args: argparse.Namespace) -> None:
     print(f"\n{report_str}\n")
 
     if notifier and save:
+        logger.info(
+            "ic_monthly_comparison.report_sent",
+            channel="telegram",
+            report_date=report_date.isoformat(),
+            v1_strategy=v1_stats.strategy_name,
+            v2_strategy=v2_stats.strategy_name,
+        )
         try:
             await notifier.send_notification(report_str)
         except Exception as exc:

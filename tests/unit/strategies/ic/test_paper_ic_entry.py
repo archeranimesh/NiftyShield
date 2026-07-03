@@ -822,3 +822,77 @@ async def test_db_verification_query_failure_blocks_success_notification(
     assert "⚠️" in sent_msg
     assert "✅" not in sent_msg
     assert "database is locked" in sent_msg
+
+
+# ---------------------------------------------------------------------------
+# B010.3 — structlog migration (setup_logging() entrypoint call)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_run_calls_setup_logging_first(
+    mock_vix_data,
+    mock_store,
+    mock_lookup,
+    mock_market_client,
+    mock_subprocess,
+    mock_telegram,
+):
+    """run() must call setup_logging() as its first action (LOGGING.md standard)."""
+    test_args = [
+        "paper_ic_entry.py",
+        "--expiry-type",
+        "weekly",
+        "--no-dry-run",
+        "--bod-path",
+        "dummy.json",
+    ]
+    with (
+        patch.object(sys, "argv", test_args),
+        patch("scripts.strategies.ic.paper_ic_entry.setup_logging") as mock_setup,
+    ):
+        await run()
+
+    mock_setup.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_duplicate_guard_logs_structured_error(
+    mock_vix_data,
+    mock_store,
+    mock_lookup,
+):
+    """Duplicate-position guard fires ic_entry.duplicate_position at ERROR, no print()."""
+    from src.paper.models import PaperPosition
+
+    mock_store.get_positions.return_value = [
+        PaperPosition(
+            strategy_name="paper_ic_nifty_v1_weekly",
+            leg_role="short_put",
+            net_qty=-65,
+            avg_cost=Decimal("0"),
+            avg_sell_price=Decimal("20.0"),
+            instrument_key="NSE_FO|MOCK",
+        )
+    ]
+    test_args = [
+        "paper_ic_entry.py",
+        "--expiry-type",
+        "weekly",
+        "--no-dry-run",
+        "--bod-path",
+        "dummy.json",
+    ]
+    import structlog.testing
+
+    with (
+        patch.object(sys, "argv", test_args),
+        patch("scripts.strategies.ic.paper_ic_entry.setup_logging"),
+        structlog.testing.capture_logs() as logs,
+        pytest.raises(SystemExit) as excinfo,
+    ):
+        await run()
+
+    assert excinfo.value.code == 1
+    events = [entry["event"] for entry in logs]
+    assert "ic_entry.duplicate_position" in events

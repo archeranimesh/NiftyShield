@@ -49,6 +49,7 @@ from src.paper.constants import (
 )
 from src.paper.store import PaperStore
 from src.strategy.ic_expiry_config import CONFIGS
+from src.utils.logging import setup_logging
 
 load_dotenv()
 
@@ -171,6 +172,7 @@ def parse_args() -> argparse.Namespace:
 
 async def run() -> None:
     """Run the Iron Condor entry workflow."""
+    setup_logging()
     args = parse_args()
     config = CONFIGS[args.expiry_type]
 
@@ -178,10 +180,7 @@ async def run() -> None:
     store = PaperStore(args.db_path)
     open_positions = store.get_positions(config.strategy_name)
     if any(pos.net_qty != 0 for pos in open_positions):
-        print(
-            f"ERROR: active position already exists for {config.strategy_name}",
-            file=sys.stderr,
-        )
+        logger.error("ic_entry.duplicate_position", strategy_name=config.strategy_name)
         sys.exit(1)
 
     gate_violations = []
@@ -229,10 +228,7 @@ async def run() -> None:
         if args.force_entry:
             logger.warning("force_entry.ivr_bypass", ivr=ivr, gate=config.ivr_gate)
         else:
-            print(
-                "ERROR: India VIX IVR is None (insufficient data). Stop.",
-                file=sys.stderr,
-            )
+            logger.error("ic_entry.ivr_data_unavailable")
             sys.exit(1)
     # Tracks whether ivr was below gate and entry proceeded anyway (via
     # --force-entry or --log-only-gates) — used later to force the SELL leg
@@ -256,18 +252,15 @@ async def run() -> None:
                 )
             )
         else:
-            print(
-                f"ERROR: India VIX IVR = {ivr:.2f} below gate threshold of {config.ivr_gate:.2f}.",
-                file=sys.stderr,
-            )
+            logger.error("ic_entry.ivr_gate_blocked", ivr=ivr, gate=float(config.ivr_gate))
             sys.exit(1)
 
     if ivr is not None:
-        print(f"INFO: India VIX IVR = {ivr:.2f} (gate={config.ivr_gate})")
+        logger.info("ic_entry.ivr_resolved", ivr=ivr, gate=float(config.ivr_gate))
 
     # Step 6: DTE window check
     if not args.bod_path.exists():
-        print(f"ERROR: BOD file not found at {args.bod_path}", file=sys.stderr)
+        logger.error("ic_entry.bod_file_missing", bod_path=str(args.bod_path))
         sys.exit(1)
 
     try:
@@ -280,10 +273,7 @@ async def run() -> None:
     except Exception as exc:
         # Intentional: broad catch for BOD loading/expiry resolution to ensure
         # exit 1 failure is reported to caller.
-        print(
-            f"ERROR: failed to load BOD or resolve expiries: {exc}",
-            file=sys.stderr,
-        )
+        logger.error("ic_entry.bod_load_failed", error=str(exc))
         sys.exit(1)
 
     expiry_str = None
@@ -293,10 +283,7 @@ async def run() -> None:
             break
 
     if expiry_str is None:
-        print(
-            f"ERROR: no {config.expiry_bucket} expiry candidate found. Stop.",
-            file=sys.stderr,
-        )
+        logger.error("ic_entry.no_expiry_candidate", expiry_bucket=config.expiry_bucket)
         sys.exit(1)
 
     expiry_date = date.fromisoformat(expiry_str)
@@ -318,7 +305,7 @@ async def run() -> None:
                 )
             )
     else:
-        print(f"INFO: selected expiry = {expiry_str} (DTE={dte})")
+        logger.info("ic_entry.expiry_selected", expiry=expiry_str, dte=dte)
 
     # Step 7: Live chain fetch
     try:
@@ -327,14 +314,11 @@ async def run() -> None:
     except Exception as exc:
         # Intentional: broad catch for live network client to ensure failure
         # exits gracefully with diagnostic message.
-        print(
-            f"ERROR: failed to fetch option chain for {expiry_str}: {exc}",
-            file=sys.stderr,
-        )
+        logger.error("ic_entry.chain_fetch_failed", expiry=expiry_str, error=str(exc))
         sys.exit(1)
 
     if not raw_chain:
-        print(f"ERROR: option chain empty for {expiry_str}", file=sys.stderr)
+        logger.error("ic_entry.chain_empty", expiry=expiry_str)
         sys.exit(1)
 
     # Step 8: Strike selection (4 legs)
@@ -347,14 +331,14 @@ async def run() -> None:
     short_put_candidates = filter_strikes_by_delta(raw_chain, "PE", put_min, put_max)
     ranked_put = rank_strikes(short_put_candidates)
     if not ranked_put:
-        print("ERROR: failed to resolve leg short_put", file=sys.stderr)
+        logger.error("ic_entry.leg_resolution_failed", leg="short_put")
         sys.exit(1)
     short_put = ranked_put[0]
 
     short_call_candidates = filter_strikes_by_delta(raw_chain, "CE", call_min, call_max)
     ranked_call = rank_strikes(short_call_candidates)
     if not ranked_call:
-        print("ERROR: failed to resolve leg short_call", file=sys.stderr)
+        logger.error("ic_entry.leg_resolution_failed", leg="short_call")
         sys.exit(1)
     short_call = ranked_call[0]
 
@@ -369,7 +353,7 @@ async def run() -> None:
         expiry=expiry_str,
     )
     if not long_put_candidates:
-        print("ERROR: failed to resolve leg long_put", file=sys.stderr)
+        logger.error("ic_entry.leg_resolution_failed", leg="long_put")
         sys.exit(1)
     long_put_key = long_put_candidates[0]["instrument_key"]
 
@@ -380,7 +364,7 @@ async def run() -> None:
         expiry=expiry_str,
     )
     if not long_call_candidates:
-        print("ERROR: failed to resolve leg long_call", file=sys.stderr)
+        logger.error("ic_entry.leg_resolution_failed", leg="long_call")
         sys.exit(1)
     long_call_key = long_call_candidates[0]["instrument_key"]
 
@@ -397,7 +381,7 @@ async def run() -> None:
                 )
             )
         else:
-            print("ERROR: short_put failed liquidity gate", file=sys.stderr)
+            logger.error("ic_entry.liquidity_gate_blocked", leg="short_put")
             sys.exit(1)
     if not _apply_liquidity_gate([short_call]):
         if args.log_only_gates:
@@ -411,7 +395,7 @@ async def run() -> None:
                 )
             )
         else:
-            print("ERROR: short_call failed liquidity gate", file=sys.stderr)
+            logger.error("ic_entry.liquidity_gate_blocked", leg="short_call")
             sys.exit(1)
 
     # Step 10: Fetch spot (used only for the Telegram notification below).
@@ -422,10 +406,7 @@ async def run() -> None:
     ltp_map = client.get_ltp_sync(["NSE_INDEX|Nifty 50"])
     nifty_spot = ltp_map.get("NSE_INDEX|Nifty 50")
     if nifty_spot is None:
-        print(
-            "ERROR: failed to fetch live Nifty 50 spot price.",
-            file=sys.stderr,
-        )
+        logger.error("ic_entry.spot_fetch_failed")
         sys.exit(1)
 
     # Persist all threshold-gate violations collected above (log-only mode).
@@ -488,10 +469,20 @@ async def run() -> None:
         cmds.append(cmd)
 
     if args.dry_run:
+        logger.info(
+            "ic_entry.dry_run_preview",
+            strategy=config.strategy_name,
+            leg_count=len(cmds),
+        )
         print("\n[DRY-RUN] Commands to execute:")
         for cmd in cmds:
             print(" ".join(cmd))
     else:
+        logger.info(
+            "ic_entry.executing_legs",
+            strategy=config.strategy_name,
+            leg_count=len(cmds),
+        )
         for cmd in cmds:
             print(f"Executing: {' '.join(cmd)}")
             subprocess.run(cmd, check=True)
@@ -528,11 +519,6 @@ async def run() -> None:
                     f"Subprocess calls exited 0 but {len(missing_legs)}/4 legs were "
                     f"NOT persisted to the DB: {', '.join(missing_legs)}."
                 )
-            print(
-                f"ERROR: {detail} Check --no-dry-run wiring and per-leg logs above. "
-                f"NOT sending success notification.",
-                file=sys.stderr,
-            )
             logger.error(
                 "ic_entry.legs_not_persisted",
                 strategy_name=config.strategy_name,

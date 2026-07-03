@@ -39,7 +39,8 @@ from src.intraday.market_store import IntradayMarketStore
 from src.paper.constants import STRATEGY_CSP, STRATEGY_FUTURES, STRATEGY_PROXY, STRATEGY_SPOT
 from src.paper.models import GateViolation
 
-_log = structlog.get_logger("scripts.strategies.ic.ic_entry_gates")
+_SCRIPT_NAME = "scripts.strategies.ic.ic_entry_gates"
+logger = structlog.get_logger(_SCRIPT_NAME)
 
 
 def make_gate_violation(
@@ -138,10 +139,10 @@ def _post_expiry_gate() -> None:
     today = date.today()
     expiry = _most_recently_settled_expiry(today)
     if today <= expiry:
-        print(
-            f"ERROR: post_expiry_gate: settlement for {expiry} has not yet "
-            f"completed (today={today}). Entry is only valid after settlement.",
-            file=sys.stderr,
+        logger.error(
+            "post_expiry_gate.blocked",
+            expiry=str(expiry),
+            today=str(today),
         )
         sys.exit(1)
 
@@ -175,10 +176,7 @@ def check_duplicate(
                 )
             except Exception:  # noqa: BLE001
                 pass
-        print(
-            f"ERROR: active position already exists for {strategy_name}",
-            file=sys.stderr,
-        )
+        logger.error("check_duplicate.blocked", strategy_name=strategy_name)
         sys.exit(1)
 
 
@@ -270,7 +268,7 @@ def resolve_ivr(
         try:
             series = load_vix_series(vix_data_dir)
             if _is_vix_window_stale(series, date.today()):
-                _log.warning(
+                logger.warning(
                     "vix.window_stale",
                     window_max_date=str(series.index.max()),
                     threshold_days=_MAX_VIX_WINDOW_STALENESS_DAYS,
@@ -282,9 +280,9 @@ def resolve_ivr(
                 if vix_today is not None:
                     ivr = compute_ivr(vix_today, series)
         except Exception as exc:  # noqa: BLE001 — broad catch by design; IVR is non-fatal
-            _log.warning("vix.load_failed", error=str(exc))
+            logger.warning("vix.load_failed", error=str(exc))
     else:
-        _log.warning("vix.dir_missing", path=str(vix_data_dir))
+        logger.warning("vix.dir_missing", path=str(vix_data_dir))
 
     violation: GateViolation | None = None
 
@@ -292,17 +290,14 @@ def resolve_ivr(
     # regardless of force_entry or log_only_gates.
     if ivr is None:
         if force_entry:
-            _log.warning("force_entry.ivr_bypass", ivr=ivr, gate=ivr_gate)
+            logger.warning("force_entry.ivr_bypass", ivr=ivr, gate=ivr_gate)
             return ivr, violation
-        print(
-            "ERROR: India VIX IVR is None (insufficient data). Stop.",
-            file=sys.stderr,
-        )
+        logger.error("resolve_ivr.data_unavailable")
         sys.exit(1)
 
     if ivr < float(ivr_gate):
         if log_only_gates and not force_entry:
-            _log.warning(
+            logger.warning(
                 "gate.ivr_violation_logged",
                 ivr=ivr,
                 gate=float(ivr_gate),
@@ -315,7 +310,7 @@ def resolve_ivr(
                 strategy_name=strategy_name,
             )
         elif force_entry:
-            _log.warning("force_entry.ivr_bypass", ivr=ivr, gate=ivr_gate)
+            logger.warning("force_entry.ivr_bypass", ivr=ivr, gate=ivr_gate)
         else:
             if notifier is not None:
                 try:
@@ -324,13 +319,10 @@ def resolve_ivr(
                     )
                 except Exception:  # noqa: BLE001
                     pass
-            print(
-                f"ERROR: India VIX IVR = {ivr:.2f} below gate threshold of {ivr_gate:.2f}.",
-                file=sys.stderr,
-            )
+            logger.error("resolve_ivr.gate_blocked", ivr=ivr, gate=float(ivr_gate))
             sys.exit(1)
 
-    print(f"INFO: India VIX IVR = {ivr:.2f} (gate={ivr_gate})")
+    logger.info("resolve_ivr.resolved", ivr=ivr, gate=float(ivr_gate))
 
     return ivr, violation
 
@@ -372,7 +364,7 @@ def resolve_expiry(
             (all STRUCTURAL — never bypassed).
     """
     if not bod_path.exists():
-        print(f"ERROR: BOD file not found at {bod_path}", file=sys.stderr)
+        logger.error("resolve_expiry.bod_file_missing", bod_path=str(bod_path))
         sys.exit(1)
 
     try:
@@ -383,10 +375,7 @@ def resolve_expiry(
             preference=[expiry_bucket],
         )
     except Exception as exc:  # noqa: BLE001 — broad catch; BOD failures must exit cleanly
-        print(
-            f"ERROR: failed to load BOD or resolve expiries: {exc}",
-            file=sys.stderr,
-        )
+        logger.error("resolve_expiry.bod_load_failed", error=str(exc))
         sys.exit(1)
 
     expiry_str: str | None = None
@@ -396,10 +385,7 @@ def resolve_expiry(
             break
 
     if expiry_str is None:
-        print(
-            f"ERROR: no {expiry_bucket} expiry candidate found. Stop.",
-            file=sys.stderr,
-        )
+        logger.error("resolve_expiry.no_candidate_found", expiry_bucket=expiry_bucket)
         sys.exit(1)
 
     expiry_date = date.fromisoformat(expiry_str)
@@ -407,7 +393,7 @@ def resolve_expiry(
 
     violation: GateViolation | None = None
     if dte < dte_warn_lo or dte > dte_warn_hi:
-        _log.warning(
+        logger.warning(
             "dte.outside_range",
             dte=dte,
             min_dte=dte_warn_lo,
@@ -420,7 +406,7 @@ def resolve_expiry(
             strategy_name=strategy_name,
         )
     else:
-        print(f"INFO: selected expiry = {expiry_str} (DTE={dte})")
+        logger.info("resolve_expiry.selected", expiry=expiry_str, dte=dte)
 
     return lookup, expiry_str, dte, violation
 

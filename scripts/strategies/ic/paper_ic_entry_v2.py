@@ -57,6 +57,7 @@ from src.paper.constants import (
 )
 from src.paper.store import PaperStore
 from src.strategy.ic_expiry_config_v2 import CONFIGS_V2, IronCondorV2ExpiryConfig
+from src.utils.logging import setup_logging
 
 load_dotenv()
 
@@ -233,6 +234,7 @@ def parse_args() -> argparse.Namespace:
 
 async def run() -> None:
     """Run the IronCondorV2 entry workflow."""
+    setup_logging()
     args = parse_args()
     config = CONFIGS_V2[args.expiry_type]
     strategy_name = f"paper_ic_nifty_v2_{config.expiry_type}"
@@ -303,14 +305,11 @@ async def run() -> None:
         client = UpstoxMarketClient(settings.upstox_analytics_token)
         raw_chain = client.get_option_chain_sync("NSE_INDEX|Nifty 50", expiry_str)
     except Exception as exc:  # noqa: BLE001
-        print(
-            f"ERROR: failed to fetch option chain for {expiry_str}: {exc}",
-            file=sys.stderr,
-        )
+        logger.error("ic_entry.chain_fetch_failed", expiry=expiry_str, error=str(exc))
         sys.exit(1)
 
     if not raw_chain:
-        print(f"ERROR: option chain empty for {expiry_str}", file=sys.stderr)
+        logger.error("ic_entry.chain_empty", expiry=expiry_str)
         sys.exit(1)
 
     # Step 6: Short leg selection (25Δ put / 22Δ call, D1 ruling)
@@ -322,14 +321,14 @@ async def run() -> None:
     short_put_candidates = filter_strikes_by_delta(raw_chain, "PE", put_lo, put_hi)
     ranked_put = rank_strikes(short_put_candidates)
     if not ranked_put:
-        print("ERROR: failed to resolve leg short_put", file=sys.stderr)
+        logger.error("ic_entry.leg_resolution_failed", leg="short_put")
         sys.exit(1)
     short_put = ranked_put[0]
 
     short_call_candidates = filter_strikes_by_delta(raw_chain, "CE", call_lo, call_hi)
     ranked_call = rank_strikes(short_call_candidates)
     if not ranked_call:
-        print("ERROR: failed to resolve leg short_call", file=sys.stderr)
+        logger.error("ic_entry.leg_resolution_failed", leg="short_call")
         sys.exit(1)
     short_call = ranked_call[0]
 
@@ -342,10 +341,11 @@ async def run() -> None:
             f"Reason: No put wing passes delta + premium floors "
             f"(floor=₹{config.long_wing_min_premium}, delta_floor={config.long_wing_delta_floor})"
         )
-        print(
-            "ERROR: short_put long wing — no candidate passes delta + premium floors "
-            f"(floor=₹{config.long_wing_min_premium}, delta_floor={config.long_wing_delta_floor})",
-            file=sys.stderr,
+        logger.error(
+            "ic_entry.long_wing_floor_blocked",
+            leg="short_put",
+            min_premium=float(config.long_wing_min_premium),
+            delta_floor=float(config.long_wing_delta_floor),
         )
         sys.exit(1)
 
@@ -357,10 +357,11 @@ async def run() -> None:
             f"Reason: No call wing passes delta + premium floors "
             f"(floor=₹{config.long_wing_min_premium}, delta_floor={config.long_wing_delta_floor})"
         )
-        print(
-            "ERROR: short_call long wing — no candidate passes delta + premium floors "
-            f"(floor=₹{config.long_wing_min_premium}, delta_floor={config.long_wing_delta_floor})",
-            file=sys.stderr,
+        logger.error(
+            "ic_entry.long_wing_floor_blocked",
+            leg="short_call",
+            min_premium=float(config.long_wing_min_premium),
+            delta_floor=float(config.long_wing_delta_floor),
         )
         sys.exit(1)
 
@@ -377,7 +378,7 @@ async def run() -> None:
                 )
             )
         else:
-            print("ERROR: short_put failed liquidity gate", file=sys.stderr)
+            logger.error("ic_entry.liquidity_gate_blocked", leg="short_put")
             sys.exit(1)
     if not _apply_liquidity_gate([short_call]):
         if args.log_only_gates:
@@ -391,7 +392,7 @@ async def run() -> None:
                 )
             )
         else:
-            print("ERROR: short_call failed liquidity gate", file=sys.stderr)
+            logger.error("ic_entry.liquidity_gate_blocked", leg="short_call")
             sys.exit(1)
 
     # Step 9: Fetch spot (used only for the Telegram notification below).
@@ -402,7 +403,7 @@ async def run() -> None:
     ltp_map = client.get_ltp_sync(["NSE_INDEX|Nifty 50"])
     nifty_spot = ltp_map.get("NSE_INDEX|Nifty 50")
     if nifty_spot is None:
-        print("ERROR: failed to fetch live Nifty 50 spot price.", file=sys.stderr)
+        logger.error("ic_entry.spot_fetch_failed")
         sys.exit(1)
 
     # Persist all threshold-gate violations collected above (log-only mode).
@@ -461,10 +462,20 @@ async def run() -> None:
         cmds.append(cmd)
 
     if args.dry_run:
+        logger.info(
+            "ic_entry.dry_run_preview",
+            strategy=strategy_name,
+            leg_count=len(cmds),
+        )
         print("\n[DRY-RUN] Commands to execute:")
         for cmd in cmds:
             print(" ".join(cmd))
     else:
+        logger.info(
+            "ic_entry.executing_legs",
+            strategy=strategy_name,
+            leg_count=len(cmds),
+        )
         for cmd in cmds:
             print(f"Executing: {' '.join(cmd)}")
             subprocess.run(cmd, check=True)
@@ -499,11 +510,6 @@ async def run() -> None:
                     f"Subprocess calls exited 0 but {len(missing_legs)}/4 legs were "
                     f"NOT persisted to the DB: {', '.join(missing_legs)}."
                 )
-            print(
-                f"ERROR: {detail} Check --no-dry-run wiring and per-leg logs above. "
-                f"NOT sending success notification.",
-                file=sys.stderr,
-            )
             logger.error(
                 "ic_entry.legs_not_persisted",
                 strategy_name=strategy_name,

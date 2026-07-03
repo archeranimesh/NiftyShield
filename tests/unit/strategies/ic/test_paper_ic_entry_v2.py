@@ -734,3 +734,66 @@ def test_post_expiry_gate_holiday_on_last_tuesday() -> None:
         mock_date.today.return_value = date(2026, 7, 29)
         mock_date.side_effect = date
         _post_expiry_gate()  # should not raise
+
+
+# ---------------------------------------------------------------------------
+# B010.3 — structlog migration (setup_logging() entrypoint call)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_run_calls_setup_logging_first(
+    mock_gates, mock_store, mock_client, mock_subprocess, mock_telegram, mock_delta_tracker
+) -> None:
+    """run() must call setup_logging() as its first action (LOGGING.md standard)."""
+    with (
+        patch.object(
+            sys,
+            "argv",
+            [
+                "paper_ic_entry_v2.py",
+                "--expiry-type",
+                "monthly",
+                "--no-dry-run",
+                "--bod-path",
+                "dummy.json",
+            ],
+        ),
+        patch("scripts.strategies.ic.paper_ic_entry_v2.setup_logging") as mock_setup,
+    ):
+        await run()
+
+    mock_setup.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_chain_fetch_failure_logs_structured_error(
+    mock_gates, mock_store, mock_client
+) -> None:
+    """Chain fetch failure fires ic_entry.chain_fetch_failed at ERROR, no print()."""
+    import structlog.testing
+
+    mock_client.get_option_chain_sync.side_effect = RuntimeError("network down")
+
+    with (
+        patch.object(
+            sys,
+            "argv",
+            [
+                "paper_ic_entry_v2.py",
+                "--expiry-type",
+                "monthly",
+                "--no-dry-run",
+                "--bod-path",
+                "dummy.json",
+            ],
+        ),
+        patch("scripts.strategies.ic.paper_ic_entry_v2.setup_logging"),
+        structlog.testing.capture_logs() as logs,
+        pytest.raises(SystemExit) as excinfo,
+    ):
+        await run()
+
+    assert excinfo.value.code == 1
+    events = [entry["event"] for entry in logs]
+    assert "ic_entry.chain_fetch_failed" in events

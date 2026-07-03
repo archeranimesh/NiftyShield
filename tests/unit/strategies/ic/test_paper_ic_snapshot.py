@@ -10,6 +10,7 @@ from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import structlog.testing
 
 from scripts.strategies.ic.paper_ic_snapshot import _run
 from src.paper.models import PaperPosition
@@ -640,3 +641,151 @@ async def test_v1_loop_unchanged(
     call_arg = mock_telegram.send_notification.call_args[0][0]
     assert "📋 IC EOD Audit — monthly (paper_ic_nifty_v1_monthly)" in call_arg
     mock_v2_class.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# B010.3 — structlog migration (setup_logging() entrypoint + report_sent event)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_run_calls_setup_logging_first(
+    mock_store, mock_telegram, mock_create_client
+) -> None:
+    """_run() must call setup_logging() as its first action (LOGGING.md standard)."""
+    args = argparse.Namespace(
+        date=date(2026, 6, 26),
+        dry_run=False,
+        db_path="dummy.db",
+        bod_path="dummy.json",
+    )
+    with patch("scripts.strategies.ic.paper_ic_snapshot.setup_logging") as mock_setup:
+        await _run(args)
+
+    mock_setup.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_no_positions_report_sent_logs_zero_reports(
+    mock_store, mock_telegram, mock_create_client
+) -> None:
+    """No-open-positions path logs ic_snapshot.report_sent with report_count=0."""
+    mock_store.get_positions.return_value = []
+    args = argparse.Namespace(
+        date=date(2026, 6, 26),
+        dry_run=False,
+        db_path="dummy.db",
+        bod_path="dummy.json",
+    )
+    with (
+        patch("scripts.strategies.ic.paper_ic_snapshot.setup_logging"),
+        structlog.testing.capture_logs() as logs,
+    ):
+        await _run(args)
+
+    events = [entry["event"] for entry in logs]
+    assert "ic_snapshot.report_sent" in events
+    sent = next(e for e in logs if e["event"] == "ic_snapshot.report_sent")
+    assert sent["report_count"] == 0
+    assert sent["channel"] == "telegram"
+
+
+@pytest.mark.asyncio
+async def test_one_variant_active_logs_report_sent(
+    mock_store,
+    mock_telegram,
+    mock_create_client,
+    mock_parse_chain,
+    mock_ic_class,
+) -> None:
+    """Active-variant path logs ic_snapshot.report_sent with report_count>0."""
+    monthly_name = CONFIGS["monthly"].strategy_name
+    positions = [
+        PaperPosition(
+            strategy_name=monthly_name,
+            leg_role="short_put",
+            net_qty=-1,
+            avg_cost=Decimal("0.0"),
+            avg_sell_price=Decimal("80.0"),
+            instrument_key="NSE_FO|NIFTY26JUN202624000PE",
+            entry_date=date(2026, 6, 1),
+        )
+    ]
+    mock_store.get_positions.side_effect = (
+        lambda name: positions if name == monthly_name else []
+    )
+
+    args = argparse.Namespace(
+        date=date(2026, 6, 26),
+        dry_run=False,
+        db_path="dummy.db",
+        bod_path="dummy.json",
+    )
+
+    with (
+        patch("sqlite3.connect") as mock_conn,
+        patch("scripts.strategies.ic.paper_ic_snapshot.setup_logging"),
+        structlog.testing.capture_logs() as logs,
+    ):
+        mock_cursor = MagicMock()
+        mock_cursor.fetchall.return_value = []
+        exe = mock_conn.return_value.__enter__.return_value.execute
+        exe.return_value = mock_cursor
+
+        await _run(args)
+
+    events = [entry["event"] for entry in logs]
+    assert "ic_snapshot.report_sent" in events
+    sent = next(e for e in logs if e["event"] == "ic_snapshot.report_sent")
+    assert sent["report_count"] > 0
+
+
+@pytest.mark.asyncio
+async def test_variant_failure_logs_structured_error(
+    mock_store, mock_telegram, mock_create_client, mock_parse_chain, mock_ic_class
+) -> None:
+    """A variant raising unexpectedly logs ic_snapshot.variant_failed, still completes."""
+    monthly_name = CONFIGS["monthly"].strategy_name
+    positions = [
+        PaperPosition(
+            strategy_name=monthly_name,
+            leg_role="short_put",
+            net_qty=-1,
+            avg_cost=Decimal("0.0"),
+            avg_sell_price=Decimal("80.0"),
+            instrument_key="NSE_FO|NIFTY26JUN202624000PE",
+            entry_date=date(2026, 6, 1),
+        )
+    ]
+    mock_store.get_positions.side_effect = (
+        lambda name: positions if name == monthly_name else []
+    )
+    mock_ic_class.check_signals.side_effect = RuntimeError("boom")
+    # Force process_variant's internal try/except for check_signals to instead
+    # raise from a point caught by _run's own variant-level try/except: make
+    # _find_leg blow up unexpectedly deep in report assembly instead.
+    mock_ic_class.check_signals = AsyncMock(return_value=[])
+    mock_ic_class._compute_combined_pnl.side_effect = RuntimeError("boom")
+
+    args = argparse.Namespace(
+        date=date(2026, 6, 26),
+        dry_run=False,
+        db_path="dummy.db",
+        bod_path="dummy.json",
+    )
+
+    with (
+        patch("sqlite3.connect") as mock_conn,
+        patch("scripts.strategies.ic.paper_ic_snapshot.setup_logging"),
+        structlog.testing.capture_logs() as logs,
+    ):
+        mock_cursor = MagicMock()
+        mock_cursor.fetchall.return_value = []
+        exe = mock_conn.return_value.__enter__.return_value.execute
+        exe.return_value = mock_cursor
+
+        await _run(args)
+
+    events = [entry["event"] for entry in logs]
+    assert "ic_snapshot.variant_failed" in events
+    assert mock_telegram.send_notification.call_count == 1

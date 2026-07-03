@@ -15,6 +15,7 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
+from structlog.testing import capture_logs
 
 from scripts.strategies.ic.ic_entry_gates import (
     _is_vix_window_stale,
@@ -448,3 +449,84 @@ class TestPostExpiryGate:
             mock_date.today.return_value = date(2026, 8, 26)
             mock_date.side_effect = date
             _post_expiry_gate()  # must not raise
+
+
+# ---------------------------------------------------------------------------
+# B010.3 — structlog migration (print() -> logger.error/info/warning)
+# ---------------------------------------------------------------------------
+
+
+class TestB0103StructlogMigration:
+    """Confirms print()-as-log-line calls became real structlog events."""
+
+    def test_post_expiry_gate_blocked_logs_structured_error(self) -> None:
+        """post_expiry_gate.blocked event fires with expiry/today context, no print()."""
+        with patch("scripts.strategies.ic.ic_entry_gates.date") as mock_date:
+            mock_date.today.return_value = date(2026, 6, 30)
+            mock_date.side_effect = date
+            with capture_logs() as logs:
+                with pytest.raises(SystemExit):
+                    _post_expiry_gate()
+        events = [entry["event"] for entry in logs]
+        assert "post_expiry_gate.blocked" in events
+        blocked = next(e for e in logs if e["event"] == "post_expiry_gate.blocked")
+        assert blocked["log_level"] == "error"
+        assert "expiry" in blocked
+        assert "today" in blocked
+
+    def test_check_duplicate_blocked_logs_structured_error(self) -> None:
+        """check_duplicate.blocked fires at ERROR with strategy_name, no print()."""
+        store = MagicMock()
+        pos = MagicMock()
+        pos.net_qty = 50
+        store.get_positions.return_value = [pos]
+
+        with capture_logs() as logs:
+            with pytest.raises(SystemExit):
+                check_duplicate(store, "paper_ic_nifty_v2_monthly")
+
+        events = [entry["event"] for entry in logs]
+        assert "check_duplicate.blocked" in events
+        blocked = next(e for e in logs if e["event"] == "check_duplicate.blocked")
+        assert blocked["log_level"] == "error"
+        assert blocked["strategy_name"] == "paper_ic_nifty_v2_monthly"
+
+    def test_resolve_expiry_bod_file_missing_logs_structured_error(self) -> None:
+        """resolve_expiry.bod_file_missing fires when the BOD path doesn't exist."""
+        with capture_logs() as logs:
+            with pytest.raises(SystemExit):
+                resolve_expiry(
+                    Path("/nonexistent/bod.json"),
+                    expiry_bucket="weekly",
+                    dte_warn_lo=1,
+                    dte_warn_hi=10,
+                )
+        events = [entry["event"] for entry in logs]
+        assert "resolve_expiry.bod_file_missing" in events
+
+    def test_resolve_ivr_gate_blocked_logs_structured_error(self) -> None:
+        """resolve_ivr hard-block path (log_only_gates=False) logs a structured event."""
+        with (
+            patch("scripts.strategies.ic.ic_entry_gates.Path.exists", return_value=True),
+            patch("scripts.strategies.ic.ic_entry_gates.load_vix_series", return_value=[]),
+            patch("scripts.strategies.ic.ic_entry_gates.IntradayMarketStore") as m_store_cls,
+            patch("scripts.strategies.ic.ic_entry_gates.fetch_vix_latest", return_value=15.0),
+            patch("scripts.strategies.ic.ic_entry_gates.compute_ivr", return_value=0.10),
+        ):
+            store_inst = MagicMock()
+            store_inst.get_latest_vix_today.return_value = 15.0
+            m_store_cls.return_value = store_inst
+
+            with capture_logs() as logs:
+                with pytest.raises(SystemExit):
+                    resolve_ivr(
+                        Path("dummy.db"),
+                        Decimal("0.25"),
+                        force_entry=False,
+                        log_only_gates=False,
+                    )
+        events = [entry["event"] for entry in logs]
+        assert "resolve_ivr.gate_blocked" in events
+        blocked = next(e for e in logs if e["event"] == "resolve_ivr.gate_blocked")
+        assert blocked["ivr"] == pytest.approx(0.10)
+        assert blocked["gate"] == pytest.approx(0.25)

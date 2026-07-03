@@ -35,6 +35,7 @@ from src.strategy.ic_expiry_config import CONFIGS
 from src.strategy.ic_expiry_config_v2 import CONFIGS_V2
 from src.strategy.ic_nifty_v1 import IronCondorV1
 from src.strategy.ic_nifty_v2 import IronCondorV2
+from src.utils.logging import setup_logging
 
 load_dotenv()
 
@@ -321,6 +322,7 @@ async def process_variant(
 
 
 async def _run(args: argparse.Namespace) -> None:
+    setup_logging()
     snap_date: date = args.date or date.today()
     save: bool = not args.dry_run
 
@@ -332,9 +334,7 @@ async def _run(args: argparse.Namespace) -> None:
         broker = create_client(settings.upstox_env)
     except ValueError:
         if args.dry_run:
-            logger.warning(
-                "Upstox client initialization failed — using mock broker."
-            )
+            logger.warning("ic_snapshot.broker_init_failed_mock_fallback")
 
             class _MockBroker:
                 async def get_ltp(self, keys: list[str]) -> dict[str, Decimal]:
@@ -347,7 +347,7 @@ async def _run(args: argparse.Namespace) -> None:
 
             broker = _MockBroker()
         else:
-            logger.error("Upstox client init failed. Use --dry-run.")
+            logger.error("ic_snapshot.broker_init_failed")
             sys.exit(1)
 
     # Telegram notifier
@@ -394,6 +394,7 @@ async def _run(args: argparse.Namespace) -> None:
                 "ic_snapshot.variant_failed",
                 strategy=config.strategy_name,
                 error=str(exc),
+                variant_version="v1",
             )
             reports.append(
                 f"📋 IC EOD Audit — {expiry_type} ({config.strategy_name})\n"
@@ -415,13 +416,24 @@ async def _run(args: argparse.Namespace) -> None:
             if report is not None:
                 reports.append(report)
         except Exception as exc:
-            logger.error("ic_snapshot.v2_variant_failed", strategy=config.strategy_name, error=str(exc))
+            logger.error(
+                "ic_snapshot.variant_failed",
+                strategy=config.strategy_name,
+                error=str(exc),
+                variant_version="v2",
+            )
             reports.append(f"📋 IC EOD Audit — {expiry_type} ({config.strategy_name})\nError: Snapshot failed.")
 
     if not has_any_positions:
         msg = "IC EOD: no open positions across all expiry types."
         print(msg)
         if notifier and save:
+            logger.info(
+                "ic_snapshot.report_sent",
+                channel="telegram",
+                report_count=0,
+                snap_date=snap_date.isoformat(),
+            )
             try:
                 await notifier.send_notification(msg)
             except Exception as exc:  # Intentional: fail-safe delivery
@@ -431,9 +443,16 @@ async def _run(args: argparse.Namespace) -> None:
         return
 
     # Print reports and send to Telegram
-    for r in reports:
+    for idx, r in enumerate(reports):
         print(f"\n{r}\n")
         if notifier and save:
+            logger.info(
+                "ic_snapshot.report_sent",
+                channel="telegram",
+                report_index=idx,
+                report_count=len(reports),
+                snap_date=snap_date.isoformat(),
+            )
             try:
                 await notifier.send_notification(r)
             except Exception as exc:  # Intentional: fail-safe delivery
