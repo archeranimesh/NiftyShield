@@ -329,6 +329,12 @@ def _historical_main(snap_date: date, db_path: Path) -> int:
         nuvama_options_summary=nuvama_options_summary,
     )
     summary_text = summary_text + "\n\n" + dhan_options_section
+    logger.info(
+        "daily_snapshot.summary_report",
+        mode="historical",
+        snap_date=snap_date.isoformat(),
+        body=summary_text,
+    )
     print(summary_text)
     print("\n  Done.")
     return 0
@@ -715,6 +721,12 @@ async def _async_main(snap_date: date, db_path: Path, dhan_trade_count: int = 0)
         )
         # Append Dhan Options section (always — shows [unavailable] on failure).
         summary_text = summary_text + "\n\n" + dhan_options_section
+        logger.info(
+            "daily_snapshot.summary_report",
+            mode="live",
+            snap_date=snap_date.isoformat(),
+            body=summary_text,
+        )
         print(summary_text)
 
         # ── Telegram notification (non-fatal, skipped if env vars absent) ─
