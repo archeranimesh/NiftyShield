@@ -13,6 +13,41 @@
 > `BUGS.md` is not migrated, it stays until `BUG-001` is fixed and deleted per its own
 > convention. ID numbering is one shared sequence across both files — this registry
 > starts at `BUG-002`.
+>
+> **Priority note:** `BUG-010` is pinned first in reading order (out of ID sequence) because
+> it's marked highest priority to pick up next — fixing it makes every other entry in this
+> registry faster to triage going forward. IDs are a discovery-order log, not a priority
+> queue; this entry's position is the priority signal.
+
+---
+
+## BUG-010 — Six incompatible log output formats coexist in `logs/`, no enforced logging entrypoint
+
+| Field | Value |
+|---|---|
+| Severity | **HIGH** — not a financial-logic defect, but actively degrades debuggability project-wide; directly slowed down triage of `BUG-009` (had to eyeball-parse mixed formats instead of grepping a single structured shape). Bumped from MEDIUM to HIGH and moved to the front of this registry — pick up first. |
+| Status | 🔴 Open |
+| Discovered | 2026-07-03, surveying every file in `logs/` after noticing `logs/intraday.log` mixed formats |
+| Location | Project-wide — no single file, see breakdown below |
+
+**Symptom:** every log file in `logs/` was sampled (`head`/`tail`, 19 files). At least six distinct line formats are in circulation, often interleaved within the same file:
+
+1. **Structlog pipeline (correct, the intended standard)** — `src/utils/logging.py::setup_logging()` wired correctly. Format: `YYYY-MM-DD HH:MM:SS [LEVEL] [pkg] [sub] [module] event key=value`. Seen in `chain_intraday.log`, `chain_snapshot.log`, `eod_summary.log`, `monitor_daemon.log`, `morning_nav.log`, `pre_market_brief.log`, most of `intraday.log`/`paper_snapshot.log`/`vix_refresh.log`. This is the good case — every other format below is a deviation from it.
+2. **Bare stdlib `logging.getLogger(__name__)`, bypassing structlog entirely** — `src/client/upstox_market.py:32`, three call sites (~131/165/205), `%s`-style. Because `setup_logging()` sets the stdlib root handler to `format="%(message)s"`, these render as bare `upstox.api_call endpoint=... status_code=... latency_ms=...` with no timestamp, no level, no module tag. Appears inside `chain_intraday.log`, `chain_snapshot.log`, `intraday.log`, `paper_snapshot.log`, `pre_market_brief.log` — scattered wherever `upstox_market.py` is on the call path.
+3. **Raw `print(f"ERROR: ...")` / `print(f"INFO: ...")` with no timestamp** — `scripts/strategies/ic/ic_entry_gates.py`, `paper_ic_entry.py`, `paper_ic_entry_v2.py`. Produces `ERROR: post_expiry_gate: ...`, `INFO: selected expiry = ...` with a hand-typed prefix instead of a real level field. Fills `ic_leaps.log`, `ic_monthly.log`, `ic_v2_monthly.log`, `ic_weekly.log`, `ic_yearly.log` almost entirely.
+4. **`structlog.get_logger(...)` called without `setup_logging()` ever being invoked** — all five files under `scripts/strategies/ic/` construct a module-level `logger = structlog.get_logger(...)` but none call `setup_logging()`, so structlog falls back to its own unconfigured default renderer: `2026-07-03 10:54:36 [warning  ]  gate.ivr_violation_logged  gate=0.25 ivr=0.149...` — lowercase padded level, no `[module]` bracket, different timestamp/spacing than format 1. Mixed into `ic_monthly.log`, `ic_v2_monthly.log`, `ic_snapshot.log` alongside format 3.
+5. **Hand-built human-readable report strings (emoji, tables, no structure at all)** — `paper_ic_snapshot.py` (`📋 IC EOD Audit — ...`), `paper_ic_monthly_comparison.py` (`📊 IC Monthly Comparison — ...`), and a Rich-style `───` table block at the tail of `paper_snapshot.log`. These are Telegram-notification bodies also being dumped straight into the log file as-is — not a log line, a rendered report.
+6. **Bespoke bracket-timestamp format, distinct from format 1** — `scripts/portfolio/daily_snapshot.py` writes `[2026-06-15 15:45:01] Daily snapshot for 2026-06-15` followed by indented plain-text detail lines (`  run_id=...`), which is neither the structlog pipeline nor a `print(f"LEVEL: ...")` — a third, separate hand-rolled convention. Fills `logs/snapshot.log`.
+
+One additional file, `logs/apiconnect.log`, is the Nuvama APIConnect SDK's own internal logger output (`2026-06-15 06:14:48,167 [INFO] APIConnect.APIConnect: ...`, comma-millisecond timestamps) — this is third-party and out of project control; it should be documented as an accepted exception, not "fixed."
+
+**Root cause:** `setup_logging()` exists and is well-built (`src/utils/logging.py`), but nothing in the codebase enforces that every entrypoint script calls it before logging, and nothing prevents `print()` or raw stdlib `logging.getLogger()` from being used instead. Three independent failure modes compound: (a) scripts that never call `setup_logging()` at all, (b) code that reaches for stdlib `logging` directly instead of `structlog.stdlib.get_logger`, and (c) human-facing report/notification text being treated as if it were a log line. `REVIEW.md` G7 mandates `%`-style formatting for "logger calls," which is a stdlib-logging convention — it doesn't address structlog's keyword-argument idiom at all, so the review checklist itself has no rule that would have caught formats 2–6.
+
+**Impact:** concretely slowed down the `BUG-009` investigation — errors and warnings are not uniformly greppable (`grep ERROR` misses format-4's `[warning  ]` lines and format-1's `[ERROR]` lines have a different bracket shape; format 3's `"ERROR:"` prefix has no real level field to filter on). Any future alerting/monitoring built on top of these logs (e.g. "page me on any ERROR") cannot rely on a single parse rule.
+
+**Suggested fix:** see `LOGGING.md` (project root — new file, added alongside this bug entry) for the standard going forward. Concretely: (1) every entrypoint script (anything with `if __name__ == "__main__"`) must call `setup_logging()` before any other logging happens — add this as a `code-reviewer` checklist item; (2) migrate `src/client/upstox_market.py` to `structlog.stdlib.get_logger(__name__)` (3 call sites); (3) migrate the five `scripts/strategies/ic/*.py` files' raw `print()` calls to `logger.info/warning/error(...)` with keyword args, and add the missing `setup_logging()` call; (4) migrate `scripts/portfolio/daily_snapshot.py` off its bespoke `[timestamp] message` format onto the shared pipeline; (5) keep emoji/table report strings, but log them as a single structured event (e.g. `logger.info("report.sent", channel="telegram", strategy=..., body=report_text)`) rather than a bare `print()` with no level/timestamp; (6) document `apiconnect.log` as an intentional third-party exception rather than attempting to reformat SDK-internal logging.
+
+**Related:** discovered while triaging `BUG-009`; `upstox_market.py`'s stdlib-logging bypass was separately flagged before this survey formalized it as one item in the larger project-wide pattern.
 
 ---
 
@@ -213,3 +248,41 @@ The adjustment loop optimizes for exactly one objective (portfolio delta back in
 **Suggested fix:** either (a) have `record_paper_trade.py` re-fetch live LTP and compare against the passed `--price` within some tolerance, warning or blocking on material drift, or (b) have the dry-run commands omit `--price` entirely and let `record_paper_trade.py`'s existing live-fetch path (already there for the no-price case) be the only path — accepting that the reviewed dry-run numbers are illustrative, not literal execution instructions. Either way, re-running the IVR/DTE/delta gates at actual execution time (not just at dry-run generation time) closes the real gap.
 
 **Related:** `BUG-007` (same family — decisions made at one point in the pipeline are not re-checked at the point where they actually take effect).
+
+---
+
+## BUG-009 — `paper_ic_snapshot.py` can never resolve expiry from `instrument_key`, silently killing the daily IC EOD audit
+
+| Field | Value |
+|---|---|
+| Severity | **HIGH** — daily snapshot report for both monthly IC variants is a permanent no-op; no P&L/audit visibility despite open positions |
+| Status | 🔴 Open |
+| Discovered | 2026-07-03, investigating why no snapshot report arrived for `paper_ic_nifty_v2_monthly` after today's entry |
+| Location | `scripts/strategies/ic/paper_ic_snapshot.py::process_variant` (lines ~115–134), regex defined line 44 |
+
+**Symptom:** `logs/ic_snapshot.log`, 2026-07-03 15:45:05 — cron ran on schedule (`45 15 * * 1-5`), both variants had open positions, but output was:
+```
+ic_snapshot.no_expiry_found strategy=paper_ic_nifty_v1_monthly
+ic_snapshot.no_expiry_found strategy=paper_ic_nifty_v2_monthly
+
+📋 IC EOD Audit — monthly (paper_ic_nifty_v1_monthly)
+Error: Expiry date could not be parsed from positions.
+
+📋 IC EOD Audit — monthly (paper_ic_nifty_v2_monthly)
+Error: Expiry date could not be parsed from positions.
+```
+No real audit ever reaches the user — just this error stub, and it's apparently not escalated anywhere visible (non-fatal notifier contract per `src/notifications/CLAUDE.md`), so the failure goes unnoticed until asked about directly.
+
+**Root cause:**
+```python
+_EXPIRY_RE_ROBUST = re.compile(r"NIFTY(\d{2}[A-Za-z]{3}\d{4})", re.IGNORECASE)
+...
+m = _EXPIRY_RE_ROBUST.search(p.instrument_key)
+```
+This expects a trading-symbol string like `NIFTY28JUL2026...` embedded in `p.instrument_key`. Actual `instrument_key` values recorded in `paper_trades` (confirmed via query) are Upstox's numeric form — `NSE_FO|63930`, `NSE_FO|63987`, etc. — with no date substring anywhere. The regex can never match, `expiry` stays `None` for every leg of every variant, and the function always falls into the `no_expiry_found` branch regardless of whether positions are genuinely open and healthy.
+
+**Impact:** confirmed today for `paper_ic_nifty_v2_monthly` (4 legs entered same day, all `OPEN` in `paper_trades`) and `paper_ic_nifty_v1_monthly` (also has open legs). This is not a one-off — the bug is structural (bad assumption baked into the regex), so it has silently broken the daily EOD audit for both variants since whichever commit last changed `instrument_key` to the numeric format, or since this script was first written against the wrong assumption. `git log --oneline` on this file not yet checked to date the regression precisely.
+
+**Suggested fix:** don't derive expiry from a string pattern that was never present in the stored key. Either (a) reverse-lookup the numeric `instrument_key` against the offline instrument master (`src/instruments/`) to get the real trading symbol/expiry, or (b) store expiry directly on the position/trade row at entry time (`paper_trades` or `PaperPosition`) so downstream snapshot code doesn't need to reconstruct it at all. Option (b) avoids adding an instrument-master lookup dependency to a script whose only job is reporting.
+
+**Related:** none yet — first bug traced to `paper_ic_snapshot.py` itself; distinct from `BUG-002`'s put/call substring-matching bug in `_position_delta`, though both stem from the same class of mistake (assuming a trading-symbol string is present where only a numeric `instrument_key` actually is).
