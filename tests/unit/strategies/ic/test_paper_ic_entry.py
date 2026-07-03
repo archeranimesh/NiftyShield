@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import sys
-from datetime import datetime
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -14,7 +13,6 @@ import pytest
 from scripts.strategies.ic.paper_ic_entry import run
 from src.paper.constants import STRATEGY_CSP
 from src.paper.models import PaperPosition
-from src.risk.models import PortfolioDelta
 
 
 @pytest.fixture(autouse=True)
@@ -686,7 +684,7 @@ async def test_bod_lookup_failed_error(
 
 
 @pytest.mark.asyncio
-async def test_portfolio_delta_breach_and_adjust(
+async def test_ic_entry_ignores_other_open_positions(
     mock_vix_data,
     mock_store,
     mock_lookup,
@@ -694,46 +692,43 @@ async def test_portfolio_delta_breach_and_adjust(
     mock_subprocess,
     mock_telegram,
 ):
-    """Test portfolio delta breach triggers one-strike OTM adjustment."""
-    # Current delta = 0.20 lots (very long).
-    # Proposed IC: 23800 PE (-0.10 delta) & 24700 CE (+0.08 delta).
-    # Net IC delta = 0.02 lots.
-    # Projected total = 0.20 + 0.02 = 0.22 lots (passes).
-    #
-    # Let's mock current delta = 0.24 lots.
-    # Net IC delta = 0.02 lots. Projected = 0.26 lots (breach > 0.25).
-    # We attempt OTM adjustment: shift short put (23800 PE) one strike lower
-    # (23700 PE, delta -0.08).
-    # New net IC delta = 0.08 - 0.08 = 0.00 lots.
-    # New projected = 0.24 + 0.00 = 0.24 lots (passes!).
-    with patch("scripts.strategies.ic.paper_ic_entry.PortfolioDeltaTracker") as mock_tracker_cls:
-        tracker_inst = MagicMock()
-        tracker_inst.aggregate_delta.return_value = PortfolioDelta(
-            options_delta_lots=Decimal("0.26"),
-            niftybees_delta_lots=Decimal("0.0"),
-            total_delta_lots=Decimal("0.26"),
-            warning_breached=False,
-            cap_breached=False,
-            as_of=datetime.now(),
-        )
-        mock_tracker_cls.return_value = tracker_inst
+    """IC entries are judged on their own two short legs only (2026-07-03).
 
-        test_args = [
-            "paper_ic_entry.py",
-            "--expiry-type",
-            "weekly",
-            "--no-dry-run",
-            "--bod-path",
-            "dummy.json",
-        ]
-        with patch.object(sys, "argv", test_args):
-            await run()
+    Regression test for the removal of cross-strategy/cross-IC-variant
+    portfolio-delta gating and self-adjustment. Previously, an open position
+    in another strategy (or another IC expiry variant) with a large delta
+    could push this script to silently shift the short_put/short_call strike
+    one notch OTM ("Portfolio delta gate adjusted ..."). Per explicit product
+    decision, this script must no longer query PaperStore.get_strategy_names()
+    or PaperStore.get_positions() for any strategy other than its own
+    duplicate-entry guard, and must not import/construct PortfolioDeltaTracker
+    at all. Strikes are chosen purely by delta-target proximity on the live
+    chain, regardless of what else is open.
+    """
+    test_args = [
+        "paper_ic_entry.py",
+        "--expiry-type",
+        "weekly",
+        "--no-dry-run",
+        "--bod-path",
+        "dummy.json",
+    ]
+    with patch.object(sys, "argv", test_args):
+        await run()
 
-        assert mock_subprocess.call_count == 4
-        called_cmds = [call.args[0] for call in mock_subprocess.call_args_list]
+    assert mock_subprocess.call_count == 4
+    called_cmds = [call.args[0] for call in mock_subprocess.call_args_list]
 
-        # Verify short put was adjusted to 23700
-        assert called_cmds[0][8] == "NSE_FO|P23700"
+    # Strikes land at the plain delta-target selection (23800 PE / 24600 CE
+    # per mock_chain's delta table) — no adjustment mechanism exists anymore.
+    assert called_cmds[0][8] == "NSE_FO|P23800"
+    assert called_cmds[2][8] == "NSE_FO|C24600"
+
+    # get_strategy_names() was only ever called by the removed cross-strategy
+    # aggregation step — its absence here is direct evidence the mechanism is
+    # gone, not just dormant. get_positions() is still legitimately called
+    # once for this strategy's own duplicate-entry guard.
+    mock_store.get_strategy_names.assert_not_called()
 
 
 @pytest.mark.asyncio

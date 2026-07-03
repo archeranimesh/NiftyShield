@@ -204,13 +204,14 @@ def mock_telegram():
 
 @pytest.fixture
 def mock_delta_tracker():
-    with patch("scripts.strategies.ic.paper_ic_entry_v2.PortfolioDeltaTracker") as m_cls:
-        tracker = MagicMock()
-        pd = MagicMock()
-        pd.total_delta_lots = Decimal("0.05")  # neutral portfolio
-        tracker.aggregate_delta.return_value = pd
-        m_cls.return_value = tracker
-        yield tracker
+    """No-op fixture, kept only so existing test signatures don't need editing.
+
+    PortfolioDeltaTracker was removed from paper_ic_entry_v2.py on 2026-07-03
+    (IC entries are judged on their own two short legs only — see DECISIONS.md
+    "IC entries judged in isolation"). Patching that symbol would now raise
+    AttributeError since the import no longer exists in the module.
+    """
+    yield None
 
 
 # ---------------------------------------------------------------------------
@@ -511,39 +512,42 @@ async def test_long_wing_premium_floor_exits(
 
 
 # ---------------------------------------------------------------------------
-# Portfolio delta adjustment
+# Portfolio delta adjustment (removed 2026-07-03)
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_portfolio_delta_adjustment_shifts_short_put(
+async def test_ic_entry_ignores_other_open_positions(
     mock_gates, mock_store, mock_client, mock_subprocess, mock_telegram
 ) -> None:
-    """When projected delta > 0.25, short_put is shifted one strike OTM."""
-    with patch("scripts.strategies.ic.paper_ic_entry_v2.PortfolioDeltaTracker") as m_cls:
-        tracker = MagicMock()
-        pd = MagicMock()
-        # High current delta forces adjustment: projected = 0.25 (put) - 0.22 (call) + 0.30 = ~0.33
-        pd.total_delta_lots = Decimal("0.30")
-        tracker.aggregate_delta.return_value = pd
-        m_cls.return_value = tracker
+    """IC entries are judged on their own two short legs only (2026-07-03).
 
-        with patch.object(
-            sys,
-            "argv",
-            [
-                "paper_ic_entry_v2.py",
-                "--expiry-type",
-                "monthly",
-                "--no-dry-run",
-                "--bod-path",
-                "dummy.json",
-            ],
-        ):
-            await run()
+    Regression test for the removal of cross-strategy/cross-IC-variant
+    portfolio-delta gating and self-adjustment. get_strategy_names() was only
+    ever called by the removed aggregation step — its absence here is direct
+    evidence the mechanism is gone. Strikes land at the plain delta-target
+    selection (24100 PE / 24500 CE per _build_chain's delta table), regardless
+    of what else is open in the account.
+    """
+    with patch.object(
+        sys,
+        "argv",
+        [
+            "paper_ic_entry_v2.py",
+            "--expiry-type",
+            "monthly",
+            "--no-dry-run",
+            "--bod-path",
+            "dummy.json",
+        ],
+    ):
+        await run()
 
-    # Should still complete (adjustment found) and execute 4 legs
     assert mock_subprocess.call_count == 4
+    cmds = [c.args[0] for c in mock_subprocess.call_args_list]
+    assert cmds[0][8] == "NSE_FO|P24100"
+    assert cmds[2][8] == "NSE_FO|C24300"
+    mock_store.get_strategy_names.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

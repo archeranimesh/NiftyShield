@@ -678,7 +678,17 @@ def main() -> None:
         force_entry=args.force_entry,
     )
 
-    if args.action == "BUY" and not args.close and not args.force_entry:
+    # IC strategies (paper_ic_nifty_v1_*/v2_*) are exempt from this account-wide
+    # check: per explicit product decision (2026-07-03, DECISIONS.md "IC entries
+    # judged in isolation"), an IC's hedge-leg BUYs must never be influenced by
+    # unrelated strategies' (CSP, futures, proxy, spot) open positions. Other
+    # strategies (e.g. CSP rolls) are unaffected and still go through this gate.
+    if (
+        args.action == "BUY"
+        and not args.close
+        and not args.force_entry
+        and not args.strategy.startswith("paper_ic_")
+    ):
         try:
             market_client = UpstoxMarketClient()
             ltp_dict = market_client.get_ltp_sync(["NSE_INDEX|Nifty 50"])

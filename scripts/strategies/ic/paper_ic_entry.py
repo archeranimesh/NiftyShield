@@ -27,7 +27,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from scripts.strategies.ic.ic_entry_gates import (
     _post_expiry_gate,
-    ic_relevant_strategy_names,
     make_gate_violation,
 )
 from src.backtest.ivr import compute_ivr
@@ -49,7 +48,6 @@ from src.paper.constants import (
     STRATEGY_CSP,
 )
 from src.paper.store import PaperStore
-from src.risk.delta_tracker import PortfolioDeltaTracker
 from src.strategy.ic_expiry_config import CONFIGS
 
 load_dotenv()
@@ -416,8 +414,11 @@ async def run() -> None:
             print("ERROR: short_call failed liquidity gate", file=sys.stderr)
             sys.exit(1)
 
-    # Step 10: Portfolio delta check
-    # Fetch spot to determine current delta & projected delta
+    # Step 10: Fetch spot (used only for the Telegram notification below).
+    # Portfolio-level delta gating/self-adjustment removed 2026-07-03 per
+    # explicit product decision: IC entries are judged on their own two short
+    # legs only, never against other strategies' or other IC variants'
+    # positions. See DECISIONS.md 2026-07-03 "IC entries judged in isolation."
     ltp_map = client.get_ltp_sync(["NSE_INDEX|Nifty 50"])
     nifty_spot = ltp_map.get("NSE_INDEX|Nifty 50")
     if nifty_spot is None:
@@ -426,127 +427,6 @@ async def run() -> None:
             file=sys.stderr,
         )
         sys.exit(1)
-
-    strategies_list = ic_relevant_strategy_names(store.get_strategy_names())
-    all_open_pos = []
-    for strat in strategies_list:
-        all_open_pos.extend([p for p in store.get_positions(strat) if p.net_qty != 0])
-
-    tracker = PortfolioDeltaTracker()
-    portfolio_delta = tracker.aggregate_delta(all_open_pos, Decimal(str(nifty_spot)), LOT_SIZE)
-    current_delta_lots = portfolio_delta.total_delta_lots
-
-    ic_delta_lots = Decimal(str(abs(short_put["delta"]))) - Decimal(str(abs(short_call["delta"])))
-    projected_total = current_delta_lots + ic_delta_lots
-
-    if not args.force_entry:
-        if projected_total < Decimal("-0.05") or projected_total > Decimal("0.25"):
-            # Attempt one-strike OTM adjustment
-            adjusted = False
-            sorted_chain = sorted(raw_chain, key=lambda e: e.get("strike_price", 0.0))
-            strikes = [e.get("strike_price", 0.0) for e in sorted_chain]
-
-            if projected_total > Decimal("0.25"):
-                # Shift short put one strike further OTM (lower strike)
-                try:
-                    idx = strikes.index(short_put["strike"])
-                    if idx > 0:
-                        adj_entry = sorted_chain[idx - 1]
-                        adj_put = extract_strike_row(adj_entry, "PE")
-                        if adj_put and _apply_liquidity_gate([adj_put]):
-                            new_ic_delta = Decimal(str(abs(adj_put["delta"]))) - Decimal(
-                                str(abs(short_call["delta"]))
-                            )
-                            if (
-                                Decimal("-0.05")
-                                <= (current_delta_lots + new_ic_delta)
-                                <= Decimal("0.25")
-                            ):
-                                # Success
-                                short_put = adj_put
-                                long_put_strike = (
-                                    float(short_put["strike"]) - config.wing_width_points
-                                )
-                                long_put_candidates = lookup.search_options(
-                                    underlying="NIFTY",
-                                    strike=long_put_strike,
-                                    option_type="PE",
-                                    expiry=expiry_str,
-                                )
-                                if long_put_candidates:
-                                    long_put_key = long_put_candidates[0]["instrument_key"]
-                                    adjusted = True
-                                    print(
-                                        f"INFO: Portfolio delta gate "
-                                        f"adjusted short_put to "
-                                        f"{short_put['strike']}"
-                                    )
-                except ValueError:
-                    pass
-
-            elif projected_total < Decimal("-0.05"):
-                # Shift short call one strike further OTM (higher strike)
-                try:
-                    idx = strikes.index(short_call["strike"])
-                    if idx < len(strikes) - 1:
-                        adj_entry = sorted_chain[idx + 1]
-                        adj_call = extract_strike_row(adj_entry, "CE")
-                        if adj_call and _apply_liquidity_gate([adj_call]):
-                            new_ic_delta = Decimal(str(abs(short_put["delta"]))) - Decimal(
-                                str(abs(adj_call["delta"]))
-                            )
-                            if (
-                                Decimal("-0.05")
-                                <= (current_delta_lots + new_ic_delta)
-                                <= Decimal("0.25")
-                            ):
-                                # Success
-                                short_call = adj_call
-                                long_call_strike = (
-                                    float(short_call["strike"]) + config.wing_width_points
-                                )
-                                long_call_candidates = lookup.search_options(
-                                    underlying="NIFTY",
-                                    strike=long_call_strike,
-                                    option_type="CE",
-                                    expiry=expiry_str,
-                                )
-                                if long_call_candidates:
-                                    long_call_key = long_call_candidates[0]["instrument_key"]
-                                    adjusted = True
-                                    print(
-                                        f"INFO: Portfolio delta gate "
-                                        f"adjusted short_call to "
-                                        f"{short_call['strike']}"
-                                    )
-                except ValueError:
-                    pass
-
-            if not adjusted:
-                if args.log_only_gates:
-                    logger.warning(
-                        "gate.portfolio_delta_violation_logged",
-                        projected_total=str(projected_total),
-                    )
-                    gate_violations.append(
-                        make_gate_violation(
-                            gate_name="portfolio_delta",
-                            threshold="[-0.05, 0.25]",
-                            actual=f"{projected_total:.4f}",
-                            strategy_name=config.strategy_name,
-                        )
-                    )
-                else:
-                    print(
-                        f"ERROR: Portfolio delta check failed. "
-                        f"Projected={projected_total:.3f} lots "
-                        f"(outside [-0.05, 0.25]). Stop.",
-                        file=sys.stderr,
-                    )
-                    sys.exit(1)
-    else:
-        if projected_total < Decimal("-0.05") or projected_total > Decimal("0.25"):
-            logger.warning("force_entry.delta_bypass", projected_total=projected_total)
 
     # Persist all threshold-gate violations collected above (log-only mode).
     for violation in gate_violations:
