@@ -54,6 +54,7 @@ Module tree (file-level descriptions): **`CONTEXT_TREE.md`** — load only when 
 - Working inside `src/<module>/` → that module's `CLAUDE.md` loads automatically
 - Reviewing or building on Antigravity's work → also read `ANTIGRAVITY.md`
 - Authoring or reviewing any task/story/spec mentioning expiry, DTE, or calendar logic → also read `REFERENCES.md` (expiry day changed Thursday→Tuesday, April 2026)
+- Adding a new entrypoint script, adding/editing any `logger.*()` call, or touching `src/utils/logging.py` → also read `LOGGING.md` (project root) — canonical logging standard; see `BUG-010` in `docs/bugs/bugs.md` for why it exists
 
 ## Python Standards (new module checklist)
 
@@ -65,6 +66,14 @@ Every new Python package directory — whether under `src/`, `scripts/`, or `tes
 Reminder: after adding a new package, re-index: `mcp__codebase-memory-mcp__index_repository`.
 
 ## Logging standard (scripts/)
+
+**Full standard: `LOGGING.md` (project root) — read it before adding any entrypoint script or
+`logger.*()` call.** It covers the required line shape, event-naming convention, the
+`setup_logging()` entrypoint rule, and why raw `print()` / bare stdlib `logging.getLogger()`
+are banned in `src/` and `scripts/` (see `BUG-010`, `docs/bugs/bugs.md`, for the audit that
+found six incompatible formats in `logs/` before this was written down).
+
+The naming-convention rule specific to `scripts/`, summarized here for quick reference:
 
 **Never** use `structlog.get_logger(__name__)` in `scripts/`. When a script is run directly,
 `__name__ == "__main__"` and every log line shows `[__main__]` — losing all module context.
@@ -274,6 +283,8 @@ Never use a lower-ranked response to contradict Stage 3.
 | Commit format | `.claude/skills/commit/SKILL.md` |
 | Session close / protocol audit | `.claude/skills/session-close/SKILL.md` |
 | Python review checklist | `REVIEW.md` |
+| Logging standard (entrypoint rule, line shape, event naming) | `LOGGING.md` |
+| Bug registry (confirmed defects) | `docs/bugs/bugs.md` |
 | Backtest → paper → live pipeline plan | `BACKTEST_PLAN.md` |
 | Council trigger criteria + workflow | `docs/council/README.md` |
 | Completed council decisions | `docs/council/YYYY-MM-DD_<topic>.md` |
