@@ -767,19 +767,17 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
     if args.date:
         snap_date = date.fromisoformat(args.date)
-        print(f"[{now}] Historical P&L query for {snap_date.isoformat()}")
+        logger.info("daily_snapshot.historical_query", snap_date=snap_date.isoformat())
         return _historical_main(snap_date, args.db_path)
 
     snap_date = date.today()
     if not is_trading_day(snap_date):
-        print(f"[{now}] Market holiday ({snap_date.isoformat()}) — skipping snapshot.")
+        logger.info("daily_snapshot.market_holiday_skip", snap_date=snap_date.isoformat())
         return 0
 
-    print(f"[{now}] Daily snapshot for {snap_date.isoformat()}")
+    logger.info("daily_snapshot.starting", snap_date=snap_date.isoformat())
     return asyncio.run(_async_main(snap_date, args.db_path, dhan_trade_count=args.dhan_trade_count))
 
 
