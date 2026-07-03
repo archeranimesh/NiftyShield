@@ -119,7 +119,7 @@
 - [x] **B007.2** — N/A — mooted: the `adj_call`/`adj_put` portfolio-delta strike-shift block this item targets no longer exists; removed by the 2026-07-03 "IC entries judged in isolation" decision (`DECISIONS.md`), confirmed via `search_code` (zero matches for `adj_call`/`adj_put`/"Portfolio delta gate adjusted" repo-wide) | Confirmed 2026-07-03, N/A per Animesh
 - [x] **B007.3** — N/A — no code path left to test | N/A per Animesh
 - [x] **B007.4** — N/A — no diff to review | N/A per Animesh
-- [x] **B007.5** — N/A — bugs.md status flipped to closed/moot below, no fix commit | N/A per Animesh
+- [x] **B007.5** — N/A — bugs.md status flipped to closed/moot below, no fix commit | N/A per Animesh | SHA 66c4c71
 
 ---
 
@@ -137,8 +137,8 @@
 ## BUG-009 — `paper_ic_snapshot.py` can never resolve expiry from `instrument_key`
 
 - [x] **B009.1** — Root-cause confirmed: `_EXPIRY_RE_ROBUST` regex expects a trading-symbol string (`NIFTY28JUL2026...`) embedded in `p.instrument_key`; actual stored keys are Upstox's numeric form (`NSE_FO|63930`) with no date substring — regex can never match, `expiry` stays `None` for every leg, `no_expiry_found` branch always fires regardless of position health | Confirmed 2026-07-03 (no code change, investigation only)
-- [ ] **B009.2** — Decision needed (Animesh): (a) reverse-lookup the numeric `instrument_key` against the offline instrument master (`src/instruments/`) to recover the real trading symbol/expiry, or (b) store expiry directly on the position/trade row at entry time (`paper_trades`/`PaperPosition`) so downstream snapshot code doesn't need to reconstruct it — bugs.md leans toward (b) to avoid adding an instrument-master lookup dependency to a reporting-only script, but flag for confirmation since (b) implies a schema/write-path change vs. (a)'s read-only fix
-- [ ] **B009.3** — Implement chosen option in `scripts/strategies/ic/paper_ic_snapshot.py::process_variant` (and the write path if (b) is chosen)
+- [x] **B009.2** — Decision: **option (a)** — reverse-lookup the numeric `instrument_key` against the offline instrument master (`src/instruments/`, `InstrumentLookup.get_by_key`) at read time in `process_variant`. Rejected (b) (write expiry to `PaperPosition`/`paper_trades` at entry time): it still needs (a)'s lookup logic anyway as a one-time backfill for every pre-migration `paper_trades` row, so it doesn't actually avoid the instrument-master dependency bugs.md cited as the reason to prefer it — just defers paying for it once at migration time. (a) also matches the existing precedent set by BUG-002's `PaperPosition.option_type`, which was deliberately resolved lazily at read time (not written at trade-record time) for the same reason: no migration, no backfill, fixes existing historical data immediately. No schema/write-path change. Decided by Animesh, 2026-07-03 (no code change this step).
+- [ ] **B009.3** — Implement in `scripts/strategies/ic/paper_ic_snapshot.py::process_variant`: resolve expiry via `InstrumentLookup.get_by_key(instrument_key)` (same mechanism as B002.3), falling back to `no_expiry_found` (unchanged, logged) when the key is unresolvable/legacy
 - [ ] **B009.4** — Tests: happy-path (numeric `instrument_key` → expiry correctly resolved, real audit report generated), edge case (unresolvable/legacy key → falls back to `no_expiry_found` without crashing, same as today's safe-but-wrong behavior)
 - [ ] **B009.5** — Run real `@code-reviewer` subagent (or `general-purpose` + `REVIEW.md` substitute) against `git diff HEAD`
 - [ ] **B009.6** — Commit, update `bugs.md` status to ✅ Fixed + SHA
