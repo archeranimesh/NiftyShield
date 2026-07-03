@@ -40,7 +40,7 @@ def _chain_to_table(
             return Decimal("0.000000")
         return v.quantize(_D6, rounding=ROUND_HALF_UP)
 
-    for strike_price, strike_strike in chain.strikes.items():
+    for _strike_price, strike_strike in chain.strikes.items():
         for opt_type, leg in [("CE", strike_strike.ce), ("PE", strike_strike.pe)]:
             if leg is None:
                 continue
@@ -96,12 +96,16 @@ class ChainWriter:
         chain: OptionChain,
         snapshot_ts: datetime,
         underlying: str = "NIFTY_50",
+        label: str = "default",
     ) -> Path:
         """Write an EOD chain snapshot to Parquet.
 
-        Path: {base_dir}/{year}/{month}/upstox_{date}.parquet
-        Overwrites any existing file for the same date (idempotent).
-        Returns the path written.
+        Path: {base_dir}/{year}/{month}/upstox_{date}_{label}.parquet
+        `label` (e.g. "monthly"/"quarterly"/"yearly") disambiguates multiple
+        expiries snapshotted in the same run — without it, snapshots for
+        different expiries at the same date silently overwrite each other
+        (BUG-006). Overwrites any existing file for the same date+label
+        (idempotent). Returns the path written.
         """
         if snapshot_ts.tzinfo is None or snapshot_ts.tzinfo.utcoffset(snapshot_ts) != timedelta(0):
             raise ValueError("snapshot_ts must be timezone-aware UTC")
@@ -114,7 +118,7 @@ class ChainWriter:
 
         dest_dir = self.base_dir / year / month
         dest_dir.mkdir(parents=True, exist_ok=True)
-        dest_path = dest_dir / f"upstox_{date_str}.parquet"
+        dest_path = dest_dir / f"upstox_{date_str}_{label}.parquet"
 
         table = _chain_to_table(chain, snapshot_ts, underlying)
         pq.write_table(table, dest_path)
@@ -125,13 +129,17 @@ class ChainWriter:
         chain: OptionChain,
         snapshot_ts: datetime,
         underlying: str = "NIFTY_50",
+        label: str = "default",
     ) -> Path:
         """Write a 5-min intraday snapshot to Parquet.
 
-        Path: {base_dir}/{year}/{month}/{day}/upstox_{HHMM}.parquet
+        Path: {base_dir}/{year}/{month}/{day}/upstox_{HHMM}_{label}.parquet
         HHMM is IST 24-hour (convert from UTC snapshot_ts internally).
-        Overwrites any existing file for the same HHMM (idempotent).
-        Returns the path written.
+        `label` (e.g. "monthly"/"quarterly"/"yearly") disambiguates multiple
+        expiries snapshotted in the same 5-min run — without it, snapshots
+        for different expiries at the same HHMM silently overwrite each
+        other (BUG-006). Overwrites any existing file for the same
+        HHMM+label (idempotent). Returns the path written.
         """
         if snapshot_ts.tzinfo is None or snapshot_ts.tzinfo.utcoffset(snapshot_ts) != timedelta(0):
             raise ValueError("snapshot_ts must be timezone-aware UTC")
@@ -145,7 +153,7 @@ class ChainWriter:
 
         dest_dir = self.base_dir / year / month / day
         dest_dir.mkdir(parents=True, exist_ok=True)
-        dest_path = dest_dir / f"upstox_{hhmm}.parquet"
+        dest_path = dest_dir / f"upstox_{hhmm}_{label}.parquet"
 
         table = _chain_to_table(chain, snapshot_ts, underlying)
         pq.write_table(table, dest_path)

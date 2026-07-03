@@ -105,9 +105,11 @@ def main(args: list[str] | None = None) -> int:
             raw = client.get_option_chain_sync(_NIFTY_INSTRUMENT, expiry_str)
             chain = parse_upstox_option_chain(raw)
             if parsed_args.mode == "eod":
-                path = writer.write_eod_snapshot(chain, snapshot_ts, _NIFTY_UNDERLYING)
+                path = writer.write_eod_snapshot(chain, snapshot_ts, _NIFTY_UNDERLYING, label=label)
             else:
-                path = writer.write_intraday_snapshot(chain, snapshot_ts, _NIFTY_UNDERLYING)
+                path = writer.write_intraday_snapshot(
+                    chain, snapshot_ts, _NIFTY_UNDERLYING, label=label
+                )
             logger.info(
                 "snapshot written: expiry=%s label=%s strikes=%d path=%s",
                 expiry_str,

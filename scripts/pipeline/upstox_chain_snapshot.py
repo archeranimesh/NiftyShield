@@ -94,7 +94,7 @@ def main() -> int:
         try:
             raw = client.get_option_chain_sync(_NIFTY_INSTRUMENT, expiry_str)
             chain = parse_upstox_option_chain(raw)
-            path = writer.write_eod_snapshot(chain, snapshot_ts, _NIFTY_UNDERLYING)
+            path = writer.write_eod_snapshot(chain, snapshot_ts, _NIFTY_UNDERLYING, label=label)
             row_count = len(chain.strikes) * 2
             logger.info(
                 "snapshot written: expiry=%s label=%s strikes=%d rows=%d path=%s",

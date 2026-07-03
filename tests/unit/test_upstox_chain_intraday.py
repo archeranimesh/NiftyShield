@@ -193,6 +193,34 @@ def test_bod_load_failure_returns_one() -> None:
     assert result == 1
 
 
+def test_label_passed_per_expiry() -> None:
+    """BUG-006 regression: each write_intraday_snapshot call gets its own label kwarg.
+
+    Same snapshot_ts (same HHMM) across all 3 expiries — the label is the only thing
+    that prevents monthly/quarterly/yearly from overwriting each other on disk.
+    """
+    mock_chain = _make_mock_chain(n_strikes=2)
+    mock_lookup = _make_mock_lookup(THREE_EXPIRIES)
+
+    with (
+        patch(f"{_SCRIPT_MODULE}.is_trading_day", return_value=True),
+        patch(f"{_SCRIPT_MODULE}.InstrumentLookup") as mock_lu_cls,
+        patch(f"{_SCRIPT_MODULE}.UpstoxMarketClient"),
+        patch(f"{_SCRIPT_MODULE}.parse_upstox_option_chain", return_value=mock_chain),
+        patch(f"{_SCRIPT_MODULE}.ChainWriter") as mock_writer_cls,
+    ):
+        mock_lu_cls.from_file.return_value = mock_lookup
+        mock_writer_cls.return_value.write_intraday_snapshot.return_value = Path("/tmp/x.parquet")
+
+        result = main()
+
+    assert result == 0
+    calls = mock_writer_cls.return_value.write_intraday_snapshot.call_args_list
+    assert len(calls) == 3
+    passed_labels = [call.kwargs.get("label") for call in calls]
+    assert passed_labels == [label for label, _ in THREE_EXPIRIES]
+
+
 def test_mode_flag_parsing() -> None:
     """The script accepts --mode flag and calls correct write function."""
     mock_chain = _make_mock_chain()
