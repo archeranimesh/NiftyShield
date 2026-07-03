@@ -4,7 +4,7 @@
 > Read this before writing any code. Do not rely on session summaries or chat history.
 > Repo: https://github.com/archeranimesh/NiftyShield
 
-**Related files:** [MISSION.md](MISSION.md) — immutable mission + grounding principles | [DECISIONS.md](DECISIONS.md) | [REFERENCES.md](REFERENCES.md) | [TODOS.md](TODOS.md) | [PLANNER.md](PLANNER.md) | [BACKTEST_PLAN.md](BACKTEST_PLAN.md) — Phase 0 active tasks only (~300 lines) | [BACKTEST_PLAN_PHASE1.md](BACKTEST_PLAN_PHASE1.md) — Phase 1+ tasks (load only after Phase 0.8 gate) | [LITERATURE.md](LITERATURE.md) — concept reference (Kelly, Sharpe, meta-labeling) | [docs/plan/](docs/plan/) — one story file per task | [INSTRUCTION.md](INSTRUCTION.md)
+**Related files:** [MISSION.md](MISSION.md) — immutable mission + grounding principles | [DECISIONS.md](DECISIONS.md) | [REFERENCES.md](REFERENCES.md) | [TODOS.md](TODOS.md) | [PLANNER.md](PLANNER.md) | [BACKTEST_PLAN.md](BACKTEST_PLAN.md) — Phase 0 active tasks only (~300 lines) | [BACKTEST_PLAN_PHASE1.md](BACKTEST_PLAN_PHASE1.md) — Phase 1+ tasks (load only after Phase 0.8 gate) | [LITERATURE.md](LITERATURE.md) — concept reference (Kelly, Sharpe, meta-labeling) | [LOGGING.md](LOGGING.md) — logging standard | [docs/plan/](docs/plan/) — one story file per task | [INSTRUCTION.md](INSTRUCTION.md)
 ---
 
 ## Current State (as of 2026-05-25)
@@ -109,6 +109,7 @@ Before writing any code: read `CONTEXT.md`, state `CONTEXT.md ✓`, confirm scop
 - Starting new feature work: also read `TODOS.md` + `PLANNER.md`
 - Working on backtest, paper trading, strategy research, or any Phase 0 task: also read `BACKTEST_PLAN.md` (Phase 0, ~300 lines). Phase 1+ work: also read `BACKTEST_PLAN_PHASE1.md` (only after Phase 0.8 gate passes). Tick `[x]` only when the task's DoD is fully met and the commit has landed. Do not skip phase gates.
 - Working in a `src/` module: that module's `CLAUDE.md` loads automatically
+- Adding a new entrypoint script or any `logger.*()` call: also read `LOGGING.md` (canonical logging standard; see `BUG-010` in `docs/bugs/bugs.md`)
 
 ## Immediate TODOs
 
