@@ -5,18 +5,34 @@
 from __future__ import annotations
 
 import argparse
-from datetime import date
+import re
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import structlog.testing
 
-from scripts.strategies.ic.paper_ic_snapshot import _run
+from scripts.strategies.ic.paper_ic_snapshot import _run, process_variant
 from src.paper.models import PaperPosition
 from src.strategy.ic_expiry_config import CONFIGS
 from src.strategy.ic_expiry_config_v2 import CONFIGS_V2
 from src.strategy.protocol import SignalEvent
+
+
+# Test fixtures encode a trading-symbol-shaped date substring inside the
+# (otherwise numeric-form) instrument_key purely for readability, e.g.
+# "NSE_FO|NIFTY26JUN202624000PE". This helper mirrors that fixture
+# convention by resolving it into the {"expiry": epoch_ms} shape
+# InstrumentLookup.get_by_key returns in production (BUG-009 fix); it does
+# NOT re-implement or re-test production regex logic, which no longer
+# exists in scripts/strategies/ic/paper_ic_snapshot.py.
+def _fixture_get_by_key(instrument_key: str) -> dict | None:
+    m = re.search(r"NIFTY(\d{2}[A-Za-z]{3}\d{4})", instrument_key, re.IGNORECASE)
+    if not m:
+        return None
+    dt = datetime.strptime(m.group(1).upper(), "%d%b%Y").replace(tzinfo=timezone.utc)
+    return {"instrument_type": "PE", "expiry": int(dt.timestamp() * 1000)}
 
 
 @pytest.fixture(autouse=True)
@@ -25,6 +41,7 @@ def mock_lookup():
     target = "src.instruments.lookup.InstrumentLookup.from_file"
     with patch(target) as mock_from_file:
         inst = MagicMock()
+        inst.get_by_key.side_effect = _fixture_get_by_key
         mock_from_file.return_value = inst
         yield inst
 
@@ -789,3 +806,118 @@ async def test_variant_failure_logs_structured_error(
     events = [entry["event"] for entry in logs]
     assert "ic_snapshot.variant_failed" in events
     assert mock_telegram.send_notification.call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# BUG-009 — expiry resolution via InstrumentLookup.get_by_key, not regex
+# against the numeric instrument_key (which never contains a date substring)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_process_variant_resolves_expiry_via_numeric_instrument_key(
+    mock_ic_class,
+):
+    """Happy-path: a numeric instrument_key (e.g. "NSE_FO|63930") with no
+    embedded date resolves expiry via InstrumentLookup.get_by_key instead of
+    staying stuck on the always-None regex path."""
+    store = MagicMock()
+    monthly_name = CONFIGS["monthly"].strategy_name
+    positions = [
+        PaperPosition(
+            strategy_name=monthly_name,
+            leg_role="short_put",
+            net_qty=-1,
+            avg_cost=Decimal("0.0"),
+            avg_sell_price=Decimal("80.0"),
+            instrument_key="NSE_FO|63930",
+            entry_date=date(2026, 6, 1),
+        )
+    ]
+    store.get_positions.return_value = positions
+
+    lookup = MagicMock()
+    expiry_epoch_ms = int(
+        datetime(2026, 6, 26, tzinfo=timezone.utc).timestamp() * 1000
+    )
+    lookup.get_by_key.return_value = {
+        "instrument_type": "PE",
+        "expiry": expiry_epoch_ms,
+    }
+
+    broker = MagicMock()
+    broker.get_option_chain = AsyncMock(return_value=[])
+    chain = MagicMock()
+    chain.underlying_spot = Decimal("24500")
+
+    with (
+        patch("sqlite3.connect") as mock_conn,
+        patch(
+            "scripts.strategies.ic.paper_ic_snapshot.parse_upstox_option_chain",
+            return_value=chain,
+        ),
+    ):
+        mock_cursor = MagicMock()
+        mock_cursor.fetchall.return_value = []
+        exe = mock_conn.return_value.__enter__.return_value.execute
+        exe.return_value = mock_cursor
+
+        report = await process_variant(
+            "monthly",
+            CONFIGS["monthly"],
+            store,
+            broker,
+            lookup,
+            None,
+            date(2026, 6, 26),
+            False,
+        )
+
+    lookup.get_by_key.assert_called_with("NSE_FO|63930")
+    assert report is not None
+    assert "Error: Expiry date could not be parsed" not in report
+    assert "DTE: 0" in report
+
+
+@pytest.mark.asyncio
+async def test_process_variant_unresolvable_key_falls_back_no_expiry_found(
+    mock_ic_class,
+):
+    """Edge-case: instrument_key not found in the BOD instrument master
+    (unresolvable/legacy key) falls back to the existing no_expiry_found
+    error branch instead of crashing."""
+    store = MagicMock()
+    monthly_name = CONFIGS["monthly"].strategy_name
+    positions = [
+        PaperPosition(
+            strategy_name=monthly_name,
+            leg_role="short_put",
+            net_qty=-1,
+            avg_cost=Decimal("0.0"),
+            avg_sell_price=Decimal("80.0"),
+            instrument_key="NSE_FO|UNKNOWN_LEGACY_KEY",
+            entry_date=date(2026, 6, 1),
+        )
+    ]
+    store.get_positions.return_value = positions
+
+    lookup = MagicMock()
+    lookup.get_by_key.return_value = None
+
+    broker = MagicMock()
+    with structlog.testing.capture_logs() as logs:
+        report = await process_variant(
+            "monthly",
+            CONFIGS["monthly"],
+            store,
+            broker,
+            lookup,
+            None,
+            date(2026, 6, 26),
+            False,
+        )
+
+    assert report is not None
+    assert "Error: Expiry date could not be parsed from positions." in report
+    events = [entry["event"] for entry in logs]
+    assert "ic_snapshot.no_expiry_found" in events

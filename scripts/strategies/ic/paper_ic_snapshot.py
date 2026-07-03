@@ -27,7 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 from src.client.factory import create_client
 from src.client.upstox_market import parse_upstox_option_chain
 from src.config import settings
-from src.instruments.lookup import InstrumentLookup
+from src.instruments.lookup import InstrumentLookup, parse_expiry
 from src.notifications.telegram_gateway import TelegramGateway
 from src.paper.constants import DEFAULT_BOD_PATH, DEFAULT_DB_PATH
 from src.paper.store import PaperStore
@@ -42,7 +42,6 @@ load_dotenv()
 _SCRIPT_NAME = "scripts.strategies.ic.paper_ic_snapshot"
 logger = structlog.get_logger(_SCRIPT_NAME)
 
-_EXPIRY_RE_ROBUST = re.compile(r"NIFTY(\d{2}[A-Za-z]{3}\d{4})", re.IGNORECASE)
 
 
 def parse_key_details(instrument_key: str) -> tuple[str, str]:
@@ -113,16 +112,22 @@ async def process_variant(
     if not ic_positions:
         return None
 
-    # Determine expiry date
+    # Determine expiry date via reverse lookup against the offline instrument
+    # master (numeric instrument_key, e.g. "NSE_FO|63930", has no embedded
+    # date substring -- a regex against it can never match; see BUG-009).
     expiry = None
     for p in ic_positions:
-        m = _EXPIRY_RE_ROBUST.search(p.instrument_key)
-        if m:
-            try:
-                expiry = datetime.strptime(m.group(1).upper(), "%d%b%Y").date()
-                break
-            except ValueError:
-                pass
+        inst = lookup.get_by_key(p.instrument_key)
+        if inst is None:
+            continue
+        expiry_str = parse_expiry(inst.get("expiry"))
+        if expiry_str is None:
+            continue
+        try:
+            expiry = date.fromisoformat(expiry_str)
+            break
+        except ValueError:
+            pass
 
     if expiry is None:
         logger.warning(

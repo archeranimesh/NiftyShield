@@ -226,7 +226,7 @@ Both `paper_ic_entry.py` (line ~359) and `paper_ic_entry_v2.py` (line ~351) have
 | Field | Value |
 |---|---|
 | Severity | **HIGH** — can silently accept a structure whose standalone risk/reward was never checked after portfolio-delta correction |
-| Status | ⚪ Closed — moot (2026-07-03) |
+| Status | ⚪ Closed — moot (2026-07-03, SHA 66c4c71) |
 | Discovered | 2026-07-03, tracing why weekly IC dry-run selected 24750 CE / 24950 CE for the call wing |
 | Location | `scripts/strategies/ic/paper_ic_entry.py` lines ~437–530 (`paper_ic_entry_v2.py` lines ~417–467 has the same pattern) |
 
@@ -285,7 +285,7 @@ The adjustment loop optimizes for exactly one objective (portfolio delta back in
 | Field | Value |
 |---|---|
 | Severity | **HIGH** — daily snapshot report for both monthly IC variants is a permanent no-op; no P&L/audit visibility despite open positions |
-| Status | 🔴 Open |
+| Status | ✅ Fixed |
 | Discovered | 2026-07-03, investigating why no snapshot report arrived for `paper_ic_nifty_v2_monthly` after today's entry |
 | Location | `scripts/strategies/ic/paper_ic_snapshot.py::process_variant` (lines ~115–134), regex defined line 44 |
 
@@ -313,5 +313,7 @@ This expects a trading-symbol string like `NIFTY28JUL2026...` embedded in `p.ins
 **Impact:** confirmed today for `paper_ic_nifty_v2_monthly` (4 legs entered same day, all `OPEN` in `paper_trades`) and `paper_ic_nifty_v1_monthly` (also has open legs). This is not a one-off — the bug is structural (bad assumption baked into the regex), so it has silently broken the daily EOD audit for both variants since whichever commit last changed `instrument_key` to the numeric format, or since this script was first written against the wrong assumption. `git log --oneline` on this file not yet checked to date the regression precisely.
 
 **Suggested fix:** don't derive expiry from a string pattern that was never present in the stored key. Either (a) reverse-lookup the numeric `instrument_key` against the offline instrument master (`src/instruments/`) to get the real trading symbol/expiry, or (b) store expiry directly on the position/trade row at entry time (`paper_trades` or `PaperPosition`) so downstream snapshot code doesn't need to reconstruct it at all. Option (b) avoids adding an instrument-master lookup dependency to a script whose only job is reporting.
+
+**Fix (2026-07-03, option (a), per Animesh B009.2 decision):** replaced `_EXPIRY_RE_ROBUST` regex block in `process_variant` with `InstrumentLookup.get_by_key(p.instrument_key)` (the `lookup` param was already threaded into the function but unused) → `parse_expiry(inst.get("expiry"))` → `date.fromisoformat(...)`. Same lazy read-time resolution pattern as BUG-002's `PaperPosition.option_type` — no schema change, no migration, fixes historical rows immediately. Unresolvable/legacy `instrument_key` (lookup returns `None`, or `parse_expiry` returns `None`) falls back to the existing `no_expiry_found` branch unchanged — same safe-but-informative behavior as before, just no longer the *only* reachable path. `_EXPIRY_RE_ROBUST` constant and its now-dead code removed; `re` import retained (still used elsewhere in the file for signal-note parsing). 2 new dedicated tests on `process_variant` (numeric-key happy path resolves DTE correctly; unresolvable-key edge case still falls back to `no_expiry_found` without crashing) + existing suite's `mock_lookup` autouse fixture updated so `get_by_key` derives the same expiry the old regex used to, keeping all prior assertions valid without touching every test's fixture data. **Tests not executed this session** — sandbox `.local` disk quota exhausted (`pip install pytest` → `No space left on device`), same limitation class as B004.6/B006.6/B010.4–7; both touched files verified via `py_compile` only. Logic traced manually against `InstrumentLookup.get_by_key`/`parse_expiry` signatures confirmed via the codebase graph.
 
 **Related:** none yet — first bug traced to `paper_ic_snapshot.py` itself; distinct from `BUG-002`'s put/call substring-matching bug in `_position_delta`, though both stem from the same class of mistake (assuming a trading-symbol string is present where only a numeric `instrument_key` actually is).
