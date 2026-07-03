@@ -51,6 +51,25 @@ One additional file, `logs/apiconnect.log`, is the Nuvama APIConnect SDK's own i
 
 ---
 
+## BUG-011 — `test_build_notifier_returns_none_when_token_missing` fails on live host (suspected cross-test env leakage)
+
+| Field | Value |
+|---|---|
+| Severity | **LOW** — test-suite reliability only, no production code path affected; `build_notifier()` itself is not known-broken |
+| Status | 🔴 Open |
+| Discovered | 2026-07-03, live-host `pytest` run surfaced by Animesh after BUG-010 B010.4 session |
+| Location | `tests/unit/test_notifications.py::test_build_notifier_returns_none_when_token_missing`; suspected root cause in `src/config.py::_DynamicSettings` or a test elsewhere that mutates `os.environ` outside `monkeypatch` |
+
+**Symptom:** `assert <src.notifications.telegram.TelegramNotifier object at 0x111d06c60> is None` — `build_notifier()` returned a real notifier instead of `None` even though the test calls `monkeypatch.delenv("TELEGRAM_BOT_TOKEN")` / `monkeypatch.delenv("TELEGRAM_CHAT_ID")` immediately beforehand.
+
+**Not yet root-caused** — this entry logs a confirmed repro (real pytest failure, output pasted by Animesh), not a confirmed root cause; investigation is the first checklist step. Not caused by the B010.4 diff — that session touched only `scripts/portfolio/daily_snapshot.py` and a new test file, never `src/notifications/`, `src/config.py`, or `tests/unit/test_notifications.py`.
+
+**Leading hypothesis:** `build_notifier()` reads through `settings.telegram_bot_token`/`telegram_chat_id`, where `settings` is the `_DynamicSettings` singleton (`src/config.py`) that rebuilds `Settings` only when `hash(frozenset(os.environ.items()))` changes since the last access. If `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` are real values already present in the live host's process environment (exported in the shell, not `.env`-sourced) — or some other test in the suite writes directly into `os.environ` rather than through `monkeypatch` (whose reversion `monkeypatch.delenv` in *this* test can't undo if it happened in a different test's un-reverted mutation) — this test only passes when run in isolation, and fails as part of the full suite or a shell session that already exports the tokens. Unconfirmed until reproduced.
+
+**Suggested fix (pending investigation):** (a) confirm via `pytest tests/unit/test_notifications.py::test_build_notifier_returns_none_when_token_missing -q` run alone vs. full-suite run — isolates whether this is cross-test leakage vs. a `_DynamicSettings` caching bug; (b) `echo $TELEGRAM_BOT_TOKEN $TELEGRAM_CHAT_ID` in the host shell running pytest to rule out real OS-level env vars; (c) if cross-test leakage is confirmed, `grep -rn "os.environ\[" tests/` for any raw (non-`monkeypatch`) mutation and convert it to `monkeypatch.setenv`.
+
+---
+
 ## BUG-002 — Option delta sign/magnitude corrupted by put-call misclassification
 
 | Field | Value |
