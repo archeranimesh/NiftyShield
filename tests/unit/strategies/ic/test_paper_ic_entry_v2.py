@@ -245,6 +245,54 @@ async def test_happy_path_executes_four_legs(
 
     assert mock_telegram.send_notification.call_count == 1
 
+    # record_paper_trade.py has no --ivr flag, and IVR here (0.35) is above
+    # the 0.25 gate, so no --force-entry forwarding should occur on any leg.
+    for cmd in cmds:
+        assert "--ivr" not in cmd
+        assert "--force-entry" not in cmd
+
+
+@pytest.mark.asyncio
+async def test_ivr_below_gate_forwards_force_entry_to_sell_legs_only(
+    mock_gates, mock_store, mock_client, mock_subprocess, mock_telegram, mock_delta_tracker
+) -> None:
+    """When resolve_ivr reports ivr below the 0.25 gate (either via the
+    log-only-gates GateViolation path or the --force-entry bypass path,
+    both of which return ivr_violation=None under force_entry), this script
+    must forward --force-entry to record_paper_trade.py on the SELL legs
+    only — that downstream script enforces its own independent SELL-only R3
+    gate and would otherwise re-block an entry already approved here.
+    """
+    mock_gates["ivr"].return_value = (0.10, None)  # below 0.25 gate
+
+    with patch.object(
+        sys,
+        "argv",
+        [
+            "paper_ic_entry_v2.py",
+            "--expiry-type",
+            "monthly",
+            "--no-dry-run",
+            "--force-entry",
+            "--bod-path",
+            "dummy.json",
+        ],
+    ):
+        await run()
+
+    assert mock_subprocess.call_count == 4
+    cmds = [c.args[0] for c in mock_subprocess.call_args_list]
+    short_put_cmd, long_put_cmd, short_call_cmd, long_call_cmd = cmds
+
+    assert short_put_cmd[10] == "SELL"
+    assert "--force-entry" in short_put_cmd
+    assert short_call_cmd[10] == "SELL"
+    assert "--force-entry" in short_call_cmd
+    assert long_put_cmd[10] == "BUY"
+    assert "--force-entry" not in long_put_cmd
+    assert long_call_cmd[10] == "BUY"
+    assert "--force-entry" not in long_call_cmd
+
 
 @pytest.mark.asyncio
 async def test_dry_run_does_not_call_subprocess(

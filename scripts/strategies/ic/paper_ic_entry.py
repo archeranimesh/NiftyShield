@@ -236,7 +236,12 @@ async def run() -> None:
                 file=sys.stderr,
             )
             sys.exit(1)
-    elif ivr < float(config.ivr_gate):
+    # Tracks whether ivr was below gate and entry proceeded anyway (via
+    # --force-entry or --log-only-gates) — used later to force the SELL leg
+    # subprocess calls through record_paper_trade.py's own independent R3
+    # gate, which would otherwise re-block what this script already allowed.
+    ivr_below_gate = ivr is not None and ivr < float(config.ivr_gate)
+    if ivr is not None and ivr < float(config.ivr_gate):
         # THRESHOLD gate.
         if args.force_entry:
             logger.warning("force_entry.ivr_bypass", ivr=ivr, gate=config.ivr_gate)
@@ -582,9 +587,17 @@ async def run() -> None:
             str(LOT_SIZE),
             "--price",
             str(price),
-            "--ivr",
-            str(round(ivr, 4)) if ivr is not None else "0",
         ]
+        # record_paper_trade.py has no --ivr flag — it computes ivr_at_entry
+        # itself and enforces its own independent R3 gate (hard-blocks SELL
+        # at ivr<0.25 unless --force-entry). If this script already decided
+        # to proceed despite ivr<gate (via --force-entry or log-only-gates),
+        # pass --force-entry on SELL legs only, so the downstream gate
+        # doesn't re-block an entry already approved upstream. BUY hedge
+        # legs are left alone so record_paper_trade's own portfolio-delta
+        # check still runs on them.
+        if action == "SELL" and ivr_below_gate:
+            cmd.append("--force-entry")
         cmds.append(cmd)
 
     if args.dry_run:

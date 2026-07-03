@@ -266,8 +266,6 @@ async def test_weekly_standalone(
         "65",
         "--price",
         "60.0",
-        "--ivr",
-        "0.3",
     ]
     # Verify long put
     assert called_cmds[1][6] == "long_put_hedge"
@@ -568,6 +566,25 @@ async def test_ivr_below_gate_logs_violation_and_proceeds_by_default(
     violation_args = [c.args[0] for c in mock_store.record_gate_violation.call_args_list]
     assert any(v.gate_name == "ivr" for v in violation_args)
 
+    # record_paper_trade.py has no --ivr flag and enforces its own
+    # independent SELL-only R3 gate — this script must forward --force-entry
+    # on the SELL legs (short_put, short_call) so that gate doesn't re-block
+    # what was already logged-and-allowed here, while leaving the BUY hedge
+    # legs alone (record_paper_trade's R3 gate never applies to BUY anyway,
+    # but its portfolio-delta check should still run on those legs).
+    called_cmds = [call.args[0] for call in mock_subprocess.call_args_list]
+    for cmd in called_cmds:
+        assert "--ivr" not in cmd
+    short_put_cmd, long_put_cmd, short_call_cmd, long_call_cmd = called_cmds
+    assert short_put_cmd[10] == "SELL"
+    assert "--force-entry" in short_put_cmd
+    assert short_call_cmd[10] == "SELL"
+    assert "--force-entry" in short_call_cmd
+    assert long_put_cmd[10] == "BUY"
+    assert "--force-entry" not in long_put_cmd
+    assert long_call_cmd[10] == "BUY"
+    assert "--force-entry" not in long_call_cmd
+
 
 @pytest.mark.asyncio
 async def test_ivr_below_gate_forced(
@@ -593,6 +610,16 @@ async def test_ivr_below_gate_forced(
         await run()
 
     assert mock_subprocess.call_count == 4
+
+    # --force-entry (top-level bypass) does not populate gate_violations, so
+    # this exercises the other branch of ivr_below_gate: it must still be
+    # forwarded to record_paper_trade.py on SELL legs only.
+    called_cmds = [call.args[0] for call in mock_subprocess.call_args_list]
+    short_put_cmd, long_put_cmd, short_call_cmd, long_call_cmd = called_cmds
+    assert "--force-entry" in short_put_cmd
+    assert "--force-entry" in short_call_cmd
+    assert "--force-entry" not in long_put_cmd
+    assert "--force-entry" not in long_call_cmd
 
 
 @pytest.mark.asyncio
