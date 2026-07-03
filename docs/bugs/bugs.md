@@ -26,7 +26,7 @@
 | Field | Value |
 |---|---|
 | Severity | **HIGH** — not a financial-logic defect, but actively degrades debuggability project-wide; directly slowed down triage of `BUG-009` (had to eyeball-parse mixed formats instead of grepping a single structured shape). Bumped from MEDIUM to HIGH and moved to the front of this registry — pick up first. |
-| Status | 🔴 Open |
+| Status | ✅ Fixed — SHA range 5fa5e33..5d5c8ef (see `docs/bugs/task.md` B010.2–B010.9 for per-item SHAs) |
 | Discovered | 2026-07-03, surveying every file in `logs/` after noticing `logs/intraday.log` mixed formats |
 | Location | Project-wide — no single file, see breakdown below |
 
@@ -48,6 +48,8 @@ One additional file, `logs/apiconnect.log`, is the Nuvama APIConnect SDK's own i
 **Suggested fix:** see `LOGGING.md` (project root — new file, added alongside this bug entry) for the standard going forward. Concretely: (1) every entrypoint script (anything with `if __name__ == "__main__"`) must call `setup_logging()` before any other logging happens — add this as a `code-reviewer` checklist item; (2) migrate `src/client/upstox_market.py` to `structlog.stdlib.get_logger(__name__)` (3 call sites); (3) migrate the five `scripts/strategies/ic/*.py` files' raw `print()` calls to `logger.info/warning/error(...)` with keyword args, and add the missing `setup_logging()` call; (4) migrate `scripts/portfolio/daily_snapshot.py` off its bespoke `[timestamp] message` format onto the shared pipeline; (5) keep emoji/table report strings, but log them as a single structured event (e.g. `logger.info("report.sent", channel="telegram", strategy=..., body=report_text)`) rather than a bare `print()` with no level/timestamp; (6) document `apiconnect.log` as an intentional third-party exception rather than attempting to reformat SDK-internal logging.
 
 **Related:** discovered while triaging `BUG-009`; `upstox_market.py`'s stdlib-logging bypass was separately flagged before this survey formalized it as one item in the larger project-wide pattern.
+
+**Closing summary (2026-07-03):** all six format deviations addressed per the suggested-fix list (B010.2–B010.6); `apiconnect.log` documented as an accepted third-party exception (B010.6, verified already satisfied by the original `LOGGING.md` commit); happy-path + degrade-gracefully tests added (B010.7); final review pass (B010.8) against the cumulative diff (`git diff 96c80e7..5d5c8ef`) found no CRITICAL/ERROR — see `docs/bugs/task.md` B010.8 for the checklist covered (G2/G7/G8, unused imports, no information loss on removed `print()` calls). Follow-up recommended, not yet actioned: add "every entrypoint script calls `setup_logging()`" as a permanent `code-reviewer` checklist item (per the original suggested-fix item 1) so this doesn't regress.
 
 ---
 
