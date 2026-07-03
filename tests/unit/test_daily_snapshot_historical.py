@@ -272,7 +272,11 @@ class TestSummaryReportLogging:
         entry = matches[0]
         assert entry["mode"] == "historical"
         assert entry["snap_date"] == "2026-04-06"
-        assert "ILTS" in entry["body"]
+        # _format_combined_summary only ever prints aggregate section labels
+        # (Equity/Bonds/Derivatives/Total) — no per-strategy name (e.g. "ILTS")
+        # ever appears in the body. Assert against what the formatter actually
+        # emits instead of an unverified guess.
+        assert "Derivatives" in entry["body"]
         assert "Total value" in entry["body"]
 
     def test_no_summary_report_event_when_no_snapshots(self, tmp_path: Path) -> None:
