@@ -92,6 +92,47 @@ def test_bind_trace_id_appears_in_log(capsys):
     assert parsed["trace_id"] == tid
 
 
+def test_entrypoint_script_emits_structlog_pipeline_shaped_line(capsys):
+    """After setup_logging(), a dotted module-name logger renders the full
+
+    documented pipeline shape (LOGGING.md "Required shape of every log line"):
+    ``YYYY-MM-DD HH:MM:SS [LEVEL] [pkg] [sub] [module] event key=value``.
+    """
+    setup_logging(json=False, level="INFO")
+    logger = structlog.get_logger("scripts.strategies.ic.paper_ic_snapshot")
+    logger.warning("ic_snapshot.no_expiry_found", strategy="paper_ic_nifty_v1_monthly")
+
+    captured = capsys.readouterr()
+    line = captured.out.strip()
+    pattern = (
+        r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} "
+        r"\[WARNING\] \[scripts\] \[strategies\] \[ic\] \[paper_ic_snapshot\] "
+        r"ic_snapshot\.no_expiry_found strategy=paper_ic_nifty_v1_monthly$"
+    )
+    assert re.match(pattern, line), f"Line did not match pipeline shape: {line!r}"
+
+
+def test_log_call_before_setup_logging_degrades_gracefully(capsys):
+    """A log call made before setup_logging() is ever called must not crash.
+
+    Simulates the state structlog is in for any process that logs at import
+    time (or in a code path reached before main() calls setup_logging()):
+    no explicit configure() has been called, so structlog falls back to its
+    own built-in defaults. This is not the documented pipeline shape, but it
+    must still degrade gracefully rather than raising.
+    """
+    structlog.reset_defaults()
+    try:
+        logger = structlog.get_logger("scripts.strategies.ic.pre_setup")
+        logger.info("pre_setup.log_call", foo="bar")  # must not raise
+
+        captured = capsys.readouterr()
+        assert "pre_setup.log_call" in captured.out
+    finally:
+        # Leave structlog configured for any tests that run after this one.
+        setup_logging(json=False, level="INFO")
+
+
 def test_two_bind_trace_ids_are_independent(capsys):
     """Each bind_trace_id call replaces the previous value in the context."""
     setup_logging(json=True, level="INFO")
