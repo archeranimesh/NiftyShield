@@ -237,7 +237,7 @@ The adjustment loop optimizes for exactly one objective (portfolio delta back in
 | Field | Value |
 |---|---|
 | Severity | **HIGH** — a paper trade can be recorded against stale price/IVR/delta data if the printed dry-run commands are executed even a short time after generation |
-| Status | ✅ Fixed (2026-07-03, SHA pending) |
+| Status | ✅ Fixed (2026-07-03, SHA d09d316) |
 | Discovered | 2026-07-03, checking whether `record_paper_trade.py` re-validates anything when the dry-run's printed commands are pasted and run |
 | Location | `scripts/strategies/ic/paper_ic_entry.py` (dry-run command generation) → `scripts/record/record_paper_trade.py` line ~645 |
 

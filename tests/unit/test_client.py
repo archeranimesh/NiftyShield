@@ -17,6 +17,7 @@ from typing import Any
 
 import pytest
 import requests
+import structlog
 
 from src.client.exceptions import LTPFetchError
 from src.client.upstox_market import UpstoxMarketClient
@@ -164,24 +165,26 @@ class _OkResp:
         }
 
 
-def test_ltp_logs_latency_ms_and_status_code(
-    client: UpstoxMarketClient, monkeypatch, caplog
-) -> None:
-    """_fetch_ltp_batch must emit endpoint, status_code, and latency_ms."""
-    monkeypatch.setattr(client._session, "get", lambda *a, **kw: _OkResp())
-    import logging
+def test_ltp_logs_latency_ms_and_status_code(client: UpstoxMarketClient, monkeypatch) -> None:
+    """_fetch_ltp_batch must emit endpoint, status_code, and latency_ms.
 
-    with caplog.at_level(logging.INFO, logger="src.client.upstox_market"):
+    Uses structlog's `capture_logs()` rather than stdlib `caplog` — after the
+    BUG-010 B010.2 migration, `upstox_market.logger` is a structlog logger
+    whose keyword-argument event dict isn't rendered into stdlib
+    `record.getMessage()` text the way the old `%s`-style call was.
+    """
+    monkeypatch.setattr(client._session, "get", lambda *a, **kw: _OkResp())
+
+    with structlog.testing.capture_logs() as captured:
         client.get_ltp_sync(["NSE_FO|37810"])
 
-    combined = " ".join(r.getMessage() for r in caplog.records)
-    assert "latency_ms" in combined
-    assert "status_code" in combined
+    events = [e for e in captured if e.get("event") == "upstox.api_call"]
+    assert events, f"expected an 'upstox.api_call' event, got {captured}"
+    assert "latency_ms" in events[0]
+    assert "status_code" in events[0]
 
 
-def test_ohlc_logs_latency_ms_and_status_code(
-    client: UpstoxMarketClient, monkeypatch, caplog
-) -> None:
+def test_ohlc_logs_latency_ms_and_status_code(client: UpstoxMarketClient, monkeypatch) -> None:
     """get_ohlc_sync must emit endpoint, status_code, and latency_ms."""
 
     class _OhlcResp:
@@ -194,18 +197,18 @@ def test_ohlc_logs_latency_ms_and_status_code(
             return {"data": {}}
 
     monkeypatch.setattr(client._session, "get", lambda *a, **kw: _OhlcResp())
-    import logging
 
-    with caplog.at_level(logging.INFO, logger="src.client.upstox_market"):
+    with structlog.testing.capture_logs() as captured:
         client.get_ohlc_sync(["NSE_FO|37810"], interval="1d")
 
-    combined = " ".join(r.getMessage() for r in caplog.records)
-    assert "latency_ms" in combined
-    assert "status_code" in combined
+    events = [e for e in captured if e.get("event") == "upstox.api_call"]
+    assert events, f"expected an 'upstox.api_call' event, got {captured}"
+    assert "latency_ms" in events[0]
+    assert "status_code" in events[0]
 
 
 def test_option_chain_logs_latency_ms_and_status_code(
-    client: UpstoxMarketClient, monkeypatch, caplog
+    client: UpstoxMarketClient, monkeypatch
 ) -> None:
     """get_option_chain_sync must emit endpoint, status_code, and latency_ms."""
 
@@ -219,14 +222,14 @@ def test_option_chain_logs_latency_ms_and_status_code(
             return {"data": {}}
 
     monkeypatch.setattr(client._session, "get", lambda *a, **kw: _ChainResp())
-    import logging
 
-    with caplog.at_level(logging.INFO, logger="src.client.upstox_market"):
+    with structlog.testing.capture_logs() as captured:
         client.get_option_chain_sync("NSE_INDEX|Nifty 50", "2026-06-19")
 
-    combined = " ".join(r.getMessage() for r in caplog.records)
-    assert "latency_ms" in combined
-    assert "status_code" in combined
+    events = [e for e in captured if e.get("event") == "upstox.api_call"]
+    assert events, f"expected an 'upstox.api_call' event, got {captured}"
+    assert "latency_ms" in events[0]
+    assert "status_code" in events[0]
 
 
 @pytest.mark.asyncio

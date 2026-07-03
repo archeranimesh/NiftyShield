@@ -17,19 +17,19 @@ Error policy:
 from __future__ import annotations
 
 import asyncio
-import logging
 import time
 from datetime import date
 from decimal import Decimal
 from typing import Any
 
 import requests
+import structlog
 
 from src.client.exceptions import DataFetchError, LTPFetchError
 from src.config import settings
 from src.models.options import OptionChain, OptionChainStrike, OptionLeg
 
-logger = logging.getLogger(__name__)
+logger = structlog.stdlib.get_logger(__name__)
 
 V3_LTP_URL = "https://api.upstox.com/v3/market-quote/ltp"
 V3_OHLC_URL = "https://api.upstox.com/v3/market-quote/ohlc"
@@ -129,10 +129,10 @@ class UpstoxMarketClient:
             )
             latency_ms = int((time.perf_counter() - t0) * 1000)
             logger.info(
-                "upstox.api_call endpoint=%s status_code=%s latency_ms=%s",
-                V3_OHLC_URL,
-                resp.status_code,
-                latency_ms,
+                "upstox.api_call",
+                endpoint=V3_OHLC_URL,
+                status_code=resp.status_code,
+                latency_ms=latency_ms,
             )
             resp.raise_for_status()
             data = resp.json().get("data", {})
@@ -162,10 +162,10 @@ class UpstoxMarketClient:
             )
             latency_ms = int((time.perf_counter() - t0) * 1000)
             logger.info(
-                "upstox.api_call endpoint=%s status_code=%s latency_ms=%s",
-                V2_OPTION_CHAIN_URL,
-                resp.status_code,
-                latency_ms,
+                "upstox.api_call",
+                endpoint=V2_OPTION_CHAIN_URL,
+                status_code=resp.status_code,
+                latency_ms=latency_ms,
             )
             resp.raise_for_status()
             data = resp.json().get("data", [])
@@ -202,10 +202,10 @@ class UpstoxMarketClient:
             )
             latency_ms = int((time.perf_counter() - t0) * 1000)
             logger.info(
-                "upstox.api_call endpoint=%s status_code=%s latency_ms=%s",
-                V3_LTP_URL,
-                resp.status_code,
-                latency_ms,
+                "upstox.api_call",
+                endpoint=V3_LTP_URL,
+                status_code=resp.status_code,
+                latency_ms=latency_ms,
             )
             resp.raise_for_status()
         except requests.RequestException as e:
@@ -274,7 +274,7 @@ def _safe_decimal_greek(val: Any) -> Decimal | None:
     try:
         return Decimal(str(val))
     except Exception:
-        logger.warning("Non-numeric Greek value %r — storing as None", val)
+        logger.warning("greek.non_numeric_value", value=repr(val))
         return None
 
 
