@@ -226,9 +226,11 @@ Both `paper_ic_entry.py` (line ~359) and `paper_ic_entry_v2.py` (line ~351) have
 | Field | Value |
 |---|---|
 | Severity | **HIGH** — can silently accept a structure whose standalone risk/reward was never checked after portfolio-delta correction |
-| Status | 🔴 Open |
+| Status | ⚪ Closed — moot (2026-07-03) |
 | Discovered | 2026-07-03, tracing why weekly IC dry-run selected 24750 CE / 24950 CE for the call wing |
 | Location | `scripts/strategies/ic/paper_ic_entry.py` lines ~437–530 (`paper_ic_entry_v2.py` lines ~417–467 has the same pattern) |
+
+**Closed as moot (2026-07-03, no code change):** the `adj_call`/`adj_put` portfolio-delta strike-shift block this bug describes no longer exists in either entry script. It was removed by the same-day "IC entries judged in isolation" decision (`DECISIONS.md` 2026-07-03) — IC entries are now judged only on their own two short legs' delta, never adjusted against other strategies'/variants' open positions. Confirmed via `search_code` for `adj_call`/`adj_put`/"Portfolio delta gate adjusted" across the repo — zero matches. B007.2–B007.5 marked N/A in `task.md` per Animesh; no fix implemented since there is nothing left to fix.
 
 **Symptom:** none directly logged as an error — found while explaining why the portfolio-delta gate printed `INFO: Portfolio delta gate adjusted short_call to 24750.0`. Traced the adjustment code path and confirmed: when `projected_total` (existing book delta + this IC's delta) falls outside `[-0.05, 0.25]`, the script shifts the offending short leg **one strike further OTM** and re-derives its wing hedge at `strike ± wing_width_points`. The only check applied to the shifted leg before accepting it is `_apply_liquidity_gate([adj_call])` (or `adj_put`) — there is no re-check that the new strike still satisfies `config.short_call_delta ± config.delta_range` (or the put equivalent), no re-check of DTE/IVR gates against the now-different structure, and no recomputation of max-profit/max-loss/POP/R:R for the adjusted four-leg structure before accepting it.
 
