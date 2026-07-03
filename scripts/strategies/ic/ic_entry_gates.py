@@ -25,7 +25,7 @@ from __future__ import annotations
 import calendar
 import sys
 from collections.abc import Callable
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 
@@ -37,8 +37,30 @@ from src.backtest.vix_ingest import fetch_vix_latest, load_vix_series
 from src.instruments.lookup import InstrumentLookup
 from src.intraday.market_store import IntradayMarketStore
 from src.paper.constants import STRATEGY_CSP, STRATEGY_FUTURES, STRATEGY_PROXY, STRATEGY_SPOT
+from src.paper.models import GateViolation
 
 _log = structlog.get_logger("scripts.strategies.ic.ic_entry_gates")
+
+
+def make_gate_violation(
+    gate_name: str,
+    threshold: str,
+    actual: str,
+    strategy_name: str,
+) -> GateViolation:
+    """Build a GateViolation stamped with the current UTC time.
+
+    Shared factory so every threshold-gate call site constructs the record
+    identically. Only used under ``--log-only-gates`` mode — structural
+    gates never produce a GateViolation.
+    """
+    return GateViolation(
+        gate_name=gate_name,
+        threshold=threshold,
+        actual=actual,
+        strategy_name=strategy_name,
+        logged_at=datetime.now(timezone.utc),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -205,23 +227,41 @@ def resolve_ivr(
     ivr_gate: Decimal,
     force_entry: bool,
     notifier: Callable[[str], None] | None = None,
-) -> float | None:
+    *,
+    log_only_gates: bool = True,
+    strategy_name: str = "",
+) -> tuple[float | None, GateViolation | None]:
     """Load VIX series, compute IVR, apply gate.
 
-    Returns the computed IVR value (float) or ``None`` if data is unavailable.
-    Calls ``sys.exit(1)`` when IVR is below *ivr_gate* and *force_entry* is False.
-    Logs a WARNING and continues when *force_entry* is True.
+    ``ivr is None`` (stale/missing VIX window, per ``_is_vix_window_stale``)
+    is a STRUCTURAL data-unavailability guard: ``log_only_gates`` never
+    bypasses it (log-only mode only applies to the below-threshold path
+    below). The pre-existing ``force_entry`` manual override can still
+    bypass it, unchanged from prior behaviour — that flag was never scoped
+    to threshold gates only, and changing that is out of scope here.
+
+    The IVR-below-threshold path is a THRESHOLD gate. Under
+    ``log_only_gates=True`` (default), a below-gate IVR no longer aborts —
+    it returns a ``GateViolation`` for the caller to persist and the entry
+    proceeds. ``force_entry`` remains a separate, pre-existing bypass with
+    its own logged-WARNING behaviour (kept for backward compatibility).
 
     Args:
         db_path: Path to paper trading SQLite DB (used by IntradayMarketStore).
         ivr_gate: Minimum acceptable IVR for entry.
-        force_entry: When True, bypass the gate with a warning.
+        force_entry: When True, bypass the gate with a warning (legacy path).
         notifier: Optional sync callable for gate-failure Telegram alerts.
             Called only when IVR is below the gate threshold (not on data-missing).
             Any exception it raises is swallowed.
+        log_only_gates: When True (default), a below-gate IVR is recorded as
+            a GateViolation instead of hard-blocking. When False, restores
+            the original hard-block behaviour (subject to force_entry).
+        strategy_name: DB strategy name, stamped onto any GateViolation.
 
     Returns:
-        Computed IVR as float, or None if VIX data is unavailable.
+        Tuple of (computed IVR as float or None, GateViolation or None).
+        IVR is None only when VIX data is unavailable — that path always
+        exits before returning.
     """
     vix_data_dir = Path("data/historical/ohlc/india_vix")
     ivr: float | None = None
@@ -246,14 +286,37 @@ def resolve_ivr(
     else:
         _log.warning("vix.dir_missing", path=str(vix_data_dir))
 
-    if not force_entry:
-        if ivr is None:
-            print(
-                "ERROR: India VIX IVR is None (insufficient data). Stop.",
-                file=sys.stderr,
+    violation: GateViolation | None = None
+
+    # STRUCTURAL: ivr=None (stale/missing window) always hard-blocks,
+    # regardless of force_entry or log_only_gates.
+    if ivr is None:
+        if force_entry:
+            _log.warning("force_entry.ivr_bypass", ivr=ivr, gate=ivr_gate)
+            return ivr, violation
+        print(
+            "ERROR: India VIX IVR is None (insufficient data). Stop.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    if ivr < float(ivr_gate):
+        if log_only_gates and not force_entry:
+            _log.warning(
+                "gate.ivr_violation_logged",
+                ivr=ivr,
+                gate=float(ivr_gate),
+                strategy_name=strategy_name,
             )
-            sys.exit(1)
-        if ivr < float(ivr_gate):
+            violation = make_gate_violation(
+                gate_name="ivr",
+                threshold=str(ivr_gate),
+                actual=f"{ivr:.4f}",
+                strategy_name=strategy_name,
+            )
+        elif force_entry:
+            _log.warning("force_entry.ivr_bypass", ivr=ivr, gate=ivr_gate)
+        else:
             if notifier is not None:
                 try:
                     notifier(
@@ -266,14 +329,10 @@ def resolve_ivr(
                 file=sys.stderr,
             )
             sys.exit(1)
-    else:
-        if ivr is None or ivr < float(ivr_gate):
-            _log.warning("force_entry.ivr_bypass", ivr=ivr, gate=ivr_gate)
 
-    if ivr is not None:
-        print(f"INFO: India VIX IVR = {ivr:.2f} (gate={ivr_gate})")
+    print(f"INFO: India VIX IVR = {ivr:.2f} (gate={ivr_gate})")
 
-    return ivr
+    return ivr, violation
 
 
 # ---------------------------------------------------------------------------
@@ -286,21 +345,31 @@ def resolve_expiry(
     expiry_bucket: str,
     dte_warn_lo: int,
     dte_warn_hi: int,
-) -> tuple[InstrumentLookup, str, int]:
+    *,
+    strategy_name: str = "",
+) -> tuple[InstrumentLookup, str, int, GateViolation | None]:
     """Resolve the target expiry from the BOD file and validate the DTE window.
+
+    The DTE window is a THRESHOLD gate — it has never hard-blocked entry
+    (only logged a WARNING). That behaviour is unchanged; this now also
+    returns a ``GateViolation`` when the DTE falls outside the window so
+    callers can persist it under ``--log-only-gates`` for retrospective
+    analysis, consistent with the other threshold gates.
 
     Args:
         bod_path: Path to the BOD instruments JSON file.
         expiry_bucket: Expiry bucket label: ``"monthly"``, ``"weekly"``, etc.
         dte_warn_lo: Minimum acceptable DTE (warn if below).
         dte_warn_hi: Maximum acceptable DTE (warn if above).
+        strategy_name: DB strategy name, stamped onto any GateViolation.
 
     Returns:
-        Tuple of ``(InstrumentLookup, expiry_str, dte)``.
+        Tuple of ``(InstrumentLookup, expiry_str, dte, GateViolation | None)``.
         ``expiry_str`` is ISO-format (``"YYYY-MM-DD"``); ``dte`` is calendar days.
 
     Raises:
-        SystemExit(1): BOD file missing, expiry resolution fails, or no candidate found.
+        SystemExit(1): BOD file missing, expiry resolution fails, or no candidate found
+            (all STRUCTURAL — never bypassed).
     """
     if not bod_path.exists():
         print(f"ERROR: BOD file not found at {bod_path}", file=sys.stderr)
@@ -336,6 +405,7 @@ def resolve_expiry(
     expiry_date = date.fromisoformat(expiry_str)
     dte = (expiry_date - date.today()).days
 
+    violation: GateViolation | None = None
     if dte < dte_warn_lo or dte > dte_warn_hi:
         _log.warning(
             "dte.outside_range",
@@ -343,10 +413,16 @@ def resolve_expiry(
             min_dte=dte_warn_lo,
             max_dte=dte_warn_hi,
         )
+        violation = make_gate_violation(
+            gate_name="dte_window",
+            threshold=f"[{dte_warn_lo}, {dte_warn_hi}]",
+            actual=str(dte),
+            strategy_name=strategy_name,
+        )
     else:
         print(f"INFO: selected expiry = {expiry_str} (DTE={dte})")
 
-    return lookup, expiry_str, dte
+    return lookup, expiry_str, dte, violation
 
 
 # ---------------------------------------------------------------------------

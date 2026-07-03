@@ -258,3 +258,25 @@ class PaperExitEvent(BaseModel):
     created_at: str | None = None
 
     model_config = {"frozen": True}
+
+
+class GateViolation(BaseModel):
+    """Structured record of a threshold gate that would have blocked entry.
+
+    Written under ``--log-only-gates`` mode: a threshold/discretionary IC
+    entry gate (IVR floor, DTE window, liquidity floor, portfolio-delta cap)
+    fails, but instead of aborting the entry the failure is persisted here
+    and the trade proceeds. Structural/data-integrity gates (duplicate
+    position, post-expiry guard, unresolved instrument keys, stale/missing
+    chain data) never produce a ``GateViolation`` — they always hard-block
+    regardless of the flag.
+    """
+
+    id: int | None = None
+    gate_name: str = Field(..., min_length=1)
+    threshold: str
+    actual: str
+    strategy_name: str = Field(..., min_length=1)
+    logged_at: datetime
+
+    model_config = {"frozen": True}

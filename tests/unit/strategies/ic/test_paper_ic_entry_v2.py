@@ -149,8 +149,8 @@ def mock_gates():
     ):
         lookup = MagicMock()
         lookup.search_options.return_value = [{"instrument_key": "NSE_FO|MOCK_LONG"}]
-        m_ivr.return_value = 0.35
-        m_expiry.return_value = (lookup, "2026-07-31", 35)
+        m_ivr.return_value = (0.35, None)
+        m_expiry.return_value = (lookup, "2026-07-31", 35, None)
         yield {"dup": m_dup, "gate": m_gate, "ivr": m_ivr, "expiry": m_expiry, "lookup": lookup}
 
 
@@ -453,8 +453,9 @@ async def test_ivr_gate_failure_sends_telegram(
     tg_mock = MagicMock()
     tg_mock.send = AsyncMock()
 
-    # Simulate resolve_ivr calling its notifier and exiting
-    def _fake_ivr(db_path, gate, force_entry, notifier=None):
+    # Simulate resolve_ivr calling its notifier and exiting (log-only-gates
+    # disabled here, since this test exercises the legacy hard-block path).
+    def _fake_ivr(db_path, gate, force_entry, notifier=None, **kwargs):
         if notifier is not None:
             notifier(f"⚠️ IC V2 Entry BLOCKED\nGate: ivr\nIVR: 0.10 / Gate: {gate:.2f}")
         sys.exit(1)
@@ -470,6 +471,7 @@ async def test_ivr_gate_failure_sends_telegram(
                 "--expiry-type",
                 "monthly",
                 "--no-dry-run",
+                "--no-log-only-gates",
                 "--bod-path",
                 "dummy.json",
             ],

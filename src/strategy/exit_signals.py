@@ -73,6 +73,7 @@ class ExitSignalEngine:
         if entry_price > 0:
             premium_stop_would_fire = current_mark >= premium_threshold_mult * entry_price
 
+        actual_rule_used: Literal["DELTA", "PREMIUM", "BOTH", "NEITHER"]
         if delta_stop_would_fire and premium_stop_would_fire:
             actual_rule_used = "BOTH"
         elif delta_stop_would_fire:

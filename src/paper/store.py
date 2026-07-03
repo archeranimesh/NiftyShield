@@ -20,7 +20,7 @@ from collections import defaultdict
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import structlog
 
@@ -30,6 +30,7 @@ from src.models.portfolio import TradeAction
 from src.paper.constants import DEFAULT_BOD_PATH, NIFTYBEES_KEY
 from src.paper.models import (
     ExitSignal,
+    GateViolation,
     PaperLegSnapshot,
     PaperNavSnapshot,
     PaperPosition,
@@ -182,6 +183,18 @@ CREATE TABLE IF NOT EXISTS paper_action_audit (
     rationale       TEXT,
     executed_at     TEXT    NOT NULL    -- ISO UTC
 ) STRICT;
+
+CREATE TABLE IF NOT EXISTS gate_violations (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    gate_name       TEXT    NOT NULL,
+    threshold       TEXT    NOT NULL,
+    actual          TEXT    NOT NULL,
+    strategy_name   TEXT    NOT NULL,
+    logged_at       TEXT    NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_gate_violations_strategy_gate
+    ON gate_violations (strategy_name, gate_name);
 
 CREATE TABLE IF NOT EXISTS paper_strategies (
     strategy_name            TEXT PRIMARY KEY,
@@ -686,9 +699,7 @@ class PaperStore:
                 return None
         return self._instrument_lookup
 
-    def _resolve_option_type(
-        self, instrument_key: str
-    ) -> Literal["PE", "CE", "FUT", "EQ"] | None:
+    def _resolve_option_type(self, instrument_key: str) -> Literal["PE", "CE", "FUT", "EQ"] | None:
         """Classify an instrument_key as PE/CE/FUT/EQ for PaperPosition.option_type.
 
         NiftyBees short-circuits to "EQ" without a lookup. Everything else is
@@ -724,7 +735,7 @@ class PaperStore:
 
         instrument_type = inst.get("instrument_type")
         if instrument_type in ("CE", "PE", "FUT"):
-            return instrument_type
+            return cast(Literal["CE", "PE", "FUT"], instrument_type)
 
         logger.warning(
             "option_type_resolution_unrecognised_type",
@@ -1559,6 +1570,78 @@ class PaperStore:
                 (event_id,),
             ).fetchone()
         return self._parse_exit_event_row(row) if row is not None else None
+
+    # ── Gate violations ──────────────────────────────────────────────────────
+
+    def record_gate_violation(self, violation: GateViolation) -> int:
+        """Insert a threshold-gate violation and return the generated row ID.
+
+        Called under ``--log-only-gates`` mode when a threshold/discretionary
+        gate (IVR floor, DTE window, liquidity floor, portfolio-delta cap)
+        would have blocked entry. Structural gates never call this — they
+        hard-block via ``sys.exit(1)`` regardless of the flag.
+
+        Args:
+            violation: The GateViolation to persist.
+
+        Returns:
+            The generated ID of the inserted row.
+        """
+        with _connect(self.db_path) as conn:
+            cur = conn.execute(
+                """INSERT INTO gate_violations
+                   (gate_name, threshold, actual, strategy_name, logged_at)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (
+                    violation.gate_name,
+                    violation.threshold,
+                    violation.actual,
+                    violation.strategy_name,
+                    violation.logged_at.isoformat(),
+                ),
+            )
+            if cur.lastrowid is None:
+                raise ValueError("Failed to insert gate violation")
+            return cur.lastrowid
+
+    def get_gate_violation_counts(
+        self,
+        strategy_name: str | None = None,
+        gate_name: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Aggregate gate-violation counts, GROUP BY (strategy_name, gate_name).
+
+        Pre-aggregates at the DB layer per project Rule 1 — callers never
+        receive a raw per-row dump.
+
+        Args:
+            strategy_name: Optional filter to a single strategy.
+            gate_name: Optional filter to a single gate.
+
+        Returns:
+            List of dicts with keys ``strategy_name``, ``gate_name``,
+            ``violation_count``, ordered by count descending.
+        """
+        clauses = []
+        params: list[str] = []
+        if strategy_name is not None:
+            clauses.append("strategy_name = ?")
+            params.append(strategy_name)
+        if gate_name is not None:
+            clauses.append("gate_name = ?")
+            params.append(gate_name)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+
+        with _connect(self.db_path) as conn:
+            rows = conn.execute(
+                f"""SELECT strategy_name, gate_name, COUNT(*) AS violation_count
+                    FROM gate_violations
+                    {where}
+                    GROUP BY strategy_name, gate_name
+                    ORDER BY violation_count DESC""",
+                params,
+            ).fetchall()
+        return [dict(r) for r in rows]
 
     def acknowledge_exit_event(self, event_id: int) -> None:
         """Update event status to 'ACKNOWLEDGED' if status is 'OPEN'.

@@ -90,42 +90,55 @@ class TestResolveIvr:
             yield {"load": m_load, "ivr": m_ivr, "fetch": m_fetch}
 
     def test_happy_path_returns_ivr(self, mock_vix_stack) -> None:
-        """Returns IVR float when gate is satisfied."""
-        result = resolve_ivr(Path("dummy.db"), Decimal("0.25"), force_entry=False)
-        assert result == pytest.approx(0.35)
+        """Returns (IVR float, None) when gate is satisfied."""
+        ivr, violation = resolve_ivr(Path("dummy.db"), Decimal("0.25"), force_entry=False)
+        assert ivr == pytest.approx(0.35)
+        assert violation is None
 
-    def test_ivr_below_gate_exits(self, mock_vix_stack) -> None:
-        """Exits with code 1 when IVR is below the gate and force_entry=False."""
+    def test_ivr_below_gate_logs_violation_by_default(self, mock_vix_stack) -> None:
+        """THRESHOLD gate: log-only mode (default) records a GateViolation instead of exiting."""
+        mock_vix_stack["ivr"].return_value = 0.10  # below 0.25 gate
+        ivr, violation = resolve_ivr(
+            Path("dummy.db"), Decimal("0.25"), force_entry=False, strategy_name="paper_ic_test"
+        )
+        assert ivr == pytest.approx(0.10)
+        assert violation is not None
+        assert violation.gate_name == "ivr"
+        assert violation.strategy_name == "paper_ic_test"
+
+    def test_ivr_below_gate_exits_when_log_only_disabled(self, mock_vix_stack) -> None:
+        """Exits with code 1 when IVR is below the gate and log_only_gates=False."""
         mock_vix_stack["ivr"].return_value = 0.10  # below 0.25 gate
         with pytest.raises(SystemExit) as exc_info:
-            resolve_ivr(Path("dummy.db"), Decimal("0.25"), force_entry=False)
+            resolve_ivr(Path("dummy.db"), Decimal("0.25"), force_entry=False, log_only_gates=False)
         assert exc_info.value.code == 1
 
     def test_ivr_below_gate_force_entry_continues(self, mock_vix_stack) -> None:
-        """Does not exit when force_entry=True; returns low IVR with warning."""
+        """Does not exit when force_entry=True; returns low IVR with warning, no violation."""
         mock_vix_stack["ivr"].return_value = 0.10
-        result = resolve_ivr(Path("dummy.db"), Decimal("0.25"), force_entry=True)
-        assert result == pytest.approx(0.10)
+        ivr, violation = resolve_ivr(Path("dummy.db"), Decimal("0.25"), force_entry=True)
+        assert ivr == pytest.approx(0.10)
+        assert violation is None
 
     def test_ivr_none_exits(self, mock_vix_stack) -> None:
-        """Exits with code 1 when IVR cannot be computed and force_entry=False."""
+        """STRUCTURAL: exits with code 1 when IVR cannot be computed, even under log-only-gates."""
         mock_vix_stack["ivr"].return_value = None
         with pytest.raises(SystemExit) as exc_info:
             resolve_ivr(Path("dummy.db"), Decimal("0.25"), force_entry=False)
         assert exc_info.value.code == 1
 
     def test_vix_load_error_treated_as_none(self, mock_vix_stack) -> None:
-        """VIX load exception is caught; exits cleanly on gate failure."""
+        """VIX load exception is caught; exits cleanly on gate failure (STRUCTURAL)."""
         mock_vix_stack["load"].side_effect = RuntimeError("disk error")
         with pytest.raises(SystemExit) as exc_info:
             resolve_ivr(Path("dummy.db"), Decimal("0.25"), force_entry=False)
         assert exc_info.value.code == 1
 
     def test_stale_window_skips_compute_and_exits(self, mock_vix_stack) -> None:
-        """BUG-004: window >7 days stale is treated as gate-data-unavailable.
+        """BUG-004: window >7 days stale is treated as gate-data-unavailable (STRUCTURAL).
 
         compute_ivr must not even be called — staleness is checked before
-        the IVR calculation, not after.
+        the IVR calculation, not after. Never bypassed by log_only_gates.
         """
         stale_dates = pd.date_range("2025-01-01", periods=252, freq="D").date
         mock_vix_stack["load"].return_value = pd.Series([15.0] * 252, index=stale_dates)
@@ -138,8 +151,9 @@ class TestResolveIvr:
         """A window whose max date is within the threshold computes normally."""
         fresh_dates = pd.date_range(end=date.today(), periods=252, freq="D").date
         mock_vix_stack["load"].return_value = pd.Series([15.0] * 252, index=fresh_dates)
-        result = resolve_ivr(Path("dummy.db"), Decimal("0.25"), force_entry=False)
-        assert result == pytest.approx(0.35)
+        ivr, violation = resolve_ivr(Path("dummy.db"), Decimal("0.25"), force_entry=False)
+        assert ivr == pytest.approx(0.35)
+        assert violation is None
         mock_vix_stack["ivr"].assert_called_once()
 
 
@@ -251,7 +265,7 @@ class TestResolveExpiry:
             yield inst
 
     def test_happy_path_returns_tuple(self, mock_lookup_factory) -> None:
-        """Returns (lookup, expiry_str, dte) for a valid monthly expiry."""
+        """Returns (lookup, expiry_str, dte, None) for a DTE inside the window."""
         from datetime import date, timedelta
 
         # Patch date.today so DTE is predictable
@@ -260,13 +274,36 @@ class TestResolveExpiry:
         with patch("scripts.strategies.ic.ic_entry_gates.date") as m_date:
             m_date.today.return_value = today
             m_date.fromisoformat.side_effect = date.fromisoformat
-            lookup, expiry_str, dte = resolve_expiry(
+            lookup, expiry_str, dte, violation = resolve_expiry(
                 Path("dummy.json"), "monthly", dte_warn_lo=30, dte_warn_hi=45
             )
 
         assert expiry_str == "2026-07-31"
         assert dte == 35
         assert lookup is mock_lookup_factory
+        assert violation is None
+
+    def test_dte_outside_window_returns_violation(self, mock_lookup_factory) -> None:
+        """DTE outside the window returns a GateViolation but does not raise (THRESHOLD)."""
+        from datetime import date, timedelta
+
+        target = date(2026, 7, 31)
+        today = target - timedelta(days=5)  # below dte_warn_lo=30
+        with patch("scripts.strategies.ic.ic_entry_gates.date") as m_date:
+            m_date.today.return_value = today
+            m_date.fromisoformat.side_effect = date.fromisoformat
+            _, expiry_str, dte, violation = resolve_expiry(
+                Path("dummy.json"),
+                "monthly",
+                dte_warn_lo=30,
+                dte_warn_hi=45,
+                strategy_name="paper_ic_test",
+            )
+
+        assert dte == 5
+        assert violation is not None
+        assert violation.gate_name == "dte_window"
+        assert violation.strategy_name == "paper_ic_test"
 
     def test_bod_missing_exits(self) -> None:
         """Exits with code 1 when the BOD file does not exist."""

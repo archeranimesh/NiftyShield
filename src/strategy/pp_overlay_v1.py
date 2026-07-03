@@ -298,13 +298,15 @@ class PPOverlayV1(ReEntryMixin):
                 if metadata.get("mark") is not None
                 else pos.avg_cost
             )
-            delta = float(metadata.get("delta")) if metadata.get("delta") is not None else 0.0
+            delta_raw = metadata.get("delta")
+            delta = float(delta_raw) if delta_raw is not None else 0.0
 
             expiry = self._parse_expiry(pos.instrument_key)
             dte = (expiry - market_today()).days if expiry is not None else 0
-            if metadata.get("dte") is not None:
+            dte_raw = metadata.get("dte")
+            if dte_raw is not None:
                 try:
-                    dte = int(float(metadata.get("dte")))
+                    dte = int(float(dte_raw))
                 except (ValueError, TypeError):
                     pass
 

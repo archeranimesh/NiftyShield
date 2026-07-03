@@ -8,11 +8,11 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Literal
 
-logger = logging.getLogger(__name__)
-
 from src.client.protocol import BrokerClient
 from src.client.upstox_market import parse_upstox_option_chain
 from src.models.options import OptionChain
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -136,35 +136,31 @@ async def select_overlay_expiry(
         if option_type == "COLLAR":
             put_spread = None
             put_oi = None
-            if (
-                p_strike is not None
-                and p_strike in chain.strikes
-                and chain.strikes[p_strike].pe is not None
-            ):
-                leg = chain.strikes[p_strike].pe
+            put_leg = None
+            if p_strike is not None and p_strike in chain.strikes:
+                put_leg = chain.strikes[p_strike].pe
+            if put_leg is not None:
                 mid = (
-                    (leg.bid + leg.ask) / Decimal("2")
-                    if leg.bid > Decimal("0") and leg.ask > Decimal("0")
-                    else leg.ltp
+                    (put_leg.bid + put_leg.ask) / Decimal("2")
+                    if put_leg.bid > Decimal("0") and put_leg.ask > Decimal("0")
+                    else put_leg.ltp
                 )
-                put_spread = _compute_spread_pct(leg.bid, leg.ask, mid)
-                put_oi = leg.oi
+                put_spread = _compute_spread_pct(put_leg.bid, put_leg.ask, mid)
+                put_oi = put_leg.oi
 
             call_spread = None
             call_oi = None
-            if (
-                c_strike is not None
-                and c_strike in chain.strikes
-                and chain.strikes[c_strike].ce is not None
-            ):
-                leg = chain.strikes[c_strike].ce
+            call_leg = None
+            if c_strike is not None and c_strike in chain.strikes:
+                call_leg = chain.strikes[c_strike].ce
+            if call_leg is not None:
                 mid = (
-                    (leg.bid + leg.ask) / Decimal("2")
-                    if leg.bid > Decimal("0") and leg.ask > Decimal("0")
-                    else leg.ltp
+                    (call_leg.bid + call_leg.ask) / Decimal("2")
+                    if call_leg.bid > Decimal("0") and call_leg.ask > Decimal("0")
+                    else call_leg.ltp
                 )
-                call_spread = _compute_spread_pct(leg.bid, leg.ask, mid)
-                call_oi = leg.oi
+                call_spread = _compute_spread_pct(call_leg.bid, call_leg.ask, mid)
+                call_oi = call_leg.oi
 
             profiles.append(CollarSpreadProfile(expiry, put_spread, call_spread, put_oi, call_oi))
 

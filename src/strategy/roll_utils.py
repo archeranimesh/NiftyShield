@@ -58,6 +58,8 @@ def find_strike_by_delta(
 
     def _sort_key(leg: OptionLeg) -> tuple[Decimal, int]:
         # Primary: distance from target; secondary: descending OI (negate for min-sort).
-        return (abs(abs(leg.delta) - target_delta), -leg.oi)  # type: ignore[return-value]
+        # candidates is already filtered for delta is None above.
+        assert leg.delta is not None
+        return (abs(abs(leg.delta) - target_delta), -leg.oi)
 
     return min(candidates, key=_sort_key)

@@ -205,7 +205,7 @@ class NiftyTrackComparisonV1:
             expiry = self._parse_expiry(pos.instrument_key)
             dte: int | None = (expiry - today).days if expiry is not None else None
 
-            payload_base = {
+            payload_base: dict[str, Any] = {
                 "track": pos.strategy_name,
                 "leg_role": pos.leg_role,
                 "dte": dte,
@@ -395,6 +395,7 @@ class NiftyTrackComparisonV1:
                             target = await self._select_overlay_roll_target(
                                 pos.leg_role, pos.strategy_name
                             )
+                            severity: Literal["WARN", "ACTION"]
                             if target is not None:
                                 decay_payload["strategy_name"] = pos.strategy_name
                                 decay_payload["suggested_instrument_key"] = target.instrument_key
@@ -619,7 +620,7 @@ class NiftyTrackComparisonV1:
         from src.client.upstox_market import parse_upstox_option_chain
 
         try:
-            raw = await self._broker.get_option_chain(  # type: ignore[union-attr]
+            raw = await self._broker.get_option_chain(
                 "NSE_INDEX|Nifty 50",
                 "next",
             )

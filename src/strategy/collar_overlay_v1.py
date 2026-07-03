@@ -369,9 +369,10 @@ class CollarOverlayV1(ReEntryMixin):
             )
 
             call_dte = 0
-            if metadata.get("dte") is not None:
+            call_dte_raw = metadata.get("dte")
+            if call_dte_raw is not None:
                 try:
-                    call_dte = int(float(metadata.get("dte")))
+                    call_dte = int(float(call_dte_raw))
                 except (ValueError, TypeError):
                     pass
             elif call_pos:

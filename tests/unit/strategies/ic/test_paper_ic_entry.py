@@ -477,16 +477,31 @@ async def test_open_position_prevention(
 
 
 @pytest.mark.asyncio
-async def test_ivr_below_gate_error(
+async def test_duplicate_guard_blocks_even_with_log_only_gates_on(
     mock_vix_data, mock_store, mock_lookup, mock_market_client, mock_subprocess
 ):
-    """Test that low IVR blocks entry."""
-    mock_vix_data["ivr"].return_value = 0.10  # weekly gate is 0.15
+    """STRUCTURAL gate edge case: duplicate position always hard-blocks.
+
+    check_duplicate is a structural/data-integrity gate — it must abort
+    entry even when --log-only-gates is explicitly on (the default), never
+    downgraded to a logged GateViolation.
+    """
+    mock_store.get_positions.return_value = [
+        PaperPosition(
+            strategy_name="paper_ic_nifty_v1_weekly",
+            leg_role="short_put",
+            net_qty=-65,
+            avg_cost=Decimal("0"),
+            avg_sell_price=Decimal("100"),
+            instrument_key="dummy",
+        )
+    ]
     test_args = [
         "paper_ic_entry.py",
         "--expiry-type",
         "weekly",
         "--no-dry-run",
+        "--log-only-gates",
         "--bod-path",
         "dummy.json",
     ]
@@ -498,6 +513,60 @@ async def test_ivr_below_gate_error(
 
     assert excinfo.value.code == 1
     assert mock_subprocess.call_count == 0
+    assert mock_store.record_gate_violation.call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_ivr_below_gate_error(
+    mock_vix_data, mock_store, mock_lookup, mock_market_client, mock_subprocess
+):
+    """Test that low IVR blocks entry when --no-log-only-gates is passed."""
+    mock_vix_data["ivr"].return_value = 0.10  # weekly gate is 0.15
+    test_args = [
+        "paper_ic_entry.py",
+        "--expiry-type",
+        "weekly",
+        "--no-dry-run",
+        "--no-log-only-gates",
+        "--bod-path",
+        "dummy.json",
+    ]
+    with (
+        patch.object(sys, "argv", test_args),
+        pytest.raises(SystemExit) as excinfo,
+    ):
+        await run()
+
+    assert excinfo.value.code == 1
+    assert mock_subprocess.call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_ivr_below_gate_logs_violation_and_proceeds_by_default(
+    mock_vix_data, mock_store, mock_lookup, mock_market_client, mock_subprocess, mock_telegram
+):
+    """Default --log-only-gates=True: low IVR records a GateViolation, entry proceeds.
+
+    Happy-path test for THRESHOLD-gate log-only mode: trade opens (4 legs
+    executed) and the violation is persisted, queryable via
+    get_gate_violation_counts (GROUP BY strategy_name, gate_name).
+    """
+    mock_vix_data["ivr"].return_value = 0.10  # weekly gate is 0.15
+    test_args = [
+        "paper_ic_entry.py",
+        "--expiry-type",
+        "weekly",
+        "--no-dry-run",
+        "--bod-path",
+        "dummy.json",
+    ]
+    with patch.object(sys, "argv", test_args):
+        await run()
+
+    assert mock_subprocess.call_count == 4
+    assert mock_store.record_gate_violation.call_count >= 1
+    violation_args = [c.args[0] for c in mock_store.record_gate_violation.call_args_list]
+    assert any(v.gate_name == "ivr" for v in violation_args)
 
 
 @pytest.mark.asyncio

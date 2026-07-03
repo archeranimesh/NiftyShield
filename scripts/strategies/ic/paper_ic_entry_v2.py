@@ -38,6 +38,7 @@ from scripts.strategies.ic.ic_entry_gates import (
     _post_expiry_gate,
     check_duplicate,
     ic_relevant_strategy_names,
+    make_gate_violation,
     resolve_expiry,
     resolve_ivr,
 )
@@ -201,6 +202,18 @@ def parse_args() -> argparse.Namespace:
         help="Skip IVR gate and portfolio-delta gate; log WARNING per bypass.",
     )
     parser.add_argument(
+        "--log-only-gates",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Threshold gates (IVR, DTE window, liquidity floor, portfolio-"
+            "delta cap) record a GateViolation and let entry proceed instead "
+            "of blocking (default: on). Structural gates (duplicate, "
+            "post-expiry, unresolved instrument keys, stale/missing chain "
+            "data) always hard-block regardless of this flag."
+        ),
+    )
+    parser.add_argument(
         "--bod-path",
         type=Path,
         default=DEFAULT_BOD_PATH,
@@ -242,9 +255,10 @@ async def run() -> None:
         except Exception:  # noqa: BLE001
             pass
 
-    # Step 2: Duplicate guard (shared gate)
+    # Step 2: Duplicate guard (shared gate, STRUCTURAL — never bypassed)
     store = PaperStore(args.db_path)
     check_duplicate(store, strategy_name, notifier=_gate_alert)
+    gate_violations = []
 
     # Step 2b: Post-expiry gate — calendar-based (last Tuesday of current month)
     try:
@@ -257,16 +271,28 @@ async def run() -> None:
         )
         sys.exit(1)
 
-    # Step 2c: Expiry resolution + DTE window check (shared gate)
-    _, expiry_str, dte = resolve_expiry(
+    # Step 2c: Expiry resolution + DTE window check (shared gate, THRESHOLD)
+    _, expiry_str, dte, dte_violation = resolve_expiry(
         args.bod_path,
         expiry_bucket=config.expiry_type,
         dte_warn_lo=_V2_MONTHLY_DTE_WARN_LO,
         dte_warn_hi=_V2_MONTHLY_DTE_WARN_HI,
+        strategy_name=strategy_name,
     )
+    if dte_violation is not None and args.log_only_gates:
+        gate_violations.append(dte_violation)
 
-    # Step 3: IVR gate (shared gate)
-    ivr = resolve_ivr(args.db_path, _V2_MONTHLY_IVR_GATE, args.force_entry, notifier=_gate_alert)
+    # Step 3: IVR gate (shared gate, THRESHOLD)
+    ivr, ivr_violation = resolve_ivr(
+        args.db_path,
+        _V2_MONTHLY_IVR_GATE,
+        args.force_entry,
+        notifier=_gate_alert,
+        log_only_gates=args.log_only_gates,
+        strategy_name=strategy_name,
+    )
+    if ivr_violation is not None:
+        gate_violations.append(ivr_violation)
 
     # Step 5: Live chain fetch
     try:
@@ -334,13 +360,35 @@ async def run() -> None:
         )
         sys.exit(1)
 
-    # Step 8: Liquidity gate on short legs
+    # Step 8: Liquidity gate on short legs (THRESHOLD)
     if not _apply_liquidity_gate([short_put]):
-        print("ERROR: short_put failed liquidity gate", file=sys.stderr)
-        sys.exit(1)
+        if args.log_only_gates:
+            logger.warning("gate.liquidity_violation_logged", leg="short_put")
+            gate_violations.append(
+                make_gate_violation(
+                    gate_name="liquidity_short_put",
+                    threshold="liquidity_gate_pass",
+                    actual="failed",
+                    strategy_name=strategy_name,
+                )
+            )
+        else:
+            print("ERROR: short_put failed liquidity gate", file=sys.stderr)
+            sys.exit(1)
     if not _apply_liquidity_gate([short_call]):
-        print("ERROR: short_call failed liquidity gate", file=sys.stderr)
-        sys.exit(1)
+        if args.log_only_gates:
+            logger.warning("gate.liquidity_violation_logged", leg="short_call")
+            gate_violations.append(
+                make_gate_violation(
+                    gate_name="liquidity_short_call",
+                    threshold="liquidity_gate_pass",
+                    actual="failed",
+                    strategy_name=strategy_name,
+                )
+            )
+        else:
+            print("ERROR: short_call failed liquidity gate", file=sys.stderr)
+            sys.exit(1)
 
     # Step 9: Portfolio delta check
     ltp_map = client.get_ltp_sync(["NSE_INDEX|Nifty 50"])
@@ -417,20 +465,43 @@ async def run() -> None:
                     pass
 
             if not adjusted:
-                _gate_alert(
-                    f"⚠️ IC V2 Entry BLOCKED — {strategy_name}\n"
-                    f"Gate: portfolio_delta\n"
-                    f"Reason: Projected delta {projected_total:.3f} lots outside [-0.05, 0.25]"
-                )
-                print(
-                    f"ERROR: Portfolio delta check failed. "
-                    f"Projected={projected_total:.3f} lots (outside [-0.05, 0.25]). Stop.",
-                    file=sys.stderr,
-                )
-                sys.exit(1)
+                if args.log_only_gates:
+                    logger.warning(
+                        "gate.portfolio_delta_violation_logged",
+                        projected_total=str(projected_total),
+                    )
+                    gate_violations.append(
+                        make_gate_violation(
+                            gate_name="portfolio_delta",
+                            threshold="[-0.05, 0.25]",
+                            actual=f"{projected_total:.4f}",
+                            strategy_name=strategy_name,
+                        )
+                    )
+                else:
+                    _gate_alert(
+                        f"⚠️ IC V2 Entry BLOCKED — {strategy_name}\n"
+                        f"Gate: portfolio_delta\n"
+                        f"Reason: Projected delta {projected_total:.3f} lots outside [-0.05, 0.25]"
+                    )
+                    print(
+                        f"ERROR: Portfolio delta check failed. "
+                        f"Projected={projected_total:.3f} lots (outside [-0.05, 0.25]). Stop.",
+                        file=sys.stderr,
+                    )
+                    sys.exit(1)
     else:
         if projected_total < Decimal("-0.05") or projected_total > Decimal("0.25"):
             logger.warning("force_entry.delta_bypass", projected_total=projected_total)
+
+    # Persist all threshold-gate violations collected above (log-only mode).
+    for violation in gate_violations:
+        try:
+            store.record_gate_violation(violation)
+        except Exception as exc:  # noqa: BLE001 — persistence failure must not block entry
+            logger.warning(
+                "gate_violation.persist_failed", gate_name=violation.gate_name, error=str(exc)
+            )
 
     # Step 10: Build and print/execute record_paper_trade commands
     legs = [

@@ -564,13 +564,13 @@ class CSPNiftyV1(ReEntryMixin):
             self._store.mark_trade_defended(
                 short_put.strategy_name,
                 short_put.leg_role,
-                result.new_trade.instrument_key,
+                result.new_instrument_key,
             )
             await self._send_notification(
                 f"🔄 <b>CSP rolled down-and-out</b>\n"
                 f"Closed: <code>{short_put.instrument_key}</code>\n"
-                f"Opened: <code>{result.new_trade.instrument_key}</code>\n"
-                f"New credit: {result.new_trade.price}"
+                f"Opened: <code>{result.new_instrument_key}</code>\n"
+                f"New credit: {result.new_price}"
             )
         except Exception as exc:
             log.error("csp_nifty_v1._roll_down.failed", error=str(exc))
