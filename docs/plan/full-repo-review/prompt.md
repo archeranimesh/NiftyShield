@@ -3,11 +3,50 @@ Read `CONTEXT.md` and state `CONTEXT.md ✓` before doing anything else. Then re
 **only task** for this session. Do not look at any other unchecked item. One task.
 Complete it fully. Stop.
 
+**Operating philosophy for this entire epic — read this before any task, every time:**
+Animesh and Claude are co-invested in NiftyShield's outcome, not in a client/vendor or
+grader/gradee relationship. There is no adversarial "AI polices the human's code" framing
+and no deferential "AI approves whatever the human already built" framing either — both
+are wrong for the same reason: neither treats the other party's blind spots as worth
+surfacing. The only framing that serves the mission (`MISSION.md`'s Five Immutable
+Principles, "Protect Before You Earn" above all) is two co-investors who each know the
+other has genuine gaps and actively hunt for them, because a blind spot caught late costs
+real capital and a blind spot caught here costs nothing but an hour of review.
+
+This cuts both ways and every persona in `stories.md` must apply it symmetrically:
+- **Findings about the code/docs are not personal and not adversarial theater.** Rate
+  severity by actual business impact (does this expose capital, does this cost a real
+  decision-quality point, per `MISSION.md`'s Grounding Test) — not by how many findings
+  make the review look thorough. A padded list of INFO-level nitpicks is as useless to a
+  co-investor as a review that rubber-stamps everything.
+- **The reviewer's own blind spots are equally in scope.** Every closing block in
+  `stories.md` asks the reviewing model to name a missing persona — that instruction exists
+  because the model doing FR-1 through FR-8 can be just as wrong as the code it's reviewing
+  (see: this same conversation's `RapidCouncil` mistake — citing a file as "live" without
+  checking `DECISIONS.md` first, caught by Animesh, not self-caught). Catching that kind of
+  error is the job, on both sides, not a failure to be defensive about.
+- **The point of FR-7 (synthesis) is not "did the code pass."** It's "where did the panel,
+  including its blind spots, converge on something that actually threatens the mission" —
+  capital protection, the three-phase validation gate, pool segregation — versus something
+  that's stylistically imperfect but low-stakes. Rank accordingly; do not treat all
+  CRITICAL tags as equally urgent without checking which mission principle each one touches.
+- **FR-9's roadmap is the actual deliverable.** A findings folder nobody acts on has not
+  helped either co-investor. If a finding doesn't produce a follow-up story stub or a
+  `DECISIONS.md` entry, ask whether it was worth flagging at all before filing it away.
+
 **This is a review-only epic — no production code changes.** Every task (FR-1 through
-FR-8) produces a written finding, not a diff — FR-8 specifically produces the tooling/
+FR-8) produces a written finding, not a diff — FR-1 specifically decides whether this
+epic's own process is sound (see ordering note below) and FR-8 produces the tooling/
 Antigravity-handoff usage guide, itself a finding, not an edit to any live doc yet. Only
 FR-9 (the final task) touches the repo outside `findings/`, and even then only to write the
 synthesized roadmap + update `DECISIONS.md` — it does not implement any fix.
+
+**Ordering:** FR-1 (Protocol Review) runs first, ahead of the financial/architecture/
+security tasks, even though it reads like a meta/wrap-up task. It has no dependency on any
+other task's output and it judges whether this epic's own protocol — including the
+"Operating philosophy" below — is sound before FR-2 through FR-6 spend Opus/Fable budget
+executing under it. Same reasoning as `CLAUDE.md`'s own Step 2b council checkpoint: verify
+the process before running it, not after the fact.
 
 **Origin:** Two independent chat-session reviews (2026-07-04) surfaced findings the
 existing per-commit gates (`code-reviewer`, `test-runner`, `greeks-analyst`,
@@ -48,12 +87,13 @@ prompt too leading.
 
 **Output contract:** each of FR-1 through FR-6 writes one file to
 `docs/plan/full-repo-review/findings/<task-id>_<persona-slug>.md` (directory does not exist
-yet — create it in FR-1, the first task). FR-7 reads all six and writes
-`findings/FR-7_synthesis.md`. FR-8 (tooling/Antigravity-handoff usage guide) reads FR-5's
-output and writes `findings/FR-8_practitioner-devex.md`. FR-9 is the only task that edits
-files outside this folder, and only per its own spec. **Nothing appears in `findings/`
-until a task is actually run — this folder of prompts is a spec, not a job queue; no
-automation fires on its own.**
+yet — create it in FR-1, the first task, which now runs before the others per the ordering
+note in `stories.md`). FR-7 reads all six (FR-1..FR-6) and writes
+`findings/FR-7_synthesis.md`. FR-8 (tooling/Antigravity-handoff usage guide) reads FR-1's
+output specifically and writes `findings/FR-8_practitioner-devex.md`. FR-9 is the only task
+that edits files outside this folder, and only per its own spec. **Nothing appears in
+`findings/` until a task is actually run — this folder of prompts is a spec, not a job
+queue; no automation fires on its own.**
 
 **How a task actually gets executed — pick one mechanism per task, state which in your
 `| Model:` note when you tick the box:**

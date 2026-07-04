@@ -9,10 +9,89 @@
 > **Every task's prompt ends with the same closing block** (reproduced in each task below,
 > not just referenced) — this is deliberate: it must survive being copy-pasted into a fresh
 > session with no other context from this file.
+>
+> **Ordering note:** FR-1 (Protocol Review) runs first, ahead of the financial/code review
+> tasks, even though it would conventionally be numbered last as a meta-task. Reason: it has
+> no dependency on any other task's output, and it judges — among other things — whether
+> this very epic's own protocol (including the "Operating philosophy" in `prompt.md`) is
+> sound before the other six tasks spend real model budget executing under it. Same logic
+> as `CLAUDE.md`'s own Step 2b council checkpoint: verify the process before running it, not
+> after.
 
 ---
 
-## FR-1 — Financial Modeling & Greeks Correctness Review
+## FR-1 — Prompting Methodology & AI-Collaboration Protocol Review
+
+**Persona:** Protocol Reviewer — this is the meta-task: reviewing not the code but the
+instructions that govern how AI assistants (Claude, Antigravity, and any future model) work
+in this repo, including this review epic's own instructions. Origin of this whole epic was
+a **prompting** conversation; it would be inconsistent to review everything except the
+prompts themselves, and inconsistent to let this task run last when it gates the rest.
+
+**Model:** Fable. This requires holding `CLAUDE.md`, every module `CLAUDE.md`,
+`ANTIGRAVITY.md`, `docs/antigravity/ai_collaboration_plan.md`, and a sample of
+`docs/plan/*/prompt.md` files in mind simultaneously to judge whether the protocol is
+internally consistent and whether it's actually being followed in practice (not just
+whether it reads well in isolation).
+
+**Folder/files to attach:** root `CLAUDE.md`, every `src/*/CLAUDE.md`, `ANTIGRAVITY.md`,
+`docs/antigravity/`, `REVIEW.md`, `LOGGING.md`, `docs/council/README.md`, every
+`docs/plan/*/prompt.md` (not the full stories/tasks files — just the prompts, which is the
+actual instruction surface an agent sees first), and this epic's own
+`docs/plan/full-repo-review/prompt.md` + `stories.md`.
+
+**Known seed issues — start here, then go wider:**
+- This very story's own `prompt.md` and `stories.md` are in scope — do not exempt this
+  review epic from its own review. Check whether the model/persona assignments made here
+  are actually justified or whether they're arbitrary-sounding despite the stated reasoning.
+- Compare 3-4 `docs/plan/*/prompt.md` files against each other — is the "one task per
+  session, find first unchecked box, stop" discipline actually uniform, or have later
+  stories drifted in structure/tone from earlier ones (`telegram-leg-labels/prompt.md` is a
+  recent, detailed example — use it as the baseline for comparison)?
+- `CLAUDE.md`'s Step 2b "Council checkpoint" — check whether any story in `docs/plan/`
+  contains a decision that should have triggered a council call per
+  `docs/council/README.md#when-to-trigger-the-council` but didn't (i.e., the checkpoint is
+  written down but verify it's actually been applied, not just documented).
+- Whether the Antigravity/Claude implementation-routing logic (Step 3b) has ever actually
+  been exercised — check `git log` for any commit authored via the Antigravity path vs.
+  whether every commit so far has gone through the Claude-implements branch regardless of
+  what the routing criteria would have selected.
+
+**Task:**
+1. Read `CLAUDE.md`'s full Pre-Task Protocol top to bottom as if seeing it for the first
+   time — flag any instruction that is ambiguous enough that two reasonable agents would
+   follow it differently.
+2. Sample 3 `docs/plan/*/prompt.md` files from different months (check folder mtimes or
+   `git log` for creation dates) and diff their structure/tone/rigor.
+3. Check whether `docs/council/README.md`'s trigger criteria have actually gated any real
+   decision, or whether council calls (where they exist in `docs/council/`) were made
+   without an explicit checkpoint reference beforehand.
+4. Evaluate whether the module `CLAUDE.md` auto-load mechanism creates any contradiction
+   between a module's local rules and the root `CLAUDE.md` (e.g. does any module file
+   permit something Part III of `REVIEW.md` forbids?).
+5. **Decide whether the "Operating philosophy" block in this epic's own `prompt.md`**
+   (co-investor framing, mutual blind-spot catching, findings rated by mission impact not
+   nitpick volume) **should be promoted into root `CLAUDE.md`'s "AI Collaboration" section**
+   so it governs every session rather than only this one review epic. Weigh: does it change
+   any concrete behavior beyond what's already implied by the existing protocol (Rule 0's
+   "state why the graph was insufficient," the mandatory missing-persona closing block
+   pattern itself), or is it framing/tone that doesn't survive being generalized outside a
+   review context? State a clear recommendation (promote / keep scoped / revise-then-promote)
+   with reasoning — this is a decision FR-9 will act on, not a rhetorical question.
+6. Rate each finding CRITICAL (protocol ambiguity that has already caused or will cause
+   incorrect agent behavior) / ERROR (drift/inconsistency, not yet harmful) / WARNING /
+   INFO.
+
+**Output:** `docs/plan/full-repo-review/findings/FR-1_protocol-reviewer.md`.
+
+**Closing block (include verbatim at the end of your own output file):**
+> State the persona you reviewed as (Protocol Reviewer). Name at least one perspective this
+> review did not cover that a different persona would have caught — write "none identified"
+> explicitly if genuinely nothing comes to mind, do not omit this section.
+
+---
+
+## FR-2 — Financial Modeling & Greeks Correctness Review
 
 **Persona:** Quant Reviewer — options pricing, Greeks, P&L accounting, Decimal/float
 boundary discipline. Adversarial toward the codebase: assume every formula is wrong until
@@ -56,7 +135,7 @@ same rigor applied broadly, not a cheaper model skimming for style issues.
 5. Rate each finding CRITICAL (wrong result, real-money impact) / ERROR (wrong in an edge
    case) / WARNING (correct today, fragile) / INFO (stylistic).
 
-**Output:** `docs/plan/full-repo-review/findings/FR-1_quant-reviewer.md` — one section per
+**Output:** `docs/plan/full-repo-review/findings/FR-2_quant-reviewer.md` — one section per
 finding, formula shown, correct derivation shown, severity, file:line.
 
 **Closing block (include verbatim at the end of your own output file):**
@@ -66,7 +145,7 @@ finding, formula shown, correct derivation shown, severity, file:line.
 
 ---
 
-## FR-2 — Architecture & Design-Doc Consistency Review
+## FR-3 — Architecture & Design-Doc Consistency Review
 
 **Persona:** Systems Architect — cross-document consistency, whether decisions recorded in
 one doc are honored in the docs that depend on it, whether the story-file/epic structure
@@ -81,7 +160,7 @@ exactly the long-horizon multi-file synthesis Fable is positioned for.
 `DECISIONS.md`, `REFERENCES.md`, `TODOS.md`, `PLANNER.md`, `BACKTEST_PLAN.md`,
 `BACKTEST_PLAN_PHASE1.md`, `MISSION.md`, `GLOSSARY.md`, `LITERATURE.md`, `ANTIGRAVITY.md`),
 plus `docs/plan/` and `docs/council/` in full, plus `docs/bugs/bugs.md`. Do not attach
-`src/` or `tests/` — this task is documents-only; FR-1/FR-3/FR-4 cover code.
+`src/` or `tests/` — this task is documents-only; FR-2/FR-4/FR-5 cover code.
 
 **Known seed issues — start here, then go wider:**
 - `CONTEXT.md` "What Does NOT Exist Yet" claims `src/nuvama/CLAUDE.md` is unwritten; it
@@ -109,7 +188,7 @@ plus `docs/plan/` and `docs/council/` in full, plus `docs/bugs/bugs.md`. Do not 
 5. Rate each finding CRITICAL (actively misleading, will cause wrong work) / ERROR (stale
    but low-blast-radius) / WARNING (drifting, not yet wrong) / INFO.
 
-**Output:** `docs/plan/full-repo-review/findings/FR-2_systems-architect.md`.
+**Output:** `docs/plan/full-repo-review/findings/FR-3_systems-architect.md`.
 
 **Closing block (include verbatim at the end of your own output file):**
 > State the persona you reviewed as (Systems Architect). Name at least one perspective this
@@ -118,7 +197,7 @@ plus `docs/plan/` and `docs/council/` in full, plus `docs/bugs/bugs.md`. Do not 
 
 ---
 
-## FR-3 — Code Quality & Coding-Standard Compliance Sweep
+## FR-4 — Code Quality & Coding-Standard Compliance Sweep
 
 **Persona:** Standards Auditor — mechanical, wide, cheap coverage against the rules already
 written down in `REVIEW.md` and `LOGGING.md`. Not a judgment task; a counting task.
@@ -128,7 +207,7 @@ rule across many files. It doesn't need Opus-level judgment or Fable-level long-
 synthesis, and running it on either would be paying for capability this task doesn't use.
 
 **Folder/files to attach:** `src/`, `scripts/`, `REVIEW.md`, `LOGGING.md`. Do not attach
-`docs/plan/` or `docs/council/` — those are FR-2's and FR-5's scope.
+`docs/plan/` or `docs/council/` — those are FR-1's and FR-3's scope.
 
 **Known seed issues — confirm current counts, do not assume these are still accurate:**
 - 20 files using bare `logging.getLogger(__name__)` instead of
@@ -156,7 +235,7 @@ synthesis, and running it on either would be paying for capability this task doe
 5. Rate each finding CRITICAL/ERROR/WARNING/INFO per the severities `REVIEW.md`'s own rules
    assign (G1, G5, G6, G7 are explicitly CRITICAL; G8 is ERROR).
 
-**Output:** `docs/plan/full-repo-review/findings/FR-3_standards-auditor.md` — grouped by
+**Output:** `docs/plan/full-repo-review/findings/FR-4_standards-auditor.md` — grouped by
 rule ID, with exact file:line and current count, not the seed estimate.
 
 **Closing block (include verbatim at the end of your own output file):**
@@ -166,7 +245,7 @@ rule ID, with exact file:line and current count, not the seed estimate.
 
 ---
 
-## FR-4 — Test Adequacy & Ground-Truth Coverage Review
+## FR-5 — Test Adequacy & Ground-Truth Coverage Review
 
 **Persona:** Test Auditor — not "do tests pass" but "what's untested that matters," with
 particular focus on the gap between property tests (internal consistency) and golden tests
@@ -183,7 +262,7 @@ judgment call, not a coverage-counting one.
 "every public function needs one happy-path + one error/edge-case test" rule).
 
 **Known seed issues — start here, then go wider:**
-- No golden-value test exists for any Greeks calculation (see FR-1 seed #1 — this is the
+- No golden-value test exists for any Greeks calculation (see FR-2 seed #1 — this is the
   same gap from the test-coverage angle rather than the correctness angle; both tasks
   should cross-reference each other's findings in FR-7).
 - No put-call parity check exists on the option chain parser.
@@ -210,70 +289,10 @@ judgment call, not a coverage-counting one.
    (financial logic with property tests but no golden test) / WARNING (non-financial gap) /
    INFO.
 
-**Output:** `docs/plan/full-repo-review/findings/FR-4_test-auditor.md`.
+**Output:** `docs/plan/full-repo-review/findings/FR-5_test-auditor.md`.
 
 **Closing block (include verbatim at the end of your own output file):**
 > State the persona you reviewed as (Test Auditor). Name at least one perspective this
-> review did not cover that a different persona would have caught — write "none identified"
-> explicitly if genuinely nothing comes to mind, do not omit this section.
-
----
-
-## FR-5 — Prompting Methodology & AI-Collaboration Protocol Review
-
-**Persona:** Protocol Reviewer — this is the meta-task: reviewing not the code but the
-instructions that govern how AI assistants (Claude, Antigravity, and any future model) work
-in this repo. Origin of this whole epic was a **prompting** conversation; it would be
-inconsistent to review everything except the prompts themselves.
-
-**Model:** Fable. Same reasoning as FR-2 — this requires holding `CLAUDE.md`, every module
-`CLAUDE.md`, `ANTIGRAVITY.md`, `docs/antigravity/ai_collaboration_plan.md`, and a sample of
-`docs/plan/*/prompt.md` files in mind simultaneously to judge whether the protocol is
-internally consistent and whether it's actually being followed in practice (not just
-whether it reads well in isolation).
-
-**Folder/files to attach:** root `CLAUDE.md`, every `src/*/CLAUDE.md`, `ANTIGRAVITY.md`,
-`docs/antigravity/`, `REVIEW.md`, `LOGGING.md`, `docs/council/README.md`, and every
-`docs/plan/*/prompt.md` (not the full stories/tasks files — just the prompts, which is the
-actual instruction surface an agent sees first).
-
-**Known seed issues — start here, then go wider:**
-- This very story's own `prompt.md` and `stories.md` are in scope — do not exempt this
-  review epic from its own review. Check whether the model/persona assignments made here
-  are actually justified or whether they're arbitrary-sounding despite the stated reasoning.
-- Compare 3-4 `docs/plan/*/prompt.md` files against each other — is the "one task per
-  session, find first unchecked box, stop" discipline actually uniform, or have later
-  stories drifted in structure/tone from earlier ones (`telegram-leg-labels/prompt.md` is a
-  recent, detailed example — use it as the baseline for comparison)?
-- `CLAUDE.md`'s Step 2b "Council checkpoint" — check whether any story in `docs/plan/`
-  contains a decision that should have triggered a council call per
-  `docs/council/README.md#when-to-trigger-the-council` but didn't (i.e., the checkpoint is
-  written down but verify it's actually been applied, not just documented).
-- Whether the Antigravity/Claude implementation-routing logic (Step 3b) has ever actually
-  been exercised — check `git log` for any commit authored via the Antigravity path vs.
-  whether every commit so far has gone through the Claude-implements branch regardless of
-  what the routing criteria would have selected.
-
-**Task:**
-1. Read `CLAUDE.md`'s full Pre-Task Protocol top to bottom as if seeing it for the first
-   time — flag any instruction that is ambiguous enough that two reasonable agents would
-   follow it differently.
-2. Sample 3 `docs/plan/*/prompt.md` files from different months (check folder mtimes or
-   `git log` for creation dates) and diff their structure/tone/rigor.
-3. Check whether `docs/council/README.md`'s trigger criteria have actually gated any real
-   decision, or whether council calls (where they exist in `docs/council/`) were made
-   without an explicit checkpoint reference beforehand.
-4. Evaluate whether the module `CLAUDE.md` auto-load mechanism creates any contradiction
-   between a module's local rules and the root `CLAUDE.md` (e.g. does any module file
-   permit something Part III of `REVIEW.md` forbids?).
-5. Rate each finding CRITICAL (protocol ambiguity that has already caused or will cause
-   incorrect agent behavior) / ERROR (drift/inconsistency, not yet harmful) / WARNING /
-   INFO.
-
-**Output:** `docs/plan/full-repo-review/findings/FR-5_protocol-reviewer.md`.
-
-**Closing block (include verbatim at the end of your own output file):**
-> State the persona you reviewed as (Protocol Reviewer). Name at least one perspective this
 > review did not cover that a different persona would have caught — write "none identified"
 > explicitly if genuinely nothing comes to mind, do not omit this section.
 
@@ -342,7 +361,7 @@ read all Stage-1 outputs, do not re-derive their findings, synthesize and rank.
 
 **Model:** Fable. This step requires reading six full findings documents plus this repo's
 existing council-output conventions and holding all of it in context to judge what's
-missing — the same long-horizon synthesis role as FR-2/FR-5, applied to the panel's own
+missing — the same long-horizon synthesis role as FR-1/FR-3, applied to the panel's own
 output rather than the repo directly.
 
 **Folder/files to attach:** `docs/plan/full-repo-review/findings/` (all six FR-1..FR-6
@@ -358,7 +377,7 @@ formatting reference for Stage 3 synthesis style.
    if both Quant Reviewer and Test Auditor separately flag "no one is checking regulatory/
    SEBI-compliance implications of the April 2026 Tuesday-expiry change on any of this
    logic," that's not a coincidence to ignore).
-3. Cross-reference findings across documents — does FR-1's Greeks-formula finding and FR-4's
+3. Cross-reference findings across documents — does FR-2's Greeks-formula finding and FR-5's
    test-coverage finding describe the same underlying gap from two angles? Merge, don't
    duplicate.
 4. Produce a Summary Table in the same style as `docs/archive/council/strategy/*.md`'s
@@ -383,7 +402,7 @@ formatting reference for Stage 3 synthesis style.
 ## FR-8 — Tooling Usage Guide: Claude Code vs. Cowork vs. Antigravity Handoff, by Job Type
 
 **Persona:** Practitioner/DevEx — not "is the protocol internally consistent" (that's
-FR-5), but "if I am a developer starting a task right now, which surface do I open, and
+FR-1), but "if I am a developer starting a task right now, which surface do I open, and
 why." This is the piece that was actually missing from the review as originally scoped:
 every other task audits whether existing docs are correct; this one produces a decision
 guide that doesn't fully exist yet in one place.
@@ -392,11 +411,11 @@ guide that doesn't fully exist yet in one place.
 in root `CLAUDE.md`, `ANTIGRAVITY.md`, `docs/antigravity/ai_collaboration_plan.md`) plus
 general knowledge of what each surface (Claude Code CLI, Cowork, Antigravity) is actually
 built for — it's a collation-and-clarification task, not a deep judgment call. Read
-`findings/FR-5_protocol-reviewer.md` first (must exist before this task starts) — do not
-re-derive protocol ambiguities FR-5 already found; build the guide around them.
+`findings/FR-1_protocol-reviewer.md` first (must exist before this task starts) — do not
+re-derive protocol ambiguities FR-1 already found; build the guide around them.
 
 **Folder/files to attach:** root `CLAUDE.md` (Step 3b specifically), `ANTIGRAVITY.md`,
-`docs/antigravity/ai_collaboration_plan.md`, `docs/plan/full-repo-review/findings/FR-5_protocol-reviewer.md`.
+`docs/antigravity/ai_collaboration_plan.md`, `docs/plan/full-repo-review/findings/FR-1_protocol-reviewer.md`.
 
 **Task:**
 1. Extract the current Step 3b routing criteria verbatim (when Claude implements vs. when
@@ -406,18 +425,18 @@ re-derive protocol ambiguities FR-5 already found; build the guide around them.
    model overrides including `fable`/`opus`/`sonnet`, task-list widget, no local hook
    support) — when is one surface clearly better suited than the other for this repo's kind
    of work (e.g. a quick single-file fix at your desk vs. a multi-hour audit like this very
-   epic vs. a job needing a specific model override like FR-1/FR-2/FR-6/FR-7 here).
+   epic vs. a job needing a specific model override like FR-2/FR-3/FR-6/FR-7 here).
 3. For at least 6 concrete job types drawn from this repo's actual history (a BACKTEST_PLAN
    Phase 0 task, a council-gated architecture decision, a mechanical logging-migration
    fix, a golden-value test authoring task, a cron/daemon debugging session, a full-repo
    review task like this epic), state: recommended surface, recommended model (if
-   choosable), and why — cite the FR-5 finding if it flagged ambiguity relevant to that job
+   choosable), and why — cite the FR-1 finding if it flagged ambiguity relevant to that job
    type.
 4. Explicitly cover the Antigravity handoff mechanics: what the structured handoff prompt
    must contain (per Step 3b), what "Phase Completion Output" Claude must verify (SHA match,
    test count) before closing the phase, and what to do when verification fails (per
    existing CLAUDE.md instruction: open a fix session with failure details — confirm this
-   is still accurate or flag if FR-5 found it stale).
+   is still accurate or flag if FR-1 found it stale).
 5. Flag anywhere this guide has to make a judgment call the existing docs don't actually
    settle — those are candidates for a `DECISIONS.md` entry, not something to guess at
    silently.
@@ -454,13 +473,20 @@ actionable structure, not generating new judgment.
    guide lives, following the same "targeted `Edit`, never `Write`-over" rule as every other
    doc update in this repo. Do not leave the guide stranded only inside `findings/` where
    nothing points to it.
-3. Add a row to `docs/plan/README.md`'s "Active Stories" table for each new story folder
+3. Read FR-1's recommendation on whether the "Operating philosophy" (co-investor framing)
+   block should be promoted into root `CLAUDE.md`'s "AI Collaboration" section. If FR-1
+   recommended promote or revise-then-promote, add it there (targeted `Edit`, scoped to
+   what FR-1 actually recommended — do not paste the full epic-specific block verbatim if
+   FR-1 flagged parts of it as review-context-specific). If FR-1 recommended keep-scoped,
+   leave `docs/plan/full-repo-review/prompt.md` as the sole location and note the decision
+   + reasoning in this task's own commit message so it isn't silently dropped.
+4. Add a row to `docs/plan/README.md`'s "Active Stories" table for each new story folder
    created, status `⬜ Not started`.
-4. Update `DECISIONS.md` per the existing Council Decision Protocol (root `CLAUDE.md`):
+5. Update `DECISIONS.md` per the existing Council Decision Protocol (root `CLAUDE.md`):
    add one entry citing this review epic as the source, dated, with the Summary Table
    findings and any "Noted, deferred" items from FR-7's "Personas Not Represented" section
    logged as dissenting/deferred notes.
-5. Do **not** implement any fix in this task — new story folders contain only specs, no
+6. Do **not** implement any fix in this task — new story folders contain only specs, no
    code changes. This task's own commit is docs-only.
 
 **Verify:**
