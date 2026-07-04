@@ -34,19 +34,24 @@ This cuts both ways and every persona in `stories.md` must apply it symmetricall
   helped either co-investor. If a finding doesn't produce a follow-up story stub or a
   `DECISIONS.md` entry, ask whether it was worth flagging at all before filing it away.
 
-**This is a review-only epic — no production code changes.** Every task (FR-1 through
-FR-8) produces a written finding, not a diff — FR-1 specifically decides whether this
-epic's own process is sound (see ordering note below) and FR-8 produces the tooling/
-Antigravity-handoff usage guide, itself a finding, not an edit to any live doc yet. Only
-FR-9 (the final task) touches the repo outside `findings/`, and even then only to write the
-synthesized roadmap + update `DECISIONS.md` — it does not implement any fix.
+**This is a review-only epic — no production code changes.** Every task (FR-0 through
+FR-8) produces a written finding, not a diff — FR-0 validates the model-choice premise
+itself, FR-1 decides whether this epic's own process is sound (see ordering note below),
+and FR-8 produces the tooling/Antigravity-handoff usage guide, itself a finding, not an
+edit to any live doc yet. Only FR-9 (the final task) touches the repo outside `findings/`,
+and even then only to write the synthesized roadmap + update `DECISIONS.md` — it does not
+implement any fix.
 
-**Ordering:** FR-1 (Protocol Review) runs first, ahead of the financial/architecture/
-security tasks, even though it reads like a meta/wrap-up task. It has no dependency on any
-other task's output and it judges whether this epic's own protocol — including the
-"Operating philosophy" below — is sound before FR-2 through FR-6 spend Opus/Fable budget
-executing under it. Same reasoning as `CLAUDE.md`'s own Step 2b council checkpoint: verify
-the process before running it, not after the fact.
+**Ordering:** FR-0 (Model Validation Pilot) runs first, before anything else — it tests
+whether Fable's cost premium over Opus is actually justified for this repo's three
+Fable-assigned tasks (FR-1, FR-3, FR-7), rather than assuming Anthropic's general
+positioning transfers to this specific kind of work. FR-1 (Protocol Review) runs second,
+ahead of the financial/architecture/security tasks, even though it reads like a meta/
+wrap-up task. It has no dependency on any other task's output besides FR-0's
+recommendation, and it judges whether this epic's own protocol — including the "Operating
+philosophy" below — is sound before FR-2 through FR-6 spend Opus/Fable budget executing
+under it. Same reasoning as `CLAUDE.md`'s own Step 2b council checkpoint: verify the
+process before running it, not after the fact.
 
 **Origin:** Two independent chat-session reviews (2026-07-04) surfaced findings the
 existing per-commit gates (`code-reviewer`, `test-runner`, `greeks-analyst`,
@@ -75,7 +80,26 @@ capability the cheaper model lacks.
 **Folder to attach in each session:** every task in `stories.md` states an explicit
 "Folder/files to attach" line. Attach only that scope for that session — do not attach the
 full repo for a task scoped to `docs/` only, and do not scope down a task that explicitly
-needs full-repo visibility (FR-2, FR-5, FR-7).
+needs full-repo visibility (FR-1, FR-3, FR-7).
+
+**Provenance and forward-plan scope:** this review is not limited to the current state of
+`docs/plan/` and root markdown — FR-3 explicitly traces a sample of `DECISIONS.md` entries
+back to the `docs/archive/council/` source that produced them (confirming the decision
+still accurately reflects its own origin, not a drifted paraphrase) and separately checks
+whether `docs/plan/README.md`'s "Blocked / Later Stories" and `BACKTEST_PLAN_PHASE1.md`'s
+not-yet-built scope still hold given everything else the review finds. `docs/archive/`
+holds 144 files total; FR-3 samples `docs/archive/council/` and `docs/archive/plan/`
+specifically rather than reading the archive exhaustively — if that sample turns up
+systemic drift, flag it as a candidate for a dedicated follow-up pass in FR-9 rather than
+trying to cover all 144 files in one session.
+
+**Folder-naming scope:** FR-3 also runs a directory-structure naming-collision check across
+`src/` and `scripts/` — seeded by `src/strategy/` (library code: protocol, monitor,
+concrete strategy classes) vs. `scripts/strategies/` (per-strategy CLI entrypoint scripts),
+a singular/plural pair naming two conceptually different layers. This needs only a
+directory listing, not file contents, and any rename recommendation is a `DECISIONS.md`-
+worthy call given import/CI/doc blast radius — FR-3 recommends, FR-9 doesn't auto-execute a
+rename, that becomes its own follow-up story if warranted.
 
 **Persona discipline:** every task's prompt in `stories.md` ends with the same closing
 instruction — state the persona you are reviewing as, and name at least one perspective
@@ -85,15 +109,16 @@ specifically to collect and act on these self-reported gaps — a persona that e
 task says "none identified" for is itself a signal the panel may be too narrow or the
 prompt too leading.
 
-**Output contract:** each of FR-1 through FR-6 writes one file to
-`docs/plan/full-repo-review/findings/<task-id>_<persona-slug>.md` (directory does not exist
-yet — create it in FR-1, the first task, which now runs before the others per the ordering
-note in `stories.md`). FR-7 reads all six (FR-1..FR-6) and writes
-`findings/FR-7_synthesis.md`. FR-8 (tooling/Antigravity-handoff usage guide) reads FR-1's
-output specifically and writes `findings/FR-8_practitioner-devex.md`. FR-9 is the only task
-that edits files outside this folder, and only per its own spec. **Nothing appears in
-`findings/` until a task is actually run — this folder of prompts is a spec, not a job
-queue; no automation fires on its own.**
+**Output contract:** FR-0 runs first and creates the `findings/` directory, writing
+`findings/FR-0_model-validation-pilot.md`. Each of FR-1 through FR-6 then writes one file to
+`docs/plan/full-repo-review/findings/<task-id>_<persona-slug>.md` — FR-1, FR-3, and FR-7
+each check FR-0's recommendation before running, per the ordering note in `stories.md`.
+FR-7 reads all six (FR-1..FR-6) and writes `findings/FR-7_synthesis.md`. FR-8 (tooling/
+Antigravity-handoff usage guide) reads FR-1's output specifically and writes
+`findings/FR-8_practitioner-devex.md`. FR-9 is the only task that edits files outside this
+folder, and only per its own spec. **Nothing appears in `findings/` until a task is
+actually run — this folder of prompts is a spec, not a job queue; no automation fires on
+its own.**
 
 **How a task actually gets executed — pick one mechanism per task, state which in your
 `| Model:` note when you tick the box:**

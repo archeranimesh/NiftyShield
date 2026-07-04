@@ -10,13 +10,72 @@
 > not just referenced) — this is deliberate: it must survive being copy-pasted into a fresh
 > session with no other context from this file.
 >
-> **Ordering note:** FR-1 (Protocol Review) runs first, ahead of the financial/code review
-> tasks, even though it would conventionally be numbered last as a meta-task. Reason: it has
-> no dependency on any other task's output, and it judges — among other things — whether
-> this very epic's own protocol (including the "Operating philosophy" in `prompt.md`) is
-> sound before the other six tasks spend real model budget executing under it. Same logic
-> as `CLAUDE.md`'s own Step 2b council checkpoint: verify the process before running it, not
-> after.
+> **Ordering note:** FR-0 (Model Validation Pilot) runs before everything, including FR-1.
+> FR-1 (Protocol Review) runs second, ahead of the financial/code review tasks, even though
+> it would conventionally be numbered last as a meta-task. Reason: FR-1 has no dependency on
+> any other task's output (other than FR-0's model recommendation) and it judges — among
+> other things — whether this very epic's own protocol (including the "Operating philosophy"
+> in `prompt.md`) is sound before the other tasks spend real model budget executing under
+> it. Same logic as `CLAUDE.md`'s own Step 2b council checkpoint: verify the process before
+> running it, not after.
+
+---
+
+## FR-0 — Model Validation Pilot: Fable vs. Opus
+
+**Persona:** none — this is not a content review, it's an infrastructure/methodology check
+on the review itself. Whoever runs it is validating a premise, not forming an opinion about
+NiftyShield.
+
+**Model:** Run the *same* prompt on both Fable and Opus — that's the entire point of this
+task. Not interchangeable with any other task in this epic: this is the one task that
+exists specifically to test whether the Fable/Opus split assigned elsewhere is justified.
+
+**Why this is its own task, not a step inside FR-1:** folding a second full model run
+inside FR-1 would violate the "one task per session, do only that task" discipline every
+other story in this repo follows, and would only validate Fable-vs-Opus for the Protocol
+Reviewer persona specifically — it wouldn't say anything about whether Fable is worth it
+for FR-3 (cross-document architecture synthesis) or FR-7 (synthesis-of-synthesis), which
+are different cognitive demands. A standalone pilot, run once, whose recommendation all
+three Fable-assigned tasks (FR-1, FR-3, FR-7) read before executing, is the correct shape.
+
+**Folder/files to attach:** identical to FR-1's scope (root `CLAUDE.md`, every
+`src/*/CLAUDE.md`, `ANTIGRAVITY.md`, `docs/antigravity/`, `REVIEW.md`, `LOGGING.md`,
+`docs/council/README.md`, every `docs/plan/*/prompt.md`, this epic's own `prompt.md` +
+`stories.md`) — reuse FR-1's full task list as the test payload rather than inventing a
+separate smaller prompt, since FR-1 is representative of the long-horizon, hold-many-docs-
+in-mind synthesis work Fable is specifically claimed to be good at, and it's a task that
+has to actually run regardless.
+
+**Task:**
+1. Run FR-1's full task list (steps 1-5 in `stories.md`'s FR-1 section, excluding the
+   philosophy-promotion recommendation's downstream effects — just produce the analysis)
+   once on Fable and once on Opus, same prompt, same attached scope, back to back.
+2. Diff the two outputs directly: where do they materially disagree (not stylistic
+   differences — actual disagreements about whether something is ambiguous, stale, or a
+   genuine protocol gap), where is one clearly more thorough or catches something the other
+   missed, and where are they functionally identical.
+3. State plainly whether the Fable run's findings justified its cost premium (~5x Opus per
+   Anthropic's published pricing) for *this specific kind of task on this specific repo* —
+   not a general claim about Fable's capability, a specific one about whether the extra
+   spend bought anything here.
+4. Produce a recommendation, not a hedge: for each of FR-1, FR-3, FR-7 individually, state
+   keep-Fable or downgrade-to-Opus, with the reasoning tied to what the diff in step 2
+   actually showed for that kind of task (protocol audit vs. cross-doc architecture
+   synthesis vs. meta-synthesis-of-synthesis are not identical demands — a diff result that
+   applies to one doesn't automatically transfer to the others; say so explicitly if you
+   can't extrapolate confidently to FR-3/FR-7 from a FR-1-shaped test and flag that as a
+   limitation rather than recommending past your evidence).
+5. This is a one-time validation — do not re-run this pilot for every subsequent Fable task
+   in this epic; FR-1/FR-3/FR-7 each read this file once and either keep or substitute Opus
+   accordingly.
+
+**Output:** `docs/plan/full-repo-review/findings/FR-0_model-validation-pilot.md` — both raw
+outputs (or a faithful summary of each if full text is too long), the diff, and the
+per-task recommendation table.
+
+**Closing block:** not required for this task — it's a methodology pilot, not a persona
+review of NiftyShield itself, so the missing-persona instruction doesn't apply here.
 
 ---
 
@@ -82,6 +141,10 @@ actual instruction surface an agent sees first), and this epic's own
    incorrect agent behavior) / ERROR (drift/inconsistency, not yet harmful) / WARNING /
    INFO.
 
+**Before running this task:** read `findings/FR-0_model-validation-pilot.md` (must exist
+first). If it recommends downgrading Protocol Review to Opus, run this task on Opus instead
+of Fable and note the substitution in your `| Model:` line in `tasks.md`.
+
 **Output:** `docs/plan/full-repo-review/findings/FR-1_protocol-reviewer.md`.
 
 **Closing block (include verbatim at the end of your own output file):**
@@ -103,8 +166,10 @@ same rigor applied broadly, not a cheaper model skimming for style issues.
 
 **Folder/files to attach:** `src/risk/`, `src/paper/`, `src/strategy/` (all files, esp.
 `exit_signals.py`, `profit_lock_engine.py`, `delta_tracker.py`), `src/backtest/ivr.py`,
-`src/models/options.py`, `REFERENCES.md`, `DECISIONS.md`. Do not attach `scripts/` or
-`docs/plan/` — this task is about the math living in `src/`, not the automation around it.
+`src/models/options.py`, `REFERENCES.md`, `DECISIONS.md`, plus read-only query access to
+`data/portfolio/portfolio.sqlite` (aggregate/named-column queries only, per root
+`CLAUDE.md` Rule 1 — never `SELECT *`). Do not attach `scripts/` or `docs/plan/` — this
+task is about the math living in `src/`, not the automation around it.
 
 **Known seed issues — start here, then go wider:**
 - No golden/reference-value test exists anywhere in `tests/` that checks a Greeks
@@ -121,6 +186,11 @@ same rigor applied broadly, not a cheaper model skimming for style issues.
   `max(W,W)` isn't a typo for two different wing-width variables collapsed to the same one.
 - Verify put-call parity holds across `src/client/upstox_market.py`'s
   `parse_upstox_option_chain` output for any sampled chain in `tests/fixtures/responses/`.
+- `REFERENCES.md` documents the expiry-day change (Thursday → Tuesday, effective April
+  2026) — no task in this epic currently confirms every DTE/expiry calculation in
+  `src/instruments/lookup.py`, `src/backtest/ivr.py`, and the `ExitSignalEngine` DTE-based
+  thresholds (time-stop, roll-eligible windows) was actually updated consistently, versus
+  some being fixed and others silently still assuming a Thursday cadence.
 
 **Task:**
 1. `search_graph`/`get_code_snippet` every public function touching Greeks, delta, premium,
@@ -132,11 +202,30 @@ same rigor applied broadly, not a cheaper model skimming for style issues.
    using `==`.
 4. Check `git log --oneline -10` on the 3-4 riskiest files for recent unexplained changes to
    thresholds or formulas without a corresponding `DECISIONS.md` entry.
-5. Rate each finding CRITICAL (wrong result, real-money impact) / ERROR (wrong in an edge
+5. **Ground-truth reconciliation:** query `data/portfolio/portfolio.sqlite`'s `trades` table
+   for 2-3 real seeded rows (e.g. the `finideas_ilts`/`finrakshak` entries `CONTEXT.md`
+   documents — real entry prices, quantities, dated positions). Independently hand-compute
+   what the P&L/margin *should* be for those exact positions as of a specific date, then
+   compare against what the system's own tracker functions (`PaperTracker.compute_pnl` or
+   the live `portfolio/tracker.py` equivalent) actually produced or would produce for the
+   same inputs. This is a stronger check than a synthetic golden value — it's real recorded
+   money, not a hypothetical scenario, and a formula can pass every synthetic test while
+   still diverging from what actually happened to a real position.
+6. **Regulatory/compliance check:** verify the Tuesday-expiry change (`REFERENCES.md`) is
+   applied consistently everywhere expiry/DTE is computed in the attached scope — not just
+   in the one place a bug was previously found and fixed. Grep for any hardcoded weekday
+   logic (`Thursday`, `weekday() == 3`, etc.) that might have been missed. Note: this is a
+   compliance-adjacent check (contract dates must match actual NSE calendar), not a full
+   regulatory audit (margin rules, STT, tax treatment) — flag in your closing block if a
+   dedicated regulatory/compliance persona is warranted for those broader questions, since
+   none of FR-1/FR-3/FR-4/FR-5/FR-6 currently covers them either.
+7. Rate each finding CRITICAL (wrong result, real-money impact) / ERROR (wrong in an edge
    case) / WARNING (correct today, fragile) / INFO (stylistic).
 
 **Output:** `docs/plan/full-repo-review/findings/FR-2_quant-reviewer.md` — one section per
-finding, formula shown, correct derivation shown, severity, file:line.
+finding, formula shown, correct derivation shown, severity, file:line. Include the
+ground-truth reconciliation (step 5) as its own labeled section showing hand-computed vs.
+system value side by side.
 
 **Closing block (include verbatim at the end of your own output file):**
 > State the persona you reviewed as (Quant Reviewer). Name at least one perspective this
@@ -149,18 +238,37 @@ finding, formula shown, correct derivation shown, severity, file:line.
 
 **Persona:** Systems Architect — cross-document consistency, whether decisions recorded in
 one doc are honored in the docs that depend on it, whether the story-file/epic structure
-itself is internally coherent over its ~6-month history.
+itself is internally coherent over its ~6-month history. This includes three dimensions
+easy to skip in a surface-level pass: (a) **provenance** — does a current decision still
+accurately reflect the archived source (council output, superseded plan, original research)
+that actually produced it, or has it drifted from its own origin; (b) **forward validity**
+— do plans for work not yet built still hold given everything else this review turns up, or
+is a blocked/future story quietly resting on an assumption another task just falsified;
+(c) **folder/naming structure** — do near-identical directory names across `src/` and
+`scripts/` create real ambiguity for a human or an agent trying to find where something
+lives (seed example below: `src/strategy/` vs. `scripts/strategies/`).
 
 **Model:** Fable. This task requires holding the full document graph in mind at once —
 `CONTEXT.md` ↔ `DECISIONS.md` ↔ `CONTEXT_TREE.md` ↔ `BACKTEST_PLAN.md`/`_PHASE1.md` ↔
-`docs/plan/*` ↔ `docs/council/*` — and synthesizing across all of it in one pass, which is
-exactly the long-horizon multi-file synthesis Fable is positioned for.
+`docs/plan/*` ↔ `docs/council/*` ↔ `docs/archive/*` — and synthesizing across all of it in
+one pass, which is exactly the long-horizon multi-file synthesis Fable is positioned for.
+`docs/archive/` alone is 144 files; do not attempt to read all of it exhaustively — sample
+per the task steps below rather than exhaustively summarizing the archive. **Before
+running:** check `findings/FR-0_model-validation-pilot.md`'s recommendation for FR-3
+specifically — if it recommends downgrading to Opus, use Opus instead and note the
+substitution in `tasks.md`.
 
 **Folder/files to attach:** full repo root markdown files (`CONTEXT.md`, `CONTEXT_TREE.md`,
 `DECISIONS.md`, `REFERENCES.md`, `TODOS.md`, `PLANNER.md`, `BACKTEST_PLAN.md`,
 `BACKTEST_PLAN_PHASE1.md`, `MISSION.md`, `GLOSSARY.md`, `LITERATURE.md`, `ANTIGRAVITY.md`),
-plus `docs/plan/` and `docs/council/` in full, plus `docs/bugs/bugs.md`. Do not attach
-`src/` or `tests/` — this task is documents-only; FR-2/FR-4/FR-5 cover code.
+plus `docs/plan/` and `docs/council/` in full, plus `docs/bugs/bugs.md`, plus
+`docs/archive/council/` and `docs/archive/plan/` specifically (not the rest of
+`docs/archive/` — `docs/archive/reviews/`, `docs/archive/research/`, etc. are lower-priority
+provenance sources; note in your findings if spot-checks here suggest those need a
+follow-up pass). Do not attach full `src/`/`tests/` file contents — this task is
+documents-only for everything except step 7 below, which needs only a **directory
+listing** (e.g. `find src scripts -type d | sort`), not file contents — reading source is
+FR-2/FR-4/FR-5's job.
 
 **Known seed issues — start here, then go wider:**
 - `CONTEXT.md` "What Does NOT Exist Yet" claims `src/nuvama/CLAUDE.md` is unwritten; it
@@ -174,6 +282,17 @@ plus `docs/plan/` and `docs/council/` in full, plus `docs/bugs/bugs.md`. Do not 
 - Whether `BACKTEST_PLAN.md` (Phase 0) and `BACKTEST_PLAN_PHASE1.md` still describe a gate
   criterion (Phase 0.8) that has since been superseded by a later council ruling without the
   plan doc being updated to match.
+- `docs/plan/README.md`'s "Blocked / Later Stories" table (`backtest-eval-core/`,
+  `signals-eval-core/`, `signals/`) — each has a stated blocker; confirm the blocker is
+  still accurate and hasn't quietly been resolved (or made worse) by work that's landed
+  since the blocker was written.
+- `src/strategy/` (the `PaperStrategy` protocol, `StrategyMonitor`, concrete strategy
+  classes like `CSPNiftyV1`/`IronCondorV2`) vs. `scripts/strategies/` (per-strategy CLI
+  entrypoint scripts, e.g. `scripts/strategies/ic/paper_ic_entry.py`) — singular vs. plural
+  is a thin disambiguator between two conceptually different layers (library code vs.
+  operator-run scripts) that both answer to "strategy." Confirm whether this has already
+  caused a misdirected `Read`/edit in `git log` history, and whether `CONTEXT_TREE.md`
+  disambiguates them clearly enough that a fresh agent wouldn't need to guess.
 
 **Task:**
 1. Build a dependency map of which docs claim authority over which facts (e.g. "instrument
@@ -185,7 +304,31 @@ plus `docs/plan/` and `docs/council/` in full, plus `docs/bugs/bugs.md`. Do not 
    "Conventions" section) — flag any structural drift.
 4. Identify any decision recorded in `DECISIONS.md` that a *dependent* doc (a story file, a
    module `CLAUDE.md`) contradicts or fails to reflect.
-5. Rate each finding CRITICAL (actively misleading, will cause wrong work) / ERROR (stale
+5. **Provenance check:** pick 5 `DECISIONS.md` entries that cite a council ruling or a
+   specific story as their source (e.g. "council ruling docs/archive/council/strategy/..."
+   — several IC V2 and profit-lock entries already do this). Open the cited
+   `docs/archive/council/` source file for each and confirm the `DECISIONS.md` entry still
+   accurately represents what that source actually concluded — not a paraphrase drift, not
+   a decision that got walked back later without the `DECISIONS.md` entry being updated to
+   say so.
+6. **Forward-validity check:** for each entry in `docs/plan/README.md`'s "Blocked / Later
+   Stories" table, plus `BACKTEST_PLAN_PHASE1.md`'s Phase 1+ scope, ask whether the
+   underlying assumption still holds — not whether the doc reads coherently in isolation,
+   but whether anything else in this repo (a later `DECISIONS.md` entry, a superseded
+   `docs/archive/plan/` doc, a finding you already made in step 2 or 5) has since
+   invalidated or changed the premise the future plan depends on.
+7. **Folder-naming collision check:** run `find src scripts -maxdepth 2 -type d | sort` and
+   scan for name pairs that are singular/plural or near-identical variants of each other
+   across the two trees (start from the seed pair `src/strategy/` vs.
+   `scripts/strategies/`, then check the rest — e.g. is there any other `src/<x>/` and
+   `scripts/<x>s/` or `scripts/<x>/` pairing with the same ambiguity risk). For each pair
+   found: state which one a human/agent would land on first by intuition, whether that's
+   the *wrong* one often enough to matter, and recommend one of — rename (state old/new
+   path, note it's a `DECISIONS.md`-worthy change given import/CI/doc blast radius),
+   disambiguating note added to `CONTEXT_TREE.md` (cheap, no code risk, if rename isn't
+   worth the churn), or no action (if the ambiguity is more theoretical than real — e.g. if
+   `git log` in step 5's spirit shows no evidence anyone has actually confused them).
+8. Rate each finding CRITICAL (actively misleading, will cause wrong work) / ERROR (stale
    but low-blast-radius) / WARNING (drifting, not yet wrong) / INFO.
 
 **Output:** `docs/plan/full-repo-review/findings/FR-3_systems-architect.md`.
@@ -310,7 +453,9 @@ logic review, not a lighter pass.
 
 **Folder/files to attach:** `src/client/` (all 4 `BrokerClient` implementations +
 `exceptions.py` + `factory.py`), `src/auth/`, `src/config.py`, `.env.example`,
-`.pre-commit-config.yaml`, `.github/workflows/ci.yml`, `src/notifications/telegram_gateway.py`.
+`.pre-commit-config.yaml`, `.github/workflows/ci.yml`, `src/notifications/telegram_gateway.py`,
+`src/db.py`, plus a directory listing (not contents) of `data/portfolio/` and whatever
+backup/cron scripts exist under `scripts/` referencing that path.
 
 **Known seed issues — start here, then go wider:**
 - Confirm no `.env` file is tracked in git (`git ls-files | grep .env`) and that
@@ -327,6 +472,12 @@ logic review, not a lighter pass.
 - CI (`ci.yml`) forces `UPSTOX_ENV=test` — confirm no code path can accidentally hit the
   live Upstox API during CI regardless of env misconfiguration (defense in depth, not just
   "the env var is set correctly").
+- `data/portfolio/portfolio.sqlite` is the single live source of truth for the entire
+  system (per `CONTEXT.md`) — nothing in this repo's existing gates (`code-reviewer`,
+  `test-runner`, etc.) checks backup/durability of that file. A single-file SQLite DB with
+  no confirmed backup strategy is a real capital-protection risk under `MISSION.md`
+  Principle I ("Protect Before You Earn") even though it's an operational risk, not a
+  trading-logic one.
 
 **Task:**
 1. Trace every retryable-exception catch site (`search_code`/`trace_path` on
@@ -341,7 +492,14 @@ logic review, not a lighter pass.
 4. Check whether any `NotImplementedError`-raising blocked method (order execution) has a
    code path that could silently no-op instead of raising, if a future refactor changes
    the exception handling around it.
-5. Rate each finding CRITICAL (exploitable or real-money-risk) / ERROR (defense-in-depth
+5. **Database durability check:** confirm whether any backup mechanism exists for
+   `data/portfolio/portfolio.sqlite` (cron-based file copy, SQLite `.backup`, off-machine
+   sync, version control of periodic dumps — anything). If none exists, this is itself a
+   finding: state what a single-file corruption or disk failure would cost (loss of trade
+   history, `paper_trades`, `daily_snapshots` — everything `CONTEXT.md` describes as living
+   there) and recommend a concrete minimum (e.g. a daily `sqlite3 .backup` cron to a
+   separate path/drive) rather than leaving it unaddressed.
+6. Rate each finding CRITICAL (exploitable or real-money-risk) / ERROR (defense-in-depth
    gap) / WARNING / INFO.
 
 **Output:** `docs/plan/full-repo-review/findings/FR-6_red-team-reviewer.md`.
@@ -362,7 +520,13 @@ read all Stage-1 outputs, do not re-derive their findings, synthesize and rank.
 **Model:** Fable. This step requires reading six full findings documents plus this repo's
 existing council-output conventions and holding all of it in context to judge what's
 missing — the same long-horizon synthesis role as FR-1/FR-3, applied to the panel's own
-output rather than the repo directly.
+output rather than the repo directly. **Before running:** check
+`findings/FR-0_model-validation-pilot.md`'s recommendation for FR-7 specifically — if it
+recommends downgrading to Opus, use Opus instead and note the substitution in `tasks.md`.
+Note FR-0's own limitation caveat here: its test payload is FR-1-shaped, so its
+recommendation for FR-7 (synthesis-of-synthesis, a different task shape) may be explicitly
+flagged as low-confidence — if so, treat FR-0's default-to-Fable as the safer choice rather
+than downgrading on thin evidence.
 
 **Folder/files to attach:** `docs/plan/full-repo-review/findings/` (all six FR-1..FR-6
 outputs, which must exist before this task can start — do not run FR-7 out of order),
@@ -460,38 +624,53 @@ actionable structure, not generating new judgment.
 `docs/plan/README.md`, `DECISIONS.md`.
 
 **Task:**
-1. For every CRITICAL/ERROR finding in `FR-7_synthesis.md`'s Summary Table that maps to a
-   concrete code or doc change, create a new story stub under `docs/plan/` following the
-   existing `prompt.md`/`tasks.md`/`stories.md` convention (see `docs/plan/README.md`
-   "Conventions" section) — one new story folder per coherent group of related findings,
-   not one giant undifferentiated backlog. Name folders descriptively
-   (`logging-migration-completion/`, `greeks-golden-tests/`, `docs-consistency-cleanup/`,
-   etc. — actual names depend on what FR-7 found).
-2. Fold `FR-8_practitioner-devex.md`'s tooling guide into a durable location — either a new
+1. **CRITICAL-verification gate — do this before step 2, for every CRITICAL finding only**
+   (ERROR/WARNING/INFO do not require this, only CRITICAL): independently re-confirm the
+   finding before it becomes a story stub or a `DECISIONS.md` entry. This means actually
+   re-deriving the specific claim (re-run the formula, re-check the cited file:line, re-run
+   the specific test/grep the finding is based on) — not re-reading the finding and
+   agreeing with it. A false-positive CRITICAL that spawns a "fix" for correct code is
+   exactly the late-caught-blind-spot cost the "Operating philosophy" in `prompt.md` exists
+   to prevent, just inverted (the review process itself introducing the error instead of
+   catching one). If a CRITICAL doesn't hold up under re-derivation, downgrade it in the
+   roadmap and note why in this task's commit message — do not silently drop it either,
+   since disagreement between the original finding and this verification pass is itself
+   useful signal for FR-7-style synthesis in any future review.
+2. For every CRITICAL/ERROR finding in `FR-7_synthesis.md`'s Summary Table that maps to a
+   concrete code or doc change (post-verification for CRITICALs per step 1), create a new
+   story stub under `docs/plan/` following the existing `prompt.md`/`tasks.md`/`stories.md`
+   convention (see `docs/plan/README.md` "Conventions" section) — one new story folder per
+   coherent group of related findings, not one giant undifferentiated backlog. Name folders
+   descriptively (`logging-migration-completion/`, `greeks-golden-tests/`,
+   `docs-consistency-cleanup/`, etc. — actual names depend on what FR-7 found).
+3. Fold `FR-8_practitioner-devex.md`'s tooling guide into a durable location — either a new
    section in root `CLAUDE.md` (if FR-8 found the current Step 3b guidance genuinely
    incomplete) or a pointer row added to `CONTEXT.md`/`CLAUDE.md` referencing where the
    guide lives, following the same "targeted `Edit`, never `Write`-over" rule as every other
    doc update in this repo. Do not leave the guide stranded only inside `findings/` where
    nothing points to it.
-3. Read FR-1's recommendation on whether the "Operating philosophy" (co-investor framing)
+4. Read FR-1's recommendation on whether the "Operating philosophy" (co-investor framing)
    block should be promoted into root `CLAUDE.md`'s "AI Collaboration" section. If FR-1
    recommended promote or revise-then-promote, add it there (targeted `Edit`, scoped to
    what FR-1 actually recommended — do not paste the full epic-specific block verbatim if
    FR-1 flagged parts of it as review-context-specific). If FR-1 recommended keep-scoped,
    leave `docs/plan/full-repo-review/prompt.md` as the sole location and note the decision
    + reasoning in this task's own commit message so it isn't silently dropped.
-4. Add a row to `docs/plan/README.md`'s "Active Stories" table for each new story folder
+5. Add a row to `docs/plan/README.md`'s "Active Stories" table for each new story folder
    created, status `⬜ Not started`.
-5. Update `DECISIONS.md` per the existing Council Decision Protocol (root `CLAUDE.md`):
+6. Update `DECISIONS.md` per the existing Council Decision Protocol (root `CLAUDE.md`):
    add one entry citing this review epic as the source, dated, with the Summary Table
    findings and any "Noted, deferred" items from FR-7's "Personas Not Represented" section
    logged as dissenting/deferred notes.
-6. Do **not** implement any fix in this task — new story folders contain only specs, no
+7. Do **not** implement any fix in this task — new story folders contain only specs, no
    code changes. This task's own commit is docs-only.
 
 **Verify:**
-- `docs/plan/full-repo-review/findings/` contains 8 files (FR-1 through FR-8).
-- At least one new story folder exists under `docs/plan/` for each CRITICAL finding.
+- `docs/plan/full-repo-review/findings/` contains 9 files (FR-0 through FR-8).
+- Every CRITICAL finding was independently re-derived per step 1, not just re-read —
+  this task's commit message states, for each CRITICAL, confirmed or downgraded-and-why.
+- At least one new story folder exists under `docs/plan/` for each *confirmed* CRITICAL
+  finding.
 - `docs/plan/README.md` lists every new folder.
 - Root `CLAUDE.md` or `CONTEXT.md` points to where the FR-8 tooling guide lives.
 - `DECISIONS.md` has a new dated entry referencing this epic.
