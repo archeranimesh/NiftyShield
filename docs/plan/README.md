@@ -27,6 +27,8 @@
 | `council-refactor/` | Remove `RapidCouncil` from daemon approval path; fix `send_approval_request` signature bug; add deterministic backtestable roll rules (`evaluate_roll_csp`, `evaluate_roll_overlay`) to `ExitSignalEngine` | CR0 — fix approval flow signature | ⬜ Not started |
 | `ic-nifty-v2/` | IronCondorV2: 25Δ/22Δ high-delta IC with 10Δ wings, partial-roll adjustment, DTE-tiered exit — 6 code stories + docs close | IC-V2-0 — config dataclass | ⬜ Not started |
 | `paper-exit-codification/` | Codify q11+q12 council rulings: TIME_STOP/DTE_REVIEW priority fix in `evaluate_cc`; StrategyMonitor observability logs | EC-1 — TIME_STOP priority fix | ⬜ Not started |
+| `telegram-leg-labels/` | Replace raw Upstox instrument keys in Telegram prose messages with human-readable `NIFTY 22000 CE 07 JUL 26` labels; CLI command lines stay untouched | TL-1 — formatter in `src/instruments/lookup.py` | ⬜ Not started |
+| `full-repo-review/` | One-time multi-model, multi-persona review of design docs, source, tests, the AI-collaboration prompting protocol, and which surface (Claude Code / Cowork / Antigravity) to use per job type — Opus/Fable/Sonnet assigned per task by capability, not cost; output is a synthesized findings folder + spawned follow-up story stubs | FR-1 — financial modeling & Greeks correctness (Opus) | ⬜ Not started |
 
 ---
 
