@@ -340,6 +340,120 @@ FR-2/FR-4/FR-5's job.
 
 ---
 
+## FR-3.1 — Full Folder Structure & Taxonomy Review
+
+**Persona:** Folder Structure Auditor — wide, mostly-mechanical enumeration and
+categorization of every directory in the repo (not just `src/`/`scripts/`, and not just the
+two `docs/archive/` subfolders FR-3 sampled). FR-3 found real structural drift working from
+seed issues and a directory-listing-only pass on `src/`/`scripts/`; this task's job is to
+close the two gaps FR-3 explicitly left open: (a) `docs/archive/`'s full 144-file tree, not
+just `council/` and `plan/`, and (b) a systematic (not seed-driven) collision/orphan/
+convention-drift scan across every top-level tree, grouped by category so findings don't get
+lost in an undifferentiated flat list.
+
+**Model:** Sonnet. Per `findings/FR-0_model-validation-pilot.md`: Opus's demonstrated edge in
+that pilot was empirical rigor — running concrete, reproducible verification commands and
+tying findings to them — while Fable's edge was specifically deep provenance-tracing across
+a small number of heavily cross-referenced documents. This task is neither; it's wide
+enumeration and categorization (list every directory, bucket it, flag naming collisions and
+convention drift), the same shape FR-4/FR-5/FR-8 already run on Sonnet for the same reason.
+**Escalation path:** if any individual rename recommendation from step 4 below turns out to
+carry real import/CI/doc blast radius (i.e. it's not a docs-only fix), flag that specific
+finding `NEEDS-OPUS-REVIEW` rather than asserting the rename is safe yourself — same pattern
+FR-5 uses to escalate financial-correctness findings.
+
+**Depends on:** FR-3's output (`findings/FR-3_systems-architect.md`) — reuse its
+naming-collision findings (F8, F9) and its `docs/archive/council/`+`docs/archive/plan/`
+listings rather than re-deriving them from scratch. Runs after FR-3, before FR-4, so FR-7's
+synthesis can fold this in alongside the other FR-1..FR-6 outputs.
+
+**Folder/files to attach:** directory listings only (no file contents needed except where a
+specific flagged item needs a one-line content check to confirm it's not a false positive) —
+`find . -type d -not -path '*/.*' -not -path '*/__pycache__*' -not -path '*/node_modules/*' |
+sort` from repo root, plus targeted `ls`/`find` on any directory a grouping below needs
+expanded. Group findings into four buckets:
+- **Code** — `src/`, `scripts/`, `tests/`
+- **Docs-active** — `docs/plan/`, `docs/council/`, `docs/bugs/`, root markdown files
+- **Docs-archive** — all of `docs/archive/` (`council/`, `plan/`, `reviews/`, `research/`,
+  and any other subfolder present — FR-3 only sampled the first two)
+- **Config-and-data** — `data/` (structure only — this is gitignored; confirm the structure
+  documented in `CONTEXT.md`/`CONTEXT_TREE.md` matches what's actually on disk, do not read
+  DB contents), `.github/`, root config files' relationship to the folders they configure
+  (e.g. does `pyproject.toml`'s `[tool.pytest.ini_options]` `testpaths` still point at where
+  tests actually live)
+
+**Known seed issues — start here, then go wider:**
+- FR-3's F8/F9: `src/strategy/` vs. `scripts/strategies/` (singular/plural, rated WARNING,
+  recommend `CONTEXT_TREE.md` note not rename) and the two exact-name collisions
+  `src/intraday/`↔`scripts/intraday/`, `src/council/`↔`scripts/council/` (also WARNING).
+  Confirm these still hold and check whether the *rest* of `src/`/`scripts/` (not just the
+  seeded pairs) has any further collision FR-3 didn't have scope to fully enumerate — FR-3's
+  step 7 was seeded, not exhaustive.
+- `docs/archive/plan/` mixes proper story-folder-convention entries (`council-refactor/`,
+  `paper-backbone/`, `dev-foundation/`, `chain-data/`, `paper-backbone-adj/`,
+  `paper-exit-signals/`, `scripts-restructure/`) with bare loose files sitting directly in
+  `docs/archive/plan/` with no folder (`PAPER_TRADING_PLAN.md`, `mvp_tracker.md`,
+  `story_audit_remediation.md`, `story_paper_impl_tasks.md`, `story_risk_gamma_phase_a.md`,
+  `variance_gate.md`, `0_3_finideas_roll.md`, `1_10_dhan_chain_client.md`,
+  `1_5b_analytics_module.md`) — determine whether this is deliberate (pre-folder-convention
+  era, archived as-is) or unaddressed drift, and whether any of those loose files describe
+  something `docs/archive/plan/README.md`'s own conventions section should mention as a
+  recognized shape.
+- `docs/archive/council/` has two subfolders (`data_architecture/`, `misc/`) that
+  `docs/council/README.md`'s own stated taxonomy never mentions (FR-3 F5) — confirm whether
+  `docs/archive/reviews/` and `docs/archive/research/` have the same kind of undocumented-
+  category problem relative to whatever doc claims to describe the archive's shape.
+- `ic-nifty-v2`'s archive path (`docs/archive/ic-nifty-v2/`) does not follow the
+  `docs/archive/plan/<story>/` convention the other archived stories use — it sits as a
+  top-level `docs/archive/` entry instead of nested under `docs/archive/plan/`. Confirm
+  whether this is the only archived story that breaks the nesting convention, or a second
+  instance of the same drift.
+
+**Task:**
+1. Produce the full directory tree (excluding VCS/cache/build noise) and sort every
+   directory into the four buckets above.
+2. Within Code: enumerate every `src/<x>/`↔`scripts/<x>/` or `scripts/<x>s/` pairing (not
+   just the FR-3 seed pairs) and apply FR-3's own decision matrix (rename /
+   `CONTEXT_TREE.md` note / no action) to each, with the same "which one would a
+   human/agent land on first, is that wrong often enough to matter" test.
+3. Within Docs-archive: check every subfolder of `docs/archive/` against whatever doc
+   (`docs/council/README.md`, `docs/archive/plan/README.md`, or none) claims to document its
+   shape; flag undocumented categories, orphaned top-level entries that break a stated
+   nesting convention (see the `ic-nifty-v2` seed above), and loose-file-vs-folder
+   inconsistency within `docs/archive/plan/`.
+4. Within Docs-active and Config-and-data: check for orphaned directories (exist on disk,
+   referenced by nothing) and referenced-but-missing directories (a doc names a path that
+   doesn't exist) — this is the same class of check as FR-3's dead-link finding (variance-
+   gate → stale council path) but applied to directories rather than individual file links.
+5. For every finding, state: what's inconsistent, whether it has caused (check `git log` for
+   evidence, same standard as FR-3) or could plausibly cause a misdirected read/edit, and the
+   recommended fix (rename / doc note / no action), per the same CRITICAL/ERROR/WARNING/INFO
+   scale FR-3 used.
+6. **Docs-archive follow-up decision (mandatory, do not skip):** compare the volume and
+   severity of Docs-archive findings (step 3) against the other three buckets. If
+   Docs-archive findings materially exceed the others — either in count, or because any
+   single finding there is CRITICAL/ERROR and would require reading file *contents* (not
+   just structure) to resolve, which is out of this task's scope — state explicitly that a
+   dedicated `docs/archive/`-only follow-up story is warranted, and write it as a story stub
+   (one paragraph: what it would cover, why FR-3.1's structure-only pass couldn't close it,
+   suggested persona/model) inside this task's own output file, in a clearly labeled
+   `## Follow-up Story Stub` section. Do not create the new story folder yourself — FR-9 is
+   responsible for actually spawning it from this stub, per its existing "spawned follow-up
+   story stubs" mandate. If Docs-archive findings do *not* materially exceed the others,
+   state that conclusion explicitly too (e.g. "no follow-up warranted — Docs-archive findings
+   were comparable in volume/severity to Code and Docs-active") rather than silently omitting
+   the section — the absence of a follow-up need is itself a finding FR-9 should be able to
+   read directly rather than infer from silence.
+
+**Output:** `docs/plan/full-repo-review/findings/FR-3.1_folder-structure-auditor.md`.
+
+**Closing block (include verbatim at the end of your own output file):**
+> State the persona you reviewed as (Folder Structure Auditor). Name at least one
+> perspective this review did not cover that a different persona would have caught — write
+> "none identified" explicitly if genuinely nothing comes to mind, do not omit this section.
+
+---
+
 ## FR-4 — Code Quality & Coding-Standard Compliance Sweep
 
 **Persona:** Standards Auditor — mechanical, wide, cheap coverage against the rules already
