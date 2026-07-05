@@ -19,7 +19,7 @@
 - [x] **FR-0** — Model validation pilot: Fable vs. Opus, same prompt, diffed (no persona — infrastructure check, run on **both Fable and Opus**) | SHA: c7e8740 | Model: Fable + Opus (both)
 - [x] **FR-1** — Prompting methodology & AI-collaboration protocol review, incl. philosophy-promotion decision (Protocol Reviewer persona, **Fable, pending FR-0**) | SHA: 811ed02 | Model: Opus (downgraded from Fable per FR-0 recommendation)
 - [x] **FR-2** — Financial modeling & Greeks correctness review (Quant Reviewer persona, **Opus**) | SHA: 9390330 | Model: Opus
-- [ ] **FR-3** — Architecture & design-doc consistency review (Systems Architect persona, **Fable, pending FR-0**)
+- [x] **FR-3** — Architecture & design-doc consistency review (Systems Architect persona, **Fable, pending FR-0**) | SHA: 8a67ffe | Model: Sonnet (deviation from FR-0's low-confidence keep-Fable recommendation — no Fable subagent override available inline; noted in the findings file)
 - [ ] **FR-3.1** — Full folder structure & taxonomy review, all trees grouped by category (Folder Structure Auditor persona, **Sonnet**, depends on FR-3 output)
 - [ ] **FR-4** — Code quality & coding-standard compliance sweep (Standards Auditor persona, **Sonnet**)
 - [ ] **FR-5** — Test adequacy & ground-truth coverage review (Test Auditor persona, **Sonnet**, escalate financial gaps to **Opus**)
