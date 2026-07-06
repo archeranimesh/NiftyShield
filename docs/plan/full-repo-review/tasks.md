@@ -24,6 +24,6 @@
 - [x] **FR-4** — Code quality & coding-standard compliance sweep (Standards Auditor persona, **Sonnet**) | SHA: 3242fa8 | Model: Sonnet
 - [x] **FR-5** — Test adequacy & ground-truth coverage review (Test Auditor persona, **Sonnet**, escalate financial gaps to **Opus**) | SHA: 5e09860 | Model: Sonnet (2 findings tagged NEEDS-OPUS-REVIEW, not yet Opus-reviewed)
 - [x] **FR-6** — Security & operational-risk review (Red-Team persona, **Opus**) | SHA: ed3791b | Model: Sonnet (deviation from Opus assignment — no Opus subagent override available inline; noted here per epic's own deviation-logging pattern from FR-3)
-- [ ] **FR-7** — Missing-persona / blind-spot synthesis (Chairman persona, **Fable, pending FR-0**)
+- [x] **FR-7** — Missing-persona / blind-spot synthesis (Chairman persona, **Fable, pending FR-0**) | SHA: d57ee7f | Model: Fable
 - [ ] **FR-8** — Tooling usage guide: Claude Code vs. Cowork vs. Antigravity handoff, by job type (Practitioner/DevEx persona, **Sonnet**)
 - [ ] **FR-9** — Build implementation roadmap folder + DECISIONS.md update (no model assignment — mechanical synthesis of FR-1..FR-8 outputs)
