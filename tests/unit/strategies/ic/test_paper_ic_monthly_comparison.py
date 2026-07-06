@@ -54,6 +54,7 @@ def test_comparison_report_format():
         signals_fired_today=["DELTA_WARN"],
         roll_count=1,
         lock_count=0,
+        has_open_position=True,
     )
     v2 = ICMonthlyStats(
         strategy_name="paper_ic_nifty_v2_monthly",
@@ -69,6 +70,7 @@ def test_comparison_report_format():
         signals_fired_today=[],
         roll_count=1,
         lock_count=1,
+        has_open_position=True,
     )
 
     report = build_comparison_report(v1, v2, date(2026, 6, 27))
@@ -95,6 +97,7 @@ def test_comparison_report_one_missing():
         signals_fired_today=["DELTA_WARN"],
         roll_count=1,
         lock_count=0,
+        has_open_position=True,
     )
     v2 = ICMonthlyStats(
         strategy_name="paper_ic_nifty_v2_monthly",
@@ -110,6 +113,7 @@ def test_comparison_report_one_missing():
         signals_fired_today=[],
         roll_count=0,
         lock_count=0,
+        has_open_position=False,
     )
 
     report = build_comparison_report(v1, v2, date(2026, 6, 27))
@@ -203,6 +207,125 @@ async def test_build_stats_happy_path(store):
     )
     assert stats.dte is not None
     assert stats.dte > 0
+    assert stats.has_open_position is True
+
+
+# ── BUG-012 follow-up: numeric-key expiry resolution + open/no-open distinction ──
+
+
+@pytest.mark.asyncio
+async def test_build_stats_no_open_position_has_open_position_false(store):
+    """No positions at all -> has_open_position False (the one correct case)."""
+    from scripts.strategies.ic.paper_ic_monthly_comparison import build_stats
+
+    class _MockBroker:
+        pass
+
+    stats = await build_stats(
+        strategy_name="paper_ic_nifty_v1_monthly",
+        strategy_cls=IronCondorV1,
+        config=V1_CONFIG,
+        store=store,
+        broker=_MockBroker(),
+        today=date(2026, 6, 27),
+    )
+    assert stats.has_open_position is False
+    assert stats.dte is None
+
+
+@pytest.mark.asyncio
+async def test_build_stats_resolves_expiry_via_bod_for_numeric_key(store):
+    """Numeric instrument_key (no embedded date) still resolves DTE via BOD lookup.
+
+    Regression for the bug where a real, open position with a numeric key
+    (e.g. NSE_FO|63896) left dte=None because the regex-only expiry parse
+    never matches — which then falsely printed "No open position" for a
+    position that was genuinely open (has_open_position now decouples this).
+    """
+    from scripts.strategies.ic.paper_ic_monthly_comparison import build_stats
+    from src.models.portfolio import TradeAction
+    from src.paper.models import PaperTrade
+
+    store.record_trades(
+        [
+            PaperTrade(
+                strategy_name="paper_ic_nifty_v1_monthly",
+                leg_role="short_put",
+                instrument_key="NSE_FO|63896",
+                trade_date=date(2026, 6, 25),
+                action=TradeAction.SELL,
+                quantity=25,
+                price=Decimal("100"),
+            ),
+        ]
+    )
+
+    class _MockBroker:
+        async def get_option_chain(self, underlying, expiry):
+            return []
+
+    lookup = MagicMock()
+    lookup.get_by_key.return_value = {"expiry": "2026-07-31"}
+
+    stats = await build_stats(
+        strategy_name="paper_ic_nifty_v1_monthly",
+        strategy_cls=IronCondorV1,
+        config=V1_CONFIG,
+        store=store,
+        broker=_MockBroker(),
+        today=date(2026, 6, 27),
+        lookup=lookup,
+    )
+
+    assert stats.has_open_position is True
+    assert stats.dte is not None
+    assert stats.dte == (date(2026, 7, 31) - date(2026, 6, 27)).days
+
+
+def test_report_distinguishes_open_position_unresolvable_dte_from_no_position():
+    """A genuinely open position with unresolvable DTE shows N/A, not 'No open position'."""
+    v1 = ICMonthlyStats(
+        strategy_name="paper_ic_nifty_v1_monthly",
+        entry_credit_pts=None,
+        current_mark_pts=None,
+        captured_fraction=None,
+        dte=None,
+        short_put_delta=None,
+        short_call_delta=None,
+        profit_lock_zone=0,
+        realized_pnl_month=Decimal("0"),
+        unrealized_pnl=Decimal("0"),
+        signals_fired_today=[],
+        roll_count=0,
+        lock_count=0,
+        has_open_position=True,
+    )
+    v2 = ICMonthlyStats(
+        strategy_name="paper_ic_nifty_v2_monthly",
+        entry_credit_pts=None,
+        current_mark_pts=None,
+        captured_fraction=None,
+        dte=None,
+        short_put_delta=None,
+        short_call_delta=None,
+        profit_lock_zone=0,
+        realized_pnl_month=Decimal("0"),
+        unrealized_pnl=Decimal("0"),
+        signals_fired_today=[],
+        roll_count=0,
+        lock_count=0,
+        has_open_position=False,
+    )
+
+    report = build_comparison_report(v1, v2, date(2026, 6, 27))
+
+    v1_line = next(line for line in report.splitlines() if line.startswith("DTE"))
+    assert "N/A" in v1_line
+    assert "No open position" in v1_line  # V2 column, correctly blank
+    # V1's own column must not say "No open position" — it has a real position,
+    # DTE just couldn't be computed.
+    v1_column = v1_line.split("N/A")[0]
+    assert "No open position" not in v1_column
 
 
 # ---------------------------------------------------------------------------
@@ -254,7 +377,9 @@ async def test_run_calls_setup_logging_first(mock_run_deps) -> None:
     """_run() must call setup_logging() as its first action (LOGGING.md standard)."""
     from scripts.strategies.ic.paper_ic_monthly_comparison import _run
 
-    args = argparse.Namespace(date=date(2026, 6, 27), dry_run=True, db_path="dummy.sqlite")
+    args = argparse.Namespace(
+        date=date(2026, 6, 27), dry_run=True, db_path="dummy.sqlite", bod_path="dummy.json"
+    )
 
     with patch("scripts.strategies.ic.paper_ic_monthly_comparison.setup_logging") as mock_setup:
         await _run(args)
@@ -267,7 +392,9 @@ async def test_run_dry_run_does_not_send_or_log_report(mock_run_deps) -> None:
     """--dry-run (default save=False) must not log report_sent or call Telegram."""
     from scripts.strategies.ic.paper_ic_monthly_comparison import _run
 
-    args = argparse.Namespace(date=date(2026, 6, 27), dry_run=True, db_path="dummy.sqlite")
+    args = argparse.Namespace(
+        date=date(2026, 6, 27), dry_run=True, db_path="dummy.sqlite", bod_path="dummy.json"
+    )
 
     with structlog.testing.capture_logs() as logs:
         await _run(args)
@@ -296,7 +423,9 @@ async def test_run_no_dry_run_logs_report_sent(mock_run_deps, monkeypatch) -> No
     mock_run_deps["create_client"].side_effect = None
     mock_run_deps["create_client"].return_value = MagicMock()
 
-    args = argparse.Namespace(date=date(2026, 6, 27), dry_run=False, db_path="dummy.sqlite")
+    args = argparse.Namespace(
+        date=date(2026, 6, 27), dry_run=False, db_path="dummy.sqlite", bod_path="dummy.json"
+    )
 
     with (
         patch("scripts.strategies.ic.paper_ic_monthly_comparison.setup_logging"),

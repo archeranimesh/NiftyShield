@@ -21,8 +21,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 from src.client.factory import create_client
 from src.client.upstox_market import parse_upstox_option_chain
 from src.config import settings
+from src.instruments.lookup import InstrumentLookup, parse_expiry
 from src.notifications.telegram_gateway import TelegramGateway
-from src.paper.constants import DEFAULT_DB_PATH
+from src.paper.constants import DEFAULT_BOD_PATH, DEFAULT_DB_PATH
 from src.paper.store import PaperStore
 from src.strategy.ic_expiry_config import CONFIGS as V1_CONFIGS
 from src.strategy.ic_expiry_config_v2 import IC_V2_MONTHLY as V2_CONFIG
@@ -53,6 +54,7 @@ class ICMonthlyStats:
     signals_fired_today: list[str]
     roll_count: int
     lock_count: int
+    has_open_position: bool = False
 
 
 def _get_monthly_realized_pnl(store: PaperStore, strategy_name: str, today: date) -> Decimal:
@@ -165,6 +167,7 @@ async def build_stats(
     store: PaperStore,
     broker: Any,
     today: date,
+    lookup: InstrumentLookup | None = None,
 ) -> ICMonthlyStats:
     positions = store.get_positions(strategy_name)
     open_pos = [p for p in positions if p.net_qty != 0]
@@ -191,11 +194,19 @@ async def build_stats(
             signals_fired_today=signals_today,
             roll_count=0,
             lock_count=0,
+            has_open_position=False,
         )
 
     ic = strategy_cls(broker, store, None, config)
 
-    # Determine expiry date
+    # Determine expiry date. Regex first (covers keys with an embedded date
+    # substring, e.g. "NSE_FO|NIFTY26JUN2026..."); real Upstox keys are
+    # numeric-only (e.g. "NSE_FO|63896") and never match, so those fall back
+    # to a BOD instrument-master lookup (BUG-012 — this script had the same
+    # blind spot IronCondorV1/V2._find_leg had, except here it corrupted the
+    # report's "open position" detection entirely: dte stayed None even
+    # though open_pos was non-empty, so the report falsely printed "No open
+    # position" for a position that was very much open).
     _EXPIRY_RE = re.compile(r"NIFTY(\d{2}[A-Za-z]{3}\d{4})", re.IGNORECASE)
     expiry = None
     for p in open_pos:
@@ -203,6 +214,20 @@ async def build_stats(
         if m:
             try:
                 expiry = datetime.strptime(m.group(1).upper(), "%d%b%Y").date()
+                break
+            except ValueError:
+                pass
+
+    if expiry is None and lookup is not None:
+        for p in open_pos:
+            inst = lookup.get_by_key(p.instrument_key)
+            if inst is None:
+                continue
+            expiry_str = parse_expiry(inst.get("expiry"))
+            if expiry_str is None:
+                continue
+            try:
+                expiry = date.fromisoformat(expiry_str)
                 break
             except ValueError:
                 pass
@@ -265,6 +290,7 @@ async def build_stats(
         signals_fired_today=signals_today,
         roll_count=roll_count,
         lock_count=lock_count,
+        has_open_position=True,
     )
 
 
@@ -314,9 +340,15 @@ def build_comparison_report(v1: ICMonthlyStats, v2: ICMonthlyStats, report_date:
     else:
         edge_line = "Edge so far:  Tied"
 
-    # Handle missing positions gracefully
-    v1_open = v1.dte is not None
-    v2_open = v2.dte is not None
+    # Handle missing positions gracefully. Driven by has_open_position (set
+    # from the real store.get_positions() result in build_stats), not by
+    # dte — dte can legitimately be None for a genuinely open position when
+    # expiry can't be resolved (BOD miss, malformed key), and conflating
+    # "can't compute DTE" with "no position" mislabels the row (BUG-012
+    # follow-up: this previously showed "No open position" for real,
+    # actively-open IC positions).
+    v1_open = v1.has_open_position
+    v2_open = v2.has_open_position
 
     def safe_col(val: str, is_open: bool) -> str:
         return val if is_open else "No open position"
@@ -349,6 +381,11 @@ async def _run(args: argparse.Namespace) -> None:
     save: bool = not args.dry_run
 
     store = PaperStore(args.db_path)
+    try:
+        lookup: InstrumentLookup | None = InstrumentLookup.from_file(args.bod_path)
+    except Exception as exc:  # Intentional: fail-safe BOD load
+        logger.warning("ic_monthly_comparison.bod_load_failed", error=str(exc))
+        lookup = None
 
     try:
         broker = create_client(settings.upstox_env)
@@ -382,6 +419,7 @@ async def _run(args: argparse.Namespace) -> None:
         store=store,
         broker=broker,
         today=report_date,
+        lookup=lookup,
     )
 
     v2_stats = await build_stats(
@@ -391,6 +429,7 @@ async def _run(args: argparse.Namespace) -> None:
         store=store,
         broker=broker,
         today=report_date,
+        lookup=lookup,
     )
 
     report_str = build_comparison_report(v1_stats, v2_stats, report_date)
@@ -430,6 +469,12 @@ def main() -> None:
         type=Path,
         default=DEFAULT_DB_PATH,
         help=f"SQLite DB path (default: {DEFAULT_DB_PATH})",
+    )
+    parser.add_argument(
+        "--bod-path",
+        type=Path,
+        default=DEFAULT_BOD_PATH,
+        help=f"BOD instruments JSON path (default: {DEFAULT_BOD_PATH})",
     )
 
     args = parser.parse_args()
