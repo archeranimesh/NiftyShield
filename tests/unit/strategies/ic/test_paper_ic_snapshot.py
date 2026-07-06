@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import structlog.testing
 
-from scripts.strategies.ic.paper_ic_snapshot import _run, process_variant
+from scripts.strategies.ic.paper_ic_snapshot import _run, format_leg_label, process_variant
 from src.paper.models import PaperPosition
 from src.strategy.ic_expiry_config import CONFIGS
 from src.strategy.ic_expiry_config_v2 import CONFIGS_V2
@@ -1017,3 +1017,80 @@ async def test_process_variant_unresolvable_key_falls_back_no_expiry_found(
     assert "Error: Expiry date could not be parsed from positions." in report
     events = [entry["event"] for entry in logs]
     assert "ic_snapshot.no_expiry_found" in events
+
+
+# ── format_leg_label: human-readable report labels ("NIFTY 22900 PE 28 JUL 26") ──
+
+
+def test_format_leg_label_regex_match_uses_key_embedded_strike() -> None:
+    """Keys the fast regex already handles skip the BOD lookup entirely."""
+    lookup = MagicMock()
+
+    label = format_leg_label(
+        "NSE_FO|NIFTY26JUN202624000PE", lookup, date(2026, 6, 26)
+    )
+
+    assert label == "NIFTY 24000 PE 26 JUN 26"
+    lookup.get_by_key.assert_not_called()
+
+
+def test_format_leg_label_numeric_key_resolves_via_bod() -> None:
+    """Numeric key (no embedded strike) falls back to the BOD lookup."""
+    lookup = MagicMock()
+    lookup.get_by_key.return_value = {
+        "strike_price": Decimal("22900"),
+        "instrument_type": "PE",
+    }
+
+    label = format_leg_label("NSE_FO|63930", lookup, date(2026, 7, 28))
+
+    assert label == "NIFTY 22900 PE 28 JUL 26"
+
+
+def test_format_leg_label_bod_fractional_strike_preserved() -> None:
+    """A genuinely fractional strike (rare, but not impossible) isn't truncated."""
+    lookup = MagicMock()
+    lookup.get_by_key.return_value = {
+        "strike_price": Decimal("22900.5"),
+        "instrument_type": "CE",
+    }
+
+    label = format_leg_label("NSE_FO|63931", lookup, date(2026, 7, 28))
+
+    assert label == "NIFTY 22900.5 CE 28 JUL 26"
+
+
+def test_format_leg_label_unresolvable_key_falls_back_to_raw() -> None:
+    """Neither regex nor BOD can resolve → raw instrument_key, never raises."""
+    lookup = MagicMock()
+    lookup.get_by_key.return_value = None
+
+    label = format_leg_label("NSE_FO|99999999", lookup, date(2026, 7, 28))
+
+    assert label == "NSE_FO|99999999"
+
+
+def test_format_leg_label_bod_unexpected_instrument_type_falls_back_to_raw() -> None:
+    """A resolved BOD row with an unexpected instrument_type (not CE/PE) is rejected."""
+    lookup = MagicMock()
+    lookup.get_by_key.return_value = {
+        "strike_price": Decimal("22900"),
+        "instrument_type": "FUT",
+    }
+
+    label = format_leg_label("NSE_FO|63930", lookup, date(2026, 7, 28))
+
+    assert label == "NSE_FO|63930"
+
+
+def test_format_leg_label_bod_lookup_raises_falls_back_to_raw() -> None:
+    """A BOD file/lookup failure (e.g. I/O error) degrades to the raw key, never raises."""
+    lookup = MagicMock()
+    lookup.get_by_key.side_effect = OSError("BOD file missing")
+
+    with structlog.testing.capture_logs() as logs:
+        label = format_leg_label("NSE_FO|63930", lookup, date(2026, 7, 28))
+
+    assert label == "NSE_FO|63930"
+    events = [entry["event"] for entry in logs]
+    assert "ic_snapshot.leg_label_bod_lookup_failed" in events

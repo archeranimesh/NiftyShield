@@ -69,6 +69,56 @@ def parse_key_details(instrument_key: str) -> tuple[str, str]:
     return "", ""
 
 
+def format_leg_label(
+    instrument_key: str, lookup: InstrumentLookup, expiry: date
+) -> str:
+    """Build a human-readable leg label for the EOD report, e.g. "NIFTY 22900 PE 28 JUL 26".
+
+    Tries the fast regex parse first (``parse_key_details``); real Upstox
+    keys are numeric-only (e.g. ``NSE_FO|63930``) and never match, so those
+    fall back to a BOD instrument-master lookup for ``strike_price``, same
+    fallback already used by ``IronCondorV1/V2._find_leg`` (BUG-012).
+    ``expiry`` is passed in rather than re-resolved per leg since the
+    variant's expiry is already known from the earlier reverse-lookup pass
+    in ``process_variant`` and is identical for every leg of one IC.
+
+    Args:
+        instrument_key: Position's Upstox instrument key.
+        lookup: Offline BOD instrument master.
+        expiry: The IC variant's resolved expiry date.
+
+    Returns:
+        Formatted label, or the raw ``instrument_key`` when neither the
+        regex nor the BOD lookup can resolve a strike/option type.
+    """
+    strike_num, opt_type = parse_key_details(instrument_key)
+    if not strike_num:
+        try:
+            inst = lookup.get_by_key(instrument_key)
+        except Exception as exc:  # Intentional: fail-safe BOD lookup
+            logger.warning(
+                "ic_snapshot.leg_label_bod_lookup_failed",
+                instrument_key=instrument_key,
+                error=str(exc),
+            )
+            inst = None
+        if inst is not None and inst.get("strike_price") is not None:
+            resolved_type = inst.get("instrument_type")
+            if resolved_type in ("CE", "PE"):
+                strike_decimal = Decimal(str(inst["strike_price"]))
+                strike_num = (
+                    str(int(strike_decimal))
+                    if strike_decimal == strike_decimal.to_integral_value()
+                    else str(strike_decimal)
+                )
+                opt_type = resolved_type
+
+    if not strike_num:
+        return instrument_key
+
+    return f"NIFTY {strike_num} {opt_type} {expiry.strftime('%d %b %y').upper()}"
+
+
 def get_action_taken(row: dict[str, Any]) -> str:
     """Determine the action taken for an acted exit event."""
     if row.get("actual_rule_used"):
@@ -209,10 +259,7 @@ async def process_variant(
             continue
 
         opt_leg = ic._find_leg(chain, pos.instrument_key)
-        strike_num, opt_type = parse_key_details(pos.instrument_key)
-        strike_suffix = (
-            f"{strike_num}{opt_type}" if strike_num else pos.instrument_key
-        )
+        strike_suffix = format_leg_label(pos.instrument_key, lookup, expiry)
 
         ltp_val = opt_leg.ltp if opt_leg is not None else None
         ltp_str = f"LTP=₹{ltp_val:.2f}" if ltp_val is not None else "LTP=N/A"
