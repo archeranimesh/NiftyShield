@@ -548,6 +548,102 @@ def mock_v2_class():
         yield mock_cls
 
 
+class _ReversedSignatureStrategy:
+    """Stand-in for a strategy whose __init__ param order differs from
+    IronCondorV1's (broker, store, notifier, config).
+
+    Mirrors IronCondorV2's real order (config, broker, store, notifier).
+    Used to prove process_variant's strategy_cls instantiation binds each
+    argument to the right attribute regardless of declaration order —
+    a positional call silently mis-binds `self.config` to the broker
+    object, producing 'X object has no attribute expiry_type' at runtime
+    (the bug this test guards against).
+    """
+
+    def __init__(self, config=None, broker=None, store=None, notifier=None):
+        self.config = config
+        self.broker = broker
+        self.store = store
+        self.notifier = notifier
+        self.strategy_name = getattr(config, "strategy_name", None)
+
+    async def check_signals(self, chain, positions):
+        # The regression: if process_variant ever calls this class
+        # positionally as (broker, store, notifier, config), `self.config`
+        # would be bound to the broker/store/notifier instead, and this
+        # attribute access would raise AttributeError.
+        assert self.config.strategy_name == CONFIGS["monthly"].strategy_name
+        return []
+
+    def _compute_ivr_str(self):
+        return "IVR: 0.42"
+
+    def _find_leg(self, chain, instrument_key):
+        return None
+
+    def _compute_combined_pnl(self, chain, positions):
+        return (None, Decimal("100.0"))
+
+
+@pytest.mark.asyncio
+async def test_process_variant_binds_constructor_args_by_keyword(mock_lookup):
+    """9. strategy_cls with a reversed __init__ signature still works.
+
+    Regression test for the 'UpstoxLiveClient' object has no attribute
+    'expiry_type' failure: process_variant must instantiate strategy_cls
+    with keyword arguments, not positionally, since IronCondorV1 and
+    IronCondorV2 declare __init__ params in different orders.
+    """
+    config = CONFIGS["monthly"]
+    positions = [
+        PaperPosition(
+            strategy_name=config.strategy_name,
+            leg_role="short_put",
+            net_qty=-1,
+            avg_cost=Decimal("0.0"),
+            avg_sell_price=Decimal("80.0"),
+            instrument_key="NSE_FO|NIFTY26JUN202624000PE",
+            entry_date=date(2026, 6, 1),
+        )
+    ]
+
+    store = MagicMock()
+    store.get_positions.return_value = positions
+    store.db_path = "dummy.db"
+
+    broker = MagicMock()
+    broker.get_option_chain = AsyncMock(return_value=[])
+
+    with patch(
+        "scripts.strategies.ic.paper_ic_snapshot.parse_upstox_option_chain"
+    ) as mock_parse:
+        chain = MagicMock()
+        chain.underlying_spot = Decimal("24500")
+        mock_parse.return_value = chain
+
+        with patch("sqlite3.connect") as mock_conn:
+            mock_cursor = MagicMock()
+            mock_cursor.fetchall.return_value = []
+            exe = mock_conn.return_value.__enter__.return_value.execute
+            exe.return_value = mock_cursor
+
+            report = await process_variant(
+                "monthly",
+                config,
+                store,
+                broker,
+                mock_lookup,
+                None,
+                date(2026, 6, 15),
+                False,
+                strategy_cls=_ReversedSignatureStrategy,
+            )
+
+    assert report is not None
+    assert "Error" not in report
+    assert "📋 IC EOD Audit — monthly" in report
+
+
 
 @pytest.mark.asyncio
 async def test_v2_monthly_included_in_audit(

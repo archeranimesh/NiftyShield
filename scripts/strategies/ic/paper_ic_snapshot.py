@@ -163,8 +163,13 @@ async def process_variant(
     # Fetch Nifty spot and VIX LTP
     nifty_spot = chain.underlying_spot
 
-    # Instantiate strategy
-    ic = strategy_cls(broker, store, notifier, config)
+    # Instantiate strategy. Keyword args are mandatory here: IronCondorV1 and
+    # IronCondorV2 declare their __init__ params in different orders
+    # (V1: broker, store, notifier, config / V2: config, broker, store,
+    # notifier), so a positional call binds the wrong object to `self._config`
+    # for whichever class doesn't match. See BUG entry for the resulting
+    # 'UpstoxLiveClient' object has no attribute 'expiry_type' failure.
+    ic = strategy_cls(broker=broker, store=store, notifier=notifier, config=config)
 
     # Evaluate signals
     try:

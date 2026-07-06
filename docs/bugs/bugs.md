@@ -74,6 +74,27 @@ One additional file, `logs/apiconnect.log`, is the Nuvama APIConnect SDK's own i
 
 ---
 
+## BUG-012 — `paper_ic_snapshot.py` instantiated `IronCondorV2` with positional args, silently mis-binding config to the broker object
+
+| Field | Value |
+|---|---|
+| Severity | **HIGH** — the V2 monthly IC's EOD signal evaluation had been silently no-op'ing (caught exception, degraded report) since `IronCondorV2` was first wired into the snapshot cron; no crash, no alert distinct from a normal chain hiccup |
+| Status | ✅ Fixed — see `DECISIONS.md` 2026-07-06 entry for full root-cause writeup and commit |
+| Discovered | 2026-07-06, user (Animesh) reported no IC snapshot for the day; traced via `logs/ic_snapshot.log` |
+| Location | `scripts/strategies/ic/paper_ic_snapshot.py::process_variant` (constructor call site); root cause is signature-order divergence between `src/strategy/ic_nifty_v1.py::IronCondorV1.__init__` and `src/strategy/ic_nifty_v2.py::IronCondorV2.__init__` |
+
+**Symptom:** `ic_snapshot.log` showed, for `paper_ic_nifty_v2_monthly` only: `ic_snapshot.check_signals_failed strategy=paper_ic_nifty_v2_monthly error='UpstoxLiveClient' object has no attribute 'expiry_type'`, surfaced to Telegram as "Error: Signal evaluation failed" instead of a real snapshot. `paper_ic_nifty_v1_monthly` produced a snapshot but with `LTP=N/A`/`δ=0.00` on every leg — a separate, already-tracked defect (see TODOS.md "Fix BOD resolution in CC / PP / Collar / IC V1 / IC V2 leg finders").
+
+**Root cause:** `process_variant` calls `strategy_cls(broker, store, notifier, config)` positionally to generically instantiate either IC strategy class. `IronCondorV1.__init__(self, broker=None, store=None, notifier=None, config=None)` matches this order. `IronCondorV2.__init__(self, config=None, broker=None, store=None, notifier=None)` does not — so for every V2 invocation, `self._config` was bound to the live `UpstoxLiveClient` broker instance, `self._broker` to `store`, etc. This stayed invisible until `check_signals` accessed `self._config.expiry_type` deep inside `ProfitLockEngine().evaluate(...)`, which raised, was caught by `process_variant`'s own fail-safe `try/except Exception`, and downgraded to a one-line error report — no traceback reached logs at ERROR-with-stack level, no distinct alert from a routine chain-fetch failure.
+
+**Fix:** `scripts/strategies/ic/paper_ic_snapshot.py:172` — call `strategy_cls(broker=broker, store=store, notifier=notifier, config=config)` by keyword, which binds correctly regardless of either class's declared parameter order. Confirmed via `@code-reviewer` that the only other instantiation site (`scripts/daemon/monitor_daemon.py`) already used keyword args for both classes — no other call site carried this risk.
+
+**Test:** `tests/unit/strategies/ic/test_paper_ic_snapshot.py::test_process_variant_binds_constructor_args_by_keyword` — a fake `_ReversedSignatureStrategy` class with V2's real `__init__` order is passed as `strategy_cls`; `check_signals` asserts `self.config.strategy_name` matches the real config, which would fail under the pre-fix positional call (self.config would resolve to the mocked broker instead).
+
+**Related:** the two-class polymorphic-strategy pattern in `process_variant` has no protocol/ABC enforcing a shared `__init__` signature — worth a follow-up to standardize both classes on the same constructor param order (or route construction through a small factory keyed by strategy version) so this class of bug can't recur when a V3 is added.
+
+---
+
 ## BUG-002 — Option delta sign/magnitude corrupted by put-call misclassification
 
 | Field | Value |
