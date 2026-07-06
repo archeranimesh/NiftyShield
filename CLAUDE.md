@@ -196,6 +196,7 @@ A phase is not complete until all three are done. Never move to the next phase m
 - `CONTEXT.md` — "What Exists" module tree if new files added
 - `DECISIONS.md` — any new architecture decisions
 - `TODOS.md` — mark completed items, add session log entry
+- `docs/plan/README.md` — status column for the story/epic just touched (root cause of the epic going stale is this file not being in this list — see FR-7 row 15, `docs/plan/full-repo-review/findings/FR-7_synthesis.md`)
 - The relevant `src/<module>/CLAUDE.md` if module invariants changed
 
 **5b — Verify tests green:**
@@ -290,8 +291,9 @@ Never use a lower-ranked response to contradict Stage 3.
 | Completed council decisions | `docs/council/YYYY-MM-DD_<topic>.md` |
 | Antigravity operating protocol | `ANTIGRAVITY.md` |
 | Claude–Antigravity workflow division | `docs/antigravity/ai_collaboration_plan.md` |
+| Which surface (Claude Code / Cowork / Antigravity) + model to use, by job type | `docs/plan/full-repo-review/findings/FR-8_practitioner-devex.md` |
 
-## AI Collaboration — Antigravity
+## AI Collaboration — Antigravity and human review
 
 This project uses two AI agents. Claude (you) handles planning, graph queries, council decisions, and the mandatory `@code-reviewer` gate. Antigravity handles autonomous multi-file implementation, TDD loops, and commit execution.
 
@@ -300,6 +302,12 @@ This project uses two AI agents. Claude (you) handles planning, graph queries, c
 - Antigravity follows `ANTIGRAVITY.md` (project root). Its file-editing tools differ from Claude's: it uses `multi_replace_file_content` where Claude uses `Edit`, and `write_to_file` only for new files.
 - The workflow division (who does what, in which phase) is in `docs/antigravity/ai_collaboration_plan.md`.
 - Council decisions are always Claude's responsibility. Antigravity does not trigger the council.
+- Job-type → surface/model routing (BACKTEST_PLAN phase, council-gated decision, mechanical logging fix, golden-test authoring, cron debugging, full-repo review): see `docs/plan/full-repo-review/findings/FR-8_practitioner-devex.md`.
+
+**Rules for any review — Claude reviewing Antigravity's work, `code-reviewer` runs, or human handoffs** (promoted from the full-repo-review epic's prompt, per that epic's FR-1 finding that these three generalize beyond the epic itself — see `docs/plan/full-repo-review/findings/FR-1_protocol-reviewer.md` Step 5):
+1. **Rate severity by mission impact, not by finding volume.** Severity is tied to actual business impact (does this expose capital, does this cost a real decision-quality point) — not to how many findings make a review look thorough. A padded list of INFO-level nitpicks is as useless as a review that rubber-stamps everything.
+2. **Verify your own citations before asserting them.** Before citing a file, line, or DECISIONS.md entry as "live" or "current," check it against the repo — do not trust a prior pass or your own memory of the codebase.
+3. **Every review or handoff states at least one perspective it did not cover** — write "none identified" explicitly if genuinely nothing comes to mind; never omit the section.
 
 ---
 
