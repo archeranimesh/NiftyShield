@@ -849,3 +849,81 @@ def test_parse_expiry_unrecognised_returns_none() -> None:
     """Unrecognised key format must return None without raising."""
     strat = IronCondorV1()
     assert strat._parse_expiry("NSE_EQ|INFY") is None
+
+
+# ── BUG-012: numeric instrument key BOD fallback in _find_leg ────────────────
+
+
+def test_find_leg_resolves_numeric_key_via_bod_pe() -> None:
+    """Numeric key (no NIFTY<strike><PE|CE> substring) resolves via BOD lookup."""
+    from unittest.mock import MagicMock, patch
+
+    strat = IronCondorV1()
+    chain = _make_chain()  # has a PE at strike 22000
+
+    with patch("src.instruments.lookup.InstrumentLookup.from_file") as mock_from_file:
+        lookup = MagicMock()
+        lookup.get_by_key.return_value = {
+            "strike_price": Decimal("22000"),
+            "instrument_type": "PE",
+        }
+        mock_from_file.return_value = lookup
+
+        leg = strat._find_leg(chain, "NSE_FO|63896")
+
+    assert leg is not None
+    assert leg.strike == Decimal("22000")
+
+
+def test_find_leg_resolves_numeric_key_via_bod_ce() -> None:
+    """Same BOD fallback path resolves a CE leg."""
+    from unittest.mock import MagicMock, patch
+
+    strat = IronCondorV1()
+    chain = _make_chain()  # has a CE at strike 25000
+
+    with patch("src.instruments.lookup.InstrumentLookup.from_file") as mock_from_file:
+        lookup = MagicMock()
+        lookup.get_by_key.return_value = {
+            "strike_price": Decimal("25000"),
+            "instrument_type": "CE",
+        }
+        mock_from_file.return_value = lookup
+
+        leg = strat._find_leg(chain, "NSE_FO|63991")
+
+    assert leg is not None
+    assert leg.strike == Decimal("25000")
+
+
+def test_find_leg_numeric_key_not_in_bod_returns_none() -> None:
+    """Numeric key absent from the BOD master returns None, never raises."""
+    from unittest.mock import MagicMock, patch
+
+    strat = IronCondorV1()
+    chain = _make_chain()
+
+    with patch("src.instruments.lookup.InstrumentLookup.from_file") as mock_from_file:
+        lookup = MagicMock()
+        lookup.get_by_key.return_value = None
+        mock_from_file.return_value = lookup
+
+        leg = strat._find_leg(chain, "NSE_FO|99999999")
+
+    assert leg is None
+
+
+def test_find_leg_bod_lookup_raises_returns_none() -> None:
+    """A BOD file/lookup failure is caught and degrades to None, never raises."""
+    from unittest.mock import patch
+
+    strat = IronCondorV1()
+    chain = _make_chain()
+
+    with patch(
+        "src.instruments.lookup.InstrumentLookup.from_file",
+        side_effect=OSError("BOD file missing"),
+    ):
+        leg = strat._find_leg(chain, "NSE_FO|63896")
+
+    assert leg is None

@@ -30,8 +30,10 @@ from typing import TYPE_CHECKING, Literal
 
 import structlog
 
+from src.instruments.lookup import InstrumentLookup
 from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
+from src.paper.constants import DEFAULT_BOD_PATH
 from src.paper.models import PaperPosition
 from src.strategy import roll_utils
 from src.strategy.protocol import ApprovedAction, LegSpec, SignalEvent
@@ -610,9 +612,11 @@ class IronCondorV1:
     def _find_leg(self, market: OptionChain, instrument_key: str) -> OptionLeg | None:
         """Locate a CE or PE leg in the chain for the given instrument key.
 
-        Parses the strike and option type (CE/PE) from ``instrument_key``.
-        Returns ``None`` when the key is unrecognised or the strike is absent
-        from the chain snapshot.
+        Parses the strike and option type (CE/PE) from ``instrument_key`` via
+        regex first. Real Upstox keys are numeric-only (e.g. ``NSE_FO|63896``)
+        and never match the regex (BUG-009/BUG-012) — those fall back to a
+        BOD instrument-master lookup for ``strike_price``/``instrument_type``,
+        mirroring ``CSPNiftyV1._find_put_leg``.
 
         Args:
             market: Current option chain.
@@ -623,11 +627,7 @@ class IronCondorV1:
         """
         m = _STRIKE_RE.search(instrument_key)
         if not m:
-            log.warning(
-                "ic_nifty_v1.strike_parse_failed",
-                instrument_key=instrument_key,
-            )
-            return None
+            return self._find_leg_via_bod(market, instrument_key)
 
         try:
             strike = Decimal(m.group(1))
@@ -644,6 +644,65 @@ class IronCondorV1:
             return None
 
         return strike_data.ce if option_type == "CE" else strike_data.pe
+
+    def _find_leg_via_bod(
+        self, market: OptionChain, instrument_key: str
+    ) -> OptionLeg | None:
+        """Resolve a numeric-only instrument key via the offline BOD master.
+
+        Args:
+            market: Current option chain.
+            instrument_key: Position's Upstox instrument key (numeric form,
+                e.g. ``NSE_FO|63896``, no embedded strike/type substring).
+
+        Returns:
+            Matching ``OptionLeg``, or ``None`` when the key can't be
+            resolved (missing from BOD, no strike/type recorded, absent from
+            the live chain, or an unexpected ``instrument_type``).
+        """
+        try:
+            lookup = InstrumentLookup.from_file(DEFAULT_BOD_PATH)
+            inst = lookup.get_by_key(instrument_key)
+            if inst is None or inst.get("strike_price") is None:
+                log.warning(
+                    "ic_nifty_v1.strike_parse_failed",
+                    instrument_key=instrument_key,
+                    reason="not_found_in_bod",
+                )
+                return None
+
+            option_type = inst.get("instrument_type")
+            if option_type not in ("CE", "PE"):
+                log.warning(
+                    "ic_nifty_v1.strike_parse_failed",
+                    instrument_key=instrument_key,
+                    reason="unexpected_instrument_type",
+                    instrument_type=option_type,
+                )
+                return None
+
+            strike = Decimal(str(inst["strike_price"]))
+            strike_data = market.strikes.get(strike)
+            if strike_data is None:
+                return None
+
+            leg = strike_data.ce if option_type == "CE" else strike_data.pe
+            if leg is not None:
+                log.debug(
+                    "ic_nifty_v1.leg_resolved_via_bod",
+                    instrument_key=instrument_key,
+                    strike=str(strike),
+                    option_type=option_type,
+                )
+            return leg
+        except Exception as exc:  # Intentional: fail-safe BOD lookup
+            log.warning(
+                "ic_nifty_v1.strike_parse_failed",
+                instrument_key=instrument_key,
+                reason="bod_lookup_failed",
+                error=str(exc),
+            )
+            return None
 
     def _compute_combined_pnl(
         self,

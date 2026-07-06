@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import datetime
 from decimal import Decimal
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -387,3 +387,72 @@ def test_apply_action_rejects_unknown() -> None:
 
     with pytest.raises(ValueError, match="OPEN_NEW_IC"):
         asyncio.run(strategy.apply_action(_standard_ic_positions(), action))
+
+
+# ── BUG-012: numeric instrument key BOD fallback ─────────────────────────────
+
+
+def test_find_leg_resolves_numeric_key_via_bod() -> None:
+    """Numeric key (no NIFTY<strike><PE|CE> substring) resolves via BOD lookup."""
+    strategy = _make_strategy()
+    chain = _chain({"23900": (None, _leg("23900", "-0.20"))})
+
+    with patch("src.instruments.lookup.InstrumentLookup.from_file") as mock_from_file:
+        lookup = MagicMock()
+        lookup.get_by_key.return_value = {
+            "strike_price": Decimal("23900"),
+            "instrument_type": "PE",
+        }
+        mock_from_file.return_value = lookup
+
+        leg = strategy._find_leg(chain, "NSE_FO|63930")
+
+    assert leg is not None
+    assert leg.strike == Decimal("23900")
+
+
+def test_find_leg_numeric_key_not_in_bod_returns_none() -> None:
+    """Numeric key absent from the BOD master returns None, never raises."""
+    strategy = _make_strategy()
+    chain = _chain({"23900": (None, _leg("23900", "-0.20"))})
+
+    with patch("src.instruments.lookup.InstrumentLookup.from_file") as mock_from_file:
+        lookup = MagicMock()
+        lookup.get_by_key.return_value = None
+        mock_from_file.return_value = lookup
+
+        leg = strategy._find_leg(chain, "NSE_FO|99999999")
+
+    assert leg is None
+
+
+def test_position_strike_resolves_numeric_key_via_bod() -> None:
+    """_position_strike (used by Zone 2 profit-lock) resolves numeric keys too."""
+    strategy = _make_strategy()
+    pos = _pos("short_put", "NSE_FO|63930")
+
+    with patch("src.instruments.lookup.InstrumentLookup.from_file") as mock_from_file:
+        lookup = MagicMock()
+        lookup.get_by_key.return_value = {
+            "strike_price": Decimal("23900"),
+            "instrument_type": "PE",
+        }
+        mock_from_file.return_value = lookup
+
+        strike = strategy._position_strike(pos)
+
+    assert strike == Decimal("23900")
+
+
+def test_position_strike_bod_lookup_raises_returns_none() -> None:
+    """A BOD file/lookup failure is caught and degrades to None, never raises."""
+    strategy = _make_strategy()
+    pos = _pos("short_put", "NSE_FO|63930")
+
+    with patch(
+        "src.instruments.lookup.InstrumentLookup.from_file",
+        side_effect=OSError("BOD file missing"),
+    ):
+        strike = strategy._position_strike(pos)
+
+    assert strike is None
