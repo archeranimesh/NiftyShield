@@ -22,7 +22,7 @@
 - [x] **FR-3** — Architecture & design-doc consistency review (Systems Architect persona, **Fable, pending FR-0**) | SHA: 8a67ffe | Model: Sonnet (deviation from FR-0's low-confidence keep-Fable recommendation — no Fable subagent override available inline; noted in the findings file)
 - [x] **FR-3.1** — Full folder structure & taxonomy review, all trees grouped by category (Folder Structure Auditor persona, **Sonnet**, depends on FR-3 output) | SHA: d205d16 | Model: Sonnet
 - [x] **FR-4** — Code quality & coding-standard compliance sweep (Standards Auditor persona, **Sonnet**) | SHA: 3242fa8 | Model: Sonnet
-- [ ] **FR-5** — Test adequacy & ground-truth coverage review (Test Auditor persona, **Sonnet**, escalate financial gaps to **Opus**)
+- [x] **FR-5** — Test adequacy & ground-truth coverage review (Test Auditor persona, **Sonnet**, escalate financial gaps to **Opus**) | SHA: PENDING | Model: Sonnet (2 findings tagged NEEDS-OPUS-REVIEW, not yet Opus-reviewed)
 - [ ] **FR-6** — Security & operational-risk review (Red-Team persona, **Opus**)
 - [ ] **FR-7** — Missing-persona / blind-spot synthesis (Chairman persona, **Fable, pending FR-0**)
 - [ ] **FR-8** — Tooling usage guide: Claude Code vs. Cowork vs. Antigravity handoff, by job type (Practitioner/DevEx persona, **Sonnet**)
