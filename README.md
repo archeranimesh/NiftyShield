@@ -246,7 +246,7 @@ Output path: `data/offline/chain_snapshots_5min/{year}/{month}/{day}/upstox_{HHM
 
 ### Database Backup and Retention (Cron)
 
-Creates an online backup of the live WAL-mode portfolio database and prunes older backups (retains newest 30 daily and 12 monthly backups).
+Creates an online backup of the live WAL-mode portfolio database and prunes older backups (retains newest 30 daily and 12 monthly backups). The backup destination is determined by `BACKUP_DIR` in `.env` (defaults to `/var/backups/niftyshield`), ensuring backups are physically isolated from the repo mount.
 
 ```bash
 # Online DB backup — 4:00 PM IST, Mon–Fri

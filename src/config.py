@@ -147,6 +147,10 @@ class Settings(BaseSettings):
         default="data/portfolio/portfolio.sqlite",
         description="Path to the shared SQLite database.",
     )
+    backup_dir: str = Field(
+        default="/var/backups/niftyshield",
+        description="Path to the backup directory. Should be outside the repo mount.",
+    )
     vix_data_dir: str = Field(
         default="data/historical/ohlc/india_vix",
         description="Directory containing India VIX Parquet files.",

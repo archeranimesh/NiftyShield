@@ -48,9 +48,21 @@ def test_backup_database_creates_valid_backup(
         result = cursor.fetchone()
         assert result[0] == "ok"
 
-        # Verify data copied
-        cursor.execute("SELECT value FROM test")
-        assert cursor.fetchone()[0] == "hello"
+    # Verify data copied
+    cursor.execute("SELECT value FROM test")
+    assert cursor.fetchone()[0] == "hello"
+
+
+def test_backup_database_raises_when_source_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Set a nonexistent db path
+    missing_db = tmp_path / "missing.sqlite"
+    monkeypatch.setattr(settings, "db_path", str(missing_db))
+
+    backup_dir = tmp_path / "backups"
+    with pytest.raises(FileNotFoundError, match="Source database not found"):
+        backup_database(backup_dir)
 
 
 def test_prune_backups(tmp_path: Path) -> None:
@@ -103,3 +115,19 @@ def test_prune_backups(tmp_path: Path) -> None:
 
     # 20260131 is within the 30 daily days (it's the 31st out of 35 days), so it should be retained
     assert "portfolio_20260131_120000.sqlite" in remaining_names
+
+
+def test_prune_backups_no_op_when_under_limit(tmp_path: Path) -> None:
+    backup_dir = tmp_path / "backups"
+    backup_dir.mkdir()
+
+    # Create 5 dummy backup files (fewer than daily_keep=30)
+    for day in range(1, 6):
+        (backup_dir / f"portfolio_2026010{day}_120000.sqlite").touch()
+
+    # Prune
+    prune_backups(backup_dir, daily_keep=30, monthly_keep=12)
+
+    # Verify no files were deleted
+    remaining_files = list(backup_dir.glob("portfolio_*.sqlite"))
+    assert len(remaining_files) == 5

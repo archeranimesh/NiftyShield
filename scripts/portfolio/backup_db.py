@@ -35,7 +35,7 @@ def backup_database(backup_dir: Path) -> Path:
     source_db_path = Path(settings.db_path)
     if not source_db_path.exists():
         logger.error("source_db_not_found", path=str(source_db_path))
-        sys.exit(1)
+        raise FileNotFoundError(f"Source database not found: {source_db_path}")
 
     backup_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
@@ -116,9 +116,13 @@ def prune_backups(backup_dir: Path, daily_keep: int = 30, monthly_keep: int = 12
 
 def main() -> None:
     setup_logging()
-    backup_dir = Path("backups/portfolio")
-    backup_database(backup_dir)
-    prune_backups(backup_dir)
+    backup_dir = Path(settings.backup_dir).expanduser()
+    try:
+        backup_database(backup_dir)
+        prune_backups(backup_dir)
+    except FileNotFoundError as e:
+        logger.error("backup_failed", error=str(e))
+        sys.exit(1)
 
 
 if __name__ == "__main__":
