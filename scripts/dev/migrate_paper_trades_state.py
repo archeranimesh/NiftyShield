@@ -28,9 +28,6 @@ _SCRIPT_NAME = "scripts.dev.migrate_paper_trades_state"
 logger = structlog.get_logger(_SCRIPT_NAME)
 
 
-_SCRIPT_NAME = "scripts.dev.migrate_paper_trades_state"
-
-
 def _column_exists(conn: sqlite3.Connection, table: str, column: str) -> bool:
     """Return True if *column* exists in *table*."""
     rows = conn.execute(f"PRAGMA table_info({table})").fetchall()

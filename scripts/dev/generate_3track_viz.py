@@ -21,8 +21,6 @@ _SCRIPT_NAME = "scripts.dev.generate_3track_viz"
 logger = structlog.get_logger(_SCRIPT_NAME)
 
 
-_SCRIPT_NAME = "scripts.dev.generate_3track_viz"
-
 DB_PATH = Path("data/portfolio/portfolio.sqlite")
 DEFAULT_OUT = Path("docs/viz/3track_comparison.html")
 
