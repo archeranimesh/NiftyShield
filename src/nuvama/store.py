@@ -16,15 +16,16 @@ Two tables, both in the shared portfolio.sqlite:
 
 from __future__ import annotations
 
-import logging
 import sqlite3
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
+import structlog
+
 from src.db import connect
 from src.nuvama.models import NuvamaOptionPosition
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 _CREATE_POSITIONS = """
 CREATE TABLE IF NOT EXISTS nuvama_positions (

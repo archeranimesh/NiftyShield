@@ -26,14 +26,14 @@ Design notes:
 
 from __future__ import annotations
 
-import logging
 import re
 
 import aiohttp
+import structlog
 
 from src.config import settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 _TELEGRAM_API = "https://api.telegram.org/bot{token}/sendMessage"
 

@@ -11,15 +11,15 @@ silently block a valid trading day.
 
 from __future__ import annotations
 
-import logging
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Final
 from zoneinfo import ZoneInfo
 
+import structlog
 import yaml
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Resolved once at import time; all callers share the same anchor.
 # YAMLs live alongside the module in src/market_calendar/data/ — version-controlled

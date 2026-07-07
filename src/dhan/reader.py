@@ -21,17 +21,17 @@ Usage (integration):
 
 from __future__ import annotations
 
-import logging
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 import requests
+import structlog
 
 from src.dhan.models import DhanHolding, DhanPortfolioSummary
 from src.models.portfolio import AssetType
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 DHAN_API_BASE = "https://api.dhan.co/v2"
 

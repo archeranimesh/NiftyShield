@@ -9,16 +9,17 @@ are floats — converted at the boundary via Decimal(str(float_val)).
 
 from __future__ import annotations
 
-import logging
 from datetime import date
 from decimal import Decimal
+
+import structlog
 
 from src.client.protocol import MarketDataProvider
 from src.models.portfolio import TradeAction
 from src.paper.models import PaperNavSnapshot, PaperPosition, PaperTrade
 from src.paper.store import PaperStore
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def _compute_leg_unrealized_pnl(

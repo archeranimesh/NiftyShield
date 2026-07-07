@@ -54,15 +54,16 @@ and exceeds the threshold.
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime, timezone
 from decimal import Decimal
+
+import structlog
 
 from src.paper.constants import NIFTYBEES_KEY
 from src.paper.models import PaperPosition
 from src.risk.models import PortfolioDelta
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # ── Default thresholds (parameterised via constructor) ────────────────────────
 

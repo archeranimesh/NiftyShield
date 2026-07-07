@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Literal
 
+import structlog
+
 from src.paper.models import TradeState
 
-_log = logging.getLogger(__name__)
+_log = structlog.get_logger(__name__)
 
 # Shared profit-target retention ratio: fire when LTP ≤ 30% of entry credit (70% captured).
 # Used by CSP and CC evaluators.

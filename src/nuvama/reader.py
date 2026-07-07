@@ -13,14 +13,15 @@ Key design decisions (see DECISIONS.md — Nuvama Integration):
 from __future__ import annotations
 
 import json
-import logging
 from datetime import date
 from decimal import Decimal, InvalidOperation
+
+import structlog
 
 from src.nuvama.models import NuvamaBondHolding, NuvamaBondSummary
 from src.nuvama.protocol import NuvamaClient
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # ISINs already tracked by other systems (e.g. strategy legs, Dhan reader).
 # Holdings with these ISINs are silently skipped to prevent double-counting.

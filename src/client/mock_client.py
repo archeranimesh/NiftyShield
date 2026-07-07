@@ -40,11 +40,12 @@ Usage in tests
 from __future__ import annotations
 
 import json
-import logging
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
+
+import structlog
 
 from src.client.exceptions import InsufficientMarginError, OrderRejectedError
 from src.client.protocol import (
@@ -58,7 +59,7 @@ from src.client.protocol import (
     Position,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Sentinel used to distinguish "not set" from None
 _MISSING = object()

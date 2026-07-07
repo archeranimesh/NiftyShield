@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Literal
+
+import structlog
 
 from src.client.protocol import BrokerClient
 from src.client.upstox_market import parse_upstox_option_chain
 from src.models.options import OptionChain
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @dataclass(frozen=True)

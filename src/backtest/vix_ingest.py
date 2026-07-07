@@ -7,18 +7,18 @@ pandas Series for IVR computation.
 
 from __future__ import annotations
 
-import logging
 from datetime import date, timedelta
 from pathlib import Path
 from urllib.parse import quote
 
 import pandas as pd
 import requests
+import structlog
 
 from src.client.exceptions import DataFetchError
 from src.config import settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def ingest_vix_from_csv(csv_path: Path, out_dir: Path) -> int:

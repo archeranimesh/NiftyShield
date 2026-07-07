@@ -19,17 +19,17 @@ from __future__ import annotations
 
 import asyncio
 import datetime
-import logging
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 import aiohttp
+import structlog
 
 from src.db import connect
 from src.notifications.telegram import TelegramNotifier
 from src.strategy.protocol import SignalEvent
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 _SCANNER_INTERVAL_SECONDS = 300  # 5 minutes
 

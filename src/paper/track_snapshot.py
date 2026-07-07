@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from typing import Any, cast
+
+import structlog
 
 from src.client.protocol import BrokerClient
 from src.client.upstox_market import parse_upstox_option_chain
@@ -22,7 +23,7 @@ from src.paper.proxy_monitor import ProxyDeltaMonitor
 from src.paper.store import PaperStore
 from src.paper.tracker import _compute_leg_unrealized_pnl
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @dataclass(frozen=True)

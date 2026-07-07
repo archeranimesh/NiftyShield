@@ -17,12 +17,13 @@ takes a raw string, making the entire module testable with a fixture file.
 
 from __future__ import annotations
 
-import logging
 import urllib.request
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
+import structlog
+
+logger = structlog.get_logger(__name__)
 
 AMFI_URL = "https://www.amfiindia.com/spages/NAVAll.txt"
 

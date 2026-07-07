@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-import logging
 from datetime import date
 from pathlib import Path
 
 import pandas as pd
 import pyarrow.parquet as pq
+import structlog
 
 from src.backtest.constants import DEFAULT_DATA_DIR
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def load_options_ohlcv(

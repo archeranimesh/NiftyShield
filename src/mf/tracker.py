@@ -19,17 +19,18 @@ P&L precision:
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 
+import structlog
+
 from src.mf.nav_fetcher import fetch_navs
 from src.mf.store import MFStore
 from src.models.mf import MFHolding, MFNavSnapshot
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 _TWO_DP = Decimal("0.01")
 

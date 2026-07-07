@@ -14,11 +14,12 @@ to preserve sub-rupee precision through P&L calculations and SQLite round-trips.
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING
+
+import structlog
 
 if TYPE_CHECKING:
     from src.dhan.models import DhanPortfolioSummary
@@ -34,7 +35,7 @@ from pydantic import (
     model_validator,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class TradeAction(str, Enum):

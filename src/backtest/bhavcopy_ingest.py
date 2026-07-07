@@ -1,6 +1,5 @@
 import calendar
 import csv
-import logging
 import re
 import subprocess
 import zipfile
@@ -11,11 +10,12 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
 import requests
+import structlog
 from pydantic import BaseModel, Field
 
 from src.config import settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # UDiFF (Dec 2024+) instrument type codes → canonical instrument strings
 _UDIFF_FI_MAP: dict[str, str] = {

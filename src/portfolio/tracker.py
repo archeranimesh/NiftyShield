@@ -6,10 +6,11 @@ with UpstoxLiveClient (production) or MockBrokerClient (testing).
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
+
+import structlog
 
 from src.client.protocol import MarketDataProvider
 from src.client.upstox_market import parse_upstox_option_chain
@@ -25,7 +26,7 @@ from src.models.portfolio import (
 from src.portfolio.service import SnapshotService, SnapshotServiceProtocol
 from src.portfolio.store import PortfolioStore
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 # ── P&L summary dataclasses ─────────────────────────────────────

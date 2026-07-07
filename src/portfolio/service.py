@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import date
 from decimal import Decimal
 from typing import Protocol
 
+import structlog
+
 from src.models.portfolio import DailySnapshot, Strategy
 from src.portfolio.store import PortfolioStore
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class SnapshotServiceProtocol(Protocol):

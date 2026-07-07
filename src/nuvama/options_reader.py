@@ -7,13 +7,14 @@ summaries for F&O Options.
 from __future__ import annotations
 
 import json
-import logging
 from datetime import date
 from decimal import Decimal, InvalidOperation
 
+import structlog
+
 from src.nuvama.models import NuvamaOptionPosition, NuvamaOptionsSummary
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def parse_options_positions(raw_response: str) -> list[NuvamaOptionPosition]:
