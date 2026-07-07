@@ -261,8 +261,11 @@ class TelegramGateway:
     ) -> None:
         """Route a single CallbackQuery to the appropriate callback.
 
-        Auth guard: drops updates whose sender id and chat id both differ
-        from the configured chat_id.
+        Auth guard: drops updates whose sender id differs from the
+        configured chat_id. Only the identity of the button-presser
+        matters — chat membership is not a valid substitute, since any
+        member of a group chat the bot is added to could otherwise
+        approve/reject real trading decisions.
 
         Args:
             cq: Raw callback_query dict from Telegram.
@@ -270,12 +273,10 @@ class TelegramGateway:
             on_rejected: Callback for reject button presses.
         """
         sender_id = str(cq.get("from", {}).get("id", ""))
-        chat_id_from_msg = str(cq.get("message", {}).get("chat", {}).get("id", ""))
-        if sender_id != self._chat_id and chat_id_from_msg != self._chat_id:
+        if sender_id != self._chat_id:
             logger.warning(
-                "Auth guard: dropping callback from sender=%s chat=%s",
+                "Auth guard: dropping callback from sender=%s",
                 sender_id,
-                chat_id_from_msg,
             )
             return
 

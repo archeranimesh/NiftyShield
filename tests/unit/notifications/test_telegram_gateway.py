@@ -259,19 +259,24 @@ async def test_auth_guard_routes_approve_from_correct_sender() -> None:
     on_rejected.assert_not_awaited()
 
 
-async def test_auth_guard_routes_approve_when_chat_id_matches() -> None:
-    """Callback is accepted if chat.id matches even when from.id differs."""
+async def test_auth_guard_drops_non_allowlisted_sender_in_matching_chat() -> None:
+    """Regression (FR-7 row 9): a group-chat member other than the configured
+    sender must be rejected even when the callback's chat.id matches
+    self._chat_id. Chat membership is not a valid stand-in for sender
+    identity — only sender_id == self._chat_id authorises approve/reject.
+    """
     gw = _make_gateway(chat_id="-1001234567")
     on_approved = AsyncMock()
     on_rejected = AsyncMock()
 
     cq = {
-        "from": {"id": 999},  # different user in a group
+        "from": {"id": 999},  # different user in the same group chat
         "message": {"message_id": 7, "chat": {"id": -1001234567}},
         "data": "approve:1",
     }
     await gw._handle_callback(cq, on_approved, on_rejected)
-    on_approved.assert_awaited_once_with(7, 1)
+    on_approved.assert_not_awaited()
+    on_rejected.assert_not_awaited()
 
 
 async def test_auth_guard_routes_reject_from_correct_sender() -> None:
