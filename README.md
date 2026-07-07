@@ -244,6 +244,17 @@ Fetches Nifty option chains for up to 3 expiries every 5 minutes during market h
 Output path: `data/offline/chain_snapshots_5min/{year}/{month}/{day}/upstox_{HHMM}.parquet` (override with `CHAIN_INTRADAY_DIR`).
 
 
+### Database Backup and Retention (Cron)
+
+Creates an online backup of the live WAL-mode portfolio database and prunes older backups (retains newest 30 daily and 12 monthly backups).
+
+```bash
+# Online DB backup — 4:00 PM IST, Mon–Fri
+0 16 * * 1-5  cd /path/to/NiftyShield && python -m scripts.portfolio.backup_db >> logs/backup_db.log 2>&1
+```
+
+
+
 ### Dhan Login (daily)
 
 NiftyShield monitors your Dhan portfolio for F&O P&L tracking and after-market holdings review. Dhan uses a manual 24-hour access token generated from their web portal.
