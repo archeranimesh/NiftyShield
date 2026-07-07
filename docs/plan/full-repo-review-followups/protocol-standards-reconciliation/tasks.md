@@ -2,7 +2,7 @@
 
 > Find the first unchecked box below. That is the only task for this session.
 
-- [x] **T1** — Single reconciliation pass across CLAUDE.md, REVIEW.md, and the affected module docs (targeted Edit only, never Write-over): (a) add one line to the AutoTrigger table's "Blocking" note — on surfaces t
+- [x] **T1** — Single reconciliation pass across CLAUDE.md, REVIEW.md, and the affected module docs (targeted Edit only, never Write-over): (a) add one line to the AutoTrigger table's "Blocking" note — on surfaces t | SHA: 0a8d739
 
 ---
 
