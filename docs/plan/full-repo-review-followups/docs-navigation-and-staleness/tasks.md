@@ -2,7 +2,7 @@
 
 > Find the first unchecked box below. That is the only task for this session.
 
-- [ ] **T1** — Rewrite `docs/plan/README.md`'s status table rows for `dev-foundation`, `council-refactor`, `paper-backbone`, `ic-nifty-v2` against `docs/archive/plan/` + `DECISIONS.md` (targeted Edit only). Fix `doc
+- [x] **T1** — Rewrite `docs/plan/README.md`'s status table rows for `dev-foundation`, `council-refactor`, `paper-backbone`, `ic-nifty-v2` against `docs/archive/plan/` + `DECISIONS.md` (targeted Edit only). Fix `docs/council/README.md`'s taxonomy and archive tables, repoint dead council links in `DECISIONS.md`/`docs/plan/variance-gate/prompt.md`, remove stale nuvama CLAUDE.md line from `CONTEXT.md`. | SHAs: 2df25c2, fbddaed, 49a34b1, bdec83a
 
 ---
 
