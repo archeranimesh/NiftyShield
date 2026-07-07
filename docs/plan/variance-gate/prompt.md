@@ -15,7 +15,7 @@ The CSP v1 Nifty strategy is in paper trading. The Phase 0.8 gate defines what m
 true before live capital is deployed. The gate was council-approved on 2026-05-02.
 
 Full gate specification: `docs/plan/variance-gate/variance_gate_spec.md`
-Council decision: `docs/council/2026-05-02_variance-gate-regime-completeness.md`
+Council decision: `docs/archive/council/risk/2026-05-02_variance-gate-regime-completeness.md`
 Canonical strategy spec (to be reconciled in VG0): `docs/strategies/csp_nifty_v1.md`
 
 ---
