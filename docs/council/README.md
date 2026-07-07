@@ -7,15 +7,18 @@ Archived outputs from the LLM Council (tools/llm-council) on NiftyShield design 
 ```
 docs/council/
 ├── README.md
-├── archive/
-│   ├── strategy/    # entry/exit rules, instrument selection, strike methodology
-│   ├── risk/        # portfolio risk caps, monitoring regimes, deployment gates
-│   └── research/    # Phase 3+ / option-buying / future strategy research
 └── pending/
     └── YYYY-MM-DD_<topic>_prompt.md   # prompts saved when council server was offline
+
+docs/archive/council/
+├── strategy/           # entry/exit rules, instrument selection, strike methodology
+├── risk/               # portfolio risk caps, monitoring regimes, deployment gates
+├── research/           # Phase 3+ / option-buying / future strategy research
+├── data_architecture/  # storage choices, API integration, module design
+└── misc/               # ping tests, prompts, and uncategorized outputs
 ```
 
-Active (unresolved) council decisions live directly under `docs/council/` as `YYYY-MM-DD_<topic>.md`. Once the decision is absorbed into `DECISIONS.md` and the relevant strategy/plan docs, it moves to the appropriate `archive/` subfolder.
+Active (unresolved) council decisions live directly under `docs/council/` as `YYYY-MM-DD_<topic>.md`. Once the decision is absorbed into `DECISIONS.md` and the relevant strategy/plan docs, it moves to the appropriate `docs/archive/council/` subfolder.
 
 ## When to Trigger the Council
 
@@ -158,6 +161,10 @@ Full council output files are in `archive/` subfolders.
 | 2026-05-02 | `2026-05-02_integrated-leg2-strike-methodology.md` | %OTM over delta-based for Leg 2 (long 8% below spot, short 20% below spot); delta-based rejected on cost unpredictability at high VIX |
 | 2026-05-02 | `2026-05-02_iron-condor-v1-core-design.md` | Mild put-side asymmetry: short put 16Δ / short call 14Δ normal; 18Δ/12Δ high-IVR; symmetric deltas rejected |
 | 2026-05-02 | `2026-05-02_nifty-long-instrument-comparison-protection.md` | Track C = Deep ITM Call (delta ≈ 0.90); Futures + Covered Call / CSP programmatically blocked |
+| 2026-05-28 | `2026-05-28_paper-trade-exit-philosophy.md` | **Superseded** by 2026-06-26 version |
+| 2026-06-26 | `2026-06-26_ic-v2-core-design.md` | IronCondorV2 25Δ/22Δ entry, 10Δ wings, partial-roll, DTE exits |
+| 2026-06-26 | `2026-06-26_paper-trade-exit-philosophy.md` | TIME_STOP/DTE_REVIEW priority fix in evaluate_cc; StrategyMonitor observability logs (q11/q12) |
+| 2026-06-27 | `2026-06-27_ic-v2-profit-lock-adjustment.md` | IC V2 profit-lock Zone 1/2/3 rules |
 
 ### archive/risk/
 
@@ -172,3 +179,10 @@ Full council output files are in `archive/` subfolders.
 | Date | File | Key Decision |
 |---|---|---|
 | 2026-05-02 | `2026-05-02_gamma-acceleration-mispricing-option-buying.md` | Near-expiry buy research (Phase 3): Gamma Gearing primary metric; Speed secondary; OI velocity confirmation only |
+
+### archive/data_architecture/
+
+| Date | File | Key Decision |
+|---|---|---|
+| 2026-06-02 | `2026-06-02_strategy-monitor-watchlist-design.md` | **Superseded** by 2026-06-26 version |
+| 2026-06-26 | `2026-06-26_strategy-monitor-watchlist-design.md` | StrategyMonitor watchlist design and storage |
