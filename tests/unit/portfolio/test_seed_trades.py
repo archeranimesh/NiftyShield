@@ -146,8 +146,9 @@ def test_seed_trades_ebbetf0431_position(store: PortfolioStore) -> None:
 
 
 def test_seed_trades_nifty_jun_pe_is_short(store: PortfolioStore) -> None:
-    """NIFTY_JUN_PE SELL 65 → net qty -65, avg buy price 0."""
+    """NIFTY_JUN_PE SELL 65 → net qty -65, avg price falls back to weighted
+    SELL price (FR-7 row 1 fix) since there are no BUY trades for this leg."""
     seed_trades(store)
     pos = store.get_position("finideas_ilts", "NIFTY_JUN_PE")
     assert pos.quantity == -65
-    assert pos.average_price == Decimal("0")
+    assert pos.average_price == Decimal("840.00")

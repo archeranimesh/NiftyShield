@@ -89,7 +89,13 @@ class Position(BaseModel):
         leg_role: Role/name of the leg.
         instrument_key: Instrument key of the position, or None if no trades exist.
         quantity: Net quantity (positive for net long, negative for net short).
-        average_price: Weighted average buy price of remaining units.
+        average_price: Weighted average price of remaining units — BUY-side
+            weighted average when buy_qty > 0 (long or partially-closed-short
+            legs), else SELL-side weighted average for short-first legs with
+            no BUY trades at all.
+        realized_pnl: Cumulative realized P&L booked from closed quantity
+            (min(buy_qty, sell_qty)), computed as (sell_avg - buy_avg) *
+            closed_qty. Zero when no round-trip has occurred yet.
     """
 
     strategy_name: str = Field(..., min_length=1)
@@ -97,6 +103,7 @@ class Position(BaseModel):
     instrument_key: str | None = Field(default=None)
     quantity: int  # negative for net short positions
     average_price: Decimal = Field(default=Decimal("0"), ge=0)
+    realized_pnl: Decimal = Field(default=Decimal("0"))
 
     model_config = {"frozen": True}
 
@@ -308,6 +315,14 @@ class Strategy(BaseModel):
     description: str = ""
     legs: list[Leg] = Field(default_factory=list)
     created_at: datetime | None = None
+    realized_pnl: Decimal = Field(
+        default=Decimal("0"),
+        description=(
+            "Cumulative realized P&L from closed legs, populated by "
+            "apply_trade_positions() from the trades ledger; zero for a "
+            "strategy loaded straight from ALL_STRATEGIES with no trade overlay."
+        ),
+    )
 
     @computed_field  # type: ignore[misc]
     @property

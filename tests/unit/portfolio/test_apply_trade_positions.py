@@ -234,3 +234,86 @@ def test_strategy_name_and_description_preserved() -> None:
     result = apply_trade_positions(s, {})
     assert result.name == s.name
     assert result.description == s.description
+
+
+# ── Realized P&L rollup (FR-7 row 1) ─────────────────────────────────────────
+
+
+def test_no_positions_realized_pnl_is_zero() -> None:
+    """Empty positions dict → realized_pnl defaults to zero."""
+    s = _strategy(_equity_leg())
+    result = apply_trade_positions(s, {})
+    assert result.realized_pnl == Decimal("0")
+
+
+def test_fully_closed_leg_realized_pnl_not_dropped() -> None:
+    """A fully closed leg (net_qty=0, dropped from legs) still contributes its
+    realized_pnl to the returned Strategy instead of vanishing."""
+    s = _strategy(_equity_leg(qty=438), _option_leg())
+    positions = {
+        "EBBETF0431": Position(
+            strategy_name="ILTS", leg_role="EBBETF0431", quantity=0,
+            average_price=Decimal("0"), instrument_key="NSE_EQ|INF754K01LE1",
+            realized_pnl=Decimal("52318.50"),
+        )
+    }
+    result = apply_trade_positions(s, positions)
+    keys = [leg.instrument_key for leg in result.legs]
+    assert "NSE_EQ|INF754K01LE1" not in keys  # still dropped from active legs
+    assert result.realized_pnl == Decimal("52318.50")  # but P&L is not lost
+
+
+def test_partially_closed_matched_leg_realized_pnl_included() -> None:
+    """A matched leg that's still open (partial close) also contributes its
+    already-booked realized_pnl."""
+    s = _strategy(_equity_leg(qty=438))
+    positions = {
+        "EBBETF0431": Position(
+            strategy_name="ILTS", leg_role="EBBETF0431", quantity=100,
+            average_price=Decimal("1388.01"), instrument_key="NSE_EQ|INF754K01LE1",
+            realized_pnl=Decimal("1200.00"),
+        )
+    }
+    result = apply_trade_positions(s, positions)
+    assert result.legs[0].quantity == 100
+    assert result.realized_pnl == Decimal("1200.00")
+
+
+def test_unmatched_dropped_leg_realized_pnl_included() -> None:
+    """An unmatched leg_role (not in strategy definition) that's fully closed
+    is neither in legs nor appended, but its realized_pnl still counts."""
+    s = _strategy(_equity_leg())
+    positions = {
+        "EBBETF0431": Position(
+            strategy_name="ILTS", leg_role="EBBETF0431", quantity=465,
+            average_price=Decimal("1388.01"), instrument_key="NSE_EQ|INF754K01LE1",
+        ),
+        "LIQUIDBEES": Position(
+            strategy_name="ILTS", leg_role="LIQUIDBEES", quantity=0,
+            average_price=Decimal("0"), instrument_key="NSE_EQ|INF732E01037",
+            realized_pnl=Decimal("300.00"),
+        ),
+    }
+    result = apply_trade_positions(s, positions)
+    names = [leg.display_name for leg in result.legs]
+    assert "LIQUIDBEES" not in names
+    assert result.realized_pnl == Decimal("300.00")
+
+
+def test_realized_pnl_summed_across_multiple_legs() -> None:
+    """Realized P&L from multiple legs (one dropped, one still open) sums correctly."""
+    s = _strategy(_equity_leg(qty=438), _option_leg())
+    positions = {
+        "EBBETF0431": Position(
+            strategy_name="ILTS", leg_role="EBBETF0431", quantity=0,
+            average_price=Decimal("0"), instrument_key="NSE_EQ|INF754K01LE1",
+            realized_pnl=Decimal("500.00"),
+        ),
+        "NIFTY_DEC_23000_PE": Position(
+            strategy_name="ILTS", leg_role="NIFTY_DEC_23000_PE", quantity=30,
+            average_price=Decimal("975.00"), instrument_key="NSE_FO|37810",
+            realized_pnl=Decimal("-100.00"),
+        ),
+    }
+    result = apply_trade_positions(s, positions)
+    assert result.realized_pnl == Decimal("400.00")

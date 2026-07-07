@@ -94,6 +94,14 @@ def apply_trade_positions(
     options legs never individually traded via record_trade) are passed through
     unchanged.
 
+    The returned Strategy's realized_pnl is the sum of Position.realized_pnl
+    across every position in *positions* — matched, unmatched/appended, and
+    dropped (fully closed) alike. Realized P&L is booked once a leg's
+    instrument_key round-trips (BUY+SELL against the same key) regardless of
+    whether that leg still has an open quantity or was fully closed and
+    dropped from updated_legs — previously a fully closed leg's realized P&L
+    vanished entirely along with the leg (FR-7 row 1).
+
     This function is pure — no I/O, no DB access.
 
     Args:
@@ -102,7 +110,8 @@ def apply_trade_positions(
             dict[leg_role → Position].
 
     Returns:
-        New Strategy instance with trade-derived quantities where available.
+        New Strategy instance with trade-derived quantities where available
+        and realized_pnl populated from closed legs.
     """
     # Build instrument_key → Position for O(1) lookup
     by_instrument_key: dict[str, Position] = {pos.instrument_key: pos for pos in positions.values()}
@@ -150,12 +159,15 @@ def apply_trade_positions(
             )
         )
 
+    total_realized_pnl = sum((pos.realized_pnl for pos in positions.values()), Decimal("0"))
+
     return strategy.__class__(
         id=strategy.id,
         name=strategy.name,
         description=strategy.description,
         legs=updated_legs,
         created_at=strategy.created_at,
+        realized_pnl=total_realized_pnl,
     )
 
 

@@ -218,10 +218,12 @@ def test_get_position_buy_only_net_quantity(store: PortfolioStore) -> None:
 
 def test_get_position_sell_only_net_quantity(store: PortfolioStore) -> None:
     """Short position — only SELL trades, no BUY."""
-    store.record_trade(_sell(qty=65))
+    store.record_trade(_sell(qty=65, price="840.00"))
     pos = store.get_position("ILTS", "NIFTY_JUN_PE")
     assert pos.quantity == -65
-    assert pos.average_price == Decimal("0")  # no buy trades → avg is zero
+    # Short-first leg: no BUY trades → average_price falls back to the
+    # weighted SELL price (FR-7 row 1 fix), not Decimal("0").
+    assert pos.average_price == Decimal("840.00")
 
 
 def test_get_position_mixed_buy_sell_net(store: PortfolioStore) -> None:
@@ -278,11 +280,97 @@ def test_get_position_avg_price_ignores_sell_price(store: PortfolioStore) -> Non
     assert pos.average_price == Decimal("1388.00")
 
 
-def test_get_position_sell_only_avg_price_is_zero(store: PortfolioStore) -> None:
-    """No BUY trades → avg price is Decimal('0'), not an error."""
+def test_get_position_sell_only_avg_price_is_weighted_sell_price(store: PortfolioStore) -> None:
+    """No BUY trades → avg price falls back to the weighted SELL price (FR-7 row 1)."""
     store.record_trade(_sell(qty=65, price="840.00"))
     pos = store.get_position("ILTS", "NIFTY_JUN_PE")
-    assert pos.average_price == Decimal("0")
+    assert pos.average_price == Decimal("840.00")
+
+
+def test_get_position_sell_only_avg_price_weighted_across_two_sells(
+    store: PortfolioStore,
+) -> None:
+    """Two SELL trades at different prices → weighted average, no BUY trades."""
+    store.record_trade(
+        Trade(
+            strategy_name="ILTS", leg_role="NIFTY_JUN_PE",
+            instrument_key="NSE_FO|37810",
+            trade_date=date(2026, 1, 15), action=TradeAction.SELL,
+            quantity=40, price=Decimal("840.00"),
+        )
+    )
+    store.record_trade(
+        Trade(
+            strategy_name="ILTS", leg_role="NIFTY_JUN_PE",
+            instrument_key="NSE_FO|37810",
+            trade_date=date(2026, 1, 20), action=TradeAction.SELL,
+            quantity=25, price=Decimal("820.00"),
+        )
+    )
+    pos = store.get_position("ILTS", "NIFTY_JUN_PE")
+    expected = (Decimal("40") * Decimal("840.00") + Decimal("25") * Decimal("820.00")) / Decimal(
+        "65"
+    )
+    assert pos.average_price == expected
+
+
+def test_get_position_short_first_no_close_realized_pnl_zero(store: PortfolioStore) -> None:
+    """Short-first leg with no BUY (nothing closed yet) → realized_pnl is zero."""
+    store.record_trade(_sell(qty=65, price="840.00"))
+    pos = store.get_position("ILTS", "NIFTY_JUN_PE")
+    assert pos.realized_pnl == Decimal("0")
+
+
+def test_get_position_short_first_closed_leg_realized_pnl(store: PortfolioStore) -> None:
+    """SELL 65 @ 840 then BUY 65 @ 600 (cover) → realized_pnl = (840-600)*65."""
+    store.record_trade(
+        Trade(
+            strategy_name="ILTS", leg_role="NIFTY_JUN_PE",
+            instrument_key="NSE_FO|37810",
+            trade_date=date(2026, 1, 15), action=TradeAction.SELL,
+            quantity=65, price=Decimal("840.00"),
+        )
+    )
+    store.record_trade(
+        Trade(
+            strategy_name="ILTS", leg_role="NIFTY_JUN_PE",
+            instrument_key="NSE_FO|37810",
+            trade_date=date(2026, 2, 1), action=TradeAction.BUY,
+            quantity=65, price=Decimal("600.00"),
+        )
+    )
+    pos = store.get_position("ILTS", "NIFTY_JUN_PE")
+    assert pos.quantity == 0
+    assert pos.realized_pnl == (Decimal("840.00") - Decimal("600.00")) * Decimal("65")
+
+
+def test_get_position_buy_first_round_trip_realized_pnl(store: PortfolioStore) -> None:
+    """BUY 100 @ 1388 then SELL 100 @ 1400 (round trip) → realized_pnl = (1400-1388)*100."""
+    store.record_trade(
+        Trade(
+            strategy_name="ILTS", leg_role="EBBETF0431",
+            instrument_key="NSE_EQ|INF754K01LE1",
+            trade_date=date(2026, 1, 15), action=TradeAction.BUY,
+            quantity=100, price=Decimal("1388.00"),
+        )
+    )
+    store.record_trade(
+        Trade(
+            strategy_name="ILTS", leg_role="EBBETF0431",
+            instrument_key="NSE_EQ|INF754K01LE1",
+            trade_date=date(2026, 2, 1), action=TradeAction.SELL,
+            quantity=100, price=Decimal("1400.00"),
+        )
+    )
+    pos = store.get_position("ILTS", "EBBETF0431")
+    assert pos.realized_pnl == (Decimal("1400.00") - Decimal("1388.00")) * Decimal("100")
+
+
+def test_get_position_buy_only_no_close_realized_pnl_zero(store: PortfolioStore) -> None:
+    """BUY-only, nothing sold → realized_pnl is zero (existing happy path unchanged)."""
+    store.record_trade(_buy(qty=438, price="1388.12"))
+    pos = store.get_position("ILTS", "EBBETF0431")
+    assert pos.realized_pnl == Decimal("0")
 
 
 # ── get_all_positions_for_strategy ────────────────────────────────────────────
@@ -390,6 +478,40 @@ def test_get_all_positions_single_connection(store: PortfolioStore) -> None:
     assert pos_l3.quantity == 200
     assert pos_l3.average_price == Decimal("250.00")
     assert pos_l3.instrument_key == "NSE_EQ|INF754K01LE1"
+
+
+def test_get_all_positions_short_first_avg_price_and_realized_pnl(
+    store: PortfolioStore,
+) -> None:
+    """Short-first leg (SELL then covering BUY) gets a non-zero avg price and
+    realized_pnl via get_all_positions_for_strategy — the path apply_trade_positions
+    actually consumes (FR-7 row 1)."""
+    store.record_trade(
+        Trade(
+            strategy_name="ILTS", leg_role="NIFTY_JUN_PE",
+            instrument_key="NSE_FO|37810",
+            trade_date=date(2026, 1, 15), action=TradeAction.SELL,
+            quantity=65, price=Decimal("840.00"),
+        )
+    )
+    result = store.get_all_positions_for_strategy("ILTS")
+    pos = result["NIFTY_JUN_PE"]
+    assert pos.quantity == -65
+    assert pos.average_price == Decimal("840.00")
+    assert pos.realized_pnl == Decimal("0")  # nothing closed yet
+
+    store.record_trade(
+        Trade(
+            strategy_name="ILTS", leg_role="NIFTY_JUN_PE",
+            instrument_key="NSE_FO|37810",
+            trade_date=date(2026, 2, 1), action=TradeAction.BUY,
+            quantity=65, price=Decimal("600.00"),
+        )
+    )
+    result = store.get_all_positions_for_strategy("ILTS")
+    pos = result["NIFTY_JUN_PE"]
+    assert pos.quantity == 0
+    assert pos.realized_pnl == (Decimal("840.00") - Decimal("600.00")) * Decimal("65")
 
 
 def test_get_all_positions_instrument_key_after_roll(store: PortfolioStore) -> None:

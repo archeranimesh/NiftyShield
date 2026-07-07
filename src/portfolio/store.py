@@ -27,6 +27,52 @@ from src.models.portfolio import (
     create_strategy_instance,
 )
 
+def _weighted_avg_and_realized(
+    buy_qty: Decimal,
+    buy_value: Decimal,
+    sell_qty: Decimal,
+    sell_value: Decimal,
+) -> tuple[Decimal, Decimal]:
+    """Derive (average_price, realized_pnl) from aggregated BUY/SELL totals.
+
+    average_price mirrors the BUY-side weighted average when buy_qty > 0
+    (long or partially-closed-short legs); falls back to the SELL-side
+    weighted average for short-first legs with no BUY trades at all — this
+    is what get_position()/get_all_positions_for_strategy() previously
+    silently returned as Decimal("0") for (BUG: FR-7 row 1).
+
+    realized_pnl is booked on the closed quantity — min(buy_qty, sell_qty) —
+    as (sell_avg - buy_avg) * closed_qty, mirroring
+    src.paper.tracker._compute_realized_pnl_by_leg. Zero when nothing has
+    round-tripped yet.
+
+    Args:
+        buy_qty: Total BUY quantity.
+        buy_value: Total BUY notional (price * qty summed).
+        sell_qty: Total SELL quantity.
+        sell_value: Total SELL notional (price * qty summed).
+
+    Returns:
+        Tuple of (average_price, realized_pnl).
+    """
+    if buy_qty > 0:
+        avg_price = buy_value / buy_qty
+    elif sell_qty > 0:
+        avg_price = sell_value / sell_qty
+    else:
+        avg_price = Decimal("0")
+
+    closed_qty = min(buy_qty, sell_qty)
+    if closed_qty > 0:
+        buy_avg = buy_value / buy_qty
+        sell_avg = sell_value / sell_qty
+        realized_pnl = (sell_avg - buy_avg) * closed_qty
+    else:
+        realized_pnl = Decimal("0")
+
+    return avg_price, realized_pnl
+
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS strategies (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -614,12 +660,14 @@ class PortfolioStore:
             return [_row_to_trade(r) for r in rows]
 
     def get_position(self, strategy_name: str, leg_role: str) -> Position:
-        """Derive net quantity and weighted average buy price from the ledger.
+        """Derive net quantity, weighted average price, and realized P&L from the ledger.
 
         Net quantity = SUM(qty for BUY) - SUM(qty for SELL).
-        Avg buy price = weighted average of BUY trades only; SELL prices are
-        not used (same rationale as get_holdings() in MFStore — Python Decimal
-        arithmetic, not SQL CAST).
+        Average price = weighted average of BUY trades when buy_qty > 0; for
+        short-first legs with no BUY trades at all, falls back to the
+        weighted average SELL price instead of Decimal("0") — see
+        _weighted_avg_and_realized (FR-7 row 1 fix).
+        realized_pnl = booked P&L on the closed quantity (min(buy_qty, sell_qty)).
 
         Args:
             strategy_name: Strategy to query.
@@ -627,7 +675,8 @@ class PortfolioStore:
 
         Returns:
             Position: The position model. If no trades exist, returns a Position
-            with quantity=0, average_price=Decimal("0"), and instrument_key=None.
+            with quantity=0, average_price=Decimal("0"), realized_pnl=Decimal("0"),
+            and instrument_key=None.
         """
         trades = self.get_trades(strategy_name, leg_role)
         if not trades:
@@ -642,6 +691,7 @@ class PortfolioStore:
         buy_qty = Decimal("0")
         buy_value = Decimal("0")
         sell_qty = Decimal("0")
+        sell_value = Decimal("0")
         instrument_key = trades[-1].instrument_key
 
         for t in trades:
@@ -650,15 +700,19 @@ class PortfolioStore:
                 buy_value += Decimal(t.quantity) * t.price
             else:
                 sell_qty += t.quantity
+                sell_value += Decimal(t.quantity) * t.price
 
         net_qty = int(buy_qty - sell_qty)
-        avg_price = (buy_value / buy_qty) if buy_qty > 0 else Decimal("0")
+        avg_price, realized_pnl = _weighted_avg_and_realized(
+            buy_qty, buy_value, sell_qty, sell_value
+        )
         return Position(
             strategy_name=strategy_name,
             leg_role=leg_role,
             instrument_key=instrument_key,
             quantity=net_qty,
             average_price=avg_price,
+            realized_pnl=realized_pnl,
         )
 
     def get_all_positions_for_strategy(self, strategy_name: str) -> dict[str, Position]:
@@ -689,6 +743,7 @@ class PortfolioStore:
         buy_qty: dict[str, int] = defaultdict(int)
         sell_qty: dict[str, int] = defaultdict(int)
         buy_value: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
+        sell_value: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
         ikey: dict[str, str] = {}
 
         for row in all_rows:
@@ -701,18 +756,23 @@ class PortfolioStore:
                 buy_value[leg] += price * qty
             else:
                 sell_qty[leg] += qty
+                sell_value[leg] += price * qty
 
         result: dict[str, Position] = {}
         for leg, instrument_key in ikey.items():
-            bq = buy_qty[leg]
-            net = bq - sell_qty[leg]
-            avg = buy_value[leg] / bq if bq > 0 else Decimal("0")
+            bq = Decimal(buy_qty[leg])
+            sq = Decimal(sell_qty[leg])
+            net = buy_qty[leg] - sell_qty[leg]
+            avg, realized_pnl = _weighted_avg_and_realized(
+                bq, buy_value[leg], sq, sell_value[leg]
+            )
             result[leg] = Position(
                 strategy_name=strategy_name,
                 leg_role=leg,
                 instrument_key=instrument_key,
                 quantity=net,
                 average_price=avg,
+                realized_pnl=realized_pnl,
             )
         return result
 
