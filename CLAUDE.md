@@ -104,6 +104,12 @@ Check against `docs/council/README.md#when-to-trigger-the-council`. A decision q
 **all three** hold: (1) load-bearing and costly to reverse, (2) two defensible approaches with
 materially different outcomes, (3) spans multiple disciplines simultaneously.
 
+**Authoritative mechanism:** this three-condition manual check is the sole source of truth for
+the checkpoint. The AutoTrigger table's `options-strategist` row and
+`docs/antigravity/ai_collaboration_plan.md`'s council reference both point back here rather
+than restating the criteria — `options-strategist` is advisory-only, and a real council call
+per `docs/council/README.md` always supersedes it when the three conditions hold.
+
 **If yes:** surface the decision to the user, draft the council question, recommend a template,
 and wait for the council output before writing any code. The council output gates Step 3.
 
@@ -116,6 +122,10 @@ This checkpoint exists only in the planning phase. Never invoke the council mid-
 > Plan: [one sentence] → touches [file1, file2] → tests in [test file] → commit. Proceed?
 
 If plan touches more than 2 files, wait for explicit go-ahead.
+
+The Step 3b implementation-routing fork (Claude vs. Antigravity) applies regardless of file
+count — it is independent of the go-ahead gate above. A ≤2-file task still needs a routing
+decision; it just skips the go-ahead wait.
 
 ## Step 3b — Implementation routing (mandatory after go-ahead)
 
@@ -182,6 +192,11 @@ Inline review is not a substitute — each agent runs in an isolated context wit
 For `code-reviewer`: any `CRITICAL` or `ERROR` finding must be resolved; `WARNING` may be
 deferred with a documented reason in the commit message.
 
+On surfaces that structurally cannot spawn `.claude/agents/*` (Antigravity, some subagent
+contexts): emit the await-signal per `ANTIGRAVITY.md` and hand control to a human reviewer.
+That handoff satisfies the gate — it is human-completed, not skipped. The gate is violated
+only if the commit proceeds with neither a real agent run nor a human review having occurred.
+
 **Financial logic commits** (Greeks, P&L, Decimal paths, BrokerClient boundaries):
 real `@code-reviewer` subagent is mandatory — Antigravity's persona approximation is
 insufficient because it does not load `REVIEW.md` hygiene rules unless explicitly provided.
@@ -203,8 +218,8 @@ A phase is not complete until all three are done. Never move to the next phase m
 - Run `python -m pytest tests/unit/ --tb=no -q` — all must pass before committing.
 
 **5c — Commit** (format in `.claude/skills/commit/SKILL.md`):
-- Code changes: run the `code-reviewer` agent against `git diff HEAD`. Address any `CRITICAL` or `ERROR` findings before committing. `WARNING` may be deferred with a documented reason.
-- Docs / config only: skip code-reviewer. Commit immediately after 5a.
+- Code changes: any commit touching `.py` files under `src/`, `scripts/`, or `tests/` (ANTIGRAVITY.md's precise scope for "code"). Run the `code-reviewer` agent against `git diff HEAD`. Address any `CRITICAL` or `ERROR` findings before committing. `WARNING` may be deferred with a documented reason.
+- Docs / config only: no `.py` files under `src/`, `scripts/`, or `tests/` in the diff — skip code-reviewer. Commit immediately after 5a.
 - **Never bundle changes from separate phases into one commit.**
 
 **⛔ The commit must be executed, not drafted.** A written-out commit message is not a commit. The phase is not closed until you have run:

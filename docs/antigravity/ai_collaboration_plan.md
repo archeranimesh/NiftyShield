@@ -17,7 +17,7 @@ Claude is your immediate, synchronous assistant in the IDE.
 * **Specialized Agent Reviews:** Invoke your custom `.claude/agents/`:
   * `@greeks-analyst`: Review changes to your Option chain parsing or PnL logic.
   * `@options-strategist`: Discuss `finideas_ilts` vs `finrakshak` logic.
-* **Council Checkpoint:** Use Claude to simulate the "Council checkpoint" (Step 2b) for standard decisions. **CRITICAL EXCEPTION:** If a decision meets all three criteria (load-bearing + costly to reverse + multi-discipline), the *real* council workflow (`docs/council/README.md`) strictly supersedes any Claude simulation.
+* **Council Checkpoint:** The authoritative Step 2b mechanism — the three-condition manual check — lives in `CLAUDE.md` Step 2b; this section does not restate it. **CRITICAL EXCEPTION:** If a decision meets all three criteria (load-bearing + costly to reverse + multi-discipline), the *real* council workflow (`docs/council/README.md`) strictly supersedes any Claude simulation.
 
 ## 3. Antigravity: The Autonomous Execution Engine
 Antigravity operates asynchronously and handles multi-step, heavy-lifting tasks across the workspace.

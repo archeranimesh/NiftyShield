@@ -61,9 +61,10 @@ All tables are in the shared `data/portfolio/portfolio.sqlite` DB.
 Frozen dataclass added in Phase A. Fields: `strategy_name`, `leg_role`, `snapshot_date`,
 `unrealized_pnl`, `realized_pnl`, `total_pnl`, `ltp` (optional).
 
-**`total_pnl` invariant (enforced at write time):** `record_leg_snapshot` asserts
-`total_pnl == unrealized_pnl + realized_pnl` and raises `ValueError` on mismatch.
-Never construct a `PaperLegSnapshot` with inconsistent components — the store will reject it.
+**`total_pnl` invariant (enforced at write time):** `record_leg_snapshot` checks
+`total_pnl == unrealized_pnl + realized_pnl` and raises `ValueError` on mismatch (never
+literal `assert` — REVIEW.md G6). Never construct a `PaperLegSnapshot` with inconsistent
+components — the store will reject it.
 
 ---
 
@@ -71,7 +72,7 @@ Never construct a `PaperLegSnapshot` with inconsistent components — the store 
 
 | Method | Signature | Behaviour |
 |---|---|---|
-| `record_leg_snapshot` | `(snap: PaperLegSnapshot) → None` | Upsert with `ON CONFLICT … DO UPDATE`. Asserts `total_pnl` invariant before writing. |
+| `record_leg_snapshot` | `(snap: PaperLegSnapshot) → None` | Upsert with `ON CONFLICT … DO UPDATE`. Raises `ValueError` on `total_pnl` invariant mismatch before writing (never literal `assert` — REVIEW.md G6). |
 | `get_leg_snapshot` | `(strategy, leg_role, snap_date) → PaperLegSnapshot \| None` | Exact date lookup. |
 | `get_prev_leg_snapshot` | `(strategy, leg_role, before_date) → PaperLegSnapshot \| None` | Latest snapshot strictly before `before_date` (for delta-from-yesterday). |
 | `delete_trade` | `(trade: PaperTrade) → None` | Deletes by `(strategy_name, leg_role, trade_date, action)`. No-op if missing. Used for atomic rollback in overlay roll script. |

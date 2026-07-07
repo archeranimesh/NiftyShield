@@ -28,6 +28,8 @@ Official source: `https://www.amfiindia.com/spages/NAVAll.txt`
 
 `nav_fetcher.py` injectable: accepts a `NavFetcherFn = Callable[[set[str]], dict[str, Decimal]]`. Tests pass a lambda; production gets the real AMFI fetcher. Missing AMFI codes logged as WARNING, not raised.
 
+Per REVIEW.md G5: any broad `except Exception`/bare `except` used to isolate AMFI-fetch or NAV-parsing failures must carry an inline comment stating it is an intentional isolation point — a bare broad catch without that comment is a `CRITICAL` finding.
+
 ---
 
 ## Decimal TEXT Round-trip Invariant

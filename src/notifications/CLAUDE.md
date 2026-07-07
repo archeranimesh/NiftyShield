@@ -10,6 +10,7 @@ The notifier **must never abort the cron job**. This is the core design constrai
 
 - `send()` catches all `Exception` broadly, logs `WARNING`, returns `False`. It never re-raises.
 - The cron (`daily_snapshot.py`) wraps the `send()` call without a try/except — it relies entirely on `send()`'s own catch. Do not change `send()` to raise.
+- Per REVIEW.md G5: this broad catch must carry an inline comment stating it is an intentional isolation point (e.g. `except Exception:  # Intentional: notifier must never abort the caller`) — a bare broad catch without that comment is a `CRITICAL` finding even here.
 
 ---
 

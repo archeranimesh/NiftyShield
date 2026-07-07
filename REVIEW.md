@@ -703,6 +703,8 @@ except Exception as e:  # Intentional: isolate all upstream failures at service 
 
 **Rule:** `except Exception` or bare `except` without an inline comment stating it is an *intentional isolation point* is a `CRITICAL` finding. The comment must explain *why* a broad catch is correct here, not just restate the catch.
 
+Module docs that mandate a broad catch as a design requirement (`src/notifications/CLAUDE.md`, `src/dhan/CLAUDE.md`, `src/nuvama/CLAUDE.md`, `src/mf/CLAUDE.md`) now cite this rule inline — the design requirement and this rule are not in tension: the catch is allowed, the missing intent comment is what's `CRITICAL`.
+
 ---
 
 ### G6. No `assert` in Production Code (§2.4)
@@ -723,6 +725,8 @@ def withdraw(amount: Decimal) -> None:
 ```
 
 **Rule:** `assert` is only permitted in `tests/` directories. In `src/` and `scripts/`, raise the appropriate exception from the `BrokerError` hierarchy or a built-in (`ValueError`, `TypeError`). Any `assert` outside `tests/` is a `CRITICAL` finding.
+
+`src/paper/CLAUDE.md`'s `total_pnl` invariant description was reworded to match this rule exactly ("raises `ValueError` on mismatch", never literal `assert`) — the invariant was always enforced via `ValueError` in code; only the doc's loose "asserts" wording was corrected.
 
 ---
 

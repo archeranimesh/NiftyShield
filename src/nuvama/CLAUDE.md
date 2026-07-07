@@ -45,3 +45,6 @@ All monetary fields (`avg_price`, `ltp`, `pnl`, etc.) use `Decimal`,
 stored as TEXT in SQLite. Read back with `Decimal(row["col"])`.
 `InvalidOperation` on malformed rows is caught in `parse_bond_holdings()`
 with a WARNING — the snapshot continues without the bad record.
+Per REVIEW.md G5: this broad catch must carry an inline comment stating it
+is an intentional isolation point — a bare `except` without that comment is
+a `CRITICAL` finding.

@@ -27,6 +27,9 @@ holding as Equity or Bond, and persists snapshots for day-change delta tracking.
   EBBETF0431 and LIQUIDBEES are never double-counted.
 - **Non-fatal in cron** — Dhan block wrapped in try/except. Expired token (24h
   expiry) → `[unavailable]` in Bonds section, rest of summary unaffected.
+  Per REVIEW.md G5: this broad catch must carry an inline comment stating it is
+  an intentional isolation point — a bare `except Exception` without that
+  comment is a `CRITICAL` finding.
 - **Monetary values as Decimal** — TEXT storage, same as portfolio/ and mf/.
 
 ## Data Flow
