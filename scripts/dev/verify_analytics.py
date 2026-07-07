@@ -24,7 +24,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
+import structlog
 from dotenv import load_dotenv
+
+from src.utils.logging import setup_logging
+
+_SCRIPT_NAME = "scripts.dev.verify_analytics"
+logger = structlog.get_logger(_SCRIPT_NAME)
+
 
 # ---------------------------------------------------------------------------
 # Constants — Instruments relevant to NiftyShield
@@ -328,4 +335,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()
     main()

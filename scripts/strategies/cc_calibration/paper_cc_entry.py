@@ -14,7 +14,10 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+import structlog
 from dotenv import load_dotenv
+
+from src.utils.logging import setup_logging
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 
@@ -32,6 +35,10 @@ from src.paper.constants import (
     STRATEGY_CC_OVERLAY,
     compute_max_lots,
 )
+
+_SCRIPT_NAME = "scripts.strategies.cc_calibration.paper_cc_entry"
+logger = structlog.get_logger(_SCRIPT_NAME)
+
 
 load_dotenv()
 
@@ -280,4 +287,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()
     main()

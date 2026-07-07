@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
-from datetime import date, datetime, timezone
+from datetime import date
 from pathlib import Path
 
 import structlog
@@ -58,9 +58,7 @@ async def main() -> int:
             ).fetchall()
 
             count_query = "SELECT COUNT(*) FROM pending_approvals "
-            count_query += (
-                "WHERE date(created_at, '+5 hours', '+30 minutes') = ?"
-            )
+            count_query += "WHERE date(created_at, '+5 hours', '+30 minutes') = ?"
             count_row = conn.execute(count_query, (today_str,)).fetchone()
             council_count = count_row[0] if count_row else 0
 

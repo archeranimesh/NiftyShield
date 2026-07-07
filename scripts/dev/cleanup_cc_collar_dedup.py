@@ -33,6 +33,14 @@ import sqlite3
 import sys
 from pathlib import Path
 
+import structlog
+
+from src.utils.logging import setup_logging
+
+_SCRIPT_NAME = "scripts.dev.cleanup_cc_collar_dedup"
+logger = structlog.get_logger(_SCRIPT_NAME)
+
+
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 DEFAULT_DB = Path("data/portfolio/portfolio.sqlite")
@@ -170,4 +178,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()
     main()

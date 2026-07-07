@@ -41,10 +41,18 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+import structlog
+
+from src.utils.logging import setup_logging
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.models.portfolio import Trade, TradeAction
 from src.portfolio.store import PortfolioStore
+
+_SCRIPT_NAME = "scripts.portfolio.roll_leg"
+logger = structlog.get_logger(_SCRIPT_NAME)
+
 
 DEFAULT_DB_PATH = Path("data/portfolio/portfolio.sqlite")
 
@@ -231,4 +239,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()
     main()

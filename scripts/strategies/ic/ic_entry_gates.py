@@ -43,6 +43,10 @@ _SCRIPT_NAME = "scripts.strategies.ic.ic_entry_gates"
 logger = structlog.get_logger(_SCRIPT_NAME)
 
 
+_SCRIPT_NAME = "scripts.strategies.ic.ic_entry_gates"
+logger = structlog.get_logger(_SCRIPT_NAME)
+
+
 def make_gate_violation(
     gate_name: str,
     threshold: str,

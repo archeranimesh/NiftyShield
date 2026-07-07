@@ -8,7 +8,10 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+import structlog
+
 from src.config import settings
+from src.utils.logging import setup_logging
 
 # Ensure src/ is in PYTHONPATH
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -31,6 +34,10 @@ from src.paper.metrics import compute_nee
 from src.paper.proxy_monitor import ProxyDeltaMonitor
 from src.paper.store import PaperStore
 from src.paper.track_snapshot import TrackPnL, generate_track_snapshot
+
+_SCRIPT_NAME = "scripts.dev.paper_track_snapshot"
+logger = structlog.get_logger(_SCRIPT_NAME)
+
 
 # --- Overlay display helpers -------------------------------------------------
 
@@ -187,4 +194,5 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()
     asyncio.run(main())

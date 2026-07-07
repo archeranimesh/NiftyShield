@@ -10,9 +10,14 @@ Usage:
 import sys
 
 import requests
+import structlog
 from dotenv import load_dotenv
 
 from src.config import settings
+
+_SCRIPT_NAME = "scripts.dev.test_api_version"
+logger = structlog.get_logger(_SCRIPT_NAME)
+
 
 load_dotenv()
 

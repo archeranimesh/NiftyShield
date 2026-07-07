@@ -26,10 +26,18 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+import structlog
+
+from src.utils.logging import setup_logging
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.models.portfolio import Trade, TradeAction
 from src.portfolio.store import PortfolioStore
+
+_SCRIPT_NAME = "scripts.seed.seed_trades"
+logger = structlog.get_logger(_SCRIPT_NAME)
+
 
 # ---------------------------------------------------------------------------
 # Trade data — placeholder dates (2026-01-15) pending contract note review
@@ -201,4 +209,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()
     main()

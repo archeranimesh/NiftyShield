@@ -18,7 +18,14 @@ from __future__ import annotations
 import argparse
 from decimal import Decimal
 
+import structlog
+
 from src.nuvama.store import NuvamaStore
+from src.utils.logging import setup_logging
+
+_SCRIPT_NAME = "scripts.seed.seed_nuvama_positions"
+logger = structlog.get_logger(_SCRIPT_NAME)
+
 
 # ---------------------------------------------------------------------------
 # Known positions (sourced from Nuvama UI 2026-04-14)
@@ -140,4 +147,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()
     main()

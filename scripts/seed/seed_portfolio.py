@@ -13,12 +13,19 @@ import argparse
 import sys
 from pathlib import Path
 
+import structlog
+
+from src.utils.logging import setup_logging
+
 # Allow running from project root
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.models.portfolio import DailySnapshot
 from src.portfolio.store import PortfolioStore
 from src.portfolio.strategies import ALL_STRATEGIES
+
+_SCRIPT_NAME = "scripts.seed.seed_portfolio"
+logger = structlog.get_logger(_SCRIPT_NAME)
 
 
 def seed(db_path: Path) -> None:
@@ -73,4 +80,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()
     main()

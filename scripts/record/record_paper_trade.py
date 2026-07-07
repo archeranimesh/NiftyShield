@@ -32,6 +32,9 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+import structlog
+
+from src.utils.logging import setup_logging
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -59,6 +62,10 @@ from src.paper.models import PaperTrade
 from src.paper.store import PaperStore
 from src.risk.delta_tracker import PortfolioDeltaTracker
 from src.risk.entry_gate import check_entry_allowed
+
+_SCRIPT_NAME = "scripts.record.record_paper_trade"
+logger = structlog.get_logger(_SCRIPT_NAME)
+
 
 load_dotenv()
 
@@ -883,4 +890,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()
     main()

@@ -13,6 +13,14 @@ import argparse
 import sqlite3
 from pathlib import Path
 
+import structlog
+
+from src.utils.logging import setup_logging
+
+_SCRIPT_NAME = "scripts.dev.generate_3track_viz"
+logger = structlog.get_logger(_SCRIPT_NAME)
+
+
 _SCRIPT_NAME = "scripts.dev.generate_3track_viz"
 
 DB_PATH = Path("data/portfolio/portfolio.sqlite")
@@ -482,4 +490,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()
     main()

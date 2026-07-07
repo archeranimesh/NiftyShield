@@ -27,9 +27,17 @@ import argparse
 import sys
 from pathlib import Path
 
+import structlog
+
+from src.utils.logging import setup_logging
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from src.instruments.lookup import InstrumentLookup, format_results
+
+_SCRIPT_NAME = "scripts.lookup.instrument_lookup"
+logger = structlog.get_logger(_SCRIPT_NAME)
+
 
 DEFAULT_BOD_PATH = Path("data/instruments/NSE.json.gz")
 
@@ -165,4 +173,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()
     main()

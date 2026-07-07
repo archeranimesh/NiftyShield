@@ -16,9 +16,17 @@ import sqlite3
 import sys
 from pathlib import Path
 
+import structlog
+
+from src.utils.logging import setup_logging
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from src.paper.constants import DEFAULT_DB_PATH
+
+_SCRIPT_NAME = "scripts.dev.migrate_paper_trades_state"
+logger = structlog.get_logger(_SCRIPT_NAME)
+
 
 _SCRIPT_NAME = "scripts.dev.migrate_paper_trades_state"
 
@@ -77,4 +85,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()
     main()

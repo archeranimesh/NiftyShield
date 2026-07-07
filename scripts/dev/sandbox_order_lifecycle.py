@@ -21,9 +21,16 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+import structlog
 import upstox_client
 from dotenv import load_dotenv
 from upstox_client.rest import ApiException
+
+from src.utils.logging import setup_logging
+
+_SCRIPT_NAME = "scripts.dev.sandbox_order_lifecycle"
+logger = structlog.get_logger(_SCRIPT_NAME)
+
 
 # ---------------------------------------------------------------------------
 # Fixture Recorder
@@ -284,4 +291,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()
     main()

@@ -28,6 +28,14 @@ import sqlite3
 import sys
 from pathlib import Path
 
+import structlog
+
+from src.utils.logging import setup_logging
+
+_SCRIPT_NAME = "scripts.dev.migrate_strike_to_text"
+logger = structlog.get_logger(_SCRIPT_NAME)
+
+
 DEFAULT_DB = Path(__file__).parent.parent / "data" / "portfolio" / "portfolio.sqlite"
 
 
@@ -156,4 +164,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()
     main()

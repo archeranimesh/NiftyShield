@@ -34,6 +34,10 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+import structlog
+
+from src.utils.logging import setup_logging
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from dotenv import load_dotenv
@@ -48,6 +52,10 @@ from src.instruments.strike_selector import (
     rank_strikes,
 )
 from src.paper.constants import LOT_SIZE, STRATEGY_CSP
+
+_SCRIPT_NAME = "scripts.lookup.find_strike_by_delta"
+logger = structlog.get_logger(_SCRIPT_NAME)
+
 
 UNDERLYING_DEFAULT = "NSE_INDEX|Nifty 50"
 DEFAULT_LOT_SIZE = LOT_SIZE  # single source of truth: src/paper/constants.py
@@ -497,4 +505,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()
     main()

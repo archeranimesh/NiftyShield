@@ -19,6 +19,10 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+import structlog
+
+from src.utils.logging import setup_logging
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from dotenv import load_dotenv
@@ -26,6 +30,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from src.notifications.telegram import build_notifier  # noqa: E402
+
+_SCRIPT_NAME = "scripts.dev.send_test_telegram"
+logger = structlog.get_logger(_SCRIPT_NAME)
 
 
 def main() -> int:
@@ -65,4 +72,5 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    setup_logging()
     sys.exit(main())

@@ -36,11 +36,18 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+import structlog
 import yaml
+
+from src.utils.logging import setup_logging
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from src.client.upstox_market import UpstoxMarketClient
+
+_SCRIPT_NAME = "scripts.lookup.find_overlay_strikes"
+logger = structlog.get_logger(_SCRIPT_NAME)
+
 
 UNDERLYING = "NSE_INDEX|Nifty 50"
 SPREAD_GATE = 3.0  # percent
@@ -526,4 +533,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()
     main()

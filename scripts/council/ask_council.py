@@ -37,6 +37,14 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+import structlog
+
+from src.utils.logging import setup_logging
+
+_SCRIPT_NAME = "scripts.council.ask_council"
+logger = structlog.get_logger(_SCRIPT_NAME)
+
+
 # ---------------------------------------------------------------------------
 # Paths — resolved relative to project root so the script can be run from
 # any working directory.
@@ -414,4 +422,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()
     main()

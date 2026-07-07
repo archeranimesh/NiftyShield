@@ -32,6 +32,14 @@ import sys
 from pathlib import Path
 from typing import NamedTuple
 
+import structlog
+
+from src.utils.logging import setup_logging
+
+_SCRIPT_NAME = "scripts.dev.validate_strategy_spec"
+logger = structlog.get_logger(_SCRIPT_NAME)
+
+
 # ---------------------------------------------------------------------------
 # Required sections
 # ---------------------------------------------------------------------------
@@ -195,4 +203,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()
     main()

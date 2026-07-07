@@ -22,11 +22,19 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+import structlog
+
+from src.utils.logging import setup_logging
+
 # Allow ``python scripts/seed_mf_holdings.py`` from repo root
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.mf.store import MFStore
 from src.models.mf import MFTransaction, TransactionType
+
+_SCRIPT_NAME = "scripts.seed.seed_mf_holdings"
+logger = structlog.get_logger(_SCRIPT_NAME)
+
 
 # ---------------------------------------------------------------------------
 # Portfolio data — locked in on 2026-04-01 (entry baseline)
@@ -157,4 +165,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()
     main()
