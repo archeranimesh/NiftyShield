@@ -60,7 +60,6 @@ Scripts (under `scripts/` structured into functional axis):
 
 ### What Does NOT Exist Yet
 
-- `src/nuvama/CLAUDE.md` — module context file not yet written
 - `src/execution/`, `src/streaming/` — empty (planned per BACKTEST_PLAN.md Phase 1–2)
 - `src/gamma/` script logic (`gamma_daily_watch.py`) — planned for Phase A next (scaffolding and store implemented in Task B1)
 - PT-S2 Signal Pipeline (`src/strategy/signal_pipeline.py`) — blocked on signals story + OpenRouter API key
