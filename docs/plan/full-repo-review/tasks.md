@@ -26,4 +26,4 @@
 - [x] **FR-6** — Security & operational-risk review (Red-Team persona, **Opus**) | SHA: ed3791b | Model: Sonnet (deviation from Opus assignment — no Opus subagent override available inline; noted here per epic's own deviation-logging pattern from FR-3)
 - [x] **FR-7** — Missing-persona / blind-spot synthesis (Chairman persona, **Fable, pending FR-0**) | SHA: d57ee7f | Model: Fable
 - [x] **FR-8** — Tooling usage guide: Claude Code vs. Cowork vs. Antigravity handoff, by job type (Practitioner/DevEx persona, **Sonnet**) | SHA: 308aa57 | Model: Sonnet
-- [ ] **FR-9** — Build implementation roadmap folder + DECISIONS.md update (no model assignment — mechanical synthesis of FR-1..FR-8 outputs)
+- [x] **FR-9** — Build implementation roadmap folder + DECISIONS.md update (no model assignment — mechanical synthesis of FR-1..FR-8 outputs) | SHA: 149408f | Model: Sonnet

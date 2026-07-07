@@ -9,6 +9,8 @@ created — see FR-9's commit message for the verification method.
 
 The Telegram callback auth guard for approving/rejecting real trading decisions uses OR logic where it should use AND — any member of a group chat the bot is ever added to could approve/reject real trading decisions. Currently masked only by 1:1-DM topology living in the deployer's head, not enforced in code.
 
+**Surface & Model: Claude Code, Sonnet (escalate to Opus if the guard's identity semantics are unclear from the surrounding code).** Small (2 files) but not purely mechanical — verifying *which* identity check is actually correct here (sender vs. chat membership) is a real security judgment call, not a search-and-replace; Step 3b's "single/2-file task where inline judgment calls are likely" criterion routes this to Claude, not Antigravity, despite the small diff size.
+
 **Pre-implementation gate:** State in one sentence which task, which files, which test file.
 Do not write any code until this plan is stated.
 
