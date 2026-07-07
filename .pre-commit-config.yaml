@@ -23,6 +23,14 @@ repos:
         files: ^scripts/
         types: [python]
 
+      - id: no-bare-logging
+        name: "src/ and scripts/ must not use bare logging.getLogger"
+        language: pygrep
+        entry: "logging\\.getLogger"
+        exclude: "^src/utils/logging\\.py$"
+        files: ^(src|scripts)/
+        types: [python]
+
   - repo: https://github.com/Yelp/detect-secrets
     rev: v1.5.0
     hooks:
