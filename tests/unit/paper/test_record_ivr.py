@@ -201,6 +201,94 @@ def test_record_trade_skips_ivr_on_insufficient_data(mock_vix, capsys):
     assert "WARNING: Insufficient VIX history" in captured.err
 
 
+def test_record_trade_custom_ivr_gate_blocks_below_strategy_threshold(mock_vix, capsys):
+    """Regression for 2026-07-08: weekly's configured gate (0.15) previously
+    diverged silently from this script's hardcoded 0.25, so a SELL at
+    IVR 0.16 cleared the caller's own gate but still hard-blocked here.
+    --ivr-gate lets the caller pass its actual configured threshold.
+    """
+    mock_load, mock_ivr = mock_vix
+    mock_load.return_value = pd.Series({date(2024, 1, 1): 15.0})
+    mock_ivr.return_value = 0.10  # below a custom 0.15 gate
+
+    argv = [
+        "scripts/record/record_paper_trade.py",
+        "--key",
+        "KEY",
+        "--price",
+        "100",
+        "--date",
+        "2024-01-01",
+        "--strategy",
+        "paper_test",
+        "--ivr-gate",
+        "0.15",
+    ]
+    with patch("sys.argv", argv):
+        with pytest.raises(SystemExit) as excinfo:
+            main()
+        assert excinfo.value.code == 1
+
+    captured = capsys.readouterr()
+    assert "ERROR: R3 blocked — low IVR (0.10) < gate (0.15)" in captured.err
+
+
+def test_record_trade_custom_ivr_gate_passes_above_strategy_threshold(mock_vix, capsys):
+    """IVR 0.16 is below the legacy 0.25 default but clears a strategy's
+    looser configured gate (0.15, e.g. weekly) — must not block.
+    """
+    mock_load, mock_ivr = mock_vix
+    mock_load.return_value = pd.Series({date(2024, 1, 1): 15.0})
+    mock_ivr.return_value = 0.16
+
+    argv = [
+        "scripts/record/record_paper_trade.py",
+        "--key",
+        "KEY",
+        "--price",
+        "100",
+        "--date",
+        "2024-01-01",
+        "--strategy",
+        "paper_test",
+        "--ivr-gate",
+        "0.15",
+    ]
+    with patch("sys.argv", argv):
+        main()  # must not raise / exit
+
+    captured = capsys.readouterr()
+    assert "ivr_entry : 0.16" in captured.out
+    assert "ERROR: R3 blocked" not in captured.err
+    assert "ATTENTION: IVR is 0.16 (R3 Entry Window)" in captured.err
+
+
+def test_record_trade_default_ivr_gate_unchanged(mock_vix, capsys):
+    """No --ivr-gate passed: behavior must match the legacy hardcoded 0.25."""
+    mock_load, mock_ivr = mock_vix
+    mock_load.return_value = pd.Series({date(2024, 1, 1): 15.0})
+    mock_ivr.return_value = 0.20
+
+    argv = [
+        "scripts/record/record_paper_trade.py",
+        "--key",
+        "KEY",
+        "--price",
+        "100",
+        "--date",
+        "2024-01-01",
+        "--strategy",
+        "paper_test",
+    ]
+    with patch("sys.argv", argv):
+        with pytest.raises(SystemExit) as excinfo:
+            main()
+        assert excinfo.value.code == 1
+
+    captured = capsys.readouterr()
+    assert "ERROR: R3 blocked — low IVR (0.20) < gate (0.25)" in captured.err
+
+
 def test_record_trade_skips_ivr_on_missing_date(mock_vix, capsys):
     mock_load, mock_ivr = mock_vix
     mock_load.return_value = pd.Series({date(2024, 1, 2): 15.0})  # Different date

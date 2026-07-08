@@ -449,14 +449,21 @@ async def run() -> None:
             "--price",
             str(price),
         ]
-        # record_paper_trade.py has no --ivr flag — it computes ivr_at_entry
-        # itself and enforces its own independent R3 gate (hard-blocks SELL
-        # at ivr<0.25 unless --force-entry). If this script already decided
-        # to proceed despite ivr<gate (via --force-entry or log-only-gates),
-        # pass --force-entry on SELL legs only, so the downstream gate
-        # doesn't re-block an entry already approved upstream. BUY hedge
-        # legs are left alone so record_paper_trade's own portfolio-delta
-        # check still runs on them.
+        # record_paper_trade.py computes ivr_at_entry itself and enforces its
+        # own independent R3 gate (hard-blocks SELL at ivr < --ivr-gate unless
+        # --force-entry). Always pass this script's config.ivr_gate through so
+        # the downstream gate matches the strategy's actual configured
+        # threshold instead of falling back to its own hardcoded default —
+        # weekly's gate (0.15) previously diverged silently from that
+        # hardcoded 0.25, so a SELL at ivr=0.16 cleared this script's own gate
+        # but still crashed downstream with an unhandled CalledProcessError
+        # (found 2026-07-08).
+        cmd.extend(["--ivr-gate", str(config.ivr_gate)])
+        # If this script already decided to proceed despite ivr<gate (via
+        # --force-entry or log-only-gates), pass --force-entry on SELL legs
+        # only, so the downstream gate doesn't re-block an entry already
+        # approved upstream. BUY hedge legs are left alone so
+        # record_paper_trade's own portfolio-delta check still runs on them.
         if action == "SELL" and ivr_below_gate:
             cmd.append("--force-entry")
         # record_paper_trade.py's own --dry-run defaults to True (BooleanOptionalAction).

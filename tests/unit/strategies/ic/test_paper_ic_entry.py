@@ -261,9 +261,9 @@ async def test_weekly_standalone(
     assert mock_subprocess.call_count == 4
     called_cmds = [call.args[0] for call in mock_subprocess.call_args_list]
 
-    # Verify short put
-    assert called_cmds[0] == [
-        "python",
+    # Verify short put. argv[0] is sys.executable (not a hardcoded "python"
+    # literal — see bbacf77), so compare everything after it.
+    assert called_cmds[0][1:] == [
         "-m",
         "scripts.record.record_paper_trade",
         "--strategy",
@@ -278,6 +278,8 @@ async def test_weekly_standalone(
         "65",
         "--price",
         "60.0",
+        "--ivr-gate",
+        "0.15",
         "--no-dry-run",
     ]
     # Verify long put
@@ -319,6 +321,57 @@ async def test_monthly_standalone(
     assert called_cmds[0][8] == "NSE_FO|P24000"
     # Short Call: 24500 CE
     assert called_cmds[2][8] == "NSE_FO|C24500"
+
+
+def test_weekly_and_monthly_forward_distinct_ivr_gate(
+    mock_vix_data,
+    mock_store,
+    mock_lookup,
+    mock_market_client,
+    mock_subprocess,
+    mock_telegram,
+):
+    """Regression for 2026-07-08: record_paper_trade.py's own R3 gate was
+    hardcoded to 0.25 regardless of strategy, silently diverging from
+    weekly's looser configured gate (0.15) and hard-blocking entries that
+    weekly's own config had already approved. Every leg command must now
+    carry --ivr-gate matching the strategy's ic_expiry_config.py value.
+    """
+    import asyncio
+
+    test_args = [
+        "paper_ic_entry.py",
+        "--expiry-type",
+        "weekly",
+        "--no-dry-run",
+        "--bod-path",
+        "dummy.json",
+    ]
+    with patch.object(sys, "argv", test_args):
+        asyncio.run(run())
+    weekly_cmds = [call.args[0] for call in mock_subprocess.call_args_list]
+    assert weekly_cmds, "expected at least one leg command for weekly"
+    for cmd in weekly_cmds:
+        assert "--ivr-gate" in cmd
+        assert cmd[cmd.index("--ivr-gate") + 1] == "0.15"
+
+    mock_subprocess.reset_mock()
+    mock_lookup.get_expiry_candidates.return_value = [("monthly", "2026-07-30")]
+    test_args = [
+        "paper_ic_entry.py",
+        "--expiry-type",
+        "monthly",
+        "--no-dry-run",
+        "--bod-path",
+        "dummy.json",
+    ]
+    with patch.object(sys, "argv", test_args):
+        asyncio.run(run())
+    monthly_cmds = [call.args[0] for call in mock_subprocess.call_args_list]
+    assert monthly_cmds, "expected at least one leg command for monthly"
+    for cmd in monthly_cmds:
+        assert "--ivr-gate" in cmd
+        assert cmd[cmd.index("--ivr-gate") + 1] == "0.25"
 
 
 @pytest.mark.asyncio

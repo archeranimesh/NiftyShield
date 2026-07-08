@@ -442,14 +442,20 @@ async def run() -> None:
             "--price",
             str(price),
         ]
-        # record_paper_trade.py has no --ivr flag — it computes ivr_at_entry
-        # itself and enforces its own independent R3 gate (hard-blocks SELL
-        # at ivr<0.25 unless --force-entry). If this script already decided
-        # to proceed despite ivr<gate (via --force-entry or log-only-gates),
-        # pass --force-entry on SELL legs only, so the downstream gate
-        # doesn't re-block an entry already approved upstream. BUY hedge
-        # legs are left alone so record_paper_trade's own portfolio-delta
-        # check still runs on them.
+        # record_paper_trade.py computes ivr_at_entry itself and enforces its
+        # own independent R3 gate (hard-blocks SELL at ivr < --ivr-gate unless
+        # --force-entry). Always pass _V2_MONTHLY_IVR_GATE through so the
+        # downstream gate stays pinned to this script's actual threshold
+        # rather than record_paper_trade.py's own default — defense-in-depth
+        # against the V1 weekly/monthly gate-mismatch bug (fixed 2026-07-08,
+        # see paper_ic_entry.py), even though V2 is monthly-only today and the
+        # two values currently happen to match (both 0.25).
+        cmd.extend(["--ivr-gate", str(_V2_MONTHLY_IVR_GATE)])
+        # If this script already decided to proceed despite ivr<gate (via
+        # --force-entry or log-only-gates), pass --force-entry on SELL legs
+        # only, so the downstream gate doesn't re-block an entry already
+        # approved upstream. BUY hedge legs are left alone so
+        # record_paper_trade's own portfolio-delta check still runs on them.
         if action == "SELL" and ivr_below_gate:
             cmd.append("--force-entry")
         # record_paper_trade.py's own --dry-run defaults to True (BooleanOptionalAction).

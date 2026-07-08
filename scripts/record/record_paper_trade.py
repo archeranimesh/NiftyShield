@@ -227,6 +227,17 @@ def _parse_args() -> argparse.Namespace:
         default=False,
         help="Force execution even if IVR checks fail the entry gate (R3 block override).",
     )
+    parser.add_argument(
+        "--ivr-gate",
+        type=Decimal,
+        default=Decimal("0.25"),
+        help=(
+            "Minimum IVR required for SELL entry (R3 gate). Callers with a "
+            "strategy-specific threshold (e.g. ic_expiry_config.py CONFIGS) "
+            "should pass it explicitly. Default: 0.25 (legacy value for "
+            "callers that don't set one)."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -539,6 +550,7 @@ def _get_ivr_and_enforce(
     vix_data_dir: Path,
     db_path: Path,
     force_entry: bool = False,
+    ivr_gate: float = 0.25,
 ) -> float | None:
     """Fetch live VIX, load historical window, compute IVR, enforce R3 gates.
 
@@ -550,8 +562,17 @@ def _get_ivr_and_enforce(
     The 252-day historical window always comes from the Parquet. If the Parquet
     has insufficient history, IVR returns None — bootstrap with vix_ingest.py.
 
-    On SELL with IVR < 0.25 and no force_entry, prints error to stderr and exits 1.
-    On SELL with IVR < 0.25 and force_entry, prints warning to stderr and returns IVR.
+    On SELL with IVR < ivr_gate and no force_entry, prints error to stderr and
+    exits 1. On SELL with IVR < ivr_gate and force_entry, prints warning to
+    stderr and returns IVR.
+
+    ivr_gate defaults to 0.25 (the historical hardcoded value) for callers that
+    don't pass one. Strategy-specific callers (e.g. paper_ic_entry.py) must
+    pass their own ic_expiry_config.py CONFIGS[...].ivr_gate — the weekly
+    bucket's gate (0.15) previously diverged silently from this function's
+    hardcoded 0.25, so entries that cleared the weekly config's own gate were
+    still hard-blocked here (found 2026-07-08: weekly SELL at IVR 0.16 crashed
+    with an unhandled CalledProcessError despite the caller's gate passing).
 
     Args:
         trade_date: Date of the trade execution.
@@ -559,6 +580,9 @@ def _get_ivr_and_enforce(
         vix_data_dir: Path to the India VIX Parquet directory.
         db_path: Path to the shared SQLite database (for intraday snapshots).
         force_entry: If True, override low IVR block.
+        ivr_gate: Minimum acceptable IVR for SELL entry. Caller-supplied so the
+            gate matches the strategy's actual configured threshold instead of
+            a hardcoded constant.
 
     Returns:
         Computed IVR value or None if data is insufficient.
@@ -616,10 +640,11 @@ def _get_ivr_and_enforce(
 
     # ── R3 Entry Gate Warnings & Enforcement (SELL only) ──────────────────────
     if action == TradeAction.SELL:
-        if ivr < 0.25:
+        if ivr < ivr_gate:
             if not force_entry:
                 print(
-                    f"ERROR: R3 blocked — low IVR ({ivr:.2f}). Use --force-entry to override.",
+                    f"ERROR: R3 blocked — low IVR ({ivr:.2f}) < gate ({ivr_gate:.2f}). "
+                    "Use --force-entry to override.",
                     file=sys.stderr,
                 )
                 sys.exit(1)
@@ -628,7 +653,7 @@ def _get_ivr_and_enforce(
                     f"WARNING: R3 override — Low IVR ({ivr:.2f}) forced.",
                     file=sys.stderr,
                 )
-        elif 0.25 <= ivr <= 0.50:
+        elif ivr_gate <= ivr <= 0.50:
             print(
                 f"ATTENTION: IVR is {ivr:.2f} (R3 Entry Window). "
                 "Ensure sufficient premium/margin for potential expansion.",
@@ -771,6 +796,7 @@ def main() -> None:
         args.vix_data_dir,
         args.db_path,
         force_entry=args.force_entry,
+        ivr_gate=float(args.ivr_gate),
     )
 
     # IC strategies (paper_ic_nifty_v1_*/v2_*) are exempt from this account-wide
@@ -857,7 +883,7 @@ def main() -> None:
 
     store = PaperStore(args.db_path)
     if store.record_trade(trade):
-        if ivr_at_entry is not None and ivr_at_entry < 0.25 and args.force_entry:
+        if ivr_at_entry is not None and ivr_at_entry < float(args.ivr_gate) and args.force_entry:
             try:
                 from datetime import datetime, timezone
 
