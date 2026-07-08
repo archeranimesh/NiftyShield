@@ -433,7 +433,7 @@ async def run() -> None:
     cmds = []
     for role, action, key, price in legs:
         cmd = [
-            "python",
+            sys.executable,
             "-m",
             "scripts.record.record_paper_trade",
             "--strategy",
