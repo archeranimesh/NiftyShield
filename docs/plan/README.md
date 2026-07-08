@@ -29,6 +29,7 @@
 | `ic-nifty-v2/` | IronCondorV2: 25Δ/22Δ high-delta IC with 10Δ wings, partial-roll adjustment, DTE-tiered exit — 6 code stories + docs close | All tasks complete | ✅ Shipped/Archived |
 | `paper-exit-codification/` | Codify q11+q12 council rulings: TIME_STOP/DTE_REVIEW priority fix in `evaluate_cc`; StrategyMonitor observability logs | EC-1 — TIME_STOP priority fix | ⬜ Not started |
 | `telegram-leg-labels/` | Replace raw Upstox instrument keys in Telegram prose messages with human-readable `NIFTY 22000 CE 07 JUL 26` labels; CLI command lines stay untouched | TL-1 — formatter in `src/instruments/lookup.py` | ⬜ Not started |
+| `ic-yearly-expiry-fix/` | Fix `InstrumentLookup.get_expiry_candidates()`'s `"yearly"` label — currently matches June or December whichever clears a 201–420 DTE band, causing IC V1's yearly bucket to resolve June 2027 instead of December 2026 on 2026-07-08; per Animesh, NSE Nifty's annual contract is always December's last Tuesday | YE-1 — audit 6 callers of the `"yearly"` label before changing shared logic | ⬜ Not started |
 | `full-repo-review/` | One-time multi-model, multi-persona review of design docs, source, tests, the AI-collaboration prompting protocol, and which surface (Claude Code / Cowork / Antigravity) to use per job type — Opus/Fable/Sonnet assigned per task by capability, not cost, validated by a Fable-vs-Opus pilot before the Fable tasks run; output is a synthesized findings folder + spawned follow-up story stubs | FR-1..FR-9 complete — see `full-repo-review-followups/` epic above | ✅ Complete |
 
 ---
