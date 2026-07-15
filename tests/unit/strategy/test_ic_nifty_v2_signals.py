@@ -389,6 +389,77 @@ def test_apply_action_rejects_unknown() -> None:
         asyncio.run(strategy.apply_action(_standard_ic_positions(), action))
 
 
+# ── Auto-close persistence (fix for silent no-op — same gap as IronCondorV1:
+#    closing fills were never written to paper_trades, so the same exit
+#    signal re-fired every tick with no visible error) ─────────────────────
+
+
+def test_apply_action_close_full_auto_execute_persists_all_legs() -> None:
+    """Auto-execute CLOSE_FULL with broker+store injected writes 4 closing trades."""
+    import asyncio
+
+    from src.client.protocol import BrokerClient
+    from src.paper.store import PaperStore
+
+    broker = MagicMock(spec=BrokerClient)
+    from unittest.mock import AsyncMock
+
+    broker.get_ltp = AsyncMock(
+        return_value={
+            _key("23900", "PE"): Decimal("30.00"),
+            _key("23200", "PE"): Decimal("2.00"),
+            _key("25100", "CE"): Decimal("28.00"),
+            _key("25800", "CE"): Decimal("2.50"),
+        }
+    )
+    store = MagicMock(spec=PaperStore)
+    store.record_trades = MagicMock(side_effect=lambda trades: (trades, []))
+
+    strategy = IronCondorV2(config=IC_V2_MONTHLY, broker=broker, store=store)
+    strategy.set_original_credit(Decimal("100"))
+    positions = _standard_ic_positions()
+    action = ApprovedAction(
+        action_type="CLOSE_FULL",
+        legs_to_close=[],
+        legs_to_open=[],
+        rationale="auto-execute",
+        council_rank=1,
+        metadata={"auto_selected": True, "event_type": "LOSS_STOP"},
+    )
+
+    result = asyncio.run(strategy.apply_action(positions, action))
+
+    store.record_trades.assert_called_once()
+    (written,), _ = store.record_trades.call_args
+    assert {t.leg_role for t in written} == {
+        "short_put",
+        "long_put_hedge",
+        "short_call",
+        "long_call_hedge",
+    }
+    assert result == []
+
+
+def test_apply_action_close_full_auto_execute_without_broker_skips_persist_no_raise() -> None:
+    """No broker/store injected → logs and skips persistence, does not raise."""
+    import asyncio
+
+    strategy = _make_strategy()  # broker=None, store=None
+    positions = _standard_ic_positions()
+    action = ApprovedAction(
+        action_type="CLOSE_FULL",
+        legs_to_close=[],
+        legs_to_open=[],
+        rationale="auto-execute",
+        council_rank=1,
+        metadata={"auto_selected": True, "event_type": "LOSS_STOP"},
+    )
+
+    result = asyncio.run(strategy.apply_action(positions, action))
+
+    assert result == []
+
+
 # ── BUG-012: numeric instrument key BOD fallback ─────────────────────────────
 
 

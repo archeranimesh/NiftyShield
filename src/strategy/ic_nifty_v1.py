@@ -36,6 +36,7 @@ from src.models.options import OptionChain, OptionLeg
 from src.paper.constants import DEFAULT_BOD_PATH
 from src.paper.models import PaperPosition
 from src.strategy import roll_utils
+from src.strategy.ic_close_executor import close_ic_legs
 from src.strategy.protocol import ApprovedAction, LegSpec, SignalEvent
 
 if TYPE_CHECKING:
@@ -473,6 +474,35 @@ class IronCondorV1:
             # Note: legs_to_open is intentionally not consumed here.
             # PaperExecutor (backbone) handles the new-leg DB write.
             # apply_action only removes the closed wing from positions.
+            # TODO(IC-CLOSE-2): ROLL_WING's own close side is not persisted
+            # either — same gap as the flatten actions below, deferred
+            # pending strike-selection for the replacement leg. See
+            # DECISIONS.md and TODOS.md.
+        elif action.action_type in (
+            "CLOSE_FULL",
+            "CLOSE_CALL_SPREAD",
+            "CLOSE_PUT_SPREAD",
+        ) and self._is_auto_execute(action):
+            # Manual/Telegram-approved actions are persisted by PaperExecutor
+            # (src/strategy/executor.py), not here — see monitor_daemon.py's
+            # callback path. Only the auto-execute dispatch path (which never
+            # reaches PaperExecutor) needs apply_action to self-persist.
+            if self._broker is None or self._store is None:
+                log.warning(
+                    "ic_nifty_v1.apply_action.no_broker_or_store",
+                    action_type=action.action_type,
+                    strategy_name=self.strategy_name,
+                )
+            else:
+                triggering_signal = (action.metadata or {}).get("event_type", action.action_type)
+                await close_ic_legs(
+                    broker=self._broker,
+                    store=self._store,
+                    positions=[p for p in positions if p.leg_role in closed],
+                    closed_roles=closed,
+                    strategy_name=self.strategy_name,
+                    notes=f"ic_nifty_v1 auto-close: {triggering_signal}",
+                )
         return [p for p in positions if p.leg_role not in closed]
 
     # ── Private helpers ───────────────────────────────────────────────────────
@@ -645,9 +675,7 @@ class IronCondorV1:
 
         return strike_data.ce if option_type == "CE" else strike_data.pe
 
-    def _find_leg_via_bod(
-        self, market: OptionChain, instrument_key: str
-    ) -> OptionLeg | None:
+    def _find_leg_via_bod(self, market: OptionChain, instrument_key: str) -> OptionLeg | None:
         """Resolve a numeric-only instrument key via the offline BOD master.
 
         Args:

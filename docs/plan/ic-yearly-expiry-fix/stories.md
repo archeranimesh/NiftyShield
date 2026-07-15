@@ -135,3 +135,51 @@ note (`"half_yearly"` or similar) for that caller only — do not reintroduce Ju
    table for the caller-impact assessment.
 3. `CONTEXT.md` — update `InstrumentLookup.get_expiry_candidates()` description if its docstring
    summary changed materially (DTE band removed for the yearly label).
+
+---
+
+# Separate concern — weekly-expiry Greeks snapshot gap (added 2026-07-08, unrelated to YE-1..YE-4)
+
+> This section tracks a distinct bug found while debugging a `DELTA_WARN` Telegram alert for
+> `paper_ic_nifty_v1_weekly`. It does not touch `get_expiry_candidates()` or the June/December
+> yearly-label issue above — filed here only because it surfaced in the same session. Do not let
+> Antigravity pick this up as part of YE-1..YE-4; it is a separate task (see `tasks.md`).
+
+## WG-1 — Persist per-leg Greeks for the weekly expiry bucket
+
+**Problem:** The intraday/EOD option-chain snapshot pipelines
+(`scripts/pipeline/upstox_chain_intraday.py`, `scripts/pipeline/upstox_chain_snapshot.py`) archive
+full per-strike Greeks (delta/gamma/theta/vega/iv) to Parquet for the `monthly`, `quarterly`, and
+`yearly` buckets only — confirmed by listing
+`data/historical/option_chain/intraday/2026/07/08/`, which contains only
+`upstox_HHMM_{monthly,quarterly,yearly}.parquet`, no `weekly` file. `IronCondorV1`
+(`paper_ic_nifty_v1_weekly`) trades the weekly bucket exclusively, and `check_signals()`
+(`src/strategy/ic_nifty_v1.py`) reads `opt_leg.delta` from a live `upstox.api_call` at tick time —
+that value is used to decide `DELTA_WARN`/`DELTA_STOP`/`ROLL_WING` but is never persisted anywhere,
+only summarized as an event-level log line (`strategy_monitor.chain_fetched
+expiry=... strikes=...`) with no per-leg field values.
+
+**Observed impact (2026-07-08):** A Telegram alert fired `DELTA_WARN: short_call |delta| 0.2518 ≥
+0.25` for the 24700CE weekly short leg. By the time it was investigated, the broker terminal showed
+delta 0.09 for the same leg. There was no way to confirm what Upstox actually returned at the
+alert's tick — not in `logs/monitor_daemon.log` (event-level only), not in the Parquet snapshot
+pipeline (weekly bucket not archived). Root cause of the 0.25 → 0.09 discrepancy is still
+unconfirmed as a result.
+
+**Fix:** Extend the intraday snapshot pipeline (or add a lightweight sidecar writer inside
+`IronCondorV1.check_signals`/the monitor daemon tick loop) to persist a `weekly` bucket alongside
+`monthly`/`quarterly`/`yearly`, same schema (`snapshot_ts, underlying, expiry_date, strike,
+option_type, spot, ltp, bid, ask, oi, volume, iv, delta, gamma, theta, vega`). At minimum, log the
+per-leg Greeks actually used for `DELTA_WARN`/`DELTA_STOP` decisions at WARNING severity so a raw
+value is recoverable from `logs/` even without the Parquet archive.
+
+**Tests required:** happy-path (weekly snapshot written with correct schema and expiry resolution
+for the current Tuesday-expiry weekly bucket) + edge case (no weekly expiry available on a given
+day — pipeline should not crash, should log and skip). No network in tests — mock the chain
+response.
+
+**Files touched:** `scripts/pipeline/upstox_chain_intraday.py`,
+`scripts/pipeline/upstox_chain_snapshot.py`, possibly `src/strategy/ic_nifty_v1.py` (per-leg log
+line), plus corresponding test files. Confirm actual blast radius before editing — do not assume
+scope beyond what's listed here without checking callers first, per this project's graph-before-Read
+protocol.

@@ -548,6 +548,101 @@ def test_apply_action_roll_wing_empty_legs_to_open_raises() -> None:
         asyncio.run(strat.apply_action(positions, action))
 
 
+# ── Auto-close persistence (fix for silent no-op — closing fills were never
+#    written to paper_trades, so the same exit signal re-fired every tick) ──
+
+
+def _make_auto_close_action(action_type: str, event_type: str = "LOSS_STOP") -> ApprovedAction:
+    """Build an auto-execute CLOSE_FULL-style action as StrategyMonitor would."""
+    return ApprovedAction(
+        action_type=action_type,
+        legs_to_close=[],
+        legs_to_open=[],
+        rationale="auto-execute",
+        council_rank=1,
+        metadata={"auto_selected": True, "event_type": event_type},
+    )
+
+
+def test_apply_action_close_full_auto_execute_persists_all_legs() -> None:
+    """Auto-execute CLOSE_FULL with broker+store injected writes 4 closing trades."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from src.client.protocol import BrokerClient
+    from src.paper.store import PaperStore
+
+    broker = MagicMock(spec=BrokerClient)
+    broker.get_ltp = AsyncMock(
+        return_value={
+            _SHORT_PUT_KEY: Decimal("30.00"),
+            _LONG_PUT_KEY: Decimal("2.00"),
+            _SHORT_CALL_KEY: Decimal("28.00"),
+            _LONG_CALL_KEY: Decimal("2.50"),
+        }
+    )
+    store = MagicMock(spec=PaperStore)
+    store.record_trades = MagicMock(side_effect=lambda trades: (trades, []))
+
+    strat = IronCondorV1(broker=broker, store=store)
+    positions = _make_ic_positions()
+    action = _make_auto_close_action("CLOSE_FULL")
+
+    result = asyncio.run(strat.apply_action(positions, action))
+
+    store.record_trades.assert_called_once()
+    (written,), _ = store.record_trades.call_args
+    assert {t.leg_role for t in written} == {
+        "short_put",
+        "long_put_hedge",
+        "short_call",
+        "long_call_hedge",
+    }
+    # In-memory filtering behaviour unchanged: all legs removed for CLOSE_FULL.
+    assert result == []
+
+
+def test_apply_action_close_full_auto_execute_without_broker_skips_persist_no_raise() -> None:
+    """No broker/store injected → logs and skips persistence, does not raise (regression guard)."""
+    strat = IronCondorV1()  # broker=None, store=None
+    positions = _make_ic_positions()
+    action = _make_auto_close_action("CLOSE_FULL")
+
+    result = asyncio.run(strat.apply_action(positions, action))
+
+    # Still returns empty (in-memory filter), no exception even though nothing was persisted.
+    assert result == []
+
+
+def test_apply_action_close_full_manual_action_does_not_auto_persist() -> None:
+    """A manually-approved (non auto-execute) CLOSE_FULL does not call close_ic_legs.
+
+    Manual/Telegram-approved actions are persisted by PaperExecutor
+    (src/strategy/executor.py) via the callback path in monitor_daemon.py,
+    not by apply_action — avoids a double-write if both paths ever fired.
+    """
+    from unittest.mock import MagicMock
+
+    from src.client.protocol import BrokerClient
+    from src.paper.store import PaperStore
+
+    broker = MagicMock(spec=BrokerClient)
+    store = MagicMock(spec=PaperStore)
+
+    strat = IronCondorV1(broker=broker, store=store)
+    positions = _make_ic_positions()
+    action = ApprovedAction(
+        action_type="CLOSE_FULL",
+        legs_to_close=["short_put", "long_put_hedge", "short_call", "long_call_hedge"],
+        legs_to_open=[],
+        rationale="manual approval",  # not "auto-execute"
+        council_rank=1,
+    )
+
+    asyncio.run(strat.apply_action(positions, action))
+
+    store.record_trades.assert_not_called()
+
+
 def test_auto_execute_is_true() -> None:
     """IronCondorV1 must declare auto_execute=True (exits are rule-based)."""
     strat = IronCondorV1()
@@ -829,9 +924,11 @@ def test_is_auto_execute() -> None:
 # IC-F9 — _parse_expiry handles both live key formats
 # ---------------------------------------------------------------------------
 
+
 def test_parse_expiry_date_before_pe_suffix() -> None:
     """Key format: date immediately before PE/CE — NSE_FO|NIFTY26JUN2026PE24000."""
     from datetime import date
+
     strat = IronCondorV1()
     result = strat._parse_expiry("NSE_FO|NIFTY26JUN2026PE24000")
     assert result == date(2026, 6, 26)
@@ -840,6 +937,7 @@ def test_parse_expiry_date_before_pe_suffix() -> None:
 def test_parse_expiry_date_before_strike() -> None:
     """Key format: date followed by numeric strike — NSE_FO|NIFTY26JUN202624000PE."""
     from datetime import date
+
     strat = IronCondorV1()
     result = strat._parse_expiry("NSE_FO|NIFTY26JUN202624000PE")
     assert result == date(2026, 6, 26)
