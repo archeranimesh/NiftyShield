@@ -17,6 +17,18 @@ writes them atomically via ``PaperStore.record_trades`` — mirroring the
 pattern already used by ``OverlayCloser.close_collar_all`` for the overlay
 strategies and ``close_csp_leg`` for CSP.
 
+When a leg's LTP is missing, the fallback branches on *why*: if the BOD
+instrument master shows the contract's expiry is today or earlier, LTP will
+never resolve (the instrument is delisted or the exchange has stopped
+quoting it for the day) — so the price is derived from
+Nifty spot instead of reused verbatim. ITM legs settle at intrinsic value
+(``|spot - strike|``); OTM legs settle at ``_OTM_EXPIRY_PRICE`` (0.05, the
+NSE tick floor for a worthless expiry). Only when the contract has *not*
+expired (a transient LTP gap) or BOD/spot resolution itself fails does it
+fall back to the leg's own entry price — added 2026-07-16 after entry-price
+fallback was found to silently zero out realized P&L on every post-expiry
+LOSS_STOP close (see DECISIONS.md 2026-07-16).
+
 Scope: flatten-only actions (``CLOSE_FULL``, ``CLOSE_CALL_SPREAD``,
 ``CLOSE_PUT_SPREAD``). ``ROLL_WING`` and ``PROFIT_LOCK_ZONE2`` are roll
 actions (close + open a replacement leg at a new strike) and are not
@@ -25,12 +37,15 @@ covered here — see DECISIONS.md and TODOS.md for the follow-up.
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
 import structlog
 
+from src.instruments.lookup import InstrumentLookup, parse_expiry
 from src.market_calendar.holidays import market_today
+from src.paper.constants import DEFAULT_BOD_PATH
 from src.paper.models import PaperTrade, TradeAction
 
 if TYPE_CHECKING:
@@ -39,6 +54,15 @@ if TYPE_CHECKING:
     from src.paper.store import PaperStore
 
 log = structlog.get_logger(__name__)
+
+# Nifty 50 index instrument key — used to derive intrinsic settlement value
+# for legs whose own LTP is unavailable because the contract has expired.
+_NIFTY_SPOT_KEY = "NSE_INDEX|Nifty 50"
+
+# NSE minimum tick — used as the settlement price for OTM legs that expired
+# worthless. Not literally 0: keeps the closing trade's price field positive
+# and matches how NSE itself prices a worthless expiry on the bhavcopy.
+_OTM_EXPIRY_PRICE = Decimal("0.05")
 
 
 async def close_ic_legs(
@@ -90,20 +114,83 @@ async def close_ic_legs(
         ltp_map = {}
 
     today = market_today()
+    bod_lookup: InstrumentLookup | None = None
+    spot: Decimal | None = None
+    spot_fetch_attempted = False
     trades: list[PaperTrade] = []
     for pos in to_close:
         raw = ltp_map.get(pos.instrument_key)
         close_price: Decimal
         if raw is None or Decimal(str(raw)) <= 0:
-            # Fall back to the leg's own entry price — same degraded-mode
-            # behaviour as close_csp_leg (src/strategy/csp_roll_executor.py).
-            close_price = pos.avg_sell_price if pos.net_qty < 0 else pos.avg_cost
-            log.warning(
-                "ic_close_executor.ltp_missing_fallback_to_entry",
-                strategy_name=strategy_name,
-                instrument_key=pos.instrument_key,
-                fallback_price=str(close_price),
-            )
+            settlement_price = None
+            if bod_lookup is None:
+                try:
+                    bod_lookup = InstrumentLookup.from_file(DEFAULT_BOD_PATH)
+                except Exception as exc:
+                    log.warning(
+                        "ic_close_executor.bod_lookup_load_failed",
+                        strategy_name=strategy_name,
+                        error=str(exc),
+                    )
+                    bod_lookup = None
+
+            inst = bod_lookup.get_by_key(pos.instrument_key) if bod_lookup else None
+            expiry_str = parse_expiry(inst.get("expiry")) if inst else None
+            option_type = inst.get("instrument_type") if inst else None
+            strike_price = inst.get("strike_price") if inst else None
+
+            is_post_expiry = expiry_str is not None and date.fromisoformat(expiry_str) <= today
+
+            if is_post_expiry and option_type in ("CE", "PE") and strike_price is not None:
+                if not spot_fetch_attempted:
+                    spot_fetch_attempted = True
+                    try:
+                        spot_map = await broker.get_ltp([_NIFTY_SPOT_KEY])
+                        spot_raw = spot_map.get(_NIFTY_SPOT_KEY)
+                        spot = Decimal(str(spot_raw)) if spot_raw is not None else None
+                    except Exception as exc:
+                        log.warning(
+                            "ic_close_executor.spot_fetch_failed",
+                            strategy_name=strategy_name,
+                            error=str(exc),
+                        )
+                        spot = None
+
+                if spot is not None:
+                    strike = Decimal(str(strike_price))
+                    is_itm = (option_type == "CE" and spot > strike) or (
+                        option_type == "PE" and spot < strike
+                    )
+                    if is_itm:
+                        settlement_price = (
+                            (spot - strike) if option_type == "CE" else (strike - spot)
+                        ).quantize(Decimal("0.01"))
+                    else:
+                        settlement_price = _OTM_EXPIRY_PRICE
+                    log.warning(
+                        "ic_close_executor.ltp_missing_fallback_to_expiry_settlement",
+                        strategy_name=strategy_name,
+                        instrument_key=pos.instrument_key,
+                        option_type=option_type,
+                        strike=str(strike),
+                        spot=str(spot),
+                        settlement_price=str(settlement_price),
+                    )
+
+            if settlement_price is not None:
+                close_price = settlement_price
+            else:
+                # Fall back to the leg's own entry price — same degraded-mode
+                # behaviour as close_csp_leg (src/strategy/csp_roll_executor.py).
+                # Used when the contract hasn't expired (transient LTP gap) or
+                # when BOD/spot resolution itself failed.
+                close_price = pos.avg_sell_price if pos.net_qty < 0 else pos.avg_cost
+                log.warning(
+                    "ic_close_executor.ltp_missing_fallback_to_entry",
+                    strategy_name=strategy_name,
+                    instrument_key=pos.instrument_key,
+                    fallback_price=str(close_price),
+                )
         else:
             close_price = Decimal(str(raw)).quantize(Decimal("0.01"))
 

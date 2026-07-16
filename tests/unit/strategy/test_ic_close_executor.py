@@ -14,14 +14,15 @@ from __future__ import annotations
 
 import asyncio
 from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from src.client.protocol import BrokerClient
+from src.market_calendar.holidays import market_today
 from src.paper.models import PaperPosition, TradeAction
 from src.paper.store import PaperStore
-from src.strategy.ic_close_executor import close_ic_legs
+from src.strategy.ic_close_executor import _NIFTY_SPOT_KEY, _OTM_EXPIRY_PRICE, close_ic_legs
 
 _STRATEGY = "paper_ic_nifty_v1_weekly"
 
@@ -144,25 +145,32 @@ def test_close_call_spread_only_touches_call_legs(
 
 
 def test_missing_ltp_falls_back_to_entry_price(mock_store: MagicMock) -> None:
-    """LTP absent for an instrument → fall back to the leg's own entry price."""
+    """LTP absent + instrument not found in BOD (not expired) → entry-price fallback."""
     broker = MagicMock(spec=BrokerClient)
     broker.get_ltp = AsyncMock(return_value={})  # nothing resolved
     positions = [_make_position("short_put", "NSE_FO|51348", net_qty=-65, avg_sell_price="6.68")]
 
-    inserted = _run(
-        close_ic_legs(
-            broker=broker,
-            store=mock_store,
-            positions=positions,
-            closed_roles={"short_put"},
-            strategy_name=_STRATEGY,
-            notes="fallback test",
+    mock_lookup = MagicMock()
+    mock_lookup.get_by_key.return_value = None  # not in BOD → can't tell it's expired
+    with patch(
+        "src.strategy.ic_close_executor.InstrumentLookup.from_file",
+        return_value=mock_lookup,
+    ):
+        inserted = _run(
+            close_ic_legs(
+                broker=broker,
+                store=mock_store,
+                positions=positions,
+                closed_roles={"short_put"},
+                strategy_name=_STRATEGY,
+                notes="fallback test",
+            )
         )
-    )
 
     assert len(inserted) == 1
     assert inserted[0].price == Decimal("6.68")
     assert inserted[0].action == TradeAction.BUY
+    broker.get_ltp.assert_called_once()  # only the option-leg batch call, no spot fetch
 
 
 def test_broker_ltp_fetch_raises_falls_back_to_entry_price(mock_store: MagicMock) -> None:
@@ -171,20 +179,186 @@ def test_broker_ltp_fetch_raises_falls_back_to_entry_price(mock_store: MagicMock
     broker.get_ltp = AsyncMock(side_effect=RuntimeError("upstox down"))
     positions = [_make_position("long_put_hedge", "NSE_FO|51340", net_qty=65, avg_cost="4.12")]
 
-    inserted = _run(
-        close_ic_legs(
-            broker=broker,
-            store=mock_store,
-            positions=positions,
-            closed_roles={"long_put_hedge"},
-            strategy_name=_STRATEGY,
-            notes="broker error test",
+    mock_lookup = MagicMock()
+    mock_lookup.get_by_key.return_value = None
+    with patch(
+        "src.strategy.ic_close_executor.InstrumentLookup.from_file",
+        return_value=mock_lookup,
+    ):
+        inserted = _run(
+            close_ic_legs(
+                broker=broker,
+                store=mock_store,
+                positions=positions,
+                closed_roles={"long_put_hedge"},
+                strategy_name=_STRATEGY,
+                notes="broker error test",
+            )
         )
-    )
 
     assert len(inserted) == 1
     assert inserted[0].price == Decimal("4.12")
     assert inserted[0].action == TradeAction.SELL
+
+
+# ── Post-expiry settlement fallback ─────────────────────────────────────────
+
+
+def _mock_bod_inst(strike_price: float, instrument_type: str, expiry: str) -> dict[str, object]:
+    return {"strike_price": strike_price, "instrument_type": instrument_type, "expiry": expiry}
+
+
+def test_post_expiry_itm_call_settles_at_intrinsic_value(mock_store: MagicMock) -> None:
+    """Expired short_call, strike below spot (ITM) → settle at spot - strike."""
+    broker = MagicMock(spec=BrokerClient)
+    # First call: option-leg LTP batch, empty (expired, no LTP). Second call: spot.
+    broker.get_ltp = AsyncMock(side_effect=[{}, {_NIFTY_SPOT_KEY: Decimal("24150.00")}])
+    positions = [_make_position("short_call", "NSE_FO|51405", net_qty=-65, avg_sell_price="17.12")]
+
+    mock_lookup = MagicMock()
+    mock_lookup.get_by_key.return_value = _mock_bod_inst(24000, "CE", "2026-07-14")
+    with patch(
+        "src.strategy.ic_close_executor.InstrumentLookup.from_file",
+        return_value=mock_lookup,
+    ):
+        inserted = _run(
+            close_ic_legs(
+                broker=broker,
+                store=mock_store,
+                positions=positions,
+                closed_roles={"short_call"},
+                strategy_name=_STRATEGY,
+                notes="expiry settlement test",
+            )
+        )
+
+    assert len(inserted) == 1
+    assert inserted[0].price == Decimal("150.00")  # 24150 - 24000
+    assert inserted[0].action == TradeAction.BUY
+    assert broker.get_ltp.call_count == 2
+    broker.get_ltp.assert_any_call([_NIFTY_SPOT_KEY])
+
+
+def test_post_expiry_otm_put_settles_at_tick_floor(mock_store: MagicMock) -> None:
+    """Expired long_put_hedge, strike below spot (OTM for a put) → settle at 0.05."""
+    broker = MagicMock(spec=BrokerClient)
+    broker.get_ltp = AsyncMock(side_effect=[{}, {_NIFTY_SPOT_KEY: Decimal("24150.00")}])
+    positions = [_make_position("long_put_hedge", "NSE_FO|51340", net_qty=65, avg_cost="4.12")]
+
+    mock_lookup = MagicMock()
+    mock_lookup.get_by_key.return_value = _mock_bod_inst(23500, "PE", "2026-07-14")
+    with patch(
+        "src.strategy.ic_close_executor.InstrumentLookup.from_file",
+        return_value=mock_lookup,
+    ):
+        inserted = _run(
+            close_ic_legs(
+                broker=broker,
+                store=mock_store,
+                positions=positions,
+                closed_roles={"long_put_hedge"},
+                strategy_name=_STRATEGY,
+                notes="expiry settlement test",
+            )
+        )
+
+    assert len(inserted) == 1
+    assert inserted[0].price == _OTM_EXPIRY_PRICE
+    assert inserted[0].action == TradeAction.SELL
+
+
+def test_post_expiry_but_spot_unavailable_falls_back_to_entry_price(
+    mock_store: MagicMock,
+) -> None:
+    """Expired leg but spot fetch itself fails → degrade to entry-price fallback."""
+    broker = MagicMock(spec=BrokerClient)
+    broker.get_ltp = AsyncMock(side_effect=[{}, RuntimeError("spot fetch down")])
+    positions = [_make_position("short_call", "NSE_FO|51405", net_qty=-65, avg_sell_price="17.12")]
+
+    mock_lookup = MagicMock()
+    mock_lookup.get_by_key.return_value = _mock_bod_inst(24000, "CE", "2026-07-14")
+    with patch(
+        "src.strategy.ic_close_executor.InstrumentLookup.from_file",
+        return_value=mock_lookup,
+    ):
+        inserted = _run(
+            close_ic_legs(
+                broker=broker,
+                store=mock_store,
+                positions=positions,
+                closed_roles={"short_call"},
+                strategy_name=_STRATEGY,
+                notes="expiry settlement test",
+            )
+        )
+
+    assert len(inserted) == 1
+    assert inserted[0].price == Decimal("17.12")  # entry-price fallback, not settlement
+
+
+def test_expiry_is_today_still_settles_at_intrinsic_value(mock_store: MagicMock) -> None:
+    """Boundary case: expiry == today (same-day close) must use settlement, not entry price.
+
+    This is the dominant real-world trigger — the daemon almost always
+    detects a dead leg on expiry day itself, once the exchange stops
+    quoting it. A strict `<` here would silently reintroduce the exact
+    P&L-zeroing bug this module was written to fix.
+    """
+    broker = MagicMock(spec=BrokerClient)
+    broker.get_ltp = AsyncMock(side_effect=[{}, {_NIFTY_SPOT_KEY: Decimal("24150.00")}])
+    positions = [_make_position("short_call", "NSE_FO|51405", net_qty=-65, avg_sell_price="17.12")]
+
+    mock_lookup = MagicMock()
+    today_str = market_today().isoformat()
+    mock_lookup.get_by_key.return_value = _mock_bod_inst(24000, "CE", today_str)
+    with patch(
+        "src.strategy.ic_close_executor.InstrumentLookup.from_file",
+        return_value=mock_lookup,
+    ):
+        inserted = _run(
+            close_ic_legs(
+                broker=broker,
+                store=mock_store,
+                positions=positions,
+                closed_roles={"short_call"},
+                strategy_name=_STRATEGY,
+                notes="same-day expiry test",
+            )
+        )
+
+    assert len(inserted) == 1
+    assert inserted[0].price == Decimal("150.00")  # settlement, NOT entry price (17.12)
+    assert broker.get_ltp.call_count == 2  # spot fetch must have been triggered
+
+
+def test_not_yet_expired_missing_ltp_uses_entry_price_not_settlement(
+    mock_store: MagicMock,
+) -> None:
+    """LTP missing but BOD expiry is still in the future → transient gap, not expiry."""
+    broker = MagicMock(spec=BrokerClient)
+    broker.get_ltp = AsyncMock(return_value={})
+    positions = [_make_position("short_call", "NSE_FO|51405", net_qty=-65, avg_sell_price="17.12")]
+
+    mock_lookup = MagicMock()
+    mock_lookup.get_by_key.return_value = _mock_bod_inst(24000, "CE", "2099-01-01")
+    with patch(
+        "src.strategy.ic_close_executor.InstrumentLookup.from_file",
+        return_value=mock_lookup,
+    ):
+        inserted = _run(
+            close_ic_legs(
+                broker=broker,
+                store=mock_store,
+                positions=positions,
+                closed_roles={"short_call"},
+                strategy_name=_STRATEGY,
+                notes="not expired test",
+            )
+        )
+
+    assert len(inserted) == 1
+    assert inserted[0].price == Decimal("17.12")
+    broker.get_ltp.assert_called_once()  # no spot fetch — not post-expiry
 
 
 # ── Edge cases ───────────────────────────────────────────────────────────────
