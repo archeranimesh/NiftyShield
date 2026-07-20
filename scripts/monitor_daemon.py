@@ -364,6 +364,12 @@ async def main() -> int:
     strategies_ref = [s.strategy_name for s in strategies]
 
     # Initialize StrategyMonitor
+    # BUG-2 follow-up (2026-07-20): lookup was never threaded through here, so
+    # _get_position_expiry() couldn't resolve numeric instrument keys (real
+    # Upstox keys, e.g. NSE_FO|63896) and every tick silently fell back to a
+    # single expiry_fn() chain for ALL strategies regardless of their real
+    # expiry — exit signals gated on combined_mark (PROFIT_TARGET, LOSS_STOP)
+    # were silently suppressed system-wide. See DECISIONS.md 2026-07-20.
     monitor = StrategyMonitor(
         broker=broker,
         store=store,
@@ -371,6 +377,7 @@ async def main() -> int:
         strategies=strategies,
         poll_interval_s=args.poll_interval,
         expiry_fn=get_expiry,
+        lookup=lookup,
     )
 
     # Initialize PaperExecutor for resolving callbacks

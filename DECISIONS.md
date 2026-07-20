@@ -778,6 +778,20 @@ Source: this session, SHA 96398b4.
 
 ---
 
+## BUG-2 follow-up — `StrategyMonitor.lookup` never wired into the live daemon (2026-07-20)
+
+**Finding:** `scripts/monitor_daemon.py` builds an `InstrumentLookup` instance at startup (for `get_expiry()`'s fallback) but never passed it into `StrategyMonitor(...)`. Since `StrategyMonitor._get_position_expiry()` only resolves expiry via BOD lookup when `self._lookup is not None`, and its named-key regex never matches real Upstox numeric keys (`NSE_FO|63896`), expiry resolution silently returned `None` for every numeric-keyed position in the daemon process — for every strategy, not just IC. `_group_positions_by_expiry` then returned `{}`, `_fetch_chains` fell back to `expiry_fn()`'s single default expiry, and `_tick()`'s fallback path (`monitor.py:159-161`) assigned that one wrong-expiry chain to every open position regardless of its real expiry. Downstream, `IronCondorV1._compute_combined_pnl` treats any leg missing from the (wrong) chain as `mark_available=False` and silently drops `PROFIT_TARGET`/`LOSS_STOP` — no log line, no exception, no Telegram approval request, no `pending_approvals` row. Confirmed live: `paper_ic_nifty_v1_monthly` sat at ~70–80% profit captured with zero signal emitted across a full morning of ticks (09:15–10:31), while the daemon's own `chain_fetched` log line showed it fetching a 2026-08-25 expiry chain for legs that actually expire 2026-07-28.
+
+**Root cause history:** this is a regression of BUG-2 (`docs/plan/council-refactor/tasks.md`), originally fixed 2026-06-13 (SHA `61f4690`) with the opposite symptom — quarterly positions evaluated against the wrong (monthly) chain, producing a **false-positive** `PROFIT_TARGET` from misread `ltp=0`. That fix added the `lookup` param + BOD fallback to `StrategyMonitor` itself, but never touched `scripts/monitor_daemon.py` — the only entrypoint that runs it continuously in production. `TODOS.md`'s 2026-06-13 session-log entry incorrectly states the fix landed "in snapshot + daemon"; it only landed in `monitor.py` and the standalone `paper_3track_snapshot.py` script. The daemon has been running without `lookup` wired since before BUG-2 was ever opened.
+
+**Fix:** one-line wiring change — `scripts/monitor_daemon.py` now passes `lookup=lookup` into `StrategyMonitor(...)`. 2 new tests in `tests/unit/test_monitor_daemon.py` (`test_lookup_wired_into_strategy_monitor`, `test_lookup_none_when_bod_load_fails_still_wired`) assert the daemon's BOD-backed lookup (or explicit `None` on load failure) is always threaded through, rather than silently defaulting.
+
+**Scope note:** this bug degraded exit-signal gating (`PROFIT_TARGET`, `LOSS_STOP`, and any other combined-mark-based signal) for every numeric-keyed position the daemon monitors, not only the monthly IC — CSP, overlays, and all four IC V1/V2 expiry variants share the same `_get_position_expiry` path. No retroactive audit of how long other strategies' signals were suppressed has been done yet; worth a follow-up TODOS item if other positions show similarly stale unresolved ACTION signals.
+
+Source: this session (Cowork), diagnosed via `scratch/2026-07-20_ic_v1_monthly_profit_target_repro.py` against live Upstox chain data.
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty

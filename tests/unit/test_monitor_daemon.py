@@ -171,6 +171,95 @@ async def test_four_ic_strategies_registered() -> None:
 
 
 @pytest.mark.asyncio
+async def test_lookup_wired_into_strategy_monitor(tmp_path) -> None:
+    """BUG-2 follow-up (2026-07-20): StrategyMonitor must receive the daemon's
+    BOD-backed InstrumentLookup, or _get_position_expiry() can never resolve
+    numeric instrument keys and every tick silently evaluates positions
+    against the wrong expiry's chain (see DECISIONS.md 2026-07-20).
+    """
+    bod_file = tmp_path / "bod.json.gz"
+    bod_file.write_bytes(b"")  # existence is all get_expiry()'s try/except needs
+
+    mock_store = MagicMock()
+    mock_gateway = MagicMock()
+    mock_gateway.start_polling = AsyncMock()
+    mock_broker = MagicMock()
+
+    mock_monitor = MagicMock()
+    mock_monitor.run = AsyncMock()
+    mock_monitor_cls = MagicMock(return_value=mock_monitor)
+
+    sentinel_lookup = MagicMock(name="sentinel_lookup")
+    mock_lookup_cls = MagicMock()
+    mock_lookup_cls.from_file.return_value = sentinel_lookup
+
+    from src.config import settings
+
+    with (
+        patch("scripts.monitor_daemon.PaperStore", return_value=mock_store),
+        patch("scripts.monitor_daemon.TelegramGateway", return_value=mock_gateway),
+        patch("scripts.monitor_daemon.create_client", return_value=mock_broker),
+        patch("scripts.monitor_daemon.StrategyMonitor", mock_monitor_cls),
+        patch("scripts.monitor_daemon.InstrumentLookup", mock_lookup_cls),
+        patch("scripts.monitor_daemon.IronCondorV1", None),
+        patch("scripts.monitor_daemon.IronCondorV2", None),
+        patch("scripts.monitor_daemon.CSPNiftyV1", None),
+        patch("scripts.monitor_daemon.NiftyTrackComparisonV1", None),
+        patch("scripts.monitor_daemon.MONITOR_OVERLAYS", False),
+        patch("sys.argv", ["monitor_daemon.py"]),
+        patch("asyncio.gather", side_effect=asyncio.CancelledError),
+        patch.object(settings, "telegram_bot_token", "fake_token"),
+        patch.object(settings, "telegram_chat_id", "fake_chat_id"),
+        patch.object(settings, "bod_instruments_path", str(bod_file)),
+    ):
+        await daemon.main()
+
+        mock_lookup_cls.from_file.assert_called_once()
+        _, kwargs = mock_monitor_cls.call_args
+        assert kwargs.get("lookup") is sentinel_lookup
+
+
+@pytest.mark.asyncio
+async def test_lookup_none_when_bod_load_fails_still_wired() -> None:
+    """When BOD load fails, lookup stays None — but must still be passed
+    through explicitly (not omitted) so StrategyMonitor's own default/behavior
+    is driven by this module's fallback logic, not a silently-stale default.
+    """
+    mock_store = MagicMock()
+    mock_gateway = MagicMock()
+    mock_gateway.start_polling = AsyncMock()
+    mock_broker = MagicMock()
+
+    mock_monitor = MagicMock()
+    mock_monitor.run = AsyncMock()
+    mock_monitor_cls = MagicMock(return_value=mock_monitor)
+
+    from src.config import settings
+
+    with (
+        patch("scripts.monitor_daemon.PaperStore", return_value=mock_store),
+        patch("scripts.monitor_daemon.TelegramGateway", return_value=mock_gateway),
+        patch("scripts.monitor_daemon.create_client", return_value=mock_broker),
+        patch("scripts.monitor_daemon.StrategyMonitor", mock_monitor_cls),
+        patch("scripts.monitor_daemon.IronCondorV1", None),
+        patch("scripts.monitor_daemon.IronCondorV2", None),
+        patch("scripts.monitor_daemon.CSPNiftyV1", None),
+        patch("scripts.monitor_daemon.NiftyTrackComparisonV1", None),
+        patch("scripts.monitor_daemon.MONITOR_OVERLAYS", False),
+        patch("sys.argv", ["monitor_daemon.py"]),
+        patch("asyncio.gather", side_effect=asyncio.CancelledError),
+        patch.object(settings, "telegram_bot_token", "fake_token"),
+        patch.object(settings, "telegram_chat_id", "fake_chat_id"),
+        patch.object(settings, "bod_instruments_path", "/nonexistent/path/bod.json.gz"),
+    ):
+        await daemon.main()
+
+        _, kwargs = mock_monitor_cls.call_args
+        assert "lookup" in kwargs
+        assert kwargs.get("lookup") is None
+
+
+@pytest.mark.asyncio
 async def test_one_ic_failure_does_not_block_others() -> None:
     # Setup mocks for main dependencies
     mock_store = MagicMock()
