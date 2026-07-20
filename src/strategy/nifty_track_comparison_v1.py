@@ -24,14 +24,17 @@ from __future__ import annotations
 
 import re
 from datetime import date, datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any, Literal
 
 import structlog
 
+from src.instruments.lookup import InstrumentLookup
 from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
+from src.paper.constants import DEFAULT_BOD_PATH
 from src.paper.models import PaperPosition
+from src.strategy._price_utils import find_option_leg
 from src.strategy.exit_signals import ExitSignalEngine
 from src.strategy.protocol import ApprovedAction, LegSpec, SignalEvent
 from src.strategy.roll_utils import find_strike_by_delta
@@ -45,9 +48,6 @@ _EXPIRY_RE = re.compile(
     r"NSE_FO\|NIFTY(\d{2}[A-Za-z]{3}\d{4})(PE|CE)",
     re.IGNORECASE,
 )
-
-# Matches keys like "NSE_FO|NIFTY23000PE" → group 1 = "23000"
-_STRIKE_RE = re.compile(r"NIFTY(\d+)(PE|CE)", re.IGNORECASE)
 
 # ── Thresholds ────────────────────────────────────────────────────────────────
 
@@ -99,6 +99,7 @@ class NiftyTrackComparisonV1:
         store: Any = None,
         notifier: Any = None,
         broker: Any = None,
+        instrument_lookup: InstrumentLookup | None = None,
         **kwargs: Any,
     ) -> None:
         """Initialise NiftyTrackComparisonV1.
@@ -107,11 +108,32 @@ class NiftyTrackComparisonV1:
             store: SQLite-backed store for paper trading records.
             notifier: Notifier for sending Telegram alerts.
             broker: Broker client interface.
+            instrument_lookup: Optional pre-built ``InstrumentLookup`` (BOD JSON),
+                used by ``find_option_leg`` to resolve real numeric Upstox
+                instrument keys that carry no strike/type in the key string
+                itself. If not injected, lazily built from ``DEFAULT_BOD_PATH``
+                on first use (same pattern as ``PaperStore._resolve_instrument_lookup``).
             **kwargs: Additional keyword arguments.
         """
         self._store = store
         self._notifier = notifier
         self._broker = broker
+        self._instrument_lookup = instrument_lookup
+
+    def _resolve_instrument_lookup(self) -> InstrumentLookup | None:
+        """Lazily construct and cache the InstrumentLookup used for leg resolution.
+
+        Non-fatal: on load failure, logs a WARNING and returns None so callers
+        degrade to regex-only resolution (symbolic keys still work; real
+        numeric keys will fail to resolve, same as before this fallback existed).
+        """
+        if self._instrument_lookup is None:
+            try:
+                self._instrument_lookup = InstrumentLookup.from_file(DEFAULT_BOD_PATH)
+            except Exception as exc:
+                log.warning("nifty_track_comparison_v1.bod_lookup_load_failed", error=str(exc))
+                return None
+        return self._instrument_lookup
 
     # ── Guard helpers ─────────────────────────────────────────────────────────
 
@@ -702,11 +724,10 @@ class NiftyTrackComparisonV1:
     def _find_option_leg(self, market: OptionChain, instrument_key: str) -> OptionLeg | None:
         """Locate the chain leg (CE or PE) matching the position's instrument key.
 
-        Tries a direct strike lookup by parsing ``instrument_key``.
-        Returns the CE leg for calls (``overlay_cc``, ``overlay_collar_call``)
-        and the PE leg for puts (``overlay_pp``, ``overlay_collar_put``).
-        Returns ``None`` when no parseable strike is found or the strike is absent
-        from the chain snapshot.
+        Delegates to the shared ``find_option_leg`` utility: tries a direct
+        regex strike/type parse first (symbolic/test keys), then falls back
+        to BOD JSON lookup for real numeric Upstox instrument keys that carry
+        no strike/type in the key string itself.
 
         Args:
             market: Current option chain.
@@ -715,22 +736,4 @@ class NiftyTrackComparisonV1:
         Returns:
             Matching ``OptionLeg``, or ``None`` when unavailable.
         """
-        m = _STRIKE_RE.search(instrument_key)
-        if not m:
-            return None
-
-        try:
-            strike = Decimal(m.group(1))
-        except InvalidOperation:
-            log.warning(
-                "nifty_track_comparison_v1.strike_parse_failed",
-                instrument_key=instrument_key,
-            )
-            return None
-
-        option_type = m.group(2).upper()
-        strike_data = market.strikes.get(strike)
-        if strike_data is None:
-            return None
-
-        return strike_data.ce if option_type == "CE" else strike_data.pe
+        return find_option_leg(instrument_key, market, lookup=self._resolve_instrument_lookup())

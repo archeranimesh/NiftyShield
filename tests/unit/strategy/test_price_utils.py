@@ -116,3 +116,63 @@ def test_find_option_leg_case_insensitive() -> None:
     market = _make_chain(pe_strike="23000")
     leg = find_option_leg("NSE_FO|nifty23000pe29MAY2026", market)
     assert leg is not None
+
+
+# ── find_option_leg — real numeric Upstox keys via BOD lookup fallback ────────
+
+
+class _FakeLookup:
+    """Minimal stand-in for InstrumentLookup.get_by_key()."""
+
+    def __init__(self, instruments: dict[str, dict[str, object]]) -> None:
+        self._instruments = instruments
+
+    def get_by_key(self, instrument_key: str) -> dict[str, object] | None:
+        return self._instruments.get(instrument_key)
+
+
+def test_find_option_leg_resolves_real_numeric_key_via_bod_lookup() -> None:
+    """Real Upstox keys (e.g. NSE_FO|65900) carry no strike/type in the key
+    string and must fall back to BOD JSON resolution — this is the case that
+    broke AUTO-CLOSE for overlay_collar_call in production."""
+    market = _make_chain(ce_strike="24000")
+    lookup = _FakeLookup({"NSE_FO|65900": {"instrument_type": "CE", "strike_price": 24000.0}})
+    leg = find_option_leg("NSE_FO|65900", market, lookup=lookup)
+    assert leg is not None
+    assert leg.strike == Decimal("24000")
+
+
+def test_find_option_leg_numeric_key_without_lookup_returns_none() -> None:
+    """No lookup injected → numeric key can never resolve (matches pre-fix
+    behaviour for callers that don't pass a lookup)."""
+    market = _make_chain(ce_strike="24000")
+    with capture_logs() as cap:
+        leg = find_option_leg("NSE_FO|65900", market)
+    assert leg is None
+    assert any("key_not_parseable" in e.get("event", "") for e in cap)
+
+
+def test_find_option_leg_bod_lookup_key_not_found() -> None:
+    market = _make_chain(ce_strike="24000")
+    lookup = _FakeLookup({})  # instrument_key absent from BOD JSON
+    with capture_logs() as cap:
+        leg = find_option_leg("NSE_FO|99999", market, lookup=lookup)
+    assert leg is None
+    assert any("bod_lookup_failed" in e.get("event", "") for e in cap)
+
+
+def test_find_option_leg_bod_lookup_strike_absent_from_chain() -> None:
+    market = _make_chain(ce_strike="24000")
+    lookup = _FakeLookup({"NSE_FO|65900": {"instrument_type": "CE", "strike_price": 25000.0}})
+    leg = find_option_leg("NSE_FO|65900", market, lookup=lookup)
+    assert leg is None
+
+
+def test_find_option_leg_bod_lookup_non_option_instrument_type() -> None:
+    """FUT/EQ instrument types are not option legs — must not resolve."""
+    market = _make_chain(ce_strike="24000")
+    lookup = _FakeLookup({"NSE_FO|48100": {"instrument_type": "FUT", "strike_price": None}})
+    with capture_logs() as cap:
+        leg = find_option_leg("NSE_FO|48100", market, lookup=lookup)
+    assert leg is None
+    assert any("bod_not_an_option" in e.get("event", "") for e in cap)

@@ -13,8 +13,10 @@ from typing import TYPE_CHECKING, Any
 
 import structlog
 
+from src.instruments.lookup import InstrumentLookup
 from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
+from src.paper.constants import DEFAULT_BOD_PATH
 from src.paper.models import ExitSignal, PaperPosition, PaperTrade, TradeAction
 
 if TYPE_CHECKING:
@@ -43,6 +45,7 @@ class OverlayCloser:
         store: PaperStore,
         simulator: PaperFillSimulator,
         notifier: Any = None,
+        instrument_lookup: InstrumentLookup | None = None,
     ) -> None:
         """Initialise OverlayCloser.
 
@@ -50,10 +53,31 @@ class OverlayCloser:
             store: PaperStore for database operations.
             simulator: PaperFillSimulator for fill pricing.
             notifier: Optional notifier (e.g. TelegramGateway) to alert on failure.
+            instrument_lookup: Optional pre-built ``InstrumentLookup`` (BOD JSON),
+                used by ``find_option_leg`` to resolve real numeric Upstox
+                instrument keys that carry no strike/type in the key string
+                itself. If not injected, lazily built from ``DEFAULT_BOD_PATH``
+                on first use (same pattern as ``PaperStore._resolve_instrument_lookup``).
         """
         self._store = store
         self._simulator = simulator
         self._notifier = notifier
+        self._instrument_lookup = instrument_lookup
+
+    def _resolve_instrument_lookup(self) -> InstrumentLookup | None:
+        """Lazily construct and cache the InstrumentLookup used for leg resolution.
+
+        Non-fatal: on load failure, logs a WARNING and returns None so callers
+        degrade to regex-only resolution (symbolic keys still work; real
+        numeric keys will fail with the usual "leg absent from chain" error).
+        """
+        if self._instrument_lookup is None:
+            try:
+                self._instrument_lookup = InstrumentLookup.from_file(DEFAULT_BOD_PATH)
+            except Exception as exc:
+                log.warning("overlay_closer.bod_lookup_load_failed", error=str(exc))
+                return None
+        return self._instrument_lookup
 
     def close_single_leg(
         self,
@@ -443,7 +467,7 @@ class OverlayCloser:
             ValueError: When the leg is absent from the chain or carries no
                 positive price. Callers must not proceed with a zero-price fill.
         """
-        leg = find_option_leg(instrument_key, market)
+        leg = find_option_leg(instrument_key, market, lookup=self._resolve_instrument_lookup())
         if leg is None:
             raise ValueError(f"resolve_mid_price: leg absent from chain for {instrument_key}")
         return resolve_price(leg)
@@ -454,7 +478,7 @@ class OverlayCloser:
         Delegates to the shared ``find_option_leg`` utility so that key-parse
         and lookup errors are logged at WARNING rather than silently swallowed.
         """
-        return find_option_leg(instrument_key, market)
+        return find_option_leg(instrument_key, market, lookup=self._resolve_instrument_lookup())
 
     def _parse_expiry(self, instrument_key: str) -> date | None:
         """Extract expiry date."""
