@@ -417,7 +417,7 @@ The `StrategyMonitor` module docstring (`src/strategy/monitor.py` lines 7-8) doc
 | Field | Value |
 |---|---|
 | Severity | **HIGH** — two of three parallel tracks are currently carrying double the intended protective-put exposure, misattributed to an expired contract; this is a live position-sizing/risk misstatement, not just a stale reference |
-| Status | 🔴 Open |
+| Status | ✅ Fixed (2026-07-20) |
 | Discovered | 2026-07-20, investigating `option_type_resolution_failed instrument_key=NSE_FO|58627` in `logs/paper_snapshot.log` (`trace_id=f5985444`) |
 | Location | `paper_trades` rows for `paper_nifty_spot` and `paper_nifty_futures` / `overlay_pp`, `NSE_FO|58627` (22000 PE, expiry 2026-06-30); cycle-tracking logic in `src/paper/store.py::get_positions` (DBI-3, `425e054`) |
 
@@ -430,5 +430,7 @@ The `StrategyMonitor` module docstring (`src/strategy/monitor.py` lines 7-8) doc
 **Suggested fix:** backfill the missing `SELL 65 NSE_FO|58627` close trade for `paper_nifty_spot` and `paper_nifty_futures`, dated to match `paper_nifty_proxy`'s 2026-05-27 close (same price, 0.05, since all three tracks opened the original position identically and the contract's worthless-expiry economics don't differ by track). Verify `get_positions()` then correctly resets to `net_qty=65` on `NSE_FO|63848` for both tracks post-backfill.
 
 **Related:** BUG-015 (same DBI-3 zero-crossing assumption broken by a different data-entry gap — missing trade here vs. wrong quantity there); both point to the same underlying process gap: roll trades recorded per-track manually with no cross-track consistency check.
+
+**Fix (2026-07-20):** backfilled the missing `SELL 65 NSE_FO|58627 @ 0.05` close trade into `paper_trades` for `paper_nifty_spot` and `paper_nifty_futures`, dated `2026-05-27` to match `paper_nifty_proxy`'s existing close row exactly (same price, same `ivr_at_entry=0.3110992529348986`), with a `notes` annotation identifying it as a BUG-016 backfill. Data-only correction — no `.py` change, `UNIQUE(strategy_name, leg_role, instrument_key, trade_date, action)` constraint confirmed non-conflicting before insert (differs by `strategy_name` from the existing proxy row). Verified by reimplementing `PaperStore.get_positions()`'s exact cycle-tracking algorithm against the live DB (project `.venv` unusable in this session's sandbox — broken symlink to a macOS-only interpreter) rather than trusting a paraphrase: all three tracks now report `net_qty=65`, `instrument_key=NSE_FO|63848`, `entry_date=2026-06-29` for `overlay_pp` — matching, no longer double-booked or misattributed to the expired `58627`.
 
 ---
