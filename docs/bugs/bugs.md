@@ -367,3 +367,68 @@ The `StrategyMonitor` module docstring (`src/strategy/monitor.py` lines 7-8) doc
 **Fix (2026-07-20):** added `IronCondorV1._send_close_notification()` (mirrors `CSPNiftyV1._send_notification` pattern) and wired it into `apply_action()`'s `CLOSE_FULL`/`CLOSE_CALL_SPREAD`/`CLOSE_PUT_SPREAD` auto-execute branch, called with the `PaperTrade` rows actually returned by `close_ic_legs()` (empty list → no-op, since `close_ic_legs()` already logs `ic_close_executor.nothing_to_close` for that case). Added the equivalent `IronCondorV2._send_close_notification()` for the same three action types in its `apply_action()` — the existing `_send_profit_lock_notification()` for `PROFIT_LOCK_ZONE2` is untouched, this is a second, separate notification for the full/spread-close path it never had. Both non-fatal (logged WARNING/ERROR on send failure, never raises) matching the project's notifier contract. `ROLL_WING`'s own close side remains unnotified — same known scope boundary as `IC-CLOSE-2` (TODOS.md), the replacement leg isn't persisted yet either, so a roll-close notification would be misleading before that's built.
 
 **Related:** the 2026-07-15 `close_ic_legs()` persistence fix (TODOS.md) this notification gap sat behind; `DECISIONS.md` 2026-07-20 (same session, the `lookup=` wiring fix and silent-failure-logging pass that led to discovering this).
+
+---
+
+## BUG-014 — `get_positions()` resolves `option_type` unconditionally, generating permanent unactionable warnings for closed legs on delisted contracts
+
+| Field | Value |
+|---|---|
+| Severity | **MEDIUM** — pure log noise, no capital or data-integrity impact; but the noise is permanent and will recur on every snapshot run forever for affected legs |
+| Status | 🔴 Open |
+| Discovered | 2026-07-20, investigating repeated `option_type_resolution_failed` warnings in `logs/paper_snapshot.log` (`trace_id=f5985444`) |
+| Location | `src/paper/store.py::PaperStore.get_positions` (line ~611, `_resolve_option_type` call site) |
+
+**Symptom:** `option_type_resolution_failed instrument_key=NSE_FO|71474 reason="instrument_key not found in BOD JSON"` and the same for `NSE_FO|44498`, logged on every EOD snapshot run despite both legs having `net_qty == 0` (fully closed, per `paper_trades`: `71474` closed 2026-06-08, `44498` settled ITM 2026-07-17).
+
+**Root cause:** `get_positions()` builds one `PaperPosition` per `leg_role` a strategy has ever traded, grouped only by `leg_role` with no filter on the resulting `net_qty`. It always calls `self._resolve_option_type(cycle_instrument_key)` at construction time (added in `96398b4`, 2026-07-02, B002.3) — before any caller has a chance to apply the `net_qty != 0` filtering convention used everywhere downstream (`paper_3track_snapshot.py:378,567,1200`; the `all_open_pos` loop referenced in BUG-005). `96398b4`'s own 9-test suite covers BOD-load-failure and unresolved-key paths but never a `net_qty == 0` leg. Since Upstox's BOD file drops delisted/expired contracts once settled, any closed leg's `cycle_instrument_key` will *never* resolve again — the warning is not staleness, it's permanent.
+
+**Impact:** no functional impact (`option_type` degrades to `None`, which every downstream caller already treats as a valid, non-fatal state per the field's own docstring). Purely operational: log noise obscures genuine BOD-staleness or resolution issues on legs that are actually still open.
+
+**Suggested fix:** guard the `_resolve_option_type` call in `get_positions()`/`get_position` on `net_qty != 0` — skip resolution (and leave `option_type=None`) for flat legs, consistent with how `_check_base_expiry` already skips flat legs before its own BOD-dependent lookup (`scripts/strategies/three_track/paper_3track_snapshot.py:377-378`). Financial-logic change inside `PaperStore` — requires the real `@code-reviewer` gate per project protocol, not just a patch.
+
+**Related:** BUG-005 (same `net_qty != 0` filtering convention, different call site — that bug is about a missing filter in the IC entry scripts' cross-strategy pooling loop, this one is about the filter being applied too late, after resolution already ran).
+
+---
+
+## BUG-015 — `base_futures` leg (`paper_nifty_futures`) recorded wrong quantity (75 instead of correct lot size 65) on the May 2026 settlement-close and roll, corrupting the leg's cycle tracking
+
+| Field | Value |
+|---|---|
+| Severity | **HIGH** — live base leg's current `net_qty` and `instrument_key` attribution are both wrong; roll/expiry monitoring for this leg is silently mis-targeted |
+| Status | 🔴 Open |
+| Discovered | 2026-07-20, investigating `base_expiry.expiry_not_found instrument_key=NSE_FO|66071` in `logs/paper_snapshot.log` (`trace_id=f5985444`) |
+| Location | `paper_trades` rows for `paper_nifty_futures` / `base_futures`, `NSE_FO|66071` (2026-05-26) and `NSE_FO|62329` (2026-05-29); cycle-tracking logic in `src/paper/store.py::get_positions` (DBI-3, `425e054`) |
+
+**Symptom:** `_check_base_expiry` (`scripts/strategies/three_track/paper_3track_snapshot.py:392`) logs `base_expiry.expiry_not_found` for `NSE_FO|66071` — a NIFTY futures contract that expired 2026-05-26, nearly two months ago — because `get_positions()` still reports the open `base_futures` position as keyed to it.
+
+**Root cause:** Trade history: `BUY 65 NSE_FO|66071` (2026-05-11, correctly 1 lot at the current 65 lot size per `DateAwareLotSizeResolver`'s Jan-1-2026-onward table) → `SELL 75 NSE_FO|66071` (2026-05-26, "Settlement close") → `BUY 75 NSE_FO|62329` (2026-05-29, "Base roll: June futures"). Both the settlement-close and the roll used quantity 75 — the *previous* Nifty lot size (in effect Nov 2024–Dec 2025), not the correct 65 in effect at the time. `DateAwareLotSizeResolver` isn't even wired into the paper-trading path (its only callers are `src/portfolio/strategies/finideas/finrakshak.py` and `ilts.py`) — quantity on these trade-recording scripts is a manually supplied CLI argument, so this is a data-entry error (likely muscle memory from the pre-changeover convention), not a code defect in the resolver or recording scripts. The mismatched 65/75 quantities mean running `net_qty` (`65 − 75 = −10`) never crosses exactly zero, so `get_positions()`'s DBI-3 cycle-reset (`src/paper/store.py`, resets `cycle_instrument_key` only on an exact zero-crossing) never fires — the June roll's `BUY 75` folds into the same still-open cycle (`−10 + 75 = 65`), and `cycle_instrument_key` stays frozen on the expired May contract instead of updating to the June one.
+
+**Impact:** `base_futures`'s reported `net_qty` (65) happens to look numerically plausible by coincidence, masking that the underlying ledger is wrong and that the position is attributed to a delisted instrument_key. Roll/expiry monitoring (`_check_base_expiry`) for this leg is checking the wrong contract's expiry — if a further roll happened after `62329`, its expiry is not being monitored at all currently.
+
+**Suggested fix:** corrective SQL update on the two `paper_trades` rows (75 → 65) to restore an exact zero-crossing, then verify `get_positions()` correctly resets `cycle_instrument_key` to the intended current contract. Check whether the 65-vs-75 error propagated into any roll after `62329` before correcting.
+
+**Related:** BUG-016 (same DBI-3 zero-crossing cycle-reset assumption broken by a different data-entry gap); DECISIONS.md DBI-3 entry (`425e054`).
+
+---
+
+## BUG-016 — `overlay_pp` roll on 2026-06-29 never recorded a closing trade for `paper_nifty_spot`/`paper_nifty_futures`, leaving both tracks double-booked at 2x the intended position
+
+| Field | Value |
+|---|---|
+| Severity | **HIGH** — two of three parallel tracks are currently carrying double the intended protective-put exposure, misattributed to an expired contract; this is a live position-sizing/risk misstatement, not just a stale reference |
+| Status | 🔴 Open |
+| Discovered | 2026-07-20, investigating `option_type_resolution_failed instrument_key=NSE_FO|58627` in `logs/paper_snapshot.log` (`trace_id=f5985444`) |
+| Location | `paper_trades` rows for `paper_nifty_spot` and `paper_nifty_futures` / `overlay_pp`, `NSE_FO|58627` (22000 PE, expiry 2026-06-30); cycle-tracking logic in `src/paper/store.py::get_positions` (DBI-3, `425e054`) |
+
+**Symptom:** `option_type_resolution_failed` fires for `NSE_FO|58627`, a 22000 PE that expired 2026-06-30, three weeks ago — because `get_positions()` still reports it as the current `overlay_pp` position's `cycle_instrument_key` for two of the three parallel tracks.
+
+**Root cause:** Trade history across all three strategies: `BUY 65 NSE_FO|58627` (2026-05-11, all three of `paper_nifty_spot`/`paper_nifty_futures`/`paper_nifty_proxy` open identically) → `SELL 65 NSE_FO|58627 @ 0.05` (2026-05-27, **`paper_nifty_proxy` only**) → `BUY 65 NSE_FO|63848` (21800 PE, exp 2026-07-28) (2026-06-29, all three open the roll). `paper_nifty_proxy` closed the expiring 22000 PE near-worthless before opening the new 21800 PE roll — a clean, zero-crossing cycle. `paper_nifty_spot` and `paper_nifty_futures` never got the matching `SELL 65` close; both went straight from the original May `BUY` into the June 29 roll `BUY` with nothing in between. Their running `net_qty` for this leg is therefore **130** (65 + 65 stacked), not 65 — the earlier per-strategy `SUM` check in this session only surfaced the aggregate and didn't catch the double-booking until the full per-row history was pulled. Because `net_qty` never crossed zero for these two tracks, `get_positions()`'s DBI-3 cycle-reset never fires, so `cycle_instrument_key` stays frozen on the expired `58627` instead of moving to `63848` — same failure mode as BUG-015, different trigger (a missing trade, not a wrong quantity).
+
+**Impact:** `paper_nifty_spot` and `paper_nifty_futures` are each currently carrying a real double-booked protective-put position (old expired 22000 PE + new 21800 PE, both counted as one 130-unit lot misattributed to the expired contract) — this skews any P&L, delta, or notional-exposure calculation reading `overlay_pp`'s `net_qty`/`instrument_key` for these two tracks, not just a cosmetic log warning.
+
+**Suggested fix:** backfill the missing `SELL 65 NSE_FO|58627` close trade for `paper_nifty_spot` and `paper_nifty_futures`, dated to match `paper_nifty_proxy`'s 2026-05-27 close (same price, 0.05, since all three tracks opened the original position identically and the contract's worthless-expiry economics don't differ by track). Verify `get_positions()` then correctly resets to `net_qty=65` on `NSE_FO|63848` for both tracks post-backfill.
+
+**Related:** BUG-015 (same DBI-3 zero-crossing assumption broken by a different data-entry gap — missing trade here vs. wrong quantity there); both point to the same underlying process gap: roll trades recorded per-track manually with no cross-track consistency check.
+
+---
