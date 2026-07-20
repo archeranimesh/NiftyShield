@@ -792,6 +792,18 @@ Source: this session (Cowork), diagnosed via `scratch/2026-07-20_ic_v1_monthly_p
 
 ---
 
+## BUG-013 — `IronCondorV1`/`IronCondorV2` silent on Telegram for full/spread closes (2026-07-20)
+
+Same session as the `lookup=` wiring fix above — once that fix let the monthly IC's `PROFIT_TARGET` actually auto-close live, the resulting Telegram silence surfaced a second, independent gap. `IronCondorV1` never called its injected `notifier` anywhere in the file (dead constructor parameter). `IronCondorV2` only notified for the rare `PROFIT_LOCK_ZONE2` roll, not its own `CLOSE_FULL`/`CLOSE_CALL_SPREAD`/`CLOSE_PUT_SPREAD` — the actions actually triggered by the common `PROFIT_TARGET`/`FORCED_CLOSE` signals. Every other auto-execute strategy (`CSPNiftyV1`, `CCOverlayV1`, `CollarOverlayV1`, `PPOverlayV1`) already confirms on close.
+
+**Fix:** added `_send_close_notification()` to both classes, called from `apply_action()`'s auto-execute `CLOSE_FULL`/`CLOSE_CALL_SPREAD`/`CLOSE_PUT_SPREAD` branch with the actual `PaperTrade` rows `close_ic_legs()` persisted (empty → no-op, matching `close_ic_legs()`'s own `nothing_to_close` no-op). Non-fatal — logged, never raises, matching the existing notifier contract used everywhere else in `src/strategy/`. `ROLL_WING`'s close side remains unnotified, matching the known `IC-CLOSE-2` scope boundary (its replacement leg isn't persisted yet either).
+
+Full writeup: `docs/bugs/bugs.md` BUG-013.
+
+Source: this session (Cowork), discovered while verifying whether a received Telegram message actually came from this close path (it didn't — traced to a separate script, `paper_ic_snapshot.py`'s EOD audit cron).
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty

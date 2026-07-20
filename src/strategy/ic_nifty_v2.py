@@ -45,7 +45,7 @@ from src.instruments.lookup import InstrumentLookup
 from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
 from src.paper.constants import DEFAULT_BOD_PATH
-from src.paper.models import PaperPosition
+from src.paper.models import PaperPosition, PaperTrade
 from src.strategy import roll_utils
 from src.strategy.ic_close_executor import close_ic_legs
 from src.strategy.profit_lock_engine import ProfitLockDecision, ProfitLockEngine, ProfitLockState
@@ -1752,7 +1752,7 @@ class IronCondorV2:
                 )
             else:
                 triggering_signal = (action.metadata or {}).get("event_type", action.action_type)
-                await close_ic_legs(
+                closed_trades = await close_ic_legs(
                     broker=self._broker,
                     store=self._store,
                     positions=[p for p in positions if p.leg_role in closed],
@@ -1760,7 +1760,53 @@ class IronCondorV2:
                     strategy_name=self.strategy_name,
                     notes=f"ic_nifty_v2 auto-close: {triggering_signal}",
                 )
+                # BUG-013 (2026-07-20): only PROFIT_LOCK_ZONE2 sent a Telegram
+                # confirmation — CLOSE_FULL/CLOSE_CALL_SPREAD/CLOSE_PUT_SPREAD
+                # (the far more common full-close actions, including the one
+                # triggered by PROFIT_TARGET) were silent. See DECISIONS.md
+                # 2026-07-20 and docs/bugs/bugs.md BUG-013.
+                await self._send_close_notification(
+                    action.action_type, triggering_signal, closed_trades
+                )
         return [p for p in positions if p.leg_role not in closed]
+
+    async def _send_close_notification(
+        self,
+        action_type: str,
+        triggering_signal: str,
+        closed_trades: list[PaperTrade],
+    ) -> None:
+        """Send a plain HTML close-confirmation notification. Non-fatal.
+
+        Mirrors IronCondorV1._send_close_notification and the existing
+        _send_profit_lock_notification pattern already used here for Zone 2.
+
+        Args:
+            action_type: The ApprovedAction.action_type that was executed
+                (CLOSE_FULL, CLOSE_CALL_SPREAD, or CLOSE_PUT_SPREAD).
+            triggering_signal: The SignalEvent.event_type that caused the
+                auto-execute (e.g. the profit-target/DTE/delta FORCED_CLOSE
+                reasons this strategy uses).
+            closed_trades: The closing PaperTrade rows actually persisted by
+                close_ic_legs(); empty when nothing was open to close.
+        """
+        if self._notifier is None:
+            return
+        if not closed_trades:
+            return
+        legs_text = "\n".join(
+            f"  {t.leg_role}: {t.action.value} {t.quantity} @ {t.price}" for t in closed_trades
+        )
+        text = (
+            f"✅ <b>IC V2 closed — {triggering_signal}</b>\n"
+            f"Strategy: <code>{self.strategy_name}</code>\n"
+            f"Action: {action_type}\n"
+            f"{legs_text}"
+        )
+        try:
+            await self._notifier.send_notification(text)
+        except Exception as exc:
+            log.error("ic_nifty_v2.send_notification_failed", error=str(exc))
 
     # ── Private helpers (copied verbatim from ic_nifty_v1) ───────────────────
 

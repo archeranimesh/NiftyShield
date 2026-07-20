@@ -488,6 +488,54 @@ def test_apply_action_close_full_auto_execute_persists_all_legs() -> None:
     assert result == []
 
 
+def test_apply_action_close_full_auto_execute_sends_close_notification() -> None:
+    """BUG-013 (2026-07-20): CLOSE_FULL must confirm via Telegram.
+
+    Previously only PROFIT_LOCK_ZONE2 (a rare partial roll) sent a
+    notification — the far more common full-close path was silent. See
+    docs/bugs/bugs.md BUG-013.
+    """
+    import asyncio
+
+    from src.client.protocol import BrokerClient
+    from src.paper.store import PaperStore
+
+    broker = MagicMock(spec=BrokerClient)
+    from unittest.mock import AsyncMock
+
+    broker.get_ltp = AsyncMock(
+        return_value={
+            _key("23900", "PE"): Decimal("30.00"),
+            _key("23200", "PE"): Decimal("2.00"),
+            _key("25100", "CE"): Decimal("28.00"),
+            _key("25800", "CE"): Decimal("2.50"),
+        }
+    )
+    store = MagicMock(spec=PaperStore)
+    store.record_trades = MagicMock(side_effect=lambda trades: (trades, []))
+    notifier = MagicMock()
+    notifier.send_notification = AsyncMock()
+
+    strategy = IronCondorV2(config=IC_V2_MONTHLY, broker=broker, store=store, notifier=notifier)
+    strategy.set_original_credit(Decimal("100"))
+    positions = _standard_ic_positions()
+    action = ApprovedAction(
+        action_type="CLOSE_FULL",
+        legs_to_close=[],
+        legs_to_open=[],
+        rationale="auto-execute",
+        council_rank=1,
+        metadata={"auto_selected": True, "event_type": "LOSS_STOP"},
+    )
+
+    asyncio.run(strategy.apply_action(positions, action))
+
+    notifier.send_notification.assert_called_once()
+    (message,), _ = notifier.send_notification.call_args
+    assert "LOSS_STOP" in message
+    assert _STRATEGY_NAME in message
+
+
 def test_apply_action_close_full_auto_execute_without_broker_skips_persist_no_raise() -> None:
     """No broker/store injected → logs and skips persistence, does not raise."""
     import asyncio

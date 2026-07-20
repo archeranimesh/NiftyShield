@@ -658,6 +658,71 @@ def test_apply_action_close_full_auto_execute_without_broker_skips_persist_no_ra
     assert result == []
 
 
+def test_apply_action_close_full_auto_execute_sends_close_notification() -> None:
+    """BUG-013 (2026-07-20): auto-execute CLOSE_FULL must confirm via Telegram.
+
+    IronCondorV1 accepted a notifier but never called it — every auto-close
+    was silent, unlike CSP/CC/Collar/PP. See docs/bugs/bugs.md BUG-013.
+    """
+    from unittest.mock import AsyncMock, MagicMock
+
+    from src.client.protocol import BrokerClient
+    from src.paper.store import PaperStore
+
+    broker = MagicMock(spec=BrokerClient)
+    broker.get_ltp = AsyncMock(
+        return_value={
+            _SHORT_PUT_KEY: Decimal("7.70"),
+            _LONG_PUT_KEY: Decimal("3.95"),
+            _SHORT_CALL_KEY: Decimal("3.35"),
+            _LONG_CALL_KEY: Decimal("1.20"),
+        }
+    )
+    store = MagicMock(spec=PaperStore)
+    store.record_trades = MagicMock(side_effect=lambda trades: (trades, []))
+    notifier = MagicMock()
+    notifier.send_notification = AsyncMock()
+
+    strat = IronCondorV1(broker=broker, store=store, notifier=notifier)
+    positions = _make_ic_positions()
+    action = _make_auto_close_action("CLOSE_FULL", event_type="PROFIT_TARGET")
+
+    asyncio.run(strat.apply_action(positions, action))
+
+    notifier.send_notification.assert_called_once()
+    (message,), _ = notifier.send_notification.call_args
+    assert "PROFIT_TARGET" in message
+    assert _STRATEGY in message
+    assert "short_put" in message
+
+
+def test_apply_action_no_notifier_does_not_raise() -> None:
+    """Happy path — no notifier configured, close still succeeds silently."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from src.client.protocol import BrokerClient
+    from src.paper.store import PaperStore
+
+    broker = MagicMock(spec=BrokerClient)
+    broker.get_ltp = AsyncMock(
+        return_value={
+            _SHORT_PUT_KEY: Decimal("7.70"),
+            _LONG_PUT_KEY: Decimal("3.95"),
+            _SHORT_CALL_KEY: Decimal("3.35"),
+            _LONG_CALL_KEY: Decimal("1.20"),
+        }
+    )
+    store = MagicMock(spec=PaperStore)
+    store.record_trades = MagicMock(side_effect=lambda trades: (trades, []))
+
+    strat = IronCondorV1(broker=broker, store=store)  # no notifier
+    positions = _make_ic_positions()
+    action = _make_auto_close_action("CLOSE_FULL")
+
+    result = asyncio.run(strat.apply_action(positions, action))
+    assert result == []  # close still happens; notification is best-effort only
+
+
 def test_apply_action_close_full_manual_action_does_not_auto_persist() -> None:
     """A manually-approved (non auto-execute) CLOSE_FULL does not call close_ic_legs.
 

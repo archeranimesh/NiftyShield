@@ -34,7 +34,7 @@ from src.instruments.lookup import InstrumentLookup
 from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
 from src.paper.constants import DEFAULT_BOD_PATH
-from src.paper.models import PaperPosition
+from src.paper.models import PaperPosition, PaperTrade
 from src.strategy import roll_utils
 from src.strategy.ic_close_executor import close_ic_legs
 from src.strategy.protocol import ApprovedAction, LegSpec, SignalEvent
@@ -507,7 +507,7 @@ class IronCondorV1:
                 )
             else:
                 triggering_signal = (action.metadata or {}).get("event_type", action.action_type)
-                await close_ic_legs(
+                closed_trades = await close_ic_legs(
                     broker=self._broker,
                     store=self._store,
                     positions=[p for p in positions if p.leg_role in closed],
@@ -515,7 +515,51 @@ class IronCondorV1:
                     strategy_name=self.strategy_name,
                     notes=f"ic_nifty_v1 auto-close: {triggering_signal}",
                 )
+                # BUG-013 (2026-07-20): IronCondorV1 accepted a notifier in its
+                # constructor but never called it — every auto-close was
+                # silent on Telegram, unlike every other auto-execute
+                # strategy (CSP/CC/Collar/PP all confirm on close). See
+                # DECISIONS.md 2026-07-20 and docs/bugs/bugs.md BUG-013.
+                await self._send_close_notification(
+                    action.action_type, triggering_signal, closed_trades
+                )
         return [p for p in positions if p.leg_role not in closed]
+
+    async def _send_close_notification(
+        self,
+        action_type: str,
+        triggering_signal: str,
+        closed_trades: list[PaperTrade],
+    ) -> None:
+        """Send a plain HTML close-confirmation notification. Non-fatal.
+
+        Args:
+            action_type: The ApprovedAction.action_type that was executed
+                (CLOSE_FULL, CLOSE_CALL_SPREAD, or CLOSE_PUT_SPREAD).
+            triggering_signal: The SignalEvent.event_type that caused the
+                auto-execute (e.g. PROFIT_TARGET, LOSS_STOP, TIME_STOP).
+            closed_trades: The closing PaperTrade rows actually persisted by
+                close_ic_legs(); empty when nothing was open to close.
+        """
+        if self._notifier is None:
+            return
+        if not closed_trades:
+            # close_ic_legs() already logs ic_close_executor.nothing_to_close;
+            # no notification needed for a no-op.
+            return
+        legs_text = "\n".join(
+            f"  {t.leg_role}: {t.action.value} {t.quantity} @ {t.price}" for t in closed_trades
+        )
+        text = (
+            f"✅ <b>IC closed — {triggering_signal}</b>\n"
+            f"Strategy: <code>{self.strategy_name}</code>\n"
+            f"Action: {action_type}\n"
+            f"{legs_text}"
+        )
+        try:
+            await self._notifier.send_notification(text)
+        except Exception as exc:
+            log.warning("ic_nifty_v1.send_notification.failed", error=str(exc))
 
     # ── Private helpers ───────────────────────────────────────────────────────
 
