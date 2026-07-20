@@ -174,6 +174,69 @@ async def test_check_base_expiry_alerts(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_check_base_expiry_ditm_call_skips_weekly(tmp_path: Path) -> None:
+    """base_ditm_call must roll to the next monthly, not the intervening weekly."""
+    store = _make_store(tmp_path)
+    today = date(2026, 6, 21)
+
+    instruments = [
+        {
+            "instrument_key": "NSE_FO|NIFTY26JUN23000CE",
+            "underlying_symbol": "NIFTY",
+            "instrument_type": "CE",
+            "strike_price": 23000.0,
+            "expiry": "2026-06-25",  # expiring, 4 DTE
+            "trading_symbol": "NIFTY JUN 23000 CE",
+            "segment": "NSE_FO",
+        },
+        {
+            "instrument_key": "NSE_FO|NIFTY26JUN30W23000CE",
+            "underlying_symbol": "NIFTY",
+            "instrument_type": "CE",
+            "strike_price": 23000.0,
+            "expiry": "2026-06-30",  # weekly, same strike — must NOT be selected
+            "trading_symbol": "NIFTY JUN30 23000 CE",
+            "segment": "NSE_FO",
+        },
+        {
+            "instrument_key": "NSE_FO|NIFTY26JUL23000CE",
+            "underlying_symbol": "NIFTY",
+            "instrument_type": "CE",
+            "strike_price": 23000.0,
+            "expiry": "2026-07-30",  # next monthly — correct pick
+            "trading_symbol": "NIFTY JUL 23000 CE",
+            "segment": "NSE_FO",
+        },
+    ]
+    lookup = InstrumentLookup(instruments)
+
+    pos_ce = PaperPosition(
+        strategy_name="paper_nifty_proxy",
+        leg_role="base_ditm_call",
+        net_qty=50,
+        avg_cost=Decimal("1000.0"),
+        avg_sell_price=Decimal("0.0"),
+        instrument_key="NSE_FO|NIFTY26JUN23000CE",
+    )
+
+    notifier = MagicMock()
+    notifier.send = AsyncMock()
+
+    await snap_mod._check_base_expiry(
+        positions=[pos_ce],
+        instruments=lookup,
+        today=today,
+        store=store,
+        notifier=notifier,
+    )
+
+    assert notifier.send.call_count == 1
+    alert_msg = notifier.send.call_args[0][0]
+    assert "NSE_FO|NIFTY26JUL23000CE" in alert_msg
+    assert "NSE_FO|NIFTY26JUN30W23000CE" not in alert_msg
+
+
+@pytest.mark.asyncio
 async def test_check_base_expiry_idempotency(tmp_path: Path) -> None:
     store = _make_store(tmp_path)
     today = date(2026, 6, 21)

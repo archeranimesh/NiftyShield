@@ -418,6 +418,78 @@ class InstrumentLookup:
         candidates.sort(key=lambda x: x[0])
         return candidates[0][1]
 
+    def get_next_contract_in_band(
+        self, instrument_key: str, today: date, preference: list[str] | None = None
+    ) -> dict[str, Any] | None:
+        """Find the next same-strike option contract in the monthly/quarterly/yearly cadence.
+
+        Unlike `get_next_contract`, which walks strictly to the next chronological
+        expiry at the same strike (and thus lands on next week's weekly contract for
+        options, since NIFTY lists a weekly expiry at every strike), this method uses
+        `get_expiry_candidates()` to pick the next expiry that actually belongs to the
+        monthly/quarterly/yearly cadence — skipping intervening weeklies. Intended for
+        rolling base legs (e.g. `base_ditm_call`) that are meant to stay in a
+        multi-week+ expiry band, never a weekly contract.
+
+        Args:
+            instrument_key: The instrument key of the current (expiring) contract.
+            today: Reference date for band selection (passed through to
+                `get_expiry_candidates`).
+            preference: Custom band preference order. Defaults to
+                ["monthly", "quarterly", "yearly"] (weekly is never selected here).
+
+        Returns:
+            The instrument dictionary of the next same-strike contract in the
+            nearest available band, or None if the current contract is unknown,
+            not an option, or no band expiry has a matching strike.
+        """
+        current = self.get_by_key(instrument_key)
+        if not current:
+            logger.warning(
+                "get_next_contract_in_band.current_not_found", instrument_key=instrument_key
+            )
+            return None
+
+        underlying = current.get("underlying_symbol")
+        inst_type = current.get("instrument_type")
+        strike = current.get("strike_price")
+        if inst_type not in ("CE", "PE") or not underlying or strike is None:
+            logger.warning(
+                "get_next_contract_in_band.not_an_option",
+                instrument_key=instrument_key,
+                instrument_type=inst_type,
+            )
+            return None
+
+        band_candidates = self.get_expiry_candidates(underlying, today, preference=preference)
+        if not band_candidates:
+            logger.warning(
+                "get_next_contract_in_band.no_band_expiry",
+                instrument_key=instrument_key,
+                underlying=underlying,
+            )
+            return None
+
+        for _label, exp_date in band_candidates:
+            for inst in self._instruments:
+                if inst.get("underlying_symbol") != underlying:
+                    continue
+                if inst.get("instrument_type") != inst_type:
+                    continue
+                if inst.get("strike_price") != strike:
+                    continue
+                if parse_expiry(inst.get("expiry")) == exp_date:
+                    return inst
+
+        logger.warning(
+            "get_next_contract_in_band.strike_not_found_in_band",
+            instrument_key=instrument_key,
+            underlying=underlying,
+            strike=strike,
+            bands=band_candidates,
+        )
+        return None
+
     def get_all_option_expiries(self, underlying: str) -> list[str]:
         """Return all unique option expiries for an underlying chronologically.
 

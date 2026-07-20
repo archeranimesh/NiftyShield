@@ -237,3 +237,125 @@ def test_expiry_candidates_ignores_weeklies():
         ("monthly", "2026-05-28"),
         ("quarterly", "2026-06-25")
     ]
+
+
+def test_get_next_contract_in_band_skips_weekly():
+    """A same-strike weekly contract must be skipped in favor of the next monthly."""
+    today = date(2026, 5, 10)
+    # Current (expiring) contract, DTE < 1 so it's excluded from its own band search.
+    expiring = "2026-05-11"
+    weekly = "2026-05-14"  # same strike, DTE 4 -> would be `get_next_contract`'s pick
+    monthly = "2026-05-28"  # same strike, DTE 18, last of May -> correct pick
+
+    instruments = [
+        {
+            "instrument_key": "NSE_FO|NIFTY26MAY11W22000CE",
+            "segment": "NSE_FO",
+            "underlying_symbol": "NIFTY",
+            "instrument_type": "CE",
+            "strike_price": 22000.0,
+            "expiry": expiring,
+        },
+        {
+            "instrument_key": "NSE_FO|NIFTY26MAY14W22000CE",
+            "segment": "NSE_FO",
+            "underlying_symbol": "NIFTY",
+            "instrument_type": "CE",
+            "strike_price": 22000.0,
+            "expiry": weekly,
+        },
+        {
+            "instrument_key": "NSE_FO|NIFTY26MAY22000CE",
+            "segment": "NSE_FO",
+            "underlying_symbol": "NIFTY",
+            "instrument_type": "CE",
+            "strike_price": 22000.0,
+            "expiry": monthly,
+        },
+    ]
+    lookup = InstrumentLookup(instruments)
+
+    next_inst = lookup.get_next_contract_in_band("NSE_FO|NIFTY26MAY11W22000CE", today)
+
+    assert next_inst is not None
+    assert next_inst["instrument_key"] == "NSE_FO|NIFTY26MAY22000CE"
+
+
+def test_get_next_contract_in_band_falls_back_to_quarterly():
+    """When no monthly contract exists at the strike, fall back to the quarterly band."""
+    today = date(2026, 5, 10)
+    expiring = "2026-05-11"
+    quarterly = "2026-06-25"  # same strike, last of June (quarterly month)
+
+    instruments = [
+        {
+            "instrument_key": "NSE_FO|NIFTY26MAY11W22000CE",
+            "segment": "NSE_FO",
+            "underlying_symbol": "NIFTY",
+            "instrument_type": "CE",
+            "strike_price": 22000.0,
+            "expiry": expiring,
+        },
+        {
+            "instrument_key": "NSE_FO|NIFTY26JUN22000CE",
+            "segment": "NSE_FO",
+            "underlying_symbol": "NIFTY",
+            "instrument_type": "CE",
+            "strike_price": 22000.0,
+            "expiry": quarterly,
+        },
+    ]
+    lookup = InstrumentLookup(instruments)
+
+    next_inst = lookup.get_next_contract_in_band("NSE_FO|NIFTY26MAY11W22000CE", today)
+
+    assert next_inst is not None
+    assert next_inst["instrument_key"] == "NSE_FO|NIFTY26JUN22000CE"
+
+
+def test_get_next_contract_in_band_no_strike_match_returns_none():
+    """No instrument at the required strike in any band -> None (BOD-stale warning path)."""
+    today = date(2026, 5, 10)
+    instruments = [
+        {
+            "instrument_key": "NSE_FO|NIFTY26MAY11W22000CE",
+            "segment": "NSE_FO",
+            "underlying_symbol": "NIFTY",
+            "instrument_type": "CE",
+            "strike_price": 22000.0,
+            "expiry": "2026-05-11",
+        },
+        # Monthly band exists, but only at a different strike.
+        {
+            "instrument_key": "NSE_FO|NIFTY26MAY22200CE",
+            "segment": "NSE_FO",
+            "underlying_symbol": "NIFTY",
+            "instrument_type": "CE",
+            "strike_price": 22200.0,
+            "expiry": "2026-05-28",
+        },
+    ]
+    lookup = InstrumentLookup(instruments)
+
+    assert lookup.get_next_contract_in_band("NSE_FO|NIFTY26MAY11W22000CE", today) is None
+
+
+def test_get_next_contract_in_band_current_not_found():
+    """Unknown instrument_key -> None."""
+    lookup = InstrumentLookup([])
+    assert lookup.get_next_contract_in_band("NSE_FO|INVALID", date(2026, 5, 10)) is None
+
+
+def test_get_next_contract_in_band_rejects_futures():
+    """A FUT instrument_key is out of scope for this method -> None."""
+    instruments = [
+        {
+            "instrument_key": "NSE_FO|NIFTY26MAYFUT",
+            "segment": "NSE_FO",
+            "underlying_symbol": "NIFTY",
+            "instrument_type": "FUT",
+            "expiry": "2026-05-28",
+        },
+    ]
+    lookup = InstrumentLookup(instruments)
+    assert lookup.get_next_contract_in_band("NSE_FO|NIFTY26MAYFUT", date(2026, 5, 10)) is None

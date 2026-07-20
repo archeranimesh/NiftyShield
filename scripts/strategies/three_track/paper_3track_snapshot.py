@@ -397,7 +397,15 @@ async def _check_base_expiry(
             continue
 
         # DTE <= 5: Base position is expiring!
-        next_inst = instruments.get_next_contract(pos.instrument_key)
+        # base_ditm_call must roll within the monthly/quarterly/yearly cadence, never
+        # into a weekly contract — NIFTY options list a weekly expiry at every strike,
+        # so a plain "next chronological expiry" walk lands on next week's contract.
+        # base_futures has no weekly contract to begin with (NSE lists NIFTY futures
+        # monthly-only), so the plain next-expiry walk is safe there.
+        if pos.leg_role == "base_ditm_call":
+            next_inst = instruments.get_next_contract_in_band(pos.instrument_key, today)
+        else:
+            next_inst = instruments.get_next_contract(pos.instrument_key)
         warning_suffix = ""
         if not next_inst:
             logger.warning("base_expiry.next_contract_not_found", instrument_key=pos.instrument_key)
