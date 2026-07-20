@@ -133,9 +133,13 @@ class PaperPosition:
             ``"FUT"`` for futures contracts. ``None`` if the instrument_key could
             not be resolved (unrecognised/legacy key), the resolved instrument
             is none of CE/PE/FUT (e.g. an equity/index key other than
-            NiftyBees), or the BOD JSON file itself could not be loaded
-            (missing/corrupt) — all cases are logged as a warning and never
-            raise.
+            NiftyBees), the BOD JSON file itself could not be loaded
+            (missing/corrupt) — all logged as a warning and never raise — or
+            (BUG-014) the leg is flat (``net_qty == 0``): resolution is skipped
+            entirely for closed legs, silently, since a settled/delisted
+            contract's instrument_key can never resolve again once it drops
+            out of the BOD file, and attempting it every read would produce a
+            permanent, unactionable warning for every closed leg forever.
     """
 
     strategy_name: str

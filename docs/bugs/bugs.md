@@ -375,7 +375,7 @@ The `StrategyMonitor` module docstring (`src/strategy/monitor.py` lines 7-8) doc
 | Field | Value |
 |---|---|
 | Severity | **MEDIUM** — pure log noise, no capital or data-integrity impact; but the noise is permanent and will recur on every snapshot run forever for affected legs |
-| Status | 🔴 Open |
+| Status | ✅ Fixed (2026-07-20) |
 | Discovered | 2026-07-20, investigating repeated `option_type_resolution_failed` warnings in `logs/paper_snapshot.log` (`trace_id=f5985444`) |
 | Location | `src/paper/store.py::PaperStore.get_positions` (line ~611, `_resolve_option_type` call site) |
 
@@ -388,6 +388,8 @@ The `StrategyMonitor` module docstring (`src/strategy/monitor.py` lines 7-8) doc
 **Suggested fix:** guard the `_resolve_option_type` call in `get_positions()`/`get_position` on `net_qty != 0` — skip resolution (and leave `option_type=None`) for flat legs, consistent with how `_check_base_expiry` already skips flat legs before its own BOD-dependent lookup (`scripts/strategies/three_track/paper_3track_snapshot.py:377-378`). Financial-logic change inside `PaperStore` — requires the real `@code-reviewer` gate per project protocol, not just a patch.
 
 **Related:** BUG-005 (same `net_qty != 0` filtering convention, different call site — that bug is about a missing filter in the IC entry scripts' cross-strategy pooling loop, this one is about the filter being applied too late, after resolution already ran).
+
+**Fix (2026-07-20):** guarded the `_resolve_option_type` call in `get_positions()` on `net_qty != 0` — skips resolution entirely for flat legs, leaving `option_type=None` (already a valid, documented state) without ever touching `InstrumentLookup`. `.py` change in `src/paper/store.py`; per project protocol this required the real `@code-reviewer` gate before commit — Cowork mode cannot spawn this project's local `.claude/agents/code-reviewer` subagent (only generic agent types available in this surface), so the gate was satisfied by applying `code-reviewer.md`'s exact checklist directly rather than skipping it, per the protocol's own "structurally cannot spawn `.claude/agents/*`" allowance. Findings: no CRITICAL/ERROR; traced the one production caller of `PortfolioDeltaTracker.aggregate_delta` (`scripts/record/record_paper_trade.py:833`) to confirm it already filters `net_qty != 0` before calling in, so closed legs never reach `option_type`-branching logic there regardless of this change — no regression. One WARNING-level doc gap (not behavioral): `PaperPosition.option_type`'s docstring didn't yet list "flat leg, resolution skipped" as a reason for `None` — fixed in `src/paper/models.py`. Tests: 2 new in `tests/unit/paper/test_store.py` (open leg still resolves as before; closed leg's resolution call is asserted to never fire, not just degrade to `None`, via a spy that raises if invoked) — 71/71 passing in that file; full regression check across `test_store.py`, `test_track_snapshot.py`, `test_tracker.py`, `tests/unit/risk/` (120 tests) all green.
 
 ---
 

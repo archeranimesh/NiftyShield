@@ -624,7 +624,19 @@ class PaperStore:
                     avg_sell_price=avg_sell_price,
                     instrument_key=cycle_instrument_key,
                     entry_date=cycle_start_date,
-                    option_type=self._resolve_option_type(cycle_instrument_key),
+                    # BUG-014: a flat (net_qty == 0) leg's cycle_instrument_key
+                    # references its most recently closed contract, which — once
+                    # settled/delisted — will never resolve against the BOD file
+                    # again. Resolving option_type for closed legs produces a
+                    # permanent, unactionable warning on every snapshot run, so
+                    # skip resolution entirely when the leg carries no live
+                    # position (option_type=None is already a valid, non-fatal
+                    # state per PaperPosition's docstring).
+                    option_type=(
+                        self._resolve_option_type(cycle_instrument_key)
+                        if net_qty != 0
+                        else None
+                    ),
                 )
             )
         return positions

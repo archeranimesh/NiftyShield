@@ -392,6 +392,44 @@ def test_get_positions_bulk_resolves_option_type_per_leg(db_path: Path) -> None:
     assert pos_map["short_call"].option_type == "CE"
 
 
+def test_get_positions_still_resolves_option_type_for_open_leg(db_path: Path) -> None:
+    """Regression guard for BUG-014's net_qty!=0 gate: an open leg must still resolve."""
+    lookup = InstrumentLookup([{"instrument_key": _KEY, "instrument_type": "PE"}])
+    store = PaperStore(db_path, instrument_lookup=lookup)
+    store.record_trade(_sell_trade(instrument_key=_KEY, quantity=65))
+    pos = store.get_position(_STRATEGY, _LEG)
+    assert pos.net_qty == -65
+    assert pos.option_type == "PE"
+
+
+def test_get_positions_skips_option_type_resolution_for_closed_leg(db_path: Path) -> None:
+    """BUG-014: a flat (net_qty == 0) leg must not attempt option_type resolution at all.
+
+    Regression guard: get_positions() previously called _resolve_option_type
+    unconditionally for every leg_role a strategy has ever traded, including
+    fully closed ones. Once a contract expires/is delisted, InstrumentLookup
+    can never resolve it again — so a closed leg produced a permanent,
+    unactionable option_type_resolution_failed warning on every snapshot run.
+    Asserts the resolution call is skipped entirely (not just that it degrades
+    to None) by making the call raise if invoked.
+    """
+    store = PaperStore(db_path)
+    store.record_trade(_buy_trade(instrument_key=_KEY, quantity=65))
+    store.record_trade(_sell_trade(instrument_key=_KEY, quantity=65, trade_date=date(2026, 5, 20)))
+
+    def _must_not_be_called(instrument_key: str) -> None:
+        raise AssertionError(
+            f"_resolve_option_type must not be called for a closed leg (net_qty == 0), "
+            f"got instrument_key={instrument_key!r}"
+        )
+
+    store._resolve_option_type = _must_not_be_called  # type: ignore[method-assign]
+
+    pos = store.get_position(_STRATEGY, _LEG)
+    assert pos.net_qty == 0
+    assert pos.option_type is None
+
+
 def test_get_positions_bulk(store: PaperStore) -> None:
     # Record trades for different legs
     store.record_trade(_sell_trade(leg_role="leg_1", quantity=75, price=Decimal("120.50")))
