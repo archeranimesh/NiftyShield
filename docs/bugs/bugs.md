@@ -444,7 +444,7 @@ The `StrategyMonitor` module docstring (`src/strategy/monitor.py` lines 7-8) doc
 | Field | Value |
 |---|---|
 | Severity | **HIGH** — the base futures leg (hedge notional for the 3-track comparison) is currently unhedged/stale on an expired contract with no live price feed; needs an operator roll decision, not a code or data fix |
-| Status | 🔴 Open |
+| Status | ✅ Fixed (2026-07-20) |
 | Discovered | 2026-07-20, as a direct consequence of fixing BUG-015 — correcting the 66071→62329 quantity error required pulling `base_futures`'s complete trade history, which showed only 3 rows total, ending at the June roll |
 | Location | `paper_trades`, `paper_nifty_futures` / `base_futures`, `NSE_FO|62329` (June 2026 NIFTY futures, expiry 2026-06-30) |
 
@@ -457,5 +457,7 @@ The `StrategyMonitor` module docstring (`src/strategy/monitor.py` lines 7-8) doc
 **Suggested fix:** not a data correction — requires deciding and recording an actual roll (settlement-close `NSE_FO|62329` at its 2026-06-30 settlement price, then open the next NIFTY futures contract, likely September quarterly per the contract's monthly-only listing convention). This is a live trading/strategy decision, not a bug patch — flagging for operator action rather than fixing unilaterally.
 
 **Related:** BUG-015 (the quantity-error fix this was discovered while verifying); BUG-016 (same "roll process incomplete" family — a different leg, different failure shape, same underlying gap: rolls recorded manually per-leg with no completeness check or reminder once a leg goes quiet).
+
+**Fix (2026-07-20):** operator decision — roll directly into August (`NSE_FO|58072`, expiry 2026-08-25), skipping July (`NSE_FO|61093`, only 8 DTE remaining at decision time, not worth entering). Prices sourced live rather than approximated (correcting the same shortcut that caused BUG-015): June settlement-close used the official NSE Final Settlement Price from the FUTIDX bhavcopy (`settle_price=23865.75` for the 2026-06-30 expiry row, fetched via `scripts/pipeline/bhavcopy_bootstrap.py --underlying NIFTY --start 2026-06-30 --end 2026-06-30 --include-futures`, written to `data/offline/futures_ohlcv/2026/06/nifty_2026_06.parquet`) — distinct from and more correct than that day's traded close (23861.80). August open used a live LTP fetch via `UpstoxMarketClient.get_ltp_sync` (24364.0, against spot 24238.5 — this session's sandbox has no route to `api.upstox.com`, so the operator ran the fetch locally and supplied the result). Recorded: `SELL 65 NSE_FO|62329 @ 23865.75` (2026-06-30), `BUY 65 NSE_FO|58072 @ 24364.0` (2026-07-20). Verified via the same `get_positions()` reimplementation used for BUG-015/016: `net_qty=65`, `instrument_key=NSE_FO|58072`, `entry_date=2026-07-20` — leg is live and correctly hedged again after 20 days unrolled.
 
 ---
