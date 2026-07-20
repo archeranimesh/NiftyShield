@@ -253,6 +253,18 @@ class IronCondorV1:
 
         # ── Combined mark signals ─────────────────────────────────────────────
         combined_mark, entry_credit = self._compute_combined_pnl(market, ic_positions)
+        if combined_mark is None or entry_credit <= Decimal("0"):
+            # 2026-07-20: this guard used to silently skip PROFIT_TARGET/
+            # LOSS_STOP entirely with no trace — the exact failure point of
+            # the BUG-2 follow-up incident. `grep pnl_gate_skipped` now shows
+            # every tick this strategy went unmonitored and why.
+            # See DECISIONS.md 2026-07-20.
+            log.debug(
+                "ic_nifty_v1.pnl_gate_skipped",
+                strategy=self.strategy_name,
+                reason="mark_unavailable" if combined_mark is None else "entry_credit_not_positive",
+                entry_credit=str(entry_credit),
+            )
         if combined_mark is not None and entry_credit > Decimal("0"):
             pct = combined_mark / entry_credit
             if pct <= self._config.profit_target_pct:
@@ -773,6 +785,20 @@ class IronCondorV1:
                     combined_mark -= opt_leg.ltp
                 else:
                     mark_available = False
+
+            if opt_leg is None:
+                # 2026-07-20: this is the exact point PROFIT_TARGET/LOSS_STOP
+                # went silent during the BUG-2 follow-up incident — a leg not
+                # found in `market` (e.g. because the daemon fetched the
+                # wrong expiry's chain) used to flip mark_available=False
+                # with zero logging. See DECISIONS.md 2026-07-20.
+                log.warning(
+                    "ic_nifty_v1.mark_unavailable",
+                    strategy=self.strategy_name,
+                    leg_role=pos.leg_role,
+                    instrument_key=pos.instrument_key,
+                    market_expiry=str(market.expiry),
+                )
 
         return (combined_mark if mark_available else None, entry_credit)
 

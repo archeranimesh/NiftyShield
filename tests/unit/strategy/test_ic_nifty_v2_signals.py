@@ -25,6 +25,7 @@ from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import pytest
+from structlog.testing import capture_logs
 
 from src.models.options import OptionChain, OptionChainStrike, OptionLeg
 from src.paper.models import PaperPosition
@@ -227,6 +228,53 @@ def test_no_signal_on_healthy_position() -> None:
 
         result = asyncio.run(strategy.check_signals(_healthy_chain(), _standard_ic_positions()))
     assert result == []
+
+
+def test_mark_unavailable_logged_and_pnl_gate_skipped_on_empty_chain() -> None:
+    """BUG-2 follow-up (2026-07-20): a chain missing all legs (e.g. daemon
+    fetched the wrong expiry) must log ic_nifty_v2.mark_unavailable per leg
+    and ic_nifty_v2.pnl_gate_skipped once, instead of silently returning []
+    with no trace of why priorities 4-6 (profit target / profit-lock) never
+    evaluated.
+    """
+    strategy = _make_strategy()
+    empty_chain = _chain({}, expiry=_EXPIRY)
+    with (
+        patch("src.strategy.ic_nifty_v2.market_today", return_value=_FROZEN_TODAY),
+        capture_logs() as logs,
+    ):
+        import asyncio
+
+        result = asyncio.run(strategy.check_signals(empty_chain, _standard_ic_positions()))
+
+    assert result == []
+    unavailable = [e for e in logs if e["event"] == "ic_nifty_v2.mark_unavailable"]
+    assert len(unavailable) == 4
+    assert {e["leg_role"] for e in unavailable} == {
+        "short_put",
+        "long_put_hedge",
+        "short_call",
+        "long_call_hedge",
+    }
+    skipped = [e for e in logs if e["event"] == "ic_nifty_v2.pnl_gate_skipped"]
+    assert len(skipped) == 1
+    assert skipped[0]["reason"] == "mark_unavailable"
+    assert skipped[0]["strategy"] == _STRATEGY_NAME
+
+
+def test_mark_unavailable_not_logged_on_healthy_chain() -> None:
+    """Happy path — all legs resolve, no warning noise."""
+    strategy = _make_strategy()
+    with (
+        patch("src.strategy.ic_nifty_v2.market_today", return_value=_FROZEN_TODAY),
+        capture_logs() as logs,
+    ):
+        import asyncio
+
+        asyncio.run(strategy.check_signals(_healthy_chain(), _standard_ic_positions()))
+
+    assert not [e for e in logs if e["event"] == "ic_nifty_v2.mark_unavailable"]
+    assert not [e for e in logs if e["event"] == "ic_nifty_v2.pnl_gate_skipped"]
 
 
 def test_full_pipeline_delta_warn() -> None:

@@ -158,6 +158,21 @@ class StrategyMonitor:
             expiry_groups = self._group_positions_by_expiry(positions)
             if not expiry_groups:
                 # No resolvable expiry — fall back to first available chain.
+                # 2026-07-20: this silently assigns EVERY open position (any
+                # expiry) to whichever chain happened to be fetched first —
+                # the exact mechanism behind the BUG-2 follow-up incident
+                # (see DECISIONS.md 2026-07-20). Only log when there are
+                # actual positions being mis-assigned; a flat strategy with
+                # zero positions hitting this branch is not a problem.
+                open_positions = [p for p in positions if p.net_qty != 0]
+                if open_positions:
+                    fallback_expiry = next(iter(chains))
+                    log.warning(
+                        "strategy_monitor.expiry_fallback_used",
+                        strategy=strategy.strategy_name,
+                        fallback_expiry=str(fallback_expiry),
+                        position_count=len(open_positions),
+                    )
                 expiry_groups = {next(iter(chains)): positions}
             for expiry_date, expiry_positions in expiry_groups.items():
                 chain = chains.get(expiry_date)
@@ -306,6 +321,19 @@ class StrategyMonitor:
                         return _date.fromisoformat(expiry_str)
                     except ValueError:
                         pass
+
+        # 2026-07-20: this branch was silently dropping every numeric-keyed
+        # position's expiry when self._lookup was None (StrategyMonitor built
+        # without a lookup= arg — see DECISIONS.md 2026-07-20). Making it
+        # visible here means the next occurrence shows up on `grep` alone,
+        # without needing a standalone repro script.
+        log.warning(
+            "strategy_monitor.expiry_unresolved",
+            strategy=pos.strategy_name,
+            leg_role=pos.leg_role,
+            instrument_key=pos.instrument_key,
+            lookup_wired=self._lookup is not None,
+        )
         return None
 
     def _group_positions_by_expiry(
@@ -355,7 +383,20 @@ class StrategyMonitor:
 
         # Fallback: use expiry_fn when positions carry no parseable expiry.
         if not unique_expiries and self._expiry_fn is not None:
+            open_position_count = sum(1 for p in positions if p.net_qty != 0)
             expiry_str = self._expiry_fn()
+            if open_position_count:
+                # 2026-07-20: distinguishes a legitimate "no chain needed"
+                # empty tick from the degraded case — real open positions
+                # existed but every one of them failed expiry resolution, so
+                # this single expiry_fn() chain is about to be used for ALL
+                # of them regardless of their real expiry. See
+                # DECISIONS.md 2026-07-20.
+                log.warning(
+                    "strategy_monitor.chain_fetch_fallback_to_expiry_fn",
+                    open_position_count=open_position_count,
+                    fallback_expiry=expiry_str,
+                )
             try:
                 unique_expiries.add(_date.fromisoformat(expiry_str))
             except ValueError:

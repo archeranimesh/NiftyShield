@@ -17,6 +17,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
+from structlog.testing import capture_logs
 
 from src.models.options import OptionChain, OptionChainStrike, OptionLeg
 from src.paper.models import PaperPosition
@@ -208,6 +209,50 @@ def test_profit_target_fires_when_mark_at_50_pct() -> None:
     assert "PROFIT_TARGET" in types
     pt = next(e for e in events if e.event_type == "PROFIT_TARGET")
     assert pt.severity == "ACTION"
+
+
+def test_mark_unavailable_logs_warning_per_missing_leg() -> None:
+    """BUG-2 follow-up (2026-07-20): each leg missing from the chain during
+    _compute_combined_pnl must emit ic_nifty_v1.mark_unavailable — this is the
+    exact point PROFIT_TARGET/LOSS_STOP went silent in the live incident.
+    """
+    strat = IronCondorV1()
+    positions = _make_ic_positions()
+    with capture_logs() as logs:
+        combined_mark, entry_credit = strat._compute_combined_pnl(_make_empty_chain(), positions)
+    assert combined_mark is None
+    assert entry_credit == Decimal("100")
+    unavailable_events = [e for e in logs if e["event"] == "ic_nifty_v1.mark_unavailable"]
+    assert len(unavailable_events) == 4  # one per leg, chain has zero strikes
+    leg_roles = {e["leg_role"] for e in unavailable_events}
+    assert leg_roles == {"short_put", "long_put_hedge", "short_call", "long_call_hedge"}
+    assert all(e["strategy"] == _STRATEGY for e in unavailable_events)
+
+
+def test_mark_unavailable_not_logged_on_healthy_chain() -> None:
+    """Happy path — no missing legs, no warning noise."""
+    strat = IronCondorV1()
+    positions = _make_ic_positions()
+    with capture_logs() as logs:
+        combined_mark, _entry_credit = strat._compute_combined_pnl(_make_chain(), positions)
+    assert combined_mark is not None
+    assert not [e for e in logs if e["event"] == "ic_nifty_v1.mark_unavailable"]
+
+
+def test_pnl_gate_skipped_logged_when_mark_unavailable() -> None:
+    """BUG-2 follow-up (2026-07-20): check_signals must log why PROFIT_TARGET/
+    LOSS_STOP were skipped when the chain is missing legs, instead of silently
+    returning no signal for that reason.
+    """
+    strat = IronCondorV1()
+    positions = _make_ic_positions()
+    with capture_logs() as logs:
+        events = asyncio.run(strat.check_signals(_make_empty_chain(), positions))
+    assert not [e for e in events if e.event_type in ("PROFIT_TARGET", "LOSS_STOP")]
+    skipped = [e for e in logs if e["event"] == "ic_nifty_v1.pnl_gate_skipped"]
+    assert len(skipped) == 1
+    assert skipped[0]["reason"] == "mark_unavailable"
+    assert skipped[0]["strategy"] == _STRATEGY
 
 
 def test_loss_stop_fires_when_mark_at_200_pct() -> None:

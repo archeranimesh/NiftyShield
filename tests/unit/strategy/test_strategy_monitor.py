@@ -13,6 +13,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from structlog.testing import capture_logs
 
 from src.client.exceptions import DataFetchError
 from src.models.options import OptionChain
@@ -436,6 +437,112 @@ async def test_tick_fetches_chain_per_unique_expiry() -> None:
     called_expiries = {call.args[1] for call in broker.get_option_chain.call_args_list}
     assert "2026-06-30" in called_expiries
     assert "2026-07-29" in called_expiries
+
+
+def test_get_position_expiry_logs_warning_when_unresolvable() -> None:
+    """BUG-2 follow-up (2026-07-20): a numeric instrument key with no lookup
+    wired must log strategy_monitor.expiry_unresolved instead of silently
+    returning None — this is the exact daemon misconfiguration behind the
+    live incident (StrategyMonitor built without lookup=).
+    """
+    monitor = _make_monitor()  # no lookup passed — matches the pre-fix daemon
+    pos = PaperPosition(
+        strategy_name="paper_ic_nifty_v1_monthly",
+        leg_role="short_put",
+        net_qty=-65,
+        avg_cost=Decimal("0"),
+        avg_sell_price=Decimal("21.40"),
+        instrument_key="NSE_FO|63896",  # real Upstox numeric key, no named format
+    )
+    with capture_logs() as logs:
+        result = monitor._get_position_expiry(pos)
+    assert result is None
+    unresolved = [e for e in logs if e["event"] == "strategy_monitor.expiry_unresolved"]
+    assert len(unresolved) == 1
+    assert unresolved[0]["instrument_key"] == "NSE_FO|63896"
+    assert unresolved[0]["lookup_wired"] is False
+
+
+def test_get_position_expiry_no_warning_for_named_key() -> None:
+    """Happy path — named-format key resolves via regex, no warning noise."""
+    monitor = _make_monitor()
+    pos = PaperPosition(
+        strategy_name="paper_csp_nifty_v1",
+        leg_role="short_put",
+        net_qty=-65,
+        avg_cost=Decimal("0"),
+        avg_sell_price=Decimal("100"),
+        instrument_key="NIFTY30JUN2026PE23000",
+    )
+    with capture_logs() as logs:
+        result = monitor._get_position_expiry(pos)
+    assert result is not None
+    assert not [e for e in logs if e["event"] == "strategy_monitor.expiry_unresolved"]
+
+
+@pytest.mark.asyncio
+async def test_tick_logs_expiry_fallback_used_for_unresolvable_positions() -> None:
+    """BUG-2 follow-up (2026-07-20): when a strategy's positions all fail
+    expiry resolution (no lookup wired, numeric keys), _tick's blanket
+    fallback — assigning every position to whichever chain was fetched
+    first — must be visible via strategy_monitor.expiry_fallback_used.
+    """
+    pos = PaperPosition(
+        strategy_name="paper_ic_nifty_v1_monthly",
+        leg_role="short_put",
+        net_qty=-65,
+        avg_cost=Decimal("0"),
+        avg_sell_price=Decimal("21.40"),
+        instrument_key="NSE_FO|63896",
+    )
+    strategy = MockStrategy()
+    strategy.strategy_name = "paper_ic_nifty_v1_monthly"
+    strategy.check_signals = AsyncMock(return_value=[])
+    store = _make_store(positions=[pos])
+    monitor = _make_monitor(store=store, strategies=[strategy])  # no lookup
+
+    with (
+        patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch(
+            "src.strategy.monitor.datetime",
+            **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
+        ),
+        capture_logs() as logs,
+    ):
+        await monitor._tick()
+
+    fallback_events = [e for e in logs if e["event"] == "strategy_monitor.expiry_fallback_used"]
+    assert len(fallback_events) == 1
+    assert fallback_events[0]["strategy"] == "paper_ic_nifty_v1_monthly"
+    assert fallback_events[0]["position_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_fetch_chains_logs_fallback_to_expiry_fn_for_open_positions() -> None:
+    """BUG-2 follow-up (2026-07-20): _fetch_chains falling back to expiry_fn()
+    because every position failed resolution must log
+    strategy_monitor.chain_fetch_fallback_to_expiry_fn with how many real
+    positions are about to be mis-assigned.
+    """
+    pos = PaperPosition(
+        strategy_name="paper_ic_nifty_v1_monthly",
+        leg_role="short_put",
+        net_qty=-65,
+        avg_cost=Decimal("0"),
+        avg_sell_price=Decimal("21.40"),
+        instrument_key="NSE_FO|63896",
+    )
+    monitor = _make_monitor(expiry_fn=lambda: "2026-08-25")  # no lookup
+
+    with capture_logs() as logs:
+        await monitor._fetch_chains([pos])
+
+    fallback_events = [
+        e for e in logs if e["event"] == "strategy_monitor.chain_fetch_fallback_to_expiry_fn"
+    ]
+    assert len(fallback_events) == 1
+    assert fallback_events[0]["open_position_count"] == 1
+    assert fallback_events[0]["fallback_expiry"] == "2026-08-25"
 
 
 @pytest.mark.asyncio

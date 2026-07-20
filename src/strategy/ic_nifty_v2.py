@@ -1202,6 +1202,15 @@ class IronCondorV2:
         captured_fraction: Decimal | None = None
         if combined_mark is not None and entry_credit > Decimal("0"):
             captured_fraction = (entry_credit - combined_mark) / entry_credit
+        else:
+            # 2026-07-20: makes the priorities-4-6 skip visible — see
+            # ic_nifty_v1.py's identical fix and DECISIONS.md 2026-07-20.
+            log.debug(
+                "ic_nifty_v2.pnl_gate_skipped",
+                strategy=self.strategy_name,
+                reason="mark_unavailable" if combined_mark is None else "entry_credit_not_positive",
+                entry_credit=str(entry_credit),
+            )
 
         # ── Priority 4: Profit target ≥ 70% → CLOSE_FULL ─────────────────────
         if captured_fraction is not None and combined_mark is not None:
@@ -1889,6 +1898,19 @@ class IronCondorV2:
                     combined_mark -= opt_leg.ltp
                 else:
                     mark_available = False
+
+            if opt_leg is None:
+                # 2026-07-20: mirrors the ic_nifty_v1.py fix — a leg not found
+                # in `market` used to flip mark_available=False with zero
+                # logging, silently suppressing profit-target/loss-stop/
+                # profit-lock signals. See DECISIONS.md 2026-07-20.
+                log.warning(
+                    "ic_nifty_v2.mark_unavailable",
+                    strategy=self.strategy_name,
+                    leg_role=pos.leg_role,
+                    instrument_key=pos.instrument_key,
+                    market_expiry=str(market.expiry),
+                )
 
         return (combined_mark if mark_available else None, entry_credit)
 

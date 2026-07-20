@@ -172,6 +172,82 @@ with everything else that happened in the same request/run":
 
 ---
 
+## Silent-failure / degraded-path logging (mandatory)
+
+> Why this section exists: on 2026-07-20, `paper_ic_nifty_v1_monthly` sat at ~70-80% profit
+> captured for a full morning with `PROFIT_TARGET` never firing, and the live
+> `monitor_daemon.log` showed *nothing wrong* — no ERROR, no WARNING, no exception, just
+> `leg_resolved_via_bod` lines that looked healthy. Root cause (`DECISIONS.md` 2026-07-20) was
+> a chain of five silent fallback/guard branches, each individually reasonable ("degrade
+> gracefully instead of crashing") but collectively invisible — diagnosing it required writing
+> a standalone repro script and manually re-running the exact live code path outside the daemon.
+> That should never be necessary again.
+
+**Rule: every fallback, guard, or "skip this decision" branch that changes program behavior
+must log at the moment it fires — not just the exception paths.** A function that silently
+returns `None`/`[]`/a default instead of raising is doing exactly what it's designed to do, and
+that is precisely why it needs a log line: nothing else will tell you it happened.
+
+This is a different concern from the sections above (which are about *format* — is it
+structlog, does it have a level). This section is about *coverage* — does every branch that
+degrades behavior have a log line at all, regardless of format.
+
+### How to recognize a branch that needs this
+
+Ask: "if this line executes, does anything downstream behave differently than the caller
+probably expects?" If yes, it needs a log line, even if:
+- it's not technically an error (e.g. `expiry_fn()` fallback is a designed feature, not a bug)
+- the function's docstring already documents the fallback (documentation is not observability)
+- a similar-looking success path is already logged nearby (the *degraded* variant needs its own
+  distinct event name — never reuse a healthy-path event for a fallback path, or `grep` for the
+  healthy event will silently include failures)
+
+### Event naming for this category
+
+Suffix pattern: `<module>.<condition>_unresolved` / `<module>.<condition>_fallback_used` /
+`<module>.<condition>_unavailable` / `<module>.<condition>_gate_skipped` — distinct enough from
+plain `_failed`/`_error` events that a reviewer scanning `grep -E "unresolved|fallback|unavailable|gate_skipped"`
+across `logs/` gets a complete picture of every degraded-path activation in the system, separate
+from actual exceptions.
+
+### Level
+
+`WARNING` if the branch causes a real signal/decision to be silently dropped or computed against
+wrong data (this is the BUG-2-follow-up case — `strategy_monitor.expiry_unresolved`,
+`strategy_monitor.expiry_fallback_used`, `ic_nifty_v1.mark_unavailable`). `DEBUG` if the branch
+is expected/benign and only useful for tracing why a signal *didn't* fire on a given tick (e.g.
+`ic_nifty_v1.pnl_gate_skipped` — same underlying condition as the `WARNING` above, logged again
+at the point where it changes the caller's outcome, so both "what broke" and "what didn't happen
+as a result" are independently greppable).
+
+### Worked example from the 2026-07-20 incident
+
+```python
+# Wrong (what existed before) — silent degrade, no trace of why
+if self._lookup is not None:
+    ...
+return None
+
+# Right — the degrade itself is now visible
+if self._lookup is not None:
+    ...
+log.warning(
+    "strategy_monitor.expiry_unresolved",
+    instrument_key=pos.instrument_key,
+    lookup_wired=self._lookup is not None,
+)
+return None
+```
+
+See `src/strategy/monitor.py` (`_get_position_expiry`, `_tick`, `_fetch_chains`) and
+`src/strategy/ic_nifty_v1.py`/`ic_nifty_v2.py` (`_compute_combined_pnl`, `check_signals`) for
+the full set of fixes this incident produced — use them as the reference pattern for auditing
+other silent-fallback branches elsewhere in the codebase (`cc_overlay_v1.py`, `pp_overlay_v1.py`,
+and `collar_overlay_v1.py`'s BOD-resolution fallbacks are flagged in `TODOS.md` as still needing
+this treatment).
+
+---
+
 ## Documented exception: third-party SDK logs
 
 `logs/apiconnect.log` is written directly by the Nuvama `APIConnect` SDK's own internal
