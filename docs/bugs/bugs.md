@@ -396,7 +396,7 @@ The `StrategyMonitor` module docstring (`src/strategy/monitor.py` lines 7-8) doc
 | Field | Value |
 |---|---|
 | Severity | **HIGH** — live base leg's current `net_qty` and `instrument_key` attribution are both wrong; roll/expiry monitoring for this leg is silently mis-targeted |
-| Status | 🔴 Open |
+| Status | ✅ Fixed (2026-07-20) |
 | Discovered | 2026-07-20, investigating `base_expiry.expiry_not_found instrument_key=NSE_FO|66071` in `logs/paper_snapshot.log` (`trace_id=f5985444`) |
 | Location | `paper_trades` rows for `paper_nifty_futures` / `base_futures`, `NSE_FO|66071` (2026-05-26) and `NSE_FO|62329` (2026-05-29); cycle-tracking logic in `src/paper/store.py::get_positions` (DBI-3, `425e054`) |
 
@@ -408,7 +408,9 @@ The `StrategyMonitor` module docstring (`src/strategy/monitor.py` lines 7-8) doc
 
 **Suggested fix:** corrective SQL update on the two `paper_trades` rows (75 → 65) to restore an exact zero-crossing, then verify `get_positions()` correctly resets `cycle_instrument_key` to the intended current contract. Check whether the 65-vs-75 error propagated into any roll after `62329` before correcting.
 
-**Related:** BUG-016 (same DBI-3 zero-crossing cycle-reset assumption broken by a different data-entry gap); DECISIONS.md DBI-3 entry (`425e054`).
+**Related:** BUG-016 (same DBI-3 zero-crossing cycle-reset assumption broken by a different data-entry gap); DECISIONS.md DBI-3 entry (`425e054`); BUG-017 (new — the error's propagation check surfaced that `62329` was never rolled after its own 2026-06-30 expiry, a separate live gap this fix exposed rather than caused).
+
+**Fix (2026-07-20):** confirmed via full trade-history pull that the 75-vs-75 error did not propagate past `NSE_FO|62329` — no roll exists after it, so only the two original rows (`id=29` SELL, `id=30` BUY) needed correction. Updated both quantities 75 → 65 in `paper_trades`, with a `notes` annotation identifying the correction and citing `DateAwareLotSizeResolver`'s date table as the source of truth (65 in effect for both trade dates, 75 was the pre-2026-01-01 value). Data-only correction, no `.py` change. Verified by reimplementing `get_positions()`'s exact cycle-tracking algorithm against the live DB (as with BUG-016 — project `.venv` unusable this session): `paper_nifty_futures`/`base_futures` now correctly reports `net_qty=65`, `instrument_key=NSE_FO|62329`, `entry_date=2026-05-29`. Surfaced BUG-017 as a direct consequence — logged separately rather than folded into this fix, since resolving it requires an actual roll decision (new contract selection), not a ledger correction.
 
 ---
 
@@ -432,5 +434,26 @@ The `StrategyMonitor` module docstring (`src/strategy/monitor.py` lines 7-8) doc
 **Related:** BUG-015 (same DBI-3 zero-crossing assumption broken by a different data-entry gap — missing trade here vs. wrong quantity there); both point to the same underlying process gap: roll trades recorded per-track manually with no cross-track consistency check.
 
 **Fix (2026-07-20):** backfilled the missing `SELL 65 NSE_FO|58627 @ 0.05` close trade into `paper_trades` for `paper_nifty_spot` and `paper_nifty_futures`, dated `2026-05-27` to match `paper_nifty_proxy`'s existing close row exactly (same price, same `ivr_at_entry=0.3110992529348986`), with a `notes` annotation identifying it as a BUG-016 backfill. Data-only correction — no `.py` change, `UNIQUE(strategy_name, leg_role, instrument_key, trade_date, action)` constraint confirmed non-conflicting before insert (differs by `strategy_name` from the existing proxy row). Verified by reimplementing `PaperStore.get_positions()`'s exact cycle-tracking algorithm against the live DB (project `.venv` unusable in this session's sandbox — broken symlink to a macOS-only interpreter) rather than trusting a paraphrase: all three tracks now report `net_qty=65`, `instrument_key=NSE_FO|63848`, `entry_date=2026-06-29` for `overlay_pp` — matching, no longer double-booked or misattributed to the expired `58627`.
+
+---
+
+## BUG-017 — `paper_nifty_futures`/`base_futures` never rolled past its June contract; `NSE_FO|62329` has sat expired 20 days with no successor
+
+| Field | Value |
+|---|---|
+| Severity | **HIGH** — the base futures leg (hedge notional for the 3-track comparison) is currently unhedged/stale on an expired contract with no live price feed; needs an operator roll decision, not a code or data fix |
+| Status | 🔴 Open |
+| Discovered | 2026-07-20, as a direct consequence of fixing BUG-015 — correcting the 66071→62329 quantity error required pulling `base_futures`'s complete trade history, which showed only 3 rows total, ending at the June roll |
+| Location | `paper_trades`, `paper_nifty_futures` / `base_futures`, `NSE_FO|62329` (June 2026 NIFTY futures, expiry 2026-06-30) |
+
+**Symptom:** none logged as a distinct warning yet — post-BUG-015 fix, `_check_base_expiry` will now correctly target `NSE_FO|62329` instead of the wrong `66071`, and should start firing `base_expiry.expiry_not_found` (or a large negative-DTE alert, depending on whether `62329` still resolves in the BOD file) on the next snapshot run, since DTE has been negative for 20 days.
+
+**Root cause:** the base futures leg was rolled once, correctly in intent (May → June, `id=30`, 2026-05-29), but no further roll was ever recorded after the June contract's 2026-06-30 expiry. Unlike `overlay_pp` (BUG-016, where the roll happened but the close was missing) or the option base leg (`base_ditm_call`, `44498`, which did settle correctly 2026-07-17), this leg's roll process simply stopped after one cycle — no trade of any kind exists for this leg after 2026-05-29.
+
+**Impact:** the paper book's futures-based hedge/comparison track has had no live, valid instrument backing this leg for three weeks. Any P&L, delta, or notional-exposure read on `paper_nifty_futures`/`base_futures` since 2026-06-30 is against a settled, non-existent contract — not simply "stale data" but "no real position," which is a bigger problem for a leg whose whole purpose is to track live futures-based hedging.
+
+**Suggested fix:** not a data correction — requires deciding and recording an actual roll (settlement-close `NSE_FO|62329` at its 2026-06-30 settlement price, then open the next NIFTY futures contract, likely September quarterly per the contract's monthly-only listing convention). This is a live trading/strategy decision, not a bug patch — flagging for operator action rather than fixing unilaterally.
+
+**Related:** BUG-015 (the quantity-error fix this was discovered while verifying); BUG-016 (same "roll process incomplete" family — a different leg, different failure shape, same underlying gap: rolls recorded manually per-leg with no completeness check or reminder once a leg goes quiet).
 
 ---
