@@ -277,6 +277,63 @@ def test_mark_unavailable_not_logged_on_healthy_chain() -> None:
     assert not [e for e in logs if e["event"] == "ic_nifty_v2.pnl_gate_skipped"]
 
 
+def test_flat_legs_produce_no_signals_and_no_bod_warnings() -> None:
+    """2026-07-21: a fully-closed V2 IC (net_qty == 0 on all four legs) must
+    be filtered out entirely, not re-resolved against the chain every tick.
+
+    ``PaperStore.get_positions`` still returns one ``PaperPosition`` per
+    ``leg_role`` after a leg closes (BUG-014), carrying the now-settled,
+    delisted ``instrument_key`` of the closed contract. Without the
+    ``net_qty != 0`` filter, ``check_signals`` would call ``_find_leg``/
+    ``_compute_combined_pnl`` on that dead key every tick, which can never
+    resolve via BOD again — producing permanent ``strike_parse_failed``/
+    ``mark_unavailable`` warning noise. Same defect class as the
+    ``ic_nifty_v1.py`` fix — see DECISIONS.md 2026-07-21.
+    """
+    strategy = _make_strategy()
+    positions = [
+        _pos("short_put", "NSE_FO|51348", net_qty=0),
+        _pos("long_put_hedge", "NSE_FO|51340", net_qty=0),
+        _pos("short_call", "NSE_FO|51405", net_qty=0),
+        _pos("long_call_hedge", "NSE_FO|51417", net_qty=0),
+    ]
+    with (
+        patch("src.strategy.ic_nifty_v2.market_today", return_value=_FROZEN_TODAY),
+        capture_logs() as logs,
+    ):
+        import asyncio
+
+        result = asyncio.run(strategy.check_signals(_chain({}, expiry=_EXPIRY), positions))
+
+    assert result == []
+    assert not [e for e in logs if e["event"] == "ic_nifty_v2.strike_parse_failed"]
+    assert not [e for e in logs if e["event"] == "ic_nifty_v2.mark_unavailable"]
+
+
+def test_flat_legs_excluded_but_open_legs_still_evaluated() -> None:
+    """A mix of flat and open legs: only the open legs (net_qty != 0) reach
+    the chain-resolution path; the flat leg's dead instrument_key is dropped
+    before it can ever trigger a BOD warning, and the still-open legs are
+    evaluated normally (healthy chain → no signals).
+    """
+    strategy = _make_strategy()
+    positions = _standard_ic_positions()
+    # short_put's cycle already closed and rolled to a dead numeric key —
+    # everything else in the IC is still open.
+    positions[0] = _pos("short_put", "NSE_FO|51348", net_qty=0)
+    with (
+        patch("src.strategy.ic_nifty_v2.market_today", return_value=_FROZEN_TODAY),
+        capture_logs() as logs,
+    ):
+        import asyncio
+
+        result = asyncio.run(strategy.check_signals(_healthy_chain(), positions))
+
+    unavailable = [e for e in logs if e["event"] == "ic_nifty_v2.mark_unavailable"]
+    assert not [e for e in unavailable if e.get("leg_role") == "short_put"]
+    assert result == []
+
+
 def test_full_pipeline_delta_warn() -> None:
     """|short_delta| = 0.31 → DELTA_WARN WARN signal, no action needed."""
     strategy = _make_strategy()

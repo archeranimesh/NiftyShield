@@ -1065,6 +1065,17 @@ class IronCondorV2:
     ) -> list[SignalEvent]:
         """Evaluate exit/adjustment signals for the open IronCondorV2 position.
 
+        Filters positions to ``strategy_name == self.strategy_name`` and to
+        ``net_qty != 0``. A flat leg's ``instrument_key`` is its most
+        recently *closed* contract (``PaperStore.get_positions`` still
+        returns one ``PaperPosition`` per ``leg_role`` regardless of
+        flatness, per BUG-014) — once that contract settles, Upstox's BOD
+        file drops it permanently, so resolving it via the chain/BOD lookups
+        used below can never succeed again. Without this filter, a
+        fully-closed V2 IC keeps getting evaluated (and warning) on every
+        tick indefinitely. Same defect class as BUG-014 and the
+        ``ic_nifty_v1.py`` fix (see DECISIONS.md 2026-07-21).
+
         8-level precedence ladder (council ruling IC-V2-4 + IC-V2-10):
           1. DTE ≤ hard-close cutoff → FORCED_CLOSE (FORCE_CLOSE or CLOSE_FULL both fire here)
           2. |short_delta| ≥ 0.45   → FORCED_CLOSE (extreme delta)
@@ -1083,7 +1094,9 @@ class IronCondorV2:
         Returns:
             List of SignalEvents; empty when no action is warranted.
         """
-        ic_positions = [p for p in positions if p.strategy_name == self.strategy_name]
+        ic_positions = [
+            p for p in positions if p.strategy_name == self.strategy_name and p.net_qty != 0
+        ]
         if not ic_positions:
             return []
 
