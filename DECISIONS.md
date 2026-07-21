@@ -810,6 +810,22 @@ Source: this session (Cowork), discovered while verifying whether a received Tel
 
 ---
 
+## `paper_snapshot.py` per-strategy fault isolation + single no-flag cron (2026-07-21)
+
+Discovered `paper_ic_nifty_v1_weekly` had 8 open legs (entered 2026-07-08 to 2026-07-16) with zero cron coverage — only monthly V1/V2 and CSP had `--strategy` lines in `scripts/cron/paper_snapshot.cron.txt`. The naive remediation (drop `--strategy`, rely on `store.get_strategy_names()` auto-discovery in one shared cron line) was initially rejected: `_run()`'s loop over strategies had no error isolation, so one strategy's LTP/broker failure would abort the whole batch and silently skip every strategy sorting after it alphabetically — a worse failure mode than the missing-cron-line bug it was meant to fix.
+
+**Decision:** fix the fault isolation first, then consolidate. `_run()`'s per-strategy loop body now runs inside try/except; a failure is logged (`paper_snapshot.strategy_failed`, `paper_snapshot.batch_partial_failure`) and the loop continues to the next strategy; the script now exits 1 (not 0) if any strategy failed, while still snapshotting every strategy unaffected by the failure. Verified (not assumed) that this can't leave a half-written NAV row: `PaperStore.record_nav_snapshot` is a single upsert statement inside one `src/db.py::connect()` context, which rolls back on any exception before re-raising.
+
+Cron collapsed from 6 per-strategy lines to one: `paper_snapshot.py --no-dry-run` (no `--strategy` flag) + the separate `paper_3track_snapshot` line. Any future `paper_*` strategy with trades is now snapshotted automatically — no cron edit required at strategy-creation time, closing the actual root cause of the weekly gap (not "someone forgot," but "the system required someone to remember").
+
+`paper_ic_nifty_v1_leaps`/`paper_ic_nifty_v1_yearly` remain zero-trade (config presets exist in `ic_expiry_config.py`, never entered) — the no-flag line is a safe no-op for them until a real entry happens.
+
+Source: this session (Cowork). `code-reviewer` gate run via general-purpose subagent (real `@code-reviewer` unavailable on this surface): 0 CRITICAL, 1 ERROR (resolved as verified-safe, see above), 2 WARNING logged as non-blocking follow-ups (broad `except Exception` doesn't distinguish transient vs. programming-bug failures; new tests don't assert call-ordering on the failure path).
+
+**Not yet committed** — sandbox `.git/index.lock` present with permission denied on removal; commit must run on Animesh's machine.
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty

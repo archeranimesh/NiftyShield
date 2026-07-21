@@ -264,3 +264,103 @@ async def test_most_recent_note_only_for_multiple_trades_per_leg(
     # Check that ONLY the most recent note ("roll adjustment note") is printed
     assert "Notes: [leg_open_multi_trade] roll adjustment note" in captured.out
     assert "initial entry note" not in captured.out
+
+
+@pytest.mark.asyncio
+@patch("scripts.portfolio.paper_snapshot.create_client")
+@patch("scripts.portfolio.paper_snapshot.PaperStore")
+@patch("scripts.portfolio.paper_snapshot.PaperTracker")
+async def test_all_strategies_snapshot_when_none_fail(
+    mock_tracker_cls: MagicMock,
+    mock_store_cls: MagicMock,
+    mock_create_client: MagicMock,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Happy path: multiple strategies in one no-flag run all get snapshotted, exit code 0."""
+    mock_store = MagicMock()
+    mock_store_cls.return_value = mock_store
+
+    mock_tracker = MagicMock()
+    mock_tracker_cls.return_value = mock_tracker
+
+    mock_store.get_strategy_names.return_value = ["paper_strategy_a", "paper_strategy_b"]
+    mock_tracker.compute_pnl = AsyncMock(
+        side_effect=[
+            (Decimal("10"), Decimal("5"), Decimal("15")),
+            (Decimal("20"), Decimal("0"), Decimal("20")),
+        ]
+    )
+    mock_store.get_trades.return_value = []
+    mock_store.get_positions.return_value = []
+
+    args = argparse.Namespace(
+        strategy=None,
+        date=None,
+        spot=None,
+        db_path="dummy.db",
+        dry_run=True,
+    )
+
+    exit_code = await _run(args)
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "paper_strategy_a" in captured.out
+    assert "paper_strategy_b" in captured.out
+    assert "FAILED" not in captured.out
+
+
+@pytest.mark.asyncio
+@patch("scripts.portfolio.paper_snapshot.create_client")
+@patch("scripts.portfolio.paper_snapshot.PaperStore")
+@patch("scripts.portfolio.paper_snapshot.PaperTracker")
+async def test_one_strategy_failure_does_not_block_others(
+    mock_tracker_cls: MagicMock,
+    mock_store_cls: MagicMock,
+    mock_create_client: MagicMock,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """One strategy's compute_pnl raising (e.g. a broker LTP fetch error) must not
+    prevent strategies that sort after it alphabetically from being snapshotted.
+    Regression guard for the failure mode described in docs/bugs/bugs.md
+    BUG-016/017/018: an unhandled per-leg fetch failure previously would have
+    aborted the whole batch run silently.
+    """
+    mock_store = MagicMock()
+    mock_store_cls.return_value = mock_store
+
+    mock_tracker = MagicMock()
+    mock_tracker_cls.return_value = mock_tracker
+
+    mock_store.get_strategy_names.return_value = [
+        "paper_strategy_a_broken",
+        "paper_strategy_b_ok",
+    ]
+
+    async def _compute_pnl(name: str):
+        if name == "paper_strategy_a_broken":
+            raise ConnectionError("simulated LTP fetch failure")
+        return (Decimal("20"), Decimal("0"), Decimal("20"))
+
+    mock_tracker.compute_pnl = AsyncMock(side_effect=_compute_pnl)
+    mock_store.get_trades.return_value = []
+    mock_store.get_positions.return_value = []
+
+    args = argparse.Namespace(
+        strategy=None,
+        date=None,
+        spot=None,
+        db_path="dummy.db",
+        dry_run=True,
+    )
+
+    exit_code = await _run(args)
+
+    # Batch must report failure (non-zero) but must NOT have aborted early —
+    # the second, unaffected strategy still needs to appear in the output.
+    assert exit_code == 1
+
+    captured = capsys.readouterr()
+    assert "paper_strategy_b_ok" in captured.out
+    assert "paper_strategy_a_broken" in captured.err
+    assert "FAILED" in captured.err

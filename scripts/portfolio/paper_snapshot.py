@@ -136,49 +136,67 @@ async def _run(args: argparse.Namespace) -> int:
     any_printed = False
     pnl_rows = []
     all_notes = []
+    failed_strategies: list[str] = []
 
     for name in strategy_names:
-        pnl = await tracker.compute_pnl(name)
-        if pnl is None:
-            continue
+        # Fault isolation: one strategy's LTP/broker failure must not abort
+        # the batch and silently skip every strategy that sorts after it
+        # alphabetically. Log, record the failure, and move on. See
+        # docs/bugs/bugs.md BUG-016/017/018 for prior incidents where a
+        # single bad leg's resolution failure went undetected because
+        # nothing downstream distinguished "no trades" from "fetch failed".
+        try:
+            pnl = await tracker.compute_pnl(name)
+            if pnl is None:
+                continue
 
-        unrealized, realized, total = pnl
-        pnl_rows.append(
-            {
-                "strategy": name,
-                "unrealized": unrealized,
-                "realized": realized,
-                "total": total,
-            }
-        )
-        any_printed = True
-
-        # Collect notes from open trades/legs (only the most recent trade per open leg)
-        trades = store.get_trades(name)
-        positions = store.get_positions(name)
-        open_legs = {p.leg_role for p in positions if p.net_qty != 0}
-
-        most_recent_trade_per_leg = {}
-        for trade in trades:
-            if trade.leg_role in open_legs:
-                most_recent_trade_per_leg[trade.leg_role] = trade
-
-        for leg_role, trade in most_recent_trade_per_leg.items():
-            if trade.notes and trade.notes.strip():
-                all_notes.append((leg_role, trade.notes.strip()))
-
-        if args.dry_run:
-            # Still print the underlying for context in dry-run
-            if args.spot is not None:
-                print(f"{name} underlying : ₹{args.spot:,.2f}")
-        else:
-            snap = await tracker.record_daily_snapshot(
-                name,
-                snapshot_date=snap_date,
-                underlying_price=args.spot,
+            unrealized, realized, total = pnl
+            pnl_rows.append(
+                {
+                    "strategy": name,
+                    "unrealized": unrealized,
+                    "realized": realized,
+                    "total": total,
+                }
             )
-            if snap:
-                print(f"  ✅  {name}: recorded to DB (P&L: ₹{float(total):+,.2f})")
+            any_printed = True
+
+            # Collect notes from open trades/legs (only the most recent trade per open leg)
+            trades = store.get_trades(name)
+            positions = store.get_positions(name)
+            open_legs = {p.leg_role for p in positions if p.net_qty != 0}
+
+            most_recent_trade_per_leg = {}
+            for trade in trades:
+                if trade.leg_role in open_legs:
+                    most_recent_trade_per_leg[trade.leg_role] = trade
+
+            for leg_role, trade in most_recent_trade_per_leg.items():
+                if trade.notes and trade.notes.strip():
+                    all_notes.append((leg_role, trade.notes.strip()))
+
+            if args.dry_run:
+                # Still print the underlying for context in dry-run
+                if args.spot is not None:
+                    print(f"{name} underlying : ₹{args.spot:,.2f}")
+            else:
+                snap = await tracker.record_daily_snapshot(
+                    name,
+                    snapshot_date=snap_date,
+                    underlying_price=args.spot,
+                )
+                if snap:
+                    print(f"  ✅  {name}: recorded to DB (P&L: ₹{float(total):+,.2f})")
+        except Exception as exc:  # noqa: BLE001 - deliberate batch-fault isolation boundary
+            failed_strategies.append(name)
+            logger.error(
+                "paper_snapshot.strategy_failed",
+                strategy=name,
+                error=str(exc),
+                error_type=type(exc).__name__,
+            )
+            print(f"  ❌  {name}: snapshot FAILED — {type(exc).__name__}: {exc}", file=sys.stderr)
+            continue
     if pnl_rows:
         print(
             "\n"
@@ -197,6 +215,19 @@ async def _run(args: argparse.Namespace) -> int:
             print("Notes: " + " | ".join(deduped_notes))
     elif not any_printed:
         print("No active strategies with trades found.")
+
+    if failed_strategies:
+        logger.error(
+            "paper_snapshot.batch_partial_failure",
+            failed_count=len(failed_strategies),
+            failed_strategies=failed_strategies,
+        )
+        print(
+            f"\n⚠️  {len(failed_strategies)} strategy(ies) FAILED to snapshot: "
+            f"{', '.join(failed_strategies)}",
+            file=sys.stderr,
+        )
+        return 1
 
     return 0
 
