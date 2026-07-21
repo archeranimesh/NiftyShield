@@ -113,8 +113,17 @@ class IronCondorV1:
     ) -> list[SignalEvent]:
         """Evaluate exit signals for the open Iron Condor position.
 
-        Filters positions to ``strategy_name == "paper_ic_nifty_v1"``.
-        Returns ``[]`` when no IC positions exist.  All four legs are
+        Filters positions to ``strategy_name == "paper_ic_nifty_v1"`` and to
+        ``net_qty != 0``. A flat leg's ``instrument_key`` is its most
+        recently *closed* contract (``PaperStore.get_positions`` still
+        returns one ``PaperPosition`` per ``leg_role`` regardless of
+        flatness, per BUG-014) — once that contract settles, Upstox's BOD
+        file drops it permanently, so resolving it via ``_find_leg`` can
+        never succeed again. Without this filter, a fully-closed IC keeps
+        emitting ``strike_parse_failed``/``mark_unavailable`` warnings on
+        every tick indefinitely. Same defect class as BUG-014, one layer up
+        the call chain (see DECISIONS.md 2026-07-21).
+        Returns ``[]`` when no open IC positions exist.  All four legs are
         evaluated together; P&L signals are based on the combined mark.
 
         Args:
@@ -124,7 +133,9 @@ class IronCondorV1:
         Returns:
             List of detected SignalEvents; empty list when nothing to act on.
         """
-        ic_positions = [p for p in positions if p.strategy_name == self.strategy_name]
+        ic_positions = [
+            p for p in positions if p.strategy_name == self.strategy_name and p.net_qty != 0
+        ]
         if not ic_positions:
             return []
 

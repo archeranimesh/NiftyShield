@@ -191,6 +191,50 @@ def test_other_strategy_positions_ignored() -> None:
     assert result == []
 
 
+def test_flat_legs_produce_no_signals_and_no_bod_warnings() -> None:
+    """2026-07-21: a fully-closed IC (net_qty == 0 on all four legs) must be
+    filtered out entirely, not re-resolved against the chain every tick.
+
+    ``PaperStore.get_positions`` still returns one ``PaperPosition`` per
+    ``leg_role`` after a leg closes (BUG-014), carrying the now-settled,
+    delisted ``instrument_key`` of the closed contract. Without the
+    ``net_qty != 0`` filter, ``check_signals`` calls ``_find_leg``/
+    ``_compute_combined_pnl`` on that dead key every tick, which can never
+    resolve via BOD again — producing permanent ``strike_parse_failed``/
+    ``mark_unavailable`` warning noise. See DECISIONS.md 2026-07-21.
+    """
+    strat = IronCondorV1()
+    positions = [
+        _make_position(leg_role="short_put", instrument_key="NSE_FO|51348", net_qty=0),
+        _make_position(leg_role="long_put_hedge", instrument_key="NSE_FO|51340", net_qty=0),
+        _make_position(leg_role="short_call", instrument_key="NSE_FO|51405", net_qty=0),
+        _make_position(leg_role="long_call_hedge", instrument_key="NSE_FO|51417", net_qty=0),
+    ]
+    with capture_logs() as logs:
+        result = asyncio.run(strat.check_signals(_make_empty_chain(), positions))
+    assert result == []
+    assert not [e for e in logs if e["event"] == "ic_nifty_v1.strike_parse_failed"]
+    assert not [e for e in logs if e["event"] == "ic_nifty_v1.mark_unavailable"]
+
+
+def test_flat_legs_excluded_but_open_legs_still_evaluated() -> None:
+    """A mix of flat and open legs: only the open legs (net_qty != 0) reach
+    the chain-resolution path; the flat leg's dead instrument_key is dropped
+    before it can ever trigger a BOD warning.
+    """
+    strat = IronCondorV1()
+    positions = _make_ic_positions()
+    # short_put's cycle already closed and rolled to a dead numeric key —
+    # everything else in the IC is still open.
+    positions[0] = _make_position(leg_role="short_put", instrument_key="NSE_FO|51348", net_qty=0)
+    with capture_logs() as logs:
+        events = asyncio.run(strat.check_signals(_make_chain(), positions))
+    assert not [e for e in logs if e["event"] == "ic_nifty_v1.strike_parse_failed"]
+    # short_put excluded from delta evaluation — only short_call's delta signal path runs.
+    delta_events = [e for e in events if e.event_type in ("DELTA_STOP", "DELTA_WARN")]
+    assert all(e.payload.get("leg_role") != "short_put" for e in delta_events)
+
+
 def test_profit_target_fires_when_mark_at_50_pct() -> None:
     """Combined mark ≤ 50% of entry credit → PROFIT_TARGET ACTION.
 
