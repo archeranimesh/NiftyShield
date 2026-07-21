@@ -151,6 +151,126 @@ async def test_auto_close_overlay_cc_profit_target(
 
 
 @pytest.mark.asyncio
+async def test_auto_close_overlay_collar_put_pnl_uses_preclose_qty(
+    store: PaperStore, simulator: PaperFillSimulator, chain: OptionChain
+) -> None:
+    """Regression: collar close must not report the put leg's P&L as zero.
+
+    close_collar_all() writes both legs' closing trades atomically, so a
+    get_position() call for the put leg made *after* it returns sees
+    net_qty already flattened to 0. auto_close_overlay() must snapshot the
+    put leg's qty/entry *before* invoking close_collar_all(), matching what
+    it already does for the call leg via the pre-close `pos` parameter.
+    Bug found analyzing a real Telegram COLLAR CLOSED message that showed
+    the put leg's realized loss as "₹-0".
+    """
+    call_key = "NSE_FO|NIFTY65900CE"
+    put_key = "NSE_FO|NIFTY65894PE"
+
+    store.record_trade(
+        PaperTrade(
+            strategy_name="paper_nifty_futures",
+            leg_role="overlay_collar_call",
+            instrument_key=call_key,
+            trade_date=date.today(),
+            action=TradeAction.SELL,
+            quantity=65,
+            price=Decimal("543.90"),
+            is_paper=True,
+        )
+    )
+    store.record_trade(
+        PaperTrade(
+            strategy_name="paper_nifty_futures",
+            leg_role="overlay_collar_put",
+            instrument_key=put_key,
+            trade_date=date.today(),
+            action=TradeAction.BUY,
+            quantity=65,
+            price=Decimal("141.90"),
+            is_paper=True,
+        )
+    )
+    event_id = store.create_exit_event(
+        strategy_name="paper_nifty_futures",
+        leg_name="overlay_collar_call",
+        trade_id=call_key,
+        event_time=datetime.now(timezone.utc),
+        detected_by="EOD",
+        exit_signal=ExitSignal.DELTA_STOP,
+        severity="ACTION",
+        entry_price=Decimal("543.90"),
+    )
+
+    notifier = AsyncMock()
+
+    call_leg = OptionLeg(
+        instrument_key=call_key,
+        option_type="CE",
+        strike_price=Decimal("65900"),
+        ltp=Decimal("757.55"),
+        delta=Decimal("0.60"),
+        bid=Decimal("757.00"),
+        ask=Decimal("758.00"),
+        oi=1000,
+        volume=500,
+        gamma=Decimal("0.001"),
+        theta=Decimal("-5.0"),
+        vega=Decimal("10.0"),
+        iv=Decimal("15.0"),
+        strike=Decimal("65900"),
+    )
+    put_leg = OptionLeg(
+        instrument_key=put_key,
+        option_type="PE",
+        strike_price=Decimal("65894"),
+        ltp=Decimal("26.15"),
+        delta=Decimal("-0.05"),
+        bid=Decimal("25.90"),
+        ask=Decimal("26.40"),
+        oi=1000,
+        volume=500,
+        gamma=Decimal("0.001"),
+        theta=Decimal("-1.0"),
+        vega=Decimal("2.0"),
+        iv=Decimal("18.0"),
+        strike=Decimal("65894"),
+    )
+    chain.strikes[Decimal("65900")] = OptionChainStrike(ce=call_leg, pe=None)
+    chain.strikes[Decimal("65894")] = OptionChainStrike(ce=None, pe=put_leg)
+
+    pos = store.get_position("paper_nifty_futures", "overlay_collar_call")
+    assert pos.net_qty == -65
+
+    def _find_leg(chain_, instrument_key, option_type, lookup):
+        return call_leg if instrument_key == call_key else put_leg
+
+    with patch("src.paper.chain_utils.find_chain_leg", side_effect=_find_leg):
+        success = await auto_close_overlay(
+            store=store,
+            simulator=simulator,
+            pos=pos,
+            event_id=event_id,
+            chain=chain,
+            notifier=notifier,
+            lookup=None,
+            vix=15.0,
+            exit_signal="DELTA_STOP",
+        )
+
+    assert success is True
+    assert store.get_position("paper_nifty_futures", "overlay_collar_put").net_qty == 0
+
+    notifier.send.assert_called_once()
+    msg = notifier.send.call_args[0][0]
+    assert "COLLAR CLOSED" in msg
+    # Put leg lost ~(26.15-141.90)*65 = -7,523.75 -> displayed as -7,524.
+    # Before the fix this rendered as "→ ₹-0".
+    assert "₹-7,524" in msg
+    assert "₹-0\n" not in msg
+
+
+@pytest.mark.asyncio
 async def test_evaluate_pp_reentry_eligible(
     store: PaperStore, simulator: PaperFillSimulator, chain: OptionChain
 ) -> None:

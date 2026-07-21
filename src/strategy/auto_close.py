@@ -118,6 +118,18 @@ async def auto_close_overlay(
             )
 
         elif leg_role == "overlay_collar_call":
+            # Snapshot the put leg's position BEFORE close_collar_all() runs.
+            # close_collar_all() writes the closing trade for both legs
+            # atomically, so a get_position() call made *after* it returns
+            # sees net_qty already flattened to 0 — computing put_pnl from
+            # that would silently zero it out regardless of the real price
+            # move. Capture qty/entry now, same as call_pnl already does via
+            # the pre-close `pos` parameter.
+            put_pos = store.get_position(strategy_name, "overlay_collar_put")
+            put_entry = put_pos.avg_cost if put_pos else Decimal("0")
+            put_key = put_pos.instrument_key if put_pos else "overlay_collar_put"
+            put_qty = abs(put_pos.net_qty) if put_pos else 0
+
             closer.close_collar_all(
                 strategy_name=strategy_name,
                 market=chain,
@@ -125,12 +137,6 @@ async def auto_close_overlay(
                 vix=vix,
             )
             call_pnl = (entry_price - exit_ltp) * abs(pos.net_qty)
-
-            # Fetch put position
-            put_pos = store.get_position(strategy_name, "overlay_collar_put")
-            put_entry = put_pos.avg_cost if put_pos else Decimal("0")
-            put_key = put_pos.instrument_key if put_pos else "overlay_collar_put"
-            put_qty = abs(put_pos.net_qty) if put_pos else 0
 
             put_leg = find_chain_leg(chain, put_key, "PE", lookup) if put_pos else None
             put_exit = put_leg.ltp if put_leg is not None else Decimal("0")
