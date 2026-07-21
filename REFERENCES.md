@@ -99,17 +99,18 @@ Verification: `grep -i "<scheme name>" <(curl https://www.amfiindia.com/spages/N
 | Leg Role | Instrument | Key | Entry Price | Qty | Direction |
 |---|---|---|---|---|---|
 | EBBETF0431 | ETF | `NSE_EQ\|INF754K01LE1` | ₹1388.12 | 438 | LONG |
-| NIFTY_DEC_PE | NIFTY DEC 23000 PE | `NSE_FO\|37810` | ₹975.00 | 65 | LONG |
-| NIFTY_JUN_CE | NIFTY JUN 23000 CE | `NSE_FO\|37799` | ₹1082.00 | 65 | LONG |
-| NIFTY_JUN_PE | NIFTY JUN 23000 PE | `NSE_FO\|37805` | ₹840.00 | 65 | SHORT |
+| NIFTY_DEC_PE | NIFTY DEC 23000 PE | `NSE_FO\|37810` | ₹975.00 | 0 (closed 2026-07-14 @ ₹269.95) | — |
+| NIFTY_JUL_CE | NIFTY JUL 23000 CE | `NSE_FO\|63895` | ₹1245.00 | 0 (closed 2026-07-14 @ ₹1164.05) | — |
+| NIFTY_JUL_PE | NIFTY JUL 23000 PE | `NSE_FO\|63896` | ₹90.95 | 0 (closed 2026-07-14 @ ₹26.95) | — |
 
 > Note: EBBETF0431 net qty = 465 @ avg ₹1388.01 (trade-adjusted via `apply_trade_positions()`). Entry prices above are from strategy definition; actual cost basis driven by `trades` table.
+> JUN CE/PE (`NSE_FO|37799`/`NSE_FO|37805`) rolled to JUL CE/PE on 2026-06-17 — see TODOS.md session log. Both JUL legs and the DEC PE hedge were closed manually via Zerodha on 2026-07-14; `finideas_ilts` currently holds only the EBBETF0431 leg.
 
 ### Finideas FinRakshak (`finrakshak`)
 
 | Leg Role | Instrument | Key | Entry Price | Qty | Direction |
 |---|---|---|---|---|---|
-| NIFTY_DEC_PE | NIFTY DEC 23000 PE | `NSE_FO\|37810` | ₹962.15 | 65 | LONG |
+| NIFTY_DEC_PE | NIFTY DEC 23000 PE | `NSE_FO\|37810` | ₹962.15 | 0 (closed 2026-07-14 @ ₹269.95) | — |
 
 ### FinRakshak Protected MF Portfolio
 
