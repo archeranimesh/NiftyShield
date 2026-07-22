@@ -830,6 +830,20 @@ Source: this session (Cowork). `code-reviewer` gate run via general-purpose suba
 
 ---
 
+## BUG-015 — `get_expiry_candidates` yearly starved by quarterly's DTE-band claim on December (2026-07-22)
+
+`logs/ic_yearly.log` showed `ic_entry.leg_resolution_failed` every run, with `dte.outside_range dte=342-356 min_dte=180 max_dte=270` preceding it. Root cause: the old classifier defined `yearly` as a DTE band (201–420) over June/December last-of-month dates, and `quarterly` as a DTE band (46–200) over March/June/September/December — both bands checked against the same date via a single `elif` chain writing into one shared `label → expiry` mapping. December satisfies both `is_quarterly` and `is_yearly` simultaneously, but the `elif` chain only ever assigns one label per date, and `quarterly`'s band (46–200) was checked first. Once the live Dec 2026 contract's DTE (160, as of today 2026-07-22) fell inside quarterly's window, quarterly claimed it and yearly was left with no December candidate at all — it fell through to the next June/Dec date (Jun 2027, 342 DTE), which then failed the downstream `paper_ic_entry` gate (`min_dte=180, max_dte=270`) every single day.
+
+Confirmed via scratch inspection of the live Upstox instrument dump (`data/instruments/NSE.json.gz`) that there is no exchange-native monthly/quarterly/yearly identifier — Upstox only exposes a boolean `weekly` flag. The monthly/quarterly/yearly distinction is purely a calendar-cadence convention this codebase imposes; the exchange makes no such distinction, so classification logic (not a missing field) was always going to be the fix.
+
+**Decision (Animesh, 2026-07-22):** redefine `yearly` as always the nearest live last-of-December expiry with DTE ≥ `yearly_dte_floor` (new param, default 180 — mirrors `ICExpiryConfig CONFIGS["yearly"].dte_warn_lo`), rolling to next December once the current one drops below the floor. This is deliberately decoupled from `quarterly`'s independent DTE-band logic (unchanged) — the same December date can and should satisfy both labels simultaneously once it's inside quarterly's 46–200 window, giving "December also works as a quarterly trade in its final stretch" for free, per the user's stated intent, rather than as a special case.
+
+**Fix:** `src/instruments/lookup.py::get_expiry_candidates` — removed `is_yearly` from the shared per-date `elif` classification entirely; added a separate post-loop resolution pass over all `last_of_month` December dates, picking the minimum-DTE one ≥ floor (falling back to nearest-live if none clears the floor). `quarterly`/`monthly` logic untouched. 3 new tests in `tests/unit/instruments/test_expiry_candidates.py` (double-duty Dec, floor rollover, fallback-when-none-clear-floor); all 21 tests in that file pass, plus 55/56 in `tests/unit/instruments/` + `tests/unit/scripts/test_gamma_daily_watch.py` (the 1 error is a pre-existing sandbox `aiohttp` import gap, unrelated).
+
+Source: this session (Cowork), diagnosed from `logs/ic_yearly.log` + scratch inspection of `data/instruments/NSE.json.gz`.
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty

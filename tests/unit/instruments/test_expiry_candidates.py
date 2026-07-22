@@ -1,6 +1,7 @@
-import pytest
 from datetime import date, timedelta
+
 from src.instruments.lookup import InstrumentLookup
+
 
 def test_expiry_candidates_happy_path():
     """BOD with monthly + quarterly + yearly returns all in correct CSP order."""
@@ -8,40 +9,63 @@ def test_expiry_candidates_happy_path():
     # monthly: 15-45 (2026-05-25 to 2026-06-24) -> May 28, 2026 (DTE 18)
     # quarterly: 46-200 (2026-06-25 to 2026-11-26) -> June 25, 2026 (DTE 46, month 6)
     # yearly: 201-420 (2026-11-27 to 2027-07-04) -> Dec 31, 2026 (DTE 235, month 12)
-    
+
     m_exp = "2026-05-28"
     q_exp = "2026-06-25"
     y_exp = "2026-12-31"
-    
+
     instruments = [
-        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": m_exp},
-        {"segment": "NSE_FO", "instrument_type": "CE", "underlying_symbol": "NIFTY", "expiry": q_exp},
-        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": y_exp},
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": m_exp,
+        },
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "CE",
+            "underlying_symbol": "NIFTY",
+            "expiry": q_exp,
+        },
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": y_exp,
+        },
     ]
     lookup = InstrumentLookup(instruments)
     candidates = lookup.get_expiry_candidates("NIFTY", today)
-    
-    assert candidates == [
-        ("monthly", m_exp),
-        ("quarterly", q_exp),
-        ("yearly", y_exp)
-    ]
+
+    assert candidates == [("monthly", m_exp), ("quarterly", q_exp), ("yearly", y_exp)]
+
 
 def test_expiry_candidates_dte_gate():
     """Expiries with DTE < 15 are excluded."""
     today = date(2026, 5, 10)
     too_close = (today + timedelta(days=14)).isoformat()
     just_right = (today + timedelta(days=15)).isoformat()
-    
+
     instruments = [
-        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": too_close},
-        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": just_right},
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": too_close,
+        },
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": just_right,
+        },
     ]
     lookup = InstrumentLookup(instruments)
     candidates = lookup.get_expiry_candidates("NIFTY", today)
-    
+
     assert len(candidates) == 1
     assert candidates[0] == ("monthly", just_right)
+
 
 def test_expiry_candidates_dte_boundary():
     """DTE=45 is monthly, DTE=46 is quarterly."""
@@ -49,9 +73,16 @@ def test_expiry_candidates_dte_boundary():
     # Let today be April 13, 2026. May 28, 2026 (last Thursday of May) is DTE 45.
     today_m = date(2026, 4, 13)
     m_exp = "2026-05-28"
-    lookup_m = InstrumentLookup([
-        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": m_exp}
-    ])
+    lookup_m = InstrumentLookup(
+        [
+            {
+                "segment": "NSE_FO",
+                "instrument_type": "PE",
+                "underlying_symbol": "NIFTY",
+                "expiry": m_exp,
+            }
+        ]
+    )
     candidates_m = lookup_m.get_expiry_candidates("NIFTY", today_m)
     assert candidates_m == [("monthly", m_exp)]
 
@@ -59,29 +90,45 @@ def test_expiry_candidates_dte_boundary():
     # Let today be May 10, 2026. June 25, 2026 (last Thursday of June) is DTE 46.
     today_q = date(2026, 5, 10)
     q_exp = "2026-06-25"
-    lookup_q = InstrumentLookup([
-        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": q_exp}
-    ])
+    lookup_q = InstrumentLookup(
+        [
+            {
+                "segment": "NSE_FO",
+                "instrument_type": "PE",
+                "underlying_symbol": "NIFTY",
+                "expiry": q_exp,
+            }
+        ]
+    )
     candidates_q = lookup_q.get_expiry_candidates("NIFTY", today_q)
     assert candidates_q == [("quarterly", q_exp)]
+
 
 def test_expiry_candidates_missing_category():
     """Missing category (e.g. quarterly) does not crash and returns others."""
     today = date(2026, 5, 10)
     m_exp = "2026-05-28"
     y_exp = "2026-12-31"
-    
+
     instruments = [
-        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": m_exp},
-        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": y_exp},
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": m_exp,
+        },
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": y_exp,
+        },
     ]
     lookup = InstrumentLookup(instruments)
     candidates = lookup.get_expiry_candidates("NIFTY", today)
-    
-    assert candidates == [
-        ("monthly", m_exp),
-        ("yearly", y_exp)
-    ]
+
+    assert candidates == [("monthly", m_exp), ("yearly", y_exp)]
+
 
 def test_expiry_candidates_custom_preference():
     """Custom preference order is respected."""
@@ -89,37 +136,60 @@ def test_expiry_candidates_custom_preference():
     m_exp = "2026-05-28"
     q_exp = "2026-06-25"
     y_exp = "2026-12-31"
-    
+
     instruments = [
-        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": m_exp},
-        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": q_exp},
-        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": y_exp},
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": m_exp,
+        },
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": q_exp,
+        },
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": y_exp,
+        },
     ]
     lookup = InstrumentLookup(instruments)
-    
+
     # Test 3-track style preference: quarterly -> yearly -> monthly
     pref = ["quarterly", "yearly", "monthly"]
     candidates = lookup.get_expiry_candidates("NIFTY", today, preference=pref)
-    
-    assert candidates == [
-        ("quarterly", q_exp),
-        ("yearly", y_exp),
-        ("monthly", m_exp)
-    ]
+
+    assert candidates == [("quarterly", q_exp), ("yearly", y_exp), ("monthly", m_exp)]
+
 
 def test_expiry_candidates_no_network_mock_bod():
     """Verify it uses provided instruments and no network calls (implicitly tested by no mock)."""
     today = date(2026, 5, 10)
     # Different underlying should be ignored
     instruments = [
-        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "BANKNIFTY", "expiry": "2026-05-28"},
-        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": "2026-05-28"},
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "BANKNIFTY",
+            "expiry": "2026-05-28",
+        },
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": "2026-05-28",
+        },
     ]
     lookup = InstrumentLookup(instruments)
     candidates = lookup.get_expiry_candidates("NIFTY", today)
-    
+
     assert len(candidates) == 1
     assert candidates[0] == ("monthly", "2026-05-28")
+
 
 def test_weekly_nearest_tuesday():
     """Two Tuesdays and one non-Tuesday in DTE≤14; preference=["weekly"] picks the nearer Tuesday."""
@@ -127,11 +197,26 @@ def test_weekly_nearest_tuesday():
     today = date(2026, 6, 25)
     instruments = [
         # Tuesday DTE 5 — nearest Tuesday
-        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": "2026-06-30"},
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": "2026-06-30",
+        },
         # Tuesday DTE 12
-        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": "2026-07-07"},
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": "2026-07-07",
+        },
         # Sunday DTE 3 — not Tuesday, must be ignored
-        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": "2026-06-28"},
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": "2026-06-28",
+        },
     ]
     lookup = InstrumentLookup(instruments)
     candidates = lookup.get_expiry_candidates("NIFTY", today, preference=["weekly"])
@@ -142,7 +227,12 @@ def test_weekly_not_in_default_preference():
     """Default preference ["monthly","quarterly","yearly"] does not include "weekly"."""
     today = date(2026, 6, 25)
     instruments = [
-        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": "2026-06-30"},
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": "2026-06-30",
+        },
     ]
     lookup = InstrumentLookup(instruments)
     candidates = lookup.get_expiry_candidates("NIFTY", today)
@@ -156,9 +246,19 @@ def test_weekly_and_monthly_coexist():
     today = date(2026, 6, 10)
     instruments = [
         # June 16 = Tuesday, DTE 6 → weekly
-        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": "2026-06-16"},
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": "2026-06-16",
+        },
         # June 30 = Tuesday and last-of-month, DTE 20 → monthly (DTE > 14, not weekly)
-        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": "2026-06-30"},
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": "2026-06-30",
+        },
     ]
     lookup = InstrumentLookup(instruments)
     candidates = lookup.get_expiry_candidates("NIFTY", today, preference=["weekly", "monthly"])
@@ -171,7 +271,12 @@ def test_weekly_no_tuesday_in_window():
     today = date(2026, 6, 25)
     instruments = [
         # July 2 = Thursday, DTE 7 — not Tuesday
-        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": "2026-07-02"},
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": "2026-07-02",
+        },
     ]
     lookup = InstrumentLookup(instruments)
     candidates = lookup.get_expiry_candidates("NIFTY", today, preference=["weekly"])
@@ -183,7 +288,12 @@ def test_weekly_boundary_inclusive_14():
     # June 16, 2026 = Tuesday; June 30 = Tuesday, DTE 14
     today = date(2026, 6, 16)
     instruments = [
-        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": "2026-06-30"},
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": "2026-06-30",
+        },
     ]
     lookup = InstrumentLookup(instruments)
     candidates = lookup.get_expiry_candidates("NIFTY", today, preference=["weekly"])
@@ -195,7 +305,12 @@ def test_weekly_boundary_exclusive_15():
     # June 15, 2026 = Monday; June 30 = Tuesday, DTE 15
     today = date(2026, 6, 15)
     instruments = [
-        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": "2026-06-30"},
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": "2026-06-30",
+        },
     ]
     lookup = InstrumentLookup(instruments)
     candidates = lookup.get_expiry_candidates("NIFTY", today, preference=["weekly"])
@@ -205,7 +320,7 @@ def test_weekly_boundary_exclusive_15():
 def test_expiry_candidates_ignores_weeklies():
     """Verify that weekly expiries (not the last of the month) are ignored, choosing only monthly."""
     today = date(2026, 5, 10)
-    
+
     # May expiries:
     # 2026-05-14 (weekly, DTE 4 - too close anyway)
     # 2026-05-21 (weekly, DTE 11 - too close anyway)
@@ -215,28 +330,60 @@ def test_expiry_candidates_ignores_weeklies():
     # 2026-06-11 (weekly, DTE 32 - in monthly DTE band, but should be ignored)
     # 2026-06-18 (weekly, DTE 39 - in monthly DTE band, but should be ignored)
     # 2026-06-25 (monthly, DTE 46 - last of June, quarterly month, so quarterly candidate)
-    
+
     instruments = [
-        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": "2026-05-14"},
-        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": "2026-05-21"},
-        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": "2026-05-28"},
-        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": "2026-06-04"},
-        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": "2026-06-11"},
-        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": "2026-06-18"},
-        {"segment": "NSE_FO", "instrument_type": "PE", "underlying_symbol": "NIFTY", "expiry": "2026-06-25"},
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": "2026-05-14",
+        },
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": "2026-05-21",
+        },
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": "2026-05-28",
+        },
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": "2026-06-04",
+        },
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": "2026-06-11",
+        },
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": "2026-06-18",
+        },
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": "2026-06-25",
+        },
     ]
-    
+
     lookup = InstrumentLookup(instruments)
     candidates = lookup.get_expiry_candidates("NIFTY", today)
-    
+
     # Even though 2026-06-04, 06-11, 06-18 have 15 <= DTE <= 45, they are weekly contracts
     # and should NOT be selected as the monthly candidate.
     # Instead, 2026-05-28 (DTE 18, last of May) is the monthly candidate.
     # 2026-06-25 (DTE 46, last of June) is the quarterly candidate.
-    assert candidates == [
-        ("monthly", "2026-05-28"),
-        ("quarterly", "2026-06-25")
-    ]
+    assert candidates == [("monthly", "2026-05-28"), ("quarterly", "2026-06-25")]
 
 
 def test_get_next_contract_in_band_skips_weekly():
@@ -344,6 +491,122 @@ def test_get_next_contract_in_band_current_not_found():
     """Unknown instrument_key -> None."""
     lookup = InstrumentLookup([])
     assert lookup.get_next_contract_in_band("NSE_FO|INVALID", date(2026, 5, 10)) is None
+
+
+def test_yearly_december_double_duty_as_quarterly():
+    """A December expiry inside the quarterly DTE band (46-200) AND at or
+    above yearly_dte_floor (180) is quarterly's pick AND yearly's primary
+    (non-fallback) pick simultaneously. Regression test for the 2026-07-22
+    bug where quarterly's exclusive claim on the date starved yearly,
+    forcing a rollover a full year out.
+    """
+    today = date(2026, 6, 22)
+    dec_2026 = "2026-12-29"  # DTE 190 -> inside quarterly's 46-200 band AND >= yearly floor (180)
+    jun_2027 = "2027-06-29"  # DTE ~372 -> would have been the old (wrong) yearly pick
+
+    instruments = [
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": dec_2026,
+        },
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": jun_2027,
+        },
+    ]
+    lookup = InstrumentLookup(instruments)
+    candidates = lookup.get_expiry_candidates("NIFTY", today, yearly_dte_floor=180)
+
+    labels = dict(candidates)
+    assert labels["quarterly"] == dec_2026
+    assert labels["yearly"] == dec_2026
+
+
+def test_yearly_december_double_duty_via_fallback_below_floor():
+    """Reproduces the exact 2026-07-22 production scenario: December is
+    below yearly_dte_floor (160 < 180) but still the only December live,
+    so it's picked via yearly's fallback branch AND independently claimed
+    by quarterly (46-200 band) — both labels point at the same date.
+    """
+    today = date(2026, 7, 22)
+    dec_2026 = "2026-12-29"  # DTE 160 -> inside quarterly's band, below yearly floor
+    jun_2027 = "2027-06-29"  # DTE 342 -> was the old (wrong) yearly pick before this fix
+
+    instruments = [
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": dec_2026,
+        },
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": jun_2027,
+        },
+    ]
+    lookup = InstrumentLookup(instruments)
+    candidates = lookup.get_expiry_candidates("NIFTY", today, yearly_dte_floor=180)
+
+    labels = dict(candidates)
+    assert labels["quarterly"] == dec_2026
+    assert labels["yearly"] == dec_2026
+
+
+def test_yearly_rolls_to_next_december_below_floor():
+    """Once the nearest December's DTE drops below yearly_dte_floor, yearly
+    rolls forward to the next December instead of offering a stale pick.
+    """
+    today = date(2026, 10, 1)
+    dec_2026 = "2026-12-29"  # DTE ~89 -> below floor (180)
+    dec_2027 = "2027-12-28"  # DTE ~453 -> next December, above floor
+
+    instruments = [
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": dec_2026,
+        },
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": dec_2027,
+        },
+    ]
+    lookup = InstrumentLookup(instruments)
+    candidates = lookup.get_expiry_candidates("NIFTY", today, yearly_dte_floor=180)
+
+    labels = dict(candidates)
+    assert labels["yearly"] == dec_2027
+
+
+def test_yearly_falls_back_to_nearest_december_when_none_above_floor():
+    """If no December clears the floor at all, yearly falls back to the
+    nearest live one rather than returning no candidate.
+    """
+    today = date(2026, 12, 1)
+    dec_2026 = "2026-12-29"  # DTE ~28 -> below floor, but the only candidate
+
+    instruments = [
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": dec_2026,
+        },
+    ]
+    lookup = InstrumentLookup(instruments)
+    candidates = lookup.get_expiry_candidates("NIFTY", today, yearly_dte_floor=180)
+
+    labels = dict(candidates)
+    assert labels["yearly"] == dec_2026
 
 
 def test_get_next_contract_in_band_rejects_futures():

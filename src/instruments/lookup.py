@@ -277,7 +277,11 @@ class InstrumentLookup:
     # ── Expiry parsing (module-level: parse_expiry) ──
 
     def get_expiry_candidates(
-        self, underlying: str, today: date, preference: list[str] | None = None
+        self,
+        underlying: str,
+        today: date,
+        preference: list[str] | None = None,
+        yearly_dte_floor: int = 180,
     ) -> list[tuple[str, str]]:
         """Return (label, expiry_date) pairs in preference order.
 
@@ -285,7 +289,20 @@ class InstrumentLookup:
           weekly:    DTE ≤ 14, nearest Tuesday (Nifty weekly post-April 2026)
           monthly:   DTE 15–45, last expiry of the calendar month
           quarterly: DTE 46–200, last expiry of Mar/Jun/Sep/Dec
-          yearly:    DTE 201–420, last expiry of Jun/Dec
+
+        yearly is NOT a DTE band. It is always the last expiry of December
+        (the last Tuesday, since all post-April-2026 expiries fall on
+        Tuesday) — the nearest live one with DTE >= yearly_dte_floor. Once
+        the current December contract's DTE drops below that floor (i.e.
+        we're in its final quarter), yearly rolls forward to next December
+        instead of continuing to offer a stale near-dated contract. This is
+        deliberately independent of the quarterly band above: the same
+        December date can and often will satisfy both labels at once (e.g.
+        ~160 DTE out, it's inside quarterly's 46-200 band while still being
+        December) — that's intentional, so a December expiry can serve as a
+        quarterly trade once it's no longer far enough out to count as
+        yearly. See DECISIONS.md 2026-07-22 "yearly = nearest December, not
+        a June/Dec DTE band".
 
         Default preference order: ["monthly", "quarterly", "yearly"] — weekly is opt-in.
         Pass preference=["weekly"] for IC weekly entry.
@@ -294,6 +311,12 @@ class InstrumentLookup:
             underlying: Underlying symbol (e.g. 'NIFTY').
             today: Reference date for DTE calculation.
             preference: Custom order of labels. Defaults to ["monthly", "quarterly", "yearly"].
+            yearly_dte_floor: Minimum DTE for the nearest December expiry to
+                count as "yearly" rather than rolling to next December.
+                Defaults to 180, mirroring ICExpiryConfig
+                CONFIGS["yearly"].dte_warn_lo (src/strategy/ic_expiry_config.py)
+                — kept as a plain int default here rather than importing
+                that config, since src/instruments sits below src/strategy.
 
         Returns:
             List of (label, expiry_date_str) tuples.
@@ -348,19 +371,32 @@ class InstrumentLookup:
 
             is_monthly = d == last_of_month[(d.year, d.month)]
             is_quarterly = is_monthly and (d.month in (3, 6, 9, 12))
-            # NSE's long-dated options (yearly/half-yearly) expire in June and December.
-            is_yearly = is_monthly and (d.month in (6, 12))
 
             label = None
             if 15 <= dte <= 45 and is_monthly:
                 label = "monthly"
             elif 46 <= dte <= 200 and is_quarterly:
                 label = "quarterly"
-            elif 201 <= dte <= 420 and is_yearly:
-                label = "yearly"
 
             if label and label not in mapping:
                 mapping[label] = exp
+
+        # yearly: nearest live December (last-of-month == last Tuesday) with
+        # DTE >= yearly_dte_floor, rolling to the next December otherwise.
+        # Resolved independently of the monthly/quarterly loop above so a
+        # December date already claimed by "quarterly" can still be reused
+        # here — see docstring.
+        december_dates = sorted(d for (_, month), d in last_of_month.items() if month == 12)
+        yearly_candidates = [(d, (d - today).days) for d in december_dates]
+        yearly_candidates = [(d, dte) for d, dte in yearly_candidates if dte >= 1]
+        on_or_above_floor = [(d, dte) for d, dte in yearly_candidates if dte >= yearly_dte_floor]
+        chosen = min(on_or_above_floor, key=lambda t: t[1], default=None)
+        if chosen is None:
+            # No December far enough out yet (e.g. thin BOD data) — fall
+            # back to the nearest live December rather than returning none.
+            chosen = min(yearly_candidates, key=lambda t: t[1], default=None)
+        if chosen is not None:
+            mapping["yearly"] = chosen[0].isoformat()
 
         pref_order = preference or ["monthly", "quarterly", "yearly"]
         result: list[tuple[str, str]] = []
