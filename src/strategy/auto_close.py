@@ -14,6 +14,7 @@ from src.backtest.ivr import compute_ivr
 from src.backtest.vix_ingest import load_vix_series
 from src.models.options import OptionChain
 from src.paper.models import PaperPosition
+
 if TYPE_CHECKING:
     from src.paper.store import PaperStore
 from src.paper.tracker import get_strategy_realized_pnl
@@ -130,12 +131,18 @@ async def auto_close_overlay(
             put_key = put_pos.instrument_key if put_pos else "overlay_collar_put"
             put_qty = abs(put_pos.net_qty) if put_pos else 0
 
-            closer.close_collar_all(
+            closed_ok = closer.close_collar_all(
                 strategy_name=strategy_name,
                 market=chain,
                 event_id=event_id,
                 vix=vix,
             )
+            if not closed_ok:
+                # close_collar_all already logged + notified the write failure
+                # and left both legs open. Raise so the outer except block's
+                # existing AUTO-CLOSE FAILED handling fires instead of us
+                # falling through to send a false "COLLAR CLOSED" report.
+                raise RuntimeError("close_collar_all reported failure — position still open")
             call_pnl = (entry_price - exit_ltp) * abs(pos.net_qty)
 
             put_leg = find_chain_leg(chain, put_key, "PE", lookup) if put_pos else None
@@ -332,9 +339,7 @@ async def evaluate_pp_reentry_eod(
 
         if passed and notifier is not None:
             # Aggregate realized P&L across all three track strategies
-            realized_pnl = sum(
-                get_strategy_realized_pnl(store, s) for s in track_strategies
-            )
+            realized_pnl = sum(get_strategy_realized_pnl(store, s) for s in track_strategies)
             msg = (
                 f"🟢 PP RE-ENTRY ELIGIBLE — 3-track overlay\n"
                 f"IVR    : {ivr:.2f} (passes reentry threshold)\n"

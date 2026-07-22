@@ -184,8 +184,15 @@ class OverlayCloser:
         market: OptionChain,
         event_id: int | None,
         vix: float | None = None,
-    ) -> None:
-        """Atomically close both Collar legs (short call and long put) with rollback."""
+    ) -> bool:
+        """Atomically close both Collar legs (short call and long put) with rollback.
+
+        Returns:
+            True if the position ended up flat (either already flat, or the
+            close trades were written successfully). False if a write failure
+            left the position still open — callers must not treat the close
+            as having happened when this returns False.
+        """
         today = market_today()
         call_pos = self._store.get_position(strategy_name, SHORT_CALL_ROLE)
         put_pos = self._store.get_position(strategy_name, LONG_PUT_ROLE)
@@ -197,7 +204,7 @@ class OverlayCloser:
                 self._store.resolve_exit_event_with_audit(
                     event_id=event_id, status="DISMISSED", notes="Already flat"
                 )
-            return
+            return True
 
         # Build both close trades before any write so we can commit atomically.
         trades_to_write: list[PaperTrade] = []
@@ -256,7 +263,7 @@ class OverlayCloser:
                     self._notifier.send(
                         f"Collar close failed: could not write close trades. Error: {e}"
                     )
-                return
+                return False
 
         if event_id is not None:
             self._store.resolve_exit_event_with_audit(event_id=event_id, status="ACTED")
@@ -273,6 +280,7 @@ class OverlayCloser:
                 notes="MANUAL_OVERRIDE",
             )
             self._store.resolve_exit_event(eid, "ACTED")
+        return True
 
     def monetize_collar_put(
         self,

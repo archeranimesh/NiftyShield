@@ -273,8 +273,9 @@ def test_close_collar_all_happy_path(store: PaperStore, closer: OverlayCloser) -
     store.record_trade(t2)
 
     chain = _make_chain("10", "0.05", "20", "-0.10")
-    closer.close_collar_all("paper_collar_v1", chain, None, 15.0)
+    result = closer.close_collar_all("paper_collar_v1", chain, None, 15.0)
 
+    assert result is True
     # Verify both legs are closed
     assert store.get_position("paper_collar_v1", "overlay_collar_call").net_qty == 0
     assert store.get_position("paper_collar_v1", "overlay_collar_put").net_qty == 0
@@ -315,8 +316,9 @@ def test_close_collar_all_rollback(
     store.record_trades = mock_record_trades  # type: ignore[method-assign]
 
     chain = _make_chain("10", "0.05", "20", "-0.10")
-    closer.close_collar_all("paper_collar_v1", chain, None, 15.0)
+    result = closer.close_collar_all("paper_collar_v1", chain, None, 15.0)
 
+    assert result is False
     # Verify both legs are still open (no partial write committed)
     pos = store.get_position("paper_collar_v1", "overlay_collar_call")
     assert pos.net_qty == -65
@@ -439,8 +441,9 @@ def test_close_collar_already_flat(store: PaperStore, closer: OverlayCloser, cap
     )
 
     chain = _make_chain("10", "0.05", "20", "-0.10")
-    closer.close_collar_all("paper_collar_v1", chain, event_id, 15.0)
+    result = closer.close_collar_all("paper_collar_v1", chain, event_id, 15.0)
 
+    assert result is True
     # Verify event is DISMISSED
     events = store.get_open_exit_events("paper_collar_v1")
     assert not any(e["id"] == event_id for e in events)
