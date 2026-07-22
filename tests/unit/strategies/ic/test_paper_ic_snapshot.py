@@ -54,6 +54,11 @@ def mock_store():
         store_inst = MagicMock()
         store_inst.get_positions.return_value = []
         store_inst.get_open_exit_events.return_value = []
+        # Default: no margin snapshot captured for this entry cycle — matches
+        # get_margin_snapshot's real "not found" contract (returns None, not
+        # an error). Individual tests override this when exercising the
+        # ROI-on-margin line.
+        store_inst.get_margin_snapshot.return_value = None
         mock_cls.return_value = store_inst
         yield store_inst
 
@@ -609,6 +614,7 @@ async def test_process_variant_binds_constructor_args_by_keyword(mock_lookup):
 
     store = MagicMock()
     store.get_positions.return_value = positions
+    store.get_margin_snapshot.return_value = None
     store.db_path = "dummy.db"
 
     broker = MagicMock()
@@ -931,6 +937,7 @@ async def test_process_variant_resolves_expiry_via_numeric_instrument_key(
         )
     ]
     store.get_positions.return_value = positions
+    store.get_margin_snapshot.return_value = None
 
     lookup = MagicMock()
     expiry_epoch_ms = int(

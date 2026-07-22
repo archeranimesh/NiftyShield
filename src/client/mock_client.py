@@ -52,7 +52,9 @@ from src.client.protocol import (
     Candle,
     CandleRequest,
     Holding,
+    MarginInstrument,
     MarginResponse,
+    OrderMarginResponse,
     OrderModify,
     OrderRequest,
     OrderResponse,
@@ -63,6 +65,11 @@ logger = structlog.get_logger(__name__)
 
 # Sentinel used to distinguish "not set" from None
 _MISSING = object()
+
+# Deterministic per-unit margin used by get_order_margin's fake calculation —
+# not calibrated to real SPAN values, just stable enough for offline tests.
+_MOCK_MARGIN_PER_UNIT = Decimal("50")
+_MOCK_NETTING_BENEFIT = Decimal("0.4")  # final_margin fraction when basket has both BUY and SELL
 
 
 class MockBrokerClient:
@@ -327,6 +334,46 @@ class MockBrokerClient:
         """
         self._raise_if_queued("get_margins")
         return {"available_margin": float(self._margin_available)}
+
+    async def get_order_margin(
+        self, instruments: list[MarginInstrument]
+    ) -> OrderMarginResponse:
+        """Return a deterministic fake margin for a basket of instruments.
+
+        Not calibrated to real SPAN/exposure math — this exists so offline
+        tests can exercise the get_order_margin call path (basket credit
+        capture at IC entry) without hitting the live Upstox margin
+        calculator. ``final_margin`` applies a flat netting-benefit factor
+        whenever the basket contains both a BUY and a SELL leg, mimicking
+        the cross-leg SPAN benefit an IC gets in production.
+
+        Args:
+            instruments: List of ``{instrument_key, quantity, transaction_type,
+                product}`` dicts.
+
+        Returns:
+            Dict with ``required_margin`` and ``final_margin`` (both float).
+
+        Raises:
+            ValueError: If ``instruments`` is empty.
+        """
+        self._raise_if_queued("get_order_margin")
+        if not instruments:
+            raise ValueError("get_order_margin: instruments must not be empty")
+
+        required_margin = sum(
+            (Decimal(str(inst.get("quantity", 0))) * _MOCK_MARGIN_PER_UNIT for inst in instruments),
+            start=Decimal("0"),
+        )
+        transaction_types = {inst.get("transaction_type") for inst in instruments}
+        has_netting_benefit = {"BUY", "SELL"} <= transaction_types
+        final_margin = (
+            required_margin * _MOCK_NETTING_BENEFIT if has_netting_benefit else required_margin
+        )
+        return {
+            "required_margin": float(required_margin),
+            "final_margin": float(final_margin),
+        }
 
     # ------------------------------------------------------------------
     # BrokerClient — additional methods

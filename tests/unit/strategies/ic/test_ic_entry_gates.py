@@ -22,6 +22,7 @@ from scripts.strategies.ic.ic_entry_gates import (
     _last_tuesday_of_month,
     _most_recently_settled_expiry,
     _post_expiry_gate,
+    capture_entry_margin,
     check_duplicate,
     ic_relevant_strategy_names,
     resolve_expiry,
@@ -530,3 +531,97 @@ class TestB0103StructlogMigration:
         blocked = next(e for e in logs if e["event"] == "resolve_ivr.gate_blocked")
         assert blocked["ivr"] == pytest.approx(0.10)
         assert blocked["gate"] == pytest.approx(0.25)
+
+
+# ---------------------------------------------------------------------------
+# capture_entry_margin
+# ---------------------------------------------------------------------------
+
+
+class TestCaptureEntryMargin:
+    """capture_entry_margin is a non-fatal, entry-only margin capture helper.
+
+    Failures (broker call or DB write) must be logged and swallowed, never
+    raised — margin capture must never turn a successful entry into a failure.
+    """
+
+    @pytest.mark.asyncio
+    async def test_success_persists_snapshot(self) -> None:
+        broker = MagicMock()
+        broker.get_order_margin = MagicMock(
+            side_effect=None,
+            return_value={"required_margin": 273414.70, "final_margin": 73233.55},
+        )
+        # get_order_margin is async on the real protocol — wrap with AsyncMock semantics.
+        from unittest.mock import AsyncMock
+
+        broker.get_order_margin = AsyncMock(
+            return_value={"required_margin": 273414.70, "final_margin": 73233.55}
+        )
+        store = MagicMock()
+
+        result = await capture_entry_margin(
+            broker=broker,
+            store=store,
+            strategy_name="paper_ic_nifty_v1_weekly",
+            entry_date=date(2026, 7, 21),
+            legs=[("NSE_FO|1", "SELL", 75), ("NSE_FO|2", "BUY", 75)],
+        )
+
+        assert result is not None
+        assert result.final_margin == Decimal("73233.55")
+        assert result.required_margin == Decimal("273414.70")
+        store.record_margin_snapshot.assert_called_once()
+        persisted = store.record_margin_snapshot.call_args.args[0]
+        assert persisted.strategy_name == "paper_ic_nifty_v1_weekly"
+        assert persisted.entry_date == date(2026, 7, 21)
+
+        # Instruments basket sent to the broker mirrors the legs tuples.
+        sent_instruments = broker.get_order_margin.call_args.args[0]
+        assert sent_instruments == [
+            {"instrument_key": "NSE_FO|1", "quantity": 75, "transaction_type": "SELL", "product": "D"},
+            {"instrument_key": "NSE_FO|2", "quantity": 75, "transaction_type": "BUY", "product": "D"},
+        ]
+
+    @pytest.mark.asyncio
+    async def test_broker_failure_is_swallowed_returns_none(self) -> None:
+        from unittest.mock import AsyncMock
+
+        broker = MagicMock()
+        broker.get_order_margin = AsyncMock(side_effect=RuntimeError("network down"))
+        store = MagicMock()
+
+        with capture_logs() as logs:
+            result = await capture_entry_margin(
+                broker=broker,
+                store=store,
+                strategy_name="paper_ic_nifty_v1_weekly",
+                entry_date=date(2026, 7, 21),
+                legs=[("NSE_FO|1", "SELL", 75)],
+            )
+
+        assert result is None
+        store.record_margin_snapshot.assert_not_called()
+        events = [entry["event"] for entry in logs]
+        assert "capture_entry_margin.failed" in events
+
+    @pytest.mark.asyncio
+    async def test_store_write_failure_is_swallowed_returns_none(self) -> None:
+        from unittest.mock import AsyncMock
+
+        broker = MagicMock()
+        broker.get_order_margin = AsyncMock(
+            return_value={"required_margin": 100.0, "final_margin": 40.0}
+        )
+        store = MagicMock()
+        store.record_margin_snapshot.side_effect = RuntimeError("db locked")
+
+        result = await capture_entry_margin(
+            broker=broker,
+            store=store,
+            strategy_name="paper_ic_nifty_v1_weekly",
+            entry_date=date(2026, 7, 21),
+            legs=[("NSE_FO|1", "SELL", 75)],
+        )
+
+        assert result is None

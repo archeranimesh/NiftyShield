@@ -31,6 +31,7 @@ from src.paper.constants import DEFAULT_BOD_PATH, NIFTYBEES_KEY
 from src.paper.models import (
     ExitSignal,
     GateViolation,
+    MarginSnapshot,
     PaperLegSnapshot,
     PaperNavSnapshot,
     PaperPosition,
@@ -207,6 +208,19 @@ CREATE TABLE IF NOT EXISTS paper_strategies (
     active_call_width_pts    INTEGER NOT NULL DEFAULT 0,
     cycle_id                 TEXT    NOT NULL DEFAULT ''
 ) STRICT;
+
+CREATE TABLE IF NOT EXISTS paper_margin_snapshots (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    strategy_name    TEXT NOT NULL,
+    entry_date       TEXT NOT NULL,
+    required_margin  TEXT NOT NULL,
+    final_margin     TEXT NOT NULL,
+    captured_at      TEXT NOT NULL,
+    UNIQUE(strategy_name, entry_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_paper_margin_snapshots_strategy_entry
+    ON paper_margin_snapshots(strategy_name, entry_date);
 """
 
 
@@ -1582,6 +1596,68 @@ class PaperStore:
                 (event_id,),
             ).fetchone()
         return self._parse_exit_event_row(row) if row is not None else None
+
+    # ── Margin snapshots ─────────────────────────────────────────────────────
+
+    def record_margin_snapshot(self, snapshot: MarginSnapshot) -> None:
+        """Upsert the entry-cycle margin snapshot for a strategy.
+
+        Idempotent on (strategy_name, entry_date) — safe to call more than
+        once for the same entry cycle (e.g. a retried entry script run); the
+        latest call wins.
+
+        Args:
+            snapshot: The MarginSnapshot to persist.
+        """
+        with _connect(self.db_path) as conn:
+            conn.execute(
+                """INSERT INTO paper_margin_snapshots
+                   (strategy_name, entry_date, required_margin, final_margin, captured_at)
+                   VALUES (?, ?, ?, ?, ?)
+                   ON CONFLICT(strategy_name, entry_date) DO UPDATE SET
+                       required_margin = excluded.required_margin,
+                       final_margin = excluded.final_margin,
+                       captured_at = excluded.captured_at""",
+                (
+                    snapshot.strategy_name,
+                    snapshot.entry_date.isoformat(),
+                    str(snapshot.required_margin),
+                    str(snapshot.final_margin),
+                    snapshot.captured_at.isoformat(),
+                ),
+            )
+
+    def get_margin_snapshot(
+        self, strategy_name: str, entry_date: date
+    ) -> MarginSnapshot | None:
+        """Fetch the margin snapshot for a strategy's entry cycle, if captured.
+
+        Args:
+            strategy_name: Paper strategy name.
+            entry_date: Entry cycle date — matches ``PaperPosition.entry_date``.
+
+        Returns:
+            MarginSnapshot if one was recorded for this (strategy, entry_date)
+            pair, else None (e.g. entry predates this feature, or the
+            margin-calculator call failed at entry time and was logged but
+            not persisted).
+        """
+        with _connect(self.db_path) as conn:
+            row = conn.execute(
+                """SELECT strategy_name, entry_date, required_margin, final_margin, captured_at
+                   FROM paper_margin_snapshots
+                   WHERE strategy_name = ? AND entry_date = ?""",
+                (strategy_name, entry_date.isoformat()),
+            ).fetchone()
+        if row is None:
+            return None
+        return MarginSnapshot(
+            strategy_name=row["strategy_name"],
+            entry_date=date.fromisoformat(row["entry_date"]),
+            required_margin=Decimal(row["required_margin"]),
+            final_margin=Decimal(row["final_margin"]),
+            captured_at=datetime.fromisoformat(row["captured_at"]),
+        )
 
     # ── Gate violations ──────────────────────────────────────────────────────
 

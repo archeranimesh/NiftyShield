@@ -176,6 +176,34 @@ class PaperNavSnapshot:
 
 
 @dataclass(frozen=True)
+class MarginSnapshot:
+    """Margin captured once, at the entry of a strategy's open position cycle.
+
+    One row per (strategy_name, entry_date) in ``paper_margin_snapshots``.
+    Captured from ``BrokerClient.get_order_margin()`` immediately after a
+    strategy's entry trades are recorded — not refreshed daily. ROI-on-margin
+    reporting divides P&L by ``final_margin`` (the post-netting-benefit
+    figure — what the broker actually blocks), never ``required_margin``.
+
+    Attributes:
+        strategy_name: Paper strategy this snapshot belongs to.
+        entry_date: Date the position cycle opened — matches
+            ``PaperPosition.entry_date`` for the same cycle.
+        required_margin: Pre-netting-benefit basket margin (each leg priced
+            independently). Kept for reference/audit, not used in ROI.
+        final_margin: Post-netting-benefit margin — actual capital blocked.
+            ROI-on-margin denominator.
+        captured_at: UTC timestamp of the margin-calculator call.
+    """
+
+    strategy_name: str
+    entry_date: date
+    required_margin: Decimal
+    final_margin: Decimal
+    captured_at: datetime
+
+
+@dataclass(frozen=True)
 class PaperLegSnapshot:
     """Per-leg daily P&L snapshot for a paper strategy.
 

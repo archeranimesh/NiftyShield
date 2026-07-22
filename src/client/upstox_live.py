@@ -27,18 +27,32 @@ Expired instruments:
 
 from __future__ import annotations
 
+import asyncio
 from decimal import Decimal
+from typing import Any
 
+import requests
+import structlog
+
+from src.client.exceptions import AuthenticationError, DataFetchError
 from src.client.protocol import (
     CandleRequest,
     Holding,
+    MarginInstrument,
     MarginResponse,
     OrderModify,
+    OrderMarginResponse,
     OrderRequest,
     OrderResponse,
     Position,
 )
 from src.client.upstox_market import UpstoxMarketClient
+from src.config import settings
+
+logger = structlog.stdlib.get_logger(__name__)
+
+V2_MARGIN_URL = "https://api.upstox.com/v2/charges/margin"
+MAX_MARGIN_INSTRUMENTS_PER_REQUEST = 20
 
 
 class UpstoxLiveClient:
@@ -181,6 +195,87 @@ class UpstoxLiveClient:
             NotImplementedError: Always. See CONTEXT.md → Tokens & Auth.
         """
         raise NotImplementedError("Requires Daily OAuth token — see CONTEXT.md")
+
+    # ── Order margin calculator (Daily OAuth token — reads settings directly) ──
+    #
+    # Unlike the other Daily-OAuth-gated methods above, this one is wired: the
+    # margin-calculator endpoint (POST /v2/charges/margin) doesn't touch the
+    # positions/holdings surface that's still pending a constructor refactor
+    # (see module docstring), so it reads UPSTOX_ACCESS_TOKEN from settings
+    # directly rather than waiting on that broader change. Scope: IC margin
+    # capture at paper-trade entry only — see DECISIONS.md.
+
+    async def get_order_margin(
+        self, instruments: list[MarginInstrument]
+    ) -> OrderMarginResponse:
+        """Compute required/final margin for a basket of not-yet-placed orders.
+
+        Args:
+            instruments: List of ``{instrument_key, quantity, transaction_type,
+                product}`` dicts. Max 20 per call (Upstox limit) — callers must
+                pre-batch larger baskets.
+
+        Returns:
+            Parsed ``data`` object from the Upstox response, e.g.
+            ``{"required_margin": ..., "final_margin": ..., "margins": [...]}``.
+
+        Raises:
+            ValueError: If ``instruments`` is empty or exceeds the 20-instrument
+                limit.
+            AuthenticationError: If UPSTOX_ACCESS_TOKEN is missing or the API
+                rejects it (401/403).
+            DataFetchError: If the request fails for any other reason, or the
+                response is missing the expected ``data`` object.
+        """
+        if not instruments:
+            raise ValueError("get_order_margin: instruments must not be empty")
+        if len(instruments) > MAX_MARGIN_INSTRUMENTS_PER_REQUEST:
+            raise ValueError(
+                f"get_order_margin: max {MAX_MARGIN_INSTRUMENTS_PER_REQUEST} "
+                f"instruments per call, got {len(instruments)}"
+            )
+        return await asyncio.to_thread(self._get_order_margin_sync, instruments)
+
+    def _get_order_margin_sync(
+        self, instruments: list[MarginInstrument]
+    ) -> OrderMarginResponse:
+        """Sync implementation of get_order_margin — see that method for contract."""
+        token = settings.upstox_access_token
+        if not token:
+            raise AuthenticationError(
+                "get_order_margin: UPSTOX_ACCESS_TOKEN not set — "
+                "run: python -m src.auth.login"
+            )
+
+        try:
+            resp = requests.post(
+                V2_MARGIN_URL,
+                headers={
+                    "accept": "application/json",
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json",
+                },
+                json={"instruments": instruments},
+                timeout=15,
+            )
+        except requests.RequestException as exc:
+            raise DataFetchError(f"get_order_margin: request failed: {exc}") from exc
+
+        if resp.status_code in (401, 403):
+            raise AuthenticationError(
+                f"get_order_margin: auth rejected (status={resp.status_code}) — "
+                "token likely expired, run: python -m src.auth.login"
+            )
+        if not resp.ok:
+            raise DataFetchError(
+                f"get_order_margin: HTTP {resp.status_code}: {resp.text[:500]}"
+            )
+
+        body: dict[str, Any] = resp.json()
+        data = body.get("data")
+        if not isinstance(data, dict):
+            raise DataFetchError(f"get_order_margin: unexpected response shape: {body!r}")
+        return data
 
     # ── Private helpers ───────────────────────────────────────────
 

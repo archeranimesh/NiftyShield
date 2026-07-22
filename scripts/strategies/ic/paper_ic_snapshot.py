@@ -29,7 +29,7 @@ from src.client.upstox_market import parse_upstox_option_chain
 from src.config import settings
 from src.instruments.lookup import InstrumentLookup, parse_expiry
 from src.notifications.telegram_gateway import TelegramGateway
-from src.paper.constants import DEFAULT_BOD_PATH, DEFAULT_DB_PATH
+from src.paper.constants import DEFAULT_BOD_PATH, DEFAULT_DB_PATH, LOT_SIZE
 from src.paper.store import PaperStore
 from src.strategy.ic_expiry_config import CONFIGS
 from src.strategy.ic_expiry_config_v2 import CONFIGS_V2
@@ -300,6 +300,29 @@ async def process_variant(
             f"entry credit ₹{entry_credit:.2f} → N/A% captured so far"
         )
 
+    # ROI on margin — divides total ₹ P&L by the final_margin captured once at
+    # entry (see MarginSnapshot docstring). entry_date is shared across every
+    # leg of one entry cycle, so any position's value works as the lookup key.
+    # Absent for cycles opened before this feature existed, or where the
+    # margin-calculator call failed non-fatally at entry time.
+    entry_date = ic_positions[0].entry_date
+    roi_line = "ROI on margin: N/A (no margin snapshot for this entry)"
+    if entry_date is not None:
+        margin_snapshot = store.get_margin_snapshot(config.strategy_name, entry_date)
+        if margin_snapshot is not None and margin_snapshot.final_margin > Decimal("0"):
+            if combined_mark is not None:
+                total_pnl_rupees = (entry_credit - combined_mark) * LOT_SIZE
+                roi_pct = (total_pnl_rupees / margin_snapshot.final_margin) * Decimal("100")
+                roi_line = (
+                    f"ROI on margin: ₹{total_pnl_rupees:,.0f} / "
+                    f"₹{margin_snapshot.final_margin:,.0f} margin → {roi_pct:.1f}%"
+                )
+            else:
+                roi_line = (
+                    f"ROI on margin: N/A (no live mark) — "
+                    f"margin blocked ₹{margin_snapshot.final_margin:,.0f}"
+                )
+
     # Signals
     sig_strs = []
     for ev in events:
@@ -361,7 +384,8 @@ async def process_variant(
         f"DTE: {dte}  |  Nifty: {nifty_spot:,.0f}  |  IVR: {ivr_str}\n\n"
         f"Position:\n"
         f"{position_block}\n\n"
-        f"{pnl_line}\n\n"
+        f"{pnl_line}\n"
+        f"{roi_line}\n\n"
         f"Today's signals: {sigs_str}\n"
         f"Intraday actions: {intraday_str}"
     )

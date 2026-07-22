@@ -24,6 +24,7 @@ import argparse
 import asyncio
 import subprocess
 import sys
+from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
@@ -36,11 +37,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from scripts.strategies.ic.ic_entry_gates import (
     _post_expiry_gate,
+    capture_entry_margin,
     check_duplicate,
     make_gate_violation,
     resolve_expiry,
     resolve_ivr,
 )
+from src.client.upstox_live import UpstoxLiveClient
 from src.client.upstox_market import UpstoxMarketClient
 from src.config import settings
 from src.instruments.strike_selector import (
@@ -536,6 +539,24 @@ async def run() -> None:
             except Exception as exc:  # noqa: BLE001 — telegram is non-fatal
                 logger.warning("telegram.send_failed", error=str(exc))
             sys.exit(1)
+
+        # Step 11b: Capture entry-cycle margin (non-fatal). Legs are confirmed
+        # persisted above. Client construction is wrapped here too, not just the
+        # broker call inside capture_entry_margin — UpstoxLiveClient() itself can
+        # raise (missing UPSTOX_ANALYTICS_TOKEN) and legs are already persisted
+        # at this point, so that must never crash the script before the success
+        # notification.
+        try:
+            margin_legs = [(key, action, LOT_SIZE) for _role, action, key, _price in legs]
+            await capture_entry_margin(
+                broker=UpstoxLiveClient(),
+                store=store,
+                strategy_name=strategy_name,
+                entry_date=date.today(),
+                legs=margin_legs,
+            )
+        except Exception as exc:  # noqa: BLE001 — margin capture must never block a successful entry
+            logger.warning("ic_entry.margin_capture_failed", error=str(exc))
 
         # Step 12: Telegram notification — only reached once all 4 legs are
         # confirmed present in the DB.

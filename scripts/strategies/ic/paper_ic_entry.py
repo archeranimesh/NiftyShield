@@ -27,10 +27,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from scripts.strategies.ic.ic_entry_gates import (
     _post_expiry_gate,
+    capture_entry_margin,
     make_gate_violation,
 )
 from src.backtest.ivr import compute_ivr
 from src.backtest.vix_ingest import fetch_vix_latest, load_vix_series
+from src.client.upstox_live import UpstoxLiveClient
 from src.client.upstox_market import UpstoxMarketClient
 from src.config import settings
 from src.instruments.lookup import InstrumentLookup
@@ -546,6 +548,25 @@ async def run() -> None:
             except Exception as exc:  # noqa: BLE001 — telegram delivery is non-fatal
                 logger.warning("telegram.send_failed", error=str(exc))
             sys.exit(1)
+
+        # Step 12b: Capture entry-cycle margin (non-fatal). Legs are confirmed
+        # persisted above; instrument keys/actions/qty mirror the `legs` tuples
+        # built for the record_paper_trade subprocess calls. Client construction
+        # is wrapped here too, not just the broker call inside
+        # capture_entry_margin — UpstoxLiveClient() itself can raise (missing
+        # UPSTOX_ANALYTICS_TOKEN) and legs are already persisted at this point,
+        # so that must never crash the script before the success notification.
+        try:
+            margin_legs = [(key, action, LOT_SIZE) for _role, action, key, _price in legs]
+            await capture_entry_margin(
+                broker=UpstoxLiveClient(),
+                store=store,
+                strategy_name=config.strategy_name,
+                entry_date=date.today(),
+                legs=margin_legs,
+            )
+        except Exception as exc:  # noqa: BLE001 — margin capture must never block a successful entry
+            logger.warning("ic_entry.margin_capture_failed", error=str(exc))
 
         # Step 13: Telegram notification — only reached once all 4 legs are
         # confirmed present in the DB.

@@ -223,6 +223,24 @@ def mock_subprocess():
         yield mock_run
 
 
+@pytest.fixture(autouse=True)
+def mock_upstox_live_client():
+    """Mock UpstoxLiveClient (Step 12b margin capture) — no network in tests.
+
+    Applies to every test in this module: the --no-dry-run execute path
+    unconditionally constructs UpstoxLiveClient() and calls get_order_margin
+    after legs are persisted. Without this fixture that would be a real
+    network call to the live Upstox margin-calculator endpoint.
+    """
+    with patch("scripts.strategies.ic.paper_ic_entry.UpstoxLiveClient") as mock_cls:
+        client = MagicMock()
+        client.get_order_margin = AsyncMock(
+            return_value={"required_margin": 100000.0, "final_margin": 40000.0}
+        )
+        mock_cls.return_value = client
+        yield client
+
+
 @pytest.fixture
 def mock_telegram():
     """Mock TelegramGateway."""
@@ -503,6 +521,64 @@ async def test_telegram_failure_non_fatal(
     ]
     with patch.object(sys, "argv", test_args):
         await run()  # should not raise
+
+
+@pytest.mark.asyncio
+async def test_margin_captured_and_persisted_on_successful_entry(
+    mock_vix_data,
+    mock_store,
+    mock_lookup,
+    mock_market_client,
+    mock_subprocess,
+    mock_telegram,
+    mock_upstox_live_client,
+):
+    """Step 12b: after all 4 legs are confirmed persisted, margin is fetched
+    for the basket and the snapshot is written to the store."""
+    test_args = [
+        "paper_ic_entry.py",
+        "--expiry-type",
+        "weekly",
+        "--no-dry-run",
+        "--bod-path",
+        "dummy.json",
+    ]
+    with patch.object(sys, "argv", test_args):
+        await run()
+
+    mock_upstox_live_client.get_order_margin.assert_awaited_once()
+    instruments = mock_upstox_live_client.get_order_margin.call_args.args[0]
+    assert len(instruments) == 4
+    assert {i["transaction_type"] for i in instruments} == {"BUY", "SELL"}
+    mock_store.record_margin_snapshot.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_margin_capture_failure_does_not_block_success_notification(
+    mock_vix_data,
+    mock_store,
+    mock_lookup,
+    mock_market_client,
+    mock_subprocess,
+    mock_telegram,
+    mock_upstox_live_client,
+):
+    """get_order_margin failing must not prevent the success Telegram notification
+    or otherwise crash the script — legs are already persisted at that point."""
+    mock_upstox_live_client.get_order_margin.side_effect = RuntimeError("network down")
+    test_args = [
+        "paper_ic_entry.py",
+        "--expiry-type",
+        "weekly",
+        "--no-dry-run",
+        "--bod-path",
+        "dummy.json",
+    ]
+    with patch.object(sys, "argv", test_args):
+        await run()  # should not raise
+
+    assert mock_telegram.send_notification.call_count == 1
+    mock_store.record_margin_snapshot.assert_not_called()
 
     assert mock_subprocess.call_count == 4
 

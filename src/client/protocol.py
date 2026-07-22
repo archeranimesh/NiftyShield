@@ -47,6 +47,8 @@ OrderModify = dict[str, Any]  # TODO: TD-7 — replace with Pydantic model from 
 Position = dict[str, Any]  # TODO: TD-7 — replace with Pydantic model from src.models
 Holding = dict[str, Any]  # TODO: TD-7 — replace with Pydantic model from src.models
 MarginResponse = dict[str, Any]  # TODO: TD-7 — replace with Pydantic model from src.models
+MarginInstrument = dict[str, Any]  # TODO: TD-7 — replace with Pydantic model from src.models
+OrderMarginResponse = dict[str, Any]  # TODO: TD-7 — replace with Pydantic model from src.models
 Candle = dict[str, Any]  # TODO: TD-7 — replace with Pydantic model from src.models
 CandleRequest = dict[str, Any]  # TODO: TD-7 — replace with Pydantic model from src.models
 Contract = dict[str, Any]  # TODO: TD-7 — replace with Pydantic model from src.models
@@ -98,6 +100,20 @@ class PortfolioReader(Protocol):
 
     async def get_margins(self) -> MarginResponse: ...
 
+    async def get_order_margin(
+        self, instruments: list[MarginInstrument]
+    ) -> OrderMarginResponse:
+        """Compute required/final margin for a basket of not-yet-placed orders.
+
+        Distinct from ``get_margins`` (account-level funds/margin snapshot):
+        this is the pre-trade margin-calculator call — given a list of
+        ``{instrument_key, quantity, transaction_type, product}`` dicts, it
+        returns the SPAN + exposure margin the basket would block, with
+        cross-leg netting applied (``final_margin``) and without
+        (``required_margin``). Max 20 instruments per call (Upstox limit).
+        """
+        ...
+
 
 # ---------------------------------------------------------------------------
 # Full BrokerClient protocol
@@ -142,6 +158,10 @@ class BrokerClient(Protocol):
     async def get_holdings(self) -> list[Holding]: ...
 
     async def get_margins(self) -> MarginResponse: ...
+
+    async def get_order_margin(
+        self, instruments: list[MarginInstrument]
+    ) -> OrderMarginResponse: ...
 
     # ── Additional methods not covered by sub-protocols ──────────
 

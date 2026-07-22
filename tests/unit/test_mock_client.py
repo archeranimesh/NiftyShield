@@ -277,6 +277,32 @@ class TestPortfolioReader:
         margins = await client.get_margins()
         assert "available_margin" in margins
 
+    async def test_get_order_margin_applies_netting_benefit_for_ic_basket(self) -> None:
+        """A basket with both BUY and SELL legs (an IC) gets the benefit factor."""
+        client = make_client()
+        instruments = [
+            {"instrument_key": "NSE_FO|1", "quantity": 50, "transaction_type": "SELL", "product": "D"},
+            {"instrument_key": "NSE_FO|2", "quantity": 50, "transaction_type": "BUY", "product": "D"},
+        ]
+        result = await client.get_order_margin(instruments)
+        # required = (50 + 50) * 50 = 5000; final = 5000 * 0.4 = 2000
+        assert result["required_margin"] == pytest.approx(5_000.0)
+        assert result["final_margin"] == pytest.approx(2_000.0)
+
+    async def test_get_order_margin_no_benefit_for_single_direction_basket(self) -> None:
+        """A basket with only SELL legs gets no netting benefit — final == required."""
+        client = make_client()
+        instruments = [
+            {"instrument_key": "NSE_FO|1", "quantity": 50, "transaction_type": "SELL", "product": "D"},
+        ]
+        result = await client.get_order_margin(instruments)
+        assert result["required_margin"] == result["final_margin"] == pytest.approx(2_500.0)
+
+    async def test_get_order_margin_empty_instruments_raises(self) -> None:
+        client = make_client()
+        with pytest.raises(ValueError):
+            await client.get_order_margin([])
+
 
 # ---------------------------------------------------------------------------
 # get_historical_candles / get_expired_option_contracts

@@ -182,3 +182,97 @@ class TestErrorPassthrough:
 
         with pytest.raises(DataFetchError, match="timeout"):
             await client.get_option_chain("NSE_INDEX|Nifty 50", "2026-06-30")
+
+
+# ---------------------------------------------------------------------------
+# get_order_margin
+# ---------------------------------------------------------------------------
+
+
+class TestGetOrderMargin:
+    """get_order_margin is wired (unlike get_margins) — reads UPSTOX_ACCESS_TOKEN
+    from settings directly and calls the live margin-calculator endpoint.
+    """
+
+    _INSTRUMENTS = [
+        {
+            "instrument_key": "NSE_FO|1",
+            "quantity": 50,
+            "transaction_type": "SELL",
+            "product": "D",
+        }
+    ]
+
+    @pytest.mark.asyncio
+    async def test_empty_instruments_raises_value_error(self) -> None:
+        client = make_client()
+        with pytest.raises(ValueError, match="must not be empty"):
+            await client.get_order_margin([])
+
+    @pytest.mark.asyncio
+    async def test_too_many_instruments_raises_value_error(self) -> None:
+        client = make_client()
+        with pytest.raises(ValueError, match="max 20"):
+            await client.get_order_margin(self._INSTRUMENTS * 21)
+
+    @pytest.mark.asyncio
+    async def test_missing_token_raises_authentication_error(self) -> None:
+        from src.client.exceptions import AuthenticationError
+
+        client = make_client()
+        with patch("src.client.upstox_live.settings") as mock_settings:
+            mock_settings.upstox_access_token = None
+            with pytest.raises(AuthenticationError, match="UPSTOX_ACCESS_TOKEN not set"):
+                await client.get_order_margin(self._INSTRUMENTS)
+
+    @pytest.mark.asyncio
+    async def test_success_returns_data_object(self) -> None:
+        client = make_client()
+        fake_response = MagicMock()
+        fake_response.status_code = 200
+        fake_response.ok = True
+        fake_response.json.return_value = {
+            "status": "success",
+            "data": {"required_margin": 5000.0, "final_margin": 2000.0},
+        }
+        with (
+            patch("src.client.upstox_live.settings") as mock_settings,
+            patch("src.client.upstox_live.requests.post", return_value=fake_response) as mock_post,
+        ):
+            mock_settings.upstox_access_token = "fake-daily-token"
+            result = await client.get_order_margin(self._INSTRUMENTS)
+
+        assert result == {"required_margin": 5000.0, "final_margin": 2000.0}
+        assert mock_post.call_args.kwargs["headers"]["Authorization"] == "Bearer fake-daily-token"
+
+    @pytest.mark.asyncio
+    async def test_401_raises_authentication_error(self) -> None:
+        from src.client.exceptions import AuthenticationError
+
+        client = make_client()
+        fake_response = MagicMock()
+        fake_response.status_code = 401
+        with (
+            patch("src.client.upstox_live.settings") as mock_settings,
+            patch("src.client.upstox_live.requests.post", return_value=fake_response),
+        ):
+            mock_settings.upstox_access_token = "expired-token"
+            with pytest.raises(AuthenticationError, match="auth rejected"):
+                await client.get_order_margin(self._INSTRUMENTS)
+
+    @pytest.mark.asyncio
+    async def test_non_dict_data_raises_data_fetch_error(self) -> None:
+        from src.client.exceptions import DataFetchError
+
+        client = make_client()
+        fake_response = MagicMock()
+        fake_response.status_code = 200
+        fake_response.ok = True
+        fake_response.json.return_value = {"status": "success"}  # no "data" key
+        with (
+            patch("src.client.upstox_live.settings") as mock_settings,
+            patch("src.client.upstox_live.requests.post", return_value=fake_response),
+        ):
+            mock_settings.upstox_access_token = "fake-daily-token"
+            with pytest.raises(DataFetchError, match="unexpected response shape"):
+                await client.get_order_margin(self._INSTRUMENTS)
