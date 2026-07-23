@@ -42,6 +42,7 @@ from typing import TYPE_CHECKING, Literal
 import structlog
 
 from src.instruments.lookup import InstrumentLookup
+from src.instruments.lookup import parse_expiry as _parse_expiry_epoch
 from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
 from src.paper.constants import DEFAULT_BOD_PATH
@@ -1097,6 +1098,15 @@ class IronCondorV2:
         ic_positions = [
             p for p in positions if p.strategy_name == self.strategy_name and p.net_qty != 0
         ]
+        # TEMP DIAGNOSTIC (BUG-018, remove after 2026-07-24 verification —
+        # see docs/bugs/bugs.md): confirms live ticks now reach this point
+        # and resolve an expiry, instead of silently short-circuiting.
+        log.debug(
+            "ic_nifty_v2.check_signals_entry_diag",
+            strategy=self.strategy_name,
+            positions_total=len(positions),
+            ic_positions_count=len(ic_positions),
+        )
         if not ic_positions:
             return []
 
@@ -1108,6 +1118,11 @@ class IronCondorV2:
                 if self._parse_expiry(p.instrument_key) is not None
             ),
             None,
+        )
+        log.debug(
+            "ic_nifty_v2.check_signals_expiry_diag",
+            strategy=self.strategy_name,
+            expiry=str(expiry) if expiry is not None else None,
         )
         if expiry is None:
             return []
@@ -1215,6 +1230,17 @@ class IronCondorV2:
         captured_fraction: Decimal | None = None
         if combined_mark is not None and entry_credit > Decimal("0"):
             captured_fraction = (entry_credit - combined_mark) / entry_credit
+            # TEMP DIAGNOSTIC (BUG-018, remove after 2026-07-24 verification):
+            # unconditional per-tick visibility into the live captured_fraction,
+            # to compare against paper_snapshot.py's independently-computed
+            # EOD unrealized_pnl for the same strategy/day.
+            log.debug(
+                "ic_nifty_v2.check_signals_pnl_diag",
+                strategy=self.strategy_name,
+                combined_mark_pts=str(combined_mark),
+                entry_credit_pts=str(entry_credit),
+                captured_fraction=str(captured_fraction.quantize(Decimal("0.0001"))),
+            )
         else:
             # 2026-07-20: makes the priorities-4-6 skip visible — see
             # ic_nifty_v1.py's identical fix and DECISIONS.md 2026-07-20.
@@ -1976,18 +2002,57 @@ class IronCondorV2:
     def _parse_expiry(self, instrument_key: str) -> date | None:
         """Extract the option expiry date from an instrument key.
 
+        Parses via regex first (``NSE_FO|NIFTY<DDMonYYYY>...`` trading-symbol
+        form). Real Upstox keys are numeric-only (e.g. ``NSE_FO|63930``) and
+        never match — BUG-018 (2026-07-23): this silently made
+        check_signals's expiry lookup return None on every real leg, every
+        tick, since the strategy's first entry (2026-07-03), because there
+        was no fallback — check_signals hit `if expiry is None: return []`
+        before ever reaching DTE/profit-target/profit-lock evaluation.
+        Identical root cause to BUG-009 (paper_ic_snapshot.py) and BUG-012's
+        ``_find_leg``/``_position_strike`` (this file). Fixed the same way:
+        numeric keys fall back to a BOD instrument-master reverse lookup.
+        See docs/bugs/bugs.md BUG-018.
+
         Args:
             instrument_key: Upstox instrument key for the option leg.
 
         Returns:
-            Parsed expiry date, or None if key carries no date.
+            Parsed expiry date, or None if the key can't be resolved.
         """
         m = _EXPIRY_RE.search(instrument_key)
-        if not m:
-            return None
+        if m:
+            try:
+                return datetime.strptime(m.group(1).upper(), "%d%b%Y").date()
+            except ValueError:
+                return None
+
         try:
-            return datetime.strptime(m.group(1).upper(), "%d%b%Y").date()
-        except ValueError:
+            lookup = InstrumentLookup.from_file(DEFAULT_BOD_PATH)
+            inst = lookup.get_by_key(instrument_key)
+            if inst is None:
+                log.warning(
+                    "ic_nifty_v2.expiry_parse_failed",
+                    instrument_key=instrument_key,
+                    reason="not_found_in_bod",
+                )
+                return None
+            expiry_str = _parse_expiry_epoch(inst.get("expiry"))
+            if expiry_str is None:
+                log.warning(
+                    "ic_nifty_v2.expiry_parse_failed",
+                    instrument_key=instrument_key,
+                    reason="no_expiry_field",
+                )
+                return None
+            return date.fromisoformat(expiry_str)
+        except (ValueError, OSError) as exc:
+            log.warning(
+                "ic_nifty_v2.expiry_parse_failed",
+                instrument_key=instrument_key,
+                reason="exception",
+                error=str(exc),
+            )
             return None
 
     def _compute_ivr_str(self) -> str:

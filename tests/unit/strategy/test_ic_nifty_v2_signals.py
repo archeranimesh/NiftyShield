@@ -680,3 +680,156 @@ def test_position_strike_bod_lookup_raises_returns_none() -> None:
         strike = strategy._position_strike(pos)
 
     assert strike is None
+
+
+# ── BUG-018: _parse_expiry numeric instrument key BOD fallback ─────────────
+#
+# Real Upstox instrument_key values recorded in paper_trades are numeric-only
+# (NSE_FO|63930), never the NSE_FO|NIFTY<DDMonYYYY>... trading-symbol form
+# the old _EXPIRY_RE regex required. That silently made check_signals's
+# expiry lookup return None on every real position, every tick — see
+# docs/bugs/bugs.md BUG-018. Same fix/test pattern as BUG-012 above
+# (_find_leg / _position_strike), applied to _parse_expiry.
+
+
+def test_parse_expiry_resolves_numeric_key_via_bod() -> None:
+    """Numeric key (no embedded trading symbol) resolves expiry via BOD lookup."""
+    strategy = _make_strategy()
+
+    with patch("src.instruments.lookup.InstrumentLookup.from_file") as mock_from_file:
+        lookup = MagicMock()
+        lookup.get_by_key.return_value = {
+            "strike_price": Decimal("23900"),
+            "instrument_type": "PE",
+            "expiry": "2026-07-28",
+        }
+        mock_from_file.return_value = lookup
+
+        expiry = strategy._parse_expiry("NSE_FO|63930")
+
+    assert expiry == datetime.date(2026, 7, 28)
+
+
+def test_parse_expiry_resolves_numeric_key_via_bod_epoch_ms() -> None:
+    """Real BOD data supplies `expiry` as epoch-ms int, not an ISO string.
+
+    Advisory code-review finding (2026-07-23): the sibling test above only
+    exercises the ISO-string branch of `parse_expiry()` (src/instruments/
+    lookup.py), which real production BOD data never actually sends — the
+    exact test-realism gap class that hid BUG-018 itself (a regex satisfied
+    by the test fixture but never by real data). This test exercises the
+    epoch-ms branch instead, matching what `InstrumentLookup` actually
+    returns from the live NSE.json.gz file.
+    """
+    strategy = _make_strategy()
+    # 2026-07-28T00:00:00Z in epoch milliseconds.
+    epoch_ms = int(datetime.datetime(2026, 7, 28, tzinfo=datetime.timezone.utc).timestamp() * 1000)
+
+    with patch("src.instruments.lookup.InstrumentLookup.from_file") as mock_from_file:
+        lookup = MagicMock()
+        lookup.get_by_key.return_value = {
+            "strike_price": Decimal("23900"),
+            "instrument_type": "PE",
+            "expiry": epoch_ms,
+        }
+        mock_from_file.return_value = lookup
+
+        expiry = strategy._parse_expiry("NSE_FO|63930")
+
+    assert expiry == datetime.date(2026, 7, 28)
+
+
+def test_parse_expiry_numeric_key_not_in_bod_returns_none() -> None:
+    """Numeric key absent from the BOD master returns None, never raises."""
+    strategy = _make_strategy()
+
+    with patch("src.instruments.lookup.InstrumentLookup.from_file") as mock_from_file:
+        lookup = MagicMock()
+        lookup.get_by_key.return_value = None
+        mock_from_file.return_value = lookup
+
+        expiry = strategy._parse_expiry("NSE_FO|99999999")
+
+    assert expiry is None
+
+
+def test_parse_expiry_bod_lookup_raises_returns_none() -> None:
+    """A BOD file/lookup failure is caught and degrades to None, never raises."""
+    strategy = _make_strategy()
+
+    with patch(
+        "src.instruments.lookup.InstrumentLookup.from_file",
+        side_effect=OSError("BOD file missing"),
+    ):
+        expiry = strategy._parse_expiry("NSE_FO|63930")
+
+    assert expiry is None
+
+
+def test_check_signals_end_to_end_resolves_expiry_via_bod() -> None:
+    """Full check_signals pipeline with real *numeric* keys (production form,
+    e.g. NSE_FO|63930) now reaches DTE/P&L evaluation instead of silently
+    short-circuiting at `if expiry is None`.
+
+    Regression test for BUG-018: before the fix, this exact scenario — the
+    real production instrument_key format — returned [] from the very first
+    gate on every tick, with zero log output, for the strategy's entire
+    lifetime. LTPs are chosen so combined_mark leaves ~10% of entry credit
+    captured (well under the 25% Zone-1 milestone and the 30% delta-warn
+    threshold), so the *correct*, fully-evaluated outcome is a genuine hold
+    ([]) — proving the pipeline reached and passed through profit-target/
+    profit-lock evaluation, not that it short-circuited before reaching it.
+    Both diagnostic log lines are asserted to confirm the pipeline actually
+    ran, not just that the return value happened to match.
+    """
+    strategy = _make_strategy()
+    positions = [
+        _pos("short_put", "NSE_FO|63930", avg_sell_price="100"),
+        _pos("long_put_hedge", "NSE_FO|63896", avg_cost="50", net_qty=1),
+        _pos("short_call", "NSE_FO|63975", avg_sell_price="100"),
+        _pos("long_call_hedge", "NSE_FO|63987", avg_cost="50", net_qty=1),
+    ]
+    bod_by_key = {
+        "NSE_FO|63930": {"strike_price": Decimal("23900"), "instrument_type": "PE"},
+        "NSE_FO|63896": {"strike_price": Decimal("23200"), "instrument_type": "PE"},
+        "NSE_FO|63975": {"strike_price": Decimal("25100"), "instrument_type": "CE"},
+        "NSE_FO|63987": {"strike_price": Decimal("25800"), "instrument_type": "CE"},
+    }
+
+    def _fake_get_by_key(key: str) -> dict | None:
+        inst = bod_by_key.get(key)
+        if inst is None:
+            return None
+        return {**inst, "expiry": _EXPIRY.isoformat()}
+
+    # entry_credit = (95 short_put + 95 short_call) - (50 long_put + 50 long_call) = 90... see below.
+    # avg_sell_price=100 per short leg, avg_cost=50 per long leg → entry_credit = 200-100 = 100.
+    # combined_mark = (put_ltp + call_ltp) - (hedge_put_ltp + hedge_call_ltp) = (95+95)-(50+50) = 90.
+    # captured_fraction = (100-90)/100 = 10% — below every zone/delta/profit-target threshold.
+    chain = _chain(
+        {
+            "23900": (None, _leg("23900", "-0.20", ltp="95")),
+            "23200": (None, _leg("23200", "-0.10", ltp="50")),
+            "25100": (_leg("25100", "0.20", ltp="95"), None),
+            "25800": (_leg("25800", "0.10", ltp="50"), None),
+        }
+    )
+
+    with patch("src.instruments.lookup.InstrumentLookup.from_file") as mock_from_file:
+        lookup = MagicMock()
+        lookup.get_by_key.side_effect = _fake_get_by_key
+        mock_from_file.return_value = lookup
+
+        with patch("src.strategy.ic_nifty_v2.market_today", return_value=_FROZEN_TODAY):
+            import asyncio
+
+            with capture_logs() as logs:
+                result = asyncio.run(strategy.check_signals(chain, positions))
+
+    assert result == []
+    entry_diag = [e for e in logs if e.get("event") == "ic_nifty_v2.check_signals_entry_diag"]
+    assert entry_diag and entry_diag[0]["ic_positions_count"] == 4
+    expiry_diag = [e for e in logs if e.get("event") == "ic_nifty_v2.check_signals_expiry_diag"]
+    assert expiry_diag and expiry_diag[0]["expiry"] == _EXPIRY.isoformat()
+    pnl_diag = [e for e in logs if e.get("event") == "ic_nifty_v2.check_signals_pnl_diag"]
+    assert pnl_diag and pnl_diag[0]["captured_fraction"] == "0.1000"
