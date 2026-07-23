@@ -143,9 +143,20 @@ construction with `format_option_label("NIFTY", short_put["strike"], "PE", expir
 (same for the call leg). Do not touch the `cmds` list, the `subprocess.run` call, or any
 line inside the `for role, action, key, price in legs:` loop that builds `cmd = [...]`.
 
+**Bug fix bundled into this task:** the long-leg lines (currently `f"Long Put
+{int(long_put_strike)}PE   (hedge)\n"` / `f"Long Call  {int(long_call_strike)}CE  (hedge)\n"`,
+around line 559/562) omit the mid price even though `long_put["mid"]` / `long_call["mid"]`
+are already fetched (line 422–423) and used in the `net_credit` calc (line 552) — they're
+just never interpolated into the message text. Add `mid=₹{long_put['mid']:.2f}` /
+`mid=₹{long_call['mid']:.2f}` to those two lines, same style as the short-leg lines, while
+converting them to `format_option_label(...)`.
+
 **Tests:**
 - `test_entry_preview_message_uses_readable_label` — assert the Telegram preview text
   contains `"NIFTY 23800 PE"`-style label, not `"23800PE"`
+- `test_entry_preview_message_shows_long_leg_mid` — assert both long-leg lines contain
+  `mid=₹` followed by `long_put["mid"]` / `long_call["mid"]` formatted to 2dp (regression
+  guard for the currently-missing hedge-leg mid price)
 - `test_entry_command_block_unchanged` — assert the printed/executed command strings
   still contain the raw `--key NSE_FO|...` value verbatim (regression guard so a future
   edit doesn't accidentally reformat the command block too)
