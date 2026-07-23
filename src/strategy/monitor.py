@@ -36,6 +36,7 @@ from src.paper.models import PaperPosition
 
 if TYPE_CHECKING:
     from src.paper.store import PaperStore
+from src.paper.tracker import PaperTracker
 from src.strategy.protocol import ApprovedAction, PaperStrategy, SignalEvent
 from src.utils.logging import bind_trace_id, generate_trace_id
 
@@ -43,6 +44,12 @@ log = structlog.get_logger(__name__)
 
 _IST = timezone(timedelta(hours=5, minutes=30))
 _MARKET_OPEN = (9, 15)
+# Window for the live-vs-EOD-snapshot P&L diagnostic (BUG-019): only the
+# last 10 minutes before close, so this doesn't add a get_ltp batch call
+# per strategy on every ~90s tick all day — just the handful of ticks that
+# actually overlap the comparison window against paper_snapshot.py's own
+# 15:35ish EOD read.
+_PNL_DIAG_WINDOW_START = (15, 20)
 _MARKET_CLOSE = (15, 30)
 
 _NIFTY_INSTRUMENT = "NSE_INDEX|Nifty 50"
@@ -86,6 +93,10 @@ class StrategyMonitor:
         self._poll_interval_s = poll_interval_s
         self._expiry_fn = expiry_fn
         self._lookup = lookup
+        # TEMP DIAGNOSTIC (BUG-019): only used by _log_live_pnl_diag. broker
+        # structurally satisfies MarketDataProvider (get_ltp/get_option_chain),
+        # so no adapter needed — see src/client/protocol.py docstring.
+        self._tracker = PaperTracker(store, broker)
 
     def register(self, strategy: PaperStrategy) -> None:
         """Add a strategy to the registry after construction.
@@ -197,6 +208,73 @@ class StrategyMonitor:
 
         log.info("tick.end", trace_id=trace_id)
         self._write_heartbeat(os.getpid())
+        # Diagnostic runs after the heartbeat write (code-review finding,
+        # 2026-07-23): a slow/hanging get_ltp inside the comparison window
+        # must not delay heartbeat freshness — this is a pure side-channel
+        # and must never be able to degrade the real tick loop it rides on.
+        await self._log_live_pnl_diag(now_ist, per_strategy_positions, trace_id)
+
+    async def _log_live_pnl_diag(
+        self,
+        now_ist: datetime,
+        per_strategy_positions: dict[str, list[PaperPosition]],
+        trace_id: str,
+    ) -> None:
+        """TEMP DIAGNOSTIC (BUG-019, investigation — remove once resolved).
+
+        User-reported (2026-07-23): suspected disparity between what the
+        live monitor computes intraday and what ``paper_snapshot.py``'s EOD
+        cron records a few minutes after close, for `paper_ic_nifty_v2_monthly`
+        specifically (see BUG-018). This generalises the check to every
+        registered strategy, and calls the *exact same* function the EOD
+        snapshot cron calls (`PaperTracker.compute_pnl`) — not an
+        approximation — so any gap found between this tick's reading and
+        the later EOD snapshot log line is a genuine timing/computation
+        discrepancy, not a methodology difference between two similar but
+        distinct formulas.
+
+        Restricted to the last `_PNL_DIAG_WINDOW_START` (15:20) through
+        close (15:30) IST — the exact window that matters for the
+        comparison — rather than every ~90s tick all day, to avoid adding
+        an extra `get_ltp` batch call per strategy on every tick.
+
+        Args:
+            now_ist: Current IST timestamp (already computed by the caller).
+            per_strategy_positions: Positions already fetched this tick, per
+                strategy_name — reused to skip strategies with no open legs
+                without an extra store query.
+            trace_id: This tick's trace_id, so diag lines can be correlated
+                with the rest of the tick's log output.
+        """
+        hour_min = (now_ist.hour, now_ist.minute)
+        if hour_min < _PNL_DIAG_WINDOW_START or hour_min > _MARKET_CLOSE:
+            return
+
+        for strategy in self._strategies:
+            positions = per_strategy_positions.get(strategy.strategy_name, [])
+            if not any(p.net_qty != 0 for p in positions):
+                continue
+            try:
+                pnl = await self._tracker.compute_pnl(strategy.strategy_name)
+            except Exception:  # Intentional: diagnostic side-channel must never break the tick loop
+                log.exception(
+                    "strategy_monitor.live_pnl_diag_error",
+                    strategy=strategy.strategy_name,
+                    trace_id=trace_id,
+                )
+                continue
+            if pnl is None:
+                continue
+            unrealized, realized, total = pnl
+            log.debug(
+                "strategy_monitor.live_pnl_diag",
+                strategy=strategy.strategy_name,
+                time=f"{now_ist.hour:02d}:{now_ist.minute:02d}",
+                unrealized_pnl=str(unrealized),
+                realized_pnl=str(realized),
+                total_pnl=str(total),
+                trace_id=trace_id,
+            )
 
     async def _route_event(
         self,

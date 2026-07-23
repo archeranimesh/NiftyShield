@@ -629,6 +629,205 @@ async def test_tick_all_chains_fail_skips_gracefully() -> None:
 
 
 # ---------------------------------------------------------------------------
+# _log_live_pnl_diag() — BUG-019 diagnostic
+# ---------------------------------------------------------------------------
+#
+# User-reported (2026-07-23): suspected disparity between the live monitor's
+# intraday P&L and paper_snapshot.py's EOD-cron reading, for paper_ic_nifty_v2
+# specifically (BUG-018) but suspected generally. _log_live_pnl_diag calls
+# the *exact* PaperTracker.compute_pnl the EOD snapshot cron calls, once per
+# strategy with open positions, restricted to the 15:20-15:30 IST window so
+# it doesn't add a get_ltp batch call to every ~90s tick all day.
+
+
+def _open_position(strategy_name: str = "paper_mock_strategy") -> PaperPosition:
+    """A single open (net_qty != 0) leg for the given strategy."""
+    return PaperPosition(
+        strategy_name=strategy_name,
+        leg_role="short_put",
+        net_qty=-1,
+        avg_cost=Decimal("0"),
+        avg_sell_price=Decimal("100"),
+        instrument_key="NSE_FO|63930",
+    )
+
+
+def _flat_position(strategy_name: str = "paper_mock_strategy") -> PaperPosition:
+    """A closed (net_qty == 0) leg — should never trigger the diagnostic."""
+    return PaperPosition(
+        strategy_name=strategy_name,
+        leg_role="short_put",
+        net_qty=0,
+        avg_cost=Decimal("0"),
+        avg_sell_price=Decimal("100"),
+        instrument_key="NSE_FO|63930",
+    )
+
+
+@pytest.mark.asyncio
+async def test_live_pnl_diag_logged_inside_close_window() -> None:
+    """Open position + time inside [15:20, 15:30] → compute_pnl called, logged."""
+    positions = [_open_position()]
+    store = _make_store(positions=positions)
+    strategy = MockStrategy()
+    monitor = _make_monitor(store=store, strategies=[strategy])
+    monitor._tracker = MagicMock()
+    monitor._tracker.compute_pnl = AsyncMock(
+        return_value=(Decimal("500.25"), Decimal("0"), Decimal("500.25"))
+    )
+
+    with (
+        patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch(
+            "src.strategy.monitor.datetime",
+            **{"now.return_value": _fake_ist_time(15, 25), "side_effect": None},
+        ),
+        capture_logs() as logs,
+    ):
+        await monitor._tick()
+
+    monitor._tracker.compute_pnl.assert_awaited_once_with(strategy.strategy_name)
+    diag = [e for e in logs if e.get("event") == "strategy_monitor.live_pnl_diag"]
+    assert diag and diag[0]["strategy"] == strategy.strategy_name
+    assert diag[0]["total_pnl"] == "500.25"
+    assert diag[0]["time"] == "15:25"
+
+
+@pytest.mark.parametrize(
+    ("hour", "minute", "should_fire"),
+    [
+        (15, 20, True),  # window start, inclusive
+        (15, 30, True),  # market close, inclusive
+        (15, 19, False),  # one minute before window start
+        (15, 31, False),  # one minute after close — exercises _log_live_pnl_diag's
+        # own `> _MARKET_CLOSE` boundary directly, independent of _tick()'s
+        # outer 09:15-15:30 market-hours guard which would normally reject
+        # this time before _log_live_pnl_diag is ever reached in production.
+    ],
+)
+@pytest.mark.asyncio
+async def test_live_pnl_diag_window_boundaries(hour: int, minute: int, should_fire: bool) -> None:
+    """Off-by-one regression coverage for the 15:20-15:30 inclusive window.
+
+    Code-review finding (2026-07-23): the original tests only covered one
+    clearly-inside and one clearly-outside time, leaving the `<`/`>`
+    boundary comparisons — exactly where off-by-one errors hide — unasserted.
+    Calls `_log_live_pnl_diag` directly (not via `_tick()`) so the window
+    check is isolated from the outer market-hours guard.
+    """
+    monitor = _make_monitor(strategies=[MockStrategy()])
+    monitor._tracker = MagicMock()
+    monitor._tracker.compute_pnl = AsyncMock(
+        return_value=(Decimal("1"), Decimal("0"), Decimal("1"))
+    )
+
+    await monitor._log_live_pnl_diag(
+        now_ist=_fake_ist_time(hour, minute),
+        per_strategy_positions={"paper_mock_strategy": [_open_position()]},
+        trace_id="test-trace",
+    )
+
+    if should_fire:
+        monitor._tracker.compute_pnl.assert_awaited_once()
+    else:
+        monitor._tracker.compute_pnl.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_live_pnl_diag_skipped_outside_window() -> None:
+    """Open position but time outside [15:20, 15:30] → compute_pnl never called."""
+    positions = [_open_position()]
+    store = _make_store(positions=positions)
+    strategy = MockStrategy()
+    monitor = _make_monitor(store=store, strategies=[strategy])
+    monitor._tracker = MagicMock()
+    monitor._tracker.compute_pnl = AsyncMock()
+
+    with (
+        patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch(
+            "src.strategy.monitor.datetime",
+            **{"now.return_value": _fake_ist_time(11, 0), "side_effect": None},
+        ),
+    ):
+        await monitor._tick()
+
+    monitor._tracker.compute_pnl.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_live_pnl_diag_skipped_when_strategy_flat() -> None:
+    """Inside window but every position net_qty == 0 → compute_pnl never called."""
+    positions = [_flat_position()]
+    store = _make_store(positions=positions)
+    strategy = MockStrategy()
+    monitor = _make_monitor(store=store, strategies=[strategy])
+    monitor._tracker = MagicMock()
+    monitor._tracker.compute_pnl = AsyncMock()
+
+    with (
+        patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch(
+            "src.strategy.monitor.datetime",
+            **{"now.return_value": _fake_ist_time(15, 25), "side_effect": None},
+        ),
+    ):
+        await monitor._tick()
+
+    monitor._tracker.compute_pnl.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_live_pnl_diag_swallows_compute_pnl_exception() -> None:
+    """A compute_pnl failure is logged and does not crash the tick / block heartbeat."""
+    positions = [_open_position()]
+    store = _make_store(positions=positions)
+    strategy = MockStrategy()
+    monitor = _make_monitor(store=store, strategies=[strategy])
+    monitor._tracker = MagicMock()
+    monitor._tracker.compute_pnl = AsyncMock(side_effect=RuntimeError("get_ltp failed"))
+
+    with (
+        patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch(
+            "src.strategy.monitor.datetime",
+            **{"now.return_value": _fake_ist_time(15, 25), "side_effect": None},
+        ),
+        capture_logs() as logs,
+    ):
+        await monitor._tick()
+
+    store.write_heartbeat.assert_called_once()
+    err = [e for e in logs if e.get("event") == "strategy_monitor.live_pnl_diag_error"]
+    assert err and err[0]["strategy"] == strategy.strategy_name
+
+
+@pytest.mark.asyncio
+async def test_live_pnl_diag_skipped_when_compute_pnl_returns_none() -> None:
+    """compute_pnl returning None (no trades at all) → nothing logged, no crash."""
+    positions = [_open_position()]
+    store = _make_store(positions=positions)
+    strategy = MockStrategy()
+    monitor = _make_monitor(store=store, strategies=[strategy])
+    monitor._tracker = MagicMock()
+    monitor._tracker.compute_pnl = AsyncMock(return_value=None)
+
+    with (
+        patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch(
+            "src.strategy.monitor.datetime",
+            **{"now.return_value": _fake_ist_time(15, 25), "side_effect": None},
+        ),
+        capture_logs() as logs,
+    ):
+        await monitor._tick()
+
+    diag = [e for e in logs if e.get("event") == "strategy_monitor.live_pnl_diag"]
+    assert diag == []
+    store.write_heartbeat.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
 # Helpers (private to this module)
 # ---------------------------------------------------------------------------
 

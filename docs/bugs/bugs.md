@@ -467,7 +467,7 @@ The `StrategyMonitor` module docstring (`src/strategy/monitor.py` lines 7-8) doc
 | Field | Value |
 |---|---|
 | Severity | **HIGH** — the V2 monthly IC's live profit-target, profit-lock (25/50/75% zones), DTE hard-close, and delta-based forced-close signals have never fired once since entry; the position has been running completely unmanaged by its own strategy logic for three weeks |
-| Status | ✅ Fixed (2026-07-23), diagnostics added, pending live tick verification |
+| Status | ✅ Fixed and committed (2026-07-23, SHA `3435c5a`); diagnostics added, pending 2026-07-24 live tick verification + removal |
 | Discovered | 2026-07-23, investigating a user-reported discrepancy: `paper_snapshot.py`'s EOD `paper_nav_snapshots` row for `paper_ic_nifty_v2_monthly` showed 66.4% of max credit captured on 2026-07-21, but `paper_strategies.profit_lock_zone` had never advanced past 0 (not even the 25% log-only milestone) |
 | Location | `src/strategy/ic_nifty_v2.py::IronCondorV2._parse_expiry` (was regex-only; `_EXPIRY_RE` defined near top of file) |
 
@@ -486,5 +486,41 @@ The `StrategyMonitor` module docstring (`src/strategy/monitor.py` lines 7-8) doc
 **Code review (2026-07-23):** general-purpose agent explicitly loaded `.claude/agents/code-reviewer.md` + `REVIEW.md` and reviewed the scoped diff (this Cowork surface cannot spawn the real `@code-reviewer` subagent). 0 CRITICAL, 0 ERROR, 2 WARNING, 2 INFO. Findings: (1) WARNING — `_parse_expiry`'s BOD fallback now fires on every live tick (real keys are always numeric), adding a third uncached `InstrumentLookup.from_file()` gzip+JSON-parse call per tick alongside the pre-existing `_find_leg_via_bod`/`_position_strike` callers; deferred — pre-existing uncached pattern in this file, not introduced by this fix, but worth hoisting to a memoized/constructor-injected lookup in a follow-up. (2) WARNING — the original two `_parse_expiry` unit tests only fed `expiry` as an ISO string, never exercising the epoch-ms int branch real BOD data actually returns (`src/instruments/lookup.py::parse_expiry`'s int branch) — the same test-realism gap class that hid BUG-018 itself; **fixed immediately**, added `test_parse_expiry_resolves_numeric_key_via_bod_epoch_ms`. (3) INFO — doc said "two" diagnostic log lines, code has three; fixed in CONTEXT.md/TODOS.md. (4) INFO — eager `Decimal.quantize()`/`str()` work in the pnl_diag log call regardless of log level; accepted, line is temporary (removal tagged 2026-07-24). Decimal correctness and exception-scope calibration (`ValueError`/`OSError`) both verified clean, no findings.
 
 **Related:** BUG-009 (identical root cause, different script), BUG-012 (same fix pattern, different method in the same file — `_find_leg`/`_position_strike` vs `_parse_expiry`).
+
+**Committed:** SHA `3435c5a`.
+
+**Open follow-ups (tracked in TODOS.md):**
+1. Check `logs/monitor_daemon.log` on 2026-07-24 for `ic_nifty_v2.check_signals_pnl_diag` on `paper_ic_nifty_v2_monthly` — confirms the fix reaches live P&L evaluation in production, not just under test. Once confirmed, remove the 3 temporary diagnostic `log.debug` lines (`check_signals_entry_diag`/`check_signals_expiry_diag`/`check_signals_pnl_diag`) from `check_signals`.
+2. Deferred WARNING from code review: `_parse_expiry`'s BOD fallback now fires on every live tick (real keys are always numeric), adding a third uncached `InstrumentLookup.from_file()` read per tick alongside `_find_leg_via_bod`/`_position_strike`. Hoist to a memoized/constructor-injected lookup (pre-existing pattern in this file, not unique to this fix — worth fixing once, for all three call sites).
+
+**Related open investigation:** BUG-019 — Animesh generalised this to "is the live-vs-EOD-snapshot disparity happening for every strategy, not just V2 monthly?" See BUG-019 below.
+
+---
+
+## BUG-019 — Investigation: does every strategy show a live-tick vs. EOD-snapshot P&L disparity, not just `paper_ic_nifty_v2_monthly`?
+
+| Field | Value |
+|---|---|
+| Severity | **Under investigation** — not yet confirmed as a bug beyond the BUG-018 case; diagnostic instrumentation added to gather evidence across all strategies |
+| Status | 🔍 Diagnostics added (2026-07-23), awaiting a live trading day's data before any fix is scoped |
+| Discovered | 2026-07-23, as a direct generalisation of BUG-018 — Animesh: "can we have some debugs added to check for all the strategy what is the PNL at 15:30 and what does the snapshot measure, i believe there is a disparency" |
+| Location | `src/strategy/monitor.py::StrategyMonitor` |
+
+**Hypothesis being tested:** BUG-018 showed `paper_ic_nifty_v2_monthly`'s own internal P&L computation (`_compute_combined_pnl` inside `check_signals`) never ran at all (silently short-circuited before reaching it) — so the "disparity" there was actually "the live side computed nothing," not "the two sides computed different numbers using the same inputs." Now that BUG-018 is fixed, Animesh suspects a *broader* disparity may exist across all strategies between what the live monitor tick sees intraday (specifically near close, ~15:30) and what `paper_snapshot.py`'s EOD cron records a few minutes later (~15:35-15:36). This could be: (a) a genuine last-minute market move between the last tick and the EOD read (not a bug), (b) a real computation/staleness bug independent of BUG-018, or (c) nothing — the two readings may in fact agree once V2 is no longer blind.
+
+**Instrumentation added (2026-07-23):** `StrategyMonitor._log_live_pnl_diag()`, called at the end of every `_tick()`. Restricted to the 15:20-15:30 IST window (not every ~90s tick all day, to avoid adding a `get_ltp` batch call per strategy on every tick). For every registered strategy with at least one open leg (`net_qty != 0`), it calls `PaperTracker.compute_pnl(strategy_name)` — the *exact same function* `paper_snapshot.py`'s EOD cron calls, not an approximation — and logs `strategy_monitor.live_pnl_diag` with `unrealized_pnl`/`realized_pnl`/`total_pnl`/`time`. Because it's the identical function, any gap between this tick's reading (~15:20-15:30) and the EOD snapshot's own log line (`Recorded paper NAV snapshot for '<strategy>' ... total_pnl=X`, ~15:35-15:36) is a genuine timing/staleness disparity, not a methodology difference — the two sides can be diffed directly.
+
+**Tests:** `tests/unit/strategy/test_strategy_monitor.py` — `test_live_pnl_diag_logged_inside_close_window`, `test_live_pnl_diag_skipped_outside_window`, `test_live_pnl_diag_skipped_when_strategy_flat`, `test_live_pnl_diag_swallows_compute_pnl_exception`, `test_live_pnl_diag_skipped_when_compute_pnl_returns_none`, `test_live_pnl_diag_window_boundaries` (parametrized, added after code review — see below). **Not run in-sandbox** (same disk-quota limitation as BUG-018) — verified via `py_compile` only, pending live-host `pytest` run.
+
+**Code review (2026-07-23):** general-purpose agent loaded `.claude/agents/code-reviewer.md` + `REVIEW.md` directly and reviewed the scoped diff. 1 CRITICAL, 2 WARNING, 1 INFO — all resolved before commit:
+- **CRITICAL** (REVIEW.md G5): `except Exception:` in `_log_live_pnl_diag` lacked the required inline `# Intentional: ...` comment (the docstring rationale doesn't satisfy the rule as written). Fixed: added inline comment on the `except` line.
+- **WARNING**: the diag call was awaited *before* `_write_heartbeat`, so a slow/hanging `get_ltp` inside the comparison window could delay heartbeat freshness — a real (if narrow) production effect for something meant to be a pure side-channel. Fixed: reordered so `_write_heartbeat` runs first, diag call moved after.
+- **WARNING**: the original tests covered only one clearly-inside (15:25) and one clearly-outside (11:00) time, leaving the inclusive `_PNL_DIAG_WINDOW_START`/`_MARKET_CLOSE` boundaries (15:20, 15:30) and the just-outside minutes (15:19, 15:31) unasserted — exactly where off-by-one errors hide. Fixed: added `test_live_pnl_diag_window_boundaries` (parametrized, 4 cases).
+- **INFO**: mocking `monitor._tracker` post-construction (rather than mocking broker/store) verified as a reasonable unit-test strategy — the real `PaperTracker(store, broker)` wiring still runs in `__init__` via `_make_monitor`, no integration gap hidden. No action needed.
+Decimal correctness (`str(unrealized)` etc., no float leakage) and the `PaperTracker(store, broker)`/`BrokerClient`-satisfies-`MarketDataProvider` wiring both verified clean.
+
+**Next step:** after the next trading day, grep `logs/monitor_daemon.log` for `strategy_monitor.live_pnl_diag` (per strategy, 15:20-15:30 entries) and `logs/paper_snapshot.log` for `Recorded paper NAV snapshot` (same day), diff the last live reading against the EOD figure for every strategy. If a real gap shows up beyond what a few minutes of market movement could plausibly explain, escalate to a proper BUG-0XX with root-cause investigation; if not, remove this diagnostic (same 2026-07-24-style cleanup as BUG-018's temp logs, timeline TBD based on how many days of data are needed).
+
+**Related:** BUG-018 (the specific case that prompted this generalisation).
 
 ---
