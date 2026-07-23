@@ -502,7 +502,7 @@ The `StrategyMonitor` module docstring (`src/strategy/monitor.py` lines 7-8) doc
 | Field | Value |
 |---|---|
 | Severity | **Under investigation** — not yet confirmed as a bug beyond the BUG-018 case; diagnostic instrumentation added to gather evidence across all strategies |
-| Status | 🔍 Diagnostics added (2026-07-23), awaiting a live trading day's data before any fix is scoped |
+| Status | 🔍 Diagnostics added and committed (2026-07-23, SHA `f7177b6`), awaiting a live trading day's data before any fix is scoped |
 | Discovered | 2026-07-23, as a direct generalisation of BUG-018 — Animesh: "can we have some debugs added to check for all the strategy what is the PNL at 15:30 and what does the snapshot measure, i believe there is a disparency" |
 | Location | `src/strategy/monitor.py::StrategyMonitor` |
 
@@ -520,6 +520,8 @@ The `StrategyMonitor` module docstring (`src/strategy/monitor.py` lines 7-8) doc
 Decimal correctness (`str(unrealized)` etc., no float leakage) and the `PaperTracker(store, broker)`/`BrokerClient`-satisfies-`MarketDataProvider` wiring both verified clean.
 
 **Next step:** after the next trading day, grep `logs/monitor_daemon.log` for `strategy_monitor.live_pnl_diag` (per strategy, 15:20-15:30 entries) and `logs/paper_snapshot.log` for `Recorded paper NAV snapshot` (same day), diff the last live reading against the EOD figure for every strategy. If a real gap shows up beyond what a few minutes of market movement could plausibly explain, escalate to a proper BUG-0XX with root-cause investigation; if not, remove this diagnostic (same 2026-07-24-style cleanup as BUG-018's temp logs, timeline TBD based on how many days of data are needed).
+
+**Committed:** SHA `f7177b6`.
 
 **Related:** BUG-018 (the specific case that prompted this generalisation).
 
