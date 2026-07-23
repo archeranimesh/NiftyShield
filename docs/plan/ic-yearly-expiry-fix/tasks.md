@@ -6,10 +6,20 @@
 
 ---
 
-- [ ] **YE-1** — Audit all 6 non-test callers of the `"yearly"` expiry label; produce impact table (read-only, no code)
-- [ ] **YE-2** — Fix `get_expiry_candidates()`: `"yearly"` resolves to nearest December last-Tuesday expiry only, no DTE band gate at this layer
-- [ ] **YE-3** — Fix/confirm callers per YE-1 findings; add regression tests proving no silent behavior change
-- [ ] **YE-4** — Docs close: TODOS.md session log, DECISIONS.md entry, CONTEXT.md update if docstring changed — no code
+- [x] **YE-1..YE-4 — SUPERSEDED, not executed as written.** A separate 2026-07-22 Cowork session
+      (user-reported, not from this story's own trigger) independently diagnosed and fixed the
+      same root cause via a different path — no formal blast-radius audit was run against the 8
+      callers listed in YE-1 below, but the shipped fix matches YE-2's spec almost exactly
+      (December-only, no DTE band, nearest-live rollover with no artificial floor after a
+      same-day self-correction). See `DECISIONS.md` BUG-015 (both the initial fix and its
+      follow-up correction) for the full account, and `TODOS.md` 2026-07-22 entries. Commit
+      `7495fb0` + a same-day follow-up commit (not yet landed at time of writing — sandbox
+      `.git/index.lock` permission issue, same class as prior sessions).
+      **Residual risk:** the YE-1 caller audit was never actually performed — the 8 call sites
+      listed below were not individually re-verified against the new December-only semantics.
+      Worth a follow-up pass if any of the non-IC-V1 callers (chain snapshot pipelines,
+      3-track overlay) show unexpected far-dated-contract selection.
+- [ ] **WG-1** below remains open and unaffected by this.
 
 ---
 

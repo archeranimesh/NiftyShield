@@ -494,46 +494,14 @@ def test_get_next_contract_in_band_current_not_found():
 
 
 def test_yearly_december_double_duty_as_quarterly():
-    """A December expiry inside the quarterly DTE band (46-200) AND at or
-    above yearly_dte_floor (180) is quarterly's pick AND yearly's primary
-    (non-fallback) pick simultaneously. Regression test for the 2026-07-22
-    bug where quarterly's exclusive claim on the date starved yearly,
-    forcing a rollover a full year out.
-    """
-    today = date(2026, 6, 22)
-    dec_2026 = "2026-12-29"  # DTE 190 -> inside quarterly's 46-200 band AND >= yearly floor (180)
-    jun_2027 = "2027-06-29"  # DTE ~372 -> would have been the old (wrong) yearly pick
-
-    instruments = [
-        {
-            "segment": "NSE_FO",
-            "instrument_type": "PE",
-            "underlying_symbol": "NIFTY",
-            "expiry": dec_2026,
-        },
-        {
-            "segment": "NSE_FO",
-            "instrument_type": "PE",
-            "underlying_symbol": "NIFTY",
-            "expiry": jun_2027,
-        },
-    ]
-    lookup = InstrumentLookup(instruments)
-    candidates = lookup.get_expiry_candidates("NIFTY", today, yearly_dte_floor=180)
-
-    labels = dict(candidates)
-    assert labels["quarterly"] == dec_2026
-    assert labels["yearly"] == dec_2026
-
-
-def test_yearly_december_double_duty_via_fallback_below_floor():
-    """Reproduces the exact 2026-07-22 production scenario: December is
-    below yearly_dte_floor (160 < 180) but still the only December live,
-    so it's picked via yearly's fallback branch AND independently claimed
-    by quarterly (46-200 band) — both labels point at the same date.
+    """A December expiry inside the quarterly DTE band (46-200) is
+    quarterly's pick AND still yearly's pick, since yearly has no DTE
+    floor and always takes the nearest live December. Regression test for
+    the 2026-07-22 bug where quarterly's exclusive claim on the date
+    starved yearly, forcing a rollover a full year out.
     """
     today = date(2026, 7, 22)
-    dec_2026 = "2026-12-29"  # DTE 160 -> inside quarterly's band, below yearly floor
+    dec_2026 = "2026-12-29"  # DTE 160 -> inside quarterly's 46-200 band
     jun_2027 = "2027-06-29"  # DTE 342 -> was the old (wrong) yearly pick before this fix
 
     instruments = [
@@ -551,20 +519,24 @@ def test_yearly_december_double_duty_via_fallback_below_floor():
         },
     ]
     lookup = InstrumentLookup(instruments)
-    candidates = lookup.get_expiry_candidates("NIFTY", today, yearly_dte_floor=180)
+    candidates = lookup.get_expiry_candidates("NIFTY", today)
 
     labels = dict(candidates)
     assert labels["quarterly"] == dec_2026
     assert labels["yearly"] == dec_2026
 
 
-def test_yearly_rolls_to_next_december_below_floor():
-    """Once the nearest December's DTE drops below yearly_dte_floor, yearly
-    rolls forward to the next December instead of offering a stale pick.
+def test_yearly_stays_on_near_dated_december_no_floor():
+    """yearly does not roll forward just because the nearest live December
+    is close (e.g. inside its final quarter) — it stays on that December
+    until it actually expires and drops out of the live instrument feed.
+    Regression test for the 2026-07-22 over-correction that added an
+    artificial DTE floor, which prematurely rolled to a far-dated December
+    with too sparse a strike ladder to resolve entry legs against.
     """
-    today = date(2026, 10, 1)
-    dec_2026 = "2026-12-29"  # DTE ~89 -> below floor (180)
-    dec_2027 = "2027-12-28"  # DTE ~453 -> next December, above floor
+    today = date(2026, 12, 1)
+    dec_2026 = "2026-12-29"  # DTE ~28, deep inside its final quarter
+    dec_2027 = "2027-12-28"  # DTE ~392, must NOT be picked while 2026-12-29 is still live
 
     instruments = [
         {
@@ -581,32 +553,34 @@ def test_yearly_rolls_to_next_december_below_floor():
         },
     ]
     lookup = InstrumentLookup(instruments)
-    candidates = lookup.get_expiry_candidates("NIFTY", today, yearly_dte_floor=180)
+    candidates = lookup.get_expiry_candidates("NIFTY", today)
 
     labels = dict(candidates)
-    assert labels["yearly"] == dec_2027
+    assert labels["yearly"] == dec_2026
 
 
-def test_yearly_falls_back_to_nearest_december_when_none_above_floor():
-    """If no December clears the floor at all, yearly falls back to the
-    nearest live one rather than returning no candidate.
+def test_yearly_rolls_once_current_december_no_longer_live():
+    """Once the current December contract is no longer present in the live
+    instrument feed (settled/delisted), yearly naturally picks up the next
+    live December with no extra rollover logic needed.
     """
-    today = date(2026, 12, 1)
-    dec_2026 = "2026-12-29"  # DTE ~28 -> below floor, but the only candidate
+    today = date(2027, 1, 5)
+    # dec_2026 deliberately absent — it has settled and dropped off the feed.
+    dec_2027 = "2027-12-28"
 
     instruments = [
         {
             "segment": "NSE_FO",
             "instrument_type": "PE",
             "underlying_symbol": "NIFTY",
-            "expiry": dec_2026,
+            "expiry": dec_2027,
         },
     ]
     lookup = InstrumentLookup(instruments)
-    candidates = lookup.get_expiry_candidates("NIFTY", today, yearly_dte_floor=180)
+    candidates = lookup.get_expiry_candidates("NIFTY", today)
 
     labels = dict(candidates)
-    assert labels["yearly"] == dec_2026
+    assert labels["yearly"] == dec_2027
 
 
 def test_get_next_contract_in_band_rejects_futures():

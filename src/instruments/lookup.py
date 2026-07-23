@@ -281,7 +281,6 @@ class InstrumentLookup:
         underlying: str,
         today: date,
         preference: list[str] | None = None,
-        yearly_dte_floor: int = 180,
     ) -> list[tuple[str, str]]:
         """Return (label, expiry_date) pairs in preference order.
 
@@ -290,19 +289,24 @@ class InstrumentLookup:
           monthly:   DTE 15–45, last expiry of the calendar month
           quarterly: DTE 46–200, last expiry of Mar/Jun/Sep/Dec
 
-        yearly is NOT a DTE band. It is always the last expiry of December
-        (the last Tuesday, since all post-April-2026 expiries fall on
-        Tuesday) — the nearest live one with DTE >= yearly_dte_floor. Once
-        the current December contract's DTE drops below that floor (i.e.
-        we're in its final quarter), yearly rolls forward to next December
-        instead of continuing to offer a stale near-dated contract. This is
-        deliberately independent of the quarterly band above: the same
-        December date can and often will satisfy both labels at once (e.g.
-        ~160 DTE out, it's inside quarterly's 46-200 band while still being
-        December) — that's intentional, so a December expiry can serve as a
-        quarterly trade once it's no longer far enough out to count as
-        yearly. See DECISIONS.md 2026-07-22 "yearly = nearest December, not
-        a June/Dec DTE band".
+        yearly is NOT a DTE band. It is always the nearest live last expiry
+        of December (the last Tuesday, since all post-April-2026 expiries
+        fall on Tuesday) — no lower DTE bound. Rollover to the next December
+        is not modelled here: once the current December contract actually
+        settles, NSE stops listing it, so it drops out of the live
+        instrument feed and "nearest live December" naturally becomes next
+        December with no extra logic required. This is deliberately
+        independent of the quarterly band above: the same December date
+        will satisfy both labels simultaneously once it's inside quarterly's
+        46-200 DTE band while still being the nearest December — that's
+        intentional, so a December expiry can serve as a quarterly trade in
+        its final stretch without ceasing to be the yearly candidate. See
+        DECISIONS.md 2026-07-22 "yearly = nearest live December, not a
+        June/Dec DTE band" (and its 2026-07-22 correction — an earlier
+        version of this fix added an artificial DTE floor that rolled the
+        pick to next December too early, before the live contract had even
+        settled, breaking strike resolution against a near-empty far-dated
+        chain).
 
         Default preference order: ["monthly", "quarterly", "yearly"] — weekly is opt-in.
         Pass preference=["weekly"] for IC weekly entry.
@@ -311,12 +315,6 @@ class InstrumentLookup:
             underlying: Underlying symbol (e.g. 'NIFTY').
             today: Reference date for DTE calculation.
             preference: Custom order of labels. Defaults to ["monthly", "quarterly", "yearly"].
-            yearly_dte_floor: Minimum DTE for the nearest December expiry to
-                count as "yearly" rather than rolling to next December.
-                Defaults to 180, mirroring ICExpiryConfig
-                CONFIGS["yearly"].dte_warn_lo (src/strategy/ic_expiry_config.py)
-                — kept as a plain int default here rather than importing
-                that config, since src/instruments sits below src/strategy.
 
         Returns:
             List of (label, expiry_date_str) tuples.
@@ -381,20 +379,14 @@ class InstrumentLookup:
             if label and label not in mapping:
                 mapping[label] = exp
 
-        # yearly: nearest live December (last-of-month == last Tuesday) with
-        # DTE >= yearly_dte_floor, rolling to the next December otherwise.
-        # Resolved independently of the monthly/quarterly loop above so a
-        # December date already claimed by "quarterly" can still be reused
-        # here — see docstring.
+        # yearly: nearest live December (last-of-month == last Tuesday), no
+        # DTE floor. Resolved independently of the monthly/quarterly loop
+        # above so a December date already claimed by "quarterly" can still
+        # be reused here — see docstring.
         december_dates = sorted(d for (_, month), d in last_of_month.items() if month == 12)
         yearly_candidates = [(d, (d - today).days) for d in december_dates]
         yearly_candidates = [(d, dte) for d, dte in yearly_candidates if dte >= 1]
-        on_or_above_floor = [(d, dte) for d, dte in yearly_candidates if dte >= yearly_dte_floor]
-        chosen = min(on_or_above_floor, key=lambda t: t[1], default=None)
-        if chosen is None:
-            # No December far enough out yet (e.g. thin BOD data) — fall
-            # back to the nearest live December rather than returning none.
-            chosen = min(yearly_candidates, key=lambda t: t[1], default=None)
+        chosen = min(yearly_candidates, key=lambda t: t[1], default=None)
         if chosen is not None:
             mapping["yearly"] = chosen[0].isoformat()
 
