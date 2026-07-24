@@ -561,10 +561,23 @@ class IronCondorV1:
         legs_text = "\n".join(
             f"  {t.leg_role}: {t.action.value} {t.quantity} @ {t.price}" for t in closed_trades
         )
+        try:
+            # Deferred import: src.paper.tracker -> src.paper.store ->
+            # src.strategy.profit_lock_engine creates a circular import if
+            # hoisted to module level, since src/strategy/__init__.py eagerly
+            # imports this module.
+            from src.paper.tracker import get_strategy_realized_pnl
+
+            net_pnl = get_strategy_realized_pnl(self._store, self.strategy_name)
+            pnl_text = f"Net P&L: ₹{net_pnl:,.2f}\n"
+        except Exception as exc:
+            log.warning("ic_nifty_v1.net_pnl_calc_failed", error=str(exc))
+            pnl_text = ""
         text = (
             f"✅ <b>IC closed — {triggering_signal}</b>\n"
             f"Strategy: <code>{self.strategy_name}</code>\n"
             f"Action: {action_type}\n"
+            f"{pnl_text}"
             f"{legs_text}"
         )
         try:
