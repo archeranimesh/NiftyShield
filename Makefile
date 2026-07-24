@@ -1,4 +1,4 @@
-.PHONY: test coverage lint fmt security ci dead-code help
+.PHONY: test coverage lint fmt security ci dead-code help index
 
 test: ## Run offline unit tests (fast)
 	python -m pytest tests/unit/ --tb=short -q -n auto
@@ -29,6 +29,9 @@ dead-code: ## Dead code report (advisory, does not fail)
 	vulture src/ || true
 
 ci: lint test coverage security ## Full CI sequence (what GitHub Actions runs)
+
+index: ## Re-index the codebase-memory-mcp knowledge graph for this repo
+	codebase-memory-mcp cli index_repository '{"repo_path": "$(CURDIR)"}'
 
 
 help: ## Show help messages for Makefile targets
