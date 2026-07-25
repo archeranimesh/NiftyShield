@@ -286,6 +286,60 @@ def test_get_position_unknown_returns_zero(store: PaperStore) -> None:
     assert pos.option_type is None
 
 
+# ── get_position: instrument_key disambiguation (PG-2a) ────────────────────────
+
+_ROLLED_KEY = "NSE_FO|67890"
+
+
+def test_get_position_no_instrument_key_single_match_unchanged(store: PaperStore) -> None:
+    """No instrument_key, exactly one position for the leg_role → unchanged behavior."""
+    store.record_trade(_sell_trade(quantity=65, price=Decimal("120.50")))
+    pos = store.get_position(_STRATEGY, _LEG)
+    assert pos.net_qty == -65
+    assert pos.instrument_key == _KEY
+
+
+def test_get_position_instrument_key_matches_one_of_two(store: PaperStore) -> None:
+    """instrument_key given, matches one of two same-leg_role positions → returns that one."""
+    store.record_trade(
+        _sell_trade(instrument_key=_KEY, trade_date=date(2026, 5, 1), quantity=65)
+    )
+    store.record_trade(
+        _sell_trade(instrument_key=_ROLLED_KEY, trade_date=date(2026, 6, 1), quantity=65)
+    )
+    pos = store.get_position(_STRATEGY, _LEG, instrument_key=_ROLLED_KEY)
+    assert pos.instrument_key == _ROLLED_KEY
+    assert pos.net_qty == -65
+
+
+def test_get_position_instrument_key_no_match_returns_flat_default(store: PaperStore) -> None:
+    """instrument_key given, no match among open positions → flat-position default."""
+    store.record_trade(_sell_trade(instrument_key=_KEY, quantity=65))
+    pos = store.get_position(_STRATEGY, _LEG, instrument_key="NSE_FO|00000")
+    assert pos.net_qty == 0
+    assert pos.avg_cost == Decimal("0")
+    assert pos.instrument_key == ""
+
+
+def test_get_position_ambiguous_returns_most_recent_entry_date(store: PaperStore) -> None:
+    """No instrument_key, two same-leg_role positions with different entry_date.
+
+    Picks the more recent entry_date. The WARNING is logged via structlog, not
+    routed through Python logging, so not assertable via caplog (same
+    constraint documented in
+    test_get_position_unrecognised_key_falls_back_to_none_with_warning below) —
+    only the behavioral contract (most-recent wins) is asserted here.
+    """
+    store.record_trade(
+        _sell_trade(instrument_key=_KEY, trade_date=date(2026, 5, 1), quantity=65)
+    )
+    store.record_trade(
+        _sell_trade(instrument_key=_ROLLED_KEY, trade_date=date(2026, 6, 1), quantity=65)
+    )
+    pos = store.get_position(_STRATEGY, _LEG)
+    assert pos.instrument_key == _ROLLED_KEY
+
+
 # ── get_position / get_positions: option_type resolution (B002.3) ─────────────
 
 

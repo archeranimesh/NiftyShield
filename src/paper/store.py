@@ -667,34 +667,70 @@ class PaperStore:
         self,
         strategy_name: str,
         leg_role: str,
+        instrument_key: str | None = None,
     ) -> PaperPosition:
         """Compute net open position for a leg from the paper_trades ledger.
 
         Net quantity = SUM(BUY qty) - SUM(SELL qty).
         Average cost = weighted average of BUY prices only (SELL prices excluded,
         consistent with live PortfolioStore.get_position semantics).
-        Instrument key taken from the most recent trade for this leg.
+
+        Post-PG-1, ``get_positions()`` can return multiple rows sharing a
+        ``leg_role`` during a roll overlap (old contract not yet fully closed,
+        new contract already open). Resolution order (PG-2a):
+
+        - ``instrument_key`` given: filter to that exact ``(leg_role,
+          instrument_key)`` pair; fall through to the flat-position default if
+          no match.
+        - ``instrument_key`` is ``None`` and exactly one position matches
+          ``leg_role``: return it (unchanged pre-PG-2a behavior).
+        - ``instrument_key`` is ``None`` and more than one position matches
+          ``leg_role``: pick the one with the most recent ``entry_date`` and
+          log a WARNING — callers not yet updated to pass ``instrument_key``
+          get a visible signal instead of a silent, iteration-order-dependent
+          guess. See docs/plan/paper-store-position-granularity/stories.md
+          PG-2a.
 
         Args:
             strategy_name: Paper strategy name.
             leg_role: Leg identifier within the strategy.
+            instrument_key: Optional Upstox instrument key to disambiguate
+                between multiple open positions sharing ``leg_role``.
 
         Returns:
-            PaperPosition with net_qty=0 and avg_cost=Decimal("0") if no trades exist.
+            PaperPosition with net_qty=0 and avg_cost=Decimal("0") if no
+            matching trades exist.
         """
-        positions = {p.leg_role: p for p in self.get_positions(strategy_name)}
-        return positions.get(
-            leg_role,
-            PaperPosition(
-                strategy_name=strategy_name,
-                leg_role=leg_role,
-                net_qty=0,
-                avg_cost=Decimal("0"),
-                avg_sell_price=Decimal("0"),
-                instrument_key="",
-                option_type=None,
-            ),
+        flat_default = PaperPosition(
+            strategy_name=strategy_name,
+            leg_role=leg_role,
+            net_qty=0,
+            avg_cost=Decimal("0"),
+            avg_sell_price=Decimal("0"),
+            instrument_key="",
+            option_type=None,
         )
+
+        matches = [p for p in self.get_positions(strategy_name) if p.leg_role == leg_role]
+
+        if instrument_key is not None:
+            for p in matches:
+                if p.instrument_key == instrument_key:
+                    return p
+            return flat_default
+
+        if not matches:
+            return flat_default
+        if len(matches) == 1:
+            return matches[0]
+
+        logger.warning(
+            "paper_store.get_position_ambiguous",
+            strategy_name=strategy_name,
+            leg_role=leg_role,
+            match_count=len(matches),
+        )
+        return max(matches, key=lambda p: p.entry_date or date.min)
 
     def _resolve_instrument_lookup(self) -> InstrumentLookup | None:
         """Lazily construct and cache the InstrumentLookup used for option_type resolution.
