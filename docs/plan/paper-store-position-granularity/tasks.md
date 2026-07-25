@@ -6,6 +6,6 @@
 
 ---
 
-- [ ] **PG-1** — Fix `PaperStore.get_positions()` to group by `(strategy_name, leg_role, instrument_key)` + update `PaperPosition` model + tests
+- [x] **PG-1** — Fix `PaperStore.get_positions()` to group by `(strategy_name, leg_role, instrument_key)` + update `PaperPosition` model + tests | SHA: c89b0d8
 - [ ] **PG-2** — Audit and fix all callers of `get_positions()` that assumed one position per leg role (snapshot scripts, delta tracker, strategy monitor, executor)
 - [ ] **PG-3** — Docs close: TODOS.md session log entry, DECISIONS.md entry, CONTEXT.md model tree update — no code
