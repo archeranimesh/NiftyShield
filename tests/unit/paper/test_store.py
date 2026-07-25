@@ -450,6 +450,66 @@ def test_get_positions_bulk(store: PaperStore) -> None:
     assert pos_map["leg_2"].avg_cost == Decimal("60.00")
 
 
+def test_get_positions_two_instruments_same_leg_role(store: PaperStore) -> None:
+    """PG-1: distinct instrument_keys under one leg_role must not be netted together."""
+    key_a = "NSE_FO|58627"
+    key_b = "NSE_FO|63848"
+    store.record_trade(_buy_trade(instrument_key=key_a, quantity=65, price=Decimal("10.00")))
+    store.record_trade(_buy_trade(instrument_key=key_b, quantity=65, price=Decimal("15.00")))
+
+    positions = store.get_positions(_STRATEGY)
+    assert len(positions) == 2
+
+    pos_by_key = {p.instrument_key: p for p in positions}
+    assert pos_by_key[key_a].net_qty == 65
+    assert pos_by_key[key_b].net_qty == 65
+    assert all(p.leg_role == _LEG for p in positions)
+
+
+def test_get_positions_roll_scenario(store: PaperStore) -> None:
+    """PG-1: closing the expiring contract must not zero out the replacement contract.
+
+    Regression guard for the 2026-06-29 overlay_pp failure: SELL 65 of the
+    expired May put must not consume the 65 qty BUY of the live June put.
+    """
+    expiring_key = "NSE_FO|58627"
+    live_key = "NSE_FO|63848"
+
+    store.record_trade(
+        _buy_trade(instrument_key=expiring_key, quantity=65, price=Decimal("10.00"))
+    )
+    store.record_trade(
+        _sell_trade(
+            instrument_key=expiring_key,
+            quantity=65,
+            price=Decimal("0.05"),
+            trade_date=date(2026, 6, 29),
+        )
+    )
+    store.record_trade(
+        _buy_trade(instrument_key=live_key, quantity=65, price=Decimal("12.00"))
+    )
+
+    positions = store.get_positions(_STRATEGY)
+    pos_by_key = {p.instrument_key: p for p in positions}
+
+    # Expiring contract is flat — excluded entirely.
+    assert expiring_key not in pos_by_key
+    # Live contract retains its full open quantity.
+    assert pos_by_key[live_key].net_qty == 65
+
+
+def test_get_positions_excludes_net_zero_instrument(store: PaperStore) -> None:
+    """PG-1: a fully closed (leg_role, instrument_key) pair is excluded, not returned at 0."""
+    store.record_trade(_buy_trade(quantity=65, price=Decimal("10.00")))
+    store.record_trade(
+        _sell_trade(quantity=65, price=Decimal("11.00"), trade_date=date(2026, 5, 5))
+    )
+
+    positions = store.get_positions(_STRATEGY)
+    assert positions == []
+
+
 # ── record_nav_snapshot ───────────────────────────────────────────────────────
 
 
@@ -925,15 +985,24 @@ def test_get_positions_multi_cycle_avg_sell_price_current_cycle_only(
 
 
 def test_get_positions_fully_closed_cycle_returns_net_zero(store: PaperStore) -> None:
-    """A leg that was opened and fully closed has net_qty=0 — no open position."""
+    """PG-1: a leg opened and fully closed is excluded from get_positions() entirely.
+
+    Superseded assertion (pre-PG-1): get_positions() used to return a
+    net_qty=0 row for a closed (leg_role, instrument_key) pair. PG-1 requires
+    filtering net_qty == 0 groups out of the result set — get_position()
+    (singular) still reports net_qty=0 via its own zero-position default.
+    """
     # Open and close a full cycle
     store.record_trade(_sell_trade(trade_date=date(2026, 5, 1)))
     store.record_trade(_buy_trade(trade_date=date(2026, 5, 8)))
 
     positions = store.get_positions(_STRATEGY)
     pos = next((p for p in positions if p.leg_role == _LEG), None)
-    assert pos is not None
-    assert pos.net_qty == 0
+    assert pos is None
+
+    # get_position() (singular) still reports the flat state via its default.
+    single = store.get_position(_STRATEGY, _LEG)
+    assert single.net_qty == 0
 
 
 def test_proxy_delta_breach_count_methods(store: PaperStore) -> None:

@@ -563,13 +563,22 @@ class PaperStore:
         return [_row_to_trade(r) for r in rows]
 
     def get_positions(self, strategy_name: str) -> list[PaperPosition]:
-        """Compute net open positions for all legs of a strategy in a single query.
+        """Compute net open positions for all (leg, instrument) pairs of a strategy.
+
+        Grouped by ``(leg_role, instrument_key)`` — not ``leg_role`` alone — so a
+        SELL that closes an expiring contract during a roll never nets against
+        the BUY that opened the replacement contract (PG-1; see
+        docs/plan/paper-store-position-granularity/). ``delete_trade()`` already
+        scopes its WHERE clause to ``instrument_key``; this keeps the same
+        granularity. Callers that assumed one position per ``leg_role`` must be
+        updated to iterate all returned positions (PG-2).
 
         Args:
             strategy_name: Paper strategy name.
 
         Returns:
-            List of PaperPosition.
+            One PaperPosition per (leg_role, instrument_key) pair with a
+            non-zero net quantity. Flat pairs are excluded.
         """
         with _connect(self.db_path) as conn:
             rows = conn.execute(
@@ -583,12 +592,12 @@ class PaperStore:
         if not rows:
             return []
 
-        leg_rows = defaultdict(list)
+        instrument_rows = defaultdict(list)
         for row in rows:
-            leg_rows[row["leg_role"]].append(row)
+            instrument_rows[(row["leg_role"], row["instrument_key"])].append(row)
 
         positions = []
-        for leg_role, rows_for_leg in leg_rows.items():
+        for (leg_role, group_instrument_key), rows_for_instrument in instrument_rows.items():
             net_qty = 0
             buy_total_qty = 0
             buy_total_cost = Decimal("0")
@@ -596,11 +605,12 @@ class PaperStore:
             sell_total_cost = Decimal("0")
             # DBI-3: track the opening trade of the current cycle (after net_qty last hit 0).
             # cycle_start_date: entry date regardless of BUY/SELL action (fixes long-first legs).
-            # cycle_instrument_key: contract that opened the current cycle (fixes rolled legs).
+            # cycle_instrument_key: always group_instrument_key now — each group is already
+            # scoped to a single instrument (PG-1), so no roll can occur within a group.
             cycle_start_date: date | None = None
-            cycle_instrument_key: str = ""
+            cycle_instrument_key: str = group_instrument_key
 
-            for row in rows_for_leg:
+            for row in rows_for_instrument:
                 qty = row["quantity"]
                 price = Decimal(row["price"])
                 raw_date = row["trade_date"]
@@ -624,6 +634,9 @@ class PaperStore:
                     sell_total_qty += qty
                     sell_total_cost += price * qty
 
+            if net_qty == 0:
+                continue
+
             avg_cost = buy_total_cost / buy_total_qty if buy_total_qty > 0 else Decimal("0")
             avg_sell_price = (
                 sell_total_cost / sell_total_qty if sell_total_qty > 0 else Decimal("0")
@@ -638,19 +651,14 @@ class PaperStore:
                     avg_sell_price=avg_sell_price,
                     instrument_key=cycle_instrument_key,
                     entry_date=cycle_start_date,
-                    # BUG-014: a flat (net_qty == 0) leg's cycle_instrument_key
-                    # references its most recently closed contract, which — once
-                    # settled/delisted — will never resolve against the BOD file
-                    # again. Resolving option_type for closed legs produces a
-                    # permanent, unactionable warning on every snapshot run, so
-                    # skip resolution entirely when the leg carries no live
-                    # position (option_type=None is already a valid, non-fatal
-                    # state per PaperPosition's docstring).
-                    option_type=(
-                        self._resolve_option_type(cycle_instrument_key)
-                        if net_qty != 0
-                        else None
-                    ),
+                    # BUG-014: flat (net_qty == 0) groups are filtered out above, so
+                    # every position reaching here is live and safe to resolve. A
+                    # closed group's instrument_key would reference a settled/delisted
+                    # contract that can never resolve again once it drops out of the
+                    # BOD file — resolving it would produce a permanent, unactionable
+                    # warning on every snapshot run, which is why it's excluded rather
+                    # than resolved-and-discarded.
+                    option_type=self._resolve_option_type(cycle_instrument_key),
                 )
             )
         return positions
