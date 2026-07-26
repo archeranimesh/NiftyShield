@@ -19,6 +19,9 @@ import sys
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
@@ -427,3 +430,81 @@ def test_snapshot_date_explicit_parsed_correctly() -> None:
 
     snap_date = _date.fromisoformat(ns.date) if ns.date else _date.today()
     assert snap_date == _date(2026, 5, 7)
+
+
+# ── PG-2b: _run() LTP collection uses get_positions(), not per-leg_role loop ──
+
+
+@pytest.mark.asyncio
+async def test_run_ltp_fetch_includes_both_roll_overlap_instruments(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Roll overlap (two open positions sharing a leg_role) — both instrument
+    keys must reach the LTP fetch. Pre-PG-2b, the `[store.get_position(track, r)
+    for r in leg_roles]` loop silently dropped whichever instrument
+    get_position()'s ambiguity resolution didn't pick.
+    """
+    import argparse
+
+    store = _make_store(tmp_path)
+    _OLD_KEY = "NSE_FO|58627"
+    _NEW_KEY = "NSE_FO|63848"
+
+    # Two open positions, same leg_role, different instrument_key (roll overlap).
+    store.record_trade(
+        PaperTrade(
+            strategy_name=_STRATEGY,
+            leg_role="base_etf",
+            instrument_key=_OLD_KEY,
+            trade_date=_DATE,
+            action=TradeAction.BUY,
+            quantity=65,
+            price=Decimal("240.00"),
+        )
+    )
+    store.record_trade(
+        PaperTrade(
+            strategy_name=_STRATEGY,
+            leg_role="base_etf",
+            instrument_key=_NEW_KEY,
+            trade_date=_DATE,
+            action=TradeAction.BUY,
+            quantity=65,
+            price=Decimal("245.00"),
+        )
+    )
+
+    fake_broker = MagicMock()
+    fake_broker.get_ltp = AsyncMock(return_value={})
+    fake_broker.get_option_chain = AsyncMock(return_value=[])
+
+    monkeypatch.setattr("src.client.factory.create_client", lambda env, **kw: fake_broker)
+
+    async def _fake_generate_track_snapshot(**kwargs):  # noqa: ANN001, ANN003
+        return _make_snapshot()
+
+    monkeypatch.setattr(snap_mod, "generate_track_snapshot", _fake_generate_track_snapshot)
+    monkeypatch.setattr(
+        snap_mod.InstrumentLookup, "from_file", classmethod(lambda cls, *_a, **_kw: cls({}))
+    )
+
+    args = argparse.Namespace(
+        date=_DATE,
+        spot=24000.0,
+        dry_run=True,  # save=False — skip EOD exit-signal block entirely
+        period="none",
+        tracks=["spot"],
+        db_path=store.db_path,
+        bod_path=Path("data/instruments/NSE.json.gz"),
+        verbose=False,
+    )
+    # _run() constructs its own PaperStore(args.db_path) — point it at our seeded DB
+    # rather than re-instantiating a fresh (empty) one for the given path.
+    monkeypatch.setattr(snap_mod, "PaperStore", lambda *_a, **_kw: store)
+
+    await snap_mod._run(args)
+
+    assert fake_broker.get_ltp.call_count == 1
+    fetched_keys = set(fake_broker.get_ltp.call_args.args[0])
+    assert _OLD_KEY in fetched_keys
+    assert _NEW_KEY in fetched_keys

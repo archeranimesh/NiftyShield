@@ -1149,10 +1149,11 @@ async def _run(args: argparse.Namespace) -> None:
             }
         )
 
-        # Collect LTP map from positions (needed for leg snapshot ltp field)
-        trades = store.get_trades(track_name)
-        leg_roles = {t.leg_role for t in trades}
-        positions = [store.get_position(track_name, r) for r in leg_roles]
+        # Collect LTP map from positions (needed for leg snapshot ltp field).
+        # PG-2b: get_positions() returns one row per (leg_role, instrument_key),
+        # so a roll overlap (old + new instrument sharing a leg_role) is never
+        # silently dropped the way per-leg_role get_position() calls could.
+        positions = store.get_positions(track_name)
         inst_keys = [p.instrument_key for p in positions if p.instrument_key and p.net_qty != 0]
         raw_ltps: dict = {}
         if inst_keys:
