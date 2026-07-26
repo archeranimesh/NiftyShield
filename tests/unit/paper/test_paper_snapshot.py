@@ -270,6 +270,90 @@ async def test_most_recent_note_only_for_multiple_trades_per_leg(
 @patch("scripts.portfolio.paper_snapshot.create_client")
 @patch("scripts.portfolio.paper_snapshot.PaperStore")
 @patch("scripts.portfolio.paper_snapshot.PaperTracker")
+async def test_both_notes_printed_for_roll_overlap_same_leg_role(
+    mock_tracker_cls: MagicMock,
+    mock_store_cls: MagicMock,
+    mock_create_client: MagicMock,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Two open positions sharing a leg_role (roll overlap) must both surface their
+    notes — a dict keyed by leg_role alone silently drops one (PG-2c)."""
+    mock_store = MagicMock()
+    mock_store_cls.return_value = mock_store
+
+    mock_tracker = MagicMock()
+    mock_tracker_cls.return_value = mock_tracker
+
+    mock_store.get_strategy_names.return_value = ["paper_strategy_1"]
+    mock_tracker.compute_pnl = AsyncMock(
+        return_value=(Decimal("100"), Decimal("50"), Decimal("150"))
+    )
+
+    # Roll overlap: old contract not yet fully closed, new contract already open —
+    # both share leg_role="short_put" but differ by instrument_key.
+    trades = [
+        PaperTrade(
+            strategy_name="paper_strategy_1",
+            leg_role="short_put",
+            instrument_key="NSE_FO|NIFTY26500PE",
+            trade_date=date(2026, 5, 20),
+            action=TradeAction.SELL,
+            quantity=65,
+            price=Decimal("140.00"),
+            notes="old contract note",
+        ),
+        PaperTrade(
+            strategy_name="paper_strategy_1",
+            leg_role="short_put",
+            instrument_key="NSE_FO|NIFTY26600PE",
+            trade_date=date(2026, 5, 26),
+            action=TradeAction.SELL,
+            quantity=65,
+            price=Decimal("150.00"),
+            notes="new contract note",
+        ),
+    ]
+    mock_store.get_trades.return_value = trades
+
+    mock_store.get_positions.return_value = [
+        PaperPosition(
+            strategy_name="paper_strategy_1",
+            leg_role="short_put",
+            net_qty=-65,
+            avg_cost=Decimal("0"),
+            avg_sell_price=Decimal("140.00"),
+            instrument_key="NSE_FO|NIFTY26500PE",
+        ),
+        PaperPosition(
+            strategy_name="paper_strategy_1",
+            leg_role="short_put",
+            net_qty=-65,
+            avg_cost=Decimal("0"),
+            avg_sell_price=Decimal("150.00"),
+            instrument_key="NSE_FO|NIFTY26600PE",
+        ),
+    ]
+
+    args = argparse.Namespace(
+        strategy="paper_strategy_1",
+        date=None,
+        spot=25000.0,
+        db_path="dummy.db",
+        dry_run=True,
+    )
+
+    exit_code = await _run(args)
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "old contract note" in captured.out
+    assert "new contract note" in captured.out
+
+
+@pytest.mark.asyncio
+@patch("scripts.portfolio.paper_snapshot.create_client")
+@patch("scripts.portfolio.paper_snapshot.PaperStore")
+@patch("scripts.portfolio.paper_snapshot.PaperTracker")
 async def test_all_strategies_snapshot_when_none_fail(
     mock_tracker_cls: MagicMock,
     mock_store_cls: MagicMock,

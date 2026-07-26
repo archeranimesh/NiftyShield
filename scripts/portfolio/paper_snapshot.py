@@ -164,14 +164,17 @@ async def _run(args: argparse.Namespace) -> int:
             # Collect notes from open trades/legs (only the most recent trade per open leg)
             trades = store.get_trades(name)
             positions = store.get_positions(name)
-            open_legs = {p.leg_role for p in positions if p.net_qty != 0}
+            open_legs = {
+                (p.leg_role, p.instrument_key) for p in positions if p.net_qty != 0
+            }
 
             most_recent_trade_per_leg = {}
             for trade in trades:
-                if trade.leg_role in open_legs:
-                    most_recent_trade_per_leg[trade.leg_role] = trade
+                key = (trade.leg_role, trade.instrument_key)
+                if key in open_legs:
+                    most_recent_trade_per_leg[key] = trade
 
-            for leg_role, trade in most_recent_trade_per_leg.items():
+            for (leg_role, _instrument_key), trade in most_recent_trade_per_leg.items():
                 if trade.notes and trade.notes.strip():
                     all_notes.append((leg_role, trade.notes.strip()))
 
