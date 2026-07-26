@@ -192,24 +192,37 @@ class _DynamicSettings:
     """
 
     _cached_settings: Settings | None
-    _environ_hash: int | None
+    _environ_snapshot: dict[str, str] | None
 
     def __init__(self) -> None:
         self._cached_settings = None
-        self._environ_hash = None
+        self._environ_snapshot = None
 
     def _get_settings(self) -> Settings:
         import os
         import sys
 
-        # frozenset of os.environ is stable and hashable since all keys/values are strings.
-        current_hash = hash(frozenset(os.environ.items()))
-        if self._cached_settings is None or self._environ_hash != current_hash:
+        # Compare the actual environ contents, not a hash of them. hash() only
+        # guarantees that equal dicts hash equal — it does NOT guarantee the
+        # converse. Two *different* os.environ snapshots can hash to the same
+        # int (frozenset's hash is a fixed XOR-based combination, not
+        # cryptographic), and a large test suite that adds/removes/swaps dozens
+        # of env vars across hundreds of tests hits this often enough to be a
+        # real bug, not a theoretical one: BUG-011, 2026-07-26 — a coincidental
+        # hash collision let a stale Settings instance (built while a real
+        # TELEGRAM_BOT_TOKEN was present in os.environ from an unrelated test)
+        # survive past the point where monkeypatch.delenv had removed it,
+        # making build_notifier() return a live notifier instead of None.
+        # Reproduced only under full-suite pytest-xdist runs, never in
+        # isolation — consistent with a collision that needs many concurrent
+        # env mutations to surface.
+        current_snapshot = dict(os.environ)
+        if self._cached_settings is None or self._environ_snapshot != current_snapshot:
             kwargs: dict[str, Any] = {}
             if os.environ.get("UPSTOX_ENV", "test") == "test" or "pytest" in sys.modules:
                 kwargs["_env_file"] = None
             self._cached_settings = Settings(**kwargs)
-            self._environ_hash = current_hash
+            self._environ_snapshot = current_snapshot
         assert self._cached_settings is not None
         return self._cached_settings
 
