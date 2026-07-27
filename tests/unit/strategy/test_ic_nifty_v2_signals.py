@@ -478,6 +478,42 @@ def test_apply_action_close_put_spread() -> None:
     assert remaining_roles == {"short_call", "long_call_hedge"}
 
 
+def test_apply_action_close_put_spread_roll_overlap_closes_correct_instrument() -> None:
+    """PG-4g: roll overlap — two positions share ``short_put`` with different
+    ``instrument_key``s (old contract not yet closed, new one already open).
+    CLOSE_PUT_SPREAD must close only the most-recently-entered short_put
+    (mirrors ``PaperStore.get_position``'s PG-2a ambiguity resolution), not
+    both, and must leave the call legs untouched.
+    """
+    import dataclasses
+
+    strategy = _make_strategy()
+    positions = _standard_ic_positions()
+    stale_short_put = dataclasses.replace(
+        _pos("short_put", _strike_key("23800", "PE"), avg_sell_price="90"),
+        entry_date=datetime.date(2026, 6, 1),
+    )
+    positions[0] = dataclasses.replace(positions[0], entry_date=datetime.date(2026, 7, 1))
+    positions = [stale_short_put, *positions]
+
+    action = ApprovedAction(
+        action_type="CLOSE_PUT_SPREAD",
+        legs_to_close=[],
+        legs_to_open=[],
+        rationale="auto-execute",
+        council_rank=1,
+    )
+    import asyncio
+
+    result = asyncio.run(strategy.apply_action(positions, action))
+
+    remaining_keys = {p.instrument_key for p in result}
+    assert stale_short_put.instrument_key in remaining_keys
+    assert _key("23900", "PE") not in remaining_keys
+    remaining_roles = {p.leg_role for p in result}
+    assert remaining_roles == {"short_put", "short_call", "long_call_hedge"}
+
+
 def test_apply_action_rejects_unknown() -> None:
     """Unsupported action_type raises ValueError immediately."""
     strategy = _make_strategy()

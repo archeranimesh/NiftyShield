@@ -50,7 +50,7 @@ from src.paper.models import PaperPosition, PaperTrade
 from src.strategy import roll_utils
 from src.strategy.ic_close_executor import close_ic_legs
 from src.strategy.profit_lock_engine import ProfitLockDecision, ProfitLockEngine, ProfitLockState
-from src.strategy.protocol import ApprovedAction, LegSpec, SignalEvent
+from src.strategy.protocol import ApprovedAction, LegClose, LegSpec, SignalEvent
 
 if TYPE_CHECKING:
     from src.client.protocol import BrokerClient
@@ -91,6 +91,43 @@ _PROFIT_TARGET_RETENTION = Decimal("0.30")
 _ALLOWED_V2_ACTIONS = frozenset(
     {"CLOSE_FULL", "CLOSE_CALL_SPREAD", "CLOSE_PUT_SPREAD", "ROLL_WING", "PROFIT_LOCK_ZONE2"}
 )
+
+
+def _leg_close_matches(pos: PaperPosition, leg: LegClose) -> bool:
+    """Return True when ``leg`` identifies ``pos`` as the position to close.
+
+    Matches on ``leg_role`` always; additionally matches on ``instrument_key``
+    when the ``LegClose`` supplies one, so that a roll overlap (two positions
+    sharing a ``leg_role`` with different ``instrument_key``s) only selects
+    the specific instrument being closed (PG-4g, mirrors PG-4f in ic_nifty_v1).
+    """
+    if pos.leg_role != leg.leg_role:
+        return False
+    if leg.instrument_key is not None:
+        return pos.instrument_key == leg.instrument_key
+    return True
+
+
+def _position_for_role(ic_positions: list[PaperPosition], leg_role: str) -> PaperPosition | None:
+    """Resolve the position to close for ``leg_role``.
+
+    When two positions share ``leg_role`` (roll overlap), picks the one with
+    the most-recent ``entry_date`` — mirrors ``PaperStore.get_position``'s
+    ambiguity handling (PG-2a) and ``ic_nifty_v1``'s equivalent helper (PG-4f)
+    so the auto-selected close target is consistent with the rest of the
+    codebase.
+    """
+    matches = [p for p in ic_positions if p.leg_role == leg_role]
+    if not matches:
+        return None
+    if len(matches) == 1:
+        return matches[0]
+    log.warning(
+        "ic_nifty_v2.position_for_role_ambiguous",
+        leg_role=leg_role,
+        match_count=len(matches),
+    )
+    return max(matches, key=lambda p: p.entry_date or date.min)
 
 
 # ── Position update ───────────────────────────────────────────────────────────
@@ -1736,6 +1773,16 @@ class IronCondorV2:
                 f"allowed: {sorted(_ALLOWED_V2_ACTIONS)}."
             )
 
+        # ic_positions: this strategy's open legs, used to resolve the exact
+        # instrument to close per role (PG-4g) — mirrors ic_nifty_v1's
+        # _auto_select_action / effective_legs pattern (PG-4f) so a roll
+        # overlap (two positions sharing a leg_role with different
+        # instrument_keys) only matches the specific instrument identified
+        # by signal evaluation, not "a" position with that role.
+        ic_positions = [
+            p for p in positions if p.strategy_name == self.strategy_name and p.net_qty != 0
+        ]
+
         closed = {leg.leg_role for leg in action.legs_to_close}
         if self._is_auto_execute(action):
             if action.action_type == "CLOSE_FULL":
@@ -1773,6 +1820,20 @@ class IronCondorV2:
             # is not persisted either, same gap as the flatten actions below, deferred
             # pending strike-selection for the replacement leg. See DECISIONS.md/TODOS.md.
 
+        # Populate instrument_key per role from ic_positions so a roll overlap
+        # only matches the exact instrument, not any position sharing the role.
+        effective_legs = [
+            LegClose(
+                leg_role=r,
+                instrument_key=(
+                    pos.instrument_key
+                    if (pos := _position_for_role(ic_positions, r)) is not None
+                    else None
+                ),
+            )
+            for r in closed
+        ]
+
         log.info(
             "ic_nifty_v2.apply_action",
             strategy_name=self.strategy_name,
@@ -1794,7 +1855,11 @@ class IronCondorV2:
                 closed_trades = await close_ic_legs(
                     broker=self._broker,
                     store=self._store,
-                    positions=[p for p in positions if p.leg_role in closed],
+                    positions=[
+                        p
+                        for p in positions
+                        if any(_leg_close_matches(p, leg) for leg in effective_legs)
+                    ],
                     closed_roles=closed,
                     strategy_name=self.strategy_name,
                     notes=f"ic_nifty_v2 auto-close: {triggering_signal}",
@@ -1807,7 +1872,9 @@ class IronCondorV2:
                 await self._send_close_notification(
                     action.action_type, triggering_signal, closed_trades
                 )
-        return [p for p in positions if p.leg_role not in closed]
+        return [
+            p for p in positions if not any(_leg_close_matches(p, leg) for leg in effective_legs)
+        ]
 
     async def _send_close_notification(
         self,
