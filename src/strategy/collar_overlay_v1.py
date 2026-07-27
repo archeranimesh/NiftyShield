@@ -21,7 +21,7 @@ from src.models.portfolio import TradeAction
 from src.paper.constants import STRATEGY_COLLAR_OVERLAY
 from src.paper.models import PaperPosition, PaperTrade
 from src.strategy.exit_signals import ExitSignalEngine
-from src.strategy.protocol import ApprovedAction, SignalEvent
+from src.strategy.protocol import ApprovedAction, LegClose, SignalEvent
 from src.strategy.reentry_mixin import ReEntryMixin
 
 log = structlog.get_logger(__name__)
@@ -37,6 +37,21 @@ _STRIKE_RE = re.compile(r"NIFTY(\d+)(PE|CE)", re.IGNORECASE)
 
 SHORT_CALL_ROLE = "overlay_collar_call"
 LONG_PUT_ROLE = "overlay_collar_put"
+
+
+def _leg_close_matches(pos: PaperPosition, leg: LegClose) -> bool:
+    """Return True when ``leg`` identifies ``pos`` as the position to close.
+
+    Matches on ``leg_role`` always; additionally matches on ``instrument_key``
+    when the ``LegClose`` supplies one, so that a roll overlap (two positions
+    sharing a ``leg_role`` with different ``instrument_key``s) only selects
+    and removes the specific instrument being closed (PG-4e).
+    """
+    if pos.leg_role != leg.leg_role:
+        return False
+    if leg.instrument_key is not None:
+        return pos.instrument_key == leg.instrument_key
+    return True
 
 
 class CollarOverlayV1(ReEntryMixin):
@@ -247,12 +262,31 @@ class CollarOverlayV1(ReEntryMixin):
             action_type=action.action_type,
         )
 
+        short_call_leg = next(
+            (leg for leg in action.legs_to_close if leg.leg_role == SHORT_CALL_ROLE), None
+        )
+        long_put_leg = next(
+            (leg for leg in action.legs_to_close if leg.leg_role == LONG_PUT_ROLE), None
+        )
+
         short_call_pos = next(
-            (p for p in positions if p.leg_role == SHORT_CALL_ROLE and p.net_qty < 0),
+            (
+                p
+                for p in positions
+                if p.leg_role == SHORT_CALL_ROLE
+                and p.net_qty < 0
+                and (short_call_leg is None or _leg_close_matches(p, short_call_leg))
+            ),
             None,
         )
         long_put_pos = next(
-            (p for p in positions if p.leg_role == LONG_PUT_ROLE and p.net_qty > 0),
+            (
+                p
+                for p in positions
+                if p.leg_role == LONG_PUT_ROLE
+                and p.net_qty > 0
+                and (long_put_leg is None or _leg_close_matches(p, long_put_leg))
+            ),
             None,
         )
 
@@ -285,13 +319,9 @@ class CollarOverlayV1(ReEntryMixin):
                 count=len(trades_to_record),
             )
 
-        closed_roles = set()
-        if short_call_pos:
-            closed_roles.add(SHORT_CALL_ROLE)
-        if long_put_pos:
-            closed_roles.add(LONG_PUT_ROLE)
+        closed_positions = [p for p in (short_call_pos, long_put_pos) if p is not None]
 
-        updated = [p for p in positions if p.leg_role not in closed_roles]
+        updated = [p for p in positions if p not in closed_positions]
 
         triggering_signal = action.metadata.get("triggering_signal") if action.metadata else None
         if triggering_signal in ("PROFIT_TARGET", "TIME_STOP") and short_call_pos is not None:

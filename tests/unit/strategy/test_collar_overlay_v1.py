@@ -251,7 +251,10 @@ def test_apply_action_valid() -> None:
 
     action = ApprovedAction(
         action_type="CLOSE_COLLAR",
-        legs_to_close=[LegClose(leg_role="overlay_collar_call"), LegClose(leg_role="overlay_collar_put")],
+        legs_to_close=[
+            LegClose(leg_role="overlay_collar_call"),
+            LegClose(leg_role="overlay_collar_put"),
+        ],
         legs_to_open=[],
         rationale="test",
         council_rank=1,
@@ -299,7 +302,10 @@ def test_apply_action_records_both_legs_atomically() -> None:
     put_pos = _make_long_put_position(avg_cost="50")
     action = ApprovedAction(
         action_type="CLOSE_COLLAR",
-        legs_to_close=[LegClose(leg_role="overlay_collar_call"), LegClose(leg_role="overlay_collar_put")],
+        legs_to_close=[
+            LegClose(leg_role="overlay_collar_call"),
+            LegClose(leg_role="overlay_collar_put"),
+        ],
         legs_to_open=[],
         rationale="test",
         council_rank=1,
@@ -382,3 +388,44 @@ def test_apply_action_calls_check_reentry_for_eligible_signals() -> None:
     with patch.object(strategy, "_check_reentry", new=AsyncMock()) as mock_reentry:
         _run(strategy.apply_action([call_pos], action))
         mock_reentry.assert_awaited_once()
+
+
+def test_apply_action_roll_overlap_closes_only_matched_instrument() -> None:
+    """PG-4e: two short-call positions share overlay_collar_call during a roll
+    overlap (old expiring contract not yet closed, new contract already open).
+
+    When the ApprovedAction's LegClose carries the specific instrument_key
+    (as the old contract being closed), apply_action must close only that
+    instrument and leave the other (still-open, different instrument_key)
+    position untouched in the returned list — not drop both under a blind
+    leg_role-only match.
+    """
+    mock_store = MagicMock()
+    strategy = CollarOverlayV1(store=mock_store)
+
+    old_call = _make_short_call_position(
+        instrument_key="NSE_FO|NIFTY29MAY2026CE", avg_sell_price="80"
+    )
+    new_call = _make_short_call_position(
+        instrument_key="NSE_FO|NIFTY26JUN2026CE", avg_sell_price="90"
+    )
+
+    action = ApprovedAction(
+        action_type="CLOSE_COLLAR",
+        legs_to_close=[
+            LegClose(leg_role="overlay_collar_call", instrument_key=old_call.instrument_key)
+        ],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+        metadata={"mark": "30.0"},
+    )
+
+    result = _run(strategy.apply_action([old_call, new_call], action))
+
+    # Only the old (matched) instrument was closed; the new one survives.
+    assert result == [new_call]
+    mock_store.record_trades.assert_called_once()
+    trades = mock_store.record_trades.call_args[0][0]
+    assert len(trades) == 1
+    assert trades[0].instrument_key == old_call.instrument_key
