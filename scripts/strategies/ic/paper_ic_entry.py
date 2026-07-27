@@ -507,8 +507,8 @@ async def run() -> None:
         missing_legs: list[str] = []
         verification_error: str | None = None
         try:
-            for role, _action, _key, _price in legs:
-                pos = store.get_position(config.strategy_name, role)
+            for role, _action, key, _price in legs:
+                pos = store.get_position(config.strategy_name, role, instrument_key=key)
                 if pos.net_qty == 0:
                     missing_legs.append(role)
         except Exception as exc:  # noqa: BLE001 — a DB read failure here must not be

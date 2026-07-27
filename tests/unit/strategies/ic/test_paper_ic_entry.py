@@ -909,6 +909,13 @@ async def test_leg_not_persisted_blocks_success_notification(
     sent_msg = mock_telegram.send_notification.call_args[0][0]
     assert "⚠️" in sent_msg
     assert "✅" not in sent_msg
+    # PG-2e: the post-entry verification loop must pass instrument_key
+    # explicitly rather than relying on get_position()'s most-recent-entry_date
+    # fallback (PG-2a) — each of the 4 leg calls carries its own key.
+    assert mock_store.get_position.call_count == 4
+    for call in mock_store.get_position.call_args_list:
+        assert "instrument_key" in call.kwargs
+        assert call.kwargs["instrument_key"]
 
 
 @pytest.mark.asyncio
