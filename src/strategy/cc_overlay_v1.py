@@ -203,7 +203,7 @@ class CCOverlayV1(ReEntryMixin):
             raise ValueError(
                 f"CCOverlayV1 only accepts CLOSE_CC actions; got {action.action_type!r}"
             )
-        closed = set(action.legs_to_close)
+        closed = {leg.leg_role for leg in action.legs_to_close}
         log.info(
             "cc_overlay_v1.apply_action",
             action_type=action.action_type,

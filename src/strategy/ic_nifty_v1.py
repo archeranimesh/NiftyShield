@@ -37,7 +37,7 @@ from src.paper.constants import DEFAULT_BOD_PATH
 from src.paper.models import PaperPosition, PaperTrade
 from src.strategy import roll_utils
 from src.strategy.ic_close_executor import close_ic_legs
-from src.strategy.protocol import ApprovedAction, LegSpec, SignalEvent
+from src.strategy.protocol import ApprovedAction, LegClose, LegSpec, SignalEvent
 
 if TYPE_CHECKING:
     from src.client.protocol import BrokerClient
@@ -477,7 +477,7 @@ class IronCondorV1:
             )
 
         # Override legs to close if called via auto-execute (where legs_to_close is not fully populated)
-        closed = set(action.legs_to_close)
+        closed = {leg.leg_role for leg in action.legs_to_close}
         if self._is_auto_execute(action):
             if action.action_type == "CLOSE_FULL":
                 closed = _SHORT_ROLES | _LONG_ROLES
@@ -624,7 +624,7 @@ class IronCondorV1:
         if full_close_trigger is not None:
             return ApprovedAction(
                 action_type="CLOSE_FULL",
-                legs_to_close=list(_SHORT_ROLES | _LONG_ROLES),
+                legs_to_close=[LegClose(leg_role=r) for r in (_SHORT_ROLES | _LONG_ROLES)],
                 legs_to_open=[],
                 rationale="auto-execute",
                 council_rank=1,
@@ -643,7 +643,7 @@ class IronCondorV1:
             )
             return ApprovedAction(
                 action_type="ROLL_WING",
-                legs_to_close=[roll_event.payload["leg_role"]],
+                legs_to_close=[LegClose(leg_role=roll_event.payload["leg_role"])],
                 legs_to_open=[new_leg],
                 rationale="auto-execute",
                 council_rank=1,
@@ -662,7 +662,7 @@ class IronCondorV1:
             )
             return ApprovedAction(
                 action_type=action_type,
-                legs_to_close=list(spread_roles),
+                legs_to_close=[LegClose(leg_role=r) for r in spread_roles],
                 legs_to_open=[],
                 rationale="auto-execute",
                 council_rank=1,

@@ -15,7 +15,7 @@ import pytest
 from src.models.options import OptionChain, OptionChainStrike, OptionLeg
 from src.paper.models import PaperPosition
 from src.strategy.collar_overlay_v1 import CollarOverlayV1
-from src.strategy.protocol import ApprovedAction, SignalEvent
+from src.strategy.protocol import ApprovedAction, LegClose, SignalEvent
 
 _STRATEGY = "paper_collar_v1"
 _OTHER_STRATEGY = "paper_other_v1"
@@ -251,7 +251,7 @@ def test_apply_action_valid() -> None:
 
     action = ApprovedAction(
         action_type="CLOSE_COLLAR",
-        legs_to_close=["overlay_collar_call", "overlay_collar_put"],
+        legs_to_close=[LegClose(leg_role="overlay_collar_call"), LegClose(leg_role="overlay_collar_put")],
         legs_to_open=[],
         rationale="test",
         council_rank=1,
@@ -299,7 +299,7 @@ def test_apply_action_records_both_legs_atomically() -> None:
     put_pos = _make_long_put_position(avg_cost="50")
     action = ApprovedAction(
         action_type="CLOSE_COLLAR",
-        legs_to_close=["overlay_collar_call", "overlay_collar_put"],
+        legs_to_close=[LegClose(leg_role="overlay_collar_call"), LegClose(leg_role="overlay_collar_put")],
         legs_to_open=[],
         rationale="test",
         council_rank=1,
@@ -333,7 +333,7 @@ def test_apply_action_handles_missing_put_leg_gracefully() -> None:
     call_pos = _make_short_call_position(avg_sell_price="80")
     action = ApprovedAction(
         action_type="CLOSE_COLLAR",
-        legs_to_close=["overlay_collar_call"],
+        legs_to_close=[LegClose(leg_role="overlay_collar_call")],
         legs_to_open=[],
         rationale="test",
         council_rank=1,
@@ -354,7 +354,7 @@ def test_apply_action_no_store_does_not_raise() -> None:
     call_pos = _make_short_call_position()
     action = ApprovedAction(
         action_type="CLOSE_COLLAR",
-        legs_to_close=["overlay_collar_call"],
+        legs_to_close=[LegClose(leg_role="overlay_collar_call")],
         legs_to_open=[],
         rationale="test",
         council_rank=1,
@@ -372,7 +372,7 @@ def test_apply_action_calls_check_reentry_for_eligible_signals() -> None:
     call_pos = _make_short_call_position(avg_sell_price="80")
     action = ApprovedAction(
         action_type="CLOSE_COLLAR",
-        legs_to_close=["overlay_collar_call"],
+        legs_to_close=[LegClose(leg_role="overlay_collar_call")],
         legs_to_open=[],
         rationale="profit target",
         council_rank=1,

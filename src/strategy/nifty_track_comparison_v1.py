@@ -546,7 +546,7 @@ class NiftyTrackComparisonV1:
         if not action.legs_to_open:
             raise ValueError(f"{action.action_type} requires at least one leg in legs_to_open")
 
-        closed: set[str] = set(action.legs_to_close)
+        closed: set[str] = {leg.leg_role for leg in action.legs_to_close}
         return [p for p in positions if p.leg_role not in closed]
 
     # ── Roll target selection ─────────────────────────────────────────────────

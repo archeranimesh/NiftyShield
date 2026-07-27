@@ -10,7 +10,7 @@ from src.paper.models import ExitSignal, PaperTrade, TradeAction
 from src.paper.store import PaperStore
 from src.strategy.executor import PaperFillSimulator
 from src.strategy.overlay_closer import OverlayCloser
-from src.strategy.protocol import ApprovedAction
+from src.strategy.protocol import ApprovedAction, LegClose
 
 
 class MockNotifier:
@@ -374,7 +374,7 @@ def test_route(store: PaperStore, closer: OverlayCloser) -> None:
 
     action = ApprovedAction(
         action_type="CLOSE_CC",
-        legs_to_close=["short_call"],
+        legs_to_close=[LegClose(leg_role="short_call")],
         legs_to_open=[],
         rationale="test",
         council_rank=1,

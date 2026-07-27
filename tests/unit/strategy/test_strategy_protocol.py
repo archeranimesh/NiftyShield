@@ -4,7 +4,7 @@ import pytest
 
 from src.models.options import OptionChain
 from src.paper.models import PaperPosition
-from src.strategy.protocol import ApprovedAction, LegSpec, PaperStrategy, SignalEvent
+from src.strategy.protocol import ApprovedAction, LegClose, LegSpec, PaperStrategy, SignalEvent
 
 
 class MockStrategy:
@@ -108,11 +108,28 @@ def test_signal_event_model():
         event.severity = "WARN"
 
 
+def test_leg_close_defaults_instrument_key_to_none():
+    """LegClose.instrument_key defaults to None (leg_role-only lookup)."""
+    leg = LegClose(leg_role="short_put")
+    assert leg.leg_role == "short_put"
+    assert leg.instrument_key is None
+
+    with pytest.raises(FrozenInstanceError):
+        leg.leg_role = "short_call"
+
+
+def test_leg_close_with_instrument_key():
+    """LegClose carries instrument_key when supplied, disambiguating a roll overlap."""
+    leg = LegClose(leg_role="short_put", instrument_key="NSE_FO|12345")
+    assert leg.instrument_key == "NSE_FO|12345"
+    assert leg == LegClose(leg_role="short_put", instrument_key="NSE_FO|12345")
+
+
 def test_approved_action_model():
     """Test ApprovedAction model initialization and immutability."""
     action = ApprovedAction(
         action_type="ROLL_OVER",
-        legs_to_close=["short_put"],
+        legs_to_close=[LegClose(leg_role="short_put")],
         legs_to_open=[
             LegSpec(
                 instrument_key="NSE_EQ|INE456",
@@ -125,7 +142,7 @@ def test_approved_action_model():
         council_rank=1,
     )
     assert action.action_type == "ROLL_OVER"
-    assert action.legs_to_close == ["short_put"]
+    assert action.legs_to_close == [LegClose(leg_role="short_put")]
     assert len(action.legs_to_open) == 1
     assert action.legs_to_open[0].leg_role == "new_short_put"
     assert action.rationale == "Roll DTE 5"

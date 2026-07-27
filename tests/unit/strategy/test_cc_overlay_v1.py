@@ -15,7 +15,7 @@ import pytest
 from src.models.options import OptionChain, OptionChainStrike, OptionLeg
 from src.paper.models import PaperPosition
 from src.strategy.cc_overlay_v1 import CCOverlayV1
-from src.strategy.protocol import ApprovedAction, SignalEvent
+from src.strategy.protocol import ApprovedAction, LegClose, SignalEvent
 
 _STRATEGY = "paper_covered_call_v1"
 _OTHER_STRATEGY = "paper_other_v1"
@@ -181,7 +181,7 @@ def test_apply_action_close_cc() -> None:
     pos = _make_position()
     action = ApprovedAction(
         action_type="CLOSE_CC",
-        legs_to_close=["short_call"],
+        legs_to_close=[LegClose(leg_role="short_call")],
         legs_to_open=[],
         rationale="test",
         council_rank=1,
@@ -248,7 +248,7 @@ def test_apply_action_triggering_signals() -> None:
     # 1. PROFIT_TARGET trigger -> check_reentry called
     action_pt = ApprovedAction(
         action_type="CLOSE_CC",
-        legs_to_close=["short_call"],
+        legs_to_close=[LegClose(leg_role="short_call")],
         legs_to_open=[],
         rationale="test",
         council_rank=1,
@@ -264,7 +264,7 @@ def test_apply_action_triggering_signals() -> None:
     # 2. TIME_STOP trigger -> check_reentry called
     action_ts = ApprovedAction(
         action_type="CLOSE_CC",
-        legs_to_close=["short_call"],
+        legs_to_close=[LegClose(leg_role="short_call")],
         legs_to_open=[],
         rationale="test",
         council_rank=1,
@@ -280,7 +280,7 @@ def test_apply_action_triggering_signals() -> None:
     # 3. LOSS_STOP trigger -> check_reentry NOT called
     action_ls = ApprovedAction(
         action_type="CLOSE_CC",
-        legs_to_close=["short_call"],
+        legs_to_close=[LegClose(leg_role="short_call")],
         legs_to_open=[],
         rationale="test",
         council_rank=1,
@@ -296,7 +296,7 @@ def test_apply_action_triggering_signals() -> None:
     # 4. DELTA_STOP trigger -> check_reentry NOT called
     action_ds = ApprovedAction(
         action_type="CLOSE_CC",
-        legs_to_close=["short_call"],
+        legs_to_close=[LegClose(leg_role="short_call")],
         legs_to_open=[],
         rationale="test",
         council_rank=1,
@@ -313,7 +313,7 @@ def test_apply_action_null_dependencies() -> None:
     pos = _make_position()
     action = ApprovedAction(
         action_type="CLOSE_CC",
-        legs_to_close=["short_call"],
+        legs_to_close=[LegClose(leg_role="short_call")],
         legs_to_open=[],
         rationale="test",
         council_rank=1,
@@ -354,7 +354,7 @@ def test_apply_action_records_closing_trade_to_store() -> None:
     pos = _make_position(avg_sell_price="80", leg_role="short_call", net_qty=-65)
     action = ApprovedAction(
         action_type="CLOSE_CC",
-        legs_to_close=["short_call"],
+        legs_to_close=[LegClose(leg_role="short_call")],
         legs_to_open=[],
         rationale="test",
         council_rank=1,
@@ -380,7 +380,7 @@ def test_apply_action_recording_idempotent_on_duplicate() -> None:
     pos = _make_position(avg_sell_price="80")
     action = ApprovedAction(
         action_type="CLOSE_CC",
-        legs_to_close=["short_call"],
+        legs_to_close=[LegClose(leg_role="short_call")],
         legs_to_open=[],
         rationale="test",
         council_rank=1,
@@ -399,7 +399,7 @@ def test_apply_action_no_store_does_not_raise() -> None:
     pos = _make_position()
     action = ApprovedAction(
         action_type="CLOSE_CC",
-        legs_to_close=["short_call"],
+        legs_to_close=[LegClose(leg_role="short_call")],
         legs_to_open=[],
         rationale="test",
         council_rank=1,
@@ -418,7 +418,7 @@ def test_record_close_trade_falls_back_to_avg_sell_price_when_mark_missing() -> 
     pos = _make_position(avg_sell_price="80")
     action = ApprovedAction(
         action_type="CLOSE_CC",
-        legs_to_close=["short_call"],
+        legs_to_close=[LegClose(leg_role="short_call")],
         legs_to_open=[],
         rationale="test",
         council_rank=1,

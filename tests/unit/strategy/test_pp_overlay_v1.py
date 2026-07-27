@@ -15,7 +15,7 @@ import pytest
 from src.models.options import OptionChain, OptionChainStrike, OptionLeg
 from src.paper.models import PaperPosition
 from src.strategy.pp_overlay_v1 import PPOverlayV1
-from src.strategy.protocol import ApprovedAction, SignalEvent
+from src.strategy.protocol import ApprovedAction, LegClose, SignalEvent
 
 _STRATEGY = "paper_protective_put_v1"
 _OTHER_STRATEGY = "paper_other_v1"
@@ -171,7 +171,7 @@ def test_apply_action_monetize_pp() -> None:
     pos = _make_position(instrument_key=key)
     action = ApprovedAction(
         action_type="MONETIZE_PP",
-        legs_to_close=["protective_put"],
+        legs_to_close=[LegClose(leg_role="protective_put")],
         legs_to_open=[],
         rationale="test",
         council_rank=1,
@@ -192,7 +192,7 @@ def test_apply_action_roll_pp() -> None:
     pos = _make_position()
     action = ApprovedAction(
         action_type="ROLL_PP",
-        legs_to_close=["protective_put"],
+        legs_to_close=[LegClose(leg_role="protective_put")],
         legs_to_open=[],
         rationale="test",
         council_rank=1,
@@ -246,7 +246,7 @@ def test_apply_action_send_plain_message_fallback() -> None:
     pos = _make_position()
     action = ApprovedAction(
         action_type="ROLL_PP",
-        legs_to_close=["protective_put"],
+        legs_to_close=[LegClose(leg_role="protective_put")],
         legs_to_open=[],
         rationale="test",
         council_rank=1,
@@ -270,7 +270,7 @@ def test_apply_action_notifier_missing_methods_non_fatal() -> None:
     pos = _make_position()
     action = ApprovedAction(
         action_type="ROLL_PP",
-        legs_to_close=["protective_put"],
+        legs_to_close=[LegClose(leg_role="protective_put")],
         legs_to_open=[],
         rationale="test",
         council_rank=1,
@@ -289,7 +289,7 @@ def test_apply_action_dte_float_casting() -> None:
     pos = _make_position()
     action = ApprovedAction(
         action_type="ROLL_PP",
-        legs_to_close=["protective_put"],
+        legs_to_close=[LegClose(leg_role="protective_put")],
         legs_to_open=[],
         rationale="test",
         council_rank=1,
@@ -317,7 +317,7 @@ def test_apply_action_records_closing_trade_to_store() -> None:
     pos = _make_position(instrument_key=key, avg_cost="50", net_qty=65)
     action = ApprovedAction(
         action_type="MONETIZE_PP",
-        legs_to_close=["protective_put"],
+        legs_to_close=[LegClose(leg_role="protective_put")],
         legs_to_open=[],
         rationale="test",
         council_rank=1,
@@ -343,7 +343,7 @@ def test_apply_action_recording_idempotent_on_duplicate() -> None:
     pos = _make_position(instrument_key=_expiry_key(15))
     action = ApprovedAction(
         action_type="MONETIZE_PP",
-        legs_to_close=["protective_put"],
+        legs_to_close=[LegClose(leg_role="protective_put")],
         legs_to_open=[],
         rationale="test",
         council_rank=1,
@@ -361,7 +361,7 @@ def test_apply_action_no_store_does_not_raise() -> None:
     pos = _make_position()
     action = ApprovedAction(
         action_type="MONETIZE_PP",
-        legs_to_close=["protective_put"],
+        legs_to_close=[LegClose(leg_role="protective_put")],
         legs_to_open=[],
         rationale="test",
         council_rank=1,
@@ -380,7 +380,7 @@ def test_record_close_trade_falls_back_to_avg_cost_when_mark_missing() -> None:
     pos = _make_position(avg_cost="50")
     action = ApprovedAction(
         action_type="MONETIZE_PP",
-        legs_to_close=["protective_put"],
+        legs_to_close=[LegClose(leg_role="protective_put")],
         legs_to_open=[],
         rationale="test",
         council_rank=1,

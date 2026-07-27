@@ -33,7 +33,7 @@ from src.paper.models import PaperPosition
 from src.strategy.ic_expiry_config_v2 import IC_V2_MONTHLY
 from src.strategy.ic_nifty_v2 import IronCondorV2
 from src.strategy.profit_lock_engine import ProfitLockDecision, ProfitLockState
-from src.strategy.protocol import ApprovedAction, LegSpec
+from src.strategy.protocol import ApprovedAction, LegClose, LegSpec
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -471,7 +471,7 @@ def test_apply_action_updates_state():
     positions = _standard_positions()
     action = ApprovedAction(
         action_type="PROFIT_LOCK_ZONE2",
-        legs_to_close=["long_put_hedge", "long_call_hedge"],
+        legs_to_close=[LegClose(leg_role="long_put_hedge"), LegClose(leg_role="long_call_hedge")],
         legs_to_open=[
             LegSpec(
                 instrument_key="NSE_FO|NIFTY23600PE",

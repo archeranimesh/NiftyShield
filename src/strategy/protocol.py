@@ -19,6 +19,21 @@ class LegSpec:
 
 
 @dataclass(frozen=True)
+class LegClose:
+    """Identifies a single position to close as part of an ApprovedAction.
+
+    ``instrument_key`` disambiguates which position to close when a roll
+    overlap leaves two positions sharing the same ``leg_role`` (see PG-2a /
+    PG-4 in docs/plan/paper-store-position-granularity/). ``None`` preserves
+    the old leg_role-only lookup (PaperStore.get_position falls back to its
+    most-recent-entry_date heuristic and logs a WARNING on ambiguity).
+    """
+
+    leg_role: str
+    instrument_key: str | None = None
+
+
+@dataclass(frozen=True)
 class SignalEvent:
     """Emitted by a strategy when it detects something worth acting on."""
 
@@ -34,8 +49,9 @@ class ApprovedAction:
 
     action_type: str
     legs_to_close: list[
-        str
-    ]  # leg_role values of positions to close. NOTE: leg_role must be unique within a position to be unambiguous.
+        LegClose
+    ]  # positions to close, identified by (leg_role, instrument_key). instrument_key=None falls
+    # back to PaperStore.get_position's most-recent-entry_date heuristic (logs WARNING on ambiguity).
     legs_to_open: list[LegSpec]
     rationale: str
     council_rank: int  # 1 = top pick (Note: rank could be decoupled from action if multi-action objects are supported)

@@ -22,7 +22,7 @@ from structlog.testing import capture_logs
 from src.models.options import OptionChain, OptionChainStrike, OptionLeg
 from src.paper.models import PaperPosition
 from src.strategy.ic_nifty_v1 import IronCondorV1
-from src.strategy.protocol import ApprovedAction
+from src.strategy.protocol import ApprovedAction, LegClose
 
 _STRATEGY = "paper_ic_nifty_v1_monthly"
 _OTHER_STRATEGY = "paper_other_v1"
@@ -433,7 +433,7 @@ def test_apply_action_close_call_spread_succeeds() -> None:
     positions = _make_ic_positions()
     action = ApprovedAction(
         action_type="CLOSE_CALL_SPREAD",
-        legs_to_close=["short_call", "long_call_hedge"],
+        legs_to_close=[LegClose(leg_role="short_call"), LegClose(leg_role="long_call_hedge")],
         legs_to_open=[],
         rationale="test",
         council_rank=1,
@@ -598,7 +598,7 @@ def test_apply_action_roll_wing_with_leg_to_open_succeeds() -> None:
     positions = _make_ic_positions()
     action = ApprovedAction(
         action_type="ROLL_WING",
-        legs_to_close=["short_call"],
+        legs_to_close=[LegClose(leg_role="short_call")],
         legs_to_open=[
             LegSpec(
                 instrument_key="NSE_FO|NIFTY26000CE",
@@ -628,7 +628,7 @@ def test_apply_action_roll_wing_empty_legs_to_open_raises() -> None:
     positions = _make_ic_positions()
     action = ApprovedAction(
         action_type="ROLL_WING",
-        legs_to_close=["short_call"],
+        legs_to_close=[LegClose(leg_role="short_call")],
         legs_to_open=[],
         rationale="test",
         council_rank=1,
@@ -786,7 +786,7 @@ def test_apply_action_close_full_manual_action_does_not_auto_persist() -> None:
     positions = _make_ic_positions()
     action = ApprovedAction(
         action_type="CLOSE_FULL",
-        legs_to_close=["short_put", "long_put_hedge", "short_call", "long_call_hedge"],
+        legs_to_close=[LegClose(leg_role="short_put"), LegClose(leg_role="long_put_hedge"), LegClose(leg_role="short_call"), LegClose(leg_role="long_call_hedge")],
         legs_to_open=[],
         rationale="manual approval",  # not "auto-execute"
         council_rank=1,
@@ -831,7 +831,7 @@ def test_auto_select_loss_stop_wins() -> None:
     action = strat._auto_select_action(events)
     assert action is not None
     assert action.action_type == "CLOSE_FULL"
-    assert set(action.legs_to_close) == {
+    assert {leg.leg_role for leg in action.legs_to_close} == {
         "short_call",
         "short_put",
         "long_call_hedge",
@@ -865,7 +865,7 @@ def test_auto_select_roll_over_delta_stop() -> None:
     action = strat._auto_select_action(events)
     assert action is not None
     assert action.action_type == "ROLL_WING"
-    assert action.legs_to_close == ["short_call"]
+    assert action.legs_to_close == [LegClose(leg_role="short_call")]
     assert len(action.legs_to_open) == 1
     assert action.legs_to_open[0].instrument_key == "NSE_FO|NIFTY26000CE"
     assert action.legs_to_open[0].leg_role == "short_call"
@@ -887,7 +887,7 @@ def test_auto_select_delta_stop_call_spread() -> None:
     action = strat._auto_select_action(events)
     assert action is not None
     assert action.action_type == "CLOSE_CALL_SPREAD"
-    assert set(action.legs_to_close) == {"short_call", "long_call_hedge"}
+    assert {leg.leg_role for leg in action.legs_to_close} == {"short_call", "long_call_hedge"}
 
 
 def test_auto_select_none_when_no_action() -> None:
@@ -1038,7 +1038,7 @@ def test_check_signals_auto_execute_delta_stop_no_roll() -> None:
 
 def test_is_auto_execute() -> None:
     """_is_auto_execute identifies auto-execution correctly."""
-    from src.strategy.protocol import ApprovedAction
+    from src.strategy.protocol import ApprovedAction, LegClose
 
     strat = IronCondorV1()
 

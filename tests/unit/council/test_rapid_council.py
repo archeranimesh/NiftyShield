@@ -7,7 +7,7 @@ import pytest
 
 from src.council.models import CouncilOutput
 from src.council.rapid import CouncilTimeoutError, RapidCouncil
-from src.strategy.protocol import SignalEvent
+from src.strategy.protocol import LegClose, SignalEvent
 
 
 @pytest.fixture
@@ -90,7 +90,7 @@ async def test_rapid_council_happy_path(council: RapidCouncil, signal_event: Sig
         assert not any(resp.timed_out for resp in output.stage1_responses)
         assert len(output.actions) == 1
         assert output.actions[0].action_type == "ADJUST"
-        assert output.actions[0].legs_to_close == ["leg1"]
+        assert output.actions[0].legs_to_close == [LegClose(leg_role="leg1")]
         assert len(output.actions[0].legs_to_open) == 1
         assert output.actions[0].legs_to_open[0].instrument_key == "NIFTY26JUN22000CE"
         assert output.actions[0].legs_to_open[0].action == "BUY"

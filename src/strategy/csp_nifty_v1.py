@@ -451,7 +451,7 @@ class CSPNiftyV1(ReEntryMixin):
         if action.action_type == "ROLL":
             if not action.legs_to_open:
                 raise ValueError("ROLL action requires at least one leg in legs_to_open")
-            closed: set[str] = set(action.legs_to_close)
+            closed: set[str] = {leg.leg_role for leg in action.legs_to_close}
             # Remove the closed leg from the in-memory list.  The new leg is NOT appended
             # here because it has not been filled yet — PaperExecutor.dispatch handles the
             # DB close + open via action.legs_to_open at fill time.  The next tick's

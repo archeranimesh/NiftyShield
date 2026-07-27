@@ -12,7 +12,7 @@ import structlog
 
 from src.client.exceptions import BrokerError, DataFetchError
 from src.council.models import CouncilOutput, PersonaResponse
-from src.strategy.protocol import ApprovedAction, LegSpec, SignalEvent
+from src.strategy.protocol import ApprovedAction, LegClose, LegSpec, SignalEvent
 
 logger = structlog.get_logger(__name__)
 
@@ -165,7 +165,9 @@ class RapidCouncil:
                     actions.append(
                         ApprovedAction(
                             action_type=item.get("action_type", ""),
-                            legs_to_close=item.get("legs_to_close", []),
+                            legs_to_close=[
+                                LegClose(leg_role=r) for r in item.get("legs_to_close", [])
+                            ],
                             legs_to_open=legs_open,
                             rationale=item.get("rationale", ""),
                             council_rank=int(item.get("council_rank", idx + 1)),

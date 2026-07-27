@@ -22,7 +22,7 @@ from src.models.portfolio import TradeAction
 from src.paper.models import PaperPosition, PaperTrade
 from src.strategy._price_utils import resolve_price
 from src.strategy.executor import PaperExecutor, PaperFillSimulator
-from src.strategy.protocol import ApprovedAction, LegSpec
+from src.strategy.protocol import ApprovedAction, LegClose, LegSpec
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -61,10 +61,14 @@ def _make_store(
     positions = positions or []
     store.get_positions.return_value = positions
 
-    # get_position: find matching leg_role or return a zero-qty default
-    def _get_position(strategy_name: str, leg_role: str) -> PaperPosition:
+    # get_position: find matching (leg_role, instrument_key) or return a zero-qty default
+    def _get_position(
+        strategy_name: str, leg_role: str, instrument_key: str | None = None
+    ) -> PaperPosition:
         for p in positions:
-            if p.leg_role == leg_role:
+            if p.leg_role == leg_role and (
+                instrument_key is None or p.instrument_key == instrument_key
+            ):
                 return p
         return PaperPosition(
             strategy_name=strategy_name,
@@ -231,7 +235,7 @@ class TestPaperExecutorCloseLeg:
 
         action = ApprovedAction(
             action_type="EXIT",
-            legs_to_close=["short_put"],
+            legs_to_close=[LegClose(leg_role="short_put")],
             legs_to_open=[],
             rationale="profit target hit",
             council_rank=1,
@@ -260,7 +264,7 @@ class TestPaperExecutorCloseLeg:
 
         action = ApprovedAction(
             action_type="EXIT",
-            legs_to_close=["long_put"],
+            legs_to_close=[LegClose(leg_role="long_put")],
             legs_to_open=[],
             rationale="hedge exit",
             council_rank=1,
@@ -284,7 +288,7 @@ class TestPaperExecutorCloseLeg:
 
         action = ApprovedAction(
             action_type="EXIT",
-            legs_to_close=["short_put"],
+            legs_to_close=[LegClose(leg_role="short_put")],
             legs_to_open=[],
             rationale="nothing open",
             council_rank=1,
@@ -294,6 +298,39 @@ class TestPaperExecutorCloseLeg:
             executor.apply("paper_csp", action, chain, approval_id=9, vix=18.0)
 
         store.record_trade.assert_not_called()
+
+    def test_instrument_key_disambiguates_roll_overlap(self) -> None:
+        """Two positions share leg_role (roll overlap) — LegClose.instrument_key
+        selects the correct one, and get_position is called with that key."""
+        old_position = _make_position(
+            "paper_csp", "short_put", net_qty=-50, instrument_key="NSE_FO|OLD"
+        )
+        new_position = _make_position(
+            "paper_csp", "short_put", net_qty=-50, instrument_key="NSE_FO|NEW"
+        )
+        store = _make_store(positions=[old_position, new_position])
+        executor = _make_executor(store=store)
+        chain = _make_chain()
+
+        action = ApprovedAction(
+            action_type="EXIT",
+            legs_to_close=[LegClose(leg_role="short_put", instrument_key="NSE_FO|NEW")],
+            legs_to_open=[],
+            rationale="close the new contract only",
+            council_rank=1,
+        )
+
+        with (
+            patch.object(executor, "_resolve_mid_price", return_value=Decimal("100")),
+            patch.object(executor, "_write_audit"),
+        ):
+            executor.apply("paper_csp", action, chain, approval_id=11, vix=18.0)
+
+        store.get_position.assert_called_once_with(
+            "paper_csp", "short_put", instrument_key="NSE_FO|NEW"
+        )
+        recorded: PaperTrade = store.record_trade.call_args[0][0]
+        assert recorded.instrument_key == "NSE_FO|NEW"
 
 
 class TestPaperExecutorEmptyAction:

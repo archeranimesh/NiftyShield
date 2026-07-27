@@ -1736,7 +1736,7 @@ class IronCondorV2:
                 f"allowed: {sorted(_ALLOWED_V2_ACTIONS)}."
             )
 
-        closed = set(action.legs_to_close)
+        closed = {leg.leg_role for leg in action.legs_to_close}
         if self._is_auto_execute(action):
             if action.action_type == "CLOSE_FULL":
                 closed = _SHORT_ROLES | _LONG_ROLES

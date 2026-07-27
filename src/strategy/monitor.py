@@ -37,7 +37,7 @@ from src.paper.models import PaperPosition
 if TYPE_CHECKING:
     from src.paper.store import PaperStore
 from src.paper.tracker import PaperTracker
-from src.strategy.protocol import ApprovedAction, PaperStrategy, SignalEvent
+from src.strategy.protocol import ApprovedAction, LegClose, PaperStrategy, SignalEvent
 from src.utils.logging import bind_trace_id, generate_trace_id
 
 log = structlog.get_logger(__name__)
@@ -317,7 +317,7 @@ class StrategyMonitor:
                 metadata = dict(event.payload)
                 action = ApprovedAction(
                     action_type=action_type,
-                    legs_to_close=[event.payload.get("leg_role", "short_put")],
+                    legs_to_close=[LegClose(leg_role=event.payload.get("leg_role", "short_put"))],
                     legs_to_open=[],
                     rationale="auto-execute",
                     council_rank=1,

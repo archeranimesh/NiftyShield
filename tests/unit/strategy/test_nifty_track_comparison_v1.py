@@ -20,7 +20,7 @@ import pytest
 from src.models.options import OptionChain, OptionChainStrike, OptionLeg
 from src.paper.models import PaperPosition
 from src.strategy.nifty_track_comparison_v1 import NiftyTrackComparisonV1
-from src.strategy.protocol import ApprovedAction, LegSpec
+from src.strategy.protocol import ApprovedAction, LegClose, LegSpec
 
 _SPOT = "paper_nifty_spot"
 _FUTURES = "paper_nifty_futures"
@@ -110,12 +110,14 @@ def _make_position(
 
 def _make_approved_action(
     action_type: str = "ROLL_OVERLAY",
-    legs_to_close: list[str] | None = None,
+    legs_to_close: list[LegClose] | None = None,
     legs_to_open: list[LegSpec] | None = None,
 ) -> ApprovedAction:
     return ApprovedAction(
         action_type=action_type,
-        legs_to_close=legs_to_close if legs_to_close is not None else ["overlay_pp"],
+        legs_to_close=legs_to_close
+        if legs_to_close is not None
+        else [LegClose(leg_role="overlay_pp")],
         legs_to_open=legs_to_open if legs_to_open is not None else [
             LegSpec(
                 instrument_key="NSE_FO|NIFTY01JUL202624000PE",
@@ -434,7 +436,7 @@ def test_apply_action_roll_overlay_removes_closed_leg() -> None:
     ]
     action = _make_approved_action(
         action_type="ROLL_OVERLAY",
-        legs_to_close=["overlay_pp"],
+        legs_to_close=[LegClose(leg_role="overlay_pp")],
         legs_to_open=[
             LegSpec(
                 instrument_key="NSE_FO|NIFTY01JUL202624000PE",
@@ -459,7 +461,7 @@ def test_apply_action_roll_collar_removes_both_collar_legs() -> None:
     ]
     action = _make_approved_action(
         action_type="ROLL_COLLAR",
-        legs_to_close=["overlay_collar_put", "overlay_collar_call"],
+        legs_to_close=[LegClose(leg_role="overlay_collar_put"), LegClose(leg_role="overlay_collar_call")],
         legs_to_open=[
             LegSpec(
                 instrument_key="NSE_FO|NIFTY01JUL202623500PE",
@@ -797,7 +799,7 @@ def test_apply_action_unknown_type_raises_value_error() -> None:
     strategy = NiftyTrackComparisonV1()
     action = ApprovedAction(
         action_type="CLOSE_FULL",
-        legs_to_close=["overlay_pp"],
+        legs_to_close=[LegClose(leg_role="overlay_pp")],
         legs_to_open=[],
         rationale="test",
         council_rank=1,
@@ -811,7 +813,7 @@ def test_apply_action_roll_overlay_empty_legs_to_open_raises_value_error() -> No
     strategy = NiftyTrackComparisonV1()
     action = ApprovedAction(
         action_type="ROLL_OVERLAY",
-        legs_to_close=["overlay_pp"],
+        legs_to_close=[LegClose(leg_role="overlay_pp")],
         legs_to_open=[],
         rationale="test",
         council_rank=1,

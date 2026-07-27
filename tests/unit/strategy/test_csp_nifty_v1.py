@@ -31,7 +31,7 @@ from src.models.options import OptionChain, OptionChainStrike, OptionLeg
 from src.paper.models import PaperPosition, PaperTrade, TradeAction
 from src.paper.store import PaperStore
 from src.strategy.csp_nifty_v1 import CSPNiftyV1
-from src.strategy.protocol import ApprovedAction, LegSpec, SignalEvent
+from src.strategy.protocol import ApprovedAction, LegClose, LegSpec, SignalEvent
 
 _STRATEGY = "paper_csp_nifty_v1"
 _OTHER_STRATEGY = "paper_other_v1"
@@ -325,10 +325,10 @@ def test_no_events_when_healthy() -> None:
 # ── apply_action ──────────────────────────────────────────────────────────────
 
 
-def _make_close_full_action(legs: list[str] | None = None) -> ApprovedAction:
+def _make_close_full_action(legs: list[LegClose] | None = None) -> ApprovedAction:
     return ApprovedAction(
         action_type="CLOSE_FULL",
-        legs_to_close=legs or ["short_put"],
+        legs_to_close=legs or [LegClose(leg_role="short_put")],
         legs_to_open=[],
         rationale="test",
         council_rank=1,
@@ -339,7 +339,7 @@ def test_apply_action_close_full_returns_without_error() -> None:
     """apply_action with CLOSE_FULL does not raise and removes closed legs."""
     strategy = CSPNiftyV1()
     pos = _make_position()
-    action = _make_close_full_action(["short_put"])
+    action = _make_close_full_action([LegClose(leg_role="short_put")])
     result = _run(strategy.apply_action([pos], action))
     # closed leg is filtered out
     assert all(p.leg_role != "short_put" for p in result)
@@ -415,7 +415,7 @@ def _make_close_and_roll_action(triggering: str = "PROFIT_TARGET") -> ApprovedAc
     """CLOSE_AND_ROLL is the CR1d action type for profit-target / time-stop exits."""
     return ApprovedAction(
         action_type="CLOSE_AND_ROLL",
-        legs_to_close=["short_put"],
+        legs_to_close=[LegClose(leg_role="short_put")],
         legs_to_open=[],
         rationale="profit target hit",
         council_rank=1,
@@ -607,7 +607,7 @@ def test_apply_action_close_and_roll_time_stop_runs_reentry(tmp_path: Path) -> N
     vix_series = _make_vix_series(ivr=0.30)
     time_stop_action = ApprovedAction(
         action_type="CLOSE_AND_ROLL",
-        legs_to_close=["short_put"],
+        legs_to_close=[LegClose(leg_role="short_put")],
         legs_to_open=[],
         rationale="21 days elapsed",
         council_rank=1,
@@ -627,7 +627,7 @@ def test_apply_action_rejects_unknown_action_type() -> None:
     strategy = CSPNiftyV1()
     bad_action = ApprovedAction(
         action_type="ROLL_DOWN",
-        legs_to_close=["short_put"],
+        legs_to_close=[LegClose(leg_role="short_put")],
         legs_to_open=[],
         rationale="unknown",
         council_rank=1,
@@ -886,7 +886,7 @@ def test_close_and_roll_passes_qty_to_open_new_csp_leg() -> None:
     pos = _make_position(net_qty=-65, avg_sell_price="100")
     action = ApprovedAction(
         action_type="CLOSE_AND_ROLL",
-        legs_to_close=["short_put"],
+        legs_to_close=[LegClose(leg_role="short_put")],
         legs_to_open=[],
         rationale="profit target",
         council_rank=1,
@@ -1111,7 +1111,7 @@ def test_apply_action_roll_removes_closed_leg() -> None:
     )
     action = ApprovedAction(
         action_type="ROLL",
-        legs_to_close=["short_put"],
+        legs_to_close=[LegClose(leg_role="short_put")],
         legs_to_open=[roll_spec],
         rationale="ROLL signal",
         council_rank=1,
@@ -1152,7 +1152,7 @@ def test_apply_action_roll_raises_when_legs_to_open_empty() -> None:
     pos = _make_position()
     action = ApprovedAction(
         action_type="ROLL",
-        legs_to_close=["short_put"],
+        legs_to_close=[LegClose(leg_role="short_put")],
         legs_to_open=[],
         rationale="test",
         council_rank=1,

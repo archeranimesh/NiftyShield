@@ -212,15 +212,18 @@ class PaperExecutor:
             "action.dispatch",
             strategy=strategy_name,
             action_type=action.action_type,
-            legs_to_close=action.legs_to_close,
+            legs_to_close=[leg.leg_role for leg in action.legs_to_close],
             legs_to_open=[s.leg_role for s in action.legs_to_open],
             trace_id=trace_id,
         )
         today = market_today()
 
         # 1. Close legs
-        for leg_role in action.legs_to_close:
-            position = self._store.get_position(strategy_name, leg_role)
+        for leg in action.legs_to_close:
+            leg_role = leg.leg_role
+            position = self._store.get_position(
+                strategy_name, leg_role, instrument_key=leg.instrument_key
+            )
             if position.net_qty == 0:
                 continue  # nothing open for this leg
             close_action = TradeAction.SELL if position.net_qty > 0 else TradeAction.BUY
