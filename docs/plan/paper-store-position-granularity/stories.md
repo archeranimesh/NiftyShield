@@ -238,3 +238,103 @@ Needs its own scoping session before implementation.
 
 **Files likely touched:** `src/strategy/protocol.py`, `src/strategy/executor.py`, all
 `src/strategy/*_v1.py` + `ic_nifty_v1.py`/`ic_nifty_v2.py`, their tests.
+
+**Scoping audit (2026-07-27):** confirmed via `search_code("legs_to_close")` — `ApprovedAction`
+has `in_degree: 64` (heavily constructed across 7 concrete strategies + their tests).
+`PaperExecutor.apply()` currently does:
+```python
+for leg_role in action.legs_to_close:
+    position = self._store.get_position(strategy_name, leg_role)
+```
+Too large/risky for one commit. Split below — each sub-task is independently testable and,
+except PG-4a, touches only one strategy file + its test file.
+
+---
+
+## PG-4a — `LegClose` dataclass + executor wiring (foundational)
+
+**Fix:**
+1. Add a frozen dataclass to `src/strategy/protocol.py`:
+   ```python
+   @dataclass(frozen=True)
+   class LegClose:
+       leg_role: str
+       instrument_key: str | None = None
+   ```
+2. Change `ApprovedAction.legs_to_close: list[str]` → `list[LegClose]`.
+3. Update `PaperExecutor.apply()`'s close loop to:
+   ```python
+   for leg in action.legs_to_close:
+       position = self._store.get_position(
+           strategy_name, leg.leg_role, instrument_key=leg.instrument_key
+       )
+   ```
+   (relies on PG-2a's `get_position` signature, already landed).
+4. Mechanically update every existing `ApprovedAction(...)` construction site — all 7 concrete
+   strategies (`CSPNiftyV1`, `CCOverlayV1`, `PPOverlayV1`, `CollarOverlayV1`, `IronCondorV1`,
+   `IronCondorV2`, `NiftyTrackComparisonV1`) plus their tests — to wrap bare leg_role strings as
+   `LegClose(leg_role=r)`. **No `instrument_key` populated in this task** — pure syntax
+   transform, zero behavior change, keeps the wrong-leg risk exactly at PG-2a's current
+   (logged-fallback) level. This is what makes PG-4a safe to land alone before PG-4b–h.
+
+**Why foundational:** every other PG-4 sub-task depends on `LegClose` existing and
+`PaperExecutor.apply()` reading `.instrument_key`. Landing this first with no behavior change
+means PG-4b–h can each land independently afterward without a big-bang multi-file commit.
+
+**Tests required:**
+- `PaperExecutor.apply()`: `LegClose(leg_role=..., instrument_key=None)` → behavior identical to
+  current (existing tests green, using `get_position(..., instrument_key=None)`).
+- `LegClose(leg_role=..., instrument_key=<key>)` → `get_position` called with that key (mock/spy
+  assertion), correct instrument closed in a two-position-same-leg_role fixture.
+- Existing `ApprovedAction` construction tests across all 7 strategies updated to the new type,
+  must remain green.
+
+**Files touched:** `src/strategy/protocol.py`, `src/strategy/executor.py`,
+`tests/unit/strategy/test_executor.py`, `tests/unit/strategy/test_protocol.py`, plus a mechanical
+(non-behavioral) touch of every `ApprovedAction` construction site in `src/strategy/*_v1.py` +
+`ic_nifty_v1.py`/`ic_nifty_v2.py` and their tests.
+
+---
+
+## PG-4b through PG-4h — per-strategy `instrument_key` population
+
+**Common fix (repeated per strategy):** wherever the strategy already has the resolved
+`PaperPosition` in hand when building a `LegClose` for `legs_to_close` (it does — each strategy's
+`apply_action`/`check_signals` receives `positions: list[PaperPosition]` and matches by
+`leg_role` to decide what to close), populate `LegClose(leg_role=..., instrument_key=matched_position.instrument_key)`
+instead of leaving `instrument_key=None`.
+
+**Common test requirement (repeated per strategy):** a roll-overlap fixture — two positions
+sharing the target `leg_role` with different `instrument_key`s — asserting the emitted
+`LegClose.instrument_key` matches the position the strategy's own signal logic identified as the
+one to close (not just "a" match).
+
+Each sub-task depends only on PG-4a and is independent of the others (different files, no shared
+state):
+
+| Task | Strategy | Files |
+|---|---|---|
+| PG-4b | `CSPNiftyV1` | `src/strategy/csp_nifty_v1.py`, `tests/unit/strategy/test_csp_nifty_v1.py` |
+| PG-4c | `CCOverlayV1` | `src/strategy/cc_overlay_v1.py`, `tests/unit/strategy/test_cc_overlay_v1.py` |
+| PG-4d | `PPOverlayV1` | `src/strategy/pp_overlay_v1.py`, `tests/unit/strategy/test_pp_overlay_v1.py` |
+| PG-4e | `CollarOverlayV1` | `src/strategy/collar_overlay_v1.py`, `tests/unit/strategy/test_collar_overlay_v1.py` |
+| PG-4f | `IronCondorV1` | `src/strategy/ic_nifty_v1.py`, `tests/unit/strategy/test_ic_nifty_v1.py` |
+| PG-4g | `IronCondorV2` | `src/strategy/ic_nifty_v2.py`, `tests/unit/strategy/test_ic_nifty_v2.py` |
+| PG-4h | `NiftyTrackComparisonV1` | `src/strategy/nifty_track_comparison_v1.py`, `tests/unit/strategy/test_nifty_track_comparison_v1.py` |
+
+---
+
+## PG-4i — Docs close
+
+**No code.** Targeted `Edit` calls only — never `Write` on existing files.
+
+1. `TODOS.md` — mark PG-4a–h (whichever subset landed) complete with session log entry.
+2. `DECISIONS.md` — add entry: "`ApprovedAction.legs_to_close` carries `LegClose(leg_role,
+   instrument_key)` pairs, not bare leg_role strings; `PaperExecutor.apply()` passes
+   `instrument_key` through to `get_position()`, eliminating the PG-2a logged-fallback ambiguity
+   for strategies that populate it."
+3. `CONTEXT.md` — update `ApprovedAction`/`PaperExecutor` description in the `src/strategy/`
+   module tree entry to reflect the new `legs_to_close` type.
+
+Run only after PG-4a through PG-4h (or whichever subset the team decides to land) are complete —
+its docs-close pass summarizes the whole PG-4 split, not just one sub-task.
