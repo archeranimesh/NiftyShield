@@ -14,6 +14,7 @@ from decimal import Decimal
 
 import structlog.testing
 
+from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionChainStrike, OptionLeg
 from src.strategy.ic_expiry_config_v2 import IC_V2_MONTHLY
 from src.strategy.ic_nifty_v2 import IronCondorV2, PositionUpdate
@@ -239,6 +240,10 @@ class TestSdSanityCheck:
 
         # sd_width = 24500 × 0.15 × sqrt(30/365) × 1.25 ≈ 1316 pts.
         # Wing width 2900 pts (23900-21000) >> 1.5 × 1316 ≈ 1974 → triggers wide warn.
+        # Expiry pinned to today+30 (not an absolute date) so `dte` stays 30 regardless
+        # of when this test runs — a fixed calendar date drifts toward dte=0 over time
+        # and silently invalidates the sd_width math above (see 2026-07-27 investigation,
+        # TODOS.md / DECISIONS.md).
         chain = _chain(
             {
                 "23900": (None, _leg("23900", "-0.25", ltp="120", bid="119", ask="121")),
@@ -249,7 +254,8 @@ class TestSdSanityCheck:
                     _leg("24500", "0.50", ltp="200", bid="199", ask="201"),
                     _leg("24500", "-0.50", ltp="200", bid="199", ask="201"),
                 ),
-            }
+            },
+            expiry=market_today() + datetime.timedelta(days=30),
         )
 
         with structlog.testing.capture_logs() as cap:
@@ -265,6 +271,9 @@ class TestSdSanityCheck:
         strategy = IronCondorV2(config=IC_V2_MONTHLY)
 
         # sd_width ≈ 1316 pts. Wing width 200 pts (24300-24100) < 0.4 × 1316 ≈ 526 → triggers tight warn.
+        # Expiry pinned to today+30 (not an absolute date) — see wide-wing test above for why:
+        # a fixed calendar date drifts toward dte=0 and silently shrinks sd_width until this
+        # threshold stops firing (confirmed root cause of the 2026-07-27 failure).
         chain = _chain(
             {
                 "24300": (None, _leg("24300", "-0.25", ltp="120", bid="119", ask="121")),
@@ -275,7 +284,8 @@ class TestSdSanityCheck:
                     _leg("24500", "0.50", ltp="200", bid="199", ask="201"),
                     _leg("24500", "-0.50", ltp="200", bid="199", ask="201"),
                 ),
-            }
+            },
+            expiry=market_today() + datetime.timedelta(days=30),
         )
 
         with structlog.testing.capture_logs() as cap:
