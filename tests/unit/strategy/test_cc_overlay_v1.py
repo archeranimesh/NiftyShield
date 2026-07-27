@@ -408,6 +408,47 @@ def test_apply_action_no_store_does_not_raise() -> None:
     assert result == []
 
 
+def test_apply_action_close_cc_matches_instrument_key_during_overlap() -> None:
+    """Roll overlap: two positions share leg_role with different instrument_keys.
+
+    Only the instrument identified by LegClose.instrument_key should be
+    removed / recorded as closed — the other (still-open) instrument must
+    survive in the returned positions list (PG-4c, mirrors PG-4b).
+    """
+    mock_store = MagicMock()
+    mock_store.record_trade.return_value = True
+    strategy = CCOverlayV1(store=mock_store, notifier=None)
+    strategy._check_reentry = AsyncMock()
+
+    old_pos = _make_position(
+        instrument_key="NSE_FO|NIFTY26JUN2026CE",
+        leg_role="short_call",
+        avg_sell_price="80",
+        net_qty=-65,
+        entry_date=date(2026, 5, 1),
+    )
+    new_pos = _make_position(
+        instrument_key="NSE_FO|NIFTY31JUL2026CE",
+        leg_role="short_call",
+        avg_sell_price="90",
+        net_qty=-65,
+        entry_date=date(2026, 6, 1),
+    )
+    action = ApprovedAction(
+        action_type="CLOSE_CC",
+        legs_to_close=[LegClose(leg_role="short_call", instrument_key="NSE_FO|NIFTY26JUN2026CE")],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+        metadata={"mark": "5.0"},
+    )
+    result = _run(strategy.apply_action([old_pos, new_pos], action))
+
+    assert result == [new_pos]
+    trade = mock_store.record_trade.call_args[0][0]
+    assert trade.instrument_key == "NSE_FO|NIFTY26JUN2026CE"
+
+
 def test_record_close_trade_falls_back_to_avg_sell_price_when_mark_missing() -> None:
     """No mark in metadata → closing trade priced at avg_sell_price."""
     mock_store = MagicMock()

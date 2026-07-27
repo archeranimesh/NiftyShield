@@ -21,10 +21,27 @@ from src.models.portfolio import TradeAction
 from src.paper.constants import STRATEGY_CC_OVERLAY
 from src.paper.models import PaperPosition, PaperTrade
 from src.strategy.exit_signals import ExitSignalEngine
-from src.strategy.protocol import ApprovedAction, SignalEvent
+from src.strategy.protocol import ApprovedAction, LegClose, SignalEvent
 from src.strategy.reentry_mixin import ReEntryMixin
 
 log = structlog.get_logger(__name__)
+
+
+def _leg_close_matches(pos: PaperPosition, leg: LegClose) -> bool:
+    """Return True when ``leg`` identifies ``pos`` as the position to close.
+
+    Matches on ``leg_role`` always; additionally matches on ``instrument_key``
+    when the ``LegClose`` supplies one, so that a roll overlap (two positions
+    sharing a ``leg_role`` with different ``instrument_key``s) only removes
+    the specific instrument being closed (PG-4c, mirrors PG-4b's
+    ``csp_nifty_v1._leg_close_matches``).
+    """
+    if pos.leg_role != leg.leg_role:
+        return False
+    if leg.instrument_key is not None:
+        return pos.instrument_key == leg.instrument_key
+    return True
+
 
 # Matches keys like "NSE_FO|NIFTY29MAY2026PE" → group 1 = "29MAY2026"
 _EXPIRY_RE = re.compile(
@@ -203,18 +220,25 @@ class CCOverlayV1(ReEntryMixin):
             raise ValueError(
                 f"CCOverlayV1 only accepts CLOSE_CC actions; got {action.action_type!r}"
             )
-        closed = {leg.leg_role for leg in action.legs_to_close}
         log.info(
             "cc_overlay_v1.apply_action",
             action_type=action.action_type,
-            legs_to_close=list(closed),
+            legs_to_close=[leg.leg_role for leg in action.legs_to_close],
         )
 
         closed_pos = next(
-            (p for p in positions if p.leg_role in closed and p.net_qty < 0),
+            (
+                p
+                for p in positions
+                if any(_leg_close_matches(p, leg) for leg in action.legs_to_close) and p.net_qty < 0
+            ),
             None,
         )
-        updated = [p for p in positions if p.leg_role not in closed]
+        updated = [
+            p
+            for p in positions
+            if not any(_leg_close_matches(p, leg) for leg in action.legs_to_close)
+        ]
 
         triggering_signal = action.metadata.get("triggering_signal") if action.metadata else None
 
