@@ -118,7 +118,9 @@ def _make_approved_action(
         legs_to_close=legs_to_close
         if legs_to_close is not None
         else [LegClose(leg_role="overlay_pp")],
-        legs_to_open=legs_to_open if legs_to_open is not None else [
+        legs_to_open=legs_to_open
+        if legs_to_open is not None
+        else [
             LegSpec(
                 instrument_key="NSE_FO|NIFTY01JUL202624000PE",
                 action="BUY",
@@ -451,6 +453,69 @@ def test_apply_action_roll_overlay_removes_closed_leg() -> None:
     assert result[0].leg_role == "base_etf"
 
 
+def test_apply_action_roll_overlay_roll_overlap_matches_instrument_key() -> None:
+    """Roll overlap: two positions share leg_role with different instrument_keys.
+
+    Only the position identified by LegClose.instrument_key is removed — the
+    other (already-rolled-in) instrument under the same leg_role survives.
+    Regression for PG-4h.
+    """
+    strategy = NiftyTrackComparisonV1()
+    old_key = "NSE_FO|NIFTY24000PE"
+    new_key = "NSE_FO|NIFTY01JUL202624000PE"
+    positions = [
+        _make_position(leg_role="overlay_pp", instrument_key=old_key),
+        _make_position(leg_role="overlay_pp", instrument_key=new_key),
+        _make_position(leg_role="base_etf", instrument_key="NIFTYBEES", net_qty=650),
+    ]
+    action = _make_approved_action(
+        action_type="ROLL_OVERLAY",
+        legs_to_close=[LegClose(leg_role="overlay_pp", instrument_key=old_key)],
+        legs_to_open=[
+            LegSpec(
+                instrument_key="NSE_FO|NIFTY01AUG202624000PE",
+                action="BUY",
+                quantity=75,
+                leg_role="overlay_pp",
+            )
+        ],
+    )
+    result = _run(strategy.apply_action(positions, action))
+    remaining_keys = {p.instrument_key for p in result}
+    assert old_key not in remaining_keys
+    assert new_key in remaining_keys
+    assert len(result) == 2
+
+
+def test_apply_action_roll_overlay_no_instrument_key_matches_all_leg_role() -> None:
+    """LegClose without instrument_key falls back to leg_role-only matching.
+
+    Preserves pre-PG-4a behavior for callers that don't yet supply an
+    instrument_key.
+    """
+    strategy = NiftyTrackComparisonV1()
+    positions = [
+        _make_position(leg_role="overlay_pp", instrument_key="NSE_FO|NIFTY24000PE"),
+        _make_position(leg_role="overlay_pp", instrument_key="NSE_FO|NIFTY01JUL202624000PE"),
+        _make_position(leg_role="base_etf", net_qty=650),
+    ]
+    action = _make_approved_action(
+        action_type="ROLL_OVERLAY",
+        legs_to_close=[LegClose(leg_role="overlay_pp")],
+        legs_to_open=[
+            LegSpec(
+                instrument_key="NSE_FO|NIFTY01AUG202624000PE",
+                action="BUY",
+                quantity=75,
+                leg_role="overlay_pp",
+            )
+        ],
+    )
+    result = _run(strategy.apply_action(positions, action))
+    assert len(result) == 1
+    assert result[0].leg_role == "base_etf"
+
+
 def test_apply_action_roll_collar_removes_both_collar_legs() -> None:
     """ROLL_COLLAR + two LegSpecs → both collar legs removed, base_etf kept."""
     strategy = NiftyTrackComparisonV1()
@@ -461,7 +526,10 @@ def test_apply_action_roll_collar_removes_both_collar_legs() -> None:
     ]
     action = _make_approved_action(
         action_type="ROLL_COLLAR",
-        legs_to_close=[LegClose(leg_role="overlay_collar_put"), LegClose(leg_role="overlay_collar_call")],
+        legs_to_close=[
+            LegClose(leg_role="overlay_collar_put"),
+            LegClose(leg_role="overlay_collar_call"),
+        ],
         legs_to_open=[
             LegSpec(
                 instrument_key="NSE_FO|NIFTY01JUL202623500PE",
@@ -611,6 +679,7 @@ def test_proxy_delta_no_store() -> None:
 
 # ── NT-2: _check_futures_cc_block ────────────────────────────────────────────
 
+
 def _empty_market() -> OptionChain:
     """Minimal OptionChain with no strikes — sufficient for block-guard tests."""
     return OptionChain(
@@ -624,8 +693,12 @@ def test_futures_cc_standalone_blocked() -> None:
     """Futures + overlay_cc with no long put → BLOCKED_COMBINATION ACTION."""
     strategy = NiftyTrackComparisonV1()
     positions = [
-        _make_position(strategy_name=_FUTURES, leg_role="overlay_cc",
-                       instrument_key="NSE_FO|NIFTY29MAY2026CE", net_qty=-65),
+        _make_position(
+            strategy_name=_FUTURES,
+            leg_role="overlay_cc",
+            instrument_key="NSE_FO|NIFTY29MAY2026CE",
+            net_qty=-65,
+        ),
     ]
     result = _run(strategy.check_signals(_empty_market(), positions))
     blocked = [e for e in result if e.event_type == "BLOCKED_COMBINATION"]
@@ -639,10 +712,18 @@ def test_futures_cc_with_collar_put_allowed() -> None:
     """Futures + overlay_cc + overlay_collar_put (proper collar) → no block."""
     strategy = NiftyTrackComparisonV1()
     positions = [
-        _make_position(strategy_name=_FUTURES, leg_role="overlay_cc",
-                       instrument_key="NSE_FO|NIFTY29MAY2026CE", net_qty=-65),
-        _make_position(strategy_name=_FUTURES, leg_role="overlay_collar_put",
-                       instrument_key="NSE_FO|NIFTY29MAY2026PE", net_qty=65),
+        _make_position(
+            strategy_name=_FUTURES,
+            leg_role="overlay_cc",
+            instrument_key="NSE_FO|NIFTY29MAY2026CE",
+            net_qty=-65,
+        ),
+        _make_position(
+            strategy_name=_FUTURES,
+            leg_role="overlay_collar_put",
+            instrument_key="NSE_FO|NIFTY29MAY2026PE",
+            net_qty=65,
+        ),
     ]
     result = _run(strategy.check_signals(_empty_market(), positions))
     assert not any(e.event_type == "BLOCKED_COMBINATION" for e in result)
@@ -652,10 +733,18 @@ def test_futures_collar_call_and_collar_put_allowed() -> None:
     """Futures + overlay_collar_call + overlay_collar_put → no block."""
     strategy = NiftyTrackComparisonV1()
     positions = [
-        _make_position(strategy_name=_FUTURES, leg_role="overlay_collar_call",
-                       instrument_key="NSE_FO|NIFTY29MAY2026CE", net_qty=-65),
-        _make_position(strategy_name=_FUTURES, leg_role="overlay_collar_put",
-                       instrument_key="NSE_FO|NIFTY29MAY2026PE", net_qty=65),
+        _make_position(
+            strategy_name=_FUTURES,
+            leg_role="overlay_collar_call",
+            instrument_key="NSE_FO|NIFTY29MAY2026CE",
+            net_qty=-65,
+        ),
+        _make_position(
+            strategy_name=_FUTURES,
+            leg_role="overlay_collar_put",
+            instrument_key="NSE_FO|NIFTY29MAY2026PE",
+            net_qty=65,
+        ),
     ]
     result = _run(strategy.check_signals(_empty_market(), positions))
     assert not any(e.event_type == "BLOCKED_COMBINATION" for e in result)
@@ -665,8 +754,12 @@ def test_futures_degenerate_collar_blocked() -> None:
     """Futures + overlay_collar_call without paired put → BLOCKED_COMBINATION."""
     strategy = NiftyTrackComparisonV1()
     positions = [
-        _make_position(strategy_name=_FUTURES, leg_role="overlay_collar_call",
-                       instrument_key="NSE_FO|NIFTY29MAY2026CE", net_qty=-65),
+        _make_position(
+            strategy_name=_FUTURES,
+            leg_role="overlay_collar_call",
+            instrument_key="NSE_FO|NIFTY29MAY2026CE",
+            net_qty=-65,
+        ),
     ]
     result = _run(strategy.check_signals(_empty_market(), positions))
     blocked = [e for e in result if e.event_type == "BLOCKED_COMBINATION"]
@@ -678,8 +771,12 @@ def test_spot_cc_not_blocked() -> None:
     """Spot base + overlay_cc → no BLOCKED_COMBINATION (guard only applies to Futures)."""
     strategy = NiftyTrackComparisonV1()
     positions = [
-        _make_position(strategy_name=_SPOT, leg_role="overlay_cc",
-                       instrument_key="NSE_FO|NIFTY29MAY2026CE", net_qty=-65),
+        _make_position(
+            strategy_name=_SPOT,
+            leg_role="overlay_cc",
+            instrument_key="NSE_FO|NIFTY29MAY2026CE",
+            net_qty=-65,
+        ),
     ]
     result = _run(strategy.check_signals(_empty_market(), positions))
     assert not any(e.event_type == "BLOCKED_COMBINATION" for e in result)
@@ -689,8 +786,12 @@ def test_proxy_cc_not_blocked() -> None:
     """Proxy base + overlay_cc → no BLOCKED_COMBINATION."""
     strategy = NiftyTrackComparisonV1()
     positions = [
-        _make_position(strategy_name=_PROXY, leg_role="overlay_cc",
-                       instrument_key="NSE_FO|NIFTY29MAY2026CE", net_qty=-65),
+        _make_position(
+            strategy_name=_PROXY,
+            leg_role="overlay_cc",
+            instrument_key="NSE_FO|NIFTY29MAY2026CE",
+            net_qty=-65,
+        ),
     ]
     result = _run(strategy.check_signals(_empty_market(), positions))
     assert not any(e.event_type == "BLOCKED_COMBINATION" for e in result)
@@ -700,8 +801,12 @@ def test_futures_no_overlays_no_block() -> None:
     """Futures base with no overlay legs → no BLOCKED_COMBINATION."""
     strategy = NiftyTrackComparisonV1()
     positions = [
-        _make_position(strategy_name=_FUTURES, leg_role="base_futures",
-                       instrument_key="NSE_FO|NIFTYFUT", net_qty=50),
+        _make_position(
+            strategy_name=_FUTURES,
+            leg_role="base_futures",
+            instrument_key="NSE_FO|NIFTYFUT",
+            net_qty=50,
+        ),
     ]
     result = _run(strategy.check_signals(_empty_market(), positions))
     assert not any(e.event_type == "BLOCKED_COMBINATION" for e in result)

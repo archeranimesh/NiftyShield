@@ -36,7 +36,7 @@ from src.paper.constants import DEFAULT_BOD_PATH
 from src.paper.models import PaperPosition
 from src.strategy._price_utils import find_option_leg
 from src.strategy.exit_signals import ExitSignalEngine
-from src.strategy.protocol import ApprovedAction, LegSpec, SignalEvent
+from src.strategy.protocol import ApprovedAction, LegClose, LegSpec, SignalEvent
 from src.strategy.roll_utils import find_strike_by_delta
 
 log = structlog.get_logger(__name__)
@@ -70,6 +70,22 @@ _CC_TARGET_DELTA: Decimal = Decimal("0.20")
 
 # Roll action types handled by apply_action.
 _ALLOWED_ACTIONS: frozenset[str] = frozenset({"ROLL_OVERLAY", "ROLL_COLLAR"})
+
+
+def _leg_close_matches(pos: PaperPosition, leg: LegClose) -> bool:
+    """Return True when ``leg`` identifies ``pos`` as the position to close.
+
+    Matches on ``leg_role`` always; additionally matches on ``instrument_key``
+    when the ``LegClose`` supplies one, so that a roll overlap (two positions
+    sharing a ``leg_role`` with different ``instrument_key``s) only removes
+    the specific instrument being closed (PG-4h).
+    """
+    if pos.leg_role != leg.leg_role:
+        return False
+    if leg.instrument_key is not None:
+        return pos.instrument_key == leg.instrument_key
+    return True
+
 
 # Default lot size for Nifty overlay legs (SEBI standard as of 2024).
 _NIFTY_LOT_SIZE: int = 75
@@ -546,8 +562,16 @@ class NiftyTrackComparisonV1:
         if not action.legs_to_open:
             raise ValueError(f"{action.action_type} requires at least one leg in legs_to_open")
 
-        closed: set[str] = {leg.leg_role for leg in action.legs_to_close}
-        return [p for p in positions if p.leg_role not in closed]
+        # Match on instrument_key when the LegClose supplies one — during a roll
+        # overlap two positions can share the same leg_role with different
+        # instrument_keys, and leg_role-only matching would incorrectly drop both
+        # (PG-4h).  Falls back to leg_role-only matching when instrument_key is
+        # None, preserving pre-PG-4a behavior.
+        return [
+            p
+            for p in positions
+            if not any(_leg_close_matches(p, leg) for leg in action.legs_to_close)
+        ]
 
     # ── Roll target selection ─────────────────────────────────────────────────
 
