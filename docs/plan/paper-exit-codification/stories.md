@@ -101,13 +101,62 @@ Add one line to `TODOS.md` under a `## Backlog` section or equivalent:
 
 ---
 
+## EC-4 — TIME_STOP Must Gate on DTE-Remaining, Not Days-Held
+
+**Context:** Spawned from TODOS.md (detected 2026-06-30, event 68 fired TIME_STOP on
+`paper_nifty_spot / overlay_collar_call`, NSE_FO|65900, September 24000 CE, DTE=91 remaining —
+auto-close correctly failed since the chain was absent, but the signal itself was wrong). This
+is a distinct bug from EC-1's priority-ordering fix — EC-1 makes DTE_REVIEW suppress a
+simultaneously-firing TIME_STOP; EC-4 fixes TIME_STOP's own trigger condition, which is
+independently wrong for any quarterly/leaps/yearly entry. `evaluate_cc`, `evaluate_time_stop_csp`,
+and any other exit-signal evaluator using `days_held >= N` treat holding period as the exit
+trigger — but the intent of TIME_STOP is to exit *before expiry*, not to impose a flat
+holding-period limit. A 113-DTE collar call held for 21 days still has 91 DTE left and should
+not be closed just because 21 days elapsed.
+
+**Correct semantic:** close when DTE drops below a per-strategy/per-expiry-type floor (e.g. ≤7
+for weekly CC, ≤14 for monthly CSP, ≤21 for quarterly collar) — the threshold is a function of
+entry DTE or expiry type, not a wall-clock counter.
+
+**Files to change:**
+- `src/strategy/exit_signals.py` — `evaluate_time_stop_csp`, `evaluate_cc` (and any other
+  evaluator taking `days_held`)
+- `tests/unit/strategy/test_exit_signals.py` — add/update tests
+
+**Before any code:**
+```
+get_code_snippet("ExitSignalEngine.evaluate_time_stop_csp")
+get_code_snippet("ExitSignalEngine.evaluate_cc")
+search_code("days_held")             # every call site — all must be migrated together
+git log --oneline -10 src/strategy/exit_signals.py
+```
+
+**Land after EC-1** — EC-1's priority ordering assumes `TIME_STOP`'s trigger condition already
+exists; changing the condition itself first would make EC-1's test fixtures (`days_held=22,
+dte=10 → TIME_STOP fires`) need rework mid-story. Confirm EC-1 is checked off in `tasks.md`
+before starting this one.
+
+**Tests:**
+- `test_time_stop_quarterly_not_triggered_by_days_held_alone` — quarterly entry, days_held=21,
+  dte_remaining=91 → no TIME_STOP (regression test for the reported event 68 case)
+- `test_time_stop_fires_when_dte_floor_breached` — dte_remaining ≤ per-expiry-type floor → fires
+- `test_time_stop_floor_is_expiry_type_aware` — weekly floor (7) vs monthly floor (14) vs
+  quarterly floor (21) each produce correct fire/no-fire at the boundary
+
+**Commit:** `fix(strategy): TIME_STOP gates on DTE-remaining, not days-held`
+
+---
+
 ## EC-3 — Docs Close
 
 **Goal:** Confirm docs updated, add TODOS.md session log line. No code changes.
 
 **Verify:**
-- `DECISIONS.md` — already updated in session with q11 and q12 council rulings ✓
-- `TODOS.md` — add one line confirming paper-exit-codification complete
+- `DECISIONS.md` — already updated in session with q11 and q12 council rulings ✓ (add an entry
+  for EC-4's fix once it lands)
+- `TODOS.md` — add one line confirming paper-exit-codification complete (EC-1, EC-2, EC-4)
 - No new files in `src/` → no CONTEXT.md or CONTEXT_TREE.md changes needed
 
-**Commit:** `docs: paper-exit-codification EC-1/EC-2 session close`
+**Commit:** `docs: paper-exit-codification EC-1/EC-2/EC-4 session close`
+
+**Run this last** — after EC-1, EC-2, and EC-4 are all checked off in `tasks.md`.
