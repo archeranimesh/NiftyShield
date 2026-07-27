@@ -577,6 +577,11 @@ def test_close_explicit_key_skips_db_lookup(mock_store_cls, tmp_path: Path) -> N
     # It should only be called ONCE (for the summary in main), not TWICE.
     assert mock_store_cls.return_value.get_position.call_count == 1
 
+    # PG-2d: the summary call must pass the already-resolved instrument_key
+    # explicitly, instead of relying on get_position()'s ambiguity fallback.
+    _, kwargs = mock_store_cls.return_value.get_position.call_args
+    assert kwargs.get("instrument_key") == _KEY
+
 
 # ── Delta gate tests ──────────────────────────────────────────────────────────
 

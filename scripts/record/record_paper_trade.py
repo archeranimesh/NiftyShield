@@ -903,7 +903,7 @@ def main() -> None:
             except Exception as exc:
                 print(f"WARNING: failed to write MANUAL_OVERRIDE event — {exc}", file=sys.stderr)
 
-    pos = store.get_position(trade.strategy_name, trade.leg_role)
+    pos = store.get_position(trade.strategy_name, trade.leg_role, instrument_key=instrument_key)
     if pos.net_qty == 0:
         print(f"{trade.strategy_name} / {trade.leg_role}: position closed (net qty = 0)")
     else:
