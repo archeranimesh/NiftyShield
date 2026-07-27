@@ -27,15 +27,22 @@ story on this list. Do not jump between stories mid-sequence; the ordering below
 12. [ ] **MVP: Multi-bagger Value Picks Tracker** — `docs/plan/mvp/tasks.md`, starting at **M1.1**. Independent — does not block any other story on this list.
 13. [ ] **Variance gate — CSP v1 deployment gate observation** (2026-07-07) — `docs/plan/variance-gate/variance_gate_tasks.md`, starting at **VG0** (spec reconciliation; remaining tasks are human checkpoints, not build tasks).
 14. [ ] **Options Income strategy** (2026-06-03) — `docs/plan/options_income/options_income_tasks.md`, starting at **S0** (data audit).
-15. [ ] **backtest-eval-core: `BacktestStore` + `src/analytics/`** — `docs/plan/backtest-eval-core/tasks.md`, starting at **B1.1**. Blocked by BACKTEST_PLAN_PHASE1.md tasks 1.3 + 1.4 — do not start until those land.
-16. [ ] **signals-eval-core: regime engine + signal generators + validation** — `docs/plan/signals-eval-core/tasks.md`, starting at **SE1.1**. Blocked by backtest-eval-core + Phase 1.12 gate.
-17. [ ] **signals: multi-LLM daily signal pipeline** — `docs/plan/signals/signals_tasks.md`, starting at **S1.1**.
-18. [ ] **risk-gamma-phase-a, Track B: Near-Expiry Gamma Buy strategy** — `docs/plan/risk-gamma-phase-a/risk_gamma_tasks.md`, starting at **B2.2** (Track A + B1/B2.1 already shipped).
-19. [ ] **greeks-parity-validation** (P3, gated on council) — `docs/plan/full-repo-review-followups/greeks-parity-validation/tasks.md`, starting at T1. **Do not implement directly** — requires an `options-strategist`/`greeks-analyst` council consult first (tolerance-band decision).
-20. [ ] **paper-pnl-golden-tests** (P3) — `docs/plan/full-repo-review-followups/paper-pnl-golden-tests/tasks.md`, starting at T1 — add exact-value golden assertions for `_compute_leg_unrealized_pnl`.
-21. [ ] **suppression-hygiene-triage** (P3) — `docs/plan/full-repo-review-followups/suppression-hygiene-triage/tasks.md`, starting at T1 — REVIEW.md carve-out for self-describing `# noqa` codes.
-22. [ ] **Broker abstraction** (LOW priority) — multi-broker parser/adapter layer so data fetching can migrate to Dhan or Kite without touching storage. Storage format (Parquet, SQLite, model field names) is frozen — only fetch + parse changes. Full story: `docs/plan/broker-abstraction/`. 16 tasks (BA-0 → BA-15), starting at **BA-0** (probe scripts + decision matrix). BA-14/BA-15 blocked until `src/execution/` (Phase 1) exists. Do not start until Phase 0.8 gate clears.
-23. [ ] **Historical data abstraction** (LOW priority) — `HistoricalCandleFetcher` protocol so VIX and OHLC fetching can switch between Upstox, Dhan, Kite, and NSE CSV without touching storage. Currently `vix_ingest.py` has Upstox URLs hardcoded with sync `requests`; `get_historical_candles` on `BrokerClient` raises `NotImplementedError`. 11 tasks HD-0→HD-10, starting at **HD-0** (cost-bounded probe scripts). HD-6 (Dhan)/HD-7 (Kite ₹2000/month) conditional on HD-0 decision matrix. Do not start until Phase 0.8 gate clears.
+15. [ ] **Backtest Engine** — `docs/plan/backtest-engine/{phase1,phase2,phase3,phase4}/`. Mirrors `BACKTEST_PLAN_PHASE1.md`'s full structure (root doc is canonical; these dirs are thin status pointers). Work through phases **in order** — each phase's GATE task blocks the next phase dir entirely, so this is really 4 sub-stories chained, not 1:
+    - **Phase 1** (Aug–Dec 2026 target) — `docs/plan/backtest-engine/phase1/tasks.md`. Gated on the Phase 0.8 variance gate (item 13 above). Starts at **1.3a**/**1.4** (parallel), through **1.12**. Blocks items 16/17 below.
+    - **Phase 2** (CSP live + IC paper, ~6mo) — `docs/plan/backtest-engine/phase2/tasks.md`. Gated on Phase 1's **1.12**. Starts at **2.1**. Note: the Parallel Research Tracks named inside this phase in the root doc are tracked via `signals-eval-core` (item 17), not a separate task list here.
+    - **Phase 3** (IC live + third strategy + portfolio construction, ~12mo) — `docs/plan/backtest-engine/phase3/tasks.md`. Gated on Phase 2's **2.7**. Starts at **3.1**.
+    - **Phase 4** (basket maturity + Finideas evaluation, 2028–2030) — `docs/plan/backtest-engine/phase4/tasks.md`. Gated on Phase 3's **3.6**. Starts at **4.1** (Owner: Animesh — capital-allocation decision, not a Cowork task).
+16. [ ] **backtest-eval-core: `BacktestStore` + `src/analytics/`** — `docs/plan/backtest-eval-core/tasks.md`, starting at **B1.1**. Blocked by item 15 (tasks 1.3 + 1.4) — do not start until those land.
+17. [ ] **signals-eval-core: regime engine + signal generators + validation** — `docs/plan/signals-eval-core/tasks.md`, starting at **SE1.1**. Blocked by item 16 + item 15's 1.12 gate. Covers both Track A (swing) and Track B (investment) pipelines — SE1–SE8 in full.
+18. [ ] **signals: multi-LLM daily signal pipeline** — `docs/plan/signals/signals_tasks.md`, starting at **S1.1**.
+19. [ ] **risk-gamma-phase-a, Track B: Near-Expiry Gamma Buy strategy** — `docs/plan/risk-gamma-phase-a/risk_gamma_tasks.md`, starting at **B2.2** (Track A + B1/B2.1 already shipped).
+20. [ ] **greeks-parity-validation** (P3, gated on council) — `docs/plan/full-repo-review-followups/greeks-parity-validation/tasks.md`, starting at T1. **Do not implement directly** — requires an `options-strategist`/`greeks-analyst` council consult first (tolerance-band decision).
+21. [ ] **paper-pnl-golden-tests** (P3) — `docs/plan/full-repo-review-followups/paper-pnl-golden-tests/tasks.md`, starting at T1 — add exact-value golden assertions for `_compute_leg_unrealized_pnl`.
+22. [ ] **suppression-hygiene-triage** (P3) — `docs/plan/full-repo-review-followups/suppression-hygiene-triage/tasks.md`, starting at T1 — REVIEW.md carve-out for self-describing `# noqa` codes.
+23. [ ] **Broker abstraction** (LOW priority) — multi-broker parser/adapter layer so data fetching can migrate to Dhan or Kite without touching storage. Storage format (Parquet, SQLite, model field names) is frozen — only fetch + parse changes. Full story: `docs/plan/broker-abstraction/`. 16 tasks (BA-0 → BA-15), starting at **BA-0** (probe scripts + decision matrix). BA-14/BA-15 blocked until `src/execution/` (item 24's OE-1) exists. Do not start until Phase 0.8 gate clears.
+24. [ ] **Historical data abstraction** (LOW priority) — `HistoricalCandleFetcher` protocol so VIX and OHLC fetching can switch between Upstox, Dhan, Kite, and NSE CSV without touching storage. Currently `vix_ingest.py` has Upstox URLs hardcoded with sync `requests`; `get_historical_candles` on `BrokerClient` raises `NotImplementedError`. 11 tasks HD-0→HD-10, starting at **HD-0** (cost-bounded probe scripts). HD-6 (Dhan)/HD-7 (Kite ₹2000/month) conditional on HD-0 decision matrix. Do not start until Phase 0.8 gate clears.
+25. [ ] **Phase 2 — Research Pipelines & Integrations** (2027+) — `docs/plan/phase2-integrations/tasks.md`, starting at **PV-1** (P&L Visualization — not gated, can be pulled forward independently). **ZK-1**/**OE-1**/**PT-1** are gated per their own stated reasons (Kite Connect priority, static IP, defer-until-touched) — see the story file. Does not include the Swing/Investment signal pipelines — those are item 17 above.
+26. [ ] **Technical Debt** (opportunistic — not sequential) — `docs/plan/technical-debt/tasks.md` (**DEBT-3/5/6a/6b/6c/7**). Do not pick these up on their own; each fires only when its named file/module is already being touched for another story's task. See `prompt.md` for the exact trigger per item and why this one breaks the "finish in sequence" rule the rest of this list follows.
 
 **Before build queue starts on paper-backbone-dependent stories** — verify prerequisites:
 ```bash
@@ -48,7 +55,8 @@ search_graph("CCOverlayV1")       # must return zero results
 
 ## Animesh-only: Stockmock Calibration Backtests
 
-Prerequisite for Phase 1 task 1.7 (`CSPStrategy` calibration). Stockmock UI — no code required.
+Prerequisite for item 15 (`docs/plan/backtest-engine/phase1/tasks.md` task **1.1**, which itself
+feeds task 1.7's `CSPConfig`). Stockmock UI — no code required.
 
 - [ ] COVID crash (Feb–Apr 2020) — strikes hit, premium, max M2M loss, breach frequency
 - [ ] IL&FS crisis (Sep–Oct 2018) — same metrics
@@ -56,55 +64,6 @@ Prerequisite for Phase 1 task 1.7 (`CSPStrategy` calibration). Stockmock UI — 
 - [ ] Stable baseline (Jan–Dec 2023) — expected exit-type distribution in normal markets
 - [ ] Summarise in [docs/strategies/csp_nifty_v1.md](docs/strategies/csp_nifty_v1.md) under "Calibration Backtest Results (Stockmock)"
 - [ ] Commit: `docs(strategies): CSP v1 Stockmock calibration backtest results`
-
----
-
-## Phase 1 — Backtest Engine (Aug–Dec 2026)
-
-*Gated on Phase 0.8. Load [BACKTEST_PLAN_PHASE1.md](BACKTEST_PLAN_PHASE1.md) when the gate clears.*
-
-**Replay Harness** (`docs/plan/replay_harness.md` — design doc not yet written): prereq for Phase 0.8 gate criterion B. Injects historical chain snapshots (COVID 2020-03-16 or IL&FS 2018-09-21) into `PaperTracker`. No code until task 1.3a data exists.
-
-**Key milestones (full spec in [BACKTEST_PLAN_PHASE1.md](BACKTEST_PLAN_PHASE1.md)):**
-- **1.3a** — Nifty 50 + NiftyBees OHLC Parquet; derived: ATR-14, slope-50, SMA-10M, VIX rank-252.
-- **1.3b** — TrueData 1-min options ingest (~1.5 GB for 2022–2024; start after zip delivery).
-- **1.4** — `BacktestEngine` core (Strategy Protocol + DayContext + run loop).
-- **1.5** — `BacktestStore` (`src/backtest/store.py`); `src/analytics/` (trade metrics, B2.1/B2.2) tracked separately under its own numbering — full spec: [docs/plan/backtest-eval-core/](docs/plan/backtest-eval-core/).
-- **1.7** — `CSPStrategy` with `CSPConfig` from Stockmock calibration results.
-- **1.11** — Regime-matched Z-score; gate `|Z| ≤ 1.5`.
-- **1.12** — Phase 1 gate: paper vs backtest distributions match; Animesh sign-off.
-
----
-
-## Phase 2 — Research Pipelines & Integrations (2027+)
-
-*Gated on Phase 1.12. Full specs in [PLANNER.md](PLANNER.md) and [docs/plan/](docs/plan/).*
-
-| Item | Notes |
-|---|---|
-| P&L Visualization (Cowork artifact) | ~6 weeks of data available now — buildable if prioritised. Four panels: MF, Dhan ETFs, Nuvama Bonds, Nuvama Options. Panel 5 (Zerodha) blocked on Kite Connect. |
-| Zerodha / Kite Connect integration | Defer until FinRakshak/ILTS P&L visibility matters. Evaluate Kite MCP server before writing `src/zerodha/` from scratch. |
-| Swing Strategy Pipeline (Track A) | SE1–SE3 + SE5–SE6. Full sequence: [docs/plan/signals-eval-core/tasks.md](docs/plan/signals-eval-core/tasks.md). |
-| Investment Strategy Pipeline (Track B) | SE1–SE2 + SE4–SE6. Same story file. Parallel branch off SE2.2. |
-| Order Execution Layer (`src/execution/`) | Blocked: static IP not provisioned. Design done against `BrokerClient` protocol. |
-| `paper_snapshot.py` → Telegram | Wire `build_notifier`; non-fatal. Defer until file is touched for another reason. |
-
----
-
-## Technical Debt
-
-Fix alongside adjacent refactoring only. Never a standalone commit.
-
-**DEBT-3:** License boilerplate — decision needed before automation. Every file gets a header once chosen.
-
-**DEBT-5:** `test_bhavcopy_ingest.py` missing append-path coverage — `write_to_parquet` merge branch (`replace_schema_metadata` call) not tested. Fix when touching that test file: write-twice test asserting second run's lineage metadata survives the merge.
-
-**DEBT-6:** Leg validation + calendar data gaps for historical backtesting:
-1. Move hardcoded expiry whitelist (`{2026-04-07, 2026-12-29}`) from `Leg` to `market_calendar` YAML.
-2. Holiday YAML datasets for 2017–2025 missing in `src/market_calendar/data/` — historical `Leg` construction pre-2026 fails open.
-3. Formalise `is_nifty` check: replace denylist with an `instrument_key`-based predicate.
-
-**DEBT-7:** Refactor dynamic dispatch in `daily_snapshot.py` to eliminate `noqa: F401` unused import suppressions (which hide broken imports if helpers are renamed/moved).
 
 ---
 
