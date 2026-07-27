@@ -24,6 +24,14 @@ src/
 │   ├── constants.py          # DEFAULT_DATA_DIR: Path to data/offline/options_ohlcv/ (repo-root-relative). Imported by bhavcopy_loader.py.
 │   ├── vix_ingest.py         # India VIX historical ingestion pipeline (NSE CSV / Upstox API)
 │   └── ivr.py                # Trailing 252-day India VIX Implied Volatility Rank (IVR) calculation
+├── gamma/
+│   ├── __init__.py           # Package marker
+│   ├── models.py             # GammaChainSnapshot + GammaWatchlistEntry frozen dataclasses — Near-Expiry Gamma Buy strategy scaffolding
+│   └── store.py              # GammaStore: SQLite persistence for gamma chain snapshots + watchlist entries
+├── council/
+│   ├── __init__.py           # Package marker
+│   ├── models.py             # Council request/response Pydantic models (CouncilOutput etc.)
+│   └── rapid.py              # RapidCouncil: parallel Stage-1 fan-out (5 heterogeneous personas) + chairman synthesis + timeout handling
 ├── models/
 │   ├── __init__.py           # Re-exports all shared models from portfolio.py + mf.py for convenience.
 │   ├── portfolio.py          # Canonical home for all portfolio domain types: Leg, Strategy, DailySnapshot, Trade, TradeAction, Direction, ProductType, AssetType, PortfolioSummary. Monetary fields Decimal; P&L methods accept float|Decimal. PortfolioSummary refactored (AR-4): 16 flat cross-source fields + four typed Optional source references: mf_pnl (PortfolioPnL|None), dhan (DhanPortfolioSummary|None), nuvama_bonds (NuvamaBondSummary|None), nuvama_options (NuvamaOptionsSummary|None). Availability exposed via computed @property (dhan_available, nuvama_available, nuvama_options_available, mf_available). String-literal TYPE_CHECKING annotations on source fields avoid circular imports.
@@ -54,6 +62,7 @@ src/
 │   ├── metrics.py            # Pure metric functions: compute_nee() (Nifty-equivalent exposure), cost attribution helpers. NIFTYBEES_BETA_TO_NIFTY = 0.92.
 │   ├── overlay_selector.py   # Overlay expiry selector — finds most cost-efficient protection leg across candidate expiries. Async; returns ranked candidates.
 │   ├── proxy_monitor.py      # Track C delta monitor. ProxyDeltaMonitor tracks DITM call delta drift for the proxy track and flags rebalance triggers.
+│   ├── chain_utils.py        # Shared option-chain lookup helpers used across paper entry/roll scripts
 │   ├── _display.py           # Legacy labels (BASE_LABELS, OVERLAY_LABELS) and hedge_verdict. Kept for backward compat with older snapshot scripts.
 │   └── _utils.py             # Paper-local utilities: safe_float(val, default) — converts any value to float without raising.
 ├── strategy/
@@ -77,6 +86,8 @@ src/
 │   ├── auto_close.py         # EOD auto-close orchestrator for overlays via OverlayCloser; status → ACTED
 │   ├── roll_utils.py         # Shared helpers: find_strike_by_delta, apply_liquidity_gate
 │   ├── csp_roll_executor.py  # Legacy CSP roll executor (retained for compatibility)
+│   ├── ic_close_executor.py  # close_ic_legs(): shared auto-close persistence helper for IronCondorV1/V2 — batch LTP fetch + atomic closing-trade writes; settlement-fallback for missing LTP on expiry day
+│   ├── _price_utils.py       # Shared price/LTP resolution helpers used by executor.py + ic_close_executor.py
 │   └── profit_lock_engine.py # ProfitLockEngine: stateless 3-zone profit-lock evaluator; ProfitLockState + ProfitLockDecision frozen dataclasses; floor formula max(W,W)+D_cum+D_lock+K ≤ 0.75×C₀; Zone 1 log-only, Zone 2 wing contraction to ~19Δ, Zone 3 CLOSE_FULL; council ruling 2026-06-27
 ├── mf/
 │   ├── CLAUDE.md             # Module context: transaction ledger model, AMFI source, Decimal TEXT invariant, MFHolding location
@@ -112,7 +123,9 @@ src/
 ├── notifications/
 │   ├── CLAUDE.md             # Module context: non-fatal contract, build_notifier() → None, HTML parse_mode
 │   ├── __init__.py           # Package marker.
-│   └── telegram.py           # TelegramNotifier: fire-and-forget sendMessage via raw requests (HTML parse_mode, <pre> block). build_notifier() returns None when env vars absent. send() never raises — catches Exception broadly, logs WARNING, returns False.
+│   ├── protocol.py           # NotifierProtocol — abstracts the notification sink for testability
+│   ├── telegram.py           # TelegramNotifier: fire-and-forget sendMessage via raw requests (HTML parse_mode, <pre> block). build_notifier() returns None when env vars absent. send() never raises — catches Exception broadly, logs WARNING, returns False.
+│   └── telegram_gateway.py   # TelegramGateway: council-free approval request dispatch + inbound callback polling + auth guard (chat-ID allowlist) + timeout scan for stale pending approvals
 ├── nuvama/
 │   ├── __init__.py           # Package marker
 │   ├── models.py             # Frozen dataclasses: NuvamaBondHolding (isin/qty/avg_price/ltp/chg_pct/hair_cut; cost_basis/current_value/pnl/pnl_pct/day_delta properties), NuvamaBondSummary (total_value/basis/pnl/pnl_pct/total_day_delta). All BOND classification. NuvamaOptionPosition (trade_symbol/instrument_name/net_qty/avg_price/ltp/unrealized_pnl/realized_pnl_today). NuvamaOptionsSummary (snapshot_date/positions tuple/total_unrealized_pnl/total_realized_pnl_today/cumulative_realized_pnl/intraday_high/low/nifty_high/low; net_pnl property = unrealized + cumulative_realized).
@@ -132,7 +145,8 @@ src/
     ├── exceptions.py         # Custom exception hierarchy: BrokerError → AuthenticationError, RateLimitError, DataFetchError (→ LTPFetchError), OrderRejectedError (→ InsufficientMarginError), InstrumentNotFoundError.
     ├── protocol.py           # BrokerClient + MarketStream protocols. Sub-protocols: MarketDataProvider, OrderExecutor, PortfolioReader. Stub type aliases (= Any) for all Pydantic models not yet in src/models/.
     ├── upstox_market.py      # Sync requests client. V3 LTP endpoint. Pipe→colon key remap. Raises LTPFetchError on HTTP error / empty data.
-    ├── upstox_live.py        # UpstoxLiveClient: production BrokerClient. Delegates get_ltp + get_option_chain to UpstoxMarketClient (Analytics Token). Order execution raises NotImplementedError (static IP blocked). Portfolio read raises NotImplementedError (Daily OAuth token required). Expired instruments + historical candles raise NotImplementedError.
+    ├── upstox_live.py        # UpstoxLiveClient: production BrokerClient. Delegates get_ltp + get_option_chain to UpstoxMarketClient (Analytics Token). Order execution raises NotImplementedError (static IP blocked). Portfolio read raises NotImplementedError (Daily OAuth token required). Expired instruments + historical candles raise NotImplementedError. get_order_margin() (2026-07-22): pre-trade margin calculator via POST /v2/charges/margin.
+    ├── mock_client.py        # MockBrokerClient: offline BrokerClient implementation — deterministic fakes for all protocol methods, including a netting-benefit factor for get_order_margin() BUY+SELL baskets
     └── factory.py            # Composition root. create_client(env) → BrokerClient. env: "prod" → UpstoxLiveClient (UPSTOX_ANALYTICS_TOKEN), "sandbox" → UpstoxLiveClient (UPSTOX_SANDBOX_TOKEN), "test" → MockBrokerClient. ONLY file in src/ that imports concrete clients.
 
 scripts/
@@ -142,7 +156,8 @@ scripts/
 │   ├── upstox_chain_snapshot.py # EOD option chain snapshot cron. Writes to PyArrow Parquet.
 │   ├── upstox_chain_intraday.py # 5-min intraday option chain snapshot. Writes to Parquet.
 │   ├── gamma_daily_watch.py     # Greeks monitoring from chain snapshots.
-│   └── bhavcopy_bootstrap.py    # Resumable bulk NSE bhavcopy download 2016–present.
+│   ├── bhavcopy_bootstrap.py    # Resumable bulk NSE bhavcopy download 2016–present.
+│   └── refresh_vix.py           # India VIX ingestion refresh cron — wraps src/backtest/vix_ingest.py, resumable gap-fill.
 ├── lookup/               # on-demand queries; called by humans or entry scripts
 │   ├── __init__.py       # Package marker
 │   ├── find_strike_by_delta.py  # CLI: live Nifty option chain → filter by |delta| range → strike/IV/key table. Prints ready-to-paste record_paper_trade.py commands. --expiry and --date use type=date.fromisoformat. Added --track shortcut.
@@ -155,19 +170,20 @@ scripts/
 ├── strategies/           # strategy-specific scripts; one subfolder per strategy
 │   ├── __init__.py       # Package marker
 │   ├── csp/
-│   │   ├── __init__.py   # Package marker
-│   │   └── paper_csp_roll.py # profit-target / time-stop / delta-stop exit.
+│   │   └── __init__.py   # Package marker only — paper_csp_roll.py retired 2026-07 (PA2); CSP rolls now backbone-managed via CSPNiftyV1.apply_action + PaperExecutor
 │   ├── three_track/
 │   │   ├── __init__.py   # Package marker
 │   │   ├── paper_3track_entry.py    # Base leg entry for 3-Track comparison. Auto-selects DITM CE proxy + futures + NiftyBees. --confirm required to write.
 │   │   ├── paper_3track_overlay.py  # Live-fetch overlay entry for all 3 tracks (spot/futures/proxy). PP/CC/collar types. CC permanently blocked on paper_nifty_futures (synthetic short put). _check_existing_overlay detects open SELL positions correctly. Atomicity: failed writes rolled back via store.delete_trade(). Imports: ALL_TRACKS, _ACTION_FOR_ROLE, _OPTION_TYPE_FOR_ROLE, _build_trade, _collect_expiry_candidates, _fetch_candidates_for_expiries, _select_best_candidate.
 │   │   ├── paper_3track_overlay_entry.py # overlay-specific entry script.
-│   │   ├── paper_3track_overlay_roll.py  # Rolls expiring overlay legs at DTE ≤ OVERLAY_ROLL_DTE (5). _parse_expiry_from_key extracts date from NSE_FO key regex. _find_expiring_overlay: Phase-B fix applied (last_trade tracks SELL direction). _roll_single: 2-trade atomic (close written first; open failure → delete_trade rollback). --force bypasses DTE gate. --yes skips interactive confirmation (TTY-aware). Imports constants + helpers from paper_3track_overlay.py.
+│   │   │                                  # (paper_3track_overlay_roll.py retired 2026-07 (PA2) — 3-track overlay rolls now backbone-managed via NiftyTrackComparisonV1.apply_action + PaperExecutor)
 │   │   └── paper_3track_snapshot.py      # Canonical EOD cron for 3-track comparison (15:45 IST). Live spot fetch (--spot to override). Per-leg delta-from-yesterday via get_prev_leg_snapshot. Writes paper_nav_snapshots + paper_leg_snapshots (--no-save for dry-run). _hedge_verdict shows overlay protection ratio. Uses format_track_summary() for summary-first reporting; --verbose for leg details.
 │   ├── ic/
 │   │   ├── __init__.py   # Package marker
-│   │   ├── paper_ic_entry.py    # Config-driven IC entry helper for all four variants (weekly/monthly/leaps/yearly); IVR/duplicate/DTE/liquidity/portfolio-delta gates; --dry-run default.
-│   │   ├── paper_ic_snapshot.py # EOD audit cron for all four IC variants; per-leg Greeks snapshot; Telegram summary; cron 45 15 * * 1-5.
+│   │   ├── ic_entry_gates.py    # Shared pre-entry gate helpers (check_duplicate, resolve_ivr w/ VIX-staleness guard, resolve_expiry, capture_entry_margin) used by both V1 and V2 entry scripts.
+│   │   ├── paper_ic_entry.py    # Config-driven IC entry helper for all four V1 variants (weekly/monthly/leaps/yearly); IVR/duplicate/DTE/liquidity gates (portfolio-delta gate removed 2026-07-03 — IC entries judged in isolation); --dry-run default.
+│   │   ├── paper_ic_entry_v2.py # V2-only entry helper — delta-based 10Δ long-wing placement via live chain scan, long_wing_min_premium floor enforced, shares gates via ic_entry_gates.py.
+│   │   ├── paper_ic_snapshot.py # EOD audit cron for all IC variants (V1 loop over all four + V2 loop over CONFIGS_V2); per-leg Greeks snapshot; ROI-on-margin line; Telegram summary; cron 45 15 * * 1-5.
 │   │   └── paper_ic_monthly_comparison.py # EOD V1 vs V2 monthly comparison cron; ICMonthlyStats dataclass; side-by-side Telegram report (entry credit / captured % / deltas / P&L / profit-lock zone / adjustments); cron 45 15 * * 1-5.
 │   └── cc_calibration/   # NiftyBees lot-sizing probe (retire after 3 cycles)
 │       ├── __init__.py   # Package marker
@@ -175,6 +191,7 @@ scripts/
 │       └── paper_cc_roll.py
 ├── portfolio/            # live portfolio P&L — not paper, not strategy-specific
 │   ├── __init__.py       # Package marker
+│   ├── backup_db.py      # Online SQLite backup cron — copies data/portfolio/portfolio.sqlite via the sqlite3 backup API (safe under WAL).
 │   ├── daily_snapshot.py # Thin I/O orchestration only. Live mode: holiday guard (is_trading_day) exits early on NSE holidays before any API call; fetches LTPs, records snapshots, prints P&L, sends Telegram (non-fatal). Historical mode (--date YYYY-MM-DD): reads stored snapshots, computes P&L offline — no holiday guard, no API call. Pure computation in src/portfolio/summary.py; pure formatting in src/portfolio/formatting.py. Live mode: create_client(UPSTOX_ENV) — UPSTOX_ENV=test → MockBrokerClient. _historical_main reconstructs NuvamaBondHolding objects using actual qty+ltp from NuvamaStore.get_snapshot_for_date() (AR-6 — no more qty=1 stub).
 │   ├── morning_nav.py    # MF NAV backfill cron (09:15 IST, weekdays). Fetches AMFI and upserts MFNavSnapshot for prev_trading_day(today) — fixes stale T-2 NAV written by the 15:45 daily_snapshot run (AMFI not yet published at that time). --date override for manual recovery. Exit 0/1. Cron: 15 9 * * 1-5.
 │   ├── paper_snapshot.py # EOD mark-to-market for CSP Nifty. Dry-run by default; --no-dry-run to write. Integrated format_pnl_table() for standardized output.
@@ -194,16 +211,32 @@ scripts/
 │   ├── __init__.py       # Package marker
 │   ├── ask_council.py
 │   └── council_templates/
-└── dev/                  # diagnostics, smoke tests, one-off migrations
-    ├── __init__.py       # Package marker
-    ├── send_test_telegram.py # Smoke-test script. Reads TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID from .env, sends a sample P&L message. Exit code 0/1. Run before first cron to verify credentials.
-    ├── validate_strategy_spec.py # strategy spec linter.
-    ├── probe_nuvama_schema.py # Diagnostic script (not production). Dumps all rmsHdg fields from live Holdings() response.
-    ├── migrate_strike_to_text.py
-    ├── test_api_version.py
-    ├── paper_track_snapshot.py # Legacy snapshot script (preserved for compatibility).
-    ├── verify_analytics.py     # Smoke-tests LTP, option chain, Greeks, historical candles via Analytics Token. Moved from src/analytics/ (SS1).
-    └── sandbox_order_lifecycle.py # Place → Modify → Cancel via V3 Order API (sandbox=True). Moved from src/sandbox/ (SS1).
+├── dev/                  # diagnostics, smoke tests, one-off migrations
+│   ├── __init__.py       # Package marker
+│   ├── send_test_telegram.py # Smoke-test script. Reads TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID from .env, sends a sample P&L message. Exit code 0/1. Run before first cron to verify credentials.
+│   ├── validate_strategy_spec.py # strategy spec linter.
+│   ├── probe_nuvama_schema.py # Diagnostic script (not production). Dumps all rmsHdg fields from live Holdings() response.
+│   ├── migrate_strike_to_text.py
+│   ├── migrate_add_closed_state.py    # One-off migration: adds CLOSED to TradeState-related schema.
+│   ├── migrate_exit_events_decimal.py # One-off migration: paper_exit_events numeric columns → Decimal-safe TEXT.
+│   ├── migrate_paper_action_audit.py  # One-off migration: adds action-audit columns/table for paper trade actions.
+│   ├── migrate_paper_strategies.py    # One-off migration: paper_strategies table schema updates (e.g. proxy_delta_breach_count).
+│   ├── migrate_paper_trades_state.py  # One-off migration: adds TradeState column to paper_trades.
+│   ├── migrate_paper_trades_unique.py # One-off migration: uniqueness constraint fix on paper_trades.
+│   ├── check_ic_margin.py    # Diagnostic: queries live/mock order margin for an IC leg basket.
+│   ├── cleanup_cc_collar_dedup.py # One-off cleanup: dedupes overlapping CC/Collar paper positions from a historical bug.
+│   ├── generate_3track_viz.py # Generates a visualization/report of the 3-track comparison history.
+│   ├── test_api_version.py
+│   ├── paper_track_snapshot.py # Legacy snapshot script (preserved for compatibility).
+│   ├── verify_analytics.py     # Smoke-tests LTP, option chain, Greeks, historical candles via Analytics Token. Moved from src/analytics/ (SS1).
+│   └── sandbox_order_lifecycle.py # Place → Modify → Cancel via V3 Order API (sandbox=True). Moved from src/sandbox/ (SS1).
+├── healthcheck.py         # Dead man's switch for EOD cron validation (top-level, not under daemon/). Trading-day guard, DB/snapshot/VIX recency checks, disk space. Silent on pass; Telegram alert + exit 1 on failure. Cron: 30 16 * * 1-5.
+├── position_health_check.py # Standalone position/Greeks sanity-check cron — flags stale or missing Greeks/LTP on open paper positions.
+├── eod_summary.py         # EOD P&L summary cron — Telegram digest across all strategies. (Moved out of scripts/daemon/ — that subfolder no longer exists.)
+├── pre_market_brief.py    # Pre-market summary cron. (Moved out of scripts/daemon/ — that subfolder no longer exists.)
+├── monitor_daemon.py      # Monitor daemon main loop (StrategyMonitor host process). (Moved out of scripts/daemon/ — that subfolder no longer exists.)
+├── start_monitor.py       # Launcher for monitor_daemon.py. (Moved out of scripts/daemon/ — that subfolder no longer exists.)
+└── stop_monitor.py        # Graceful shutdown for monitor_daemon.py. (Moved out of scripts/daemon/ — that subfolder no longer exists.)
 
 .claude/
 ├── settings.json             # PreToolUse hook: warns on Read targeting src/ or scripts/
