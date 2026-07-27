@@ -72,6 +72,42 @@ _ALL_ROLES = _SHORT_ROLES | _LONG_ROLES
 _ALLOWED_ACTIONS = {"CLOSE_FULL", "CLOSE_CALL_SPREAD", "CLOSE_PUT_SPREAD", "ROLL_WING"}
 
 
+def _leg_close_matches(pos: PaperPosition, leg: LegClose) -> bool:
+    """Return True when ``leg`` identifies ``pos`` as the position to close.
+
+    Matches on ``leg_role`` always; additionally matches on ``instrument_key``
+    when the ``LegClose`` supplies one, so that a roll overlap (two positions
+    sharing a ``leg_role`` with different ``instrument_key``s) only selects
+    the specific instrument being closed (PG-4f).
+    """
+    if pos.leg_role != leg.leg_role:
+        return False
+    if leg.instrument_key is not None:
+        return pos.instrument_key == leg.instrument_key
+    return True
+
+
+def _position_for_role(ic_positions: list[PaperPosition], leg_role: str) -> PaperPosition | None:
+    """Resolve the position to close for ``leg_role``.
+
+    When two positions share ``leg_role`` (roll overlap), picks the one with
+    the most-recent ``entry_date`` — mirrors ``PaperStore.get_position``'s
+    ambiguity handling (PG-2a) so the auto-selected close target is
+    consistent with the rest of the codebase.
+    """
+    matches = [p for p in ic_positions if p.leg_role == leg_role]
+    if not matches:
+        return None
+    if len(matches) == 1:
+        return matches[0]
+    log.warning(
+        "ic_nifty_v1.position_for_role_ambiguous",
+        leg_role=leg_role,
+        match_count=len(matches),
+    )
+    return max(matches, key=lambda p: p.entry_date or date.min)
+
+
 class IronCondorV1:
     """Backbone-compatible wrapper for the paper_ic_nifty_v1 strategy.
 
@@ -325,7 +361,7 @@ class IronCondorV1:
 
         # Wire _auto_select_action logic
         if self.auto_execute:
-            selected_action = self._auto_select_action(events)
+            selected_action = self._auto_select_action(events, ic_positions)
             if selected_action is not None:
                 filtered_events: list[SignalEvent] = []
                 action_emitted = False
@@ -476,7 +512,12 @@ class IronCondorV1:
                 f"allowed: {sorted(_ALLOWED_ACTIONS)}."
             )
 
-        # Override legs to close if called via auto-execute (where legs_to_close is not fully populated)
+        # Override legs to close if called via auto-execute (where legs_to_close is not fully populated).
+        # Roles come from the override (or the action itself); instrument_key is preserved from
+        # whatever action.legs_to_close already carries per role — populated by
+        # _auto_select_action for the auto-execute path (PG-4f) — so a roll overlap (two
+        # positions sharing a leg_role with different instrument_keys) only matches the exact
+        # instrument identified by signal evaluation, not "a" position with that role.
         closed = {leg.leg_role for leg in action.legs_to_close}
         if self._is_auto_execute(action):
             if action.action_type == "CLOSE_FULL":
@@ -485,6 +526,9 @@ class IronCondorV1:
                 closed = {"short_call", "long_call_hedge"}
             elif action.action_type == "CLOSE_PUT_SPREAD":
                 closed = {"short_put", "long_put_hedge"}
+
+        key_by_role = {leg.leg_role: leg.instrument_key for leg in action.legs_to_close}
+        effective_legs = [LegClose(leg_role=r, instrument_key=key_by_role.get(r)) for r in closed]
 
         log.info(
             "ic_nifty_v1.apply_action",
@@ -521,7 +565,11 @@ class IronCondorV1:
                 closed_trades = await close_ic_legs(
                     broker=self._broker,
                     store=self._store,
-                    positions=[p for p in positions if p.leg_role in closed],
+                    positions=[
+                        p
+                        for p in positions
+                        if any(_leg_close_matches(p, leg) for leg in effective_legs)
+                    ],
                     closed_roles=closed,
                     strategy_name=self.strategy_name,
                     notes=f"ic_nifty_v1 auto-close: {triggering_signal}",
@@ -534,7 +582,9 @@ class IronCondorV1:
                 await self._send_close_notification(
                     action.action_type, triggering_signal, closed_trades
                 )
-        return [p for p in positions if p.leg_role not in closed]
+        return [
+            p for p in positions if not any(_leg_close_matches(p, leg) for leg in effective_legs)
+        ]
 
     async def _send_close_notification(
         self,
@@ -593,7 +643,9 @@ class IronCondorV1:
             return True
         return action.rationale == "auto-execute"
 
-    def _auto_select_action(self, events: list[SignalEvent]) -> ApprovedAction | None:
+    def _auto_select_action(
+        self, events: list[SignalEvent], ic_positions: list[PaperPosition]
+    ) -> ApprovedAction | None:
         """Select one action from a list of fired signals using priority rules.
 
         Priority (highest first):
@@ -607,6 +659,10 @@ class IronCondorV1:
 
         Args:
             events: All SignalEvents returned by check_signals for this tick.
+            ic_positions: Open positions for this strategy (already filtered
+                to net_qty != 0) — used to populate each ``LegClose.instrument_key``
+                so ``apply_action`` closes the exact instrument identified here,
+                not just "a" position sharing the leg_role (PG-4f).
 
         Returns:
             Single ApprovedAction to execute, or None.
@@ -624,7 +680,17 @@ class IronCondorV1:
         if full_close_trigger is not None:
             return ApprovedAction(
                 action_type="CLOSE_FULL",
-                legs_to_close=[LegClose(leg_role=r) for r in (_SHORT_ROLES | _LONG_ROLES)],
+                legs_to_close=[
+                    LegClose(
+                        leg_role=r,
+                        instrument_key=(
+                            pos.instrument_key
+                            if (pos := _position_for_role(ic_positions, r)) is not None
+                            else None
+                        ),
+                    )
+                    for r in (_SHORT_ROLES | _LONG_ROLES)
+                ],
                 legs_to_open=[],
                 rationale="auto-execute",
                 council_rank=1,
@@ -643,7 +709,12 @@ class IronCondorV1:
             )
             return ApprovedAction(
                 action_type="ROLL_WING",
-                legs_to_close=[LegClose(leg_role=roll_event.payload["leg_role"])],
+                legs_to_close=[
+                    LegClose(
+                        leg_role=roll_event.payload["leg_role"],
+                        instrument_key=roll_event.payload.get("current_instrument_key"),
+                    )
+                ],
                 legs_to_open=[new_leg],
                 rationale="auto-execute",
                 council_rank=1,
@@ -662,7 +733,17 @@ class IronCondorV1:
             )
             return ApprovedAction(
                 action_type=action_type,
-                legs_to_close=[LegClose(leg_role=r) for r in spread_roles],
+                legs_to_close=[
+                    LegClose(
+                        leg_role=r,
+                        instrument_key=(
+                            pos.instrument_key
+                            if (pos := _position_for_role(ic_positions, r)) is not None
+                            else None
+                        ),
+                    )
+                    for r in spread_roles
+                ],
                 legs_to_open=[],
                 rationale="auto-execute",
                 council_rank=1,

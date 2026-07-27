@@ -109,6 +109,7 @@ def _make_position(
     avg_cost: str = "0",
     net_qty: int = -65,
     strategy_name: str = _STRATEGY,
+    entry_date: date | None = None,
 ) -> PaperPosition:
     return PaperPosition(
         strategy_name=strategy_name,
@@ -117,6 +118,7 @@ def _make_position(
         avg_cost=Decimal(avg_cost),
         avg_sell_price=Decimal(avg_sell_price),
         instrument_key=instrument_key,
+        entry_date=entry_date,
     )
 
 
@@ -786,7 +788,12 @@ def test_apply_action_close_full_manual_action_does_not_auto_persist() -> None:
     positions = _make_ic_positions()
     action = ApprovedAction(
         action_type="CLOSE_FULL",
-        legs_to_close=[LegClose(leg_role="short_put"), LegClose(leg_role="long_put_hedge"), LegClose(leg_role="short_call"), LegClose(leg_role="long_call_hedge")],
+        legs_to_close=[
+            LegClose(leg_role="short_put"),
+            LegClose(leg_role="long_put_hedge"),
+            LegClose(leg_role="short_call"),
+            LegClose(leg_role="long_call_hedge"),
+        ],
         legs_to_open=[],
         rationale="manual approval",  # not "auto-execute"
         council_rank=1,
@@ -828,7 +835,7 @@ def test_auto_select_loss_stop_wins() -> None:
         SignalEvent(event_type="PROFIT_TARGET", severity="ACTION", description="", payload={}),
         SignalEvent(event_type="LOSS_STOP", severity="ACTION", description="", payload={}),
     ]
-    action = strat._auto_select_action(events)
+    action = strat._auto_select_action(events, [])
     assert action is not None
     assert action.action_type == "CLOSE_FULL"
     assert {leg.leg_role for leg in action.legs_to_close} == {
@@ -862,7 +869,7 @@ def test_auto_select_roll_over_delta_stop() -> None:
             },
         ),
     ]
-    action = strat._auto_select_action(events)
+    action = strat._auto_select_action(events, [])
     assert action is not None
     assert action.action_type == "ROLL_WING"
     assert action.legs_to_close == [LegClose(leg_role="short_call")]
@@ -884,7 +891,7 @@ def test_auto_select_delta_stop_call_spread() -> None:
             payload={"leg_role": "short_call"},
         )
     ]
-    action = strat._auto_select_action(events)
+    action = strat._auto_select_action(events, [])
     assert action is not None
     assert action.action_type == "CLOSE_CALL_SPREAD"
     assert {leg.leg_role for leg in action.legs_to_close} == {"short_call", "long_call_hedge"}
@@ -899,8 +906,105 @@ def test_auto_select_none_when_no_action() -> None:
         SignalEvent(event_type="DELTA_WARN", severity="WARN", description="", payload={}),
         SignalEvent(event_type="DTE_WARN", severity="INFO", description="", payload={}),
     ]
-    action = strat._auto_select_action(events)
+    action = strat._auto_select_action(events, [])
     assert action is None
+
+
+def test_auto_select_close_full_populates_instrument_key() -> None:
+    """CLOSE_FULL's LegClose entries carry each role's live instrument_key (PG-4f)."""
+    from src.strategy.protocol import SignalEvent
+
+    strat = IronCondorV1()
+    ic_positions = _make_ic_positions()
+    events = [SignalEvent(event_type="LOSS_STOP", severity="ACTION", description="", payload={})]
+
+    action = strat._auto_select_action(events, ic_positions)
+    assert action is not None
+    keys_by_role = {leg.leg_role: leg.instrument_key for leg in action.legs_to_close}
+    assert keys_by_role == {
+        "short_put": _SHORT_PUT_KEY,
+        "long_put_hedge": _LONG_PUT_KEY,
+        "short_call": _SHORT_CALL_KEY,
+        "long_call_hedge": _LONG_CALL_KEY,
+    }
+
+
+def test_auto_select_roll_overlap_picks_most_recent_position() -> None:
+    """CLOSE_FULL on a roll-overlap fixture selects the most-recently-entered
+    position for the ambiguous leg_role, not just any match sharing the role
+    (PG-4f, mirrors PaperStore.get_position's PG-2a ambiguity handling)."""
+    from src.strategy.protocol import SignalEvent
+
+    strat = IronCondorV1()
+    old_short_call = _make_position(
+        leg_role="short_call",
+        instrument_key="NSE_FO|NIFTY25000CE_OLD",
+        entry_date=date(2026, 5, 1),
+    )
+    new_short_call = _make_position(
+        leg_role="short_call",
+        instrument_key=_SHORT_CALL_KEY,
+        entry_date=date(2026, 6, 1),
+    )
+    # Drop the standard short_call fixture, leaving only the two roll-overlap
+    # positions (old + new) sharing leg_role="short_call".
+    ic_positions = [p for p in _make_ic_positions() if p.leg_role != "short_call"] + [
+        old_short_call,
+        new_short_call,
+    ]
+    events = [SignalEvent(event_type="LOSS_STOP", severity="ACTION", description="", payload={})]
+
+    action = strat._auto_select_action(events, ic_positions)
+    assert action is not None
+    short_call_leg = next(leg for leg in action.legs_to_close if leg.leg_role == "short_call")
+    assert short_call_leg.instrument_key == _SHORT_CALL_KEY
+
+
+def test_apply_action_close_full_roll_overlap_closes_only_matched_instrument() -> None:
+    """apply_action(CLOSE_FULL) on a roll-overlap fixture removes only the position
+    whose instrument_key matches the LegClose, leaving the other same-role position
+    open (PG-4f)."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from src.client.protocol import BrokerClient
+    from src.paper.store import PaperStore
+
+    broker = MagicMock(spec=BrokerClient)
+    broker.get_ltp = AsyncMock(
+        return_value={
+            _SHORT_PUT_KEY: Decimal("30.00"),
+            _LONG_PUT_KEY: Decimal("2.00"),
+            _SHORT_CALL_KEY: Decimal("28.00"),
+            _LONG_CALL_KEY: Decimal("2.50"),
+        }
+    )
+    store = MagicMock(spec=PaperStore)
+    store.record_trades = MagicMock(side_effect=lambda trades: (trades, []))
+
+    strat = IronCondorV1(broker=broker, store=store)
+    old_short_call = _make_position(
+        leg_role="short_call",
+        instrument_key="NSE_FO|NIFTY25000CE_OLD",
+        entry_date=date(2026, 5, 1),
+    )
+    positions = _make_ic_positions() + [old_short_call]
+    action = ApprovedAction(
+        action_type="CLOSE_FULL",
+        legs_to_close=[
+            LegClose(leg_role="short_put", instrument_key=_SHORT_PUT_KEY),
+            LegClose(leg_role="long_put_hedge", instrument_key=_LONG_PUT_KEY),
+            LegClose(leg_role="short_call", instrument_key=_SHORT_CALL_KEY),
+            LegClose(leg_role="long_call_hedge", instrument_key=_LONG_CALL_KEY),
+        ],
+        legs_to_open=[],
+        rationale="auto-execute",
+        council_rank=1,
+        metadata={"auto_selected": True},
+    )
+
+    result = asyncio.run(strat.apply_action(positions, action))
+
+    assert result == [old_short_call]
 
 
 # ── IC-F1: IVR wiring tests ───────────────────────────────────────────────────
@@ -1038,7 +1142,7 @@ def test_check_signals_auto_execute_delta_stop_no_roll() -> None:
 
 def test_is_auto_execute() -> None:
     """_is_auto_execute identifies auto-execution correctly."""
-    from src.strategy.protocol import ApprovedAction, LegClose
+    from src.strategy.protocol import ApprovedAction
 
     strat = IronCondorV1()
 
