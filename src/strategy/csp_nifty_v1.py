@@ -44,7 +44,7 @@ from src.paper.constants import DEFAULT_BOD_PATH
 from src.paper.models import PaperPosition, TradeState
 from src.strategy.csp_roll_executor import close_csp_leg, open_new_csp_leg, roll_down_and_out
 from src.strategy.exit_signals import ExitSignalEngine
-from src.strategy.protocol import ApprovedAction, LegSpec, SignalEvent
+from src.strategy.protocol import ApprovedAction, LegClose, LegSpec, SignalEvent
 from src.strategy.reentry_mixin import ReEntryMixin
 from src.strategy.roll_utils import find_strike_by_delta
 
@@ -91,6 +91,21 @@ _SIGNAL_ACTION_MAP: dict[str, str] = {
 # ROLL is emitted independently (outside priority suppression) when a replacement strike
 # is available.  It maps to the ROLL action handled by apply_action.
 _ROLL_AUTO_ACTION = "ROLL"
+
+
+def _leg_close_matches(pos: PaperPosition, leg: LegClose) -> bool:
+    """Return True when ``leg`` identifies ``pos`` as the position to close.
+
+    Matches on ``leg_role`` always; additionally matches on ``instrument_key``
+    when the ``LegClose`` supplies one, so that a roll overlap (two positions
+    sharing a ``leg_role`` with different ``instrument_key``s) only removes
+    the specific instrument being closed (PG-4b).
+    """
+    if pos.leg_role != leg.leg_role:
+        return False
+    if leg.instrument_key is not None:
+        return pos.instrument_key == leg.instrument_key
+    return True
 
 
 class CSPNiftyV1(ReEntryMixin):
@@ -451,12 +466,21 @@ class CSPNiftyV1(ReEntryMixin):
         if action.action_type == "ROLL":
             if not action.legs_to_open:
                 raise ValueError("ROLL action requires at least one leg in legs_to_open")
-            closed: set[str] = {leg.leg_role for leg in action.legs_to_close}
             # Remove the closed leg from the in-memory list.  The new leg is NOT appended
             # here because it has not been filled yet — PaperExecutor.dispatch handles the
             # DB close + open via action.legs_to_open at fill time.  The next tick's
             # store.get_positions() call will reflect the new leg once the executor writes it.
-            return [p for p in positions if p.leg_role not in closed]
+            #
+            # Match on instrument_key when the LegClose supplies one — during a roll
+            # overlap two positions can share the same leg_role with different
+            # instrument_keys, and leg_role-only matching would incorrectly drop both
+            # (PG-4b).  Falls back to leg_role-only matching when instrument_key is
+            # None, preserving pre-PG-4a behavior.
+            return [
+                p
+                for p in positions
+                if not any(_leg_close_matches(p, leg) for leg in action.legs_to_close)
+            ]
 
         return remaining  # unreachable but satisfies mypy
 

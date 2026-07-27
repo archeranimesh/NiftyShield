@@ -1055,7 +1055,6 @@ def test_roll_signal_fires_when_days_held_21_and_replacement_available() -> None
     them — using days_held is the only viable trigger for this condition.
     """
     strategy = CSPNiftyV1()
-    expiry_date = date(2026, 6, 26)
     chain = _make_chain_with_roll_candidate(current_ltp="60", current_delta="-0.20")
     pos = _make_position(
         instrument_key="NSE_FO|NIFTY23000PE",
@@ -1120,11 +1119,40 @@ def test_apply_action_roll_removes_closed_leg() -> None:
     assert all(p.leg_role != "short_put" for p in result)
 
 
+def test_apply_action_roll_matches_instrument_key_during_overlap() -> None:
+    """ROLL with instrument_key on LegClose removes only that instrument (PG-4b).
+
+    During a roll overlap, two positions can share ``leg_role="short_put"``
+    with different ``instrument_key``s.  The LegClose emitted for the leg
+    being closed must disambiguate by instrument_key so the still-open
+    replacement leg is not also dropped from the in-memory list.
+    """
+    strategy = CSPNiftyV1()
+    old_pos = _make_position(instrument_key="NSE_FO|NIFTY23000PE")
+    new_pos = _make_position(instrument_key="NSE_FO|NIFTY22000PE")
+    roll_spec = LegSpec(
+        instrument_key="NSE_FO|NIFTY21000PE",
+        action="SELL",
+        quantity=1,
+        leg_role="short_put",
+        notes="roll_target delta=-0.22",
+    )
+    action = ApprovedAction(
+        action_type="ROLL",
+        legs_to_close=[LegClose(leg_role="short_put", instrument_key="NSE_FO|NIFTY23000PE")],
+        legs_to_open=[roll_spec],
+        rationale="ROLL signal",
+        council_rank=1,
+    )
+    result = _run(strategy.apply_action([old_pos, new_pos], action))
+    assert old_pos not in result
+    assert new_pos in result
+
+
 def test_roll_signal_does_not_fire_when_no_candidate_in_chain() -> None:
     """ROLL does NOT fire when chain has no PE leg in the 22-delta [0.18, 0.28] band."""
     strategy = CSPNiftyV1()
     # Chain only has the current position's leg; no 22-delta candidate.
-    chain = _make_chain(ltp="48", delta="-0.20")  # 48/80 = 0.60 > 0.50; delta < 0.35; dte=9999
     # Trigger ROLL profit condition: mark = 39 (≤ 50% of 80) but no roll candidate in range.
     chain_no_candidate = OptionChain(
         underlying_spot=Decimal("24000"),
