@@ -27,6 +27,11 @@ council-checkpoint per CLAUDE.md Step 2b, explicitly accepting the automation ri
 | 1 | Does this abandon RQ2 ("which overlay works best on which base")? | **Yes, explicitly.** Futures and Proxy report raw, unprotected base P&L only, forever. RQ2 is retired, not deferred — do not resurrect duplicate overlay legs on Futures/Proxy in any future story without a fresh decision. |
 | 2 | What happens to the ~18 existing duplicate overlay rows already in `paper_trades` for `paper_nifty_futures` and `paper_nifty_proxy` (collar_call 65900, collar_put 65894, pp 58627/63848 — see S1)? | Deferred to story-writing time. **This document's recommendation: close them out with an explicit synthetic exit trade, not a hard delete** — paper P&L history should stay reconstructable, and a silent delete would make the 2026-05 to 2026-07 realized P&L numbers already reported to the operator (e.g. proxy realized +30,985.18) irreproducible. Flagged as **S1 — requires explicit operator go-ahead before running**, separate from the rest of the epic, because it mutates trade history operators have already seen reported numbers from. |
 | 3 | Automate `NiftyTrackComparisonV1` (currently `auto_execute=False` by design)? | **Yes, operator has decided. Council pass explicitly skipped at operator's instruction.** Do not re-litigate this in a future session; if a future agent is tempted to add a council step here, that instruction has already been overridden once by the person who owns the capital risk being modeled. |
+| 4 | (2026-07-28, supersedes S3's original synthetic-attribution design) Should the daily 3-track comparison use an overlay-adjusted NiftyBees figure, with Futures/Proxy shown via synthetic attribution? | **No — reversed.** Operator wants a fully independent, apples-to-apples base-instrument comparison: all three tracks (Spot/Futures/DITM) compared on base-leg P&L only, persisted daily so performance can be queried over time. Overlay is **display/analysis only, never trade-linked to Futures/Proxy (already true via S2) and now also never math-linked to the comparison** — no overlay-adjusted NiftyBees number, no synthetic attribution to Futures/Proxy, for any track. Overlay P&L continues to be tracked and reported, just in its own separate place, never blended into the RQ1 comparison. See revised S3. |
+| 5 | (2026-07-28) Automated base-leg roll for Futures/DITM — quarterly-first to reduce cost-of-carry roll frequency? | **No.** Considered and rejected — NSE index F&O lists only 3 monthly serials (near/next/far); there is no separately-liquid quarterly instrument. A quarterly-first rule would deliberately pick the least liquid available serial every roll. Keep the existing `["monthly","quarterly","yearly"]` band preference in `get_expiry_candidates()`/`get_next_contract_in_band()` unchanged. |
+| 6 | (2026-07-28) Roll trigger and liquidity-gate behavior for S5's base-leg roll automation? | **Corrected same day — trigger is per-leg, not a single shared threshold.** `base_futures`: **DTE ≤ 1** (roll on expiry day or the day before — operator preference, prioritizing capital efficiency over the liquidity-crunch concern originally raised for this leg). `base_ditm_call`: **DTE < 20** (band_min+5 buffer, ~1 week ahead — operator's stated reasoning was margin increasing near expiry; more material driver is this leg's much thinner options liquidity far from front-month, same conclusion either way). **Gate: warn-only, always roll** for both legs — matches existing `PROXY_OI_MIN`/`PROXY_SPREAD_MAX` pattern in `paper_3track_entry.py`; operator explicitly declined a hard block for this story. **Futures liquidity check: relative OI ≥ 10% of near-month contract's OI** (chosen over an absolute floor — futures OI operates on a different scale than option OI and a fixed number would need periodic re-tuning). Note: Nifty options are cash-settled, not physically delivered, so there's no delivery-margin spike near expiry the way single-stock options can have — flagged as a factual correction, doesn't change the DITM trigger decision. |
+| 7 | (2026-07-28) Should initial entry (base + overlay), not just maintenance actions, also be automated? | **Yes, but as a one-time bootstrap, not recurring — corrected same day.** Initial answer ("fixed cadence, independent of position state") was struck after a lifecycle walkthrough surfaced it assumed a "periodic new cycle" model that isn't the operator's intent: NiftyBees is never closed, and "roll" (Futures/DITM) means contract maintenance on one continuous position, not cycle renewal. There is no cycle to re-enter periodically. Automate entry only for the case of no open position existing yet (first-ever entry); no cadence, no overlap logic needed — there's no second cycle to overlap with. See S6. |
+| 8 | (2026-07-28) What's the visibility mechanism once there's no approval gate left anywhere in the pipeline? | **Telegram notification on every trade event** — base-leg roll (S5, build the notify call in from the start), overlay entry/open (currently silent, new), base-leg initial entry (currently silent, new). Overlay close is already implemented (`cc_overlay_v1.py`/`pp_overlay_v1.py`/`collar_overlay_v1.py`) and unchanged. See S6. |
 
 ## Scope boundary — what this epic does NOT touch
 
@@ -41,12 +46,25 @@ council-checkpoint per CLAUDE.md Step 2b, explicitly accepting the automation ri
 
 - `src/strategy/nifty_track_comparison_v1.py` — auto_execute flip, per-track overlay gating
 - `src/strategy/exit_signals.py` — no signal-rule changes expected, only which tracks call them
-- `src/paper/store.py` / `src/paper/models.py` — if overlay leg ownership needs a schema marker
-- `scripts/strategies/three_track/paper_3track_overlay.py`, `paper_3track_overlay_entry.py` — restrict entry to NiftyBees
-- `scripts/strategies/three_track/paper_3track_snapshot.py` — P&L aggregation change
+- `src/paper/store.py` / `src/paper/models.py` — new `TrackComparisonSnapshot` model + store
+  methods (S3); overlay leg ownership schema marker if needed (S1/S2)
+- `scripts/strategies/three_track/paper_3track_overlay.py`, `paper_3track_overlay_entry.py` — restrict entry to NiftyBees (S2); cadence-trigger + Telegram notify on entry (S6)
+- `scripts/strategies/three_track/paper_3track_snapshot.py` — base-only comparison aggregation +
+  daily persistence (S3); base-leg roll trigger/execution, or a new sibling script (S5)
+- `scripts/strategies/three_track/paper_3track_entry.py` — cadence-trigger logic + Telegram notify
+  on entry (S6, currently manual `--confirm` only, no notification)
+- `src/notifications/` — no new module expected, reuse existing `TelegramNotifier`/`build_notifier()`
+  non-fatal contract for S5/S6's new notify call sites
 - `docs/instructions/3track.md`, `docs/strategies/nifty_track_comparison_v1.md` — rewrite to match new design
-- `DECISIONS.md` — log the RQ2 retirement and automation flip as formal decisions
-- `tests/unit/strategies/`, `tests/unit/scripts/` — per-story
+- `DECISIONS.md` — log the RQ2 retirement, automation flip, base-only comparison decoupling, S5's
+  roll trigger/liquidity design, and S6's full-automation + notify-on-every-trade decision
+- `tests/unit/strategies/`, `tests/unit/scripts/`, `tests/unit/paper/` — per-story
+
+**Story count is now 7** (S1, S2, S3, S4, S5, S6, S0) — the epic prompt's "one task per session,
+find the first unchecked item" instruction still applies; S3/S5 no longer block on S1/S2 (see
+ordering note at the top of `stories.md`), so either may legitimately be "the first unchecked
+item" a session picks up depending on what's already landed. S6 is the last functional story,
+gated on S2 + S5 (and best landed after S4).
 
 **Before any code, every story:** run the CLAUDE.md Rule 0 graph checks (`git log --oneline -10
 <file>`, `search_graph`, `trace_path`) before `Read`. Do not skip this because the epic is
