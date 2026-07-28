@@ -71,6 +71,7 @@ Verification: `grep -i "<scheme name>" <(curl https://www.amfiindia.com/spages/N
 - **Monthly NSE options expire last Tuesday of the month.** Monthly symbols show only month name; weeklies show full date.
 - **Nifty Index LTP:** `NSE_INDEX|Nifty 50` can be included in the standard V3 LTP batch call alongside equity and F&O keys — no separate endpoint needed for spot price.
 - **Upstox has no MF API.** No holdings, NAV, or transaction endpoints in V2 or V3. Community requests confirmed unanswered as of Feb 2026.
+- **Yearly-expiry option Greeks are not reported.** Known Upstox limitation — the December/yearly-band contracts return `option_greeks.delta` as missing/None (silently coerced to `0.0` by any `_safe()`-style helper), even at high OI. Confirmed 2026-07-28 via `find_chain_entry` against the 2026-12-29 Nifty chain (OI 2.2M, spread 0.01%, delta reported as 0.000 — implausible for a real ~4% OTM 154-DTE call). Any strategy relying on delta-based exit signals (e.g. `evaluate_cc`'s DELTA_STOP/DELTA_WARN) cannot be trusted against a yearly-expiry position — LOSS_STOP (premium multiple) becomes the only working defense for that band.
 
 ---
 
