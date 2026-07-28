@@ -461,6 +461,261 @@ prevents the confusion entirely.
 
 ---
 
+## CC1 — Per-strategy delta candidate ladder, CC gets its own
+
+> Context: `scripts/lookup/find_strike_by_delta.py` already does everything needed for a
+> delta-targeted, multi-expiry (monthly/quarterly/yearly), liquidity-gated strike search —
+> but it is CSP-only under the hood. Confirmed via live run (2026-07-28, `--option-type CE
+> --delta-min 0.20 --delta-max 0.35 --strategy paper_covered_call_v1`): the printed
+> comparison table honors the user's `--delta-min`/`--delta-max` flags, but the actual
+> auto-selected strike (the one that generates the `record_paper_trade` command) does not —
+> it re-filters against a hardcoded module-level `DELTA_CANDIDATES = [0.22, 0.25, 0.20]`,
+> which is CSP's short-put target ladder, regardless of what the caller asked for. For CC
+> this is silently wrong: the CLI accepted CE + a CC-appropriate delta range and then handed
+> back a strike chosen against CSP's target deltas anyway.
+
+**Problem:** `DELTA_CANDIDATES` (module-level constant in `find_strike_by_delta.py`) is used
+unconditionally in `main()`'s auto-select loop, regardless of `--strategy`/`--option-type`.
+There is no `CC_DELTA_CANDIDATES` — CC either silently inherits CSP's ladder (current, wrong
+behavior) or has to bypass auto-select entirely and read the printed table by hand (current
+workaround).
+
+**Files to change:**
+- `scripts/lookup/find_strike_by_delta.py` — add `CC_DELTA_CANDIDATES`, select the ladder
+  based on `--option-type` (CE → CC ladder, PE → existing CSP ladder) or an explicit
+  `--overlay-type cc` flag if that reads more clearly than inferring from side
+- `src/instruments/strike_selector.py` — `rank_strikes()`'s docstring says "CSP entry
+  preference" but the ranking tuple itself (round-strike preference, spread bucket, OI,
+  exact spread) isn't actually CSP-specific — confirm this before assuming it needs to
+  change; likely just a docstring fix, not a logic change
+- `tests/unit/test_find_strike_by_delta.py` — new tests for CC ladder selection
+- `src/strategy/cc_overlay_v1.py` — `reentry_script_hint` currently points to
+  `find_overlay_strikes.py --overlay-type cc` (the %OTM tool); decide whether this story's
+  output should update that hint to the delta-based tool instead (see CC2 below — this
+  can't be decided independently of CC2)
+
+**Before any code:**
+```
+get_code_snippet("find_strike_by_delta.main")           # confirm auto-select loop location
+get_code_snippet("DELTA_CANDIDATES")                      # confirm current CSP values
+search_code("DEFAULT_STRATEGY")                           # confirm all CSP-specific defaults that need a CC sibling
+git log --oneline -10 scripts/lookup/find_strike_by_delta.py
+```
+
+**Tests:**
+- `test_cc_ladder_used_for_ce_option_type` — `--option-type CE` selects from
+  `CC_DELTA_CANDIDATES`, not `DELTA_CANDIDATES`
+- `test_csp_ladder_unchanged_for_pe_option_type` — regression guard, PE path untouched
+- `test_selected_strike_respects_requested_delta_range` — the auto-selected row's delta
+  actually falls near the CC ladder, not CSP's, when `--option-type CE`
+
+**Commit:** `feat(instruments): CC-specific delta candidate ladder, decouple from CSP's`
+
+---
+
+## CC2 — Open decision (needs operator input before CC1 can pick real numbers)
+
+**What `CC_DELTA_CANDIDATES` should actually contain is not a mechanical choice — it's a
+live strategy-parameter decision, and there's a real tension to resolve first:**
+
+The CC overlay's current *production* entry path (`find_overlay_strikes.py
+--overlay-type cc`) targets a fixed 4% OTM strike — confirmed 2026-07-28 experiment: for
+monthly (2026-08-25), 4% OTM lands near strike 24950 (delta ≈0.135, quite far OTM / low
+delta). A delta-targeted search at 0.20–0.24 (this session's test run) instead picked strike
+24700 (≈2.4% OTM, delta 0.2191) — a **closer, higher-delta, higher-premium, higher-assignment-
+risk strike than the current live default.** These are not the same strike and not a rounding
+difference — they represent two different entry philosophies (fixed %OTM vs. fixed-delta),
+and CC's existing exit rules (`DELTA_STOP` 0.55, `DELTA_WARN` 0.45) were presumably calibrated
+against whatever entry delta the %OTM approach has historically produced, not against a
+0.20–0.24 entry target.
+
+**Cross-reference (2026-07-28, found while fixing this folder's structure):**
+`docs/plan/paper-exit-codification/stories.md` **EC-4** already owns the TIME_STOP
+redesign — replacing `days_held >= 21` with a per-strategy/per-expiry-type DTE-remaining
+floor in `evaluate_cc`/`evaluate_time_stop_csp`, spawned from a real production bug
+(TODOS.md event 68, 2026-06-30: TIME_STOP fired on a 91-DTE-remaining collar call).
+**CC2 does not own the TIME_STOP mechanism question — EC-4 does.** CC2 is narrowed to
+just the delta-band decision. Two things this cross-reference surfaces that neither
+story currently resolves on its own:
+- EC-4's example floors are themselves marked "e.g." (≤7 weekly, ≤14 monthly, ≤21
+  quarterly) — provisional, not decided, same open-parameter problem CC2 has for delta.
+  Two epics independently carrying the same kind of unresolved number.
+- EC-4's example monthly floor (14 DTE) sits above CC's existing `DTE_REVIEW` WARN
+  threshold (5 DTE) — if EC-4 lands with that example value, `DTE_REVIEW` becomes dead
+  code for CC monthly, since TIME_STOP would always fire first. EC-4's spec doesn't
+  address this interaction; flag it there before EC-4 ships, not just here.
+
+**Revised recommendation:** CC1/CC3 should depend on **EC-4 having landed**, not just on
+CC2 — entering CC closer to the money (a delta-targeted strike) only makes sense once the
+exit rule meant to protect that position is measuring DTE-remaining correctly, not
+days-held. Calibrating CC1's ladder against the current (wrong) TIME_STOP risks doing the
+delta-band tuning twice: once now, again after EC-4 changes what actually triggers the
+exit.
+
+**CC2, narrowed — council checkpoint still applies** (load-bearing: changes what strike
+real paper trades get entered at; two materially different approaches with different
+P&L/assignment-risk profiles; spans strategy design + NSE microstructure). Recommend
+template `strategy_parameters`, draft question:
+
+> "CCOverlayV1's current production entry uses a fixed 4% OTM strike via
+> find_overlay_strikes.py. A delta-targeted alternative (using the existing
+> find_strike_by_delta.py engine, generalized for CC) would instead target a fixed delta
+> band (e.g. 0.20–0.30). These produce materially different strikes — 4% OTM is
+> ~0.135 delta on the current monthly chain, versus 0.20–0.24 landing 1.6 percentage
+> points closer to the money. Should CC entry move to a delta-targeted approach, and if so
+> what delta band, given DELTA_STOP fires at 0.55 and DELTA_WARN at 0.45 — is there a
+> preferred cushion between entry delta and the stop? (Note: TIME_STOP/DTE_REVIEW
+> calibration is EC-4's scope, not this question's — assume EC-4 has landed with
+> whatever DTE-remaining floor it settles on before answering.)"
+
+**Until this is answered, CC1 can ship as an experimentation/comparison tool only** (parallel
+to `find_overlay_strikes.py`, not replacing it) — `CC_DELTA_CANDIDATES` gets a reasonable
+placeholder (e.g. matching the 0.20–0.24 band already validated in this session's test run)
+with an explicit code comment that the values are provisional pending this decision, and
+`cc_overlay_v1.py`'s `reentry_script_hint` stays pointed at the %OTM tool until the operator
+decides otherwise.
+
+**Commit:** none — this is a decision-gate note, not an implementation story. Resolve via
+council or direct operator decision, then update `DECISIONS.md` and CC1's ladder values.
+
+---
+
+## CC3 — Automated CC entry script + cron wiring
+
+**Context (2026-07-28, operator directive):** CC entry today is entirely manual — run
+`find_overlay_strikes.py --overlay-type cc` (or, once CC1 lands, the delta-targeted
+`find_strike_by_delta.py --option-type CE`), eyeball the table, hand-paste the
+`record_paper_trade` command. Operator wants this scheduled: entry checked every
+Wednesday, gated so it only actually acts the one week that matters (the Wednesday
+immediately after the monthly Tuesday expiry — always a Wednesday, not necessarily the
+calendar's *last* Wednesday of the month; confirmed with operator this distinction
+matters and "day after expiry" is the intended target, not "last calendar Wednesday").
+
+**Model directly on `paper_ic_entry.py`'s existing, working production pattern** — do not
+invent a new scheduling mechanism. Confirmed live in today's crontab:
+```
+30 10 * * 3 ... paper_ic_entry.py --expiry-type monthly --no-dry-run >> logs/ic_monthly.log 2>&1
+```
+This fires **every Wednesday**, not just the monthly-expiry Wednesday — precision comes
+from the script's own idempotency guard (`tests/unit/strategies/ic/test_paper_ic_entry.py
+::test_open_position_prevention`: checks `store.get_positions()` for an existing open leg
+of the relevant `leg_role`/`strategy_name` first; if found, `sys.exit(1)` before any
+subprocess/entry logic runs — confirmed via `mock_subprocess.call_count == 0` in that
+test). Three weeks out of four this is a silent no-op; the fourth week it's the real
+entry. This sidesteps needing to compute "is today actually the Wednesday after expiry"
+in cron syntax at all (cron cannot express that natively) — the guard makes the schedule
+correct by omission rather than by precise date math.
+
+**Correction (2026-07-28, same session):** `paper_3track_overlay_entry.py` already reads
+`cfg.overlay_type` (`'pp'`/`'cc'`/`'collar'`) from `overlay_entry.yaml` — CC is already a
+supported value, not a new argument to add. **Extend this existing script, do not create
+a new one.** However, its only existing safety check (`_query_open_call_roles`) is
+narrower than it looks: it prevents writing `overlay_cc` and `overlay_collar_call` on the
+*same instrument*, not "does an `overlay_cc` position already exist at all for
+`paper_nifty_spot`." Unlike `paper_ic_entry.py`, there is **no bootstrap-if-flat
+idempotency guard today** — run as-is against a freshly-generated YAML, it will record a
+second `overlay_cc` entry even if one is already open. This must be added before weekly
+cron is safe; without it, a Wednesday cron would double up positions three weeks out of
+four instead of safely no-op'ing the way IC's does.
+
+Full automation also needs a second piece IC's single-script model doesn't require for
+CC: today, generating `overlay_entry.yaml` (via `find_overlay_strikes.py`, or CC1's
+`find_strike_by_delta.py` once it ships) and recording it (via
+`paper_3track_overlay_entry.py`) are two separate manual steps a human chains by hand.
+Unattended cron needs something invoking both in sequence — either a thin wrapper script,
+or folding YAML generation directly into `paper_3track_overlay_entry.py` so it calls the
+selector itself rather than reading a pre-written file.
+
+**Scope extension (2026-07-28, operator directive — "I do not want anything manually,
+please make sure the exit happens, I only get notified"):** verified exit itself is
+already fully hands-off — `StrategyMonitor._route_event()` dispatches ACTION events
+straight to `apply_action()` with no approval step whenever `strategy.auto_execute` and
+the event's `auto_execute` payload are both `True` (true for all four of CC's ACTION
+signals), so nothing needed there. But re-entry has a silent gap that contradicts
+"I only get notified": `CCOverlayV1.apply_action()` only calls `ReEntryMixin._check_reentry()`
+when `triggering_signal in ("PROFIT_TARGET", "TIME_STOP")` — a `LOSS_STOP` or `DELTA_STOP`
+close gets **no** re-entry eligibility check and **no** notification at all today. This
+story must extend that guard to cover all four signals, not just add the cron. The
+`ReEntryMixin` gates themselves (DTE ≥14, IVR ≥0.25, no open position) stay as-is and
+still apply regardless of *why* the leg closed — a LOSS_STOP close after a sharp rally
+should still be allowed to block re-entry if IVR is unfavorable, that gate logic doesn't
+need to change, only the trigger condition that decides whether to run the check at all.
+
+**Files to change:**
+- `scripts/strategies/three_track/paper_3track_overlay_entry.py` — add the missing
+  open-position idempotency guard (mirroring `paper_ic_entry.py`'s pattern: check
+  `store.get_positions()` for an existing open `overlay_cc` leg on `paper_nifty_spot`
+  before recording; exit without writing if found), and either accept CC1's selector
+  output directly or add a wrapper step that calls it before `load_overlay_config()`
+- `src/strategy/cc_overlay_v1.py` — `apply_action()`'s re-entry trigger guard currently
+  reads `if triggering_signal in ("PROFIT_TARGET", "TIME_STOP")`; widen to all four ACTION
+  signals (`PROFIT_TARGET`, `LOSS_STOP`, `DELTA_STOP`, `TIME_STOP`) so every close runs
+  the eligibility check and sends a notification — closes the silent gap where
+  `LOSS_STOP`/`DELTA_STOP` closes currently produce no re-entry signal at all
+- Reuses CC1's `find_strike_by_delta.py --option-type CE` (once CC1 ships) for strike
+  selection — **do not** wire this to `find_overlay_strikes.py`'s %OTM path; that stays
+  the fallback/manual tool until CC2 resolves which approach is the real production entry
+  method
+- `tests/unit/paper/test_overlay_entry.py` (existing test file for this script) — add
+  idempotency-guard tests alongside the existing `_query_open_call_roles`/collar-pair
+  tests
+- `tests/unit/strategy/test_cc_overlay_v1.py` — extend `apply_action` tests for the
+  widened re-entry trigger guard (see Tests below)
+- New cron line (added to crontab directly, not a repo file — confirm with operator
+  whether this project keeps a tracked crontab reference file anywhere, e.g.
+  `docs/ops/crontab.md`, and update it if so)
+
+**Before any code:**
+```
+get_code_snippet("paper_3track_overlay_entry.main")       # exact current guard/flow
+get_code_snippet("_query_open_call_roles")                # confirm exact scope of the existing (narrower) guard
+get_code_snippet("paper_ic_entry.run")                     # exact idempotency-guard structure to mirror
+get_code_snippet("test_open_position_prevention")          # exact assertions to replicate for CC
+git log --oneline -10 scripts/strategies/three_track/paper_3track_overlay_entry.py
+```
+
+**Required behavior:**
+- Cron: `* * * 3` (every Wednesday), matching IC's pattern exactly — no attempt at
+  "compute the actual post-expiry Wednesday" scheduling logic
+- Script checks for an existing open `overlay_cc` position for `paper_nifty_spot` first
+  (new guard, mirroring `paper_ic_entry.py`'s pattern — distinct from the existing
+  `_query_open_call_roles` same-instrument check, which stays as-is) — if found, exit
+  without acting, log at INFO (not WARNING/ERROR — a no-op week is expected behavior, not
+  a fault)
+- If no open position: run CC1's delta-targeted strike search, apply the same re-entry
+  gates `ReEntryMixin` already defines (DTE ≥14, IVR ≥0.25) even though this is a fresh
+  bootstrap entry rather than a post-close re-entry — the gates exist to avoid entering
+  into a bad IV/DTE environment regardless of *why* the leg is currently flat
+- Telegram notification on successful entry (non-fatal, matches `build_notifier()`
+  contract) — this is the same notification gap S6 already identifies for base-leg entry;
+  CC's version of it can ship independently of S6 rather than waiting for it
+- **Hard dependency: this story cannot go live with `--no-dry-run` (or unattended cron)
+  until CC1 (ladder) and CC2 (delta-band decision) are both resolved** — until then, ship
+  this story with `--dry-run` only, same posture as `find_overlay_strikes.py`/
+  `find_strike_by_delta.py` today
+
+**Tests:**
+- `test_entry_skipped_when_open_overlay_cc_position_exists` — new idempotency guard,
+  mirrors `test_open_position_prevention`; asserts no trade recorded
+- `test_entry_proceeds_when_no_open_position`
+- `test_existing_query_open_call_roles_guard_unchanged` — regression guard, the
+  same-instrument cross-type check still works exactly as today
+- `test_reentry_gates_applied_to_bootstrap_entry` — DTE/IVR gates block entry even when
+  there's no prior close event to trigger them (bootstrap case, not just post-close)
+- `test_dry_run_default_until_cc1_cc2_resolved` — regression guard against accidentally
+  shipping `--no-dry-run` as a default before the ladder/band decision lands
+- `test_notification_failure_does_not_block_entry` — non-fatal Telegram contract
+- `test_reentry_check_called_for_loss_stop` — new: `_check_reentry` now called when
+  `triggering_signal == "LOSS_STOP"` (regression test for the gap this story closes)
+- `test_reentry_check_called_for_delta_stop` — same for `DELTA_STOP`
+- `test_reentry_gates_unchanged_regardless_of_triggering_signal` — DTE/IVR/open-position
+  gate logic itself doesn't change, only which signals invoke it — a LOSS_STOP close with
+  unfavorable IVR still correctly blocks re-entry, same as a PROFIT_TARGET close would
+
+**Commit:** `feat(strategy): automated CC entry script, Wednesday cron, guarded by open-position check; re-entry check on all four exit signals`
+
+---
+
 ## Open risk not resolved by this epic (log in TODOS.md, don't block on it)
 
 Full automation (S4) combined with a single overlay copy (S1–S3) means a bad overlay-roll

@@ -14,6 +14,7 @@
 |--------|---------------|--------|
 | `dev-foundation/` | Engineering excellence epic — tooling, CI, code health (3 sub-stories) | ✅ Shipped/Archived |
 | `full-repo-review-followups/` | 9 stories spawned from the full-repo-review epic's FR-7 Chairman Synthesis (7 CRITICAL + 2 selected ERROR findings, all independently re-verified) — P0: portfolio P&L fix, DB backup cron; P1: docs staleness, Telegram auth fix; P2: CLAUDE.md/REVIEW.md reconciliation, logging migration; P3: Greeks/parity validation (council-gated), golden tests, suppression hygiene. Priority order and dependencies in the epic's own `README.md`. | ⬜ Not started — start with the P0 folders |
+| `3track-consolidation/` | Overlay (CC/PP/Collar) retired on Futures/Proxy, live only on NiftyBees; base-leg-only daily comparison snapshot (+ Nifty spot as 4th series); automated base-leg rolling (Futures/DITM); full unattended automation (`NiftyTrackComparisonV1.auto_execute=True`, one-time bootstrap entry, Telegram on every trade event); plus an independent CC delta-based strike-selector sub-thread (CC1–CC3: per-strategy delta ladder, entry-delta-band decision gate, automated CC entry script + Wednesday cron) | ⬜ Not started — **S1 needs explicit operator go-ahead**; S3/S5/CC1/CC3 can start immediately, standalone |
 
 ---
 

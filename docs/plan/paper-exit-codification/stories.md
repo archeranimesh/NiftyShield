@@ -118,6 +118,17 @@ not be closed just because 21 days elapsed.
 for weekly CC, ≤14 for monthly CSP, ≤21 for quarterly collar) — the threshold is a function of
 entry DTE or expiry type, not a wall-clock counter.
 
+**Cross-reference (2026-07-28, found while working `docs/plan/3track-consolidation`'s CC
+delta-selector sub-thread):** check the chosen floor against `evaluate_cc`'s existing
+`DTE_REVIEW` WARN threshold (currently `dte <= 5`) before picking final numbers. The
+example monthly floor above (≤14) sits *above* `DTE_REVIEW`'s 5 — if TIME_STOP fires at
+14 DTE, `DTE_REVIEW`'s dte≤5 WARN never gets a chance to matter for CC monthly, since
+TIME_STOP would always force-close first. Confirm whether that's intended (TIME_STOP
+fully subsumes DTE_REVIEW for CC) or whether the floors need reordering so both signals
+retain independent meaning. `docs/plan/3track-consolidation/stories.md` CC1/CC2/CC3 are
+blocked on this story landing — don't finalize floor values without checking that folder
+isn't relying on assumptions this story is about to change.
+
 **Files to change:**
 - `src/strategy/exit_signals.py` — `evaluate_time_stop_csp`, `evaluate_cc` (and any other
   evaluator taking `days_held`)
