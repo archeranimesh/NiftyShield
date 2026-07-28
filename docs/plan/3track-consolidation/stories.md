@@ -716,6 +716,744 @@ git log --oneline -10 scripts/strategies/three_track/paper_3track_overlay_entry.
 
 ---
 
+## PP1 — Per-strategy delta candidate ladder for PP, extend `find_strike_by_delta.py`
+
+**Context (added 2026-07-28, mirrors CC1):** `PPOverlayV1.reentry_script_hint` points at
+`find_overlay_strikes.py --overlay-type pp` (fixed %OTM selection), same tool CC used before
+CC1. `find_strike_by_delta.py`'s auto-select loop is CSP-only (`DELTA_CANDIDATES`); CC1 adds a
+CE-side ladder. This story adds the PE-long-protection ladder so PP gets the same
+delta-targeted option CC does, without disturbing the CSP short-put path.
+
+**Confirmed via code read (2026-07-28), not memory — corrects a stale CONTEXT.md claim:**
+`PPOverlayV1` already inherits `ReEntryMixin` (`class PPOverlayV1(ReEntryMixin)`,
+`src/strategy/pp_overlay_v1.py:58`) and calls `self._check_reentry(...)` from `apply_action`.
+It overrides `_ivr_passes()` for its inverted gate (`reentry_ivr_threshold=0.60`, blocks when
+IVR is *above* threshold — the opposite of CSP/CC's "don't sell premium when IV is cheap"
+logic, here it's "don't buy protection right after a vol spike"). It does **not** need a custom
+`_evaluate_pp_reentry` method — that CONTEXT.md description is out of date and should be
+corrected as part of this story's S0-equivalent doc pass, not carried forward.
+
+**Problem:** PP is long options (buying a put for protection), not short — its delta ladder
+target is conceptually different from both CSP's short-put ladder and CC1's CE ladder: PP wants
+a strike deep enough OTM to be cheap, but close enough to the money that it actually pays out in
+a crash. `find_strike_by_delta.py` has no PE-long-protection candidate set today; the CSP
+ladder assumes short-premium selection criteria (round-strike preference, spread/OI ranking
+tuned for entry-credit optimization) that don't obviously transfer to a long-debit purchase.
+
+**Scope note (2026-07-28, operator directive):** the original PP1 draft also raised a
+PE-ambiguity/ladder-collision concern (bare `--option-type PE` can't distinguish CSP from PP,
+both fall through to `DELTA_CANDIDATES` today). Operator has scoped that out for now — PP is
+being evaluated independently of CSP, not run live alongside it against the same instrument, so
+the collision risk doesn't apply yet. That concern is **not deleted, just deferred** — re-open it
+before PP and CSP are ever both automated/live simultaneously (see S4/CC3/PP3's "full automation"
+direction, where this could resurface). The action-direction bug found via live-testing this
+session (see **PP1a**, split out separately) is unrelated to this deferral and stays in scope.
+
+**Files to change:**
+- `scripts/lookup/find_strike_by_delta.py` — add `PP_DELTA_CANDIDATES`; ladder selection keyed
+  off `--option-type PE` + an explicit `--overlay-type pp` flag (PE is ambiguous on its own —
+  CSP is also PE-side; do not infer PP vs. CSP from option-type alone, require the explicit flag)
+- `src/instruments/strike_selector.py` — confirm (don't assume) whether `rank_strikes()`'s
+  spread/OI ranking is appropriate unchanged for a long-debit purchase, or whether PP needs its
+  own ranking tuple (e.g., liquidity may matter more than spread tightness for an infrequently-
+  touched protective leg) — this is a real open question, not a mechanical copy from CC1
+- `tests/unit/test_find_strike_by_delta.py` — PP ladder selection tests
+- `src/strategy/pp_overlay_v1.py` — `reentry_script_hint` update decision deferred to PP2
+  (same dependency shape as CC1/CC2/`cc_overlay_v1.py`'s hint)
+
+**Before any code:**
+```
+get_code_snippet("PPOverlayV1")                          # already read this session — inherits ReEntryMixin, confirmed
+get_code_snippet("find_strike_by_delta.main")
+get_code_snippet("DELTA_CANDIDATES")
+get_code_snippet("CC_DELTA_CANDIDATES")                   # once CC1 lands — mirror its flag/selection pattern, don't diverge stylistically
+search_code("rank_strikes")
+git log --oneline -10 scripts/lookup/find_strike_by_delta.py
+```
+
+**Tests:**
+- `test_pp_ladder_used_for_pe_option_type_with_overlay_flag` — `--option-type PE --overlay-type pp`
+  selects from `PP_DELTA_CANDIDATES`, not `DELTA_CANDIDATES`
+- `test_csp_ladder_unchanged_for_pe_without_overlay_flag` — regression guard, bare `--option-type PE`
+  (CSP's existing invocation shape) is untouched
+- `test_pe_without_overlay_flag_does_not_silently_pick_pp_ladder` — explicit guard against the
+  ambiguity this story exists to resolve (PE alone must never imply PP)
+
+**Commit:** `feat(instruments): PP-specific delta candidate ladder, decouple PE-long from CSP's PE-short`
+
+---
+
+## PP1a — Fix `--action` defaulting to SELL for `paper_protective_put_v1` (confirmed live bug, 2026-07-28)
+
+**Confirmed via live run this session** — `python -m scripts.lookup.find_strike_by_delta
+--option-type PE --delta-min 0.20 --delta-max 0.35 --strategy paper_protective_put_v1`
+generated `record_paper_trade --strategy paper_protective_put_v1 --key "NSE_FO|61500" --price
+110.85 --no-dry-run` with **no `--action` in the printed command**, because the script's
+default `--action` is `SELL` (`scripts/lookup/find_strike_by_delta.py`, `_parse_args`,
+`default="SELL"`). Protective put is a long-put (protection-buying) strategy — a `SELL PE`
+recorded under `paper_protective_put_v1` is not a delta mismatch, it's the wrong trade
+direction entirely: a naked short put booked under a strategy name that implies protection.
+
+**Scope explicitly narrowed (2026-07-28, operator directive):** evaluate PP independently of
+CSP for now — ignore the PE-ambiguity/ladder-collision concern PP1 originally raised (CSP vs.
+PP both resolving through the same `DELTA_CANDIDATES` fallback because `--option-type PE`
+alone doesn't distinguish them). That concern only matters if both strategies are live
+simultaneously against the same instrument; not the case today. **This story is action-direction
+only, decoupled from PP1's ladder-selection scope.**
+
+**Required behavior:**
+- When `--strategy` resolves to `STRATEGY_PP_OVERLAY` (`"paper_protective_put_v1"`), `--action`
+  must resolve to `BUY` automatically — no manual `--action BUY` flag should be required to get
+  the correct trade direction, since this script's whole purpose (per S6/CC3/PP3) is eventually
+  feeding an automated entry path with no human eyeballing the printed command first.
+  Concretely: a caller must not be able to record a `SELL` under this strategy at all, whether
+  by omission (currently the actual bug) or by explicit override (`--action SELL` passed by
+  mistake) — treat "explicit SELL for PP" as a hard error, not just "let the default handle it,"
+  since a human/script that explicitly gets this wrong is exactly the failure mode a delta ladder
+  fix doesn't protect against.
+- Introduce a small pure, importable, unit-testable resolver (e.g. `_resolve_action(strategy,
+  action) -> str`) rather than inlining the branch into `main()` — matches this file's existing
+  pattern of keeping `main()` thin and pushing logic into testable helpers (`_infer_leg`,
+  `filter_strikes_by_delta`, `rank_strikes` are all already factored this way).
+- `--action`'s argparse default likely needs to move from a static `"SELL"` to `None`, with the
+  strategy-aware resolution happening after `--track`'s `--strategy` shortcut is applied (so
+  `--track spot --strategy paper_protective_put_v1`-style overrides are still caught).
+
+**Files to change:**
+- `scripts/lookup/find_strike_by_delta.py` — new `_resolve_action()` helper, `--action` default
+  change, wire into `main()` before `build_record_command()` is called
+- `tests/unit/test_find_strike_by_delta.py` — new tests, following this file's existing
+  docstring-table convention (see the numbered test list at the top of the file)
+
+**Before any code:**
+```
+get_code_snippet("_infer_leg")            # existing pattern for a small pure helper this mirrors
+get_code_snippet("build_record_command")  # confirm where --action currently flows into the printed command
+search_code("STRATEGY_PP_OVERLAY")        # confirm the exact constant/import path (src/paper/constants.py)
+git log --oneline -10 scripts/lookup/find_strike_by_delta.py
+```
+
+**Tests:**
+- `test_resolve_action_defaults_buy_for_pp_strategy` — `_resolve_action("paper_protective_put_v1", None)` → `"BUY"`
+- `test_resolve_action_rejects_explicit_sell_for_pp_strategy` — `_resolve_action("paper_protective_put_v1", "SELL")` raises
+- `test_resolve_action_unchanged_for_non_pp_strategies` — regression guard, CSP/CC/other strategies keep the existing `SELL` default when `action=None`, and still accept an explicit `BUY`/`SELL` override
+- `test_resolve_action_explicit_buy_for_pp_is_a_noop` — passing `--action BUY` explicitly for PP still resolves to `BUY` (not an error, just redundant)
+
+**Commit:** `fix(lookup): find_strike_by_delta.py defaults/enforces BUY for paper_protective_put_v1`
+
+---
+
+## PP2 — Open decision: does PP move off fixed %OTM to delta-targeted entry?
+
+**Mirrors CC2's shape, narrower stakes.** Unlike CC (where %OTM vs. delta-targeted changes
+assignment risk and premium collected), PP is a debit purchase — the tradeoff is protection
+cost vs. protection responsiveness (a closer-to-the-money put costs more but pays out earlier
+in a drawdown; a further OTM put is cheap tail insurance that may not trigger until a severe
+move). This is a real strategy-parameter decision, not a mechanical follow-on from PP1.
+
+**Council checkpoint applies** (load-bearing — changes the cost/response profile of the only
+downside protection in the pipeline post-S1/S2; two defensible approaches; spans strategy design
++ NSE options microstructure). Recommend template `strategy_parameters`, draft question:
+
+> "PPOverlayV1's current production entry uses `find_overlay_strikes.py --overlay-type pp`
+> (fixed %OTM). A delta-targeted alternative (PP1's `PP_DELTA_CANDIDATES` via
+> `find_strike_by_delta.py`) would target a fixed delta band instead. Given PP's exit rules
+> (`CRASH_MONETIZE` at delta ≤ -0.80 or 5× debit, `ROLL_ELIGIBLE` at low DTE) were calibrated
+> against whatever entry delta the %OTM approach has historically produced, and given PP's
+> re-entry IVR gate is inverted (blocks re-entry when IVR is high, unlike CSP/CC) — should PP
+> also move to delta-targeted entry, and if so what band? Note PP is long options: the tradeoff
+> is protection cost (cheaper, further OTM) vs. protection responsiveness (pricier, closer to
+> the money, pays out sooner in a drawdown) — this is a different axis than CC's
+> premium-vs-assignment-risk tradeoff, don't reuse CC2's answer by analogy."
+
+**Until answered:** PP1 ships as an experimentation/comparison tool only, `PP_DELTA_CANDIDATES`
+provisional, `reentry_script_hint` stays pointed at the %OTM tool.
+
+**Commit:** none — decision-gate note. Resolve via council or operator, then update
+`DECISIONS.md` and PP1's ladder values.
+
+---
+
+## PP3 — Fix silent re-entry gap on ROLL_PP + automated PP entry script + cron
+
+**Context (2026-07-28, same "I only get notified" directive that drove CC3):** Two independent
+gaps, bundled here because both are re-entry/automation completeness gaps on the same strategy.
+
+**Gap 1 — confirmed via code read, `src/strategy/pp_overlay_v1.py` `apply_action()`:**
+```python
+if action.action_type == "MONETIZE_PP" and closed_pos is not None:
+    await self._check_reentry(...)
+```
+`ROLL_PP` closes never call `_check_reentry` — a rolled-away protective put produces **no**
+re-entry eligibility check and **no** notification, mirroring exactly the class of gap CC3 fixes
+for `LOSS_STOP`/`DELTA_STOP`. Unlike CC (four ACTION signals, all should trigger), PP has two
+action types and the question of whether `ROLL_PP` *should* trigger `_check_reentry` needs a
+moment's thought: a ROLL_PP is (per naming) a continuation of protection into a new contract,
+not a full exit to flat — so this may be intentionally different from CC's case, not simply an
+oversight to copy the same fix onto. **Resolve this distinction before writing the test**, not
+after — confirm via `git log --oneline -10 src/strategy/pp_overlay_v1.py` and
+`get_code_snippet("evaluate_pp")` whether `ROLL_PP` leaves the position open (in which case no
+re-entry check is correct behavior — there's nothing to re-enter, the leg just changed
+contracts) or closes it to flat pending a fresh entry (in which case this is the same bug class
+as CC's and needs the same fix). Do not assume the answer mirrors CC without checking.
+
+**Gap 2 — automated entry.** `paper_3track_overlay_entry.py` already reads `overlay_type='pp'`
+from YAML (same as CC). Needs the same missing pieces CC3 identifies: an idempotency guard
+(check for an existing open `protective_put`/`LONG_PUT_ROLES` position on `paper_nifty_spot`
+before recording — today's only related check, `_query_open_call_roles`, doesn't cover this),
+and a wrapper/fold-in step invoking strike selection (PP1's tool, or the existing %OTM tool
+pending PP2) before recording, matching CC3's two-step-to-one-step consolidation.
+
+**Cron cadence differs from CC3 — do not copy Wednesday-after-expiry verbatim.** PP is
+protection against a drawdown, not a premium-collection cycle tied to expiry — confirm with the
+operator what the actual re-entry trigger condition should be (e.g., "no open PP position and
+IVR gate passes" checked daily off the existing snapshot cron, closer to S5's roll-check cadence
+than CC3's weekly-with-idempotency-guard pattern) before picking a schedule. Flag this as an
+open question rather than assuming IC/CC's Wednesday cadence transfers.
+
+**Files to change:**
+- `src/strategy/pp_overlay_v1.py` — resolve and fix Gap 1 per the investigation above
+- `scripts/strategies/three_track/paper_3track_overlay_entry.py` — idempotency guard for PP,
+  extending whatever guard CC3 adds (likely the same function, parameterized by overlay type,
+  rather than a second copy-pasted guard)
+- `tests/unit/strategy/test_pp_overlay_v1.py` — reentry-trigger tests for whichever fix Gap 1
+  resolves to
+- `tests/unit/paper/test_overlay_entry.py` — PP idempotency-guard tests
+- Cron config / `docs/ops/crontab.md` if it exists (see CC3 — same open question about whether
+  this project tracks a crontab reference file)
+
+**Before any code:**
+```
+get_code_snippet("PPOverlayV1.apply_action")              # already read this session — re-confirm before writing code
+get_code_snippet("evaluate_pp")                            # does ROLL_PP semantically leave a position open?
+git log --oneline -10 src/strategy/pp_overlay_v1.py
+get_code_snippet("_query_open_call_roles")                 # confirm scope, same as CC3
+```
+
+**Depends on:** PP1 + PP2 for the entry-selection method (mirrors CC3's dependency on CC1/CC2);
+Gap 1's fix does not depend on PP1/PP2 and can ship independently/first.
+
+**Tests:**
+- `test_roll_pp_reentry_check_behavior` — named generically pending the Gap 1 investigation;
+  either `test_roll_pp_triggers_reentry_check` (if fix needed) or
+  `test_roll_pp_correctly_skips_reentry_check_position_stays_open` (if current behavior is
+  correct) — do not write this test until the investigation step above is done
+- `test_entry_skipped_when_open_pp_position_exists`
+- `test_entry_proceeds_when_no_open_pp_position`
+- `test_notification_failure_does_not_block_pp_entry`
+- `test_dry_run_default_until_pp1_pp2_resolved`
+
+**Commit:** `fix(strategy): resolve PP re-entry gap + automated PP entry, guarded by open-position check`
+
+---
+
+## Collar1 — Two-leg strike selection for Collar, coordinating CC1's CE ladder and PP1's PE ladder
+
+**Context (added 2026-07-28, mirrors CC1/PP1 but not a mechanical copy):** `CollarOverlayV1`
+(`src/strategy/collar_overlay_v1.py:57-499`) holds two simultaneous legs — a short call
+(`overlay_collar_call`, `SHORT_CALL_ROLE`) and a long put (`overlay_collar_put`, `LONG_PUT_ROLE`).
+Its production entry path today is `find_overlay_strikes.py --overlay-type collar` (fixed %OTM
+for both legs — confirmed via `reentry_script_hint = "run find_overlay_strikes.py --overlay-type
+collar"`, `collar_overlay_v1.py:63`). `find_strike_by_delta.py` has **zero references to collar
+today** (confirmed via `search_code("collar", path_filter="scripts/lookup/find_strike_by_delta.py")`
+— no matches) — unlike CSP/CC/PP, there is no delta-based candidate ladder for either collar leg
+yet, and no coordination logic between the two legs at all.
+
+**Problem, not a single-leg problem:** a collar isn't "CC1's ladder plus PP1's ladder run
+independently" — the two legs interact financially. Selling the call funds buying the put (in
+whole or in part); the OTM distance chosen for each leg jointly determines whether the combo is
+net credit, net debit, or zero-cost, and how much upside is capped versus how much downside is
+covered. Running CC1's CE search and PP1's PE search as two unrelated calls would pick each leg's
+"best" delta in isolation and could easily produce a combo that's expensive (both legs picked for
+liquidity/spread quality with no netting constraint) or lopsided (deep downside protection funded
+by giving up almost no upside, or vice versa) without that being a deliberate choice.
+
+**Scope, once CC1 and PP1 have landed (hard dependency — see below):** extend
+`find_strike_by_delta.py` (or a thin wrapper over it) with an `--overlay-type collar` mode that:
+1. Runs the CE-side search using `CC_DELTA_CANDIDATES` (CC1) for the short call leg.
+2. Runs the PE-side search using `PP_DELTA_CANDIDATES` (PP1) for the long put leg.
+3. Reports the **net premium** of the combo (call credit − put debit) alongside each leg's
+   individual delta/strike/liquidity figures — this net figure is the one piece of coordination
+   logic this story must add; it does not exist for either CC1 or PP1 individually because
+   neither is a two-leg combo.
+4. Does **not** attempt to auto-select "the" combo the way CC1/PP1 auto-select a single strike —
+   print the cross-product of viable call/put candidates (small: each ladder is 2-4 candidates)
+   with net premium for each pairing, and leave the actual pick to CC2/PP2-style operator judgment
+   (folded into Collar2 below) rather than inventing a third auto-select heuristic no one has
+   asked for.
+
+**Hard dependency — this story cannot start until CC1 and PP1 both ship** (unlike CC1/PP1
+themselves, which only depend on each other loosely): there is no independent "Collar ladder" to
+invent from scratch — this story's entire job is coordinating the two ladders CC1/PP1 already
+define. Building a third, Collar-specific ladder in parallel would duplicate CC1/PP1's delta-band
+work and risk drifting out of sync with whatever CC2/PP2 later decide.
+
+**Files to change:**
+- `scripts/lookup/find_strike_by_delta.py` — `--overlay-type collar` mode; reuses
+  `CC_DELTA_CANDIDATES` (CC1) and `PP_DELTA_CANDIDATES` (PP1) directly, does not define new
+  constants; new `_net_collar_premium(call_price, put_price) -> Decimal` pure helper
+- `src/instruments/strike_selector.py` — confirm (don't assume) whether the existing
+  `rank_strikes()` tuple needs a collar-aware variant, or whether CC1's/PP1's per-leg ranking
+  already suffices once each leg's candidate is picked independently and only the net-premium
+  report is new
+- `tests/unit/test_find_strike_by_delta.py` — collar mode tests
+- `src/strategy/collar_overlay_v1.py` — `reentry_script_hint` update decision deferred to
+  Collar2 (same dependency shape as CC1→CC2, PP1→PP2)
+
+**Before any code:**
+```
+get_code_snippet("CollarOverlayV1")                       # already read this session — confirmed
+                                                            # two-leg roles, ReEntryMixin inheritance
+get_code_snippet("CC_DELTA_CANDIDATES")                    # once CC1 lands
+get_code_snippet("PP_DELTA_CANDIDATES")                    # once PP1 lands
+search_code("overlay-type collar")                         # confirm find_overlay_strikes.py's
+                                                            # existing %OTM collar mode as reference
+git log --oneline -10 scripts/lookup/find_strike_by_delta.py
+```
+
+**Tests:**
+- `test_collar_mode_runs_both_ce_and_pe_searches` — `--overlay-type collar` invokes both ladders,
+  not just one
+- `test_net_collar_premium_computed_correctly` — call credit minus put debit, sign correct for
+  net-credit and net-debit cases
+- `test_collar_mode_does_not_auto_select_a_single_combo` — regression guard against inventing an
+  unrequested third auto-select heuristic; output is the candidate cross-product, not one pick
+- `test_collar_mode_requires_cc1_pp1_ladders_present` — collar mode raises a clear error if
+  `CC_DELTA_CANDIDATES`/`PP_DELTA_CANDIDATES` aren't importable (guards the hard dependency)
+
+**Commit:** `feat(instruments): two-leg delta-targeted strike search for Collar, coordinating CC1/PP1 ladders`
+
+---
+
+## Collar2 — Open decision: does Collar move off fixed %OTM to coordinated delta-targeted entry?
+
+**Mirrors CC2/PP2's shape, different tradeoff axis again — do not answer by analogy to either.**
+CC2's axis is premium collected vs. assignment risk (single short leg). PP2's axis is protection
+cost vs. protection responsiveness (single long leg). Collar's axis is **net cost/credit of the
+combo vs. how much upside is capped and how much downside is covered** — a genuinely two-
+dimensional tradeoff neither single-leg story faces, because moving either leg's strike changes
+both the combo's net cost *and* its cap/floor simultaneously.
+
+**Council checkpoint applies** (load-bearing — changes the net cost basis and payoff shape of the
+one overlay that already covers both call and put; two defensible approaches; spans strategy
+design + NSE options microstructure + capital-efficiency tradeoffs distinct from CC2/PP2).
+Recommend template `strategy_parameters`, draft question:
+
+> "CollarOverlayV1's current production entry uses `find_overlay_strikes.py --overlay-type
+> collar` (fixed %OTM for both legs). A delta-targeted alternative (Collar1's coordinated
+> CC_DELTA_CANDIDATES/PP_DELTA_CANDIDATES search) would instead target a fixed delta band per
+> leg and report net combo premium. Given the call leg's exit rules (`DELTA_STOP` 0.55,
+> `DELTA_WARN` 0.45, shared with CC via `evaluate_cc`) and the put leg's protective role, should
+> Collar move to delta-targeted entry for both legs, and if so what per-leg bands — and should the
+> combo be constrained toward net-zero-cost, or is a net-debit/net-credit skew acceptable if it
+> produces a better cap/floor shape? This is a two-dimensional tradeoff (net cost *and* payoff
+> shape move together) — don't reuse CC2's or PP2's single-axis answer by analogy."
+
+**Until answered:** Collar1 ships as an experimentation/comparison tool only (candidate
+cross-product, no auto-select), `reentry_script_hint` stays pointed at the %OTM tool.
+
+**Commit:** none — decision-gate note. Resolve via council or operator, then update
+`DECISIONS.md` and Collar1's ladder/net-premium presentation.
+
+---
+
+## Collar3 — Automated Collar entry script + idempotency guard + cron + re-entry gap audit
+
+**Context (2026-07-28, same "I only get notified" directive that drove CC3/PP3):** Collar entry
+today is entirely manual — run `find_overlay_strikes.py --overlay-type collar`, eyeball both
+legs, hand-paste two `record_paper_trade` commands (or the YAML → `paper_3track_overlay_entry.py`
+path for the two-track write). This story automates entry the same way CC3/PP3 do, but the
+two-leg nature changes both the idempotency guard and the re-entry audit shape.
+
+**Idempotency guard gap — confirmed via code read, `paper_3track_overlay_entry.py`:** the only
+existing safety check for collar is `_query_open_call_roles()`
+(`paper_3track_overlay_entry.py:231-273`) plus `_validate_collar_pairs()` (`:63-102`). Both are
+narrower than "does an open Collar position already exist":
+- `_query_open_call_roles()` answers "does *any* strategy already have an open short call
+  (`overlay_cc` or `overlay_collar_call`) on *this specific instrument key*" — a same-instrument
+  cross-type dedup check (prevents double-counting one physical short call under two leg_roles),
+  not a "Collar already open, don't re-enter" bootstrap guard.
+- `_validate_collar_pairs()` only checks that a collar submission includes both legs (or is
+  exempted because an existing `overlay_cc` covers the call side) — it validates the *shape* of
+  a submission already in flight, it doesn't check whether a collar is already open before that
+  submission is built.
+- Confirmed by reading `main()` (`:494-569`): there is no call anywhere in the entry flow that
+  asks "does `paper_nifty_spot` already hold an open `overlay_collar_call` + `overlay_collar_put`
+  pair" before proceeding to `build_overlay_trades()`. Same class of gap CC3/PP3 found and fixed
+  for their single-leg cases — run as-is against a freshly-generated collar YAML, a Wednesday (or
+  whatever cadence) cron would record a second collar pair even if one is already open, same
+  three-weeks-out-of-four double-up risk CC3 flags.
+
+**Re-entry gap — confirmed via code read, `CollarOverlayV1.apply_action`
+(`src/strategy/collar_overlay_v1.py`):**
+```python
+triggering_signal = action.metadata.get("triggering_signal") if action.metadata else None
+if triggering_signal in ("PROFIT_TARGET", "TIME_STOP") and short_call_pos is not None:
+    ...
+    await self._check_reentry(...)
+```
+This is the exact same gap class CC3 fixes — `evaluate_cc()` (which drives Collar's short-call
+signal evaluation, confirmed via `check_signals`'s `ExitSignalEngine.evaluate_cc(...)` call) can
+also emit `LOSS_STOP`, `DELTA_STOP`, `DELTA_WARN`, and `BELOW_FLOOR` (`src/strategy/exit_signals.py:284-338`)
+— only `PROFIT_TARGET` and `TIME_STOP` currently trigger `_check_reentry`. A `LOSS_STOP` or
+`DELTA_STOP` close on the short call (both `ACTION` severity, both route through `CLOSE_COLLAR`
+same as a `PROFIT_TARGET` close) produces **no** re-entry eligibility check and **no** re-entry
+notification today — identical bug shape to the one CC3 closes for `CCOverlayV1`, confirmed
+independently here rather than assumed by analogy (per this task's own instruction not to assume
+Collar mirrors CC without checking).
+
+**What is correctly two-leg-aware already (don't re-fix):** `apply_action`'s close logic and
+`OverlayCloser.close_collar_all`/`monetize_collar_put` (`src/strategy/overlay_closer.py`) already
+handle the two-leg atomicity concern — `apply_action` builds close trades for whichever of
+`short_call_pos`/`long_put_pos` are present and writes them via a single `store.record_trades([...])`
+call (not two separate `record_trade()` calls), and logs a warning if the put leg is missing
+(`collar_overlay_v1.apply_action.missing_put_leg`). This story's job is the *entry-side*
+idempotency guard and the *re-entry-trigger* widening — not re-doing the close-side atomicity,
+which is already correct.
+
+**Files to change:**
+- `scripts/strategies/three_track/paper_3track_overlay_entry.py` — new idempotency guard (e.g.
+  `_query_open_collar_pair(db_path) -> bool`, parameterized alongside whatever CC3/PP3 land for
+  their own overlay types, per tasks.md's note that CC3/PP3's guards are likely one shared
+  parameterized function rather than three separate copies) — checks for an existing open
+  `overlay_collar_call` **and** `overlay_collar_put` pair for `paper_nifty_spot` before recording;
+  if found, exit without acting, log at INFO (expected no-op, matching CC3's INFO-not-WARNING
+  convention for a no-op week)
+- `src/strategy/collar_overlay_v1.py` — widen `apply_action`'s re-entry trigger guard from
+  `triggering_signal in ("PROFIT_TARGET", "TIME_STOP")` to include `LOSS_STOP`, `DELTA_STOP`, and
+  `BELOW_FLOOR` (mirror CC3's exact reasoning: the `ReEntryMixin` gates themselves — DTE ≥14, IVR
+  ≥0.25, no open position — don't need to change, only which signals invoke `_check_reentry`).
+  Confirm whether `DELTA_WARN` (a `WARN`, not `ACTION`, severity) should also trigger — likely not,
+  since `WARN` signals don't close the position (no `CLOSE_COLLAR` dispatched), so there's nothing
+  to re-enter after; verify this against `check_signals`'s severity-based dispatch before assuming
+- Reuses Collar1's two-leg delta-targeted search (once Collar1 ships) for strike selection —
+  same **hard dependency** shape as CC3 on CC1/CC2 and PP3 on PP1/PP2: this story cannot go live
+  with `--no-dry-run`/unattended cron until Collar1 and Collar2 are both resolved
+- `tests/unit/paper/test_overlay_entry.py` — idempotency-guard tests for the collar pair
+- `tests/unit/strategy/test_collar_overlay_v1.py` — extend `apply_action` tests for the widened
+  re-entry trigger guard
+
+**Before any code:**
+```
+get_code_snippet("paper_3track_overlay_entry.main")        # confirm exact current guard/flow —
+                                                             # already read this session, re-confirm
+get_code_snippet("_query_open_call_roles")                  # confirm exact (narrower) scope — already
+                                                             # read this session, confirmed same-instrument
+                                                             # cross-type dedup, not bootstrap idempotency
+get_code_snippet("_validate_collar_pairs")                  # confirm exact (narrower) scope — same read
+get_code_snippet("CollarOverlayV1.apply_action")             # already read this session — confirmed
+                                                             # PROFIT_TARGET/TIME_STOP-only gap
+get_code_snippet("ExitSignalEngine.evaluate_cc")             # confirm full signal set driving Collar's
+                                                             # short-call evaluation — already read
+                                                             # this session, confirmed BELOW_FLOOR/
+                                                             # PROFIT_TARGET/LOSS_STOP/DELTA_STOP/DELTA_WARN
+git log --oneline -10 src/strategy/collar_overlay_v1.py
+```
+
+**Cron cadence:** not decided here — flag as open, same as PP3 (do not assume CC3's Wednesday
+cadence transfers; Collar's short-call side is expiry-cycle premium collection like CC, but its
+put side is drawdown protection like PP — a single shared cadence for both legs' re-entry isn't
+obviously right and needs the same operator confirmation PP3 defers).
+
+**Depends on:** Collar1 + Collar2 for the entry-selection method (mirrors CC3→CC1/CC2,
+PP3→PP1/PP2). The re-entry-trigger-widening fix does not depend on Collar1/Collar2 and can ship
+independently/first, same as PP3's Gap-1/Gap-2 split.
+
+**Tests:**
+- `test_entry_skipped_when_open_collar_pair_exists` — new idempotency guard, mirrors CC3/PP3's
+  pattern; asserts no trade recorded for either leg
+- `test_entry_proceeds_when_no_open_collar_position`
+- `test_existing_query_open_call_roles_guard_unchanged` — regression guard, the same-instrument
+  cross-type check still works exactly as today
+- `test_existing_validate_collar_pairs_guard_unchanged` — regression guard, partial-collar
+  submission validation still fires exactly as today
+- `test_dry_run_default_until_collar1_collar2_resolved` — regression guard against accidentally
+  shipping `--no-dry-run` before the ladder/band decision lands
+- `test_reentry_check_called_for_loss_stop` — new: `_check_reentry` now called when
+  `triggering_signal == "LOSS_STOP"`
+- `test_reentry_check_called_for_delta_stop` — same for `DELTA_STOP`
+- `test_reentry_check_called_for_below_floor` — same for `BELOW_FLOOR`
+- `test_reentry_check_not_called_for_delta_warn` — regression guard: WARN-severity signals never
+  close the position, so no re-entry check should fire for them (confirm this assumption in code
+  before writing the test, per this story's own "don't assume" instruction)
+- `test_reentry_gates_unchanged_regardless_of_triggering_signal` — DTE/IVR/open-position gate
+  logic itself doesn't change, only which signals invoke it
+- `test_close_collar_all_atomicity_unchanged` — regression guard that this story doesn't disturb
+  the already-correct two-leg atomic close/missing-put-leg-warning behavior
+
+**Commit:** `feat(strategy): automated Collar entry script, idempotency-guarded, re-entry check widened to all applicable exit signals`
+
+---
+
+## S7 — Fix overlay leg-role mismatch breaking daily CC/PP/Collar snapshot persistence (confirmed bug, 2026-07-28)
+
+**Context:** User-reported observation ("there is no snapshot for collar, CC and PP, we should be
+able to track these overlay's daily pnl") led to a code read that found a real, confirmed bug —
+not a missing feature. `_save_leg_snapshots()` (`scripts/strategies/three_track/paper_3track_snapshot.py:964-1014`)
+does loop `snapshot.pnl.overlay_pnls.items()` and calls `store.record_leg_snapshot()` for each
+role — on the surface this looks like it already persists a daily row per overlay leg. The bug is
+in what `role` actually is by the time it gets there.
+
+`generate_track_snapshot()` (`src/paper/track_snapshot.py:130-304`) computes `overlay_pnls` keyed
+by the *real* leg_role (`overlay_cc`, `overlay_pp`, `overlay_collar_call`, `overlay_collar_put`)
+during its main loop, but immediately before returning, calls:
+```python
+overlay_pnls = _normalize_overlay_pnls(overlay_pnls)
+```
+`_normalize_overlay_pnls()` (`src/paper/track_snapshot.py:57-98`) collapses those real leg_roles
+into three **display labels** — `"cc"`, `"collar"`, `"pp"` — merging collar's call+put into one
+unit and deduplicating `overlay_cc` vs `overlay_collar_call` (same physical contract recorded
+under two roles). This collapsing is correct and necessary for the printed comparison table and
+for `net_pnl` (prevents double-counting the short call) — **but the `TrackSnapshot` returned by
+`generate_track_snapshot()` carries only the collapsed labels forward**, and `_save_leg_snapshots()`
+persists directly from that already-normalized `pnl.overlay_pnls` dict with no re-expansion step.
+
+**Concrete consequences, confirmed by reading both functions:**
+1. `_save_leg_snapshots()` calls `store.get_position(track_name, role)` where `role` is `"cc"`,
+   `"collar"`, or `"pp"` — none of these are real `leg_role` values in `paper_trades`, so this
+   lookup never matches, and `overlay_ltp` is silently `None` for every CC/PP/Collar snapshot row,
+   every day (not an occasional gap — this is the row's *only* possible outcome given the key
+   mismatch).
+2. The `PaperLegSnapshot` row gets written with `leg_role="cc"` / `"collar"` / `"pp"` — disconnected
+   from the real `overlay_cc`/`overlay_pp`/`overlay_collar_call`/`overlay_collar_put` leg_roles
+   every other consumer in the codebase uses (e.g. `store.get_prev_leg_snapshot(track_name, role,
+   ...)` calls elsewhere in this same file for MTD/daily-delta calculations pass through the same
+   collapsed labels, so those *do* work internally today — but nothing outside this file's own
+   round-trip can query CC/PP/Collar's daily P&L history by its real leg_role, and S3's planned
+   `paper_track_comparison_snapshots` table explicitly filters to base-only legs, so it can't be
+   used as a substitute path either).
+3. **Not caught by the existing test suite:** `test_save_leg_snapshots_with_overlay`
+   (`tests/unit/paper/test_paper_3track_snapshot.py:276+`) constructs its `TrackSnapshot` fixture
+   directly with the real leg_role key (`overlay_pnls={"overlay_pp": Decimal("-200")}`), bypassing
+   `generate_track_snapshot()`'s normalization step entirely. The test has been green throughout
+   because it never exercises the actual runtime data flow (`_run()` always calls
+   `generate_track_snapshot()` first, then feeds its already-normalized output into
+   `_save_leg_snapshots()`) — a real gap between unit-test assumptions and the production call
+   path, not a flaky or skipped test.
+
+**Fix options (pick one, don't mix — decide at implementation time based on which is less
+invasive):**
+- **(a) Persist before normalization.** Have `_run()` also capture the raw (pre-normalize)
+  overlay_pnls dict from `generate_track_snapshot()` (would require that function to return both,
+  or a second lighter-weight call) and pass the raw dict to `_save_leg_snapshots()` for
+  persistence, while the display/summary path keeps using the normalized dict as today. Keeps
+  the two concerns (display grouping vs. persistence granularity) cleanly separated.
+- **(b) Re-expand at persistence time.** Give `_save_leg_snapshots()` (or a helper it calls) the
+  original per-leg-role realized/unrealized breakdown — it already computes `realized_by_leg` from
+  `store.get_trades(track_name)` using real leg_roles, so the raw per-role unrealized figures could
+  be recomputed or threaded through separately from the normalized `pnl.overlay_pnls` used for
+  `overlay_ltp`/display.
+- Whichever is chosen, `store.get_position(track_name, role)` inside `_save_leg_snapshots` must
+  end up called with a real leg_role (`overlay_cc`/`overlay_pp`/`overlay_collar_call`/
+  `overlay_collar_put`), never the collapsed display label.
+
+**Files to change:**
+- `src/paper/track_snapshot.py` — `generate_track_snapshot()` (expose raw overlay_pnls
+  alongside normalized, per whichever fix option is chosen)
+- `scripts/strategies/three_track/paper_3track_snapshot.py` — `_save_leg_snapshots()` (persist
+  against real leg_role, not the collapsed display label)
+- `tests/unit/paper/test_paper_3track_snapshot.py` — new integration-shaped test that goes
+  through `generate_track_snapshot()` → `_save_leg_snapshots()` end to end (the existing unit test
+  stays as a regression guard for `_save_leg_snapshots()` in isolation, but this story needs the
+  gap between the two functions covered, which nothing today exercises)
+- `tests/unit/paper/test_track_snapshot.py` (or sibling) — coverage for whatever new raw-dict
+  exposure `generate_track_snapshot()` gains
+
+**Before any code:**
+```
+get_code_snippet("generate_track_snapshot")          # already read this session — confirmed
+                                                       # normalization happens before return
+get_code_snippet("_normalize_overlay_pnls")           # already read this session — confirmed
+                                                       # collapses overlay_cc/pp/collar_call/put
+                                                       # to "cc"/"collar"/"pp"
+get_code_snippet("_save_leg_snapshots")               # already read this session — confirmed
+                                                       # persists against the collapsed labels
+get_code_snippet("test_save_leg_snapshots_with_overlay")  # confirmed this test bypasses the
+                                                       # normalization step, doesn't catch the bug
+git log --oneline -10 src/paper/track_snapshot.py
+git log --oneline -10 scripts/strategies/three_track/paper_3track_snapshot.py
+```
+
+**Tests:**
+- `test_generate_track_snapshot_exposes_raw_overlay_leg_roles` — whichever fix option is chosen,
+  the real leg_role keys (`overlay_cc`, `overlay_pp`, `overlay_collar_call`, `overlay_collar_put`)
+  must be recoverable somewhere in the return value, not just the collapsed `"cc"/"collar"/"pp"`
+- `test_save_leg_snapshots_end_to_end_uses_real_leg_role` — full `generate_track_snapshot()` →
+  `_save_leg_snapshots()` path; asserts `store.get_leg_snapshot(track, "overlay_cc", date)` (etc.)
+  returns a row, not `store.get_leg_snapshot(track, "cc", date)`
+- `test_save_leg_snapshots_end_to_end_ltp_populated` — regression guard for consequence #1: the
+  persisted overlay row's `ltp` field is non-None when the instrument has a live price, proving
+  `get_position()` was called with a real leg_role
+- `test_save_leg_snapshots_collar_persists_both_legs_separately` — Collar's call and put legs
+  each get their own `paper_leg_snapshots` row (real leg_role each), even though they're displayed
+  as one merged `"collar"` figure in the summary table — persistence granularity and display
+  granularity are allowed to differ, this test guards that they do differ correctly rather than
+  collapsing at both layers
+- `test_existing_display_normalization_unchanged` — regression guard: the printed comparison
+  table / `_normalize_overlay_pnls`'s collar-merge and CC/collar_call dedup logic is untouched by
+  this fix; only the *persistence* path changes
+
+**Commit:** `fix(paper): persist daily CC/PP/Collar leg snapshots under real leg_role, not display label`
+
+---
+
+## S8 — Overlay P&L comparison table (CC/PP/Collar), mirroring S3's design for the base tracks
+
+**Context:** S3 gave the three base tracks a dedicated, queryable daily comparison table
+(`paper_track_comparison_snapshots`) with `pnl_1d_abs/pct` and `pnl_inception_abs/pct` per track.
+Overlays have no equivalent — S7 fixes `paper_leg_snapshots` to persist under the correct real
+leg_role, but that table's schema/query shape was designed for arbitrary per-leg audit rows, not
+for a clean "show me CC's daily and cumulative P&L over time" query the way S3's table serves that
+exact purpose for base legs. **Hard dependency: S7 must land first** — building this on top of
+the collapsed-label bug would inherit the same `None`-ltp and wrong-key problems.
+
+**Required behavior (mirrors S3's Level-1 fields exactly, applied per overlay instead of per
+base track):**
+- New table, e.g. `paper_overlay_pnl_snapshots`, one row per `(snapshot_date, strategy_name,
+  overlay_type)` where `overlay_type ∈ {"cc", "pp", "collar"}` — Collar's call+put stays merged
+  as one unit here too (matching S3's per-track granularity, not S7's per-real-leg-role
+  persistence granularity; S7 fixes the underlying leg data, this table is a display/analysis
+  aggregation on top, same relationship `paper_leg_snapshots` already has to the printed summary)
+- Same four fields as S3: `pnl_1d_abs`, `pnl_1d_pct` (denominator = yesterday's overlay mark),
+  `pnl_inception_abs`, `pnl_inception_pct` (denominator = entry cost/credit basis) — confirm
+  with the operator whether CC's credit-received basis and PP's debit-paid basis need different
+  sign conventions before assuming they're symmetric with S3's long-only base-leg math
+- Written by the same daily cron as S3/S7 (`paper_3track_snapshot.py`), computed from the
+  now-correctly-keyed `paper_leg_snapshots` rows S7 produces
+- Queryable independently: `get_overlay_pnl_snapshots(strategy_name, overlay_type) →
+  list[OverlayPnLSnapshot]`, same pattern as S3's `get_track_comparison_snapshots()`
+
+**Files to change:**
+- `src/paper/store.py` / `src/paper/models.py` — new `OverlayPnLSnapshot` model + store methods
+- `scripts/strategies/three_track/paper_3track_snapshot.py` — new aggregation step, reads S7's
+  corrected `paper_leg_snapshots` rows
+- `tests/unit/paper/test_store.py` (or sibling), `tests/unit/scripts/`
+
+**Before any code:**
+```
+get_code_snippet("TrackComparisonSnapshot")      # S3's model — mirror its shape, don't diverge
+get_code_snippet("record_track_comparison_snapshot")
+get_code_snippet("get_track_comparison_snapshots")
+```
+Confirm S7 has landed (check `git log --oneline -5 src/paper/track_snapshot.py` for S7's commit)
+before starting — this story's entire input depends on S7's leg_role fix being live.
+
+**Tests:**
+- `test_overlay_pnl_snapshot_persists_all_three_types_daily`
+- `test_overlay_pnl_1d_uses_yesterday_mark_denominator` / `..._inception_uses_entry_basis`
+- `test_collar_call_and_put_merged_as_one_row` — Collar's two legs produce one comparison row,
+  not two, matching the display convention S3/S7 already established
+- `test_queryable_by_strategy_and_overlay_type`
+
+**Commit:** `feat(paper): daily P&L comparison table for CC/PP/Collar overlays, mirrors S3's base-track design`
+
+---
+
+## S9 — NiftyBees protection-recovery comparison table + Telegram digest
+
+**Context:** S3 gives per-track base P&L, S8 gives per-overlay P&L. Neither answers the operator's
+actual question: on a day NiftyBees is down, how much of that loss did each overlay recover?
+Confirmed with operator (2026-07-28) via sample-table iteration — final approved shape is one row
+per day, NiftyBees 1D P&L next to CC/PP/Collar 1D P&L side by side, plus a single "best recovery"
+figure, not three separate per-overlay recovery percentages. **Hard dependency: S3 and S8 must
+both land first** — this table reads their output, it computes nothing from raw legs itself.
+
+**Required behavior:**
+- New table `paper_protection_recovery_snapshots`, one row per `snapshot_date`, columns:
+  `niftybees_pnl_1d`, `cc_pnl_1d`, `pp_pnl_1d`, `collar_pnl_1d`, `niftybees_pnl_inception`,
+  `cc_pnl_inception`, `pp_pnl_inception`, `collar_pnl_inception`, `best_overlay` (nullable —
+  which of cc/pp/collar recovered the largest share), `best_recovery_pct` (nullable).
+- `recovery_pct` (per overlay, used to pick `best_overlay`) is defined **only** when
+  `niftybees_pnl_1d < 0`: `overlay_pnl_1d / abs(niftybees_pnl_1d)`. On a day NiftyBees is flat or
+  positive, `best_overlay`/`best_recovery_pct` are `NULL`, not a negative or zero-anchored number —
+  confirmed with operator this avoids a misleading "-36% recovery" reading on green days when
+  nothing needed recovering.
+- Same rule applies at inception granularity using `niftybees_pnl_inception` / overlay
+  `pnl_inception` — a separate `best_overlay_inception` / `best_recovery_pct_inception` pair, not
+  a running sum of the daily figures (inception basis is entry cost/credit, per S3/S8, so it will
+  legitimately drift from a naive cumulative sum of the daily column — that's expected, not a bug
+  to reconcile away).
+- **Open design question to resolve before implementation, not deferred silently:** does NiftyBees
+  carry all three overlays live simultaneously, or is this an analysis/backtest view comparing
+  three hypothetical scenarios against the one live overlay actually attached? The "single overlay
+  copy" risk noted at the end of this epic (S1–S4) implies the latter — confirm with operator
+  before writing the aggregation query, since it changes whether `cc_pnl_1d`/`pp_pnl_1d`/
+  `collar_pnl_1d` are three live parallel series or three what-if reconstructions.
+- Written by the same daily cron as S3/S7/S8 (`paper_3track_snapshot.py`), reading S3's
+  `paper_track_comparison_snapshots` (niftybees row) and S8's `paper_overlay_pnl_snapshots`
+  (cc/pp/collar rows) for the same `snapshot_date` — no independent leg-level computation.
+- Queryable: `get_protection_recovery_snapshots(strategy_name, start_date=None, end_date=None) →
+  list[ProtectionRecoverySnapshot]`.
+
+**Telegram digest (new — optimized format, replaces console-only reporting):**
+Today this data only prints to console (`summary_rows` in `paper_3track_snapshot.py`'s `main()`)
+— no Telegram message exists for the cross-track/overlay comparison at all, only a critical proxy-
+delta alert. S9 adds one compact daily Telegram message, sent once per cron run (not per-track,
+not per-overlay — a single digest), format:
+
+```
+📊 NiftyBees vs overlays — 28 Jul
+NiftyBees: -700
+  CC   +300 (43%)
+  PP   +180 (26%)
+  Collar +240 (34%)
+Best: CC
+```
+
+On a flat/green NiftyBees day, drop the recovery percentages and the "Best" line entirely rather
+than printing misleading numbers:
+
+```
+📊 NiftyBees vs overlays — 27 Jul
+NiftyBees: +250
+  CC   -90
+  PP   -45
+  Collar -60
+```
+
+Rules for the message builder (`_build_recovery_digest()`, new function):
+- One `notifier.send()` call per cron run for this digest, not one per overlay — avoid the
+  per-signal Telegram spam pattern the exit-signal path already has to batch around (see
+  `compute_and_record_exit_signals`'s WARN-batching comment, same file, ~line 525).
+- Overlay lines sorted by recovery amount descending on a red NiftyBees day (best first, matching
+  the "Best:" line), sorted by raw P&L descending on a green day (no recovery framing to sort by).
+- Reuse `notifier.send()` (`TelegramNotifier`, already imported in this file) — no new gateway.
+- Suppressed (like the rest of this script's Telegram calls) in dry-run mode (`save=False`).
+
+**Files to change:**
+- `src/paper/store.py` / `src/paper/models.py` — new `ProtectionRecoverySnapshot` model +
+  `record_protection_recovery_snapshot()` / `get_protection_recovery_snapshots()` store methods
+- `scripts/strategies/three_track/paper_3track_snapshot.py` — new aggregation step (reads S3+S8
+  output for the same `snap_date`) + `_build_recovery_digest()` + one `notifier.send()` call in
+  `main()`
+- `tests/unit/paper/test_store.py` (or sibling), `tests/unit/scripts/`
+
+**Before any code:**
+```
+get_code_snippet("TrackComparisonSnapshot")       # S3's model
+get_code_snippet("OverlayPnLSnapshot")            # S8's model
+search_code("_normalize_overlay_pnls")            # existing collar-merge/dedup convention to match
+git log --oneline -5 src/paper/store.py           # confirm S3+S8 have landed
+```
+Confirm both S3 and S8 have landed (models + store methods present) before starting — this
+story's entire input is their output tables, computed from nothing else.
+
+**Tests:**
+- `test_recovery_pct_null_on_green_niftybees_day` — `niftybees_pnl_1d >= 0` → `best_overlay`
+  and `best_recovery_pct` are `None`, not a negative/zero number
+- `test_recovery_pct_computed_correctly_on_red_day` — fixture matching the -700/+300/+180/+240
+  sample above asserts `best_overlay == "cc"`, `best_recovery_pct == pytest.approx(0.4286)`
+- `test_inception_recovery_independent_of_daily` — inception fields don't derive from summing
+  daily rows
+- `test_digest_omits_recovery_lines_on_green_day` — message builder output has no "Best:" line
+  and no percentages when NiftyBees 1D P&L is non-negative
+- `test_digest_single_telegram_call_per_run` — `notifier.send()` called exactly once for the
+  recovery digest, not once per overlay
+
+**Commit:** `feat(paper): NiftyBees protection-recovery comparison + Telegram digest`
+
+---
+
 ## Open risk not resolved by this epic (log in TODOS.md, don't block on it)
 
 Full automation (S4) combined with a single overlay copy (S1–S3) means a bad overlay-roll
