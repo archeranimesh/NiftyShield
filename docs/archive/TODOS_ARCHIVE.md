@@ -13,6 +13,18 @@
   LTP/intrinsic fallback reused from `close_ic_legs()`); fixed the S1b `overlay_cc` state bug.
   New script `scripts/dev/migrate_3track_close_duplicate_overlays.py` (dry-run default). 7 new
   tests, all green. — SHA: 8c41cca
+- [2026-07-29] 3-Track Consolidation **S2r** — removed both track-ownership overlay blocks in
+  `nifty_track_comparison_v1.py`: `_check_futures_cc_block` (BLOCKED_COMBINATION guard) and its
+  `check_signals` call site, plus a second, undocumented futures+`overlay_cc` hard-block found
+  inside `_select_overlay_roll_target` during implementation (same conflation, confirmed
+  in-scope with operator before removing — not in S2r's original "files to change" list).
+  Dropped the now-unused `strategy_name` param from `_select_overlay_roll_target`. Rewrote
+  `tests/unit/strategy/test_nifty_track_comparison_v1.py`'s NT-2 section: deleted the
+  block-behavior tests, added regression tests asserting BLOCKED_COMBINATION is unreachable for
+  any track/role combination, and rewrote the roll-target WARN test (now asserts ACTION, since
+  removing the second block lets a real broker chain yield a target for futures+overlay_cc).
+  Verified via `py_compile` + graph re-index in-session (sandbox had no disk space for
+  `pytest`); operator confirmed pytest green on host post-commit. — SHA: abdb7ef
 
 ---
 
