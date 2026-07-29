@@ -24,7 +24,7 @@
   `/sessions` disk-full was worked around this time via `pip install --target=/tmp/pydeps`
   against `/`'s separate partition — pytest actually ran in-session: 12/12 new tests, 384 across
   `tests/unit/paper/`, 613 across `tests/unit/portfolio/`+`tests/unit/strategy/`, all green. Full
-  detail: `DECISIONS.md` 2026-07-29 S3r entry. — SHA: (commit pending, see below)
+  detail: `DECISIONS.md` 2026-07-29 S3r entry. — SHA: 450cd9c
 - [2026-07-29] 3-Track Consolidation **S1r** — re-home overlay legs (`overlay_pp`/`overlay_cc`/
   `overlay_collar_call`/`overlay_collar_put`) from `paper_nifty_spot` to a track-independent
   `paper_nifty_overlay` strategy_name; closed Futures/Proxy overlay duplicates (RQ2 cleanup,
