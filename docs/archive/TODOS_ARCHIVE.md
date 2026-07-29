@@ -28,7 +28,7 @@
   S4 entry. Tests: 9 new (7 strategy-level, 2 monitor-level); full `tests/unit/strategy/` suite
   (501 tests) re-run clean via code-reviewer subagent with a working pytest env (sandbox itself
   lacks pytest — known disk-quota constraint). 0 CRITICAL/ERROR from review; 1 deferred WARNING
-  (flat-position guard, addressed same session) — SHA: pending
+  (flat-position guard, addressed same session) — SHA: ef540c7
 - [2026-07-29] 3-Track Consolidation **S3r** — query-time overlay coverage ratio per track
   (Spot/Futures/Proxy), no persistence, no duplicate rows. New
   `src/portfolio/overlay_coverage.py::compute_overlay_coverage`, `OverlayCoverage` dataclass
