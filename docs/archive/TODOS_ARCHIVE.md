@@ -7,6 +7,24 @@
 
 ## Session Log — 2026-07-29
 
+- [2026-07-29] 3-Track Consolidation **S3r** — query-time overlay coverage ratio per track
+  (Spot/Futures/Proxy), no persistence, no duplicate rows. New
+  `src/portfolio/overlay_coverage.py::compute_overlay_coverage`, `OverlayCoverage` dataclass
+  (`src/paper/models.py`), `STRATEGY_OVERLAY` constant promoted from a migration-script private
+  literal (`src/paper/constants.py`). Extracted `resolve_leg_delta()` out of
+  `generate_track_snapshot`'s inline loop body (`src/paper/track_snapshot.py`) so the new module
+  reuses the one live-chain Greeks fetch path instead of duplicating it — confirmed
+  behavior-preserving (existing `test_track_snapshot.py` tests pass unchanged). Deviated from the
+  story spec's assumption that Futures notional comes from `paper_margin_snapshots` — that table
+  is IC-only, never written by the 3-track path (a graph edge suggesting otherwise was a false
+  positive, confirmed empty by grep); used `qty * 1.0` delta instead, confirmed with operator
+  before implementing. Real `@code-reviewer` subagent run against `git diff HEAD`: 0
+  CRITICAL/ERROR, 1 INFO (loose typing, not blocking), 1 WARNING (coverage-sign docs — addressed
+  in the same session, see `OverlayCoverage` docstring). Unlike the S2r/S3 sessions above,
+  `/sessions` disk-full was worked around this time via `pip install --target=/tmp/pydeps`
+  against `/`'s separate partition — pytest actually ran in-session: 12/12 new tests, 384 across
+  `tests/unit/paper/`, 613 across `tests/unit/portfolio/`+`tests/unit/strategy/`, all green. Full
+  detail: `DECISIONS.md` 2026-07-29 S3r entry. — SHA: (commit pending, see below)
 - [2026-07-29] 3-Track Consolidation **S1r** — re-home overlay legs (`overlay_pp`/`overlay_cc`/
   `overlay_collar_call`/`overlay_collar_put`) from `paper_nifty_spot` to a track-independent
   `paper_nifty_overlay` strategy_name; closed Futures/Proxy overlay duplicates (RQ2 cleanup,

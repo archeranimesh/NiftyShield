@@ -127,6 +127,89 @@ def _compute_realized_pnl_by_leg(store: PaperStore, strategy_name: str) -> dict[
     return realized_by_leg
 
 
+async def resolve_leg_delta(
+    pos: Any,
+    lookup: InstrumentLookup,
+    broker: BrokerClient,
+    fetched_chains: dict[str, OptionChain | None],
+) -> tuple[Decimal, Decimal, Decimal]:
+    """Resolve (delta, theta, vega) for one open leg — the single Greeks source.
+
+    Shared by ``generate_track_snapshot`` (display/EOD snapshot) and
+    ``src.portfolio.overlay_coverage.compute_overlay_coverage`` (S3r query-time
+    coverage ratio) so there is exactly one place that fetches live chain
+    Greeks — duplicating this fetch was explicitly flagged as a risk in
+    docs/plan/3track-consolidation/stories.md S3r.
+
+    ``base_etf``/``base_futures`` use fixed beta/delta assumptions (NiftyBees
+    tracks Nifty ≈1:1; futures delta is definitionally 1.0). ``base_ditm_call``
+    and any ``overlay_*`` role resolve delta live from the option chain,
+    since both drift with spot/time and must never be assumed.
+
+    Args:
+        pos: PaperPosition for the leg (must have net_qty != 0 for a
+            meaningful result — flat legs resolve to zero delta via the
+            chain-lookup miss path, same as an unresolvable instrument).
+        lookup: BOD instrument lookup for expiry/strike/type resolution.
+        broker: BrokerClient used to fetch the live option chain on a
+            per-expiry cache-miss basis.
+        fetched_chains: Mutable per-call cache, keyed by parsed expiry
+            string — passed in by the caller so multiple legs sharing an
+            expiry only fetch the chain once.
+
+    Returns:
+        (delta, theta, vega) tuple, each zero if the leg's instrument or
+        strike can't be resolved (never raises — matches the pre-refactor
+        behavior in the ``generate_track_snapshot`` loop body).
+    """
+    is_overlay = pos.leg_role.startswith("overlay_")
+
+    if pos.leg_role == "base_etf":
+        return NIFTYBEES_BETA_TO_NIFTY, Decimal("0"), Decimal("0")
+    if pos.leg_role == "base_futures":
+        return Decimal("1.0"), Decimal("0"), Decimal("0")
+    if pos.leg_role != "base_ditm_call" and not is_overlay:
+        return Decimal("0"), Decimal("0"), Decimal("0")
+
+    inst = lookup.get_by_key(pos.instrument_key)
+    if not inst:
+        return Decimal("0"), Decimal("0"), Decimal("0")
+
+    expiry = inst.get("expiry")
+    parsed_expiry = parse_expiry(expiry)
+    strike = Decimal(str(inst.get("strike_price", 0)))
+    opt_type = inst.get("instrument_type")
+
+    if not parsed_expiry or strike <= Decimal("0"):
+        return Decimal("0"), Decimal("0"), Decimal("0")
+
+    if parsed_expiry not in fetched_chains:
+        underlying = "NSE_INDEX|Nifty 50"  # assumption for Nifty 50 options
+        try:
+            raw_chain = await broker.get_option_chain(underlying, parsed_expiry)
+            fetched_chains[parsed_expiry] = parse_upstox_option_chain(
+                cast(list[dict[str, Any]], raw_chain)
+            )
+        # Intentional: isolate LTP fetch errors for single legs.
+        except Exception:
+            fetched_chains[parsed_expiry] = None
+
+    chain = fetched_chains[parsed_expiry]
+    if not (chain and strike in chain.strikes):
+        return Decimal("0"), Decimal("0"), Decimal("0")
+
+    strike_data = chain.strikes[strike]
+    leg_data = strike_data.ce if opt_type == "CE" else strike_data.pe
+    if not leg_data:
+        return Decimal("0"), Decimal("0"), Decimal("0")
+
+    return (
+        leg_data.delta or Decimal("0"),
+        leg_data.theta or Decimal("0"),
+        leg_data.vega or Decimal("0"),
+    )
+
+
 async def generate_track_snapshot(
     store: PaperStore,
     broker: BrokerClient,
@@ -209,42 +292,9 @@ async def generate_track_snapshot(
                 overlay_pnls.get(pos.leg_role, Decimal("0")) + leg_total_pnl
             )
 
-        leg_delta = Decimal("0")
-        leg_theta = Decimal("0")
-        leg_vega = Decimal("0")
-
-        if pos.leg_role == "base_etf":
-            leg_delta = NIFTYBEES_BETA_TO_NIFTY
-        elif pos.leg_role == "base_futures":
-            leg_delta = Decimal("1.0")
-        elif pos.leg_role == "base_ditm_call" or is_overlay:
-            inst = lookup.get_by_key(pos.instrument_key)
-            if inst:
-                expiry = inst.get("expiry")
-                parsed_expiry = parse_expiry(expiry)
-                strike = Decimal(str(inst.get("strike_price", 0)))
-                opt_type = inst.get("instrument_type")
-
-                if parsed_expiry and strike > Decimal("0"):
-                    if parsed_expiry not in fetched_chains:
-                        underlying = "NSE_INDEX|Nifty 50"  # assumption for Nifty 50 options
-                        try:
-                            raw_chain = await broker.get_option_chain(underlying, parsed_expiry)
-                            fetched_chains[parsed_expiry] = parse_upstox_option_chain(
-                                cast(list[dict[str, Any]], raw_chain)
-                            )
-                        # Intentional: isolate LTP fetch errors for single legs.
-                        except Exception:
-                            fetched_chains[parsed_expiry] = None
-
-                    chain = fetched_chains[parsed_expiry]
-                    if chain and strike in chain.strikes:
-                        strike_data = chain.strikes[strike]
-                        leg_data = strike_data.ce if opt_type == "CE" else strike_data.pe
-                        if leg_data:
-                            leg_delta = leg_data.delta or Decimal("0")
-                            leg_theta = leg_data.theta or Decimal("0")
-                            leg_vega = leg_data.vega or Decimal("0")
+        leg_delta, leg_theta, leg_vega = await resolve_leg_delta(
+            pos, lookup, broker, fetched_chains
+        )
 
         qty_d = Decimal(str(pos.net_qty))
 

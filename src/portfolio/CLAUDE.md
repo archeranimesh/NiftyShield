@@ -4,6 +4,18 @@
 
 ---
 
+## Note: `overlay_coverage.py` is a different domain than the rest of this directory
+
+Everything else below (`Leg`/`Trade`/`Strategy`, `PortfolioTracker`, `apply_trade_positions()`)
+belongs to the **live** finideas/finrakshak portfolio system. `overlay_coverage.py` (added S3r,
+2026-07-29) is **paper-trading** code — it reads `PaperStore`/`PaperPosition` from `src/paper/`,
+not this module's `store.py`/`models.py`. It lives here only because the story called for a
+query-time join comparable in spirit to `PortfolioTracker`'s per-strategy joins; it shares no
+types, tables, or constraints with the rest of this file. Do not assume the Decimal/Leg/Trade
+conventions below apply to it — see `src/paper/CLAUDE.md` instead.
+
+---
+
 ## Core Distinctions
 
 ### Leg vs Trade

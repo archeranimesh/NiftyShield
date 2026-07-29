@@ -28,11 +28,18 @@ STRATEGY_PP_OVERLAY = "paper_protective_put_v1"
 STRATEGY_COLLAR_OVERLAY = "paper_collar_v1"
 STRATEGY_IC = "paper_ic_nifty_v1"
 
+# Track-independent overlay namespace (S1r, 2026-07-29, SHA 8c41cca) — the single
+# live copy of CC/PP/Collar overlay legs, no longer owned by any one of the three
+# base tracks. Previously only a private literal (_OVERLAY_STRATEGY) in
+# scripts/dev/migrate_3track_close_duplicate_overlays.py; promoted here so S3r's
+# coverage query and any future caller share one definition.
+STRATEGY_OVERLAY = "paper_nifty_overlay"
+
 # Per-expiry IC variants
-STRATEGY_IC_WEEKLY  = "paper_ic_nifty_v1_weekly"
+STRATEGY_IC_WEEKLY = "paper_ic_nifty_v1_weekly"
 STRATEGY_IC_MONTHLY = "paper_ic_nifty_v1_monthly"
-STRATEGY_IC_LEAPS   = "paper_ic_nifty_v1_leaps"
-STRATEGY_IC_YEARLY  = "paper_ic_nifty_v1_yearly"
+STRATEGY_IC_LEAPS = "paper_ic_nifty_v1_leaps"
+STRATEGY_IC_YEARLY = "paper_ic_nifty_v1_yearly"
 
 # 3-Track Targeting Thresholds (Extracted from paper_3track_overlay.py)
 PP_OTM_MIN = 0.08

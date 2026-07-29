@@ -204,6 +204,43 @@ class MarginSnapshot:
 
 
 @dataclass(frozen=True)
+class OverlayCoverage:
+    """Query-time overlay coverage ratio for one 3-track base (S3r, 2026-07-29).
+
+    Never persisted — overlay legs live in a single track-independent copy
+    (``STRATEGY_OVERLAY = "paper_nifty_overlay"``, S1r); this is a read-time
+    join answering "how much protection does the current overlay give this
+    track right now", recomputed on every call rather than duplicated per
+    track (that duplication was RQ2's original, retired mistake).
+
+    Attributes:
+        track_name: One of the three base strategy_names (Spot/Futures/Proxy).
+        track_effective_units: Base leg's effective Nifty-point exposure —
+            ``qty * delta`` (NiftyBees beta for Spot, 1.0 for Futures, live
+            chain delta for the Proxy DITM call). Zero if the track has no
+            open base position.
+        overlay_effective_units: Sum of ``qty * delta`` across all open legs
+            in the shared overlay namespace — independent of which track this
+            coverage row is being computed for.
+        coverage_pct: ``overlay_effective_units / track_effective_units *
+            100``. ``None`` when ``track_effective_units`` is zero (no open
+            base position — coverage is undefined, not zero). Can be
+            negative — not a bug: a directionally-correlated overlay leg
+            (e.g. a protective put attributed to a short base) reduces net
+            exposure rather than hedging it, and that should read as
+            negative coverage, not be clamped to zero.
+        as_of: Date this ratio was computed for (chain/Greeks are always
+            fetched live; this is a label, not a persistence key).
+    """
+
+    track_name: str
+    track_effective_units: Decimal
+    overlay_effective_units: Decimal
+    coverage_pct: Decimal | None
+    as_of: date
+
+
+@dataclass(frozen=True)
 class PaperLegSnapshot:
     """Per-leg daily P&L snapshot for a paper strategy.
 

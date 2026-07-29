@@ -923,6 +923,58 @@ item, no unmet blockers).
 
 ---
 
+## S3r — Query-time overlay coverage ratio per track (2026-07-29)
+
+Implements `docs/plan/3track-consolidation/stories.md` S3r. New `src/portfolio/overlay_coverage.py`
+(`compute_overlay_coverage`) answers "how much protection does the current overlay give this
+track right now" as a live read-time join — never persisted, never duplicated per track (that
+duplication was RQ2's retired mistake). Overlay legs live in the single track-independent
+namespace `STRATEGY_OVERLAY = "paper_nifty_overlay"` (S1r); this function pulls a track's own
+base position plus that shared overlay namespace's open positions and computes
+`overlay_effective_units / track_effective_units * 100`. New `OverlayCoverage` frozen dataclass
+in `src/paper/models.py`.
+
+**Deviation from the story text — Futures notional source:** S3r's spec assumed
+`paper_margin_snapshots` was an available data source for Futures notional. It isn't — margin
+capture is wired only from the IC entry scripts (`capture_entry_margin()`, called from
+`paper_ic_entry.py`/`_v2.py`); a graph trace suggesting `paper_3track_snapshot.py` also called it
+turned out to be a false-positive co-location edge, confirmed empty by `search_code`. `CONTEXT.md`
+already documented this as "IC-only for now." Rather than depend on a table nothing writes to for
+the 3-track strategies, Futures' effective exposure is computed the same way as every other
+track — `qty * delta` (delta fixed at 1.0 for a linear future) — via the same `resolve_leg_delta`
+helper used for Spot/Proxy/overlay legs. No SPAN-margin-aware leverage adjustment; the story asked
+for delta-equivalent exposure, which qty×1.0 already gives for a future. Flagged to and confirmed
+with the operator before implementation (2026-07-29).
+
+**Refactor:** `src/paper/track_snapshot.py`'s `generate_track_snapshot` had its per-leg
+delta/theta/vega resolution (chain fetch + `base_etf`/`base_futures`/`base_ditm_call`/overlay
+branches) extracted into a standalone `resolve_leg_delta()` async function, shared by both
+`generate_track_snapshot` and the new `compute_overlay_coverage` — S3r's own story text flagged
+duplicating this fetch as a risk. Behavior-preserving: existing `test_track_snapshot.py` tests
+pass unchanged after the extraction (confirmed by an independent `@code-reviewer` pass comparing
+old inline logic against the extracted function line-for-line).
+
+**Coverage sign:** `coverage_pct` can be negative — not a bug. A directionally-correlated overlay
+leg (rather than a hedge) reduces net exposure instead of protecting it, and that should read as
+negative, not be clamped to zero. Documented in `OverlayCoverage`'s docstring per the
+code-reviewer's WARNING finding.
+
+**Sandbox note:** `/sessions` disk was at 100% (same known constraint as the S3 entry above and
+the 2026-07-22 `close_collar_all` entry); worked around this session by `pip install
+--target=/tmp/pydeps` against `/`'s separate 3GB free partition and running with
+`PYTHONPATH=/tmp/pydeps:.` — unlike the prior two sessions, this let pytest actually run in-session
+rather than substituting `py_compile` + hand-trace. Full green: 12/12 new tests
+(`tests/unit/portfolio/test_overlay_coverage.py` + `tests/unit/paper/test_track_snapshot.py`), 384
+across `tests/unit/paper/`, 613 across `tests/unit/portfolio/` + `tests/unit/strategy/`. A real
+`@code-reviewer` subagent pass ran against `git diff HEAD` — 0 CRITICAL/ERROR, one INFO (loose
+`Any` typing on `resolve_leg_delta`'s `pos` param, not blocking) and one WARNING (coverage-sign
+documentation, addressed above).
+
+Source: this session (Cowork), `docs/plan/3track-consolidation/tasks.md` S3r (first unchecked
+item with all blockers landed — S1r SHA 8c41cca).
+
+---
+
 ## `IronCondorV1._send_close_notification` mypy gap fix (2026-07-29)
 
 Unrelated to the same-day S3 work — surfaced by operator running mypy locally:
