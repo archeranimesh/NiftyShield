@@ -82,6 +82,7 @@ from src.paper.models import (
     PaperLegSnapshot,
     PaperNavSnapshot,
     PaperPosition,
+    TrackComparisonSnapshot,
     TradeState,
 )
 from src.paper.proxy_monitor import ProxyDeltaMonitor
@@ -1014,6 +1015,160 @@ def _save_leg_snapshots(
         logger.debug("Leg snapshot saved: %s %s %s", track_name, role, snap_date)
 
 
+# ── Track comparison snapshots (S3 — base-leg only, overlay excluded) ──────────
+#
+# RQ1 ("which base instrument tracks Nifty best") is answered here strictly
+# from base-leg mark price. Overlay P&L (CC/PP/Collar) is real and reported
+# elsewhere (paper_leg_snapshots / get_strategy_realized_pnl) but must never
+# blend into or be inferred from these numbers, for any track — including
+# NiftyBees. See docs/plan/3track-consolidation/stories.md S3.
+
+_SPOT_SERIES_NAME = "nifty_index"
+
+
+def _mark_value(ltp: Decimal | None, net_qty: int) -> Decimal | None:
+    """Position mark value (LTP * absolute quantity), or None if LTP unknown."""
+    if ltp is None:
+        return None
+    return ltp * abs(net_qty)
+
+
+def _safe_pct(numerator: Decimal, denominator: Decimal | None) -> Decimal:
+    """Percentage return, or 0 if the denominator is missing/zero."""
+    if not denominator:
+        return Decimal("0")
+    return numerator / denominator
+
+
+def _spot_price_on(store: PaperStore, track_name: str, on_date: date) -> Decimal | None:
+    """Best-effort Nifty spot lookup for a date, reusing nav-snapshot history.
+
+    ``paper_nav_snapshots.underlying_price`` already carries the Nifty spot
+    fetched once per snapshot run — reused here instead of a second spot
+    price history table.
+    """
+    for snap in store.get_nav_snapshots(track_name):
+        if snap.snapshot_date == on_date:
+            return snap.underlying_price
+    return None
+
+
+def _compute_track_comparison_snapshot(
+    store: PaperStore,
+    track_name: str,
+    snap_date: date,
+    nifty_spot: Decimal,
+) -> TrackComparisonSnapshot | None:
+    """Compute the S3 base-leg-only comparison snapshot for one 3-track strategy.
+
+    Reads only the base leg (``_base_leg_role(track_name)``) — overlay legs
+    never enter this calculation or its denominators. Must be called after
+    ``_save_leg_snapshots`` has persisted today's base-leg row for this track.
+
+    Returns:
+        None if today's base-leg snapshot has not been persisted yet (should
+        not happen in the standard ``_run`` flow, guarded defensively).
+    """
+    base_role = _base_leg_role(track_name)
+    today_leg = store.get_leg_snapshot(track_name, base_role, snap_date)
+    if today_leg is None:
+        logger.warning(
+            "track_comparison.no_base_leg_snapshot", track=track_name, date=str(snap_date)
+        )
+        return None
+
+    pos = store.get_position(track_name, base_role)
+    net_qty = pos.net_qty if pos else 0
+    avg_cost = pos.avg_cost if pos else Decimal("0")
+    entry_cost_basis = avg_cost * abs(net_qty) if net_qty else None
+
+    pnl_inception_abs = today_leg.total_pnl
+    pnl_inception_pct = _safe_pct(pnl_inception_abs, entry_cost_basis)
+
+    prev = store.get_prev_leg_snapshot(track_name, base_role, snap_date)
+    if prev is None:
+        # First-ever snapshot for this leg: no prior mark to diff against —
+        # today's cumulative move IS the 1-day move.
+        pnl_1d_abs = pnl_inception_abs
+        pnl_1d_pct = Decimal("0")
+    else:
+        pnl_1d_abs = today_leg.total_pnl - prev.total_pnl
+        prev_mark_value = _mark_value(prev.ltp, net_qty)
+        pnl_1d_pct = _safe_pct(pnl_1d_abs, prev_mark_value)
+
+    tracking_error_pct: Decimal | None = None
+    if pos is not None and pos.entry_date is not None:
+        spot_entry = _spot_price_on(store, track_name, pos.entry_date)
+        if spot_entry:
+            spot_return_pct = (nifty_spot - spot_entry) / spot_entry
+            tracking_error_pct = pnl_inception_pct - spot_return_pct
+
+    return TrackComparisonSnapshot(
+        strategy_name=track_name,
+        snapshot_date=snap_date,
+        pnl_1d_abs=pnl_1d_abs,
+        pnl_1d_pct=pnl_1d_pct,
+        pnl_inception_abs=pnl_inception_abs,
+        pnl_inception_pct=pnl_inception_pct,
+        tracking_error_pct=tracking_error_pct,
+    )
+
+
+def _compute_spot_comparison_snapshot(
+    store: PaperStore,
+    snap_date: date,
+    nifty_spot: Decimal,
+    entry_date: date | None,
+) -> TrackComparisonSnapshot:
+    """Compute the 4th synthetic ``"nifty_index"`` comparison series.
+
+    Same pnl_1d/pnl_inception definitions as the three base tracks, with the
+    spot price itself standing in for both mark and unit notional.
+    ``entry_date`` anchors the inception denominator — callers pass the
+    relevant track's base-leg entry_date. Today's live data has all three
+    tracks entered the same day, so this is a single unambiguous value for
+    now; if entry dates ever diverge across tracks, which one to anchor
+    spot's inception% against becomes a real design question, flagged as an
+    implementation-time detail in docs/plan/3track-consolidation/stories.md S3
+    and not resolved here.
+    """
+    spot_entry = _spot_price_on(store, STRATEGY_SPOT, entry_date) if entry_date else None
+    if spot_entry is None:
+        # Bootstrap: no historical spot recorded yet for the entry date
+        # (e.g. first-ever run) — use today's spot as a same-day proxy,
+        # yielding a 0% inception return until real history accumulates.
+        spot_entry = nifty_spot
+
+    pnl_inception_abs = nifty_spot - spot_entry
+    pnl_inception_pct = _safe_pct(pnl_inception_abs, spot_entry)
+
+    prev_rows = store.get_track_comparison_snapshots(
+        _SPOT_SERIES_NAME, end_date=snap_date - timedelta(days=1)
+    )
+    prev = prev_rows[-1] if prev_rows else None
+    if prev is None:
+        pnl_1d_abs = pnl_inception_abs
+        pnl_1d_pct = Decimal("0")
+    else:
+        prev_spot = _spot_price_on(store, STRATEGY_SPOT, prev.snapshot_date)
+        if prev_spot:
+            pnl_1d_abs = nifty_spot - prev_spot
+            pnl_1d_pct = _safe_pct(pnl_1d_abs, prev_spot)
+        else:
+            pnl_1d_abs = pnl_inception_abs - prev.pnl_inception_abs
+            pnl_1d_pct = Decimal("0")
+
+    return TrackComparisonSnapshot(
+        strategy_name=_SPOT_SERIES_NAME,
+        snapshot_date=snap_date,
+        pnl_1d_abs=pnl_1d_abs,
+        pnl_1d_pct=pnl_1d_pct,
+        pnl_inception_abs=pnl_inception_abs,
+        pnl_inception_pct=pnl_inception_pct,
+        tracking_error_pct=None,
+    )
+
+
 # ── Summary table ─────────────────────────────────────────────────────────────
 
 
@@ -1182,6 +1337,21 @@ async def _run(args: argparse.Namespace) -> None:
         if save:
             _save_nav_snapshot(store, track_name, snapshot, snap_date, nifty_spot)
             _save_leg_snapshots(store, track_name, snapshot, snap_date, ltp_map)
+            cmp_snap = _compute_track_comparison_snapshot(store, track_name, snap_date, nifty_spot)
+            if cmp_snap is not None:
+                store.record_track_comparison_snapshot(cmp_snap)
+
+    if save:
+        # 4th synthetic series: Nifty spot, same fields/denominators as the
+        # three tracks above. Anchored on STRATEGY_SPOT's base-leg entry_date
+        # (see _compute_spot_comparison_snapshot docstring for the caveat if
+        # tracks ever have divergent entry dates).
+        spot_pos = store.get_position(STRATEGY_SPOT, _base_leg_role(STRATEGY_SPOT))
+        spot_entry_date = spot_pos.entry_date if spot_pos else None
+        spot_cmp_snap = _compute_spot_comparison_snapshot(
+            store, snap_date, nifty_spot, spot_entry_date
+        )
+        store.record_track_comparison_snapshot(spot_cmp_snap)
 
     # ── EOD exit signal evaluation (Tier 1) ──────────────────────────────────
     # Collect open positions across all tracks + CSP strategy, derive unique

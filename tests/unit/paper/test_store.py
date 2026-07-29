@@ -36,7 +36,13 @@ import pytest
 from src.instruments.lookup import InstrumentLookup
 from src.models.portfolio import TradeAction
 from src.paper.constants import NIFTYBEES_KEY
-from src.paper.models import PaperLegSnapshot, PaperNavSnapshot, PaperTrade, TradeState
+from src.paper.models import (
+    PaperLegSnapshot,
+    PaperNavSnapshot,
+    PaperTrade,
+    TrackComparisonSnapshot,
+    TradeState,
+)
 from src.paper.store import PaperStore
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -301,9 +307,7 @@ def test_get_position_no_instrument_key_single_match_unchanged(store: PaperStore
 
 def test_get_position_instrument_key_matches_one_of_two(store: PaperStore) -> None:
     """instrument_key given, matches one of two same-leg_role positions → returns that one."""
-    store.record_trade(
-        _sell_trade(instrument_key=_KEY, trade_date=date(2026, 5, 1), quantity=65)
-    )
+    store.record_trade(_sell_trade(instrument_key=_KEY, trade_date=date(2026, 5, 1), quantity=65))
     store.record_trade(
         _sell_trade(instrument_key=_ROLLED_KEY, trade_date=date(2026, 6, 1), quantity=65)
     )
@@ -330,9 +334,7 @@ def test_get_position_ambiguous_returns_most_recent_entry_date(store: PaperStore
     test_get_position_unrecognised_key_falls_back_to_none_with_warning below) —
     only the behavioral contract (most-recent wins) is asserted here.
     """
-    store.record_trade(
-        _sell_trade(instrument_key=_KEY, trade_date=date(2026, 5, 1), quantity=65)
-    )
+    store.record_trade(_sell_trade(instrument_key=_KEY, trade_date=date(2026, 5, 1), quantity=65))
     store.record_trade(
         _sell_trade(instrument_key=_ROLLED_KEY, trade_date=date(2026, 6, 1), quantity=65)
     )
@@ -529,9 +531,7 @@ def test_get_positions_roll_scenario(store: PaperStore) -> None:
     expiring_key = "NSE_FO|58627"
     live_key = "NSE_FO|63848"
 
-    store.record_trade(
-        _buy_trade(instrument_key=expiring_key, quantity=65, price=Decimal("10.00"))
-    )
+    store.record_trade(_buy_trade(instrument_key=expiring_key, quantity=65, price=Decimal("10.00")))
     store.record_trade(
         _sell_trade(
             instrument_key=expiring_key,
@@ -540,9 +540,7 @@ def test_get_positions_roll_scenario(store: PaperStore) -> None:
             trade_date=date(2026, 6, 29),
         )
     )
-    store.record_trade(
-        _buy_trade(instrument_key=live_key, quantity=65, price=Decimal("12.00"))
-    )
+    store.record_trade(_buy_trade(instrument_key=live_key, quantity=65, price=Decimal("12.00")))
 
     positions = store.get_positions(_STRATEGY)
     pos_by_key = {p.instrument_key: p for p in positions}
@@ -1074,3 +1072,83 @@ def test_proxy_delta_breach_count_methods(store: PaperStore) -> None:
     # Reset count to 0
     store.set_proxy_delta_breach_count("paper_nonexistent", 0)
     assert store.get_proxy_delta_breach_count("paper_nonexistent") == 0
+
+
+# ── record_track_comparison_snapshot / get_track_comparison_snapshots (S3) ─────
+
+
+def _cmp_snap(**overrides) -> TrackComparisonSnapshot:
+    defaults = dict(
+        strategy_name=_STRATEGY,
+        snapshot_date=date(2026, 5, 1),
+        pnl_1d_abs=Decimal("100.00"),
+        pnl_1d_pct=Decimal("0.01"),
+        pnl_inception_abs=Decimal("1000.00"),
+        pnl_inception_pct=Decimal("0.05"),
+        tracking_error_pct=Decimal("0.002"),
+    )
+    defaults.update(overrides)
+    return TrackComparisonSnapshot(**defaults)
+
+
+def test_record_track_comparison_snapshot_fields_round_trip(store: PaperStore) -> None:
+    original = _cmp_snap()
+    store.record_track_comparison_snapshot(original)
+    retrieved = store.get_track_comparison_snapshots(_STRATEGY)[0]
+    assert retrieved.strategy_name == original.strategy_name
+    assert retrieved.snapshot_date == original.snapshot_date
+    assert retrieved.pnl_1d_abs == original.pnl_1d_abs
+    assert retrieved.pnl_1d_pct == original.pnl_1d_pct
+    assert retrieved.pnl_inception_abs == original.pnl_inception_abs
+    assert retrieved.pnl_inception_pct == original.pnl_inception_pct
+    assert retrieved.tracking_error_pct == original.tracking_error_pct
+
+
+def test_record_track_comparison_snapshot_tracking_error_none_round_trips(
+    store: PaperStore,
+) -> None:
+    store.record_track_comparison_snapshot(_cmp_snap(tracking_error_pct=None))
+    retrieved = store.get_track_comparison_snapshots(_STRATEGY)[0]
+    assert retrieved.tracking_error_pct is None
+
+
+def test_record_track_comparison_snapshot_upserts(store: PaperStore) -> None:
+    store.record_track_comparison_snapshot(_cmp_snap(pnl_1d_abs=Decimal("100.00")))
+    store.record_track_comparison_snapshot(_cmp_snap(pnl_1d_abs=Decimal("999.00")))
+    snaps = store.get_track_comparison_snapshots(_STRATEGY)
+    assert len(snaps) == 1
+    assert snaps[0].pnl_1d_abs == Decimal("999.00")
+
+
+def test_get_track_comparison_snapshots_ordered_by_date(store: PaperStore) -> None:
+    store.record_track_comparison_snapshot(_cmp_snap(snapshot_date=date(2026, 5, 3)))
+    store.record_track_comparison_snapshot(_cmp_snap(snapshot_date=date(2026, 5, 1)))
+    store.record_track_comparison_snapshot(_cmp_snap(snapshot_date=date(2026, 5, 2)))
+    snaps = store.get_track_comparison_snapshots(_STRATEGY)
+    assert [s.snapshot_date for s in snaps] == [
+        date(2026, 5, 1),
+        date(2026, 5, 2),
+        date(2026, 5, 3),
+    ]
+
+
+def test_get_track_comparison_snapshots_filters_by_date_range(store: PaperStore) -> None:
+    for d in (date(2026, 5, 1), date(2026, 5, 2), date(2026, 5, 3), date(2026, 5, 4)):
+        store.record_track_comparison_snapshot(_cmp_snap(snapshot_date=d))
+    snaps = store.get_track_comparison_snapshots(
+        _STRATEGY, start_date=date(2026, 5, 2), end_date=date(2026, 5, 3)
+    )
+    assert [s.snapshot_date for s in snaps] == [date(2026, 5, 2), date(2026, 5, 3)]
+
+
+def test_get_track_comparison_snapshots_returns_empty_for_unknown_strategy(
+    store: PaperStore,
+) -> None:
+    assert store.get_track_comparison_snapshots("paper_nonexistent") == []
+
+
+def test_track_comparison_snapshots_isolated_per_strategy(store: PaperStore) -> None:
+    store.record_track_comparison_snapshot(_cmp_snap(strategy_name="paper_nifty_spot"))
+    store.record_track_comparison_snapshot(_cmp_snap(strategy_name="nifty_index"))
+    assert len(store.get_track_comparison_snapshots("paper_nifty_spot")) == 1
+    assert len(store.get_track_comparison_snapshots("nifty_index")) == 1

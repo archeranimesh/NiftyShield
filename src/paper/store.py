@@ -36,6 +36,7 @@ from src.paper.models import (
     PaperNavSnapshot,
     PaperPosition,
     PaperTrade,
+    TrackComparisonSnapshot,
     TradeState,
 )
 from src.strategy.profit_lock_engine import ProfitLockState
@@ -221,6 +222,20 @@ CREATE TABLE IF NOT EXISTS paper_margin_snapshots (
 
 CREATE INDEX IF NOT EXISTS idx_paper_margin_snapshots_strategy_entry
     ON paper_margin_snapshots(strategy_name, entry_date);
+
+CREATE TABLE IF NOT EXISTS paper_track_comparison_snapshots (
+    strategy_name       TEXT NOT NULL,
+    snapshot_date       TEXT NOT NULL,
+    pnl_1d_abs          TEXT NOT NULL,
+    pnl_1d_pct          TEXT NOT NULL,
+    pnl_inception_abs   TEXT NOT NULL,
+    pnl_inception_pct   TEXT NOT NULL,
+    tracking_error_pct  TEXT,
+    PRIMARY KEY (strategy_name, snapshot_date)
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS idx_paper_track_comparison_strategy_date
+    ON paper_track_comparison_snapshots(strategy_name, snapshot_date);
 """
 
 
@@ -248,6 +263,20 @@ def _row_to_leg_snapshot(row: sqlite3.Row) -> PaperLegSnapshot:
         realized_pnl=Decimal(row["realized_pnl"]),
         total_pnl=Decimal(row["total_pnl"]),
         ltp=Decimal(row["ltp"]) if row["ltp"] is not None else None,
+    )
+
+
+def _row_to_track_comparison_snapshot(row: sqlite3.Row) -> TrackComparisonSnapshot:
+    return TrackComparisonSnapshot(
+        strategy_name=row["strategy_name"],
+        snapshot_date=date.fromisoformat(row["snapshot_date"]),
+        pnl_1d_abs=Decimal(row["pnl_1d_abs"]),
+        pnl_1d_pct=Decimal(row["pnl_1d_pct"]),
+        pnl_inception_abs=Decimal(row["pnl_inception_abs"]),
+        pnl_inception_pct=Decimal(row["pnl_inception_pct"]),
+        tracking_error_pct=(
+            Decimal(row["tracking_error_pct"]) if row["tracking_error_pct"] is not None else None
+        ),
     )
 
 
@@ -1227,6 +1256,81 @@ class PaperStore:
             return None
         return _row_to_leg_snapshot(row)
 
+    # ── Track comparison snapshots (S3 — base-leg only, overlay excluded) ──────
+
+    def record_track_comparison_snapshot(self, snap: TrackComparisonSnapshot) -> None:
+        """Upsert a daily base-leg-only track comparison snapshot.
+
+        ON CONFLICT UPDATE replaces the row if the same
+        (strategy_name, snapshot_date) already exists — idempotent re-runs
+        are safe, matching ``record_leg_snapshot``'s pattern.
+
+        Args:
+            snap: The TrackComparisonSnapshot to persist. ``strategy_name``
+                may be one of the three 3-track strategy names or the
+                synthetic ``"nifty_index"`` value for the spot series.
+        """
+        with _connect(self.db_path) as conn:
+            conn.execute(
+                """INSERT INTO paper_track_comparison_snapshots
+                   (strategy_name, snapshot_date, pnl_1d_abs, pnl_1d_pct,
+                    pnl_inception_abs, pnl_inception_pct, tracking_error_pct)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(strategy_name, snapshot_date)
+                   DO UPDATE SET
+                       pnl_1d_abs         = excluded.pnl_1d_abs,
+                       pnl_1d_pct         = excluded.pnl_1d_pct,
+                       pnl_inception_abs  = excluded.pnl_inception_abs,
+                       pnl_inception_pct  = excluded.pnl_inception_pct,
+                       tracking_error_pct = excluded.tracking_error_pct""",
+                (
+                    snap.strategy_name,
+                    snap.snapshot_date.isoformat(),
+                    str(snap.pnl_1d_abs),
+                    str(snap.pnl_1d_pct),
+                    str(snap.pnl_inception_abs),
+                    str(snap.pnl_inception_pct),
+                    str(snap.tracking_error_pct) if snap.tracking_error_pct is not None else None,
+                ),
+            )
+
+    def get_track_comparison_snapshots(
+        self,
+        strategy_name: str,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> list[TrackComparisonSnapshot]:
+        """Return the comparison-snapshot history for one strategy, ordered by date.
+
+        Args:
+            strategy_name: One of the three 3-track strategy names, or the
+                synthetic ``"nifty_index"`` value for the Nifty spot series.
+            start_date: Inclusive lower bound on snapshot_date. None = no bound.
+            end_date: Inclusive upper bound on snapshot_date. None = no bound.
+
+        Returns:
+            TrackComparisonSnapshot rows for ``strategy_name``, ordered
+            ascending by snapshot_date. Empty list if none exist.
+        """
+        query = (
+            "SELECT strategy_name, snapshot_date, pnl_1d_abs, pnl_1d_pct,"
+            " pnl_inception_abs, pnl_inception_pct, tracking_error_pct"
+            " FROM paper_track_comparison_snapshots"
+            " WHERE strategy_name = ?"
+        )
+        params: list[Any] = [strategy_name]
+        if start_date is not None:
+            query += " AND snapshot_date >= ?"
+            params.append(start_date.isoformat())
+        if end_date is not None:
+            query += " AND snapshot_date <= ?"
+            params.append(end_date.isoformat())
+        query += " ORDER BY snapshot_date ASC"
+
+        with _connect(self.db_path) as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [_row_to_track_comparison_snapshot(row) for row in rows]
+
     def delete_trade(self, trade: PaperTrade) -> None:
         """Delete a single paper trade by its unique constraint fields.
 
@@ -1671,9 +1775,7 @@ class PaperStore:
                 ),
             )
 
-    def get_margin_snapshot(
-        self, strategy_name: str, entry_date: date
-    ) -> MarginSnapshot | None:
+    def get_margin_snapshot(self, strategy_name: str, entry_date: date) -> MarginSnapshot | None:
         """Fetch the margin snapshot for a strategy's entry cycle, if captured.
 
         Args:

@@ -25,6 +25,23 @@
   removing the second block lets a real broker chain yield a target for futures+overlay_cc).
   Verified via `py_compile` + graph re-index in-session (sandbox had no disk space for
   `pytest`); operator confirmed pytest green on host post-commit. — SHA: abdb7ef
+- [2026-07-29] 3-Track Consolidation **S3** — independent daily base-leg comparison snapshot,
+  overlay fully decoupled. New `TrackComparisonSnapshot` dataclass + `paper_track_comparison_snapshots`
+  table (`src/paper/models.py`, `src/paper/store.py`); `_compute_track_comparison_snapshot()` /
+  `_compute_spot_comparison_snapshot()` in `paper_3track_snapshot.py`, wired into `_run()`;
+  `generate_3track_viz.py` gets a visually separate RQ1 comparison table sourced from the new
+  table. Real `@code-reviewer` subagent run against `git diff HEAD`: 0 CRITICAL/ERROR, 2
+  WARNINGs deferred (see `DECISIONS.md` 2026-07-29 S3 entry). Verified via `py_compile` only —
+  sandbox `/sessions` disk was 100% full, `pip install` failed with "No space left on device",
+  pytest could not run in-session; operator to run `python -m pytest tests/unit/` and commit.
+  — SHA: pending (operator commit)
+- [2026-07-29] Fix mypy gap: `IronCondorV1._send_close_notification` called
+  `get_strategy_realized_pnl(self._store, ...)` (`PaperStore`-only param) against
+  `self._store: PaperStore | None`. Added explicit `self._store is None` branch (distinct log
+  event `net_pnl_calc_skipped_no_store` vs. genuine-failure `net_pnl_calc_failed`), matching the
+  method's existing non-fatal-notification contract. New test calls the private method directly
+  since the branch is unreachable through `apply_action`'s own guard. Unrelated to S3, own
+  commit. — SHA: pending (operator commit)
 
 ---
 

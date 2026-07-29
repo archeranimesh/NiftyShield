@@ -233,6 +233,49 @@ class PaperLegSnapshot:
     ltp: Decimal | None = None
 
 
+@dataclass(frozen=True)
+class TrackComparisonSnapshot:
+    """Daily base-instrument-only P&L snapshot for the 3-track RQ1 comparison.
+
+    One row per (strategy_name, snapshot_date) in
+    ``paper_track_comparison_snapshots``. Computed strictly from the base leg
+    (``base_etf`` / ``base_futures`` / ``base_ditm_call``) mark price — overlay
+    legs (CC/PP/Collar) never enter this table, by design (see
+    docs/plan/3track-consolidation/stories.md S3). Nifty spot is persisted as
+    a 4th synthetic series under ``strategy_name="nifty_index"`` so all four
+    series share one schema and one query path.
+
+    Attributes:
+        strategy_name: One of the three 3-track strategy names, or the
+            synthetic ``"nifty_index"`` value for the Nifty spot series.
+        snapshot_date: Date of this snapshot.
+        pnl_1d_abs: Today's base-leg mark value minus yesterday's base-leg
+            mark value (absolute Rupees).
+        pnl_1d_pct: ``pnl_1d_abs / yesterday's mark value`` — standard daily
+            return. Denominator is yesterday's closing mark, never entry cost
+            basis and never NEE/spot notional.
+        pnl_inception_abs: Today's base-leg mark value minus entry cost basis
+            (absolute Rupees, cumulative since the track's original entry).
+        pnl_inception_pct: ``pnl_inception_abs / entry_cost_basis``.
+            Deliberately a *different* denominator than ``pnl_1d_pct`` — the
+            two percentage fields are never computed off the same base and
+            must not be treated as directly subtractable/addable.
+        tracking_error_pct: Secondary/bonus field — this track's cumulative
+            return % minus Nifty spot's cumulative return % over the same
+            window since entry. ``None`` for the ``"nifty_index"`` row itself
+            (tracking error against itself is meaningless) and until entry
+            data is available to compute it.
+    """
+
+    strategy_name: str
+    snapshot_date: date
+    pnl_1d_abs: Decimal
+    pnl_1d_pct: Decimal
+    pnl_inception_abs: Decimal
+    pnl_inception_pct: Decimal
+    tracking_error_pct: Decimal | None = None
+
+
 class ExitSignal(str, Enum):
     PROFIT_TARGET = "PROFIT_TARGET"
     TIME_STOP = "TIME_STOP"

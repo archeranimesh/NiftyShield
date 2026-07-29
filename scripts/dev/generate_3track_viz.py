@@ -88,7 +88,34 @@ def _fetch_data(conn: sqlite3.Connection) -> dict:
                 entry[ov] = None
         series[track] = entry
 
-    return {"dates": dates, "series": series, "spot": spot}
+    # RQ1 comparison — read from paper_track_comparison_snapshots (S3), the
+    # persisted base-leg-only figures. Kept visually separate from the
+    # overlay-inclusive "series" above; never merged into the same chart.
+    cur.execute(
+        """
+        SELECT strategy_name, snapshot_date, pnl_1d_pct, pnl_inception_pct,
+               tracking_error_pct
+        FROM paper_track_comparison_snapshots
+        ORDER BY snapshot_date
+        """
+    )
+    strategy_to_label = {sname: track for track, (sname, _) in TRACKS.items()}
+    strategy_to_label["nifty_index"] = "Nifty Spot"
+    rq1_comparison: dict[str, dict] = {}
+    for sname, snap_date, pnl_1d_pct, pnl_inception_pct, tracking_error_pct in cur.fetchall():
+        label = strategy_to_label.get(sname, sname)
+        rq1_comparison[label] = {
+            "date": snap_date,
+            "pnl_1d_pct": round(float(pnl_1d_pct), 4) if pnl_1d_pct is not None else None,
+            "pnl_inception_pct": round(float(pnl_inception_pct), 4)
+            if pnl_inception_pct is not None
+            else None,
+            "tracking_error_pct": round(float(tracking_error_pct), 4)
+            if tracking_error_pct is not None
+            else None,
+        }
+
+    return {"dates": dates, "series": series, "spot": spot, "rq1_comparison": rq1_comparison}
 
 
 def _html(data: dict) -> str:
@@ -97,7 +124,22 @@ def _html(data: dict) -> str:
     dates = data["dates"]
     series = data["series"]
     spot = data["spot"]
+    rq1_comparison = data.get("rq1_comparison", {})
     last_date = dates[-1] if dates else "—"
+
+    def _fmt_pct(v: float | None) -> str:
+        if v is None:
+            return "—"
+        cls = "pos" if v >= 0 else "neg"
+        return f'<span class="{cls}">{v * 100:+.2f}%</span>'
+
+    rq1_rows = "".join(
+        f"<tr><td>{label}</td>"
+        f"<td>{_fmt_pct(vals['pnl_1d_pct'])}</td>"
+        f"<td>{_fmt_pct(vals['pnl_inception_pct'])}</td>"
+        f"<td>{_fmt_pct(vals['tracking_error_pct'])}</td></tr>"
+        for label, vals in rq1_comparison.items()
+    )
 
     # Short date labels: "May 11" etc.
     def fmt_date(d: str) -> str:
@@ -171,6 +213,16 @@ def _html(data: dict) -> str:
 <!-- OVERVIEW -->
 <div id="panel-overview" class="panel active">
   <div class="summary-grid" id="summary-cards"></div>
+  <div class="chart-wrap">
+    <h2>RQ1 Comparison — base-leg only (paper_track_comparison_snapshots, overlay excluded)</h2>
+    <table style="width:100%;border-collapse:collapse;font-size:.85rem">
+      <thead><tr style="color:#78909c;text-align:left">
+        <th style="padding:6px 8px">Track</th><th style="padding:6px 8px">1-Day</th>
+        <th style="padding:6px 8px">Inception</th><th style="padding:6px 8px">Tracking Error vs Spot</th>
+      </tr></thead>
+      <tbody style="color:#e0e0e0">{rq1_rows or '<tr><td colspan="4" style="padding:6px 8px;color:#78909c">No comparison snapshots yet</td></tr>'}</tbody>
+    </table>
+  </div>
   <div class="chart-wrap">
     <h2>Base Track Comparison (₹ P&amp;L from inception)</h2>
     <div class="legend-row">

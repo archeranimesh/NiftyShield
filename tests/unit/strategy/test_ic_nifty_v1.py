@@ -769,6 +769,46 @@ def test_apply_action_no_notifier_does_not_raise() -> None:
     assert result == []  # close still happens; notification is best-effort only
 
 
+def test_send_close_notification_no_store_skips_pnl_without_raising() -> None:
+    """store=None: notification still sends, net P&L text omitted, no crash.
+
+    Regression guard for the mypy gap fixed 2026-07-29 — get_strategy_realized_pnl
+    requires PaperStore, not PaperStore | None. _send_close_notification is only
+    reached via apply_action's own None-store guard today (line ~557), so this
+    branch is unreachable through that path; this test exercises the private
+    method directly so the guard has real coverage rather than being dead code.
+    """
+    from unittest.mock import AsyncMock, MagicMock
+
+    from src.models.portfolio import TradeAction
+    from src.paper.models import PaperTrade
+
+    notifier = MagicMock()
+    notifier.send_notification = AsyncMock()
+
+    strat = IronCondorV1(notifier=notifier)  # store=None
+    closed_trades = [
+        PaperTrade(
+            strategy_name=_STRATEGY,
+            leg_role="short_put",
+            instrument_key=_SHORT_PUT_KEY,
+            trade_date=date(2026, 5, 1),
+            action=TradeAction.BUY,
+            quantity=75,
+            price=Decimal("7.70"),
+            notes="close",
+        )
+    ]
+
+    with capture_logs() as logs:
+        asyncio.run(strat._send_close_notification("CLOSE_FULL", "PROFIT_TARGET", closed_trades))
+
+    notifier.send_notification.assert_called_once()
+    (message,), _ = notifier.send_notification.call_args
+    assert "Net P&L" not in message
+    assert any(log.get("event") == "ic_nifty_v1.net_pnl_calc_skipped_no_store" for log in logs)
+
+
 def test_apply_action_close_full_manual_action_does_not_auto_persist() -> None:
     """A manually-approved (non auto-execute) CLOSE_FULL does not call close_ic_legs.
 

@@ -884,6 +884,73 @@ Source: this session (Cowork), TODOS.md follow-up item from the 2026-07-21 colla
 
 ---
 
+## S3 — Independent daily base-leg comparison snapshot (2026-07-29)
+
+Implements `docs/plan/3track-consolidation/stories.md` S3 (operator-confirmed field
+definitions, 2026-07-28). RQ1 ("which base instrument tracks Nifty best") is answered from a
+new `paper_track_comparison_snapshots` table computed strictly from base-leg
+(`base_etf`/`base_futures`/`base_ditm_call`) mark price — overlay legs (CC/PP/Collar) never
+enter this table's aggregation, for any of the four series (three tracks + a synthetic
+`"nifty_index"` spot row), matching the operator's 2026-07-28 reversal of the original
+synthetic-attribution design. `pnl_1d_pct` and `pnl_inception_pct` use deliberately different
+denominators (yesterday's mark value vs. entry cost basis) — see `TrackComparisonSnapshot`
+docstring in `src/paper/models.py`.
+
+**Design choice — spot price history:** rather than a second spot-price table,
+`_compute_spot_comparison_snapshot`/`_spot_price_on` reuse `paper_nav_snapshots.underlying_price`
+(already fetched once per snapshot run and written for every track). Bootstrap case (no nav
+history yet for a track's entry date) falls back to today's spot as a same-day proxy, yielding
+a 0% inception return until real history accumulates — documented in the function docstring,
+not silently wrong.
+
+**Deferred (WARNING, real `@code-reviewer` subagent run against `git diff HEAD`, 0
+CRITICAL/ERROR):** both `_compute_track_comparison_snapshot`'s no-prior-leg-snapshot bootstrap
+branch and `_compute_spot_comparison_snapshot`'s prev-spot-lookup-gap fallback branch force
+`pnl_1d_pct = Decimal("0")` even when `pnl_1d_abs` is non-zero — an inconsistent pair on the
+rare day this fires (first-ever snapshot, or a gap in nav-snapshot history). Reviewer's own
+assessment: low mission impact (paper-trading, cosmetic edge case, not a live-capital P&L
+error) — deferred rather than blocking the commit. Revisit if the 0%/non-zero-abs mismatch is
+ever observed live in `generate_3track_viz.py`'s RQ1 table.
+
+**Sandbox note:** `/sessions` disk was 100% full this session (`pip install` failed with "No
+space left on device"), so pytest could not run in-session. All new/changed files verified via
+`python3 -m py_compile` (clean) and hand-traced against the new tests; operator will run
+`python -m pytest tests/unit/` locally before/after the commit — same substitution pattern as
+the 2026-07-22 `close_collar_all` entry above.
+
+Source: this session (Cowork), `docs/plan/3track-consolidation/tasks.md` S3 (first unchecked
+item, no unmet blockers).
+
+---
+
+## `IronCondorV1._send_close_notification` mypy gap fix (2026-07-29)
+
+Unrelated to the same-day S3 work — surfaced by operator running mypy locally:
+`get_strategy_realized_pnl(self._store, ...)` at `src/strategy/ic_nifty_v1.py:621` typed
+`self._store` as `PaperStore | None` against a `PaperStore`-only parameter. In practice
+`_send_close_notification` is only ever reached via `apply_action`'s own
+`if self._broker is None or self._store is None:` guard (line ~557), so `self._store` is
+non-None by the time this line runs today — but mypy doesn't narrow instance attributes across
+the method boundary, and the old code relied on that implicit guarantee inside a broad
+`except Exception` that would have silently mislabeled a `None`-store case as
+`net_pnl_calc_failed` if the guarantee were ever broken by a future caller.
+
+**Decision:** added an explicit `if self._store is None` branch before the try/except, logging
+`ic_nifty_v1.net_pnl_calc_skipped_no_store` (distinct event name from the genuine-failure
+`net_pnl_calc_failed`) and skipping straight to `pnl_text = ""` — matches this method's existing
+non-fatal-notification contract (see `src/notifications/CLAUDE.md`), same pattern as the
+`self._notifier is None` guard already at the top of the function.
+
+Tests: `tests/unit/strategy/test_ic_nifty_v1.py::test_send_close_notification_no_store_skips_pnl_without_raising`
+— calls the private method directly (the guarded branch is otherwise unreachable through
+`apply_action`'s own None-store short-circuit), asserting the notification still sends without
+"Net P&L" text and the new log event fires. Verified via `py_compile` only — same sandbox disk
+constraint as the S3 entry above; operator to confirm mypy clean + pytest green locally.
+
+Source: this session (Cowork), operator-reported mypy error.
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty
