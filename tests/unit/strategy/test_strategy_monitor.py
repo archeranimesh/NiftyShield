@@ -19,7 +19,7 @@ from src.client.exceptions import DataFetchError
 from src.models.options import OptionChain
 from src.paper.models import PaperPosition
 from src.strategy.monitor import StrategyMonitor
-from src.strategy.protocol import SignalEvent
+from src.strategy.protocol import LegSpec, SignalEvent
 
 # Import MockStrategy defined alongside the protocol tests.
 from tests.unit.strategy.test_strategy_protocol import MockStrategy
@@ -316,6 +316,93 @@ async def test_tick_action_create_approval_delegates_to_store() -> None:
     assert args[0] == strategy.strategy_name
     assert args[1] == "TIME_STOP"
     assert args[3] == 99  # msg_id propagated from send_approval_request
+
+
+@pytest.mark.asyncio
+async def test_route_event_threads_legs_to_open_into_approved_action() -> None:
+    """_route_event's generic auto-execute dispatch must pass event.payload's
+    legs_to_open through to the ApprovedAction it builds — regression guard
+    for the bug found while scoping S4 (NiftyTrackComparisonV1's ROLL_OVERLAY
+    requires a non-empty legs_to_open; the old hardcoded legs_to_open=[]
+    would raise inside apply_action and be silently swallowed)."""
+    strategy = MockStrategy()
+    strategy.auto_execute = True
+    strategy.apply_action = AsyncMock(return_value=[])
+    replacement_leg = LegSpec(
+        instrument_key="NSE_FO|NIFTY01AUG202623500PE",
+        action="BUY",
+        quantity=75,
+        leg_role="overlay_pp",
+        price=Decimal("60"),
+    )
+    event = SignalEvent(
+        event_type="ROLL_ELIGIBLE",
+        severity="ACTION",
+        description="roll eligible",
+        payload={
+            "leg_role": "overlay_pp",
+            "auto_execute": True,
+            "auto_action": "ROLL_OVERLAY",
+            "legs_to_open": [replacement_leg],
+        },
+    )
+    strategy.check_signals = AsyncMock(return_value=[event])
+
+    store = _make_store()
+    notifier = _make_notifier()
+    monitor = _make_monitor(store=store, notifier=notifier, strategies=[strategy])
+
+    with (
+        patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch(
+            "src.strategy.monitor.datetime",
+            **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
+        ),
+    ):
+        await monitor._tick()
+
+    strategy.apply_action.assert_called_once()
+    dispatched_action = strategy.apply_action.call_args[0][1]
+    assert dispatched_action.legs_to_open == [replacement_leg]
+    notifier.send_approval_request.assert_not_called()
+    store.create_approval.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_route_event_defaults_legs_to_open_empty_for_close_only_actions() -> None:
+    """Regression guard: close-only auto-execute strategies (CCOverlayV1-style,
+    no legs_to_open in payload) are unaffected by the legs_to_open threading —
+    still get an empty list, same as before this fix."""
+    strategy = MockStrategy()
+    strategy.auto_execute = True
+    strategy.apply_action = AsyncMock(return_value=[])
+    event = SignalEvent(
+        event_type="PROFIT_TARGET",
+        severity="ACTION",
+        description="close short call",
+        payload={
+            "leg_role": "overlay_cc",
+            "auto_execute": True,
+            "auto_action": "CLOSE_CC",
+        },
+    )
+    strategy.check_signals = AsyncMock(return_value=[event])
+
+    store = _make_store()
+    notifier = _make_notifier()
+    monitor = _make_monitor(store=store, notifier=notifier, strategies=[strategy])
+
+    with (
+        patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch(
+            "src.strategy.monitor.datetime",
+            **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
+        ),
+    ):
+        await monitor._tick()
+
+    dispatched_action = strategy.apply_action.call_args[0][1]
+    assert dispatched_action.legs_to_open == []
 
 
 # ---------------------------------------------------------------------------

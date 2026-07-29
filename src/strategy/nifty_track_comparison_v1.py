@@ -32,8 +32,9 @@ import structlog
 from src.instruments.lookup import InstrumentLookup
 from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
+from src.models.portfolio import TradeAction
 from src.paper.constants import DEFAULT_BOD_PATH
-from src.paper.models import PaperPosition
+from src.paper.models import PaperPosition, PaperTrade
 from src.strategy._price_utils import find_option_leg
 from src.strategy.exit_signals import ExitSignalEngine
 from src.strategy.protocol import ApprovedAction, LegClose, LegSpec, SignalEvent
@@ -97,6 +98,7 @@ class NiftyTrackComparisonV1:
     """
 
     strategy_name: str = "paper_nifty_3track_v1"
+    auto_execute: bool = True
 
     TRACK_STRATEGY_NAMES: list[str] = [
         "paper_nifty_spot",
@@ -294,6 +296,29 @@ class NiftyTrackComparisonV1:
                     )
                 for res in roll_results:
                     if res.exit_signal == "ROLL_ELIGIBLE":
+                        # Resolve a replacement leg now so this urgent (DTE ≤ 5) roll can
+                        # auto-execute like the DTE 6–10 advance-notice path already does.
+                        # Without a target, ROLL_OVERLAY has nothing to open — falls back
+                        # to the Telegram approval flow (auto_execute key simply absent).
+                        roll_target = await self._select_overlay_roll_target(pos.leg_role)
+                        roll_payload: dict[str, Any] = {
+                            **payload_base,
+                            "valid_actions": ["RECORD_ROLL"],
+                        }
+                        if roll_target is not None:
+                            roll_payload["auto_execute"] = True
+                            roll_payload["auto_action"] = "ROLL_OVERLAY"
+                            roll_payload["valid_actions"] = ["ROLL_OVERLAY", "RECORD_ROLL"]
+                            roll_payload["strategy_name"] = pos.strategy_name
+                            roll_payload["suggested_instrument_key"] = roll_target.instrument_key
+                            roll_payload["suggested_strike"] = roll_target.notes
+                            roll_payload["legs_to_open"] = [roll_target]
+                            # Close-side mark for the leg being rolled away — apply_action
+                            # reads this for the closing PaperTrade price; falls back to
+                            # avg_sell_price/avg_cost there when unavailable.
+                            closing_leg = self._find_option_leg(market, pos.instrument_key)
+                            if closing_leg is not None:
+                                roll_payload["mark"] = str(closing_leg.ltp)
                         events.append(
                             SignalEvent(
                                 event_type="ROLL_ELIGIBLE",
@@ -302,7 +327,7 @@ class NiftyTrackComparisonV1:
                                     f"Overlay {pos.leg_role} on {pos.strategy_name} "
                                     f"DTE {dte} ≤ {_ROLL_ELIGIBLE_DTE} — roll eligible"
                                 ),
-                                payload={**payload_base, "valid_actions": ["RECORD_ROLL"]},
+                                payload=roll_payload,
                             )
                         )
                     elif res.exit_signal == "ROLL_BASE_FIRST":
@@ -321,6 +346,7 @@ class NiftyTrackComparisonV1:
                 # DTE 6–10: advance notice — upgrade to ACTION when a roll target is available.
                 target = await self._select_overlay_roll_target(pos.leg_role)
                 if target is not None:
+                    closing_leg = self._find_option_leg(market, pos.instrument_key)
                     events.append(
                         SignalEvent(
                             event_type="ROLL_DUE_DTE",
@@ -331,12 +357,15 @@ class NiftyTrackComparisonV1:
                             ),
                             payload={
                                 **payload_base,
+                                "auto_execute": True,
+                                "auto_action": "ROLL_OVERLAY",
                                 "strategy_name": pos.strategy_name,
                                 "suggested_instrument_key": target.instrument_key,
                                 "suggested_strike": target.notes,
                                 "suggested_expiry": "",
                                 "suggested_delta": "",
                                 "suggested_mid_price": "",
+                                "mark": str(closing_leg.ltp) if closing_leg is not None else None,
                                 "valid_actions": ["ROLL_OVERLAY"],
                                 "legs_to_open": [target],
                             },
@@ -373,6 +402,8 @@ class NiftyTrackComparisonV1:
                             target = await self._select_overlay_roll_target(pos.leg_role)
                             severity: Literal["WARN", "ACTION"]
                             if target is not None:
+                                decay_payload["auto_execute"] = True
+                                decay_payload["auto_action"] = "ROLL_OVERLAY"
                                 decay_payload["strategy_name"] = pos.strategy_name
                                 decay_payload["suggested_instrument_key"] = target.instrument_key
                                 decay_payload["suggested_strike"] = target.notes
@@ -473,11 +504,16 @@ class NiftyTrackComparisonV1:
         positions: list[PaperPosition],
         action: ApprovedAction,
     ) -> list[PaperPosition]:
-        """Execute ROLL_OVERLAY or ROLL_COLLAR — optimistic in-memory position update.
+        """Execute ROLL_OVERLAY or ROLL_COLLAR — persists the roll and updates in-memory state.
 
         Closes legs listed in ``action.legs_to_close`` by removing matching
-        positions from the list.  The executor handles all DB writes; this method
-        only returns the post-roll in-memory position state.
+        positions from the list, and persists the close (+ the replacement
+        open from ``action.legs_to_open``) to ``paper_trades`` via a single
+        atomic ``store.record_trades()`` call when a store is configured
+        (2026-07-29, S4 — this method used to be in-memory-only, relying on
+        an "executor" dispatch that never actually existed; auto-executing
+        without this fix would compute a roll and never write it, the same
+        failure class as the 2026-07-15 IC incident).
 
         ROLL_OVERLAY: one leg closed + one LegSpec in ``legs_to_open``.
         ROLL_COLLAR:  two legs closed (collar_put + collar_call) + two LegSpecs.
@@ -505,11 +541,113 @@ class NiftyTrackComparisonV1:
         # instrument_keys, and leg_role-only matching would incorrectly drop both
         # (PG-4h).  Falls back to leg_role-only matching when instrument_key is
         # None, preserving pre-PG-4a behavior.
-        return [
-            p
-            for p in positions
-            if not any(_leg_close_matches(p, leg) for leg in action.legs_to_close)
+        closed_positions = [
+            p for p in positions if any(_leg_close_matches(p, leg) for leg in action.legs_to_close)
         ]
+        updated = [p for p in positions if p not in closed_positions]
+
+        self._persist_roll(closed_positions, action)
+
+        return updated
+
+    def _persist_roll(
+        self,
+        closed_positions: list[PaperPosition],
+        action: ApprovedAction,
+    ) -> None:
+        """Write the roll's close + open legs to ``paper_trades`` atomically.
+
+        Non-fatal by omission, not by design: a leg whose price cannot be
+        resolved (no live mark and no positive avg cost/credit fallback, or
+        a ``LegSpec`` with no ``price`` captured at selection time) is logged
+        at WARNING and skipped rather than persisted with a fabricated price
+        — a missing roll leg is visible on the next tick's DTE check; a
+        wrong-priced one silently corrupts P&L history.
+
+        Args:
+            closed_positions: Positions matched by ``action.legs_to_close``.
+            action: The approved roll action; ``action.metadata`` carries the
+                signal payload (``mark``, ``strategy_name``) set in
+                ``check_signals``.
+        """
+        if self._store is None:
+            return
+
+        today = market_today()
+        metadata = action.metadata or {}
+        trades: list[PaperTrade] = []
+
+        for pos in closed_positions:
+            if pos.net_qty == 0:
+                # Defensive: PaperTrade.quantity requires > 0. Not known to be reachable
+                # today (callers pass live open positions), but skip+warn matches this
+                # method's stated contract rather than letting a pydantic ValidationError
+                # propagate uncaught.
+                log.warning(
+                    "nifty_track_comparison_v1.apply_action.flat_position_skip",
+                    leg_role=pos.leg_role,
+                    instrument_key=pos.instrument_key,
+                )
+                continue
+            mark = metadata.get("mark")
+            try:
+                close_price = Decimal(str(mark)) if mark is not None else None
+            except Exception:
+                close_price = None
+            if close_price is None or close_price <= Decimal("0"):
+                close_price = pos.avg_sell_price if pos.net_qty < 0 else pos.avg_cost
+            if close_price <= Decimal("0"):
+                log.warning(
+                    "nifty_track_comparison_v1.apply_action.zero_close_price_skip",
+                    leg_role=pos.leg_role,
+                    instrument_key=pos.instrument_key,
+                )
+                continue
+            trades.append(
+                PaperTrade(
+                    strategy_name=pos.strategy_name,
+                    leg_role=pos.leg_role,
+                    instrument_key=pos.instrument_key,
+                    trade_date=today,
+                    action=TradeAction.BUY if pos.net_qty < 0 else TradeAction.SELL,
+                    quantity=abs(pos.net_qty),
+                    price=close_price,
+                    notes="roll close via apply_action",
+                )
+            )
+
+        strategy_name = metadata.get("strategy_name") or (
+            closed_positions[0].strategy_name if closed_positions else None
+        )
+        for leg in action.legs_to_open:
+            if strategy_name is None:
+                log.warning(
+                    "nifty_track_comparison_v1.apply_action.unknown_strategy_name_skip",
+                    leg_role=leg.leg_role,
+                )
+                continue
+            if leg.price is None or leg.price <= Decimal("0"):
+                log.warning(
+                    "nifty_track_comparison_v1.apply_action.zero_open_price_skip",
+                    leg_role=leg.leg_role,
+                    instrument_key=leg.instrument_key,
+                )
+                continue
+            trades.append(
+                PaperTrade(
+                    strategy_name=strategy_name,
+                    leg_role=leg.leg_role,
+                    instrument_key=leg.instrument_key,
+                    trade_date=today,
+                    action=TradeAction[leg.action],
+                    quantity=leg.quantity,
+                    price=leg.price,
+                    notes="roll open via apply_action",
+                )
+            )
+
+        if trades:
+            self._store.record_trades(trades)
 
     # ── Roll target selection ─────────────────────────────────────────────────
 
@@ -578,6 +716,7 @@ class NiftyTrackComparisonV1:
             quantity=_NIFTY_LOT_SIZE,
             leg_role=leg_role,
             notes=str(leg.strike),
+            price=leg.ltp,
         )
 
     async def _fetch_next_chain(self) -> OptionChain | None:

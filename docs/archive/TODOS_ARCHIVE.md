@@ -7,6 +7,28 @@
 
 ## Session Log — 2026-07-29
 
+- [2026-07-29] 3-Track Consolidation **S4** — `NiftyTrackComparisonV1.auto_execute` flipped
+  `False → True`. Scoping surfaced two real, pre-existing gaps fixed in the same commit rather
+  than deferred: (1) `StrategyMonitor._route_event` (`src/strategy/monitor.py`) hardcoded
+  `legs_to_open=[]` on every auto-execute `ApprovedAction` — this strategy's `ROLL_OVERLAY`
+  requires a non-empty `legs_to_open` and raises otherwise, and the exception was silently
+  swallowed by `_route_event`'s bare `except Exception`, meaning every auto-executed roll would
+  have no-op'd forever with zero visibility; fixed by threading
+  `event.payload.get("legs_to_open", [])` through. (2) `NiftyTrackComparisonV1.apply_action` never
+  persisted anything to `paper_trades` — it referenced a "PaperExecutor" DB-write step that does
+  not exist anywhere in the codebase (`_route_event` is the only caller); fixed with a new
+  `_persist_roll()` helper writing close+open legs via one atomic `store.record_trades()` call,
+  same discipline as `close_ic_legs()` — this is the exact 2026-07-15 IC-incident failure class
+  the S4 story spec explicitly warned against. `check_signals`'s ROLL_ELIGIBLE (DTE ≤ 5) branch
+  now also resolves a roll target (previously only the DTE 6–10 and decay branches did) so the
+  most urgent roll case can actually auto-execute. New `LegSpec.price: Decimal | None = None`
+  field (`src/strategy/protocol.py`, additive) carries the live LTP captured at target-selection
+  time through to the open-leg persistence. `RECORD_REENTRY` (proxy-delta) stays manual by
+  design — not in `_ALLOWED_ACTIONS`, regression-tested. Full detail: `DECISIONS.md` 2026-07-29
+  S4 entry. Tests: 9 new (7 strategy-level, 2 monitor-level); full `tests/unit/strategy/` suite
+  (501 tests) re-run clean via code-reviewer subagent with a working pytest env (sandbox itself
+  lacks pytest — known disk-quota constraint). 0 CRITICAL/ERROR from review; 1 deferred WARNING
+  (flat-position guard, addressed same session) — SHA: pending
 - [2026-07-29] 3-Track Consolidation **S3r** — query-time overlay coverage ratio per track
   (Spot/Futures/Proxy), no persistence, no duplicate rows. New
   `src/portfolio/overlay_coverage.py::compute_overlay_coverage`, `OverlayCoverage` dataclass

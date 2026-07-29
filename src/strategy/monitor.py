@@ -315,10 +315,14 @@ class StrategyMonitor:
                 # Pass full payload so apply_action() receives all state-update keys
                 # (e.g. cumulative_lock_debit_pts, new_put_width_pts for PROFIT_LOCK_ZONE2).
                 metadata = dict(event.payload)
+                # legs_to_open threads through any replacement leg(s) the strategy already
+                # selected in check_signals (e.g. NiftyTrackComparisonV1's ROLL_OVERLAY —
+                # apply_action requires a non-empty legs_to_open and raises otherwise).
+                # Defaults to [] for close-only actions (CLOSE_CC, CLOSE_AND_WAIT, ...).
                 action = ApprovedAction(
                     action_type=action_type,
                     legs_to_close=[LegClose(leg_role=event.payload.get("leg_role", "short_put"))],
-                    legs_to_open=[],
+                    legs_to_open=event.payload.get("legs_to_open", []),
                     rationale="auto-execute",
                     council_rank=1,
                     metadata=metadata,

@@ -1003,6 +1003,23 @@ Source: this session (Cowork), operator-reported mypy error.
 
 ---
 
+## 3-Track Consolidation S4 — NiftyTrackComparisonV1 full automation (2026-07-29)
+
+**Decision:** `NiftyTrackComparisonV1.auto_execute` flipped `False → True` (`docs/plan/3track-consolidation/prompt.md` Decision Log #3, council checkpoint explicitly skipped by operator). Scoping this surfaced two pre-existing gaps that would have made the flip unsafe on its own — both fixed in the same commit, not deferred:
+
+1. **`StrategyMonitor._route_event` (`src/strategy/monitor.py`) hardcoded `legs_to_open=[]`** on every auto-execute `ApprovedAction` it builds. `NiftyTrackComparisonV1.apply_action` requires a non-empty `legs_to_open` for `ROLL_OVERLAY`/`ROLL_COLLAR` and raises otherwise — the exception was caught by `_route_event`'s bare `except Exception: log.exception(...)`, meaning every auto-executed roll would have silently no-op'd forever with no Telegram visibility. Fixed: `legs_to_open=event.payload.get("legs_to_open", [])`. Close-only strategies (CC/PP/Collar) are unaffected — their payloads never set that key, so it defaults to `[]` exactly as before.
+2. **`NiftyTrackComparisonV1.apply_action` never persisted anything** — it only removed the closed leg from the in-memory positions list, per its own docstring ("the executor handles all DB writes"), referring to a `PaperExecutor.dispatch` call that does not exist anywhere in the codebase; `_route_event` is the *only* caller of `apply_action`. Automating this strategy without a fix would have computed rolls correctly and never written them to `paper_trades` — the same failure class as the 2026-07-15 IC incident this epic's S4 story spec explicitly calls out. Fixed: new `_persist_roll()` helper writes close + open legs via one atomic `store.record_trades()` call, mirroring `close_ic_legs()`'s discipline. Close price sourced from `action.metadata["mark"]` (now populated in `check_signals` for all three roll-eligible branches), falling back to `avg_sell_price`/`avg_cost`; open price sourced from a new `LegSpec.price: Decimal | None = None` field (`src/strategy/protocol.py`, additive, no existing call site broken), captured from the live LTP at the moment `_select_overlay_roll_target` selects a candidate. Any leg whose price can't be resolved (or a flat `net_qty == 0` closed position — defensive, not known to be reachable today) is skipped with a WARNING log rather than persisted with a fabricated price.
+
+`RECORD_REENTRY` (proxy-delta breach on `base_ditm_call`) is deliberately excluded from auto-execution — it is not in `NiftyTrackComparisonV1._ALLOWED_ACTIONS`, so it always stays on the Telegram approval path. Not a gap to close; scoped out on purpose (regression-tested).
+
+**Deferred, flagged not blocking (from code-reviewer subagent pass, 2026-07-29):** `_route_event`'s per-tick dispatch ordering when multiple `ROLL_ELIGIBLE`/`ROLL_DUE_DTE` events fire for the same underlying leg in one tick was not traced — theoretical risk of a double-dispatch race before the first `_persist_roll` commits. No test covers this; not known to be reachable given `check_signals` only emits one roll-class event per position per tick today. Revisit if a future story adds concurrent per-leg evaluation.
+
+Tests: `tests/unit/strategy/test_nifty_track_comparison_v1.py` (7 new), `tests/unit/strategy/test_strategy_monitor.py` (2 new). Full `tests/unit/strategy/` suite (501 tests) re-run clean — confirms the `_route_event` change doesn't regress CSP/CC/IC/Collar's existing auto-execute paths. Verified via a code-reviewer subagent with a working pytest environment (77/77 target tests passed) — sandbox itself lacks pytest (known disk-quota constraint, see prior S3 entries).
+
+Source: this session (Cowork), `docs/plan/3track-consolidation/stories.md` S4.
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty

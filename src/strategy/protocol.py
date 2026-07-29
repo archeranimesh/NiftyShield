@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Any, Literal, Protocol, runtime_checkable
 
 from src.models.options import OptionChain
@@ -16,6 +17,13 @@ class LegSpec:
     quantity: int
     leg_role: str  # e.g. "short_put", "long_put_hedge"
     notes: str = ""
+    # Execution price captured at selection time (e.g. live LTP when the roll
+    # target was chosen). Optional — most legs_to_open construction sites predate
+    # this field and don't persist a new open trade themselves. None means "no
+    # price known"; callers that persist an open trade from this leg (e.g.
+    # NiftyTrackComparisonV1.apply_action) must treat that as "cannot record,
+    # skip and warn" rather than defaulting to a fabricated price.
+    price: Decimal | None = None
 
 
 @dataclass(frozen=True)

@@ -857,3 +857,179 @@ def test_apply_action_roll_overlay_empty_legs_to_open_raises_value_error() -> No
     )
     with pytest.raises(ValueError, match="requires at least one leg"):
         _run(strategy.apply_action([_make_position()], action))
+
+
+# ── S4: full automation (auto_execute=True) ──────────────────────────────────
+
+
+class FakeStore:
+    """Minimal store stub: records every `record_trades` call verbatim."""
+
+    def __init__(self) -> None:
+        self.recorded_batches: list[list[object]] = []
+
+    def record_trades(self, trades: list[object]) -> tuple[list[object], list[object]]:
+        self.recorded_batches.append(list(trades))
+        return (list(trades), [])
+
+
+def test_auto_execute_flag_is_true() -> None:
+    """S4: NiftyTrackComparisonV1 is now a fully automated strategy, matching
+    CCOverlayV1/PPOverlayV1/CollarOverlayV1's existing auto_execute=True."""
+    assert NiftyTrackComparisonV1.auto_execute is True
+
+
+def test_roll_eligible_action_dispatches_without_approval() -> None:
+    """DTE ≤ 5 with a broker-resolved target sets auto_execute + auto_action in the
+    payload, and includes legs_to_open — the two things StrategyMonitor._route_event
+    needs to dispatch straight to apply_action instead of the Telegram approval flow."""
+    next_chain = _make_next_chain(option_type="PE", strike="23500", delta="-0.20")
+    broker = MockBroker(chain=next_chain)
+    strategy = NiftyTrackComparisonV1(broker=broker)
+    pos = _make_position(
+        strategy_name=_SPOT,
+        leg_role="overlay_pp",
+        instrument_key=_expiry_key(4),
+    )
+    result = _run(strategy.check_signals(_make_empty_chain(), [pos]))
+    roll_events = [e for e in result if e.event_type == "ROLL_ELIGIBLE"]
+    assert len(roll_events) == 1
+    event = roll_events[0]
+    assert event.payload.get("auto_execute") is True
+    assert event.payload.get("auto_action") == "ROLL_OVERLAY"
+    assert len(event.payload.get("legs_to_open", [])) == 1
+    assert event.payload["legs_to_open"][0].price is not None
+
+
+def test_roll_eligible_without_broker_stays_manual() -> None:
+    """No broker configured → _select_overlay_roll_target returns None → the
+    ROLL_ELIGIBLE event carries no auto_execute key, so it still routes through
+    Telegram approval (regression guard: a missing target must never auto-fire)."""
+    strategy = NiftyTrackComparisonV1()  # no broker
+    pos = _make_position(
+        strategy_name=_SPOT,
+        leg_role="overlay_pp",
+        instrument_key=_expiry_key(4),
+    )
+    result = _run(strategy.check_signals(_make_empty_chain(), [pos]))
+    roll_events = [e for e in result if e.event_type == "ROLL_ELIGIBLE"]
+    assert len(roll_events) == 1
+    assert "auto_execute" not in roll_events[0].payload
+
+
+def test_proxy_reentry_action_stays_manual_never_auto_executes() -> None:
+    """RECORD_REENTRY (proxy delta breach) is not in _ALLOWED_ACTIONS for
+    apply_action — it must never carry auto_execute, or StrategyMonitor would
+    dispatch it straight into a ValueError swallowed by _route_event's bare
+    except. Regression guard distinguishing this from the ROLL_* signals.
+    Mirrors test_proxy_delta_critical_breach's setup (delta=0.38, count=3)."""
+    store = MockStore(count=3)
+    strategy = NiftyTrackComparisonV1(store=store)
+
+    ce = _make_leg(ltp="80", delta="0.38", option_type="CE")
+    market = OptionChain(
+        underlying_spot=Decimal("24000"),
+        expiry=date(2026, 6, 26),
+        strikes={Decimal("24000"): OptionChainStrike(ce=ce, pe=None)},
+    )
+    positions = [
+        PaperPosition(
+            strategy_name=_PROXY,
+            leg_role="base_ditm_call",
+            instrument_key="NSE_FO|NIFTY24000CE",
+            net_qty=65,
+            avg_cost=Decimal("120"),
+            avg_sell_price=Decimal("0"),
+        )
+    ]
+    result = _run(strategy.check_signals(market, positions))
+    action_events = [e for e in result if e.severity == "ACTION"]
+    assert action_events, "expected the PROXY_DELTA_CRITICAL ACTION event"
+    for event in action_events:
+        assert "auto_execute" not in event.payload
+
+
+def test_auto_executed_action_persists_to_paper_trades() -> None:
+    """Regression test for the 2026-07-15 IC class of bug: an auto-executed
+    ROLL_OVERLAY must actually write the close + open legs to paper_trades via
+    store.record_trades(), not just update the in-memory position list."""
+    store = FakeStore()
+    strategy = NiftyTrackComparisonV1(store=store)
+    closed_pos = _make_position(
+        strategy_name=_SPOT,
+        leg_role="overlay_pp",
+        instrument_key="NSE_FO|NIFTY24000PE",
+        net_qty=65,  # long put — close is a SELL
+        avg_cost="80",
+    )
+    open_leg = LegSpec(
+        instrument_key="NSE_FO|NIFTY01AUG202623500PE",
+        action="BUY",
+        quantity=65,
+        leg_role="overlay_pp",
+        price=Decimal("60"),
+    )
+    action = ApprovedAction(
+        action_type="ROLL_OVERLAY",
+        legs_to_close=[LegClose(leg_role="overlay_pp", instrument_key="NSE_FO|NIFTY24000PE")],
+        legs_to_open=[open_leg],
+        rationale="auto-execute",
+        council_rank=1,
+        metadata={"strategy_name": _SPOT, "mark": "55"},
+    )
+    result = _run(strategy.apply_action([closed_pos], action))
+
+    assert result == []  # closed leg removed from in-memory state
+    assert len(store.recorded_batches) == 1
+    trades = store.recorded_batches[0]
+    assert len(trades) == 2
+    close_trade = next(t for t in trades if t.instrument_key == "NSE_FO|NIFTY24000PE")
+    open_trade = next(t for t in trades if t.instrument_key == open_leg.instrument_key)
+    assert close_trade.action.value == "SELL"  # closing a long put
+    assert close_trade.price == Decimal("55")  # from action.metadata["mark"]
+    assert open_trade.action.value == "BUY"
+    assert open_trade.price == Decimal("60")  # from LegSpec.price
+    assert open_trade.strategy_name == _SPOT
+
+
+def test_apply_action_no_store_does_not_raise() -> None:
+    """No store configured (store=None, e.g. tests / dry-run use) → apply_action
+    still returns updated positions without attempting persistence."""
+    strategy = NiftyTrackComparisonV1()  # store=None
+    action = _make_approved_action()
+    result = _run(strategy.apply_action([_make_position()], action))
+    assert result == []
+
+
+def test_apply_action_skips_leg_with_no_resolvable_price() -> None:
+    """A LegSpec with no price and a closed position with no positive
+    avg_cost/avg_sell_price fallback must be skipped, not persisted with a
+    fabricated price — silent corruption of P&L history is worse than a
+    visibly missing trade row."""
+    store = FakeStore()
+    strategy = NiftyTrackComparisonV1(store=store)
+    closed_pos = _make_position(
+        strategy_name=_SPOT,
+        leg_role="overlay_pp",
+        instrument_key="NSE_FO|NIFTY24000PE",
+        net_qty=65,
+        avg_cost="0",  # no cost basis
+        avg_sell_price="0",
+    )
+    open_leg = LegSpec(
+        instrument_key="NSE_FO|NIFTY01AUG202623500PE",
+        action="BUY",
+        quantity=65,
+        leg_role="overlay_pp",
+        # price intentionally omitted (None)
+    )
+    action = ApprovedAction(
+        action_type="ROLL_OVERLAY",
+        legs_to_close=[LegClose(leg_role="overlay_pp", instrument_key="NSE_FO|NIFTY24000PE")],
+        legs_to_open=[open_leg],
+        rationale="auto-execute",
+        council_rank=1,
+        metadata={"strategy_name": _SPOT},
+    )
+    _run(strategy.apply_action([closed_pos], action))
+    assert store.recorded_batches == []
