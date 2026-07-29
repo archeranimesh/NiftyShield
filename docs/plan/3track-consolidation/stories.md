@@ -1,219 +1,83 @@
 # 3-Track Consolidation & Automation — Story Specs
 
-> Read `prompt.md` first — it has the Decision Log this whole epic depends on.
-> Story order (revised 2026-07-28, two rounds): S3 and S5 are independent of S1/S2 — the daily
-> comparison snapshot is base-leg-only and never reads overlay rows, so overlay duplication/
-> restriction no longer gates it. **S4 (overlay automation) still needs S1 + S2 landed first** —
-> automating overlay actions on top of triplicated/unrestricted overlay data would let a bot act
-> on the CC state bug or roll an overlay onto a track it's no longer supposed to exist on. **S6
-> (bootstrap-entry automation + trade-event Telegram notifications — revised same day, see below)
-> needs S2 + S5 landed first** — it automates overlay/base entry and wires notifications into S5's
-> roll executor, so it can't ship before those exist. Suggested pick-up order: S3 can start
-> immediately, standalone. S5 can start immediately, standalone, but is more useful landed before
-> S6. S1 waits on operator go-ahead; S2 can follow S1 or run parallel with S3/S5. S4 after S1+S2.
-> S6 last of the functional stories, after S2+S5 (and ideally S4, since S6 is the story that
-> removes the last human checkpoint from the whole pipeline — better to land it once overlay
-> automation is already proven stable). S0 (docs) trails everything, after S6, since stale docs
-> actively mislead the next session per CLAUDE.md Rule 0.
-> **Correction (2026-07-28, same day):** S6 originally specified a recurring, fixed-cadence
-> re-entry trigger with an unresolved cycle-overlap question. A lifecycle walkthrough with the
-> operator surfaced that all three tracks are actually perpetual single-entry positions — nothing
-> in this epic ever closes one, "roll" means contract maintenance, not cycle renewal. S6 is revised
-> below to a one-time bootstrap entry; the cadence/overlap question is void, not just answered.
+> Read `prompt.md` first — it has the epic's Decision Log. Find your task ID in
+> `docs/plan/3track-consolidation/tasks.md`'s checklist, then jump straight to that heading
+> below (`##`/`###` headings match task IDs exactly, e.g. `## S5`, `### S3r`). Only open/pending
+> stories live in this file — completed ones (S1r, S2r, S3, plus the original superseded S1/S2)
+> are archived in full at `docs/archive/plan/3track-consolidation-completed.md`, referenced from
+> S3r's recap below where their reasoning is still load-bearing.
+
+> **Story order:** S3r, S5, S7 are independent — any can start immediately. **S4** (overlay
+> automation) needs S1r+S2r landed first (done) plus S3r ideally in place so automation isn't
+> flying blind on coverage. **S6** needs S2r+S5 landed (S2r done; S5 pending) and is best
+> sequenced after S4. **S0** (docs) trails everything. **S8** needs **S7** landed first (reads
+> S7's leg-role fix). **S9** needs **S3 and S8** landed first (reads their output tables only).
+> CC1/PP1/Collar1 (delta ladders) → CC2/PP2/Collar2 (decision gates) → CC3/PP3/Collar3
+> (automated entry) is a strict per-thread chain; PP1a and the re-entry-gap halves of
+> CC3/PP3/Collar3 can each ship independently/first. See each story's own "Depends on" line for
+> specifics — do not infer ordering by story number alone.
 
 ---
 
-## S1 — Retire duplicate overlay legs on Futures and Proxy (data migration, operator go-ahead required)
+## S3r — Per-track coverage/P&L comparison, computed at query time
 
-**Context:** `paper_trades` currently carries near-identical overlay legs across all three
-strategy namespaces — same instrument_key, same strike, same entry price, entered the same
-day — because the original design (RQ2) wanted overlay-per-base comparison. Confirmed live
-duplicates as of 2026-07-20:
+**Context recap (full decision history archived in
+`docs/archive/plan/3track-consolidation-completed.md`'s REVISION section — S1r/S2r, both
+shipped 2026-07-29):** overlay legs now live in a track-independent `paper_nifty_overlay`
+strategy_name (S1r) with no track-ownership entry blocks (S2r). Per-track overlay coverage/P&L
+must be computed **at query time only**, never via duplicate trade rows per track (that was
+RQ2's mistake). Qty/lot values are **not** normalized or resized — Spot's 5735 ETF units,
+Futures' 65-qty (1 lot), Proxy's 65-qty (1 lot) are used as-is; capital parity (~15L margin at
+entry, confirmed by operator) is what makes the three tracks P&L-comparable, not exposure
+parity. Exposure (effective Nifty units) still differs per track — ETF ≈1x, Futures levered via
+SPAN margin, DITM call ≈ delta <1x — so overlay *coverage ratio* per track is a real per-track
+calculation, not a flat lookup.
 
-| leg_role | instrument_key | Spot | Futures | Proxy |
-|---|---|---|---|---|
-| `overlay_collar_call` | `NSE_FO\|65900` | open | open | open |
-| `overlay_collar_put` | `NSE_FO\|65894` | open | open | open |
-| `overlay_pp` | `NSE_FO\|58627` | open (never closed — likely expired, booking gap) | open (same gap) | closed (rolled correctly) |
-| `overlay_pp` | `NSE_FO\|63848` | open | open | — |
-| `overlay_cc` | `NSE_FO\|71474` | state=OPEN but net flat (bought back 06-08) — **separately a data bug, not in scope here, see S1b** | n/a (hard-blocked, never existed for futures) | state=OPEN but net flat |
+**Problem:** with overlay re-homed to its own namespace (S1r), there is no existing code path that
+answers "how much protection does this overlay give Spot / Futures / Proxy right now" — that
+comparison was never built under the RQ2 design (which faked it by physical duplication) and isn't
+built under S3's base-only snapshot either (S3 deliberately excludes overlay). This story is the
+actual query-time join the operator is asking for.
 
-**Decision (prompt.md #2 recommendation — confirm with operator before executing this story,
-even though the rest of the epic doesn't need sign-off):** write explicit closing trades for
-the Futures and Proxy copies of `overlay_collar_call`, `overlay_collar_put`, and `overlay_pp`,
-priced at the LTP available at story-execution time (same pattern as `close_ic_legs()` in
-`src/strategy/ic_close_executor.py` — batch LTP fetch, intrinsic-value fallback if expired).
-Do not hard-delete rows. NiftyBees (`paper_nifty_spot`) copies are untouched by this story —
-they become the sole surviving live overlay after S3 ships.
+**Design constraint (confirmed 2026-07-29):** coverage is computed as **effective Nifty-point
+exposure**, not raw qty, because the three tracks are capital-equivalent (~15L margin) but not
+exposure-equivalent:
+- Spot: `qty * 1.0` (ETF tracks Nifty ≈1:1)
+- Futures: `qty * lot_multiplier * 1.0` delta, but levered relative to margin — flag notional via
+  `paper_margin_snapshots` rather than assuming a fixed 15L, since SPAN margin drifts intraday/day-to-day
+- Proxy (DITM call): `qty * current_delta` — delta must be pulled live (Greeks snapshot), not
+  assumed ≈1, since "DITM" drifts toward ATM as spot moves and delta is time-varying
 
-**S1b (bundle into this story, same root cause class):** the `overlay_cc` leg for spot has a
-closing BUY (`NSE_FO|71474`, 06-08, price 12.60) tagged `state='OPEN'` when the near-identical
-`overlay_collar_call` closing BUY at the same price/date is correctly `CLOSED`. Fix the state
-on that row too — this is the reason CC currently shows as absent from `paper_leg_snapshots`
-via omission rather than an explicit closed state, which will confuse the new single-copy
-aggregation in S3 if left as-is.
+Overlay coverage % for a given track = `overlay_position_delta_equivalent / track_effective_nifty_units`.
 
 **Files to change:**
-- New one-off script: `scripts/dev/migrate_3track_close_duplicate_overlays.py` (follow
-  `scripts/dev/migrate_add_closed_state.py` pattern referenced in TODOS.md BUG-7 — `--dry-run`
-  default, explicit `--apply` flag, structured log line per row closed)
-- `tests/unit/scripts/test_migrate_3track_close_duplicate_overlays.py`
+- New query function, likely `src/portfolio/overlay_coverage.py` or a method on the existing
+  tracker — confirm placement via graph, do not assume a new file is needed if
+  `PortfolioTracker`/`summary.py` already has an analogous per-strategy join pattern
+- Reuses `paper_margin_snapshots` (existing table, confirmed present) for Futures notional/margin,
+  and whatever Greeks-snapshot source CC1/PP1/Collar1 already read delta from (confirm — do not
+  duplicate a second delta-fetch path)
+- `tests/unit/` — coverage-ratio tests per track type, including a delta-drift case for Proxy
+  (DITM call delta moving from ~0.95 toward ~0.7 as spot falls, confirming coverage % recalculates
+  rather than using entry-time delta)
 
 **Before any code:**
 ```
-git log --oneline -10 scripts/dev/migrate_add_closed_state.py   # prior art for this exact pattern
-search_graph("close_ic_legs")                                    # reuse LTP-fetch/fallback logic
-search_code("state='OPEN'")                                      # confirm no other consumers assume these rows stay open
+get_code_snippet("PortfolioTracker")            # confirm existing per-strategy join pattern
+search_code("paper_margin_snapshots")           # confirm schema/columns for futures notional
+search_graph("delta")                            # confirm which Greeks source is canonical (avoid a second path)
 ```
 
-**Tests:**
-- `test_dry_run_reports_rows_without_writing` — dry-run mode touches zero rows
-- `test_apply_closes_futures_and_proxy_overlay_legs` — after `--apply`, all Futures/Proxy overlay
-  rows for collar_call/collar_put/pp are `state='CLOSED'`; Spot rows untouched
-- `test_cc_state_bug_fixed` — `overlay_cc` 71474 BUY row for spot/proxy now `CLOSED`
-- `test_expired_leg_uses_intrinsic_fallback` — 58627 (past expiry) prices via intrinsic value, not live LTP
+**Commit:** `feat(portfolio): query-time overlay coverage ratio per track, no duplicate rows`
 
-**Commit:** `fix(paper): close duplicate Futures/Proxy overlay legs, retire RQ2 overlay data`
+**Note:** CC1/PP1/Collar1 (delta-targeted strike selection stories, below) are unaffected by this
+revision — they govern *which strike* an overlay leg enters at, orthogonal to *which track owns
+the leg* (now: none, per S1r). No changes needed to those stories.
 
----
-
-## S2 — Restrict overlay entry to NiftyBees only
-
-**Context:** `paper_3track_overlay.py` / `paper_3track_overlay_entry.py` / `find_overlay_strikes.py`
-currently write overlay legs for all three strategy namespaces in one pass. Post-S1, only
-`paper_nifty_spot` should ever receive a new overlay leg. Futures already has a standalone-CC
-hard block (`_check_futures_cc_block`) — this story generalizes that pattern to a full
-non-NiftyBees overlay block, all overlay types, both Futures and Proxy.
-
-**Files to change:**
-- `scripts/strategies/three_track/paper_3track_overlay.py`
-- `scripts/strategies/three_track/paper_3track_overlay_entry.py`
-- `scripts/lookup/find_overlay_strikes.py`
-- `src/strategy/nifty_track_comparison_v1.py` — `_check_futures_cc_block` → generalize or add
-  a sibling `_check_non_niftybees_overlay_block` (ERROR severity, matches existing pattern)
-- `tests/unit/scripts/`, `tests/unit/strategies/test_nifty_track_comparison_v1.py`
-
-**Before any code:**
-```
-get_code_snippet("NiftyTrackComparisonV1._check_futures_cc_block")
-search_code("overlay_collar")
-search_code("overlay_pp")
-search_code("overlay_cc")
-git log --oneline -10 src/strategy/nifty_track_comparison_v1.py
-```
-
-**Required behavior:**
-- Any script that would write an `overlay_*` leg_role trade for `paper_nifty_futures` or
-  `paper_nifty_proxy` must hard-fail (not silently skip) with a clear error naming the
-  blocked strategy_name, matching the existing futures-CC error message style.
-- `paper_3track_overlay.py` / `_entry.py` drop the `--tracks` fan-out for overlay writes
-  entirely — overlay commands no longer accept `futures`/`proxy` as valid `--track` values.
-  Base-leg entry (`paper_3track_entry.py`) is untouched — all three tracks still get a base
-  position, this story only touches overlays.
-
-**Tests:**
-- `test_overlay_entry_blocks_futures` / `test_overlay_entry_blocks_proxy` — attempted overlay
-  write for either namespace raises/hard-exits with the expected error
-- `test_overlay_entry_allows_niftybees` — happy path unchanged for spot
-- `test_track_flag_rejects_non_niftybees_for_overlay_commands`
-
-**Commit:** `feat(strategy): restrict all overlay entry to paper_nifty_spot only`
-
----
-
-## S3 — Independent daily base-leg comparison snapshot (overlay fully excluded)
-
-**Context (revised 2026-07-28 — supersedes the original synthetic-attribution design below the
-operator explicitly rejected):** RQ1 is "which base instrument tracks Nifty best" — NiftyBees,
-Futures, or the DITM synthetic long. The operator wants this answered as a clean, apples-to-apples
-comparison across all three tracks, with **zero overlay involvement, for any track, including
-NiftyBees.** Overlay P&L is real and useful, but it answers a different question (protection
-cost/benefit) and must never blend into or be inferred from the base-instrument comparison.
-Concretely: no synthetic attribution, no overlay-adjusted NiftyBees figure in this comparison —
-overlay is display/analysis only, never trade-linked to Futures/Proxy (already true post-S2) and
-now also never *math*-linked to the comparison numbers for any of the three tracks.
-
-**Two independent, non-overlapping outputs from this story:**
-
-1. **Daily base-only comparison snapshot** — new persisted table (e.g. `paper_track_comparison_snapshots`),
-   one row per `(snapshot_date, strategy_name)` for all three 3-track strategies, computed strictly
-   from `base_etf` / `base_futures` / `base_ditm_call` leg mark price (never touching overlay
-   rows). **Level-1 fields, confirmed 2026-07-28 (operator):**
-   - `pnl_1d_abs` — today's base-leg mark minus yesterday's base-leg mark (absolute ₹)
-   - `pnl_1d_pct` — `pnl_1d_abs / yesterday's_mark` (denominator is yesterday's closing mark, the
-     standard daily-return definition — NOT entry cost basis, NOT NEE/spot notional)
-   - `pnl_inception_abs` — today's base-leg mark minus entry price (absolute ₹, cumulative since
-     the track's original entry date)
-   - `pnl_inception_pct` — `pnl_inception_abs / entry_cost_basis` (denominator is the original
-     entry price/cost — deliberately a *different* denominator than the 1-day figure; do not reuse
-     yesterday's mark here, and do not conflate the two %s as directly subtractable/addable)
-   - Tracking-error figure (base track cumulative return % vs. Nifty spot cumulative return % over
-     the same window) — this is a secondary/bonus field answering RQ1's actual tracking-quality
-     question; the four `pnl_*` fields above are the operator's explicit level-1 ask and take
-     priority if there's ever a conflict in implementation ordering.
-
-   **Nifty spot as a 4th series (confirmed 2026-07-28, operator):** Nifty spot gets the identical
-   four `pnl_1d_abs`/`pnl_1d_pct`/`pnl_inception_abs`/`pnl_inception_pct` fields, computed the
-   exact same way as the three tracks — 1-day % against yesterday's spot close, inception % against
-   spot's price on the relevant track's entry date. Persist it as its own row in the same table
-   using a synthetic `strategy_name` value (e.g. `"nifty_index"`) rather than a separate schema or
-   a bolt-on column set — keeps `get_track_comparison_snapshots()` and every downstream query
-   uniform across all four series (three tracks + spot), no special-casing required. Since the
-   three tracks may have different entry dates in principle (even though today's live data has
-   them entered the same day), spot's `pnl_inception_*` should be computed once per *comparison
-   context* against whichever track's entry date is relevant to that comparison — flag this as an
-   implementation-time detail to resolve if entry dates ever diverge across tracks; not expected to
-   matter for the current live data (see S1 context table — all three entered same day).
-
-   Written by a daily cron (extend `paper_3track_snapshot.py` or a new sibling script — decide at
-   implementation time based on how entangled the existing snapshot function already is). Must be
-   queryable independently, e.g.
-   `SELECT * FROM paper_track_comparison_snapshots WHERE strategy_name = ? ORDER BY snapshot_date` —
-   this is the whole point: performance-over-time query support, not just an EOD print.
-2. **Overlay P&L** — stays exactly where it already lives (existing `paper_leg_snapshots` /
-   `get_strategy_realized_pnl` machinery for `paper_nifty_spot`'s overlay legs). No new table. The
-   comparison query in (1) must never join or filter on overlay `leg_role`s — enforce this with an
-   explicit `leg_role IN ('base_etf','base_futures','base_ditm_call')` filter, not an implicit
-   exclusion, so a future contributor can't accidentally reintroduce overlay rows by widening a
-   query.
-
-**Files to change:**
-- `scripts/strategies/three_track/paper_3track_snapshot.py` — new base-only comparison
-  aggregation + daily persistence call; leave existing overlay P&L reporting untouched
-- `src/paper/store.py` / `src/paper/models.py` — new `TrackComparisonSnapshot` model +
-  `record_track_comparison_snapshot()` / `get_track_comparison_snapshots()` store methods
-- `scripts/dev/generate_3track_viz.py` — comparison viz reads from the new table, overlay stays a
-  visually separate section, never merged into the same series/column
-- `tests/unit/scripts/test_paper_3track_snapshot_period.py` and siblings
-- `tests/unit/paper/test_store.py` (or sibling) for the new snapshot table
-
-**Before any code:**
-```
-get_code_snippet("paper_3track_snapshot")     # or trace_path if too large for one snippet
-search_code("paper_leg_snapshots")
-search_code("underlying_price")               # NEE/tracking-error math already exists somewhere, reuse it
-git log --oneline -10 scripts/strategies/three_track/paper_3track_snapshot.py
-```
-
-**Tests:**
-- `test_comparison_snapshot_excludes_overlay_legs` — base-only P&L, verified against a fixture
-  with overlay rows present, asserting they never enter the aggregation
-- `test_comparison_snapshot_persists_all_three_tracks_daily` — one row per strategy per day
-- `test_comparison_snapshot_queryable_by_date_range` — `get_track_comparison_snapshots()` returns
-  ordered history for a given strategy
-- `test_pnl_1d_uses_yesterday_mark_denominator` — `pnl_1d_pct` computed against yesterday's
-  closing mark, not entry cost or NEE
-- `test_pnl_inception_uses_entry_cost_denominator` — `pnl_inception_pct` computed against original
-  entry price/cost basis, not yesterday's mark
-- `test_pnl_1d_and_inception_use_different_denominators` — explicit regression guard that the two
-  percentage fields are never computed off the same base, given they look similar but aren't
-- `test_tracking_error_computed_against_spot` — base track return vs. Nifty spot return since entry
-- `test_spot_persisted_as_fourth_series` — Nifty spot row present with the same 4 `pnl_*` fields,
-  same denominators as the 3 tracks, queryable via the same `strategy_name`-keyed method
-- `test_overlay_pnl_untouched_by_comparison_change` — existing overlay P&L reporting path produces
-  identical output before/after this story (regression guard against accidental coupling)
-
-**Commit:** `feat(paper): independent daily base-leg comparison snapshot, overlay fully decoupled`
+**Council checkpoint — waived, operator override (2026-07-29):** this revision qualifies under
+CLAUDE.md Step 2b, but the operator explicitly declined a council discussion and directed override.
+Sign-off recorded in `DECISIONS.md` (round 5 entry) in lieu of a council pass. S3r is cleared to
+proceed to Step 3 (state plan, get go-ahead) without further gating.
 
 ---
 
@@ -225,10 +89,9 @@ strategy in the codebase (`CCOverlayV1`, `PPOverlayV1`, `CollarOverlayV1`) alrea
 `auto_execute=True`. Operator has confirmed (prompt.md Decision Log #3) they want this flipped,
 council-checkpoint explicitly skipped at their instruction.
 
-**This story ships last**, after S1–S3, so automated actions are operating against the
-already-cleaned single-copy overlay data — flipping automation on top of the current
-triplicated/buggy state would let a bot act on the CC state bug (S1b) or the PP booking gap
-before those are fixed.
+**This story ships after S1r/S2r (done) and against the already-cleaned single-copy overlay
+data** — flipping automation on top of the prior triplicated/buggy state would let a bot act on
+the CC state bug (S1b) or the PP booking gap before those were fixed.
 
 **Files to change:**
 - `src/strategy/nifty_track_comparison_v1.py` — `auto_execute` property/flag
@@ -247,11 +110,10 @@ git log --oneline -10 src/strategy/nifty_track_comparison_v1.py
 
 **Required behavior:**
 - `auto_execute=True`, dispatched through `PaperExecutor` like the other three overlay strategies.
-- All existing hard blocks (`_check_futures_cc_block` / S2's generalized non-NiftyBees overlay
-  block, proxy delta signals, roll-base-first guard) remain enforced — automation removes the
-  human approval step, not the safety gates. This is the single most important invariant of this
-  story: automating the wrong action faster is strictly worse than the current manual-approval
-  state, not neutral.
+- All existing hard blocks (proxy delta signals, roll-base-first guard) remain enforced —
+  automation removes the human approval step, not the safety gates. This is the single most
+  important invariant of this story: automating the wrong action faster is strictly worse than
+  the current manual-approval state, not neutral.
 - Confirm `close_ic_legs()`-style persistence discipline applies here too — TODOS.md already
   documents a real incident (2026-07-15) where auto-execute actions were computed but never
   written to `paper_trades` for IC strategies. Explicitly test that every auto-executed action
@@ -260,8 +122,6 @@ git log --oneline -10 src/strategy/nifty_track_comparison_v1.py
 **Tests:**
 - `test_auto_execute_flag_is_true`
 - `test_roll_eligible_action_dispatches_without_approval`
-- `test_blocked_combination_still_enforced_under_automation` — confirms S2's guard fires even
-  with `auto_execute=True`
 - `test_auto_executed_action_persists_to_paper_trades` — regression test for the exact class of
   bug fixed 2026-07-15 in the IC strategies
 
@@ -362,15 +222,11 @@ actions all execute automatically, with Telegram as the sole visibility mechanis
 gate anywhere in the flow after this story ships).
 
 **Confirmed decisions (2026-07-28, revised same day after a lifecycle walkthrough surfaced a
-contradiction — see below):**
+contradiction — see DECISIONS.md "round 3" entry):**
 - **All three tracks are perpetual, single-entry positions — there is no "cycle" that ever closes
   and no recurring re-entry.** NiftyBees is never closed. Futures and DITM "roll" means exactly
   "close current-month/current-band contract, open next-month/next-band contract" (S5) — it is
-  contract maintenance on one continuous position, not a new cycle. This directly struck the
-  original version of this story's "fixed cadence, independent of position state" entry-trigger
-  decision, which only made sense under a "periodic new cycles" model that turned out not to be
-  the operator's intent — flagged and corrected in the same session rather than left inconsistent
-  across docs (see DECISIONS.md "round 3" entry).
+  contract maintenance on one continuous position, not a new cycle.
 - **Entry automation is a one-time bootstrap, not a recurring trigger.** If a track has no open
   base-leg position (i.e., it has never been entered, or — purely hypothetically, since nothing in
   this epic ever closes one — somehow became flat), automate that single entry. There is no
@@ -383,11 +239,10 @@ contradiction — see below):**
 - Reuse the existing `TelegramNotifier`/`build_notifier()` non-fatal contract
   (`src/notifications/CLAUDE.md`) — notification failure must never block or roll back a trade
   that already executed; log WARNING and continue, matching every other strategy's pattern.
-- Message format matches the codebase's existing convention: plain text, `<b>`/`<code>` HTML tags
-  (rendered inert inside Telegram's `<pre>` wrapper per `dhan/positions.py`'s documented behavior,
-  but kept for consistency with strategies that send outside a `<pre>` wrapper — confirm which
-  path `TelegramNotifier.send()` actually uses for these new call sites before assuming), emoji
-  prefix per event type (suggest: 🔄 for roll, 🟢 for new entry, matching ✅/⚠️ used elsewhere).
+- Message format matches the codebase's existing convention: plain text, `<b>`/`<code>` HTML tags,
+  emoji prefix per event type (suggest: 🔄 for roll, 🟢 for new entry, matching ✅/⚠️ used elsewhere).
+  Confirm which rendering path `TelegramNotifier.send()` actually uses for these new call sites
+  before assuming.
 - Each new call site (entry script, overlay entry script, S5's roll executor) gets its own
   non-fatal try/except around the notify call, mirroring `csp_nifty_v1.py`'s pattern — a
   notification failure is cosmetic, not a trade failure.
@@ -433,25 +288,23 @@ for S4.
 ## S0 — Documentation and decision-log updates
 
 **Context:** `docs/instructions/3track.md` and `docs/strategies/nifty_track_comparison_v1.md`
-still describe RQ2 (overlay-per-base comparison) as live research. Once S1–S6 ship, those docs
+still describe RQ2 (overlay-per-base comparison) as live research. Once S3r–S6 ship, those docs
 actively mislead — CLAUDE.md Rule 0 tells every future session to trust `git log` and the graph
 over stale docs, but nothing should be relying on that safety net when a one-line doc fix
 prevents the confusion entirely.
 
 **Files to change:**
 - `docs/instructions/3track.md` — rewrite Overlay Menu table: single column (NiftyBees only),
-  remove Futures/Proxy overlay rows; note the daily base-only comparison snapshot (S3) is
+  remove Futures/Proxy overlay rows; note the daily base-only comparison snapshot (S3, shipped) is
   computed strictly from base legs, overlay P&L is a fully separate, non-blended report; note S5's
   automated base-leg roll cadence (DTE<20 trigger, band preference, liquidity gate behavior); note
   S6's cycle-entry cadence and full unattended pipeline, with Telegram as the sole visibility layer
 - `docs/strategies/nifty_track_comparison_v1.md` — retire RQ2 explicitly, don't just delete it
   silently (future readers should know it was tried and retired, not that it was never asked)
 - `CONTEXT.md` — update `NiftyTrackComparisonV1` description (`auto_execute=False` → `True`),
-  add module tree entries for S1's migration script, S3's `TrackComparisonSnapshot`
-  model/table + query methods, S5's roll script, and S6's entry-trigger + notification wiring
-- `DECISIONS.md` — rows for: RQ2 retirement, automation flip, base-only comparison snapshot
-  (overlay fully decoupled from RQ1 comparison), S5's roll trigger/liquidity-gate design, and S6's
-  full-automation + notification-on-every-trade decision
+  add module tree entries for S5's roll script and S6's entry-trigger + notification wiring
+- `DECISIONS.md` — rows for: RQ2 retirement, automation flip, S5's roll trigger/liquidity-gate
+  design, and S6's full-automation + notification-on-every-trade decision
 - `TODOS.md` — close out the pre-existing PP booking-gap and CC state-bug items this epic
   subsumes (search for the 2026-07-20 session log entries this conversation would produce)
 
@@ -852,8 +705,8 @@ in a drawdown; a further OTM put is cheap tail insurance that may not trigger un
 move). This is a real strategy-parameter decision, not a mechanical follow-on from PP1.
 
 **Council checkpoint applies** (load-bearing — changes the cost/response profile of the only
-downside protection in the pipeline post-S1/S2; two defensible approaches; spans strategy design
-+ NSE options microstructure). Recommend template `strategy_parameters`, draft question:
+downside protection in the pipeline post-S1r/S2r; two defensible approaches; spans strategy
+design + NSE options microstructure). Recommend template `strategy_parameters`, draft question:
 
 > "PPOverlayV1's current production entry uses `find_overlay_strikes.py --overlay-type pp`
 > (fixed %OTM). A delta-targeted alternative (PP1's `PP_DELTA_CANDIDATES` via
@@ -1219,7 +1072,7 @@ persists directly from that already-normalized `pnl.overlay_pnls` dict with no r
    every other consumer in the codebase uses (e.g. `store.get_prev_leg_snapshot(track_name, role,
    ...)` calls elsewhere in this same file for MTD/daily-delta calculations pass through the same
    collapsed labels, so those *do* work internally today — but nothing outside this file's own
-   round-trip can query CC/PP/Collar's daily P&L history by its real leg_role, and S3's planned
+   round-trip can query CC/PP/Collar's daily P&L history by its real leg_role, and S3's
    `paper_track_comparison_snapshots` table explicitly filters to base-only legs, so it can't be
    used as a substitute path either).
 3. **Not caught by the existing test suite:** `test_save_leg_snapshots_with_overlay`
@@ -1299,7 +1152,7 @@ git log --oneline -10 scripts/strategies/three_track/paper_3track_snapshot.py
 
 ## S8 — Overlay P&L comparison table (CC/PP/Collar), mirroring S3's design for the base tracks
 
-**Context:** S3 gave the three base tracks a dedicated, queryable daily comparison table
+**Context:** S3 (shipped) gave the three base tracks a dedicated, queryable daily comparison table
 (`paper_track_comparison_snapshots`) with `pnl_1d_abs/pct` and `pnl_inception_abs/pct` per track.
 Overlays have no equivalent — S7 fixes `paper_leg_snapshots` to persist under the correct real
 leg_role, but that table's schema/query shape was designed for arbitrary per-leg audit rows, not
@@ -1351,12 +1204,12 @@ before starting — this story's entire input depends on S7's leg_role fix being
 
 ## S9 — NiftyBees protection-recovery comparison table + Telegram digest
 
-**Context:** S3 gives per-track base P&L, S8 gives per-overlay P&L. Neither answers the operator's
-actual question: on a day NiftyBees is down, how much of that loss did each overlay recover?
-Confirmed with operator (2026-07-28) via sample-table iteration — final approved shape is one row
-per day, NiftyBees 1D P&L next to CC/PP/Collar 1D P&L side by side, plus a single "best recovery"
-figure, not three separate per-overlay recovery percentages. **Hard dependency: S3 and S8 must
-both land first** — this table reads their output, it computes nothing from raw legs itself.
+**Context:** S3 (shipped) gives per-track base P&L, S8 gives per-overlay P&L. Neither answers the
+operator's actual question: on a day NiftyBees is down, how much of that loss did each overlay
+recover? Confirmed with operator (2026-07-28) via sample-table iteration — final approved shape is
+one row per day, NiftyBees 1D P&L next to CC/PP/Collar 1D P&L side by side, plus a single "best
+recovery" figure, not three separate per-overlay recovery percentages. **Hard dependency: S3 and
+S8 must both land first** — this table reads their output, it computes nothing from raw legs itself.
 
 **Required behavior:**
 - New table `paper_protection_recovery_snapshots`, one row per `snapshot_date`, columns:
@@ -1376,9 +1229,9 @@ both land first** — this table reads their output, it computes nothing from ra
 - **Open design question to resolve before implementation, not deferred silently:** does NiftyBees
   carry all three overlays live simultaneously, or is this an analysis/backtest view comparing
   three hypothetical scenarios against the one live overlay actually attached? The "single overlay
-  copy" risk noted at the end of this epic (S1–S4) implies the latter — confirm with operator
-  before writing the aggregation query, since it changes whether `cc_pnl_1d`/`pp_pnl_1d`/
-  `collar_pnl_1d` are three live parallel series or three what-if reconstructions.
+  copy" risk noted at the end of this epic implies the latter — confirm with operator before
+  writing the aggregation query, since it changes whether `cc_pnl_1d`/`pp_pnl_1d`/`collar_pnl_1d`
+  are three live parallel series or three what-if reconstructions.
 - Written by the same daily cron as S3/S7/S8 (`paper_3track_snapshot.py`), reading S3's
   `paper_track_comparison_snapshots` (niftybees row) and S8's `paper_overlay_pnl_snapshots`
   (cc/pp/collar rows) for the same `snapshot_date` — no independent leg-level computation.
@@ -1456,10 +1309,10 @@ story's entire input is their output tables, computed from nothing else.
 
 ## Open risk not resolved by this epic (log in TODOS.md, don't block on it)
 
-Full automation (S4) combined with a single overlay copy (S1–S3) means a bad overlay-roll
+Full automation (S4) combined with a single overlay copy (S1r/S2r) means a bad overlay-roll
 decision now affects the *only* protection NiftyBees has, with no human check before execution.
 Previously, even a bad decision was triplicated as "one of three data points" and reviewed
 before acting. Recommend the first live cycle after S4 ships gets a manual daily review of
 `paper_exit_events` for `paper_nifty_spot` regardless of automation — not as a story requirement,
-but flagging it here since nothing in S1–S4 builds in a monitoring backstop for the new risk
+but flagging it here since nothing in S3r/S4 builds in a monitoring backstop for the new risk
 concentration.

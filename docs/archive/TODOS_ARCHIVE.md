@@ -42,6 +42,13 @@
   method's existing non-fatal-notification contract. New test calls the private method directly
   since the branch is unreachable through `apply_action`'s own guard. Unrelated to S3, own
   commit. — SHA: 07570d3
+- [2026-07-29] Docs reorg (no code): `docs/plan/3track-consolidation/stories.md` moved completed
+  story specs (S1r, S2r, S3, plus originally-superseded S1/S2 — all shipped/ticked in `tasks.md`)
+  to new `docs/archive/plan/3track-consolidation-completed.md`, nothing deleted. `stories.md` cut
+  from 1614 to 1318 lines, now holds only open/pending stories. `prompt.md`'s stale "Files most
+  likely touched" section (duplicated each story's own "Files to change", already known to have
+  drifted twice) trimmed to a pointer; added archive cross-references in `prompt.md` and
+  `tasks.md`. — SHA: pending (operator commit)
 
 ---
 

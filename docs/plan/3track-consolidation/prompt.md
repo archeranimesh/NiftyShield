@@ -1,9 +1,20 @@
 # 3-Track Consolidation & Automation — Epic Prompt
 
-> One task per session. Find the first unchecked item in `stories.md`. That is your only task.
+> One task per session. Find the first unchecked `- [ ]` item in `tasks.md` (the checklist —
+> `stories.md` holds the full spec per open task ID, read the matching section there once the
+> task ID is known; completed stories are archived at
+> `docs/archive/plan/3track-consolidation-completed.md`, not in `stories.md` anymore). That is
+> your only task.
 > This epic **reverses part of the documented research design** in `docs/instructions/3track.md`
 > and `docs/strategies/nifty_track_comparison_v1.md` — read the Decision Log below before
 > touching anything.
+>
+> **On completion:** confirm the commit SHA via `git log --oneline -1`, then open `tasks.md` and
+> check the completed line — if it does not already end with `| SHA: <sha>`, tick `- [x]` and
+> append it; if a SHA is already present (e.g. checked off in an earlier partial session), leave
+> it untouched rather than overwriting. Log the session in `docs/archive/TODOS_ARCHIVE.md`'s
+> Session Log (create today's dated section if none exists yet), not in `TODOS.md` directly —
+> `TODOS.md` itself says new entries belong in the archive since the 2026-07-27 reorg.
 
 ---
 
@@ -42,29 +53,21 @@ council-checkpoint per CLAUDE.md Step 2b, explicitly accepting the automation ri
 - CSP (`paper_csp_nifty_v1`), Iron Condor V1/V2 — untouched, different strategy family.
 - `PortfolioDeltaTracker` combined-delta caps — untouched; still applies at the account level.
 
-## Files most likely touched (confirm exact set at each story's start)
+## Which files a story touches
 
-- `src/strategy/nifty_track_comparison_v1.py` — auto_execute flip, per-track overlay gating
-- `src/strategy/exit_signals.py` — no signal-rule changes expected, only which tracks call them
-- `src/paper/store.py` / `src/paper/models.py` — new `TrackComparisonSnapshot` model + store
-  methods (S3); overlay leg ownership schema marker if needed (S1/S2)
-- `scripts/strategies/three_track/paper_3track_overlay.py`, `paper_3track_overlay_entry.py` — restrict entry to NiftyBees (S2); cadence-trigger + Telegram notify on entry (S6)
-- `scripts/strategies/three_track/paper_3track_snapshot.py` — base-only comparison aggregation +
-  daily persistence (S3); base-leg roll trigger/execution, or a new sibling script (S5)
-- `scripts/strategies/three_track/paper_3track_entry.py` — cadence-trigger logic + Telegram notify
-  on entry (S6, currently manual `--confirm` only, no notification)
-- `src/notifications/` — no new module expected, reuse existing `TelegramNotifier`/`build_notifier()`
-  non-fatal contract for S5/S6's new notify call sites
-- `docs/instructions/3track.md`, `docs/strategies/nifty_track_comparison_v1.md` — rewrite to match new design
-- `DECISIONS.md` — log the RQ2 retirement, automation flip, base-only comparison decoupling, S5's
-  roll trigger/liquidity design, and S6's full-automation + notify-on-every-trade decision
-- `tests/unit/strategies/`, `tests/unit/scripts/`, `tests/unit/paper/` — per-story
+Each story in `stories.md` states its own "Files to change" section — that is the authoritative,
+per-story list; do not reconstruct it here, it goes stale the moment a story's actual
+implementation diverges from its plan (it already has, twice, for S1r/S3). Confirm the exact set
+at each story's start via the graph, not by memory of this doc.
 
-**Story count is now 7** (S1, S2, S3, S4, S5, S6, S0) — the epic prompt's "one task per session,
-find the first unchecked item" instruction still applies; S3/S5 no longer block on S1/S2 (see
-ordering note at the top of `stories.md`), so either may legitimately be "the first unchecked
-item" a session picks up depending on what's already landed. S6 is the last functional story,
-gated on S2 + S5 (and best landed after S4).
+**Story count has grown past the original 7** (S1/S2 superseded by S1r/S2r/S3r per the
+2026-07-29 revision; CC1–3, PP1–3, Collar1–3, S7, S8, S9 added as independent sub-threads) — the
+epic prompt's "one task per session, find the first unchecked item in `tasks.md`" instruction
+still applies regardless of count; several stories are independent of each other (see ordering
+notes in `stories.md` and `tasks.md`), so which one is "first unchecked" depends on what's
+already landed. **Completed stories (S1r, S2r, S3, plus the original superseded S1/S2) are
+archived in full at `docs/archive/plan/3track-consolidation-completed.md`** — `stories.md` now
+holds only open/pending story specs.
 
 **Before any code, every story:** run the CLAUDE.md Rule 0 graph checks (`git log --oneline -10
 <file>`, `search_graph`, `trace_path`) before `Read`. Do not skip this because the epic is

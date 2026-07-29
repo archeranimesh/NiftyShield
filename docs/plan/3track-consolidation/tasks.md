@@ -2,7 +2,8 @@
 
 > Antigravity: find the first unchecked `- [ ]` line whose blockers are already checked.
 > Tick the box and append `| SHA: <sha>` when done. Add one line to `TODOS.md`.
-> Full story spec for each task: `docs/plan/3track-consolidation/stories.md`.
+> Full story spec for each open task: `docs/plan/3track-consolidation/stories.md`. Completed
+> tasks' specs (S1r, S2r, S3, plus the original superseded S1/S2): `docs/archive/plan/3track-consolidation-completed.md`.
 > Decision log: `docs/plan/3track-consolidation/prompt.md`; `DECISIONS.md` 2026-07-28 and
 > 2026-07-29 (round 5, overlay/track independence) entries.
 
