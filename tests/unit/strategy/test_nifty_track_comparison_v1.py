@@ -677,11 +677,16 @@ def test_proxy_delta_no_store() -> None:
     assert result[0].event_type == "PROXY_DELTA_WARN"
 
 
-# ── NT-2: _check_futures_cc_block ────────────────────────────────────────────
+# ── S2r: track-ownership overlay blocks removed ─────────────────────────────
+# `_check_futures_cc_block` and the futures+CC hard-block inside
+# `_select_overlay_roll_target` are both deleted (2026-07-29) — overlay is
+# track-independent by operator decision (see docs/plan/3track-consolidation/
+# stories.md S2r). Overlay entry/roll is never gated on which track's context
+# it is evaluated from; BLOCKED_COMBINATION no longer fires for any track.
 
 
 def _empty_market() -> OptionChain:
-    """Minimal OptionChain with no strikes — sufficient for block-guard tests."""
+    """Minimal OptionChain with no strikes — sufficient for these tests."""
     return OptionChain(
         underlying_spot=Decimal("24000"),
         expiry=date(2026, 6, 26),
@@ -689,8 +694,8 @@ def _empty_market() -> OptionChain:
     )
 
 
-def test_futures_cc_standalone_blocked() -> None:
-    """Futures + overlay_cc with no long put → BLOCKED_COMBINATION ACTION."""
+def test_futures_cc_standalone_no_longer_blocked() -> None:
+    """Futures + standalone overlay_cc → no BLOCKED_COMBINATION (S2r: block removed)."""
     strategy = NiftyTrackComparisonV1()
     positions = [
         _make_position(
@@ -701,57 +706,11 @@ def test_futures_cc_standalone_blocked() -> None:
         ),
     ]
     result = _run(strategy.check_signals(_empty_market(), positions))
-    blocked = [e for e in result if e.event_type == "BLOCKED_COMBINATION"]
-    assert len(blocked) == 1
-    assert blocked[0].severity == "ACTION"
-    assert "overlay_cc" in blocked[0].payload["violating_roles"]
-    assert "CLOSE_LEG" in blocked[0].payload["valid_actions"]
-
-
-def test_futures_cc_with_collar_put_allowed() -> None:
-    """Futures + overlay_cc + overlay_collar_put (proper collar) → no block."""
-    strategy = NiftyTrackComparisonV1()
-    positions = [
-        _make_position(
-            strategy_name=_FUTURES,
-            leg_role="overlay_cc",
-            instrument_key="NSE_FO|NIFTY29MAY2026CE",
-            net_qty=-65,
-        ),
-        _make_position(
-            strategy_name=_FUTURES,
-            leg_role="overlay_collar_put",
-            instrument_key="NSE_FO|NIFTY29MAY2026PE",
-            net_qty=65,
-        ),
-    ]
-    result = _run(strategy.check_signals(_empty_market(), positions))
     assert not any(e.event_type == "BLOCKED_COMBINATION" for e in result)
 
 
-def test_futures_collar_call_and_collar_put_allowed() -> None:
-    """Futures + overlay_collar_call + overlay_collar_put → no block."""
-    strategy = NiftyTrackComparisonV1()
-    positions = [
-        _make_position(
-            strategy_name=_FUTURES,
-            leg_role="overlay_collar_call",
-            instrument_key="NSE_FO|NIFTY29MAY2026CE",
-            net_qty=-65,
-        ),
-        _make_position(
-            strategy_name=_FUTURES,
-            leg_role="overlay_collar_put",
-            instrument_key="NSE_FO|NIFTY29MAY2026PE",
-            net_qty=65,
-        ),
-    ]
-    result = _run(strategy.check_signals(_empty_market(), positions))
-    assert not any(e.event_type == "BLOCKED_COMBINATION" for e in result)
-
-
-def test_futures_degenerate_collar_blocked() -> None:
-    """Futures + overlay_collar_call without paired put → BLOCKED_COMBINATION."""
+def test_futures_degenerate_collar_no_longer_blocked() -> None:
+    """Futures + overlay_collar_call without paired put → no BLOCKED_COMBINATION (S2r)."""
     strategy = NiftyTrackComparisonV1()
     positions = [
         _make_position(
@@ -762,51 +721,22 @@ def test_futures_degenerate_collar_blocked() -> None:
         ),
     ]
     result = _run(strategy.check_signals(_empty_market(), positions))
-    blocked = [e for e in result if e.event_type == "BLOCKED_COMBINATION"]
-    assert len(blocked) == 1
-    assert "overlay_collar_call" in blocked[0].payload["violating_roles"]
-
-
-def test_spot_cc_not_blocked() -> None:
-    """Spot base + overlay_cc → no BLOCKED_COMBINATION (guard only applies to Futures)."""
-    strategy = NiftyTrackComparisonV1()
-    positions = [
-        _make_position(
-            strategy_name=_SPOT,
-            leg_role="overlay_cc",
-            instrument_key="NSE_FO|NIFTY29MAY2026CE",
-            net_qty=-65,
-        ),
-    ]
-    result = _run(strategy.check_signals(_empty_market(), positions))
     assert not any(e.event_type == "BLOCKED_COMBINATION" for e in result)
 
 
-def test_proxy_cc_not_blocked() -> None:
-    """Proxy base + overlay_cc → no BLOCKED_COMBINATION."""
+def test_no_blocked_combination_event_type_ever_emitted() -> None:
+    """BLOCKED_COMBINATION is no longer a reachable event_type for any track/role
+    combination — regression guard against reintroducing a track-ownership block."""
     strategy = NiftyTrackComparisonV1()
     positions = [
         _make_position(
-            strategy_name=_PROXY,
-            leg_role="overlay_cc",
+            strategy_name=track,
+            leg_role=role,
             instrument_key="NSE_FO|NIFTY29MAY2026CE",
             net_qty=-65,
-        ),
-    ]
-    result = _run(strategy.check_signals(_empty_market(), positions))
-    assert not any(e.event_type == "BLOCKED_COMBINATION" for e in result)
-
-
-def test_futures_no_overlays_no_block() -> None:
-    """Futures base with no overlay legs → no BLOCKED_COMBINATION."""
-    strategy = NiftyTrackComparisonV1()
-    positions = [
-        _make_position(
-            strategy_name=_FUTURES,
-            leg_role="base_futures",
-            instrument_key="NSE_FO|NIFTYFUT",
-            net_qty=50,
-        ),
+        )
+        for track in (_SPOT, _FUTURES, _PROXY)
+        for role in ("overlay_cc", "overlay_collar_call")
     ]
     result = _run(strategy.check_signals(_empty_market(), positions))
     assert not any(e.event_type == "BLOCKED_COMBINATION" for e in result)
@@ -879,8 +809,10 @@ def test_roll_due_decay_action_when_broker_has_replacement() -> None:
 # ── PA1.3: futures+CC block → ROLL_DUE_DTE stays WARN ─────────────────────────
 
 
-def test_futures_cc_block_causes_roll_due_dte_warn() -> None:
-    """paper_nifty_futures + overlay_cc → _select_overlay_roll_target returns None → WARN."""
+def test_futures_cc_roll_target_selected_now_that_block_is_removed() -> None:
+    """S2r: paper_nifty_futures + overlay_cc no longer forces `_select_overlay_roll_target`
+    to return None — a real broker chain now yields a roll target and ROLL_DUE_DTE
+    upgrades to ACTION, same as any other track/role combination."""
     next_chain = _make_next_chain(option_type="CE", strike="25000", delta="0.20")
     broker = MockBroker(chain=next_chain)
     strategy = NiftyTrackComparisonV1(broker=broker)
@@ -893,7 +825,7 @@ def test_futures_cc_block_causes_roll_due_dte_warn() -> None:
     result = _run(strategy.check_signals(_empty_market(), [pos]))
     dte_events = [e for e in result if e.event_type == "ROLL_DUE_DTE"]
     assert len(dte_events) == 1
-    assert dte_events[0].severity == "WARN"
+    assert dte_events[0].severity == "ACTION"
 
 
 # ── PA1.3: apply_action error cases ──────────────────────────────────────────

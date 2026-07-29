@@ -54,12 +54,6 @@ _EXPIRY_RE = re.compile(
 _ROLL_ELIGIBLE_DTE = 5  # DTE ≤ 5 → delegate to ExitSignalEngine.evaluate_roll_overlay
 _ROLL_DUE_DTE_MAX = 10  # DTE 6–10 → ROLL_DUE_DTE WARN (advance notice)
 _DECAY_WARN_PCT = Decimal("0.25")  # remaining premium ≤ 25% of entry → ROLL_DUE_DECAY
-
-# Short call roles that are blocked when paired with a Futures base and no long put.
-# overlay_cc   — standalone covered call: always blocked on Futures.
-# overlay_collar_call — blocked only when the paired put is missing (degenerate collar).
-_FUTURES_BLOCKED_ROLES: frozenset[str] = frozenset({"overlay_cc", "overlay_collar_call"})
-
 # Delta parameters for overlay roll target selection (next-expiry chain).
 # PP / collar-put: 8–10% OTM put, target 20Δ.
 # CC / collar-call: 3–5% OTM call, target 20Δ.
@@ -151,55 +145,6 @@ class NiftyTrackComparisonV1:
                 return None
         return self._instrument_lookup
 
-    # ── Guard helpers ─────────────────────────────────────────────────────────
-
-    def _check_futures_cc_block(
-        self,
-        positions: list[PaperPosition],
-        strategy_name: str,
-    ) -> list[SignalEvent]:
-        """Emit BLOCKED_COMBINATION ACTION if a standalone covered call exists on a Futures base.
-
-        Futures + standalone short call = synthetic short put (unlimited downside).
-        A collar (short call + long put together) is explicitly permitted.
-        A degenerate collar (call without its paired put, e.g. put closed early) is blocked.
-
-        Args:
-            positions: All open positions for this strategy track.
-            strategy_name: The futures strategy namespace (e.g. 'paper_nifty_futures').
-
-        Returns:
-            List containing one BLOCKED_COMBINATION SignalEvent if the block fires, else [].
-        """
-        if strategy_name != "paper_nifty_futures":
-            return []
-
-        short_call_positions = [p for p in positions if p.leg_role in _FUTURES_BLOCKED_ROLES]
-        if not short_call_positions:
-            return []
-
-        has_long_put = any(p.leg_role in {"overlay_collar_put", "overlay_pp"} for p in positions)
-        if has_long_put:
-            return []
-
-        return [
-            SignalEvent(
-                event_type="BLOCKED_COMBINATION",
-                severity="ACTION",
-                description=(
-                    "Futures + standalone short call detected — "
-                    "synthetic short put (unlimited downside). "
-                    "Close the short call leg immediately."
-                ),
-                payload={
-                    "track": strategy_name,
-                    "violating_roles": [p.leg_role for p in short_call_positions],
-                    "action_required": "CLOSE_LEG",
-                    "valid_actions": ["CLOSE_LEG"],
-                },
-            )
-        ]
-
     # ── PaperStrategy protocol ────────────────────────────────────────────────
 
     async def check_signals(
@@ -223,11 +168,6 @@ class NiftyTrackComparisonV1:
             List of WARN SignalEvents; empty list when no overlays are open.
         """
         events: list[SignalEvent] = []
-
-        # ── Futures + standalone CC block guard (checked once per strategy track) ──
-        for track in self.TRACK_STRATEGY_NAMES:
-            track_positions = [p for p in positions if p.strategy_name == track]
-            events.extend(self._check_futures_cc_block(track_positions, track))
 
         today = market_today()
 
@@ -379,7 +319,7 @@ class NiftyTrackComparisonV1:
                         )
             elif dte is not None and dte <= _ROLL_DUE_DTE_MAX:
                 # DTE 6–10: advance notice — upgrade to ACTION when a roll target is available.
-                target = await self._select_overlay_roll_target(pos.leg_role, pos.strategy_name)
+                target = await self._select_overlay_roll_target(pos.leg_role)
                 if target is not None:
                     events.append(
                         SignalEvent(
@@ -430,9 +370,7 @@ class NiftyTrackComparisonV1:
                                 "entry_credit": str(entry_credit),
                                 "pct_remaining": str(pct_remaining.quantize(Decimal("0.01"))),
                             }
-                            target = await self._select_overlay_roll_target(
-                                pos.leg_role, pos.strategy_name
-                            )
+                            target = await self._select_overlay_roll_target(pos.leg_role)
                             severity: Literal["WARN", "ACTION"]
                             if target is not None:
                                 decay_payload["strategy_name"] = pos.strategy_name
@@ -578,7 +516,6 @@ class NiftyTrackComparisonV1:
     async def _select_overlay_roll_target(
         self,
         leg_role: str,
-        strategy_name: str,
     ) -> LegSpec | None:
         """Fetch the next-expiry chain and select a replacement overlay leg.
 
@@ -587,8 +524,8 @@ class NiftyTrackComparisonV1:
         ``None`` when no broker client is set, the chain fetch fails, or no
         candidate exists within the delta band.
 
-        Blocked combination: ``paper_nifty_futures`` + ``overlay_cc`` always
-        returns ``None`` (synthetic short-put risk).
+        Track-independent (S2r, 2026-07-29): selection depends only on
+        ``leg_role``, never on which track's context it is called from.
 
         The broker's ``get_option_chain`` may return either a raw Upstox dict
         (production) or an ``OptionChain`` instance (tests / mock brokers).
@@ -596,20 +533,10 @@ class NiftyTrackComparisonV1:
 
         Args:
             leg_role: Overlay leg role being rolled.
-            strategy_name: Track strategy namespace (e.g. 'paper_nifty_futures').
 
         Returns:
             ``LegSpec`` for the replacement leg, or ``None``.
         """
-        # Hard block: Futures + standalone CC.
-        if strategy_name == "paper_nifty_futures" and leg_role == "overlay_cc":
-            log.debug(
-                "nifty_track_comparison_v1._select_overlay_roll_target.futures_cc_blocked",
-                strategy_name=strategy_name,
-                leg_role=leg_role,
-            )
-            return None
-
         if self._broker is None:
             return None
 
