@@ -34,14 +34,14 @@
   WARNINGs deferred (see `DECISIONS.md` 2026-07-29 S3 entry). Verified via `py_compile` only —
   sandbox `/sessions` disk was 100% full, `pip install` failed with "No space left on device",
   pytest could not run in-session; operator to run `python -m pytest tests/unit/` and commit.
-  — SHA: pending (operator commit)
+  — SHA: 07570d3 (landed together with the mypy fix below, same commit)
 - [2026-07-29] Fix mypy gap: `IronCondorV1._send_close_notification` called
   `get_strategy_realized_pnl(self._store, ...)` (`PaperStore`-only param) against
   `self._store: PaperStore | None`. Added explicit `self._store is None` branch (distinct log
   event `net_pnl_calc_skipped_no_store` vs. genuine-failure `net_pnl_calc_failed`), matching the
   method's existing non-fatal-notification contract. New test calls the private method directly
   since the branch is unreachable through `apply_action`'s own guard. Unrelated to S3, own
-  commit. — SHA: pending (operator commit)
+  commit. — SHA: 07570d3
 
 ---
 
