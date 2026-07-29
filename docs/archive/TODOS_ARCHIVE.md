@@ -5,6 +5,17 @@
 
 ---
 
+## Session Log — 2026-07-29
+
+- [2026-07-29] 3-Track Consolidation **S1r** — re-home overlay legs (`overlay_pp`/`overlay_cc`/
+  `overlay_collar_call`/`overlay_collar_put`) from `paper_nifty_spot` to a track-independent
+  `paper_nifty_overlay` strategy_name; closed Futures/Proxy overlay duplicates (RQ2 cleanup,
+  LTP/intrinsic fallback reused from `close_ic_legs()`); fixed the S1b `overlay_cc` state bug.
+  New script `scripts/dev/migrate_3track_close_duplicate_overlays.py` (dry-run default). 7 new
+  tests, all green. — SHA: 8c41cca
+
+---
+
 ## Build Queue — shipped rows, closed out 2026-07-27
 
 Moved from TODOS.md's "Build Queue" table during the docs/plan reorg. Rows 1 and 9-13

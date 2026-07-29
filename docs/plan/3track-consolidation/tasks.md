@@ -3,17 +3,21 @@
 > Antigravity: find the first unchecked `- [ ]` line whose blockers are already checked.
 > Tick the box and append `| SHA: <sha>` when done. Add one line to `TODOS.md`.
 > Full story spec for each task: `docs/plan/3track-consolidation/stories.md`.
-> Decision log: `docs/plan/3track-consolidation/prompt.md`; `DECISIONS.md` 2026-07-28 entries.
+> Decision log: `docs/plan/3track-consolidation/prompt.md`; `DECISIONS.md` 2026-07-28 and
+> 2026-07-29 (round 5, overlay/track independence) entries.
 
 ---
 
-- [ ] **S1** — Retire duplicate overlay legs on Futures and Proxy (data migration). **Blocked: requires explicit operator go-ahead before running** — mutates trade history already reported to the operator.
-- [ ] **S2** — Restrict overlay entry to NiftyBees only. Depends on: S1.
-- [ ] **S3** — Independent daily base-leg comparison snapshot (overlay fully excluded). Independent — can start anytime.
-- [ ] **S4** — Full automation of `NiftyTrackComparisonV1` (`auto_execute=True`). Depends on: S1, S2.
+- [x] ~~**S1** — Retire duplicate overlay legs on Futures and Proxy (data migration).~~ **Superseded 2026-07-29 by S1r** — destination changed (re-home to `paper_nifty_overlay`, not leave under `paper_nifty_spot`). Do not implement as originally written; see S1r below.
+- [x] ~~**S2** — Restrict overlay entry to NiftyBees only.~~ **Deleted 2026-07-29, see S2r** — operator decision: overlay is track-independent, this story's premise is reversed. Do not implement.
+- [x] **S1r** — Re-home overlay legs to independent `strategy_name` (`paper_nifty_overlay`), supersedes S1's destination while reusing its close/LTP-fallback logic. Operator go-ahead given 2026-07-29. Council checkpoint waived by operator override 2026-07-29, see `DECISIONS.md` round 5 entry. | SHA: 8c41cca
+- [ ] **S2r** — Remove track-ownership overlay blocks: today's live `_check_futures_cc_block` plus (not-yet-implemented) original S2. Depends on: none, but land alongside/after S1r so overlay entry isn't unblocked before it has a track-independent home to land in.
+- [ ] **S3** — Independent daily base-leg comparison snapshot (overlay fully excluded). Independent — can start anytime. Design unaffected by the 2026-07-29 revision.
+- [ ] **S3r** — Query-time overlay coverage/P&L per track (Spot/Futures/Proxy), new story, not in original scope. Effective-Nifty-exposure calc (ETF ≈1x, Futures via margin/SPAN, DITM via live delta) — no qty/lot resizing. Depends on: S1r (overlay must be re-homed before a track-agnostic query makes sense).
+- [ ] **S4** — Full automation of `NiftyTrackComparisonV1` (`auto_execute=True`). Depends on: S1r, S2r (was S1, S2).
 - [ ] **S5** — Automated base-leg rolling for Futures and DITM tracks. Independent — can start anytime.
-- [ ] **S6** — Full unattended automation: one-time bootstrap entry + trade-event Telegram notifications. Depends on: S2, S5. Best sequenced after S4 too.
-- [ ] **S0** — Documentation and decision-log updates (retire RQ2, module tree, DECISIONS.md rows). Run last, after S1–S6. Docs-only, no code-reviewer gate.
+- [ ] **S6** — Full unattended automation: one-time bootstrap entry + trade-event Telegram notifications. Depends on: S2r, S5 (was S2, S5). Best sequenced after S4 too.
+- [ ] **S0** — Documentation and decision-log updates (retire RQ2, module tree, DECISIONS.md rows; also document S1r/S2r/S3r's overlay-independence model). Run last, after S1r/S2r/S3/S3r/S4–S6. Docs-only, no code-reviewer gate.
 - [ ] **S7** — **Confirmed bug (2026-07-28), not a missing feature:** daily CC/PP/Collar leg snapshots are already being written by `_save_leg_snapshots()` every cron run, but under the wrong `leg_role` — `generate_track_snapshot()` normalizes overlay legs to display labels (`"cc"`/`"collar"`/`"pp"`) before returning, and `_save_leg_snapshots()` persists directly against those collapsed labels instead of the real `overlay_cc`/`overlay_pp`/`overlay_collar_call`/`overlay_collar_put` leg_roles. Result: `overlay_ltp` is always `None` on these rows (the `get_position()` lookup never matches), and nothing that queries `paper_leg_snapshots` by real leg_role can find this history. Not caught by the existing test (`test_save_leg_snapshots_with_overlay` bypasses `generate_track_snapshot()`'s normalization by constructing its fixture with the real leg_role directly). Independent of S1–S6/CC/PP/Collar automation stories — pure persistence-layer bug fix, can ship anytime.
 - [ ] **S8** — Dedicated daily P&L comparison table for CC/PP/Collar overlays (`paper_overlay_pnl_snapshots`), mirroring S3's design (`pnl_1d_abs/pct`, `pnl_inception_abs/pct`) but per overlay instead of per base track. Collar's call+put merge into one row, matching existing display convention. **Depends on: S7** (this table's aggregation reads the leg_role-corrected `paper_leg_snapshots` rows S7 produces — building it before S7 lands would inherit the same broken-key/null-ltp bug).
 - [ ] **S9** — NiftyBees protection-recovery comparison table (`paper_protection_recovery_snapshots`) + one compact daily Telegram digest showing NiftyBees P&L against CC/PP/Collar recovery, recovery-pct only shown on loss days. **Depends on: S3, S8** (reads their output tables only, no independent leg computation). Open question flagged in `stories.md`: confirm with operator whether this is three live parallel overlay series or three what-if reconstructions against the single live overlay copy, before writing the aggregation query.
