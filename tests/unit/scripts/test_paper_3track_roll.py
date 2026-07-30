@@ -176,6 +176,86 @@ async def test_roll_persists_both_close_and_open_atomically(tmp_path: Path) -> N
 
 
 @pytest.mark.asyncio
+async def test_roll_notifies_telegram_on_success(tmp_path: Path) -> None:
+    """S6: a successful roll must notify, and the message must not contain
+    markdown asterisks (TelegramNotifier.send() wraps in <pre> with
+    parse_mode HTML — a leftover *bold* marker would render literally)."""
+    store = _make_store(tmp_path)
+    _seed_entry_trade(store)
+    lookup = _futures_lookup()
+    today = date(2026, 7, 29)
+
+    pos = PaperPosition(
+        strategy_name="paper_nifty_futures",
+        leg_role="base_futures",
+        net_qty=50,
+        avg_cost=Decimal("23000.0"),
+        avg_sell_price=Decimal("0.0"),
+        instrument_key="NSE_FO|NIFTY26JULFUT",
+    )
+
+    broker = MagicMock()
+    broker.get_ltp = AsyncMock(
+        return_value={
+            "NSE_FO|NIFTY26JULFUT": Decimal("23100.0"),
+            "NSE_FO|NIFTY26AUGFUT": Decimal("23150.0"),
+        }
+    )
+    notifier = MagicMock()
+    notifier.send = AsyncMock(return_value=True)
+
+    summary = await roll_mod.check_and_roll_leg(
+        pos, lookup, store, broker, notifier=notifier, today=today, dry_run=False
+    )
+
+    assert summary is not None
+    notifier.send.assert_awaited_once()
+    msg = notifier.send.await_args[0][0]
+    assert "*" not in msg
+    assert "BASE LEG ROLLED" in msg
+
+
+@pytest.mark.asyncio
+async def test_roll_notify_failure_does_not_block_trade(tmp_path: Path) -> None:
+    """Non-fatal contract: a Telegram failure must never roll back or fail
+    an already-executed roll."""
+    store = _make_store(tmp_path)
+    _seed_entry_trade(store)
+    lookup = _futures_lookup()
+    today = date(2026, 7, 29)
+
+    pos = PaperPosition(
+        strategy_name="paper_nifty_futures",
+        leg_role="base_futures",
+        net_qty=50,
+        avg_cost=Decimal("23000.0"),
+        avg_sell_price=Decimal("0.0"),
+        instrument_key="NSE_FO|NIFTY26JULFUT",
+    )
+
+    broker = MagicMock()
+    broker.get_ltp = AsyncMock(
+        return_value={
+            "NSE_FO|NIFTY26JULFUT": Decimal("23100.0"),
+            "NSE_FO|NIFTY26AUGFUT": Decimal("23150.0"),
+        }
+    )
+    notifier = MagicMock()
+    notifier.send = AsyncMock(side_effect=RuntimeError("network down"))
+
+    summary = await roll_mod.check_and_roll_leg(
+        pos, lookup, store, broker, notifier=notifier, today=today, dry_run=False
+    )
+
+    # Roll itself must have completed despite the notify failure.
+    assert summary is not None
+    assert summary["inserted"] == 2
+    positions = store.get_positions("paper_nifty_futures")
+    open_keys = {p.instrument_key: p.net_qty for p in positions}
+    assert open_keys.get("NSE_FO|NIFTY26AUGFUT") == 50
+
+
+@pytest.mark.asyncio
 async def test_roll_dry_run_does_not_persist(tmp_path: Path) -> None:
     store = _make_store(tmp_path)
     lookup = _futures_lookup()

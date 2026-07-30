@@ -302,7 +302,7 @@ async def check_and_roll_leg(
             else f"Liquidity gate: {'✅ PASS' if gate_passed else '⚠️ WARN'}"
         )
         msg = (
-            f"🔄 *BASE LEG ROLLED*\n"
+            f"🔄 BASE LEG ROLLED\n"
             f"Strategy: {pos.strategy_name}\n"
             f"Leg: {pos.leg_role}\n"
             f"Closed: {pos.instrument_key} @ ₹{close_price}\n"

@@ -1057,6 +1057,56 @@ Source: this session (Cowork), `docs/plan/3track-consolidation/stories.md` S6 sc
 
 ---
 
+## 3-Track Consolidation S6 — full unattended automation: bootstrap entry + Telegram notify (2026-07-30)
+
+**Decision:** Per the epic's round-3 revision (2026-07-28, DECISIONS.md), all three base-leg
+tracks are perpetual single-entry positions with no recurring cycle to re-enter — entry
+automation is a one-time bootstrap, not a scheduled recurring trigger. S5 already wired the
+roll-side Telegram notification into `paper_3track_roll.py`'s `check_and_roll_leg()`; this story
+closes the remaining gap: both entry scripts had no bootstrap gate at all (every `--confirm`
+invocation blindly re-recorded, relying entirely on manual operator discipline never to
+double-run) and neither notified on success.
+
+**Implementation:**
+- `paper_3track_entry.py`: new `_has_open_base_positions(store)` — True if any of
+  `STRATEGY_SPOT`/`STRATEGY_FUTURES`/`STRATEGY_PROXY` already has an open position (via
+  `store.get_positions()`, same primitive S5 already uses). `main()` now checks this before
+  writing and skips entirely (logged, non-fatal) if already bootstrapped — the three base legs
+  are always entered together in one bootstrap cycle, so any one track being open is sufficient
+  to block a re-run. Successful bootstrap entry now notifies Telegram via
+  `build_notifier()`/`TelegramNotifier.send()`, wrapped in the same non-fatal try/except pattern
+  as the roll notification (notify failure logs WARNING, never blocks the trade or the CLI's
+  exit code).
+- `paper_3track_overlay_entry.py`: new `_has_open_overlay_leg(store, leg_role)` — checks a single
+  marker leg role per overlay type (`overlay_pp`/`overlay_cc`/`overlay_collar_put` — put chosen
+  for collar since it's always inserted whenever a collar is entered, independent of the
+  put/call dedup logic against a pre-existing standalone CC). Gates the whole entry the same way;
+  notifies Telegram on success with the recorded leg(s) and price(s).
+- `paper_3track_roll.py`: existing roll notification used `*bold*` markdown syntax inside a
+  message `TelegramNotifier.send()` wraps in `<pre>` with `parse_mode: HTML` — the asterisks
+  would have rendered as literal characters, not bold. Fixed in all three call sites (operator
+  decision, 2026-07-30: fix everywhere in this commit rather than leave the pre-existing S5
+  instance inconsistent with the two new ones).
+
+**Known inefficiency, not blocking:** `paper_3track_entry.py`'s bootstrap check runs after
+`fetch_live_prices()` (the live Upstox API call), not before — on an already-bootstrapped day, a
+scheduled cron invocation still pays for the full live price fetch before discovering it's a
+no-op. Correctness is unaffected (the write is still correctly gated); this is a pure efficiency
+gap, deferred rather than fixed in this pass to avoid restructuring `main()`'s control flow
+beyond this story's stated scope. Candidate for a follow-up if the live-fetch cost becomes
+material at cron cadence.
+
+Tests: `tests/unit/scripts/test_paper_3track_entry.py` (7, new file), 4 new tests in
+`tests/unit/scripts/test_paper_3track_overlay_entry_notify.py` (new file), 2 new notify tests in
+`tests/unit/scripts/test_paper_3track_roll.py`. Full `tests/unit/scripts/`, `tests/unit/paper/`,
+and `tests/unit/strategy/` suites re-run clean apart from two pre-existing, unrelated failures
+(both network-dependent — `test_ditm_roll_persists_via_band_aware_lookup` and
+`test_r3_no_block_on_buy` — fail identically without any of this session's changes).
+
+Source: this session (Cowork), `docs/plan/3track-consolidation/stories.md` S6.
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty

@@ -30,6 +30,7 @@ Diagnostics:
 from __future__ import annotations
 
 # ruff: noqa: E402
+import asyncio
 import math
 import sys
 from dataclasses import dataclass
@@ -51,6 +52,7 @@ load_dotenv()
 from src.client.upstox_market import UpstoxMarketClient
 from src.instruments.lookup import InstrumentLookup, parse_expiry
 from src.models.portfolio import TradeAction
+from src.notifications.telegram import build_notifier
 from src.paper._display import BASE_LABELS
 from src.paper._utils import safe_float
 from src.paper.constants import (
@@ -659,6 +661,26 @@ def print_preview(p: LivePrices, gates: dict[str, str], confirmed: bool) -> None
         print("  ✅  All three base legs recorded.\n")
 
 
+def _has_open_base_positions(store: PaperStore) -> bool:
+    """True if any of the three base-leg tracks already has an open position.
+
+    Base-leg entry is a one-time bootstrap (S6, 2026-07-28 decision) — all three
+    tracks are perpetual, single-entry positions with no recurring cycle to
+    re-enter, so once any track has been entered this must never refire, even
+    when the entry script is invoked on a schedule (cron-safe idempotency).
+
+    Args:
+        store: PaperStore to query.
+
+    Returns:
+        True if Spot, Futures, or Proxy already holds an open base position.
+    """
+    for strategy_name in (STRATEGY_SPOT, STRATEGY_FUTURES, STRATEGY_PROXY):
+        if store.get_positions(strategy_name):
+            return True
+    return False
+
+
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 
@@ -788,22 +810,48 @@ def main() -> None:
 
     gates = compute_gate_results(prices)
 
-    # Write to DB if --confirm
-    if args.confirm:
-        trades = build_trades(prices)
-        store = PaperStore(args.db_path)
-        for trade in trades:
-            store.record_trade(trade)
-            logger.info(
-                "Recorded: strategy=%s leg=%s qty=%d price=%s",
-                trade.strategy_name,
-                trade.leg_role,
-                trade.quantity,
-                trade.price,
-            )
-        logger.info("All 3 base legs written to %s", args.db_path)
+    # Write to DB if --confirm. Bootstrap-only (S6): skip entirely if any track
+    # already has an open base position — this is never a recurring re-entry.
+    store = PaperStore(args.db_path)
+    already_bootstrapped = _has_open_base_positions(store)
+    wrote = False
 
-    print_preview(prices, gates, confirmed=args.confirm)
+    if args.confirm:
+        if already_bootstrapped:
+            logger.info(
+                "paper_3track_entry.bootstrap_skipped",
+                reason="one_or_more_tracks_already_open",
+            )
+        else:
+            trades = build_trades(prices)
+            for trade in trades:
+                store.record_trade(trade)
+                logger.info(
+                    "Recorded: strategy=%s leg=%s qty=%d price=%s",
+                    trade.strategy_name,
+                    trade.leg_role,
+                    trade.quantity,
+                    trade.price,
+                )
+            logger.info("All 3 base legs written to %s", args.db_path)
+            wrote = True
+
+            notifier = build_notifier()
+            if notifier:
+                msg = (
+                    "🟢 BASE ENTRY — 3-Track bootstrap\n"
+                    f"Cycle: {args.cycle}\n"
+                    f"Spot: NIFTYBEES qty={prices.niftybees_qty} @ ₹{prices.niftybees_ltp}\n"
+                    f"Futures: {prices.futures_key} @ ₹{prices.futures_price}\n"
+                    f"Proxy: {prices.proxy_instrument_key} @ ₹{prices.proxy_price} "
+                    f"(δ={prices.proxy_actual_delta})"
+                )
+                try:
+                    asyncio.run(notifier.send(msg))
+                except Exception as exc:  # non-fatal — notify failure never blocks the trade
+                    logger.warning("paper_3track_entry.notify_failed", error=str(exc))
+
+    print_preview(prices, gates, confirmed=wrote)
 
 
 if __name__ == "__main__":

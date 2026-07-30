@@ -23,6 +23,7 @@ Usage:
 import argparse
 
 # ruff: noqa: E402
+import asyncio
 import sys
 from dataclasses import dataclass
 from datetime import date
@@ -35,6 +36,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from src.models.portfolio import TradeAction
+from src.notifications.telegram import build_notifier
 from src.paper.constants import (
     DEFAULT_DB_PATH,
     STRATEGY_OVERLAY,
@@ -45,6 +47,14 @@ from src.utils.logging import setup_logging
 
 _SCRIPT_NAME = "scripts.strategies.three_track.paper_3track_overlay_entry"
 logger = structlog.get_logger(_SCRIPT_NAME)
+
+# One-time bootstrap marker leg per overlay type (S6) — its presence under
+# STRATEGY_OVERLAY means this overlay was already entered and must not refire.
+_PRIMARY_LEG_ROLE = {
+    "pp": "overlay_pp",
+    "cc": "overlay_cc",
+    "collar": "overlay_collar_put",
+}
 
 DEFAULT_CONFIG = Path("data/paper/overlay_entry.yaml")
 
@@ -473,6 +483,24 @@ def _record_collar_trades(store: PaperStore, overlay_trades: list["OverlayTrade"
             )
 
 
+def _has_open_overlay_leg(store: PaperStore, leg_role: str) -> bool:
+    """True if STRATEGY_OVERLAY already holds an open position for *leg_role*.
+
+    Overlay entry is a one-time bootstrap per leg (S6, 2026-07-28 decision) —
+    once entered, the position is maintained via ExitSignalEngine-driven
+    monetize/roll/close actions, never re-entered by this script. This guards
+    a cron-invoked re-run from double-entering the same overlay leg.
+
+    Args:
+        store: PaperStore to query.
+        leg_role: The overlay leg_role to check (see ``_PRIMARY_LEG_ROLE``).
+
+    Returns:
+        True if an open position with this leg_role already exists.
+    """
+    return any(p.leg_role == leg_role for p in store.get_positions(STRATEGY_OVERLAY))
+
+
 def main() -> None:
     """CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -502,6 +530,12 @@ def main() -> None:
     setup_logging()
 
     cfg = load_overlay_config(args.config)
+    store = PaperStore(args.db_path)
+
+    # Bootstrap-only (S6): skip entirely if this overlay's marker leg is already
+    # open. Overlay entry is a one-time bootstrap, never a recurring re-entry.
+    primary_role = _PRIMARY_LEG_ROLE[cfg.overlay_type]
+    already_bootstrapped = _has_open_overlay_leg(store, primary_role)
 
     # Check for an existing open short call on the same instrument to prevent
     # recording overlay_cc and overlay_collar_call on the same contract.
@@ -527,26 +561,47 @@ def main() -> None:
         _validate_collar_pairs(overlay_trades, existing_call_role=existing_call_role)
 
     if not args.dry_run:
-        store = PaperStore(args.db_path)
-
-        if cfg.overlay_type == "collar":
-            _record_collar_trades(store, overlay_trades)
+        if already_bootstrapped:
+            logger.info(
+                "paper_3track_overlay_entry.bootstrap_skipped",
+                overlay_type=cfg.overlay_type,
+                leg_role=primary_role,
+            )
+            print(
+                f"SKIPPED: {primary_role} already open under {STRATEGY_OVERLAY} — "
+                "overlay entry is a one-time bootstrap, not a recurring re-entry.",
+                file=sys.stderr,
+            )
         else:
-            for ot in overlay_trades:
-                inserted = store.record_trade(ot.trade)
-                if inserted:
-                    logger.info(
-                        "trade.INSERTED",
-                        strategy=ot.trade.strategy_name,
-                        leg=ot.trade.leg_role,
-                    )
-                else:
-                    logger.info(
-                        "trade.SKIPPED",
-                        reason="conflict on strategy/leg/date/action",
-                        strategy=ot.trade.strategy_name,
-                        leg=ot.trade.leg_role,
-                    )
+            if cfg.overlay_type == "collar":
+                _record_collar_trades(store, overlay_trades)
+            else:
+                for ot in overlay_trades:
+                    inserted = store.record_trade(ot.trade)
+                    if inserted:
+                        logger.info(
+                            "trade.INSERTED",
+                            strategy=ot.trade.strategy_name,
+                            leg=ot.trade.leg_role,
+                        )
+                    else:
+                        logger.info(
+                            "trade.SKIPPED",
+                            reason="conflict on strategy/leg/date/action",
+                            strategy=ot.trade.strategy_name,
+                            leg=ot.trade.leg_role,
+                        )
+
+            notifier = build_notifier()
+            if notifier:
+                lines = [f"🟢 OVERLAY ENTRY — {cfg.overlay_type.upper()} bootstrap"]
+                for ot in overlay_trades:
+                    lines.append(f"{ot.leg_role}: {ot.trade.instrument_key} @ ₹{ot.trade.price}")
+                msg = "\n".join(lines)
+                try:
+                    asyncio.run(notifier.send(msg))
+                except Exception as exc:  # non-fatal — notify failure never blocks the trade
+                    logger.warning("paper_3track_overlay_entry.notify_failed", error=str(exc))
 
     print_summary(cfg, overlay_trades, warnings, args.dry_run)
 

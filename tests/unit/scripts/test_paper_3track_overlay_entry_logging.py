@@ -1,4 +1,5 @@
 """Tests for OPS-1: insert/skip logging in paper_3track_overlay_entry.main()."""
+
 from __future__ import annotations
 
 import sys
@@ -7,8 +8,6 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
@@ -46,31 +45,37 @@ def _run_main_with_mock_store(record_trade_return: bool) -> list[tuple]:
 
     mock_store = MagicMock()
     mock_store.record_trade.return_value = record_trade_return
+    mock_store.get_positions.return_value = []  # no existing overlay leg → bootstrap fires
 
     mock_logger = MagicMock()
     mock_logger.info.side_effect = fake_log_info
 
+    mock_cfg = MagicMock()
+    mock_cfg.overlay_type = "cc"
+    mock_cfg.call_instrument_key = None  # skips the open-call dedup query
+
     with (
         patch(
-            "scripts.strategies.three_track.paper_3track_overlay_entry.load_overlay_config"
+            "scripts.strategies.three_track.paper_3track_overlay_entry.load_overlay_config",
+            return_value=mock_cfg,
         ),
         patch(
             "scripts.strategies.three_track.paper_3track_overlay_entry.build_overlay_trades",
             return_value=([overlay_trade], []),
         ),
-        patch(
-            "scripts.strategies.three_track.paper_3track_overlay_entry.print_summary"
-        ),
+        patch("scripts.strategies.three_track.paper_3track_overlay_entry.print_summary"),
         patch(
             "scripts.strategies.three_track.paper_3track_overlay_entry.PaperStore",
             return_value=mock_store,
         ),
-        patch(
-            "scripts.strategies.three_track.paper_3track_overlay_entry.setup_logging"
-        ),
+        patch("scripts.strategies.three_track.paper_3track_overlay_entry.setup_logging"),
         patch(
             "scripts.strategies.three_track.paper_3track_overlay_entry.logger",
             mock_logger,
+        ),
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.build_notifier",
+            return_value=None,
         ),
         patch("sys.argv", ["paper_3track_overlay_entry.py"]),
     ):

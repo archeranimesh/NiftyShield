@@ -7,6 +7,25 @@
 
 ## Session Log — 2026-07-30
 
+- [2026-07-30] 3-Track Consolidation **S6** — full unattended automation: one-time bootstrap
+  entry + trade-event Telegram notifications. `paper_3track_entry.py`'s new
+  `_has_open_base_positions()` and `paper_3track_overlay_entry.py`'s new
+  `_has_open_overlay_leg()` gate both entry scripts' write path — skip entirely (logged,
+  non-fatal) once the relevant track/leg already has an open position, since all three base
+  legs and each overlay type are one-time bootstraps with no recurring cycle. Both now notify
+  Telegram on a successful bootstrap entry via `build_notifier()`/`TelegramNotifier.send()`,
+  non-fatal (matches S5's roll-notify contract). Also fixed a pre-existing `*bold*`
+  markdown/HTML mismatch in all three notify call sites (`paper_3track_roll.py`'s S5 roll
+  message plus the two new ones) — `TelegramNotifier.send()` wraps in `<pre>` with
+  `parse_mode: HTML`, so markdown asterisks rendered literally rather than bold. Known
+  deferred inefficiency (not a correctness bug): the base-entry bootstrap check runs after the
+  live Upstox price fetch, not before, so an already-bootstrapped cron day still pays for the
+  fetch before discovering it's a no-op. Tests: `tests/unit/scripts/test_paper_3track_entry.py`
+  (7, new), `tests/unit/scripts/test_paper_3track_overlay_entry_notify.py` (4, new), 2 new
+  notify tests in `test_paper_3track_roll.py`. Full `tests/unit/scripts/`, `tests/unit/paper/`,
+  `tests/unit/strategy/` suites re-run clean apart from two pre-existing unrelated network-bound
+  failures. Full detail: `DECISIONS.md` 2026-07-30 S6 entry.
+
 - [2026-07-30] 3-Track Consolidation — overlay-entry targeting follow-up to **S1r** (SHA
   b5082f6), scoped in while planning **S6**. `paper_3track_overlay_entry.py`'s
   `build_overlay_trades()` still wrote one overlay leg per 3-track base
