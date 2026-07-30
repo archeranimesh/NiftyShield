@@ -5,6 +5,30 @@
 
 ---
 
+## Session Log — 2026-07-30
+
+- [2026-07-30] 3-Track Consolidation **S5** — automated base-leg roll for Futures/DITM tracks.
+  New `scripts/strategies/three_track/paper_3track_roll.py`: per-leg DTE triggers
+  (`base_futures` ≤1, `base_ditm_call` <20, independently checked, regression-tested to never
+  collapse into one shared constant), warn-only liquidity gates (futures relative-OI, DITM reuses
+  `PROXY_OI_MIN`/`PROXY_SPREAD_MAX`), atomic close+open persistence via a single
+  `PaperStore.record_trades()` call — same discipline as `close_ic_legs()`/S4's `_persist_roll()`
+  after the 2026-07-15 incident class. Real `@code-reviewer` subagent run against the new files:
+  0 CRITICAL/ERROR, 3 WARNING — addressed the highest-impact one same-session (partial-insert
+  roll now flagged with an ERROR log + a distinct `🚨 PARTIAL ROLL` Telegram message instead of
+  looking identical to a clean roll), added a DITM-path orchestration test and a partial-roll test
+  to close the two coverage gaps the review flagged; deferred the remaining WARNING (an unguarded
+  `store.record_trades` exception crashes the script rather than being caught — acceptable per the
+  review's own reasoning: visible via nonzero cron exit, not a silent-loss repeat of 2026-07-15).
+  Explicitly does **not** touch `NiftyTrackComparisonV1`/`auto_execute` — regression test confirms
+  `check_signals` still emits nothing for a bare `base_futures` position. Tests:
+  `tests/unit/scripts/test_paper_3track_roll.py`, 12 tests. **Not run this session** — sandbox
+  disk at 100% (`pip install -e ".[dev]"` ENOSPC, same constraint as the 2026-07-23 BUG-018
+  session); verified via `python3 -m py_compile` + manual trace of `PaperStore.get_positions()`'s
+  netting behavior against each test's seeded trade history. Needs a live-host `pytest` run before
+  being trusted as CI-verified. Full detail: `DECISIONS.md` 2026-07-30 S5 entry.
+  `docs/plan/3track-consolidation/tasks.md` S5 ticked.
+
 ## Session Log — 2026-07-29
 
 - [2026-07-29] 3-Track Consolidation **S4** — `NiftyTrackComparisonV1.auto_execute` flipped
