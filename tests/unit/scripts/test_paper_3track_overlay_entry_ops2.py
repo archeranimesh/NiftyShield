@@ -69,33 +69,17 @@ class TestValidateCollarPairs:
         # No collar legs → no pairs to validate → passes
         _validate_collar_pairs([_ot(cc)])
 
-    def test_multiple_strategies_all_complete_passes(self) -> None:
-        trades = []
-        for strat in ("paper_nifty_spot", "paper_nifty_proxy"):
-            trades.append(
-                _ot(_make_trade(strategy=strat, leg=_COLLAR_PUT_ROLE, key="NSE_FO|11111"))
-            )
-            trades.append(
-                _ot(
-                    _make_trade(
-                        strategy=strat,
-                        leg=_COLLAR_CALL_ROLE,
-                        action=TradeAction.SELL,
-                        key="NSE_FO|22222",
-                    )
-                )
-            )
-        _validate_collar_pairs(trades)
+    def test_put_only_exempt_when_existing_cc_covers_call(self) -> None:
+        """Single overlay namespace (S1r): put-only is valid when overlay_cc already
+        exists on the call instrument — the existing CC serves as the collar call."""
+        put = _make_trade(leg=_COLLAR_PUT_ROLE, key="NSE_FO|11111")
+        # Should not raise — dedup exemption
+        _validate_collar_pairs([_ot(put)], existing_call_role="overlay_cc")
 
-    def test_one_strategy_missing_call_raises(self) -> None:
-        # spot: complete; proxy: put-only
-        spot_put = _make_trade(strategy="paper_nifty_spot", leg=_COLLAR_PUT_ROLE)
-        spot_call = _make_trade(
-            strategy="paper_nifty_spot", leg=_COLLAR_CALL_ROLE, action=TradeAction.SELL
-        )
-        proxy_put = _make_trade(strategy="paper_nifty_proxy", leg=_COLLAR_PUT_ROLE)
+    def test_put_only_without_exemption_raises(self) -> None:
+        put = _make_trade(leg=_COLLAR_PUT_ROLE, key="NSE_FO|11111")
         with pytest.raises(SystemExit):
-            _validate_collar_pairs([_ot(spot_put), _ot(spot_call), _ot(proxy_put)])
+            _validate_collar_pairs([_ot(put)], existing_call_role=None)
 
 
 class TestRecordCollarTrades:

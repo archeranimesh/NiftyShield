@@ -251,11 +251,13 @@ def test_load_overlay_config_cc_bad_call_key_raises(tmp_path):
 # ── build_overlay_trades ──────────────────────────────────────────────────────
 
 
-def test_build_overlay_trades_pp_records_all_three_tracks():
+def test_build_overlay_trades_pp_records_single_overlay_namespace():
+    """Overlay legs are track-independent (S1r) — one leg, not one per track."""
     cfg = _make_overlay_config(overlay_type="pp")
     trades, warnings = build_overlay_trades(cfg)
     strategies = {ot.strategy for ot in trades}
-    assert strategies == {"paper_nifty_spot", "paper_nifty_futures", "paper_nifty_proxy"}
+    assert strategies == {"paper_nifty_overlay"}
+    assert len(trades) == 1
     assert len(warnings) == 0
 
 
@@ -271,16 +273,15 @@ def test_build_overlay_trades_pp_leg_role():
     assert all(ot.leg_role == "overlay_pp" for ot in trades)
 
 
-def test_build_overlay_trades_cc_blocks_futures():
+def test_build_overlay_trades_cc_single_overlay_namespace():
+    """Futures+standalone-CC block was track-ownership logic (S2r retired it) —
+    overlay is track-independent, so there's no track to block anymore."""
     cfg = _make_overlay_config(overlay_type="cc")
     trades, warnings = build_overlay_trades(cfg)
     strategies = {ot.strategy for ot in trades}
-    # Futures must be absent
-    assert "paper_nifty_futures" not in strategies
-    assert "paper_nifty_spot" in strategies
-    assert "paper_nifty_proxy" in strategies
-    assert len(warnings) == 1
-    assert "BLOCKED" in warnings[0]
+    assert strategies == {"paper_nifty_overlay"}
+    assert len(trades) == 1
+    assert len(warnings) == 0
 
 
 def test_build_overlay_trades_cc_is_sell():
@@ -289,19 +290,19 @@ def test_build_overlay_trades_cc_is_sell():
     assert all(ot.trade.action == TradeAction.SELL for ot in trades)
 
 
-def test_build_overlay_trades_collar_records_six_legs():
+def test_build_overlay_trades_collar_records_two_legs():
     cfg = _make_overlay_config(overlay_type="collar")
     trades, warnings = build_overlay_trades(cfg)
-    # 3 tracks × 2 legs (put + call) = 6
-    assert len(trades) == 6
+    # Single overlay namespace × 2 legs (put + call) = 2, not 3 tracks × 2 = 6
+    assert len(trades) == 2
     assert len(warnings) == 0
 
 
-def test_build_overlay_trades_collar_includes_futures():
+def test_build_overlay_trades_collar_single_overlay_namespace():
     cfg = _make_overlay_config(overlay_type="collar")
     trades, _ = build_overlay_trades(cfg)
     strategies = {ot.strategy for ot in trades}
-    assert "paper_nifty_futures" in strategies
+    assert strategies == {"paper_nifty_overlay"}
 
 
 def test_build_overlay_trades_collar_leg_roles():
