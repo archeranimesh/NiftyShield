@@ -489,7 +489,19 @@ class InstrumentLookup:
             )
             return None
 
+        current_expiry = parse_expiry(current.get("expiry"))
+
         band_candidates = self.get_expiry_candidates(underlying, today, preference=preference)
+        # Only bands strictly after the current contract's own expiry qualify —
+        # otherwise a near-term band pick (e.g. "monthly") can resolve back to the
+        # currently-held contract itself when it happens to be the last expiry of
+        # its calendar month, which would silently no-op the roll instead of
+        # advancing to the next band-cadence contract.
+        band_candidates = [
+            (label, exp_date)
+            for label, exp_date in band_candidates
+            if current_expiry is None or exp_date > current_expiry
+        ]
         if not band_candidates:
             logger.warning(
                 "get_next_contract_in_band.no_band_expiry",
