@@ -1022,6 +1022,41 @@ Source: this session (Cowork), `docs/plan/3track-consolidation/stories.md` S4.
 
 ---
 
+## 3-Track Consolidation — overlay-entry targeting follow-up to S1r (2026-07-30)
+
+**Decision:** `paper_3track_overlay_entry.py`'s `build_overlay_trades()` still wrote one overlay
+leg per 3-track base (`paper_nifty_spot`/`paper_nifty_futures`/`paper_nifty_proxy`) after S1r
+(2026-07-29, SHA 8c41cca) re-homed *existing* overlay legs to the shared, track-independent
+`STRATEGY_OVERLAY = "paper_nifty_overlay"` namespace — S1r was a data migration of legs already
+in the DB, but the entry script's forward-write path was never updated to match, so every new
+overlay entry kept landing at the old per-track destinations S1r had just migrated away from.
+Surfaced while scoping S6's bootstrap-entry check (which needs a single correct strategy_name to
+query `get_positions()` against — checking the stale per-track names would have baked the
+retired model back in; checking `STRATEGY_OVERLAY` while the entry script still wrote elsewhere
+would have made the bootstrap check never see its own writes and refire indefinitely).
+
+**Fix (SHA b5082f6):** `build_overlay_trades()` now emits exactly one `OverlayTrade` per leg role
+under `STRATEGY_OVERLAY` (two for collar: put + call) instead of looping over the three tracks.
+The `paper_nifty_futures` + standalone `overlay_cc` block (`_CC_BLOCKED`) is removed outright —
+it was track-ownership logic of the same kind S2r already retired from the live strategy monitor
+(`_check_futures_cc_block`); with no per-track ownership left, there is no track for a call leg
+to conflict with. `_query_open_call_roles` (dict keyed by strategy) simplified to
+`_query_open_call_role` (single `leg_role | None`), and `_validate_collar_pairs` simplified from
+per-strategy grouping to a single role-set check, both since there is only one overlay namespace
+to reason about now.
+
+Tests: `tests/unit/paper/test_overlay_entry.py` and
+`tests/unit/scripts/test_paper_3track_overlay_entry_ops2.py` updated — the old "3 tracks × N
+legs" assertions replaced with single-namespace assertions; the two multi-strategy collar-pair
+tests replaced with put-only dedup-exemption tests (the multi-strategy scenario no longer exists
+under this model). Full `tests/unit/` suite re-run clean aside from one pre-existing,
+unrelated failure (`test_ditm_roll_persists_via_band_aware_lookup`, fails identically without
+this change — a network/lookup issue in `paper_3track_roll.py`, untouched here).
+
+Source: this session (Cowork), `docs/plan/3track-consolidation/stories.md` S6 scoping.
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty

@@ -7,6 +7,21 @@
 
 ## Session Log — 2026-07-30
 
+- [2026-07-30] 3-Track Consolidation — overlay-entry targeting follow-up to **S1r** (SHA
+  b5082f6), scoped in while planning **S6**. `paper_3track_overlay_entry.py`'s
+  `build_overlay_trades()` still wrote one overlay leg per 3-track base
+  (Spot/Futures/Proxy) after S1r re-homed *existing* overlay legs to the shared
+  `STRATEGY_OVERLAY` namespace — the entry script's forward-write path had never been updated
+  to match. Fixed: emits one `OverlayTrade` per leg role under `STRATEGY_OVERLAY` (two for
+  collar), dropped the now-nonsensical Futures+standalone-CC block (S2r already retired the
+  live-strategy-monitor version of this same track-ownership check),
+  `_query_open_call_roles`→`_query_open_call_role` and `_validate_collar_pairs` simplified
+  from per-strategy dicts to single-role logic. Tests: `tests/unit/paper/test_overlay_entry.py`
+  + `tests/unit/scripts/test_paper_3track_overlay_entry_ops2.py` updated for the
+  single-namespace model (37 tests, all passing). Full `tests/unit/` suite re-run clean apart
+  from one pre-existing unrelated failure (`test_ditm_roll_persists_via_band_aware_lookup`,
+  fails identically without this change). Full detail: `DECISIONS.md` 2026-07-30 entry.
+
 - [2026-07-30] 3-Track Consolidation **S5** — automated base-leg roll for Futures/DITM tracks.
   New `scripts/strategies/three_track/paper_3track_roll.py`: per-leg DTE triggers
   (`base_futures` ≤1, `base_ditm_call` <20, independently checked, regression-tested to never
