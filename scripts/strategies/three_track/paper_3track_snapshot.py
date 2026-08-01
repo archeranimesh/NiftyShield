@@ -83,6 +83,7 @@ from src.paper.models import (
     PaperLegSnapshot,
     PaperNavSnapshot,
     PaperPosition,
+    ProtectionRecoverySnapshot,
     TrackComparisonSnapshot,
     TradeState,
 )
@@ -1328,6 +1329,151 @@ def _compute_spot_comparison_snapshot(
     )
 
 
+# ── Protection recovery (S9 — NiftyBees vs overlay recovery) ───────────────────
+
+
+def _best_recovery(
+    niftybees_pnl: Decimal,
+    overlay_pnls: dict[str, Decimal],
+) -> tuple[str | None, Decimal | None]:
+    """Pick the overlay with the largest recovery share on a red day.
+
+    ``recovery_pct`` is only meaningful when ``niftybees_pnl < 0`` — on a
+    flat/green day there is nothing to recover, so both return values are
+    ``None`` rather than a misleading zero/negative-anchored figure
+    (confirmed with operator, stories.md S9).
+
+    Args:
+        niftybees_pnl: NiftyBees P&L for the period (1d or inception).
+        overlay_pnls: Mapping of overlay_type -> P&L for the same period.
+
+    Returns:
+        ``(best_overlay, best_recovery_pct)``, both ``None`` together when
+        ``niftybees_pnl >= 0``.
+    """
+    if niftybees_pnl >= 0:
+        return None, None
+    denom = abs(niftybees_pnl)
+    best_type: str | None = None
+    best_pct: Decimal | None = None
+    for overlay_type, pnl in overlay_pnls.items():
+        pct = pnl / denom
+        if best_pct is None or pct > best_pct:
+            best_type, best_pct = overlay_type, pct
+    return best_type, best_pct
+
+
+def _compute_protection_recovery_snapshot(
+    store: PaperStore,
+    snap_date: date,
+) -> ProtectionRecoverySnapshot | None:
+    """Compute the S9 recovery comparison row for one date.
+
+    Reads only S3's ``paper_track_comparison_snapshots`` (NiftyBees row,
+    ``strategy_name == STRATEGY_SPOT``) and S8's ``paper_overlay_pnl_snapshots``
+    (cc/pp/collar rows for ``STRATEGY_SPOT``) for the same ``snap_date`` — no
+    independent leg-level computation, per stories.md S9. Must be called
+    after ``_compute_track_comparison_snapshot``/``_compute_overlay_pnl_snapshots``
+    have persisted today's rows for ``STRATEGY_SPOT``.
+
+    Returns:
+        None if today's NiftyBees S3 row has not been persisted yet
+        (should not happen in the standard ``_run`` flow, guarded
+        defensively — mirrors ``_compute_track_comparison_snapshot``'s
+        own-day guard).
+    """
+    niftybees_rows = store.get_track_comparison_snapshots(
+        STRATEGY_SPOT, start_date=snap_date, end_date=snap_date
+    )
+    if not niftybees_rows:
+        logger.warning("protection_recovery.no_niftybees_snapshot", date=str(snap_date))
+        return None
+    niftybees = niftybees_rows[0]
+
+    overlay_1d: dict[str, Decimal] = {
+        "cc": Decimal("0"),
+        "pp": Decimal("0"),
+        "collar": Decimal("0"),
+    }
+    overlay_inception: dict[str, Decimal] = dict(overlay_1d)
+    for overlay_type in ("cc", "pp", "collar"):
+        rows = store.get_overlay_pnl_snapshots(
+            STRATEGY_SPOT, overlay_type, start_date=snap_date, end_date=snap_date
+        )
+        if rows:
+            overlay_1d[overlay_type] = rows[0].pnl_1d_abs
+            overlay_inception[overlay_type] = rows[0].pnl_inception_abs
+
+    best_overlay, best_recovery_pct = _best_recovery(niftybees.pnl_1d_abs, overlay_1d)
+    best_overlay_inception, best_recovery_pct_inception = _best_recovery(
+        niftybees.pnl_inception_abs, overlay_inception
+    )
+
+    return ProtectionRecoverySnapshot(
+        snapshot_date=snap_date,
+        niftybees_pnl_1d=niftybees.pnl_1d_abs,
+        cc_pnl_1d=overlay_1d["cc"],
+        pp_pnl_1d=overlay_1d["pp"],
+        collar_pnl_1d=overlay_1d["collar"],
+        niftybees_pnl_inception=niftybees.pnl_inception_abs,
+        cc_pnl_inception=overlay_inception["cc"],
+        pp_pnl_inception=overlay_inception["pp"],
+        collar_pnl_inception=overlay_inception["collar"],
+        best_overlay=best_overlay,
+        best_recovery_pct=best_recovery_pct,
+        best_overlay_inception=best_overlay_inception,
+        best_recovery_pct_inception=best_recovery_pct_inception,
+    )
+
+
+_RECOVERY_OVERLAY_LABELS = {"cc": "CC", "pp": "PP", "collar": "Collar"}
+
+
+def _build_recovery_digest(snap: ProtectionRecoverySnapshot) -> str:
+    """Build the S9 compact daily Telegram digest text.
+
+    On a red NiftyBees day, overlay lines are sorted by recovery amount
+    descending (best first, matching the "Best:" line) and recovery
+    percentages/"Best:" are shown. On a flat/green day, recovery framing is
+    dropped entirely — lines sorted by raw P&L descending instead, no
+    percentages, no "Best:" line (stories.md S9).
+
+    Args:
+        snap: The computed recovery snapshot for one date.
+
+    Returns:
+        Multi-line digest text, ready for ``notifier.send()``.
+    """
+    overlay_pnls = {
+        "cc": snap.cc_pnl_1d,
+        "pp": snap.pp_pnl_1d,
+        "collar": snap.collar_pnl_1d,
+    }
+    date_str = snap.snapshot_date.strftime("%d %b")
+    lines = [
+        f"\U0001f4ca NiftyBees vs overlays — {date_str}",
+        f"NiftyBees: {snap.niftybees_pnl_1d:+.0f}",
+    ]
+
+    is_red = snap.niftybees_pnl_1d < 0
+    if is_red:
+        ordered = sorted(overlay_pnls.items(), key=lambda kv: kv[1], reverse=True)
+        denom = abs(snap.niftybees_pnl_1d)
+        for overlay_type, pnl in ordered:
+            pct = (pnl / denom) * 100 if denom else Decimal("0")
+            label = _RECOVERY_OVERLAY_LABELS[overlay_type]
+            lines.append(f"  {label:<6} {pnl:+.0f} ({pct:.0f}%)")
+        if snap.best_overlay:
+            lines.append(f"Best: {_RECOVERY_OVERLAY_LABELS[snap.best_overlay]}")
+    else:
+        ordered = sorted(overlay_pnls.items(), key=lambda kv: kv[1], reverse=True)
+        for overlay_type, pnl in ordered:
+            label = _RECOVERY_OVERLAY_LABELS[overlay_type]
+            lines.append(f"  {label:<6} {pnl:+.0f}")
+
+    return "\n".join(lines)
+
+
 # ── Summary table ─────────────────────────────────────────────────────────────
 
 
@@ -1514,6 +1660,20 @@ async def _run(args: argparse.Namespace) -> None:
             store, snap_date, nifty_spot, spot_entry_date
         )
         store.record_track_comparison_snapshot(spot_cmp_snap)
+
+        # S9 — NiftyBees vs overlay recovery comparison + single Telegram
+        # digest. Reads only S3/S8's rows just persisted above for
+        # STRATEGY_SPOT (niftybees + cc/pp/collar) — no independent leg
+        # computation. One notifier.send() call per run, not per overlay.
+        recovery_snap = _compute_protection_recovery_snapshot(store, snap_date)
+        if recovery_snap is not None:
+            store.record_protection_recovery_snapshot(recovery_snap)
+            if notifier:
+                try:
+                    await notifier.send(_build_recovery_digest(recovery_snap))
+                # Intentional: notification failure must not crash the snapshot.
+                except Exception as exc:
+                    logger.warning("protection_recovery.telegram_failed", error=str(exc))
 
     # ── EOD exit signal evaluation (Tier 1) ──────────────────────────────────
     # Collect open positions across all tracks + CSP strategy, derive unique

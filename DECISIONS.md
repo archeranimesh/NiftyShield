@@ -1145,6 +1145,51 @@ Source: this session (Cowork), `docs/plan/3track-consolidation/stories.md` S6.
 
 ---
 
+## 3-Track Consolidation S9 — NiftyBees protection-recovery comparison + Telegram digest (2026-08-01)
+
+**Open design question resolved with operator before implementation:** does NiftyBees carry
+all three overlays (CC/PP/Collar) live simultaneously, or is there one live overlay copy and
+the other two are hypothetical/backtest reconstructions? **Operator answer: three live parallel
+overlays.** This confirms S9's `cc_pnl_1d`/`pp_pnl_1d`/`collar_pnl_1d` columns are three real
+independent series (S8's per-`overlay_type` rows), not a single live copy plus two what-if
+reconstructions — matches S1r/S2r's "overlay is track-independent, attached to NiftyBees only"
+model on the *track* axis, which is orthogonal to this *overlay-type* axis.
+
+**Implementation:** `ProtectionRecoverySnapshot` (new, `src/paper/models.py`) is a pure
+aggregation over S3's `paper_track_comparison_snapshots` (NiftyBees/`STRATEGY_SPOT` row) and
+S8's `paper_overlay_pnl_snapshots` (cc/pp/collar rows), joined on `snapshot_date` — no
+independent leg-level computation, per the story spec. `recovery_pct`/`best_overlay` (and the
+separate `..._inception` pair) are `None`, not a negative/zero-anchored number, whenever the
+relevant NiftyBees P&L is `>= 0` (nothing to recover on a green/flat day) — confirmed matches
+stories.md S9's sample fixture (`-700`/`+300`/`+180`/`+240` → `best_overlay == "cc"`,
+`best_recovery_pct ≈ 0.4286`).
+
+**Deviation from story spec:** `get_protection_recovery_snapshots()` drops the `strategy_name`
+parameter the spec's signature listed (`get_protection_recovery_snapshots(strategy_name,
+start_date=None, end_date=None)`). The table has no `strategy_name` column — it's a single
+NiftyBees-anchored series (one row per `snapshot_date`), not per-strategy like S3/S8's tables —
+so the parameter would have been dead weight with nothing to filter on. `PRIMARY KEY
+(snapshot_date)` reflects the same reasoning.
+
+**Telegram digest:** `_build_recovery_digest()` builds one compact message per cron run — never
+one per overlay, matching the exit-signal path's existing WARN-batching pattern. Overlay lines
+sorted by recovery amount descending on a red day (with a trailing "Best:" line); sorted by raw
+P&L descending on a green day, with the "Best:" line and all percentages dropped entirely rather
+than printed as misleading numbers. Plain text (no markdown `*bold*`), reusing
+`TelegramNotifier.send()`'s existing `<pre>`/HTML wrapping. Suppressed in dry-run (`save=False`),
+same contract as every other Telegram call site in this script.
+
+**Tests:** 12 in `tests/unit/scripts/test_paper_3track_protection_recovery.py` (the 5 named in
+the story spec plus 7 supporting cases) + 6 in `tests/unit/paper/test_store.py`. Full relevant
+suite (`tests/unit/scripts/test_paper_3track_*`, `tests/unit/paper/`, excluding two sandbox-only
+gaps unrelated to this change — `hypothesis` not installed for `test_pnl_hypothesis.py`,
+`pyarrow` not installed for the pre-existing `test_record_paper_trade.py` VIX-series tests) —
+424 passed, 0 failures.
+
+Source: this session (Cowork), `docs/plan/3track-consolidation/stories.md` S9.
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty

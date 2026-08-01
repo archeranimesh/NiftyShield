@@ -41,6 +41,7 @@ from src.paper.models import (
     PaperLegSnapshot,
     PaperNavSnapshot,
     PaperTrade,
+    ProtectionRecoverySnapshot,
     TrackComparisonSnapshot,
     TradeState,
 )
@@ -1225,3 +1226,86 @@ def test_overlay_pnl_snapshots_isolated_by_overlay_type(store: PaperStore) -> No
     assert len(store.get_overlay_pnl_snapshots("paper_nifty_spot", "cc")) == 1
     assert len(store.get_overlay_pnl_snapshots("paper_nifty_spot", "pp")) == 1
     assert len(store.get_overlay_pnl_snapshots("paper_nifty_spot", "collar")) == 1
+
+
+# ── record_protection_recovery_snapshot / get_protection_recovery_snapshots (S9) ─
+
+
+def _recovery_snap(**overrides) -> ProtectionRecoverySnapshot:
+    defaults = dict(
+        snapshot_date=date(2026, 5, 1),
+        niftybees_pnl_1d=Decimal("-700"),
+        cc_pnl_1d=Decimal("300"),
+        pp_pnl_1d=Decimal("180"),
+        collar_pnl_1d=Decimal("240"),
+        niftybees_pnl_inception=Decimal("-1400"),
+        cc_pnl_inception=Decimal("600"),
+        pp_pnl_inception=Decimal("360"),
+        collar_pnl_inception=Decimal("480"),
+        best_overlay="cc",
+        best_recovery_pct=Decimal("0.4286"),
+        best_overlay_inception="cc",
+        best_recovery_pct_inception=Decimal("0.4286"),
+    )
+    defaults.update(overrides)
+    return ProtectionRecoverySnapshot(**defaults)
+
+
+def test_record_protection_recovery_snapshot_fields_round_trip(store: PaperStore) -> None:
+    original = _recovery_snap()
+    store.record_protection_recovery_snapshot(original)
+    retrieved = store.get_protection_recovery_snapshots()[0]
+    assert retrieved == original
+
+
+def test_record_protection_recovery_snapshot_nullable_fields_round_trip(
+    store: PaperStore,
+) -> None:
+    original = _recovery_snap(
+        niftybees_pnl_1d=Decimal("250"),
+        best_overlay=None,
+        best_recovery_pct=None,
+        best_overlay_inception=None,
+        best_recovery_pct_inception=None,
+    )
+    store.record_protection_recovery_snapshot(original)
+    retrieved = store.get_protection_recovery_snapshots()[0]
+    assert retrieved.best_overlay is None
+    assert retrieved.best_recovery_pct is None
+    assert retrieved.best_overlay_inception is None
+    assert retrieved.best_recovery_pct_inception is None
+
+
+def test_record_protection_recovery_snapshot_upserts(store: PaperStore) -> None:
+    store.record_protection_recovery_snapshot(_recovery_snap(niftybees_pnl_1d=Decimal("-700")))
+    store.record_protection_recovery_snapshot(_recovery_snap(niftybees_pnl_1d=Decimal("-999")))
+    snaps = store.get_protection_recovery_snapshots()
+    assert len(snaps) == 1
+    assert snaps[0].niftybees_pnl_1d == Decimal("-999")
+
+
+def test_get_protection_recovery_snapshots_ordered_by_date(store: PaperStore) -> None:
+    store.record_protection_recovery_snapshot(_recovery_snap(snapshot_date=date(2026, 5, 3)))
+    store.record_protection_recovery_snapshot(_recovery_snap(snapshot_date=date(2026, 5, 1)))
+    store.record_protection_recovery_snapshot(_recovery_snap(snapshot_date=date(2026, 5, 2)))
+    snaps = store.get_protection_recovery_snapshots()
+    assert [s.snapshot_date for s in snaps] == [
+        date(2026, 5, 1),
+        date(2026, 5, 2),
+        date(2026, 5, 3),
+    ]
+
+
+def test_get_protection_recovery_snapshots_filters_by_date_range(store: PaperStore) -> None:
+    for d in (date(2026, 5, 1), date(2026, 5, 2), date(2026, 5, 3), date(2026, 5, 4)):
+        store.record_protection_recovery_snapshot(_recovery_snap(snapshot_date=d))
+    snaps = store.get_protection_recovery_snapshots(
+        start_date=date(2026, 5, 2), end_date=date(2026, 5, 3)
+    )
+    assert [s.snapshot_date for s in snaps] == [date(2026, 5, 2), date(2026, 5, 3)]
+
+
+def test_get_protection_recovery_snapshots_returns_empty_when_none_recorded(
+    store: PaperStore,
+) -> None:
+    assert store.get_protection_recovery_snapshots() == []

@@ -7,6 +7,30 @@
 
 ## Session Log — 2026-08-01
 
+- [2026-08-01] 3-Track Consolidation **S9** — NiftyBees protection-recovery comparison table +
+  Telegram digest. Open design question flagged in the story spec ("does NiftyBees carry all
+  three overlays live simultaneously, or is one live and the other two hypothetical?") resolved
+  with the operator (Animesh) before writing any code — answer: three live parallel overlays,
+  consistent with S8's per-`overlay_type` row design. New `ProtectionRecoverySnapshot`
+  (`src/paper/models.py`) + `paper_protection_recovery_snapshots` table +
+  `record_protection_recovery_snapshot`/`get_protection_recovery_snapshots` (`src/paper/store.py`)
+  — pure aggregation joining S3's NiftyBees row and S8's cc/pp/collar rows on `snapshot_date`, no
+  independent leg computation. Deviated from the story spec's `get_protection_recovery_snapshots`
+  signature by dropping `strategy_name` (table has no such column — single NiftyBees-anchored
+  series, not per-strategy). `_compute_protection_recovery_snapshot()` +
+  `_build_recovery_digest()` (`scripts/strategies/three_track/paper_3track_snapshot.py`), wired
+  into `_run()` right after S3's spot synthetic row, one `notifier.send()` call per cron run
+  (never per-overlay), suppressed in dry-run. `recovery_pct`/`best_overlay` null (not
+  negative/zero) on a green/flat NiftyBees day; inception recovery computed independently of the
+  daily pair. Tests: 6 new in `tests/unit/paper/test_store.py`, 12 new in
+  `tests/unit/scripts/test_paper_3track_protection_recovery.py`. Sandbox note: `.venv` shebang
+  unusable in this Cowork sandbox and the default `pip install --user` target hit a home-dir
+  quota (`/sessions/.../.local`) — worked around via `PYTHONUSERBASE` pointed at the mounted
+  outputs volume. Relevant suite (`tests/unit/scripts/test_paper_3track_*`, `tests/unit/paper/`,
+  excluding two pre-existing sandbox-only gaps — missing `hypothesis` and `pyarrow`, both
+  unrelated to this change) — 424 passed, 0 failures. `docs/plan/3track-consolidation/tasks.md`
+  ticked; `DECISIONS.md` and `CONTEXT.md` updated.
+
 - [2026-08-01] 3-Track Consolidation **S8** — daily P&L comparison table for CC/PP/Collar
   overlays, mirroring S3's `TrackComparisonSnapshot` design per-overlay instead of per-base-track.
   New `OverlayPnLSnapshot` (`src/paper/models.py`) + `paper_overlay_pnl_snapshots` table +

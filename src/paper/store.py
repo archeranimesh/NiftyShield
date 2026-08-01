@@ -37,6 +37,7 @@ from src.paper.models import (
     PaperNavSnapshot,
     PaperPosition,
     PaperTrade,
+    ProtectionRecoverySnapshot,
     TrackComparisonSnapshot,
     TradeState,
 )
@@ -251,6 +252,23 @@ CREATE TABLE IF NOT EXISTS paper_overlay_pnl_snapshots (
 
 CREATE INDEX IF NOT EXISTS idx_paper_overlay_pnl_strategy_type_date
     ON paper_overlay_pnl_snapshots(strategy_name, overlay_type, snapshot_date);
+
+CREATE TABLE IF NOT EXISTS paper_protection_recovery_snapshots (
+    snapshot_date                 TEXT NOT NULL,
+    niftybees_pnl_1d              TEXT NOT NULL,
+    cc_pnl_1d                     TEXT NOT NULL,
+    pp_pnl_1d                     TEXT NOT NULL,
+    collar_pnl_1d                 TEXT NOT NULL,
+    niftybees_pnl_inception       TEXT NOT NULL,
+    cc_pnl_inception              TEXT NOT NULL,
+    pp_pnl_inception              TEXT NOT NULL,
+    collar_pnl_inception          TEXT NOT NULL,
+    best_overlay                  TEXT,
+    best_recovery_pct             TEXT,
+    best_overlay_inception        TEXT,
+    best_recovery_pct_inception   TEXT,
+    PRIMARY KEY (snapshot_date)
+) STRICT;
 """
 
 
@@ -304,6 +322,30 @@ def _row_to_overlay_pnl_snapshot(row: sqlite3.Row) -> OverlayPnLSnapshot:
         pnl_1d_pct=Decimal(row["pnl_1d_pct"]),
         pnl_inception_abs=Decimal(row["pnl_inception_abs"]),
         pnl_inception_pct=Decimal(row["pnl_inception_pct"]),
+    )
+
+
+def _row_to_protection_recovery_snapshot(row: sqlite3.Row) -> ProtectionRecoverySnapshot:
+    return ProtectionRecoverySnapshot(
+        snapshot_date=date.fromisoformat(row["snapshot_date"]),
+        niftybees_pnl_1d=Decimal(row["niftybees_pnl_1d"]),
+        cc_pnl_1d=Decimal(row["cc_pnl_1d"]),
+        pp_pnl_1d=Decimal(row["pp_pnl_1d"]),
+        collar_pnl_1d=Decimal(row["collar_pnl_1d"]),
+        niftybees_pnl_inception=Decimal(row["niftybees_pnl_inception"]),
+        cc_pnl_inception=Decimal(row["cc_pnl_inception"]),
+        pp_pnl_inception=Decimal(row["pp_pnl_inception"]),
+        collar_pnl_inception=Decimal(row["collar_pnl_inception"]),
+        best_overlay=row["best_overlay"],
+        best_recovery_pct=(
+            Decimal(row["best_recovery_pct"]) if row["best_recovery_pct"] is not None else None
+        ),
+        best_overlay_inception=row["best_overlay_inception"],
+        best_recovery_pct_inception=(
+            Decimal(row["best_recovery_pct_inception"])
+            if row["best_recovery_pct_inception"] is not None
+            else None
+        ),
     )
 
 
@@ -1431,6 +1473,99 @@ class PaperStore:
         with _connect(self.db_path) as conn:
             rows = conn.execute(query, params).fetchall()
         return [_row_to_overlay_pnl_snapshot(row) for row in rows]
+
+    # ── Protection recovery snapshots (S9 — NiftyBees vs overlay recovery) ─────
+
+    def record_protection_recovery_snapshot(self, snap: ProtectionRecoverySnapshot) -> None:
+        """Upsert a daily NiftyBees-vs-overlay recovery comparison row.
+
+        ON CONFLICT UPDATE replaces the row if the same ``snapshot_date``
+        already exists — idempotent re-runs are safe, matching
+        ``record_overlay_pnl_snapshot``'s pattern.
+
+        Args:
+            snap: The ProtectionRecoverySnapshot to persist.
+        """
+        with _connect(self.db_path) as conn:
+            conn.execute(
+                """INSERT INTO paper_protection_recovery_snapshots
+                   (snapshot_date, niftybees_pnl_1d, cc_pnl_1d, pp_pnl_1d,
+                    collar_pnl_1d, niftybees_pnl_inception, cc_pnl_inception,
+                    pp_pnl_inception, collar_pnl_inception, best_overlay,
+                    best_recovery_pct, best_overlay_inception,
+                    best_recovery_pct_inception)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(snapshot_date)
+                   DO UPDATE SET
+                       niftybees_pnl_1d             = excluded.niftybees_pnl_1d,
+                       cc_pnl_1d                    = excluded.cc_pnl_1d,
+                       pp_pnl_1d                    = excluded.pp_pnl_1d,
+                       collar_pnl_1d                = excluded.collar_pnl_1d,
+                       niftybees_pnl_inception       = excluded.niftybees_pnl_inception,
+                       cc_pnl_inception              = excluded.cc_pnl_inception,
+                       pp_pnl_inception              = excluded.pp_pnl_inception,
+                       collar_pnl_inception          = excluded.collar_pnl_inception,
+                       best_overlay                  = excluded.best_overlay,
+                       best_recovery_pct             = excluded.best_recovery_pct,
+                       best_overlay_inception        = excluded.best_overlay_inception,
+                       best_recovery_pct_inception   = excluded.best_recovery_pct_inception""",
+                (
+                    snap.snapshot_date.isoformat(),
+                    str(snap.niftybees_pnl_1d),
+                    str(snap.cc_pnl_1d),
+                    str(snap.pp_pnl_1d),
+                    str(snap.collar_pnl_1d),
+                    str(snap.niftybees_pnl_inception),
+                    str(snap.cc_pnl_inception),
+                    str(snap.pp_pnl_inception),
+                    str(snap.collar_pnl_inception),
+                    snap.best_overlay,
+                    str(snap.best_recovery_pct) if snap.best_recovery_pct is not None else None,
+                    snap.best_overlay_inception,
+                    (
+                        str(snap.best_recovery_pct_inception)
+                        if snap.best_recovery_pct_inception is not None
+                        else None
+                    ),
+                ),
+            )
+
+    def get_protection_recovery_snapshots(
+        self,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> list[ProtectionRecoverySnapshot]:
+        """Return the protection-recovery snapshot history, ordered by date.
+
+        Args:
+            start_date: Inclusive lower bound on snapshot_date. None = no bound.
+            end_date: Inclusive upper bound on snapshot_date. None = no bound.
+
+        Returns:
+            ProtectionRecoverySnapshot rows, ordered ascending by
+            snapshot_date. Empty list if none exist.
+        """
+        query = (
+            "SELECT snapshot_date, niftybees_pnl_1d, cc_pnl_1d, pp_pnl_1d,"
+            " collar_pnl_1d, niftybees_pnl_inception, cc_pnl_inception,"
+            " pp_pnl_inception, collar_pnl_inception, best_overlay,"
+            " best_recovery_pct, best_overlay_inception,"
+            " best_recovery_pct_inception"
+            " FROM paper_protection_recovery_snapshots"
+            " WHERE 1=1"
+        )
+        params: list[Any] = []
+        if start_date is not None:
+            query += " AND snapshot_date >= ?"
+            params.append(start_date.isoformat())
+        if end_date is not None:
+            query += " AND snapshot_date <= ?"
+            params.append(end_date.isoformat())
+        query += " ORDER BY snapshot_date ASC"
+
+        with _connect(self.db_path) as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [_row_to_protection_recovery_snapshot(row) for row in rows]
 
     def delete_trade(self, trade: PaperTrade) -> None:
         """Delete a single paper trade by its unique constraint fields.

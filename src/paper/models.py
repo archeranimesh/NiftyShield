@@ -359,6 +359,60 @@ class OverlayPnLSnapshot:
     pnl_inception_pct: Decimal
 
 
+@dataclass(frozen=True)
+class ProtectionRecoverySnapshot:
+    """Daily NiftyBees-vs-overlay recovery comparison row.
+
+    One row per ``snapshot_date`` in ``paper_protection_recovery_snapshots``.
+    Reads S3's ``TrackComparisonSnapshot`` (NiftyBees base leg) and S8's
+    ``OverlayPnLSnapshot`` (cc/pp/collar) for the same date — computes
+    nothing from raw legs itself. See
+    docs/plan/3track-consolidation/stories.md S9.
+
+    Attributes:
+        snapshot_date: Date of this snapshot.
+        niftybees_pnl_1d: NiftyBees base-leg 1-day P&L (S3, ``strategy_name
+            == STRATEGY_SPOT``).
+        cc_pnl_1d: CC overlay 1-day P&L (S8, ``overlay_type == "cc"``).
+        pp_pnl_1d: PP overlay 1-day P&L (S8, ``overlay_type == "pp"``).
+        collar_pnl_1d: Collar overlay 1-day P&L (S8, ``overlay_type ==
+            "collar"``).
+        niftybees_pnl_inception: NiftyBees base-leg inception P&L.
+        cc_pnl_inception: CC overlay inception P&L.
+        pp_pnl_inception: PP overlay inception P&L.
+        collar_pnl_inception: Collar overlay inception P&L.
+        best_overlay: Which of cc/pp/collar recovered the largest share of
+            a red NiftyBees day, by ``recovery_pct``. ``None`` when
+            ``niftybees_pnl_1d >= 0`` — a green/flat day has nothing to
+            recover, so there is no meaningful "best" overlay, not a
+            zero-anchored one.
+        best_recovery_pct: ``overlay_pnl_1d / abs(niftybees_pnl_1d)`` for
+            ``best_overlay``. ``None`` under the same green/flat-day rule
+            as ``best_overlay`` — always both-None or both-set together.
+        best_overlay_inception: Same rule as ``best_overlay`` but computed
+            from the inception fields, independently of the daily pair —
+            not a running sum of daily recovery, since inception P&L uses
+            entry cost/credit basis per S3/S8 and legitimately drifts from
+            a naive cumulative sum of the daily column.
+        best_recovery_pct_inception: Inception-basis counterpart to
+            ``best_recovery_pct``, same None-pairing rule.
+    """
+
+    snapshot_date: date
+    niftybees_pnl_1d: Decimal
+    cc_pnl_1d: Decimal
+    pp_pnl_1d: Decimal
+    collar_pnl_1d: Decimal
+    niftybees_pnl_inception: Decimal
+    cc_pnl_inception: Decimal
+    pp_pnl_inception: Decimal
+    collar_pnl_inception: Decimal
+    best_overlay: str | None = None
+    best_recovery_pct: Decimal | None = None
+    best_overlay_inception: str | None = None
+    best_recovery_pct_inception: Decimal | None = None
+
+
 class ExitSignal(str, Enum):
     PROFIT_TARGET = "PROFIT_TARGET"
     TIME_STOP = "TIME_STOP"
