@@ -281,6 +281,7 @@ class InstrumentLookup:
         underlying: str,
         today: date,
         preference: list[str] | None = None,
+        min_expiry: str | None = None,
     ) -> list[tuple[str, str]]:
         """Return (label, expiry_date) pairs in preference order.
 
@@ -315,6 +316,12 @@ class InstrumentLookup:
             underlying: Underlying symbol (e.g. 'NIFTY').
             today: Reference date for DTE calculation.
             preference: Custom order of labels. Defaults to ["monthly", "quarterly", "yearly"].
+            min_expiry: If given (as a YYYY-MM-DD string), expiries at or before this
+                date are excluded from band consideration entirely — before the
+                monthly/quarterly "last of month" cadence is computed. Used when
+                rolling an existing position so its own expiry can never be
+                re-selected as the "next" band contract, even when it happens to be
+                the last expiry of its calendar month.
 
         Returns:
             List of (label, expiry_date_str) tuples.
@@ -328,7 +335,7 @@ class InstrumentLookup:
             if inst.get("underlying_symbol", "").upper() != underlying.upper():
                 continue
             exp = parse_expiry(inst.get("expiry"))
-            if exp:
+            if exp and (min_expiry is None or exp > min_expiry):
                 seen.add(exp)
 
         # Parse all expiries to determine calendar cadence
@@ -491,17 +498,15 @@ class InstrumentLookup:
 
         current_expiry = parse_expiry(current.get("expiry"))
 
-        band_candidates = self.get_expiry_candidates(underlying, today, preference=preference)
-        # Only bands strictly after the current contract's own expiry qualify —
-        # otherwise a near-term band pick (e.g. "monthly") can resolve back to the
-        # currently-held contract itself when it happens to be the last expiry of
-        # its calendar month, which would silently no-op the roll instead of
-        # advancing to the next band-cadence contract.
-        band_candidates = [
-            (label, exp_date)
-            for label, exp_date in band_candidates
-            if current_expiry is None or exp_date > current_expiry
-        ]
+        # min_expiry excludes the current contract's own expiry (and anything
+        # earlier) from band consideration at the source — otherwise a near-term
+        # band pick (e.g. "monthly") can resolve back to the currently-held
+        # contract itself when it happens to be the last expiry of its calendar
+        # month, silently no-opping the roll instead of advancing to the next
+        # band-cadence contract.
+        band_candidates = self.get_expiry_candidates(
+            underlying, today, preference=preference, min_expiry=current_expiry
+        )
         if not band_candidates:
             logger.warning(
                 "get_next_contract_in_band.no_band_expiry",

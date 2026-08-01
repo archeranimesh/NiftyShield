@@ -378,6 +378,7 @@ async def test_ditm_roll_persists_via_band_aware_lookup(tmp_path: Path) -> None:
         [
             {
                 "instrument_key": "NSE_FO|NIFTY26JUL23000CE",
+                "segment": "NSE_FO",
                 "underlying_symbol": "NIFTY",
                 "instrument_type": "CE",
                 "strike_price": 23000.0,
@@ -386,6 +387,7 @@ async def test_ditm_roll_persists_via_band_aware_lookup(tmp_path: Path) -> None:
             },
             {
                 "instrument_key": "NSE_FO|NIFTY26AUG23000CE",
+                "segment": "NSE_FO",
                 "underlying_symbol": "NIFTY",
                 "instrument_type": "CE",
                 "strike_price": 23000.0,
