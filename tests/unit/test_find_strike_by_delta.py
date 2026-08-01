@@ -49,6 +49,11 @@ _safe_float
  28  test_safe_float_none_returns_default               None → 0.0
  29  test_safe_float_valid_string                       "3.14" → 3.14
  30  test_safe_float_invalid_returns_custom_default     "N/A" → custom default
+
+_select_delta_candidates (CC1)
+ 31  test_cc_ladder_used_for_ce_option_type              CE → CC_DELTA_CANDIDATES
+ 32  test_csp_ladder_unchanged_for_pe_option_type        PE → DELTA_CANDIDATES (regression guard)
+ 33  test_selected_strike_respects_requested_delta_range CE auto-select picks from CC ladder, not CSP's
 """
 
 from __future__ import annotations
@@ -63,8 +68,11 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from scripts.lookup.find_strike_by_delta import (
+    CC_DELTA_CANDIDATES,
+    DELTA_CANDIDATES,
     _infer_leg,
     _safe_float,
+    _select_delta_candidates,
     build_record_command,
     filter_strikes_by_delta,
     format_table,
@@ -374,3 +382,39 @@ def test_rank_strikes_prefers_higher_oi() -> None:
     # 22300 should be rank 1 due to higher OI
     assert ranked[0]["strike"] == 22300.0
     assert ranked[1]["strike"] == 22200.0
+
+
+# ── _select_delta_candidates (CC1) ─────────────────────────────────────────────
+
+
+def test_cc_ladder_used_for_ce_option_type() -> None:
+    assert _select_delta_candidates("CE") == CC_DELTA_CANDIDATES
+
+
+def test_csp_ladder_unchanged_for_pe_option_type() -> None:
+    """Regression guard: PE (and BOTH) path is untouched by CC1."""
+    assert _select_delta_candidates("PE") == DELTA_CANDIDATES
+    assert _select_delta_candidates("BOTH") == DELTA_CANDIDATES
+
+
+def test_selected_strike_respects_requested_delta_range() -> None:
+    """Auto-selecting against the CC ladder finds a strike near CC's target deltas
+    (0.18/0.20/0.15), not CSP's (0.22/0.25/0.20) — end-to-end check that main()'s
+    ladder switch (via _select_delta_candidates) actually changes which strike wins,
+    mirroring the fallback loop in main().
+    """
+    rows = filter_strikes_by_delta(_load_chain(), "CE", 0.0, 1.0)
+    ladder = _select_delta_candidates("CE")
+    assert ladder == CC_DELTA_CANDIDATES
+    assert ladder != DELTA_CANDIDATES
+
+    selected = None
+    for candidate in ladder:
+        near = [r for r in rows if abs(abs(r["delta"]) - candidate) <= 0.02]
+        if near:
+            selected = rank_strikes(near)[0]
+            break
+
+    assert selected is not None, "No CE strike found near any CC ladder target delta"
+    # Selected strike's delta must be near a CC ladder value, not a CSP-only value like 0.25
+    assert any(abs(abs(selected["delta"]) - c) <= 0.02 for c in CC_DELTA_CANDIDATES)

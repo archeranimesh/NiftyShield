@@ -178,7 +178,7 @@ def _apply_liquidity_gate(
 
 
 def rank_strikes(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Rank filtered strike rows by CSP entry preference.
+    """Rank filtered strike rows by entry preference (side-agnostic — CSP, CC, PP, etc.).
 
     Ranking tuple (ascending — lower wins):
       1. is_non_round  — 0 for multiples of 100 (preferred), 1 otherwise

@@ -60,13 +60,37 @@ logger = structlog.get_logger(_SCRIPT_NAME)
 UNDERLYING_DEFAULT = "NSE_INDEX|Nifty 50"
 DEFAULT_LOT_SIZE = LOT_SIZE  # single source of truth: src/paper/constants.py
 
-# Fallback sequence of absolute target deltas tried in order (ES12)
+# Fallback sequence of absolute target deltas tried in order (ES12). CSP short-put ladder.
 DELTA_CANDIDATES = [0.22, 0.25, 0.20]
+
+# CC short-call ladder (CC1, 3track-consolidation). PROVISIONAL — these values are a
+# reasonable starting band (15-20Δ short call), not an operator/council-approved target.
+# Do not treat as live until CC2 (docs/plan/3track-consolidation/stories.md) resolves the
+# entry delta band decision gate.
+CC_DELTA_CANDIDATES = [0.18, 0.20, 0.15]
 
 # Defaults that mirror scripts.record.record_paper_trade — used to emit minimal commands.
 DEFAULT_STRATEGY = STRATEGY_CSP
 DEFAULT_ACTION = "SELL"
 DEFAULT_LEG = "short_put"
+
+
+def _select_delta_candidates(option_type: str) -> list[float]:
+    """Select the fallback delta-candidate ladder for the requested option side.
+
+    CE (covered-call short calls) get their own ladder (CC1) — previously CC silently
+    inherited CSP's short-put ladder regardless of `--option-type`, which is a different
+    strategy's target deltas. PE and BOTH keep the existing CSP ladder unchanged.
+
+    Args:
+        option_type: ``"CE"``, ``"PE"``, or ``"BOTH"`` (from ``--option-type``).
+
+    Returns:
+        The candidate ladder to try in order.
+    """
+    if option_type == "CE":
+        return CC_DELTA_CANDIDATES
+    return DELTA_CANDIDATES
 
 
 # ── Data helpers ──────────────────────────────────────────────────────────────
@@ -413,11 +437,12 @@ def main() -> None:
         sys.exit(1)
 
     # ── Candidate Selection Flow with Liquidity Gate (ES12) ──
+    delta_candidates = _select_delta_candidates(args.option_type)
     selected_row = None
-    requested_delta = DELTA_CANDIDATES[0]
+    requested_delta = delta_candidates[0]
     fallback_used = False
 
-    for candidate in DELTA_CANDIDATES:
+    for candidate in delta_candidates:
         candidate_rows = []
         for label, expiry in expiries:
             raw_data = raw_data_by_expiry.get(expiry)
