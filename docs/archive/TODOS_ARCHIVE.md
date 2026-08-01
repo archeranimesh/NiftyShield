@@ -7,6 +7,29 @@
 
 ## Session Log — 2026-08-01
 
+- [2026-08-01] 3-Track Consolidation **S7** — fixed confirmed bug (found 2026-07-28): daily
+  CC/PP/Collar `paper_leg_snapshots` rows were persisted under `_normalize_overlay_pnls()`'s
+  collapsed display labels (`"cc"`/`"pp"`/`"collar"`), not the real `leg_role` values
+  (`overlay_cc`/`overlay_pp`/`overlay_collar_call`/`overlay_collar_put`), so
+  `store.get_position()` never matched and `overlay_ltp` was silently `None` on every row,
+  every day. Fix: new `TrackPnL.raw_overlay_pnls` field (`src/paper/track_snapshot.py`)
+  captured pre-normalization; `_save_leg_snapshots()`
+  (`scripts/strategies/three_track/paper_3track_snapshot.py`) now persists off it instead of
+  the collapsed dict. Display/summary paths (base_unrealized subtraction, printed
+  cc_pnl/collar_pnl/pp_pnl) untouched — confirmed via grep that every other `.overlay_pnls`
+  call site correctly wants the normalized/deduped view. Tests: new end-to-end
+  `generate_track_snapshot()` → `_save_leg_snapshots()` regression test plus a raw-vs-normalized
+  unit test; existing `_make_snapshot()` helper updated to pass `raw_overlay_pnls` through
+  (no existing assertions changed). 35/35 target tests green; lint/format clean; no regressions
+  in the wider suite (25 pre-existing failures are unrelated sandbox dependency gaps —
+  missing pyarrow/duckdb, unrelated `record_paper_trade.py` script). **Not reviewed by the
+  real `@code-reviewer` subagent** — Cowork surface cannot spawn `.claude/agents/*`; Claude
+  performed the review manually in-session per `ANTIGRAVITY.md`'s structurally-blocked-surface
+  rule (no CRITICAL/ERROR findings; one accepted-behavior note on the legacy
+  overlay_cc/overlay_collar_call duplicate-key case, documented in DECISIONS.md) and flagged
+  this explicitly before committing. SHA 192be41. `docs/plan/3track-consolidation/tasks.md`
+  ticked; `DECISIONS.md` and `CONTEXT.md` updated.
+
 - [2026-08-01] 3-Track Consolidation **S0** — documentation and decision-log close-out, docs-only
   (no code-reviewer gate per CLAUDE.md Step 5c). `docs/instructions/3track.md`: rewrote the
   Overlay Menu to single-column NiftyBees-only, added an automation-status callout summarizing
