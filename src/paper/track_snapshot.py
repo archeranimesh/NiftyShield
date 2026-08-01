@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 from typing import Any, cast
@@ -36,10 +36,15 @@ class TrackGreeks:
 @dataclass(frozen=True)
 class TrackPnL:
     base_pnl: Decimal
-    overlay_pnls: dict[str, Decimal]  # e.g., {'overlay_pp': Decimal("-100"), ...}
+    overlay_pnls: dict[str, Decimal]  # normalized display labels: cc/pp/collar
     net_pnl: Decimal
     unrealized_pnl: Decimal
     realized_pnl: Decimal
+    # Real leg_role keys (overlay_cc/overlay_pp/overlay_collar_call/overlay_collar_put),
+    # captured before _normalize_overlay_pnls() collapses them to display labels.
+    # Persistence (paper_leg_snapshots) must key off this, never off overlay_pnls above
+    # (S7, 2026-07-28 — see docs/plan/3track-consolidation/stories.md).
+    raw_overlay_pnls: dict[str, Decimal] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -328,6 +333,10 @@ async def generate_track_snapshot(
         else:
             proxy_alert = "OK"
 
+    # Capture the real leg_role keys before collapsing to display labels — the
+    # persistence path (paper_leg_snapshots) needs these, not the merged view (S7).
+    raw_overlay_pnls = dict(overlay_pnls)
+
     # Merge collar legs into one unit and deduplicate CC/collar_call before
     # computing net_pnl — prevents double-counting the short call.
     overlay_pnls = _normalize_overlay_pnls(overlay_pnls)
@@ -344,7 +353,14 @@ async def generate_track_snapshot(
 
     return TrackSnapshot(
         track_name=track_namespace,
-        pnl=TrackPnL(base_pnl, overlay_pnls, net_pnl, total_unrealized, total_realized),
+        pnl=TrackPnL(
+            base_pnl,
+            overlay_pnls,
+            net_pnl,
+            total_unrealized,
+            total_realized,
+            raw_overlay_pnls=raw_overlay_pnls,
+        ),
         greeks=TrackGreeks(net_delta, net_theta, net_vega),
         max_drawdown_abs=max_dd_abs,
         max_drawdown_pct=max_dd_pct,

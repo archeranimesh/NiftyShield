@@ -58,6 +58,9 @@ def _make_snapshot(
             net_pnl=net,
             unrealized_pnl=unrealized,
             realized_pnl=realized,
+            # This helper already uses real leg_role keys (overlay_pp/overlay_cc),
+            # so raw == normalized here — straight passthrough.
+            raw_overlay_pnls=overlay_pnls,
         ),
         greeks=TrackGreeks(Decimal("0.92"), Decimal("-5"), Decimal("10")),
         max_drawdown_abs=Decimal("-500"),
@@ -307,6 +310,66 @@ def test_save_leg_snapshots_with_overlay(tmp_path: Path) -> None:
     assert overlay_snap is not None
     assert overlay_snap.total_pnl == overlay_snap.unrealized_pnl + overlay_snap.realized_pnl
     assert overlay_snap.total_pnl == Decimal("-200")
+
+
+@pytest.mark.asyncio
+async def test_save_leg_snapshots_end_to_end_uses_real_leg_role(tmp_path: Path) -> None:
+    """S7 regression guard: run the *actual* production path — generate_track_snapshot()
+    (which normalizes overlay_pnls to display labels) feeding straight into
+    _save_leg_snapshots() — not the _make_snapshot() shortcut used by the tests
+    above. Before the fix, this path persisted under leg_role="pp" (the collapsed
+    display label), which is not a real leg_role, so get_position()/get_leg_snapshot()
+    lookups against the real "overlay_pp" role always missed.
+    """
+    from src.instruments.lookup import InstrumentLookup
+    from src.paper.track_snapshot import generate_track_snapshot
+
+    store = _make_store(tmp_path)
+    store.record_trade(_make_trade(leg_role="base_etf"))
+    store.record_trade(
+        PaperTrade(
+            strategy_name=_STRATEGY,
+            leg_role="overlay_pp",
+            instrument_key="NSE_FO|NIFTY22000PE",
+            trade_date=_DATE,
+            action=TradeAction.BUY,
+            quantity=65,
+            price=Decimal("300.00"),
+        )
+    )
+
+    broker = AsyncMock()
+    broker.get_ltp.return_value = {
+        "NSE_EQ|NIFTYBEES": Decimal("250.0"),
+        "NSE_FO|NIFTY22000PE": Decimal("280.0"),
+    }
+    lookup = MagicMock(spec=InstrumentLookup)
+    lookup.get_by_key.return_value = None  # forces resolve_leg_delta's safe zero-delta path
+
+    snapshot = await generate_track_snapshot(
+        store, broker, lookup, _STRATEGY, Decimal("24000"), Decimal("100000"), _DATE
+    )
+
+    # Sanity: the snapshot's display view is collapsed, as expected.
+    assert set(snapshot.pnl.overlay_pnls) == {"pp"}
+    assert set(snapshot.pnl.raw_overlay_pnls) == {"overlay_pp"}
+
+    snap_mod._save_leg_snapshots(
+        store,
+        _STRATEGY,
+        snapshot,
+        _DATE,
+        ltp_map={"NSE_FO|NIFTY22000PE": Decimal("280.0")},
+    )
+
+    # Real leg_role must be queryable.
+    real_role_snap = store.get_leg_snapshot(_STRATEGY, "overlay_pp", _DATE)
+    assert real_role_snap is not None
+    # ltp must be populated — proof get_position() was called with the real leg_role.
+    assert real_role_snap.ltp == Decimal("280.0")
+
+    # The collapsed display label must NOT have been persisted as its own row.
+    assert store.get_leg_snapshot(_STRATEGY, "pp", _DATE) is None
 
 
 def test_save_leg_snapshots_closed_overlay_shows_realized_pnl(tmp_path: Path) -> None:

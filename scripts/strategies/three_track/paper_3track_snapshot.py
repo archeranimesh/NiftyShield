@@ -997,8 +997,11 @@ def _save_leg_snapshots(
     )
     store.record_leg_snapshot(leg_snap)
 
-    # Overlay legs (one snapshot per leg_role)
-    for role, overlay_pnl in pnl.overlay_pnls.items():
+    # Overlay legs (one snapshot per real leg_role — never the collapsed
+    # display label in pnl.overlay_pnls, e.g. "cc"/"collar"/"pp". Using the
+    # display label here silently orphaned get_position() lookups and left
+    # overlay_ltp always None (S7, 2026-07-28).
+    for role, overlay_pnl in pnl.raw_overlay_pnls.items():
         overlay_pos = store.get_position(track_name, role)
         overlay_ltp = ltp_map.get(overlay_pos.instrument_key) if overlay_pos else None
         overlay_realized = realized_by_leg.get(role, Decimal("0"))

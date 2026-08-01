@@ -419,3 +419,72 @@ async def test_none_ltp_does_not_suppress_realized_pnl(caplog: pytest.LogCapture
     assert snap.pnl.base_pnl == Decimal("500")
     assert snap.pnl.net_pnl == Decimal("500")
     assert any("LTP unavailable" in r.message for r in caplog.records)
+
+
+# ---------------------------------------------------------------------------
+# S7: raw (pre-normalization) overlay leg_role exposure for persistence
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_generate_track_snapshot_exposes_raw_overlay_leg_roles() -> None:
+    """pnl.raw_overlay_pnls must carry the real leg_role keys (overlay_collar_call/
+    overlay_collar_put) even though pnl.overlay_pnls collapses them into "collar"
+    for display. _save_leg_snapshots() needs the real keys to call
+    store.get_position() correctly — persisting off the collapsed label was the
+    S7 bug (2026-07-28): overlay_ltp was always None because "collar"/"cc"/"pp"
+    are never real leg_role values in paper_trades.
+    """
+    trades = [
+        PaperTrade(
+            strategy_name="paper_nifty_spot",
+            leg_role="overlay_collar_call",
+            instrument_key="NIFTY_CALL",
+            trade_date=date(2026, 6, 1),
+            action=TradeAction.SELL,
+            quantity=1,
+            price=Decimal("50.0"),
+            notes="",
+        ),
+        PaperTrade(
+            strategy_name="paper_nifty_spot",
+            leg_role="overlay_collar_put",
+            instrument_key="NIFTY_PUT",
+            trade_date=date(2026, 6, 1),
+            action=TradeAction.BUY,
+            quantity=1,
+            price=Decimal("40.0"),
+            notes="",
+        ),
+    ]
+    positions = [
+        PaperPosition(
+            strategy_name="paper_nifty_spot",
+            leg_role="overlay_collar_call",
+            instrument_key="NIFTY_CALL",
+            net_qty=-1,
+            avg_cost=Decimal("0"),
+            avg_sell_price=Decimal("50.0"),
+        ),
+        PaperPosition(
+            strategy_name="paper_nifty_spot",
+            leg_role="overlay_collar_put",
+            instrument_key="NIFTY_PUT",
+            net_qty=1,
+            avg_cost=Decimal("40.0"),
+            avg_sell_price=Decimal("0"),
+        ),
+    ]
+
+    store = MockPaperStore(trades, positions, [])
+    broker = MockBrokerClient()
+    lookup = MockInstrumentLookup()
+
+    snap = await generate_track_snapshot(
+        store, broker, lookup, "paper_nifty_spot", Decimal("24000"), Decimal("100000"), date.today()
+    )
+
+    # Display view: collapsed to a single merged "collar" label.
+    assert set(snap.pnl.overlay_pnls) == {"collar"}
+    # Persistence view: both real leg_roles must survive, uncollapsed.
+    assert set(snap.pnl.raw_overlay_pnls) == {"overlay_collar_call", "overlay_collar_put"}
