@@ -7,6 +7,15 @@
 
 ## Session Log — 2026-08-01
 
+- [2026-08-01] 3-Track Consolidation **CC1** — CC-specific delta candidate ladder for
+  `find_strike_by_delta.py`, decoupled from CSP's (`DELTA_CANDIDATES` was silently applied to
+  CC's `--option-type CE` requests). New `CC_DELTA_CANDIDATES` (provisional, gated by CC2) +
+  `_select_delta_candidates(option_type)` helper; `rank_strikes()` docstring corrected
+  (side-agnostic, no logic change). 3 new tests, all green (confirmed by operator on host —
+  sandbox has no disk space for pytest). Reviewed via `general-purpose` agent standing in for
+  `@code-reviewer` — no CRITICAL/ERROR/WARNING. SHA: e6d4ddf. See DECISIONS.md 2026-08-01 CC1
+  entry, `docs/plan/3track-consolidation/stories.md`/`tasks.md`.
+
 - [2026-08-01] 3-Track Consolidation **S9** — NiftyBees protection-recovery comparison table +
   Telegram digest. Open design question flagged in the story spec ("does NiftyBees carry all
   three overlays live simultaneously, or is one live and the other two hypothetical?") resolved

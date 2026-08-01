@@ -25,7 +25,7 @@
 
 ---
 
-- [ ] **CC1** — Per-strategy delta candidate ladder for `find_strike_by_delta.py` (CC gets its own, decoupled from CSP's). Can be built now as an experimentation/comparison tool, but **treat ladder values as provisional until `paper-exit-codification`'s EC-4 lands** (EC-4 owns the TIME_STOP DTE-remaining redesign; calibrating CC's entry delta against the current wrong TIME_STOP risks re-tuning twice).
+- [x] **CC1** — Per-strategy delta candidate ladder for `find_strike_by_delta.py` (CC gets its own, decoupled from CSP's). Can be built now as an experimentation/comparison tool, but **treat ladder values as provisional until `paper-exit-codification`'s EC-4 lands** (EC-4 owns the TIME_STOP DTE-remaining redesign; calibrating CC's entry delta against the current wrong TIME_STOP risks re-tuning twice). | SHA: e6d4ddf
 - [ ] **CC2** — Decision gate (not an implementation task): CC entry delta band vs. current 4% OTM production default. Needs operator decision or council (`strategy_parameters` template). Scope narrowed — does NOT own TIME_STOP/DTE_REVIEW calibration, that's `paper-exit-codification` EC-4's. Gates CC1's ladder values from provisional → live, and gates CC3's `--no-dry-run`.
 - [ ] **CC3** — Automated CC entry: idempotency guard on `paper_3track_overlay_entry.py` + Wednesday cron (mirrors `paper_ic_entry.py`'s pattern). Can be built/tested now in parallel with CC1/CC2, but **must ship `--dry-run`-only until CC1 + CC2 + `paper-exit-codification` EC-4 all resolve.**
 
