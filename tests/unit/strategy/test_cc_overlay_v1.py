@@ -8,7 +8,7 @@ from __future__ import annotations
 import asyncio
 from datetime import date, timedelta
 from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -277,7 +277,7 @@ def test_apply_action_triggering_signals() -> None:
     strategy._check_reentry.reset_mock()
     mock_notifier.send_notification.reset_mock()
 
-    # 3. LOSS_STOP trigger -> check_reentry NOT called
+    # 3. LOSS_STOP trigger -> check_reentry called
     action_ls = ApprovedAction(
         action_type="CLOSE_CC",
         legs_to_close=[LegClose(leg_role="short_call")],
@@ -287,13 +287,13 @@ def test_apply_action_triggering_signals() -> None:
         metadata={"triggering_signal": "LOSS_STOP", "mark": "201", "delta": "0.30"},
     )
     _run(strategy.apply_action([pos], action_ls))
-    strategy._check_reentry.assert_not_called()
+    strategy._check_reentry.assert_called_once()
     mock_notifier.send_notification.assert_called_once()
 
     strategy._check_reentry.reset_mock()
     mock_notifier.send_notification.reset_mock()
 
-    # 4. DELTA_STOP trigger -> check_reentry NOT called
+    # 4. DELTA_STOP trigger -> check_reentry called
     action_ds = ApprovedAction(
         action_type="CLOSE_CC",
         legs_to_close=[LegClose(leg_role="short_call")],
@@ -303,8 +303,35 @@ def test_apply_action_triggering_signals() -> None:
         metadata={"triggering_signal": "DELTA_STOP", "mark": "80", "delta": "0.56"},
     )
     _run(strategy.apply_action([pos], action_ds))
-    strategy._check_reentry.assert_not_called()
+    strategy._check_reentry.assert_called_once()
     mock_notifier.send_notification.assert_called_once()
+
+
+def test_reentry_gates_unchanged_regardless_of_triggering_signal() -> None:
+    """Test that check_reentry is called with correct parameters for bad IVR/DTE,
+    proving the gate logic itself didn't change even if the trigger signal did."""
+    mock_store = MagicMock()
+    strategy = CCOverlayV1(store=mock_store, notifier=None)
+    pos = _make_position(
+        avg_sell_price="80", leg_role="short_call", instrument_key="NSE_FO|NIFTY26JUN2026CE"
+    )
+
+    with patch.object(strategy, "_check_reentry", new_callable=AsyncMock) as mock_check:
+        action_ls = ApprovedAction(
+            action_type="CLOSE_CC",
+            legs_to_close=[LegClose(leg_role="short_call")],
+            legs_to_open=[],
+            rationale="test",
+            council_rank=1,
+            metadata={"triggering_signal": "LOSS_STOP"},
+        )
+        _run(strategy.apply_action([pos], action_ls))
+        mock_check.assert_called_once_with(
+            expiry=date(2026, 6, 26),
+            today=date.today(),
+            instrument_key="NSE_FO|NIFTY26JUN2026CE",
+            trade_id=0,
+        )
 
 
 def test_apply_action_null_dependencies() -> None:
