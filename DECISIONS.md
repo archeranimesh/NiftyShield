@@ -1186,7 +1186,7 @@ gaps unrelated to this change — `hypothesis` not installed for `test_pnl_hypot
 `pyarrow` not installed for the pre-existing `test_record_paper_trade.py` VIX-series tests) —
 424 passed, 0 failures.
 
-Source: this session (Cowork), `docs/plan/3track-consolidation/stories.md` S9.
+Source: this session (Cowork), `docs/plan/3track-consolidation/stories.md` S9. SHA afc9bfa.
 
 ---
 

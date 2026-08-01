@@ -28,8 +28,8 @@
   quota (`/sessions/.../.local`) — worked around via `PYTHONUSERBASE` pointed at the mounted
   outputs volume. Relevant suite (`tests/unit/scripts/test_paper_3track_*`, `tests/unit/paper/`,
   excluding two pre-existing sandbox-only gaps — missing `hypothesis` and `pyarrow`, both
-  unrelated to this change) — 424 passed, 0 failures. `docs/plan/3track-consolidation/tasks.md`
-  ticked; `DECISIONS.md` and `CONTEXT.md` updated.
+  unrelated to this change) — 424 passed, 0 failures. SHA afc9bfa.
+  `docs/plan/3track-consolidation/tasks.md` ticked; `DECISIONS.md` and `CONTEXT.md` updated.
 
 - [2026-08-01] 3-Track Consolidation **S8** — daily P&L comparison table for CC/PP/Collar
   overlays, mirroring S3's `TrackComparisonSnapshot` design per-overlay instead of per-base-track.
