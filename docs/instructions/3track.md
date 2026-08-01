@@ -1,7 +1,24 @@
 # 3-Track Nifty Long Comparison — Operator Guide
 
-> Source of truth for strategy spec: `docs/strategies/nifty_track_comparison_v1.md`
+> Source of truth for strategy spec: `docs/archive/strategies/nifty_track_comparison_v1.md`
+> (path corrected 2026-08-01, S0 — the doc lives under `docs/archive/strategies/`, not
+> `docs/strategies/`, despite still being the live spec; see that file's own top-of-file notice).
 > This guide covers the operational workflow only: what to run, when, and in what order.
+
+> **⛔ Automation status (2026-08-01, `3track-consolidation` epic S0):** RQ2 (per-overlay
+> protection comparison across all three base tracks) is **retired**. Overlays (CC/PP/Collar)
+> now exist **only** on the NiftyBees (Spot) base — see the revised Overlay Menu below. Futures
+> and Proxy report raw, unprotected base P&L only, forever (S2r). The daily base-leg comparison
+> snapshot (S3, shipped) is computed strictly from base legs across all three tracks — overlay
+> P&L is a fully separate, non-blended report, never summed into the RQ1 comparison (S3r/S4
+> revision, 2026-07-28). Base-leg rolling for Futures/DITM is now automated (S5: `base_futures`
+> rolls at DTE ≤ 1, `base_ditm_call` at DTE < 20, warn-only liquidity gate). Initial entry
+> (base legs + overlay) is now a one-time automated bootstrap — not a recurring cadence — with
+> Telegram as the sole visibility layer for every trade event (S6, shipped 2026-07-30). There is
+> no human approval step left anywhere in this pipeline; see `DECISIONS.md` 2026-07-28/07-29/
+> 07-30 entries and `docs/plan/3track-consolidation/prompt.md` for the full decision history.
+> Sections below describing manual, multi-track overlay commands are retained for historical/
+> debugging reference but no longer reflect the live automated path.
 
 ---
 
@@ -38,17 +55,36 @@ each new cycle. NSE revises lot sizes periodically.
 
 ---
 
-## Overlay Menu and Blocked Combinations
+## Overlay Menu (revised 2026-08-01, S0 — supersedes the 3-track menu below)
 
-| Overlay | Spot | Futures | Proxy |
+| Overlay | NiftyBees (Spot) |
+|---------|------------------|
+| Protective Put (PP) — BUY PE, ~8–10% OTM | ✅ Only track overlays are entered on |
+| Covered Call (CC) — SELL CE, ~3–5% OTM | ✅ Only track overlays are entered on |
+| Collar (PP + CC together) | ✅ Only track overlays are entered on |
+
+Overlays are **track-independent** (S1r) and live in their own `paper_nifty_overlay` strategy
+namespace — they are no longer duplicated per base track. Futures (`paper_nifty_futures`) and
+Proxy (`paper_nifty_proxy`) carry **no overlay positions at all**, ever (S2r) — the old
+Futures-standalone-CC hard block below is retained defensively in code
+(`_check_futures_cc_block`) but is now moot, since overlay entry is never attempted against
+those strategy names in the first place.
+
+**Historical note (pre-2026-07-29 design, kept for context):** the table immediately below
+described overlays duplicated per track (PP/CC/Collar on Spot, Futures, and Proxy) to answer
+RQ2 ("which overlay works best on which base"). That research question is retired — see
+`docs/archive/strategies/nifty_track_comparison_v1.md` for the retirement note. Do not follow
+the commands under "Step 2 — Overlay Entry" below as-is; they predate S1r/S2r/S6 and target
+per-track overlay recording that the current code no longer supports.
+
+| Overlay (old, retired 2026-07-29) | Spot | Futures | Proxy |
 |---------|------|---------|-------|
 | Protective Put (PP) — BUY PE, ~8–10% OTM | ✅ | ✅ (creates synthetic long call — record for completeness) | ✅ (creates bull call spread) |
 | Covered Call (CC) — SELL CE, ~3–5% OTM | ✅ | 🚫 **BLOCKED** | ✅ |
 | Collar (PP + CC together) | ✅ | ✅ (collar only — standalone CC is permanently blocked) | ✅ |
 
-**Hard block:** `paper_nifty_futures` + standalone `overlay_cc` = synthetic short put =
-unlimited downside. Violates MISSION.md Principle I. Every script enforces this automatically
-and will reject the combination.
+**Hard block (retained defensively, no longer reachable):** `paper_nifty_futures` + standalone
+`overlay_cc` = synthetic short put = unlimited downside. Violates MISSION.md Principle I.
 
 ---
 

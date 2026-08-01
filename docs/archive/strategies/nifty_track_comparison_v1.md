@@ -1,5 +1,18 @@
 # 3-Track Nifty Long Instrument Comparison v1
 
+> **⛔ RQ2 retired (2026-08-01, `3track-consolidation` epic S0).** Research Question 2 below
+> ("Protection effectiveness" — comparing overlay performance across all three base tracks) was
+> tried and explicitly abandoned by operator decision (2026-07-29, `DECISIONS.md` round 5 entry;
+> full history in `docs/plan/3track-consolidation/prompt.md` Decision Log #1/#4). It is not
+> "never asked" — it was implemented (duplicate overlay legs per track), found to conflate
+> track-ownership with overlay strategy, and retired in favor of a track-independent overlay
+> model: overlays (CC/PP/Collar) now exist **only** on the NiftyBees (Spot) base, in their own
+> `paper_nifty_overlay` namespace (S1r/S2r), and are never math-linked back into the RQ1
+> base-track comparison (S3r). Futures and Proxy report raw, unprotected base P&L, forever. RQ1
+> (base instrument comparison, below) is unaffected and remains the live research question — see
+> `paper_track_comparison_snapshots` (S3) for its daily data. Do not resurrect duplicate overlay
+> legs on Futures/Proxy in any future story without a fresh operator decision.
+
 | Field     | Value                                                                    |
 |-----------|--------------------------------------------------------------------------|
 | Name      | 3-Track Nifty Long Instrument Comparison                                 |
@@ -24,13 +37,17 @@ Given equivalent notional Nifty exposure (NEE), how do the three instruments dif
 - Margin and capital locked at broker level
 - Transaction costs and rolling costs annualised
 
-**Research question 2 — Protection effectiveness (Spot / NiftyBees only):**
+**Research question 2 — Protection effectiveness (Spot / NiftyBees only) — RETIRED 2026-07-29,
+see notice at top of file:**
 When the Nifty index falls, how much protection does each overlay structure deliver, and
-what is the long-term running cost of carrying that protection? Protection overlays are
+what is the long-term running cost of carrying that protection? ~~Protection overlays are
 applied to Spot (NiftyBees) as the base because it is the primary capital deployment.
 Futures and Proxy receive the same overlays for data completeness — the DB can be queried
 later to compare (base × overlay) combinations across all three tracks — but the primary
-protection analysis is Spot only.
+protection analysis is Spot only.~~ **Current state:** overlays are entered on Spot only, by
+construction — there is no per-track duplication left to query. RQ2 as originally scoped
+(comparing the same overlay's effect across all three base tracks) cannot be answered from
+current data and is not being collected for.
 
 **Three tracks:**
 
@@ -48,7 +65,22 @@ All three tracks run simultaneously for the full comparison window.
 
 ---
 
-## Approved Overlay Menu
+## Approved Overlay Menu (revised 2026-08-01, S0 — supersedes table below)
+
+| Overlay | NiftyBees (Spot) |
+|---------|------------------|
+| Protective Put (buy OTM put, ~8–10% OTM) | ✅ Only track overlays are entered on |
+| Covered Call (sell OTM call, ~3–5% OTM) | ✅ Only track overlays are entered on |
+| Collar (PP + Covered Call together) | ✅ Only track overlays are entered on |
+
+Overlays are track-independent (`paper_nifty_overlay` namespace, S1r) and entered only against
+the Spot base. Futures and Proxy never carry overlay positions (S2r) — the Futures+standalone-CC
+block documented below is retained in code defensively but is no longer reachable in normal
+operation, since overlay entry is never attempted against `paper_nifty_futures`/`paper_nifty_proxy`.
+CSP (Cash-Secured Put) remains excluded from this framework entirely — tracked standalone in
+`paper_csp_nifty_v1`.
+
+**Historical table (pre-2026-07-29 per-track overlay design, kept for context — do not follow):**
 
 | Overlay | Spot | Futures | Proxy |
 |---------|---------|---------|---------|
@@ -56,18 +88,11 @@ All three tracks run simultaneously for the full comparison window.
 | Covered Call (sell OTM call, ~3–5% OTM) | ✅ Safe | 🚫 **BLOCKED** | ✅ Safe (creates diagonal/vertical spread) |
 | Collar (PP + Covered Call together) | ✅ Preferred | ✅ Safe (collar only — never standalone covered call) | ✅ Safe |
 
-**Blocked combinations — hard rules, never record:**
+**Blocked combination — hard rule, retained defensively:**
 
 - **Futures + standalone Covered Call:** Futures + short call = synthetic short put (unlimited downside). Violates `MISSION.md` Principle I.
 
 This combination is documented in `DECISIONS.md` as permanently blocked per the council ruling.
-CSP (Cash-Secured Put) is excluded from this framework entirely — it is tracked as a
-standalone strategy in `paper_csp_nifty_v1` and is not an overlay here.
-
-**Redundant but not blocked (record, flag in leg notes):**
-
-- Proxy + Protective Put: equivalent to entering a bull call spread directly. Record for completeness; note in `--notes` that it is structurally redundant.
-- Futures + Protective Put: equivalent to buying a long call. Record; note redundancy.
 
 ---
 

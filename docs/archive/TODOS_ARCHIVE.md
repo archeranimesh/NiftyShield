@@ -5,6 +5,28 @@
 
 ---
 
+## Session Log — 2026-08-01
+
+- [2026-08-01] 3-Track Consolidation **S0** — documentation and decision-log close-out, docs-only
+  (no code-reviewer gate per CLAUDE.md Step 5c). `docs/instructions/3track.md`: rewrote the
+  Overlay Menu to single-column NiftyBees-only, added an automation-status callout summarizing
+  S1r–S6, retained the old per-track table for historical reference; also corrected the
+  "source of truth" doc-path pointer, which had drifted (`docs/strategies/...` doesn't exist —
+  the file actually lives at `docs/archive/strategies/nifty_track_comparison_v1.md`).
+  `docs/archive/strategies/nifty_track_comparison_v1.md`: added an explicit RQ2-retired notice
+  at the top of the file plus inline strikethrough/annotation on the RQ2 research-question
+  paragraph and the old per-track Approved Overlay Menu table — RQ2 is documented as tried and
+  retired, not silently deleted. `DECISIONS.md`: added the missing S5 implementation decision
+  row (roll trigger/liquidity-gate design, SHA 177660e) — RQ2 retirement and S1r/S2r/S4/S6 were
+  already documented from prior sessions, S5 was the one gap. `CONTEXT.md`: verified already
+  current (auto_execute=True, S5/S6 module-tree entries present from prior sessions) — no edit
+  needed. `TODOS.md`: item 1 rewritten to reflect S1r/S2r/S3/S3r/S4/S5/S6 all shipped with SHAs,
+  confirmed no open PP-booking-gap/CC-state-bug items remain (both closed under S1r, SHA
+  8c41cca) — the story spec's instruction to "search for the 2026-07-20 session log entries"
+  was itself stale; the fix had already landed and been logged under a different story name.
+
+---
+
 ## Session Log — 2026-07-30
 
 - [2026-07-30] 3-Track Consolidation **S6** — full unattended automation: one-time bootstrap
@@ -482,3 +504,7 @@ CLI: live option chain → filter by delta range → fixed-width table + dry-run
 ### ✅ P&L Visualization decision — RESOLVED 2026-05-03
 
 Decision: keep cumulative inception P&L (vs Nuvama session view). No code changes required.
+
+### ✅ DITM band-roll self-match fix — DONE 2026-07-30 (SHA 3b57ad6)
+
+`get_next_contract_in_band` could resolve back to the currently-held contract's own expiry when it was the last expiry of its calendar month, silently no-opping DITM base-leg rolls. Fixed via new `min_expiry` param on `get_expiry_candidates` (`src/instruments/lookup.py`), excluding the current contract's own expiry before monthly/quarterly cadence is computed. Test fixture in `tests/unit/scripts/test_paper_3track_roll.py` was also missing `"segment": "NSE_FO"`, masking the bug across two review passes. See DECISIONS.md 2026-07-30 entry for full root-cause detail. Reviewed by operator (Animesh) as human-reviewer-of-record — Cowork surface cannot spawn `.claude/agents/code-reviewer`/`roll-validator`; confirmed green via local `pytest` run before commit.
