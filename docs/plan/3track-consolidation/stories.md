@@ -685,10 +685,21 @@ confirms.
 - Regression: CSP/IC/PP paths through `rank_strikes()` unaffected (if implemented as a shared
   parameter, confirm default preserves today's round-100-only behavior for all non-CC callers)
 
-**Commit:** none yet — implementation story, not started. Do not implement until the open design
-questions above (cushion bar definition, `rank_strikes()` vs. script-local placement) are
-resolved — this is a smaller-scope decision than CC2 but still needs a concrete answer before
-code, not an assumption.
+**Resolved + implemented (2026-08-01, direct operator decision, no council pass):** cushion bar
+is the existing `_apply_liquidity_gate()` — no separate OI/spread comparison ratio between
+round-500 and round-100 tiers. No additional spread/delta-proximity gate beyond what already
+runs upstream (spread via the liquidity gate, delta-proximity via the existing ±0.02 candidate
+window). Cross-expiry reach is allowed — a round-500 strike on quarterly/yearly can win over a
+round-100 strike on the nearer expiry; confirmed this was already inherent in `main()`'s
+candidate loop (pools all resolved expiries before ranking/gating), not new behavior introduced
+by this story. Placement: CC-local `_reorder_cc_round500_first()` in
+`scripts/lookup/find_strike_by_delta.py`, not a `rank_strikes()` parameter — keeps the 12-caller
+shared function untouched. **Known accepted risk, unresolved by this story:** cross-expiry reach
+can select a leg whose DTE/theta/roll economics diverge from what CC's exit thresholds assume;
+`TIME_STOP` is still `days_held >= 21` until EC-5 lands. See DECISIONS.md 2026-08-01 CC4 entry
+for full implementation detail.
+
+**Commit:** `feat(lookup): CC round-500 strike preference with liquidity-gated round-100 fallback`
 
 ---
 

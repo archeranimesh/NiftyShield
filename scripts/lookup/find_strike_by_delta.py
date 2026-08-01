@@ -78,6 +78,45 @@ DEFAULT_ACTION = "SELL"
 DEFAULT_LEG = "short_put"
 
 
+def _reorder_cc_round500_first(
+    gated_rows: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], str | None]:
+    """Reorder CC's liquidity-gated candidates so round-₹500 strikes rank first (CC4).
+
+    Round-500 strikes (24500, 25000, 25500, …) carry materially deeper OI than
+    neighbouring round-100 strikes on the live chain — operator directive
+    (docs/plan/3track-consolidation/stories.md CC4). This is a *preference*, not a
+    hard filter: any round-500 candidate that already cleared
+    :func:`_apply_liquidity_gate` is preferred over round-100 candidates; if none did,
+    fall back to the best round-100 candidate (existing gate + rank order, untouched).
+    Cushion bar (operator-resolved 2026-08-01): the existing liquidity gate itself —
+    no separate OI/spread comparison between the two tiers. Internal ordering within
+    each tier is unchanged (delta-proximity via the input's rank order, OI/spread as
+    tiebreaker — both already applied by :func:`rank_strikes` before this call).
+
+    CC-only — callers must gate this on ``option_type == "CE"`` themselves; this
+    function never touches the shared :func:`rank_strikes`, so CSP/IC/PP paths are
+    unaffected regardless of call-site placement.
+
+    Args:
+        gated_rows: Output of :func:`_apply_liquidity_gate`, already ranked.
+
+    Returns:
+        Tuple of (reordered rows, fallback_reason). ``fallback_reason`` is ``None``
+        when at least one round-500 candidate is present (no fallback needed);
+        otherwise a human-readable string explaining round-100 was used instead —
+        callers should log this so a human reviewing the entry log can see why
+        round-500 was skipped.
+    """
+    round_500 = [r for r in gated_rows if int(r["strike"]) % 500 == 0]
+    others = [r for r in gated_rows if int(r["strike"]) % 500 != 0]
+    if round_500:
+        return round_500 + others, None
+    if others:
+        return others, "no round-500 strike passed the liquidity gate in this delta window"
+    return [], None
+
+
 def _select_delta_candidates(option_type: str) -> list[float]:
     """Select the fallback delta-candidate ladder for the requested option side.
 
@@ -469,6 +508,24 @@ def main() -> None:
 
         ranked_candidate = rank_strikes(candidate_rows)
         filtered_candidate = _apply_liquidity_gate(ranked_candidate)
+
+        round500_fallback_reason: str | None = None
+        if args.option_type == "CE" and filtered_candidate:
+            filtered_candidate, round500_fallback_reason = _reorder_cc_round500_first(
+                filtered_candidate
+            )
+            if round500_fallback_reason:
+                logger.warning(
+                    "cc_round500_fallback",
+                    reason=round500_fallback_reason,
+                    candidate_delta=candidate,
+                )
+                print(
+                    f"WARNING: CC round-500 fallback — {round500_fallback_reason}; "
+                    "using best round-100 candidate instead.",
+                    file=sys.stderr,
+                )
+
         if filtered_candidate:
             pick_idx = min(args.index - 1, len(filtered_candidate) - 1)
             if args.index - 1 > len(filtered_candidate) - 1:

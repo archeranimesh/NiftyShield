@@ -54,6 +54,13 @@ _select_delta_candidates (CC1)
  31  test_cc_ladder_used_for_ce_option_type              CE → CC_DELTA_CANDIDATES
  32  test_csp_ladder_unchanged_for_pe_option_type        PE → DELTA_CANDIDATES (regression guard)
  33  test_selected_strike_respects_requested_delta_range CE auto-select picks from CC ladder, not CSP's
+
+_reorder_cc_round500_first (CC4)
+ 34  test_round500_preferred_when_present                round-500 candidate moved to front, no fallback reason
+ 35  test_round500_fallback_to_round100_with_reason       no round-500 in gated set → round-100 first, reason set
+ 36  test_round500_internal_order_preserved               multiple round-500 rows keep their rank_strikes order
+ 37  test_round500_empty_input_returns_empty              [] → ([], None)
+ 38  test_round500_all_round500_no_fallback_reason         every gated row is round-500 → reason is None
 """
 
 from __future__ import annotations
@@ -71,6 +78,7 @@ from scripts.lookup.find_strike_by_delta import (
     CC_DELTA_CANDIDATES,
     DELTA_CANDIDATES,
     _infer_leg,
+    _reorder_cc_round500_first,
     _safe_float,
     _select_delta_candidates,
     build_record_command,
@@ -418,3 +426,56 @@ def test_selected_strike_respects_requested_delta_range() -> None:
     assert selected is not None, "No CE strike found near any CC ladder target delta"
     # Selected strike's delta must be near a CC ladder value, not a CSP-only value like 0.25
     assert any(abs(abs(selected["delta"]) - c) <= 0.02 for c in CC_DELTA_CANDIDATES)
+
+
+# ── _reorder_cc_round500_first (CC4) ───────────────────────────────────────────
+
+
+def test_round500_preferred_when_present() -> None:
+    """A round-500 candidate is moved to the front even if it ranks lower on OI."""
+    gated = [
+        {"strike": 24800.0, "oi": 5000, "instrument_key": "K_round100"},
+        {"strike": 25000.0, "oi": 1000, "instrument_key": "K_round500"},
+    ]
+    reordered, reason = _reorder_cc_round500_first(gated)
+    assert reordered[0]["instrument_key"] == "K_round500"
+    assert reordered[1]["instrument_key"] == "K_round100"
+    assert reason is None
+
+
+def test_round500_fallback_to_round100_with_reason() -> None:
+    """No round-500 candidate in the gated set → round-100 order preserved, reason set."""
+    gated = [
+        {"strike": 24800.0, "oi": 5000, "instrument_key": "K1"},
+        {"strike": 24900.0, "oi": 3000, "instrument_key": "K2"},
+    ]
+    reordered, reason = _reorder_cc_round500_first(gated)
+    assert reordered == gated
+    assert reason == "no round-500 strike passed the liquidity gate in this delta window"
+
+
+def test_round500_internal_order_preserved() -> None:
+    """Multiple round-500 rows keep their incoming (rank_strikes) relative order."""
+    gated = [
+        {"strike": 25000.0, "oi": 100, "instrument_key": "K_first"},
+        {"strike": 24500.0, "oi": 900, "instrument_key": "K_second"},
+        {"strike": 24800.0, "oi": 5000, "instrument_key": "K_round100"},
+    ]
+    reordered, reason = _reorder_cc_round500_first(gated)
+    assert [r["instrument_key"] for r in reordered] == ["K_first", "K_second", "K_round100"]
+    assert reason is None
+
+
+def test_round500_empty_input_returns_empty() -> None:
+    assert _reorder_cc_round500_first([]) == ([], None)
+
+
+def test_round500_all_round500_no_fallback_reason() -> None:
+    """Every gated row is round-500 → no round-100 tier at all, reason still None."""
+    gated = [
+        {"strike": 25000.0, "oi": 1000, "instrument_key": "K1"},
+        {"strike": 24500.0, "oi": 500, "instrument_key": "K2"},
+    ]
+    reordered, reason = _reorder_cc_round500_first(gated)
+    assert len(reordered) == 2
+    assert reason is None
