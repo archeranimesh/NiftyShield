@@ -328,3 +328,127 @@ def test_build_overlay_trades_notes_contain_cycle_and_expiry():
     for ot in trades:
         assert "Cycle 2" in ot.trade.notes
         assert "2026-09-25" in ot.trade.notes
+
+
+# ── main idempotency guards ───────────────────────────────────────────────────
+
+
+def test_open_position_prevention(tmp_path, capsys):
+    """Test that open overlay_cc position on STRATEGY_SPOT prevents new CC entry."""
+    from unittest.mock import MagicMock, patch
+
+    from scripts.strategies.three_track.paper_3track_overlay_entry import main
+    from src.paper.constants import STRATEGY_SPOT
+
+    config_path = _write_yaml(tmp_path, _valid_cc_raw())
+    db_path = tmp_path / "dummy.sqlite"
+
+    test_args = [
+        "paper_3track_overlay_entry.py",
+        "--config",
+        str(config_path),
+        "--db-path",
+        str(db_path),
+        "--dry-run",
+    ]
+
+    with (
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.PaperStore"
+        ) as mock_store_cls,
+        patch("sys.argv", test_args),
+    ):
+        mock_store = MagicMock()
+        mock_store_cls.return_value = mock_store
+
+        def mock_get_positions(strategy_name):
+            if strategy_name == STRATEGY_SPOT:
+                m = MagicMock(leg_role="overlay_cc")
+                m.net_qty = -1
+                return [m]
+            return []
+
+        mock_store.get_positions.side_effect = mock_get_positions
+
+        with pytest.raises(SystemExit) as excinfo:
+            main()
+
+        assert excinfo.value.code == 0
+        captured = capsys.readouterr()
+        assert "paper_3track_overlay_entry.duplicate_position" in captured.out
+
+
+def test_entry_proceeds_when_no_open_position(tmp_path, capsys):
+    """Test positive path: entry proceeds when no overlay_cc exists on STRATEGY_SPOT."""
+    from unittest.mock import MagicMock, patch
+
+    from scripts.strategies.three_track.paper_3track_overlay_entry import main
+
+    config_path = _write_yaml(tmp_path, _valid_cc_raw())
+    db_path = tmp_path / "dummy.sqlite"
+
+    test_args = [
+        "paper_3track_overlay_entry.py",
+        "--config",
+        str(config_path),
+        "--db-path",
+        str(db_path),
+        "--dry-run",
+    ]
+
+    with (
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.PaperStore"
+        ) as mock_store_cls,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry._query_open_call_role"
+        ) as mock_query,
+        patch("sys.argv", test_args),
+    ):
+        mock_store = MagicMock()
+        mock_store_cls.return_value = mock_store
+        mock_store.get_positions.return_value = []
+        mock_query.return_value = None
+
+        main()
+
+        captured = capsys.readouterr()
+        assert "paper_3track_overlay_entry.duplicate_position" not in captured.out
+
+
+def test_existing_query_open_call_roles_guard_unchanged(tmp_path, capsys):
+    """Test regression guard: _query_open_call_role check still works and skips overlay_collar_call."""
+    from unittest.mock import MagicMock, patch
+
+    from scripts.strategies.three_track.paper_3track_overlay_entry import main
+
+    config_path = _write_yaml(tmp_path, _valid_cc_raw())
+    db_path = tmp_path / "dummy.sqlite"
+
+    test_args = [
+        "paper_3track_overlay_entry.py",
+        "--config",
+        str(config_path),
+        "--db-path",
+        str(db_path),
+        "--dry-run",
+    ]
+
+    with (
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.PaperStore"
+        ) as mock_store_cls,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry._query_open_call_role"
+        ) as mock_query,
+        patch("sys.argv", test_args),
+    ):
+        mock_store = MagicMock()
+        mock_store_cls.return_value = mock_store
+        mock_store.get_positions.return_value = []
+        mock_query.return_value = "overlay_collar_call"
+
+        with pytest.raises(SystemExit) as excinfo:
+            main()
+
+        assert excinfo.value.code == 1

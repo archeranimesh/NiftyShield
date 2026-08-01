@@ -40,6 +40,7 @@ from src.notifications.telegram import build_notifier
 from src.paper.constants import (
     DEFAULT_DB_PATH,
     STRATEGY_OVERLAY,
+    STRATEGY_SPOT,
 )
 from src.paper.models import PaperTrade
 from src.paper.store import PaperStore
@@ -536,6 +537,16 @@ def main() -> None:
     # open. Overlay entry is a one-time bootstrap, never a recurring re-entry.
     primary_role = _PRIMARY_LEG_ROLE[cfg.overlay_type]
     already_bootstrapped = _has_open_overlay_leg(store, primary_role)
+
+    # Idempotency guard for CC overlay entry on paper_nifty_spot track
+    if cfg.overlay_type == "cc":
+        spot_positions = store.get_positions(STRATEGY_SPOT)
+        if any(p.leg_role == "overlay_cc" and p.net_qty != 0 for p in spot_positions):
+            logger.info(
+                "paper_3track_overlay_entry.duplicate_position", strategy_name=STRATEGY_SPOT
+            )
+            print(f"SKIPPED: overlay_cc already open on {STRATEGY_SPOT}.", file=sys.stderr)
+            sys.exit(0)
 
     # Check for an existing open short call on the same instrument to prevent
     # recording overlay_cc and overlay_collar_call on the same contract.
