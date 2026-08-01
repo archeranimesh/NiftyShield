@@ -313,6 +313,52 @@ class TrackComparisonSnapshot:
     tracking_error_pct: Decimal | None = None
 
 
+@dataclass(frozen=True)
+class OverlayPnLSnapshot:
+    """Daily per-overlay P&L snapshot, mirroring ``TrackComparisonSnapshot``'s
+
+    Level-1 fields for CC/PP/Collar instead of the base tracks.
+
+    One row per ``(strategy_name, overlay_type, snapshot_date)`` in
+    ``paper_overlay_pnl_snapshots``. ``strategy_name`` is the 3-track
+    strategy the overlay is attached to (overlays currently only exist on
+    NiftyBees, per DECISIONS.md 2026-07-29 round 5, but this table does not
+    hardcode that). Computed from the real-leg-role ``paper_leg_snapshots``
+    rows S7 produces (``overlay_cc``/``overlay_pp``/``overlay_collar_call``/
+    ``overlay_collar_put``) — Collar's call+put merge into a single
+    ``"collar"`` row, matching the display convention
+    ``_normalize_overlay_pnls`` already established for the printed summary.
+    See docs/plan/3track-consolidation/stories.md S8.
+
+    Attributes:
+        strategy_name: 3-track strategy this overlay is attached to.
+        overlay_type: One of ``"cc"``, ``"pp"``, ``"collar"``.
+        snapshot_date: Date of this snapshot.
+        pnl_1d_abs: Today's overlay total P&L minus yesterday's overlay total
+            P&L (absolute Rupees).
+        pnl_1d_pct: ``pnl_1d_abs / yesterday's mark value``. Denominator is
+            yesterday's closing mark, never entry cost/credit basis.
+        pnl_inception_abs: Today's overlay total P&L minus zero (P&L is
+            already cumulative since entry) — kept as its own field for
+            symmetry with S3's shape and to allow the two pct fields to use
+            independent denominators.
+        pnl_inception_pct: ``pnl_inception_abs / abs(entry_basis)``, where
+            entry_basis is the credit received (CC) or debit paid (PP) at
+            entry, or the sum of both legs' absolute basis for Collar. Same
+            unsigned-denominator convention as S3 — P&L direction is already
+            correctly signed via mark-to-market, so no overlay-specific sign
+            inversion is applied (confirmed with operator, 2026-08-01).
+    """
+
+    strategy_name: str
+    overlay_type: str
+    snapshot_date: date
+    pnl_1d_abs: Decimal
+    pnl_1d_pct: Decimal
+    pnl_inception_abs: Decimal
+    pnl_inception_pct: Decimal
+
+
 class ExitSignal(str, Enum):
     PROFIT_TARGET = "PROFIT_TARGET"
     TIME_STOP = "TIME_STOP"

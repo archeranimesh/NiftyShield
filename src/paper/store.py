@@ -32,6 +32,7 @@ from src.paper.models import (
     ExitSignal,
     GateViolation,
     MarginSnapshot,
+    OverlayPnLSnapshot,
     PaperLegSnapshot,
     PaperNavSnapshot,
     PaperPosition,
@@ -236,6 +237,20 @@ CREATE TABLE IF NOT EXISTS paper_track_comparison_snapshots (
 
 CREATE INDEX IF NOT EXISTS idx_paper_track_comparison_strategy_date
     ON paper_track_comparison_snapshots(strategy_name, snapshot_date);
+
+CREATE TABLE IF NOT EXISTS paper_overlay_pnl_snapshots (
+    strategy_name       TEXT NOT NULL,
+    overlay_type        TEXT NOT NULL,
+    snapshot_date       TEXT NOT NULL,
+    pnl_1d_abs          TEXT NOT NULL,
+    pnl_1d_pct          TEXT NOT NULL,
+    pnl_inception_abs   TEXT NOT NULL,
+    pnl_inception_pct   TEXT NOT NULL,
+    PRIMARY KEY (strategy_name, overlay_type, snapshot_date)
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS idx_paper_overlay_pnl_strategy_type_date
+    ON paper_overlay_pnl_snapshots(strategy_name, overlay_type, snapshot_date);
 """
 
 
@@ -277,6 +292,18 @@ def _row_to_track_comparison_snapshot(row: sqlite3.Row) -> TrackComparisonSnapsh
         tracking_error_pct=(
             Decimal(row["tracking_error_pct"]) if row["tracking_error_pct"] is not None else None
         ),
+    )
+
+
+def _row_to_overlay_pnl_snapshot(row: sqlite3.Row) -> OverlayPnLSnapshot:
+    return OverlayPnLSnapshot(
+        strategy_name=row["strategy_name"],
+        overlay_type=row["overlay_type"],
+        snapshot_date=date.fromisoformat(row["snapshot_date"]),
+        pnl_1d_abs=Decimal(row["pnl_1d_abs"]),
+        pnl_1d_pct=Decimal(row["pnl_1d_pct"]),
+        pnl_inception_abs=Decimal(row["pnl_inception_abs"]),
+        pnl_inception_pct=Decimal(row["pnl_inception_pct"]),
     )
 
 
@@ -1330,6 +1357,80 @@ class PaperStore:
         with _connect(self.db_path) as conn:
             rows = conn.execute(query, params).fetchall()
         return [_row_to_track_comparison_snapshot(row) for row in rows]
+
+    # ── Overlay P&L snapshots (S8 — per-overlay, mirrors S3's shape) ────────────
+
+    def record_overlay_pnl_snapshot(self, snap: OverlayPnLSnapshot) -> None:
+        """Upsert a daily per-overlay P&L comparison snapshot.
+
+        ON CONFLICT UPDATE replaces the row if the same
+        (strategy_name, overlay_type, snapshot_date) already exists —
+        idempotent re-runs are safe, matching
+        ``record_track_comparison_snapshot``'s pattern.
+
+        Args:
+            snap: The OverlayPnLSnapshot to persist.
+        """
+        with _connect(self.db_path) as conn:
+            conn.execute(
+                """INSERT INTO paper_overlay_pnl_snapshots
+                   (strategy_name, overlay_type, snapshot_date, pnl_1d_abs,
+                    pnl_1d_pct, pnl_inception_abs, pnl_inception_pct)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(strategy_name, overlay_type, snapshot_date)
+                   DO UPDATE SET
+                       pnl_1d_abs        = excluded.pnl_1d_abs,
+                       pnl_1d_pct        = excluded.pnl_1d_pct,
+                       pnl_inception_abs = excluded.pnl_inception_abs,
+                       pnl_inception_pct = excluded.pnl_inception_pct""",
+                (
+                    snap.strategy_name,
+                    snap.overlay_type,
+                    snap.snapshot_date.isoformat(),
+                    str(snap.pnl_1d_abs),
+                    str(snap.pnl_1d_pct),
+                    str(snap.pnl_inception_abs),
+                    str(snap.pnl_inception_pct),
+                ),
+            )
+
+    def get_overlay_pnl_snapshots(
+        self,
+        strategy_name: str,
+        overlay_type: str,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> list[OverlayPnLSnapshot]:
+        """Return the overlay P&L snapshot history, ordered by date.
+
+        Args:
+            strategy_name: 3-track strategy the overlay is attached to.
+            overlay_type: One of ``"cc"``, ``"pp"``, ``"collar"``.
+            start_date: Inclusive lower bound on snapshot_date. None = no bound.
+            end_date: Inclusive upper bound on snapshot_date. None = no bound.
+
+        Returns:
+            OverlayPnLSnapshot rows for (strategy_name, overlay_type),
+            ordered ascending by snapshot_date. Empty list if none exist.
+        """
+        query = (
+            "SELECT strategy_name, overlay_type, snapshot_date, pnl_1d_abs,"
+            " pnl_1d_pct, pnl_inception_abs, pnl_inception_pct"
+            " FROM paper_overlay_pnl_snapshots"
+            " WHERE strategy_name = ? AND overlay_type = ?"
+        )
+        params: list[Any] = [strategy_name, overlay_type]
+        if start_date is not None:
+            query += " AND snapshot_date >= ?"
+            params.append(start_date.isoformat())
+        if end_date is not None:
+            query += " AND snapshot_date <= ?"
+            params.append(end_date.isoformat())
+        query += " ORDER BY snapshot_date ASC"
+
+        with _connect(self.db_path) as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [_row_to_overlay_pnl_snapshot(row) for row in rows]
 
     def delete_trade(self, trade: PaperTrade) -> None:
         """Delete a single paper trade by its unique constraint fields.

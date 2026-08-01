@@ -7,6 +7,24 @@
 
 ## Session Log — 2026-08-01
 
+- [2026-08-01] 3-Track Consolidation **S8** — daily P&L comparison table for CC/PP/Collar
+  overlays, mirroring S3's `TrackComparisonSnapshot` design per-overlay instead of per-base-track.
+  New `OverlayPnLSnapshot` (`src/paper/models.py`) + `paper_overlay_pnl_snapshots` table +
+  `record_overlay_pnl_snapshot`/`get_overlay_pnl_snapshots` (`src/paper/store.py`). Computed by
+  `_compute_overlay_pnl_snapshots()` (`scripts/strategies/three_track/paper_3track_snapshot.py`),
+  reading only S7's real-leg-role `paper_leg_snapshots` rows. Sign-convention question (CC credit
+  vs PP debit basis) resolved with the operator via a worked numeric example before writing any
+  code — no inversion needed, `pnl_abs` is already direction-aware, same formula as S3.
+  `_leg_entry_basis()` correctly picks `avg_sell_price` for short/credit legs and `avg_cost` for
+  long/debit legs (caught mid-implementation — `avg_cost` is BUY-only and would silently zero a
+  short leg's denominator). Real `@code-reviewer` subagent run found one WARNING: a lone
+  `overlay_collar_put` (call already closed/rolled off) produced zero rows, a silent data gap —
+  fixed to report as `"collar"` with a WARNING log, plus a regression test. Tests: 6 new in
+  `tests/unit/paper/test_store.py`, 11 new in `tests/unit/scripts/test_paper_3track_overlay_pnl.py`.
+  Full `tests/unit/` suite re-run clean apart from pre-existing pyarrow/fastparquet import
+  failures (unrelated). `docs/plan/3track-consolidation/tasks.md` ticked; `DECISIONS.md` and
+  `CONTEXT.md` updated.
+
 - [2026-08-01] 3-Track Consolidation **S7** — fixed confirmed bug (found 2026-07-28): daily
   CC/PP/Collar `paper_leg_snapshots` rows were persisted under `_normalize_overlay_pnls()`'s
   collapsed display labels (`"cc"`/`"pp"`/`"collar"`), not the real `leg_role` values

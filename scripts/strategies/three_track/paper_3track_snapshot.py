@@ -79,6 +79,7 @@ from src.paper.formatting import format_track_summary
 from src.paper.metrics import compute_nee
 from src.paper.models import (
     ExitSignal,
+    OverlayPnLSnapshot,
     PaperLegSnapshot,
     PaperNavSnapshot,
     PaperPosition,
@@ -1117,6 +1118,161 @@ def _compute_track_comparison_snapshot(
     )
 
 
+# ── Overlay P&L snapshots (S8 — per-overlay, mirrors S3's shape) ───────────────
+#
+# Grouping mirrors _normalize_overlay_pnls' precedence exactly, so this table
+# never diverges from the printed summary's collar-merge/CC-dedup convention:
+# overlay_collar_call takes precedence over overlay_cc (same physical
+# contract); collar_call + collar_put merge into one "collar" row; a lone
+# collar_call (no put) or a lone overlay_cc surfaces as "cc"; overlay_pp is
+# independent and always "pp".
+
+_OVERLAY_ROLES = ("overlay_cc", "overlay_pp", "overlay_collar_call", "overlay_collar_put")
+
+
+def _overlay_type_groups(present_roles: set[str]) -> dict[str, list[str]]:
+    """Map real leg_roles present today to their overlay_type group.
+
+    Args:
+        present_roles: Real leg_role keys with a today's leg snapshot.
+
+    Returns:
+        Dict of overlay_type -> list of real leg_roles composing it.
+    """
+    groups: dict[str, list[str]] = {}
+    has_call = "overlay_collar_call" in present_roles
+    has_put = "overlay_collar_put" in present_roles
+    has_cc = "overlay_cc" in present_roles
+    has_pp = "overlay_pp" in present_roles
+
+    if has_call and has_put:
+        groups["collar"] = ["overlay_collar_call", "overlay_collar_put"]
+    elif has_call:
+        groups["cc"] = ["overlay_collar_call"]
+    elif has_put:
+        # Call leg closed/rolled off, put leg still open — still a "collar"
+        # position (the protective put), not a dropped/orphaned leg. Logged
+        # so a real lifecycle transition (not a bug) is visible in the cron
+        # output, same spirit as _compute_track_comparison_snapshot's
+        # no-base-leg-snapshot WARNING.
+        logger.warning(
+            "overlay_pnl.collar_put_without_call",
+            detail="Collar call leg absent today, put leg still open — reporting as collar-put-only",
+        )
+        groups["collar"] = ["overlay_collar_put"]
+    elif has_cc:
+        groups["cc"] = ["overlay_cc"]
+
+    if has_pp:
+        groups["pp"] = ["overlay_pp"]
+
+    return groups
+
+
+def _leg_entry_basis(store: PaperStore, track_name: str, role: str) -> Decimal | None:
+    """Entry cost/credit basis for one leg, or None if no open position.
+
+    A short leg (e.g. CC's sold call, net_qty < 0) has no BUY trades, so
+    ``avg_cost`` is zero — the real basis is the credit received, tracked
+    separately as ``avg_sell_price``. A long leg (e.g. PP's bought put,
+    net_qty > 0) uses ``avg_cost`` (debit paid) the same way S3's base legs
+    do. Picking the wrong field for a short leg would silently zero out its
+    denominator and produce a spurious 0% inception return.
+    """
+    pos = store.get_position(track_name, role)
+    if pos is None or pos.net_qty == 0:
+        return None
+    per_unit = pos.avg_sell_price if pos.net_qty < 0 else pos.avg_cost
+    return per_unit * abs(pos.net_qty)
+
+
+def _compute_overlay_pnl_snapshots(
+    store: PaperStore,
+    track_name: str,
+    snap_date: date,
+) -> list[OverlayPnLSnapshot]:
+    """Compute the S8 per-overlay comparison snapshots for one 3-track strategy.
+
+    Reads only ``paper_leg_snapshots`` rows already persisted today by
+    ``_save_leg_snapshots`` under the real overlay leg_roles (S7's fix) —
+    never the collapsed display labels. One row per overlay_type present
+    today; an overlay with no open/closed leg today produces no row (unlike
+    S3's base-leg guard, there is no "should always exist" invariant here —
+    a track may simply carry no overlay).
+
+    Args:
+        store: PaperStore instance.
+        track_name: 3-track strategy the overlay is attached to.
+        snap_date: Date of this snapshot.
+
+    Returns:
+        List of OverlayPnLSnapshot, one per overlay_type present today.
+    """
+    today_by_role: dict[str, PaperLegSnapshot] = {}
+    for role in _OVERLAY_ROLES:
+        leg = store.get_leg_snapshot(track_name, role, snap_date)
+        if leg is not None:
+            today_by_role[role] = leg
+
+    groups = _overlay_type_groups(set(today_by_role))
+    results: list[OverlayPnLSnapshot] = []
+
+    for overlay_type, roles in groups.items():
+        pnl_inception_abs = sum((today_by_role[r].total_pnl for r in roles), Decimal("0"))
+
+        entry_basis = sum(
+            (b for r in roles if (b := _leg_entry_basis(store, track_name, r)) is not None),
+            Decimal("0"),
+        )
+        pnl_inception_pct = _safe_pct(pnl_inception_abs, entry_basis if entry_basis else None)
+
+        prev_by_role: dict[str, PaperLegSnapshot] = {}
+        for r in roles:
+            prev = store.get_prev_leg_snapshot(track_name, r, snap_date)
+            if prev is not None:
+                prev_by_role[r] = prev
+
+        if not prev_by_role:
+            # First-ever snapshot for every role in this group: no prior mark
+            # to diff against — today's cumulative move IS the 1-day move.
+            pnl_1d_abs = pnl_inception_abs
+            pnl_1d_pct = Decimal("0")
+        else:
+            pnl_1d_abs = pnl_inception_abs - sum(
+                (prev_by_role[r].total_pnl for r in roles if r in prev_by_role), Decimal("0")
+            )
+            prev_mark_value = sum(
+                (
+                    _mark_value(prev_by_role[r].ltp, _position_qty(store, track_name, r))
+                    or Decimal("0")
+                    for r in roles
+                    if r in prev_by_role
+                ),
+                Decimal("0"),
+            )
+            pnl_1d_pct = _safe_pct(pnl_1d_abs, prev_mark_value if prev_mark_value else None)
+
+        results.append(
+            OverlayPnLSnapshot(
+                strategy_name=track_name,
+                overlay_type=overlay_type,
+                snapshot_date=snap_date,
+                pnl_1d_abs=pnl_1d_abs,
+                pnl_1d_pct=pnl_1d_pct,
+                pnl_inception_abs=pnl_inception_abs,
+                pnl_inception_pct=pnl_inception_pct,
+            )
+        )
+
+    return results
+
+
+def _position_qty(store: PaperStore, track_name: str, role: str) -> int:
+    """Net quantity for a leg, or 0 if no position exists."""
+    pos = store.get_position(track_name, role)
+    return pos.net_qty if pos is not None else 0
+
+
 def _compute_spot_comparison_snapshot(
     store: PaperStore,
     snap_date: date,
@@ -1343,6 +1499,9 @@ async def _run(args: argparse.Namespace) -> None:
             cmp_snap = _compute_track_comparison_snapshot(store, track_name, snap_date, nifty_spot)
             if cmp_snap is not None:
                 store.record_track_comparison_snapshot(cmp_snap)
+
+            for overlay_snap in _compute_overlay_pnl_snapshots(store, track_name, snap_date):
+                store.record_overlay_pnl_snapshot(overlay_snap)
 
     if save:
         # 4th synthetic series: Nifty spot, same fields/denominators as the

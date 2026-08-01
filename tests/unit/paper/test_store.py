@@ -37,6 +37,7 @@ from src.instruments.lookup import InstrumentLookup
 from src.models.portfolio import TradeAction
 from src.paper.constants import NIFTYBEES_KEY
 from src.paper.models import (
+    OverlayPnLSnapshot,
     PaperLegSnapshot,
     PaperNavSnapshot,
     PaperTrade,
@@ -1152,3 +1153,75 @@ def test_track_comparison_snapshots_isolated_per_strategy(store: PaperStore) -> 
     store.record_track_comparison_snapshot(_cmp_snap(strategy_name="nifty_index"))
     assert len(store.get_track_comparison_snapshots("paper_nifty_spot")) == 1
     assert len(store.get_track_comparison_snapshots("nifty_index")) == 1
+
+
+# ── record_overlay_pnl_snapshot / get_overlay_pnl_snapshots (S8) ────────────────
+
+
+def _overlay_snap(**overrides) -> OverlayPnLSnapshot:
+    defaults = dict(
+        strategy_name="paper_nifty_spot",
+        overlay_type="cc",
+        snapshot_date=date(2026, 5, 1),
+        pnl_1d_abs=Decimal("60.00"),
+        pnl_1d_pct=Decimal("0.06"),
+        pnl_inception_abs=Decimal("60.00"),
+        pnl_inception_pct=Decimal("0.60"),
+    )
+    defaults.update(overrides)
+    return OverlayPnLSnapshot(**defaults)
+
+
+def test_record_overlay_pnl_snapshot_fields_round_trip(store: PaperStore) -> None:
+    original = _overlay_snap()
+    store.record_overlay_pnl_snapshot(original)
+    retrieved = store.get_overlay_pnl_snapshots("paper_nifty_spot", "cc")[0]
+    assert retrieved.strategy_name == original.strategy_name
+    assert retrieved.overlay_type == original.overlay_type
+    assert retrieved.snapshot_date == original.snapshot_date
+    assert retrieved.pnl_1d_abs == original.pnl_1d_abs
+    assert retrieved.pnl_1d_pct == original.pnl_1d_pct
+    assert retrieved.pnl_inception_abs == original.pnl_inception_abs
+    assert retrieved.pnl_inception_pct == original.pnl_inception_pct
+
+
+def test_record_overlay_pnl_snapshot_upserts(store: PaperStore) -> None:
+    store.record_overlay_pnl_snapshot(_overlay_snap(pnl_1d_abs=Decimal("60.00")))
+    store.record_overlay_pnl_snapshot(_overlay_snap(pnl_1d_abs=Decimal("999.00")))
+    snaps = store.get_overlay_pnl_snapshots("paper_nifty_spot", "cc")
+    assert len(snaps) == 1
+    assert snaps[0].pnl_1d_abs == Decimal("999.00")
+
+
+def test_get_overlay_pnl_snapshots_ordered_by_date(store: PaperStore) -> None:
+    store.record_overlay_pnl_snapshot(_overlay_snap(snapshot_date=date(2026, 5, 3)))
+    store.record_overlay_pnl_snapshot(_overlay_snap(snapshot_date=date(2026, 5, 1)))
+    store.record_overlay_pnl_snapshot(_overlay_snap(snapshot_date=date(2026, 5, 2)))
+    snaps = store.get_overlay_pnl_snapshots("paper_nifty_spot", "cc")
+    assert [s.snapshot_date for s in snaps] == [
+        date(2026, 5, 1),
+        date(2026, 5, 2),
+        date(2026, 5, 3),
+    ]
+
+
+def test_get_overlay_pnl_snapshots_filters_by_date_range(store: PaperStore) -> None:
+    for d in (date(2026, 5, 1), date(2026, 5, 2), date(2026, 5, 3), date(2026, 5, 4)):
+        store.record_overlay_pnl_snapshot(_overlay_snap(snapshot_date=d))
+    snaps = store.get_overlay_pnl_snapshots(
+        "paper_nifty_spot", "cc", start_date=date(2026, 5, 2), end_date=date(2026, 5, 3)
+    )
+    assert [s.snapshot_date for s in snaps] == [date(2026, 5, 2), date(2026, 5, 3)]
+
+
+def test_get_overlay_pnl_snapshots_returns_empty_for_unknown_strategy(store: PaperStore) -> None:
+    assert store.get_overlay_pnl_snapshots("paper_nonexistent", "cc") == []
+
+
+def test_overlay_pnl_snapshots_isolated_by_overlay_type(store: PaperStore) -> None:
+    store.record_overlay_pnl_snapshot(_overlay_snap(overlay_type="cc"))
+    store.record_overlay_pnl_snapshot(_overlay_snap(overlay_type="pp"))
+    store.record_overlay_pnl_snapshot(_overlay_snap(overlay_type="collar"))
+    assert len(store.get_overlay_pnl_snapshots("paper_nifty_spot", "cc")) == 1
+    assert len(store.get_overlay_pnl_snapshots("paper_nifty_spot", "pp")) == 1
+    assert len(store.get_overlay_pnl_snapshots("paper_nifty_spot", "collar")) == 1
