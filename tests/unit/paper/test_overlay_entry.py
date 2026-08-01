@@ -472,13 +472,20 @@ def test_reentry_gates_applied_to_bootstrap_entry(tmp_path, capsys):
         patch(
             "scripts.strategies.three_track.paper_3track_overlay_entry.InstrumentLookup"
         ) as mock_lookup_cls,
-        patch("scripts.strategies.three_track.paper_3track_overlay_entry.fetch_vix_latest"),
-        patch("scripts.strategies.three_track.paper_3track_overlay_entry.load_vix_series"),
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.load_vix_series"
+        ) as mock_load,
         patch("scripts.strategies.three_track.paper_3track_overlay_entry.compute_ivr") as mock_ivr,
     ):
         mock_lookup = MagicMock()
         mock_lookup_cls.from_file.return_value = mock_lookup
         mock_lookup.get_expiry_candidates.return_value = [("monthly", "2026-08-27")]
+
+        mock_series = MagicMock()
+        mock_series.empty = False
+        mock_series.__len__.return_value = 252
+        mock_series.iloc = [-15.0, 15.0]  # Just need [-1] to work
+        mock_load.return_value = mock_series
 
         # Mock IVR < 0.25 (blocked)
         mock_ivr.return_value = 0.20
@@ -590,8 +597,9 @@ def test_entry_success(tmp_path, capsys):
         patch(
             "scripts.strategies.three_track.paper_3track_overlay_entry.InstrumentLookup"
         ) as mock_lookup_cls,
-        patch("scripts.strategies.three_track.paper_3track_overlay_entry.fetch_vix_latest"),
-        patch("scripts.strategies.three_track.paper_3track_overlay_entry.load_vix_series"),
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.load_vix_series"
+        ) as mock_load,
         patch("scripts.strategies.three_track.paper_3track_overlay_entry.compute_ivr") as mock_ivr,
         patch(
             "scripts.strategies.three_track.paper_3track_overlay_entry.UpstoxMarketClient"
@@ -618,6 +626,12 @@ def test_entry_success(tmp_path, capsys):
         mock_lookup = MagicMock()
         mock_lookup_cls.from_file.return_value = mock_lookup
         mock_lookup.get_expiry_candidates.return_value = [("monthly", "2026-08-27")]
+
+        mock_series = MagicMock()
+        mock_series.empty = False
+        mock_series.__len__.return_value = 252
+        mock_series.iloc = [-15.0, 15.0]
+        mock_load.return_value = mock_series
 
         mock_ivr.return_value = 0.30  # > 0.25 (passed)
 

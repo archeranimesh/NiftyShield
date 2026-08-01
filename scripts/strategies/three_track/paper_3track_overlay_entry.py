@@ -41,7 +41,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from scripts.lookup.find_strike_by_delta import _select_delta_candidates
 from src.backtest.ivr import compute_ivr
-from src.backtest.vix_ingest import fetch_vix_latest, load_vix_series
+from src.backtest.vix_ingest import load_vix_series
 from src.client.upstox_market import UpstoxMarketClient
 from src.config import settings
 from src.instruments.lookup import InstrumentLookup
@@ -178,8 +178,13 @@ def auto_cc_bootstrap(bod_path: Path) -> OverlayConfig | None:
     # Gate 2: IVR >= 0.25
     try:
         vix_series = load_vix_series(settings.vix_data_dir)
-        vix_today = fetch_vix_latest()
+        if vix_series.empty or len(vix_series) < 252:
+            logger.error("auto_cc.ivr_history_insufficient")
+            return None
+
+        vix_today = float(vix_series.iloc[-1])
         ivr = compute_ivr(vix_today, vix_series)
+
         if ivr is None or ivr < 0.25:
             logger.error("auto_cc.ivr_gate_failed", ivr=ivr)
             return None

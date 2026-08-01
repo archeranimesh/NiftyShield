@@ -92,3 +92,4 @@ Session Log grows large again.
 - **Phase A**: Added idempotency guard (`_query_open_call_role`) to `paper_3track_overlay_entry.py` to prevent duplicate CC entry.
 - **Phase B**: Updated `CCOverlayV1` reentry triggers to include `LOSS_STOP` and `DELTA_STOP`.
 - **Phase C**: Automated CC entry bootstrap via `--auto-cc` in `paper_3track_overlay_entry.py`. Added IVR/DTE gates and integrated strike selection using `CC_DELTA_CANDIDATES`.
+- **Fix**: Aligned auto CC bootstrap's IVR check source with ReEntryMixin by using last ingested Parquet point instead of live API fetch, averting gate evaluation mismatch and masking of fetch failures.
