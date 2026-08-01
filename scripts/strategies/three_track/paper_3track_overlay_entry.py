@@ -18,6 +18,10 @@ Usage:
     python scripts/paper_3track_overlay_entry.py --dry-run
     python scripts/paper_3track_overlay_entry.py
     python scripts/paper_3track_overlay_entry.py --config data/paper/cycle2_overlay.yaml
+    python scripts/paper_3track_overlay_entry.py --auto-cc --dry-run
+
+Cron example (dry-run only until CC1/CC2/EC-5 resolved):
+    15 15 * * 3  cd /path/to/NiftyShield && python scripts/strategies/three_track/paper_3track_overlay_entry.py --auto-cc --dry-run
 """
 
 import argparse
@@ -35,9 +39,21 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
+from scripts.lookup.find_strike_by_delta import _select_delta_candidates
+from src.backtest.ivr import compute_ivr
+from src.backtest.vix_ingest import fetch_vix_latest, load_vix_series
+from src.client.upstox_market import UpstoxMarketClient
+from src.config import settings
+from src.instruments.lookup import InstrumentLookup
+from src.instruments.strike_selector import (
+    _apply_liquidity_gate,
+    filter_strikes_by_delta,
+    rank_strikes,
+)
 from src.models.portfolio import TradeAction
 from src.notifications.telegram import build_notifier
 from src.paper.constants import (
+    DEFAULT_BOD_PATH,
     DEFAULT_DB_PATH,
     STRATEGY_OVERLAY,
     STRATEGY_SPOT,
@@ -126,6 +142,114 @@ class OverlayConfig:
     call_price: Decimal
     call_spread_pct: float | None
     call_oi: int
+
+
+def auto_cc_bootstrap(bod_path: Path) -> OverlayConfig | None:
+    """Automate CC entry (fetch chain, apply gates, select strike)."""
+    today = date.today()
+    try:
+        lookup = InstrumentLookup.from_file(bod_path)
+        expiries = lookup.get_expiry_candidates(
+            underlying="NIFTY",
+            today=today,
+            preference=["monthly"],
+        )
+    except Exception as exc:
+        logger.error("auto_cc.bod_load_failed", error=str(exc))
+        return None
+
+    expiry_str = None
+    for label, exp_str in expiries:
+        if label == "monthly":
+            expiry_str = exp_str
+            break
+
+    if not expiry_str:
+        logger.error("auto_cc.no_monthly_expiry_found")
+        return None
+
+    # Gate 1: DTE >= 14
+    expiry_date = date.fromisoformat(expiry_str)
+    dte = (expiry_date - today).days
+    if dte < 14:
+        logger.error("auto_cc.dte_gate_failed", dte=dte)
+        return None
+
+    # Gate 2: IVR >= 0.25
+    try:
+        vix_series = load_vix_series(settings.vix_data_dir)
+        vix_today = fetch_vix_latest()
+        ivr = compute_ivr(vix_today, vix_series)
+        if ivr is None or ivr < 0.25:
+            logger.error("auto_cc.ivr_gate_failed", ivr=ivr)
+            return None
+    except Exception as exc:
+        logger.error("auto_cc.ivr_check_failed", error=str(exc))
+        return None
+
+    # Fetch live chain
+    try:
+        client = UpstoxMarketClient(settings.upstox_analytics_token)
+        raw_chain = client.get_option_chain_sync("NSE_INDEX|Nifty 50", expiry_str)
+    except Exception as exc:
+        logger.error("auto_cc.chain_fetch_failed", error=str(exc))
+        return None
+
+    if not raw_chain:
+        logger.error("auto_cc.chain_empty")
+        return None
+
+    # Strike selection
+    delta_candidates = _select_delta_candidates(option_type="CE")
+    selected_row = None
+
+    for candidate in delta_candidates:
+        delta_min = max(0.0, candidate - 0.02)
+        delta_max = candidate + 0.02
+        rows = filter_strikes_by_delta(
+            raw_chain,
+            option_type="CE",
+            delta_min=delta_min,
+            delta_max=delta_max,
+        )
+        if not rows:
+            continue
+
+        ranked = rank_strikes(rows)
+        filtered = _apply_liquidity_gate(ranked)
+        if filtered:
+            selected_row = filtered[0]
+            break
+
+    if not selected_row:
+        logger.error("auto_cc.no_eligible_strike_found")
+        return None
+
+    call_price = Decimal(
+        str(selected_row["mid"] if selected_row["mid"] > 0 else selected_row["ltp"])
+    )
+
+    return OverlayConfig(
+        overlay_type="cc",
+        entry_date=today,
+        cycle=1,  # Cycle doesn't matter for auto CC
+        lot_size=75,
+        expiry=expiry_str,
+        expiry_type="monthly",
+        dte_at_entry=dte,
+        put_strike=0.0,
+        put_instrument_key="",
+        put_price=Decimal("0"),
+        put_spread_pct=None,
+        put_oi=0,
+        call_strike=float(selected_row["strike"]),
+        call_instrument_key=selected_row["instrument_key"],
+        call_price=call_price,
+        call_spread_pct=float(selected_row["gate_spread"])
+        if selected_row.get("gate_spread") is not None
+        else None,
+        call_oi=int(selected_row["oi"]),
+    )
 
 
 def load_overlay_config(path: Path) -> OverlayConfig:
@@ -527,10 +651,34 @@ def main() -> None:
         action="store_true",
         help="Preview without writing to DB.",
     )
+    parser.add_argument(
+        "--bod-path",
+        type=Path,
+        default=DEFAULT_BOD_PATH,
+        help=f"Path to BOD instrument JSON (default: {DEFAULT_BOD_PATH})",
+    )
+    parser.add_argument(
+        "--auto-cc",
+        action="store_true",
+        help="Automate CC entry (bypasses YAML config, fetches chain, applies gates).",
+    )
     args = parser.parse_args()
     setup_logging()
 
-    cfg = load_overlay_config(args.config)
+    if args.auto_cc:
+        if not args.dry_run:
+            print(
+                "ERROR: --no-dry-run is temporarily blocked for auto-cc until CC1/CC2/EC-5 lands.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+        cfg = auto_cc_bootstrap(args.bod_path)
+        if cfg is None:
+            print("ERROR: auto-CC bootstrap failed. Check logs.", file=sys.stderr)
+            sys.exit(1)
+    else:
+        cfg = load_overlay_config(args.config)
     store = PaperStore(args.db_path)
 
     # Bootstrap-only (S6): skip entirely if this overlay's marker leg is already

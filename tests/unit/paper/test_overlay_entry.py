@@ -3,6 +3,7 @@
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 import yaml
@@ -452,3 +453,195 @@ def test_existing_query_open_call_roles_guard_unchanged(tmp_path, capsys):
             main()
 
         assert excinfo.value.code == 1
+
+
+def test_reentry_gates_applied_to_bootstrap_entry(tmp_path, capsys):
+    """DTE/IVR gates must block a fresh bootstrap entry."""
+    from scripts.strategies.three_track.paper_3track_overlay_entry import main
+
+    test_args = [
+        "paper_3track_overlay_entry.py",
+        "--auto-cc",
+        "--dry-run",
+        "--db-path",
+        str(tmp_path / "test.sqlite"),
+    ]
+
+    with (
+        patch("sys.argv", test_args),
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.InstrumentLookup"
+        ) as mock_lookup_cls,
+        patch("scripts.strategies.three_track.paper_3track_overlay_entry.fetch_vix_latest"),
+        patch("scripts.strategies.three_track.paper_3track_overlay_entry.load_vix_series"),
+        patch("scripts.strategies.three_track.paper_3track_overlay_entry.compute_ivr") as mock_ivr,
+    ):
+        mock_lookup = MagicMock()
+        mock_lookup_cls.from_file.return_value = mock_lookup
+        mock_lookup.get_expiry_candidates.return_value = [("monthly", "2026-08-27")]
+
+        # Mock IVR < 0.25 (blocked)
+        mock_ivr.return_value = 0.20
+
+        with pytest.raises(SystemExit) as excinfo:
+            main()
+
+        assert excinfo.value.code == 1
+        captured = capsys.readouterr()
+        assert "auto-CC bootstrap failed" in captured.err
+
+
+def test_dry_run_default_until_cc1_cc2_resolved(tmp_path, capsys):
+    """regression guard against --no-dry-run ever becoming default before EC-5 lands"""
+    from scripts.strategies.three_track.paper_3track_overlay_entry import main
+
+    test_args = [
+        "paper_3track_overlay_entry.py",
+        "--auto-cc",
+        "--db-path",
+        str(tmp_path / "test.sqlite"),
+    ]
+    with patch("sys.argv", test_args):
+        with pytest.raises(SystemExit) as excinfo:
+            main()
+
+        assert excinfo.value.code == 1
+        captured = capsys.readouterr()
+        assert "--no-dry-run is temporarily blocked for auto-cc" in captured.err
+
+
+def test_notification_failure_does_not_block_entry(tmp_path, capsys):
+    """non-fatal Telegram contract"""
+    import yaml
+
+    from scripts.strategies.three_track.paper_3track_overlay_entry import main
+
+    cfg_file = tmp_path / "overlay_entry.yaml"
+    cfg_file.write_text(
+        yaml.dump(
+            {
+                "overlay": {
+                    "type": "cc",
+                    "date": "2026-07-29",
+                    "cycle": 1,
+                    "lot_size": 75,
+                    "expiry": "2026-08-27",
+                    "call_strike": 25000,
+                    "call_instrument_key": "NSE_FO|NIFTY27AUG26CE",
+                    "call_price": "100.5",
+                }
+            }
+        )
+    )
+
+    test_args = [
+        "paper_3track_overlay_entry.py",
+        "--config",
+        str(cfg_file),
+        "--db-path",
+        str(tmp_path / "test.sqlite"),
+        # we do NOT pass --dry-run because we want to test the notification block
+    ]
+
+    with (
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.PaperStore"
+        ) as mock_store_cls,
+        patch("sys.argv", test_args),
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.build_notifier"
+        ) as mock_build_notifier,
+        patch("scripts.strategies.three_track.paper_3track_overlay_entry.asyncio.run") as mock_run,
+    ):
+        mock_store = MagicMock()
+        mock_store_cls.return_value = mock_store
+        mock_store.get_positions.return_value = []
+        mock_store.record_trade.return_value = True
+
+        mock_notifier = MagicMock()
+        mock_build_notifier.return_value = mock_notifier
+        mock_notifier.send.side_effect = Exception("Telegram API down")
+
+        mock_run.side_effect = Exception("Telegram API down")
+
+        # This should NOT raise SystemExit because the exception is caught
+        main()
+
+        # Verification that we got past it
+        mock_store.record_trade.assert_called_once()
+        captured = capsys.readouterr()
+        assert "RECORDED TO DB" in captured.out
+
+
+def test_entry_success(tmp_path, capsys):
+    """Verify the full automated CC entry flow."""
+    from scripts.strategies.three_track.paper_3track_overlay_entry import main
+
+    test_args = [
+        "paper_3track_overlay_entry.py",
+        "--auto-cc",
+        "--dry-run",
+        "--db-path",
+        str(tmp_path / "test.sqlite"),
+    ]
+
+    with (
+        patch("sys.argv", test_args),
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.InstrumentLookup"
+        ) as mock_lookup_cls,
+        patch("scripts.strategies.three_track.paper_3track_overlay_entry.fetch_vix_latest"),
+        patch("scripts.strategies.three_track.paper_3track_overlay_entry.load_vix_series"),
+        patch("scripts.strategies.three_track.paper_3track_overlay_entry.compute_ivr") as mock_ivr,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.UpstoxMarketClient"
+        ) as mock_client_cls,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry._select_delta_candidates"
+        ) as mock_candidates,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.filter_strikes_by_delta"
+        ) as mock_filter,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.rank_strikes"
+        ) as mock_rank,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry._apply_liquidity_gate"
+        ) as mock_gate,
+        patch("scripts.strategies.three_track.paper_3track_overlay_entry.date") as mock_date,
+    ):
+        from datetime import date
+
+        mock_date.today.return_value = date(2026, 8, 1)
+        mock_date.fromisoformat.side_effect = date.fromisoformat
+
+        mock_lookup = MagicMock()
+        mock_lookup_cls.from_file.return_value = mock_lookup
+        mock_lookup.get_expiry_candidates.return_value = [("monthly", "2026-08-27")]
+
+        mock_ivr.return_value = 0.30  # > 0.25 (passed)
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_client.get_option_chain_sync.return_value = [{"some": "data"}]
+
+        mock_candidates.return_value = [0.18, 0.20, 0.15]
+        mock_filter.return_value = [{"strike": 25000}]
+        mock_rank.return_value = [{"strike": 25000}]
+
+        mock_gate.return_value = [
+            {
+                "strike": 25000,
+                "instrument_key": "NSE_FO|NIFTY27AUG26CE",
+                "mid": 100.0,
+                "ltp": 99.0,
+                "gate_spread": 1.5,
+                "oi": 1000,
+            }
+        ]
+
+        main()
+
+        captured = capsys.readouterr()
+        assert "100.00" in captured.out
+        assert "DRY RUN" in captured.out

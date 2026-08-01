@@ -87,3 +87,8 @@ Full forensic log (SHAs, bug numbers, root-cause detail) moved to
 [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md) during the 2026-07-27 reorg —
 add new entries there going forward, or start a fresh dated section here if this file's
 Session Log grows large again.
+
+### 2026-08-01 Session Log
+- **Phase A**: Added idempotency guard (`_query_open_call_role`) to `paper_3track_overlay_entry.py` to prevent duplicate CC entry.
+- **Phase B**: Updated `CCOverlayV1` reentry triggers to include `LOSS_STOP` and `DELTA_STOP`.
+- **Phase C**: Automated CC entry bootstrap via `--auto-cc` in `paper_3track_overlay_entry.py`. Added IVR/DTE gates and integrated strike selection using `CC_DELTA_CANDIDATES`.
