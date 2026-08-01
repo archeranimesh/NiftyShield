@@ -431,6 +431,23 @@ decides otherwise.
 **Commit:** none — this is a decision-gate note, not an implementation story. Resolve via
 council or direct operator decision, then update `DECISIONS.md` and CC1's ladder values.
 
+**Resolved (2026-08-01, direct operator decision, no council pass):** delta band **0.18–0.20**,
+matching CC1's existing `CC_DELTA_CANDIDATES` values as-is — no new number needed calibration.
+OI is the liquidity gate (already what `rank_strikes()`/`_apply_liquidity_gate` enforce); no
+separate round-strike rule at this decision's level — round-500 preference is CC4's scope, a
+refinement *within* whatever strike this band selects, not part of CC2's own resolution. Path
+to this answer: operator initially wanted more analysis (BS-calibrated delta estimate, then
+confirmed against the live chain — 1% OTM ≈0.39 delta, judged too little DELTA_WARN/STOP
+cushion), then converged on 0.20 delta with a preference for round strikes; the round-strike
+half of that was split out into CC4 rather than folded into CC2's band decision. Note this band
+converges with today's live 4% OTM default on the chain checked this session (both landed on
+strike 25000) — so this resolution is better read as "confirm and make delta-native what's
+already the production default," not a behavior change in itself. `CC_DELTA_CANDIDATES`'s code
+comment (`scripts/lookup/find_strike_by_delta.py`) updated provisional → confirmed accordingly.
+**Still blocked on EC-5** (`docs/plan/paper-exit-codification`, CC's TIME_STOP/DTE_REVIEW
+collapse) landing before CC3 can go `--no-dry-run` — this resolution does not itself clear that
+dependency.
+
 ---
 
 ## CC3 — Automated CC entry script + cron wiring

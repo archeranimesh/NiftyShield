@@ -63,10 +63,13 @@ DEFAULT_LOT_SIZE = LOT_SIZE  # single source of truth: src/paper/constants.py
 # Fallback sequence of absolute target deltas tried in order (ES12). CSP short-put ladder.
 DELTA_CANDIDATES = [0.22, 0.25, 0.20]
 
-# CC short-call ladder (CC1, 3track-consolidation). PROVISIONAL — these values are a
-# reasonable starting band (15-20Δ short call), not an operator/council-approved target.
-# Do not treat as live until CC2 (docs/plan/3track-consolidation/stories.md) resolves the
-# entry delta band decision gate.
+# CC short-call ladder (CC1, 3track-consolidation). CONFIRMED — CC2 (docs/plan/
+# 3track-consolidation/stories.md, resolved 2026-08-01, see DECISIONS.md) closed the entry
+# delta band decision gate at 0.18-0.20, matching the existing values here; OI is the
+# liquidity gate (already enforced by rank_strikes()/_apply_liquidity_gate). Round-strike
+# preference within this band is CC4's separate, still-open scope, not CC2's.
+# Still blocked on EC-5 (docs/plan/paper-exit-codification) landing before CC3 goes
+# --no-dry-run.
 CC_DELTA_CANDIDATES = [0.18, 0.20, 0.15]
 
 # Defaults that mirror scripts.record.record_paper_trade — used to emit minimal commands.
