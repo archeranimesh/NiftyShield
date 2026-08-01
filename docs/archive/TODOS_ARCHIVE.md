@@ -22,8 +22,8 @@
   fixed to report as `"collar"` with a WARNING log, plus a regression test. Tests: 6 new in
   `tests/unit/paper/test_store.py`, 11 new in `tests/unit/scripts/test_paper_3track_overlay_pnl.py`.
   Full `tests/unit/` suite re-run clean apart from pre-existing pyarrow/fastparquet import
-  failures (unrelated). `docs/plan/3track-consolidation/tasks.md` ticked; `DECISIONS.md` and
-  `CONTEXT.md` updated.
+  failures (unrelated). SHA 6dc561c. `docs/plan/3track-consolidation/tasks.md` ticked;
+  `DECISIONS.md` and `CONTEXT.md` updated.
 
 - [2026-08-01] 3-Track Consolidation **S7** — fixed confirmed bug (found 2026-07-28): daily
   CC/PP/Collar `paper_leg_snapshots` rows were persisted under `_normalize_overlay_pnls()`'s
