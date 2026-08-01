@@ -569,6 +569,112 @@ git log --oneline -10 scripts/strategies/three_track/paper_3track_overlay_entry.
 
 ---
 
+## CC4 — Round-500 strike preference for CC ranking, with liquidity-aware fallback to round-100
+
+**Context (2026-08-01, operator directive, arising from CC2 analysis session):** while stress-
+testing CC2's delta-band question, operator noted that round-₹500 strikes (24500, 25000, 25500…)
+carry materially deeper OI than neighboring round-100 strikes on the live chain checked this
+session (strike 25000: 5.4M OI vs. strike 24800's 2.2M — 2.5x, both "round-100" under
+`rank_strikes()`'s current tier-1 test, but only 25000 is round-500). `rank_strikes()`
+(`src/instruments/strike_selector.py:180-206`) already has a round-100 preference baked into its
+ranking tuple (`is_non_round = strike % 100 != 0`, tier 1 of 4), but it's **shared and
+side-agnostic** — 12 inbound callers per the graph (`paper_ic_entry_v2`, `csp_roll_executor`,
+`record_paper_trade`, `paper_3track_snapshot`, plus CC1/CC3's use via `find_strike_by_delta.py`).
+Changing its default tier would silently change CSP/IC/PP strike selection too — out of scope
+here, this story is CC-only.
+
+**Design, corrected mid-discussion from an initial hard-filter proposal:** not a hard filter
+(exclude non-round-500 strikes entirely) — operator wants round-500 preferred in ranking, with
+an explicit, liquidity-aware fallback: if the round-500 candidate(s) inside the active delta
+window (CC1's ±0.02 band around the current ladder rung, e.g. 0.18–0.22 for a 0.20 target) don't
+clear a "sufficient cushion" bar on liquidity/OI (or any other parameter — spread, delta
+proximity — worth checking), fall back to the best round-100 strike in-window instead, chosen by
+the existing spread/OI ranking. **Whenever the fallback path is taken, log a line explaining
+why** — which parameter(s) failed to clear cushion on the round-500 candidate(s) — so a human
+reviewing `logs/cc_option.log` (or wherever this script logs) can see when and why round-500 was
+skipped, not just which strike got picked.
+
+**Open design questions to resolve before implementation (do not guess — confirm with operator
+or via `get_code_snippet`/chain inspection at implementation time):**
+- What exactly defines "sufficient cushion" on liquidity/OI for a round-500 candidate to be
+  accepted over falling back to round-100? A hard OI floor? A relative-to-round-100-candidate
+  ratio (e.g., round-500 OI must be ≥ some fraction of the best round-100 OI in-window)? The
+  session that spawned this story didn't pin a number — needs a decision, possibly its own
+  mini-decision-gate rather than a number picked from first principles.
+- "any other parameter" (operator's phrasing) is open — spread width and delta-proximity-to-
+  target are candidates worth checking in addition to OI before deciding round-500 is unsuitable.
+- **Ranking within the round-500 tier itself (2026-08-01, operator example):** when multiple
+  round-500 candidates exist, delta-proximity-to-target wins over raw OI — operator's worked
+  example: choosing between strike 25500 (delta 0.1902, close to the 0.20 rung) and strike 25000
+  (delta 0.3489, far from any CC1 ladder target) prefers 25500 despite both being round-500,
+  because 0.3489 isn't a real fit for the ladder regardless of round-strike status. In practice
+  this mostly falls out of the existing ±0.02 delta-window filter already applied before ranking
+  (a 0.3489-delta strike wouldn't survive that filter to begin with) — but confirm the round-500
+  tier's internal ordering is delta-proximity-first, OI/spread as tiebreaker, not OI-first.
+- **Cross-expiry scope (2026-08-01, flagged from the same example — operator's example strike was
+  on the quarterly expiry, not monthly):** does the round-500 fallback search only within the
+  currently-targeted expiry (monthly, per CC1/CC3's cadence), or is reaching to quarterly/yearly
+  for a round-500 fit intentional? Reaching cross-expiry sidesteps CC3's Wednesday-post-monthly-
+  expiry cron assumption and changes DTE/theta/roll economics materially — **not yet confirmed
+  with operator, do not assume cross-expiry search is in scope.** Default assumption until
+  answered: round-500 preference applies within the targeted expiry only; if no round-500 strike
+  clears cushion on that expiry, fall back to round-100 on the *same* expiry, not to another
+  expiry's round-500 strike.
+  **Re-entry-guard concern resolved (2026-08-01):** operator confirmed CC3's idempotency guard is
+  presence-based (checks for any open `overlay_cc` leg on `paper_nifty_spot`, not expiry-scoped)
+  — same pattern as IC's `test_open_position_prevention` — so cross-expiry entry would not cause
+  double-entry on later Wednesdays regardless of which expiry got picked. **Still open:** the
+  economics concern — a quarterly-dated CC leg has materially different DTE/theta/roll behavior
+  than CC1's exit thresholds (`DELTA_STOP`/`DELTA_WARN`, TIME_STOP pending EC-4) were reasoned
+  about assuming. Entry-guard mechanics are no longer a blocker to answering the cross-expiry
+  question; the economics question is.
+- Does this belong in `rank_strikes()` as an optional `round_to`/preference parameter (keeps the
+  ranking logic centralized, but touches a 12-caller shared function's signature), or as a
+  CC-local wrapper in `find_strike_by_delta.py` that doesn't touch the shared function at all
+  (smaller blast radius, some duplication of ranking logic)? Lean toward the CC-local wrapper
+  given the shared function's caller count, but confirm at implementation time rather than
+  assuming.
+
+**Related (2026-08-01):** while stress-testing CC's exit thresholds against these same round-500
+candidates, operator found `days_held >= 21` TIME_STOP would misfire on a quarterly-dated CC
+(force-close at 38 DTE remaining) — spawned a cross-epic decision, EC-5 in
+`docs/plan/paper-exit-codification`, collapsing CC's TIME_STOP/DTE_REVIEW into one DTE<=5
+auto-close. See this folder's `tasks.md` CC5 entry (pointer only, implementation lives in
+`paper-exit-codification`). Relevant to CC4 because it directly informs the still-open
+cross-expiry economics question above: a DTE-based close is safe regardless of which expiry
+CC4's round-500 fallback lands on, which removes one (but not all — delta-risk-over-time is
+still open) of the concerns about letting CC4 reach into quarterly/yearly expiries.
+
+**Depends on:** CC1 (ladder must exist first — this story refines *which* strike CC1's ladder
+picks, doesn't change the ladder itself); narrows the same delta window CC1 already searches.
+Like CC1, results here stay provisional until CC2 resolves — this story doesn't change the
+CC2 dependency, it only affects strike selection *within* whatever delta band CC2 eventually
+confirms.
+
+**Files to change (tentative, confirm at implementation time per open question above):**
+- `scripts/lookup/find_strike_by_delta.py` — CC branch of the candidate-selection loop
+- Possibly `src/instruments/strike_selector.py` if the round-500 preference is added as a
+  `rank_strikes()` parameter rather than a script-local wrapper
+- Log line for the fallback-reason case (confirm target log file/logger per `LOGGING.md`
+  standard — this project's canonical logging doc, mandatory reading before adding any
+  `logger.*()` call)
+
+**Tests (mandatory, no network):**
+- Round-500 candidate present with sufficient cushion → selected over round-100 alternatives
+  in the same delta window
+- Round-500 candidate present but fails the cushion bar (whatever it's defined as) → falls back
+  to best round-100 strike, and a log line is emitted explaining which parameter failed
+- No round-500 candidate at all in-window → falls back cleanly, same logging behavior
+- Regression: CSP/IC/PP paths through `rank_strikes()` unaffected (if implemented as a shared
+  parameter, confirm default preserves today's round-100-only behavior for all non-CC callers)
+
+**Commit:** none yet — implementation story, not started. Do not implement until the open design
+questions above (cushion bar definition, `rank_strikes()` vs. script-local placement) are
+resolved — this is a smaller-scope decision than CC2 but still needs a concrete answer before
+code, not an assumption.
+
+---
+
 ## PP1 — Per-strategy delta candidate ladder for PP, extend `find_strike_by_delta.py`
 
 **Context (added 2026-07-28, mirrors CC1):** `PPOverlayV1.reentry_script_hint` points at

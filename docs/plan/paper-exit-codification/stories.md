@@ -156,6 +156,81 @@ before starting this one.
 
 **Commit:** `fix(strategy): TIME_STOP gates on DTE-remaining, not days-held`
 
+**Status (2026-08-01):** narrowed for CC by EC-5 below — CC no longer needs a per-expiry-type
+floor, a flat `dte <= 5` close covers it. This story's original scope (`evaluate_time_stop_csp`,
+CSP's `days_held` bug) is untouched and still open; only the CC portion is superseded.
+
+---
+
+## EC-5 — CC: collapse TIME_STOP + DTE_REVIEW into one DTE≤5 auto-close (decision + implementation)
+
+**Context (2026-08-01, operator decision, Cowork session working `3track-consolidation`'s
+CC1/CC4 strike-selection sub-thread):** while picking CC's entry strike and walking through its
+exit thresholds, operator tested `days_held >= 21` against two real candidate strikes — one
+monthly (2026-08-25, 24 DTE at entry), one quarterly (2026-09-29, 59 DTE at entry). Entering
+either today (2026-08-01), `days_held == 21` fires on 2026-08-22 regardless of which was picked:
+for the monthly that lands at DTE=3 (roughly sane, tight). For the **quarterly it lands at
+DTE=38** — force-closing a short call with over five weeks of theta still to harvest, for no
+reason connected to actual position risk. This is a live reproduction of the TODOS.md event-68
+bug (collar call closed at 91 DTE remaining) using this session's own candidates, not a
+hypothetical.
+
+**Decision:** for CC, replace both `TIME_STOP` (`days_held >= 21`, ACTION) and `DTE_REVIEW`
+(`dte <= 5`, WARN) with a single ACTION-severity signal firing at `dte <= 5`, evaluated after
+PROFIT_TARGET/DELTA_STOP/LOSS_STOP (same priority position `DTE_REVIEW` already occupies,
+matching EC-1's intended evaluation order — PROFIT_TARGET → DELTA_STOP → LOSS_STOP → DTE close).
+This auto-closes the position, no human step, consistent with the "I only get notified" direction
+already set for CC3/S6 in `3track-consolidation`. `dte <= 5` was not picked fresh — it reuses the
+threshold `DTE_REVIEW` already had in code, so no new number needed calibration.
+
+**Explicitly reverses two prior rulings, do not re-litigate without a fresh decision:**
+- **EC-1's q11 council ruling** kept `DTE_REVIEW` at WARN severity (notify only, position stays
+  open) and only had `DTE_REVIEW` suppress a redundant `TIME_STOP` firing. EC-5 instead makes
+  `DTE_REVIEW`'s condition itself the close trigger — a materially stronger action than q11
+  approved. Overridden by direct operator decision, not a fresh council pass — see
+  `docs/council/README.md`'s override precedent (matches how `3track-consolidation`'s S1r/S4
+  decisions were made directly with the operator).
+- **EC-4's per-expiry-type floor design** (≤7 weekly / ≤14 monthly / ≤21 quarterly) is narrowed
+  to a single flat `dte <= 5` for CC — simpler, and the quarterly-candidate walkthrough above
+  shows a flat DTE-based close is correct across expiry types without needing separate tuned
+  floors, at least for CC. Whether this simplification also holds for other strategies (CSP,
+  overlays with their own TIME_STOP-shaped bugs) is not decided here — CC-only.
+
+**Scope boundary:** CC only (`evaluate_cc`). `evaluate_time_stop_csp` (CSP) is untouched —
+different strategy family, not discussed in the session that produced this decision, EC-4's
+original scope still stands there if a future session decides to extend this.
+
+**Files to change:**
+- `src/strategy/exit_signals.py` — `ExitSignalEngine.evaluate_cc`: remove the `days_held >= 21`
+  `TIME_STOP` block and the `dte <= 5` `DTE_REVIEW` (WARN) block; replace both with one
+  `dte <= 5` check emitting a single ACTION-severity result (retain the `DTE_REVIEW` name for
+  continuity unless operator prefers otherwise at implementation time). Drop `days_held` from
+  `evaluate_cc`'s signature if nothing else in the method still needs it — confirm via
+  `get_code_snippet` before removing, other callers may pass it positionally.
+- `tests/unit/strategy/test_exit_signals.py` — replace/update the existing
+  `test_evaluate_cc_time_stop` and `test_evaluate_cc_dte_review` tests
+
+**Before any code:**
+```
+get_code_snippet("ExitSignalEngine.evaluate_cc")     # exact current TIME_STOP/DTE_REVIEW blocks
+search_code("days_held")                              # every evaluate_cc caller passing this param
+git log --oneline -10 src/strategy/exit_signals.py
+```
+
+**Tests:**
+- `test_evaluate_cc_dte_close_fires_at_5` — dte=5 → single ACTION signal, no separate TIME_STOP
+- `test_evaluate_cc_dte_close_no_fire_above_5` — dte=6, any days_held → no close signal
+- `test_evaluate_cc_dte_close_correct_on_quarterly_entry` — regression test reproducing this
+  story's own quarterly walkthrough: high days_held, high dte (e.g. days_held=21, dte=38) →
+  no close signal (this is the exact case that was wrong under the old `days_held >= 21` rule)
+- `test_evaluate_cc_profit_target_still_supersedes_dte_close` — PROFIT_TARGET fires before dte
+  check is reached, matches EC-1's intended priority order
+- Regression: confirm no other `evaluate_cc` caller breaks if `days_held` is dropped from the
+  signature (grep all call sites first, per "Before any code" above)
+
+**Commit:** `fix(strategy): evaluate_cc — collapse TIME_STOP/DTE_REVIEW into single DTE<=5 auto-close`
+(financial logic — real `@code-reviewer` run mandatory before this commits, per CLAUDE.md)
+
 ---
 
 ## EC-3 — Docs Close
