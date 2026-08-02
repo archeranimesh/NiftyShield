@@ -204,22 +204,38 @@ class ExitSignalEngine:
         cls,
         *,
         days_held: int,
+        dte: int | None = None,
     ) -> list[ExitSignalResult]:
-        """Fire when days_held ≥ 21 calendar days since entry.
+        """Fire the days-held backstop, gated on DTE-remaining (EC-4).
+
+        ``days_held >= 21`` alone is not a valid close trigger for a position
+        that was rolled onto a longer-dated (quarterly/leaps) contract — event
+        68 (2026-06-30) reproduced this: a leg with 91 DTE remaining hit
+        ``days_held == 21`` and fired TIME_STOP with no expiry pressure behind
+        it. When DTE is resolvable, it is used as a corroborating guard: the
+        backstop only fires if the position also still has ≤ 21 DTE left —
+        the same threshold ``ReEntryMixin`` uses as its re-entry floor
+        (DTE ≥ 14), so a position past that floor is already "close to
+        expiry" territory and the days-held counter is meaningful again.
+        When DTE cannot be resolved (e.g. a strike-embedded instrument key
+        with no parseable expiry), ``days_held`` alone remains the only
+        available signal and the original backstop behavior is preserved.
 
         Args:
             days_held: Number of calendar days since the trade was opened.
+            dte: Days to expiry of the current short put leg, or ``None``
+                when the instrument key's expiry could not be resolved.
 
         Returns:
             Single-element list when signal fires; empty list otherwise.
         """
-        if days_held >= 21:
+        if days_held >= 21 and (dte is None or dte <= 21):
             return [
                 ExitSignalResult(
                     exit_signal="TIME_STOP",
                     severity="ACTION",
                     threshold_value=21.0,
-                    notes=f"Days held {days_held} ≥ 21",
+                    notes=f"Days held {days_held} ≥ 21 (dte={dte})",
                 )
             ]
         return []

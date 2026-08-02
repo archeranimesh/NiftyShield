@@ -11,7 +11,7 @@ Signal table (CR1b 2026-06-06):
   PROFIT_TARGET  ACTION  LTP ≤ 30% of entry credit (70% captured)
   HARD_STOP      ACTION  LTP ≥ 2× entry credit
   DELTA_BREACH   ACTION  |delta| ≥ 0.40 (OPEN state)
-  TIME_STOP      ACTION  days_held ≥ 21
+  TIME_STOP      ACTION  days_held ≥ 21 AND (dte unresolvable OR dte ≤ 21) — EC-4
   ROLL_ELIGIBLE  ACTION  DTE ≤ 7
 """
 
@@ -289,6 +289,18 @@ def test_time_stop_does_not_fire_on_dte_alone() -> None:
     key = _expiry_key(dte=20)
     # entry_date=None → days_held=0, so TIME_STOP cannot fire
     pos = _make_position(instrument_key=key, avg_sell_price="80", entry_date=None)
+    events = _run(strategy.check_signals(_make_empty_chain(), [pos]))
+    assert not any(e.event_type == "TIME_STOP" for e in events)
+
+
+def test_time_stop_does_not_fire_on_quarterly_roll() -> None:
+    """EC-4 regression (event 68, 2026-06-30): days_held=21 on a leg rolled
+    onto a quarterly contract (dte=91 remaining) must NOT fire TIME_STOP —
+    there is no expiry pressure behind the days-held counter here."""
+    strategy = CSPNiftyV1()
+    key = _expiry_key(dte=91)
+    entry = date.today() - timedelta(days=21)
+    pos = _make_position(instrument_key=key, avg_sell_price="80", entry_date=entry)
     events = _run(strategy.check_signals(_make_empty_chain(), [pos]))
     assert not any(e.event_type == "TIME_STOP" for e in events)
 

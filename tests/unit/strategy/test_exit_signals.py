@@ -414,6 +414,40 @@ def test_evaluate_time_stop_csp_no_fire_at_20():
     assert results == []
 
 
+# EC-4 — TIME_STOP must gate on DTE-remaining, not days_held alone
+
+
+def test_time_stop_csp_quarterly_not_triggered_by_days_held_alone():
+    """Regression for event 68 (2026-06-30): quarterly entry, days_held=21,
+    dte=91 remaining — must NOT fire TIME_STOP just because the day counter
+    rolled over; there is no expiry pressure behind it."""
+    results = ExitSignalEngine.evaluate_time_stop_csp(days_held=21, dte=91)
+    assert results == []
+
+
+def test_time_stop_csp_fires_when_dte_floor_breached():
+    """days_held ≥ 21 AND dte ≤ 21 (both conditions true) → fires."""
+    results = ExitSignalEngine.evaluate_time_stop_csp(days_held=21, dte=10)
+    assert len(results) == 1
+    assert results[0].exit_signal == "TIME_STOP"
+    assert results[0].severity == "ACTION"
+
+
+def test_time_stop_csp_no_fire_at_dte_22():
+    """days_held ≥ 21 but dte = 22 (> 21 floor) → no fire."""
+    results = ExitSignalEngine.evaluate_time_stop_csp(days_held=25, dte=22)
+    assert results == []
+
+
+def test_time_stop_csp_fires_when_dte_unresolvable():
+    """dte=None (unresolvable expiry) preserves the original days_held-only
+    backstop — the only signal available for strike-embedded keys with no
+    parseable expiry."""
+    results = ExitSignalEngine.evaluate_time_stop_csp(days_held=21, dte=None)
+    assert len(results) == 1
+    assert results[0].exit_signal == "TIME_STOP"
+
+
 # evaluate_roll_eligible_csp
 
 

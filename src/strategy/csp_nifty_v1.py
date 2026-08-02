@@ -23,7 +23,10 @@ apply_action handles four action types:
   OPEN_NEW         → open_new_csp_leg (triggered when state = RE_ENTRY_PENDING)
 
 Note: TIME_STOP is ``days_held ≥ 21`` (calendar days since first SELL trade),
-NOT ``DTE ≤ 21``.
+gated on DTE remaining (EC-4, 2026-08-02) — it only fires when DTE is
+unresolvable OR DTE ≤ 21; a position rolled onto a longer-dated contract
+(e.g. quarterly, 90+ DTE) no longer force-closes on days-held alone. See
+``ExitSignalEngine.evaluate_time_stop_csp`` and DECISIONS.md 2026-08-02.
 """
 
 from __future__ import annotations
@@ -218,7 +221,12 @@ class CSPNiftyV1(ReEntryMixin):
                     ltp=ltp, entry_credit=entry_credit
                 )
             # Time-based signals fire even when the chain does not carry this expiry.
-            results += ExitSignalEngine.evaluate_time_stop_csp(days_held=days_held)
+            # TIME_STOP's dte guard (EC-4) needs a real None on unresolvable expiry,
+            # not the 9999 sentinel used below for evaluate_roll_eligible_csp/logging.
+            resolved_dte = dte if expiry is not None else None
+            results += ExitSignalEngine.evaluate_time_stop_csp(
+                days_held=days_held, dte=resolved_dte
+            )
             results += ExitSignalEngine.evaluate_roll_eligible_csp(dte=dte)
             results = ExitSignalEngine._sort_results(results)
 

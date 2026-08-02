@@ -207,7 +207,12 @@ def _dispatch_evaluate(
         results += ExitSignalEngine.evaluate_delta_breach_csp(
             delta=float(leg.delta) if leg.delta is not None else None, state=TradeState.OPEN
         )
-        results += ExitSignalEngine.evaluate_time_stop_csp(days_held=days_held)
+        # EC-4: TIME_STOP's dte guard needs a real None on unresolvable expiry,
+        # not the 9999 sentinel `dte` carries for evaluate_roll_eligible_csp.
+        resolved_dte = None if dte == 9999 else dte
+        results += ExitSignalEngine.evaluate_time_stop_csp(
+            days_held=days_held, dte=resolved_dte
+        )
         results += ExitSignalEngine.evaluate_roll_eligible_csp(dte=dte)
         return ExitSignalEngine._sort_results(results)
 
