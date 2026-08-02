@@ -307,3 +307,125 @@ def test_get_strategy_realized_pnl(store: PaperStore) -> None:
     store.record_trade(_sell(qty=10, price="100.00", leg="short_put"))
     store.record_trade(_buy(qty=10, price="40.00", leg="short_put"))
     assert get_strategy_realized_pnl(store, _STRATEGY) == Decimal("600.00")
+
+
+# ── compute_pnl_by_leg_group ────────────────────────────────────────────────
+
+_OVERLAY_STRATEGY = "paper_nifty_overlay"
+_CC_KEY = "NSE_FO|CC1"
+_COLLAR_CALL_KEY = "NSE_FO|COLLARCALL1"
+_COLLAR_PUT_KEY = "NSE_FO|COLLARPUT1"
+
+
+@pytest.mark.asyncio
+async def test_compute_pnl_by_leg_group_unifies_collar_legs(
+    tracker: PaperTracker, store: PaperStore, market: MockBrokerClient
+) -> None:
+    """Collar's two legs (call+put) must combine into one 'Collar' row,
+    while CC stays in its own row — they're different instrument keys and
+    different leg_roles, so only the OVERLAY_LABELS grouping ties them together."""
+    # CC: open short call, unrealized profit
+    store.record_trade(
+        PaperTrade(
+            strategy_name=_OVERLAY_STRATEGY,
+            leg_role="overlay_cc",
+            instrument_key=_CC_KEY,
+            trade_date=_DATE,
+            action=TradeAction.SELL,
+            quantity=75,
+            price=Decimal("100.00"),
+        )
+    )
+    market.set_price(_CC_KEY, Decimal("40.00"))  # unrealized = (100-40)*75 = 4500
+
+    # Collar: open short call + open long put, different instrument keys
+    store.record_trade(
+        PaperTrade(
+            strategy_name=_OVERLAY_STRATEGY,
+            leg_role="overlay_collar_call",
+            instrument_key=_COLLAR_CALL_KEY,
+            trade_date=_DATE,
+            action=TradeAction.SELL,
+            quantity=65,
+            price=Decimal("50.00"),
+        )
+    )
+    market.set_price(_COLLAR_CALL_KEY, Decimal("30.00"))  # unrealized = (50-30)*65 = 1300
+    store.record_trade(
+        PaperTrade(
+            strategy_name=_OVERLAY_STRATEGY,
+            leg_role="overlay_collar_put",
+            instrument_key=_COLLAR_PUT_KEY,
+            trade_date=_DATE,
+            action=TradeAction.BUY,
+            quantity=65,
+            price=Decimal("80.00"),
+        )
+    )
+    market.set_price(_COLLAR_PUT_KEY, Decimal("95.00"))  # unrealized = (95-80)*65 = 975
+
+    result = await tracker.compute_pnl_by_leg_group(_OVERLAY_STRATEGY)
+
+    assert set(result.keys()) == {"CC", "Collar"}
+    cc_unrealized, cc_realized, cc_total = result["CC"]
+    assert cc_unrealized == Decimal("4500.00")
+    assert cc_realized == Decimal("0")
+    assert cc_total == Decimal("4500.00")
+
+    collar_unrealized, collar_realized, collar_total = result["Collar"]
+    assert collar_unrealized == Decimal("2275.00")  # 1300 + 975, both legs combined
+    assert collar_realized == Decimal("0")
+    assert collar_total == Decimal("2275.00")
+
+
+@pytest.mark.asyncio
+async def test_compute_pnl_by_leg_group_no_trades_returns_empty_dict(
+    tracker: PaperTracker,
+) -> None:
+    """No trades at all → empty dict, not None (differs from compute_pnl's
+    None sentinel — callers iterate a dict either way, so empty is the
+    natural 'nothing to show' signal here)."""
+    result = await tracker.compute_pnl_by_leg_group(_OVERLAY_STRATEGY)
+    assert result == {}
+
+
+@pytest.mark.asyncio
+async def test_compute_pnl_by_leg_group_includes_fully_closed_leg(
+    tracker: PaperTracker, store: PaperStore, market: MockBrokerClient
+) -> None:
+    """A leg_role that's fully closed (net_qty == 0, absent from open
+    positions) but has realized P&L must still surface as its own row with
+    unrealized=0 — not get silently dropped because it's missing from the
+    open-positions side of the union."""
+    # overlay_cc fully closed: SELL 75@100, BUY 75@40 -> realized (100-40)*75 = 4500
+    store.record_trade(
+        PaperTrade(
+            strategy_name=_OVERLAY_STRATEGY,
+            leg_role="overlay_cc",
+            instrument_key=_CC_KEY,
+            trade_date=_DATE,
+            action=TradeAction.SELL,
+            quantity=75,
+            price=Decimal("100.00"),
+        )
+    )
+    store.record_trade(
+        PaperTrade(
+            strategy_name=_OVERLAY_STRATEGY,
+            leg_role="overlay_cc",
+            instrument_key=_CC_KEY,
+            trade_date=_DATE,
+            action=TradeAction.BUY,
+            quantity=75,
+            price=Decimal("40.00"),
+        )
+    )
+    # No market.set_price call — leg is closed, so it must never reach get_ltp.
+
+    result = await tracker.compute_pnl_by_leg_group(_OVERLAY_STRATEGY)
+
+    assert "CC" in result
+    unrealized, realized, total = result["CC"]
+    assert unrealized == Decimal("0")
+    assert realized == Decimal("4500.00")
+    assert total == Decimal("4500.00")

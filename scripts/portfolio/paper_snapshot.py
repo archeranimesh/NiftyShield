@@ -39,6 +39,7 @@ import argparse
 import asyncio
 import sys
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 
 import structlog
@@ -49,7 +50,7 @@ from src.utils.logging import setup_logging
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.client.factory import create_client
-from src.paper.constants import DEFAULT_DB_PATH
+from src.paper.constants import DEFAULT_DB_PATH, STRATEGY_OVERLAY
 from src.paper.formatting import format_pnl_table
 from src.paper.store import PaperStore
 from src.paper.tracker import PaperTracker
@@ -146,27 +147,49 @@ async def _run(args: argparse.Namespace) -> int:
         # single bad leg's resolution failure went undetected because
         # nothing downstream distinguished "no trades" from "fetch failed".
         try:
-            pnl = await tracker.compute_pnl(name)
-            if pnl is None:
-                continue
+            if name == STRATEGY_OVERLAY:
+                # Overlay is track-independent and can hold multiple leg
+                # groups at once (CC, PP, Collar) — show each as its own
+                # row rather than one blended number. Collar's two legs
+                # (call+put) are combined into a single "Collar" row by
+                # compute_pnl_by_leg_group, since they're always traded
+                # as a pair.
+                by_group = await tracker.compute_pnl_by_leg_group(name)
+                if not by_group:
+                    continue
 
-            unrealized, realized, total = pnl
-            pnl_rows.append(
-                {
-                    "strategy": name,
-                    "unrealized": unrealized,
-                    "realized": realized,
-                    "total": total,
-                }
-            )
-            any_printed = True
+                total = Decimal("0")
+                for group, (g_unrealized, g_realized, g_total) in by_group.items():
+                    pnl_rows.append(
+                        {
+                            "strategy": f"{name} / {group}",
+                            "unrealized": g_unrealized,
+                            "realized": g_realized,
+                            "total": g_total,
+                        }
+                    )
+                    total += g_total
+                any_printed = True
+            else:
+                pnl = await tracker.compute_pnl(name)
+                if pnl is None:
+                    continue
+
+                unrealized, realized, total = pnl
+                pnl_rows.append(
+                    {
+                        "strategy": name,
+                        "unrealized": unrealized,
+                        "realized": realized,
+                        "total": total,
+                    }
+                )
+                any_printed = True
 
             # Collect notes from open trades/legs (only the most recent trade per open leg)
             trades = store.get_trades(name)
             positions = store.get_positions(name)
-            open_legs = {
-                (p.leg_role, p.instrument_key) for p in positions if p.net_qty != 0
-            }
+            open_legs = {(p.leg_role, p.instrument_key) for p in positions if p.net_qty != 0}
 
             most_recent_trade_per_leg = {}
             for trade in trades:

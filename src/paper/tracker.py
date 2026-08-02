@@ -16,6 +16,7 @@ import structlog
 
 from src.client.protocol import MarketDataProvider
 from src.models.portfolio import TradeAction
+from src.paper._display import OVERLAY_LABELS
 from src.paper.models import PaperNavSnapshot, PaperPosition, PaperTrade
 from src.paper.store import PaperStore
 
@@ -163,6 +164,65 @@ class PaperTracker:
         total = unrealized + realized
 
         return unrealized, realized, total
+
+    async def compute_pnl_by_leg_group(
+        self, strategy_name: str
+    ) -> dict[str, tuple[Decimal, Decimal, Decimal]]:
+        """Compute P&L per leg group (e.g. CC / PP / Collar) for a paper strategy.
+
+        Groups leg_roles via ``OVERLAY_LABELS`` so a Collar's two legs
+        (``overlay_collar_call`` + ``overlay_collar_put``) report as one
+        combined "Collar" row — they're entered and exited as a pair, so a
+        split view would be misleading. leg_roles with no ``OVERLAY_LABELS``
+        entry group under their own leg_role name, unchanged.
+
+        Args:
+            strategy_name: Paper strategy name (must start with ``paper_``).
+
+        Returns:
+            Mapping of group_label -> (unrealized, realized, total). Empty
+            dict if the strategy has no trades at all.
+        """
+        all_trades = self.store.get_trades(strategy_name)
+        if not all_trades:
+            logger.warning("No trades found for paper strategy '%s'", strategy_name)
+            return {}
+
+        positions = self._get_open_positions(strategy_name)
+        instrument_keys = [p.instrument_key for p in positions if p.instrument_key]
+        prices: dict[str, Decimal] = {}
+        if instrument_keys:
+            prices = await self.market.get_ltp(instrument_keys)
+
+        unrealized_by_leg: dict[str, Decimal] = {}
+        for pos in positions:
+            ltp = prices.get(pos.instrument_key, Decimal("0"))
+            unrealized_by_leg[pos.leg_role] = unrealized_by_leg.get(
+                pos.leg_role, Decimal("0")
+            ) + _compute_leg_unrealized_pnl(pos, ltp)
+
+        realized_by_leg = _compute_realized_pnl_by_leg(all_trades)
+
+        leg_roles = set(unrealized_by_leg) | set(realized_by_leg)
+        unrealized_by_group: dict[str, Decimal] = {}
+        realized_by_group: dict[str, Decimal] = {}
+        for leg_role in leg_roles:
+            group = OVERLAY_LABELS.get(leg_role, leg_role)
+            unrealized_by_group[group] = unrealized_by_group.get(
+                group, Decimal("0")
+            ) + unrealized_by_leg.get(leg_role, Decimal("0"))
+            realized_by_group[group] = realized_by_group.get(
+                group, Decimal("0")
+            ) + realized_by_leg.get(leg_role, Decimal("0"))
+
+        return {
+            group: (
+                unrealized_by_group[group],
+                realized_by_group[group],
+                unrealized_by_group[group] + realized_by_group[group],
+            )
+            for group in sorted(unrealized_by_group.keys() | realized_by_group.keys())
+        }
 
     async def record_daily_snapshot(
         self,

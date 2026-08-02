@@ -448,3 +448,97 @@ async def test_one_strategy_failure_does_not_block_others(
     assert "paper_strategy_b_ok" in captured.out
     assert "paper_strategy_a_broken" in captured.err
     assert "FAILED" in captured.err
+
+
+@pytest.mark.asyncio
+@patch("scripts.portfolio.paper_snapshot.create_client")
+@patch("scripts.portfolio.paper_snapshot.PaperStore")
+@patch("scripts.portfolio.paper_snapshot.PaperTracker")
+async def test_overlay_strategy_splits_into_one_row_per_leg_group(
+    mock_tracker_cls: MagicMock,
+    mock_store_cls: MagicMock,
+    mock_create_client: MagicMock,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """paper_nifty_overlay must print one table row per leg group (CC, Collar)
+    instead of one blended row — Collar's call+put legs stay combined into a
+    single 'Collar' row, per operator decision (unify collar since it's always
+    traded as a pair). A non-overlay strategy in the same run must still print
+    as a single row, unaffected."""
+    mock_store = MagicMock()
+    mock_store_cls.return_value = mock_store
+
+    mock_tracker = MagicMock()
+    mock_tracker_cls.return_value = mock_tracker
+
+    mock_store.get_strategy_names.return_value = ["paper_csp_nifty_v1", "paper_nifty_overlay"]
+    mock_tracker.compute_pnl = AsyncMock(
+        return_value=(Decimal("100"), Decimal("50"), Decimal("150"))
+    )
+    mock_tracker.compute_pnl_by_leg_group = AsyncMock(
+        return_value={
+            "CC": (Decimal("4500.00"), Decimal("0"), Decimal("4500.00")),
+            "Collar": (Decimal("2275.00"), Decimal("0"), Decimal("2275.00")),
+        }
+    )
+    mock_store.get_trades.return_value = []
+    mock_store.get_positions.return_value = []
+
+    args = argparse.Namespace(
+        strategy=None,
+        date=None,
+        spot=None,
+        db_path="dummy.db",
+        dry_run=True,
+    )
+
+    exit_code = await _run(args)
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "paper_csp_nifty_v1" in captured.out
+    assert "paper_nifty_overlay / CC" in captured.out
+    assert "paper_nifty_overlay / Collar" in captured.out
+    # The blended "paper_nifty_overlay" row (no leg-group suffix) must not
+    # also appear — compute_pnl (the blended path) must not have been called
+    # for this strategy.
+    mock_tracker.compute_pnl.assert_awaited_once_with("paper_csp_nifty_v1")
+
+
+@pytest.mark.asyncio
+@patch("scripts.portfolio.paper_snapshot.create_client")
+@patch("scripts.portfolio.paper_snapshot.PaperStore")
+@patch("scripts.portfolio.paper_snapshot.PaperTracker")
+async def test_overlay_strategy_with_no_open_legs_prints_nothing(
+    mock_tracker_cls: MagicMock,
+    mock_store_cls: MagicMock,
+    mock_create_client: MagicMock,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Edge case: paper_nifty_overlay exists in strategy_names but has no
+    trades yet (empty dict from compute_pnl_by_leg_group) — must be skipped
+    cleanly, not raise or print an empty/broken row."""
+    mock_store = MagicMock()
+    mock_store_cls.return_value = mock_store
+
+    mock_tracker = MagicMock()
+    mock_tracker_cls.return_value = mock_tracker
+
+    mock_store.get_strategy_names.return_value = ["paper_nifty_overlay"]
+    mock_tracker.compute_pnl_by_leg_group = AsyncMock(return_value={})
+    mock_store.get_trades.return_value = []
+    mock_store.get_positions.return_value = []
+
+    args = argparse.Namespace(
+        strategy=None,
+        date=None,
+        spot=None,
+        db_path="dummy.db",
+        dry_run=True,
+    )
+
+    exit_code = await _run(args)
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    assert "paper_nifty_overlay" not in captured.out

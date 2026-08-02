@@ -37,6 +37,18 @@
   `docs/plan/3track-consolidation/tasks.md` CC3 and DECISIONS.md). Full detail:
   DECISIONS.md's CC3 entry (2026-08-02).
 
+- [2026-08-02] EOD P&L table: split `paper_nifty_overlay` into per-overlay-type rows —
+  operator asked how CC's individual P&L would be visible once it's trading (it wouldn't
+  have been, `paper_nifty_overlay` was one blended row for CC/PP/Collar together). Chose
+  per-overlay-type grouping over per-leg-role after confirming Collar should stay unified
+  (both legs always traded as a pair). New `PaperTracker.compute_pnl_by_leg_group()`
+  (`src/paper/tracker.py`) groups via the pre-existing `OVERLAY_LABELS` dict; wired into
+  `scripts/portfolio/paper_snapshot.py` for `STRATEGY_OVERLAY` only, other strategies
+  unaffected; persistence to `paper_nav_snapshots` unchanged, printed table only. 29 tests
+  green (`tests/unit/paper/test_tracker.py`, `test_paper_snapshot.py`), reviewed via
+  `general-purpose` agent standing in for `@code-reviewer` — no CRITICAL/ERROR, one coverage
+  gap closed in-session. Full detail: DECISIONS.md's entry (2026-08-02).
+
 ## Session Log — 2026-08-01
 
 - [2026-08-01] 3-Track Consolidation **CC1** — CC-specific delta candidate ladder for
