@@ -1,9 +1,27 @@
 import json
 import re
 
+import pytest
 import structlog
 
 from src.utils.logging import bind_trace_id, generate_trace_id, setup_logging
+from tests.unit.conftest import reset_structlog_test_config
+
+
+@pytest.fixture(autouse=True)
+def _restore_baseline_structlog_config():
+    """Every test in this file calls the real ``setup_logging()``, which
+
+    reconfigures structlog's global wrapper_class/processors (and forces the
+    stdlib root logger level via ``logging.basicConfig(force=True)``) with no
+    built-in teardown. Left unrestored, that config leaks into whichever test
+    runs next in the same worker process — e.g. it silently downgrades
+    log.debug() calls elsewhere in the suite to no-ops when setup_logging()
+    was last called with level="INFO". Restore the session baseline after
+    every test here so this file's real-setup_logging tests stay isolated.
+    """
+    yield
+    reset_structlog_test_config()
 
 
 def test_setup_logging_console(capsys):
