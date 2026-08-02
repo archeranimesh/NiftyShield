@@ -776,7 +776,7 @@ Confirmed that existing codebase already implements the canonical rules. Codific
 | Phase 0 exit regime | Strictly static mechanical; log IVR/VIX/regime but do not condition on them |
 | Automation tier | Tier 1 (EOD signal detection) mandatory; Tier 2 intraday deferred to Phase 1 |
 | Exit signal storage | Separate `paper_exit_events` table (already exists) with OPEN→ACKNOWLEDGED→ACTED/DISMISSED lifecycle |
-| Open gap | TIME_STOP vs DTE_REVIEW priority ordering in `evaluate_cc` — minor fix pending (story EC-1) |
+| Open gap | ~~TIME_STOP vs DTE_REVIEW priority ordering in `evaluate_cc` — minor fix pending (story EC-1)~~ Retired 2026-08-02, superseded by EC-5 (2026-08-01 operator decision, see below) — confirmed no other exit-signal evaluator shares the gap |
 
 Source: `docs/archive/council/strategy/2026-06-26_paper-trade-exit-philosophy.md`
 
@@ -793,6 +793,8 @@ Source: `docs/archive/council/strategy/2026-06-26_paper-trade-exit-philosophy.md
 
 Noted, deferred: Hybrid split-fetch (LTP every tick + periodic Greeks) for Phase 1 when scale warrants it.
 Source: `docs/archive/council/data_architecture/2026-06-26_strategy-monitor-watchlist-design.md`
+
+**EC-2 implemented (2026-08-02):** `strategy_monitor.chain_fetch_complete` added to `_fetch_chains` and `strategy_monitor.tick_summary` added to `_tick` (`src/strategy/monitor.py`). **Field deviation from the ruling above:** `chain_fetch_complete` uses `expiry` instead of `strategy_name` — `_fetch_chains` fetches one chain per unique expiry and shares it across every strategy holding a position in that expiry, so there is no single strategy_name to attach to one fetch; `expiry` is the actual fetch-granularity key. 3 tests added to `tests/unit/strategy/test_strategy_monitor.py`. Full suite: 2589 passed / 2 skipped / 1 pre-existing unrelated failure (`test_paper_3track_overlay_entry_notify.py`, confirmed present on `main` before this change).
 
 ---
 

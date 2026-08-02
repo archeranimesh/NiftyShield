@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import time
 from collections.abc import Callable
 from datetime import date, datetime, timedelta, timezone
 from datetime import date as _date
@@ -127,6 +128,7 @@ class StrategyMonitor:
              each position's expiry subset → route events.
           6. Write heartbeat.
         """
+        tick_start = time.monotonic()
         trace_id = generate_trace_id()
         bind_trace_id(trace_id)
         log.info("tick.start", trace_id=trace_id)
@@ -162,6 +164,7 @@ class StrategyMonitor:
             self._write_heartbeat(os.getpid())
             return
 
+        signals_emitted = 0
         for strategy in self._strategies:
             positions = per_strategy_positions[strategy.strategy_name]
             # Group this strategy's positions by expiry; call check_signals once
@@ -203,9 +206,16 @@ class StrategyMonitor:
                     )
                     continue
 
+                signals_emitted += len(events)
                 for event in events:
                     await self._route_event(event, strategy, chain, expiry_positions)
 
+        log.info(
+            "strategy_monitor.tick_summary",
+            strategies_evaluated=len(self._strategies),
+            signals_emitted=signals_emitted,
+            tick_duration_ms=round((time.monotonic() - tick_start) * 1000),
+        )
         log.info("tick.end", trace_id=trace_id)
         self._write_heartbeat(os.getpid())
         # Diagnostic runs after the heartbeat write (code-review finding,
@@ -492,6 +502,7 @@ class StrategyMonitor:
         chains: dict[date, OptionChain] = {}
         for expiry_date in unique_expiries:
             expiry_str = expiry_date.isoformat()
+            fetch_t0 = time.monotonic()
             try:
                 raw = await self._broker.get_option_chain(_NIFTY_INSTRUMENT, expiry_str)
             except DataFetchError as exc:
@@ -507,6 +518,18 @@ class StrategyMonitor:
                 "strategy_monitor.chain_fetched",
                 expiry=expiry_str,
                 strikes=len(chains[expiry_date].strikes),
+            )
+            # EC-2 (q12 observability ruling, DECISIONS.md 2026-06-26): field
+            # is `expiry` here rather than the story spec's `strategy_name` —
+            # chains are fetched once per unique expiry and shared across every
+            # strategy holding a position in that expiry (see _fetch_chains'
+            # docstring), so there is no single strategy_name to attach to a
+            # fetch. `expiry` is the actual fetch-granularity key.
+            log.info(
+                "strategy_monitor.chain_fetch_complete",
+                expiry=expiry_str,
+                strike_count=len(chains[expiry_date].strikes),
+                fetch_latency_ms=round((time.monotonic() - fetch_t0) * 1000),
             )
 
         return chains

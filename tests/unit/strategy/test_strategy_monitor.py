@@ -915,6 +915,110 @@ async def test_live_pnl_diag_skipped_when_compute_pnl_returns_none() -> None:
 
 
 # ---------------------------------------------------------------------------
+# EC-2: observability log lines (q12 ruling, DECISIONS.md 2026-06-26)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_chain_fetch_complete_logged() -> None:
+    """After a successful chain fetch, chain_fetch_complete is logged with
+    expiry, strike_count, and fetch_latency_ms.
+
+    Field is `expiry`, not the story spec's `strategy_name` — chains are
+    fetched once per unique expiry and shared across every strategy holding
+    a position in that expiry (see StrategyMonitor._fetch_chains), so there
+    is no single strategy_name to attach to one fetch.
+    """
+    positions = [_open_position()]
+    store = _make_store(positions=positions)
+    strategy = MockStrategy()
+    strategy.check_signals = AsyncMock(return_value=[])
+    monitor = _make_monitor(store=store, strategies=[strategy])
+
+    with (
+        patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch(
+            "src.strategy.monitor.datetime",
+            **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
+        ),
+        capture_logs() as logs,
+    ):
+        await monitor._tick()
+
+    fetched = [e for e in logs if e.get("event") == "strategy_monitor.chain_fetch_complete"]
+    assert len(fetched) == 1
+    # No lookup wired on the monitor → NSE_FO|63930 is unresolvable, so
+    # _fetch_chains falls back to expiry_fn()'s default ("2026-06-26").
+    assert fetched[0]["expiry"] == "2026-06-26"
+    assert fetched[0]["strike_count"] == 0
+    assert isinstance(fetched[0]["fetch_latency_ms"], int)
+    assert fetched[0]["fetch_latency_ms"] >= 0
+
+
+@pytest.mark.asyncio
+async def test_tick_summary_logged() -> None:
+    """After a tick, tick_summary is logged with strategies_evaluated,
+    signals_emitted, and tick_duration_ms."""
+    strategy = MockStrategy()
+    strategy.check_signals = AsyncMock(return_value=[])
+    store = _make_store()
+    monitor = _make_monitor(store=store, strategies=[strategy])
+
+    with (
+        patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch(
+            "src.strategy.monitor.datetime",
+            **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
+        ),
+        capture_logs() as logs,
+    ):
+        await monitor._tick()
+
+    summary = [e for e in logs if e.get("event") == "strategy_monitor.tick_summary"]
+    assert len(summary) == 1
+    assert summary[0]["strategies_evaluated"] == 1
+    assert summary[0]["signals_emitted"] == 0
+    assert isinstance(summary[0]["tick_duration_ms"], int)
+    assert summary[0]["tick_duration_ms"] >= 0
+
+
+@pytest.mark.asyncio
+async def test_tick_summary_signal_count_matches() -> None:
+    """Two strategies emitting 3 signals total → signals_emitted == 3."""
+    info_event = SignalEvent(
+        event_type="IVR_HIGH", severity="INFO", description="IVR above 50", payload={}
+    )
+    warn_event = SignalEvent(
+        event_type="DELTA_BREACH", severity="WARN", description="delta breach", payload={}
+    )
+
+    strategy_a = MockStrategy()
+    strategy_a.check_signals = AsyncMock(return_value=[info_event, warn_event])
+    strategy_b = MockStrategy()
+    strategy_b.strategy_name = "paper_mock_strategy_b"
+    strategy_b.check_signals = AsyncMock(return_value=[info_event])
+
+    store = _make_store()
+    notifier = _make_notifier()
+    monitor = _make_monitor(store=store, notifier=notifier, strategies=[strategy_a, strategy_b])
+
+    with (
+        patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch(
+            "src.strategy.monitor.datetime",
+            **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
+        ),
+        capture_logs() as logs,
+    ):
+        await monitor._tick()
+
+    summary = [e for e in logs if e.get("event") == "strategy_monitor.tick_summary"]
+    assert len(summary) == 1
+    assert summary[0]["strategies_evaluated"] == 2
+    assert summary[0]["signals_emitted"] == 3
+
+
+# ---------------------------------------------------------------------------
 # Helpers (private to this module)
 # ---------------------------------------------------------------------------
 

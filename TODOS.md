@@ -32,7 +32,7 @@ now point at each other so this dependency isn't only visible in one place.
 3. [ ] **CSP collateral leg `long_niftybees`** (2026-07-27) — `docs/plan/csp-collateral-leg/tasks.md`, starting at **CL-1** (CL-0 done).
 4. [ ] **Entry event filter R4** (2026-07-27) — `docs/plan/entry-event-filter/tasks.md`, starting at **EF-1** (EF-0 done; pending ES12).
 5. [ ] **Execution risk hardening** (2026-07-27) — `docs/plan/execution-risk-hardening/tasks.md`, starting at **RH-1**.
-6. [ ] **Paper exit codification** (2026-07-27) — `docs/plan/paper-exit-codification/tasks.md`, starting at **EC-1** (EC-4 depends on EC-1 landing first — do not skip ahead to EC-4). **EC-4 is a cross-epic blocker, found 2026-07-28:** item 1's CC1/CC2/CC3 sub-thread (`docs/plan/3track-consolidation/`) depends on EC-4 landing before CC's entry-delta work is calibrated against the right TIME_STOP semantics — prioritize EC-4 if item 1's CC sub-thread becomes active first.
+6. [ ] **Paper exit codification** (2026-07-27, updated 2026-08-02) — `docs/plan/paper-exit-codification/tasks.md`. EC-1 retired 2026-08-02 (superseded by EC-5, confirmed no other evaluator shares its gap). EC-2 shipped 2026-08-02. Next: **EC-5** (CC-only flat DTE≤5 close, operator decision 2026-08-01, not yet implemented) then **EC-3** (docs close). EC-4's original scope narrows to `evaluate_time_stop_csp` only (CSP) — not decided, not blocking EC-5. **Cross-epic note:** item 1's CC1/CC2/CC3 sub-thread depended on EC-4 landing first for TIME_STOP semantics; confirm that dependency still holds now that EC-4 is narrowed to CSP-only before resuming CC2/CC3.
 7. [ ] **Reporting & ops fixes** (2026-07-27) — `docs/plan/reporting-and-ops-fixes/tasks.md`, starting at **RO-1**.
 8. [ ] **IC daily snapshot semantics** (2026-07-25) — `docs/plan/paper-ic-daily-snapshot/tasks.md`, starting at **SNAP-1** (Owner: Claude — financial-logic gate).
 9. [ ] **Telegram leg labels** (2026-07-23) — `docs/plan/telegram-leg-labels/tasks.md`, starting at **TL-1**.
@@ -87,6 +87,11 @@ Full forensic log (SHAs, bug numbers, root-cause detail) moved to
 [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md) during the 2026-07-27 reorg —
 add new entries there going forward, or start a fresh dated section here if this file's
 Session Log grows large again.
+
+### 2026-08-02 Session Log
+- **EC-1** (paper-exit-codification): retired, not implemented — confirmed superseded for CC by EC-5 and confirmed no other exit-signal evaluator (`evaluate_time_stop_csp`, `evaluate_pp`, `evaluate_roll_overlay`) pairs a TIME_STOP with a DTE_REVIEW WARN, so the priority-ordering gap EC-1 targeted doesn't exist elsewhere. `tasks.md` checkbox ticked, no code change.
+- **EC-2** (paper-exit-codification, q12 observability ruling): added `strategy_monitor.chain_fetch_complete` (`src/strategy/monitor.py::_fetch_chains`) and `strategy_monitor.tick_summary` (`::_tick`) structlog lines. Deviated from story spec's `strategy_name` field on the first log — used `expiry` instead, since chains are fetched once per unique expiry and shared across strategies (see `_fetch_chains` docstring), not per-strategy. 3 new tests in `tests/unit/strategy/test_strategy_monitor.py`. Full suite: 2589 passed, 2 skipped, 1 pre-existing unrelated failure (`test_paper_3track_overlay_entry_notify.py::test_overlay_entry_does_not_refire_once_leg_open`, confirmed present on `main` before this change, not touched by this diff).
+- **[PERF-1]** StrategyMonitor Phase 1 scaling: trigger hybrid split-fetch (LTP per tick, Greeks periodic) when legs > 20 OR tick_duration_ms > 1500 OR rate limit errors. Baseline data from `strategy_monitor.tick_summary` log (added 2026-08-02, EC-2).
 
 ### 2026-08-01 Session Log
 - **Phase A**: Added idempotency guard (`_query_open_call_role`) to `paper_3track_overlay_entry.py` to prevent duplicate CC entry.
