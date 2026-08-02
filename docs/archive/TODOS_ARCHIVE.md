@@ -5,6 +5,19 @@
 
 ---
 
+## Session Log — 2026-08-02
+
+- [2026-08-02] 3-Track Consolidation **CC5** — pointer/dependency-visibility task closed, no
+  code of its own. Underlying work (`paper-exit-codification` EC-5, CC's `TIME_STOP`/
+  `DTE_REVIEW` collapse into a flat `dte <= 5` close) was already implemented and committed
+  (SHA `5066367`, `paper-exit-codification/tasks.md` EC-5 already ticked, DECISIONS.md entry
+  already present) — this session only confirmed that landing and closed CC5's checkbox in
+  `docs/plan/3track-consolidation/tasks.md` to reflect it. **Not resolved this session:**
+  CC1/CC3's `--no-dry-run` gate. EC-5's own tests were never run on a live host (sandbox disk
+  quota exhausted during EC-5's authoring sessions per `TODOS.md` item 6's carried verification
+  debt) — flipping CC1/CC3 to live posture needs that `pytest` confirmation first, which is a
+  separate, still-open action, not part of CC5's scope.
+
 ## Session Log — 2026-08-01
 
 - [2026-08-01] 3-Track Consolidation **CC1** — CC-specific delta candidate ladder for
