@@ -498,8 +498,11 @@ def test_reentry_gates_applied_to_bootstrap_entry(tmp_path, capsys):
         assert "auto-CC bootstrap failed" in captured.err
 
 
-def test_dry_run_default_until_cc1_cc2_resolved(tmp_path, capsys):
-    """regression guard against --no-dry-run ever becoming default before EC-5 lands"""
+def test_auto_cc_no_dry_run_no_longer_blocked(tmp_path, capsys):
+    """regression guard: --auto-cc without --dry-run (this script's existing live
+    default — it only ever defined a plain --dry-run store_true flag, never a
+    --no-dry-run counterpart) proceeds to bootstrap now that CC1/CC2/EC-5 have
+    landed (2026-08-02) — must not resurrect the old hard block."""
     from scripts.strategies.three_track.paper_3track_overlay_entry import main
 
     test_args = [
@@ -508,13 +511,64 @@ def test_dry_run_default_until_cc1_cc2_resolved(tmp_path, capsys):
         "--db-path",
         str(tmp_path / "test.sqlite"),
     ]
-    with patch("sys.argv", test_args):
+
+    with (
+        patch("sys.argv", test_args),
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.auto_cc_bootstrap"
+        ) as mock_bootstrap,
+    ):
+        # Bootstrap gates (DTE/IVR/liquidity) are exercised separately by
+        # test_reentry_gates_applied_to_bootstrap_entry; here we only assert the
+        # old unconditional --no-dry-run block is gone, so force bootstrap to
+        # fail past it cleanly rather than re-testing gate internals.
+        mock_bootstrap.return_value = None
+
         with pytest.raises(SystemExit) as excinfo:
             main()
 
-        assert excinfo.value.code == 1
         captured = capsys.readouterr()
-        assert "--no-dry-run is temporarily blocked for auto-cc" in captured.err
+        assert "temporarily blocked" not in captured.err
+        assert excinfo.value.code == 1
+        assert "auto-CC bootstrap failed" in captured.err
+
+
+def test_auto_cc_no_dry_run_writes_trade_on_bootstrap_success(tmp_path, capsys):
+    """Full success path: --auto-cc without --dry-run, bootstrap succeeds, must
+    actually reach PaperStore.record_trade — not just fail to hit the old block."""
+    from scripts.strategies.three_track.paper_3track_overlay_entry import main
+
+    cfg = load_overlay_config(_write_yaml(tmp_path, _valid_cc_raw()))
+    test_args = [
+        "paper_3track_overlay_entry.py",
+        "--auto-cc",
+        "--db-path",
+        str(tmp_path / "test.sqlite"),
+    ]
+
+    with (
+        patch("sys.argv", test_args),
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.auto_cc_bootstrap"
+        ) as mock_bootstrap,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.PaperStore"
+        ) as mock_store_cls,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry._query_open_call_role"
+        ) as mock_query,
+    ):
+        mock_bootstrap.return_value = cfg
+        mock_store = MagicMock()
+        mock_store_cls.return_value = mock_store
+        mock_store.get_positions.return_value = []
+        mock_query.return_value = None
+
+        main()
+
+        mock_store.record_trade.assert_called_once()
+        captured = capsys.readouterr()
+        assert "RECORDED TO DB" in captured.out
 
 
 def test_notification_failure_does_not_block_entry(tmp_path, capsys):

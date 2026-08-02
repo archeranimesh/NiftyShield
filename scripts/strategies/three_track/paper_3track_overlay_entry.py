@@ -19,9 +19,16 @@ Usage:
     python scripts/paper_3track_overlay_entry.py
     python scripts/paper_3track_overlay_entry.py --config data/paper/cycle2_overlay.yaml
     python scripts/paper_3track_overlay_entry.py --auto-cc --dry-run
+    python scripts/paper_3track_overlay_entry.py --auto-cc
 
-Cron example (dry-run only until CC1/CC2/EC-5 resolved):
-    15 15 * * 3  cd /path/to/NiftyShield && python scripts/strategies/three_track/paper_3track_overlay_entry.py --auto-cc --dry-run
+NOTE: unlike paper_ic_entry.py, --dry-run here is a plain store_true flag (no
+--no-dry-run counterpart) — omitting the flag entirely means live (writes to DB).
+This is pre-existing behavior for the manual/YAML entry path too, not something
+this change introduced; flagged separately as worth a follow-up decision.
+
+Cron example (--auto-cc live path unblocked 2026-08-02 — CC1/CC2/EC-5 all landed,
+EC-5's tests confirmed green on live host same day, see DECISIONS.md):
+    30 10 * * 3  cd /path/to/NiftyShield && python scripts/strategies/three_track/paper_3track_overlay_entry.py --auto-cc
 """
 
 import argparse
@@ -671,13 +678,10 @@ def main() -> None:
     setup_logging()
 
     if args.auto_cc:
-        if not args.dry_run:
-            print(
-                "ERROR: --no-dry-run is temporarily blocked for auto-cc until CC1/CC2/EC-5 lands.",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-
+        # --no-dry-run block lifted 2026-08-02: CC1 (delta ladder), CC2 (delta-band
+        # decision), and EC-5 (DTE<=5 exit collapse) have all landed, and EC-5's tests
+        # were confirmed green on a live host the same day (see DECISIONS.md, TODOS.md
+        # item 6). See docs/plan/3track-consolidation/tasks.md CC5 for the closure note.
         cfg = auto_cc_bootstrap(args.bod_path)
         if cfg is None:
             print("ERROR: auto-CC bootstrap failed. Check logs.", file=sys.stderr)

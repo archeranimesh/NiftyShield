@@ -18,6 +18,25 @@
   debt) — flipping CC1/CC3 to live posture needs that `pytest` confirmation first, which is a
   separate, still-open action, not part of CC5's scope.
 
+- [2026-08-02] 3-Track Consolidation **CC3 follow-up** — ran the live-host `pytest` pass CC5
+  flagged as outstanding: `tests/unit/strategy/test_exit_signals.py` +
+  `test_cc_overlay_v1.py` + `test_collar_overlay_v1.py` (94 tests, EC-5's own suite) and
+  `tests/unit/paper/test_overlay_entry.py` + related `tests/unit/scripts/test_paper_3track_*`
+  files (170+ tests, CC3's entry-script suite) — all green via a scratch `pip --target`
+  install (`/sessions` sandbox disk still at 100%, `aiohttp`/`pytest` installed to `/tmp`
+  instead). With that confirmation in hand, removed the `--auto-cc`/`--no-dry-run` hard block
+  in `paper_3track_overlay_entry.py::main()` (operator go-ahead given directly, no council
+  pass — same precedent as CC2/CC5). Added `test_auto_cc_no_dry_run_writes_trade_on_bootstrap_success`
+  to prove the live-write path actually calls `PaperStore.record_trade`, not just that the old
+  block's error message is gone. Reviewed via a `general-purpose` agent standing in for
+  `@code-reviewer` — no CRITICAL/ERROR; confirmed this script is paper-only (no
+  `BrokerClient`/`place_order` import). **Not done:** normalizing `--dry-run` to a
+  `BooleanOptionalAction` (attempted, reverted — would have broken 3 tests relying on the
+  current "no flag = live" default for the manual/YAML entry path); cron wiring (operator's
+  to do, Claude cannot edit crontab from this sandbox — line given in
+  `docs/plan/3track-consolidation/tasks.md` CC3 and DECISIONS.md). Full detail:
+  DECISIONS.md's CC3 entry (2026-08-02).
+
 ## Session Log — 2026-08-01
 
 - [2026-08-01] 3-Track Consolidation **CC1** — CC-specific delta candidate ladder for
