@@ -216,32 +216,36 @@ def test_delta_warn_fires_for_short_call() -> None:
     )
 
 
-def test_time_stop_fires_for_short_call() -> None:
+def test_dte_close_fires_for_short_call() -> None:
+    # EC-5: TIME_STOP (days_held >= 21) is gone from evaluate_cc — collar short call
+    # shares evaluate_cc with CC, so it now auto-closes at dte <= 5 regardless of
+    # days_held, and no longer at days_held >= 21 alone.
     strategy = CollarOverlayV1()
-    # time stop: days held >= 21
     chain = _make_chain("50", "0.20", "30", "-0.10")
+    key = _expiry_key(dte=5, option_type="CE")
     pos1 = _make_short_call_position(
-        avg_sell_price="80", entry_date=date.today() - timedelta(days=21)
+        instrument_key=key, avg_sell_price="80", entry_date=date.today() - timedelta(days=21)
     )
     events = _run(strategy.check_signals(chain, [pos1]))
     assert any(
-        e.event_type == "TIME_STOP"
+        e.event_type == "DTE_REVIEW"
         and e.severity == "ACTION"
         and e.payload.get("auto_execute") is True
         for e in events
     )
+    assert not any(e.event_type == "TIME_STOP" for e in events)
 
 
-def test_dte_review_warns_for_short_call() -> None:
+def test_high_days_held_alone_does_not_close_short_call_when_dte_far_out() -> None:
+    # Regression for the event-68 shape on the collar short call leg.
     strategy = CollarOverlayV1()
     chain = _make_chain("50", "0.20", "30", "-0.10")
-    key = _expiry_key(dte=4, option_type="CE")
-    pos1 = _make_short_call_position(instrument_key=key, avg_sell_price="80")
-    events = _run(strategy.check_signals(chain, [pos1]))
-    assert any(
-        e.event_type == "DTE_REVIEW" and e.severity == "WARN" and "auto_execute" not in e.payload
-        for e in events
+    key = _expiry_key(dte=38, option_type="CE")
+    pos1 = _make_short_call_position(
+        instrument_key=key, avg_sell_price="80", entry_date=date.today() - timedelta(days=21)
     )
+    events = _run(strategy.check_signals(chain, [pos1]))
+    assert events == []
 
 
 def test_apply_action_valid() -> None:

@@ -324,7 +324,10 @@ class CollarOverlayV1(ReEntryMixin):
         updated = [p for p in positions if p not in closed_positions]
 
         triggering_signal = action.metadata.get("triggering_signal") if action.metadata else None
-        if triggering_signal in ("PROFIT_TARGET", "TIME_STOP") and short_call_pos is not None:
+        if (
+            triggering_signal in ("PROFIT_TARGET", "TIME_STOP", "DTE_REVIEW")
+            and short_call_pos is not None
+        ):
             expiry = self._parse_expiry(short_call_pos.instrument_key)
             await self._check_reentry(
                 expiry=expiry,

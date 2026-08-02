@@ -147,14 +147,28 @@ def test_loss_stop_fires_at_2_5x() -> None:
     assert any(e.event_type == "LOSS_STOP" and e.severity == "ACTION" for e in events)
 
 
-def test_time_stop_fires_at_21_days() -> None:
+def test_dte_close_fires_at_5_dte() -> None:
+    # EC-5: TIME_STOP (days_held >= 21) no longer exists in evaluate_cc — replaced
+    # by a single ACTION-severity DTE_REVIEW close at dte <= 5, regardless of days_held.
     strategy = CCOverlayV1()
-    chain = _make_chain(ltp="80", delta="0.20")
-    # 21 days ago
+    key = _expiry_key(dte=5)
+    chain = _make_chain(ltp="80", delta="0.20", strike="23000")
     entry_date = date.today() - timedelta(days=21)
-    pos = _make_position(avg_sell_price="80", entry_date=entry_date)
+    pos = _make_position(instrument_key=key, avg_sell_price="80", entry_date=entry_date)
     events = _run(strategy.check_signals(chain, [pos]))
-    assert any(e.event_type == "TIME_STOP" and e.severity == "ACTION" for e in events)
+    assert any(e.event_type == "DTE_REVIEW" and e.severity == "ACTION" for e in events)
+    assert not any(e.event_type == "TIME_STOP" for e in events)
+
+
+def test_high_days_held_alone_does_not_close_when_dte_far_out() -> None:
+    # Regression for the event-68 shape: high days_held, high dte -> no close.
+    strategy = CCOverlayV1()
+    key = _expiry_key(dte=38)
+    chain = _make_chain(ltp="80", delta="0.20", strike="23000")
+    entry_date = date.today() - timedelta(days=21)
+    pos = _make_position(instrument_key=key, avg_sell_price="80", entry_date=entry_date)
+    events = _run(strategy.check_signals(chain, [pos]))
+    assert events == []
 
 
 def test_check_signals_with_entry_date_none() -> None:
@@ -216,15 +230,15 @@ def test_check_signals_payload_auto_execute() -> None:
     assert profit_target_event.payload.get("auto_action") == "CLOSE_CC"
     assert profit_target_event.payload.get("triggering_signal") == "PROFIT_TARGET"
 
-    # TIME_STOP fires
-    entry_date = date.today() - timedelta(days=21)
-    pos_time = _make_position(avg_sell_price="80", entry_date=entry_date)
-    chain_time = _make_chain(ltp="80", delta="0.20")
-    events_time = _run(strategy.check_signals(chain_time, [pos_time]))
-    time_stop_event = next(e for e in events_time if e.event_type == "TIME_STOP")
-    assert time_stop_event.payload.get("auto_execute") is True
-    assert time_stop_event.payload.get("auto_action") == "CLOSE_CC"
-    assert time_stop_event.payload.get("triggering_signal") == "TIME_STOP"
+    # DTE_REVIEW close fires (EC-5: replaces TIME_STOP as the days-held/DTE backstop)
+    key = _expiry_key(dte=5)
+    pos_dte = _make_position(instrument_key=key, avg_sell_price="80")
+    chain_dte = _make_chain(ltp="80", delta="0.20")
+    events_dte = _run(strategy.check_signals(chain_dte, [pos_dte]))
+    dte_review_event = next(e for e in events_dte if e.event_type == "DTE_REVIEW")
+    assert dte_review_event.payload.get("auto_execute") is True
+    assert dte_review_event.payload.get("auto_action") == "CLOSE_CC"
+    assert dte_review_event.payload.get("triggering_signal") == "DTE_REVIEW"
 
     # DELTA_WARN fires (no auto_execute)
     chain_warn = _make_chain(ltp="80", delta="0.46")
@@ -303,6 +317,24 @@ def test_apply_action_triggering_signals() -> None:
         metadata={"triggering_signal": "DELTA_STOP", "mark": "80", "delta": "0.56"},
     )
     _run(strategy.apply_action([pos], action_ds))
+    strategy._check_reentry.assert_called_once()
+    mock_notifier.send_notification.assert_called_once()
+
+    strategy._check_reentry.reset_mock()
+    mock_notifier.send_notification.reset_mock()
+
+    # 5. DTE_REVIEW trigger -> check_reentry called (EC-5: DTE_REVIEW replaces TIME_STOP
+    # as the ACTION-severity close signal; the re-entry allow-list must include it or a
+    # DTE-close silently skips re-entry evaluation — regression caught in review)
+    action_dr = ApprovedAction(
+        action_type="CLOSE_CC",
+        legs_to_close=[LegClose(leg_role="short_call")],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+        metadata={"triggering_signal": "DTE_REVIEW", "mark": "80", "delta": "0.20"},
+    )
+    _run(strategy.apply_action([pos], action_dr))
     strategy._check_reentry.assert_called_once()
     mock_notifier.send_notification.assert_called_once()
 

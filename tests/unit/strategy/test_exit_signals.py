@@ -131,44 +131,8 @@ def test_evaluate_cc_delta_stop_and_warn():
     assert results[0].exit_signal == "DELTA_WARN"
 
 
-def test_evaluate_cc_time_stop():
-    # entry=20.0, mark=15.0, days_held=21, dte=20 -> TIME_STOP ACTION
-    results = ExitSignalEngine.evaluate_cc(
-        entry_price=20.0,
-        current_mark=15.0,
-        delta=0.20,
-        dte=20,
-        days_held=21,
-    )
-    assert len(results) == 1
-    assert results[0].exit_signal == "TIME_STOP"
-    assert results[0].severity == "ACTION"
-
-    # days_held=20 -> []
-    results = ExitSignalEngine.evaluate_cc(
-        entry_price=20.0,
-        current_mark=15.0,
-        delta=0.20,
-        dte=20,
-        days_held=20,
-    )
-    assert results == []
-
-    # days_held=21, dte=4 -> both TIME_STOP and DTE_REVIEW fire
-    results = ExitSignalEngine.evaluate_cc(
-        entry_price=20.0,
-        current_mark=15.0,
-        delta=0.20,
-        dte=4,
-        days_held=21,
-    )
-    signals = {r.exit_signal for r in results}
-    assert "TIME_STOP" in signals
-    assert "DTE_REVIEW" in signals
-
-
-def test_evaluate_cc_dte_review():
-    # dte=5 -> DTE_REVIEW WARN
+def test_evaluate_cc_dte_close_fires_at_5():
+    # dte=5 -> single ACTION-severity DTE_REVIEW close, no separate TIME_STOP (EC-5)
     results = ExitSignalEngine.evaluate_cc(
         entry_price=20.0,
         current_mark=15.0,
@@ -178,30 +142,63 @@ def test_evaluate_cc_dte_review():
     )
     assert len(results) == 1
     assert results[0].exit_signal == "DTE_REVIEW"
-    assert results[0].severity == "WARN"
+    assert results[0].severity == "ACTION"
 
-    # dte=6 -> []
+
+def test_evaluate_cc_dte_close_no_fire_above_5():
+    # dte=6, any days_held -> no close signal
     results = ExitSignalEngine.evaluate_cc(
         entry_price=20.0,
         current_mark=15.0,
         delta=0.20,
         dte=6,
-        days_held=5,
+        days_held=999,
     )
     assert results == []
 
-    # dte=4, delta=0.70 -> DTE_REVIEW WARN, DELTA_STOP fires (fires separately)
+
+def test_evaluate_cc_dte_close_correct_on_quarterly_entry():
+    # Regression for EC-5's own quarterly walkthrough: high days_held, high dte
+    # (days_held=21, dte=38) must NOT close — this is the exact case that was
+    # wrong under the old `days_held >= 21` TIME_STOP rule.
     results = ExitSignalEngine.evaluate_cc(
         entry_price=20.0,
         current_mark=15.0,
-        delta=0.70,
+        delta=0.20,
+        dte=38,
+        days_held=21,
+    )
+    assert results == []
+
+    # No TIME_STOP signal exists anywhere in evaluate_cc's output space anymore.
+    results = ExitSignalEngine.evaluate_cc(
+        entry_price=20.0,
+        current_mark=15.0,
+        delta=0.20,
+        dte=4,
+        days_held=21,
+    )
+    signals = {r.exit_signal for r in results}
+    assert "TIME_STOP" not in signals
+    assert "DTE_REVIEW" in signals
+
+
+def test_evaluate_cc_profit_target_still_supersedes_dte_close():
+    # PROFIT_TARGET is evaluated first and sorts ahead of the dte<=5 close check,
+    # matching EC-1's intended priority order (PROFIT_TARGET -> ... -> DTE close).
+    # Both are ACTION-severity and both legitimately fire here (dte=4 <= 5); the
+    # ordering guarantee is that PROFIT_TARGET is first, not that DTE_REVIEW is
+    # suppressed.
+    results = ExitSignalEngine.evaluate_cc(
+        entry_price=20.0,
+        current_mark=5.9,  # <= 30% of entry credit
+        delta=0.15,
         dte=4,
         days_held=5,
     )
-    signals = {r.exit_signal for r in results}
+    signals = [r.exit_signal for r in results]
+    assert signals[0] == "PROFIT_TARGET"
     assert "DTE_REVIEW" in signals
-    assert "DELTA_STOP" in signals
-    assert "DTE_FORCED" not in signals
 
 
 def test_evaluate_cc_sort_order():

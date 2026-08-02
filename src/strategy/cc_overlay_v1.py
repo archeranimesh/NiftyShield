@@ -243,7 +243,8 @@ class CCOverlayV1(ReEntryMixin):
         triggering_signal = action.metadata.get("triggering_signal") if action.metadata else None
 
         if (
-            triggering_signal in ("PROFIT_TARGET", "TIME_STOP", "LOSS_STOP", "DELTA_STOP")
+            triggering_signal
+            in ("PROFIT_TARGET", "TIME_STOP", "LOSS_STOP", "DELTA_STOP", "DTE_REVIEW")
             and closed_pos is not None
         ):
             expiry = self._parse_expiry(closed_pos.instrument_key)

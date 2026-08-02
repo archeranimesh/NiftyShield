@@ -361,31 +361,26 @@ class ExitSignalEngine:
                 )
             )
 
-        # 6. TIME_STOP: days_held >= 21
-        if days_held >= 21:
-            results.append(
-                ExitSignalResult(
-                    exit_signal="TIME_STOP",
-                    severity="ACTION",
-                    threshold_value=21.0,
-                    delta_stop_would_fire=delta_stop,
-                    premium_stop_would_fire=premium_stop,
-                    actual_rule_used=rule_used,
-                    notes=f"Days held {days_held} >= 21",
-                )
-            )
-
-        # 7. DTE_REVIEW: DTE <= 5 (always fires at DTE <= 5, replacing DTE_FORCED)
+        # 6. DTE_REVIEW: collapsed ACTION-severity auto-close at DTE <= 5 (EC-5, 2026-08-02).
+        # Replaces the former separate TIME_STOP (days_held >= 21) and DTE_REVIEW (WARN)
+        # blocks — days_held >= 21 alone force-closed quarterly/leaps CC entries with weeks
+        # of theta still to harvest (e.g. a quarterly CC entered today hits days_held==21 at
+        # dte=38). A flat DTE-based close is correct across expiry types for CC; see
+        # docs/plan/paper-exit-codification/stories.md EC-5 and the reversed q11 ruling in
+        # docs/archive/council/strategy/2026-06-26_paper-trade-exit-philosophy.md.
+        # `days_held` is intentionally unused here but kept in the signature — both call
+        # sites (cc_overlay_v1.py, paper_3track_snapshot.py) still pass it, and this method
+        # is shared with the collar short-call leg evaluation.
         if dte <= 5:
             results.append(
                 ExitSignalResult(
                     exit_signal="DTE_REVIEW",
-                    severity="WARN",
+                    severity="ACTION",
                     threshold_value=5.0,
                     delta_stop_would_fire=delta_stop,
                     premium_stop_would_fire=premium_stop,
                     actual_rule_used=rule_used,
-                    notes=f"DTE {dte} <= 5",
+                    notes=f"DTE {dte} <= 5 — auto-close (EC-5 collapse of TIME_STOP+DTE_REVIEW)",
                 )
             )
 
