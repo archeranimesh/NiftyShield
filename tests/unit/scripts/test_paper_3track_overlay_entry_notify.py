@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from scripts.strategies.three_track import paper_3track_overlay_entry as ov_entry
 from src.models.portfolio import TradeAction
-from src.paper.constants import STRATEGY_OVERLAY
+from src.paper.constants import STRATEGY_OVERLAY, STRATEGY_SPOT
 from src.paper.models import PaperTrade
 
 
@@ -85,7 +85,15 @@ def test_overlay_entry_does_not_refire_once_leg_open() -> None:
     existing_position.leg_role = "overlay_cc"  # matches the primary marker for "cc"
 
     mock_store = MagicMock()
-    mock_store.get_positions.return_value = [existing_position]
+
+    def _get_positions(strategy_name: str) -> list[MagicMock]:
+        # SPOT-track idempotency guard (eba1806) must see no overlay_cc position —
+        # only the OVERLAY-track bootstrap guard this test exercises should fire.
+        if strategy_name == STRATEGY_SPOT:
+            return []
+        return [existing_position]
+
+    mock_store.get_positions.side_effect = _get_positions
 
     _run_main(mock_store, mock_notifier=None, overlay_trade=overlay_trade)
 
