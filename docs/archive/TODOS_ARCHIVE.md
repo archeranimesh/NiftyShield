@@ -65,6 +65,18 @@
   not resolved. Files: `docs/plan/3track-consolidation/tasks.md`, `stories.md`, `DECISIONS.md`
   (this file). No code-reviewer gate — docs/config only, no `.py` files in the diff.
 
+- [2026-08-03] 3-Track Consolidation **PP5 — council-resolved, CRASH_MONETIZE profit
+  extraction** — docs-only, no code changed. Submitted `tmp/q15_pp_crash_monetize_profit_
+  extraction.md`/`tmp/q15.sh` to the LLM Council (`tools/llm-council`) asking whether PP's
+  binary `CRASH_MONETIZE` exit should move to a tiered/partial-capture design given 2008-shape
+  extended declines. Verdict (`docs/council/2026-08-03_pp-crash-monetize-profit-extraction.md`):
+  retain the binary full-close, no code change — small sample (2 tail events, 1 multi-month
+  decline in 26 years) and execution risk during genuine crash liquidity conditions both argue
+  against added complexity. Minority 50/50-tranche view logged as deferred, not adopted, with
+  explicit revisit triggers (new tail event, feasible chain-level backtest, or 12+ months paper
+  data). Files: `docs/plan/3track-consolidation/tasks.md`, `stories.md`, `DECISIONS.md` (this
+  file). No code-reviewer gate — docs/config only, no `.py` files in the diff.
+
 ## Session Log — 2026-08-02
 
 - [2026-08-02] 3-Track Consolidation **CC5** — pointer/dependency-visibility task closed, no

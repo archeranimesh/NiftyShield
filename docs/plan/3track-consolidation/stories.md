@@ -1089,6 +1089,69 @@ commit needed — this is no longer a decision-gate story.
 
 ---
 
+## PP5 — CRASH_MONETIZE profit extraction: council-resolved, retain binary full-close
+
+**Context:** raised during the PP4 discussion — given `CRASH_MONETIZE` closes the entire PP
+position in one shot, and 2008-shape extended declines (six separate ≥5% single-month declines
+across ten months) show a real crash isn't always a single clean event, does a binary
+all-or-nothing exit leave value on the table relative to a tiered/partial capture design? This
+was judged genuinely council-worthy (unlike PP3/PP4's IVR-gate handling, which turned out to be
+pattern-reuse, not a fresh decision) — no existing project convention answers "how much of an
+extended decline should PP's exit try to capture," and the tradeoff (captured value vs. execution
+risk in exactly the worst liquidity conditions) is real in both directions.
+
+**Council question:** `tmp/q15_pp_crash_monetize_profit_extraction.md` / `tmp/q15.sh`, template
+`strategy_parameters`, context files `src/strategy/exit_signals.py`, `src/strategy/pp_overlay_v1.py`,
+`src/strategy/executor.py`, this stories.md, `DECISIONS.md`.
+
+**Verdict, `docs/council/2026-08-03_pp-crash-monetize-profit-extraction.md` (chairman
+openai/gpt-4.1, panel openai/gpt-4.1 + deepseek/deepseek-r1-0528):** **retain the binary
+full-close, no code change.** Both panel responses and the chairman converged (Stage 2 aggregate
+ranks tied 1.5/1.5 — no real split at the ranking level):
+
+1. **Data too small to calibrate tiers.** Only two ≥20% single-month drawdowns in 26 years
+   (2008, 2020) and exactly one multi-month "waterfall" decline (2008) — insufficient sample to
+   design a tiered/tranche regime with any statistical confidence.
+2. **Execution risk dominates during the exact conditions this signal fires under.** Deep-ITM
+   Nifty put liquidity collapses in a genuine crash — spreads blow out, depth vanishes.
+   `PaperFillSimulator`'s flat ₹4.0 slippage cap for VIX ≥ 30 likely understates real VIX 50-90+
+   conditions (2008/2020-scale). A single full-close is one order with the best chance of clean
+   execution before liquidity deteriorates further; a tiered/tranche design requires multiple
+   separately-timed exits, each of which risks non-fill or materially worse-than-modeled pricing —
+   council's assessment (deepseek panelist): tiered exits could erode "20-40% of paper gains in
+   real trading, negating their theoretical advantage."
+3. **PP's role is windfall/tail insurance, not incremental P&L optimization.** Monthly re-entry
+   at 0.15 delta already provides repeated protection by construction; monetizing early in an
+   extended decline sacrifices comparatively little total protection value versus the execution
+   risk added by trying to capture more.
+
+**Minority/dissenting view, logged not adopted (`Dissenting Notes`/`Minority View` sections of
+the council output):** a 50/50 tranche (half closed at delta -0.65, half at -0.80) was raised by
+minority voices in both panel responses — real options-desk practice sometimes scales out of
+positions for exactly this liquidity reason (a 1-lot fill is more likely than a 4-lot fill in a
+tail event). Explicitly conditioned: "only adopt if simulation can confirm partials are fillable
+... gracefully degrade to all-or-nothing if a partial fill cannot be simulated in backtest or
+observed in live trading." Not adopted now — first candidate to revisit if the trigger
+conditions below are met, not a rejected idea to be forgotten.
+
+**Explicit, non-open-ended revisit triggers (from the council's own Practical Recommendation
+section — do not re-litigate this question absent one of these):**
+1. At least one additional real tail event (post-2020 vintage) occurs and can be backtested
+   against actual options-chain data.
+2. A full historical chain-based backtest becomes feasible and shows structurally significant
+   "give-back" consistent across multiple events and multiple delta levels.
+3. 12+ months of paper-trading operation accumulates across varied volatility regimes, giving
+   real (not simulated) fill experience to reassess against.
+
+**Action:** none — `ExitSignalEngine.evaluate_pp`'s `CRASH_MONETIZE` logic is unchanged.
+`PPOverlayV1.apply_action`'s full-close-only `MONETIZE_PP` handling is confirmed correct as-is,
+not a gap.
+
+**Commit:** none — decision-gate note, resolved via council rather than direct operator call
+(unlike PP2/PP3/PP4's implementation resolution). See `DECISIONS.md` 2026-08-03 PP5 entry.
+
+---
+
 ## Collar1 — Two-leg strike selection for Collar, coordinating CC1's CE ladder and PP1's PE ladder
 
 **Context (added 2026-07-28, mirrors CC1/PP1 but not a mechanical copy):** `CollarOverlayV1`
