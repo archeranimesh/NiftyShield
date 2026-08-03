@@ -7,6 +7,22 @@
 
 ## Session Log — 2026-08-03
 
+- [2026-08-03] 3-Track Consolidation **PP3** — Gap 1 investigated, confirmed correct-as-is:
+  `PPOverlayV1.apply_action`'s `ROLL_PP` branch deliberately doesn't call `_check_reentry`
+  (mirroring CC3's fix would be wrong here — the mixin's DTE≥14 gate would evaluate against
+  the just-closed ≤5-DTE contract and always report BLOCKED). Documented via comment, no logic
+  change; pre-existing `test_apply_action_roll_pp` already covers it. Gap 2 implemented: added
+  `auto_pp_bootstrap()` + `_open_pp_dte()` + `--auto-pp`/`--log-only-gates` to
+  `paper_3track_overlay_entry.py`, mirroring CC3's shape. Daily cadence, two entry triggers
+  (no open put = bootstrap, DTE≤5 = routine roll gap-fill, briefly holding two puts to satisfy
+  "no unprotected day"), generic S6 bootstrap gate bypassed specifically for this path, IVR gate
+  reuses IC's `resolve_ivr`/`GateViolation` log-only pattern. 9 new tests; sandbox disk quota
+  (same `/sessions` 100%-full constraint as PP1/PP1a/BUG-018) worked around with the same
+  `pip --target /tmp` approach — 60/60 tests confirmed green on a live pytest run. Reviewed via
+  `general-purpose` (manual trace) + a code-reviewer-standing-in agent — no CRITICAL/ERROR,
+  3 WARNINGs deferred (documented in DECISIONS.md). Full detail: DECISIONS.md's PP3 entry
+  (2026-08-03). SHA: pending (filled in after commit).
+
 - [2026-08-03] 3-Track Consolidation **PP1** — added `PP_DELTA_CANDIDATES = [0.20, 0.25, 0.15]`
   (provisional, gated by the separate PP2 decision-gate story) to `find_strike_by_delta.py`,
   selected only when `--option-type PE` **and** the new explicit `--overlay-type pp` flag are

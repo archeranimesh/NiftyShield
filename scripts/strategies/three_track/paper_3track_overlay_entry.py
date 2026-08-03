@@ -20,6 +20,8 @@ Usage:
     python scripts/paper_3track_overlay_entry.py --config data/paper/cycle2_overlay.yaml
     python scripts/paper_3track_overlay_entry.py --auto-cc --dry-run
     python scripts/paper_3track_overlay_entry.py --auto-cc
+    python scripts/paper_3track_overlay_entry.py --auto-pp --dry-run
+    python scripts/paper_3track_overlay_entry.py --auto-pp
 
 NOTE: unlike paper_ic_entry.py, --dry-run here is a plain store_true flag (no
 --no-dry-run counterpart) — omitting the flag entirely means live (writes to DB).
@@ -29,15 +31,24 @@ this change introduced; flagged separately as worth a follow-up decision.
 Cron example (--auto-cc live path unblocked 2026-08-02 — CC1/CC2/EC-5 all landed,
 EC-5's tests confirmed green on live host same day, see DECISIONS.md):
     30 10 * * 3  cd /path/to/NiftyShield && python scripts/strategies/three_track/paper_3track_overlay_entry.py --auto-cc
+
+Cron example (--auto-pp live path unblocked 2026-08-03 — PP1/PP2 both landed,
+see docs/plan/3track-consolidation/tasks.md PP2/PP3). Daily cadence (not CC's
+weekly Wednesday), off the existing snapshot cron, since --auto-pp itself
+short-circuits to a no-op (exit 0) whenever a fresh (DTE > 5) put is already
+open — a daily invocation is idempotent by construction, same reasoning as S6's
+bootstrap entry scripts:
+    35 15 * * 1-5  cd /path/to/NiftyShield && python scripts/strategies/three_track/paper_3track_overlay_entry.py --auto-pp
 """
 
 import argparse
 
 # ruff: noqa: E402
 import asyncio
+import re
 import sys
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -47,6 +58,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from scripts.lookup.find_strike_by_delta import _select_delta_candidates
+from scripts.strategies.ic.ic_entry_gates import make_gate_violation
 from src.backtest.ivr import compute_ivr
 from src.backtest.vix_ingest import load_vix_series
 from src.client.upstox_market import UpstoxMarketClient
@@ -63,9 +75,10 @@ from src.paper.constants import (
     DEFAULT_BOD_PATH,
     DEFAULT_DB_PATH,
     STRATEGY_OVERLAY,
+    STRATEGY_PP_OVERLAY,
     STRATEGY_SPOT,
 )
-from src.paper.models import PaperTrade
+from src.paper.models import GateViolation, PaperTrade
 from src.paper.store import PaperStore
 from src.utils.logging import setup_logging
 
@@ -81,6 +94,22 @@ _PRIMARY_LEG_ROLE = {
 }
 
 DEFAULT_CONFIG = Path("data/paper/overlay_entry.yaml")
+
+# Matches keys like "NSE_FO|NIFTY29MAY2026PE" -> group 1 = "29MAY2026" — same
+# pattern as PPOverlayV1._EXPIRY_RE (src/strategy/pp_overlay_v1.py), duplicated
+# here rather than imported since this is a standalone script-side lookup
+# against paper_trades rows, not a strategy-object method.
+_PP_EXPIRY_RE = re.compile(r"NSE_FO\|NIFTY(\d{2}[A-Za-z]{3}\d{4})(PE|CE)", re.IGNORECASE)
+
+# Matches PPOverlayV1.reentry_ivr_threshold — PP's re-entry IVR gate is
+# inverted vs CSP/CC/collar: blocks when IVR is too HIGH (don't buy protection
+# at peak post-crash vol), not too low.
+_PP_REENTRY_IVR_THRESHOLD = 0.60
+
+# ROLL_ELIGIBLE threshold in ExitSignalEngine.evaluate_pp — kept in lockstep
+# per PP3's story requirement so the entry script's routine-roll trigger and
+# the exit-signal engine's roll trigger never drift apart.
+_PP_ROLL_DTE_THRESHOLD = 5
 
 _COLLAR_PUT_ROLE = "overlay_collar_put"
 _COLLAR_CALL_ROLE = "overlay_collar_call"
@@ -261,6 +290,242 @@ def auto_cc_bootstrap(bod_path: Path) -> OverlayConfig | None:
         if selected_row.get("gate_spread") is not None
         else None,
         call_oi=int(selected_row["oi"]),
+    )
+
+
+def _open_pp_dte(db_path: Path) -> int | None:
+    """Return the DTE of the currently open overlay_pp position, or None if flat.
+
+    Distinguishes PP3's two entry triggers:
+      - None (no open overlay_pp row at all) -> bootstrap/gap-fill.
+      - DTE <= _PP_ROLL_DTE_THRESHOLD -> routine roll; the fresh put must be
+        bought the same day (no-gap requirement — operator: "i do not want
+        unprotected day"), which means the outgoing (this row) and the
+        incoming put are briefly both open under the same leg_role.
+      - DTE > _PP_ROLL_DTE_THRESHOLD -> a fresh put already covers; nothing
+        to do this run.
+
+    Mirrors ``_query_open_call_role``'s standalone sqlite-net-qty pattern
+    rather than going through ``PaperStore.get_positions`` (which is also
+    filtered to ``net_qty != 0`` and would work, but this keeps the
+    entry-script gate self-contained and consistent with the existing CC/
+    collar dedup check in this file).
+
+    Args:
+        db_path: Path to the SQLite portfolio DB.
+
+    Returns:
+        Minimum DTE (calendar days) across any open ``overlay_pp`` rows, or
+        None if no such row is open. Un-parseable instrument keys are
+        skipped with a WARNING (never raise — a gate helper must not crash
+        the entry run over one bad row).
+    """
+    import sqlite3
+
+    try:
+        conn = sqlite3.connect(str(db_path))
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT instrument_key,
+                   SUM(CASE WHEN action='SELL' THEN -quantity ELSE quantity END) AS net_qty
+            FROM paper_trades
+            WHERE strategy_name = ?
+              AND leg_role = 'overlay_pp'
+            GROUP BY instrument_key
+            HAVING net_qty > 0
+            """,
+            (STRATEGY_OVERLAY,),
+        )
+        rows = cur.fetchall()
+        conn.close()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("open_pp_dte.query_failed", error=str(exc))
+        return None
+
+    if not rows:
+        return None
+
+    today = date.today()
+    dtes: list[int] = []
+    for instrument_key, _net_qty in rows:
+        m = _PP_EXPIRY_RE.search(instrument_key)
+        if not m:
+            logger.warning("open_pp_dte.expiry_unparseable", instrument_key=instrument_key)
+            continue
+        try:
+            expiry = datetime.strptime(m.group(1).upper(), "%d%b%Y").date()
+        except ValueError:
+            logger.warning("open_pp_dte.expiry_unparseable", instrument_key=instrument_key)
+            continue
+        dtes.append((expiry - today).days)
+
+    if not dtes:
+        return None
+    return min(dtes)
+
+
+def auto_pp_bootstrap(
+    bod_path: Path,
+    *,
+    log_only_gates: bool = True,
+) -> tuple[OverlayConfig | None, GateViolation | None]:
+    """Automate PP entry — bootstrap (no open put) or routine roll gap-fill.
+
+    Caller (``main()``) must already have checked ``_open_pp_dte`` and
+    short-circuited on a fresh (DTE > ``_PP_ROLL_DTE_THRESHOLD``) open
+    position before calling this — this function only resolves the expiry/
+    IVR/strike-selection path, it does not re-check the open-position gate.
+
+    Args:
+        bod_path: Path to the BOD instrument JSON file.
+        log_only_gates: When True (default), a below/above-threshold IVR is
+            recorded as a GateViolation instead of hard-blocking entry — the
+            routine roll always proceeds same-day regardless (no-gap
+            requirement); when False, restores the original hard-block.
+
+    Returns:
+        Tuple of (OverlayConfig or None, GateViolation or None). cfg is None
+        on any structural failure (BOD load, no monthly expiry, DTE < 14,
+        chain fetch, no eligible strike) — these are never gated by
+        log_only_gates, they always abort. The GateViolation is populated
+        only when the IVR gate would have blocked under strict mode.
+    """
+    today = date.today()
+
+    try:
+        lookup = InstrumentLookup.from_file(bod_path)
+        expiries = lookup.get_expiry_candidates(
+            underlying="NIFTY",
+            today=today,
+            preference=["monthly"],
+        )
+    except Exception as exc:
+        logger.error("auto_pp.bod_load_failed", error=str(exc))
+        return None, None
+
+    expiry_str = None
+    for label, exp_str in expiries:
+        if label == "monthly":
+            expiry_str = exp_str
+            break
+
+    if not expiry_str:
+        logger.error("auto_pp.no_monthly_expiry_found")
+        return None, None
+
+    # Gate 1: DTE >= 14 (structural — matches ReEntryMixin's own floor).
+    expiry_date = date.fromisoformat(expiry_str)
+    dte = (expiry_date - today).days
+    if dte < 14:
+        logger.error("auto_pp.dte_gate_failed", dte=dte)
+        return None, None
+
+    # Gate 2: IVR — inverted threshold gate for PP (blocks when IVR too HIGH).
+    # THRESHOLD gate: log-only under --log-only-gates (default on), matching
+    # scripts/strategies/ic/ic_entry_gates.py::resolve_ivr's pattern. Data
+    # unavailability (empty/short history) remains a STRUCTURAL abort —
+    # never bypassed by log_only_gates.
+    violation: GateViolation | None = None
+    try:
+        vix_series = load_vix_series(settings.vix_data_dir)
+        if vix_series.empty or len(vix_series) < 252:
+            logger.error("auto_pp.ivr_history_insufficient")
+            return None, None
+
+        vix_today = float(vix_series.iloc[-1])
+        ivr = compute_ivr(vix_today, vix_series)
+        if ivr is None:
+            logger.error("auto_pp.ivr_history_insufficient")
+            return None, None
+
+        if ivr > _PP_REENTRY_IVR_THRESHOLD:
+            if log_only_gates:
+                logger.warning(
+                    "gate.ivr_pp_reentry_violation_logged",
+                    ivr=ivr,
+                    gate=_PP_REENTRY_IVR_THRESHOLD,
+                )
+                violation = make_gate_violation(
+                    gate_name="ivr_pp_reentry",
+                    threshold=str(_PP_REENTRY_IVR_THRESHOLD),
+                    actual=f"{ivr:.4f}",
+                    strategy_name=STRATEGY_PP_OVERLAY,
+                )
+            else:
+                logger.error("auto_pp.ivr_gate_failed", ivr=ivr)
+                return None, None
+    except Exception as exc:
+        logger.error("auto_pp.ivr_check_failed", error=str(exc))
+        return None, None
+
+    # Fetch live chain
+    try:
+        client = UpstoxMarketClient(settings.upstox_analytics_token)
+        raw_chain = client.get_option_chain_sync("NSE_INDEX|Nifty 50", expiry_str)
+    except Exception as exc:
+        logger.error("auto_pp.chain_fetch_failed", error=str(exc))
+        return None, violation
+
+    if not raw_chain:
+        logger.error("auto_pp.chain_empty")
+        return None, violation
+
+    # Strike selection — PE ladder scoped to PP via the explicit overlay_type
+    # flag (PP1, 2026-08-03): bare option_type="PE" alone resolves to CSP's
+    # DELTA_CANDIDATES, ambiguous between CSP short-put and PP long-put use.
+    delta_candidates = _select_delta_candidates(option_type="PE", overlay_type="pp")
+    selected_row = None
+
+    for candidate in delta_candidates:
+        delta_min = max(0.0, candidate - 0.02)
+        delta_max = candidate + 0.02
+        rows = filter_strikes_by_delta(
+            raw_chain,
+            option_type="PE",
+            delta_min=delta_min,
+            delta_max=delta_max,
+        )
+        if not rows:
+            continue
+
+        ranked = rank_strikes(rows)
+        filtered = _apply_liquidity_gate(ranked)
+        if filtered:
+            selected_row = filtered[0]
+            break
+
+    if not selected_row:
+        logger.error("auto_pp.no_eligible_strike_found")
+        return None, violation
+
+    put_price = Decimal(
+        str(selected_row["mid"] if selected_row["mid"] > 0 else selected_row["ltp"])
+    )
+
+    return (
+        OverlayConfig(
+            overlay_type="pp",
+            entry_date=today,
+            cycle=1,  # Cycle doesn't matter for auto PP
+            lot_size=75,
+            expiry=expiry_str,
+            expiry_type="monthly",
+            dte_at_entry=dte,
+            put_strike=float(selected_row["strike"]),
+            put_instrument_key=selected_row["instrument_key"],
+            put_price=put_price,
+            put_spread_pct=float(selected_row["gate_spread"])
+            if selected_row.get("gate_spread") is not None
+            else None,
+            put_oi=int(selected_row["oi"]),
+            call_strike=0.0,
+            call_instrument_key="",
+            call_price=Decimal("0"),
+            call_spread_pct=None,
+            call_oi=0,
+        ),
+        violation,
     )
 
 
@@ -674,8 +939,29 @@ def main() -> None:
         action="store_true",
         help="Automate CC entry (bypasses YAML config, fetches chain, applies gates).",
     )
+    parser.add_argument(
+        "--auto-pp",
+        action="store_true",
+        help=(
+            "Automate PP entry (bypasses YAML config, fetches chain, applies gates). "
+            "Bootstrap when no put is open; routine-roll gap-fill when the open put "
+            f"has DTE <= {_PP_ROLL_DTE_THRESHOLD}; no-op (exit 0) otherwise."
+        ),
+    )
+    parser.add_argument(
+        "--log-only-gates",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "--auto-pp only: record a below/above-threshold IVR gate as a "
+            "GateViolation and proceed, instead of hard-blocking (default: on, "
+            "matches IC's resolve_ivr pattern)."
+        ),
+    )
     args = parser.parse_args()
     setup_logging()
+
+    gate_violation: GateViolation | None = None
 
     if args.auto_cc:
         # --no-dry-run block lifted 2026-08-02: CC1 (delta ladder), CC2 (delta-band
@@ -686,6 +972,23 @@ def main() -> None:
         if cfg is None:
             print("ERROR: auto-CC bootstrap failed. Check logs.", file=sys.stderr)
             sys.exit(1)
+    elif args.auto_pp:
+        # --no-dry-run unblocked 2026-08-03: PP1 (delta ladder) and PP2 (delta-
+        # targeted entry, monthly cadence decision) have both landed — see
+        # docs/plan/3track-consolidation/tasks.md PP2/PP3.
+        open_dte = _open_pp_dte(args.db_path)
+        if open_dte is not None and open_dte > _PP_ROLL_DTE_THRESHOLD:
+            logger.info("auto_pp.fresh_position_open", dte=open_dte)
+            print(
+                f"SKIPPED: overlay_pp already open at DTE={open_dte} "
+                f"(> {_PP_ROLL_DTE_THRESHOLD}) — nothing to do.",
+                file=sys.stderr,
+            )
+            sys.exit(0)
+        cfg, gate_violation = auto_pp_bootstrap(args.bod_path, log_only_gates=args.log_only_gates)
+        if cfg is None:
+            print("ERROR: auto-PP bootstrap failed. Check logs.", file=sys.stderr)
+            sys.exit(1)
     else:
         cfg = load_overlay_config(args.config)
     store = PaperStore(args.db_path)
@@ -694,6 +997,18 @@ def main() -> None:
     # open. Overlay entry is a one-time bootstrap, never a recurring re-entry.
     primary_role = _PRIMARY_LEG_ROLE[cfg.overlay_type]
     already_bootstrapped = _has_open_overlay_leg(store, primary_role)
+
+    if args.auto_pp:
+        # PP3, 2026-08-03: the generic S6 gate above assumes at most one open
+        # leg ever. PP's routine-roll trigger deliberately holds two puts
+        # briefly — the outgoing (still open, DTE <= _PP_ROLL_DTE_THRESHOLD)
+        # and the fresh one being entered here — to satisfy the "no
+        # unprotected day" requirement. The PP-specific _open_pp_dte gate
+        # above already distinguishes bootstrap/routine-roll from "fresh
+        # position covers, nothing to do" (which exits before reaching this
+        # line), so the generic one-time-bootstrap gate would incorrectly
+        # re-block the routine-roll case here — bypass it for this path only.
+        already_bootstrapped = False
 
     # Idempotency guard for CC overlay entry on paper_nifty_spot track
     if cfg.overlay_type == "cc":
@@ -760,11 +1075,25 @@ def main() -> None:
                             leg=ot.trade.leg_role,
                         )
 
+            if gate_violation is not None:
+                try:
+                    store.record_gate_violation(gate_violation)
+                except Exception as exc:  # non-fatal — a logging gate must never block the trade
+                    logger.warning(
+                        "paper_3track_overlay_entry.gate_violation_record_failed",
+                        error=str(exc),
+                    )
+
             notifier = build_notifier()
             if notifier:
                 lines = [f"🟢 OVERLAY ENTRY — {cfg.overlay_type.upper()} bootstrap"]
                 for ot in overlay_trades:
                     lines.append(f"{ot.leg_role}: {ot.trade.instrument_key} @ ₹{ot.trade.price}")
+                if gate_violation is not None:
+                    lines.append(
+                        f"⚠ Gate logged: {gate_violation.gate_name} "
+                        f"(threshold={gate_violation.threshold}, actual={gate_violation.actual})"
+                    )
                 msg = "\n".join(lines)
                 try:
                     asyncio.run(notifier.send(msg))

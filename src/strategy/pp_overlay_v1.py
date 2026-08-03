@@ -246,6 +246,18 @@ class PPOverlayV1(ReEntryMixin):
             if not any(_leg_close_matches(p, leg) for leg in action.legs_to_close)
         ]
 
+        # ROLL_PP deliberately does NOT call _check_reentry (PP3, investigated
+        # 2026-08-03, confirmed correct-as-is — not the CC3 gap class). The
+        # mixin's DTE gate (>= 14) would be evaluated against closed_pos's
+        # expiry, which by construction has <= 5 DTE remaining whenever
+        # ROLL_ELIGIBLE fires — it would report BLOCKED on every routine roll,
+        # a spam notification with zero information content. ROLL_PP is
+        # contract continuation, not a full exit to a fresh cycle (unlike
+        # MONETIZE_PP, a real crash-triggered exit that may sit flat for
+        # months). The actual reopen for ROLL_PP is handled by
+        # paper_3track_overlay_entry.py's auto_pp_bootstrap() (--auto-pp),
+        # gated on DTE <= 5 to match evaluate_pp's own ROLL_ELIGIBLE threshold
+        # — see docs/plan/3track-consolidation/stories.md PP3.
         if action.action_type == "MONETIZE_PP" and closed_pos is not None:
             expiry = self._parse_expiry(closed_pos.instrument_key)
             await self._check_reentry(

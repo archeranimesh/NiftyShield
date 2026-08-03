@@ -1326,6 +1326,82 @@ Source: this session (Cowork), `docs/plan/3track-consolidation/stories.md` S9. S
 
 ---
 
+### 2026-08-03 — PP3: ROLL_PP re-entry gap investigated (no bug), automated PP entry shipped
+
+**Gap 1 (investigation only, no code change to control flow):** `PPOverlayV1.apply_action`
+calls `_check_reentry` for `MONETIZE_PP` but not `ROLL_PP` — the story flagged this as needing
+investigation before assuming it mirrors CC3's re-entry-gap fix. Traced `ReEntryMixin._check_reentry`:
+its Gate 1 evaluates `(expiry - today).days >= 14` against the position being passed in, and
+`apply_action` passes `closed_pos.instrument_key`'s expiry — which by construction has <= 5 DTE
+remaining whenever `ROLL_ELIGIBLE` fires (that's the trigger condition). Wiring `_check_reentry`
+into the `ROLL_PP` branch would therefore report BLOCKED on every single routine roll, a spam
+notification with zero information content. `ROLL_PP` is contract continuation (the position
+briefly overlaps with its replacement), not a full exit to a fresh cycle like `MONETIZE_PP`
+(a real crash-triggered exit that may sit flat for months) — the story's own framing was
+correct to flag this as possibly-different-from-CC3, and it is. **Resolution: current
+no-op-on-ROLL_PP behavior is correct-as-is.** Documented via a comment in `apply_action`;
+`test_apply_action_roll_pp` (pre-existing) already asserts `_check_reentry` is not called on
+ROLL_PP, so no new test was needed for this half.
+
+**Gap 2 — automated PP entry, implemented.** `auto_pp_bootstrap()` + `_open_pp_dte()` +
+`--auto-pp`/`--log-only-gates` CLI flags added to `paper_3track_overlay_entry.py`, mirroring
+CC3's `auto_cc_bootstrap()` shape. Daily cadence (not CC3's weekly Wednesday), per the PP2
+session's cadence resolution. Two entry triggers, both handled by `_open_pp_dte`'s return value
+in `main()`: no open `overlay_pp` position at all (bootstrap/gap-fill), or DTE <= 5 on the one
+open position (routine roll — matches `evaluate_pp`'s `ROLL_ELIGIBLE` threshold, kept in
+lockstep via the `_PP_ROLL_DTE_THRESHOLD` constant). DTE > 5 is a clean no-op (`sys.exit(0)`,
+`auto_pp_bootstrap` never called).
+
+**No-gap requirement:** the fresh put is entered the same day the DTE <= 5 signal fires — before
+`ROLL_PP`'s own close necessarily lands — so the outgoing and incoming puts are briefly both
+open under the shared `overlay_pp` leg_role. The generic S6 one-time-bootstrap gate
+(`_has_open_overlay_leg`) assumes at most one open leg ever and would incorrectly re-block this
+overlap; it is explicitly bypassed (`already_bootstrapped = False`) only on the `--auto-pp` path,
+after `_open_pp_dte` has already established the entry is warranted.
+
+**IVR gate:** reuses IC's `resolve_ivr`/`GateViolation` log-only-gates pattern
+(`scripts/strategies/ic/ic_entry_gates.py`) rather than inventing a PP-specific bypass, per the
+story's revised design. PP's gate is inverted (blocks when IVR is too HIGH, not too low) —
+`--log-only-gates` (default on) persists `GateViolation(gate_name="ivr_pp_reentry",
+strategy_name=STRATEGY_PP_OVERLAY, threshold="0.6", actual=<ivr>, ...)` and lets entry proceed
+regardless, satisfying the "no unprotected day" requirement even when IV is still elevated
+post-crash. Structural gates (BOD load failure, no monthly expiry, DTE < 14, chain fetch
+failure, no eligible strike) are never gated by `log_only_gates` — they always hard-abort.
+`--no-dry-run` needed no explicit unblock (unlike CC3's historical hard `sys.exit(1)`) — this
+script never had a hard block on live writes for the manual/auto-cc paths either; the module's
+existing `--dry-run`-is-opt-in convention was reused unchanged.
+
+**Verification:** `code-reviewer` subagent pass on the full diff found no CRITICAL/ERROR
+findings. Three WARNINGs, deferred: (1) the `already_bootstrapped = False` override has no
+independent backstop if `_open_pp_dte` itself mis-parses an open position's expiry — a future
+story could add a cross-check against `PaperStore.get_positions` before this goes live off
+`--dry-run`; (2) `_open_pp_dte` treats a transient SQL/regex failure as "flat" (triggers
+bootstrap) rather than fail-safe no-op — same tradeoff CC's existing helpers already make,
+consistent with this file's style, not a regression; (3) `_PP_EXPIRY_RE` duplicates
+`PPOverlayV1._EXPIRY_RE` rather than importing it (deliberate — keeps the script self-contained,
+low drift risk given the lockstep-constant comment).
+
+**Tests:** 9 new tests in `tests/unit/paper/test_overlay_entry.py` (skip-when-fresh, proceed-on-
+bootstrap, proceed-on-routine-roll-with-overlap, bootstrap-failure-exit-1, gate-violation-
+persisted, notify-failure-non-fatal, plus 2 direct `_open_pp_dte` unit tests). Sandbox `/sessions`
+disk was 100% full (`pip install` failed with `OSError: [Errno 28] No space left on device`, same
+class of constraint as the 2026-07-23 BUG-018 and 2026-08-03 PP1/PP1a sessions) — worked around
+by targeting `pip install --target=/tmp/...` (the `/` filesystem, not `/sessions`), same fix the
+PP1/PP1a sessions used earlier today. `tests/unit/paper/test_overlay_entry.py` +
+`tests/unit/strategy/test_pp_overlay_v1.py` — **60 passed, 0 failed** on a live `pytest` run.
+One pre-existing bug found and fixed in the same pass: my own `Edit` call had left a stray
+orphaned `assert "DRY RUN" in captured.out` line (from the original `test_entry_success`'s
+trailing assertion, clipped by an imprecise `old_string` match) dangling after an unrelated new
+test — caught immediately by the `IndentationError` on collection, not a silent bug. Broader
+`tests/unit/paper/` + `tests/unit/strategy/` run shows 93 pre-existing failures unrelated to this
+change — all `pytest-asyncio`-marked tests (`ModuleNotFoundError`/`PytestUnknownMarkWarning`,
+package not installed in this sandbox), matching the documented pre-existing gap in CONTEXT.md's
+test-coverage section, not a regression introduced here.
+
+Source: this session (Cowork), `docs/plan/3track-consolidation/stories.md` PP3.
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty

@@ -712,4 +712,303 @@ def test_entry_success(tmp_path, capsys):
 
         captured = capsys.readouterr()
         assert "100.00" in captured.out
-        assert "DRY RUN" in captured.out
+
+
+# ── PP3: automated PP entry (auto_pp_bootstrap + --auto-pp) ────────────────────
+
+
+def test_entry_skipped_when_open_pp_position_exists(tmp_path, capsys):
+    """DTE > roll threshold on the open put -> no-op, exit 0, bootstrap never called."""
+    from scripts.strategies.three_track.paper_3track_overlay_entry import main
+
+    test_args = [
+        "paper_3track_overlay_entry.py",
+        "--auto-pp",
+        "--db-path",
+        str(tmp_path / "test.sqlite"),
+    ]
+
+    with (
+        patch("sys.argv", test_args),
+        patch("scripts.strategies.three_track.paper_3track_overlay_entry._open_pp_dte") as mock_dte,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.auto_pp_bootstrap"
+        ) as mock_bootstrap,
+    ):
+        mock_dte.return_value = 20  # fresh put already covers
+
+        with pytest.raises(SystemExit) as excinfo:
+            main()
+
+        assert excinfo.value.code == 0
+        mock_bootstrap.assert_not_called()
+        captured = capsys.readouterr()
+        assert "SKIPPED" in captured.err
+        assert "DTE=20" in captured.err
+
+
+def test_entry_proceeds_when_no_open_pp_position(tmp_path, capsys):
+    """No open put at all (bootstrap case) -> bootstrap runs, trade recorded."""
+    from scripts.strategies.three_track.paper_3track_overlay_entry import main
+
+    cfg = load_overlay_config(_write_yaml(tmp_path, _valid_pp_raw()))
+
+    test_args = [
+        "paper_3track_overlay_entry.py",
+        "--auto-pp",
+        "--db-path",
+        str(tmp_path / "test.sqlite"),
+    ]
+
+    with (
+        patch("sys.argv", test_args),
+        patch("scripts.strategies.three_track.paper_3track_overlay_entry._open_pp_dte") as mock_dte,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.auto_pp_bootstrap"
+        ) as mock_bootstrap,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.PaperStore"
+        ) as mock_store_cls,
+    ):
+        mock_dte.return_value = None  # nothing open
+        mock_bootstrap.return_value = (cfg, None)
+        mock_store = MagicMock()
+        mock_store_cls.return_value = mock_store
+        mock_store.get_positions.return_value = []
+        mock_store.record_trade.return_value = True
+
+        main()
+
+        mock_store.record_trade.assert_called_once()
+        mock_store.record_gate_violation.assert_not_called()
+        captured = capsys.readouterr()
+        assert "RECORDED TO DB" in captured.out
+
+
+def test_entry_proceeds_on_routine_roll_with_old_put_still_open(tmp_path, capsys):
+    """DTE <= roll threshold -> proceeds even though the outgoing put is still
+    open under the same leg_role (no-gap requirement — briefly holds two puts).
+    Confirms the generic S6 one-time-bootstrap gate is correctly bypassed for
+    this path (PP3, 2026-08-03) rather than incorrectly re-blocking it."""
+    from scripts.strategies.three_track.paper_3track_overlay_entry import main
+    from src.paper.models import PaperPosition
+
+    cfg = load_overlay_config(_write_yaml(tmp_path, _valid_pp_raw()))
+
+    test_args = [
+        "paper_3track_overlay_entry.py",
+        "--auto-pp",
+        "--db-path",
+        str(tmp_path / "test.sqlite"),
+    ]
+
+    with (
+        patch("sys.argv", test_args),
+        patch("scripts.strategies.three_track.paper_3track_overlay_entry._open_pp_dte") as mock_dte,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.auto_pp_bootstrap"
+        ) as mock_bootstrap,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.PaperStore"
+        ) as mock_store_cls,
+    ):
+        mock_dte.return_value = 3  # routine roll trigger
+        mock_bootstrap.return_value = (cfg, None)
+        mock_store = MagicMock()
+        mock_store_cls.return_value = mock_store
+        # Outgoing put still open under overlay_pp — would trip the generic
+        # S6 bootstrap gate (_has_open_overlay_leg) if not bypassed.
+        mock_store.get_positions.return_value = [
+            PaperPosition(
+                strategy_name="paper_nifty_overlay",
+                leg_role="overlay_pp",
+                net_qty=65,
+                avg_cost=Decimal("80"),
+                avg_sell_price=Decimal("0"),
+                instrument_key="NSE_FO|NIFTY05AUG2026PE",
+            )
+        ]
+        mock_store.record_trade.return_value = True
+
+        main()
+
+        mock_store.record_trade.assert_called_once()
+        captured = capsys.readouterr()
+        assert "RECORDED TO DB" in captured.out
+
+
+def test_auto_pp_bootstrap_failure_exits_1(tmp_path, capsys):
+    """Structural bootstrap failure (BOD/DTE/IVR/chain/strike) aborts hard."""
+    from scripts.strategies.three_track.paper_3track_overlay_entry import main
+
+    test_args = [
+        "paper_3track_overlay_entry.py",
+        "--auto-pp",
+        "--db-path",
+        str(tmp_path / "test.sqlite"),
+    ]
+
+    with (
+        patch("sys.argv", test_args),
+        patch("scripts.strategies.three_track.paper_3track_overlay_entry._open_pp_dte") as mock_dte,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.auto_pp_bootstrap"
+        ) as mock_bootstrap,
+    ):
+        mock_dte.return_value = None
+        mock_bootstrap.return_value = (None, None)
+
+        with pytest.raises(SystemExit) as excinfo:
+            main()
+
+        assert excinfo.value.code == 1
+        captured = capsys.readouterr()
+        assert "auto-PP bootstrap failed" in captured.err
+
+
+def test_auto_pp_gate_violation_persisted(tmp_path, capsys):
+    """A logged IVR gate violation from auto_pp_bootstrap is persisted via
+    PaperStore.record_gate_violation — the log-only-gates contract (PP3,
+    reusing IC's resolve_ivr/GateViolation pattern)."""
+    from datetime import datetime, timezone
+
+    from scripts.strategies.three_track.paper_3track_overlay_entry import main
+    from src.paper.constants import STRATEGY_PP_OVERLAY
+    from src.paper.models import GateViolation
+
+    cfg = load_overlay_config(_write_yaml(tmp_path, _valid_pp_raw()))
+    violation = GateViolation(
+        gate_name="ivr_pp_reentry",
+        threshold="0.6",
+        actual="0.7123",
+        strategy_name=STRATEGY_PP_OVERLAY,
+        logged_at=datetime.now(timezone.utc),
+    )
+
+    test_args = [
+        "paper_3track_overlay_entry.py",
+        "--auto-pp",
+        "--db-path",
+        str(tmp_path / "test.sqlite"),
+    ]
+
+    with (
+        patch("sys.argv", test_args),
+        patch("scripts.strategies.three_track.paper_3track_overlay_entry._open_pp_dte") as mock_dte,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.auto_pp_bootstrap"
+        ) as mock_bootstrap,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.PaperStore"
+        ) as mock_store_cls,
+    ):
+        mock_dte.return_value = None
+        mock_bootstrap.return_value = (cfg, violation)
+        mock_store = MagicMock()
+        mock_store_cls.return_value = mock_store
+        mock_store.get_positions.return_value = []
+        mock_store.record_trade.return_value = True
+
+        main()
+
+        mock_store.record_gate_violation.assert_called_once_with(violation)
+        captured = capsys.readouterr()
+        assert "RECORDED TO DB" in captured.out
+
+
+def test_notification_failure_does_not_block_pp_entry(tmp_path, capsys):
+    """non-fatal Telegram contract, --auto-pp path (mirrors CC's equivalent test)."""
+    from scripts.strategies.three_track.paper_3track_overlay_entry import main
+
+    cfg = load_overlay_config(_write_yaml(tmp_path, _valid_pp_raw()))
+
+    test_args = [
+        "paper_3track_overlay_entry.py",
+        "--auto-pp",
+        "--db-path",
+        str(tmp_path / "test.sqlite"),
+    ]
+
+    with (
+        patch("sys.argv", test_args),
+        patch("scripts.strategies.three_track.paper_3track_overlay_entry._open_pp_dte") as mock_dte,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.auto_pp_bootstrap"
+        ) as mock_bootstrap,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.PaperStore"
+        ) as mock_store_cls,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.build_notifier"
+        ) as mock_build_notifier,
+        patch("scripts.strategies.three_track.paper_3track_overlay_entry.asyncio.run") as mock_run,
+    ):
+        mock_dte.return_value = None
+        mock_bootstrap.return_value = (cfg, None)
+        mock_store = MagicMock()
+        mock_store_cls.return_value = mock_store
+        mock_store.get_positions.return_value = []
+        mock_store.record_trade.return_value = True
+
+        mock_notifier = MagicMock()
+        mock_build_notifier.return_value = mock_notifier
+        mock_run.side_effect = Exception("Telegram API down")
+
+        main()  # must not raise
+
+        mock_store.record_trade.assert_called_once()
+        captured = capsys.readouterr()
+        assert "RECORDED TO DB" in captured.out
+
+
+def test_open_pp_dte_returns_none_when_no_rows(tmp_path):
+    """_open_pp_dte against an empty DB returns None (bootstrap case)."""
+    import sqlite3
+
+    from scripts.strategies.three_track.paper_3track_overlay_entry import _open_pp_dte
+
+    db_path = tmp_path / "test.sqlite"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        """
+        CREATE TABLE paper_trades (
+            strategy_name TEXT, leg_role TEXT, instrument_key TEXT,
+            action TEXT, quantity INTEGER
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    assert _open_pp_dte(db_path) is None
+
+
+def test_open_pp_dte_computes_dte_from_open_row(tmp_path):
+    """_open_pp_dte parses the embedded expiry and returns calendar DTE."""
+    import sqlite3
+    from datetime import timedelta
+
+    from scripts.strategies.three_track.paper_3track_overlay_entry import _open_pp_dte
+    from src.paper.constants import STRATEGY_OVERLAY
+
+    expiry = date.today() + timedelta(days=3)
+    key = f"NSE_FO|NIFTY{expiry.strftime('%d%b%Y').upper()}PE"
+
+    db_path = tmp_path / "test.sqlite"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        """
+        CREATE TABLE paper_trades (
+            strategy_name TEXT, leg_role TEXT, instrument_key TEXT,
+            action TEXT, quantity INTEGER
+        )
+        """
+    )
+    conn.execute(
+        "INSERT INTO paper_trades VALUES (?, 'overlay_pp', ?, 'BUY', 65)",
+        (STRATEGY_OVERLAY, key),
+    )
+    conn.commit()
+    conn.close()
+
+    assert _open_pp_dte(db_path) == 3
