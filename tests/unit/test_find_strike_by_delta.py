@@ -67,6 +67,12 @@ _select_delta_candidates (PP1)
  40  test_csp_ladder_unchanged_for_pe_without_overlay_flag       bare PE (CSP's shape) untouched — regression guard
  41  test_pe_without_overlay_flag_does_not_silently_pick_pp_ladder  PE alone must never imply PP
  42  test_cc_overlay_type_is_a_noop_for_ce                        --overlay-type cc doesn't change CE's ladder
+
+_resolve_action (PP1a)
+ 43  test_resolve_action_defaults_buy_for_pp_strategy            PP + action=None → "BUY"
+ 44  test_resolve_action_rejects_explicit_sell_for_pp_strategy   PP + action="SELL" → raises ValueError
+ 45  test_resolve_action_unchanged_for_non_pp_strategies          non-PP strategies keep SELL default / explicit override
+ 46  test_resolve_action_explicit_buy_for_pp_is_a_noop            PP + action="BUY" → "BUY" (no error)
 """
 
 from __future__ import annotations
@@ -86,6 +92,7 @@ from scripts.lookup.find_strike_by_delta import (
     PP_DELTA_CANDIDATES,
     _infer_leg,
     _reorder_cc_round500_first,
+    _resolve_action,
     _safe_float,
     _select_delta_candidates,
     build_record_command,
@@ -93,6 +100,7 @@ from scripts.lookup.find_strike_by_delta import (
     format_table,
     rank_strikes,
 )
+from src.paper.constants import STRATEGY_PP_OVERLAY
 
 # ── Fixture loading ───────────────────────────────────────────────────────────
 
@@ -507,6 +515,32 @@ def test_pe_without_overlay_flag_does_not_silently_pick_pp_ladder() -> None:
     """
     assert _select_delta_candidates("PE") != PP_DELTA_CANDIDATES
     assert _select_delta_candidates("PE", overlay_type="cc") == DELTA_CANDIDATES
+
+
+# ── _resolve_action (PP1a) ──────────────────────────────────────────────────────
+
+
+def test_resolve_action_defaults_buy_for_pp_strategy() -> None:
+    assert _resolve_action(STRATEGY_PP_OVERLAY, None) == "BUY"
+
+
+def test_resolve_action_rejects_explicit_sell_for_pp_strategy() -> None:
+    with pytest.raises(ValueError, match="SELL"):
+        _resolve_action(STRATEGY_PP_OVERLAY, "SELL")
+
+
+def test_resolve_action_unchanged_for_non_pp_strategies() -> None:
+    """Regression guard: non-PP strategies keep the existing SELL default when
+    action=None, and still accept an explicit BUY/SELL override.
+    """
+    assert _resolve_action("paper_csp_nifty_v1", None) == "SELL"
+    assert _resolve_action("paper_csp_nifty_v1", "SELL") == "SELL"
+    assert _resolve_action("paper_csp_nifty_v1", "BUY") == "BUY"
+    assert _resolve_action("paper_nifty_overlay", None) == "SELL"
+
+
+def test_resolve_action_explicit_buy_for_pp_is_a_noop() -> None:
+    assert _resolve_action(STRATEGY_PP_OVERLAY, "BUY") == "BUY"
 
 
 def test_cc_overlay_type_is_a_noop_for_ce() -> None:

@@ -51,7 +51,7 @@ from src.instruments.strike_selector import (
     filter_strikes_by_delta,
     rank_strikes,
 )
-from src.paper.constants import LOT_SIZE, STRATEGY_CSP
+from src.paper.constants import LOT_SIZE, STRATEGY_CSP, STRATEGY_PP_OVERLAY
 
 _SCRIPT_NAME = "scripts.lookup.find_strike_by_delta"
 logger = structlog.get_logger(_SCRIPT_NAME)
@@ -159,6 +159,37 @@ def _select_delta_candidates(option_type: str, overlay_type: str | None = None) 
 
 
 # ── Data helpers ──────────────────────────────────────────────────────────────
+
+
+def _resolve_action(strategy: str, action: str | None) -> str:
+    """Resolve the effective trade action, enforcing PP's long-only direction.
+
+    Protective put (``STRATEGY_PP_OVERLAY``) is a protection-buying strategy — recording
+    a ``SELL`` under it would be a naked short put booked under a name that implies
+    protection, not a delta mismatch (PP1a, 3track-consolidation). PP must always
+    resolve to ``BUY``, whether by omission (the confirmed 2026-07-28 bug) or by an
+    explicit ``--action SELL`` override, which is treated as a hard error rather than
+    silently corrected.
+
+    Args:
+        strategy: Resolved ``--strategy`` value (after any ``--track`` shortcut).
+        action: Raw ``--action`` value, or ``None`` if the flag was omitted.
+
+    Returns:
+        ``"BUY"`` or ``"SELL"``.
+
+    Raises:
+        ValueError: If ``strategy`` is ``STRATEGY_PP_OVERLAY`` and ``action`` is
+            explicitly ``"SELL"``.
+    """
+    if strategy == STRATEGY_PP_OVERLAY:
+        if action == "SELL":
+            raise ValueError(
+                f"--action SELL is not valid for {STRATEGY_PP_OVERLAY!r} — "
+                "protective put is a long-put strategy; use --action BUY (or omit --action)."
+            )
+        return "BUY"
+    return action if action is not None else "SELL"
 
 
 def _infer_leg(option_type: str, action: str) -> str:
@@ -391,8 +422,11 @@ def _parse_args() -> argparse.Namespace:
     dry_grp.add_argument(
         "--action",
         choices=["BUY", "SELL"],
-        default="SELL",
-        help="Trade action. Default: SELL.",
+        default=None,
+        help=(
+            "Trade action. Default: SELL (BUY, non-overridable, for "
+            f"{STRATEGY_PP_OVERLAY!r})."
+        ),
     )
     dry_grp.add_argument(
         "--date",
@@ -419,6 +453,12 @@ def main() -> None:
 
     if args.track:
         args.strategy = f"paper_nifty_{args.track}"
+
+    try:
+        args.action = _resolve_action(args.strategy, args.action)
+    except ValueError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        sys.exit(1)
 
     if args.delta_min < 0 or args.delta_max < 0:
         print(
