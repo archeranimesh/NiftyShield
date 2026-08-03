@@ -35,6 +35,24 @@
   `pre-commit` was not installed in this sandbox session; committed with `--no-verify` since the
   equivalent checks (tests, review) had already run manually. SHA: `0f1b924`.
 
+- [2026-08-03] 3-Track Consolidation **PP2 resolved + PP3 cadence resolved + PP4 opened** —
+  docs-only session (Cowork), no code changed. PP2: operator decision, 0.15 delta / monthly
+  cadence for PP entry, backed by a live chain pull (`logs/pp_option.log`) and a 26-year Nifty
+  monthly-return frequency analysis (single-month declines ≥5% occur ~1.4×/year) the operator
+  supplied. Quarterly cadence rejected on a concrete finding (a 5%-in-a-quarter move leaves the
+  quarterly-equivalent strike still OTM/worthless; the monthly-equivalent strike nets ≈₹27k/lot
+  on the same move). PP3: cadence question (previously open) resolved in the same pass — daily
+  check, same-day roll re-entry (no close-then-wait gap), unconditional IVR-gate bypass scoped
+  to the routine `ROLL_PP` path only, driven by the operator's explicit "no unprotected day"
+  constraint; PP3's implementation itself remains unchecked/unimplemented. PP4 (new): surfaced,
+  not resolved — `CRASH_MONETIZE`'s re-entry attempt can be blocked by PP's inverted IVR gate
+  exactly when a crash is elevating IV, risking extended unprotected exposure across a
+  multi-month decline; flagged as clearing CLAUDE.md's three-condition council test, council
+  question drafted, not run this session. Files touched: `docs/plan/3track-consolidation/
+  tasks.md`, `stories.md`, `DECISIONS.md` (this file). No code-reviewer gate — docs/config only,
+  no `.py` files in the diff. No SHA — not committed from this Cowork session (operator commits
+  locally); see `DECISIONS.md`'s PP2/PP3/PP4 entries (2026-08-03) for full detail.
+
 ## Session Log — 2026-08-02
 
 - [2026-08-02] 3-Track Consolidation **CC5** — pointer/dependency-visibility task closed, no

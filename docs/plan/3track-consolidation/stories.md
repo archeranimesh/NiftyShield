@@ -861,6 +861,51 @@ provisional, `reentry_script_hint` stays pointed at the %OTM tool.
 
 ---
 
+**RESOLVED (2026-08-03, direct operator decision, no council pass despite the council-checkpoint
+recommendation above):** 0.15 delta, monthly cadence. Operator reviewed a live chain pull
+(`logs/pp_option.log`, spot ₹24,562.10) cross-referencing PP1's whole ladder (0.15/0.20/0.25 →
+strikes 23,800/24,100/24,200, premiums ₹49.35/87.05/105.85). 0.20-0.25 rejected as pricing PP
+closer to a recurring-strangle cost than insurance (7-10x the current ~9%-OTM premium annually);
+current 9% OTM rejected as functionally decorative for this book (≈0.03 delta, priced to almost
+never pay — fine for pure black-swan cover, not fit for purpose when PP's actual job is protecting
+a pledged-collateral margin cushion that gets stressed well before crash-level moves).
+
+**Quarterly cadence explicitly rejected, not just deprioritized** — evaluated head-to-head against
+a quarterly-equivalent candidate (23,300 strike, 5.1% OTM, ₹71.25, `NSE_FO|73924`, delta -0.1135).
+A 5%-in-one-quarter move lands spot at 23,334 — *above* the 23,300 strike — so the quarterly put
+would expire worthless while the monthly 23,800-strike put nets ≈₹27k/lot on the identical 5% move
+inside a single month. Quarterly cadence structurally under-protects against a real but partial
+intra-period drawdown that recovers before the (infrequent) roll date; monthly re-pricing doesn't
+have that blind spot. Annual cost comparison (₹38,493 monthly-12x vs. ₹18,525 quarterly-4x) was
+explicitly not the deciding factor — the quarterly plan's cheapness reflects doing the job less
+often, not doing it more efficiently.
+
+**Empirical grounding (operator-supplied data, not requested by Claude but decisive in framing the
+cost):** 26 years of Nifty monthly returns (2000–2026 YTD, 307 months) show single-month declines
+≥5% occurred 36 times (~11.7%, ~1.4×/year), ≥10% ten times (~once/2.6yr), ≥15% six times
+(~once/4.3yr), ≥20% twice (2008, 2020 — ~once/13yr). This confirms a 3.1%-OTM monthly put sits
+below a recurring, not rare, event threshold — the ≈₹38,493/year premium is better understood as
+budgeted annual insurance against an expected event, not tail-cover premium that's "supposed to"
+mostly expire worthless.
+
+**Companion items surfaced, not resolved here:**
+1. `CRASH_MONETIZE`'s delta ≤ -0.80 threshold was calibrated against whatever entry delta the old
+   ~9%-OTM (≈0.03 delta) approach produced; a 0.15-delta entry reaches -0.80 on a materially
+   smaller move. Whether/how to recalibrate is folded into **PP4** below, not decided here.
+2. PP3's cadence question (was open, "confirm with operator") is now resolved as part of this
+   discussion, not deferred to PP3's own session — see PP3's updated spec below and its
+   `tasks.md` entry: daily check, same-day roll re-entry, unconditional IVR-gate bypass for the
+   routine `ROLL_PP` path specifically (does not extend to `MONETIZE_PP`-triggered re-entry, see
+   PP4).
+
+**Action:** `PP_DELTA_CANDIDATES`'s inline comment: provisional → confirmed (0.15). No code
+change beyond the comment — PP1 already shipped the ladder values as-is.
+
+**Full analysis trail:** conversation-derived, not a separate doc — key numbers reproduced above
+so this resolution is self-contained without needing to replay the session.
+
+---
+
 ## PP3 — Fix silent re-entry gap on ROLL_PP + automated PP entry script + cron
 
 **Context (2026-07-28, same "I only get notified" directive that drove CC3):** Two independent
@@ -891,12 +936,25 @@ before recording — today's only related check, `_query_open_call_roles`, doesn
 and a wrapper/fold-in step invoking strike selection (PP1's tool, or the existing %OTM tool
 pending PP2) before recording, matching CC3's two-step-to-one-step consolidation.
 
-**Cron cadence differs from CC3 — do not copy Wednesday-after-expiry verbatim.** PP is
-protection against a drawdown, not a premium-collection cycle tied to expiry — confirm with the
-operator what the actual re-entry trigger condition should be (e.g., "no open PP position and
-IVR gate passes" checked daily off the existing snapshot cron, closer to S5's roll-check cadence
-than CC3's weekly-with-idempotency-guard pattern) before picking a schedule. Flag this as an
-open question rather than assuming IC/CC's Wednesday cadence transfers.
+**Cron cadence — RESOLVED 2026-08-03, folded in from the PP2 decision session, not deferred to
+this story's own start:** daily check (not CC3's weekly Wednesday cron), off the existing snapshot
+cron, against two conditions — no open `protective_put`/`LONG_PUT_ROLES` position at all
+(bootstrap/gap-fill case), or an existing position with DTE ≤ 5 (routine roll trigger, matches
+`evaluate_pp`'s existing `ROLL_ELIGIBLE` threshold so the entry script's own idempotency check
+and the exit-signal engine's roll trigger stay in lockstep).
+
+**No-gap requirement — RESOLVED same session, this is now a hard design constraint, not an
+open question:** the replacement put must be bought the **same day** the DTE≤5 signal fires, not
+after the outgoing put expires — this means briefly holding two puts (outgoing, ≤5 DTE remaining,
+and the fresh one) rather than a window with zero protection. Operator was explicit: "i do not
+want unprotected day." **The routine `ROLL_PP` re-entry must bypass PP's IVR gate unconditionally**
+— a roll is coverage continuity the operator already committed to, not a new discretionary
+purchase, and blocking renewal on elevated IVR would refuse protection exactly when volatility
+(and plausibly the need for protection) is highest. This bypass is scoped **only** to the
+`ROLL_PP`/routine-roll path — `MONETIZE_PP`-triggered re-entry (crash cash-out) keeps the existing
+IVR gate as-is; whether *that* gate should also be relaxed is a materially different, higher-stakes
+question spun into its own story, **PP4** (council checkpoint applies there, not here — this
+routine-roll fix was judged simple enough for direct resolution, same tier as PP2/CC2/CC4).
 
 **Files to change:**
 - `src/strategy/pp_overlay_v1.py` — resolve and fix Gap 1 per the investigation above
@@ -931,6 +989,74 @@ Gap 1's fix does not depend on PP1/PP2 and can ship independently/first.
 - `test_dry_run_default_until_pp1_pp2_resolved`
 
 **Commit:** `fix(strategy): resolve PP re-entry gap + automated PP entry, guarded by open-position check`
+
+---
+
+## PP4 — Open decision: CRASH_MONETIZE re-entry continuity gap under PP's inverted IVR gate
+
+**Context (surfaced 2026-08-03, during the PP2/PP3 decision session, not a pre-planned story):**
+Confirmed via code read (`src/strategy/pp_overlay_v1.py::apply_action`, `exit_signals.py::evaluate_pp`):
+`CRASH_MONETIZE` (delta ≤ -0.80 OR value ≥ 5× entry debit) is an ACTION-severity signal that
+auto-closes the position and immediately calls `_check_reentry`. `_check_reentry` runs
+`_ivr_passes`, and PP overrides this to be **inverted** relative to CSP/CC — it blocks re-entry
+when IVR is *elevated* (`reentry_ivr_threshold = 0.60`), on the reasoning that you shouldn't
+overpay for protection when volatility is already rich.
+
+That reasoning is sound for an isolated vol spike, but breaks down across an **extended** decline.
+IV is typically elevated precisely because the crash that just triggered `CRASH_MONETIZE` is still
+in progress — so the gate is most likely to block re-entry at the exact moment the book has just
+been left unprotected by design. Reference case: 2008 had six separate single-month declines ≥5%
+across ten months (Jan −16.31%, Mar −9.36%, May −5.73%, Jun −17.03%, Sep −10.06%, Oct −26.41% —
+see PP2's empirical table). A `CRASH_MONETIZE` triggered early in a decline of that shape, followed
+by an IVR-blocked re-entry, could leave the book naked through several subsequent down-months.
+
+**Distinct from PP3's routine-roll fix, which is already settled and unconditional:** PP3's IVR
+bypass applies only to `ROLL_PP` (maintenance of a position already committed to, no discretion
+involved). PP4 is about `MONETIZE_PP`-triggered re-entry specifically — a case where the operator
+already realized a gain and is making a fresh, discretionary decision to re-arm. Overriding the
+gate here trades away its original purpose (don't buy protection when vol is priced rich) against
+coverage-continuity risk. That tradeoff is real in both directions and is exactly why this is a
+council-checkpoint item, unlike PP3's roll fix.
+
+**Also folds in, rather than spinning out separately:** whether `CRASH_MONETIZE`'s
+delta ≤ -0.80 threshold itself needs recalibration now that PP2 moved entry to 0.15 delta. The
+threshold was never explicitly calibrated against any specific entry delta, but a put entered
+closer to the money reaches -0.80 on a smaller underlying move than one entered far OTM — worth
+resolving in the same pass since both bear on "how does PP behave once a crash is already
+underway."
+
+**Council checkpoint applies** — clears all three of CLAUDE.md Step 2b's conditions: (1)
+load-bearing, costly to reverse — this is the only downside protection in the pipeline and the
+failure mode is "unprotected mid-crash," not a cosmetic issue; (2) genuinely multiple defensible
+approaches — full IVR-gate bypass post-`CRASH_MONETIZE` (mirrors PP3's roll fix), a time-boxed
+override (bypass only for N days post-crash-close, then gate resumes), a separate elevated-
+tolerance re-entry threshold specific to this path (e.g. IVR ≤ 0.80 instead of 0.60 for
+post-monetize re-entry only), or recalibrating `CRASH_MONETIZE`'s delta threshold instead of or
+alongside a gate change; (3) spans strategy design, NSE crash-microstructure (deep-ITM put
+liquidity/spread behavior during a crash — relevant to whether re-entry can even fill cleanly),
+and risk/capital management simultaneously. Recommend template `strategy_parameters`. Draft
+question:
+
+> "PPOverlayV1's `CRASH_MONETIZE` signal (delta ≤ -0.80 or value ≥ 5× entry debit) auto-closes and
+> immediately attempts re-entry, gated by an inverted IVR check that blocks re-entry when IVR is
+> elevated. Because crashes elevate IV, this gate is most likely to block re-entry exactly when the
+> book has just been left without protection, risking extended unprotected exposure across a
+> multi-month decline (2008-style). Should this re-entry path bypass the IVR gate (fully, or with
+> a time-boxed/threshold-relaxed variant), and separately, should `CRASH_MONETIZE`'s delta ≤ -0.80
+> threshold be recalibrated given PP2 moved entry to 0.15 delta (closer to the money than the
+> ~0.03-delta entry the threshold was implicitly tuned against)? Note this is a narrower, path-
+> specific question than PP3's roll-cadence fix (already resolved, unconditional bypass) — don't
+> reuse that answer by analogy, the discretionary-vs-maintenance distinction is the crux here."
+
+**Until answered:** `CRASH_MONETIZE` ships unchanged — immediate full close, existing IVR-gated
+re-entry attempt. The gap is documented (this story, plus the `tasks.md` PP4 entry), not fixed.
+
+**Depends on:** none structurally to start the council process, but reasons about both PP2
+(entry delta, resolved) and PP3 (routine-roll re-entry design, resolved) — sequence after both.
+
+**Commit:** none — decision-gate note, same as PP2. Resolve via council, then update
+`DECISIONS.md`, `evaluate_pp`'s threshold (if recalibrated), and `PPOverlayV1._ivr_passes`
+call-site behavior for the `MONETIZE_PP` path (if bypass/relaxation chosen).
 
 ---
 

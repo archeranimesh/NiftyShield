@@ -5,6 +5,75 @@
 
 ---
 
+**PP2 resolved — PP entry moves to 0.15 delta, monthly cadence (2026-08-03, direct operator
+decision, no council pass despite the story's council-checkpoint recommendation):** Closes the
+entry-delta-band decision gate that had gated `PP_DELTA_CANDIDATES` (`scripts/lookup/
+find_strike_by_delta.py`) provisional → live since PP1 shipped. Decided via a live chain pull
+(`logs/pp_option.log`, spot ₹24,562.10) rather than picked blind: 0.15 delta → strike 23,800
+(3.1% OTM, ₹49.35, `NSE_FO|61535`). 0.20/0.25 rejected as pricing PP like a recurring strangle
+(7-10x current ~9%-OTM cost) rather than insurance; current 9% OTM (≈0.03 delta) rejected as
+functionally decorative for a book whose PP job is margin-cushion protection, not pure black-swan
+cover. **Quarterly cadence rejected on a concrete, not preferential, basis:** head-to-head against
+a quarterly-equivalent candidate (23,300 strike, 5.1% OTM, ₹71.25, `NSE_FO|73924`), a 5%-in-a-
+quarter move lands spot at 23,334 — above the 23,300 strike, put expires worthless — while the
+monthly 23,800-strike put nets ≈₹27k/lot on the identical 5% move inside one month; quarterly
+cadence structurally under-protects against a real, partial intra-period drawdown that recovers
+before the (infrequent) roll date. Cheaper annual cost (₹18,525 quarterly-4x vs. ₹38,493
+monthly-12x) was explicitly not the deciding factor. **Empirical grounding:** operator supplied 26
+years of Nifty monthly returns (2000–2026 YTD, 307 months); single-month declines ≥5% occurred 36
+times (~11.7%, ~1.4×/year), ≥10% ten times (~once/2.6yr), ≥15% six times (~once/4.3yr), ≥20% twice
+(2008, 2020, ~once/13yr) — confirms 3.1% OTM sits below a recurring event threshold, reframing the
+≈₹38,493/year premium as budgeted annual insurance, not lottery-ticket tail cover. `PP_DELTA_
+CANDIDATES`'s 0.15 comment updated provisional → confirmed; no other code change (PP1 already
+shipped the ladder values). **Two items surfaced but deliberately not resolved in this same pass:**
+(1) `CRASH_MONETIZE`'s delta ≤ -0.80 threshold was calibrated against the old ~0.03-delta entry and
+likely needs re-examination now that entry is 0.15 delta — folded into PP4 (below), not decided
+here; (2) PP3's cadence question (previously open) was resolved in this same session, not deferred
+— see the PP3 entry directly below. Full spec: `docs/plan/3track-consolidation/stories.md` PP2
+(resolved); `tasks.md` PP2 ticked, no SHA (decision-gate, not a code commit).
+
+**PP3 cadence/no-gap design resolved (2026-08-03, direct operator decision, no council pass):**
+Folded into the same session as PP2 rather than deferred to PP3's own implementation start,
+driven directly by the operator's stated constraint: "i do not want unprotected day." Resolves
+PP3's previously-open cadence question. **Cadence:** daily check (not CC3's weekly Wednesday
+cron) off the existing snapshot cron, against two conditions — no open `protective_put`/
+`LONG_PUT_ROLES` position at all (bootstrap/gap-fill), or an existing position at DTE ≤ 5
+(matches `evaluate_pp`'s existing `ROLL_ELIGIBLE` threshold, keeping the entry script's
+idempotency check and the exit-signal engine's roll trigger in lockstep). **No-gap requirement:**
+the replacement put must enter the **same day** the DTE≤5 signal fires — briefly holding two
+puts (outgoing, ≤5 DTE remaining, plus the fresh one) rather than any window with zero coverage.
+**IVR-gate bypass, scoped narrowly:** the routine `ROLL_PP` re-entry must bypass PP's inverted
+IVR gate unconditionally — a roll is coverage continuity already committed to, not a new
+discretionary purchase, and blocking renewal on elevated IVR would refuse protection exactly when
+volatility (and plausibly the need for it) is highest. This bypass applies **only** to the
+`ROLL_PP`/routine-roll path; `MONETIZE_PP`-triggered re-entry (crash cash-out) keeps the existing
+gate as-is — that path is materially different (discretionary re-arm after a realized gain, not
+maintenance) and is spun into its own council-gated story, PP4, rather than resolved here.
+Implementation (idempotency guard, same-day entry wiring, gate bypass) is still open — this
+entry records the design decision only, no code shipped yet. Full spec: `docs/plan/
+3track-consolidation/stories.md` PP3 (updated); `tasks.md` PP3 (not yet ticked — implementation
+still pending).
+
+**PP4 opened — CRASH_MONETIZE re-entry continuity gap under extended drawdowns, council
+checkpoint applies (2026-08-03, surfaced during the PP2/PP3 session, not resolved):** Confirmed
+via code read that `CRASH_MONETIZE` (delta ≤ -0.80 or value ≥ 5× entry) auto-closes and
+immediately attempts `_check_reentry`, gated by PP's inverted IVR check (blocks re-entry when IVR
+is elevated). Because IV is typically elevated precisely because a crash is in progress, this gate
+is most likely to block re-entry exactly when the book has just been left unprotected — risking
+extended naked exposure across a multi-month decline (2008 reference: six separate ≥5% single-
+month declines across ten months, per PP2's empirical table). Distinct from PP3's roll fix (settled,
+unconditional bypass, maintenance-not-discretion) — PP4 concerns the discretionary re-entry after a
+realized crash gain, where bypassing the gate trades away its original purpose against coverage-
+continuity risk; also folds in whether `CRASH_MONETIZE`'s delta ≤ -0.80 threshold needs
+recalibration now that PP2 moved entry to 0.15 delta. Clears CLAUDE.md Step 2b's three-condition
+council test (load-bearing, multiple defensible approaches, spans strategy design + crash
+microstructure + risk management) — **not resolved by direct operator call**, unlike PP2/PP3;
+council question drafted in `stories.md` PP4, template `strategy_parameters`. Until resolved,
+`CRASH_MONETIZE` ships unchanged. Full spec: `docs/plan/3track-consolidation/stories.md` PP4
+(new); `tasks.md` PP4 (new, unchecked).
+
+---
+
 **EOD P&L table: `paper_nifty_overlay` split into one row per overlay type, Collar's two legs unified (2026-08-02, direct operator decision, no council pass):** Operator asked whether CC's individual daily P&L would be visible once it starts trading — it wouldn't have been, since `paper_nifty_overlay` is one blended row covering CC/PP/Collar together. Two groupings were offered: per-`leg_role` (up to 4 rows, since Collar is stored as two separate leg_roles — `overlay_collar_call` + `overlay_collar_put`) or per-overlay-type (max 3 rows, Collar's two legs summed into one). Operator chose per-overlay-type: "the whole idea is to trade both legs together, why keep it separate" — Collar is always entered/exited as a pair, so a split view would misrepresent it as two independent positions. Implementation: `PaperTracker.compute_pnl_by_leg_group()` (`src/paper/tracker.py`) reuses the existing `_compute_realized_pnl_by_leg` helper and the existing per-position unrealized calc, and groups by `OVERLAY_LABELS` (`src/paper/_display.py`, pre-existing dict already mapping both collar leg_roles to `"Collar"` — no new mapping needed). `scripts/portfolio/paper_snapshot.py` calls this new method instead of `compute_pnl` only for `STRATEGY_OVERLAY`; every other strategy's single-row behavior is unchanged. Persistence is untouched — `record_daily_snapshot` still writes one blended row to `paper_nav_snapshots`; only the printed EOD table changed. Tests: `tests/unit/paper/test_tracker.py` (Collar-unification arithmetic traced by hand — SELL 65@50→30 + BUY 65@80→95 = ₹2,275 combined unrealized; no-trades edge case; a fully-closed leg with realized-only P&L doesn't get silently dropped from the union of open/closed leg_roles) and `tests/unit/paper/test_paper_snapshot.py` (overlay strategy splits into `paper_nifty_overlay / CC` + `/ Collar` rows in the same run a non-overlay strategy prints normally; an overlay strategy with zero open legs is skipped cleanly). All 29 tests green on a live-host-equivalent scratch install this session. Reviewed via a `general-purpose` agent standing in for `@code-reviewer` (no such agent type registered in this Cowork session) — no CRITICAL/ERROR; one coverage gap flagged (the closed-leg-with-realized-only scenario had no test) and closed in-session with `test_compute_pnl_by_leg_group_includes_fully_closed_leg`; confirmed `format_pnl_table`'s 30-char strategy-name column comfortably fits the longest new label (`"paper_nifty_overlay / Collar"`, 28 chars) without truncation. **Currently moot in practice:** no CC/PP/Collar positions exist under `paper_nifty_overlay` yet (all overlay legs in the DB today are legacy per-track rows from before the S1r/S2r consolidation, and are fully closed) — these rows won't appear until `--auto-cc` (unblocked same session, see entry below) or a manual PP/Collar entry actually writes a trade there.
 
 **CC3 `--auto-cc` live-posture block lifted (2026-08-02, direct operator go-ahead, no council pass):** The `paper_3track_overlay_entry.py` hard block (`if args.auto_cc and not args.dry_run: sys.exit(1)`, added when CC3 shipped) is removed. Its stated prerequisites — CC1 (delta ladder), CC2 (delta-band decision, resolved 2026-08-01), CC5/EC-5 (DTE≤5 exit-signal collapse) — are all confirmed landed, and this session ran EC-5's previously-untested changes (`tests/unit/strategy/test_exit_signals.py`, `test_cc_overlay_v1.py`, `test_collar_overlay_v1.py`: 94 tests) plus the CC3 entry-script suite (`tests/unit/paper/test_overlay_entry.py` and related `tests/unit/scripts/test_paper_3track_*` files: 170+ tests) on a live host for the first time — all green, closing the verification debt `TODOS.md` item 6 had carried since 2026-08-02's earlier session. **Scope note, not resolved here:** this script only ever defined a plain `--dry-run` store_true flag, never a `--no-dry-run` counterpart (unlike `paper_ic_entry.py`'s `BooleanOptionalAction`) — so *omitting* `--dry-run` is what reaches the live-write path, which was already true for the manual/YAML entry path before this change too. An attempt to normalize this to `BooleanOptionalAction(default=True)` for consistency/safety was made and reverted in the same session after discovering `tests/unit/scripts/test_paper_3track_overlay_entry_logging.py`, `test_paper_3track_overlay_entry_notify.py`, and 3 tests in `test_overlay_entry.py` rely on the current default (no flag = live) — changing the default would have silently broken tested, pre-existing behavior for the non-`--auto-cc` path. Flagged as a real footgun (an operator forgetting `--dry-run` in an ad-hoc manual run already writes; this change doesn't add that risk, but the cron line for the newly-unblocked `--auto-cc` path shares it) — worth its own follow-up story, deliberately not bundled into this scope-limited unblock. This is paper-only: confirmed no `BrokerClient`/`place_order`/`UpstoxLiveClient` import in this script — writes go to `PaperStore.record_trade` (local SQLite), reads go through `UpstoxMarketClient` (market data only). Reviewed via a `general-purpose` agent standing in for `@code-reviewer` (no such agent type registered in this Cowork session) — no CRITICAL/ERROR findings; two WARNINGs (the flag-asymmetry footgun above, and an initial test-coverage gap where the block-removal test only proved the old error message was gone without proving the live-write path actually works) — the second WARNING was fixed in-session by adding `test_auto_cc_no_dry_run_writes_trade_on_bootstrap_success`, which asserts `PaperStore.record_trade` is actually called. Full spec: `docs/plan/3track-consolidation/tasks.md` CC3 (updated), CC5 (closure note); cron wiring left to operator — Claude cannot edit crontab from this sandbox.
