@@ -85,6 +85,29 @@ question draft retained for the record); `tasks.md` PP3/PP4 updated. Implementat
 `GateViolation` wiring into `PPOverlayV1._ivr_passes`) not yet built — this entry records the
 design decision only.
 
+**PP4 closed, no implementation needed — traced-and-confirmed, supersedes this entry's
+"implementation not yet built" and its literal `gate_name="ivr_pp_reentry_crash"` (2026-08-03,
+same-day follow-up, operator-confirmed before closing):** The entry above assumed PP4 still needed
+its own `PPOverlayV1._ivr_passes` wiring with a distinct `gate_name`. Tracing the actual call graph
+(not the story draft) shows this is already covered: `main()`'s `--auto-pp` path (`scripts/
+strategies/three_track/paper_3track_overlay_entry.py`) calls `_open_pp_dte(db_path)`; when it
+returns `None` — "no open `overlay_pp` row exists" — it falls through to `auto_pp_bootstrap()`,
+the same function PP3 shipped, using the same `GateViolation(gate_name="ivr_pp_reentry", ...)`.
+`_open_pp_dte() is None` is true both for a genuine first-ever bootstrap *and* for the state
+`PPOverlayV1.apply_action` leaves behind the instant `MONETIZE_PP` (`CRASH_MONETIZE`) closes the
+position — the code has no way to distinguish the two, and the PP4 story's own goal ("one
+mechanism... not two separate ad hoc fixes") argues it shouldn't. `test_auto_pp_gate_violation_
+persisted` (`tests/unit/paper/test_overlay_entry.py`, written for PP3) already exercises exactly
+this "no open position → `GateViolation` persisted, entry proceeds" path, so PP4's acceptance
+criterion is already covered by an existing green test, not a gap. **Rejected adding a distinct
+`gate_name="ivr_pp_reentry_crash"`** — it would require threading a "preceded by MONETIZE_PP" flag
+through the bootstrap trigger for no behavioral difference (identical bypass, only the audit
+string changes), which is the exact ad-hoc-duplication this story set out to avoid. No code
+change, no new tests, no `code-reviewer` pass needed — docs-only closure. Full spec: `docs/plan/
+3track-consolidation/stories.md` PP4; `tasks.md` PP4 ticked, SHA points to PP3's commit (d064263)
+since that is the commit that actually covers this behavior, same pattern as CC5's pointer-task
+closure.
+
 ---
 
 **PP5 — CRASH_MONETIZE profit extraction, council-resolved: retain binary full-close, no code

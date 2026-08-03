@@ -7,6 +7,18 @@
 
 ## Session Log — 2026-08-03
 
+- [2026-08-03] 3-Track Consolidation **PP4** — Closed with no new code. Traced the call graph
+  (not the story draft): `main()`'s `--auto-pp` path treats `_open_pp_dte()==None` — "no open
+  `overlay_pp` position" — as the bootstrap trigger, which is exactly the state `MONETIZE_PP`
+  (`CRASH_MONETIZE`) leaves behind, indistinguishable in code from a first-ever bootstrap. PP3's
+  `auto_pp_bootstrap()`/`GateViolation(gate_name="ivr_pp_reentry")` already fires on that
+  condition, and `test_auto_pp_gate_violation_persisted` already asserts it. Rejected the story's
+  literal `gate_name="ivr_pp_reentry_crash"` — would require threading a "preceded by
+  MONETIZE_PP" flag for no behavioral difference, contradicting PP4's own "one mechanism, not
+  two ad hoc fixes" goal. Operator confirmed this reading (AskUserQuestion) before closing rather
+  than defaulting to writing new code. Docs-only commit — `tasks.md` PP4 ticked (SHA points to
+  PP3's d064263), DECISIONS.md follow-up entry added superseding the earlier "implementation not
+  yet built" note. No `.py` diff, so no `code-reviewer` pass required.
 - [2026-08-03] 3-Track Consolidation **PP3** — Gap 1 investigated, confirmed correct-as-is:
   `PPOverlayV1.apply_action`'s `ROLL_PP` branch deliberately doesn't call `_check_reentry`
   (mirroring CC3's fix would be wrong here — the mixin's DTE≥14 gate would evaluate against
