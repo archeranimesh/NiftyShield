@@ -7,6 +7,35 @@
 
 ## Session Log — 2026-08-03
 
+- [2026-08-03] 3-Track Consolidation **Collar3a** — Widened `CollarOverlayV1.apply_action`'s
+  re-entry trigger guard from `("PROFIT_TARGET", "TIME_STOP", "DTE_REVIEW")` to also include
+  `LOSS_STOP`/`DELTA_STOP` — mirrors CC3's exact shipped trigger set for `CCOverlayV1`; confirmed
+  via code read that `BELOW_FLOOR` must stay excluded (INFO-severity in `evaluate_cc()`, never
+  dispatches `CLOSE_COLLAR`). Split same day from the original Collar3 story into this
+  independent one-line fix (Collar3a) and the larger automated-entry build (Collar3b, still
+  gated on Collar1/Collar2 + a cadence decision). 6 tests added/updated in
+  `tests/unit/strategy/test_collar_overlay_v1.py`; 519/519 green on `tests/unit/strategy/`
+  (worked around sandbox `/sessions` disk exhaustion via `pip install
+  --target=.../mnt/outputs/pydeps`, same recurring fix class as PP1/PP3/CC3/Collar1). Only the
+  re-entry trigger tuple changed — `ReEntryMixin` gates and the two-leg atomic close were not
+  touched. See `DECISIONS.md` 2026-08-03 Collar3a; `tasks.md` Collar3a ticked.
+
+- [2026-08-03] 3-Track Consolidation **Collar2** — Decision gate resolved, no code commit
+  (decision-gate task, per CC2/PP2 precedent). Direct operator decision, no council pass: Collar
+  moves to coordinated delta-targeted entry — call leg filtered to CC2's confirmed 0.18–0.20Δ
+  band, put leg filtered to PP2's confirmed 0.15Δ (±0.02 tolerance), tiebreak toward minimum
+  `|net_premium|` among survivors (the previously-open net-cost dimension). Verified against a
+  live chain pull (`logs/collar_option.log`, 2026-08-25 expiry): only one candidate survives both
+  bands — 25,200 CE (Δ+0.1850) / 23,900 PE (Δ−0.1495), net premium −0.58, both legs liquid
+  (`NSE_FO|61929` OI 1.55M / `NSE_FO|61586` OI 757K). Prototyped standalone in
+  `scratch/collar_select.py` (parses Collar1's cross-product table, applies the band filter +
+  tiebreak, optional `--resolve-keys` fetches live `instrument_key`s and prints ready-to-paste
+  `record_paper_trade` commands — nothing auto-executes). **Not yet folded into
+  `find_strike_by_delta.py`** — that fold, plus automated entry/idempotency guard/cron, is
+  Collar3's scope and still requires a proven `--dry-run` cycle before going live, same gate
+  CC3/PP3 both passed through. See `DECISIONS.md` 2026-08-03 Collar2 entry; `tasks.md` Collar2
+  ticked.
+
 - [2026-08-03] 3-Track Consolidation **Collar1** — Two-leg delta-targeted collar search shipped
   in `find_strike_by_delta.py` (`--overlay-type collar`), coordinating CC1's
   `CC_DELTA_CANDIDATES` and PP1's `PP_DELTA_CANDIDATES` (both prerequisites already landed).

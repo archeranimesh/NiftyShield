@@ -5,6 +5,24 @@
 
 ---
 
+**Collar3a shipped — widened CollarOverlayV1 re-entry trigger to LOSS_STOP/DELTA_STOP
+(2026-08-03):** Split from Collar3 same day (see Collar3b for the larger automated-entry half).
+`CollarOverlayV1.apply_action`'s re-entry guard previously only called `_check_reentry` on
+`PROFIT_TARGET`/`TIME_STOP`/`DTE_REVIEW`; `evaluate_cc()` can also emit `LOSS_STOP` and
+`DELTA_STOP` (both ACTION-severity, both route through `CLOSE_COLLAR`) without triggering
+re-entry — same bug shape CC3 fixed for `CCOverlayV1`. Target trigger set now mirrors CC3's
+exact shipped set: `("PROFIT_TARGET", "TIME_STOP", "DTE_REVIEW", "LOSS_STOP", "DELTA_STOP")`.
+**Correction to the original story draft:** `BELOW_FLOOR` deliberately excluded — confirmed via
+code read that it's INFO-severity in `evaluate_cc()` (`src/strategy/exit_signals.py:296-308`)
+and never dispatches `CLOSE_COLLAR`, so there's no close event to re-enter after (same reasoning
+already used to exclude `DELTA_WARN`). Only the trigger-guard tuple changed — `ReEntryMixin`'s
+own DTE≥14/IVR≥0.25/no-open-position gates and the already-correct two-leg atomic close
+(`OverlayCloser.close_collar_all`/`monetize_collar_put`) are untouched. 6 tests added/updated in
+`tests/unit/strategy/test_collar_overlay_v1.py`, 519/519 green on `tests/unit/strategy/`.
+Full spec: `docs/plan/3track-consolidation/stories.md` Collar3a; `tasks.md` Collar3a ticked.
+
+---
+
 **Collar1 shipped — two-leg delta-targeted collar search, cross-product only, no auto-select
 (2026-08-03):** `find_strike_by_delta.py` gained `--overlay-type collar`, coordinating CC1's
 `CC_DELTA_CANDIDATES` (short call) and PP1's `PP_DELTA_CANDIDATES` (long put) — both were a hard
@@ -21,6 +39,36 @@ decision gate, same relationship CC1→CC2 and PP1→PP2 already have. 10 new te
 a live `pytest` run (sandbox `/sessions` disk again at 100% capacity — worked around via `pip
 install --target=.../mnt/outputs/pydeps`, the same recurring fix class as PP1/PP3/CC3 sessions).
 Full spec: `docs/plan/3track-consolidation/stories.md` Collar1; `tasks.md` Collar1 ticked.
+
+---
+
+**Collar2 resolved — Collar moves to coordinated delta-targeted entry, band-filter + zero-cost
+tiebreak (2026-08-03, direct operator decision, no council pass despite the story's council-
+checkpoint recommendation):** Closes the entry-method decision gate that had held Collar1's
+cross-product output (`find_strike_by_delta.py --overlay-type collar`) as experimentation-only
+since Collar1 shipped. **Selection rule:** call leg filtered to CC2's already-confirmed
+0.18–0.20Δ band (not the full `CC_DELTA_CANDIDATES` ladder — candidates outside the confirmed
+band are excluded, not merely down-ranked); put leg filtered to PP2's already-confirmed 0.15Δ
+specifically (±0.02 tolerance, since live chain deltas rarely land exactly on 0.15) — not
+`PP_DELTA_CANDIDATES`'s other rungs (0.20/0.25), which PP2 rejected on its own drawdown-recovery
+evidence. **Net-cost stance (Collar2's previously-unresolved second dimension): tiebreak toward
+minimum `|net_premium|`** among survivors of both band filters — i.e. prefer the closest-to-
+zero-cost combo over a deliberate net-debit/net-credit skew, absent any stated reason to prefer
+either. Verified against a live chain pull same session (`logs/collar_option.log`, 2026-08-25
+expiry): of 9 raw candidate pairings only one survives both bands — 25,200 CE (Δ+0.1850) / 23,900
+PE (Δ−0.1495) — landing at net premium −0.58 (essentially zero-cost by coincidence, not by
+construction of the tiebreak alone). Live-chain instrument_key resolution confirmed both legs
+liquid and tradeable: `NSE_FO|61929` (CE, mid ₹58.15, OI 1,546,090) / `NSE_FO|61586` (PE, mid
+₹58.73, OI 757,445) — mid-price difference (58.15 − 58.73 = −0.58) exactly matches the earlier
+net-premium calc, cross-checking the two independent code paths (Collar1's mid-price convention
+vs. this session's live `find_chain_entry` resolution) against each other. **Selection rule
+prototyped in `scratch/collar_select.py` (not yet folded into `find_strike_by_delta.py` — that
+fold, plus `reentry_script_hint` update, is explicitly deferred to Collar3, same dependency shape
+CC2→CC3 and PP2→PP3 already have).** `CC_DELTA_CANDIDATES`/`PP_DELTA_CANDIDATES` themselves are
+unchanged by this decision — Collar2 only decided how to combine two already-confirmed ladders,
+it did not re-open either one. Full spec: `docs/plan/3track-consolidation/stories.md` Collar2
+(resolved); `tasks.md` Collar2 ticked, no SHA (decision-gate, not a code commit — the prototype
+script lives outside `src/`/`scripts/` and is not itself the implementation).
 
 ---
 

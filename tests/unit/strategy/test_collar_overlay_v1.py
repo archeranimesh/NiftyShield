@@ -394,6 +394,162 @@ def test_apply_action_calls_check_reentry_for_eligible_signals() -> None:
         mock_reentry.assert_awaited_once()
 
 
+def test_reentry_check_called_for_loss_stop() -> None:
+    """Collar3a: LOSS_STOP is ACTION-severity and dispatches CLOSE_COLLAR — must
+    trigger re-entry, same as PROFIT_TARGET/TIME_STOP/DTE_REVIEW."""
+    from unittest.mock import AsyncMock, patch
+
+    mock_store = MagicMock()
+    strategy = CollarOverlayV1(store=mock_store)
+
+    call_pos = _make_short_call_position(avg_sell_price="80")
+    action = ApprovedAction(
+        action_type="CLOSE_COLLAR",
+        legs_to_close=[LegClose(leg_role="overlay_collar_call")],
+        legs_to_open=[],
+        rationale="loss stop",
+        council_rank=1,
+        metadata={"triggering_signal": "LOSS_STOP", "mark": "200"},
+    )
+
+    with patch.object(strategy, "_check_reentry", new=AsyncMock()) as mock_reentry:
+        _run(strategy.apply_action([call_pos], action))
+        mock_reentry.assert_awaited_once()
+
+
+def test_reentry_check_called_for_delta_stop() -> None:
+    """Collar3a: DELTA_STOP is ACTION-severity and dispatches CLOSE_COLLAR — must
+    trigger re-entry, mirroring CC3's shipped trigger set for CCOverlayV1."""
+    from unittest.mock import AsyncMock, patch
+
+    mock_store = MagicMock()
+    strategy = CollarOverlayV1(store=mock_store)
+
+    call_pos = _make_short_call_position(avg_sell_price="80")
+    action = ApprovedAction(
+        action_type="CLOSE_COLLAR",
+        legs_to_close=[LegClose(leg_role="overlay_collar_call")],
+        legs_to_open=[],
+        rationale="delta stop",
+        council_rank=1,
+        metadata={"triggering_signal": "DELTA_STOP", "mark": "60"},
+    )
+
+    with patch.object(strategy, "_check_reentry", new=AsyncMock()) as mock_reentry:
+        _run(strategy.apply_action([call_pos], action))
+        mock_reentry.assert_awaited_once()
+
+
+def test_reentry_check_not_called_for_below_floor() -> None:
+    """Regression guard: BELOW_FLOOR is INFO-severity in evaluate_cc() and never
+    dispatches CLOSE_COLLAR, so there is no close event to re-enter after."""
+    from unittest.mock import AsyncMock, patch
+
+    mock_store = MagicMock()
+    strategy = CollarOverlayV1(store=mock_store)
+
+    call_pos = _make_short_call_position(avg_sell_price="80")
+    action = ApprovedAction(
+        action_type="CLOSE_COLLAR",
+        legs_to_close=[LegClose(leg_role="overlay_collar_call")],
+        legs_to_open=[],
+        rationale="below floor",
+        council_rank=1,
+        metadata={"triggering_signal": "BELOW_FLOOR", "mark": "40"},
+    )
+
+    with patch.object(strategy, "_check_reentry", new=AsyncMock()) as mock_reentry:
+        _run(strategy.apply_action([call_pos], action))
+        mock_reentry.assert_not_awaited()
+
+
+def test_reentry_check_not_called_for_delta_warn() -> None:
+    """Regression guard: WARN-severity signals never close the position, so no
+    re-entry check should fire for them."""
+    from unittest.mock import AsyncMock, patch
+
+    mock_store = MagicMock()
+    strategy = CollarOverlayV1(store=mock_store)
+
+    call_pos = _make_short_call_position(avg_sell_price="80")
+    action = ApprovedAction(
+        action_type="CLOSE_COLLAR",
+        legs_to_close=[LegClose(leg_role="overlay_collar_call")],
+        legs_to_open=[],
+        rationale="delta warn",
+        council_rank=1,
+        metadata={"triggering_signal": "DELTA_WARN", "mark": "50"},
+    )
+
+    with patch.object(strategy, "_check_reentry", new=AsyncMock()) as mock_reentry:
+        _run(strategy.apply_action([call_pos], action))
+        mock_reentry.assert_not_awaited()
+
+
+def test_reentry_gates_unchanged_regardless_of_triggering_signal() -> None:
+    """The ReEntryMixin's own DTE/IVR/open-position gate logic doesn't change —
+    only which triggering signals invoke _check_reentry. Verify _check_reentry
+    is invoked with the same argument shape for both an old and a newly-added
+    trigger."""
+    from unittest.mock import AsyncMock, patch
+
+    mock_store = MagicMock()
+    strategy = CollarOverlayV1(store=mock_store)
+
+    fixed_today = date(2026, 8, 3)
+    for signal in ("PROFIT_TARGET", "LOSS_STOP"):
+        call_pos = _make_short_call_position(avg_sell_price="80")
+        action = ApprovedAction(
+            action_type="CLOSE_COLLAR",
+            legs_to_close=[LegClose(leg_role="overlay_collar_call")],
+            legs_to_open=[],
+            rationale=signal,
+            council_rank=1,
+            metadata={"triggering_signal": signal, "mark": "30"},
+        )
+        with (
+            patch.object(strategy, "_check_reentry", new=AsyncMock()) as mock_reentry,
+            patch("src.strategy.collar_overlay_v1.market_today", return_value=fixed_today),
+        ):
+            _run(strategy.apply_action([call_pos], action))
+            mock_reentry.assert_awaited_once_with(
+                expiry=strategy._parse_expiry(call_pos.instrument_key),
+                today=fixed_today,
+                instrument_key=call_pos.instrument_key,
+                trade_id=0,
+            )
+
+
+def test_close_collar_all_atomicity_unchanged() -> None:
+    """Regression guard: this story only widens the re-entry trigger set — the
+    already-correct two-leg atomic close (both legs written via a single
+    store.record_trades([...]) call) and missing-put-leg-warning behavior must
+    not be disturbed."""
+    mock_store = MagicMock()
+    strategy = CollarOverlayV1(store=mock_store)
+
+    call_pos = _make_short_call_position(avg_sell_price="80")
+    put_pos = _make_long_put_position(avg_cost="40")
+    action = ApprovedAction(
+        action_type="CLOSE_COLLAR",
+        legs_to_close=[
+            LegClose(leg_role="overlay_collar_call"),
+            LegClose(leg_role="overlay_collar_put"),
+        ],
+        legs_to_open=[],
+        rationale="loss stop",
+        council_rank=1,
+        metadata={"triggering_signal": "LOSS_STOP", "mark": "200"},
+    )
+
+    result = _run(strategy.apply_action([call_pos, put_pos], action))
+
+    assert result == []
+    mock_store.record_trades.assert_called_once()
+    trades = mock_store.record_trades.call_args[0][0]
+    assert len(trades) == 2
+
+
 def test_apply_action_roll_overlap_closes_only_matched_instrument() -> None:
     """PG-4e: two short-call positions share overlay_collar_call during a roll
     overlap (old expiring contract not yet closed, new contract already open).
