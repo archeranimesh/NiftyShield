@@ -947,14 +947,26 @@ and the exit-signal engine's roll trigger stay in lockstep).
 open question:** the replacement put must be bought the **same day** the DTE≤5 signal fires, not
 after the outgoing put expires — this means briefly holding two puts (outgoing, ≤5 DTE remaining,
 and the fresh one) rather than a window with zero protection. Operator was explicit: "i do not
-want unprotected day." **The routine `ROLL_PP` re-entry must bypass PP's IVR gate unconditionally**
-— a roll is coverage continuity the operator already committed to, not a new discretionary
-purchase, and blocking renewal on elevated IVR would refuse protection exactly when volatility
-(and plausibly the need for protection) is highest. This bypass is scoped **only** to the
-`ROLL_PP`/routine-roll path — `MONETIZE_PP`-triggered re-entry (crash cash-out) keeps the existing
-IVR gate as-is; whether *that* gate should also be relaxed is a materially different, higher-stakes
-question spun into its own story, **PP4** (council checkpoint applies there, not here — this
-routine-roll fix was judged simple enough for direct resolution, same tier as PP2/CC2/CC4).
+want unprotected day."
+
+**IVR-gate handling — REVISED 2026-08-03, replaces the earlier "unconditional bypass" language:**
+rather than inventing a PP-specific bypass, reuse the existing IC pattern this project already
+ships — `--log-only-gates` (`scripts/strategies/ic/ic_entry_gates.py::resolve_ivr`,
+`src/paper/models.py::GateViolation`). That flag already defaults to **on** for IC
+(`BooleanOptionalAction, default=True`): a below-gate IVR there doesn't hard-block either, it's
+persisted as a `GateViolation` (gate_name, threshold, actual, strategy_name, logged_at — a plain
+frozen Pydantic model, nothing IC-specific in its schema) and entry proceeds regardless.
+
+Applied to PP's routine `ROLL_PP` re-entry: the roll always proceeds same-day (satisfies "no
+unprotected day"), and whenever IVR would have blocked it under strict mode, a
+`GateViolation(gate_name="ivr_pp_reentry", strategy_name=STRATEGY_PP_OVERLAY, threshold=str(0.60),
+actual=str(ivr), ...)` is persisted — a record is kept for later analysis rather than silently
+dropped, and the same `--log-only-gates` flag is the switch to hard-block later if/when this
+strategy set is ever wired to real order placement (confirmed this session it currently is not —
+`place_order` has no caller in any strategy's execution path). This is implementation-only, reusing
+an already-reviewed project convention, not a fresh risk decision — see PP4 below, which drops its
+earlier council-checkpoint framing for exactly this reason and extends the same treatment to the
+`MONETIZE_PP`-triggered re-entry path too.
 
 **Files to change:**
 - `src/strategy/pp_overlay_v1.py` — resolve and fix Gap 1 per the investigation above
@@ -992,7 +1004,7 @@ Gap 1's fix does not depend on PP1/PP2 and can ship independently/first.
 
 ---
 
-## PP4 — Open decision: CRASH_MONETIZE re-entry continuity gap under PP's inverted IVR gate
+## PP4 — CRASH_MONETIZE re-entry continuity gap: resolved via IC's --log-only-gates pattern
 
 **Context (surfaced 2026-08-03, during the PP2/PP3 decision session, not a pre-planned story):**
 Confirmed via code read (`src/strategy/pp_overlay_v1.py::apply_action`, `exit_signals.py::evaluate_pp`):
@@ -1009,54 +1021,71 @@ been left unprotected by design. Reference case: 2008 had six separate single-mo
 across ten months (Jan −16.31%, Mar −9.36%, May −5.73%, Jun −17.03%, Sep −10.06%, Oct −26.41% —
 see PP2's empirical table). A `CRASH_MONETIZE` triggered early in a decline of that shape, followed
 by an IVR-blocked re-entry, could leave the book naked through several subsequent down-months.
+Worked example traced this session with the 2008 sequence mapped onto today's spot level for
+illustration: a January `CRASH_MONETIZE` books a large gain, IVR spikes from the same crash and
+blocks re-entry, and March's further −9.36% move (≈₹125k on a 65-unit comparable notional) goes
+completely unprotected — the mechanically expected outcome of this gate shape, not a rare
+double-failure.
 
-**Distinct from PP3's routine-roll fix, which is already settled and unconditional:** PP3's IVR
-bypass applies only to `ROLL_PP` (maintenance of a position already committed to, no discretion
-involved). PP4 is about `MONETIZE_PP`-triggered re-entry specifically — a case where the operator
-already realized a gain and is making a fresh, discretionary decision to re-arm. Overriding the
-gate here trades away its original purpose (don't buy protection when vol is priced rich) against
-coverage-continuity risk. That tradeoff is real in both directions and is exactly why this is a
-council-checkpoint item, unlike PP3's roll fix.
+**RESOLVED 2026-08-03, same session — reframed from a council-checkpoint decision to a
+pattern-reuse implementation, once two facts were established:**
 
-**Also folds in, rather than spinning out separately:** whether `CRASH_MONETIZE`'s
-delta ≤ -0.80 threshold itself needs recalibration now that PP2 moved entry to 0.15 delta. The
-threshold was never explicitly calibrated against any specific entry delta, but a put entered
-closer to the money reaches -0.80 on a smaller underlying move than one entered far OTM — worth
-resolving in the same pass since both bear on "how does PP behave once a crash is already
-underway."
+1. **This entire system is paper-trading only, confirmed by code, not assumption.** `place_order`
+   (the real order-placement call) has exactly two call sites in the whole repo —
+   `src/client/mock_client.py`'s own internal demo and `scripts/dev/sandbox_order_lifecycle.py` (a
+   manual dev tool). No strategy class, no `PaperExecutor`, nothing in any auto-execute path calls
+   it — IC (V1/V2), CSP, CC, PP, Collar all write to `PaperStore`/SQLite only. A blocked re-entry
+   today costs zero real capital; it only distorts the paper P&L record.
+2. **This project already has an established, already-reviewed convention for exactly this
+   shape of problem, and it isn't PP-specific.** `scripts/strategies/ic/ic_entry_gates.py::
+   resolve_ivr` + `src/paper/models.py::GateViolation`: IC's `--log-only-gates` flag defaults to
+   **on** (`BooleanOptionalAction, default=True`), meaning IC's own threshold gates (IVR floor,
+   DTE window, liquidity floor, portfolio-delta cap) don't hard-block today either — a below-gate
+   IVR is persisted as a `GateViolation` (gate_name, threshold, actual, strategy_name, logged_at;
+   a plain frozen Pydantic model, nothing IC-specific in its schema) and the entry proceeds
+   regardless. Structural gates (duplicate position, post-expiry, missing chain data) are the only
+   ones that still hard-block, because those are data-integrity failures, not risk-tolerance
+   calls.
 
-**Council checkpoint applies** — clears all three of CLAUDE.md Step 2b's conditions: (1)
-load-bearing, costly to reverse — this is the only downside protection in the pipeline and the
-failure mode is "unprotected mid-crash," not a cosmetic issue; (2) genuinely multiple defensible
-approaches — full IVR-gate bypass post-`CRASH_MONETIZE` (mirrors PP3's roll fix), a time-boxed
-override (bypass only for N days post-crash-close, then gate resumes), a separate elevated-
-tolerance re-entry threshold specific to this path (e.g. IVR ≤ 0.80 instead of 0.60 for
-post-monetize re-entry only), or recalibrating `CRASH_MONETIZE`'s delta threshold instead of or
-alongside a gate change; (3) spans strategy design, NSE crash-microstructure (deep-ITM put
-liquidity/spread behavior during a crash — relevant to whether re-entry can even fill cleanly),
-and risk/capital management simultaneously. Recommend template `strategy_parameters`. Draft
-question:
+Given both facts, "should PP bypass its IVR gate post-crash" is no longer a fresh, load-bearing,
+two-defensible-approaches tradeoff — it's a question of extending an already-adopted project
+convention to a strategy that happens not to use it yet. That fails the council-checkpoint test's
+second condition (genuinely defensible alternative approaches with materially different outcomes)
+on reflection, so the original council-checkpoint framing below is retained as a record of the
+reasoning trail but **is no longer the operative path** — resolved directly instead, same tier as
+PP2/PP3/CC2/CC4.
+
+**Resolution:** extend the identical `--log-only-gates`/`GateViolation` treatment PP3 now uses for
+`ROLL_PP` to `MONETIZE_PP`-triggered re-entry too. `_ivr_passes`'s threshold check, when it would
+block post-crash re-entry, persists `GateViolation(gate_name="ivr_pp_reentry_crash",
+strategy_name=STRATEGY_PP_OVERLAY, threshold=str(0.60), actual=str(ivr), ...)` and re-entry
+proceeds anyway. One mechanism, one flag, now covers both PP3's routine roll and PP4's
+crash-triggered re-entry — not two separate ad hoc fixes with different bypass philosophies.
+
+**Superseded council-question draft (kept for the record, not being sent to council):**
 
 > "PPOverlayV1's `CRASH_MONETIZE` signal (delta ≤ -0.80 or value ≥ 5× entry debit) auto-closes and
 > immediately attempts re-entry, gated by an inverted IVR check that blocks re-entry when IVR is
 > elevated. Because crashes elevate IV, this gate is most likely to block re-entry exactly when the
 > book has just been left without protection, risking extended unprotected exposure across a
 > multi-month decline (2008-style). Should this re-entry path bypass the IVR gate (fully, or with
-> a time-boxed/threshold-relaxed variant), and separately, should `CRASH_MONETIZE`'s delta ≤ -0.80
-> threshold be recalibrated given PP2 moved entry to 0.15 delta (closer to the money than the
-> ~0.03-delta entry the threshold was implicitly tuned against)? Note this is a narrower, path-
-> specific question than PP3's roll-cadence fix (already resolved, unconditional bypass) — don't
-> reuse that answer by analogy, the discretionary-vs-maintenance distinction is the crux here."
+> a time-boxed/threshold-relaxed variant)?" — **superseded**: the answer is "reuse IC's existing
+> `--log-only-gates` default rather than design a bespoke variant," established by direct
+> resolution instead of a council pass.
 
-**Until answered:** `CRASH_MONETIZE` ships unchanged — immediate full close, existing IVR-gated
-re-entry attempt. The gap is documented (this story, plus the `tasks.md` PP4 entry), not fixed.
+**Not resolved here, split into its own follow-up:** whether `CRASH_MONETIZE`'s delta ≤ -0.80
+threshold itself needs recalibrating now that PP2 moved entry to 0.15 delta (closer to the money,
+reaches -0.80 on a smaller move than the ~0.03-delta entry the threshold was implicitly tuned
+against). To be discussed and resolved separately — likely via the same empirical-frequency
+approach PP2 used against the 26-year monthly-return table, rather than a council pass, but not
+decided yet.
 
-**Depends on:** none structurally to start the council process, but reasons about both PP2
-(entry delta, resolved) and PP3 (routine-roll re-entry design, resolved) — sequence after both.
+**Depends on:** PP3 (shares the same `GateViolation`/`--log-only-gates` implementation, should
+land together or PP3-first).
 
-**Commit:** none — decision-gate note, same as PP2. Resolve via council, then update
-`DECISIONS.md`, `evaluate_pp`'s threshold (if recalibrated), and `PPOverlayV1._ivr_passes`
-call-site behavior for the `MONETIZE_PP` path (if bypass/relaxation chosen).
+**Commit:** implementation commit once built — `PPOverlayV1._ivr_passes` call sites for both
+`ROLL_PP` (PP3) and `MONETIZE_PP` (PP4) wired through the shared pattern, plus tests. No council
+commit needed — this is no longer a decision-gate story.
 
 ---
 

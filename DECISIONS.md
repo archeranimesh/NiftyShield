@@ -54,23 +54,36 @@ entry records the design decision only, no code shipped yet. Full spec: `docs/pl
 3track-consolidation/stories.md` PP3 (updated); `tasks.md` PP3 (not yet ticked — implementation
 still pending).
 
-**PP4 opened — CRASH_MONETIZE re-entry continuity gap under extended drawdowns, council
-checkpoint applies (2026-08-03, surfaced during the PP2/PP3 session, not resolved):** Confirmed
-via code read that `CRASH_MONETIZE` (delta ≤ -0.80 or value ≥ 5× entry) auto-closes and
-immediately attempts `_check_reentry`, gated by PP's inverted IVR check (blocks re-entry when IVR
-is elevated). Because IV is typically elevated precisely because a crash is in progress, this gate
-is most likely to block re-entry exactly when the book has just been left unprotected — risking
-extended naked exposure across a multi-month decline (2008 reference: six separate ≥5% single-
-month declines across ten months, per PP2's empirical table). Distinct from PP3's roll fix (settled,
-unconditional bypass, maintenance-not-discretion) — PP4 concerns the discretionary re-entry after a
-realized crash gain, where bypassing the gate trades away its original purpose against coverage-
-continuity risk; also folds in whether `CRASH_MONETIZE`'s delta ≤ -0.80 threshold needs
-recalibration now that PP2 moved entry to 0.15 delta. Clears CLAUDE.md Step 2b's three-condition
-council test (load-bearing, multiple defensible approaches, spans strategy design + crash
-microstructure + risk management) — **not resolved by direct operator call**, unlike PP2/PP3;
-council question drafted in `stories.md` PP4, template `strategy_parameters`. Until resolved,
-`CRASH_MONETIZE` ships unchanged. Full spec: `docs/plan/3track-consolidation/stories.md` PP4
-(new); `tasks.md` PP4 (new, unchecked).
+**PP3/PP4 IVR-gate handling resolved via IC's --log-only-gates/GateViolation pattern, PP4's
+council-checkpoint framing dropped (2026-08-03, same session, direct resolution):** Originally
+PP4 was opened as a council-checkpoint decision gate (see prior entry, superseded by this one) —
+should `CRASH_MONETIZE`-triggered re-entry bypass PP's inverted IVR gate given crashes elevate IV
+right when re-entry is attempted, risking extended unprotected exposure (2008 reference: six
+separate ≥5% single-month declines across ten months). Operator pointed at an existing project
+mechanism rather than accepting a bespoke fix: `scripts/strategies/ic/ic_entry_gates.py::
+resolve_ivr` + `src/paper/models.py::GateViolation`. IC's `--log-only-gates` flag already defaults
+to **on** (`BooleanOptionalAction, default=True`) — IC's own threshold gates (IVR floor, DTE
+window, liquidity floor, portfolio-delta cap) don't hard-block today either; a below-gate IVR is
+persisted as a `GateViolation` (gate_name/threshold/actual/strategy_name/logged_at, a plain frozen
+Pydantic model, nothing IC-specific in its schema) and entry proceeds regardless — only structural
+gates (duplicate position, post-expiry, missing chain data) still hard-block. Confirmed separately
+this session, prompted by the operator: **the entire system is paper-trading only** —
+`place_order` has exactly two call sites in the repo (`src/client/mock_client.py`'s own demo,
+`scripts/dev/sandbox_order_lifecycle.py` dev tool), none of them in any strategy's execution path;
+IC included. A blocked re-entry today costs zero real capital. Given both facts, "should PP bypass
+its IVR gate" stopped being a fresh, load-bearing, multiple-defensible-approaches question — it's
+extending an already-adopted project convention to a strategy that doesn't use it yet, which fails
+the council-checkpoint test's second condition on reflection. **Resolution:** both PP3's routine
+`ROLL_PP` re-entry and PP4's `MONETIZE_PP`-triggered re-entry now share one design — the threshold
+check persists a `GateViolation` (`gate_name="ivr_pp_reentry"` / `"ivr_pp_reentry_crash"`,
+`strategy_name=STRATEGY_PP_OVERLAY`) instead of blocking, and re-entry proceeds; `--log-only-gates`
+is the same switch to hard-block later once this strategy set is ever wired to live orders. Not
+resolved in this pass: whether `CRASH_MONETIZE`'s delta ≤ -0.80 threshold needs recalibrating for
+the new 0.15-delta entry — split out as its own follow-up, to be discussed separately. Full spec:
+`docs/plan/3track-consolidation/stories.md` PP3 (updated), PP4 (reframed, superseded council-
+question draft retained for the record); `tasks.md` PP3/PP4 updated. Implementation (the actual
+`GateViolation` wiring into `PPOverlayV1._ivr_passes`) not yet built — this entry records the
+design decision only.
 
 ---
 

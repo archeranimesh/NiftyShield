@@ -50,8 +50,20 @@
   multi-month decline; flagged as clearing CLAUDE.md's three-condition council test, council
   question drafted, not run this session. Files touched: `docs/plan/3track-consolidation/
   tasks.md`, `stories.md`, `DECISIONS.md` (this file). No code-reviewer gate — docs/config only,
-  no `.py` files in the diff. No SHA — not committed from this Cowork session (operator commits
-  locally); see `DECISIONS.md`'s PP2/PP3/PP4 entries (2026-08-03) for full detail.
+  no `.py` files in the diff. SHA: `4d6e2f4`.
+
+- [2026-08-03] 3-Track Consolidation **PP3/PP4 IVR-gate handling revised** — docs-only, no code
+  changed. Operator pointed at an existing project mechanism (`--log-only-gates`/`GateViolation`,
+  already used by IC, defaults to on) rather than accepting the earlier "unconditional bypass"
+  (PP3) / "council-checkpoint decision" (PP4) framing. Both PP3's routine `ROLL_PP` re-entry and
+  PP4's `MONETIZE_PP`-triggered re-entry now share one design: persist a `GateViolation` instead
+  of blocking, re-entry proceeds, same flag available to hard-block later once live orders exist.
+  PP4's council-checkpoint recommendation dropped on reflection — extending an already-adopted
+  convention isn't a fresh load-bearing decision. Confirmed (code-verified, not assumed) that the
+  whole system, IC included, is paper-trading only — `place_order` has no caller in any strategy
+  execution path. `CRASH_MONETIZE`'s delta ≤ -0.80 threshold recalibration question split out,
+  not resolved. Files: `docs/plan/3track-consolidation/tasks.md`, `stories.md`, `DECISIONS.md`
+  (this file). No code-reviewer gate — docs/config only, no `.py` files in the diff.
 
 ## Session Log — 2026-08-02
 
