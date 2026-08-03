@@ -1262,131 +1262,171 @@ cross-product, no auto-select), `reentry_script_hint` stays pointed at the %OTM 
 
 ---
 
-## Collar3 — Automated Collar entry script + idempotency guard + cron + re-entry gap audit
+## Collar3a — Widen CollarOverlayV1 re-entry trigger to all applicable ACTION exit signals
 
-**Context (2026-07-28, same "I only get notified" directive that drove CC3/PP3):** Collar entry
-today is entirely manual — run `find_overlay_strikes.py --overlay-type collar`, eyeball both
-legs, hand-paste two `record_paper_trade` commands (or the YAML → `paper_3track_overlay_entry.py`
-path for the two-track write). This story automates entry the same way CC3/PP3 do, but the
-two-leg nature changes both the idempotency guard and the re-entry audit shape.
+**Split from Collar3 (2026-08-03)** — the original single Collar3 story bundled an independent
+re-entry-gap fix with a much larger automated-entry build; split into Collar3a (this story, ready
+now, no dependencies) and Collar3b (automated entry, depends on Collar1/Collar2 + an unresolved
+cadence decision) so the small fix isn't blocked on the big one.
 
-**Idempotency guard gap — confirmed via code read, `paper_3track_overlay_entry.py`:** the only
-existing safety check for collar is `_query_open_call_roles()`
-(`paper_3track_overlay_entry.py:231-273`) plus `_validate_collar_pairs()` (`:63-102`). Both are
-narrower than "does an open Collar position already exist":
-- `_query_open_call_roles()` answers "does *any* strategy already have an open short call
-  (`overlay_cc` or `overlay_collar_call`) on *this specific instrument key*" — a same-instrument
-  cross-type dedup check (prevents double-counting one physical short call under two leg_roles),
-  not a "Collar already open, don't re-enter" bootstrap guard.
-- `_validate_collar_pairs()` only checks that a collar submission includes both legs (or is
-  exempted because an existing `overlay_cc` covers the call side) — it validates the *shape* of
-  a submission already in flight, it doesn't check whether a collar is already open before that
-  submission is built.
-- Confirmed by reading `main()` (`:494-569`): there is no call anywhere in the entry flow that
-  asks "does `paper_nifty_spot` already hold an open `overlay_collar_call` + `overlay_collar_put`
-  pair" before proceeding to `build_overlay_trades()`. Same class of gap CC3/PP3 found and fixed
-  for their single-leg cases — run as-is against a freshly-generated collar YAML, a Wednesday (or
-  whatever cadence) cron would record a second collar pair even if one is already open, same
-  three-weeks-out-of-four double-up risk CC3 flags.
-
-**Re-entry gap — confirmed via code read, `CollarOverlayV1.apply_action`
-(`src/strategy/collar_overlay_v1.py`):**
+**Context (2026-07-28, same "I only get notified" directive that drove CC3/PP3):** confirmed via
+code read, `CollarOverlayV1.apply_action` (`src/strategy/collar_overlay_v1.py`) currently gates
+`_check_reentry` on:
 ```python
 triggering_signal = action.metadata.get("triggering_signal") if action.metadata else None
-if triggering_signal in ("PROFIT_TARGET", "TIME_STOP") and short_call_pos is not None:
+if (
+    triggering_signal in ("PROFIT_TARGET", "TIME_STOP", "DTE_REVIEW")
+    and short_call_pos is not None
+):
     ...
     await self._check_reentry(...)
 ```
-This is the exact same gap class CC3 fixes — `evaluate_cc()` (which drives Collar's short-call
-signal evaluation, confirmed via `check_signals`'s `ExitSignalEngine.evaluate_cc(...)` call) can
-also emit `LOSS_STOP`, `DELTA_STOP`, `DELTA_WARN`, and `BELOW_FLOOR` (`src/strategy/exit_signals.py:284-338`)
-— only `PROFIT_TARGET` and `TIME_STOP` currently trigger `_check_reentry`. A `LOSS_STOP` or
-`DELTA_STOP` close on the short call (both `ACTION` severity, both route through `CLOSE_COLLAR`
-same as a `PROFIT_TARGET` close) produces **no** re-entry eligibility check and **no** re-entry
-notification today — identical bug shape to the one CC3 closes for `CCOverlayV1`, confirmed
-independently here rather than assumed by analogy (per this task's own instruction not to assume
-Collar mirrors CC without checking).
+(current code already includes `DTE_REVIEW` alongside `PROFIT_TARGET`/`TIME_STOP` — the original
+story text predates that addition; verified live against the file this session, not assumed.)
+
+`evaluate_cc()` (which drives Collar's short-call signal evaluation via `ExitSignalEngine.evaluate_cc`)
+can also emit `LOSS_STOP` and `DELTA_STOP` (both `ACTION` severity, both route through
+`CLOSE_COLLAR` same as a `PROFIT_TARGET`/`DTE_REVIEW` close) — neither currently triggers
+`_check_reentry`. Same bug shape CC3 fixed for `CCOverlayV1`.
+
+**Correction to the original story (confirmed via code read this session, not assumed):**
+`BELOW_FLOOR` must **not** be added to the trigger set. `evaluate_cc()`
+(`src/strategy/exit_signals.py:296-308`) defines `BELOW_FLOOR` as `severity="INFO"`, not
+`ACTION` — INFO-severity signals never dispatch `CLOSE_COLLAR`, so there is no close event to
+re-enter after, exactly the same reasoning the original story already used (correctly) to exclude
+`DELTA_WARN`. Confirmed against CC3's own shipped precedent: `CCOverlayV1.apply_action`'s actual
+trigger set (`src/strategy/cc_overlay_v1.py:245-247`) is
+`("PROFIT_TARGET", "TIME_STOP", "LOSS_STOP", "DELTA_STOP", "DTE_REVIEW")` — no `BELOW_FLOOR`.
+Collar3a mirrors that exact set (swap `TIME_STOP` for Collar's already-present `DTE_REVIEW`, which
+is CC's post-EC-5 successor signal for the same close path).
+
+**Target trigger set:** `("PROFIT_TARGET", "TIME_STOP", "DTE_REVIEW", "LOSS_STOP", "DELTA_STOP")`.
 
 **What is correctly two-leg-aware already (don't re-fix):** `apply_action`'s close logic and
 `OverlayCloser.close_collar_all`/`monetize_collar_put` (`src/strategy/overlay_closer.py`) already
 handle the two-leg atomicity concern — `apply_action` builds close trades for whichever of
 `short_call_pos`/`long_put_pos` are present and writes them via a single `store.record_trades([...])`
 call (not two separate `record_trade()` calls), and logs a warning if the put leg is missing
-(`collar_overlay_v1.apply_action.missing_put_leg`). This story's job is the *entry-side*
-idempotency guard and the *re-entry-trigger* widening — not re-doing the close-side atomicity,
-which is already correct.
+(`collar_overlay_v1.apply_action.missing_put_leg`). This story's job is only the
+*re-entry-trigger* widening — not the close-side atomicity, which is already correct and must not
+be disturbed.
 
 **Files to change:**
-- `scripts/strategies/three_track/paper_3track_overlay_entry.py` — new idempotency guard (e.g.
-  `_query_open_collar_pair(db_path) -> bool`, parameterized alongside whatever CC3/PP3 land for
-  their own overlay types, per tasks.md's note that CC3/PP3's guards are likely one shared
-  parameterized function rather than three separate copies) — checks for an existing open
-  `overlay_collar_call` **and** `overlay_collar_put` pair for `paper_nifty_spot` before recording;
-  if found, exit without acting, log at INFO (expected no-op, matching CC3's INFO-not-WARNING
-  convention for a no-op week)
 - `src/strategy/collar_overlay_v1.py` — widen `apply_action`'s re-entry trigger guard from
-  `triggering_signal in ("PROFIT_TARGET", "TIME_STOP")` to include `LOSS_STOP`, `DELTA_STOP`, and
-  `BELOW_FLOOR` (mirror CC3's exact reasoning: the `ReEntryMixin` gates themselves — DTE ≥14, IVR
-  ≥0.25, no open position — don't need to change, only which signals invoke `_check_reentry`).
-  Confirm whether `DELTA_WARN` (a `WARN`, not `ACTION`, severity) should also trigger — likely not,
-  since `WARN` signals don't close the position (no `CLOSE_COLLAR` dispatched), so there's nothing
-  to re-enter after; verify this against `check_signals`'s severity-based dispatch before assuming
-- Reuses Collar1's two-leg delta-targeted search (once Collar1 ships) for strike selection —
-  same **hard dependency** shape as CC3 on CC1/CC2 and PP3 on PP1/PP2: this story cannot go live
-  with `--no-dry-run`/unattended cron until Collar1 and Collar2 are both resolved
-- `tests/unit/paper/test_overlay_entry.py` — idempotency-guard tests for the collar pair
+  `triggering_signal in ("PROFIT_TARGET", "TIME_STOP", "DTE_REVIEW")` to also include `LOSS_STOP`
+  and `DELTA_STOP` (the `ReEntryMixin` gates themselves — DTE ≥14, IVR ≥0.25, no open position —
+  don't change, only which signals invoke `_check_reentry`)
 - `tests/unit/strategy/test_collar_overlay_v1.py` — extend `apply_action` tests for the widened
   re-entry trigger guard
 
 **Before any code:**
 ```
-get_code_snippet("paper_3track_overlay_entry.main")        # confirm exact current guard/flow —
-                                                             # already read this session, re-confirm
-get_code_snippet("_query_open_call_roles")                  # confirm exact (narrower) scope — already
-                                                             # read this session, confirmed same-instrument
-                                                             # cross-type dedup, not bootstrap idempotency
-get_code_snippet("_validate_collar_pairs")                  # confirm exact (narrower) scope — same read
-get_code_snippet("CollarOverlayV1.apply_action")             # already read this session — confirmed
-                                                             # PROFIT_TARGET/TIME_STOP-only gap
-get_code_snippet("ExitSignalEngine.evaluate_cc")             # confirm full signal set driving Collar's
-                                                             # short-call evaluation — already read
-                                                             # this session, confirmed BELOW_FLOOR/
-                                                             # PROFIT_TARGET/LOSS_STOP/DELTA_STOP/DELTA_WARN
-git log --oneline -10 src/strategy/collar_overlay_v1.py
+get_code_snippet("CollarOverlayV1.apply_action")   # already read this session — confirmed current
+                                                     # set is PROFIT_TARGET/TIME_STOP/DTE_REVIEW
+get_code_snippet("cc_overlay_v1")                   # confirm CC3's exact shipped trigger set to
+                                                     # mirror (already read: no BELOW_FLOOR)
+git log --oneline -10 src/strategy/collar_overlay_v1.py   # already run this session
 ```
 
-**Cron cadence:** not decided here — flag as open, same as PP3 (do not assume CC3's Wednesday
-cadence transfers; Collar's short-call side is expiry-cycle premium collection like CC, but its
-put side is drawdown protection like PP — a single shared cadence for both legs' re-entry isn't
-obviously right and needs the same operator confirmation PP3 defers).
-
-**Depends on:** Collar1 + Collar2 for the entry-selection method (mirrors CC3→CC1/CC2,
-PP3→PP1/PP2). The re-entry-trigger-widening fix does not depend on Collar1/Collar2 and can ship
-independently/first, same as PP3's Gap-1/Gap-2 split.
+**Depends on:** none. Independent, can ship first — same relationship PP3's Gap-1 fix had to
+Gap-2's automated entry.
 
 **Tests:**
-- `test_entry_skipped_when_open_collar_pair_exists` — new idempotency guard, mirrors CC3/PP3's
-  pattern; asserts no trade recorded for either leg
-- `test_entry_proceeds_when_no_open_collar_position`
-- `test_existing_query_open_call_roles_guard_unchanged` — regression guard, the same-instrument
-  cross-type check still works exactly as today
-- `test_existing_validate_collar_pairs_guard_unchanged` — regression guard, partial-collar
-  submission validation still fires exactly as today
-- `test_dry_run_default_until_collar1_collar2_resolved` — regression guard against accidentally
-  shipping `--no-dry-run` before the ladder/band decision lands
 - `test_reentry_check_called_for_loss_stop` — new: `_check_reentry` now called when
   `triggering_signal == "LOSS_STOP"`
 - `test_reentry_check_called_for_delta_stop` — same for `DELTA_STOP`
-- `test_reentry_check_called_for_below_floor` — same for `BELOW_FLOOR`
+- `test_reentry_check_not_called_for_below_floor` — regression guard: `BELOW_FLOOR` is
+  INFO-severity and never dispatches `CLOSE_COLLAR`, so no re-entry check should fire (this is a
+  correction to the original story's draft test list, which incorrectly asserted the opposite)
 - `test_reentry_check_not_called_for_delta_warn` — regression guard: WARN-severity signals never
-  close the position, so no re-entry check should fire for them (confirm this assumption in code
-  before writing the test, per this story's own "don't assume" instruction)
+  close the position, so no re-entry check should fire for them
 - `test_reentry_gates_unchanged_regardless_of_triggering_signal` — DTE/IVR/open-position gate
   logic itself doesn't change, only which signals invoke it
 - `test_close_collar_all_atomicity_unchanged` — regression guard that this story doesn't disturb
   the already-correct two-leg atomic close/missing-put-leg-warning behavior
 
-**Commit:** `feat(strategy): automated Collar entry script, idempotency-guarded, re-entry check widened to all applicable exit signals`
+**Commit:** `fix(strategy): widen Collar re-entry trigger to LOSS_STOP/DELTA_STOP`
+
+---
+
+## Collar3b — Automated Collar entry: bootstrap function + idempotency guard + cron
+
+**Split from Collar3 (2026-08-03)** — see Collar3a above for the independent re-entry-gap fix,
+now separated out. This story is the larger, dependency-gated half.
+
+**Context (2026-07-28, same "I only get notified" directive that drove CC3/PP3):** Collar entry
+today is entirely manual — run `find_strike_by_delta.py --overlay-type collar` (Collar1), eyeball
+the call×put cross-product (Collar2's confirmed bands: call 0.18–0.20Δ, put 0.15Δ ±0.02, min
+`|net_premium|` tiebreak), hand-paste two `record_paper_trade` commands (or the YAML →
+`paper_3track_overlay_entry.py` path for the two-leg write). This story would automate entry the
+way CC3 (`auto_cc_bootstrap`)/PP3 (`auto_pp_bootstrap`) do — a new `auto_collar_bootstrap()` +
+`--auto-collar` flag in `paper_3track_overlay_entry.py`.
+
+**Confirmed via code read this session — the "idempotency guard gap" is narrower than the
+original story assumed:** the *manual*/YAML collar entry path already has a bootstrap-only guard
+today, via the generic S6 mechanism — `main()` computes
+`primary_role = _PRIMARY_LEG_ROLE[cfg.overlay_type]` (`"overlay_collar_put"` for collar,
+`paper_3track_overlay_entry.py:90-93`) and skips entry entirely if
+`_has_open_overlay_leg(store, primary_role)` is `True`. So a hand-run YAML collar entry cannot
+already double up. What does **not** exist yet is any `--auto-collar` bootstrap function at all —
+there is nothing to guard because the automated path hasn't been written. `_query_open_call_role()`
+(same-instrument cross-type dedup, confirmed narrow scope — not a bootstrap check) and
+`_validate_collar_pairs()` (submission-shape validator, not a pre-submission existence check)
+remain correctly out of scope for this story, same as originally noted.
+
+**Practical implication:** this story is substantially a new-feature build (chain fetch + Collar1's
+two-leg delta search + Collar2's band/tiebreak selection + gates + trade construction), not a small
+guard addition — closer in size to CC3/PP3's bootstrap functions than to Collar3a's one-line trigger
+widening. Size this accordingly before starting.
+
+**Files to change (draft — confirm via graph at implementation time, this list may drift):**
+- `scripts/strategies/three_track/paper_3track_overlay_entry.py` — new `auto_collar_bootstrap()`
+  (mirrors `auto_cc_bootstrap`/`auto_pp_bootstrap` shape) + `--auto-collar` CLI flag; reuses
+  Collar1's `_find_candidates_for_ladder()`/`run_collar_mode()` machinery and Collar2's confirmed
+  bands/net-premium tiebreak for two-leg strike selection; the existing generic
+  `_has_open_overlay_leg(store, "overlay_collar_put")` bootstrap gate already fires for this path
+  with no new guard code required — confirm this is sufficient once the function exists, rather
+  than assuming a second bespoke `_query_open_collar_pair()` helper is needed (the original story
+  proposed one; verify it isn't redundant with the existing generic gate before writing it)
+- `tests/unit/paper/test_overlay_entry.py` — bootstrap-path tests for `--auto-collar`
+- `tests/unit/scripts` / wherever CC3/PP3's own bootstrap tests live — mirror test shape
+
+**Before any code:**
+```
+get_code_snippet("auto_cc_bootstrap")               # CC3's shipped shape to mirror
+get_code_snippet("auto_pp_bootstrap")               # PP3's shipped shape to mirror
+get_code_snippet("_has_open_overlay_leg")            # confirm generic gate already covers collar
+get_code_snippet("run_collar_mode")                  # Collar1's two-leg search entry point
+git log --oneline -10 scripts/strategies/three_track/paper_3track_overlay_entry.py
+```
+
+**Open question — cron cadence (must be resolved with operator before implementation, do not
+assume):** do not copy CC3's Wednesday cadence or PP3's daily-with-DTE-gate cadence verbatim.
+Collar's short-call side is expiry-cycle premium collection like CC; its long-put side is
+drawdown protection like PP. A single shared cadence for both legs' re-entry isn't obviously
+right — candidates to put to the operator: (a) weekly, call-leg-driven, matching CC's cadence
+since the call is the more time-sensitive leg; (b) daily with a DTE-gate on whichever leg is
+closer to roll, matching PP's shape; (c) a Collar-specific hybrid keyed on each leg's own DTE
+independently. Resolve before writing `auto_collar_bootstrap()`, same gating PP3 applied to its
+own open cadence question.
+
+**Depends on:** Collar1 + Collar2 for the entry-selection method (both landed — SHA e148731,
+2026-08-03 respectively) — the selection-method dependency is satisfied. Still blocked on the
+cron-cadence decision above, and on the same `--no-dry-run`-until-proven-live posture CC3/PP3
+both required (ship `--dry-run`-only first, same as CC3's pre-CC5 posture).
+
+**Tests:**
+- `test_auto_collar_bootstrap_no_open_position` — happy path, both legs selected and recorded
+  (dry-run)
+- `test_auto_collar_bootstrap_skipped_when_already_open` — generic `_has_open_overlay_leg` gate
+  fires, no trades recorded
+- `test_auto_collar_dry_run_default` — regression guard against accidentally shipping
+  `--no-dry-run` before a live-proven dry-run cycle
+- Additional tests per whatever gate/selection logic the implementation session actually adds —
+  this list is a starting point, not exhaustive (confirm final shape against CC3/PP3's own test
+  files for parity)
+
+**Commit:** `feat(strategy): automated Collar entry via --auto-collar bootstrap`
 
 ---
 
