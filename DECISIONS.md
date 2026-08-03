@@ -5,6 +5,25 @@
 
 ---
 
+**Collar1 shipped — two-leg delta-targeted collar search, cross-product only, no auto-select
+(2026-08-03):** `find_strike_by_delta.py` gained `--overlay-type collar`, coordinating CC1's
+`CC_DELTA_CANDIDATES` (short call) and PP1's `PP_DELTA_CANDIDATES` (long put) — both were a hard
+prerequisite (Collar1 has no independent ladder of its own) and both had already shipped.
+`_find_candidates_for_ladder()` collects one liquidity-gated candidate per ladder rung (both
+sides, all resolved rungs), `compute_net_collar_premium()` computes call credit − put debit
+(mid-price convention, matching `build_record_command`'s existing pricing rule),
+`build_collar_cross_product()` reports the full call×put cross-product, and `run_collar_mode()`
+raises `RuntimeError` if either ladder is missing/empty — verified as a real guard (not
+cosmetic) by a `general-purpose` agent standing in for `@code-reviewer`. Per the story's explicit
+scope, this does **not** auto-select a single combo (regression-guarded by
+`test_collar_mode_does_not_auto_select_a_single_combo`) — the pick is deferred to Collar2's
+decision gate, same relationship CC1→CC2 and PP1→PP2 already have. 10 new tests, 56/56 green on
+a live `pytest` run (sandbox `/sessions` disk again at 100% capacity — worked around via `pip
+install --target=.../mnt/outputs/pydeps`, the same recurring fix class as PP1/PP3/CC3 sessions).
+Full spec: `docs/plan/3track-consolidation/stories.md` Collar1; `tasks.md` Collar1 ticked.
+
+---
+
 **PP2 resolved — PP entry moves to 0.15 delta, monthly cadence (2026-08-03, direct operator
 decision, no council pass despite the story's council-checkpoint recommendation):** Closes the
 entry-delta-band decision gate that had gated `PP_DELTA_CANDIDATES` (`scripts/lookup/

@@ -7,6 +7,20 @@
 
 ## Session Log — 2026-08-03
 
+- [2026-08-03] 3-Track Consolidation **Collar1** — Two-leg delta-targeted collar search shipped
+  in `find_strike_by_delta.py` (`--overlay-type collar`), coordinating CC1's
+  `CC_DELTA_CANDIDATES` and PP1's `PP_DELTA_CANDIDATES` (both prerequisites already landed).
+  New helpers `_find_candidates_for_ladder`/`compute_net_collar_premium`/
+  `build_collar_cross_product`/`format_collar_table`/`run_collar_mode`. Deliberately does not
+  auto-select a combo — prints the call×put cross-product with net premium (call credit − put
+  debit), leaving the pick to Collar2. `RuntimeError` guard confirmed real (not cosmetic) if
+  either ladder is missing/empty. 10 new tests, 56/56 passing on a live `pytest` run — sandbox
+  `/sessions` disk was at 100% again, worked around via `pip install --target=.../mnt/outputs/
+  pydeps` (same fix class as PP1/PP3/CC3). `general-purpose` agent stood in for `@code-reviewer`
+  — no CRITICAL/ERROR; two low-severity WARNINGs deferred (see CONTEXT.md Collar1 entry).
+  `tasks.md` Collar1 ticked. See `DECISIONS.md` and `docs/plan/3track-consolidation/stories.md`
+  Collar1.
+
 - [2026-08-03] 3-Track Consolidation **PP4** — Closed with no new code. Traced the call graph
   (not the story draft): `main()`'s `--auto-pp` path treats `_open_pp_dte()==None` — "no open
   `overlay_pp` position" — as the bootstrap trigger, which is exactly the state `MONETIZE_PP`

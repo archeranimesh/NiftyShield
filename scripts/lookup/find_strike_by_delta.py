@@ -131,6 +131,168 @@ def _reorder_cc_round500_first(
     return [], None
 
 
+def _find_candidates_for_ladder(
+    raw_data_by_expiry: dict[str, Any],
+    expiries: list[tuple[str, str]],
+    option_type: str,
+    ladder: list[float],
+) -> list[dict[str, Any]]:
+    """Find one best liquidity-gated candidate row per ladder rung.
+
+    Unlike ``main()``'s single-selection fallback loop (which stops at the first
+    rung with a passing candidate), this collects a candidate for *every* rung that
+    has one — Collar1 needs the full set of viable call/put candidates to build the
+    cross-product, not a single winner.
+
+    Args:
+        raw_data_by_expiry: Raw Upstox chain rows keyed by expiry string.
+        expiries: ``(label, expiry)`` tuples already resolved for this run.
+        option_type: ``"CE"`` or ``"PE"``.
+        ladder: Target |delta| values to search, in order (e.g. ``CC_DELTA_CANDIDATES``).
+
+    Returns:
+        List of candidate rows (each the top-ranked, liquidity-gated row for its
+        rung), annotated with ``target_delta``. Rungs with no passing candidate are
+        omitted, not padded with ``None``.
+    """
+    candidates: list[dict[str, Any]] = []
+    for target in ladder:
+        rows: list[dict[str, Any]] = []
+        for label, expiry in expiries:
+            raw_data = raw_data_by_expiry.get(expiry)
+            if not raw_data:
+                continue
+            delta_min = max(0.0, target - 0.02)
+            delta_max = target + 0.02
+            r = filter_strikes_by_delta(
+                raw_data, option_type=option_type, delta_min=delta_min, delta_max=delta_max
+            )
+            for row in r:
+                row["expiry"] = expiry
+                row["expiry_label"] = label
+            rows.extend(r)
+        if not rows:
+            continue
+        gated = _apply_liquidity_gate(rank_strikes(rows))
+        if gated:
+            candidates.append({**gated[0], "target_delta": target})
+    return candidates
+
+
+def compute_net_collar_premium(call_row: dict[str, Any], put_row: dict[str, Any]) -> float:
+    """Net premium of a collar combo: short-call credit minus long-put debit.
+
+    Positive means the call funds more than the put costs (net credit); negative
+    means the combo is a net debit. Uses mid price ``(bid+ask)/2`` when available,
+    falling back to ``ltp`` — same convention as :func:`build_record_command`.
+
+    Args:
+        call_row: A candidate row for the short call leg (``overlay_collar_call``).
+        put_row: A candidate row for the long put leg (``overlay_collar_put``).
+
+    Returns:
+        Net premium rounded to 2 decimal places.
+    """
+    call_price = call_row["mid"] if call_row.get("mid", 0) > 0 else call_row["ltp"]
+    put_price = put_row["mid"] if put_row.get("mid", 0) > 0 else put_row["ltp"]
+    return round(call_price - put_price, 2)
+
+
+def build_collar_cross_product(
+    call_candidates: list[dict[str, Any]],
+    put_candidates: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Cross product of CC-ladder call candidates × PP-ladder put candidates.
+
+    Does not auto-select a "best" combo — Collar1's scope is coordination and
+    reporting only; the pick is left to operator/Collar2 judgment.
+
+    Args:
+        call_candidates: Output of :func:`_find_candidates_for_ladder` for CE.
+        put_candidates: Output of :func:`_find_candidates_for_ladder` for PE.
+
+    Returns:
+        List of ``{"call": row, "put": row, "net_premium": float}`` dicts, one per
+        pairing. Empty if either side has no candidates.
+    """
+    return [
+        {"call": call, "put": put, "net_premium": compute_net_collar_premium(call, put)}
+        for call in call_candidates
+        for put in put_candidates
+    ]
+
+
+def format_collar_table(combos: list[dict[str, Any]]) -> str:
+    """Format the collar candidate cross-product as a fixed-width table string.
+
+    Args:
+        combos: Output of :func:`build_collar_cross_product`.
+
+    Returns:
+        Multi-line string ready for ``print()``.
+    """
+    if not combos:
+        return "  No viable collar combos found — check CC1/PP1 ladders and liquidity gate."
+
+    col_hdr = (
+        f"  {'CALL STRIKE':>11}  {'CALL Δ':>7}  {'PUT STRIKE':>10}  "
+        f"{'PUT Δ':>7}  {'NET PREMIUM':>11}"
+    )
+    sep = "  " + "─" * (len(col_hdr) - 2)
+    lines = [col_hdr, sep]
+    for c in combos:
+        lines.append(
+            f"  {c['call']['strike']:>11.0f}  {c['call']['delta']:>+7.4f}  "
+            f"{c['put']['strike']:>10.0f}  {c['put']['delta']:>+7.4f}  "
+            f"{c['net_premium']:>11.2f}"
+        )
+    return "\n".join(lines)
+
+
+def run_collar_mode(
+    raw_data_by_expiry: dict[str, Any],
+    expiries: list[tuple[str, str]],
+    cc_ladder: list[float] | None = None,
+    pp_ladder: list[float] | None = None,
+) -> list[dict[str, Any]]:
+    """Coordinate CC1's call ladder and PP1's put ladder into collar candidate combos.
+
+    Collar1 (3track-consolidation): hard-depends on both CC1 and PP1 having shipped
+    their respective delta ladders — there is no independent "collar ladder" to
+    invent; this function's entire job is running both existing ladders and
+    reporting the cross-product, never auto-selecting a single combo.
+
+    Args:
+        raw_data_by_expiry: Raw Upstox chain rows keyed by expiry string.
+        expiries: ``(label, expiry)`` tuples already resolved for this run.
+        cc_ladder: Call-side ladder; defaults to :data:`CC_DELTA_CANDIDATES`.
+        pp_ladder: Put-side ladder; defaults to :data:`PP_DELTA_CANDIDATES`.
+
+    Returns:
+        Output of :func:`build_collar_cross_product`.
+
+    Raises:
+        RuntimeError: If either ladder is missing or empty — guards the hard
+            CC1/PP1 dependency instead of silently running collar mode with no
+            candidates on one side.
+    """
+    cc_ladder = CC_DELTA_CANDIDATES if cc_ladder is None else cc_ladder
+    pp_ladder = PP_DELTA_CANDIDATES if pp_ladder is None else pp_ladder
+    if not cc_ladder:
+        raise RuntimeError(
+            "Collar mode requires CC_DELTA_CANDIDATES (CC1) to be defined and non-empty — "
+            "the call ladder must ship before collar mode can run."
+        )
+    if not pp_ladder:
+        raise RuntimeError(
+            "Collar mode requires PP_DELTA_CANDIDATES (PP1) to be defined and non-empty — "
+            "the put ladder must ship before collar mode can run."
+        )
+    call_candidates = _find_candidates_for_ladder(raw_data_by_expiry, expiries, "CE", cc_ladder)
+    put_candidates = _find_candidates_for_ladder(raw_data_by_expiry, expiries, "PE", pp_ladder)
+    return build_collar_cross_product(call_candidates, put_candidates)
+
+
 def _select_delta_candidates(option_type: str, overlay_type: str | None = None) -> list[float]:
     """Select the fallback delta-candidate ladder for the requested option side.
 
@@ -370,12 +532,15 @@ def _parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--overlay-type",
-        choices=["cc", "pp"],
+        choices=["cc", "pp", "collar"],
         default=None,
         help=(
             "Explicit overlay ladder opt-in (PP1). 'pp' selects PP_DELTA_CANDIDATES for "
             "--option-type PE (bare PE without this flag stays on CSP's ladder). 'cc' is "
-            "a no-op — --option-type CE already resolves to the CC ladder on its own."
+            "a no-op — --option-type CE already resolves to the CC ladder on its own. "
+            "'collar' (Collar1) runs both CC's call ladder and PP's put ladder and reports "
+            "the candidate cross-product with net premium — it does not auto-select a "
+            "single combo; --option-type is ignored in this mode."
         ),
     )
     p.add_argument(
@@ -544,6 +709,21 @@ def main() -> None:
         except Exception as exc:
             print(f"  WARNING: fetch failed for {expiry} — {exc} — skipping.")
             continue
+
+    if args.overlay_type == "collar":
+        try:
+            combos = run_collar_mode(raw_data_by_expiry, expiries)
+        except RuntimeError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            sys.exit(1)
+        print()
+        print(format_collar_table(combos))
+        print()
+        print(
+            "Collar mode reports the candidate cross-product only — no combo is "
+            "auto-selected. Pick a pairing per operator/Collar2 judgment."
+        )
+        sys.exit(0)
 
     if not all_rows:
         print(

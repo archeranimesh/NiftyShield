@@ -95,10 +95,14 @@ from scripts.lookup.find_strike_by_delta import (
     _resolve_action,
     _safe_float,
     _select_delta_candidates,
+    build_collar_cross_product,
     build_record_command,
+    compute_net_collar_premium,
     filter_strikes_by_delta,
+    format_collar_table,
     format_table,
     rank_strikes,
+    run_collar_mode,
 )
 from src.paper.constants import STRATEGY_PP_OVERLAY
 
@@ -541,6 +545,83 @@ def test_resolve_action_unchanged_for_non_pp_strategies() -> None:
 
 def test_resolve_action_explicit_buy_for_pp_is_a_noop() -> None:
     assert _resolve_action(STRATEGY_PP_OVERLAY, "BUY") == "BUY"
+
+
+# ── Collar1: two-leg delta-targeted collar search ──────────────────────────────
+
+_CALL_ROW: dict = {
+    "side": "CE",
+    "strike": 22600.0,
+    "delta": 0.18,
+    "iv": 12.0,
+    "ltp": 40.0,
+    "mid": 42.0,
+    "bid": 41.0,
+    "ask": 43.0,
+    "oi": 50000,
+    "instrument_key": "NSE_FO|CALL1",
+}
+
+_PUT_ROW: dict = {
+    "side": "PE",
+    "strike": 21900.0,
+    "delta": -0.20,
+    "iv": 15.0,
+    "ltp": 55.0,
+    "mid": 50.0,
+    "bid": 49.0,
+    "ask": 51.0,
+    "oi": 60000,
+    "instrument_key": "NSE_FO|PUT1",
+}
+
+
+def test_net_collar_premium_computed_correctly() -> None:
+    # call credit 42.0 - put debit 50.0 = -8.0 (net debit)
+    assert compute_net_collar_premium(_CALL_ROW, _PUT_ROW) == -8.0
+    # net-credit case: call mid raised above put mid
+    rich_call = {**_CALL_ROW, "mid": 60.0}
+    assert compute_net_collar_premium(rich_call, _PUT_ROW) == 10.0
+
+
+def test_collar_mode_runs_both_ce_and_pe_searches(monkeypatch: pytest.MonkeyPatch) -> None:
+    """--overlay-type collar invokes both the CC ladder and the PP ladder, not just one."""
+    seen_option_types: list[str] = []
+
+    def fake_find_candidates(raw_data_by_expiry, expiries, option_type, ladder):
+        seen_option_types.append(option_type)
+        return [_CALL_ROW] if option_type == "CE" else [_PUT_ROW]
+
+    import scripts.lookup.find_strike_by_delta as mod
+
+    monkeypatch.setattr(mod, "_find_candidates_for_ladder", fake_find_candidates)
+    combos = run_collar_mode({"2026-05-29": _load_chain()}, [("monthly", "2026-05-29")])
+    assert set(seen_option_types) == {"CE", "PE"}
+    assert len(combos) == 1
+    assert combos[0]["call"] == _CALL_ROW
+    assert combos[0]["put"] == _PUT_ROW
+
+
+def test_collar_mode_does_not_auto_select_a_single_combo() -> None:
+    """Cross-product reports every pairing — regression guard against inventing a
+    third auto-select heuristic no one asked for."""
+    call_candidates = [{**_CALL_ROW, "target_delta": 0.18}, {**_CALL_ROW, "target_delta": 0.20}]
+    put_candidates = [{**_PUT_ROW, "target_delta": 0.20}, {**_PUT_ROW, "target_delta": 0.25}]
+    combos = build_collar_cross_product(call_candidates, put_candidates)
+    assert len(combos) == 4  # full 2x2 cross-product, no single pick
+    table = format_collar_table(combos)
+    assert table.count("NET PREMIUM") == 1  # header appears once, not per-row
+    # header + separator + one row per combo
+    assert len(table.splitlines()) == 2 + len(combos)
+
+
+def test_collar_mode_requires_cc1_pp1_ladders_present() -> None:
+    """Collar mode raises a clear error if either ladder is missing/empty — guards
+    the hard CC1/PP1 dependency rather than silently running one-sided."""
+    with pytest.raises(RuntimeError, match="CC1"):
+        run_collar_mode({}, [], cc_ladder=[], pp_ladder=PP_DELTA_CANDIDATES)
+    with pytest.raises(RuntimeError, match="PP1"):
+        run_collar_mode({}, [], cc_ladder=CC_DELTA_CANDIDATES, pp_ladder=[])
 
 
 def test_cc_overlay_type_is_a_noop_for_ce() -> None:
