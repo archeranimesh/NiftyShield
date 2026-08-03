@@ -61,6 +61,12 @@ _reorder_cc_round500_first (CC4)
  36  test_round500_internal_order_preserved               multiple round-500 rows keep their rank_strikes order
  37  test_round500_empty_input_returns_empty              [] → ([], None)
  38  test_round500_all_round500_no_fallback_reason         every gated row is round-500 → reason is None
+
+_select_delta_candidates (PP1)
+ 39  test_pp_ladder_used_for_pe_option_type_with_overlay_flag   PE + --overlay-type pp → PP_DELTA_CANDIDATES
+ 40  test_csp_ladder_unchanged_for_pe_without_overlay_flag       bare PE (CSP's shape) untouched — regression guard
+ 41  test_pe_without_overlay_flag_does_not_silently_pick_pp_ladder  PE alone must never imply PP
+ 42  test_cc_overlay_type_is_a_noop_for_ce                        --overlay-type cc doesn't change CE's ladder
 """
 
 from __future__ import annotations
@@ -77,6 +83,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 from scripts.lookup.find_strike_by_delta import (
     CC_DELTA_CANDIDATES,
     DELTA_CANDIDATES,
+    PP_DELTA_CANDIDATES,
     _infer_leg,
     _reorder_cc_round500_first,
     _safe_float,
@@ -479,3 +486,32 @@ def test_round500_all_round500_no_fallback_reason() -> None:
     reordered, reason = _reorder_cc_round500_first(gated)
     assert len(reordered) == 2
     assert reason is None
+
+
+# ── _select_delta_candidates (PP1) ─────────────────────────────────────────────
+
+
+def test_pp_ladder_used_for_pe_option_type_with_overlay_flag() -> None:
+    assert _select_delta_candidates("PE", overlay_type="pp") == PP_DELTA_CANDIDATES
+
+
+def test_csp_ladder_unchanged_for_pe_without_overlay_flag() -> None:
+    """Regression guard: bare --option-type PE (CSP's existing invocation shape) is untouched."""
+    assert _select_delta_candidates("PE") == DELTA_CANDIDATES
+    assert _select_delta_candidates("PE", overlay_type=None) == DELTA_CANDIDATES
+
+
+def test_pe_without_overlay_flag_does_not_silently_pick_pp_ladder() -> None:
+    """Explicit guard against the ambiguity PP1 exists to resolve: PE alone must never
+    imply PP, only the explicit --overlay-type pp opt-in does.
+    """
+    assert _select_delta_candidates("PE") != PP_DELTA_CANDIDATES
+    assert _select_delta_candidates("PE", overlay_type="cc") == DELTA_CANDIDATES
+
+
+def test_cc_overlay_type_is_a_noop_for_ce() -> None:
+    """--overlay-type cc is a no-op — --option-type CE already resolves to the CC ladder
+    on its own, so passing the flag must not change the outcome.
+    """
+    assert _select_delta_candidates("CE", overlay_type="cc") == CC_DELTA_CANDIDATES
+    assert _select_delta_candidates("CE", overlay_type="cc") == _select_delta_candidates("CE")

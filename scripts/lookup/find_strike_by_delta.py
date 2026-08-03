@@ -72,6 +72,20 @@ DELTA_CANDIDATES = [0.22, 0.25, 0.20]
 # --no-dry-run.
 CC_DELTA_CANDIDATES = [0.18, 0.20, 0.15]
 
+# PP long-put protection ladder (PP1, 3track-consolidation). PROVISIONAL — these values are
+# an experimentation/comparison starting point only, not an operator-confirmed entry band.
+# PP2 (docs/plan/3track-consolidation/stories.md) is the actual decision gate; do not treat
+# this ladder as live-ready until PP2 resolves it, same provisional→confirmed pattern CC1's
+# comment followed before CC2 closed it. Ordering favors 0.20 first (deep enough OTM to keep
+# the debit cheap) with 0.25/0.15 as fallbacks — deliberately not copied from CSP's or CC's
+# ladders: PP is a long-debit purchase, not a short-premium sale. Confirmed (2026-08-03,
+# not assumed) that src.instruments.strike_selector.rank_strikes()'s existing spread/OI/
+# round-strike ranking stays unchanged for PP — it is already documented side-agnostic
+# ("CSP, CC, PP, etc.") and its criteria (tight spread, high OI, round strikes) matter for
+# an infrequently-touched protective leg's exit liquidity, not just entry-credit
+# optimization; no PP-specific ranking tuple added.
+PP_DELTA_CANDIDATES = [0.20, 0.25, 0.15]
+
 # Defaults that mirror scripts.record.record_paper_trade — used to emit minimal commands.
 DEFAULT_STRATEGY = STRATEGY_CSP
 DEFAULT_ACTION = "SELL"
@@ -117,21 +131,30 @@ def _reorder_cc_round500_first(
     return [], None
 
 
-def _select_delta_candidates(option_type: str) -> list[float]:
+def _select_delta_candidates(option_type: str, overlay_type: str | None = None) -> list[float]:
     """Select the fallback delta-candidate ladder for the requested option side.
 
     CE (covered-call short calls) get their own ladder (CC1) — previously CC silently
     inherited CSP's short-put ladder regardless of `--option-type`, which is a different
-    strategy's target deltas. PE and BOTH keep the existing CSP ladder unchanged.
+    strategy's target deltas. PE keeps the existing CSP ladder unless the caller passes
+    the explicit ``--overlay-type pp`` flag (PP1) — PE alone is ambiguous between CSP's
+    short-put and PP's long-put, so the PP ladder is opt-in only, never inferred from
+    `--option-type PE` by itself (operator-scoped deferral, see PP1 story: the collision
+    only matters once CSP and PP are both live simultaneously, not evaluated yet). BOTH
+    always keeps the CSP ladder — overlay-type selection is single-side by construction.
 
     Args:
         option_type: ``"CE"``, ``"PE"``, or ``"BOTH"`` (from ``--option-type``).
+        overlay_type: ``"pp"`` to opt into the PP long-put ladder, ``"cc"`` (no-op —
+            CE already resolves to ``CC_DELTA_CANDIDATES`` on its own), or ``None``.
 
     Returns:
         The candidate ladder to try in order.
     """
     if option_type == "CE":
         return CC_DELTA_CANDIDATES
+    if option_type == "PE" and overlay_type == "pp":
+        return PP_DELTA_CANDIDATES
     return DELTA_CANDIDATES
 
 
@@ -315,6 +338,16 @@ def _parse_args() -> argparse.Namespace:
         help="Filter by option side. Default: PE.",
     )
     p.add_argument(
+        "--overlay-type",
+        choices=["cc", "pp"],
+        default=None,
+        help=(
+            "Explicit overlay ladder opt-in (PP1). 'pp' selects PP_DELTA_CANDIDATES for "
+            "--option-type PE (bare PE without this flag stays on CSP's ladder). 'cc' is "
+            "a no-op — --option-type CE already resolves to the CC ladder on its own."
+        ),
+    )
+    p.add_argument(
         "--underlying",
         default=UNDERLYING_DEFAULT,
         help=f'Underlying instrument key. Default: "{UNDERLYING_DEFAULT}".',
@@ -479,7 +512,7 @@ def main() -> None:
         sys.exit(1)
 
     # ── Candidate Selection Flow with Liquidity Gate (ES12) ──
-    delta_candidates = _select_delta_candidates(args.option_type)
+    delta_candidates = _select_delta_candidates(args.option_type, args.overlay_type)
     selected_row = None
     requested_delta = delta_candidates[0]
     fallback_used = False
