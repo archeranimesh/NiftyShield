@@ -5,6 +5,21 @@
 
 ---
 
+## Session Log — 2026-08-03
+
+- [2026-08-03] 3-Track Consolidation **PP1** — added `PP_DELTA_CANDIDATES = [0.20, 0.25, 0.15]`
+  (provisional, gated by the separate PP2 decision-gate story) to `find_strike_by_delta.py`,
+  selected only when `--option-type PE` **and** the new explicit `--overlay-type pp` flag are
+  both passed — bare `--option-type PE` (CSP's existing shape) stays on `DELTA_CANDIDATES`
+  unchanged, resolving the PE-ambiguity concern the story flagged without collapsing it into
+  silent inference. Confirmed (not assumed) via `get_code_snippet` that `rank_strikes()` needs
+  no PP-specific ranking tuple — already documented side-agnostic. 4 new tests added; sandbox
+  disk quota (same `/sessions` 100%-full constraint as 2026-08-01/08-02 sessions) worked around
+  with the same `pip --target /tmp` approach the 2026-08-02 CC3 follow-up used — all 48 tests
+  (44 existing + 4 new) confirmed green on a live pytest run. Reviewed via a `general-purpose`
+  agent standing in for `@code-reviewer` — no CRITICAL/ERROR. Full detail: DECISIONS.md's PP1
+  entry (2026-08-03). SHA: `88bfe2d`.
+
 ## Session Log — 2026-08-02
 
 - [2026-08-02] 3-Track Consolidation **CC5** — pointer/dependency-visibility task closed, no
