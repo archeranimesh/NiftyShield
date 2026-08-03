@@ -21,7 +21,7 @@
   `pip --target /tmp` approach — 60/60 tests confirmed green on a live pytest run. Reviewed via
   `general-purpose` (manual trace) + a code-reviewer-standing-in agent — no CRITICAL/ERROR,
   3 WARNINGs deferred (documented in DECISIONS.md). Full detail: DECISIONS.md's PP3 entry
-  (2026-08-03). SHA: pending (filled in after commit).
+  (2026-08-03). SHA: d064263.
 
 - [2026-08-03] 3-Track Consolidation **PP1** — added `PP_DELTA_CANDIDATES = [0.20, 0.25, 0.15]`
   (provisional, gated by the separate PP2 decision-gate story) to `find_strike_by_delta.py`,
