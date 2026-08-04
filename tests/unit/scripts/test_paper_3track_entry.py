@@ -221,8 +221,8 @@ def test_entry_enters_only_still_flat_tracks_when_one_already_open() -> None:
     Futures/Proxy still enter (the per-track gate this story adds; the old
     all-or-nothing gate would have skipped the whole bootstrap)."""
     mock_store = MagicMock()
-    mock_store.get_positions.side_effect = (
-        lambda strategy_name: [MagicMock()] if strategy_name == STRATEGY_SPOT else []
+    mock_store.get_positions.side_effect = lambda strategy_name: (
+        [MagicMock()] if strategy_name == STRATEGY_SPOT else []
     )
     mock_store.record_trade.return_value = True
     bt_mock = MagicMock(return_value=[_fake_trade(n) for n in range(2)])
@@ -254,26 +254,63 @@ def test_entry_tracks_flag_restricts_to_requested_tracks() -> None:
 
 def test_auto_futures_exits_early_when_track_open() -> None:
     mock_store = MagicMock()
-    mock_store.get_positions.side_effect = (
-        lambda strategy_name: [MagicMock()] if strategy_name == STRATEGY_FUTURES else []
+    mock_store.get_positions.side_effect = lambda strategy_name: (
+        [MagicMock()] if strategy_name == STRATEGY_FUTURES else []
     )
     with pytest.raises(SystemExit) as exc:
-        _run_main(mock_store, mock_notifier=None, extra_argv=["--auto-futures"], include_confirm=False)
+        _run_main(
+            mock_store, mock_notifier=None, extra_argv=["--auto-futures"], include_confirm=False
+        )
     assert exc.value.code == 0
 
 
 def test_auto_ditm_exits_early_when_track_open() -> None:
     mock_store = MagicMock()
-    mock_store.get_positions.side_effect = (
-        lambda strategy_name: [MagicMock()] if strategy_name == STRATEGY_PROXY else []
+    mock_store.get_positions.side_effect = lambda strategy_name: (
+        [MagicMock()] if strategy_name == STRATEGY_PROXY else []
     )
     with pytest.raises(SystemExit) as exc:
         _run_main(mock_store, mock_notifier=None, extra_argv=["--auto-ditm"], include_confirm=False)
     assert exc.value.code == 0
 
 
-def test_auto_flags_block_confirm_flag() -> None:
+def test_auto_futures_confirm_writes_trade_when_track_flat() -> None:
+    """EC-5 landed and was verified (DECISIONS.md 2026-08-02 CC3 unblock precedent) —
+    --auto-futures --confirm must actually write, not just avoid the old sys.exit(1).
+    Asserting only "no error" here would repeat the exact coverage gap CC3's own
+    review caught and fixed (test_auto_cc_no_dry_run_writes_trade_on_bootstrap_success)."""
     mock_store = MagicMock()
-    with pytest.raises(SystemExit) as exc:
-        _run_main(mock_store, mock_notifier=None, extra_argv=["--auto-futures"], include_confirm=True)
-    assert exc.value.code == 1
+    mock_store.get_positions.return_value = []  # futures flat
+    mock_store.record_trade.return_value = True
+    bt_mock = MagicMock(return_value=[_fake_trade(0)])
+
+    _run_main(
+        mock_store,
+        mock_notifier=None,
+        extra_argv=["--auto-futures"],
+        include_confirm=True,
+        build_trades_mock=bt_mock,
+    )
+
+    called_tracks = bt_mock.call_args.kwargs["tracks"]
+    assert called_tracks == {STRATEGY_FUTURES}
+    assert mock_store.record_trade.call_count == 1
+
+
+def test_auto_ditm_confirm_writes_trade_when_track_flat() -> None:
+    mock_store = MagicMock()
+    mock_store.get_positions.return_value = []  # proxy flat
+    mock_store.record_trade.return_value = True
+    bt_mock = MagicMock(return_value=[_fake_trade(0)])
+
+    _run_main(
+        mock_store,
+        mock_notifier=None,
+        extra_argv=["--auto-ditm"],
+        include_confirm=True,
+        build_trades_mock=bt_mock,
+    )
+
+    called_tracks = bt_mock.call_args.kwargs["tracks"]
+    assert called_tracks == {STRATEGY_PROXY}
+    assert mock_store.record_trade.call_count == 1

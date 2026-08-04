@@ -585,7 +585,9 @@ def build_trades(p: LivePrices, tracks: set[str] | None = None) -> list[PaperTra
         ),
     )
     all_trades = {STRATEGY_SPOT: spot, STRATEGY_FUTURES: futures, STRATEGY_PROXY: proxy}
-    selected = all_trades if tracks is None else {k: v for k, v in all_trades.items() if k in tracks}
+    selected = (
+        all_trades if tracks is None else {k: v for k, v in all_trades.items() if k in tracks}
+    )
     logger.debug("Built %d PaperTrade objects", len(selected))
     return list(selected.values())
 
@@ -750,12 +752,12 @@ def main() -> None:
     parser.add_argument(
         "--auto-futures",
         action="store_true",
-        help="Auto-entry for futures track (dry-run only for now).",
+        help="Auto-entry for futures track. Pair with --confirm to write live.",
     )
     parser.add_argument(
         "--auto-ditm",
         action="store_true",
-        help="Auto-entry for proxy track (dry-run only for now).",
+        help="Auto-entry for proxy track. Pair with --confirm to write live.",
     )
     parser.add_argument(
         "--expiry",
@@ -802,16 +804,12 @@ def main() -> None:
         )
 
     if args.auto_futures or args.auto_ditm:
-        if args.confirm:
-            logger.error("--confirm is currently blocked for auto modes pending dry-run-only safety gate.")
-            sys.exit(1)
-            
         auto_tracks = []
         if args.auto_futures:
             auto_tracks.append("futures")
         if args.auto_ditm:
             auto_tracks.append("proxy")
-        
+
         args.tracks = auto_tracks
 
     _TRACK_MAP = {"spot": STRATEGY_SPOT, "futures": STRATEGY_FUTURES, "proxy": STRATEGY_PROXY}
@@ -922,7 +920,9 @@ def main() -> None:
 
             notifier = build_notifier()
             if notifier:
-                lines = [f"🟢 BASE ENTRY — 3-Track bootstrap ({', '.join(sorted(tracks_to_enter))})"]
+                lines = [
+                    f"🟢 BASE ENTRY — 3-Track bootstrap ({', '.join(sorted(tracks_to_enter))})"
+                ]
                 lines.append(f"Cycle: {args.cycle}")
                 if STRATEGY_SPOT in tracks_to_enter:
                     lines.append(

@@ -5,6 +5,23 @@
 
 ---
 
+**`--auto-futures`/`--auto-ditm` live posture unblocked (2026-08-04, direct operator go-ahead,
+no council pass):** `paper_3track_entry.py`'s auto-mode block on `--confirm` (added same session
+it shipped, pending EC-5) is removed, following the identical CC3 precedent below: EC-5 (CC's
+`TIME_STOP`/`DTE_REVIEW` collapse to a flat `dte<=5` close) is the named prerequisite, it landed
+2026-08-02, and its verification debt closed 2026-08-04 (live-host `pytest tests/unit/` run,
+2654 passed / 2 skipped / 1 pre-existing unrelated failure, covering the EC-5 test files). Unlike
+Collar3b below, this isn't "no real gate existed" — EC-5 was a real, named blocker that is now
+confirmed satisfied, so this is a straight unblock, not a re-framing.
+`test_auto_flags_block_confirm_flag` (asserted only that the old `sys.exit(1)` was gone) replaced
+with `test_auto_futures_confirm_writes_trade_when_track_flat` /
+`test_auto_ditm_confirm_writes_trade_when_track_flat`, which assert `PaperStore.record_trade` is
+actually called — the same test-coverage gap CC3's own review caught and had to fix after the
+fact (`test_auto_cc_no_dry_run_writes_trade_on_bootstrap_success`), not repeated here.
+`scripts/cron/paper_snapshot.cron.txt`'s `--auto-futures --confirm` / `--auto-ditm --confirm`
+lines (already staged) now write live paper positions once this lands — sync to the live
+crontab is an operator action, Claude cannot edit crontab from this sandbox.
+
 **`--auto-collar` live posture unblocked (2026-08-04, direct operator decision, no council
 pass):** Collar3b originally shipped `--auto-collar` hard-blocked to `--dry-run` only, framed as
 "same posture CC3/PP3 shipped with initially." On review, that framing didn't hold up — CC3's and
