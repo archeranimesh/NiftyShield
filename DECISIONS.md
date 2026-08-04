@@ -1581,6 +1581,8 @@ Source: this session (Cowork), `docs/plan/3track-consolidation/stories.md` PP3.
 
 ---
 
+**2026-08-04 — BUG-020 Phase 3 (IC V2 profit-target/profit-lock credit substitution):** `check_signals`'s single PnL-computation block substitutes the persisted `original_entry_credit` (Phase 1/2) for the recomputed `entry_credit` when present, and this substitution point is shared by both the Priority 4 profit-target branch and the Priorities 5/6 profit-lock zones (`_check_profit_lock`) — confirmed intentional during code review, not a scoping bug: the council doc (`docs/archive/council/strategy/2026-06-27_ic-v2-profit-lock-adjustment.md`) defines `entry_credit`/`captured_fraction` once as the shared economic baseline for both, so a single substitution point matches the documented design rather than requiring two parallel patches. The store read is wrapped non-fatal (`try/except`, `log.warning`, degrade to recompute) — same contract as Phase 2's entry-side `set_original_entry_credit` call — because an unguarded read would have let a transient SQLite error skip delta-roll evaluation (priorities 7/8) too, not just the credit substitution, which is a materially worse regression than "fall back to today's behavior." Source: this session (Cowork), `docs/bugs/bugs.md` BUG-020, `docs/bugs/task.md` B020.10-13.
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty

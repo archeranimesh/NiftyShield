@@ -21,12 +21,10 @@ Test list (from stories.md IC-V2-10):
 
 from __future__ import annotations
 
-from asyncio import run as arun
 import datetime
+from asyncio import run as arun
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
 
 from src.models.options import OptionChain, OptionChainStrike, OptionLeg
 from src.paper.models import PaperPosition
@@ -39,7 +37,7 @@ from src.strategy.protocol import ApprovedAction, LegClose, LegSpec
 
 _STRATEGY_NAME = "paper_ic_nifty_v2_monthly"
 _EXPIRY = datetime.date(2026, 7, 31)
-_FROZEN_TODAY = datetime.date(2026, 7, 15)   # DTE = 16
+_FROZEN_TODAY = datetime.date(2026, 7, 15)  # DTE = 16
 _EXPIRY_TAG = "31JUL2026"
 
 # Entry: shorts @ 23900 PE / 25100 CE each @ 100 pts; wings @ 50 pts.
@@ -128,8 +126,14 @@ def _healthy_chain_with_mark(put_mark: str = "40", call_mark: str = "30") -> Opt
     # = put_mark + call_mark - 5 - 5  (wings valued at 5)
     return _chain(
         {
-            "23900": (None, _leg("23900", "-0.20", ltp=put_mark, bid=str(put_ltp - 1), ask=str(put_ltp + 1))),
-            "25100": (_leg("25100", "0.18", ltp=call_mark, bid=str(call_ltp - 1), ask=str(call_ltp + 1)), None),
+            "23900": (
+                None,
+                _leg("23900", "-0.20", ltp=put_mark, bid=str(put_ltp - 1), ask=str(put_ltp + 1)),
+            ),
+            "25100": (
+                _leg("25100", "0.18", ltp=call_mark, bid=str(call_ltp - 1), ask=str(call_ltp + 1)),
+                None,
+            ),
             "23200": (None, _leg("23200", "-0.08", ltp="5", bid="4.5", ask="5.5")),
             "25800": (_leg("25800", "0.07", ltp="5", bid="4.5", ask="5.5"), None),
             # Zone 2 target wing strikes (19Δ area)
@@ -224,6 +228,11 @@ def _mock_store(pl_state: ProfitLockState | None = None) -> MagicMock:
     store = MagicMock()
     store.get_profit_lock_state.return_value = pl_state or _make_pl_state()
     store.set_profit_lock_state.return_value = None
+    # BUG-020 Phase 3: check_signals now unconditionally reads this before
+    # computing captured_fraction. None keeps these profit-lock-zone tests
+    # exercising today's recompute-from-ic_positions path unchanged — they
+    # are not testing Phase 3's persisted-credit substitution.
+    store.get_original_entry_credit.return_value = None
     return store
 
 
@@ -252,9 +261,7 @@ def test_zone1_emits_info_no_action(mock_today):
     strategy = _make_strategy(store)
     positions = _standard_positions()
 
-    signals = arun(
-        strategy.check_signals(chain, positions)
-    )
+    signals = arun(strategy.check_signals(chain, positions))
 
     assert len(signals) == 1
     s = signals[0]
@@ -277,9 +284,7 @@ def test_zone2_executes_automatically(MockEngine, mock_today):
     store = _mock_store(_make_pl_state(zone=0, zone2_executed=False))
     strategy = _make_strategy(store)
 
-    signals = arun(
-        strategy.check_signals(chain, _standard_positions())
-    )
+    signals = arun(strategy.check_signals(chain, _standard_positions()))
 
     assert len(signals) == 1
     s = signals[0]
@@ -301,9 +306,7 @@ def test_zone2_close_full_when_formula_fails(MockEngine, mock_today):
     store = _mock_store(_make_pl_state(zone=0, zone2_executed=False))
     strategy = _make_strategy(store)
 
-    signals = arun(
-        strategy.check_signals(chain, _standard_positions())
-    )
+    signals = arun(strategy.check_signals(chain, _standard_positions()))
 
     assert len(signals) == 1
     s = signals[0]
@@ -322,9 +325,7 @@ def test_zone2_not_repeated(MockEngine, mock_today):
     store = _mock_store(_make_pl_state(zone=2, zone2_executed=True))
     strategy = _make_strategy(store)
 
-    signals = arun(
-        strategy.check_signals(chain, _standard_positions())
-    )
+    signals = arun(strategy.check_signals(chain, _standard_positions()))
 
     # No zone2 re-trigger; engine called (because zone2_executed guard is in engine not caller)
     # but the engine itself returns NONE → no signal
@@ -351,9 +352,7 @@ def test_zone2_precedence_below_forced_close(mock_today):
     store = _mock_store(_make_pl_state(zone=0, zone2_executed=False))
     strategy = _make_strategy(store)
 
-    signals = arun(
-        strategy.check_signals(chain, _standard_positions())
-    )
+    signals = arun(strategy.check_signals(chain, _standard_positions()))
 
     assert len(signals) == 1
     s = signals[0]
@@ -383,9 +382,7 @@ def test_zone2_precedence_below_profit_target(mock_today):
     store = _mock_store(_make_pl_state(zone=0, zone2_executed=False))
     strategy = _make_strategy(store)
 
-    signals = arun(
-        strategy.check_signals(chain, _standard_positions())
-    )
+    signals = arun(strategy.check_signals(chain, _standard_positions()))
 
     assert len(signals) == 1
     s = signals[0]
@@ -420,9 +417,7 @@ def test_zone2_precedence_above_d3_roll(MockEngine, mock_today):
     store = _mock_store(_make_pl_state(zone=0, zone2_executed=False))
     strategy = _make_strategy(store)
 
-    signals = arun(
-        strategy.check_signals(chain, _standard_positions())
-    )
+    signals = arun(strategy.check_signals(chain, _standard_positions()))
 
     assert len(signals) == 1
     s = signals[0]
@@ -445,9 +440,7 @@ def test_notification_payload(MockEngine, mock_today):
     store = _mock_store(_make_pl_state(zone=0, zone2_executed=False))
     strategy = _make_strategy(store)
 
-    signals = arun(
-        strategy.check_signals(chain, _standard_positions())
-    )
+    signals = arun(strategy.check_signals(chain, _standard_positions()))
 
     assert len(signals) == 1
     payload = signals[0].payload

@@ -414,6 +414,117 @@ def test_full_pipeline_profit_target() -> None:
     assert captured >= Decimal("0.70"), f"expected ≥70% captured, got {captured}"
 
 
+# ── Tests: BUG-020 Phase 3 — profit target reads persisted original_entry_credit ──
+
+
+def test_profit_target_unaffected_when_persisted_credit_matches_recompute() -> None:
+    """Happy path: full 4-leg basket, persisted credit == today's recompute (100 pts).
+
+    Confirms Phase 3's substitution is a no-op for the correct-case (no partial
+    close yet) — same CLOSE_FULL result as the pre-Phase-3 `test_full_pipeline_profit_target`.
+    """
+    store = MagicMock()
+    store.get_original_entry_credit.return_value = Decimal("100")
+    strategy = IronCondorV2(config=IC_V2_MONTHLY, store=store)
+    with patch("src.strategy.ic_nifty_v2.market_today", return_value=_FROZEN_TODAY):
+        import asyncio
+
+        result = asyncio.run(
+            strategy.check_signals(_profit_target_chain(), _standard_ic_positions())
+        )
+    store.get_original_entry_credit.assert_called_once_with(strategy.strategy_name)
+    assert len(result) == 1
+    assert result[0].event_type == "CLOSE_FULL"
+    captured = Decimal(result[0].payload["captured_fraction"])
+    assert captured >= Decimal("0.70")
+
+
+def test_profit_target_uses_persisted_credit_after_partial_close() -> None:
+    """BUG-020 symptom fix: after the call spread has already closed, the
+    surviving put spread's own recomputed credit (150-50=100 pts, drifted
+    above the true original via avg_sell_price averaging) would falsely
+    trigger the 70% profit target (captured = (100-25)/100 = 75%). The
+    persisted original 4-leg entry credit (60 pts) is the true basket
+    economics and correctly keeps captured below target (captured =
+    (60-25)/60 = 58.3%) — no CLOSE_FULL.
+    """
+    store = MagicMock()
+    store.get_original_entry_credit.return_value = Decimal("60")
+    strategy = IronCondorV2(config=IC_V2_MONTHLY, store=store)
+    positions = [
+        _pos("short_put", _key("23900", "PE"), avg_sell_price="150"),
+        _pos("long_put_hedge", _key("23200", "PE"), avg_cost="50", net_qty=1),
+        _pos("short_call", _key("25100", "CE"), net_qty=0),
+        _pos("long_call_hedge", _key("25800", "CE"), net_qty=0),
+    ]
+    chain = _chain(
+        {
+            "23900": (None, _leg("23900", "-0.05", ltp="30", bid="29.5", ask="30.5")),
+            "23200": (None, _leg("23200", "-0.02", ltp="5", bid="4.75", ask="5.25")),
+        }
+    )
+    with patch("src.strategy.ic_nifty_v2.market_today", return_value=_FROZEN_TODAY):
+        import asyncio
+
+        result = asyncio.run(strategy.check_signals(chain, positions))
+    assert result == [], f"expected hold (no profit target fire), got {result}"
+
+
+def test_profit_target_falls_back_to_recompute_when_no_persisted_credit() -> None:
+    """Edge case: `get_original_entry_credit` returns None (pre-Phase-2 position,
+    never persisted) — falls back to today's recompute-from-ic_positions
+    behavior, unchanged. Non-breaking for positions entered before Phase 2.
+    """
+    store = MagicMock()
+    store.get_original_entry_credit.return_value = None
+    strategy = IronCondorV2(config=IC_V2_MONTHLY, store=store)
+    with patch("src.strategy.ic_nifty_v2.market_today", return_value=_FROZEN_TODAY):
+        import asyncio
+
+        result = asyncio.run(
+            strategy.check_signals(_profit_target_chain(), _standard_ic_positions())
+        )
+    assert len(result) == 1
+    assert result[0].event_type == "CLOSE_FULL"
+    captured = Decimal(result[0].payload["captured_fraction"])
+    assert captured >= Decimal("0.70")
+
+
+def test_profit_target_skips_store_lookup_when_no_store_injected() -> None:
+    """Edge case: `store=None` (test doubles / callers with no persistence
+    wired) must not raise — the `self._store is not None` guard short-circuits
+    the lookup entirely and falls back to recompute, same as the None-return case.
+    """
+    strategy = _make_strategy(original_credit="100")  # broker=None, store=None
+    with patch("src.strategy.ic_nifty_v2.market_today", return_value=_FROZEN_TODAY):
+        import asyncio
+
+        result = asyncio.run(
+            strategy.check_signals(_profit_target_chain(), _standard_ic_positions())
+        )
+    assert len(result) == 1
+    assert result[0].event_type == "CLOSE_FULL"
+
+
+def test_profit_target_survives_store_read_failure() -> None:
+    """Edge case: `get_original_entry_credit` raises (e.g. transient SQLite
+    lock/error). Must not propagate out of `check_signals` — degrades to the
+    recompute fallback, same as the None case, so priorities 4-8 still
+    evaluate for this tick instead of the whole method raising.
+    """
+    store = MagicMock()
+    store.get_original_entry_credit.side_effect = RuntimeError("db locked")
+    strategy = IronCondorV2(config=IC_V2_MONTHLY, store=store)
+    with patch("src.strategy.ic_nifty_v2.market_today", return_value=_FROZEN_TODAY):
+        import asyncio
+
+        result = asyncio.run(
+            strategy.check_signals(_profit_target_chain(), _standard_ic_positions())
+        )
+    assert len(result) == 1
+    assert result[0].event_type == "CLOSE_FULL"
+
+
 def test_protocol_compliance() -> None:
     """IronCondorV2 satisfies the PaperStrategy structural subtype check."""
     assert isinstance(IronCondorV2(), PaperStrategy)

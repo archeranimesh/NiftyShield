@@ -1264,6 +1264,27 @@ class IronCondorV2:
 
         # ── Compute PnL (needed for priorities 4–6) ───────────────────────────
         combined_mark, entry_credit = self._compute_combined_pnl(market, ic_positions)
+        # BUG-020 Phase 3: anchor captured-fraction calc (profit target +
+        # profit-lock zones) to the atomic 4-leg credit persisted at entry,
+        # not the recomputed sum over currently-open legs — a partial close
+        # (e.g. one spread closed) must not re-scope the target to the
+        # smaller surviving-legs credit. `None` (pre-Phase-2 positions, or
+        # no store injected) falls back to today's recompute, unchanged.
+        original_entry_credit: Decimal | None = None
+        if self._store is not None:
+            try:
+                original_entry_credit = self._store.get_original_entry_credit(self.strategy_name)
+            except Exception:  # Intentional: a transient store read failure must
+                # not skip priorities 4-8 for this tick (delta-roll evaluation
+                # included) — degrade to the pre-Phase-3 recompute, same as the
+                # "never persisted" (None) case, rather than propagating.
+                log.warning(
+                    "ic_nifty_v2.original_entry_credit_read_failed",
+                    strategy=self.strategy_name,
+                    exc_info=True,
+                )
+        if original_entry_credit is not None:
+            entry_credit = original_entry_credit
         captured_fraction: Decimal | None = None
         if combined_mark is not None and entry_credit > Decimal("0"):
             captured_fraction = (entry_credit - combined_mark) / entry_credit
