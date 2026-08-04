@@ -6,11 +6,10 @@ No network, no real bot token, no TELEGRAM_* env vars required.
 
 from __future__ import annotations
 
-import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 import aiohttp
+import pytest
 
 from src.notifications.telegram import (
     TelegramNotifier,
@@ -18,6 +17,19 @@ from src.notifications.telegram import (
     build_notifier,
     escape_mdv2,
 )
+
+# Env vars that can leak across tests if dotenv loads into os.environ — several
+# scripts/ modules (e.g. paper_3track_roll.py) call load_dotenv() unconditionally
+# at import time, which is never undone by monkeypatch since monkeypatch only
+# reverts changes it made itself. Same pattern as tests/unit/auth/test_dhan_verify.py.
+_TELEGRAM_ENV_VARS = ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TELEGRAM_MESSAGE_BUDGET"]
+
+
+@pytest.fixture(autouse=True)
+def clean_telegram_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Prevent env var leakage between tests — dotenv writes to os.environ globally."""
+    for var in _TELEGRAM_ENV_VARS:
+        monkeypatch.delenv(var, raising=False)
 
 
 # ── _html_escape ──────────────────────────────────────────────────
@@ -70,10 +82,7 @@ def _make_mock_session(resp_data: dict, status: int = 200) -> MagicMock:
     mock_resp.status = status
     if status >= 400:
         mock_resp.raise_for_status.side_effect = aiohttp.ClientResponseError(
-            request_info=MagicMock(),
-            history=(),
-            status=status,
-            message="Error"
+            request_info=MagicMock(), history=(), status=status, message="Error"
         )
     else:
         mock_resp.raise_for_status.return_value = None
@@ -87,7 +96,7 @@ def _make_mock_session(resp_data: dict, status: int = 200) -> MagicMock:
     # mock_session used as 'async with aiohttp.ClientSession(...) as session:'
     mock_session.__aenter__ = AsyncMock(return_value=mock_session)
     mock_session.__aexit__ = AsyncMock(return_value=None)
-    
+
     return mock_session
 
 
@@ -168,7 +177,7 @@ async def test_send_returns_false_on_timeout() -> None:
     mock_session.__aenter__ = AsyncMock(return_value=mock_session)
     mock_session.__aexit__ = AsyncMock(return_value=None)
     mock_session.post.side_effect = aiohttp.ServerTimeoutError("timed out")
-    
+
     with patch("src.notifications.telegram.aiohttp.ClientSession", return_value=mock_session):
         notifier = TelegramNotifier(bot_token="tok", chat_id="123")
         assert await notifier.send("hello") is False
@@ -199,6 +208,7 @@ async def test_send_does_not_raise_on_any_failure() -> None:
 
 
 # ── TelegramNotifier.send — budget limits ────────────────────────
+
 
 async def test_send_respects_message_budget() -> None:
     mock_session = _make_mock_session({"ok": True})

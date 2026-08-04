@@ -557,6 +557,10 @@ def test_auto_cc_no_dry_run_writes_trade_on_bootstrap_success(tmp_path, capsys):
         patch(
             "scripts.strategies.three_track.paper_3track_overlay_entry._query_open_call_role"
         ) as mock_query,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.build_notifier",
+            return_value=None,
+        ),
     ):
         mock_bootstrap.return_value = cfg
         mock_store = MagicMock()
@@ -769,6 +773,10 @@ def test_entry_proceeds_when_no_open_pp_position(tmp_path, capsys):
         patch(
             "scripts.strategies.three_track.paper_3track_overlay_entry.PaperStore"
         ) as mock_store_cls,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.build_notifier",
+            return_value=None,
+        ),
     ):
         mock_dte.return_value = None  # nothing open
         mock_bootstrap.return_value = (cfg, None)
@@ -811,6 +819,10 @@ def test_entry_proceeds_on_routine_roll_with_old_put_still_open(tmp_path, capsys
         patch(
             "scripts.strategies.three_track.paper_3track_overlay_entry.PaperStore"
         ) as mock_store_cls,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.build_notifier",
+            return_value=None,
+        ),
     ):
         mock_dte.return_value = 3  # routine roll trigger
         mock_bootstrap.return_value = (cfg, None)
@@ -901,6 +913,10 @@ def test_auto_pp_gate_violation_persisted(tmp_path, capsys):
         patch(
             "scripts.strategies.three_track.paper_3track_overlay_entry.PaperStore"
         ) as mock_store_cls,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.build_notifier",
+            return_value=None,
+        ),
     ):
         mock_dte.return_value = None
         mock_bootstrap.return_value = (cfg, violation)
@@ -1171,14 +1187,14 @@ def test_has_open_overlay_leg_recognizes_collar_primary_role(tmp_path):
     confirmed here with a real PaperStore rather than trusting the code read,
     since --auto-collar's own dry-run-only posture prevents exercising the
     live skip-message path end-to-end through main() yet."""
-    from src.models.portfolio import TradeAction
-    from src.paper.constants import STRATEGY_OVERLAY
-    from src.paper.models import PaperTrade
-    from src.paper.store import PaperStore
     from scripts.strategies.three_track.paper_3track_overlay_entry import (
         _PRIMARY_LEG_ROLE,
         _has_open_overlay_leg,
     )
+    from src.models.portfolio import TradeAction
+    from src.paper.constants import STRATEGY_OVERLAY
+    from src.paper.models import PaperTrade
+    from src.paper.store import PaperStore
 
     assert _PRIMARY_LEG_ROLE["collar"] == "overlay_collar_put"
 
