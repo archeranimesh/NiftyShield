@@ -16,7 +16,7 @@ import structlog.testing
 from src.models.options import OptionChain, OptionChainStrike, OptionLeg
 from src.paper.models import PaperPosition
 from src.strategy.ic_expiry_config_v2 import IC_V2_MONTHLY
-from src.strategy.ic_nifty_v2 import IronCondorV2
+from src.strategy.ic_nifty_v2 import IronCondorV2, RollResult
 
 # ---------------------------------------------------------------------------
 # Fixtures — chain and position builders
@@ -357,6 +357,85 @@ class TestDeltaStop:
         assert result.signal_type == "DELTA_STOP"
         guard_fails = [e for e in cap if e.get("event") == "ic_nifty_v2.roll_guard_failed"]
         assert any(e.get("guard") == "width_expansion" for e in guard_fails)
+
+    def test_wing_floor_miss_rescued_by_narrower_search(self) -> None:
+        """BUG-022: initial candidate fails the wing floor, but a narrower
+        strike between the old long hedge and the new short clears both the
+        floor and the floor-guarantee inequality → roll succeeds (ROLL_WING),
+        not a DELTA_STOP fallback."""
+        strategy = IronCondorV2(config=IC_V2_MONTHLY)
+        # Healthy original credit so the shared floor-guarantee inequality
+        # (dominated by the untouched call side's own 700pt width) still
+        # clears — this test isolates "does the narrower-search rescue a
+        # wing-floor miss at all", not the inequality's own width math
+        # (separately covered in test_roll_utils.py).
+        strategy.set_original_credit(Decimal("1000"))
+        positions = _standard_ic_positions()  # old long put hedge at 23200
+        chain = _chain(
+            {
+                "23900": (None, _leg("23900", "-0.36", ltp="160", bid="159", ask="161")),
+                "23500": (None, _leg("23500", "-0.25", ltp="100", bid="99", ask="101")),
+                # Delta-band candidate: below the ₹15 premium floor → wing_floor_miss.
+                "22800": (None, _leg("22800", "-0.10", ltp="5", bid="4", ask="6")),
+                # Narrower candidate strictly between old_long (23200) and
+                # new_short (23500) — clears premium/liquidity and the
+                # floor-guarantee inequality with a healthy original credit.
+                "23300": (None, _leg("23300", "-0.12", ltp="20", bid="19.5", ask="20.5")),
+                # Old long put hedge — must be priceable in the live chain so
+                # guard 5 (debit cap) can compute the roll debit.
+                "23200": (None, _leg("23200", "-0.04", ltp="30", bid="29.25", ask="30.75")),
+                "25100": (_leg("25100", "0.18", ltp="70", bid="69", ask="71"), None),
+                "25800": (_leg("25800", "0.10", ltp="30", bid="29", ask="31"), None),
+            }
+        )
+
+        with structlog.testing.capture_logs() as cap:
+            result = strategy._evaluate_adjustment(positions, chain, dte=20, expiry="2026-07-31")
+
+        assert result is not None
+        assert result.signal_type == "ROLL_WING"
+        assert result.roll_update is not None
+        new_long_key = result.roll_update.legs[3].instrument_key
+        assert "23300" in new_long_key
+        guard_fails = [e for e in cap if e.get("event") == "ic_nifty_v2.roll_guard_failed"]
+        assert any(e.get("guard") == "wing_floor_miss" for e in guard_fails)
+        assert not any(e.get("guard") == "wing_search_exhausted" for e in guard_fails)
+
+
+class TestRollResultToSignalBug022:
+    """Direct unit tests on _roll_result_to_signal's DELTA_STOP mapping."""
+
+    def test_delta_stop_maps_to_close_full_not_naked_spread(self) -> None:
+        """Any DELTA_STOP block reason (not just dte_cutoff) now escalates to
+        CLOSE_FULL — never CLOSE_CALL_SPREAD/CLOSE_PUT_SPREAD (BUG-022)."""
+        strategy = IronCondorV2(config=IC_V2_MONTHLY)
+        result = RollResult(
+            signal_type="DELTA_STOP",
+            side="call",
+            roll_update=None,
+            block_reason="wing_search_exhausted",
+        )
+        event = strategy._roll_result_to_signal(
+            result, dte=20, expiry_str="2026-07-31", dte_action="NORMAL"
+        )
+        assert event.event_type == "DELTA_STOP"
+        assert event.payload["auto_action"] == "CLOSE_FULL"
+        assert event.payload["valid_actions"] == ["CLOSE_FULL"]
+
+    def test_delta_stop_debit_cap_also_maps_to_close_full(self) -> None:
+        """A pre-existing guard reason (debit_cap) also escalates to CLOSE_FULL now."""
+        strategy = IronCondorV2(config=IC_V2_MONTHLY)
+        result = RollResult(
+            signal_type="DELTA_STOP",
+            side="put",
+            roll_update=None,
+            block_reason="debit_cap",
+        )
+        event = strategy._roll_result_to_signal(
+            result, dte=20, expiry_str="2026-07-31", dte_action="NORMAL"
+        )
+        assert event.payload["auto_action"] == "CLOSE_FULL"
+        assert event.payload["valid_actions"] == ["CLOSE_FULL"]
 
 
 # ---------------------------------------------------------------------------

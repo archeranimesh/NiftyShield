@@ -876,9 +876,31 @@ class IronCondorV2:
                 **baseline,
                 side=side,
                 guard="wing_floor_miss",
-                detail="replacement long fails delta/premium/liquidity floor",
+                detail=(
+                    "replacement long fails delta/premium/liquidity floor; "
+                    "searching progressively narrower candidates (BUG-022)"
+                ),
             )
-            return None, "wing_floor_miss"
+            new_long = self._search_narrower_wing_candidate(
+                side=side,
+                market=market,
+                old_long_strike=old_long_strike,
+                new_short_strike=new_short.strike,
+                positions=positions,
+            )
+            if new_long is None:
+                log.warning(
+                    "ic_nifty_v2.roll_guard_failed",
+                    **baseline,
+                    side=side,
+                    guard="wing_search_exhausted",
+                    detail=(
+                        "no candidate between the original wing and the new short "
+                        "strike cleared the liquidity/premium floor and the "
+                        "floor-guarantee inequality"
+                    ),
+                )
+                return None, "wing_search_exhausted"
 
         # ── Guard 4: replacement width ≤ original spread width ─────────────────
         new_width = abs(new_short.strike - new_long.strike)
@@ -1011,6 +1033,91 @@ class IronCondorV2:
         # rolling aggressively OTM; guard 5 caps this at 50% of original credit).
         roll_net = (old_short_leg.ltp - old_long_leg.ltp) - (new_short.ltp - new_long.ltp)
         return PositionUpdate(legs=legs, total_credit_pts=roll_net), ""
+
+    def _search_narrower_wing_candidate(
+        self,
+        *,
+        side: Literal["put", "call"],
+        market: OptionChain,
+        old_long_strike: Decimal,
+        new_short_strike: Decimal,
+        positions: list[PaperPosition],
+    ) -> OptionLeg | None:
+        """BUG-022: progressively-narrower wing search after a single-candidate wing-floor miss.
+
+        Reuses the same floor-guarantee inequality Zone 2 profit-lock enforces
+        (``roll_utils.evaluate_floor_formula``, via
+        ``roll_utils.search_narrow_wing_replacement``) instead of the pre-fix
+        behavior, which gave up on the very first delta-band candidate that
+        failed a liquidity/premium check and fell through to a naked
+        single-side spread close.
+
+        ``d_cum``/``d_lock`` are passed as zero: those terms track cumulative
+        *profit-lock* roll debit (Zone 2 state), a separate bookkeeping
+        concern from a delta-stop roll — conflating them would either
+        double-count or require new state tracking with no council/operator
+        spec behind it. See DECISIONS.md BUG-022.
+
+        Args:
+            side: "put" or "call" — which vertical is being rolled.
+            market: Live option chain snapshot.
+            old_long_strike: Strike of the existing long hedge being replaced.
+            new_short_strike: Strike of the already-selected replacement short.
+            positions: Current open IC paper positions (for the opposite
+                side's wing width, feeding max(W_put, W_call)).
+
+        Returns:
+            The first candidate ``OptionLeg`` clearing both checks, or
+            ``None`` if the entire range between ``old_long_strike`` and
+            ``new_short_strike`` (exclusive) fails.
+        """
+        cfg = self._config
+        plc = cfg.profit_lock
+        option_type: Literal["CE", "PE"] = "CE" if side == "call" else "PE"
+
+        opposite_side: Literal["put", "call"] = "call" if side == "put" else "put"
+        opposite_short_pos = next(
+            (p for p in positions if p.leg_role == f"short_{opposite_side}"), None
+        )
+        opposite_long_pos = next(
+            (p for p in positions if p.leg_role == f"long_{opposite_side}_hedge"), None
+        )
+        opposite_width = Decimal("0")
+        if opposite_short_pos is not None and opposite_long_pos is not None:
+            opp_short_strike = self._position_strike(opposite_short_pos)
+            opp_long_strike = self._position_strike(opposite_long_pos)
+            if opp_short_strike is not None and opp_long_strike is not None:
+                opposite_width = abs(opp_short_strike - opp_long_strike)
+
+        entry_credit = self._original_ic_credit
+        if self._store is not None:
+            try:
+                persisted = self._store.get_original_entry_credit(self.strategy_name)
+            except Exception:  # Intentional: a transient store read failure must
+                # degrade to the in-memory value, not abort the wing search.
+                log.warning(
+                    "ic_nifty_v2.original_entry_credit_read_failed",
+                    strategy=self.strategy_name,
+                    context="wing_search",
+                    exc_info=True,
+                )
+                persisted = None
+            if persisted is not None:
+                entry_credit = persisted
+
+        return roll_utils.search_narrow_wing_replacement(
+            chain=market,
+            option_type=option_type,
+            short_strike=new_short_strike,
+            current_wing_strike=old_long_strike,
+            other_side_width_pts=opposite_width,
+            d_cum_pts=Decimal("0"),
+            d_lock_pts=Decimal("0"),
+            k_pts=plc.cost_buffer_pts,
+            entry_credit_pts=entry_credit,
+            floor_budget=plc.floor_budget_zone2,
+            min_premium=plc.zone2_long_wing_min_premium,
+        )
 
     # ── DTE-tiered exit (IC-V2-3) ────────────────────────────────────────────
 
@@ -1685,18 +1792,26 @@ class IronCondorV2:
                         "valid_actions": ["CLOSE_FULL"],
                     },
                 )
-            close_action = "CLOSE_CALL_SPREAD" if side == "call" else "CLOSE_PUT_SPREAD"
+            # BUG-022: a roll failure — for any guard reason, not just a wing-
+            # floor miss (which now has its own narrower-search fallback in
+            # _execute_partial_roll before ever reaching DELTA_STOP) — must
+            # never fall through to a naked single-side CLOSE_CALL_SPREAD/
+            # CLOSE_PUT_SPREAD. Escalate to a full close instead; the IC never
+            # ends up structurally one-sided as its final state.
             return SignalEvent(
                 event_type="DELTA_STOP",
                 severity="ACTION",
-                description=f"{side} spread delta stop — roll blocked ({roll_result.block_reason})",
+                description=(
+                    f"{side} spread delta stop — roll blocked "
+                    f"({roll_result.block_reason}); escalating to full close (BUG-022)"
+                ),
                 payload={
                     "side": side,
                     "block_reason": roll_result.block_reason,
                     "dte": dte,
                     "auto_execute": True,
-                    "auto_action": close_action,
-                    "valid_actions": [close_action, "CLOSE_FULL"],
+                    "auto_action": "CLOSE_FULL",
+                    "valid_actions": ["CLOSE_FULL"],
                 },
             )
 

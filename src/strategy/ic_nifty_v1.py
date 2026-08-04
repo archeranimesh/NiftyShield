@@ -37,7 +37,15 @@ from src.paper.constants import DEFAULT_BOD_PATH
 from src.paper.models import PaperPosition, PaperTrade
 from src.strategy import roll_utils
 from src.strategy.ic_close_executor import close_ic_legs
+from src.strategy.ic_expiry_config_v2 import ProfitLockConfig
 from src.strategy.protocol import ApprovedAction, LegClose, LegSpec, SignalEvent
+
+# BUG-022: V1 has no strategy-specific floor-guarantee config of its own
+# (unlike V2's IronCondorV2ExpiryConfig.profit_lock). Reuse V2's
+# ProfitLockConfig defaults for the narrower-wing search's floor budget /
+# cost buffer / min premium, per the agreed cross-strategy design — the two
+# strategies share one behavior here, not two independently-tuned ones.
+_WING_SEARCH_FLOOR_DEFAULTS = ProfitLockConfig()
 
 if TYPE_CHECKING:
     from src.client.protocol import BrokerClient
@@ -243,6 +251,30 @@ class IronCondorV1:
                 # Attempt roll: fire ROLL_WING alongside DELTA_STOP when a
                 # farther OTM replacement is available.
                 roll_target = self._select_wing_roll_target(market, pos.leg_role, opt_leg.strike)
+                if roll_target is None:
+                    # BUG-022: the single delta-band candidate failed (or none
+                    # existed) — before conceding to a naked single-side
+                    # close, search progressively narrower wing widths
+                    # between the existing long hedge and the short strike,
+                    # gated by the same floor-guarantee inequality Zone 2
+                    # profit-lock (IronCondorV2) uses.
+                    long_role = (
+                        "long_call_hedge" if pos.leg_role == "short_call" else "long_put_hedge"
+                    )
+                    long_pos = _position_for_role(ic_positions, long_role)
+                    long_leg = (
+                        self._find_leg(market, long_pos.instrument_key)
+                        if long_pos is not None
+                        else None
+                    )
+                    if long_leg is not None:
+                        roll_target = self._search_narrower_wing_candidate(
+                            leg_role=pos.leg_role,
+                            market=market,
+                            short_strike=opt_leg.strike,
+                            current_wing_strike=long_leg.strike,
+                            ic_positions=ic_positions,
+                        )
                 if roll_target is not None:
                     candidate_leg = self._find_leg(market, roll_target.instrument_key)
                     if candidate_leg is None:
@@ -395,6 +427,11 @@ class IronCondorV1:
                             "LOSS_STOP",
                             "TIME_STOP",
                             "PROFIT_TARGET",
+                            # BUG-022: DELTA_STOP with no roll target (single-
+                            # candidate AND narrower-search both exhausted)
+                            # now also escalates to CLOSE_FULL — must survive
+                            # this filter like the other CLOSE_FULL triggers.
+                            "DELTA_STOP",
                         ):
                             is_match = True
                         elif (
@@ -753,18 +790,15 @@ class IronCondorV1:
                 metadata={"auto_selected": True},
             )
 
-        # Priority 5: Close single spread (delta breach without roll target)
+        # Priority 5: DELTA_STOP with no roll target (single-candidate search
+        # AND the BUG-022 narrower-width search both exhausted, per
+        # check_signals) → escalate to CLOSE_FULL. Never fall through to a
+        # naked single-side CLOSE_CALL_SPREAD/CLOSE_PUT_SPREAD as the final
+        # state — the IC must exit both sides, not just the breached one.
         delta_event = next((e for e in action_events if e.event_type == "DELTA_STOP"), None)
         if delta_event is not None:
-            leg_role = delta_event.payload["leg_role"]
-            action_type = "CLOSE_CALL_SPREAD" if leg_role == "short_call" else "CLOSE_PUT_SPREAD"
-            spread_roles = (
-                {"short_call", "long_call_hedge"}
-                if leg_role == "short_call"
-                else {"short_put", "long_put_hedge"}
-            )
             return ApprovedAction(
-                action_type=action_type,
+                action_type="CLOSE_FULL",
                 legs_to_close=[
                     LegClose(
                         leg_role=r,
@@ -774,7 +808,7 @@ class IronCondorV1:
                             else None
                         ),
                     )
-                    for r in spread_roles
+                    for r in (_SHORT_ROLES | _LONG_ROLES)
                 ],
                 legs_to_open=[],
                 rationale="auto-execute",
@@ -830,6 +864,99 @@ class IronCondorV1:
             quantity=1,
             leg_role=leg_role,
             notes=f"roll_wing delta={candidate.delta}",
+        )
+
+    def _search_narrower_wing_candidate(
+        self,
+        *,
+        leg_role: str,
+        market: OptionChain,
+        short_strike: Decimal,
+        current_wing_strike: Decimal,
+        ic_positions: list[PaperPosition],
+    ) -> LegSpec | None:
+        """BUG-022: progressively-narrower wing search after a delta-band roll-target miss.
+
+        ``_select_wing_roll_target`` only ever evaluates one delta-band
+        candidate and has no liquidity/premium floor at all — pre-fix, if
+        that single candidate didn't exist or (post-fix elsewhere) failed a
+        floor, V1 fell straight through to a naked single-side
+        ``CLOSE_CALL_SPREAD``/``CLOSE_PUT_SPREAD``. This walks every strike
+        between the existing long hedge and the short strike, gated by the
+        same floor-guarantee inequality Zone 2 profit-lock (``IronCondorV2``)
+        uses, via the shared ``roll_utils.search_narrow_wing_replacement``.
+
+        V1 has no profit-lock state, so ``d_cum``/``d_lock`` are zero — same
+        rationale as V2's own delta-stop wiring (see DECISIONS.md BUG-022).
+
+        Args:
+            leg_role: ``"short_call"`` or ``"short_put"``.
+            market: Current option chain snapshot.
+            short_strike: Strike of the threatened short leg.
+            current_wing_strike: Strike of the existing long hedge.
+            ic_positions: Open positions for this strategy, for the opposite
+                side's wing width (feeding ``max(W_put, W_call)``).
+
+        Returns:
+            ``LegSpec`` for the first candidate clearing both checks, or
+            ``None`` when the whole range is exhausted.
+        """
+        option_type: Literal["CE", "PE"] = "CE" if leg_role == "short_call" else "PE"
+        opposite_leg_role = "short_put" if leg_role == "short_call" else "short_call"
+        opposite_long_role = (
+            "long_put_hedge" if leg_role == "short_call" else "long_call_hedge"
+        )
+        opposite_short_pos = _position_for_role(ic_positions, opposite_leg_role)
+        opposite_long_pos = _position_for_role(ic_positions, opposite_long_role)
+        opposite_width = Decimal("0")
+        if opposite_short_pos is not None and opposite_long_pos is not None:
+            opp_short_leg = self._find_leg(market, opposite_short_pos.instrument_key)
+            opp_long_leg = self._find_leg(market, opposite_long_pos.instrument_key)
+            if opp_short_leg is not None and opp_long_leg is not None:
+                opposite_width = abs(opp_short_leg.strike - opp_long_leg.strike)
+
+        entry_credit = Decimal("0")
+        if self._store is not None:
+            try:
+                persisted = self._store.get_original_entry_credit(self.strategy_name)
+            except Exception:  # Intentional: a transient store read failure must
+                # not block the wing search — degrade to "no known credit",
+                # which the floor formula treats as a hard-to-satisfy budget
+                # (0.75 * 0 == 0), erring conservative rather than skipping
+                # the check entirely.
+                log.warning(
+                    "ic_nifty_v1.original_entry_credit_read_failed",
+                    strategy=self.strategy_name,
+                    context="wing_search",
+                    exc_info=True,
+                )
+                persisted = None
+            if persisted is not None:
+                entry_credit = persisted
+
+        candidate = roll_utils.search_narrow_wing_replacement(
+            chain=market,
+            option_type=option_type,
+            short_strike=short_strike,
+            current_wing_strike=current_wing_strike,
+            other_side_width_pts=opposite_width,
+            d_cum_pts=Decimal("0"),
+            d_lock_pts=Decimal("0"),
+            k_pts=_WING_SEARCH_FLOOR_DEFAULTS.cost_buffer_pts,
+            entry_credit_pts=entry_credit,
+            floor_budget=_WING_SEARCH_FLOOR_DEFAULTS.floor_budget_zone2,
+            min_premium=_WING_SEARCH_FLOOR_DEFAULTS.zone2_long_wing_min_premium,
+        )
+        if candidate is None:
+            return None
+
+        instrument_key = f"NSE_FO|NIFTY{int(candidate.strike)}{option_type}"
+        return LegSpec(
+            instrument_key=instrument_key,
+            action="SELL",
+            quantity=1,
+            leg_role=leg_role,
+            notes=f"roll_wing_narrow_search delta={candidate.delta}",
         )
 
     def _find_leg(self, market: OptionChain, instrument_key: str) -> OptionLeg | None:

@@ -689,6 +689,47 @@ def test_roll_wing_not_fired_when_no_ce_target_in_range() -> None:
     assert "ROLL_WING" not in types
 
 
+def test_roll_wing_rescued_by_bug_022_narrower_search() -> None:
+    """No delta-band CE target exists, but a narrower strike between the
+    existing long hedge (25500) and the short strike (25000) clears the
+    liquidity/premium floor and the floor-guarantee inequality (given a
+    persisted entry credit) -> ROLL_WING fires instead of a bare DELTA_STOP."""
+    from unittest.mock import MagicMock
+
+    from src.paper.store import PaperStore
+
+    store = MagicMock(spec=PaperStore)
+    store.get_original_entry_credit.return_value = Decimal("1000")
+    strat = IronCondorV1(store=store)
+    strat.auto_execute = False
+
+    strikes = {
+        Decimal("21500"): OptionChainStrike(
+            pe=_make_leg(ltp="3", delta="-0.05", strike="21500")
+        ),
+        Decimal("22000"): OptionChainStrike(
+            pe=_make_leg(ltp="30", delta="-0.10", strike="22000")
+        ),
+        Decimal("25000"): OptionChainStrike(
+            ce=_make_leg(ltp="25", delta="0.36", strike="25000")
+        ),
+        Decimal("25500"): OptionChainStrike(ce=_make_leg(ltp="2", delta="0.04", strike="25500")),
+        # Narrower candidate strictly between 25000 (short) and 25500 (old
+        # long hedge) — clears premium/liquidity floors.
+        Decimal("25200"): OptionChainStrike(
+            ce=_make_leg(ltp="20", delta="0.15", strike="25200")
+        ),
+    }
+    chain = OptionChain(underlying_spot=Decimal("24000"), expiry=date(2026, 6, 26), strikes=strikes)
+    positions = _make_ic_positions()
+
+    events = asyncio.run(strat.check_signals(chain, positions))
+    types = [e.event_type for e in events]
+    assert "ROLL_WING" in types
+    roll_event = next(e for e in events if e.event_type == "ROLL_WING")
+    assert "25200" in roll_event.payload["suggested_instrument_key"]
+
+
 def test_roll_wing_blocked_by_directional_guard() -> None:
     """CE target exists in delta range but is at a strike below current short_call
     strike → directional guard blocks it → no ROLL_WING (only DELTA_STOP fires).
@@ -1061,8 +1102,8 @@ def test_auto_select_roll_over_delta_stop() -> None:
     assert action.legs_to_open[0].leg_role == "short_call"
 
 
-def test_auto_select_delta_stop_call_spread() -> None:
-    """DELTA_STOP on short_call only → CLOSE_CALL_SPREAD."""
+def test_auto_select_delta_stop_escalates_to_close_full() -> None:
+    """DELTA_STOP with no roll target → CLOSE_FULL (BUG-022), never a naked spread close."""
     from src.strategy.protocol import SignalEvent
 
     strat = IronCondorV1()
@@ -1076,8 +1117,13 @@ def test_auto_select_delta_stop_call_spread() -> None:
     ]
     action = strat._auto_select_action(events, [])
     assert action is not None
-    assert action.action_type == "CLOSE_CALL_SPREAD"
-    assert {leg.leg_role for leg in action.legs_to_close} == {"short_call", "long_call_hedge"}
+    assert action.action_type == "CLOSE_FULL"
+    assert {leg.leg_role for leg in action.legs_to_close} == {
+        "short_call",
+        "long_call_hedge",
+        "short_put",
+        "long_put_hedge",
+    }
 
 
 def test_auto_select_none_when_no_action() -> None:
@@ -1301,7 +1347,8 @@ def test_check_signals_auto_execute_delta_stop_with_roll() -> None:
 
 
 def test_check_signals_auto_execute_delta_stop_no_roll() -> None:
-    """DELTA_STOP fires without a roll target -> CLOSE_CALL_SPREAD action auto_executed."""
+    """DELTA_STOP with both the direct target and the BUG-022 narrower search
+    exhausted -> CLOSE_FULL action auto_executed (never a naked spread close)."""
     from unittest.mock import patch
 
     strat = IronCondorV1()
@@ -1312,7 +1359,10 @@ def test_check_signals_auto_execute_delta_stop_no_roll() -> None:
     )
     positions = _make_ic_positions()
 
-    with patch.object(strat, "_select_wing_roll_target", return_value=None):
+    with (
+        patch.object(strat, "_select_wing_roll_target", return_value=None),
+        patch.object(strat, "_search_narrower_wing_candidate", return_value=None),
+    ):
         events = asyncio.run(strat.check_signals(chain, positions))
 
     action_events = [e for e in events if e.severity == "ACTION"]
@@ -1320,7 +1370,7 @@ def test_check_signals_auto_execute_delta_stop_no_roll() -> None:
     ev = action_events[0]
     assert ev.event_type == "DELTA_STOP"
     assert ev.payload["auto_execute"] is True
-    assert ev.payload["auto_action"] == "CLOSE_CALL_SPREAD"
+    assert ev.payload["auto_action"] == "CLOSE_FULL"
 
 
 def test_is_auto_execute() -> None:
