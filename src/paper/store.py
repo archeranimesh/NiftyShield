@@ -403,6 +403,12 @@ class PaperStore:
                 "ALTER TABLE paper_strategies ADD COLUMN active_put_width_pts INTEGER NOT NULL DEFAULT 0",
                 "ALTER TABLE paper_strategies ADD COLUMN active_call_width_pts INTEGER NOT NULL DEFAULT 0",
                 "ALTER TABLE paper_strategies ADD COLUMN cycle_id TEXT NOT NULL DEFAULT ''",
+                # BUG-020 Phase 1: original 4-leg entry credit, captured atomically at
+                # entry, so profit-target/loss-stop branches don't re-scope to whatever
+                # legs happen to still be open after a partial close. NULL until an
+                # entry populates it (Phase 2) — read side must treat NULL as "unknown,
+                # fall back to today's recompute" (Phase 3), not as zero.
+                "ALTER TABLE paper_strategies ADD COLUMN original_entry_credit TEXT DEFAULT NULL",
             ):
                 try:
                     conn.execute(_ddl)
@@ -1198,6 +1204,53 @@ class PaperStore:
                     state.cycle_id,
                 ),
             )
+
+    def set_original_entry_credit(self, strategy_name: str, original_entry_credit: Decimal) -> None:
+        """Persist the original 4-leg entry credit for one strategy's current cycle.
+
+        BUG-020 Phase 1/2: captured atomically at entry so the profit-target/
+        loss-stop branches can reference the basket's original economics
+        instead of recomputing from whatever legs are still open after a
+        partial close. Upserts into the same ``paper_strategies`` row used by
+        profit-lock state — one row per strategy_name, not per cycle, so a
+        new entry's call here overwrites the prior cycle's value.
+
+        Args:
+            strategy_name: Strategy identifier, e.g. ``paper_ic_nifty_v2_monthly``.
+            original_entry_credit: Net credit at entry, index points per unit.
+        """
+        with _connect(self.db_path) as conn:
+            conn.execute(
+                """INSERT INTO paper_strategies (strategy_name, original_entry_credit)
+                   VALUES (?, ?)
+                   ON CONFLICT(strategy_name) DO UPDATE SET
+                       original_entry_credit = excluded.original_entry_credit""",
+                (strategy_name, str(original_entry_credit)),
+            )
+
+    def get_original_entry_credit(self, strategy_name: str) -> Decimal | None:
+        """Return the persisted original entry credit, or None if never recorded.
+
+        BUG-020 Phase 1: read-only counterpart to ``set_original_entry_credit``.
+        Returns None both when the strategy has no ``paper_strategies`` row yet
+        and when the row exists but the column is still NULL (pre-Phase-2
+        positions, or a strategy that has never called the setter) — callers
+        must treat None as "fall back to recompute", never as zero credit.
+
+        Args:
+            strategy_name: Strategy identifier, e.g. ``paper_ic_nifty_v2_monthly``.
+
+        Returns:
+            The persisted Decimal credit, or None if unknown.
+        """
+        with _connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT original_entry_credit FROM paper_strategies WHERE strategy_name = ?",
+                (strategy_name,),
+            ).fetchone()
+            if row is None or row["original_entry_credit"] is None:
+                return None
+            return Decimal(row["original_entry_credit"])
 
     def reset_profit_lock_state(self, strategy_name: str, cycle_id: str) -> None:
         """Reset all fields to defaults for a new entry cycle."""

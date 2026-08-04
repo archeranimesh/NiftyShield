@@ -152,3 +152,107 @@
 - [x] **B011.3** — Tests: happy-path (test passes in isolation and as part of full suite), edge case (test still correctly returns a notifier when both env vars are genuinely set, per `test_build_notifier_returns_notifier_when_both_set`, is unaffected by the fix) | N/A — no code path changed to test; existing `monkeypatch`-based tests in `tests/unit/test_notifications.py` already cover both cases | N/A
 - [x] **B011.4** — Run real `@code-reviewer` subagent (or `general-purpose` + `REVIEW.md` substitute) against `git diff HEAD` — not a financial-logic change, substitute review acceptable | N/A — no diff to review (investigation-only closure) | N/A
 - [x] **B011.5** — Commit, update `bugs.md` status to ✅ Fixed + SHA | `bugs.md` BUG-011 status flipped to ✅ Fixed/moot, citing `fe69612` as the pre-existing fix commit | No new SHA — docs-only, existing fix predates this bug report
+
+---
+
+## BUG-012 — `paper_ic_snapshot.py` instantiated `IronCondorV2` with positional args, silently mis-binding config to the broker object
+
+- [x] **B012.1** — Fixed and closed; full root-cause writeup lives in `DECISIONS.md` 2026-07-06 entry, not duplicated in this checklist (backfilled 2026-08-04 — this entry was missing from `task.md` despite `bugs.md` showing it ✅ Fixed) | See `DECISIONS.md` 2026-07-06 | SHA — see `DECISIONS.md`
+
+---
+
+## BUG-013 — `IronCondorV1` never sends a Telegram close confirmation; `IronCondorV2` only sends one for the rare Zone-2 roll, not its own CLOSE_FULL
+
+- [x] **B013.1** — Fixed and closed 2026-07-20; `_send_close_notification()` added to both classes, wired into `apply_action`'s auto-execute `CLOSE_FULL`/`CLOSE_CALL_SPREAD`/`CLOSE_PUT_SPREAD` branch (backfilled 2026-08-04 — missing from `task.md`) | See `bugs.md` BUG-013 for full fix detail | SHA — see `bugs.md`
+
+---
+
+## BUG-014 — `get_positions()` resolves `option_type` unconditionally, generating permanent unactionable warnings for closed legs on delisted contracts
+
+- [x] **B014.1** — Fixed and closed 2026-07-20 (backfilled 2026-08-04 — missing from `task.md`) | See `bugs.md` BUG-014 for full fix detail | SHA — see `bugs.md`
+
+---
+
+## BUG-015 — `base_futures` leg (`paper_nifty_futures`) recorded wrong quantity (75 instead of correct lot size 65) on the May 2026 settlement-close and roll, corrupting the leg's cycle tracking
+
+- [x] **B015.1** — Fixed and closed 2026-07-20 (backfilled 2026-08-04 — missing from `task.md`) | See `bugs.md` BUG-015 for full fix detail | SHA — see `bugs.md`
+
+---
+
+## BUG-016 — `overlay_pp` roll on 2026-06-29 never recorded a closing trade for `paper_nifty_spot`/`paper_nifty_futures`, leaving both tracks double-booked at 2x the intended position
+
+- [x] **B016.1** — Fixed and closed 2026-07-20 (backfilled 2026-08-04 — missing from `task.md`) | See `bugs.md` BUG-016 for full fix detail | SHA — see `bugs.md`
+
+---
+
+## BUG-017 — `paper_nifty_futures`/`base_futures` never rolled past its June contract; `NSE_FO|62329` has sat expired 20 days with no successor
+
+- [x] **B017.1** — Fixed and closed 2026-07-20 (backfilled 2026-08-04 — missing from `task.md`) | See `bugs.md` BUG-017 for full fix detail | SHA — see `bugs.md`
+
+---
+
+## BUG-018 — `IronCondorV2._parse_expiry` never matches real Upstox instrument keys; `check_signals` has silently no-op'd for `paper_ic_nifty_v2_monthly` since entry (2026-07-03)
+
+- [x] **B018.1** — Fixed and committed 2026-07-23 (backfilled 2026-08-04 — missing from `task.md`) | See `bugs.md` BUG-018 for full fix detail | SHA `3435c5a`
+
+---
+
+## BUG-019 — Investigation: does every strategy show a live-tick vs. EOD-snapshot P&L disparity, not just `paper_ic_nifty_v2_monthly`?
+
+- [ ] **B019.1** — Diagnostics committed 2026-07-23 (SHA `f7177b6`), still awaiting a live trading day's `strategy_monitor.live_pnl_diag` vs. `paper_snapshot.log` diff before any fix is scoped (backfilled 2026-08-04 — missing from `task.md`; **this item is NOT done, do not check it** — pick up per `bugs.md` BUG-019's "Next step") | Not yet actioned | No SHA yet
+
+---
+
+## BUG-020 — `IronCondorV2` profit target re-scopes to the surviving legs' credit after any partial close, instead of the original 4-leg basket credit
+
+- [x] **B020.1** — Decision made 2026-08-04 (Animesh): persist `original_entry_credit` captured atomically at entry (Option 1), not reconstructed on demand from `paper_trades` history. Chosen because it's the approach the original council doc (`docs/archive/council/strategy/2026-06-27_ic-v2-profit-lock-adjustment.md`) actually specified, is cheaper at read time (checked every tick), and avoids the implicit-recomputation pattern that caused this bug in the first place.
+- [x] **B020.2** — Direct-operator override accepted 2026-08-04 (Animesh), in place of a full council session, per `DECISIONS.md` precedent — satisfies `CLAUDE.md` Step 2b gate.
+
+**Implementation split into 3 phases (2026-08-04, per Animesh's request — each phase is a complete, independently working, fully tested slice; no phase leaves the system half-implemented). Mirrors `CLAUDE.md`'s Model → Store → Tracker/orchestration phase-boundary guidance. One commit per phase.**
+
+### Phase 1 — Model + Store (persistence only, no behavior change)
+
+- [x] **B020.3** — Confirmed shape: no `PaperPosition`/`PaperTrade` schema change needed. `paper_strategies` (keyed by `strategy_name`, one row per strategy — not per cycle) already carries analogous per-strategy state (`ProfitLockState`'s `set_profit_lock_state`/`get_profit_lock_state`, `src/paper/store.py:1174-1206`/`1140-1172`) and already has a `cycle_id` column. Mirrored that exact upsert pattern with a new `original_entry_credit TEXT DEFAULT NULL` column, migrated in the same `ALTER TABLE ... ADD COLUMN` loop as the profit-lock fields (`src/paper/store.py:397-411`). Also noted: `IronCondorV2._original_ic_credit` / `set_original_credit()` (`src/strategy/ic_nifty_v2.py:559-565`) already exists as an in-memory-only field used for the debit-cap guard — never persisted, never read by `_compute_combined_pnl`. Confirms the gap Phase 2/3 need to close.
+- [x] **B020.4** — Implemented `PaperStore.set_original_entry_credit(strategy_name, original_entry_credit)` and `PaperStore.get_original_entry_credit(strategy_name) -> Decimal | None` (`src/paper/store.py`). Returns `None` — not `0` — both when no row exists and when the row exists but the column is still NULL, so Phase 3 can distinguish "unknown, fall back to recompute" from "zero credit". No strategy file touched; nothing reads this value in production code yet — write path exists and is exercised only by tests.
+- [x] **B020.5** — `tests/unit/paper/test_original_entry_credit.py`: happy-path (`test_set_and_get_roundtrip`), edge cases (`test_get_returns_none_when_never_recorded`, `test_get_returns_none_when_row_exists_but_column_null`, `test_set_overwrites_prior_value`, `test_scoped_per_strategy_name`). **Not run in-sandbox** — same disk-quota limitation as BUG-018/019 (`pip install` fails with `OSError: No space left on device`); verified via `python3 -m py_compile` only, pending live-host `pytest` run.
+- [x] **B020.6** — Docs updated: `bugs.md` BUG-020 status line now notes Phase 1 landed; this file. `CONTEXT.md` not yet touched (deferred to Phase 3 close per the split's own B020.13, since Phase 1's schema addition is easier to describe alongside the full fix than as an isolated note). | SHA pending — sandbox `.git/index.lock` held by a concurrent process (permission denied on removal, not stale), commit deferred to live host. Files staged for commit: `src/paper/store.py`, `tests/unit/paper/test_original_entry_credit.py`, `docs/bugs/bugs.md`, `docs/bugs/task.md`.
+
+### Phase 2 — Wire IronCondorV2 entry path to populate it
+
+**Discovery carried over from Phase 1 (B020.3):** `IronCondorV2` already has `_original_ic_credit` / `set_original_credit()` (`src/strategy/ic_nifty_v2.py:559-565`) — but it's in-memory only, set by the caller after a successful `enter()`, used solely for the debit-cap guard, never persisted, and never read by `_compute_combined_pnl`. Phase 2 needs a decision before implementation: (a) keep `_original_ic_credit` as-is for the debit-cap guard and add a separate call to `PaperStore.set_original_entry_credit()` alongside it at the same call site, or (b) fold the two together so `set_original_credit()` itself persists via the store, removing the duplicate concept. Leaning toward (a) — the in-memory field and the persisted value serve different consumers (debit-cap guard vs. profit-target branch across restarts) and collapsing them risks a debit-cap regression if the store call fails/is slow on a hot path — but flagging for confirmation before writing code, same as B020.1's persistence-shape decision.
+
+- [ ] **B020.7** — `enter()` (`src/strategy/ic_nifty_v2.py:218`) already computes `total_credit_pts` on `PositionUpdate`. Wire the entry executor (exact call site TBD — likely `src/strategy/executor.py`) to pass `total_credit_pts` into the Phase 1 store method at entry, per whichever option is chosen above.
+- [ ] **B020.8** — Tests: happy-path (new entry → `original_entry_credit` is readable via Phase 1's store method with the correct value), edge case (entry executor call still succeeds/records trades correctly if the credit-persistence call fails — must not block trade recording on this side-write).
+- [ ] **B020.9** — Commit. Note explicitly in commit message + `TODOS.md`: positions entered *before* this phase have no persisted `original_entry_credit` — expected gap, not a regression, handled by Phase 3's fallback.
+
+### Phase 3 — Consume persisted value in profit-target branch (actual bug fix)
+
+- [ ] **B020.10** — `_compute_combined_pnl` (`src/strategy/ic_nifty_v2.py:2031`) / `check_signals`'s Priority 4 profit-target branch (line 1266-1320): read `original_entry_credit` via Phase 1's store method when present; fall back to today's recompute-from-`ic_positions` behavior when absent (pre-Phase-2 positions) — no crash, no behavior change for those in-flight positions until they cycle out.
+- [ ] **B020.11** — Tests: happy-path (full 4-leg basket with a persisted `original_entry_credit`, profit target computed against it, unchanged from today's correct-case behavior), edge case (partial close already executed — e.g. call spread closed — profit target on remaining put spread measured against the *persisted original 4-leg* credit, not the put-only recompute — this is the actual BUG-020 symptom fix), edge case (no persisted value — falls back to current recompute behavior unchanged, confirms non-breaking for pre-Phase-2 positions).
+- [ ] **B020.12** — Run real `@code-reviewer` subagent (or `general-purpose` + `REVIEW.md` substitute) against `git diff HEAD` — financial-logic gate, mandatory.
+- [ ] **B020.13** — Commit, update `bugs.md` BUG-020 status to ✅ Fixed + SHA, update `CONTEXT.md`/`DECISIONS.md` for the schema/store addition, add `TODOS.md` session log entry.
+
+**Related:** BUG-021 (`IronCondorV1` has the identical defect — not in scope here; separate task once this pattern is proven out on V2).
+
+---
+
+## BUG-021 — `IronCondorV1` has the same partial-close entry-credit re-scoping defect as `IronCondorV2` (BUG-020)
+
+- [ ] **B021.1** — Confirm whether BUG-020's chosen persistence approach (once decided) can be implemented as one shared helper consumed by both `ic_nifty_v1.py` and `ic_nifty_v2.py`, rather than two parallel patches — the two files already drifted once on wing-floor logic (see BUG-022), avoid repeating that here.
+- [ ] **B021.2** — Implement in `src/strategy/ic_nifty_v1.py::_compute_combined_pnl` / `check_signals`'s PROFIT_TARGET/LOSS_STOP branch (line 302-359) — same fix shape as B020.3.
+- [ ] **B021.3** — Tests: same three cases as B020.4, adapted for V1's `PROFIT_TARGET` and `LOSS_STOP` signals (V1 has both; V2 only has profit target in this defect's scope).
+- [ ] **B021.4** — Run real `@code-reviewer` subagent (or substitute) against `git diff HEAD`.
+- [ ] **B021.5** — Commit, update `bugs.md` BUG-021 status to ✅ Fixed + SHA.
+
+---
+
+## BUG-022 — Delta-stop wing-roll failure drops straight to a naked single-side partial close instead of searching narrower wing widths first; affects both `IronCondorV1` and `IronCondorV2`
+
+- [ ] **B022.1** — Read `IronCondorV1::_select_wing_roll_target` in full (line 766 onward, not yet fully reviewed) to confirm whether V1 already applies a wing-floor liquidity/premium guard equivalent to V2's `entry_skip_wing_floor_miss`, or accepts the first delta-matched candidate unconditionally. This determines whether V1's failure mode today is "same as V2" or "worse than V2" (silently accepts a marginal roll instead of falling back to partial close).
+- [ ] **B022.2** — Council checkpoint (`CLAUDE.md` Step 2b) or direct-operator override to ratify the agreed design (see `bugs.md` BUG-022 "Agreed design" section) and settle the open parameters: minimum wing-width floor, max candidate strikes to search per tick, shared-helper vs. per-file implementation.
+- [ ] **B022.3** — Extract/generalize the existing Zone 2 profit-lock floor-guarantee check (`max(W_put, W_call) + D_cum + D_lock + K ≤ 0.75 × C₀`, currently only in the voluntary profit-lock path) into a reusable helper callable from both the profit-lock path and the new delta-stop roll-search path.
+- [ ] **B022.4** — Implement the progressive narrow-width candidate search in `IronCondorV2`'s `roll_wing_attempt` sequence (`src/strategy/ic_nifty_v2.py`, ~line 1051-1680): on wing-floor-miss, try the next-narrower candidate down to the agreed minimum width, checking both the liquidity/premium floor and the floor-guarantee inequality at each step; only escalate to `CLOSE_FULL` if the entire range is exhausted.
+- [ ] **B022.5** — Implement the equivalent search in `IronCondorV1`'s `_select_wing_roll_target`/`_auto_select_action` Priority 5 path (`src/strategy/ic_nifty_v1.py`, line 736-786), reusing B022.3's shared helper.
+- [ ] **B022.6** — Tests (both files): happy-path (first candidate clears both floors — unchanged behavior from today), edge case (first candidate fails, a narrower candidate within the minimum-width floor clears both checks — roll succeeds instead of partial close), edge case (every candidate down to the minimum width fails — escalates to `CLOSE_FULL`, never falls through to a naked single-side close), edge case (minimum-width floor itself — confirm the search never proposes a width narrower than the configured floor).
+- [ ] **B022.7** — Run real `@code-reviewer` subagent (or substitute) against `git diff HEAD` — financial-logic gate, mandatory; explicitly verify the minimum-width floor can't be bypassed and the `CLOSE_FULL` fallback path is unconditionally reachable (no silent no-op if the search loop has a logic error).
+- [ ] **B022.8** — Commit, update `bugs.md` BUG-022 status to ✅ Fixed + SHA, update `DECISIONS.md` with the ratified council/override decision and final parameter values.

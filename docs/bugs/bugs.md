@@ -537,3 +537,80 @@ Decimal correctness (`str(unrealized)` etc., no float leakage) and the `PaperTra
 **Related:** BUG-018 (the specific case that prompted this generalisation).
 
 ---
+
+## BUG-020 — `IronCondorV2` profit target re-scopes to the surviving legs' credit after any partial close, instead of the original 4-leg basket credit
+
+| Field | Value |
+|---|---|
+| Severity | **HIGH** — financial-logic defect, directly affects when real capital would be closed under live trading; makes the 70% profit target fire early (against a smaller, post-partial-close credit base) rather than against the condor's actual entry economics. |
+| Status | 🔴 Open — Phase 1 (persistence layer) landed 2026-08-04; profit-target branch still reads the old recomputed value until Phase 3 |
+| Discovered | 2026-08-04, user question about why `paper_ic_nifty_v2_monthly` closed with a "70% profit target" label alongside a negative lifetime Net P&L |
+| Location | `src/strategy/ic_nifty_v2.py::_compute_combined_pnl` (line 2031), consumed by `check_signals`'s Priority 4 profit-target branch (line 1266) |
+
+**Symptom:** `paper_ic_nifty_v2_monthly` closed on 2026-08-04 09:24:11 (`ic_nifty_v2.profit_target_close`, `captured_fraction=0.70`) on what was, by then, only the surviving put spread (`short_put`/`long_put_hedge`) — the call spread had already been force-closed the prior day (2026-08-03 09:15:30, `DELTA_STOP` → `CLOSE_CALL_SPREAD`, after a roll attempt failed the wing-liquidity floor). The reported 70% capture was computed against `entry_credit_pts=98.375`, which is the *put spread's own* entry credit, not the original 4-leg entry credit of 163.850 recorded at basket entry (07-31).
+
+**Root cause:** `_compute_combined_pnl` builds `entry_credit` by summing `avg_sell_price`/`avg_cost` over whatever positions are passed in as `ic_positions` — which is filtered to currently-open legs only. There is no persisted field carrying the original 4-leg entry credit forward; once a partial close (`CLOSE_CALL_SPREAD`/`CLOSE_PUT_SPREAD`) removes legs from `ic_positions`, every subsequent `check_signals` tick silently recomputes `entry_credit` from the smaller remaining subset. The 70% profit-target threshold (`_PROFIT_TARGET_RETENTION`) is then applied against that shrunk denominator.
+
+**Contradicts documented design:** `docs/archive/council/strategy/2026-06-27_ic-v2-profit-lock-adjustment.md` defines `entry_credit` as the original combined 4-leg credit (line 80: "current combined mark (cost to close all 4 legs)"; line 301-303's state-field table; line 969's `captured_fraction` formula) and names a dedicated field, `original_entry_credit`, meant to persist this across the position's lifecycle. That field does not exist anywhere in `ic_nifty_v2.py`, `src/paper/models.py`, or `src/paper/store.py` — it was specified in the council decision but never implemented.
+
+**Practical effect:** any partial close (delta-stop, failed roll, profit-lock wing contraction) makes the profit target easier to hit than intended, because it's chasing a smaller basket. The strategy's lifetime realized P&L can be negative (as it was here, driven by the earlier call-side delta-stop loss) even while a late-cycle "profit target" fires and reports a superficially healthy 70% capture — the two numbers are not contradictory once you know the scoping, but the current behavior deviates from the council-specified design.
+
+**Suggested fix (not yet implemented):** persist `original_entry_credit` (4-leg, captured atomically at entry alongside the existing `PaperTrade` rows) and reference it in the profit-target branch instead of recomputing from `ic_positions`. Same defect present in `IronCondorV1` — see BUG-021.
+
+**Fix in progress, phased per `docs/bugs/task.md`:** decision made 2026-08-04 (direct-operator override, not a full council session — Option 1: persist at entry, not reconstruct from history). Phase 1 (`PaperStore.set_original_entry_credit`/`get_original_entry_credit`, new `paper_strategies.original_entry_credit` column) committed 2026-08-04. Phases 2 (wire `IronCondorV2.enter()` to populate it) and 3 (consume it in the profit-target branch, the actual symptom fix) not yet done.
+
+**Related:** BUG-021 (identical defect in `IronCondorV1`), BUG-018 (same file, prior `_parse_expiry` defect), BUG-012 (same file, config mis-binding).
+
+---
+
+## BUG-021 — `IronCondorV1` has the same partial-close entry-credit re-scoping defect as `IronCondorV2` (BUG-020)
+
+| Field | Value |
+|---|---|
+| Severity | **HIGH** — same class as BUG-020; not yet observed in a live close (no partial close has fired for `paper_ic_nifty_v1_weekly` in the logs sampled), but the code path is provably present and will trigger under the same conditions. |
+| Status | 🔴 Open |
+| Discovered | 2026-08-04, audit follow-up after BUG-020, per user request to check V1 |
+| Location | `src/strategy/ic_nifty_v1.py::_compute_combined_pnl` (line 907), consumed by `check_signals`'s PROFIT_TARGET/LOSS_STOP branch (line 302) |
+
+**Symptom (not yet reproduced live, confirmed by code inspection):** `ic_nifty_v1.py`'s `check_signals` calls the identical `_compute_combined_pnl` pattern as V2 — `entry_credit` is summed over `ic_positions`, which is filtered to `net_qty != 0` only (line 172-174), with no persisted original-basket credit field. `IronCondorV1` explicitly supports partial closes: `_ALLOWED_ACTIONS` includes `CLOSE_CALL_SPREAD`/`CLOSE_PUT_SPREAD` (line 72), and a single-leg `DELTA_STOP` can auto-select a spread-specific close (line 739: `action_type = "CLOSE_CALL_SPREAD" if leg_role == "short_call" else "CLOSE_PUT_SPREAD"`). If any such partial close executes, every subsequent tick's `PROFIT_TARGET`/`LOSS_STOP` evaluation (line 315-359) will compute `pct = combined_mark / entry_credit` against the surviving legs' credit only, not the original condor's — same root cause and same practical effect as BUG-020.
+
+**Root cause:** identical to BUG-020 — no `original_entry_credit` field persisted at entry; `_compute_combined_pnl` reconstructs `entry_credit` from whatever's currently open.
+
+**Suggested fix:** same as BUG-020 — persist `original_entry_credit` at entry, reference it in both files' profit-target/loss-stop branches instead of recomputing. Given both strategies share the defect, the fix should probably land as one shared helper/field rather than two parallel patches, to avoid the two files drifting again.
+
+**Not yet fixed** — flagging in this registry per user request.
+
+**Related:** BUG-020 (identical defect in `IronCondorV2`, discovered first).
+
+---
+
+## BUG-022 — Delta-stop wing-roll failure drops straight to a naked single-side partial close (`CLOSE_CALL_SPREAD`/`CLOSE_PUT_SPREAD`) instead of searching narrower wing widths first; affects both `IronCondorV1` and `IronCondorV2`
+
+| Field | Value |
+|---|---|
+| Severity | **HIGH** — financial-logic/risk-management defect. Not a computation error like BUG-020/021; a structural gap where a single failed liquidity check on one candidate strike causes the strategy to give up defined-risk structure entirely on that side, rather than trying other candidates or forcing a full exit. |
+| Status | 🔴 Open — design agreed with user (2026-08-04), not yet implemented; scoped for a council checkpoint before coding (see below) |
+| Discovered | 2026-08-04, user question "how only CE legs got closed, IC should always have 4 legs" — follow-up to BUG-020 investigation |
+| Location | `src/strategy/ic_nifty_v2.py` (`roll_wing_attempt`/`entry_skip_wing_floor_miss`/`roll_guard_failed`/`delta_stop` sequence, ~line 1051-1680; `apply_action`'s `CLOSE_CALL_SPREAD`/`CLOSE_PUT_SPREAD` branch, line 1790-1793); `src/strategy/ic_nifty_v1.py` (`_select_wing_roll_target`, line 766; `_auto_select_action` Priority 5, line 736-762) |
+
+**Symptom (confirmed live, V2):** 2026-08-03 09:15:30 (trace `01d74268`), `paper_ic_nifty_v2_monthly`'s short call delta breached `roll_trigger_delta` (0.3726). `roll_wing_attempt` tried one replacement long-call candidate; it failed the wing-floor liquidity/premium check (`entry_skip_wing_floor_miss`, `floor_value=0.05`, `actual_value=1.487`). On that single failure, the code went straight to `roll_guard_failed` → `delta_stop` → `CLOSE_CALL_SPREAD`, closing `short_call`+`long_call_hedge` only (`151.95`/`48.20`) and leaving `short_put`+`long_put_hedge` open. No re-hedge or re-entry logic exists anywhere in the file to reopen the call side afterward (confirmed — `DECISIONS.md`'s IC-CLOSE-2 note explicitly defers replacement-leg logic for `ROLL_WING`/`PROFIT_LOCK_ZONE2`, and `CLOSE_CALL_SPREAD`/`CLOSE_PUT_SPREAD` don't attempt one at all). From that tick until the full close on 08-04, the "iron condor" was structurally a naked-ish 2-leg put credit spread.
+
+**Root cause:** the roll-attempt logic only ever evaluates a single candidate replacement strike per tick. If that one candidate fails the wing-floor guard, the code has exactly two branches: `ROLL_WING` (succeed) or `CLOSE_CALL_SPREAD`/`CLOSE_PUT_SPREAD` (give up on that side only). There is no intermediate step that tries progressively narrower candidate widths before conceding, and no path that escalates to `CLOSE_FULL` (exit both sides) instead of a single-side partial close.
+
+**Same defect confirmed in `IronCondorV1`:** `_auto_select_action`'s Priority 5 (line 736-762) has the identical two-branch shape — `ROLL_WING` if `_select_wing_roll_target` finds a candidate, else `CLOSE_CALL_SPREAD`/`CLOSE_PUT_SPREAD` on the breached side only. `_select_wing_roll_target` (line 766) was not fully read for whether it applies the same wing-floor liquidity guard V2 does — needs confirming before implementation, since V1's roll-acceptance criteria may currently be looser (accepting more marginal candidates) rather than stricter.
+
+**Existing reviewed precedent for the correct pattern:** this codebase already has a "search a narrower structure against a floor guarantee, fall back to `CLOSE_FULL` if nothing qualifies" mechanism — `IronCondorV2`'s Zone 2 profit-lock wing contraction (`docs/archive/council/strategy/2026-06-27_ic-v2-profit-lock-adjustment.md`, floor inequality `max(W_put, W_call) + D_cum + D_lock + K ≤ 0.75 × C₀`, "if the inequality cannot be satisfied at liquid strikes, CLOSE_FULL executes automatically — no human decision point"). That logic is currently only wired to the *voluntary* profit-lock path, not the *involuntary* delta-stop roll path this bug covers.
+
+**Agreed design (user + Claude discussion, 2026-08-04, not yet council-ratified):** on delta-stop roll failure, before falling back to a single-side close:
+1. Search progressively narrower long-strike candidates (walking the hedge leg toward the short strike) down to a configured minimum width floor — not all the way to the short strike itself, which would collapse the hedge to zero width (a naked short with extra transaction cost, not a defined-risk structure).
+2. At each candidate width, check both the existing liquidity/premium floor AND the same floor-guarantee inequality already used by Zone 2 profit-lock (reused, not reinvented).
+3. Only if no candidate across the full search range clears both checks, escalate to `CLOSE_FULL` (exit both sides) — never fall through to a naked single-side `CLOSE_CALL_SPREAD`/`CLOSE_PUT_SPREAD` as the final state.
+4. Applies to both `IronCondorV1` and `IronCondorV2`; ideally implemented as one shared roll-search helper rather than two parallel implementations, to avoid the drift already seen between the two files' wing-floor logic.
+
+**Open parameters requiring a decision before implementation:** minimum wing-width floor (points or ₹ debit terms), maximum number of candidate strikes to try per tick, whether V1 and V2 share one helper or keep separate (mirroring) implementations, and whether V1's `_select_wing_roll_target` needs its own floor-guarantee check added first (currently unconfirmed).
+
+**Not yet fixed** — per `CLAUDE.md` Step 2b, this is a load-bearing, hard-to-reverse risk-management decision with multiple defensible parameter choices spanning strategy design and execution mechanics; recommend a council checkpoint (or explicit direct-operator override, per the precedent already used elsewhere in `DECISIONS.md`) before implementation, given it changes live risk exposure behavior for both IC strategies.
+
+**Related:** BUG-020, BUG-021 (same investigation thread, same two files, discovered same session — entry-credit scoping vs. this structural roll/close gap are two distinct defects, not duplicates).
+
+---
