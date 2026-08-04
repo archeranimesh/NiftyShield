@@ -543,7 +543,7 @@ Decimal correctness (`str(unrealized)` etc., no float leakage) and the `PaperTra
 | Field | Value |
 |---|---|
 | Severity | **HIGH** — financial-logic defect, directly affects when real capital would be closed under live trading; makes the 70% profit target fire early (against a smaller, post-partial-close credit base) rather than against the condor's actual entry economics. |
-| Status | 🔴 Open — Phase 1 (persistence layer) landed 2026-08-04; profit-target branch still reads the old recomputed value until Phase 3 |
+| Status | 🔴 Open — Phase 1 (persistence layer) landed 2026-08-04, SHA `285a8fa`; Phase 2 (V2 entry-path wiring) landed 2026-08-04, SHA pending — see task.md B020.7 for the entry-path discovery that changed this phase's plan (`IronCondorV2.enter()` is dead code in production; wired into `paper_ic_entry_v2.py::run()` instead); profit-target branch still reads the old recomputed value until Phase 3 |
 | Discovered | 2026-08-04, user question about why `paper_ic_nifty_v2_monthly` closed with a "70% profit target" label alongside a negative lifetime Net P&L |
 | Location | `src/strategy/ic_nifty_v2.py::_compute_combined_pnl` (line 2031), consumed by `check_signals`'s Priority 4 profit-target branch (line 1266) |
 
@@ -557,7 +557,7 @@ Decimal correctness (`str(unrealized)` etc., no float leakage) and the `PaperTra
 
 **Suggested fix (not yet implemented):** persist `original_entry_credit` (4-leg, captured atomically at entry alongside the existing `PaperTrade` rows) and reference it in the profit-target branch instead of recomputing from `ic_positions`. Same defect present in `IronCondorV1` — see BUG-021.
 
-**Fix in progress, phased per `docs/bugs/task.md`:** decision made 2026-08-04 (direct-operator override, not a full council session — Option 1: persist at entry, not reconstruct from history). Phase 1 (`PaperStore.set_original_entry_credit`/`get_original_entry_credit`, new `paper_strategies.original_entry_credit` column) committed 2026-08-04. Phases 2 (wire `IronCondorV2.enter()` to populate it) and 3 (consume it in the profit-target branch, the actual symptom fix) not yet done.
+**Fix in progress, phased per `docs/bugs/task.md`:** decision made 2026-08-04 (direct-operator override, not a full council session — Option 1: persist at entry, not reconstruct from history). Phase 1 (`PaperStore.set_original_entry_credit`/`get_original_entry_credit`, new `paper_strategies.original_entry_credit` column) committed 2026-08-04, SHA `285a8fa`. Phases 2 (wire `IronCondorV2.enter()` to populate it) and 3 (consume it in the profit-target branch, the actual symptom fix) not yet done.
 
 **Related:** BUG-021 (identical defect in `IronCondorV1`), BUG-018 (same file, prior `_parse_expiry` defect), BUG-012 (same file, config mis-binding).
 

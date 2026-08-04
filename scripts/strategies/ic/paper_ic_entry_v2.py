@@ -558,9 +558,19 @@ async def run() -> None:
         except Exception as exc:  # noqa: BLE001 — margin capture must never block a successful entry
             logger.warning("ic_entry.margin_capture_failed", error=str(exc))
 
+        # Step 11c: Persist the original 4-leg entry credit (BUG-020 Phase 2).
+        # Legs are confirmed persisted above. Non-fatal — a persistence failure
+        # here must not block a successful entry; the profit-target branch
+        # (BUG-020 Phase 3) falls back to its existing recompute behavior when
+        # this value is absent.
+        net_credit = (short_put["mid"] + short_call["mid"]) - (long_put["mid"] + long_call["mid"])
+        try:
+            store.set_original_entry_credit(strategy_name, net_credit)
+        except Exception as exc:  # noqa: BLE001 — persistence failure must never block entry
+            logger.warning("ic_entry.original_credit_persist_failed", error=str(exc))
+
         # Step 12: Telegram notification — only reached once all 4 legs are
         # confirmed present in the DB.
-        net_credit = (short_put["mid"] + short_call["mid"]) - (long_put["mid"] + long_call["mid"])
         wing_width_put = abs(short_put["strike"] - long_put["strike"])
         wing_width_call = abs(long_call["strike"] - short_call["strike"])
         msg = (

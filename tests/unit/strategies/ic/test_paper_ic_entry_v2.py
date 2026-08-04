@@ -289,7 +289,12 @@ async def test_happy_path_executes_four_legs(
 
 @pytest.mark.asyncio
 async def test_margin_captured_and_persisted_on_successful_entry(
-    mock_gates, mock_store, mock_client, mock_subprocess, mock_telegram, mock_delta_tracker,
+    mock_gates,
+    mock_store,
+    mock_client,
+    mock_subprocess,
+    mock_telegram,
+    mock_delta_tracker,
     mock_upstox_live_client,
 ) -> None:
     """Step 11b: after all 4 legs are confirmed persisted, margin is fetched
@@ -316,7 +321,12 @@ async def test_margin_captured_and_persisted_on_successful_entry(
 
 @pytest.mark.asyncio
 async def test_margin_capture_failure_does_not_block_success_notification(
-    mock_gates, mock_store, mock_client, mock_subprocess, mock_telegram, mock_delta_tracker,
+    mock_gates,
+    mock_store,
+    mock_client,
+    mock_subprocess,
+    mock_telegram,
+    mock_delta_tracker,
     mock_upstox_live_client,
 ) -> None:
     """get_order_margin failing must not prevent the success Telegram notification
@@ -338,6 +348,73 @@ async def test_margin_capture_failure_does_not_block_success_notification(
 
     assert mock_telegram.send_notification.call_count == 1
     mock_store.record_margin_snapshot.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_original_entry_credit_persisted_on_successful_entry(
+    mock_gates,
+    mock_store,
+    mock_client,
+    mock_subprocess,
+    mock_telegram,
+    mock_delta_tracker,
+    mock_upstox_live_client,
+) -> None:
+    """BUG-020 Phase 2: after all 4 legs are confirmed persisted, the basket's
+    net credit is written via ``PaperStore.set_original_entry_credit`` so the
+    profit-target branch (Phase 3) can reference the original 4-leg economics
+    instead of recomputing from whatever legs are still open after a partial
+    close."""
+    with patch.object(
+        sys,
+        "argv",
+        [
+            "paper_ic_entry_v2.py",
+            "--expiry-type",
+            "monthly",
+            "--no-dry-run",
+            "--bod-path",
+            "dummy.json",
+        ],
+    ):
+        await run()
+
+    mock_store.set_original_entry_credit.assert_called_once()
+    call_args = mock_store.set_original_entry_credit.call_args.args
+    assert call_args[0] == "paper_ic_nifty_v2_monthly"
+    # All 4 legs quoted at ltp=50 in the fixture chain → net credit = 0.
+    assert call_args[1] == Decimal("0")
+
+
+@pytest.mark.asyncio
+async def test_original_entry_credit_persist_failure_does_not_block_success_notification(
+    mock_gates,
+    mock_store,
+    mock_client,
+    mock_subprocess,
+    mock_telegram,
+    mock_delta_tracker,
+    mock_upstox_live_client,
+) -> None:
+    """set_original_entry_credit failing must not prevent the success Telegram
+    notification or otherwise crash the script — legs are already persisted
+    at that point (same non-fatal contract as margin capture)."""
+    mock_store.set_original_entry_credit.side_effect = RuntimeError("db locked")
+    with patch.object(
+        sys,
+        "argv",
+        [
+            "paper_ic_entry_v2.py",
+            "--expiry-type",
+            "monthly",
+            "--no-dry-run",
+            "--bod-path",
+            "dummy.json",
+        ],
+    ):
+        await run()  # should not raise
+
+    assert mock_telegram.send_notification.call_count == 1
 
 
 @pytest.mark.asyncio
