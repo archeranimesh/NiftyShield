@@ -1076,6 +1076,10 @@ def test_auto_collar_no_dry_run_writes_trades_on_bootstrap_success(tmp_path, cap
         patch(
             "scripts.strategies.three_track.paper_3track_overlay_entry._query_open_call_role"
         ) as mock_query,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.build_notifier",
+            return_value=None,
+        ),
     ):
         mock_bootstrap.return_value = cfg
         mock_store = MagicMock()
