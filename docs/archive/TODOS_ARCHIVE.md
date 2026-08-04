@@ -54,8 +54,10 @@
   `git diff --cached`; two WARNINGs logged and deferred in DECISIONS.md (a silent-no-op edge case
   in the Telegram failure-notification fallback chain, and a pre-existing float→Decimal
   round-trip inherited unchanged from `evaluate_pp`). `docs/plan/3track-consolidation/tasks.md`
-  Collar3b ticked. Committed — SHA recorded in the tasks.md line once `git log --oneline -1` is
-  confirmed.
+  Collar3b ticked. Committed: SHA eb18b31, confirmed via `git log --oneline -1`. (Note: hit a
+  stale `.git/HEAD.lock` from an earlier session at commit time — same recurring sandbox
+  filesystem quirk as the `.git/objects/*/tmp_obj_*` unlink warnings seen throughout this
+  session; `mv`'d it aside rather than `rm`, which failed with "Operation not permitted".)
 
 - [2026-08-04] 3-Track Consolidation **Collar3b — design session, NO CODE WRITTEN, handover
   only.** Two implementation-agent spawns were declined before any file was touched (both by
