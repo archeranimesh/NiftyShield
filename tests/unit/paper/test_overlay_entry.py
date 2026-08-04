@@ -1017,9 +1017,10 @@ def test_open_pp_dte_computes_dte_from_open_row(tmp_path):
 # ── Collar3b: --auto-collar bootstrap ───────────────────────────────────────
 
 
-def test_auto_collar_requires_dry_run(tmp_path, capsys):
-    """Collar3b posture: --auto-collar without --dry-run is hard-blocked —
-    not yet proven live, unlike CC3/PP3 post-unblock."""
+def test_auto_collar_no_dry_run_no_longer_blocked(tmp_path, capsys):
+    """Live-posture unblock (2026-08-04): --auto-collar without --dry-run
+    proceeds to bootstrap now that Collar1/Collar2/Collar3a have all landed —
+    no decision gate remains open (mirrors CC3's own unblock regression test)."""
     from scripts.strategies.three_track.paper_3track_overlay_entry import main
 
     test_args = [
@@ -1029,13 +1030,67 @@ def test_auto_collar_requires_dry_run(tmp_path, capsys):
         str(tmp_path / "test.sqlite"),
     ]
 
-    with patch("sys.argv", test_args):
+    with (
+        patch("sys.argv", test_args),
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.auto_collar_bootstrap"
+        ) as mock_bootstrap,
+    ):
+        # Bootstrap gates (DTE/IVR/ladder) are exercised separately by
+        # test_auto_collar_bootstrap_failure_exits_1; here we only assert the
+        # old --dry-run-only block is gone, so force bootstrap to fail past
+        # it cleanly rather than re-testing gate internals.
+        mock_bootstrap.return_value = None
+
         with pytest.raises(SystemExit) as excinfo:
             main()
 
-        assert excinfo.value.code == 1
         captured = capsys.readouterr()
-        assert "requires --dry-run" in captured.err
+        assert "requires --dry-run" not in captured.err
+        assert excinfo.value.code == 1
+        assert "auto-collar bootstrap failed" in captured.err
+
+
+def test_auto_collar_no_dry_run_writes_trades_on_bootstrap_success(tmp_path, capsys):
+    """Full success path: --auto-collar without --dry-run, bootstrap succeeds,
+    must actually reach PaperStore.record_trades (collar writes both legs
+    atomically via _record_collar_trades) — not just fail to hit the old block."""
+    from scripts.strategies.three_track.paper_3track_overlay_entry import main
+
+    cfg = load_overlay_config(_write_yaml(tmp_path, _valid_collar_raw()))
+    test_args = [
+        "paper_3track_overlay_entry.py",
+        "--auto-collar",
+        "--db-path",
+        str(tmp_path / "test.sqlite"),
+    ]
+
+    with (
+        patch("sys.argv", test_args),
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.auto_collar_bootstrap"
+        ) as mock_bootstrap,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.PaperStore"
+        ) as mock_store_cls,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry._query_open_call_role"
+        ) as mock_query,
+    ):
+        mock_bootstrap.return_value = cfg
+        mock_store = MagicMock()
+        mock_store_cls.return_value = mock_store
+        mock_store.get_positions.return_value = []
+        mock_store.record_trades.return_value = ([], [])
+        mock_query.return_value = None
+
+        main()
+
+        mock_store.record_trades.assert_called_once()
+        trades = mock_store.record_trades.call_args[0][0]
+        assert {t.leg_role for t in trades} == {"overlay_collar_put", "overlay_collar_call"}
+        captured = capsys.readouterr()
+        assert "RECORDED TO DB" in captured.out
 
 
 def test_auto_collar_bootstrap_no_open_position(tmp_path, capsys):

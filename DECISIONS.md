@@ -5,6 +5,43 @@
 
 ---
 
+**`--auto-collar` live posture unblocked (2026-08-04, direct operator decision, no council
+pass):** Collar3b originally shipped `--auto-collar` hard-blocked to `--dry-run` only, framed as
+"same posture CC3/PP3 shipped with initially." On review, that framing didn't hold up — CC3's and
+PP3's blocks were each tied to a *named, still-open decision gate* (CC2 delta-band + EC-5 for CC3;
+PP2 delta-band for PP3), not a generic seasoning period. Collar has no equivalent open gate:
+Collar1 (ladder search), Collar2 (band + net-premium tiebreak, already verified live against
+`logs/collar_option.log` on 2026-08-03), and Collar3a (re-entry trigger widening) are all landed.
+The block was therefore an unjustified default, not a real safeguard. Operator's own rationale
+for lifting it: this is paper trading — no real capital is at risk, so the cost of a bug is bad
+data (misleading P&L history downstream consumers like S8/S9 read from) rather than financial
+loss, and that's an acceptable tradeoff against leaving a genuinely-working feature idle.
+
+**Residual risk, explicitly accepted rather than hidden:** unlike CC3/PP3, whose *underlying*
+exit/close logic (`CCOverlayV1`/`PPOverlayV1.apply_action`) had already been running live for
+weeks before their bootstrap scripts were unblocked, Collar3b's entire atomic close+reenter path
+(`_select_combined_reentry_action`, `_reenter_collar`, `select_and_build_collar_entry`) is new
+code that has only run against unit-test mocks, never a live tick. `auto_collar_bootstrap`'s own
+gates (DTE/IVR/ladder selection) similarly have not had an EC-5-style live-host test-confirmation
+pass the way CC's did. Recommend watching the first live `CLOSE_AND_REENTER_COLLAR` dispatch and
+first `--auto-collar` cron run in `logs/monitor_daemon.log`/`logs/collar_entry.log` before
+treating the path as proven, even though it is no longer gated on doing so.
+
+Removed the `sys.exit(1)` block in `paper_3track_overlay_entry.py::main()`; updated the module
+docstring's cron examples to match CC3/PP3's documented shape (`30 10 * * 3`, weekly Wednesday,
+since the call leg reuses CC's band). Test changes: `test_auto_collar_requires_dry_run` replaced
+with `test_auto_collar_no_dry_run_no_longer_blocked` (regression guard the block stays gone,
+mirrors CC3's own unblock test) + new `test_auto_collar_no_dry_run_writes_trades_on_bootstrap_success`
+(proves the live write path actually reaches `PaperStore.record_trades` with both
+`overlay_collar_put`/`overlay_collar_call` legs, not just that the error string disappeared).
+Reviewed via `general-purpose` agent standing in for `@code-reviewer` — no CRITICAL/ERROR.
+89/89 relevant tests green, 2654/2655 full offline suite green (same one pre-existing
+sandbox-network-blocked failure, unrelated). Cron line still needs manual wiring by the
+operator (Claude cannot edit crontab from this sandbox) — see the docstring in
+`paper_3track_overlay_entry.py` for the exact line.
+
+---
+
 **Collar3b shipped — unified atomic exit+immediate-reenter for Collar (2026-08-04):**
 Redesigned scope (operator, 2026-08-04) supersedes the original cron-bootstrap-only draft —
 Collar is treated as one indivisible unit: any qualifying signal on either leg closes both legs

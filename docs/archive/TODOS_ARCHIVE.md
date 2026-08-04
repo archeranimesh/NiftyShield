@@ -7,6 +7,28 @@
 
 ## Session Log — 2026-08-04
 
+- [2026-08-04] 3-Track Consolidation **`--auto-collar` live posture unblocked**, same-day
+  follow-up to the Collar3b shipment below. User pushed back on the shipped dry-run-only hard
+  block, asking why Collar was still blocked when its requirements looked closed. Checked the
+  actual precedent instead of restating the "same as CC3/PP3" claim from the original commit
+  message: CC3/PP3's blocks were each tied to a *named, still-open decision gate* at the time
+  they shipped (CC2/EC-5 for CC3, PP2 for PP3) — not a generic "prove it live first" policy.
+  Collar has no equivalent open gate: Collar1/Collar2/Collar3a are all landed. The original block
+  was therefore an unjustified copy-paste of CC3/PP3's *shape*, not their *reason*. Flagged this
+  correction directly rather than defending the original framing. User then noted this is paper
+  trading — no real capital at risk — which changes the cost/benefit of leaving a
+  fully-implemented feature idle. Removed the `sys.exit(1)` block, updated the module docstring's
+  cron example to match CC3/PP3's format, replaced `test_auto_collar_requires_dry_run` with a
+  regression guard the block stays gone plus a new test proving the live write path actually
+  reaches `PaperStore.record_trades` with both collar legs (not just an error-string check).
+  Explicitly logged the one real residual risk in DECISIONS.md rather than glossing over it:
+  unlike CC3/PP3, Collar3b's entire close+reenter path is new code never exercised on a live
+  tick — recommended watching the first live dispatch in the logs, even though nothing gates on
+  it now. Reviewed via `general-purpose` agent standing in for `@code-reviewer` — no
+  CRITICAL/ERROR. 2654/2655 full offline suite green (same one pre-existing unrelated failure).
+  Cron line still needs manual wiring by the operator — Claude cannot edit crontab from this
+  sandbox; exact line is in the script's module docstring.
+
 - [2026-08-04] 3-Track Consolidation **Collar3b — implemented and shipped** per the design
   handover logged immediately below. Started by re-indexing the codebase-memory graph (was stale
   — 5649 nodes vs. 11354 after reindex, missing everything from Collar1/CC3/PP3 onward; graph

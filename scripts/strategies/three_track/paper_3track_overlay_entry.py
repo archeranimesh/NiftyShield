@@ -23,6 +23,7 @@ Usage:
     python scripts/paper_3track_overlay_entry.py --auto-pp --dry-run
     python scripts/paper_3track_overlay_entry.py --auto-pp
     python scripts/paper_3track_overlay_entry.py --auto-collar --dry-run
+    python scripts/paper_3track_overlay_entry.py --auto-collar
 
 NOTE: unlike paper_ic_entry.py, --dry-run here is a plain store_true flag (no
 --no-dry-run counterpart) — omitting the flag entirely means live (writes to DB).
@@ -40,6 +41,14 @@ short-circuits to a no-op (exit 0) whenever a fresh (DTE > 5) put is already
 open — a daily invocation is idempotent by construction, same reasoning as S6's
 bootstrap entry scripts:
     35 15 * * 1-5  cd /path/to/NiftyShield && python scripts/strategies/three_track/paper_3track_overlay_entry.py --auto-pp
+
+Cron example (--auto-collar live path unblocked 2026-08-04 — Collar1/Collar2/Collar3a all
+landed, no decision gate remains open; paper trading, operator explicitly accepted the risk
+of unexercised-live code over a dry-run-only default, see DECISIONS.md). Bootstrap only —
+one-time-per-position via the existing generic _has_open_overlay_leg gate (S6), so any cadence
+is idempotent by construction; mirrors CC's weekly Wednesday slot since collar's call leg reuses
+CC's band:
+    30 10 * * 3  cd /path/to/NiftyShield && python scripts/strategies/three_track/paper_3track_overlay_entry.py --auto-collar
 """
 
 import argparse
@@ -1080,8 +1089,9 @@ def main() -> None:
         help=(
             "Automate first-ever Collar entry (bootstrap only — routine reentry after "
             "a close is handled automatically by CollarOverlayV1.apply_action, not this "
-            "flag). Requires --dry-run until proven live (Collar3b posture, matches "
-            "CC3/PP3's original dry-run-only rollout)."
+            "flag). Live path unblocked 2026-08-04 — Collar1/Collar2/Collar3a all landed, "
+            "no decision gate remains open (paper trading, operator accepted the risk of "
+            "unexercised code over a dry-run-only default), see DECISIONS.md."
         ),
     )
     parser.add_argument(
@@ -1096,18 +1106,6 @@ def main() -> None:
     )
     args = parser.parse_args()
     setup_logging()
-
-    if args.auto_collar and not args.dry_run:
-        # Collar3b posture: unlike CC3/PP3 post-unblock, --auto-collar has not yet
-        # been proven live — no CC3/PP3-style unblock decision has been made for
-        # collar. Hard-block --no-dry-run until an operator decision lifts this,
-        # same posture CC3/PP3 both shipped with initially.
-        print(
-            "ERROR: --auto-collar requires --dry-run — not yet proven live "
-            "(Collar3b posture, see docs/plan/3track-consolidation/tasks.md Collar3b).",
-            file=sys.stderr,
-        )
-        sys.exit(1)
 
     gate_violation: GateViolation | None = None
 
