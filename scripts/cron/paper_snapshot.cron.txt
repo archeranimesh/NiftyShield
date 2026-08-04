@@ -1,2 +1,5 @@
 35 15 * * 1-5 cd /Users/abhadra/myWork/myCode/python/NiftyShield && /Users/abhadra/myWork/myCode/python/NiftyShield/.venv/bin/python -m scripts.strategies.three_track.paper_3track_snapshot --no-dry-run >> logs/paper_snapshot.log 2>&1
 36 15 * * 1-5 cd /Users/abhadra/myWork/myCode/python/NiftyShield && /Users/abhadra/myWork/myCode/python/NiftyShield/.venv/bin/python -m scripts.portfolio.paper_snapshot --no-dry-run >> logs/paper_snapshot.log 2>&1
+30 10 * * 1-5 cd /Users/abhadra/myWork/myCode/python/NiftyShield && /Users/abhadra/myWork/myCode/python/NiftyShield/.venv/bin/python -m scripts.strategies.three_track.paper_3track_roll --no-dry-run >> logs/base_roll.log 2>&1
+30 10 * * 1-5 cd /Users/abhadra/myWork/myCode/python/NiftyShield && /Users/abhadra/myWork/myCode/python/NiftyShield/.venv/bin/python -m scripts.strategies.three_track.paper_3track_entry --auto-futures --confirm >> logs/futures_entry.log 2>&1
+30 10 * * 1-5 cd /Users/abhadra/myWork/myCode/python/NiftyShield && /Users/abhadra/myWork/myCode/python/NiftyShield/.venv/bin/python -m scripts.strategies.three_track.paper_3track_entry --auto-ditm --confirm >> logs/ditm_entry.log 2>&1

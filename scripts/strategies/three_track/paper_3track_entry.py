@@ -530,8 +530,15 @@ def compute_gate_results(p: LivePrices) -> dict[str, str]:
 # ── Build trades ─────────────────────────────────────────────────────────────
 
 
-def build_trades(p: LivePrices) -> list[PaperTrade]:
-    """Build the three base-leg PaperTrade objects from live prices."""
+def build_trades(p: LivePrices, tracks: set[str] | None = None) -> list[PaperTrade]:
+    """Build base-leg PaperTrade objects from live prices, filtered to `tracks`.
+
+    Args:
+        p: Live-fetched prices for the entry cycle.
+        tracks: Strategy_name constants to build trades for (subset of
+            STRATEGY_SPOT/FUTURES/PROXY). `None` (default) builds all three,
+            preserving the original bootstrap-all-at-once behavior.
+    """
     nee = p.nifty_spot * Decimal(str(p.lot_size))
     tag = f"Cycle {p.cycle}."
     surplus = nee - SPAN_MARGIN_ESTIMATE
@@ -577,8 +584,10 @@ def build_trades(p: LivePrices) -> list[PaperTrade]:
             f"Target delta 0.90. {tag}"
         ),
     )
-    logger.debug("Built %d PaperTrade objects", 3)
-    return [spot, futures, proxy]
+    all_trades = {STRATEGY_SPOT: spot, STRATEGY_FUTURES: futures, STRATEGY_PROXY: proxy}
+    selected = all_trades if tracks is None else {k: v for k, v in all_trades.items() if k in tracks}
+    logger.debug("Built %d PaperTrade objects", len(selected))
+    return list(selected.values())
 
 
 # ── Preview output ────────────────────────────────────────────────────────────
@@ -661,13 +670,36 @@ def print_preview(p: LivePrices, gates: dict[str, str], confirmed: bool) -> None
         print("  ✅  All three base legs recorded.\n")
 
 
+def _open_tracks(store: PaperStore) -> set[str]:
+    """Return the subset of the three base-leg tracks that already hold an open position.
+
+    Per-track bootstrap gate (mirrors `_has_open_overlay_leg` in
+    `paper_3track_overlay_entry.py`): each of Spot/Futures/Proxy is a perpetual,
+    single-entry position with no recurring cycle, so once a *given* track has
+    been entered it must never refire — but that no longer blocks the other two
+    tracks from bootstrapping independently, enabling `--auto-futures`/
+    `--auto-ditm`-style cron automation per track instead of an all-or-nothing gate.
+
+    Args:
+        store: PaperStore to query.
+
+    Returns:
+        Set of strategy_name constants (subset of STRATEGY_SPOT/FUTURES/PROXY)
+        that already have an open base position.
+    """
+    return {
+        strategy_name
+        for strategy_name in (STRATEGY_SPOT, STRATEGY_FUTURES, STRATEGY_PROXY)
+        if store.get_positions(strategy_name)
+    }
+
+
 def _has_open_base_positions(store: PaperStore) -> bool:
     """True if any of the three base-leg tracks already has an open position.
 
-    Base-leg entry is a one-time bootstrap (S6, 2026-07-28 decision) — all three
-    tracks are perpetual, single-entry positions with no recurring cycle to
-    re-enter, so once any track has been entered this must never refire, even
-    when the entry script is invoked on a schedule (cron-safe idempotency).
+    Kept for backward compatibility with existing call sites/tests that only
+    need a single yes/no bootstrap check across all three tracks. New per-track
+    automation should call `_open_tracks()` directly instead.
 
     Args:
         store: PaperStore to query.
@@ -675,10 +707,7 @@ def _has_open_base_positions(store: PaperStore) -> bool:
     Returns:
         True if Spot, Futures, or Proxy already holds an open base position.
     """
-    for strategy_name in (STRATEGY_SPOT, STRATEGY_FUTURES, STRATEGY_PROXY):
-        if store.get_positions(strategy_name):
-            return True
-    return False
+    return bool(_open_tracks(store))
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
@@ -703,7 +732,30 @@ def main() -> None:
     parser.add_argument(
         "--confirm",
         action="store_true",
-        help="Write all three base legs to DB. Default: preview only.",
+        help="Write the selected base legs to DB. Default: preview only.",
+    )
+    parser.add_argument(
+        "--tracks",
+        nargs="+",
+        choices=["spot", "futures", "proxy"],
+        metavar="TRACK",
+        default=None,
+        help=(
+            "Tracks to bootstrap (default: all three). Each track's bootstrap "
+            "gate is independent — an already-open track is skipped, others "
+            "still enter. Enables per-track cron automation, e.g. "
+            "--tracks futures proxy."
+        ),
+    )
+    parser.add_argument(
+        "--auto-futures",
+        action="store_true",
+        help="Auto-entry for futures track (dry-run only for now).",
+    )
+    parser.add_argument(
+        "--auto-ditm",
+        action="store_true",
+        help="Auto-entry for proxy track (dry-run only for now).",
     )
     parser.add_argument(
         "--expiry",
@@ -749,6 +801,26 @@ def main() -> None:
             "When implemented, configs must live in config/paper/, NOT data/paper/."
         )
 
+    if args.auto_futures or args.auto_ditm:
+        if args.confirm:
+            logger.error("--confirm is currently blocked for auto modes pending dry-run-only safety gate.")
+            sys.exit(1)
+            
+        auto_tracks = []
+        if args.auto_futures:
+            auto_tracks.append("futures")
+        if args.auto_ditm:
+            auto_tracks.append("proxy")
+        
+        args.tracks = auto_tracks
+
+    _TRACK_MAP = {"spot": STRATEGY_SPOT, "futures": STRATEGY_FUTURES, "proxy": STRATEGY_PROXY}
+    requested_tracks = (
+        {_TRACK_MAP[t] for t in args.tracks}
+        if args.tracks
+        else {STRATEGY_SPOT, STRATEGY_FUTURES, STRATEGY_PROXY}
+    )
+
     today = date.today()
     logger.info("3-Track entry starting (today=%s, cycle=%d)", today, args.cycle)
 
@@ -792,6 +864,14 @@ def main() -> None:
             force_proxy_expiry,
         )
 
+    store = PaperStore(args.db_path)
+    already_open = _open_tracks(store)
+    tracks_to_enter = requested_tracks - already_open
+
+    if (args.auto_futures or args.auto_ditm) and not tracks_to_enter:
+        logger.info("Auto-entry: Requested tracks %s are already open. Exiting.", args.tracks)
+        sys.exit(0)
+
     # Fetch all live prices (proxy searched across monthly + quarterly + yearly unless forced)
     try:
         prices = fetch_live_prices(
@@ -810,20 +890,24 @@ def main() -> None:
 
     gates = compute_gate_results(prices)
 
-    # Write to DB if --confirm. Bootstrap-only (S6): skip entirely if any track
-    # already has an open base position — this is never a recurring re-entry.
-    store = PaperStore(args.db_path)
-    already_bootstrapped = _has_open_base_positions(store)
+    # Write to DB if --confirm. Bootstrap-only (S6), now per-track (S6b): each
+    # of Spot/Futures/Proxy is gated independently — a track that's already
+    # open is skipped, others in the requested set still enter. This is what
+    # makes --auto-futures/--auto-ditm-style cron automation possible without
+    # blocking on an unrelated track (e.g. Spot staying open forever).
     wrote = False
 
     if args.confirm:
-        if already_bootstrapped:
+        if already_open & requested_tracks:
             logger.info(
                 "paper_3track_entry.bootstrap_skipped",
-                reason="one_or_more_tracks_already_open",
+                reason="already_open",
+                tracks=sorted(already_open & requested_tracks),
             )
+        if not tracks_to_enter:
+            logger.info("paper_3track_entry.nothing_to_enter", requested=sorted(requested_tracks))
         else:
-            trades = build_trades(prices)
+            trades = build_trades(prices, tracks=tracks_to_enter)
             for trade in trades:
                 store.record_trade(trade)
                 logger.info(
@@ -833,19 +917,25 @@ def main() -> None:
                     trade.quantity,
                     trade.price,
                 )
-            logger.info("All 3 base legs written to %s", args.db_path)
+            logger.info("Base legs written to %s: %s", args.db_path, sorted(tracks_to_enter))
             wrote = True
 
             notifier = build_notifier()
             if notifier:
-                msg = (
-                    "🟢 BASE ENTRY — 3-Track bootstrap\n"
-                    f"Cycle: {args.cycle}\n"
-                    f"Spot: NIFTYBEES qty={prices.niftybees_qty} @ ₹{prices.niftybees_ltp}\n"
-                    f"Futures: {prices.futures_key} @ ₹{prices.futures_price}\n"
-                    f"Proxy: {prices.proxy_instrument_key} @ ₹{prices.proxy_price} "
-                    f"(δ={prices.proxy_actual_delta})"
-                )
+                lines = [f"🟢 BASE ENTRY — 3-Track bootstrap ({', '.join(sorted(tracks_to_enter))})"]
+                lines.append(f"Cycle: {args.cycle}")
+                if STRATEGY_SPOT in tracks_to_enter:
+                    lines.append(
+                        f"Spot: NIFTYBEES qty={prices.niftybees_qty} @ ₹{prices.niftybees_ltp}"
+                    )
+                if STRATEGY_FUTURES in tracks_to_enter:
+                    lines.append(f"Futures: {prices.futures_key} @ ₹{prices.futures_price}")
+                if STRATEGY_PROXY in tracks_to_enter:
+                    lines.append(
+                        f"Proxy: {prices.proxy_instrument_key} @ ₹{prices.proxy_price} "
+                        f"(δ={prices.proxy_actual_delta})"
+                    )
+                msg = "\n".join(lines)
                 try:
                     asyncio.run(notifier.send(msg))
                 except Exception as exc:  # non-fatal — notify failure never blocks the trade

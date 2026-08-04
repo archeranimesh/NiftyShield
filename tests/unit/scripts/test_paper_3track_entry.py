@@ -11,9 +11,11 @@ from decimal import Decimal
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from scripts.strategies.three_track import paper_3track_entry
 from src.models.portfolio import TradeAction
-from src.paper.constants import STRATEGY_FUTURES, STRATEGY_SPOT
+from src.paper.constants import STRATEGY_FUTURES, STRATEGY_PROXY, STRATEGY_SPOT
 from src.paper.models import PaperTrade
 from src.paper.store import PaperStore
 
@@ -65,6 +67,32 @@ def test_bootstrap_checks_all_three_tracks(tmp_path: Path) -> None:
     assert paper_3track_entry._has_open_base_positions(store) is True
 
 
+# ── _open_tracks (per-track gate) ───────────────────────────────────────────
+
+
+def test_open_tracks_empty_when_no_positions(tmp_path: Path) -> None:
+    store = _make_store(tmp_path)
+    assert paper_3track_entry._open_tracks(store) == set()
+
+
+def test_open_tracks_reports_only_the_open_track(tmp_path: Path) -> None:
+    """Spot open, Futures/Proxy flat — only Spot should report as open, unlike
+    the old all-or-nothing _has_open_base_positions gate."""
+    store = _make_store(tmp_path)
+    store.record_trade(
+        PaperTrade(
+            strategy_name=STRATEGY_SPOT,
+            leg_role="base_etf",
+            instrument_key="NSE_EQ|NIFTYBEES",
+            trade_date=date(2026, 6, 25),
+            action=TradeAction.BUY,
+            quantity=5735,
+            price=Decimal("250.0"),
+        )
+    )
+    assert paper_3track_entry._open_tracks(store) == {STRATEGY_SPOT}
+
+
 # ── main() bootstrap + notify wiring ────────────────────────────────────────
 
 
@@ -91,7 +119,19 @@ def _fake_trade(n: int) -> MagicMock:
     return trade
 
 
-def _run_main(mock_store: MagicMock, mock_notifier) -> None:
+def _run_main(
+    mock_store: MagicMock,
+    mock_notifier,
+    extra_argv: list[str] | None = None,
+    build_trades_mock: MagicMock | None = None,
+    include_confirm: bool = True,
+) -> MagicMock:
+    bt_mock = build_trades_mock or MagicMock(return_value=[_fake_trade(n) for n in range(3)])
+    sys_argv = ["paper_3track_entry.py"]
+    if include_confirm:
+        sys_argv.append("--confirm")
+    if extra_argv:
+        sys_argv.extend(extra_argv)
     with (
         patch("scripts.strategies.three_track.paper_3track_entry.UpstoxMarketClient"),
         patch("scripts.strategies.three_track.paper_3track_entry.InstrumentLookup"),
@@ -109,7 +149,7 @@ def _run_main(mock_store: MagicMock, mock_notifier) -> None:
         ),
         patch(
             "scripts.strategies.three_track.paper_3track_entry.build_trades",
-            return_value=[_fake_trade(n) for n in range(3)],
+            bt_mock,
         ),
         patch(
             "scripts.strategies.three_track.paper_3track_entry.PaperStore",
@@ -120,9 +160,10 @@ def _run_main(mock_store: MagicMock, mock_notifier) -> None:
             return_value=mock_notifier,
         ),
         patch("scripts.strategies.three_track.paper_3track_entry.print_preview"),
-        patch("sys.argv", ["paper_3track_entry.py", "--confirm"]),
+        patch("sys.argv", sys_argv),
     ):
         paper_3track_entry.main()
+    return bt_mock
 
 
 def test_entry_trigger_fires_when_no_open_position() -> None:
@@ -173,3 +214,66 @@ def test_notification_failure_does_not_block_trade() -> None:
     _run_main(mock_store, mock_notifier=mock_notifier)  # must not raise
 
     assert mock_store.record_trade.call_count == 3
+
+
+def test_entry_enters_only_still_flat_tracks_when_one_already_open() -> None:
+    """Spot already open, Futures/Proxy flat — Spot must be skipped while
+    Futures/Proxy still enter (the per-track gate this story adds; the old
+    all-or-nothing gate would have skipped the whole bootstrap)."""
+    mock_store = MagicMock()
+    mock_store.get_positions.side_effect = (
+        lambda strategy_name: [MagicMock()] if strategy_name == STRATEGY_SPOT else []
+    )
+    mock_store.record_trade.return_value = True
+    bt_mock = MagicMock(return_value=[_fake_trade(n) for n in range(2)])
+
+    _run_main(mock_store, mock_notifier=None, build_trades_mock=bt_mock)
+
+    called_tracks = bt_mock.call_args.kwargs["tracks"]
+    assert called_tracks == {STRATEGY_FUTURES, STRATEGY_PROXY}
+    assert mock_store.record_trade.call_count == 2
+
+
+def test_entry_tracks_flag_restricts_to_requested_tracks() -> None:
+    """--tracks futures proxy must never touch Spot, even when Spot is flat."""
+    mock_store = MagicMock()
+    mock_store.get_positions.return_value = []  # all three flat
+    mock_store.record_trade.return_value = True
+    bt_mock = MagicMock(return_value=[_fake_trade(n) for n in range(2)])
+
+    _run_main(
+        mock_store,
+        mock_notifier=None,
+        extra_argv=["--tracks", "futures", "proxy"],
+        build_trades_mock=bt_mock,
+    )
+
+    called_tracks = bt_mock.call_args.kwargs["tracks"]
+    assert called_tracks == {STRATEGY_FUTURES, STRATEGY_PROXY}
+
+
+def test_auto_futures_exits_early_when_track_open() -> None:
+    mock_store = MagicMock()
+    mock_store.get_positions.side_effect = (
+        lambda strategy_name: [MagicMock()] if strategy_name == STRATEGY_FUTURES else []
+    )
+    with pytest.raises(SystemExit) as exc:
+        _run_main(mock_store, mock_notifier=None, extra_argv=["--auto-futures"], include_confirm=False)
+    assert exc.value.code == 0
+
+
+def test_auto_ditm_exits_early_when_track_open() -> None:
+    mock_store = MagicMock()
+    mock_store.get_positions.side_effect = (
+        lambda strategy_name: [MagicMock()] if strategy_name == STRATEGY_PROXY else []
+    )
+    with pytest.raises(SystemExit) as exc:
+        _run_main(mock_store, mock_notifier=None, extra_argv=["--auto-ditm"], include_confirm=False)
+    assert exc.value.code == 0
+
+
+def test_auto_flags_block_confirm_flag() -> None:
+    mock_store = MagicMock()
+    with pytest.raises(SystemExit) as exc:
+        _run_main(mock_store, mock_notifier=None, extra_argv=["--auto-futures"], include_confirm=True)
+    assert exc.value.code == 1
