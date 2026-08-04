@@ -387,6 +387,56 @@ class ExitSignalEngine:
         return cls._sort_results(results)
 
     @classmethod
+    def evaluate_crash_monetize(
+        cls,
+        *,
+        entry_price: float,
+        current_mark: float,
+        delta: float | None,
+    ) -> list[ExitSignalResult]:
+        """Fire CRASH_MONETIZE when a long put leg deep-ITMs or spikes in value.
+
+        Shared logic behind ``evaluate_pp``'s signal #1 (δ ≤ -0.80 OR value ≥ 5×
+        entry debit) — extracted (Collar3b) so Collar's long put leg can reuse the
+        exact same rule instead of a hand-rolled duplicate threshold. ``evaluate_pp``
+        below delegates to this method; behavior/thresholds are unchanged.
+
+        Args:
+            entry_price: Debit paid at entry (positive value).
+            current_mark: Current LTP / mark of the long put.
+            delta: Current delta of the long put (negative, e.g. -0.85), or None.
+
+        Returns:
+            Single-element list when signal fires; empty list otherwise.
+        """
+        entry_dec = Decimal(str(entry_price))
+        mark_dec = Decimal(str(current_mark))
+
+        if entry_dec <= 0:
+            _log.warning(
+                "evaluate_crash_monetize.zero_entry_price — skipping evaluation",
+                extra={"entry_price": entry_price, "current_mark": current_mark},
+            )
+            return []
+
+        delta_breached = delta <= -0.80 if delta is not None else False
+        value_breached = mark_dec >= Decimal("5.0") * entry_dec
+        if delta_breached or value_breached:
+            threshold_5x = Decimal("5.0") * entry_dec
+            return [
+                ExitSignalResult(
+                    exit_signal="CRASH_MONETIZE",
+                    severity="ACTION",
+                    threshold_value=5.0,
+                    notes=(
+                        f"Crash monetise: delta={delta}, value={mark_dec:.2f}, "
+                        f"5x_threshold={threshold_5x:.2f}"
+                    ),
+                )
+            ]
+        return []
+
+    @classmethod
     def evaluate_pp(
         cls,
         *,
@@ -413,7 +463,6 @@ class ExitSignalEngine:
             List of ExitSignalResult, sorted ACTION-first. Empty list if no signal.
         """
         entry_dec = Decimal(str(entry_price))
-        mark_dec = Decimal(str(current_mark))
         results: list[ExitSignalResult] = []
 
         # Guard: entry_price == 0 makes value_breached always True (0 >= 0*0).
@@ -425,18 +474,11 @@ class ExitSignalEngine:
             return []
 
         # 1. CRASH_MONETIZE: put delta <= -0.80 OR value >= 5x entry debit
-        delta_breached = delta <= -0.80 if delta is not None else False
-        value_breached = mark_dec >= Decimal("5.0") * entry_dec
-        if delta_breached or value_breached:
-            threshold_5x = Decimal("5.0") * entry_dec
-            results.append(
-                ExitSignalResult(
-                    exit_signal="CRASH_MONETIZE",
-                    severity="ACTION",
-                    threshold_value=5.0,
-                    notes=f"Crash monetise: delta={delta}, value={mark_dec:.2f}, 5x_threshold={threshold_5x:.2f}",
-                )
+        results.extend(
+            cls.evaluate_crash_monetize(
+                entry_price=entry_price, current_mark=current_mark, delta=delta
             )
+        )
 
         # 2. ROLL_ELIGIBLE: DTE <= 5 (auto-roll to next expiry)
         if dte <= 5:

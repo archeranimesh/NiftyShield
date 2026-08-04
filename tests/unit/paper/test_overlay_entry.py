@@ -1012,3 +1012,129 @@ def test_open_pp_dte_computes_dte_from_open_row(tmp_path):
     conn.close()
 
     assert _open_pp_dte(db_path) == 3
+
+
+# ── Collar3b: --auto-collar bootstrap ───────────────────────────────────────
+
+
+def test_auto_collar_requires_dry_run(tmp_path, capsys):
+    """Collar3b posture: --auto-collar without --dry-run is hard-blocked —
+    not yet proven live, unlike CC3/PP3 post-unblock."""
+    from scripts.strategies.three_track.paper_3track_overlay_entry import main
+
+    test_args = [
+        "paper_3track_overlay_entry.py",
+        "--auto-collar",
+        "--db-path",
+        str(tmp_path / "test.sqlite"),
+    ]
+
+    with patch("sys.argv", test_args):
+        with pytest.raises(SystemExit) as excinfo:
+            main()
+
+        assert excinfo.value.code == 1
+        captured = capsys.readouterr()
+        assert "requires --dry-run" in captured.err
+
+
+def test_auto_collar_bootstrap_no_open_position(tmp_path, capsys):
+    """Happy path: both legs selected via mocked auto_collar_bootstrap, dry-run
+    preview only — no trades written to the DB."""
+    from scripts.strategies.three_track.paper_3track_overlay_entry import main
+
+    cfg = load_overlay_config(_write_yaml(tmp_path, _valid_collar_raw()))
+    test_args = [
+        "paper_3track_overlay_entry.py",
+        "--auto-collar",
+        "--dry-run",
+        "--db-path",
+        str(tmp_path / "test.sqlite"),
+    ]
+
+    with (
+        patch("sys.argv", test_args),
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.auto_collar_bootstrap"
+        ) as mock_bootstrap,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.PaperStore"
+        ) as mock_store_cls,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry._query_open_call_role"
+        ) as mock_query,
+    ):
+        mock_bootstrap.return_value = cfg
+        mock_store = MagicMock()
+        mock_store_cls.return_value = mock_store
+        mock_store.get_positions.return_value = []
+        mock_query.return_value = None
+
+        main()
+
+        mock_store.record_trades.assert_not_called()
+        mock_store.record_trade.assert_not_called()
+        captured = capsys.readouterr()
+        assert "DRY RUN" in captured.out
+
+
+def test_auto_collar_bootstrap_failure_exits_1(tmp_path, capsys):
+    """Structural bootstrap failure (BOD/DTE/IVR/chain/ladder) aborts hard."""
+    from scripts.strategies.three_track.paper_3track_overlay_entry import main
+
+    test_args = [
+        "paper_3track_overlay_entry.py",
+        "--auto-collar",
+        "--dry-run",
+        "--db-path",
+        str(tmp_path / "test.sqlite"),
+    ]
+
+    with (
+        patch("sys.argv", test_args),
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.auto_collar_bootstrap"
+        ) as mock_bootstrap,
+    ):
+        mock_bootstrap.return_value = None
+
+        with pytest.raises(SystemExit) as excinfo:
+            main()
+
+        assert excinfo.value.code == 1
+        captured = capsys.readouterr()
+        assert "auto-collar bootstrap failed" in captured.err
+
+
+def test_has_open_overlay_leg_recognizes_collar_primary_role(tmp_path):
+    """The generic S6 one-time-bootstrap gate (_has_open_overlay_leg) already
+    covers collar via _PRIMARY_LEG_ROLE["collar"] == "overlay_collar_put" —
+    confirmed here with a real PaperStore rather than trusting the code read,
+    since --auto-collar's own dry-run-only posture prevents exercising the
+    live skip-message path end-to-end through main() yet."""
+    from src.models.portfolio import TradeAction
+    from src.paper.constants import STRATEGY_OVERLAY
+    from src.paper.models import PaperTrade
+    from src.paper.store import PaperStore
+    from scripts.strategies.three_track.paper_3track_overlay_entry import (
+        _PRIMARY_LEG_ROLE,
+        _has_open_overlay_leg,
+    )
+
+    assert _PRIMARY_LEG_ROLE["collar"] == "overlay_collar_put"
+
+    store = PaperStore(tmp_path / "test.sqlite")
+    assert _has_open_overlay_leg(store, "overlay_collar_put") is False
+
+    store.record_trade(
+        PaperTrade(
+            strategy_name=STRATEGY_OVERLAY,
+            leg_role="overlay_collar_put",
+            instrument_key="NSE_FO|NIFTY23900PE",
+            trade_date=date.today(),
+            action=TradeAction.BUY,
+            quantity=65,
+            price=Decimal("38.0"),
+        )
+    )
+    assert _has_open_overlay_leg(store, "overlay_collar_put") is True

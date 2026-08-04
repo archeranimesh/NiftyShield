@@ -20,11 +20,28 @@ from src.models.options import OptionChain, OptionLeg
 from src.models.portfolio import TradeAction
 from src.paper.constants import STRATEGY_COLLAR_OVERLAY
 from src.paper.models import PaperPosition, PaperTrade
+from src.strategy.collar_entry import CollarEntrySelectionError, select_and_build_collar_entry
 from src.strategy.exit_signals import ExitSignalEngine
 from src.strategy.protocol import ApprovedAction, LegClose, SignalEvent
 from src.strategy.reentry_mixin import ReEntryMixin
 
 log = structlog.get_logger(__name__)
+
+# Collar3b priority ordering (highest first) — all resolve to the same terminal
+# action (atomic close both legs, then immediately reselect and open a fresh
+# two-leg pair). Mirrors IronCondorV1._auto_select_action's priority-selection
+# pattern. TIME_STOP is deliberately excluded — Collar3b operator ruling:
+# DTE_REVIEW (DTE<=5) is the only time-based trigger for Collar, TIME_STOP
+# (fixed calendar days_held) is wrong for a position decoupled from actual
+# DTE-to-expiry. TIME_STOP may still appear in _check_reentry's own audit-log
+# trigger tuple (secondary, logging-only) but never drives this action.
+_REENTRY_ACTION_PRIORITY = (
+    "CRASH_MONETIZE",
+    "LOSS_STOP",
+    "PROFIT_TARGET",
+    "DTE_REVIEW",
+    "DELTA_STOP",
+)
 
 # Matches keys like "NSE_FO|NIFTY29MAY2026PE" → group 1 = "29MAY2026"
 _EXPIRY_RE = re.compile(
@@ -67,6 +84,7 @@ class CollarOverlayV1(ReEntryMixin):
         store: Any = None,
         notifier: Any = None,
         vix_data_dir: Path | str | None = None,
+        broker: Any = None,
     ) -> None:
         """Initialise CollarOverlayV1.
 
@@ -74,9 +92,13 @@ class CollarOverlayV1(ReEntryMixin):
             store: PaperStore instance for persisting closing trades. None → writes skipped.
             notifier: TelegramGateway for re-entry notifications. None → notifications skipped.
             vix_data_dir: Path to Parquet VIX data directory for IVR gating. None → settings default.
+            broker: BrokerClient for live chain fetch during Collar3b combined
+                close+reenter. None → reenter selection is skipped (logged
+                WARNING) — used by tests / any caller not wiring live reentry.
         """
         self._store = store
         self._notifier = notifier
+        self._broker = broker
         from src.config import settings
 
         self._vix_data_dir = (
@@ -193,9 +215,109 @@ class CollarOverlayV1(ReEntryMixin):
                 )
             )
 
+        # Evaluate Long Put — CRASH_MONETIZE only (Collar3b: net-new signal,
+        # mirrors ExitSignalEngine.evaluate_pp's signal #1 exactly via the
+        # shared evaluate_crash_monetize classmethod).
+        if long_put_pos is not None:
+            put_leg = self._find_put_leg(market, long_put_pos.instrument_key)
+            put_entry_price = float(long_put_pos.avg_cost)
+            put_current_mark = float(put_leg.ltp) if put_leg is not None else put_entry_price
+            put_delta = (
+                float(put_leg.delta) if (put_leg is not None and put_leg.delta is not None) else None
+            )
+            crash_results = ExitSignalEngine.evaluate_crash_monetize(
+                entry_price=put_entry_price,
+                current_mark=put_current_mark,
+                delta=put_delta,
+            )
+            for result in crash_results:
+                payload = {
+                    "leg_role": long_put_pos.leg_role,
+                    "triggering_leg": "long_put",
+                    "leg_states": leg_states,
+                }
+                if put_leg is not None:
+                    payload["delta"] = str(put_leg.delta)
+                    payload["mark"] = str(put_leg.ltp)
+                    payload["entry_debit"] = str(long_put_pos.avg_cost)
+
+                payload["auto_execute"] = True
+                payload["auto_action"] = "CLOSE_COLLAR"
+                payload["triggering_signal"] = result.exit_signal
+                payload["valid_actions"] = ["CLOSE_COLLAR"]
+
+                events.append(
+                    SignalEvent(
+                        event_type=result.exit_signal,
+                        severity=result.severity,
+                        description=result.notes or result.exit_signal,
+                        payload=payload,
+                    )
+                )
+
+        events = self._select_combined_reentry_action(events)
+
         # Sort results: ACTION first, then WARN, then INFO
         severity_order = {"ACTION": 0, "WARN": 1, "INFO": 2}
         return sorted(events, key=lambda x: severity_order.get(x.severity, 3))
+
+    def _select_combined_reentry_action(self, events: list[SignalEvent]) -> list[SignalEvent]:
+        """Pick one ACTION event by Collar3b priority and mark it for the
+        combined close+reenter action (``CLOSE_AND_REENTER_COLLAR``).
+
+        Mirrors ``IronCondorV1._auto_select_action``'s priority-selection
+        pattern: multiple ACTION-severity signals may fire on the same tick
+        (e.g. DELTA_STOP on the call and CRASH_MONETIZE on the put); exactly
+        one is promoted to drive auto-execute, per
+        ``_REENTRY_ACTION_PRIORITY`` (highest first). All other events pass
+        through unchanged (still visible for audit/Telegram context, but not
+        auto-executed).
+        """
+        action_events = [e for e in events if e.severity == "ACTION"]
+        if not action_events:
+            return events
+
+        types_present = {e.event_type for e in action_events}
+        winner_type = next((t for t in _REENTRY_ACTION_PRIORITY if t in types_present), None)
+        if winner_type is None:
+            return events
+
+        winner_emitted = False
+        new_events: list[SignalEvent] = []
+        for e in events:
+            if e.severity == "ACTION" and e.event_type == winner_type and not winner_emitted:
+                new_payload = {
+                    **e.payload,
+                    "auto_execute": True,
+                    "auto_action": "CLOSE_AND_REENTER_COLLAR",
+                    "triggering_signal": winner_type,
+                    "valid_actions": ["CLOSE_AND_REENTER_COLLAR"],
+                }
+                new_events.append(
+                    SignalEvent(
+                        event_type=e.event_type,
+                        severity=e.severity,
+                        description=e.description,
+                        payload=new_payload,
+                    )
+                )
+                winner_emitted = True
+            elif e.severity == "ACTION":
+                # Non-winning ACTION event this tick — demote to informational,
+                # never auto-executed alongside the winner.
+                demoted_payload = {k: v for k, v in e.payload.items() if k != "auto_execute"}
+                demoted_payload.pop("auto_action", None)
+                new_events.append(
+                    SignalEvent(
+                        event_type=e.event_type,
+                        severity=e.severity,
+                        description=e.description,
+                        payload=demoted_payload,
+                    )
+                )
+            else:
+                new_events.append(e)
+        return new_events
 
     def describe_context(
         self,
@@ -252,16 +374,69 @@ class CollarOverlayV1(ReEntryMixin):
         positions: list[PaperPosition],
         action: ApprovedAction,
     ) -> list[PaperPosition]:
-        """Apply approved action CLOSE_COLLAR."""
-        if action.action_type != "CLOSE_COLLAR":
+        """Apply approved action CLOSE_COLLAR or CLOSE_AND_REENTER_COLLAR.
+
+        CLOSE_COLLAR: legacy — atomic two-leg close only (manual/Telegram
+        approval path, or the ``_check_reentry`` audit-log-only re-entry
+        eligibility check per PROFIT_TARGET/TIME_STOP/DTE_REVIEW/LOSS_STOP/
+        DELTA_STOP).
+
+        CLOSE_AND_REENTER_COLLAR (Collar3b): atomic close, then immediate
+        reselection via ``select_and_build_collar_entry`` — no partial-close
+        concept for Collar. ``_check_reentry`` still runs as a secondary
+        audit-log entry (unchanged trigger set — TIME_STOP included there
+        for logging parity only, never drives the combined action itself,
+        since check_signals never emits TIME_STOP as an ACTION signal here).
+        """
+        if action.action_type not in ("CLOSE_COLLAR", "CLOSE_AND_REENTER_COLLAR"):
             raise ValueError(
-                f"CollarOverlayV1 only accepts CLOSE_COLLAR; got {action.action_type!r}"
+                "CollarOverlayV1 only accepts CLOSE_COLLAR or CLOSE_AND_REENTER_COLLAR; "
+                f"got {action.action_type!r}"
             )
         log.info(
             "collar_overlay_v1.apply_action",
             action_type=action.action_type,
         )
 
+        short_call_pos, long_put_pos, updated = self._close_both_legs(positions, action)
+
+        if short_call_pos is None and long_put_pos is None:
+            log.warning(
+                "collar_overlay_v1.apply_action.no_positions_found", strategy=self.strategy_name
+            )
+            return positions
+
+        triggering_signal = action.metadata.get("triggering_signal") if action.metadata else None
+
+        # Secondary audit-log-only re-entry eligibility check — unchanged trigger
+        # set/behavior from Collar3a. Runs for both action types.
+        if (
+            triggering_signal
+            in ("PROFIT_TARGET", "TIME_STOP", "DTE_REVIEW", "LOSS_STOP", "DELTA_STOP")
+            and short_call_pos is not None
+        ):
+            expiry = self._parse_expiry(short_call_pos.instrument_key)
+            await self._check_reentry(
+                expiry=expiry,
+                today=market_today(),
+                instrument_key=short_call_pos.instrument_key,
+                trade_id=0,
+            )
+
+        if action.action_type == "CLOSE_AND_REENTER_COLLAR":
+            await self._reenter_collar(short_call_pos, triggering_signal or "UNKNOWN")
+
+        await self._send_close_notification(short_call_pos, long_put_pos, action)
+        return updated
+
+    def _close_both_legs(
+        self,
+        positions: list[PaperPosition],
+        action: ApprovedAction,
+    ) -> tuple[PaperPosition | None, PaperPosition | None, list[PaperPosition]]:
+        """Resolve the two Collar legs matched by ``action`` and write their
+        closing trades atomically. Returns (short_call_pos, long_put_pos, updated_positions).
+        """
         short_call_leg = next(
             (leg for leg in action.legs_to_close if leg.leg_role == SHORT_CALL_ROLE), None
         )
@@ -291,10 +466,7 @@ class CollarOverlayV1(ReEntryMixin):
         )
 
         if not short_call_pos and not long_put_pos:
-            log.warning(
-                "collar_overlay_v1.apply_action.no_positions_found", strategy=self.strategy_name
-            )
-            return positions
+            return None, None, positions
 
         trades_to_record = []
         mark = action.metadata.get("mark") if action.metadata else None
@@ -320,25 +492,101 @@ class CollarOverlayV1(ReEntryMixin):
             )
 
         closed_positions = [p for p in (short_call_pos, long_put_pos) if p is not None]
-
         updated = [p for p in positions if p not in closed_positions]
+        return short_call_pos, long_put_pos, updated
 
-        triggering_signal = action.metadata.get("triggering_signal") if action.metadata else None
-        if (
-            triggering_signal
-            in ("PROFIT_TARGET", "TIME_STOP", "DTE_REVIEW", "LOSS_STOP", "DELTA_STOP")
-            and short_call_pos is not None
-        ):
-            expiry = self._parse_expiry(short_call_pos.instrument_key)
-            await self._check_reentry(
-                expiry=expiry,
-                today=market_today(),
-                instrument_key=short_call_pos.instrument_key,
-                trade_id=0,
+    async def _reenter_collar(
+        self,
+        closed_short_call_pos: PaperPosition | None,
+        triggering_signal: str,
+    ) -> None:
+        """Immediately reselect and open a fresh two-leg Collar pair (Collar3b).
+
+        Failure handling (operator spec): reentry selection failure (no
+        candidate clears the ladder, chain fetch fails, gate blocks) logs
+        ERROR with full context, sends a Telegram message telling the
+        operator to enter manually, and leaves the position flat — no
+        auto-retry, no degraded fallback.
+        """
+        if self._broker is None or self._store is None:
+            log.warning(
+                "collar_overlay_v1.reenter_collar.skipped_no_broker_or_store",
+                triggering_signal=triggering_signal,
             )
+            return
 
-        await self._send_close_notification(short_call_pos, long_put_pos, action)
-        return updated
+        closing_dte: int | None = None
+        if closed_short_call_pos is not None:
+            expiry = self._parse_expiry(closed_short_call_pos.instrument_key)
+            if expiry is not None:
+                closing_dte = (expiry - market_today()).days
+
+        try:
+            new_trades = await select_and_build_collar_entry(
+                self._broker,
+                self._store,
+                market_today(),
+                triggering_signal,
+                closing_dte=closing_dte,
+            )
+        except CollarEntrySelectionError as exc:
+            log.error(
+                "collar_overlay_v1.reenter_collar.selection_failed",
+                error=str(exc),
+                triggering_signal=triggering_signal,
+                closing_dte=closing_dte,
+            )
+            await self._send_reentry_failure_notification(exc, triggering_signal)
+            return
+        except Exception as exc:  # noqa: BLE001 — never let an unexpected error crash the tick
+            log.error(
+                "collar_overlay_v1.reenter_collar.unexpected_failure",
+                error=str(exc),
+                triggering_signal=triggering_signal,
+                closing_dte=closing_dte,
+            )
+            await self._send_reentry_failure_notification(exc, triggering_signal)
+            return
+
+        try:
+            self._store.record_trades(new_trades)
+            log.info(
+                "collar_overlay_v1.reenter_collar.recorded",
+                triggering_signal=triggering_signal,
+                count=len(new_trades),
+            )
+        except Exception as exc:  # noqa: BLE001 — a failed write must never be swallowed silently
+            log.error(
+                "collar_overlay_v1.reenter_collar.record_failed",
+                error=str(exc),
+                triggering_signal=triggering_signal,
+            )
+            await self._send_reentry_failure_notification(exc, triggering_signal)
+
+    async def _send_reentry_failure_notification(
+        self, exc: Exception, triggering_signal: str
+    ) -> None:
+        """Non-fatal Telegram alert: reentry failed, operator must enter manually."""
+        if self._notifier is None:
+            return
+        msg = (
+            f"⚠️ <b>Collar: REENTRY FAILED ({triggering_signal})</b>\n"
+            f"Position closed but automated reentry could not complete.\n"
+            f"Reason: {exc}\n"
+            f"Action required: enter the Collar manually."
+        )
+        try:
+            if hasattr(self._notifier, "send_notification"):
+                await self._notifier.send_notification(msg)
+            elif hasattr(self._notifier, "send_plain_message"):
+                await self._notifier.send_plain_message(msg)
+            elif hasattr(self._notifier, "send"):
+                await self._notifier.send(msg)
+        except Exception as notify_exc:  # noqa: BLE001 — notify failure must never crash the tick
+            log.error(
+                "collar_overlay_v1.reentry_failure_notify_failed",
+                error=str(notify_exc),
+            )
 
     def _build_close_trade(
         self,

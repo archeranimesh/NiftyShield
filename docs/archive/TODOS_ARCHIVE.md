@@ -5,6 +5,137 @@
 
 ---
 
+## Session Log — 2026-08-04
+
+- [2026-08-04] 3-Track Consolidation **Collar3b — implemented and shipped** per the design
+  handover logged immediately below. Started by re-indexing the codebase-memory graph (was stale
+  — 5649 nodes vs. 11354 after reindex, missing everything from Collar1/CC3/PP3 onward; graph
+  queries for `run_collar_mode`/`auto_cc_bootstrap`/`_has_open_overlay_leg` all returned zero
+  results pre-reindex despite the functions existing on disk — a real gap, not operator error,
+  worth remembering for future sessions on this repo). Found the prior handover session (or an
+  unlogged follow-up) had already left substantial uncommitted work in the tree matching the
+  design spec below almost exactly: new `src/strategy/collar_entry.py`
+  (`select_and_build_collar_entry`, `CollarEntrySelectionError`), the 5-signal priority dispatch
+  in `collar_overlay_v1.py` (`_select_combined_reentry_action`, `_reenter_collar`,
+  `_send_reentry_failure_notification`), and `ExitSignalEngine.evaluate_crash_monetize` in
+  `exit_signals.py`. Verified all of it against the actual `InstrumentLookup.get_expiry_candidates`
+  signature (confirmed `min_expiry` param exists), `PaperStore.record_trades` (sync, not async),
+  `BrokerClient.get_option_chain` (async, matches the `await` usage), and `market_today` import
+  — all consistent, no drift from the codebase's real shape. Ran the untouched baseline suite
+  first (2629/2630 passed, 1 pre-existing unrelated failure — `test_r3_no_block_on_buy`, blocked
+  by the sandbox's network proxy denying `api.upstox.com`, confirmed present before any Collar3b
+  change) to confirm the uncommitted draft hadn't silently broken anything.
+
+  What was actually missing and built this session: `auto_collar_bootstrap()` +
+  `--auto-collar` CLI flag in `paper_3track_overlay_entry.py` (reuses Collar1's real
+  `run_collar_mode()` directly — scripts-to-scripts, no layering issue there), the
+  `--auto-collar`-without-`--dry-run` hard block, and all tests — `tests/unit/strategy/
+  test_collar_entry.py` (new, 15 tests covering happy path, Collar2 tiebreak, DTE≤5→next-month
+  expiry rule, DTE>5→current-month, bootstrap `closing_dte=None` case, and every gate/failure
+  path), 8 new tests in `test_collar_overlay_v1.py` (CRASH_MONETIZE ×2, priority-ordering against
+  DELTA_STOP, TIME_STOP-exclusion regression, reenter success/failure/no-broker-skip), and 5 in
+  `test_overlay_entry.py` (dry-run-required hard block, bootstrap happy path, bootstrap failure,
+  plus a real-PaperStore confirmation that the existing generic S6 gate already recognizes
+  Collar's primary leg role — written because the story's literal "skipped_when_already_open"
+  test can't be exercised end-to-end through `main()` while `--auto-collar` stays dry-run-only by
+  design). Two test bugs caught and fixed during the session: the new CRASH_MONETIZE tests
+  initially passed only a lone put position to `check_signals`, which unconditionally returns
+  `[]` when no short-call position is present (undocumented precondition, not a bug in the
+  strategy — fixed by including both legs in the fixture).
+
+  Sandbox note: `.venv/bin/pytest`'s shebang points at the host Mac path and is dead inside this
+  Cowork sandbox; `/sessions` mount was at 100% disk. Installed the full runtime+test dependency
+  set (`pytest`, `numpy`, `pandas`, `pyarrow`, `duckdb`, `pydantic-settings`, `structlog`, etc.)
+  to `/tmp/pydeps` instead (root `/` mount had headroom), in ~8 batched `pip install --target=`
+  calls to stay under the tool's 45s timeout — same workaround class as the CC3/PP1/PP3 sessions,
+  just against a different root cause (dead venv, not disk quota) this time.
+
+  code-reviewer stand-in (`general-purpose` agent) found no CRITICAL/ERROR findings against
+  `git diff --cached`; two WARNINGs logged and deferred in DECISIONS.md (a silent-no-op edge case
+  in the Telegram failure-notification fallback chain, and a pre-existing float→Decimal
+  round-trip inherited unchanged from `evaluate_pp`). `docs/plan/3track-consolidation/tasks.md`
+  Collar3b ticked. Committed — SHA recorded in the tasks.md line once `git log --oneline -1` is
+  confirmed.
+
+- [2026-08-04] 3-Track Consolidation **Collar3b — design session, NO CODE WRITTEN, handover
+  only.** Two implementation-agent spawns were declined before any file was touched (both by
+  operator interrupt) — everything below is a **design spec agreed with the operator**, not yet
+  implemented. Next session should start by re-spawning the implementation agent with this spec
+  (or implementing directly) rather than re-deriving the design.
+
+  **Scope supersedes the original Collar3b story draft in `stories.md`** (which only proposed a
+  small `--auto-collar` cron bootstrap). Operator instead wants a **unified atomic
+  exit+immediate-reenter model**: on any qualifying signal, close both Collar legs atomically and
+  immediately reselect/open a fresh pair — no "close, then wait for manual re-entry" step, no
+  polling cadence for the reenter itself (cadence question from the original story is now moot
+  except for first-ever bootstrap).
+
+  **Confirmed signal set + priority (highest first), all resolving to the SAME terminal action
+  (atomic close both legs → immediate reselect+reopen; no partial-close, unlike IC's
+  CLOSE_CALL_SPREAD/CLOSE_PUT_SPREAD split, since Collar is inherently 2-leg):**
+  1. `CRASH_MONETIZE` (put leg, δ≤-0.80 OR value≥5× entry debit) — **net-new for Collar**, mirror
+     `evaluate_pp`'s existing CRASH_MONETIZE logic (`src/strategy/exit_signals.py`), don't invent
+     new thresholds. Operator's own reasoning: the put currently has no independent crash
+     trigger, only the call's signals drive the close — a fast crash could blow the put deep ITM
+     before the call's PROFIT_TARGET catches up.
+  2. `LOSS_STOP` (call, LTP ≥ 2× entry credit) — already implemented/wired (Collar3a).
+  3. `PROFIT_TARGET` (call, LTP ≤ 30% of entry credit) — already implemented/wired.
+  4. `DTE_REVIEW` (DTE≤5) — **operator explicitly rejected reusing CSP/IC's fixed
+     calendar-days-held `TIME_STOP` (21 days)** for this: decoupled from actual DTE-to-expiry, so
+     a quarterly-expiry collar would fire TIME_STOP mid-cycle instead of near expiry. Only
+     DTE≤5-to-expiry drives the new combined action, uniformly, regardless of whether the current
+     cycle is monthly or quarterly. Collar3a's existing `_check_reentry` audit-log trigger tuple
+     may keep TIME_STOP for logging/notification purposes only — it must NOT drive the new
+     close+reenter action.
+  5. `DELTA_STOP` (call, δ≥0.55) — already implemented/wired.
+
+  Priority-selection pattern (when multiple signals fire same tick) should mirror
+  `IronCondorV1._auto_select_action` (`src/strategy/ic_nifty_v1.py`) — fixed priority tuple,
+  first match wins.
+
+  **Reentry strike selection:** always Collar1's `_find_candidates_for_ladder()`/
+  `run_collar_mode()` (`scripts/lookup/find_strike_by_delta.py`) + Collar2's confirmed bands
+  (call `CC_DELTA_CANDIDATES` 0.18–0.20Δ / put `PP_DELTA_CANDIDATES` 0.15Δ±0.02) + min
+  `|net_premium|` tiebreak — same target deltas every time regardless of which signal triggered
+  the close. No sharing of state/positions with CC/CSP/PP — confirmed with operator, Collar
+  selection reads only the live chain.
+
+  **Expiry selection at every reentry:** if DTE remaining on the position being closed ≤5, select
+  the NEXT month's expiry for the new pair; otherwise stay in the CURRENT month's expiry. Same
+  DTE≤5 threshold as signal #4, applied to expiry choice rather than just close-or-not.
+
+  **Failure handling:** reentry selection failure (no candidate clears either ladder, chain fetch
+  fails, gate blocks) → log ERROR with full context (triggering signal, spot/IV at failure,
+  reason) + Telegram alert telling operator to enter manually + leave position flat. No
+  auto-retry, no degraded-strike fallback.
+
+  **Bootstrap (first-ever entry, no position open yet)** stays the smaller, separate piece from
+  the original story: `--auto-collar` flag → `auto_collar_bootstrap()` in
+  `paper_3track_overlay_entry.py`, mirroring shipped `auto_cc_bootstrap()`/`auto_pp_bootstrap()`
+  shape, gated by the existing generic `_has_open_overlay_leg(store, "overlay_collar_put")` —
+  confirmed sufficient, no new guard needed. Ship `--dry-run`-only initially (hard-block
+  `--no-dry-run` with `sys.exit(1)`), same posture as CC3/PP3.
+
+  **Architecture requirement flagged, not yet resolved:** `src/strategy/collar_overlay_v1.py`
+  (in `src/`) needs to trigger real strike search + trade construction on close, but `src/` must
+  not import from `scripts/`. Planned fix: extract shared two-leg selection + `PaperTrade`
+  construction into new `src/strategy/collar_entry.py::select_and_build_collar_entry(broker,
+  store, today, triggering_signal) -> list[PaperTrade]`, called from both the CLI bootstrap path
+  and `apply_action`. Whether `find_strike_by_delta.py`'s collar-mode functions are importable
+  as-is from `src/`, or need further extraction, was **not yet investigated** — first thing the
+  implementation session should check.
+
+  **Draft file list (unconfirmed against current graph state):** `src/strategy/collar_entry.py`
+  (new), `src/strategy/collar_overlay_v1.py` (`apply_action` rewrite), `src/strategy/exit_signals.py`
+  (possible CRASH_MONETIZE exposure for Collar's put leg), `scripts/strategies/three_track/
+  paper_3track_overlay_entry.py` (`auto_collar_bootstrap()`), plus tests in
+  `tests/unit/strategy/test_collar_overlay_v1.py`, new `tests/unit/strategy/test_collar_entry.py`,
+  and wherever CC3/PP3's bootstrap tests live.
+
+  **Not done:** no code written, no tests written, no commit, `tasks.md` Collar3b line still
+  unchecked. Next session: re-run Rule 0 graph checks (this doc's file list may have drifted),
+  then implement per the spec above.
+
 ## Session Log — 2026-08-03
 
 - [2026-08-03] 3-Track Consolidation **Collar3a** — Widened `CollarOverlayV1.apply_action`'s

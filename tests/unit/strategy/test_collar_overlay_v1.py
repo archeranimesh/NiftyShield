@@ -550,6 +550,181 @@ def test_close_collar_all_atomicity_unchanged() -> None:
     assert len(trades) == 2
 
 
+def test_crash_monetize_fires_for_long_put_on_delta() -> None:
+    """Collar3b: CRASH_MONETIZE is net-new for Collar's put leg — fires on
+    delta <= -0.80, mirroring evaluate_pp's signal #1 exactly.
+
+    check_signals early-returns [] when no short call position is present
+    (Collar always requires the call leg to be open to evaluate at all), so
+    a healthy call leg (small delta, far from any of its own triggers) is
+    included purely to satisfy that precondition.
+    """
+    strategy = CollarOverlayV1()
+    chain = _make_chain("20", "0.15", "300", "-0.85")
+    call_pos = _make_short_call_position(avg_sell_price="80")
+    put_pos = _make_long_put_position(avg_cost="50")
+    events = _run(strategy.check_signals(chain, [call_pos, put_pos]))
+    assert any(
+        e.event_type == "CRASH_MONETIZE"
+        and e.severity == "ACTION"
+        and e.payload.get("auto_execute") is True
+        and e.payload.get("auto_action") == "CLOSE_AND_REENTER_COLLAR"
+        for e in events
+    )
+
+
+def test_crash_monetize_fires_for_long_put_on_value() -> None:
+    """CRASH_MONETIZE also fires when value >= 5x entry debit, independent of delta."""
+    strategy = CollarOverlayV1()
+    # entry debit 50, mark 300 (6x) — delta stays mild so only the value leg fires.
+    chain = _make_chain("20", "0.15", "300", "-0.50")
+    call_pos = _make_short_call_position(avg_sell_price="80")
+    put_pos = _make_long_put_position(avg_cost="50")
+    events = _run(strategy.check_signals(chain, [call_pos, put_pos]))
+    assert any(e.event_type == "CRASH_MONETIZE" and e.severity == "ACTION" for e in events)
+
+
+def test_crash_monetize_priority_wins_over_delta_stop() -> None:
+    """When CRASH_MONETIZE (put) and DELTA_STOP (call) both fire the same tick,
+    CRASH_MONETIZE — highest in _REENTRY_ACTION_PRIORITY — is promoted to drive
+    the combined action; DELTA_STOP is demoted to informational only."""
+    strategy = CollarOverlayV1()
+    # call delta 0.56 -> DELTA_STOP; put delta -0.85 -> CRASH_MONETIZE.
+    chain = _make_chain("100", "0.56", "300", "-0.85")
+    call_pos = _make_short_call_position(avg_sell_price="80")
+    put_pos = _make_long_put_position(avg_cost="50")
+    events = _run(strategy.check_signals(chain, [call_pos, put_pos]))
+
+    crash_events = [e for e in events if e.event_type == "CRASH_MONETIZE"]
+    delta_stop_events = [e for e in events if e.event_type == "DELTA_STOP"]
+    assert len(crash_events) == 1
+    assert crash_events[0].payload.get("auto_execute") is True
+    assert crash_events[0].payload.get("auto_action") == "CLOSE_AND_REENTER_COLLAR"
+
+    assert len(delta_stop_events) == 1
+    assert "auto_execute" not in delta_stop_events[0].payload
+    assert "auto_action" not in delta_stop_events[0].payload
+
+
+def test_time_stop_does_not_trigger_combined_action() -> None:
+    """Regression guard for the operator's explicit TIME_STOP exclusion:
+    TIME_STOP is not in _REENTRY_ACTION_PRIORITY, so even an ACTION-severity
+    TIME_STOP event must never be promoted to auto_action=CLOSE_AND_REENTER_COLLAR."""
+    strategy = CollarOverlayV1()
+    events_in = [
+        SignalEvent(
+            event_type="TIME_STOP",
+            severity="ACTION",
+            description="time stop",
+            payload={"leg_role": "overlay_collar_call"},
+        )
+    ]
+    events_out = strategy._select_combined_reentry_action(events_in)
+    assert events_out == events_in
+    assert "auto_action" not in events_out[0].payload
+
+
+def test_apply_action_close_and_reenter_selects_and_records_new_pair() -> None:
+    """CLOSE_AND_REENTER_COLLAR: after the atomic close, select_and_build_collar_entry
+    is called and its two returned legs are recorded via a second record_trades call."""
+    from unittest.mock import AsyncMock, patch
+
+    mock_store = MagicMock()
+    mock_broker = MagicMock()
+    strategy = CollarOverlayV1(store=mock_store, broker=mock_broker)
+
+    call_pos = _make_short_call_position(avg_sell_price="80")
+    put_pos = _make_long_put_position(avg_cost="50")
+    new_put = PaperPosition(
+        strategy_name=_STRATEGY,
+        leg_role="overlay_collar_put",
+        net_qty=65,
+        avg_cost=Decimal("40"),
+        avg_sell_price=Decimal("0"),
+        instrument_key="NSE_FO|NIFTY22000PE",
+        entry_date=date.today(),
+    )
+    action = ApprovedAction(
+        action_type="CLOSE_AND_REENTER_COLLAR",
+        legs_to_close=[
+            LegClose(leg_role="overlay_collar_call"),
+            LegClose(leg_role="overlay_collar_put"),
+        ],
+        legs_to_open=[],
+        rationale="crash monetize",
+        council_rank=1,
+        metadata={"triggering_signal": "CRASH_MONETIZE", "mark": "300"},
+    )
+
+    with patch(
+        "src.strategy.collar_overlay_v1.select_and_build_collar_entry",
+        new=AsyncMock(return_value=[new_put]),
+    ) as mock_select:
+        result = _run(strategy.apply_action([call_pos, put_pos], action))
+
+    mock_select.assert_awaited_once()
+    assert mock_store.record_trades.call_count == 2
+    assert result == []
+
+
+def test_apply_action_close_and_reenter_failure_logs_and_notifies_leaves_flat() -> None:
+    """Reentry selection failure: ERROR logged, Telegram notified, no reentry
+    trades recorded (only the original close), position stays flat — no
+    auto-retry, no degraded fallback (Collar3b spec)."""
+    from unittest.mock import AsyncMock, patch
+
+    from src.strategy.collar_entry import CollarEntrySelectionError
+
+    mock_store = MagicMock()
+    mock_broker = MagicMock()
+    mock_notifier = MagicMock()
+    mock_notifier.send = AsyncMock()
+    strategy = CollarOverlayV1(store=mock_store, broker=mock_broker, notifier=mock_notifier)
+
+    call_pos = _make_short_call_position(avg_sell_price="80")
+    action = ApprovedAction(
+        action_type="CLOSE_AND_REENTER_COLLAR",
+        legs_to_close=[LegClose(leg_role="overlay_collar_call")],
+        legs_to_open=[],
+        rationale="crash monetize",
+        council_rank=1,
+        metadata={"triggering_signal": "CRASH_MONETIZE", "mark": "300"},
+    )
+
+    with patch(
+        "src.strategy.collar_overlay_v1.select_and_build_collar_entry",
+        new=AsyncMock(side_effect=CollarEntrySelectionError("no viable combo")),
+    ):
+        result = _run(strategy.apply_action([call_pos], action))
+
+    # Only the original close was recorded — no second (reentry) record_trades call.
+    assert mock_store.record_trades.call_count == 1
+    assert result == []
+
+
+def test_apply_action_close_and_reenter_skipped_without_broker() -> None:
+    """No broker wired (e.g. tests / any caller not wiring live reentry) ->
+    reentry selection is skipped with a WARNING, never crashes apply_action."""
+    mock_store = MagicMock()
+    strategy = CollarOverlayV1(store=mock_store, broker=None)
+
+    call_pos = _make_short_call_position(avg_sell_price="80")
+    action = ApprovedAction(
+        action_type="CLOSE_AND_REENTER_COLLAR",
+        legs_to_close=[LegClose(leg_role="overlay_collar_call")],
+        legs_to_open=[],
+        rationale="crash monetize",
+        council_rank=1,
+        metadata={"triggering_signal": "CRASH_MONETIZE", "mark": "300"},
+    )
+
+    result = _run(strategy.apply_action([call_pos], action))
+
+    # Only the close was recorded — reentry silently skipped, no crash.
+    assert mock_store.record_trades.call_count == 1
+    assert result == []
+
+
 def test_apply_action_roll_overlap_closes_only_matched_instrument() -> None:
     """PG-4e: two short-call positions share overlay_collar_call during a roll
     overlap (old expiring contract not yet closed, new contract already open).

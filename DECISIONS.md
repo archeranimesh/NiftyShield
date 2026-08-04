@@ -5,6 +5,58 @@
 
 ---
 
+**Collar3b shipped — unified atomic exit+immediate-reenter for Collar (2026-08-04):**
+Redesigned scope (operator, 2026-08-04) supersedes the original cron-bootstrap-only draft —
+Collar is treated as one indivisible unit: any qualifying signal on either leg closes both legs
+atomically and immediately reselects/reopens a fresh pair in the same action, no
+close-then-wait-for-manual-reentry step. Five signals drive the combined action, fixed priority
+(highest first): `CRASH_MONETIZE` (put, net-new — mirrors `evaluate_pp`'s δ≤-0.80/value≥5×
+logic via new shared classmethod `ExitSignalEngine.evaluate_crash_monetize`), `LOSS_STOP`,
+`PROFIT_TARGET`, `DTE_REVIEW` (DTE≤5 — `TIME_STOP` deliberately excluded, operator ruling: fixed
+calendar days-held is the wrong axis for a DTE-decoupled exit), `DELTA_STOP`. Priority-selection
+mirrors `IronCondorV1._auto_select_action`'s pattern via new `_select_combined_reentry_action`
+in `CollarOverlayV1` — exactly one ACTION event is promoted to `auto_action=
+CLOSE_AND_REENTER_COLLAR` per tick, others demoted to informational (no double-execution).
+Reentry always targets Collar1's ladders + Collar2's min-`|net_premium|` tiebreak, reading only
+the live chain (no cross-strategy state). Expiry rule: DTE≤5 on the closing position → next
+month; otherwise current month.
+
+**Layering resolved:** `src/` cannot import from `scripts/` (hard rule). New
+`src/strategy/collar_entry.py::select_and_build_collar_entry()` reimplements the two-leg search
+against `src/instruments/strike_selector.py` primitives directly (ladder constants mirrored,
+not imported, with an explicit comment pointing back to `scripts/lookup/find_strike_by_delta.py`
+as source of truth) rather than duplicating the CLI's raw logic wholesale. Shared by both
+`CollarOverlayV1.apply_action`'s reentry path and the (separate, smaller) `--auto-collar`
+bootstrap CLI flag — the latter reuses Collar1's actual `run_collar_mode()` directly since it's
+scripts-to-scripts, not src-to-scripts.
+
+**Failure handling:** reentry selection failure (`CollarEntrySelectionError` or any unexpected
+exception) logs ERROR with full context, sends a Telegram alert instructing manual entry, and
+leaves the position flat — no auto-retry, no degraded fallback. A broker not being wired (tests,
+or any caller not opting into live reentry) logs WARNING and skips reentry, never crashes.
+
+**Bootstrap (first-ever entry only):** `auto_collar_bootstrap()` + `--auto-collar` in
+`paper_3track_overlay_entry.py`, mirroring `auto_cc_bootstrap`/`auto_pp_bootstrap`'s shape,
+gated by the existing generic `_has_open_overlay_leg(store, "overlay_collar_put")` (S6) — no new
+guard needed. Hard-blocked to `--dry-run` only (`sys.exit(1)` otherwise) — not yet proven live,
+same initial posture CC3/PP3 shipped with. Routine reentry after any close is fully covered by
+the `apply_action` path above and needs no cron; the bootstrap flag exists only for the one case
+that isn't event-triggered (no Collar position exists yet at all).
+
+Reviewed via `general-purpose` agent standing in for `@code-reviewer` — no CRITICAL/ERROR
+findings. Two WARNINGs noted, both deferred: (1) `_send_reentry_failure_notification` silently
+no-ops without logging if the notifier object exposes none of `send_notification`/
+`send_plain_message`/`send` (unlikely given the existing notifier contract, but the one path in
+this diff where a failure could go unlogged); (2) the `float→Decimal` round-trip inside
+`evaluate_crash_monetize` is a pre-existing pattern inherited from `evaluate_pp`, not new risk.
+34 tests added (`test_collar_entry.py` new, 15 tests; `test_collar_overlay_v1.py` +8;
+`test_overlay_entry.py` +4, plus one generic-gate confirmation test), 2653/2654 offline tests
+green (the one failure is `test_r3_no_block_on_buy`, a pre-existing sandbox-network-blocked
+failure confirmed present on the baseline before this change, unrelated to Collar3b). Full spec:
+`docs/plan/3track-consolidation/stories.md` Collar3b; `tasks.md` Collar3b ticked.
+
+---
+
 **Collar3a shipped — widened CollarOverlayV1 re-entry trigger to LOSS_STOP/DELTA_STOP
 (2026-08-03):** Split from Collar3 same day (see Collar3b for the larger automated-entry half).
 `CollarOverlayV1.apply_action`'s re-entry guard previously only called `_check_reentry` on

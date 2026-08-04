@@ -22,6 +22,7 @@ Usage:
     python scripts/paper_3track_overlay_entry.py --auto-cc
     python scripts/paper_3track_overlay_entry.py --auto-pp --dry-run
     python scripts/paper_3track_overlay_entry.py --auto-pp
+    python scripts/paper_3track_overlay_entry.py --auto-collar --dry-run
 
 NOTE: unlike paper_ic_entry.py, --dry-run here is a plain store_true flag (no
 --no-dry-run counterpart) — omitting the flag entirely means live (writes to DB).
@@ -57,7 +58,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
-from scripts.lookup.find_strike_by_delta import _select_delta_candidates
+from scripts.lookup.find_strike_by_delta import _select_delta_candidates, run_collar_mode
 from scripts.strategies.ic.ic_entry_gates import make_gate_violation
 from src.backtest.ivr import compute_ivr
 from src.backtest.vix_ingest import load_vix_series
@@ -290,6 +291,131 @@ def auto_cc_bootstrap(bod_path: Path) -> OverlayConfig | None:
         if selected_row.get("gate_spread") is not None
         else None,
         call_oi=int(selected_row["oi"]),
+    )
+
+
+def auto_collar_bootstrap(bod_path: Path) -> OverlayConfig | None:
+    """Automate first-ever Collar entry (fetch chain, apply gates, select both legs).
+
+    Bootstrap only (Collar3b) — mirrors ``auto_cc_bootstrap``/``auto_pp_bootstrap``'s
+    shape and gates (DTE >= 14, IVR >= 0.25), but selects *both* legs in one pass by
+    reusing Collar1's ``run_collar_mode`` (coordinates CC1's call ladder and PP1's put
+    ladder into the candidate cross-product) and applying Collar2's confirmed
+    tiebreak: minimum ``|net_premium|`` among survivors of both bands. Routine
+    reentry after a close is handled separately and automatically by
+    ``CollarOverlayV1.apply_action``'s combined close+reenter action
+    (``src/strategy/collar_entry.py``) — this function only covers the one case that
+    isn't event-triggered: no Collar position exists yet at all.
+
+    Args:
+        bod_path: Path to the BOD instrument JSON file.
+
+    Returns:
+        OverlayConfig with both put_* and call_* fields populated, or None on any
+        structural failure (BOD load, no monthly expiry, DTE < 14, IVR gate, chain
+        fetch, or no viable combo) — always logged via ``logger.error`` before
+        returning.
+    """
+    today = date.today()
+    try:
+        lookup = InstrumentLookup.from_file(bod_path)
+        expiries = lookup.get_expiry_candidates(
+            underlying="NIFTY",
+            today=today,
+            preference=["monthly"],
+        )
+    except Exception as exc:
+        logger.error("auto_collar.bod_load_failed", error=str(exc))
+        return None
+
+    expiry_str = None
+    for label, exp_str in expiries:
+        if label == "monthly":
+            expiry_str = exp_str
+            break
+
+    if not expiry_str:
+        logger.error("auto_collar.no_monthly_expiry_found")
+        return None
+
+    # Gate 1: DTE >= 14
+    expiry_date = date.fromisoformat(expiry_str)
+    dte = (expiry_date - today).days
+    if dte < 14:
+        logger.error("auto_collar.dte_gate_failed", dte=dte)
+        return None
+
+    # Gate 2: IVR >= 0.25 (same threshold as auto_cc_bootstrap/ReEntryMixin)
+    try:
+        vix_series = load_vix_series(settings.vix_data_dir)
+        if vix_series.empty or len(vix_series) < 252:
+            logger.error("auto_collar.ivr_history_insufficient")
+            return None
+
+        vix_today = float(vix_series.iloc[-1])
+        ivr = compute_ivr(vix_today, vix_series)
+
+        if ivr is None or ivr < 0.25:
+            logger.error("auto_collar.ivr_gate_failed", ivr=ivr)
+            return None
+    except Exception as exc:
+        logger.error("auto_collar.ivr_check_failed", error=str(exc))
+        return None
+
+    # Fetch live chain
+    try:
+        client = UpstoxMarketClient(settings.upstox_analytics_token)
+        raw_chain = client.get_option_chain_sync("NSE_INDEX|Nifty 50", expiry_str)
+    except Exception as exc:
+        logger.error("auto_collar.chain_fetch_failed", error=str(exc))
+        return None
+
+    if not raw_chain:
+        logger.error("auto_collar.chain_empty")
+        return None
+
+    # Two-leg search: Collar1's run_collar_mode coordinates CC1's call ladder +
+    # PP1's put ladder into the full candidate cross-product (never auto-selects).
+    try:
+        combos = run_collar_mode(
+            raw_data_by_expiry={expiry_str: raw_chain},
+            expiries=[("monthly", expiry_str)],
+        )
+    except RuntimeError as exc:
+        logger.error("auto_collar.ladder_missing", error=str(exc))
+        return None
+
+    if not combos:
+        logger.error("auto_collar.no_viable_combo_found")
+        return None
+
+    # Collar2 tiebreak: minimum |net_premium| among survivors of both bands.
+    best = min(combos, key=lambda c: abs(c["net_premium"]))
+    call_row, put_row = best["call"], best["put"]
+
+    call_price = Decimal(str(call_row["mid"] if call_row.get("mid", 0) > 0 else call_row["ltp"]))
+    put_price = Decimal(str(put_row["mid"] if put_row.get("mid", 0) > 0 else put_row["ltp"]))
+
+    return OverlayConfig(
+        overlay_type="collar",
+        entry_date=today,
+        cycle=1,  # Cycle doesn't matter for auto collar
+        lot_size=75,
+        expiry=expiry_str,
+        expiry_type="monthly",
+        dte_at_entry=dte,
+        put_strike=float(put_row["strike"]),
+        put_instrument_key=put_row["instrument_key"],
+        put_price=put_price,
+        put_spread_pct=float(put_row["gate_spread"]) if put_row.get("gate_spread") is not None else None,
+        put_oi=int(put_row["oi"]),
+        call_strike=float(call_row["strike"]),
+        call_instrument_key=call_row["instrument_key"],
+        call_price=call_price,
+        call_spread_pct=float(call_row["gate_spread"])
+        if call_row.get("gate_spread") is not None
+        else None,
+        call_oi=int(call_row["oi"]),
     )
 
 
@@ -949,6 +1075,16 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--auto-collar",
+        action="store_true",
+        help=(
+            "Automate first-ever Collar entry (bootstrap only — routine reentry after "
+            "a close is handled automatically by CollarOverlayV1.apply_action, not this "
+            "flag). Requires --dry-run until proven live (Collar3b posture, matches "
+            "CC3/PP3's original dry-run-only rollout)."
+        ),
+    )
+    parser.add_argument(
         "--log-only-gates",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -960,6 +1096,18 @@ def main() -> None:
     )
     args = parser.parse_args()
     setup_logging()
+
+    if args.auto_collar and not args.dry_run:
+        # Collar3b posture: unlike CC3/PP3 post-unblock, --auto-collar has not yet
+        # been proven live — no CC3/PP3-style unblock decision has been made for
+        # collar. Hard-block --no-dry-run until an operator decision lifts this,
+        # same posture CC3/PP3 both shipped with initially.
+        print(
+            "ERROR: --auto-collar requires --dry-run — not yet proven live "
+            "(Collar3b posture, see docs/plan/3track-consolidation/tasks.md Collar3b).",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     gate_violation: GateViolation | None = None
 
@@ -988,6 +1136,11 @@ def main() -> None:
         cfg, gate_violation = auto_pp_bootstrap(args.bod_path, log_only_gates=args.log_only_gates)
         if cfg is None:
             print("ERROR: auto-PP bootstrap failed. Check logs.", file=sys.stderr)
+            sys.exit(1)
+    elif args.auto_collar:
+        cfg = auto_collar_bootstrap(args.bod_path)
+        if cfg is None:
+            print("ERROR: auto-collar bootstrap failed. Check logs.", file=sys.stderr)
             sys.exit(1)
     else:
         cfg = load_overlay_config(args.config)
