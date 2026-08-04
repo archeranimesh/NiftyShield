@@ -584,6 +584,69 @@ async def test_margin_capture_failure_does_not_block_success_notification(
 
 
 @pytest.mark.asyncio
+async def test_original_entry_credit_persisted_on_successful_entry(
+    mock_vix_data,
+    mock_store,
+    mock_lookup,
+    mock_market_client,
+    mock_subprocess,
+    mock_telegram,
+    mock_upstox_live_client,
+):
+    """BUG-021: after all 4 legs are confirmed persisted, the basket's net
+    credit is written via ``PaperStore.set_original_entry_credit`` so the
+    profit-target/loss-stop branch can reference the original 4-leg
+    economics instead of recomputing from whatever legs are still open
+    after a partial close (mirrors BUG-020 Phase 2 for IronCondorV2)."""
+    test_args = [
+        "paper_ic_entry.py",
+        "--expiry-type",
+        "weekly",
+        "--no-dry-run",
+        "--bod-path",
+        "dummy.json",
+    ]
+    with patch.object(sys, "argv", test_args):
+        await run()
+
+    mock_store.set_original_entry_credit.assert_called_once()
+    call_args = mock_store.set_original_entry_credit.call_args.args
+    assert call_args[0] == "paper_ic_nifty_v1_weekly"
+    # short/long mids come from the mock chain fixture: short leg mid=50 (CE)
+    # or 60 (PE), long leg same — net credit = (60+50)-(60+50) = 0 with this
+    # fixture's flat pricing; assert the type/shape, not a hand-derived value.
+    assert isinstance(call_args[1], Decimal)
+
+
+@pytest.mark.asyncio
+async def test_original_entry_credit_persist_failure_does_not_block_success_notification(
+    mock_vix_data,
+    mock_store,
+    mock_lookup,
+    mock_market_client,
+    mock_subprocess,
+    mock_telegram,
+    mock_upstox_live_client,
+):
+    """set_original_entry_credit failing must not prevent the success Telegram
+    notification or otherwise crash the script — legs are already persisted
+    at that point (same non-fatal contract as margin capture)."""
+    mock_store.set_original_entry_credit.side_effect = RuntimeError("db locked")
+    test_args = [
+        "paper_ic_entry.py",
+        "--expiry-type",
+        "weekly",
+        "--no-dry-run",
+        "--bod-path",
+        "dummy.json",
+    ]
+    with patch.object(sys, "argv", test_args):
+        await run()  # should not raise
+
+    assert mock_telegram.send_notification.call_count == 1
+
+
+@pytest.mark.asyncio
 async def test_open_position_prevention(
     mock_vix_data, mock_store, mock_lookup, mock_market_client, mock_subprocess
 ):

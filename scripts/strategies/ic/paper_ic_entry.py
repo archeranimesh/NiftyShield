@@ -568,9 +568,20 @@ async def run() -> None:
         except Exception as exc:  # noqa: BLE001 — margin capture must never block a successful entry
             logger.warning("ic_entry.margin_capture_failed", error=str(exc))
 
+        # Step 12c: Persist the original 4-leg entry credit (BUG-021, mirrors
+        # BUG-020 Phase 2 for IronCondorV2). Legs are confirmed persisted
+        # above. Non-fatal — a persistence failure here must not block a
+        # successful entry; the profit-target/loss-stop branch (BUG-021 fix
+        # in ic_nifty_v1.py) falls back to its existing recompute behavior
+        # when this value is absent.
+        net_credit = (short_put["mid"] + short_call["mid"]) - (long_put["mid"] + long_call["mid"])
+        try:
+            store.set_original_entry_credit(config.strategy_name, net_credit)
+        except Exception as exc:  # noqa: BLE001 — persistence failure must never block entry
+            logger.warning("ic_entry.original_credit_persist_failed", error=str(exc))
+
         # Step 13: Telegram notification — only reached once all 4 legs are
         # confirmed present in the DB.
-        net_credit = (short_put["mid"] + short_call["mid"]) - (long_put["mid"] + long_call["mid"])
         msg = (
             f"✅ IC Entry — {args.expiry_type} ({config.strategy_name})\n"
             f"Mode: {mode}\n"

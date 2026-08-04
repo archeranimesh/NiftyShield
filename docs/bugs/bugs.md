@@ -568,19 +568,17 @@ Decimal correctness (`str(unrealized)` etc., no float leakage) and the `PaperTra
 | Field | Value |
 |---|---|
 | Severity | **HIGH** — same class as BUG-020; not yet observed in a live close (no partial close has fired for `paper_ic_nifty_v1_weekly` in the logs sampled), but the code path is provably present and will trigger under the same conditions. |
-| Status | 🔴 Open |
+| Status | ✅ Fixed |
 | Discovered | 2026-08-04, audit follow-up after BUG-020, per user request to check V1 |
 | Location | `src/strategy/ic_nifty_v1.py::_compute_combined_pnl` (line 907), consumed by `check_signals`'s PROFIT_TARGET/LOSS_STOP branch (line 302) |
 
-**Symptom (not yet reproduced live, confirmed by code inspection):** `ic_nifty_v1.py`'s `check_signals` calls the identical `_compute_combined_pnl` pattern as V2 — `entry_credit` is summed over `ic_positions`, which is filtered to `net_qty != 0` only (line 172-174), with no persisted original-basket credit field. `IronCondorV1` explicitly supports partial closes: `_ALLOWED_ACTIONS` includes `CLOSE_CALL_SPREAD`/`CLOSE_PUT_SPREAD` (line 72), and a single-leg `DELTA_STOP` can auto-select a spread-specific close (line 739: `action_type = "CLOSE_CALL_SPREAD" if leg_role == "short_call" else "CLOSE_PUT_SPREAD"`). If any such partial close executes, every subsequent tick's `PROFIT_TARGET`/`LOSS_STOP` evaluation (line 315-359) will compute `pct = combined_mark / entry_credit` against the surviving legs' credit only, not the original condor's — same root cause and same practical effect as BUG-020.
+**Symptom (confirmed by code inspection, not yet reproduced live):** `ic_nifty_v1.py`'s `check_signals` calls the identical `_compute_combined_pnl` pattern as V2 — `entry_credit` is summed over `ic_positions`, which is filtered to `net_qty != 0` only (line 172-174), with no persisted original-basket credit field. `IronCondorV1` explicitly supports partial closes: `_ALLOWED_ACTIONS` includes `CLOSE_CALL_SPREAD`/`CLOSE_PUT_SPREAD` (line 72), and a single-leg `DELTA_STOP` can auto-select a spread-specific close (line 739: `action_type = "CLOSE_CALL_SPREAD" if leg_role == "short_call" else "CLOSE_PUT_SPREAD"`). If any such partial close executes, every subsequent tick's `PROFIT_TARGET`/`LOSS_STOP` evaluation (line 315-359) will compute `pct = combined_mark / entry_credit` against the surviving legs' credit only, not the original condor's — same root cause and same practical effect as BUG-020.
 
 **Root cause:** identical to BUG-020 — no `original_entry_credit` field persisted at entry; `_compute_combined_pnl` reconstructs `entry_credit` from whatever's currently open.
 
-**Suggested fix:** same as BUG-020 — persist `original_entry_credit` at entry, reference it in both files' profit-target/loss-stop branches instead of recomputing. Given both strategies share the defect, the fix should probably land as one shared helper/field rather than two parallel patches, to avoid the two files drifting again.
+**Fix (2026-08-04):** reused BUG-020's shared `PaperStore.get_original_entry_credit`/`set_original_entry_credit` helpers as-is (already generic on `strategy_name`, no store-layer change needed — confirmed via graph before implementing, avoiding a second BUG-022-style file drift). `scripts/strategies/ic/paper_ic_entry.py` now persists the 4-leg net credit non-fatally right after margin capture, mirroring V2's entry-script pattern exactly. `ic_nifty_v1.py::check_signals` substitutes the persisted credit into `entry_credit` before the shared PROFIT_TARGET/LOSS_STOP threshold checks — one substitution point covers both signals, unlike V2's profit-target-only scope, since V1's `entry_credit` variable feeds both branches. Falls back to today's recompute on `None` (never persisted) or a store-read exception (narrowly caught, degrades without skipping the rest of the tick's signal evaluation). `general-purpose` + `REVIEW.md` substitute for `@code-reviewer` against `git diff HEAD`: no CRITICAL/ERROR. 682/682 tests pass across `tests/unit/strategy/`, `tests/unit/strategies/ic/`, `tests/unit/paper/test_original_entry_credit.py`.
 
-**Not yet fixed** — flagging in this registry per user request.
-
-**Related:** BUG-020 (identical defect in `IronCondorV2`, discovered first).
+**Related:** BUG-020 (identical defect in `IronCondorV2`, fixed first; this fix reuses its persistence layer unchanged).
 
 ---
 

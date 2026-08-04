@@ -321,6 +321,149 @@ def test_loss_stop_fires_when_mark_at_200_pct() -> None:
     assert ls.severity == "ACTION"
 
 
+# ── Tests: BUG-021 — profit target/loss stop read persisted original_entry_credit ──
+
+
+def test_profit_target_unaffected_when_persisted_credit_matches_recompute() -> None:
+    """Happy path: full 4-leg basket, persisted credit == today's recompute (100 pts).
+
+    Confirms the substitution is a no-op for the correct-case (no partial
+    close yet) — same PROFIT_TARGET result as
+    ``test_profit_target_fires_when_mark_at_50_pct``.
+    """
+    from unittest.mock import MagicMock
+
+    from src.paper.store import PaperStore
+
+    store = MagicMock(spec=PaperStore)
+    store.get_original_entry_credit.return_value = Decimal("100")
+    strat = IronCondorV1(store=store)
+    chain = _make_chain(
+        short_put_ltp="28",
+        long_put_ltp="3",
+        short_call_ltp="23",
+        long_call_ltp="2",
+    )
+    positions = _make_ic_positions()
+    events = asyncio.run(strat.check_signals(chain, positions))
+    store.get_original_entry_credit.assert_called_once_with(_STRATEGY)
+    types = [e.event_type for e in events]
+    assert "PROFIT_TARGET" in types
+
+
+def test_profit_target_uses_persisted_credit_after_partial_close() -> None:
+    """BUG-021 symptom fix: after the call spread has already closed, the
+    surviving put spread's own recomputed credit (60-5=55 pts, drifted above
+    the true original via averaging) would falsely trigger the 50% profit
+    target once its mark drops far enough. The persisted original 4-leg
+    entry credit (100 pts) is the true basket economics and correctly keeps
+    the pct above the 50% threshold — no PROFIT_TARGET.
+    """
+    from unittest.mock import MagicMock
+
+    from src.paper.store import PaperStore
+
+    store = MagicMock(spec=PaperStore)
+    store.get_original_entry_credit.return_value = Decimal("100")
+    strat = IronCondorV1(store=store)
+    positions = [
+        _make_position(
+            leg_role="short_put",
+            instrument_key=_SHORT_PUT_KEY,
+            avg_sell_price=_SHORT_PUT_SELL,
+            net_qty=-65,
+        ),
+        _make_position(
+            leg_role="long_put_hedge",
+            instrument_key=_LONG_PUT_KEY,
+            avg_cost=_LONG_PUT_COST,
+            net_qty=65,
+        ),
+        # Call spread already closed — flat, dead key, excluded by net_qty filter.
+        _make_position(leg_role="short_call", instrument_key="NSE_FO|51405", net_qty=0),
+        _make_position(leg_role="long_call_hedge", instrument_key="NSE_FO|51417", net_qty=0),
+    ]
+    # Surviving put spread mark = 20 - 2 = 18. Recompute-only pct = 18/55 = 32.7%
+    # (would fire PROFIT_TARGET at ≤50%). True basket pct = 18/100 = 18%
+    # (also ≤50% here) — use a mark where only the mis-scoped denominator
+    # would cross the threshold: mark = 30 → recompute pct 30/55=54.5% (no
+    # fire), true pct 30/100=30% (fires). This isolates the denominator bug.
+    chain = _make_chain(short_put_ltp="31", long_put_ltp="1")
+    events = asyncio.run(strat.check_signals(chain, positions))
+    types = [e.event_type for e in events]
+    assert "PROFIT_TARGET" in types, (
+        "expected persisted 100pt basket credit to correctly fire PROFIT_TARGET "
+        "at 30% remaining; recompute-only credit (55pt) would have missed it"
+    )
+
+
+def test_profit_target_falls_back_to_recompute_when_no_persisted_credit() -> None:
+    """Edge case: `get_original_entry_credit` returns None (never persisted,
+    e.g. pre-fix positions) — falls back to today's recompute-from-ic_positions
+    behavior, unchanged.
+    """
+    from unittest.mock import MagicMock
+
+    from src.paper.store import PaperStore
+
+    store = MagicMock(spec=PaperStore)
+    store.get_original_entry_credit.return_value = None
+    strat = IronCondorV1(store=store)
+    chain = _make_chain(
+        short_put_ltp="28",
+        long_put_ltp="3",
+        short_call_ltp="23",
+        long_call_ltp="2",
+    )
+    positions = _make_ic_positions()
+    events = asyncio.run(strat.check_signals(chain, positions))
+    types = [e.event_type for e in events]
+    assert "PROFIT_TARGET" in types
+
+
+def test_profit_target_skips_store_lookup_when_no_store_injected() -> None:
+    """Edge case: `store=None` (test doubles / callers with no persistence
+    wired) must not raise — the `self._store is not None` guard short-circuits
+    the lookup entirely and falls back to recompute, same as the None-return case.
+    """
+    strat = IronCondorV1()  # broker=None, store=None
+    chain = _make_chain(
+        short_put_ltp="28",
+        long_put_ltp="3",
+        short_call_ltp="23",
+        long_call_ltp="2",
+    )
+    positions = _make_ic_positions()
+    events = asyncio.run(strat.check_signals(chain, positions))
+    types = [e.event_type for e in events]
+    assert "PROFIT_TARGET" in types
+
+
+def test_loss_stop_survives_store_read_failure() -> None:
+    """Edge case: `get_original_entry_credit` raises (e.g. transient SQLite
+    lock/error). Must not propagate out of `check_signals` — degrades to the
+    recompute fallback, same as the None case, so LOSS_STOP still evaluates
+    for this tick instead of the whole method raising.
+    """
+    from unittest.mock import MagicMock
+
+    from src.paper.store import PaperStore
+
+    store = MagicMock(spec=PaperStore)
+    store.get_original_entry_credit.side_effect = RuntimeError("db locked")
+    strat = IronCondorV1(store=store)
+    chain = _make_chain(
+        short_put_ltp="105",
+        long_put_ltp="5",
+        short_call_ltp="105",
+        long_call_ltp="5",
+    )
+    positions = _make_ic_positions()
+    events = asyncio.run(strat.check_signals(chain, positions))
+    types = [e.event_type for e in events]
+    assert "LOSS_STOP" in types
+
+
 def test_delta_stop_fires_on_short_call_breach() -> None:
     """Short call |delta| = 0.36 ≥ 0.35 → DELTA_STOP ACTION."""
     strat = IronCondorV1()

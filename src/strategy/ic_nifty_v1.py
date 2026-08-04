@@ -300,6 +300,27 @@ class IronCondorV1:
 
         # ── Combined mark signals ─────────────────────────────────────────────
         combined_mark, entry_credit = self._compute_combined_pnl(market, ic_positions)
+        # BUG-021 (mirrors BUG-020 Phase 3 for IronCondorV2): anchor the
+        # PROFIT_TARGET/LOSS_STOP pct calc to the atomic 4-leg credit
+        # persisted at entry, not the recomputed sum over currently-open
+        # legs — a partial close (CLOSE_CALL_SPREAD/CLOSE_PUT_SPREAD) must
+        # not re-scope the target to the smaller surviving-legs credit.
+        # `None` (pre-fix positions, or no store injected) falls back to
+        # today's recompute, unchanged. A store-read failure must not skip
+        # the rest of this tick's signal evaluation, so it degrades the same
+        # way as the None case rather than propagating.
+        original_entry_credit: Decimal | None = None
+        if self._store is not None:
+            try:
+                original_entry_credit = self._store.get_original_entry_credit(self.strategy_name)
+            except Exception:  # noqa: BLE001 — degrade to recompute, don't skip the tick
+                log.warning(
+                    "ic_nifty_v1.original_entry_credit_read_failed",
+                    strategy=self.strategy_name,
+                    exc_info=True,
+                )
+        if original_entry_credit is not None:
+            entry_credit = original_entry_credit
         if combined_mark is None or entry_credit <= Decimal("0"):
             # 2026-07-20: this guard used to silently skip PROFIT_TARGET/
             # LOSS_STOP entirely with no trace — the exact failure point of
