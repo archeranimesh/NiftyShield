@@ -68,7 +68,7 @@ positions" risk. Each task is independently landable; no shared files between th
   `docs/bugs/bugs.md` entry if a real missed exit is found) — not a code commit unless a fix is
   required, in which case split that into its own task rather than bundling.
 
-  **Commit (docs-only, if no fix needed):** `docs(strategy): audit exit-signal gating degradation window` | SHA: <pending>
+  **Commit (docs-only, if no fix needed):** `docs(strategy): audit exit-signal gating degradation window` | SHA: 500cd29
 
 ---
 
