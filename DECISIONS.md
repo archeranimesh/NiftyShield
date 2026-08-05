@@ -1188,6 +1188,66 @@ Source: this session (Cowork), diagnosed via `scratch/2026-07-20_ic_v1_monthly_p
 
 ---
 
+## MC-2 — Audit: how long was exit-signal gating actually degraded across strategies (2026-08-05)
+
+**Scope check first:** the follow-up entry above claims "CSP, overlays, and all four IC V1/V2
+expiry variants share the same `_get_position_expiry` path." Registration history
+(`git log --diff-filter=A -- scripts/monitor_daemon.py`, `git log -S"CSPNiftyV1"`) shows
+`CSPNiftyV1` was registered in `monitor_daemon.py` from the daemon's very first commit
+(9191c02) — i.e. for its entire life. Overlay strategies (`CCOverlayV1`/`PPOverlayV1`/
+`CollarOverlayV1`) were gated behind `MONITOR_OVERLAYS=1`, enabled later (`c68250c`); no
+overlay `paper_trades` rows exist before that gate flipped, so overlays have no pre-fix exposure
+window to audit. `NiftyTrackComparisonV1`/base tracks (`paper_nifty_spot`/`futures`/`proxy`)
+run their own EOD cron path (`three_track/*`), not the live daemon's tick loop, and are outside
+this bug's blast radius regardless of registration status.
+
+**Fix confirmed still in place:** `grep -n "lookup=lookup" scripts/monitor_daemon.py` → line
+380, unchanged since e48c529. `logs/monitor_daemon.log` (current file, all `2026-07`/`2026-08`
+entries, 67,360 lines) shows zero `expiry=None`/`expiry_unresolved` occurrences across the
+entire retained window — the fix has held since restart.
+
+**Retroactive audit is structurally limited:** `logs/monitor_daemon.log`'s earliest line is
+`2026-07-20 12:39:44` — the exact daemon restart that shipped the `lookup=lookup` fix. No
+daemon log survives from before the fix; log rotation/restart destroyed the only record of the
+degraded window itself. This means the *actual* pre-fix degradation cannot be directly verified
+from daemon logs for any strategy — only reconstructed from `paper_trades`/`paper_exit_events`
+state, which is what follows.
+
+**CSP (`paper_csp_nifty_v1`) — no evidence of a missed exit.** Its full daemon-registered
+lifecycle (`paper_trades`, 2026-05-11 → 2026-07-08, all `short_put`) ran entirely inside the
+alleged degraded window (pre-fix, since the daemon predates 2026-07-20 entirely) and shows a
+clean, regular roll cadence — SELL/BUY/SELL pairs roughly every 2–3 weeks (05-11, 05-28, 06-08,
+06-23, 07-03, final close 07-08) — consistent with `TIME_STOP`/`PROFIT_TARGET` firing and
+closing on schedule, not silence. `paper_exit_events` confirms: 11 `ACTION`-severity CSP events
+(2026-06-04 → 06-12, all `DISMISSED`, i.e. they *reached* the approval/notification path) plus
+34 `INFO` events same window. Signals were being generated and delivered for CSP throughout this
+period — the wrong-expiry-chain theory does not appear to have suppressed it in practice. (Note,
+separate from MC-2's scope: all 11 `ACTION` events being `DISMISSED` rather than `ACTED` is worth
+a human glance, but is a Telegram-approval-workflow question, not a gating-degradation one.)
+
+**IC v1 monthly — the one confirmed live incident**, already fully documented in the entry
+above (~70–80% profit captured, zero `PROFIT_TARGET` signal, 2026-07-20). No second confirmed
+incident found for `paper_ic_nifty_v1_{weekly,leaps,yearly}` or `paper_ic_nifty_v2_monthly` —
+`paper_trades` shows `v1_weekly`/`v2_monthly` opened 2026-07-03/07-08 (inside the degraded
+window) but no independent repro was run against them the way `v1_monthly` was; absence of a
+second documented incident is not proof of absence, just no positive finding.
+
+**Current state (as of 2026-08-05, post-fix): no open position found sitting past its exit
+threshold unnoticed.** All open `paper_exit_events` rows for daemon-monitored strategies are
+`WARNING` severity (`v1_monthly`, `v1_leaps`, `v2_monthly` — informational, not a missed
+`ACTION`-severity signal); no stale open `ACTION` rows exist for any daemon-registered strategy.
+
+**Conclusion:** no code fix required — MC-2 closes as audit-only. The one confirmed missed exit
+remains the IC v1 monthly incident already in DECISIONS.md; CSP's cadence argues against
+system-wide silent suppression despite sharing the code path. The retroactive-audit gap itself
+(no pre-fix daemon log survives) is the actual finding worth carrying forward — see TODOS.md.
+
+Source: this session, `data/portfolio/portfolio.sqlite` (`paper_trades`/`paper_exit_events`
+aggregate queries, Rule 1-compliant — no raw dumps), `logs/monitor_daemon.log` full-file grep,
+`git log -S"CSPNiftyV1"` / `--diff-filter=A` on `scripts/monitor_daemon.py`.
+
+---
+
 ## BUG-013 — `IronCondorV1`/`IronCondorV2` silent on Telegram for full/spread closes (2026-07-20)
 
 Same session as the `lookup=` wiring fix above — once that fix let the monthly IC's `PROFIT_TARGET` actually auto-close live, the resulting Telegram silence surfaced a second, independent gap. `IronCondorV1` never called its injected `notifier` anywhere in the file (dead constructor parameter). `IronCondorV2` only notified for the rare `PROFIT_LOCK_ZONE2` roll, not its own `CLOSE_FULL`/`CLOSE_CALL_SPREAD`/`CLOSE_PUT_SPREAD` — the actions actually triggered by the common `PROFIT_TARGET`/`FORCED_CLOSE` signals. Every other auto-execute strategy (`CSPNiftyV1`, `CCOverlayV1`, `CollarOverlayV1`, `PPOverlayV1`) already confirms on close.

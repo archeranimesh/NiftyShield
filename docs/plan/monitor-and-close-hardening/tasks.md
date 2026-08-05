@@ -40,11 +40,11 @@ positions" risk. Each task is independently landable; no shared files between th
   even when both `_fetch_chains` and `_group_positions_by_expiry` need the value; one confirming
   the WARNING itself still fires exactly once for a genuinely unresolvable position.
 
-  **Commit:** `fix(strategy): dedupe expiry_unresolved double-log per tick` | SHA: <pending>
+  **Commit:** `fix(strategy): dedupe expiry_unresolved double-log per tick` | SHA: 1239591
 
 ---
 
-- [ ] **MC-2** — Audit how long exit-signal gating was degraded across strategies other than
+- [x] **MC-2** — Audit how long exit-signal gating was degraded across strategies other than
   `paper_ic_nifty_v1_monthly`. Spawned from TODOS.md (deferred from the 2026-07-20 `lookup`
   wiring fix). `scripts/monitor_daemon.py` never passed `lookup=` into `StrategyMonitor`, so
   `PROFIT_TARGET`/`LOSS_STOP`/any combined-mark-based signal was silently suppressed for every
@@ -68,7 +68,7 @@ positions" risk. Each task is independently landable; no shared files between th
   `docs/bugs/bugs.md` entry if a real missed exit is found) — not a code commit unless a fix is
   required, in which case split that into its own task rather than bundling.
 
-  **Commit (docs-only, if no fix needed):** `docs(strategy): audit exit-signal gating degradation window`
+  **Commit (docs-only, if no fix needed):** `docs(strategy): audit exit-signal gating degradation window` | SHA: <pending>
 
 ---
 
