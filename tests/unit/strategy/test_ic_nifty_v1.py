@@ -492,10 +492,10 @@ def test_delta_stop_fires_on_short_put_breach() -> None:
     assert ds.payload["leg_role"] == "short_put"
 
 
-def test_time_stop_fires_at_dte_13() -> None:
-    """DTE = 13 ≤ 14 → TIME_STOP ACTION."""
+def test_time_stop_fires_at_dte_6() -> None:
+    """DTE = 6 ≤ 7 → TIME_STOP ACTION."""
     strat = IronCondorV1()
-    expiry = date.today() + timedelta(days=13)
+    expiry = date.today() + timedelta(days=6)
     date_str = expiry.strftime("%d%b%Y").upper()
     positions = _make_ic_positions(
         short_put_key=f"NSE_FO|NIFTY{date_str}PE",
@@ -523,10 +523,10 @@ def test_delta_warn_fires_on_short_call_at_0_27() -> None:
     assert dw.payload["leg_role"] == "short_call"
 
 
-def test_dte_warn_fires_at_dte_19() -> None:
-    """DTE = 19 ≤ 21 → DTE_WARN INFO."""
+def test_dte_warn_fires_at_dte_13() -> None:
+    """DTE = 13 ≤ 14 → DTE_WARN INFO."""
     strat = IronCondorV1()
-    expiry = date.today() + timedelta(days=19)
+    expiry = date.today() + timedelta(days=13)
     date_str = expiry.strftime("%d%b%Y").upper()
     positions = _make_ic_positions(
         short_put_key=f"NSE_FO|NIFTY{date_str}PE",
@@ -539,7 +539,7 @@ def test_dte_warn_fires_at_dte_19() -> None:
     assert "DTE_WARN" in types
     dw = next(e for e in events if e.event_type == "DTE_WARN")
     assert dw.severity == "INFO"
-    # TIME_STOP must NOT fire at DTE 19 (threshold is 14)
+    # TIME_STOP must NOT fire at DTE 13 (threshold is 7)
     assert "TIME_STOP" not in types
 
 
@@ -704,21 +704,13 @@ def test_roll_wing_rescued_by_bug_022_narrower_search() -> None:
     strat.auto_execute = False
 
     strikes = {
-        Decimal("21500"): OptionChainStrike(
-            pe=_make_leg(ltp="3", delta="-0.05", strike="21500")
-        ),
-        Decimal("22000"): OptionChainStrike(
-            pe=_make_leg(ltp="30", delta="-0.10", strike="22000")
-        ),
-        Decimal("25000"): OptionChainStrike(
-            ce=_make_leg(ltp="25", delta="0.36", strike="25000")
-        ),
+        Decimal("21500"): OptionChainStrike(pe=_make_leg(ltp="3", delta="-0.05", strike="21500")),
+        Decimal("22000"): OptionChainStrike(pe=_make_leg(ltp="30", delta="-0.10", strike="22000")),
+        Decimal("25000"): OptionChainStrike(ce=_make_leg(ltp="25", delta="0.36", strike="25000")),
         Decimal("25500"): OptionChainStrike(ce=_make_leg(ltp="2", delta="0.04", strike="25500")),
         # Narrower candidate strictly between 25000 (short) and 25500 (old
         # long hedge) — clears premium/liquidity floors.
-        Decimal("25200"): OptionChainStrike(
-            ce=_make_leg(ltp="20", delta="0.15", strike="25200")
-        ),
+        Decimal("25200"): OptionChainStrike(ce=_make_leg(ltp="20", delta="0.15", strike="25200")),
     }
     chain = OptionChain(underlying_spot=Decimal("24000"), expiry=date(2026, 6, 26), strikes=strikes)
     positions = _make_ic_positions()
