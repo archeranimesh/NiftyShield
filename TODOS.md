@@ -101,6 +101,15 @@ Session Log grows large again.
   Wired `_log_counterfactual_exit` into `IronCondorV1.check_signals` (SHA: 92227f7) and 
   wrapped `IronCondorV2.check_signals` to intercept ACTION-severity events (SHA: 524e86a).
   Added test coverage in both V1 and V2 signal test files.
+- **DT-4 (`ic-time-stop-dte-tiering`, docs close)**: all four tasks (DT-1..DT-3b) now shipped —
+  `tasks.md` fully ticked with SHAs. Docs-only: `CONTEXT.md` gained a clause on
+  `ic_expiry_config.py`'s uniform `time_stop_dte=7`/`dte_warn=14` terminal rule (monthly/leaps/
+  yearly) and cross-referenced the already-present `counterfactual_dte_marks` schema note;
+  `docs/plan/README.md` row for `ic-time-stop-dte-tiering/` added under Active Stories, marked
+  Shipped/Archived. `DECISIONS.md` needed no further edit (DT-2 already added the entry). Full
+  `pytest tests/unit/ --tb=no -q` run green before commit. Scheduled a one-time reminder
+  (~2027-02-05, 6 monthly cycles out) to revisit the 7-DTE default against the counterfactual
+  DTE-mark data DT-3b now captures — not due yet. Epic closed this session.
 
 ### 2026-08-02 Session Log
 - **Test fix**: `test_paper_3track_overlay_entry_notify.py::test_overlay_entry_does_not_refire_once_leg_open` (flagged as a pre-existing unrelated failure in the EC-2 entry below) — root cause was the SPOT-track idempotency guard added in `eba1806` (`paper_3track_overlay_entry.py`), which calls `store.get_positions(STRATEGY_SPOT)` and `sys.exit(0)` if any position looks like an open `overlay_cc`. The test's `MagicMock().get_positions` returned the same fixture regardless of the strategy argument, and the fixture's `MagicMock().net_qty` was truthy against `!= 0`, so the new SPOT guard fired and raised an uncaught `SystemExit` before the test's actual target (the OVERLAY-track bootstrap-skip guard) was ever reached. Fixed by giving `get_positions` a `side_effect` scoped by strategy name in `tests/unit/scripts/test_paper_3track_overlay_entry_notify.py`. No source change.
