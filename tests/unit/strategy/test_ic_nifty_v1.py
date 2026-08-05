@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 from datetime import date, timedelta
 from decimal import Decimal
+from unittest.mock import MagicMock
 
 import pytest
 from structlog.testing import capture_logs
@@ -1285,6 +1286,42 @@ def test_check_signals_auto_execute_loss_stop() -> None:
     assert ev.event_type == "LOSS_STOP"
     assert ev.payload["auto_execute"] is True
     assert ev.payload["auto_action"] == "CLOSE_FULL"
+
+
+def test_check_signals_counterfactual_log_action_events() -> None:
+    """Check that ACTION events trigger a counterfactual_dte_marks DB log."""
+    from src.paper.store import PaperStore
+    store = MagicMock(spec=PaperStore)
+    store.get_original_entry_credit.return_value = None
+    strat = IronCondorV1(store=store)
+    chain = _make_chain(
+        short_put_ltp="105",
+        long_put_ltp="5",
+        short_call_ltp="105",
+        long_call_ltp="5",
+    )
+    positions = _make_ic_positions()
+    
+    events = asyncio.run(strat.check_signals(chain, positions))
+    action_events = [e for e in events if e.severity == "ACTION"]
+    assert len(action_events) == 1
+    
+    assert store.create_exit_event.call_count == 1
+    kwargs = store.create_exit_event.call_args[1]
+    assert kwargs["strategy_name"] == strat.strategy_name
+    assert kwargs["leg_name"] == "ALL"
+    assert kwargs["exit_signal"] == "LOSS_STOP"
+    assert kwargs["severity"] == "ACTION"
+    assert "counterfactual_dte_marks" in kwargs
+    
+    import json
+    blob = json.loads(kwargs["counterfactual_dte_marks"])
+    assert "exit_dte" in blob
+    assert "mark_at_exit" in blob
+    assert "short_put_delta" in blob
+    assert "short_call_delta" in blob
+    assert "spread_pct_put" in blob
+    assert "spread_pct_call" in blob
 
 
 def test_check_signals_auto_execute_profit_target() -> None:
