@@ -152,7 +152,7 @@ Session Log grows large again.
   this entry). **Commit blocked**: sandbox `.git/HEAD.lock` held by a concurrent process,
   permission denied to remove (same class of failure as BUG-020 Phase 3, 2026-08-04) —
   `git commit --no-verify` also failed on the lock, not just the missing `pre-commit` binary.
-  Changes are staged in the working tree only; commit deferred to live host. SHA pending.
+  Committed on live host. SHA: `3bdebd9`.
 - **DT-1** (ic-time-stop-dte-tiering, council ruling `docs/council/2026-08-05_ic-time-stop-dte-tiering.md`): `src/strategy/ic_expiry_config.py`'s `CONFIGS` monthly/leaps/yearly buckets moved from entry-DTE-scaled `time_stop_dte`/`dte_warn` (14/21, 45/60, 60/90) to a uniform `time_stop_dte=7`/`dte_warn=14`; weekly (2/4) unchanged, no other fields touched. Fixed a real consequent regression: `tests/unit/strategy/test_ic_nifty_v1.py` had two tests hardcoding the old monthly DTE boundaries (13/19), not listed in the story's file scope — updated to 6/13 and renamed. `@code-reviewer` not spawnable in this Cowork session (no such agent type registered); per `CLAUDE.md`'s surface-fallback rule, handed off to Animesh for human review before commit — approved. SHA `184667c`. DT-2/DT-3a/DT-3b/DT-4 remain open; 6-monthly-cycle review of the 7-DTE default not yet due.
 
 ### 2026-08-04 Session Log
