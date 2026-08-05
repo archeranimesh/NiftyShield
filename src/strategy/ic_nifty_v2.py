@@ -35,7 +35,7 @@ from __future__ import annotations
 import math
 import re
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING, Literal
 
@@ -1208,6 +1208,22 @@ class IronCondorV2:
         market: OptionChain,
         positions: list[PaperPosition],
     ) -> list[SignalEvent]:
+        """Evaluate exit/adjustment signals for the open IronCondorV2 position."""
+        events = await self._evaluate_signals(market, positions)
+        if events:
+            ic_positions = [
+                p for p in positions if p.strategy_name == self.strategy_name and p.net_qty != 0
+            ]
+            for e in events:
+                if e.severity == "ACTION":
+                    self._log_counterfactual_exit(e, market, ic_positions)
+        return events
+
+    async def _evaluate_signals(
+        self,
+        market: OptionChain,
+        positions: list[PaperPosition],
+    ) -> list[SignalEvent]:
         """Evaluate exit/adjustment signals for the open IronCondorV2 position.
 
         Filters positions to ``strategy_name == self.strategy_name`` and to
@@ -2270,6 +2286,90 @@ class IronCondorV2:
                 error=str(exc),
             )
             return None
+
+    def _log_counterfactual_exit(
+        self,
+        event: SignalEvent,
+        market: OptionChain,
+        ic_positions: list[PaperPosition],
+    ) -> None:
+        """Create a counterfactual exit event in the DB for ACTION signals."""
+        if self._store is None:
+            return
+
+        try:
+            import json
+
+            from src.paper.models import ExitSignal
+
+            expiry = next((self._parse_expiry(p.instrument_key) for p in ic_positions), None)
+            dte = (expiry - market_today()).days if expiry is not None else None
+            combined_mark, _ = self._compute_combined_pnl(market, ic_positions)
+
+            def _get_delta(role: str) -> str | None:
+                pos = _position_for_role(ic_positions, role)
+                if pos is None:
+                    return None
+                leg = self._find_leg(market, pos.instrument_key)
+                if leg is None or leg.delta is None:
+                    return None
+                return str(leg.delta)
+
+            def _get_spread_pct(short_role: str, long_role: str) -> str | None:
+                short_pos = _position_for_role(ic_positions, short_role)
+                long_pos = _position_for_role(ic_positions, long_role)
+                if not short_pos or not long_pos:
+                    return None
+                short_leg = self._find_leg(market, short_pos.instrument_key)
+                long_leg = self._find_leg(market, long_pos.instrument_key)
+                if (
+                    not short_leg
+                    or not long_leg
+                    or short_leg.ltp is None
+                    or long_leg.ltp is None
+                ):
+                    return None
+                mark = short_leg.ltp - long_leg.ltp
+                credit = short_pos.avg_sell_price - long_pos.avg_cost
+                if credit <= Decimal("0"):
+                    return None
+                pct = mark / credit
+                return str(pct.quantize(Decimal("0.01")))
+
+            blob = {
+                "exit_dte": dte,
+                "mark_at_exit": str(combined_mark) if combined_mark is not None else None,
+                "short_put_delta": _get_delta("short_put"),
+                "short_call_delta": _get_delta("short_call"),
+                "spread_pct_put": _get_spread_pct("short_put", "long_put_hedge"),
+                "spread_pct_call": _get_spread_pct("short_call", "long_call_hedge"),
+            }
+
+            try:
+                exit_signal = ExitSignal(event.event_type)
+            except ValueError:
+                exit_signal = ExitSignal.NONE
+
+            sev = "WARNING" if event.severity == "WARN" else event.severity
+
+            self._store.create_exit_event(
+                strategy_name=self.strategy_name,
+                leg_name="ALL",
+                trade_id="0",
+                event_time=datetime.now(timezone.utc),
+                detected_by="INTRADAY",
+                exit_signal=exit_signal,
+                severity=sev,  # type: ignore[arg-type]
+                entry_price=Decimal("0"),
+                counterfactual_dte_marks=json.dumps(blob),
+                notes=event.description,
+            )
+        except Exception:  # Intentional: do not crash tick loop if counterfactual log fails
+            log.warning(
+                "ic_nifty_v2.counterfactual_log_failed",
+                strategy=self.strategy_name,
+                exc_info=True,
+            )
 
     def _compute_ivr_str(self) -> str:
         """Load VIX Parquet series and compute IVR; returns formatted string.

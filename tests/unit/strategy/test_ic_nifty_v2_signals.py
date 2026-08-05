@@ -980,3 +980,64 @@ def test_check_signals_end_to_end_resolves_expiry_via_bod() -> None:
     assert expiry_diag and expiry_diag[0]["expiry"] == _EXPIRY.isoformat()
     pnl_diag = [e for e in logs if e.get("event") == "ic_nifty_v2.check_signals_pnl_diag"]
     assert pnl_diag and pnl_diag[0]["captured_fraction"] == "0.1000"
+
+
+def test_check_signals_counterfactual_log_action_events() -> None:
+    """Check that ACTION events trigger a counterfactual_dte_marks DB log in V2."""
+    from src.paper.store import PaperStore
+    store = MagicMock(spec=PaperStore)
+    store.get_original_entry_credit.return_value = None
+    
+    from src.strategy.profit_lock_engine import ProfitLockState
+    pl_state = ProfitLockState(
+        profit_lock_zone=0, 
+        zone2_lock_executed=False, 
+        zone3_lock_executed=False, 
+        cumulative_lock_debit_pts=Decimal("0"),
+        active_put_width_pts=0, 
+        active_call_width_pts=0, 
+        cycle_id=""
+    )
+    store.get_profit_lock_state.return_value = pl_state
+
+    config = IC_V2_MONTHLY
+    strat = IronCondorV2(config=config, store=store)
+    
+    # Trigger Priority 2 FORCED_CLOSE by extreme delta
+    chain = _chain(
+        {
+            "23900": (None, _leg("23900", "-0.80", ltp="200")),
+            "23200": (None, _leg("23200", "-0.10", ltp="10")),
+            "25100": (_leg("25100", "0.20", ltp="50"), None),
+            "25800": (_leg("25800", "0.10", ltp="10"), None),
+        }
+    )
+    positions = [
+        _pos("short_put", _key("23900", "PE")),
+        _pos("long_put_hedge", _key("23200", "PE")),
+        _pos("short_call", _key("25100", "CE")),
+        _pos("long_call_hedge", _key("25800", "CE")),
+    ]
+    
+    with patch("src.strategy.ic_nifty_v2.market_today", return_value=_FROZEN_TODAY):
+        import asyncio
+        events = asyncio.run(strat.check_signals(chain, positions))
+        
+    action_events = [e for e in events if e.severity == "ACTION"]
+    assert len(action_events) == 1
+    
+    assert store.create_exit_event.call_count == 1
+    kwargs = store.create_exit_event.call_args[1]
+    assert kwargs["strategy_name"] == strat.strategy_name
+    assert kwargs["leg_name"] == "ALL"
+    assert kwargs["severity"] == "ACTION"
+    assert "counterfactual_dte_marks" in kwargs
+    
+    import json
+    blob = json.loads(kwargs["counterfactual_dte_marks"])
+    assert "exit_dte" in blob
+    assert "mark_at_exit" in blob
+    assert "short_put_delta" in blob
+    assert "short_call_delta" in blob
+    assert "spread_pct_put" in blob
+    assert "spread_pct_call" in blob
