@@ -5,6 +5,30 @@
 
 ---
 
+**IC time-stop DTE de-tiered — uniform terminal rule (2026-08-05, council ruling):**
+`ic_expiry_config.py`'s per-bucket `time_stop_dte`/`dte_warn` no longer scale to entry-DTE
+window. Council ruling (`docs/council/2026-08-05_ic-time-stop-dte-tiering.md`, unanimous on the
+core diagnosis across 3 panelists) rejected `IC-M1.md`'s entry-DTE-proportional scaling
+(weekly 2/4, monthly 14/21, leaps 45/60, yearly 60/90) as unsound — an option's terminal
+gamma/pin risk depends on *current* remaining DTE, not entry tenor; the wide leaps/yearly
+buffers were truncating theta capture with no demonstrated risk benefit. New values: monthly,
+leaps, and yearly all use `time_stop_dte=7`, `dte_warn=14`. Weekly unchanged
+(`time_stop_dte=2`, `dte_warn=4` — 5–8 DTE entry window makes 7 DTE unreachable). The panel
+split 5-vs-14 DTE for the uniform value (Response A: IC's defined-risk wing structure permits
+holding to 5 DTE, mirroring the 2026-06-26 CC/PP/Collar `DTE_REVIEW≤5` ruling; Response B/C:
+wide wings cap max loss but don't hedge near-strike gamma, so IC still needs execution-risk
+buffer beyond 5) — chairman resolved at 7 as a Phase 0 research default, not a final
+calibration, paired with mandatory counterfactual DTE logging (DT-3) and a review after 6
+monthly cycles. Liquidity-by-tenor concern (raised as a possible justification for the old wider
+buffers) was rejected — NSE Nifty contracts converge to a shared order book by original
+calendar month regardless of entry-tenor label, so no execution-quality case for wider buffers
+exists. **Noted, deferred (dissenting/future-work):** a separate `MAX_DAYS_IN_TRADE`
+capital-velocity parameter was proposed to decouple ROI-per-margin-day concerns from the
+risk-driven time-stop — not built now, flagged for a future story if leaps/yearly capital
+lockup becomes a measured problem.
+
+---
+
 **`--auto-futures`/`--auto-ditm` live posture unblocked (2026-08-04, direct operator go-ahead,
 no council pass):** `paper_3track_entry.py`'s auto-mode block on `--confirm` (added same session
 it shipped, pending EC-5) is removed, following the identical CC3 precedent below: EC-5 (CC's

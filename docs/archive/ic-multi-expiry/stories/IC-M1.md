@@ -230,3 +230,14 @@ Do NOT touch these in this story — IC-M2 migrates them.
 dataclass instance. Import path: `from dataclasses import FrozenInstanceError` (Python 3.11+)
 or catch as `AttributeError` on 3.10. Use `pytest.raises((FrozenInstanceError, AttributeError))`
 to cover both minor versions.
+
+---
+
+## 2026-08-05 Correction — Entry-DTE Scaling Superseded
+
+The `time_stop_dte`/`dte_warn` scaling this story introduced (weekly 2/4, monthly 14/21,
+leaps 45/60, yearly 60/90) was rejected by council ruling
+`docs/council/2026-08-05_ic-time-stop-dte-tiering.md`: no empirical or theoretical basis
+existed for entry-DTE-proportional buffers beyond linear intuition. Current values live in
+`ic_expiry_config.py` — see `DECISIONS.md` 2026-08-05 for the full account. This file is kept
+as the historical record of the original (superseded) design, not the current spec.
