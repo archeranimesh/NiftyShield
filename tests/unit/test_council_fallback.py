@@ -39,24 +39,22 @@ council.stage3_synthesize_final:
 from __future__ import annotations
 
 import sys
-import asyncio
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
-import pytest
 
 # ── path setup ────────────────────────────────────────────────────────────────
 _COUNCIL_ROOT = Path(__file__).parents[2] / "tools" / "llm-council"
 if str(_COUNCIL_ROOT) not in sys.path:
     sys.path.insert(0, str(_COUNCIL_ROOT))
 
-from backend.openrouter import query_model, query_models_parallel  # noqa: E402
 from backend.config import CHAIRMAN_FALLBACK  # noqa: E402
-
+from backend.openrouter import query_model, query_models_parallel  # noqa: E402
 
 # ── helpers ───────────────────────────────────────────────────────────────────
+
 
 def _make_http_mock(content: str = "ok", model_slug: str = "openai/gpt-4.1") -> tuple:
     """Return (mock_AsyncClient_cls, mock_post) for patching httpx.AsyncClient.
@@ -89,6 +87,7 @@ def _make_parallel_mock(
 
 
 # ── query_model ───────────────────────────────────────────────────────────────
+
 
 class TestQueryModelPayload:
     """Verify the JSON payload shape sent to OpenRouter."""
@@ -293,6 +292,7 @@ class TestQueryModelTransportFallback:
 
 # ── query_models_parallel ─────────────────────────────────────────────────────
 
+
 class TestQueryModelsParallel:
     """Verify parallel dispatch with per-model fallback routing."""
 
@@ -304,6 +304,7 @@ class TestQueryModelsParallel:
             messages: list,
             fallbacks: list | None = None,
             timeout: float = 120.0,
+            max_tokens: int | None = None,
         ) -> dict:
             captured_payloads.append({"model": model, "fallbacks": fallbacks})
             return {"content": "ok", "reasoning_details": None, "model_used": model}
@@ -326,6 +327,7 @@ class TestQueryModelsParallel:
             messages: list,
             fallbacks: list | None = None,
             timeout: float = 120.0,
+            max_tokens: int | None = None,
         ) -> dict:
             captured.append({"model": model, "fallbacks": fallbacks})
             return {"content": "ok", "reasoning_details": None, "model_used": model}
@@ -345,6 +347,7 @@ class TestQueryModelsParallel:
             messages: list,
             fallbacks: list | None = None,
             timeout: float = 120.0,
+            max_tokens: int | None = None,
         ) -> dict:
             # Simulate fallback firing: model_used differs from primary
             return {"content": "ok", "reasoning_details": None, "model_used": "openai/gpt-4.1"}
@@ -362,11 +365,13 @@ class TestQueryModelsParallel:
 
     async def test_backward_compat_no_fallbacks_arg(self) -> None:
         """Calling without fallbacks kwarg must not error (old call sites)."""
+
         async def fake_query_model(
             model: str,
             messages: list,
             fallbacks: list | None = None,
             timeout: float = 120.0,
+            max_tokens: int | None = None,
         ) -> dict:
             return {"content": "ok", "reasoning_details": None, "model_used": model}
 
@@ -382,6 +387,7 @@ class TestQueryModelsParallel:
 
 # ── council stage1 integration ────────────────────────────────────────────────
 
+
 class TestStage1FallbackRecording:
     """stage1_collect_responses should record model_used and fallback_from."""
 
@@ -396,7 +402,9 @@ class TestStage1FallbackRecording:
             }
         }
         with patch("backend.council.COUNCIL_MODELS", ["openai/gpt-5.5"]):
-            with patch("backend.council.query_models_parallel", _make_parallel_mock(mock_responses)):
+            with patch(
+                "backend.council.query_models_parallel", _make_parallel_mock(mock_responses)
+            ):
                 results = await stage1_collect_responses("What is X?")
 
         assert len(results) == 1
@@ -414,7 +422,9 @@ class TestStage1FallbackRecording:
             }
         }
         with patch("backend.council.COUNCIL_MODELS", ["openai/gpt-5.5"]):
-            with patch("backend.council.query_models_parallel", _make_parallel_mock(mock_responses)):
+            with patch(
+                "backend.council.query_models_parallel", _make_parallel_mock(mock_responses)
+            ):
                 results = await stage1_collect_responses("What is X?")
 
         assert results[0]["model"] == "openai/gpt-4.1"
@@ -431,7 +441,9 @@ class TestStage1FallbackRecording:
             }
         }
         with patch("backend.council.COUNCIL_MODELS", ["openai/gpt-5.5"]):
-            with patch("backend.council.query_models_parallel", _make_parallel_mock(mock_responses)):
+            with patch(
+                "backend.council.query_models_parallel", _make_parallel_mock(mock_responses)
+            ):
                 results = await stage1_collect_responses("What is X?")
 
         assert "fallback_from" not in results[0]
@@ -439,23 +451,32 @@ class TestStage1FallbackRecording:
 
 # ── council stage3 — chairman fallback ───────────────────────────────────────
 
+
 class TestChairmanFallback:
     """stage3_synthesize_final should pass CHAIRMAN_FALLBACK to query_model."""
 
     async def test_chairman_called_with_chairman_fallback(self) -> None:
         from backend.council import stage3_synthesize_final
 
-        mock_qm = AsyncMock(return_value={
-            "content": "synthesis",
-            "reasoning_details": None,
-            "model_used": "anthropic/claude-opus-4.6",
-        })
+        mock_qm = AsyncMock(
+            return_value={
+                "content": "synthesis",
+                "reasoning_details": None,
+                "model_used": "anthropic/claude-opus-4.6",
+            }
+        )
 
         with patch("backend.council.query_model", mock_qm):
             await stage3_synthesize_final(
                 "q",
                 [{"model": "openai/gpt-5.5", "response": "r1"}],
-                [{"model": "openai/gpt-5.5", "ranking": "FINAL RANKING:\n1. Response A", "parsed_ranking": ["Response A"]}],
+                [
+                    {
+                        "model": "openai/gpt-5.5",
+                        "ranking": "FINAL RANKING:\n1. Response A",
+                        "parsed_ranking": ["Response A"],
+                    }
+                ],
             )
 
         _, kwargs = mock_qm.call_args
@@ -465,17 +486,25 @@ class TestChairmanFallback:
         from backend.council import stage3_synthesize_final
 
         # model_used differs from CHAIRMAN_MODEL → fallback fired
-        mock_qm = AsyncMock(return_value={
-            "content": "fallback synthesis",
-            "reasoning_details": None,
-            "model_used": "openai/gpt-4.1",  # fallback answered
-        })
+        mock_qm = AsyncMock(
+            return_value={
+                "content": "fallback synthesis",
+                "reasoning_details": None,
+                "model_used": "openai/gpt-4.1",  # fallback answered
+            }
+        )
 
         with patch("backend.council.query_model", mock_qm):
             result = await stage3_synthesize_final(
                 "q",
                 [{"model": "openai/gpt-5.5", "response": "r1"}],
-                [{"model": "openai/gpt-5.5", "ranking": "FINAL RANKING:\n1. Response A", "parsed_ranking": ["Response A"]}],
+                [
+                    {
+                        "model": "openai/gpt-5.5",
+                        "ranking": "FINAL RANKING:\n1. Response A",
+                        "parsed_ranking": ["Response A"],
+                    }
+                ],
             )
 
         assert result["model"] == "openai/gpt-4.1"
