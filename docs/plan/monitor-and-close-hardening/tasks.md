@@ -12,7 +12,7 @@ positions" risk. Each task is independently landable; no shared files between th
 
 ---
 
-- [ ] **MC-1** — Dedupe `strategy_monitor.expiry_unresolved` firing twice per tick per
+- [x] **MC-1** — Dedupe `strategy_monitor.expiry_unresolved` firing twice per tick per
   unresolvable position. Spawned from TODOS.md (deferred from the 2026-07-20 silent-failure
   logging pass). `_fetch_chains` and `_group_positions_by_expiry` both independently call
   `_get_position_expiry` on the same position list each tick, so a degraded position logs the
@@ -40,7 +40,7 @@ positions" risk. Each task is independently landable; no shared files between th
   even when both `_fetch_chains` and `_group_positions_by_expiry` need the value; one confirming
   the WARNING itself still fires exactly once for a genuinely unresolvable position.
 
-  **Commit:** `fix(strategy): dedupe expiry_unresolved double-log per tick`
+  **Commit:** `fix(strategy): dedupe expiry_unresolved double-log per tick` | SHA: <pending>
 
 ---
 

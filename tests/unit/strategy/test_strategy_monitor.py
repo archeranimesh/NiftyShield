@@ -567,6 +567,92 @@ def test_get_position_expiry_no_warning_for_named_key() -> None:
     assert not [e for e in logs if e["event"] == "strategy_monitor.expiry_unresolved"]
 
 
+def test_get_position_expiry_memoized_within_tick() -> None:
+    """MC-1: repeated calls for the same instrument_key within one tick must
+    hit the cache, not recompute — the underlying resolution logic (and its
+    WARNING for an unresolvable key) only runs once per (tick, instrument_key)
+    even though _fetch_chains and _group_positions_by_expiry both call
+    _get_position_expiry independently on the same position list.
+    """
+    monitor = _make_monitor()  # no lookup passed — unresolvable numeric key
+    pos = PaperPosition(
+        strategy_name="paper_ic_nifty_v1_monthly",
+        leg_role="short_put",
+        net_qty=-65,
+        avg_cost=Decimal("0"),
+        avg_sell_price=Decimal("21.40"),
+        instrument_key="NSE_FO|63896",
+    )
+    with capture_logs() as logs:
+        first = monitor._get_position_expiry(pos)
+        second = monitor._get_position_expiry(pos)
+    assert first is None
+    assert second is None
+    unresolved = [e for e in logs if e["event"] == "strategy_monitor.expiry_unresolved"]
+    assert len(unresolved) == 1
+
+
+@pytest.mark.asyncio
+async def test_tick_logs_expiry_unresolved_once_per_position_per_tick() -> None:
+    """MC-1: a genuinely unresolvable position must produce exactly one
+    strategy_monitor.expiry_unresolved WARNING per tick, even though both
+    _fetch_chains and _group_positions_by_expiry call _get_position_expiry
+    on it during the same tick. Regression test for the pre-fix double-log.
+    """
+    pos = PaperPosition(
+        strategy_name="paper_ic_nifty_v1_monthly",
+        leg_role="short_put",
+        net_qty=-65,
+        avg_cost=Decimal("0"),
+        avg_sell_price=Decimal("21.40"),
+        instrument_key="NSE_FO|63896",  # numeric key, no lookup wired
+    )
+    strategy = MockStrategy()
+    strategy.check_signals = AsyncMock(return_value=[])
+    store = _make_store(positions=[pos])
+    broker = MagicMock()
+    broker.get_option_chain = AsyncMock(return_value=[])
+
+    monitor = _make_monitor(broker=broker, store=store, strategies=[strategy])
+
+    with (
+        patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch(
+            "src.strategy.monitor.datetime",
+            **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
+        ),
+        capture_logs() as logs,
+    ):
+        await monitor._tick()
+
+    unresolved = [e for e in logs if e["event"] == "strategy_monitor.expiry_unresolved"]
+    assert len(unresolved) == 1
+
+
+def test_get_position_expiry_memoizes_resolved_value_not_just_none() -> None:
+    """MC-1: the cache must also short-circuit the *resolvable* path — a
+    second call for the same instrument_key must return the identical cached
+    date object without re-running the regex/BOD resolution, not just
+    suppress a duplicate warning on the unresolvable path.
+    """
+    monitor = _make_monitor()
+    pos = PaperPosition(
+        strategy_name="paper_csp_nifty_v1",
+        leg_role="short_put",
+        net_qty=-65,
+        avg_cost=Decimal("0"),
+        avg_sell_price=Decimal("100"),
+        instrument_key="NIFTY30JUN2026PE23000",
+    )
+    first = monitor._get_position_expiry(pos)
+    assert pos.instrument_key in monitor._expiry_cache
+    with patch("src.strategy.monitor._date") as mock_date:
+        second = monitor._get_position_expiry(pos)
+    # Cache hit must bypass resolution entirely — no _date(...) construction call.
+    mock_date.assert_not_called()
+    assert second == first
+
+
 @pytest.mark.asyncio
 async def test_tick_logs_expiry_fallback_used_for_unresolvable_positions() -> None:
     """BUG-2 follow-up (2026-07-20): when a strategy's positions all fail

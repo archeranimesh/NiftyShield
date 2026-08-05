@@ -98,6 +98,14 @@ class StrategyMonitor:
         # structurally satisfies MarketDataProvider (get_ltp/get_option_chain),
         # so no adapter needed — see src/client/protocol.py docstring.
         self._tracker = PaperTracker(store, broker)
+        # MC-1 (2026-08-05): per-tick memoization for _get_position_expiry.
+        # _fetch_chains and _group_positions_by_expiry each independently call
+        # _get_position_expiry on the same position list every tick, so an
+        # unresolvable position logged strategy_monitor.expiry_unresolved
+        # twice per tick with identical fields. Cleared at the start of each
+        # _tick(); keyed by instrument_key since expiry resolution depends
+        # only on that field, not on strategy_name/leg_role.
+        self._expiry_cache: dict[str, date | None] = {}
 
     def register(self, strategy: PaperStrategy) -> None:
         """Add a strategy to the registry after construction.
@@ -131,6 +139,7 @@ class StrategyMonitor:
         tick_start = time.monotonic()
         trace_id = generate_trace_id()
         bind_trace_id(trace_id)
+        self._expiry_cache.clear()
         log.info("tick.start", trace_id=trace_id)
         now_ist = datetime.now(tz=_IST)
         today = now_ist.date()
@@ -376,6 +385,9 @@ class StrategyMonitor:
         Returns:
             Expiry date or None when unresolvable.
         """
+        if pos.instrument_key in self._expiry_cache:
+            return self._expiry_cache[pos.instrument_key]
+
         import re as _re
 
         _KEY_EXPIRY_RE = _re.compile(r"NIFTY(\d{2})([A-Za-z]{3})(\d{4})(CE|PE)", _re.IGNORECASE)
@@ -400,7 +412,9 @@ class StrategyMonitor:
                 month = _MONTH_ABBR.get(m.group(2).upper())
                 year = int(m.group(3))
                 if month:
-                    return _date(year, month, day)
+                    resolved = _date(year, month, day)
+                    self._expiry_cache[pos.instrument_key] = resolved
+                    return resolved
             except (ValueError, TypeError):
                 pass
 
@@ -410,7 +424,9 @@ class StrategyMonitor:
                 expiry_str = parse_expiry(inst.get("expiry"))
                 if expiry_str:
                     try:
-                        return _date.fromisoformat(expiry_str)
+                        resolved = _date.fromisoformat(expiry_str)
+                        self._expiry_cache[pos.instrument_key] = resolved
+                        return resolved
                     except ValueError:
                         pass
 
@@ -426,6 +442,7 @@ class StrategyMonitor:
             instrument_key=pos.instrument_key,
             lookup_wired=self._lookup is not None,
         )
+        self._expiry_cache[pos.instrument_key] = None
         return None
 
     def _group_positions_by_expiry(
