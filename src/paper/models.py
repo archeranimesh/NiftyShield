@@ -465,6 +465,7 @@ class PaperExitEvent(BaseModel):
     delta_stop_would_fire: Literal[0, 1] | None = None
     premium_stop_would_fire: Literal[0, 1] | None = None
     actual_rule_used: str | None = None
+    counterfactual_dte_marks: str | None = None
     status: Literal["OPEN", "ACKNOWLEDGED", "ACTED", "DISMISSED"] = "OPEN"
     notes: str | None = None
     created_at: str | None = None

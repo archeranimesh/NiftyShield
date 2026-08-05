@@ -45,6 +45,7 @@ def test_create_and_get_exit_event(store: PaperStore) -> None:
         delta_stop_would_fire=0,
         premium_stop_would_fire=1,
         actual_rule_used="PREMIUM",
+        counterfactual_dte_marks='{"exit_dte": 14}',
         notes="initial notes",
     )
     assert event_id >= 1
@@ -71,6 +72,7 @@ def test_create_and_get_exit_event(store: PaperStore) -> None:
     assert ev["delta_stop_would_fire"] == 0
     assert ev["premium_stop_would_fire"] == 1
     assert ev["actual_rule_used"] == "PREMIUM"
+    assert ev["counterfactual_dte_marks"] == '{"exit_dte": 14}'
     assert ev["status"] == "OPEN"
     assert ev["notes"] == "initial notes"
 
@@ -106,6 +108,7 @@ def test_nullable_optional_fields(store: PaperStore) -> None:
     assert ev["delta_stop_would_fire"] is None
     assert ev["premium_stop_would_fire"] is None
     assert ev["actual_rule_used"] is None
+    assert ev["counterfactual_dte_marks"] is None
     assert ev["notes"] is None
 
 

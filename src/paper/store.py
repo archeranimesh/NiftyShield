@@ -162,6 +162,7 @@ CREATE TABLE IF NOT EXISTS paper_exit_events (
     delta_stop_would_fire   INTEGER,
     premium_stop_would_fire INTEGER,
     actual_rule_used        TEXT,
+    counterfactual_dte_marks TEXT,
     status                  TEXT    NOT NULL DEFAULT 'OPEN',
     notes                   TEXT,
     created_at              TEXT    NOT NULL DEFAULT (datetime('now'))
@@ -1914,6 +1915,7 @@ class PaperStore:
         delta_stop_would_fire: int | None = None,
         premium_stop_would_fire: int | None = None,
         actual_rule_used: str | None = None,
+        counterfactual_dte_marks: str | None = None,
         notes: str | None = None,
     ) -> int:
         """Insert an exit event with status='OPEN' and return the generated row ID.
@@ -1948,9 +1950,12 @@ class PaperStore:
                 """INSERT INTO paper_exit_events
                    (strategy_name, leg_name, trade_id, snapshot_id, event_time,
                     detected_by, exit_signal, severity, ltp, mid, bid, ask,
-                    delta, dte, entry_price, threshold_value, delta_stop_would_fire,
-                    premium_stop_would_fire, actual_rule_used, status, notes)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?)""",
+                    delta, dte, entry_price, threshold_value,
+                    delta_stop_would_fire, premium_stop_would_fire,
+                    actual_rule_used, counterfactual_dte_marks,
+                    status, notes)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                           ?, ?, ?, ?, 'OPEN', ?)""",
                 (
                     strategy_name,
                     leg_name,
@@ -1971,6 +1976,7 @@ class PaperStore:
                     delta_stop_would_fire,
                     premium_stop_would_fire,
                     actual_rule_used,
+                    counterfactual_dte_marks,
                     notes,
                 ),
             )
@@ -1997,8 +2003,9 @@ class PaperStore:
                               event_time, detected_by, exit_signal, severity,
                               ltp, mid, bid, ask, delta, dte, entry_price,
                               threshold_value, delta_stop_would_fire,
-                              premium_stop_would_fire, actual_rule_used, status,
-                              notes, created_at
+                              premium_stop_would_fire, actual_rule_used,
+                              counterfactual_dte_marks, status, notes,
+                              created_at
                        FROM paper_exit_events
                        WHERE strategy_name = ? AND status IN ('OPEN', 'ACKNOWLEDGED')
                        ORDER BY event_time ASC, id ASC""",
@@ -2010,8 +2017,9 @@ class PaperStore:
                               event_time, detected_by, exit_signal, severity,
                               ltp, mid, bid, ask, delta, dte, entry_price,
                               threshold_value, delta_stop_would_fire,
-                              premium_stop_would_fire, actual_rule_used, status,
-                              notes, created_at
+                              premium_stop_would_fire, actual_rule_used,
+                              counterfactual_dte_marks, status, notes,
+                              created_at
                        FROM paper_exit_events
                        WHERE status IN ('OPEN', 'ACKNOWLEDGED')
                        ORDER BY event_time ASC, id ASC"""
@@ -2026,8 +2034,9 @@ class PaperStore:
                           event_time, detected_by, exit_signal, severity,
                           ltp, mid, bid, ask, delta, dte, entry_price,
                           threshold_value, delta_stop_would_fire,
-                          premium_stop_would_fire, actual_rule_used, status,
-                          notes, created_at
+                          premium_stop_would_fire, actual_rule_used,
+                          counterfactual_dte_marks, status, notes,
+                          created_at
                    FROM paper_exit_events
                    WHERE id = ?""",
                 (event_id,),
