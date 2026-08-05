@@ -94,7 +94,7 @@ Session Log grows large again.
   `stories.md` as a separate follow-up, not folded into this story. DT-3b's spec updated with the
   confirmed call sites (`IronCondorV1.check_signals` + `IronCondorV2.check_signals`, both — V2 has
   its own independent implementation). DT-3b is now unblocked for Antigravity handoff. No tests run
-  (docs-only change). SHA: pending commit this session.
+  (docs-only change). SHA: adb1589.
 
 ### 2026-08-02 Session Log
 - **Test fix**: `test_paper_3track_overlay_entry_notify.py::test_overlay_entry_does_not_refire_once_leg_open` (flagged as a pre-existing unrelated failure in the EC-2 entry below) — root cause was the SPOT-track idempotency guard added in `eba1806` (`paper_3track_overlay_entry.py`), which calls `store.get_positions(STRATEGY_SPOT)` and `sys.exit(0)` if any position looks like an open `overlay_cc`. The test's `MagicMock().get_positions` returned the same fixture regardless of the strategy argument, and the fixture's `MagicMock().net_qty` was truthy against `!= 0`, so the new SPOT guard fired and raised an uncaught `SystemExit` before the test's actual target (the OVERLAY-track bootstrap-skip guard) was ever reached. Fixed by giving `get_positions` a `side_effect` scoped by strategy name in `tests/unit/scripts/test_paper_3track_overlay_entry_notify.py`. No source change.
