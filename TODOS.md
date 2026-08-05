@@ -43,6 +43,7 @@ story on this list. Do not jump between stories mid-sequence; the ordering below
 24. [ ] **Historical data abstraction** (LOW priority) — `HistoricalCandleFetcher` protocol so VIX and OHLC fetching can switch between Upstox, Dhan, Kite, and NSE CSV without touching storage. Currently `vix_ingest.py` has Upstox URLs hardcoded with sync `requests`; `get_historical_candles` on `BrokerClient` raises `NotImplementedError`. 11 tasks HD-0→HD-10, starting at **HD-0** (cost-bounded probe scripts). HD-6 (Dhan)/HD-7 (Kite ₹2000/month) conditional on HD-0 decision matrix. Do not start until Phase 0.8 gate clears.
 25. [ ] **Phase 2 — Research Pipelines & Integrations** (2027+) — `docs/plan/phase2-integrations/tasks.md`, starting at **PV-1** (P&L Visualization — not gated, can be pulled forward independently). **ZK-1**/**OE-1**/**PT-1** are gated per their own stated reasons (Kite Connect priority, static IP, defer-until-touched) — see the story file. Does not include the Swing/Investment signal pipelines — those are item 17 above.
 26. [ ] **Technical Debt** (opportunistic — not sequential) — `docs/plan/technical-debt/tasks.md` (**DEBT-3/5/6a/6b/6c/7**). Do not pick these up on their own; each fires only when its named file/module is already being touched for another story's task. See `prompt.md` for the exact trigger per item and why this one breaks the "finish in sequence" rule the rest of this list follows.
+27. [ ] **Fix dead IC EOD report query** (2026-08-05) — fix `scripts/strategies/ic/paper_ic_snapshot.py`'s "Intraday actions" query which was identified as dead code during the DT-3a audit.
 
 **Before build queue starts on paper-backbone-dependent stories** — verify prerequisites:
 ```bash
@@ -95,6 +96,11 @@ Session Log grows large again.
   confirmed call sites (`IronCondorV1.check_signals` + `IronCondorV2.check_signals`, both — V2 has
   its own independent implementation). DT-3b is now unblocked for Antigravity handoff. No tests run
   (docs-only change). SHA: adb1589.
+- **DT-3b (`ic-time-stop-dte-tiering`)**: Implemented counterfactual DTE logging for IC exits.
+  Added `counterfactual_dte_marks` column to `paper_exit_events` (SHA: 17b4ff9). 
+  Wired `_log_counterfactual_exit` into `IronCondorV1.check_signals` (SHA: 92227f7) and 
+  wrapped `IronCondorV2.check_signals` to intercept ACTION-severity events (SHA: 524e86a).
+  Added test coverage in both V1 and V2 signal test files.
 
 ### 2026-08-02 Session Log
 - **Test fix**: `test_paper_3track_overlay_entry_notify.py::test_overlay_entry_does_not_refire_once_leg_open` (flagged as a pre-existing unrelated failure in the EC-2 entry below) — root cause was the SPOT-track idempotency guard added in `eba1806` (`paper_3track_overlay_entry.py`), which calls `store.get_positions(STRATEGY_SPOT)` and `sys.exit(0)` if any position looks like an open `overlay_cc`. The test's `MagicMock().get_positions` returned the same fixture regardless of the strategy argument, and the fixture's `MagicMock().net_qty` was truthy against `!= 0`, so the new SPOT guard fired and raised an uncaught `SystemExit` before the test's actual target (the OVERLAY-track bootstrap-skip guard) was ever reached. Fixed by giving `get_positions` a `side_effect` scoped by strategy name in `tests/unit/scripts/test_paper_3track_overlay_entry_notify.py`. No source change.
