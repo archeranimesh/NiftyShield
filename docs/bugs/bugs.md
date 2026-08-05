@@ -612,3 +612,26 @@ Decimal correctness (`str(unrealized)` etc., no float leakage) and the `PaperTra
 **Related:** BUG-020, BUG-021 (same investigation thread, same two files, discovered same session — entry-credit scoping vs. this structural roll/close gap are two distinct defects, not duplicates).
 
 ---
+
+## BUG-023 — `ROLL_WING`/`PROFIT_LOCK_ZONE2` replacement-leg `instrument_key` is fabricated, not resolved from BOD; would be written to `paper_trades` unresolvable once IC-CLOSE-2 persistence lands
+
+| Field | Value |
+|---|---|
+| Severity | **HIGH** — same defect class as BUG-012/BUG-014 (fabricated/unresolvable `instrument_key`), but not yet symptomatic because the write path it would poison (IC-CLOSE-2 / MC-3) doesn't exist in production yet. Blocks MC-3 from shipping as originally scoped. |
+| Status | 🔴 Open |
+| Discovered | 2026-08-05, `docs/plan/monitor-and-close-hardening/tasks.md` MC-3 pre-implementation investigation (graph-before-code step) |
+| Location | `src/strategy/ic_nifty_v1.py::IronCondorV1._select_wing_roll_target` (line 947: `instrument_key = f"NSE_FO|NIFTY{int(candidate.strike)}{option_type}"`); `src/strategy/ic_nifty_v2.py::IronCondorV2._roll_result_to_signal` (equivalent `f"NSE_FO|NIFTY{int(new_put_wing.strike)}PE"` / `...CE"` construction for the Zone 2 profit-lock replacement wings) |
+
+**Symptom (confirmed by code inspection, not yet live):** both V1's `ROLL_WING` roll-target selection and V2's `PROFIT_LOCK_ZONE2` wing-contraction selection pick a real, chain-derived candidate (`roll_utils.find_strike_by_delta` / `roll_utils.search_narrow_wing_replacement`), then build the *replacement leg's* `instrument_key` by string-formatting the strike into a symbol-style key (`NSE_FO|NIFTY25000PE`). Per `CONTEXT.md`/BUG-002 (`src/risk/delta_tracker.py` classification note) and every other instrument-key call site in this codebase, real Upstox instrument keys are numeric-only (e.g. `NSE_FO|63930`) — this symbol-style key can never resolve via `InstrumentLookup.get_by_key` or the live chain's own keying scheme.
+
+**Why it's dormant today:** neither `ROLL_WING` (V1) nor `PROFIT_LOCK_ZONE2` (V2) currently persists the replacement leg to `paper_trades` at all — the payload's `suggested_instrument_key`/`new_put_wing_key`/`new_call_wing_key` fields are only ever displayed in Telegram messages and consumed as an approval-flow hint. The fabricated key sits inert. `docs/plan/monitor-and-close-hardening/tasks.md`'s MC-3 (IC-CLOSE-2) is the task that would first write it to the DB — see that task's split below.
+
+**Root cause:** `_select_wing_roll_target` (V1) and `_roll_result_to_signal` (V2) both derive the replacement leg's `instrument_key` purely from the in-memory chain scan result (an `OptionLeg`, which has no `instrument_key` field at all — confirmed via `src/models/options.py`), rather than resolving it against the BOD instrument master the way every persisting call site elsewhere in the codebase does.
+
+**Reusable fix (confirmed present, not novel):** `InstrumentLookup.search_options(underlying="NIFTY", strike=<candidate.strike>, option_type=<"CE"|"PE">, expiry=<already-resolved IC expiry>)` (`src/instruments/lookup.py:188`, 3 existing callers) returns the real BOD instrument dict, including its numeric `instrument_key`. Route both files' roll-target construction through it instead of the f-string; treat "candidate found by delta/liquidity but strike not present in the same-expiry BOD file" as a failed candidate (same as a liquidity-gate miss), not a crash.
+
+**Relationship to MC-3:** MC-3 ("persist the close side of ROLL_WING/PROFIT_LOCK_ZONE2") was scoped as a pure persistence task assuming the replacement leg's key was already valid. It wasn't. Per user decision 2026-08-05, MC-3 is being split (see `tasks.md`) rather than silently expanded in scope this session.
+
+**Related:** BUG-012 (same defect class, IC's original strike-parse-failure fix), BUG-014 (same class, closed-leg key resolution).
+
+---

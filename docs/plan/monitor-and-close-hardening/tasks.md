@@ -72,14 +72,46 @@ positions" risk. Each task is independently landable; no shared files between th
 
 ---
 
-- [ ] **MC-3** — IC-CLOSE-2: persist the close side of `ROLL_WING`/`PROFIT_LOCK_ZONE2` actions.
+- [ ] **MC-3a** — BUG-023: resolve the `ROLL_WING`/`PROFIT_LOCK_ZONE2` replacement leg's real
+  `instrument_key` via BOD, instead of the current fabricated symbol-style key. Split out of the
+  original MC-3 (2026-08-05 pre-implementation investigation) — see `docs/bugs/bugs.md` BUG-023
+  for full root-cause detail. **Must land before MC-3b** — MC-3b's persistence would otherwise
+  write an unresolvable key to `paper_trades`.
+
+  **Affects:** `src/strategy/ic_nifty_v1.py::IronCondorV1._select_wing_roll_target`,
+  `src/strategy/ic_nifty_v2.py::IronCondorV2._roll_result_to_signal`.
+
+  **Before any code:**
+  ```
+  get_code_snippet("InstrumentLookup.search_options")   # reusable resolver, 3 existing callers
+  git log --oneline -10 src/instruments/lookup.py
+  ```
+
+  **Fix:** replace the `f"NSE_FO|NIFTY{int(strike)}{option_type}"` construction in both files
+  with `InstrumentLookup.search_options(underlying="NIFTY", strike=..., option_type=..., expiry=...)`
+  (BOD-backed, already-resolved IC expiry as the filter); a strike absent from the same-expiry
+  BOD file is treated as a failed candidate (same handling as an existing liquidity-gate miss),
+  not an exception.
+
+  **Tests:** BOD resolves a valid candidate strike to its real numeric key; strike present in
+  the live chain scan but absent from BOD for that expiry is rejected as a candidate (not a
+  crash); existing V1/V2 roll-target tests updated to assert against a real key shape, not the
+  symbol-style placeholder.
+
+  **Commit:** `fix(strategy): resolve ROLL_WING/PROFIT_LOCK_ZONE2 replacement key via BOD`
+
+---
+
+- [ ] **MC-3b** — IC-CLOSE-2: persist the close side of `ROLL_WING`/`PROFIT_LOCK_ZONE2` actions.
   Spawned from TODOS.md (deferred from the 2026-07-15 auto-close persistence fix). Same missing-
   persistence gap as the flatten actions (`CLOSE_FULL` etc., fixed 2026-07-15 via
   `close_ic_legs()`), but for roll actions: the old leg being replaced is filtered from the
   in-memory `positions` list without a DB write. Not yet symptomatic as of the last check (0
   occurrences of either action type in `logs/monitor_daemon.log`) but will silently no-op the
-  same way once a roll signal fires. Needs new-strike-selection logic for the replacement leg
-  before the close+open can be made atomic — bigger scope than the flatten-only fix.
+  same way once a roll signal fires. **Depends on MC-3a landing first** — strike selection
+  itself already exists (`_select_wing_roll_target`/`_search_narrower_wing_candidate` in V1,
+  `roll_utils.search_narrow_wing_replacement` in V2, both chain-derived); the only missing piece
+  besides persistence was a valid key, which MC-3a provides.
 
   **Affects:** `src/strategy/ic_nifty_v1.py` (`ROLL_WING`), `src/strategy/ic_nifty_v2.py`
   (`ROLL_WING`, `PROFIT_LOCK_ZONE2`).
@@ -91,12 +123,6 @@ positions" risk. Each task is independently landable; no shared files between th
   search_code("PROFIT_LOCK_ZONE2")
   git log --oneline -10 src/strategy/ic_close_executor.py
   ```
-
-  **Design note:** this needs a strike-selection step for the replacement leg (not just a close)
-  before the old+new can be written atomically — check whether `_auto_select_action()` or the
-  profit-lock engine already has a strike-selection helper to reuse before writing a new one.
-  If genuinely novel logic is required, this may itself be too large for one session — split
-  further if `search_graph` shows no reusable strike-selection primitive exists yet.
 
   **Tests:** roll-fires → old leg closed and persisted to `paper_trades`, new leg opened and
   persisted, atomic (single `record_trades` call, no partial-write window).

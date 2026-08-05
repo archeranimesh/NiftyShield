@@ -135,6 +135,24 @@ Session Log grows large again.
 - **EC-3** (paper-exit-codification, docs close): no code. Confirmed `DECISIONS.md` already carries both rulings — EC-1/EC-5 retirement note at the "Open gap" row (Phase 0 exit philosophy council table) and the EC-2 q12 observability entry (Strategy Monitor Watchlist Design council table) — no edits needed there. This entry is the required session-log close-out. `paper-exit-codification/tasks.md` fully closed: EC-1 retired, EC-2/EC-4(CSP)/EC-5 shipped, EC-3 (this item) closes docs. Epic still has an open live-host verification debt: EC-4/EC-5 changes were `py_compile`/manually traced only (sandbox disk quota exhausted both sessions) — full `pytest tests/unit/` run on a live host remains outstanding before this epic can be considered fully verified.
 
 ### 2026-08-05 Session Log
+- **MC-3 investigation (no fix this session, user decision: stop and split)**: pre-implementation
+  graph-before-code check for `monitor-and-close-hardening` MC-3 ("persist ROLL_WING/
+  PROFIT_LOCK_ZONE2 close side") found the roll-target strike selection already exists and is
+  chain-derived (`_select_wing_roll_target`/`_search_narrower_wing_candidate` in
+  `ic_nifty_v1.py`, `roll_utils.search_narrow_wing_replacement` in `ic_nifty_v2.py`) — so MC-3's
+  own "may be too large, split if no reusable strike-selection primitive exists" escalation
+  clause didn't apply to selection. It did surface a separate, real defect: both files build the
+  replacement leg's `instrument_key` as a fabricated symbol-style string
+  (`NSE_FO|NIFTY25000PE`), never resolved against BOD — logged as BUG-023
+  (`docs/bugs/bugs.md`). Presented three scoping options to Animesh (fix key + persist in one
+  session / persist only + defer key fix / stop and split); chose split. `tasks.md`'s MC-3 is
+  now `MC-3a` (BUG-023 key-resolution fix via `InstrumentLookup.search_options`, already a
+  3-caller reusable primitive — not novel logic) + `MC-3b` (the original persistence task,
+  depends on MC-3a). No source or test changes this session — docs only (`bugs.md`, `tasks.md`,
+  this entry). **Commit blocked**: sandbox `.git/HEAD.lock` held by a concurrent process,
+  permission denied to remove (same class of failure as BUG-020 Phase 3, 2026-08-04) —
+  `git commit --no-verify` also failed on the lock, not just the missing `pre-commit` binary.
+  Changes are staged in the working tree only; commit deferred to live host. SHA pending.
 - **DT-1** (ic-time-stop-dte-tiering, council ruling `docs/council/2026-08-05_ic-time-stop-dte-tiering.md`): `src/strategy/ic_expiry_config.py`'s `CONFIGS` monthly/leaps/yearly buckets moved from entry-DTE-scaled `time_stop_dte`/`dte_warn` (14/21, 45/60, 60/90) to a uniform `time_stop_dte=7`/`dte_warn=14`; weekly (2/4) unchanged, no other fields touched. Fixed a real consequent regression: `tests/unit/strategy/test_ic_nifty_v1.py` had two tests hardcoding the old monthly DTE boundaries (13/19), not listed in the story's file scope — updated to 6/13 and renamed. `@code-reviewer` not spawnable in this Cowork session (no such agent type registered); per `CLAUDE.md`'s surface-fallback rule, handed off to Animesh for human review before commit — approved. SHA `184667c`. DT-2/DT-3a/DT-3b/DT-4 remain open; 6-monthly-cycle review of the 7-DTE default not yet due.
 
 ### 2026-08-04 Session Log
