@@ -74,6 +74,16 @@ Full forensic log (SHAs, bug numbers, root-cause detail) moved to
 add new entries there going forward, or start a fresh dated section here if this file's
 Session Log grows large again.
 
+### 2026-08-05 Session Log
+- **DT-2 (`ic-time-stop-dte-tiering`)**: docs-only task — added `DECISIONS.md` entry recording
+  the council ruling (`docs/council/2026-08-05_ic-time-stop-dte-tiering.md`) that replaces
+  `ic_expiry_config.py`'s entry-DTE-scaled `time_stop_dte`/`dte_warn` with a uniform terminal
+  rule (`time_stop_dte=7`/`dte_warn=14` for monthly/leaps/yearly, weekly unchanged), and appended
+  a correction note to `docs/archive/ic-multi-expiry/stories/IC-M1.md` marking its original
+  entry-DTE-scaled design as superseded. No code changes (DT-1 already shipped the config values,
+  SHA 184667c). SHA: f59104d. Next unchecked task is DT-3a (audit) — not started this session, per
+  the one-task-per-session protocol.
+
 ### 2026-08-02 Session Log
 - **Test fix**: `test_paper_3track_overlay_entry_notify.py::test_overlay_entry_does_not_refire_once_leg_open` (flagged as a pre-existing unrelated failure in the EC-2 entry below) — root cause was the SPOT-track idempotency guard added in `eba1806` (`paper_3track_overlay_entry.py`), which calls `store.get_positions(STRATEGY_SPOT)` and `sys.exit(0)` if any position looks like an open `overlay_cc`. The test's `MagicMock().get_positions` returned the same fixture regardless of the strategy argument, and the fixture's `MagicMock().net_qty` was truthy against `!= 0`, so the new SPOT guard fired and raised an uncaught `SystemExit` before the test's actual target (the OVERLAY-track bootstrap-skip guard) was ever reached. Fixed by giving `get_positions` a `side_effect` scoped by strategy name in `tests/unit/scripts/test_paper_3track_overlay_entry_notify.py`. No source change.
 - **Test isolation fix**: `tests/unit/strategy/test_ic_nifty_v1.py::test_pnl_gate_skipped_logged_when_mark_unavailable` intermittently failed (`assert 0 == 1` on captured `pnl_gate_skipped` debug log) depending on pytest-xdist worker scheduling — `tests/unit/utils/test_logging.py` calls the real `setup_logging()` 8 times with no teardown, which globally reconfigures structlog's `wrapper_class` to `make_filtering_bound_logger(INFO)` and forces the stdlib root logger level via `logging.basicConfig(force=True)`. When that test file ran before `test_ic_nifty_v1.py` in the same worker, the `log.debug(...)` call under test got filtered before structlog's `capture_logs()` sink ever saw it. Fixed at the source: extracted `tests/unit/conftest.py`'s session-scoped structlog config into `reset_structlog_test_config()`, and added an autouse fixture in `tests/unit/utils/test_logging.py` that restores that baseline after every test in the file. Confirmed via manual repro (fails without the fix when both files run in one worker, passes with it) — full suite now green (`make test`).
