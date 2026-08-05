@@ -184,6 +184,45 @@ confirmed module/function in place of the placeholder, plus a one-line note in t
 confirming DT-3b is now unblocked. **DT-3a does not write any implementation code** — audit
 only, per the `ic-yearly-expiry-fix` YE-1 precedent (`docs/plan/ic-yearly-expiry-fix/tasks.md`).
 
+**AUDIT FINDING (2026-08-05, confirmed via `trace_path`/`search_code` + `grep -rn
+"create_exit_event(" src/ scripts/`):** the story's own hypothesis was wrong — there is no
+existing writer to redirect. Every current caller of `PaperStore.create_exit_event` was
+enumerated (`reentry_mixin.py:176`, `overlay_closer.py:271`, `overlay_closer.py:398`,
+`record_paper_trade.py:892`, `paper_3track_snapshot.py:433`, `paper_3track_snapshot.py:612`) and
+none is reachable from `IronCondorV1`/`IronCondorV2`. `reentry_mixin.py`'s writes are gated on
+`ReEntryMixin`, which neither IC class inherits. `overlay_closer.py` (the only writer of
+`status='ACTED'` rows anywhere in the codebase — confirmed via `grep -rn "ACTED"`) is exclusively
+the 3-track overlay close path (CC/PP/Collar), never IC. `record_paper_trade.py`'s call site is
+an unrelated manual-entry R3-override event, not an exit signal. `StrategyMonitor._route_event`
+(`src/strategy/monitor.py:289-365`, read in full) dispatches auto-execute `ACTION` events
+straight to `strategy.apply_action(...)` and never references `create_exit_event` or
+`paper_exit_events` at all — confirmed by `grep` returning zero matches in `monitor.py`.
+Consequence: `paper_ic_snapshot.py::process_variant`'s raw-SQL `SELECT ... WHERE status='ACTED'`
+(line ~347-354) is currently dead — it can never return rows for an IC `strategy_name`, so every
+IC EOD report's "Intraday actions" line always prints `"none"` regardless of what actually
+executed intraday. This was not previously documented as a known gap.
+
+**Confirmed call site for DT-3b:** `IronCondorV1.check_signals` (`src/strategy/ic_nifty_v1.py`)
+and `IronCondorV2.check_signals` (`src/strategy/ic_nifty_v2.py`) — both, not just V1; each has
+its own independent `check_signals` implementation with its own `chain: OptionChain` in scope at
+the moment an ACTION-severity `SignalEvent` (TIME_STOP, PROFIT_TARGET, LOSS_STOP, DELTA_STOP,
+ROLL_WING) is constructed, which is exactly where the counterfactual mark/Greeks/spread capture
+belongs (mirrors `reentry_mixin.py`'s existing pattern of writing at signal-detection time, not
+at execution time in `apply_action`). `apply_action` was considered and rejected as the write
+point — it does not receive `chain`, only `positions` + `ApprovedAction`, so it cannot compute
+the counterfactual marks without an extra chain fetch DT-3b's spec explicitly rules out.
+`StrategyMonitor._route_event` was also considered and rejected — it is a generic dispatcher
+shared by every auto-execute strategy (CSP/CC/PP/Collar included), so adding IC-specific
+counterfactual-capture logic there would either leak IC concerns into a shared code path or
+require strategy-type branching that doesn't belong in the monitor. **DT-3b is now unblocked**
+against this confirmed pair of call sites; its "Files to change" list should read
+`src/strategy/ic_nifty_v1.py::IronCondorV1.check_signals` and
+`src/strategy/ic_nifty_v2.py::IronCondorV2.check_signals` in place of the placeholder line,
+alongside the `src/paper/store.py` schema change. DT-3b's implementer should also flag the
+`paper_ic_snapshot.py` dead-query finding above in TODOS.md as a separate, smaller follow-up
+(existing IC EOD reports have been silently underreporting intraday actions) — out of scope for
+this story, not silently absorbed into it.
+
 ---
 
 ## DT-3b — Counterfactual DTE Logging: Implementation `[Antigravity]`
@@ -191,9 +230,13 @@ only, per the `ic-yearly-expiry-fix` YE-1 precedent (`docs/plan/ic-yearly-expiry
 **Do not start until DT-3a's findings are written into this file.** The spec below is
 provisional pending that audit.
 
-**Files to change (confirm/adjust against DT-3a's audit findings before editing):**
+**Files to change (confirmed against DT-3a's audit findings, 2026-08-05):**
 - `src/paper/store.py` — schema migration (new nullable column) + `create_exit_event` param
-- Whichever module the audit confirms writes IC exit events (see above)
+- `src/strategy/ic_nifty_v1.py::IronCondorV1.check_signals` — new `create_exit_event` call site;
+  no existing writer to redirect (DT-3a found none reachable from IC at all — see audit finding
+  above)
+- `src/strategy/ic_nifty_v2.py::IronCondorV2.check_signals` — same, V2 has its own independent
+  `check_signals` and must be wired separately, not inherited from V1
 - `src/strategy/ic_nifty_v1.py::check_signals` — compute the counterfactual marks/Greeks at
   14/10/7/5 DTE from the already-fetched `market: OptionChain` (no extra chain fetch needed —
   the same snapshot serves both the real signal evaluation and the counterfactual capture,

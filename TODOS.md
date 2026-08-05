@@ -83,6 +83,18 @@ Session Log grows large again.
   entry-DTE-scaled design as superseded. No code changes (DT-1 already shipped the config values,
   SHA 184667c). SHA: f59104d. Next unchecked task is DT-3a (audit) — not started this session, per
   the one-task-per-session protocol.
+- **DT-3a (`ic-time-stop-dte-tiering`)**: audit-only, no implementation code, per the
+  `ic-yearly-expiry-fix` YE-1 precedent. Traced every caller of `PaperStore.create_exit_event`
+  (`trace_path` + `grep -rn "create_exit_event(" src/ scripts/`) and confirmed the story's own
+  hypothesis was wrong: no writer reachable from `IronCondorV1`/`IronCondorV2` exists at all —
+  `StrategyMonitor._route_event` never touches `paper_exit_events`, `reentry_mixin.py`'s writes
+  require `ReEntryMixin` (neither IC class inherits it), and `overlay_closer.py` (the only writer
+  of `status='ACTED'` rows anywhere) is 3-track-overlay-only. Side finding: `paper_ic_snapshot.py`'s
+  "Intraday actions" EOD-report query has therefore always been dead for IC — flagged in
+  `stories.md` as a separate follow-up, not folded into this story. DT-3b's spec updated with the
+  confirmed call sites (`IronCondorV1.check_signals` + `IronCondorV2.check_signals`, both — V2 has
+  its own independent implementation). DT-3b is now unblocked for Antigravity handoff. No tests run
+  (docs-only change). SHA: pending commit this session.
 
 ### 2026-08-02 Session Log
 - **Test fix**: `test_paper_3track_overlay_entry_notify.py::test_overlay_entry_does_not_refire_once_leg_open` (flagged as a pre-existing unrelated failure in the EC-2 entry below) — root cause was the SPOT-track idempotency guard added in `eba1806` (`paper_3track_overlay_entry.py`), which calls `store.get_positions(STRATEGY_SPOT)` and `sys.exit(0)` if any position looks like an open `overlay_cc`. The test's `MagicMock().get_positions` returned the same fixture regardless of the strategy argument, and the fixture's `MagicMock().net_qty` was truthy against `!= 0`, so the new SPOT guard fired and raised an uncaught `SystemExit` before the test's actual target (the OVERLAY-track bootstrap-skip guard) was ever reached. Fixed by giving `get_positions` a `side_effect` scoped by strategy name in `tests/unit/scripts/test_paper_3track_overlay_entry_notify.py`. No source change.
