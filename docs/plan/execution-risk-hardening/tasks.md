@@ -98,6 +98,53 @@ belong reopening the archived epic for.
 
 ---
 
-- [ ] **RH-4** — Docs close: `TODOS.md` session log entry per task landed (RH-1 through RH-3,
-  whichever subset ships). `DECISIONS.md` entry required if RH-1 lands (atomicity design is an
-  architecture decision). Run only after RH-1 through RH-3 are complete.
+- [ ] **RH-4** — Shared NiftyBees collateral-capacity check across CSP/CC/PP/Collar. Spawned
+  2026-08-06 from the `csp-collateral-leg` story close-out (archived —
+  `docs/archive/plan/csp-collateral-leg/`). That story confirmed `compute_max_lots()`
+  (`src/paper/constants.py`) correctly computes how many lots a given NiftyBees holding
+  supports, but it's reachable from exactly one place: `paper_cc_entry.py`, a manual/interactive
+  calibration script, never the live automated entry path. `CSPNiftyV1._open_new` hardcodes
+  `quantity: int = 1`; `build_overlay_trades` (CC/PP/Collar's live automated entry, via
+  `auto_cc_bootstrap`/CC3) hardcodes `quantity=cfg.lot_size`. Every strategy independently
+  assumes it can draw one lot from the same physical NiftyBees pool (`STRATEGY_SPOT` /
+  `paper_nifty_spot`) with no aggregate check that combined draw doesn't exceed what's actually
+  held. Numbers happen to work out today (holding supports exactly 1 lot, everything's sized at
+  1 lot) — that's coincidence, not enforcement.
+
+  **Needs an operator decision before implementation** — hard gate (block entry if aggregate
+  lots requested exceeds `compute_max_lots()`'s result) vs. warn-only (log a `GateViolation` via
+  the existing `record_gate_violation`/log-only-gates pattern already used for IVR/DTE/liquidity
+  gates, entry proceeds regardless). Do not assume — ask, same as CL-4's resolved precedent.
+
+  **Council checkpoint:** evaluate against `docs/council/README.md`'s three-condition test
+  before implementing — this touches capital-allocation risk across four live strategies
+  simultaneously, may qualify.
+
+  **Before any code:**
+  ```
+  get_code_snippet("compute_max_lots")
+  search_code("record_gate_violation")     # existing log-only-gates pattern to mirror if warn-only
+  search_graph("CSPNiftyV1")                # confirm current hardcoded quantity=1 still holds
+  search_graph("build_overlay_trades")      # confirm current quantity=cfg.lot_size still holds
+  ```
+
+  **Deliverable:** one shared helper (e.g. `check_collateral_capacity(strategy_name, lots_requested)
+  -> bool | GateViolation`) called from CSP's entry path and the overlay entry path (CC/PP/Collar),
+  summing already-open lots across all four strategies against `compute_max_lots()`'s ceiling.
+  No new `PaperPosition`/model — reads existing `paper_nifty_spot` position + open positions
+  across the four strategies, per the CL-1 precedent (no double-counting the collateral itself).
+
+  **Tests:** aggregate-at-capacity (4th strategy's entry blocked/warned when combined lots would
+  exceed capacity), aggregate-under-capacity (entry proceeds), zero-holding edge case.
+
+  **Financial logic note:** touches capital-allocation/entry-gating logic — the real
+  `@code-reviewer` gate is mandatory once code lands, even if this surface can't spawn it (state
+  the substitution used).
+
+  **Commit:** `feat(strategy): add shared NiftyBees collateral-capacity gate`
+
+---
+
+- [ ] **RH-5** — Docs close: `TODOS.md` session log entry per task landed (RH-1 through RH-4,
+  whichever subset ships). `DECISIONS.md` entry required if RH-1 or RH-4 lands (both are
+  architecture decisions). Run only after RH-1 through RH-4 are complete.
