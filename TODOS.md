@@ -205,6 +205,38 @@ Session Log grows large again.
   Committed on live host. SHA: `3bdebd9`.
 - **DT-1** (ic-time-stop-dte-tiering, council ruling `docs/council/2026-08-05_ic-time-stop-dte-tiering.md`): `src/strategy/ic_expiry_config.py`'s `CONFIGS` monthly/leaps/yearly buckets moved from entry-DTE-scaled `time_stop_dte`/`dte_warn` (14/21, 45/60, 60/90) to a uniform `time_stop_dte=7`/`dte_warn=14`; weekly (2/4) unchanged, no other fields touched. Fixed a real consequent regression: `tests/unit/strategy/test_ic_nifty_v1.py` had two tests hardcoding the old monthly DTE boundaries (13/19), not listed in the story's file scope — updated to 6/13 and renamed. `@code-reviewer` not spawnable in this Cowork session (no such agent type registered); per `CLAUDE.md`'s surface-fallback rule, handed off to Animesh for human review before commit — approved. SHA `184667c`. DT-2/DT-3a/DT-3b/DT-4 remain open; 6-monthly-cycle review of the 7-DTE default not yet due.
 
+### 2026-08-06 Session Log (RH-1 IC entry compensating close)
+- **RH-1** (`docs/plan/execution-risk-hardening/tasks.md`): the 4-leg IC entry sequence
+  (`paper_ic_entry.py`/`_v2.py`) shells out to `record_paper_trade.py` once per leg with no
+  shared transaction; a mid-sequence `subprocess.CalledProcessError` was previously uncaught
+  and crashed the script immediately, leaving already-persisted legs (e.g. a naked short put)
+  with no offsetting hedge and no alert. Council checkpoint evaluated and found not warranted
+  (single-discipline execution-reliability question, not multi-disciplinary — falls under
+  README's "Do NOT trigger" implementation-pattern bucket). Design chosen directly: compensating
+  close, not an in-process DB transaction — each leg's gates (R3 IVR, price-drift) are woven
+  into `record_paper_trade.py`'s CLI `main()`, and extracting them into a shared library was out
+  of scope for one session. Added `_compensate_legs()` to both entry scripts: on any leg failure
+  (crash, mid-loop) it stops attempting further legs, reuses the existing post-loop DB
+  verification step to determine exactly which legs actually persisted, and issues
+  reversed-action (SELL<->BUY) closing trades at original entry price for those legs via
+  `--force-entry` (bypasses gates meant for fresh entries, not for an urgent unwind). Telegram
+  alert now distinguishes three outcomes: nothing to compensate, compensation succeeded (no
+  naked exposure), or compensation itself failed for some legs (MANUAL INTERVENTION REQUIRED).
+  Reviewed via `general-purpose` agent standing in for `@code-reviewer` against `git diff HEAD`
+  — no CRITICAL/ERROR; two WARNINGs deferred: (1) verification-failure branch's Telegram wording
+  could be more urgent given position state is genuinely unknown there, (2) the "silent no-op"
+  trigger path (all 4 subprocesses exit 0 but DB verification alone finds missing legs, i.e.
+  `subprocess_error is None`) shares the same compensation code path as the tested
+  crash-mid-sequence case but has no *direct* test exercising a partial (not all-4) miss without
+  a subprocess error. 2 new tests per file (happy-path compensation, compensation-itself-fails).
+  49/49 `tests/unit/strategies/ic/` pass; full suite 2707/2707 excluding 3 pre-existing
+  environment failures (sandbox has no network egress to api.upstox.com;
+  `test_chain_reader.py`/`test_council_fallback.py` have pre-existing missing-dependency import
+  errors) — confirmed pre-existing by isolating and re-running them independently of this
+  change. RH-4 explicitly out of scope this session (separate, still-open gap — confirmed the
+  archived `csp-collateral-leg` story only validated `compute_max_lots()`'s formula, never wired
+  it into a live entry-path enforcement gate). See `DECISIONS.md` 2026-08-06.
+
 ### 2026-08-06 Session Log (WARN dedup)
 - **DELTA_WARN Telegram spam fix**: user-reported (`[paper_ic_nifty_v1_monthly] DELTA_WARN: short_call |delta| 0.3272 >= 0.25` every ~2 min). Root cause: `StrategyMonitor._route_event` sent a plain Telegram message for every WARN-severity `SignalEvent` unconditionally, and strategies like `IronCondorV1.check_signals` re-emit the same WARN every tick while the condition persists (no state tracking existed at all). Fixed with an OFF→ON transition model, not a time-based cooldown (operator's explicit choice — once per condition until resolved, no periodic re-fire): new `warn_signal_state` SQLite table (`src/paper/store.py`) keyed `(strategy_name, event_type, leg_role)` + `is_warn_active`/`set_warn_active`/`reconcile_warn_state` methods. `StrategyMonitor._tick` now accumulates a `warn_fired: set[(event_type, leg_role)]` per strategy across all its expiry groups each tick, `_route_event` checks/sets `is_warn_active`/`set_warn_active` before sending, and `reconcile_warn_state` clears any previously-active condition absent from `warn_fired` (recovered) so the next re-breach alerts immediately. `_route_event` gained an optional `warn_fired` param (`None` in direct test calls = dedup skipped, matches pre-fix behavior for those callers). Tests: `tests/unit/paper/test_warn_signal_state.py` (8 cases) + 2 new cases in `tests/unit/strategy/test_strategy_monitor.py` (suppressed-when-active, first-occurrence-marks-active); existing `_make_store()` helper updated with `is_warn_active.return_value = False` default so pre-existing WARN tests keep passing. 44/44 targeted tests pass (`pip install --target=.../mnt/outputs/pydeps` sandbox workaround). Full `tests/unit/` run: 2216 passed, 27 failed/34 errors — all pre-existing, unrelated (missing `aiohttp`/`hypothesis` deps, `api.upstox.com` network blocked by sandbox proxy — confirmed by re-running `test_gate_violations.py`/`test_store.py`/`test_lookup.py` individually). See `DECISIONS.md` 2026-08-06.
 

@@ -5,6 +5,38 @@
 
 ---
 
+**RH-1 IC entry atomicity — compensating close, not in-process transaction (2026-08-06):**
+`paper_ic_entry.py`/`_v2.py` build the 4-leg Iron Condor entry as 4 independent
+`record_paper_trade.py` subprocess calls, one per leg, with no shared DB transaction. A
+mid-sequence subprocess failure previously crashed the script uncaught, leaving already-persisted
+legs (e.g. a naked short with no offsetting hedge) with no rollback and no alert. Two designs were
+weighed: (1) collapse to a single in-process DB transaction across all 4 legs, or (2) keep the
+subprocess-per-leg structure and add an explicit compensating close on partial failure. Chose (2)
+— each leg's entry gates (R3 IVR hard-block, price-drift re-check against fresh LTP) are woven
+into `record_paper_trade.py`'s CLI `main()`; collapsing to one transaction would require extracting
+all of that gate logic into an importable library shared between the CLI and the entry scripts, a
+larger refactor than this session's scope. Council checkpoint evaluated per
+`docs/council/README.md`'s three-condition test and found **not warranted**: the decision is
+load-bearing (condition 1) but fails condition 3 — it's a single-discipline execution-reliability/
+systems-design question, not one spanning options microstructure + quant modeling + backtest
+fidelity simultaneously; it falls under the README's explicit "Do NOT trigger" bucket
+(implementation-pattern decision, reversible via a later refactor). Decision made directly rather
+than via a full council call. Implementation: on any leg subprocess failure, stop attempting
+further legs (don't compound a partial basket), reuse the existing post-loop DB-verification step
+to determine exactly which legs actually persisted (works uniformly whether the failure was a
+crash or the pre-existing "silent no-op" class of bug), then issue reversed-action (SELL<->BUY)
+closing trades at original entry price for the persisted legs via `--force-entry` (deliberately
+bypasses the R3/drift gates, which are designed to guard fresh entries, not gate an urgent unwind).
+Telegram alert distinguishes 3 outcomes: nothing to compensate, compensation succeeded (no naked
+exposure remains), or compensation itself failed for some legs (MANUAL INTERVENTION REQUIRED —
+this is the one state that remains genuinely unsafe and cannot be auto-resolved further). RH-4
+(shared NiftyBees collateral-capacity gate across CSP/CC/PP/Collar) was explicitly scoped out of
+this session — confirmed still open, not resolved by the archived `csp-collateral-leg` story
+(which validated `compute_max_lots()`'s formula but never wired it into any live entry-path
+enforcement). See `docs/plan/execution-risk-hardening/tasks.md` RH-1, `TODOS.md` 2026-08-06.
+
+---
+
 **CSP collateral leg — no new position, reuse `compute_max_lots()` (2026-08-06):**
 `docs/plan/csp-collateral-leg` was scoped assuming `long_niftybees` had no existing
 representation in the paper system. Investigation found the opposite: `STRATEGY_SPOT =

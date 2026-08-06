@@ -14,6 +14,7 @@ No network calls; all external dependencies are mocked.
 
 from __future__ import annotations
 
+import subprocess
 import sys
 from datetime import date
 from decimal import Decimal
@@ -544,6 +545,141 @@ async def test_db_verification_query_failure_blocks_success_notification(
     assert "⚠️" in sent_msg
     assert "✅" not in sent_msg
     assert "database is locked" in sent_msg
+
+
+# ---------------------------------------------------------------------------
+# RH-1 — mid-sequence subprocess failure triggers compensating closes
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_mid_sequence_failure_compensates_persisted_legs(
+    mock_gates, mock_store, mock_client, mock_subprocess, mock_telegram, mock_delta_tracker
+) -> None:
+    """RH-1 happy path: leg 3 crashes, legs 1-2 (already persisted) get closed.
+
+    Mirrors the V1 regression test — short_call's subprocess call raises
+    after short_put/long_put_hedge already succeeded; long_call_hedge is
+    never attempted. Verification finds short_put/long_put_hedge persisted
+    and the other two missing; compensating reversed-action closes must be
+    issued for the two persisted legs.
+    """
+    mock_subprocess.side_effect = [
+        MagicMock(),  # short_put — succeeds
+        MagicMock(),  # long_put_hedge — succeeds
+        subprocess.CalledProcessError(1, "record_paper_trade"),  # short_call — crashes
+        MagicMock(),  # compensating close for short_put
+        MagicMock(),  # compensating close for long_put_hedge
+    ]
+
+    def _get_position(strategy_name, leg_role):
+        persisted = leg_role in ("short_put", "long_put_hedge")
+        return PaperPosition(
+            strategy_name=strategy_name,
+            leg_role=leg_role,
+            net_qty=-65 if persisted else 0,
+            avg_cost=Decimal("0"),
+            avg_sell_price=Decimal("50.0") if persisted else Decimal("0"),
+            instrument_key="NSE_FO|MOCK",
+        )
+
+    mock_store.get_position.side_effect = _get_position
+
+    with (
+        patch.object(
+            sys,
+            "argv",
+            [
+                "paper_ic_entry_v2.py",
+                "--expiry-type",
+                "monthly",
+                "--no-dry-run",
+                "--bod-path",
+                "dummy.json",
+            ],
+        ),
+        pytest.raises(SystemExit) as excinfo,
+    ):
+        await run()
+
+    assert excinfo.value.code == 1
+    # 3 entry attempts (stopped at the failing leg) + 2 compensating closes.
+    assert mock_subprocess.call_count == 5
+    compensating_calls = mock_subprocess.call_args_list[3:5]
+    compensating_roles = {call.args[0][6] for call in compensating_calls}  # "--leg" value
+    assert compensating_roles == {"short_put", "long_put_hedge"}
+    for call in compensating_calls:
+        cmd = call.args[0]
+        assert "--force-entry" in cmd
+        leg_idx = cmd.index("--leg") + 1
+        action_idx = cmd.index("--action") + 1
+        if cmd[leg_idx] == "short_put":
+            assert cmd[action_idx] == "BUY"
+        else:
+            assert cmd[action_idx] == "SELL"
+
+    assert mock_telegram.send_notification.call_count == 1
+    sent_msg = mock_telegram.send_notification.call_args[0][0]
+    assert "⚠️" in sent_msg
+    assert "✅" not in sent_msg
+    assert "Compensating closes succeeded" in sent_msg
+    assert "MANUAL INTERVENTION" not in sent_msg
+
+
+@pytest.mark.asyncio
+async def test_compensation_failure_alerts_manual_intervention(
+    mock_gates, mock_store, mock_client, mock_subprocess, mock_telegram, mock_delta_tracker
+) -> None:
+    """RH-1 worst case: the compensating close itself fails.
+
+    Same mid-sequence crash, but the compensating subprocess call for one of
+    the two persisted legs also raises. Naked exposure remains — the
+    Telegram alert must say so explicitly.
+    """
+    mock_subprocess.side_effect = [
+        MagicMock(),  # short_put — succeeds
+        MagicMock(),  # long_put_hedge — succeeds
+        subprocess.CalledProcessError(1, "record_paper_trade"),  # short_call — crashes
+        MagicMock(),  # compensating close for short_put — succeeds
+        subprocess.CalledProcessError(1, "record_paper_trade"),  # compensating close fails
+    ]
+
+    def _get_position(strategy_name, leg_role):
+        persisted = leg_role in ("short_put", "long_put_hedge")
+        return PaperPosition(
+            strategy_name=strategy_name,
+            leg_role=leg_role,
+            net_qty=-65 if persisted else 0,
+            avg_cost=Decimal("0"),
+            avg_sell_price=Decimal("50.0") if persisted else Decimal("0"),
+            instrument_key="NSE_FO|MOCK",
+        )
+
+    mock_store.get_position.side_effect = _get_position
+
+    with (
+        patch.object(
+            sys,
+            "argv",
+            [
+                "paper_ic_entry_v2.py",
+                "--expiry-type",
+                "monthly",
+                "--no-dry-run",
+                "--bod-path",
+                "dummy.json",
+            ],
+        ),
+        pytest.raises(SystemExit) as excinfo,
+    ):
+        await run()
+
+    assert excinfo.value.code == 1
+    assert mock_subprocess.call_count == 5
+    assert mock_telegram.send_notification.call_count == 1
+    sent_msg = mock_telegram.send_notification.call_args[0][0]
+    assert "⚠️" in sent_msg
+    assert "MANUAL INTERVENTION REQUIRED" in sent_msg
 
 
 @pytest.mark.asyncio

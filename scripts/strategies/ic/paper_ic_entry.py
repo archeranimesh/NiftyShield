@@ -79,6 +79,61 @@ def _safe_price(val: Any) -> Decimal | None:
         return None
 
 
+def _compensate_legs(
+    persisted_legs: list[tuple[str, str, str, Decimal]],
+    strategy_name: str,
+) -> tuple[list[str], list[str]]:
+    """Issue same-day compensating closes for legs already persisted mid-sequence.
+
+    RH-1: the 4-leg entry sequence is 4 independent `record_paper_trade.py`
+    subprocess calls with no shared transaction. If a middle leg fails (crash
+    or silent no-op), the legs that already landed are left in the DB —
+    a naked short with no offsetting hedge is a real risk-exposure bug, not
+    bookkeeping. This reverses each already-persisted leg's action (SELL<->BUY)
+    at its original entry price to zero out net_qty immediately; it is a
+    compensating trade, not a market-price close — the goal is removing the
+    exposure, not capturing P&L on it. `--force-entry` bypasses the R3 IVR
+    gate and price-drift check, both of which are designed to guard fresh
+    entries and would otherwise be able to block an urgent unwind.
+
+    Returns:
+        (compensated_roles, failed_roles) — roles whose reversing trade
+        persisted successfully vs. roles where the compensating subprocess
+        call itself failed (these require manual intervention).
+    """
+    compensated: list[str] = []
+    failed: list[str] = []
+    for role, action, key, price in persisted_legs:
+        reverse_action = "BUY" if action == "SELL" else "SELL"
+        cmd = [
+            sys.executable,
+            "-m",
+            "scripts.record.record_paper_trade",
+            "--strategy",
+            strategy_name,
+            "--leg",
+            role,
+            "--key",
+            key,
+            "--action",
+            reverse_action,
+            "--qty",
+            str(LOT_SIZE),
+            "--price",
+            str(price),
+            "--force-entry",
+            "--no-dry-run",
+        ]
+        try:
+            print(f"Compensating: {' '.join(cmd)}")
+            subprocess.run(cmd, check=True)
+            compensated.append(role)
+        except subprocess.CalledProcessError as exc:
+            logger.error("ic_entry.compensation_failed", leg=role, error=str(exc))
+            failed.append(role)
+    return compensated, failed
+
+
 def extract_strike_row(entry: dict[str, Any], option_type: str) -> dict[str, Any] | None:
     """Extract price and delta info for a single strike side."""
     strike = entry.get("strike_price")
@@ -492,9 +547,19 @@ async def run() -> None:
             strategy=config.strategy_name,
             leg_count=len(cmds),
         )
+        subprocess_error: str | None = None
         for cmd in cmds:
             print(f"Executing: {' '.join(cmd)}")
-            subprocess.run(cmd, check=True)
+            try:
+                subprocess.run(cmd, check=True)
+            except subprocess.CalledProcessError as exc:
+                # RH-1: stop attempting further legs on first failure — do not
+                # compound a partial basket. Verification below determines
+                # exactly which legs (if any) actually landed before this
+                # failure, regardless of whether it crashed or silently no-op'd.
+                subprocess_error = str(exc)
+                logger.error("ic_entry.leg_subprocess_failed", error=subprocess_error)
+                break
 
         # Step 12: Verify legs actually landed in the DB before reporting success.
         # subprocess exit code 0 is necessary but not sufficient — record_paper_trade.py
@@ -520,19 +585,49 @@ async def run() -> None:
             verification_error = str(exc)
             logger.error("ic_entry.verification_failed", error=verification_error)
 
-        if missing_legs or verification_error is not None:
+        if missing_legs or verification_error is not None or subprocess_error is not None:
             if verification_error is not None:
-                detail = f"Post-execution DB verification itself failed: {verification_error}"
-            else:
+                # RH-1: cannot safely compensate without knowing which legs are
+                # actually persisted — a blind reversal here could close a leg
+                # that was never opened, or miss one that was. Alert only.
                 detail = (
-                    f"Subprocess calls exited 0 but {len(missing_legs)}/4 legs were "
-                    f"NOT persisted to the DB: {', '.join(missing_legs)}."
+                    f"Post-execution DB verification itself failed: {verification_error}. "
+                    f"Compensation skipped — cannot determine which legs are persisted."
                 )
+                compensated, compensation_failed = [], []
+            else:
+                persisted_legs = [leg for leg in legs if leg[0] not in missing_legs]
+                compensated, compensation_failed = _compensate_legs(
+                    persisted_legs, config.strategy_name
+                )
+                subprocess_detail = (
+                    f"Leg subprocess failed ({subprocess_error}). " if subprocess_error else ""
+                )
+                if not persisted_legs:
+                    detail = f"{subprocess_detail}No legs were persisted — nothing to compensate."
+                elif compensation_failed:
+                    detail = (
+                        f"{subprocess_detail}{len(missing_legs)}/4 legs NOT persisted: "
+                        f"{', '.join(missing_legs)}. Compensation FAILED for "
+                        f"{', '.join(compensation_failed)} — MANUAL INTERVENTION REQUIRED, "
+                        f"naked exposure remains on those legs. "
+                        f"Compensated OK: {', '.join(compensated) or 'none'}."
+                    )
+                else:
+                    detail = (
+                        f"{subprocess_detail}{len(missing_legs)}/4 legs NOT persisted: "
+                        f"{', '.join(missing_legs)}. Compensating closes succeeded for all "
+                        f"{len(persisted_legs)} already-persisted legs "
+                        f"({', '.join(compensated) or 'none'}) — no naked exposure remains."
+                    )
             logger.error(
                 "ic_entry.legs_not_persisted",
                 strategy_name=config.strategy_name,
                 missing_legs=missing_legs,
                 verification_error=verification_error,
+                subprocess_error=subprocess_error,
+                compensated=compensated,
+                compensation_failed=compensation_failed,
             )
             try:
                 tg = TelegramGateway(
@@ -543,7 +638,7 @@ async def run() -> None:
                 await tg.send_notification(
                     f"⚠️ IC Entry — {args.expiry_type} ({config.strategy_name})\n"
                     f"{detail}\n"
-                    f"Check logs immediately — position state may be inconsistent."
+                    f"Check logs immediately."
                 )
             except Exception as exc:  # noqa: BLE001 — telegram delivery is non-fatal
                 logger.warning("telegram.send_failed", error=str(exc))

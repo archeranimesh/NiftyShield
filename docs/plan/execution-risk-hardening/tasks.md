@@ -13,7 +13,7 @@ belong reopening the archived epic for.
 
 ---
 
-- [ ] **RH-1** — Make the IC entry 4-leg subprocess sequence atomic (or add explicit
+- [x] **RH-1** — Make the IC entry 4-leg subprocess sequence atomic (or add explicit
   compensation). Spawned from TODOS.md (surfaced 2026-07-03 while fixing the `--ivr`/R3-gate
   bug — see `DECISIONS.md` same date). `paper_ic_entry.py`/`paper_ic_entry_v2.py` shell out to
   `record_paper_trade.py` once per leg (short_put, long_put_hedge, short_call, long_call_hedge)
