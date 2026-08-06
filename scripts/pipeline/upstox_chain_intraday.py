@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Intraday 5-min option chain snapshot cron for NiftyShield.
 
-Fetches Nifty option chains for up to 3 expiries (monthly / quarterly / yearly)
+Fetches Nifty option chains for up to 4 expiries (weekly / monthly / quarterly / yearly)
 and writes each to Parquet via ChainWriter.write_intraday_snapshot.
 
 Designed to run every 5 minutes during market hours (Mon–Fri):
@@ -45,12 +45,12 @@ logger = structlog.get_logger(_SCRIPT_NAME)
 _NIFTY_INSTRUMENT = "NSE_INDEX|Nifty 50"
 _DEFAULT_INTRADAY_DIR = "data/offline/chain_snapshots_5min"
 _DEFAULT_BOD_PATH = Path("data/instruments/NSE.json.gz")
-_PREFERENCE = ["monthly", "quarterly", "yearly"]
+_PREFERENCE = ["weekly", "monthly", "quarterly", "yearly"]
 _NIFTY_UNDERLYING = "NIFTY_50"
 
 
 def main(args: list[str] | None = None) -> int:
-    """Fetch intraday option chain for 3 Nifty expiries and persist to Parquet.
+    """Fetch intraday option chain for 4 Nifty expiries and persist to Parquet.
 
     Returns 0 on success, 1 on any error.
     Designed to run as: */5 9-15 * * 1-5 (Mon–Fri).
@@ -86,9 +86,9 @@ def main(args: list[str] | None = None) -> int:
 
     expiries = lookup.get_expiry_candidates("NIFTY", today, _PREFERENCE)
 
-    if len(expiries) < 3:
+    if len(expiries) < 4:
         logger.warning(
-            "only %d expiry candidates found (expected 3): %s",
+            "only %d expiry candidates found (expected 4): %s",
             len(expiries),
             expiries,
         )

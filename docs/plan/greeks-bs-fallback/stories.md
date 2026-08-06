@@ -65,9 +65,35 @@ saved as a permanent fixture, see below).
     non-pinned Greeks (i.e. exclude any row where `abs(delta) == 1.0` and `gamma == 0.0`
     simultaneously — the combination that flags the degenerate case).
 
-**Still open — weekly and monthly buckets have not been checked.** Do not assume they behave
-like quarterly; run the same script against both before finalizing GF-4's detection-threshold
-design (task explicitly calls this out already).
+**monthly** (2026-08-25, DTE 19, confirmed 2026-08-06 — Cowork session): 242 strike rows (121
+strikes, both sides). Real, smoothly-varying Greeks on liquid strikes — same shape as quarterly
+(deltas trending from near-1.0/-1.0 deep ITM toward ~0 deep OTM, nonzero theta/vega/gamma
+throughout). Same degenerate-pinned-delta pattern as quarterly on illiquid far strikes (`ltp=0`,
+`delta` pinned ±1.0, all other Greeks 0.0) — 63/242 rows on this pass, all explained by the same
+"no tradeable quote" case, not a monthly-specific defect. **No zero-Greeks pattern — monthly is
+also a valid known-good chain**, and is in fact the stronger validation-ground-truth candidate
+vs. quarterly: it's the nearer-dated, more liquid bucket (242 vs 208 non-degenerate-eligible rows,
+tighter spreads throughout), and cross-validated independently — a live diagnostic-script dump at
+16:55 IST matched the pipeline's own stored 5-min Parquet snapshot (15:56 IST, market closed at
+15:30 so no drift expected) row-for-row on strike, ltp, oi, and iv, confirming the capture/storage
+path (`parse_upstox_option_chain` → `ChainWriter`) is not itself introducing any of the zero-Greeks
+behavior — it's faithfully reproducing what Upstox returns.
+
+**yearly, re-confirmed 2026-08-06:** same all-zero-Greeks pattern as 2026-07-22 (delta/gamma/theta/
+vega/iv all exactly 0.0 across every strike), persistent 3+ weeks later — not a transient outage.
+Additionally: the live diagnostic run returned 41 strike rows vs. 42 in the same-day stored Parquet
+snapshot (15:56 IST) — one strike present in storage, absent from the fresh pull an hour later.
+Given yearly's Greeks are already unusable, this row-count instability wasn't chased further, but
+is worth GF-1's implementer knowing about: yearly's `raw_chain` strike-count itself may not be
+stable run-to-run, on top of the zero-Greeks defect.
+
+**Still open — weekly bucket has not been checked**, and cannot be from stored data alone: no
+weekly expiry is currently fetched by either `upstox_chain_snapshot.py` or
+`upstox_chain_intraday.py` (`_PREFERENCE = ["monthly", "quarterly", "yearly"]` in both — weekly is
+simply not in the capture pipeline). Auditing weekly requires either a one-off live run of
+`scratch/2026-07-22_ic_yearly_full_chain_dump.py weekly` or adding `"weekly"` to `_PREFERENCE`
+first. Do not assume it behaves like monthly/quarterly just because they're clean — GF-1's original
+instruction to check all four buckets stands.
 
 **Decision — validation ground truth:** use the **quarterly** bucket (2026-09-29 as of this
 writing) for GF-5, excluding the pinned-delta anomaly rows described above. Whoever picks this up

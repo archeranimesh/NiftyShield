@@ -44,6 +44,7 @@ story on this list. Do not jump between stories mid-sequence; the ordering below
 25. [ ] **Phase 2 — Research Pipelines & Integrations** (2027+) — `docs/plan/phase2-integrations/tasks.md`, starting at **PV-1** (P&L Visualization — not gated, can be pulled forward independently). **ZK-1**/**OE-1**/**PT-1** are gated per their own stated reasons (Kite Connect priority, static IP, defer-until-touched) — see the story file. Does not include the Swing/Investment signal pipelines — those are item 17 above.
 26. [ ] **Technical Debt** (opportunistic — not sequential) — `docs/plan/technical-debt/tasks.md` (**DEBT-3/5/6a/6b/6c/7**). Do not pick these up on their own; each fires only when its named file/module is already being touched for another story's task. See `prompt.md` for the exact trigger per item and why this one breaks the "finish in sequence" rule the rest of this list follows.
 27. [ ] **Fix dead IC EOD report query** (2026-08-05) — fix `scripts/strategies/ic/paper_ic_snapshot.py`'s "Intraday actions" query which was identified as dead code during the DT-3a audit.
+28. [ ] **Chain delta/decay analysis** (2026-08-06) — `docs/plan/chain-decay-analysis/tasks.md`, starting at **CDA-1**. Exploratory/read-only, independent — does not block or get blocked by anything else on this list. Monthly bucket only (yearly excluded, see item 11's GF-1 findings).
 
 **Before build queue starts on paper-backbone-dependent stories** — verify prerequisites:
 ```bash
@@ -74,6 +75,42 @@ Full forensic log (SHAs, bug numbers, root-cause detail) moved to
 [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md) during the 2026-07-27 reorg —
 add new entries there going forward, or start a fresh dated section here if this file's
 Session Log grows large again.
+
+### 2026-08-06 Session Log (chain data validation + new story)
+- **GF-1 partial (`greeks-bs-fallback`)**: audit-only, no code change. Confirmed monthly bucket
+  (2026-08-25 expiry) has no zero-Greeks defect — clean, smoothly-varying deltas, same degenerate-
+  pinned-delta pattern on illiquid strikes as quarterly (not a monthly-specific issue). Re-confirmed
+  yearly's zero-Greeks defect persists 3+ weeks after first discovery (2026-07-22), plus a new
+  observation: yearly's raw strike count is unstable run-to-run (41 vs 42 strikes, same day, ~1hr
+  apart). Validated via row-level cross-check: a fresh live diagnostic pull
+  (`scratch/2026-07-22_ic_yearly_full_chain_dump.py`) matched the 5-min intraday cron's stored
+  Parquet snapshot exactly on strike/ltp/oi/iv for both monthly and quarterly — confirms
+  `parse_upstox_option_chain`/`ChainWriter` are not introducing any of the zero-Greeks behavior.
+  Weekly still unaudited — not in either chain script's `_PREFERENCE` list. Findings appended to
+  `docs/plan/greeks-bs-fallback/stories.md` GF-1 section; `docs/plan/README.md` row updated. Per
+  Animesh: use both monthly and quarterly as GF-5's validation ground truth (not quarterly alone
+  as originally recorded).
+- **Weekly bucket added to chain capture**: `_PREFERENCE` in `scripts/pipeline/upstox_chain_snapshot.py`
+  and `scripts/pipeline/upstox_chain_intraday.py` changed from `["monthly","quarterly","yearly"]`
+  to `["weekly","monthly","quarterly","yearly"]` (plus the `len(expiries) < 3` warning threshold
+  and docstrings updated to 4). `InstrumentLookup.get_expiry_candidates()` already supports
+  `"weekly"` as a label, no other code changes needed. Mechanical — confirmed via subagent that
+  existing `tests/unit/test_upstox_chain_snapshot.py`/`test_upstox_chain_intraday.py` mock
+  `get_expiry_candidates` without asserting on the preference list, so no test breakage expected.
+  **Not run through `pytest` this session** — sandbox `.venv` symlinks to the host's Anaconda,
+  unavailable here; needs a live-host `python -m pytest tests/unit/ --tb=no -q` confirmation
+  before this is considered verified, per the project's blocking test gate.
+- **New story: `chain-decay-analysis`** — created `docs/plan/chain-decay-analysis/{prompt,tasks,
+  stories}.md`, added as TODOS item 28 and a `docs/plan/README.md` row. Scope: empirical check of
+  whether intraday premium moves track delta (+gamma/theta/vega decomposition) using the existing
+  5-min intraday chain Parquet (`data/historical/option_chain/intraday/`, capturing since
+  2026-06-01, confirmed complete — full chain, all strikes, not liquidity-filtered). Monthly bucket
+  only; yearly excluded pending `greeks-bs-fallback`, quarterly deferred. Not started — CDA-1 is
+  next.
+- **Storage path correction**: confirmed live capture is writing to `data/historical/option_chain/
+  {eod,intraday}/`, not `data/offline/chain_snapshots{,_5min}/` as `DECISIONS.md`'s 2026-04-27
+  entry states — that entry is stale (path renamed at some point, not reflected there). Flagged for
+  correction but not yet edited into `DECISIONS.md` this session.
 
 ### 2026-08-05 Session Log
 - **MC-2 (`monitor-and-close-hardening`)**: audit-only, no code change. Confirmed the
