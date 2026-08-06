@@ -670,6 +670,15 @@ def test_roll_wing_fires_on_short_call_breach_with_target() -> None:
     assert rw.payload["leg_role"] == "short_call"
     assert rw.payload["suggested_instrument_key"] == "NSE_FO|76006"
     assert rw.payload["current_instrument_key"] == _SHORT_CALL_KEY
+    # MC-3b: legs_to_open must carry the real LegSpec so apply_action's
+    # auto-execute path can persist the roll's open side.
+    from src.strategy.protocol import LegSpec
+
+    legs_to_open = rw.payload["legs_to_open"]
+    assert len(legs_to_open) == 1
+    assert isinstance(legs_to_open[0], LegSpec)
+    assert legs_to_open[0].instrument_key == "NSE_FO|76006"
+    assert legs_to_open[0].leg_role == "short_call"
 
 
 def test_roll_wing_fires_on_short_put_breach_with_target() -> None:
@@ -844,6 +853,50 @@ def test_apply_action_roll_wing_empty_legs_to_open_raises() -> None:
     )
     with pytest.raises(ValueError, match="legs_to_open"):
         asyncio.run(strat.apply_action(positions, action))
+
+
+def test_apply_action_roll_wing_auto_execute_persists_close_and_open() -> None:
+    """MC-3b: auto-execute ROLL_WING must persist both the close and open leg
+    atomically via roll_ic_legs, not just filter the closed leg in memory.
+    """
+    from unittest.mock import AsyncMock, MagicMock
+
+    from src.client.protocol import BrokerClient
+    from src.paper.store import PaperStore
+    from src.strategy.protocol import LegSpec
+
+    broker = MagicMock(spec=BrokerClient)
+    broker.get_ltp = AsyncMock(return_value={_SHORT_CALL_KEY: Decimal("28.00")})
+    store = MagicMock(spec=PaperStore)
+    store.record_trades = MagicMock(side_effect=lambda trades: (trades, []))
+
+    strat = IronCondorV1(broker=broker, store=store)
+    positions = _make_ic_positions()
+    action = ApprovedAction(
+        action_type="ROLL_WING",
+        legs_to_close=[LegClose(leg_role="short_call")],
+        legs_to_open=[
+            LegSpec(
+                instrument_key="NSE_FO|76006",
+                action="SELL",
+                quantity=1,
+                leg_role="short_call",
+                notes="roll_wing delta=0.15",
+                price=Decimal("12.00"),
+            )
+        ],
+        rationale="auto-execute",
+        council_rank=1,
+        metadata={"auto_selected": True, "event_type": "ROLL_WING"},
+    )
+
+    result = asyncio.run(strat.apply_action(positions, action))
+
+    store.record_trades.assert_called_once()
+    (written,), _ = store.record_trades.call_args
+    assert {t.instrument_key for t in written} == {_SHORT_CALL_KEY, "NSE_FO|76006"}
+    remaining_roles = {p.leg_role for p in result}
+    assert "short_call" not in remaining_roles
 
 
 # ── Auto-close persistence (fix for silent no-op — closing fills were never

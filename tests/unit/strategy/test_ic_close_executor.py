@@ -22,7 +22,13 @@ from src.client.protocol import BrokerClient
 from src.market_calendar.holidays import market_today
 from src.paper.models import PaperPosition, TradeAction
 from src.paper.store import PaperStore
-from src.strategy.ic_close_executor import _NIFTY_SPOT_KEY, _OTM_EXPIRY_PRICE, close_ic_legs
+from src.strategy.ic_close_executor import (
+    _NIFTY_SPOT_KEY,
+    _OTM_EXPIRY_PRICE,
+    close_ic_legs,
+    roll_ic_legs,
+)
+from src.strategy.protocol import LegSpec
 
 _STRATEGY = "paper_ic_nifty_v1_weekly"
 
@@ -404,3 +410,135 @@ def test_store_write_failure_returns_empty_and_does_not_raise(
     )
 
     assert inserted == []
+
+
+# ── roll_ic_legs ─────────────────────────────────────────────────────────────
+
+
+def test_roll_happy_path_writes_close_and_open_legs_atomically(
+    mock_broker: MagicMock, mock_store: MagicMock
+) -> None:
+    """Roll: old short_call closed, new short_call opened, single record_trades call."""
+    positions = [_make_position("short_call", "NSE_FO|51405", net_qty=-65, avg_sell_price="17.12")]
+    open_legs = [
+        LegSpec(
+            instrument_key="NSE_FO|51999",
+            action="SELL",
+            quantity=65,
+            leg_role="short_call",
+            notes="roll_open_short delta=0.15",
+            price=Decimal("12.50"),
+        )
+    ]
+
+    inserted = _run(
+        roll_ic_legs(
+            broker=mock_broker,
+            store=mock_store,
+            close_positions=positions,
+            closed_roles={"short_call"},
+            open_legs=open_legs,
+            strategy_name=_STRATEGY,
+            notes="test roll",
+        )
+    )
+
+    assert len(inserted) == 2
+    mock_store.record_trades.assert_called_once()
+    (written,), _ = mock_store.record_trades.call_args
+    assert len(written) == 2
+    close_trade = next(t for t in written if t.instrument_key == "NSE_FO|51405")
+    open_trade = next(t for t in written if t.instrument_key == "NSE_FO|51999")
+    assert close_trade.action == TradeAction.BUY
+    assert close_trade.price == Decimal("38.50")  # from mock_broker LTP
+    assert open_trade.action == TradeAction.SELL
+    assert open_trade.price == Decimal("12.50")
+    assert open_trade.quantity == 65
+    for t in written:
+        assert t.notes == "test roll"
+
+
+def test_roll_open_leg_missing_price_aborts_entire_roll(
+    mock_broker: MagicMock, mock_store: MagicMock
+) -> None:
+    """Open leg with price=None must abort the roll — no partial write."""
+    positions = [_make_position("short_call", "NSE_FO|51405", net_qty=-65, avg_sell_price="17.12")]
+    open_legs = [
+        LegSpec(
+            instrument_key="NSE_FO|51999",
+            action="SELL",
+            quantity=65,
+            leg_role="short_call",
+            notes="roll_open_short delta=0.15",
+            price=None,
+        )
+    ]
+
+    inserted = _run(
+        roll_ic_legs(
+            broker=mock_broker,
+            store=mock_store,
+            close_positions=positions,
+            closed_roles={"short_call"},
+            open_legs=open_legs,
+            strategy_name=_STRATEGY,
+            notes="test roll",
+        )
+    )
+
+    assert inserted == []
+    mock_store.record_trades.assert_not_called()
+
+
+def test_roll_open_leg_non_positive_price_aborts_entire_roll(
+    mock_broker: MagicMock, mock_store: MagicMock
+) -> None:
+    """Open leg with price<=0 must abort the roll — same as price=None."""
+    positions = [_make_position("short_call", "NSE_FO|51405", net_qty=-65, avg_sell_price="17.12")]
+    open_legs = [
+        LegSpec(
+            instrument_key="NSE_FO|51999",
+            action="SELL",
+            quantity=65,
+            leg_role="short_call",
+            notes="roll_open_short delta=0.15",
+            price=Decimal("0"),
+        )
+    ]
+
+    inserted = _run(
+        roll_ic_legs(
+            broker=mock_broker,
+            store=mock_store,
+            close_positions=positions,
+            closed_roles={"short_call"},
+            open_legs=open_legs,
+            strategy_name=_STRATEGY,
+            notes="test roll",
+        )
+    )
+
+    assert inserted == []
+    mock_store.record_trades.assert_not_called()
+
+
+def test_roll_nothing_to_close_and_nothing_to_open_returns_empty(
+    mock_broker: MagicMock, mock_store: MagicMock
+) -> None:
+    """No open positions for the requested roles and no legs to open → no-op."""
+    positions = [_make_position("short_call", "NSE_FO|51405", net_qty=0)]
+
+    inserted = _run(
+        roll_ic_legs(
+            broker=mock_broker,
+            store=mock_store,
+            close_positions=positions,
+            closed_roles={"short_call"},
+            open_legs=[],
+            strategy_name=_STRATEGY,
+            notes="nothing to roll",
+        )
+    )
+
+    assert inserted == []
+    mock_store.record_trades.assert_not_called()

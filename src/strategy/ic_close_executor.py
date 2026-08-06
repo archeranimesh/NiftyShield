@@ -29,10 +29,11 @@ fall back to the leg's own entry price — added 2026-07-16 after entry-price
 fallback was found to silently zero out realized P&L on every post-expiry
 LOSS_STOP close (see DECISIONS.md 2026-07-16).
 
-Scope: flatten-only actions (``CLOSE_FULL``, ``CLOSE_CALL_SPREAD``,
-``CLOSE_PUT_SPREAD``). ``ROLL_WING`` and ``PROFIT_LOCK_ZONE2`` are roll
-actions (close + open a replacement leg at a new strike) and are not
-covered here — see DECISIONS.md and TODOS.md for the follow-up.
+Scope: flatten actions (``CLOSE_FULL``, ``CLOSE_CALL_SPREAD``,
+``CLOSE_PUT_SPREAD``) via ``close_ic_legs``, and roll actions (``ROLL_WING``,
+``PROFIT_LOCK_ZONE2`` — close the old leg(s) and open replacement leg(s) at a
+new strike) via ``roll_ic_legs``. Both persist atomically through a single
+``PaperStore.record_trades`` call.
 """
 
 from __future__ import annotations
@@ -52,6 +53,7 @@ if TYPE_CHECKING:
     from src.client.protocol import BrokerClient
     from src.paper.models import PaperPosition
     from src.paper.store import PaperStore
+    from src.strategy.protocol import LegSpec
 
 log = structlog.get_logger(__name__)
 
@@ -65,43 +67,20 @@ _NIFTY_SPOT_KEY = "NSE_INDEX|Nifty 50"
 _OTM_EXPIRY_PRICE = Decimal("0.05")
 
 
-async def close_ic_legs(
+async def _build_close_trades(
     broker: BrokerClient,
-    store: PaperStore,
-    positions: list[PaperPosition],
-    closed_roles: set[str],
+    to_close: list[PaperPosition],
     strategy_name: str,
     notes: str,
 ) -> list[PaperTrade]:
-    """Close the given IC legs at live LTP and persist atomically.
+    """Resolve close-side prices and build closing ``PaperTrade`` rows.
 
-    Args:
-        broker: BrokerClient used to fetch live LTP for the closing legs.
-        store: PaperStore used to persist the closing trades.
-        positions: Currently open positions (already filtered to this
-            strategy by the caller).
-        closed_roles: leg_role values to close (e.g. all four IC roles
-            for CLOSE_FULL, or the two call-spread roles for
-            CLOSE_CALL_SPREAD).
-        strategy_name: Paper strategy name; must start with ``paper_``
-            (enforced by ``PaperTrade``).
-        notes: Note string recorded against every closing trade for the
-            audit trail (e.g. the triggering signal).
-
-    Returns:
-        The closing ``PaperTrade`` rows actually inserted. Empty when
-        nothing was open for the requested roles, when the LTP fetch and
-        fallback both fail, or when the atomic write is rejected.
+    Shared by ``close_ic_legs`` and ``roll_ic_legs`` — LTP is fetched live
+    per leg, falling back to BOD-derived expiry settlement (intrinsic value
+    for ITM, ``_OTM_EXPIRY_PRICE`` for OTM) or, as a last resort, the leg's
+    own entry price. See module docstring for the full rationale. Does not
+    write to the store — callers persist the returned trades themselves.
     """
-    to_close = [p for p in positions if p.leg_role in closed_roles and p.net_qty != 0]
-    if not to_close:
-        log.warning(
-            "ic_close_executor.nothing_to_close",
-            strategy_name=strategy_name,
-            closed_roles=sorted(closed_roles),
-        )
-        return []
-
     keys = [p.instrument_key for p in to_close]
     try:
         ltp_map = await broker.get_ltp(keys)
@@ -209,7 +188,47 @@ async def close_ic_legs(
                 is_paper=True,
             )
         )
+    return trades
 
+
+async def close_ic_legs(
+    broker: BrokerClient,
+    store: PaperStore,
+    positions: list[PaperPosition],
+    closed_roles: set[str],
+    strategy_name: str,
+    notes: str,
+) -> list[PaperTrade]:
+    """Close the given IC legs at live LTP and persist atomically.
+
+    Args:
+        broker: BrokerClient used to fetch live LTP for the closing legs.
+        store: PaperStore used to persist the closing trades.
+        positions: Currently open positions (already filtered to this
+            strategy by the caller).
+        closed_roles: leg_role values to close (e.g. all four IC roles
+            for CLOSE_FULL, or the two call-spread roles for
+            CLOSE_CALL_SPREAD).
+        strategy_name: Paper strategy name; must start with ``paper_``
+            (enforced by ``PaperTrade``).
+        notes: Note string recorded against every closing trade for the
+            audit trail (e.g. the triggering signal).
+
+    Returns:
+        The closing ``PaperTrade`` rows actually inserted. Empty when
+        nothing was open for the requested roles, when the LTP fetch and
+        fallback both fail, or when the atomic write is rejected.
+    """
+    to_close = [p for p in positions if p.leg_role in closed_roles and p.net_qty != 0]
+    if not to_close:
+        log.warning(
+            "ic_close_executor.nothing_to_close",
+            strategy_name=strategy_name,
+            closed_roles=sorted(closed_roles),
+        )
+        return []
+
+    trades = await _build_close_trades(broker, to_close, strategy_name, notes)
     if not trades:
         return []
 
@@ -232,6 +251,110 @@ async def close_ic_legs(
 
     log.info(
         "ic_close_executor.legs_closed",
+        strategy_name=strategy_name,
+        legs=[t.leg_role for t in inserted],
+        prices={t.leg_role: str(t.price) for t in inserted},
+    )
+    return inserted
+
+
+async def roll_ic_legs(
+    broker: BrokerClient,
+    store: PaperStore,
+    close_positions: list[PaperPosition],
+    closed_roles: set[str],
+    open_legs: list[LegSpec],
+    strategy_name: str,
+    notes: str,
+) -> list[PaperTrade]:
+    """Close the old roll leg(s) and open the replacement leg(s) atomically.
+
+    Used by ``ROLL_WING`` (V1/V2) and ``PROFIT_LOCK_ZONE2`` (V2) auto-execute:
+    both close an existing leg and open a replacement at a new strike, and
+    must persist both sides in a single ``PaperStore.record_trades`` call —
+    a roll that writes only the close side would leave the position naked,
+    worse than not rolling at all.
+
+    Args:
+        broker: BrokerClient used to fetch live LTP for the closing legs.
+        store: PaperStore used to persist the close+open trades.
+        close_positions: Currently open positions (already filtered to this
+            strategy by the caller).
+        closed_roles: leg_role values to close.
+        open_legs: Replacement legs to open — each must carry a resolved
+            ``price`` (captured at selection time); a leg with ``price``
+            ``None`` or non-positive aborts the entire roll.
+        strategy_name: Paper strategy name; must start with ``paper_``
+            (enforced by ``PaperTrade``).
+        notes: Note string recorded against every trade for the audit trail.
+
+    Returns:
+        The close+open ``PaperTrade`` rows actually inserted. Empty when
+        there is nothing to close and nothing to open, when any open leg is
+        missing a price, or when the atomic write is rejected.
+    """
+    to_close = [p for p in close_positions if p.leg_role in closed_roles and p.net_qty != 0]
+
+    if not to_close and not open_legs:
+        log.warning(
+            "ic_close_executor.nothing_to_roll",
+            strategy_name=strategy_name,
+            closed_roles=sorted(closed_roles),
+        )
+        return []
+
+    for leg in open_legs:
+        if leg.price is None or leg.price <= 0:
+            log.error(
+                "ic_close_executor.roll_open_leg_price_missing",
+                strategy_name=strategy_name,
+                instrument_key=leg.instrument_key,
+                leg_role=leg.leg_role,
+            )
+            return []
+
+    close_trades = await _build_close_trades(broker, to_close, strategy_name, notes)
+
+    today = market_today()
+    open_trades = [
+        PaperTrade(
+            strategy_name=strategy_name,
+            leg_role=leg.leg_role,
+            instrument_key=leg.instrument_key,
+            trade_date=today,
+            action=TradeAction[leg.action],
+            quantity=leg.quantity,
+            price=leg.price,
+            notes=notes,
+            ivr_at_entry=None,
+            is_paper=True,
+        )
+        for leg in open_legs
+    ]
+
+    all_trades = close_trades + open_trades
+    if not all_trades:
+        return []
+
+    try:
+        inserted, skipped = store.record_trades(all_trades)
+    except Exception as exc:
+        log.error(
+            "ic_close_executor.write_failed",
+            strategy_name=strategy_name,
+            error=str(exc),
+        )
+        return []
+
+    if skipped:
+        log.error(
+            "ic_close_executor.partial_write",
+            strategy_name=strategy_name,
+            skipped=[t.leg_role for t in skipped],
+        )
+
+    log.info(
+        "ic_close_executor.legs_rolled",
         strategy_name=strategy_name,
         legs=[t.leg_role for t in inserted],
         prices={t.leg_role: str(t.price) for t in inserted},

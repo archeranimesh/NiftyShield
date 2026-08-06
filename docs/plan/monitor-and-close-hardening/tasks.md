@@ -110,7 +110,7 @@ positions" risk. Each task is independently landable; no shared files between th
 
 ---
 
-- [ ] **MC-3b** — IC-CLOSE-2: persist the close side of `ROLL_WING`/`PROFIT_LOCK_ZONE2` actions.
+- [x] **MC-3b** — IC-CLOSE-2: persist the close side of `ROLL_WING`/`PROFIT_LOCK_ZONE2` actions.
   Spawned from TODOS.md (deferred from the 2026-07-15 auto-close persistence fix). Same missing-
   persistence gap as the flatten actions (`CLOSE_FULL` etc., fixed 2026-07-15 via
   `close_ic_legs()`), but for roll actions: the old leg being replaced is filtered from the
@@ -135,7 +135,18 @@ positions" risk. Each task is independently landable; no shared files between th
   **Tests:** roll-fires → old leg closed and persisted to `paper_trades`, new leg opened and
   persisted, atomic (single `record_trades` call, no partial-write window).
 
-  **Commit:** `fix(strategy): persist ROLL_WING/PROFIT_LOCK_ZONE2 close side atomically`
+  **Commit:** `fix(strategy): persist ROLL_WING/PROFIT_LOCK_ZONE2 close side atomically` | SHA: pending
+  — sandbox `.git/HEAD.lock` limitation, same as MC-3a/MC-6; commit to be run on live host.
+
+  **Scope note (found during implementation, not assumed at task-authoring time):** the task as
+  originally scoped assumed strike-selection + `legs_to_open` already reached `apply_action` and
+  only the DB write was missing. Tracing the actual code showed `legs_to_open` never reached
+  `apply_action` at all for any of the three signals — `StrategyMonitor._route_event`'s
+  auto-execute path reads `event.payload.get("legs_to_open", [])`, and none of `ROLL_WING`
+  (V1/V2) or `PROFIT_LOCK_ZONE2`'s `SignalEvent` payloads ever set that key. Wiring
+  `legs_to_open` through (using `LegSpec.price` captured at selection time, per its existing
+  docstring contract) was therefore part of this fix, not a separate task — folded in rather
+  than deferred, since there was nothing to persist without it.
 
 ---
 
@@ -195,8 +206,7 @@ positions" risk. Each task is independently landable; no shared files between th
   (treated as a failed entry, not a partial position or a crash); existing `enter()` tests
   updated to assert real key shape.
 
-  **Commit:** `fix(strategy): resolve IC V2 entry leg instrument_key via BOD` | SHA: pending —
-  same sandbox `.git/HEAD.lock` limitation as MC-3a; commit to be run on live host.
+  **Commit:** `fix(strategy): resolve IC V2 entry leg instrument_key via BOD` | SHA: 55d442a
 
 ---
 

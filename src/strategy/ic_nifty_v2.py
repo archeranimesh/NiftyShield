@@ -48,7 +48,7 @@ from src.models.options import OptionChain, OptionLeg
 from src.paper.constants import DEFAULT_BOD_PATH
 from src.paper.models import PaperPosition, PaperTrade
 from src.strategy import roll_utils
-from src.strategy.ic_close_executor import close_ic_legs
+from src.strategy.ic_close_executor import close_ic_legs, roll_ic_legs
 from src.strategy.profit_lock_engine import ProfitLockDecision, ProfitLockEngine, ProfitLockState
 from src.strategy.protocol import ApprovedAction, LegClose, LegSpec, SignalEvent
 
@@ -1027,6 +1027,7 @@ class IronCondorV2:
                 quantity=1,
                 leg_role=role_short,
                 notes=f"roll_close_short delta={new_short.delta}",
+                price=old_short_leg.ltp,
             ),
             LegSpec(
                 instrument_key=close_long_key,
@@ -1034,6 +1035,7 @@ class IronCondorV2:
                 quantity=1,
                 leg_role=role_long,
                 notes="roll_close_long",
+                price=old_long_leg.ltp,
             ),
             LegSpec(
                 instrument_key=new_short_key,
@@ -1041,6 +1043,7 @@ class IronCondorV2:
                 quantity=1,
                 leg_role=role_short,
                 notes=f"roll_open_short delta={new_short.delta}",
+                price=new_short.ltp,
             ),
             LegSpec(
                 instrument_key=new_long_key,
@@ -1048,6 +1051,7 @@ class IronCondorV2:
                 quantity=1,
                 leg_role=role_long,
                 notes=f"roll_open_long delta={new_long.delta}",
+                price=new_long.ltp,
             ),
         ]
         # total_credit_pts = net option points received for the roll.
@@ -1648,6 +1652,29 @@ class IronCondorV2:
                     new_cum_debit = pl_state.cumulative_lock_debit_pts + (
                         decision.net_debit_pts or Decimal("0")
                     )
+                    zone2_legs_to_open: list[LegSpec] = []
+                    if new_put_wing and new_put_key:
+                        zone2_legs_to_open.append(
+                            LegSpec(
+                                instrument_key=new_put_key,
+                                action="BUY",
+                                quantity=1,
+                                leg_role="long_put_hedge",
+                                notes="profit_lock_zone2_open_put",
+                                price=new_put_wing.ltp,
+                            )
+                        )
+                    if new_call_wing and new_call_key:
+                        zone2_legs_to_open.append(
+                            LegSpec(
+                                instrument_key=new_call_key,
+                                action="BUY",
+                                quantity=1,
+                                leg_role="long_call_hedge",
+                                notes="profit_lock_zone2_open_call",
+                                price=new_call_wing.ltp,
+                            )
+                        )
                     return [
                         SignalEvent(
                             event_type="PROFIT_LOCK_ZONE2",
@@ -1688,6 +1715,7 @@ class IronCondorV2:
                                 "zone2_lock_executed": True,
                                 "cumulative_lock_debit_pts": str(new_cum_debit),
                                 "cycle_id": pl_state.cycle_id,
+                                "legs_to_open": zone2_legs_to_open,
                             },
                         )
                     ]
@@ -1856,6 +1884,11 @@ class IronCondorV2:
             )
 
         if sig == "ROLL_WING":
+            legs_to_open = (
+                [leg for leg in roll_result.roll_update.legs if leg.notes.startswith("roll_open_")]
+                if roll_result.roll_update is not None
+                else []
+            )
             return SignalEvent(
                 event_type="ROLL_WING",
                 severity="ACTION",
@@ -1867,6 +1900,7 @@ class IronCondorV2:
                     "auto_execute": True,
                     "auto_action": "ROLL_WING",
                     "valid_actions": ["ROLL_WING", "CLOSE_FULL"],
+                    "legs_to_open": legs_to_open,
                 },
             )
 
@@ -2047,11 +2081,9 @@ class IronCondorV2:
                         await self._send_profit_lock_notification(action.metadata or {})
                     except Exception as exc:
                         log.error("ic_nifty_v2.send_notification_failed", error=str(exc))
-            # ROLL_WING: legs_to_close comes from the payload; PaperExecutor handles new-leg writes.
-            # TODO(IC-CLOSE-2): PROFIT_LOCK_ZONE2 and ROLL_WING both close old legs as
-            # part of a roll (replacement leg opened at a new strike) — that close side
-            # is not persisted either, same gap as the flatten actions below, deferred
-            # pending strike-selection for the replacement leg. See DECISIONS.md/TODOS.md.
+            # ROLL_WING: legs_to_close comes from the payload; persistence of both
+            # sides (old leg close + new leg open) happens below via roll_ic_legs,
+            # after effective_legs is built, mirroring the CLOSE_* pattern.
 
         # Populate instrument_key per role from ic_positions so a roll overlap
         # only matches the exact instrument, not any position sharing the role.
@@ -2104,6 +2136,36 @@ class IronCondorV2:
                 # 2026-07-20 and docs/bugs/bugs.md BUG-013.
                 await self._send_close_notification(
                     action.action_type, triggering_signal, closed_trades
+                )
+        elif action.action_type in ("ROLL_WING", "PROFIT_LOCK_ZONE2") and self._is_auto_execute(
+            action
+        ):
+            if self._broker is None or self._store is None:
+                log.warning(
+                    "ic_nifty_v2.apply_action.no_broker_or_store",
+                    action_type=action.action_type,
+                    strategy_name=self.strategy_name,
+                )
+            else:
+                triggering_signal = (action.metadata or {}).get("event_type", action.action_type)
+                rolled_trades = await roll_ic_legs(
+                    broker=self._broker,
+                    store=self._store,
+                    close_positions=[
+                        p
+                        for p in positions
+                        if any(_leg_close_matches(p, leg) for leg in effective_legs)
+                    ],
+                    closed_roles=closed,
+                    open_legs=action.legs_to_open,
+                    strategy_name=self.strategy_name,
+                    notes=f"ic_nifty_v2 roll: {triggering_signal}",
+                )
+                log.info(
+                    "ic_nifty_v2.roll_persisted",
+                    strategy_name=self.strategy_name,
+                    action_type=action.action_type,
+                    legs=[t.leg_role for t in rolled_trades],
                 )
         return [
             p for p in positions if not any(_leg_close_matches(p, leg) for leg in effective_legs)

@@ -370,6 +370,15 @@ def test_full_pipeline_roll_wing() -> None:
     assert result[0].event_type == "ROLL_WING"
     assert result[0].severity == "ACTION"
     assert result[0].payload.get("auto_execute") is True
+    # MC-3b: legs_to_open must carry the two open-side LegSpecs (new short +
+    # new long) so apply_action's auto-execute path can persist the roll.
+    from src.strategy.protocol import LegSpec
+
+    legs_to_open = result[0].payload["legs_to_open"]
+    assert len(legs_to_open) == 2
+    assert all(isinstance(leg, LegSpec) for leg in legs_to_open)
+    assert all(leg.notes.startswith("roll_open_") for leg in legs_to_open)
+    assert all(leg.price is not None and leg.price > 0 for leg in legs_to_open)
 
 
 def test_full_pipeline_forced_close_delta() -> None:
@@ -767,6 +776,67 @@ def test_apply_action_close_full_auto_execute_without_broker_skips_persist_no_ra
     result = asyncio.run(strategy.apply_action(positions, action))
 
     assert result == []
+
+
+def test_apply_action_roll_wing_auto_execute_persists_close_and_open() -> None:
+    """MC-3b: auto-execute ROLL_WING persists both the old-leg close and the
+    new-leg open atomically via roll_ic_legs.
+    """
+    import asyncio
+
+    from src.client.protocol import BrokerClient
+    from src.paper.store import PaperStore
+    from src.strategy.protocol import LegClose, LegSpec
+
+    broker = MagicMock(spec=BrokerClient)
+    from unittest.mock import AsyncMock
+
+    broker.get_ltp = AsyncMock(return_value={_key("23900", "PE"): Decimal("160.00")})
+    store = MagicMock(spec=PaperStore)
+    store.record_trades = MagicMock(side_effect=lambda trades: (trades, []))
+
+    strategy = IronCondorV2(config=IC_V2_MONTHLY, broker=broker, store=store)
+    strategy.set_original_credit(Decimal("200"))
+    positions = _standard_ic_positions()
+    action = ApprovedAction(
+        action_type="ROLL_WING",
+        legs_to_close=[LegClose(leg_role="short_put"), LegClose(leg_role="long_put_hedge")],
+        legs_to_open=[
+            LegSpec(
+                instrument_key="NSE_FO|235000",
+                action="SELL",
+                quantity=1,
+                leg_role="short_put",
+                notes="roll_open_short delta=-0.25",
+                price=Decimal("100.00"),
+            ),
+            LegSpec(
+                instrument_key="NSE_FO|228000",
+                action="BUY",
+                quantity=1,
+                leg_role="long_put_hedge",
+                notes="roll_open_long delta=-0.10",
+                price=Decimal("30.00"),
+            ),
+        ],
+        rationale="auto-execute",
+        council_rank=1,
+        metadata={"auto_selected": True, "event_type": "ROLL_WING"},
+    )
+
+    result = asyncio.run(strategy.apply_action(positions, action))
+
+    store.record_trades.assert_called_once()
+    (written,), _ = store.record_trades.call_args
+    assert {t.instrument_key for t in written} == {
+        _key("23900", "PE"),
+        _key("23200", "PE"),
+        "NSE_FO|235000",
+        "NSE_FO|228000",
+    }
+    remaining_roles = {p.leg_role for p in result}
+    assert "short_put" not in remaining_roles
+    assert "long_put_hedge" not in remaining_roles
 
 
 # ── BUG-012: numeric instrument key BOD fallback ─────────────────────────────

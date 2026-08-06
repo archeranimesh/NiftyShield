@@ -36,7 +36,7 @@ from src.models.options import OptionChain, OptionLeg
 from src.paper.constants import DEFAULT_BOD_PATH
 from src.paper.models import PaperPosition, PaperTrade
 from src.strategy import roll_utils
-from src.strategy.ic_close_executor import close_ic_legs
+from src.strategy.ic_close_executor import close_ic_legs, roll_ic_legs
 from src.strategy.ic_expiry_config_v2 import ProfitLockConfig
 from src.strategy.protocol import ApprovedAction, LegClose, LegSpec, SignalEvent
 
@@ -312,6 +312,7 @@ class IronCondorV1:
                                     "CLOSE_CALL_SPREAD",
                                     "CLOSE_PUT_SPREAD",
                                 ],
+                                "legs_to_open": [roll_target],
                             },
                         )
                     )
@@ -679,13 +680,35 @@ class IronCondorV1:
         if action.action_type == "ROLL_WING":
             if not action.legs_to_open and not self._is_auto_execute(action):
                 raise ValueError("ROLL_WING action requires at least one leg in legs_to_open")
-            # Note: legs_to_open is intentionally not consumed here.
-            # PaperExecutor (backbone) handles the new-leg DB write.
-            # apply_action only removes the closed wing from positions.
-            # TODO(IC-CLOSE-2): ROLL_WING's own close side is not persisted
-            # either — same gap as the flatten actions below, deferred
-            # pending strike-selection for the replacement leg. See
-            # DECISIONS.md and TODOS.md.
+            if self._is_auto_execute(action):
+                if self._broker is None or self._store is None:
+                    log.warning(
+                        "ic_nifty_v1.apply_action.no_broker_or_store",
+                        action_type=action.action_type,
+                        strategy_name=self.strategy_name,
+                    )
+                else:
+                    triggering_signal = (action.metadata or {}).get(
+                        "event_type", action.action_type
+                    )
+                    rolled_trades = await roll_ic_legs(
+                        broker=self._broker,
+                        store=self._store,
+                        close_positions=[
+                            p
+                            for p in positions
+                            if any(_leg_close_matches(p, leg) for leg in effective_legs)
+                        ],
+                        closed_roles=closed,
+                        open_legs=action.legs_to_open,
+                        strategy_name=self.strategy_name,
+                        notes=f"ic_nifty_v1 roll: {triggering_signal}",
+                    )
+                    log.info(
+                        "ic_nifty_v1.roll_wing_persisted",
+                        strategy_name=self.strategy_name,
+                        legs=[t.leg_role for t in rolled_trades],
+                    )
         elif action.action_type in (
             "CLOSE_FULL",
             "CLOSE_CALL_SPREAD",
@@ -949,6 +972,7 @@ class IronCondorV1:
             quantity=1,
             leg_role=leg_role,
             notes=f"roll_wing delta={candidate.delta}",
+            price=candidate.ltp,
         )
 
     def _search_narrower_wing_candidate(
@@ -1042,6 +1066,7 @@ class IronCondorV1:
             quantity=1,
             leg_role=leg_role,
             notes=f"roll_wing_narrow_search delta={candidate.delta}",
+            price=candidate.ltp,
         )
 
     def _resolve_roll_target_key(

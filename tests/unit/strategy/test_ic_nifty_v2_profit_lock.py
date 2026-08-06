@@ -515,3 +515,72 @@ def test_apply_action_updates_state():
     assert saved_state.active_put_width_pts == 300
     # Telegram notification sent
     notifier.send_notification.assert_called_once()
+
+
+def test_apply_action_profit_lock_zone2_persists_close_and_open_legs():
+    """MC-3b: PROFIT_LOCK_ZONE2 auto-execute persists the old-wing close and
+    new-wing open atomically via roll_ic_legs, alongside the existing
+    ProfitLockState persistence and Telegram notification.
+    """
+    from src.client.protocol import BrokerClient
+
+    store = _mock_store(_make_pl_state(zone=0, zone2_executed=False))
+    store.record_trades = MagicMock(side_effect=lambda trades: (trades, []))
+    broker = MagicMock(spec=BrokerClient)
+    broker.get_ltp = AsyncMock(return_value={})  # long hedges → entry-price fallback
+    notifier = MagicMock()
+    notifier.send_notification = AsyncMock(return_value=None)
+    strategy = IronCondorV2(  # type: ignore[arg-type]
+        config=IC_V2_MONTHLY, store=store, broker=broker, notifier=notifier
+    )
+
+    positions = _standard_positions()
+    action = ApprovedAction(
+        action_type="PROFIT_LOCK_ZONE2",
+        legs_to_close=[LegClose(leg_role="long_put_hedge"), LegClose(leg_role="long_call_hedge")],
+        legs_to_open=[
+            LegSpec(
+                instrument_key="NSE_FO|NIFTY23600PE",
+                action="BUY",
+                quantity=1,
+                leg_role="long_put_hedge",
+                notes="profit_lock_zone2_open_put",
+                price=Decimal("15.00"),
+            ),
+            LegSpec(
+                instrument_key="NSE_FO|NIFTY25400CE",
+                action="BUY",
+                quantity=1,
+                leg_role="long_call_hedge",
+                notes="profit_lock_zone2_open_call",
+                price=Decimal("18.00"),
+            ),
+        ],
+        rationale="auto-execute",
+        council_rank=1,
+        metadata={
+            "new_profit_lock_zone": 2,
+            "zone2_lock_executed": True,
+            "cumulative_lock_debit_pts": "34",
+            "new_put_width_pts": 300,
+            "new_call_width_pts": 300,
+            "cycle_id": "cycle1",
+            "event_type": "PROFIT_LOCK_ZONE2",
+        },
+    )
+
+    updated = arun(strategy.apply_action(positions, action))
+
+    store.record_trades.assert_called_once()
+    (written,), _ = store.record_trades.call_args
+    assert {t.instrument_key for t in written} == {
+        _key("23200", "PE"),
+        _key("25800", "CE"),
+        "NSE_FO|NIFTY23600PE",
+        "NSE_FO|NIFTY25400CE",
+    }
+    remaining_roles = {p.leg_role for p in updated}
+    assert "long_put_hedge" not in remaining_roles
+    assert "long_call_hedge" not in remaining_roles
+    store.set_profit_lock_state.assert_called_once()
+    notifier.send_notification.assert_called_once()
