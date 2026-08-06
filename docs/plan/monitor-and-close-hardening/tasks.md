@@ -135,8 +135,7 @@ positions" risk. Each task is independently landable; no shared files between th
   **Tests:** roll-fires → old leg closed and persisted to `paper_trades`, new leg opened and
   persisted, atomic (single `record_trades` call, no partial-write window).
 
-  **Commit:** `fix(strategy): persist ROLL_WING/PROFIT_LOCK_ZONE2 close side atomically` | SHA: pending
-  — sandbox `.git/HEAD.lock` limitation, same as MC-3a/MC-6; commit to be run on live host.
+  **Commit:** `fix(strategy): persist ROLL_WING/PROFIT_LOCK_ZONE2 close side atomically` | SHA: 03853ce
 
   **Scope note (found during implementation, not assumed at task-authoring time):** the task as
   originally scoped assumed strike-selection + `legs_to_open` already reached `apply_action` and
@@ -150,7 +149,7 @@ positions" risk. Each task is independently landable; no shared files between th
 
 ---
 
-- [ ] **MC-4** — Fix BOD resolution in CC / PP / Collar leg finders. Spawned from TODOS.md
+- [x] **MC-4** — Fix BOD resolution in CC / PP / Collar leg finders. Spawned from TODOS.md
   (remaining scope after the IC portion was fixed 2026-07-06, and after `_price_utils.py`/
   `overlay_closer.py`/`executor.py`/`nifty_track_comparison_v1.py` were fixed 2026-07-20).
   `src/strategy/cc_overlay_v1.py`, `src/strategy/pp_overlay_v1.py`,
@@ -178,6 +177,7 @@ positions" risk. Each task is independently landable; no shared files between th
   (asserted via a fixture where the chain-walk would have picked the wrong strike).
 
   **Commit:** `fix(strategy): route CC/PP/Collar leg finders through shared BOD-fallback utility`
+  | SHA: pending
 
 ---
 

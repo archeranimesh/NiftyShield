@@ -9,17 +9,19 @@ from __future__ import annotations
 
 import re
 from datetime import date, datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
 import structlog
 
+from src.instruments.lookup import InstrumentLookup
 from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
 from src.models.portfolio import TradeAction
-from src.paper.constants import STRATEGY_COLLAR_OVERLAY
+from src.paper.constants import DEFAULT_BOD_PATH, STRATEGY_COLLAR_OVERLAY
 from src.paper.models import PaperPosition, PaperTrade
+from src.strategy._price_utils import find_option_leg
 from src.strategy.collar_entry import CollarEntrySelectionError, select_and_build_collar_entry
 from src.strategy.exit_signals import ExitSignalEngine
 from src.strategy.protocol import ApprovedAction, LegClose, SignalEvent
@@ -48,9 +50,6 @@ _EXPIRY_RE = re.compile(
     r"NSE_FO\|NIFTY(\d{2}[A-Za-z]{3}\d{4})(PE|CE)",
     re.IGNORECASE,
 )
-
-# Matches keys like "NSE_FO|NIFTY23000PE" → group 1 = "23000"
-_STRIKE_RE = re.compile(r"NIFTY(\d+)(PE|CE)", re.IGNORECASE)
 
 SHORT_CALL_ROLE = "overlay_collar_call"
 LONG_PUT_ROLE = "overlay_collar_put"
@@ -85,6 +84,7 @@ class CollarOverlayV1(ReEntryMixin):
         notifier: Any = None,
         vix_data_dir: Path | str | None = None,
         broker: Any = None,
+        instrument_lookup: InstrumentLookup | None = None,
     ) -> None:
         """Initialise CollarOverlayV1.
 
@@ -95,15 +95,36 @@ class CollarOverlayV1(ReEntryMixin):
             broker: BrokerClient for live chain fetch during Collar3b combined
                 close+reenter. None → reenter selection is skipped (logged
                 WARNING) — used by tests / any caller not wiring live reentry.
+            instrument_lookup: Optional pre-built ``InstrumentLookup`` (BOD JSON),
+                used by ``find_option_leg`` to resolve real numeric Upstox
+                instrument keys that carry no strike/type in the key string
+                itself. If not injected, lazily built from ``DEFAULT_BOD_PATH``
+                on first use (same pattern as ``PaperStore._resolve_instrument_lookup``).
         """
         self._store = store
         self._notifier = notifier
         self._broker = broker
+        self._instrument_lookup = instrument_lookup
         from src.config import settings
 
         self._vix_data_dir = (
             Path(vix_data_dir) if vix_data_dir is not None else Path(settings.vix_data_dir)
         )
+
+    def _resolve_instrument_lookup(self) -> InstrumentLookup | None:
+        """Lazily construct and cache the InstrumentLookup used for leg resolution.
+
+        Non-fatal: on load failure, logs a WARNING and returns None so callers
+        degrade to regex-only resolution (symbolic keys still work; real
+        numeric keys will fail to resolve, same as before this fallback existed).
+        """
+        if self._instrument_lookup is None:
+            try:
+                self._instrument_lookup = InstrumentLookup.from_file(DEFAULT_BOD_PATH)
+            except Exception as exc:
+                log.warning("collar_overlay_v1.bod_lookup_load_failed", error=str(exc))
+                return None
+        return self._instrument_lookup
 
     async def check_signals(
         self,
@@ -699,46 +720,24 @@ class CollarOverlayV1(ReEntryMixin):
             )
 
     def _find_call_leg(self, market: OptionChain, instrument_key: str) -> OptionLeg | None:
-        """Locate the CE leg in the chain."""
-        m = _STRIKE_RE.search(instrument_key)
-        if m:
-            try:
-                strike = Decimal(m.group(1))
-                strike_data = market.strikes.get(strike)
-                if strike_data is not None and strike_data.ce is not None:
-                    return strike_data.ce
-            except InvalidOperation:
-                log.warning(
-                    "collar_overlay_v1.strike_parse_failed",
-                    instrument_key=instrument_key,
-                )
+        """Locate the CE leg in the chain.
 
-        for strike_data in market.strikes.values():
-            if strike_data.ce is not None and strike_data.ce.ltp > Decimal("0"):
-                return strike_data.ce
-
-        return None
+        Delegates to the shared ``find_option_leg`` utility: tries a direct
+        regex strike/type parse first (symbolic/test keys), then falls back
+        to BOD JSON lookup for real numeric Upstox instrument keys that carry
+        no strike/type in the key string itself.
+        """
+        return find_option_leg(instrument_key, market, lookup=self._resolve_instrument_lookup())
 
     def _find_put_leg(self, market: OptionChain, instrument_key: str) -> OptionLeg | None:
-        """Locate the PE leg in the chain."""
-        m = _STRIKE_RE.search(instrument_key)
-        if m:
-            try:
-                strike = Decimal(m.group(1))
-                strike_data = market.strikes.get(strike)
-                if strike_data is not None and strike_data.pe is not None:
-                    return strike_data.pe
-            except InvalidOperation:
-                log.warning(
-                    "collar_overlay_v1.strike_parse_failed",
-                    instrument_key=instrument_key,
-                )
+        """Locate the PE leg in the chain.
 
-        for strike_data in market.strikes.values():
-            if strike_data.pe is not None and strike_data.pe.ltp > Decimal("0"):
-                return strike_data.pe
-
-        return None
+        Delegates to the shared ``find_option_leg`` utility: tries a direct
+        regex strike/type parse first (symbolic/test keys), then falls back
+        to BOD JSON lookup for real numeric Upstox instrument keys that carry
+        no strike/type in the key string itself.
+        """
+        return find_option_leg(instrument_key, market, lookup=self._resolve_instrument_lookup())
 
     def _parse_expiry(self, instrument_key: str) -> date | None:
         """Extract option expiry date."""

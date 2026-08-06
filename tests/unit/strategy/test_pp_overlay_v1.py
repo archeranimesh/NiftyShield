@@ -432,3 +432,42 @@ def test_record_close_trade_falls_back_to_avg_cost_when_mark_missing() -> None:
 
     trade = mock_store.record_trade.call_args[0][0]
     assert trade.price == Decimal("50")
+
+
+# ── MC-4: _find_put_leg BOD-fallback routing ──────────────────────────────
+
+
+class _FakeLookup:
+    """Minimal stand-in for InstrumentLookup.get_by_key()."""
+
+    def __init__(self, instruments: dict[str, dict[str, object]]) -> None:
+        self._instruments = instruments
+
+    def get_by_key(self, instrument_key: str) -> dict[str, object] | None:
+        return self._instruments.get(instrument_key)
+
+
+def test_find_put_leg_resolves_real_numeric_key_via_bod_lookup() -> None:
+    """Real Upstox keys (e.g. NSE_FO|65900) carry no strike/type in the key
+    string and must resolve via the shared BOD-fallback utility, not a blind
+    chain walk."""
+    market = _make_chain(ltp="50", delta="-0.20", strike="21000")
+    lookup = _FakeLookup({"NSE_FO|65900": {"instrument_type": "PE", "strike_price": 21000.0}})
+    strategy = PPOverlayV1(instrument_lookup=lookup)
+
+    leg = strategy._find_put_leg(market, "NSE_FO|65900")
+
+    assert leg is not None
+    assert leg.strike == Decimal("21000")
+
+
+def test_find_put_leg_chain_walk_fallback_is_gone() -> None:
+    """Old behaviour: an unresolvable key silently walked the chain and
+    returned the first PE with positive LTP — the wrong strike. New
+    behaviour: an unresolvable key (no lookup, no regex match) returns None."""
+    market = _make_chain(ltp="50", delta="-0.20", strike="21000")
+    strategy = PPOverlayV1()  # no instrument_lookup injected
+
+    leg = strategy._find_put_leg(market, "NSE_FO|65900")
+
+    assert leg is None
