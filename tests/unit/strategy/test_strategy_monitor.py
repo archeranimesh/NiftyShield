@@ -50,6 +50,11 @@ def _make_store(
     """
     store = MagicMock()
     store.get_positions.return_value = positions or []
+    # WARN dedup (StrategyMonitor._route_event): default to "not already
+    # active" so existing WARN-fires-once-per-tick tests keep sending on
+    # their first (and only) tick, matching pre-dedup behavior. Tests that
+    # specifically exercise the dedup/reconcile path override this.
+    store.is_warn_active.return_value = False
     return store
 
 
@@ -215,6 +220,80 @@ async def test_tick_warn_signal_sends_plain_message() -> None:
 
     notifier.send_plain_message.assert_called_once()
     notifier.send_approval_request.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_tick_warn_signal_suppressed_when_already_active() -> None:
+    """WARN condition already flagged active in store → no repeat Telegram send.
+
+    Regression test for the DELTA_WARN-every-~2min issue: a strategy that
+    re-emits the same WARN every tick while the condition persists must not
+    re-send once StrategyMonitor has already alerted for that occurrence.
+    """
+    strategy = MockStrategy()
+    warn_event = SignalEvent(
+        event_type="DELTA_WARN",
+        severity="WARN",
+        description="short_call |delta| 0.3272 >= 0.25",
+        payload={"leg_role": "short_call"},
+    )
+    strategy.check_signals = AsyncMock(return_value=[warn_event])
+
+    store = _make_store()
+    store.is_warn_active.return_value = True  # already alerted this occurrence
+    notifier = _make_notifier()
+    monitor = _make_monitor(store=store, notifier=notifier, strategies=[strategy])
+
+    with (
+        patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch(
+            "src.strategy.monitor.datetime",
+            **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
+        ),
+    ):
+        await monitor._tick()
+
+    notifier.send_plain_message.assert_not_called()
+    store.set_warn_active.assert_not_called()
+    # Still reconciled so a recovery elsewhere in the same tick is tracked.
+    # broker.get_option_chain defaults to [] -> parse_upstox_option_chain
+    # falls back to its own _EMPTY_EXPIRY sentinel (1970-01-01), distinct
+    # from the expiry_fn-derived dict key (2026-06-26) used only to select
+    # which chain to fetch.
+    store.reconcile_warn_state.assert_called_once_with(
+        strategy.strategy_name, {("DELTA_WARN", "short_call", "1970-01-01")}
+    )
+
+
+@pytest.mark.asyncio
+async def test_tick_warn_signal_first_occurrence_marks_active() -> None:
+    """First WARN occurrence (not yet active) → sends and marks active in store."""
+    strategy = MockStrategy()
+    warn_event = SignalEvent(
+        event_type="DELTA_WARN",
+        severity="WARN",
+        description="short_call |delta| 0.3272 >= 0.25",
+        payload={"leg_role": "short_call"},
+    )
+    strategy.check_signals = AsyncMock(return_value=[warn_event])
+
+    store = _make_store()  # is_warn_active defaults to False
+    notifier = _make_notifier()
+    monitor = _make_monitor(store=store, notifier=notifier, strategies=[strategy])
+
+    with (
+        patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch(
+            "src.strategy.monitor.datetime",
+            **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
+        ),
+    ):
+        await monitor._tick()
+
+    notifier.send_plain_message.assert_called_once()
+    store.set_warn_active.assert_called_once_with(
+        strategy.strategy_name, "DELTA_WARN", "short_call", True, "1970-01-01"
+    )
 
 
 @pytest.mark.asyncio

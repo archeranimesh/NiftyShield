@@ -5,6 +5,28 @@
 
 ---
 
+**WARN-severity Telegram dedup — OFF→ON transition, not time-based cooldown (2026-08-06):**
+`StrategyMonitor._route_event` previously sent a plain Telegram message for every WARN-severity
+`SignalEvent` unconditionally, every tick, for as long as the underlying condition (e.g.
+`DELTA_WARN`) stayed breached — user-reported as a message every ~2 min. Operator explicitly
+chose state-transition dedup over a cooldown timer: alert once when a condition newly breaches
+(OFF→ON), stay silent while it remains breached, clear on recovery so the next re-breach alerts
+immediately. New `warn_signal_state` SQLite table (`PaperStore`, keyed
+`(strategy_name, event_type, leg_role)`) persists across daemon restarts (operator's choice —
+in-memory was considered and rejected to survive a mid-day restart without re-spamming).
+`StrategyMonitor._tick` accumulates fired `(event_type, leg_role)` keys per strategy across all
+its expiry groups each tick and calls `PaperStore.reconcile_warn_state` once per strategy to
+clear any previously-active condition that didn't fire this tick. No periodic re-fire and no
+escalation tier — a fast-moving breach (e.g. delta continuing to climb) does not get a second
+alert until it recovers and re-breaches. Scope: applies to all WARN-severity signals across all
+strategies (the mechanism is generic on `event_type`/`leg_role`, not `DELTA_WARN`-specific).
+Dedup key is `(strategy_name, event_type, leg_role, expiry)` — expiry (`chain.expiry.isoformat()`)
+was added after `general-purpose` review (standing in for `@code-reviewer`) flagged an ERROR:
+without it, two expiry groups sharing a `leg_role` under one `strategy_name` (a future
+calendar/multi-expiry strategy) would alias to the same dedup row and suppress a genuinely new
+breach in the second expiry. No current strategy triggers this (each IC bucket is a distinct
+`strategy_name` per expiry), but the column is cheap and the table was unreleased at review time.
+
 **IC time-stop DTE de-tiered — uniform terminal rule (2026-08-05, council ruling):**
 `ic_expiry_config.py`'s per-bucket `time_stop_dte`/`dte_warn` no longer scale to entry-DTE
 window. Council ruling (`docs/council/2026-08-05_ic-time-stop-dte-tiering.md`, unanimous on the

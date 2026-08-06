@@ -270,6 +270,16 @@ CREATE TABLE IF NOT EXISTS paper_protection_recovery_snapshots (
     best_recovery_pct_inception   TEXT,
     PRIMARY KEY (snapshot_date)
 ) STRICT;
+
+CREATE TABLE IF NOT EXISTS warn_signal_state (
+    strategy_name   TEXT    NOT NULL,
+    event_type      TEXT    NOT NULL,
+    leg_role        TEXT    NOT NULL,
+    expiry          TEXT    NOT NULL DEFAULT '',
+    active          INTEGER NOT NULL DEFAULT 0,
+    updated_at      TEXT    NOT NULL,
+    PRIMARY KEY (strategy_name, event_type, leg_role, expiry)
+) STRICT;
 """
 
 
@@ -2104,6 +2114,117 @@ class PaperStore:
         )
 
     # ── Gate violations ──────────────────────────────────────────────────────
+
+    # ── WARN signal dedup state ──────────────────────────────────────────
+    def is_warn_active(
+        self, strategy_name: str, event_type: str, leg_role: str, expiry: str = ""
+    ) -> bool:
+        """Return whether a WARN condition is already flagged active.
+
+        Used by ``StrategyMonitor._route_event`` to suppress repeat Telegram
+        sends for a WARN-severity ``SignalEvent`` that fires on every tick
+        while its underlying condition (e.g. delta breach) persists — the
+        alert should fire once on the OFF→ON transition, not every ~2 min.
+
+        Args:
+            strategy_name: Strategy that emitted the event.
+            event_type: Event type string, e.g. "DELTA_WARN".
+            leg_role: Leg the warning applies to, e.g. "short_call".
+            expiry: ISO expiry date of the chain the event was evaluated
+                against (``chain.expiry.isoformat()``), included in the key
+                so two distinct expiry groups sharing a ``leg_role`` under
+                the same ``strategy_name`` (e.g. a future calendar/multi-
+                expiry strategy) never alias to one dedup row. Defaults to
+                "" for callers that don't carry expiry context.
+
+        Returns:
+            True if this condition was already active as of the last tick.
+        """
+        with _connect(self.db_path) as conn:
+            row = conn.execute(
+                """SELECT active FROM warn_signal_state
+                   WHERE strategy_name = ? AND event_type = ? AND leg_role = ? AND expiry = ?""",
+                (strategy_name, event_type, leg_role, expiry),
+            ).fetchone()
+        return bool(row is not None and row["active"])
+
+    def set_warn_active(
+        self,
+        strategy_name: str,
+        event_type: str,
+        leg_role: str,
+        active: bool,
+        expiry: str = "",
+    ) -> None:
+        """Upsert the active/inactive state for a WARN condition.
+
+        Args:
+            strategy_name: Strategy that emitted the event.
+            event_type: Event type string, e.g. "DELTA_WARN".
+            leg_role: Leg the warning applies to.
+            active: True to mark the condition as currently ongoing (alert
+                already sent this occurrence); False to clear it on recovery
+                so the next breach re-alerts.
+            expiry: ISO expiry date, see ``is_warn_active`` docstring.
+        """
+        with _connect(self.db_path) as conn:
+            conn.execute(
+                """INSERT INTO warn_signal_state
+                   (strategy_name, event_type, leg_role, expiry, active, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(strategy_name, event_type, leg_role, expiry)
+                   DO UPDATE SET active = excluded.active, updated_at = excluded.updated_at""",
+                (
+                    strategy_name,
+                    event_type,
+                    leg_role,
+                    expiry,
+                    1 if active else 0,
+                    datetime.now(tz=timezone.utc).isoformat(),
+                ),
+            )
+
+    def reconcile_warn_state(
+        self, strategy_name: str, fired_keys: set[tuple[str, str, str]]
+    ) -> None:
+        """Clear active WARN state for conditions that did not fire this tick.
+
+        Called once per strategy per tick after all its ``SignalEvent``s have
+        been routed. Any ``(event_type, leg_role, expiry)`` previously marked
+        active but absent from ``fired_keys`` has recovered (the strategy's
+        ``check_signals`` only emits a WARN event while the condition holds)
+        — clearing it means the next re-breach alerts immediately rather than
+        staying silent forever after the first occurrence.
+
+        Args:
+            strategy_name: Strategy whose WARN state is being reconciled.
+            fired_keys: Set of (event_type, leg_role, expiry) triples that
+                fired as WARN-severity events during this tick for this
+                strategy, unioned across all of its expiry groups.
+        """
+        with _connect(self.db_path) as conn:
+            rows = conn.execute(
+                """SELECT event_type, leg_role, expiry FROM warn_signal_state
+                   WHERE strategy_name = ? AND active = 1""",
+                (strategy_name,),
+            ).fetchall()
+            recovered = [
+                (r["event_type"], r["leg_role"], r["expiry"])
+                for r in rows
+                if (r["event_type"], r["leg_role"], r["expiry"]) not in fired_keys
+            ]
+            for event_type, leg_role, expiry in recovered:
+                conn.execute(
+                    """UPDATE warn_signal_state SET active = 0, updated_at = ?
+                       WHERE strategy_name = ? AND event_type = ? AND leg_role = ? AND expiry = ?""",
+                    (
+                        datetime.now(tz=timezone.utc).isoformat(),
+                        strategy_name,
+                        event_type,
+                        leg_role,
+                        expiry,
+                    ),
+                )
 
     def record_gate_violation(self, violation: GateViolation) -> int:
         """Insert a threshold-gate violation and return the generated row ID.

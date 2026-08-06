@@ -176,6 +176,12 @@ class StrategyMonitor:
         signals_emitted = 0
         for strategy in self._strategies:
             positions = per_strategy_positions[strategy.strategy_name]
+            # (event_type, leg_role, expiry) triples that fire as WARN this
+            # tick, across all of this strategy's expiry groups — reconciled
+            # against DB state once the strategy's groups are all processed
+            # (WARN dedup). expiry is part of the key so two expiry groups
+            # sharing a leg_role under one strategy_name never alias.
+            warn_fired: set[tuple[str, str, str]] = set()
             # Group this strategy's positions by expiry; call check_signals once
             # per expiry subset so each position is evaluated against the right chain.
             expiry_groups = self._group_positions_by_expiry(positions)
@@ -217,7 +223,13 @@ class StrategyMonitor:
 
                 signals_emitted += len(events)
                 for event in events:
-                    await self._route_event(event, strategy, chain, expiry_positions)
+                    await self._route_event(event, strategy, chain, expiry_positions, warn_fired)
+
+            # WARN dedup: any condition active in DB but not re-fired across
+            # any of this strategy's expiry groups this tick has recovered —
+            # clear it so the next breach alerts immediately (see
+            # PaperStore.reconcile_warn_state docstring).
+            self._store.reconcile_warn_state(strategy.strategy_name, warn_fired)
 
         log.info(
             "strategy_monitor.tick_summary",
@@ -301,6 +313,7 @@ class StrategyMonitor:
         strategy: PaperStrategy,
         chain: OptionChain,
         positions: list[PaperPosition],
+        warn_fired: set[tuple[str, str, str]] | None = None,
     ) -> None:
         """Dispatch a SignalEvent based on severity and strategy auto_execute flag.
 
@@ -309,11 +322,29 @@ class StrategyMonitor:
         is called directly and a plain notification is sent.  All other ACTION
         events route to the Telegram approval flow.
 
+        WARN events are deduped against ``warn_signal_state`` (PaperStore):
+        the Telegram send only fires on the OFF→ON transition (condition
+        newly breached), not on every tick the condition remains true — a
+        strategy's ``check_signals`` re-emits the same WARN every tick while
+        the underlying threshold stays breached (e.g. delta), which without
+        this dedup produced a message every ~poll_interval_s indefinitely.
+        The dedup key is ``(event_type, leg_role, chain.expiry)`` — expiry is
+        included so two expiry groups sharing a leg_role under one
+        strategy_name (e.g. a future calendar/multi-expiry strategy) never
+        alias to the same dedup row.
+
         Args:
             event: The signal emitted by the strategy.
             strategy: The strategy that emitted it (for context).
-            chain: Current option chain (passed to describe_context).
+            chain: Current option chain (passed to describe_context; its
+                ``expiry`` is also folded into the WARN dedup key).
             positions: Current open positions for this strategy.
+            warn_fired: Mutable set the caller uses to track which
+                (event_type, leg_role, expiry) WARN keys fired this tick for
+                this strategy, across all its expiry groups — passed so
+                ``_tick`` can reconcile recovered conditions once the
+                strategy's groups are all routed. None (e.g. direct test
+                calls) skips dedup and always sends.
         """
         if event.severity == "INFO":
             log.debug(
@@ -323,8 +354,21 @@ class StrategyMonitor:
                 description=event.description,
             )
         elif event.severity == "WARN":
-            text = f"[{strategy.strategy_name}] {event.event_type}: {event.description}"
-            await self._notifier.send_plain_message(text)
+            leg_role = event.payload.get("leg_role", "")
+            expiry_str = chain.expiry.isoformat() if chain.expiry else ""
+            key = (event.event_type, leg_role, expiry_str)
+            if warn_fired is not None:
+                warn_fired.add(key)
+            already_active = warn_fired is not None and self._store.is_warn_active(
+                strategy.strategy_name, event.event_type, leg_role, expiry_str
+            )
+            if not already_active:
+                text = f"[{strategy.strategy_name}] {event.event_type}: {event.description}"
+                await self._notifier.send_plain_message(text)
+                if warn_fired is not None:
+                    self._store.set_warn_active(
+                        strategy.strategy_name, event.event_type, leg_role, True, expiry_str
+                    )
         elif event.severity == "ACTION":
             auto_execute_strategy = getattr(strategy, "auto_execute", False)
             auto_execute_payload = event.payload.get("auto_execute", False)
