@@ -87,7 +87,7 @@ belong reopening the archived epic for.
 
 ---
 
-- [ ] **RH-3** — Reconsider `council_rank: int` on `ApprovedAction`. Spawned from TODOS.md
+- [x] **RH-3** — Reconsider `council_rank: int` on `ApprovedAction`. Spawned from TODOS.md
   (PB1.1 post-review item, paper-backbone epic — now archived). Evaluate decoupling council
   rank from the action model to support a single canonical action object before building the
   executor. Given `PaperExecutor` (`executor.py`) is now fully built and `ApprovedAction`
@@ -108,6 +108,18 @@ belong reopening the archived epic for.
   first per the project's "one task per session" convention.
 
   **Commit (docs-only finding, no refactor):** `docs(strategy): council_rank review — <finding>`
+
+  **Verified 2026-08-06:** still load-bearing, no change. `council_rank` is a required field
+  (no default) on `ApprovedAction`, with 28 callers across the codebase. Confirmed via
+  `get_code_snippet("ApprovedAction")` + `search_code("council_rank")`:
+  `scripts/monitor_daemon.py::on_approved` matches the user's Telegram-selected rank back to
+  the correct action dict in a multi-action council output
+  (`action_dict.get("council_rank") == rank`) — a real selection key, not decorative;
+  `src/council/rapid.py::RapidCouncil._parse_chairman_response` preserves the chairman's
+  ranking per action; every auto-execute call site (`monitor.py::_route_event`,
+  `ic_nifty_v1.py::_auto_select_action`) and every test factory sets `council_rank=1`.
+  Decoupling would require redesigning the Telegram approval/selection flow — out of scope
+  for a docs-only review, no follow-up task warranted at this time.
 
 ---
 

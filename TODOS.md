@@ -82,6 +82,13 @@ Session Log grows large again.
   (`src/paper/models.py:79-95`), not just the protocol-conformance mock check. No code change;
   ticked with a verification note.
 
+### 2026-08-06 Session Log (execution-risk-hardening RH-3 verified)
+- **RH-3 (`docs/plan/execution-risk-hardening/tasks.md`)** — `council_rank: int` on
+  `ApprovedAction` confirmed still load-bearing, no change: required field with 28 callers,
+  used by `scripts/monitor_daemon.py::on_approved` to match a Telegram-approved rank back to
+  its action dict in a multi-action council output. No code change; ticked with a
+  verification note.
+
 ### 2026-08-06 Session Log (csp-collateral-leg closed)
 - **CSP collateral leg `long_niftybees`** — closed without implementing CL-1..CL-4 as originally
   scoped. Traced `NIFTYBEES_KEY`/`STRATEGY_SPOT` and found `paper_nifty_spot` is already the real,
