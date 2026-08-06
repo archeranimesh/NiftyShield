@@ -5,6 +5,27 @@
 
 ---
 
+**CSP collateral leg — no new position, reuse `compute_max_lots()` (2026-08-06):**
+`docs/plan/csp-collateral-leg` was scoped assuming `long_niftybees` had no existing
+representation in the paper system. Investigation found the opposite: `STRATEGY_SPOT =
+"paper_nifty_spot"` (`src/paper/constants.py`) already is the real NiftyBees holding — a live
+3-track base-leg `PaperPosition` against `NIFTYBEES_KEY`, valued nightly (confirmed via the EOD
+Telegram summary's `paper_nifty_spot` unrealized P&L line). Building a second
+`PaperPosition`/`leg_role` under `paper_csp_nifty_v1` for the same physical shares would have
+double-counted one real holding across two strategy ledgers — any portfolio-level aggregation
+summing position value/delta across strategies would overstate NiftyBees exposure 2x. The
+story's quantity formula (`qty = floor((65 × nifty_spot) / niftybees_ltp)`) is the same
+relationship `compute_max_lots()` (shipped for the CC overlay, `covered-call-overlay` CC1)
+already computes, solved for lots instead of units — CSP reuses it directly, no new function,
+no new model, no backfill, no snapshot wiring. `compute_max_lots()`'s existing docstring
+("Recompute at each annual NiftyBees leg reset") also already answers the story's CL-4 "annual
+reset" question — it's a read-time recompute against current spot/LTP each cycle, not a stored
+value or scheduled job. Verified live: `compute_max_lots(5735, Decimal("24635.70"),
+Decimal("280.07"), 65) == 1` lot (holding as of 2026-08-05/06). Story closed with zero code
+changes — docs-only. See `docs/plan/csp-collateral-leg/tasks.md`.
+
+---
+
 **WARN-severity Telegram dedup — OFF→ON transition, not time-based cooldown (2026-08-06):**
 `StrategyMonitor._route_event` previously sent a plain Telegram message for every WARN-severity
 `SignalEvent` unconditionally, every tick, for as long as the underlying condition (e.g.
