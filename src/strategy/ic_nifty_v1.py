@@ -511,12 +511,7 @@ class IronCondorV1:
                     return None
                 short_leg = self._find_leg(market, short_pos.instrument_key)
                 long_leg = self._find_leg(market, long_pos.instrument_key)
-                if (
-                    not short_leg
-                    or not long_leg
-                    or short_leg.ltp is None
-                    or long_leg.ltp is None
-                ):
+                if not short_leg or not long_leg or short_leg.ltp is None or long_leg.ltp is None:
                     return None
                 mark = short_leg.ltp - long_leg.ltp
                 credit = short_pos.avg_sell_price - long_pos.avg_cost
@@ -945,7 +940,9 @@ class IronCondorV1:
         if option_type == "PE" and candidate.strike >= current_strike:
             return None
 
-        instrument_key = f"NSE_FO|NIFTY{int(candidate.strike)}{option_type}"
+        instrument_key = self._resolve_roll_target_key(candidate.strike, option_type, market.expiry)
+        if instrument_key is None:
+            return None
         return LegSpec(
             instrument_key=instrument_key,
             action="SELL",
@@ -991,9 +988,7 @@ class IronCondorV1:
         """
         option_type: Literal["CE", "PE"] = "CE" if leg_role == "short_call" else "PE"
         opposite_leg_role = "short_put" if leg_role == "short_call" else "short_call"
-        opposite_long_role = (
-            "long_put_hedge" if leg_role == "short_call" else "long_call_hedge"
-        )
+        opposite_long_role = "long_put_hedge" if leg_role == "short_call" else "long_call_hedge"
         opposite_short_pos = _position_for_role(ic_positions, opposite_leg_role)
         opposite_long_pos = _position_for_role(ic_positions, opposite_long_role)
         opposite_width = Decimal("0")
@@ -1038,7 +1033,9 @@ class IronCondorV1:
         if candidate is None:
             return None
 
-        instrument_key = f"NSE_FO|NIFTY{int(candidate.strike)}{option_type}"
+        instrument_key = self._resolve_roll_target_key(candidate.strike, option_type, market.expiry)
+        if instrument_key is None:
+            return None
         return LegSpec(
             instrument_key=instrument_key,
             action="SELL",
@@ -1046,6 +1043,58 @@ class IronCondorV1:
             leg_role=leg_role,
             notes=f"roll_wing_narrow_search delta={candidate.delta}",
         )
+
+    def _resolve_roll_target_key(
+        self, strike: Decimal, option_type: str, expiry: date
+    ) -> str | None:
+        """Resolve a chain-scanned roll-target candidate to its real BOD key.
+
+        Replacement legs for ``ROLL_WING`` come from ``roll_utils``' chain
+        scan (an ``OptionLeg``, which carries no ``instrument_key`` at all)
+        — string-formatting the strike into a symbol-style key (BUG-023)
+        produces one that can never resolve, since real Upstox keys are
+        numeric-only. Route through the offline BOD instrument master
+        instead, same as every other persisting call site in this codebase.
+
+        Args:
+            strike: Candidate replacement leg's strike price.
+            option_type: ``"CE"`` or ``"PE"``.
+            expiry: Already-resolved IC expiry, to disambiguate the same
+                strike across multiple live expiries.
+
+        Returns:
+            Real numeric ``instrument_key``, or ``None`` when the
+            strike/type/expiry combination isn't present in BOD — treated
+            as a failed candidate (same as a liquidity-gate miss), not an
+            exception.
+        """
+        try:
+            lookup = InstrumentLookup.from_file(DEFAULT_BOD_PATH)
+            matches = lookup.search_options(
+                underlying="NIFTY",
+                strike=float(strike),
+                option_type=option_type,
+                expiry=expiry,
+            )
+        except Exception as exc:  # Intentional: fail-safe BOD lookup
+            log.warning(
+                "ic_nifty_v1.roll_target_bod_lookup_failed",
+                strike=str(strike),
+                option_type=option_type,
+                error=str(exc),
+            )
+            return None
+
+        if not matches:
+            log.warning(
+                "ic_nifty_v1.roll_target_not_in_bod",
+                strike=str(strike),
+                option_type=option_type,
+                expiry=str(expiry),
+            )
+            return None
+
+        return matches[0]["instrument_key"]
 
     def _find_leg(self, market: OptionChain, instrument_key: str) -> OptionLeg | None:
         """Locate a CE or PE leg in the chain for the given instrument key.

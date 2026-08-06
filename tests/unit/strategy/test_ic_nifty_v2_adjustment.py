@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import datetime
 from decimal import Decimal
+from unittest.mock import MagicMock, patch
 
 import structlog.testing
 
@@ -194,7 +195,15 @@ class TestRollWing:
         positions = _standard_ic_positions()
         chain = _challenged_put_chain(put_delta="-0.36")
 
-        with structlog.testing.capture_logs() as cap:
+        with (
+            patch("src.instruments.lookup.InstrumentLookup.from_file") as mock_from_file,
+            structlog.testing.capture_logs() as cap,
+        ):
+            lookup = MagicMock()
+            lookup.search_options.side_effect = lambda **kwargs: [
+                {"instrument_key": f"NSE_FO|{int(kwargs['strike'])}"}
+            ]
+            mock_from_file.return_value = lookup
             result = strategy._evaluate_adjustment(positions, chain, dte=20, expiry="2026-07-31")
 
         assert result is not None
@@ -229,7 +238,13 @@ class TestRollWing:
         positions = _standard_ic_positions()
         chain = _challenged_put_chain(put_delta="-0.36")
 
-        result = strategy._evaluate_adjustment(positions, chain, dte=20, expiry="2026-07-31")
+        with patch("src.instruments.lookup.InstrumentLookup.from_file") as mock_from_file:
+            lookup = MagicMock()
+            lookup.search_options.side_effect = lambda **kwargs: [
+                {"instrument_key": f"NSE_FO|{int(kwargs['strike'])}"}
+            ]
+            mock_from_file.return_value = lookup
+            result = strategy._evaluate_adjustment(positions, chain, dte=20, expiry="2026-07-31")
 
         assert result is not None and result.roll_update is not None
         for leg in result.roll_update.legs:
@@ -389,7 +404,15 @@ class TestDeltaStop:
             }
         )
 
-        with structlog.testing.capture_logs() as cap:
+        with (
+            patch("src.instruments.lookup.InstrumentLookup.from_file") as mock_from_file,
+            structlog.testing.capture_logs() as cap,
+        ):
+            lookup = MagicMock()
+            lookup.search_options.side_effect = lambda **kwargs: [
+                {"instrument_key": f"NSE_FO|{int(kwargs['strike'])}"}
+            ]
+            mock_from_file.return_value = lookup
             result = strategy._evaluate_adjustment(positions, chain, dte=20, expiry="2026-07-31")
 
         assert result is not None
@@ -597,7 +620,13 @@ class TestStateHelpers:
         positions = _standard_ic_positions()
         chain = _challenged_put_chain(put_delta="-0.36")
 
-        result = strategy._evaluate_adjustment(positions, chain, dte=20, expiry="2026-07-31")
+        with patch("src.instruments.lookup.InstrumentLookup.from_file") as mock_from_file:
+            lookup = MagicMock()
+            lookup.search_options.side_effect = lambda **kwargs: [
+                {"instrument_key": f"NSE_FO|{int(kwargs['strike'])}"}
+            ]
+            mock_from_file.return_value = lookup
+            result = strategy._evaluate_adjustment(positions, chain, dte=20, expiry="2026-07-31")
 
         # Roll should succeed (ROLL_WING) despite huge potential debit,
         # because the guard condition is `original_ic_credit > 0`.

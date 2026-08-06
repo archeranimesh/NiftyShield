@@ -618,7 +618,7 @@ Decimal correctness (`str(unrealized)` etc., no float leakage) and the `PaperTra
 | Field | Value |
 |---|---|
 | Severity | **HIGH** — same defect class as BUG-012/BUG-014 (fabricated/unresolvable `instrument_key`), but not yet symptomatic because the write path it would poison (IC-CLOSE-2 / MC-3) doesn't exist in production yet. Blocks MC-3 from shipping as originally scoped. |
-| Status | 🔴 Open |
+| Status | ✅ Fixed (MC-3a, `docs/plan/monitor-and-close-hardening/tasks.md`) — `_select_wing_roll_target`/`_search_narrower_wing_candidate` (V1) and `_roll_result_to_signal`'s Zone 2 branch + `_execute_partial_roll` (V2, the latter not explicitly named in this entry's original scope but same defect, same files, fixed alongside) now route through new `_resolve_roll_target_key()` helpers calling `InstrumentLookup.search_options`; a BOD miss/exception is treated as a failed roll candidate (`None`), never a crash or a persisted bad key. |
 | Discovered | 2026-08-05, `docs/plan/monitor-and-close-hardening/tasks.md` MC-3 pre-implementation investigation (graph-before-code step) |
 | Location | `src/strategy/ic_nifty_v1.py::IronCondorV1._select_wing_roll_target` (line 947: `instrument_key = f"NSE_FO|NIFTY{int(candidate.strike)}{option_type}"`); `src/strategy/ic_nifty_v2.py::IronCondorV2._roll_result_to_signal` (equivalent `f"NSE_FO|NIFTY{int(new_put_wing.strike)}PE"` / `...CE"` construction for the Zone 2 profit-lock replacement wings) |
 
@@ -633,5 +633,24 @@ Decimal correctness (`str(unrealized)` etc., no float leakage) and the `PaperTra
 **Relationship to MC-3:** MC-3 ("persist the close side of ROLL_WING/PROFIT_LOCK_ZONE2") was scoped as a pure persistence task assuming the replacement leg's key was already valid. It wasn't. Per user decision 2026-08-05, MC-3 is being split (see `tasks.md`) rather than silently expanded in scope this session.
 
 **Related:** BUG-012 (same defect class, IC's original strike-parse-failure fix), BUG-014 (same class, closed-leg key resolution).
+
+---
+
+## BUG-024 — `IronCondorV2.enter()` still fabricates all four entry legs' `instrument_key` via string-formatting, not BOD resolution
+
+| Field | Value |
+|---|---|
+| Severity | **HIGH** — same defect class as BUG-023, but wider blast radius: this is the *entry* path (`enter()`, `src/strategy/ic_nifty_v2.py:277,284,291,298`), which persists to `paper_trades` on every single new IC V2 open — unlike BUG-023's roll path, which was confirmed dormant. |
+| Status | 🔴 Open |
+| Discovered | 2026-08-06, `@code-reviewer`-substitute pass on the MC-3a (BUG-023) fix — flagged as out-of-scope for that task and not previously tracked. |
+| Location | `src/strategy/ic_nifty_v2.py::IronCondorV2.enter`, lines 277 (`short_put`), 284 (`short_call`), 291 (`long_put`), 298 (`long_call`) — all four build `instrument_key=f"NSE_FO|NIFTY{int(<leg>.strike)}<CE\|PE>"` from the chain-scanned `OptionLeg` directly. |
+
+**Symptom:** identical construction pattern to BUG-023's roll-target fabrication — a symbol-style key that real Upstox `instrument_key`s (numeric-only, e.g. `NSE_FO|63930`) can never match.
+
+**Why this is more urgent than BUG-023 was:** `enter()`'s legs are written to `paper_trades` immediately on entry (not gated behind an unimplemented persistence step), so this is likely already producing unresolvable `instrument_key`s on live/paper IC V2 positions today — needs verification against `paper_trades` for existing `paper_ic_nifty_v2_*` rows before assuming severity, per this project's Rule 1 (pre-aggregate, don't dump).
+
+**Suggested fix:** same pattern as BUG-023's fix — route through `InstrumentLookup.search_options(underlying="NIFTY", strike=..., option_type=..., expiry=...)` (or reuse the new `IronCondorV2._resolve_roll_target_key` helper, generalized/renamed since it's no longer roll-specific once this lands).
+
+**Related:** BUG-023 (identical defect class, roll path — fixed), BUG-012, BUG-014.
 
 ---

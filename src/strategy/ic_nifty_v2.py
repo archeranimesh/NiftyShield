@@ -985,17 +985,15 @@ class IronCondorV2:
         # Leg 2: Sell back old long hedge (close challenged long)
         close_long_key = old_long_pos.instrument_key
         # Leg 3: Sell new replacement short
-        new_short_key = (
-            f"NSE_FO|NIFTY{int(new_short.strike)}PE"
-            if side == "put"
-            else f"NSE_FO|NIFTY{int(new_short.strike)}CE"
+        new_short_key = self._resolve_roll_target_key(
+            new_short.strike, "PE" if side == "put" else "CE", expiry
         )
         # Leg 4: Buy new replacement long wing
-        new_long_key = (
-            f"NSE_FO|NIFTY{int(new_long.strike)}PE"
-            if side == "put"
-            else f"NSE_FO|NIFTY{int(new_long.strike)}CE"
+        new_long_key = self._resolve_roll_target_key(
+            new_long.strike, "PE" if side == "put" else "CE", expiry
         )
+        if new_short_key is None or new_long_key is None:
+            return None, "bod_key_unresolved"
 
         legs = [
             LegSpec(
@@ -1613,11 +1611,15 @@ class IronCondorV2:
                     old_long_put_key = long_put_pos.instrument_key if long_put_pos else ""
                     old_long_call_key = long_call_pos.instrument_key if long_call_pos else ""
                     new_put_key = (
-                        f"NSE_FO|NIFTY{int(new_put_wing.strike)}PE" if new_put_wing else ""
-                    )
+                        self._resolve_roll_target_key(new_put_wing.strike, "PE", expiry_str)
+                        if new_put_wing
+                        else None
+                    ) or ""
                     new_call_key = (
-                        f"NSE_FO|NIFTY{int(new_call_wing.strike)}CE" if new_call_wing else ""
-                    )
+                        self._resolve_roll_target_key(new_call_wing.strike, "CE", expiry_str)
+                        if new_call_wing
+                        else None
+                    ) or ""
                     new_cum_debit = pl_state.cumulative_lock_debit_pts + (
                         decision.net_debit_pts or Decimal("0")
                     )
@@ -1740,6 +1742,58 @@ class IronCondorV2:
                 ]
 
         return []
+
+    def _resolve_roll_target_key(
+        self, strike: Decimal, option_type: str, expiry_str: str
+    ) -> str | None:
+        """Resolve a Zone 2 replacement wing candidate to its real BOD key.
+
+        Zone 2 profit-lock's new_put_wing/new_call_wing come from
+        ``ProfitLockEngine``'s chain scan (an ``OptionLeg``, which carries no
+        ``instrument_key`` at all) — string-formatting the strike into a
+        symbol-style key (BUG-023) produces one that can never resolve,
+        since real Upstox keys are numeric-only. Route through the offline
+        BOD instrument master instead, same as every other persisting call
+        site in this codebase.
+
+        Args:
+            strike: Candidate replacement wing's strike price.
+            option_type: ``"CE"`` or ``"PE"``.
+            expiry_str: Already-resolved IC expiry (ISO string), to
+                disambiguate the same strike across multiple live expiries.
+
+        Returns:
+            Real numeric ``instrument_key``, or ``None`` when the
+            strike/type/expiry combination isn't present in BOD — treated
+            as a failed candidate, not an exception.
+        """
+        try:
+            lookup = InstrumentLookup.from_file(DEFAULT_BOD_PATH)
+            matches = lookup.search_options(
+                underlying="NIFTY",
+                strike=float(strike),
+                option_type=option_type,
+                expiry=expiry_str,
+            )
+        except Exception as exc:  # Intentional: fail-safe BOD lookup
+            log.warning(
+                "ic_nifty_v2.roll_target_bod_lookup_failed",
+                strike=str(strike),
+                option_type=option_type,
+                error=str(exc),
+            )
+            return None
+
+        if not matches:
+            log.warning(
+                "ic_nifty_v2.roll_target_not_in_bod",
+                strike=str(strike),
+                option_type=option_type,
+                expiry=expiry_str,
+            )
+            return None
+
+        return matches[0]["instrument_key"]
 
     def _roll_result_to_signal(
         self,
@@ -2322,12 +2376,7 @@ class IronCondorV2:
                     return None
                 short_leg = self._find_leg(market, short_pos.instrument_key)
                 long_leg = self._find_leg(market, long_pos.instrument_key)
-                if (
-                    not short_leg
-                    or not long_leg
-                    or short_leg.ltp is None
-                    or long_leg.ltp is None
-                ):
+                if not short_leg or not long_leg or short_leg.ltp is None or long_leg.ltp is None:
                     return None
                 mark = short_leg.ltp - long_leg.ltp
                 credit = short_pos.avg_sell_price - long_pos.avg_cost

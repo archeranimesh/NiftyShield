@@ -72,7 +72,7 @@ positions" risk. Each task is independently landable; no shared files between th
 
 ---
 
-- [ ] **MC-3a** — BUG-023: resolve the `ROLL_WING`/`PROFIT_LOCK_ZONE2` replacement leg's real
+- [x] **MC-3a** — BUG-023: resolve the `ROLL_WING`/`PROFIT_LOCK_ZONE2` replacement leg's real
   `instrument_key` via BOD, instead of the current fabricated symbol-style key. Split out of the
   original MC-3 (2026-08-05 pre-implementation investigation) — see `docs/bugs/bugs.md` BUG-023
   for full root-cause detail. **Must land before MC-3b** — MC-3b's persistence would otherwise
@@ -99,6 +99,15 @@ positions" risk. Each task is independently landable; no shared files between th
   symbol-style placeholder.
 
   **Commit:** `fix(strategy): resolve ROLL_WING/PROFIT_LOCK_ZONE2 replacement key via BOD`
+  | SHA: pending — sandbox `.git/HEAD.lock` stale, permission denied to remove; changes are
+  staged (`git add`) but commit deferred to live host.
+
+  **Note:** also fixed the identical fabrication in V2's `_execute_partial_roll` (D3 partial
+  roll new-leg keys) — same file, same defect class, feeds the same ROLL_WING path; found via
+  `@code-reviewer`-substitute pass, not separately scoped, folded in rather than left half-fixed.
+  A third occurrence in `IronCondorV2.enter()` (entry legs, not roll) was found and is
+  **out of scope** — logged as BUG-023's sibling, `docs/bugs/bugs.md` BUG-024 (open, not fixed
+  this session).
 
 ---
 

@@ -643,36 +643,61 @@ def _make_chain_with_roll_targets(
 
 
 def test_roll_wing_fires_on_short_call_breach_with_target() -> None:
-    """Short call |delta|=0.36 + CE target at 26000 → ROLL_WING ACTION fires alongside DELTA_STOP."""
+    """Short call |delta|=0.36 + CE target at 26000 → ROLL_WING ACTION fires alongside DELTA_STOP.
+
+    BOD resolves the chain-scanned 26000 CE candidate to its real numeric
+    instrument_key (BUG-023) — the fabricated "NSE_FO|NIFTY26000CE" symbol
+    style key is never produced.
+    """
+    from unittest.mock import MagicMock, patch
+
     strat = IronCondorV1()
     strat.auto_execute = False
     chain = _make_chain_with_roll_targets(short_call_delta="0.36")
     positions = _make_ic_positions()
-    events = asyncio.run(strat.check_signals(chain, positions))
+
+    with patch("src.instruments.lookup.InstrumentLookup.from_file") as mock_from_file:
+        lookup = MagicMock()
+        lookup.search_options.return_value = [{"instrument_key": "NSE_FO|76006"}]
+        mock_from_file.return_value = lookup
+        events = asyncio.run(strat.check_signals(chain, positions))
+
     types = [e.event_type for e in events]
     assert "DELTA_STOP" in types
     assert "ROLL_WING" in types
     rw = next(e for e in events if e.event_type == "ROLL_WING")
     assert rw.severity == "ACTION"
     assert rw.payload["leg_role"] == "short_call"
-    assert "26000" in rw.payload["suggested_instrument_key"]
+    assert rw.payload["suggested_instrument_key"] == "NSE_FO|76006"
     assert rw.payload["current_instrument_key"] == _SHORT_CALL_KEY
 
 
 def test_roll_wing_fires_on_short_put_breach_with_target() -> None:
-    """Short put |delta|=0.37 + PE target at 21000 → ROLL_WING ACTION fires alongside DELTA_STOP."""
+    """Short put |delta|=0.37 + PE target at 21000 → ROLL_WING ACTION fires alongside DELTA_STOP.
+
+    BOD resolves the chain-scanned 21000 PE candidate to its real numeric
+    instrument_key (BUG-023).
+    """
+    from unittest.mock import MagicMock, patch
+
     strat = IronCondorV1()
     strat.auto_execute = False
     chain = _make_chain_with_roll_targets(short_put_delta="-0.37")
     positions = _make_ic_positions()
-    events = asyncio.run(strat.check_signals(chain, positions))
+
+    with patch("src.instruments.lookup.InstrumentLookup.from_file") as mock_from_file:
+        lookup = MagicMock()
+        lookup.search_options.return_value = [{"instrument_key": "NSE_FO|71001"}]
+        mock_from_file.return_value = lookup
+        events = asyncio.run(strat.check_signals(chain, positions))
+
     types = [e.event_type for e in events]
     assert "DELTA_STOP" in types
     assert "ROLL_WING" in types
     rw = next(e for e in events if e.event_type == "ROLL_WING")
     assert rw.severity == "ACTION"
     assert rw.payload["leg_role"] == "short_put"
-    assert "21000" in rw.payload["suggested_instrument_key"]
+    assert rw.payload["suggested_instrument_key"] == "NSE_FO|71001"
 
 
 def test_roll_wing_not_fired_when_no_ce_target_in_range() -> None:
@@ -695,7 +720,7 @@ def test_roll_wing_rescued_by_bug_022_narrower_search() -> None:
     existing long hedge (25500) and the short strike (25000) clears the
     liquidity/premium floor and the floor-guarantee inequality (given a
     persisted entry credit) -> ROLL_WING fires instead of a bare DELTA_STOP."""
-    from unittest.mock import MagicMock
+    from unittest.mock import MagicMock, patch
 
     from src.paper.store import PaperStore
 
@@ -716,11 +741,16 @@ def test_roll_wing_rescued_by_bug_022_narrower_search() -> None:
     chain = OptionChain(underlying_spot=Decimal("24000"), expiry=date(2026, 6, 26), strikes=strikes)
     positions = _make_ic_positions()
 
-    events = asyncio.run(strat.check_signals(chain, positions))
+    with patch("src.instruments.lookup.InstrumentLookup.from_file") as mock_from_file:
+        lookup = MagicMock()
+        lookup.search_options.return_value = [{"instrument_key": "NSE_FO|75200"}]
+        mock_from_file.return_value = lookup
+        events = asyncio.run(strat.check_signals(chain, positions))
+
     types = [e.event_type for e in events]
     assert "ROLL_WING" in types
     roll_event = next(e for e in events if e.event_type == "ROLL_WING")
-    assert "25200" in roll_event.payload["suggested_instrument_key"]
+    assert roll_event.payload["suggested_instrument_key"] == "NSE_FO|75200"
 
 
 def test_roll_wing_blocked_by_directional_guard() -> None:
@@ -1291,6 +1321,7 @@ def test_check_signals_auto_execute_loss_stop() -> None:
 def test_check_signals_counterfactual_log_action_events() -> None:
     """Check that ACTION events trigger a counterfactual_dte_marks DB log."""
     from src.paper.store import PaperStore
+
     store = MagicMock(spec=PaperStore)
     store.get_original_entry_credit.return_value = None
     strat = IronCondorV1(store=store)
@@ -1301,11 +1332,11 @@ def test_check_signals_counterfactual_log_action_events() -> None:
         long_call_ltp="5",
     )
     positions = _make_ic_positions()
-    
+
     events = asyncio.run(strat.check_signals(chain, positions))
     action_events = [e for e in events if e.severity == "ACTION"]
     assert len(action_events) == 1
-    
+
     assert store.create_exit_event.call_count == 1
     kwargs = store.create_exit_event.call_args[1]
     assert kwargs["strategy_name"] == strat.strategy_name
@@ -1313,8 +1344,9 @@ def test_check_signals_counterfactual_log_action_events() -> None:
     assert kwargs["exit_signal"] == "LOSS_STOP"
     assert kwargs["severity"] == "ACTION"
     assert "counterfactual_dte_marks" in kwargs
-    
+
     import json
+
     blob = json.loads(kwargs["counterfactual_dte_marks"])
     assert "exit_dte" in blob
     assert "mark_at_exit" in blob
@@ -1545,3 +1577,55 @@ def test_find_leg_bod_lookup_raises_returns_none() -> None:
         leg = strat._find_leg(chain, "NSE_FO|63896")
 
     assert leg is None
+
+
+# ── BUG-023: _resolve_roll_target_key BOD-backed replacement key ────────────
+
+
+def test_resolve_roll_target_key_resolves_valid_candidate() -> None:
+    """A candidate strike/type/expiry present in BOD resolves to its real
+    numeric instrument_key — never the fabricated symbol-style key."""
+    from unittest.mock import MagicMock, patch
+
+    strat = IronCondorV1()
+
+    with patch("src.instruments.lookup.InstrumentLookup.from_file") as mock_from_file:
+        lookup = MagicMock()
+        lookup.search_options.return_value = [{"instrument_key": "NSE_FO|76006"}]
+        mock_from_file.return_value = lookup
+
+        key = strat._resolve_roll_target_key(Decimal("26000"), "CE", date(2026, 6, 26))
+
+    assert key == "NSE_FO|76006"
+
+
+def test_resolve_roll_target_key_absent_from_bod_returns_none() -> None:
+    """A strike present in the live chain scan but absent from BOD for that
+    expiry is rejected as a failed candidate, not a crash."""
+    from unittest.mock import MagicMock, patch
+
+    strat = IronCondorV1()
+
+    with patch("src.instruments.lookup.InstrumentLookup.from_file") as mock_from_file:
+        lookup = MagicMock()
+        lookup.search_options.return_value = []
+        mock_from_file.return_value = lookup
+
+        key = strat._resolve_roll_target_key(Decimal("26000"), "CE", date(2026, 6, 26))
+
+    assert key is None
+
+
+def test_resolve_roll_target_key_bod_lookup_raises_returns_none() -> None:
+    """A BOD file/lookup failure is caught and degrades to None, never raises."""
+    from unittest.mock import patch
+
+    strat = IronCondorV1()
+
+    with patch(
+        "src.instruments.lookup.InstrumentLookup.from_file",
+        side_effect=OSError("BOD file missing"),
+    ):
+        key = strat._resolve_roll_target_key(Decimal("26000"), "CE", date(2026, 6, 26))
+
+    assert key is None

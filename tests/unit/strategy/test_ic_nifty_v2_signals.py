@@ -353,8 +353,17 @@ def test_full_pipeline_roll_wing() -> None:
     against the 60-pt roll debit computed from the chain prices.
     """
     strategy = _make_strategy(original_credit="200")
-    with patch("src.strategy.ic_nifty_v2.market_today", return_value=_FROZEN_TODAY):
+    with (
+        patch("src.strategy.ic_nifty_v2.market_today", return_value=_FROZEN_TODAY),
+        patch("src.instruments.lookup.InstrumentLookup.from_file") as mock_from_file,
+    ):
         import asyncio
+
+        lookup = MagicMock()
+        lookup.search_options.side_effect = lambda **kwargs: [
+            {"instrument_key": f"NSE_FO|{int(kwargs['strike'])}00"}
+        ]
+        mock_from_file.return_value = lookup
 
         result = asyncio.run(strategy.check_signals(_roll_wing_chain(), _standard_ic_positions()))
     assert len(result) == 1
@@ -913,6 +922,52 @@ def test_parse_expiry_bod_lookup_raises_returns_none() -> None:
     assert expiry is None
 
 
+# ── BUG-023: _resolve_roll_target_key BOD-backed replacement key ────────────
+
+
+def test_resolve_roll_target_key_resolves_valid_candidate() -> None:
+    """A candidate strike/type/expiry present in BOD resolves to its real
+    numeric instrument_key — never the fabricated symbol-style key."""
+    strategy = _make_strategy()
+
+    with patch("src.instruments.lookup.InstrumentLookup.from_file") as mock_from_file:
+        lookup = MagicMock()
+        lookup.search_options.return_value = [{"instrument_key": "NSE_FO|71001"}]
+        mock_from_file.return_value = lookup
+
+        key = strategy._resolve_roll_target_key(Decimal("21000"), "PE", "2026-07-31")
+
+    assert key == "NSE_FO|71001"
+
+
+def test_resolve_roll_target_key_absent_from_bod_returns_none() -> None:
+    """A strike present in the live chain scan but absent from BOD for that
+    expiry is rejected as a failed candidate, not a crash."""
+    strategy = _make_strategy()
+
+    with patch("src.instruments.lookup.InstrumentLookup.from_file") as mock_from_file:
+        lookup = MagicMock()
+        lookup.search_options.return_value = []
+        mock_from_file.return_value = lookup
+
+        key = strategy._resolve_roll_target_key(Decimal("21000"), "PE", "2026-07-31")
+
+    assert key is None
+
+
+def test_resolve_roll_target_key_bod_lookup_raises_returns_none() -> None:
+    """A BOD file/lookup failure is caught and degrades to None, never raises."""
+    strategy = _make_strategy()
+
+    with patch(
+        "src.instruments.lookup.InstrumentLookup.from_file",
+        side_effect=OSError("BOD file missing"),
+    ):
+        key = strategy._resolve_roll_target_key(Decimal("21000"), "PE", "2026-07-31")
+
+    assert key is None
+
+
 def test_check_signals_end_to_end_resolves_expiry_via_bod() -> None:
     """Full check_signals pipeline with real *numeric* keys (production form,
     e.g. NSE_FO|63930) now reaches DTE/P&L evaluation instead of silently
@@ -985,24 +1040,26 @@ def test_check_signals_end_to_end_resolves_expiry_via_bod() -> None:
 def test_check_signals_counterfactual_log_action_events() -> None:
     """Check that ACTION events trigger a counterfactual_dte_marks DB log in V2."""
     from src.paper.store import PaperStore
+
     store = MagicMock(spec=PaperStore)
     store.get_original_entry_credit.return_value = None
-    
+
     from src.strategy.profit_lock_engine import ProfitLockState
+
     pl_state = ProfitLockState(
-        profit_lock_zone=0, 
-        zone2_lock_executed=False, 
-        zone3_lock_executed=False, 
+        profit_lock_zone=0,
+        zone2_lock_executed=False,
+        zone3_lock_executed=False,
         cumulative_lock_debit_pts=Decimal("0"),
-        active_put_width_pts=0, 
-        active_call_width_pts=0, 
-        cycle_id=""
+        active_put_width_pts=0,
+        active_call_width_pts=0,
+        cycle_id="",
     )
     store.get_profit_lock_state.return_value = pl_state
 
     config = IC_V2_MONTHLY
     strat = IronCondorV2(config=config, store=store)
-    
+
     # Trigger Priority 2 FORCED_CLOSE by extreme delta
     chain = _chain(
         {
@@ -1018,22 +1075,24 @@ def test_check_signals_counterfactual_log_action_events() -> None:
         _pos("short_call", _key("25100", "CE")),
         _pos("long_call_hedge", _key("25800", "CE")),
     ]
-    
+
     with patch("src.strategy.ic_nifty_v2.market_today", return_value=_FROZEN_TODAY):
         import asyncio
+
         events = asyncio.run(strat.check_signals(chain, positions))
-        
+
     action_events = [e for e in events if e.severity == "ACTION"]
     assert len(action_events) == 1
-    
+
     assert store.create_exit_event.call_count == 1
     kwargs = store.create_exit_event.call_args[1]
     assert kwargs["strategy_name"] == strat.strategy_name
     assert kwargs["leg_name"] == "ALL"
     assert kwargs["severity"] == "ACTION"
     assert "counterfactual_dte_marks" in kwargs
-    
+
     import json
+
     blob = json.loads(kwargs["counterfactual_dte_marks"])
     assert "exit_dte" in blob
     assert "mark_at_exit" in blob
