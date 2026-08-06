@@ -84,12 +84,15 @@ from src.notifications.telegram import build_notifier
 from src.paper.constants import (
     DEFAULT_BOD_PATH,
     DEFAULT_DB_PATH,
+    NIFTY_UNDERLYING,
+    NIFTYBEES_KEY,
     STRATEGY_OVERLAY,
     STRATEGY_PP_OVERLAY,
     STRATEGY_SPOT,
 )
 from src.paper.models import GateViolation, PaperTrade
 from src.paper.store import PaperStore
+from src.risk.collateral_gate import check_collateral_capacity
 from src.utils.logging import setup_logging
 
 _SCRIPT_NAME = "scripts.strategies.three_track.paper_3track_overlay_entry"
@@ -1038,6 +1041,41 @@ def _has_open_overlay_leg(store: PaperStore, leg_role: str) -> bool:
     return any(p.leg_role == leg_role for p in store.get_positions(STRATEGY_OVERLAY))
 
 
+def _check_overlay_collateral_capacity(
+    store: PaperStore, strategy_name: str, lots_requested: int
+) -> None:
+    """Warn-only NiftyBees collateral-capacity gate for overlay entry (RH-4, 2026-08-06).
+
+    Never blocks entry — fetches live Nifty spot/NiftyBees LTP and delegates to
+    ``check_collateral_capacity`` (aggregates open lots across CSP + this shared
+    overlay namespace against ``compute_max_lots()``'s ceiling; logs a
+    ``GateViolation`` on breach). Any failure (LTP fetch, gate itself) is caught
+    and logged non-fatally — an advisory gate must never block a trade that
+    already cleared its own strategy-specific gates.
+    """
+    try:
+        client = UpstoxMarketClient(settings.upstox_analytics_token)
+        ltp_map = client.get_ltp_sync([NIFTY_UNDERLYING, NIFTYBEES_KEY])
+        nifty_spot_ltp = ltp_map.get(NIFTY_UNDERLYING)
+        niftybees_ltp = ltp_map.get(NIFTYBEES_KEY)
+        if nifty_spot_ltp is None or niftybees_ltp is None:
+            logger.warning(
+                "paper_3track_overlay_entry.collateral_gate_skipped_missing_ltp",
+                nifty_spot_available=nifty_spot_ltp is not None,
+                niftybees_ltp_available=niftybees_ltp is not None,
+            )
+            return
+        check_collateral_capacity(
+            store=store,
+            strategy_name=strategy_name,
+            lots_requested=lots_requested,
+            nifty_spot=nifty_spot_ltp,
+            niftybees_ltp=niftybees_ltp,
+        )
+    except Exception as exc:  # non-fatal — advisory gate must never block the trade
+        logger.warning("paper_3track_overlay_entry.collateral_gate_failed", error=str(exc))
+
+
 def main() -> None:
     """CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -1207,6 +1245,9 @@ def main() -> None:
                 file=sys.stderr,
             )
         else:
+            _check_overlay_collateral_capacity(
+                store, STRATEGY_OVERLAY, lots_requested=len(overlay_trades)
+            )
             if cfg.overlay_type == "collar":
                 _record_collar_trades(store, overlay_trades)
             else:

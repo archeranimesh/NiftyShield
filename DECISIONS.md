@@ -1771,6 +1771,36 @@ Source: this session (Cowork), `docs/plan/3track-consolidation/stories.md` PP3.
 
 **2026-08-06 — MC-4 (CC/PP/Collar leg finders routed through shared BOD-fallback utility):** `CCOverlayV1._find_call_leg`, `PPOverlayV1._find_put_leg`, and `CollarOverlayV1._find_call_leg`/`_find_put_leg` each carried their own private `_STRIKE_RE`-only regex parse, and on a numeric-key parse failure (the normal case for real Upstox `instrument_key`s) fell back to a blind chain walk that returned the first CE/PE in the chain with positive LTP — a strictly worse failure mode than IC's pre-BUG-012 blind-`None`, since it silently computed exit signals against the wrong strike rather than skipping. Fixed by deleting all four methods' bodies and delegating to the existing shared `find_option_leg(instrument_key, market, lookup=...)` (`src/strategy/_price_utils.py`), same pattern already applied to `OverlayCloser`/`PaperExecutor`/`NiftyTrackComparisonV1` (2026-07-20): each strategy's `__init__` gained `instrument_lookup: InstrumentLookup | None = None` plus a lazy, non-fatal `_resolve_instrument_lookup()` (BOD load failure logs WARNING and degrades to regex-only resolution, never raises). The now-dead `_STRIKE_RE` compiled regex and the `InvalidOperation` import were removed from all three files (confirmed via grep — no other use in-file); `_EXPIRY_RE` and `Decimal` remain, still used elsewhere. No caller of any of the three constructors passes positional args past `store`/`notifier` (all call sites use keywords), so the new trailing parameter is non-breaking. Reviewed via `general-purpose` agent standing in for `@code-reviewer` against the diff — no CRITICAL/ERROR findings; confirmed the blind chain-walk is fully removed (no `_STRIKE_RE`/`fallback_used`/`ltp > Decimal` remnants across the three files). 591/591 `tests/unit/strategy/` pass, including 8 new tests (one per finder confirming BOD-fallback resolution, one per finder confirming the chain-walk fallback is gone — asserted via a fixture where the old code would have picked the wrong strike). This session's `.git/index.lock` could not be removed via `rm`/`os.remove` (FUSE `EPERM`, the same recurring sandbox artifact noted in MC-3a/MC-3b/MC-6's commit-deferral notes) but *could* be renamed via `os.rename` — worked around by renaming it out of the way rather than deferring the commit to a live host, so this is the first MC-series commit in this thread executed directly in-sandbox. Source: this session (Cowork), `docs/plan/monitor-and-close-hardening/tasks.md` MC-4.
 
+**2026-08-06 — RH-4 (shared NiftyBees collateral-capacity gate, warn-only):** Operator decision
+(AskUserQuestion, no council call — fails `docs/council/README.md`'s condition 3, single-discipline
+capital-allocation engineering, not cross-disciplinary): **warn-only**, mirroring the existing
+IVR/DTE/liquidity `--log-only-gates` pattern, not a hard block. New `check_collateral_capacity()`
+(`src/risk/collateral_gate.py`) resolves the NiftyBees holding from the existing `STRATEGY_SPOT`
+(`paper_nifty_spot`) position — no new model or position type, per the CL-1 precedent recorded in
+`TODOS.md`'s 2026-08-06 csp-collateral-leg close-out — sums open lots across `STRATEGY_CSP` and the
+single shared `STRATEGY_OVERLAY` namespace (covering CC/PP/Collar), and compares against
+`compute_max_lots()`'s ceiling. A breach logs a `GateViolation` via `PaperStore.record_gate_violation`
+but the caller always proceeds; both call sites (`open_new_csp_leg` in
+`src/strategy/csp_roll_executor.py`, `_check_overlay_collateral_capacity` in
+`scripts/strategies/three_track/paper_3track_overlay_entry.py`) wrap the call in a non-fatal
+`try/except` and skip entirely (log-only) if either live LTP (Nifty spot, NiftyBees) is
+unavailable — an advisory gate must never abort or delay a real entry. `PaperStore` is imported
+under `TYPE_CHECKING` only in `collateral_gate.py` to avoid a real circular import
+(`src.paper.store` → `src.strategy.profit_lock_engine` → `src.strategy` package `__init__` →
+`csp_nifty_v1` → `csp_roll_executor` → this module); safe because `from __future__ import
+annotations` is present and the module only duck-types `store` at runtime. Reviewed via
+`general-purpose` agent standing in for `@code-reviewer` (financial logic gate) — found one
+CRITICAL (the CSP call site was missing the overlay site's non-fatal wrapping, meaning a DB error
+inside the gate itself could have aborted a live entry — the exact failure mode the warn-only
+design exists to prevent) and fixed in the same pass; no other CRITICAL/ERROR. One WARNING
+deferred (`lot_size <= 0` silently returns 0 open lots rather than logging — not capital-risk-
+affecting since `LOT_SIZE` is a fixed constant, not user input). 6 new tests
+(`tests/unit/risk/test_collateral_gate.py`) + 4 call-site wiring tests (`test_csp_roll_executor.py`,
+`test_paper_3track_overlay_entry_ops2.py`) — all pass; full `tests/unit/` suite unchanged at
+2631 passed relative to the pre-existing 25 failed/7 errors (network-blocked LTP tests, missing
+`duckdb`/`pandas` in this sandbox — same documented class as prior sessions' close-out notes, not
+a regression). Source: this session (Cowork), `docs/plan/execution-risk-hardening/tasks.md` RH-4.
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty

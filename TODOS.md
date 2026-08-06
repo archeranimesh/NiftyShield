@@ -76,6 +76,16 @@ Full forensic log (SHAs, bug numbers, root-cause detail) moved to
 add new entries there going forward, or start a fresh dated section here if this file's
 Session Log grows large again.
 
+### 2026-08-06 Session Log (execution-risk-hardening RH-4 shipped)
+- **RH-4 (`docs/plan/execution-risk-hardening/tasks.md`)** — shared warn-only NiftyBees
+  collateral-capacity gate. New `check_collateral_capacity()` (`src/risk/collateral_gate.py`),
+  wired into CSP (`open_new_csp_leg`, `src/strategy/csp_roll_executor.py`) and overlay
+  (`_check_overlay_collateral_capacity`, `scripts/strategies/three_track/paper_3track_overlay_entry.py`)
+  entry paths. Warn-only per operator decision — see `DECISIONS.md` 2026-08-06 for full detail
+  including the code-reviewer-substitute finding (CSP call site missing non-fatal wrapping, fixed
+  same session). RH-5 (docs close for the whole `execution-risk-hardening` story) is next —
+  not done this session, per one-task-per-session protocol.
+
 ### 2026-08-06 Session Log (execution-risk-hardening RH-2 verified)
 - **RH-2 (`docs/plan/execution-risk-hardening/tasks.md`)** — `paper_` prefix on `strategy_name`
   already fully enforced structurally via `PaperTrade.strategy_name_must_have_paper_prefix`

@@ -17,6 +17,7 @@ from scripts.strategies.three_track.paper_3track_overlay_entry import (
     _COLLAR_CALL_ROLE,
     _COLLAR_PUT_ROLE,
     OverlayTrade,
+    _check_overlay_collateral_capacity,
     _record_collar_trades,
     _validate_collar_pairs,
 )
@@ -114,3 +115,62 @@ class TestRecordCollarTrades:
         store.record_trades.return_value = ([], [])
         _record_collar_trades(store, ots)
         assert store.record_trades.call_count == 2
+
+
+class TestCheckOverlayCollateralCapacity:
+    """RH-4: warn-only collateral gate wiring at the overlay entry call site."""
+
+    def test_invokes_shared_gate_with_live_ltps(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        store = MagicMock()
+        fake_client = MagicMock()
+        fake_client.get_ltp_sync.return_value = {
+            "NSE_INDEX|Nifty 50": Decimal("24500"),
+            "NSE_EQ|INF204KB14I2": Decimal("280"),
+        }
+        monkeypatch.setattr(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.UpstoxMarketClient",
+            MagicMock(return_value=fake_client),
+        )
+        mock_gate = MagicMock(return_value=None)
+        monkeypatch.setattr(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.check_collateral_capacity",
+            mock_gate,
+        )
+
+        _check_overlay_collateral_capacity(store, "paper_nifty_overlay", lots_requested=1)
+
+        mock_gate.assert_called_once()
+        _, kwargs = mock_gate.call_args
+        assert kwargs["strategy_name"] == "paper_nifty_overlay"
+        assert kwargs["lots_requested"] == 1
+        assert kwargs["nifty_spot"] == Decimal("24500")
+        assert kwargs["niftybees_ltp"] == Decimal("280")
+
+    def test_missing_ltp_skips_gate_without_raising(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        store = MagicMock()
+        fake_client = MagicMock()
+        fake_client.get_ltp_sync.return_value = {}  # neither key resolves
+        monkeypatch.setattr(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.UpstoxMarketClient",
+            MagicMock(return_value=fake_client),
+        )
+        mock_gate = MagicMock()
+        monkeypatch.setattr(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.check_collateral_capacity",
+            mock_gate,
+        )
+
+        # Must not raise — advisory gate, non-fatal on missing data.
+        _check_overlay_collateral_capacity(store, "paper_nifty_overlay", lots_requested=1)
+
+        mock_gate.assert_not_called()
+
+    def test_client_exception_is_non_fatal(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        store = MagicMock()
+        monkeypatch.setattr(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.UpstoxMarketClient",
+            MagicMock(side_effect=RuntimeError("network down")),
+        )
+
+        # Must not raise — non-fatal, mirrors the notify-failure pattern elsewhere.
+        _check_overlay_collateral_capacity(store, "paper_nifty_overlay", lots_requested=1)

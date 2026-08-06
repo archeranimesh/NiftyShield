@@ -127,6 +127,61 @@ def test_open_new_csp_leg_dry_run(
     mock_store.record_trade.assert_not_called()
 
 
+def test_open_new_csp_leg_live_invokes_collateral_gate(
+    mock_broker: MagicMock, mock_store: MagicMock, mock_lookup: MagicMock
+) -> None:
+    """RH-4: a live (non-dry-run) open calls the warn-only collateral gate with
+    the requested quantity, using LTPs resolved from the same broker.get_ltp
+    call — never blocks even when the gate itself reports a breach."""
+    mock_broker.get_option_chain = AsyncMock(
+        return_value=[
+            {
+                "strike_price": 22800.0,
+                "put_options": {
+                    "instrument_key": "NSE_FO|NIFTY22800PE",
+                    "option_greeks": {"delta": -0.22, "iv": 15.0},
+                    "market_data": {
+                        "ltp": 45.50,
+                        "bid_price": 45.0,
+                        "ask_price": 46.0,
+                        "oi": 50000.0,
+                    },
+                },
+            }
+        ]
+    )
+    mock_broker.get_ltp = AsyncMock(
+        return_value={
+            "NSE_INDEX|Nifty 50": Decimal("24500"),
+            "NSE_EQ|INF204KB14I2": Decimal("280"),
+        }
+    )
+
+    with patch(
+        "src.strategy.csp_roll_executor.check_collateral_capacity"
+    ) as mock_gate:
+        mock_gate.return_value = None
+        _run(
+            open_new_csp_leg(
+                mock_broker,
+                mock_store,
+                mock_lookup,
+                strategy="paper_csp_nifty_v1",
+                roll_date=date(2026, 6, 5),
+                dry_run=False,
+                quantity=50,
+            )
+        )
+
+    mock_gate.assert_called_once()
+    _, kwargs = mock_gate.call_args
+    assert kwargs["strategy_name"] == "paper_csp_nifty_v1"
+    assert kwargs["lots_requested"] == 50
+    assert kwargs["nifty_spot"] == Decimal("24500")
+    assert kwargs["niftybees_ltp"] == Decimal("280")
+    mock_store.record_trade.assert_called_once()
+
+
 def test_roll_csp_success(
     mock_broker: MagicMock, mock_store: MagicMock, mock_lookup: MagicMock
 ) -> None:

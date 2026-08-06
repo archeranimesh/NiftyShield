@@ -123,7 +123,7 @@ belong reopening the archived epic for.
 
 ---
 
-- [ ] **RH-4** — Shared NiftyBees collateral-capacity check across CSP/CC/PP/Collar. Spawned
+- [x] **RH-4** — Shared NiftyBees collateral-capacity check across CSP/CC/PP/Collar. Spawned
   2026-08-06 from the `csp-collateral-leg` story close-out (archived —
   `docs/archive/plan/csp-collateral-leg/`). That story confirmed `compute_max_lots()`
   (`src/paper/constants.py`) correctly computes how many lots a given NiftyBees holding
@@ -167,6 +167,12 @@ belong reopening the archived epic for.
   the substitution used).
 
   **Commit:** `feat(strategy): add shared NiftyBees collateral-capacity gate`
+
+  **Resolved 2026-08-06:** warn-only (operator decision, no council call — see DECISIONS.md).
+  `check_collateral_capacity()` in new `src/risk/collateral_gate.py`; wired into
+  `open_new_csp_leg` (`src/strategy/csp_roll_executor.py`) and
+  `_check_overlay_collateral_capacity` (`scripts/strategies/three_track/paper_3track_overlay_entry.py`).
+  See DECISIONS.md 2026-08-06 for full detail. | SHA: __PENDING__
 
 ---
 

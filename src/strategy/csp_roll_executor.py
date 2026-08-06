@@ -17,8 +17,9 @@ from src.client.protocol import BrokerClient
 from src.instruments.lookup import InstrumentLookup
 from src.instruments.strike_selector import filter_strikes_by_delta, rank_strikes
 from src.models.portfolio import TradeAction
-from src.paper.constants import NIFTY_UNDERLYING
+from src.paper.constants import NIFTY_UNDERLYING, NIFTYBEES_KEY
 from src.paper.models import PaperTrade
+from src.risk.collateral_gate import check_collateral_capacity
 
 if TYPE_CHECKING:
     from src.paper.store import PaperStore
@@ -240,6 +241,31 @@ async def open_new_csp_leg(
     )
 
     if not dry_run:
+        # RH-4, 2026-08-06: warn-only shared NiftyBees collateral-capacity gate —
+        # never blocks entry, only logs a GateViolation on breach (operator decision,
+        # docs/plan/execution-risk-hardening/tasks.md). Skipped (not hard-failed) if
+        # either LTP is unavailable — this is advisory, not a data-integrity gate.
+        ltp_map = await broker.get_ltp([NIFTY_UNDERLYING, NIFTYBEES_KEY])
+        nifty_spot_ltp = ltp_map.get(NIFTY_UNDERLYING)
+        niftybees_ltp = ltp_map.get(NIFTYBEES_KEY)
+        if nifty_spot_ltp is not None and niftybees_ltp is not None:
+            try:
+                check_collateral_capacity(
+                    store=store,
+                    strategy_name=strategy,
+                    lots_requested=quantity,
+                    nifty_spot=nifty_spot_ltp,
+                    niftybees_ltp=niftybees_ltp,
+                )
+            except Exception as exc:  # non-fatal — advisory gate must never block entry
+                logger.warning("csp_roll_executor.collateral_gate_failed", error=str(exc))
+        else:
+            logger.warning(
+                "csp_roll_executor.collateral_gate_skipped_missing_ltp",
+                nifty_spot_available=nifty_spot_ltp is not None,
+                niftybees_ltp_available=niftybees_ltp is not None,
+            )
+
         store.record_trade(new_trade)
 
     logger.info(
