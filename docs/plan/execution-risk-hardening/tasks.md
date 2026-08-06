@@ -172,7 +172,7 @@ belong reopening the archived epic for.
   `check_collateral_capacity()` in new `src/risk/collateral_gate.py`; wired into
   `open_new_csp_leg` (`src/strategy/csp_roll_executor.py`) and
   `_check_overlay_collateral_capacity` (`scripts/strategies/three_track/paper_3track_overlay_entry.py`).
-  See DECISIONS.md 2026-08-06 for full detail. | SHA: __PENDING__
+  See DECISIONS.md 2026-08-06 for full detail. | SHA: c0d7dd8
 
 ---
 
