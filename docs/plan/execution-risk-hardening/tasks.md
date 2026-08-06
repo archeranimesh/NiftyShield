@@ -51,7 +51,7 @@ belong reopening the archived epic for.
 
 ---
 
-- [ ] **RH-2** — Enforce `strategy_name` `paper_` prefix constraint. Spawned from TODOS.md
+- [x] **RH-2** — Enforce `strategy_name` `paper_` prefix constraint. Spawned from TODOS.md
   (PB1.1 post-review item, paper-backbone epic — now archived). Validate that concrete
   strategies use the required `paper_` prefix on `strategy_name`. Note: a related check already
   landed — `tests/unit/strategy/test_strategy_protocol.py:64-67` asserts `hasattr(mock_strategy,
@@ -72,6 +72,18 @@ belong reopening the archived epic for.
   concrete class missing the check, and assert it in that class's test file.
 
   **Commit (if code changes):** `test(strategy): assert paper_ prefix on <StrategyClass>.strategy_name`
+
+  **Verification finding (2026-08-06):** already fully covered, no code change needed.
+  Enforcement is structural, not per-class: `PaperTrade.strategy_name_must_have_paper_prefix`
+  (`src/paper/models.py:79-95`, a Pydantic `field_validator`) raises `ValidationError` for any
+  non-`paper_`-prefixed `strategy_name` at the single choke point every concrete strategy writes
+  through — stronger than a per-class assertion since it can't be skipped by a new strategy class.
+  Tested in `tests/unit/paper/test_models.py::test_paper_trade_rejects_missing_prefix` and
+  `::test_paper_trade_rejects_live_strategy_name`. Protocol-conformance mock check already existed
+  at `tests/unit/strategy/test_strategy_protocol.py:66-68`. All named constants in
+  `src/paper/constants.py` (`STRATEGY_SPOT`, `STRATEGY_CSP`, `STRATEGY_CC_OVERLAY`,
+  `STRATEGY_PP_OVERLAY`, `STRATEGY_COLLAR_OVERLAY`, `STRATEGY_IC*`) carry the `paper_` prefix.
+  No commit needed beyond this docs-close pass. | SHA: 3f9021e
 
 ---
 

@@ -76,6 +76,12 @@ Full forensic log (SHAs, bug numbers, root-cause detail) moved to
 add new entries there going forward, or start a fresh dated section here if this file's
 Session Log grows large again.
 
+### 2026-08-06 Session Log (execution-risk-hardening RH-2 verified)
+- **RH-2 (`docs/plan/execution-risk-hardening/tasks.md`)** — `paper_` prefix on `strategy_name`
+  already fully enforced structurally via `PaperTrade.strategy_name_must_have_paper_prefix`
+  (`src/paper/models.py:79-95`), not just the protocol-conformance mock check. No code change;
+  ticked with a verification note.
+
 ### 2026-08-06 Session Log (csp-collateral-leg closed)
 - **CSP collateral leg `long_niftybees`** — closed without implementing CL-1..CL-4 as originally
   scoped. Traced `NIFTYBEES_KEY`/`STRATEGY_SPOT` and found `paper_nifty_spot` is already the real,
