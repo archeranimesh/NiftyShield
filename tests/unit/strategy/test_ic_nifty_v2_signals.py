@@ -922,10 +922,10 @@ def test_parse_expiry_bod_lookup_raises_returns_none() -> None:
     assert expiry is None
 
 
-# ── BUG-023: _resolve_roll_target_key BOD-backed replacement key ────────────
+# ── BUG-023: _resolve_instrument_key BOD-backed replacement key ────────────
 
 
-def test_resolve_roll_target_key_resolves_valid_candidate() -> None:
+def test_resolve_instrument_key_resolves_valid_candidate() -> None:
     """A candidate strike/type/expiry present in BOD resolves to its real
     numeric instrument_key — never the fabricated symbol-style key."""
     strategy = _make_strategy()
@@ -935,12 +935,12 @@ def test_resolve_roll_target_key_resolves_valid_candidate() -> None:
         lookup.search_options.return_value = [{"instrument_key": "NSE_FO|71001"}]
         mock_from_file.return_value = lookup
 
-        key = strategy._resolve_roll_target_key(Decimal("21000"), "PE", "2026-07-31")
+        key = strategy._resolve_instrument_key(Decimal("21000"), "PE", "2026-07-31")
 
     assert key == "NSE_FO|71001"
 
 
-def test_resolve_roll_target_key_absent_from_bod_returns_none() -> None:
+def test_resolve_instrument_key_absent_from_bod_returns_none() -> None:
     """A strike present in the live chain scan but absent from BOD for that
     expiry is rejected as a failed candidate, not a crash."""
     strategy = _make_strategy()
@@ -950,12 +950,12 @@ def test_resolve_roll_target_key_absent_from_bod_returns_none() -> None:
         lookup.search_options.return_value = []
         mock_from_file.return_value = lookup
 
-        key = strategy._resolve_roll_target_key(Decimal("21000"), "PE", "2026-07-31")
+        key = strategy._resolve_instrument_key(Decimal("21000"), "PE", "2026-07-31")
 
     assert key is None
 
 
-def test_resolve_roll_target_key_bod_lookup_raises_returns_none() -> None:
+def test_resolve_instrument_key_bod_lookup_raises_returns_none() -> None:
     """A BOD file/lookup failure is caught and degrades to None, never raises."""
     strategy = _make_strategy()
 
@@ -963,7 +963,7 @@ def test_resolve_roll_target_key_bod_lookup_raises_returns_none() -> None:
         "src.instruments.lookup.InstrumentLookup.from_file",
         side_effect=OSError("BOD file missing"),
     ):
-        key = strategy._resolve_roll_target_key(Decimal("21000"), "PE", "2026-07-31")
+        key = strategy._resolve_instrument_key(Decimal("21000"), "PE", "2026-07-31")
 
     assert key is None
 

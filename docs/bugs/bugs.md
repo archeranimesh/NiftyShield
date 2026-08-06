@@ -641,16 +641,16 @@ Decimal correctness (`str(unrealized)` etc., no float leakage) and the `PaperTra
 | Field | Value |
 |---|---|
 | Severity | **HIGH** — same defect class as BUG-023, but wider blast radius: this is the *entry* path (`enter()`, `src/strategy/ic_nifty_v2.py:277,284,291,298`), which persists to `paper_trades` on every single new IC V2 open — unlike BUG-023's roll path, which was confirmed dormant. |
-| Status | 🔴 Open |
+| Status | ✅ Fixed (MC-6, `docs/plan/monitor-and-close-hardening/tasks.md`) — all four `enter()` legs now resolve via the (renamed, now-shared) `IronCondorV2._resolve_instrument_key()` helper; a BOD miss on any leg aborts the entire entry (`return None`), never a partial/unresolvable position. Pre-fix audit (`scripts/dev/audit_bug024_fabricated_keys.py` against the live DB, 2026-08-06) found **0** existing `paper_ic_nifty_v2*` rows with a fabricated key — confirmed dormant before this fix, not an active data-corruption incident. |
 | Discovered | 2026-08-06, `@code-reviewer`-substitute pass on the MC-3a (BUG-023) fix — flagged as out-of-scope for that task and not previously tracked. |
 | Location | `src/strategy/ic_nifty_v2.py::IronCondorV2.enter`, lines 277 (`short_put`), 284 (`short_call`), 291 (`long_put`), 298 (`long_call`) — all four build `instrument_key=f"NSE_FO|NIFTY{int(<leg>.strike)}<CE\|PE>"` from the chain-scanned `OptionLeg` directly. |
 
 **Symptom:** identical construction pattern to BUG-023's roll-target fabrication — a symbol-style key that real Upstox `instrument_key`s (numeric-only, e.g. `NSE_FO|63930`) can never match.
 
-**Why this is more urgent than BUG-023 was:** `enter()`'s legs are written to `paper_trades` immediately on entry (not gated behind an unimplemented persistence step), so this is likely already producing unresolvable `instrument_key`s on live/paper IC V2 positions today — needs verification against `paper_trades` for existing `paper_ic_nifty_v2_*` rows before assuming severity, per this project's Rule 1 (pre-aggregate, don't dump).
+**Why this was more urgent than BUG-023 was:** `enter()`'s legs are written to `paper_trades` immediately on entry (not gated behind an unimplemented persistence step) — but the pre-fix audit confirmed it hadn't actually produced any unresolvable rows yet.
 
-**Suggested fix:** same pattern as BUG-023's fix — route through `InstrumentLookup.search_options(underlying="NIFTY", strike=..., option_type=..., expiry=...)` (or reuse the new `IronCondorV2._resolve_roll_target_key` helper, generalized/renamed since it's no longer roll-specific once this lands).
+**Fix applied:** same pattern as BUG-023's fix — routes through `InstrumentLookup.search_options(underlying="NIFTY", strike=..., option_type=..., expiry=...)` via the renamed `_resolve_instrument_key()` helper (was `_resolve_roll_target_key`, generalized since it's shared by entry and roll/profit-lock now). Reviewed via `general-purpose` agent standing in for `@code-reviewer` — no CRITICAL/ERROR; two WARNINGs: (1) entry now hard-blocks if BOD lags the live chain scan intraday (operational risk, monitor `ic_nifty_v2.entry_key_resolution_failed` log frequency post-deploy, not fixed — there's no code fix for "BOD can be stale," only monitoring); (2) `entry_recorded` log was firing before the new abort check — fixed in the same pass, moved after the resolution guard so it only ever describes entries that actually proceed. 67/67 relevant tests pass.
 
-**Related:** BUG-023 (identical defect class, roll path — fixed), BUG-012, BUG-014.
+**Related:** BUG-023 (identical defect class, roll path — fixed, same commit lineage), BUG-012, BUG-014.
 
 ---

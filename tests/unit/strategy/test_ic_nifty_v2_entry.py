@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import datetime
 import re
+from contextlib import contextmanager
 from decimal import Decimal
+from unittest.mock import MagicMock, patch
 
 import structlog.testing
 
@@ -62,6 +64,23 @@ def _chain(
     )
 
 
+@contextmanager
+def _patch_bod():
+    """Patch the BOD instrument lookup used by _resolve_instrument_key (BUG-024).
+
+    Resolved keys are numeric-style (``NSE_FO|NIFTY<strike><CE|PE>``, matching
+    production shape) and keyed off the strike/option_type passed to
+    ``search_options`` so per-leg assertions still work unchanged.
+    """
+    with patch("src.instruments.lookup.InstrumentLookup.from_file") as mock_from_file:
+        lookup = MagicMock()
+        lookup.search_options.side_effect = lambda **kwargs: [
+            {"instrument_key": f"NSE_FO|NIFTY{int(kwargs['strike'])}{kwargs['option_type']}"}
+        ]
+        mock_from_file.return_value = lookup
+        yield lookup
+
+
 def _standard_chain() -> OptionChain:
     """A realistic 4-strike chain covering the full IC structure.
 
@@ -96,7 +115,8 @@ class TestEnterHappyPath:
         strategy = IronCondorV2(config=IC_V2_MONTHLY)
         chain = _standard_chain()
 
-        result = strategy.enter(chain)
+        with _patch_bod():
+            result = strategy.enter(chain)
 
         assert isinstance(result, PositionUpdate)
         assert len(result.legs) == 4
@@ -109,7 +129,7 @@ class TestEnterHappyPath:
         strategy = IronCondorV2(config=IC_V2_MONTHLY)
         chain = _standard_chain()
 
-        with structlog.testing.capture_logs() as cap:
+        with _patch_bod(), structlog.testing.capture_logs() as cap:
             result = strategy.enter(chain)
 
         assert result is not None
@@ -121,7 +141,8 @@ class TestEnterHappyPath:
         strategy = IronCondorV2(config=IC_V2_MONTHLY)
         chain = _standard_chain()
 
-        result = strategy.enter(chain)
+        with _patch_bod():
+            result = strategy.enter(chain)
 
         assert result is not None
         assert result.total_credit_pts > Decimal("0")
@@ -131,7 +152,8 @@ class TestEnterHappyPath:
         strategy = IronCondorV2(config=IC_V2_MONTHLY)
         chain = _standard_chain()
 
-        result = strategy.enter(chain)
+        with _patch_bod():
+            result = strategy.enter(chain)
 
         assert result is not None
         sp_leg = next(lg for lg in result.legs if lg.leg_role == "short_put")
@@ -258,7 +280,7 @@ class TestSdSanityCheck:
             expiry=market_today() + datetime.timedelta(days=30),
         )
 
-        with structlog.testing.capture_logs() as cap:
+        with _patch_bod(), structlog.testing.capture_logs() as cap:
             result = strategy.enter(chain)
 
         # Entry proceeds (warn only — never blocks)
@@ -288,10 +310,62 @@ class TestSdSanityCheck:
             expiry=market_today() + datetime.timedelta(days=30),
         )
 
-        with structlog.testing.capture_logs() as cap:
+        with _patch_bod(), structlog.testing.capture_logs() as cap:
             result = strategy.enter(chain)
 
         # Entry proceeds (warn only — never blocks)
         assert result is not None
         events = [e["event"] for e in cap]
         assert "ic_nifty_v2.entry_sd_warn_tight" in events
+
+
+# ---------------------------------------------------------------------------
+# BUG-024: entry-side instrument_key resolution
+# ---------------------------------------------------------------------------
+
+
+class TestEnterInstrumentKeyResolution:
+    def test_enter_all_four_legs_resolve_via_bod_returns_real_keys(self) -> None:
+        """All 4 legs resolve through BOD -> PositionUpdate carries real
+        numeric-style instrument_keys (not the old fabricated symbol keys)."""
+        strategy = IronCondorV2(config=IC_V2_MONTHLY)
+        chain = _standard_chain()
+
+        with _patch_bod():
+            result = strategy.enter(chain)
+
+        assert isinstance(result, PositionUpdate)
+        assert len(result.legs) == 4
+        for leg in result.legs:
+            assert leg.instrument_key is not None
+            assert leg.instrument_key.startswith("NSE_FO|NIFTY")
+
+    def test_enter_one_leg_missing_from_bod_returns_none(self) -> None:
+        """One leg's strike absent from BOD for the resolved expiry -> enter()
+        returns None (skip the whole entry), never a partial position."""
+        strategy = IronCondorV2(config=IC_V2_MONTHLY)
+        chain = _standard_chain()
+
+        with patch("src.instruments.lookup.InstrumentLookup.from_file") as mock_from_file:
+            lookup = MagicMock()
+
+            def _search_options(**kwargs):
+                # Simulate the short-put leg (23900 PE) missing from BOD;
+                # every other leg resolves normally.
+                if int(kwargs["strike"]) == 23900 and kwargs["option_type"] == "PE":
+                    return []
+                return [
+                    {
+                        "instrument_key": f"NSE_FO|NIFTY{int(kwargs['strike'])}{kwargs['option_type']}"
+                    }
+                ]
+
+            lookup.search_options.side_effect = _search_options
+            mock_from_file.return_value = lookup
+
+            with structlog.testing.capture_logs() as cap:
+                result = strategy.enter(chain)
+
+        assert result is None
+        events = [e["event"] for e in cap]
+        assert "ic_nifty_v2.entry_key_resolution_failed" in events

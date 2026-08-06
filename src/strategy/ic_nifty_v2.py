@@ -259,6 +259,31 @@ class IronCondorV2:
         total_credit = (short_put.ltp + short_call.ltp) - (long_put.ltp + long_call.ltp)
         ivr_str = self._compute_ivr_str()
 
+        short_put_key = self._resolve_instrument_key(short_put.strike, "PE", expiry_str)
+        short_call_key = self._resolve_instrument_key(short_call.strike, "CE", expiry_str)
+        long_put_key = self._resolve_instrument_key(long_put.strike, "PE", expiry_str)
+        long_call_key = self._resolve_instrument_key(long_call.strike, "CE", expiry_str)
+        if None in (short_put_key, short_call_key, long_put_key, long_call_key):
+            # BUG-024: one or more legs picked by the delta/liquidity scan
+            # aren't present in the same-expiry BOD file. Abort the whole
+            # entry rather than persist a partial or unresolvable position —
+            # same skip-on-failure contract as the selection checks above.
+            # Deliberately logged before entry_recorded below, and entry_recorded
+            # is skipped entirely on this path — entry_recorded must only ever
+            # describe entries that actually proceed, not attempted-then-aborted
+            # ones (a reviewer-flagged log-semantics issue in an earlier revision
+            # of this diff, where entry_recorded fired unconditionally).
+            log.warning(
+                "ic_nifty_v2.entry_key_resolution_failed",
+                strategy_name=self.strategy_name,
+                expiry=expiry_str,
+                short_put_key=short_put_key,
+                short_call_key=short_call_key,
+                long_put_key=long_put_key,
+                long_call_key=long_call_key,
+            )
+            return None
+
         log.info(
             "ic_nifty_v2.entry_recorded",
             strategy_name=self.strategy_name,
@@ -274,28 +299,28 @@ class IronCondorV2:
 
         legs = [
             LegSpec(
-                instrument_key=f"NSE_FO|NIFTY{int(short_put.strike)}PE",
+                instrument_key=short_put_key,
                 action="SELL",
                 quantity=1,
                 leg_role="short_put",
                 notes=f"delta={short_put.delta}",
             ),
             LegSpec(
-                instrument_key=f"NSE_FO|NIFTY{int(short_call.strike)}CE",
+                instrument_key=short_call_key,
                 action="SELL",
                 quantity=1,
                 leg_role="short_call",
                 notes=f"delta={short_call.delta}",
             ),
             LegSpec(
-                instrument_key=f"NSE_FO|NIFTY{int(long_put.strike)}PE",
+                instrument_key=long_put_key,
                 action="BUY",
                 quantity=1,
                 leg_role="long_put_hedge",
                 notes=f"delta={long_put.delta}",
             ),
             LegSpec(
-                instrument_key=f"NSE_FO|NIFTY{int(long_call.strike)}CE",
+                instrument_key=long_call_key,
                 action="BUY",
                 quantity=1,
                 leg_role="long_call_hedge",
@@ -985,11 +1010,11 @@ class IronCondorV2:
         # Leg 2: Sell back old long hedge (close challenged long)
         close_long_key = old_long_pos.instrument_key
         # Leg 3: Sell new replacement short
-        new_short_key = self._resolve_roll_target_key(
+        new_short_key = self._resolve_instrument_key(
             new_short.strike, "PE" if side == "put" else "CE", expiry
         )
         # Leg 4: Buy new replacement long wing
-        new_long_key = self._resolve_roll_target_key(
+        new_long_key = self._resolve_instrument_key(
             new_long.strike, "PE" if side == "put" else "CE", expiry
         )
         if new_short_key is None or new_long_key is None:
@@ -1611,12 +1636,12 @@ class IronCondorV2:
                     old_long_put_key = long_put_pos.instrument_key if long_put_pos else ""
                     old_long_call_key = long_call_pos.instrument_key if long_call_pos else ""
                     new_put_key = (
-                        self._resolve_roll_target_key(new_put_wing.strike, "PE", expiry_str)
+                        self._resolve_instrument_key(new_put_wing.strike, "PE", expiry_str)
                         if new_put_wing
                         else None
                     ) or ""
                     new_call_key = (
-                        self._resolve_roll_target_key(new_call_wing.strike, "CE", expiry_str)
+                        self._resolve_instrument_key(new_call_wing.strike, "CE", expiry_str)
                         if new_call_wing
                         else None
                     ) or ""
@@ -1743,23 +1768,25 @@ class IronCondorV2:
 
         return []
 
-    def _resolve_roll_target_key(
+    def _resolve_instrument_key(
         self, strike: Decimal, option_type: str, expiry_str: str
     ) -> str | None:
-        """Resolve a Zone 2 replacement wing candidate to its real BOD key.
+        """Resolve a chain-scanned candidate leg to its real BOD instrument_key.
 
-        Zone 2 profit-lock's new_put_wing/new_call_wing come from
-        ``ProfitLockEngine``'s chain scan (an ``OptionLeg``, which carries no
-        ``instrument_key`` at all) — string-formatting the strike into a
-        symbol-style key (BUG-023) produces one that can never resolve,
-        since real Upstox keys are numeric-only. Route through the offline
-        BOD instrument master instead, same as every other persisting call
-        site in this codebase.
+        Shared by entry (``enter()``, BUG-024) and roll/profit-lock target
+        selection (``_execute_partial_roll``, Zone 2 profit-lock in
+        ``_roll_result_to_signal``, BUG-023) — all three build the
+        candidate leg from an ``OptionLeg`` (chain scan result), which
+        carries no ``instrument_key`` at all. String-formatting the strike
+        into a symbol-style key produces one that can never resolve, since
+        real Upstox keys are numeric-only. Route through the offline BOD
+        instrument master instead, same as every other persisting call site
+        in this codebase.
 
         Args:
-            strike: Candidate replacement wing's strike price.
+            strike: Candidate leg's strike price.
             option_type: ``"CE"`` or ``"PE"``.
-            expiry_str: Already-resolved IC expiry (ISO string), to
+            expiry_str: Already-resolved expiry (ISO string), to
                 disambiguate the same strike across multiple live expiries.
 
         Returns:
@@ -1777,7 +1804,7 @@ class IronCondorV2:
             )
         except Exception as exc:  # Intentional: fail-safe BOD lookup
             log.warning(
-                "ic_nifty_v2.roll_target_bod_lookup_failed",
+                "ic_nifty_v2.instrument_key_bod_lookup_failed",
                 strike=str(strike),
                 option_type=option_type,
                 error=str(exc),
@@ -1786,7 +1813,7 @@ class IronCondorV2:
 
         if not matches:
             log.warning(
-                "ic_nifty_v2.roll_target_not_in_bod",
+                "ic_nifty_v2.instrument_key_not_in_bod",
                 strike=str(strike),
                 option_type=option_type,
                 expiry=expiry_str,

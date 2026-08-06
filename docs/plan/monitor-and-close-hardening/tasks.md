@@ -99,8 +99,7 @@ positions" risk. Each task is independently landable; no shared files between th
   symbol-style placeholder.
 
   **Commit:** `fix(strategy): resolve ROLL_WING/PROFIT_LOCK_ZONE2 replacement key via BOD`
-  | SHA: pending — sandbox `.git/HEAD.lock` stale, permission denied to remove; changes are
-  staged (`git add`) but commit deferred to live host.
+  | SHA: 30af733
 
   **Note:** also fixed the identical fabrication in V2's `_execute_partial_roll` (D3 partial
   roll new-leg keys) — same file, same defect class, feeds the same ROLL_WING path; found via
@@ -168,6 +167,36 @@ positions" risk. Each task is independently landable; no shared files between th
   (asserted via a fixture where the chain-walk would have picked the wrong strike).
 
   **Commit:** `fix(strategy): route CC/PP/Collar leg finders through shared BOD-fallback utility`
+
+---
+
+- [x] **MC-6** — BUG-024: resolve `IronCondorV2.enter()`'s four entry legs' real `instrument_key`
+  via BOD, instead of the fabricated symbol-style key. Same defect class as BUG-023/MC-3a, found
+  during the MC-3a code-review pass (2026-08-06) and deliberately left out of that commit's scope
+  — see `docs/bugs/bugs.md` BUG-024. Higher severity than BUG-023 was, since `enter()`'s legs
+  persist to `paper_trades` immediately (not gated behind an unbuilt persistence step). Audited
+  2026-08-06 via `scripts/dev/audit_bug024_fabricated_keys.py` against the live DB — **0 rows**
+  found with a fabricated key under `paper_ic_nifty_v2*`, confirming the defect is dormant, not
+  actively corrupting persisted data, before this fix lands.
+
+  **Affects:** `src/strategy/ic_nifty_v2.py::IronCondorV2.enter`.
+
+  **Fix:** reuse the `_resolve_roll_target_key(strike, option_type, expiry_str)` helper added in
+  MC-3a (same signature already fits — `strike: Decimal`, `option_type: "CE"|"PE"`,
+  `expiry_str: str`, `market.expiry.isoformat()` already computed in `enter()`) — renamed to
+  `_resolve_instrument_key` since it's no longer roll-specific once `enter()` uses it too; all
+  existing MC-3a call sites (`_roll_result_to_signal` Zone 2, `_execute_partial_roll`) updated to
+  the new name, behavior unchanged. Any of the four legs failing to resolve aborts entry
+  entirely (`return None`) — same skip-on-failure contract `_select_short_put`/`_select_short_call`/
+  `_select_long_wing` already use earlier in `enter()`, not a partial 3-leg entry.
+
+  **Tests:** all four legs resolve via BOD → `PositionUpdate` returned with real numeric keys;
+  any single leg's strike absent from BOD for the resolved expiry → `enter()` returns `None`
+  (treated as a failed entry, not a partial position or a crash); existing `enter()` tests
+  updated to assert real key shape.
+
+  **Commit:** `fix(strategy): resolve IC V2 entry leg instrument_key via BOD` | SHA: pending —
+  same sandbox `.git/HEAD.lock` limitation as MC-3a; commit to be run on live host.
 
 ---
 
