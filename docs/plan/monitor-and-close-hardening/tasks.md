@@ -177,7 +177,7 @@ positions" risk. Each task is independently landable; no shared files between th
   (asserted via a fixture where the chain-walk would have picked the wrong strike).
 
   **Commit:** `fix(strategy): route CC/PP/Collar leg finders through shared BOD-fallback utility`
-  | SHA: pending
+  | SHA: 6301730
 
 ---
 
