@@ -47,6 +47,7 @@ belong reopening the archived epic for.
   compensated/closed automatically (compensation design), whichever design is chosen.
 
   **Commit:** `fix(scripts): make IC entry 4-leg sequence atomic (or add compensating close)`
+  | SHA: 880e3b0
 
 ---
 
