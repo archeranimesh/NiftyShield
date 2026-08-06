@@ -223,4 +223,4 @@ positions" risk. Each task is independently landable; no shared files between th
   now updated to closed with a consolidated SHA list. No `DECISIONS.md` or `CONTEXT.md` edit
   required.
 
-  **Commit:** `docs(strategy): close monitor-and-close-hardening story` | SHA: pending
+  **Commit:** `docs(strategy): close monitor-and-close-hardening story` | SHA: 11a555e
