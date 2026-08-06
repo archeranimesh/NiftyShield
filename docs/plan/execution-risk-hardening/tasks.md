@@ -83,7 +83,7 @@ belong reopening the archived epic for.
   at `tests/unit/strategy/test_strategy_protocol.py:66-68`. All named constants in
   `src/paper/constants.py` (`STRATEGY_SPOT`, `STRATEGY_CSP`, `STRATEGY_CC_OVERLAY`,
   `STRATEGY_PP_OVERLAY`, `STRATEGY_COLLAR_OVERLAY`, `STRATEGY_IC*`) carry the `paper_` prefix.
-  No commit needed beyond this docs-close pass. | SHA: 3f9021e
+  No commit needed beyond this docs-close pass. | SHA: 59b30d5
 
 ---
 
