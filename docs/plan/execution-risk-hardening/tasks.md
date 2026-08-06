@@ -176,6 +176,13 @@ belong reopening the archived epic for.
 
 ---
 
-- [ ] **RH-5** — Docs close: `TODOS.md` session log entry per task landed (RH-1 through RH-4,
+- [x] **RH-5** — Docs close: `TODOS.md` session log entry per task landed (RH-1 through RH-4,
   whichever subset ships). `DECISIONS.md` entry required if RH-1 or RH-4 lands (both are
   architecture decisions). Run only after RH-1 through RH-4 are complete.
+
+  **Verified 2026-08-06:** all four session-log entries already present in `TODOS.md`
+  (RH-1 at line 231, RH-2 at line 89, RH-3 at line 95, RH-4 at line 79 — each landed in its
+  own session as work completed). `DECISIONS.md` carries entries for both architecture
+  decisions: RH-1 compensating-close design (line 8) and RH-4 warn-only collateral gate
+  (line 1774). No new doc content required beyond marking item 4 done in `TODOS.md`'s
+  priority list and archiving this story. | SHA: pending
