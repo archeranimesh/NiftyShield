@@ -31,8 +31,6 @@ import re
 import aiohttp
 import structlog
 
-from src.config import settings
-
 logger = structlog.get_logger(__name__)
 
 _TELEGRAM_API = "https://api.telegram.org/bot{token}/sendMessage"
@@ -126,15 +124,29 @@ def build_notifier() -> TelegramNotifier | None:
     Returns None (silently) when either variable is absent — callers
     guard with ``if notifier:`` and skip notification without error.
 
+    Deliberately bypasses the ``settings`` singleton's ``_DynamicSettings``
+    cache and constructs a fresh, uncached ``Settings(_env_file=None)`` on
+    every call. This function's return value gates whether a real Telegram
+    message is sent, so it cannot depend on cache-invalidation correctness
+    across the process lifetime — see BUG-011 (docs/bugs/bugs.md): a stale
+    cached ``Settings`` instance surviving past a test's ``monkeypatch.delenv``
+    made this return a live notifier instead of None under `pytest -n auto`
+    full-suite runs, never in isolation. A fresh instance per call removes
+    that dependency entirely, independent of whatever the exact staleness
+    trigger turns out to be.
+
     Returns:
         Configured TelegramNotifier, or None if env vars are not set.
     """
-    token = (settings.telegram_bot_token or "").strip()
-    chat_id = (settings.telegram_chat_id or "").strip()
+    from src.config import Settings
+
+    fresh = Settings(_env_file=None)  # type: ignore[call-arg]
+    token = (fresh.telegram_bot_token or "").strip()
+    chat_id = (fresh.telegram_chat_id or "").strip()
     if not token or not chat_id:
         return None
 
-    budget = settings.telegram_message_budget
+    budget = fresh.telegram_message_budget
 
     return TelegramNotifier(bot_token=token, chat_id=chat_id, budget=budget)
 
