@@ -210,9 +210,17 @@ positions" risk. Each task is independently landable; no shared files between th
 
 ---
 
-- [ ] **MC-5** — Docs close: `TODOS.md` session log entry per task landed (MC-1 through MC-4,
+- [x] **MC-5** — Docs close: `TODOS.md` session log entry per task landed (MC-1 through MC-4,
   whichever subset ships), `DECISIONS.md` entry only if MC-3/MC-4 change production behavior
   (MC-1/MC-2 are logging/audit-only, no DECISIONS.md entry needed for those unless MC-2's audit
   finds a real missed exit). No `CONTEXT.md` change expected unless MC-3 introduces a new
   strike-selection helper worth noting in the module tree. Run only after MC-1 through MC-4
   (or whichever subset the team lands) are complete.
+
+  **Result:** all six sub-tasks (MC-1, MC-2, MC-3a, MC-3b, MC-4, MC-6) already carried full
+  `TODOS.md` session-log entries and `DECISIONS.md` entries from their own landing sessions —
+  this task's only remaining gap was TODOS.md item 2's stale "starting at MC-2" status line,
+  now updated to closed with a consolidated SHA list. No `DECISIONS.md` or `CONTEXT.md` edit
+  required.
+
+  **Commit:** `docs(strategy): close monitor-and-close-hardening story` | SHA: pending
