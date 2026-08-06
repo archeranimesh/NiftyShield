@@ -777,7 +777,15 @@ def test_entry_proceeds_when_no_open_pp_position(tmp_path, capsys):
             "scripts.strategies.three_track.paper_3track_overlay_entry.build_notifier",
             return_value=None,
         ),
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.UpstoxMarketClient"
+        ) as mock_client_cls,
     ):
+        # RH-4 collateral-capacity gate (2026-08-06) is advisory-only and out of scope
+        # for this test — force its missing-LTP skip path so it never reaches
+        # check_collateral_capacity/record_gate_violation with the empty mock_store
+        # positions below (which would otherwise read as a real breach).
+        mock_client_cls.return_value.get_ltp_sync.return_value = {}
         mock_dte.return_value = None  # nothing open
         mock_bootstrap.return_value = (cfg, None)
         mock_store = MagicMock()
@@ -917,7 +925,15 @@ def test_auto_pp_gate_violation_persisted(tmp_path, capsys):
             "scripts.strategies.three_track.paper_3track_overlay_entry.build_notifier",
             return_value=None,
         ),
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.UpstoxMarketClient"
+        ) as mock_client_cls,
     ):
+        # RH-4 collateral-capacity gate (2026-08-06) is advisory-only and out of scope
+        # for this test — force its missing-LTP skip path so the only
+        # record_gate_violation call is the one under test (the IVR violation from
+        # auto_pp_bootstrap), not a spurious breach from the empty mock_store positions.
+        mock_client_cls.return_value.get_ltp_sync.return_value = {}
         mock_dte.return_value = None
         mock_bootstrap.return_value = (cfg, violation)
         mock_store = MagicMock()
