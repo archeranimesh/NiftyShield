@@ -43,7 +43,7 @@ Scaffold only: create subdirectory `__init__.py` files under `scripts/` (`pipeli
 Prerequisite for paper-exit-signals (#5). Core deliverables: `PaperStrategy` protocol, `StrategyMonitor`, `PaperExecutor`, `RapidCouncil`, `TelegramGateway`, DB migrations, daemon scripts. Hard deadline: Jun–Jul 2026.
 
 **3. Build queue #5 — paper-exit-signals: Automated Exit Detection + Closure** (`docs/plan/paper-exit-signals/`)
-Blocked by #4 PT-0. Council authority: `docs/council/2026-05-28_paper-trade-exit-philosophy.md` — all 10 thresholds binding.
+Blocked by #4 PT-0. Council authority: `docs/archive/council/strategy/2026-05-28_paper-trade-exit-philosophy.md` — all 10 thresholds binding.
 
 **Start point:** Run SR1 first (scaffold is 1 commit, zero risk), then begin paper-backbone PT-0.
 

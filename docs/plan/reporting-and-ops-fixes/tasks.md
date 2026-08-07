@@ -65,7 +65,7 @@ design intent between them.
 
 ---
 
-- [ ] **RO-3** — Fix remaining dead `docs/council/...` links in live docs. Spawned from
+- [x] **RO-3** — Fix remaining dead `docs/council/...` links in live docs. Spawned from
   TODOS.md (2026-07-07, spawned from `docs-navigation-and-staleness` T1). That story's T1 fixed
   the two links named in its own spec (`docs/plan/variance-gate/prompt.md`, `DECISIONS.md`
   397-407) but a grep during that story's Phase C found the same dead-path pattern still live in
@@ -84,8 +84,6 @@ design intent between them.
   **No code-reviewer gate** — docs-only.
 
   **Commit:** `docs: fix remaining dead docs/council links in dev-foundation + variance-gate`
-
----
 
 - [ ] **RO-4** — Add healthcheck cron. Spawned from TODOS.md. `scripts/healthcheck.py` (CH-8,
   already shipped) is not yet wired into crontab — this is the remaining operational step.

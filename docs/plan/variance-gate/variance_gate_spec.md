@@ -1,6 +1,6 @@
 # CSP v1 Variance Gate — Full Specification
 
-**Source decision:** `docs/council/2026-05-02_variance-gate-regime-completeness.md`  
+**Source decision:** `docs/archive/council/risk/2026-05-02_variance-gate-regime-completeness.md`  
 **Supersedes:** Original Phase 0.8 single bullet "≥6 cycles with one of each exit type"  
 **Canonical strategy spec:** `docs/strategies/csp_nifty_v1.md`
 
@@ -182,6 +182,6 @@ The gate references `docs/strategies/csp_nifty_v1.md` as the single source of tr
 | `BACKTEST_PLAN.md § 0.8` | Gate checklist |
 | `BACKTEST_PLAN.md § 1.11` | Regime-matched Z-score computation |
 | `docs/strategies/csp_nifty_v1.md` | Canonical strategy spec (gate's source of truth) |
-| `docs/council/2026-05-02_variance-gate-regime-completeness.md` | Council decision (full deliberation) |
+| `docs/archive/council/risk/2026-05-02_variance-gate-regime-completeness.md` | Council decision (full deliberation) |
 | `TODOS.md → Define historical replay harness` | Replay harness design task |
 | `TODOS.md → India VIX ingestion` | IVR computation prerequisite |
