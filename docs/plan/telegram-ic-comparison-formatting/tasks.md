@@ -4,12 +4,33 @@
 > and append `| SHA: <sha>` when done. Add one line to `TODOS.md`. Full story spec for each task:
 > `stories.md` in this directory.
 
+> **⛔ SUPERSEDED 2026-08-07.** TGFMT-2 through TGFMT-9 below are superseded by
+> `docs/plan/telegram-markdown-migration/` — that epic's `formatting-rules/` and
+> `strategy-rollout/` stories absorb the same goal (shared table-formatting helper,
+> `auto_close.py` and other builders retrofitted, CLAUDE.md standard) under Markdown
+> parse_mode instead of the HTML+`<pre>` alignment-only fix planned here. Do not start
+> TGFMT-2..9 — start `telegram-markdown-migration/backbone/` instead.
+>
+> **TGFMT-1 stays as shipped history** (SHA `a69d817`) — its dynamic-width fix to
+> `build_comparison_report()` is real, working code and is NOT redone from scratch;
+> `telegram-markdown-migration/strategy-rollout/` ROLL-2 builds on top of it (adds Markdown
+> formatting to already-correct alignment logic).
+>
+> **Two still-open feature asks from TGFMT-2/TGFMT-3 are not superseded, just not yet
+> re-homed:** the "Legs" row (open-leg count, 🔴 if <4) and the Bkd/Flt month-vs-inception
+> P&L split (`Bkd (M)`/`Bkd (I)`/`Flt (M)`/`Flt (I)`, the latter requiring a genuinely new
+> `_get_unrealized_pnl_month_change()` calc, not a copy of the inception figure). These are
+> real data/feature requests independent of which formatting engine renders them — whoever
+> picks up `telegram-markdown-migration/strategy-rollout/` ROLL-2 should carry these forward
+> into that task's scope rather than let them silently drop. See TGFMT-2/TGFMT-3 below for
+> the original spec.
+
 ---
 
 - [x] **TGFMT-1** — Fix `build_comparison_report()` alignment: replace hand-counted literal
   spacing with dynamic label/column widths, right-aligned value columns. Regression test with an
   artificially long label. **Owner: Claude** (financial-report formatting, low ambiguity, mechanical
-  once the scratch script's proven approach is ported). | SHA: PENDING
+  once the scratch script's proven approach is ported). | SHA: a69d817
 - [ ] **TGFMT-2** — Add "Legs" row (open leg count out of 4, 🔴 if < 4) to `ICMonthlyStats` and the
   report. No new data dependency — `build_stats()` already computes `open_pos`. Can run in
   parallel with or right after TGFMT-1. **Owner: Claude.**
