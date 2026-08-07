@@ -100,6 +100,41 @@ criterion) rather than assumed — same failure class `CLAUDE.md` documents from
 this project routes through the real code-reviewer gate rather than Antigravity's persona-based
 self-review.
 
+### SNAP-2 finding (2026-08-07) — **closed, not implemented**
+
+During a Cowork session investigating IC V2 daily P&L, `paper_nav_snapshots` was found to already
+contain strategy-level `realized_pnl`/`unrealized_pnl`/`total_pnl` for all five IC variants
+(V1 weekly/monthly/leaps/yearly, V2 monthly), 2026-07-21 through present, written daily by
+`scripts/portfolio/paper_snapshot.py` (`36 15 * * 1-5`, calling `PaperTracker.record_nav_snapshot()`)
+— a completely separate code path from `paper_ic_snapshot.py` (the Telegram-report script this
+story originally targeted). Sample (`paper_ic_nifty_v2_monthly`):
+
+```
+2026-07-21  realized=0            unrealized=5422.63    total=5422.63
+2026-07-24  realized=-3056.63     unrealized=0           total=-3056.63
+2026-08-05  realized=-1756.08     unrealized=-157.63      total=-1913.71
+```
+
+The story's premise ("`paper_leg_snapshots` has zero rows for every IC variant" — still true)
+was read as "IC has no persisted daily P&L at all" — false. `paper_leg_snapshots` is per-leg;
+`paper_nav_snapshots` is per-strategy, and per-strategy is all four of this story's stated end
+goals (daily graph, realized-since-inception, realized-this-month, unrealized-since-inception)
+actually need. Per-leg attribution (which wing/short leg drove the P&L) was never a stated
+requirement — it would be new scope, not a gap-fill.
+
+**Decision:** close SNAP-2 without implementing. Do not wire `record_leg_snapshot()` into
+`paper_ic_snapshot.py` unless a future requirement specifically needs per-leg breakdown for IC
+(e.g. a per-leg Greeks dashboard). If that need arises, re-open as a new story rather than
+un-closing this one — the original rationale (mirror `paper_3track_snapshot.py`'s call shape) still
+applies then. See `DB_REGISTRY.md` for the full per-table writer/cadence breakdown that surfaced
+this — check it before assuming any `paper_*` table is empty for a strategy.
+
+**Downstream effect on SNAP-4:** no longer blocked by SNAP-2. Still blocked by SNAP-1 (need the
+cumulative-vs-delta confirmation before writing aggregation queries), but SNAP-4's query source
+should target `paper_nav_snapshots`, not `paper_leg_snapshots` — that table already has live rows
+for every IC variant today, so SNAP-4 can be built and validated against production data
+immediately once SNAP-1 lands, without waiting on any new writer code.
+
 ---
 
 ## SNAP-3 — Audit whether CSP/CC/PP/Collar have the same wiring gap
