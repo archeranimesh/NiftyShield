@@ -18,7 +18,7 @@ story on this list. Do not jump between stories mid-sequence; the ordering below
 3. [x] **CSP collateral leg `long_niftybees`** (2026-07-27, closed 2026-08-06, archived 2026-08-06) — archived to `docs/archive/plan/csp-collateral-leg/`. Rescoped and closed with zero code changes: the `long_niftybees` holding already existed as `paper_nifty_spot` (3-track base leg), and its "annual reset"/sizing question was already answered by the existing `compute_max_lots()` (CC overlay). See `DECISIONS.md` 2026-08-06. **Open follow-on, not part of this story:** no strategy currently checks aggregate NiftyBees collateral capacity before entering — CSP/CC/PP/Collar each hardcode their own lot count independently, `compute_max_lots()` is only reachable from a manual calibration script (`paper_cc_entry.py`), never the live automated entry path. Candidate addition to `execution-risk-hardening` (item 5) if a shared capacity gate is wanted.
 4. [x] **Execution risk hardening** (2026-07-27, closed 2026-08-06, archived 2026-08-06) — archived to `docs/archive/plan/execution-risk-hardening/`. All tasks landed: RH-1 (IC entry compensating close, SHA 880e3b0), RH-2 (paper_ prefix already enforced structurally, verification-only), RH-3 (council_rank still load-bearing, verification-only), RH-4 (shared warn-only NiftyBees collateral gate, SHA c0d7dd8), RH-5 (docs-close entry, SHA cd5ef89). See `DECISIONS.md` 2026-08-06 entries for RH-1/RH-4.
 5. [x] **Paper exit codification** (2026-07-27, closed 2026-08-02, archived 2026-08-04) — archived to `docs/archive/plan/paper-exit-codification/`. All tasks resolved: EC-1 retired (superseded by EC-5), EC-2 shipped, EC-4 (CSP portion) implemented, EC-5 (CC-only flat DTE≤5 close) implemented, EC-3 (docs close) done. **Verification debt closed 2026-08-04:** live `pytest tests/unit/` run (2654 passed, 2 skipped, 1 pre-existing unrelated network-dependent failure) confirms EC-4/EC-5 changes are green — see item 1's close-out note for the same run. **Cross-epic note:** item 1's CC1/CC2/CC3 sub-thread's EC-4 dependency was already satisfied (CSP portion landed); item 1 is now also closed.
-6. [x] **Reporting & ops fixes** (2026-07-27, closed 2026-08-07) — `docs/plan/reporting-and-ops-fixes/tasks.md`. All tasks landed: RO-1 (SHA 6096fe2), RO-2 (SHA 7fa175b), RO-3 (SHA 98e781e), RO-4 (verified live, no code change), RO-5 (SHA 1754704), RO-6 (this docs-close entry). **2026-08-07: RO-1 landed** (SHA 6096fe2) — `_compute_daily_deltas` now returns per-role `cc_pnl`/`collar_pnl`/`pp_pnl` 1-day deltas instead of leaving `summary_rows`' inception-to-date totals unmerged; `--daily` mode's Day CC/Day Collar/Day PP columns were showing inception totals before this fix. Tests green (offline suite unaffected elsewhere). **2026-08-07: RO-4 verified, no code change** — `logs/cron.log` already has the healthcheck cron live (`55 15 * * 1-5 ... scripts.healthcheck`), correct invocation shape, placed after `position_health_check`; differs from the task's suggested 16:30 slot (runs 15:55) with no functional gap. Manual Telegram-alert dry-run confirmation not re-verified this session — flagged to Animesh. **2026-08-07: RO-5 landed** (SHA 1754704) — added the IVR NULL exception note (Cycles 1-2 accepted data gap, criterion A satisfied from Cycle 3 onward) to `BACKTEST_PLAN.md`'s Phase 0.8 gate criterion A. Docs-only, no code-reviewer gate.
+6. [x] **Reporting & ops fixes** (2026-07-27, closed 2026-08-07, archived 2026-08-07) — archived to `docs/archive/plan/reporting-and-ops-fixes/`. All tasks landed: RO-1 (SHA 6096fe2), RO-2 (SHA 7fa175b), RO-3 (SHA 98e781e), RO-4 (verified live, no code change), RO-5 (SHA 1754704), RO-6 (docs-close entry). RO-1 — `_compute_daily_deltas` now returns per-role `cc_pnl`/`collar_pnl`/`pp_pnl` 1-day deltas instead of leaving `summary_rows`' inception-to-date totals unmerged; `--daily` mode's Day CC/Day Collar/Day PP columns were showing inception totals before this fix. RO-4 — `logs/cron.log` already has the healthcheck cron live (`55 15 * * 1-5 ... scripts.healthcheck`), correct invocation shape, placed after `position_health_check`; differs from the task's suggested 16:30 slot (runs 15:55) with no functional gap; manual Telegram-alert dry-run confirmation not re-verified, flagged to Animesh. RO-5 — added the IVR NULL exception note (Cycles 1-2 accepted data gap, criterion A satisfied from Cycle 3 onward) to `BACKTEST_PLAN.md`'s Phase 0.8 gate criterion A. See `docs/archive/plan/reporting-and-ops-fixes/tasks.md` for full task-by-task history.
 7. [ ] **IC daily snapshot semantics** (2026-07-25) — `docs/plan/paper-ic-daily-snapshot/tasks.md`, starting at **SNAP-1** (Owner: Claude — financial-logic gate).
 8. [ ] **Telegram leg labels** (2026-07-23) — `docs/plan/telegram-leg-labels/tasks.md`, starting at **TL-1**.
 9. [ ] **IC yearly-expiry residual risk** (2026-07-23) — `docs/plan/ic-yearly-expiry-fix/tasks.md`, starting at **WG-1** (persist per-leg Greeks for weekly expiry bucket; YE-1..YE-4 superseded/already fixed live, see DECISIONS.md BUG-015).
@@ -77,7 +77,7 @@ add new entries there going forward, or start a fresh dated section here if this
 Session Log grows large again.
 
 ### 2026-08-07 Session Log
-- **RO-2** (`docs/plan/reporting-and-ops-fixes/tasks.md`): fixed `pre_market_brief.py` reporting
+- **RO-2** (`docs/archive/plan/reporting-and-ops-fixes/tasks.md`): fixed `pre_market_brief.py` reporting
   a fabricated multi-lakh notional loss for futures legs pre-market (no pre-open LTP, missing
   price defaulted to 0). New `_compute_unrealized_with_fallback()` prices each leg individually;
   a FUT leg with no live LTP falls back to `PaperStore.get_prev_leg_snapshot()`'s EOD unrealized
@@ -90,16 +90,18 @@ Session Log grows large again.
   sandbox dependency workaround (`pip install --target=.../mnt/outputs/pydeps`) — 2 remaining
   failures pre-existing/environmental (live network call in `test_record_paper_trade_r3.py`,
   unrelated import error in `test_council_fallback.py`), not caused by this change. SHA `7fa175b`.
-- **RO-3** (`docs/plan/reporting-and-ops-fixes/tasks.md`): repointed dead `docs/council/...`
+- **RO-3** (`docs/archive/plan/reporting-and-ops-fixes/tasks.md`): repointed dead `docs/council/...`
   links to their real `docs/archive/council/...` paths in `docs/plan/dev-foundation/README.md:46`
   and `docs/plan/variance-gate/variance_gate_spec.md:3,185`. Docs-only, no code-reviewer/test
   gate. SHA `98e781e`.
-- **RO-6** (`docs/plan/reporting-and-ops-fixes/tasks.md`): docs-close for the
+- **RO-6** (`docs/archive/plan/reporting-and-ops-fixes/tasks.md`): docs-close for the
   `reporting-and-ops-fixes` story. Verified TODOS.md session-log entries exist for RO-1 through
   RO-5; `CONTEXT.md` left unchanged — neither RO-1's `_compute_daily_deltas` fix nor RO-2's
   `_compute_unrealized_with_fallback` fix touches behavior currently described in CONTEXT.md's
   module tree. Docs-only, no code-reviewer/test gate. Story closed — all six tasks (RO-1..RO-6)
   landed. Next story on the priority list: **IC daily snapshot semantics** (item 7, SNAP-1).
+- **Archived** `docs/plan/reporting-and-ops-fixes/` → `docs/archive/plan/reporting-and-ops-fixes/`
+  (`git mv`) after RO-6 closed the story.
 
 ### 2026-08-06 Session Log (execution-risk-hardening RH-5 docs close, story archived)
 - **RH-5 (`docs/plan/execution-risk-hardening/tasks.md`)** — docs-close verification only, no
