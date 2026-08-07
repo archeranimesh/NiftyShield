@@ -272,43 +272,131 @@ originally scoped: port the already-correct alignment logic to use
 `formatting-rules/`'s `build_side_by_side_kv_table` (for consistency with every other message
 in this epic) and add Markdown bold/parse_mode — not fix a bug that no longer exists.
 
+**Confirmed message structure (2026-08-07, `message-format-workshop.md` session) — reference
+implementation `scratch/2026-08-07_ic_monthly_comparison_telegram_format.py`:**
+
+```
+⚖️ *IC Monthly (V1 vs V2)* | 2026-08-07
+```text
+Metric         V1     V2
+------------------------
+DTE            18     18
+Credit        ₹87   ₹129
+Captured      +4%    +3%
+Put Δ       -0.03  -0.23
+Call Δ      +0.28  +0.23
+------------------------
+Flt P&L (M)   N/A    N/A
+Bkd P&L (M)    ₹0    ₹58
+Flt P&L (I)  ₹359   ₹587
+Bkd P&L (I)   N/A    N/A
+------------------------
+Lock Zone     N/A   None
+Adjustments    0R 0R, 0L
+Signals      None   None
+------------------------
+```
+🏆 *Edge so far:* `V2 (+₹286 vs V1)`
+```
+
+(Escaping omitted for readability, as in `ROLL-1`'s block — see the scratch script for the actual
+MarkdownV2 source. `N/A` values above reflect this session's real data, which didn't include
+Legs/Bkd(I)/Flt(M) — see the per-field sourcing below for what the real implementation shows once
+wired.) This single-table layout (dashed-rule row groups inside one fenced block) supersedes an
+earlier draft of this task that assumed `build_side_by_side_kv_table` (two separate bordered
+tables joined with `\|`) — confirmed on-device that one fenced comparison table reads better for
+this specific message than two adjacent kv tables; `formatting-rules/`'s `build_side_by_side_kv_table`
+may still be the right generic helper for *other* future two-column messages, just not this one.
+
 **Two still-open feature asks carried forward from TGFMT-2/TGFMT-3 — include in this task's
-scope, don't drop them:**
-1. **Legs row** — open-leg count out of 4, with a 🔴 suffix if <4. No new data dependency;
-   `build_stats()` already computes `open_pos` per TGFMT-2's original spec.
-2. **Bkd/Flt month-vs-inception split** — `Bkd (M)`/`Bkd (I)` (realized P&L, month vs.
-   inception) and `Flt (M)`/`Flt (I)` (unrealized P&L, ditto). `Bkd (M)`/`Bkd (I)` come from
-   `paper_nav_snapshots.realized_pnl` (already a cumulative field). **`Flt (M)` is a genuinely
-   new calculation** — month-start delta on `unrealized_pnl` (a point-in-time field), via a new
-   `_get_unrealized_pnl_month_change()`. Per TGFMT-3's revision note: do NOT implement this as
-   a copy of `Flt (I)` — the two are expected to differ, and a test must assert that they do
-   (a test that only checks the two are equal would pass on a broken no-op implementation).
+scope, don't drop them. Per-field data sourcing confirmed 2026-08-07 by reading the real code
+(not assumed) — two of the three are wiring, one is genuinely new:**
+
+1. **Legs row** — open-leg count out of 4, with a 🔴 suffix if <4. **Already available, zero new
+   queries.** `build_stats()` (`scripts/strategies/ic/paper_ic_monthly_comparison.py`, confirmed
+   via `get_code_snippet`) already computes `open_pos = [p for p in positions if p.net_qty != 0]`
+   as its very first line — just thread `len(open_pos)` through to `ICMonthlyStats` and the
+   report. Render as `n/4` with a `🔴` suffix when `n < 4`.
+
+2. **`Bkd (I)`** (realized P&L, since inception) — **already available via an existing public
+   helper, but the original TGFMT carry-forward note above (superseded by this correction) was
+   WRONG about the source.** `src/paper/tracker.py::get_strategy_realized_pnl(store,
+   strategy_name)` is the correct source — it sums from `paper_trades` directly, matching how
+   realized P&L is computed everywhere else in the codebase. **Do NOT read
+   `paper_nav_snapshots.realized_pnl`'s latest row** (which `_get_monthly_realized_pnl` already
+   fetches internally as `curr_val` and discards, tempting as it looks) — per `CONTEXT.md`'s
+   SNAP-1 finding, that column resets to 0 on a full open→close→reopen cycle, so it silently
+   undercounts "since inception" for any strategy that has ever fully closed and reopened. This
+   correction matters: an implementer following the old carry-forward note literally would ship a
+   Bkd(I) that's wrong specifically for strategies with a closed-and-reopened history — exactly
+   the case "since inception" needs to be right for.
+
+3. **`Flt (M)`** (unrealized P&L, month-only delta) — **the one genuinely new calculation.**
+   `Flt (I)` is not a sum-since-inception the way `Bkd (I)` is — unrealized P&L has no flow to
+   accumulate, it's a point-in-time mark-to-market value (`_get_unrealized_pnl`'s existing
+   `paper_nav_snapshots.unrealized_pnl` read for today already IS `Flt (I)`, confirmed — no new
+   function needed for that half). `Flt (M)` is a different quantity: today's unrealized minus
+   unrealized-as-of-month-start, mirroring `_get_monthly_realized_pnl`'s exact existing
+   curr-row/prev-row pattern but against the `unrealized_pnl` column instead of `realized_pnl` —
+   new `_get_unrealized_pnl_month_change()`. **Confirmed 2026-08-07: `Flt (M)` and `Flt (I)` are
+   NOT generally equal** — they coincide only when the position had zero unrealized P&L at
+   month-start (i.e., wasn't open yet before the 1st of this calendar month), which depends on
+   the actual `entry_date` vs. today, not something to assume either way. This is exactly why the
+   test below is mandatory, not optional: implementing `Flt (M)` as a copy of `Flt (I)` would
+   look correct on any position that happened to be open the whole month and only silently break
+   on a mid-month entry.
 
 **Files to change:**
 - `scripts/strategies/ic/paper_ic_monthly_comparison.py` — `build_comparison_report()`,
-  `ICMonthlyStats`, new `_get_inception_realized_pnl()` / `_get_unrealized_pnl_month_change()`
+  `ICMonthlyStats` (add `open_leg_count: int`, `inception_realized_pnl: Decimal`,
+  `unrealized_pnl_month_change: Decimal`), `build_stats()` (thread `len(open_pos)` through, call
+  `get_strategy_realized_pnl()`), new `_get_unrealized_pnl_month_change()`
+- `src/paper/tracker.py` — no change needed, `get_strategy_realized_pnl()` already exists and is
+  exported; just import and call it from `paper_ic_monthly_comparison.py`
 - `tests/unit/strategies/ic/test_paper_ic_monthly_comparison.py`
 
 **Before any code:**
 ```
 get_code_snippet("build_comparison_report")   # confirm current (TGFMT-1-fixed) implementation
 get_code_snippet("ICMonthlyStats")
-get_code_snippet("build_stats")               # confirm open_pos is already available, per TGFMT-2
+get_code_snippet("build_stats")               # open_pos already available at the top, confirmed 2026-08-07
+get_code_snippet("get_strategy_realized_pnl") # src/paper/tracker.py — confirm current signature before importing
+get_code_snippet("_get_monthly_realized_pnl") # the pattern _get_unrealized_pnl_month_change() must mirror
 ```
-Replace the (already dynamic-width, per TGFMT-1) hand-rolled table logic with
-`build_side_by_side_kv_table`, using the V1/V2 monthly columns as `rows_a`/`rows_b`. Preserve
-existing warn-emoji-on-value behavior (`🔴` suffix for a flagged value) — check
+Build the message using a single fenced comparison table (see the confirmed structure above and
+`scratch/2026-08-07_ic_monthly_comparison_telegram_format.py`'s `build_compare_table()` — a
+generic `list[list[(label, v1, v2)]]` row-groups builder with a dashed rule between groups and
+`max(len(x) for x in ...)`-computed widths, never a hand-counted constant, same discipline
+`build_leg_table` already follows). This does not use `formatting-rules/`'s
+`build_side_by_side_kv_table` — an earlier draft of this task assumed it would, but the confirmed
+on-device layout is one fenced table with row groups, not two bordered kv tables side by side;
+`build_compare_table` (or an equivalent promoted into `formatting-rules/`'s `formatting.py`, judgment
+call for the implementer) is the actual match. Preserve existing warn-emoji-on-value behavior
+(`🔴` suffix for a flagged value) for the new Legs row specifically — check
 `_build_side_by_side_report` in `scratch/2026-08-07_telegram_ic_comparison_format_repro.py` for
-how that was represented before deciding whether it survives the port unchanged or needs
-adjustment for the new table format.
+how a similar flag was represented in the pre-Markdown version before deciding whether it survives
+unchanged.
 
 **Tests:** existing `test_comparison_report_format` and `test_comparison_report_one_missing`
 must still pass (or be updated if the exact output string changed — expected, since parse_mode
 and table-builder call are changing; update assertions to match, don't weaken them). Keep
 TGFMT-1's existing long-label regression test (`"Realized (inception)"` or equivalent) — it
 must still pass under the new table builder, proving the dynamic-width property survived the
-port. Add new tests for the Legs row and the Bkd/Flt split per the feature-ask spec above,
-including the "Flt (M) != Flt (I)" assertion.
+port. Add, specifically:
+- `test_legs_row_shows_open_count` — 4/4 legs open, no 🔴
+- `test_legs_row_shows_warning_when_incomplete` — <4 legs open, 🔴 suffix present
+- `test_bkd_inception_uses_get_strategy_realized_pnl` — mocks `get_strategy_realized_pnl` and
+  asserts its return value (not `paper_nav_snapshots.realized_pnl`'s raw latest row) appears in
+  the report; regression test for the corrected sourcing above — a test that only checked "some
+  number appears" would pass even if a future edit silently reverted to the wrong (cycle-resetting)
+  source
+- `test_flt_month_differs_from_flt_inception` — the mandatory "`Flt (M) != Flt (I)`" assertion
+  from the feature-ask spec above; construct fixture data where a mid-month entry makes them
+  genuinely different, not just numerically coincidental
+- `test_flt_month_change_uses_correct_snapshot_rows` — mirrors whatever regression test
+  `_get_monthly_realized_pnl` already has (if any — check via `search_graph` before writing this
+  from scratch) for its curr-row/prev-row boundary logic, applied to the new
+  `_get_unrealized_pnl_month_change()`
 
 **Financial-logic commit note:** the Bkd/Flt month-delta calc is P&L-adjacent — real
 `@code-reviewer` against `git diff HEAD` required per root `CLAUDE.md`.

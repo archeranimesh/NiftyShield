@@ -17,8 +17,13 @@
       `formatting-rules/` complete (data sources: `ROLL-0` for Net Δ/θ, `FMT-1c` for the header —
       both soft dependencies, see `ROLL-1`'s spec for what happens if sequencing is reversed)
 - [ ] **ROLL-2** — Migrate IC monthly comparison report
-      (`scripts/strategies/ic/paper_ic_monthly_comparison.py`) — also fixes its hand-counted
-      width bug | Blocked by: ROLL-1
+      (`scripts/strategies/ic/paper_ic_monthly_comparison.py`) to a single fenced comparison
+      table; adds Legs row (`open_pos`, already available), Bkd P&L (I) (via
+      `get_strategy_realized_pnl()` — NOT `paper_nav_snapshots.realized_pnl`'s raw row, which
+      resets on a close/reopen cycle per `CONTEXT.md` SNAP-1), and Flt P&L (M) (genuinely new
+      `_get_unrealized_pnl_month_change()`, must differ from Flt (I) — see stories.md for why).
+      Hand-counted width bug already fixed (TGFMT-1, SHA `a69d817`) — not this task's job.
+      | Blocked by: ROLL-1
 - [ ] **ROLL-3** — Migrate strategy close/roll notifications (7 classes, same list as
       backbone MD-3) to the new format where it adds value | Blocked by: ROLL-2
 - [ ] **ROLL-4** — Migrate approval-request message formatting
