@@ -9,6 +9,14 @@ attempts). That prototype also surfaced a real bug class: a lone `_` in dynamic 
 (`DELTA_WARN`) opens an unclosed `_italic_` entity in Markdown and 400s the send — silently,
 since `TelegramNotifier.send()` swallows exceptions by contract (non-fatal notifications).
 
+**Revised 2026-08-07: target is `parse_mode=MarkdownV2`, not legacy `Markdown` v1** (the
+prototype used legacy Markdown; `backbone/stories.md`'s header note explains the switch —
+MarkdownV2's larger reserved-character set removes the "smart" entity-pairing ambiguity that
+caused the `DELTA_WARN` bug in the first place, and is Telegram's actively-recommended mode).
+This also means `backbone/` MD-3/MD-4's audit-and-fix pass covers more ground than originally
+scoped: MarkdownV2 reserves ordinary prose punctuation (`.`/`(`/`)`/`-`/`!`) in addition to
+markup characters, so static message *templates* need escaping too, not just dynamic values.
+
 **Scope decision (confirmed with Animesh, 2026-08-07):** replace `TelegramNotifier`'s default
 parse mode globally — not an opt-in second method. This is the higher-blast-radius option:
 every existing caller of `send_plain_message()` / `TelegramNotifier.send()` was written for

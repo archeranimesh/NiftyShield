@@ -12,17 +12,17 @@ which during the task by checking whether `src/notifications/CLAUDE.md` is alrea
 that a standalone file reads better; either is acceptable, just pick one and be consistent with
 the rest of this epic's docs).
 
-**Proposed rules** (derived from what was actually validated interactively in
+**Rules** (derived from what was actually validated interactively in
 `scratch/2026-08-07_ic_eod_audit_telegram_format.py` across several rounds of user feedback —
-not invented fresh; confirm against that script's final version, then resolve the one open
-inconsistency noted below before finalizing):
+not invented fresh; confirm against that script's final version):
 
 | Parameter type | Format | Example | Rationale |
 |---|---|---|---|
-| Money (premium, credit, margin, P&L) | `Decimal`, 2dp, `,` thousands sep, `₹` prefix | `₹86.68`, `₹82,628` | Project invariant: monetary fields are always `Decimal`, never `float` (`CLAUDE.md` Data Layer rule). Margin happens to always be whole rupees in practice but format as 2dp for consistency, not a special case. |
+| Money (premium, credit, margin, P&L) — `format_money` default | `Decimal`, 2dp, `,` thousands sep, `₹` prefix | `₹86.68`, `₹82,628` | Project invariant: monetary fields are always `Decimal`, never `float` (`CLAUDE.md` Data Layer rule). Margin happens to always be whole rupees in practice but format as 2dp for consistency, not a special case. |
 | Strike price | Integer, no decimal | `23000` | Strikes are always whole numbers on NSE; a trailing `.0` is visual noise (same rule `format_option_label` already applies in `src/instruments/lookup.py`, TL-1 — reuse that convention, don't reinvent it). |
 | Greeks (delta; extend to gamma/theta/vega when those appear in a message) | 2dp, always signed (`+`/`-`), `-` placeholder when not applicable to a leg (e.g. long legs with no delta figure in the source data) | `+0.28`, `-0.03`, `-` | Matches existing Greeks-analyst convention in trading vocabulary; explicit sign disambiguates short/long-side delta at a glance. |
-| LTP | 2dp | `₹9.30` | **Open inconsistency to resolve in this task:** the scratch script used 2dp in the key/value table version but 1dp (`9.3`) in the final compact fenced-table version, purely to save horizontal width on a narrow mobile screen. Pick one canonical default (2dp, matching money) for `format_money`-driven LTP; the compact table MAY still override to 1dp locally as a deliberate width-saving exception IF `strategy-rollout/` decides that table needs it — document that as an explicit exception in the table-builder's docstring (FMT-3), not a silent inconsistency. |
+| LTP / Entry — `format_money` default (2dp) | 2dp | `₹9.30` | Matches money default everywhere `format_money` is used directly (kv tables, prose lines). |
+| LTP / Entry — **inside `build_leg_table` specifically** | 1dp, locked-in exception | `9.3` | **Resolved 2026-08-07** (confirmed with Animesh): 1dp is a deliberate width-saving override for this one table, not a silent inconsistency — narrow mobile screens can't afford 2dp across 4 numeric columns plus a Δ column in a fenced code block. `build_leg_table` must document this explicitly in its own docstring as an override of `format_money`'s default, not call `format_money` for these two columns — use a local 1dp format instead. Every other caller of LTP/Entry (e.g. a future single-leg close notification, `strategy-rollout/` ROLL-3) uses the 2dp default unless it has the same mobile-table width constraint. |
 | DTE, Open legs, quantities | Integer | `18`, `4` | Whole units, no formatting needed. |
 | IVR | 2dp, unitless | `0.16` | Matches how it's already displayed in existing option-chain analysis. |
 | Percentages (Captured %, ROI %) | 1dp | `4%`, `0.2%` | One decimal is enough precision for a percentage-of-credit figure; 2dp reads as false precision on numbers this small. |
@@ -140,12 +140,23 @@ def build_side_by_side_kv_table(
 
 def build_leg_table(legs: list[LegRow]) -> str:
     """Fenced-code-block-ready position table: [S]/[B] badge, instrument, Δ, LTP,
-    entry — right-aligned numerics via format_greek/format_money. `LegRow` — define
-    as a small dataclass/TypedDict here rather than accepting raw dicts, per project
+    entry — right-aligned numerics via format_greek for Δ. `LegRow` — define as a
+    small dataclass/TypedDict here rather than accepting raw dicts, per project
     convention (dataclasses/Pydantic for structured shapes, CLAUDE.md Python Standards).
+
+    LTP/Entry columns: 1dp, NOT format_money's 2dp default — locked-in exception
+    (resolved 2026-08-07, see FMT-1's spec table) to fit 4 numeric columns + Δ on a
+    narrow mobile screen inside a fenced code block. Use a local `f"{value:.1f}"`
+    here, not format_money(), and say so in this function's own docstring so a
+    future reader doesn't "fix" it into a money-formatter call. None -> right-aligned
+    "-", same convention as format_greek's None handling — do not duplicate that
+    logic ad hoc, reuse format_greek's None branch shape for consistency even though
+    Entry isn't itself a Greek.
+
     Caller wraps the return value in a ```fenced block``` — this function does not add
     the fence itself, keeping it reusable for non-Telegram output (e.g. plain console
-    printing) too."""
+    printing) too.
+    """
 ```
 
 **Known bug class this must not repeat:** `build_comparison_report()`
