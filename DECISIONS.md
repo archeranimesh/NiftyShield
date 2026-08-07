@@ -26,6 +26,7 @@ current market IVR (0.139, well under the 0.25 floor) correctly hard-blocked und
 CC-only-hard-block code before this change landed, confirming the gap was real and not merely
 theoretical. See `CONTEXT.md` `paper_3track_overlay_entry.py` entry, `docs/bugs/bugs.md` BUG-026
 (related — this extension was requested immediately after BUG-026's fix was verified live).
+SHA `6034096` (BUG-026's own fix: SHA `b3202e3`, docs SHA-backfill: `aa8a4df`).
 
 ---
 
