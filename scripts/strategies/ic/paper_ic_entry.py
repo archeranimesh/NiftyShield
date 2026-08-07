@@ -35,7 +35,7 @@ from src.backtest.vix_ingest import fetch_vix_latest, load_vix_series
 from src.client.upstox_live import UpstoxLiveClient
 from src.client.upstox_market import UpstoxMarketClient
 from src.config import settings
-from src.instruments.lookup import InstrumentLookup
+from src.instruments.lookup import InstrumentLookup, format_option_label
 from src.instruments.strike_selector import (
     _apply_liquidity_gate,
     filter_strikes_by_delta,
@@ -681,12 +681,14 @@ async def run() -> None:
             f"✅ IC Entry — {args.expiry_type} ({config.strategy_name})\n"
             f"Mode: {mode}\n"
             f"IVR: {ivr:.2f}  DTE: {dte}  Nifty: {nifty_spot:,.0f}\n\n"
-            f"Short Put  {int(short_put['strike'])}PE  "
+            f"Short Put  {format_option_label('NIFTY', short_put['strike'], 'PE', expiry_str)}  "
             f"δ={abs(short_put['delta']):.3f}  mid=₹{short_put['mid']:.2f}\n"
-            f"Long Put   {int(long_put_strike)}PE   (hedge)\n"
-            f"Short Call {int(short_call['strike'])}CE "
+            f"Long Put   {format_option_label('NIFTY', long_put_strike, 'PE', expiry_str)}   "
+            f"(hedge)  mid=₹{long_put['mid']:.2f}\n"
+            f"Short Call {format_option_label('NIFTY', short_call['strike'], 'CE', expiry_str)} "
             f"δ={abs(short_call['delta']):.3f}  mid=₹{short_call['mid']:.2f}\n"
-            f"Long Call  {int(long_call_strike)}CE  (hedge)\n\n"
+            f"Long Call  {format_option_label('NIFTY', long_call_strike, 'CE', expiry_str)}  "
+            f"(hedge)  mid=₹{long_call['mid']:.2f}\n\n"
             f"Net credit: ₹{net_credit:.2f}/lot  "
             f"(₹{net_credit * LOT_SIZE:,.0f} for {LOT_SIZE} units)"
         )

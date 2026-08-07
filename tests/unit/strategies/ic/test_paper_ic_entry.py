@@ -310,6 +310,91 @@ async def test_weekly_standalone(
 
 
 @pytest.mark.asyncio
+async def test_entry_preview_message_uses_readable_label(
+    mock_vix_data,
+    mock_store,
+    mock_lookup,
+    mock_market_client,
+    mock_subprocess,
+    mock_telegram,
+):
+    """Telegram preview message uses format_option_label, not raw '23800PE'."""
+    test_args = [
+        "paper_ic_entry.py",
+        "--expiry-type",
+        "weekly",
+        "--no-dry-run",
+        "--bod-path",
+        "dummy.json",
+    ]
+    with patch.object(sys, "argv", test_args):
+        await run()
+
+    sent_msg = mock_telegram.send_notification.call_args[0][0]
+    assert "NIFTY 23800 PE" in sent_msg
+    assert "NIFTY 24600 CE" in sent_msg
+    assert "23800PE" not in sent_msg
+    assert "24600CE" not in sent_msg
+
+
+@pytest.mark.asyncio
+async def test_entry_preview_message_shows_long_leg_mid(
+    mock_vix_data,
+    mock_store,
+    mock_lookup,
+    mock_market_client,
+    mock_subprocess,
+    mock_telegram,
+):
+    """Long-leg (hedge) lines include the mid price, previously omitted."""
+    test_args = [
+        "paper_ic_entry.py",
+        "--expiry-type",
+        "weekly",
+        "--no-dry-run",
+        "--bod-path",
+        "dummy.json",
+    ]
+    with patch.object(sys, "argv", test_args):
+        await run()
+
+    sent_msg = mock_telegram.send_notification.call_args[0][0]
+    assert "Long Put" in sent_msg
+    assert "Long Call" in sent_msg
+    for line in sent_msg.splitlines():
+        if line.strip().startswith("Long Put") or line.strip().startswith("Long Call"):
+            assert "mid=₹" in line
+
+
+@pytest.mark.asyncio
+async def test_entry_command_block_unchanged(
+    mock_vix_data,
+    mock_store,
+    mock_lookup,
+    mock_market_client,
+    mock_subprocess,
+    mock_telegram,
+):
+    """The executed record_paper_trade commands still carry the raw instrument_key."""
+    test_args = [
+        "paper_ic_entry.py",
+        "--expiry-type",
+        "weekly",
+        "--no-dry-run",
+        "--bod-path",
+        "dummy.json",
+    ]
+    with patch.object(sys, "argv", test_args):
+        await run()
+
+    called_cmds = [call.args[0] for call in mock_subprocess.call_args_list]
+    assert called_cmds[0][8] == "NSE_FO|P23800"
+    assert called_cmds[1][8] == "NSE_FO|MOCK_LONG_LEG"
+    assert called_cmds[2][8] == "NSE_FO|C24600"
+    assert called_cmds[3][8] == "NSE_FO|MOCK_LONG_LEG"
+
+
+@pytest.mark.asyncio
 async def test_monthly_standalone(
     mock_vix_data,
     mock_store,
