@@ -935,12 +935,31 @@ class PaperStore:
     def record_nav_snapshot(self, snapshot: PaperNavSnapshot) -> None:
         """Upsert a daily NAV snapshot for a paper strategy.
 
+        Asserts ``snapshot.total_pnl == snapshot.unrealized_pnl +
+        snapshot.realized_pnl`` before writing. Raises ``ValueError`` on
+        mismatch — same invariant class enforced by ``record_leg_snapshot``
+        (added SNAP-5, 2026-08-07, after 42/267 historical rows were found
+        with a drifted total_pnl — see docs/plan/paper-ic-daily-snapshot/
+        stories.md SNAP-5).
+
         ON CONFLICT UPDATE replaces the row if the same (strategy_name,
         snapshot_date) already exists — idempotent re-runs are safe.
 
         Args:
             snapshot: The PaperNavSnapshot to persist.
+
+        Raises:
+            ValueError: If total_pnl != unrealized_pnl + realized_pnl.
         """
+        expected = snapshot.unrealized_pnl + snapshot.realized_pnl
+        if snapshot.total_pnl != expected:
+            raise ValueError(
+                f"PaperNavSnapshot total_pnl invariant violated: "
+                f"total_pnl={snapshot.total_pnl} but "
+                f"unrealized_pnl + realized_pnl={expected} "
+                f"(strategy={snapshot.strategy_name!r}, "
+                f"snapshot_date={snapshot.snapshot_date!r})"
+            )
         with _connect(self.db_path) as conn:
             conn.execute(
                 """INSERT INTO paper_nav_snapshots

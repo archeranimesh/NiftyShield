@@ -5,6 +5,46 @@
 
 ---
 
+**SNAP-5 — total_pnl invariant fix + backfill in `paper_nav_snapshots` (2026-08-07):**
+Root cause diagnosed via graph query, not assumed from SNAP-1's data: `generate_track_snapshot`
+(`src/paper/track_snapshot.py`) computed `net_pnl` by routing overlay legs through
+`_normalize_overlay_pnls()`, which deliberately drops `overlay_cc`'s contribution when
+`overlay_collar_call` is also open (same physical contract recorded under two roles, to avoid
+double-counting the short call in the display figure). `total_unrealized`/`total_realized`,
+however, were accumulated straight from every open leg with no equivalent dedup — so on any
+snapshot date where both roles were simultaneously open, `total_pnl` (`_save_nav_snapshot` writes
+`net_pnl` as `total_pnl`) silently diverged from `unrealized_pnl + realized_pnl`. Confirmed
+against live data: all 42 SNAP-1-flagged rows are `paper_nifty_spot`/`paper_nifty_proxy`, exactly
+the pattern this produces.
+Two fix shapes were presented to Animesh (AskUserQuestion): (1) redefine stored `total_pnl` as
+strictly `unrealized_pnl + realized_pnl`, which would also silently change the basis for
+`compute_cycle_max_drawdown`/`compute_return_on_nee` (both read `total_pnl` back out of
+`paper_nav_snapshots` as `nav_history`); or (2) fix the actual double-count by replaying the same
+`overlay_cc`-drop rule against `total_unrealized`/`total_realized` before summing, leaving
+`net_pnl`/max-DD/return-on-NEE numerically unchanged. Animesh chose (2) — the invariant violation
+is a bug in the totals, not evidence that `net_pnl` itself is wrong; (1) would have quietly
+corrupted two other already-correct metrics to paper over the symptom.
+Implementation: `generate_track_snapshot` now tracks per-leg-role `overlay_unrealized`/
+`overlay_realized` dicts in parallel to `overlay_pnls`, and subtracts `overlay_cc`'s components
+from the totals whenever `overlay_collar_call` is also present in `raw_overlay_pnls` — the exact
+condition `_normalize_overlay_pnls` uses to decide the drop. `PaperStore.record_nav_snapshot()`
+gained the same write-time `ValueError` invariant enforcement `record_leg_snapshot()` already had,
+landed before the backfill so no new bad row could appear once the historical rows were corrected.
+`scripts/dev/backfill_nav_total_pnl.py` (one-off, mirrors `migrate_paper_trades_state.py`'s
+pattern) then recomputed `total_pnl = Decimal(unrealized_pnl) + Decimal(realized_pnl)` for the 42
+bad rows directly — no trade replay or LTP refetch, since `unrealized_pnl`/`realized_pnl` were
+already correct per SNAP-1. Verified live: dry-run matched SNAP-1's 42-row count exactly; applied
+against `data/portfolio/portfolio.sqlite` (backed up first); post-backfill audit confirms 0/267
+rows violate the invariant. Code-reviewer gate: Cowork substitution — REVIEW.md checklist applied
+directly (no mutable defaults, no bare/broad `except`, no `assert` outside tests, %-style would
+apply to logger calls but none were added — script uses `print()` matching
+`migrate_paper_trades_state.py`'s existing convention, import ordering matches project convention,
+new lines all within the 100-char configured limit). `python -m pytest tests/unit/` — 2765 passed,
+2 skipped, 1 pre-existing failure (sandboxed network egress to api.upstox.com, unrelated). See
+`docs/plan/paper-ic-daily-snapshot/stories.md` SNAP-5, `tasks.md`.
+
+---
+
 **`--log-only-gates` extended to CC/Collar auto-entry (2026-08-07):**
 `--log-only-gates` (`paper_3track_overlay_entry.py`) previously only worked for `--auto-pp` —
 `auto_cc_bootstrap`/`auto_collar_bootstrap` had no `log_only_gates` param at all, so a

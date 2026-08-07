@@ -599,8 +599,8 @@ def test_record_nav_snapshot_fields_round_trip(store: PaperStore) -> None:
 
 
 def test_record_nav_snapshot_upsert_updates(store: PaperStore) -> None:
-    store.record_nav_snapshot(_snap(unrealized_pnl=Decimal("100")))
-    store.record_nav_snapshot(_snap(unrealized_pnl=Decimal("999")))
+    store.record_nav_snapshot(_snap(unrealized_pnl=Decimal("100"), total_pnl=Decimal("350")))
+    store.record_nav_snapshot(_snap(unrealized_pnl=Decimal("999"), total_pnl=Decimal("1249")))
     snaps = store.get_nav_snapshots(_STRATEGY)
     assert len(snaps) == 1
     assert snaps[0].unrealized_pnl == Decimal("999")
@@ -613,9 +613,20 @@ def test_record_nav_snapshot_underlying_price_none(store: PaperStore) -> None:
 
 
 def test_record_nav_snapshot_decimal_precision(store: PaperStore) -> None:
-    store.record_nav_snapshot(_snap(unrealized_pnl=Decimal("123.456789")))
+    store.record_nav_snapshot(
+        _snap(unrealized_pnl=Decimal("123.456789"), total_pnl=Decimal("373.456789"))
+    )
     retrieved = store.get_nav_snapshots(_STRATEGY)[0]
     assert retrieved.unrealized_pnl == Decimal("123.456789")
+
+
+def test_record_nav_snapshot_inconsistent_total_pnl_raises(store: PaperStore) -> None:
+    # total_pnl=999 but unrealized(500) + realized(250) = 750 — mismatch
+    bad = _snap(total_pnl=Decimal("999"))
+    with pytest.raises(ValueError, match="total_pnl invariant violated"):
+        store.record_nav_snapshot(bad)
+    # And the bad row must not have been written.
+    assert store.get_nav_snapshots(_STRATEGY) == []
 
 
 # ── get_nav_snapshots ─────────────────────────────────────────────────────────

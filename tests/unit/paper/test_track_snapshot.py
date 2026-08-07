@@ -287,6 +287,101 @@ def test_compute_realized_pnl_by_leg():
     assert realized["overlay"] == Decimal("1000")
 
 
+@pytest.mark.asyncio
+async def test_total_pnl_invariant_holds_when_cc_deduped_against_collar() -> None:
+    """total_unrealized + total_realized must equal net_pnl even when
+    overlay_cc is dropped by _normalize_overlay_pnls in favor of
+    overlay_collar_call (same physical contract, two leg_roles).
+
+    Regression guard for SNAP-5: prior to this fix, total_unrealized/
+    total_realized accumulated overlay_cc's contribution even though
+    net_pnl dropped it, so paper_nav_snapshots.total_pnl (built from
+    net_pnl by _save_nav_snapshot) silently diverged from
+    unrealized_pnl + realized_pnl.
+    """
+    trades = [
+        PaperTrade(
+            strategy_name="paper_nifty_spot",
+            leg_role="base_etf",
+            instrument_key="NIFTYBEES",
+            trade_date=date(2026, 6, 1),
+            action=TradeAction.BUY,
+            quantity=100,
+            price=Decimal("240.0"),
+            notes="",
+        ),
+        # overlay_cc: open short, avg_sell_price 50, LTP 100 -> unrealized = -50
+        PaperTrade(
+            strategy_name="paper_nifty_spot",
+            leg_role="overlay_cc",
+            instrument_key="NIFTY_OPT",
+            trade_date=date(2026, 6, 1),
+            action=TradeAction.SELL,
+            quantity=1,
+            price=Decimal("50.0"),
+            notes="",
+        ),
+        # overlay_collar_call: open short, avg_sell_price 80, LTP 100 -> unrealized = -20
+        PaperTrade(
+            strategy_name="paper_nifty_spot",
+            leg_role="overlay_collar_call",
+            instrument_key="NIFTY_OPT",
+            trade_date=date(2026, 6, 1),
+            action=TradeAction.SELL,
+            quantity=1,
+            price=Decimal("80.0"),
+            notes="",
+        ),
+    ]
+    positions = [
+        PaperPosition(
+            strategy_name="paper_nifty_spot",
+            leg_role="base_etf",
+            instrument_key="NIFTYBEES",
+            net_qty=100,
+            avg_cost=Decimal("240.0"),
+            avg_sell_price=Decimal("0"),
+        ),
+        PaperPosition(
+            strategy_name="paper_nifty_spot",
+            leg_role="overlay_cc",
+            instrument_key="NIFTY_OPT",
+            net_qty=-1,
+            avg_cost=Decimal("0"),
+            avg_sell_price=Decimal("50.0"),
+        ),
+        PaperPosition(
+            strategy_name="paper_nifty_spot",
+            leg_role="overlay_collar_call",
+            instrument_key="NIFTY_OPT",
+            net_qty=-1,
+            avg_cost=Decimal("0"),
+            avg_sell_price=Decimal("80.0"),
+        ),
+    ]
+
+    store = MockPaperStore(trades, positions, [])
+    broker = MockBrokerClient()
+    lookup = MockInstrumentLookup()
+
+    snap = await generate_track_snapshot(
+        store, broker, lookup, "paper_nifty_spot", Decimal("24000"), Decimal("100000"), date.today()
+    )
+
+    # net_pnl drops overlay_cc (deduped against overlay_collar_call):
+    # base_pnl (1000) + collar_call only (-20) = 980.
+    assert snap.pnl.net_pnl == Decimal("980")
+    # The invariant this story exists to fix: total_unrealized + total_realized
+    # must match net_pnl (== what _save_nav_snapshot persists as total_pnl).
+    assert snap.pnl.unrealized_pnl + snap.pnl.realized_pnl == snap.pnl.net_pnl
+    assert snap.pnl.unrealized_pnl == Decimal("980")
+    assert snap.pnl.realized_pnl == Decimal("0")
+    # raw_overlay_pnls still exposes both real leg_roles — persistence to
+    # paper_leg_snapshots must not lose overlay_cc's own figure.
+    assert snap.pnl.raw_overlay_pnls["overlay_cc"] == Decimal("-50")
+    assert snap.pnl.raw_overlay_pnls["overlay_collar_call"] == Decimal("-20")
+
+
 # ---------------------------------------------------------------------------
 # P1-2: None LTP guard — expired instrument must not produce notional loss
 # ---------------------------------------------------------------------------

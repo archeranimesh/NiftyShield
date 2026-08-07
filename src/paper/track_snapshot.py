@@ -255,6 +255,12 @@ async def generate_track_snapshot(
 
     base_pnl = Decimal("0")
     overlay_pnls: dict[str, Decimal] = {}
+    # Per-leg-role components, tracked in parallel to overlay_pnls so the same
+    # dedup _normalize_overlay_pnls applies to overlay_pnls can be replayed against
+    # total_unrealized/total_realized below (BUG: SNAP-5 — these two totals must stay
+    # in lockstep with net_pnl or paper_nav_snapshots' total_pnl invariant breaks).
+    overlay_unrealized: dict[str, Decimal] = {}
+    overlay_realized: dict[str, Decimal] = {}
 
     total_unrealized = Decimal("0")
     total_realized = Decimal("0")
@@ -296,6 +302,12 @@ async def generate_track_snapshot(
             overlay_pnls[pos.leg_role] = (
                 overlay_pnls.get(pos.leg_role, Decimal("0")) + leg_total_pnl
             )
+            overlay_unrealized[pos.leg_role] = (
+                overlay_unrealized.get(pos.leg_role, Decimal("0")) + unrealized
+            )
+            overlay_realized[pos.leg_role] = (
+                overlay_realized.get(pos.leg_role, Decimal("0")) + leg_realized
+            )
 
         leg_delta, leg_theta, leg_vega = await resolve_leg_delta(
             pos, lookup, broker, fetched_chains
@@ -319,6 +331,7 @@ async def generate_track_snapshot(
     for leg_role, realized_amt in realized_by_leg.items():
         if leg_role.startswith("overlay_") and leg_role not in open_leg_roles:
             overlay_pnls[leg_role] = overlay_pnls.get(leg_role, Decimal("0")) + realized_amt
+            overlay_realized[leg_role] = overlay_realized.get(leg_role, Decimal("0")) + realized_amt
             total_realized += realized_amt
 
     if proxy_monitor and proxy_base_leg_delta is not None:
@@ -341,6 +354,17 @@ async def generate_track_snapshot(
     # computing net_pnl — prevents double-counting the short call.
     overlay_pnls = _normalize_overlay_pnls(overlay_pnls)
     net_pnl = base_pnl + sum(overlay_pnls.values())
+
+    # SNAP-5 fix: _normalize_overlay_pnls silently drops overlay_cc's contribution
+    # to net_pnl when overlay_collar_call is also present (same physical contract
+    # recorded under two roles). total_unrealized/total_realized accumulated above
+    # never went through that dedup, so they kept including the dropped leg — this
+    # broke the total_pnl == unrealized_pnl + realized_pnl invariant on any snapshot
+    # date where both roles were open simultaneously (see stories.md SNAP-5 findings).
+    # Replay the exact same drop here so both totals stay in lockstep with net_pnl.
+    if "overlay_collar_call" in raw_overlay_pnls and "overlay_cc" in raw_overlay_pnls:
+        total_unrealized -= overlay_unrealized.get("overlay_cc", Decimal("0"))
+        total_realized -= overlay_realized.get("overlay_cc", Decimal("0"))
 
     # Calculate Max DD and Return on NEE
     nav_snapshots = store.get_nav_snapshots(track_namespace)
