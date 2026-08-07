@@ -124,7 +124,8 @@ def test_format_track_summary_inception_headers():
 
 
 def test_format_track_summary_daily_headers():
-    """period='daily' uses 1-day delta column headers."""
+    """period='daily' uses plain 1-day delta column headers (no 'Day' prefix —
+    the period is already implied by the daily table itself)."""
     rows = [
         {
             "track": "Spot",
@@ -135,10 +136,38 @@ def test_format_track_summary_daily_headers():
         }
     ]
     output = format_track_summary(rows, period="daily")
-    assert "Day Base" in output
-    assert "Day Overlay" in output
-    assert "Day Net" in output
+    assert "Day Base" not in output
+    assert "Day Overlay" not in output
+    assert "Day Net" not in output
     assert "Base P&L" not in output
+    header_line = output.splitlines()[1]
+    assert "Base" in header_line
+    assert "Overlay" in header_line
+    assert "Net" in header_line
+
+
+def test_format_track_summary_daily_breakdown_headers():
+    """period='daily' breakdown view (rows carry cc_pnl/collar_pnl/pp_pnl)
+    also drops the redundant 'Day' prefix from all five columns."""
+    rows = [
+        {
+            "track": "Spot",
+            "base_pnl": Decimal("500"),
+            "cc_pnl": Decimal("10"),
+            "collar_pnl": Decimal("0"),
+            "pp_pnl": Decimal("-5"),
+            "net_pnl": Decimal("505"),
+            "return_on_nee": 0.2,
+        }
+    ]
+    output = format_track_summary(rows, period="daily")
+    assert "Day" not in output
+    header_line = output.splitlines()[1]
+    assert "Base" in header_line
+    assert "CC" in header_line
+    assert "Collar" in header_line
+    assert "PP" in header_line
+    assert "Net" in header_line
 
 
 def test_format_track_summary_default_period_is_inception():

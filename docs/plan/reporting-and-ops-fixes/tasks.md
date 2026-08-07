@@ -12,7 +12,7 @@ design intent between them.
 
 ---
 
-- [ ] **RO-1** — Fix daily breakdown columns in `paper_3track_snapshot.py`. Spawned from
+- [x] **RO-1** — Fix daily breakdown columns in `paper_3track_snapshot.py`. Spawned from
   TODOS.md (detected 2026-06-29). In `--daily` mode, `Day CC`, `Day Collar`, and `Day PP`
   display **inception-to-date totals**, not 1-day deltas. Root cause: `_compute_daily_deltas`
   returns only `{base_pnl, overlay_pnl, net_pnl}`; the merge
@@ -34,7 +34,7 @@ design intent between them.
   **Tests:** `--daily` mode output for a multi-day fixture asserts `Day CC`/`Day Collar`/
   `Day PP` are 1-day deltas, not inception totals; `Day Net` unchanged/still correct.
 
-  **Commit:** `fix(scripts): paper_3track_snapshot --daily CC/Collar/PP show 1-day delta, not inception total`
+  **Commit:** `fix(scripts): paper_3track_snapshot --daily CC/Collar/PP show 1-day delta, not inception total` | SHA: 6096fe2
 
 ---
 

@@ -64,14 +64,14 @@ def format_pnl_table(rows: list[dict[str, Any]], title: str = "", is_dry_run: bo
 
 
 _PERIOD_HEADERS: dict[str, tuple[str, str, str]] = {
-    "daily": ("Day Base", "Day Overlay", "Day Net"),
+    "daily": ("Base", "Overlay", "Net"),
     "monthly": ("MTD Base", "MTD Overlay", "MTD Net"),
     "inception": ("Base P&L", "Overlay", "Net P&L"),
 }
 
 # Extended headers for the breakdown view (Base | CC | Collar | PP | Net | Ret/NEE)
 _PERIOD_HEADERS_BREAKDOWN: dict[str, tuple[str, str, str, str, str]] = {
-    "daily": ("Day Base", "Day CC", "Day Collar", "Day PP", "Day Net"),
+    "daily": ("Base", "CC", "Collar", "PP", "Net"),
     "monthly": ("MTD Base", "MTD CC", "MTD Collar", "MTD PP", "MTD Net"),
     "inception": ("Base P&L", "CC", "Collar", "PP", "Net P&L"),
 }
