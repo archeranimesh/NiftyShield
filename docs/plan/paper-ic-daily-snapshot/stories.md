@@ -292,20 +292,29 @@ historical rows.
   data, not *correcting wrong* data already present — not a clean 1:1 analogy, worth confirming
   explicitly rather than assuming.
 
-Recommendation (not yet a decision): Option B, for consistency with this epic's existing
-backfill-out-of-scope stance and because SNAP-4 (per SNAP-1's finding) already recomputes
-`total_pnl` at query time rather than trusting the stored column — so the 42 bad rows are already
-neutralized for reporting purposes even before this fix lands. But this is Animesh's call, not
-assumed here.
+**Decision (2026-08-07, Animesh): Option A — backfill in place.** The 42 bad rows get corrected,
+not just neutralized at query time. Since `unrealized_pnl`/`realized_pnl` are themselves correct
+on every row (only the stored `total_pnl` drifted), the backfill does not need to replay trades or
+refetch historical LTPs — it's a direct `Decimal(realized_pnl) + Decimal(unrealized_pnl)` rewrite
+of `total_pnl` per bad row, done in Python (SQLite has no native Decimal type; columns are
+TEXT-stored per `CLAUDE.md`'s Decimal convention — no raw-SQL arithmetic). Sequencing within this
+story: land the write-time invariant enforcement fix *first* (task 2 below) so no new bad row can
+appear the moment the backfill runs, then backfill the 42 existing rows as a one-off script
+(suggested: `scripts/dev/backfill_nav_total_pnl.py`, mirroring the `scripts/dev/` migration
+pattern already used by `migrate_strike_to_text.py`).
 
-**Task (once the backfill decision is made):**
+**Task (backfill decision made — Option A):**
 1. Diagnose why the two values diverge for the 42 rows — check whether `record_nav_snapshot()`
    does something between compute and persist (e.g. rounding, a separate update path, a race with
    `paper_3track_snapshot.py`'s own writes to strategies that also appear in the 3-track set) via
    `search_code("record_nav_snapshot")` / `get_code_snippet` — do not assume the cause from
    SNAP-1's data alone.
-2. Add the same write-time invariant enforcement `record_leg_snapshot()` already has.
-3. Apply the backfill decision (A or B) to the 42 existing rows.
+2. Add the same write-time invariant enforcement `record_leg_snapshot()` already has — lands
+   before the backfill so no new bad row can appear once the historical rows are corrected.
+3. Backfill the 42 existing rows: `scripts/dev/backfill_nav_total_pnl.py` (or similar), reads each
+   bad row, computes `Decimal(realized_pnl) + Decimal(unrealized_pnl)`, writes it back as
+   `total_pnl`. No trade replay or LTP refetch needed — `realized_pnl`/`unrealized_pnl` are already
+   correct per SNAP-1's finding.
 
 **Tests required:** happy path (matching values write cleanly) + edge case (mismatched values are
 rejected/logged per the enforcement mechanism chosen, mirroring `record_leg_snapshot()`'s existing
