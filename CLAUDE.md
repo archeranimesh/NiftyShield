@@ -46,6 +46,7 @@ Module tree (file-level descriptions): **`CONTEXT_TREE.md`** — load only when 
 **Load additional files when relevant:**
 - Adding/changing module architecture → also read `DECISIONS.md` + `CONTEXT_TREE.md`
 - Touching instrument keys, AMFI codes, market data → also read `REFERENCES.md`
+- Writing to `portfolio.sqlite`, adding a new table, or unsure which table already holds data you're looking for → also read `DB_REGISTRY.md` **first** (before assuming a table is empty/missing — see its 2026-08-07 note on `paper_nav_snapshots` vs. `paper_leg_snapshots`)
 - Starting a new feature → also read `TODOS.md` + `PLANNER.md`
 - Phase 0 backtest / paper trading / strategy / `src/paper/` / `src/risk/` work → also read `BACKTEST_PLAN.md` (Phase 0 only — ~300 lines)
 - Phase 1+ work (only after Phase 0.8 gate passes) → also read `BACKTEST_PLAN_PHASE1.md`
@@ -287,6 +288,7 @@ Never use a lower-ranked response to contradict Stage 3.
 | Project state | `CONTEXT.md` |
 | Architecture decisions | `DECISIONS.md` |
 | Instrument keys / AMFI codes / API quirks | `REFERENCES.md` |
+| SQLite table registry (writer, cadence, purpose per table — check before any DB write) | `DB_REGISTRY.md` |
 | Open TODOs + session log | `TODOS.md` |
 | Multi-sprint roadmap | `PLANNER.md` |
 | Strategy definitions (code) | `src/portfolio/strategies/finideas/` |

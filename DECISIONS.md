@@ -37,6 +37,26 @@ enforcement). See `docs/plan/execution-risk-hardening/tasks.md` RH-1, `TODOS.md`
 
 ---
 
+**DB_REGISTRY.md — SQLite table registry, checked before any DB write (2026-08-07):**
+During a Cowork investigation into why `paper_ic_nifty_v2_monthly` had no daily P&L data, the
+initial diagnosis (from `docs/plan/paper-ic-daily-snapshot/stories.md`) was that `paper_leg_snapshots`
+had zero rows for every IC variant — true, but incomplete: `paper_nav_snapshots` (a separate
+table, written by a separate cron/script, `scripts/portfolio/paper_snapshot.py` at `36 15 * * 1-5`
+vs. `paper_leg_snapshots`'s writer `paper_3track_snapshot.py` at `35 15 * * 1-5`) already had
+strategy-level daily realized/unrealized/total P&L for all five IC variants going back to
+2026-07-21. Cost real time to discover only via ad-hoc `sqlite3` queries against every candidate
+table. Created `DB_REGISTRY.md` (repo root) — one entry per table in `portfolio.sqlite`: writer
+method/script, cron cadence, grain (per-strategy vs. per-leg vs. per-overlay), and purpose, split
+into "daily-write (cron)" and "event/audit" sections. Wired into `CLAUDE.md`'s "load additional
+files when relevant" list and Quick Reference table, gated on "writing to `portfolio.sqlite` /
+adding a new table / unsure which table already holds the data." No council checkpoint — pure
+documentation, no code or schema change, single-discipline (fails condition 3). Explicitly framed
+as check-first, not authoritative-forever: the file's own footer states it must be re-verified
+against `search_code`/`sqlite_master`, not trusted from memory, since new tables will outpace it.
+See `docs/plan/paper-ic-daily-snapshot/` for the investigation that triggered this.
+
+---
+
 **CSP collateral leg — no new position, reuse `compute_max_lots()` (2026-08-06):**
 `docs/plan/csp-collateral-leg` was scoped assuming `long_niftybees` had no existing
 representation in the paper system. Investigation found the opposite: `STRATEGY_SPOT =
