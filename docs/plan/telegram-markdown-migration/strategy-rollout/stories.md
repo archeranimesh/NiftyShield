@@ -129,10 +129,12 @@ but predates both the MarkdownV2 revision (see epic `README.md`) and the confirm
 produced via `message-format-workshop.md`, confirmed on-device 2026-08-07. Port from this file,
 not the v1 one.
 
-**Confirmed message structure (updated 2026-08-07 — now includes Net Δ/Net θ):**
+**Confirmed message structure (updated 2026-08-07 — now includes Net Δ/Net θ AND the FMT-1c
+color-coded header/hashtag, hashtag auto-detection confirmed working live on-device):**
 
 ```
-📊 *IC EOD (Monthly)* | `paper_ic_nifty_v2_monthly`
+🔵 📅 *IC EOD Audit — Monthly (V2)* | #IC_Monthly_V2
+`paper_ic_nifty_v2_monthly`
 *Nifty:* 24,571 | *DTE:* 18 | *IVR:* 0.16
 *Net Δ:* incomplete | *Net θ:* incomplete
 ```
@@ -150,8 +152,19 @@ Act Strike Type     Δ   LTP Entry
 ⚙️ *Actions:* None
 ```
 
-(Backslash escaping of literal `.`/`(`/`)`/`|` omitted above for readability — see the scratch
-script for the actual MarkdownV2 source with `escape_markdown()` applied throughout.)
+(Backslash escaping of literal `.`/`(`/`)`/`|`/`#`/`_` omitted above for readability — see the
+scratch script for the actual MarkdownV2 source with `escape_markdown()` applied throughout.)
+
+**Header design fully specified in `formatting-rules/stories.md` FMT-1c — read that before
+implementing, do not re-derive the color/emoji mapping from scratch.** Summary: color+emoji encode
+timeframe only (🟡⚡ weekly, 🔵📅 monthly, 🟢🔭 leaps, 🟠🌌 yearly) — never version, so the scheme
+doesn't need new colors if V2 ever gains more than its current single (monthly) expiry bucket.
+Version is a separate `\(V2\)`-style text badge in the title (V1 stays unbadged). The hashtag
+(`#IC_{Timeframe}_{Version}`) sits on the title line, unwrapped by any code span — wrapping it in
+backticks (as an earlier external draft of this scheme did) silently kills Telegram's hashtag
+auto-detection, since Telegram doesn't parse entities inside code spans. The existing
+`` `{strategy_id}` `` code-span line is kept as its own separate line below the title for
+exact-string copy/audit — it and the hashtag serve different jobs, don't merge them.
 
 **"Net Δ: incomplete" is the honest current state, not a placeholder to fix in this task.** It
 prints `incomplete` because the real position's long-leg deltas and all four legs' thetas aren't
@@ -225,7 +238,10 @@ needed — one port covers `IC EOD Audit — weekly (paper_ic_nifty_v1_weekly)` 
 `strategy_id`/`dte`/`nifty`/`ivr`/legs/`margin` are all already per-variant *data*, not per-variant
 *code*. `scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py`'s new `VARIANTS` dict + `--variant`
 flag (5 entries) demonstrates this — every variant renders correctly with zero branching in
-`build_message()`.
+`build_message()`. The FMT-1c color-coded header is the one piece that DOES need a per-variant
+**data** lookup (timeframe → color/emoji, `V1`-vs-`V2` → badge) — still not per-variant *code*,
+since `build_header()`'s `_TIMEFRAME_META`/`VARIANT_META` dicts (see FMT-1c) are the single source
+both `process_variant()`'s V1 and V2 call paths read from identically.
 
 **Tests:** update the existing message-format test(s) for this script to assert the new
 structure; keep at least one test that constructs a leg with an underscore-bearing signal code
@@ -236,7 +252,11 @@ started from — don't let the regression test get lost in the rewrite). Add tes
 `SCENARIOS` presets are a ready-made list of cases to port into real assertions, not just visual
 checks. Do not duplicate `ROLL-0`'s net-Greeks unit tests here — this task's tests should assert
 the *rendering* of `net_delta`/`net_theta` (numeric vs. incomplete), not re-test the summation
-logic itself.
+logic itself. Do not duplicate FMT-1c's own header unit tests here either (color/emoji-per-timeframe,
+version-badge presence, hashtag-not-in-code-span) if `build_header()` lands as its own
+independently-tested unit — this task's tests should assert that `process_variant()` *calls* it
+correctly per variant (right timeframe in, right header out), via one test per one of the five
+active variants, not re-verify the color/emoji table.
 
 **Commit:** `feat(ic): migrate EOD audit message to Markdown table format`
 

@@ -225,6 +225,95 @@ VARIANTS = {
     "v2_monthly": ("IC EOD (Monthly)", "paper_ic_nifty_v2_monthly"),
 }
 
+# Color/emoji/hashtag scheme (2026-08-07, alert-fatigue differentiation).
+# Deliberately keeps color+emoji as a TIMEFRAME-only channel (scales to any
+# number of strategy versions without needing new colors) and encodes
+# version as a separate text badge — an earlier proposal colored
+# monthly-v1 blue and monthly-v2 purple, which conflates timeframe and
+# version onto the same channel and would need a whole new color set the
+# moment v2 gains a second expiry bucket (CONFIGS_V2 is explicitly
+# "Phase 1, monthly only" — more phases are plausible). Also covers all
+# FOUR of V1's real expiry buckets (src/paper/constants.py /
+# ICExpiryConfig's weekly/monthly/leaps/yearly presets) — the pasted
+# proposal only showed three examples and omitted yearly entirely, which
+# would have left it falling back to no color/emoji at all, recreating
+# the exact ambiguity this scheme exists to fix.
+_TIMEFRAME_META = {
+    "weekly": {"color": "\U0001f7e1", "tf_emoji": "⚡", "title": "Weekly", "tag": "Weekly"},
+    "monthly": {
+        "color": "\U0001f535",
+        "tf_emoji": "\U0001f4c5",
+        "title": "Monthly",
+        "tag": "Monthly",
+    },
+    "leaps": {"color": "\U0001f7e2", "tf_emoji": "\U0001f52d", "title": "Leaps", "tag": "LEAPS"},
+    "yearly": {"color": "\U0001f7e0", "tf_emoji": "\U0001f30c", "title": "Yearly", "tag": "Yearly"},
+}
+
+# Structured variant metadata (supersedes the flat VARIANTS tuple above for
+# header-building purposes — VARIANTS is kept as-is since build_message()
+# still only needs strategy_label/strategy_id; this dict adds what the new
+# color-coded header needs on top).
+VARIANT_META = {
+    "v1_weekly": {
+        "timeframe": "weekly",
+        "version": "V1",
+        "strategy_id": "paper_ic_nifty_v1_weekly",
+    },
+    "v1_monthly": {
+        "timeframe": "monthly",
+        "version": "V1",
+        "strategy_id": "paper_ic_nifty_v1_monthly",
+    },
+    "v1_leaps": {"timeframe": "leaps", "version": "V1", "strategy_id": "paper_ic_nifty_v1_leaps"},
+    "v1_yearly": {
+        "timeframe": "yearly",
+        "version": "V1",
+        "strategy_id": "paper_ic_nifty_v1_yearly",
+    },
+    "v2_monthly": {
+        "timeframe": "monthly",
+        "version": "V2",
+        "strategy_id": "paper_ic_nifty_v2_monthly",
+    },
+}
+
+
+def build_header(variant_key: str) -> tuple[str, str]:
+    """Build the two color-coded header lines for one IC variant.
+
+    Returns (title_line, id_line):
+        title_line: "{color} {tf_emoji} *IC EOD Audit — {Timeframe}[ (V2)]* | {hashtag}"
+        id_line: "`{strategy_id}`" — kept separate from the hashtag on
+            purpose. The hashtag (unescaped-of-backticks, so Telegram's
+            native auto-detection still fires) is for tap-to-filter across
+            chat history; the code-span strategy_id is for exact-string
+            copy/grep during an audit. They serve different jobs and
+            collapsing them into one loses one of the two.
+
+    NOT VERIFIED LIVE: whether Telegram's hashtag auto-detection still
+    highlights a hashtag whose source text went through MarkdownV2
+    escaping (# and _ are both MARKDOWNV2_RESERVED, so the source contains
+    "\\#IC\\_Weekly\\_V1"; the de-escaped rendered text should be a clean
+    "#IC_Weekly_V1", but confirm it actually renders as a tappable link
+    on-device before relying on this for real audit workflows).
+    """
+    meta = VARIANT_META[variant_key]
+    tf = _TIMEFRAME_META[meta["timeframe"]]
+    version = meta["version"]
+
+    version_suffix = " \\(V2\\)" if version == "V2" else ""
+    title = f"IC EOD Audit — {tf['title']}"
+
+    hashtag_raw = f"#IC_{tf['tag']}_{version}"
+    hashtag = escape_markdown(hashtag_raw)  # escapes both # and _
+
+    title_line = (
+        f"{tf['color']} {tf['tf_emoji']} *{escape_markdown(title)}{version_suffix}* \\| {hashtag}"
+    )
+    id_line = mdcode(meta["strategy_id"])
+    return title_line, id_line
+
 
 # --- Inlined MD-1 helpers (src/notifications/markdown.py, not yet shipped) ---
 
@@ -453,8 +542,19 @@ def build_message(d: dict) -> str:
     else:
         net_theta_str = escape_markdown(format_greek(float(net_theta)))
 
-    lines = [
-        f"\U0001f4ca *{header_label}* \\| {mdcode(d['strategy_id'])}",
+    variant_key = d.get("variant_key")
+    if variant_key is not None:
+        title_line, id_line = build_header(variant_key)
+    else:
+        # Fallback for scenarios/tests that never set variant_key — the
+        # original single-emoji header, unchanged behavior.
+        title_line = f"\U0001f4ca *{header_label}* \\| {mdcode(d['strategy_id'])}"
+        id_line = None
+
+    lines = [title_line]
+    if id_line is not None:
+        lines.append(id_line)
+    lines += [
         f"*Nifty:* {nifty_str} \\| *DTE:* {d['dte']} \\| *IVR:* {ivr_str}",
         f"*Net \u0394:* {net_delta_str} \\| *Net \u03b8:* {net_theta_str}",
         "```",
@@ -549,6 +649,7 @@ async def main() -> None:
     label, strategy_id = VARIANTS[args.variant]
     scenario_data["strategy_label"] = label
     scenario_data["strategy_id"] = strategy_id
+    scenario_data["variant_key"] = args.variant
     text = build_message(scenario_data)
     print(f"--- scenario: {args.scenario} | variant: {args.variant} ---")
     print(text)

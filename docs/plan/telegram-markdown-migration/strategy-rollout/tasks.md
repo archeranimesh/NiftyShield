@@ -12,8 +12,10 @@
       (`scripts/strategies/ic/paper_ic_snapshot.py::process_variant`) — data-only, plain-text
       report line, no Markdown/parse_mode dependency | Blocked by: none
 - [ ] **ROLL-1** — Migrate IC EOD audit (`scripts/strategies/ic/paper_ic_snapshot.py`) to the
-      new format | Blocked by: `backbone/` + `formatting-rules/` complete (data source: `ROLL-0`,
-      soft dependency — see `ROLL-1`'s spec for what happens if sequencing is reversed)
+      new format, including the FMT-1c timeframe color/emoji/hashtag header (all 5 active
+      variants: V1 weekly/monthly/leaps/yearly + V2 monthly) | Blocked by: `backbone/` +
+      `formatting-rules/` complete (data sources: `ROLL-0` for Net Δ/θ, `FMT-1c` for the header —
+      both soft dependencies, see `ROLL-1`'s spec for what happens if sequencing is reversed)
 - [ ] **ROLL-2** — Migrate IC monthly comparison report
       (`scripts/strategies/ic/paper_ic_monthly_comparison.py`) — also fixes its hand-counted
       width bug | Blocked by: ROLL-1

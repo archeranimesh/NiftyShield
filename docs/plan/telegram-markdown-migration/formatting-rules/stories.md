@@ -75,6 +75,93 @@ to have that severity value available, rather than silently downgrading to prese
 
 ---
 
+## FMT-1c — Timeframe Color/Emoji Header + Hashtag (confirmed 2026-08-07, on-device verified)
+
+**Problem:** running all five active IC EOD audit variants (V1 weekly/monthly/leaps/yearly + V2
+monthly) side by side in one Telegram chat, they were visually near-identical — same `📊` emoji,
+same generic header shape — creating real alert-fatigue risk during a busy session (easy to
+misread which variant a message belongs to at a glance). Surfaced and confirmed via
+`message-format-workshop.md`, built and iterated in
+`scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py`, **hashtag auto-detection confirmed
+working live on-device 2026-08-07** (the one previously-flagged unverified assumption — MarkdownV2
+escaping the `#`/`_` in the hashtag's source text does not prevent Telegram's own hashtag
+auto-detection from firing on the de-escaped rendered text).
+
+**Design decision — color/emoji encode TIMEFRAME only, never version.** An external suggestion
+proposed 4 distinct colors for 4 example variants, one of which (purple) was assigned specifically
+to "v2 monthly" — i.e. color encoding *version*, not timeframe, for that one case. Rejected: this
+conflates two independent axes onto one visual channel and doesn't scale — the moment V2 gains a
+second expiry bucket (plausible; `CONFIGS_V2` is explicitly scoped "Phase 1, monthly only" per
+`src/strategy/ic_expiry_config_v2.py`, implying more phases), you'd need an entirely new color set
+rather than reusing the existing timeframe colors. The chosen design instead keeps color+emoji as
+a pure timeframe indicator (scales to any number of versions sharing a timeframe) and encodes
+version as a separate, orthogonal text badge in the bold title. Also note the original external
+proposal's example set only covered 3 of V1's 4 real expiry buckets and omitted `yearly` entirely
+(confirmed via `ICExpiryConfig`'s real `weekly`/`monthly`/`leaps`/`yearly` presets,
+`src/paper/constants.py`'s `STRATEGY_IC_WEEKLY/MONTHLY/LEAPS/YEARLY`) — an omission that would
+have silently recreated the exact ambiguity this scheme exists to fix for that one variant.
+
+**Confirmed timeframe → color/emoji mapping:**
+
+| Timeframe | Color | Emoji | Rationale |
+|---|---|---|---|
+| Weekly | 🟡 | ⚡ | Fastest-moving, highest gamma risk, needs the most frequent attention. |
+| Monthly | 🔵 | 📅 | Standard calendar-cycle expiry — the "default" tier, calmest color. |
+| Leaps | 🟢 | 🔭 | Long-dated (46–200 DTE per `ICExpiryConfig`), low day-to-day maintenance. |
+| Yearly | 🟠 | 🌌 | Longest horizon (201–420 DTE) — distinct from Leaps, not reused/blended. |
+
+**Version badge (orthogonal to color):** `V1` is implicit (no badge — matches the existing
+convention where the common case stays visually quiet); any non-`V1` version appends
+`\(V2\)`/etc. to the bold title text, escaped per MarkdownV2. Confirmed hashtag format:
+`#IC_{Timeframe}_{Version}` (e.g. `#IC_Weekly_V1`, `#IC_Monthly_V2`) — `Leaps` renders as `LEAPS`
+in the hashtag specifically (conventional acronym capitalization), all other timeframes
+title-case. **Hashtag must NOT be wrapped in a code span** — Telegram does not parse any entities,
+including its own auto-detected hashtags, inside `` ` `` /``` ``` ``` — an earlier draft of the
+external proposal showed the hashtag inside backticks, which would have silently made it
+non-tappable while looking correct in a screenshot. The existing `` `{strategy_id}` `` code-span
+line is kept as a *separate* line below the title — it serves a different job (exact-string
+copy/grep for audit trails) than the hashtag (native Telegram tap-to-filter across chat history);
+collapsing them into one loses one of the two purposes.
+
+**Confirmed header shape (2 lines, replaces the single-emoji header in `ROLL-1`'s original
+confirmed layout):**
+
+```
+🔵 📅 *IC EOD Audit — Monthly \(V2\)* \| \#IC\_Monthly\_V2
+`paper_ic_nifty_v2_monthly`
+```
+
+(Backslash escaping shown as actual MarkdownV2 source; renders as clean bold text + a live
+hashtag + a monospace code span.)
+
+**Files to change (when promoted from scratch, not yet done):** this is IC-specific (timeframe
+naming, `STRATEGY_IC_*` variants) rather than a generic cross-strategy formatter, so it likely
+does **not** belong in `src/notifications/formatting.py` alongside FMT-2/FMT-3's
+strategy-agnostic helpers — a judgment call for whoever implements this to make explicitly (e.g.
+a new `_build_header()`/`TIMEFRAME_META` inside `scripts/strategies/ic/paper_ic_snapshot.py`
+itself, colocated with `process_variant()`, rather than exported as a reusable notifications
+helper). Do not default to `src/notifications/formatting.py` without considering this — flag the
+decision in the implementation commit either way.
+- `scripts/strategies/ic/paper_ic_snapshot.py` — new header-building logic (function name/location
+  per the above judgment call), wired into `process_variant()`'s report construction
+- `tests/unit/strategies/ic/test_paper_ic_snapshot.py` — one test per timeframe asserting the
+  correct color/emoji/hashtag combination, plus one asserting the `V1`-is-implicit /
+  non-`V1`-gets-a-badge rule
+
+**Tests:**
+- `test_header_weekly_color_emoji` / `..._monthly...` / `..._leaps...` / `..._yearly...` — each
+  asserts the exact `(color, emoji)` pair for its timeframe
+- `test_header_v1_has_no_version_badge` — title text contains no `\(V1\)` or similar
+- `test_header_v2_has_version_badge` — title text contains the escaped `\(V2\)` badge
+- `test_hashtag_not_wrapped_in_code_span` — regression test for the exact bug this task's design
+  section calls out; assert the hashtag line contains no backtick characters
+- `test_hashtag_escapes_reserved_chars` — `#`/`_` in the raw hashtag are backslash-escaped in the
+  constructed message (same regression-test shape MD-1/ROLL-1 already use for `mdcode()`)
+
+**Commit (when promoted):** `feat(ic): timeframe color-coded headers + hashtags for EOD audit`
+
+---
+
 ## FMT-2 — Value Formatters
 
 **Files to change:**
