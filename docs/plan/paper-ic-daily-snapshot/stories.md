@@ -51,6 +51,63 @@ aggregation" mistake Rule 1 in `CLAUDE.md` exists to prevent.
 what the answer will be — exploratory, not mechanical. Matches Step 3b's "exploratory work where
 the spec may change" and "requiring graph queries mid-implementation" rows.
 
+### SNAP-1 findings (2026-08-07)
+
+**Semantics: `realized_pnl`/`unrealized_pnl`/`total_pnl` are cumulative-as-of-date, not daily
+deltas** — confirmed at the source in `PaperTracker.compute_pnl()` (`src/paper/tracker.py:133`),
+which calls `_compute_realized_pnl(store, strategy_name)` (`tracker.py:94`) — that function pulls
+`store.get_trades(strategy_name)` (the full trade ledger for the strategy) and sums realized P&L
+across **all** closed legs to date, every time it runs; `unrealized` is a fresh mark-to-market
+over currently-open positions. Both `record_daily_snapshot()` (writes `paper_nav_snapshots`) and
+the leg-level equivalent used by `paper_3track_snapshot.py` (writes `paper_leg_snapshots`) call
+`compute_pnl()`/its per-leg sibling the same way — no delta or running-sum logic exists anywhere
+in the write path.
+
+Verified against the live data (`paper_nifty_futures`, `paper_nav_snapshots`, strategy-level):
+`realized_pnl` sits flat at a constant value for many consecutive days, then steps to a new
+constant on the exact day a leg closes (`2026-05-27→28`: `0 → -5003.84`; `2026-06-08→09`:
+`-5003.84 → 15903.41`; `2026-07-20→21`: `15903.41 → -41195.48`) — it does not reset between those
+step days. `unrealized_pnl` fluctuates freely day to day (mark-to-market), consistent with
+cumulative-as-of-date, not a delta.
+
+Query used (Rule 1-compliant — named columns, no `SELECT *`):
+```sql
+SELECT snapshot_date, realized_pnl, unrealized_pnl, total_pnl
+FROM paper_nav_snapshots
+WHERE strategy_name = ?
+ORDER BY snapshot_date;
+```
+
+**Caveat for SNAP-4 — "since inception" is not always a single monotonic run.** On `2026-08-05`,
+`paper_nifty_futures`' `realized_pnl` in `paper_nav_snapshots` drops back to `0` after sitting at
+`-41195.48` the prior session (same reset visible independently in `paper_leg_snapshots` for
+`base_futures`, `-28172.08 → 0`) — a full-cycle close/reopen, not a bug in the field. **"Realized
+P&L since inception" cannot be read as "the latest row's `realized_pnl`" if a strategy has been
+through more than one full open→close cycle** — that would silently drop every prior cycle's
+realized P&L. SNAP-4 must either (a) detect cycle boundaries (a same-day drop in `realized_pnl`
+after previously nonzero) and sum across cycles, or (b) sum realized P&L directly from closed
+`paper_trades` rows rather than trusting the latest snapshot. Recommend (b) for correctness —
+`paper_trades` is the append-only source of truth per `DB_REGISTRY.md`; the snapshot tables are
+derived and reset per the strategy's live position lifecycle, not a running total across
+strategy lifetime. **This did not come up in the IC V2 sample quoted in the SNAP-2 finding above
+because that cycle hasn't reset yet — do not assume IC is exempt.**
+
+**Invariant `total_pnl == unrealized_pnl + realized_pnl` — holds in `paper_leg_snapshots`, does
+NOT hold universally in `paper_nav_snapshots`.** Checked with `Decimal` arithmetic (not float) to
+avoid rounding false-positives:
+
+- `paper_leg_snapshots`: 647/647 rows satisfy the invariant exactly — consistent with
+  `CONTEXT.md`'s statement that `record_leg_snapshot()` enforces it at write time.
+- `paper_nav_snapshots`: **42 of 267 rows fail** (e.g. `paper_nifty_spot`/`paper_nifty_proxy`,
+  `2026-06-17` and `2026-06-19`: `realized_pnl=20907.25`, `unrealized_pnl=-10409.50`,
+  `total_pnl=-2825.95` — arithmetic gives `10497.75`, not `-2825.95`). `record_nav_snapshot()` /
+  `record_daily_snapshot()` do not enforce this invariant at write time the way
+  `record_leg_snapshot()` does. Root cause not investigated further here (out of scope — SNAP-1
+  is semantics-confirmation, not a bug fix); flagging as a candidate follow-up story. **SNAP-4
+  must not assume `total_pnl` in `paper_nav_snapshots` is trustworthy — recompute
+  `unrealized_pnl + realized_pnl` at query time rather than reading the stored `total_pnl`
+  column**, or investigate/fix the write path first.
+
 ---
 
 ## SNAP-2 — Wire `record_leg_snapshot()` into `paper_ic_snapshot.py` for all IC variants
@@ -211,9 +268,68 @@ pass.
 
 ---
 
+## SNAP-5 — Fix `total_pnl` write-time invariant gap in `paper_nav_snapshots`
+
+**Problem:** SNAP-1's audit found `record_nav_snapshot()`/`record_daily_snapshot()`
+(`src/paper/tracker.py`) do not enforce `total_pnl == unrealized_pnl + realized_pnl` at write
+time, unlike `PaperStore.record_leg_snapshot()` (which enforces it and has zero violations across
+647 `paper_leg_snapshots` rows). Live data check: 42 of 267 `paper_nav_snapshots` rows currently
+have a `total_pnl` that does not equal `unrealized_pnl + realized_pnl` (exact `Decimal`
+arithmetic, not a rounding artifact — see SNAP-1 findings for a reproducible example,
+`paper_nifty_spot`/`paper_nifty_proxy` on `2026-06-17` and `2026-06-19`). Root cause not yet
+diagnosed — SNAP-1 was semantics-confirmation only, this story is the actual investigation + fix.
+
+**Open decision — requires Animesh, not a Claude call:** what to do with the 42 already-bad
+historical rows.
+- **Option A — backfill in place:** recompute and overwrite `total_pnl` for the 42 rows from
+  their existing `unrealized_pnl`/`realized_pnl` values. Simple, but silently rewrites history
+  that may already have been read/reported on (e.g. in a prior Telegram message or manual check).
+- **Option B — leave history as-is, enforce going forward only:** add the write-time invariant
+  check (mirroring `record_leg_snapshot()`'s pattern) so no *new* bad row can land, but leave the
+  42 existing rows untouched (optionally flagged, e.g. a comment/log noting they predate the fix).
+  Consistent with this project's stated "backfill is explicitly out of scope" posture elsewhere in
+  this same story file (SNAP-2/SNAP-4), but that precedent was about *reconstructing missing*
+  data, not *correcting wrong* data already present — not a clean 1:1 analogy, worth confirming
+  explicitly rather than assuming.
+
+Recommendation (not yet a decision): Option B, for consistency with this epic's existing
+backfill-out-of-scope stance and because SNAP-4 (per SNAP-1's finding) already recomputes
+`total_pnl` at query time rather than trusting the stored column — so the 42 bad rows are already
+neutralized for reporting purposes even before this fix lands. But this is Animesh's call, not
+assumed here.
+
+**Task (once the backfill decision is made):**
+1. Diagnose why the two values diverge for the 42 rows — check whether `record_nav_snapshot()`
+   does something between compute and persist (e.g. rounding, a separate update path, a race with
+   `paper_3track_snapshot.py`'s own writes to strategies that also appear in the 3-track set) via
+   `search_code("record_nav_snapshot")` / `get_code_snippet` — do not assume the cause from
+   SNAP-1's data alone.
+2. Add the same write-time invariant enforcement `record_leg_snapshot()` already has.
+3. Apply the backfill decision (A or B) to the 42 existing rows.
+
+**Tests required:** happy path (matching values write cleanly) + edge case (mismatched values are
+rejected/logged per the enforcement mechanism chosen, mirroring `record_leg_snapshot()`'s existing
+regression test pattern in `test_store.py`).
+
+**Financial-logic gate:** persists real P&L; per `CLAUDE.md`'s AutoTrigger table, the real
+`@code-reviewer` gate (or its documented Cowork substitution) is mandatory before committing.
+
+**Files touched:** `src/paper/tracker.py` (and/or `src/paper/store.py` if enforcement moves to the
+store layer to mirror `record_leg_snapshot()`'s location exactly — confirm via graph before
+choosing), `tests/unit/paper/test_tracker.py` (or `test_store.py`).
+
+**Why Claude, not Antigravity:** Root cause is undiagnosed — exploratory investigation with a
+judgment call on where enforcement belongs, not a fixed mechanical spec. Also financial logic,
+routed through the real code-reviewer gate.
+
+---
+
 ## Sequencing
 
-SNAP-1 → SNAP-2 → SNAP-3 (can run in parallel with SNAP-2 — independent audit) → SNAP-4.
+SNAP-1 → SNAP-2 → SNAP-3 (can run in parallel with SNAP-2 — independent audit) → SNAP-4 → SNAP-5.
 SNAP-4 hard-depends on SNAP-1's finding and SNAP-2 having landed; don't start it before both are
-done. SNAP-3's findings may spawn a follow-up story (SNAP-5+) — not pre-created here, per YE-1's
-precedent of not scoping unstarted work speculatively.
+done. SNAP-5 is independent of SNAP-4's implementation but should land after SNAP-4 so the
+reporting script's query-time workaround is proven in place regardless of when the write-path fix
+ships; SNAP-5 also has an open Animesh decision gate (backfill approach) that must resolve before
+implementation starts. SNAP-3's findings may spawn additional follow-up stories (SNAP-6+) — not
+pre-created here, per YE-1's precedent of not scoping unstarted work speculatively.
