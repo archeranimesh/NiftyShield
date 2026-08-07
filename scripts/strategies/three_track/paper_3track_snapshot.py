@@ -770,8 +770,9 @@ def _compute_daily_deltas(
         snap_date: Today's snapshot date.
 
     Returns:
-        List of dicts with keys ``base_pnl``, ``overlay_pnl``, ``net_pnl``
-        holding 1-day deltas; one dict per result entry (same order).
+        List of dicts with keys ``base_pnl``, ``overlay_pnl``, ``net_pnl``,
+        ``cc_pnl``, ``collar_pnl``, ``pp_pnl`` holding 1-day deltas; one dict
+        per result entry (same order).
     """
     rows: list[dict] = []
     for track_name, snapshot in results:
@@ -782,16 +783,21 @@ def _compute_daily_deltas(
         base_day = _leg_delta(store, track_name, base_role, base_total, snap_date) or Decimal("0")
 
         overlay_day = Decimal("0")
+        overlay_day_by_role: dict[str, Decimal] = {}
         for role, role_pnl in pnl.overlay_pnls.items():
             d = _leg_delta(store, track_name, role, role_pnl, snap_date)
             if d is not None:
                 overlay_day += d
+                overlay_day_by_role[role] = d
 
         rows.append(
             {
                 "base_pnl": base_day,
                 "overlay_pnl": overlay_day,
                 "net_pnl": base_day + overlay_day,
+                "cc_pnl": overlay_day_by_role.get("cc", Decimal("0")),
+                "collar_pnl": overlay_day_by_role.get("collar", Decimal("0")),
+                "pp_pnl": overlay_day_by_role.get("pp", Decimal("0")),
             }
         )
     return rows

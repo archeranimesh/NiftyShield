@@ -83,6 +83,9 @@ def test_compute_daily_deltas_with_prior_snapshot() -> None:
     assert rows[0]["base_pnl"] == Decimal("2000")
     assert rows[0]["overlay_pnl"] == Decimal("0")
     assert rows[0]["net_pnl"] == Decimal("2000")
+    assert rows[0]["cc_pnl"] == Decimal("0")
+    assert rows[0]["collar_pnl"] == Decimal("0")
+    assert rows[0]["pp_pnl"] == Decimal("0")
 
 
 def test_compute_daily_deltas_no_prior_snapshot() -> None:
@@ -96,11 +99,19 @@ def test_compute_daily_deltas_no_prior_snapshot() -> None:
     assert rows[0]["base_pnl"] == Decimal("0")
     assert rows[0]["overlay_pnl"] == Decimal("0")
     assert rows[0]["net_pnl"] == Decimal("0")
+    assert rows[0]["cc_pnl"] == Decimal("0")
+    assert rows[0]["collar_pnl"] == Decimal("0")
+    assert rows[0]["pp_pnl"] == Decimal("0")
 
 
 def test_compute_daily_deltas_overlay_summed() -> None:
-    """Overlay day delta sums across multiple overlay legs."""
-    overlays = {"overlay_cc": Decimal("-500"), "overlay_pp": Decimal("300")}
+    """Overlay day delta sums across multiple overlay legs.
+
+    Uses the normalized display-label keys ("cc"/"pp") that
+    generate_track_snapshot produces in pnl.overlay_pnls (see comment in
+    the summary_rows construction above _compute_daily_deltas's caller).
+    """
+    overlays = {"cc": Decimal("-500"), "pp": Decimal("300")}
     snap = _make_track_snapshot(
         base_unrealized=Decimal("8000"), realized=Decimal("0"), overlay_pnls=overlays
     )
@@ -108,8 +119,8 @@ def test_compute_daily_deltas_overlay_summed() -> None:
     def _side_effect(strategy, leg_role, before_date):
         mapping = {
             "base_etf": _make_leg_snapshot(Decimal("8000")),  # delta = 0
-            "overlay_cc": _make_leg_snapshot(Decimal("-600")),  # delta = +100
-            "overlay_pp": _make_leg_snapshot(Decimal("200")),  # delta = +100
+            "cc": _make_leg_snapshot(Decimal("-600")),  # delta = +100
+            "pp": _make_leg_snapshot(Decimal("200")),  # delta = +100
         }
         return mapping.get(leg_role)
 
@@ -121,6 +132,33 @@ def test_compute_daily_deltas_overlay_summed() -> None:
     assert rows[0]["overlay_pnl"] == Decimal("200")  # 100 + 100
     assert rows[0]["base_pnl"] == Decimal("0")  # 8000 − 8000
     assert rows[0]["net_pnl"] == Decimal("200")
+    assert rows[0]["cc_pnl"] == Decimal("100")
+    assert rows[0]["pp_pnl"] == Decimal("100")
+    assert rows[0]["collar_pnl"] == Decimal("0")
+
+
+def test_compute_daily_deltas_cc_pnl_is_1day_not_inception() -> None:
+    """RO-1 regression: cc_pnl in the delta row must be a 1-day delta, not the
+    inception-to-date total carried in summary_rows before the merge."""
+    overlays = {"cc": Decimal("-9000")}  # large inception-to-date total
+    snap = _make_track_snapshot(
+        base_unrealized=Decimal("8000"), realized=Decimal("0"), overlay_pnls=overlays
+    )
+
+    def _side_effect(strategy, leg_role, before_date):
+        mapping = {
+            "base_etf": _make_leg_snapshot(Decimal("8000")),
+            "cc": _make_leg_snapshot(Decimal("-8950")),  # yesterday's total → delta = -50
+        }
+        return mapping.get(leg_role)
+
+    store = MagicMock()
+    store.get_prev_leg_snapshot.side_effect = _side_effect
+
+    rows = _compute_daily_deltas([("paper_nifty_spot", snap)], store, date(2026, 6, 15))
+
+    assert rows[0]["cc_pnl"] == Decimal("-50")
+    assert rows[0]["cc_pnl"] != overlays["cc"]
 
 
 # ── CLI period parsing ────────────────────────────────────────────────────────
