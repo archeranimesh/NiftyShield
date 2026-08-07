@@ -79,6 +79,15 @@ tasks were added since.
 
 ---
 
+## Message-by-message format iteration
+
+`message-format-workshop.md` (this directory) is a **reusable** prompt, not tied to one task —
+use it every time you want to iterate a specific Telegram message's format live (paste a
+before/after, or ask for a suggestion), confirm it on-device via a scratch script, and have the
+confirmed result written back into `strategy-rollout/stories.md`/`tasks.md`. This is how ROLL-1
+(IC EOD audit) was actually produced; use it for ROLL-2 onward instead of writing a message's
+final format directly into `stories.md` without a live-confirmed reference script.
+
 ## Conventions
 
 Same as `docs/plan/README.md` — each folder has `prompt.md` (session entry point), `tasks.md`
