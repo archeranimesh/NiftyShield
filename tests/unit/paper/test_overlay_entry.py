@@ -617,7 +617,17 @@ def test_auto_cc_gate_violation_persisted(tmp_path, capsys):
             "scripts.strategies.three_track.paper_3track_overlay_entry.build_notifier",
             return_value=None,
         ),
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.UpstoxMarketClient"
+        ) as mock_client_cls,
     ):
+        # RH-4 collateral-capacity gate (2026-08-06) is advisory-only and out of
+        # scope for this test — force its missing-LTP skip path so it never
+        # reaches check_collateral_capacity/record_gate_violation with the empty
+        # mock_store positions below (which would otherwise read as a real
+        # breach and record a second, unrelated GateViolation, doubling the
+        # call count this test is asserting on).
+        mock_client_cls.return_value.get_ltp_sync.return_value = {}
         mock_bootstrap.return_value = (cfg, violation)
         mock_store = MagicMock()
         mock_store_cls.return_value = mock_store
@@ -1227,7 +1237,17 @@ def test_auto_collar_gate_violation_persisted(tmp_path, capsys):
             "scripts.strategies.three_track.paper_3track_overlay_entry.build_notifier",
             return_value=None,
         ),
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.UpstoxMarketClient"
+        ) as mock_client_cls,
     ):
+        # RH-4 collateral-capacity gate (2026-08-06) is advisory-only and out of
+        # scope for this test — force its missing-LTP skip path so it never
+        # reaches check_collateral_capacity/record_gate_violation with the empty
+        # mock_store positions below (which would otherwise read as a real
+        # breach and record a second, unrelated GateViolation, doubling the
+        # call count this test is asserting on).
+        mock_client_cls.return_value.get_ltp_sync.return_value = {}
         mock_bootstrap.return_value = (cfg, violation)
         mock_store = MagicMock()
         mock_store_cls.return_value = mock_store
