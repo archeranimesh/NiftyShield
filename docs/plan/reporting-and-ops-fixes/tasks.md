@@ -83,7 +83,9 @@ design intent between them.
 
   **No code-reviewer gate** — docs-only.
 
-  **Commit:** `docs: fix remaining dead docs/council links in dev-foundation + variance-gate`
+  **Commit:** `docs: fix remaining dead docs/council links in dev-foundation + variance-gate` | SHA: 98e781e
+
+---
 
 - [ ] **RO-4** — Add healthcheck cron. Spawned from TODOS.md. `scripts/healthcheck.py` (CH-8,
   already shipped) is not yet wired into crontab — this is the remaining operational step.

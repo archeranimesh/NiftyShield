@@ -90,6 +90,10 @@ Session Log grows large again.
   sandbox dependency workaround (`pip install --target=.../mnt/outputs/pydeps`) — 2 remaining
   failures pre-existing/environmental (live network call in `test_record_paper_trade_r3.py`,
   unrelated import error in `test_council_fallback.py`), not caused by this change. SHA `7fa175b`.
+- **RO-3** (`docs/plan/reporting-and-ops-fixes/tasks.md`): repointed dead `docs/council/...`
+  links to their real `docs/archive/council/...` paths in `docs/plan/dev-foundation/README.md:46`
+  and `docs/plan/variance-gate/variance_gate_spec.md:3,185`. Docs-only, no code-reviewer/test
+  gate. SHA `98e781e`.
 
 ### 2026-08-06 Session Log (execution-risk-hardening RH-5 docs close, story archived)
 - **RH-5 (`docs/plan/execution-risk-hardening/tasks.md`)** — docs-close verification only, no
