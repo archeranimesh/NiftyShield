@@ -136,6 +136,8 @@ All of the following must be true before loading `BACKTEST_PLAN_PHASE1.md`.
 
 - [ ] **(A) Minimum paper sample:** ≥6 executed paper CSP cycles **and** ≥9 calendar months of entry-decision observation (whichever comes later). Cycles skipped by R3/R4/event filters count as filter-validation observations.
 
+  **IVR NULL exception:** IVR NULL for Cycles 1 and 2 — accepted data gap; criterion A satisfied from Cycle 3 onward. Cycle 1 (id=14, 2026-05-11): pipeline not live yet. Cycle 2 (id=32, 2026-05-28): 0/252 days VIX history blocked computation.
+
 - [ ] **(B) Exit-path validation:** Each exit mechanism validated at least once via live paper or deterministic historical replay:
 
   | Exit Type | Validation requirement |

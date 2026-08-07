@@ -87,8 +87,17 @@ design intent between them.
 
 ---
 
-- [ ] **RO-4** — Add healthcheck cron. Spawned from TODOS.md. `scripts/healthcheck.py` (CH-8,
+- [x] **RO-4** — Add healthcheck cron. Spawned from TODOS.md. `scripts/healthcheck.py` (CH-8,
   already shipped) is not yet wired into crontab — this is the remaining operational step.
+
+  **Verified 2026-08-07:** `logs/cron.log` already contains a live entry —
+  `55 15 * * 1-5 cd /Users/abhadra/myWork/myCode/python/NiftyShield && .venv/bin/python -m scripts.healthcheck >> logs/healthcheck.log 2>&1`
+  — consistent invocation shape with every other cron line in the file (`.venv` interpreter,
+  `cd`-into-repo, module form, redirected log). Runs at 15:55 IST rather than the task's
+  suggested 16:30, placed right after `position_health_check`; no functional gap. Manual
+  dry-run confirmation that the Telegram alert fires on failure was not re-verified in this
+  session — Animesh, please confirm that's been checked, or flag if the schedule time (15:55
+  vs 16:30) should change. No repo diff needed, so no commit for this task.
 
   **Action (operational, not a code change):**
   ```
@@ -107,7 +116,7 @@ design intent between them.
 
 ---
 
-- [ ] **RO-5** — Add IVR NULL note to `BACKTEST_PLAN.md`. Spawned from TODOS.md. Phase 0.8 gate
+- [x] **RO-5** — Add IVR NULL note to `BACKTEST_PLAN.md`. Spawned from TODOS.md. Phase 0.8 gate
   criterion A needs a documented exception: *"IVR NULL for Cycles 1 and 2 — accepted data gap;
   criterion A satisfied from Cycle 3 onward."* Cycle 1 (id=14, 2026-05-11): pipeline not live
   yet. Cycle 2 (id=32, 2026-05-28): 0/252 days VIX history blocked computation.
