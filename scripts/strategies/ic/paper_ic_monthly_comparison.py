@@ -353,24 +353,46 @@ def build_comparison_report(v1: ICMonthlyStats, v2: ICMonthlyStats, report_date:
     def safe_col(val: str, is_open: bool) -> str:
         return val if is_open else "No open position"
 
+    # TGFMT-1: dynamic label/column widths, right-aligned value columns.
+    # Previous implementation hand-counted literal spaces per label to hit a
+    # fixed budget plus fixed :<15 value-column widths — both broke silently
+    # the moment a label/value exceeded what was counted by hand at write
+    # time (reproduced live with long labels colliding into the value
+    # column). Widths below are always derived from actual content via
+    # max(len(...)), never a hand-typed literal — correct by construction
+    # for any row/label set.
+    rows: list[tuple[str, str, str]] = [
+        ("Entry credit", safe_col(fmt_pts(v1.entry_credit_pts), v1_open),
+         safe_col(fmt_pts(v2.entry_credit_pts), v2_open)),
+        ("Captured", safe_col(fmt_pct(v1.captured_fraction), v1_open),
+         safe_col(fmt_pct(v2.captured_fraction), v2_open)),
+        ("Short put Δ", safe_col(fmt_delta(v1.short_put_delta), v1_open),
+         safe_col(fmt_delta(v2.short_put_delta), v2_open)),
+        ("Short call Δ", safe_col(fmt_delta(v1.short_call_delta), v1_open),
+         safe_col(fmt_delta(v2.short_call_delta), v2_open)),
+        ("DTE", safe_col(fmt_dte(v1.dte), v1_open), safe_col(fmt_dte(v2.dte), v2_open)),
+        ("Unrealized P&L", fmt_pnl(v1.unrealized_pnl), fmt_pnl(v2.unrealized_pnl)),
+        ("Realized (month)", fmt_pnl(v1.realized_pnl_month), fmt_pnl(v2.realized_pnl_month)),
+        ("Profit-lock zone", safe_col(fmt_zone(v1.profit_lock_zone, False), v1_open),
+         safe_col(fmt_zone(v2.profit_lock_zone, True), v2_open)),
+        ("Adjustments", safe_col(fmt_adj(True, v1.roll_count, v1.lock_count), v1_open),
+         safe_col(fmt_adj(False, v2.roll_count, v2.lock_count), v2_open)),
+        ("Signals today", fmt_sigs(v1.signals_fired_today), fmt_sigs(v2.signals_fired_today)),
+    ]
+
+    label_width = max(len(r[0]) for r in rows) + 1  # +1 gap before the columns start
+    col1_width = max(len("V1 Monthly"), max(len(r[1]) for r in rows))
+    col2_width = max(len("V2 Monthly"), max(len(r[2]) for r in rows))
+
     lines = [
         f"📊 IC Monthly Comparison — {report_date.isoformat()}",
         "",
-        "                    V1 Monthly      V2 Monthly",
-        "─────────────────────────────────────────────",
-        f"Entry credit        {safe_col(fmt_pts(v1.entry_credit_pts), v1_open):<15} {safe_col(fmt_pts(v2.entry_credit_pts), v2_open)}",
-        f"Captured            {safe_col(fmt_pct(v1.captured_fraction), v1_open):<15} {safe_col(fmt_pct(v2.captured_fraction), v2_open)}",
-        f"Short put Δ         {safe_col(fmt_delta(v1.short_put_delta), v1_open):<15} {safe_col(fmt_delta(v2.short_put_delta), v2_open)}",
-        f"Short call Δ        {safe_col(fmt_delta(v1.short_call_delta), v1_open):<15} {safe_col(fmt_delta(v2.short_call_delta), v2_open)}",
-        f"DTE                 {safe_col(fmt_dte(v1.dte), v1_open):<15} {safe_col(fmt_dte(v2.dte), v2_open)}",
-        f"Unrealized P&L      {fmt_pnl(v1.unrealized_pnl):<15} {fmt_pnl(v2.unrealized_pnl)}",
-        f"Realized (month)    {fmt_pnl(v1.realized_pnl_month):<15} {fmt_pnl(v2.realized_pnl_month)}",
-        f"Profit-lock zone    {safe_col(fmt_zone(v1.profit_lock_zone, False), v1_open):<15} {safe_col(fmt_zone(v2.profit_lock_zone, True), v2_open)}",
-        f"Adjustments         {safe_col(fmt_adj(True, v1.roll_count, v1.lock_count), v1_open):<15} {safe_col(fmt_adj(False, v2.roll_count, v2.lock_count), v2_open)}",
-        f"Signals today       {fmt_sigs(v1.signals_fired_today):<15} {fmt_sigs(v2.signals_fired_today)}",
-        "",
-        edge_line,
+        f"{'':<{label_width}}{'V1 Monthly':>{col1_width}}  {'V2 Monthly':>{col2_width}}",
+        "─" * (label_width + col1_width + col2_width + 2),
     ]
+    for label, v1_cell, v2_cell in rows:
+        lines.append(f"{label:<{label_width}}{v1_cell:>{col1_width}}  {v2_cell:>{col2_width}}")
+    lines += ["", edge_line]
 
     return "\n".join(lines)
 

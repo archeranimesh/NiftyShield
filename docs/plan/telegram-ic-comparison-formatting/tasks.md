@@ -6,10 +6,10 @@
 
 ---
 
-- [ ] **TGFMT-1** — Fix `build_comparison_report()` alignment: replace hand-counted literal
+- [x] **TGFMT-1** — Fix `build_comparison_report()` alignment: replace hand-counted literal
   spacing with dynamic label/column widths, right-aligned value columns. Regression test with an
   artificially long label. **Owner: Claude** (financial-report formatting, low ambiguity, mechanical
-  once the scratch script's proven approach is ported).
+  once the scratch script's proven approach is ported). | SHA: PENDING
 - [ ] **TGFMT-2** — Add "Legs" row (open leg count out of 4, 🔴 if < 4) to `ICMonthlyStats` and the
   report. No new data dependency — `build_stats()` already computes `open_pos`. Can run in
   parallel with or right after TGFMT-1. **Owner: Claude.**
