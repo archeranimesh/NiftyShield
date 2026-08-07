@@ -1229,3 +1229,107 @@ def test_has_open_overlay_leg_recognizes_collar_primary_role(tmp_path):
         )
     )
     assert _has_open_overlay_leg(store, "overlay_collar_put") is True
+
+
+# ── BUG-026: settings.vix_data_dir str/Path mismatch at the IVR gate ───────────
+#
+# auto_cc_bootstrap/auto_collar_bootstrap/auto_pp_bootstrap passed
+# settings.vix_data_dir straight into load_vix_series(), which immediately
+# calls .glob() on it. Every other test for these functions mocks
+# load_vix_series() directly, so a str vs. Path defect in the real settings
+# value never reached .glob() in the suite and the crash shipped silently on
+# every cron run. These tests exercise the real load_vix_series() call
+# (only InstrumentLookup/chain-fetch are mocked) against a real fixture VIX
+# Parquet directory, so a regression back to settings.vix_data_dir: str
+# fails here with AttributeError instead of only in prod logs.
+
+
+def _write_vix_fixture(vix_dir: Path, rows: int = 252) -> None:
+    """Write a real india_vix_*.parquet file load_vix_series can glob/read."""
+    import pandas as pd
+
+    vix_dir.mkdir(parents=True, exist_ok=True)
+    dates = pd.date_range(end=date.today(), periods=rows, freq="B").date
+    df = pd.DataFrame({"date": dates, "close": [15.0] * rows})
+    df.to_parquet(vix_dir / "india_vix_fixture.parquet")
+
+
+def test_auto_cc_bootstrap_reaches_chain_fetch_with_real_vix_dir(tmp_path, monkeypatch):
+    """auto_cc_bootstrap must clear the real IVR gate (settings.vix_data_dir as
+    an actual Path, load_vix_series not mocked) and reach the chain-fetch
+    stage — the BUG-026 crash site is between these two, so getting past the
+    IVR gate without AttributeError is the regression proof."""
+    from scripts.strategies.three_track.paper_3track_overlay_entry import (
+        auto_cc_bootstrap,
+    )
+
+    vix_dir = tmp_path / "vix"
+    _write_vix_fixture(vix_dir)
+    monkeypatch.setattr(
+        "scripts.strategies.three_track.paper_3track_overlay_entry.settings.vix_data_dir",
+        vix_dir,
+    )
+
+    with patch(
+        "scripts.strategies.three_track.paper_3track_overlay_entry.InstrumentLookup"
+    ) as mock_lookup_cls:
+        mock_lookup = MagicMock()
+        mock_lookup_cls.from_file.return_value = mock_lookup
+        mock_lookup.get_expiry_candidates.return_value = [("monthly", "2026-08-27")]
+
+        # UpstoxMarketClient is never patched here — chain fetch fails on a
+        # real (unconfigured) client, which is fine: we only need proof the
+        # IVR gate (the BUG-026 crash site) was cleared without raising.
+        result = auto_cc_bootstrap(tmp_path / "bod.json")
+
+    assert result is None
+
+
+def test_auto_pp_bootstrap_reaches_chain_fetch_with_real_vix_dir(tmp_path, monkeypatch):
+    """Same regression proof as CC, for the PP bootstrap path."""
+    from scripts.strategies.three_track.paper_3track_overlay_entry import (
+        auto_pp_bootstrap,
+    )
+
+    vix_dir = tmp_path / "vix"
+    _write_vix_fixture(vix_dir)
+    monkeypatch.setattr(
+        "scripts.strategies.three_track.paper_3track_overlay_entry.settings.vix_data_dir",
+        vix_dir,
+    )
+
+    with patch(
+        "scripts.strategies.three_track.paper_3track_overlay_entry.InstrumentLookup"
+    ) as mock_lookup_cls:
+        mock_lookup = MagicMock()
+        mock_lookup_cls.from_file.return_value = mock_lookup
+        mock_lookup.get_expiry_candidates.return_value = [("monthly", "2026-08-27")]
+
+        cfg, gate_violation = auto_pp_bootstrap(tmp_path / "bod.json")
+
+    assert cfg is None
+
+
+def test_auto_collar_bootstrap_reaches_chain_fetch_with_real_vix_dir(tmp_path, monkeypatch):
+    """Same regression proof as CC, for the Collar bootstrap path."""
+    from scripts.strategies.three_track.paper_3track_overlay_entry import (
+        auto_collar_bootstrap,
+    )
+
+    vix_dir = tmp_path / "vix"
+    _write_vix_fixture(vix_dir)
+    monkeypatch.setattr(
+        "scripts.strategies.three_track.paper_3track_overlay_entry.settings.vix_data_dir",
+        vix_dir,
+    )
+
+    with patch(
+        "scripts.strategies.three_track.paper_3track_overlay_entry.InstrumentLookup"
+    ) as mock_lookup_cls:
+        mock_lookup = MagicMock()
+        mock_lookup_cls.from_file.return_value = mock_lookup
+        mock_lookup.get_expiry_candidates.return_value = [("monthly", "2026-08-27")]
+
+        result = auto_collar_bootstrap(tmp_path / "bod.json")
+
+    assert result is None

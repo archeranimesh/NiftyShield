@@ -5,6 +5,29 @@
 
 ---
 
+**BUG-026 fix — retype `Settings.vix_data_dir: str` → `Path` at the source, not a 3-call-site wrap (2026-08-07):**
+`auto_cc_bootstrap`/`auto_collar_bootstrap`/`auto_pp_bootstrap` (`paper_3track_overlay_entry.py`)
+passed `settings.vix_data_dir` straight into `load_vix_series()`, which immediately calls
+`.glob()` on it — crashing with `AttributeError: 'str' object has no attribute 'glob'` inside a
+bare `except Exception`, silently, on every one of the three overlay-entry crons since at least
+2026-08-04. Two fix shapes were weighed: (a) narrow — wrap `Path(settings.vix_data_dir)` at just
+the 3 broken call sites, matching the defensive pattern every other of the ~11 callers already
+uses; (b) root-cause — retype the field itself. Animesh chose (b) directly (AskUserQuestion, no
+full council call — single-discipline config-typing fix, fails the council's multi-discipline
+condition). A full `grep`/graph sweep of all `vix_data_dir` usages confirmed (b) was safe: every
+existing caller already wraps the setting in `Path(...)` before use (`Path(Path(x))` is a no-op),
+so only the 3 broken sites and one `str`-comparison test assertion needed a change — no other
+caller does string-only ops (f-string interpolation, `.split()`, etc.) on the value. `db_path`/
+`backup_dir`/`chain_snapshot_dir`/`chain_intraday_dir` are the same `str`-typed path-like-field
+pattern on `Settings` but are out of this bug's scope — not reported as broken, not swept. Also
+added regression coverage the bug report flagged as missing: every existing test for the three
+bootstrap functions mocks `load_vix_series` directly, so the wrong type never reached `.glob()` in
+the suite — 3 new tests in `tests/unit/paper/test_overlay_entry.py` call the real
+`load_vix_series()` against a fixture Parquet dir to close that gap. See `docs/bugs/bugs.md`
+BUG-026, `CONTEXT.md` `src/config.py` entry.
+
+---
+
 **RH-1 IC entry atomicity — compensating close, not in-process transaction (2026-08-06):**
 `paper_ic_entry.py`/`_v2.py` build the 4-leg Iron Condor entry as 4 independent
 `record_paper_trade.py` subprocess calls, one per leg, with no shared DB transaction. A

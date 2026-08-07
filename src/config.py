@@ -10,6 +10,7 @@ Usage::
     token = settings.upstox_analytics_token
 """
 
+from pathlib import Path
 from typing import Any
 
 from pydantic import Field, field_validator
@@ -151,9 +152,14 @@ class Settings(BaseSettings):
         default="/var/backups/niftyshield",
         description="Path to the backup directory. Should be outside the repo mount.",
     )
-    vix_data_dir: str = Field(
-        default="data/historical/ohlc/india_vix",
-        description="Directory containing India VIX Parquet files.",
+    vix_data_dir: Path = Field(
+        default=Path("data/historical/ohlc/india_vix"),
+        description=(
+            "Directory containing India VIX Parquet files. Typed as Path "
+            "(not str) so callers that pass settings.vix_data_dir straight "
+            "into Path-only APIs (e.g. load_vix_series' .glob() call) don't "
+            "crash with AttributeError — see BUG-026."
+        ),
     )
     chain_snapshot_dir: str = Field(
         default="data/historical/option_chain/eod",

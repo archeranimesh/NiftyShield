@@ -673,3 +673,29 @@ Decimal correctness (`str(unrealized)` etc., no float leakage) and the `PaperTra
 **Related:** MC-3b (`docs/plan/monitor-and-close-hardening/tasks.md`), BUG-023, BUG-024.
 
 ---
+
+## BUG-026 — CC/PP/Collar auto-entry crons crash at the IVR gate on every run (`str`/`Path` mismatch on `settings.vix_data_dir`); zero overlay trades have ever landed despite live-posture unblock
+
+| Field | Value |
+|---|---|
+| Severity | **HIGH** — not a financial-logic correctness defect (no position was ever entered, so no bad trade), but a live-capital-adjacent automation is fully non-functional: three scheduled crons (`--auto-cc`, `--auto-collar` every Wed 10:30; `--auto-pp` daily 10:30) have failed on 100% of invocations since at least 2026-08-04, with no downstream signal (no Telegram alert, only a stderr line captured in a per-cron log file) that would surface this to the operator. |
+| Status | ✅ Fixed (2026-08-07, SHA pending) — `Settings.vix_data_dir` retyped `str` → `Path`; see `DECISIONS.md` 2026-08-07 for the root-cause-vs-narrow-wrap decision and the caller sweep that confirmed it was safe. |
+| Discovered | 2026-08-07, cross-checking SNAP-3's DB finding ("CC/PP/Collar have zero rows in every `paper_*` table") against `logs/cron.log` + `logs/cc_entry.log`/`collar_entry.log`/`pp_entry.log` at the operator's prompt — SNAP-3 had initially (incorrectly) attributed the empty tables to "pre-bootstrap, nothing has traded yet," per stale `CONTEXT.md` text saying `--no-dry-run` was still hard-blocked for these paths. That block was actually lifted 2026-08-02/03 (confirmed via `paper_3track_overlay_entry.py` code), so the correct explanation is this bug, not an unstarted feature. |
+| Location | `src/config.py::Settings.vix_data_dir` (declared `str`, not `Path`); `src/backtest/vix_ingest.py::load_vix_series(data_dir: Path)` (calls `data_dir.glob(...)` unconditionally); all three call sites in `scripts/strategies/three_track/paper_3track_overlay_entry.py`: `auto_cc_bootstrap` (~line 241), `auto_collar_bootstrap` (~line 374), `auto_pp_bootstrap` (~line 597) — each passes `settings.vix_data_dir` straight into `load_vix_series` with no `Path(...)` wrap. |
+
+**Symptom:** `logs/cc_entry.log`, `logs/collar_entry.log`, `logs/pp_entry.log` show the identical error on every single cron run:
+
+```
+[ERROR] ... auto_cc.ivr_check_failed error='str' object has no attribute 'glob'
+ERROR: auto-CC bootstrap failed. Check logs.
+```
+
+(same shape for `auto_collar`/`auto_pp`; `pp_entry.log` shows 4 consecutive daily failures, 2026-08-04 through 2026-08-07). All three functions wrap the IVR gate in a bare `except Exception` that logs and returns `None` (or `(None, None)` for PP) — the crash never propagates, so the cron job "succeeds" (exit path is a clean early return, not an unhandled exception) and produces no Telegram alert. This is why `paper_trades`/`paper_nav_snapshots`/`paper_leg_snapshots`/`paper_overlay_pnl_snapshots` all show zero rows for `paper_nifty_overlay` and every overlay `leg_role` (`overlay_cc`, `overlay_pp`, `overlay_collar_call`, `overlay_collar_put`) — confirmed independently against the live DB by both Cowork's mounted copy and a direct run on the operator's host (`scratch/2026-08-07_overlay_snap3_cross_check.py`).
+
+**Root cause:** `Settings.vix_data_dir: str = Field(default="data/historical/ohlc/india_vix", ...)` in `src/config.py` — typed as a plain string. `load_vix_series(data_dir: Path)` in `src/backtest/vix_ingest.py` immediately calls `data_dir.glob("**/india_vix_*.parquet")`, which raises `AttributeError` on a `str`. Every other `load_vix_series` caller apparently wraps the setting in `Path(...)` before passing it (not confirmed exhaustively — 11 total callers per the graph, only these 3 were traced for this bug); these three overlay bootstrap functions do not.
+
+**Fixed 2026-08-07** — `Settings.vix_data_dir: str` retyped to `Path` (`src/config.py`); pydantic coerces a string env value automatically, so no `.env`/env-var change needed. Root-cause fix chosen over the narrower 3-call-site wrap (Animesh, direct decision) after a full `grep`/graph sweep of all ~11 `vix_data_dir` callers confirmed every other caller already wraps the value in `Path(...)` defensively — only the 3 broken call sites (`auto_cc_bootstrap`/`auto_collar_bootstrap`/`auto_pp_bootstrap`) and one `str`-comparison test assertion (`tests/unit/test_config.py`) needed changing. Confirmed the exact gap this bug's own diagnosis predicted: every existing test for the three bootstrap functions mocks `load_vix_series` directly, so `settings.vix_data_dir`'s real type never reached `.glob()` in the suite. Added the regression test the bug report called for: 3 new tests in `tests/unit/paper/test_overlay_entry.py` call the real (unmocked) `load_vix_series()` against a fixture VIX Parquet directory for all three bootstrap functions, plus 2 new tests in `tests/unit/test_config.py` (Path-type assertion, string-env-var-to-Path coercion). 2726 passed / 2 skipped on a live-sandbox `pytest tests/unit/` run; 1 pre-existing failure (`test_r3_no_block_on_buy`, blocked outbound network call to `api.upstox.com`) + 2 pre-existing collection errors (`test_chain_reader.py`, `test_council_fallback.py`) re-run in isolation and confirmed unrelated to this diff. Not a financial-logic correctness change (config type fix only, no P&L/Decimal/order-path code touched) — `general-purpose` + `REVIEW.md` substitute review, no CRITICAL/ERROR.
+
+**Related:** `docs/plan/paper-ic-daily-snapshot/stories.md` SNAP-3 findings (correction), 3-Track Consolidation epic (CC1–CC5/PP1–PP5/Collar1–Collar3b, `docs/archive/plan/3track-consolidation/`) — this bug means the "live-posture unblock" closed in that epic never actually resulted in a live overlay entry.
+
+---

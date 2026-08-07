@@ -4,6 +4,8 @@ All tests are offline — no network, no .env file dependency.
 Environment variables are injected via monkeypatch.
 """
 
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -39,7 +41,8 @@ def test_defaults_with_no_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     assert s.dhan_client_id is None
     assert s.dhan_access_token is None
     assert s.nuvama_settings_file == "data/nuvama/settings.json"
-    assert s.vix_data_dir == "data/historical/ohlc/india_vix"
+    assert s.vix_data_dir == Path("data/historical/ohlc/india_vix")
+    assert isinstance(s.vix_data_dir, Path)
     assert s.db_path == "data/portfolio/portfolio.sqlite"
     assert s.log_level == "INFO"
 
@@ -56,6 +59,37 @@ def test_invalid_upstox_env_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("UPSTOX_ENV", "live")
     with pytest.raises(ValidationError):
         Settings(_env_file=None)  # type: ignore[call-arg]
+
+
+# ── vix_data_dir Path typing (BUG-026) ──────────────────────────────
+#
+# vix_data_dir was declared `str`, so `load_vix_series(settings.vix_data_dir)`
+# call sites that skipped their own `Path(...)` wrap crashed with
+# `AttributeError: 'str' object has no attribute 'glob'` — the three
+# --auto-cc/--auto-pp/--auto-collar bootstrap functions in
+# paper_3track_overlay_entry.py did exactly this on every cron run. Every
+# existing test for those functions mocks `load_vix_series` directly, so
+# the wrong type never reached `.glob()` in the suite — these tests close
+# that gap at the settings layer.
+
+
+def test_vix_data_dir_is_path_type(monkeypatch: pytest.MonkeyPatch) -> None:
+    """vix_data_dir is a real Path, not str — callers can .glob() it directly."""
+    monkeypatch.delenv("VIX_DATA_DIR", raising=False)
+    s = Settings(_env_file=None)  # type: ignore[call-arg]
+
+    assert isinstance(s.vix_data_dir, Path)
+    # The exact call BUG-026's crash site made — must not raise AttributeError.
+    list(s.vix_data_dir.glob("**/*.parquet"))
+
+
+def test_vix_data_dir_env_override_coerces_to_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A string env var value still coerces cleanly into a Path field."""
+    monkeypatch.setenv("VIX_DATA_DIR", "/tmp/custom_vix_dir")
+    s = Settings(_env_file=None)  # type: ignore[call-arg]
+
+    assert s.vix_data_dir == Path("/tmp/custom_vix_dir")
+    assert isinstance(s.vix_data_dir, Path)
 
 
 # ── _DynamicSettings cache invalidation (BUG-011) ──────────────────
