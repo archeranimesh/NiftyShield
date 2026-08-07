@@ -124,6 +124,16 @@ Session Log grows large again.
   (2730 passed, 2 pre-existing/environmental failures unrelated to this change). Code-reviewer gate:
   Cowork substitution, REVIEW.md checklist applied directly, no CRITICAL/ERROR findings. SNAP-5
   (`total_pnl` write-time invariant fix + backfill) is next on the sequencing list.
+- **TL-3** (`docs/plan/telegram-leg-labels/tasks.md`): wired `format_option_label` into
+  `scripts/strategies/ic/paper_ic_entry.py::run()`'s Telegram entry-preview message (short/long
+  put/call lines) — replaces ad hoc `f"{int(strike)}PE"` strings, matching TL-1/TL-2's convention.
+  Bundled bug fix: the two "Long Put"/"Long Call" hedge lines were missing the mid price despite
+  it already being fetched (`long_put['mid']`/`long_call['mid']`) — added. The `cmds` subprocess
+  block (literal `record_paper_trade.py --key NSE_FO|...` commands) is untouched, guarded by a new
+  regression test. 3 new tests in `tests/unit/strategies/ic/test_paper_ic_entry.py` (28/28 pass in
+  that file; full offline suite has pre-existing/environmental failures — missing `duckdb` and
+  other deps in this sandbox — unrelated to this change). Reviewed via `general-purpose` agent
+  standing in for `@code-reviewer` — no CRITICAL/ERROR. SHA `271d6ae`.
 
 ### 2026-08-06 Session Log (execution-risk-hardening RH-5 docs close, story archived)
 - **RH-5 (`docs/plan/execution-risk-hardening/tasks.md`)** — docs-close verification only, no
