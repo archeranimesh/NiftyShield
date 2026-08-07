@@ -25,13 +25,78 @@ load_dotenv()
 from src.backtest.ivr import compute_ivr  # noqa: E402
 from src.backtest.vix_ingest import load_vix_series  # noqa: E402
 from src.client.factory import create_client  # noqa: E402
+from src.client.protocol import BrokerClient  # noqa: E402
 from src.config import settings  # noqa: E402
 from src.notifications.telegram_gateway import TelegramGateway  # noqa: E402
+from src.paper.models import PaperPosition  # noqa: E402
 from src.paper.store import PaperStore  # noqa: E402
-from src.paper.tracker import PaperTracker  # noqa: E402
+from src.paper.tracker import _compute_leg_unrealized_pnl  # noqa: E402
+
+# _compute_leg_unrealized_pnl is intentionally reused rather than duplicated —
+# it is the single source of truth for the short/long P&L formula (see
+# src/paper/tracker.py); reimplementing it here would risk the two drifting.
 from src.utils.logging import setup_logging  # noqa: E402
 
 logger = structlog.get_logger("scripts.pre_market_brief")
+
+
+async def _compute_unrealized_with_fallback(
+    store: PaperStore,
+    broker: BrokerClient,
+    strategy_name: str,
+    positions: list[PaperPosition],
+) -> Decimal:
+    """Compute unrealized P&L for a strategy's open legs, pre-market safe.
+
+    Futures have no pre-open session, so ``get_ltp`` returns nothing for
+    them before market open — treating that as a live price of 0 would
+    report a large notional loss that doesn't exist. For any FUT leg with
+    no usable live LTP, fall back to the most recent EOD ``paper_leg_snapshots``
+    row for that leg instead of pricing it at zero. Non-futures legs are
+    unaffected: pre-market LTP for options/equity is expected to already be
+    the prior close and is used as-is.
+
+    Args:
+        store: Paper trading store, for the EOD snapshot fallback lookup.
+        broker: Broker client used to fetch live LTPs.
+        strategy_name: Paper strategy name (must start with ``paper_``).
+        positions: Open (net_qty != 0) positions for this strategy.
+
+    Returns:
+        Total unrealized P&L across the given positions.
+    """
+    instrument_keys = [p.instrument_key for p in positions if p.instrument_key]
+    prices: dict[str, Decimal] = {}
+    if instrument_keys:
+        prices = await broker.get_ltp(instrument_keys)
+
+    today = date.today()
+    unrealized = Decimal("0")
+    for pos in positions:
+        ltp = prices.get(pos.instrument_key)
+        if pos.option_type == "FUT" and (ltp is None or ltp == Decimal("0")):
+            snapshot = await asyncio.to_thread(
+                store.get_prev_leg_snapshot, strategy_name, pos.leg_role, today
+            )
+            if snapshot is not None:
+                unrealized += snapshot.unrealized_pnl
+                continue
+            logger.warning(
+                "No live LTP and no prior EOD snapshot for futures leg; "
+                "reporting zero unrealized P&L for this leg",
+                strategy=strategy_name,
+                leg_role=pos.leg_role,
+            )
+            # Deliberately skip _compute_leg_unrealized_pnl here — pricing a
+            # futures leg at 0 is exactly the fabricated-notional-loss bug
+            # this fallback exists to avoid (RO-2). No snapshot means no
+            # informed P&L is available, so report zero for this leg only.
+            continue
+        elif ltp is None:
+            ltp = Decimal("0")
+        unrealized += _compute_leg_unrealized_pnl(pos, ltp)
+
+    return unrealized
 
 
 async def get_current_ivr() -> float | None:
@@ -80,7 +145,6 @@ async def main() -> int:
         return 0
 
     broker = create_client(settings.upstox_env)
-    tracker = PaperTracker(store=store, market=broker)
 
     ivr_val = await get_current_ivr()
     ivr_text = f"{ivr_val * 100:.1f}%" if ivr_val is not None else "N/A"
@@ -102,8 +166,9 @@ async def main() -> int:
 
         has_open_positions = True
         try:
-            pnl_info = await tracker.compute_pnl(name)
-            unrealized = pnl_info[0] if pnl_info else Decimal("0")
+            unrealized = await _compute_unrealized_with_fallback(
+                store, broker, name, open_legs
+            )
         except Exception as e:
             # Intentional: Isolate P&L calculation failures per strategy
             logger.warning(
