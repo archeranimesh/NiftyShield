@@ -115,6 +115,15 @@ Session Log grows large again.
   independently on the operator's own host via `scratch/2026-08-07_overlay_snap3_cross_check.py`
   (output `logs/snap3.log`) — ruled out a stale-mount explanation before concluding it was a real
   bug. See `stories.md` SNAP-3 findings + correction.
+- **SNAP-4** (`docs/plan/paper-ic-daily-snapshot/tasks.md`): new `scripts/reporting/paper_pnl_report.py`
+  + `build_pnl_report()` — daily P&L graph data, realized-since-inception (summed from `paper_trades`
+  via `get_strategy_realized_pnl()`, immune to the cycle-reset trap SNAP-1 flagged), realized-this-month
+  (nav-snapshot baseline diff), unrealized-since-inception, per strategy. Recomputes `total_pnl` at
+  query time rather than trusting the stored column, per SNAP-1's 42/267-row invariant-violation
+  finding. 2 new tests (`tests/unit/reporting/test_paper_pnl_report.py`), full offline suite green
+  (2730 passed, 2 pre-existing/environmental failures unrelated to this change). Code-reviewer gate:
+  Cowork substitution, REVIEW.md checklist applied directly, no CRITICAL/ERROR findings. SNAP-5
+  (`total_pnl` write-time invariant fix + backfill) is next on the sequencing list.
 
 ### 2026-08-06 Session Log (execution-risk-hardening RH-5 docs close, story archived)
 - **RH-5 (`docs/plan/execution-risk-hardening/tasks.md`)** — docs-close verification only, no
