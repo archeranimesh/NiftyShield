@@ -127,11 +127,19 @@ design intent between them.
 
   **No code-reviewer gate** — docs-only.
 
-  **Commit:** `docs(backtest): note IVR NULL exception for Cycles 1-2 in Phase 0.8 gate criterion A`
+  **Commit:** `docs(backtest): note IVR NULL exception for Cycles 1-2 in Phase 0.8 gate criterion A` | SHA: 1754704
 
 ---
 
-- [ ] **RO-6** — Docs close: `TODOS.md` session log entry per task landed (RO-1 through RO-5,
+- [x] **RO-6** — Docs close: `TODOS.md` session log entry per task landed (RO-1 through RO-5,
   whichever subset ships). `CONTEXT.md` update only if RO-1/RO-2 change a described script
   behavior worth noting in the module tree. Run only after RO-1 through RO-5 (or whichever
   subset the team lands) are complete.
+
+  **Closed 2026-08-07.** Verified session-log entries exist for RO-1 (SHA 6096fe2), RO-2 (SHA
+  7fa175b), RO-3 (SHA 98e781e), RO-4 (verified, no code change), RO-5 (SHA 1754704) — all present
+  in `TODOS.md`'s 2026-08-07 Session Log / item 6 note. `CONTEXT.md` not updated: neither RO-1's
+  `_compute_daily_deltas` fix nor RO-2's `_compute_unrealized_with_fallback` fix touches behavior
+  currently described in CONTEXT.md's module tree (the `paper_3track_snapshot.py` and
+  `pre_market_brief.py` entries there don't mention the specific functions/bugs fixed). No code
+  changes in this task — docs-only, no code-reviewer/test gate.
