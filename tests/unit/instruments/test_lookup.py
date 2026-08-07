@@ -10,15 +10,19 @@ Covers:
 
 from __future__ import annotations
 
+from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp
 import pytest
+import structlog.testing
 
 from src.instruments.lookup import (
     InstrumentLookup,
     _best_score,
     _score_query,
+    format_leg_label,
+    format_option_label,
     search_api,
 )
 
@@ -270,3 +274,68 @@ class TestSearchApiTimeout:
         assert timeout is not None, "ClientSession must be called with timeout="
         assert isinstance(timeout, aiohttp.ClientTimeout)
         assert timeout.total == 10
+
+
+# ── format_option_label / format_leg_label ─────────────────────────────────────
+
+
+def test_format_option_label_happy() -> None:
+    label = format_option_label("NIFTY", 22000, "CE", "2026-07-07")
+    assert label == "NIFTY 22000 CE 07 JUL 26"
+
+
+def test_format_option_label_date_object() -> None:
+    label = format_option_label("NIFTY", 22000, "CE", date(2026, 7, 7))
+    assert label == "NIFTY 22000 CE 07 JUL 26"
+
+
+def test_format_leg_label_resolves_from_bod() -> None:
+    mock_lookup = MagicMock(spec=InstrumentLookup)
+    mock_lookup.get_by_key.return_value = {
+        "instrument_key": "NSE_FO|65900",
+        "trading_symbol": "NIFTY2570722000CE",
+        "underlying_symbol": "NIFTY",
+        "instrument_type": "CE",
+        "strike_price": 22000,
+        "expiry": "2026-07-07",
+        "segment": "NSE_FO",
+    }
+
+    label = format_leg_label("NSE_FO|65900", mock_lookup)
+
+    assert label == "NIFTY 22000 CE 07 JUL 26"
+    mock_lookup.get_by_key.assert_called_once_with("NSE_FO|65900")
+
+
+def test_format_leg_label_unresolvable_key_falls_back() -> None:
+    mock_lookup = MagicMock(spec=InstrumentLookup)
+    mock_lookup.get_by_key.return_value = None
+
+    with structlog.testing.capture_logs() as captured:
+        label = format_leg_label("NSE_FO|65900", mock_lookup)
+
+    assert label == "NSE_FO|65900"
+    events = [e for e in captured if e.get("event") == "format_leg_label.unresolvable_key"]
+    assert events, f"expected an 'unresolvable_key' warning, got {captured}"
+    assert events[0]["log_level"] == "warning"
+
+
+def test_format_leg_label_non_option_instrument_falls_back() -> None:
+    mock_lookup = MagicMock(spec=InstrumentLookup)
+    mock_lookup.get_by_key.return_value = {
+        "instrument_key": "NSE_FO|44498",
+        "trading_symbol": "NIFTY26JULFUT",
+        "underlying_symbol": "NIFTY",
+        "instrument_type": "FUT",
+        "strike_price": None,
+        "expiry": "2026-07-30",
+        "segment": "NSE_FO",
+    }
+
+    with structlog.testing.capture_logs() as captured:
+        label = format_leg_label("NSE_FO|44498", mock_lookup)
+
+    assert label == "NSE_FO|44498"
+    events = [e for e in captured if e.get("event") == "format_leg_label.non_option_instrument"]
+    assert events, f"expected a 'non_option_instrument' warning, got {captured}"
+    assert events[0]["log_level"] == "warning"

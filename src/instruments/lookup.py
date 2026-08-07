@@ -666,3 +666,71 @@ def format_results(results: list[dict[str, Any]], fields: list[str] | None = Non
         lines.append("  ".join(row))
 
     return "\n".join(lines)
+
+
+# ── Human-readable label formatting (Telegram/log messages) ───────────────────
+
+
+def format_option_label(
+    underlying: str, strike: float, option_type: str, expiry: str | date
+) -> str:
+    """Human-readable option label, e.g. 'NIFTY 22000 CE 07 JUL 26'.
+
+    Args:
+        underlying: Underlying symbol, e.g. 'NIFTY'.
+        strike: Strike price (formatted with no decimal places).
+        option_type: 'CE' or 'PE'.
+        expiry: Expiry as 'YYYY-MM-DD' string or date object.
+
+    Returns:
+        Formatted label string. Never raises — malformed expiry falls back to the raw
+        expiry value rendered as-is.
+    """
+    strike_str = str(int(strike)) if float(strike).is_integer() else str(strike)
+
+    if isinstance(expiry, date):
+        expiry_str = expiry.strftime("%d %b %y").upper()
+    else:
+        parsed = parse_expiry(expiry)
+        try:
+            expiry_date = datetime.strptime(parsed or str(expiry), "%Y-%m-%d").date()
+            expiry_str = expiry_date.strftime("%d %b %y").upper()
+        except (TypeError, ValueError):
+            expiry_str = str(expiry)
+
+    return f"{underlying} {strike_str} {option_type} {expiry_str}"
+
+
+def format_leg_label(instrument_key: str, lookup: InstrumentLookup) -> str:
+    """Resolve instrument_key via the BOD lookup and format as a human label.
+
+    Args:
+        instrument_key: Raw Upstox instrument key, e.g. 'NSE_FO|65900'.
+        lookup: InstrumentLookup instance to resolve against.
+
+    Returns:
+        `format_option_label(...)` output on successful resolution. Falls back to the
+        raw `instrument_key` string (logged WARNING, never raises) when the key is not
+        found in the BOD JSON or resolves to a non-option instrument (FUT/EQ) — those
+        callers should not have routed through this helper, but it must degrade safely
+        rather than crash a notification path.
+    """
+    inst = lookup.get_by_key(instrument_key)
+    if inst is None:
+        logger.warning("format_leg_label.unresolvable_key", instrument_key=instrument_key)
+        return instrument_key
+
+    instrument_type = inst.get("instrument_type")
+    if instrument_type not in ("CE", "PE"):
+        logger.warning(
+            "format_leg_label.non_option_instrument",
+            instrument_key=instrument_key,
+            instrument_type=instrument_type,
+        )
+        return instrument_key
+
+    underlying = inst.get("underlying_symbol") or inst.get("name") or ""
+    strike = inst.get("strike_price")
+    expiry = parse_expiry(inst.get("expiry"))
+
+    return format_option_label(underlying, strike, instrument_type, expiry or "")
