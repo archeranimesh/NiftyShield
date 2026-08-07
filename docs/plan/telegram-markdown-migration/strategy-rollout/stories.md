@@ -129,14 +129,14 @@ but predates both the MarkdownV2 revision (see epic `README.md`) and the confirm
 produced via `message-format-workshop.md`, confirmed on-device 2026-08-07. Port from this file,
 not the v1 one.
 
-**Confirmed message structure (updated 2026-08-07 — now includes Net Δ/Net θ AND the FMT-1c
-color-coded header/hashtag, hashtag auto-detection confirmed working live on-device):**
+**Confirmed message structure (updated 2026-08-07 — now includes Expiry, Net Δ/Net θ, AND the
+FMT-1c color-coded header/hashtag; hashtag auto-detection confirmed working live on-device):**
 
 ```
 🔵 📅 *IC EOD Audit — Monthly (V2)* | #IC_Monthly_V2
 `paper_ic_nifty_v2_monthly`
-*Nifty:* 24,571 | *DTE:* 18 | *IVR:* 0.16
-*Net Δ:* incomplete | *Net θ:* incomplete
+*Expiry:* 25 Aug 26 | *DTE:* 18 | *Nifty:* 24,571
+*IVR:* 0.16 | *Net Δ:* incomplete | *Net θ:* incomplete
 ```
 Act Strike Type     Δ   LTP Entry
 ---------------------------------
@@ -154,6 +154,18 @@ Act Strike Type     Δ   LTP Entry
 
 (Backslash escaping of literal `.`/`(`/`)`/`|`/`#`/`_` omitted above for readability — see the
 scratch script for the actual MarkdownV2 source with `escape_markdown()` applied throughout.)
+
+**Expiry row — confirmed 2026-08-07, `format_expiry()`: `"25 Aug 26"` (day, short month, 2-digit
+year, no leading zero on the day — `strftime("%d %b %y").lstrip("0")`, portable across platforms
+unlike `%-d`). Not yet in FMT-1's spec table; add it there when this ships.** Zero new data
+fetch — `process_variant()` already resolves the real `expiry` date object (via the BOD
+instrument lookup) purely to compute `dte`, then discards it; DTE is derived FROM expiry, not the
+other way round, so the real implementation must print that already-resolved value directly and
+must NOT reconstruct an expiry date from DTE the way the scratch script's data fixture does
+(that script has no live lookup to call, so it fakes the date as `snap_date + dte` purely for
+demo purposes — this shortcut is invalid in the real implementation, which already has the true
+value in scope). Nifty moved to the end of the Expiry/DTE line (was previously first); IVR moved
+onto the Net Δ/θ line rather than dropped, since the requested 3-field row had no room for it.
 
 **Header design fully specified in `formatting-rules/stories.md` FMT-1c — read that before
 implementing, do not re-derive the color/emoji mapping from scratch.** Summary: color+emoji encode

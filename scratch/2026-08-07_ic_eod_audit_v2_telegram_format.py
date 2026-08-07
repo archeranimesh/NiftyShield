@@ -50,6 +50,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
@@ -63,6 +64,14 @@ from src.config import settings  # noqa: E402
 data = {
     "strategy_label": "IC EOD (Monthly)",
     "strategy_id": "paper_ic_nifty_v2_monthly",
+    # expiry: derived here as snap_date + dte (2026-08-07 + 18 days), matching
+    # what process_variant() already resolves via the BOD instrument lookup
+    # for real — this scratch script has no live lookup to call, so the date
+    # is reconstructed from the already-confirmed DTE rather than guessed
+    # independently. Real implementation reads the actual resolved `expiry`
+    # date object already in scope in process_variant(), never recomputes it
+    # from DTE (DTE is derived FROM expiry there, not the other way round).
+    "expiry": date(2026, 8, 25),
     "dte": 18,
     "nifty": 24571,
     "ivr": 0.16,
@@ -424,6 +433,18 @@ def format_pct(value: float) -> str:
     return f"{value:.0f}%" if value == int(value) else f"{value:.1f}%"
 
 
+def format_expiry(value: date) -> str:
+    """'25 Aug 26' — day, short month name, 2-digit year.
+
+    Not yet in FMT-1's spec table (no message showed expiry before this
+    session) — %-d is platform-dependent for no-leading-zero day (fails on
+    some Windows builds); using .lstrip("0") on %d instead, which is
+    portable and gives the same "25 Aug 26" / "5 Aug 26" (not "05 Aug 26")
+    shape either way.
+    """
+    return value.strftime("%d %b %y").lstrip("0")
+
+
 # --- Inlined FMT-3 leg table (src/notifications/formatting.py, not yet shipped) ---
 
 
@@ -515,6 +536,7 @@ def build_message(d: dict) -> str:
     )
 
     header_label = escape_markdown(d["strategy_label"])  # "IC EOD (Monthly)" -> escapes ( )
+    expiry_str = escape_markdown(format_expiry(d["expiry"]))
     nifty_str = escape_markdown(f"{d['nifty']:,}")
     ivr_str = escape_markdown(f"{d['ivr']:.2f}")
     credit_str = escape_markdown(format_money(d["entry_credit"]))
@@ -555,8 +577,8 @@ def build_message(d: dict) -> str:
     if id_line is not None:
         lines.append(id_line)
     lines += [
-        f"*Nifty:* {nifty_str} \\| *DTE:* {d['dte']} \\| *IVR:* {ivr_str}",
-        f"*Net \u0394:* {net_delta_str} \\| *Net \u03b8:* {net_theta_str}",
+        f"*Expiry:* {expiry_str} \\| *DTE:* {d['dte']} \\| *Nifty:* {nifty_str}",
+        f"*IVR:* {ivr_str} \\| *Net \u0394:* {net_delta_str} \\| *Net \u03b8:* {net_theta_str}",
         "```",
         build_leg_table(d["legs"]),
         "```",
