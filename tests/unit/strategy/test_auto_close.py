@@ -118,6 +118,14 @@ async def test_auto_close_overlay_cc_profit_target(
     pos = store.get_position("paper_nifty_spot", "overlay_cc")
     assert pos.net_qty == -65
 
+    lookup = MagicMock()
+    lookup.get_by_key.return_value = {
+        "instrument_type": "CE",
+        "strike_price": 23000,
+        "expiry": "2026-06-25",
+        "underlying_symbol": "NIFTY",
+    }
+
     # Run auto-close
     with patch(
         "src.paper.chain_utils.find_chain_leg",
@@ -130,7 +138,7 @@ async def test_auto_close_overlay_cc_profit_target(
             event_id=event_id,
             chain=chain,
             notifier=notifier,
-            lookup=None,
+            lookup=lookup,
             vix=15.0,
             exit_signal="PROFIT_TARGET",
         )
@@ -147,7 +155,86 @@ async def test_auto_close_overlay_cc_profit_target(
     # Wait for notification task to complete
     await asyncio.sleep(0.1)
     notifier.send.assert_called_once()
-    assert "CC CLOSED" in notifier.send.call_args[0][0]
+    msg = notifier.send.call_args[0][0]
+    assert "CC CLOSED" in msg
+    assert "NIFTY 23000 CE 25 JUN 26" in msg
+    assert "NSE_FO|NIFTY23000CE" not in msg
+
+
+@pytest.mark.asyncio
+async def test_auto_close_overlay_cc_unresolvable_key_falls_back_to_raw(
+    store: PaperStore, simulator: PaperFillSimulator, chain: OptionChain
+) -> None:
+    """format_leg_label fallback: unresolvable key still renders + notifies (non-fatal)."""
+    store.record_trade(
+        PaperTrade(
+            strategy_name="paper_nifty_spot",
+            leg_role="overlay_cc",
+            instrument_key="NSE_FO|NIFTY23000CE",
+            trade_date=date.today(),
+            action=TradeAction.SELL,
+            quantity=65,
+            price=Decimal("100.0"),
+            is_paper=True,
+        )
+    )
+    event_id = store.create_exit_event(
+        strategy_name="paper_nifty_spot",
+        leg_name="overlay_cc",
+        trade_id="NSE_FO|NIFTY23000CE",
+        event_time=datetime.now(timezone.utc),
+        detected_by="EOD",
+        exit_signal=ExitSignal.PROFIT_TARGET,
+        severity="ACTION",
+        entry_price=Decimal("100.0"),
+    )
+
+    notifier = AsyncMock()
+
+    option_leg = OptionLeg(
+        instrument_key="NSE_FO|NIFTY23000CE",
+        option_type="CE",
+        strike_price=Decimal("23000.0"),
+        ltp=Decimal("30.0"),
+        delta=Decimal("-0.15"),
+        bid=Decimal("29.5"),
+        ask=Decimal("30.5"),
+        oi=1000,
+        volume=500,
+        gamma=Decimal("0.001"),
+        theta=Decimal("-5.0"),
+        vega=Decimal("10.0"),
+        iv=Decimal("15.0"),
+        strike=Decimal("23000.0"),
+    )
+    chain.strikes[Decimal("23000.0")] = OptionChainStrike(ce=option_leg, pe=None)
+
+    pos = store.get_position("paper_nifty_spot", "overlay_cc")
+
+    lookup = MagicMock()
+    lookup.get_by_key.return_value = None  # unresolvable in BOD JSON
+
+    with patch(
+        "src.paper.chain_utils.find_chain_leg",
+        return_value=option_leg,
+    ):
+        success = await auto_close_overlay(
+            store=store,
+            simulator=simulator,
+            pos=pos,
+            event_id=event_id,
+            chain=chain,
+            notifier=notifier,
+            lookup=lookup,
+            vix=15.0,
+            exit_signal="PROFIT_TARGET",
+        )
+
+    assert success is True
+    await asyncio.sleep(0.1)
+    # Notification still sends (non-fatal contract) with the raw key as fallback.
+    notifier.send.assert_called_once()
+    assert "NSE_FO|NIFTY23000CE" in notifier.send.call_args[0][0]
 
 
 @pytest.mark.asyncio

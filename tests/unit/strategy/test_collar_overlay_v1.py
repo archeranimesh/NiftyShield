@@ -837,3 +837,84 @@ def test_find_put_leg_chain_walk_fallback_is_gone() -> None:
     leg = strategy._find_put_leg(market, "NSE_FO|65901")
 
     assert leg is None
+
+
+# ── TL-2: _send_close_notification uses format_leg_label ──────────────────
+
+
+def test_apply_action_close_collar_notification_uses_formatted_labels() -> None:
+    """_send_close_notification must render human-readable labels for both legs."""
+    from unittest.mock import AsyncMock
+
+    mock_store = MagicMock()
+    mock_notifier = AsyncMock()
+    lookup = _FakeLookup(
+        {
+            "NSE_FO|65900": {
+                "instrument_type": "CE",
+                "strike_price": 24500.0,
+                "expiry": "2026-07-07",
+                "underlying_symbol": "NIFTY",
+            },
+            "NSE_FO|65901": {
+                "instrument_type": "PE",
+                "strike_price": 21500.0,
+                "expiry": "2026-07-07",
+                "underlying_symbol": "NIFTY",
+            },
+        }
+    )
+    strategy = CollarOverlayV1(store=mock_store, notifier=mock_notifier, instrument_lookup=lookup)
+
+    call_pos = _make_short_call_position(instrument_key="NSE_FO|65900", avg_sell_price="80")
+    put_pos = _make_long_put_position(instrument_key="NSE_FO|65901", avg_cost="50")
+    action = ApprovedAction(
+        action_type="CLOSE_COLLAR",
+        legs_to_close=[
+            LegClose(leg_role="overlay_collar_call"),
+            LegClose(leg_role="overlay_collar_put"),
+        ],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+        metadata={"mark": "30.0"},
+    )
+    _run(strategy.apply_action([call_pos, put_pos], action))
+
+    mock_notifier.send_notification.assert_called_once()
+    msg = mock_notifier.send_notification.call_args[0][0]
+    assert "NIFTY 24500 CE 07 JUL 26" in msg
+    assert "NIFTY 21500 PE 07 JUL 26" in msg
+    assert "NSE_FO|65900" not in msg
+    assert "NSE_FO|65901" not in msg
+
+
+def test_apply_action_close_collar_notification_falls_back_when_unresolvable() -> None:
+    """Unresolvable keys: raw keys still appear, notification still sends (non-fatal)."""
+    from unittest.mock import AsyncMock
+
+    mock_store = MagicMock()
+    mock_notifier = AsyncMock()
+    lookup = _FakeLookup({})  # no entries -> unresolvable
+
+    strategy = CollarOverlayV1(store=mock_store, notifier=mock_notifier, instrument_lookup=lookup)
+
+    call_pos = _make_short_call_position(instrument_key="NSE_FO|65900", avg_sell_price="80")
+    put_pos = _make_long_put_position(instrument_key="NSE_FO|65901", avg_cost="50")
+    action = ApprovedAction(
+        action_type="CLOSE_COLLAR",
+        legs_to_close=[
+            LegClose(leg_role="overlay_collar_call"),
+            LegClose(leg_role="overlay_collar_put"),
+        ],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+        metadata={"mark": "30.0"},
+    )
+    _run(strategy.apply_action([call_pos, put_pos], action))
+
+    mock_notifier.send_notification.assert_called_once()
+    msg = mock_notifier.send_notification.call_args[0][0]
+    assert "NSE_FO|65900" in msg
+    assert "NSE_FO|65901" in msg

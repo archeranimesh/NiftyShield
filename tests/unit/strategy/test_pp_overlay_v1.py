@@ -163,11 +163,22 @@ def test_roll_eligible_fires_at_dte_4() -> None:
 def test_apply_action_monetize_pp() -> None:
     mock_store = MagicMock()
     mock_notifier = AsyncMock()
-    strategy = PPOverlayV1(store=mock_store, notifier=mock_notifier)
-    strategy._check_reentry = AsyncMock()
 
     # Using DTE=15
     key = _expiry_key(dte=15)
+    lookup = _FakeLookup(
+        {
+            key: {
+                "instrument_type": "PE",
+                "strike_price": 23000.0,
+                "expiry": (date.today() + timedelta(days=15)).isoformat(),
+                "underlying_symbol": "NIFTY",
+            }
+        }
+    )
+    strategy = PPOverlayV1(store=mock_store, notifier=mock_notifier, instrument_lookup=lookup)
+    strategy._check_reentry = AsyncMock()
+
     pos = _make_position(instrument_key=key)
     action = ApprovedAction(
         action_type="MONETIZE_PP",
@@ -180,7 +191,33 @@ def test_apply_action_monetize_pp() -> None:
     assert len(result) == 0
     strategy._check_reentry.assert_awaited_once()
     mock_notifier.send_notification.assert_called_once()
-    assert "💰 <b>PP: MONETIZE_PP</b>" in mock_notifier.send_notification.call_args[0][0]
+    msg = mock_notifier.send_notification.call_args[0][0]
+    assert "💰 <b>PP: MONETIZE_PP</b>" in msg
+    assert "NIFTY 23000 PE" in msg
+    assert key not in msg
+
+
+def test_apply_action_monetize_pp_notification_falls_back_when_unresolvable() -> None:
+    """Unresolvable key: raw key still appears, notification still sends (non-fatal)."""
+    mock_store = MagicMock()
+    mock_notifier = AsyncMock()
+    key = _expiry_key(dte=15)
+    lookup = _FakeLookup({})  # no entries -> unresolvable
+    strategy = PPOverlayV1(store=mock_store, notifier=mock_notifier, instrument_lookup=lookup)
+    strategy._check_reentry = AsyncMock()
+
+    pos = _make_position(instrument_key=key)
+    action = ApprovedAction(
+        action_type="MONETIZE_PP",
+        legs_to_close=[LegClose(leg_role="protective_put")],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+    )
+    result = _run(strategy.apply_action([pos], action))
+    assert len(result) == 0
+    mock_notifier.send_notification.assert_called_once()
+    assert key in mock_notifier.send_notification.call_args[0][0]
 
 
 def test_apply_action_roll_pp() -> None:

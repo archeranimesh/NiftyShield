@@ -556,6 +556,62 @@ def test_find_call_leg_resolves_real_numeric_key_via_bod_lookup() -> None:
     assert leg.strike == Decimal("24000")
 
 
+def test_apply_action_close_cc_notification_uses_formatted_label() -> None:
+    """_send_close_notification must render a human-readable label, not the raw key."""
+    mock_notifier = AsyncMock()
+    mock_store = MagicMock()
+    lookup = _FakeLookup(
+        {
+            "NSE_FO|65900": {
+                "instrument_type": "CE",
+                "strike_price": 24000.0,
+                "expiry": "2026-07-07",
+                "underlying_symbol": "NIFTY",
+            }
+        }
+    )
+    strategy = CCOverlayV1(store=mock_store, notifier=mock_notifier, instrument_lookup=lookup)
+    strategy._check_reentry = AsyncMock()
+    pos = _make_position(instrument_key="NSE_FO|65900", avg_sell_price="80")
+    action = ApprovedAction(
+        action_type="CLOSE_CC",
+        legs_to_close=[LegClose(leg_role="short_call")],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+        metadata={"triggering_signal": "PROFIT_TARGET", "mark": "24.0", "delta": "0.20"},
+    )
+    _run(strategy.apply_action([pos], action))
+
+    mock_notifier.send_notification.assert_called_once()
+    msg = mock_notifier.send_notification.call_args[0][0]
+    assert "NIFTY 24000 CE 07 JUL 26" in msg
+    assert "NSE_FO|65900" not in msg
+
+
+def test_apply_action_close_cc_notification_falls_back_when_unresolvable() -> None:
+    """Unresolvable key: raw key still appears, notification still sends (non-fatal)."""
+    mock_notifier = AsyncMock()
+    mock_store = MagicMock()
+    lookup = _FakeLookup({})  # no entries -> unresolvable
+    strategy = CCOverlayV1(store=mock_store, notifier=mock_notifier, instrument_lookup=lookup)
+    strategy._check_reentry = AsyncMock()
+    pos = _make_position(instrument_key="NSE_FO|65900", avg_sell_price="80")
+    action = ApprovedAction(
+        action_type="CLOSE_CC",
+        legs_to_close=[LegClose(leg_role="short_call")],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+        metadata={"triggering_signal": "PROFIT_TARGET", "mark": "24.0", "delta": "0.20"},
+    )
+    _run(strategy.apply_action([pos], action))
+
+    mock_notifier.send_notification.assert_called_once()
+    msg = mock_notifier.send_notification.call_args[0][0]
+    assert "NSE_FO|65900" in msg
+
+
 def test_find_call_leg_chain_walk_fallback_is_gone() -> None:
     """Old behaviour: an unresolvable key silently walked the chain and
     returned the first CE with positive LTP — the wrong strike. New

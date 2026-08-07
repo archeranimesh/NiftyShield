@@ -12,6 +12,7 @@ import structlog
 
 from src.backtest.ivr import compute_ivr
 from src.backtest.vix_ingest import load_vix_series
+from src.instruments.lookup import format_leg_label
 from src.models.options import OptionChain
 from src.paper.models import PaperPosition
 
@@ -115,7 +116,13 @@ async def auto_close_overlay(
                 }
             ]
             await _send_close_notification(
-                notifier, strategy_name, legs_notif, exit_signal, store, is_collar=False
+                notifier,
+                strategy_name,
+                legs_notif,
+                exit_signal,
+                store,
+                is_collar=False,
+                lookup=lookup,
             )
 
         elif leg_role == "overlay_collar_call":
@@ -170,7 +177,13 @@ async def auto_close_overlay(
                 },
             ]
             await _send_close_notification(
-                notifier, strategy_name, legs_notif, exit_signal, store, is_collar=True
+                notifier,
+                strategy_name,
+                legs_notif,
+                exit_signal,
+                store,
+                is_collar=True,
+                lookup=lookup,
             )
 
         elif leg_role == "overlay_pp":
@@ -194,7 +207,13 @@ async def auto_close_overlay(
                 }
             ]
             await _send_close_notification(
-                notifier, strategy_name, legs_notif, exit_signal, store, is_collar=False
+                notifier,
+                strategy_name,
+                legs_notif,
+                exit_signal,
+                store,
+                is_collar=False,
+                lookup=lookup,
             )
 
         else:
@@ -238,10 +257,14 @@ async def _send_close_notification(
     exit_signal: str,
     store: PaperStore,
     is_collar: bool = False,
+    lookup: Any | None = None,
 ) -> None:
     """Send unified, formatted close notifications to Telegram."""
     if notifier is None:
         return
+
+    def _label(key: str) -> str:
+        return format_leg_label(key, lookup) if lookup is not None else key
 
     try:
         realized_pnl = get_strategy_realized_pnl(store, strategy_name)
@@ -252,8 +275,8 @@ async def _send_close_notification(
             net_pnl = call_leg["pnl"] + put_leg["pnl"]
             msg = (
                 f"✅ COLLAR CLOSED — {strategy_name}\n"
-                f"Short Call: {call_leg['key']} @ ₹{call_leg['exit']:.2f}  (entry ₹{call_leg['entry']:.2f})  → ₹{call_leg['pnl']:+,.0f}\n"
-                f"Long Put:   {put_leg['key']} @ ₹{put_leg['exit']:.2f}  (entry ₹{put_leg['entry']:.2f})  → ₹{put_leg['pnl']:+,.0f}\n"
+                f"Short Call: {_label(call_leg['key'])} @ ₹{call_leg['exit']:.2f}  (entry ₹{call_leg['entry']:.2f})  → ₹{call_leg['pnl']:+,.0f}\n"
+                f"Long Put:   {_label(put_leg['key'])} @ ₹{put_leg['exit']:.2f}  (entry ₹{put_leg['entry']:.2f})  → ₹{put_leg['pnl']:+,.0f}\n"
                 f"Signal    : {exit_signal}\n"
                 f"Net P&L   : ₹{net_pnl:+,.0f}  (call + put combined)\n"
                 f"Overlay P&L (total realized): ₹{realized_pnl:+,.0f}"
@@ -263,7 +286,7 @@ async def _send_close_notification(
             if leg["role"] == "overlay_cc":
                 msg = (
                     f"✅ CC CLOSED — {strategy_name}\n"
-                    f"📤 {leg['key']} @ ₹{leg['exit']:.2f}  (entry ₹{leg['entry']:.2f})\n"
+                    f"📤 {_label(leg['key'])} @ ₹{leg['exit']:.2f}  (entry ₹{leg['entry']:.2f})\n"
                     f"Signal : {exit_signal}\n"
                     f"Leg P&L: ₹{leg['pnl']:+,.0f}\n"
                     f"Overlay P&L (total realized): ₹{realized_pnl:+,.0f}"
@@ -272,7 +295,7 @@ async def _send_close_notification(
                 if exit_signal == "CRASH_MONETIZE":
                     msg = (
                         f"💰 PP CRASH MONETIZED — {strategy_name}\n"
-                        f"📤 {leg['key']} @ ₹{leg['exit']:.2f}  (entry ₹{leg['entry']:.2f})\n"
+                        f"📤 {_label(leg['key'])} @ ₹{leg['exit']:.2f}  (entry ₹{leg['entry']:.2f})\n"
                         f"Signal : CRASH_MONETIZE  (delta {leg['delta']:.3f})\n"
                         f"Leg P&L: ₹{leg['pnl']:+,.0f}\n"
                         f"State  : → RE_ENTRY_PENDING (monitoring IVR ≤ 0.60, DTE ≥ 14)\n"
@@ -281,7 +304,7 @@ async def _send_close_notification(
                 else:  # PROFIT_TARGET / ROLL_ELIGIBLE
                     msg = (
                         f"✅ PP CLOSED — {strategy_name}\n"
-                        f"📤 {leg['key']} @ ₹{leg['exit']:.2f}  (entry ₹{leg['entry']:.2f})\n"
+                        f"📤 {_label(leg['key'])} @ ₹{leg['exit']:.2f}  (entry ₹{leg['entry']:.2f})\n"
                         f"Signal : {exit_signal}\n"
                         f"Leg P&L: ₹{leg['pnl']:+,.0f}\n"
                         f"Overlay P&L (total realized): ₹{realized_pnl:+,.0f}"

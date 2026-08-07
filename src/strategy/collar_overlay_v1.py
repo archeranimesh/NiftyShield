@@ -15,7 +15,7 @@ from typing import Any
 
 import structlog
 
-from src.instruments.lookup import InstrumentLookup
+from src.instruments.lookup import InstrumentLookup, format_leg_label
 from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
 from src.models.portfolio import TradeAction
@@ -244,7 +244,9 @@ class CollarOverlayV1(ReEntryMixin):
             put_entry_price = float(long_put_pos.avg_cost)
             put_current_mark = float(put_leg.ltp) if put_leg is not None else put_entry_price
             put_delta = (
-                float(put_leg.delta) if (put_leg is not None and put_leg.delta is not None) else None
+                float(put_leg.delta)
+                if (put_leg is not None and put_leg.delta is not None)
+                else None
             )
             crash_results = ExitSignalEngine.evaluate_crash_monetize(
                 entry_price=put_entry_price,
@@ -654,7 +656,12 @@ class CollarOverlayV1(ReEntryMixin):
             metadata = action.metadata or {}
             triggering_signal = metadata.get("triggering_signal")
 
-            call_key = call_pos.instrument_key if call_pos else "None"
+            lookup = self._resolve_instrument_lookup()
+            call_key = (
+                format_leg_label(call_pos.instrument_key, lookup)
+                if call_pos and lookup
+                else (call_pos.instrument_key if call_pos else "None")
+            )
             call_entry = call_pos.avg_sell_price if call_pos else Decimal("0")
 
             call_exit = (
@@ -682,7 +689,11 @@ class CollarOverlayV1(ReEntryMixin):
                 call_expiry = self._parse_expiry(call_pos.instrument_key)
                 call_dte = (call_expiry - market_today()).days if call_expiry else 0
 
-            put_key = put_pos.instrument_key if put_pos else "None"
+            put_key = (
+                format_leg_label(put_pos.instrument_key, lookup)
+                if put_pos and lookup
+                else (put_pos.instrument_key if put_pos else "None")
+            )
             put_entry = put_pos.avg_cost if put_pos else Decimal("0")
             put_exit = put_entry
             put_exit_str = f"~₹{put_exit:.2f}" if put_pos else f"₹{put_exit:.2f}"
