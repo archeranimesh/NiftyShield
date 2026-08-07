@@ -43,6 +43,27 @@ The `_format_combined_summary()` function in `daily_snapshot.py` produces the su
 
 ---
 
+## Instrument Label Formatting
+
+Any Telegram or log message that names an option leg in prose must use
+`format_leg_label(instrument_key, lookup)` (`src/instruments/lookup.py`) when only the
+raw key is on hand, or `format_option_label(underlying, strike, option_type, expiry)`
+when strike/type/expiry are already resolved (e.g. from a live chain scan). Never
+interpolate a raw Upstox `instrument_key` (e.g. `NSE_FO|65900`) or a hand-rolled
+`f"{strike}{side}"` string into message text.
+
+**Exception — CLI commands:** literal commands meant to be copy-pasted and executed
+(e.g. `record_paper_trade.py --key NSE_FO|...`) always keep the raw `instrument_key`
+verbatim. The formatting rule applies to prose only, never to command arguments.
+
+**Fallback:** unresolvable keys degrade to the raw key + logged WARNING, never raise —
+consistent with this module's non-fatal contract above.
+
+Origin: `docs/plan/telegram-leg-labels/` — raw `NSE_FO|65900` shown in an AUTO-CLOSE
+Telegram alert with no way to identify the strike.
+
+---
+
 ## Adding New Notifier Types
 
 Follow the same pattern:

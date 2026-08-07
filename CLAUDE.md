@@ -56,6 +56,7 @@ Module tree (file-level descriptions): **`CONTEXT_TREE.md`** — load only when 
 - Reviewing or building on Antigravity's work → also read `ANTIGRAVITY.md`
 - Authoring or reviewing any task/story/spec mentioning expiry, DTE, or calendar logic → also read `REFERENCES.md` (expiry day changed Thursday→Tuesday, April 2026)
 - Adding a new entrypoint script, adding/editing any `logger.*()` call, or touching `src/utils/logging.py` → also read `LOGGING.md` (project root) — canonical logging standard; see `BUG-010` in `docs/bugs/bugs.md` for why it exists
+- Building or editing any Telegram/notification message text (strategy close/roll/entry alerts, gate-violation alerts) → also read `src/notifications/CLAUDE.md` §"Instrument Label Formatting" — canonical instrument-label formatting rule
 
 ## Python Standards (new module checklist)
 
