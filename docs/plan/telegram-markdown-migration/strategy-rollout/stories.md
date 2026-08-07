@@ -14,6 +14,95 @@ decision), so it goes last and gets the coordination check.
 
 ---
 
+## ROLL-0 — Capture Long-Leg Delta + Theta in IC EOD Audit (data-only, no Markdown dependency)
+
+**Confirmed 2026-08-07 (message-format-workshop session):** this is a small, self-contained
+data-capture fix, not a new epic/story, and it does **not** depend on `backbone/` or
+`formatting-rules/` shipping — it changes what `process_variant` extracts from the live chain it
+already fetches, independent of parse_mode. Sequenced before `ROLL-1` here because `ROLL-1`'s
+Markdown port should consume this data once it exists, not re-derive it — but `ROLL-0` can land
+and ship value (a corrected plain-text report line) on its own, any time.
+
+**The gap, confirmed by reading the real code (not assumed):** `process_variant()`
+(`scripts/strategies/ic/paper_ic_snapshot.py`, lines 143-402, shared by both `IronCondorV1` and
+`IronCondorV2` via the `strategy_cls` param — this function is NOT duplicated per version) already
+fetches the live option chain once per variant and already resolves every leg's `OptionLeg` via
+`ic._find_leg(chain, pos.instrument_key)` inside its `role_order` loop — for all four roles,
+including the two long legs (`long_put_hedge`, `long_call_hedge`). `OptionLeg` already carries
+`.delta`, `.theta`, `.gamma`, `.vega` (same fields `_extract_greeks_from_chain` in
+`src/portfolio/tracker.py` reads off the identical chain-parsing output — confirmed, not assumed).
+The gap is purely in what the loop body *does* with the already-resolved `opt_leg`:
+
+```python
+if role in ["short_put", "short_call"]:
+    delta_val = (
+        opt_leg.delta
+        if (opt_leg is not None and opt_leg.delta is not None)
+        else 0.0
+    )
+    ...
+else:  # long_put_hedge, long_call_hedge
+    label = role_labels[role]
+    pos_lines.append(f"  {label} {strike_suffix}  {ltp_str}")
+```
+
+Two problems in this block, both in scope for this task:
+1. The `else` branch (long legs) never reads `opt_leg.delta`/`opt_leg.theta` at all, despite
+   `opt_leg` already being resolved and in scope — delta/theta for long legs is discarded, not
+   unavailable.
+2. The short-leg branch's `else 0.0` fallback conflates "delta is genuinely zero" with "delta
+   could not be resolved" — a chain-lookup miss silently prints `δ=0.00`, which reads as a real
+   flat-delta leg rather than missing data. Fix to `None` (rendered as `-`, matching FMT-1's
+   existing None-handling convention for Greeks) while touching this code, since the distinction
+   matters for exactly the Net Δ computation this task adds.
+
+**`_find_leg` confirmed identical between V1 and V2** (2026-08-07, read both in full) — same
+regex-first/BOD-fallback logic, same `OptionLeg | None` return type, only the log event name
+differs (`ic_nifty_v1.strike_decimal_failed` vs `ic_nifty_v2.strike_parse_failed`). Leg-role
+strings are also identical across both (`short_put`/`short_call`/`long_put_hedge`/
+`long_call_hedge` — confirmed via grep against `ic_nifty_v2.py`). So this task requires no
+per-version branching in `process_variant` — one code path already serves both.
+
+**Files to change:**
+- `scripts/strategies/ic/paper_ic_snapshot.py` — `process_variant()`'s role-loop body
+- Matching test file: `tests/unit/strategies/ic/test_paper_ic_snapshot.py`
+
+**What to change:**
+1. For all four roles (not just the two shorts), capture `opt_leg.delta` and `opt_leg.theta`
+   into per-leg variables, `None` on any resolution miss (chain lookup fails, `opt_leg is None`,
+   or the field itself is `None`) — do not default to `0.0` for any role.
+2. Compute `net_delta`/`net_theta` across all four legs using the same never-silently-partial
+   rule already proven in `scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py`'s
+   `compute_net_greek()`: if ANY leg's value is `None`, the net is `None` ("incomplete"), never a
+   partial sum that looks complete. Port that helper's logic (or the function itself) rather than
+   reimplementing the None-handling ad hoc.
+3. Add a `Net Δ: ... | Net θ: ...` line to the existing plain-text `report` string (between the
+   `DTE/Nifty/IVR` line and the `Position:` block) — this lands in the *current* pre-Markdown
+   report format, independent of `ROLL-1`. When incomplete, print `Net Δ: incomplete` /
+   `Net θ: incomplete` (or `N/A` — pick one, match this file's existing `N/A` convention for
+   missing combined-mark/margin-snapshot data rather than inventing a new missing-data string).
+4. `ROLL-1`'s later Markdown port consumes these same per-leg delta/theta values and the
+   computed net — it should not need to re-derive them from `opt_leg` a second time. If `ROLL-1`
+   is implemented before `ROLL-0` for any reason, it must still not skip this fix; sequence exists
+   only as a suggestion, not a hard gate, since neither depends on the other's *code*, only on
+   not duplicating the extraction logic.
+
+**Tests:**
+- Happy path: all four legs resolve real delta/theta from a mocked chain → `Net Δ`/`Net θ` print
+  correct sums (add a fixture chain with non-zero long-leg deltas/thetas, not all-zero, so the
+  test would actually fail if the long-leg extraction were silently dropped again)
+- Edge case: one leg's chain lookup misses (mirrors `test_chain_fetch_fails_for_one_variant`'s
+  existing pattern for the variant-level miss, but scoped to a single leg within an otherwise
+  successful chain fetch) → `Net Δ`/`Net θ` both print the incomplete/`N/A` state, not a partial
+  sum
+- Regression: a short leg's `opt_leg.delta is None` (real chain-lookup miss, not a genuine 0.0
+  delta) → per-leg display shows the None-placeholder, not `0.00` — proves the `else 0.0` bug is
+  actually fixed, not just papered over by the new Net Δ line
+
+**Commit:** `feat(ic): capture long-leg delta/theta and net position Greeks in EOD audit`
+
+---
+
 ## ROLL-1 — IC EOD Audit
 
 **Reference implementation superseded 2026-08-07.** The original prototype
@@ -25,12 +114,12 @@ but predates both the MarkdownV2 revision (see epic `README.md`) and the confirm
 produced via `message-format-workshop.md`, confirmed on-device 2026-08-07. Port from this file,
 not the v1 one.
 
-**Confirmed message structure (2026-08-07):**
+**Confirmed message structure (updated 2026-08-07 — now includes Net Δ/Net θ):**
 
 ```
 📊 *IC EOD (Monthly)* | `paper_ic_nifty_v2_monthly`
 *Nifty:* 24,571 | *DTE:* 18 | *IVR:* 0.16
-
+*Net Δ:* incomplete | *Net θ:* incomplete
 ```
 Act Strike Type     Δ   LTP Entry
 ---------------------------------
@@ -39,15 +128,26 @@ Act Strike Type     Δ   LTP Entry
 [S] 25100  CE   +0.23  74.2  81.1
 [B] 25500  CE       -  19.8     -
 ```
-
 💰 *Credit:* ₹128.92 ➡️ *Mark:* ₹125.40
 ✅ *Captured:* ₹3.52 (2.7%) | *ROI:* 0.2% (₹229)
 🏦 *Margin:* ₹97,243
-🟢 *Alert:* None | *Actions:* None
+🟢 *Alert:* None
+⚙️ *Actions:* None
 ```
 
 (Backslash escaping of literal `.`/`(`/`)`/`|` omitted above for readability — see the scratch
 script for the actual MarkdownV2 source with `escape_markdown()` applied throughout.)
+
+**"Net Δ: incomplete" is the honest current state, not a placeholder to fix in this task.** It
+prints `incomplete` because the real position's long-leg deltas and all four legs' thetas aren't
+captured yet — that data-availability gap is `ROLL-0` (above), a separate task this one depends
+on for the *data*, not the formatting. `ROLL-1` renders whatever `net_delta`/`net_theta` it's
+given (a number, or the `None`-triggered incomplete state) — it must NOT itself attempt to
+compute or backfill the net Greeks; that's ROLL-0's job. If `ROLL-0` has landed by the time this
+task starts, the confirmed layout above should show real numbers instead of `incomplete` — update
+this block's example to match live data at that point rather than leaving it stale. Alert and
+Actions are two separate lines (⚠️/🟢 and ⚙️ respectively), not one combined `Alert | Actions`
+line — corrected from an earlier draft of this spec.
 
 **Files to change:**
 - `scripts/strategies/ic/paper_ic_snapshot.py` — the message-building function (find via
@@ -86,20 +186,30 @@ test path (see below) before it shipped as a live bug.
 
 **Scenario test harness (new convention, not previously part of this workshop's scope):**
 `scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py` gained a `SCENARIOS` dict + `--scenario`
-CLI flag (`profit` / `loss` / `flat` / `alert` / `loss_alert`) so `pnl_emoji`/`alert_emoji`'s
-branches can be exercised without hand-editing the data dict — `--list-scenarios` to enumerate,
-`--send` required to actually post (default is print-only, to avoid an accidental live send while
-browsing scenarios). Worth carrying this pattern (named scenario presets over a single hardcoded
-`data` dict) into the real test file for this message, not just the scratch script — the same
-loss/alert/flat branches need real pytest coverage, not just visual on-device confirmation.
+CLI flag (`profit` / `loss` / `flat` / `alert` / `loss_alert` / `full_greeks`) so
+`pnl_emoji`/`alert_emoji`/`compute_net_greek`'s branches can be exercised without hand-editing the
+data dict — `--list-scenarios` to enumerate, `--send` required to actually post (default is
+print-only, to avoid an accidental live send while browsing scenarios). `full_greeks` uses
+synthetic (clearly-labeled non-real) complete delta+theta data across all four legs specifically
+to demonstrate the Net Δ/Net θ line rendering a real number instead of `incomplete` — worth
+noting during the port that this scenario's synthetic long-leg deltas produced `Net Δ: -0.01`,
+not the naive `+0.00` you'd get from summing only the two short legs, i.e. proof the
+never-silently-partial rule in `compute_net_greek()` (see `ROLL-0`) actually changes the displayed
+number once real data is complete, not just whether the line prints. Worth carrying the
+named-scenario-preset pattern into the real test file for this message, not just the scratch
+script — the same loss/alert/flat/full_greeks branches need real pytest coverage, not just visual
+on-device confirmation.
 
 **Tests:** update the existing message-format test(s) for this script to assert the new
 structure; keep at least one test that constructs a leg with an underscore-bearing signal code
 to prove the `mdcode()` wrapping survived the port (this is the exact bug this whole epic
 started from — don't let the regression test get lost in the rewrite). Add tests for
-`pnl_emoji`/`alert_emoji`'s branches in the message-building test file too (loss state, alert
-state, flat P&L) — the scratch script's `SCENARIOS` presets are a ready-made list of cases to
-port into real assertions, not just visual checks.
+`pnl_emoji`/`alert_emoji`/`compute_net_greek`'s branches in the message-building test file too
+(loss state, alert state, flat P&L, complete vs. incomplete Greeks) — the scratch script's
+`SCENARIOS` presets are a ready-made list of cases to port into real assertions, not just visual
+checks. Do not duplicate `ROLL-0`'s net-Greeks unit tests here — this task's tests should assert
+the *rendering* of `net_delta`/`net_theta` (numeric vs. incomplete), not re-test the summation
+logic itself.
 
 **Commit:** `feat(ic): migrate EOD audit message to Markdown table format`
 

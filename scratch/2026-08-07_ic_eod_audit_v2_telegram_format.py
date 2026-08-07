@@ -47,6 +47,7 @@ or:
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import sys
 from decimal import Decimal
@@ -65,15 +66,49 @@ data = {
     "dte": 18,
     "nifty": 24571,
     "ivr": 0.16,
+    # theta: None on every leg, same as the two longs' delta — this position's
+    # real data has never captured per-leg theta (see resolve_leg_delta() in
+    # src/paper/track_snapshot.py — that (delta, theta, vega) chain lookup
+    # exists but is only wired for 3-track base/overlay legs, never IC).
+    # Do NOT backfill a guessed theta here; compute_net_greek() below treats
+    # any None as "net incomplete" rather than silently summing a partial set.
     "legs": [
-        {"role": "Short Put", "strike": 24200, "opt_type": "PE", "delta": -0.23,
-         "ltp": Decimal("88.95"), "entry": Decimal("97.78")},
-        {"role": "Long Put", "strike": 23500, "opt_type": "PE", "delta": None,
-         "ltp": Decimal("18.05"), "entry": None},
-        {"role": "Short Call", "strike": 25100, "opt_type": "CE", "delta": 0.23,
-         "ltp": Decimal("74.25"), "entry": Decimal("81.10")},
-        {"role": "Long Call", "strike": 25500, "opt_type": "CE", "delta": None,
-         "ltp": Decimal("19.75"), "entry": None},
+        {
+            "role": "Short Put",
+            "strike": 24200,
+            "opt_type": "PE",
+            "delta": -0.23,
+            "theta": None,
+            "ltp": Decimal("88.95"),
+            "entry": Decimal("97.78"),
+        },
+        {
+            "role": "Long Put",
+            "strike": 23500,
+            "opt_type": "PE",
+            "delta": None,
+            "theta": None,
+            "ltp": Decimal("18.05"),
+            "entry": None,
+        },
+        {
+            "role": "Short Call",
+            "strike": 25100,
+            "opt_type": "CE",
+            "delta": 0.23,
+            "theta": None,
+            "ltp": Decimal("74.25"),
+            "entry": Decimal("81.10"),
+        },
+        {
+            "role": "Long Call",
+            "strike": 25500,
+            "opt_type": "CE",
+            "delta": None,
+            "theta": None,
+            "ltp": Decimal("19.75"),
+            "entry": None,
+        },
     ],
     "mark": Decimal("125.40"),
     "entry_credit": Decimal("128.92"),
@@ -92,30 +127,77 @@ data = {
 }
 
 
-def _make_scenario(**overrides) -> dict:
+def _make_scenario(*, legs=None, **overrides) -> dict:
     """Deep-copy `data` and apply top-level field overrides.
 
-    Only overrides scalar/list fields at the top level (mark, signals,
-    roi_amount, ...) — legs aren't varied per scenario since none of the
-    emoji logic depends on individual leg values, only on the derived
-    captured_credit (mark vs. entry_credit) and the signals list.
+    `legs`, if given, replaces the leg list wholesale (used by
+    `full_greeks` below to supply complete synthetic delta/theta data —
+    every other scenario reuses the real position's leg list unchanged).
     """
     import copy
 
     d = copy.deepcopy(data)
+    if legs is not None:
+        d["legs"] = legs
     d.update(overrides)
     return d
 
 
-# Named presets for exercising pnl_emoji()/alert_emoji() branches without
-# hand-editing `data` each time. Add a new key here rather than a one-off
-# edit to `data` when you need another combination.
+# Synthetic complete-Greeks leg set for the `full_greeks` scenario only.
+# NOT real position data — exists purely to demonstrate the Net Δ/Net θ
+# line rendering once all four legs' Greeks are actually captured (see
+# compute_net_greek()'s "incomplete" branch, which is what every other
+# scenario below exercises instead, since the real position genuinely
+# lacks this data today).
+_FULL_GREEKS_LEGS = [
+    {
+        "role": "Short Put",
+        "strike": 24200,
+        "opt_type": "PE",
+        "delta": -0.23,
+        "theta": Decimal("4.10"),
+        "ltp": Decimal("88.95"),
+        "entry": Decimal("97.78"),
+    },
+    {
+        "role": "Long Put",
+        "strike": 23500,
+        "opt_type": "PE",
+        "delta": -0.06,
+        "theta": Decimal("-0.85"),
+        "ltp": Decimal("18.05"),
+        "entry": None,
+    },
+    {
+        "role": "Short Call",
+        "strike": 25100,
+        "opt_type": "CE",
+        "delta": 0.23,
+        "theta": Decimal("3.95"),
+        "ltp": Decimal("74.25"),
+        "entry": Decimal("81.10"),
+    },
+    {
+        "role": "Long Call",
+        "strike": 25500,
+        "opt_type": "CE",
+        "delta": 0.05,
+        "theta": Decimal("-0.70"),
+        "ltp": Decimal("19.75"),
+        "entry": None,
+    },
+]
+
+# Named presets for exercising pnl_emoji()/alert_emoji()/net-Greeks branches
+# without hand-editing `data` each time. Add a new key here rather than a
+# one-off edit to `data` when you need another combination.
 SCENARIOS = {
     "profit": lambda: _make_scenario(),
     "loss": lambda: _make_scenario(mark=Decimal("140.00")),
     "flat": lambda: _make_scenario(mark=data["entry_credit"]),
     "alert": lambda: _make_scenario(signals=["DELTA_WARN"]),  # profit + alert
     "loss_alert": lambda: _make_scenario(mark=Decimal("140.00"), signals=["DELTA_WARN"]),
+    "full_greeks": lambda: _make_scenario(legs=_FULL_GREEKS_LEGS),
 }
 
 
@@ -145,6 +227,7 @@ def mdcode(value: str) -> str:
 
 
 # --- Inlined FMT-2 helpers (src/notifications/formatting.py, not yet shipped) ---
+
 
 def format_money(value: Decimal) -> str:
     """2dp, comma thousands, ₹ prefix, sign BEFORE the symbol for negatives.
@@ -188,6 +271,26 @@ def alert_emoji(signals: list[str]) -> str:
     return "\U0001f7e2" if not signals else "⚠️"
 
 
+def compute_net_greek(legs: list[dict], key: str) -> Decimal | None:
+    """Sum a Greek across all legs, or None if ANY leg is missing it.
+
+    Deliberately does NOT sum only the legs that happen to have a value -
+    a partial sum labeled "Net" would look complete while silently
+    excluding real (non-zero) contributions from whichever legs are
+    missing data. For this position specifically, the two long legs have
+    no captured delta and no leg has captured theta at all (see the
+    `data["legs"]` module-level comment) - so this returns None for both
+    Net Δ and Net θ until a real chain-Greeks fetch (the IC equivalent of
+    src/paper/track_snapshot.py's resolve_leg_delta) backfills every leg.
+    """
+    values = [leg.get(key) for leg in legs]
+    if any(v is None for v in values):
+        return None
+    return (
+        sum(values, Decimal("0")) if isinstance(values[0], Decimal) else Decimal(str(sum(values)))
+    )
+
+
 def format_greek(value: float | None, *, width: int | None = None) -> str:
     """2dp, always signed, '-' placeholder for None. Matches FMT-2 signature."""
     if value is None:
@@ -209,6 +312,7 @@ def format_pct(value: float) -> str:
 
 # --- Inlined FMT-3 leg table (src/notifications/formatting.py, not yet shipped) ---
 
+
 def build_leg_table(legs: list[dict]) -> str:
     """Fenced-code-block-ready position table: Act/Strike/Type/Δ/LTP/Entry.
 
@@ -222,8 +326,16 @@ def build_leg_table(legs: list[dict]) -> str:
         badge = "[S]" if leg["role"].startswith("Short") else "[B]"
         delta_str = format_greek(leg["delta"])
         entry_str = f"{leg['entry']:.1f}" if leg["entry"] is not None else "-"
-        rows.append((badge, format_strike(leg["strike"]), leg["opt_type"],
-                     delta_str, f"{leg['ltp']:.1f}", entry_str))
+        rows.append(
+            (
+                badge,
+                format_strike(leg["strike"]),
+                leg["opt_type"],
+                delta_str,
+                f"{leg['ltp']:.1f}",
+                entry_str,
+            )
+        )
 
     widths = {
         "act": 3,
@@ -266,8 +378,27 @@ def build_message(d: dict) -> str:
     roi_amount = d["roi_amount"]
     roi_pct = d["roi_pct"]
 
-    signals = ", ".join(mdcode(s) for s in d["signals"]) if d["signals"] else "None"
-    actions = ", ".join(mdcode(a) for a in d["intraday_actions"]) if d["intraday_actions"] else "None"
+    net_delta = compute_net_greek(d["legs"], "delta")
+    net_theta = compute_net_greek(d["legs"], "theta")
+
+    # signal_notes: optional list[str | None], index-aligned with d["signals"]
+    # — a short free-text annotation per signal code (e.g. "Test short wing").
+    # Absent/shorter list is fine; missing entries render with no note.
+    signal_notes = d.get("signal_notes", [])
+    if d["signals"]:
+        parts = []
+        for i, s in enumerate(d["signals"]):
+            note = signal_notes[i] if i < len(signal_notes) else None
+            if note:
+                parts.append(f"{mdcode(s)} \\({escape_markdown(note)}\\)")
+            else:
+                parts.append(mdcode(s))
+        signals = ", ".join(parts)
+    else:
+        signals = "None"
+    actions = (
+        ", ".join(mdcode(a) for a in d["intraday_actions"]) if d["intraday_actions"] else "None"
+    )
 
     header_label = escape_markdown(d["strategy_label"])  # "IC EOD (Monthly)" -> escapes ( )
     nifty_str = escape_markdown(f"{d['nifty']:,}")
@@ -288,9 +419,19 @@ def build_message(d: dict) -> str:
     # parens is fine either way — no extra handling needed beyond
     # format_money's fix above.
 
+    if net_delta is None:
+        net_delta_str = "incomplete"
+    else:
+        net_delta_str = escape_markdown(format_greek(float(net_delta)))
+    if net_theta is None:
+        net_theta_str = "incomplete"
+    else:
+        net_theta_str = escape_markdown(format_greek(float(net_theta)))
+
     lines = [
         f"\U0001f4ca *{header_label}* \\| {mdcode(d['strategy_id'])}",
         f"*Nifty:* {nifty_str} \\| *DTE:* {d['dte']} \\| *IVR:* {ivr_str}",
+        f"*Net \u0394:* {net_delta_str} \\| *Net \u03b8:* {net_theta_str}",
         "```",
         build_leg_table(d["legs"]),
         "```",
@@ -298,7 +439,8 @@ def build_message(d: dict) -> str:
         f"{pnl_icon} *Captured:* {captured_amt_str} \\({captured_pct_str}\\) \\| "
         f"*ROI:* {roi_pct_str} \\(\u20b9{roi_amt_str}\\)",
         f"\U0001f3e6 *Margin:* \u20b9{margin_str}",
-        f"{alert_icon} *Alert:* {signals} \\| *Actions:* {actions}",
+        f"{alert_icon} *Alert:* {signals}",
+        f"\u2699\ufe0f *Actions:* {actions}",
     ]
     return "\n".join(lines)
 
@@ -326,24 +468,26 @@ async def send_markdown_v2(bot_token: str, chat_id: str, message: str) -> bool:
         return False
 
 
-def _parse_args() -> "argparse.Namespace":
-    import argparse
-
+def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="IC EOD audit (V2 monthly) Telegram message format probe."
     )
     parser.add_argument(
-        "--scenario", default="profit", choices=sorted(SCENARIOS),
+        "--scenario",
+        default="profit",
+        choices=sorted(SCENARIOS),
         help="Named data preset to render (default: profit — your confirmed real numbers).",
     )
     parser.add_argument(
-        "--list-scenarios", action="store_true",
+        "--list-scenarios",
+        action="store_true",
         help="Print available --scenario names and exit.",
     )
     parser.add_argument(
-        "--send", action="store_true",
+        "--send",
+        action="store_true",
         help="Actually send to Telegram (default: print only, never sends). "
-             "Requires TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID in the environment.",
+        "Requires TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID in the environment.",
     )
     return parser.parse_args()
 

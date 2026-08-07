@@ -8,8 +8,12 @@
 
 ---
 
+- [ ] **ROLL-0** — Capture long-leg delta + theta and compute Net Δ/Net θ in the IC EOD audit
+      (`scripts/strategies/ic/paper_ic_snapshot.py::process_variant`) — data-only, plain-text
+      report line, no Markdown/parse_mode dependency | Blocked by: none
 - [ ] **ROLL-1** — Migrate IC EOD audit (`scripts/strategies/ic/paper_ic_snapshot.py`) to the
-      new format | Blocked by: `backbone/` + `formatting-rules/` complete
+      new format | Blocked by: `backbone/` + `formatting-rules/` complete (data source: `ROLL-0`,
+      soft dependency — see `ROLL-1`'s spec for what happens if sequencing is reversed)
 - [ ] **ROLL-2** — Migrate IC monthly comparison report
       (`scripts/strategies/ic/paper_ic_monthly_comparison.py`) — also fixes its hand-counted
       width bug | Blocked by: ROLL-1
