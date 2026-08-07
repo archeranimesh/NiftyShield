@@ -200,6 +200,31 @@ SCENARIOS = {
     "full_greeks": lambda: _make_scenario(legs=_FULL_GREEKS_LEGS),
 }
 
+# Every IC variant this format needs to render, confirmed against the real
+# strategy_name constants (not guessed): V1's four (src/paper/constants.py,
+# STRATEGY_IC_WEEKLY/MONTHLY/LEAPS/YEARLY) and V2's currently-only variant
+# (src/strategy/ic_expiry_config_v2.py builds strategy_name as
+# f"paper_ic_nifty_v2_{expiry_type}"; CONFIGS_V2 is Phase 1 / monthly-only
+# today — V2 weekly/leaps/yearly do NOT exist as runnable strategies yet,
+# so they're deliberately absent here rather than invented).
+#
+# build_message() takes strategy_label/strategy_id purely as data (see the
+# `data` dict above) — nothing in it, build_leg_table(), or the net-Greeks
+# line is hardcoded to one variant. scripts/strategies/ic/paper_ic_snapshot.py's
+# _run() already loops `for expiry_type, config in CONFIGS.items()` (V1) and
+# `for expiry_type, config in CONFIGS_V2.items()` (V2), calling the SAME
+# process_variant() for every one — so once ROLL-0/ROLL-1 land there, every
+# variant below gets the new format and the Net Δ/θ line automatically, with
+# no per-variant branching required anywhere. This dict exists only to prove
+# that in the scratch script, not because the real implementation needs one.
+VARIANTS = {
+    "v1_weekly": ("IC EOD (Weekly)", "paper_ic_nifty_v1_weekly"),
+    "v1_monthly": ("IC EOD (Monthly)", "paper_ic_nifty_v1_monthly"),
+    "v1_leaps": ("IC EOD (Leaps)", "paper_ic_nifty_v1_leaps"),
+    "v1_yearly": ("IC EOD (Yearly)", "paper_ic_nifty_v1_yearly"),
+    "v2_monthly": ("IC EOD (Monthly)", "paper_ic_nifty_v2_monthly"),
+}
+
 
 # --- Inlined MD-1 helpers (src/notifications/markdown.py, not yet shipped) ---
 
@@ -484,6 +509,20 @@ def _parse_args() -> argparse.Namespace:
         help="Print available --scenario names and exit.",
     )
     parser.add_argument(
+        "--variant",
+        default="v2_monthly",
+        choices=sorted(VARIANTS),
+        help="Which IC strategy variant's label/strategy_id to render "
+        "(default: v2_monthly — the confirmed real position). Proves the "
+        "format is variant-agnostic; V2 currently only has 'monthly' "
+        "(CONFIGS_V2 is Phase 1-scoped) so no v2_weekly/v2_leaps/v2_yearly exist.",
+    )
+    parser.add_argument(
+        "--list-variants",
+        action="store_true",
+        help="Print available --variant names and exit.",
+    )
+    parser.add_argument(
         "--send",
         action="store_true",
         help="Actually send to Telegram (default: print only, never sends). "
@@ -500,9 +539,18 @@ async def main() -> None:
             print(name)
         return
 
+    if args.list_variants:
+        for name in sorted(VARIANTS):
+            label, strategy_id = VARIANTS[name]
+            print(f"{name}: {label} | {strategy_id}")
+        return
+
     scenario_data = SCENARIOS[args.scenario]()
+    label, strategy_id = VARIANTS[args.variant]
+    scenario_data["strategy_label"] = label
+    scenario_data["strategy_id"] = strategy_id
     text = build_message(scenario_data)
-    print(f"--- scenario: {args.scenario} ---")
+    print(f"--- scenario: {args.scenario} | variant: {args.variant} ---")
     print(text)
     print(
         "\n(Note: printed text above is raw MarkdownV2 source — asterisks/"

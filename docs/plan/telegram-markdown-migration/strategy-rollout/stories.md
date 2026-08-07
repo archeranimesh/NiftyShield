@@ -63,6 +63,21 @@ strings are also identical across both (`short_put`/`short_call`/`long_put_hedge
 `long_call_hedge` — confirmed via grep against `ic_nifty_v2.py`). So this task requires no
 per-version branching in `process_variant` — one code path already serves both.
 
+**Applies to every active IC variant automatically — confirmed via `_run()`, not assumed.**
+`_run()` calls `process_variant()` once per entry in two loops: `for expiry_type, config in
+CONFIGS.items()` (V1 — all four of `weekly`/`monthly`/`leaps`/`yearly`, real strategy_names
+`paper_ic_nifty_v1_{weekly,monthly,leaps,yearly}` per `src/paper/constants.py`'s
+`STRATEGY_IC_WEEKLY/MONTHLY/LEAPS/YEARLY`) and `for expiry_type, config in CONFIGS_V2.items()`
+(V2 — currently `monthly` only; `CONFIGS_V2` is Phase 1-scoped per `src/strategy/
+ic_expiry_config_v2.py`, `paper_ic_nifty_v2_weekly`/`_leaps`/`_yearly` do not exist as runnable
+strategies yet — do not add them to any test fixture as if they're live). Since this task edits
+`process_variant()` itself, not a per-variant call site, every variant in both loops gets the
+long-leg Greeks capture and the Net Δ/θ line with zero additional code — no per-variant task
+needed here or in `ROLL-1`. `scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py` gained a
+`VARIANTS` dict + `--variant` CLI flag (5 entries: the four V1 expiries plus V2 monthly) purely
+to demonstrate `build_message()` is already variant-agnostic — not because the real
+implementation needs a variants list of its own.
+
 **Files to change:**
 - `scripts/strategies/ic/paper_ic_snapshot.py` — `process_variant()`'s role-loop body
 - Matching test file: `tests/unit/strategies/ic/test_paper_ic_snapshot.py`
@@ -199,6 +214,18 @@ number once real data is complete, not just whether the line prints. Worth carry
 named-scenario-preset pattern into the real test file for this message, not just the scratch
 script — the same loss/alert/flat/full_greeks branches need real pytest coverage, not just visual
 on-device confirmation.
+
+**Applies to every active IC variant automatically — same reasoning as `ROLL-0`.** This task
+edits `process_variant()`'s message-building logic (the function itself, not a per-call-site
+wrapper), and `_run()` already calls it once per variant across both `CONFIGS` (V1: weekly/
+monthly/leaps/yearly) and `CONFIGS_V2` (V2: monthly only, Phase 1-scoped — see `ROLL-0`'s note,
+do not assume V2 weekly/leaps/yearly exist). No per-variant task, test file, or code path is
+needed — one port covers `IC EOD Audit — weekly (paper_ic_nifty_v1_weekly)` through
+`— yearly (paper_ic_nifty_v1_yearly)` and V2's monthly identically, since `strategy_label`/
+`strategy_id`/`dte`/`nifty`/`ivr`/legs/`margin` are all already per-variant *data*, not per-variant
+*code*. `scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py`'s new `VARIANTS` dict + `--variant`
+flag (5 entries) demonstrates this — every variant renders correctly with zero branching in
+`build_message()`.
 
 **Tests:** update the existing message-format test(s) for this script to assert the new
 structure; keep at least one test that constructs a leg with an underscore-bearing signal code
