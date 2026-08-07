@@ -86,6 +86,8 @@ from src.paper.constants import (
     DEFAULT_DB_PATH,
     NIFTY_UNDERLYING,
     NIFTYBEES_KEY,
+    STRATEGY_CC_OVERLAY,
+    STRATEGY_COLLAR_OVERLAY,
     STRATEGY_OVERLAY,
     STRATEGY_PP_OVERLAY,
     STRATEGY_SPOT,
@@ -193,8 +195,29 @@ class OverlayConfig:
     call_oi: int
 
 
-def auto_cc_bootstrap(bod_path: Path) -> OverlayConfig | None:
-    """Automate CC entry (fetch chain, apply gates, select strike)."""
+def auto_cc_bootstrap(
+    bod_path: Path,
+    *,
+    log_only_gates: bool = True,
+) -> tuple[OverlayConfig | None, GateViolation | None]:
+    """Automate CC entry (fetch chain, apply gates, select strike).
+
+    Args:
+        bod_path: Path to the BOD instrument JSON file.
+        log_only_gates: When True (default), a below-threshold IVR is
+            recorded as a GateViolation instead of hard-blocking entry —
+            same contract as ``auto_pp_bootstrap``'s param of the same name
+            (paper-trading phase, no real capital at risk; see DECISIONS.md
+            2026-08-07). When False, restores the original hard-block.
+
+    Returns:
+        Tuple of (OverlayConfig or None, GateViolation or None). cfg is None
+        on any structural failure (BOD load, no monthly expiry, DTE < 14,
+        history-unavailable, chain fetch, no eligible strike) — these are
+        never gated by log_only_gates, they always abort. The GateViolation
+        is populated only when the IVR gate would have blocked under strict
+        mode.
+    """
     today = date.today()
     try:
         lookup = InstrumentLookup.from_file(bod_path)
@@ -205,7 +228,7 @@ def auto_cc_bootstrap(bod_path: Path) -> OverlayConfig | None:
         )
     except Exception as exc:
         logger.error("auto_cc.bod_load_failed", error=str(exc))
-        return None
+        return None, None
 
     expiry_str = None
     for label, exp_str in expiries:
@@ -215,31 +238,48 @@ def auto_cc_bootstrap(bod_path: Path) -> OverlayConfig | None:
 
     if not expiry_str:
         logger.error("auto_cc.no_monthly_expiry_found")
-        return None
+        return None, None
 
-    # Gate 1: DTE >= 14
+    # Gate 1: DTE >= 14 (structural — never bypassed by log_only_gates).
     expiry_date = date.fromisoformat(expiry_str)
     dte = (expiry_date - today).days
     if dte < 14:
         logger.error("auto_cc.dte_gate_failed", dte=dte)
-        return None
+        return None, None
 
-    # Gate 2: IVR >= 0.25
+    # Gate 2: IVR >= 0.25. THRESHOLD gate: log-only under --log-only-gates
+    # (default on), matching auto_pp_bootstrap/ic_entry_gates.resolve_ivr's
+    # pattern. Data unavailability (empty/short history) stays a STRUCTURAL
+    # abort — never bypassed by log_only_gates.
+    violation: GateViolation | None = None
     try:
         vix_series = load_vix_series(settings.vix_data_dir)
         if vix_series.empty or len(vix_series) < 252:
             logger.error("auto_cc.ivr_history_insufficient")
-            return None
+            return None, None
 
         vix_today = float(vix_series.iloc[-1])
         ivr = compute_ivr(vix_today, vix_series)
 
-        if ivr is None or ivr < 0.25:
-            logger.error("auto_cc.ivr_gate_failed", ivr=ivr)
-            return None
+        if ivr is None:
+            logger.error("auto_cc.ivr_history_insufficient")
+            return None, None
+
+        if ivr < 0.25:
+            if log_only_gates:
+                logger.warning("gate.ivr_cc_reentry_violation_logged", ivr=ivr, gate=0.25)
+                violation = make_gate_violation(
+                    gate_name="ivr_cc_reentry",
+                    threshold="0.25",
+                    actual=f"{ivr:.4f}",
+                    strategy_name=STRATEGY_CC_OVERLAY,
+                )
+            else:
+                logger.error("auto_cc.ivr_gate_failed", ivr=ivr)
+                return None, None
     except Exception as exc:
         logger.error("auto_cc.ivr_check_failed", error=str(exc))
-        return None
+        return None, None
 
     # Fetch live chain
     try:
@@ -247,11 +287,11 @@ def auto_cc_bootstrap(bod_path: Path) -> OverlayConfig | None:
         raw_chain = client.get_option_chain_sync("NSE_INDEX|Nifty 50", expiry_str)
     except Exception as exc:
         logger.error("auto_cc.chain_fetch_failed", error=str(exc))
-        return None
+        return None, None
 
     if not raw_chain:
         logger.error("auto_cc.chain_empty")
-        return None
+        return None, None
 
     # Strike selection
     delta_candidates = _select_delta_candidates(option_type="CE")
@@ -277,13 +317,13 @@ def auto_cc_bootstrap(bod_path: Path) -> OverlayConfig | None:
 
     if not selected_row:
         logger.error("auto_cc.no_eligible_strike_found")
-        return None
+        return None, None
 
     call_price = Decimal(
         str(selected_row["mid"] if selected_row["mid"] > 0 else selected_row["ltp"])
     )
 
-    return OverlayConfig(
+    cfg = OverlayConfig(
         overlay_type="cc",
         entry_date=today,
         cycle=1,  # Cycle doesn't matter for auto CC
@@ -304,9 +344,14 @@ def auto_cc_bootstrap(bod_path: Path) -> OverlayConfig | None:
         else None,
         call_oi=int(selected_row["oi"]),
     )
+    return cfg, violation
 
 
-def auto_collar_bootstrap(bod_path: Path) -> OverlayConfig | None:
+def auto_collar_bootstrap(
+    bod_path: Path,
+    *,
+    log_only_gates: bool = True,
+) -> tuple[OverlayConfig | None, GateViolation | None]:
     """Automate first-ever Collar entry (fetch chain, apply gates, select both legs).
 
     Bootstrap only (Collar3b) — mirrors ``auto_cc_bootstrap``/``auto_pp_bootstrap``'s
@@ -321,12 +366,21 @@ def auto_collar_bootstrap(bod_path: Path) -> OverlayConfig | None:
 
     Args:
         bod_path: Path to the BOD instrument JSON file.
+        log_only_gates: When True (default), a below-threshold IVR is
+            recorded as a GateViolation instead of hard-blocking entry —
+            same contract as ``auto_pp_bootstrap``/``auto_cc_bootstrap``'s
+            param of the same name (paper-trading phase, no real capital at
+            risk; see DECISIONS.md 2026-08-07). When False, restores the
+            original hard-block.
 
     Returns:
-        OverlayConfig with both put_* and call_* fields populated, or None on any
-        structural failure (BOD load, no monthly expiry, DTE < 14, IVR gate, chain
-        fetch, or no viable combo) — always logged via ``logger.error`` before
-        returning.
+        Tuple of (OverlayConfig or None, GateViolation or None). cfg has both
+        put_* and call_* fields populated on success, or is None on any
+        structural failure (BOD load, no monthly expiry, DTE < 14,
+        history-unavailable, chain fetch, or no viable combo) — these are
+        never gated by log_only_gates, they always abort. The GateViolation
+        is populated only when the IVR gate would have blocked under strict
+        mode.
     """
     today = date.today()
     try:
@@ -338,7 +392,7 @@ def auto_collar_bootstrap(bod_path: Path) -> OverlayConfig | None:
         )
     except Exception as exc:
         logger.error("auto_collar.bod_load_failed", error=str(exc))
-        return None
+        return None, None
 
     expiry_str = None
     for label, exp_str in expiries:
@@ -348,31 +402,48 @@ def auto_collar_bootstrap(bod_path: Path) -> OverlayConfig | None:
 
     if not expiry_str:
         logger.error("auto_collar.no_monthly_expiry_found")
-        return None
+        return None, None
 
-    # Gate 1: DTE >= 14
+    # Gate 1: DTE >= 14 (structural — never bypassed by log_only_gates).
     expiry_date = date.fromisoformat(expiry_str)
     dte = (expiry_date - today).days
     if dte < 14:
         logger.error("auto_collar.dte_gate_failed", dte=dte)
-        return None
+        return None, None
 
-    # Gate 2: IVR >= 0.25 (same threshold as auto_cc_bootstrap/ReEntryMixin)
+    # Gate 2: IVR >= 0.25 (same threshold as auto_cc_bootstrap/ReEntryMixin).
+    # THRESHOLD gate: log-only under --log-only-gates (default on). Data
+    # unavailability (empty/short history) stays a STRUCTURAL abort — never
+    # bypassed by log_only_gates.
+    violation: GateViolation | None = None
     try:
         vix_series = load_vix_series(settings.vix_data_dir)
         if vix_series.empty or len(vix_series) < 252:
             logger.error("auto_collar.ivr_history_insufficient")
-            return None
+            return None, None
 
         vix_today = float(vix_series.iloc[-1])
         ivr = compute_ivr(vix_today, vix_series)
 
-        if ivr is None or ivr < 0.25:
-            logger.error("auto_collar.ivr_gate_failed", ivr=ivr)
-            return None
+        if ivr is None:
+            logger.error("auto_collar.ivr_history_insufficient")
+            return None, None
+
+        if ivr < 0.25:
+            if log_only_gates:
+                logger.warning("gate.ivr_collar_reentry_violation_logged", ivr=ivr, gate=0.25)
+                violation = make_gate_violation(
+                    gate_name="ivr_collar_reentry",
+                    threshold="0.25",
+                    actual=f"{ivr:.4f}",
+                    strategy_name=STRATEGY_COLLAR_OVERLAY,
+                )
+            else:
+                logger.error("auto_collar.ivr_gate_failed", ivr=ivr)
+                return None, None
     except Exception as exc:
         logger.error("auto_collar.ivr_check_failed", error=str(exc))
-        return None
+        return None, None
 
     # Fetch live chain
     try:
@@ -380,11 +451,11 @@ def auto_collar_bootstrap(bod_path: Path) -> OverlayConfig | None:
         raw_chain = client.get_option_chain_sync("NSE_INDEX|Nifty 50", expiry_str)
     except Exception as exc:
         logger.error("auto_collar.chain_fetch_failed", error=str(exc))
-        return None
+        return None, None
 
     if not raw_chain:
         logger.error("auto_collar.chain_empty")
-        return None
+        return None, None
 
     # Two-leg search: Collar1's run_collar_mode coordinates CC1's call ladder +
     # PP1's put ladder into the full candidate cross-product (never auto-selects).
@@ -395,11 +466,11 @@ def auto_collar_bootstrap(bod_path: Path) -> OverlayConfig | None:
         )
     except RuntimeError as exc:
         logger.error("auto_collar.ladder_missing", error=str(exc))
-        return None
+        return None, None
 
     if not combos:
         logger.error("auto_collar.no_viable_combo_found")
-        return None
+        return None, None
 
     # Collar2 tiebreak: minimum |net_premium| among survivors of both bands.
     best = min(combos, key=lambda c: abs(c["net_premium"]))
@@ -408,7 +479,7 @@ def auto_collar_bootstrap(bod_path: Path) -> OverlayConfig | None:
     call_price = Decimal(str(call_row["mid"] if call_row.get("mid", 0) > 0 else call_row["ltp"]))
     put_price = Decimal(str(put_row["mid"] if put_row.get("mid", 0) > 0 else put_row["ltp"]))
 
-    return OverlayConfig(
+    cfg = OverlayConfig(
         overlay_type="collar",
         entry_date=today,
         cycle=1,  # Cycle doesn't matter for auto collar
@@ -419,7 +490,9 @@ def auto_collar_bootstrap(bod_path: Path) -> OverlayConfig | None:
         put_strike=float(put_row["strike"]),
         put_instrument_key=put_row["instrument_key"],
         put_price=put_price,
-        put_spread_pct=float(put_row["gate_spread"]) if put_row.get("gate_spread") is not None else None,
+        put_spread_pct=float(put_row["gate_spread"])
+        if put_row.get("gate_spread") is not None
+        else None,
         put_oi=int(put_row["oi"]),
         call_strike=float(call_row["strike"]),
         call_instrument_key=call_row["instrument_key"],
@@ -429,6 +502,7 @@ def auto_collar_bootstrap(bod_path: Path) -> OverlayConfig | None:
         else None,
         call_oi=int(call_row["oi"]),
     )
+    return cfg, violation
 
 
 def _open_pp_dte(db_path: Path) -> int | None:
@@ -1137,9 +1211,11 @@ def main() -> None:
         action=argparse.BooleanOptionalAction,
         default=True,
         help=(
-            "--auto-pp only: record a below/above-threshold IVR gate as a "
-            "GateViolation and proceed, instead of hard-blocking (default: on, "
-            "matches IC's resolve_ivr pattern)."
+            "Applies to --auto-cc/--auto-pp/--auto-collar: record a "
+            "below/above-threshold IVR gate as a GateViolation and proceed, "
+            "instead of hard-blocking (default: on — paper-trading phase, "
+            "no real capital at risk; matches IC's resolve_ivr pattern; "
+            "see DECISIONS.md 2026-08-07)."
         ),
     )
     args = parser.parse_args()
@@ -1152,7 +1228,7 @@ def main() -> None:
         # decision), and EC-5 (DTE<=5 exit collapse) have all landed, and EC-5's tests
         # were confirmed green on a live host the same day (see DECISIONS.md, TODOS.md
         # item 6). See docs/plan/3track-consolidation/tasks.md CC5 for the closure note.
-        cfg = auto_cc_bootstrap(args.bod_path)
+        cfg, gate_violation = auto_cc_bootstrap(args.bod_path, log_only_gates=args.log_only_gates)
         if cfg is None:
             print("ERROR: auto-CC bootstrap failed. Check logs.", file=sys.stderr)
             sys.exit(1)
@@ -1174,7 +1250,9 @@ def main() -> None:
             print("ERROR: auto-PP bootstrap failed. Check logs.", file=sys.stderr)
             sys.exit(1)
     elif args.auto_collar:
-        cfg = auto_collar_bootstrap(args.bod_path)
+        cfg, gate_violation = auto_collar_bootstrap(
+            args.bod_path, log_only_gates=args.log_only_gates
+        )
         if cfg is None:
             print("ERROR: auto-collar bootstrap failed. Check logs.", file=sys.stderr)
             sys.exit(1)

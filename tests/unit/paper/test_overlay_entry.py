@@ -522,7 +522,7 @@ def test_auto_cc_no_dry_run_no_longer_blocked(tmp_path, capsys):
         # test_reentry_gates_applied_to_bootstrap_entry; here we only assert the
         # old unconditional --no-dry-run block is gone, so force bootstrap to
         # fail past it cleanly rather than re-testing gate internals.
-        mock_bootstrap.return_value = None
+        mock_bootstrap.return_value = (None, None)
 
         with pytest.raises(SystemExit) as excinfo:
             main()
@@ -562,7 +562,7 @@ def test_auto_cc_no_dry_run_writes_trade_on_bootstrap_success(tmp_path, capsys):
             return_value=None,
         ),
     ):
-        mock_bootstrap.return_value = cfg
+        mock_bootstrap.return_value = (cfg, None)
         mock_store = MagicMock()
         mock_store_cls.return_value = mock_store
         mock_store.get_positions.return_value = []
@@ -571,6 +571,63 @@ def test_auto_cc_no_dry_run_writes_trade_on_bootstrap_success(tmp_path, capsys):
         main()
 
         mock_store.record_trade.assert_called_once()
+        captured = capsys.readouterr()
+        assert "RECORDED TO DB" in captured.out
+
+
+def test_auto_cc_gate_violation_persisted(tmp_path, capsys):
+    """A logged IVR gate violation from auto_cc_bootstrap is persisted via
+    PaperStore.record_gate_violation — same log-only-gates contract PP
+    already has (2026-08-07: extended from --auto-pp-only to also cover
+    --auto-cc/--auto-collar, paper-trading phase, no real capital at risk)."""
+    from datetime import datetime, timezone
+
+    from scripts.strategies.three_track.paper_3track_overlay_entry import main
+    from src.paper.constants import STRATEGY_CC_OVERLAY
+    from src.paper.models import GateViolation
+
+    cfg = load_overlay_config(_write_yaml(tmp_path, _valid_cc_raw()))
+    violation = GateViolation(
+        gate_name="ivr_cc_reentry",
+        threshold="0.25",
+        actual="0.1393",
+        strategy_name=STRATEGY_CC_OVERLAY,
+        logged_at=datetime.now(timezone.utc),
+    )
+
+    test_args = [
+        "paper_3track_overlay_entry.py",
+        "--auto-cc",
+        "--db-path",
+        str(tmp_path / "test.sqlite"),
+    ]
+
+    with (
+        patch("sys.argv", test_args),
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.auto_cc_bootstrap"
+        ) as mock_bootstrap,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.PaperStore"
+        ) as mock_store_cls,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry._query_open_call_role"
+        ) as mock_query,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.build_notifier",
+            return_value=None,
+        ),
+    ):
+        mock_bootstrap.return_value = (cfg, violation)
+        mock_store = MagicMock()
+        mock_store_cls.return_value = mock_store
+        mock_store.get_positions.return_value = []
+        mock_store.record_trade.return_value = True
+        mock_query.return_value = None
+
+        main()
+
+        mock_store.record_gate_violation.assert_called_once_with(violation)
         captured = capsys.readouterr()
         assert "RECORDED TO DB" in captured.out
 
@@ -1072,7 +1129,7 @@ def test_auto_collar_no_dry_run_no_longer_blocked(tmp_path, capsys):
         # test_auto_collar_bootstrap_failure_exits_1; here we only assert the
         # old --dry-run-only block is gone, so force bootstrap to fail past
         # it cleanly rather than re-testing gate internals.
-        mock_bootstrap.return_value = None
+        mock_bootstrap.return_value = (None, None)
 
         with pytest.raises(SystemExit) as excinfo:
             main()
@@ -1113,7 +1170,7 @@ def test_auto_collar_no_dry_run_writes_trades_on_bootstrap_success(tmp_path, cap
             return_value=None,
         ),
     ):
-        mock_bootstrap.return_value = cfg
+        mock_bootstrap.return_value = (cfg, None)
         mock_store = MagicMock()
         mock_store_cls.return_value = mock_store
         mock_store.get_positions.return_value = []
@@ -1125,6 +1182,62 @@ def test_auto_collar_no_dry_run_writes_trades_on_bootstrap_success(tmp_path, cap
         mock_store.record_trades.assert_called_once()
         trades = mock_store.record_trades.call_args[0][0]
         assert {t.leg_role for t in trades} == {"overlay_collar_put", "overlay_collar_call"}
+        captured = capsys.readouterr()
+        assert "RECORDED TO DB" in captured.out
+
+
+def test_auto_collar_gate_violation_persisted(tmp_path, capsys):
+    """A logged IVR gate violation from auto_collar_bootstrap is persisted via
+    PaperStore.record_gate_violation — same log-only-gates contract PP/CC
+    already have (2026-08-07 extension, paper-trading phase)."""
+    from datetime import datetime, timezone
+
+    from scripts.strategies.three_track.paper_3track_overlay_entry import main
+    from src.paper.constants import STRATEGY_COLLAR_OVERLAY
+    from src.paper.models import GateViolation
+
+    cfg = load_overlay_config(_write_yaml(tmp_path, _valid_collar_raw()))
+    violation = GateViolation(
+        gate_name="ivr_collar_reentry",
+        threshold="0.25",
+        actual="0.1393",
+        strategy_name=STRATEGY_COLLAR_OVERLAY,
+        logged_at=datetime.now(timezone.utc),
+    )
+
+    test_args = [
+        "paper_3track_overlay_entry.py",
+        "--auto-collar",
+        "--db-path",
+        str(tmp_path / "test.sqlite"),
+    ]
+
+    with (
+        patch("sys.argv", test_args),
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.auto_collar_bootstrap"
+        ) as mock_bootstrap,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.PaperStore"
+        ) as mock_store_cls,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry._query_open_call_role"
+        ) as mock_query,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.build_notifier",
+            return_value=None,
+        ),
+    ):
+        mock_bootstrap.return_value = (cfg, violation)
+        mock_store = MagicMock()
+        mock_store_cls.return_value = mock_store
+        mock_store.get_positions.return_value = []
+        mock_store.record_trades.return_value = ([], [])
+        mock_query.return_value = None
+
+        main()
+
+        mock_store.record_gate_violation.assert_called_once_with(violation)
         captured = capsys.readouterr()
         assert "RECORDED TO DB" in captured.out
 
@@ -1155,7 +1268,7 @@ def test_auto_collar_bootstrap_no_open_position(tmp_path, capsys):
             "scripts.strategies.three_track.paper_3track_overlay_entry._query_open_call_role"
         ) as mock_query,
     ):
-        mock_bootstrap.return_value = cfg
+        mock_bootstrap.return_value = (cfg, None)
         mock_store = MagicMock()
         mock_store_cls.return_value = mock_store
         mock_store.get_positions.return_value = []
@@ -1187,7 +1300,7 @@ def test_auto_collar_bootstrap_failure_exits_1(tmp_path, capsys):
             "scripts.strategies.three_track.paper_3track_overlay_entry.auto_collar_bootstrap"
         ) as mock_bootstrap,
     ):
-        mock_bootstrap.return_value = None
+        mock_bootstrap.return_value = (None, None)
 
         with pytest.raises(SystemExit) as excinfo:
             main()
@@ -1280,9 +1393,9 @@ def test_auto_cc_bootstrap_reaches_chain_fetch_with_real_vix_dir(tmp_path, monke
         # UpstoxMarketClient is never patched here — chain fetch fails on a
         # real (unconfigured) client, which is fine: we only need proof the
         # IVR gate (the BUG-026 crash site) was cleared without raising.
-        result = auto_cc_bootstrap(tmp_path / "bod.json")
+        cfg, gate_violation = auto_cc_bootstrap(tmp_path / "bod.json")
 
-    assert result is None
+    assert cfg is None
 
 
 def test_auto_pp_bootstrap_reaches_chain_fetch_with_real_vix_dir(tmp_path, monkeypatch):
@@ -1330,6 +1443,6 @@ def test_auto_collar_bootstrap_reaches_chain_fetch_with_real_vix_dir(tmp_path, m
         mock_lookup_cls.from_file.return_value = mock_lookup
         mock_lookup.get_expiry_candidates.return_value = [("monthly", "2026-08-27")]
 
-        result = auto_collar_bootstrap(tmp_path / "bod.json")
+        cfg, gate_violation = auto_collar_bootstrap(tmp_path / "bod.json")
 
-    assert result is None
+    assert cfg is None

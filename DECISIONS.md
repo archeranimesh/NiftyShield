@@ -5,6 +5,30 @@
 
 ---
 
+**`--log-only-gates` extended to CC/Collar auto-entry (2026-08-07):**
+`--log-only-gates` (`paper_3track_overlay_entry.py`) previously only worked for `--auto-pp` —
+`auto_cc_bootstrap`/`auto_collar_bootstrap` had no `log_only_gates` param at all, so a
+below-threshold IVR reading unconditionally hard-blocked entry for CC/Collar even with the flag
+passed (it was silently accepted by argparse and simply never read by those two code paths).
+Animesh's direct call: extend the same log-only pattern to all three overlay types, since this is
+paper trading and no real capital is at risk — a logged, non-blocking `GateViolation` is more
+useful data than a silent block during the data-collection phase (mirrors the same reasoning
+behind IC's `resolve_ivr`/PP's original `log_only_gates` param). Implementation: both functions
+now take `log_only_gates: bool = True` and return `tuple[OverlayConfig | None, GateViolation |
+None]`, an exact structural copy of `auto_pp_bootstrap`'s existing shape — gate names
+`ivr_cc_reentry`/`ivr_collar_reentry`, `strategy_name=STRATEGY_CC_OVERLAY`/`STRATEGY_COLLAR_OVERLAY`.
+Structural gates (BOD load, no monthly expiry, DTE < 14, VIX-history-unavailable, chain fetch, no
+eligible strike/combo) are untouched — they always hard-abort regardless of `log_only_gates`, same
+distinction PP already draws. `main()`'s `record_gate_violation`/Telegram-annotation persistence
+block was already generic (built for PP) and required no change — it fires identically once
+`gate_violation` is populated for any overlay type. Verified live: `--auto-cc --dry-run` against
+current market IVR (0.139, well under the 0.25 floor) correctly hard-blocked under the *old*
+CC-only-hard-block code before this change landed, confirming the gap was real and not merely
+theoretical. See `CONTEXT.md` `paper_3track_overlay_entry.py` entry, `docs/bugs/bugs.md` BUG-026
+(related — this extension was requested immediately after BUG-026's fix was verified live).
+
+---
+
 **BUG-026 fix — retype `Settings.vix_data_dir: str` → `Path` at the source, not a 3-call-site wrap (2026-08-07):**
 `auto_cc_bootstrap`/`auto_collar_bootstrap`/`auto_pp_bootstrap` (`paper_3track_overlay_entry.py`)
 passed `settings.vix_data_dir` straight into `load_vix_series()`, which immediately calls
