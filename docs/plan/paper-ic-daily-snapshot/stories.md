@@ -219,6 +219,68 @@ pattern in `CONTEXT.md`).
 precedent in `docs/plan/ic-yearly-expiry-fix/stories.md` (audit blast radius before any fix
 lands).
 
+### SNAP-3 findings (2026-08-07) — no gap found; overlays have never traded
+
+Queried live `data/portfolio/portfolio.sqlite` directly (`paper_trades`, `paper_nav_snapshots`,
+`paper_leg_snapshots` distinct `strategy_name` sets) rather than reasoning from code alone, since
+this is exactly the class of question `DB_REGISTRY.md` warns against assuming.
+
+`scripts/portfolio/paper_snapshot.py` is a single **general-purpose** batch runner (confirmed by
+reading `_run()`, `scripts/portfolio/paper_snapshot.py:108-258`) — it is not IC-specific or
+CSP-specific despite what `docs/instructions/csp_nifty_v1.md`'s cron line (`5 10 * * 1-5 ...
+--strategy paper_csp_nifty_v1`) and `docs/instructions/paper_trade.md` imply. With no `--strategy`
+flag it loops `store.get_strategy_names()` (distinct `strategy_name` in `paper_trades`) and calls
+`tracker.record_daily_snapshot(name, ...)` for every one of them, `STRATEGY_OVERLAY`
+(`paper_nifty_overlay`) included — the per-group `compute_pnl_by_leg_group` branch only changes
+what gets *printed*, not what gets persisted (confirmed in `CONTEXT.md`'s own note on this). The
+live production cron is the no-`--strategy` form (`36 15 * * 1-5`, per SNAP-2's finding and
+`docs/plan/paper-ic-daily-snapshot/stories.md:165`) — the CSP-only cron line in
+`docs/instructions/csp_nifty_v1.md`/`paper_trade.md` is stale documentation predating this
+batch-all behavior, not a second competing cron.
+
+| Strategy | `paper_trades` rows | `paper_nav_snapshots` rows | `paper_leg_snapshots` rows | Has gap? |
+|---|---|---|---|---|
+| `paper_csp_nifty_v1` | 10 | 57 | 0 | **No** — same mechanism as IC (SNAP-2), full coverage since 2026-07-21-ish onward. |
+| `paper_ic_nifty_v1_{weekly,monthly,leaps}` / `paper_ic_nifty_v2_monthly` | 4–28 | 9–10 | 0 | **No** — SNAP-2's finding, unchanged. |
+| `paper_nifty_futures` / `paper_nifty_proxy` / `paper_nifty_spot` | 1–3 | 57 | 197–225 | **No** — these are the only strategies with `paper_leg_snapshots` rows at all (via `paper_3track_snapshot.py`'s explicit `record_leg_snapshot()` calls, per `CONTEXT.md`), on top of full `paper_nav_snapshots` coverage. |
+| CC / PP / Collar overlay (`paper_nifty_overlay`, all three `leg_role`s) | **0** | **0** | **0** | **N/A for the SNAP epic itself (there's genuinely nothing to snapshot), but the *reason* is not what this table first said — see correction below.** |
+
+**⚠️ Correction (2026-08-07, same session, prompted by operator pushback):** the original text here
+read "still pre-bootstrap, `--no-dry-run` is dry-run-only pending CC5/EC-5" — that was **wrong**,
+sourced from a stale `CONTEXT.md` sentence rather than the live code. The `--no-dry-run` block for
+CC/PP/Collar auto-entry was actually lifted 2026-08-02 (CC)/2026-08-03 (PP)/2026-08-04 (Collar3b),
+confirmed directly in `scripts/strategies/three_track/paper_3track_overlay_entry.py`. `logs/cron.log`
+confirms all three auto-entry crons are live and scheduled (`--auto-cc`/`--auto-collar` every
+Wednesday 10:30 IST, `--auto-pp` daily 10:30 IST) — this is what the operator meant by "we have
+cc, pp, collar running."
+
+The real explanation: **BUG-026** (`docs/bugs/bugs.md`) — `Settings.vix_data_dir` is typed `str`,
+not `Path`, and all three bootstrap functions (`auto_cc_bootstrap`/`auto_collar_bootstrap`/
+`auto_pp_bootstrap`) pass it straight into `load_vix_series(data_dir: Path)`, which calls
+`data_dir.glob(...)` unconditionally. Every single cron invocation since at least 2026-08-04 has
+crashed at the IVR gate with `'str' object has no attribute 'glob'`, caught by a bare
+`except Exception` that logs and returns `None` — so the cron "succeeds" (clean early return, no
+Telegram alert) while never reaching chain fetch, strike selection, or `paper_trades` persistence.
+Confirmed against `logs/cc_entry.log`/`collar_entry.log`/`pp_entry.log` and independently
+re-verified against the live DB on the operator's own host (`scratch/2026-08-07_overlay_snap3_cross_check.py`
+output in `logs/snap3.log`) — same result as the Cowork-mounted copy, ruling out a stale-mount
+explanation.
+
+**Net effect on this table's answer:** the "0/0/0, has gap? N/A" data is still accurate — there's
+still nothing in `paper_nav_snapshots` to report for CC/PP/Collar today, so SNAP-4's scope is
+unaffected. But this is not benign "pre-bootstrap, nothing to do yet" — it's a live, silently-failing
+automation bug, filed as **BUG-026**, HIGH severity, not fixed here (out of this read-only task's
+scope; SNAP-3's own instructions say do not fix findings, size a follow-up instead).
+
+**Recommendation:** no follow-up SNAP story needed for `paper_nav_snapshots` coverage — SNAP-2's
+finding generalizes to every currently-trading strategy without modification, confirmed against
+live data rather than assumed from the code alone. Two separate follow-ups now exist outside the
+SNAP epic: (1) fix **BUG-026** — likely a fast, contained fix (type `vix_data_dir: Path` or wrap at
+the 3 call sites) but touches a live cron path, route through the normal financial-logic review
+gate since it unblocks real order placement; (2) the *documentation* gap where
+`docs/instructions/csp_nifty_v1.md`/`paper_trade.md` implies a CSP-only cron when the real cron is
+the batch-all form (still just a doc edit, still out of scope here).
+
 ---
 
 ## SNAP-4 — Reporting script: daily graph data + inception/monthly P&L summary
