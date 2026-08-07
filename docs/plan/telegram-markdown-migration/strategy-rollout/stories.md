@@ -16,6 +16,39 @@ decision), so it goes last and gets the coordination check.
 
 ## ROLL-1 — IC EOD Audit
 
+**Reference implementation superseded 2026-08-07.** The original prototype
+(`scratch/2026-08-07_ic_eod_audit_telegram_format.py`, `strategy_id=paper_ic_nifty_v1_monthly`,
+legacy `parse_mode=Markdown`) is now historical only — it proved the bold+fenced-table concept
+but predates both the MarkdownV2 revision (see epic `README.md`) and the confirmed layout below.
+**The live reference is `scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py`**
+(`strategy_id=paper_ic_nifty_v2_monthly`, real V2 IC position data, `parse_mode=MarkdownV2`) —
+produced via `message-format-workshop.md`, confirmed on-device 2026-08-07. Port from this file,
+not the v1 one.
+
+**Confirmed message structure (2026-08-07):**
+
+```
+📊 *IC EOD (Monthly)* | `paper_ic_nifty_v2_monthly`
+*Nifty:* 24,571 | *DTE:* 18 | *IVR:* 0.16
+
+```
+Act Strike Type     Δ   LTP Entry
+---------------------------------
+[S] 24200  PE   -0.23  89.0  97.8
+[B] 23500  PE       -  18.0     -
+[S] 25100  CE   +0.23  74.2  81.1
+[B] 25500  CE       -  19.8     -
+```
+
+💰 *Credit:* ₹128.92 ➡️ *Mark:* ₹125.40
+✅ *Captured:* ₹3.52 (2.7%) | *ROI:* 0.2% (₹229)
+🏦 *Margin:* ₹97,243
+🟢 *Alert:* None | *Actions:* None
+```
+
+(Backslash escaping of literal `.`/`(`/`)`/`|` omitted above for readability — see the scratch
+script for the actual MarkdownV2 source with `escape_markdown()` applied throughout.)
+
 **Files to change:**
 - `scripts/strategies/ic/paper_ic_snapshot.py` — the message-building function (find via
   `search_graph`, not assumed — TL-3 in `telegram-leg-labels` already touched entry-preview
@@ -26,17 +59,47 @@ decision), so it goes last and gets the coordination check.
 ```
 get_code_snippet(<message-building function in paper_ic_snapshot.py>)   # find via search_graph first
 ```
-Port the structure validated interactively in
-`scratch/2026-08-07_ic_eod_audit_telegram_format.py`'s final `build_message()`: bold header +
-identifier line, Snapshot/P&L side-by-side kv table, fenced leg table, bold summary lines below
-— using `formatting-rules/`'s `build_kv_table` / `build_side_by_side_kv_table` / `build_leg_table`
-/ `format_money` / `format_greek` / `format_strike` / `format_pct`, and `backbone/`'s `mdcode()`
-for any signal/action code. Do not hand-roll formatting logic that FMT-2/FMT-3 already built.
+Port `scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py`'s `build_message()` structure: bold
+header + `mdcode()`-wrapped strategy_id, bold Nifty/DTE/IVR line, fenced leg table, bold
+Credit/Mark line, bold Captured/ROI line (with `pnl_emoji()` — see below), bold Margin line, bold
+Alert/Actions line (with `alert_emoji()`) — using `formatting-rules/`'s `build_leg_table` /
+`format_money` / `format_greek` / `format_strike` / `format_pct`, and `backbone/`'s `mdcode()` /
+`escape_markdown()` for every dynamic value AND every literal reserved character in the static
+template text (parentheses, pipes, decimal points — MarkdownV2's reserved set is wider than
+legacy Markdown's, see `backbone/stories.md`). Do not hand-roll formatting logic that FMT-2/FMT-3
+already built. This message does **not** use a side-by-side kv table (`build_side_by_side_kv_table`)
+— the confirmed layout is a single linear stack of bold summary lines plus the one fenced leg
+table, not two Snapshot/P&L tables side by side as an earlier draft of this task assumed. Update
+this task's `get_code_snippet` step accordingly if the target function still expects that shape.
+
+**New: dynamic status emojis (FMT-1b, `formatting-rules/stories.md`).** `✅`/`🔻`/`➖` on
+`pnl_emoji(captured_credit)` (sign of credit-minus-mark, not a hardcoded `✅`) and `🟢`/`⚠️` on
+`alert_emoji(signals)` (presence-based, not a substring match on the signal code — see FMT-1b for
+the rejected substring-matching design and why). Both must land in `formatting-rules/` (FMT-2 or
+a new FMT-2b) before this task can import them; if `formatting-rules/` ships without them, add
+them there first rather than defining them locally in this script.
+
+**Also confirmed 2026-08-07 — negative-money sign fix (see FMT-1's updated table):**
+`format_money` must put the sign before the `₹`, not after (`-₹11.08`, not `₹-11.08`). This only
+manifests once a strategy is in a loss state; caught via the scratch script's `--scenario loss`
+test path (see below) before it shipped as a live bug.
+
+**Scenario test harness (new convention, not previously part of this workshop's scope):**
+`scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py` gained a `SCENARIOS` dict + `--scenario`
+CLI flag (`profit` / `loss` / `flat` / `alert` / `loss_alert`) so `pnl_emoji`/`alert_emoji`'s
+branches can be exercised without hand-editing the data dict — `--list-scenarios` to enumerate,
+`--send` required to actually post (default is print-only, to avoid an accidental live send while
+browsing scenarios). Worth carrying this pattern (named scenario presets over a single hardcoded
+`data` dict) into the real test file for this message, not just the scratch script — the same
+loss/alert/flat branches need real pytest coverage, not just visual on-device confirmation.
 
 **Tests:** update the existing message-format test(s) for this script to assert the new
 structure; keep at least one test that constructs a leg with an underscore-bearing signal code
 to prove the `mdcode()` wrapping survived the port (this is the exact bug this whole epic
-started from — don't let the regression test get lost in the rewrite).
+started from — don't let the regression test get lost in the rewrite). Add tests for
+`pnl_emoji`/`alert_emoji`'s branches in the message-building test file too (loss state, alert
+state, flat P&L) — the scratch script's `SCENARIOS` presets are a ready-made list of cases to
+port into real assertions, not just visual checks.
 
 **Commit:** `feat(ic): migrate EOD audit message to Markdown table format`
 

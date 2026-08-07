@@ -25,11 +25,53 @@ not invented fresh; confirm against that script's final version):
 | LTP / Entry — **inside `build_leg_table` specifically** | 1dp, locked-in exception | `9.3` | **Resolved 2026-08-07** (confirmed with Animesh): 1dp is a deliberate width-saving override for this one table, not a silent inconsistency — narrow mobile screens can't afford 2dp across 4 numeric columns plus a Δ column in a fenced code block. `build_leg_table` must document this explicitly in its own docstring as an override of `format_money`'s default, not call `format_money` for these two columns — use a local 1dp format instead. Every other caller of LTP/Entry (e.g. a future single-leg close notification, `strategy-rollout/` ROLL-3) uses the 2dp default unless it has the same mobile-table width constraint. |
 | DTE, Open legs, quantities | Integer | `18`, `4` | Whole units, no formatting needed. |
 | IVR | 2dp, unitless | `0.16` | Matches how it's already displayed in existing option-chain analysis. |
-| Percentages (Captured %, ROI %) | 1dp | `4%`, `0.2%` | One decimal is enough precision for a percentage-of-credit figure; 2dp reads as false precision on numbers this small. |
+| Percentages (Captured %, ROI %) | 1dp; whole numbers print with no trailing `.0` | `3%`, `2.7%`, `0.2%` | One decimal is enough precision for a percentage-of-credit figure; 2dp reads as false precision on numbers this small. Resolves the ambiguity FMT-2's original docstring flagged ("4" -> "4%" vs "4.0%") — whole-number inputs print bare, fractional inputs get 1dp. Confirmed via `format_pct` in `scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py`. |
+| Money — negative values (loss states) | Sign BEFORE the `₹` symbol, not after | `-₹11.08`, not `₹-11.08` | **Added 2026-08-07** (ROLL-1 scratch iteration, `scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py`). A naive `f"₹{value:,.2f}"` puts Python's sign after the literal `₹` prefix for negative `Decimal`s, which reads wrong typographically. FMT-1's original table only had positive examples, so this case was unspecified — worth locking in now, before any message actually shows a loss state, so FMT-2's real `format_money` doesn't ship the naive version and need a follow-up fix. |
 
 **Tests:** none — docs-only task.
 
 **Commit:** `docs(notifications): Telegram message formatting spec`
+
+---
+
+## FMT-1b — Dynamic Status Emojis (confirmed 2026-08-07, surfaced during ROLL-1 scratch iteration)
+
+**Not in the original FMT-1 scope** — added after a Cowork session workshopped the IC EOD audit
+message and wanted P&L/alert state reflected visually, not just as static emoji baked into the
+template (the original prototype hardcoded `✅`/`⚠️` regardless of the actual data). Two small
+helper functions, promoted from `scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py`:
+
+```python
+def pnl_emoji(amount: Decimal) -> str:
+    """>0 -> '✅', <0 -> '🔻', ==0 -> '➖'."""
+
+def alert_emoji(signals: list[str]) -> str:
+    """Empty list -> '🟢', non-empty -> '⚠️'."""
+```
+
+**Rejected design, and why:** an external suggestion proposed selecting the alert emoji by
+substring-matching the signal code (`if "WARN" in signal: ...`). Rejected — this couples display
+logic to a naming convention that isn't guaranteed stable (a future code like
+`GAMMA_RISK_ACTION` wouldn't contain `"WARN"` but would be a worse severity than one that does).
+`alert_emoji` as specified above is presence-based only (any signal present -> warning), which is
+correct for what the current message data actually carries.
+
+**Deferred, not resolved:** a real three-tier severity indicator (🟢 info / ⚠️ warn / 🚨 action)
+needs the actual `ExitSignalResult.severity` enum value threaded through from
+`ExitSignalEngine` into whatever builds the EOD audit message — the current `paper_ic_snapshot.py`
+message-building function's data shape does not yet carry that field. Do not fake this by
+substring-matching the signal code name as a severity proxy. This is real scope for whichever
+task (likely inside `ROLL-1`'s real port, or a follow-on) wires the message-building function to
+`ExitSignalEngine`'s output — flag it explicitly if `ROLL-1`'s real implementation turns out not
+to have that severity value available, rather than silently downgrading to presence-only forever.
+
+**Files to change (when promoted from scratch, not yet done):**
+- `src/notifications/formatting.py` — add `pnl_emoji`, `alert_emoji` alongside FMT-2's other
+  formatters
+- `tests/unit/notifications/test_formatting.py` — happy-path + edge case per function
+  (`pnl_emoji`: positive/negative/zero; `alert_emoji`: empty list/single signal/multiple signals)
+
+**Commit (when promoted):** `feat(notifications): dynamic P&L/alert status emojis`
 
 ---
 
