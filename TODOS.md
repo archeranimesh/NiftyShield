@@ -76,6 +76,21 @@ Full forensic log (SHAs, bug numbers, root-cause detail) moved to
 add new entries there going forward, or start a fresh dated section here if this file's
 Session Log grows large again.
 
+### 2026-08-07 Session Log
+- **RO-2** (`docs/plan/reporting-and-ops-fixes/tasks.md`): fixed `pre_market_brief.py` reporting
+  a fabricated multi-lakh notional loss for futures legs pre-market (no pre-open LTP, missing
+  price defaulted to 0). New `_compute_unrealized_with_fallback()` prices each leg individually;
+  a FUT leg with no live LTP falls back to `PaperStore.get_prev_leg_snapshot()`'s EOD unrealized
+  P&L instead of pricing at 0, and reports zero (not a fabricated loss) when no prior snapshot
+  exists either. Reviewed via `general-purpose` agent standing in for `@code-reviewer` (financial
+  logic gate) — no CRITICAL/ERROR; 3 WARNINGs deferred (no staleness floor on the snapshot
+  fallback, Telegram message doesn't flag stale-vs-live FUT P&L, reused helper imported by its
+  underscore-prefixed name rather than promoted to public). 5 new tests in
+  `tests/unit/scripts/test_pre_market_brief.py`; full offline suite green (2732 passed) after
+  sandbox dependency workaround (`pip install --target=.../mnt/outputs/pydeps`) — 2 remaining
+  failures pre-existing/environmental (live network call in `test_record_paper_trade_r3.py`,
+  unrelated import error in `test_council_fallback.py`), not caused by this change. SHA `7fa175b`.
+
 ### 2026-08-06 Session Log (execution-risk-hardening RH-5 docs close, story archived)
 - **RH-5 (`docs/plan/execution-risk-hardening/tasks.md`)** — docs-close verification only, no
   code change. Confirmed `TODOS.md` session-log entries exist for RH-1 through RH-4 (all below,

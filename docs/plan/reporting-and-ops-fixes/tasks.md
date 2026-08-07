@@ -38,7 +38,7 @@ design intent between them.
 
 ---
 
-- [ ] **RO-2** — Fix pre-market P&L for futures in `pre_market_brief.py`. Spawned from
+- [x] **RO-2** — Fix pre-market P&L for futures in `pre_market_brief.py`. Spawned from
   TODOS.md (detected 2026-06-29). During pre-market, futures have no LTP (no pre-open session),
   so `get_ltp` returns nothing and `prices.get(key, Decimal("0"))` defaults to 0 — a LONG future
   at ~24000 × 65 qty reports as a ~₹1.5M+ notional loss in unrealized P&L.
@@ -61,7 +61,7 @@ design intent between them.
   P&L instead of a zeroed-price notional loss; non-futures legs (where LTP is genuinely
   available pre-market) unaffected.
 
-  **Commit:** `fix(scripts): pre_market_brief — fall back to last snapshot P&L for futures with no pre-open LTP`
+  **Commit:** `fix(scripts): pre_market_brief — fall back to last snapshot P&L for futures with no pre-open LTP` | SHA: 7fa175b
 
 ---
 
