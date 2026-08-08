@@ -119,13 +119,31 @@ Session Log grows large again.
 ### 2026-08-08 Session Log (missing-message-workshop, queue item 2)
 - **Telegram Markdown migration** (item 29): ran `TODO.md` queue item 2 (generic strategy WARN
   event alert, `StrategyMonitor._route_event`, `src/strategy/monitor.py:366-367`) through
-  `message-format-workshop.md`. Confirmed kv-line format reusing ROLL-7's convention (bold
-  strategy label, `mdcode()`-wrapped `event_type`, escaped free-text description) — reference
-  `scratch/2026-08-08_strategy_event_alert_format.py`. Added **ROLL-8** to
-  `strategy-rollout/stories.md`/`tasks.md` (unblocked, same soft deps as other ROLL tasks);
-  `ROLL-5` docs-close blocked-by list updated to include it. No new FMT-1 rule surfaced. Ticked
-  `TODO.md` item 2. Docs+scratch only — `backbone/MD-1` still not shipped (confirmed fresh via
-  `search_graph("mdcode")`/`search_graph("escape_markdown")`, both zero). SHA `3865cb6`.
+  `message-format-workshop.md`. Initial kv-line draft (SHA `3865cb6`, reusing ROLL-7's
+  convention verbatim) was superseded same session by a v2 cause->effect compact
+  counter-proposal from Animesh: `⚠️ <EVENT TYPE humanized> - <strategy label>` headline +
+  optional `Leg:` line + one escaped description line. Two things from the counter-proposal's
+  first mockup were reviewed and NOT carried over, both flagged explicitly in the spec rather
+  than silently dropped: (1) decomposing `description` into separate `Metric:`/`Action:` fields
+  isn't representable from what `_route_event` actually has in scope (one pre-built prose
+  string, no separate numeric fields) without refactoring every `check_signals()` emitter to
+  pass structured payload data — real scope beyond this task; (2) tiering the alert emoji
+  per event_type (`🚨` vs `⚠️`) would misrepresent severity, since `_route_event`'s WARN branch
+  is the only severity that ever reaches this code path (ACTION events auto-execute or route to
+  `send_approval_request`, INFO just logs) — a fixed `⚠️` is the accurate signal, not a
+  compromise, and reuses `FMT-1b`'s already-settled objection to selecting emoji by
+  string-matching the signal code. What WAS free and used: `event_type.replace("_", " ")`
+  (mechanical reformat of the real identifier, not an invented label) and a `Leg:` line sourced
+  from `event.payload.get("leg_role", "")`, which `_route_event` already reads for its WARN
+  dedup key — both real, no upstream refactor needed. Kept ROLL-7's fuller-form
+  `STRATEGY_LABELS`/`LEG_ROLE_LABELS` tables (not ROLL-6's abbreviated table-column form),
+  confirmed explicitly. Reference `scratch/2026-08-08_strategy_event_alert_format.py` (v2).
+  `strategy-rollout/stories.md`'s ROLL-8 section rewritten with the v2 structure, the
+  v1->v2 rationale, and revised tests (dropped the `mdcode()`-escaping test since v1's
+  `Event:` line no longer exists; added headline-humanization and fixed-severity-emoji
+  regression tests). `TODO.md` item 2's SHA updated to the v2 write-back. No new FMT-1 rule
+  surfaced. Docs+scratch only — `backbone/MD-1` still not shipped (confirmed fresh via
+  `search_graph("mdcode")`/`search_graph("escape_markdown")`, both zero). SHA `ec008ba`.
 
 ### 2026-08-07 Session Log
 - **RO-2** (`docs/archive/plan/reporting-and-ops-fixes/tasks.md`): fixed `pre_market_brief.py` reporting
