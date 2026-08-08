@@ -34,7 +34,7 @@
       table, no multi-source data. No escaping audit (MD-*) or format task (ROLL-*) names this
       file. Format confirmed 2026-08-08 (kv-line shape, not the originally-drafted single
       packed line) and written back as `strategy-rollout/` **ROLL-7** — see
-      `scratch/2026-08-08_reentry_notice_format.py`. | SHA: —
+      `scratch/2026-08-08_reentry_notice_format.py`. | SHA: e00326d
 
 - [ ] **2. Strategy event alerts** — `src/strategy/monitor.py:366-367`
       `text = f"[{strategy.strategy_name}] {event.event_type}: {event.description}"` →
