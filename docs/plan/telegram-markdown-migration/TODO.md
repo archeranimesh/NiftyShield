@@ -36,11 +36,13 @@
       packed line) and written back as `strategy-rollout/` **ROLL-7** — see
       `scratch/2026-08-08_reentry_notice_format.py`. | SHA: e00326d
 
-- [ ] **2. Strategy event alerts** — `src/strategy/monitor.py:366-367`
+- [x] **2. Strategy event alerts** — `src/strategy/monitor.py:366-367`
       `text = f"[{strategy.strategy_name}] {event.event_type}: {event.description}"` →
       `self._notifier.send_plain_message(text)`. One f-string line, generic across all monitored
       event types. Distinct from `send_approval_request` (line 410, same file) which ROLL-4
-      covers — this is a separate code path in the same class. | SHA: —
+      covers — this is a separate code path in the same class. Format confirmed 2026-08-08
+      (kv-line shape, reusing ROLL-7's convention) and written back as `strategy-rollout/`
+      **ROLL-8** — see `scratch/2026-08-08_strategy_event_alert_format.py`. | SHA: 3865cb6
 
 - [ ] **3. Three-track roll notification** —
       `scripts/strategies/three_track/paper_3track_roll.py:309-313`

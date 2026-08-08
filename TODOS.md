@@ -116,6 +116,17 @@ Full forensic log (SHAs, bug numbers, root-cause detail) moved to
 add new entries there going forward, or start a fresh dated section here if this file's
 Session Log grows large again.
 
+### 2026-08-08 Session Log (missing-message-workshop, queue item 2)
+- **Telegram Markdown migration** (item 29): ran `TODO.md` queue item 2 (generic strategy WARN
+  event alert, `StrategyMonitor._route_event`, `src/strategy/monitor.py:366-367`) through
+  `message-format-workshop.md`. Confirmed kv-line format reusing ROLL-7's convention (bold
+  strategy label, `mdcode()`-wrapped `event_type`, escaped free-text description) — reference
+  `scratch/2026-08-08_strategy_event_alert_format.py`. Added **ROLL-8** to
+  `strategy-rollout/stories.md`/`tasks.md` (unblocked, same soft deps as other ROLL tasks);
+  `ROLL-5` docs-close blocked-by list updated to include it. No new FMT-1 rule surfaced. Ticked
+  `TODO.md` item 2. Docs+scratch only — `backbone/MD-1` still not shipped (confirmed fresh via
+  `search_graph("mdcode")`/`search_graph("escape_markdown")`, both zero). SHA `3865cb6`.
+
 ### 2026-08-07 Session Log
 - **RO-2** (`docs/archive/plan/reporting-and-ops-fixes/tasks.md`): fixed `pre_market_brief.py` reporting
   a fabricated multi-lakh notional loss for futures legs pre-market (no pre-open LTP, missing
