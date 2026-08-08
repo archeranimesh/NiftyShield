@@ -480,83 +480,169 @@ task covers both the transport switch (HTML → `TelegramNotifier.send()` + Mark
 format migration in one pass, since the message was never wired through the shared notifier to
 begin with.
 
-**Confirmed message structure (2026-08-08, `message-format-workshop.md` session) — reference
-implementation `scratch/2026-08-08_eod_paper_summary_format.py`:**
+**Confirmed message structure — FINAL v2 (2026-08-08, `message-format-workshop.md` session,
+iterated live on-device) — reference implementation
+`scratch/2026-08-08_eod_paper_summary_format.py`:**
 
 ```
-📝 NiftyShield Paper EOD | 07 Aug 2026 | #EOD_SUMMARY
-Activities: 0
-Total P&L : +₹64,615
-📊 Strategy Performance
+📝 NiftyShield Paper EOD | 07 Aug 2026
+Activities: 0 | Net P&L: +₹65,404 ✅
 ```text
-Strategy   |      Flt |      Bkd |    Total
------------|----------|----------|---------
-CSP V1     |        0 |  +11,024 |  +11,024
-IC V1 Leap |   +4,079 |        0 |   +4,079
-IC V1 Mth  |     +359 |   +3,486 |   +3,846
-IC V1 Wkly |        0 |   +2,759 |   +2,759
-IC V2 Mth  |     +587 |   -1,756 |   -1,169
-Nifty Fut  |     -150 |        0 |     -150
-Nifty Proxy|   -2,971 |   -3,443 |   -6,414
-Nifty Spot |  +50,640 |        0 |  +50,640
+STRATEGY       |      FLT |      BKD |    TOTAL
+===============|==========|==========|=========
+> TRACK TOTAL  |  +47,520 |   -3,443 |  +44,077
+ Fut           |     -150 |        - |     -150
+ Proxy         |   -2,971 |   -3,443 |   -6,414
+ Spot          |  +50,640 |        - |  +50,640
+---------------|----------|----------|---------
+> IC TOTAL     |   +5,144 |   +4,490 |   +9,634
+ V1 Wkly       |        - |   +2,759 |   +2,759
+ V1 Mth        |     +359 |   +3,486 |   +3,846
+ V1 Leap       |   +4,079 |        - |   +4,079
+ V1 Yrly       |     +120 |        - |     +120
+ V2 Mth        |     +587 |   -1,756 |   -1,169
+---------------|----------|----------|---------
+> OVERLAY TOTAL|     +115 |     +555 |     +669
+ Collar        |     +210 |      -86 |     +125
+ CC            |        - |     +640 |     +640
+ PP            |      -95 |        - |      -95
+---------------|----------|----------|---------
+> CSP TOTAL    |        - |  +11,024 |  +11,024
+ V1            |        - |  +11,024 |  +11,024
 ```
+#EOD_SUMMARY
 ```
 
 (Escaping omitted for readability, as in `ROLL-1`'s block — see the scratch script for the
-actual MarkdownV2 source. The header's `#EOD_SUMMARY` hashtag is a whole-message tag, not
-per-strategy — this message aggregates all 8 strategies in one send, unlike the single-strategy
-IC EOD Audit where the tag identifies which one variant the message is about, so a per-strategy
-tag list was considered and rejected in favor of one message-level tag. On-device hashtag
-tappability for this escaped-`#`/`_` pattern was already confirmed working in `FMT-1c` — not
-re-verified from scratch here, same mechanism.)
+actual MarkdownV2 source. `#EOD_SUMMARY` sits on its own line AFTER the closing fence, not in
+the header — MarkdownV2 doesn't parse entities, including Telegram's auto-hashtag-detection,
+inside a fenced code block, so it could never have lived inside the table. Still a whole-message
+tag, not per-strategy — this message aggregates 12 strategies in one send, unlike the
+single-strategy IC EOD Audit where the tag identifies which one variant the message is about.
+On-device hashtag tappability for this escaped-`#`/`_` pattern was already confirmed working in
+`FMT-1c` — not re-verified from scratch here, same mechanism.)
+
+**v1 → v2 revision summary (v1 was an 8-row flat list, superseded — see the scratch script's
+module docstring "Iteration history" for the full blow-by-blow, not reproduced here):**
+1. Grew from 8 to 12 strategies, grouped into 4 buckets (confirmed strategy_id → bucket mapping
+   below).
+2. Each bucket's subtotal row renders ABOVE its member rows (`"> BUCKET TOTAL"`), not below —
+   see `FMT-1d`'s "Bucket grouping + totals-first" note for the confirmed rationale and the
+   explicit caveat that this is a scan-speed trade-off specific to this message, not a pattern
+   to assume elsewhere.
+3. Member row labels dropped their redundant bucket-name prefix (`V1 Leap` not `IC V1 Leap`,
+   `Fut` not `Nifty Fut`, `V1` not `CSP V1`) — the bucket's own total row already establishes
+   context.
+4. Zero cells render as `-`, not `0` (`FMT-1d`).
+5. `Activities` and `Net P&L` merged onto one line with a `pnl_emoji()` indicator (`FMT-1b`'s
+   existing spec, reused not reinvented) — the `📊 Strategy Performance` section label was
+   dropped as redundant.
+6. Column headers went ALL CAPS (`STRATEGY`/`FLT`/`BKD`/`TOTAL`), and the table gained a double
+   rule (`====`) under the header distinct from the single rule (`----`) between buckets.
+7. The bucket-total prefix is plain ASCII `>`, not `▶` — see `FMT-1e` (new) for why: Telegram
+   renders `▶` via its emoji-presentation glyph even inside a fence, breaking alignment.
+
+**Confirmed strategy_id → bucket mapping (verified via `src/paper/constants.py` and
+`src/strategy/ic_expiry_config_v2.py`/`ic_nifty_v2.py`, not assumed):**
+
+| Bucket | strategy_id | Display label |
+|---|---|---|
+| Track | `paper_nifty_futures` | `Fut` |
+| Track | `paper_nifty_proxy` | `Proxy` |
+| Track | `paper_nifty_spot` | `Spot` |
+| IC | `paper_ic_nifty_v1_weekly` | `V1 Wkly` |
+| IC | `paper_ic_nifty_v1_monthly` | `V1 Mth` |
+| IC | `paper_ic_nifty_v1_leaps` | `V1 Leap` |
+| IC | `paper_ic_nifty_v1_yearly` | `V1 Yrly` |
+| IC | `paper_ic_nifty_v2_monthly` | `V2 Mth` |
+| Overlay | `paper_collar_v1` | `Collar` |
+| Overlay | `paper_covered_call_v1` | `CC` |
+| Overlay | `paper_protective_put_v1` | `PP` |
+| CSP | `paper_csp_nifty_v1` | `V1` |
+
+**Bkd sourcing — confirmed 2026-08-08, mirrors `ROLL-2`'s corrected finding:** `Bkd` (realized
+P&L) must be **since-inception, survives close/reopen cycles** — source from
+`get_strategy_realized_pnl(store, strategy_name)` (`src/paper/tracker.py`, sums from the
+append-only `paper_trades` ledger), **not** `paper_nav_snapshots.realized_pnl`'s latest row,
+which resets to 0 on a full open→close→reopen cycle (confirmed live for `paper_nifty_futures` on
+2026-08-05, per `CONTEXT.md` SNAP-1). Apply uniformly across all 12 strategies, not just the
+Track bucket (which is the one most likely to have actually cycled). `Flt` stays a point-in-time
+mark-to-market read from `paper_nav_snapshots.unrealized_pnl`'s latest row — no change there.
 
 **Design decisions locked in this session, don't re-litigate:**
-1. Display names are human-readable, not the raw `strategy_id` (`IC V1 Leap`, not
-   `paper_ic_nifty_v1_leaps` or even `ic_nifty_v1_leaps`) — see the full mapping in the scratch
-   script's `_DISPLAY_NAME` dict. `Mth` is the confirmed abbreviation for "monthly."
-2. Money in the table uses the new `FMT-1d` integer-table exception, not `format_money`'s 2dp
-   default. `₹` appears once, on the Total P&L line only.
-3. Column headers are `Flt`/`Bkd`, reusing `ROLL-2`'s vocabulary (see `FMT-1d`'s terminology
-   note) — not `Unrealized`/`Realized` or any other pair.
-4. Table columns are fixed-width via `max(len(x) for x in ...)`, never a hand-counted literal —
-   same discipline as every other table in this epic (`build_leg_table`, `ROLL-2`'s
-   `build_compare_table`).
+1. Display names are human-readable, bucket-prefix-free (see mapping table above). `Mth` is the
+   confirmed abbreviation for "monthly."
+2. Money in the table uses `FMT-1d`'s integer-table exception, not `format_money`'s 2dp default.
+   `₹` appears once, on the `Net P&L` line only. Zero renders as `-`.
+3. Column headers are `FLT`/`BKD` (all caps), reusing `ROLL-2`'s `Flt`/`Bkd` vocabulary — not
+   `Unrealized`/`Realized` or any other pair.
+4. `Bkd` sources from `get_strategy_realized_pnl()` (since-inception, cycle-safe) — see the
+   sourcing note above. This is the single most important correctness point in this task; a
+   naive read of the snapshot column will silently undercount cyclical strategies.
+5. Table columns are fixed-width via `max(len(x) for x in ...)`, never a hand-counted literal —
+   same discipline as every other table in this epic.
+6. Bucket subtotal rows use `>` (plain ASCII), never `▶` or any other symbol not explicitly
+   confirmed safe inside a fence — see `FMT-1e`.
+7. A `strategy_id` present in the query result but not mapped to any bucket must raise loudly at
+   message-build time, not silently drop the row — new strategies added to the DB need an
+   explicit bucket assignment before they'll show up here.
 
 **Files to change:**
 - `scripts/eod_summary.py` — replace the raw HTML `<b>...</b>` message construction (currently
   `main()`, message-building starts ~line 79) with a call into a new
   `build_eod_summary_message()`, sent via `TelegramGateway`/`TelegramNotifier.send()` with
-  `parse_mode=MarkdownV2` instead of the current direct HTML send
+  `parse_mode=MarkdownV2` instead of the current direct HTML send. Must call
+  `get_strategy_realized_pnl()` per strategy for `Bkd`, not read `paper_nav_snapshots` directly
+  for that field (see Bkd sourcing note above).
 - `src/notifications/formatting.py` — promote the scratch script's `build_strategy_table()` (the
-  `FMT-1d` table builder) and `_fmt_table_money()` here, alongside the other formatting-rules
-  helpers, once `formatting-rules/` FMT-2/FMT-3 have landed
+  `FMT-1d`/`FMT-1e` bucketed, totals-first table builder), `_fmt_table_money()`, and the
+  `_DISPLAY_NAME`/`_BUCKETS` mapping (or an equivalent structure — judgment call for the
+  implementer whether this belongs in `formatting.py` or a `scripts/eod_summary.py`-local
+  constant, since the bucket mapping is specific to this one message, unlike `format_money`/
+  `pnl_emoji` which are genuinely reusable) once `formatting-rules/` FMT-2/FMT-3 have landed
 - `tests/unit/scripts/test_eod_summary.py` (new, or extend existing test file if one already
   covers `eod_summary.py` — check via `search_graph` before assuming there's nothing there)
 
 **Before any code:**
 ```
-get_code_snippet("eod_summary")           # confirm current main()/message-building implementation
-search_graph("TelegramGateway")           # confirm the send method signature this should call instead of raw HTML
-search_graph("build_leg_table")           # confirm FMT-3's promoted table-builder pattern to mirror
+get_code_snippet("eod_summary")            # confirm current main()/message-building implementation
+search_graph("TelegramGateway")            # confirm the send method signature this should call instead of raw HTML
+search_graph("build_leg_table")            # confirm FMT-3's promoted table-builder pattern to mirror
+search_graph("get_strategy_realized_pnl")  # confirm current signature before wiring Bkd sourcing
 ```
 
 **Tests:**
 - `test_build_eod_summary_message_matches_confirmed_format` — golden-output test against the
-  confirmed structure above (or a close variant using fixture Decimal values), asserting exact
-  table alignment and the `Flt`/`Bkd`/`Total` header
-- `test_eod_summary_table_money_no_decimals` — regression test for the FMT-1d integer-table
+  confirmed v2 structure above (or a close variant using fixture Decimal values), asserting
+  exact table alignment, bucket ordering (Track/IC/Overlay/CSP), and the `FLT`/`BKD`/`TOTAL`
+  header
+- `test_eod_summary_bucket_subtotal_is_sum_of_members` — each bucket's `> BUCKET TOTAL` row must
+  equal the sum of its member rows' `Flt`/`Bkd` independently — a test that only checks the
+  grand `Net P&L` total would pass even if a bucket subtotal silently drifted
+- `test_eod_summary_bkd_uses_get_strategy_realized_pnl` — mocks `get_strategy_realized_pnl` and
+  asserts its return value (not `paper_nav_snapshots.realized_pnl`'s raw latest row) appears in
+  the report; regression test for the corrected sourcing above, same pattern `ROLL-2` needed —
+  a test that only checked "some number appears" would pass even if a future edit silently
+  reverted to the cycle-resetting source
+- `test_eod_summary_unmapped_strategy_raises` — a `strategy_id` not present in the bucket
+  mapping must raise, not silently vanish from the message
+- `test_eod_summary_table_money_no_decimals` — regression test for the `FMT-1d` integer-table
   exception; a fixture value with cents (e.g. `Decimal("359.12")`) must render as `+359`, not
   `+359.12` or `+359.1`
-- `test_eod_summary_zero_value_renders_bare` — `Decimal("0.00")` renders as `0`, not `+0` or `-0`
+- `test_eod_summary_zero_value_renders_dash` — `Decimal("0.00")` renders as `-`, not `0`/`+0`/`-0`
 - `test_eod_summary_hashtag_survives_escaping` — same regression-test pattern as `ROLL-1`: the
   literal `#EOD_SUMMARY` string, once escaped and sent, must round-trip correctly (this project's
   test suite can assert on the escaped source string containing `\#EOD\_SUMMARY`, matching how
   `MD-1`'s existing escaping tests are structured — check that pattern via `search_graph` before
   writing this one)
-- `test_eod_summary_total_pnl_sums_all_strategies` — `Total P&L` line equals the sum of every
-  row's `Flt + Bkd`, not a separately-fetched aggregate that could silently drift from the table
+- `test_eod_summary_net_pnl_sums_all_buckets` — `Net P&L` line equals the sum of every bucket
+  subtotal (which in turn equals the sum of every row), not a separately-fetched aggregate that
+  could silently drift from the table
 
-**Commit:** `feat(scripts): migrate EOD paper summary to MarkdownV2 + Flt/Bkd table`
+**Financial-logic commit note:** the `Bkd` sourcing change (since-inception vs. cycle-resetting)
+is P&L-adjacent — real `@code-reviewer` against `git diff HEAD` required per root `CLAUDE.md`.
+
+**Commit:** `feat(scripts): migrate EOD paper summary to MarkdownV2 + bucketed Flt/Bkd table`
 
 ---
 

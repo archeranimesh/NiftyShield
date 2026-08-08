@@ -35,7 +35,7 @@ not invented fresh; confirm against that script's final version):
 
 ---
 
-## FMT-1d — Money — Multi-Strategy Summary Table Exception (confirmed 2026-08-08)
+## FMT-1d — Money — Multi-Strategy Summary Table Exception (confirmed 2026-08-08, revised v2)
 
 **Not in the original FMT-1 table.** Surfaced during the EOD Paper Summary workshop session
 (`message-format-workshop.md`, `scratch/2026-08-08_eod_paper_summary_format.py`) — the same
@@ -44,7 +44,8 @@ applied to money instead of decimal precision.
 
 | Context | Format | Example | Rationale |
 |---|---|---|---|
-| Money inside a **multi-strategy summary table** (8+ rows, 3+ numeric columns) | Signed integer, comma thousands sep, **no `₹` prefix per cell** | `+11,024`, `-1,169`, `0` (bare, no sign) | `format_money`'s 2dp + `₹`-per-cell default does not fit 8 strategy rows × 3 numeric columns in a fixed-width monospace block under Telegram's mobile line-wrap limit. `₹` appears exactly once, on the message's Total P&L summary line, not per table cell. |
+| Money inside a **multi-strategy summary table** (8+ rows, 3+ numeric columns) | Signed integer, comma thousands sep, **no `₹` prefix per cell** | `+11,024`, `-1,169` | `format_money`'s 2dp + `₹`-per-cell default does not fit 12 strategy rows × 3 numeric columns in a fixed-width monospace block under Telegram's mobile line-wrap limit. `₹` appears exactly once, on the message's Net P&L summary line, not per table cell. |
+| Zero values inside the same table | Bare `-` (accounting-dash convention) | `-` | **Revised 2026-08-08 (v2)** — v1 rendered zero as bare `0`; changed to `-` to reduce visual noise from strategies/legs that haven't booked or marked anything yet. Sign is otherwise always shown for non-zero values. |
 
 This is a table-specific override, not a general relaxation of the Decimal/2dp money rule —
 `format_money`'s 2dp default with `₹` prefix still applies everywhere else (kv tables, prose
@@ -54,14 +55,56 @@ follows for its 1dp exception — never call `format_money` for these cells and 
 output.
 
 **Terminology note (also confirmed 2026-08-08):** column headers for unrealized/realized P&L in
-this table use `Flt`/`Bkd` (floating / booked), reusing `ROLL-2`'s "Flt P&L (M)" / "Bkd P&L (I)"
-vocabulary rather than inventing new abbreviations for the same underlying values. Any future
-message showing unrealized/realized P&L side by side should default to `Flt`/`Bkd` for
-consistency, not re-derive its own short forms.
+this table use `Flt`/`Bkd` (floating / booked, rendered `FLT`/`BKD` in v2's all-caps table
+header), reusing `ROLL-2`'s "Flt P&L (M)" / "Bkd P&L (I)" vocabulary rather than inventing new
+abbreviations for the same underlying values. Any future message showing unrealized/realized
+P&L side by side should default to `Flt`/`Bkd` for consistency, not re-derive its own short
+forms.
+
+**Bucket grouping + totals-first layout (added 2026-08-08, v2 — see `ROLL-6` for the full
+confirmed message):** when a multi-strategy table's rows fall into natural groups (this
+message's Track/IC/Overlay/CSP), each group's subtotal row renders **above** its member rows,
+prefixed `"> BUCKET NAME TOTAL"` (all caps, never abbreviated to "TOT"). This is a scan-speed
+trade-off — optimizes for "which bucket needs attention" at a glance, at the cost of the more
+familiar components-then-sum order — confirmed intentional for *this* message specifically (a
+daily glance, not a reconciliation document); do not assume it generalizes to other tables in
+this epic without asking. Member row labels must not repeat the bucket name (e.g. `V1 Wkly` not
+`IC V1 Wkly` inside the `IC` bucket) — the bucket's own total row already establishes context,
+and it doubles as the section label, so no separate `-- BUCKET --` header row is needed. A
+double rule (`====`) separates the table header from the first bucket; a single rule (`----`)
+separates buckets from each other.
 
 **Commit (when promoted):** fold into whichever commit promotes
 `scratch/2026-08-08_eod_paper_summary_format.py`'s table builder into
 `src/notifications/formatting.py` (see `strategy-rollout/` ROLL-6).
+
+---
+
+## FMT-1e — Monospace-Table Safety: Emoji-Presentation Glyphs, Not Just Emoji (confirmed 2026-08-08)
+
+**Extends FMT-3's existing emoji-breaks-alignment warning** (`build_leg_table`'s `[S]`/`[B]`
+plain-text badges) — that warning was scoped to literal emoji characters. On-device testing
+during the EOD Paper Summary workshop (`scratch/2026-08-08_eod_paper_summary_format.py`)
+surfaced a wider version of the same risk: **`▶` (U+25B6 BLACK RIGHT-POINTING TRIANGLE) is not
+an emoji character, but Telegram renders it using its emoji-presentation glyph** (an
+automatically-appended variation selector) even inside a fenced code block — double-width,
+breaks column alignment identically to a real emoji.
+
+**Rule:** inside any fenced (`` ``` ``) monospace table, only use plain ASCII characters for
+structural markers (bucket-total prefixes, separators, badges). Do not assume a symbol is safe
+just because it isn't conventionally thought of as "an emoji" — many Unicode symbols (arrows,
+geometric shapes, dingbats) have an emoji-presentation variant that some clients, including
+Telegram, render by default. If a symbol's safety hasn't been confirmed on-device, don't use it
+inside a fence; verify first (this is exactly how the `▶` -> `>` fix was found — assumed safe,
+shipped to a scratch script, confirmed broken on-device, corrected before promotion to real code).
+
+**Files to change (when promoted):** none directly — this is a documentation-only rule to check
+against when writing any future fenced-table builder in `src/notifications/formatting.py`
+(`build_leg_table`, `build_compare_table`, the `ROLL-6` bucket-table builder, and any new one).
+
+**Commit (when promoted):** fold into whichever commit adds this rule as a code comment/docstring
+note on the relevant table-builder function(s), or a standalone `docs(notifications): document
+FMT-1e monospace-table emoji-presentation risk` if not otherwise touching that code.
 
 ---
 

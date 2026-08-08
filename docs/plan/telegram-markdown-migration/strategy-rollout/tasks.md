@@ -31,8 +31,12 @@
       `telegram-approval-auth-fix` first | Blocked by: ROLL-3
 - [ ] **ROLL-6** — Migrate EOD Paper Summary (`scripts/eod_summary.py`) to
       `TelegramNotifier.send()` + MarkdownV2 — not in the epic's original confirmed-callers
-      list (currently sends via raw HTML, missed by `backbone/`'s audit); format confirmed
-      2026-08-08 (`Flt`/`Bkd` table, `FMT-1d` integer-money exception, `#EOD_SUMMARY` header
-      tag) | Blocked by: `backbone/` + `formatting-rules/` complete (same soft deps as other
-      ROLL tasks)
+      list (currently sends via raw HTML, missed by `backbone/`'s audit); v2 format confirmed
+      2026-08-08 on-device (4 buckets — Track/IC/Overlay/CSP, 12 strategies total —
+      totals-first subtotal rows, `FMT-1d` integer-money exception + zero-as-`-`, `FMT-1e`
+      ASCII-only-inside-fence rule, `Bkd` sourced from `get_strategy_realized_pnl()`
+      since-inception not the resettable snapshot column, `#EOD_SUMMARY` tag after the fence)
+      | Blocked by: `backbone/` + `formatting-rules/` complete (same soft deps as other ROLL
+      tasks) — financial-logic commit note: `Bkd` sourcing is P&L-adjacent, real
+      `@code-reviewer` required
 - [ ] **ROLL-5** — Docs close | Blocked by: ROLL-4, ROLL-6

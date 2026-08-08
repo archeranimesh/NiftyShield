@@ -62,7 +62,29 @@ per-cell, `₹` only on the Total P&L line) — recorded as new **FMT-1d** in
 `formatting-rules/stories.md`. New **ROLL-6** added to `strategy-rollout/stories.md`/`tasks.md`
 (blocked by `backbone/`+`formatting-rules/`, same soft-dep pattern as other ROLL tasks); `ROLL-5`
 Docs Close now also blocked by `ROLL-6`. Still docs+scratch only — no `src/`/`scripts/` code
-touched this session.
+touched this session. **Same-day follow-up (2026-08-08, EOD Paper Summary v2 — final):**
+`scratch/2026-08-08_eod_paper_summary_format.py` revised through several more rounds and
+confirmed final on-device. Grew from 8 to 12 strategies, grouped into 4 buckets (Track: Fut/
+Proxy/Spot; IC: 5 variants; Overlay: Collar/CC/PP; CSP: 1) — real strategy_id/bucket mapping
+confirmed via `src/paper/constants.py` and `src/strategy/ic_expiry_config_v2.py`, not assumed.
+Each bucket's subtotal now renders ABOVE its member rows (`"> BUCKET TOTAL"`) rather than below
+— a deliberate scan-speed trade-off for this specific daily-glance message, confirmed with
+Animesh, not a pattern to assume elsewhere in the epic. Member row labels dropped their
+redundant bucket-name prefix once the bucket's own total row started carrying that context
+(`V1 Leap` not `IC V1 Leap`). Caught and fixed a real on-device bug: `▶` renders via Telegram's
+emoji-presentation glyph even inside a fenced code block, breaking column alignment — same
+failure class `FMT-3` already warns about for literal emoji, just wider than previously
+understood; recorded as new **FMT-1e**. `FMT-1d` revised to cover zero-as-`-` (was `0`) and the
+bucket/totals-first table convention. Clarified and locked in `Bkd`'s sourcing: must be
+since-inception via `get_strategy_realized_pnl()` (survives close/reopen cycles), not
+`paper_nav_snapshots.realized_pnl`'s raw latest row (resets on a full cycle) — the exact same
+correction `ROLL-2` needed, now applied here too and documented in the `StrategyRow` dataclass
+docstring so it can't be missed when `ROLL-6` is actually implemented. `ROLL-6`'s full spec in
+`strategy-rollout/stories.md` rewritten to match (confirmed strategy_id→bucket mapping table,
+Bkd sourcing note, updated test list including bucket-subtotal and Bkd-sourcing regression
+tests, financial-logic commit note since `Bkd` sourcing is P&L-adjacent). `formatting-rules/`
+`tasks.md` was missing `FMT-1d`/`FMT-1e` entirely — backfilled, same omission pattern as the
+earlier `FMT-1b`/`FMT-1c` backfill. Still docs+scratch only.
 
 **Before build queue starts on paper-backbone-dependent stories** — verify prerequisites:
 ```bash
