@@ -771,6 +771,96 @@ search_graph("_DISPLAY_NAME")                       # ROLL-6's table, if it has 
 
 ---
 
+## ROLL-8 — Generic Strategy WARN Event Alert
+
+**Not in the epic's original confirmed-callers list** — added 2026-08-08 via
+`missing-message-workshop-prompt.md`/`message-format-workshop.md` (queue item 2,
+`docs/plan/telegram-markdown-migration/TODO.md`). One f-string line, generic across every
+monitored strategy/event type — not IC-specific like `ROLL-1`/`ROLL-2`, and distinct from the
+per-strategy close/roll notifications `ROLL-3` covers.
+
+**Confirmed real source:** `StrategyMonitor._route_event`'s WARN branch
+(`src/strategy/monitor.py:366-367`), the shared dispatch path every `PaperStrategy.check_signals()`
+implementation's WARN-severity `SignalEvent`s route through (already deduped OFF->ON by
+`warn_signal_state`/`is_warn_active` before this text is built — see `_route_event`'s docstring).
+Distinct from `send_approval_request` (line 410, same file, `ROLL-4`'s ACTION-severity path):
+
+```python
+text = f"[{strategy.strategy_name}] {event.event_type}: {event.description}"
+await self._notifier.send_plain_message(text)
+```
+
+**Confirmed message structure (2026-08-08, `message-format-workshop.md` session — "kv-line,
+ROLL-7 style" option selected by Animesh, over a single-bold-line minimal-change option and a
+raw-strategy-id-no-label-table option)** — reference implementation
+`scratch/2026-08-08_strategy_event_alert_format.py`:
+
+```
+⚠️ *IC V1 Monthly*
+Event: `DELTA_BREACH`
+short put delta \-0\.42 exceeds threshold \-0\.40 \(review roll candidates\)\.
+```
+
+(Backslash escaping shown as actual MarkdownV2 source, as in `ROLL-1`/`ROLL-2`/`ROLL-7`'s
+blocks.) Reuses `ROLL-7`'s epic-wide kv-line convention rather than inventing a new shape for
+this message specifically — bold strategy-label headline, `mdcode()`-wrapped identifier
+(`event_type`, treated as an identifier/signal code, same as `ROLL-1`'s `strategy_id` and
+`ROLL-7`'s `script_hint`), then a final `escape_markdown()`'d free-text line (`description` is
+genuine prose from whichever `ExitSignalEngine`/strategy method emitted the event, not an
+identifier — matches ROLL-7's `Reason:` line treatment).
+
+**Reuses ROLL-7's `STRATEGY_LABELS` table (same 12 strategy_ids, fuller-form human labels) —
+does not redefine it independently.** The reference scratch script currently duplicates the
+dict inline (neither script is real `src/` code yet), same flagged-not-resolved duplication
+point ROLL-7's own docstring already raises: once either `ROLL-7` or this task ships for real,
+the surviving one should promote a single shared `STRATEGY_LABELS` into
+`src/notifications/formatting.py` and the other should import it, not maintain a second copy.
+Whichever of `ROLL-7`/`ROLL-8` lands first in real code should do that promotion as part of its
+own commit, so the second implementation only has to import.
+
+**No `Leg:` line** — unlike `ROLL-7`, `SignalEvent` here does not always carry a `leg_role`
+(`_route_event`'s WARN branch reads `event.payload.get("leg_role", "")`, i.e. optional/empty
+for some event types) — do not force a `Leg:` line that would print blank for those events.
+If `event.payload["leg_role"]` is present and non-empty at implementation time, add it as an
+optional third kv line between `Event:` and the description (`Leg: <label>`, same
+`LEG_ROLE_LABELS` dict ROLL-7 defines) — but only when present, never a blank placeholder line.
+
+**No new FMT-1 formatting rule surfaced this session** — this message reuses ROLL-7's existing
+label/`mdcode()`/`escape_markdown()` conventions verbatim, no new parameter type or table shape.
+
+**Files to change:**
+- `src/strategy/monitor.py` — `StrategyMonitor._route_event`'s WARN branch (text-building only;
+  the dedup/`warn_signal_state` logic above it is unrelated and untouched)
+- New: `STRATEGY_LABELS`/(optional `LEG_ROLE_LABELS`) lookup — land in
+  `src/notifications/formatting.py` if that module (or `ROLL-7`'s label table) has shipped by
+  the time this task starts; otherwise colocate locally and flag for the same promotion
+  `ROLL-7` already flags
+- Matching test file: `tests/unit/strategy/test_strategy_monitor.py` (existing file — extend,
+  not new, per `search_graph` before assuming)
+
+**Before any code:**
+```
+get_code_snippet("StrategyMonitor._route_event")   # confirm current WARN-branch text fresh
+search_graph("STRATEGY_LABELS")                      # confirm whether ROLL-7's table has landed
+```
+
+**Tests:**
+- One test per scenario in the reference script (`delta_warn`, `proxy_delta_warn`,
+  `roll_base_first_warn`) asserting the exact 3-line kv structure and correct escaping
+- `test_event_alert_escapes_underscore_event_type` — an `event_type`/`strategy_name` fixture
+  containing an underscore (`DELTA_WARN`, the exact bug that started this epic) survives
+  label-lookup + `mdcode()`/`escape_markdown()` correctly — the regression test every message in
+  this epic carries forward
+- `test_event_alert_unmapped_strategy_raises` — a `strategy_name` not present in
+  `STRATEGY_LABELS` raises loudly (`ValueError`), not silently falls back to the raw id or drops
+  the notification — same discipline `ROLL-6`/`ROLL-7` both require
+- `test_event_alert_omits_leg_line_when_absent` — `event.payload` with no `leg_role` produces no
+  blank `Leg:` line, proving the optional-line rule above is actually honored
+
+**Commit:** `feat(strategy): migrate generic WARN event alert to Markdown kv-line format`
+
+---
+
 ## ROLL-5 — Docs Close
 
 **Files to change (targeted `Edit`, never `Write`):**

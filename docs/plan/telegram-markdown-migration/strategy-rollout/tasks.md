@@ -47,4 +47,10 @@
       new `STRATEGY_LABELS`/`LEG_ROLE_LABELS` display mappings — see stories.md for why neither
       is a drop-in escaping change | Blocked by: `backbone/` + `formatting-rules/` complete
       (same soft deps as other ROLL tasks)
-- [ ] **ROLL-5** — Docs close | Blocked by: ROLL-4, ROLL-6, ROLL-7
+- [ ] **ROLL-8** — Migrate generic strategy WARN event alert
+      (`src/strategy/monitor.py::StrategyMonitor._route_event` WARN branch) to a kv-line
+      MarkdownV2 format; not in the epic's original confirmed-callers list (surfaced via
+      `missing-message-workshop-prompt.md`, TODO.md item 2); reuses `ROLL-7`'s `STRATEGY_LABELS`
+      table and kv-line convention, no new formatting rule | Blocked by: `backbone/` +
+      `formatting-rules/` complete (same soft deps as other ROLL tasks)
+- [ ] **ROLL-5** — Docs close | Blocked by: ROLL-4, ROLL-6, ROLL-7, ROLL-8
