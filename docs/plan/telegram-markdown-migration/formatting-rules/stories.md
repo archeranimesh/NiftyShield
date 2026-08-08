@@ -35,6 +35,36 @@ not invented fresh; confirm against that script's final version):
 
 ---
 
+## FMT-1d — Money — Multi-Strategy Summary Table Exception (confirmed 2026-08-08)
+
+**Not in the original FMT-1 table.** Surfaced during the EOD Paper Summary workshop session
+(`message-format-workshop.md`, `scratch/2026-08-08_eod_paper_summary_format.py`) — the same
+class of override `build_leg_table`'s 1dp exception already established (FMT-1's LTP/Entry row),
+applied to money instead of decimal precision.
+
+| Context | Format | Example | Rationale |
+|---|---|---|---|
+| Money inside a **multi-strategy summary table** (8+ rows, 3+ numeric columns) | Signed integer, comma thousands sep, **no `₹` prefix per cell** | `+11,024`, `-1,169`, `0` (bare, no sign) | `format_money`'s 2dp + `₹`-per-cell default does not fit 8 strategy rows × 3 numeric columns in a fixed-width monospace block under Telegram's mobile line-wrap limit. `₹` appears exactly once, on the message's Total P&L summary line, not per table cell. |
+
+This is a table-specific override, not a general relaxation of the Decimal/2dp money rule —
+`format_money`'s 2dp default with `₹` prefix still applies everywhere else (kv tables, prose
+lines, single-value messages). Any new function implementing this exception must document it
+explicitly in its own docstring as an override, the same discipline `build_leg_table` already
+follows for its 1dp exception — never call `format_money` for these cells and then strip its
+output.
+
+**Terminology note (also confirmed 2026-08-08):** column headers for unrealized/realized P&L in
+this table use `Flt`/`Bkd` (floating / booked), reusing `ROLL-2`'s "Flt P&L (M)" / "Bkd P&L (I)"
+vocabulary rather than inventing new abbreviations for the same underlying values. Any future
+message showing unrealized/realized P&L side by side should default to `Flt`/`Bkd` for
+consistency, not re-derive its own short forms.
+
+**Commit (when promoted):** fold into whichever commit promotes
+`scratch/2026-08-08_eod_paper_summary_format.py`'s table builder into
+`src/notifications/formatting.py` (see `strategy-rollout/` ROLL-6).
+
+---
+
 ## FMT-1b — Dynamic Status Emojis (confirmed 2026-08-07, surfaced during ROLL-1 scratch iteration)
 
 **Not in the original FMT-1 scope** — added after a Cowork session workshopped the IC EOD audit

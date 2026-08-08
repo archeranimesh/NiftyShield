@@ -471,6 +471,95 @@ in the approval message body survives correctly (same regression-test pattern as
 
 ---
 
+## ROLL-6 — EOD Paper Summary
+
+**Not in the epic's original confirmed-callers list** (see `README.md`'s 2026-08-08 addendum)
+— `scripts/eod_summary.py` currently sends via raw HTML `parse_mode` directly, bypassing
+`TelegramNotifier.send()` entirely, which is why `backbone/`'s original audit missed it. This
+task covers both the transport switch (HTML → `TelegramNotifier.send()` + MarkdownV2) and the
+format migration in one pass, since the message was never wired through the shared notifier to
+begin with.
+
+**Confirmed message structure (2026-08-08, `message-format-workshop.md` session) — reference
+implementation `scratch/2026-08-08_eod_paper_summary_format.py`:**
+
+```
+📝 NiftyShield Paper EOD | 07 Aug 2026 | #EOD_SUMMARY
+Activities: 0
+Total P&L : +₹64,615
+📊 Strategy Performance
+```text
+Strategy   |      Flt |      Bkd |    Total
+-----------|----------|----------|---------
+CSP V1     |        0 |  +11,024 |  +11,024
+IC V1 Leap |   +4,079 |        0 |   +4,079
+IC V1 Mth  |     +359 |   +3,486 |   +3,846
+IC V1 Wkly |        0 |   +2,759 |   +2,759
+IC V2 Mth  |     +587 |   -1,756 |   -1,169
+Nifty Fut  |     -150 |        0 |     -150
+Nifty Proxy|   -2,971 |   -3,443 |   -6,414
+Nifty Spot |  +50,640 |        0 |  +50,640
+```
+```
+
+(Escaping omitted for readability, as in `ROLL-1`'s block — see the scratch script for the
+actual MarkdownV2 source. The header's `#EOD_SUMMARY` hashtag is a whole-message tag, not
+per-strategy — this message aggregates all 8 strategies in one send, unlike the single-strategy
+IC EOD Audit where the tag identifies which one variant the message is about, so a per-strategy
+tag list was considered and rejected in favor of one message-level tag. On-device hashtag
+tappability for this escaped-`#`/`_` pattern was already confirmed working in `FMT-1c` — not
+re-verified from scratch here, same mechanism.)
+
+**Design decisions locked in this session, don't re-litigate:**
+1. Display names are human-readable, not the raw `strategy_id` (`IC V1 Leap`, not
+   `paper_ic_nifty_v1_leaps` or even `ic_nifty_v1_leaps`) — see the full mapping in the scratch
+   script's `_DISPLAY_NAME` dict. `Mth` is the confirmed abbreviation for "monthly."
+2. Money in the table uses the new `FMT-1d` integer-table exception, not `format_money`'s 2dp
+   default. `₹` appears once, on the Total P&L line only.
+3. Column headers are `Flt`/`Bkd`, reusing `ROLL-2`'s vocabulary (see `FMT-1d`'s terminology
+   note) — not `Unrealized`/`Realized` or any other pair.
+4. Table columns are fixed-width via `max(len(x) for x in ...)`, never a hand-counted literal —
+   same discipline as every other table in this epic (`build_leg_table`, `ROLL-2`'s
+   `build_compare_table`).
+
+**Files to change:**
+- `scripts/eod_summary.py` — replace the raw HTML `<b>...</b>` message construction (currently
+  `main()`, message-building starts ~line 79) with a call into a new
+  `build_eod_summary_message()`, sent via `TelegramGateway`/`TelegramNotifier.send()` with
+  `parse_mode=MarkdownV2` instead of the current direct HTML send
+- `src/notifications/formatting.py` — promote the scratch script's `build_strategy_table()` (the
+  `FMT-1d` table builder) and `_fmt_table_money()` here, alongside the other formatting-rules
+  helpers, once `formatting-rules/` FMT-2/FMT-3 have landed
+- `tests/unit/scripts/test_eod_summary.py` (new, or extend existing test file if one already
+  covers `eod_summary.py` — check via `search_graph` before assuming there's nothing there)
+
+**Before any code:**
+```
+get_code_snippet("eod_summary")           # confirm current main()/message-building implementation
+search_graph("TelegramGateway")           # confirm the send method signature this should call instead of raw HTML
+search_graph("build_leg_table")           # confirm FMT-3's promoted table-builder pattern to mirror
+```
+
+**Tests:**
+- `test_build_eod_summary_message_matches_confirmed_format` — golden-output test against the
+  confirmed structure above (or a close variant using fixture Decimal values), asserting exact
+  table alignment and the `Flt`/`Bkd`/`Total` header
+- `test_eod_summary_table_money_no_decimals` — regression test for the FMT-1d integer-table
+  exception; a fixture value with cents (e.g. `Decimal("359.12")`) must render as `+359`, not
+  `+359.12` or `+359.1`
+- `test_eod_summary_zero_value_renders_bare` — `Decimal("0.00")` renders as `0`, not `+0` or `-0`
+- `test_eod_summary_hashtag_survives_escaping` — same regression-test pattern as `ROLL-1`: the
+  literal `#EOD_SUMMARY` string, once escaped and sent, must round-trip correctly (this project's
+  test suite can assert on the escaped source string containing `\#EOD\_SUMMARY`, matching how
+  `MD-1`'s existing escaping tests are structured — check that pattern via `search_graph` before
+  writing this one)
+- `test_eod_summary_total_pnl_sums_all_strategies` — `Total P&L` line equals the sum of every
+  row's `Flt + Bkd`, not a separately-fetched aggregate that could silently drift from the table
+
+**Commit:** `feat(scripts): migrate EOD paper summary to MarkdownV2 + Flt/Bkd table`
+
+---
+
 ## ROLL-5 — Docs Close
 
 **Files to change (targeted `Edit`, never `Write`):**

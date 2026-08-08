@@ -29,4 +29,10 @@
 - [ ] **ROLL-4** — Migrate approval-request message formatting
       (`TelegramGateway.send_approval_request`) — coordinate with
       `telegram-approval-auth-fix` first | Blocked by: ROLL-3
-- [ ] **ROLL-5** — Docs close | Blocked by: ROLL-4
+- [ ] **ROLL-6** — Migrate EOD Paper Summary (`scripts/eod_summary.py`) to
+      `TelegramNotifier.send()` + MarkdownV2 — not in the epic's original confirmed-callers
+      list (currently sends via raw HTML, missed by `backbone/`'s audit); format confirmed
+      2026-08-08 (`Flt`/`Bkd` table, `FMT-1d` integer-money exception, `#EOD_SUMMARY` header
+      tag) | Blocked by: `backbone/` + `formatting-rules/` complete (same soft deps as other
+      ROLL tasks)
+- [ ] **ROLL-5** — Docs close | Blocked by: ROLL-4, ROLL-6

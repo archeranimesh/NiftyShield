@@ -37,6 +37,14 @@ characters in its dynamic content. Confirmed real callers via the code graph (no
 All of these must be part of this epic's audit-and-fix pass (`backbone/`), not left to silently
 break the first time one of them interpolates a value with an underscore or asterisk.
 
+**Added 2026-08-08 (message-format-workshop.md session, EOD Paper Summary):**
+`scripts/eod_summary.py` was missing from the confirmed-callers list above — it sends the daily
+"NiftyShield EOD Paper Summary" message via raw HTML parse_mode directly (not
+`TelegramNotifier.send()`), so it fell outside the original audit scope entirely. It is now in
+scope: `strategy-rollout/` ROLL-6 covers its migration to `TelegramNotifier.send()` +
+MarkdownV2. `backbone/`'s audit-and-fix pass should be re-checked against this file if it has
+already landed by the time ROLL-6 starts — do not assume it was covered.
+
 **All Telegram messages migrate** (not just IC) — confirmed with Animesh. `strategy-rollout/`
 sequences the actual format migration by risk tier; `backbone/` only changes the transport
 (parse mode) and makes existing plain-text messages safe under it, it does not change how any
