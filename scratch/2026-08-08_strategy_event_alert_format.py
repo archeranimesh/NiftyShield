@@ -19,31 +19,65 @@ own `_send_close_notification` methods (ROLL-3) — this is the one generic line
 This script inlines its own copies, matching MD-1's exact spec in
 `docs/plan/telegram-markdown-migration/backbone/stories.md`.
 
-Format (Animesh-confirmed, 2026-08-08, `message-format-workshop.md` session — "kv-line,
-ROLL-7 style" option): reuses ROLL-7's kv-line convention (bold strategy label headline,
-`mdcode()`-wrapped identifier, escaped free-text body) rather than inventing a new shape for
-this message specifically — same rationale ROLL-7 itself gives for preferring a shared
-epic-wide pattern over a bespoke one-off:
+Format — **REVISED v2, 2026-08-08 (same session, cause->effect compact counter-proposal from
+Animesh, superseding the v1 kv-line draft below).** v1 shape (superseded, kept here for the
+elimination trail):
 
     ⚠️ *<strategy label>*
     Event: `<event_type>`
     <description, escaped>
 
+v2 (THIS VERSION) folds the event identifier into the headline and adds a `Leg:` line, while
+deliberately NOT decomposing `description` into separate Metric/Limit/Action fields the way
+Animesh's first pasted mockup did — that mockup's per-field breakdown isn't representable from
+what `_route_event`'s WARN branch actually has in scope (`strategy_name`, `event_type`,
+`event.description` as one pre-built prose string; no separate numeric delta/threshold/action
+fields anywhere upstream). Getting real Metric/Action fields would require every
+`check_signals()` emitter to start passing structured payload fields instead of prose — out of
+scope for this task, and splitting the existing string by parsing it would be the same
+brittle move ROLL-7 already rejected for `_check_reentry`'s `blocked_reason`. Two things ARE
+free and genuinely used here (not invented):
+
+    ⚠️ DELTA BREACH — <strategy label>
+    Leg: <leg role label>
+    <description, escaped>
+
+1. **`event_type` humanized via mechanical `.replace("_", " ")` only** — `DELTA_BREACH` ->
+   `DELTA BREACH`. This is a plain reformat of the real identifier, not a new vocabulary — the
+   first mockup's `ROLL_BASE_FIRST` -> "SEQUENCE LOCK" would have been an invented rename, not a
+   reformat; rejected for that reason, not used here.
+2. **`Leg:` line from `event.payload.get("leg_role", "")`** — this field is already read by
+   `_route_event` itself (used in the WARN dedup key), so it's real, in-scope, no refactor
+   needed. Omitted entirely when absent/empty (some event types carry no leg_role) rather than
+   printing a blank line — same "optional line" rule this task's story spec already states.
+
+**Severity emoji is fixed `⚠️`, deliberately not tiered per event_type (e.g. not `🚨` for
+"breach" vs `⚠️` for "warn").** Confirmed during this session: `_route_event`'s WARN branch is
+the ONLY severity that ever reaches this text-building code at all — ACTION-severity events
+either auto-execute or become a `send_approval_request` call (`ROLL-4`'s territory), never this
+line; INFO just logs. So every message through this code path IS a WARN by construction — a
+tiered emoji here would misrepresent severity, not just be an unimplemented nice-to-have. A
+single `⚠️` is the accurate signal, not a compromise. (This also reuses FMT-1b's already-settled
+objection to selecting emoji by matching against the event_type/signal-code string — same
+anti-pattern, just applied to a `🚨`-vs-`⚠️` choice instead of `alert_emoji`'s presence check.)
+
 `STRATEGY_LABELS` below is the SAME fuller-form 12-id -> human-label table ROLL-7's reference
-script (`scratch/2026-08-08_reentry_notice_format.py`) defines — duplicated here rather than
-imported, since neither script is real `src/` code yet (both are pre-`ROLL-*` scratch
-references). ROLL-7's own docstring already flags this as a real "revisit once one of these
-ships" duplication point, not a NEW one introduced by this script — see that script's module
-docstring point 1. `event_type` is an identifier-like value (`DELTA_BREACH`, `TIME_STOP`,
-`ROLL_ELIGIBLE`, ...) so it's `mdcode()`-wrapped, not `escape_markdown()`'d as prose — matches
-how ROLL-1 treats `strategy_id` and ROLL-7 treats `script_hint`. `description` is genuinely
-free-form prose (`event.description`, built by whichever `ExitSignalEngine`/strategy method
-emitted the `SignalEvent`) and may contain punctuation MarkdownV2 reserves (parentheses,
-periods, `=`, `-`) — `escape_markdown()`'d, not `mdcode()`'d, since it's not an identifier.
+script (`scratch/2026-08-08_reentry_notice_format.py`) defines — kept as the fuller form here
+too (Animesh confirmed 2026-08-08: NOT switching to ROLL-6's abbreviated table-column form
+("IC V1 Mth") for this standalone headline, despite an earlier draft using that shorter form —
+the fuller "IC V1 Monthly" reads better outside a table). Duplicated here rather than imported,
+since neither script is real `src/` code yet (both are pre-`ROLL-*` scratch references). ROLL-7's
+own docstring already flags this as a real "revisit once one of these ships" duplication point,
+not a NEW one introduced by this script. `event.description` is genuinely free-form prose (built
+by whichever `ExitSignalEngine`/strategy method emitted the `SignalEvent`) and may contain
+punctuation MarkdownV2 reserves (parentheses, periods, `=`, `-`) — `escape_markdown()`'d, kept as
+a single line, not decomposed.
 
 An unmapped `strategy_name` raises loudly (`ValueError`), same discipline ROLL-6/ROLL-7 both
 require for their own label lookups — a new strategy needs an explicit label added here (and
 eventually in the real `STRATEGY_LABELS`/`formatting.py`) before it can WARN through this path.
+`LEG_ROLE_LABELS` mirrors ROLL-7's own dict (explicit mapping, not `.title()` — same CC/PP
+acronym-casing reasoning) — duplicated here for the same not-yet-real-code reason.
 
 Not part of src/notifications/ — purely for iterating on layout before wiring into the real
 `_route_event`. Read-only w.r.t. the DB — makes zero DB calls. Sends a real Telegram message
@@ -118,6 +152,21 @@ STRATEGY_LABELS: dict[str, str] = {
 }
 
 
+# leg_role values actually used across strategies emitting WARN-severity SignalEvents
+# (CSP/CC/PP/Collar's own leg roles, plus the 3-track base roles) — same dict shape as
+# ROLL-7's LEG_ROLE_LABELS, duplicated here for the same not-yet-real-code reason.
+LEG_ROLE_LABELS: dict[str, str] = {
+    "short_put": "Short Put",
+    "short_call": "Short Call",
+    "overlay_cc": "Overlay CC",
+    "overlay_pp": "Overlay PP",
+    "overlay_collar_call": "Overlay Collar Call",
+    "overlay_collar_put": "Overlay Collar Put",
+    "base_ditm_call": "Base DITM Call",
+    "base_futures": "Base Futures",
+}
+
+
 def _label_strategy(strategy_name: str) -> str:
     """Explicit-mapping lookup; unmapped id raises loudly rather than silently falling back
     to the raw id — same discipline ROLL-6/ROLL-7 both require for their own label tables."""
@@ -127,56 +176,80 @@ def _label_strategy(strategy_name: str) -> str:
         raise ValueError(f"no display label mapped for strategy_name={strategy_name!r}") from None
 
 
-# ── Sample data — real (event_type, description) shapes as emitted by SignalEvent producers
-# (ExitSignalEngine / ReEntryMixin-adjacent strategies) reaching _route_event's WARN branch. ──
+def _label_leg(leg_role: str) -> str:
+    """Same explicit-mapping discipline as _label_strategy. Callers must skip this entirely
+    (no Leg: line) when leg_role is absent/empty — see build_message()'s guard — rather than
+    calling this with an empty string and getting a spurious raise."""
+    try:
+        return LEG_ROLE_LABELS[leg_role]
+    except KeyError:
+        raise ValueError(f"no display label mapped for leg_role={leg_role!r}") from None
+
+
+# ── Sample data — real (event_type, leg_role, description) shapes as emitted by SignalEvent
+# producers (ExitSignalEngine / strategy check_signals()) reaching _route_event's WARN branch.
+# leg_role empty string models the real event.payload.get("leg_role", "") default — some event
+# types carry no leg_role. ──
 
 SCENARIOS: dict[str, dict] = {
-    "delta_warn": {
+    "delta_breach": {
         "strategy_name": "paper_ic_nifty_v1_monthly",
         "event_type": "DELTA_BREACH",
+        "leg_role": "short_put",
         "description": "short put delta -0.42 exceeds threshold -0.40 (review roll candidates).",
     },
     "proxy_delta_warn": {
         "strategy_name": "paper_nifty_proxy",
         "event_type": "PROXY_DELTA_WARN",
+        "leg_role": "base_ditm_call",
         "description": "base_ditm_call delta 0.61 < 0.65 warn band (not yet critical).",
     },
     "roll_base_first_warn": {
         "strategy_name": "paper_covered_call_v1",
         "event_type": "ROLL_BASE_FIRST",
+        "leg_role": "overlay_cc",
         "description": "base_dte=8 <= 10 — roll the base leg before the overlay_cc leg.",
     },
     "underscore_regression": {
         "strategy_name": "paper_csp_nifty_v1",
         "event_type": "DELTA_WARN",
+        "leg_role": "short_put",
         "description": "signal_code=DELTA_WARN (the exact bug that started this epic).",
+    },
+    "no_leg_role": {
+        "strategy_name": "paper_nifty_spot",
+        "event_type": "TRACKING_ERROR_WARN",
+        "leg_role": "",
+        "description": "tracking error 1.8% exceeds 1.5% band vs Nifty spot since entry.",
     },
 }
 
 
 def build_message(d: dict) -> str:
-    """kv-line port of _route_event's WARN branch text, MarkdownV2-safe.
+    """Cause->effect compact port of _route_event's WARN branch text, MarkdownV2-safe.
 
-    Shape (Animesh-confirmed, "kv-line, ROLL-7 style"):
-        ⚠️ *<strategy label>*
-        Event: `<event_type>`
+    Shape (Animesh-confirmed v2, 2026-08-08 — supersedes the v1 kv-line draft in this
+    module's docstring):
+        ⚠️ DELTA BREACH - <strategy label>
+        Leg: <leg role label>              [omitted entirely when leg_role absent/empty]
         <description, escaped>
 
-    strategy_name -> looked up via STRATEGY_LABELS, then escape_markdown()'d (labels are
-    curated plain text, escaped anyway on principle, same as ROLL-7). event_type ->
-    mdcode() (identifier/signal code, kept copyable — matches ROLL-1's strategy_id and
-    ROLL-7's script_hint treatment). description -> escape_markdown() (free-form prose from
-    whichever strategy/engine emitted the SignalEvent, may contain '.'/'('/')'/'-'/'=').
+    event_type -> mechanical `.replace("_", " ")` only (real identifier reformatted, not
+    renamed — see module docstring point 1). strategy_name -> STRATEGY_LABELS lookup,
+    escape_markdown()'d (fuller-form table, confirmed kept over ROLL-6's abbreviated one).
+    leg_role -> LEG_ROLE_LABELS lookup, escape_markdown()'d, line omitted when absent.
+    description -> escape_markdown() as a single line, deliberately not decomposed into
+    separate Metric/Action fields — see module docstring for why that's out of scope.
     """
+    event_headline = escape_markdown(d["event_type"].replace("_", " "))
     strategy_label = escape_markdown(_label_strategy(d["strategy_name"]))
-    event_code = mdcode(d["event_type"])
     description = escape_markdown(d["description"])
 
-    lines = [
-        f"⚠️ *{strategy_label}*",
-        f"Event: {event_code}",
-        description,
-    ]
+    lines = [f"⚠️ {event_headline} \\- {strategy_label}"]
+    leg_role = d.get("leg_role", "")
+    if leg_role:
+        lines.append(f"Leg: {escape_markdown(_label_leg(leg_role))}")
+    lines.append(description)
     return "\n".join(lines)
 
 
@@ -199,7 +272,7 @@ async def send_markdown_v2(bot_token: str, chat_id: str, message: str) -> bool:
 
 
 async def main() -> None:
-    scenario = sys.argv[1] if len(sys.argv) > 1 else "delta_warn"
+    scenario = sys.argv[1] if len(sys.argv) > 1 else "delta_breach"
     if scenario == "--list-scenarios":
         print("\n".join(SCENARIOS.keys()))
         return

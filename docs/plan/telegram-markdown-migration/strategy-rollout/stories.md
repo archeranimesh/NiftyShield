@@ -790,10 +790,11 @@ text = f"[{strategy.strategy_name}] {event.event_type}: {event.description}"
 await self._notifier.send_plain_message(text)
 ```
 
-**Confirmed message structure (2026-08-08, `message-format-workshop.md` session — "kv-line,
-ROLL-7 style" option selected by Animesh, over a single-bold-line minimal-change option and a
-raw-strategy-id-no-label-table option)** — reference implementation
-`scratch/2026-08-08_strategy_event_alert_format.py`:
+**Confirmed message structure — REVISED v2 (2026-08-08, same `message-format-workshop.md`
+session — cause->effect compact counter-proposal from Animesh, superseding the v1 kv-line
+draft below).** v1 (superseded, kept for the elimination trail — "kv-line, ROLL-7 style"
+option, selected over a single-bold-line minimal-change option and a
+raw-strategy-id-no-label-table option):
 
 ```
 ⚠️ *IC V1 Monthly*
@@ -801,61 +802,98 @@ Event: `DELTA_BREACH`
 short put delta \-0\.42 exceeds threshold \-0\.40 \(review roll candidates\)\.
 ```
 
+**v2 (final, reference implementation `scratch/2026-08-08_strategy_event_alert_format.py`):**
+
+```
+⚠️ DELTA BREACH \- IC V1 Monthly
+Leg: Short Put
+short put delta \-0\.42 exceeds threshold \-0\.40 \(review roll candidates\)\.
+```
+
 (Backslash escaping shown as actual MarkdownV2 source, as in `ROLL-1`/`ROLL-2`/`ROLL-7`'s
-blocks.) Reuses `ROLL-7`'s epic-wide kv-line convention rather than inventing a new shape for
-this message specifically — bold strategy-label headline, `mdcode()`-wrapped identifier
-(`event_type`, treated as an identifier/signal code, same as `ROLL-1`'s `strategy_id` and
-`ROLL-7`'s `script_hint`), then a final `escape_markdown()`'d free-text line (`description` is
-genuine prose from whichever `ExitSignalEngine`/strategy method emitted the event, not an
-identifier — matches ROLL-7's `Reason:` line treatment).
+blocks.) v1 -> v2 revision, and what was explicitly rejected along the way:
 
-**Reuses ROLL-7's `STRATEGY_LABELS` table (same 12 strategy_ids, fuller-form human labels) —
-does not redefine it independently.** The reference scratch script currently duplicates the
-dict inline (neither script is real `src/` code yet), same flagged-not-resolved duplication
-point ROLL-7's own docstring already raises: once either `ROLL-7` or this task ships for real,
-the surviving one should promote a single shared `STRATEGY_LABELS` into
-`src/notifications/formatting.py` and the other should import it, not maintain a second copy.
-Whichever of `ROLL-7`/`ROLL-8` lands first in real code should do that promotion as part of its
-own commit, so the second implementation only has to import.
+1. **`event_type` folded into the headline via mechanical `.replace("_", " ")` only** —
+   `DELTA_BREACH` -> `DELTA BREACH`. A first pasted mockup this session proposed inventing new
+   headline vocabulary per event_type (e.g. `ROLL_BASE_FIRST` -> "SEQUENCE LOCK") — rejected:
+   that's a rename, not a reformat, and would need an open-ended event_type -> label dict
+   maintained forever as new signals get added. Plain `.replace("_", " ")` costs nothing and
+   stays honest to the real identifier (no `mdcode()`/code-span treatment of `event_type` in
+   v2 — it's now prose in the headline, not a kept-for-audit identifier the way `ROLL-1`'s
+   `strategy_id` code-span line or `ROLL-7`'s `script_hint` are).
+2. **`Leg:` line added — real, not invented.** `event.payload.get("leg_role", "")` is already
+   read by `_route_event` itself (used in the WARN dedup key), so this is genuinely
+   available data, not a refactor. Omitted entirely when absent/empty (some event types carry
+   no leg_role) rather than printing a blank placeholder line.
+3. **`Metric:`/`Action:` fields from the first mockup were NOT carried over — structurally
+   can't be, not just deferred.** `_route_event`'s WARN branch only has `strategy_name`,
+   `event_type`, and `event.description` (one pre-built prose string) in scope. Decomposing it
+   into separate numeric-delta/limit/action fields would require every `check_signals()`
+   emitter across every strategy to start passing structured payload fields instead of prose —
+   real scope beyond this task, not a formatting choice. Parsing the existing string at render
+   time to fake the split was considered and rejected — the same brittle-string-splitting
+   pattern `ROLL-7`'s spec already rejected for `_check_reentry`'s `blocked_reason`. `description`
+   stays one `escape_markdown()`'d line.
+4. **Emoji stays fixed `⚠️`, not tiered per event_type (`🚨` for "breach" vs `⚠️` for "warn"),
+   confirmed as a real correctness point, not a missing nice-to-have.** `_route_event`'s WARN
+   branch is the ONLY severity that ever reaches this text-building code — ACTION-severity
+   events either auto-execute or route to `send_approval_request` (`ROLL-4`), never this line;
+   INFO just logs. Every message through this path IS a WARN by construction, so a tiered emoji
+   would misrepresent severity, not merely skip an enhancement. Same underlying objection
+   `FMT-1b` already raised against selecting `alert_emoji` by matching the signal-code string —
+   applied here to emoji-per-event-type instead of presence-based alerting.
 
-**No `Leg:` line** — unlike `ROLL-7`, `SignalEvent` here does not always carry a `leg_role`
-(`_route_event`'s WARN branch reads `event.payload.get("leg_role", "")`, i.e. optional/empty
-for some event types) — do not force a `Leg:` line that would print blank for those events.
-If `event.payload["leg_role"]` is present and non-empty at implementation time, add it as an
-optional third kv line between `Event:` and the description (`Leg: <label>`, same
-`LEG_ROLE_LABELS` dict ROLL-7 defines) — but only when present, never a blank placeholder line.
+**Reuses ROLL-7's `STRATEGY_LABELS` table (same 12 strategy_ids, fuller-form human labels,
+e.g. "IC V1 Monthly" not ROLL-6's table-column "IC V1 Mth") and its `LEG_ROLE_LABELS` table —
+does not redefine either independently.** Confirmed 2026-08-08: keep the fuller form for this
+standalone headline, do not switch to ROLL-6's abbreviated form. The reference scratch script
+duplicates both dicts inline (neither script is real `src/` code yet), same
+flagged-not-resolved duplication point ROLL-7's own docstring already raises: once either
+`ROLL-7` or this task ships for real, the surviving one should promote shared
+`STRATEGY_LABELS`/`LEG_ROLE_LABELS` into `src/notifications/formatting.py` and the other should
+import them, not maintain a second copy. Whichever of `ROLL-7`/`ROLL-8` lands first in real code
+should do that promotion as part of its own commit.
 
 **No new FMT-1 formatting rule surfaced this session** — this message reuses ROLL-7's existing
-label/`mdcode()`/`escape_markdown()` conventions verbatim, no new parameter type or table shape.
+label/`escape_markdown()` conventions, minus `mdcode()` (dropped in v2 — `event_type` is now
+headline prose, not a kept identifier). No new parameter type or table shape.
 
 **Files to change:**
 - `src/strategy/monitor.py` — `StrategyMonitor._route_event`'s WARN branch (text-building only;
   the dedup/`warn_signal_state` logic above it is unrelated and untouched)
-- New: `STRATEGY_LABELS`/(optional `LEG_ROLE_LABELS`) lookup — land in
-  `src/notifications/formatting.py` if that module (or `ROLL-7`'s label table) has shipped by
-  the time this task starts; otherwise colocate locally and flag for the same promotion
-  `ROLL-7` already flags
+- New: `STRATEGY_LABELS`/`LEG_ROLE_LABELS` lookup — land in `src/notifications/formatting.py`
+  if that module (or `ROLL-7`'s label tables) has shipped by the time this task starts;
+  otherwise colocate locally and flag for the same promotion `ROLL-7` already flags
 - Matching test file: `tests/unit/strategy/test_strategy_monitor.py` (existing file — extend,
   not new, per `search_graph` before assuming)
 
 **Before any code:**
 ```
 get_code_snippet("StrategyMonitor._route_event")   # confirm current WARN-branch text fresh
-search_graph("STRATEGY_LABELS")                      # confirm whether ROLL-7's table has landed
+search_graph("STRATEGY_LABELS")                      # confirm whether ROLL-7's tables have landed
 ```
 
 **Tests:**
-- One test per scenario in the reference script (`delta_warn`, `proxy_delta_warn`,
-  `roll_base_first_warn`) asserting the exact 3-line kv structure and correct escaping
-- `test_event_alert_escapes_underscore_event_type` — an `event_type`/`strategy_name` fixture
+- One test per scenario in the reference script (`delta_breach`, `proxy_delta_warn`,
+  `roll_base_first_warn`, `no_leg_role`) asserting the exact headline/Leg/description structure
+  and correct escaping
+- `test_event_alert_headline_humanizes_event_type` — `event_type="ROLL_BASE_FIRST"` renders as
+  `ROLL BASE FIRST` in the headline (mechanical `.replace("_", " ")`, not a relabeling dict) —
+  regression test proving the headline stays a reformat of the real identifier, not an invented
+  synonym
+- `test_event_alert_escapes_underscore_description` — a `description`/`strategy_name` fixture
   containing an underscore (`DELTA_WARN`, the exact bug that started this epic) survives
-  label-lookup + `mdcode()`/`escape_markdown()` correctly — the regression test every message in
-  this epic carries forward
+  label-lookup + `escape_markdown()` correctly — the regression test every message in this epic
+  carries forward
 - `test_event_alert_unmapped_strategy_raises` — a `strategy_name` not present in
   `STRATEGY_LABELS` raises loudly (`ValueError`), not silently falls back to the raw id or drops
   the notification — same discipline `ROLL-6`/`ROLL-7` both require
 - `test_event_alert_omits_leg_line_when_absent` — `event.payload` with no `leg_role` produces no
-  blank `Leg:` line, proving the optional-line rule above is actually honored
+  `Leg:` line at all, proving the optional-line rule above is actually honored (not a blank
+  placeholder line)
+- `test_event_alert_severity_never_tiered` — regression test for the fixed-`⚠️` design decision:
+  construct two WARN events with different `event_type` values and assert both render the same
+  leading emoji, proving no substring-based severity/emoji inference crept in
 
 **Commit:** `feat(strategy): migrate generic WARN event alert to Markdown kv-line format`
 
