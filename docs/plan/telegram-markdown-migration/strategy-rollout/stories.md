@@ -646,6 +646,131 @@ is P&L-adjacent — real `@code-reviewer` against `git diff HEAD` required per r
 
 ---
 
+## ROLL-7 — Re-entry Blocked/Eligible Notice
+
+**Not in the epic's original confirmed-callers list** — added 2026-08-08 via
+`missing-message-workshop-prompt.md`/`message-format-workshop.md` (queue item 1,
+`docs/plan/telegram-markdown-migration/TODO.md`). Simplest message in the queue: single
+status notice, no table, no multi-source data.
+
+**Confirmed real source:** `ReEntryMixin._check_reentry`
+(`src/strategy/reentry_mixin.py:189-210`), inherited by `CSPNiftyV1`, `CCOverlayV1`, and
+`CollarOverlayV1` (`src/strategy/CLAUDE.md` — all three `ReEntryMixin` subclasses). TODO.md's
+queue line named only the BLOCKED half; reading the real method in full (per this workshop's
+own protocol) surfaced a second branch sharing the same code path — both are in scope for this
+task:
+
+```python
+status_line = (
+    f"✅ {strategy_name} {leg_role} Re-entry ELIGIBLE — run {script_hint}"
+    if signal == ELIGIBLE
+    else f"⛔ {strategy_name} {leg_role} Re-entry BLOCKED"
+)
+msg = f"{status_line}\n{notes}"
+```
+sent via `self._notifier.send_plain_message(msg)`.
+
+**Confirmed message structure (2026-08-08, `message-format-workshop.md` session, kv-line
+counter-proposal from Animesh, superseding this workshop's initial single-packed-line draft)
+— reference implementation `scratch/2026-08-08_reentry_notice_format.py`:**
+
+```
+⛔ RE\-ENTRY BLOCKED: IC V1 Monthly
+Leg: Short Call
+Reason: DTE\=9 < 14 \(Too close to expiry\)
+```
+```
+✅ RE\-ENTRY ELIGIBLE: CSP V1
+Leg: Short Put
+Status: All Gates Passed
+Execute:
+`scripts/record/record_paper_trade.py`
+```
+
+(Backslash escaping shown as actual MarkdownV2 source, as in `ROLL-1`/`ROLL-2`'s blocks — see
+the scratch script for all four confirmed scenarios: `blocked_dte`, `blocked_ivr`,
+`blocked_open_position`, `eligible`.)
+
+**Two things this message needs that the plain-escaping port didn't — both real scope, not
+cosmetic:**
+
+1. **Strategy display label (`STRATEGY_LABELS`).** `ReEntryMixin.strategy_name` is the raw id
+   (`paper_csp_nifty_v1`); the confirmed headline uses a human label ("CSP V1"). No generic
+   id→label mapping exists in `src/strategy/` yet. `ROLL-6`'s `_DISPLAY_NAME` table is NOT
+   reused here as-is — it's sized for a narrow table column ("V1 Mth", "Fut") and reads badly
+   as a standalone headline ("RE-ENTRY BLOCKED: V1 Mth"). This task defines its own fuller-form
+   `STRATEGY_LABELS` dict (same 12 strategy_ids, longer label text — see the scratch script for
+   the full table). **Revisit once `ROLL-6` ships:** consider promoting one shared
+   `id -> {short, long}` label struct in `formatting.py` that both messages read from, rather
+   than maintaining two independent label tables long-term — flagged, not resolved, don't
+   silently duplicate-and-drift.
+2. **Structured `(short_reason, detail)` per gate, not string-split prose.** The real
+   `_check_reentry` currently builds one free-text `blocked_reason` string per gate (e.g.
+   `"DTE=9 < 14 — too close to expiry for re-entry"`). Splitting that string on the em dash at
+   render time to recover "DTE=9 < 14" + "(Too close to expiry)" would be brittle — a future
+   gate's reason might not contain an em dash, or a different one. **This task must refactor
+   the three gates inside `_check_reentry` (DTE, IVR, open-position) to each produce a
+   `(short_reason: str, detail: str | None)` pair instead of one prose string**, and have the
+   message-building code format the pair — not fake the split. This is real production-logic
+   scope beyond MD-3's "escaping only" boundary, which is fine: `strategy-rollout/` is
+   explicitly allowed to reword message content (`ROLL-3`'s charter), unlike `backbone/`. The
+   `IVR history insufficient` / `open position check failed` non-gate-specific failure
+   `blocked_reason` strings (structural, not one of the three named gates) also need a
+   `(short_reason, detail)` shape — treat as a 4th/5th case, don't leave them as a fallback
+   raw-string path that skips the new formatting.
+
+`Leg:` labels (`LEG_ROLE_LABELS`) use an explicit dict, not `.title()` —
+`"overlay_cc".title()` produces "Overlay Cc", not "Overlay CC"; CC/PP acronyms need the same
+explicit treatment this epic already gives them elsewhere (`FMT-1c`'s IC/V1/V2 badges,
+`ROLL-6`'s CC/PP display names).
+
+**Open question, deliberately not resolved in the confirmed format:** the raw `strategy_id`
+(kept as its own `` `code span` `` line in `ROLL-1`'s IC audit header, for exact-string
+copy/grep against logs) is dropped entirely from this message, per Animesh's confirmed
+example. If exact-id grep-ability turns out to matter for this message too, add it back as a
+third/fourth line during implementation — don't assume the omission was an oversight, it was a
+confirmed choice, but don't treat it as permanently closed either if a real workflow need
+surfaces.
+
+**Files to change:**
+- `src/strategy/reentry_mixin.py` — `ReEntryMixin._check_reentry` (the three gates' reason
+  construction, plus the two `structural failure` reason strings noted above; the
+  message-building/formatting call)
+- New: strategy label + leg-role label lookups (`STRATEGY_LABELS`/`LEG_ROLE_LABELS` or
+  equivalent) — land in `src/notifications/formatting.py` alongside `formatting-rules/`'s other
+  helpers if that module has shipped by the time this task starts, otherwise colocate in
+  `reentry_mixin.py` and move later (judgment call for the implementer, same shape as `FMT-1c`'s
+  header-location judgment call)
+- Matching test file: `tests/unit/strategy/test_reentry_mixin.py` (existing file — extend, not
+  new, per `search_graph` before assuming)
+
+**Before any code:**
+```
+get_code_snippet("ReEntryMixin._check_reentry")   # confirm current gate/reason construction fresh
+search_graph("STRATEGY_LABELS")                    # confirm no such mapping already exists elsewhere
+search_graph("_DISPLAY_NAME")                       # ROLL-6's table, if it has landed — do not duplicate blindly
+```
+
+**Tests:**
+- One test per scenario in the reference script (`eligible`, `blocked_dte`, `blocked_ivr`,
+  `blocked_open_position`) asserting the exact kv-line structure and correct escaping
+- `test_reentry_notice_escapes_underscore_leg_role` — a leg_role/strategy_name fixture
+  containing an underscore survives label-lookup + `escape_markdown()` correctly — the
+  regression test every message in this epic carries forward
+- `test_reentry_notice_unmapped_strategy_raises` — a `strategy_name` not present in
+  `STRATEGY_LABELS` raises loudly (`ValueError`), not silently falls back to the raw id or
+  drops the notification
+- `test_reentry_notice_unmapped_leg_role_raises` — same, for `LEG_ROLE_LABELS`
+- `test_blocked_reason_is_structured_pair` — each of the three gates (DTE/IVR/open-position)
+  and the two structural-failure paths return a `(short_reason, detail)` tuple, not a single
+  prose string — regression test for the string-split-is-brittle fix this task makes
+- `test_eligible_execute_line_uses_mdcode` — `script_hint` renders as a backtick-wrapped code
+  span in the ELIGIBLE branch
+
+**Commit:** `feat(strategy): migrate re-entry notice to Markdown kv-line format`
+
+---
+
 ## ROLL-5 — Docs Close
 
 **Files to change (targeted `Edit`, never `Write`):**

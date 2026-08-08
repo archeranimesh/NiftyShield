@@ -39,4 +39,12 @@
       | Blocked by: `backbone/` + `formatting-rules/` complete (same soft deps as other ROLL
       tasks) — financial-logic commit note: `Bkd` sourcing is P&L-adjacent, real
       `@code-reviewer` required
-- [ ] **ROLL-5** — Docs close | Blocked by: ROLL-4, ROLL-6
+- [ ] **ROLL-7** — Migrate re-entry blocked/eligible notice
+      (`src/strategy/reentry_mixin.py::ReEntryMixin._check_reentry`) to a kv-line MarkdownV2
+      format; not in the epic's original confirmed-callers list (surfaced via
+      `missing-message-workshop-prompt.md`, TODO.md item 1); requires refactoring the three
+      gates' `blocked_reason` construction into structured `(short_reason, detail)` pairs plus
+      new `STRATEGY_LABELS`/`LEG_ROLE_LABELS` display mappings — see stories.md for why neither
+      is a drop-in escaping change | Blocked by: `backbone/` + `formatting-rules/` complete
+      (same soft deps as other ROLL tasks)
+- [ ] **ROLL-5** — Docs close | Blocked by: ROLL-4, ROLL-6, ROLL-7
