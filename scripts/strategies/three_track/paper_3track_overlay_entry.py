@@ -131,6 +131,47 @@ _COLLAR_CALL_ROLE = "overlay_collar_call"
 _COLLAR_ROLES = frozenset({_COLLAR_PUT_ROLE, _COLLAR_CALL_ROLE})
 
 
+# Fallback only — used if a selected strike's instrument_key can't be
+# resolved back against the BOD file (should not happen in practice, since
+# the strike was itself selected from a BOD-backed chain). Nifty's current
+# lot size is 65 (was 75 before a lot-size revision — that staleness is
+# exactly the bug this fallback exists to not repeat). Kept in sync with
+# _NIFTY_LOT_SIZE_FALLBACK in src/strategy/nifty_track_comparison_v1.py;
+# both should be replaced by a single shared constant if Nifty's lot size
+# changes again.
+_NIFTY_LOT_SIZE_FALLBACK = 65
+
+
+def _resolve_lot_size(lookup: InstrumentLookup, instrument_key: str) -> int:
+    """Resolve the live lot size for *instrument_key* from the BOD file.
+
+    Hardcoding lot_size at strike-selection time silently drifted stale
+    after a Nifty lot-size revision (auto CC/Collar/PP builders all shipped
+    with lot_size=75 baked in — see DECISIONS.md 2026-08-10). Reading it
+    from the same BOD record the strike was selected from keeps entries in
+    lockstep with whatever lot size is currently live.
+
+    Args:
+        lookup: BOD-backed instrument lookup, already loaded for this run.
+        instrument_key: The selected strike's instrument_key.
+
+    Returns:
+        The instrument's lot_size, or ``_NIFTY_LOT_SIZE_FALLBACK`` if the
+        BOD record is missing or has no lot_size field.
+    """
+    inst = lookup.get_by_key(instrument_key)
+    lot_size = inst.get("lot_size") if inst is not None else None
+    if lot_size is None or int(lot_size) <= 0:
+        logger.warning(
+            "lot_size.bod_lookup_failed_using_fallback",
+            instrument_key=instrument_key,
+            bod_lot_size=lot_size,
+            fallback=_NIFTY_LOT_SIZE_FALLBACK,
+        )
+        return _NIFTY_LOT_SIZE_FALLBACK
+    return int(lot_size)
+
+
 def _validate_collar_pairs(
     overlay_trades: list["OverlayTrade"],
     existing_call_role: str | None = None,
@@ -327,7 +368,7 @@ def auto_cc_bootstrap(
         overlay_type="cc",
         entry_date=today,
         cycle=1,  # Cycle doesn't matter for auto CC
-        lot_size=75,
+        lot_size=_resolve_lot_size(lookup, selected_row["instrument_key"]),
         expiry=expiry_str,
         expiry_type="monthly",
         dte_at_entry=dte,
@@ -483,7 +524,7 @@ def auto_collar_bootstrap(
         overlay_type="collar",
         entry_date=today,
         cycle=1,  # Cycle doesn't matter for auto collar
-        lot_size=75,
+        lot_size=_resolve_lot_size(lookup, call_row["instrument_key"]),
         expiry=expiry_str,
         expiry_type="monthly",
         dte_at_entry=dte,
@@ -720,7 +761,7 @@ def auto_pp_bootstrap(
             overlay_type="pp",
             entry_date=today,
             cycle=1,  # Cycle doesn't matter for auto PP
-            lot_size=75,
+            lot_size=_resolve_lot_size(lookup, selected_row["instrument_key"]),
             expiry=expiry_str,
             expiry_type="monthly",
             dte_at_entry=dte,

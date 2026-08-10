@@ -82,8 +82,13 @@ def _leg_close_matches(pos: PaperPosition, leg: LegClose) -> bool:
     return True
 
 
-# Default lot size for Nifty overlay legs (SEBI standard as of 2024).
-_NIFTY_LOT_SIZE: int = 75
+# Fallback lot size for Nifty overlay legs, used only when the BOD lookup
+# can't resolve the rolled instrument_key (e.g. lookup unavailable). Do not
+# treat this as authoritative — it drifted stale once already (was 75 when
+# Nifty's live lot size had moved to 65; see DECISIONS.md 2026-08-10). Kept
+# in lockstep with _NIFTY_LOT_SIZE_FALLBACK in
+# scripts/strategies/three_track/paper_3track_overlay_entry.py.
+_NIFTY_LOT_SIZE_FALLBACK: int = 65
 
 
 class NiftyTrackComparisonV1:
@@ -713,11 +718,38 @@ class NiftyTrackComparisonV1:
         return LegSpec(
             instrument_key=instrument_key,
             action=leg_action,  # type: ignore[arg-type]
-            quantity=_NIFTY_LOT_SIZE,
+            quantity=self._resolve_lot_size(instrument_key),
             leg_role=leg_role,
             notes=str(leg.strike),
             price=leg.ltp,
         )
+
+    def _resolve_lot_size(self, instrument_key: str) -> int:
+        """Resolve the live lot size for *instrument_key* from the BOD lookup.
+
+        Falls back to ``_NIFTY_LOT_SIZE_FALLBACK`` if the lookup is
+        unavailable or has no matching/valid record — mirrors
+        ``_resolve_lot_size`` in
+        ``scripts/strategies/three_track/paper_3track_overlay_entry.py``.
+
+        Args:
+            instrument_key: The rolled leg's instrument_key.
+
+        Returns:
+            The instrument's lot_size, or the fallback constant.
+        """
+        lookup = self._resolve_instrument_lookup()
+        inst = lookup.get_by_key(instrument_key) if lookup is not None else None
+        lot_size = inst.get("lot_size") if inst is not None else None
+        if lot_size is None or int(lot_size) <= 0:
+            log.warning(
+                "nifty_track_comparison_v1.lot_size_bod_lookup_failed_using_fallback",
+                instrument_key=instrument_key,
+                bod_lot_size=lot_size,
+                fallback=_NIFTY_LOT_SIZE_FALLBACK,
+            )
+            return _NIFTY_LOT_SIZE_FALLBACK
+        return int(lot_size)
 
     async def _fetch_next_chain(self) -> OptionChain | None:
         """Fetch and parse the next-expiry Nifty option chain via the broker.

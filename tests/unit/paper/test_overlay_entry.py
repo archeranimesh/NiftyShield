@@ -14,7 +14,9 @@ from scripts.lookup.find_overlay_strikes import (
     find_chain_entry,
 )
 from scripts.strategies.three_track.paper_3track_overlay_entry import (
+    _NIFTY_LOT_SIZE_FALLBACK,
     OverlayConfig,
+    _resolve_lot_size,
     build_overlay_trades,
     load_overlay_config,
 )
@@ -1466,3 +1468,44 @@ def test_auto_collar_bootstrap_reaches_chain_fetch_with_real_vix_dir(tmp_path, m
         cfg, gate_violation = auto_collar_bootstrap(tmp_path / "bod.json")
 
     assert cfg is None
+
+
+# ── _resolve_lot_size ─────────────────────────────────────────────────────
+
+
+def test_resolve_lot_size_reads_from_bod_record():
+    """Happy path: BOD record has a lot_size, it's used verbatim."""
+    lookup = MagicMock()
+    lookup.get_by_key.return_value = {"instrument_key": "NSE_FO|61622", "lot_size": 65}
+
+    result = _resolve_lot_size(lookup, "NSE_FO|61622")
+
+    assert result == 65
+    lookup.get_by_key.assert_called_once_with("NSE_FO|61622")
+
+
+def test_resolve_lot_size_falls_back_when_bod_record_missing():
+    """Edge case: BOD lookup returns None (key not found) — use fallback, don't raise."""
+    lookup = MagicMock()
+    lookup.get_by_key.return_value = None
+
+    result = _resolve_lot_size(lookup, "NSE_FO|does_not_exist")
+
+    assert result == _NIFTY_LOT_SIZE_FALLBACK
+
+
+def test_nifty_lot_size_fallback_is_65_not_stale_75():
+    """Regression pin: the fallback must be the current Nifty lot size (65),
+    not the stale value (75) that caused this bug in the first place."""
+    assert _NIFTY_LOT_SIZE_FALLBACK == 65
+
+
+def test_resolve_lot_size_falls_back_when_bod_lot_size_is_zero():
+    """Edge case: BOD record exists but lot_size is 0 (malformed/partial data)
+    — must not silently produce a zero-quantity trade."""
+    lookup = MagicMock()
+    lookup.get_by_key.return_value = {"instrument_key": "NSE_FO|61622", "lot_size": 0}
+
+    result = _resolve_lot_size(lookup, "NSE_FO|61622")
+
+    assert result == _NIFTY_LOT_SIZE_FALLBACK

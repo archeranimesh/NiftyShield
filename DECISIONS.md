@@ -1927,6 +1927,44 @@ whole codebase, not just this call site. Fixed by moving `format_exc_info` into
 (pre-existing network/optional-dep failures in this sandbox, same documented class as prior
 sessions). Source: this session (Cowork).
 
+### 2026-08-10 — Nifty overlay auto-entry hardcoded stale `lot_size=75` (BUG)
+
+Reported by Animesh after today's `overlay_pp` entry showed an unexpectedly small unrealized
+loss: PP was bought 1 lot @ 65.7, put currently 60.90, expected loss ₹312 (65 × 4.8) but the
+`paper_trades` row recorded `quantity=75`. Root cause: `auto_cc_bootstrap`, `auto_collar_bootstrap`,
+and `auto_pp_bootstrap` in `scripts/strategies/three_track/paper_3track_overlay_entry.py` each
+hardcoded `lot_size=75` in the `OverlayConfig` they build — stale from before a Nifty lot-size
+revision (BOD data confirms current lot size is 65 as of 2026-08). The manual/YAML entry path
+(`load_overlay_config`) was unaffected — it reads `lot_size` from the YAML config, not a literal.
+A second independent hardcode, `_NIFTY_LOT_SIZE = 75` in
+`src/strategy/nifty_track_comparison_v1.py` (used when building roll-target `LegSpec`s), had the
+same staleness — no shared source of truth existed between the two files.
+
+Fix: both hardcodes replaced with a `_resolve_lot_size(lookup, instrument_key)` helper that reads
+`lot_size` off the selected strike's own BOD record (`InstrumentLookup.get_by_key`), falling back
+to a named constant (now corrected to 65) only if the BOD record is missing/unresolvable — e.g.
+`nifty_track_comparison_v1`'s roll-target keys are synthetic/symbolic and won't match real BOD
+numeric keys, so that path still relies on the fallback constant in production; a proper fix would
+resolve via `lookup.search_options(strike=..., option_type=..., expiry=...)` instead of
+`get_by_key` — **deferred, not yet built**, tracked here so it doesn't silently stay a known gap.
+Today's bad `paper_trades` row (`overlay_pp`, 2026-08-10, quantity 75→65) corrected directly in
+`portfolio.sqlite`. **Self-caught during review (`@code-reviewer` subagent, CRITICAL finding):**
+the first pass of this fix left `paper_3track_overlay_entry.py`'s own fallback constant at the
+stale `75` — same bug class, would have silently reintroduced it on any BOD-lookup miss. Fixed to
+65 before commit; also hardened both `_resolve_lot_size` implementations to reject
+`lot_size <= 0` from a malformed BOD record (not just `None`), matching the WARNING the same
+review raised. 6 new tests total (`tests/unit/paper/test_overlay_entry.py`,
+`tests/unit/strategy/test_nifty_track_comparison_v1.py`) — happy path (BOD-resolved lot size),
+missing-record fallback, zero-lot_size fallback, and a regression pin asserting the fallback
+constant equals 65 (would have caught the reviewer's CRITICAL finding directly) for each fix site.
+Full `tests/unit/` suite: 2741 passed / 1 failed (`test_r3_no_block_on_buy`, network-blocked LTP
+call — pre-existing, unrelated) / 5 errors (missing `hypothesis` package in this session's
+throwaway venv, pre-existing, unrelated). Source: this session (Cowork).
+
+**Noted, deferred:** resolve `nifty_track_comparison_v1`'s roll-target lot size via
+`InstrumentLookup.search_options` (strike/type/expiry) instead of `get_by_key`, so production roll
+legs get the real BOD-sourced lot size instead of falling back to the constant every time.
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty

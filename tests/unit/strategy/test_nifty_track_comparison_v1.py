@@ -19,7 +19,10 @@ import pytest
 
 from src.models.options import OptionChain, OptionChainStrike, OptionLeg
 from src.paper.models import PaperPosition
-from src.strategy.nifty_track_comparison_v1 import NiftyTrackComparisonV1
+from src.strategy.nifty_track_comparison_v1 import (
+    _NIFTY_LOT_SIZE_FALLBACK,
+    NiftyTrackComparisonV1,
+)
 from src.strategy.protocol import ApprovedAction, LegClose, LegSpec
 
 _SPOT = "paper_nifty_spot"
@@ -1033,3 +1036,45 @@ def test_apply_action_skips_leg_with_no_resolvable_price() -> None:
     )
     _run(strategy.apply_action([closed_pos], action))
     assert store.recorded_batches == []
+
+
+# ── _resolve_lot_size ─────────────────────────────────────────────────────
+
+
+def test_resolve_lot_size_reads_from_injected_bod_lookup():
+    """Happy path: injected InstrumentLookup resolves lot_size for the key."""
+
+    class _FakeLookup:
+        def get_by_key(self, instrument_key: str) -> dict | None:
+            assert instrument_key == "NSE_FO|61622"
+            return {"instrument_key": "NSE_FO|61622", "lot_size": 65}
+
+    strategy = NiftyTrackComparisonV1(instrument_lookup=_FakeLookup())
+    assert strategy._resolve_lot_size("NSE_FO|61622") == 65
+
+
+def test_resolve_lot_size_falls_back_when_lookup_unresolvable():
+    """Edge case: no injected lookup and BOD file load fails — use fallback."""
+    strategy = NiftyTrackComparisonV1(instrument_lookup=None)
+    # Symbolic roll-target keys built by _select_overlay_roll_target never
+    # match real BOD instrument_key entries, so with no lookup injected this
+    # exercises the same degrade-gracefully path production hits.
+    assert strategy._resolve_lot_size("NSE_FO|NIFTY24000PE") == _NIFTY_LOT_SIZE_FALLBACK
+
+
+def test_nifty_lot_size_fallback_is_65_not_stale_75():
+    """Regression pin: the fallback must be the current Nifty lot size (65),
+    not the stale value (75) that caused this bug in the first place."""
+    assert _NIFTY_LOT_SIZE_FALLBACK == 65
+
+
+def test_resolve_lot_size_falls_back_when_bod_lot_size_is_zero():
+    """Edge case: injected lookup returns a record with lot_size=0 — must not
+    silently produce a zero-quantity roll leg."""
+
+    class _FakeLookup:
+        def get_by_key(self, instrument_key: str) -> dict | None:
+            return {"instrument_key": instrument_key, "lot_size": 0}
+
+    strategy = NiftyTrackComparisonV1(instrument_lookup=_FakeLookup())
+    assert strategy._resolve_lot_size("NSE_FO|61622") == _NIFTY_LOT_SIZE_FALLBACK
