@@ -705,7 +705,7 @@ ERROR: auto-CC bootstrap failed. Check logs.
 | Field | Value |
 |---|---|
 | Severity | **HIGH** — not a financial-logic defect, but this is the project's dead-man's-switch cron (`CONTEXT_TREE.md`: "Dead man's switch for EOD cron validation"). Its entire purpose is to alert when something else is broken; it has been silently failing to alert for at least 4 trading days with zero downstream signal — the exact "silent automation failure" class `BUG-026` also hit. |
-| Status | 🔴 Open |
+| Status | 🟡 Fix in progress — code + tests done this session (`docs/bugs/task.md` B027.1/B027.2), commit pending |
 | Discovered | 2026-08-10, Animesh reported seeing healthcheck log entries but no Telegram messages, while other scripts' Telegram alerts (`paper_3track_snapshot.py`, `eod_summary.py`, etc.) were arriving normally — investigated during the `telegram-markdown-migration` ROLL-11 workshop session. |
 | Location | `scripts/healthcheck.py` (imports, lines 16-30) — missing `from dotenv import load_dotenv` + `load_dotenv()` call present in every sibling cron script. |
 

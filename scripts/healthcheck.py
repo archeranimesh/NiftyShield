@@ -21,13 +21,22 @@ from datetime import date, datetime
 from pathlib import Path
 
 import structlog
+from dotenv import load_dotenv
 
-from src.backtest.vix_ingest import load_vix_series
-from src.config import settings
-from src.db import connect
-from src.market_calendar.holidays import is_trading_day
-from src.notifications.telegram import build_notifier
-from src.utils.logging import setup_logging
+# Load environment before local imports — build_notifier() reads only real
+# os.environ (Settings(_env_file=None), see BUG-011), so this must run before
+# settings/build_notifier are touched. Every other cron-invoked script in this
+# repo already does this; healthcheck.py was missing it entirely (BUG-027),
+# which meant every alert silently no-op'd under cron ("Telegram notifier not
+# configured") despite has_issue correctly firing.
+load_dotenv()
+
+from src.backtest.vix_ingest import load_vix_series  # noqa: E402
+from src.config import settings  # noqa: E402
+from src.db import connect  # noqa: E402
+from src.market_calendar.holidays import is_trading_day  # noqa: E402
+from src.notifications.telegram import build_notifier  # noqa: E402
+from src.utils.logging import setup_logging  # noqa: E402
 
 logger = structlog.get_logger()
 
