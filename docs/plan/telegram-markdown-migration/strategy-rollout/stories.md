@@ -1086,6 +1086,112 @@ per root `CLAUDE.md`'s AutoTrigger table.
 
 ---
 
+## ROLL-10 — Proxy Delta CRITICAL Alert
+
+**Not in the epic's original confirmed-callers list** — added 2026-08-10 via
+`missing-message-workshop-prompt.md`/`message-format-workshop.md` (queue item 4, TODO.md).
+Single status alert, no table, fires only on the CRITICAL proxy-delta breach state.
+
+**Confirmed real source:** `scripts/dev/paper_track_snapshot.py::main`, lines 185-190
+(confirmed via `search_graph` + direct read of the file, not the TODO.md grep excerpt alone):
+
+```python
+if track_name == STRATEGY_PROXY and snapshot.proxy_delta_alert:
+    print(f"  ALERT  : Proxy Delta State -> {snapshot.proxy_delta_alert}")
+    if "CRITICAL" in snapshot.proxy_delta_alert:
+        await notifier.send(
+            f"🚨 **CRITICAL**: Proxy Delta Monitor triggered: {snapshot.proxy_delta_alert}"
+            f"\nDelta: {snapshot.greeks.net_delta:.2f}"
+        )
+```
+
+Only the CRITICAL branch calls `notifier.send()` — the ALERT/WARNING/OK print() lines are
+console-only and out of scope. The current call site already sends `**bold**` (legacy-Markdown
+asterisks) with no `parse_mode` set at all — i.e. already silently broken (literal asterisks),
+not a regression introduced by this migration.
+
+**Known duplicate, flagged not fixed:** `scripts/strategies/three_track/paper_3track_snapshot.py::_run`
+(~line 1639) sends a near-identical "Proxy Delta CRITICAL" alert independently from the same
+`TrackSnapshot.proxy_delta_alert` field and the same `"CRITICAL" in ...` check — and it's the
+real production EOD cron path, whereas `paper_track_snapshot.py` is the lower-stakes dev/manual
+script. Not named in `backbone/`'s MD-4 file list or any other `ROLL-*` task. Added as TODO.md
+queue item 10 for a future workshop session — out of scope for this task per the
+missing-message-workshop-prompt's "do not batch" rule.
+
+**Confirmed message structure (2026-08-10, `message-format-workshop.md` session — one
+on-device round-trip via `--send`, reference implementation
+`scratch/2026-08-10_proxy_delta_critical_alert_format.py`):**
+
+```
+🚨 CRITICAL: PROXY DELTA
+📐 Current: \-0\.32 🔴
+📉 Rule Breach: CRITICAL \(<0\.40, day 3 of 3\+\)
+```
+
+(Backslash escaping shown as actual MarkdownV2 source, as in every other confirmed block in
+this file.)
+
+**Elimination trail — two real findings, not cosmetic:**
+1. **Escaping bug, found live:** the first draft only escaped the headline's literal `-`, not
+   the `Delta:` line's formatted signed-float value (`-0.32`). Telegram 400'd:
+   `Character '-' is reserved and must be escaped`. Fix: run `escape_markdown()` over the
+   **entire** formatted numeric string, not just its sign character — a signed 2dp value also
+   carries a `.` (also reserved). Every other numeric field in this epic already does this
+   (`ROLL-1`'s Credit/Mark lines, etc.); this is the first message in the epic where a formatted
+   *Greek* value specifically needed the same treatment, worth calling out for the real
+   `format_greek()`/`escape_markdown()` call-site pairing once promoted from scratch.
+2. **`🤖 Action: REQUIRED / PENDING / AUTO-HEDGING` proposed, then dropped.** No
+   action/remediation-state field exists anywhere upstream of this alert —
+   `ProxyDeltaMonitor.update_and_check` and `TrackSnapshot` compute no such value, and no
+   auto-hedge mechanism is wired to proxy-delta breaches today. Rendering it would fabricate
+   data — same anti-pattern `FMT-1b`/`ROLL-8` already rejected for their own severity/action
+   fields. Confirmed with Animesh: revisit only once a real action signal exists.
+3. **`📉 Rule Breach:` renders `proxy_delta_alert` verbatim, not split into separate
+   threshold/day-count fields.** The threshold (`0.40`) and consecutive-day count aren't passed
+   to this call site as their own values — only pre-baked into one string
+   (`src/paper/track_snapshot.py::generate_track_snapshot`, ~line 349,
+   `f"CRITICAL (<0.40, day {consecutive} of 3+)"`). Parsing them back out at render time would
+   repeat the exact brittle string-split pattern `ROLL-7` rejected for `_check_reentry`'s
+   `blocked_reason`. **Real implementation must first plumb `consecutive_days` as its own field**
+   on `TrackSnapshot` (currently computed by `ProxyDeltaMonitor.update_and_check` then discarded
+   after being folded into the string) before a structured `Rule Breach:` layout is possible —
+   confirmed with Animesh: plan this data-plumbing at implementation time, same shape as
+   `ROLL-0` was for the IC audit's Net Δ/θ. Until then, ship the verbatim string.
+
+**Files to change:**
+- `scripts/dev/paper_track_snapshot.py` — `main`'s CRITICAL-branch `notifier.send()` call
+- `src/paper/track_snapshot.py` — `TrackSnapshot`/`generate_track_snapshot`, to add the
+  `consecutive_days` field needed for finding 3 above (real scope, not deferred past this
+  `ROLL-10` implementation — only deferred past this *format-confirmation* workshop session)
+- Matching test file: `tests/unit/scripts/test_paper_track_snapshot.py` (new, or extend if one
+  already exists — check via `search_graph` before assuming)
+
+**Before any code:**
+```
+get_code_snippet("paper_track_snapshot.main")
+get_code_snippet("ProxyDeltaMonitor.update_and_check")
+get_code_snippet("generate_track_snapshot")
+search_graph("TrackSnapshot")   # confirm current field list before adding consecutive_days
+```
+
+**Tests:**
+- `test_critical_alert_escapes_signed_delta` — regression test for finding 1: a negative
+  (`-0.32`) and positive (`+0.05`) `net_delta` both survive `escape_markdown()` fully (sign AND
+  decimal point escaped), not just the headline's literal `-`
+- `test_critical_alert_no_action_line` — regression test for finding 2: the constructed message
+  never contains an `Action:`/🤖 line, proving the fabricated-data rejection stuck
+- `test_critical_alert_rule_breach_is_verbatim` — `proxy_delta_alert` string appears escaped but
+  otherwise unmodified in the `Rule Breach:` line, not parsed/reconstructed
+- `test_critical_alert_only_fires_on_critical_state` — WARNING/OK states never call
+  `notifier.send()` (existing behavior, must survive the port)
+- `test_reentry_notice_escapes_underscore...` — N/A for this message (no identifier-shaped
+  dynamic value carries an underscore here); the epic's standard underscore-survival regression
+  test is not applicable and should not be force-added just for pattern-completeness
+
+**Commit:** `feat(scripts): migrate proxy delta CRITICAL alert to MarkdownV2`
+
+---
+
 ## ROLL-5 — Docs Close
 
 **Files to change (targeted `Edit`, never `Write`):**

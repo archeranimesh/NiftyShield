@@ -64,4 +64,13 @@
       confirmed-callers list (surfaced via `missing-message-workshop-prompt.md`, TODO.md item
       3) | Blocked by: `backbone/` + `formatting-rules/` complete (same soft deps as other
       ROLL tasks)
-- [ ] **ROLL-5** — Docs close | Blocked by: ROLL-4, ROLL-6, ROLL-7, ROLL-8, ROLL-9
+- [ ] **ROLL-10** — Migrate Proxy Delta CRITICAL alert
+      (`scripts/dev/paper_track_snapshot.py::main`, CRITICAL branch) to a 3-line emoji-labeled
+      MarkdownV2 format (📐 Current / 📉 Rule Breach); not in the epic's original
+      confirmed-callers list (surfaced via `missing-message-workshop-prompt.md`, TODO.md item
+      4); requires a small `TrackSnapshot`/`generate_track_snapshot` data-plumbing addition
+      (expose `consecutive_days`) before the `Rule Breach:` line can be split into structured
+      fields — currently ships as the verbatim `proxy_delta_alert` string, see stories.md for
+      why splitting now would be premature | Blocked by: `backbone/` + `formatting-rules/`
+      complete (same soft deps as other ROLL tasks)
+- [ ] **ROLL-5** — Docs close | Blocked by: ROLL-4, ROLL-6, ROLL-7, ROLL-8, ROLL-9, ROLL-10

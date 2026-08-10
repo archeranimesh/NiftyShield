@@ -91,6 +91,18 @@
       (`scripts/eod_summary.py`, covered by ROLL-6) — separate script, separate data source
       (live portfolio, not paper strategies). | SHA: —
 
+- [ ] **10. Production Proxy Delta CRITICAL alert (duplicate)** —
+      `scripts/strategies/three_track/paper_3track_snapshot.py::_run`, ~line 1639. Surfaced
+      2026-08-10 while running queue item 4 through the workshop: this is a near-identical
+      "Proxy Delta CRITICAL" Telegram alert to the one item 4 covers
+      (`scripts/dev/paper_track_snapshot.py`), reading the same `TrackSnapshot.proxy_delta_alert`
+      field and firing on the same `"CRITICAL" in ...` check — but this one lives in the real
+      production EOD cron path, not the lower-stakes dev script item 4 scoped to. Not named in
+      `backbone/`'s MD-4 file list or any `ROLL-*` task. Once `ROLL-10` (item 4's spec) ships,
+      confirm whether this production copy can just call the same message-builder rather than
+      needing its own independent format-workshop pass — don't assume a second full workshop
+      session is required without checking that first. | SHA: —
+
 ---
 
 ## Gap explanation — `scripts/reporting/paper_pnl_report.py`

@@ -116,6 +116,32 @@ Full forensic log (SHAs, bug numbers, root-cause detail) moved to
 add new entries there going forward, or start a fresh dated section here if this file's
 Session Log grows large again.
 
+### 2026-08-10 Session Log (missing-message-workshop, queue item 4)
+- **Telegram Markdown migration** (item 29): ran `TODO.md` queue item 4 (Proxy Delta CRITICAL
+  alert, `scripts/dev/paper_track_snapshot.py::main` lines 185-190) through
+  `message-format-workshop.md`. Confirmed real source is the dev/manual-run script, distinct
+  from a near-identical alert independently sent by the production EOD cron
+  (`scripts/strategies/three_track/paper_3track_snapshot.py::_run`, ~line 1639) — flagged, not
+  fixed, added as new TODO.md queue item 10. Iterated one live on-device round via `--send`:
+  first draft only escaped the headline's literal `-`, missed escaping the `Delta:` line's
+  formatted signed-float value entirely (`-0.32`'s `-` AND `.` both MarkdownV2-reserved) —
+  Telegram 400'd, fixed by running `escape_markdown()` over the whole formatted numeric string.
+  Animesh then counter-proposed a 4-line emoji-labeled shape (📐 Current / 📉 Rule Breach /
+  🤖 Action); the `Action:` line was dropped — no action/remediation-state field exists anywhere
+  upstream of this alert (`ProxyDeltaMonitor`/`TrackSnapshot` compute no such value), rendering
+  one would have fabricated data. `Rule Breach:` ships the `proxy_delta_alert` string verbatim
+  rather than split into threshold/day-count sub-fields — those aren't separately available at
+  this call site today, only pre-baked into one string; splitting it needs a real
+  `TrackSnapshot`/`generate_track_snapshot` data-plumbing addition (`consecutive_days`),
+  deferred to `ROLL-10`'s real implementation per Animesh, not done in this format-only session.
+  Reference `scratch/2026-08-10_proxy_delta_critical_alert_format.py` (3 scenarios). Added
+  **ROLL-10** to `strategy-rollout/stories.md`/`tasks.md` (unblocked by
+  `backbone/`+`formatting-rules/`, same soft deps as other ROLL tasks); `ROLL-5`'s docs-close
+  blocked-by list updated to include it. Ticked TODO.md item 4, added TODO.md item 10 for the
+  production-duplicate gap. Still docs+scratch only — `ROLL-10` itself remains unimplemented;
+  `backbone/MD-1` still has not shipped, confirmed fresh this session via
+  `search_graph("mdcode")`/`search_graph("escape_markdown")` both returning zero results.
+
 ### 2026-08-10 Session Log (logging bug: `format_exc_info` console-mode gap)
 - **Fix** (`src/utils/logging.py`): investigated why `paper_ic_nifty_v1_leaps`'s 10:27:03
   `PROFIT_TARGET` close left `ic_nifty_v1.counterfactual_log_failed` (`exc_info=True`) with no
