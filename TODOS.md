@@ -142,6 +142,30 @@ Session Log grows large again.
   `backbone/MD-1` still has not shipped, confirmed fresh this session via
   `search_graph("mdcode")`/`search_graph("escape_markdown")` both returning zero results.
 
+### 2026-08-10 Session Log (missing-message-workshop, queue item 5)
+- **Telegram Markdown migration** (item 29): ran `TODO.md` queue item 5 (System Healthcheck
+  alert, `scripts/healthcheck.py::main` lines 165-178) through `message-format-workshop.md`.
+  Initial draft was a bold-headline + verbatim-escaped-line re-render of `run_checks()`'s
+  existing 5 status strings; Animesh rejected it in favor of a grouped severity-status
+  counter-proposal (`⚠️ NIFTYSHIELD: DEGRADED [HH:MM]` headline, `🚨 ACTION REQUIRED:` issue
+  lines with normalized labels + status words, `✅ SYSTEMS NORMAL:` inline pass summary).
+  Confirmed on rendered-source review only — this Cowork sandbox's `.venv` is a symlink back to
+  Animesh's host machine and the sandbox Python lacks `aiohttp`, so no live `--send` round-trip
+  was possible this session; Animesh is running it locally to verify on-device rendering before
+  real implementation starts. Flagged real scope in the write-back: the confirmed v2 format
+  needs `run_checks()` refactored to return structured `CheckResult` objects (label/severity/
+  status_word/detail) instead of today's pre-formatted `list[str]` — re-parsing the existing
+  strings back into parts would repeat the brittle string-split pattern already rejected for
+  `ROLL-7`'s `blocked_reason`. Overall status word stays a single fixed `DEGRADED` for any
+  `has_issue=True` state (no distinct DOWN/CRITICAL tier — not part of what was confirmed).
+  Reference `scratch/2026-08-10_healthcheck_alert_format.py` (4 scenarios: `single_issue`,
+  `multi_issue`, `db_down`, `exception_text`). Added **ROLL-11** to
+  `strategy-rollout/stories.md`/`tasks.md` (unblocked by `backbone/`+`formatting-rules/`, same
+  soft deps as other ROLL tasks); `ROLL-5`'s docs-close blocked-by list updated to include it.
+  Ticked TODO.md item 5. Still docs+scratch only — `ROLL-11` itself remains unimplemented;
+  `backbone/MD-1` still has not shipped, confirmed fresh this session via
+  `search_graph("mdcode")`/`search_graph("escape_markdown")` both returning zero results.
+
 ### 2026-08-10 Session Log (logging bug: `format_exc_info` console-mode gap)
 - **Fix** (`src/utils/logging.py`): investigated why `paper_ic_nifty_v1_leaps`'s 10:27:03
   `PROFIT_TARGET` close left `ic_nifty_v1.counterfactual_log_failed` (`exc_info=True`) with no

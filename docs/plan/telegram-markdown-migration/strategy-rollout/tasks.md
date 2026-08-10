@@ -73,4 +73,11 @@
       fields — currently ships as the verbatim `proxy_delta_alert` string, see stories.md for
       why splitting now would be premature | Blocked by: `backbone/` + `formatting-rules/`
       complete (same soft deps as other ROLL tasks)
-- [ ] **ROLL-5** — Docs close | Blocked by: ROLL-4, ROLL-6, ROLL-7, ROLL-8, ROLL-9, ROLL-10
+- [ ] **ROLL-11** — Migrate System Healthcheck alert (`scripts/healthcheck.py::main`) to a
+      grouped severity-status MarkdownV2 format (`DEGRADED [HH:MM]` headline, `ACTION REQUIRED`
+      issue lines, `SYSTEMS NORMAL` pass summary); not in the epic's original confirmed-callers
+      list (surfaced via `missing-message-workshop-prompt.md`, TODO.md item 5); requires
+      refactoring `run_checks()` to return structured `CheckResult` objects instead of
+      pre-formatted strings — see stories.md for why a drop-in re-render isn't possible | Blocked
+      by: `backbone/` + `formatting-rules/` complete (same soft deps as other ROLL tasks)
+- [ ] **ROLL-5** — Docs close | Blocked by: ROLL-4, ROLL-6, ROLL-7, ROLL-8, ROLL-9, ROLL-10, ROLL-11

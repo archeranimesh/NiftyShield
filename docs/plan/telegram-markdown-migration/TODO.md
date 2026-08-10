@@ -63,9 +63,14 @@
       written back as `strategy-rollout/` **ROLL-10** — see
       `scratch/2026-08-10_proxy_delta_critical_alert_format.py`. | SHA: 54f7acc
 
-- [ ] **5. System healthcheck alert** — `scripts/healthcheck.py:171-178`
+- [x] **5. System healthcheck alert** — `scripts/healthcheck.py:171-178`
       `⚠️ NiftyShield Healthcheck — {now_str} IST` + multi-line disk/process alert body (variable
-      number of issue lines), sent raw via `notifier.send()`. | SHA: —
+      number of issue lines), sent raw via `notifier.send()`. Format confirmed 2026-08-10
+      (Animesh's grouped-severity counter-proposal: `DEGRADED [HH:MM]` headline, `ACTION
+      REQUIRED` issue lines, `SYSTEMS NORMAL` pass summary — supersedes an initial
+      verbatim-line draft; not yet exercised via a live `--send` round-trip, this Cowork
+      sandbox had no working venv) and written back as `strategy-rollout/` **ROLL-11** — see
+      `scratch/2026-08-10_healthcheck_alert_format.py`. | SHA: —
 
 - [ ] **6. Position health check alert** — `scripts/position_health_check.py:129-135`
       `⚠️ NiftyShield Position Health — {date}` + overdue-position list (days overdue, net_qty

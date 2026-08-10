@@ -1192,7 +1192,138 @@ search_graph("TrackSnapshot")   # confirm current field list before adding conse
 
 ---
 
+## ROLL-11 — System Healthcheck Alert
+
+**Not in the epic's original confirmed-callers list** — added 2026-08-10 via
+`missing-message-workshop-prompt.md`/`message-format-workshop.md` (queue item 5, TODO.md).
+Variable-length multi-check status alert, no fenced table.
+
+**Confirmed real source:** `scripts/healthcheck.py::main`, lines 165-178 (confirmed via
+`search_graph` + `get_code_snippet`, not the TODO.md grep excerpt alone):
+
+```python
+if has_issue:
+    alert_body = "\n".join(messages)
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+    alert_msg = f"⚠️ NiftyShield Healthcheck — {now_str} IST\n{alert_body}"
+    ...
+    success = await notifier.send(alert_msg)
+```
+
+`messages` (`list[str]`) is built by `run_checks()` (same file, lines 35-120) — 5 fixed checks
+(DB accessibility, `daily_snapshots` recency, `paper_nav_snapshots` recency, VIX data recency,
+disk space), each appending one pre-formatted ✅/❌/⚠️-prefixed string. Only 2 of the 5
+(VIX/Disk) ever interpolate a dynamic value (`stale_days`, `free_mb`, `str(e)` on either); a
+DB-connect exception collapses checks 1-3 into 3 fixed error lines instead.
+
+**Confirmed message structure (2026-08-10, `message-format-workshop.md` session — Animesh's
+counter-proposal, superseding this workshop's initial verbatim-line draft; not yet exercised
+via a live `--send` round-trip — the Cowork sandbox this session ran in had no working venv,
+see reference script's "Known sandbox limitation" note) — reference implementation
+`scratch/2026-08-10_healthcheck_alert_format.py`:**
+
+```
+⚠️ NIFTYSHIELD: DEGRADED [12:17]
+
+🚨 ACTION REQUIRED:
+❌ Daily Snapshot: MISSING (Today)
+⚠️ Paper NAV: MISSING (Today)
+⚠️ Disk Space: LOW (450.2 MB)
+
+✅ SYSTEMS NORMAL: DB Access, VIX Data
+```
+
+(Backslash escaping shown de-escaped above for readability, as in every other confirmed block
+in this file — see the scratch script for the actual MarkdownV2 source.)
+
+**Elimination trail:**
+1. **v1 draft (superseded):** a straight bold-headline + verbatim-escaped-line re-render of
+   `run_checks()`'s existing message strings, one line per check in original order, unmodified
+   wording (`✅ DB: accessible`, `⚠️ Disk space: 450.2 MB free`, etc.). Rejected — Animesh's
+   counter-proposal groups by severity (issues first, passes folded into one summary line)
+   rather than always emitting one line per check regardless of state.
+2. **v2 (confirmed) is NOT a drop-in re-render of the same `messages: list[str]` — it needs
+   structured input.** Re-parsing `"✅ DB: accessible"` back into `(label="DB Access",
+   severity=ok)` via string matching would repeat the exact brittle-string-parsing anti-pattern
+   this epic already rejected once (`ROLL-7`'s `_check_reentry` `blocked_reason` splitting).
+   **`run_checks()` itself must be refactored to return `list[CheckResult]`** (a new frozen
+   dataclass: `label: str`, `severity: Literal["ok","warn","critical"]`, `status_word: str`,
+   `detail: str | None`) instead of `list[str]` — this is a breaking change to `run_checks()`'s
+   return type/signature, not just to `main()`'s alert-message f-string. `main()`'s
+   message-building then consumes the structured list. This is a bigger lift than the v1 draft
+   — flagging explicitly, same class of scope-increase `ROLL-7`/`ROLL-9`/`ROLL-10` already hit
+   in this epic when a "just re-render this" task turned out to need upstream data-shape
+   changes first.
+3. Raw snake_case check keys (`daily_snapshots`, `paper_nav_snapshots`) are renamed to human
+   labels (`Daily Snapshot`, `Paper NAV`) in the structured `CheckResult.label` field —
+   sidesteps needing to escape an underscore in these particular values entirely, rather than
+   `mdcode()`/`escape_markdown()`-wrapping the raw key.
+4. Overall status word is a single fixed `DEGRADED` for any `has_issue=True` state — matches
+   `run_checks()`'s existing boolean model (there is no distinct "critical vs warning-only"
+   overall tier today, even though the confirmed example above mixes one ❌ and two ⚠️ items
+   under one `DEGRADED` headline). **Not resolved in this task:** whether a `DOWN`/`CRITICAL`
+   overall tier should exist for e.g. a DB-inaccessible state — that would need its own design
+   decision (a distinct third overall word, and a rule for which check(s) trigger it) that
+   wasn't part of what Animesh confirmed. Flagged as a possible future refinement; implement
+   the single-`DEGRADED` model as confirmed, do not invent a tiered model unprompted.
+5. Timestamp drops the date and the `IST` suffix present in the current implementation and in
+   the v1 draft — confirmed format is `[HH:MM]` only (e.g. `[12:17]`), no `YYYY-MM-DD`, no `IST`
+   label. Square brackets are new punctuation (both `[`/`]` are MarkdownV2-reserved, escaped
+   like everything else).
+6. When every check is non-ok, the trailing `✅ SYSTEMS NORMAL:` line is omitted entirely
+   rather than printed with nothing after the colon (`build_message()`'s existing behavior in
+   the reference script — carry this into the real implementation, don't regress to an empty
+   trailing line).
+
+**backbone/ (MD-1..MD-5) status as of this session: NOT shipped** — confirmed via
+`search_graph("mdcode")` / `search_graph("escape_markdown")`, both zero results (same check as
+`ROLL-9`/`ROLL-10`'s sessions). Reference script inlines its own copy of `escape_markdown()`.
+
+**Files to change:**
+- `scripts/healthcheck.py` — `run_checks()` (return type change: `list[str]` ->
+  `list[CheckResult]`, per finding 2 above), `main()` (message-building call site)
+- New: a `CheckResult` dataclass + the grouped-message builder (`src/notifications/formatting.py`
+  if `formatting-rules/` has shipped by the time this task starts, otherwise colocate in
+  `scripts/healthcheck.py` and move later — same colocate-then-promote judgment call `FMT-1c`'s
+  header and `ROLL-7`'s `STRATEGY_LABELS` already used)
+- Matching test file: `tests/unit/test_healthcheck.py` (existing file — extend, not new, per
+  `search_graph` before assuming; existing tests `test_run_checks_all_pass`,
+  `test_run_checks_missing_daily_snapshot`, `test_main_success_flow`,
+  `test_main_failure_alerts`, `test_main_non_trading_day` will need updating for the
+  `list[CheckResult]` return-type change)
+
+**Before any code:**
+```
+get_code_snippet("run_checks")            # confirm current 5-check implementation fresh
+get_code_snippet("main")                  # scripts/healthcheck.py — confirm alert_msg construction fresh
+get_code_snippet("test_run_checks_all_pass")   # confirm existing test's assumption about return type
+```
+
+**Tests:**
+- One test per confirmed scenario in the reference script (`single_issue`, `multi_issue`,
+  `db_down`, `exception_text`) asserting the exact grouped layout and correct escaping
+- `test_healthcheck_normal_line_omitted_when_all_issues` — regression test for finding 6: when
+  every `CheckResult` is non-ok, no trailing `✅ SYSTEMS NORMAL:` line appears at all
+- `test_healthcheck_escapes_exception_text_in_detail` — a `str(e)` fixture containing
+  `.`/`(`/`)` (e.g. `"Connection refused: (errno 111)"`) survives `escape_markdown()` inside the
+  `detail` field — the highest-risk field in this message (arbitrary free text), same regression
+  class as `ROLL-9`/`ROLL-10`'s dynamic-value escaping tests
+- `test_healthcheck_run_checks_returns_check_results` — regression test for finding 2:
+  `run_checks()`'s return type is `list[CheckResult]`, not `list[str]` — a test that only
+  checked "some issue is flagged" would pass even if a future edit silently reverted to
+  pre-formatted strings
+- `test_healthcheck_overall_status_always_degraded` — regression test for finding 4: a fixture
+  mixing one `critical` and one `warn` `CheckResult` still renders `DEGRADED` (not a fabricated
+  `DOWN`/`CRITICAL` tier), confirming the single-tier model wasn't silently expanded
+
+**Commit:** `feat(scripts): migrate healthcheck alert to Markdown grouped status format`
+
+---
+
 ## ROLL-5 — Docs Close
+
+**Blocked by:** ROLL-4, ROLL-6, ROLL-7, ROLL-8, ROLL-9, ROLL-10, ROLL-11 (updated 2026-08-10 to
+add ROLL-11 — see `tasks.md`).
 
 **Files to change (targeted `Edit`, never `Write`):**
 - `CONTEXT.md` — note the completed migration across all message types
