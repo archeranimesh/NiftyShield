@@ -81,7 +81,7 @@
       ⚠️ rows with a parsed token suffix instead of the raw broker key; not yet exercised via a
       live `--send` round-trip, this Cowork sandbox had no working venv) and written back as
       `strategy-rollout/` **ROLL-12** — see
-      `scratch/2026-08-10_position_health_alert_format.py`. | SHA: TBD
+      `scratch/2026-08-10_position_health_alert_format.py`. | SHA: 049d4ff
 
 - [ ] **7. Three-track entry / overlay-entry confirmations** —
       `scripts/strategies/three_track/paper_3track_entry.py:940`,
