@@ -64,14 +64,12 @@ from src.paper._display import (
 from src.paper._display import (
     fmt_decimal as _fmt,
 )
-from src.paper._display import (
-    hedge_verdict as _hedge_verdict,
-)
 from src.paper.constants import (
     DEFAULT_BOD_PATH,
     DEFAULT_DB_PATH,
     LOT_SIZE,
     STRATEGY_FUTURES,
+    STRATEGY_OVERLAY,
     STRATEGY_PROXY,
     STRATEGY_SPOT,
 )
@@ -90,7 +88,7 @@ from src.paper.models import (
 from src.paper.proxy_monitor import ProxyDeltaMonitor
 from src.paper.store import PaperStore
 from src.paper.track_snapshot import TrackSnapshot, generate_track_snapshot
-from src.paper.tracker import _compute_realized_pnl_by_leg
+from src.paper.tracker import _compute_leg_unrealized_pnl, _compute_realized_pnl_by_leg
 from src.strategy.exit_signals import ExitSignalEngine
 from src.utils.logging import bind_trace_id, generate_trace_id, setup_logging
 
@@ -210,9 +208,7 @@ def _dispatch_evaluate(
         # EC-4: TIME_STOP's dte guard needs a real None on unresolvable expiry,
         # not the 9999 sentinel `dte` carries for evaluate_roll_eligible_csp.
         resolved_dte = None if dte == 9999 else dte
-        results += ExitSignalEngine.evaluate_time_stop_csp(
-            days_held=days_held, dte=resolved_dte
-        )
+        results += ExitSignalEngine.evaluate_time_stop_csp(days_held=days_held, dte=resolved_dte)
         results += ExitSignalEngine.evaluate_roll_eligible_csp(dte=dte)
         return ExitSignalEngine._sort_results(results)
 
@@ -761,8 +757,10 @@ def _compute_daily_deltas(
 ) -> list[dict]:
     """Compute 1-day P&L delta fields for each track in the summary table.
 
-    For each track: reads the prior leg snapshot for base and each overlay leg,
-    computes today − prior.  Returns Decimal("0") when no prior snapshot exists.
+    BUG-028 (2026-08-10): base-leg-only — tracks no longer carry overlay P&L,
+    so there is nothing to fold in here. The standalone overlay book's own
+    1-day P&L is reported separately (``_build_recovery_digest``, and the
+    "Overlay (standalone)" summary row via ``_overlay_summary_row``).
 
     Args:
         results: List of (track_name, TrackSnapshot) pairs from the snapshot loop.
@@ -770,34 +768,20 @@ def _compute_daily_deltas(
         snap_date: Today's snapshot date.
 
     Returns:
-        List of dicts with keys ``base_pnl``, ``overlay_pnl``, ``net_pnl``,
-        ``cc_pnl``, ``collar_pnl``, ``pp_pnl`` holding 1-day deltas; one dict
-        per result entry (same order).
+        List of dicts with keys ``base_pnl``, ``net_pnl`` holding 1-day
+        deltas; one dict per result entry (same order).
     """
     rows: list[dict] = []
     for track_name, snapshot in results:
         pnl = snapshot.pnl
         base_role = _base_leg_role(track_name)
-        base_unrealized = pnl.unrealized_pnl - sum(pnl.overlay_pnls.values())
-        base_total = base_unrealized + pnl.realized_pnl
+        base_total = pnl.unrealized_pnl + pnl.realized_pnl
         base_day = _leg_delta(store, track_name, base_role, base_total, snap_date) or Decimal("0")
-
-        overlay_day = Decimal("0")
-        overlay_day_by_role: dict[str, Decimal] = {}
-        for role, role_pnl in pnl.overlay_pnls.items():
-            d = _leg_delta(store, track_name, role, role_pnl, snap_date)
-            if d is not None:
-                overlay_day += d
-                overlay_day_by_role[role] = d
 
         rows.append(
             {
                 "base_pnl": base_day,
-                "overlay_pnl": overlay_day,
-                "net_pnl": base_day + overlay_day,
-                "cc_pnl": overlay_day_by_role.get("cc", Decimal("0")),
-                "collar_pnl": overlay_day_by_role.get("collar", Decimal("0")),
-                "pp_pnl": overlay_day_by_role.get("pp", Decimal("0")),
+                "net_pnl": base_day,
             }
         )
     return rows
@@ -827,6 +811,8 @@ def _compute_monthly_deltas(
 ) -> list[dict]:
     """Compute month-to-date P&L delta fields for each track in the summary table.
 
+    BUG-028 (2026-08-10): base-leg-only — see ``_compute_daily_deltas``.
+
     The MTD reference is the nearest prior leg snapshot on or before the first
     NSE trading day of snap_date's month.  Returns Decimal("0") when no such
     snapshot exists (e.g., first trading day of month with no prior data).
@@ -837,8 +823,8 @@ def _compute_monthly_deltas(
         snap_date: Today's snapshot date.
 
     Returns:
-        List of dicts with keys ``base_pnl``, ``overlay_pnl``, ``net_pnl``
-        holding MTD deltas; one dict per result entry (same order).
+        List of dicts with keys ``base_pnl``, ``net_pnl`` holding MTD deltas;
+        one dict per result entry (same order).
     """
     first_td = _first_trading_day_of_month(snap_date)
     # Use first_td + 1 day as exclusive upper bound so the snapshot ON first_td
@@ -849,23 +835,15 @@ def _compute_monthly_deltas(
     for track_name, snapshot in results:
         pnl = snapshot.pnl
         base_role = _base_leg_role(track_name)
-        base_unrealized = pnl.unrealized_pnl - sum(pnl.overlay_pnls.values())
-        base_total = base_unrealized + pnl.realized_pnl
+        base_total = pnl.unrealized_pnl + pnl.realized_pnl
 
         prev_base = store.get_prev_leg_snapshot(track_name, base_role, before_date=ref_date)
         base_day = (base_total - prev_base.total_pnl) if prev_base is not None else Decimal("0")
 
-        overlay_day = Decimal("0")
-        for role, role_pnl in pnl.overlay_pnls.items():
-            prev = store.get_prev_leg_snapshot(track_name, role, before_date=ref_date)
-            if prev is not None:
-                overlay_day += role_pnl - prev.total_pnl
-
         rows.append(
             {
                 "base_pnl": base_day,
-                "overlay_pnl": overlay_day,
-                "net_pnl": base_day + overlay_day,
+                "net_pnl": base_day,
             }
         )
     return rows
@@ -880,18 +858,15 @@ def _print_track_block(
     leg_deltas: dict[str, Decimal | None],
     today: date,
 ) -> None:
-    """Print the full track block to stdout."""
+    """Print the full track block to stdout.
+
+    BUG-028 (2026-08-10): base-leg-only. Overlay P&L (CC/PP/Collar) belongs
+    to the independent ``STRATEGY_OVERLAY`` book and is printed separately —
+    see the "Overlay (standalone)" block in ``_run`` (verbose mode).
+    """
     W = 88
     label = BASE_LABELS.get(track_name, track_name)
     pnl = snapshot.pnl
-
-    # Merge collar legs
-    grouped_overlay: dict[str, Decimal] = {}
-    for role, amount in pnl.overlay_pnls.items():
-        display = OVERLAY_LABELS.get(role, role)
-        grouped_overlay[display] = grouped_overlay.get(display, Decimal("0")) + amount
-
-    overlay_total = sum(grouped_overlay.values()) if grouped_overlay else Decimal("0")
 
     print(f"\n  {'─' * (W - 4)}")
     print(f"  {track_name.upper():<40} {label}")
@@ -904,23 +879,7 @@ def _print_track_block(
         f"   unrealized={_fmt(pnl.unrealized_pnl)}  realized={_fmt(pnl.realized_pnl)}"
         f"{_delta_arrow(base_delta)}"
     )
-
-    # Overlay legs
-    if grouped_overlay:
-        for display, amount in grouped_overlay.items():
-            # Sum per-leg deltas for merged groups (collar)
-            overlay_delta_sum: Decimal | None = None
-            for role, _role_pnl in pnl.overlay_pnls.items():
-                if OVERLAY_LABELS.get(role, role) == display:
-                    rd = leg_deltas.get(role)
-                    if rd is not None:
-                        overlay_delta_sum = (overlay_delta_sum or Decimal("0")) + rd
-            print(f"  {display:<20} {_fmt(amount):>12}{_delta_arrow(overlay_delta_sum)}")
-        print(f"  {'─' * 38}")
-        verdict = _hedge_verdict(pnl.base_pnl, overlay_total)
-        print(f"  {'Net':<20} {_fmt(pnl.net_pnl):>12}   {verdict}")
-    else:
-        print(f"  {'Net':<20} {_fmt(pnl.net_pnl):>12}   (no overlay)")
+    print(f"  {'Net':<20} {_fmt(pnl.net_pnl):>12}   (overlay reported separately, see below)")
 
     # Greeks + metrics
     g = snapshot.greeks
@@ -942,13 +901,6 @@ def _base_leg_role(track_name: str) -> str:
         STRATEGY_FUTURES: "base_futures",
         STRATEGY_PROXY: "base_ditm_call",
     }.get(track_name, "base_etf")
-
-
-def _overlay_roles_for_track(store: PaperStore, track_name: str, snap_date: date) -> list[str]:
-    """Return all overlay leg_roles that have open or recently closed positions."""
-    trades = store.get_trades(track_name)
-    roles = {t.leg_role for t in trades if t.leg_role.startswith("overlay_")}
-    return sorted(roles)
 
 
 # ── Persistence ───────────────────────────────────────────────────────────────
@@ -982,17 +934,19 @@ def _save_leg_snapshots(
     snap_date: date,
     ltp_map: dict[str, Decimal],
 ) -> None:
-    """Persist per-leg snapshots (paper_leg_snapshots table) for all open legs."""
+    """Persist the base-leg snapshot (paper_leg_snapshots table) for a track.
+
+    BUG-028 (2026-08-10): overlay legs are no longer persisted here — they
+    belong to the independent ``STRATEGY_OVERLAY`` strategy and are persisted
+    by ``_save_overlay_leg_snapshots`` instead.
+    """
     pnl = snapshot.pnl
 
-    # Compute per-leg realized P&L from the full trade ledger so that closed
-    # overlay legs carry their actual realized amount rather than Decimal("0").
     all_trades = store.get_trades(track_name)
     realized_by_leg = _compute_realized_pnl_by_leg(all_trades)
 
-    # Base leg
     base_role = _base_leg_role(track_name)
-    base_unrealized = pnl.unrealized_pnl - sum(pnl.overlay_pnls.values())
+    base_unrealized = pnl.unrealized_pnl
     base_realized = realized_by_leg.get(base_role, Decimal("0"))
     base_total = base_unrealized + base_realized
 
@@ -1009,26 +963,6 @@ def _save_leg_snapshots(
         ltp=base_ltp,
     )
     store.record_leg_snapshot(leg_snap)
-
-    # Overlay legs (one snapshot per real leg_role — never the collapsed
-    # display label in pnl.overlay_pnls, e.g. "cc"/"collar"/"pp". Using the
-    # display label here silently orphaned get_position() lookups and left
-    # overlay_ltp always None (S7, 2026-07-28).
-    for role, overlay_pnl in pnl.raw_overlay_pnls.items():
-        overlay_pos = store.get_position(track_name, role)
-        overlay_ltp = ltp_map.get(overlay_pos.instrument_key) if overlay_pos else None
-        overlay_realized = realized_by_leg.get(role, Decimal("0"))
-        snap = PaperLegSnapshot(
-            strategy_name=track_name,
-            leg_role=role,
-            snapshot_date=snap_date,
-            unrealized_pnl=overlay_pnl,
-            realized_pnl=overlay_realized,
-            total_pnl=overlay_pnl + overlay_realized,
-            ltp=overlay_ltp,
-        )
-        store.record_leg_snapshot(snap)
-        logger.debug("Leg snapshot saved: %s %s %s", track_name, role, snap_date)
 
 
 # ── Track comparison snapshots (S3 — base-leg only, overlay excluded) ──────────
@@ -1132,8 +1066,10 @@ def _compute_track_comparison_snapshot(
 
 # ── Overlay P&L snapshots (S8 — per-overlay, mirrors S3's shape) ───────────────
 #
-# Grouping mirrors _normalize_overlay_pnls' precedence exactly, so this table
-# never diverges from the printed summary's collar-merge/CC-dedup convention:
+# Grouping precedence is owned by _overlay_type_groups (below) now that
+# track_snapshot.py's _normalize_overlay_pnls was removed (BUG-028): overlay
+# legs no longer flow through a track's snapshot at all, so this file is the
+# sole place the collar-merge/CC-dedup convention lives.
 # overlay_collar_call takes precedence over overlay_cc (same physical
 # contract); collar_call + collar_put merge into one "collar" row; a lone
 # collar_call (no put) or a lone overlay_cc surfaces as "cc"; overlay_pp is
@@ -1200,29 +1136,35 @@ def _leg_entry_basis(store: PaperStore, track_name: str, role: str) -> Decimal |
 
 def _compute_overlay_pnl_snapshots(
     store: PaperStore,
-    track_name: str,
     snap_date: date,
 ) -> list[OverlayPnLSnapshot]:
-    """Compute the S8 per-overlay comparison snapshots for one 3-track strategy.
+    """Compute the per-overlay P&L snapshots for the standalone overlay book.
+
+    BUG-028 fix (2026-08-10): overlay legs (CC/PP/Collar) live under the
+    independent ``STRATEGY_OVERLAY`` strategy_name since S2r (2026-07-29),
+    not under whichever 3-track strategy they might once have been attached
+    to — this queries ``STRATEGY_OVERLAY`` directly instead of inheriting a
+    base-track loop's ``strategy_name``, which was the actual root cause of
+    the silent-zero bug (the real rows were always filed elsewhere).
 
     Reads only ``paper_leg_snapshots`` rows already persisted today by
-    ``_save_leg_snapshots`` under the real overlay leg_roles (S7's fix) —
-    never the collapsed display labels. One row per overlay_type present
-    today; an overlay with no open/closed leg today produces no row (unlike
-    S3's base-leg guard, there is no "should always exist" invariant here —
-    a track may simply carry no overlay).
+    ``_save_overlay_leg_snapshots`` under ``STRATEGY_OVERLAY`` + the real
+    overlay leg_roles — never the collapsed display labels. One row per
+    overlay_type present today; no open/closed leg today produces no row.
 
     Args:
         store: PaperStore instance.
-        track_name: 3-track strategy the overlay is attached to.
         snap_date: Date of this snapshot.
 
     Returns:
-        List of OverlayPnLSnapshot, one per overlay_type present today.
+        List of OverlayPnLSnapshot, one per overlay_type present today, all
+        stamped ``strategy_name=STRATEGY_OVERLAY`` (BUG-028's canonical
+        attribution — no schema change, same
+        ``(strategy_name, overlay_type, snapshot_date)`` primary key).
     """
     today_by_role: dict[str, PaperLegSnapshot] = {}
     for role in _OVERLAY_ROLES:
-        leg = store.get_leg_snapshot(track_name, role, snap_date)
+        leg = store.get_leg_snapshot(STRATEGY_OVERLAY, role, snap_date)
         if leg is not None:
             today_by_role[role] = leg
 
@@ -1233,14 +1175,14 @@ def _compute_overlay_pnl_snapshots(
         pnl_inception_abs = sum((today_by_role[r].total_pnl for r in roles), Decimal("0"))
 
         entry_basis = sum(
-            (b for r in roles if (b := _leg_entry_basis(store, track_name, r)) is not None),
+            (b for r in roles if (b := _leg_entry_basis(store, STRATEGY_OVERLAY, r)) is not None),
             Decimal("0"),
         )
         pnl_inception_pct = _safe_pct(pnl_inception_abs, entry_basis if entry_basis else None)
 
         prev_by_role: dict[str, PaperLegSnapshot] = {}
         for r in roles:
-            prev = store.get_prev_leg_snapshot(track_name, r, snap_date)
+            prev = store.get_prev_leg_snapshot(STRATEGY_OVERLAY, r, snap_date)
             if prev is not None:
                 prev_by_role[r] = prev
 
@@ -1255,7 +1197,7 @@ def _compute_overlay_pnl_snapshots(
             )
             prev_mark_value = sum(
                 (
-                    _mark_value(prev_by_role[r].ltp, _position_qty(store, track_name, r))
+                    _mark_value(prev_by_role[r].ltp, _position_qty(store, STRATEGY_OVERLAY, r))
                     or Decimal("0")
                     for r in roles
                     if r in prev_by_role
@@ -1266,7 +1208,7 @@ def _compute_overlay_pnl_snapshots(
 
         results.append(
             OverlayPnLSnapshot(
-                strategy_name=track_name,
+                strategy_name=STRATEGY_OVERLAY,
                 overlay_type=overlay_type,
                 snapshot_date=snap_date,
                 pnl_1d_abs=pnl_1d_abs,
@@ -1277,6 +1219,139 @@ def _compute_overlay_pnl_snapshots(
         )
 
     return results
+
+
+async def _compute_overlay_leg_totals(
+    store: PaperStore,
+    broker: Any,
+    snap_date: date,
+) -> dict[str, tuple[Decimal, Decimal, Decimal, Decimal | None]]:
+    """Compute today's per-leg-role P&L for the standalone overlay book.
+
+    BUG-028 (2026-08-10): the overlay book (``STRATEGY_OVERLAY``) is no
+    longer discovered as a side effect of a 3-track base snapshot — it is
+    computed directly here, independent of which tracks were selected via
+    ``--tracks``. In-memory only (does not read/write ``paper_leg_snapshots``
+    itself); used both to persist today's rows (``_save_overlay_leg_snapshots``,
+    gated on ``save``) and to populate the dry-run preview summary row
+    (``_overlay_summary_row``, always).
+
+    Args:
+        store: PaperStore instance.
+        broker: BrokerClient (or dry-run mock) for the LTP fetch.
+        snap_date: Date of this snapshot.
+
+    Returns:
+        Mapping of leg_role -> (unrealized_pnl, realized_pnl, total_pnl, ltp).
+        Empty dict if ``STRATEGY_OVERLAY`` has never had a trade recorded —
+        distinguishes "overlay book never entered" from "entered, now flat."
+    """
+    trades = store.get_trades(STRATEGY_OVERLAY)
+    if not trades:
+        return {}
+
+    leg_roles = sorted({t.leg_role for t in trades})
+    realized_by_leg = _compute_realized_pnl_by_leg(trades)
+    positions = {role: store.get_position(STRATEGY_OVERLAY, role) for role in leg_roles}
+
+    open_keys = [
+        p.instrument_key
+        for p in positions.values()
+        if p is not None and p.net_qty != 0 and p.instrument_key
+    ]
+    ltp_map: dict[str, Decimal] = {}
+    if open_keys:
+        try:
+            raw = await broker.get_ltp(open_keys)
+            ltp_map = {k: Decimal(str(v)) for k, v in raw.items() if v}
+        # Intentional: isolate overlay LTP fetch errors from the rest of the run.
+        except Exception as exc:
+            logger.warning("overlay_leg_totals.ltp_fetch_failed", error=str(exc))
+
+    totals: dict[str, tuple[Decimal, Decimal, Decimal, Decimal | None]] = {}
+    for role in leg_roles:
+        pos = positions[role]
+        overlay_ltp = ltp_map.get(pos.instrument_key) if pos else None
+        if pos is not None and pos.net_qty != 0:
+            if overlay_ltp is not None:
+                unrealized = _compute_leg_unrealized_pnl(pos, overlay_ltp)
+            else:
+                logger.warning(
+                    "overlay_leg_totals.ltp_unavailable",
+                    instrument_key=pos.instrument_key,
+                    leg_role=role,
+                )
+                unrealized = Decimal("0")
+        else:
+            unrealized = Decimal("0")
+        realized = realized_by_leg.get(role, Decimal("0"))
+        totals[role] = (unrealized, realized, unrealized + realized, overlay_ltp)
+
+    return totals
+
+
+def _save_overlay_leg_snapshots(
+    store: PaperStore,
+    totals: dict[str, tuple[Decimal, Decimal, Decimal, Decimal | None]],
+    snap_date: date,
+) -> None:
+    """Persist today's standalone overlay leg snapshots (``paper_leg_snapshots``).
+
+    BUG-028 (2026-08-10): overlay legs are their own strategy
+    (``STRATEGY_OVERLAY``) now — no longer discovered/persisted as a side
+    effect of any 3-track base snapshot (see ``_save_leg_snapshots``, which
+    now writes the base leg only).
+    """
+    for role, (unrealized, realized, total, ltp) in totals.items():
+        snap = PaperLegSnapshot(
+            strategy_name=STRATEGY_OVERLAY,
+            leg_role=role,
+            snapshot_date=snap_date,
+            unrealized_pnl=unrealized,
+            realized_pnl=realized,
+            total_pnl=total,
+            ltp=ltp,
+        )
+        store.record_leg_snapshot(snap)
+        logger.debug("Overlay leg snapshot saved: %s %s", role, snap_date)
+
+
+def _overlay_summary_row(
+    totals: dict[str, tuple[Decimal, Decimal, Decimal, Decimal | None]],
+) -> dict | None:
+    """Build the standalone overlay summary row for the printed comparison table.
+
+    BUG-028 Phase 1 (2026-08-10): overlay P&L is no longer folded into any
+    track's row — it gets exactly one row, independent of ``--tracks``
+    selection, matching the council-mandated "NiftyBees vs standalone overlay
+    book" framing (no "active track" selection).
+
+    Returns:
+        None when the overlay book has never been entered (``totals`` empty)
+        — the row is omitted rather than shown as a false ``₹0`` (BUG-028
+        Phase 2's no-silent-zero mandate applies to the digest; applying the
+        same principle here for consistency, even though Phase 2's formal
+        WARNING-logging scope is the leg-source layer, not this row).
+    """
+    if not totals:
+        return None
+
+    groups = _overlay_type_groups(set(totals) & set(_OVERLAY_ROLES))
+    by_type = {
+        overlay_type: sum((totals[r][2] for r in roles if r in totals), Decimal("0"))
+        for overlay_type, roles in groups.items()
+    }
+    overlay_total = sum(by_type.values(), Decimal("0"))
+    return {
+        "track": "Overlay (standalone)",
+        "base_pnl": Decimal("0"),
+        "overlay_pnl": overlay_total,
+        "cc_pnl": by_type.get("cc", Decimal("0")),
+        "collar_pnl": by_type.get("collar", Decimal("0")),
+        "pp_pnl": by_type.get("pp", Decimal("0")),
+        "net_pnl": overlay_total,
+        "return_on_nee": 0.0,
+    }
 
 
 def _position_qty(store: PaperStore, track_name: str, role: str) -> int:
@@ -1380,12 +1455,17 @@ def _compute_protection_recovery_snapshot(
 ) -> ProtectionRecoverySnapshot | None:
     """Compute the S9 recovery comparison row for one date.
 
-    Reads only S3's ``paper_track_comparison_snapshots`` (NiftyBees row,
-    ``strategy_name == STRATEGY_SPOT``) and S8's ``paper_overlay_pnl_snapshots``
-    (cc/pp/collar rows for ``STRATEGY_SPOT``) for the same ``snap_date`` — no
-    independent leg-level computation, per stories.md S9. Must be called
-    after ``_compute_track_comparison_snapshot``/``_compute_overlay_pnl_snapshots``
-    have persisted today's rows for ``STRATEGY_SPOT``.
+    Reads S3's ``paper_track_comparison_snapshots`` (NiftyBees row,
+    ``strategy_name == STRATEGY_SPOT`` — the base-leg comparison is still
+    anchored on the spot track, that half is untouched by BUG-028) and S8's
+    ``paper_overlay_pnl_snapshots`` (cc/pp/collar rows, BUG-028 fix: now
+    ``strategy_name == STRATEGY_OVERLAY``, the standalone overlay book — was
+    incorrectly ``STRATEGY_SPOT`` before this fix, which is why every overlay
+    leg opened after S2r (2026-07-29) read back as a silent zero here) for
+    the same ``snap_date`` — no independent leg-level computation, per
+    stories.md S9. Must be called after
+    ``_compute_track_comparison_snapshot``/``_compute_overlay_pnl_snapshots``
+    have persisted today's rows.
 
     Returns:
         None if today's NiftyBees S3 row has not been persisted yet
@@ -1409,7 +1489,7 @@ def _compute_protection_recovery_snapshot(
     overlay_inception: dict[str, Decimal] = dict(overlay_1d)
     for overlay_type in ("cc", "pp", "collar"):
         rows = store.get_overlay_pnl_snapshots(
-            STRATEGY_SPOT, overlay_type, start_date=snap_date, end_date=snap_date
+            STRATEGY_OVERLAY, overlay_type, start_date=snap_date, end_date=snap_date
         )
         if rows:
             overlay_1d[overlay_type] = rows[0].pnl_1d_abs
@@ -1486,26 +1566,6 @@ def _build_recovery_digest(snap: ProtectionRecoverySnapshot) -> str:
 
 
 # ── Summary table ─────────────────────────────────────────────────────────────
-
-
-def _print_summary_table(
-    results: list[tuple[str, TrackSnapshot]],
-    today: date,
-) -> None:
-    """Print the cross-track comparison table."""
-    W = 88
-    print(f"\n{'═' * W}")
-    print(f"  {'Track':<28} {'Base P&L':>12} {'Overlay':>12} {'Net P&L':>12} {'Ret/NEE':>9}")
-    print(f"  {'─' * (W - 4)}")
-    for name, snap in results:
-        pnl = snap.pnl
-        overlay_total = sum(pnl.overlay_pnls.values()) if pnl.overlay_pnls else Decimal("0")
-        label = BASE_LABELS.get(name, name)
-        print(
-            f"  {label:<28} {_fmt(pnl.base_pnl):>12} {_fmt(overlay_total):>12}"
-            f" {_fmt(pnl.net_pnl):>12} {float(snap.return_on_nee):>8.2f}%"
-        )
-    print(f"{'═' * W}")
 
 
 # ── Main async orchestration ──────────────────────────────────────────────────
@@ -1603,18 +1663,14 @@ async def _run(args: argparse.Namespace) -> None:
         results.append((track_name, snapshot))
 
         pnl = snapshot.pnl
-        # overlay_pnls is normalized by generate_track_snapshot: keys are
-        # "cc", "collar", "pp" — collar = call+put as one unit, no double-count.
-        overlay_total = sum(pnl.overlay_pnls.values()) if pnl.overlay_pnls else Decimal("0")
+        # BUG-028 (2026-08-10): base-leg-only now — overlay P&L no longer
+        # rides along with a track's row. See _overlay_summary_row for the
+        # single standalone overlay row appended below, independent of
+        # --tracks selection.
         summary_rows.append(
             {
                 "track": BASE_LABELS.get(track_name, track_name),
                 "base_pnl": pnl.base_pnl,
-                "overlay_pnl": overlay_total,
-                # Per-overlay breakdown (collar = call+put as 1 unit)
-                "cc_pnl": pnl.overlay_pnls.get("cc", Decimal("0")),
-                "collar_pnl": pnl.overlay_pnls.get("collar", Decimal("0")),
-                "pp_pnl": pnl.overlay_pnls.get("pp", Decimal("0")),
                 "net_pnl": pnl.net_pnl,
                 "return_on_nee": snapshot.return_on_nee,
             }
@@ -1657,8 +1713,10 @@ async def _run(args: argparse.Namespace) -> None:
             if cmp_snap is not None:
                 store.record_track_comparison_snapshot(cmp_snap)
 
-            for overlay_snap in _compute_overlay_pnl_snapshots(store, track_name, snap_date):
-                store.record_overlay_pnl_snapshot(overlay_snap)
+    # BUG-028 (2026-08-10): the overlay book (STRATEGY_OVERLAY) is its own
+    # strategy, independent of which tracks were selected via --tracks —
+    # always computed once here, not per-track inside the loop above.
+    overlay_totals = await _compute_overlay_leg_totals(store, broker, snap_date)
 
     if save:
         # 4th synthetic series: Nifty spot, same fields/denominators as the
@@ -1672,10 +1730,17 @@ async def _run(args: argparse.Namespace) -> None:
         )
         store.record_track_comparison_snapshot(spot_cmp_snap)
 
-        # S9 — NiftyBees vs overlay recovery comparison + single Telegram
-        # digest. Reads only S3/S8's rows just persisted above for
-        # STRATEGY_SPOT (niftybees + cc/pp/collar) — no independent leg
-        # computation. One notifier.send() call per run, not per overlay.
+        if overlay_totals:
+            _save_overlay_leg_snapshots(store, overlay_totals, snap_date)
+            for overlay_snap in _compute_overlay_pnl_snapshots(store, snap_date):
+                store.record_overlay_pnl_snapshot(overlay_snap)
+
+        # S9 — NiftyBees vs standalone overlay book recovery comparison +
+        # single Telegram digest. Reads S3's STRATEGY_SPOT row (base-leg
+        # comparison) and S8's STRATEGY_OVERLAY rows just persisted above
+        # (BUG-028 fix — was STRATEGY_SPOT, silently zero for any overlay
+        # opened after S2r) — no independent leg-level computation. One
+        # notifier.send() call per run, not per overlay.
         recovery_snap = _compute_protection_recovery_snapshot(store, snap_date)
         if recovery_snap is not None:
             store.record_protection_recovery_snapshot(recovery_snap)
@@ -1801,6 +1866,13 @@ async def _run(args: argparse.Namespace) -> None:
             monthly_deltas = _compute_monthly_deltas(results, store, snap_date)
             for i, delta_row in enumerate(monthly_deltas):
                 display_rows[i] = {**display_rows[i], **delta_row}
+        # BUG-028: one standalone overlay row, independent of --tracks
+        # selection and of the daily/monthly per-track delta merge above
+        # (inception-only for now — 1d/MTD delta parity for this row is not
+        # part of Phase 1's correctness fix).
+        overlay_row = _overlay_summary_row(overlay_totals)
+        if overlay_row is not None:
+            display_rows.append(overlay_row)
         print(
             "\n"
             + format_track_summary(
@@ -1814,17 +1886,28 @@ async def _run(args: argparse.Namespace) -> None:
     # Print detailed blocks only if verbose
     if args.verbose:
         for track_name, snapshot in results:
-            # Re-calculate leg_deltas for display
+            # Re-calculate leg_deltas for display (base leg only — BUG-028)
             pnl = snapshot.pnl
             leg_deltas = {}
             base_role = _base_leg_role(track_name)
-            base_unrealized = pnl.unrealized_pnl - sum(pnl.overlay_pnls.values())
-            base_total = base_unrealized + pnl.realized_pnl
+            base_total = pnl.unrealized_pnl + pnl.realized_pnl
             leg_deltas[base_role] = _leg_delta(store, track_name, base_role, base_total, snap_date)
-            for role, role_pnl in pnl.overlay_pnls.items():
-                leg_deltas[role] = _leg_delta(store, track_name, role, role_pnl, snap_date)
 
             _print_track_block(track_name, snapshot, leg_deltas, snap_date)
+
+        if overlay_totals:
+            W = 88
+            print(f"\n  {'─' * (W - 4)}")
+            print(f"  {'OVERLAY (STANDALONE)':<40} {STRATEGY_OVERLAY}")
+            print(f"  {'─' * (W - 4)}")
+            for role, (unrealized, realized, total, _ltp) in sorted(overlay_totals.items()):
+                label = OVERLAY_LABELS.get(role, role)
+                delta = _leg_delta(store, STRATEGY_OVERLAY, role, total, snap_date)
+                print(
+                    f"  {label:<20} {_fmt(total):>12}"
+                    f"   unrealized={_fmt(unrealized)}  realized={_fmt(realized)}"
+                    f"{_delta_arrow(delta)}"
+                )
 
     if save:
         print(f"\n  ✅  All snapshots written to {args.db_path}\n")

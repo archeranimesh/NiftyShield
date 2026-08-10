@@ -1,10 +1,12 @@
 """Unit tests for S9: NiftyBees protection-recovery comparison + Telegram digest.
 
-Coverage (see docs/plan/3track-consolidation/stories.md S9):
+Coverage (see docs/plan/3track-consolidation/stories.md S9,
+docs/council/2026-08-10_overlay-pnl-reporting-track-independence.md BUG-028):
 - _compute_protection_recovery_snapshot: reads only S3's
-  paper_track_comparison_snapshots (NiftyBees row) and S8's
-  paper_overlay_pnl_snapshots (cc/pp/collar rows) for the same snapshot_date
-  — no independent leg-level computation.
+  paper_track_comparison_snapshots (NiftyBees row, STRATEGY_SPOT) and S8's
+  paper_overlay_pnl_snapshots (cc/pp/collar rows, STRATEGY_OVERLAY — BUG-028
+  fix, 2026-08-10; was incorrectly STRATEGY_SPOT before) for the same
+  snapshot_date — no independent leg-level computation.
 - recovery_pct / best_overlay is None on a green/flat NiftyBees day, never a
   negative or zero-anchored number.
 - Inception recovery is computed independently of the daily pair, not a
@@ -32,7 +34,7 @@ from scripts.strategies.three_track.paper_3track_snapshot import (
     _build_recovery_digest,
     _compute_protection_recovery_snapshot,
 )
-from src.paper.constants import STRATEGY_SPOT
+from src.paper.constants import STRATEGY_OVERLAY, STRATEGY_SPOT
 from src.paper.models import OverlayPnLSnapshot, ProtectionRecoverySnapshot, TrackComparisonSnapshot
 from src.paper.store import PaperStore
 
@@ -61,7 +63,7 @@ def _seed_overlay(
 ) -> None:
     store.record_overlay_pnl_snapshot(
         OverlayPnLSnapshot(
-            strategy_name=STRATEGY_SPOT,
+            strategy_name=STRATEGY_OVERLAY,
             overlay_type=overlay_type,
             snapshot_date=_SNAP_DATE,
             pnl_1d_abs=pnl_1d,

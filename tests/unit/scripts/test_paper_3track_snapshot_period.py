@@ -3,12 +3,17 @@
 Coverage:
 - _compute_daily_deltas: with prior snapshot → returns correct 1-day delta.
 - _compute_daily_deltas: without prior snapshot → returns Decimal("0").
-- _compute_daily_deltas: overlay legs summed correctly.
 - CLI period mutual exclusion: --daily + --inception → argparse error.
 - CLI period default: no flag → period='daily'.
 - _first_trading_day_of_month: normal month, and non-trading 1st.
 - _compute_monthly_deltas: reference vs first trading day; no prior → Decimal("0").
 - -m flag no longer exits with error.
+
+BUG-028 (2026-08-10): _compute_daily_deltas/_compute_monthly_deltas are now
+base-leg-only — tracks no longer carry overlay P&L, so the old
+overlay-summing/cc-1d-vs-inception regression tests that lived here were
+removed (the behavior they guarded no longer exists in this function; overlay
+P&L is computed independently, see tests/unit/scripts/test_paper_3track_overlay_pnl.py).
 """
 
 from __future__ import annotations
@@ -38,16 +43,18 @@ from src.paper.models import PaperLegSnapshot
 def _make_track_snapshot(
     base_unrealized: Decimal = Decimal("10000"),
     realized: Decimal = Decimal("2000"),
-    overlay_pnls: dict | None = None,
 ) -> MagicMock:
-    """Build a minimal TrackSnapshot mock."""
-    snap = MagicMock()
-    overlays = overlay_pnls or {}
-    snap.pnl.unrealized_pnl = base_unrealized + sum(overlays.values())
+    """Build a minimal TrackSnapshot mock.
+
+    BUG-028 (2026-08-10): base-leg-only — TrackPnL no longer carries
+    overlay_pnls/raw_overlay_pnls at all.
+    """
+    snap = MagicMock(spec=["pnl"])
+    snap.pnl = MagicMock(spec=["unrealized_pnl", "realized_pnl", "base_pnl", "net_pnl"])
+    snap.pnl.unrealized_pnl = base_unrealized
     snap.pnl.realized_pnl = realized
     snap.pnl.base_pnl = base_unrealized
-    snap.pnl.overlay_pnls = overlays
-    snap.pnl.net_pnl = base_unrealized + realized + sum(overlays.values())
+    snap.pnl.net_pnl = base_unrealized + realized
     return snap
 
 
@@ -67,9 +74,7 @@ def _make_leg_snapshot(total_pnl: Decimal) -> PaperLegSnapshot:
 
 def test_compute_daily_deltas_with_prior_snapshot() -> None:
     """Base delta = current_total − prev.total_pnl when prior snapshot exists."""
-    snap = _make_track_snapshot(
-        base_unrealized=Decimal("10000"), realized=Decimal("2000"), overlay_pnls={}
-    )
+    snap = _make_track_snapshot(base_unrealized=Decimal("10000"), realized=Decimal("2000"))
     # base_total = 10000 + 2000 = 12000; prior was 10000 → delta = 2000
     prev_snap = _make_leg_snapshot(Decimal("10000"))
 
@@ -80,12 +85,7 @@ def test_compute_daily_deltas_with_prior_snapshot() -> None:
     rows = _compute_daily_deltas(results, store, date(2026, 6, 15))
 
     assert len(rows) == 1
-    assert rows[0]["base_pnl"] == Decimal("2000")
-    assert rows[0]["overlay_pnl"] == Decimal("0")
-    assert rows[0]["net_pnl"] == Decimal("2000")
-    assert rows[0]["cc_pnl"] == Decimal("0")
-    assert rows[0]["collar_pnl"] == Decimal("0")
-    assert rows[0]["pp_pnl"] == Decimal("0")
+    assert rows[0] == {"base_pnl": Decimal("2000"), "net_pnl": Decimal("2000")}
 
 
 def test_compute_daily_deltas_no_prior_snapshot() -> None:
@@ -96,69 +96,7 @@ def test_compute_daily_deltas_no_prior_snapshot() -> None:
 
     rows = _compute_daily_deltas([("paper_nifty_spot", snap)], store, date(2026, 6, 15))
 
-    assert rows[0]["base_pnl"] == Decimal("0")
-    assert rows[0]["overlay_pnl"] == Decimal("0")
-    assert rows[0]["net_pnl"] == Decimal("0")
-    assert rows[0]["cc_pnl"] == Decimal("0")
-    assert rows[0]["collar_pnl"] == Decimal("0")
-    assert rows[0]["pp_pnl"] == Decimal("0")
-
-
-def test_compute_daily_deltas_overlay_summed() -> None:
-    """Overlay day delta sums across multiple overlay legs.
-
-    Uses the normalized display-label keys ("cc"/"pp") that
-    generate_track_snapshot produces in pnl.overlay_pnls (see comment in
-    the summary_rows construction above _compute_daily_deltas's caller).
-    """
-    overlays = {"cc": Decimal("-500"), "pp": Decimal("300")}
-    snap = _make_track_snapshot(
-        base_unrealized=Decimal("8000"), realized=Decimal("0"), overlay_pnls=overlays
-    )
-
-    def _side_effect(strategy, leg_role, before_date):
-        mapping = {
-            "base_etf": _make_leg_snapshot(Decimal("8000")),  # delta = 0
-            "cc": _make_leg_snapshot(Decimal("-600")),  # delta = +100
-            "pp": _make_leg_snapshot(Decimal("200")),  # delta = +100
-        }
-        return mapping.get(leg_role)
-
-    store = MagicMock()
-    store.get_prev_leg_snapshot.side_effect = _side_effect
-
-    rows = _compute_daily_deltas([("paper_nifty_spot", snap)], store, date(2026, 6, 15))
-
-    assert rows[0]["overlay_pnl"] == Decimal("200")  # 100 + 100
-    assert rows[0]["base_pnl"] == Decimal("0")  # 8000 − 8000
-    assert rows[0]["net_pnl"] == Decimal("200")
-    assert rows[0]["cc_pnl"] == Decimal("100")
-    assert rows[0]["pp_pnl"] == Decimal("100")
-    assert rows[0]["collar_pnl"] == Decimal("0")
-
-
-def test_compute_daily_deltas_cc_pnl_is_1day_not_inception() -> None:
-    """RO-1 regression: cc_pnl in the delta row must be a 1-day delta, not the
-    inception-to-date total carried in summary_rows before the merge."""
-    overlays = {"cc": Decimal("-9000")}  # large inception-to-date total
-    snap = _make_track_snapshot(
-        base_unrealized=Decimal("8000"), realized=Decimal("0"), overlay_pnls=overlays
-    )
-
-    def _side_effect(strategy, leg_role, before_date):
-        mapping = {
-            "base_etf": _make_leg_snapshot(Decimal("8000")),
-            "cc": _make_leg_snapshot(Decimal("-8950")),  # yesterday's total → delta = -50
-        }
-        return mapping.get(leg_role)
-
-    store = MagicMock()
-    store.get_prev_leg_snapshot.side_effect = _side_effect
-
-    rows = _compute_daily_deltas([("paper_nifty_spot", snap)], store, date(2026, 6, 15))
-
-    assert rows[0]["cc_pnl"] == Decimal("-50")
-    assert rows[0]["cc_pnl"] != overlays["cc"]
+    assert rows[0] == {"base_pnl": Decimal("0"), "net_pnl": Decimal("0")}
 
 
 # ── CLI period parsing ────────────────────────────────────────────────────────
@@ -243,9 +181,7 @@ def test_first_trading_day_non_trading_first(monkeypatch: pytest.MonkeyPatch) ->
 
 def test_compute_monthly_deltas_with_prior_snapshot() -> None:
     """MTD delta = current_total − snapshot on/before first trading day of month."""
-    snap = _make_track_snapshot(
-        base_unrealized=Decimal("15000"), realized=Decimal("3000"), overlay_pnls={}
-    )
+    snap = _make_track_snapshot(base_unrealized=Decimal("15000"), realized=Decimal("3000"))
     # base_total = 15000 + 3000 = 18000; first-TD snapshot was 10000 → MTD = 8000
     mtd_snap = _make_leg_snapshot(Decimal("10000"))
 
@@ -256,9 +192,7 @@ def test_compute_monthly_deltas_with_prior_snapshot() -> None:
     rows = _compute_monthly_deltas(results, store, date(2026, 6, 15))
 
     assert len(rows) == 1
-    assert rows[0]["base_pnl"] == Decimal("8000")
-    assert rows[0]["overlay_pnl"] == Decimal("0")
-    assert rows[0]["net_pnl"] == Decimal("8000")
+    assert rows[0] == {"base_pnl": Decimal("8000"), "net_pnl": Decimal("8000")}
 
 
 def test_compute_monthly_deltas_no_prior_snapshot() -> None:
@@ -269,9 +203,7 @@ def test_compute_monthly_deltas_no_prior_snapshot() -> None:
 
     rows = _compute_monthly_deltas([("paper_nifty_spot", snap)], store, date(2026, 6, 15))
 
-    assert rows[0]["base_pnl"] == Decimal("0")
-    assert rows[0]["overlay_pnl"] == Decimal("0")
-    assert rows[0]["net_pnl"] == Decimal("0")
+    assert rows[0] == {"base_pnl": Decimal("0"), "net_pnl": Decimal("0")}
 
 
 def test_compute_monthly_deltas_uses_first_td_as_reference() -> None:

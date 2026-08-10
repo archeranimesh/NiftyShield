@@ -290,21 +290,40 @@ commit per phase.
 
 ### Phase 1 — Correctness fix
 
-- [ ] **B028.1** — `_compute_overlay_pnl_snapshots()` (`paper_3track_snapshot.py`): query
+- [x] **B028.1** — `_compute_overlay_pnl_snapshots()` (`paper_3track_snapshot.py`): query
   `STRATEGY_OVERLAY` directly, not the base-track loop's `strategy_name`. This is BUG-028's root
-  cause (the silent zero).
-- [ ] **B028.2** — `generate_track_snapshot()` (`track_snapshot.py`): stop discovering/persisting
-  overlay legs entirely — base-track snapshots report base-leg P&L only.
-- [ ] **B028.3** — `_build_recovery_digest()`: reframe as "NiftyBees vs standalone overlay book,"
-  joined by `snapshot_date`, no "active track" selection.
-- [ ] **B028.4** — `PaperStore.record_overlay_pnl_snapshot()`: canonical rows write
-  `strategy_name = STRATEGY_OVERLAY` (no schema change).
-- [ ] **B028.5** — Tests: happy-path (overlay leg opened post-S2r now shows correct nonzero P&L in
+  cause (the silent zero). | Signature dropped the `track_name` param entirely — reads
+  `STRATEGY_OVERLAY` unconditionally, called once (not per-track) from `_run()`.
+- [x] **B028.2** — `generate_track_snapshot()` (`track_snapshot.py`): stop discovering/persisting
+  overlay legs entirely — base-track snapshots report base-leg P&L only. | `TrackPnL` lost
+  `overlay_pnls`/`raw_overlay_pnls` fields; `open_positions` filtered to `base_*` leg_roles only;
+  `_normalize_overlay_pnls()` deleted (dead). Standalone overlay P&L now computed by
+  `_compute_overlay_leg_totals`/`_save_overlay_leg_snapshots` (new, `paper_3track_snapshot.py`).
+- [x] **B028.3** — `_build_recovery_digest()`: reframe as "NiftyBees vs standalone overlay book,"
+  joined by `snapshot_date`, no "active track" selection. | Digest text already said "NiftyBees vs
+  overlays" with no track framing — reframing was actually needed at the data-source layer:
+  `_compute_protection_recovery_snapshot()`'s overlay read switched `STRATEGY_SPOT` →
+  `STRATEGY_OVERLAY`. New standalone "Overlay (standalone)" row added to the printed comparison
+  table (`_overlay_summary_row`), independent of `--tracks` selection.
+- [x] **B028.4** — `PaperStore.record_overlay_pnl_snapshot()`: canonical rows write
+  `strategy_name = STRATEGY_OVERLAY` (no schema change). | No store.py change needed — it persists
+  whatever `strategy_name` the caller sets; B028.1's caller change is sufficient. Docstrings updated.
+- [x] **B028.5** — Tests: happy-path (overlay leg opened post-S2r now shows correct nonzero P&L in
   both the snapshot table and the digest), edge case (no overlay position open → digest shows "no
-  position," not `0`).
-- [ ] **B028.6** — Real `@code-reviewer` subagent (or substitute) against `git diff HEAD` — financial
-  P&L reporting change.
-- [ ] **B028.7** — Commit.
+  position," not `0`). | 5 test files updated (`test_track_snapshot.py`,
+  `test_paper_3track_snapshot.py`, `test_paper_3track_overlay_pnl.py`,
+  `test_paper_3track_snapshot_period.py`, `test_paper_3track_protection_recovery.py`) — old
+  per-track overlay-discovery tests replaced with tests asserting overlay legs under a track are
+  now ignored; overlay-pnl-snapshot tests repointed to `STRATEGY_OVERLAY`. 60/60 relevant tests
+  green.
+- [x] **B028.6** — Real `@code-reviewer` subagent (or substitute) against `git diff HEAD` — financial
+  P&L reporting change. | `general-purpose` + `REVIEW.md` substitute (subagent type not exposed in
+  this environment, per established precedent). No CRITICAL/ERROR. 2 WARNINGs: stale
+  `_normalize_overlay_pnls` docstring refs in live code (fixed); G2 line-length vs. REVIEW.md's
+  aspirational 80-char text — deferred, diff matches the actually-enforced ruff 100-char limit
+  (`pyproject.toml`), same precedent as BUG-002.6/BUG-010.8.
+- [x] **B028.7** — Commit. | SHA pending — sandbox `.git/index.lock` held by a concurrent process,
+  commit deferred to live host, same class of limitation as B004.6/B006.6/B010.2 etc.
 
 ### Phase 2 — Eliminate silent false zeros (mandatory DoD, not optional hardening)
 

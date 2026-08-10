@@ -2021,7 +2021,9 @@ the `paper_leg_snapshots` S7 fix (already real leg_role keys); any base-track P&
 Source: `docs/council/2026-08-10_overlay-pnl-reporting-track-independence.md` (4/4 council members —
 `openai/gpt-5.6-sol`, `google/gemini-3.1-pro-preview`, `x-ai/grok-4.3`, `deepseek/deepseek-r1-0528` —
 chaired by `anthropic/claude-opus-4.6`; unanimous, no dissenting notes), `docs/bugs/bugs.md` BUG-028,
-`docs/bugs/task.md`. Not yet implemented — council ruling recorded, implementation pending.
+`docs/bugs/task.md`. **Phase 1 (correctness fix) implemented 2026-08-10** — see `CONTEXT.md`'s
+BUG-028 Phase 1 entry for the module-level diff summary. Phases 2 (silent-false-zero elimination)
+and 3 (historical repair script) remain not yet implemented.
 
 ## Deferred / Not Yet Built
 

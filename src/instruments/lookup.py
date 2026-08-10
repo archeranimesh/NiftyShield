@@ -731,6 +731,9 @@ def format_leg_label(instrument_key: str, lookup: InstrumentLookup) -> str:
 
     underlying = inst.get("underlying_symbol") or inst.get("name") or ""
     strike = inst.get("strike_price")
+    if strike is None:
+        logger.warning("format_leg_label.missing_strike", instrument_key=instrument_key)
+        return instrument_key
     expiry = parse_expiry(inst.get("expiry"))
 
     return format_option_label(underlying, strike, instrument_type, expiry or "")

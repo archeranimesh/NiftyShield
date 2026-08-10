@@ -1529,7 +1529,11 @@ class PaperStore:
         """Return the overlay P&L snapshot history, ordered by date.
 
         Args:
-            strategy_name: 3-track strategy the overlay is attached to.
+            strategy_name: Strategy the overlay P&L is attributed to. Since
+                BUG-028 (2026-08-10) this is ``STRATEGY_OVERLAY`` — the
+                standalone overlay book — for every row written after the
+                fix; pre-fix rows may still carry a 3-track strategy_name
+                until BUG-028 Phase 3's historical repair runs.
             overlay_type: One of ``"cc"``, ``"pp"``, ``"collar"``.
             start_date: Inclusive lower bound on snapshot_date. None = no bound.
             end_date: Inclusive upper bound on snapshot_date. None = no bound.

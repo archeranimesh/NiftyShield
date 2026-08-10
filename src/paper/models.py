@@ -320,18 +320,22 @@ class OverlayPnLSnapshot:
     Level-1 fields for CC/PP/Collar instead of the base tracks.
 
     One row per ``(strategy_name, overlay_type, snapshot_date)`` in
-    ``paper_overlay_pnl_snapshots``. ``strategy_name`` is the 3-track
-    strategy the overlay is attached to (overlays currently only exist on
-    NiftyBees, per DECISIONS.md 2026-07-29 round 5, but this table does not
-    hardcode that). Computed from the real-leg-role ``paper_leg_snapshots``
-    rows S7 produces (``overlay_cc``/``overlay_pp``/``overlay_collar_call``/
+    ``paper_overlay_pnl_snapshots``. ``strategy_name`` is
+    ``STRATEGY_OVERLAY`` (the standalone overlay book, since BUG-028's
+    2026-08-10 fix) for every row written going forward — a pre-fix row may
+    still carry a 3-track strategy_name until BUG-028 Phase 3's historical
+    repair runs. Computed from the real-leg-role ``paper_leg_snapshots`` rows
+    (``overlay_cc``/``overlay_pp``/``overlay_collar_call``/
     ``overlay_collar_put``) — Collar's call+put merge into a single
     ``"collar"`` row, matching the display convention
-    ``_normalize_overlay_pnls`` already established for the printed summary.
-    See docs/plan/3track-consolidation/stories.md S8.
+    ``_overlay_type_groups`` (``scripts/strategies/three_track/paper_3track_snapshot.py``)
+    establishes for the printed summary.
+    See docs/plan/3track-consolidation/stories.md S8,
+    docs/council/2026-08-10_overlay-pnl-reporting-track-independence.md.
 
     Attributes:
-        strategy_name: 3-track strategy this overlay is attached to.
+        strategy_name: Strategy this overlay P&L is attributed to
+            (``STRATEGY_OVERLAY`` post-BUG-028).
         overlay_type: One of ``"cc"``, ``"pp"``, ``"collar"``.
         snapshot_date: Date of this snapshot.
         pnl_1d_abs: Today's overlay total P&L minus yesterday's overlay total

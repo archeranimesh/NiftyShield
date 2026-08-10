@@ -316,21 +316,27 @@ async def roll_ic_legs(
     close_trades = await _build_close_trades(broker, to_close, strategy_name, notes)
 
     today = market_today()
-    open_trades = [
-        PaperTrade(
-            strategy_name=strategy_name,
-            leg_role=leg.leg_role,
-            instrument_key=leg.instrument_key,
-            trade_date=today,
-            action=TradeAction[leg.action],
-            quantity=leg.quantity,
-            price=leg.price,
-            notes=notes,
-            ivr_at_entry=None,
-            is_paper=True,
+    open_trades: list[PaperTrade] = []
+    for leg in open_legs:
+        # Already validated non-None/positive in the guard loop above —
+        # asserted here so mypy can narrow Decimal | None -> Decimal without
+        # re-running the check (and to fail loudly if that invariant is ever
+        # broken by a future edit to the guard loop).
+        assert leg.price is not None
+        open_trades.append(
+            PaperTrade(
+                strategy_name=strategy_name,
+                leg_role=leg.leg_role,
+                instrument_key=leg.instrument_key,
+                trade_date=today,
+                action=TradeAction[leg.action],
+                quantity=leg.quantity,
+                price=leg.price,
+                notes=notes,
+                ivr_at_entry=None,
+                is_paper=True,
+            )
         )
-        for leg in open_legs
-    ]
 
     all_trades = close_trades + open_trades
     if not all_trades:

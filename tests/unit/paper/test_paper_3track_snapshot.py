@@ -27,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 import scripts.strategies.three_track.paper_3track_snapshot as snap_mod
 from src.models.portfolio import TradeAction
+from src.paper._display import hedge_verdict as _hedge_verdict
 from src.paper.models import PaperLegSnapshot, PaperTrade
 from src.paper.store import PaperStore
 from src.paper.track_snapshot import TrackGreeks, TrackPnL, TrackSnapshot
@@ -44,23 +45,17 @@ def _make_store(tmp_path: Path) -> PaperStore:
 
 def _make_snapshot(
     base_pnl: Decimal = Decimal("1000"),
-    overlay_pnls: dict | None = None,
     unrealized: Decimal = Decimal("800"),
     realized: Decimal = Decimal("200"),
 ) -> TrackSnapshot:
-    overlay_pnls = overlay_pnls or {}
-    net = base_pnl + sum(overlay_pnls.values())
+    """BUG-028 (2026-08-10): TrackPnL is base-leg-only — net_pnl == base_pnl."""
     return TrackSnapshot(
         track_name=_STRATEGY,
         pnl=TrackPnL(
             base_pnl=base_pnl,
-            overlay_pnls=overlay_pnls,
-            net_pnl=net,
+            net_pnl=base_pnl,
             unrealized_pnl=unrealized,
             realized_pnl=realized,
-            # This helper already uses real leg_role keys (overlay_pp/overlay_cc),
-            # so raw == normalized here — straight passthrough.
-            raw_overlay_pnls=overlay_pnls,
         ),
         greeks=TrackGreeks(Decimal("0.92"), Decimal("-5"), Decimal("10")),
         max_drawdown_abs=Decimal("-500"),
@@ -145,12 +140,18 @@ def test_delta_arrow_none() -> None:
     assert "no prior" in result
 
 
-# ── _hedge_verdict ────────────────────────────────────────────────────────────
+# ── hedge_verdict ─────────────────────────────────────────────────────────────
+#
+# BUG-028 (2026-08-10): paper_3track_snapshot.py no longer imports
+# hedge_verdict — a track's own P&L no longer pairs base vs. overlay (overlay
+# is a standalone book now), so there's nothing left in this module to call
+# it with. The verdict logic itself is untouched; test it directly against
+# its home module (imported at module top as _hedge_verdict).
 
 
 def test_hedge_verdict_fully_protected() -> None:
     # base loss, overlay gain that reduces net loss
-    verdict = snap_mod._hedge_verdict(Decimal("-1000"), Decimal("600"))
+    verdict = _hedge_verdict(Decimal("-1000"), Decimal("600"))
     assert "Protected" in verdict
     assert "60%" in verdict
 
@@ -158,17 +159,17 @@ def test_hedge_verdict_fully_protected() -> None:
 def test_hedge_verdict_partial() -> None:
     # overlay gain > abs(base loss) — absorbed > 100%? Actually this means net positive
     # Real partial: overlay < base loss, but some help
-    verdict = snap_mod._hedge_verdict(Decimal("-1000"), Decimal("300"))
+    verdict = _hedge_verdict(Decimal("-1000"), Decimal("300"))
     assert "Protected" in verdict or "Partial" in verdict
 
 
 def test_hedge_verdict_no_protection() -> None:
-    verdict = snap_mod._hedge_verdict(Decimal("-1000"), Decimal("-200"))
+    verdict = _hedge_verdict(Decimal("-1000"), Decimal("-200"))
     assert "No protection" in verdict
 
 
 def test_hedge_verdict_overlay_drag_on_up_move() -> None:
-    verdict = snap_mod._hedge_verdict(Decimal("1000"), Decimal("-150"))
+    verdict = _hedge_verdict(Decimal("1000"), Decimal("-150"))
     assert "drag" in verdict or "Overlay" in verdict
 
 
@@ -265,7 +266,6 @@ def test_save_leg_snapshots_base_only(tmp_path: Path) -> None:
 
     snapshot = _make_snapshot(
         base_pnl=Decimal("1000"),
-        overlay_pnls={},
         unrealized=Decimal("800"),
         realized=Decimal("200"),
     )
@@ -276,7 +276,12 @@ def test_save_leg_snapshots_base_only(tmp_path: Path) -> None:
     assert result.total_pnl == result.unrealized_pnl + result.realized_pnl
 
 
-def test_save_leg_snapshots_with_overlay(tmp_path: Path) -> None:
+def test_save_leg_snapshots_ignores_overlay_trades_under_track(tmp_path: Path) -> None:
+    """BUG-028 (2026-08-10): even if a track's ledger still carries a leftover
+    overlay_* trade (pre-S2r, not yet closed/rolled off), _save_leg_snapshots
+    must persist only the base leg — overlay leg snapshots are the standalone
+    STRATEGY_OVERLAY book's responsibility (_save_overlay_leg_snapshots).
+    """
     store = _make_store(tmp_path)
     store.record_trade(_make_trade(leg_role="base_etf"))
     store.record_trade(
@@ -293,7 +298,6 @@ def test_save_leg_snapshots_with_overlay(tmp_path: Path) -> None:
 
     snapshot = _make_snapshot(
         base_pnl=Decimal("1000"),
-        overlay_pnls={"overlay_pp": Decimal("-200")},
         unrealized=Decimal("1000"),
         realized=Decimal("0"),
     )
@@ -305,125 +309,11 @@ def test_save_leg_snapshots_with_overlay(tmp_path: Path) -> None:
         ltp_map={"NSE_FO|NIFTY22000PE": Decimal("280.00")},
     )
 
-    # Overlay leg snapshot must exist and satisfy total_pnl invariant
-    overlay_snap = store.get_leg_snapshot(_STRATEGY, "overlay_pp", _DATE)
-    assert overlay_snap is not None
-    assert overlay_snap.total_pnl == overlay_snap.unrealized_pnl + overlay_snap.realized_pnl
-    assert overlay_snap.total_pnl == Decimal("-200")
-
-
-@pytest.mark.asyncio
-async def test_save_leg_snapshots_end_to_end_uses_real_leg_role(tmp_path: Path) -> None:
-    """S7 regression guard: run the *actual* production path — generate_track_snapshot()
-    (which normalizes overlay_pnls to display labels) feeding straight into
-    _save_leg_snapshots() — not the _make_snapshot() shortcut used by the tests
-    above. Before the fix, this path persisted under leg_role="pp" (the collapsed
-    display label), which is not a real leg_role, so get_position()/get_leg_snapshot()
-    lookups against the real "overlay_pp" role always missed.
-    """
-    from src.instruments.lookup import InstrumentLookup
-    from src.paper.track_snapshot import generate_track_snapshot
-
-    store = _make_store(tmp_path)
-    store.record_trade(_make_trade(leg_role="base_etf"))
-    store.record_trade(
-        PaperTrade(
-            strategy_name=_STRATEGY,
-            leg_role="overlay_pp",
-            instrument_key="NSE_FO|NIFTY22000PE",
-            trade_date=_DATE,
-            action=TradeAction.BUY,
-            quantity=65,
-            price=Decimal("300.00"),
-        )
-    )
-
-    broker = AsyncMock()
-    broker.get_ltp.return_value = {
-        "NSE_EQ|NIFTYBEES": Decimal("250.0"),
-        "NSE_FO|NIFTY22000PE": Decimal("280.0"),
-    }
-    lookup = MagicMock(spec=InstrumentLookup)
-    lookup.get_by_key.return_value = None  # forces resolve_leg_delta's safe zero-delta path
-
-    snapshot = await generate_track_snapshot(
-        store, broker, lookup, _STRATEGY, Decimal("24000"), Decimal("100000"), _DATE
-    )
-
-    # Sanity: the snapshot's display view is collapsed, as expected.
-    assert set(snapshot.pnl.overlay_pnls) == {"pp"}
-    assert set(snapshot.pnl.raw_overlay_pnls) == {"overlay_pp"}
-
-    snap_mod._save_leg_snapshots(
-        store,
-        _STRATEGY,
-        snapshot,
-        _DATE,
-        ltp_map={"NSE_FO|NIFTY22000PE": Decimal("280.0")},
-    )
-
-    # Real leg_role must be queryable.
-    real_role_snap = store.get_leg_snapshot(_STRATEGY, "overlay_pp", _DATE)
-    assert real_role_snap is not None
-    # ltp must be populated — proof get_position() was called with the real leg_role.
-    assert real_role_snap.ltp == Decimal("280.0")
-
-    # The collapsed display label must NOT have been persisted as its own row.
-    assert store.get_leg_snapshot(_STRATEGY, "pp", _DATE) is None
-
-
-def test_save_leg_snapshots_closed_overlay_shows_realized_pnl(tmp_path: Path) -> None:
-    """Closed overlay leg must show non-zero realized P&L, not Decimal("0").
-
-    This is the core invariant of RPT-SNAP: overlay legs that have been closed
-    (SELL + BUY round-trip) must carry their realized P&L in paper_leg_snapshots,
-    not the zero placeholder that existed before the fix.
-    """
-    store = _make_store(tmp_path)
-    # Base leg: open (BUY, still held)
-    store.record_trade(_make_trade(leg_role="base_etf", action=TradeAction.BUY))
-    # Overlay CC leg: closed round-trip SELL 50 → BUY 20 → realized = (50-20)*65 = 1950
-    store.record_trade(
-        PaperTrade(
-            strategy_name=_STRATEGY,
-            leg_role="overlay_cc",
-            instrument_key="NSE_FO|NIFTY25000CE",
-            trade_date=_DATE,
-            action=TradeAction.SELL,
-            quantity=65,
-            price=Decimal("50.00"),
-        )
-    )
-    store.record_trade(
-        PaperTrade(
-            strategy_name=_STRATEGY,
-            leg_role="overlay_cc",
-            instrument_key="NSE_FO|NIFTY25000CE",
-            trade_date=_DATE,
-            action=TradeAction.BUY,
-            quantity=65,
-            price=Decimal("20.00"),
-        )
-    )
-
-    snapshot = _make_snapshot(
-        base_pnl=Decimal("500"),
-        overlay_pnls={"overlay_cc": Decimal("0")},  # currently flat (closed)
-        unrealized=Decimal("500"),
-        realized=Decimal("1950"),
-    )
-    snap_mod._save_leg_snapshots(store, _STRATEGY, snapshot, _DATE, ltp_map={})
-
-    overlay_snap = store.get_leg_snapshot(_STRATEGY, "overlay_cc", _DATE)
-    assert overlay_snap is not None
-    # Pre-fix: realized_pnl would be Decimal("0"); post-fix: must be Decimal("1950")
-    assert overlay_snap.realized_pnl == Decimal("1950.00")
-    assert overlay_snap.total_pnl == overlay_snap.unrealized_pnl + overlay_snap.realized_pnl
-
-    # Base leg realized must reflect only base leg trades (open BUY, no round-trip → 0)
+    # Base leg persisted, as always.
     base_snap = store.get_leg_snapshot(_STRATEGY, "base_etf", _DATE)
     assert base_snap is not None
-    assert base_snap.realized_pnl == Decimal("0")
+    # No row written under this track's strategy_name for the overlay leg.
+    assert store.get_leg_snapshot(_STRATEGY, "overlay_pp", _DATE) is None
 
 
 def test_save_leg_snapshots_total_pnl_invariant_holds(tmp_path: Path) -> None:

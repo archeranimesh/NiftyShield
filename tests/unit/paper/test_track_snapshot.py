@@ -103,14 +103,16 @@ async def test_generate_track_snapshot_base_etf():
 
 
 @pytest.mark.asyncio
-async def test_closed_overlay_leg_included_in_snapshot() -> None:
-    """Closed overlay leg (net_qty == 0) must contribute realized P&L to overlay_pnls.
-
-    Regression guard for RPT-1: prior to the second-pass fix, a fully closed
-    CC/PP/Collar leg was invisible in overlay_pnls — net_pnl showed base only.
+async def test_overlay_legs_under_a_track_are_ignored() -> None:
+    """BUG-028 (2026-08-10): a track's own trades/positions may still carry a
+    leftover ``overlay_*``-role row (pre-S2r, not yet closed/rolled off), but
+    ``generate_track_snapshot`` must not attribute it to this track's P&L or
+    Greeks any more — overlay legs are the independent ``STRATEGY_OVERLAY``
+    book's responsibility now (see
+    ``scripts/strategies/three_track/paper_3track_snapshot.py``'s standalone
+    overlay pipeline). Only the base leg counts.
     """
     trades = [
-        # Base leg: open ETF position
         PaperTrade(
             strategy_name="paper_nifty_spot",
             leg_role="base_etf",
@@ -121,7 +123,8 @@ async def test_closed_overlay_leg_included_in_snapshot() -> None:
             price=Decimal("240.0"),
             notes="",
         ),
-        # Overlay CC: opened (SELL) and closed (BUY) — net_qty == 0
+        # Leftover overlay_cc row under this track's own strategy_name — must
+        # be ignored entirely, not folded into base_pnl/net_pnl/Greeks.
         PaperTrade(
             strategy_name="paper_nifty_spot",
             leg_role="overlay_cc",
@@ -132,19 +135,8 @@ async def test_closed_overlay_leg_included_in_snapshot() -> None:
             price=Decimal("100.0"),
             notes="",
         ),
-        PaperTrade(
-            strategy_name="paper_nifty_spot",
-            leg_role="overlay_cc",
-            instrument_key="NIFTY_OPT",
-            trade_date=date(2026, 6, 10),
-            action=TradeAction.BUY,
-            quantity=1,
-            price=Decimal("30.0"),
-            notes="",
-        ),
     ]
     positions = [
-        # base_etf open
         PaperPosition(
             strategy_name="paper_nifty_spot",
             leg_role="base_etf",
@@ -153,13 +145,12 @@ async def test_closed_overlay_leg_included_in_snapshot() -> None:
             avg_cost=Decimal("240.0"),
             avg_sell_price=Decimal("0"),
         ),
-        # overlay_cc fully closed — net_qty == 0, must not enter open_positions loop
         PaperPosition(
             strategy_name="paper_nifty_spot",
             leg_role="overlay_cc",
             instrument_key="NIFTY_OPT",
-            net_qty=0,
-            avg_cost=Decimal("30.0"),
+            net_qty=-1,
+            avg_cost=Decimal("0"),
             avg_sell_price=Decimal("100.0"),
         ),
     ]
@@ -172,21 +163,22 @@ async def test_closed_overlay_leg_included_in_snapshot() -> None:
         store, broker, lookup, "paper_nifty_spot", Decimal("24000"), Decimal("100000"), date.today()
     )
 
-    # overlay_cc realized = (100 - 30) * 1 = 70; normalized to "cc" by _normalize_overlay_pnls
-    assert "cc" in snap.pnl.overlay_pnls
-    assert snap.pnl.overlay_pnls["cc"] == Decimal("70")
-    # base_pnl = (250 - 240) * 100 = 1000; net_pnl = 1000 + 70 = 1070
+    # base_pnl = (250 - 240) * 100 = 1000; the overlay_cc leg contributes
+    # nothing — pre-fix this would have added its P&L to net_pnl.
     assert snap.pnl.base_pnl == Decimal("1000")
-    assert snap.pnl.net_pnl == Decimal("1070")
+    assert snap.pnl.net_pnl == Decimal("1000")
+    # No overlay attribute survives on TrackPnL at all (BUG-028 dataclass change).
+    assert not hasattr(snap.pnl, "overlay_pnls")
+    assert not hasattr(snap.pnl, "raw_overlay_pnls")
+    # Greeks reflect only the base ETF leg (fixed beta), never the overlay short.
+    assert snap.greeks.net_delta == Decimal("92.0")
 
 
 @pytest.mark.asyncio
-async def test_all_closed_overlay_no_open_positions() -> None:
-    """Track with only closed overlay legs (base also closed) must return their
-    realized P&L — not zero — in overlay_pnls.
-
-    Edge case: open_positions is empty so the main loop does nothing, but
-    the second pass must still pick up closed overlay realized P&L.
+async def test_track_with_only_leftover_overlay_legs_reports_zero() -> None:
+    """Edge case: a track whose only positions are leftover overlay_* rows
+    (no base leg at all — e.g. fully rolled-off/legacy data) must report a
+    flat zero snapshot, not attempt to resolve overlay Greeks/P&L for it.
     """
     trades = [
         PaperTrade(
@@ -199,25 +191,14 @@ async def test_all_closed_overlay_no_open_positions() -> None:
             price=Decimal("50.0"),
             notes="",
         ),
-        PaperTrade(
-            strategy_name="paper_nifty_spot",
-            leg_role="overlay_cc",
-            instrument_key="NIFTY_OPT",
-            trade_date=date(2026, 6, 10),
-            action=TradeAction.BUY,
-            quantity=2,
-            price=Decimal("20.0"),
-            notes="",
-        ),
     ]
-    # Explicit flat position — net_qty=0 so it must NOT enter open_positions loop
     positions = [
         PaperPosition(
             strategy_name="paper_nifty_spot",
             leg_role="overlay_cc",
             instrument_key="NIFTY_OPT",
-            net_qty=0,
-            avg_cost=Decimal("20.0"),
+            net_qty=-2,
+            avg_cost=Decimal("0"),
             avg_sell_price=Decimal("50.0"),
         ),
     ]
@@ -229,9 +210,9 @@ async def test_all_closed_overlay_no_open_positions() -> None:
         store, broker, lookup, "paper_nifty_spot", Decimal("24000"), Decimal("100000"), date.today()
     )
 
-    # realized = (50 - 20) * 2 = 60
-    assert snap.pnl.overlay_pnls.get("cc") == Decimal("60")  # normalized from overlay_cc
-    assert snap.pnl.net_pnl == Decimal("60")
+    assert snap.pnl.base_pnl == Decimal("0")
+    assert snap.pnl.net_pnl == Decimal("0")
+    assert snap.greeks.net_delta == Decimal("0")
 
 
 def test_compute_realized_pnl_by_leg():
@@ -288,16 +269,14 @@ def test_compute_realized_pnl_by_leg():
 
 
 @pytest.mark.asyncio
-async def test_total_pnl_invariant_holds_when_cc_deduped_against_collar() -> None:
-    """total_unrealized + total_realized must equal net_pnl even when
-    overlay_cc is dropped by _normalize_overlay_pnls in favor of
-    overlay_collar_call (same physical contract, two leg_roles).
+async def test_total_pnl_invariant_holds_with_base_leg_only() -> None:
+    """total_unrealized + total_realized must equal net_pnl.
 
-    Regression guard for SNAP-5: prior to this fix, total_unrealized/
-    total_realized accumulated overlay_cc's contribution even though
-    net_pnl dropped it, so paper_nav_snapshots.total_pnl (built from
-    net_pnl by _save_nav_snapshot) silently diverged from
-    unrealized_pnl + realized_pnl.
+    BUG-028 (2026-08-10) superseded the SNAP-5 CC/collar-dedup regression
+    guard this test used to cover: overlay legs no longer enter this
+    computation at all (see test_overlay_legs_under_a_track_are_ignored),
+    so the dedup-vs-total-drift failure mode this test guarded is now
+    structurally impossible here. Kept as a plain base-leg invariant check.
     """
     trades = [
         PaperTrade(
@@ -310,28 +289,6 @@ async def test_total_pnl_invariant_holds_when_cc_deduped_against_collar() -> Non
             price=Decimal("240.0"),
             notes="",
         ),
-        # overlay_cc: open short, avg_sell_price 50, LTP 100 -> unrealized = -50
-        PaperTrade(
-            strategy_name="paper_nifty_spot",
-            leg_role="overlay_cc",
-            instrument_key="NIFTY_OPT",
-            trade_date=date(2026, 6, 1),
-            action=TradeAction.SELL,
-            quantity=1,
-            price=Decimal("50.0"),
-            notes="",
-        ),
-        # overlay_collar_call: open short, avg_sell_price 80, LTP 100 -> unrealized = -20
-        PaperTrade(
-            strategy_name="paper_nifty_spot",
-            leg_role="overlay_collar_call",
-            instrument_key="NIFTY_OPT",
-            trade_date=date(2026, 6, 1),
-            action=TradeAction.SELL,
-            quantity=1,
-            price=Decimal("80.0"),
-            notes="",
-        ),
     ]
     positions = [
         PaperPosition(
@@ -341,22 +298,6 @@ async def test_total_pnl_invariant_holds_when_cc_deduped_against_collar() -> Non
             net_qty=100,
             avg_cost=Decimal("240.0"),
             avg_sell_price=Decimal("0"),
-        ),
-        PaperPosition(
-            strategy_name="paper_nifty_spot",
-            leg_role="overlay_cc",
-            instrument_key="NIFTY_OPT",
-            net_qty=-1,
-            avg_cost=Decimal("0"),
-            avg_sell_price=Decimal("50.0"),
-        ),
-        PaperPosition(
-            strategy_name="paper_nifty_spot",
-            leg_role="overlay_collar_call",
-            instrument_key="NIFTY_OPT",
-            net_qty=-1,
-            avg_cost=Decimal("0"),
-            avg_sell_price=Decimal("80.0"),
         ),
     ]
 
@@ -368,18 +309,10 @@ async def test_total_pnl_invariant_holds_when_cc_deduped_against_collar() -> Non
         store, broker, lookup, "paper_nifty_spot", Decimal("24000"), Decimal("100000"), date.today()
     )
 
-    # net_pnl drops overlay_cc (deduped against overlay_collar_call):
-    # base_pnl (1000) + collar_call only (-20) = 980.
-    assert snap.pnl.net_pnl == Decimal("980")
-    # The invariant this story exists to fix: total_unrealized + total_realized
-    # must match net_pnl (== what _save_nav_snapshot persists as total_pnl).
+    assert snap.pnl.net_pnl == Decimal("1000")
     assert snap.pnl.unrealized_pnl + snap.pnl.realized_pnl == snap.pnl.net_pnl
-    assert snap.pnl.unrealized_pnl == Decimal("980")
+    assert snap.pnl.unrealized_pnl == Decimal("1000")
     assert snap.pnl.realized_pnl == Decimal("0")
-    # raw_overlay_pnls still exposes both real leg_roles — persistence to
-    # paper_leg_snapshots must not lose overlay_cc's own figure.
-    assert snap.pnl.raw_overlay_pnls["overlay_cc"] == Decimal("-50")
-    assert snap.pnl.raw_overlay_pnls["overlay_collar_call"] == Decimal("-20")
 
 
 # ---------------------------------------------------------------------------
@@ -517,18 +450,17 @@ async def test_none_ltp_does_not_suppress_realized_pnl(caplog: pytest.LogCapture
 
 
 # ---------------------------------------------------------------------------
-# S7: raw (pre-normalization) overlay leg_role exposure for persistence
+# BUG-028: collar legs (or any overlay_*) under a track are ignored outright
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_generate_track_snapshot_exposes_raw_overlay_leg_roles() -> None:
-    """pnl.raw_overlay_pnls must carry the real leg_role keys (overlay_collar_call/
-    overlay_collar_put) even though pnl.overlay_pnls collapses them into "collar"
-    for display. _save_leg_snapshots() needs the real keys to call
-    store.get_position() correctly — persisting off the collapsed label was the
-    S7 bug (2026-07-28): overlay_ltp was always None because "collar"/"cc"/"pp"
-    are never real leg_role values in paper_trades.
+async def test_generate_track_snapshot_ignores_collar_legs_under_a_track() -> None:
+    """A track carrying leftover overlay_collar_call/overlay_collar_put rows
+    must not surface them anywhere on TrackPnL — collar P&L is the standalone
+    ``STRATEGY_OVERLAY`` book's responsibility since S2r/BUG-028, not a
+    track's. Supersedes the old S7 raw_overlay_pnls exposure test, which
+    covered the now-removed per-track overlay discovery/persistence path.
     """
     trades = [
         PaperTrade(
@@ -579,7 +511,7 @@ async def test_generate_track_snapshot_exposes_raw_overlay_leg_roles() -> None:
         store, broker, lookup, "paper_nifty_spot", Decimal("24000"), Decimal("100000"), date.today()
     )
 
-    # Display view: collapsed to a single merged "collar" label.
-    assert set(snap.pnl.overlay_pnls) == {"collar"}
-    # Persistence view: both real leg_roles must survive, uncollapsed.
-    assert set(snap.pnl.raw_overlay_pnls) == {"overlay_collar_call", "overlay_collar_put"}
+    assert snap.pnl.base_pnl == Decimal("0")
+    assert snap.pnl.net_pnl == Decimal("0")
+    assert not hasattr(snap.pnl, "overlay_pnls")
+    assert not hasattr(snap.pnl, "raw_overlay_pnls")

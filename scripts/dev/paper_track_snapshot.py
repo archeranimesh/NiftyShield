@@ -19,9 +19,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.client.upstox_market import UpstoxMarketClient
 from src.instruments.lookup import InstrumentLookup
 from src.notifications.telegram import TelegramNotifier
-from src.paper._display import BASE_LABELS, OVERLAY_LABELS
+from src.paper._display import BASE_LABELS
 from src.paper._display import fmt_decimal as _fmt
-from src.paper._display import hedge_verdict as _hedge_verdict
 from src.paper.constants import (
     DEFAULT_BOD_PATH,
     DEFAULT_DB_PATH,
@@ -45,36 +44,16 @@ logger = structlog.get_logger(_SCRIPT_NAME)
 
 
 def _format_pnl_block(track_name: str, pnl: TrackPnL) -> list[str]:
-    """Build the 🛡 Hedge block lines for a track's PnL.
+    """Build the base-leg P&L block lines for a track.
 
-    Groups overlay_collar_put + overlay_collar_call into a single Collar line.
-    Falls back to a plain base-only line when no overlays are present.
+    BUG-028 (2026-08-10): base-leg-only — overlay P&L (CC/PP/Collar) belongs
+    to the independent ``STRATEGY_OVERLAY`` book, not any track, and is not
+    reported by this legacy backward-compat script. Use
+    ``scripts/strategies/three_track/paper_3track_snapshot.py`` for the
+    standalone overlay view.
     """
     base_label = BASE_LABELS.get(track_name, "Base")
-    lines: list[str] = []
-
-    # Merge overlay legs by display name (collar_put + collar_call → Collar).
-    grouped: dict[str, Decimal] = {}
-    for role, amount in pnl.overlay_pnls.items():
-        label = OVERLAY_LABELS.get(role, role)
-        grouped[label] = grouped.get(label, Decimal("0")) + amount
-
-    if not grouped:
-        lines.append(f"  Base ({base_label}):  {_fmt(pnl.base_pnl)}")
-        return lines
-
-    overlay_names = " + ".join(grouped)
-    overlay_total = sum(grouped.values())
-
-    lines.append(f"  🛡 Hedge ({overlay_names})")
-    lines.append(f"    {base_label:<22} {_fmt(pnl.base_pnl)}")
-    for label, amount in grouped.items():
-        lines.append(f"    {label:<22} {_fmt(amount)}")
-    lines.append(f"    {'─' * 35}")
-    verdict = _hedge_verdict(pnl.base_pnl, overlay_total)
-    lines.append(f"    {'Net':<22} {_fmt(pnl.net_pnl)}  {verdict}")
-
-    return lines
+    return [f"  Base ({base_label}):  {_fmt(pnl.base_pnl)}"]
 
 
 class MockBrokerClientDryRun:
