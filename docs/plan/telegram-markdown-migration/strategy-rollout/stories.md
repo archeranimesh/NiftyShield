@@ -1320,10 +1320,154 @@ get_code_snippet("test_run_checks_all_pass")   # confirm existing test's assumpt
 
 ---
 
+## ROLL-12 — Position Health Check Alert
+
+**Not in the epic's original confirmed-callers list** — added 2026-08-10 via
+`missing-message-workshop-prompt.md`/`message-format-workshop.md` (queue item 6, TODO.md).
+Variable-length two-shape finding list, TODO.md flagged it "closer to a table than items 1-4."
+
+**Confirmed real source:** `scripts/position_health_check.py::main`, lines 129-135 (confirmed
+via `search_graph` + `get_code_snippet`, not the TODO.md grep excerpt alone):
+
+```python
+if has_issue:
+    alert_body = "\n".join(findings)
+    alert_msg = f"⚠️ NiftyShield Position Health — {today.isoformat()}\n{alert_body}"
+    ...
+    success = await notifier.send(alert_msg)
+```
+
+`findings` (`list[str]`) is built by `run_position_checks()` (same file, lines 48-91) —
+already pre-aggregated per root CLAUDE.md Rule 1 (never raw position rows). Exactly two
+pre-formatted finding shapes today:
+
+```python
+f"❌ UNRESOLVED_INSTRUMENT: {strategy_name}/{position.leg_role} " \
+f"key={position.instrument_key} net_qty={position.net_qty}"
+
+f"❌ ROLL_OVERDUE: {strategy_name}/{position.leg_role} " \
+f"key={position.instrument_key} expiry={expiry_str} " \
+f"({days_overdue}d overdue) net_qty={position.net_qty}"
+```
+
+**Confirmed message structure (2026-08-10, `message-format-workshop.md` session — v3, after
+two rounds of iteration; not yet exercised via a live `--send` round-trip — this Cowork sandbox
+session had no working venv/aiohttp, same limitation ROLL-9/ROLL-10/ROLL-11 hit) — reference
+implementation `scratch/2026-08-10_position_health_alert_format.py`:**
+
+```
+⚠️ NIFTYSHIELD: POSITION HEALTH
+
+❌ ROLLS OVERDUE (2):
+🚨 12d LATE: [CSP V1] Short 25x NIFTY 22500 PE (18 Aug 26)
+🚨 5d LATE: [IC V1 Weekly] Short 50x NIFTY 23000 CE (25 Aug 26)
+
+❓ UNMAPPED ASSET (1):
+⚠️ [Covered Call V1] Long 100x (Unknown Token: 99999)
+```
+
+(Backslash escaping shown de-escaped above for readability, as in every other confirmed block
+in this file — see the scratch script for the actual MarkdownV2 source.)
+
+**Elimination trail:**
+1. **v1 (superseded):** raw `mdcode()`-identifier lines — `strategy/leg_role` + raw
+   instrument_key + `key=value` fields, closest to a straight re-render of the current
+   f-strings. Rejected by Animesh as "cryptic" (the raw `NSE_FO|48521` broker key specifically).
+2. **v2 (superseded):** kept the grouped-list shape but swapped the raw key for a resolved
+   human-readable option label via the real, already-shipped `src.instruments.lookup.
+   format_option_label()` (TL-1's convention — reused, not reinvented). Rejected in favor of
+   v3's further restructure (below), not because the label itself was wrong.
+3. **v3 (confirmed) restructures every row:** direction word (`Short`/`Long`, derived from
+   `net_qty`'s sign — negative net_qty = Short, matching the existing short-option-collects-
+   premium convention) + quantity as `abs(net_qty)` instead of a bare signed `qty=` field;
+   human strategy label in `[brackets]` (reusing the **same `STRATEGY_LABELS` dict** ROLL-7/
+   ROLL-8's reference scripts already define, duplicated here for the same not-yet-real-code
+   reason those two note) instead of the raw `strategy_name/leg_role` identifier; a per-row
+   `Xd LATE:` prefix instead of a trailing `(Nd overdue)` suffix.
+4. **Severity icon confirmed always 🚨 for ROLLS OVERDUE — no ⚠️ tier** (Animesh's explicit
+   answer, 2026-08-10, asked rather than assumed): every roll-overdue finding is inherently
+   action-required regardless of days overdue. `days_overdue` still renders in the `Xd LATE:`
+   text — only the icon is fixed, not the number.
+5. **Date format confirmed to stay on FMT-1's locked `dd Mon yy` spec** (Animesh's explicit
+   answer, 2026-08-10), not the shorter `dd-Mon` shown informally in his sketch — asked
+   explicitly rather than silently adopt an unstated FMT-1 override, same discipline
+   `build_leg_table`'s 1dp override required a confirmed decision for.
+6. Rows within `ROLLS OVERDUE` sort by `days_overdue` descending (12d before 5d) — with the
+   per-row icon now fixed at 🚨 (point 4), days-overdue-descending is the only remaining
+   at-a-glance urgency signal, so this is sorted explicitly rather than left in
+   `run_position_checks()`'s incidental strategy-then-position iteration order.
+7. Section renamed `ROLL_OVERDUE` -> `ROLLS OVERDUE` (❌ header / 🚨 per-row) and
+   `UNRESOLVED_INSTRUMENT` -> `UNMAPPED ASSET` (❓ header / ⚠️ per-row) — Animesh's exact
+   wording, adopted verbatim rather than the raw enum-style names from the current f-strings.
+8. `UNMAPPED ASSET` rows show only the numeric suffix of the raw `instrument_key` (after the
+   `|`) as `Unknown Token: <suffix>`, not the full `NSE_FO|99999` key — parsed defensively
+   (falls back to the full raw key if no `|` is present, not a hard-coded NSE_FO-only parser).
+9. A real fenced table (`build_kv_table`) was considered and rejected across all three
+   drafts — `ROLL_OVERDUE`/`ROLLS OVERDUE` and `UNRESOLVED_INSTRUMENT`/`UNMAPPED ASSET` have
+   different field sets (expiry/days_overdue/instrument only exist on the first), so a unioned
+   table would need blank cells for every second-type row; a grouped list reads cleaner for two
+   heterogeneous finding shapes. Revisit if a third finding type is ever added.
+10. Header drops the date entirely (`⚠️ NIFTYSHIELD: POSITION HEALTH`, no date/time suffix) —
+    unlike ROLL-11's healthcheck alert (which keeps `[HH:MM]` in its headline), every row here
+    already carries its own expiry date, so a message-level "as-of" stamp was judged redundant.
+
+**Asymmetry that can't be fixed by formatting alone:** `UNMAPPED ASSET` findings have no `inst`
+by construction — `lookup.get_by_key()` returned `None`, which is exactly why the finding
+fired. There is no strike/underlying/expiry to build a `ROLLS OVERDUE`-style instrument line
+from, so these rows keep the bare direction/qty + token suffix as the only identifying
+information — a structural difference from `ROLLS OVERDUE` rows, not a formatting gap.
+
+**backbone/ (MD-1..MD-5) status as of this session: NOT shipped** — confirmed via
+`search_graph("mdcode")` / `search_graph("escape_markdown")`, both zero results outside
+`scratch/` (same check as every prior queue item's session). Reference script inlines its own
+copy of `escape_markdown()` (no `mdcode()` needed in v3 — identifiers are no longer shown in
+code spans, see elimination trail point 3).
+
+**Files to change:**
+- `scripts/position_health_check.py` — `run_position_checks()` (return type change:
+  `list[str]` -> `list[PositionFinding]`, a new frozen dataclass per the reference script's
+  shape — same class of upstream data-shape change ROLL-11 needed for `run_checks()`),
+  `main()` (message-building call site)
+- New: `PositionFinding` dataclass + the grouped-message builder (`src/notifications/
+  formatting.py` if `formatting-rules/` has shipped by the time this task starts, otherwise
+  colocate in `scripts/position_health_check.py` and move later — same colocate-then-promote
+  judgment call `FMT-1c`'s header and `ROLL-7`'s `STRATEGY_LABELS` already used)
+- Matching test file: `tests/unit/test_position_health_check.py` (existing file — extend, not
+  new, per `search_graph` before assuming; existing tests build `FakeInstrumentLookup`-backed
+  fixtures that will need to keep working against the new `list[PositionFinding]` return type)
+
+**Before any code:**
+```
+get_code_snippet("run_position_checks")   # confirm current implementation fresh
+get_code_snippet("main")                  # scripts/position_health_check.py — confirm alert_msg construction fresh
+search_graph("STRATEGY_LABELS")           # confirm whether ROLL-7/ROLL-8 have promoted this to real src/ yet
+```
+
+**Tests:**
+- One test per confirmed scenario in the reference script (`roll_overdue_only`,
+  `unresolved_only`, `mixed`, `single_finding`, `roll_overdue_futures`) asserting the exact
+  grouped layout, sort order, and correct escaping
+- `test_position_health_rolls_overdue_sorted_descending` — regression test for elimination
+  trail point 6: a fixture with days_overdue in ascending insertion order renders descending
+- `test_position_health_futures_leg_no_strike_in_label` — regression test for the FUT
+  special-case (`_resolved_label`'s `format_option_label()` bypass): a `base_futures`-role
+  finding renders `NIFTY FUT`, never a spurious strike value
+- `test_position_health_unmapped_asset_omits_expiry_fields` — confirms an `UNMAPPED ASSET` row
+  never attempts to render expiry/days-overdue (they don't exist for this finding type)
+- `test_position_health_unknown_token_parses_numeric_suffix` — `NSE_FO|99999` -> `99999`;
+  edge case: an instrument_key with no `|` falls back to the full raw key unchanged
+- `test_position_health_unmapped_strategy_raises` — regression test matching ROLL-7/ROLL-8's
+  own `STRATEGY_LABELS` discipline: an unmapped `strategy_name` raises `ValueError`, does not
+  silently fall back to the raw id
+
+**Commit:** `feat(scripts): migrate position health alert to Markdown grouped status format`
+
+---
+
 ## ROLL-5 — Docs Close
 
-**Blocked by:** ROLL-4, ROLL-6, ROLL-7, ROLL-8, ROLL-9, ROLL-10, ROLL-11 (updated 2026-08-10 to
-add ROLL-11 — see `tasks.md`).
+**Blocked by:** ROLL-4, ROLL-6, ROLL-7, ROLL-8, ROLL-9, ROLL-10, ROLL-11, ROLL-12 (updated
+2026-08-10 to add ROLL-12 — see `tasks.md`).
 
 **Files to change (targeted `Edit`, never `Write`):**
 - `CONTEXT.md` — note the completed migration across all message types

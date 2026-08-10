@@ -72,9 +72,16 @@
       sandbox had no working venv) and written back as `strategy-rollout/` **ROLL-11** — see
       `scratch/2026-08-10_healthcheck_alert_format.py`. | SHA: —
 
-- [ ] **6. Position health check alert** — `scripts/position_health_check.py:129-135`
+- [x] **6. Position health check alert** — `scripts/position_health_check.py:129-135`
       `⚠️ NiftyShield Position Health — {date}` + overdue-position list (days overdue, net_qty
-      per row) — variable-length list, closer to a table than items 1-4. | SHA: —
+      per row) — variable-length list, closer to a table than items 1-4. Format confirmed
+      2026-08-10 (three-round iteration: raw-identifier v1 rejected as "cryptic" -> resolved-
+      option-label v2 -> v3's confirmed restructure — `ROLLS OVERDUE` 🚨 rows grouped/sorted by
+      days-overdue descending with `[strategy] Short/Long Nx LABEL (expiry)`, `UNMAPPED ASSET`
+      ⚠️ rows with a parsed token suffix instead of the raw broker key; not yet exercised via a
+      live `--send` round-trip, this Cowork sandbox had no working venv) and written back as
+      `strategy-rollout/` **ROLL-12** — see
+      `scratch/2026-08-10_position_health_alert_format.py`. | SHA: TBD
 
 - [ ] **7. Three-track entry / overlay-entry confirmations** —
       `scripts/strategies/three_track/paper_3track_entry.py:940`,

@@ -243,6 +243,43 @@ Session Log grows large again.
   `backbone/MD-1` still has not shipped, confirmed fresh this session via
   `search_graph("mdcode")`/`search_graph("escape_markdown")` both returning zero results.
 
+### 2026-08-10 Session Log (missing-message-workshop, queue item 6)
+- **Telegram Markdown migration** (item 29): ran `TODO.md` queue item 6 (Position Health check
+  alert, `scripts/position_health_check.py::main` lines 129-135) through
+  `message-format-workshop.md`. Three-round iteration in chat, not just one: v1 (raw
+  `mdcode()`-identifier lines re-rendering the current f-strings almost verbatim) rejected by
+  Animesh as "cryptic" — specifically the raw `NSE_FO|48521` broker key. v2 swapped the key for
+  a resolved human-readable option label via the real, already-shipped
+  `src.instruments.lookup.format_option_label()` (confirmed via `search_graph`/`get_code_snippet`
+  — an existing exported helper, not part of this epic's own not-yet-shipped work; reused per
+  TL-1's precedent). Animesh's own counter-sketch then drove v3, the confirmed shape: rows
+  restructured to `🚨 Nd LATE: [strategy label] Short/Long Nx LABEL (expiry)` for
+  `ROLLS OVERDUE` and `⚠️ [strategy label] Short/Long Nx (Unknown Token: nnnnn)` for
+  `UNMAPPED ASSET`. Two explicit clarifying questions asked rather than guessed (per this
+  project's own escalation discipline): per-row severity icon confirmed to stay fixed at 🚨 for
+  every roll-overdue row (no ⚠️/🚨 two-tier split, despite the sketch showing both — Animesh's
+  answer: "always 🚨"), and the row date format confirmed to stay on FMT-1's locked
+  `dd Mon yy` spec rather than the shorter `dd-Mon` shown informally in the sketch. Reused the
+  existing `STRATEGY_LABELS` dict from ROLL-7/ROLL-8's reference scripts rather than inventing a
+  new strategy-name mapping. Flagged real scope in the write-back: `run_position_checks()` needs
+  refactoring to return structured `PositionFinding` objects (same class of change ROLL-11
+  needed for `run_checks()`); `UNMAPPED ASSET` findings structurally can't get a resolved label
+  (no `inst` by construction — the lookup failure is exactly why the finding fired) — this is a
+  permanent asymmetry vs. `ROLLS OVERDUE` rows, not a formatting gap to close later. Confirmed
+  on rendered-source review only — this Cowork sandbox has no working venv/aiohttp (same
+  limitation ROLL-9/ROLL-10/ROLL-11 hit); Animesh is running it locally to verify on-device
+  rendering before real implementation starts. Reference
+  `scratch/2026-08-10_position_health_alert_format.py` (5 scenarios: `roll_overdue_only`,
+  `unresolved_only`, `mixed`, `single_finding`, `roll_overdue_futures` — the last one surfaced a
+  real gap, `format_option_label()` prints a meaningless strike for FUT legs, special-cased in
+  `_resolved_label()` rather than passed through). Added **ROLL-12** to
+  `strategy-rollout/stories.md`/`tasks.md` (unblocked by `backbone/`+`formatting-rules/`, same
+  soft deps as other ROLL tasks); `ROLL-5`'s docs-close blocked-by list updated to include it.
+  Ticked TODO.md item 6. Still docs+scratch only — `ROLL-12` itself remains unimplemented;
+  `backbone/MD-1` still has not shipped, confirmed fresh this session via
+  `search_graph("mdcode")`/`search_graph("escape_markdown")` both returning zero results outside
+  `scratch/`.
+
 ### 2026-08-10 Session Log (logging bug: `format_exc_info` console-mode gap)
 - **Fix** (`src/utils/logging.py`): investigated why `paper_ic_nifty_v1_leaps`'s 10:27:03
   `PROFIT_TARGET` close left `ic_nifty_v1.counterfactual_log_failed` (`exc_info=True`) with no

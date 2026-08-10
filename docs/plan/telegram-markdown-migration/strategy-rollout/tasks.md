@@ -80,4 +80,15 @@
       refactoring `run_checks()` to return structured `CheckResult` objects instead of
       pre-formatted strings — see stories.md for why a drop-in re-render isn't possible | Blocked
       by: `backbone/` + `formatting-rules/` complete (same soft deps as other ROLL tasks)
-- [ ] **ROLL-5** — Docs close | Blocked by: ROLL-4, ROLL-6, ROLL-7, ROLL-8, ROLL-9, ROLL-10, ROLL-11
+- [ ] **ROLL-12** — Migrate Position Health check alert
+      (`scripts/position_health_check.py::main`) to a grouped-by-finding-type MarkdownV2 format
+      (`ROLLS OVERDUE` 🚨 rows sorted days-overdue descending, `UNMAPPED ASSET` ⚠️ rows); not in
+      the epic's original confirmed-callers list (surfaced via
+      `missing-message-workshop-prompt.md`, TODO.md item 6); requires refactoring
+      `run_position_checks()` to return structured `PositionFinding` objects instead of
+      pre-formatted strings, and reuses `format_option_label()` (already shipped,
+      `src/instruments/lookup.py`) plus the `STRATEGY_LABELS` display-name table ROLL-7/ROLL-8
+      already define — see stories.md for the full elimination trail (v1 raw-key draft ->
+      v2 resolved-label draft -> v3 confirmed restructure) | Blocked by: `backbone/` +
+      `formatting-rules/` complete (same soft deps as other ROLL tasks)
+- [ ] **ROLL-5** — Docs close | Blocked by: ROLL-4, ROLL-6, ROLL-7, ROLL-8, ROLL-9, ROLL-10, ROLL-11, ROLL-12
