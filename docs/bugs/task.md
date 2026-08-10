@@ -368,7 +368,11 @@ commit per phase.
   data" rendering) — 4 tests added, see B028.9; (2) migration's old-schema detection was a
   whitespace-fragile string match against `sqlite_master.sql` — switched to `PRAGMA table_info`'s
   `notnull` flag. INFO: migration correctly transaction-wrapped (`BEGIN`/`COMMIT`), no data-loss
-  risk on mid-rebuild failure; `_best_recovery`'s all-real-data path provably unchanged.
+  risk on mid-rebuild failure; `_best_recovery`'s all-real-data path provably unchanged. Committed
+  and docs updated (`bugs.md`/`CONTEXT.md`/`TODOS.md`). | SHA `4b8b351` (this SHA-annotation
+  follow-up itself staged but not committed — sandbox `.git/HEAD.lock` held by a concurrent
+  process, permission denied to remove, same class of limitation as B004.6/B006.6/B010.2/B021.x;
+  commit deferred to live host)
 
 ### Phase 3 — Historical repair (one-off script)
 
