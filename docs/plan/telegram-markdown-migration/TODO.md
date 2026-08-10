@@ -55,9 +55,13 @@
       realized P&L line and month labels) and written back as `strategy-rollout/` **ROLL-9** —
       see `scratch/2026-08-10_3track_roll_notification_format.py`. | SHA: 79e6314
 
-- [ ] **4. Dev paper-track snapshot** — `scripts/dev/paper_track_snapshot.py:188`
+- [x] **4. Dev paper-track snapshot** — `scripts/dev/paper_track_snapshot.py:188`
       Max-drawdown / return-on-NEE metrics + proxy-delta alert state. A few metric lines, lives
-      under `scripts/dev/` (lower production stakes, still worth a consistent format). | SHA: —
+      under `scripts/dev/` (lower production stakes, still worth a consistent format). Format
+      confirmed 2026-08-10 (3-line 📐/📉 emoji-labeled shape, `Action:` line dropped as
+      fabricated-data, `Rule Breach:` ships verbatim pending a real data-plumbing follow-up) and
+      written back as `strategy-rollout/` **ROLL-10** — see
+      `scratch/2026-08-10_proxy_delta_critical_alert_format.py`. | SHA: 54f7acc
 
 - [ ] **5. System healthcheck alert** — `scripts/healthcheck.py:171-178`
       `⚠️ NiftyShield Healthcheck — {now_str} IST` + multi-line disk/process alert body (variable
