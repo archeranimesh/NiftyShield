@@ -899,6 +899,193 @@ search_graph("STRATEGY_LABELS")                      # confirm whether ROLL-7's 
 
 ---
 
+## ROLL-9 — Three-Track Base-Leg Roll Notification
+
+**Not in the epic's original confirmed-callers list** — added via
+`missing-message-workshop-prompt.md`/`message-format-workshop.md` (queue item 3,
+`docs/plan/telegram-markdown-migration/TODO.md`). TODO.md's queue line ("Two lines, single
+position event") undersold the real message — the current pre-migration code is 6 lines, not 2.
+
+**Confirmed real source:** the message-construction block inside `_notify_roll`
+(`scripts/strategies/three_track/paper_3track_roll.py:296-313`, called from `_run()` after a
+roll's close/open trades are persisted):
+
+```python
+msg = (
+    f"🔄 BASE LEG ROLLED\n"
+    f"Strategy: {pos.strategy_name}\n"
+    f"Leg: {pos.leg_role}\n"
+    f"Closed: {pos.instrument_key} @ ₹{close_price}\n"
+    f"Opened: {next_key} @ ₹{open_price}\n"
+    f"{status_line}"
+)
+```
+
+Handles both rollable leg roles: `base_futures` (DTE≤1, via `get_next_contract`) and
+`base_ditm_call` (DTE<20, via `get_next_contract_in_band` — same strike, next
+monthly/quarterly/yearly-band expiry only, confirmed via that method's implementation). Separate
+from the backbone-managed overlay/CSP rolls `ROLL-3` covers (`CSPNiftyV1`/
+`NiftyTrackComparisonV1` via `PaperExecutor`).
+
+**Confirmed message structure — two distinct layouts, one per leg role (this session,
+`message-format-workshop.md`, iterated on-device through 3 rounds) — reference implementation
+`scratch/2026-08-10_3track_roll_notification_format.py`:**
+
+`base_futures`:
+```
+🔄 ROLL: NIFTY FUT [AUG ➡️ SEP]
+💰 P&L: +₹7,812.50 🟢
+📐 Spread: 43.25 pts (Contango)
+
+⬇️ OUT: ₹24,812.50
+⬆️ IN: ₹24,855.75
+✅ L-Gate: PASS
+```
+
+`base_ditm_call`:
+```
+🔄 ROLL: PROXY DITM CALL
+🎟️ [NIFTY 24000 CE] AUG ➡️ SEP
+💰 P&L: -₹393.00 🔴
+📐 Spread: 25.62 pts (Debit)
+
+⬇️ OUT: ₹86.68
+⬆️ IN: ₹112.30
+⚠️ L-Gate: WARN
+```
+
+Gate/partial line — one of three values in both layouts:
+```
+🚨 PARTIAL ROLL — VERIFY POSITIONS MANUALLY   (partial=True; overrides gate_passed)
+✅ L-Gate: PASS                                (partial=False, gate_passed=True)
+⚠️ L-Gate: WARN                                (partial=False, gate_passed=False)
+```
+
+(Escaping omitted above for readability, as in every other block in this file — see the
+scratch script's 7 scenarios for the actual MarkdownV2 source with `escape_markdown()`/
+`mdcode()` applied throughout.)
+
+**Confirmed field-by-field data-availability audit — flagged explicitly during the workshop
+per Animesh's own request ("which of these need code changes vs. pure reformatting"), do not
+skip this when implementing:**
+
+1. **OUT/IN prices, L-Gate status, partial-roll override** — zero new data. `close_price`,
+   `open_price`, `gate_passed`, `partial` are all already `_notify_roll`'s existing local
+   values at the point the message is built.
+2. **Spread + curve/premium label** — zero new data. `open_price - close_price`; sign picks
+   the label (see below). Both values already local.
+3. **Closed-leg realized P&L** (`💰 P&L` line) — small change, not a new data source.
+   `pnl = (close_price - pos.avg_cost) * abs(pos.net_qty)`. `pos` (the `PaperPosition`) is
+   already the loop variable in scope at the call site — `avg_cost`/`net_qty` are its existing
+   attributes, no new fetch, no signature change to `_notify_roll` needed since `pos` is
+   already passed through. Uses `avg_cost`, **not** `avg_sell_price` — both `base_futures` and
+   `base_ditm_call` are long proxy/hedge positions (bought, never sold short), confirmed via
+   CONTEXT.md's `src/paper/`/`src/strategy/` sections; `avg_sell_price` would read 0 for these
+   legs. This is genuinely new message content (`_notify_roll` currently shows no P&L at all),
+   not a reformat — in scope per this folder's charter (unlike `backbone/`'s escaping-only
+   boundary).
+4. **Month labels** (`[AUG ➡️ SEP]`) — small change, not a new lookup. `expiry_date` (current
+   contract) is already resolved earlier in `_run()` via `_get_expiry_date()`; `next_inst` (the
+   dict `get_next_contract`/`get_next_contract_in_band` returns) already carries a raw
+   `expiry` field, confirmed via `InstrumentLookup.get_next_contract_in_band`'s own
+   implementation (it returns the full instrument dict from `self._instruments`, which
+   includes `expiry`). Format via `parse_expiry()` + `.strftime("%b").upper()` on both — no
+   new broker/DB call.
+5. **DITM strike** (`🎟️ [NIFTY 24000 CE] ...` line) — same non-fetch as month labels.
+   `InstrumentLookup.get_by_key()` (called internally by both `_get_expiry_date` and
+   `get_next_contract_in_band`) already returns a dict carrying `strike_price` — read it off
+   the same lookup already being done, don't add a second call.
+6. **DITM L-Gate failure reason** (e.g. "Wide Bid/Ask") — **explicitly out of scope for this
+   task, confirmed with Animesh.** `check_ditm_liquidity_gate`
+   (`paper_3track_roll.py:125-132`) collapses two independent checks
+   (`oi >= PROXY_OI_MIN`, `spread <= PROXY_SPREAD_MAX`) into a single bool today. Surfacing
+   which one failed needs that function's return type changed (e.g. to a small result object
+   naming the failed check), which is real gate-logic scope beyond a message-formatting task —
+   defer to a follow-up if the specific reason is wanted later. This task ships `⚠️ L-Gate:
+   WARN` with no parenthetical.
+
+**Curve/premium spread label — two different terms for two different leg roles, not one
+generic label. Confirmed correction mid-session (Animesh):** "Contango"/"Backwardation" is
+real futures calendar-spread terminology (far-month price > near-month price = contango, the
+same curve-slope concept as spot-vs-future, just applied between two futures expiries) — valid
+for `base_futures`. It does **not** apply to `base_ditm_call`, which is an option premium
+difference between two expiries of the *same strike*, not a futures curve — that leg uses
+"Debit"/"Credit" instead (farther-dated call costs more to roll into = Debit, cheaper = Credit).
+**Add both label pairs to `formatting-rules/stories.md` FMT-1 if not already covered by the
+time this ships** — see the note below, since neither pair exists in FMT-1's table today.
+
+**P&L sign display — new local override, not a change to `format_money`'s global default.**
+FMT-1's existing negative-money rule (sign before `₹`) is reused as-is, but the P&L line also
+needs an explicit `+` on positive values (unlike `format_money`'s current spec, which only
+distinguishes negative). Implement as a `signed: bool = False` kwarg on `format_money` (default
+`False` preserves every existing caller's behavior) rather than a second formatter function —
+confirm this doesn't already exist under a different name before adding it.
+
+**OUT/IN arrows and P&L/status emoji — confirmed, do not diverge:** `⬇️`/`⬆️` are shared
+identically across both leg-role layouts (an earlier draft used 📤/📥 for the DITM variant
+specifically, for visual distinction — rejected in favor of consistency). P&L emoji is
+`🟢`/`🔴`/`➖` (>0/<0/==0) — a **separate** function from `FMT-1b`'s not-yet-real `pnl_emoji()`
+spec (which uses `✅`/`🔻`/`➖`); if `FMT-1b` ships before this task's real implementation,
+reconcile which palette wins rather than shipping two inconsistent pnl-emoji conventions side
+by side — flagged, not resolved.
+
+**Not yet verified on-device:** `⬇️`/`⬆️` (U+2B07/U+2B06) carry the emoji-presentation
+variation selector, the same class of glyph `FMT-1e` flagged for `▶` inside a fenced table.
+This message has no fence, so `FMT-1e`'s alignment-breaking concern doesn't technically apply,
+but the on-device rendering of the stacked arrow+text lines was confirmed acceptable by
+Animesh during this session's live sends — noting here only because `FMT-1e`'s glyph-class
+warning is otherwise scoped to fenced tables and this is the first confirmed non-fenced use.
+
+**Files to change:**
+- `scripts/strategies/three_track/paper_3track_roll.py` — `_notify_roll`'s message-construction
+  block; likely needs `pos.avg_cost`/`abs(pos.net_qty)` and the resolved `expiry_date`/
+  `next_inst["expiry"]`/`strike_price` threaded through if they aren't already all in the same
+  local scope as the message build (confirm via `get_code_snippet` before assuming — the audit
+  above was done against the version read this session, re-verify if the file has changed)
+- New: `STRATEGY_SHORT_LABELS` (`{"paper_nifty_futures": "FUTURES", "paper_nifty_proxy":
+  "PROXY", "paper_nifty_spot": "SPOT"}` — only the DITM header needs this, futures header
+  hardcodes "NIFTY FUT") — land in `src/notifications/formatting.py` if that module has shipped
+  by the time this task starts, otherwise colocate and flag for promotion (same judgment call
+  `ROLL-7`/`ROLL-8` already make for their own label tables)
+- Matching test file: `tests/unit/scripts/test_paper_3track_roll.py` (existing file — extend,
+  not new, per `search_graph` before assuming)
+
+**Before any code:**
+```
+get_code_snippet("_notify_roll")                        # confirm current message-build scope fresh
+get_code_snippet("check_ditm_liquidity_gate")            # confirm still returns bool only (item 6 above)
+search_graph("InstrumentLookup.get_next_contract_in_band")  # confirm returned dict still carries expiry/strike_price
+```
+
+**Tests:**
+- One test per confirmed scenario in the reference script (`futures_clean_pass`,
+  `futures_loss_backwardation`, `futures_gate_warn`, `futures_partial_roll`, `ditm_call_warn`,
+  `ditm_call_profit_credit`, `ditm_call_partial_roll`) asserting the exact layout and correct
+  escaping for its leg role
+- `test_roll_notification_pnl_uses_avg_cost_not_avg_sell_price` — regression test for item 3's
+  entry-basis correctness; a fixture `PaperPosition` with non-zero `avg_sell_price` but the
+  real `avg_cost` basis must not leak into the P&L figure
+- `test_futures_spread_label_contango_backwardation_flat` — three cases (`open > close`,
+  `open < close`, `open == close`) assert `Contango`/`Backwardation`/`Flat`
+- `test_ditm_spread_label_debit_credit_flat` — same three cases, asserts `Debit`/`Credit`/`Flat`
+  (separate function/table from the futures one — regression test proving the two leg roles
+  never share a label function)
+- `test_ditm_gate_warn_has_no_reason_parenthetical` — regression test for item 6's explicit
+  scope boundary; a WARN-state DITM roll's message must not contain a `(...)` reason suffix,
+  proving a future edit doesn't silently half-implement the deferred gate-reason feature
+- `test_roll_notification_escapes_underscore_strategy_name` — the regression test every message
+  in this epic carries forward
+- `test_roll_notification_partial_overrides_gate_line` — `partial=True` always produces the
+  🚨 line regardless of `gate_passed`'s value, for both leg roles
+
+**Financial-logic commit note:** the P&L computation is P&L-adjacent (uses `pos.avg_cost`
+directly in a Telegram-facing figure) — real `@code-reviewer` against `git diff HEAD` required
+per root `CLAUDE.md`'s AutoTrigger table.
+
+**Commit:** `feat(scripts): migrate 3-track base-leg roll notification to Markdown + P&L`
+
+---
+
 ## ROLL-5 — Docs Close
 
 **Files to change (targeted `Edit`, never `Write`):**

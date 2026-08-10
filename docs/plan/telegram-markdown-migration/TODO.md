@@ -46,10 +46,14 @@
       written back as `strategy-rollout/` **ROLL-8** — see
       `scratch/2026-08-08_strategy_event_alert_format.py`. | SHA: ec008ba
 
-- [ ] **3. Three-track roll notification** —
+- [x] **3. Three-track roll notification** —
       `scripts/strategies/three_track/paper_3track_roll.py:309-313`
-      `Opened: {next_key} @ ₹{open_price}` + status line. Two lines, single position event. |
-      SHA: —
+      `Opened: {next_key} @ ₹{open_price}` + status line. Two lines, single position event.
+      Format confirmed 2026-08-10 (two leg-role-specific layouts, not one — base_futures gets
+      a NIFTY FUT header + Contango/Backwardation spread label, base_ditm_call gets a
+      strike-bearing ticket line + Debit/Credit spread label; both add a new closed-leg
+      realized P&L line and month labels) and written back as `strategy-rollout/` **ROLL-9** —
+      see `scratch/2026-08-10_3track_roll_notification_format.py`. | SHA: TBD
 
 - [ ] **4. Dev paper-track snapshot** — `scripts/dev/paper_track_snapshot.py:188`
       Max-drawdown / return-on-NEE metrics + proxy-delta alert state. A few metric lines, lives

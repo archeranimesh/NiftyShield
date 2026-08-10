@@ -56,4 +56,12 @@
       severity emoji is deliberately fixed (`⚠️`, never tiered) since this code path only ever
       carries WARN-severity events | Blocked by: `backbone/` + `formatting-rules/` complete
       (same soft deps as other ROLL tasks)
-- [ ] **ROLL-5** — Docs close | Blocked by: ROLL-4, ROLL-6, ROLL-7, ROLL-8
+- [ ] **ROLL-9** — Migrate three-track base-leg roll notification
+      (`scripts/strategies/three_track/paper_3track_roll.py::_notify_roll`) to two
+      leg-role-specific MarkdownV2 layouts (base_futures: NIFTY FUT header + Contango/
+      Backwardation spread; base_ditm_call: strike-bearing ticket line + Debit/Credit spread),
+      adds closed-leg realized P&L and month labels; not in the epic's original
+      confirmed-callers list (surfaced via `missing-message-workshop-prompt.md`, TODO.md item
+      3) | Blocked by: `backbone/` + `formatting-rules/` complete (same soft deps as other
+      ROLL tasks)
+- [ ] **ROLL-5** — Docs close | Blocked by: ROLL-4, ROLL-6, ROLL-7, ROLL-8, ROLL-9

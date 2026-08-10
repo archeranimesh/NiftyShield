@@ -35,6 +35,25 @@ not invented fresh; confirm against that script's final version):
 
 ---
 
+## FMT-1f — Signed Money Override + Curve/Premium Spread Labels (confirmed 2026-08-10,
+`ROLL-9` workshop session)
+
+**Not in the original FMT-1 table.** Surfaced during the three-track base-leg roll notification
+workshop (`message-format-workshop.md`, `scratch/2026-08-10_3track_roll_notification_format.py`).
+
+| Parameter type | Format | Example | Rationale |
+|---|---|---|---|
+| Money — explicit-positive-sign override | `format_money(value, signed=True)`: leading `+` on positive values, same before-`₹` negative-sign rule otherwise | `+₹7,812.50`, `-₹393.00` | `format_money`'s existing default only distinguishes negative (no sign shown on positive). A P&L line specifically needs the sign unambiguous in both directions at a glance — implement as a `signed: bool = False` kwarg (default preserves every existing caller), not a second formatter function. |
+| Futures calendar spread | `Contango` (far\-month price > near\-month price) / `Backwardation` (far < near) / `Flat` (equal) | `43.25 pts (Contango)` | Standard futures calendar-spread usage — same curve-slope concept as spot-vs-future, applied between two futures expiries. **Scoped to `base_futures`-style rolls only** — do not apply to an option-premium spread, see next row. |
+| Option-premium roll spread (same strike, different expiry) | `Debit` (farther expiry costs more to roll into) / `Credit` (costs less) / `Flat` (equal) | `25.62 pts (Debit)` | "Contango"/"Backwardation" is futures-curve terminology and does not describe an option premium difference between two expiries of the same strike — confirmed correction, `ROLL-9` session. Uses the same spread magnitude (`open_price - close_price`) as the futures row, just a different sign-to-label mapping and a different applicable leg type. |
+
+**Tests:** none — docs-only task (implementation tests land with whichever `ROLL-*` task
+promotes these into real code).
+
+**Commit:** `docs(notifications): signed-money override + curve/premium spread label spec`
+
+---
+
 ## FMT-1d — Money — Multi-Strategy Summary Table Exception (confirmed 2026-08-08, revised v2)
 
 **Not in the original FMT-1 table.** Surfaced during the EOD Paper Summary workshop session

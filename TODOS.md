@@ -131,6 +131,33 @@ Session Log grows large again.
   diff against `REVIEW.md`; single-file, additive, no logic/control-flow change to JSON mode.
   See `DECISIONS.md` 2026-08-10.
 
+### 2026-08-10 Session Log (missing-message-workshop, queue item 3)
+- **Telegram Markdown migration** (item 29): ran `TODO.md` queue item 3 (three-track base-leg
+  roll notification, `_notify_roll`, `scripts/strategies/three_track/paper_3track_roll.py:296-313`)
+  through `message-format-workshop.md`. TODO.md's queue line undersold the real message (2 lines
+  claimed, actually 6). Iterated through 3 confirmed rounds with Animesh, landing on two
+  leg-role-specific layouts (not one shared shape): `base_futures` gets a bracketed
+  `NIFTY FUT [AUG ➡️ SEP]` header + Contango/Backwardation calendar-spread label;
+  `base_ditm_call` gets a two-line header with the (never-changing, confirmed via
+  `InstrumentLookup.get_next_contract_in_band`'s same-strike matching) strike + Debit/Credit
+  option-premium spread label instead. Both add a new closed-leg realized P&L line
+  (`pnl = (close_price - pos.avg_cost) * abs(pos.net_qty)` — confirmed `avg_cost` not
+  `avg_sell_price`, both leg roles are long positions) and month labels derived from data
+  already resolved elsewhere in `_run()` (`expiry_date`/`next_inst["expiry"]`), not a new
+  fetch. One DITM gate-reason ask ("Wide Bid/Ask" parenthetical) was explicitly scoped out —
+  `check_ditm_liquidity_gate` collapses two independent checks into one bool today, and
+  splitting them is real gate-logic scope, not a formatting change; confirmed deferred with
+  Animesh rather than faked. Reference `scratch/2026-08-10_3track_roll_notification_format.py`
+  (7 scenarios). Added **ROLL-9** to `strategy-rollout/stories.md`/`tasks.md` (unblocked by
+  `backbone/`+`formatting-rules/`, same soft deps as other ROLL tasks); `ROLL-5`'s docs-close
+  blocked-by list updated to include it. Added **FMT-1f** to `formatting-rules/stories.md`
+  (signed-money override for the P&L line, plus the Contango/Backwardation vs. Debit/Credit
+  label-pair distinction — the two spread labels are NOT interchangeable, confirmed correction
+  mid-session after an initial assumption that futures-curve terminology would generalize to
+  options). Ticked TODO.md item 3. Still docs+scratch only — ROLL-9 itself remains
+  unimplemented; `backbone/MD-1` still has not shipped, confirmed fresh this session via
+  `search_graph("mdcode")` returning zero and `ls src/notifications/` showing no `markdown.py`.
+
 ### 2026-08-08 Session Log (missing-message-workshop, queue item 2)
 - **Telegram Markdown migration** (item 29): ran `TODO.md` queue item 2 (generic strategy WARN
   event alert, `StrategyMonitor._route_event`, `src/strategy/monitor.py:366-367`) through
