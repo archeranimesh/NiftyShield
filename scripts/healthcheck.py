@@ -8,6 +8,9 @@ Validates:
 4. Paper snapshot recency in paper_nav_snapshots (for today).
 5. India VIX data recency (warns if > 2 days stale).
 6. Disk space (warns if < 500 MB free).
+7. paper_3track_snapshot cron crash detection (BUG-029 follow-up, B029.5):
+   flags an unhandled Traceback in today's 15:35 cron run before it's caught
+   by the next day's `get_open_exit_events` call.
 
 Fires a Telegram alert if any check fails or warns, and exits 1.
 Runs silently and exits 0 on success.
@@ -41,13 +44,65 @@ from src.utils.logging import setup_logging  # noqa: E402
 logger = structlog.get_logger()
 
 
-def run_checks(target_date: date, db_path: Path, vix_dir: Path) -> tuple[bool, list[str]]:
+def _check_3track_snapshot_cron(log_path: Path, target_date: date) -> tuple[bool, str]:
+    """Detect whether today's ``paper_3track_snapshot`` cron run crashed.
+
+    ``logs/paper_snapshot.log`` is shared by two cron entries (see
+    ``scripts/cron/paper_snapshot.cron.txt``): the 15:35 ``paper_3track_snapshot``
+    run, and the 15:36 ``scripts.portfolio.paper_snapshot`` run appended right
+    after it in the same file. An unhandled exception in the first script
+    prints a bare Python traceback (no structlog timestamp/tag — it bypasses
+    structlog entirely) between its own tagged lines and the next script's
+    tagged lines. This is exactly the silent-failure shape BUG-029 hit for 4
+    consecutive market days (2026-08-05 through 2026-08-10): the crash was
+    logged but nothing alerted on it, and the second cron entry's unrelated
+    success made the log look healthy at a glance.
+
+    Args:
+        log_path: Path to the shared cron log file.
+        target_date: Date to check the most recent run for.
+
+    Returns:
+        Tuple of (has_issue, status_message).
+    """
+    if not log_path.exists():
+        return True, "⚠️ 3track cron: log file not found"
+
+    date_prefix = target_date.isoformat()
+    lines = log_path.read_text(errors="replace").splitlines()
+
+    last_start_idx: int | None = None
+    end_idx = len(lines)
+    for i, line in enumerate(lines):
+        if not line.startswith(date_prefix):
+            continue
+        if "[paper_3track_snapshot]" in line:
+            last_start_idx = i
+            end_idx = len(lines)
+        elif last_start_idx is not None and "[paper_snapshot]" in line:
+            end_idx = i
+            break
+
+    if last_start_idx is None:
+        return True, "⚠️ 3track cron: no run found in log for today"
+
+    run_lines = lines[last_start_idx:end_idx]
+    if any("Traceback (most recent call last)" in line for line in run_lines):
+        return True, "❌ 3track cron: Traceback in today's run"
+
+    return False, "✅ 3track cron: ok"
+
+
+def run_checks(
+    target_date: date, db_path: Path, vix_dir: Path, cron_log_path: Path
+) -> tuple[bool, list[str]]:
     """Execute all system health checks.
 
     Args:
         target_date: Date to check snapshots against.
         db_path: Path to SQLite database.
         vix_dir: Path to VIX data directory.
+        cron_log_path: Path to the shared paper_snapshot cron log file.
 
     Returns:
         Tuple of (has_failure_or_warning, list_of_status_messages).
@@ -126,6 +181,12 @@ def run_checks(target_date: date, db_path: Path, vix_dir: Path) -> tuple[bool, l
         messages.append(f"⚠️ Disk space: error ({str(e)})")
         has_issue = True
 
+    # Check 6: 3track snapshot cron crash detection (BUG-029 / B029.5)
+    cron_issue, cron_msg = _check_3track_snapshot_cron(cron_log_path, target_date)
+    messages.append(cron_msg)
+    if cron_issue:
+        has_issue = True
+
     return has_issue, messages
 
 
@@ -154,6 +215,12 @@ async def main() -> int:
         default=None,
         help="Date to check health for (YYYY-MM-DD). Defaults to today.",
     )
+    parser.add_argument(
+        "--cron-log-path",
+        type=Path,
+        default=Path("logs/paper_snapshot.log"),
+        help="Path to the shared paper_3track_snapshot/paper_snapshot cron log",
+    )
     args = parser.parse_args()
 
     # Configure logging
@@ -171,7 +238,7 @@ async def main() -> int:
         return 0
 
     logger.info("Running system health check", date=today.isoformat())
-    has_issue, messages = run_checks(today, args.db_path, args.vix_dir)
+    has_issue, messages = run_checks(today, args.db_path, args.vix_dir, args.cron_log_path)
 
     if has_issue:
         # Build status alert message

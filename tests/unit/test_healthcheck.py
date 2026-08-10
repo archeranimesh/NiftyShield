@@ -16,7 +16,7 @@ from scripts.healthcheck import main, run_checks
 @patch("scripts.healthcheck.connect")
 @patch("scripts.healthcheck.load_vix_series")
 @patch("scripts.healthcheck.shutil.disk_usage")
-def test_run_checks_all_pass(mock_disk, mock_load_vix, mock_connect) -> None:
+def test_run_checks_all_pass(mock_disk, mock_load_vix, mock_connect, tmp_path) -> None:
     """Test that run_checks returns success when all checks pass."""
     mock_conn = MagicMock()
     mock_connect.return_value.__enter__.return_value = mock_conn
@@ -31,7 +31,16 @@ def test_run_checks_all_pass(mock_disk, mock_load_vix, mock_connect) -> None:
     # 800 MB free (>= 500 MB threshold)
     mock_disk.return_value = (1000 * 1024 * 1024, 200 * 1024 * 1024, 800 * 1024 * 1024)
 
-    has_issue, messages = run_checks(today, Path("dummy.db"), Path("dummy_vix"))
+    cron_log = tmp_path / "paper_snapshot.log"
+    cron_log.write_text(
+        "2026-05-31 15:35:07 [INFO] [scripts] [strategies] [three_track] "
+        "[paper_3track_snapshot] snapshot.starting\n"
+        "2026-05-31 15:35:12 [INFO] [scripts] [strategies] [three_track] "
+        "[paper_3track_snapshot] snapshot.complete\n"
+        "2026-05-31 15:36:03 [INFO] [scripts] [portfolio] [paper_snapshot] snapshot.starting\n"
+    )
+
+    has_issue, messages = run_checks(today, Path("dummy.db"), Path("dummy_vix"), cron_log)
 
     assert not has_issue
     assert any("DB: accessible" in msg for msg in messages)
@@ -39,12 +48,15 @@ def test_run_checks_all_pass(mock_disk, mock_load_vix, mock_connect) -> None:
     assert any("paper_nav_snapshots: ok" in msg for msg in messages)
     assert any("VIX data: ok" in msg for msg in messages)
     assert any("Disk space: ok" in msg for msg in messages)
+    assert any("3track cron: ok" in msg for msg in messages)
 
 
 @patch("scripts.healthcheck.connect")
 @patch("scripts.healthcheck.load_vix_series")
 @patch("scripts.healthcheck.shutil.disk_usage")
-def test_run_checks_missing_daily_snapshot(mock_disk, mock_load_vix, mock_connect) -> None:
+def test_run_checks_missing_daily_snapshot(
+    mock_disk, mock_load_vix, mock_connect, tmp_path
+) -> None:
     """Test that run_checks fails when daily snapshot is missing."""
     mock_conn = MagicMock()
     mock_connect.return_value.__enter__.return_value = mock_conn
@@ -55,12 +67,96 @@ def test_run_checks_missing_daily_snapshot(mock_disk, mock_load_vix, mock_connec
     mock_load_vix.return_value = pd.Series([15.0], index=[today])
     mock_disk.return_value = (1000 * 1024 * 1024, 200 * 1024 * 1024, 800 * 1024 * 1024)
 
-    has_issue, messages = run_checks(today, Path("dummy.db"), Path("dummy_vix"))
+    cron_log = tmp_path / "paper_snapshot.log"
+    cron_log.write_text(
+        "2026-05-31 15:35:07 [INFO] [scripts] [strategies] [three_track] "
+        "[paper_3track_snapshot] snapshot.starting\n"
+    )
+
+    has_issue, messages = run_checks(today, Path("dummy.db"), Path("dummy_vix"), cron_log)
 
     assert has_issue
     assert any("DB: accessible" in msg for msg in messages)
     assert any("daily_snapshots: no row for today" in msg for msg in messages)
     assert any("paper_nav_snapshots: ok" in msg for msg in messages)
+
+
+@patch("scripts.healthcheck.connect")
+@patch("scripts.healthcheck.load_vix_series")
+@patch("scripts.healthcheck.shutil.disk_usage")
+def test_run_checks_3track_cron_traceback(mock_disk, mock_load_vix, mock_connect, tmp_path) -> None:
+    """Regression test for BUG-029/B029.5.
+
+    An unhandled Traceback between today's paper_3track_snapshot-tagged lines
+    and the next cron entry's (paper_snapshot) tagged lines must be flagged,
+    even though every other check passes and the log still shows other
+    entries succeeding right after it — the exact shape that let BUG-029 hit
+    silently for 4 consecutive market days.
+    """
+    mock_conn = MagicMock()
+    mock_connect.return_value.__enter__.return_value = mock_conn
+    mock_conn.execute.return_value.fetchone.side_effect = [(1,), (1,), (1,)]
+
+    today = date(2026, 8, 10)
+    mock_load_vix.return_value = pd.Series([15.0], index=[today])
+    mock_disk.return_value = (1000 * 1024 * 1024, 200 * 1024 * 1024, 800 * 1024 * 1024)
+
+    cron_log = tmp_path / "paper_snapshot.log"
+    cron_log.write_text(
+        "2026-08-10 15:35:07 [INFO] [scripts] [strategies] [three_track] "
+        "[paper_3track_snapshot] snapshot.starting\n"
+        "Traceback (most recent call last):\n"
+        '  File "paper_3track_snapshot.py", line 1925, in <module>\n'
+        "sqlite3.OperationalError: no such column: counterfactual_dte_marks\n"
+        "2026-08-10 15:36:03 [INFO] [scripts] [portfolio] [paper_snapshot] "
+        "snapshot.recorded\n"
+    )
+
+    has_issue, messages = run_checks(today, Path("dummy.db"), Path("dummy_vix"), cron_log)
+
+    assert has_issue
+    assert any("3track cron: Traceback" in msg for msg in messages)
+
+
+@patch("scripts.healthcheck.connect")
+@patch("scripts.healthcheck.load_vix_series")
+@patch("scripts.healthcheck.shutil.disk_usage")
+def test_run_checks_3track_cron_no_run_today(
+    mock_disk, mock_load_vix, mock_connect, tmp_path
+) -> None:
+    """Edge case: log file exists but has no entry for today at all.
+
+    This must be flagged (not silently skipped) — a missing cron run is at
+    least as bad a signal as a crashed one.
+    """
+    mock_conn = MagicMock()
+    mock_connect.return_value.__enter__.return_value = mock_conn
+    mock_conn.execute.return_value.fetchone.side_effect = [(1,), (1,), (1,)]
+
+    today = date(2026, 8, 10)
+    mock_load_vix.return_value = pd.Series([15.0], index=[today])
+    mock_disk.return_value = (1000 * 1024 * 1024, 200 * 1024 * 1024, 800 * 1024 * 1024)
+
+    cron_log = tmp_path / "paper_snapshot.log"
+    cron_log.write_text(
+        "2026-08-07 15:35:07 [INFO] [scripts] [strategies] [three_track] "
+        "[paper_3track_snapshot] snapshot.starting\n"
+    )
+
+    has_issue, messages = run_checks(today, Path("dummy.db"), Path("dummy_vix"), cron_log)
+
+    assert has_issue
+    assert any("3track cron: no run found" in msg for msg in messages)
+
+
+def test_check_3track_snapshot_cron_missing_file(tmp_path) -> None:
+    """Edge case: log file doesn't exist yet — must flag, not raise."""
+    from scripts.healthcheck import _check_3track_snapshot_cron
+
+    has_issue, msg = _check_3track_snapshot_cron(tmp_path / "does_not_exist.log", date(2026, 8, 10))
+
+    assert has_issue
+    assert "log file not found" in msg
 
 
 @pytest.mark.asyncio

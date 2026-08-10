@@ -391,7 +391,7 @@ commit per phase.
   returns migrated/skipped/unchanged counts (`unchanged` always 0 by construction — every
   candidate row is either migrated or skipped, no other outcome is reachable given the
   cutover-date pre-filter; kept as an explicit field to match this item's output-contract
-  wording and leave room for a future scope widening). | SHA pending
+  wording and leave room for a future scope widening). | SHA `0fd4de8`
 - [x] **B028.12** — Tests: happy-path (unambiguous legacy row relabeled correctly), edge case
   (collision detected → skipped, legacy row left intact, WARNING logged). |
   `tests/unit/scripts/test_migrate_overlay_pnl_attribution.py`, 5 tests: happy-path relabel
@@ -399,14 +399,9 @@ commit per phase.
   (`test_migrate_skips_on_collision_and_leaves_legacy_row_intact` — asserts skip count, legacy
   row still present, canonical row's `pnl_1d_abs` unchanged, proving no dual-write), no-op when
   no `STRATEGY_OVERLAY` trade exists yet (`test_migrate_no_overlay_trades_yet_is_noop`), dry-run
-  (`test_migrate_dry_run_does_not_write`). **Tests not executed this session** — sandbox has no
-  free disk to install `pytest`/`pydantic`/`structlog` (`pip install` fails with `No space left
-  on device` on `.cache` and `.local`), same class of limitation as prior BUG-020/021/026/027
-  sessions; `python -m py_compile` confirms both files are syntactically valid, and the
-  script's SQL column list/table shape was checked directly against `PaperStore`'s
-  `CREATE TABLE paper_overlay_pnl_snapshots` and `record_overlay_pnl_snapshot()`/
-  `get_overlay_pnl_snapshots()` (`src/paper/store.py`) via the graph — matches exactly. Needs a
-  live-host confirmation run before being trusted as green.
+  (`test_migrate_dry_run_does_not_write`). **Confirmed green on live host** — all 5 tests pass
+  (not executed in-sandbox originally due to no free disk for `pytest`/deps, same limitation
+  class as prior BUG-020/021/026/027 sessions; live-host run closes that gap). | SHA `0fd4de8`
 - [x] **B028.13** — Review + commit, update `bugs.md` BUG-028 status to ✅ Fixed + SHA,
   `CONTEXT.md`/`TODOS.md` updated. | `general-purpose` + `REVIEW.md` substitute for
   `@code-reviewer` (subagent type not exposed in this environment, same precedent as
@@ -417,10 +412,8 @@ commit per phase.
   rollback-on-close-without-commit — accepted as-is: this is a single-operator, run-once
   historical-repair script (not a service), the DB is backed up before any write, and
   `conn.commit()` only runs once at the very end after the full loop completes successfully, so
-  a mid-loop exception can never leave a partial commit. | SHA pending — sandbox has no
-  `pytest`/free disk this session (same limitation as B028.12), commit deferred until a
-  live-host test run confirms green; docs (`bugs.md`, `CONTEXT.md`, `DECISIONS.md`) updated in
-  the same session, staged alongside the code for that commit.
+  a mid-loop exception can never leave a partial commit. Committed on live host, tests confirmed
+  green. | SHA `0fd4de8`
 
 ---
 
@@ -438,10 +431,10 @@ commit per phase.
   re-run (`_run` called twice, no "duplicate column" exception, column count stays 1), dry-run
   (schema unchanged), already-migrated no-op. | `tests/unit/scripts/test_migrate_exit_events_counterfactual_dte_marks.py`,
   4 tests. Pre-migration DDL fixture verified line-by-line against `store.py`'s real `_SCHEMA`
-  (22 columns, `counterfactual_dte_marks` removed) — not a strawman shape. **Tests not executed
-  this session** — sandbox has no free disk for `pytest`/deps (`No space left on device`), same
-  limitation class as B028.11-13 and prior BUG-020/021/026/027 sessions; verified via
-  `py_compile` only.
+  (22 columns, `counterfactual_dte_marks` removed) — not a strawman shape. **Confirmed green on
+  live host** — all 4 tests pass (not executed in-sandbox originally due to no free disk for
+  `pytest`/deps, same limitation class as B028.11-13 and prior BUG-020/021/026/027 sessions;
+  live-host run closes that gap). | SHA `c8d5baa`
 - [x] **B029.3** — Review: `general-purpose` + `REVIEW.md` substitute (subagent type not exposed
   in this environment, same precedent as B028.6/B028.13/B021.4/B010.8) against the existing
   migration script (unchanged this session) + new test file. No CRITICAL/ERROR/WARNING —
@@ -457,12 +450,55 @@ commit per phase.
   missed overlay-pnl/leg-snapshot/protection-recovery rows by re-running
   `python -m scripts.strategies.three_track.paper_3track_snapshot --no-dry-run` (safe/idempotent,
   upsert-based). **Blocked on live host** — needs the actual production DB, not the sandbox
-  mount, plus a live-host `pytest` run confirming B029.2's tests are green first.
-- [ ] **B029.5** — Consider (separate, lower-priority follow-up, do not block B029 closure on
+  mount, plus a live-host `pytest` run confirming B029.2's tests are green first. | **Migration
+  confirmed run 2026-08-10** (Animesh, live host) — verified directly against
+  `data/portfolio/portfolio.sqlite`: `PRAGMA table_info(paper_exit_events)` shows
+  `counterfactual_dte_marks` present (nullable TEXT); the exact query that was crashing
+  (`PaperStore.get_open_exit_events()`) now executes clean. **Correction to this bug's title/
+  symptom framing**, found while checking `logs/paper_snapshot.log`: today's (2026-08-10) 15:35
+  cron run *predates* the migration and still hit the traceback inside
+  `compute_and_record_exit_signals` at 15:35:07, uncaught — confirmed via `logs/paper_snapshot.log`
+  that this is a full script crash (`Traceback` at `paper_3track_snapshot.py:1925, in <module> /
+  main()`, terminating before any of the overlay P&L/leg-snapshot/protection-recovery code further
+  down the same script ever runs), matching the bug's original diagnosis exactly. (Session
+  self-correction: an earlier pass at this note mistakenly read the `[src] [paper] [tracker]
+  Recorded paper NAV snapshot...` lines immediately following the traceback in the same log file
+  as a continuation of the same crashed run and concluded the crash was non-fatal — wrong. Those
+  lines carry no `trace_id` and a different logger tag than the 3-track script's structured
+  `[scripts] [strategies] [three_track] [paper_3track_snapshot] ... trace_id=...` lines that
+  precede the traceback; they're from the separate `36 15 * * 1-5` cron entry
+  (`scripts.portfolio.paper_snapshot`), which writes to the same shared log file and succeeds
+  independently — exactly what `bugs.md`'s Symptom section already documented as the reason the
+  crash was easy to miss. No change to the bug's severity/framing as a result; the retraction is
+  noted here only so the record doesn't carry the incorrect claim forward.) **Still open**: (a)
+  tomorrow's (2026-08-11) 15:35 cron hasn't run yet post-migration — need to confirm it completes
+  clean before this line can be checked off; (b) the backfill re-run
+  (`python -m scripts.strategies.three_track.paper_3track_snapshot --no-dry-run`) for
+  2026-08-10's fully-missed overlay-pnl/leg-snapshot/protection-recovery rows, per the original
+  B029.4 scope — not yet done.
+- [x] **B029.5** — Consider (separate, lower-priority follow-up, do not block B029 closure on
   this): add coverage to `scripts/healthcheck.py` or `scripts/position_health_check.py` for "did
   the 3-track snapshot script's last cron run exit 0 / did its log contain a Traceback" — this
   bug produced zero operator-facing signal across 4 consecutive market days despite failing
-  loudly in its own log file, the same gap class as BUG-026/027.
+  loudly in its own log file, the same gap class as BUG-026/027. | Added `_check_3track_snapshot_cron()`
+  to `scripts/healthcheck.py` as Check 6 (Animesh confirmed: healthcheck.py, not
+  position_health_check.py — matches its existing "dead man's switch" purpose and its 16:35 cron
+  slot, right after the 15:35 3-track cron). Parses `logs/paper_snapshot.log` (shared by both the
+  `paper_3track_snapshot` and `paper_snapshot` cron entries — see `scripts/cron/paper_snapshot.cron.txt`):
+  finds today's last `[paper_3track_snapshot]`-tagged line, scans forward to the next
+  `[paper_snapshot]`-tagged line (or EOF), flags a bare `Traceback (most recent call last):`
+  in that span — the exact shape BUG-029's crash took (unhandled exception bypasses structlog,
+  no timestamp/tag). Also flags "no run found for today" (missing cron is as bad a signal as a
+  crashed one) and "log file not found". New `--cron-log-path` CLI flag, default
+  `logs/paper_snapshot.log`. 5 new tests in `tests/unit/test_healthcheck.py` (clean run, traceback
+  detected, no run today, missing log file, plus updated the 2 existing `run_checks` tests for the
+  new `cron_log_path` param). **Tests not executed via pytest this session** — sandbox has no
+  pytest and `.venv/bin/python` is a broken symlink to a host-only path (same limitation class as
+  B004.6/B006.6/B009.4/B010.4-7/B029.2's original pass); the new helper's 4 branches (clean,
+  traceback, no-run, missing-file) were verified standalone via a stdlib-only script (no
+  structlog/pytest deps needed) and all returned the expected `(has_issue, message)` tuples.
+  `CONTEXT.md` updated. | SHA pending — needs live-host `pytest tests/unit/test_healthcheck.py`
+  confirmation before commit
 - [ ] **B029.6** — Commit, update `bugs.md` BUG-029 status to ✅ Fixed + SHA once B029.4 confirms
   the live migration ran clean and a subsequent cron completed without the traceback.
   `CONTEXT.md`/`TODOS.md` updated.
