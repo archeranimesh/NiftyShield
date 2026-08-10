@@ -151,6 +151,45 @@ def test_log_call_before_setup_logging_degrades_gracefully(capsys):
         setup_logging(json=False, level="INFO")
 
 
+def test_console_mode_renders_traceback_on_exc_info(capsys):
+    """A log.warning(..., exc_info=True) call in console (plain-text) mode must
+
+    render the actual traceback, not the literal token ``exc_info=True``.
+    Regression test for the 2026-08-10 incident where
+    ``ic_nifty_v1.counterfactual_log_failed`` swallowed its exception because
+    ``format_exc_info`` was only wired into the JSON branch of the processor
+    chain — see src/utils/logging.py setup_logging().
+    """
+    setup_logging(json=False, level="INFO")
+    logger = structlog.get_logger("test_exc_console")
+
+    try:
+        raise ValueError("boom")
+    except ValueError:
+        logger.warning("something.failed", exc_info=True)
+
+    captured = capsys.readouterr()
+    assert "exc_info=True" not in captured.out
+    assert "Traceback (most recent call last)" in captured.out
+    assert "ValueError: boom" in captured.out
+
+
+def test_console_mode_without_exc_info_has_no_traceback(capsys):
+    """A normal warning with no exception context stays a single clean line —
+
+    the format_exc_info processor must be a no-op when exc_info is absent.
+    """
+    setup_logging(json=False, level="INFO")
+    logger = structlog.get_logger("test_no_exc_console")
+    logger.warning("something.happened", key="val")
+
+    captured = capsys.readouterr()
+    line = captured.out.strip()
+    assert "Traceback" not in line
+    assert "something.happened" in line
+    assert "key=val" in line
+
+
 def test_two_bind_trace_ids_are_independent(capsys):
     """Each bind_trace_id call replaces the previous value in the context."""
     setup_logging(json=True, level="INFO")

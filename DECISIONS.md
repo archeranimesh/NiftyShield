@@ -1909,6 +1909,24 @@ affecting since `LOT_SIZE` is a fixed constant, not user input). 6 new tests
 `duckdb`/`pandas` in this sandbox — same documented class as prior sessions' close-out notes, not
 a regression). Source: this session (Cowork), `docs/plan/execution-risk-hardening/tasks.md` RH-4.
 
+### 2026-08-10 — `format_exc_info` wired into both logging modes (BUG, `src/utils/logging.py`)
+
+Root cause of a same-day incident: `paper_ic_nifty_v1_leaps` closed via `PROFIT_TARGET` at
+10:27:03, and `ic_nifty_v1._log_counterfactual_exit`'s wrapping `except Exception:` fired
+(`ic_nifty_v1.counterfactual_log_failed`, `exc_info=True`) with no diagnosable traceback anywhere
+in `monitor_daemon.log` or `monitor_daemon.err` — the literal token `exc_info=True` was printed
+instead. Cause: `setup_logging()`'s `structlog.processors.format_exc_info` processor was only
+appended inside the `if json:` branch of the processor chain; the plain/console branch (the
+default — `UPSTOX_LOG_JSON` unset — and what every cron/daemon log file in `logs/` actually uses)
+never rendered `exc_info=True` into a traceback, silently dropping every such exception across the
+whole codebase, not just this call site. Fixed by moving `format_exc_info` into
+`shared_processors`, unconditionally, before the `if json:` split. No behavior change to JSON mode
+(same processor, same position relative to `JSONRenderer`). 2 new tests
+(`tests/unit/utils/test_logging.py::test_console_mode_renders_traceback_on_exc_info`,
+`::test_console_mode_without_exc_info_has_no_traceback`); full offline suite otherwise unchanged
+(pre-existing network/optional-dep failures in this sandbox, same documented class as prior
+sessions). Source: this session (Cowork).
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty

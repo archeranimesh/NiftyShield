@@ -104,10 +104,17 @@ def setup_logging(*, json: bool | None = None, level: str | None = None) -> None
         structlog.stdlib.add_log_level,
         structlog.stdlib.add_logger_name,  # requires stdlib.LoggerFactory — sets event_dict["logger"]
         structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S", utc=False),
+        # Renders exc_info=True into a real traceback string under the "exception"
+        # key. Must run in BOTH modes — previously only appended inside the `if
+        # json:` branch, so any log.warning/error(..., exc_info=True) call in
+        # plain/console mode (the default; see monitor_daemon.log) silently
+        # dropped the traceback, printing the literal token `exc_info=True`
+        # instead. Root cause of a 2026-08-10 incident where a
+        # counterfactual_log_failed warning left no diagnosable exception.
+        structlog.processors.format_exc_info,
     ]
     if json:
         # JSON mode: level stays lowercase (machine-readable); logger kept as separate key.
-        shared_processors.append(structlog.processors.format_exc_info)
         shared_processors.append(structlog.processors.JSONRenderer())
     else:
         # Console mode: uppercase level and prepend [module] to event for human readability.

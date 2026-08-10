@@ -116,6 +116,21 @@ Full forensic log (SHAs, bug numbers, root-cause detail) moved to
 add new entries there going forward, or start a fresh dated section here if this file's
 Session Log grows large again.
 
+### 2026-08-10 Session Log (logging bug: `format_exc_info` console-mode gap)
+- **Fix** (`src/utils/logging.py`): investigated why `paper_ic_nifty_v1_leaps`'s 10:27:03
+  `PROFIT_TARGET` close left `ic_nifty_v1.counterfactual_log_failed` (`exc_info=True`) with no
+  actual traceback anywhere in `monitor_daemon.log`/`.err`. Root cause: `format_exc_info` was only
+  appended to the processor chain inside `setup_logging()`'s `if json:` branch — the console/
+  plain-text branch (the default, and what every cron/daemon log in `logs/` uses) never rendered
+  `exc_info=True` into a traceback, silently dropping the exception for every such call across the
+  codebase, not just this one. Moved `format_exc_info` into `shared_processors` unconditionally.
+  2 new tests (`tests/unit/utils/test_logging.py`). Full offline suite: 2648 passed, 28 failed
+  (network-blocked LTP calls / missing `duckdb`/`hypothesis` in this sandbox — pre-existing,
+  unrelated to this change), 10 collection errors (same missing-dep class). No `@code-reviewer`
+  subagent available on this surface (Cowork, no `.claude/agents/code-reviewer`) — self-reviewed
+  diff against `REVIEW.md`; single-file, additive, no logic/control-flow change to JSON mode.
+  See `DECISIONS.md` 2026-08-10.
+
 ### 2026-08-08 Session Log (missing-message-workshop, queue item 2)
 - **Telegram Markdown migration** (item 29): ran `TODO.md` queue item 2 (generic strategy WARN
   event alert, `StrategyMonitor._route_event`, `src/strategy/monitor.py:366-367`) through
