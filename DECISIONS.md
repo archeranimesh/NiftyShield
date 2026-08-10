@@ -2022,8 +2022,25 @@ Source: `docs/council/2026-08-10_overlay-pnl-reporting-track-independence.md` (4
 `openai/gpt-5.6-sol`, `google/gemini-3.1-pro-preview`, `x-ai/grok-4.3`, `deepseek/deepseek-r1-0528` —
 chaired by `anthropic/claude-opus-4.6`; unanimous, no dissenting notes), `docs/bugs/bugs.md` BUG-028,
 `docs/bugs/task.md`. **Phase 1 (correctness fix) implemented 2026-08-10** — see `CONTEXT.md`'s
-BUG-028 Phase 1 entry for the module-level diff summary. Phases 2 (silent-false-zero elimination)
-and 3 (historical repair script) remain not yet implemented.
+BUG-028 Phase 1 entry for the module-level diff summary. **Phase 2 (silent-false-zero elimination)
+implemented 2026-08-10**, SHA `4b8b351`. **Phase 3 (historical repair script) implemented
+2026-08-10** — `scripts/dev/migrate_overlay_pnl_attribution.py`, see `CONTEXT.md`'s BUG-028 Phase 3
+entry; tests not yet executed in-sandbox (no free disk), SHA pending a live-host test run.
+
+### 2026-08-10 — BUG-029: `counterfactual_dte_marks` migration committed but never run (discovered)
+
+While investigating why BUG-028 Phase 3's overlay P&L rows weren't updating for today, found that
+`scripts/strategies/three_track/paper_3track_snapshot.py`'s EOD cron has been silently crashing
+every market day since 2026-08-05 (`sqlite3.OperationalError: no such column:
+counterfactual_dte_marks`, confirmed via direct `logs/paper_snapshot.log` inspection on 08-05,
+08-07, 08-10). Root cause: commit `17b4ff9` (2026-08-05) correctly added the column to `_SCHEMA`
+and every read/write query, and even shipped a migration script in the same commit — but the
+migration was never actually executed against the live `data/portfolio/portfolio.sqlite`. This is
+a process gap (fix committed, never deployed), not a code defect — decided not to rewrite the
+already-correct migration script, only add the test coverage it was missing. Full detail:
+`docs/bugs/bugs.md`/`docs/bugs/task.md` BUG-029. Running the migration against the live DB remains
+outstanding (B029.4), deferred to a live-host session since this sandbox only mounts a copy of the
+DB and cannot be treated as the source of truth for a live write of this kind.
 
 ## Deferred / Not Yet Built
 

@@ -376,13 +376,93 @@ commit per phase.
 
 ### Phase 3 — Historical repair (one-off script)
 
-- [ ] **B028.11** — `scripts/dev/migrate_overlay_pnl_attribution.py`: back up DB; derive actual S2r
+- [x] **B028.11** — `scripts/dev/migrate_overlay_pnl_attribution.py`: back up DB; derive actual S2r
   cutover date from the trade ledger (first `STRATEGY_OVERLAY` trade), not a hardcoded commit date;
   for each pre-cutover `paper_overlay_pnl_snapshots` row, check
   `(STRATEGY_OVERLAY, overlay_type, snapshot_date)` uniqueness before relabeling — skip with a
   logged WARNING on collision, never blind-`UPDATE`; do not dual-write; output
-  migrated/skipped/unchanged counts.
-- [ ] **B028.12** — Tests: happy-path (unambiguous legacy row relabeled correctly), edge case
-  (collision detected → skipped, legacy row left intact, WARNING logged).
-- [ ] **B028.13** — Review + commit, update `bugs.md` BUG-028 status to ✅ Fixed + SHA,
+  migrated/skipped/unchanged counts. | Mirrors `migrate_paper_trades_state.py`/
+  `backfill_nav_total_pnl.py` pattern (`--db-path`/`--dry-run`, `_SCRIPT_NAME` logger). Legacy
+  candidates scoped to the 3 pre-S2r track strategies (`STRATEGY_SPOT`/`STRATEGY_FUTURES`/
+  `STRATEGY_PROXY`, `src/paper/constants.py`); cutover = `MIN(trade_date)` where
+  `strategy_name = STRATEGY_OVERLAY` in `paper_trades`. Collision check via
+  `_canonical_row_exists()` before every relabel; relabel is a single `UPDATE strategy_name`
+  (never an INSERT) so no dual-write is possible by construction. `MigrationResult` dataclass
+  returns migrated/skipped/unchanged counts (`unchanged` always 0 by construction — every
+  candidate row is either migrated or skipped, no other outcome is reachable given the
+  cutover-date pre-filter; kept as an explicit field to match this item's output-contract
+  wording and leave room for a future scope widening). | SHA pending
+- [x] **B028.12** — Tests: happy-path (unambiguous legacy row relabeled correctly), edge case
+  (collision detected → skipped, legacy row left intact, WARNING logged). |
+  `tests/unit/scripts/test_migrate_overlay_pnl_attribution.py`, 5 tests: happy-path relabel
+  (`test_migrate_relabels_precutover_legacy_row`), collision skip
+  (`test_migrate_skips_on_collision_and_leaves_legacy_row_intact` — asserts skip count, legacy
+  row still present, canonical row's `pnl_1d_abs` unchanged, proving no dual-write), no-op when
+  no `STRATEGY_OVERLAY` trade exists yet (`test_migrate_no_overlay_trades_yet_is_noop`), dry-run
+  (`test_migrate_dry_run_does_not_write`). **Tests not executed this session** — sandbox has no
+  free disk to install `pytest`/`pydantic`/`structlog` (`pip install` fails with `No space left
+  on device` on `.cache` and `.local`), same class of limitation as prior BUG-020/021/026/027
+  sessions; `python -m py_compile` confirms both files are syntactically valid, and the
+  script's SQL column list/table shape was checked directly against `PaperStore`'s
+  `CREATE TABLE paper_overlay_pnl_snapshots` and `record_overlay_pnl_snapshot()`/
+  `get_overlay_pnl_snapshots()` (`src/paper/store.py`) via the graph — matches exactly. Needs a
+  live-host confirmation run before being trusted as green.
+- [x] **B028.13** — Review + commit, update `bugs.md` BUG-028 status to ✅ Fixed + SHA,
+  `CONTEXT.md`/`TODOS.md` updated. | `general-purpose` + `REVIEW.md` substitute for
+  `@code-reviewer` (subagent type not exposed in this environment, same precedent as
+  B028.6/B021.4/B010.8) against both new files — financial P&L reporting change, gate mandatory.
+  No CRITICAL/ERROR. 2 WARNINGs: (1) `MigrationResult.unchanged` was a dead/unreachable field
+  with a misleading docstring — fixed pre-commit (see B028.11 note); (2) no explicit
+  `try/except`+`conn.rollback()` around the per-row `UPDATE` loop, relying on sqlite3's implicit
+  rollback-on-close-without-commit — accepted as-is: this is a single-operator, run-once
+  historical-repair script (not a service), the DB is backed up before any write, and
+  `conn.commit()` only runs once at the very end after the full loop completes successfully, so
+  a mid-loop exception can never leave a partial commit. | SHA pending — sandbox has no
+  `pytest`/free disk this session (same limitation as B028.12), commit deferred until a
+  live-host test run confirms green; docs (`bugs.md`, `CONTEXT.md`, `DECISIONS.md`) updated in
+  the same session, staged alongside the code for that commit.
+
+---
+
+## BUG-029 — `paper_exit_events.counterfactual_dte_marks` migration committed but never run; 3-track EOD snapshot cron has crashed every market day since 2026-08-05
+
+- [x] **B029.1** — Confirm root cause: schema-diff a fresh in-memory DB built from `src/paper/store.py`'s
+  `_SCHEMA` string against the live `data/portfolio/portfolio.sqlite`, cross-checked against
+  `logs/paper_snapshot.log` tracebacks on 2026-08-05/08-07/08-10 (identical crash each day) and
+  `git log -S "counterfactual_dte_marks"` to find the introducing commit. | Confirmed 2026-08-10
+  (no code change, investigation only) — see `docs/bugs/bugs.md` BUG-029 for full detail. The
+  fix (`scripts/dev/migrate_exit_events_counterfactual_dte_marks.py`) already existed, committed
+  2026-08-05 (SHA `17b4ff9`), just never executed against this DB.
+- [x] **B029.2** — Tests: the pre-existing migration script had none. Added happy-path (column
+  added + pre-existing row's other fields survive, new column reads back `None`), idempotent
+  re-run (`_run` called twice, no "duplicate column" exception, column count stays 1), dry-run
+  (schema unchanged), already-migrated no-op. | `tests/unit/scripts/test_migrate_exit_events_counterfactual_dte_marks.py`,
+  4 tests. Pre-migration DDL fixture verified line-by-line against `store.py`'s real `_SCHEMA`
+  (22 columns, `counterfactual_dte_marks` removed) — not a strawman shape. **Tests not executed
+  this session** — sandbox has no free disk for `pytest`/deps (`No space left on device`), same
+  limitation class as B028.11-13 and prior BUG-020/021/026/027 sessions; verified via
+  `py_compile` only.
+- [x] **B029.3** — Review: `general-purpose` + `REVIEW.md` substitute (subagent type not exposed
+  in this environment, same precedent as B028.6/B028.13/B021.4/B010.8) against the existing
+  migration script (unchanged this session) + new test file. No CRITICAL/ERROR/WARNING —
+  migration confirmed idempotent, dry-run-safe, correct `src.db.connect()` usage,
+  `ALTER TABLE ADD COLUMN` confirmed safe/cheap (`paper_exit_events` is non-`STRICT`). One INFO
+  note: running the migration against the live DB (the actual operational fix) is separate from
+  committing test coverage and must not be forgotten — **not done as part of this task**, left
+  to Animesh to run by hand (`python -m scripts.dev.migrate_exit_events_counterfactual_dte_marks`)
+  since this session's scope was documentation + test coverage, not a live-DB write.
+- [ ] **B029.4** — Run `python -m scripts.dev.migrate_exit_events_counterfactual_dte_marks`
+  against the live `data/portfolio/portfolio.sqlite` (back up first), confirm tomorrow's 15:35
+  cron completes without the `counterfactual_dte_marks` traceback, then backfill 2026-08-10's
+  missed overlay-pnl/leg-snapshot/protection-recovery rows by re-running
+  `python -m scripts.strategies.three_track.paper_3track_snapshot --no-dry-run` (safe/idempotent,
+  upsert-based). **Blocked on live host** — needs the actual production DB, not the sandbox
+  mount, plus a live-host `pytest` run confirming B029.2's tests are green first.
+- [ ] **B029.5** — Consider (separate, lower-priority follow-up, do not block B029 closure on
+  this): add coverage to `scripts/healthcheck.py` or `scripts/position_health_check.py` for "did
+  the 3-track snapshot script's last cron run exit 0 / did its log contain a Traceback" — this
+  bug produced zero operator-facing signal across 4 consecutive market days despite failing
+  loudly in its own log file, the same gap class as BUG-026/027.
+- [ ] **B029.6** — Commit, update `bugs.md` BUG-029 status to ✅ Fixed + SHA once B029.4 confirms
+  the live migration ran clean and a subsequent cron completed without the traceback.
   `CONTEXT.md`/`TODOS.md` updated.

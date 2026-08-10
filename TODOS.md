@@ -140,6 +140,59 @@ Session Log grows large again.
   environmental failures (pyarrow/network/hypothesis gaps). BUG-028 Phase 3
   (historical repair script) remains open.
 
+### 2026-08-10 Session Log (BUG-028 Phase 3 — historical overlay P&L attribution repair)
+- Implemented `docs/bugs/task.md` B028.11–B028.13: `scripts/dev/migrate_overlay_pnl_attribution.py`,
+  a one-off script mirroring `migrate_paper_trades_state.py`/`backfill_nav_total_pnl.py`'s
+  `--db-path`/`--dry-run` pattern. Backs up the DB, derives the S2r cutover date from the trade
+  ledger (`MIN(paper_trades.trade_date)` where `strategy_name = STRATEGY_OVERLAY`), and relabels
+  pre-cutover `paper_overlay_pnl_snapshots` rows filed under a legacy 3-track `strategy_name`
+  (spot/futures/proxy) to `STRATEGY_OVERLAY` — collision-checked (`(STRATEGY_OVERLAY,
+  overlay_type, snapshot_date)`) before every relabel, never a blind `UPDATE`, never a dual-write
+  (relabel is a rename, not an insert). 5 tests in
+  `tests/unit/scripts/test_migrate_overlay_pnl_attribution.py`. `general-purpose` +
+  `REVIEW.md` substitute review: no CRITICAL/ERROR; one WARNING (dead `MigrationResult.unchanged`
+  field with a misleading docstring) fixed pre-commit; one WARNING (implicit rather than explicit
+  rollback-on-exception) accepted as-is given the single-operator run-once nature and
+  backup-first sequencing. **Tests not executed this session** — sandbox has no free disk to
+  install `pytest`/`pydantic`/`structlog` (`No space left on device` on both `.cache` and
+  `.local`), same limitation class as prior BUG-020/021/026/027 sessions; verified via
+  `py_compile` (syntax) and a direct graph check of the script's SQL against
+  `PaperStore`'s actual `CREATE TABLE paper_overlay_pnl_snapshots` schema and
+  `record_overlay_pnl_snapshot()`/`get_overlay_pnl_snapshots()` signatures (exact match). Commit
+  also blocked this session — sandbox `.git/objects` writes hit `Operation not permitted`
+  (`pre-commit` also not installed) — changes staged (`git add`) but not committed; SHA pending a
+  live-host run that (a) installs test deps and confirms the 5 new tests green, (b) commits, and
+  (c) then the actual `.sqlite`-modifying run against the live DB (this script itself was never
+  executed against `data/portfolio/portfolio.sqlite` — only its tests, and even those didn't run
+  in-sandbox). BUG-028 now fully implemented across all 3 phases, pending only this
+  verification/commit/live-run gap.
+
+### 2026-08-10 Session Log (BUG-029 — discovered + test coverage added, live migration still outstanding)
+- Discovered while checking why BUG-028's overlay P&L rows weren't updating for today's PP entry:
+  `paper_3track_snapshot.py`'s `35 15 * * 1-5` EOD cron has crashed at
+  `compute_and_record_exit_signals()` → `store.get_open_exit_events()`
+  (`sqlite3.OperationalError: no such column: counterfactual_dte_marks`) every market day since
+  2026-08-05 — confirmed by reading `logs/paper_snapshot.log` directly for 08-05/08-07/08-10, all
+  three showing the identical traceback. Root cause: commit `17b4ff9` (2026-08-05) added the
+  column to `_SCHEMA` and every query correctly, and even shipped
+  `scripts/dev/migrate_exit_events_counterfactual_dte_marks.py` in the same commit — but that
+  migration was never run against the live DB. Confirmed via a schema diff (fresh in-memory DB
+  built from `_SCHEMA` vs. live `data/portfolio/portfolio.sqlite`) that this is the *only*
+  `PaperStore`-owned schema gap of this kind (one other mismatch found, `paper_strategies.original_entry_credit`
+  existing live but not in `_SCHEMA` — opposite direction, causes no crash, separate minor cleanup
+  item). Logged as `docs/bugs/bugs.md`/`docs/bugs/task.md` BUG-029. Added the test coverage the
+  pre-existing migration script never had (`tests/unit/scripts/test_migrate_exit_events_counterfactual_dte_marks.py`,
+  4 tests — column-add + row-preservation, idempotent re-run, dry-run no-write, no-op when
+  already migrated; pre-migration DDL fixture verified line-by-line against the real `_SCHEMA`,
+  not a strawman). `general-purpose` + `REVIEW.md` substitute review: no CRITICAL/ERROR/WARNING.
+  **Did not modify the migration script itself** (it was already correct) and **did not run it
+  against the live DB** — that write needs to happen on the live host, not this sandbox's mounted
+  copy, and needs a live `pytest` run confirming the new tests pass first (same disk-space
+  limitation blocking test execution as every other script this session). B029.4/B029.5/B029.6
+  remain open in `docs/bugs/task.md` — running the migration, optionally backfilling 2026-08-10's
+  missed overlay/exit-signal data, and considering a healthcheck addition so this class of crash
+  gets an operator-facing alert next time instead of sitting silent in a log file for 4+ days.
+
 ### 2026-08-10 Session Log (missing-message-workshop, queue item 4)
 - **Telegram Markdown migration** (item 29): ran `TODO.md` queue item 4 (Proxy Delta CRITICAL
   alert, `scripts/dev/paper_track_snapshot.py::main` lines 185-190) through
