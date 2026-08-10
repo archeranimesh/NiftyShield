@@ -53,7 +53,7 @@
       a NIFTY FUT header + Contango/Backwardation spread label, base_ditm_call gets a
       strike-bearing ticket line + Debit/Credit spread label; both add a new closed-leg
       realized P&L line and month labels) and written back as `strategy-rollout/` **ROLL-9** —
-      see `scratch/2026-08-10_3track_roll_notification_format.py`. | SHA: TBD
+      see `scratch/2026-08-10_3track_roll_notification_format.py`. | SHA: 79e6314
 
 - [ ] **4. Dev paper-track snapshot** — `scripts/dev/paper_track_snapshot.py:188`
       Max-drawdown / return-on-NEE metrics + proxy-delta alert state. A few metric lines, lives
