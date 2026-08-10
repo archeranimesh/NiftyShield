@@ -257,7 +257,7 @@ BUG-020 fully closed (Phases 1-3). BUG-021 (`IronCondorV1`, identical defect) re
 - [x] **B022.5** — `IronCondorV1.check_signals`'s delta-stop block falls back to new `_search_narrower_wing_candidate` when `_select_wing_roll_target` fails; `_auto_select_action` Priority 5 now always returns `CLOSE_FULL`. Caught and fixed a related pre-existing bug in the same session: a separate event-filtering block (~line 426) only matched `CLOSE_FULL` against `LOSS_STOP`/`TIME_STOP`/`PROFIT_TARGET`, silently dropping the new DELTA_STOP→CLOSE_FULL event until `"DELTA_STOP"` was added to that match tuple. | SHA `3014fd5`
 - [x] **B022.6** — `tests/unit/strategy/test_roll_utils.py` (10 new: floor-formula boundary, widest-first, narrower-candidate fallback, call/put ordering, exhaustion→None, endpoint-exclusion, illiquid-skip, below-premium-skip, empty-range); `test_ic_nifty_v2_adjustment.py` (3 new: wing-floor-miss rescued by narrower search, DELTA_STOP→CLOSE_FULL for `wing_search_exhausted` and `debit_cap`); `test_ic_nifty_v1.py` (2 updated + 1 new: CLOSE_FULL escalation, narrower-search rescue via mocked persisted credit). 567/567 `tests/unit/strategy/` + `tests/unit/paper/test_original_entry_credit.py` pass. | SHA `3014fd5`
 - [x] **B022.7** — `general-purpose` agent standing in for `@code-reviewer` against real `git diff HEAD`. No CRITICAL/ERROR. Confirmed in code (not docstring) that the short strike is structurally excluded from candidates in both directions, and that the `CLOSE_FULL` escalation is unconditional (no `if`/`else` on block_reason) in both files. One WARNING (REVIEW.md's 80-char G2 vs. the repo's actual 100-char ruff/black config — pre-existing doc/tooling mismatch, not a defect in this diff). | Confirmed 2026-08-04
-- [x] **B022.8** — Commit, update `bugs.md` BUG-022 status to ✅ Fixed, `DECISIONS.md` updated with the ratified override decision and final parameters. | SHA pending — commit follows this checklist update
+- [x] **B022.8** — Commit, update `bugs.md` BUG-022 status to ✅ Fixed, `DECISIONS.md` updated with the ratified override decision and final parameters. Verified 2026-08-10: docs (`bugs.md`, `task.md`, `DECISIONS.md`, `CONTEXT.md`, `TODOS.md`) were already bundled into the same commit as the code fix, per that commit's own `What:` list — this checklist line was simply never flipped after the fact. | SHA `3014fd5` (checkbox-flip itself staged but not committed this session — sandbox has no `pre-commit`/venv, same limitation class as B004.6/B006.6/B010.2/B021.x; commit deferred to live host)
 
 ---
 
@@ -278,3 +278,53 @@ BUG-020 fully closed (Phases 1-3). BUG-021 (`IronCondorV1`, identical defect) re
 - [x] **B027.2** — Tests added to `tests/unit/test_healthcheck.py` (4 new, 8/8 total pass): `test_healthcheck_module_calls_load_dotenv_at_import` (the core regression test — patches `dotenv.load_dotenv`, reloads the module, asserts it was called exactly once; this is the test that would have failed pre-fix), `test_healthcheck_build_notifier_resolves_after_dotenv_load` (edge case — a real fixture `.env` file + real `load_dotenv(dotenv_path=...)` call resolves `build_notifier()` to a real notifier), `test_healthcheck_build_notifier_still_none_without_configured_env` (no regression — absent env still returns `None` gracefully), plus a `_reload_healthcheck_without_touching_real_env()` helper — discovered mid-session that real `load_dotenv()` mutates `os.environ` directly (monkeypatch can't undo that), so naive test cleanup was leaking a fake token into later tests in the same process; fixed by never reloading the module with the *real* `load_dotenv()` except when a test intentionally exercises it, always restoring via a no-op-patched reload afterward. Confirmed `monkeypatch.chdir()` does NOT control which `.env` `load_dotenv()` discovers (it walks up from the *caller's source file* by default, not `cwd`) — this sandbox's real project `.env` was being picked up during an earlier draft of this test until switched to an explicit `dotenv_path=`. | Verified via `pytest tests/unit/test_healthcheck.py tests/unit/test_notifications.py tests/unit/test_config.py -q` — 44/44 pass
 - [x] **B027.3** — Not a financial-logic change (no P&L/Decimal/order-path code touched). Self-review against `REVIEW.md`: import ordering correct (`load_dotenv()` call placed and executed before any `src.*` import that could touch `settings`; `# noqa: E402` added on the now-intentionally-late `src.*` imports); no unused imports; comment explains *why* `load_dotenv()` is positioned there, not just *that* it is (referencing BUG-011's `Settings(_env_file=None)` design and BUG-027 itself) — real `@code-reviewer`/`general-purpose` substitute agent pass still recommended before final commit if available in-session. | Self-review only so far — pending agent pass
 - [ ] **B027.4** — Commit, update `bugs.md` BUG-027 status to ✅ Fixed + SHA, add a `TODOS.md` session log line.
+
+---
+
+## BUG-028 — Overlay P&L reporting pipeline structurally blind to `STRATEGY_OVERLAY`-scoped legs since S2r
+
+Council-ruled 2026-08-10 (`docs/council/2026-08-10_overlay-pnl-reporting-track-independence.md`,
+unanimous 4/4, Position B "B-lite" — no DDL change). Full mandate in `DECISIONS.md` 2026-08-10.
+3-phase split mirrors BUG-020's precedent — each phase independently working and tested, one
+commit per phase.
+
+### Phase 1 — Correctness fix
+
+- [ ] **B028.1** — `_compute_overlay_pnl_snapshots()` (`paper_3track_snapshot.py`): query
+  `STRATEGY_OVERLAY` directly, not the base-track loop's `strategy_name`. This is BUG-028's root
+  cause (the silent zero).
+- [ ] **B028.2** — `generate_track_snapshot()` (`track_snapshot.py`): stop discovering/persisting
+  overlay legs entirely — base-track snapshots report base-leg P&L only.
+- [ ] **B028.3** — `_build_recovery_digest()`: reframe as "NiftyBees vs standalone overlay book,"
+  joined by `snapshot_date`, no "active track" selection.
+- [ ] **B028.4** — `PaperStore.record_overlay_pnl_snapshot()`: canonical rows write
+  `strategy_name = STRATEGY_OVERLAY` (no schema change).
+- [ ] **B028.5** — Tests: happy-path (overlay leg opened post-S2r now shows correct nonzero P&L in
+  both the snapshot table and the digest), edge case (no overlay position open → digest shows "no
+  position," not `0`).
+- [ ] **B028.6** — Real `@code-reviewer` subagent (or substitute) against `git diff HEAD` — financial
+  P&L reporting change.
+- [ ] **B028.7** — Commit.
+
+### Phase 2 — Eliminate silent false zeros (mandatory DoD, not optional hardening)
+
+- [ ] **B028.8** — Missing overlay source data → `None`/"No data," never `Decimal("0")`; WARNING
+  logged (strategy, overlay_type, date) whenever source data is absent; digest renders "No data"/"No
+  open position" instead of `₹0.00`; a zero is only emitted when source observations genuinely exist
+  and compute to zero.
+- [ ] **B028.9** — Tests: happy-path (genuine zero P&L still renders `₹0.00`, not suppressed), edge
+  case (missing source data renders "No data" + WARNING fires, does not crash the digest).
+- [ ] **B028.10** — Review + commit.
+
+### Phase 3 — Historical repair (one-off script)
+
+- [ ] **B028.11** — `scripts/dev/migrate_overlay_pnl_attribution.py`: back up DB; derive actual S2r
+  cutover date from the trade ledger (first `STRATEGY_OVERLAY` trade), not a hardcoded commit date;
+  for each pre-cutover `paper_overlay_pnl_snapshots` row, check
+  `(STRATEGY_OVERLAY, overlay_type, snapshot_date)` uniqueness before relabeling — skip with a
+  logged WARNING on collision, never blind-`UPDATE`; do not dual-write; output
+  migrated/skipped/unchanged counts.
+- [ ] **B028.12** — Tests: happy-path (unambiguous legacy row relabeled correctly), edge case
+  (collision detected → skipped, legacy row left intact, WARNING logged).
+- [ ] **B028.13** — Review + commit, update `bugs.md` BUG-028 status to ✅ Fixed + SHA,
+  `CONTEXT.md`/`TODOS.md` updated.

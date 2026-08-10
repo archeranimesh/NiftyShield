@@ -1965,6 +1965,64 @@ throwaway venv, pre-existing, unrelated). Source: this session (Cowork).
 `InstrumentLookup.search_options` (strike/type/expiry) instead of `get_by_key`, so production roll
 legs get the real BOD-sourced lot size instead of falling back to the constant every time.
 
+### 2026-08-10 — BUG-028: overlay P&L reporting decoupled from tracks (council ruling, "Position B-lite")
+
+Council checkpoint (`CLAUDE.md` Step 2b) run — all three trigger conditions held (load-bearing for
+daily reporting + any future automation on `paper_overlay_pnl_snapshots`; two materially different
+architectures; spans strategy-design + data-architecture). Unanimous 4/4 council verdict: **Position
+B ("decouple the pipeline"), implemented as a schema-preserving "B-lite" refactor** — no DDL change,
+canonical overlay P&L rows are written with `strategy_name = STRATEGY_OVERLAY` ("paper_nifty_overlay")
+instead of a base track's own `strategy_name`. Position A ("re-attribute overlay legs back into each
+track's per-track view") was rejected without dissent: it has no defensible attribution rule (all
+three tracks → triple-counts one economic position; one "primary" track → arbitrary; a synthetic
+aggregate row → converges on Position B anyway while keeping Position A's confusion) and it would
+re-couple reporting to tracks in direct tension with S2r's (2026-07-29) deliberate decoupling of
+overlay entry/roll from tracks at the write layer. `compute_overlay_coverage()` (S3r) already
+demonstrates the correct pattern this ruling generalizes: shared overlays may be *compared with* a
+base track at read time without being *persisted as belonging to* that track.
+
+**Implementation mandate (3 phases, mirrors BUG-020's phase-boundary precedent):**
+- **Phase 1 — correctness fix:** `_compute_overlay_pnl_snapshots()` (`paper_3track_snapshot.py`)
+  queries `STRATEGY_OVERLAY` directly instead of inheriting the base-track loop's `strategy_name`
+  (this is BUG-028's actual root cause — the silent zero). `generate_track_snapshot()`
+  (`track_snapshot.py`) stops discovering/persisting overlay legs at all — base-track snapshots
+  report base-leg P&L only. `_build_recovery_digest()` reframed as "NiftyBees vs standalone overlay
+  book," joined by `snapshot_date`, no "active track" selection. `PaperStore.record_overlay_pnl_snapshot()`
+  writes canonical rows with `strategy_name = STRATEGY_OVERLAY` — no schema change, the existing
+  `(strategy_name, overlay_type, snapshot_date)` primary key already supports it.
+- **Phase 2 — eliminate silent false zeros (mandatory, part of BUG-028's DoD, not optional
+  hardening):** missing overlay source data must produce `None`/"No data," never `Decimal("0")`; a
+  WARNING (strategy, overlay_type, date) logs whenever source data is absent; the digest renders
+  "No data"/"No open position" rather than `₹0.00`; a zero is only ever emitted when source
+  observations genuinely exist and compute to zero. This is the invariant that prevents this bug
+  class from recurring silently — do not skip it to ship Phase 1 faster.
+- **Phase 3 — historical repair (one-off script, `scripts/dev/migrate_overlay_pnl_attribution.py`,
+  mirrors `backfill_nav_total_pnl.py`/`migrate_paper_trades_state.py`):** back up the DB; derive the
+  actual S2r cutover date from the trade ledger (first `STRATEGY_OVERLAY` trade), not a hardcoded
+  commit date; for each pre-cutover `paper_overlay_pnl_snapshots` row, check
+  `(STRATEGY_OVERLAY, overlay_type, snapshot_date)` uniqueness before relabeling — **do not**
+  blindly `UPDATE strategy_name`; on a collision (multiple legacy track rows sharing the same
+  `overlay_type`+`snapshot_date`), skip with a logged WARNING and leave the legacy row intact rather
+  than guessing which one is canonical; output migrated/skipped/unchanged counts for audit. **Do not
+  dual-write** the same economic P&L under both a legacy track name and `STRATEGY_OVERLAY` —
+  creates duplicate economic observations and a second cleanup migration later.
+
+**Required invariants (from the ruling, must hold post-fix):** one canonical overlay row per
+`(STRATEGY_OVERLAY, overlay_type, snapshot_date)`; overlay trades and canonical overlay snapshots
+share one strategy namespace; shared overlay P&L is never persisted once per base track; recovery
+calculations consume canonical overlay rows only; missing source data never silently becomes zero;
+historical migration never merges rows without a verified economic-identity rule; read-time track
+comparisons never write back into canonical snapshot tables.
+
+**Not changed by this ruling:** `paper_overlay_pnl_snapshots` schema (no DDL); `compute_overlay_coverage()`
+(S3r, already correct); the overlay entry/roll path (already `STRATEGY_OVERLAY`-scoped since S2r);
+the `paper_leg_snapshots` S7 fix (already real leg_role keys); any base-track P&L computation.
+
+Source: `docs/council/2026-08-10_overlay-pnl-reporting-track-independence.md` (4/4 council members —
+`openai/gpt-5.6-sol`, `google/gemini-3.1-pro-preview`, `x-ai/grok-4.3`, `deepseek/deepseek-r1-0528` —
+chaired by `anthropic/claude-opus-4.6`; unanimous, no dissenting notes), `docs/bugs/bugs.md` BUG-028,
+`docs/bugs/task.md`. Not yet implemented — council ruling recorded, implementation pending.
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty
