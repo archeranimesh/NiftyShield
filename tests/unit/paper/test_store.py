@@ -1287,6 +1287,51 @@ def test_record_protection_recovery_snapshot_nullable_fields_round_trip(
     assert retrieved.best_recovery_pct_inception is None
 
 
+def test_record_protection_recovery_snapshot_overlay_fields_null_round_trip(
+    store: PaperStore,
+) -> None:
+    """BUG-028 Phase 2: cc/pp/collar_pnl_1d + _inception are nullable now —
+
+    a missing overlay type persists and reads back as None, never coerced to
+    Decimal("0") (schema migration dropped their NOT NULL constraint).
+    """
+    original = _recovery_snap(
+        cc_pnl_1d=None,
+        pp_pnl_1d=Decimal("180"),
+        collar_pnl_1d=None,
+        cc_pnl_inception=None,
+        pp_pnl_inception=Decimal("360"),
+        collar_pnl_inception=None,
+        best_overlay="pp",
+        best_recovery_pct=Decimal("0.25"),
+        best_overlay_inception="pp",
+        best_recovery_pct_inception=Decimal("0.25"),
+    )
+    store.record_protection_recovery_snapshot(original)
+    retrieved = store.get_protection_recovery_snapshots()[0]
+    assert retrieved.cc_pnl_1d is None
+    assert retrieved.collar_pnl_1d is None
+    assert retrieved.cc_pnl_inception is None
+    assert retrieved.collar_pnl_inception is None
+    assert retrieved.pp_pnl_1d == Decimal("180")
+    assert retrieved.pp_pnl_inception == Decimal("360")
+
+
+def test_record_protection_recovery_snapshot_genuine_zero_not_null(
+    store: PaperStore,
+) -> None:
+    """A genuine zero P&L overlay round-trips as Decimal("0"), not None.
+
+    Distinguishes "observed, computed to no change" from "source absent" —
+    the whole point of BUG-028 Phase 2's nullability change.
+    """
+    original = _recovery_snap(cc_pnl_1d=Decimal("0"), cc_pnl_inception=Decimal("0"))
+    store.record_protection_recovery_snapshot(original)
+    retrieved = store.get_protection_recovery_snapshots()[0]
+    assert retrieved.cc_pnl_1d == Decimal("0")
+    assert retrieved.cc_pnl_inception == Decimal("0")
+
+
 def test_record_protection_recovery_snapshot_upserts(store: PaperStore) -> None:
     store.record_protection_recovery_snapshot(_recovery_snap(niftybees_pnl_1d=Decimal("-700")))
     store.record_protection_recovery_snapshot(_recovery_snap(niftybees_pnl_1d=Decimal("-999")))
@@ -1320,3 +1365,59 @@ def test_get_protection_recovery_snapshots_returns_empty_when_none_recorded(
     store: PaperStore,
 ) -> None:
     assert store.get_protection_recovery_snapshots() == []
+
+
+def test_protection_recovery_table_migrates_from_not_null_schema(db_path: Path) -> None:
+    """BUG-028 Phase 2: an old-schema DB (cc/pp/collar_pnl_1d TEXT NOT NULL)
+
+    is rebuilt to the nullable schema on open, preserving pre-existing rows,
+    and the nullable insert path works immediately afterward — same
+    rebuild-in-place pattern already proven for paper_trades' UNIQUE
+    migration.
+    """
+    import sqlite3
+
+    conn = sqlite3.connect(db_path)
+    conn.executescript(
+        """
+        CREATE TABLE paper_protection_recovery_snapshots (
+            snapshot_date                 TEXT NOT NULL,
+            niftybees_pnl_1d              TEXT NOT NULL,
+            cc_pnl_1d                     TEXT NOT NULL,
+            pp_pnl_1d                     TEXT NOT NULL,
+            collar_pnl_1d                 TEXT NOT NULL,
+            niftybees_pnl_inception       TEXT NOT NULL,
+            cc_pnl_inception              TEXT NOT NULL,
+            pp_pnl_inception              TEXT NOT NULL,
+            collar_pnl_inception          TEXT NOT NULL,
+            best_overlay                  TEXT,
+            best_recovery_pct             TEXT,
+            best_overlay_inception        TEXT,
+            best_recovery_pct_inception   TEXT,
+            PRIMARY KEY (snapshot_date)
+        ) STRICT;
+        INSERT INTO paper_protection_recovery_snapshots VALUES (
+            '2026-05-01', '-700', '300', '180', '240',
+            '-1400', '600', '360', '480', 'cc', '0.4286', 'cc', '0.4286'
+        );
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    store = PaperStore(db_path)
+
+    # Pre-existing row survived the rebuild, values unchanged.
+    preserved = store.get_protection_recovery_snapshots()[0]
+    assert preserved.snapshot_date == date(2026, 5, 1)
+    assert preserved.cc_pnl_1d == Decimal("300")
+
+    # Nullable insert now works against the migrated schema.
+    store.record_protection_recovery_snapshot(
+        _recovery_snap(snapshot_date=date(2026, 5, 2), cc_pnl_1d=None, cc_pnl_inception=None)
+    )
+    migrated_row = [
+        s for s in store.get_protection_recovery_snapshots() if s.snapshot_date == date(2026, 5, 2)
+    ][0]
+    assert migrated_row.cc_pnl_1d is None
+    assert migrated_row.cc_pnl_inception is None

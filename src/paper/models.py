@@ -378,13 +378,21 @@ class ProtectionRecoverySnapshot:
         niftybees_pnl_1d: NiftyBees base-leg 1-day P&L (S3, ``strategy_name
             == STRATEGY_SPOT``).
         cc_pnl_1d: CC overlay 1-day P&L (S8, ``overlay_type == "cc"``).
-        pp_pnl_1d: PP overlay 1-day P&L (S8, ``overlay_type == "pp"``).
+            ``None`` (BUG-028 Phase 2) when no ``OverlayPnLSnapshot`` row
+            exists for this type/date — source data absent, not a genuine
+            zero move. Distinct from ``Decimal("0")``, which means the
+            overlay book was observed and computed to no change.
+        pp_pnl_1d: PP overlay 1-day P&L (S8, ``overlay_type == "pp"``). Same
+            ``None``-means-missing rule as ``cc_pnl_1d``.
         collar_pnl_1d: Collar overlay 1-day P&L (S8, ``overlay_type ==
-            "collar"``).
+            "collar"``). Same ``None``-means-missing rule as ``cc_pnl_1d``.
         niftybees_pnl_inception: NiftyBees base-leg inception P&L.
-        cc_pnl_inception: CC overlay inception P&L.
-        pp_pnl_inception: PP overlay inception P&L.
-        collar_pnl_inception: Collar overlay inception P&L.
+        cc_pnl_inception: CC overlay inception P&L. Same ``None``-means-missing
+            rule as ``cc_pnl_1d``.
+        pp_pnl_inception: PP overlay inception P&L. Same ``None``-means-missing
+            rule as ``cc_pnl_1d``.
+        collar_pnl_inception: Collar overlay inception P&L. Same
+            ``None``-means-missing rule as ``cc_pnl_1d``.
         best_overlay: Which of cc/pp/collar recovered the largest share of
             a red NiftyBees day, by ``recovery_pct``. ``None`` when
             ``niftybees_pnl_1d >= 0`` — a green/flat day has nothing to
@@ -404,13 +412,13 @@ class ProtectionRecoverySnapshot:
 
     snapshot_date: date
     niftybees_pnl_1d: Decimal
-    cc_pnl_1d: Decimal
-    pp_pnl_1d: Decimal
-    collar_pnl_1d: Decimal
+    cc_pnl_1d: Decimal | None
+    pp_pnl_1d: Decimal | None
+    collar_pnl_1d: Decimal | None
     niftybees_pnl_inception: Decimal
-    cc_pnl_inception: Decimal
-    pp_pnl_inception: Decimal
-    collar_pnl_inception: Decimal
+    cc_pnl_inception: Decimal | None
+    pp_pnl_inception: Decimal | None
+    collar_pnl_inception: Decimal | None
     best_overlay: str | None = None
     best_recovery_pct: Decimal | None = None
     best_overlay_inception: str | None = None

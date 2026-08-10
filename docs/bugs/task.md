@@ -322,18 +322,53 @@ commit per phase.
   `_normalize_overlay_pnls` docstring refs in live code (fixed); G2 line-length vs. REVIEW.md's
   aspirational 80-char text — deferred, diff matches the actually-enforced ruff 100-char limit
   (`pyproject.toml`), same precedent as BUG-002.6/BUG-010.8.
-- [x] **B028.7** — Commit. | SHA pending — sandbox `.git/index.lock` held by a concurrent process,
-  commit deferred to live host, same class of limitation as B004.6/B006.6/B010.2 etc.
+- [x] **B028.7** — Commit. | SHA `6820f81` (committed by Animesh on live host — sandbox
+  `.git/index.lock` blocked commit from this session, same class of limitation as
+  B004.6/B006.6/B010.2 etc.). Pre-commit `mypy` also caught 2 unrelated pre-existing
+  type errors (`src/instruments/lookup.py::format_leg_label`, a `None` strike guard;
+  `src/strategy/ic_close_executor.py::roll_ic_legs`, a narrowing `assert` for
+  `leg.price`) — fixed and included in this commit since they blocked the hook.
 
 ### Phase 2 — Eliminate silent false zeros (mandatory DoD, not optional hardening)
 
-- [ ] **B028.8** — Missing overlay source data → `None`/"No data," never `Decimal("0")`; WARNING
-  logged (strategy, overlay_type, date) whenever source data is absent; digest renders "No data"/"No
-  open position" instead of `₹0.00`; a zero is only emitted when source observations genuinely exist
-  and compute to zero.
-- [ ] **B028.9** — Tests: happy-path (genuine zero P&L still renders `₹0.00`, not suppressed), edge
-  case (missing source data renders "No data" + WARNING fires, does not crash the digest).
-- [ ] **B028.10** — Review + commit.
+- [x] **B028.8** — `ProtectionRecoverySnapshot.cc/pp/collar_pnl_1d` + `_inception` (6 fields,
+  `src/paper/models.py`) changed `Decimal` → `Decimal | None`. `paper_protection_recovery_snapshots`
+  was a `STRICT` table with those 6 columns `TEXT NOT NULL` — SQLite can't drop `NOT NULL` via
+  `ALTER TABLE`, so `PaperStore.__init__` gained a one-time rebuild migration (create-new/copy/drop/
+  rename, same pattern as the existing `paper_trades` UNIQUE-constraint migration), detected via
+  `PRAGMA table_info` on `cc_pnl_1d`'s `notnull` flag (not a string match against
+  `sqlite_master.sql` — reviewer flagged the original substring approach as DDL-reformatting-fragile,
+  fixed before commit). `_compute_protection_recovery_snapshot`
+  (`scripts/strategies/three_track/paper_3track_snapshot.py`) now defaults `overlay_1d`/
+  `overlay_inception` to `None` per type and logs
+  `logger.warning("protection_recovery.overlay_source_missing", strategy=STRATEGY_OVERLAY,
+  overlay_type=..., date=...)` when `get_overlay_pnl_snapshots` returns no rows. `_best_recovery`
+  skips `None` entries (a missing overlay can't be "best"). `_build_recovery_digest` renders
+  `"  {label:<6} No data"` for `None` fields (sorted after the real-valued lines), preserves the
+  existing `+0`-style rendering for a genuine zero.
+- [x] **B028.9** — `tests/unit/paper/test_store.py`: nullable round-trip
+  (`test_record_protection_recovery_snapshot_overlay_fields_null_round_trip`), genuine-zero-stays-
+  zero (`test_record_protection_recovery_snapshot_genuine_zero_not_null`), schema-rebuild migration
+  (`test_protection_recovery_table_migrates_from_not_null_schema` — raw-sqlite3-constructed
+  old-schema DB, confirms pre-existing row survives + new nullable insert works post-migration).
+  `tests/unit/scripts/test_paper_3track_protection_recovery.py`: missing-source →
+  `None` + WARNING fires (`test_missing_overlay_source_yields_none_and_warns`), genuine zero not
+  treated as missing (`test_genuine_zero_overlay_pnl_is_not_treated_as_missing`), digest renders
+  "No data" without crashing on mixed Decimal/None sort
+  (`test_digest_renders_no_data_for_missing_overlay_without_crashing`), all-missing suppresses
+  "Best:" line (`test_digest_all_overlays_missing_suppresses_best_line`). 111/111 relevant tests
+  pass; full `tests/unit/` 2662 passed / 2 skipped / 28 failed / 10 errors — all pre-existing
+  environmental gaps (missing pyarrow, network-blocked `api.upstox.com`, missing hypothesis),
+  confirmed unrelated, same failure set as before this change (was 2658 passed pre-change).
+- [x] **B028.10** — `general-purpose` + `REVIEW.md` substitute for `@code-reviewer`
+  (financial P&L reporting change, gate mandatory). No CRITICAL/ERROR. 2 WARNINGs, both fixed
+  pre-commit: (1) missing wiring-level test coverage at the snapshot/digest layer (the pure
+  `_best_recovery` and store round-trip were covered but not
+  `_compute_protection_recovery_snapshot`'s WARNING-log path or `_build_recovery_digest`'s "No
+  data" rendering) — 4 tests added, see B028.9; (2) migration's old-schema detection was a
+  whitespace-fragile string match against `sqlite_master.sql` — switched to `PRAGMA table_info`'s
+  `notnull` flag. INFO: migration correctly transaction-wrapped (`BEGIN`/`COMMIT`), no data-loss
+  risk on mid-rebuild failure; `_best_recovery`'s all-real-data path provably unchanged.
 
 ### Phase 3 — Historical repair (one-off script)
 

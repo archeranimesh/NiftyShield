@@ -1420,7 +1420,7 @@ def _compute_spot_comparison_snapshot(
 
 def _best_recovery(
     niftybees_pnl: Decimal,
-    overlay_pnls: dict[str, Decimal],
+    overlay_pnls: dict[str, Decimal | None],
 ) -> tuple[str | None, Decimal | None]:
     """Pick the overlay with the largest recovery share on a red day.
 
@@ -1429,13 +1429,19 @@ def _best_recovery(
     ``None`` rather than a misleading zero/negative-anchored figure
     (confirmed with operator, stories.md S9).
 
+    BUG-028 Phase 2: ``overlay_pnls`` values may be ``None`` (source data
+    absent for that type/date, see ``_compute_protection_recovery_snapshot``)
+    — a missing overlay can never be "best," it's simply excluded from
+    consideration, not treated as a recovery of 0.
+
     Args:
         niftybees_pnl: NiftyBees P&L for the period (1d or inception).
-        overlay_pnls: Mapping of overlay_type -> P&L for the same period.
+        overlay_pnls: Mapping of overlay_type -> P&L for the same period,
+            ``None`` where source data is missing.
 
     Returns:
         ``(best_overlay, best_recovery_pct)``, both ``None`` together when
-        ``niftybees_pnl >= 0``.
+        ``niftybees_pnl >= 0`` or when every overlay type is missing data.
     """
     if niftybees_pnl >= 0:
         return None, None
@@ -1443,6 +1449,8 @@ def _best_recovery(
     best_type: str | None = None
     best_pct: Decimal | None = None
     for overlay_type, pnl in overlay_pnls.items():
+        if pnl is None:
+            continue
         pct = pnl / denom
         if best_pct is None or pct > best_pct:
             best_type, best_pct = overlay_type, pct
@@ -1481,12 +1489,11 @@ def _compute_protection_recovery_snapshot(
         return None
     niftybees = niftybees_rows[0]
 
-    overlay_1d: dict[str, Decimal] = {
-        "cc": Decimal("0"),
-        "pp": Decimal("0"),
-        "collar": Decimal("0"),
-    }
-    overlay_inception: dict[str, Decimal] = dict(overlay_1d)
+    # BUG-028 Phase 2: default to None ("source data absent"), never
+    # Decimal("0") — a missing OverlayPnLSnapshot row must not read back
+    # indistinguishably from "overlay observed, computed to no change."
+    overlay_1d: dict[str, Decimal | None] = {"cc": None, "pp": None, "collar": None}
+    overlay_inception: dict[str, Decimal | None] = dict(overlay_1d)
     for overlay_type in ("cc", "pp", "collar"):
         rows = store.get_overlay_pnl_snapshots(
             STRATEGY_OVERLAY, overlay_type, start_date=snap_date, end_date=snap_date
@@ -1494,6 +1501,13 @@ def _compute_protection_recovery_snapshot(
         if rows:
             overlay_1d[overlay_type] = rows[0].pnl_1d_abs
             overlay_inception[overlay_type] = rows[0].pnl_inception_abs
+        else:
+            logger.warning(
+                "protection_recovery.overlay_source_missing",
+                strategy=STRATEGY_OVERLAY,
+                overlay_type=overlay_type,
+                date=str(snap_date),
+            )
 
     best_overlay, best_recovery_pct = _best_recovery(niftybees.pnl_1d_abs, overlay_1d)
     best_overlay_inception, best_recovery_pct_inception = _best_recovery(
@@ -1529,17 +1543,25 @@ def _build_recovery_digest(snap: ProtectionRecoverySnapshot) -> str:
     dropped entirely — lines sorted by raw P&L descending instead, no
     percentages, no "Best:" line (stories.md S9).
 
+    BUG-028 Phase 2: an overlay type with no source data for this date
+    (``None``) renders as a "No data" line instead of a false ``+0`` —
+    excluded from the amount-based sort (can't be ranked against real
+    numbers) and always listed after the real-valued lines.
+
     Args:
         snap: The computed recovery snapshot for one date.
 
     Returns:
         Multi-line digest text, ready for ``notifier.send()``.
     """
-    overlay_pnls = {
+    overlay_pnls: dict[str, Decimal | None] = {
         "cc": snap.cc_pnl_1d,
         "pp": snap.pp_pnl_1d,
         "collar": snap.collar_pnl_1d,
     }
+    known = {k: v for k, v in overlay_pnls.items() if v is not None}
+    missing = [k for k, v in overlay_pnls.items() if v is None]
+
     date_str = snap.snapshot_date.strftime("%d %b")
     lines = [
         f"\U0001f4ca NiftyBees vs overlays — {date_str}",
@@ -1548,19 +1570,25 @@ def _build_recovery_digest(snap: ProtectionRecoverySnapshot) -> str:
 
     is_red = snap.niftybees_pnl_1d < 0
     if is_red:
-        ordered = sorted(overlay_pnls.items(), key=lambda kv: kv[1], reverse=True)
+        ordered = sorted(known.items(), key=lambda kv: kv[1], reverse=True)
         denom = abs(snap.niftybees_pnl_1d)
         for overlay_type, pnl in ordered:
             pct = (pnl / denom) * 100 if denom else Decimal("0")
             label = _RECOVERY_OVERLAY_LABELS[overlay_type]
             lines.append(f"  {label:<6} {pnl:+.0f} ({pct:.0f}%)")
+        for overlay_type in missing:
+            label = _RECOVERY_OVERLAY_LABELS[overlay_type]
+            lines.append(f"  {label:<6} No data")
         if snap.best_overlay:
             lines.append(f"Best: {_RECOVERY_OVERLAY_LABELS[snap.best_overlay]}")
     else:
-        ordered = sorted(overlay_pnls.items(), key=lambda kv: kv[1], reverse=True)
+        ordered = sorted(known.items(), key=lambda kv: kv[1], reverse=True)
         for overlay_type, pnl in ordered:
             label = _RECOVERY_OVERLAY_LABELS[overlay_type]
             lines.append(f"  {label:<6} {pnl:+.0f}")
+        for overlay_type in missing:
+            label = _RECOVERY_OVERLAY_LABELS[overlay_type]
+            lines.append(f"  {label:<6} No data")
 
     return "\n".join(lines)
 

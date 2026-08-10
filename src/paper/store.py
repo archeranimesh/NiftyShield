@@ -257,13 +257,13 @@ CREATE INDEX IF NOT EXISTS idx_paper_overlay_pnl_strategy_type_date
 CREATE TABLE IF NOT EXISTS paper_protection_recovery_snapshots (
     snapshot_date                 TEXT NOT NULL,
     niftybees_pnl_1d              TEXT NOT NULL,
-    cc_pnl_1d                     TEXT NOT NULL,
-    pp_pnl_1d                     TEXT NOT NULL,
-    collar_pnl_1d                 TEXT NOT NULL,
+    cc_pnl_1d                     TEXT,
+    pp_pnl_1d                     TEXT,
+    collar_pnl_1d                 TEXT,
     niftybees_pnl_inception       TEXT NOT NULL,
-    cc_pnl_inception              TEXT NOT NULL,
-    pp_pnl_inception              TEXT NOT NULL,
-    collar_pnl_inception          TEXT NOT NULL,
+    cc_pnl_inception              TEXT,
+    pp_pnl_inception              TEXT,
+    collar_pnl_inception          TEXT,
     best_overlay                  TEXT,
     best_recovery_pct             TEXT,
     best_overlay_inception        TEXT,
@@ -337,16 +337,29 @@ def _row_to_overlay_pnl_snapshot(row: sqlite3.Row) -> OverlayPnLSnapshot:
 
 
 def _row_to_protection_recovery_snapshot(row: sqlite3.Row) -> ProtectionRecoverySnapshot:
+    # BUG-028 Phase 2: cc/pp/collar_pnl_1d + _inception are nullable now —
+    # NULL means "source overlay data was absent that day" (see
+    # _compute_protection_recovery_snapshot), never coerced to Decimal("0").
     return ProtectionRecoverySnapshot(
         snapshot_date=date.fromisoformat(row["snapshot_date"]),
         niftybees_pnl_1d=Decimal(row["niftybees_pnl_1d"]),
-        cc_pnl_1d=Decimal(row["cc_pnl_1d"]),
-        pp_pnl_1d=Decimal(row["pp_pnl_1d"]),
-        collar_pnl_1d=Decimal(row["collar_pnl_1d"]),
+        cc_pnl_1d=Decimal(row["cc_pnl_1d"]) if row["cc_pnl_1d"] is not None else None,
+        pp_pnl_1d=Decimal(row["pp_pnl_1d"]) if row["pp_pnl_1d"] is not None else None,
+        collar_pnl_1d=(
+            Decimal(row["collar_pnl_1d"]) if row["collar_pnl_1d"] is not None else None
+        ),
         niftybees_pnl_inception=Decimal(row["niftybees_pnl_inception"]),
-        cc_pnl_inception=Decimal(row["cc_pnl_inception"]),
-        pp_pnl_inception=Decimal(row["pp_pnl_inception"]),
-        collar_pnl_inception=Decimal(row["collar_pnl_inception"]),
+        cc_pnl_inception=(
+            Decimal(row["cc_pnl_inception"]) if row["cc_pnl_inception"] is not None else None
+        ),
+        pp_pnl_inception=(
+            Decimal(row["pp_pnl_inception"]) if row["pp_pnl_inception"] is not None else None
+        ),
+        collar_pnl_inception=(
+            Decimal(row["collar_pnl_inception"])
+            if row["collar_pnl_inception"] is not None
+            else None
+        ),
         best_overlay=row["best_overlay"],
         best_recovery_pct=(
             Decimal(row["best_recovery_pct"]) if row["best_recovery_pct"] is not None else None
@@ -457,6 +470,56 @@ class PaperStore:
                     ALTER TABLE paper_trades_new RENAME TO paper_trades;
                     CREATE INDEX IF NOT EXISTS idx_paper_trades_strategy_leg
                         ON paper_trades(strategy_name, leg_role, trade_date);
+                    COMMIT;
+                    PRAGMA foreign_keys = ON;
+                    """
+                )
+            # BUG-028 Phase 2: drop NOT NULL on cc/pp/collar_pnl_1d + _inception
+            # in paper_protection_recovery_snapshots so "source data absent" can
+            # be represented as a real NULL, distinct from a genuine
+            # Decimal("0") move (SQLite can't ALTER COLUMN DROP NOT NULL in
+            # place — table rebuild required, same pattern as the paper_trades
+            # migration above).
+            table_exists = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table'"
+                " AND name='paper_protection_recovery_snapshots'"
+            ).fetchone()
+            # PRAGMA table_info's `notnull` column, not a string match against
+            # sqlite_master.sql — immune to any future reformatting of the DDL
+            # block above (whitespace/line-wrap changes would silently break a
+            # substring check with no test failure to catch it).
+            cc_col_still_not_null = table_exists and any(
+                col[1] == "cc_pnl_1d" and col[3] == 1
+                for col in conn.execute(
+                    "PRAGMA table_info(paper_protection_recovery_snapshots)"
+                ).fetchall()
+            )
+            if cc_col_still_not_null:
+                conn.executescript(
+                    """
+                    PRAGMA foreign_keys = OFF;
+                    BEGIN;
+                    CREATE TABLE paper_protection_recovery_snapshots_new (
+                        snapshot_date                 TEXT NOT NULL,
+                        niftybees_pnl_1d              TEXT NOT NULL,
+                        cc_pnl_1d                     TEXT,
+                        pp_pnl_1d                     TEXT,
+                        collar_pnl_1d                 TEXT,
+                        niftybees_pnl_inception       TEXT NOT NULL,
+                        cc_pnl_inception              TEXT,
+                        pp_pnl_inception              TEXT,
+                        collar_pnl_inception          TEXT,
+                        best_overlay                  TEXT,
+                        best_recovery_pct             TEXT,
+                        best_overlay_inception         TEXT,
+                        best_recovery_pct_inception    TEXT,
+                        PRIMARY KEY (snapshot_date)
+                    ) STRICT;
+                    INSERT INTO paper_protection_recovery_snapshots_new
+                        SELECT * FROM paper_protection_recovery_snapshots;
+                    DROP TABLE paper_protection_recovery_snapshots;
+                    ALTER TABLE paper_protection_recovery_snapshots_new
+                        RENAME TO paper_protection_recovery_snapshots;
                     COMMIT;
                     PRAGMA foreign_keys = ON;
                     """
@@ -1599,13 +1662,17 @@ class PaperStore:
                 (
                     snap.snapshot_date.isoformat(),
                     str(snap.niftybees_pnl_1d),
-                    str(snap.cc_pnl_1d),
-                    str(snap.pp_pnl_1d),
-                    str(snap.collar_pnl_1d),
+                    str(snap.cc_pnl_1d) if snap.cc_pnl_1d is not None else None,
+                    str(snap.pp_pnl_1d) if snap.pp_pnl_1d is not None else None,
+                    str(snap.collar_pnl_1d) if snap.collar_pnl_1d is not None else None,
                     str(snap.niftybees_pnl_inception),
-                    str(snap.cc_pnl_inception),
-                    str(snap.pp_pnl_inception),
-                    str(snap.collar_pnl_inception),
+                    str(snap.cc_pnl_inception) if snap.cc_pnl_inception is not None else None,
+                    str(snap.pp_pnl_inception) if snap.pp_pnl_inception is not None else None,
+                    (
+                        str(snap.collar_pnl_inception)
+                        if snap.collar_pnl_inception is not None
+                        else None
+                    ),
                     snap.best_overlay,
                     str(snap.best_recovery_pct) if snap.best_recovery_pct is not None else None,
                     snap.best_overlay_inception,
