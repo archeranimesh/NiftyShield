@@ -699,3 +699,36 @@ ERROR: auto-CC bootstrap failed. Check logs.
 **Related:** `docs/plan/paper-ic-daily-snapshot/stories.md` SNAP-3 findings (correction), 3-Track Consolidation epic (CC1–CC5/PP1–PP5/Collar1–Collar3b, `docs/archive/plan/3track-consolidation/`) — this bug means the "live-posture unblock" closed in that epic never actually resulted in a live overlay entry.
 
 ---
+
+## BUG-027 — `scripts/healthcheck.py` never calls `load_dotenv()`; every healthcheck alert has silently no-op'd since at least 2026-08-04
+
+| Field | Value |
+|---|---|
+| Severity | **HIGH** — not a financial-logic defect, but this is the project's dead-man's-switch cron (`CONTEXT_TREE.md`: "Dead man's switch for EOD cron validation"). Its entire purpose is to alert when something else is broken; it has been silently failing to alert for at least 4 trading days with zero downstream signal — the exact "silent automation failure" class `BUG-026` also hit. |
+| Status | 🔴 Open |
+| Discovered | 2026-08-10, Animesh reported seeing healthcheck log entries but no Telegram messages, while other scripts' Telegram alerts (`paper_3track_snapshot.py`, `eod_summary.py`, etc.) were arriving normally — investigated during the `telegram-markdown-migration` ROLL-11 workshop session. |
+| Location | `scripts/healthcheck.py` (imports, lines 16-30) — missing `from dotenv import load_dotenv` + `load_dotenv()` call present in every sibling cron script. |
+
+**Symptom:** `logs/healthcheck.log` shows, on every single run from 2026-08-04 through 2026-08-07 (and presumably every run since): the check messages print correctly (`✅ DB: accessible`, `⚠️ VIX data: N days stale`, etc.), `has_issue=True` is correctly detected, `main()` logs `WARNING System healthcheck failed or warned`, then immediately: `[INFO] [__main__] Telegram notifier not configured. Skipping alert.` No Telegram message is ever sent, on any run where an alert should have fired.
+
+**Root cause:** `build_notifier()` (`src/notifications/telegram.py:119-151`) deliberately constructs a fresh, uncached `Settings(_env_file=None)` on every call (see `BUG-011`'s 2026-08-06 fix) — it reads `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` **only** from the real OS process environment, never from `.env`. Every other cron-invoked script in this codebase (`paper_3track_snapshot.py`, `eod_summary.py`, `daily_snapshot.py`, `paper_ic_snapshot.py`, `paper_ic_entry.py`, ~25 files total, confirmed via `grep -rn "load_dotenv"`) calls `from dotenv import load_dotenv` + `load_dotenv()` near the top of the file *before* `build_notifier()`/`settings` is ever touched. `load_dotenv()` mutates `os.environ` directly as a side effect — that's what actually gets the token into the process environment `build_notifier()`'s `Settings(_env_file=None)` reads from. Cron's own environment never has these vars set directly (confirmed — `logs/cron.log`'s tracked crontab entries have no env-var preamble, and healthcheck's crontab line is a bare `cd ... && .venv/bin/python -m scripts.healthcheck`, identical in shape to every other job). `scripts/healthcheck.py`'s import block (lines 16-30) has no `dotenv` import and no `load_dotenv()` call at all — so under cron, `os.environ` is genuinely empty for these two vars by the time `build_notifier()` runs, and it correctly (per its own contract) returns `None`.
+
+**Why other scripts aren't affected:** identical `build_notifier()` call, identical cron invocation pattern (`cd <repo> && .venv/bin/python -m scripts.<module>`, no env-var prefix) — the only difference is every working script's own `load_dotenv()` call populating `os.environ` first. This was confirmed directly, not inferred: `grep -rn "load_dotenv"` across `src/`+`scripts/` returns the pattern in ~25 files; `scripts/healthcheck.py` is not among them.
+
+**Impact:** the healthcheck cron (`55 15 * * 1-5`) has been running "successfully" (exit code aside — `main()` still returns 1 on `has_issue`, so the cron *does* register a failure exit code, but with no human-visible alert) with zero operator-visible signal for at least the 4 trading days captured in the current `logs/healthcheck.log` window, and plausibly since the script was first deployed (`RO-4`, `docs/archive/plan/reporting-and-ops-fixes/tasks.md`) — no evidence in that task's spec that this was ever tested end-to-end against a real cron environment (only interactively, where a developer's shell likely already had the tokens exported).
+
+**Suggested fix:** add the same two-line pattern every sibling script already uses, before `build_notifier()`/`settings` is used:
+
+```python
+from dotenv import load_dotenv
+...
+load_dotenv()
+```
+
+placed the same way `eod_summary.py`/`paper_3track_snapshot.py` do it (module-level, near the top, before other project imports that might touch settings). This is a real code fix, not a docs-only or formatting change.
+
+**Suggested regression test:** mirror the pattern other `load_dotenv()`-bearing scripts' test files use (if any test asserts this — check via `search_graph` before assuming none exists) — a test that clears `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` from `os.environ` via `monkeypatch.delenv`, writes a fixture `.env` file with both values set, imports/reloads `scripts.healthcheck`, and asserts `build_notifier()` now resolves to a real notifier (not `None`) — proving the module-level `load_dotenv()` call actually runs and actually populates the environment before any notifier construction.
+
+**Related:** `BUG-011` (the `build_notifier()` `Settings(_env_file=None)` design this bug's root cause depends on); `BUG-026` (same failure shape — a live-capital-adjacent automation silently no-op'ing with no downstream alert, discovered the same way: an operator noticing an absence rather than an error).
+
+---
