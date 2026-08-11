@@ -151,7 +151,7 @@
       per MD-4's "escaping only" scope) remains `backbone/`'s job when that lands — re-check
       whether `backbone/`'s MD-4 file list already covers `daily_snapshot.py` /
       `src/dhan/positions.py` before assuming it's out of scope. Revisit this format decision
-      later if it becomes worth reopening. | SHA: —
+      later if it becomes worth reopening. | SHA: e714be2
 
 - [ ] **10. Production Proxy Delta CRITICAL alert (duplicate)** —
       `scripts/strategies/three_track/paper_3track_snapshot.py::_run`, ~line 1639. Surfaced
