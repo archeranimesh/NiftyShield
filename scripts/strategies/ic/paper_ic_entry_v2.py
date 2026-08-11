@@ -336,6 +336,7 @@ async def run() -> None:
         dte_warn_lo=_V2_MONTHLY_DTE_WARN_LO,
         dte_warn_hi=_V2_MONTHLY_DTE_WARN_HI,
         strategy_name=strategy_name,
+        notifier=_gate_alert,
     )
     if dte_violation is not None and args.log_only_gates:
         gate_violations.append(dte_violation)
@@ -364,10 +365,20 @@ async def run() -> None:
         raw_chain = client.get_option_chain_sync("NSE_INDEX|Nifty 50", expiry_str)
     except Exception as exc:  # noqa: BLE001
         logger.error("ic_entry.chain_fetch_failed", expiry=expiry_str, error=str(exc))
+        _gate_alert(
+            f"⚠️ IC V2 Entry BLOCKED — {strategy_name}\n"
+            f"Gate: chain_fetch\n"
+            f"Reason: Live option chain fetch failed: {exc}"
+        )
         sys.exit(1)
 
     if not raw_chain:
         logger.error("ic_entry.chain_empty", expiry=expiry_str)
+        _gate_alert(
+            f"⚠️ IC V2 Entry BLOCKED — {strategy_name}\n"
+            f"Gate: chain_fetch\n"
+            f"Reason: Live option chain empty for expiry {expiry_str}"
+        )
         sys.exit(1)
 
     # Step 6: Short leg selection (25Δ put / 22Δ call, D1 ruling)
@@ -380,6 +391,11 @@ async def run() -> None:
     ranked_put = rank_strikes(short_put_candidates)
     if not ranked_put:
         logger.error("ic_entry.leg_resolution_failed", leg="short_put")
+        _gate_alert(
+            f"⚠️ IC V2 Entry BLOCKED — {strategy_name}\n"
+            f"Gate: leg_resolution\n"
+            f"Reason: No short_put candidate in delta range [{put_lo:.2f}, {put_hi:.2f}]"
+        )
         sys.exit(1)
     short_put = ranked_put[0]
 
@@ -387,6 +403,11 @@ async def run() -> None:
     ranked_call = rank_strikes(short_call_candidates)
     if not ranked_call:
         logger.error("ic_entry.leg_resolution_failed", leg="short_call")
+        _gate_alert(
+            f"⚠️ IC V2 Entry BLOCKED — {strategy_name}\n"
+            f"Gate: leg_resolution\n"
+            f"Reason: No short_call candidate in delta range [{call_lo:.2f}, {call_hi:.2f}]"
+        )
         sys.exit(1)
     short_call = ranked_call[0]
 
@@ -437,6 +458,11 @@ async def run() -> None:
             )
         else:
             logger.error("ic_entry.liquidity_gate_blocked", leg="short_put")
+            _gate_alert(
+                f"⚠️ IC V2 Entry BLOCKED — {strategy_name}\n"
+                f"Gate: liquidity\n"
+                f"Reason: short_put failed the liquidity gate"
+            )
             sys.exit(1)
     if not _apply_liquidity_gate([short_call]):
         if args.log_only_gates:
@@ -451,6 +477,11 @@ async def run() -> None:
             )
         else:
             logger.error("ic_entry.liquidity_gate_blocked", leg="short_call")
+            _gate_alert(
+                f"⚠️ IC V2 Entry BLOCKED — {strategy_name}\n"
+                f"Gate: liquidity\n"
+                f"Reason: short_call failed the liquidity gate"
+            )
             sys.exit(1)
 
     # Step 9: Fetch spot (used only for the Telegram notification below).
@@ -462,6 +493,11 @@ async def run() -> None:
     nifty_spot = ltp_map.get("NSE_INDEX|Nifty 50")
     if nifty_spot is None:
         logger.error("ic_entry.spot_fetch_failed")
+        _gate_alert(
+            f"⚠️ IC V2 Entry BLOCKED — {strategy_name}\n"
+            f"Gate: spot_fetch\n"
+            f"Reason: Nifty spot LTP fetch returned no data"
+        )
         sys.exit(1)
 
     # Persist all threshold-gate violations collected above (log-only mode).

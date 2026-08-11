@@ -341,6 +341,7 @@ def resolve_expiry(
     dte_warn_hi: int,
     *,
     strategy_name: str = "",
+    notifier: Callable[[str], None] | None = None,
 ) -> tuple[InstrumentLookup, str, int, GateViolation | None]:
     """Resolve the target expiry from the BOD file and validate the DTE window.
 
@@ -356,6 +357,14 @@ def resolve_expiry(
         dte_warn_lo: Minimum acceptable DTE (warn if below).
         dte_warn_hi: Maximum acceptable DTE (warn if above).
         strategy_name: DB strategy name, stamped onto any GateViolation.
+        notifier: Optional sync callable for gate-failure Telegram alerts,
+            matching check_duplicate/resolve_ivr's existing contract. Called
+            before each of the three STRUCTURAL sys.exit(1) sites below; any
+            exception it raises is swallowed. Previously missing here, which
+            is how the 2026-08-11 auto_pp.no_monthly_expiry_found-class
+            failure (this exact function, called from paper_ic_entry_v2.py)
+            could exit silently even though the caller has its own
+            ``_gate_alert`` wired to every other gate.
 
     Returns:
         Tuple of ``(InstrumentLookup, expiry_str, dte, GateViolation | None)``.
@@ -367,6 +376,15 @@ def resolve_expiry(
     """
     if not bod_path.exists():
         logger.error("resolve_expiry.bod_file_missing", bod_path=str(bod_path))
+        if notifier is not None:
+            try:
+                notifier(
+                    f"⚠️ IC Entry BLOCKED — {strategy_name}\n"
+                    f"Gate: resolve_expiry\n"
+                    f"Reason: BOD instruments file missing ({bod_path})"
+                )
+            except Exception:  # noqa: BLE001
+                pass
         sys.exit(1)
 
     try:
@@ -378,6 +396,15 @@ def resolve_expiry(
         )
     except Exception as exc:  # noqa: BLE001 — broad catch; BOD failures must exit cleanly
         logger.error("resolve_expiry.bod_load_failed", error=str(exc))
+        if notifier is not None:
+            try:
+                notifier(
+                    f"⚠️ IC Entry BLOCKED — {strategy_name}\n"
+                    f"Gate: resolve_expiry\n"
+                    f"Reason: BOD load/expiry resolution failed: {exc}"
+                )
+            except Exception:  # noqa: BLE001
+                pass
         sys.exit(1)
 
     expiry_str: str | None = None
@@ -388,6 +415,15 @@ def resolve_expiry(
 
     if expiry_str is None:
         logger.error("resolve_expiry.no_candidate_found", expiry_bucket=expiry_bucket)
+        if notifier is not None:
+            try:
+                notifier(
+                    f"⚠️ IC Entry BLOCKED — {strategy_name}\n"
+                    f"Gate: resolve_expiry\n"
+                    f"Reason: No '{expiry_bucket}' expiry candidate found"
+                )
+            except Exception:  # noqa: BLE001
+                pass
         sys.exit(1)
 
     expiry_date = date.fromisoformat(expiry_str)

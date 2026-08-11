@@ -42,6 +42,7 @@ from src.instruments.strike_selector import (
     rank_strikes,
 )
 from src.intraday.market_store import IntradayMarketStore
+from src.notifications.telegram import build_notifier
 from src.notifications.telegram_gateway import TelegramGateway
 from src.paper.constants import (
     DEFAULT_BOD_PATH,
@@ -233,18 +234,52 @@ async def run() -> None:
     args = parse_args()
     config = CONFIGS[args.expiry_type]
 
+    # Build a Telegram notifier for gate-failure alerts (non-fatal). Mirrors
+    # paper_ic_entry_v2.py's _gate_alert exactly — V1 previously had no
+    # gate-failure alerting at all (Telegram only fired on partial-execution
+    # failure and final success), silently exiting on every structural gate
+    # below. See DECISIONS.md 2026-08-11 "IC V1/V2 gate-failure alert audit".
+    _tg = build_notifier()
+
+    def _gate_alert(msg: str) -> None:
+        """Fire a Telegram gate-failure alert (sync wrapper, non-fatal).
+
+        Schedules ``_tg.send`` as an asyncio task. Any exception — including
+        network failures — is swallowed so that telegram never blocks a gate
+        exit.
+        """
+        if _tg is None:
+            return
+        try:
+            asyncio.get_running_loop().create_task(_tg.send(msg))
+        except Exception:  # noqa: BLE001
+            pass
+
     # Step 2: Duplicate guard (STRUCTURAL — never bypassed)
     store = PaperStore(args.db_path)
     open_positions = store.get_positions(config.strategy_name)
     if any(pos.net_qty != 0 for pos in open_positions):
         logger.error("ic_entry.duplicate_position", strategy_name=config.strategy_name)
+        _gate_alert(
+            f"⚠️ IC Entry BLOCKED — {config.strategy_name}\n"
+            f"Gate: duplicate\n"
+            f"Reason: Active position already exists"
+        )
         sys.exit(1)
 
     gate_violations = []
 
     # Step 2b: Post-expiry gate (monthly only) — block entry before last-Tuesday settlement
     if args.expiry_type == "monthly":
-        _post_expiry_gate()
+        try:
+            _post_expiry_gate()
+        except SystemExit:
+            _gate_alert(
+                f"⚠️ IC Entry BLOCKED — {config.strategy_name}\n"
+                f"Gate: post_expiry_gate\n"
+                f"Reason: Current month expiry not yet passed"
+            )
+            raise
 
     # Step 3: Mode detection
     csp_positions = store.get_positions(STRATEGY_CSP)
@@ -286,6 +321,11 @@ async def run() -> None:
             logger.warning("force_entry.ivr_bypass", ivr=ivr, gate=config.ivr_gate)
         else:
             logger.error("ic_entry.ivr_data_unavailable")
+            _gate_alert(
+                f"⚠️ IC Entry BLOCKED — {config.strategy_name}\n"
+                f"Gate: ivr\n"
+                f"Reason: VIX data unavailable/stale"
+            )
             sys.exit(1)
     # Tracks whether ivr was below gate and entry proceeded anyway (via
     # --force-entry or --log-only-gates) — used later to force the SELL leg
@@ -310,6 +350,11 @@ async def run() -> None:
             )
         else:
             logger.error("ic_entry.ivr_gate_blocked", ivr=ivr, gate=float(config.ivr_gate))
+            _gate_alert(
+                f"⚠️ IC Entry BLOCKED — {config.strategy_name}\n"
+                f"Gate: ivr\n"
+                f"IVR: {ivr:.2f} / Gate: {float(config.ivr_gate):.2f}"
+            )
             sys.exit(1)
 
     if ivr is not None:
@@ -318,6 +363,11 @@ async def run() -> None:
     # Step 6: DTE window check
     if not args.bod_path.exists():
         logger.error("ic_entry.bod_file_missing", bod_path=str(args.bod_path))
+        _gate_alert(
+            f"⚠️ IC Entry BLOCKED — {config.strategy_name}\n"
+            f"Gate: resolve_expiry\n"
+            f"Reason: BOD instruments file missing ({args.bod_path})"
+        )
         sys.exit(1)
 
     try:
@@ -331,6 +381,11 @@ async def run() -> None:
         # Intentional: broad catch for BOD loading/expiry resolution to ensure
         # exit 1 failure is reported to caller.
         logger.error("ic_entry.bod_load_failed", error=str(exc))
+        _gate_alert(
+            f"⚠️ IC Entry BLOCKED — {config.strategy_name}\n"
+            f"Gate: resolve_expiry\n"
+            f"Reason: BOD load/expiry resolution failed: {exc}"
+        )
         sys.exit(1)
 
     expiry_str = None
@@ -341,6 +396,11 @@ async def run() -> None:
 
     if expiry_str is None:
         logger.error("ic_entry.no_expiry_candidate", expiry_bucket=config.expiry_bucket)
+        _gate_alert(
+            f"⚠️ IC Entry BLOCKED — {config.strategy_name}\n"
+            f"Gate: resolve_expiry\n"
+            f"Reason: No '{config.expiry_bucket}' expiry candidate found"
+        )
         sys.exit(1)
 
     expiry_date = date.fromisoformat(expiry_str)
@@ -372,10 +432,20 @@ async def run() -> None:
         # Intentional: broad catch for live network client to ensure failure
         # exits gracefully with diagnostic message.
         logger.error("ic_entry.chain_fetch_failed", expiry=expiry_str, error=str(exc))
+        _gate_alert(
+            f"⚠️ IC Entry BLOCKED — {config.strategy_name}\n"
+            f"Gate: chain_fetch\n"
+            f"Reason: Live option chain fetch failed: {exc}"
+        )
         sys.exit(1)
 
     if not raw_chain:
         logger.error("ic_entry.chain_empty", expiry=expiry_str)
+        _gate_alert(
+            f"⚠️ IC Entry BLOCKED — {config.strategy_name}\n"
+            f"Gate: chain_fetch\n"
+            f"Reason: Live option chain empty for expiry {expiry_str}"
+        )
         sys.exit(1)
 
     # Step 8: Strike selection (4 legs)
@@ -389,6 +459,11 @@ async def run() -> None:
     ranked_put = rank_strikes(short_put_candidates)
     if not ranked_put:
         logger.error("ic_entry.leg_resolution_failed", leg="short_put")
+        _gate_alert(
+            f"⚠️ IC Entry BLOCKED — {config.strategy_name}\n"
+            f"Gate: leg_resolution\n"
+            f"Reason: No short_put candidate in delta range [{put_min:.2f}, {put_max:.2f}]"
+        )
         sys.exit(1)
     short_put = ranked_put[0]
 
@@ -396,6 +471,11 @@ async def run() -> None:
     ranked_call = rank_strikes(short_call_candidates)
     if not ranked_call:
         logger.error("ic_entry.leg_resolution_failed", leg="short_call")
+        _gate_alert(
+            f"⚠️ IC Entry BLOCKED — {config.strategy_name}\n"
+            f"Gate: leg_resolution\n"
+            f"Reason: No short_call candidate in delta range [{call_min:.2f}, {call_max:.2f}]"
+        )
         sys.exit(1)
     short_call = ranked_call[0]
 
@@ -411,6 +491,11 @@ async def run() -> None:
     )
     if not long_put_candidates:
         logger.error("ic_entry.leg_resolution_failed", leg="long_put")
+        _gate_alert(
+            f"⚠️ IC Entry BLOCKED — {config.strategy_name}\n"
+            f"Gate: leg_resolution\n"
+            f"Reason: No long_put hedge found at strike {long_put_strike}"
+        )
         sys.exit(1)
     long_put_key = long_put_candidates[0]["instrument_key"]
 
@@ -422,6 +507,11 @@ async def run() -> None:
     )
     if not long_call_candidates:
         logger.error("ic_entry.leg_resolution_failed", leg="long_call")
+        _gate_alert(
+            f"⚠️ IC Entry BLOCKED — {config.strategy_name}\n"
+            f"Gate: leg_resolution\n"
+            f"Reason: No long_call hedge found at strike {long_call_strike}"
+        )
         sys.exit(1)
     long_call_key = long_call_candidates[0]["instrument_key"]
 
@@ -439,6 +529,11 @@ async def run() -> None:
             )
         else:
             logger.error("ic_entry.liquidity_gate_blocked", leg="short_put")
+            _gate_alert(
+                f"⚠️ IC Entry BLOCKED — {config.strategy_name}\n"
+                f"Gate: liquidity\n"
+                f"Reason: short_put failed the liquidity gate"
+            )
             sys.exit(1)
     if not _apply_liquidity_gate([short_call]):
         if args.log_only_gates:
@@ -453,6 +548,11 @@ async def run() -> None:
             )
         else:
             logger.error("ic_entry.liquidity_gate_blocked", leg="short_call")
+            _gate_alert(
+                f"⚠️ IC Entry BLOCKED — {config.strategy_name}\n"
+                f"Gate: liquidity\n"
+                f"Reason: short_call failed the liquidity gate"
+            )
             sys.exit(1)
 
     # Step 10: Fetch spot (used only for the Telegram notification below).
@@ -464,6 +564,11 @@ async def run() -> None:
     nifty_spot = ltp_map.get("NSE_INDEX|Nifty 50")
     if nifty_spot is None:
         logger.error("ic_entry.spot_fetch_failed")
+        _gate_alert(
+            f"⚠️ IC Entry BLOCKED — {config.strategy_name}\n"
+            f"Gate: spot_fetch\n"
+            f"Reason: Nifty spot LTP fetch returned no data"
+        )
         sys.exit(1)
 
     # Persist all threshold-gate violations collected above (log-only mode).
