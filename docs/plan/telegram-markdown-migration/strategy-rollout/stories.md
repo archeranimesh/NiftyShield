@@ -1735,10 +1735,125 @@ get_code_snippet("GateViolation")        # confirm threshold/actual are still pr
 
 ---
 
+## ROLL-15 — Three-Track Base Position Expiry Alert (summary in Telegram, commands to log)
+
+**Status: DRAFT — not yet Animesh-confirmed.** Opened 2026-08-11 via
+`missing-message-workshop-prompt.md`/`message-format-workshop.md` (TODO.md queue item 8).
+Unlike every prior `ROLL-N` in this epic, this one is not pure message-formatting — it also
+requires a genuine behavior change (splitting content that currently lives entirely in one
+Telegram message into a Telegram summary + a structured-log entry), so implementation is
+broader than "escape and restyle an f-string." Do not tick TODO.md item 8's box until the
+open questions below are resolved and a final message shape is confirmed live.
+
+**Confirmed real source:** `scripts/strategies/three_track/paper_3track_snapshot.py:487-501`
+(inside the DTE<=5 base-expiry branch — confirmed via direct read this session, not the
+TODO.md grep excerpt, which points at the wrong line range):
+
+```python
+msg = (
+    f"⚠️ *BASE POSITION EXPIRY ALERT*\n"
+    f"Strategy: {pos.strategy_name}\n"
+    f"Leg: {pos.leg_role}\n"
+    f"Expiring Contract: {expiring_symbol} ({dte} DTE)\n"
+    f"Next Contract: {next_symbol} (Key: {next_key}){warning_suffix}\n\n"
+    f"Settlement Close:\n`{close_cmd}`\n\n"
+    f"Roll Open:\n`{roll_cmd}`"
+)
+if notifier:
+    await notifier.send(msg)
+```
+
+**Design decision (Animesh, 2026-08-11):** stop sending the two copyable
+`record_paper_trade.py` shell commands over Telegram. Telegram gets a compact summary only;
+the full `close_cmd`/`roll_cmd` strings move to a structured `logger.info(...)` call at the
+same call site, for retrieval when actually performing the roll.
+
+**Operational tradeoff flagged this session, not yet resolved with Animesh:** the commands
+currently reach Telegram specifically so they're actionable from a phone at the moment of
+the alert, with no need to be at a terminal. Moving them to a log removes that — acting on
+the roll now requires log/terminal access. Since DTE<=5 gives lead time (not a same-day
+surprise), this is likely an acceptable tradeoff, but it's a deliberate scope narrowing of
+what this alert can do, not just a formatting change, and should be called out as such rather
+than silently assumed.
+
+**Open question — leg direction not yet verified:** the real source hardcodes
+`--action SELL` for `close_cmd` and `--action BUY` for `roll_cmd` regardless of position side,
+while a separate `is_short = pos.net_qty < 0` check exists earlier in the same function
+(used only for `entry_price` selection, not for command direction). Before wording the
+Telegram summary as "Close **Long** ... / Open **Long** ...", confirm via
+`get_code_snippet`/`search_graph` whether `base_futures`/`base_ditm_call` legs in this
+strategy are always long (making the hardcoded SELL-then-BUY pair always correct and the
+"Long" verb always accurate), or whether a short base leg is possible — if so, the verb must
+be derived from `is_short`, not assumed, and the existing hardcoded SELL/BUY in `close_cmd`/
+`roll_cmd` may itself be a pre-existing bug worth a separate note in `TODOS.md` rather than
+silently formatting around it.
+
+**Working draft summary shape (Telegram), pending the direction confirmation above and a
+live `--send` review — reference implementation to be updated in
+`scratch/2026-08-11_3track_settlement_roll_format.py`:**
+
+```
+🚨 Base Position Expiry — Paper 3-Track Nifty V1
+Leg: Base DITM Call (2 DTE)
+System: ⚠️ BOD data potentially stale        [only when the real source's warning_suffix fires]
+Action Required: Manual Roll
+📤 Close: <verb> 65x NIFTY AUG 21500 CE
+📥 Open: <verb> 65x NIFTY SEP 24500 CE       [resolved next_symbol, never the literal
+                                                placeholder text "Next Contract" — the real
+                                                source already resolves this via
+                                                next_inst.get("trading_symbol") when available]
+```
+
+(Backslash escaping de-escaped above for readability, matching every other confirmed block in
+this file — final MarkdownV2 source lives in the scratch script.) `<verb>` is `Long` or
+`Short` per the open question above, not hardcoded until resolved. When `next_inst` lookup
+fails (`warning_suffix` branch), the Open line falls back to the placeholder key/symbol text
+the real source already uses (`<NEXT_CONTRACT_KEY>`/`<NEXT_CONTRACT_SYMBOL>`) rather than the
+literal string "Next Contract" — that string was Animesh's shorthand in the review draft, not
+a value the real code can actually produce.
+
+**Log-emit requirement (new code, not just message formatting):** add a `logger.info(...)`
+call at the same call site (before or alongside `notifier.send()`), structured per this
+project's logging standard (`CLAUDE.md` — every API/order-adjacent log line is structured
+JSON), carrying at minimum: `strategy_name`, `leg_role`, `close_cmd`, `roll_cmd`,
+`expiring_symbol`, `next_symbol`, `next_key`. Field names to be finalized against existing
+`logger.warning("base_expiry....", ...)` calls already in this function for naming
+consistency (e.g. `base_expiry.roll_commands`).
+
+**Files to change (real implementation — later session, not this workshop pass):**
+- `scripts/strategies/three_track/paper_3track_snapshot.py` — the `msg` build (summary only)
+  + new `logger.info` call for the commands
+- Matching test file: existing three-track snapshot test module (confirm via `search_graph`
+  before assuming a path)
+
+**Before any code:**
+```
+get_code_snippet("compute_and_record_exit_signals")  # or the enclosing function name —
+                                                        # confirm base-expiry branch unchanged
+search_graph("is_short")                               # confirm whether base legs can be short
+get_code_snippet("TelegramNotifier.send")              # confirm parse_mode by the time this lands
+```
+
+**Tests:**
+- One test asserting the Telegram-bound message no longer contains `close_cmd`/`roll_cmd`
+  text
+- One test asserting the log call fires with both commands present, for a mocked/captured
+  logger
+- `test_base_expiry_short_leg_uses_short_verb` — only if the open direction question above
+  resolves to "short base legs are possible"; otherwise document why it's not needed
+- Same reserved-char escaping sweep pattern as `ROLL-13`/`ROLL-14`, applied to the summary's
+  static template text (parens around `(DTE)`, the em dash in the headline is not reserved)
+
+**Commit:** `feat(scripts): split base-expiry Telegram alert into summary + logged commands`
+(real implementation, later session) — this session's docs-only commit is
+`docs(strategy-rollout): open ROLL-15 draft for base-expiry summary/log split`.
+
+---
+
 ## ROLL-5 — Docs Close
 
-**Blocked by:** ROLL-4, ROLL-6, ROLL-7, ROLL-8, ROLL-9, ROLL-10, ROLL-11, ROLL-12 (updated
-2026-08-10 to add ROLL-12 — see `tasks.md`).
+**Blocked by:** ROLL-4, ROLL-6, ROLL-7, ROLL-8, ROLL-9, ROLL-10, ROLL-11, ROLL-12, ROLL-13,
+ROLL-14, ROLL-15 (updated 2026-08-11 to add ROLL-15 — see `tasks.md`).
 
 **Files to change (targeted `Edit`, never `Write`):**
 - `CONTEXT.md` — note the completed migration across all message types

@@ -108,13 +108,18 @@
       `scratch/2026-08-11_3track_overlay_entry_format.py`. | SHA: —
 
 - [ ] **8. Three-track snapshot — settlement/roll command message** —
-      `scripts/strategies/three_track/paper_3track_snapshot.py:497-503`
+      `scripts/strategies/three_track/paper_3track_snapshot.py:487-501`
       Posts copyable settlement-close AND roll-open shell commands in one message — two distinct
       command blocks, more structurally involved than a single status line. Note: this file's
       `_build_recovery_digest` (~line 1684) IS in scope, but only for the MD-4 *escaping* audit —
       see the `paper_pnl_report.py` gap note below for how that distinction works. The
-      settlement/roll command message at line 497-503 is a different message in the same file
-      and isn't named in either MD-4 or any ROLL task. | SHA: —
+      settlement/roll command message at line 487-501 is a different message in the same file
+      and isn't named in either MD-4 or any ROLL task. Workshop session opened 2026-08-11:
+      Animesh decided to split this into a Telegram summary + logged commands rather than a
+      pure reformat — written back as a **DRAFT** `strategy-rollout/` **ROLL-15** (not yet
+      confirmed — leg-direction verb open question, see `stories.md`). Box stays unchecked
+      until ROLL-15's format is actually confirmed and the scratch script updated to match.
+      | SHA: —
 
 - [ ] **9. Daily portfolio snapshot summary** — `scripts/portfolio/daily_snapshot.py:739`
       FD-OD/portfolio-value daily digest — the most structurally complex message in this list

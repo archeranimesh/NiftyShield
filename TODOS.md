@@ -161,6 +161,32 @@ Session Log grows large again.
   intertwined with the inline checks).
 - Commits: `47bc623` (DTE floor fix), `5795576` (three-track alerting), `3fd3d6e` (IC alerting).
 
+### 2026-08-11 Session Log (missing-message-workshop, queue item 8 — draft only, not confirmed)
+- **Telegram Markdown migration** (item 29): ran `TODO.md` queue item 8 (three-track base
+  position expiry alert, `scripts/strategies/three_track/paper_3track_snapshot.py:487-501`)
+  through `message-format-workshop.md`. Confirmed the real source directly (TODO.md's grep
+  excerpt pointed at the wrong line range — the `if notifier:` block, not the `msg = (...)`
+  build). Built an initial scratch script (`scratch/2026-08-11_3track_settlement_roll_format.py`)
+  keeping the original's two-code-block shape MarkdownV2-safe. Animesh then reviewed a
+  hand-drafted alternative that dropped the shell commands entirely in favor of a compact
+  summary — flagged three concerns before treating it as confirmed (commands disappearing
+  isn't a formatting change, "Next Contract" placeholder text discards a real resolved value
+  when available, source of the draft unclear) and asked whether commands should move
+  elsewhere rather than vanish. Animesh's follow-up: keep a Telegram summary, move the
+  commands to a structured log line instead — a genuine behavior change, not pure formatting,
+  first of its kind in this epic. Opened **ROLL-15** in `strategy-rollout/stories.md`/
+  `tasks.md` as an explicit **DRAFT**, not confirmed: flagged that the operational tradeoff
+  (commands no longer actionable straight from Telegram on a phone) hasn't been explicitly
+  signed off, and that the real source hardcodes `--action SELL`/`--action BUY` regardless of
+  position side while a separate `is_short` check exists earlier in the same function — the
+  summary's `Close Long`/`Open Long` wording can't be locked until it's confirmed whether base
+  legs (`base_futures`/`base_ditm_call`) are always long in this strategy. TODO.md item 8's
+  box deliberately left **unchecked** — per the workshop's own rule, ticking means "format
+  confirmed," which this isn't yet. Next session should resolve the direction-verb question,
+  update the scratch script to drop the commands and match ROLL-15's draft summary shape, get
+  Animesh's live-send confirmation, then tick item 8. Docs commit pending — same
+  `.git/HEAD.lock` sandbox caveat as prior sessions.
+
 ### 2026-08-11 Session Log (missing-message-workshop, queue item 7b)
 - **Telegram Markdown migration** (item 29): ran `TODO.md` queue item 7's second half through
   `message-format-workshop.md` — the overlay-entry bootstrap notification
