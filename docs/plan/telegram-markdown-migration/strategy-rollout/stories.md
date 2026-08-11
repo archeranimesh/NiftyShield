@@ -1853,6 +1853,118 @@ get_code_snippet("TelegramNotifier.send")              # confirm parse_mode by t
 
 ---
 
+## ROLL-16 — Proxy Delta CRITICAL Alert (production `_run` duplicate)
+
+**Not in the epic's original confirmed-callers list** — added 2026-08-11 via
+`missing-message-workshop-prompt.md`/`message-format-workshop.md` (TODO.md queue item 10).
+This is the **known duplicate flagged (not fixed) in `ROLL-10`'s spec**: a near-identical
+"Proxy Delta CRITICAL" Telegram alert to the one `ROLL-10` covers
+(`scripts/dev/paper_track_snapshot.py::main`), reading the same
+`TrackSnapshot.proxy_delta_alert` field and the same `"CRITICAL" in ...` check — but this one
+lives in the real production EOD cron path (`_run`, the async orchestration entry point for
+`scripts/strategies/three_track/paper_3track_snapshot.py`), not the lower-stakes dev/manual
+script `ROLL-10` scoped to.
+
+**Confirmed real source:** `scripts/strategies/three_track/paper_3track_snapshot.py::_run`,
+~line 1723 (confirmed via `search_graph` + direct read of `_run`, not the TODO.md grep excerpt
+alone):
+
+```python
+if snapshot.proxy_delta_alert and "CRITICAL" in snapshot.proxy_delta_alert:
+    msg = (
+        f"🚨 *CRITICAL* Proxy Delta alert — {track_name}\n"
+        f"Delta: {snapshot.greeks.net_delta:.3f}\n"
+        f"Date: {snap_date}"
+    )
+    if notifier:
+        try:
+            await notifier.send(msg)
+        except Exception as exc:
+            logger.warning("Telegram alert failed: %s", exc)
+```
+
+Same already-broken state as `ROLL-10`'s call site — legacy-Markdown `*bold*` with no
+`parse_mode` set (literal asterisks render today), not a regression introduced by this
+migration. Unlike `ROLL-10`'s call site, this one currently interpolates `track_name`/
+`snap_date` and formats `net_delta` at 3dp (`:.3f`) instead of using `proxy_delta_alert`/a
+signed-2dp-Greek pairing.
+
+**Format decision (confirmed with Animesh, 2026-08-11): reuse `ROLL-10`'s confirmed 3-line
+shape verbatim — no track/date line added.** Two options were put to Animesh (reuse verbatim
+vs. add a 4th Track/Date line since this is the prod cron path); he chose verbatim reuse. This
+keeps both call sites byte-identical so they can share one real message-builder function at
+implementation time instead of shipping two near-duplicate ones — same rationale `ROLL-7`'s
+`STRATEGY_LABELS`/`LEG_ROLE_LABELS` reuse and `ROLL-8` reusing `ROLL-7`'s tables already
+established for this epic. No new elimination trail was needed this session — the format is a
+direct port, not a fresh design.
+
+**Confirmed message structure — reference implementation
+`scratch/2026-08-11_3track_proxy_delta_critical_alert_format.py`:**
+
+```
+🚨 CRITICAL: PROXY DELTA
+📐 Current: \-0\.32 🔴
+📉 Rule Breach: CRITICAL \(<0\.40, day 3 of 3\+\)
+```
+
+(Backslash escaping shown as actual MarkdownV2 source, matching every other confirmed block in
+this file.) Identical to `ROLL-10`'s confirmed block — verified by running both scratch
+scripts' inline `escape_markdown()`/`_fmt_greek()` helpers against the same `critical_day3`
+scenario data and diffing the output.
+
+**Not yet exercised via a live `--send` round-trip** — this Cowork sandbox's mounted
+`.venv` symlinks resolve to the host Mac's absolute paths and don't work inside the sandboxed
+device-bash VM (`ModuleNotFoundError: No module named 'aiohttp'` when the system Python is used
+instead), same class of environment limitation `ROLL-11`/`ROLL-12` hit. Confirmation here rests
+on: (a) the format being a verbatim, byte-for-byte reuse of `ROLL-10`'s shape, which *was*
+on-device `--send`-confirmed on 2026-08-10, and (b) a print-only run in this session producing
+output identical to `ROLL-10`'s confirmed block. Re-verify via a real `--send` from a working
+venv before treating this as equivalent to a full on-device confirmation.
+
+`track_name`/`snap_date` are read into the scratch script's `SCENARIOS` dict for data-shape
+fidelity (this call site's loop can in principle pass any track name, though the CRITICAL
+branch in practice only ever triggers for `STRATEGY_PROXY`, the same guarantee `ROLL-10`'s site
+relies on) but are NOT rendered in `build_message()` — intentional, per the format decision
+above.
+
+**Files to change (real implementation — later session, not this workshop pass):**
+- `scripts/strategies/three_track/paper_3track_snapshot.py` — `_run`'s CRITICAL-branch
+  `notifier.send()` call (~line 1723); drop the 3dp `net_delta` formatting and the
+  `track_name`/`snap_date` interpolation in favor of `ROLL-10`'s shape
+- Once `ROLL-10`'s real implementation lands, check whether this call site can simply call the
+  same message-builder function (e.g. a shared `build_proxy_delta_critical_message()` in
+  `src/notifications/`) rather than duplicating the escaping/formatting logic a second time —
+  the byte-identical format makes this the obvious follow-up, not a new design question
+- Matching test file: existing three-track snapshot test module, or
+  `tests/unit/scripts/test_paper_track_snapshot.py` if `ROLL-10`'s test file lands first and
+  can be extended/shared (confirm via `search_graph` before assuming either path)
+
+**Before any code:**
+```
+get_code_snippet("paper_3track_snapshot._run")
+get_code_snippet("ProxyDeltaMonitor.update_and_check")
+get_code_snippet("generate_track_snapshot")
+search_graph("TrackSnapshot")   # confirm consecutive_days plumbing status (ROLL-10 dependency)
+```
+
+**Tests:**
+- `test_critical_alert_escapes_signed_delta` — same regression as `ROLL-10`: negative
+  (`-0.32`) and positive (`+0.05`) `net_delta` both survive `escape_markdown()` fully (sign AND
+  decimal point escaped)
+- `test_critical_alert_no_track_date_line` — regression proving the message stays byte-
+  identical to `ROLL-10`'s shape (no `track_name`/`snap_date` line reintroduced)
+- `test_critical_alert_rule_breach_is_verbatim` — `proxy_delta_alert` string appears escaped
+  but otherwise unmodified in the `Rule Breach:` line
+- `test_critical_alert_only_fires_on_critical_state` — WARNING/OK states never call
+  `notifier.send()` (existing behavior, must survive the port)
+- Consider: a shared parametrized test module covering both `ROLL-10` and `ROLL-16` call sites
+  once the message-builder is actually deduplicated, rather than two independent copies of the
+  same four tests
+
+**Commit:** `feat(scripts): migrate production proxy delta CRITICAL alert to MarkdownV2`
+
+---
+
 ## ROLL-5 — Docs Close
 
 **Blocked by:** ROLL-4, ROLL-6, ROLL-7, ROLL-8, ROLL-9, ROLL-10, ROLL-11, ROLL-12, ROLL-13,

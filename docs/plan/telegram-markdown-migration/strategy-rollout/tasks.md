@@ -118,4 +118,13 @@
       original confirmed-callers list (surfaced via `missing-message-workshop-prompt.md`,
       TODO.md item 8) | Blocked by: `backbone/` + `formatting-rules/` complete (same soft
       deps as other ROLL tasks)
-- [ ] **ROLL-5** — Docs close | Blocked by: ROLL-4, ROLL-6, ROLL-7, ROLL-8, ROLL-9, ROLL-10, ROLL-11, ROLL-12, ROLL-13, ROLL-14, ROLL-15
+- [ ] **ROLL-16** — Migrate production Proxy Delta CRITICAL alert
+      (`scripts/strategies/three_track/paper_3track_snapshot.py::_run`, ~line 1723) to
+      `ROLL-10`'s confirmed 3-line MarkdownV2 format, reused verbatim (no track/date line,
+      confirmed by Animesh 2026-08-11); known duplicate of `ROLL-10` flagged in that task's
+      spec — not in the epic's original confirmed-callers list (surfaced via
+      `missing-message-workshop-prompt.md`, TODO.md item 10); once `ROLL-10` ships, check
+      whether this call site can just call the same message-builder instead of duplicating it
+      | Blocked by: `backbone/` + `formatting-rules/` complete (same soft deps as other ROLL
+      tasks); soft-sequence after `ROLL-10` for the shared-builder follow-up
+- [ ] **ROLL-5** — Docs close | Blocked by: ROLL-4, ROLL-6, ROLL-7, ROLL-8, ROLL-9, ROLL-10, ROLL-11, ROLL-12, ROLL-13, ROLL-14, ROLL-15, ROLL-16
