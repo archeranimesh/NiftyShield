@@ -2042,6 +2042,67 @@ already-correct migration script, only add the test coverage it was missing. Ful
 outstanding (B029.4), deferred to a live-host session since this sandbox only mounts a copy of the
 DB and cannot be treated as the source of truth for a live write of this kind.
 
+### 2026-08-11 — Monthly expiry DTE floor 15→14; gate-failure Telegram alerting audit
+
+Triggered by `logs/pp_entry.log`'s `auto_pp.no_monthly_expiry_found` (2026-08-11 10:30 run).
+Initial hypothesis — a weekly/Tuesday collision now that Nifty's monthly expiry itself falls on a
+Tuesday (post-April-2026 SEBI change) — was disproven by running the existing test suite: weekly
+(DTE<=14) and monthly (DTE>=15, at the time) never actually overlapped by construction. Real root
+cause: `InstrumentLookup.get_expiry_candidates()` (`src/instruments/lookup.py`) required DTE>=15
+for the `"monthly"` band, one day stricter than every caller's own DTE>=14 entry gate
+(`auto_pp_bootstrap`/`auto_cc_bootstrap`/`auto_collar_bootstrap` Gate 1 in
+`paper_3track_overlay_entry.py`; IC V1/V2's `resolve_expiry`/inline equivalent) — a guaranteed
+1-day/month dead zone on the day a monthly contract sits at DTE=14, independent of weekday.
+
+**Fix**: lowered the monthly band floor from 15 to 14 to match callers' actual gates. This
+required narrowing the weekly-Tuesday-claim guard to the single overlapping point (`dte==14 and
+is_monthly`) rather than "any last-of-month Tuesday regardless of DTE" — a broader guard would
+have wrongly excluded legitimate weekly contracts at e.g. DTE=5 that happen to fall on a
+calendar-month-end date; caught via the project's own `test_weekly_nearest_tuesday`/
+`test_weekly_boundary_inclusive_14` regressing, not by inspection. Same shared function serves
+PP, CC, Collar (`get_expiry_candidates(preference=["monthly"])`) and IC V1/V2 monthly
+(`resolve_expiry`/inline equivalent, `expiry_bucket="monthly"`) — all four were exposed to the
+identical gap; the one fix in `lookup.py` covers all of them, no per-strategy patch needed.
+`get_next_contract_in_band`'s default multi-band preference (`["monthly","quarterly","yearly"]`)
+degrades gracefully on this edge (rolls to quarterly/yearly instead of erroring) rather than
+hard-failing like the single-band `preference=["monthly"]` callers do.
+
+**Second finding, same investigation**: none of PP/CC/Collar's structural bootstrap-gate
+failures (`cfg is None` → `sys.exit(1)`) ever alerted via Telegram — only a log line + stderr
+print, which is exactly how this incident went unnoticed for days. Fixed via a shared
+`_alert_bootstrap_failure()` helper in `paper_3track_overlay_entry.py`, non-fatal, mirroring the
+existing success-path notifier's try/except pattern.
+
+**Third finding, extending the audit to IC**: IC V1 had no gate-failure alerting at all (only
+partial-execution-failure and final-success Telegram messages); IC V2 had a `_gate_alert` helper
+wired to duplicate/post-expiry/ivr/long_wing_floor gates but not to `resolve_expiry` itself — so
+V2 would have hit this exact incident's failure mode silently too, despite its otherwise-good
+alerting coverage. Fixed: `resolve_expiry()` (`ic_entry_gates.py`) gained a `notifier` param
+matching `check_duplicate`/`resolve_ivr`'s existing contract; V2 wired it in plus its remaining
+uncovered exits (chain fetch/empty, leg resolution, liquidity hard-blocks, spot fetch); V1
+gained its own `_gate_alert` closure (deliberately mirrors V2's exact pattern rather than
+refactoring V1 onto the shared `check_duplicate`/`resolve_ivr`/`resolve_expiry` helpers, which
+would be a larger, separate refactor given V1's mode-detection/`ivr_below_gate` tracking is
+intertwined with its inlined gate checks) wired into all 16 of its structural exit points.
+
+**Known limitation carried forward, not fixed this session**: `_gate_alert`'s
+`asyncio.get_running_loop().create_task(...)` is fire-and-forget — never awaited, so a
+`sys.exit(1)` called immediately after scheduling it can in principle tear down the event loop
+before the Telegram send completes. This was already true of V2's pre-existing gates
+(duplicate/post-expiry/ivr/long_wing_floor) before today; mirroring the same pattern into V1 and
+`resolve_expiry` does not introduce a new failure mode, but does propagate the existing one
+further. Flagged to Animesh; not actioned this session — fixing it properly means changing the
+shared `notifier: Callable[[str], None]` contract to async across `check_duplicate`/
+`resolve_ivr`/`resolve_expiry`/both entry scripts' local closures, a wider signature change than
+"add the missing alert calls."
+
+Tests: `tests/unit/instruments/test_expiry_candidates.py` (23/23), `tests/unit/paper/
+test_overlay_entry.py` (60/60, +4 new; 3 pre-existing pyarrow-dependency failures unrelated),
+`tests/unit/strategies/ic/` (143/143, +6 new). SHAs: `47bc623` (DTE floor), `5795576`
+(three-track alerting), `3fd3d6e` (IC alerting), tests-only follow-up commit for the 6 IC tests
+pending. See `TODOS.md` 2026-08-11 "auto-PP entry failure investigation + fixes" for the full
+session narrative.
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty

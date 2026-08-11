@@ -118,6 +118,49 @@ Full forensic log (SHAs, bug numbers, root-cause detail) moved to
 add new entries there going forward, or start a fresh dated section here if this file's
 Session Log grows large again.
 
+### 2026-08-11 Session Log (auto-PP entry failure investigation + fixes)
+- **Trigger**: Animesh reported `logs/pp_entry.log` showing `auto_pp.no_monthly_expiry_found`
+  on today's run (SHA `47bc623` fixes; `5795576`, `3fd3d6e` follow-ons).
+- **Root cause (not the initial weekly/Tuesday-collision hypothesis, which pytest disproved)**:
+  `InstrumentLookup.get_expiry_candidates()` (`src/instruments/lookup.py`) required DTE>=15 for
+  the `"monthly"` band, one day stricter than every caller's own DTE>=14 entry gate
+  (`auto_pp_bootstrap`/`auto_cc_bootstrap`/`auto_collar_bootstrap` in
+  `paper_3track_overlay_entry.py`, IC V1/V2's `resolve_expiry`/inline equivalent) — a guaranteed
+  1-day/month dead zone on the day a monthly contract sits at DTE=14, independent of weekday.
+  Fixed by lowering the monthly floor to 14 and narrowing the weekly Tuesday-claim guard to
+  the single overlapping `dte==14` point (not "any last-of-month Tuesday", which broke
+  legitimate weekly fixtures at lower DTE — caught by running the existing test suite, not by
+  inspection). 2 new tests + 1 corrected fixture in
+  `tests/unit/instruments/test_expiry_candidates.py`; 23/23 green.
+- **Blast radius confirmed**: same shared function, so CC/Collar auto-bootstrap and IC V1/V2
+  monthly entry were all exposed to the identical one-day gap, not just PP — no PP-specific
+  fix needed, the shared `lookup.py` change covers all four.
+- **Second gap found**: PP's structural gate failure (`cfg is None` → `sys.exit(1)`) never
+  alerted via Telegram — only logged + printed to stderr, which is how this went unnoticed for
+  days. Added `_alert_bootstrap_failure()` helper in `paper_3track_overlay_entry.py`, wired into
+  all three `--auto-cc`/`--auto-pp`/`--auto-collar` failure branches. 4 new tests in
+  `tests/unit/paper/test_overlay_entry.py`.
+- **Third gap found (broader audit)**: same alerting gap in IC V1/V2. V1 had zero gate-failure
+  alerting at all (Telegram only fired on partial-execution failure + success); V2 had a
+  `_gate_alert` helper wired to duplicate/post-expiry/ivr/long_wing_floor but not to
+  `resolve_expiry` (the exact no-candidate-found failure mode), chain fetch, leg resolution,
+  liquidity hard-blocks, or spot fetch. Fixed: `resolve_expiry()` (`ic_entry_gates.py`) gained a
+  `notifier` param matching `check_duplicate`/`resolve_ivr`'s existing contract; V2 wired it in
+  plus its remaining gaps; V1 gained its own `_gate_alert` closure (mirrors V2's pattern) wired
+  into all 16 structural exit points. 6 new tests across
+  `tests/unit/strategies/ic/test_ic_entry_gates.py` / `test_paper_ic_entry.py`; 143/143 green.
+- **Known limitation carried forward, not fixed this session**: `_gate_alert`'s
+  `asyncio.get_running_loop().create_task(...)` is fire-and-forget — never awaited, so a
+  `sys.exit(1)` immediately after scheduling it can tear down the event loop before the send
+  completes. Pre-existing in V2, now also present in V1 (mirrored deliberately, not
+  independently introduced). Flagged to Animesh, not actioned — would require changing the
+  shared `notifier: Callable[[str], None]` contract to async across all three gate helpers.
+- **Not done this session**: didn't refactor IC V1 to use the shared `check_duplicate`/
+  `resolve_ivr`/`resolve_expiry` helpers instead of its inlined duplicate logic — flagged as a
+  real but separate refactor (V1's mode-detection and `ivr_below_gate` tracking are
+  intertwined with the inline checks).
+- Commits: `47bc623` (DTE floor fix), `5795576` (three-track alerting), `3fd3d6e` (IC alerting).
+
 ### 2026-08-11 Session Log (missing-message-workshop, queue item 7b)
 - **Telegram Markdown migration** (item 29): ran `TODO.md` queue item 7's second half through
   `message-format-workshop.md` — the overlay-entry bootstrap notification
