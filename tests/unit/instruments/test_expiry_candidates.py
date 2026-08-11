@@ -284,20 +284,32 @@ def test_weekly_no_tuesday_in_window():
 
 
 def test_weekly_boundary_inclusive_14():
-    """Tuesday at exactly DTE 14 is included in the weekly bucket."""
-    # June 16, 2026 = Tuesday; June 30 = Tuesday, DTE 14
-    today = date(2026, 6, 16)
+    """Tuesday at exactly DTE 14 is included in the weekly bucket -- PROVIDED
+    it is not also the last-of-month date (which is reserved for monthly at
+    DTE==14, see test_monthly_tuesday_at_dte_14_not_stolen_by_weekly). A
+    companion later-August date is included so 08-18 does not trivially
+    become "last of month" by dataset construction alone.
+    """
+    # August 4, 2026 = Tuesday; August 18 = Tuesday, DTE 14, NOT last-of-month
+    # (August 25 is).
+    today = date(2026, 8, 4)
     instruments = [
         {
             "segment": "NSE_FO",
             "instrument_type": "PE",
             "underlying_symbol": "NIFTY",
-            "expiry": "2026-06-30",
+            "expiry": "2026-08-18",
+        },
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": "2026-08-25",
         },
     ]
     lookup = InstrumentLookup(instruments)
     candidates = lookup.get_expiry_candidates("NIFTY", today, preference=["weekly"])
-    assert candidates == [("weekly", "2026-06-30")]
+    assert candidates == [("weekly", "2026-08-18")]
 
 
 def test_weekly_boundary_exclusive_15():
@@ -581,6 +593,70 @@ def test_yearly_rolls_once_current_december_no_longer_live():
 
     labels = dict(candidates)
     assert labels["yearly"] == dec_2027
+
+
+def test_monthly_tuesday_at_dte_14_not_stolen_by_weekly():
+    """Post-April-2026, Nifty's monthly expiry itself falls on a Tuesday.
+    In its final week it passes through DTE=14 one day before it would
+    exit the monthly band (DTE>=15) -- the weekly branch must not claim it,
+    or preference=["monthly"] callers (PP/CC/Collar auto-bootstrap) get
+    nothing back for that one day. Regression test for the 2026-08-11
+    "weekly/monthly Tuesday collision" bug.
+    """
+    # 2026-08-25 is a Tuesday and the last Tuesday of August (monthly expiry).
+    today = date(2026, 8, 11)
+    monthly = "2026-08-25"  # DTE 14, Tuesday, last-of-month
+
+    instruments = [
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": monthly,
+        },
+    ]
+    lookup = InstrumentLookup(instruments)
+
+    # preference=["monthly"] (the real caller shape in auto_pp/cc/collar_bootstrap)
+    # must still resolve the date, not come back empty.
+    candidates = lookup.get_expiry_candidates("NIFTY", today, preference=["monthly"])
+    assert candidates == [("monthly", monthly)]
+
+    # And it must NOT also be classified as weekly.
+    candidates_weekly = lookup.get_expiry_candidates("NIFTY", today, preference=["weekly"])
+    assert candidates_weekly == []
+
+
+def test_non_monthly_tuesday_at_dte_14_still_weekly():
+    """A plain Tuesday (not last-of-month) at DTE<=14 is still classified
+    weekly -- the last-of-month exclusion must not over-reach and swallow
+    ordinary weekly contracts.
+    """
+    # 2026-08-18 is a Tuesday, DTE 7 from 2026-08-11, and NOT last-of-month
+    # (2026-08-25 is -- included below so is_monthly resolves correctly;
+    # without a later August date, 08-18 would trivially become "last of
+    # month" by dataset construction alone).
+    today = date(2026, 8, 11)
+    weekly = "2026-08-18"
+    monthly = "2026-08-25"
+
+    instruments = [
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": weekly,
+        },
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": monthly,
+        },
+    ]
+    lookup = InstrumentLookup(instruments)
+    candidates = lookup.get_expiry_candidates("NIFTY", today, preference=["weekly"])
+    assert candidates == [("weekly", weekly)]
 
 
 def test_get_next_contract_in_band_rejects_futures():

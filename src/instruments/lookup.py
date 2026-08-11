@@ -364,21 +364,41 @@ class InstrumentLookup:
             if dte < 1:
                 continue
 
-            # Weekly: nearest Tuesday expiry with DTE ≤ 14
-            # Nifty weekly expiry is Tuesday post April 2026 (NSE/SEBI change)
+            is_monthly = d == last_of_month[(d.year, d.month)]
+
+            # Weekly: nearest Tuesday expiry with DTE <= 14, EXCEPT a last-of-month
+            # date, which stays reserved for monthly (see below). Excluding
+            # is_monthly here matters now that monthly's own floor is 14 (not 15)
+            # -- see DECISIONS.md 2026-08-11 "monthly DTE floor 15->14": the
+            # monthly band used to require DTE>=15, one day stricter than the
+            # DTE>=14 floor every monthly-band caller (auto_pp/cc/collar
+            # bootstrap Gate 1, IC's resolve_expiry) already enforces on its own,
+            # so on the single day a monthly contract sits at DTE=14 it satisfied
+            # every caller's gate but get_expiry_candidates(preference=["monthly"])
+            # returned nothing -- a guaranteed 1-day/month dead zone, reproduced
+            # in pp_entry.log 2026-08-11 (auto_pp.no_monthly_expiry_found).
             is_tuesday = d.weekday() == 1  # Mon=0 … Sun=6
-            if dte <= 14 and is_tuesday and "weekly" not in mapping:
+            # weekly's own band is dte<=14 and monthly's floor is dte>=14, so the
+            # two bands overlap at exactly dte==14 -- only suppress weekly there,
+            # not for every last-of-month Tuesday regardless of DTE (a last-of-month
+            # Tuesday at e.g. dte=5 is not monthly-eligible anyway and must still
+            # resolve as weekly).
+            if (
+                dte <= 14
+                and is_tuesday
+                and not (dte == 14 and is_monthly)
+                and "weekly" not in mapping
+            ):
                 mapping["weekly"] = exp
                 continue  # do not also classify this date as monthly
 
-            if dte < 15:
+            if dte < 14:
                 continue
 
-            is_monthly = d == last_of_month[(d.year, d.month)]
             is_quarterly = is_monthly and (d.month in (3, 6, 9, 12))
 
             label = None
-            if 15 <= dte <= 45 and is_monthly:
+            if 14 <= dte <= 45 and is_monthly:
                 label = "monthly"
             elif 46 <= dte <= 200 and is_quarterly:
                 label = "quarterly"
