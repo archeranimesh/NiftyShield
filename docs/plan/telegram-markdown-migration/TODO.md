@@ -120,7 +120,7 @@
       live `--send` reviewed and approved on-device for both scenarios — written back as
       `strategy-rollout/` **ROLL-15** — see `scratch/2026-08-11_3track_settlement_roll_format.py`.
       Real implementation (message rewrite + new `logger.info` call for the commands) is a
-      separate later task, per the workshop's own rule. | SHA: —
+      separate later task, per the workshop's own rule. | SHA: 9d13123
 
 - [ ] **9. Daily portfolio snapshot summary** — `scripts/portfolio/daily_snapshot.py:739`
       FD-OD/portfolio-value daily digest — the most structurally complex message in this list
