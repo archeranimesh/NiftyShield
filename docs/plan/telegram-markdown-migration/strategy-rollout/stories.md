@@ -1737,13 +1737,13 @@ get_code_snippet("GateViolation")        # confirm threshold/actual are still pr
 
 ## ROLL-15 — Three-Track Base Position Expiry Alert (summary in Telegram, commands to log)
 
-**Status: DRAFT — not yet Animesh-confirmed.** Opened 2026-08-11 via
-`missing-message-workshop-prompt.md`/`message-format-workshop.md` (TODO.md queue item 8).
-Unlike every prior `ROLL-N` in this epic, this one is not pure message-formatting — it also
-requires a genuine behavior change (splitting content that currently lives entirely in one
-Telegram message into a Telegram summary + a structured-log entry), so implementation is
-broader than "escape and restyle an f-string." Do not tick TODO.md item 8's box until the
-open questions below are resolved and a final message shape is confirmed live.
+**Status: DRAFT — direction question resolved, still pending a live `--send` confirmation.**
+Opened 2026-08-11 via `missing-message-workshop-prompt.md`/`message-format-workshop.md`
+(TODO.md queue item 8). Unlike every prior `ROLL-N` in this epic, this one is not pure
+message-formatting — it also requires a genuine behavior change (splitting content that
+currently lives entirely in one Telegram message into a Telegram summary + a structured-log
+entry), so implementation is broader than "escape and restyle an f-string." Do not tick
+TODO.md item 8's box until the format is confirmed live on-device.
 
 **Confirmed real source:** `scripts/strategies/three_track/paper_3track_snapshot.py:487-501`
 (inside the DTE<=5 base-expiry branch — confirmed via direct read this session, not the
@@ -1776,20 +1776,22 @@ surprise), this is likely an acceptable tradeoff, but it's a deliberate scope na
 what this alert can do, not just a formatting change, and should be called out as such rather
 than silently assumed.
 
-**Open question — leg direction not yet verified:** the real source hardcodes
-`--action SELL` for `close_cmd` and `--action BUY` for `roll_cmd` regardless of position side,
-while a separate `is_short = pos.net_qty < 0` check exists earlier in the same function
-(used only for `entry_price` selection, not for command direction). Before wording the
-Telegram summary as "Close **Long** ... / Open **Long** ...", confirm via
-`get_code_snippet`/`search_graph` whether `base_futures`/`base_ditm_call` legs in this
-strategy are always long (making the hardcoded SELL-then-BUY pair always correct and the
-"Long" verb always accurate), or whether a short base leg is possible — if so, the verb must
-be derived from `is_short`, not assumed, and the existing hardcoded SELL/BUY in `close_cmd`/
-`roll_cmd` may itself be a pre-existing bug worth a separate note in `TODOS.md` rather than
-silently formatting around it.
+**Leg direction — resolved 2026-08-11 (Animesh):** `base_futures`/`base_ditm_call` never go
+short by strategy design — Animesh confirmed directly. The `is_short = pos.net_qty < 0` check
+in the same function (line 425) is copy-reused entry-price-selection logic shared with
+short-capable legs elsewhere in this file (`overlay_cc`/`overlay_collar_call`, confirmed via
+`grep` this session), not evidence a base leg can be short — it's generic code, not a signal
+about this specific leg's design. The verb is therefore fixed as `Long` for both legs, not
+derived from `is_short`. **Residual gap, not blocking ROLL-15, noted for `TODOS.md`/
+`docs/bugs/bugs.md` separately:** the code path itself has no guard preventing a negative
+`pos.net_qty` from reaching this branch (`paper_3track_snapshot.py:380-383` only checks
+`leg_role in {...}` and `net_qty != 0`, not sign) — if that assumption is ever violated by a
+future bug elsewhere, the hardcoded `--action SELL`/`--action BUY` pair in `close_cmd`/
+`roll_cmd` would silently build the wrong-direction command. Not a message-formatting concern,
+tracked separately.
 
-**Working draft summary shape (Telegram), pending the direction confirmation above and a
-live `--send` review — reference implementation to be updated in
+**Working draft summary shape (Telegram) — direction resolved, still pending a live `--send`
+review before final lock — reference implementation:
 `scratch/2026-08-11_3track_settlement_roll_format.py`:**
 
 ```
@@ -1797,18 +1799,18 @@ live `--send` review — reference implementation to be updated in
 Leg: Base DITM Call (2 DTE)
 System: ⚠️ BOD data potentially stale        [only when the real source's warning_suffix fires]
 Action Required: Manual Roll
-📤 Close: <verb> 65x NIFTY AUG 21500 CE
-📥 Open: <verb> 65x NIFTY SEP 24500 CE       [resolved next_symbol, never the literal
+📤 Close: Long 65x NIFTY AUG 21500 CE
+📥 Open: Long 65x NIFTY SEP 24500 CE         [resolved next_symbol, never the literal
                                                 placeholder text "Next Contract" — the real
                                                 source already resolves this via
                                                 next_inst.get("trading_symbol") when available]
 ```
 
 (Backslash escaping de-escaped above for readability, matching every other confirmed block in
-this file — final MarkdownV2 source lives in the scratch script.) `<verb>` is `Long` or
-`Short` per the open question above, not hardcoded until resolved. When `next_inst` lookup
-fails (`warning_suffix` branch), the Open line falls back to the placeholder key/symbol text
-the real source already uses (`<NEXT_CONTRACT_KEY>`/`<NEXT_CONTRACT_SYMBOL>`) rather than the
+this file — final MarkdownV2 source lives in the scratch script.) `Long` is now hardcoded, not
+derived — see the resolved direction note above. When `next_inst` lookup fails
+(`warning_suffix` branch), the Open line falls back to the placeholder key/symbol text the
+real source already uses (`<NEXT_CONTRACT_KEY>`/`<NEXT_CONTRACT_SYMBOL>`) rather than the
 literal string "Next Contract" — that string was Animesh's shorthand in the review draft, not
 a value the real code can actually produce.
 
@@ -1839,8 +1841,6 @@ get_code_snippet("TelegramNotifier.send")              # confirm parse_mode by t
   text
 - One test asserting the log call fires with both commands present, for a mocked/captured
   logger
-- `test_base_expiry_short_leg_uses_short_verb` — only if the open direction question above
-  resolves to "short base legs are possible"; otherwise document why it's not needed
 - Same reserved-char escaping sweep pattern as `ROLL-13`/`ROLL-14`, applied to the summary's
   static template text (parens around `(DTE)`, the em dash in the headline is not reserved)
 

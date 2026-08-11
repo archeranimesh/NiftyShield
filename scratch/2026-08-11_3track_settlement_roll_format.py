@@ -1,22 +1,11 @@
-"""Scratch script — 3-Track BASE POSITION EXPIRY (settlement-close / roll-open command) message.
+"""Scratch script — 3-Track BASE POSITION EXPIRY Telegram summary (v2).
 
 Message #8 in docs/plan/telegram-markdown-migration/TODO.md's "Confirmed missing" queue.
+Spec: docs/plan/telegram-markdown-migration/strategy-rollout/stories.md ROLL-15 (DRAFT).
 
-Real call site: `scripts/strategies/three_track/paper_3track_snapshot.py`, ~lines 450-501
-(inside the DTE<=5 base-expiry branch, `if notifier: await notifier.send(msg)`). Confirmed via
-direct read of the real source this session (not the TODO.md grep excerpt alone) — the excerpt's
-line numbers (497-503) point at the `if notifier:` send block; the actual `msg = (...)` f-string
-build starts at line 487. Fires once per expiring base leg (`base_futures` / `base_ditm_call`)
-when `dte <= 5`, posting two copyable `record_paper_trade.py` shell commands (settlement-close +
-roll-open) in one message — more structurally involved than items 1-7b: two distinct multi-line
-code blocks, not a status line or flat kv-pairs.
-
-**backbone/ (MD-1..MD-5) status as of this session: NOT shipped** — confirmed via
-`search_graph("mdcode")` / `search_graph("escape_markdown")` returning zero hits under
-src/notifications/ (same check as every prior scratch script this epic; `src/notifications/`
-currently only has `telegram.py`/`telegram_gateway.py`/`protocol.py`, no `markdown.py`). This
-script inlines its own copies of `escape_markdown()` / `mdcode()`, matching MD-1's spec exactly
-(see backbone/stories.md MD-1).
+Real call site: `scripts/strategies/three_track/paper_3track_snapshot.py:487-501` (inside the
+DTE<=5 base-expiry branch, `if notifier: await notifier.send(msg)`). Confirmed via direct read
+of the real source, not the TODO.md grep excerpt (which points at the wrong line range).
 
 Original source (real f-string, `scripts/strategies/three_track/paper_3track_snapshot.py:487-495`):
     msg = (
@@ -31,46 +20,59 @@ Original source (real f-string, `scripts/strategies/three_track/paper_3track_sna
     if notifier:
         await notifier.send(msg)
 
-v1 (THIS VERSION — first draft this session, pending Animesh's confirmation/live-send before
-being written back, same discipline as every prior ROLL-N draft in this epic):
+v2 (THIS VERSION — supersedes v1's straight reformat; Animesh reviewed a hand-drafted
+alternative and decided this message should carry a compact summary in Telegram, with the
+`close_cmd`/`roll_cmd` shell commands moved to a structured log line instead of the message
+body — see ROLL-15's "Design decision" for the operational tradeoff this implies (commands no
+longer copy-pasteable straight from Telegram on a phone)):
 
-Kept the original's overall shape (headline, 4 kv-context lines, optional stale-BOD warning,
-then two labeled code blocks) rather than restructuring — per ROLL-3's "match the format to
-what the message needs" guidance, this message's job is "here are two commands, copy them,"
-which the original's shape already serves well; the only real work is MarkdownV2-safing it.
+Shape:
+    🚨 Base Position Expiry — <Strategy Display Name>
+    Leg: <Leg Display Name> (<DTE> DTE)
+    System: ⚠️ BOD data potentially stale        [only when warning_suffix fires in the real source]
+    Action Required: Manual Roll
+    📤 Close: Long <lot_size>x <Expiring Symbol>
+    📥 Open: Long <lot_size>x <Next Symbol>
 
-Escaping applied:
-  - `pos.strategy_name` / `pos.leg_role` / `expiring_symbol` / `next_symbol` / `next_key`: all
-    identifier-shaped dynamic values -> `mdcode()` (renders monospace, inert to any reserved
-    char inside, matches ROLL-12/ROLL-13's "identifier -> mdcode()" convention).
-  - `dte`: an int, not free text, but still rendered via `escape_markdown(str(dte))` for
-    consistency with the rest of this epic's int-interpolation handling (no reserved chars in
-    a plain integer, but the epic's own convention wraps every interpolated value, not just the
-    ones that happen to contain reserved characters in a given sample).
-  - Static template punctuation: the parens around `({dte} DTE)` and `(Key: {next_key})`, and
-    the bold-marker asterisks around `BASE POSITION EXPIRY ALERT`, are the ONLY static
-    characters needing escaping. The asterisks are deliberately NOT escaped -- they're the
-    intended `*bold*` entity, not literal text (this is the one line in the message that should
-    render bold, per the original's intent). The parens ARE literal template punctuation and
-    MarkdownV2-reserved -> `\\(` / `\\)`.
-  - `warning_suffix`: static text (`"\\n\\n⚠️ WARNING: BOD may be stale"`) built in the
-    real source, not user data -- the colon in "WARNING:" is not MarkdownV2-reserved, so no
-    escaping needed there; kept as a plain conditional line, not run through escape_markdown()
-    since it's already a controlled literal, matching how ROLL-11/ROLL-12 treated their own
-    fixed warning strings.
-  - `close_cmd` / `roll_cmd`: these are shell commands wrapped in a code span (`` ` ``) in the
-    original, and stay that way here -- MarkdownV2 does not parse entities inside a code span,
-    so the only characters that need escaping inside one are a literal backtick or backslash
-    (neither occurs in a `record_paper_trade.py` invocation). Left as raw f-strings, matching
-    the original -- NOT run through `escape_markdown()`, which would incorrectly stack backslash
-    escapes in front of every `--flag` hyphen and break copy-paste. This mirrors MD-1's
-    `mdcode()` docstring guidance (code-span content is inert) even though these two are built
-    as bare backtick-wrapped f-strings rather than via `mdcode()` itself, since they're
-    multi-line command text, not a single identifier value.
+Direction verb hardcoded `Long`, not derived — `base_futures`/`base_ditm_call` never go short
+by strategy design (confirmed by Animesh, 2026-08-11; the `is_short` check present elsewhere
+in the same source file is copy-reused entry-price-selection logic shared with genuinely
+short-capable legs like `overlay_cc`, not evidence this leg can be short — see ROLL-15's
+resolved-direction note for the full reasoning, including the noted-but-not-blocking residual
+code gap: nothing currently guards against a negative `net_qty` reaching this branch).
 
-Placeholder values (`<SETTLEMENT_LTP>`, `<ROLL_LTP>`) inside the commands are intentional --
-they're filled in by hand after checking the actual settlement/roll LTP, not computed here; kept
-verbatim from the real source.
+Strategy/leg names rendered as human-readable labels (`Paper 3-Track Nifty V1`, `Base DITM
+Call`) rather than the raw `strategy_name`/`leg_role` identifiers, matching this epic's
+established "resolve to something readable" direction (ROLL-12/ROLL-13). Fixed lookup tables
+below, not derived — an unmapped value raises, same discipline as ROLL-7/ROLL-8/ROLL-12's
+label dicts.
+
+Symbol lines use the real source's already-resolved `expiring_symbol`/`next_symbol` values
+(trading_symbol strings, e.g. `NIFTY26AUG21500CE`) — condensed to `NIFTY <MON> <strike> <right>`
+for readability, matching ROLL-13's leg-line convention, not the literal broker trading symbol
+verbatim. When `next_inst` resolution fails (the real source's `warning_suffix` branch), the
+Open line falls back to the placeholder text the real source already produces
+(`<NEXT_CONTRACT_SYMBOL>`) — never the ad hoc string "Next Contract" Animesh used as shorthand
+in his review draft, since the real code can't actually produce that exact string.
+
+`lot_size` is NOT a real field on `PaperPosition` in the real source at this call site — the
+existing code only has `pos.net_qty`. Using `abs(pos.net_qty)` here (matches what `close_cmd`/
+`roll_cmd`'s `--qty` argument already uses in the original source), not a separate lot_size
+lookup.
+
+Escaping: `mdcode()` for identifier-shaped dynamic values (nothing free-form enough here to
+need `escape_markdown()` on its own); static parens around `(<DTE> DTE)` are literal
+MarkdownV2-reserved punctuation -> explicit `\\(`/`\\)`; the *bold* headline markers are the
+intended entity, not escaped.
+
+Log-emit requirement (real implementation, NOT built here — this script is docs/format-only
+per the workshop's own rule): `close_cmd`/`roll_cmd` move to a `logger.info(...)` call at the
+same call site. Left in SCENARIOS below (unused by build_message) purely so the eventual real
+implementation's log-line test fixtures have realistic sample values to start from.
+
+backbone/ (MD-1..MD-5) status as of this session: NOT shipped — confirmed via
+`search_graph("mdcode")` returning zero hits under src/notifications/. This script inlines its
+own copies of `escape_markdown()`/`mdcode()`, matching MD-1's spec.
 
 Not part of src/notifications/ — purely for iterating on layout before wiring into the real
 script. Makes zero DB calls. Sends a real Telegram message (counts against the configured
@@ -114,24 +116,41 @@ def escape_markdown(text: str) -> str:
 
 
 def mdcode(value: str) -> str:
-    """Wrap a dynamic identifier as an inline code span — mirrors MD-1's mdcode() spec.
-
-    Falls back to a backtick-escaped form if value itself contains a literal backtick (none of
-    this message's sample identifiers do, but the fallback is included for parity with MD-1's
-    documented contract).
-    """
+    """Wrap a dynamic identifier as an inline code span — mirrors MD-1's mdcode() spec."""
     if "`" in value:
         return f"`{value.replace(chr(96), chr(92) + chr(96))}`"
     return f"`{value}`"
 
 
+# Fixed strategy_name -> display label lookup. Unmapped raises, matching ROLL-7/ROLL-8/
+# ROLL-12's label-dict discipline.
+STRATEGY_LABELS: dict[str, str] = {
+    "paper_3track_nifty_v1": "Paper 3-Track Nifty V1",
+}
+
+# Fixed leg_role -> display label lookup.
+LEG_LABELS: dict[str, str] = {
+    "base_futures": "Base Futures",
+    "base_ditm_call": "Base DITM Call",
+}
+
+
+def _label(table: dict[str, str], key: str, table_name: str) -> str:
+    try:
+        return table[key]
+    except KeyError:
+        raise ValueError(f"no display mapping for {table_name}={key!r}") from None
+
+
 # ── Sample data — mirrors real PaperPosition / instrument fields (confirmed via read of
-# paper_3track_snapshot.py:400-495 this session). ──
+# paper_3track_snapshot.py:379-495 this session). close_cmd/roll_cmd kept for the eventual
+# real log-emit implementation's test fixtures; unused by build_message() below. ──
 
 SCENARIOS: dict[str, dict] = {
     "base_futures_expiring": {
         "strategy_name": "paper_3track_nifty_v1",
         "leg_role": "base_futures",
+        "net_qty": 65,
         "expiring_symbol": "NIFTY26AUGFUT",
         "next_symbol": "NIFTY26SEPFUT",
         "next_key": "NSE_FO|54321",
@@ -139,30 +158,21 @@ SCENARIOS: dict[str, dict] = {
         "warning_suffix": "",
         "close_cmd": (
             "python scripts/record/record_paper_trade.py "
-            "--strategy paper_3track_nifty_v1 "
-            "--leg base_futures "
-            "--action SELL "
-            "--qty 65 "
-            "--key NSE_FO|48213 "
-            "--price <SETTLEMENT_LTP> "
-            "--date 2026-08-25 "
-            "--no-dry-run"
+            "--strategy paper_3track_nifty_v1 --leg base_futures --action SELL "
+            "--qty 65 --key NSE_FO|48213 --price <SETTLEMENT_LTP> "
+            "--date 2026-08-25 --no-dry-run"
         ),
         "roll_cmd": (
             "python scripts/record/record_paper_trade.py "
-            "--strategy paper_3track_nifty_v1 "
-            "--leg base_futures "
-            "--action BUY "
-            "--qty 65 "
-            "--key NSE_FO|54321 "
-            "--price <ROLL_LTP> "
-            "--date 2026-08-26 "
-            "--no-dry-run"
+            "--strategy paper_3track_nifty_v1 --leg base_futures --action BUY "
+            "--qty 65 --key NSE_FO|54321 --price <ROLL_LTP> "
+            "--date 2026-08-26 --no-dry-run"
         ),
     },
     "base_ditm_call_expiring_stale_bod": {
         "strategy_name": "paper_3track_nifty_v1",
         "leg_role": "base_ditm_call",
+        "net_qty": 65,
         "expiring_symbol": "NIFTY26AUG21500CE",
         "next_symbol": "<NEXT_CONTRACT_SYMBOL>",
         "next_key": "<NEXT_CONTRACT_KEY>",
@@ -170,54 +180,42 @@ SCENARIOS: dict[str, dict] = {
         "warning_suffix": "\n\n⚠️ WARNING: BOD may be stale",
         "close_cmd": (
             "python scripts/record/record_paper_trade.py "
-            "--strategy paper_3track_nifty_v1 "
-            "--leg base_ditm_call "
-            "--action SELL "
-            "--qty 65 "
-            "--key NSE_FO|91020 "
-            "--price <SETTLEMENT_LTP> "
-            "--date 2026-08-25 "
-            "--no-dry-run"
+            "--strategy paper_3track_nifty_v1 --leg base_ditm_call --action SELL "
+            "--qty 65 --key NSE_FO|91020 --price <SETTLEMENT_LTP> "
+            "--date 2026-08-25 --no-dry-run"
         ),
         "roll_cmd": (
             "python scripts/record/record_paper_trade.py "
-            "--strategy paper_3track_nifty_v1 "
-            "--leg base_ditm_call "
-            "--action BUY "
-            "--qty 65 "
-            "--key <NEXT_CONTRACT_KEY> "
-            "--price <ROLL_LTP> "
-            "--date 2026-08-26 "
-            "--no-dry-run"
+            "--strategy paper_3track_nifty_v1 --leg base_ditm_call --action BUY "
+            "--qty 65 --key <NEXT_CONTRACT_KEY> --price <ROLL_LTP> "
+            "--date 2026-08-26 --no-dry-run"
         ),
     },
 }
 
 
 def build_message(d: dict) -> str:
-    """v1 layout for paper_3track_snapshot.py's BASE POSITION EXPIRY notify block, MarkdownV2-safe.
-
-    See module docstring for the full derivation notes and escaping discipline. Not yet
-    Animesh-confirmed — first draft this session, pending live-send review.
+    """v2 layout for paper_3track_snapshot.py's BASE POSITION EXPIRY notify block — summary
+    only, no commands. See module docstring for full derivation notes. Direction hardcoded
+    Long (Animesh-confirmed). Not yet live-send confirmed — pending review.
     """
-    strategy = mdcode(d["strategy_name"])
-    leg = mdcode(d["leg_role"])
+    strategy = escape_markdown(_label(STRATEGY_LABELS, d["strategy_name"], "strategy_name"))
+    leg = escape_markdown(_label(LEG_LABELS, d["leg_role"], "leg_role"))
+    dte = escape_markdown(str(d["dte"]))
+    qty = escape_markdown(str(abs(d["net_qty"])))
     expiring_symbol = mdcode(d["expiring_symbol"])
     next_symbol = mdcode(d["next_symbol"])
-    next_key = mdcode(d["next_key"])
-    dte = escape_markdown(str(d["dte"]))
 
     lines = [
-        "⚠️ *BASE POSITION EXPIRY ALERT*",
-        f"Strategy: {strategy}",
-        f"Leg: {leg}",
-        f"Expiring Contract: {expiring_symbol} \\({dte} DTE\\)",
-        f"Next Contract: {next_symbol} \\(Key: {next_key}\\){d['warning_suffix']}",
-        "",
-        f"Settlement Close:\n`{d['close_cmd']}`",
-        "",
-        f"Roll Open:\n`{d['roll_cmd']}`",
+        f"🚨 *Base Position Expiry* — {strategy}",
+        f"Leg: {leg} \\({dte} DTE\\)",
     ]
+    if d["warning_suffix"]:
+        lines.append("System: ⚠️ BOD data potentially stale")
+    lines.append("Action Required: Manual Roll")
+    lines.append(f"📤 Close: Long {qty}x {expiring_symbol}")
+    lines.append(f"📥 Open: Long {qty}x {next_symbol}")
+
     return "\n".join(lines)
 
 
