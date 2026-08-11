@@ -1191,6 +1191,42 @@ def _check_overlay_collateral_capacity(
         logger.warning("paper_3track_overlay_entry.collateral_gate_failed", error=str(exc))
 
 
+def _alert_bootstrap_failure(overlay_label: str, log_file: str) -> None:
+    """Best-effort Telegram alert for a structural auto-bootstrap failure.
+
+    auto_cc_bootstrap/auto_pp_bootstrap/auto_collar_bootstrap return cfg=None
+    on any structural gate failure (BOD load, no monthly expiry, DTE<14,
+    chain fetch, no eligible strike) and the caller in main() sys.exit(1)s
+    right after — previously silent apart from a log line + stderr print,
+    which is how the 2026-08-11 auto_pp.no_monthly_expiry_found failure went
+    unnoticed until logs/pp_entry.log was checked manually four days after
+    an unrelated ivr_check_failed streak. Mirrors paper_3track_roll.py's
+    existing partial-roll failure alert. Deliberately generic (does not
+    thread the specific gate-failure reason through) — the bootstrap
+    functions only log a structured event, they don't return one; the alert
+    exists to surface *that* a cycle was silently skipped, not to replace
+    reading the log for *why*. Never raises — a notify failure must not
+    mask the underlying gate failure, and must never block the cron
+    script's sys.exit(1).
+
+    Args:
+        overlay_label: Human-readable overlay name for the alert, e.g. "PP".
+        log_file: Log file to point the operator at, e.g. "logs/pp_entry.log".
+    """
+    notifier = build_notifier()
+    if not notifier:
+        return
+    msg = (
+        f"🔴 OVERLAY ENTRY FAILED — {overlay_label} auto-bootstrap\n"
+        f"A structural gate blocked entry this cycle (no trade recorded).\n"
+        f"Check {log_file} for the failing gate."
+    )
+    try:
+        asyncio.run(notifier.send(msg))
+    except Exception as exc:  # non-fatal — notify failure never masks the gate failure
+        logger.warning("paper_3track_overlay_entry.failure_notify_failed", error=str(exc))
+
+
 def main() -> None:
     """CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -1272,6 +1308,7 @@ def main() -> None:
         cfg, gate_violation = auto_cc_bootstrap(args.bod_path, log_only_gates=args.log_only_gates)
         if cfg is None:
             print("ERROR: auto-CC bootstrap failed. Check logs.", file=sys.stderr)
+            _alert_bootstrap_failure("CC", "logs/cc_entry.log")
             sys.exit(1)
     elif args.auto_pp:
         # --no-dry-run unblocked 2026-08-03: PP1 (delta ladder) and PP2 (delta-
@@ -1289,6 +1326,7 @@ def main() -> None:
         cfg, gate_violation = auto_pp_bootstrap(args.bod_path, log_only_gates=args.log_only_gates)
         if cfg is None:
             print("ERROR: auto-PP bootstrap failed. Check logs.", file=sys.stderr)
+            _alert_bootstrap_failure("PP", "logs/pp_entry.log")
             sys.exit(1)
     elif args.auto_collar:
         cfg, gate_violation = auto_collar_bootstrap(
@@ -1296,6 +1334,7 @@ def main() -> None:
         )
         if cfg is None:
             print("ERROR: auto-collar bootstrap failed. Check logs.", file=sys.stderr)
+            _alert_bootstrap_failure("Collar", "logs/collar_entry.log")
             sys.exit(1)
     else:
         cfg = load_overlay_config(args.config)

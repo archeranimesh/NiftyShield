@@ -16,6 +16,7 @@ from scripts.lookup.find_overlay_strikes import (
 from scripts.strategies.three_track.paper_3track_overlay_entry import (
     _NIFTY_LOT_SIZE_FALLBACK,
     OverlayConfig,
+    _alert_bootstrap_failure,
     _resolve_lot_size,
     build_overlay_trades,
     load_overlay_config,
@@ -1509,3 +1510,106 @@ def test_resolve_lot_size_falls_back_when_bod_lot_size_is_zero():
     result = _resolve_lot_size(lookup, "NSE_FO|61622")
 
     assert result == _NIFTY_LOT_SIZE_FALLBACK
+
+
+# ── _alert_bootstrap_failure ─────────────────────────────────────────────────
+
+
+def test_alert_bootstrap_failure_sends_telegram_message():
+    """Happy path: a configured notifier receives a message naming the overlay
+    and pointing at the right log file — this is the alert that was entirely
+    missing before, which is why the 2026-08-11 auto_pp.no_monthly_expiry_found
+    failure went unnoticed for days."""
+    with (
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.build_notifier"
+        ) as mock_build_notifier,
+        patch("scripts.strategies.three_track.paper_3track_overlay_entry.asyncio.run") as mock_run,
+    ):
+        mock_notifier = MagicMock()
+        mock_build_notifier.return_value = mock_notifier
+
+        _alert_bootstrap_failure("PP", "logs/pp_entry.log")
+
+        mock_run.assert_called_once()
+        mock_notifier.send.assert_called_once()
+        sent_msg = mock_notifier.send.call_args[0][0]
+        assert "PP" in sent_msg
+        assert "logs/pp_entry.log" in sent_msg
+        assert "FAILED" in sent_msg
+
+
+def test_alert_bootstrap_failure_no_notifier_configured_is_noop():
+    """Edge case: no Telegram credentials configured (build_notifier returns
+    None, the existing project-wide contract) — must not raise, must not
+    attempt to send anything."""
+    with (
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.build_notifier",
+            return_value=None,
+        ),
+        patch("scripts.strategies.three_track.paper_3track_overlay_entry.asyncio.run") as mock_run,
+    ):
+        _alert_bootstrap_failure("CC", "logs/cc_entry.log")
+
+        mock_run.assert_not_called()
+
+
+def test_alert_bootstrap_failure_send_exception_is_non_fatal():
+    """Edge case: Telegram send itself raises — must be swallowed (logged
+    WARNING) exactly like the existing success-path notifier, never allowed
+    to mask or replace the underlying structural gate failure that triggered
+    the alert in the first place."""
+    with (
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.build_notifier"
+        ) as mock_build_notifier,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.asyncio.run",
+            side_effect=Exception("Telegram API down"),
+        ),
+    ):
+        mock_build_notifier.return_value = MagicMock()
+
+        # Must not raise.
+        _alert_bootstrap_failure("Collar", "logs/collar_entry.log")
+
+
+def test_auto_pp_bootstrap_failure_triggers_telegram_alert(tmp_path, capsys):
+    """Integration: the --auto-pp cfg-is-None branch in main() actually wires
+    up _alert_bootstrap_failure, not just prints to stderr."""
+    from scripts.strategies.three_track.paper_3track_overlay_entry import main
+
+    test_args = [
+        "paper_3track_overlay_entry.py",
+        "--auto-pp",
+        "--dry-run",
+        "--db-path",
+        str(tmp_path / "test.sqlite"),
+    ]
+
+    with (
+        patch("sys.argv", test_args),
+        patch("scripts.strategies.three_track.paper_3track_overlay_entry._open_pp_dte") as mock_dte,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.auto_pp_bootstrap"
+        ) as mock_bootstrap,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.build_notifier"
+        ) as mock_build_notifier,
+        patch("scripts.strategies.three_track.paper_3track_overlay_entry.asyncio.run") as mock_run,
+    ):
+        mock_dte.return_value = None
+        mock_bootstrap.return_value = (None, None)
+        mock_notifier = MagicMock()
+        mock_build_notifier.return_value = mock_notifier
+
+        with pytest.raises(SystemExit) as excinfo:
+            main()
+
+        assert excinfo.value.code == 1
+        mock_run.assert_called_once()
+        mock_notifier.send.assert_called_once()
+        assert "PP" in mock_notifier.send.call_args[0][0]
+        captured = capsys.readouterr()
+        assert "auto-PP bootstrap failed" in captured.err
