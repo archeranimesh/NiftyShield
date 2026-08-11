@@ -83,13 +83,25 @@
       `strategy-rollout/` **ROLL-12** — see
       `scratch/2026-08-10_position_health_alert_format.py`. | SHA: 049d4ff
 
-- [ ] **7. Three-track entry / overlay-entry confirmations** —
-      `scripts/strategies/three_track/paper_3track_entry.py:940`,
-      `scripts/strategies/three_track/paper_3track_overlay_entry.py:1369`
-      Entry-fill confirmation messages. Message bodies not yet read in full — grep only located
-      the call sites (`asyncio.run(notifier.send(msg))`); pull the actual f-string and confirm
-      structure before starting this session (may turn out simpler or more complex than ranked
-      here — re-rank if so). | SHA: —
+- [x] **7a. Three-track base entry bootstrap confirmation** —
+      `scripts/strategies/three_track/paper_3track_entry.py:940`. Split out of the original
+      item 7 (2026-08-11) once the message bodies were actually read in full — the entry-
+      bootstrap and overlay-entry-bootstrap messages turned out to be two structurally
+      distinct call sites, not one, so each gets its own workshop pass. Format confirmed
+      2026-08-11 (per-leg 📥-prefixed kv lines, resolved human-readable instrument labels
+      instead of raw broker keys, unified `Long` verb, explicit lot count on every leg,
+      internal `Cycle:` tag dropped) and written back as `strategy-rollout/` **ROLL-13** — see
+      `scratch/2026-08-11_3track_base_entry_format.py`. First message in this epic actually
+      confirmed via a live `--send` round trip, not just print-only review — caught two real
+      MarkdownV2 escaping bugs in the process (see ROLL-13's spec / `backbone/stories.md`
+      MD-1 addendum). | SHA: 4e19c64
+
+- [ ] **7b. Three-track overlay-entry bootstrap confirmation** —
+      `scripts/strategies/three_track/paper_3track_overlay_entry.py:1410`. Second half of the
+      original item 7 — still queued, not yet read through the workshop. Distinct message
+      shape from 7a: headline (`{overlay_type.upper()} bootstrap`) + one line per leg
+      (`leg_role: instrument @ price`) + an optional gate-violation line when a soft IVR gate
+      was breached, rather than 7a's fixed Spot/Futures/Proxy shape. | SHA: —
 
 - [ ] **8. Three-track snapshot — settlement/roll command message** —
       `scripts/strategies/three_track/paper_3track_snapshot.py:497-503`

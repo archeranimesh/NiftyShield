@@ -118,6 +118,42 @@ Full forensic log (SHAs, bug numbers, root-cause detail) moved to
 add new entries there going forward, or start a fresh dated section here if this file's
 Session Log grows large again.
 
+### 2026-08-11 Session Log (missing-message-workshop, queue item 7a)
+- **Telegram Markdown migration** (item 29): ran `TODO.md` queue item 7 through
+  `message-format-workshop.md`. Item 7 as originally queued covered two call sites (base entry
+  bootstrap + overlay entry bootstrap); read in full this session and split into two workshop
+  sessions on the spot (Animesh's decision) since they're structurally distinct messages — only
+  the base-entry half (7a, `scripts/strategies/three_track/paper_3track_entry.py::main`) was
+  run through the workshop this session. The overlay-entry half (7b,
+  `paper_3track_overlay_entry.py:1410`) stays queued, TODO.md item 7 left unchecked pending it.
+  Two-round counter-proposal iteration: v1 (kv-lines, raw broker `instrument_key` in `mdcode()`,
+  single 📥 headline anchor) drafted first but never sent live. Animesh's counter-proposal (v2)
+  swapped to resolved human-readable instrument labels (`NIFTY DEC FUT`, `NIFTY DEC 24500 CE`,
+  derived from real `LivePrices` fields — `proxy_strike`/`expiry`/`futures_expiry`, confirmed
+  via `get_code_snippet` on `fetch_live_prices()`/`build_trades()`, not fabricated), a unified
+  `Long` verb (all three legs are `TradeAction.BUY`), and an explicit lot count on every leg
+  (`futures`/`proxy` both trade `quantity=p.lot_size`, a real field — the first draft had
+  silently dropped quantity on the non-spot legs, caught during the critique round before any
+  code was written). First message in this epic actually exercised via a real `--send` round
+  trip on Animesh's own machine, not just print-only rendered-source review like ROLL-9 through
+  ROLL-12 — and that live send caught two real escaping bugs neither prior scratch script nor
+  print-only testing had surfaced: (1) a literal `=` in static template text (`"qty="`) needs
+  its own explicit `\=` — `escape_markdown()` only ever runs on dynamic values, MarkdownV2
+  reserves `=` and Telegram 400s on it unescaped even in Claude-authored text; (2) an em dash
+  (`—`, U+2014) is NOT MarkdownV2-reserved (ASCII punctuation only) — an unescaped `\` before it
+  doesn't error, it silently renders as a literal backslash, so this class of bug survives a
+  failed-send check and only a reserved-char-string sweep catches it. Both fixed and verified
+  with a standalone Python reserved-char sweep (every backslash precedes a reserved char, every
+  reserved char outside a code span is preceded by one) before each re-send. A third, non-
+  escaping miss also surfaced live: v2's first pass put the 📥 emoji on the headline only,
+  dropping it from the three leg lines — Animesh's actual counter-proposal used it as a per-line
+  marker; caught after Animesh flagged the rendered message and fixed as v2.1. Reference
+  `scratch/2026-08-11_3track_base_entry_format.py` (3 scenarios: `all_three`, `futures_only`,
+  `proxy_only`). Added **ROLL-13** to `strategy-rollout/stories.md`/`tasks.md`; added a
+  regression-test addendum to `backbone/stories.md` MD-1 for the two escaping bugs. Docs +
+  scratch script committed `4e19c64` (`--no-verify`, sandbox pre-commit-hook-unavailable
+  caveat per `missing-message-workshop-prompt.md`).
+
 ### 2026-08-10 Session Log (BUG-028 Phase 2 — eliminate silent false zeros)
 - Implemented `docs/bugs/task.md` B028.8–B028.10: `ProtectionRecoverySnapshot`'s
   cc/pp/collar overlay P&L fields (`src/paper/models.py`) changed `Decimal` →
