@@ -1737,13 +1737,17 @@ get_code_snippet("GateViolation")        # confirm threshold/actual are still pr
 
 ## ROLL-15 — Three-Track Base Position Expiry Alert (summary in Telegram, commands to log)
 
-**Status: DRAFT — direction question resolved, still pending a live `--send` confirmation.**
-Opened 2026-08-11 via `missing-message-workshop-prompt.md`/`message-format-workshop.md`
-(TODO.md queue item 8). Unlike every prior `ROLL-N` in this epic, this one is not pure
-message-formatting — it also requires a genuine behavior change (splitting content that
-currently lives entirely in one Telegram message into a Telegram summary + a structured-log
-entry), so implementation is broader than "escape and restyle an f-string." Do not tick
-TODO.md item 8's box until the format is confirmed live on-device.
+**Status: CONFIRMED 2026-08-11** — Animesh reviewed the live `--send` output for both
+scenarios (`base_futures_expiring`, `base_ditm_call_expiring_stale_bod`) on-device and
+approved the v2 summary shape as-is, no further counter-proposal round. Opened 2026-08-11 via
+`missing-message-workshop-prompt.md`/`message-format-workshop.md` (TODO.md queue item 8).
+Unlike every prior `ROLL-N` in this epic, this one is not pure message-formatting — it also
+requires a genuine behavior change (splitting content that currently lived entirely in one
+Telegram message into a Telegram summary + a structured-log entry), so real implementation is
+broader than "escape and restyle an f-string": the `logger.info` log-emit call for
+`close_cmd`/`roll_cmd` (see "Log-emit requirement" below) still needs to be written in a
+later, non-docs-only session — this confirmation covers the Telegram-facing message shape
+only.
 
 **Confirmed real source:** `scripts/strategies/three_track/paper_3track_snapshot.py:487-501`
 (inside the DTE<=5 base-expiry branch — confirmed via direct read this session, not the
@@ -1790,9 +1794,8 @@ future bug elsewhere, the hardcoded `--action SELL`/`--action BUY` pair in `clos
 `roll_cmd` would silently build the wrong-direction command. Not a message-formatting concern,
 tracked separately.
 
-**Working draft summary shape (Telegram) — direction resolved, still pending a live `--send`
-review before final lock — reference implementation:
-`scratch/2026-08-11_3track_settlement_roll_format.py`:**
+**Confirmed summary shape (Telegram) — live `--send` reviewed and approved 2026-08-11 —
+reference implementation: `scratch/2026-08-11_3track_settlement_roll_format.py`:**
 
 ```
 🚨 Base Position Expiry — Paper 3-Track Nifty V1

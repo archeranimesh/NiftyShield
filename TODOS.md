@@ -161,6 +161,27 @@ Session Log grows large again.
   intertwined with the inline checks).
 - Commits: `47bc623` (DTE floor fix), `5795576` (three-track alerting), `3fd3d6e` (IC alerting).
 
+### 2026-08-11 Session Log (missing-message-workshop, queue item 8 — confirmed, closed out)
+- **Telegram Markdown migration** (item 29): follow-up to the same-day draft session below.
+  Animesh confirmed the leg-direction open question directly (`base_futures`/`base_ditm_call`
+  never go short by strategy design) — the `is_short` check in the real source is copy-reused
+  entry-price logic shared with genuinely short-capable legs elsewhere in the file
+  (`overlay_cc`/`overlay_collar_call`), not evidence this leg can be short. Verb hardcoded
+  `Long` in `scratch/2026-08-11_3track_settlement_roll_format.py`'s v2 (commands dropped
+  entirely from `build_message()`, kept only in `SCENARIOS` as future log-emit test fixtures).
+  Noted a non-blocking residual gap for a future `docs/bugs/bugs.md` entry: nothing in
+  `paper_3track_snapshot.py:380-383` actually guards against a negative `net_qty` reaching
+  this branch, so the "never short" assumption is a strategy-design fact, not a code
+  invariant. Animesh ran both scenarios (`base_futures_expiring`,
+  `base_ditm_call_expiring_stale_bod`) live via `--send` in his own terminal (this session's
+  sandbox couldn't — `device_bash` has no network access and the local `.venv` is built
+  against `/opt/anaconda3/bin/python3.12`, not present in the sandbox VM, same class of
+  interpreter-path break as the earlier `pre-commit` hook issue) and confirmed the on-device
+  render, no further changes. `strategy-rollout/stories.md`/`tasks.md` **ROLL-15** marked
+  **CONFIRMED** (Telegram-facing shape only — the `logger.info` log-emit call for
+  `close_cmd`/`roll_cmd` remains a separate, later real-implementation task, per this
+  workshop's own "docs/scratch only" rule). **TODO.md item 8 ticked.**
+
 ### 2026-08-11 Session Log (missing-message-workshop, queue item 8 — draft only, not confirmed)
 - **Telegram Markdown migration** (item 29): ran `TODO.md` queue item 8 (three-track base
   position expiry alert, `scripts/strategies/three_track/paper_3track_snapshot.py:487-501`)

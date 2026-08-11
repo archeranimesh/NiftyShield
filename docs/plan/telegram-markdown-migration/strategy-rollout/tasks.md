@@ -113,8 +113,9 @@
       Telegram summary (verb hardcoded `Long` — `base_futures`/`base_ditm_call` never go
       short by strategy design, confirmed by Animesh 2026-08-11), with the settlement-close/
       roll-open shell commands moved to a structured `logger.info` call instead of the
-      message body; DRAFT — pending a live `--send` confirmation of the final summary
-      wording; not in the epic's original confirmed-callers list (surfaced via
-      `missing-message-workshop-prompt.md`, TODO.md item 8) | Blocked by: `backbone/` +
-      `formatting-rules/` complete (same soft deps as other ROLL tasks)
+      message body; format CONFIRMED 2026-08-11 via live `--send` review — real
+      implementation (message build + new `logger.info` call) still open; not in the epic's
+      original confirmed-callers list (surfaced via `missing-message-workshop-prompt.md`,
+      TODO.md item 8) | Blocked by: `backbone/` + `formatting-rules/` complete (same soft
+      deps as other ROLL tasks)
 - [ ] **ROLL-5** — Docs close | Blocked by: ROLL-4, ROLL-6, ROLL-7, ROLL-8, ROLL-9, ROLL-10, ROLL-11, ROLL-12, ROLL-13, ROLL-14, ROLL-15
