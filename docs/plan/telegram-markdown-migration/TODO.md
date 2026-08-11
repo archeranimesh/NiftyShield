@@ -153,17 +153,21 @@
       `src/dhan/positions.py` before assuming it's out of scope. Revisit this format decision
       later if it becomes worth reopening. | SHA: e714be2
 
-- [ ] **10. Production Proxy Delta CRITICAL alert (duplicate)** —
-      `scripts/strategies/three_track/paper_3track_snapshot.py::_run`, ~line 1639. Surfaced
-      2026-08-10 while running queue item 4 through the workshop: this is a near-identical
-      "Proxy Delta CRITICAL" Telegram alert to the one item 4 covers
-      (`scripts/dev/paper_track_snapshot.py`), reading the same `TrackSnapshot.proxy_delta_alert`
-      field and firing on the same `"CRITICAL" in ...` check — but this one lives in the real
-      production EOD cron path, not the lower-stakes dev script item 4 scoped to. Not named in
-      `backbone/`'s MD-4 file list or any `ROLL-*` task. Once `ROLL-10` (item 4's spec) ships,
-      confirm whether this production copy can just call the same message-builder rather than
-      needing its own independent format-workshop pass — don't assume a second full workshop
-      session is required without checking that first. | SHA: —
+- [x] **10. Production Proxy Delta CRITICAL alert (duplicate)** —
+      `scripts/strategies/three_track/paper_3track_snapshot.py::_run`, ~line 1723 (confirmed
+      exact line this session — the 1639 estimate above was off). Surfaced 2026-08-10 while
+      running queue item 4 through the workshop: this is a near-identical "Proxy Delta
+      CRITICAL" Telegram alert to the one item 4 covers (`scripts/dev/paper_track_snapshot.py`),
+      reading the same `TrackSnapshot.proxy_delta_alert` field and firing on the same
+      `"CRITICAL" in ...` check — but this one lives in the real production EOD cron path, not
+      the lower-stakes dev script item 4 scoped to. Not named in `backbone/`'s MD-4 file list or
+      any `ROLL-*` task. Format confirmed 2026-08-11 (reuse of `ROLL-10`'s 3-line shape,
+      verbatim — no track/date line added, Animesh's call between the two options put to him)
+      and written back as `strategy-rollout/` **ROLL-16** — see
+      `scratch/2026-08-11_3track_proxy_delta_critical_alert_format.py`. Not yet exercised via a
+      live `--send` round-trip (this Cowork sandbox's mounted `.venv` doesn't resolve inside the
+      device-bash VM); print-only output matches `ROLL-10`'s already on-device-confirmed block
+      byte-for-byte. | SHA: ba81291
 
 ---
 

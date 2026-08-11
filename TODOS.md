@@ -118,6 +118,30 @@ Full forensic log (SHAs, bug numbers, root-cause detail) moved to
 add new entries there going forward, or start a fresh dated section here if this file's
 Session Log grows large again.
 
+### 2026-08-11 Session Log (missing-message-workshop, queue item 10)
+- **Telegram Markdown migration** (item 29): ran `TODO.md` queue item 10 (Production Proxy
+  Delta CRITICAL alert duplicate, `scripts/strategies/three_track/paper_3track_snapshot.py::_run`,
+  confirmed exact line ~1723, not the ~1639 estimate in TODO.md) through
+  `message-format-workshop.md`. Per that item's own note, checked first whether this could just
+  call `ROLL-10`'s message-builder rather than needing an independent workshop pass — no real
+  builder function exists yet (`ROLL-10` implementation still open, format-only), so a workshop
+  pass was still needed, but the format decision itself was simple: put two options to Animesh
+  (reuse `ROLL-10`'s 3-line shape verbatim vs. add a 4th Track/Date line since this is the prod
+  cron path) — he chose verbatim reuse, so both call sites stay byte-identical for a future
+  shared-builder follow-up. No new elimination trail (pure reuse of an already on-device-
+  confirmed format). **Could not complete a live `--send` round-trip this session** — this
+  Cowork sandbox's mounted `.venv` has broken symlinks pointing at the host Mac's absolute
+  paths, unusable inside the sandboxed device-bash VM (`ModuleNotFoundError: No module named
+  'aiohttp'` when falling back to system Python); confirmed print-only output is byte-identical
+  to `ROLL-10`'s confirmed block instead, same class of limitation `ROLL-11`/`ROLL-12` hit.
+  Reference `scratch/2026-08-11_3track_proxy_delta_critical_alert_format.py`. Added **ROLL-16**
+  to `strategy-rollout/stories.md`/`tasks.md` (unblocked by `backbone/`+`formatting-rules/`,
+  same soft deps as other ROLL tasks; soft-sequenced after `ROLL-10` for the shared-builder
+  follow-up); `ROLL-5`'s docs-close blocked-by list updated to include it. Ticked TODO.md item
+  10, SHA `ba81291`. Docs+scratch only — `ROLL-16` itself remains unimplemented; `backbone/MD-1`
+  still has not shipped, confirmed fresh this session via `search_graph("mdcode")`/
+  `search_graph("escape_markdown")`, both returning only `scratch/`-file hits.
+
 ### 2026-08-11 Session Log (auto-PP entry failure investigation + fixes)
 - **Trigger**: Animesh reported `logs/pp_entry.log` showing `auto_pp.no_monthly_expiry_found`
   on today's run (SHA `47bc623` fixes; `5795576`, `3fd3d6e` follow-ons).
