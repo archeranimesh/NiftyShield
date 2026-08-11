@@ -96,12 +96,16 @@
       MarkdownV2 escaping bugs in the process (see ROLL-13's spec / `backbone/stories.md`
       MD-1 addendum). | SHA: 4e19c64
 
-- [ ] **7b. Three-track overlay-entry bootstrap confirmation** —
+- [x] **7b. Three-track overlay-entry bootstrap confirmation** —
       `scripts/strategies/three_track/paper_3track_overlay_entry.py:1410`. Second half of the
-      original item 7 — still queued, not yet read through the workshop. Distinct message
-      shape from 7a: headline (`{overlay_type.upper()} bootstrap`) + one line per leg
-      (`leg_role: instrument @ price`) + an optional gate-violation line when a soft IVR gate
-      was breached, rather than 7a's fixed Spot/Futures/Proxy shape. | SHA: —
+      original item 7. Distinct message shape from 7a — covers all three overlay types
+      (pp/cc/collar), genuinely mixed leg direction (put legs BUY, call legs SELL) rather than
+      7a's uniform-Long shape, plus an optional trailing gate-violation line. Format confirmed
+      2026-08-11 (per-leg direction-coded marker — 🟢 Long / 🔴 Short, one counter-proposal
+      round from the ROLL-13-derived opening draft — resolved human-readable instrument
+      labels, explicit lot count, fixed leg-role→label/right/verb mapping) and written back as
+      `strategy-rollout/` **ROLL-14** — see
+      `scratch/2026-08-11_3track_overlay_entry_format.py`. | SHA: —
 
 - [ ] **8. Three-track snapshot — settlement/roll command message** —
       `scripts/strategies/three_track/paper_3track_snapshot.py:497-503`

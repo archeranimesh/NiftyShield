@@ -1591,6 +1591,150 @@ get_code_snippet("build_trades")       # confirm lot_size/BUY-action assumptions
 
 ---
 
+## ROLL-14 — 3-Track Overlay Entry Bootstrap Notification
+
+**Not in the epic's original confirmed-callers list** — added 2026-08-11 via
+`missing-message-workshop-prompt.md`/`message-format-workshop.md` (queue item 7's second
+half, TODO.md). Item 7 originally covered two call sites (entry bootstrap + overlay
+bootstrap); split into two workshop sessions on read (Animesh's decision, 2026-08-11) since
+they're structurally distinct messages — this spec covers the overlay-bootstrap half (7b).
+The entry-bootstrap half (7a) is `ROLL-13`.
+
+**Confirmed real source:** `scripts/strategies/three_track/paper_3track_overlay_entry.py::main`,
+~line 1410 (confirmed via `search_graph` + `get_code_snippet`, not the TODO.md grep excerpt
+alone). Fires once, at bootstrap, for whichever overlay type (`pp`/`cc`/`collar`) was just
+entered via `--auto-pp`/`--auto-cc`/`--auto-collar` or a YAML config:
+
+```python
+lines = [f"🎯 OVERLAY ENTRY — {cfg.overlay_type.upper()} bootstrap"]
+for ot in overlay_trades:
+    lines.append(f"{ot.leg_role}: {ot.trade.instrument_key} @ ₹{ot.trade.price}")
+if gate_violation is not None:
+    lines.append(
+        f"⚠ Gate logged: {gate_violation.gate_name} "
+        f"(threshold={gate_violation.threshold}, actual={gate_violation.actual})"
+    )
+msg = "\n".join(lines)
+asyncio.run(notifier.send(msg))
+```
+
+**Confirmed message structure (2026-08-11, `message-format-workshop.md` session — v1.1,
+drafted directly from `ROLL-13`'s already-confirmed conventions rather than re-walking the
+raw-key elimination trail; one counter-proposal round from Animesh) — reference
+implementation `scratch/2026-08-11_3track_overlay_entry_format.py`:**
+
+```
+📥 Overlay Entry — COLLAR Bootstrap
+🟢 Collar Put: Long 65x NIFTY SEP 23500 PE @ ₹142.10
+🔴 Collar Call: Short 65x NIFTY SEP 24800 CE @ ₹185.20
+```
+
+Single-leg types (`pp`, `cc`) render the same way with one leg line; a logged soft-gate
+breach (`--log-only-gates` CC/PP/Collar reentry path) appends a trailing line:
+
+```
+📥 Overlay Entry — CC Bootstrap
+🔴 Overlay CC: Short 65x NIFTY SEP 24800 CE @ ₹185.20
+⚠️ Gate Logged: ivr_cc_reentry (threshold=0.25, actual=0.19)
+```
+
+(Backslash escaping shown de-escaped above for readability, as in every other confirmed
+block in this file — see the scratch script for the actual MarkdownV2 source.)
+
+**Elimination trail:**
+1. **v1 (this session's opening draft, not a separate raw-key round):** drafted directly from
+   `ROLL-13`'s already-confirmed conventions — resolved human-readable instrument labels,
+   explicit lot count, per-leg emoji marker — rather than starting from a raw-`instrument_key`
+   draft. `ROLL-12`/`ROLL-13` already walked the "raw key rejected as cryptic → resolved label"
+   arc twice in this epic; no reason to re-walk it for a near-identical message shape.
+   `Long`/`Short` verb derived from the leg's real `TradeAction` (`overlay_pp`/
+   `overlay_collar_put` are `BUY`, `overlay_cc`/`overlay_collar_call` are `SELL`, confirmed via
+   `get_code_snippet` on `build_overlay_trades()`) — **not uniformly `Long`** like `ROLL-13`'s
+   base-entry message, since overlay legs are genuinely mixed direction (a covered call sells
+   the call leg against the position).
+2. **v1.1 (Animesh's counter-proposal, confirmed):** per-leg marker made direction-coded
+   instead of a uniform `ROLL-13`-style single glyph on every line — 🟢 for a `Long` leg, 🔴
+   for a `Short` leg. Unlike `ROLL-13`'s base entry (all three legs always `Long`), this
+   message genuinely mixes both directions in the same message (most visibly on `collar`,
+   which always carries one of each), so a same-glyph marker loses that signal at a glance.
+   Headline keeps `📥` as the bootstrap-event marker — the direction split only applies to
+   per-leg lines, which are the only lines with a verb to encode.
+
+**Leg-role label/right/verb mapping (fixed, not derived per-message — confirmed once against
+`build_overlay_trades()`, then hardcoded, same discipline `ROLL-7`/`ROLL-8`'s
+`STRATEGY_LABELS`/`LEG_ROLE_LABELS` use):**
+
+| `leg_role` | Display label | Right | `TradeAction` | Verb | Marker |
+|---|---|---|---|---|---|
+| `overlay_pp` | Overlay PP | PE | BUY | Long | 🟢 |
+| `overlay_cc` | Overlay CC | CE | SELL | Short | 🔴 |
+| `overlay_collar_put` | Collar Put | PE | BUY | Long | 🟢 |
+| `overlay_collar_call` | Collar Call | CE | SELL | Short | 🔴 |
+
+An unmapped `leg_role` raises `ValueError` rather than silently guessing — same contract as
+`ROLL-7`/`ROLL-8`/`ROLL-12`'s label lookups.
+
+**Instrument-label derivation** (resolved from real `OverlayConfig` fields, not fabricated):
+strike from `put_strike`/`call_strike` (both real fields, already used in
+`build_overlay_trades()`'s `notes=` strings as `strike={cfg.put_strike:.0f}`/
+`{cfg.call_strike:.0f}`), month from `cfg.expiry` (real field, ISO date string, one expiry
+shared across all legs in a single bootstrap — `pp`/`cc`/`collar` never span two expiries in
+one call). Right (PE/CE) is hardcoded per leg role, not derived — a put leg is always
+`overlay_pp`/`overlay_collar_put` and a call leg is always `overlay_cc`/`overlay_collar_call`
+by construction.
+
+**Gate-violation line:** kept as a distinct trailing line when present.
+`GateViolation.threshold`/`.actual` are already pre-formatted `str` fields on the real
+Pydantic model (confirmed via `get_code_snippet` on `src/paper/models.py::GateViolation`) —
+no numeric formatting needed, just `escape_markdown()` on each value and on the static
+`"threshold="`/`"actual="` template text.
+
+**Escaping discipline carried over from `ROLL-13`** (both were live-caught bugs there, applied
+proactively here rather than re-discovered): literal `=` in static template text (the
+gate-violation line) needs explicit `\=`; em dash (`—`) is NOT MarkdownV2-reserved and must
+stay unescaped. Verified via the same reserved-char sweep script `ROLL-13` used, run against
+all four scenarios before any `--send`, catching zero regressions this time.
+
+**backbone/ (MD-1..MD-5) status as of this session: NOT shipped** — confirmed via
+`search_graph("mdcode")`, zero hits outside `scratch/`. Reference script inlines its own copy
+of `escape_markdown()`/`format_money()`, matching MD-1's spec.
+
+**Files to change:**
+- `scripts/strategies/three_track/paper_3track_overlay_entry.py` — `main()`'s notify block
+  (message construction only; `build_overlay_trades()`/`OverlayConfig`/`GateViolation` already
+  expose every field this format needs, no upstream data-shape change required)
+- New: shared `LEG_META`-style leg-role display dict + `_month_label()` helper — consider
+  promoting alongside `ROLL-13`'s equivalent helper to `src/notifications/formatting.py` if
+  `formatting-rules/` has shipped by then, rather than duplicating both scripts' inline copies
+  into real code separately
+- Matching test file: `tests/unit/paper/test_overlay_entry.py` (existing file, confirmed via
+  `search_graph` — extend with message-building tests, not new)
+
+**Before any code:**
+```
+get_code_snippet("main")                 # scripts/strategies/three_track/paper_3track_overlay_entry.py — confirm notify block fresh
+get_code_snippet("build_overlay_trades") # confirm leg_role -> TradeAction mapping unchanged
+get_code_snippet("GateViolation")        # confirm threshold/actual are still pre-formatted str fields
+```
+
+**Tests:**
+- One test per confirmed scenario in the reference script (`pp_bootstrap`, `cc_bootstrap`,
+  `collar_bootstrap`, `cc_bootstrap_gate_logged`) asserting exact per-line layout, marker
+  color, and escaping
+- `test_overlay_entry_collar_shows_both_directions` — regression test for the reason v1.1
+  exists: a collar message must show exactly one 🟢 line and one 🔴 line, never two of the same
+- `test_overlay_entry_unmapped_leg_role_raises` — regression test matching `ROLL-7`/`ROLL-8`/
+  `ROLL-12`'s own label-lookup discipline: an unmapped `leg_role` raises `ValueError`, does not
+  silently fall back
+- `test_overlay_entry_all_reserved_chars_escaped` — same generalized sweep `ROLL-13` added to
+  MD-1's addendum, applied to this message's own scenarios (including the gate-violation line)
+- `test_overlay_entry_gate_violation_line_omitted_when_none` — confirms no trailing line when
+  `gate_violation is None`, and confirms the line's exact escaping when present
+
+**Commit:** `feat(scripts): migrate 3-track overlay entry notification to MarkdownV2 kv format`
+
+---
+
 ## ROLL-5 — Docs Close
 
 **Blocked by:** ROLL-4, ROLL-6, ROLL-7, ROLL-8, ROLL-9, ROLL-10, ROLL-11, ROLL-12 (updated

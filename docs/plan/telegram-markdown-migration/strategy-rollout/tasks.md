@@ -100,4 +100,12 @@
       structurally-distinct message, still queued as TODO.md item 7's second half, not this
       task) | Blocked by: `backbone/` + `formatting-rules/` complete (same soft deps as other
       ROLL tasks)
-- [ ] **ROLL-5** — Docs close | Blocked by: ROLL-4, ROLL-6, ROLL-7, ROLL-8, ROLL-9, ROLL-10, ROLL-11, ROLL-12, ROLL-13
+- [ ] **ROLL-14** — Migrate 3-track overlay entry bootstrap notification
+      (`scripts/strategies/three_track/paper_3track_overlay_entry.py::main`) to a per-leg
+      direction-coded (🟢 Long / 🔴 Short) MarkdownV2 kv format with resolved human-readable
+      instrument labels, covering all three overlay types (pp/cc/collar) and the optional
+      gate-violation trailer line; not in the epic's original confirmed-callers list (surfaced
+      via `missing-message-workshop-prompt.md`, TODO.md item 7 — second half; item 7's
+      base-entry half is `ROLL-13`) | Blocked by: `backbone/` + `formatting-rules/` complete
+      (same soft deps as other ROLL tasks)
+- [ ] **ROLL-5** — Docs close | Blocked by: ROLL-4, ROLL-6, ROLL-7, ROLL-8, ROLL-9, ROLL-10, ROLL-11, ROLL-12, ROLL-13, ROLL-14

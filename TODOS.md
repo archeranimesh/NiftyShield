@@ -118,6 +118,37 @@ Full forensic log (SHAs, bug numbers, root-cause detail) moved to
 add new entries there going forward, or start a fresh dated section here if this file's
 Session Log grows large again.
 
+### 2026-08-11 Session Log (missing-message-workshop, queue item 7b)
+- **Telegram Markdown migration** (item 29): ran `TODO.md` queue item 7's second half through
+  `message-format-workshop.md` — the overlay-entry bootstrap notification
+  (`scripts/strategies/three_track/paper_3track_overlay_entry.py::main`, ~line 1410),
+  completing item 7 (7a, base-entry bootstrap, closed earlier this session as `ROLL-13`). Drafted
+  the opening proposal directly from `ROLL-13`'s already-confirmed conventions (resolved
+  human-readable instrument labels, explicit lot count, per-leg emoji marker) rather than
+  re-walking the raw-key elimination trail `ROLL-12`/`ROLL-13` already settled — confirmed via
+  `get_code_snippet` on `build_overlay_trades()` that leg direction is genuinely mixed here
+  (`overlay_pp`/`overlay_collar_put` are `TradeAction.BUY`, `overlay_cc`/`overlay_collar_call`
+  are `TradeAction.SELL`), so the verb couldn't be uniformly `Long` like `ROLL-13`'s base-entry
+  message. One counter-proposal round from Animesh: per-leg marker made direction-coded (🟢
+  Long / 🔴 Short) instead of a uniform single glyph, since the collar case carries both
+  directions in the same message and a same-glyph marker loses that signal — headline kept
+  `📥` as the bootstrap-event marker, the direction split only applies to per-leg lines. Fixed
+  leg-role → (label, right, verb, marker) mapping table (`overlay_pp`/`overlay_cc`/
+  `overlay_collar_put`/`overlay_collar_call`), same explicit-lookup-raises-on-unmapped
+  discipline as `ROLL-7`/`ROLL-8`/`ROLL-12`'s label dicts. Gate-violation trailer line
+  confirmed unchanged in spirit from the original source — `GateViolation.threshold`/`.actual`
+  are already pre-formatted `str` fields (confirmed via `get_code_snippet` on
+  `src/paper/models.py::GateViolation`), so no numeric formatting work needed there, just
+  escaping. Applied `ROLL-13`'s two live-caught escaping lessons (static `=` needs explicit
+  `\=`, em dash must NOT be escaped) proactively this time via the same reserved-char sweep
+  script, verified clean across all four scenarios before any `--send` — no live escaping bugs
+  this round, unlike 7a's two-round correction. Reference
+  `scratch/2026-08-11_3track_overlay_entry_format.py` (4 scenarios: `pp_bootstrap`,
+  `cc_bootstrap`, `collar_bootstrap`, `cc_bootstrap_gate_logged`). Added **ROLL-14** to
+  `strategy-rollout/stories.md`/`tasks.md`. TODO.md item 7 now fully closed (both 7a and 7b
+  ticked). Docs commit pending — same `.git/HEAD.lock` sandbox caveat as 7a, Animesh committing
+  locally.
+
 ### 2026-08-11 Session Log (missing-message-workshop, queue item 7a)
 - **Telegram Markdown migration** (item 29): ran `TODO.md` queue item 7 through
   `message-format-workshop.md`. Item 7 as originally queued covered two call sites (base entry
