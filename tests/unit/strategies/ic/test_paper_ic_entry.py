@@ -938,6 +938,72 @@ async def test_no_expiry_candidate_error(
 
 
 @pytest.mark.asyncio
+async def test_no_expiry_candidate_fires_telegram_alert(
+    mock_vix_data, mock_store, mock_lookup, mock_market_client, mock_subprocess
+):
+    """Regression guard: V1 previously had no gate-failure Telegram alerting
+    at all (unlike V2's partial _gate_alert wiring) -- every structural exit,
+    including this exact no_expiry_candidate case (the 2026-08-11 PP incident's
+    failure mode), was silent apart from a log line. ``_gate_alert`` schedules
+    ``notifier.send(msg)`` via ``asyncio.get_running_loop().create_task`` --
+    calling ``send()`` (which builds the coroutine object) happens
+    synchronously regardless of whether the task is later awaited to
+    completion, so asserting the call itself is enough to prove the alert
+    path is wired at this call site."""
+    mock_lookup.get_expiry_candidates.return_value = []
+    test_args = [
+        "paper_ic_entry.py",
+        "--expiry-type",
+        "weekly",
+        "--no-dry-run",
+        "--bod-path",
+        "dummy.json",
+    ]
+    with (
+        patch.object(sys, "argv", test_args),
+        patch("scripts.strategies.ic.paper_ic_entry.build_notifier") as mock_build_notifier,
+    ):
+        mock_notifier = MagicMock()
+        mock_notifier.send = AsyncMock()
+        mock_build_notifier.return_value = mock_notifier
+
+        with pytest.raises(SystemExit) as excinfo:
+            await run()
+
+        assert excinfo.value.code == 1
+        mock_notifier.send.assert_called_once()
+        assert "weekly" in mock_notifier.send.call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_no_notifier_configured_does_not_raise(
+    mock_vix_data, mock_store, mock_lookup, mock_market_client, mock_subprocess
+):
+    """Edge case: no Telegram credentials configured (build_notifier returns
+    None) -- the gate failure must still exit cleanly, no crash from the
+    alerting path itself."""
+    mock_lookup.get_expiry_candidates.return_value = []
+    test_args = [
+        "paper_ic_entry.py",
+        "--expiry-type",
+        "weekly",
+        "--no-dry-run",
+        "--bod-path",
+        "dummy.json",
+    ]
+    with (
+        patch.object(sys, "argv", test_args),
+        patch(
+            "scripts.strategies.ic.paper_ic_entry.build_notifier", return_value=None
+        ),
+        pytest.raises(SystemExit) as excinfo,
+    ):
+        await run()
+
+    assert excinfo.value.code == 1
+
+
+@pytest.mark.asyncio
 async def test_bod_lookup_failed_error(
     mock_vix_data, mock_store, mock_lookup, mock_market_client, mock_subprocess
 ):

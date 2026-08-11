@@ -321,6 +321,67 @@ class TestResolveExpiry:
             resolve_expiry(Path("dummy.json"), "monthly", 30, 45)
         assert exc_info.value.code == 1
 
+    def test_no_candidate_fires_notifier_before_exit(self, mock_lookup_factory) -> None:
+        """Regression guard: the no_candidate_found structural exit -- the exact
+        failure mode behind the 2026-08-11 PP incident (auto_pp.no_monthly_expiry_found)
+        -- must alert via the notifier callback before exiting. Previously
+        resolve_expiry() had no notifier param at all, so V2's otherwise-wired
+        _gate_alert never fired for this specific gate."""
+        mock_lookup_factory.get_expiry_candidates.return_value = [("weekly", "2026-07-02")]
+        notifier = MagicMock()
+        with pytest.raises(SystemExit) as exc_info:
+            resolve_expiry(
+                Path("dummy.json"),
+                "monthly",
+                30,
+                45,
+                strategy_name="paper_ic_test",
+                notifier=notifier,
+            )
+        assert exc_info.value.code == 1
+        notifier.assert_called_once()
+        assert "paper_ic_test" in notifier.call_args[0][0]
+        assert "monthly" in notifier.call_args[0][0]
+
+    def test_bod_missing_fires_notifier_before_exit(self) -> None:
+        """Same guard for the bod_file_missing structural exit."""
+        notifier = MagicMock()
+        with patch("scripts.strategies.ic.ic_entry_gates.Path.exists", return_value=False):
+            with pytest.raises(SystemExit) as exc_info:
+                resolve_expiry(Path("missing.json"), "monthly", 30, 45, notifier=notifier)
+            assert exc_info.value.code == 1
+        notifier.assert_called_once()
+
+    def test_notifier_exception_is_swallowed_and_exit_still_raised(
+        self, mock_lookup_factory
+    ) -> None:
+        """Edge case: a broken notifier (e.g. Telegram API down) must not mask
+        the underlying gate failure -- SystemExit still propagates."""
+        mock_lookup_factory.get_expiry_candidates.return_value = [("weekly", "2026-07-02")]
+        notifier = MagicMock(side_effect=Exception("Telegram API down"))
+        with pytest.raises(SystemExit) as exc_info:
+            resolve_expiry(Path("dummy.json"), "monthly", 30, 45, notifier=notifier)
+        assert exc_info.value.code == 1
+
+    def test_notifier_not_called_on_success(self, mock_lookup_factory) -> None:
+        """Happy path: a configured notifier is never invoked when resolution succeeds."""
+        from datetime import date, timedelta
+
+        target = date(2026, 7, 31)
+        today = target - timedelta(days=35)
+        notifier = MagicMock()
+        with patch("scripts.strategies.ic.ic_entry_gates.date") as m_date:
+            m_date.today.return_value = today
+            m_date.fromisoformat.side_effect = date.fromisoformat
+            resolve_expiry(
+                Path("dummy.json"),
+                "monthly",
+                dte_warn_lo=30,
+                dte_warn_hi=45,
+                notifier=notifier,
+            )
+        notifier.assert_not_called()
+
 
 # ---------------------------------------------------------------------------
 # _last_tuesday_of_month
@@ -579,8 +640,18 @@ class TestCaptureEntryMargin:
         # Instruments basket sent to the broker mirrors the legs tuples.
         sent_instruments = broker.get_order_margin.call_args.args[0]
         assert sent_instruments == [
-            {"instrument_key": "NSE_FO|1", "quantity": 75, "transaction_type": "SELL", "product": "D"},
-            {"instrument_key": "NSE_FO|2", "quantity": 75, "transaction_type": "BUY", "product": "D"},
+            {
+                "instrument_key": "NSE_FO|1",
+                "quantity": 75,
+                "transaction_type": "SELL",
+                "product": "D",
+            },
+            {
+                "instrument_key": "NSE_FO|2",
+                "quantity": 75,
+                "transaction_type": "BUY",
+                "product": "D",
+            },
         ]
 
     @pytest.mark.asyncio
