@@ -122,6 +122,24 @@ def mdcode(value: str) -> str:
 - `test_mdcode_falls_back_when_value_contains_backtick` — value with `` ` `` → uses `escape_markdown()` path, asserted via output shape not containing an unescaped/nested backtick pair
 - `test_mdcode_empty_string` — edge case, returns `` "``" `` (empty code span) — confirm this doesn't itself confuse Telegram's parser (documented assumption if not verified against live API in this task; flag for manual confirmation during MD-4's real-message testing if any caller can produce an empty value)
 
+**Addendum (2026-08-11, `ROLL-13` workshop session — two live-caught escaping bugs, both
+missed by every prior scratch script's print-only testing since this was the first message in
+the epic actually exercised via a real `--send` round trip):**
+- `test_escape_markdown_does_not_escape_non_reserved_unicode` — an em dash (`—`, U+2014) or
+  other non-ASCII symbol/emoji passed through `escape_markdown()` must come back unescaped.
+  Caught live: a hand-written `\—` in static template text (typed by analogy with an adjacent
+  ASCII hyphen that DOES need escaping) doesn't 400 — Telegram just renders the stray `\` as a
+  literal backslash — so this class of bug survives a failed-send check and needs its own
+  assertion against `MARKDOWNV2_RESERVED`'s exact membership, not just "did it send."
+- A regression case for `=` specifically: none of ROLL-7 through ROLL-12's confirmed messages
+  used a bare `=` in static template text, so `=`'s presence in `MARKDOWNV2_RESERVED` (it's
+  been in the constant since MD-1 was first specced) never actually got exercised end-to-end
+  until `ROLL-13`. Add a case to `test_escape_markdown_escapes_all_reserved_chars` that isn't
+  just "every char in the constant" but a realistic `"qty=480"`-shaped fragment, so a future
+  caller copy-pasting static text past `escape_markdown()`'s dynamic-value-only call sites (the
+  actual bug — `escape_markdown()` itself was never wrong) gets caught by a test that looks
+  like real usage, not just the exhaustive-alphabet one.
+
 **Commit:** `feat(notifications): MarkdownV2 escaping helpers for Telegram migration`
 
 ---

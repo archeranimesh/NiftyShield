@@ -1464,6 +1464,133 @@ search_graph("STRATEGY_LABELS")           # confirm whether ROLL-7/ROLL-8 have p
 
 ---
 
+## ROLL-13 — 3-Track Base Entry Bootstrap Notification
+
+**Not in the epic's original confirmed-callers list** — added 2026-08-11 via
+`missing-message-workshop-prompt.md`/`message-format-workshop.md` (queue item 7, TODO.md).
+Item 7 originally covered two call sites (entry bootstrap + overlay bootstrap); split into
+two workshop sessions on read (Animesh's decision, 2026-08-11) since they're structurally
+distinct messages — this spec covers the entry-bootstrap half only (7a). The overlay-bootstrap
+half (7b, `paper_3track_overlay_entry.py:1410`) stays queued as TODO.md item 7's second half,
+not yet run through the workshop.
+
+**Confirmed real source:** `scripts/strategies/three_track/paper_3track_entry.py::main`,
+~line 940 (confirmed via `search_graph` + `get_code_snippet`, not the TODO.md grep excerpt
+alone). Fires once, at bootstrap, when one or more of {spot, futures, proxy} tracks are
+entered for the first time via `--confirm`:
+
+```python
+lines = [f"🎯 BASE ENTRY — 3-Track bootstrap ({', '.join(sorted(tracks_to_enter))})"]
+lines.append(f"Cycle: {args.cycle}")
+if STRATEGY_SPOT in tracks_to_enter:
+    lines.append(f"Spot: NIFTYBEES qty={prices.niftybees_qty} @ ₹{prices.niftybees_ltp}")
+if STRATEGY_FUTURES in tracks_to_enter:
+    lines.append(f"Futures: {prices.futures_key} @ ₹{prices.futures_price}")
+if STRATEGY_PROXY in tracks_to_enter:
+    lines.append(
+        f"Proxy: {prices.proxy_instrument_key} @ ₹{prices.proxy_price} "
+        f"(Δ={prices.proxy_actual_delta})"
+    )
+msg = "\n".join(lines)
+asyncio.run(notifier.send(msg))
+```
+
+**Confirmed message structure (2026-08-11, `message-format-workshop.md` session — v2.1,
+after a counter-proposal round and a live `--send` correction; exercised via a real
+`--send` round trip against production Telegram credentials on Animesh's own machine, not
+just print-only — first message in this epic to actually clear a live send) — reference
+implementation `scratch/2026-08-11_3track_base_entry_format.py`:**
+
+```
+📥 Base Entry — 3-Track Bootstrap
+📥 Spot: Long 480x NIFTYBEES @ ₹281.45
+📥 Futures: Long 65x NIFTY DEC FUT @ ₹24,850.00
+📥 Proxy: Long 65x NIFTY DEC 24500 CE @ ₹612.30 (Δ=+0.72)
+```
+
+(Backslash escaping shown de-escaped above for readability, as in every other confirmed
+block in this file — see the scratch script for the actual MarkdownV2 source.)
+
+**Elimination trail:**
+1. **v1 (superseded):** kv-lines with raw broker `instrument_key` wrapped in `mdcode()`
+   (e.g. `` `NSE_FO|NIFTY24DECFUT` ``), `Cycle:` line kept, single 📥 anchor on the headline
+   only. Print-only, never actually sent live this round.
+2. **v2 (Animesh's counter-proposal, confirmed):** resolved human-readable instrument labels
+   (`NIFTY DEC FUT`, `NIFTY DEC 24500 CE`) instead of raw broker keys — matches this epic's
+   established direction (ROLL-12's own elimination trail already walked away from raw
+   identifiers as "cryptic" in favor of resolved labels; v1's raw-key choice here was a step
+   backward, not a new pattern for this epic). Unified `Long` verb for all three legs (all
+   three are `TradeAction.BUY` per `build_trades()` — confirmed via `get_code_snippet`, not
+   assumed). Explicit lot count on every leg: futures and proxy both trade
+   `quantity=p.lot_size` (a real `LivePrices`/`build_trades()` field, not invented — one lot
+   each, always). `Cycle:` line dropped entirely as internal-only bookkeeping noise with no
+   trading meaning to a reader glancing at their phone (cf. ROLL-10's "Action: line dropped as
+   fabricated-data" precedent).
+3. **v2.1 (live-send correction, confirmed):** v2's first pass put 📥 on the headline only;
+   Animesh's actual counter-proposal used 📥 as a per-line marker (one per action line, not a
+   single message-level anchor) — missed on first read, caught after an actual `--send` round
+   trip landed on-device and Animesh flagged the per-line emoji as missing. Restored: 📥
+   prefixes every leg line as well as the headline.
+
+**Instrument-label derivation** (resolved from real `LivePrices` fields, not fabricated):
+- Futures: month from `futures_expiry` (the `derive_expiry()` result passed into
+  `fetch_live_prices()`, an ISO date string) via `date.fromisoformat(...).strftime("%b").upper()`.
+  No strike (NIFTY futures, not an option).
+- Proxy: strike from `p.proxy_strike` (real field, already used in `build_trades()`'s
+  `notes=` string as `strike={p.proxy_strike:.0f}`), month from `p.expiry` (real field,
+  `proxy_row["expiry"]`, also an ISO date string). Right hardcoded `CE` — proxy is always
+  `leg_role="base_ditm_call"`, never a put, per `build_trades()`.
+- Spot: no derivation, `NIFTYBEES` is the fixed `NIFTYBEES_KEY` ticker.
+
+**Escaping lessons from this session, both live 400s / silent bugs caught before the final
+confirmed send (see MD-1's addendum in `backbone/stories.md` for the regression-test
+write-back):**
+1. A literal `=` in *static template text* (not just a dynamic value) still needs explicit
+   `\=` — MarkdownV2 reserves `=`, Telegram 400s on it unescaped even in text Claude wrote
+   itself (`escape_markdown()` only ever runs on dynamic values, never on literal template
+   characters like `"qty="`).
+2. Em dash (`—`, U+2014) is NOT MarkdownV2-reserved — Telegram reserves ASCII punctuation
+   only. An unescaped `\` before a non-reserved character doesn't error, it silently renders
+   as a literal backslash in the message — not caught by a failed `--send`, only by checking
+   the actual reserved-char string before sending.
+
+**backbone/ (MD-1..MD-5) status as of this session: NOT shipped** — confirmed via
+`search_graph("mdcode")`, zero hits outside `scratch/`. Reference script inlines its own
+copy of `escape_markdown()`/`format_money()`, matching MD-1's spec.
+
+**Files to change:**
+- `scripts/strategies/three_track/paper_3track_entry.py` — `main()`'s notify block (message
+  construction only; `fetch_live_prices()`/`build_trades()` already expose every field this
+  format needs, no upstream data-shape change required, unlike ROLL-11/ROLL-12)
+- New: a small `_month_label(iso_date: str) -> str` helper (or promote to
+  `src/notifications/formatting.py` if `formatting-rules/` has shipped by then) — same
+  colocate-then-promote judgment call prior ROLL tasks used
+- Matching test file: `tests/unit/strategies/three_track/test_paper_3track_entry.py` if it
+  exists (confirm via `search_graph` before assuming new vs. extend)
+
+**Before any code:**
+```
+get_code_snippet("main")            # scripts/strategies/three_track/paper_3track_entry.py — confirm notify block fresh
+get_code_snippet("fetch_live_prices")  # confirm LivePrices field set unchanged
+get_code_snippet("build_trades")       # confirm lot_size/BUY-action assumptions unchanged
+```
+
+**Tests:**
+- One test per confirmed scenario in the reference script (`all_three`, `futures_only`,
+  `proxy_only`) asserting the exact per-line layout and escaping
+- `test_base_entry_all_reserved_chars_escaped` — regression test generalizing this session's
+  two live-caught bugs: assert every `MARKDOWNV2_RESERVED` char outside a code span is
+  backslash-escaped, and every backslash in the output precedes a reserved char (catches both
+  under-escaping like the `=` bug and over-escaping like the em-dash bug in one sweep)
+- `test_base_entry_month_label_derivation` — `futures_expiry`/`expiry` ISO strings → correct
+  3-letter uppercase month, including a December→January year-boundary case
+- `test_base_entry_lot_size_shown_on_futures_and_proxy` — regression test for the "no qty
+  shown on non-spot legs" gap this session's first draft had
+
+**Commit:** `feat(scripts): migrate 3-track base entry notification to MarkdownV2 kv format`
+
+---
+
 ## ROLL-5 — Docs Close
 
 **Blocked by:** ROLL-4, ROLL-6, ROLL-7, ROLL-8, ROLL-9, ROLL-10, ROLL-11, ROLL-12 (updated

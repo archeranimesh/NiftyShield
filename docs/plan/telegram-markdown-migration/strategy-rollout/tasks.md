@@ -91,4 +91,13 @@
       already define — see stories.md for the full elimination trail (v1 raw-key draft ->
       v2 resolved-label draft -> v3 confirmed restructure) | Blocked by: `backbone/` +
       `formatting-rules/` complete (same soft deps as other ROLL tasks)
-- [ ] **ROLL-5** — Docs close | Blocked by: ROLL-4, ROLL-6, ROLL-7, ROLL-8, ROLL-9, ROLL-10, ROLL-11, ROLL-12
+- [ ] **ROLL-13** — Migrate 3-track base entry bootstrap notification
+      (`scripts/strategies/three_track/paper_3track_entry.py::main`) to a per-leg emoji-
+      prefixed MarkdownV2 kv format with resolved human-readable instrument labels (`NIFTY
+      DEC FUT`, `NIFTY DEC 24500 CE`) instead of raw broker keys; not in the epic's original
+      confirmed-callers list (surfaced via `missing-message-workshop-prompt.md`, TODO.md item
+      7 — item 7's overlay-bootstrap half, `paper_3track_overlay_entry.py`, is a separate
+      structurally-distinct message, still queued as TODO.md item 7's second half, not this
+      task) | Blocked by: `backbone/` + `formatting-rules/` complete (same soft deps as other
+      ROLL tasks)
+- [ ] **ROLL-5** — Docs close | Blocked by: ROLL-4, ROLL-6, ROLL-7, ROLL-8, ROLL-9, ROLL-10, ROLL-11, ROLL-12, ROLL-13
