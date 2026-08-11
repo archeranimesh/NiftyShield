@@ -122,12 +122,36 @@
       Real implementation (message rewrite + new `logger.info` call for the commands) is a
       separate later task, per the workshop's own rule. | SHA: 9d13123
 
-- [ ] **9. Daily portfolio snapshot summary** — `scripts/portfolio/daily_snapshot.py:739`
+- [x] **9. Daily portfolio snapshot summary** — `scripts/portfolio/daily_snapshot.py:739`
       FD-OD/portfolio-value daily digest — the most structurally complex message in this list
       (multiple sections, multiple data sources: FD-OD capital structure + live portfolio
-      value). Not the same message as the paper-strategy EOD summary
+      value, plus the separately-appended `format_options_section` from
+      `src/dhan/positions.py:287`). Not the same message as the paper-strategy EOD summary
       (`scripts/eod_summary.py`, covered by ROLL-6) — separate script, separate data source
-      (live portfolio, not paper strategies). | SHA: —
+      (live portfolio, not paper strategies).
+
+      Workshop session run 2026-08-11: real source read
+      (`_format_combined_summary`, 326 lines, two layouts — waterfall/has_deltas=True vs.
+      fallback/has_deltas=False). A kv-line + dash-hierarchy redesign was drafted and iterated
+      (`scratch/2026-08-11_daily_snapshot_summary_format.py`) after confirming, live on-device,
+      that the current box-drawing/tree-character layout (`├ └ ▲ ▼ ─`) and 2-space indentation
+      both break under MarkdownV2 plain text (leading whitespace stripped, flattening the
+      Equity/Bonds child hierarchy — caught via a real send round-trip run directly on
+      Animesh's machine, not just print review). A second, more compact "Performance
+      Breakdown" alternative was also proposed and reviewed; rejected for reintroducing the
+      day-delta-vs-cumulative ambiguity in the Derivatives section and replacing the Hedge
+      block's actual MF Δ/Hedge Δ numbers with an unverifiable "Active & Protected" verdict —
+      see review notes in this session's transcript.
+
+      **Decision (confirmed with Animesh, 2026-08-11): keep the current format as-is for now
+      — no ROLL-N reformat at this time.** The redesign draft and its review are kept as
+      `scratch/2026-08-11_daily_snapshot_summary_format.py` for future reference only, not
+      adopted. This message therefore does NOT get a new `strategy-rollout/` ROLL-N entry.
+      MarkdownV2 escaping-safety for its current wording (separate from any format redesign,
+      per MD-4's "escaping only" scope) remains `backbone/`'s job when that lands — re-check
+      whether `backbone/`'s MD-4 file list already covers `daily_snapshot.py` /
+      `src/dhan/positions.py` before assuming it's out of scope. Revisit this format decision
+      later if it becomes worth reopening. | SHA: —
 
 - [ ] **10. Production Proxy Delta CRITICAL alert (duplicate)** —
       `scripts/strategies/three_track/paper_3track_snapshot.py::_run`, ~line 1639. Surfaced
