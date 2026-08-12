@@ -139,3 +139,10 @@ final format directly into `stories.md` without a live-confirmed reference scrip
 
 Same as `docs/plan/README.md` — each folder has `prompt.md` (session entry point), `tasks.md`
 (first-unchecked-box protocol), `stories.md` (implementation spec).
+
+**Central entry point (added 2026-08-12):** `prompt.md` in this directory (the epic root) picks
+the right folder for you — P0 `backbone/` → P1 `formatting-rules/` → P2 `strategy-rollout/`,
+first unchecked box, with the Owner/Model/Review routing check built in. Use it instead of
+manually picking a folder-level `prompt.md`; it reads the folder-level one for you once it's
+found the task. The folder-level `prompt.md` files still exist and still work standalone — the
+central one is a router in front of them, not a replacement.

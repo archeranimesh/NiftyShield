@@ -37,6 +37,21 @@
       **real @code-reviewer, Opus — mandatory** — auth-sensitive interactive-keyboard path,
       requires live coordination-check against `telegram-approval-auth-fix` before touching;
       real-time judgment, not delegate-and-forget
+- [ ] **MD-6** — Add a static-scan escaping guard: a test that walks `src/`/`scripts/` for
+      `notifier.send(`/`send_plain_message(` call sites and asserts every interpolated dynamic
+      value passed through `escape_markdown()`/`mdcode()` somewhere upstream | Blocked by:
+      MD-3, MD-4
+      | Owner: Claude | Model: Sonnet | Review: code-reviewer — design judgment on what counts
+      as "escaped" (AST-based vs. regex call-site detection, false-positive handling).
+      **Sequencing note (corrected 2026-08-12):** an earlier session proposed sequencing this
+      right after MD-2, before MD-3/MD-4. That was wrong — MD-3/MD-4 are the audit-and-fix pass
+      that actually escapes the 11 currently-unescaped call sites; a guard test introduced
+      before they land would immediately fail against the codebase it's supposed to protect.
+      Correct position is after both audits complete, so the guard starts from a clean baseline
+      and then protects every `send()` call site added afterward — including all of
+      `formatting-rules/`'s and `strategy-rollout/`'s new call sites, since `backbone/` must be
+      fully complete before either of those can start regardless.
 - [ ] **MD-5** — Docs close: `src/notifications/CLAUDE.md`, `DECISIONS.md`, `CONTEXT.md`,
-      `TODOS.md` | Blocked by: MD-3, MD-4
-      | Owner: Antigravity | Model: n/a | Review: none (docs only)
+      `TODOS.md` | Blocked by: MD-3, MD-4, MD-6
+      | Owner: Antigravity | Model: n/a | Review: none (docs only) — also document MD-6's guard
+      contract in `src/notifications/CLAUDE.md` alongside the escaping-helper rule
