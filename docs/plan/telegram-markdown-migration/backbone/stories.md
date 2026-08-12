@@ -237,9 +237,14 @@ strategy-file change, and these are the close-notification paths for every live 
 **Files to change:**
 - `scripts/strategies/ic/paper_ic_snapshot.py`
 - `scripts/strategies/ic/paper_ic_monthly_comparison.py`
-- `scripts/reporting/paper_pnl_report.py`
 - `scripts/strategies/three_track/paper_3track_snapshot.py` (`_build_recovery_digest`)
 - `src/notifications/telegram_gateway.py` — `TelegramGateway.send_approval_request`
+
+**Correction (2026-08-12):** `scripts/reporting/paper_pnl_report.py` was removed from this list
+— it is a CLI-only tool (`--strategy`, `--json`, prints via `_report_to_json`/`_report_to_text`)
+with no `TelegramNotifier`/`TelegramGateway` call anywhere in its one-commit history (`04687f1`,
+SNAP-4). It was never a real Telegram caller; its inclusion here was a miscategorization, not a
+scope decision. See `TODO.md`'s "Correction (2026-08-12)" section for the full write-up.
 
 **Same escaping treatment as MD-3.** `send_approval_request` is the highest-consequence one in
 this task — it's the interactive-keyboard trade-approval path. Read

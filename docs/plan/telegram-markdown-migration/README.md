@@ -32,7 +32,11 @@ characters in its dynamic content. Confirmed real callers via the code graph (no
   was **already fixed** (`docs/plan/telegram-ic-comparison-formatting/` TGFMT-1, SHA
   `a69d817`) — see "A known coordination point" below; this epic's ROLL-2 builds on that fix,
   does not redo it
-- `scripts/reporting/paper_pnl_report.py`, `scripts/strategies/three_track/paper_3track_snapshot.py`
+- `scripts/strategies/three_track/paper_3track_snapshot.py`
+- ~~`scripts/reporting/paper_pnl_report.py`~~ — **removed 2026-08-12, miscategorized.** It is
+  CLI-only (stdout, `--json`/plain-text), no `TelegramNotifier`/`TelegramGateway` call exists
+  anywhere in its history (single commit `04687f1`, SNAP-4). It was never a real confirmed
+  caller despite being listed as one above — see `TODO.md`'s "Correction (2026-08-12)" section.
 
 All of these must be part of this epic's audit-and-fix pass (`backbone/`), not left to silently
 break the first time one of them interpolates a value with an underscore or asterisk.

@@ -171,40 +171,34 @@
 
 ---
 
-## Gap explanation — `scripts/reporting/paper_pnl_report.py`
+## Correction (2026-08-12) — `scripts/reporting/paper_pnl_report.py` is not in scope
 
-This file is **half-covered**, and it's easy to misread the epic docs and assume it's fully
-in scope. Two separate things are true at once:
+This file was previously described here as "half-covered" by `backbone/stories.md` MD-4 (an
+escaping-only audit) while lacking a `strategy-rollout/` ROLL task for its format. That framing
+was wrong: **the file has no Telegram send path at all.**
 
-- **It IS named in `backbone/stories.md` MD-4** (`## MD-4 — Audit + Fix: Reporting Scripts +
-  Approval Requests`), alongside `paper_ic_snapshot.py`, `paper_ic_monthly_comparison.py`,
-  `paper_3track_snapshot.py::_build_recovery_digest`, and `send_approval_request`. MD-4's job
-  is narrow: **escaping safety only** — wrap dynamic values (and reserved static punctuation)
-  so the message doesn't 400 once `TelegramNotifier.send()` switches to MarkdownV2 parse_mode.
-  MD-4 explicitly states: *"Do NOT change the message's overall wording/structure in this
-  task — that's `strategy-rollout/`'s job."*
+`scripts/reporting/paper_pnl_report.py` is a CLI-only tool — `build_pnl_report()` returns a
+`PnLReport` dataclass, and `main()` prints it via `_report_to_json()` or `_report_to_text()` to
+stdout. There is no `TelegramNotifier`, no `TelegramGateway`, no `notifier.send()` anywhere in
+the file. `git log --follow` shows a single commit in its entire history (`04687f1`, SNAP-4,
+2026-08-07) — it was never refactored down from a version that did send to Telegram either.
+Confirmed via `grep` across `src/`, `scripts/`, `tests/`, `docs/` and cross-checked against
+`TODOS.md`/`PLANNER.md`/`CONTEXT.md`/`DECISIONS.md`: no open task anywhere plans to wire this
+report to Telegram. `CONTEXT.md`'s only forward-looking note for this module is that
+`build_pnl_report()` is "importable by a future graphing layer" — a dashboard/graphing
+consumer, not Telegram.
 
-- **It is NOT named in any `strategy-rollout/` ROLL task.** `strategy-rollout/stories.md`
-  covers IC EOD Audit (ROLL-1), IC Monthly Comparison (ROLL-2), the 7 strategy close/roll
-  notifications (ROLL-3), approval requests (ROLL-4), and EOD Paper Summary (ROLL-6). There is
-  no `ROLL-*` entry for `paper_pnl_report.py` anywhere in `tasks.md` or `stories.md`.
+Both `backbone/stories.md` MD-4's file list and this epic's `README.md` confirmed-callers list
+included `paper_pnl_report.py` — that inclusion has been removed from both as a documentation
+correction, not a scope decision (see the `2026-08-12` notes in each file). Most likely cause:
+a false positive during the original code-graph sweep, picked up alongside the genuinely
+Telegram-sending `paper_ic_snapshot.py` / `paper_ic_monthly_comparison.py` it was listed next
+to.
 
-**Net effect:** once `backbone/` ships, `paper_pnl_report.py`'s message will survive the
-MarkdownV2 transport switch without silently breaking on an underscore or asterisk — but it
-will keep its current plain/HTML-era wording and layout forever, because no task actually owns
-migrating its *format* to the new bold/table style the rest of the epic is standardizing on.
-This is a real gap, not a "someone will get to it eventually" — nothing in `docs/plan/README.md`
-or this epic's own `README.md` schedules it. If `paper_pnl_report.py`'s message should get the
-same bold-header/table treatment as its siblings (IC EOD audit, IC comparison), it needs a new
-`ROLL-*`-style task added to `strategy-rollout/stories.md` + `tasks.md` explicitly — not added
-to the numbered queue above since it's a coverage gap in the epic's task list itself, not a
-message the workshop should pick up next by default.
-
-**Before writing that task:** read the actual message-building function in
-`paper_pnl_report.py` (not yet done in this pass) to confirm what it currently sends and
-whether it even benefits from a table/bold-header format, per `ROLL-3`'s "match the format to
-what the message actually needs" judgment call — don't assume it needs the same treatment as
-the IC messages just because it's in the same reporting family.
+**Net effect:** no `ROLL-*` task is needed for this file, and it should not be added to the
+numbered queue above. If a future session wants `paper_pnl_report.py`'s output sent to
+Telegram, that is new scope (a notifier integration, not a format migration) and would need its
+own story from scratch — not a correction to this epic's existing MD-4/ROLL-* task lists.
 
 ---
 
