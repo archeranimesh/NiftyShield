@@ -68,7 +68,14 @@ def test_expiry_candidates_dte_gate():
 
 
 def test_expiry_candidates_dte_boundary():
-    """DTE=45 is monthly, DTE=46 is quarterly."""
+    """DTE=45 is monthly. monthly has no ceiling (2026-08-12 fix, see
+    DECISIONS.md "monthly DTE ceiling removed"), so a lone quarterly-month
+    date at DTE=46 with no nearer last-of-month candidate now serves double
+    duty as BOTH monthly and quarterly -- same precedent as December already
+    serving both quarterly and yearly (test_yearly_december_double_duty_as_
+    quarterly). This is intentional, not a regression: monthly is defined as
+    "nearest last-of-month date with DTE >= 14", full stop.
+    """
     # Test DTE=45 is monthly:
     # Let today be April 13, 2026. May 28, 2026 (last Thursday of May) is DTE 45.
     today_m = date(2026, 4, 13)
@@ -86,8 +93,9 @@ def test_expiry_candidates_dte_boundary():
     candidates_m = lookup_m.get_expiry_candidates("NIFTY", today_m)
     assert candidates_m == [("monthly", m_exp)]
 
-    # Test DTE=46 is quarterly:
-    # Let today be May 10, 2026. June 25, 2026 (last Thursday of June) is DTE 46.
+    # Test DTE=46, no nearer monthly candidate: the quarterly-month date
+    # claims BOTH labels (monthly's ceiling removal means it's no longer
+    # excluded just for being "too far" -- it's the nearest thing available).
     today_q = date(2026, 5, 10)
     q_exp = "2026-06-25"
     lookup_q = InstrumentLookup(
@@ -101,7 +109,106 @@ def test_expiry_candidates_dte_boundary():
         ]
     )
     candidates_q = lookup_q.get_expiry_candidates("NIFTY", today_q)
-    assert candidates_q == [("quarterly", q_exp)]
+    assert candidates_q == [("monthly", q_exp), ("quarterly", q_exp)]
+
+
+def test_monthly_prefers_nearer_date_over_quarterly_month_double_duty():
+    """When a nearer, non-quarterly-month last-of-month date exists, monthly
+    picks THAT one rather than defaulting to a farther quarterly-month date
+    -- double duty (previous test) only happens when no nearer candidate
+    exists, it's never quarterly "winning" a contest.
+    """
+    today = date(2026, 5, 10)
+    m_exp = "2026-05-28"  # nearer, not a quarterly month -> monthly's true pick
+    q_exp = "2026-06-25"  # farther, quarterly month -> quarterly's pick only
+
+    instruments = [
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": m_exp,
+        },
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": q_exp,
+        },
+    ]
+    lookup = InstrumentLookup(instruments)
+    candidates = lookup.get_expiry_candidates("NIFTY", today)
+    assert candidates == [("monthly", m_exp), ("quarterly", q_exp)]
+
+
+def test_monthly_empty_feed_no_crash_no_key():
+    """No instruments at all (or none surviving the DTE>=14 floor) -> monthly
+    absent from the result entirely, not a crash or a spurious empty-string
+    entry. Regression guard for the closed-form `min(..., default=None)`
+    path added by the 2026-08-12 ceiling-removal fix -- code-reviewer flagged
+    this as untested before this test was added.
+    """
+    lookup_empty = InstrumentLookup([])
+    assert lookup_empty.get_expiry_candidates("NIFTY", date(2026, 8, 12)) == []
+
+    # Non-empty feed, but every candidate is too close (DTE < 14) -- last_of_month
+    # is populated but every entry fails the floor, so monthly must still be
+    # cleanly absent rather than raising on an empty min().
+    today = date(2026, 8, 12)
+    too_close = (today + timedelta(days=5)).isoformat()
+    lookup_too_close = InstrumentLookup(
+        [
+            {
+                "segment": "NSE_FO",
+                "instrument_type": "PE",
+                "underlying_symbol": "NIFTY",
+                "expiry": too_close,
+            },
+        ]
+    )
+    candidates = lookup_too_close.get_expiry_candidates("NIFTY", today, preference=["monthly"])
+    assert candidates == []
+
+
+def test_monthly_no_ceiling_dead_zone_regression():
+    """Regression test for the 2026-08-12 incident: reproduces the exact
+    real-world dead zone (cc_entry.log/pp_entry.log/collar_entry.log
+    auto_*.no_monthly_expiry_found) where the old fixed 14-45 DTE ceiling
+    left NO candidate at all for three days running. Aug 25, 2026 (last
+    Tuesday of August) drops to DTE=13 -- below the floor, and also gets
+    claimed by weekly since it's a Tuesday. Sep 29, 2026 (last Tuesday of
+    September) sits at DTE=48 -- three days past the old 45-day ceiling.
+    With the ceiling removed, monthly must resolve to Sep 29 (nearest
+    last-of-month date with DTE >= 14), not come back empty.
+    """
+    today = date(2026, 8, 12)
+    aug25 = "2026-08-25"  # DTE 13, Tuesday, last-of-month -> too close for monthly
+    sep29 = "2026-09-29"  # DTE 48, last-of-month, quarterly month -> monthly's real pick now
+
+    instruments = [
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": aug25,
+        },
+        {
+            "segment": "NSE_FO",
+            "instrument_type": "PE",
+            "underlying_symbol": "NIFTY",
+            "expiry": sep29,
+        },
+    ]
+    lookup = InstrumentLookup(instruments)
+
+    # The real caller shape (auto_pp/cc/collar_bootstrap): preference=["monthly"].
+    candidates = lookup.get_expiry_candidates("NIFTY", today, preference=["monthly"])
+    assert candidates == [("monthly", sep29)]
+
+    # Aug 25 still resolves as weekly independently -- monthly no longer
+    # being starved doesn't change weekly's own claim on it.
+    candidates_weekly = lookup.get_expiry_candidates("NIFTY", today, preference=["weekly"])
+    assert candidates_weekly == [("weekly", aug25)]
 
 
 def test_expiry_candidates_missing_category():

@@ -287,8 +287,28 @@ class InstrumentLookup:
 
         DTE bands:
           weekly:    DTE ≤ 14, nearest Tuesday (Nifty weekly post-April 2026)
-          monthly:   DTE 15–45, last expiry of the calendar month
           quarterly: DTE 46–200, last expiry of Mar/Jun/Sep/Dec
+
+        monthly is NOT a fixed DTE band (see DECISIONS.md 2026-08-12 "monthly
+        DTE ceiling removed — floor-only, mirrors yearly"). It is the nearest
+        live last-expiry-of-calendar-month date with DTE >= 14, no upper
+        bound, resolved the same way as yearly below (independent closed-form
+        pass over `last_of_month`, not the sequential per-date loop). The
+        previous fixed 14-45 window was narrower (32 days) than the real gap
+        between consecutive last-Tuesday-of-month dates (28 or 35 days,
+        depending on how many Tuesdays a month has) -- any month with a
+        5th Tuesday before its last one guaranteed a multi-day dead zone
+        where the outgoing contract had already dropped below the floor and
+        the incoming one hadn't yet entered the ceiling (reproduced
+        2026-08-12, cc_entry.log/pp_entry.log/collar_entry.log
+        auto_*.no_monthly_expiry_found with Aug 25 DTE=13 / Sep 29 DTE=48,
+        neither satisfying 14-45). This is the same class of bug BUG-015
+        fixed for yearly (quarterly's DTE-band claim on December starved
+        yearly of any candidate) -- floor-only + nearest-wins is the fix
+        pattern this codebase already trusts, now applied to monthly too.
+        quarterly keeps its fixed 46-200 band unmodified: its window is 154
+        days wide against the same 28-35 day gaps, so it was never at risk
+        of this dead-zone class and doesn't need the same treatment.
 
         yearly is NOT a DTE band. It is always the nearest live last expiry
         of December (the last Tuesday, since all post-April-2026 expiries
@@ -398,13 +418,23 @@ class InstrumentLookup:
             is_quarterly = is_monthly and (d.month in (3, 6, 9, 12))
 
             label = None
-            if 14 <= dte <= 45 and is_monthly:
-                label = "monthly"
-            elif 46 <= dte <= 200 and is_quarterly:
+            if 46 <= dte <= 200 and is_quarterly:
                 label = "quarterly"
 
             if label and label not in mapping:
                 mapping[label] = exp
+
+        # monthly: nearest last-of-calendar-month date with DTE >= 14, no
+        # ceiling. Resolved independently of the quarterly loop above (same
+        # pattern as yearly below) so a date already claimed by "quarterly"
+        # can still be reused here, and so weekly claiming a near-term
+        # last-of-month Tuesday first (in the loop above) never starves
+        # monthly of a candidate -- see docstring.
+        monthly_candidates = [(d, (d - today).days) for d in last_of_month.values()]
+        monthly_candidates = [(d, dte) for d, dte in monthly_candidates if dte >= 14]
+        chosen_monthly = min(monthly_candidates, key=lambda t: t[1], default=None)
+        if chosen_monthly is not None:
+            mapping["monthly"] = chosen_monthly[0].isoformat()
 
         # yearly: nearest live December (last-of-month == last Tuesday), no
         # DTE floor. Resolved independently of the monthly/quarterly loop

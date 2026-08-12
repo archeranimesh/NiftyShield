@@ -5,6 +5,42 @@
 
 ---
 
+**Monthly DTE ceiling removed — floor-only, mirrors yearly (2026-08-12, Animesh):**
+`get_expiry_candidates()`'s `monthly` band (`src/instruments/lookup.py`) previously required
+`14 <= dte <= 45` (floor lowered 15→14 on 2026-08-11, see that entry below). Root cause of a
+second, wider recurrence found the same day: the 32-day-wide window is narrower than the real
+gap between consecutive last-Tuesday-of-month dates (28 or 35 days, depending on whether a
+month has a 5th Tuesday before its last one). Any month with the 35-day gap guarantees a
+multi-day dead zone where the outgoing month's contract has already dropped below the floor and
+the incoming one hasn't yet entered the ceiling — reproduced live 2026-08-12 across all three
+overlay auto-bootstraps (`cc_entry.log`/`pp_entry.log`/`collar_entry.log`,
+`auto_{cc,pp,collar}.no_monthly_expiry_found`): Aug 25 at DTE=13 (below floor, also claimed by
+weekly), Sep 29 at DTE=48 (three days past the old ceiling). The 2026-08-11 fix treated the
+single-day edge case (DTE==14 exactly); this is the same defect class, wider, still present
+after that fix.
+
+**Decision:** remove monthly's DTE ceiling entirely. `monthly` is now resolved the same way
+`yearly` already is (see BUG-015, 2026-07-22 below) — an independent closed-form pass over
+`last_of_month`, floor-only (`dte >= 14`), take the nearest, no upper bound — rather than
+participating in the sequential per-date `elif` chain where `weekly` claiming a date first could
+starve it. `quarterly` and `weekly` are unmodified: quarterly's 46–200 window is 154 days wide
+against the same 28/35-day gaps, never at risk of the same dead zone; weekly's own DTE<=14
+Tuesday-claim logic is untouched and can still independently claim a date `monthly` no longer
+needs to consider (e.g. Aug 25 stays `weekly` today while `monthly` resolves to Sep 29 —
+verified both resolve correctly and independently, not one starving the other).
+
+**Consequence, intentional not a regression:** a quarterly-month date with no nearer monthly
+candidate now serves double duty as both `monthly` and `quarterly` (same precedent already
+established for December serving both `quarterly` and `yearly`, BUG-015). `test_expiry_
+candidates_dte_boundary` updated to reflect this; two new tests added
+(`test_monthly_prefers_nearer_date_over_quarterly_month_double_duty`,
+`test_monthly_no_ceiling_dead_zone_regression` — the last one reproduces today's exact incident
+dates). All other test files mock `get_expiry_candidates` directly rather than exercising the
+real band logic, so are unaffected. Files: `src/instruments/lookup.py` (fix),
+`tests/unit/instruments/test_expiry_candidates.py` (tests), `CONTEXT.md` (band description).
+
+---
+
 **SNAP-5 — total_pnl invariant fix + backfill in `paper_nav_snapshots` (2026-08-07):**
 Root cause diagnosed via graph query, not assumed from SNAP-1's data: `generate_track_snapshot`
 (`src/paper/track_snapshot.py`) computed `net_pnl` by routing overlay legs through
