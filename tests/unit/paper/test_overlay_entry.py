@@ -1082,11 +1082,13 @@ def test_open_pp_dte_returns_none_when_no_rows(tmp_path):
     conn.commit()
     conn.close()
 
-    assert _open_pp_dte(db_path) is None
+    # bod_path unused on this path (no rows to resolve) — any Path is fine.
+    assert _open_pp_dte(db_path, tmp_path / "unused.json.gz") is None
 
 
 def test_open_pp_dte_computes_dte_from_open_row(tmp_path):
-    """_open_pp_dte parses the embedded expiry and returns calendar DTE."""
+    """_open_pp_dte parses the embedded expiry and returns calendar DTE
+    (regex fast-path — synthetic NIFTY<DDMonYYYY>PE/CE key form)."""
     import sqlite3
     from datetime import timedelta
 
@@ -1113,7 +1115,101 @@ def test_open_pp_dte_computes_dte_from_open_row(tmp_path):
     conn.commit()
     conn.close()
 
-    assert _open_pp_dte(db_path) == 3
+    # bod_path unused on this path (regex matched, no BOD fallback needed).
+    assert _open_pp_dte(db_path, tmp_path / "unused.json.gz") == 3
+
+
+def test_open_pp_dte_resolves_numeric_key_via_bod_fallback(tmp_path):
+    """Regression test for the 2026-08-13 bug: a real Upstox instrument key
+    (NSE_FO|<numeric id>, e.g. NSE_FO|61604) never matches _PP_EXPIRY_RE.
+    Before this fix, every real open overlay_pp row fell through to
+    "unparseable", _open_pp_dte always returned None, and main()'s "already
+    have a fresh open position" short-circuit never fired -- confirmed live:
+    two open overlay_pp rows (2026-08-11, 2026-08-12), neither closed by the
+    other. This test drives the real numeric-key path through the BOD
+    fallback (mirrors ic_nifty_v2.py::_parse_expiry's regex-first/BOD-
+    fallback pattern, BUG-018/BUG-012) and asserts DTE resolves correctly
+    instead of silently returning None.
+    """
+    import sqlite3
+    from datetime import timedelta
+    from unittest.mock import MagicMock, patch
+
+    from scripts.strategies.three_track.paper_3track_overlay_entry import _open_pp_dte
+    from src.paper.constants import STRATEGY_OVERLAY
+
+    expiry = date.today() + timedelta(days=13)
+    key = "NSE_FO|61604"  # real numeric Upstox key -- never matches _PP_EXPIRY_RE
+
+    db_path = tmp_path / "test.sqlite"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        """
+        CREATE TABLE paper_trades (
+            strategy_name TEXT, leg_role TEXT, instrument_key TEXT,
+            action TEXT, quantity INTEGER
+        )
+        """
+    )
+    conn.execute(
+        "INSERT INTO paper_trades VALUES (?, 'overlay_pp', ?, 'BUY', 65)",
+        (STRATEGY_OVERLAY, key),
+    )
+    conn.commit()
+    conn.close()
+
+    with patch(
+        "scripts.strategies.three_track.paper_3track_overlay_entry.InstrumentLookup"
+    ) as mock_lookup_cls:
+        mock_lookup = MagicMock()
+        mock_lookup_cls.from_file.return_value = mock_lookup
+        mock_lookup.get_by_key.return_value = {"expiry": expiry.isoformat()}
+
+        result = _open_pp_dte(db_path, tmp_path / "bod.json.gz")
+
+    assert result == 13
+    mock_lookup.get_by_key.assert_called_once_with(key)
+
+
+def test_open_pp_dte_numeric_key_not_in_bod_returns_none_not_crash(tmp_path):
+    """A numeric key absent from the BOD file (stale BOD) logs a WARNING and
+    is skipped, not raised -- a gate helper must not crash the entry run.
+    """
+    import sqlite3
+    from unittest.mock import MagicMock, patch
+
+    from scripts.strategies.three_track.paper_3track_overlay_entry import _open_pp_dte
+    from src.paper.constants import STRATEGY_OVERLAY
+
+    key = "NSE_FO|99999999"
+
+    db_path = tmp_path / "test.sqlite"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        """
+        CREATE TABLE paper_trades (
+            strategy_name TEXT, leg_role TEXT, instrument_key TEXT,
+            action TEXT, quantity INTEGER
+        )
+        """
+    )
+    conn.execute(
+        "INSERT INTO paper_trades VALUES (?, 'overlay_pp', ?, 'BUY', 65)",
+        (STRATEGY_OVERLAY, key),
+    )
+    conn.commit()
+    conn.close()
+
+    with patch(
+        "scripts.strategies.three_track.paper_3track_overlay_entry.InstrumentLookup"
+    ) as mock_lookup_cls:
+        mock_lookup = MagicMock()
+        mock_lookup_cls.from_file.return_value = mock_lookup
+        mock_lookup.get_by_key.return_value = None
+
+        result = _open_pp_dte(db_path, tmp_path / "bod.json.gz")
+
+    assert result is None
 
 
 # ── Collar3b: --auto-collar bootstrap ───────────────────────────────────────

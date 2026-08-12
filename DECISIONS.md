@@ -5,6 +5,33 @@
 
 ---
 
+**`_open_pp_dte` numeric-instrument-key blindness — PP auto-entry duplicate-position bug (2026-08-13, Animesh):**
+`_open_pp_dte()` (`scripts/strategies/three_track/paper_3track_overlay_entry.py`) exists solely
+to answer "is there already a fresh open `overlay_pp` position" so `main()`'s auto-entry gate can
+skip re-bootstrapping. It resolved each open row's expiry via `_PP_EXPIRY_RE`, a regex matching
+only the synthetic `NSE_FO|NIFTY<DDMonYYYY>PE/CE` trading-symbol form. Real Upstox instrument
+keys are opaque numeric IDs (`NSE_FO|61604`) and never match — identical root cause to
+BUG-018/BUG-012 (`src/strategy/ic_nifty_v2.py::_parse_expiry`/`_find_leg`), but `_open_pp_dte`
+was never swept into that fix. Every open `overlay_pp` row therefore always fell through to
+"unparseable", `_open_pp_dte` always returned `None`, and `main()`'s
+`if open_dte is not None and open_dte > _PP_ROLL_DTE_THRESHOLD: skip` short-circuit never fired
+— `auto_pp_bootstrap()` entered a brand-new put on top of the still-open one on every cron run.
+Confirmed live via direct DB query: two open `overlay_pp` rows, `NSE_FO|61604` (2026-08-11,
+qty 65) and `NSE_FO|74009` (2026-08-12, qty 65), neither closing the other — 130 units of
+unintended duplicate long-put exposure.
+
+**Fix:** `_open_pp_dte` now takes a `bod_path` param and resolves expiry regex-first / BOD-lookup
+fallback (`InstrumentLookup.from_file(bod_path).get_by_key(instrument_key)` +
+`src.instruments.lookup.parse_expiry`), same pattern as `ic_nifty_v2.py::_parse_expiry`. Call
+site (`main()`) updated to pass `args.bod_path`. 4 new/updated tests in
+`tests/unit/paper/test_overlay_entry.py` (regex fast-path unchanged, BOD-fallback success,
+BOD-fallback miss returns `None` not a crash, both existing direct-call tests updated for the
+new signature). **Not fixed in this session, needs a manual DB cleanup:** the 2026-08-12 leg
+(`NSE_FO|74009`) itself — this fix prevents the *next* duplicate, it does not retroactively
+close the one already sitting in `portfolio.sqlite`.
+
+---
+
 **Monthly DTE ceiling removed — floor-only, mirrors yearly (2026-08-12, Animesh):**
 `get_expiry_candidates()`'s `monthly` band (`src/instruments/lookup.py`) previously required
 `14 <= dte <= 45` (floor lowered 15→14 on 2026-08-11, see that entry below). Root cause of a

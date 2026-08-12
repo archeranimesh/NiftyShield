@@ -73,7 +73,7 @@ from src.backtest.ivr import compute_ivr
 from src.backtest.vix_ingest import load_vix_series
 from src.client.upstox_market import UpstoxMarketClient
 from src.config import settings
-from src.instruments.lookup import InstrumentLookup
+from src.instruments.lookup import InstrumentLookup, parse_expiry
 from src.instruments.strike_selector import (
     _apply_liquidity_gate,
     filter_strikes_by_delta,
@@ -546,7 +546,7 @@ def auto_collar_bootstrap(
     return cfg, violation
 
 
-def _open_pp_dte(db_path: Path) -> int | None:
+def _open_pp_dte(db_path: Path, bod_path: Path) -> int | None:
     """Return the DTE of the currently open overlay_pp position, or None if flat.
 
     Distinguishes PP3's two entry triggers:
@@ -566,6 +566,9 @@ def _open_pp_dte(db_path: Path) -> int | None:
 
     Args:
         db_path: Path to the SQLite portfolio DB.
+        bod_path: Path to the BOD instrument JSON file, used as the
+            expiry-resolution fallback for numeric-only instrument keys
+            (see BUG, 2026-08-13, below).
 
     Returns:
         Minimum DTE (calendar days) across any open ``overlay_pp`` rows, or
@@ -600,18 +603,53 @@ def _open_pp_dte(db_path: Path) -> int | None:
         return None
 
     today = date.today()
+
+    # Expiry resolution: regex-first (human-readable trading-symbol form),
+    # BOD-lookup fallback for numeric-only keys. BUG (2026-08-13, found by
+    # Animesh): _PP_EXPIRY_RE never matches real Upstox instrument keys
+    # (NSE_FO|<numeric id>, e.g. NSE_FO|61604) -- only the synthetic
+    # NIFTY<DDMonYYYY>PE/CE symbol form. Every open overlay_pp row is a real
+    # numeric key, so this function always fell through to "unparseable",
+    # always returned None, and main()'s "already have a fresh open
+    # position, nothing to do" short-circuit never fired -- auto_pp_bootstrap
+    # re-entered a brand new put on top of the still-open one every single
+    # cron run since PP auto-entry shipped (confirmed live: two open
+    # overlay_pp rows, 2026-08-11 and 2026-08-12, neither closed by the
+    # other). Identical root cause/fix pattern to BUG-018/BUG-012
+    # (src/strategy/ic_nifty_v2.py::_parse_expiry/_find_leg) -- this
+    # function was never swept into that fix. See DECISIONS.md 2026-08-13.
+    lookup: InstrumentLookup | None = None
     dtes: list[int] = []
     for instrument_key, _net_qty in rows:
         m = _PP_EXPIRY_RE.search(instrument_key)
-        if not m:
-            logger.warning("open_pp_dte.expiry_unparseable", instrument_key=instrument_key)
+        if m:
+            try:
+                expiry = datetime.strptime(m.group(1).upper(), "%d%b%Y").date()
+            except ValueError:
+                logger.warning("open_pp_dte.expiry_unparseable", instrument_key=instrument_key)
+                continue
+            dtes.append((expiry - today).days)
             continue
-        try:
-            expiry = datetime.strptime(m.group(1).upper(), "%d%b%Y").date()
-        except ValueError:
-            logger.warning("open_pp_dte.expiry_unparseable", instrument_key=instrument_key)
+
+        if lookup is None:
+            try:
+                lookup = InstrumentLookup.from_file(bod_path)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "open_pp_dte.bod_load_failed", instrument_key=instrument_key, error=str(exc)
+                )
+                continue
+
+        inst = lookup.get_by_key(instrument_key)
+        expiry_str = parse_expiry(inst.get("expiry")) if inst else None
+        if expiry_str is None:
+            logger.warning(
+                "open_pp_dte.expiry_unparseable",
+                instrument_key=instrument_key,
+                reason="not_found_in_bod" if inst is None else "no_expiry_field",
+            )
             continue
-        dtes.append((expiry - today).days)
+        dtes.append((date.fromisoformat(expiry_str) - today).days)
 
     if not dtes:
         return None
@@ -1314,7 +1352,7 @@ def main() -> None:
         # --no-dry-run unblocked 2026-08-03: PP1 (delta ladder) and PP2 (delta-
         # targeted entry, monthly cadence decision) have both landed — see
         # docs/plan/3track-consolidation/tasks.md PP2/PP3.
-        open_dte = _open_pp_dte(args.db_path)
+        open_dte = _open_pp_dte(args.db_path, args.bod_path)
         if open_dte is not None and open_dte > _PP_ROLL_DTE_THRESHOLD:
             logger.info("auto_pp.fresh_position_open", dte=open_dte)
             print(
