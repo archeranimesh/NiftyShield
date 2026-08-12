@@ -6,16 +6,33 @@
 > Sequenced by risk: informational-only messages first, live position-event notifications
 > next, auth-sensitive interactive messages last.
 
+> **Routing (added 2026-08-12, Cowork design-review session):** `Owner` is who implements —
+> `Claude` for judgment-call/exploratory work, `Antigravity` for mechanical multi-file work with
+> an unambiguous spec. `Model` is the model the owner should run at. `Review` is the mandatory
+> gate per root `CLAUDE.md`'s Agent AutoTrigger table. Routing is a recommendation to
+> re-confirm at session start, not a hard override of the AutoTrigger table.
+>
+> **Parallelization note:** `ROLL-7` through `ROLL-16` are each blocked only on
+> "`backbone/` + `formatting-rules/` complete," not on each other, despite the linear
+> find-first-unchecked-box protocol above. None of them share a touched file **except**
+> `ROLL-15` and `ROLL-16`, which both touch `paper_3track_snapshot.py` and must stay sequential
+> relative to each other. Everything else in that range can run as separate parallel
+> sessions/agents instead of one queue — see epic improvement notes (pending).
+
 ---
 
 - [ ] **ROLL-0** — Capture long-leg delta + theta and compute Net Δ/Net θ in the IC EOD audit
       (`scripts/strategies/ic/paper_ic_snapshot.py::process_variant`) — data-only, plain-text
       report line, no Markdown/parse_mode dependency | Blocked by: none
+      | Owner: Claude | Model: Sonnet | Review: **greeks-analyst — mandatory** (any change to
+      delta/theta/Greeks fields triggers this per AutoTrigger table regardless of change size)
 - [ ] **ROLL-1** — Migrate IC EOD audit (`scripts/strategies/ic/paper_ic_snapshot.py`) to the
       new format, including the FMT-1c timeframe color/emoji/hashtag header (all 5 active
       variants: V1 weekly/monthly/leaps/yearly + V2 monthly) | Blocked by: `backbone/` +
       `formatting-rules/` complete (data sources: `ROLL-0` for Net Δ/θ, `FMT-1c` for the header —
       both soft dependencies, see `ROLL-1`'s spec for what happens if sequencing is reversed)
+      | Owner: Claude | Model: Sonnet | Review: none — 5-variant header rendering across
+      timeframe/version combos needs real formatting judgment, not delegation
 - [ ] **ROLL-2** — Migrate IC monthly comparison report
       (`scripts/strategies/ic/paper_ic_monthly_comparison.py`) to a single fenced comparison
       table; adds Legs row (`open_pos`, already available), Bkd P&L (I) (via
@@ -24,11 +41,20 @@
       `_get_unrealized_pnl_month_change()`, must differ from Flt (I) — see stories.md for why).
       Hand-counted width bug already fixed (TGFMT-1, SHA `a69d817`) — not this task's job.
       | Blocked by: ROLL-1
+      | Owner: Claude | Model: **Opus (design review recommended before writing code)** |
+      Review: **real @code-reviewer, Opus — mandatory**. The Bkd/Flt P&L sourcing distinction
+      is explicitly flagged as easy to get wrong (must differ from Flt(I)) — the one task in
+      this epic worth a second opinion before implementation, not just at the commit gate.
 - [ ] **ROLL-3** — Migrate strategy close/roll notifications (7 classes, same list as
       backbone MD-3) to the new format where it adds value | Blocked by: ROLL-2
+      | Owner: Antigravity | Model: n/a | Review: **real @code-reviewer, Opus — mandatory**
+      — same shape as MD-3, mechanical per-class once ROLL-2's format is locked, financial-logic
+      gate still applies
 - [ ] **ROLL-4** — Migrate approval-request message formatting
       (`TelegramGateway.send_approval_request`) — coordinate with
       `telegram-approval-auth-fix` first | Blocked by: ROLL-3
+      | Owner: Claude | Model: Sonnet | Review: **real @code-reviewer, Opus — mandatory** —
+      auth + interactive keyboard, explicit coordination-check requirement, no delegate-and-forget
 - [ ] **ROLL-6** — Migrate EOD Paper Summary (`scripts/eod_summary.py`) to
       `TelegramNotifier.send()` + MarkdownV2 — not in the epic's original confirmed-callers
       list (currently sends via raw HTML, missed by `backbone/`'s audit); v2 format confirmed
@@ -39,6 +65,8 @@
       | Blocked by: `backbone/` + `formatting-rules/` complete (same soft deps as other ROLL
       tasks) — financial-logic commit note: `Bkd` sourcing is P&L-adjacent, real
       `@code-reviewer` required
+      | Owner: Claude | Model: Sonnet | Review: **real @code-reviewer, Opus — mandatory**
+      (per the task's own P&L-adjacent note)
 - [ ] **ROLL-7** — Migrate re-entry blocked/eligible notice
       (`src/strategy/reentry_mixin.py::ReEntryMixin._check_reentry`) to a kv-line MarkdownV2
       format; not in the epic's original confirmed-callers list (surfaced via
@@ -47,6 +75,10 @@
       new `STRATEGY_LABELS`/`LEG_ROLE_LABELS` display mappings — see stories.md for why neither
       is a drop-in escaping change | Blocked by: `backbone/` + `formatting-rules/` complete
       (same soft deps as other ROLL tasks)
+      | Owner: Claude | Model: Sonnet | Review: none — real refactor (blocked_reason →
+      structured pairs), spec explicitly says it's not a drop-in. Parallelizable with ROLL-8
+      through ROLL-16 except ROLL-15/16 (see parallelization note above); ROLL-8 depends on the
+      label tables this task defines, so keep those two sequential relative to each other.
 - [ ] **ROLL-8** — Migrate generic strategy WARN event alert
       (`src/strategy/monitor.py::StrategyMonitor._route_event` WARN branch) to a v2
       cause-\>effect compact MarkdownV2 format (headline + optional Leg: line + description;
@@ -56,6 +88,9 @@
       severity emoji is deliberately fixed (`⚠️`, never tiered) since this code path only ever
       carries WARN-severity events | Blocked by: `backbone/` + `formatting-rules/` complete
       (same soft deps as other ROLL tasks)
+      | Owner: Antigravity | Model: n/a | Review: none — mechanical reuse of ROLL-7's tables,
+      fixed severity, no new design. Sequenced after ROLL-7 (real dependency on its label
+      tables), otherwise parallelizable.
 - [ ] **ROLL-9** — Migrate three-track base-leg roll notification
       (`scripts/strategies/three_track/paper_3track_roll.py::_notify_roll`) to two
       leg-role-specific MarkdownV2 layouts (base_futures: NIFTY FUT header + Contango/
@@ -64,6 +99,8 @@
       confirmed-callers list (surfaced via `missing-message-workshop-prompt.md`, TODO.md item
       3) | Blocked by: `backbone/` + `formatting-rules/` complete (same soft deps as other
       ROLL tasks)
+      | Owner: Claude | Model: Sonnet | Review: code-reviewer (P&L-adjacent: displays
+      closed-leg realized P&L). Two distinct layouts, moderate judgment. Parallelizable.
 - [ ] **ROLL-10** — Migrate Proxy Delta CRITICAL alert
       (`scripts/dev/paper_track_snapshot.py::main`, CRITICAL branch) to a 3-line emoji-labeled
       MarkdownV2 format (📐 Current / 📉 Rule Breach); not in the epic's original
@@ -73,6 +110,10 @@
       fields — currently ships as the verbatim `proxy_delta_alert` string, see stories.md for
       why splitting now would be premature | Blocked by: `backbone/` + `formatting-rules/`
       complete (same soft deps as other ROLL tasks)
+      | Owner: Claude | Model: Sonnet | Review: none — small dataclass field addition, low risk
+      but touches a model, keep it out of Antigravity. Parallelizable; ROLL-16 reuses this
+      task's output, so land this before ROLL-16 for the shared-builder follow-up even though
+      the task list doesn't hard-block it.
 - [ ] **ROLL-11** — Migrate System Healthcheck alert (`scripts/healthcheck.py::main`) to a
       grouped severity-status MarkdownV2 format (`DEGRADED [HH:MM]` headline, `ACTION REQUIRED`
       issue lines, `SYSTEMS NORMAL` pass summary); not in the epic's original confirmed-callers
@@ -80,6 +121,9 @@
       refactoring `run_checks()` to return structured `CheckResult` objects instead of
       pre-formatted strings — see stories.md for why a drop-in re-render isn't possible | Blocked
       by: `backbone/` + `formatting-rules/` complete (same soft deps as other ROLL tasks)
+      | Owner: Claude | Model: Sonnet | Review: none — real architecture change
+      (`run_checks()` → structured `CheckResult`), spec flags why a drop-in isn't possible.
+      Parallelizable.
 - [ ] **ROLL-12** — Migrate Position Health check alert
       (`scripts/position_health_check.py::main`) to a grouped-by-finding-type MarkdownV2 format
       (`ROLLS OVERDUE` 🚨 rows sorted days-overdue descending, `UNMAPPED ASSET` ⚠️ rows); not in
@@ -91,6 +135,9 @@
       already define — see stories.md for the full elimination trail (v1 raw-key draft ->
       v2 resolved-label draft -> v3 confirmed restructure) | Blocked by: `backbone/` +
       `formatting-rules/` complete (same soft deps as other ROLL tasks)
+      | Owner: Antigravity | Model: n/a | Review: none — multi-file but fully speced (v1→v2→v3
+      already resolved in workshop), reuses existing label tables — mechanical despite the
+      refactor shape. Real dependency on ROLL-7's label tables; otherwise parallelizable.
 - [ ] **ROLL-13** — Migrate 3-track base entry bootstrap notification
       (`scripts/strategies/three_track/paper_3track_entry.py::main`) to a per-leg emoji-
       prefixed MarkdownV2 kv format with resolved human-readable instrument labels (`NIFTY
@@ -100,6 +147,9 @@
       structurally-distinct message, still queued as TODO.md item 7's second half, not this
       task) | Blocked by: `backbone/` + `formatting-rules/` complete (same soft deps as other
       ROLL tasks)
+      | Owner: Antigravity | Model: n/a | Review: code-reviewer (first-of-epic live-tested
+      escaping edge cases per MD-1's addendum — keep review close even though implementation is
+      mechanical). Fully speced from workshop, single file. Parallelizable.
 - [ ] **ROLL-14** — Migrate 3-track overlay entry bootstrap notification
       (`scripts/strategies/three_track/paper_3track_overlay_entry.py::main`) to a per-leg
       direction-coded (🟢 Long / 🔴 Short) MarkdownV2 kv format with resolved human-readable
@@ -108,6 +158,8 @@
       via `missing-message-workshop-prompt.md`, TODO.md item 7 — second half; item 7's
       base-entry half is `ROLL-13`) | Blocked by: `backbone/` + `formatting-rules/` complete
       (same soft deps as other ROLL tasks)
+      | Owner: Antigravity | Model: n/a | Review: none — same shape as ROLL-13, mechanical.
+      Parallelizable.
 - [ ] **ROLL-15** — Migrate three-track base position expiry alert
       (`scripts/strategies/three_track/paper_3track_snapshot.py:487-501`) to a compact
       Telegram summary (verb hardcoded `Long` — `base_futures`/`base_ditm_call` never go
@@ -118,6 +170,9 @@
       original confirmed-callers list (surfaced via `missing-message-workshop-prompt.md`,
       TODO.md item 8) | Blocked by: `backbone/` + `formatting-rules/` complete (same soft
       deps as other ROLL tasks)
+      | Owner: Antigravity | Model: n/a | Review: none — message rewrite + new logger call,
+      mechanical, format already confirmed. **Must stay sequential with ROLL-16** — both touch
+      `paper_3track_snapshot.py`; land this one first.
 - [ ] **ROLL-16** — Migrate production Proxy Delta CRITICAL alert
       (`scripts/strategies/three_track/paper_3track_snapshot.py::_run`, ~line 1723) to
       `ROLL-10`'s confirmed 3-line MarkdownV2 format, reused verbatim (no track/date line,
@@ -127,4 +182,9 @@
       whether this call site can just call the same message-builder instead of duplicating it
       | Blocked by: `backbone/` + `formatting-rules/` complete (same soft deps as other ROLL
       tasks); soft-sequence after `ROLL-10` for the shared-builder follow-up
+      | Owner: Antigravity | Model: n/a | Review: none — verbatim reuse of ROLL-10's builder,
+      about as mechanical as this epic gets. **Must stay sequential with ROLL-15** (same file);
+      also real-sequence after ROLL-10 (reuses its output).
 - [ ] **ROLL-5** — Docs close | Blocked by: ROLL-4, ROLL-6, ROLL-7, ROLL-8, ROLL-9, ROLL-10, ROLL-11, ROLL-12, ROLL-13, ROLL-14, ROLL-15, ROLL-16
+      | Owner: Claude | Model: Sonnet | Review: none — synthesis/aggregation across 12 prior
+      tasks needs accurate summarization, not high-stakes judgment; Opus not warranted here

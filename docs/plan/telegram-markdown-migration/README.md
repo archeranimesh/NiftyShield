@@ -38,9 +38,6 @@ characters in its dynamic content. Confirmed real callers via the code graph (no
   anywhere in its history (single commit `04687f1`, SNAP-4). It was never a real confirmed
   caller despite being listed as one above — see `TODO.md`'s "Correction (2026-08-12)" section.
 
-All of these must be part of this epic's audit-and-fix pass (`backbone/`), not left to silently
-break the first time one of them interpolates a value with an underscore or asterisk.
-
 **Added 2026-08-08 (message-format-workshop.md session, EOD Paper Summary):**
 `scripts/eod_summary.py` was missing from the confirmed-callers list above — it sends the daily
 "NiftyShield EOD Paper Summary" message via raw HTML parse_mode directly (not
@@ -88,6 +85,44 @@ dropped — see that task's spec for the full carry-forward detail.
 that line, `tasks.md` inside the story folder is the source of truth. No live coordination
 needed as of this writing, but re-check `tasks.md` there before starting ROLL-4 in case new
 tasks were added since.
+
+---
+
+## Improvement backlog (added 2026-08-12, Cowork design-review session)
+
+Four process/design improvements identified during a plan review, sequenced by urgency — not
+listed order. Each has a model recommendation for the owning agent. Re-read this section before
+picking up any of the four; do not assume listed order is execution order.
+
+1. **MD-6 (new task) — static-scan escaping guard.** Owner: Claude, Model: Sonnet. Closes the
+   only real correctness gap of the four: `backbone/`'s escaping discipline
+   (`mdcode()`/`escape_markdown()` on every dynamic value) is currently hand-maintained with no
+   compiler/CI check — the same failure shape as the original `DELTA_WARN` bug. Add a test that
+   walks `src/`/`scripts/` for `notifier.send(`/`send_plain_message(` call sites and asserts
+   every interpolated value passed through the escaping helpers somewhere upstream. **Resequence
+   this task in `backbone/tasks.md` to land right after MD-2** (not after MD-5 where it's
+   currently positioned) — it needs to exist before `formatting-rules/`/`strategy-rollout/`
+   start generating the bulk of new `send()` call sites, so it catches mistakes as they're
+   introduced instead of requiring a forensic sweep later. **Status: not yet resequenced or
+   drafted — next up.**
+2. **FMT-1 design-gate treatment.** Owner: Claude, Model: Opus (for the spec-writing pass
+   itself, not just a post-hoc review). Already routed in `formatting-rules/tasks.md` — FMT-1 is
+   the highest-leverage doc in the epic (every downstream formatter and roughly half of
+   `strategy-rollout/` inherits its decisions), so it gets the stronger model at write-time, not
+   just at commit-review time. **Status: routing recorded, ready to execute whenever `FMT-1`'s
+   session runs — no further plan edit needed.**
+3. **ROLL-7–16 parallelization restructure.** Owner: Claude, Model: Sonnet. `ROLL-7` through
+   `ROLL-16` are each blocked only on "`backbone/` + `formatting-rules/` complete," not on each
+   other (`ROLL-15`/`ROLL-16` are the one pair that must stay sequential — both touch
+   `paper_3track_snapshot.py`). Dependency notes are already annotated inline in
+   `strategy-rollout/tasks.md`; formalizing this into explicit parallel "waves" for actual
+   multi-session execution is lower urgency — it only pays off once `backbone/` +
+   `formatting-rules/` are fully landed and those sessions are about to start. **Status:
+   dependency notes recorded, wave-grouping restructure not yet done.**
+4. **FMT-1b–1e session bundle.** Owner: Claude or Antigravity (either fine), Model: Sonnet.
+   Pure session-count housekeeping — collapse four already-fully-specced, non-overlapping
+   doc-only tasks into one session instead of four. Zero risk, zero urgency. **Status: bundling
+   note recorded in `formatting-rules/tasks.md`, not yet executed.**
 
 ---
 
