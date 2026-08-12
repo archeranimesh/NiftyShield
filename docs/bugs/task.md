@@ -497,8 +497,7 @@ commit per phase.
   B004.6/B006.6/B009.4/B010.4-7/B029.2's original pass); the new helper's 4 branches (clean,
   traceback, no-run, missing-file) were verified standalone via a stdlib-only script (no
   structlog/pytest deps needed) and all returned the expected `(has_issue, message)` tuples.
-  `CONTEXT.md` updated. | SHA pending — needs live-host `pytest tests/unit/test_healthcheck.py`
-  confirmation before commit
+  `CONTEXT.md` updated. | SHA `bee2649`
 - [ ] **B029.6** — Commit, update `bugs.md` BUG-029 status to ✅ Fixed + SHA once B029.4 confirms
   the live migration ran clean and a subsequent cron completed without the traceback.
   `CONTEXT.md`/`TODOS.md` updated.

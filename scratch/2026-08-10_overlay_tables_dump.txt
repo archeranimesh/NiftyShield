@@ -1,0 +1,804 @@
+
+================================================================================
+TABLE: paper_overlay_pnl_snapshots  (12 row(s) total, ALL rows — not overlay-filtered)
+================================================================================
+strategy_name	overlay_type	snapshot_date	pnl_1d_abs	pnl_1d_pct	pnl_inception_abs	pnl_inception_pct
+paper_nifty_spot	collar	2026-08-03	-42466.45	-9.607794117647058823529411765	-24571.95	-2.664059196617336152219873150
+paper_nifty_spot	pp	2026-08-03	-1644.500	-2.53	-6985.550	-6.978571428571428571428571429
+paper_nifty_futures	collar	2026-08-03	-36955.7500	0	-19061.2500	0
+paper_nifty_futures	pp	2026-08-03	-1644.500	-2.53	-6985.550	-6.978571428571428571428571429
+paper_nifty_proxy	collar	2026-08-03	-22587.50	0	-4693.00	0
+paper_nifty_proxy	pp	2026-08-03	-1644.500	-2.53	-6985.550	-6.978571428571428571428571429
+paper_nifty_spot	collar	2026-08-04	-48.75	-0.04155124653739612188365650970	-24620.70	-2.669344608879492600422832981
+paper_nifty_spot	pp	2026-08-04	0.000	0	-6985.550	-6.978571428571428571428571429
+paper_nifty_futures	collar	2026-08-04	0.0000	0	-19061.2500	0
+paper_nifty_futures	pp	2026-08-04	0.000	0	-6985.550	-6.978571428571428571428571429
+paper_nifty_proxy	collar	2026-08-04	0.00	0	-4693.00	0
+paper_nifty_proxy	pp	2026-08-04	0.000	0	-6985.550	-6.978571428571428571428571429
+
+================================================================================
+TABLE: paper_leg_snapshots  (653 row(s) total, ALL rows — not overlay-filtered)
+================================================================================
+strategy_name	leg_role	snapshot_date	unrealized_pnl	realized_pnl	total_pnl	ltp
+paper_nifty_spot	base_etf	2026-05-11	-5218.85	0	-5218.85	270.09
+paper_nifty_spot	overlay_cc	2026-05-11	2072.20	0	2072.20	189.5
+paper_nifty_spot	overlay_pp	2026-05-11	544.70	0	544.70	100.55
+paper_nifty_spot	overlay_collar_call	2026-05-11	2022.80	0	2022.80	189.5
+paper_nifty_spot	overlay_collar_put	2026-05-11	547.95	0	547.95	100.55
+paper_nifty_futures	base_futures	2026-05-11	-5557.50	0	-5557.50	23860.0
+paper_nifty_futures	overlay_collar_call	2026-05-11	2022.80	0	2022.80	189.5
+paper_nifty_futures	overlay_pp	2026-05-11	544.70	0	544.70	100.55
+paper_nifty_futures	overlay_collar_put	2026-05-11	547.95	0	547.95	100.55
+paper_nifty_proxy	base_ditm_call	2026-05-11	-5954.00	0	-5954.00	2054.5
+paper_nifty_proxy	overlay_cc	2026-05-11	2072.20	0	2072.20	189.5
+paper_nifty_proxy	overlay_pp	2026-05-11	544.70	0	544.70	100.55
+paper_nifty_proxy	overlay_collar_call	2026-05-11	2022.80	0	2022.80	189.5
+paper_nifty_proxy	overlay_collar_put	2026-05-11	547.95	0	547.95	100.55
+paper_nifty_spot	base_etf	2026-05-12	-31370.45	0	-31370.45	265.53
+paper_nifty_spot	overlay_collar_put	2026-05-12	3654.95	0	3654.95	148.35
+paper_nifty_spot	overlay_cc	2026-05-12	6722.95	0	6722.95	117.95
+paper_nifty_spot	overlay_collar_call	2026-05-12	6673.55	0	6673.55	117.95
+paper_nifty_spot	overlay_pp	2026-05-12	3651.70	0	3651.70	148.35
+paper_nifty_futures	base_futures	2026-05-12	-30907.50	0	-30907.50	23470.0
+paper_nifty_futures	overlay_collar_call	2026-05-12	6673.55	0	6673.55	117.95
+paper_nifty_futures	overlay_collar_put	2026-05-12	3654.95	0	3654.95	148.35
+paper_nifty_futures	overlay_pp	2026-05-12	3651.70	0	3651.70	148.35
+paper_nifty_proxy	base_ditm_call	2026-05-12	-27956.50	0	-27956.50	1716.0
+paper_nifty_proxy	overlay_collar_put	2026-05-12	3654.95	0	3654.95	148.35
+paper_nifty_proxy	overlay_cc	2026-05-12	6722.95	0	6722.95	117.95
+paper_nifty_proxy	overlay_collar_call	2026-05-12	6673.55	0	6673.55	117.95
+paper_nifty_proxy	overlay_pp	2026-05-12	3651.70	0	3651.70	148.35
+paper_nifty_spot	base_etf	2026-05-13	-30854.30	0	-30854.30	265.62
+paper_nifty_spot	overlay_cc	2026-05-13	6709.95	0	6709.95	118.15
+paper_nifty_spot	overlay_collar_put	2026-05-13	3505.45	0	3505.45	146.05
+paper_nifty_spot	overlay_collar_call	2026-05-13	6660.55	0	6660.55	118.15
+paper_nifty_spot	overlay_pp	2026-05-13	3502.20	0	3502.20	146.05
+paper_nifty_futures	base_futures	2026-05-13	-30192.50	0	-30192.50	23481.0
+paper_nifty_futures	overlay_pp	2026-05-13	3502.20	0	3502.20	146.05
+paper_nifty_futures	overlay_collar_put	2026-05-13	3505.45	0	3505.45	146.05
+paper_nifty_futures	overlay_collar_call	2026-05-13	6660.55	0	6660.55	118.15
+paper_nifty_proxy	base_ditm_call	2026-05-13	-28665.00	0	-28665.00	1705.1
+paper_nifty_proxy	overlay_cc	2026-05-13	6709.95	0	6709.95	118.15
+paper_nifty_proxy	overlay_collar_put	2026-05-13	3505.45	0	3505.45	146.05
+paper_nifty_proxy	overlay_collar_call	2026-05-13	6660.55	0	6660.55	118.15
+paper_nifty_proxy	overlay_pp	2026-05-13	3502.20	0	3502.20	146.05
+paper_nifty_spot	base_etf	2026-05-14	-14509.55	0	-14509.55	268.47
+paper_nifty_spot	overlay_cc	2026-05-14	4607.20	0	4607.20	150.5
+paper_nifty_spot	overlay_pp	2026-05-14	1155.70	0	1155.70	109.95
+paper_nifty_spot	overlay_collar_call	2026-05-14	4557.80	0	4557.80	150.5
+paper_nifty_spot	overlay_collar_put	2026-05-14	1158.95	0	1158.95	109.95
+paper_nifty_futures	base_futures	2026-05-14	-14007.50	0	-14007.50	23730.0
+paper_nifty_futures	overlay_pp	2026-05-14	1155.70	0	1155.70	109.95
+paper_nifty_futures	overlay_collar_call	2026-05-14	4557.80	0	4557.80	150.5
+paper_nifty_futures	overlay_collar_put	2026-05-14	1158.95	0	1158.95	109.95
+paper_nifty_proxy	base_ditm_call	2026-05-14	-14335.75	0	-14335.75	1925.55
+paper_nifty_proxy	overlay_cc	2026-05-14	4607.20	0	4607.20	150.5
+paper_nifty_proxy	overlay_pp	2026-05-14	1155.70	0	1155.70	109.95
+paper_nifty_proxy	overlay_collar_call	2026-05-14	4557.80	0	4557.80	150.5
+paper_nifty_proxy	overlay_collar_put	2026-05-14	1158.95	0	1158.95	109.95
+paper_nifty_spot	base_etf	2026-05-15	-17893.20	0	-17893.20	267.88
+paper_nifty_spot	overlay_pp	2026-05-15	1945.45	0	1945.45	122.1
+paper_nifty_spot	overlay_collar_call	2026-05-15	5955.30	0	5955.30	129.0
+paper_nifty_spot	overlay_cc	2026-05-15	6004.70	0	6004.70	129.0
+paper_nifty_spot	overlay_collar_put	2026-05-15	1948.70	0	1948.70	122.1
+paper_nifty_futures	base_futures	2026-05-15	-17686.50	0	-17686.50	23673.4
+paper_nifty_futures	overlay_collar_call	2026-05-15	5955.30	0	5955.30	129.0
+paper_nifty_futures	overlay_collar_put	2026-05-15	1948.70	0	1948.70	122.1
+paper_nifty_futures	overlay_pp	2026-05-15	1945.45	0	1945.45	122.1
+paper_nifty_proxy	base_ditm_call	2026-05-15	-18905.25	0	-18905.25	1855.25
+paper_nifty_proxy	overlay_pp	2026-05-15	1945.45	0	1945.45	122.1
+paper_nifty_proxy	overlay_collar_call	2026-05-15	5955.30	0	5955.30	129.0
+paper_nifty_proxy	overlay_cc	2026-05-15	6004.70	0	6004.70	129.0
+paper_nifty_proxy	overlay_collar_put	2026-05-15	1948.70	0	1948.70	122.1
+paper_nifty_spot	base_etf	2026-05-18	-18925.50	0	-18925.50	267.7
+paper_nifty_spot	overlay_collar_call	2026-05-18	6280.30	0	6280.30	124.0
+paper_nifty_spot	overlay_collar_put	2026-05-18	2153.45	0	2153.45	125.25
+paper_nifty_spot	overlay_cc	2026-05-18	6329.70	0	6329.70	124.0
+paper_nifty_spot	overlay_pp	2026-05-18	2150.20	0	2150.20	125.25
+paper_nifty_futures	base_futures	2026-05-18	-18622.50	0	-18622.50	23659.0
+paper_nifty_futures	overlay_collar_call	2026-05-18	6280.30	0	6280.30	124.0
+paper_nifty_futures	overlay_pp	2026-05-18	2150.20	0	2150.20	125.25
+paper_nifty_futures	overlay_collar_put	2026-05-18	2153.45	0	2153.45	125.25
+paper_nifty_proxy	base_ditm_call	2026-05-18	-20611.50	0	-20611.50	1829.0
+paper_nifty_proxy	overlay_collar_call	2026-05-18	6280.30	0	6280.30	124.0
+paper_nifty_proxy	overlay_collar_put	2026-05-18	2153.45	0	2153.45	125.25
+paper_nifty_proxy	overlay_cc	2026-05-18	6329.70	0	6329.70	124.0
+paper_nifty_proxy	overlay_pp	2026-05-18	2150.20	0	2150.20	125.25
+paper_nifty_spot	base_etf	2026-05-19	-18638.75	0	-18638.75	267.75
+paper_nifty_spot	overlay_collar_put	2026-05-19	1194.70	0	1194.70	110.5
+paper_nifty_spot	overlay_cc	2026-05-19	7756.45	0	7756.45	102.05
+paper_nifty_spot	overlay_collar_call	2026-05-19	7707.05	0	7707.05	102.05
+paper_nifty_spot	overlay_pp	2026-05-19	1191.45	0	1191.45	110.5
+paper_nifty_futures	base_futures	2026-05-19	-22132.50	0	-22132.50	23605.0
+paper_nifty_futures	overlay_collar_put	2026-05-19	1194.70	0	1194.70	110.5
+paper_nifty_futures	overlay_collar_call	2026-05-19	7707.05	0	7707.05	102.05
+paper_nifty_futures	overlay_pp	2026-05-19	1191.45	0	1191.45	110.5
+paper_nifty_proxy	base_ditm_call	2026-05-19	-23754.25	0	-23754.25	1780.65
+paper_nifty_proxy	overlay_collar_put	2026-05-19	1194.70	0	1194.70	110.5
+paper_nifty_proxy	overlay_cc	2026-05-19	7756.45	0	7756.45	102.05
+paper_nifty_proxy	overlay_collar_call	2026-05-19	7707.05	0	7707.05	102.05
+paper_nifty_proxy	overlay_pp	2026-05-19	1191.45	0	1191.45	110.5
+paper_nifty_spot	base_etf	2026-05-20	-16631.50	0	-16631.50	268.1
+paper_nifty_spot	overlay_cc	2026-05-20	7447.70	0	7447.70	106.8
+paper_nifty_spot	overlay_collar_call	2026-05-20	7398.30	0	7398.30	106.8
+paper_nifty_spot	overlay_collar_put	2026-05-20	408.20	0	408.20	98.4
+paper_nifty_spot	overlay_pp	2026-05-20	404.95	0	404.95	98.4
+paper_nifty_futures	base_futures	2026-05-20	-16282.50	0	-16282.50	23695.0
+paper_nifty_futures	overlay_collar_put	2026-05-20	408.20	0	408.20	98.4
+paper_nifty_futures	overlay_collar_call	2026-05-20	7398.30	0	7398.30	106.8
+paper_nifty_futures	overlay_pp	2026-05-20	404.95	0	404.95	98.4
+paper_nifty_proxy	base_ditm_call	2026-05-20	-19308.25	0	-19308.25	1849.05
+paper_nifty_proxy	overlay_cc	2026-05-20	7447.70	0	7447.70	106.8
+paper_nifty_proxy	overlay_collar_call	2026-05-20	7398.30	0	7398.30	106.8
+paper_nifty_proxy	overlay_collar_put	2026-05-20	408.20	0	408.20	98.4
+paper_nifty_proxy	overlay_pp	2026-05-20	404.95	0	404.95	98.4
+paper_nifty_spot	base_etf	2026-05-21	-16746.20	0	-16746.20	268.08
+paper_nifty_spot	overlay_collar_call	2026-05-21	8233.55	0	8233.55	93.95
+paper_nifty_spot	overlay_collar_put	2026-05-21	-199.55	0	-199.55	89.05
+paper_nifty_spot	overlay_pp	2026-05-21	-202.80	0	-202.80	89.05
+paper_nifty_spot	overlay_cc	2026-05-21	8282.95	0	8282.95	93.95
+paper_nifty_futures	base_futures	2026-05-21	-20182.50	0	-20182.50	23635.0
+paper_nifty_futures	overlay_collar_put	2026-05-21	-199.55	0	-199.55	89.05
+paper_nifty_futures	overlay_collar_call	2026-05-21	8233.55	0	8233.55	93.95
+paper_nifty_futures	overlay_pp	2026-05-21	-202.80	0	-202.80	89.05
+paper_nifty_proxy	base_ditm_call	2026-05-21	-23611.25	0	-23611.25	1782.85
+paper_nifty_proxy	overlay_collar_call	2026-05-21	8233.55	0	8233.55	93.95
+paper_nifty_proxy	overlay_collar_put	2026-05-21	-199.55	0	-199.55	89.05
+paper_nifty_proxy	overlay_pp	2026-05-21	-202.80	0	-202.80	89.05
+paper_nifty_proxy	overlay_cc	2026-05-21	8282.95	0	8282.95	93.95
+paper_nifty_spot	base_etf	2026-05-22	-8602.50	0	-8602.50	269.5
+paper_nifty_spot	overlay_collar_call	2026-05-22	7892.30	0	7892.30	99.2
+paper_nifty_spot	overlay_collar_put	2026-05-22	-1801.80	0	-1801.80	64.4
+paper_nifty_spot	overlay_pp	2026-05-22	-1805.05	0	-1805.05	64.4
+paper_nifty_spot	overlay_cc	2026-05-22	7941.70	0	7941.70	99.2
+paper_nifty_futures	base_futures	2026-05-22	-10998.00	0	-10998.00	23776.3
+paper_nifty_futures	overlay_collar_put	2026-05-22	-1801.80	0	-1801.80	64.4
+paper_nifty_futures	overlay_pp	2026-05-22	-1805.05	0	-1805.05	64.4
+paper_nifty_futures	overlay_collar_call	2026-05-22	7892.30	0	7892.30	99.2
+paper_nifty_proxy	base_ditm_call	2026-05-22	-15996.50	0	-15996.50	1900.0
+paper_nifty_proxy	overlay_collar_call	2026-05-22	7892.30	0	7892.30	99.2
+paper_nifty_proxy	overlay_collar_put	2026-05-22	-1801.80	0	-1801.80	64.4
+paper_nifty_proxy	overlay_pp	2026-05-22	-1805.05	0	-1805.05	64.4
+paper_nifty_proxy	overlay_cc	2026-05-22	7941.70	0	7941.70	99.2
+paper_nifty_spot	base_etf	2026-05-25	7799.60	0	7799.60	272.36
+paper_nifty_spot	overlay_collar_call	2026-05-25	6930.30	0	6930.30	114.0
+paper_nifty_spot	overlay_cc	2026-05-25	6979.70	0	6979.70	114.0
+paper_nifty_spot	overlay_collar_put	2026-05-25	-3875.30	0	-3875.30	32.5
+paper_nifty_spot	overlay_pp	2026-05-25	-3878.55	0	-3878.55	32.5
+paper_nifty_futures	base_futures	2026-05-25	11277.50	0	11277.50	24119.0
+paper_nifty_futures	overlay_collar_call	2026-05-25	6930.30	0	6930.30	114.0
+paper_nifty_futures	overlay_collar_put	2026-05-25	-3875.30	0	-3875.30	32.5
+paper_nifty_futures	overlay_pp	2026-05-25	-3878.55	0	-3878.55	32.5
+paper_nifty_proxy	base_ditm_call	2026-05-25	1985.75	0	1985.75	2176.65
+paper_nifty_proxy	overlay_collar_call	2026-05-25	6930.30	0	6930.30	114.0
+paper_nifty_proxy	overlay_cc	2026-05-25	6979.70	0	6979.70	114.0
+paper_nifty_proxy	overlay_collar_put	2026-05-25	-3875.30	0	-3875.30	32.5
+paper_nifty_proxy	overlay_pp	2026-05-25	-3878.55	0	-3878.55	32.5
+paper_nifty_spot	base_etf	2026-05-26	516.15	0	516.15	271.09
+paper_nifty_spot	overlay_collar_put	2026-05-26	-3842.80	0	-3842.80	33.0
+paper_nifty_spot	overlay_collar_call	2026-05-26	9504.30	0	9504.30	74.4
+paper_nifty_spot	overlay_cc	2026-05-26	9553.70	0	9553.70	74.4
+paper_nifty_spot	overlay_pp	2026-05-26	-3846.05	0	-3846.05	33.0
+paper_nifty_futures	base_futures	2026-05-26	-2223.00	0	-2223.00	23911.3
+paper_nifty_futures	overlay_pp	2026-05-26	-3846.05	0	-3846.05	33.0
+paper_nifty_futures	overlay_collar_call	2026-05-26	9504.30	0	9504.30	74.4
+paper_nifty_futures	overlay_collar_put	2026-05-26	-3842.80	0	-3842.80	33.0
+paper_nifty_proxy	base_ditm_call	2026-05-26	-9366.50	0	-9366.50	2002.0
+paper_nifty_proxy	overlay_collar_put	2026-05-26	-3842.80	0	-3842.80	33.0
+paper_nifty_proxy	overlay_collar_call	2026-05-26	9504.30	0	9504.30	74.4
+paper_nifty_proxy	overlay_cc	2026-05-26	9553.70	0	9553.70	74.4
+paper_nifty_proxy	overlay_pp	2026-05-26	-3846.05	0	-3846.05	33.0
+paper_nifty_spot	base_etf	2026-05-27	630.85	0	630.85	271.11
+paper_nifty_spot	overlay_collar_put	2026-05-27	-4167.80	0	-4167.80	28.0
+paper_nifty_spot	overlay_collar_call	2026-05-27	9920.30	0	9920.30	68.0
+paper_nifty_spot	overlay_cc	2026-05-27	9969.70	0	9969.70	68.0
+paper_nifty_spot	overlay_pp	2026-05-27	-4171.05	0	-4171.05	28.0
+paper_nifty_futures	base_futures	2026-05-27	0	0	0	
+paper_nifty_futures	overlay_pp	2026-05-27	-4171.05	0	-4171.05	28.0
+paper_nifty_futures	overlay_collar_call	2026-05-27	9920.30	0	9920.30	68.0
+paper_nifty_futures	overlay_collar_put	2026-05-27	-4167.80	0	-4167.80	28.0
+paper_nifty_proxy	base_ditm_call	2026-05-27	-9496.50	0	-9496.50	2000.0
+paper_nifty_proxy	overlay_collar_put	2026-05-27	-4167.80	0	-4167.80	28.0
+paper_nifty_proxy	overlay_collar_call	2026-05-27	9920.30	0	9920.30	68.0
+paper_nifty_proxy	overlay_cc	2026-05-27	9969.70	0	9969.70	68.0
+paper_nifty_proxy	overlay_pp	2026-05-27	-4171.05	0	-4171.05	28.0
+paper_nifty_spot	base_etf	2026-05-28	-344.10	0	-344.10	270.94
+paper_nifty_spot	overlay_cc	2026-05-28	9969.70	0	9969.70	68.0
+paper_nifty_spot	overlay_collar_put	2026-05-28	-4167.80	0	-4167.80	28.0
+paper_nifty_spot	overlay_pp	2026-05-28	-4171.05	0	-4171.05	28.0
+paper_nifty_spot	overlay_collar_call	2026-05-28	9920.30	0	9920.30	68.0
+paper_nifty_futures	base_futures	2026-05-28	1831.83928571428571428571410	-5003.83928571428571428571450	-3172.00000000000000000000040	24006.2
+paper_nifty_futures	overlay_collar_put	2026-05-28	-4167.80	0	-4167.80	28.0
+paper_nifty_futures	overlay_collar_call	2026-05-28	9920.30	0	9920.30	68.0
+paper_nifty_futures	overlay_pp	2026-05-28	-4171.05	0	-4171.05	28.0
+paper_nifty_proxy	base_ditm_call	2026-05-28	-9496.50	0	-9496.50	2000.0
+paper_nifty_proxy	overlay_cc	2026-05-28	9969.70	0	9969.70	68.0
+paper_nifty_proxy	overlay_collar_put	2026-05-28	-4167.80	0	-4167.80	28.0
+paper_nifty_proxy	overlay_pp	2026-05-28	-4171.05	0	-4171.05	28.0
+paper_nifty_proxy	overlay_collar_call	2026-05-28	9920.30	0	9920.30	68.0
+paper_nifty_spot	base_etf	2026-05-29	-15771.25	0	-15771.25	268.25
+paper_nifty_spot	overlay_cc	2026-05-29	11230.70	0	11230.70	48.6
+paper_nifty_spot	overlay_collar_put	2026-05-29	-3404.05	0	-3404.05	39.75
+paper_nifty_spot	overlay_collar_call	2026-05-29	11181.30	0	11181.30	48.6
+paper_nifty_spot	overlay_pp	2026-05-29	-3407.30	0	-3407.30	39.75
+paper_nifty_futures	base_futures	2026-05-29	-15471.16071428571428571428590	-5003.83928571428571428571450	-20475.00000000000000000000040	23740.0
+paper_nifty_futures	overlay_collar_call	2026-05-29	11181.30	0	11181.30	48.6
+paper_nifty_futures	overlay_pp	2026-05-29	-3407.30	0	-3407.30	39.75
+paper_nifty_futures	overlay_collar_put	2026-05-29	-3404.05	0	-3404.05	39.75
+paper_nifty_proxy	base_ditm_call	2026-05-29	-24085.75	0	-24085.75	1775.55
+paper_nifty_proxy	overlay_cc	2026-05-29	11230.70	0	11230.70	48.6
+paper_nifty_proxy	overlay_collar_put	2026-05-29	-3404.05	0	-3404.05	39.75
+paper_nifty_proxy	overlay_collar_call	2026-05-29	11181.30	0	11181.30	48.6
+paper_nifty_proxy	overlay_pp	2026-05-29	-3407.30	0	-3407.30	39.75
+paper_nifty_spot	base_etf	2026-06-01	-29822.00	0	-29822.00	265.8
+paper_nifty_spot	overlay_cc	2026-06-01	12634.70	0	12634.70	27.0
+paper_nifty_spot	overlay_collar_call	2026-06-01	12585.30	0	12585.30	27.0
+paper_nifty_spot	overlay_collar_put	2026-06-01	-2607.80	0	-2607.80	52.0
+paper_nifty_spot	overlay_pp	2026-06-01	-2611.05	0	-2611.05	52.0
+paper_nifty_futures	base_futures	2026-06-01	-33677.66071428571428571428590	-5003.83928571428571428571450	-38681.50000000000000000000040	23459.9
+paper_nifty_futures	overlay_pp	2026-06-01	-2611.05	0	-2611.05	52.0
+paper_nifty_futures	overlay_collar_call	2026-06-01	12585.30	0	12585.30	27.0
+paper_nifty_futures	overlay_collar_put	2026-06-01	-2607.80	0	-2607.80	52.0
+paper_nifty_proxy	base_ditm_call	2026-06-01	-41343.25	0	-41343.25	1510.05
+paper_nifty_proxy	overlay_cc	2026-06-01	12634.70	0	12634.70	27.0
+paper_nifty_proxy	overlay_collar_call	2026-06-01	12585.30	0	12585.30	27.0
+paper_nifty_proxy	overlay_collar_put	2026-06-01	-2607.80	0	-2607.80	52.0
+paper_nifty_proxy	overlay_pp	2026-06-01	-2611.05	0	-2611.05	52.0
+paper_nifty_spot	base_etf	2026-06-02	-26954.50	0	-26954.50	266.3
+paper_nifty_spot	overlay_pp	2026-06-02	-3849.30	0	-3849.30	32.95
+paper_nifty_spot	overlay_collar_put	2026-06-02	-3846.05	0	-3846.05	32.95
+paper_nifty_spot	overlay_collar_call	2026-06-02	12513.80	0	12513.80	28.1
+paper_nifty_spot	overlay_cc	2026-06-02	12563.20	0	12563.20	28.1
+paper_nifty_futures	base_futures	2026-06-02	-24246.16071428571428571428590	-5003.83928571428571428571450	-29250.00000000000000000000040	23605.0
+paper_nifty_futures	overlay_pp	2026-06-02	-3849.30	0	-3849.30	32.95
+paper_nifty_futures	overlay_collar_put	2026-06-02	-3846.05	0	-3846.05	32.95
+paper_nifty_futures	overlay_collar_call	2026-06-02	12513.80	0	12513.80	28.1
+paper_nifty_proxy	base_ditm_call	2026-06-02	-32857.50	0	-32857.50	1640.6
+paper_nifty_proxy	overlay_pp	2026-06-02	-3849.30	0	-3849.30	32.95
+paper_nifty_proxy	overlay_collar_put	2026-06-02	-3846.05	0	-3846.05	32.95
+paper_nifty_proxy	overlay_collar_call	2026-06-02	12513.80	0	12513.80	28.1
+paper_nifty_proxy	overlay_cc	2026-06-02	12563.20	0	12563.20	28.1
+paper_nifty_spot	base_etf	2026-06-03	-33263.00	0	-33263.00	265.2
+paper_nifty_spot	overlay_pp	2026-06-03	-3205.80	0	-3205.80	42.85
+paper_nifty_spot	overlay_collar_call	2026-06-03	12335.05	0	12335.05	30.85
+paper_nifty_spot	overlay_cc	2026-06-03	12384.45	0	12384.45	30.85
+paper_nifty_spot	overlay_collar_put	2026-06-03	-3202.55	0	-3202.55	42.85
+paper_nifty_futures	base_futures	2026-06-03	-31721.16071428571428571428590	-5003.83928571428571428571450	-36725.00000000000000000000040	23490.0
+paper_nifty_futures	overlay_pp	2026-06-03	-3205.80	0	-3205.80	42.85
+paper_nifty_futures	overlay_collar_put	2026-06-03	-3202.55	0	-3202.55	42.85
+paper_nifty_futures	overlay_collar_call	2026-06-03	12335.05	0	12335.05	30.85
+paper_nifty_proxy	base_ditm_call	2026-06-03	-40553.50	0	-40553.50	1522.2
+paper_nifty_proxy	overlay_pp	2026-06-03	-3205.80	0	-3205.80	42.85
+paper_nifty_proxy	overlay_collar_call	2026-06-03	12335.05	0	12335.05	30.85
+paper_nifty_proxy	overlay_cc	2026-06-03	12384.45	0	12384.45	30.85
+paper_nifty_proxy	overlay_collar_put	2026-06-03	-3202.55	0	-3202.55	42.85
+paper_nifty_spot	base_etf	2026-06-04	-29133.80	0	-29133.80	265.92
+paper_nifty_spot	overlay_cc	2026-06-04	12517.70	0	12517.70	28.8
+paper_nifty_spot	overlay_collar_put	2026-06-04	-3790.80	0	-3790.80	33.8
+paper_nifty_spot	overlay_collar_call	2026-06-04	12468.30	0	12468.30	28.8
+paper_nifty_spot	overlay_pp	2026-06-04	-3794.05	0	-3794.05	33.8
+paper_nifty_futures	base_futures	2026-06-04	-28796.16071428571428571428590	-5003.83928571428571428571450	-33800.00000000000000000000040	23535.0
+paper_nifty_futures	overlay_collar_put	2026-06-04	-3790.80	0	-3790.80	33.8
+paper_nifty_futures	overlay_collar_call	2026-06-04	12468.30	0	12468.30	28.8
+paper_nifty_futures	overlay_pp	2026-06-04	-3794.05	0	-3794.05	33.8
+paper_nifty_proxy	base_ditm_call	2026-06-04	-38291.50	0	-38291.50	1557.0
+paper_nifty_proxy	overlay_cc	2026-06-04	12517.70	0	12517.70	28.8
+paper_nifty_proxy	overlay_collar_put	2026-06-04	-3790.80	0	-3790.80	33.8
+paper_nifty_proxy	overlay_collar_call	2026-06-04	12468.30	0	12468.30	28.8
+paper_nifty_proxy	overlay_pp	2026-06-04	-3794.05	0	-3794.05	33.8
+paper_nifty_spot	base_etf	2026-06-05	-30969.00	0	-30969.00	265.6
+paper_nifty_spot	overlay_cc	2026-06-05	13164.45	0	13164.45	18.85
+paper_nifty_spot	overlay_pp	2026-06-05	-3540.55	0	-3540.55	37.7
+paper_nifty_spot	overlay_collar_call	2026-06-05	13115.05	0	13115.05	18.85
+paper_nifty_spot	overlay_collar_put	2026-06-05	-3537.30	0	-3537.30	37.7
+paper_nifty_futures	base_futures	2026-06-05	-34971.16071428571428571428590	-5003.83928571428571428571450	-39975.00000000000000000000040	23440.0
+paper_nifty_futures	overlay_collar_put	2026-06-05	-3537.30	0	-3537.30	37.7
+paper_nifty_futures	overlay_pp	2026-06-05	-3540.55	0	-3540.55	37.7
+paper_nifty_futures	overlay_collar_call	2026-06-05	13115.05	0	13115.05	18.85
+paper_nifty_proxy	base_ditm_call	2026-06-05	-43127.50	0	-43127.50	1482.6
+paper_nifty_proxy	overlay_cc	2026-06-05	13164.45	0	13164.45	18.85
+paper_nifty_proxy	overlay_pp	2026-06-05	-3540.55	0	-3540.55	37.7
+paper_nifty_proxy	overlay_collar_call	2026-06-05	13115.05	0	13115.05	18.85
+paper_nifty_proxy	overlay_collar_put	2026-06-05	-3537.30	0	-3537.30	37.7
+paper_nifty_spot	base_etf	2026-06-08	-48862.20	0	-48862.20	262.48
+paper_nifty_spot	overlay_collar_call	2026-06-08	13521.30	0	13521.30	12.6
+paper_nifty_spot	overlay_cc	2026-06-08	13570.70	0	13570.70	12.6
+paper_nifty_spot	overlay_pp	2026-06-08	-1506.05	0	-1506.05	69.0
+paper_nifty_spot	overlay_collar_put	2026-06-08	-1502.80	0	-1502.80	69.0
+paper_nifty_futures	base_futures	2026-06-08	-54009.66071428571428571428590	-5003.83928571428571428571450	-59013.50000000000000000000040	23147.1
+paper_nifty_futures	overlay_collar_put	2026-06-08	-1502.80	0	-1502.80	69.0
+paper_nifty_futures	overlay_collar_call	2026-06-08	13521.30	0	13521.30	12.6
+paper_nifty_futures	overlay_pp	2026-06-08	-1506.05	0	-1506.05	69.0
+paper_nifty_proxy	base_ditm_call	2026-06-08	-60066.50	0	-60066.50	1222.0
+paper_nifty_proxy	overlay_collar_call	2026-06-08	13521.30	0	13521.30	12.6
+paper_nifty_proxy	overlay_cc	2026-06-08	13570.70	0	13570.70	12.6
+paper_nifty_proxy	overlay_pp	2026-06-08	-1506.05	0	-1506.05	69.0
+paper_nifty_proxy	overlay_collar_put	2026-06-08	-1502.80	0	-1502.80	69.0
+paper_nifty_spot	base_etf	2026-06-09	-84990.15	44959.85	-40030.30	264.02
+paper_nifty_spot	overlay_collar_put	2026-06-09	-3547.05	0	-3547.05	110.45
+paper_nifty_spot	overlay_pp	2026-06-09	-3657.55	0	-3657.55	35.9
+paper_nifty_spot	overlay_cc	2026-06-09	11123.45	0	11123.45	581.55
+paper_nifty_spot	overlay_collar_call	2026-06-09	11074.05	0	11074.05	581.55
+paper_nifty_futures	base_futures	2026-06-09	-61923.41071428571428571428590	15903.41071428571428571428550	-46020.00000000000000000000040	23347.0
+paper_nifty_futures	overlay_collar_put	2026-06-09	-3547.05	0	-3547.05	110.45
+paper_nifty_futures	overlay_pp	2026-06-09	-3657.55	0	-3657.55	35.9
+paper_nifty_futures	overlay_collar_call	2026-06-09	11074.05	0	11074.05	581.55
+paper_nifty_proxy	base_ditm_call	2026-06-09	-94909.10	44959.85	-49949.25	1377.65
+paper_nifty_proxy	overlay_collar_put	2026-06-09	-3547.05	0	-3547.05	110.45
+paper_nifty_proxy	overlay_pp	2026-06-09	-3657.55	0	-3657.55	35.9
+paper_nifty_proxy	overlay_cc	2026-06-09	11123.45	0	11123.45	581.55
+paper_nifty_proxy	overlay_collar_call	2026-06-09	11074.05	0	11074.05	581.55
+paper_nifty_spot	base_etf	2026-06-10	-90323.70	44959.85	-45363.85	263.09
+paper_nifty_spot	overlay_pp	2026-06-10	-3391.05	0	-3391.05	40.0
+paper_nifty_spot	overlay_collar_put	2026-06-10	-2997.80	0	-2997.80	118.9
+paper_nifty_spot	overlay_collar_call	2026-06-10	14099.80	0	14099.80	535.0
+paper_nifty_spot	overlay_cc	2026-06-10	14149.20	0	14149.20	535.0
+paper_nifty_futures	base_futures	2026-06-10	-69170.91071428571428571428590	15903.41071428571428571428550	-53267.50000000000000000000040	23235.5
+paper_nifty_futures	overlay_collar_call	2026-06-10	14099.80	0	14099.80	535.0
+paper_nifty_futures	overlay_pp	2026-06-10	-3391.05	0	-3391.05	40.0
+paper_nifty_futures	overlay_collar_put	2026-06-10	-2997.80	0	-2997.80	118.9
+paper_nifty_proxy	base_ditm_call	2026-06-10	-101711.35	44959.85	-56751.50	1273.0
+paper_nifty_proxy	overlay_pp	2026-06-10	-3391.05	0	-3391.05	40.0
+paper_nifty_proxy	overlay_collar_put	2026-06-10	-2997.80	0	-2997.80	118.9
+paper_nifty_proxy	overlay_collar_call	2026-06-10	14099.80	0	14099.80	535.0
+paper_nifty_proxy	overlay_cc	2026-06-10	14149.20	0	14149.20	535.0
+paper_nifty_spot	base_etf	2026-06-11	-91183.95	44959.85	-46224.10	262.94
+paper_nifty_spot	overlay_collar_call	2026-06-11	14359.80	0	14359.80	531.0
+paper_nifty_spot	overlay_collar_put	2026-06-11	-2721.55	0	-2721.55	123.15
+paper_nifty_spot	overlay_cc	2026-06-11	14409.20	0	14409.20	531.0
+paper_nifty_spot	overlay_pp	2026-06-11	-3657.55	0	-3657.55	35.9
+paper_nifty_futures	base_futures	2026-06-11	-69664.91071428571428571428590	15903.41071428571428571428550	-53761.50000000000000000000040	23227.9
+paper_nifty_futures	overlay_collar_call	2026-06-11	14359.80	0	14359.80	531.0
+paper_nifty_futures	overlay_collar_put	2026-06-11	-2721.55	0	-2721.55	123.15
+paper_nifty_futures	overlay_pp	2026-06-11	-3657.55	0	-3657.55	35.9
+paper_nifty_proxy	base_ditm_call	2026-06-11	-102975.60	44959.85	-58015.75	1253.55
+paper_nifty_proxy	overlay_collar_call	2026-06-11	14359.80	0	14359.80	531.0
+paper_nifty_proxy	overlay_collar_put	2026-06-11	-2721.55	0	-2721.55	123.15
+paper_nifty_proxy	overlay_cc	2026-06-11	14409.20	0	14409.20	531.0
+paper_nifty_proxy	overlay_pp	2026-06-11	-3657.55	0	-3657.55	35.9
+paper_nifty_spot	base_etf	2026-06-12	-62107.50	44959.85	-17147.65	268.01
+paper_nifty_spot	overlay_pp	2026-06-12	-4934.80	0	-4934.80	16.25
+paper_nifty_spot	overlay_collar_put	2026-06-12	-5201.30	0	-5201.30	85.0
+paper_nifty_spot	overlay_cc	2026-06-12	-20.80	0	-20.80	753.0
+paper_nifty_spot	overlay_collar_call	2026-06-12	-70.20	0	-70.20	753.0
+paper_nifty_futures	base_futures	2026-06-12	-38016.41071428571428571428590	15903.41071428571428571428550	-22113.00000000000000000000040	23714.8
+paper_nifty_futures	overlay_collar_call	2026-06-12	-70.20	0	-70.20	753.0
+paper_nifty_futures	overlay_pp	2026-06-12	-4934.80	0	-4934.80	16.25
+paper_nifty_futures	overlay_collar_put	2026-06-12	-5201.30	0	-5201.30	85.0
+paper_nifty_proxy	base_ditm_call	2026-06-12	-72399.60	44959.85	-27439.75	1723.95
+paper_nifty_proxy	overlay_pp	2026-06-12	-4934.80	0	-4934.80	16.25
+paper_nifty_proxy	overlay_collar_put	2026-06-12	-5201.30	0	-5201.30	85.0
+paper_nifty_proxy	overlay_cc	2026-06-12	-20.80	0	-20.80	753.0
+paper_nifty_proxy	overlay_collar_call	2026-06-12	-70.20	0	-70.20	753.0
+paper_nifty_spot	base_etf	2026-06-15	-46508.30	0	-46508.30	270.73
+paper_nifty_spot	overlay_cc	2026-06-15	4936.10	24052.60	28988.70	838.0
+paper_nifty_spot	overlay_pp	2026-06-15	-5341.05	0	-5341.05	10.0
+paper_nifty_spot	overlay_collar_call	2026-06-15	4911.40	24027.90	28939.30	838.0
+paper_nifty_spot	overlay_collar_put	2026-06-15	-7924.15	-3120.65	-11044.80	68.0
+paper_nifty_futures	base_futures	2026-06-15	-20907.25	-5003.83928571428571428571450	-25911.08928571428571428571450	
+paper_nifty_futures	overlay_collar_put	2026-06-15	-7924.15	-3120.65	-11044.80	68.0
+paper_nifty_futures	overlay_collar_call	2026-06-15	4911.40	24027.90	28939.30	838.0
+paper_nifty_futures	overlay_pp	2026-06-15	-5341.05	0	-5341.05	10.0
+paper_nifty_proxy	base_ditm_call	2026-06-15	-59692.10	0	-59692.10	1919.45
+paper_nifty_proxy	overlay_cc	2026-06-15	4936.10	24052.60	28988.70	838.0
+paper_nifty_proxy	overlay_pp	2026-06-15	-5341.05	0	-5341.05	10.0
+paper_nifty_proxy	overlay_collar_call	2026-06-15	4911.40	24027.90	28939.30	838.0
+paper_nifty_proxy	overlay_collar_put	2026-06-15	-7924.15	-3120.65	-11044.80	68.0
+paper_nifty_spot	base_etf	2026-06-17	3943.80	0	3943.80	273.01
+paper_nifty_spot	collar	2026-06-17	-8674.25	0	-8674.25	
+paper_nifty_spot	pp	2026-06-17	-5679.05	0	-5679.05	
+paper_nifty_futures	base_futures	2026-06-17	-20907.25	-5003.83928571428571428571450	-25911.08928571428571428571450	
+paper_nifty_futures	collar	2026-06-17	-8674.25	0	-8674.25	
+paper_nifty_futures	pp	2026-06-17	-5679.05	0	-5679.05	
+paper_nifty_proxy	base_ditm_call	2026-06-17	-11165.05	0	-11165.05	2091.0
+paper_nifty_proxy	collar	2026-06-17	-8674.25	0	-8674.25	
+paper_nifty_proxy	pp	2026-06-17	-5679.05	0	-5679.05	
+paper_nifty_spot	base_etf	2026-06-19	5334.75	0	5334.75	273.18
+paper_nifty_spot	collar	2026-06-19	-6480.50	0	-6480.50	
+paper_nifty_spot	pp	2026-06-19	-5792.80	0	-5792.80	
+paper_nifty_futures	base_futures	2026-06-19	-20907.25	-5003.83928571428571428571450	-25911.08928571428571428571450	
+paper_nifty_futures	collar	2026-06-19	-6480.50	0	-6480.50	
+paper_nifty_futures	pp	2026-06-19	-5792.80	0	-5792.80	
+paper_nifty_proxy	base_ditm_call	2026-06-19	-11083.80	0	-11083.80	2085.85
+paper_nifty_proxy	collar	2026-06-19	-6480.50	0	-6480.50	
+paper_nifty_proxy	pp	2026-06-19	-5792.80	0	-5792.80	
+paper_nifty_spot	base_etf	2026-06-22	8506.60	0	8506.60	273.69
+paper_nifty_spot	collar	2026-06-22	-8719.75	0	-8719.75	
+paper_nifty_spot	pp	2026-06-22	-5825.30	0	-5825.30	
+paper_nifty_futures	base_futures	2026-06-22	-20907.25	-5003.83928571428571428571450	-25911.08928571428571428571450	
+paper_nifty_futures	collar	2026-06-22	-8719.75	0	-8719.75	
+paper_nifty_futures	pp	2026-06-22	-5825.30	0	-5825.30	
+paper_nifty_proxy	base_ditm_call	2026-06-22	-8483.80	0	-8483.80	2122.05
+paper_nifty_proxy	collar	2026-06-22	-8719.75	0	-8719.75	
+paper_nifty_proxy	pp	2026-06-22	-5825.30	0	-5825.30	
+paper_nifty_spot	base_etf	2026-06-23	-9667.80	0	-9667.80	270.5
+paper_nifty_spot	collar	2026-06-23	2249.00	0	2249.00	
+paper_nifty_spot	pp	2026-06-23	-5786.30	0	-5786.30	
+paper_nifty_futures	base_futures	2026-06-23	-20907.25	-5003.83928571428571428571450	-25911.08928571428571428571450	
+paper_nifty_futures	collar	2026-06-23	2249.00	0	2249.00	
+paper_nifty_futures	pp	2026-06-23	-5786.30	0	-5786.30	
+paper_nifty_proxy	base_ditm_call	2026-06-23	-28614.30	0	-28614.30	1810.5
+paper_nifty_proxy	collar	2026-06-23	2249.00	0	2249.00	
+paper_nifty_proxy	pp	2026-06-23	-5786.30	0	-5786.30	
+paper_nifty_spot	base_etf	2026-06-24	-11100.40	0	-11100.40	272.71
+paper_nifty_spot	collar	2026-06-24	-5902.00	0	-5902.00	
+paper_nifty_spot	pp	2026-06-24	-5822.05	0	-5822.05	
+paper_nifty_futures	base_futures	2026-06-24	-20907.25	-5003.83928571428571428571450	-25911.08928571428571428571450	
+paper_nifty_futures	collar	2026-06-24	-5902.00	0	-5902.00	
+paper_nifty_futures	pp	2026-06-24	-5822.05	0	-5822.05	
+paper_nifty_proxy	base_ditm_call	2026-06-24	-26409.50	0	-26409.50	2061.45
+paper_nifty_proxy	collar	2026-06-24	-5902.00	0	-5902.00	
+paper_nifty_proxy	pp	2026-06-24	-5822.05	0	-5822.05	
+paper_nifty_spot	base_etf	2026-06-26	-6971.20	0	-6971.20	273.43
+paper_nifty_spot	collar	2026-06-26	-6812.00	0	-6812.00	
+paper_nifty_spot	pp	2026-06-26	-5919.55	0	-5919.55	
+paper_nifty_futures	base_futures	2026-06-26	-20907.25	-5003.83928571428571428571450	-25911.08928571428571428571450	
+paper_nifty_futures	collar	2026-06-26	-6812.00	0	-6812.00	
+paper_nifty_futures	pp	2026-06-26	-5919.55	0	-5919.55	
+paper_nifty_proxy	base_ditm_call	2026-06-26	-24163.75	0	-24163.75	2096.0
+paper_nifty_proxy	collar	2026-06-26	-6812.00	0	-6812.00	
+paper_nifty_proxy	pp	2026-06-26	-5919.55	0	-5919.55	
+paper_nifty_spot	base_etf	2026-06-29	-13451.75	0	-13451.75	272.3
+paper_nifty_spot	collar	2026-06-29	-2752.75	0	-2752.75	
+paper_nifty_spot	pp	2026-06-29	-5958.55	0	-5958.55	
+paper_nifty_futures	base_futures	2026-06-29	-20907.25	-5003.83928571428571428571450	-25911.08928571428571428571450	
+paper_nifty_futures	collar	2026-06-29	-2752.75	0	-2752.75	
+paper_nifty_futures	pp	2026-06-29	-5958.55	0	-5958.55	
+paper_nifty_proxy	base_ditm_call	2026-06-29	-31778.50	0	-31778.50	1978.85
+paper_nifty_proxy	collar	2026-06-29	-2752.75	0	-2752.75	
+paper_nifty_proxy	pp	2026-06-29	-5958.55	0	-5958.55	
+paper_nifty_spot	base_etf	2026-06-30	-12706.200	0	-12706.200	272.43
+paper_nifty_spot	collar	2026-06-30	-1917.50	0	-1917.50	
+paper_nifty_spot	pp	2026-06-30	-6979.050	0	-6979.050	
+paper_nifty_futures	base_futures	2026-06-30	-20907.250	-5003.83928571428571428571450	-25911.08928571428571428571450	
+paper_nifty_futures	collar	2026-06-30	-1917.50	0	-1917.50	
+paper_nifty_futures	pp	2026-06-30	-6979.050	0	-6979.050	
+paper_nifty_proxy	base_ditm_call	2026-06-30	-17414.475	-5473.00	-22887.475	1980.0
+paper_nifty_proxy	collar	2026-06-30	-1917.50	0	-1917.50	
+paper_nifty_proxy	pp	2026-06-30	-3661.775	0	-3661.775	
+paper_nifty_spot	base_etf	2026-07-01	-10297.50	0	-10297.50	272.85
+paper_nifty_spot	collar	2026-07-01	-2830.75	0	-2830.75	
+paper_nifty_spot	pp	2026-07-01	0	0	0	
+paper_nifty_futures	base_futures	2026-07-01	-20907.25	-5003.83928571428571428571450	-25911.08928571428571428571450	
+paper_nifty_futures	collar	2026-07-01	-2830.75	0	-2830.75	
+paper_nifty_futures	pp	2026-07-01	0	0	0	
+paper_nifty_proxy	base_ditm_call	2026-07-01	-15045.225	-5473.00	-20518.225	2016.45
+paper_nifty_proxy	collar	2026-07-01	-2830.75	0	-2830.75	
+paper_nifty_proxy	pp	2026-07-01	-3778.775	0	-3778.775	
+paper_nifty_spot	base_etf	2026-07-02	-1981.75	0	-1981.75	274.3
+paper_nifty_spot	collar	2026-07-02	-8277.75	0	-8277.75	
+paper_nifty_spot	pp	2026-07-02	0	0	0	
+paper_nifty_futures	base_futures	2026-07-02	-20907.25	-5003.83928571428571428571450	-25911.08928571428571428571450	
+paper_nifty_futures	collar	2026-07-02	-8277.75	0	-8277.75	
+paper_nifty_futures	pp	2026-07-02	0	0	0	
+paper_nifty_proxy	base_ditm_call	2026-07-02	-3003.975	-5473.00	-8476.975	2201.7
+paper_nifty_proxy	collar	2026-07-02	-8277.75	0	-8277.75	
+paper_nifty_proxy	pp	2026-07-02	-3957.525	0	-3957.525	
+paper_nifty_spot	base_etf	2026-07-03	7767.75	0	7767.75	276.0
+paper_nifty_spot	collar	2026-07-03	-11482.25	0	-11482.25	
+paper_nifty_spot	pp	2026-07-03	0	0	0	
+paper_nifty_futures	base_futures	2026-07-03	-20907.25	-5003.83928571428571428571450	-25911.08928571428571428571450	
+paper_nifty_futures	collar	2026-07-03	-11482.25	0	-11482.25	
+paper_nifty_futures	pp	2026-07-03	0	0	0	
+paper_nifty_proxy	base_ditm_call	2026-07-03	2066.025	-5473.00	-3406.975	2279.7
+paper_nifty_proxy	collar	2026-07-03	-11482.25	0	-11482.25	
+paper_nifty_proxy	pp	2026-07-03	-4012.775	0	-4012.775	
+paper_nifty_spot	base_etf	2026-07-06	16255.55	0	16255.55	277.48
+paper_nifty_spot	collar	2026-07-06	-16844.75	0	-16844.75	
+paper_nifty_spot	pp	2026-07-06	0	0	0	
+paper_nifty_futures	base_futures	2026-07-06	-20907.25	-5003.83928571428571428571450	-25911.08928571428571428571450	
+paper_nifty_futures	collar	2026-07-06	-16844.75	0	-16844.75	
+paper_nifty_futures	pp	2026-07-06	0	0	0	
+paper_nifty_proxy	base_ditm_call	2026-07-06	9235.525	-5473.00	3762.525	2390.0
+paper_nifty_proxy	collar	2026-07-06	-16844.75	0	-16844.75	
+paper_nifty_proxy	pp	2026-07-06	-3970.525	0	-3970.525	
+paper_nifty_spot	base_etf	2026-07-07	12011.65	0	12011.65	276.74
+paper_nifty_spot	collar	2026-07-07	-13273.00	0	-13273.00	
+paper_nifty_spot	pp	2026-07-07	0	0	0	
+paper_nifty_futures	base_futures	2026-07-07	-20907.25	-5003.83928571428571428571450	-25911.08928571428571428571450	
+paper_nifty_futures	collar	2026-07-07	-13273.00	0	-13273.00	
+paper_nifty_futures	pp	2026-07-07	0	0	0	
+paper_nifty_proxy	base_ditm_call	2026-07-07	11510.525	-5473.00	6037.525	2425.0
+paper_nifty_proxy	collar	2026-07-07	-13273.00	0	-13273.00	
+paper_nifty_proxy	pp	2026-07-07	-4097.275	0	-4097.275	
+paper_nifty_spot	base_etf	2026-07-08	-16606.00	0	-16606.00	271.75
+paper_nifty_spot	collar	2026-07-08	6054.75	0	6054.75	
+paper_nifty_spot	pp	2026-07-08	0	0	0	
+paper_nifty_futures	base_futures	2026-07-08	-20907.25	-5003.83928571428571428571450	-25911.08928571428571428571450	
+paper_nifty_futures	collar	2026-07-08	6054.75	0	6054.75	
+paper_nifty_futures	pp	2026-07-08	0	0	0	
+paper_nifty_proxy	base_ditm_call	2026-07-08	-17414.475	-5473.00	-22887.475	
+paper_nifty_proxy	collar	2026-07-08	6054.75	0	6054.75	
+paper_nifty_proxy	pp	2026-07-08	-3314.025	0	-3314.025	
+paper_nifty_spot	base_etf	2026-07-10	3523.85	0	3523.85	275.26
+paper_nifty_spot	collar	2026-07-10	-4270.50	0	-4270.50	
+paper_nifty_spot	pp	2026-07-10	0	0	0	
+paper_nifty_futures	base_futures	2026-07-10	-20907.25	-5003.83928571428571428571450	-25911.08928571428571428571450	
+paper_nifty_futures	collar	2026-07-10	-4270.50	0	-4270.50	
+paper_nifty_futures	pp	2026-07-10	0	0	0	
+paper_nifty_proxy	base_ditm_call	2026-07-10	-17414.475	-5473.00	-22887.475	
+paper_nifty_proxy	collar	2026-07-10	-4270.50	0	-4270.50	
+paper_nifty_proxy	pp	2026-07-10	-4058.275	0	-4058.275	
+paper_nifty_spot	base_etf	2026-07-13	3753.25	0	3753.25	275.3
+paper_nifty_spot	collar	2026-07-13	-5333.25	0	-5333.25	
+paper_nifty_spot	pp	2026-07-13	0	0	0	
+paper_nifty_futures	base_futures	2026-07-13	-20907.25	-5003.83928571428571428571450	-25911.08928571428571428571450	
+paper_nifty_futures	collar	2026-07-13	-5333.25	0	-5333.25	
+paper_nifty_futures	pp	2026-07-13	0	0	0	
+paper_nifty_proxy	base_ditm_call	2026-07-13	-17414.475	-5473.00	-22887.475	
+paper_nifty_proxy	collar	2026-07-13	-5333.25	0	-5333.25	
+paper_nifty_proxy	pp	2026-07-13	-4064.775	0	-4064.775	
+paper_nifty_spot	base_etf	2026-07-14	-6856.50	0	-6856.50	273.45
+paper_nifty_spot	collar	2026-07-14	3409.25	0	3409.25	
+paper_nifty_spot	pp	2026-07-14	0	0	0	
+paper_nifty_futures	base_futures	2026-07-14	-20907.25	-5003.83928571428571428571450	-25911.08928571428571428571450	
+paper_nifty_futures	collar	2026-07-14	3409.25	0	3409.25	
+paper_nifty_futures	pp	2026-07-14	0	0	0	
+paper_nifty_proxy	base_ditm_call	2026-07-14	-17414.475	-5473.00	-22887.475	
+paper_nifty_proxy	collar	2026-07-14	3409.25	0	3409.25	
+paper_nifty_proxy	pp	2026-07-14	-4123.275	0	-4123.275	
+paper_nifty_spot	base_etf	2026-07-15	-5422.75	0	-5422.75	273.7
+paper_nifty_spot	collar	2026-07-15	942.50	0	942.50	
+paper_nifty_spot	pp	2026-07-15	0	0	0	
+paper_nifty_futures	base_futures	2026-07-15	-20907.25	-5003.83928571428571428571450	-25911.08928571428571428571450	
+paper_nifty_futures	collar	2026-07-15	942.50	0	942.50	
+paper_nifty_futures	pp	2026-07-15	0	0	0	
+paper_nifty_proxy	base_ditm_call	2026-07-15	-17414.475	-5473.00	-22887.475	
+paper_nifty_proxy	collar	2026-07-15	942.50	0	942.50	
+paper_nifty_proxy	pp	2026-07-15	-4207.775	0	-4207.775	
+paper_nifty_spot	base_etf	2026-07-16	-2727.30	0	-2727.30	274.17
+paper_nifty_spot	collar	2026-07-16	1166.75	0	1166.75	
+paper_nifty_spot	pp	2026-07-16	0	0	0	
+paper_nifty_futures	base_futures	2026-07-16	-20907.25	-5003.83928571428571428571450	-25911.08928571428571428571450	
+paper_nifty_futures	collar	2026-07-16	1166.75	0	1166.75	
+paper_nifty_futures	pp	2026-07-16	0	0	0	
+paper_nifty_proxy	base_ditm_call	2026-07-16	-17414.475	-5473.00	-22887.475	
+paper_nifty_proxy	collar	2026-07-16	1166.75	0	1166.75	
+paper_nifty_proxy	pp	2026-07-16	-4285.775	0	-4285.775	
+paper_nifty_spot	base_etf	2026-07-17	11208.75	0	11208.75	276.6
+paper_nifty_spot	collar	2026-07-17	-8869.25	0	-8869.25	
+paper_nifty_spot	pp	2026-07-17	0	0	0	
+paper_nifty_futures	base_futures	2026-07-17	-20907.25	-5003.83928571428571428571450	-25911.08928571428571428571450	
+paper_nifty_futures	collar	2026-07-17	-8869.25	0	-8869.25	
+paper_nifty_futures	pp	2026-07-17	0	0	0	
+paper_nifty_proxy	base_ditm_call	2026-07-17	-17414.475	-5473.00	-22887.475	
+paper_nifty_proxy	collar	2026-07-17	-8869.25	0	-8869.25	
+paper_nifty_proxy	pp	2026-07-17	-4269.525	0	-4269.525	
+paper_nifty_spot	base_etf	2026-07-20	5473.75	0	5473.75	275.6
+paper_nifty_spot	collar	2026-07-20	-5177.25	0	-5177.25	
+paper_nifty_spot	pp	2026-07-20	0	0	0	
+paper_nifty_futures	base_futures	2026-07-20	-20907.25	-5003.83928571428571428571450	-25911.08928571428571428571450	
+paper_nifty_futures	collar	2026-07-20	-5177.25	0	-5177.25	
+paper_nifty_futures	pp	2026-07-20	0	0	0	
+paper_nifty_proxy	base_ditm_call	2026-07-20	-17414.475	13419.250	-3995.225	
+paper_nifty_proxy	collar	2026-07-20	-5177.25	0	-5177.25	
+paper_nifty_proxy	pp	2026-07-20	-4289.025	0	-4289.025	
+paper_nifty_spot	base_etf	2026-07-21	35725.925	0	35725.925	275.18
+paper_nifty_spot	collar	2026-07-21	-15784.60	0	-15784.60	
+paper_nifty_spot	pp	2026-07-21	-4383.275	0	-4383.275	
+paper_nifty_futures	base_futures	2026-07-21	-23199.475	-28172.08333333333333333333290	-51371.55833333333333333333290	24275.0
+paper_nifty_futures	collar	2026-07-21	-503.75	0	-503.75	
+paper_nifty_futures	pp	2026-07-21	-4383.275	0	-4383.275	
+paper_nifty_proxy	base_ditm_call	2026-07-21	-22996.025	42224.21666666666666666666671	19228.19166666666666666666671	1312.45
+paper_nifty_proxy	collar	2026-07-21	-503.75	0	-503.75	
+paper_nifty_proxy	pp	2026-07-21	-4383.275	0	-4383.275	
+paper_nifty_spot	base_etf	2026-07-22	25747.025	0	25747.025	273.44
+paper_nifty_spot	collar	2026-07-22	-15635.10	0	-15635.10	
+paper_nifty_spot	pp	2026-07-22	-4393.025	0	-4393.025	
+paper_nifty_futures	base_futures	2026-07-22	-5625.1000	-28172.08333333333333333333290	-33797.18333333333333333333290	24077.1
+paper_nifty_futures	collar	2026-07-22	-9530.6250	0	-9530.6250	
+paper_nifty_futures	pp	2026-07-22	-4393.025	0	-4393.025	
+paper_nifty_proxy	base_ditm_call	2026-07-22	-33555.275	42224.21666666666666666666671	8668.94166666666666666666671	1150.0
+paper_nifty_proxy	collar	2026-07-22	6802.25	0	6802.25	
+paper_nifty_proxy	pp	2026-07-22	-4393.025	0	-4393.025	
+paper_nifty_spot	base_etf	2026-07-24	14563.775	0	14563.775	271.49
+paper_nifty_spot	collar	2026-07-24	-15277.60	0	-15277.60	
+paper_nifty_spot	pp	2026-07-24	-4432.025	0	-4432.025	
+paper_nifty_futures	base_futures	2026-07-24	-17786.6000	-28172.08333333333333333333290	-45958.68333333333333333333290	23890.0
+paper_nifty_futures	collar	2026-07-24	-9530.6250	0	-9530.6250	
+paper_nifty_futures	pp	2026-07-24	-4432.025	0	-4432.025	
+paper_nifty_proxy	base_ditm_call	2026-07-24	-20935.525	42224.21666666666666666666671	21288.69166666666666666666671	986.4
+paper_nifty_proxy	collar	2026-07-24	-2346.50	0	-2346.50	
+paper_nifty_proxy	pp	2026-07-24	-4432.025	0	-4432.025	
+paper_nifty_spot	base_etf	2026-07-27	28385.125	0	28385.125	273.9
+paper_nifty_spot	collar	2026-07-27	-15774.85	0	-15774.85	
+paper_nifty_spot	pp	2026-07-27	-4445.025	0	-4445.025	
+paper_nifty_futures	base_futures	2026-07-27	-2966.6000	-28172.08333333333333333333290	-31138.68333333333333333333290	24118.0
+paper_nifty_futures	collar	2026-07-27	-9530.6250	0	-9530.6250	
+paper_nifty_futures	pp	2026-07-27	-4445.025	0	-4445.025	
+paper_nifty_proxy	base_ditm_call	2026-07-27	-9602.775	42224.21666666666666666666671	32621.44166666666666666666671	1160.75
+paper_nifty_proxy	collar	2026-07-27	-2346.50	0	-2346.50	
+paper_nifty_proxy	pp	2026-07-27	-4445.025	0	-4445.025	
+paper_nifty_spot	base_etf	2026-07-28	27811.625	0	27811.625	273.8
+paper_nifty_spot	collar	2026-07-28	-15953.60	0	-15953.60	
+paper_nifty_spot	pp	2026-07-28	-4490.525	0	-4490.525	
+paper_nifty_futures	base_futures	2026-07-28	-2830.1000	-28172.08333333333333333333290	-31002.18333333333333333333290	24120.1
+paper_nifty_futures	collar	2026-07-28	-9530.6250	0	-9530.6250	
+paper_nifty_futures	pp	2026-07-28	-4490.525	0	-4490.525	
+paper_nifty_proxy	base_ditm_call	2026-07-28	-9446.775	42224.21666666666666666666671	32777.44166666666666666666671	1163.15
+paper_nifty_proxy	collar	2026-07-28	-2346.50	0	-2346.50	
+paper_nifty_proxy	pp	2026-07-28	-4490.525	0	-4490.525	
+paper_nifty_spot	base_etf	2026-07-29	38134.625	0	38134.625	275.6
+paper_nifty_spot	collar	2026-07-29	-16099.85	0	-16099.85	
+paper_nifty_spot	pp	2026-07-29	-3492.775	0	-3492.775	
+paper_nifty_futures	base_futures	2026-07-29	9058.4000	-28172.08333333333333333333290	-19113.68333333333333333333290	24303.0
+paper_nifty_futures	collar	2026-07-29	-9530.6250	0	-9530.6250	
+paper_nifty_futures	pp	2026-07-29	-3492.775	0	-3492.775	
+paper_nifty_proxy	base_ditm_call	2026-07-29	1521.975	42224.21666666666666666666671	43746.19166666666666666666671	1331.9
+paper_nifty_proxy	collar	2026-07-29	-2346.50	0	-2346.50	
+paper_nifty_proxy	pp	2026-07-29	-3492.775	0	-3492.775	
+paper_nifty_spot	base_etf	2026-07-31	47884.125	0	47884.125	277.3
+paper_nifty_spot	collar	2026-07-31	-16194.10	0	-16194.10	
+paper_nifty_spot	pp	2026-07-31	-3492.775	0	-3492.775	
+paper_nifty_futures	base_futures	2026-07-31	17313.4000	-28172.08333333333333333333290	-10858.68333333333333333333290	24430.0
+paper_nifty_futures	collar	2026-07-31	-9530.6250	0	-9530.6250	
+paper_nifty_futures	pp	2026-07-31	-3492.775	0	-3492.775	
+paper_nifty_proxy	base_ditm_call	2026-07-31	9263.475	42224.21666666666666666666671	51487.69166666666666666666671	1451.0
+paper_nifty_proxy	collar	2026-07-31	-2346.50	0	-2346.50	
+paper_nifty_proxy	pp	2026-07-31	-3492.775	0	-3492.775	
+paper_nifty_spot	base_etf	2026-08-03	62623.075	0	62623.075	279.87
+paper_nifty_spot	overlay_pp	2026-08-03	-3492.775	-3492.775	-6985.550	
+paper_nifty_spot	overlay_collar_put	2026-08-03	-11170.90	-3120.65	-14291.55	18.05
+paper_nifty_spot	overlay_collar_call	2026-08-03	-5140.20	-5140.20	-10280.40	
+paper_nifty_spot	overlay_cc	2026-08-03	13570.70	13570.70	27141.40	
+paper_nifty_futures	base_futures	2026-08-03	32393.4000	-28172.08333333333333333333290	4221.31666666666666666666710	24662.0
+paper_nifty_futures	overlay_pp	2026-08-03	-3492.775	-3492.775	-6985.550	
+paper_nifty_futures	overlay_collar_call	2026-08-03	-445.5750	-445.5750	-891.1500	
+paper_nifty_futures	overlay_collar_put	2026-08-03	-9085.050	-9085.050	-18170.100	
+paper_nifty_proxy	base_ditm_call	2026-08-03	23215.725	42224.21666666666666666666671	65439.94166666666666666666671	1665.65
+paper_nifty_proxy	overlay_pp	2026-08-03	-3492.775	-3492.775	-6985.550	
+paper_nifty_proxy	overlay_collar_call	2026-08-03	6559.80	6559.80	13119.60	
+paper_nifty_proxy	overlay_cc	2026-08-03	13570.70	13570.70	27141.40	
+paper_nifty_proxy	overlay_collar_put	2026-08-03	-8906.30	-8906.30	-17812.60	
+paper_nifty_spot	base_etf	2026-08-04	56486.625	0	56486.625	278.8
+paper_nifty_spot	overlay_pp	2026-08-04	-3492.775	-3492.775	-6985.550	
+paper_nifty_spot	overlay_collar_put	2026-08-04	-11219.65	-3120.65	-14340.30	17.3
+paper_nifty_spot	overlay_cc	2026-08-04	13570.70	13570.70	27141.40	
+paper_nifty_spot	overlay_collar_call	2026-08-04	-5140.20	-5140.20	-10280.40	
+paper_nifty_futures	base_futures	2026-08-04	24853.4000	-28172.08333333333333333333290	-3318.68333333333333333333290	24546.0
+paper_nifty_futures	overlay_pp	2026-08-04	-3492.775	-3492.775	-6985.550	
+paper_nifty_futures	overlay_collar_call	2026-08-04	-445.5750	-445.5750	-891.1500	
+paper_nifty_futures	overlay_collar_put	2026-08-04	-9085.050	-9085.050	-18170.100	
+paper_nifty_proxy	base_ditm_call	2026-08-04	16309.475	42224.21666666666666666666671	58533.69166666666666666666671	1559.4
+paper_nifty_proxy	overlay_pp	2026-08-04	-3492.775	-3492.775	-6985.550	
+paper_nifty_proxy	overlay_cc	2026-08-04	13570.70	13570.70	27141.40	
+paper_nifty_proxy	overlay_collar_call	2026-08-04	6559.80	6559.80	13119.60	
+paper_nifty_proxy	overlay_collar_put	2026-08-04	-8906.30	-8906.30	-17812.60	
+paper_nifty_spot	base_etf	2026-08-05	52016.45	0	52016.45	280.07
+paper_nifty_futures	base_futures	2026-08-05	-149.50	0	-149.50	24652.7
+paper_nifty_proxy	base_ditm_call	2026-08-05	-835.25	0	-835.25	1172.0
+paper_nifty_spot	base_etf	2026-08-07	50640.05	0	50640.05	279.83
+paper_nifty_futures	base_futures	2026-08-07	-325.00	0	-325.00	24650.0
+paper_nifty_proxy	base_ditm_call	2026-08-07	-2970.5	-3443.375	-6413.875	1354.3
+paper_nifty_spot	base_etf	2026-08-10	55572.15	0	55572.15	280.69
+paper_nifty_futures	base_futures	2026-08-10	325.00	0	325.00	24660.0
+paper_nifty_proxy	base_ditm_call	2026-08-10	-3487.25	-3443.375	-6930.625	1346.35
+
+================================================================================
+TABLE: paper_exit_events  (122 row(s) total, ALL rows — not overlay-filtered)
+================================================================================
+id	strategy_name	leg_name	trade_id	snapshot_id	event_time	detected_by	exit_signal	severity	ltp	mid	bid	ask	delta	dte	entry_price	threshold_value	delta_stop_would_fire	premium_stop_would_fire	actual_rule_used	status	notes	created_at	counterfactual_dte_marks
+1	paper_nifty_spot	overlay_cc	NSE_FO|71474		2026-06-04T00:00:00	EOD	LOSS_STOP	ACTION	8690.0		0.0	11944.05	1.0		221.38	2.5	1	1	BOTH	DISMISSED	Mark 8690.0 >= 2.5x entry credit 221.38	2026-06-04 10:05:06	
+2	paper_nifty_spot	overlay_cc	NSE_FO|71474		2026-06-04T00:00:00	EOD	DELTA_STOP	ACTION	8690.0		0.0	11944.05	1.0		221.38	0.55	1	1	BOTH	DISMISSED	Short call delta 1.0 >= 0.55	2026-06-04 10:05:06	
+3	paper_nifty_spot	overlay_collar_call	NSE_FO|71474		2026-06-04T00:00:00	EOD	COLLAR_CALL_WARN	WARNING	8690.0		0.0	11944.05	1.0		220.62	0.55	1	1	BOTH	DISMISSED	Collar short call delta 1.0 >= 0.55 warning	2026-06-04 10:05:06	
+4	paper_csp_nifty_v1	short_put	NSE_FO|79653		2026-06-04T00:00:00	EOD	PROFIT_TARGET	ACTION	1.45		1.15	1.45	-0.0009		199.925	0.5	0	0	NEITHER	DISMISSED	Mark 1.45 <= 50% of entry credit 199.925	2026-06-04 10:05:06	
+5	paper_csp_nifty_v1	short_put	NSE_FO|79653		2026-06-04T00:00:00	EOD	TIME_STOP	ACTION	1.45		1.15	1.45	-0.0009		199.925	21.0	0	0	NEITHER	DISMISSED	Days held 24 >= 21	2026-06-04 10:05:06	
+6	paper_nifty_spot	overlay_cc	NSE_FO|71474		2026-06-05T00:00:00	EOD	LOSS_STOP	ACTION	8690.0		0.0	0.0	1.0		221.38	2.5	1	1	BOTH	DISMISSED	Mark 8690.0 >= 2.5x entry credit 221.38	2026-06-05 10:05:06	
+7	paper_nifty_spot	overlay_cc	NSE_FO|71474		2026-06-05T00:00:00	EOD	DELTA_STOP	ACTION	8690.0		0.0	0.0	1.0		221.38	0.55	1	1	BOTH	DISMISSED	Short call delta 1.0 >= 0.55	2026-06-05 10:05:06	
+8	paper_nifty_spot	overlay_collar_call	NSE_FO|71474		2026-06-05T00:00:00	EOD	COLLAR_CALL_WARN	WARNING	8690.0		0.0	0.0	1.0		220.62	0.55	1	1	BOTH	DISMISSED	Collar short call delta 1.0 >= 0.55 warning	2026-06-05 10:05:06	
+9	paper_csp_nifty_v1	short_put	NSE_FO|79653		2026-06-05T00:00:00	EOD	PROFIT_TARGET	ACTION	1.7		1.4	1.7	-0.0011		199.925	0.5	0	0	NEITHER	DISMISSED	Mark 1.7 <= 50% of entry credit 199.925	2026-06-05 10:05:06	
+10	paper_csp_nifty_v1	short_put	NSE_FO|79653		2026-06-05T00:00:00	EOD	TIME_STOP	ACTION	1.7		1.4	1.7	-0.0011		199.925	21.0	0	0	NEITHER	DISMISSED	Days held 25 >= 21	2026-06-05 10:05:06	
+11	paper_nifty_spot	overlay_cc	NSE_FO|71474		2026-06-08T00:00:00	EOD	LOSS_STOP	ACTION	8690.0		0.0	0.0	1.0		221.38	2.5	1	1	BOTH	DISMISSED	Mark 8690.0 >= 2.5x entry credit 221.38	2026-06-08 10:05:06	
+12	paper_nifty_spot	overlay_cc	NSE_FO|71474		2026-06-08T00:00:00	EOD	DELTA_STOP	ACTION	8690.0		0.0	0.0	1.0		221.38	0.55	1	1	BOTH	DISMISSED	Short call delta 1.0 >= 0.55	2026-06-08 10:05:06	
+13	paper_nifty_spot	overlay_cc	NSE_FO|71474		2026-06-08T00:00:00	EOD	TIME_STOP	ACTION	8690.0		0.0	0.0	1.0		221.38	21.0	1	1	BOTH	DISMISSED	Days held 28 >= 21	2026-06-08 10:05:06	
+14	paper_nifty_spot	overlay_collar_call	NSE_FO|71474		2026-06-08T00:00:00	EOD	COLLAR_CALL_WARN	WARNING	8690.0		0.0	0.0	1.0		220.62	0.55	1	1	BOTH	DISMISSED	Collar short call delta 1.0 >= 0.55 warning	2026-06-08 10:05:06	
+15	paper_csp_nifty_v1	short_put	NSE_FO|63876		2026-06-08T00:00:00	EOD	PROFIT_TARGET	ACTION	1.45		1.45	1.5	-0.001		210.51	63.153				DISMISSED	LTP 1.45 ≤ 30% of entry credit 210.51 (70% captured)	2026-06-08 10:05:06	
+16	paper_csp_nifty_v1	short_put	NSE_FO|63876		2026-06-08T00:00:00	EOD	TIME_STOP	ACTION	1.45		1.45	1.5	-0.001		210.51	21.0				DISMISSED	Days held 28 ≥ 21	2026-06-08 10:05:06	
+17	paper_csp_nifty_v1	short_put	0		2026-06-09T03:45:05.611867	MANUAL	R5_REENTRY_BLOCKED	INFO						0	0.0					DISMISSED	DTE=0 < 14 — too close to expiry for re-entry	2026-06-09 03:45:05	
+18	paper_csp_nifty_v1	short_put	0		2026-06-09T03:46:38.245647	MANUAL	R5_REENTRY_BLOCKED	INFO						0	0.0					DISMISSED	DTE=0 < 14 — too close to expiry for re-entry	2026-06-09 03:46:38	
+19	paper_csp_nifty_v1	short_put	0		2026-06-09T03:48:14.783245	MANUAL	R5_REENTRY_BLOCKED	INFO						0	0.0					DISMISSED	DTE=0 < 14 — too close to expiry for re-entry	2026-06-09 03:48:14	
+20	paper_csp_nifty_v1	short_put	0		2026-06-09T03:49:47.507370	MANUAL	R5_REENTRY_BLOCKED	INFO						0	0.0					DISMISSED	DTE=0 < 14 — too close to expiry for re-entry	2026-06-09 03:49:47	
+21	paper_csp_nifty_v1	short_put	0		2026-06-09T03:51:20.223575	MANUAL	R5_REENTRY_BLOCKED	INFO						0	0.0					DISMISSED	DTE=0 < 14 — too close to expiry for re-entry	2026-06-09 03:51:20	
+22	paper_csp_nifty_v1	short_put	0		2026-06-09T03:52:53.004635	MANUAL	R5_REENTRY_BLOCKED	INFO						0	0.0					DISMISSED	DTE=0 < 14 — too close to expiry for re-entry	2026-06-09 03:52:53	
+23	paper_csp_nifty_v1	short_put	0		2026-06-09T03:54:25.455033	MANUAL	R5_REENTRY_BLOCKED	INFO						0	0.0					DISMISSED	DTE=0 < 14 — too close to expiry for re-entry	2026-06-09 03:54:25	
+24	paper_csp_nifty_v1	short_put	0		2026-06-09T03:57:39.125175	MANUAL	R5_REENTRY_BLOCKED	INFO						0	0.0					DISMISSED	DTE=0 < 14 — too close to expiry for re-entry	2026-06-09 03:57:39	
+25	paper_csp_nifty_v1	short_put	0		2026-06-09T03:59:12.947302	MANUAL	R5_REENTRY_BLOCKED	INFO						0	0.0					DISMISSED	DTE=0 < 14 — too close to expiry for re-entry	2026-06-09 03:59:12	
+26	paper_csp_nifty_v1	short_put	0		2026-06-09T04:00:46.315205	MANUAL	R5_REENTRY_BLOCKED	INFO						0	0.0					DISMISSED	DTE=0 < 14 — too close to expiry for re-entry	2026-06-09 04:00:46	
+27	paper_csp_nifty_v1	short_put	0		2026-06-09T04:02:19.396710	MANUAL	R5_REENTRY_BLOCKED	INFO						0	0.0					DISMISSED	DTE=0 < 14 — too close to expiry for re-entry	2026-06-09 04:02:19	
+28	paper_csp_nifty_v1	short_put	0		2026-06-09T04:03:51.412539	MANUAL	R5_REENTRY_BLOCKED	INFO						0	0.0					DISMISSED	DTE=0 < 14 — too close to expiry for re-entry	2026-06-09 04:03:51	
+29	paper_csp_nifty_v1	short_put	0		2026-06-09T04:05:23.768998	MANUAL	R5_REENTRY_BLOCKED	INFO						0	0.0					DISMISSED	DTE=0 < 14 — too close to expiry for re-entry	2026-06-09 04:05:23	
+30	paper_csp_nifty_v1	short_put	0		2026-06-09T04:06:55.759869	MANUAL	R5_REENTRY_BLOCKED	INFO						0	0.0					DISMISSED	DTE=0 < 14 — too close to expiry for re-entry	2026-06-09 04:06:55	
+31	paper_csp_nifty_v1	short_put	0		2026-06-09T04:08:27.900130	MANUAL	R5_REENTRY_BLOCKED	INFO						0	0.0					DISMISSED	DTE=0 < 14 — too close to expiry for re-entry	2026-06-09 04:08:27	
+32	paper_csp_nifty_v1	short_put	0		2026-06-09T04:10:00.237014	MANUAL	R5_REENTRY_BLOCKED	INFO						0	0.0					DISMISSED	DTE=0 < 14 — too close to expiry for re-entry	2026-06-09 04:10:00	
+33	paper_csp_nifty_v1	short_put	0		2026-06-09T04:11:32.635922	MANUAL	R5_REENTRY_BLOCKED	INFO						0	0.0					DISMISSED	DTE=0 < 14 — too close to expiry for re-entry	2026-06-09 04:11:32	
+34	paper_csp_nifty_v1	short_put	0		2026-06-09T04:13:05.046253	MANUAL	R5_REENTRY_BLOCKED	INFO						0	0.0					DISMISSED	DTE=0 < 14 — too close to expiry for re-entry	2026-06-09 04:13:05	
+35	paper_csp_nifty_v1	short_put	0		2026-06-09T04:14:37.047408	MANUAL	R5_REENTRY_BLOCKED	INFO						0	0.0					DISMISSED	DTE=0 < 14 — too close to expiry for re-entry	2026-06-09 04:14:37	
+36	paper_csp_nifty_v1	short_put	0		2026-06-09T04:16:09.364228	MANUAL	R5_REENTRY_BLOCKED	INFO						0	0.0					DISMISSED	DTE=0 < 14 — too close to expiry for re-entry	2026-06-09 04:16:09	
+37	paper_csp_nifty_v1	short_put	0		2026-06-09T04:17:41.431288	MANUAL	R5_REENTRY_BLOCKED	INFO						0	0.0					DISMISSED	DTE=0 < 14 — too close to expiry for re-entry	2026-06-09 04:17:41	
+38	paper_csp_nifty_v1	short_put	0		2026-06-09T04:19:13.733863	MANUAL	R5_REENTRY_BLOCKED	INFO						0	0.0					DISMISSED	DTE=0 < 14 — too close to expiry for re-entry	2026-06-09 04:19:13	
+39	paper_csp_nifty_v1	short_put	0		2026-06-09T04:20:47.181518	MANUAL	R5_REENTRY_BLOCKED	INFO						0	0.0					DISMISSED	DTE=0 < 14 — too close to expiry for re-entry	2026-06-09 04:20:47	
+40	paper_csp_nifty_v1	short_put	0		2026-06-09T04:22:19.216297	MANUAL	R5_REENTRY_BLOCKED	INFO						0	0.0					DISMISSED	DTE=0 < 14 — too close to expiry for re-entry	2026-06-09 04:22:19	
+41	paper_csp_nifty_v1	short_put	0		2026-06-09T04:23:51.473882	MANUAL	R5_REENTRY_BLOCKED	INFO						0	0.0					DISMISSED	DTE=0 < 14 — too close to expiry for re-entry	2026-06-09 04:23:51	
+42	paper_csp_nifty_v1	short_put	0		2026-06-09T04:25:23.462814	MANUAL	R5_REENTRY_BLOCKED	INFO						0	0.0					DISMISSED	DTE=0 < 14 — too close to expiry for re-entry	2026-06-09 04:25:23	
+43	paper_csp_nifty_v1	short_put	0		2026-06-09T04:26:55.548696	MANUAL	R5_REENTRY_BLOCKED	INFO						0	0.0					DISMISSED	DTE=0 < 14 — too close to expiry for re-entry	2026-06-09 04:26:55	
+44	paper_csp_nifty_v1	short_put	0		2026-06-09T04:28:27.734976	MANUAL	R5_REENTRY_BLOCKED	INFO						0	0.0					DISMISSED	DTE=0 < 14 — too close to expiry for re-entry	2026-06-09 04:28:27	
+45	paper_csp_nifty_v1	short_put	0		2026-06-09T04:30:00.021477	MANUAL	R5_REENTRY_BLOCKED	INFO						0	0.0					DISMISSED	DTE=0 < 14 — too close to expiry for re-entry	2026-06-09 04:30:00	
+46	paper_csp_nifty_v1	short_put	0		2026-06-09T04:31:32.405850	MANUAL	R5_REENTRY_BLOCKED	INFO						0	0.0					DISMISSED	DTE=0 < 14 — too close to expiry for re-entry	2026-06-09 04:31:32	
+47	paper_csp_nifty_v1	short_put	0		2026-06-09T04:33:04.360174	MANUAL	R5_REENTRY_BLOCKED	INFO						0	0.0					DISMISSED	DTE=0 < 14 — too close to expiry for re-entry	2026-06-09 04:33:04	
+48	paper_csp_nifty_v1	short_put	0		2026-06-09T04:34:36.291114	MANUAL	R5_REENTRY_BLOCKED	INFO						0	0.0					DISMISSED	DTE=0 < 14 — too close to expiry for re-entry	2026-06-09 04:34:36	
+49	paper_csp_nifty_v1	short_put	0		2026-06-09T04:36:08.322528	MANUAL	R5_REENTRY_BLOCKED	INFO						0	0.0					DISMISSED	DTE=0 < 14 — too close to expiry for re-entry	2026-06-09 04:36:08	
+50	paper_csp_nifty_v1	short_put	0		2026-06-09T04:37:40.648416	MANUAL	R5_REENTRY_BLOCKED	INFO						0	0.0					DISMISSED	DTE=0 < 14 — too close to expiry for re-entry	2026-06-09 04:37:40	
+51	paper_nifty_spot	overlay_cc	NSE_FO|65900		2026-06-09T00:00:00	EOD	PROFIT_TARGET	ACTION	96.1		96.15	96.95	0.2152		382.64	0.3	0	0	NEITHER	DISMISSED	Mark 96.1 <= 30% of entry credit 382.64	2026-06-09 10:05:07	
+52	paper_nifty_spot	overlay_cc	NSE_FO|65900		2026-06-09T00:00:00	EOD	TIME_STOP	ACTION	96.1		96.15	96.95	0.2152		382.64	21.0	0	0	NEITHER	DISMISSED	Days held 29 >= 21	2026-06-09 10:05:08	
+53	paper_csp_nifty_v1	short_put	NSE_FO|63876		2026-06-09T00:00:00	EOD	TIME_STOP	ACTION	83.0		83.0	83.95	-0.1677		210.51	21.0				DISMISSED	Days held 29 ≥ 21	2026-06-09 10:05:08	
+54	paper_nifty_spot	overlay_cc	NSE_FO|65900		2026-06-10T00:00:00	EOD	PROFIT_TARGET	ACTION	68.75		68.6	69.3	0.1693		382.64	0.3	0	0	NEITHER	DISMISSED	Mark 68.75 <= 30% of entry credit 382.64	2026-06-10 10:05:06	
+55	paper_nifty_spot	overlay_cc	NSE_FO|65900		2026-06-10T00:00:00	EOD	TIME_STOP	ACTION	68.75		68.6	69.3	0.1693		382.64	21.0	0	0	NEITHER	DISMISSED	Days held 30 >= 21	2026-06-10 10:05:06	
+56	paper_nifty_spot	overlay_collar_call	NSE_FO|65900		2026-06-10T00:00:00	EOD	COLLAR_CALL_DECAY	ACTION	68.75		68.6	69.3	0.1693		382.26	0.25	0	0	NEITHER	DISMISSED	Short call decayed to 68.75 (decay_breached=True, residual=68.75)	2026-06-10 10:05:06	
+57	paper_csp_nifty_v1	short_put	NSE_FO|63876		2026-06-10T00:00:00	EOD	TIME_STOP	ACTION	96.7		95.7	96.65	-0.1924		210.51	21.0				DISMISSED	Days held 30 ≥ 21	2026-06-10 10:05:06	
+58	paper_nifty_spot	overlay_cc	NSE_FO|65900		2026-06-11T00:00:00	EOD	PROFIT_TARGET	ACTION	61.75		61.55	62.4	0.1602		382.64	0.3	0	0	NEITHER	DISMISSED	Mark 61.75 <= 30% of entry credit 382.64	2026-06-11 10:05:09	
+59	paper_nifty_spot	overlay_cc	NSE_FO|65900		2026-06-11T00:00:00	EOD	TIME_STOP	ACTION	61.75		61.55	62.4	0.1602		382.64	21.0	0	0	NEITHER	DISMISSED	Days held 31 >= 21	2026-06-11 10:05:09	
+60	paper_nifty_spot	overlay_collar_call	NSE_FO|65900		2026-06-11T00:00:00	EOD	COLLAR_CALL_DECAY	ACTION	61.75		61.55	62.4	0.1602		382.26	0.25	0	0	NEITHER	DISMISSED	Short call decayed to 61.75 (decay_breached=True, residual=61.75)	2026-06-11 10:05:09	
+61	paper_csp_nifty_v1	short_put	NSE_FO|63876		2026-06-11T00:00:00	EOD	TIME_STOP	ACTION	89.6		89.2	89.45	-0.1876		210.51	21.0				DISMISSED	Days held 31 ≥ 21	2026-06-11 10:05:09	
+62	paper_nifty_spot	overlay_cc	NSE_FO|65900		2026-06-12T00:00:00	EOD	TIME_STOP	ACTION	164.0		163.5	164.0	0.35		382.64	21.0	0	0	NEITHER	DISMISSED	Days held 32 >= 21	2026-06-12 10:05:09	
+63	paper_csp_nifty_v1	short_put	NSE_FO|63876		2026-06-12T00:00:00	EOD	PROFIT_TARGET	ACTION	31.5		30.75	31.45	-0.0761		210.51	63.153				DISMISSED	LTP 31.5 ≤ 30% of entry credit 210.51 (70% captured)	2026-06-12 10:05:09	
+64	paper_csp_nifty_v1	short_put	NSE_FO|63876		2026-06-12T00:00:00	EOD	TIME_STOP	ACTION	31.5		30.75	31.45	-0.0761		210.51	21.0				DISMISSED	Days held 32 ≥ 21	2026-06-12 10:05:09	
+65	paper_nifty_proxy	base_ditm_call	NSE_FO|79509		2026-06-26T00:00:00	EOD	BASE_EXPIRY_ALERT	WARNING						4	2146.1	5.0				OPEN	Next contract: NIFTY 22000 CE 07 JUL 26 (NSE_FO|44498)	2026-06-26 10:05:12	
+66	paper_nifty_proxy	base_ditm_call	NSE_FO|79509		2026-06-29T00:00:00	EOD	BASE_EXPIRY_ALERT	WARNING						1	2146.1	5.0				OPEN	Next contract: NIFTY 22000 CE 07 JUL 26 (NSE_FO|44498)	2026-06-29 10:05:09	
+67	paper_nifty_proxy	base_ditm_call	NSE_FO|79509		2026-06-29T15:51:40.503542+00:00	MANUAL	MANUAL_OVERRIDE	WARNING							1978.85					OPEN	R3 override: forced entry at low IVR 0.24	2026-06-29 15:51:40	
+68	paper_nifty_spot	overlay_collar_call	NSE_FO|65900		2026-06-30T00:00:00	EOD	TIME_STOP	ACTION	790.0		788.0	790.9	0.0		543.9	21.0	0	0	NEITHER	OPEN	Days held 21 >= 21	2026-06-30 10:05:08	
+69	paper_nifty_spot	overlay_collar_call	NSE_FO|65900		2026-07-01T00:00:00	EOD	DELTA_STOP	ACTION	804.2		798.0	804.25	0.6022		543.9	0.55	1	0	DELTA	OPEN	Short call delta 0.6022 >= 0.55	2026-07-01 10:05:07	
+70	paper_nifty_spot	overlay_collar_call	NSE_FO|65900		2026-07-01T00:00:00	EOD	TIME_STOP	ACTION	804.2		798.0	804.25	0.6022		543.9	21.0	1	0	DELTA	OPEN	Days held 22 >= 21	2026-07-01 10:05:08	
+71	paper_nifty_spot	overlay_collar_call	NSE_FO|65900		2026-07-02T00:00:00	EOD	DELTA_STOP	ACTION	883.0		885.0	887.85	0.6475		543.9	0.55	1	0	DELTA	OPEN	Short call delta 0.6475 >= 0.55	2026-07-02 10:05:11	
+72	paper_nifty_spot	overlay_collar_call	NSE_FO|65900		2026-07-02T00:00:00	EOD	TIME_STOP	ACTION	883.0		885.0	887.85	0.6475		543.9	21.0	1	0	DELTA	OPEN	Days held 23 >= 21	2026-07-02 10:05:12	
+73	paper_nifty_proxy	base_ditm_call	NSE_FO|44498		2026-07-02T00:00:00	EOD	BASE_EXPIRY_ALERT	WARNING						5	1980.0	5.0				OPEN	Next contract: NIFTY 22000 CE 14 JUL 26 (NSE_FO|51241)	2026-07-02 10:05:13	
+74	paper_csp_nifty_v1	short_put	0		2026-07-03T03:45:08.613730+00:00	MANUAL	R5_REENTRY_BLOCKED	INFO						0	0.0					OPEN	DTE=0 < 14 — too close to expiry for re-entry	2026-07-03 03:45:08	
+75	paper_ic_nifty_v1_monthly	short_put	NSE_FO|63896		2026-07-03T06:21:21.814363+00:00	MANUAL	MANUAL_OVERRIDE	WARNING							21.4					OPEN	R3 override: forced entry at low IVR 0.14	2026-07-03 06:21:21	
+76	paper_ic_nifty_v1_monthly	short_call	NSE_FO|63991		2026-07-03T06:21:26.363383+00:00	MANUAL	MANUAL_OVERRIDE	WARNING							30.425					OPEN	R3 override: forced entry at low IVR 0.14	2026-07-03 06:21:26	
+77	paper_ic_nifty_v2_monthly	short_put	NSE_FO|63930		2026-07-03T08:19:26.035709+00:00	MANUAL	MANUAL_OVERRIDE	WARNING							102.15					OPEN	R3 override: forced entry at low IVR 0.15	2026-07-03 08:19:26	
+78	paper_ic_nifty_v2_monthly	short_call	NSE_FO|63975		2026-07-03T08:19:29.312236+00:00	MANUAL	MANUAL_OVERRIDE	WARNING							78.825					OPEN	R3 override: forced entry at low IVR 0.15	2026-07-03 08:19:29	
+79	paper_nifty_spot	overlay_collar_call	NSE_FO|65900		2026-07-03T00:00:00	EOD	DELTA_STOP	ACTION	930.0		926.2	941.15	0.68		543.9	0.55	1	0	DELTA	OPEN	Short call delta 0.68 >= 0.55	2026-07-03 10:05:10	
+80	paper_nifty_spot	overlay_collar_call	NSE_FO|65900		2026-07-03T00:00:00	EOD	TIME_STOP	ACTION	930.0		926.2	941.15	0.68		543.9	21.0	1	0	DELTA	OPEN	Days held 24 >= 21	2026-07-03 10:05:11	
+81	paper_nifty_proxy	base_ditm_call	NSE_FO|44498		2026-07-03T00:00:00	EOD	BASE_EXPIRY_ALERT	WARNING						4	1980.0	5.0				OPEN	Next contract: NIFTY 22000 CE 14 JUL 26 (NSE_FO|51241)	2026-07-03 10:05:13	
+82	paper_nifty_spot	overlay_collar_call	NSE_FO|65900		2026-07-06T00:00:00	EOD	DELTA_STOP	ACTION	1008.3		1000.0	1008.35	0.7115		543.9	0.55	1	0	DELTA	OPEN	Short call delta 0.7115 >= 0.55	2026-07-06 10:05:11	
+83	paper_nifty_spot	overlay_collar_call	NSE_FO|65900		2026-07-06T00:00:00	EOD	TIME_STOP	ACTION	1008.3		1000.0	1008.35	0.7115		543.9	21.0	1	0	DELTA	OPEN	Days held 27 >= 21	2026-07-06 10:05:13	
+84	paper_nifty_proxy	base_ditm_call	NSE_FO|44498		2026-07-06T00:00:00	EOD	BASE_EXPIRY_ALERT	WARNING						1	1980.0	5.0				OPEN	Next contract: NIFTY 22000 CE 14 JUL 26 (NSE_FO|51241)	2026-07-06 10:05:14	
+85	paper_nifty_spot	overlay_collar_call	NSE_FO|65900		2026-07-07T00:00:00	EOD	DELTA_STOP	ACTION	952.15		945.0	952.55	0.6984		543.9	0.55	1	0	DELTA	OPEN	Short call delta 0.6984 >= 0.55	2026-07-07 10:05:10	
+86	paper_nifty_spot	overlay_collar_call	NSE_FO|65900		2026-07-07T00:00:00	EOD	TIME_STOP	ACTION	952.15		945.0	952.55	0.6984		543.9	21.0	1	0	DELTA	OPEN	Days held 28 >= 21	2026-07-07 10:05:12	
+87	paper_nifty_proxy	base_ditm_call	NSE_FO|44498		2026-07-07T00:00:00	EOD	BASE_EXPIRY_ALERT	WARNING						0	1980.0	5.0				OPEN	Next contract: NIFTY 22000 CE 14 JUL 26 (NSE_FO|51241)	2026-07-07 10:05:14	
+88	paper_nifty_spot	overlay_collar_call	NSE_FO|65900		2026-07-08T00:00:00	EOD	DELTA_STOP	ACTION	680.95		675.0	679.75	0.5522		543.9	0.55	1	0	DELTA	OPEN	Short call delta 0.5522 >= 0.55	2026-07-08 10:05:08	
+89	paper_nifty_spot	overlay_collar_call	NSE_FO|65900		2026-07-08T00:00:00	EOD	TIME_STOP	ACTION	680.95		675.0	679.75	0.5522		543.9	21.0	1	0	DELTA	OPEN	Days held 29 >= 21	2026-07-08 10:05:09	
+90	paper_nifty_proxy	base_ditm_call	NSE_FO|44498		2026-07-08T00:00:00	EOD	BASE_EXPIRY_ALERT	WARNING						-1	1980.0	5.0				OPEN	Next contract: NIFTY 22000 CE 14 JUL 26 (NSE_FO|51241)	2026-07-08 10:05:11	
+91	paper_nifty_spot	overlay_collar_call	NSE_FO|65900		2026-07-10T00:00:00	EOD	DELTA_STOP	ACTION	819.95		821.1	828.6	0.6501		543.9	0.55	1	0	DELTA	OPEN	Short call delta 0.6501 >= 0.55	2026-07-10 10:05:09	
+92	paper_nifty_spot	overlay_collar_call	NSE_FO|65900		2026-07-10T00:00:00	EOD	TIME_STOP	ACTION	819.95		821.1	828.6	0.6501		543.9	21.0	1	0	DELTA	OPEN	Days held 31 >= 21	2026-07-10 10:05:10	
+93	paper_nifty_proxy	base_ditm_call	NSE_FO|44498		2026-07-10T00:00:00	EOD	BASE_EXPIRY_ALERT	WARNING						-3	1980.0	5.0				OPEN	Next contract: NIFTY 22000 CE 14 JUL 26 (NSE_FO|51241)	2026-07-10 10:05:11	
+94	paper_nifty_spot	overlay_collar_call	NSE_FO|65900		2026-07-13T00:00:00	EOD	DELTA_STOP	ACTION	838.0		830.2	839.0	0.6469		543.9	0.55	1	0	DELTA	OPEN	Short call delta 0.6469 >= 0.55	2026-07-13 10:05:11	
+95	paper_nifty_spot	overlay_collar_call	NSE_FO|65900		2026-07-13T00:00:00	EOD	TIME_STOP	ACTION	838.0		830.2	839.0	0.6469		543.9	21.0	1	0	DELTA	OPEN	Days held 34 >= 21	2026-07-13 10:05:12	
+96	paper_nifty_proxy	base_ditm_call	NSE_FO|44498		2026-07-13T00:00:00	EOD	BASE_EXPIRY_ALERT	WARNING						-6	1980.0	5.0				OPEN	Next contract: NIFTY 22000 CE 14 JUL 26 (NSE_FO|51241)	2026-07-13 10:05:13	
+97	paper_nifty_spot	overlay_collar_call	NSE_FO|65900		2026-07-14T00:00:00	EOD	DELTA_STOP	ACTION	709.0		706.0	709.0	0.5838		543.9	0.55	1	0	DELTA	OPEN	Short call delta 0.5838 >= 0.55	2026-07-14 10:05:15	
+98	paper_nifty_spot	overlay_collar_call	NSE_FO|65900		2026-07-14T00:00:00	EOD	TIME_STOP	ACTION	709.0		706.0	709.0	0.5838		543.9	21.0	1	0	DELTA	OPEN	Days held 35 >= 21	2026-07-14 10:05:16	
+99	paper_nifty_proxy	base_ditm_call	NSE_FO|44498		2026-07-14T00:00:00	EOD	BASE_EXPIRY_ALERT	WARNING						-7	1980.0	5.0				OPEN	Next contract: NIFTY 22000 CE 14 JUL 26 (NSE_FO|51241)	2026-07-14 10:05:19	
+100	paper_nifty_spot	overlay_collar_call	NSE_FO|65900		2026-07-15T00:00:00	EOD	DELTA_STOP	ACTION	740.15		724.6	732.35	0.6011		543.9	0.55	1	0	DELTA	OPEN	Short call delta 0.6011 >= 0.55	2026-07-15 10:05:12	
+101	paper_nifty_spot	overlay_collar_call	NSE_FO|65900		2026-07-15T00:00:00	EOD	TIME_STOP	ACTION	740.15		724.6	732.35	0.6011		543.9	21.0	1	0	DELTA	OPEN	Days held 36 >= 21	2026-07-15 10:05:13	
+102	paper_nifty_proxy	base_ditm_call	NSE_FO|44498		2026-07-15T00:00:00	EOD	BASE_EXPIRY_ALERT	WARNING						-8	1980.0	5.0				OPEN	Next contract: NIFTY 22000 CE 14 JUL 26 (NSE_FO|51241)	2026-07-15 10:05:15	
+103	paper_nifty_spot	overlay_collar_call	NSE_FO|65900		2026-07-16T00:00:00	EOD	DELTA_STOP	ACTION	734.9		727.15	734.05	0.6092		543.9	0.55	1	0	DELTA	OPEN	Short call delta 0.6092 >= 0.55	2026-07-16 10:05:10	
+104	paper_nifty_spot	overlay_collar_call	NSE_FO|65900		2026-07-16T00:00:00	EOD	TIME_STOP	ACTION	734.9		727.15	734.05	0.6092		543.9	21.0	1	0	DELTA	OPEN	Days held 37 >= 21	2026-07-16 10:05:11	
+105	paper_nifty_proxy	base_ditm_call	NSE_FO|44498		2026-07-16T00:00:00	EOD	BASE_EXPIRY_ALERT	WARNING						-9	1980.0	5.0				OPEN	Next contract: NIFTY 22000 CE 14 JUL 26 (NSE_FO|51241)	2026-07-16 10:05:13	
+106	paper_nifty_spot	overlay_collar_call	NSE_FO|65900		2026-07-17T00:00:00	EOD	DELTA_STOP	ACTION	890.0		884.4	890.0	0.6683		543.9	0.55	1	0	DELTA	OPEN	Short call delta 0.6683 >= 0.55	2026-07-17 10:05:11	
+107	paper_nifty_spot	overlay_collar_call	NSE_FO|65900		2026-07-17T00:00:00	EOD	TIME_STOP	ACTION	890.0		884.4	890.0	0.6683		543.9	21.0	1	0	DELTA	OPEN	Days held 38 >= 21	2026-07-17 10:05:12	
+108	paper_nifty_proxy	base_ditm_call	NSE_FO|44498		2026-07-17T00:00:00	EOD	BASE_EXPIRY_ALERT	WARNING						-10	1980.0	5.0				OPEN	Next contract: NIFTY 22000 CE 14 JUL 26 (NSE_FO|51241)	2026-07-17 10:05:13	
+109	paper_nifty_spot	overlay_collar_call	NSE_FO|65900		2026-07-20T00:00:00	EOD	DELTA_STOP	ACTION	831.0		831.0	834.2	0.6531		543.9	0.55	1	0	DELTA	OPEN	Short call delta 0.6531 >= 0.55	2026-07-20 10:05:09	
+110	paper_nifty_spot	overlay_collar_call	NSE_FO|65900		2026-07-20T00:00:00	EOD	TIME_STOP	ACTION	831.0		831.0	834.2	0.6531		543.9	21.0	1	0	DELTA	OPEN	Days held 41 >= 21	2026-07-20 10:05:11	
+111	paper_nifty_futures	overlay_collar_call	NSE_FO|65900		2026-07-21T00:00:00	EOD	DELTA_STOP	ACTION	757.55		757.55	758.0	0.6368		543.9	0.55	1	0	DELTA	ACTED	Short call delta 0.6368 >= 0.55	2026-07-21 10:05:08	
+112	paper_nifty_futures	overlay_collar_call	NSE_FO|65900		2026-07-21T00:00:00	EOD	TIME_STOP	ACTION	757.55		757.55	758.0	0.6368		543.9	21.0	1	0	DELTA	DISMISSED	Days held 42 >= 21
+Already flat	2026-07-21 10:05:10	
+113	paper_ic_nifty_v1_leaps	short_put	NSE_FO|65899		2026-07-22T05:00:10.161133+00:00	MANUAL	MANUAL_OVERRIDE	WARNING							146.05					OPEN	R3 override: forced entry at low IVR 0.21	2026-07-22 05:00:10	
+114	paper_ic_nifty_v1_monthly	short_put	NSE_FO|61429		2026-07-22T05:00:10.162655+00:00	MANUAL	MANUAL_OVERRIDE	WARNING							71.8					OPEN	R3 override: forced entry at low IVR 0.21	2026-07-22 05:00:10	
+115	paper_ic_nifty_v1_leaps	short_call	NSE_FO|65904		2026-07-22T05:00:17.721252+00:00	MANUAL	MANUAL_OVERRIDE	WARNING							48.325					OPEN	R3 override: forced entry at low IVR 0.21	2026-07-22 05:00:17	
+116	paper_ic_nifty_v1_monthly	short_call	NSE_FO|61897		2026-07-22T05:00:17.736876+00:00	MANUAL	MANUAL_OVERRIDE	WARNING							70.5					OPEN	R3 override: forced entry at low IVR 0.21	2026-07-22 05:00:17	
+117	paper_nifty_proxy	overlay_collar_call	NSE_FO|65900		2026-07-22T00:00:00	EOD	DELTA_STOP	ACTION	647.45		648.0	652.0	0.5787		543.9	0.55	1	0	DELTA	ACTED	Short call delta 0.5787 >= 0.55	2026-07-22 10:05:10	
+118	paper_nifty_proxy	overlay_collar_call	NSE_FO|65900		2026-07-22T00:00:00	EOD	TIME_STOP	ACTION	647.45		648.0	652.0	0.5787		543.9	21.0	1	0	DELTA	DISMISSED	Days held 43 >= 21
+Already flat	2026-07-22 10:05:12	
+119	paper_ic_nifty_v2_monthly	short_put	NSE_FO|61535		2026-07-29T05:00:10.562584+00:00	MANUAL	MANUAL_OVERRIDE	WARNING							128.9					OPEN	R3 override: forced entry at low IVR 0.16	2026-07-29 05:00:10	
+120	paper_ic_nifty_v2_monthly	short_call	NSE_FO|61845		2026-07-29T05:00:17.760572+00:00	MANUAL	MANUAL_OVERRIDE	WARNING							98.8					OPEN	R3 override: forced entry at low IVR 0.16	2026-07-29 05:00:17	
+121	paper_ic_nifty_v2_monthly	short_put	NSE_FO|61670		2026-08-05T05:00:29.457581+00:00	MANUAL	MANUAL_OVERRIDE	WARNING							97.775					OPEN	R3 override: forced entry at low IVR 0.16	2026-08-05 05:00:29	
+122	paper_ic_nifty_v2_monthly	short_call	NSE_FO|61913		2026-08-05T05:00:38.349099+00:00	MANUAL	MANUAL_OVERRIDE	WARNING							81.1					OPEN	R3 override: forced entry at low IVR 0.16	2026-08-05 05:00:38	
