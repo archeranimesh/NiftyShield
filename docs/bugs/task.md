@@ -538,3 +538,39 @@ commit per phase.
 - [ ] **B029.6** — Commit, update `bugs.md` BUG-029 status to ✅ Fixed + SHA once B029.4 confirms
   the live migration ran clean and a subsequent cron completed without the traceback.
   `CONTEXT.md`/`TODOS.md` updated.
+
+---
+
+## BUG-030 — `_overlay_type_groups()` elif-precedence drops an `overlay_cc` leg whenever an `overlay_collar_put` leg is also present same-day; corrupts the Collar P&L figure and produces a false "CC No data" line in the recovery digest
+
+- [ ] **B030.1** — Decide the entry-side question first (blocks the reporting-side fix): should the
+  call leg of the live 2026-08-12 position have been tagged `overlay_collar_call` instead of
+  `overlay_cc` when the `overlay_collar_put` leg was added same-day? Investigate
+  `paper_3track_overlay_entry.py`'s collar/CC entry path to determine whether this was (a) a
+  standalone CC that a same-day protective put should have converted to a collar (role-tagging
+  bug at entry), or (b) an intentional standalone CC with an independently-added hedge put that
+  was never meant to merge into one `collar` row. Not yet investigated — flagged in `bugs.md`, not
+  diagnosed. Per `docs/council/README.md`'s three-condition check, likely warrants the same
+  council-checkpoint bar BUG-028 used if the fix changes how future collar/CC positions get
+  tagged at entry (load-bearing, affects live daily reporting; two candidate framings with
+  materially different downstream code).
+- [ ] **B030.2** — Fix `_overlay_type_groups()` (`scripts/strategies/three_track/paper_3track_snapshot.py:1081-1117`)
+  per B030.1's resolved semantics — add the missing `has_cc and has_put` branch so an `overlay_cc`
+  leg is never silently dropped from `groups` when `overlay_collar_put` is also present. Must not
+  regress the existing `has_put`-without-`has_call`-or-`has_cc` "collar_put_without_call" warning
+  path (real lifecycle case: call leg closed/rolled off, put leg still open).
+- [ ] **B030.3** — Tests: regression test asserting
+  `_overlay_type_groups({"overlay_cc", "overlay_collar_put"})` does not drop either role (exact
+  shape of the live bug); edge cases for the other three combinations already handled
+  (`has_call+has_put`, `has_call` alone, `has_put` alone with no `has_cc`) to confirm no
+  regression. Add an end-to-end test on `_compute_overlay_pnl_snapshots` confirming both legs'
+  P&L reach the emitted row(s) once B030.2 lands.
+- [ ] **B030.4** — Backfill: `paper_overlay_pnl_snapshots` rows for 2026-08-12/08-13 (at minimum)
+  were written with the `overlay_cc` leg's P&L missing from `collar` — decide whether to recompute
+  and correct these two dates once B030.1-3 land, or document a discontinuity (mirrors BUG-028
+  Phase 3's "explicit discontinuity is safer than fabricated continuity" precedent) if a clean
+  recompute isn't possible.
+- [ ] **B030.5** — Review: real `code-reviewer` or `general-purpose` + `REVIEW.md` substitute
+  against the diff — financial P&L reporting change, same mandatory-gate class as BUG-028.
+- [ ] **B030.6** — Commit, update `bugs.md` BUG-030 status to ✅ Fixed + SHA. `CONTEXT.md`/`TODOS.md`
+  updated.

@@ -785,3 +785,41 @@ Discovered when Animesh received a `🟢 PP RE-ENTRY ELIGIBLE` Telegram alert wh
 **Related:** BUG-026/BUG-027/BUG-028 — same silent-failure shape (a broken automation path producing zero operator-facing signal until someone manually checks a log file); unlike those three, the code itself was correct from day one here — this is purely a "shipped fix, never deployed it" gap, suggesting the missing safeguard is process (a migration-execution checklist item, or `scripts/healthcheck.py`/`position_health_check.py` gaining coverage for "did the 3-track snapshot script's last run exit 0") rather than anything to fix in the migration script itself.
 
 ---
+
+## BUG-030 — `_overlay_type_groups()` elif-precedence drops an `overlay_cc` leg whenever an `overlay_collar_put` leg is also present same-day; corrupts the Collar P&L figure and produces a false "CC No data" line in the recovery digest
+
+| Field | Value |
+|---|---|
+| Severity | **HIGH** — live P&L-correctness defect, not just a reporting gap. Silently drops a real, open leg's P&L (`overlay_cc`, +₹53.625 on 2026-08-13) from both `paper_overlay_pnl_snapshots` and the daily "NiftyBees vs overlays" Telegram digest, and folds a mislabeled result into the `collar` row instead — the displayed Collar P&L (-₹973) is understated by the missing call leg's contribution (true value -₹919.75). No exception, no warning specific to this combination — same silent-failure shape as BUG-026/027/028. |
+| Status | 🔴 Open — found 2026-08-13, not yet fixed. |
+| Discovered | 2026-08-13, Animesh flagged that the "NiftyBees vs overlays" Telegram digest showed `CC No data` despite an open, correctly-recorded CC position (`STRATEGY_OVERLAY`, `overlay_cc`, SELL 65 lots, opened 2026-08-12, today's `paper_leg_snapshots.total_pnl` = +53.625). Traced live against `data/portfolio/portfolio.sqlite` during the investigation — not inferred from logs. |
+| Location | `scripts/strategies/three_track/paper_3track_snapshot.py::_overlay_type_groups()` (lines 1081-1117, root cause); `_compute_overlay_pnl_snapshots()` (lines 1137-1219, downstream — never emits an `overlay_type='cc'` row when this fires); `_build_recovery_digest()` (lines 1537-1593, renders the resulting gap as "CC No data" — that part of BUG-028 Phase 2 is working exactly as designed, it just never sees a `cc` row to render). |
+
+**Symptom:** `paper_overlay_pnl_snapshots` has zero `overlay_type='cc'` rows for either 2026-08-12 or 2026-08-13, despite `paper_leg_snapshots` showing a real, open `overlay_cc` leg with nonzero `total_pnl` on both dates (-537.875 on 08-12, +53.625 on 08-13 — confirmed via direct query). The `collar` row for the same dates contains only the `overlay_collar_put` leg's P&L (08-13: `pnl_inception_abs = -973.375`, exactly matching the put leg alone) — the `overlay_cc` leg's P&L is not merged into it, not reported separately, and not visible anywhere downstream. The digest renders `CC No data`, which BUG-028 Phase 2 correctly distinguishes from a false `+0` — but the underlying condition it's flagging (no `cc` row exists) is itself the bug, not a legitimately absent leg.
+
+**Root cause:** `_overlay_type_groups(present_roles)` decides which `overlay_*` leg_roles combine into a `cc`/`pp`/`collar` reporting row via an `if/elif` chain:
+
+```python
+if has_call and has_put:
+    groups["collar"] = ["overlay_collar_call", "overlay_collar_put"]
+elif has_call:
+    groups["cc"] = ["overlay_collar_call"]
+elif has_put:
+    groups["collar"] = ["overlay_collar_put"]      # fires here
+elif has_cc:
+    groups["cc"] = ["overlay_cc"]                   # never reached
+```
+
+`has_call`/`has_put`/`has_cc` are computed independently from `present_roles`, but the chain only ever branches on `has_call`/`has_put` — `has_cc` is checked last and is unreachable whenever `has_put` is `True`, regardless of whether `has_cc` is also `True`. The live position hit exactly this: a short call opened under leg_role `overlay_cc` (not `overlay_collar_call`) and a long put opened under `overlay_collar_put`, both same-day (2026-08-12) — economically a collar, but tagged with a `cc`-style role for the call leg rather than a `collar`-style one. `has_call=False`, `has_put=True`, `has_cc=True`. The chain falls into the `elif has_put` branch, builds `collar` from `overlay_collar_put` alone, and the `overlay_cc` leg is never added to any group in `groups`, so `_compute_overlay_pnl_snapshots`'s `for overlay_type, roles in groups.items()` loop never sees it — no row is ever written for it, silently.
+
+This is orthogonal to BUG-028: that bug was entirely about *which `strategy_name` to query* (track-scoped vs. `STRATEGY_OVERLAY`) and none of its four phases touched leg-role grouping. `_overlay_type_groups` predates BUG-028 and was carried over unmodified by all four phases — this defect exists whether or not BUG-028's fix is applied.
+
+**Two distinct questions, not yet resolved:**
+- **Entry-side:** should the call leg have been tagged `overlay_collar_call` instead of `overlay_cc` when the put was added same-day, converting what may have started as a standalone CC into a collar? If so the real fix is in the overlay entry path (`paper_3track_overlay_entry.py`'s collar/CC entry logic), not here. Not yet investigated — flagged, not diagnosed.
+- **Reporting-side, true regardless of the above:** `_overlay_type_groups` has no branch for `has_cc and has_put` simultaneously. Even if the entry-side tagging is intentional (e.g., an operator manually added a hedge put against an existing CC without converting its role), the grouping function must not silently drop one of the two legs — it needs an explicit branch that either merges `overlay_cc` + `overlay_collar_put` into `collar`, or reports both legs' P&L (as separate `cc`/`collar` rows or a combined row), matching whichever semantics is actually decided for the entry-side question above.
+
+**Suggested fix:** do not patch this inline without a decision on the entry-side question first — the two questions are coupled (the grouping fix depends on what the correct leg_role *should* have been). At minimum, add a regression test asserting `_overlay_type_groups({"overlay_cc", "overlay_collar_put"})` does not silently drop either role, whatever the resolved semantics turn out to be. Given this affects live daily P&L reporting the same way BUG-028 did, this likely qualifies for the same council-checkpoint bar BUG-028 used (`docs/council/README.md`'s three-condition check) if the entry-side fix changes how future collar/CC positions get tagged.
+
+**Related:** BUG-028 (same file, same overlay-reporting pipeline, same "silent gap read as legitimate zero/no-data" failure shape, but a different root cause — namespace vs. leg-role grouping — and BUG-028's four phases did not cover this).
+
+---
