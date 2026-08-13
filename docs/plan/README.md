@@ -24,6 +24,7 @@
 
 | Folder | What it covers | Next task | Status |
 |--------|---------------|-----------|--------|
+| `eod-pt-summary/` | Cross-strategy paper-trade EOD report: open positions, closed-today, strategy-wise P&L/Ann.%-on-margin — 3 separate Telegram messages, MarkdownV2. Iterated live in `scratch/2026-08-13_eod_pt_summary.py` (confirmed with Animesh); promotion to tested `src/` + real cron is gated on a coordination decision vs. `scripts/eod_summary.py` / `scripts/reporting/paper_pnl_report.py`. | PT-1 — document the confirmed 3-message spec | ⬜ Not started |
 | `risk-gamma-phase-a/` | Risk delta gate (done) + Near-Expiry Gamma Buy `gamma_daily_watch.py` | B2.2 — chain fetch + field computation | 🔄 In progress |
 | `variance-gate/` | CSP v1 Phase 0.8 deployment gate — spec reconciliation + gate criteria A–D | VG0 — CSP v1 spec reconciliation | ⬜ Not started |
 | `paper-backbone/` | Strategy Monitor daemon + pluggable strategy backbone (`src/strategy/`, `TelegramGateway`) | All tasks complete | ✅ Shipped/Archived |
