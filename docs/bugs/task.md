@@ -415,6 +415,47 @@ commit per phase.
   a mid-loop exception can never leave a partial commit. Committed on live host, tests confirmed
   green. | SHA `0fd4de8`
 
+### Phase 4 (found 2026-08-13) — `evaluate_pp_reentry_eod` missed by the Phase 1–3 sweep
+
+- [x] **B028.14** — Root cause confirmed against current code (not just `bugs.md`'s snapshot):
+  `src/strategy/auto_close.py::evaluate_pp_reentry_eod` built a local
+  `track_strategies = [STRATEGY_SPOT, STRATEGY_FUTURES, STRATEGY_PROXY]` and used it for both the
+  `active_pp` eligibility check and the "Overlay P&L (total realized)" sum — same root cause as
+  B028.1/B028.2 (pre-S2r assumption that overlay legs live under a track's `strategy_name`), just
+  in a file Phase 1–3's sweep didn't touch (`auto_close.py`, not `track_snapshot.py`/
+  `paper_3track_snapshot.py`). | Confirmed 2026-08-13 (no code change, investigation only)
+- [x] **B028.15** — `evaluate_pp_reentry_eod`: both call sites switched from `track_strategies` to
+  `STRATEGY_OVERLAY` directly (matches B028's resolved architecture, decision (b) decouple
+  pipeline) — eligibility check reads `store.get_positions(STRATEGY_OVERLAY)`, P&L figure reads
+  `get_strategy_realized_pnl(store, STRATEGY_OVERLAY)` (single call, not a sum). `track_strategies`
+  list and its three-track import dropped — nothing else in the function needs them.
+- [x] **B028.16** — Tests: `test_evaluate_pp_reentry_eligible` docstring/assertion updated
+  (`"3-track overlay"` → `"standalone overlay"` in the alert text);
+  `test_evaluate_pp_reentry_suppressed_when_active` updated to seed the open `overlay_pp` leg
+  under `STRATEGY_OVERLAY` instead of `STRATEGY_SPOT` (pre-fix, seeding under `STRATEGY_SPOT` would
+  have made this test fail to suppress — genuinely regression-proof, not tautological). New
+  `test_evaluate_pp_reentry_realized_pnl_reads_overlay_book_only` (edge case): seeds a closed
+  round-trip under `STRATEGY_OVERLAY` (real P&L +325) plus a distractor closed round-trip under
+  `STRATEGY_SPOT` (P&L −5000, wrong pre-fix sum −4675) and asserts only +325 appears in the
+  message. `general-purpose` + `REVIEW.md` substitute for `@code-reviewer` (subagent type not
+  exposed in this environment, same precedent as B028.6/B028.13/B021.4/B010.8) against
+  `git diff HEAD` — financial P&L reporting + trading-eligibility change, gate mandatory. No
+  CRITICAL/ERROR/WARNING against the diff; 1 INFO note logged (no invariant guards against a
+  stray `overlay_pp` leg ever landing under a base track post-S2r — latent risk inherent to the
+  council's decouple-pipeline decision itself, not introduced by this diff, not a blocker).
+  8/8 tests in `tests/unit/strategy/test_auto_close.py` pass; broader
+  `tests/unit/strategy/` + `tests/unit/paper/` (1057 tests) pass with zero regressions — run via
+  a cloud sandbox venv (`pip install -e ".[dev]"` + `requirements*.txt`) since this device
+  sandbox has no network to install `pytest`, same limitation class as prior BUG-020/021/026/027/
+  B028.11-13 sessions.
+- [ ] **B028.17** — Commit, update `bugs.md` BUG-028 status (Phase 4 line) to ✅ Fixed + SHA,
+  `CONTEXT.md`/`TODOS.md` updated. | SHA pending — sandbox `pre-commit` unavailable (device
+  sandbox has no network to install `pre-commit`/hook envs, and `.venv/bin/python` is a symlink
+  to the live host's `/opt/anaconda3/bin/python`, not resolvable in this sandbox); code + tests +
+  review complete, commit deferred to live host. When the real SHA is provided, replace every
+  `SHA pending` reference for B028.17 in both `task.md` and `TODOS.md`, and flip `bugs.md`'s
+  Phase 4 status line.
+
 ---
 
 ## BUG-029 — `paper_exit_events.counterfactual_dte_marks` migration committed but never run; 3-track EOD snapshot cron has crashed every market day since 2026-08-05
