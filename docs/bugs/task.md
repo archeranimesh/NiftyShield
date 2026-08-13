@@ -448,13 +448,9 @@ commit per phase.
   a cloud sandbox venv (`pip install -e ".[dev]"` + `requirements*.txt`) since this device
   sandbox has no network to install `pytest`, same limitation class as prior BUG-020/021/026/027/
   B028.11-13 sessions.
-- [ ] **B028.17** — Commit, update `bugs.md` BUG-028 status (Phase 4 line) to ✅ Fixed + SHA,
-  `CONTEXT.md`/`TODOS.md` updated. | SHA pending — sandbox `pre-commit` unavailable (device
-  sandbox has no network to install `pre-commit`/hook envs, and `.venv/bin/python` is a symlink
-  to the live host's `/opt/anaconda3/bin/python`, not resolvable in this sandbox); code + tests +
-  review complete, commit deferred to live host. When the real SHA is provided, replace every
-  `SHA pending` reference for B028.17 in both `task.md` and `TODOS.md`, and flip `bugs.md`'s
-  Phase 4 status line.
+- [x] **B028.17** — Commit, update `bugs.md` BUG-028 status (Phase 4 line) to ✅ Fixed + SHA,
+  `TODOS.md` updated. Not a module-structure change (no new files) — `CONTEXT.md` left as-is.
+  Committed on live host: code+tests SHA `94f3dc3`, this doc-tracking update SHA `affbd24`.
 
 ---
 
