@@ -326,26 +326,25 @@ async def evaluate_pp_reentry_eod(
 ) -> None:
     """Evaluate PP re-entry eligibility and notify if eligible (no auto-opening).
 
-    PP is always an overlay on the three track strategies (paper_nifty_spot,
-    paper_nifty_futures, paper_nifty_proxy) — never a standalone strategy.
-    We check for an active overlay_pp leg across all three tracks and notify
+    Since S2r (2026-07-29), PP is recorded standalone under STRATEGY_OVERLAY
+    (paper_nifty_overlay) — never under a base track's strategy_name. Per
+    BUG-028's resolved architecture (council 2026-08-10, decision (b) decouple
+    pipeline), all overlay P&L/position reads go through STRATEGY_OVERLAY only.
+    We check for an active overlay_pp leg under STRATEGY_OVERLAY and notify
     once if none is found and IVR passes the re-entry gate.
     """
-    from src.paper.constants import STRATEGY_FUTURES, STRATEGY_PROXY, STRATEGY_SPOT
+    from src.paper.constants import STRATEGY_OVERLAY
     from src.strategy.pp_overlay_v1 import PPOverlayV1
 
-    track_strategies = [STRATEGY_SPOT, STRATEGY_FUTURES, STRATEGY_PROXY]
-
     try:
-        # Active if ANY track carries a live overlay_pp position
+        # Active if STRATEGY_OVERLAY carries a live overlay_pp position
         active_pp = [
             p
-            for strat_name in track_strategies
-            for p in store.get_positions(strat_name)
+            for p in store.get_positions(STRATEGY_OVERLAY)
             if p.leg_role == "overlay_pp" and p.net_qty > 0
         ]
         if active_pp:
-            return  # position already open across tracks — nothing to do
+            return  # position already open — nothing to do
 
         # Calculate IVR
         vix_series = await asyncio.to_thread(load_vix_series, vix_data_dir)
@@ -361,10 +360,10 @@ async def evaluate_pp_reentry_eod(
         passed, _ = pp_strategy._ivr_passes(ivr)
 
         if passed and notifier is not None:
-            # Aggregate realized P&L across all three track strategies
-            realized_pnl = sum(get_strategy_realized_pnl(store, s) for s in track_strategies)
+            # Realized P&L from the standalone overlay book
+            realized_pnl = get_strategy_realized_pnl(store, STRATEGY_OVERLAY)
             msg = (
-                f"🟢 PP RE-ENTRY ELIGIBLE — 3-track overlay\n"
+                f"🟢 PP RE-ENTRY ELIGIBLE — standalone overlay\n"
                 f"IVR    : {ivr:.2f} (passes reentry threshold)\n"
                 f"Status : No open PP → ELIGIBLE\n"
                 f"Action : Run find_overlay_strikes.py --overlay-type pp to initiate manually\n"

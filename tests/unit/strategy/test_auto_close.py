@@ -513,20 +513,20 @@ async def test_evaluate_pp_reentry_eligible(
     notifier.send.assert_called_once()
     msg = notifier.send.call_args[0][0]
     assert "PP RE-ENTRY ELIGIBLE" in msg
-    assert "3-track overlay" in msg
+    assert "standalone overlay" in msg
 
 
 @pytest.mark.asyncio
 async def test_evaluate_pp_reentry_suppressed_when_active(
     store: PaperStore, simulator: PaperFillSimulator, chain: OptionChain
 ) -> None:
-    """No notification when an overlay_pp leg is already open on any track strategy."""
-    from src.paper.constants import STRATEGY_SPOT
+    """No notification when an overlay_pp leg is already open under STRATEGY_OVERLAY."""
+    from src.paper.constants import STRATEGY_OVERLAY
 
-    # Seed an open overlay_pp BUY on the spot track
+    # Seed an open overlay_pp BUY under the standalone overlay book
     store.record_trade(
         PaperTrade(
-            strategy_name=STRATEGY_SPOT,
+            strategy_name=STRATEGY_OVERLAY,
             leg_role="overlay_pp",
             instrument_key="NSE_FO|63848",
             trade_date=date.today(),
@@ -559,3 +559,75 @@ async def test_evaluate_pp_reentry_suppressed_when_active(
 
     # Active position detected — no notification should fire
     notifier.send.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_evaluate_pp_reentry_realized_pnl_reads_overlay_book_only(
+    store: PaperStore, simulator: PaperFillSimulator, chain: OptionChain
+) -> None:
+    """Realized P&L in the eligibility message is STRATEGY_OVERLAY's alone.
+
+    BUG-028 Phase 4: pre-fix, this summed the three base tracks' realized P&L
+    and mislabeled it as overlay P&L. Post-fix it must read only from
+    STRATEGY_OVERLAY, and a closed round-trip on a base track (noise) must
+    not leak into the figure.
+    """
+    from src.paper.constants import STRATEGY_OVERLAY, STRATEGY_SPOT
+
+    # Closed round-trip under the standalone overlay book: BUY 65 @ 10, SELL 65 @ 15
+    # -> realized P&L = 65 * (15 - 10) = 325
+    for action, price in ((TradeAction.BUY, "10.00"), (TradeAction.SELL, "15.00")):
+        store.record_trade(
+            PaperTrade(
+                strategy_name=STRATEGY_OVERLAY,
+                leg_role="overlay_pp",
+                instrument_key="NSE_FO|63848",
+                trade_date=date.today(),
+                action=action,
+                quantity=65,
+                price=Decimal(price),
+                is_paper=True,
+            )
+        )
+
+    # Distractor closed round-trip under a base track with a very different P&L —
+    # must NOT be included in the message's realized-P&L figure.
+    for action, price in ((TradeAction.BUY, "100.00"), (TradeAction.SELL, "50.00")):
+        store.record_trade(
+            PaperTrade(
+                strategy_name=STRATEGY_SPOT,
+                leg_role="base_spot",
+                instrument_key="NSE_EQ|niftybees",
+                trade_date=date.today(),
+                action=action,
+                quantity=100,
+                price=Decimal(price),
+                is_paper=True,
+            )
+        )
+
+    notifier = AsyncMock()
+    vix_series = MagicMock()
+    vix_series.empty = False
+    vix_series.iloc = ["15.0"] * 300
+    vix_series.__len__ = MagicMock(return_value=300)
+
+    with (
+        patch("src.strategy.auto_close.load_vix_series", return_value=vix_series),
+        patch("src.strategy.auto_close.compute_ivr", return_value=0.45),
+    ):
+        await evaluate_pp_reentry_eod(
+            store=store,
+            simulator=simulator,
+            chain=chain,
+            lookup=None,
+            notifier=notifier,
+            vix_data_dir=None,
+            today=date.today(),
+        )
+
+    notifier.send.assert_called_once()
+    msg = notifier.send.call_args[0][0]
+    assert "₹+325" in msg
+    assert "₹-5,000" not in msg
+    assert "₹-4,675" not in msg  # would be the (wrong) summed figure
