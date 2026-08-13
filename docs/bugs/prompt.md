@@ -39,10 +39,21 @@
 5. Financial-logic bugs (delta, P&L, Decimal paths, BrokerClient boundaries) require
    the real `@code-reviewer` subagent against `git diff HEAD` before commit — no
    exceptions, per root `CLAUDE.md`.
-6. Commit. Append `| SHA <commit_sha>` to the completed line in `docs/bugs/task.md`.
-7. Flip status in `docs/bugs/bugs.md` to `✅ Fixed` + the same SHA. Add one `TODOS.md`
-   session log line. Update `CONTEXT.md` if module structure changed.
+6. Commit. Append `| SHA <commit_sha>` to the completed line in `docs/bugs/task.md`. Keep that
+   line to one short sentence — do not paste implementation narrative, test lists, or review
+   findings into `task.md`; that detail goes in step 7's `bugs.md` update instead. `task.md` is
+   a checklist, not a log.
+7. Flip status in `docs/bugs/bugs.md` to `✅ Fixed` + the same SHA. Add an "Implementation
+   progress" note there with the detail that would otherwise have bloated `task.md` (what
+   changed, tests added, review findings). Add one `TODOS.md` session log line. Update
+   `CONTEXT.md` if module structure changed.
 8. One bug fix per commit — do not bundle unrelated `BUG-ID`s together.
+9. **If this was the last unchecked `B<N>.x` line under its `BUG-ID`** (the whole section is now
+   `[x]`) and `bugs.md`'s Status is `✅ Fixed`: in that same closing commit, move the `bugs.md`
+   entry to `docs/archive/bugs/bugs.md` and the `task.md` checklist to
+   `docs/archive/bugs/task.md`, removing both from the live files. Mirrors the `docs/plan/` →
+   `docs/archive/plan/` convention. Do not leave a fully-checked `BUG-ID` section sitting in the
+   live `task.md` — an unchecked line there should always mean real open work.
 
 ## If the sandbox `.git` is lock-contended
 

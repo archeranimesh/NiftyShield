@@ -236,6 +236,27 @@ Session Log grows large again.
   Animesh's live-send confirmation, then tick item 8. Docs commit pending — same
   `.git/HEAD.lock` sandbox caveat as prior sessions.
 
+### 2026-08-13 Session Log (docs/bugs/ archival cleanup — 24 closed bugs moved to docs/archive/bugs/)
+- Animesh: audit `docs/bugs/` for closed bugs to archive, restructure so `bugs.md` holds full
+  detail (the `stories.md` equivalent) and `task.md` holds only lean checkboxes, and confirm
+  `prompt.md` picks the first unchecked `task.md` item correctly. Audit found 24/29 logged bugs
+  (`BUG-002`–`BUG-028`, all but `BUG-019`/`025`/`027`/`029`/`030`) were ✅ Fixed/⚪ Closed — moved
+  both their `bugs.md` entries and `task.md` checklists to new `docs/archive/bugs/bugs.md` /
+  `docs/archive/bugs/task.md` (mirrors the existing `docs/plan/` → `docs/archive/plan/`
+  convention), leaving only the 5 open bugs in the live files. **Correction found during the
+  audit:** `BUG-005`'s `bugs.md` Status field said `🔴 Open` but every `task.md` B005.x line (plus
+  a follow-on "paper-phase scope decision" block) was checked and committed 2026-07-02, SHA
+  `b602066`/`5432639` — status was simply never flipped. Corrected before archiving. Also found
+  `BUG-027`'s `bugs.md` entry didn't reflect that `task.md` B027.1-3 (dotenv fix + 4 new tests)
+  were already done — added an "Implementation progress" note there before trimming `task.md`.
+  Live `task.md` (was 92KB with inline implementation narrative after every checked item) cut to
+  ~5KB, checkbox-only per bug; `bugs.md` kept/gained the corresponding detail so nothing was
+  lost. `docs/bugs/prompt.md` step 6/7 updated to enforce the split going forward (task.md line =
+  one sentence + SHA, narrative goes in bugs.md's "Implementation progress" note) and a new step
+  9 added: once a `BUG-ID`'s checklist is fully checked and its `bugs.md` Status is ✅ Fixed,
+  archive both in the closing commit — do not leave fully-checked sections in the live files.
+  Docs-only, no code change.
+
 ### 2026-08-13 Session Log (BUG-030 logged — `_overlay_type_groups` elif-precedence leg drop)
 - Animesh reported the "NiftyBees vs overlays" Telegram digest showing `CC No data` despite an
   open, correctly-recorded CC position. Traced live against `data/portfolio/portfolio.sqlite`:
