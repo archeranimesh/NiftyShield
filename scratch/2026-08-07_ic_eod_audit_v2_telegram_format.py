@@ -448,10 +448,54 @@ def format_expiry(value: date) -> str:
 # --- Inlined FMT-3 leg table (src/notifications/formatting.py, not yet shipped) ---
 
 
-def build_leg_table(legs: list[dict]) -> str:
-    """Fenced-code-block-ready position table: Act/Strike/Type/Δ/LTP/Entry.
+def format_chg_pct(ltp: Decimal, entry: Decimal | None) -> str:
+    """(LTP-Entry)/Entry*100, signed 1dp, '-' placeholder when entry is None.
 
-    LTP/Entry columns use the locked-in 1dp exception (FMT-1), NOT
+    Same field/semantics as PT-1's Chg column (scratch/2026-08-13_eod_pt_
+    summary.py's _chg_pct: pure price move, not P&L%) — added here as part
+    of the cross-message field-dictionary alignment pass (2026-08-17): Chg
+    was free to add since every leg already carries both ltp and entry,
+    unlike Qty/P&L which were deliberately NOT added (see build_leg_table's
+    docstring below for why).
+    """
+    if entry is None or entry == 0:
+        return "-"
+    return f"{(ltp - entry) / entry * 100:+.1f}%"
+
+
+def build_leg_table(legs: list[dict]) -> str:
+    """Fenced-code-block-ready position table: Act/Instrument/Δ/LTP/Entry/Chg.
+
+    Column history (2026-08-17 cross-message consistency pass against
+    scratch/2026-08-13_eod_pt_summary.py's PT-1 table — see
+    docs/plan/telegram-markdown-migration/ discussion): the original
+    Act/Strike/Type/Δ/LTP/Entry layout split each leg's identity across two
+    columns (Strike, Type). Merged into one "Instrument" column
+    (f"{strike} {opt_type}", e.g. "24200 PE") to share a field name/shape
+    with PT-1's Instrument column — underlying/expiry stay hoisted into the
+    message header rather than repeated per row (they're constant across all
+    four legs here, unlike PT-1's rows which span strategies/expiries), so
+    this is a same-*name*, different-*granularity* alignment, not a literal
+    copy of PT-1's full instrument string. Chg (LTP vs Entry, signed 1dp)
+    added as a 6th column, replacing the freed-up slot from the Strike/Type
+    merge — free addition, doesn't conflict with anything.
+
+    Two fields were deliberately NOT added despite being in PT-1's schema:
+      - Qty: this script's leg data model has no per-leg quantity field at
+        all today (IC legs share one lot size by construction, unlike PT-1's
+        genuinely-varying multi-strategy rows) — adding it would require new
+        data plumbing, not just a display change, so it's out of scope for
+        this formatting-consistency pass. Flag as a follow-up if a real
+        per-leg Qty ever becomes necessary (e.g. if IC legs ever trade
+        unequal size).
+      - P&L: this message already derives Credit/Mark/Captured/ROI as its
+        trusted aggregate. A separately-computed per-leg P&L column risks
+        disagreeing with that aggregate (rounding, different derivation) —
+        confirmed decision: keep one source of truth until/unless per-leg
+        P&L is wanted for its own diagnostic value AND Captured is rebuilt
+        as "sum of this column" rather than two independent formulas.
+
+    LTP/Entry columns still use the locked-in 1dp exception (FMT-1), NOT
     format_money's 2dp default — local f"{value:.1f}" per FMT-3's docstring,
     not format_money(). Delta uses format_greek() for consistent None/sign
     handling. Caller wraps the return in a ```fenced block```.
@@ -459,39 +503,41 @@ def build_leg_table(legs: list[dict]) -> str:
     rows = []
     for leg in legs:
         badge = "[S]" if leg["role"].startswith("Short") else "[B]"
+        instrument_str = f"{format_strike(leg['strike'])} {leg['opt_type']}"
         delta_str = format_greek(leg["delta"])
         entry_str = f"{leg['entry']:.1f}" if leg["entry"] is not None else "-"
+        chg_str = format_chg_pct(leg["ltp"], leg["entry"])
         rows.append(
             (
                 badge,
-                format_strike(leg["strike"]),
-                leg["opt_type"],
+                instrument_str,
                 delta_str,
                 f"{leg['ltp']:.1f}",
                 entry_str,
+                chg_str,
             )
         )
 
     widths = {
         "act": 3,
-        "strike": max(len("Strike"), *(len(r[1]) for r in rows)),
-        "type": max(len("Type"), *(len(r[2]) for r in rows)),
-        "delta": max(len("Δ"), *(len(r[3]) for r in rows)),
-        "ltp": max(len("LTP"), *(len(r[4]) for r in rows)),
-        "entry": max(len("Entry"), *(len(r[5]) for r in rows)),
+        "instrument": max(len("Instrument"), *(len(r[1]) for r in rows)),
+        "delta": max(len("Δ"), *(len(r[2]) for r in rows)),
+        "ltp": max(len("LTP"), *(len(r[3]) for r in rows)),
+        "entry": max(len("Entry"), *(len(r[4]) for r in rows)),
+        "chg": max(len("Chg"), *(len(r[5]) for r in rows)),
     }
 
     header = (
-        f"{'Act':<{widths['act']}} {'Strike':<{widths['strike']}} "
-        f"{'Type':<{widths['type']}} {'Δ':>{widths['delta']}} "
-        f"{'LTP':>{widths['ltp']}} {'Entry':>{widths['entry']}}"
+        f"{'Act':<{widths['act']}} {'Instrument':<{widths['instrument']}} "
+        f"{'Δ':>{widths['delta']}} {'LTP':>{widths['ltp']}} "
+        f"{'Entry':>{widths['entry']}} {'Chg':>{widths['chg']}}"
     )
     lines = [header, "-" * len(header)]
-    for act, strike, opt_type, delta_str, ltp_str, entry_str in rows:
+    for act, instrument_str, delta_str, ltp_str, entry_str, chg_str in rows:
         lines.append(
-            f"{act:<{widths['act']}} {strike:<{widths['strike']}} "
-            f"{opt_type:<{widths['type']}} {delta_str:>{widths['delta']}} "
-            f"{ltp_str:>{widths['ltp']}} {entry_str:>{widths['entry']}}"
+            f"{act:<{widths['act']}} {instrument_str:<{widths['instrument']}} "
+            f"{delta_str:>{widths['delta']}} {ltp_str:>{widths['ltp']}} "
+            f"{entry_str:>{widths['entry']}} {chg_str:>{widths['chg']}}"
         )
     return "\n".join(lines)
 
