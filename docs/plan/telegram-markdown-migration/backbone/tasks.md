@@ -21,6 +21,16 @@
       HTML-specific tests; add an entity-parse regression test | Blocked by: MD-1
       | Owner: Claude | Model: Sonnet | Review: code-reviewer — touches the non-fatal send
       contract, verify by hand, not just spec-following
+      **⚠️ Live-risk window (added 2026-08-18):** the moment MD-2 lands, every existing caller's
+      dynamic values are unescaped against MarkdownV2's larger reserved-character set — the
+      exact `DELTA_WARN` bug class this epic exists to fix, now live for every message, not
+      just one. The non-fatal send contract means this fails safe (swallowed exception, no
+      raise into strategy logic) rather than fails loud, but it also means notifications —
+      including close/roll alerts used for delta-neutral adjustment decisions — can silently
+      stop arriving for as long as the gap lasts. MD-3/MD-4 close that gap but are only
+      "blocked by" MD-2, not bundled with it, and the one-task-per-session protocol does not
+      guarantee they land soon after. **Do not merge MD-2 unless MD-3 and MD-4 are ready to
+      follow in the same sitting** — do not leave MD-2 merged on its own between sessions.
 - [ ] **MD-3** — Audit + fix strategy close/roll notifications (7 classes) for unescaped dynamic
       values | Blocked by: MD-2
       | Owner: Antigravity | Model: n/a | Review: **real @code-reviewer, Opus — mandatory**

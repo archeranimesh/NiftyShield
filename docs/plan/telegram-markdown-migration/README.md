@@ -65,6 +65,17 @@ Do not start `formatting-rules/` before `backbone/`'s escaping helper exists —
 helper that interpolates a dynamic value needs it. Do not start `strategy-rollout/` before both
 are done.
 
+**⚠️ MD-2→MD-3/MD-4 live-risk window (added 2026-08-18, Cowork review):** MD-2 (switch the
+global parse_mode to Markdown) is blocked only by MD-1, while MD-3/MD-4 (the escaping
+audit-and-fix for every existing caller) are blocked *by* MD-2 rather than bundled with it. If
+MD-2 merges alone, every unescaped dynamic value in every existing caller is now live against
+MarkdownV2's reserved-character set — the same failure shape as the original `DELTA_WARN` bug,
+across the whole notification surface instead of one message. The non-fatal send contract
+(`src/notifications/CLAUDE.md`) keeps this from crashing strategy logic, but it also means
+notifications can silently stop arriving for however long the gap lasts, including
+close/roll alerts relevant to delta-neutral adjustment decisions. See the note on MD-2 itself
+in `backbone/tasks.md` — land MD-2 and MD-3/MD-4 together, never MD-2 on its own.
+
 ## Supersession — `telegram-ic-comparison-formatting/`
 
 That story's TGFMT-1 (the `build_comparison_report()` alignment fix) is shipped and stays as
