@@ -848,6 +848,20 @@ Session Log grows large again.
   archived `csp-collateral-leg` story only validated `compute_max_lots()`'s formula, never wired
   it into a live entry-path enforcement gate). See `DECISIONS.md` 2026-08-06.
 
+### 2026-08-18 Session Log (telegram-markdown-migration, docs-only)
+- **MD-2/MD-3-4 live-risk window flagged**: Cowork review of `docs/plan/telegram-markdown-migration/`
+  found that MD-2 (global Markdown parse_mode switch) is blocked-by MD-1 but MD-3/MD-4 (escaping
+  audit-and-fix for all existing callers) are only blocked-by MD-2, not bundled with it — if MD-2
+  merges alone, every unescaped dynamic value in existing callers goes live against MarkdownV2's
+  reserved-character set, the same failure shape as the original `DELTA_WARN` bug, epic-wide
+  instead of one message. Non-fatal send contract prevents a crash but notifications (including
+  close/roll alerts) can silently stop sending for however long the gap lasts. Added an explicit
+  note under MD-2 in `backbone/tasks.md` and a matching note in the epic `README.md`'s Priority
+  order section: MD-2 must land together with MD-3/MD-4 in the same sitting, never on its own.
+  Also confirmed the epic's existing `Owner: Claude|Antigravity` routing annotations already cover
+  every `MD-*`/`FMT-*`/`ROLL-*` task (added 2026-08-12) — no gap there. Docs-only, no code, no
+  `@code-reviewer` gate required. SHA `75c7cd2`.
+
 ### 2026-08-06 Session Log (WARN dedup)
 - **DELTA_WARN Telegram spam fix**: user-reported (`[paper_ic_nifty_v1_monthly] DELTA_WARN: short_call |delta| 0.3272 >= 0.25` every ~2 min). Root cause: `StrategyMonitor._route_event` sent a plain Telegram message for every WARN-severity `SignalEvent` unconditionally, and strategies like `IronCondorV1.check_signals` re-emit the same WARN every tick while the condition persists (no state tracking existed at all). Fixed with an OFF→ON transition model, not a time-based cooldown (operator's explicit choice — once per condition until resolved, no periodic re-fire): new `warn_signal_state` SQLite table (`src/paper/store.py`) keyed `(strategy_name, event_type, leg_role)` + `is_warn_active`/`set_warn_active`/`reconcile_warn_state` methods. `StrategyMonitor._tick` now accumulates a `warn_fired: set[(event_type, leg_role)]` per strategy across all its expiry groups each tick, `_route_event` checks/sets `is_warn_active`/`set_warn_active` before sending, and `reconcile_warn_state` clears any previously-active condition absent from `warn_fired` (recovered) so the next re-breach alerts immediately. `_route_event` gained an optional `warn_fired` param (`None` in direct test calls = dedup skipped, matches pre-fix behavior for those callers). Tests: `tests/unit/paper/test_warn_signal_state.py` (8 cases) + 2 new cases in `tests/unit/strategy/test_strategy_monitor.py` (suppressed-when-active, first-occurrence-marks-active); existing `_make_store()` helper updated with `is_warn_active.return_value = False` default so pre-existing WARN tests keep passing. 44/44 targeted tests pass (`pip install --target=.../mnt/outputs/pydeps` sandbox workaround). Full `tests/unit/` run: 2216 passed, 27 failed/34 errors — all pre-existing, unrelated (missing `aiohttp`/`hypothesis` deps, `api.upstox.com` network blocked by sandbox proxy — confirmed by re-running `test_gate_violations.py`/`test_store.py`/`test_lookup.py` individually). See `DECISIONS.md` 2026-08-06.
 
