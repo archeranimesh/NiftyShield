@@ -13,11 +13,16 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from src.models.options import OptionChain, OptionChainStrike, OptionLeg
+from src.paper.constants import STRATEGY_OVERLAY
 from src.paper.models import PaperPosition
 from src.strategy.cc_overlay_v1 import CCOverlayV1
 from src.strategy.protocol import ApprovedAction, LegClose, SignalEvent
 
-_STRATEGY = "paper_covered_call_v1"
+# BUG-031: read from the real constant, not a hardcoded literal — a hardcoded
+# "paper_covered_call_v1" here would have silently kept passing after the
+# strategy_name repoint even though the class was filtering the wrong namespace
+# in production, which is exactly the gap that let the bug ship unnoticed.
+_STRATEGY = STRATEGY_OVERLAY
 _OTHER_STRATEGY = "paper_other_v1"
 
 
@@ -394,7 +399,9 @@ def test_describe_context() -> None:
         payload={},
     )
     ctx = strategy.describe_context(event, chain, [pos])
-    assert "paper_covered_call_v1" in ctx
+    # BUG-031: strategy_name now reflects the real filing namespace
+    # (STRATEGY_OVERLAY), not the retired paper_covered_call_v1 constant.
+    assert _STRATEGY in ctx
     assert "PROFIT_TARGET" in ctx
 
 

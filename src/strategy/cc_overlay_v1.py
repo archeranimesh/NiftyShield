@@ -19,7 +19,7 @@ from src.instruments.lookup import InstrumentLookup, format_leg_label
 from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
 from src.models.portfolio import TradeAction
-from src.paper.constants import DEFAULT_BOD_PATH, STRATEGY_CC_OVERLAY
+from src.paper.constants import DEFAULT_BOD_PATH, STRATEGY_OVERLAY
 from src.paper.models import PaperPosition, PaperTrade
 from src.strategy._price_utils import find_option_leg
 from src.strategy.exit_signals import ExitSignalEngine
@@ -57,7 +57,7 @@ SHORT_CALL_ROLES = {"short_call", "cc_short_call", "covered_call"}
 class CCOverlayV1(ReEntryMixin):
     """Covered Call overlay strategy implementation."""
 
-    strategy_name: str = STRATEGY_CC_OVERLAY
+    strategy_name: str = STRATEGY_OVERLAY
     auto_execute: bool = True
     reentry_leg_role: str = "covered_call"
     reentry_script_hint: str = "run find_overlay_strikes.py --overlay-type cc"

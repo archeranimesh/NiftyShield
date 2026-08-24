@@ -1184,6 +1184,107 @@ async def test_tick_summary_signal_count_matches() -> None:
 
 
 # ---------------------------------------------------------------------------
+# BUG-031 regression — real overlay strategies must be ticked against
+# STRATEGY_OVERLAY-scoped positions, not their old pre-S2r constants
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_tick_picks_up_cc_overlay_position_under_strategy_overlay() -> None:
+    """BUG-031: a CC overlay position filed under STRATEGY_OVERLAY (the
+    namespace paper_3track_overlay_entry.py's auto_cc_bootstrap actually
+    writes to) must be evaluated for exit signals by StrategyMonitor.
+
+    Deliberately end-to-end through a real CCOverlayV1 instance and a real
+    _tick(), not a unit-level strategy_name equality assertion — that
+    narrower check is exactly the class of gap that let this bug ship
+    unnoticed for three weeks (see docs/bugs/bugs.md BUG-031's B031.3 note).
+    Before the fix, CCOverlayV1.strategy_name pointed at
+    STRATEGY_CC_OVERLAY ("paper_covered_call_v1"), a namespace with zero
+    rows in production, so store.get_positions(strategy.strategy_name)
+    always returned [] and check_signals never saw a real position.
+    """
+    from src.paper.constants import STRATEGY_OVERLAY
+    from src.strategy.cc_overlay_v1 import CCOverlayV1
+
+    overlay_position = PaperPosition(
+        strategy_name=STRATEGY_OVERLAY,
+        leg_role="short_call",
+        net_qty=-65,
+        avg_cost=Decimal("0"),
+        avg_sell_price=Decimal("80"),
+        instrument_key="NSE_FO|NIFTY23000CE",
+    )
+
+    def _get_positions(strategy_name: str) -> list[PaperPosition]:
+        # Only the correct namespace should ever see this position — the
+        # exact distinction BUG-031's fix depends on.
+        return [overlay_position] if strategy_name == STRATEGY_OVERLAY else []
+
+    store = _make_store()
+    store.get_positions.side_effect = _get_positions
+
+    strategy = CCOverlayV1()
+    with patch.object(strategy, "check_signals", wraps=strategy.check_signals) as spy:
+        monitor = _make_monitor(store=store, strategies=[strategy])
+        with (
+            patch("src.strategy.monitor.is_trading_day", return_value=True),
+            patch(
+                "src.strategy.monitor.datetime",
+                **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
+            ),
+        ):
+            await monitor._tick()
+
+    store.get_positions.assert_any_call(STRATEGY_OVERLAY)
+    spy.assert_called_once()
+    _, called_positions = spy.call_args.args
+    assert called_positions == [overlay_position]
+
+
+@pytest.mark.asyncio
+async def test_tick_skips_cc_overlay_position_under_old_constant() -> None:
+    """Companion negative case: a position filed under the retired
+    STRATEGY_CC_OVERLAY namespace (pre-fix behavior) is now correctly
+    invisible to CCOverlayV1 — proves the repoint didn't just widen the
+    match to accept both namespaces."""
+    from src.paper.constants import STRATEGY_CC_OVERLAY, STRATEGY_OVERLAY
+    from src.strategy.cc_overlay_v1 import CCOverlayV1
+
+    stale_position = PaperPosition(
+        strategy_name=STRATEGY_CC_OVERLAY,
+        leg_role="short_call",
+        net_qty=-65,
+        avg_cost=Decimal("0"),
+        avg_sell_price=Decimal("80"),
+        instrument_key="NSE_FO|NIFTY23000CE",
+    )
+
+    def _get_positions(strategy_name: str) -> list[PaperPosition]:
+        return [stale_position] if strategy_name == STRATEGY_CC_OVERLAY else []
+
+    store = _make_store()
+    store.get_positions.side_effect = _get_positions
+
+    strategy = CCOverlayV1()
+    assert strategy.strategy_name == STRATEGY_OVERLAY
+    with patch.object(strategy, "check_signals", wraps=strategy.check_signals) as spy:
+        monitor = _make_monitor(store=store, strategies=[strategy])
+        with (
+            patch("src.strategy.monitor.is_trading_day", return_value=True),
+            patch(
+                "src.strategy.monitor.datetime",
+                **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
+            ),
+        ):
+            await monitor._tick()
+
+    spy.assert_called_once()
+    _, called_positions = spy.call_args.args
+    assert called_positions == []
+
+
+# ---------------------------------------------------------------------------
 # Helpers (private to this module)
 # ---------------------------------------------------------------------------
 

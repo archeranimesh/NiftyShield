@@ -19,7 +19,7 @@ from src.instruments.lookup import InstrumentLookup, format_leg_label
 from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
 from src.models.portfolio import TradeAction
-from src.paper.constants import DEFAULT_BOD_PATH, STRATEGY_PP_OVERLAY
+from src.paper.constants import DEFAULT_BOD_PATH, STRATEGY_OVERLAY
 from src.paper.models import PaperPosition, PaperTrade
 from src.strategy._price_utils import find_option_leg
 from src.strategy.exit_signals import ExitSignalEngine
@@ -57,7 +57,7 @@ LONG_PUT_ROLES = {"long_put", "pp_long_put", "protective_put"}
 class PPOverlayV1(ReEntryMixin):
     """Protective Put overlay strategy implementation."""
 
-    strategy_name: str = STRATEGY_PP_OVERLAY
+    strategy_name: str = STRATEGY_OVERLAY
     auto_execute: bool = True
     reentry_leg_role: str = "protective_put"
     reentry_script_hint: str = "run find_overlay_strikes.py --overlay-type pp"

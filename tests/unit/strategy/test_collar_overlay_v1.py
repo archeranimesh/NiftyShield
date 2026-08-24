@@ -13,11 +13,14 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.models.options import OptionChain, OptionChainStrike, OptionLeg
+from src.paper.constants import STRATEGY_OVERLAY
 from src.paper.models import PaperPosition
 from src.strategy.collar_overlay_v1 import CollarOverlayV1
 from src.strategy.protocol import ApprovedAction, LegClose, SignalEvent
 
-_STRATEGY = "paper_collar_v1"
+# BUG-031: read from the real constant, not a hardcoded literal — see
+# test_cc_overlay_v1.py's identical note.
+_STRATEGY = STRATEGY_OVERLAY
 _OTHER_STRATEGY = "paper_other_v1"
 
 
@@ -293,7 +296,9 @@ def test_describe_context() -> None:
         payload={},
     )
     ctx = strategy.describe_context(event, chain, [pos1, pos2])
-    assert "paper_collar_v1" in ctx
+    # BUG-031: strategy_name now reflects the real filing namespace
+    # (STRATEGY_OVERLAY), not the retired paper_collar_v1 constant.
+    assert _STRATEGY in ctx
     assert "PROFIT_TARGET" in ctx
 
 
