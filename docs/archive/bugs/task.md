@@ -450,3 +450,28 @@ commit per phase.
   confirmed that and closed the doc-tracking bookkeeping only.
 
 ---
+
+## BUG-029 — `paper_exit_events.counterfactual_dte_marks` migration committed but never run; 3-track EOD snapshot cron has crashed every market day since 2026-08-05
+
+- [x] **B029.1** — Root cause confirmed (schema diff + log tracebacks + `git log -S`). | No code
+  change — investigation only
+- [x] **B029.2** — Tests for the pre-existing migration script (4 cases, none existed before). |
+  SHA `c8d5baa`
+- [x] **B029.3** — Review: `general-purpose` + `REVIEW.md` substitute, no CRITICAL/ERROR/WARNING.
+  | Review-only, no SHA
+- [x] **B029.4** — Run the migration against the live DB (back up first), confirm the next 15:35
+  cron completes clean, then backfill the missed day's overlay-pnl/leg-snapshot/protection-recovery
+  rows via `paper_3track_snapshot --no-dry-run`. | Confirmed 2026-08-24 via direct DB check:
+  `counterfactual_dte_marks` present on `paper_exit_events`; `logs/paper_snapshot.log` shows the
+  three `OperationalError` tracebacks stop at 2026-08-10, every 15:35 run 08-11 through 08-21
+  clean; `paper_leg_snapshots`/`paper_protection_recovery_snapshots` both carry backfilled
+  2026-08-10 rows (3 and 1 respectively — could only exist via a backfill re-run, since the
+  crashing cron died before reaching that code). `paper_overlay_pnl_snapshots` has none for
+  08-10, which is correct, not a gap: `paper_trades` shows the first overlay leg wasn't opened
+  until 2026-08-11.
+- [x] **B029.5** — Healthcheck coverage for "did the 3-track snapshot cron crash" (non-blocking
+  follow-up). | SHA `bee2649`
+- [x] **B029.6** — Commit, update `bugs.md` BUG-029 status to ✅ Fixed + SHA once B029.4 confirms
+  clean, update `TODOS.md`. | Docs-only close, this session.
+
+---

@@ -29,24 +29,6 @@
 - [ ] **B025.1** — Deliberately deferred, not blocking (Animesh) — no checklist yet. Scope it
   before starting: `docs/bugs/bugs.md` BUG-025.
 
-## BUG-029 — `paper_exit_events.counterfactual_dte_marks` migration committed but never run; 3-track EOD snapshot cron has crashed every market day since 2026-08-05
-
-- [x] **B029.1** — Root cause confirmed (schema diff + log tracebacks + `git log -S`). | No code
-  change — investigation only
-- [x] **B029.2** — Tests for the pre-existing migration script (4 cases, none existed before). |
-  SHA `c8d5baa`
-- [x] **B029.3** — Review: `general-purpose` + `REVIEW.md` substitute, no CRITICAL/ERROR/WARNING.
-  | Review-only, no SHA
-- [ ] **B029.4** — Run the migration against the live DB (back up first), confirm the next 15:35
-  cron completes clean, then backfill the missed day's overlay-pnl/leg-snapshot/protection-recovery
-  rows via `paper_3track_snapshot --no-dry-run`. **Migration itself confirmed run 2026-08-10** —
-  still outstanding: confirm a subsequent cron ran clean, and the backfill re-run. Full detail:
-  `docs/bugs/bugs.md` BUG-029.
-- [x] **B029.5** — Healthcheck coverage for "did the 3-track snapshot cron crash" (non-blocking
-  follow-up). | SHA `bee2649`
-- [ ] **B029.6** — Commit, update `bugs.md` BUG-029 status to ✅ Fixed + SHA once B029.4 confirms
-  clean, update `TODOS.md`.
-
 ## BUG-030 — `_overlay_type_groups()` elif-precedence drops an `overlay_cc` leg
 
 - [ ] **B030.1** — Decide the entry-side question first (blocks B030.2): should the call leg have

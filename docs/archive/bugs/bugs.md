@@ -728,3 +728,36 @@ bookkeeping only: Status line above, this line, `task.md` B027.4 checkbox, `TODO
 log. No further code change needed for BUG-027.
 
 ---
+
+## BUG-029 — `paper_exit_events.counterfactual_dte_marks` migration committed but never run against the live DB; `paper_3track_snapshot.py`'s 15:35 EOD cron has crashed every market day since 2026-08-05
+
+| Field | Value |
+|---|---|
+| Severity | **HIGH** — not a P&L-correctness defect, but a full crash of the daily 3-track snapshot script before it reaches exit-signal evaluation (delta-stop/premium-stop checks for all base + overlay legs) or the overlay P&L/leg-snapshot/protection-recovery pipeline (BUG-028's fix target). Zero downstream signal — the crash is logged but nothing alerts on it, same silent-failure shape as BUG-026/027. |
+| Status | ✅ Fixed — migration confirmed live (`counterfactual_dte_marks` present on `paper_exit_events`); every 15:35 cron from 2026-08-11 through 2026-08-21 in `logs/paper_snapshot.log` completed clean (no further `OperationalError` tracebacks past 08-10); 2026-08-10's `paper_leg_snapshots`/`paper_protection_recovery_snapshots` rows confirmed backfilled. B029.5 healthcheck coverage SHA `bee2649`. Full verification detail below. |
+| Discovered | 2026-08-10, while checking `logs/paper_snapshot.log`/`logs/cron.log` to see whether today's PP overlay trade had propagated to `paper_overlay_pnl_snapshots`/`paper_leg_snapshots`. It hadn't — traced to a crash in the same cron run, not a data-attribution gap. |
+| Location | `src/paper/store.py::PaperStore.get_open_exit_events()` (crash site, `SELECT` includes `counterfactual_dte_marks`); `scripts/strategies/three_track/paper_3track_snapshot.py::compute_and_record_exit_signals()` → `_run()` (caller, crash occurs before overlay P&L/leg-snapshot/protection-recovery code further down the same function ever runs); `scripts/dev/migrate_exit_events_counterfactual_dte_marks.py` (the fix — already existed, never executed). |
+
+**Symptom:** `logs/paper_snapshot.log`'s `35 15 * * 1-5` cron entry (`scripts.strategies.three_track.paper_3track_snapshot --no-dry-run`) has thrown an identical unhandled `sqlite3.OperationalError: no such column: counterfactual_dte_marks` traceback at `compute_and_record_exit_signals()` → `store.get_open_exit_events()` on every market day from 2026-08-05 through 2026-08-10 (confirmed by direct log inspection, not inference — same file/line/error on 08-05, 08-07 [Wed/Thu logs rotated out but 08-05/08-07/08-10 confirmed present], 08-10). A separate, unrelated cron entry (`36 15 * * 1-5`, `scripts.portfolio.paper_snapshot`) writes to the same log file and succeeds independently — its `total_pnl` NAV rows continuing to appear made the crash easy to miss, since *something* useful still landed in the DB every day.
+
+**Root cause:** Commit `17b4ff9` (`feat(paper): add counterfactual_dte_marks column to paper_exit_events`, 2026-08-05 13:11 IST, Animesh) correctly added the column to `_SCHEMA`, to `create_exit_event`/`get_exit_event`/`get_open_exit_events`'s queries, **and** shipped a migration script (`scripts/dev/migrate_exit_events_counterfactual_dte_marks.py`) in the same commit — the code-side change was done properly. But committing a migration script does not run it: nothing in `docs/bugs/task.md`, `TODOS.md`, or `DECISIONS.md` records it ever being executed against `data/portfolio/portfolio.sqlite`, and a direct schema diff (fresh in-memory DB built from `_SCHEMA` vs. the live DB, checked 2026-08-10) confirms the live table is still missing the column. This is a process gap, not a code defect — the same class of "committed the fix, never ran the migration" miss, just never surfaced until a code path that actually selects the column executed (`get_open_exit_events`, called daily by the 3-track snapshot script, but apparently not exercised by anything else that runs more frequently/visibly).
+
+**Fix:** run the existing migration (`python -m scripts.dev.migrate_exit_events_counterfactual_dte_marks`) against the live DB; add test coverage for the migration script, which had none (`tests/unit/scripts/test_migrate_exit_events_counterfactual_dte_marks.py`, 4 tests: column added + existing row preserved, idempotent re-run, dry-run no-write, no-op on an already-migrated DB). `general-purpose`+`REVIEW.md` substitute review: no CRITICAL/ERROR/WARNING — migration script confirmed correct as originally written (idempotent, dry-run safe, correct use of `src.db.connect()`, `ALTER TABLE ADD COLUMN` confirmed safe/cheap since `paper_exit_events` is non-`STRICT`); the review's one INFO note flagged that running the migration against the live DB is the actual operational fix and is separate from committing test coverage — see `docs/bugs/task.md` B029.1+ for whether that's been done this session.
+
+**Related:** BUG-026/BUG-027/BUG-028 — same silent-failure shape (a broken automation path producing zero operator-facing signal until someone manually checks a log file); unlike those three, the code itself was correct from day one here — this is purely a "shipped fix, never deployed it" gap, suggesting the missing safeguard is process (a migration-execution checklist item, or `scripts/healthcheck.py`/`position_health_check.py` gaining coverage for "did the 3-track snapshot script's last run exit 0") rather than anything to fix in the migration script itself.
+
+**Implementation progress (2026-08-24, B029.4/B029.6 close):** direct DB verification via
+`python3 -c "sqlite3..."` against `data/portfolio/portfolio.sqlite` (no code change — pure
+confirmation pass): (1) `PRAGMA table_info(paper_exit_events)` confirms `counterfactual_dte_marks`
+present. (2) `grep -n "OperationalError: no such column: counterfactual_dte_marks"
+logs/paper_snapshot.log` returns exactly 3 hits, dated 2026-08-05/07/10 only — every 15:35 run
+from 2026-08-11 through 2026-08-21 present in the log has no `Traceback` entry. (3) Backfill
+confirmed: `paper_leg_snapshots` and `paper_protection_recovery_snapshots` both carry rows dated
+2026-08-10 (3 and 1 rows respectively) — these could only exist via a backfill re-run, since the
+crashing 08-10 cron died in `compute_and_record_exit_signals()` before reaching that write path.
+`paper_overlay_pnl_snapshots` has zero rows for 08-10, which is correct rather than a residual
+gap: `paper_trades` shows the first `overlay_*` leg (`overlay_pp`) wasn't opened until
+2026-08-11, so there was nothing to snapshot on 08-10. B029.4 and B029.6 both closed this
+session; see `docs/bugs/task.md` B029.1-6 (now archived, section fully checked).
+
+---

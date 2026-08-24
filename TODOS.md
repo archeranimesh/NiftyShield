@@ -134,6 +134,20 @@ Session Log grows large again.
   `docs/archive/bugs/bugs.md` per the archival convention. No code change. Docs-only commit —
   `code-reviewer` gate not applicable.
 
+### 2026-08-24 Session Log (BUG-029 docs-close — B029.4/B029.6)
+- **BUG-029** (`counterfactual_dte_marks` migration/backfill verification): direct DB check
+  against `data/portfolio/portfolio.sqlite` confirmed B029.4 fully done: (1) migration applied —
+  `paper_exit_events.counterfactual_dte_marks` present via `PRAGMA table_info`; (2) crons clean
+  since — the 3 `OperationalError: no such column` tracebacks in `logs/paper_snapshot.log` are
+  dated 08-05/08-07/08-10 only, every 15:35 run 08-11 through 08-21 has no traceback; (3) backfill
+  confirmed — `paper_leg_snapshots`/`paper_protection_recovery_snapshots` both carry 2026-08-10
+  rows (3 and 1) that could only exist via a re-run, since the crashing cron died before that
+  write path. `paper_overlay_pnl_snapshots` has none for 08-10, which is correct (no `overlay_*`
+  leg existed before 2026-08-11 per `paper_trades`) rather than a residual gap. Closed B029.4 and
+  B029.6: `bugs.md` Status flipped to ✅ Fixed, `task.md` fully checked and — all `B029.x` items
+  done — the whole section moved to `docs/archive/bugs/task.md`/`docs/archive/bugs/bugs.md`. No
+  code change. Docs-only commit — `code-reviewer` gate not applicable.
+
 ### 2026-08-19 Session Log (IC entry v1/v2 content drift — draft story only)
 - **Telegram Markdown migration** (item 29): Animesh noticed the three IC entry confirmation
   Telegram messages he was seeing (`paper_ic_nifty_v1_monthly`, `paper_ic_nifty_v2_monthly`,
