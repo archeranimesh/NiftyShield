@@ -331,6 +331,8 @@ class PPOverlayV1(ReEntryMixin):
             notes="close via apply_action",
         )
         inserted = self._store.record_trade(trade)
+        if inserted:
+            self._store.mark_trade_closed(pos.strategy_name, pos.leg_role, pos.instrument_key)
         log.info(
             "pp_overlay_v1.record_close_trade",
             leg_role=pos.leg_role,

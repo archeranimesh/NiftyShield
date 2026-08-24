@@ -476,6 +476,51 @@ def test_record_close_trade_falls_back_to_avg_cost_when_mark_missing() -> None:
     assert trade.price == Decimal("50")
 
 
+def test_record_close_trade_marks_opening_row_closed() -> None:
+    """BUG-035: closing a PP leg must call mark_trade_closed on the store so
+    the opening row transitions out of state='OPEN', not just insert the
+    closing SELL trade."""
+    mock_store = MagicMock()
+    mock_store.record_trade.return_value = True
+    strategy = PPOverlayV1(store=mock_store, notifier=None)
+    strategy._check_reentry = AsyncMock()
+
+    pos = _make_position(avg_cost="50")
+    action = ApprovedAction(
+        action_type="MONETIZE_PP",
+        legs_to_close=[LegClose(leg_role="protective_put")],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+    )
+    _run(strategy.apply_action([pos], action))
+
+    mock_store.mark_trade_closed.assert_called_once_with(
+        pos.strategy_name, pos.leg_role, pos.instrument_key
+    )
+
+
+def test_record_close_trade_skips_mark_closed_when_duplicate_insert() -> None:
+    """If record_trade reports a duplicate (already recorded), don't also
+    call mark_trade_closed — the earlier successful close already did."""
+    mock_store = MagicMock()
+    mock_store.record_trade.return_value = False
+    strategy = PPOverlayV1(store=mock_store, notifier=None)
+    strategy._check_reentry = AsyncMock()
+
+    pos = _make_position(avg_cost="50")
+    action = ApprovedAction(
+        action_type="MONETIZE_PP",
+        legs_to_close=[LegClose(leg_role="protective_put")],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+    )
+    _run(strategy.apply_action([pos], action))
+
+    mock_store.mark_trade_closed.assert_not_called()
+
+
 # ── MC-4: _find_put_leg BOD-fallback routing ──────────────────────────────
 
 

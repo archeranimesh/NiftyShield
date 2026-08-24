@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 
 from src.models.options import OptionChain, OptionChainStrike, OptionLeg
-from src.paper.models import ExitSignal, PaperTrade, TradeAction
+from src.paper.models import ExitSignal, PaperTrade, TradeAction, TradeState
 from src.paper.store import PaperStore
 from src.strategy.executor import PaperFillSimulator
 from src.strategy.overlay_closer import OverlayCloser
@@ -111,6 +111,27 @@ def closer(
     return OverlayCloser(store, simulator, notifier)
 
 
+def _opening_trade_state(store: PaperStore, strategy_name: str, leg_role: str) -> str:
+    """Read paper_trades.state for the opening (non-closing) row of a leg.
+
+    get_trade_state() only looks at SELL-opened rows (short-leg state machine);
+    a BUY-opened long leg (e.g. the collar's put) needs a direct read.
+    """
+    conn = sqlite3.connect(str(store.db_path))
+    try:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            """SELECT state FROM paper_trades
+               WHERE strategy_name = ? AND leg_role = ?
+               ORDER BY trade_date ASC, id ASC LIMIT 1""",
+            (strategy_name, leg_role),
+        ).fetchone()
+        assert row is not None
+        return row["state"]
+    finally:
+        conn.close()
+
+
 def test_close_single_leg_happy_path(store: PaperStore, closer: OverlayCloser) -> None:
     # 1. Seed entry trade for CC
     entry = PaperTrade(
@@ -154,9 +175,65 @@ def test_close_single_leg_happy_path(store: PaperStore, closer: OverlayCloser) -
     pos = store.get_position("paper_covered_call_v1", "short_call")
     assert pos.net_qty == 0
 
+    # BUG-035 regression: the opening trade row must transition to CLOSED,
+    # not stay OPEN forever (mark_trade_closed must be wired in).
+    assert (
+        _opening_trade_state(store, "paper_covered_call_v1", "short_call")
+        == TradeState.CLOSED.value
+    )
+
     # 5. Verify exit event is ACTED
     open_events = store.get_open_exit_events("paper_covered_call_v1")
     assert not any(e["id"] == event_id for e in open_events)
+
+
+def test_close_single_leg_skips_mark_closed_when_duplicate_insert(
+    store: PaperStore, closer: OverlayCloser
+) -> None:
+    """BUG-035: if record_trade reports a duplicate (already recorded this
+    calendar day), close_single_leg must not also call mark_trade_closed —
+    mirrors the CC/PP `if inserted:` guard."""
+    entry = PaperTrade(
+        strategy_name="paper_covered_call_v1",
+        leg_role="short_call",
+        instrument_key="NSE_FO|NIFTY24500CE",
+        trade_date=date.today(),
+        action=TradeAction.SELL,
+        quantity=65,
+        price=Decimal("80.0"),
+        notes="entry",
+        ivr_at_entry=0.30,
+        is_paper=True,
+    )
+    store.record_trade(entry)
+
+    original_record_trade = store.record_trade
+    calls: list[PaperTrade] = []
+
+    def fake_record_trade(trade: PaperTrade) -> bool:
+        calls.append(trade)
+        return False  # simulate duplicate skip
+
+    store.record_trade = fake_record_trade  # type: ignore[method-assign]
+    mark_closed_calls: list[tuple] = []
+    original_mark_trade_closed = store.mark_trade_closed
+    store.mark_trade_closed = lambda *a, **kw: mark_closed_calls.append(a)  # type: ignore[method-assign]
+
+    chain = _make_chain("35", "0.20", "20", "-0.10")
+    closer.close_single_leg(
+        strategy_name="paper_covered_call_v1",
+        leg_role="short_call",
+        market=chain,
+        event_id=None,
+        vix=15.0,
+        is_loss_stop=False,
+    )
+
+    store.record_trade = original_record_trade  # type: ignore[method-assign]
+    store.mark_trade_closed = original_mark_trade_closed  # type: ignore[method-assign]
+
+    assert len(calls) == 1
+    assert mark_closed_calls == []
 
 
 def test_close_single_leg_loss_stop_slippage(store: PaperStore, closer: OverlayCloser) -> None:
@@ -280,6 +357,16 @@ def test_close_collar_all_happy_path(store: PaperStore, closer: OverlayCloser) -
     assert store.get_position("paper_collar_v1", "overlay_collar_call").net_qty == 0
     assert store.get_position("paper_collar_v1", "overlay_collar_put").net_qty == 0
 
+    # BUG-035 regression: both opening rows must transition to CLOSED.
+    assert (
+        _opening_trade_state(store, "paper_collar_v1", "overlay_collar_call")
+        == TradeState.CLOSED.value
+    )
+    assert (
+        _opening_trade_state(store, "paper_collar_v1", "overlay_collar_put")
+        == TradeState.CLOSED.value
+    )
+
 
 def test_close_collar_all_rollback(
     store: PaperStore, closer: OverlayCloser, notifier: MockNotifier
@@ -356,6 +443,16 @@ def test_monetize_collar_put(store: PaperStore, closer: OverlayCloser) -> None:
 
     assert store.get_position("paper_collar_v1", "overlay_collar_call").net_qty == 0
     assert store.get_position("paper_collar_v1", "overlay_collar_put").net_qty == 0
+
+    # BUG-035 regression: both opening rows must transition to CLOSED.
+    assert (
+        _opening_trade_state(store, "paper_collar_v1", "overlay_collar_call")
+        == TradeState.CLOSED.value
+    )
+    assert (
+        _opening_trade_state(store, "paper_collar_v1", "overlay_collar_put")
+        == TradeState.CLOSED.value
+    )
 
 
 def test_route(store: PaperStore, closer: OverlayCloser) -> None:

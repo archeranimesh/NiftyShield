@@ -129,7 +129,12 @@ class OverlayCloser:
             ivr_at_entry=None,
             is_paper=True,
         )
-        self._store.record_trade(trade)
+        # quantity is always abs(position.net_qty) above — this is always a
+        # full close, never partial, so it's safe to mark the opening row
+        # CLOSED whenever the trade write actually inserted a new row.
+        inserted = self._store.record_trade(trade)
+        if inserted:
+            self._store.mark_trade_closed(strategy_name, leg_role, position.instrument_key)
 
         if event_id is not None:
             delta_stop_would_fire = None
@@ -265,6 +270,11 @@ class OverlayCloser:
                     )
                 return False
 
+            for closed_trade in trades_to_write:
+                self._store.mark_trade_closed(
+                    strategy_name, closed_trade.leg_role, closed_trade.instrument_key
+                )
+
         if event_id is not None:
             self._store.resolve_exit_event_with_audit(event_id=event_id, status="ACTED")
         else:
@@ -383,6 +393,11 @@ class OverlayCloser:
                         f"Collar monetize failed: could not write close trades. Error: {e}"
                     )
                 return
+
+            for closed_trade in trades_to_write:
+                self._store.mark_trade_closed(
+                    strategy_name, closed_trade.leg_role, closed_trade.instrument_key
+                )
 
         expiry = self._parse_expiry(put_pos.instrument_key) if put_pos else None
         dte = (expiry - today).days if expiry is not None else 0
