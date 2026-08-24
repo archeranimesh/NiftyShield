@@ -500,3 +500,25 @@ commit per phase.
   | SHA `700dbf0`
 
 ---
+
+---
+
+## BUG-030 — `_overlay_type_groups()` elif-precedence drops an `overlay_cc` leg
+
+- [x] **B030.1** — Decide the entry-side question first (blocks B030.2): should the call leg have
+  been tagged `overlay_collar_call` at entry instead of `overlay_cc`? Investigate
+  `paper_3track_overlay_entry.py`'s collar/CC entry path. Likely needs a council checkpoint —
+  see `docs/bugs/bugs.md` BUG-030. | SHA 86db6a2
+- [x] **B030.2** — Fix `_overlay_type_groups()` (`paper_3track_snapshot.py:1081-1117`) per B030.1's
+  resolved semantics — add the missing `has_cc and has_put` branch. Must not regress the existing
+  `has_put`-without-`has_call`-or-`has_cc` warning path. | SHA 86db6a2
+- [x] **B030.3** — Tests: regression test for `_overlay_type_groups({"overlay_cc",
+  "overlay_collar_put"})`, edge cases for the other 3 combinations, end-to-end test on
+  `_compute_overlay_pnl_snapshots`. | SHA 86db6a2
+- [x] **B030.4** — Backfill or document a discontinuity for the 2026-08-12/08-13
+  `paper_overlay_pnl_snapshots` rows written with the missing leg's P&L. | SHA n/a
+  (data-only backfill via `record_overlay_pnl_snapshot`, no code change; portfolio.sqlite
+  backed up first as `portfolio.bak_20260824T030023_pre-BUG030.4-backfill.sqlite`)
+- [x] **B030.5** — Review: real `code-reviewer` or `general-purpose` + `REVIEW.md` substitute
+  (mandatory — financial P&L reporting change). | SHA 86db6a2
+- [x] **B030.6** — Commit, update `bugs.md` BUG-030 status to ✅ Fixed + SHA, update `TODOS.md`. | SHA 86db6a2

@@ -124,6 +124,19 @@ Full forensic log (SHAs, bug numbers, root-cause detail) moved to
 add new entries there going forward, or start a fresh dated section here if this file's
 Session Log grows large again.
 
+### 2026-08-24 Session Log (BUG-030 closed — B030.4 backfill + archive)
+- **BUG-030 B030.4**: backfilled the two `paper_overlay_pnl_snapshots` collar rows corrupted by
+  the original bug — 08-12 pnl_inception_abs -703.625 -> -1241.500, 08-13 -973.375 -> -919.750
+  (matches bugs.md's stated true value) — via `PaperStore.record_overlay_pnl_snapshot()` using
+  the fixed `_compute_overlay_pnl_snapshots()`, no raw SQL. `portfolio.sqlite` backed up first.
+  `pp` rows on both dates verified untouched. All 6 B030.x items now checked; BUG-030 moved to
+  `docs/archive/bugs/{bugs,task}.md`.
+- **New finding (not yet filed as its own bug)**: the backfill recompute logged
+  `get_position_ambiguous leg_role=overlay_pp match_count=2` on both dates — two open positions
+  currently match `overlay_pp` under `STRATEGY_OVERLAY`, making `pp`'s `pnl_*_pct` fields
+  non-deterministic across recompute runs (abs fields unaffected). Needs a fresh `BUG-NNN` entry
+  and a decision on which `overlay_pp` position is real — flagged to Animesh, not filed yet.
+
 ### 2026-08-24 Session Log (BUG-030 fixed — overlay_cc/collar_put merge)
 - **BUG-030** (`_overlay_type_groups()` elif-precedence dropped an `overlay_cc` leg whenever an
   `overlay_collar_put` leg was also present same-day): B030.1's entry-side question resolved by
