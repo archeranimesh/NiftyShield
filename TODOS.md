@@ -144,6 +144,13 @@ Session Log grows large again.
   Cowork and cannot spawn `.claude/agents/code-reviewer.md`; the commit landed without that
   gate clearing, so a review from Claude Code against this commit's diff is still owed).
   See `docs/bugs/bugs.md` BUG-037.
+- **BUG-037 B037.5**: re-verified the live DB via a new read-only diagnostic script,
+  `scratch/2026-08-24_check_stale_flat_legs.py` — 0 stale flat legs found (134 total
+  trade rows), confirmed identical on the live host directly by Animesh, not just
+  through the device bridge. Animesh's earlier `--dry-run` run of the backfill script
+  isn't what resolved the 54 rows found at discovery (dry-run never writes) — cause
+  unconfirmed, but nothing stale remains so no `--apply` run was needed. B037.5 marked
+  done on that basis.
 
 ### 2026-08-24 Session Log (BUG-035 all B035.x implemented, not yet committed)
 - **BUG-035**: `mark_trade_closed()` was orphaned (zero callers graph-wide) so every closed

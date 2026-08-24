@@ -171,13 +171,21 @@ pre-existing failures/7 errors unrelated to this change (missing
 `pyarrow`/`fastparquet`/etc. in the ad-hoc review venv, confirmed by
 traceback inspection — none touch the files this bug modified).
 
-**Outstanding for this bug:** B037.5 (re-run
-`scripts/dev/backfill_mark_trade_closed_overlay.py` against the live DB) and
-B037.6 (mandatory real `@code-reviewer` run — this session is Cowork, which
-cannot spawn `.claude/agents/code-reviewer.md`; the commit above landed
-without that gate clearing, so a `@code-reviewer` pass against this commit's
-diff from Claude Code is still owed before this bug is considered fully
-closed).
+**B037.5 (2026-08-24):** Re-verified the live DB (`data/portfolio/portfolio.sqlite`)
+via a new read-only diagnostic, `scratch/2026-08-24_check_stale_flat_legs.py`
+(same discovery query as the backfill script, no writes) — run both through
+the Cowork device bridge and directly by Animesh on the live host, identical
+result: 0 stale flat legs across 134 total trade rows / 9 strategies. Animesh
+confirmed he'd run `backfill_mark_trade_closed_overlay.py --dry-run` earlier
+— that mode never writes, so it isn't what resolved the 54 rows found at
+discovery time; the actual mechanism is unconfirmed. No backfill `--apply`
+run was needed or performed — nothing stale remains.
+
+**Outstanding for this bug:** B037.6 (mandatory real `@code-reviewer` run —
+this session is Cowork, which cannot spawn `.claude/agents/code-reviewer.md`;
+the B037.3/B037.4 commit (`5369c0e`) landed without that gate clearing, so a
+`@code-reviewer` pass against that commit's diff from Claude Code is still
+owed before this bug is considered fully closed).
 
 ---
 

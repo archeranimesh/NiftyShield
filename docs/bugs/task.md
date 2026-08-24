@@ -44,9 +44,18 @@
 - [x] **B037.4** — Tests: regression coverage per call site mirroring
   BUG-035's B035.4 pattern (mark_trade_closed called on full close, not
   called on partial close/duplicate insert). | SHA `5369c0e`
-- [ ] **B037.5** — Re-run `scripts/dev/backfill_mark_trade_closed_overlay.py`
+- [x] **B037.5** — Re-run `scripts/dev/backfill_mark_trade_closed_overlay.py`
   (already generalized, built for BUG-035) against the live DB once B037.3
   lands — it already covers all 54 rows found in this bug's discovery scan.
+  Verified 2026-08-24 via `scratch/2026-08-24_check_stale_flat_legs.py`
+  (identical read-only query) run both through the device bridge and
+  directly by Animesh on the live host — same file, same result: 0 stale
+  flat legs, 134 total trade rows. Animesh confirms he ran the backfill
+  script with `--dry-run` earlier — note `--dry-run` never writes, so it
+  cannot be the mechanism that resolved the 54 rows found at discovery; the
+  actual cause is unconfirmed (possibly a prior `--apply` run, or the
+  discovery-time count reflected DB state that's since moved on). No open
+  action either way — nothing stale remains to backfill.
 - [ ] **B037.6** — Review: real `code-reviewer` or `general-purpose` +
   `REVIEW.md` substitute (mandatory — touches live paper-trading state
   transitions across CSP/IC, the two highest-volume strategy families).
