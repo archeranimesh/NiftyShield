@@ -147,7 +147,11 @@ async def close_csp_leg(
     )
 
     if not dry_run:
-        store.record_trade(close_trade)
+        inserted = store.record_trade(close_trade)
+        if inserted:
+            store.mark_trade_closed(
+                existing.strategy_name, existing.leg_role, existing.instrument_key
+            )
 
     logger.info(
         "csp_leg_closed",

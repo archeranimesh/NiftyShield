@@ -174,6 +174,77 @@ async def test_roll_persists_both_close_and_open_atomically(tmp_path: Path) -> N
     assert open_keys.get("NSE_FO|NIFTY26AUGFUT") == 50
     assert "NSE_FO|NIFTY26JULFUT" not in open_keys
 
+    # BUG-037: the closed leg's opening row must transition to CLOSED, not
+    # stay OPEN forever (mirrors BUG-035's overlay fix; this roll path was
+    # found to have the same wiring gap for base_futures/base_ditm_call).
+    closed_trade = next(
+        t
+        for t in store.get_trades("paper_nifty_futures", "base_futures")
+        if t.instrument_key == "NSE_FO|NIFTY26JULFUT"
+    )
+    assert closed_trade.state.value == "CLOSED"
+
+
+@pytest.mark.asyncio
+async def test_roll_skips_mark_closed_when_close_leg_is_duplicate_skipped(
+    tmp_path: Path,
+) -> None:
+    """BUG-037: if record_trades skips the close leg as a duplicate, the
+    opening row must NOT be marked CLOSED — mirrors the CC/PP/overlay
+    `if inserted:` guard, applied here via `if close_trade in inserted`."""
+    store = _make_store(tmp_path)
+    _seed_entry_trade(store)
+    lookup = _futures_lookup()
+    today = date(2026, 7, 29)
+
+    from src.models.portfolio import TradeAction
+    from src.paper.models import PaperTrade
+
+    store.record_trade(
+        PaperTrade(
+            strategy_name="paper_nifty_futures",
+            leg_role="base_futures",
+            instrument_key="NSE_FO|NIFTY26JULFUT",
+            trade_date=today,
+            action=TradeAction.SELL,
+            quantity=50,
+            price=Decimal("1.0"),
+        )
+    )
+
+    pos = PaperPosition(
+        strategy_name="paper_nifty_futures",
+        leg_role="base_futures",
+        net_qty=50,
+        avg_cost=Decimal("23000.0"),
+        avg_sell_price=Decimal("0.0"),
+        instrument_key="NSE_FO|NIFTY26JULFUT",
+    )
+
+    broker = MagicMock()
+    broker.get_ltp = AsyncMock(
+        return_value={
+            "NSE_FO|NIFTY26JULFUT": Decimal("23100.0"),
+            "NSE_FO|NIFTY26AUGFUT": Decimal("23150.0"),
+        }
+    )
+
+    summary = await roll_mod.check_and_roll_leg(
+        pos, lookup, store, broker, notifier=None, today=today, dry_run=False
+    )
+
+    assert summary is not None
+    assert summary["partial"] is True
+
+    # The original entry row (the one actually opened) must stay OPEN —
+    # the close attempt never landed, so nothing should have transitioned.
+    entry_trade = next(
+        t
+        for t in store.get_trades("paper_nifty_futures", "base_futures")
+        if t.action == TradeAction.BUY
+    )
+    assert entry_trade.state.value != "CLOSED"
+
 
 @pytest.mark.asyncio
 async def test_roll_notifies_telegram_on_success(tmp_path: Path) -> None:

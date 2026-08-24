@@ -83,6 +83,33 @@ def test_close_csp_leg_live(mock_broker: MagicMock, mock_store: MagicMock) -> No
 
     assert close_trade.price == Decimal("10.50")
     mock_store.record_trade.assert_called_once_with(close_trade)
+    # BUG-037: closing a CSP leg must transition the opening row to CLOSED,
+    # not just insert the closing trade (mirrors BUG-035's overlay fix).
+    mock_store.mark_trade_closed.assert_called_once_with(
+        "paper_csp_nifty_v1", "short_put", "NSE_FO|NIFTY23000PE"
+    )
+
+
+def test_close_csp_leg_skips_mark_closed_when_duplicate_insert(
+    mock_broker: MagicMock, mock_store: MagicMock
+) -> None:
+    """BUG-037: if record_trade reports a duplicate (already recorded), the
+    close must not also call mark_trade_closed — the earlier successful
+    close already did."""
+    mock_store.record_trade.return_value = False
+    existing = PaperTrade(
+        strategy_name="paper_csp_nifty_v1",
+        leg_role="short_put",
+        instrument_key="NSE_FO|NIFTY23000PE",
+        trade_date=date(2026, 6, 1),
+        action=TradeAction.SELL,
+        quantity=50,
+        price=Decimal("80.00"),
+    )
+
+    _run(close_csp_leg(mock_broker, mock_store, existing, date(2026, 6, 5), dry_run=False))
+
+    mock_store.mark_trade_closed.assert_not_called()
 
 
 def test_open_new_csp_leg_dry_run(
@@ -157,9 +184,7 @@ def test_open_new_csp_leg_live_invokes_collateral_gate(
         }
     )
 
-    with patch(
-        "src.strategy.csp_roll_executor.check_collateral_capacity"
-    ) as mock_gate:
+    with patch("src.strategy.csp_roll_executor.check_collateral_capacity") as mock_gate:
         mock_gate.return_value = None
         _run(
             open_new_csp_leg(

@@ -126,6 +126,61 @@ def test_close_full_persists_all_four_legs_with_opposite_action(
         assert t.notes == "test close"
 
 
+def test_close_full_marks_all_closed_legs_trade_closed(
+    mock_broker: MagicMock, mock_store: MagicMock
+) -> None:
+    """BUG-037: every leg actually closed must transition its opening row to
+    CLOSED via mark_trade_closed — mirrors BUG-035's overlay fix."""
+    positions = _make_ic_positions()
+    closed_roles = {"short_put", "long_put_hedge", "short_call", "long_call_hedge"}
+
+    inserted = _run(
+        close_ic_legs(
+            broker=mock_broker,
+            store=mock_store,
+            positions=positions,
+            closed_roles=closed_roles,
+            strategy_name=_STRATEGY,
+            notes="test close",
+        )
+    )
+
+    assert mock_store.mark_trade_closed.call_count == 4
+    called_with = {call.args for call in mock_store.mark_trade_closed.call_args_list}
+    expected = {(t.strategy_name, t.leg_role, t.instrument_key) for t in inserted}
+    assert called_with == expected
+
+
+def test_close_skips_mark_closed_for_rows_record_trades_skipped(
+    mock_broker: MagicMock, mock_store: MagicMock
+) -> None:
+    """A duplicate row skipped by record_trades (ON CONFLICT DO NOTHING) must
+    not have mark_trade_closed called for it — only actually-inserted rows."""
+    positions = _make_ic_positions()
+    closed_roles = {"short_put", "short_call"}
+
+    def _skip_short_put(trades):
+        inserted = [t for t in trades if t.leg_role != "short_put"]
+        skipped = [t for t in trades if t.leg_role == "short_put"]
+        return inserted, skipped
+
+    mock_store.record_trades = MagicMock(side_effect=_skip_short_put)
+
+    inserted = _run(
+        close_ic_legs(
+            broker=mock_broker,
+            store=mock_store,
+            positions=positions,
+            closed_roles=closed_roles,
+            strategy_name=_STRATEGY,
+            notes="test close",
+        )
+    )
+
+    assert {t.leg_role for t in inserted} == {"short_call"}
+    mock_store.mark_trade_closed.assert_called_once_with(_STRATEGY, "short_call", "NSE_FO|51405")
+
+
 def test_close_call_spread_only_touches_call_legs(
     mock_broker: MagicMock, mock_store: MagicMock
 ) -> None:
@@ -456,6 +511,39 @@ def test_roll_happy_path_writes_close_and_open_legs_atomically(
     assert open_trade.quantity == 65
     for t in written:
         assert t.notes == "test roll"
+
+
+def test_roll_marks_only_close_side_trade_closed(
+    mock_broker: MagicMock, mock_store: MagicMock
+) -> None:
+    """BUG-037: roll_ic_legs writes close+open trades in one record_trades
+    call; only the close-side row's opening trade may transition to CLOSED —
+    the freshly-opened replacement leg must stay untouched."""
+    positions = [_make_position("short_call", "NSE_FO|51405", net_qty=-65, avg_sell_price="17.12")]
+    open_legs = [
+        LegSpec(
+            instrument_key="NSE_FO|51999",
+            action="SELL",
+            quantity=65,
+            leg_role="short_call",
+            notes="roll_open_short delta=0.15",
+            price=Decimal("12.50"),
+        )
+    ]
+
+    _run(
+        roll_ic_legs(
+            broker=mock_broker,
+            store=mock_store,
+            close_positions=positions,
+            closed_roles={"short_call"},
+            open_legs=open_legs,
+            strategy_name=_STRATEGY,
+            notes="test roll",
+        )
+    )
+
+    mock_store.mark_trade_closed.assert_called_once_with(_STRATEGY, "short_call", "NSE_FO|51405")
 
 
 def test_roll_open_leg_missing_price_aborts_entire_roll(

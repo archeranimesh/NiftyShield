@@ -278,6 +278,14 @@ async def check_and_roll_leg(
     inserted, skipped = store.record_trades([close_trade, open_trade])
     summary["inserted"] = len(inserted)
     summary["skipped"] = len(skipped)
+
+    # Mirror BUG-035/BUG-037: transition the closed leg's opening row to
+    # CLOSED so it stops re-appearing as flat-but-OPEN/DEFENDED. Only fire
+    # when the close side of this roll actually landed (record_trades skips
+    # exact duplicates rather than raising) — the open side is a different
+    # instrument_key and must not affect this leg's own state transition.
+    if close_trade in inserted:
+        store.mark_trade_closed(pos.strategy_name, pos.leg_role, pos.instrument_key)
     # Both legs of a roll must land together. `record_trades` skips exact
     # duplicates (ON CONFLICT DO NOTHING) rather than raising, so a partial
     # roll (e.g. close persisted, open skipped as a stale duplicate from a

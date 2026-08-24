@@ -249,6 +249,9 @@ async def close_ic_legs(
             skipped=[t.leg_role for t in skipped],
         )
 
+    for t in inserted:
+        store.mark_trade_closed(t.strategy_name, t.leg_role, t.instrument_key)
+
     log.info(
         "ic_close_executor.legs_closed",
         strategy_name=strategy_name,
@@ -373,6 +376,15 @@ async def roll_ic_legs(
             strategy_name=strategy_name,
             skipped=[t.leg_role for t in skipped],
         )
+
+    # Only mark the close-side rows CLOSED — open_trades landed in the same
+    # record_trades call and must stay OPEN. Match by identity, not by
+    # TradeAction, since a roll can (in principle) open and close the same
+    # leg_role/instrument_key shape.
+    closed_ids = {id(t) for t in close_trades}
+    for t in inserted:
+        if id(t) in closed_ids:
+            store.mark_trade_closed(t.strategy_name, t.leg_role, t.instrument_key)
 
     log.info(
         "ic_close_executor.legs_rolled",
