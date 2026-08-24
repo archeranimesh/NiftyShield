@@ -28,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from scripts.strategies.three_track.paper_3track_snapshot import (
     _compute_overlay_pnl_snapshots,
+    _overlay_type_groups,
 )
 from src.models.portfolio import TradeAction
 from src.paper.constants import STRATEGY_OVERLAY
@@ -273,3 +274,104 @@ def test_overlay_with_no_legs_produces_no_rows(tmp_path: Path) -> None:
     store = _store(tmp_path)
     results = _compute_overlay_pnl_snapshots(store, date(2026, 5, 2))
     assert results == []
+
+
+def test_overlay_type_groups_cc_and_collar_put_merge_into_collar() -> None:
+    """BUG-030 regression: overlay_cc + collar_put must not drop the cc leg.
+
+    This is the exact live combination from 2026-08-12/13 (see docs/bugs/bugs.md
+    BUG-030): a short call intentionally tagged overlay_cc (not
+    overlay_collar_call, per build_overlay_trades' dedup guard in
+    paper_3track_overlay_entry.py — "the existing CC serves as the collar
+    call") coexisting with an overlay_collar_put. The old if/elif chain fell
+    into the has_put branch and silently dropped overlay_cc from every group.
+    """
+    groups = _overlay_type_groups({"overlay_cc", "overlay_collar_put"})
+    assert groups == {"collar": ["overlay_cc", "overlay_collar_put"]}
+
+
+def test_overlay_type_groups_call_and_put_still_merge_into_collar() -> None:
+    """Unaffected existing combination: collar_call + collar_put -> collar."""
+    groups = _overlay_type_groups({"overlay_collar_call", "overlay_collar_put"})
+    assert groups == {"collar": ["overlay_collar_call", "overlay_collar_put"]}
+
+
+def test_overlay_type_groups_call_alone_is_cc() -> None:
+    """Unaffected existing combination: lone overlay_collar_call -> cc."""
+    groups = _overlay_type_groups({"overlay_collar_call"})
+    assert groups == {"cc": ["overlay_collar_call"]}
+
+
+def test_overlay_type_groups_put_alone_is_collar() -> None:
+    """Unaffected existing combination: lone overlay_collar_put -> collar
+    (lifecycle transition)."""
+    groups = _overlay_type_groups({"overlay_collar_put"})
+    assert groups == {"collar": ["overlay_collar_put"]}
+
+
+def test_overlay_type_groups_cc_alone_is_cc() -> None:
+    """Unaffected existing combination: lone overlay_cc -> cc."""
+    groups = _overlay_type_groups({"overlay_cc"})
+    assert groups == {"cc": ["overlay_cc"]}
+
+
+def test_overlay_type_groups_pp_is_independent_of_collar_combinations() -> None:
+    """overlay_pp always gets its own row regardless of which
+    cc/collar combo fires."""
+    groups = _overlay_type_groups({"overlay_cc", "overlay_collar_put", "overlay_pp"})
+    assert groups == {
+        "collar": ["overlay_cc", "overlay_collar_put"],
+        "pp": ["overlay_pp"],
+    }
+
+
+def test_cc_and_collar_put_merged_into_one_collar_row_end_to_end(
+    tmp_path: Path,
+) -> None:
+    """BUG-030 end-to-end: must not drop the cc leg's P&L.
+
+    Reproduces the live 2026-08-13 scenario: an overlay_cc short call
+    (+53.625 P&L) and an overlay_collar_put (-973.375 P&L) open the same day.
+    Before the fix, no ``overlay_type='cc'`` row was ever emitted and the cc
+    leg's P&L silently vanished from both the row set and the digest.
+    """
+    store = _store(tmp_path)
+    entry_date = date(2026, 5, 1)
+    snap_date = date(2026, 5, 2)
+    qty = 50
+
+    _open_leg(
+        store,
+        "overlay_cc",
+        entry_date,
+        qty=qty,
+        price=Decimal("40.00"),
+        instrument_key="NSE_FO|77777",
+    )
+    _open_leg(
+        store,
+        "overlay_collar_put",
+        entry_date,
+        qty=qty,
+        price=Decimal("20.00"),
+        action=TradeAction.BUY,
+        instrument_key="NSE_FO|66666",
+    )
+    store.record_leg_snapshot(
+        _leg_snap("overlay_cc", Decimal("53.625"), snap_date, ltp=Decimal("38"))
+    )
+    store.record_leg_snapshot(
+        _leg_snap(
+            "overlay_collar_put",
+            Decimal("-973.375"),
+            snap_date,
+            ltp=Decimal("15"),
+        )
+    )
+
+    results = _compute_overlay_pnl_snapshots(store, snap_date)
+    collar_rows = [r for r in results if r.overlay_type == "collar"]
+    assert len(collar_rows) == 1
+    # Merged P&L must include both legs — cc leg's P&L must not vanish.
+    assert collar_rows[0].pnl_inception_abs == Decimal("53.625") + Decimal("-973.375")
+    assert not any(r.overlay_type == "cc" for r in results)

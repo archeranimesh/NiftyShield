@@ -1071,9 +1071,14 @@ def _compute_track_comparison_snapshot(
 # legs no longer flow through a track's snapshot at all, so this file is the
 # sole place the collar-merge/CC-dedup convention lives.
 # overlay_collar_call takes precedence over overlay_cc (same physical
-# contract); collar_call + collar_put merge into one "collar" row; a lone
-# collar_call (no put) or a lone overlay_cc surfaces as "cc"; overlay_pp is
-# independent and always "pp".
+# contract); collar_call + collar_put merge into one "collar" row; overlay_cc
+# + collar_put also merge into "collar" (BUG-030: the entry-side dedup guard
+# in paper_3track_overlay_entry.py deliberately tags the call leg overlay_cc
+# instead of overlay_collar_call when a CC already covers the same
+# instrument key — "the existing CC serves as the collar call" — so this
+# combination is economically a collar and must not drop the cc leg's P&L);
+# a lone collar_call (no put) or a lone overlay_cc (no put) surfaces as
+# "cc"; overlay_pp is independent and always "pp".
 
 _OVERLAY_ROLES = ("overlay_cc", "overlay_pp", "overlay_collar_call", "overlay_collar_put")
 
@@ -1097,6 +1102,17 @@ def _overlay_type_groups(present_roles: set[str]) -> dict[str, list[str]]:
         groups["collar"] = ["overlay_collar_call", "overlay_collar_put"]
     elif has_call:
         groups["cc"] = ["overlay_collar_call"]
+    elif has_cc and has_put:
+        # BUG-030 fix (2026-08-24): the call leg was intentionally tagged
+        # overlay_cc rather than overlay_collar_call — see
+        # build_overlay_trades()/_record_collar_trades()'s dedup guard in
+        # paper_3track_overlay_entry.py, which deliberately skips inserting a
+        # second short-call leg when an overlay_cc already covers the same
+        # instrument key ("the existing CC serves as the collar call").
+        # Economically this is a collar; both legs' P&L must be reported
+        # together or the overlay_cc leg silently vanishes from every
+        # downstream snapshot/digest (BUG-030).
+        groups["collar"] = ["overlay_cc", "overlay_collar_put"]
     elif has_put:
         # Call leg closed/rolled off, put leg still open — still a "collar"
         # position (the protective put), not a dropped/orphaned leg. Logged
