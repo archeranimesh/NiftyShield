@@ -124,6 +124,22 @@ Full forensic log (SHAs, bug numbers, root-cause detail) moved to
 add new entries there going forward, or start a fresh dated section here if this file's
 Session Log grows large again.
 
+### 2026-08-24 Session Log (BUG-033 B033.1-B033.3 fixed — _parse_expiry BOD fallback)
+- **BUG-033 B033.1-B033.3**: `CCOverlayV1`/`PPOverlayV1`/`CollarOverlayV1._parse_expiry` was
+  regex-only and never resolved real numeric Upstox instrument keys, so DTE-gated exit signals
+  (`ROLL_ELIGIBLE`/`DTE_REVIEW`) were dead for every live overlay position. Fixed via a new
+  shared `resolve_option_expiry()` helper in `src/strategy/_price_utils.py` (regex-first,
+  BOD-JSON fallback, mirroring `ic_nifty_v2.py::_parse_expiry`'s proven BUG-018 fix); all three
+  classes' `_parse_expiry` now delegate to it, the three duplicate `_EXPIRY_RE` copies removed.
+  11 new tests in `test_price_utils.py` + 2 per class in `test_pp_overlay_v1.py`/
+  `test_cc_overlay_v1.py`/`test_collar_overlay_v1.py`. Reviewed via `general-purpose` agent
+  standing in for `@code-reviewer` (mandatory, live-capital-adjacent auto-execution) — one
+  plausible defect (unguarded `lookup.get_by_key()`) verified safe, one test-coverage gap
+  (missing/malformed BOD `expiry` field) closed with 2 added tests. 111/111 pass in the four
+  touched files; full ~2800-test suite shows zero regressions attributable to this diff. SHA
+  `ef1c341`. B033.4 (manual `NSE_FO|61604` decision) and B033.5 (close-out, blocked on
+  BUG-034) remain open. See `docs/bugs/bugs.md` BUG-033.
+
 ### 2026-08-24 Session Log (BUG-030 closed — B030.4 backfill + archive)
 - **BUG-030 B030.4**: backfilled the two `paper_overlay_pnl_snapshots` collar rows corrupted by
   the original bug — 08-12 pnl_inception_abs -703.625 -> -1241.500, 08-13 -973.375 -> -919.750

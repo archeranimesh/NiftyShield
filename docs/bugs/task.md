@@ -20,20 +20,20 @@
 
 ## BUG-033 — `_parse_expiry` regex-only in `CCOverlayV1`/`PPOverlayV1`/`CollarOverlayV1` — DTE-gated exit signals (`ROLL_ELIGIBLE`/`DTE_REVIEW`) dead for every real numeric instrument key
 
-- [ ] **B033.1** — Repoint each of the three files' `_parse_expiry` to try the existing regex
+- [x] **B033.1** — Repoint each of the three files' `_parse_expiry` to try the existing regex
   first, then fall back to `self._resolve_instrument_lookup().get_by_key(instrument_key)`'s
   `expiry` field (epoch ms → `date`) when the regex misses — mirrors the fix already proven for
   `_open_pp_dte`/`paper_3track_overlay_entry.py` (`TODOS.md` 2026-08-13/2026-08-20) and
   `ic_nifty_v2.py::_parse_expiry`. Decide inline vs. a shared helper in
   `src/strategy/_price_utils.py` before implementing (three near-duplicate copies exist today —
   don't let the refactor question block the behavior fix). Full context: `docs/bugs/bugs.md`
-  BUG-033.
-- [ ] **B033.2** — Tests: regression coverage using real numeric instrument keys (not the
+  BUG-033. | SHA ef1c341
+- [x] **B033.2** — Tests: regression coverage using real numeric instrument keys (not the
   text-format fixtures the existing suites use) asserting a resolvable near-expiry DTE actually
   fires `ROLL_ELIGIBLE`/`DTE_REVIEW` — one per class (CC/PP/Collar). Also assert the regex path
-  still wins when both would resolve (no behavior change for text-format keys).
-- [ ] **B033.3** — Review: real `code-reviewer` or `general-purpose` + `REVIEW.md` substitute
-  (mandatory — same live-capital-adjacent auto-execution bar as B031.5).
+  still wins when both would resolve (no behavior change for text-format keys). | SHA ef1c341
+- [x] **B033.3** — Review: real `code-reviewer` or `general-purpose` + `REVIEW.md` substitute
+  (mandatory — same live-capital-adjacent auto-execution bar as B031.5). | SHA ef1c341
 - [ ] **B033.4** — Manual action, independent of the code fix and time-sensitive: `overlay_pp`
   leg `NSE_FO|61604` expires 2026-08-25 — decide whether to roll/close it by hand before expiry
   rather than wait for this fix to land.
