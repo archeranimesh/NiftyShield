@@ -45,8 +45,8 @@ P&L whenever an overlay role has two open positions
   fixed a real regression (alert logging incorrectly gated on `notifier`,
   would go silent with no Telegram configured) and one pre-existing gap
   (logged separately as BUG-036, not fixed inline). No REVIEW.md violations.
-- [ ] **B032.6** — Commit, update `bugs.md` BUG-032 status to ✅ Fixed + SHA,
-  update `TODOS.md`.
+- [x] **B032.6** — Committed SHA `67d4010`. `bugs.md` BUG-032 status ->
+  ✅ Fixed, `TODOS.md` session log added.
 
 ## BUG-036 — `prev_mark_value` blends today's live quantity with yesterday's LTP in `pnl_1d_pct`'s denominator
 

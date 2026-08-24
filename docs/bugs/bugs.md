@@ -94,7 +94,7 @@ protocol doesn't pick B019.1 up next.
 | Field | Value |
 |---|---|
 | Severity | **CRITICAL** — live (paper) daily P&L understatement, not a reporting-format gap. `_compute_overlay_leg_totals()` and `_leg_entry_basis()`/`_position_qty()` in `paper_3track_snapshot.py` all call `PaperStore.get_position(strategy_name, leg_role)` with no `instrument_key`; per `get_position`'s own PG-2a ambiguous-match resolution (`src/paper/store.py:844-908`), when more than one position shares a `leg_role` it silently picks the single position with the most recent `entry_date` and logs a WARNING — the *other* open position's P&L is dropped from the aggregate entirely, not merged, not double-counted, just gone. This has been live since the 2026-08-20 `overlay_pp` duplicate-entry event BUG-031 documents (old `NSE_FO|61604` leg, opened 2026-08-11, was never closed; a second `NSE_FO|74009` leg opened 2026-08-20/21 under the same `overlay_pp` role). |
-| Status | 🟡 Fix in progress — B032.1/B032.2/B032.3 done (implementation + 13-item + 1 code-review-driven test, all passing locally per Animesh 2026-08-24), B032.4 (backfill) and B032.6 (commit, blocked on sandbox git lock) outstanding. |
+| Status | ✅ Fixed — SHA `67d4010` (2026-08-24). B032.4 (historical backfill) remains open as a separate follow-up per the council ruling's own explicit stance ("not a precondition for shipping the live fix") — tracked in `docs/bugs/task.md`, not blocking this line's Fixed status. |
 | Discovered | 2026-08-24, during the BUG-030 B030.4 backfill: recomputing `overlay_pp`'s historical P&L with `_compute_overlay_pnl_snapshots()` logged `paper_store.get_position_ambiguous leg_role=overlay_pp match_count=2` on every call. Traced live against `data/portfolio/portfolio.sqlite`: `paper_trades` has two open, never-closed `overlay_pp` legs — `NSE_FO|61604` (BUY 65 @ 58.85, 2026-08-11) and `NSE_FO|74009` (BUY 65 @ 94.20 on 08-20, BUY 65 @ 91.80 on 08-21, net 130 lots). Confirmed by reconstructing `paper_leg_snapshots` figures by hand: the 2026-08-21 row (`total_pnl = -65.00`, `ltp = 92.5`) matches `(92.5 - 93.0) * 130` exactly — the weighted-avg-cost and net_qty of `NSE_FO|74009` *alone*, with `NSE_FO|61604`'s 65 lots contributing nothing. Every `overlay_pp` snapshot from 2026-08-20 onward shows the same pattern: the row jumps from tracking the single pre-08-20 leg to tracking only the newer leg, with a step discontinuity in `ltp`/`total_pnl` right at the duplicate-entry date that has no market-move explanation. |
 | Location | `scripts/strategies/three_track/paper_3track_snapshot.py`: `_compute_overlay_leg_totals()` (~line 1240-1303, the daily cron snapshot writer — the primary live-impact site), `_leg_entry_basis()` (~line 1136-1149) and `_position_qty()` (~line 1373-1376, both feed `_compute_overlay_pnl_snapshots()`'s %-denominators). Root mechanism: `PaperStore.get_position()` (`src/paper/store.py:844-908`). |
 
@@ -136,9 +136,9 @@ level up, in the fix meant to prevent it. Fixed: logging now always runs; only t
 also surfaced a second, **pre-existing** (not introduced by this fix) latent issue in
 `_compute_overlay_pnl_snapshots`'s `prev_mark_value` calculation — logged separately as BUG-036
 rather than fixed inline (touches `pnl_1d_pct` display math with no dedicated test coverage,
-out of scope for this fix's time budget). Commit blocked on the sandbox `.git/index.lock`
-issue affecting this whole session (see `docs/bugs/task.md` B032.6) — code is written and
-tested, not yet committed.
+out of scope for this fix's time budget). Committed by Animesh directly (sandbox `pre-commit`
+venv unreachable over the device bridge all session, same class of blocker as prior sessions'
+`.git/index.lock` issues) — SHA `67d4010`.
 
 **Related:** BUG-031 (root cause of *why* two `overlay_pp` positions are simultaneously open — this bug is the downstream reporting-layer consequence, distinct and independently fixable); BUG-030 (same overlay-reporting file/pipeline, different defect — leg-role grouping vs. position resolution); BUG-036 (pre-existing `prev_mark_value` staleness, surfaced during this bug's code review); discovered as a side effect of BUG-030's B030.4 backfill (`docs/archive/bugs/bugs.md`).
 
