@@ -20,21 +20,21 @@
 
 ## BUG-030 — `_overlay_type_groups()` elif-precedence drops an `overlay_cc` leg
 
-- [ ] **B030.1** — Decide the entry-side question first (blocks B030.2): should the call leg have
+- [x] **B030.1** — Decide the entry-side question first (blocks B030.2): should the call leg have
   been tagged `overlay_collar_call` at entry instead of `overlay_cc`? Investigate
   `paper_3track_overlay_entry.py`'s collar/CC entry path. Likely needs a council checkpoint —
-  see `docs/bugs/bugs.md` BUG-030.
-- [ ] **B030.2** — Fix `_overlay_type_groups()` (`paper_3track_snapshot.py:1081-1117`) per B030.1's
+  see `docs/bugs/bugs.md` BUG-030. | SHA 86db6a2
+- [x] **B030.2** — Fix `_overlay_type_groups()` (`paper_3track_snapshot.py:1081-1117`) per B030.1's
   resolved semantics — add the missing `has_cc and has_put` branch. Must not regress the existing
-  `has_put`-without-`has_call`-or-`has_cc` warning path.
-- [ ] **B030.3** — Tests: regression test for `_overlay_type_groups({"overlay_cc",
+  `has_put`-without-`has_call`-or-`has_cc` warning path. | SHA 86db6a2
+- [x] **B030.3** — Tests: regression test for `_overlay_type_groups({"overlay_cc",
   "overlay_collar_put"})`, edge cases for the other 3 combinations, end-to-end test on
-  `_compute_overlay_pnl_snapshots`.
+  `_compute_overlay_pnl_snapshots`. | SHA 86db6a2
 - [ ] **B030.4** — Backfill or document a discontinuity for the 2026-08-12/08-13
   `paper_overlay_pnl_snapshots` rows written with the missing leg's P&L.
-- [ ] **B030.5** — Review: real `code-reviewer` or `general-purpose` + `REVIEW.md` substitute
-  (mandatory — financial P&L reporting change).
-- [ ] **B030.6** — Commit, update `bugs.md` BUG-030 status to ✅ Fixed + SHA, update `TODOS.md`.
+- [x] **B030.5** — Review: real `code-reviewer` or `general-purpose` + `REVIEW.md` substitute
+  (mandatory — financial P&L reporting change). | SHA 86db6a2
+- [x] **B030.6** — Commit, update `bugs.md` BUG-030 status to ✅ Fixed + SHA, update `TODOS.md`. | SHA 86db6a2
 
 ## BUG-031 — `CCOverlayV1`/`PPOverlayV1`/`CollarOverlayV1` filter by pre-S2r `strategy_name` constants, never see `STRATEGY_OVERLAY`-scoped positions — zero live exit-signal coverage for any auto-entered CC/PP/Collar leg since 2026-07-29
 

@@ -124,6 +124,17 @@ Full forensic log (SHAs, bug numbers, root-cause detail) moved to
 add new entries there going forward, or start a fresh dated section here if this file's
 Session Log grows large again.
 
+### 2026-08-24 Session Log (BUG-030 fixed — overlay_cc/collar_put merge)
+- **BUG-030** (`_overlay_type_groups()` elif-precedence dropped an `overlay_cc` leg whenever an
+  `overlay_collar_put` leg was also present same-day): B030.1's entry-side question resolved by
+  code inspection, not a council checkpoint — `paper_3track_overlay_entry.py`'s dedup guard
+  already intentionally tags the call leg `overlay_cc` (not `overlay_collar_call`) when a CC
+  already covers the same instrument key. Fixed purely on the reporting side: added a
+  `has_cc and has_put` branch to `_overlay_type_groups()` that merges `overlay_cc` +
+  `overlay_collar_put` into the `collar` group. 7 tests added (6 unit + 1 end-to-end
+  reproducing the live 08-13 figures), all pass; ruff/py_compile clean. SHA `86db6a2`. B030.4
+  (backfill/discontinuity note for the affected 08-12/08-13 rows) remains open.
+
 ### 2026-08-24 Session Log (BUG-025 scoping — checklist added, no fix yet)
 - **BUG-025** (`roll_ic_legs` open-only write shape / `PROFIT_LOCK_ZONE2` state-ordering,
   MC-3b review follow-ups): scoped the two deferred findings into independent fixes — W1: guard
