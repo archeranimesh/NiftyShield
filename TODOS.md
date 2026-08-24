@@ -236,6 +236,21 @@ Session Log grows large again.
   open, delta/premium checked clean, DTE still unverifiable until BUG-033/034 ship — needs a
   re-check once those land.
 
+### 2026-08-24 Session Log (BUG-037 B037.1/B037.2 — trace closed, docs-only)
+- **BUG-037** (`mark_trade_closed()` never wired into CSP/IC/three_track close paths, 54 stale
+  flat legs): re-traced all three call sites against current code (grep, not
+  `codebase-memory-mcp` — its CALLS-edge index already flagged stale on this bug). Confirmed
+  `close_csp_leg`, `close_ic_legs`/`roll_ic_legs`, and `paper_3track_roll.py::check_and_roll_leg`
+  all write closing trades at the leg's own full quantity — no partial-paydown case exists at the
+  row level, so B037.3's fix needs no flatness gating beyond the per-leg trade being written.
+  Also confirmed B037.2's previously-"likely" `paper_3track_roll.py` gap in scope: same shape,
+  same fix. Noted for B037.3: `roll_ic_legs` writes close+open trades in one `record_trades`
+  call, so close-vs-open needs to stay distinguishable when wiring in `mark_trade_closed` — don't
+  derive it from `TradeAction` alone. `bugs.md` BUG-037 updated with the full trace note,
+  `task.md` B037.1/B037.2 checked. No code change — docs-only commit, `code-reviewer` gate not
+  applicable. Remaining B037.3-B037.7 deliberately split into separate ≤2-file commits per
+  Animesh's direction, picked up next.
+
 ### 2026-08-24 Session Log (BUG-030 fixed — overlay_cc/collar_put merge)
 - **BUG-030** (`_overlay_type_groups()` elif-precedence dropped an `overlay_cc` leg whenever an
   `overlay_collar_put` leg was also present same-day): B030.1's entry-side question resolved by

@@ -26,17 +26,17 @@
 
 ## BUG-037 — `mark_trade_closed()` also never wired into CSP/IC v1/v2 close paths (54 stale flat legs)
 
-- [ ] **B037.1** — Trace `close_csp_leg`/`close_ic_legs`/`roll_ic_legs` (and
+- [x] **B037.1** — Trace `close_csp_leg`/`close_ic_legs`/`roll_ic_legs` (and
   `roll_down_and_out`) call sites for any partial-close/roll scenario that can
   leave `net_qty != 0` on the leg being written — CSP's `ROLL_DOWN_AND_OUT`
   and IC's spread-only closes are partial at the strategy level, unlike
   BUG-035's overlay legs. Confirms whether `mark_trade_closed()` can be called
   unconditionally per closing trade or needs a flatness check first. See
-  `docs/bugs/bugs.md` BUG-037.
-- [ ] **B037.2** — Trace `scripts/strategies/three_track/paper_3track_roll.py`'s
+  `docs/bugs/bugs.md` BUG-037. | SHA pending — sandbox .git/index.lock held by a concurrent process, commit deferred to live host
+- [x] **B037.2** — Trace `scripts/strategies/three_track/paper_3track_roll.py`'s
   futures/proxy roll-close write path for the same gap — the `base_futures`
   and `base_ditm_call` stale rows found may or may not share this root cause;
-  not yet confirmed (unlike CSP/IC, which are confirmed via grep).
+  not yet confirmed (unlike CSP/IC, which are confirmed via grep). | SHA pending — sandbox .git/index.lock held by a concurrent process, commit deferred to live host
 - [ ] **B037.3** — Add `store.mark_trade_closed(...)` (or the appropriate
   partial-close-safe equivalent per B037.1) to `close_csp_leg`,
   `close_ic_legs`, `roll_ic_legs`, and the futures/proxy roll-close path

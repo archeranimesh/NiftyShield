@@ -117,6 +117,30 @@ protocol doesn't pick B019.1 up next.
 
 **Related:** BUG-035 (identical bug shape, different call sites — CC/PP/Collar there, CSP/IC here); this bug's discovery came directly out of validating BUG-035's backfill script.
 
+**Implementation progress (2026-08-24, B037.1/B037.2):** Re-traced current code (grep, not
+`codebase-memory-mcp` — its CALLS-edge index is already flagged stale above) for all three call
+sites. Confirms the suggested fix needs no gating beyond the per-leg trade being written:
+
+- `close_csp_leg` (`src/strategy/csp_roll_executor.py:150`) closes at `existing.quantity` — the
+  full size of that leg's row — before `record_trade`. CLOSE_AND_ROLL/CLOSE_AND_WAIT/
+  ROLL_DOWN_AND_OUT all route through here at full leg quantity.
+- `close_ic_legs`/`roll_ic_legs` (`src/strategy/ic_close_executor.py:236,361`) both build closing
+  trades via `_build_close_trades`, called only on positions with `net_qty != 0`, at that leg's
+  full `net_qty`. The "partial" in spread-only closes (e.g. CLOSE_CALL_SPREAD) is partial *at the
+  strategy level* (only some roles close) — each individual leg row written is still a full close
+  of that row. `roll_ic_legs` additionally writes open-side trades in the same `record_trades`
+  call, so the close-vs-open trades need to stay distinguishable when `mark_trade_closed` is wired
+  in (B037.3) — don't derive it from `TradeAction` alone.
+- `paper_3track_roll.py::check_and_roll_leg` (`scripts/strategies/three_track/paper_3track_roll.py:252,278`)
+  — **confirmed in scope**, not just "likely" as originally scoped. `qty = abs(pos.net_qty)`, full
+  close, `record_trades([close_trade, open_trade])`, no `mark_trade_closed` call anywhere in the
+  file. Same fix shape applies.
+
+No B037.1 flatness-check branch is needed — all three sites already only ever write full-leg
+closes, never a partial paydown of a single row. B037.3 can call `mark_trade_closed()`
+unconditionally per closing trade, keyed to that trade's own
+`(strategy_name, leg_role, instrument_key)`.
+
 ---
 
 
