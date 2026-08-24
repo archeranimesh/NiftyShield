@@ -138,8 +138,8 @@ Session Log grows large again.
   `paper_trades` but has NOT been run against the live DB yet (B036.4 open). Tests written but
   NOT executed — sandbox had no working Python env (broken venv, disk full, no pip network).
   `general-purpose`+`REVIEW.md` review found no CRITICAL/ERROR findings. Commit blocked by a
-  `.git/index.lock` held by a concurrent process on the sandbox — SHA pending, deferred to live
-  host per `docs/bugs/prompt.md`'s lock-contention clause. Remaining multi-instrument-NULL-ltp
+  `.git/index.lock` held by a concurrent process on the sandbox — committed by Animesh locally,
+  SHA `d40c3a1`. Remaining multi-instrument-NULL-ltp
   symptom (BUG-036's original symptom 1) still open, deferred pending the per-instrument
   companion table BUG-032's council ruling already deferred. See `docs/bugs/bugs.md` BUG-036.
 

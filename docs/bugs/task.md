@@ -21,40 +21,7 @@
 > BUG-033 closed 2026-08-24 (SHA `ef1c341`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 > BUG-034 closed 2026-08-24 (SHA `88df26e`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 > BUG-032 closed 2026-08-24 (SHA `67d4010`, backfill applied same day) — section moved to `docs/archive/bugs/{bugs,task}.md`.
-
-## BUG-036 — `prev_mark_value` blends today's live quantity with yesterday's LTP in `pnl_1d_pct`'s denominator
-
-- [x] **B036.1** — Decide the fix approach: add a `net_qty` field to
-  `PaperLegSnapshot`/`paper_leg_snapshots` (schema addition, not a re-key —
-  orthogonal to the BUG-032 council ruling's rejection of instrument-keying)
-  so `prev_mark_value` can use historical quantity, or accept and more
-  prominently document the imprecision as a percentage-only display
-  limitation. See `docs/bugs/bugs.md` BUG-036. — decided: add `net_qty`.
-- [x] **B036.2** — Fix `_compute_overlay_pnl_snapshots`'s `prev_mark_value`
-  computation per B036.1's resolved approach.
-- [x] **B036.3** — Tests: a day-over-day quantity change (partial close/add)
-  with a real (non-`NULL`) `prev.ltp` — no existing test constructs this
-  case, per the BUG-032 code review that surfaced this gap. Confirmed
-  passing locally by Animesh (full suite: 157 passed, after fixing a sign
-  error in the new backfill test's own expected `net_qty` — the test, not
-  the implementation, had the bug: `SELL 50 to open` is `net_qty=-50`, not
-  `+50`).
-- [x] **B036.4** — Backfill `net_qty` for the 229 existing `paper_leg_snapshots`
-  rows (2026-05-11 → present) by reconstructing historical net quantity from
-  `paper_trades` (signed `quantity` by `action`, `trade_date <= snapshot_date`,
-  grouped by `strategy_name`/`leg_role`) — via a proper query/store method, not
-  a raw `UPDATE`. Without this, `prev.net_qty` is `NULL` for every lookback
-  across existing history until new snapshots accumulate post-fix. | Run
-  against the live DB by Animesh 2026-08-24 (after fixing a script bug — see
-  bugs.md — where the raw sqlite connection queried `net_qty` before
-  `PaperStore`'s migration had ever run in-process). Confirmed via direct
-  query: 229/229 rows populated, 0 remaining NULL.
-- [x] **B036.5** — Review: real `code-reviewer` or `general-purpose` +
-  `REVIEW.md` substitute (mandatory — live overlay P&L reporting change). —
-  general-purpose+REVIEW.md substitute run; no CRITICAL/ERROR findings.
-- [ ] **B036.6** — Commit, update `bugs.md` BUG-036 status to ✅ Fixed + SHA,
-  update `TODOS.md`. | SHA pending — sandbox .git/index.lock held by a
-  concurrent process, commit deferred to live host.
+> BUG-036 closed 2026-08-24 (SHA `d40c3a1`, backfill applied same day) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
 ## BUG-035 — `_record_close_trade()` never calls `mark_trade_closed()`; closed overlay legs stay `state='OPEN'` forever
 
