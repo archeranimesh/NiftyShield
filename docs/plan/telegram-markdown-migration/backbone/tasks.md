@@ -18,8 +18,9 @@
       | Owner: Claude | Model: Sonnet | Review: code-reviewer (not financial-logic tier) —
       foundational correctness (Unicode/empty-string edge cases) warrants inline judgment over
       pure mechanical delegation
-- [ ] **MD-2** — Switch `TelegramNotifier.send()` to Markdown parse_mode; update/replace the two
+- [x] **MD-2** — Switch `TelegramNotifier.send()` to Markdown parse_mode; update/replace the two
       HTML-specific tests; add an entity-parse regression test | Blocked by: MD-1
+      | SHA: 721daf9
       | Owner: Claude | Model: Sonnet | Review: code-reviewer — touches the non-fatal send
       contract, verify by hand, not just spec-following
       **⚠️ Live-risk window (added 2026-08-18):** the moment MD-2 lands, every existing caller's
@@ -32,6 +33,12 @@
       "blocked by" MD-2, not bundled with it, and the one-task-per-session protocol does not
       guarantee they land soon after. **Do not merge MD-2 unless MD-3 and MD-4 are ready to
       follow in the same sitting** — do not leave MD-2 merged on its own between sessions.
+      **Status (2026-08-24): MD-2 landed alone, SHA `721daf9`** — Animesh explicitly chose the
+      one-task-per-session protocol over bundling MD-3/MD-4 into the same sitting (asked/
+      confirmed at session start), fully aware of the live-risk window above. **The gap is
+      currently open in production: every existing caller's dynamic values are unescaped
+      against MarkdownV2.** MD-3 and MD-4 are next up and should be treated as urgent, not
+      routine backlog — pick them up before anything else in this epic or elsewhere.
 - [ ] **MD-3** — Audit + fix strategy close/roll notifications (7 classes) for unescaped dynamic
       values | Blocked by: MD-2
       | Owner: Antigravity | Model: n/a | Review: **real @code-reviewer, Opus — mandatory**
