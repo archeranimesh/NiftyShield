@@ -18,6 +18,10 @@ from src.notifications.telegram import (
     escape_mdv2,
 )
 
+_ENTITY_PARSE_ERROR_DESCRIPTION = (
+    "Bad Request: can't parse entities: Can't find end of the entity starting at byte offset 455"
+)
+
 # Env vars that can leak across tests if dotenv loads into os.environ — several
 # scripts/ modules (e.g. paper_3track_roll.py) call load_dotenv() unconditionally
 # at import time, which is never undone by monkeypatch since monkeypatch only
@@ -122,34 +126,47 @@ async def test_send_posts_to_correct_url() -> None:
         assert "sendMessage" in url
 
 
-async def test_send_uses_html_parse_mode() -> None:
+async def test_send_uses_markdownv2_parse_mode() -> None:
     mock_session = _make_mock_session({"ok": True})
     with patch("src.notifications.telegram.aiohttp.ClientSession", return_value=mock_session):
         notifier = TelegramNotifier(bot_token="tok", chat_id="789")
         await notifier.send("msg")
         payload = mock_session.post.call_args[1]["json"]
-        assert payload["parse_mode"] == "HTML"
+        assert payload["parse_mode"] == "MarkdownV2"
+        assert "<pre>" not in payload["text"]
 
 
-async def test_send_wraps_text_in_pre_block() -> None:
+async def test_send_does_not_auto_escape() -> None:
+    """send() passes text through verbatim — escaping is the caller's job.
+
+    Proves the new caller-responsibility model introduced by the
+    MarkdownV2 migration (MD-1's escape_markdown()/mdcode()), not a
+    silent regression of the old HTML auto-escaping behavior.
+    """
     mock_session = _make_mock_session({"ok": True})
     with patch("src.notifications.telegram.aiohttp.ClientSession", return_value=mock_session):
         notifier = TelegramNotifier(bot_token="tok", chat_id="789")
-        await notifier.send("hello")
+        raw_text = "P&L: +3,250 (delta-neutral)."
+        await notifier.send(raw_text)
         payload = mock_session.post.call_args[1]["json"]
-        assert payload["text"].startswith("<pre>")
-        assert payload["text"].endswith("</pre>")
+        assert payload["text"] == raw_text
 
 
-async def test_send_escapes_html_in_message() -> None:
-    """'&' in the P&L summary must not break HTML parse_mode."""
-    mock_session = _make_mock_session({"ok": True})
+async def test_send_returns_false_on_telegram_entity_parse_error() -> None:
+    """Regression test for the original DELTA_WARN bug this epic fixes.
+
+    An unescaped MarkdownV2 reserved character (e.g. a lone underscore)
+    makes Telegram reject the send with a 400 + entity-parse description.
+    send() must swallow this like any other failure — return False, log
+    a warning, never raise — per the non-fatal notification contract.
+    """
+    mock_session = _make_mock_session(
+        {"ok": False, "description": _ENTITY_PARSE_ERROR_DESCRIPTION}, status=400
+    )
     with patch("src.notifications.telegram.aiohttp.ClientSession", return_value=mock_session):
         notifier = TelegramNotifier(bot_token="tok", chat_id="789")
-        await notifier.send("P&L: +3,250")
-        payload = mock_session.post.call_args[1]["json"]
-        assert "&amp;" in payload["text"]
-        assert "&L" not in payload["text"]
+        result = await notifier.send("DELTA_WARN triggered")
+        assert result is False
 
 
 async def test_send_passes_correct_chat_id() -> None:

@@ -17,11 +17,11 @@ Design notes:
     - send() never raises — returns False on failure and logs a WARNING.
     - build_notifier() returns None when either env var is missing, so the
       caller can skip notification with a simple `if notifier:` guard.
-    - Uses MarkdownV2 parse_mode for clean formatting; the escape() helper
-      handles the strict MarkdownV2 character set.
-    - Message content is sent in a <pre> HTML block so monospace alignment
-      in the P&L summary is preserved on mobile (HTML parse_mode used for
-      code blocks since MarkdownV2 code blocks require backtick escaping).
+    - Uses MarkdownV2 parse_mode. send() does NOT auto-escape the message
+      text — every caller that interpolates a dynamic value, or writes
+      static template prose containing MarkdownV2-reserved punctuation,
+      must use `escape_markdown()`/`mdcode()` from
+      `src/notifications/markdown.py` (see `src/notifications/CLAUDE.md`).
 """
 
 from __future__ import annotations
@@ -74,17 +74,23 @@ class TelegramNotifier:
         self._messages_sent = 0
 
     async def send(self, text: str) -> bool:
-        """Send a plain-text message to the configured chat.
+        """Send a MarkdownV2-formatted message to the configured chat.
 
-        The message is wrapped in a <pre> block so monospace formatting
-        (e.g. the P&L alignment) renders correctly on mobile.
+        The message text is sent as-authored — it is NOT auto-escaped.
+        Callers are responsible for making any interpolated dynamic value
+        (and any reserved punctuation in static template text) MarkdownV2-safe
+        via `escape_markdown()`/`mdcode()` (`src/notifications/markdown.py`)
+        before calling this method. An unescaped reserved character causes
+        Telegram to reject the send with a 400 ("can't parse entities"),
+        which this method treats as a normal failure (see Returns).
 
         Args:
-            text: Message content. HTML-unsafe characters are escaped
-                  automatically before wrapping in <pre>.
+            text: MarkdownV2-formatted message content, already escaped by
+                  the caller where required.
 
         Returns:
-            True if the API returned ok=True, False on any error.
+            True if the API returned ok=True, False on any error (including
+            a MarkdownV2 entity-parse rejection) — never raises.
         """
         if self._messages_sent >= self._budget:
             logger.warning(
@@ -95,11 +101,10 @@ class TelegramNotifier:
         # Increment before the API call so that network timeouts or HTTP errors
         # still burn a budget slot, preventing rapid retry loops on broken endpoints.
         self._messages_sent += 1
-        html_text = _html_escape(text)
         payload = {
             "chat_id": self._chat_id,
-            "text": f"<pre>{html_text}</pre>",
-            "parse_mode": "HTML",
+            "text": text,
+            "parse_mode": "MarkdownV2",
         }
         try:
             timeout = aiohttp.ClientTimeout(total=self._timeout)
