@@ -20,33 +20,7 @@
 
 > BUG-033 closed 2026-08-24 (SHA `ef1c341`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 > BUG-034 closed 2026-08-24 (SHA `88df26e`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
-
-## BUG-032 — `get_position()`'s ambiguous-match fallback silently drops one leg's
-P&L whenever an overlay role has two open positions
-
-- [x] **B032.1** — Decided by council 2026-08-24 (unanimous): hybrid — aggregate
-  per-instrument across all open positions per role, alert loudly on the
-  invariant break, no hard-fail, no `paper_leg_snapshots` schema re-key. See
-  `docs/bugs/bugs.md` BUG-032 and `DECISIONS.md`.
-- [x] **B032.2** — Fixed `_compute_overlay_leg_totals()`, `_leg_entry_basis()`, and
-  `_position_qty()` (`paper_3track_snapshot.py`) per the council's ruling: sum
-  per-instrument P&L (never blended cost/LTP), `ltp=NULL` when `n>1`, added the
-  deduplicated `overlay_pnl.multi_instrument_role` alert. Single-open-position
-  case unchanged.
-- [x] **B032.3** — Tests: implemented the council ruling's 13-item regression
-  checklist plus a 14th from the B032.5 code review — all pass locally
-  (Animesh, 2026-08-24). See `docs/bugs/bugs.md` BUG-032 for the full list.
-- [ ] **B032.4** — Backfill or document the discontinuity in `overlay_pp`'s daily
-  snapshots from 2026-08-20 onward (the older `NSE_FO|61604` leg's P&L has been
-  silently excluded every day since) — same shape as BUG-030's B030.4, likely
-  the same mechanism (rerun the fixed compute function per affected date).
-- [x] **B032.5** — Review: general-purpose agent + `REVIEW.md` substitute
-  (real `code-reviewer` unavailable this session) against the diff. Found and
-  fixed a real regression (alert logging incorrectly gated on `notifier`,
-  would go silent with no Telegram configured) and one pre-existing gap
-  (logged separately as BUG-036, not fixed inline). No REVIEW.md violations.
-- [x] **B032.6** — Committed SHA `67d4010`. `bugs.md` BUG-032 status ->
-  ✅ Fixed, `TODOS.md` session log added.
+> BUG-032 closed 2026-08-24 (SHA `67d4010`, backfill applied same day) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
 ## BUG-036 — `prev_mark_value` blends today's live quantity with yesterday's LTP in `pnl_1d_pct`'s denominator
 

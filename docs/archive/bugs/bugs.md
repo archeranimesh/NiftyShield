@@ -1049,3 +1049,102 @@ real, currently-actionable signal** — the review script is read-only (nothing 
 still needs Animesh's decision on whether/when to close that leg by hand or let the next automated
 run act on it.
 
+---
+
+## BUG-032 — `get_position()`'s ambiguous-match fallback silently drops one leg's P&L from the overlay book whenever a role has two open positions — `overlay_pp`'s daily snapshot has excluded the older `NSE_FO|61604` leg's unrealized P&L since 2026-08-20
+
+| Field | Value |
+|---|---|
+| Severity | **CRITICAL** — live (paper) daily P&L understatement, not a reporting-format gap. `_compute_overlay_leg_totals()` and `_leg_entry_basis()`/`_position_qty()` in `paper_3track_snapshot.py` all call `PaperStore.get_position(strategy_name, leg_role)` with no `instrument_key`; per `get_position`'s own PG-2a ambiguous-match resolution (`src/paper/store.py:844-908`), when more than one position shares a `leg_role` it silently picks the single position with the most recent `entry_date` and logs a WARNING — the *other* open position's P&L is dropped from the aggregate entirely, not merged, not double-counted, just gone. This has been live since the 2026-08-20 `overlay_pp` duplicate-entry event BUG-031 documents (old `NSE_FO|61604` leg, opened 2026-08-11, was never closed; a second `NSE_FO|74009` leg opened 2026-08-20/21 under the same `overlay_pp` role). |
+| Status | ✅ Fixed — SHA `67d4010` (2026-08-24). B032.4 (historical backfill) applied 2026-08-24 — see "Backfill (B032.4)" note below. All B032.x items closed. |
+| Discovered | 2026-08-24, during the BUG-030 B030.4 backfill: recomputing `overlay_pp`'s historical P&L with `_compute_overlay_pnl_snapshots()` logged `paper_store.get_position_ambiguous leg_role=overlay_pp match_count=2` on every call. Traced live against `data/portfolio/portfolio.sqlite`: `paper_trades` has two open, never-closed `overlay_pp` legs — `NSE_FO|61604` (BUY 65 @ 58.85, 2026-08-11) and `NSE_FO|74009` (BUY 65 @ 94.20 on 08-20, BUY 65 @ 91.80 on 08-21, net 130 lots). Confirmed by reconstructing `paper_leg_snapshots` figures by hand: the 2026-08-21 row (`total_pnl = -65.00`, `ltp = 92.5`) matches `(92.5 - 93.0) * 130` exactly — the weighted-avg-cost and net_qty of `NSE_FO|74009` *alone*, with `NSE_FO|61604`'s 65 lots contributing nothing. Every `overlay_pp` snapshot from 2026-08-20 onward shows the same pattern: the row jumps from tracking the single pre-08-20 leg to tracking only the newer leg, with a step discontinuity in `ltp`/`total_pnl` right at the duplicate-entry date that has no market-move explanation. |
+| Location | `scripts/strategies/three_track/paper_3track_snapshot.py`: `_compute_overlay_leg_totals()` (~line 1240-1303, the daily cron snapshot writer — the primary live-impact site), `_leg_entry_basis()` (~line 1136-1149) and `_position_qty()` (~line 1373-1376, both feed `_compute_overlay_pnl_snapshots()`'s %-denominators). Root mechanism: `PaperStore.get_position()` (`src/paper/store.py:844-908`). |
+
+**Symptom:** since 2026-08-20, the daily `overlay_pp` leg snapshot (`paper_leg_snapshots`, `strategy_name=paper_nifty_overlay`, `leg_role=overlay_pp`) and every downstream `overlay_pp`/`pp` P&L row derived from it reflects *only* the newer `NSE_FO|74009` position. The older `NSE_FO|61604` position (65 lots, still open per the trade ledger, no `SELL` ever recorded against it) contributes zero to `unrealized_pnl`, `total_pnl`, or the entry-basis/quantity used for `pnl_inception_pct`/`pnl_1d_pct` — its LTP isn't even fetched (`_compute_overlay_leg_totals`'s `open_keys` list only includes the instrument_key `get_position` happened to return). This is a live understatement of the reported overlay book P&L that has been running for every cron tick since 2026-08-20 (4+ trading days as of discovery), not a one-time historical artifact.
+
+**Root cause:** `get_position(strategy_name, leg_role)` was designed for the case where a role transitions cleanly from one instrument to the next (PG-2a's "roll overlap" comment) and, lacking an `instrument_key` to disambiguate, falls back to "most recent `entry_date` wins" with a WARNING log as the only signal. `_compute_overlay_leg_totals()`, `_leg_entry_basis()`, and `_position_qty()` all call it role-only, never per-instrument — they were written assuming (correctly, until BUG-031's underlying condition) exactly one open position per overlay role at a time. BUG-031 is *why* two positions are simultaneously open (the live monitor never saw `STRATEGY_OVERLAY` positions to close the old leg on roll) — this bug is a distinct, *downstream* defect: even once BUG-031 is fixed and future rolls close old legs promptly, this reporting-layer gap remains latent and will silently reproduce the same P&L drop the next time any overlay role legitimately has two open positions even briefly (e.g. a same-day roll that closes-then-reopens isn't atomic at the snapshot-cron's granularity). The per-role (not per-instrument) shape of `paper_leg_snapshots` and `_OVERLAY_ROLES` more broadly assumes single-position-per-role throughout this file, which this bug is the first confirmed case of that assumption breaking in production.
+
+**Suggested fix — resolved by council 2026-08-24** (`docs/council/2026-08-24_bug032-ambiguous-match-aggregation-vs-hard-fail.md`, unanimous chairman ruling; full detail in `DECISIONS.md`):
+hybrid — aggregate correctly across all open instruments per role (was Option a), alert loudly on
+the invariant break (deduplicated OFF→ON), never hard-fail (Option b rejected as standalone: PP3's
+"no unprotected day" rule deliberately holds two puts on roll day, so `GateViolation` would create
+a systematic blackout on every routine roll, not just BUG-031's stuck state), and do **not** widen
+`paper_leg_snapshots`' primary key (downstream consumers all expect one role-level row; a
+per-instrument companion table is a separate future story if ever needed).
+
+**Implementation progress:**
+- Gather `store.get_positions(STRATEGY_OVERLAY)` once, group by `leg_role`; `_compute_overlay_leg_totals`/`_leg_entry_basis`/`_position_qty` consume the grouped representation instead of independently calling `get_position()`.
+- Per-instrument LTP fetch + P&L calc, summed at role level — never a blended cost basis/LTP. `paper_leg_snapshots.ltp` must be `NULL` when `n > 1` (not the newest leg's LTP — that's the exact misrepresentation that hid this bug in the first place).
+- `get_position()` itself is unchanged (stays PG-2a) — this was a call-site bug, not a store-API bug.
+- Anomaly alert: structured log `overlay_pnl.multi_instrument_role` + non-fatal Telegram, first-detection-only (dedup), WARNING for same-day transient / ERROR after N days stuck, recovery log on return to `n ≤ 1`.
+- Failure semantics: a missing LTP for one instrument fails that role loudly (ERROR + Telegram), never a silent partial aggregate; unrelated roles/tracks continue regardless.
+- Expect (and log explicitly) a step discontinuity in `overlay_pp`'s `pnl_1d_*` on the first post-fix cron run — the correction of the 4+ day understatement, not a market move.
+- 13-item regression checklist specified in the council ruling (aggregate-not-newest-only, per-instrument LTP fetch verified, no blended cost/LTP anywhere, realized P&L not double-counted, `ltp is None` when `n>1`, SNAP-5 invariant holds, alert dedup/recovery, single-position regression, unrelated-role continuation, etc.) — B032.3 should implement all 13, not a subset.
+- B032.4 (historical backfill) is confirmed a separate follow-up story, not a precondition for shipping the live fix.
+
+**Implementation complete (2026-08-24):** `_compute_overlay_leg_totals()`, `_leg_entry_basis()`,
+`_position_qty()` rewritten per the ruling; new helpers `_overlay_positions_by_role()`,
+`_overlay_multi_instrument_streak_days()`, `_check_overlay_multi_instrument_alert()` added.
+13 tests added to `tests/unit/paper/test_paper_3track_snapshot.py` covering the council's full
+regression checklist — Animesh confirmed all pass locally. A general-purpose-agent code review
+(the `code-reviewer` substitute per `docs/bugs/prompt.md` step 5, mandatory for financial-logic
+changes) against the diff found and fixed one real regression before commit: the anomaly
+alert's structured log lines were incorrectly gated on `notifier is not None`, meaning the
+entire BUG-032 alerting mechanism would go silent (no log, no Telegram) whenever Telegram
+credentials are unset in production — reproducing BUG-032's own "silent failure" shape one
+level up, in the fix meant to prevent it. Fixed: logging now always runs; only the
+`notifier.send()` call is conditional. A 14th regression test
+(`test_multi_instrument_alert_without_notifier_does_not_crash`) locks this in. The same review
+also surfaced a second, **pre-existing** (not introduced by this fix) latent issue in
+`_compute_overlay_pnl_snapshots`'s `prev_mark_value` calculation — logged separately as BUG-036
+rather than fixed inline (touches `pnl_1d_pct` display math with no dedicated test coverage,
+out of scope for this fix's time budget). Committed by Animesh directly (sandbox `pre-commit`
+venv unreachable over the device bridge all session, same class of blocker as prior sessions'
+`.git/index.lock` issues) — SHA `67d4010`.
+
+**Backfill (B032.4, prepared and applied 2026-08-24):** affected window confirmed to be exactly
+2026-08-20 and 2026-08-21 — the only two trading days `overlay_pp` had both
+`NSE_FO|61604` (opened 2026-08-11) and `NSE_FO|74009` (opened 2026-08-20) open at once.
+2026-08-24 needs **no** `paper_leg_snapshots` correction: that day's `total_pnl`
+(`-4538.625`) is a same-day open+close of all three `overlay_pp` instruments, realized
+entirely through `record_trade()` line items rather than the ambiguous `get_position()`
+path — independently re-derived by hand from `paper_trades` (ids 213-215:
+`(4.85-58.85)*65 + (83.85-93.00)*130 + (99.85-97.375)*65 = -4538.625`) and it matches
+the stored value exactly, confirmed by the backfill script's own sanity check before it
+writes anything. 2026-08-24's `pnl_1d_abs` does cascade (it's derived from 08-21's
+corrected `total_pnl`) and is included in the backfill.
+
+Corrected values (via `_leg_entry_basis`/`_position_qty`-style aggregation, sourcing
+historical LTP from `data/historical/option_chain/eod/2026/08/upstox_<date>_{weekly,monthly}.parquet`
+— 61604's 2026-08-25 expiry lives in the weekly bucket, 74009's 2026-09-29 expiry in the
+monthly bucket):
+
+| Date | unrealized_pnl (old → new) | ltp (old → new) |
+|---|---|---|
+| 2026-08-20 | `260.00` → `-2440.75` | `98.2` → `NULL` |
+| 2026-08-21 | `-65.00` → `-3155.75` | `92.5` → `NULL` |
+
+Both corrections aggregate the *previously-dropped* `NSE_FO|61604` leg back in
+(per-instrument `(ltp − avg_cost) × net_qty`, summed — never a blended cost basis/LTP,
+per the council ruling); `ltp=NULL` reflects `n>1` open instruments that day, matching
+the fixed live code's own output shape.
+
+Backfill script: `scripts/dev/backfill_bug032_overlay_pp.py` — stdlib-only (no `.venv`
+dependency; this session's device bridge cannot reach `.venv/bin/python`, so this writes
+via raw parameterized SQL against the same `paper_leg_snapshots`/`paper_overlay_pnl_snapshots`
+schema `record_leg_snapshot`/`record_overlay_pnl_snapshot` write, enforcing the same
+`total_pnl == unrealized_pnl + realized_pnl` invariant those methods enforce, rather than
+importing `PaperStore` directly). Backs up `portfolio.sqlite` first
+(`portfolio.bak_<UTC-timestamp>_pre-BUG032.4-backfill.sqlite`, matching BUG-030 B030.4's
+naming convention), dry-run by default, only writes with `--apply`. Dry run verified
+against a staged copy of the live DB and independently against the live DB itself over
+the device bridge — both runs produced identical output to the numbers above.
+
+**Applied 2026-08-24** by Animesh: `python3 scripts/dev/backfill_bug032_overlay_pp.py --apply`.
+DB backed up to `portfolio.bak_20260824T131345_pre-BUG032.4-backfill.sqlite` first; a
+post-apply dry-run re-run confirmed the stored values now match the "NEW" column above
+exactly (OLD==NEW on the re-run). No raw-SQL errors, invariant check passed for every
+touched row. B032.4 closed.
+
+**Related:** BUG-031 (root cause of *why* two `overlay_pp` positions are simultaneously open — this bug is the downstream reporting-layer consequence, distinct and independently fixable); BUG-030 (same overlay-reporting file/pipeline, different defect — leg-role grouping vs. position resolution); BUG-036 (pre-existing `prev_mark_value` staleness, surfaced during this bug's code review, still open — see `docs/bugs/bugs.md`); discovered as a side effect of BUG-030's B030.4 backfill (`docs/archive/bugs/bugs.md`).
+

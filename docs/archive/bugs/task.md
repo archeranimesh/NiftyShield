@@ -616,3 +616,31 @@ commit per phase.
   closing out BUG-031's B031.4 with real coverage. No signal on the Collar leg (expected — not
   DTE-gated at dte=36, and Collar's own roles were never affected by BUG-034). | SHA ef1c341
 
+## BUG-032 — `get_position()`'s ambiguous-match fallback silently drops one leg's
+P&L whenever an overlay role has two open positions
+
+- [x] **B032.1** — Decided by council 2026-08-24 (unanimous): hybrid — aggregate
+  per-instrument across all open positions per role, alert loudly on the
+  invariant break, no hard-fail, no `paper_leg_snapshots` schema re-key. See
+  `docs/archive/bugs/bugs.md` BUG-032 and `DECISIONS.md`.
+- [x] **B032.2** — Fixed `_compute_overlay_leg_totals()`, `_leg_entry_basis()`, and
+  `_position_qty()` (`paper_3track_snapshot.py`) per the council's ruling: sum
+  per-instrument P&L (never blended cost/LTP), `ltp=NULL` when `n>1`, added the
+  deduplicated `overlay_pnl.multi_instrument_role` alert. Single-open-position
+  case unchanged.
+- [x] **B032.3** — Tests: implemented the council ruling's 13-item regression
+  checklist plus a 14th from the B032.5 code review — all pass locally
+  (Animesh, 2026-08-24). See `docs/archive/bugs/bugs.md` BUG-032 for the full list.
+- [x] **B032.4** — Backfilled `overlay_pp`'s 2026-08-20/21 `paper_leg_snapshots`
+  + `paper_overlay_pnl_snapshots` (2026-08-24's cascaded `pnl_1d_abs` too) via
+  `scripts/dev/backfill_bug032_overlay_pp.py`, applied by Animesh 2026-08-24.
+  DB backed up first (`portfolio.bak_20260824T131345_pre-BUG032.4-backfill.sqlite`).
+  See `docs/archive/bugs/bugs.md` BUG-032 "Backfill (B032.4)" for the before/after values.
+- [x] **B032.5** — Review: general-purpose agent + `REVIEW.md` substitute
+  (real `code-reviewer` unavailable this session) against the diff. Found and
+  fixed a real regression (alert logging incorrectly gated on `notifier`,
+  would go silent with no Telegram configured) and one pre-existing gap
+  (logged separately as BUG-036, not fixed inline). No REVIEW.md violations.
+- [x] **B032.6** — Committed SHA `67d4010`. `bugs.md` BUG-032 status ->
+  ✅ Fixed, `TODOS.md` session log added.
+
