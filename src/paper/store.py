@@ -307,6 +307,7 @@ def _row_to_leg_snapshot(row: sqlite3.Row) -> PaperLegSnapshot:
         realized_pnl=Decimal(row["realized_pnl"]),
         total_pnl=Decimal(row["total_pnl"]),
         ltp=Decimal(row["ltp"]) if row["ltp"] is not None else None,
+        net_qty=row["net_qty"] if "net_qty" in row.keys() else None,
     )
 
 
@@ -345,9 +346,7 @@ def _row_to_protection_recovery_snapshot(row: sqlite3.Row) -> ProtectionRecovery
         niftybees_pnl_1d=Decimal(row["niftybees_pnl_1d"]),
         cc_pnl_1d=Decimal(row["cc_pnl_1d"]) if row["cc_pnl_1d"] is not None else None,
         pp_pnl_1d=Decimal(row["pp_pnl_1d"]) if row["pp_pnl_1d"] is not None else None,
-        collar_pnl_1d=(
-            Decimal(row["collar_pnl_1d"]) if row["collar_pnl_1d"] is not None else None
-        ),
+        collar_pnl_1d=(Decimal(row["collar_pnl_1d"]) if row["collar_pnl_1d"] is not None else None),
         niftybees_pnl_inception=Decimal(row["niftybees_pnl_inception"]),
         cc_pnl_inception=(
             Decimal(row["cc_pnl_inception"]) if row["cc_pnl_inception"] is not None else None
@@ -433,6 +432,12 @@ class PaperStore:
                 # entry populates it (Phase 2) — read side must treat NULL as "unknown,
                 # fall back to today's recompute" (Phase 3), not as zero.
                 "ALTER TABLE paper_strategies ADD COLUMN original_entry_credit TEXT DEFAULT NULL",
+                # BUG-036 (2026-08-24): historical net quantity for a leg
+                # snapshot row, so prev_mark_value can use the quantity that
+                # was actually open on that date instead of today's live
+                # quantity. NULL for pre-fix rows until the backfill script
+                # (scripts/dev/backfill_leg_snapshot_net_qty.py) runs.
+                "ALTER TABLE paper_leg_snapshots ADD COLUMN net_qty INTEGER DEFAULT NULL",
             ):
                 try:
                     conn.execute(_ddl)
@@ -1389,14 +1394,15 @@ class PaperStore:
             conn.execute(
                 """INSERT INTO paper_leg_snapshots
                    (strategy_name, leg_role, snapshot_date, unrealized_pnl,
-                    realized_pnl, total_pnl, ltp)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)
+                    realized_pnl, total_pnl, ltp, net_qty)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                    ON CONFLICT(strategy_name, leg_role, snapshot_date)
                    DO UPDATE SET
                        unrealized_pnl = excluded.unrealized_pnl,
                        realized_pnl   = excluded.realized_pnl,
                        total_pnl      = excluded.total_pnl,
-                       ltp            = excluded.ltp""",
+                       ltp            = excluded.ltp,
+                       net_qty        = excluded.net_qty""",
                 (
                     snap.strategy_name,
                     snap.leg_role,
@@ -1405,6 +1411,7 @@ class PaperStore:
                     str(snap.realized_pnl),
                     str(snap.total_pnl),
                     str(snap.ltp) if snap.ltp is not None else None,
+                    snap.net_qty,
                 ),
             )
 
@@ -1427,7 +1434,7 @@ class PaperStore:
         with _connect(self.db_path) as conn:
             row = conn.execute(
                 "SELECT strategy_name, leg_role, snapshot_date, unrealized_pnl,"
-                " realized_pnl, total_pnl, ltp"
+                " realized_pnl, total_pnl, ltp, net_qty"
                 " FROM paper_leg_snapshots"
                 " WHERE strategy_name = ? AND leg_role = ? AND snapshot_date = ?",
                 (strategy_name, leg_role, snap_date.isoformat()),
@@ -1460,7 +1467,7 @@ class PaperStore:
         with _connect(self.db_path) as conn:
             row = conn.execute(
                 "SELECT strategy_name, leg_role, snapshot_date, unrealized_pnl,"
-                " realized_pnl, total_pnl, ltp"
+                " realized_pnl, total_pnl, ltp, net_qty"
                 " FROM paper_leg_snapshots"
                 " WHERE strategy_name = ? AND leg_role = ? AND snapshot_date < ?"
                 " ORDER BY snapshot_date DESC LIMIT 1",

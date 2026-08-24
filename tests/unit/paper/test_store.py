@@ -718,6 +718,24 @@ class TestLegSnapshots:
         assert retrieved.realized_pnl == original.realized_pnl
         assert retrieved.total_pnl == original.total_pnl
         assert retrieved.ltp == original.ltp
+        assert retrieved.net_qty == original.net_qty
+
+    def test_record_leg_snapshot_net_qty_roundtrip(self, store: PaperStore) -> None:
+        # BUG-036: net_qty must round-trip through record_leg_snapshot/get_leg_snapshot,
+        # including a negative (short) value.
+        store.record_leg_snapshot(_leg_snap(net_qty=-65))
+        retrieved = store.get_leg_snapshot(_STRATEGY, "overlay_pp", date(2026, 5, 1))
+        assert retrieved is not None
+        assert retrieved.net_qty == -65
+
+    def test_get_leg_snapshot_net_qty_none_for_legacy_row(self, store: PaperStore) -> None:
+        # BUG-036: a snapshot written without net_qty (pre-fix / pre-backfill)
+        # must read back as None, not 0 — 0 is a valid "flat" quantity and
+        # must not be confused with "unknown".
+        store.record_leg_snapshot(_leg_snap(net_qty=None))
+        retrieved = store.get_leg_snapshot(_STRATEGY, "overlay_pp", date(2026, 5, 1))
+        assert retrieved is not None
+        assert retrieved.net_qty is None
 
     def test_record_leg_snapshot_upsert(self, store: PaperStore) -> None:
         store.record_leg_snapshot(

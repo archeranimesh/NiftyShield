@@ -972,6 +972,7 @@ def _save_leg_snapshots(
         realized_pnl=base_realized,
         total_pnl=base_total,
         ltp=base_ltp,
+        net_qty=pos.net_qty if pos else 0,
     )
     store.record_leg_snapshot(leg_snap)
 
@@ -1232,31 +1233,34 @@ def _compute_overlay_pnl_snapshots(
             pnl_1d_abs = pnl_inception_abs - sum(
                 (prev_by_role[r].total_pnl for r in roles if r in prev_by_role), Decimal("0")
             )
-            # KNOWN GAP (found in BUG-032's 2026-08-24 code review, logged as
-            # BUG-036 — pre-existing, not introduced by the BUG-032 fix):
-            # _position_qty() returns TODAY's live quantity, not the quantity
-            # that was actually open as of prev_by_role[r]'s snapshot date.
-            # Two distinct symptoms: (1) when yesterday's snapshot was a
-            # multi-instrument aggregate, prev_by_role[r].ltp is NULL by
-            # design (a single LTP would misrepresent >1 open instrument) —
-            # _mark_value then returns None and that role contributes 0 to
-            # prev_mark_value, understating the pnl_1d_pct denominator for
-            # one day; (2) even in the ordinary single-instrument case, if
-            # quantity changed between yesterday and today (partial close/
-            # add), this blends today's size with yesterday's price — an
-            # apples-to-oranges denominator, understating or overstating
-            # pnl_1d_pct with no correctness guard. The ruling's ideal fix
-            # for (1) — Σ_i ltp_i × abs(qty_i) from yesterday's per-instrument
-            # marks — needs the per-instrument companion table the council
-            # explicitly deferred as a separate follow-up story; (2) needs
-            # the store to retain historical per-day quantity, which it does
-            # not today. Both accepted as a known, documented gap (BUG-036)
-            # rather than solved here — this touches pnl_1d_pct display math
-            # with no dedicated test coverage, not appropriate to patch
-            # under this fix's time budget.
+            # BUG-036 fix (2026-08-24): use the QUANTITY THAT WAS ACTUALLY
+            # OPEN on prev_by_role[r]'s snapshot date (prev_by_role[r].net_qty),
+            # not today's live quantity — closes the apples-to-oranges gap
+            # where a day-over-day partial close/add blended today's size
+            # with yesterday's price. Falls back to today's _position_qty()
+            # (the pre-fix behavior) only for legacy rows written before
+            # net_qty existed and not yet covered by the backfill script
+            # (scripts/dev/backfill_leg_snapshot_net_qty.py) — those still
+            # carry the original, documented imprecision until backfilled.
+            #
+            # REMAINING KNOWN GAP (not fixed here, still BUG-036/symptom 1):
+            # when yesterday's snapshot was a multi-instrument aggregate,
+            # prev_by_role[r].ltp is NULL by design (a single LTP would
+            # misrepresent >1 open instrument) — _mark_value then returns
+            # None and that role still contributes 0 to prev_mark_value,
+            # understating the pnl_1d_pct denominator for one day. The
+            # ideal fix — Σ_i ltp_i × abs(qty_i) from yesterday's
+            # per-instrument marks — needs the per-instrument companion
+            # table the BUG-032 council ruling explicitly deferred as a
+            # separate follow-up story.
             prev_mark_value = sum(
                 (
-                    _mark_value(prev_by_role[r].ltp, _position_qty(store, STRATEGY_OVERLAY, r))
+                    _mark_value(
+                        prev_by_role[r].ltp,
+                        prev_by_role[r].net_qty
+                        if prev_by_role[r].net_qty is not None
+                        else _position_qty(store, STRATEGY_OVERLAY, r),
+                    )
                     or Decimal("0")
                     for r in roles
                     if r in prev_by_role
@@ -1394,7 +1398,7 @@ async def _compute_overlay_leg_totals(
     broker: Any,
     snap_date: date,
     notifier: TelegramNotifier | None = None,
-) -> dict[str, tuple[Decimal, Decimal, Decimal, Decimal | None]]:
+) -> dict[str, tuple[Decimal, Decimal, Decimal, Decimal | None, int]]:
     """Compute today's per-leg-role P&L for the standalone overlay book.
 
     BUG-028 (2026-08-10): the overlay book (``STRATEGY_OVERLAY``) is no
@@ -1433,7 +1437,10 @@ async def _compute_overlay_leg_totals(
             dry-run/preview callers that don't want Telegram side effects.
 
     Returns:
-        Mapping of leg_role -> (unrealized_pnl, realized_pnl, total_pnl, ltp).
+        Mapping of leg_role -> (unrealized_pnl, realized_pnl, total_pnl, ltp,
+        net_qty). ``net_qty`` is summed across every open instrument under
+        the role (BUG-036) — same "sum independently, never blend" discipline
+        as unrealized_pnl above.
         Empty dict if ``STRATEGY_OVERLAY`` has never had a trade recorded —
         distinguishes "overlay book never entered" from "entered, now flat."
         A role can be absent even when trades exist for it, if it is
@@ -1464,14 +1471,14 @@ async def _compute_overlay_leg_totals(
         except Exception as exc:
             logger.warning("overlay_leg_totals.ltp_fetch_failed", error=str(exc))
 
-    totals: dict[str, tuple[Decimal, Decimal, Decimal, Decimal | None]] = {}
+    totals: dict[str, tuple[Decimal, Decimal, Decimal, Decimal | None, int]] = {}
     for role in leg_roles:
         matches = positions_by_role.get(role, [])
         realized = realized_by_leg.get(role, Decimal("0"))
         n = len(matches)
 
         if n == 0:
-            totals[role] = (Decimal("0"), realized, realized, None)
+            totals[role] = (Decimal("0"), realized, realized, None, 0)
         elif n == 1:
             pos = matches[0]
             overlay_ltp = ltp_map.get(pos.instrument_key) if pos.instrument_key else None
@@ -1484,7 +1491,7 @@ async def _compute_overlay_leg_totals(
                     leg_role=role,
                 )
                 unrealized = Decimal("0")
-            totals[role] = (unrealized, realized, unrealized + realized, overlay_ltp)
+            totals[role] = (unrealized, realized, unrealized + realized, overlay_ltp, pos.net_qty)
         else:
             # BUG-032: role holds >1 open instrument. Value each
             # independently and sum — never blend cost bases/LTPs.
@@ -1513,7 +1520,8 @@ async def _compute_overlay_leg_totals(
                 (_compute_leg_unrealized_pnl(p, ltp_map[p.instrument_key]) for p in matches),
                 Decimal("0"),
             )
-            totals[role] = (unrealized, realized, unrealized + realized, None)
+            net_qty = sum(p.net_qty for p in matches)
+            totals[role] = (unrealized, realized, unrealized + realized, None, net_qty)
 
         # Runs regardless of `notifier` — logging must not go silent just
         # because Telegram credentials are unset (code-review finding,
@@ -1525,7 +1533,7 @@ async def _compute_overlay_leg_totals(
 
 def _save_overlay_leg_snapshots(
     store: PaperStore,
-    totals: dict[str, tuple[Decimal, Decimal, Decimal, Decimal | None]],
+    totals: dict[str, tuple[Decimal, Decimal, Decimal, Decimal | None, int]],
     snap_date: date,
 ) -> None:
     """Persist today's standalone overlay leg snapshots (``paper_leg_snapshots``).
@@ -1535,7 +1543,7 @@ def _save_overlay_leg_snapshots(
     effect of any 3-track base snapshot (see ``_save_leg_snapshots``, which
     now writes the base leg only).
     """
-    for role, (unrealized, realized, total, ltp) in totals.items():
+    for role, (unrealized, realized, total, ltp, net_qty) in totals.items():
         snap = PaperLegSnapshot(
             strategy_name=STRATEGY_OVERLAY,
             leg_role=role,
@@ -1544,13 +1552,14 @@ def _save_overlay_leg_snapshots(
             realized_pnl=realized,
             total_pnl=total,
             ltp=ltp,
+            net_qty=net_qty,
         )
         store.record_leg_snapshot(snap)
         logger.debug("Overlay leg snapshot saved: %s %s", role, snap_date)
 
 
 def _overlay_summary_row(
-    totals: dict[str, tuple[Decimal, Decimal, Decimal, Decimal | None]],
+    totals: dict[str, tuple[Decimal, Decimal, Decimal, Decimal | None, int]],
 ) -> dict | None:
     """Build the standalone overlay summary row for the printed comparison table.
 
@@ -2167,7 +2176,9 @@ async def _run(args: argparse.Namespace) -> None:
             print(f"\n  {'─' * (W - 4)}")
             print(f"  {'OVERLAY (STANDALONE)':<40} {STRATEGY_OVERLAY}")
             print(f"  {'─' * (W - 4)}")
-            for role, (unrealized, realized, total, _ltp) in sorted(overlay_totals.items()):
+            for role, (unrealized, realized, total, _ltp, _net_qty) in sorted(
+                overlay_totals.items()
+            ):
                 label = OVERLAY_LABELS.get(role, role)
                 delta = _leg_delta(store, STRATEGY_OVERLAY, role, total, snap_date)
                 print(

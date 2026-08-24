@@ -66,7 +66,11 @@ def _open_leg(
 
 
 def _leg_snap(
-    role: str, total_pnl: Decimal, snap_date: date, ltp: Decimal | None = None
+    role: str,
+    total_pnl: Decimal,
+    snap_date: date,
+    ltp: Decimal | None = None,
+    net_qty: int | None = None,
 ) -> PaperLegSnapshot:
     return PaperLegSnapshot(
         strategy_name=_TRACK,
@@ -76,6 +80,7 @@ def _leg_snap(
         realized_pnl=Decimal("0"),
         total_pnl=total_pnl,
         ltp=ltp,
+        net_qty=net_qty,
     )
 
 
@@ -153,6 +158,50 @@ def test_overlay_pnl_1d_uses_yesterday_mark_denominator(tmp_path: Path) -> None:
     assert cc.pnl_1d_abs == Decimal("3000")
     # denominator = yesterday's mark value = 100.00 * 50 = 5000
     assert cc.pnl_1d_pct == Decimal("3000") / Decimal("5000")
+
+
+def test_overlay_pnl_1d_denominator_uses_prev_day_qty_not_todays(tmp_path: Path) -> None:
+    """BUG-036: a day-over-day quantity change must not blend today's size
+    with yesterday's price in pnl_1d_pct's denominator.
+
+    Day 1: 50 short calls open, ltp=100 -> mark value 5000, snapshot carries
+    net_qty=50 (as a post-BUG-036-fix/backfilled row would).
+    Day 2: half the position is bought back (partial close), leaving 25 open
+    -> today's LIVE quantity is 25, not 50.
+
+    Before the fix, prev_mark_value used TODAY's live quantity (25) against
+    YESTERDAY's ltp (100), giving a denominator of 2500 -- wrong, since only
+    50 contracts were actually open and marked at 100 yesterday. The fix must
+    use prev_by_role[r].net_qty (50) instead, giving a denominator of 5000.
+    """
+    store = _store(tmp_path)
+    entry_date = date(2026, 5, 1)
+    day1, day2 = date(2026, 5, 1), date(2026, 5, 2)
+
+    # Day 1: sell 50 to open.
+    _open_leg(store, "overlay_cc", entry_date, qty=50, price=Decimal("100.00"))
+    store.record_leg_snapshot(
+        _leg_snap("overlay_cc", Decimal("0"), day1, ltp=Decimal("100.00"), net_qty=50)
+    )
+
+    # Day 2: buy back 25 (partial close) -- today's live net_qty is now 25.
+    _open_leg(
+        store,
+        "overlay_cc",
+        day2,
+        qty=25,
+        price=Decimal("60.00"),
+        action=TradeAction.BUY,
+    )
+    store.record_leg_snapshot(
+        _leg_snap("overlay_cc", Decimal("1000"), day2, ltp=Decimal("60.00"), net_qty=25)
+    )
+
+    results = _compute_overlay_pnl_snapshots(store, day2)
+    cc = next(r for r in results if r.overlay_type == "cc")
+    # denominator must be yesterday's mark value = 100.00 * 50 = 5000, using
+    # yesterday's quantity -- NOT today's live 25 (which would give 2500).
+    assert cc.pnl_1d_pct == cc.pnl_1d_abs / Decimal("5000")
 
 
 def test_overlay_pnl_inception_uses_entry_basis_denominator(tmp_path: Path) -> None:

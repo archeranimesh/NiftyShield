@@ -128,6 +128,21 @@ Full forensic log (SHAs, bug numbers, root-cause detail) moved to
 add new entries there going forward, or start a fresh dated section here if this file's
 Session Log grows large again.
 
+### 2026-08-24 Session Log (BUG-036 B036.1/B036.2/B036.5 — net_qty fix implemented, not yet committed)
+- **BUG-036**: Added `net_qty: int | None` to `PaperLegSnapshot`/`paper_leg_snapshots` so
+  `_compute_overlay_pnl_snapshots`'s `prev_mark_value` can use the quantity actually open on the
+  prior snapshot date instead of today's live quantity — closes the day-over-day quantity-change
+  symptom (partial close/add blending mismatched qty/price in `pnl_1d_pct`'s denominator). Every
+  leg-snapshot write site updated; new backfill script
+  `scripts/dev/backfill_leg_snapshot_net_qty.py` reconstructs `net_qty` for existing rows from
+  `paper_trades` but has NOT been run against the live DB yet (B036.4 open). Tests written but
+  NOT executed — sandbox had no working Python env (broken venv, disk full, no pip network).
+  `general-purpose`+`REVIEW.md` review found no CRITICAL/ERROR findings. Commit blocked by a
+  `.git/index.lock` held by a concurrent process on the sandbox — SHA pending, deferred to live
+  host per `docs/bugs/prompt.md`'s lock-contention clause. Remaining multi-instrument-NULL-ltp
+  symptom (BUG-036's original symptom 1) still open, deferred pending the per-instrument
+  companion table BUG-032's council ruling already deferred. See `docs/bugs/bugs.md` BUG-036.
+
 ### 2026-08-24 Session Log (BUG-033 B033.4 closed — PP legs closed manually)
 - **BUG-033 B033.4**: Animesh confirmed all `overlay_pp` positions, including the near-expiry
   `NSE_FO|61604` leg (2026-08-25), were closed manually ahead of expiry — no roll executed.

@@ -259,6 +259,16 @@ class PaperLegSnapshot:
             ``total_pnl == unrealized_pnl + realized_pnl`` — enforced by
             ``PaperStore.record_leg_snapshot`` at write time.
         ltp: Last traded price at snapshot time (optional context).
+        net_qty: Net open quantity for this leg-role as of snapshot_date
+            (positive = long, negative = short; summed across every open
+            instrument under the role, same aggregation as get_position's
+            multi-instrument sum). ``None`` for rows written before BUG-036's
+            fix (2026-08-24) or not yet covered by its backfill — callers must
+            treat ``None`` as "unknown, fall back to today's live quantity",
+            never as zero. See BUG-036 (docs/bugs/bugs.md): before this field
+            existed, `_compute_overlay_pnl_snapshots` used today's live
+            quantity against a prior day's LTP, blending mismatched
+            quantity/price when a role's size changed day-over-day.
     """
 
     strategy_name: str
@@ -268,6 +278,7 @@ class PaperLegSnapshot:
     realized_pnl: Decimal
     total_pnl: Decimal
     ltp: Decimal | None = None
+    net_qty: int | None = None
 
 
 @dataclass(frozen=True)

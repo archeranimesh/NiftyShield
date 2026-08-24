@@ -541,7 +541,7 @@ async def test_multi_instrument_aggregates_both_legs_not_newest_only(tmp_path: P
     # Instrument B: net_qty=130, avg_cost=93.00 (weighted 94.20/91.80), ltp=95.00
     #   -> (95.00-93.00)*130 = 260.00
     # Aggregate: 74.75 + 260.00 = 334.75 -- never the newest-only 260.00.
-    unrealized, realized, total, ltp = totals["overlay_pp"]
+    unrealized, realized, total, ltp, net_qty = totals["overlay_pp"]
     assert unrealized == Decimal("334.75")
     assert realized == Decimal("0")
     assert total == Decimal("334.75")
@@ -682,7 +682,7 @@ async def test_single_instrument_role_unchanged(tmp_path: Path) -> None:
 
     totals = await snap_mod._compute_overlay_leg_totals(store, broker, _SNAP)
 
-    unrealized, realized, total, ltp = totals["overlay_pp"]
+    unrealized, realized, total, ltp, net_qty = totals["overlay_pp"]
     assert unrealized == (Decimal("60.00") - Decimal("58.85")) * 65
     assert realized == Decimal("0")
     assert total == unrealized
