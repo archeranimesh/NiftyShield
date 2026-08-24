@@ -1,0 +1,273 @@
+diff --git a/src/strategy/cc_overlay_v1.py b/src/strategy/cc_overlay_v1.py
+index 087fa88..9a5030c 100644
+--- a/src/strategy/cc_overlay_v1.py
++++ b/src/strategy/cc_overlay_v1.py
+@@ -19,7 +19,7 @@ from src.instruments.lookup import InstrumentLookup, format_leg_label
+ from src.market_calendar.holidays import market_today
+ from src.models.options import OptionChain, OptionLeg
+ from src.models.portfolio import TradeAction
+-from src.paper.constants import DEFAULT_BOD_PATH, STRATEGY_CC_OVERLAY
++from src.paper.constants import DEFAULT_BOD_PATH, STRATEGY_OVERLAY
+ from src.paper.models import PaperPosition, PaperTrade
+ from src.strategy._price_utils import find_option_leg
+ from src.strategy.exit_signals import ExitSignalEngine
+@@ -57,7 +57,7 @@ SHORT_CALL_ROLES = {"short_call", "cc_short_call", "covered_call"}
+ class CCOverlayV1(ReEntryMixin):
+     """Covered Call overlay strategy implementation."""
+ 
+-    strategy_name: str = STRATEGY_CC_OVERLAY
++    strategy_name: str = STRATEGY_OVERLAY
+     auto_execute: bool = True
+     reentry_leg_role: str = "covered_call"
+     reentry_script_hint: str = "run find_overlay_strikes.py --overlay-type cc"
+diff --git a/src/strategy/collar_overlay_v1.py b/src/strategy/collar_overlay_v1.py
+index 42fd8ac..16b2c40 100644
+--- a/src/strategy/collar_overlay_v1.py
++++ b/src/strategy/collar_overlay_v1.py
+@@ -19,7 +19,7 @@ from src.instruments.lookup import InstrumentLookup, format_leg_label
+ from src.market_calendar.holidays import market_today
+ from src.models.options import OptionChain, OptionLeg
+ from src.models.portfolio import TradeAction
+-from src.paper.constants import DEFAULT_BOD_PATH, STRATEGY_COLLAR_OVERLAY
++from src.paper.constants import DEFAULT_BOD_PATH, STRATEGY_OVERLAY
+ from src.paper.models import PaperPosition, PaperTrade
+ from src.strategy._price_utils import find_option_leg
+ from src.strategy.collar_entry import CollarEntrySelectionError, select_and_build_collar_entry
+@@ -73,7 +73,7 @@ def _leg_close_matches(pos: PaperPosition, leg: LegClose) -> bool:
+ class CollarOverlayV1(ReEntryMixin):
+     """Collar overlay strategy implementation."""
+ 
+-    strategy_name: str = STRATEGY_COLLAR_OVERLAY
++    strategy_name: str = STRATEGY_OVERLAY
+     auto_execute: bool = True
+     reentry_leg_role: str = "overlay_collar_call"
+     reentry_script_hint: str = "run find_overlay_strikes.py --overlay-type collar"
+diff --git a/src/strategy/pp_overlay_v1.py b/src/strategy/pp_overlay_v1.py
+index df95dfb..02e2fd0 100644
+--- a/src/strategy/pp_overlay_v1.py
++++ b/src/strategy/pp_overlay_v1.py
+@@ -19,7 +19,7 @@ from src.instruments.lookup import InstrumentLookup, format_leg_label
+ from src.market_calendar.holidays import market_today
+ from src.models.options import OptionChain, OptionLeg
+ from src.models.portfolio import TradeAction
+-from src.paper.constants import DEFAULT_BOD_PATH, STRATEGY_PP_OVERLAY
++from src.paper.constants import DEFAULT_BOD_PATH, STRATEGY_OVERLAY
+ from src.paper.models import PaperPosition, PaperTrade
+ from src.strategy._price_utils import find_option_leg
+ from src.strategy.exit_signals import ExitSignalEngine
+@@ -57,7 +57,7 @@ LONG_PUT_ROLES = {"long_put", "pp_long_put", "protective_put"}
+ class PPOverlayV1(ReEntryMixin):
+     """Protective Put overlay strategy implementation."""
+ 
+-    strategy_name: str = STRATEGY_PP_OVERLAY
++    strategy_name: str = STRATEGY_OVERLAY
+     auto_execute: bool = True
+     reentry_leg_role: str = "protective_put"
+     reentry_script_hint: str = "run find_overlay_strikes.py --overlay-type pp"
+diff --git a/tests/unit/strategy/test_cc_overlay_v1.py b/tests/unit/strategy/test_cc_overlay_v1.py
+index b066248..82999f4 100644
+--- a/tests/unit/strategy/test_cc_overlay_v1.py
++++ b/tests/unit/strategy/test_cc_overlay_v1.py
+@@ -13,11 +13,16 @@ from unittest.mock import AsyncMock, MagicMock, patch
+ import pytest
+ 
+ from src.models.options import OptionChain, OptionChainStrike, OptionLeg
++from src.paper.constants import STRATEGY_OVERLAY
+ from src.paper.models import PaperPosition
+ from src.strategy.cc_overlay_v1 import CCOverlayV1
+ from src.strategy.protocol import ApprovedAction, LegClose, SignalEvent
+ 
+-_STRATEGY = "paper_covered_call_v1"
++# BUG-031: read from the real constant, not a hardcoded literal — a hardcoded
++# "paper_covered_call_v1" here would have silently kept passing after the
++# strategy_name repoint even though the class was filtering the wrong namespace
++# in production, which is exactly the gap that let the bug ship unnoticed.
++_STRATEGY = STRATEGY_OVERLAY
+ _OTHER_STRATEGY = "paper_other_v1"
+ 
+ 
+@@ -394,7 +399,9 @@ def test_describe_context() -> None:
+         payload={},
+     )
+     ctx = strategy.describe_context(event, chain, [pos])
+-    assert "paper_covered_call_v1" in ctx
++    # BUG-031: strategy_name now reflects the real filing namespace
++    # (STRATEGY_OVERLAY), not the retired paper_covered_call_v1 constant.
++    assert _STRATEGY in ctx
+     assert "PROFIT_TARGET" in ctx
+ 
+ 
+diff --git a/tests/unit/strategy/test_collar_overlay_v1.py b/tests/unit/strategy/test_collar_overlay_v1.py
+index 3ca40ce..4a4326a 100644
+--- a/tests/unit/strategy/test_collar_overlay_v1.py
++++ b/tests/unit/strategy/test_collar_overlay_v1.py
+@@ -13,11 +13,14 @@ from unittest.mock import MagicMock
+ import pytest
+ 
+ from src.models.options import OptionChain, OptionChainStrike, OptionLeg
++from src.paper.constants import STRATEGY_OVERLAY
+ from src.paper.models import PaperPosition
+ from src.strategy.collar_overlay_v1 import CollarOverlayV1
+ from src.strategy.protocol import ApprovedAction, LegClose, SignalEvent
+ 
+-_STRATEGY = "paper_collar_v1"
++# BUG-031: read from the real constant, not a hardcoded literal — see
++# test_cc_overlay_v1.py's identical note.
++_STRATEGY = STRATEGY_OVERLAY
+ _OTHER_STRATEGY = "paper_other_v1"
+ 
+ 
+@@ -293,7 +296,9 @@ def test_describe_context() -> None:
+         payload={},
+     )
+     ctx = strategy.describe_context(event, chain, [pos1, pos2])
+-    assert "paper_collar_v1" in ctx
++    # BUG-031: strategy_name now reflects the real filing namespace
++    # (STRATEGY_OVERLAY), not the retired paper_collar_v1 constant.
++    assert _STRATEGY in ctx
+     assert "PROFIT_TARGET" in ctx
+ 
+ 
+diff --git a/tests/unit/strategy/test_pp_overlay_v1.py b/tests/unit/strategy/test_pp_overlay_v1.py
+index f9f506b..78cc1be 100644
+--- a/tests/unit/strategy/test_pp_overlay_v1.py
++++ b/tests/unit/strategy/test_pp_overlay_v1.py
+@@ -13,11 +13,14 @@ from unittest.mock import AsyncMock, MagicMock
+ import pytest
+ 
+ from src.models.options import OptionChain, OptionChainStrike, OptionLeg
++from src.paper.constants import STRATEGY_OVERLAY
+ from src.paper.models import PaperPosition
+ from src.strategy.pp_overlay_v1 import PPOverlayV1
+ from src.strategy.protocol import ApprovedAction, LegClose, SignalEvent
+ 
+-_STRATEGY = "paper_protective_put_v1"
++# BUG-031: read from the real constant, not a hardcoded literal — see
++# test_cc_overlay_v1.py's identical note.
++_STRATEGY = STRATEGY_OVERLAY
+ _OTHER_STRATEGY = "paper_other_v1"
+ 
+ 
+@@ -267,7 +270,9 @@ def test_describe_context() -> None:
+         payload={},
+     )
+     ctx = strategy.describe_context(event, chain, [pos])
+-    assert "paper_protective_put_v1" in ctx
++    # BUG-031: strategy_name now reflects the real filing namespace
++    # (STRATEGY_OVERLAY), not the retired paper_protective_put_v1 constant.
++    assert _STRATEGY in ctx
+     assert "CRASH_MONETIZE" in ctx
+ 
+ 
+diff --git a/tests/unit/strategy/test_strategy_monitor.py b/tests/unit/strategy/test_strategy_monitor.py
+index 89e47aa..be61ea0 100644
+--- a/tests/unit/strategy/test_strategy_monitor.py
++++ b/tests/unit/strategy/test_strategy_monitor.py
+@@ -1183,6 +1183,107 @@ async def test_tick_summary_signal_count_matches() -> None:
+     assert summary[0]["signals_emitted"] == 3
+ 
+ 
++# ---------------------------------------------------------------------------
++# BUG-031 regression — real overlay strategies must be ticked against
++# STRATEGY_OVERLAY-scoped positions, not their old pre-S2r constants
++# ---------------------------------------------------------------------------
++
++
++@pytest.mark.asyncio
++async def test_tick_picks_up_cc_overlay_position_under_strategy_overlay() -> None:
++    """BUG-031: a CC overlay position filed under STRATEGY_OVERLAY (the
++    namespace paper_3track_overlay_entry.py's auto_cc_bootstrap actually
++    writes to) must be evaluated for exit signals by StrategyMonitor.
++
++    Deliberately end-to-end through a real CCOverlayV1 instance and a real
++    _tick(), not a unit-level strategy_name equality assertion — that
++    narrower check is exactly the class of gap that let this bug ship
++    unnoticed for three weeks (see docs/bugs/bugs.md BUG-031's B031.3 note).
++    Before the fix, CCOverlayV1.strategy_name pointed at
++    STRATEGY_CC_OVERLAY ("paper_covered_call_v1"), a namespace with zero
++    rows in production, so store.get_positions(strategy.strategy_name)
++    always returned [] and check_signals never saw a real position.
++    """
++    from src.paper.constants import STRATEGY_OVERLAY
++    from src.strategy.cc_overlay_v1 import CCOverlayV1
++
++    overlay_position = PaperPosition(
++        strategy_name=STRATEGY_OVERLAY,
++        leg_role="short_call",
++        net_qty=-65,
++        avg_cost=Decimal("0"),
++        avg_sell_price=Decimal("80"),
++        instrument_key="NSE_FO|NIFTY23000CE",
++    )
++
++    def _get_positions(strategy_name: str) -> list[PaperPosition]:
++        # Only the correct namespace should ever see this position — the
++        # exact distinction BUG-031's fix depends on.
++        return [overlay_position] if strategy_name == STRATEGY_OVERLAY else []
++
++    store = _make_store()
++    store.get_positions.side_effect = _get_positions
++
++    strategy = CCOverlayV1()
++    with patch.object(strategy, "check_signals", wraps=strategy.check_signals) as spy:
++        monitor = _make_monitor(store=store, strategies=[strategy])
++        with (
++            patch("src.strategy.monitor.is_trading_day", return_value=True),
++            patch(
++                "src.strategy.monitor.datetime",
++                **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
++            ),
++        ):
++            await monitor._tick()
++
++    store.get_positions.assert_any_call(STRATEGY_OVERLAY)
++    spy.assert_called_once()
++    _, called_positions = spy.call_args.args
++    assert called_positions == [overlay_position]
++
++
++@pytest.mark.asyncio
++async def test_tick_skips_cc_overlay_position_under_old_constant() -> None:
++    """Companion negative case: a position filed under the retired
++    STRATEGY_CC_OVERLAY namespace (pre-fix behavior) is now correctly
++    invisible to CCOverlayV1 — proves the repoint didn't just widen the
++    match to accept both namespaces."""
++    from src.paper.constants import STRATEGY_CC_OVERLAY, STRATEGY_OVERLAY
++    from src.strategy.cc_overlay_v1 import CCOverlayV1
++
++    stale_position = PaperPosition(
++        strategy_name=STRATEGY_CC_OVERLAY,
++        leg_role="short_call",
++        net_qty=-65,
++        avg_cost=Decimal("0"),
++        avg_sell_price=Decimal("80"),
++        instrument_key="NSE_FO|NIFTY23000CE",
++    )
++
++    def _get_positions(strategy_name: str) -> list[PaperPosition]:
++        return [stale_position] if strategy_name == STRATEGY_CC_OVERLAY else []
++
++    store = _make_store()
++    store.get_positions.side_effect = _get_positions
++
++    strategy = CCOverlayV1()
++    assert strategy.strategy_name == STRATEGY_OVERLAY
++    with patch.object(strategy, "check_signals", wraps=strategy.check_signals) as spy:
++        monitor = _make_monitor(store=store, strategies=[strategy])
++        with (
++            patch("src.strategy.monitor.is_trading_day", return_value=True),
++            patch(
++                "src.strategy.monitor.datetime",
++                **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
++            ),
++        ):
++            await monitor._tick()
++
++    spy.assert_called_once()
++    _, called_positions = spy.call_args.args
++    assert called_positions == []
++
++
+ # ---------------------------------------------------------------------------
+ # Helpers (private to this module)
+ # ---------------------------------------------------------------------------
