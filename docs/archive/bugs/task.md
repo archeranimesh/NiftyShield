@@ -522,3 +522,50 @@ commit per phase.
 - [x] **B030.5** — Review: real `code-reviewer` or `general-purpose` + `REVIEW.md` substitute
   (mandatory — financial P&L reporting change). | SHA 86db6a2
 - [x] **B030.6** — Commit, update `bugs.md` BUG-030 status to ✅ Fixed + SHA, update `TODOS.md`. | SHA 86db6a2
+
+## BUG-031 — `CCOverlayV1`/`PPOverlayV1`/`CollarOverlayV1` filter by pre-S2r `strategy_name` constants, never see `STRATEGY_OVERLAY`-scoped positions — zero live exit-signal coverage for any auto-entered CC/PP/Collar leg since 2026-07-29
+
+- [x] **B031.1** — Grep every reference to `STRATEGY_CC_OVERLAY`/`STRATEGY_PP_OVERLAY`/
+  `STRATEGY_COLLAR_OVERLAY` (not just the three `strategy_name: str = ...` class attributes) and
+  confirm which are position-storage reads (must be repointed) vs. informational
+  `GateViolation` tags / the separate `cc_calibration/` manual tool (may be unaffected or need a
+  deliberate separate decision) — mirrors BUG-030's entry-side/reporting-side split. Full
+  context: `docs/bugs/bugs.md` BUG-031.
+- [x] **B031.2** — Repoint `strategy_name` on `src/strategy/cc_overlay_v1.py:60`,
+  `pp_overlay_v1.py:60`, `collar_overlay_v1.py:76` to `STRATEGY_OVERLAY` per B031.1's resolved
+  scope. SHA `ea5df81`.
+- [x] **B031.3** — Tests: end-to-end coverage that a CC/PP/Collar position opened under
+  `STRATEGY_OVERLAY` is picked up by a `StrategyMonitor` tick and evaluated for exit signals —
+  not just a unit-level `strategy_name` equality assertion (that gap is exactly what let this
+  ship unnoticed for three weeks). 2 new tests in `tests/unit/strategy/test_strategy_monitor.py`
+  (positive: real `_tick()` delivers a `STRATEGY_OVERLAY` position to a real `CCOverlayV1.
+  check_signals`; negative: a position under the retired `STRATEGY_CC_OVERLAY` constant does
+  not). 3 existing `test_describe_context` assertions + 3 test fixtures' hardcoded `_STRATEGY`
+  literals updated to derive from the real constant. 262 tests green (3 unrelated pre-existing
+  pyarrow-missing failures in `test_overlay_entry.py`). SHA `ea5df81` (same commit as B031.2).
+- [x] **B031.4** — Manual action, independent of the code fix: review every currently-open
+  CC/PP/Collar leg for exit-eligibility by hand (delta/premium/profit-target/DTE) — nothing has
+  been doing this automatically since 2026-07-29. **Closed 2026-08-24.** Delta/premium coverage:
+  live run of `scratch/2026-08-24_bug031_manual_exit_review.py` against the real broker/DB found
+  5 open legs (not 2 as originally scoped — 3 `overlay_pp`, 1 `overlay_cc`, 1
+  `overlay_collar_put`), zero delta/premium-based signals fired at current market levels. DTE
+  coverage was blocked by **BUG-033**/**BUG-034** (DTE-gated signals and, for PP/CC, the entire
+  `check_signals()` path dead for real positions) — resolved for PP specifically by Animesh's
+  decision to close all 3 `overlay_pp` legs by hand (`scratch/2026-08-24_close_all_pp_legs.py
+  --execute`, confirmed 0 open `overlay_pp` positions afterward) rather than wait on the DTE fix
+  — this eliminates `NSE_FO|61604`'s near-expiry exposure entirely rather than just reviewing it.
+  **Residual, not closed by this**: the still-open `overlay_cc` (`NSE_FO|74391`) and
+  `overlay_collar_put` (`NSE_FO|73994`) legs had their delta/premium checked clean but their DTE
+  was never actually verifiable (same BUG-033/034 blockers) — re-run the review script against
+  them once those bugs ship.
+- [x] **B031.5** — Review: real `code-reviewer` or `general-purpose` + `REVIEW.md` substitute
+  (mandatory — governs live-capital-adjacent auto-execution: `MONETIZE_PP`, `ROLL_PP`,
+  `CLOSE_CC`, `CLOSE_AND_REENTER_COLLAR`). `general-purpose` + `REVIEW.md` substitute run against
+  the B031.2/B031.3 diff (no real `code-reviewer` subagent on this Cowork surface) — clean bill
+  of health, no CRITICAL/ERROR, confirmed no leftover stale-constant references and that the two
+  new `StrategyMonitor` tests assert real call-arg content, not vacuous. No council checkpoint
+  triggered — this diff is a narrow two-line-per-file constant repoint (not a new architecture
+  decision), unlike BUG-028/BUG-030's broader pipeline changes.
+- [x] **B031.6** — Commit, update `bugs.md` BUG-031 status to ✅ Fixed + SHA, update `TODOS.md`.
+  All B031.x items closed 2026-08-24 — section moved to `docs/archive/bugs/{bugs,task}.md`.
+

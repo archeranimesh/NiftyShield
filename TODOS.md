@@ -142,6 +142,40 @@ Session Log grows large again.
   anticipated — no new scope. See `docs/bugs/bugs.md` BUG-031 "Implementation progress" note.
   Next: B031.2, the actual `strategy_name` repoint.
 
+### 2026-08-24 Session Log (BUG-031 closed; BUG-033/BUG-034 filed; PP legs closed manually)
+- **BUG-031 B031.2/B031.3/B031.5** (SHA `ea5df81`): repointed `strategy_name` on
+  `CCOverlayV1`/`PPOverlayV1`/`CollarOverlayV1` to `STRATEGY_OVERLAY`. Test fixtures switched from
+  hardcoded literals to the real constant (surfaced 3 real `test_describe_context` regressions,
+  fixed). 2 new end-to-end `StrategyMonitor` tests. 262 tests green. `general-purpose` +
+  `REVIEW.md` substitute review: clean. **Verification gotcha worth remembering**: the first test
+  pass looked green but was run before the edits were committed to the device — `device_bash`
+  runs against the real on-device files, not the cloud sandbox's staged copy, so that first "121
+  passed" was silently testing the unmodified pre-fix code. Always commit to device before
+  trusting a `device_bash` test run.
+- **BUG-031 B031.4/B031.6 closed**: live run of `scratch/2026-08-24_bug031_manual_exit_review.py`
+  found 5 open overlay legs (3 `overlay_pp`, 1 `overlay_cc`, 1 `overlay_collar_put` — not the 2
+  originally scoped), zero delta/premium signals fired. DTE coverage blocked by two new bugs
+  found mid-review (below). Animesh's call on the time-sensitive piece: close all 3 `overlay_pp`
+  legs by hand (`scratch/2026-08-24_close_all_pp_legs.py --execute`) rather than wait on the DTE
+  fix — confirmed 0 open `overlay_pp` positions afterward. BUG-031 fully closed, section moved to
+  `docs/archive/bugs/{bugs,task}.md`.
+- **BUG-033 filed** (not fixed): `_parse_expiry` in all three overlay classes is regex-only,
+  never resolves real numeric Upstox instrument keys (`NSE_FO|61604` etc.) — same bug class as
+  the already-fixed `_open_pp_dte`/`paper_3track_overlay_entry.py` gap (2026-08-13/08-20), never
+  swept into these three files. Result: every DTE-gated signal (`ROLL_ELIGIBLE`/`DTE_REVIEW`) has
+  been dead for every real position. Discovered because `NSE_FO|61604` had DTE=1 at review time
+  and got no roll signal.
+- **BUG-034 filed** (not fixed, more severe than BUG-033): while building the PP-close script,
+  found `PPOverlayV1.LONG_PUT_ROLES`/`CCOverlayV1.SHORT_CALL_ROLES` are stale pre-S2r role sets
+  that never contain the real production `leg_role` (`overlay_pp`/`overlay_cc`) —
+  `check_signals()`'s role filter runs *before* DTE logic, so it silently evaluates **zero** real
+  PP/CC positions regardless of BUG-033. Collar is unaffected (its role constants already match
+  production). This means today's B031.4 "no signals fired" read was only meaningful for the one
+  `overlay_collar_put` leg, not for PP/CC.
+- **Residual**: `overlay_cc` (`NSE_FO|74391`) and `overlay_collar_put` (`NSE_FO|73994`) remain
+  open, delta/premium checked clean, DTE still unverifiable until BUG-033/034 ship — needs a
+  re-check once those land.
+
 ### 2026-08-24 Session Log (BUG-030 fixed — overlay_cc/collar_put merge)
 - **BUG-030** (`_overlay_type_groups()` elif-precedence dropped an `overlay_cc` leg whenever an
   `overlay_collar_put` leg was also present same-day): B030.1's entry-side question resolved by
