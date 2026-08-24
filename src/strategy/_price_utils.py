@@ -4,11 +4,13 @@
 from __future__ import annotations
 
 import re
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING
 
 import structlog
 
+from src.instruments.lookup import parse_expiry as _parse_expiry_epoch
 from src.models.options import OptionChain, OptionLeg
 
 if TYPE_CHECKING:
@@ -22,6 +24,11 @@ log = structlog.get_logger(__name__)
 # no strike/type information — those must be resolved via BOD JSON lookup
 # instead (see `_resolve_via_bod`).
 _STRIKE_RE = re.compile(r"NIFTY(\d+)(PE|CE)", re.IGNORECASE)
+
+# Matches keys like "NSE_FO|NIFTY29MAY2026PE" → group 1 = "29MAY2026".
+# Same symbolic-key-only limitation as `_STRIKE_RE` above — real numeric
+# Upstox keys never match and must fall back to BOD JSON (`resolve_option_expiry`).
+_EXPIRY_RE = re.compile(r"NSE_FO\|NIFTY(\d{2}[A-Za-z]{3}\d{4})(PE|CE)", re.IGNORECASE)
 
 
 def find_option_leg(
@@ -103,6 +110,65 @@ def _resolve_via_bod(
     if strike_data is None:
         return None
     return strike_data.ce if option_type == "CE" else strike_data.pe
+
+
+def resolve_option_expiry(
+    instrument_key: str,
+    lookup: InstrumentLookup | None = None,
+) -> date | None:
+    """Extract an option leg's expiry date from its instrument key.
+
+    Tries the symbolic-key regex first (matches text-format keys like
+    ``NSE_FO|NIFTY29MAY2026PE``, used by unit test fixtures). Real Upstox
+    keys are numeric-only (e.g. ``NSE_FO|61604``) and never match; for those,
+    falls back to ``lookup`` (BOD JSON) to resolve the expiry when provided.
+
+    Mirrors the regex-first/BOD-fallback fix already proven for
+    ``ic_nifty_v2.py::_parse_expiry`` (BUG-018) and
+    ``paper_3track_overlay_entry.py``'s ``_open_pp_dte`` — shared here so
+    ``CCOverlayV1``/``PPOverlayV1``/``CollarOverlayV1`` stop carrying three
+    independent regex-only copies that never resolved real positions
+    (BUG-033).
+
+    Args:
+        instrument_key: Upstox instrument key for the option leg.
+        lookup: Optional ``InstrumentLookup`` (BOD JSON) used to resolve the
+            expiry for real numeric instrument keys that the regex cannot
+            parse. If omitted, only symbolic keys resolve.
+
+    Returns:
+        Parsed expiry date, or ``None`` if the key can't be resolved by
+        either path.
+    """
+    m = _EXPIRY_RE.search(instrument_key)
+    if m:
+        try:
+            return datetime.strptime(m.group(1).upper(), "%d%b%Y").date()
+        except ValueError:
+            return None
+
+    if lookup is None:
+        log.warning("resolve_option_expiry.key_not_parseable", key=instrument_key)
+        return None
+
+    inst = lookup.get_by_key(instrument_key)
+    if inst is None:
+        log.warning("resolve_option_expiry.bod_lookup_failed", key=instrument_key)
+        return None
+    expiry_str = _parse_expiry_epoch(inst.get("expiry"))
+    if expiry_str is None:
+        log.warning("resolve_option_expiry.bod_no_expiry_field", key=instrument_key)
+        return None
+    try:
+        return date.fromisoformat(expiry_str)
+    except ValueError as exc:
+        log.warning(
+            "resolve_option_expiry.bod_bad_expiry",
+            key=instrument_key,
+            expiry_str=expiry_str,
+            error=str(exc),
+        )
+        return None
 
 
 def resolve_price(leg: OptionLeg) -> Decimal:

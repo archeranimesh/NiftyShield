@@ -176,3 +176,90 @@ def test_find_option_leg_bod_lookup_non_option_instrument_type() -> None:
         leg = find_option_leg("NSE_FO|48100", market, lookup=lookup)
     assert leg is None
     assert any("bod_not_an_option" in e.get("event", "") for e in cap)
+
+
+# ── resolve_option_expiry (BUG-033) ───────────────────────────────────────────
+# CCOverlayV1/PPOverlayV1/CollarOverlayV1._parse_expiry all delegate to this
+# helper. Real Upstox instrument keys are numeric-only and never match the
+# symbolic-key regex — resolution must fall back to BOD JSON lookup.
+
+
+def test_resolve_option_expiry_symbolic_key_via_regex() -> None:
+    from datetime import date as _date
+
+    from src.strategy._price_utils import resolve_option_expiry
+
+    assert resolve_option_expiry("NSE_FO|NIFTY29MAY2026PE") == _date(2026, 5, 29)
+
+
+def test_resolve_option_expiry_resolves_real_numeric_key_via_bod_lookup() -> None:
+    from src.strategy._price_utils import resolve_option_expiry
+
+    lookup = _FakeLookup({"NSE_FO|61604": {"expiry": "2026-08-25"}})
+    assert resolve_option_expiry("NSE_FO|61604", lookup=lookup) == date(2026, 8, 25)
+
+
+def test_resolve_option_expiry_resolves_epoch_ms_expiry_via_bod_lookup() -> None:
+    from datetime import datetime, timezone
+
+    from src.strategy._price_utils import resolve_option_expiry
+
+    expiry_dt = datetime(2026, 8, 25, tzinfo=timezone.utc)
+    epoch_ms = int(expiry_dt.timestamp() * 1000)
+    lookup = _FakeLookup({"NSE_FO|61604": {"expiry": epoch_ms}})
+    assert resolve_option_expiry("NSE_FO|61604", lookup=lookup) == date(2026, 8, 25)
+
+
+def test_resolve_option_expiry_numeric_key_without_lookup_returns_none() -> None:
+    from src.strategy._price_utils import resolve_option_expiry
+
+    with capture_logs() as cap:
+        result = resolve_option_expiry("NSE_FO|61604")
+    assert result is None
+    assert any("key_not_parseable" in e.get("event", "") for e in cap)
+
+
+def test_resolve_option_expiry_numeric_key_not_in_bod_returns_none() -> None:
+    from src.strategy._price_utils import resolve_option_expiry
+
+    lookup = _FakeLookup({})
+    with capture_logs() as cap:
+        result = resolve_option_expiry("NSE_FO|61604", lookup=lookup)
+    assert result is None
+    assert any("bod_lookup_failed" in e.get("event", "") for e in cap)
+
+
+def test_resolve_option_expiry_regex_wins_over_bod_when_both_resolvable() -> None:
+    """Symbolic key still resolves via regex even when a (deliberately wrong)
+    BOD entry is also present — no behavior change for existing text-format
+    fixtures once the fallback was added."""
+    from datetime import date as _date
+
+    from src.strategy._price_utils import resolve_option_expiry
+
+    lookup = _FakeLookup({"NSE_FO|NIFTY29MAY2026PE": {"expiry": "2099-01-01"}})
+    assert resolve_option_expiry("NSE_FO|NIFTY29MAY2026PE", lookup=lookup) == _date(2026, 5, 29)
+
+
+def test_resolve_option_expiry_bod_entry_missing_expiry_field_returns_none() -> None:
+    """BOD record found but has no usable `expiry` field (None/unparseable) —
+    must degrade to None, not raise."""
+    from src.strategy._price_utils import resolve_option_expiry
+
+    lookup = _FakeLookup({"NSE_FO|61604": {"expiry": None}})
+    with capture_logs() as cap:
+        result = resolve_option_expiry("NSE_FO|61604", lookup=lookup)
+    assert result is None
+    assert any("bod_no_expiry_field" in e.get("event", "") for e in cap)
+
+
+def test_resolve_option_expiry_bod_bad_expiry_string_returns_none() -> None:
+    """A malformed (non-ISO) expiry string from BOD must degrade to None,
+    not raise ValueError out of the tick loop."""
+    from src.strategy._price_utils import resolve_option_expiry
+
+    lookup = _FakeLookup({"NSE_FO|61604": {"expiry": "not-a-date"}})
+    with capture_logs() as cap:
+        result = resolve_option_expiry("NSE_FO|61604", lookup=lookup)
+    assert result is None
+    assert any("bod_bad_expiry" in e.get("event", "") for e in cap)

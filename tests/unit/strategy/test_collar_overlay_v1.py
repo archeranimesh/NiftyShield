@@ -923,3 +923,45 @@ def test_apply_action_close_collar_notification_falls_back_when_unresolvable() -
     msg = mock_notifier.send_notification.call_args[0][0]
     assert "NSE_FO|65900" in msg
     assert "NSE_FO|65901" in msg
+
+
+def test_dte_review_fires_for_real_numeric_key_via_bod_lookup() -> None:
+    """BUG-033: real Upstox keys (e.g. NSE_FO|61604) are numeric-only and never
+    match _EXPIRY_RE — DTE must resolve via BOD JSON fallback, not the regex."""
+    expiry_str = (date.today() + timedelta(days=5)).isoformat()
+    lookup = _FakeLookup({"NSE_FO|61604": {"expiry": expiry_str}})
+    strategy = CollarOverlayV1(instrument_lookup=lookup)
+    chain = _make_chain("50", "0.20", "30", "-0.10")
+    pos1 = _make_short_call_position(
+        instrument_key="NSE_FO|61604",
+        avg_sell_price="80",
+        entry_date=date.today() - timedelta(days=21),
+    )
+    events = _run(strategy.check_signals(chain, [pos1]))
+    assert any(
+        e.event_type == "DTE_REVIEW"
+        and e.severity == "ACTION"
+        and e.payload.get("auto_execute") is True
+        for e in events
+    )
+
+
+def test_dte_review_still_prefers_regex_when_both_resolvable() -> None:
+    """No behavior change for text-format keys once the BOD fallback exists —
+    the regex path must still win when it can resolve the key itself."""
+    key = _expiry_key(dte=5, option_type="CE")
+    lookup = _FakeLookup({key: {"expiry": (date.today() + timedelta(days=999)).isoformat()}})
+    strategy = CollarOverlayV1(instrument_lookup=lookup)
+    chain = _make_chain("50", "0.20", "30", "-0.10")
+    pos1 = _make_short_call_position(
+        instrument_key=key,
+        avg_sell_price="80",
+        entry_date=date.today() - timedelta(days=21),
+    )
+    events = _run(strategy.check_signals(chain, [pos1]))
+    assert any(
+        e.event_type == "DTE_REVIEW"
+        and e.severity == "ACTION"
+        and e.payload.get("auto_execute") is True
+        for e in events
+    )

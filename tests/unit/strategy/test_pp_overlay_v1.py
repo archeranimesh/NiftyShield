@@ -513,3 +513,40 @@ def test_find_put_leg_chain_walk_fallback_is_gone() -> None:
     leg = strategy._find_put_leg(market, "NSE_FO|65900")
 
     assert leg is None
+
+
+def test_roll_eligible_fires_for_real_numeric_key_via_bod_lookup() -> None:
+    """BUG-033: real Upstox keys (e.g. NSE_FO|61604) are numeric-only and never
+    match _EXPIRY_RE — DTE must resolve via BOD JSON fallback, not the regex."""
+    expiry_str = (date.today() + timedelta(days=4)).isoformat()
+    lookup = _FakeLookup({"NSE_FO|61604": {"expiry": expiry_str}})
+    strategy = PPOverlayV1(instrument_lookup=lookup)
+    pos = _make_position(instrument_key="NSE_FO|61604")
+    events = _run(strategy.check_signals(_make_empty_chain(), [pos]))
+    assert len(events) == 1
+    assert events[0].event_type == "ROLL_ELIGIBLE"
+    assert events[0].severity == "ACTION"
+
+
+def test_roll_eligible_still_prefers_regex_when_both_resolvable() -> None:
+    """No behavior change for text-format keys once the BOD fallback exists —
+    the regex path must still win when it can resolve the key itself."""
+    key = _expiry_key(dte=4)
+    # Deliberately wrong BOD entry the regex path should never consult.
+    lookup = _FakeLookup({key: {"expiry": (date.today() + timedelta(days=999)).isoformat()}})
+    strategy = PPOverlayV1(instrument_lookup=lookup)
+    pos = _make_position(instrument_key=key)
+    events = _run(strategy.check_signals(_make_empty_chain(), [pos]))
+    assert len(events) == 1
+    assert events[0].event_type == "ROLL_ELIGIBLE"
+
+
+def test_no_roll_signal_for_real_numeric_key_when_bod_lookup_fails() -> None:
+    """A numeric key absent from the BOD lookup can't resolve DTE at all —
+    check_signals must find nothing to fire rather than silently defaulting
+    to a "far from expiry" DTE (the pre-fix behavior masked this same gap)."""
+    lookup = _FakeLookup({})  # key not present -> unresolvable
+    strategy = PPOverlayV1(instrument_lookup=lookup)
+    pos = _make_position(instrument_key="NSE_FO|61604")
+    events = _run(strategy.check_signals(_make_empty_chain(), [pos]))
+    assert events == []

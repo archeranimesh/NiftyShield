@@ -7,8 +7,7 @@ Emits exit and warning signals for Standalone CC legs.
 
 from __future__ import annotations
 
-import re
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -21,7 +20,7 @@ from src.models.options import OptionChain, OptionLeg
 from src.models.portfolio import TradeAction
 from src.paper.constants import DEFAULT_BOD_PATH, STRATEGY_OVERLAY
 from src.paper.models import PaperPosition, PaperTrade
-from src.strategy._price_utils import find_option_leg
+from src.strategy._price_utils import find_option_leg, resolve_option_expiry
 from src.strategy.exit_signals import ExitSignalEngine
 from src.strategy.protocol import ApprovedAction, LegClose, SignalEvent
 from src.strategy.reentry_mixin import ReEntryMixin
@@ -44,12 +43,6 @@ def _leg_close_matches(pos: PaperPosition, leg: LegClose) -> bool:
         return pos.instrument_key == leg.instrument_key
     return True
 
-
-# Matches keys like "NSE_FO|NIFTY29MAY2026PE" → group 1 = "29MAY2026"
-_EXPIRY_RE = re.compile(
-    r"NSE_FO\|NIFTY(\d{2}[A-Za-z]{3}\d{4})(PE|CE)",
-    re.IGNORECASE,
-)
 
 SHORT_CALL_ROLES = {"short_call", "cc_short_call", "covered_call"}
 
@@ -394,11 +387,10 @@ class CCOverlayV1(ReEntryMixin):
         return find_option_leg(instrument_key, market, lookup=self._resolve_instrument_lookup())
 
     def _parse_expiry(self, instrument_key: str) -> date | None:
-        """Extract the option expiry date from instrument key."""
-        m = _EXPIRY_RE.search(instrument_key)
-        if not m:
-            return None
-        try:
-            return datetime.strptime(m.group(1).upper(), "%d%b%Y").date()
-        except ValueError:
-            return None
+        """Extract the option expiry date from instrument key.
+
+        Regex-first with BOD-fallback for real numeric instrument keys —
+        see docs/bugs/bugs.md BUG-033. Delegates to the shared
+        ``_price_utils.resolve_option_expiry`` helper.
+        """
+        return resolve_option_expiry(instrument_key, self._resolve_instrument_lookup())

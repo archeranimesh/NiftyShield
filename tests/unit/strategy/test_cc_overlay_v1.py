@@ -631,3 +631,29 @@ def test_find_call_leg_chain_walk_fallback_is_gone() -> None:
     leg = strategy._find_call_leg(market, "NSE_FO|65900")
 
     assert leg is None
+
+
+def test_dte_review_fires_for_real_numeric_key_via_bod_lookup() -> None:
+    """BUG-033: real Upstox keys (e.g. NSE_FO|61604) are numeric-only and never
+    match _EXPIRY_RE — DTE must resolve via BOD JSON fallback, not the regex."""
+    expiry_str = (date.today() + timedelta(days=5)).isoformat()
+    lookup = _FakeLookup({"NSE_FO|61604": {"expiry": expiry_str}})
+    strategy = CCOverlayV1(instrument_lookup=lookup)
+    chain = _make_chain(ltp="80", delta="0.20", strike="23000")
+    entry_date = date.today() - timedelta(days=21)
+    pos = _make_position(instrument_key="NSE_FO|61604", avg_sell_price="80", entry_date=entry_date)
+    events = _run(strategy.check_signals(chain, [pos]))
+    assert any(e.event_type == "DTE_REVIEW" and e.severity == "ACTION" for e in events)
+
+
+def test_dte_review_still_prefers_regex_when_both_resolvable() -> None:
+    """No behavior change for text-format keys once the BOD fallback exists —
+    the regex path must still win when it can resolve the key itself."""
+    key = _expiry_key(dte=5)
+    lookup = _FakeLookup({key: {"expiry": (date.today() + timedelta(days=999)).isoformat()}})
+    strategy = CCOverlayV1(instrument_lookup=lookup)
+    chain = _make_chain(ltp="80", delta="0.20", strike="23000")
+    entry_date = date.today() - timedelta(days=21)
+    pos = _make_position(instrument_key=key, avg_sell_price="80", entry_date=entry_date)
+    events = _run(strategy.check_signals(chain, [pos]))
+    assert any(e.event_type == "DTE_REVIEW" and e.severity == "ACTION" for e in events)
