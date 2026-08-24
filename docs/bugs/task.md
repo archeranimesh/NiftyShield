@@ -25,10 +25,11 @@
 
 ## BUG-035 — `_record_close_trade()` never calls `mark_trade_closed()`; closed overlay legs stay `state='OPEN'` forever
 
-- [ ] **B035.1** — Trace whether anything downstream (signal evaluation, position
+- [x] **B035.1** — Trace whether anything downstream (signal evaluation, position
   listing, BUG-031's monitor path) filters `paper_trades`/positions by
   `state='OPEN'` — confirms or rules out overlap with BUG-031 before fixing.
-  See `docs/bugs/bugs.md` BUG-035.
+  See `docs/bugs/bugs.md` BUG-035. No overlap: zero callers of `mark_trade_closed`/
+  `get_trade_state` anywhere; `get_positions`/`get_position` never filter on `state`.
 - [ ] **B035.2** — Check `CollarOverlayV1`'s close path for the same missing
   `mark_trade_closed()` call (only CC/PP confirmed so far).
 - [ ] **B035.3** — Add `self._store.mark_trade_closed(...)` after `record_trade()`

@@ -112,7 +112,26 @@ protocol doesn't pick B019.1 up next.
 
 **Suggested fix:** add `self._store.mark_trade_closed(pos.strategy_name, pos.leg_role, pos.instrument_key)` immediately after the `record_trade(trade)` call in both `_record_close_trade()` methods (and `CollarOverlayV1`'s equivalent, once confirmed). Backfill: the two existing stale rows (`paper_trades` ids 213, 214, `overlay_pp`) need a one-time `mark_trade_closed()` call or equivalent UPDATE once the live DB lock situation allows it — do not hand-edit `state` via raw SQL outside the store method, to keep the state-machine's `WHERE state IN ('OPEN','DEFENDED')` guard as the single source of truth for what's a legal transition. Needs a regression test asserting `_record_close_trade()` results in `state='CLOSED'` on the opening row — current test suite exercises `record_trade()` and `mark_trade_closed()` separately but nothing asserts the two are wired together end-to-end, which is exactly the class of gap that let this ship unnoticed.
 
-**Related:** discovered investigating BUG-032 (`overlay_pp` ambiguous-match); potentially overlaps BUG-031 (live monitor not seeing overlay positions to close) if anything downstream gates on `state` — needs tracing to confirm or rule out before assuming independence.
+**B035.1 trace result (2026-08-24):** ran `trace_path(direction=inbound)` on both
+`mark_trade_closed` and `get_trade_state` (`src/paper/store.py`) — **zero callers of either**,
+production or otherwise, beyond their own unit tests (confirmed via `query_graph` CALLS-edge
+scan across the whole graph, not just a name search). Nothing in `StrategyMonitor._tick`/
+`check_signals` for any of the 7 concrete strategies queries `paper_trades.state` at all — CSP's
+own `TradeState` state machine (OPEN/DEFENDED/RE_ENTRY_PENDING) is driven by in-memory
+`ApprovedAction` dispatch and `PaperStrategy`-level bookkeeping, not by a `state='OPEN'` SQL
+filter. `get_positions()`/`get_position()` (per `CONTEXT.md`) sum `net_qty` across all rows
+regardless of `state` and filter only on `net_qty != 0`. **Conclusion: BUG-035 does not overlap
+BUG-031.** The stale `state='OPEN'` rows are inert — they don't currently feed signal
+evaluation, position listing, or the live monitor's close-detection path. The bug is real
+(the docstring's stated purpose — preventing re-appearance in signal evaluation — is unmet
+because the wiring was never built, not because it's being silently ignored by a downstream
+gate) but its blast radius is confined to `paper_trades.state` being permanently wrong, not an
+active production risk today. Fix proceeds as scoped (B035.2 onward) without an
+overlap-remediation branch into BUG-031's monitor path.
+
+**Related:** discovered investigating BUG-032 (`overlay_pp` ambiguous-match); traced for overlap
+with BUG-031 (live monitor not seeing overlay positions to close) — ruled out, see B035.1 trace
+result above.
 
 ---
 
