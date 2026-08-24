@@ -20,7 +20,7 @@
 
 ## BUG-031 — `CCOverlayV1`/`PPOverlayV1`/`CollarOverlayV1` filter by pre-S2r `strategy_name` constants, never see `STRATEGY_OVERLAY`-scoped positions — zero live exit-signal coverage for any auto-entered CC/PP/Collar leg since 2026-07-29
 
-- [ ] **B031.1** — Grep every reference to `STRATEGY_CC_OVERLAY`/`STRATEGY_PP_OVERLAY`/
+- [x] **B031.1** — Grep every reference to `STRATEGY_CC_OVERLAY`/`STRATEGY_PP_OVERLAY`/
   `STRATEGY_COLLAR_OVERLAY` (not just the three `strategy_name: str = ...` class attributes) and
   confirm which are position-storage reads (must be repointed) vs. informational
   `GateViolation` tags / the separate `cc_calibration/` manual tool (may be unaffected or need a

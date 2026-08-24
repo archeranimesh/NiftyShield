@@ -136,6 +136,11 @@ Session Log grows large again.
   currently match `overlay_pp` under `STRATEGY_OVERLAY`, making `pp`'s `pnl_*_pct` fields
   non-deterministic across recompute runs (abs fields unaffected). Needs a fresh `BUG-NNN` entry
   and a decision on which `overlay_pp` position is real — flagged to Animesh, not filed yet.
+- **BUG-031 B031.1** (docs-only): grepped every `STRATEGY_CC_OVERLAY`/`STRATEGY_PP_OVERLAY`/
+  `STRATEGY_COLLAR_OVERLAY` reference repo-wide, confirmed the position-storage-read vs.
+  `GateViolation`-tag vs. `cc_calibration/`-tool three-way split bugs.md's B031 entry already
+  anticipated — no new scope. See `docs/bugs/bugs.md` BUG-031 "Implementation progress" note.
+  Next: B031.2, the actual `strategy_name` repoint.
 
 ### 2026-08-24 Session Log (BUG-030 fixed — overlay_cc/collar_put merge)
 - **BUG-030** (`_overlay_type_groups()` elif-precedence dropped an `overlay_cc` leg whenever an
