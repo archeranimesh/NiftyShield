@@ -22,30 +22,7 @@
 > BUG-034 closed 2026-08-24 (SHA `88df26e`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 > BUG-032 closed 2026-08-24 (SHA `67d4010`, backfill applied same day) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 > BUG-036 closed 2026-08-24 (SHA `d40c3a1`, backfill applied same day) — section moved to `docs/archive/bugs/{bugs,task}.md`.
-
-## BUG-035 — `_record_close_trade()` never calls `mark_trade_closed()`; closed overlay legs stay `state='OPEN'` forever
-
-- [x] **B035.1** — Trace whether anything downstream (signal evaluation, position
-  listing, BUG-031's monitor path) filters `paper_trades`/positions by
-  `state='OPEN'` — confirms or rules out overlap with BUG-031 before fixing.
-  See `docs/bugs/bugs.md` BUG-035. No overlap: zero callers of `mark_trade_closed`/
-  `get_trade_state` anywhere; `get_positions`/`get_position` never filter on `state`.
-- [ ] **B035.2** — Check `CollarOverlayV1`'s close path for the same missing
-  `mark_trade_closed()` call (only CC/PP confirmed so far).
-- [ ] **B035.3** — Add `self._store.mark_trade_closed(...)` after `record_trade()`
-  in `CCOverlayV1._record_close_trade()`, `PPOverlayV1._record_close_trade()`,
-  and Collar's equivalent (per B035.2).
-- [ ] **B035.4** — Tests: assert `_record_close_trade()` transitions the opening
-  row to `state='CLOSED'` end-to-end for each overlay strategy — no existing
-  test covers `record_trade()` + `mark_trade_closed()` wired together.
-- [ ] **B035.5** — Backfill the two stale live rows (`paper_trades` ids 213, 214,
-  `overlay_pp`, `NSE_FO|61604`/`NSE_FO|74009`) via `mark_trade_closed()` — not
-  raw SQL — once B035.3 lands.
-- [ ] **B035.6** — Review: real `code-reviewer` or `general-purpose` +
-  `REVIEW.md` substitute (mandatory — touches live paper-trading state
-  transitions).
-- [ ] **B035.7** — Commit, update `bugs.md` BUG-035 status to ✅ Fixed + SHA,
-  update `TODOS.md`.
+> BUG-035 closed 2026-08-24 (SHA `0ecd86b`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
 ## BUG-019 — Investigation: does every strategy show a live-tick vs. EOD-snapshot P&L disparity?
 

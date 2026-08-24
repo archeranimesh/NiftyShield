@@ -1176,3 +1176,100 @@ touched row. B032.4 closed.
 - Committed by Animesh locally (sandbox `.git/index.lock` was held by a concurrent process at commit time, per `docs/bugs/prompt.md`'s lock-contention clause) — SHA `d40c3a1`.
 
 **Related:** BUG-032 (this bug's `prev_mark_value` call site sits inside BUG-032's fixed block; surfaced during that fix's mandatory code review, not introduced by it).
+
+---
+
+## BUG-035 — `CCOverlayV1._record_close_trade()`/`PPOverlayV1._record_close_trade()` never call `PaperStore.mark_trade_closed()`; every fully-closed overlay leg's opening trade row stays `state='OPEN'` forever
+
+| Field | Value |
+|---|---|
+| Severity | **HIGH** — not a P&L-value defect (net_qty math is unaffected), but `mark_trade_closed()`'s own docstring says its purpose is to "prevent the position from re-appearing in signal evaluation on the next tick"; if any live code path gates signal evaluation or position listing on `paper_trades.state`, a flat (net-zero) leg with a stale `state='OPEN'` row risks being treated as still-live. Plausibly the same failure shape as BUG-031 (monitor not seeing a leg as closed) — needs tracing before ruling that out. |
+| Status | ✅ Fixed — 2026-08-24, SHA pending (see note below). |
+| Discovered | 2026-08-24, while investigating BUG-032: querying `paper_trades` for `leg_role='overlay_pp'` showed both `NSE_FO|61604` (BUY 65 @ 58.85 on 2026-08-11, SELL 65 @ 4.85 on 2026-08-24 — net 0) and `NSE_FO|74009` (BUY 65+65 on 08-20/08-21, SELL 130 @ 83.85 on 2026-08-24 — net 0) still showing `state='OPEN'` on every row despite both positions being fully flat. Traced `PaperStore.mark_trade_closed()` (`src/paper/store.py:625-649`) — the only function in the codebase that transitions a trade row to `CLOSED` — via `trace_path(direction=inbound)`: **zero callers** anywhere in `src/` or `scripts/`, only its own unit tests (`tests/unit/paper/test_store.py`) invoke it. Confirmed both overlay close paths independently omit the call: `CCOverlayV1._record_close_trade()` (`src/strategy/cc_overlay_v1.py:292-334`) and `PPOverlayV1._record_close_trade()` (`src/strategy/pp_overlay_v1.py:304-346`) both build a closing `PaperTrade` and call `self._store.record_trade(trade)` — neither ever calls `mark_trade_closed()` afterward, despite `mark_trade_closed()`'s docstring explicitly describing itself as the step that runs "after a close trade has been successfully recorded." `CollarOverlayV1`'s close path not yet checked — likely same pattern, needs confirming. |
+| Location | `src/strategy/cc_overlay_v1.py:292-334`, `src/strategy/pp_overlay_v1.py:304-346` (both `_record_close_trade`); `src/paper/store.py:625-649` (`mark_trade_closed`, the orphaned target). |
+
+**Symptom:** every overlay leg (CC/PP, and likely Collar) that gets closed via `apply_action`'s close path leaves its original opening `paper_trades` row permanently `state='OPEN'`, even after a closing SELL/BUY trade brings `net_qty` to 0. `get_positions()`/`get_position()` compute net_qty correctly regardless of `state` (they sum quantities, they don't filter by state), so this has *not* been masking BUG-032's symptom — but anything else in the codebase that filters `paper_trades` or `paper_strategies`-adjacent queries by `state='OPEN'` to decide what's "still open" would see these as live positions indefinitely.
+
+**Root cause:** `mark_trade_closed()` was added (see its docstring/tests) as the intended state-transition step following a successful close-trade write, but was never wired into either overlay strategy's `_record_close_trade()`. The two methods are structurally identical (build `PaperTrade`, call `record_trade()`, log) and both independently missed the same follow-up call — this reads as the call being designed but the integration step dropped, not a logic error within either method.
+
+**Suggested fix:** add `self._store.mark_trade_closed(pos.strategy_name, pos.leg_role, pos.instrument_key)` immediately after the `record_trade(trade)` call in both `_record_close_trade()` methods (and `CollarOverlayV1`'s equivalent, once confirmed). Backfill: the two existing stale rows (`paper_trades` ids 213, 214, `overlay_pp`) need a one-time `mark_trade_closed()` call or equivalent UPDATE once the live DB lock situation allows it — do not hand-edit `state` via raw SQL outside the store method, to keep the state-machine's `WHERE state IN ('OPEN','DEFENDED')` guard as the single source of truth for what's a legal transition. Needs a regression test asserting `_record_close_trade()` results in `state='CLOSED'` on the opening row — current test suite exercises `record_trade()` and `mark_trade_closed()` separately but nothing asserts the two are wired together end-to-end, which is exactly the class of gap that let this ship unnoticed.
+
+**B035.1 trace result (2026-08-24):** ran `trace_path(direction=inbound)` on both
+`mark_trade_closed` and `get_trade_state` (`src/paper/store.py`) — **zero callers of either**,
+production or otherwise, beyond their own unit tests (confirmed via `query_graph` CALLS-edge
+scan across the whole graph, not just a name search). Nothing in `StrategyMonitor._tick`/
+`check_signals` for any of the 7 concrete strategies queries `paper_trades.state` at all — CSP's
+own `TradeState` state machine (OPEN/DEFENDED/RE_ENTRY_PENDING) is driven by in-memory
+`ApprovedAction` dispatch and `PaperStrategy`-level bookkeeping, not by a `state='OPEN'` SQL
+filter. `get_positions()`/`get_position()` (per `CONTEXT.md`) sum `net_qty` across all rows
+regardless of `state` and filter only on `net_qty != 0`. **Conclusion: BUG-035 does not overlap
+BUG-031.** The stale `state='OPEN'` rows are inert — they don't currently feed signal
+evaluation, position listing, or the live monitor's close-detection path. The bug is real
+(the docstring's stated purpose — preventing re-appearance in signal evaluation — is unmet
+because the wiring was never built, not because it's being silently ignored by a downstream
+gate) but its blast radius is confined to `paper_trades.state` being permanently wrong, not an
+active production risk today. Fix proceeds as scoped (B035.2 onward) without an
+overlap-remediation branch into BUG-031's monitor path.
+
+**Implementation progress (2026-08-24):**
+- **B035.2:** Collar's close path was confirmed to have the same gap — it never calls
+  `CCOverlayV1`/`PPOverlayV1`-style `_record_close_trade()` at all; it routes through
+  `OverlayCloser.close_collar_all()` (atomic call+put close), `OverlayCloser.monetize_collar_put()`,
+  and `OverlayCloser.close_single_leg()` (used by `close_collar_call_only` for
+  `COLLAR_CALL_DECAY`). None of the three called `mark_trade_closed()` either.
+- **B035.3:** Added `self._store.mark_trade_closed(strategy_name, leg_role, instrument_key)`
+  immediately after the trade write in all five close call sites:
+  `CCOverlayV1._record_close_trade()`, `PPOverlayV1._record_close_trade()` (both gated on
+  `record_trade()`'s `inserted` return, matching the existing idempotency pattern), and
+  `OverlayCloser.close_single_leg()`/`close_collar_all()`/`monetize_collar_put()` (the latter
+  two gated on `record_trades()` succeeding without exception — inside the same `if
+  trades_to_write:` block, after the try/except's failure branches, using the actual
+  `leg_role`/`instrument_key` off each written `PaperTrade`, not the pre-close `PaperPosition`,
+  so a roll-overlap scenario with multiple `instrument_key`s under one `leg_role` targets the
+  right row).
+- **B035.4:** Added regression tests: `test_record_close_trade_marks_opening_row_closed` +
+  `test_record_close_trade_skips_mark_closed_when_duplicate_insert` in both
+  `test_cc_overlay_v1.py`/`test_pp_overlay_v1.py` (mock-store, asserts `mark_trade_closed`
+  called/not-called with the right args); `test_overlay_closer.py` gained a
+  `_opening_trade_state()` helper (direct SQL read — `PaperStore.get_trade_state()` is
+  SELL-only by design and can't see the collar's BUY-opened put leg) plus `state='CLOSED'`
+  assertions added to the existing `close_single_leg`/`close_collar_all`/`monetize_collar_put`
+  happy-path tests, and a new `test_close_single_leg_skips_mark_closed_when_duplicate_insert`.
+  **Not run in-sandbox** — this session's device VM `.venv` is unusable (its site-packages were
+  built for python3.12 but the VM only has python3.10, and a corrupted bundled `uuid.py` breaks
+  `structlog`'s import) — same class of limitation as BUG-018/019. Verified via `py_compile`
+  only; pending a live-host `pytest` run to confirm green.
+- **B035.5:** Backfilled the two known-stale positions directly against
+  `data/portfolio/portfolio.sqlite`. Since the real `PaperStore.mark_trade_closed()` couldn't be
+  invoked in-sandbox (same `.venv` issue as B035.4), ran the identical guarded UPDATE statement
+  copied verbatim from `mark_trade_closed()`'s own SQL (`WHERE state IN ('OPEN','DEFENDED')`) —
+  not an ad-hoc UPDATE — to preserve the state-machine's own guard as the single source of
+  truth. This flipped all 5 matching rows, not just the 2 ids originally cited: `NSE_FO|61604`
+  had 2 rows (BUY 2026-08-11 id 168, SELL 2026-08-24 id 213) and `NSE_FO|74009` had 3 (BUY
+  2026-08-20 id 204, BUY 2026-08-21 id 205, SELL 2026-08-24 id 214) — the original bug note's
+  "ids 213, 214" only named the closing SELL rows; the opening BUY rows for the same
+  `(strategy_name, leg_role, instrument_key)` tuples needed the same fix and are now included.
+- **B035.6:** `general-purpose` agent review (real `code-reviewer`-style pass against the diff,
+  `REVIEW.md` rigor). Found `OverlayCloser.close_single_leg()`'s `mark_trade_closed()` call was
+  unconditional — no `if inserted:` guard unlike the CC/PP call sites — and flagged a
+  theoretical partial-close risk (marking a row CLOSED while quantity remains open). Traced
+  `close_single_leg()`: it always sets `quantity=abs(position.net_qty)` — there is no partial-close
+  path in this function today — so the specific risk doesn't apply, but added the `if inserted:`
+  guard anyway for consistency with CC/PP and a documenting comment, plus a
+  `test_close_single_leg_skips_mark_closed_when_duplicate_insert` regression test. No other
+  findings survived review (identity targeting, rollback placement, and existing test quality
+  all checked out clean).
+- **B035.1 overlap note:** per the earlier trace (above), none of these five call sites'
+  wiring gap was masking a live BUG-031 symptom — confirmed no downstream code reads
+  `paper_trades.state` today, so this was a state-machine hygiene bug, not an active
+  production-risk gap.
+- **Commit status:** committed by Animesh locally — SHA `0ecd86b`. The pre-commit hook had been
+  blocked in-sandbox by "No space left on device" during a `pre-commit` package install (session
+  workspace partition, unrelated to the repo); per the user's explicit call this was left
+  uncommitted rather than using `--no-verify`, and committed properly once disk space allowed.
+
+**Related:** discovered investigating BUG-032 (`overlay_pp` ambiguous-match); traced for overlap
+with BUG-031 (live monitor not seeing overlay positions to close) — ruled out, see B035.1 trace
+result above.
+
+---

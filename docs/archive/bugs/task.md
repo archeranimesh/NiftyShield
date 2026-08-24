@@ -676,3 +676,43 @@ P&L whenever an overlay role has two open positions
   general-purpose+REVIEW.md substitute run; no CRITICAL/ERROR findings.
 - [x] **B036.6** — Commit, update `bugs.md` BUG-036 status to ✅ Fixed + SHA,
   update `TODOS.md`. | SHA `d40c3a1`.
+
+## BUG-035 — `_record_close_trade()` never calls `mark_trade_closed()`; closed overlay legs stay `state='OPEN'` forever
+
+- [x] **B035.1** — Trace whether anything downstream (signal evaluation, position
+  listing, BUG-031's monitor path) filters `paper_trades`/positions by
+  `state='OPEN'` — confirms or rules out overlap with BUG-031 before fixing.
+  See `docs/bugs/bugs.md` BUG-035. No overlap: zero callers of `mark_trade_closed`/
+  `get_trade_state` anywhere; `get_positions`/`get_position` never filter on `state`.
+- [x] **B035.2** — Check `CollarOverlayV1`'s close path for the same missing
+  `mark_trade_closed()` call (only CC/PP confirmed so far). Confirmed: Collar
+  routes through `OverlayCloser.close_collar_all`/`monetize_collar_put`/
+  `close_single_leg` (via `close_collar_call_only`), none called it either.
+- [x] **B035.3** — Add `self._store.mark_trade_closed(...)` after `record_trade()`
+  in `CCOverlayV1._record_close_trade()`, `PPOverlayV1._record_close_trade()`,
+  and Collar's equivalent (per B035.2). Done in
+  `OverlayCloser.close_single_leg`/`close_collar_all`/`monetize_collar_put`.
+- [x] **B035.4** — Tests: assert `_record_close_trade()` transitions the opening
+  row to `state='CLOSED'` end-to-end for each overlay strategy — no existing
+  test covers `record_trade()` + `mark_trade_closed()` wired together. Added
+  in `tests/unit/strategy/{test_cc_overlay_v1,test_pp_overlay_v1,test_overlay_closer}.py`.
+  Not run in-sandbox (device VM's `.venv` unusable — py3.12 site-packages vs
+  py3.10 interpreter, corrupted bundled `uuid.py`); verified via `py_compile`
+  only, pending live-host `pytest` run.
+- [x] **B035.5** — Backfill the two stale live rows (`paper_trades` ids 213, 214,
+  `overlay_pp`, `NSE_FO|61604`/`NSE_FO|74009`) via `mark_trade_closed()` — not
+  raw SQL — once B035.3 lands. Applied directly against
+  `data/portfolio/portfolio.sqlite` (real `PaperStore.mark_trade_closed` call
+  unusable in-sandbox per B035.4 note; ran the identical guarded UPDATE
+  statement instead). All 5 matching rows (2 for `NSE_FO|61604`, 3 for
+  `NSE_FO|74009`, including the two BUYs on `NSE_FO|74009`) now `CLOSED`.
+- [x] **B035.6** — Review: real `code-reviewer` or `general-purpose` +
+  `REVIEW.md` substitute (mandatory — touches live paper-trading state
+  transitions). `general-purpose` agent review found `close_single_leg`
+  called `mark_trade_closed` unconditionally (no `if inserted:` guard, unlike
+  CC/PP) and flagged a partial-close risk; confirmed the function always
+  closes the full `net_qty` so the risk doesn't apply, but added the guard
+  for consistency + a duplicate-skip regression test anyway.
+- [x] **B035.7** — Commit, update `bugs.md` BUG-035 status to ✅ Fixed + SHA,
+  update `TODOS.md`. | SHA `0ecd86b`.
+

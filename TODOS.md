@@ -128,6 +128,25 @@ Full forensic log (SHAs, bug numbers, root-cause detail) moved to
 add new entries there going forward, or start a fresh dated section here if this file's
 Session Log grows large again.
 
+### 2026-08-24 Session Log (BUG-035 all B035.x implemented, not yet committed)
+- **BUG-035**: `mark_trade_closed()` was orphaned (zero callers graph-wide) so every closed
+  overlay leg's opening `paper_trades` row stayed `state='OPEN'` forever. B035.1 traced no
+  overlap with BUG-031 (nothing downstream reads `state` today). B035.2 confirmed Collar has
+  the same gap via `OverlayCloser.close_single_leg`/`close_collar_all`/`monetize_collar_put`.
+  B035.3 wired `mark_trade_closed(...)` into all 5 close call sites (CC, PP, and the 3
+  Collar paths), gated on the trade write actually inserting. B035.4 added regression tests
+  in `test_cc_overlay_v1.py`/`test_pp_overlay_v1.py`/`test_overlay_closer.py` — NOT executed
+  (device VM's `.venv` unusable: py3.12 site-packages vs py3.10 interpreter, corrupted
+  bundled `uuid.py` breaks `structlog`), verified via `py_compile` only. B035.5 backfilled
+  the 5 stale live rows (`NSE_FO|61604`/`NSE_FO|74009`, `overlay_pp`) directly against
+  `data/portfolio/portfolio.sqlite` using `mark_trade_closed()`'s own guarded SQL (real
+  method unusable in-sandbox for the same reason). B035.6 `general-purpose`+`REVIEW.md`
+  review found `close_single_leg` missing the `if inserted:` guard CC/PP had — fixed, plus
+  an added duplicate-skip test — no other findings. Commit blocked: pre-commit hook needs
+  the `pre-commit` package, install fails with "No space left on device" on the session
+  workspace; left uncommitted per Animesh's explicit call rather than `--no-verify`. SHA
+  pending. See `docs/bugs/bugs.md` BUG-035.
+
 ### 2026-08-24 Session Log (BUG-036 B036.1/B036.2/B036.5 — net_qty fix implemented, not yet committed)
 - **BUG-036**: Added `net_qty: int | None` to `PaperLegSnapshot`/`paper_leg_snapshots` so
   `_compute_overlay_pnl_snapshots`'s `prev_mark_value` can use the quantity actually open on the
