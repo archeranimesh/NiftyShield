@@ -123,6 +123,18 @@ Full forensic log (SHAs, bug numbers, root-cause detail) moved to
 add new entries there going forward, or start a fresh dated section here if this file's
 Session Log grows large again.
 
+### 2026-08-24 Session Log (BUG-019 live-vs-EOD P&L diff — investigation, no fix)
+- **BUG-019** (live-tick vs. EOD-snapshot P&L disparity investigation): ran the diff the
+  diagnostic's own "Next step" called for, across the 5 trading days now logged
+  (08-14/17/19/20/21) — no systematic staleness bias. Diffs (last `live_pnl_diag` tick @
+  15:28-15:29 vs. EOD `Recorded paper NAV snapshot` @ ~15:35-15:36) flip sign and scale with
+  actual intraday movement, including one exact 0.00 diff on a quiet day — matches "ordinary
+  market drift," not a computation bug. Full table in `docs/bugs/bugs.md` BUG-019. Per Animesh's
+  call, leaving `_log_live_pnl_diag()` instrumentation running rather than removing it yet; moved
+  the BUG-019 section to the bottom of `docs/bugs/task.md` (still open, deliberately
+  deprioritized below BUG-030/031) so the session-start protocol picks those up next instead.
+  No code change — docs-only.
+
 ### 2026-08-24 Session Log (BUG-027 docs-close — B027.4)
 - **BUG-027** (`scripts/healthcheck.py` missing `load_dotenv()`): the code fix and its 4 tests
   were already committed in a prior session (`7a81b6d`, with a later related change `bee2649`)

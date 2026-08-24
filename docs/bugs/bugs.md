@@ -51,6 +51,40 @@ Decimal correctness (`str(unrealized)` etc., no float leakage) and the `PaperTra
 
 **Committed:** SHA `f7177b6`.
 
+**Investigation result (2026-08-24):** ran the diff the "Next step" above calls for, across 5
+separate trading days now present in `logs/monitor_daemon.log`/`logs/paper_snapshot.log`
+(08-14, 08-17, 08-19, 08-20, 08-21) — last `strategy_monitor.live_pnl_diag` tick (15:28-15:29)
+vs. the EOD `Recorded paper NAV snapshot` line (~15:35-15:36) for each strategy:
+
+| Date | Strategy | live total_pnl | EOD total_pnl | diff |
+|---|---|---|---|---|
+| 08-14 | v1_leaps | 3805.75 | 3675.75 | -130.00 |
+| 08-14 | v2_monthly | 2129.29 | 2002.54 | -126.75 |
+| 08-17 | v1_leaps | 4056.00 | 4062.50 | +6.50 |
+| 08-19 | v1_weekly | 3692.00 | 3692.00 | 0.00 |
+| 08-19 | v1_monthly | 4917.79 | 4882.04 | -35.75 |
+| 08-19 | v1_leaps | 3003.00 | 2944.50 | -58.50 |
+| 08-19 | v2_monthly | 5828.88 | 5825.62 | -3.26 |
+| 08-20 | v1_weekly | 3695.25 | 3734.25 | +39.00 |
+| 08-20 | v1_monthly | 5281.79 | 5223.29 | -58.50 |
+| 08-20 | v1_leaps | 4400.50 | 4179.50 | -221.00 |
+| 08-20 | v2_monthly | 5731.38 | 5802.88 | +71.51 |
+| 08-21 | v1_leaps | 4494.75 | 4468.75 | -26.00 |
+| 08-21 | v1_monthly | 5337.04 | 5311.04 | -26.00 |
+| 08-21 | v1_weekly | 4176.25 | 4166.50 | -9.75 |
+| 08-21 | v2_monthly | 6108.37 | 6137.62 | +29.25 |
+
+No systematic bias — sign flips constantly, magnitude tracks how much the market actually moved
+that day (near-zero on the quiet 08-19 weekly reading vs. -221 on the more volatile 08-20
+leaps reading), and one exact 0.00 diff (08-19 weekly) confirms the two sides agree perfectly
+when the market genuinely didn't move in the 15:28→15:36 window. This matches hypothesis (a) —
+ordinary last-minute intraday price drift between the last live tick and the EOD read — not
+(b), a real computation/staleness bug. Per the "Next step" exit criteria above, this would
+normally mean removing the diagnostic; **Animesh's call (2026-08-24): leave it running longer**
+rather than closing/removing now. `docs/bugs/task.md`'s BUG-019 section moved to the bottom of
+the file (still open, deliberately deprioritized below BUG-030/031) so the session-start
+protocol doesn't pick B019.1 up next.
+
 **Related:** BUG-018 (the specific case that prompted this generalisation).
 
 ---

@@ -18,12 +18,6 @@
 
 ---
 
-## BUG-019 — Investigation: does every strategy show a live-tick vs. EOD-snapshot P&L disparity?
-
-- [ ] **B019.1** — Diagnostics committed (SHA `f7177b6`); still awaiting a live trading day's
-  `strategy_monitor.live_pnl_diag` vs. `paper_snapshot.log` diff before a fix can be scoped. Full
-  context: `docs/bugs/bugs.md` BUG-019.
-
 ## BUG-025 — MC-3b review follow-ups: `roll_ic_legs` open-only write shape, `PROFIT_LOCK_ZONE2` state/write ordering
 
 - [ ] **B025.1** — Deliberately deferred, not blocking (Animesh) — no checklist yet. Scope it
@@ -71,3 +65,17 @@
   `CLOSE_CC`, `CLOSE_AND_REENTER_COLLAR`). Likely needs a council checkpoint per
   `docs/council/README.md`'s three-condition check, same bar BUG-028/BUG-030 used.
 - [ ] **B031.6** — Commit, update `bugs.md` BUG-031 status to ✅ Fixed + SHA, update `TODOS.md`.
+
+## BUG-019 — Investigation: does every strategy show a live-tick vs. EOD-snapshot P&L disparity?
+
+> Moved to the bottom of this file deliberately (2026-08-24, Animesh) — the 08-14/17/19/20/21
+> diff (see `bugs.md` BUG-019) found no systematic staleness bug, just ordinary intraday
+> movement, so this is low-priority relative to BUG-030/031. Diagnostics are being left running
+> longer rather than removed now. Keep this section last so the session-start protocol picks up
+> BUG-030/031 first.
+
+- [ ] **B019.1** — Diagnostics committed (SHA `f7177b6`) and now diffed against 5 live trading
+  days (08-14, 08-17, 08-19, 08-20, 08-21) — no systematic bias found, gaps flip sign and scale
+  with intraday movement (one exact 0.00 diff on a low-movement day confirms the mechanism
+  itself is sound). Leaving diagnostics running per Animesh's call (2026-08-24) rather than
+  closing/removing yet. Full context: `docs/bugs/bugs.md` BUG-019.
