@@ -928,3 +928,124 @@ But `CCOverlayV1`/`PPOverlayV1`/`CollarOverlayV1` — the classes `StrategyMonit
 **Closed (B031.4/B031.6, 2026-08-24):** B031.4's manual exit-eligibility review found 5 open legs (3 `overlay_pp`, 1 `overlay_cc`, 1 `overlay_collar_put` — not the 2 originally scoped), zero delta/premium-based signals fired at current market levels. DTE coverage was blocked mid-review by two newly-discovered bugs — **BUG-033** (`_parse_expiry` regex-only, never resolves real numeric instrument keys) and **BUG-034** (`PPOverlayV1`/`CCOverlayV1`'s own `leg_role` filter sets are stale and never match production, so `check_signals()` evaluated zero real PP/CC positions regardless of BUG-033 — found while building the PP-close script below, and the more severe of the two since it runs first). Animesh's resolution for the time-sensitive piece (`NSE_FO|61604`, DTE=1 at discovery): rather than wait on BUG-033/034, closed all 3 open `overlay_pp` legs by hand via `scratch/2026-08-24_close_all_pp_legs.py --execute` (confirmed 0 open `overlay_pp` positions afterward), eliminating the exposure directly instead of reviewing it. The still-open `overlay_cc`/`overlay_collar_put` legs had delta/premium checked clean but DTE remains genuinely unverified — flagged as residual work, to re-check once BUG-033/034 ship. BUG-031 itself — the `strategy_name` defect this entry is about — is fully closed; BUG-033/034 continue as their own open entries.
 
 ---
+## BUG-034 — `PPOverlayV1.LONG_PUT_ROLES`/`CCOverlayV1.SHORT_CALL_ROLES` are stale pre-S2r role-name sets that never match the real production `leg_role` (`overlay_pp`/`overlay_cc`) — `check_signals()` silently evaluates **zero** real PP/CC positions, independent of BUG-031/BUG-033
+
+| Field | Value |
+|---|---|
+| Severity | **CRITICAL — more severe than BUG-033, and the actual primary blocker.** `check_signals()` filters `if pos.leg_role not in <ROLES_SET>: continue` *before* any DTE/delta/premium logic runs. For PP and CC, that filter rejects every real position outright — BUG-033's DTE-parsing bug (and even a hypothetical correct DTE parse) was never actually reachable for a single real position this whole session. Collar is unaffected (its role constants already match production). |
+| Status | ✅ Fixed (SHA `88df26e`, 2026-08-24). |
+| Discovered | 2026-08-24, Animesh — asked for a script to close all open PP legs. Building it against `PPOverlayV1.LONG_PUT_ROLES` (the class's own published role set, the obvious thing to filter on) returned zero matching legs against the real `STRATEGY_OVERLAY` position list, despite `get_positions()` independently confirming 3 open `overlay_pp` legs (`NSE_FO|61604`, `NSE_FO|74009`, `NSE_FO|74046`). Confirmed live via direct call: `LONG_PUT_ROLES = {"long_put", "protective_put", "pp_long_put"}` (`pp_overlay_v1.py`), `SHORT_CALL_ROLES = {"cc_short_call", "short_call", "covered_call"}` (`cc_overlay_v1.py`) — neither set contains `"overlay_pp"`/`"overlay_cc"`, the actual `leg_role` strings `paper_3track_overlay_entry.py`'s `auto_pp_bootstrap()`/`auto_cc_bootstrap()` write (confirmed via `grep leg_role=\"overlay` against that file: lines 1051/1063/1079/1091). Direct positions/filter comparison: `len([p for p in positions if p.leg_role in LONG_PUT_ROLES])` → `0`, `len([p for p in positions if p.leg_role in SHORT_CALL_ROLES])` → `0`, against 3 real open `overlay_pp` + 1 real open `overlay_cc` position. `CollarOverlayV1.SHORT_CALL_ROLE`/`LONG_PUT_ROLE` (singular constants, not sets) are `"overlay_collar_call"`/`"overlay_collar_put"` — already correct, confirmed matching the same grep's `overlay_collar_*` lines. |
+| Location | `src/strategy/pp_overlay_v1.py:54` (`LONG_PUT_ROLES`), `src/strategy/cc_overlay_v1.py:54` (`SHORT_CALL_ROLES`) — both module-level sets, used in each class's `check_signals`/`apply_action`/`describe_context`/leg-resolution paths throughout the file. The correct values already exist elsewhere in the codebase: `src/strategy/exit_signals.py:18-19` defines `_OVERLAY_SHORT_CALL_ROLES = {"overlay_cc", "overlay_collar_call"}` and `_OVERLAY_LONG_PUT_ROLES = {"overlay_pp", "overlay_collar_put"}` for `evaluate_roll_overlay()` — those are the real production role names, just never propagated back to `pp_overlay_v1.py`/`cc_overlay_v1.py`'s own filters. |
+
+**Root cause:** same "S2r renamed the leg-role/namespace convention, class-local constants never got the memo" shape as BUG-031 (which was `strategy_name`) and BUG-033 (which was `_parse_expiry`'s key format) — a third independent instance of the same underlying pattern in the same three files. `LONG_PUT_ROLES`/`SHORT_CALL_ROLES` read like pre-S2r role names for a standalone (non-overlay) PP/CC strategy that predates the `overlay_*` naming convention `paper_3track_overlay_entry.py` actually uses. `CollarOverlayV1` escaped this because its role constants (`SHORT_CALL_ROLE`/`LONG_PUT_ROLE`) were apparently authored after — or already using — the `overlay_collar_*` convention.
+
+**Impact:** identical in shape to BUG-031's original finding — zero live exit-signal coverage — but for a *different* reason and, since this filter runs first, it's the reason that actually matters right now: even with BUG-031's `strategy_name` fix live (SHA `ea5df81`), `PPOverlayV1`/`CCOverlayV1.check_signals()` still evaluate exactly zero real positions. The "no exit signals fired" result from today's B031.4 live run (`scratch/2026-08-24_bug031_manual_exit_review.py`) was **not** informative for PP/CC — it never got past this filter to check delta/premium/DTE at all. It *was* informative for the `overlay_collar_put` leg (Collar's role constants are correct), so that leg's "no signal fired" read stands.
+
+**Suggested fix:** repoint `LONG_PUT_ROLES` (`pp_overlay_v1.py`) to `{"overlay_pp"}` and `SHORT_CALL_ROLES` (`cc_overlay_v1.py`) to `{"overlay_cc"}` — a PP-only and CC-only set respectively (not reusing `exit_signals._OVERLAY_LONG_PUT_ROLES`/`_OVERLAY_SHORT_CALL_ROLES` directly, since those deliberately include the Collar variants too for `evaluate_roll_overlay`'s shared use — pulling them in here would make `PPOverlayV1` start processing Collar's put leg, a real behavior change out of scope for this fix). Needs regression tests using the real `"overlay_pp"`/`"overlay_cc"` leg_role strings (the existing unit test suites use `"short_call"`/`"protective_put"` as their default fixture values — see `test_cc_overlay_v1.py`/`test_pp_overlay_v1.py`'s `_make_position()` `leg_role` defaults — which is exactly how this shipped passing despite matching nothing real; same class of gap BUG-031's B031.3 already called out and partially fixed for `strategy_name`, this is the `leg_role` sibling of that same gap). Should ship together with or immediately after BUG-033 (both block PP/CC's live signal path; fix order doesn't matter functionally, but BUG-034 should land first since it's what's actually silently masking BUG-033 right now).
+
+**Immediate manual action, independent of the code fix:** none beyond what BUG-033 already flagged (the `NSE_FO|61604` near-expiry decision) — this bug doesn't change what to do about any specific open leg, it changes how much to trust "no signal fired" as evidence that a leg is fine. Treat every currently-open PP/CC leg as unreviewed by automation until this + BUG-033 both ship; Collar's `overlay_collar_put` leg is the one leg this session's live check actually covers.
+
+**Related:** BUG-031 (same three-file "role rename never propagated" pattern, `strategy_name` axis); BUG-033 (same pattern, `_parse_expiry` axis — and downstream of this bug for PP/CC, since this filter runs first); found while building the PP-close script for Animesh's "close all PP legs" request (`scratch/2026-08-24_close_all_pp_legs.py`), which uses the real `"overlay_pp"` literal directly rather than the buggy `LONG_PUT_ROLES` constant so it isn't blocked by this bug.
+
+**Implementation progress (2026-08-24):** Fix applied — `LONG_PUT_ROLES` (`pp_overlay_v1.py`) →
+`{"overlay_pp"}`, `SHORT_CALL_ROLES` (`cc_overlay_v1.py`) → `{"overlay_cc"}`, exactly per the
+suggested fix above (deliberately not reusing `exit_signals._OVERLAY_*`, which would pull in
+Collar's leg). Tests: every `check_signals()`/`describe_context()` call site in both test files
+was given an explicit `leg_role="overlay_pp"`/`"overlay_cc"` override (the shared `_make_position()`
+fixture default was deliberately left at the stale value, since `apply_action()`'s tests build
+`LegClose(leg_role="protective_put"/"short_call")` and match against `pos.leg_role` via an
+independent equality check unrelated to `LONG_PUT_ROLES`/`SHORT_CALL_ROLES` — flipping the shared
+default would have broken those). Added `test_check_signals_ignores_stale_leg_role` and
+`test_check_signals_evaluates_real_overlay_{pp,cc}_leg_role` to each file. Ran the full two-file
+suite (57 tests) in an isolated harness built from the real module code (not the project's own
+`.venv`, which is unreachable from the sandbox — see below) — all 57 pass.
+
+Reviewed via a `general-purpose` code-reviewer substitute against the diff (no repo access,
+diff + explanation only): 0 CRITICAL / 0 ERROR / 3 WARNING / 2 INFO. WARNINGs, deferred with
+reason: (1) `LONG_PUT_ROLES`/`SHORT_CALL_ROLES` and `exit_signals._OVERLAY_*` now encode the same
+role strings with nothing enforcing sync — accepted as the deliberate tradeoff this bug's own
+suggested fix calls for; a future rename to one and not the other would reproduce this bug's
+shape. (2) `_make_position()` fixture defaults left stale rather than flipped — see tests
+paragraph above; recommendation was to consider a fixture-drift regression test in a future pass,
+not required for this fix. (3) `describe_context()` edge cases and full call-site coverage
+unverified beyond `search_code`/`search_graph` (reviewer had no repo access) — no counter-evidence
+found.
+
+**Commit deferred — sandbox disk full (2026-08-24):** The device sandbox's `$HOME` partition
+(`/sessions/...`, separate from the mounted repo path which has ~222G free) is at 0 bytes
+available. This breaks `git commit` itself (`unable to unlink '.git/objects/.../tmp_obj_*'`:
+Operation not permitted on temp objects) and independently breaks the `pre-commit` hook (its
+sqlite store hits `disk I/O error` even after redirecting `PRE_COMMIT_HOME`/`XDG_CACHE_HOME` into
+the mounted repo path — the project's own `.venv/bin/python` symlink also points to
+`/opt/anaconda3/bin/python`, unreachable from this sandbox, so the hook can't run under the
+project's real venv either). Per Animesh's 2026-08-24 call (asked whether to `--no-verify`,
+leave staged for manual commit, or wait for him to free disk — he chose manual commit), the
+changes are left `git add`-ed on his machine, uncommitted. Drafted commit message (imperative,
+matches `.claude/skills/commit/SKILL.md` format) for whoever runs `git commit`:
+
+```
+fix(strategy): repoint LONG_PUT_ROLES/SHORT_CALL_ROLES to real leg_role
+
+Why: PPOverlayV1.LONG_PUT_ROLES and CCOverlayV1.SHORT_CALL_ROLES held
+stale pre-S2r role names that never matched the real production
+leg_role ("overlay_pp"/"overlay_cc"), so check_signals() silently
+evaluated zero real PP/CC positions — more severe than and upstream
+of BUG-033, since this filter runs before any DTE/delta/premium logic.
+What:
+- src/strategy/pp_overlay_v1.py: LONG_PUT_ROLES -> {"overlay_pp"}
+- src/strategy/cc_overlay_v1.py: SHORT_CALL_ROLES -> {"overlay_cc"}
+- tests/unit/strategy/test_pp_overlay_v1.py: check_signals/describe_context
+  call sites now pass leg_role="overlay_pp" explicitly; added
+  test_check_signals_ignores_stale_leg_role and
+  test_check_signals_evaluates_real_overlay_pp_leg_role
+- tests/unit/strategy/test_cc_overlay_v1.py: same pattern for
+  leg_role="overlay_cc"; added
+  test_check_signals_ignores_stale_leg_role and
+  test_check_signals_evaluates_real_overlay_cc_leg_role
+Ref: BUG-034 (docs/bugs/bugs.md); reviewed via general-purpose
+code-reviewer substitute, 0 CRITICAL/ERROR, 3 WARNING deferred
+(see bugs.md BUG-034 Implementation progress note for detail)
+```
+
+Committed as SHA `88df26e`. This entry is now archived; B033.5's close-out can proceed per
+its own note in `docs/bugs/task.md`.
+
+## BUG-033 — `CCOverlayV1`/`PPOverlayV1`/`CollarOverlayV1._parse_expiry` is regex-only, never resolves real numeric Upstox instrument keys — every DTE-gated exit signal (`ROLL_ELIGIBLE`/`DTE_REVIEW`) has been dead for every live overlay position since these classes existed
+
+| Field | Value |
+|---|---|
+| Severity | **CRITICAL** — live (paper) risk-management gap, same class as BUG-031 but on the DTE axis specifically. Delta/premium-based signals (`CRASH_MONETIZE`, `LOSS_STOP`, `PROFIT_TARGET`, `DELTA_STOP`) are unaffected — only DTE-gated signals are dead. Directly time-sensitive: `overlay_pp` leg `NSE_FO|61604` expires **tomorrow (2026-08-25)** and, as of discovery, would get no `ROLL_ELIGIBLE` signal at all. |
+| Status | ✅ Fixed (SHA `ef1c341`, 2026-08-24) — B033.1-B033.5 all done. Found 2026-08-24, during BUG-031's B031.4 manual exit-eligibility review. Closed same day after BUG-034 landed and the live re-run confirmed real DTE/delta/premium signal coverage end-to-end. |
+| Discovered | 2026-08-24, Animesh — ran `scratch/2026-08-24_bug031_manual_exit_review.py` (built for BUG-031's B031.4) live against the real broker/DB now that `strategy_name` is fixed (BUG-031, SHA `ea5df81`). Live chain fetch succeeded (2 `upstox.api_call status_code=200` log lines, both expiries), but `check_signals()` reported "No exit signals fired for any open leg" across all 5 open overlay legs — including `NSE_FO|61604`, whose own instrument-master DTE is 1 (expires 2026-08-25), well inside `evaluate_pp`'s `dte <= 5` `ROLL_ELIGIBLE` threshold. Confirmed live via direct call: `PPOverlayV1()._parse_expiry("NSE_FO|61604")` returns `None` — `_EXPIRY_RE` (`r"NSE_FO\|NIFTY(\d{2}[A-Za-z]{3}\d{4})(PE\|CE)"`) only matches text-format keys like `NSE_FO|NIFTY29MAY2026PE`, never numeric exchange-token keys like `NSE_FO|61604` (the format Upstox's real BOD data actually uses, confirmed via `data/instruments/NSE.json.gz`). `check_signals()`'s own fallback (`dte = ... if expiry is not None else 9999`) then makes the DTE-gated branch permanently unreachable for any real position. |
+| Location | `src/strategy/pp_overlay_v1.py:414-421` (`_parse_expiry`), `src/strategy/cc_overlay_v1.py` (own copy, same pattern, used at line ~129/210/367 call sites), `src/strategy/collar_overlay_v1.py` (own copy, used at line ~180/365). Each file defines its own private `_EXPIRY_RE`/`_parse_expiry` rather than sharing one implementation. |
+
+**Symptom, confirmed via direct call (not inferred):** `PPOverlayV1()._parse_expiry("NSE_FO|61604")` → `None`. `_EXPIRY_RE.search("NSE_FO|61604")` → `None` (no match — the pattern requires an embedded `NIFTY<DD><Mon><YYYY><PE|CE>` substring that numeric exchange-token keys never contain). Live `scratch/2026-08-24_bug031_manual_exit_review.py` run against the real broker/DB (5 open legs, 2 live chain fetches, both `status_code=200`) reported zero signals fired for any leg — a false-negative "everything is fine" result masking that DTE-gated evaluation never runs at all for these positions.
+
+**Root cause:** same bug class explicitly named as already-fixed elsewhere in this repo — TODOS.md's 2026-08-13/2026-08-20 entries describe `_open_pp_dte`'s and `paper_3track_overlay_entry.py`'s "regex-only expiry parser never matched real numeric Upstox instrument keys (same bug class as BUG-018/BUG-012)," fixed there via "regex-first/BOD-fallback resolution mirroring `ic_nifty_v2.py::_parse_expiry`." That fix was scoped to the entry-side script; these three live-monitor strategy classes' own independent `_parse_expiry` copies were never swept into it, despite each class already lazily loading an `InstrumentLookup` (`self._resolve_instrument_lookup()`, used elsewhere in the same files for leg lookup and label formatting) that could resolve exactly this case.
+
+**Impact:** for every currently-open CC/PP/Collar overlay position filed under a real numeric instrument key (all 5 confirmed open legs, per BUG-031's B031.4 review), `ROLL_ELIGIBLE` (PP, DTE ≤ 5) and `DTE_REVIEW`/roll-priority DTE checks (Collar) can never fire, regardless of how close to expiry the position actually is. This was masked until now because BUG-031 meant these classes never evaluated real positions at all — BUG-031's fix (SHA `ea5df81`) surfaced this as the next layer down, exactly as intended by B031.3/B031.4's "test with real data, not a unit-level assertion" approach.
+
+**Suggested fix:** repoint each file's `_parse_expiry` to try the existing regex first, then fall back to `self._resolve_instrument_lookup().get_by_key(instrument_key)`'s `expiry` field (epoch ms → `date`) when the regex misses — mirrors the fix already proven for `_open_pp_dte`/`paper_3track_overlay_entry.py` and for `ic_nifty_v2.py::_parse_expiry`. Given three near-duplicate `_parse_expiry`/`_EXPIRY_RE` copies already exist across these files (a maintenance smell independent of this bug), consider factoring one shared helper in `src/strategy/_price_utils.py` (already imported by all three files for `find_option_leg`) rather than patching three copies in place — but the regex-first/BOD-fallback *behavior* fix should not wait on that refactor decision. Needs regression tests using real numeric instrument keys (not the text-format fixtures the existing unit test suites use) asserting a resolvable near-expiry DTE actually fires `ROLL_ELIGIBLE`/`DTE_REVIEW` — same "test with real data" gap B031.3's note already flagged as the class of thing that let bugs like this ship unnoticed.
+
+**Immediate manual action, independent of the code fix:** `overlay_pp` leg `NSE_FO|61604` expires 2026-08-25 (tomorrow) with no auto-roll signal — Animesh should decide whether to roll/close it by hand before expiry rather than wait for this fix to land. This is in addition to, not a substitute for, BUG-031's still-open B031.4 (general exit-eligibility review) — B031.4 can now be re-run once this bug is fixed to get real DTE-based signal coverage, not just delta/premium coverage. **Closed (B033.4, 2026-08-24):** Animesh closed all `overlay_pp` positions manually ahead of expiry, including `NSE_FO|61604` — no roll executed, position exited flat.
+
+**Related:** BUG-031 (this bug was found *during* B031.4, its manual-review task, and depended on BUG-031's fix landing first to be observable at all — StrategyMonitor never evaluated real positions before that); BUG-032 (same `NSE_FO|61604` leg, different defect — P&L reporting drop vs. dead exit signal); TODOS.md 2026-08-13/2026-08-20 entries and DECISIONS.md same dates (the already-fixed sibling instances of this exact bug class in the entry-side script — this is the live-monitor-side instance that fix never covered). **Superseded in priority by BUG-034** — the leg_role filter that bug describes runs *before* `_parse_expiry` in `check_signals()`, so for PP/CC this bug's DTE-parsing gap has been unreachable/unverified the whole time this session; fix BUG-034 first, then re-verify this one is still live for the legs that survive that filter (Collar is unaffected by BUG-034 and was always independently exposed to this DTE bug).
+
+**Implementation progress (B033.1-B033.3, SHA `ef1c341`, 2026-08-24):** added `resolve_option_expiry(instrument_key, lookup)` as a shared helper in `src/strategy/_price_utils.py` (regex-first, then BOD-JSON fallback via `lookup.get_by_key()` → `src.instruments.lookup.parse_expiry` epoch-ms/str normalization → `date.fromisoformat`), mirroring `ic_nifty_v2.py::_parse_expiry`'s proven BUG-018 fix — went with the shared-helper option per the suggested-fix note rather than patching three copies in place. `CCOverlayV1`/`PPOverlayV1`/`CollarOverlayV1._parse_expiry` now each delegate to it via `resolve_option_expiry(instrument_key, self._resolve_instrument_lookup())`; the three per-file `_EXPIRY_RE` module constants (and now-unused `import re` / `datetime` imports) were removed since nothing else in those files referenced them (confirmed via grep before deleting). Tests added: `tests/unit/strategy/test_price_utils.py` (11 new cases covering symbolic-regex path, numeric-key BOD resolution, epoch-ms expiry field, missing/malformed BOD `expiry` field, key-not-in-BOD, and regex-still-wins-when-both-resolvable) plus one numeric-key + one regex-precedence regression test per strategy class in `test_pp_overlay_v1.py`/`test_cc_overlay_v1.py`/`test_collar_overlay_v1.py`, asserting `ROLL_ELIGIBLE`/`DTE_REVIEW` actually fires end-to-end through `check_signals()` for a real `NSE_FO|61604`-style key. Verified against the live repo state (not a stale clone) with a full `pytest tests/unit/` run: 111/111 pass in the four touched files; the broader ~2800-test suite shows zero regressions attributable to this diff (pre-existing 29 failures — missing VIX data dir, one already-dirty unrelated WIP test file — are identical before/after). Independent `general-purpose`+review-substitute pass (B033.3) flagged one plausible defect (unguarded `lookup.get_by_key()` in the BOD fallback) — verified safe (`InstrumentLookup.get_by_key` is a simple linear scan, can't raise) — and one test-coverage gap (missing/malformed BOD `expiry` field), which was closed with the two additional test cases above. B033.4 (manual `NSE_FO|61604` decision, expires 2026-08-25) and B033.5 (close-out, blocked on BUG-034) remain open.
+
+**B033.5 close-out (2026-08-24):** re-ran `scratch/2026-08-24_bug031_manual_exit_review.py` live,
+now that BUG-034 (SHA `88df26e`) has landed. 2 open overlay legs found: `overlay_cc`
+`NSE_FO|74391` (dte=36, NIFTY 25400 CE 29 SEP 26) and `overlay_collar_put` `NSE_FO|73994`
+(dte=36, NIFTY 23500 PE 29 SEP 26). Live option-chain fetch succeeded (status 200). `CCOverlayV1`
+fired `PROFIT_TARGET` (ACTION severity, `auto_execute=True`, `auto_action=CLOSE_CC`) — mark 23.9
+vs. entry credit 86.725 (well under the 30% profit-target threshold), delta 0.0748. This confirms
+the fix chain (BUG-031 strategy_name → BUG-033 DTE-parsing → BUG-034 leg_role filter) now
+delivers real, end-to-end exit-signal coverage for a live `overlay_cc` position — first real
+signal this whole investigation thread has produced. No signal on the Collar leg, expected: not
+DTE-gated at dte=36, and `CollarOverlayV1`'s role constants were never affected by BUG-034. This
+also closes BUG-031's B031.4 (general exit-eligibility review) with real DTE coverage, not just
+delta/premium coverage as before. **The `PROFIT_TARGET`/`CLOSE_CC` signal on `NSE_FO|74391` is a
+real, currently-actionable signal** — the review script is read-only (nothing executed), so this
+still needs Animesh's decision on whether/when to close that leg by hand or let the next automated
+run act on it.
+

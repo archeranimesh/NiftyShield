@@ -569,3 +569,50 @@ commit per phase.
 - [x] **B031.6** — Commit, update `bugs.md` BUG-031 status to ✅ Fixed + SHA, update `TODOS.md`.
   All B031.x items closed 2026-08-24 — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
+## BUG-034 — `LONG_PUT_ROLES`/`SHORT_CALL_ROLES` stale in `pp_overlay_v1.py`/`cc_overlay_v1.py` — `check_signals()` evaluates zero real PP/CC positions, upstream of and more severe than BUG-033
+
+- [x] **B034.1** — Repoint `LONG_PUT_ROLES` (`src/strategy/pp_overlay_v1.py:54`) to `{"overlay_pp"}`
+  and `SHORT_CALL_ROLES` (`src/strategy/cc_overlay_v1.py:54`) to `{"overlay_cc"}` — PP-only and
+  CC-only sets respectively, not reusing `exit_signals._OVERLAY_LONG_PUT_ROLES`/
+  `_OVERLAY_SHORT_CALL_ROLES` directly (those deliberately include the Collar variants too).
+  Full context: `docs/bugs/bugs.md` BUG-034. | SHA 88df26e
+- [x] **B034.2** — Tests: regression coverage using the real `"overlay_pp"`/`"overlay_cc"`
+  leg_role strings (not the existing fixtures' `"protective_put"`/`"short_call"` defaults, which
+  is exactly how this shipped passing against nothing real) asserting `check_signals()` actually
+  evaluates a position with the real leg_role and does NOT evaluate one with the stale role names
+  this fix removes. | SHA 88df26e
+- [x] **B034.3** — Review: real `code-reviewer` or `general-purpose` + `REVIEW.md` substitute
+  (mandatory — same live-capital-adjacent auto-execution bar as B031.5/B033.3). 0 CRITICAL/ERROR,
+  3 WARNING deferred (documented in the commit message). | SHA 88df26e
+- [x] **B034.4** — Commit, update `bugs.md` BUG-034 status to ✅ Fixed + SHA, update `TODOS.md`.
+  Land before or together with BUG-033 (B033.5 is blocked on this). | SHA 88df26e
+
+## BUG-033 — `_parse_expiry` regex-only in `CCOverlayV1`/`PPOverlayV1`/`CollarOverlayV1` — DTE-gated exit signals (`ROLL_ELIGIBLE`/`DTE_REVIEW`) dead for every real numeric instrument key
+
+- [x] **B033.1** — Repoint each of the three files' `_parse_expiry` to try the existing regex
+  first, then fall back to `self._resolve_instrument_lookup().get_by_key(instrument_key)`'s
+  `expiry` field (epoch ms → `date`) when the regex misses — mirrors the fix already proven for
+  `_open_pp_dte`/`paper_3track_overlay_entry.py` (`TODOS.md` 2026-08-13/2026-08-20) and
+  `ic_nifty_v2.py::_parse_expiry`. Decide inline vs. a shared helper in
+  `src/strategy/_price_utils.py` before implementing (three near-duplicate copies exist today —
+  don't let the refactor question block the behavior fix). Full context: `docs/bugs/bugs.md`
+  BUG-033. | SHA ef1c341
+- [x] **B033.2** — Tests: regression coverage using real numeric instrument keys (not the
+  text-format fixtures the existing suites use) asserting a resolvable near-expiry DTE actually
+  fires `ROLL_ELIGIBLE`/`DTE_REVIEW` — one per class (CC/PP/Collar). Also assert the regex path
+  still wins when both would resolve (no behavior change for text-format keys). | SHA ef1c341
+- [x] **B033.3** — Review: real `code-reviewer` or `general-purpose` + `REVIEW.md` substitute
+  (mandatory — same live-capital-adjacent auto-execution bar as B031.5). | SHA ef1c341
+- [x] **B033.4** — Manual action, independent of the code fix and time-sensitive: `overlay_pp`
+  leg `NSE_FO|61604` expires 2026-08-25 — decide whether to roll/close it by hand before expiry
+  rather than wait for this fix to land. Closed by Animesh (2026-08-24) — all PP positions
+  closed manually, ahead of expiry.
+- [x] **B033.5** — Commit, update `bugs.md` BUG-033 status to ✅ Fixed + SHA, update `TODOS.md`.
+  Re-run `scratch/2026-08-24_bug031_manual_exit_review.py` afterward to close out BUG-031's
+  B031.4 with real DTE coverage. Re-run done 2026-08-24 (Animesh, live, post-BUG-034): 2 open
+  overlay legs (`overlay_cc` `NSE_FO|74391` dte=36, `overlay_collar_put` `NSE_FO|73994` dte=36).
+  `CCOverlayV1` fired a real `PROFIT_TARGET` (auto_execute=True, auto_action=CLOSE_CC) —
+  confirms DTE/delta/premium logic is now reachable end-to-end for a real `overlay_cc` position,
+  closing out BUG-031's B031.4 with real coverage. No signal on the Collar leg (expected — not
+  DTE-gated at dte=36, and Collar's own roles were never affected by BUG-034). | SHA ef1c341
+
