@@ -34,9 +34,10 @@
   still wins when both would resolve (no behavior change for text-format keys). | SHA ef1c341
 - [x] **B033.3** — Review: real `code-reviewer` or `general-purpose` + `REVIEW.md` substitute
   (mandatory — same live-capital-adjacent auto-execution bar as B031.5). | SHA ef1c341
-- [ ] **B033.4** — Manual action, independent of the code fix and time-sensitive: `overlay_pp`
+- [x] **B033.4** — Manual action, independent of the code fix and time-sensitive: `overlay_pp`
   leg `NSE_FO|61604` expires 2026-08-25 — decide whether to roll/close it by hand before expiry
-  rather than wait for this fix to land.
+  rather than wait for this fix to land. Closed by Animesh (2026-08-24) — all PP positions
+  closed manually, ahead of expiry.
 - [ ] **B033.5** — Commit, update `bugs.md` BUG-033 status to ✅ Fixed + SHA, update `TODOS.md`.
   Re-run `scratch/2026-08-24_bug031_manual_exit_review.py` afterward to close out BUG-031's
   B031.4 with real DTE coverage. **Blocked on BUG-034 landing first** — the leg_role filter

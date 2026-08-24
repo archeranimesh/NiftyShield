@@ -124,6 +124,12 @@ Full forensic log (SHAs, bug numbers, root-cause detail) moved to
 add new entries there going forward, or start a fresh dated section here if this file's
 Session Log grows large again.
 
+### 2026-08-24 Session Log (BUG-033 B033.4 closed — PP legs closed manually)
+- **BUG-033 B033.4**: Animesh confirmed all `overlay_pp` positions, including the near-expiry
+  `NSE_FO|61604` leg (2026-08-25), were closed manually ahead of expiry — no roll executed.
+  Only B033.5 (close-out/archive, blocked on BUG-034 landing) remains open on BUG-033. See
+  `docs/bugs/bugs.md` BUG-033.
+
 ### 2026-08-24 Session Log (BUG-033 B033.1-B033.3 fixed — _parse_expiry BOD fallback)
 - **BUG-033 B033.1-B033.3**: `CCOverlayV1`/`PPOverlayV1`/`CollarOverlayV1._parse_expiry` was
   regex-only and never resolved real numeric Upstox instrument keys, so DTE-gated exit signals
