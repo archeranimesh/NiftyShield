@@ -24,6 +24,35 @@
 > BUG-036 closed 2026-08-24 (SHA `d40c3a1`, backfill applied same day) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 > BUG-035 closed 2026-08-24 (SHA `0ecd86b`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
+## BUG-037 — `mark_trade_closed()` also never wired into CSP/IC v1/v2 close paths (54 stale flat legs)
+
+- [ ] **B037.1** — Trace `close_csp_leg`/`close_ic_legs`/`roll_ic_legs` (and
+  `roll_down_and_out`) call sites for any partial-close/roll scenario that can
+  leave `net_qty != 0` on the leg being written — CSP's `ROLL_DOWN_AND_OUT`
+  and IC's spread-only closes are partial at the strategy level, unlike
+  BUG-035's overlay legs. Confirms whether `mark_trade_closed()` can be called
+  unconditionally per closing trade or needs a flatness check first. See
+  `docs/bugs/bugs.md` BUG-037.
+- [ ] **B037.2** — Trace `scripts/strategies/three_track/paper_3track_roll.py`'s
+  futures/proxy roll-close write path for the same gap — the `base_futures`
+  and `base_ditm_call` stale rows found may or may not share this root cause;
+  not yet confirmed (unlike CSP/IC, which are confirmed via grep).
+- [ ] **B037.3** — Add `store.mark_trade_closed(...)` (or the appropriate
+  partial-close-safe equivalent per B037.1) to `close_csp_leg`,
+  `close_ic_legs`, `roll_ic_legs`, and the futures/proxy roll-close path
+  (per B037.2, if confirmed in scope).
+- [ ] **B037.4** — Tests: regression coverage per call site mirroring
+  BUG-035's B035.4 pattern (mark_trade_closed called on full close, not
+  called on partial close/duplicate insert).
+- [ ] **B037.5** — Re-run `scripts/dev/backfill_mark_trade_closed_overlay.py`
+  (already generalized, built for BUG-035) against the live DB once B037.3
+  lands — it already covers all 54 rows found in this bug's discovery scan.
+- [ ] **B037.6** — Review: real `code-reviewer` or `general-purpose` +
+  `REVIEW.md` substitute (mandatory — touches live paper-trading state
+  transitions across CSP/IC, the two highest-volume strategy families).
+- [ ] **B037.7** — Commit, update `bugs.md` BUG-037 status to ✅ Fixed + SHA,
+  update `TODOS.md`.
+
 ## BUG-019 — Investigation: does every strategy show a live-tick vs. EOD-snapshot P&L disparity?
 
 > Moved to the bottom of this file deliberately (2026-08-24, Animesh) — the 08-14/17/19/20/21
