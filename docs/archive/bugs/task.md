@@ -475,3 +475,28 @@ commit per phase.
   clean, update `TODOS.md`. | Docs-only close, this session.
 
 ---
+
+## BUG-025 — MC-3b review follow-ups: `roll_ic_legs` open-only write shape, `PROFIT_LOCK_ZONE2` state/write ordering
+
+- [x] **B025.1** — Scoping done (2026-08-24) — no longer blocking; split into W1/W2 fixes below.
+  Full context: `docs/archive/bugs/bugs.md` BUG-025.
+- [x] **B025.2** — Fix W1: `roll_ic_legs`'s open-only write shape
+  (`src/strategy/ic_close_executor.py`) — when `open_legs` is non-empty and `to_close` is empty
+  (stale/already-closed `closed_roles`), log an error and return `[]` instead of writing an
+  orphan open leg. Fail-closed, symmetric to the existing naked-position guard. | SHA `700dbf0`
+- [x] **B025.3** — Fix W2: `PROFIT_LOCK_ZONE2` state/notification ordering
+  (`src/strategy/ic_nifty_v2.py::IronCondorV2.apply_action`) — move the
+  `store.set_profit_lock_state(..., zone2_lock_executed=True)` call and the Telegram
+  notification from the early branch to after `rolled_trades = await roll_ic_legs(...)`, gated
+  on `if rolled_trades:` so state is only persisted once the roll actually wrote. | SHA `700dbf0`
+- [x] **B025.4** — Tests: W1 — `closed_roles` matches zero live positions with `open_legs`
+  non-empty, assert `roll_ic_legs` returns `[]` and writes nothing. W2 — mocked `roll_ic_legs`
+  failure/empty-return, assert `zone2_lock_executed` stays unset/`False` and no Telegram
+  notification fires. | SHA `700dbf0`
+- [x] **B025.5** — Review: real `code-reviewer` or `general-purpose` + `REVIEW.md` substitute
+  (mandatory — live-capital-adjacent write-ordering change, same bar as BUG-030/031). |
+  general-purpose substitute pass, no findings — SHA `700dbf0`
+- [x] **B025.6** — Commit, update `bugs.md` BUG-025 status to ✅ Fixed + SHA, update `TODOS.md`.
+  | SHA `700dbf0`
+
+---

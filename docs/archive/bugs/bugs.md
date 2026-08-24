@@ -761,3 +761,74 @@ gap: `paper_trades` shows the first `overlay_*` leg (`overlay_pp`) wasn't opened
 session; see `docs/bugs/task.md` B029.1-6 (now archived, section fully checked).
 
 ---
+
+## BUG-025 — MC-3b review follow-ups: `roll_ic_legs` open-only write shape, `PROFIT_LOCK_ZONE2` state/write ordering
+
+| Field | Value |
+|---|---|
+| Severity | **LOW** — both are theoretical/edge-case findings from the MC-3b review pass, not confirmed live symptoms; logged so they aren't lost, not because either is known to have fired. |
+| Status | ✅ Fixed — SHA `700dbf0` (2026-08-24). |
+| Discovered | 2026-08-06, `@code-reviewer`-substitute pass on MC-3b (IC-CLOSE-2 roll persistence, `docs/plan/monitor-and-close-hardening/tasks.md`). |
+| Location | `src/strategy/ic_close_executor.py::roll_ic_legs` (W1); `src/strategy/ic_nifty_v2.py::IronCondorV2.apply_action`'s `PROFIT_LOCK_ZONE2` branch (W2). |
+
+**W1 — `roll_ic_legs`'s empty-check doesn't require `to_close` non-empty when `open_legs` is non-empty.** The guard is `if not to_close and not open_legs: ... return []` — if `closed_roles` matches zero live positions (stale role, already-closed leg from a race) but `open_legs` is non-empty, the function proceeds and writes an open-only trade: a new leg with nothing closed. Not the naked-position failure mode MC-3b was built to prevent (this is the inverse — extra/duplicate exposure), and in every current call site `closed_roles` is derived from the same in-memory position list passed as `close_positions`, so it's unlikely to diverge today. No fix applied — either assert `to_close` non-empty when `open_legs` is non-empty, or explicitly document an open-only write as an accepted `roll_ic_legs` outcome, next time this function is touched.
+
+**W2 — `PROFIT_LOCK_ZONE2`'s `ProfitLockState` persistence and Telegram notification happen before `roll_ic_legs`'s success is known.** `apply_action` calls `store.set_profit_lock_state(..., zone2_lock_executed=True)` and sends the Zone 2 notification in one branch, then calls `roll_ic_legs` in a separate, later branch. If `roll_ic_legs` fails (broker/store exception, or its own price-guard aborts), the state store already says the zone-2 lock executed while the actual leg replacement never persisted — a state/reality divergence visible on the next signal-evaluation tick. This ordering pre-dates MC-3b (the state persistence already existed; only the trade-write call is new) so it isn't a regression introduced by this task, but MC-3b was the natural point to reorder (persist state only after confirming `roll_ic_legs` returned non-empty) and that reorder wasn't done. No fix applied — flagged for a fast-follow.
+
+**Related:** MC-3b (`docs/plan/monitor-and-close-hardening/tasks.md`), BUG-023, BUG-024.
+
+**Scoping (2026-08-24):** split into two independent fixes, each small enough not to need
+council-checkpoint review on its own, but the combined diff touches the live roll/profit-lock
+path so a mandatory review gate (B025.5) still applies.
+
+- **W1 fix:** in `roll_ic_legs`, when `open_legs` is non-empty and `to_close` is empty, log an
+  error and return `[]` instead of proceeding — fail-closed, symmetric to the existing
+  naked-position guard the function already enforces for the opposite case.
+- **W2 fix:** in `IronCondorV2.apply_action`'s `PROFIT_LOCK_ZONE2` handling, move
+  `store.set_profit_lock_state(..., zone2_lock_executed=True)` and the Telegram notification from
+  the early branch to after `rolled_trades = await roll_ic_legs(...)`, gated on
+  `if rolled_trades:` — persists success only once the roll actually wrote, closing the
+  state/reality divergence window.
+
+Checklist: `docs/archive/bugs/task.md` B025.2 (W1), B025.3 (W2), B025.4 (tests for both), B025.5
+(mandatory review), B025.6 (commit + close).
+
+**Implementation progress (2026-08-24), closed same day, SHA `700dbf0`:**
+
+- **W1**: added `if open_legs and not to_close: log.error("ic_close_executor.roll_open_only_rejected", ...); return []`
+  in `roll_ic_legs`, placed after the existing `if not to_close and not open_legs` no-op guard
+  and before the open-leg price-validation loop (so a rejected open-only roll skips price
+  validation for legs it's about to discard). Close-only rolls (`to_close` non-empty, `open_legs`
+  empty) are unaffected.
+- **W2**: removed the early `store.set_profit_lock_state(...)` + Telegram-notification block from
+  the `elif action.action_type == "PROFIT_LOCK_ZONE2":` branch in `apply_action`. Both now fire
+  after `rolled_trades = await roll_ic_legs(...)` is called and logged, gated on
+  `if action.action_type == "PROFIT_LOCK_ZONE2" and rolled_trades:` — a `list[PaperTrade]`
+  truthiness check, so an empty/failed roll no longer claims the lock executed.
+- **Tests added**: `test_roll_open_only_when_closed_roles_match_nothing_returns_empty` and
+  `test_roll_close_only_still_writes_when_to_close_nonempty` in `test_ic_close_executor.py`;
+  `test_apply_action_zone2_roll_failure_does_not_persist_state` in
+  `test_ic_nifty_v2_profit_lock.py` (mocks `store.record_trades` raising `RuntimeError` to model
+  `roll_ic_legs`'s write-failure path, asserts neither `set_profit_lock_state` nor
+  `send_notification` fire). The pre-existing `test_apply_action_updates_state` was updated to
+  supply a broker/store pair (mirroring the sibling `..._persists_close_and_open_legs` test) since
+  state persistence is now gated on the roll actually reaching `roll_ic_legs` and succeeding — a
+  strategy with no broker takes the `no_broker_or_store` early-out and never reaches the roll.
+- **Test run**: `tests/unit/strategy/test_ic_close_executor.py` + `test_ic_nifty_v2_profit_lock.py`
+  — 28/28 pass. Full `tests/unit/` also run in an ad-hoc sandbox venv (macOS `.venv` isn't
+  reachable from the device-bridge Linux VM, so deps were reinstalled from
+  `requirements.txt`/`requirements-dev.txt` + pyproject dev-extras into a throwaway venv):
+  2784 passed, 29 failed, 2 skipped. Confirmed via `git show HEAD` diff that the same 29 failures
+  occur identically on unmodified sources — pre-existing environment gaps (structlog/caplog
+  wiring under the throwaway venv), not caused by this change, not investigated further here.
+- **Review**: real `@code-reviewer` subagent type isn't spawnable on this Cowork surface — used
+  the `general-purpose` + `REVIEW.md`-substitute path the project's CLAUDE.md allows for this
+  case. No findings; confirmed guard ordering, list-truthiness correctness, no stale-state read
+  between old/new W2 write locations, only one `roll_ic_legs` call site (V1 doesn't roll), and
+  that the new/modified tests exercise real (non-tautological) failure paths.
+- **Commit**: blocked initially by a `.git/index.lock` held by a concurrent process in the
+  sandbox checkout (`rm`/`git add` both hit `Operation not permitted`) — per
+  `docs/bugs/prompt.md`'s lock-contention fallback, stopped before committing rather than forcing
+  it. Animesh committed the four changed files directly once the lock cleared: SHA `700dbf0`.
+
+---

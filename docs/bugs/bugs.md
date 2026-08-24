@@ -89,39 +89,6 @@ protocol doesn't pick B019.1 up next.
 
 ---
 
-## BUG-025 — MC-3b review follow-ups: `roll_ic_legs` open-only write shape, `PROFIT_LOCK_ZONE2` state/write ordering
-
-| Field | Value |
-|---|---|
-| Severity | **LOW** — both are theoretical/edge-case findings from the MC-3b review pass, not confirmed live symptoms; logged so they aren't lost, not because either is known to have fired. |
-| Status | 🔴 Open — scoped and checklisted 2026-08-24 (`docs/bugs/task.md` B025.2-B025.6), ready to pick up next; no code change yet. |
-| Discovered | 2026-08-06, `@code-reviewer`-substitute pass on MC-3b (IC-CLOSE-2 roll persistence, `docs/plan/monitor-and-close-hardening/tasks.md`). |
-| Location | `src/strategy/ic_close_executor.py::roll_ic_legs` (W1); `src/strategy/ic_nifty_v2.py::IronCondorV2.apply_action`'s `PROFIT_LOCK_ZONE2` branch (W2). |
-
-**W1 — `roll_ic_legs`'s empty-check doesn't require `to_close` non-empty when `open_legs` is non-empty.** The guard is `if not to_close and not open_legs: ... return []` — if `closed_roles` matches zero live positions (stale role, already-closed leg from a race) but `open_legs` is non-empty, the function proceeds and writes an open-only trade: a new leg with nothing closed. Not the naked-position failure mode MC-3b was built to prevent (this is the inverse — extra/duplicate exposure), and in every current call site `closed_roles` is derived from the same in-memory position list passed as `close_positions`, so it's unlikely to diverge today. No fix applied — either assert `to_close` non-empty when `open_legs` is non-empty, or explicitly document an open-only write as an accepted `roll_ic_legs` outcome, next time this function is touched.
-
-**W2 — `PROFIT_LOCK_ZONE2`'s `ProfitLockState` persistence and Telegram notification happen before `roll_ic_legs`'s success is known.** `apply_action` calls `store.set_profit_lock_state(..., zone2_lock_executed=True)` and sends the Zone 2 notification in one branch, then calls `roll_ic_legs` in a separate, later branch. If `roll_ic_legs` fails (broker/store exception, or its own price-guard aborts), the state store already says the zone-2 lock executed while the actual leg replacement never persisted — a state/reality divergence visible on the next signal-evaluation tick. This ordering pre-dates MC-3b (the state persistence already existed; only the trade-write call is new) so it isn't a regression introduced by this task, but MC-3b was the natural point to reorder (persist state only after confirming `roll_ic_legs` returned non-empty) and that reorder wasn't done. No fix applied — flagged for a fast-follow.
-
-**Related:** MC-3b (`docs/plan/monitor-and-close-hardening/tasks.md`), BUG-023, BUG-024.
-
-**Scoping (2026-08-24):** split into two independent fixes, each small enough not to need
-council-checkpoint review on its own, but the combined diff touches the live roll/profit-lock
-path so a mandatory review gate (B025.5) still applies.
-
-- **W1 fix:** in `roll_ic_legs`, when `open_legs` is non-empty and `to_close` is empty, log an
-  error and return `[]` instead of proceeding — fail-closed, symmetric to the existing
-  naked-position guard the function already enforces for the opposite case.
-- **W2 fix:** in `IronCondorV2.apply_action`'s `PROFIT_LOCK_ZONE2` handling, move
-  `store.set_profit_lock_state(..., zone2_lock_executed=True)` and the Telegram notification from
-  the early branch to after `rolled_trades = await roll_ic_legs(...)`, gated on
-  `if rolled_trades:` — persists success only once the roll actually wrote, closing the
-  state/reality divergence window.
-
-Checklist: `docs/bugs/task.md` B025.2 (W1), B025.3 (W2), B025.4 (tests for both), B025.5
-(mandatory review), B025.6 (commit + close).
-
----
-
 ## BUG-030 — `_overlay_type_groups()` elif-precedence drops an `overlay_cc` leg whenever an `overlay_collar_put` leg is also present same-day; corrupts the Collar P&L figure and produces a false "CC No data" line in the recovery digest
 
 | Field | Value |
