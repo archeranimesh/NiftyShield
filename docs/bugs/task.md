@@ -37,13 +37,13 @@
   futures/proxy roll-close write path for the same gap — the `base_futures`
   and `base_ditm_call` stale rows found may or may not share this root cause;
   not yet confirmed (unlike CSP/IC, which are confirmed via grep). | SHA `b399a3e`
-- [ ] **B037.3** — Add `store.mark_trade_closed(...)` (or the appropriate
+- [x] **B037.3** — Add `store.mark_trade_closed(...)` (or the appropriate
   partial-close-safe equivalent per B037.1) to `close_csp_leg`,
   `close_ic_legs`, `roll_ic_legs`, and the futures/proxy roll-close path
-  (per B037.2, if confirmed in scope).
-- [ ] **B037.4** — Tests: regression coverage per call site mirroring
+  (per B037.2, if confirmed in scope). | SHA `5369c0e`
+- [x] **B037.4** — Tests: regression coverage per call site mirroring
   BUG-035's B035.4 pattern (mark_trade_closed called on full close, not
-  called on partial close/duplicate insert).
+  called on partial close/duplicate insert). | SHA `5369c0e`
 - [ ] **B037.5** — Re-run `scripts/dev/backfill_mark_trade_closed_overlay.py`
   (already generalized, built for BUG-035) against the live DB once B037.3
   lands — it already covers all 54 rows found in this bug's discovery scan.

@@ -128,6 +128,23 @@ Full forensic log (SHAs, bug numbers, root-cause detail) moved to
 add new entries there going forward, or start a fresh dated section here if this file's
 Session Log grows large again.
 
+### 2026-08-24 Session Log (BUG-037 B037.3/B037.4 committed, B037.5/B037.6 outstanding)
+- **BUG-037**: wired `store.mark_trade_closed()` into the CSP/IC/3track roll-close paths
+  BUG-035's original fix missed — `close_csp_leg`, `close_ic_legs`, `roll_ic_legs`
+  (close-side only, via `id()` identity against `close_trades` so the roll's freshly-opened
+  replacement leg is never touched), and `paper_3track_roll.py::check_and_roll_leg`. Each
+  call is gated on the close trade actually landing (not a duplicate skip), mirroring
+  BUG-035's `if inserted:` pattern. Regression tests added in `test_csp_roll_executor.py`,
+  `test_ic_close_executor.py`, `test_paper_3track_roll.py` — 51/51 pass in the touched
+  suites; full `tests/unit/` run shows 31 pre-existing failures/7 errors unrelated to this
+  change (missing `pyarrow`/`fastparquet`/etc. in the ad-hoc review venv). Committed
+  SHA `5369c0e`. **Not yet done**: B037.5 (re-run
+  `scripts/dev/backfill_mark_trade_closed_overlay.py` against the live DB — already covers
+  all 54 rows found) and B037.6 (mandatory real `@code-reviewer` pass — this session is
+  Cowork and cannot spawn `.claude/agents/code-reviewer.md`; the commit landed without that
+  gate clearing, so a review from Claude Code against this commit's diff is still owed).
+  See `docs/bugs/bugs.md` BUG-037.
+
 ### 2026-08-24 Session Log (BUG-035 all B035.x implemented, not yet committed)
 - **BUG-035**: `mark_trade_closed()` was orphaned (zero callers graph-wide) so every closed
   overlay leg's opening `paper_trades` row stayed `state='OPEN'` forever. B035.1 traced no

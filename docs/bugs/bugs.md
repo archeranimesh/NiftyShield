@@ -141,6 +141,44 @@ closes, never a partial paydown of a single row. B037.3 can call `mark_trade_clo
 unconditionally per closing trade, keyed to that trade's own
 `(strategy_name, leg_role, instrument_key)`.
 
+**Implementation progress (2026-08-24, B037.3/B037.4, SHA `5369c0e`):** Wired
+`store.mark_trade_closed()` into all three confirmed sites:
+
+- `close_csp_leg` (`src/strategy/csp_roll_executor.py`) — calls it only when
+  `record_trade()` returns `True` (guards the duplicate-insert case, same
+  shape as BUG-035's CC/PP overlay fix).
+- `close_ic_legs` (`src/strategy/ic_close_executor.py`) — iterates `inserted`
+  (the rows `record_trades()` actually wrote) and marks each one closed, so a
+  partial write (some legs skipped as duplicates) only marks the legs that
+  landed.
+- `roll_ic_legs` (`src/strategy/ic_close_executor.py`) — marks only the
+  close-side trades. Since `close_trades` and `open_trades` are concatenated
+  into one `record_trades()` call, the close-side rows are identified by
+  Python object identity (`id()`) against the pre-concatenation `close_trades`
+  list, not by `TradeAction`, so the freshly-opened replacement leg is never
+  mistakenly marked CLOSED.
+- `check_and_roll_leg` (`scripts/strategies/three_track/paper_3track_roll.py`)
+  — marks the leg closed only when `close_trade in inserted` (equality-based;
+  safe here since close_trade/open_trade always differ by instrument_key).
+
+Tests added mirroring BUG-035's B035.4 pattern (happy path + duplicate-insert
+skip) in `tests/unit/strategy/test_csp_roll_executor.py`,
+`tests/unit/strategy/test_ic_close_executor.py` (both `close_ic_legs` and
+`roll_ic_legs`), and `tests/unit/scripts/test_paper_3track_roll.py` (using a
+real `PaperStore`, not a mock, per that file's existing convention). All 51
+tests in the three touched suites pass; a full `tests/unit/` run shows 31
+pre-existing failures/7 errors unrelated to this change (missing
+`pyarrow`/`fastparquet`/etc. in the ad-hoc review venv, confirmed by
+traceback inspection — none touch the files this bug modified).
+
+**Outstanding for this bug:** B037.5 (re-run
+`scripts/dev/backfill_mark_trade_closed_overlay.py` against the live DB) and
+B037.6 (mandatory real `@code-reviewer` run — this session is Cowork, which
+cannot spawn `.claude/agents/code-reviewer.md`; the commit above landed
+without that gate clearing, so a `@code-reviewer` pass against this commit's
+diff from Claude Code is still owed before this bug is considered fully
+closed).
+
 ---
 
 
