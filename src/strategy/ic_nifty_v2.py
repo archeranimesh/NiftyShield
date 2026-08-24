@@ -2060,30 +2060,16 @@ class IronCondorV2:
                 closed = {"short_put", "long_put_hedge"}
             elif action.action_type == "PROFIT_LOCK_ZONE2":
                 closed = {"long_put_hedge", "long_call_hedge"}
-                # Persist updated profit-lock state atomically with the leg close
-                if self._store is not None:
-                    meta = action.metadata or {}
-                    new_state = ProfitLockState(
-                        profit_lock_zone=int(meta.get("new_profit_lock_zone", 2)),
-                        zone2_lock_executed=True,
-                        zone3_lock_executed=False,
-                        cumulative_lock_debit_pts=Decimal(
-                            meta.get("cumulative_lock_debit_pts", "0")
-                        ),
-                        active_put_width_pts=int(meta.get("new_put_width_pts", 0)),
-                        active_call_width_pts=int(meta.get("new_call_width_pts", 0)),
-                        cycle_id=str(meta.get("cycle_id", "")),
-                    )
-                    self._store.set_profit_lock_state(self.strategy_name, new_state)
-                # Send post-execution Telegram notification (non-fatal)
-                if self._notifier is not None:
-                    try:
-                        await self._send_profit_lock_notification(action.metadata or {})
-                    except Exception as exc:
-                        log.error("ic_nifty_v2.send_notification_failed", error=str(exc))
-            # ROLL_WING: legs_to_close comes from the payload; persistence of both
-            # sides (old leg close + new leg open) happens below via roll_ic_legs,
-            # after effective_legs is built, mirroring the CLOSE_* pattern.
+            # ROLL_WING / PROFIT_LOCK_ZONE2: legs_to_close comes from the payload;
+            # persistence of both sides (old leg close + new leg open) happens
+            # below via roll_ic_legs, after effective_legs is built, mirroring
+            # the CLOSE_* pattern. BUG-025 W2: for PROFIT_LOCK_ZONE2, the
+            # ProfitLockState write and Telegram notification used to happen
+            # here — before roll_ic_legs was even called — so a roll_ic_legs
+            # failure (broker/store exception, or its own price guard aborting)
+            # left the state store saying the zone-2 lock executed while the
+            # leg replacement never persisted. Both now happen after
+            # roll_ic_legs, gated on rolled_trades being non-empty, below.
 
         # Populate instrument_key per role from ic_positions so a roll overlap
         # only matches the exact instrument, not any position sharing the role.
@@ -2167,6 +2153,30 @@ class IronCondorV2:
                     action_type=action.action_type,
                     legs=[t.leg_role for t in rolled_trades],
                 )
+                if action.action_type == "PROFIT_LOCK_ZONE2" and rolled_trades:
+                    # BUG-025 W2: persist the zone-2 lock state and send the
+                    # Telegram confirmation only once roll_ic_legs has actually
+                    # written the new wings — an empty/failed roll must not
+                    # claim the lock executed.
+                    if self._store is not None:
+                        meta = action.metadata or {}
+                        new_state = ProfitLockState(
+                            profit_lock_zone=int(meta.get("new_profit_lock_zone", 2)),
+                            zone2_lock_executed=True,
+                            zone3_lock_executed=False,
+                            cumulative_lock_debit_pts=Decimal(
+                                meta.get("cumulative_lock_debit_pts", "0")
+                            ),
+                            active_put_width_pts=int(meta.get("new_put_width_pts", 0)),
+                            active_call_width_pts=int(meta.get("new_call_width_pts", 0)),
+                            cycle_id=str(meta.get("cycle_id", "")),
+                        )
+                        self._store.set_profit_lock_state(self.strategy_name, new_state)
+                    if self._notifier is not None:
+                        try:
+                            await self._send_profit_lock_notification(action.metadata or {})
+                        except Exception as exc:
+                            log.error("ic_nifty_v2.send_notification_failed", error=str(exc))
         return [
             p for p in positions if not any(_leg_close_matches(p, leg) for leg in effective_legs)
         ]

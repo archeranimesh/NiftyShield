@@ -522,6 +522,65 @@ def test_roll_open_leg_non_positive_price_aborts_entire_roll(
     mock_store.record_trades.assert_not_called()
 
 
+def test_roll_open_only_when_closed_roles_match_nothing_returns_empty(
+    mock_broker: MagicMock, mock_store: MagicMock
+) -> None:
+    """BUG-025 W1: closed_roles matches zero live positions but open_legs is
+    non-empty — must fail-closed (return [], write nothing) instead of writing
+    an orphan open leg with nothing closed."""
+    # short_call is flat (net_qty=0) so it never matches closed_roles below —
+    # mirrors a stale role / already-closed leg from a race.
+    positions = [_make_position("short_call", "NSE_FO|51405", net_qty=0)]
+    open_legs = [
+        LegSpec(
+            instrument_key="NSE_FO|51999",
+            action="SELL",
+            quantity=65,
+            leg_role="short_call",
+            notes="roll_open_short delta=0.15",
+            price=Decimal("12.50"),
+        )
+    ]
+
+    inserted = _run(
+        roll_ic_legs(
+            broker=mock_broker,
+            store=mock_store,
+            close_positions=positions,
+            closed_roles={"short_call"},
+            open_legs=open_legs,
+            strategy_name=_STRATEGY,
+            notes="test roll",
+        )
+    )
+
+    assert inserted == []
+    mock_store.record_trades.assert_not_called()
+
+
+def test_roll_close_only_still_writes_when_to_close_nonempty(
+    mock_broker: MagicMock, mock_store: MagicMock
+) -> None:
+    """Sanity check for the B025.2 guard's boundary: a close-only roll (no
+    open_legs) must still write — only open-only writes are rejected."""
+    positions = [_make_position("short_call", "NSE_FO|51405", net_qty=-65, avg_sell_price="17.12")]
+
+    inserted = _run(
+        roll_ic_legs(
+            broker=mock_broker,
+            store=mock_store,
+            close_positions=positions,
+            closed_roles={"short_call"},
+            open_legs=[],
+            strategy_name=_STRATEGY,
+            notes="test roll",
+        )
+    )
+
+    assert len(inserted) == 1
+    mock_store.record_trades.assert_called_once()
+
+
 def test_roll_nothing_to_close_and_nothing_to_open_returns_empty(
     mock_broker: MagicMock, mock_store: MagicMock
 ) -> None:

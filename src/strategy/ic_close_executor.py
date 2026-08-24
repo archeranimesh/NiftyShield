@@ -303,6 +303,21 @@ async def roll_ic_legs(
         )
         return []
 
+    # BUG-025 W1: closed_roles matched zero live positions (stale role, or a
+    # leg already closed by a race) but open_legs is non-empty ??? proceeding
+    # would write an open-only trade: a new leg with nothing closed, i.e.
+    # extra/duplicate exposure. Fail-closed, symmetric to the naked-position
+    # guard above (which catches the opposite shape: close-only writes are
+    # allowed, but an open-only write here is not).
+    if open_legs and not to_close:
+        log.error(
+            "ic_close_executor.roll_open_only_rejected",
+            strategy_name=strategy_name,
+            closed_roles=sorted(closed_roles),
+            open_leg_roles=[leg.leg_role for leg in open_legs],
+        )
+        return []
+
     for leg in open_legs:
         if leg.price is None or leg.price <= 0:
             log.error(

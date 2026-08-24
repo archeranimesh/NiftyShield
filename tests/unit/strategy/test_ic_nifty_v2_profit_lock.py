@@ -455,11 +455,26 @@ def test_notification_payload(MockEngine, mock_today):
 
 
 def test_apply_action_updates_state():
-    """PROFIT_LOCK_ZONE2 apply_action: store state updated with zone2_lock_executed=True."""
+    """PROFIT_LOCK_ZONE2 apply_action: store state updated with zone2_lock_executed=True.
+
+    BUG-025 W2: state persistence is now gated on roll_ic_legs actually writing
+    (rolled_trades non-empty), so this test needs a broker/store pair that lets
+    roll_ic_legs succeed — a strategy with no broker takes the
+    no_broker_or_store early-out and never reaches the roll, which would leave
+    state unset. See test_apply_action_zone2_roll_failure_does_not_persist_state
+    below for the failure-path counterpart.
+    """
+    from src.client.protocol import BrokerClient
+
     store = _mock_store(_make_pl_state(zone=0, zone2_executed=False))
+    store.record_trades = MagicMock(side_effect=lambda trades: (trades, []))
+    broker = MagicMock(spec=BrokerClient)
+    broker.get_ltp = AsyncMock(return_value={})  # long hedges → entry-price fallback
     notifier = MagicMock()
     notifier.send_notification = AsyncMock(return_value=None)
-    strategy = IronCondorV2(config=IC_V2_MONTHLY, store=store, notifier=notifier)  # type: ignore[arg-type]
+    strategy = IronCondorV2(  # type: ignore[arg-type]
+        config=IC_V2_MONTHLY, store=store, broker=broker, notifier=notifier
+    )
 
     positions = _standard_positions()
     action = ApprovedAction(
@@ -471,12 +486,16 @@ def test_apply_action_updates_state():
                 action="BUY",
                 quantity=1,
                 leg_role="long_put_hedge",
+                notes="profit_lock_zone2_open_put",
+                price=Decimal("15.00"),
             ),
             LegSpec(
                 instrument_key="NSE_FO|NIFTY25400CE",
                 action="BUY",
                 quantity=1,
                 leg_role="long_call_hedge",
+                notes="profit_lock_zone2_open_call",
+                price=Decimal("18.00"),
             ),
         ],
         rationale="auto-execute",
@@ -584,3 +603,65 @@ def test_apply_action_profit_lock_zone2_persists_close_and_open_legs():
     assert "long_call_hedge" not in remaining_roles
     store.set_profit_lock_state.assert_called_once()
     notifier.send_notification.assert_called_once()
+
+
+def test_apply_action_zone2_roll_failure_does_not_persist_state():
+    """BUG-025 W2: when roll_ic_legs fails/returns empty (store.record_trades
+    raises, or all_trades ends up empty), the ProfitLockState write and
+    Telegram notification must NOT fire — closes the state/reality divergence
+    window where the store said the zone-2 lock executed while the leg
+    replacement never persisted.
+    """
+    from src.client.protocol import BrokerClient
+
+    store = _mock_store(_make_pl_state(zone=0, zone2_executed=False))
+    # record_trades raising simulates roll_ic_legs's write-failure path,
+    # which returns [] without inserting anything.
+    store.record_trades = MagicMock(side_effect=RuntimeError("db locked"))
+    broker = MagicMock(spec=BrokerClient)
+    broker.get_ltp = AsyncMock(return_value={})
+    notifier = MagicMock()
+    notifier.send_notification = AsyncMock(return_value=None)
+    strategy = IronCondorV2(  # type: ignore[arg-type]
+        config=IC_V2_MONTHLY, store=store, broker=broker, notifier=notifier
+    )
+
+    positions = _standard_positions()
+    action = ApprovedAction(
+        action_type="PROFIT_LOCK_ZONE2",
+        legs_to_close=[LegClose(leg_role="long_put_hedge"), LegClose(leg_role="long_call_hedge")],
+        legs_to_open=[
+            LegSpec(
+                instrument_key="NSE_FO|NIFTY23600PE",
+                action="BUY",
+                quantity=1,
+                leg_role="long_put_hedge",
+                notes="profit_lock_zone2_open_put",
+                price=Decimal("15.00"),
+            ),
+            LegSpec(
+                instrument_key="NSE_FO|NIFTY25400CE",
+                action="BUY",
+                quantity=1,
+                leg_role="long_call_hedge",
+                notes="profit_lock_zone2_open_call",
+                price=Decimal("18.00"),
+            ),
+        ],
+        rationale="auto-execute",
+        council_rank=1,
+        metadata={
+            "new_profit_lock_zone": 2,
+            "zone2_lock_executed": True,
+            "cumulative_lock_debit_pts": "34",
+            "new_put_width_pts": 300,
+            "new_call_width_pts": 300,
+            "cycle_id": "cycle1",
+            "event_type": "PROFIT_LOCK_ZONE2",
+        },
+    )
+
+    arun(strategy.apply_action(positions, action))
+
+    store.set_profit_lock_state.assert_not_called()
+    notifier.send_notification.assert_not_called()
