@@ -676,3 +676,55 @@ Discovered when Animesh received a `🟢 PP RE-ENTRY ELIGIBLE` Telegram alert wh
 **Fix (implemented 2026-08-13, matches B028's resolved architecture — decision (b), decouple from tracks):** both call sites in `evaluate_pp_reentry_eod` switched from the `track_strategies` list to `STRATEGY_OVERLAY`; `track_strategies`/the `STRATEGY_SPOT/FUTURES/PROXY` import dropped from the function since nothing else in it needs the three-track list. Tests: `test_evaluate_pp_reentry_suppressed_when_active` updated to seed the open `overlay_pp` leg under `STRATEGY_OVERLAY` (eligibility check now correctly suppresses); new `test_evaluate_pp_reentry_realized_pnl_reads_overlay_book_only` proves the realized-P&L figure reads only from `STRATEGY_OVERLAY`, not a base track. `general-purpose`+`REVIEW.md` substitute for `@code-reviewer` (subagent type not exposed in this environment, same precedent as B028.6/B028.13/B021.4/B010.8) — clean, no CRITICAL/ERROR/WARNING against the diff; 1 INFO note (no invariant guard against a stray `overlay_pp` leg ever landing under a base track post-S2r — latent architectural risk inherent to the decouple-pipeline decision itself, not introduced by this diff). 8/8 tests in the file pass, plus 1057/1057 in `tests/unit/strategy/`+`tests/unit/paper/` with zero regressions (run via a cloud sandbox venv — this device sandbox has no network to install `pytest`). See `docs/bugs/task.md` B028.14–B028.17. Committed on live host: code+tests SHA `94f3dc3`, doc-tracking update SHA `affbd24`.
 
 ---
+
+## BUG-027 — `scripts/healthcheck.py` never calls `load_dotenv()`; every healthcheck alert has silently no-op'd since at least 2026-08-04
+
+| Field | Value |
+|---|---|
+| Severity | **HIGH** — not a financial-logic defect, but this is the project's dead-man's-switch cron (`CONTEXT_TREE.md`: "Dead man's switch for EOD cron validation"). Its entire purpose is to alert when something else is broken; it has been silently failing to alert for at least 4 trading days with zero downstream signal — the exact "silent automation failure" class `BUG-026` also hit. |
+| Status | ✅ Fixed — `load_dotenv()` fix (SHA `7a81b6d`) + 4 new tests in `tests/unit/test_healthcheck.py` (8/8 total pass), review self-checked against `REVIEW.md`. Docs-close (`bugs.md`/`task.md`/`TODOS.md`) landed under B027.4. |
+| Discovered | 2026-08-10, Animesh reported seeing healthcheck log entries but no Telegram messages, while other scripts' Telegram alerts (`paper_3track_snapshot.py`, `eod_summary.py`, etc.) were arriving normally — investigated during the `telegram-markdown-migration` ROLL-11 workshop session. |
+| Location | `scripts/healthcheck.py` (imports, lines 16-30) — missing `from dotenv import load_dotenv` + `load_dotenv()` call present in every sibling cron script. |
+
+**Symptom:** `logs/healthcheck.log` shows, on every single run from 2026-08-04 through 2026-08-07 (and presumably every run since): the check messages print correctly (`✅ DB: accessible`, `⚠️ VIX data: N days stale`, etc.), `has_issue=True` is correctly detected, `main()` logs `WARNING System healthcheck failed or warned`, then immediately: `[INFO] [__main__] Telegram notifier not configured. Skipping alert.` No Telegram message is ever sent, on any run where an alert should have fired.
+
+**Root cause:** `build_notifier()` (`src/notifications/telegram.py:119-151`) deliberately constructs a fresh, uncached `Settings(_env_file=None)` on every call (see `BUG-011`'s 2026-08-06 fix) — it reads `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` **only** from the real OS process environment, never from `.env`. Every other cron-invoked script in this codebase (`paper_3track_snapshot.py`, `eod_summary.py`, `daily_snapshot.py`, `paper_ic_snapshot.py`, `paper_ic_entry.py`, ~25 files total, confirmed via `grep -rn "load_dotenv"`) calls `from dotenv import load_dotenv` + `load_dotenv()` near the top of the file *before* `build_notifier()`/`settings` is ever touched. `load_dotenv()` mutates `os.environ` directly as a side effect — that's what actually gets the token into the process environment `build_notifier()`'s `Settings(_env_file=None)` reads from. Cron's own environment never has these vars set directly (confirmed — `logs/cron.log`'s tracked crontab entries have no env-var preamble, and healthcheck's crontab line is a bare `cd ... && .venv/bin/python -m scripts.healthcheck`, identical in shape to every other job). `scripts/healthcheck.py`'s import block (lines 16-30) has no `dotenv` import and no `load_dotenv()` call at all — so under cron, `os.environ` is genuinely empty for these two vars by the time `build_notifier()` runs, and it correctly (per its own contract) returns `None`.
+
+**Why other scripts aren't affected:** identical `build_notifier()` call, identical cron invocation pattern (`cd <repo> && .venv/bin/python -m scripts.<module>`, no env-var prefix) — the only difference is every working script's own `load_dotenv()` call populating `os.environ` first. This was confirmed directly, not inferred: `grep -rn "load_dotenv"` across `src/`+`scripts/` returns the pattern in ~25 files; `scripts/healthcheck.py` is not among them.
+
+**Impact:** the healthcheck cron (`55 15 * * 1-5`) has been running "successfully" (exit code aside — `main()` still returns 1 on `has_issue`, so the cron *does* register a failure exit code, but with no human-visible alert) with zero operator-visible signal for at least the 4 trading days captured in the current `logs/healthcheck.log` window, and plausibly since the script was first deployed (`RO-4`, `docs/archive/plan/reporting-and-ops-fixes/tasks.md`) — no evidence in that task's spec that this was ever tested end-to-end against a real cron environment (only interactively, where a developer's shell likely already had the tokens exported).
+
+**Suggested fix:** add the same two-line pattern every sibling script already uses, before `build_notifier()`/`settings` is used:
+
+```python
+from dotenv import load_dotenv
+...
+load_dotenv()
+```
+
+placed the same way `eod_summary.py`/`paper_3track_snapshot.py` do it (module-level, near the top, before other project imports that might touch settings). This is a real code fix, not a docs-only or formatting change.
+
+**Suggested regression test:** mirror the pattern other `load_dotenv()`-bearing scripts' test files use (if any test asserts this — check via `search_graph` before assuming none exists) — a test that clears `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` from `os.environ` via `monkeypatch.delenv`, writes a fixture `.env` file with both values set, imports/reloads `scripts.healthcheck`, and asserts `build_notifier()` now resolves to a real notifier (not `None`) — proving the module-level `load_dotenv()` call actually runs and actually populates the environment before any notifier construction.
+
+**Related:** `BUG-011` (the `build_notifier()` `Settings(_env_file=None)` design this bug's root cause depends on); `BUG-026` (same failure shape — a live-capital-adjacent automation silently no-op'ing with no downstream alert, discovered the same way: an operator noticing an absence rather than an error).
+
+**Implementation progress (2026-08-13, moved here from `task.md` during archival cleanup):**
+`from dotenv import load_dotenv` + a module-level `load_dotenv()` call added to
+`scripts/healthcheck.py`, placed before the `src.*` imports — same placement convention as
+`scripts/eod_summary.py` (`# noqa: E402` on the now-late `src.*` imports). 4 new tests in
+`tests/unit/test_healthcheck.py` (8/8 total pass): the core regression test (patches
+`dotenv.load_dotenv`, reloads the module, asserts called once — this is the test that would have
+failed pre-fix), a real-fixture-`.env` resolution test, a no-regression "still `None` without
+configured env" test, plus a `_reload_healthcheck_without_touching_real_env()` helper (discovered
+mid-session that real `load_dotenv()` mutates `os.environ` directly, leaking into later tests
+unless carefully isolated; also confirmed `monkeypatch.chdir()` does not control which `.env`
+`load_dotenv()` discovers — it walks up from the caller's source file, not `cwd`). Self-reviewed
+against `REVIEW.md` (import ordering, no unused imports, comment explains *why* not just *that*)
+— a real `@code-reviewer`/`general-purpose` agent pass is still recommended before commit.
+**Docs-close note (2026-08-24):** the code fix and its tests were already committed
+(`7a81b6d` load_dotenv fix, `bee2649` later B029.5 healthcheck follow-up in the same file) —
+`task.md`/`bugs.md` had simply not been flipped to reflect that. B027.4 closes out the
+bookkeeping only: Status line above, this line, `task.md` B027.4 checkbox, `TODOS.md` session
+log. No further code change needed for BUG-027.
+
+---

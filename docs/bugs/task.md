@@ -29,17 +29,6 @@
 - [ ] **B025.1** — Deliberately deferred, not blocking (Animesh) — no checklist yet. Scope it
   before starting: `docs/bugs/bugs.md` BUG-025.
 
-## BUG-027 — `scripts/healthcheck.py` never calls `load_dotenv()`
-
-- [x] **B027.1** — `load_dotenv()` added to `scripts/healthcheck.py`, mirrors `eod_summary.py`'s
-  placement. | No SHA yet — pending commit
-- [x] **B027.2** — Tests: `tests/unit/test_healthcheck.py`, 4 new (8/8 total pass). |
-  Verified via targeted pytest run — 44/44 pass across healthcheck/notifications/config
-- [x] **B027.3** — Self-review against `REVIEW.md` (no CRITICAL/ERROR); real agent pass still
-  recommended before commit. | Self-review only so far
-- [ ] **B027.4** — Commit, update `bugs.md` BUG-027 status to ✅ Fixed + SHA, add a `TODOS.md`
-  session log line.
-
 ## BUG-029 — `paper_exit_events.counterfactual_dte_marks` migration committed but never run; 3-track EOD snapshot cron has crashed every market day since 2026-08-05
 
 - [x] **B029.1** — Root cause confirmed (schema diff + log tracebacks + `git log -S`). | No code
@@ -75,3 +64,28 @@
 - [ ] **B030.5** — Review: real `code-reviewer` or `general-purpose` + `REVIEW.md` substitute
   (mandatory — financial P&L reporting change).
 - [ ] **B030.6** — Commit, update `bugs.md` BUG-030 status to ✅ Fixed + SHA, update `TODOS.md`.
+
+## BUG-031 — `CCOverlayV1`/`PPOverlayV1`/`CollarOverlayV1` filter by pre-S2r `strategy_name` constants, never see `STRATEGY_OVERLAY`-scoped positions — zero live exit-signal coverage for any auto-entered CC/PP/Collar leg since 2026-07-29
+
+- [ ] **B031.1** — Grep every reference to `STRATEGY_CC_OVERLAY`/`STRATEGY_PP_OVERLAY`/
+  `STRATEGY_COLLAR_OVERLAY` (not just the three `strategy_name: str = ...` class attributes) and
+  confirm which are position-storage reads (must be repointed) vs. informational
+  `GateViolation` tags / the separate `cc_calibration/` manual tool (may be unaffected or need a
+  deliberate separate decision) — mirrors BUG-030's entry-side/reporting-side split. Full
+  context: `docs/bugs/bugs.md` BUG-031.
+- [ ] **B031.2** — Repoint `strategy_name` on `src/strategy/cc_overlay_v1.py:60`,
+  `pp_overlay_v1.py:60`, `collar_overlay_v1.py:76` to `STRATEGY_OVERLAY` per B031.1's resolved
+  scope.
+- [ ] **B031.3** — Tests: end-to-end coverage that a CC/PP/Collar position opened under
+  `STRATEGY_OVERLAY` is picked up by a `StrategyMonitor` tick and evaluated for exit signals —
+  not just a unit-level `strategy_name` equality assertion (that gap is exactly what let this
+  ship unnoticed for three weeks).
+- [ ] **B031.4** — Manual action, independent of the code fix: review every currently-open
+  CC/PP/Collar leg for exit-eligibility by hand (delta/premium/profit-target/DTE) — nothing has
+  been doing this automatically since 2026-07-29. Covers the two open `overlay_pp` legs
+  (`NSE_FO|61604`, `NSE_FO|74009`) plus any open `overlay_cc`/`overlay_collar_*` legs.
+- [ ] **B031.5** — Review: real `code-reviewer` or `general-purpose` + `REVIEW.md` substitute
+  (mandatory — governs live-capital-adjacent auto-execution: `MONETIZE_PP`, `ROLL_PP`,
+  `CLOSE_CC`, `CLOSE_AND_REENTER_COLLAR`). Likely needs a council checkpoint per
+  `docs/council/README.md`'s three-condition check, same bar BUG-028/BUG-030 used.
+- [ ] **B031.6** — Commit, update `bugs.md` BUG-031 status to ✅ Fixed + SHA, update `TODOS.md`.

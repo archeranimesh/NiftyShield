@@ -13,6 +13,7 @@ story on this list. Do not jump between stories mid-sequence; the ordering below
 *which story to pick up next*, once the current one is done. Completed items are in
 `docs/archive/TODOS_ARCHIVE.md`.
 
+0d2. [x] **BUG — PP auto-entry duplicated a SECOND time despite the 2026-08-13 fix (2026-08-20, closed same day)** — reported by Animesh: PP entered again today despite the 2026-08-11 position still being open, with no `open_pp_dte.*` log line at all before the `trade.INSERTED`. Root cause was the *failure semantics* of `_open_pp_dte`, not its resolution logic (the 2026-08-13 fix was correct as far as it went): any unresolvable state — a DB query exception, or one/more open `overlay_pp` rows whose expiry can't be parsed — returned `None`, which `main()`'s `--auto-pp` gate reads as byte-for-byte identical to "no position at all, go ahead and bootstrap." Confirmed live: `NSE_FO|61604` (2026-08-11, `state='OPEN'`) + `NSE_FO|74009` (2026-08-20, `state='OPEN'`) both open in `portfolio.sqlite`, zero rows in `paper_exit_events` for either. Fixed by splitting the two conditions: `_open_pp_dte` now raises a new `OpenPPPositionUnresolvable` exception (instead of returning `None`) whenever it can't determine state on a position that might be open — a DB query failure, or open rows existing but none resolving a DTE — and `main()` catches it as a hard-abort (exit 1, Telegram alert via `_alert_bootstrap_failure`), never falling through to `auto_pp_bootstrap`. `None` is now reserved strictly for the query returning zero rows — the true "flat" case. `scripts/strategies/three_track/paper_3track_overlay_entry.py` + `tests/unit/paper/test_overlay_entry.py` (2 tests rewritten to assert the raise instead of `None`, 1 new query-failure test, 1 new `main()`-level hard-abort test). Not run against the live `pytest` suite this session — device shell available for this fix had no project venv/deps and no network to install them; needs a live-host run to confirm green. See `DECISIONS.md` 2026-08-20. **Not part of this fix, needs manual action:** the still-open 2026-08-11 leg (`NSE_FO|61604`) and the newly-duplicated 2026-08-20 leg (`NSE_FO|74009`) both need reconciling in `portfolio.sqlite` (close/merge per Animesh's call) — code fix only prevents the *next* duplicate. The root trigger for *why* today's query returned no rows / raised nothing loggable also hasn't been isolated (candidates: `--db-path` mismatch against the actual cron invocation, or a WAL-visibility race) — worth a follow-up pass since the fix here makes any recurrence loud instead of silent, but doesn't explain today's specific trigger.
 0d. [x] **BUG — PP auto-entry silently duplicated every cron run since inception (2026-08-13, closed same day)** — reported by Animesh: PP entered again today despite an active trade from yesterday. Root cause: `_open_pp_dte`'s regex-only expiry parser never matched real numeric Upstox instrument keys (same bug class as BUG-018/BUG-012, never swept into that fix), so the "already have a fresh position, skip" gate never fired — confirmed two open `overlay_pp` rows in `portfolio.sqlite` (`NSE_FO|61604` 2026-08-11, `NSE_FO|74009` 2026-08-12, neither closing the other). Fixed via regex-first/BOD-fallback resolution mirroring `ic_nifty_v2.py::_parse_expiry`. `scripts/strategies/three_track/paper_3track_overlay_entry.py` + `tests/unit/paper/test_overlay_entry.py` (4 new/updated tests). See `DECISIONS.md` 2026-08-13. **Not part of this fix, needs manual action:** the already-duplicated 2026-08-12 leg (`NSE_FO|74009`) still needs removing from `portfolio.sqlite` — code fix only prevents the *next* duplicate.
 0e. [ ] **BUG-030 — `_overlay_type_groups` elif-precedence drops `overlay_cc` leg when `overlay_collar_put` also present same-day** (found 2026-08-13, open) — the "NiftyBees vs overlays" digest's `CC No data` line and an understated `Collar` P&L figure both trace to `paper_3track_snapshot.py::_overlay_type_groups()` checking `has_put` before `has_cc` in its `elif` chain, silently orphaning the `overlay_cc` leg from every group whenever `overlay_collar_put` is also present. Orthogonal to BUG-028 (namespace fix, already closed) — this is a leg-role grouping defect BUG-028's four phases never touched. See `docs/bugs/bugs.md` BUG-030, `docs/bugs/task.md` B030.1–B030.6, starting at **B030.1** (entry-side tagging question, blocks the grouping fix).
 0d. [x] **BUG — PP auto-entry silently duplicated every cron run since inception (2026-08-13, closed same day)** — reported by Animesh: PP entered again today despite an active trade from yesterday. Root cause: `_open_pp_dte`'s regex-only expiry parser never matched real numeric Upstox instrument keys (same bug class as BUG-018/BUG-012, never swept into that fix), so the "already have a fresh position, skip" gate never fired — confirmed two open `overlay_pp` rows in `portfolio.sqlite` (`NSE_FO|61604` 2026-08-11, `NSE_FO|74009` 2026-08-12, neither closing the other). Fixed via regex-first/BOD-fallback resolution mirroring `ic_nifty_v2.py::_parse_expiry`. `scripts/strategies/three_track/paper_3track_overlay_entry.py` + `tests/unit/paper/test_overlay_entry.py` (4 new/updated tests). See `DECISIONS.md` 2026-08-13. **Not part of this fix, needs manual action:** the already-duplicated 2026-08-12 leg (`NSE_FO|74009`) still needs removing from `portfolio.sqlite` — code fix only prevents the *next* duplicate.
@@ -121,6 +122,76 @@ Full forensic log (SHAs, bug numbers, root-cause detail) moved to
 [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md) during the 2026-07-27 reorg —
 add new entries there going forward, or start a fresh dated section here if this file's
 Session Log grows large again.
+
+### 2026-08-24 Session Log (BUG-027 docs-close — B027.4)
+- **BUG-027** (`scripts/healthcheck.py` missing `load_dotenv()`): the code fix and its 4 tests
+  were already committed in a prior session (`7a81b6d`, with a later related change `bee2649`)
+  but `docs/bugs/task.md`/`bugs.md` still showed B027.4 unchecked and Status as "fix in
+  progress." This session confirmed the fix is live in `scripts/healthcheck.py` (module-level
+  `load_dotenv()` before `src.*` imports) and closed the bookkeeping only: `bugs.md` Status
+  flipped to ✅ Fixed, `task.md` B027.4 checked, and — since all four `B027.x` items are now
+  checked — the whole BUG-027 section moved to `docs/archive/bugs/task.md` /
+  `docs/archive/bugs/bugs.md` per the archival convention. No code change. Docs-only commit —
+  `code-reviewer` gate not applicable.
+
+### 2026-08-19 Session Log (IC entry v1/v2 content drift — draft story only)
+- **Telegram Markdown migration** (item 29): Animesh noticed the three IC entry confirmation
+  Telegram messages he was seeing (`paper_ic_nifty_v1_monthly`, `paper_ic_nifty_v2_monthly`,
+  `paper_ic_nifty_v1_weekly`) don't share one format. Traced via `codebase-memory-mcp` (not
+  assumed): `paper_ic_entry.py::run()` (~line 785) builds one template that serves both v1
+  weekly and v1 monthly — `args.expiry_type` only selects `CONFIGS[args.expiry_type]` and is
+  interpolated into the header, no branch in the message-building code itself — so v1's two
+  variants are the same template, confirming there are really two divergent templates (v1,
+  v2), not three. `paper_ic_entry_v2.py::run()` (~line 706) is a separate hand-rolled f-string
+  with no `Mode:` line, bare `{int(strike)}PE/CE` instead of `format_option_label()` (a live
+  violation of `src/notifications/CLAUDE.md`'s existing Instrument Label Formatting rule, not a
+  new one), and `δ=... width=Npts` on long legs instead of v1's `(hedge) mid=₹...`. Confirmed
+  the `telegram-markdown-migration` epic (README.md, backbone/, formatting-rules/,
+  strategy-rollout/) does **not** cover this — grepped `paper_ic_entry`/`paper_ic_entry_v2`/
+  "iron condor" across `strategy-rollout/stories.md` and `tasks.md`, zero hits outside `ROLL-1`
+  (IC EOD audit, a different message) and `ROLL-2` (IC comparison report, also different).
+  Also corrected an earlier statement made to Animesh mid-session that `parse_mode` was HTML —
+  epic's target (per `backbone/stories.md` and README.md's 2026-08-07 revision) is
+  `MarkdownV2`, HTML+`<pre>` is the thing being replaced.
+  Added **ROLL-17** to `strategy-rollout/stories.md`/`tasks.md`: a shared
+  `ICEntryLeg`/`ICEntryMessage` dataclass model + `format_ic_entry_message()` renderer in
+  `src/notifications/`, where the renderer owns default per-field display (strike, delta,
+  mid, wing width, mode) and a strategy script supplies only the data fields it has, with a
+  per-call `overrides` escape hatch for non-default rendering (Animesh's explicit design
+  direction, 2026-08-19). **Marked DRAFT/design-incomplete, not spec-locked like other ROLL
+  tasks** — 5 open decisions listed in the story (chief one: whether this reuses/extends
+  `FMT-3`'s already-stubbed `LegRow`/`build_leg_table()`, which targets a columnar fenced-table
+  layout, a different visual shape from IC entry's current prose-per-leg-line style, or stays a
+  separate model). `ROLL-5`'s Docs Close blocked-by list updated to include `ROLL-17` in both
+  `stories.md` and `tasks.md` (also backfilled a missing `ROLL-16` reference in `stories.md`'s
+  blocked-by line that `tasks.md` already had). Checked against `docs/council/README.md`'s
+  three-condition test: borderline council-worthy (real module-boundary/long-lived-lock-in
+  decision, condition 1) but weak on condition 2 (no P&L/materially-different-outcome fork,
+  just UX/maintainability) and condition 3 (single-discipline, not cross-disciplinary) —
+  recommended against a full council pass on the whole design, suggested only the `LegRow`
+  reuse question as a narrow `data_architecture` submission if Animesh wants one. **Docs only
+  this session — no `src/`/`scripts/` touched, `ROLL-17` itself remains unimplemented and
+  should not be picked up from `tasks.md` until a `message-format-workshop.md` session (or
+  Animesh directly) closes its 5 open decisions.**
+- **Same-day follow-up (IC-only scoping question):** Animesh asked why `ROLL-17` covers IC only
+  and not every strategy's entry message. Checked rather than assumed: `paper_cc_entry.py`
+  (covered call) sends no Telegram entry notification at all today — nothing to unify, would be
+  new plumbing. `paper_3track_entry.py`/`paper_3track_overlay_entry.py` (3-track base/overlay
+  entries) do send notifications and already have their own confirmed-format specs in this same
+  epic (`ROLL-13`, `ROLL-14`), each shaped around that strategy's own leg vocabulary
+  (direction-coded single legs), not IC's (short/hedge/wing four-leg structure) — forcing them
+  into `ROLL-17`'s IC-specific dataclass now would be guessing at a shape neither has confirmed
+  yet. IC alone has the actual duplication bug (two scripts building the same conceptual message
+  independently). Added a 6th open decision to `ROLL-17` in `stories.md`/`tasks.md`: the
+  field-formatter registry must call `formatting-rules/`'s `format_greek()`/`format_money()` for
+  value-level formatting (delta/money/etc.) rather than re-implementing it — the IC-only scoping
+  applies to the *leg model* (hedge/wing/mode concepts), not to number formatting, which stays
+  epic-wide via `FMT-1`/`FMT-2` regardless of which strategy's message is being built. Added a
+  short cross-reference note into `ROLL-13`'s and `ROLL-14`'s specs pointing at `ROLL-17`'s
+  eventual renderer *pattern* (defaults-with-per-field-overrides) as worth reusing if it fits
+  their shape once written, without adopting its IC-specific fields — no hard dependency added
+  either direction, none of the three tasks blocks on another. Docs only, no `src/`/`scripts/`
+  touched.
 
 ### 2026-08-11 Session Log (missing-message-workshop, queue item 10)
 - **Telegram Markdown migration** (item 29): ran `TODO.md` queue item 10 (Production Proxy

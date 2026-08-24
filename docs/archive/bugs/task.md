@@ -436,3 +436,17 @@ commit per phase.
   Committed on live host: code+tests SHA `94f3dc3`, this doc-tracking update SHA `affbd24`.
 
 ---
+
+## BUG-027 — `scripts/healthcheck.py` never calls `load_dotenv()`
+
+- [x] **B027.1** — `load_dotenv()` added to `scripts/healthcheck.py`, mirrors `eod_summary.py`'s
+  placement. | SHA `7a81b6d`
+- [x] **B027.2** — Tests: `tests/unit/test_healthcheck.py`, 4 new (8/8 total pass). |
+  Verified via targeted pytest run — 44/44 pass across healthcheck/notifications/config
+- [x] **B027.3** — Self-review against `REVIEW.md` (no CRITICAL/ERROR); real agent pass still
+  recommended before commit. | Self-review only so far
+- [x] **B027.4** — Commit, update `bugs.md` BUG-027 status to ✅ Fixed + SHA, add a `TODOS.md`
+  session log line. | Code+tests already committed (`7a81b6d`, `bee2649`) — this session
+  confirmed that and closed the doc-tracking bookkeeping only.
+
+---
