@@ -106,14 +106,14 @@ def test_no_positions_returns_empty() -> None:
 
 def test_filters_out_other_strategy() -> None:
     strategy = CCOverlayV1()
-    pos = _make_position(strategy_name=_OTHER_STRATEGY)
+    pos = _make_position(strategy_name=_OTHER_STRATEGY, leg_role="overlay_cc")
     result = _run(strategy.check_signals(_make_chain("40", "0.20"), [pos]))
     assert result == []
 
 
 def test_long_position_ignored() -> None:
     strategy = CCOverlayV1()
-    pos = _make_position(net_qty=65)
+    pos = _make_position(net_qty=65, leg_role="overlay_cc")
     result = _run(strategy.check_signals(_make_chain("40", "0.20"), [pos]))
     assert result == []
 
@@ -121,7 +121,7 @@ def test_long_position_ignored() -> None:
 def test_profit_target_fires_above_floor() -> None:
     strategy = CCOverlayV1()
     chain = _make_chain(ltp="24.0", delta="0.20")  # 24.0/80 = 30%
-    pos = _make_position(avg_sell_price="80")
+    pos = _make_position(avg_sell_price="80", leg_role="overlay_cc")
     events = _run(strategy.check_signals(chain, [pos]))
     assert any(e.event_type == "PROFIT_TARGET" and e.severity == "ACTION" for e in events)
 
@@ -129,7 +129,7 @@ def test_profit_target_fires_above_floor() -> None:
 def test_below_floor_prevents_profit_target() -> None:
     strategy = CCOverlayV1()
     chain = _make_chain(ltp="3.0", delta="0.20")  # 3/10 = 30% (under 30%)
-    pos = _make_position(avg_sell_price="10")  # under 12 floor
+    pos = _make_position(avg_sell_price="10", leg_role="overlay_cc")  # under 12 floor
     events = _run(strategy.check_signals(chain, [pos]))
     event_types = {e.event_type for e in events}
     assert "BELOW_FLOOR" in event_types
@@ -139,7 +139,7 @@ def test_below_floor_prevents_profit_target() -> None:
 def test_delta_stop_fires_at_0_56() -> None:
     strategy = CCOverlayV1()
     chain = _make_chain(ltp="80", delta="0.56")
-    pos = _make_position(avg_sell_price="80")
+    pos = _make_position(avg_sell_price="80", leg_role="overlay_cc")
     events = _run(strategy.check_signals(chain, [pos]))
     assert any(e.event_type == "DELTA_STOP" and e.severity == "ACTION" for e in events)
 
@@ -147,7 +147,7 @@ def test_delta_stop_fires_at_0_56() -> None:
 def test_loss_stop_fires_at_2_5x() -> None:
     strategy = CCOverlayV1()
     chain = _make_chain(ltp="201", delta="0.30")
-    pos = _make_position(avg_sell_price="80")
+    pos = _make_position(avg_sell_price="80", leg_role="overlay_cc")
     events = _run(strategy.check_signals(chain, [pos]))
     assert any(e.event_type == "LOSS_STOP" and e.severity == "ACTION" for e in events)
 
@@ -159,7 +159,9 @@ def test_dte_close_fires_at_5_dte() -> None:
     key = _expiry_key(dte=5)
     chain = _make_chain(ltp="80", delta="0.20", strike="23000")
     entry_date = date.today() - timedelta(days=21)
-    pos = _make_position(instrument_key=key, avg_sell_price="80", entry_date=entry_date)
+    pos = _make_position(
+        instrument_key=key, avg_sell_price="80", entry_date=entry_date, leg_role="overlay_cc"
+    )
     events = _run(strategy.check_signals(chain, [pos]))
     assert any(e.event_type == "DTE_REVIEW" and e.severity == "ACTION" for e in events)
     assert not any(e.event_type == "TIME_STOP" for e in events)
@@ -171,7 +173,9 @@ def test_high_days_held_alone_does_not_close_when_dte_far_out() -> None:
     key = _expiry_key(dte=38)
     chain = _make_chain(ltp="80", delta="0.20", strike="23000")
     entry_date = date.today() - timedelta(days=21)
-    pos = _make_position(instrument_key=key, avg_sell_price="80", entry_date=entry_date)
+    pos = _make_position(
+        instrument_key=key, avg_sell_price="80", entry_date=entry_date, leg_role="overlay_cc"
+    )
     events = _run(strategy.check_signals(chain, [pos]))
     assert events == []
 
@@ -179,7 +183,7 @@ def test_high_days_held_alone_does_not_close_when_dte_far_out() -> None:
 def test_check_signals_with_entry_date_none() -> None:
     strategy = CCOverlayV1()
     chain = _make_chain(ltp="80", delta="0.20")
-    pos = _make_position(avg_sell_price="80", entry_date=None)
+    pos = _make_position(avg_sell_price="80", entry_date=None, leg_role="overlay_cc")
     events = _run(strategy.check_signals(chain, [pos]))
     # No crash, should evaluate as days_held = 0
     assert not any(e.event_type == "TIME_STOP" for e in events)
@@ -187,7 +191,7 @@ def test_check_signals_with_entry_date_none() -> None:
 
 def test_missing_strike_still_evaluates_premium() -> None:
     strategy = CCOverlayV1()
-    pos = _make_position(avg_sell_price="80")
+    pos = _make_position(avg_sell_price="80", leg_role="overlay_cc")
     # Empty chain so lookup fails, but let's mock position key with DTE so DTE check is fine
     events = _run(strategy.check_signals(_make_empty_chain(), [pos]))
     assert (
@@ -228,7 +232,7 @@ def test_check_signals_payload_auto_execute() -> None:
 
     # PROFIT_TARGET fires
     chain = _make_chain(ltp="24.0", delta="0.20")
-    pos = _make_position(avg_sell_price="80")
+    pos = _make_position(avg_sell_price="80", leg_role="overlay_cc")
     events = _run(strategy.check_signals(chain, [pos]))
     profit_target_event = next(e for e in events if e.event_type == "PROFIT_TARGET")
     assert profit_target_event.payload.get("auto_execute") is True
@@ -237,7 +241,7 @@ def test_check_signals_payload_auto_execute() -> None:
 
     # DTE_REVIEW close fires (EC-5: replaces TIME_STOP as the days-held/DTE backstop)
     key = _expiry_key(dte=5)
-    pos_dte = _make_position(instrument_key=key, avg_sell_price="80")
+    pos_dte = _make_position(instrument_key=key, avg_sell_price="80", leg_role="overlay_cc")
     chain_dte = _make_chain(ltp="80", delta="0.20")
     events_dte = _run(strategy.check_signals(chain_dte, [pos_dte]))
     dte_review_event = next(e for e in events_dte if e.event_type == "DTE_REVIEW")
@@ -247,7 +251,7 @@ def test_check_signals_payload_auto_execute() -> None:
 
     # DELTA_WARN fires (no auto_execute)
     chain_warn = _make_chain(ltp="80", delta="0.46")
-    pos_warn = _make_position(avg_sell_price="80")
+    pos_warn = _make_position(avg_sell_price="80", leg_role="overlay_cc")
     events_warn = _run(strategy.check_signals(chain_warn, [pos_warn]))
     delta_warn_event = next(e for e in events_warn if e.event_type == "DELTA_WARN")
     assert "auto_execute" not in delta_warn_event.payload
@@ -391,7 +395,7 @@ def test_apply_action_null_dependencies() -> None:
 def test_describe_context() -> None:
     strategy = CCOverlayV1()
     chain = _make_chain(ltp="38.4", delta="0.20")
-    pos = _make_position(avg_sell_price="80")
+    pos = _make_position(avg_sell_price="80", leg_role="overlay_cc")
     event = SignalEvent(
         event_type="PROFIT_TARGET",
         severity="ACTION",
@@ -641,7 +645,12 @@ def test_dte_review_fires_for_real_numeric_key_via_bod_lookup() -> None:
     strategy = CCOverlayV1(instrument_lookup=lookup)
     chain = _make_chain(ltp="80", delta="0.20", strike="23000")
     entry_date = date.today() - timedelta(days=21)
-    pos = _make_position(instrument_key="NSE_FO|61604", avg_sell_price="80", entry_date=entry_date)
+    pos = _make_position(
+        instrument_key="NSE_FO|61604",
+        avg_sell_price="80",
+        entry_date=entry_date,
+        leg_role="overlay_cc",
+    )
     events = _run(strategy.check_signals(chain, [pos]))
     assert any(e.event_type == "DTE_REVIEW" and e.severity == "ACTION" for e in events)
 
@@ -654,6 +663,31 @@ def test_dte_review_still_prefers_regex_when_both_resolvable() -> None:
     strategy = CCOverlayV1(instrument_lookup=lookup)
     chain = _make_chain(ltp="80", delta="0.20", strike="23000")
     entry_date = date.today() - timedelta(days=21)
-    pos = _make_position(instrument_key=key, avg_sell_price="80", entry_date=entry_date)
+    pos = _make_position(
+        instrument_key=key, avg_sell_price="80", entry_date=entry_date, leg_role="overlay_cc"
+    )
     events = _run(strategy.check_signals(chain, [pos]))
     assert any(e.event_type == "DTE_REVIEW" and e.severity == "ACTION" for e in events)
+
+
+def test_check_signals_ignores_stale_leg_role() -> None:
+    """BUG-034: the pre-S2r role names SHORT_CALL_ROLES used to contain
+    ("short_call" default fixture value included) must no longer match —
+    check_signals must evaluate zero positions filed under the retired names,
+    even when every other condition (delta, premium) would otherwise fire."""
+    strategy = CCOverlayV1()
+    chain = _make_chain(ltp="400", delta="0.85")
+    pos = _make_position(avg_sell_price="80", leg_role="short_call")
+    events = _run(strategy.check_signals(chain, [pos]))
+    assert events == []
+
+
+def test_check_signals_evaluates_real_overlay_cc_leg_role() -> None:
+    """BUG-034: the real production leg_role ('overlay_cc', written by
+    auto_cc_bootstrap()) must pass the SHORT_CALL_ROLES filter and reach the
+    delta/premium/DTE logic."""
+    strategy = CCOverlayV1()
+    chain = _make_chain(ltp="24.0", delta="0.20")
+    pos = _make_position(avg_sell_price="80", leg_role="overlay_cc")
+    events = _run(strategy.check_signals(chain, [pos]))
+    assert any(e.event_type == "PROFIT_TARGET" and e.severity == "ACTION" for e in events)

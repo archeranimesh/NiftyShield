@@ -129,7 +129,7 @@ def test_short_position_ignored() -> None:
 def test_crash_monetize_fires_delta() -> None:
     strategy = PPOverlayV1()
     chain = _make_chain(ltp="400", delta="-0.85")
-    pos = _make_position(avg_cost="80")
+    pos = _make_position(avg_cost="80", leg_role="overlay_pp")
     events = _run(strategy.check_signals(chain, [pos]))
     assert len(events) == 1
     assert events[0].event_type == "CRASH_MONETIZE"
@@ -142,7 +142,7 @@ def test_crash_monetize_fires_delta() -> None:
 def test_crash_monetize_fires_value() -> None:
     strategy = PPOverlayV1()
     chain = _make_chain(ltp="405", delta="-0.50")  # 405/80 > 5x
-    pos = _make_position(avg_cost="80")
+    pos = _make_position(avg_cost="80", leg_role="overlay_pp")
     events = _run(strategy.check_signals(chain, [pos]))
     assert len(events) == 1
     assert events[0].event_type == "CRASH_MONETIZE"
@@ -153,7 +153,7 @@ def test_crash_monetize_fires_value() -> None:
 def test_roll_eligible_fires_at_dte_4() -> None:
     strategy = PPOverlayV1()
     key = _expiry_key(dte=4)
-    pos = _make_position(instrument_key=key)
+    pos = _make_position(instrument_key=key, leg_role="overlay_pp")
     events = _run(strategy.check_signals(_make_empty_chain(), [pos]))
     assert len(events) == 1
     assert events[0].event_type == "ROLL_ELIGIBLE"
@@ -262,7 +262,7 @@ def test_apply_action_invalid_raises() -> None:
 def test_describe_context() -> None:
     strategy = PPOverlayV1()
     chain = _make_chain(ltp="40", delta="-0.20")
-    pos = _make_position(avg_cost="80")
+    pos = _make_position(avg_cost="80", leg_role="overlay_pp")
     event = SignalEvent(
         event_type="CRASH_MONETIZE",
         severity="ACTION",
@@ -521,7 +521,7 @@ def test_roll_eligible_fires_for_real_numeric_key_via_bod_lookup() -> None:
     expiry_str = (date.today() + timedelta(days=4)).isoformat()
     lookup = _FakeLookup({"NSE_FO|61604": {"expiry": expiry_str}})
     strategy = PPOverlayV1(instrument_lookup=lookup)
-    pos = _make_position(instrument_key="NSE_FO|61604")
+    pos = _make_position(instrument_key="NSE_FO|61604", leg_role="overlay_pp")
     events = _run(strategy.check_signals(_make_empty_chain(), [pos]))
     assert len(events) == 1
     assert events[0].event_type == "ROLL_ELIGIBLE"
@@ -535,7 +535,7 @@ def test_roll_eligible_still_prefers_regex_when_both_resolvable() -> None:
     # Deliberately wrong BOD entry the regex path should never consult.
     lookup = _FakeLookup({key: {"expiry": (date.today() + timedelta(days=999)).isoformat()}})
     strategy = PPOverlayV1(instrument_lookup=lookup)
-    pos = _make_position(instrument_key=key)
+    pos = _make_position(instrument_key=key, leg_role="overlay_pp")
     events = _run(strategy.check_signals(_make_empty_chain(), [pos]))
     assert len(events) == 1
     assert events[0].event_type == "ROLL_ELIGIBLE"
@@ -547,6 +547,30 @@ def test_no_roll_signal_for_real_numeric_key_when_bod_lookup_fails() -> None:
     to a "far from expiry" DTE (the pre-fix behavior masked this same gap)."""
     lookup = _FakeLookup({})  # key not present -> unresolvable
     strategy = PPOverlayV1(instrument_lookup=lookup)
-    pos = _make_position(instrument_key="NSE_FO|61604")
+    pos = _make_position(instrument_key="NSE_FO|61604", leg_role="overlay_pp")
     events = _run(strategy.check_signals(_make_empty_chain(), [pos]))
     assert events == []
+
+
+def test_check_signals_ignores_stale_leg_role() -> None:
+    """BUG-034: the pre-S2r role names LONG_PUT_ROLES used to contain
+    ("protective_put" default fixture value included) must no longer match —
+    check_signals must evaluate zero positions filed under the retired names,
+    even when every other condition (DTE, delta, qty) would otherwise fire."""
+    strategy = PPOverlayV1()
+    key = _expiry_key(dte=4)
+    pos = _make_position(instrument_key=key, leg_role="protective_put")
+    events = _run(strategy.check_signals(_make_empty_chain(), [pos]))
+    assert events == []
+
+
+def test_check_signals_evaluates_real_overlay_pp_leg_role() -> None:
+    """BUG-034: the real production leg_role ('overlay_pp', written by
+    auto_pp_bootstrap()) must pass the LONG_PUT_ROLES filter and reach the
+    DTE/delta/premium logic."""
+    strategy = PPOverlayV1()
+    chain = _make_chain(ltp="400", delta="-0.85")
+    pos = _make_position(avg_cost="80", leg_role="overlay_pp")
+    events = _run(strategy.check_signals(chain, [pos]))
+    assert len(events) == 1
+    assert events[0].event_type == "CRASH_MONETIZE"

@@ -44,7 +44,7 @@ def _leg_close_matches(pos: PaperPosition, leg: LegClose) -> bool:
     return True
 
 
-LONG_PUT_ROLES = {"long_put", "pp_long_put", "protective_put"}
+LONG_PUT_ROLES = {"overlay_pp"}
 
 
 class PPOverlayV1(ReEntryMixin):

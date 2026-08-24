@@ -44,7 +44,7 @@ def _leg_close_matches(pos: PaperPosition, leg: LegClose) -> bool:
     return True
 
 
-SHORT_CALL_ROLES = {"short_call", "cc_short_call", "covered_call"}
+SHORT_CALL_ROLES = {"overlay_cc"}
 
 
 class CCOverlayV1(ReEntryMixin):
