@@ -94,7 +94,7 @@ protocol doesn't pick B019.1 up next.
 | Field | Value |
 |---|---|
 | Severity | **CRITICAL** — live (paper) daily P&L understatement, not a reporting-format gap. `_compute_overlay_leg_totals()` and `_leg_entry_basis()`/`_position_qty()` in `paper_3track_snapshot.py` all call `PaperStore.get_position(strategy_name, leg_role)` with no `instrument_key`; per `get_position`'s own PG-2a ambiguous-match resolution (`src/paper/store.py:844-908`), when more than one position shares a `leg_role` it silently picks the single position with the most recent `entry_date` and logs a WARNING — the *other* open position's P&L is dropped from the aggregate entirely, not merged, not double-counted, just gone. This has been live since the 2026-08-20 `overlay_pp` duplicate-entry event BUG-031 documents (old `NSE_FO|61604` leg, opened 2026-08-11, was never closed; a second `NSE_FO|74009` leg opened 2026-08-20/21 under the same `overlay_pp` role). |
-| Status | 🔴 Open — found 2026-08-24, not yet fixed. |
+| Status | 🟡 Fix in progress — B032.1/B032.2/B032.3 done (implementation + 13-item + 1 code-review-driven test, all passing locally per Animesh 2026-08-24), B032.4 (backfill) and B032.6 (commit, blocked on sandbox git lock) outstanding. |
 | Discovered | 2026-08-24, during the BUG-030 B030.4 backfill: recomputing `overlay_pp`'s historical P&L with `_compute_overlay_pnl_snapshots()` logged `paper_store.get_position_ambiguous leg_role=overlay_pp match_count=2` on every call. Traced live against `data/portfolio/portfolio.sqlite`: `paper_trades` has two open, never-closed `overlay_pp` legs — `NSE_FO|61604` (BUY 65 @ 58.85, 2026-08-11) and `NSE_FO|74009` (BUY 65 @ 94.20 on 08-20, BUY 65 @ 91.80 on 08-21, net 130 lots). Confirmed by reconstructing `paper_leg_snapshots` figures by hand: the 2026-08-21 row (`total_pnl = -65.00`, `ltp = 92.5`) matches `(92.5 - 93.0) * 130` exactly — the weighted-avg-cost and net_qty of `NSE_FO|74009` *alone*, with `NSE_FO|61604`'s 65 lots contributing nothing. Every `overlay_pp` snapshot from 2026-08-20 onward shows the same pattern: the row jumps from tracking the single pre-08-20 leg to tracking only the newer leg, with a step discontinuity in `ltp`/`total_pnl` right at the duplicate-entry date that has no market-move explanation. |
 | Location | `scripts/strategies/three_track/paper_3track_snapshot.py`: `_compute_overlay_leg_totals()` (~line 1240-1303, the daily cron snapshot writer — the primary live-impact site), `_leg_entry_basis()` (~line 1136-1149) and `_position_qty()` (~line 1373-1376, both feed `_compute_overlay_pnl_snapshots()`'s %-denominators). Root mechanism: `PaperStore.get_position()` (`src/paper/store.py:844-908`). |
 
@@ -102,13 +102,83 @@ protocol doesn't pick B019.1 up next.
 
 **Root cause:** `get_position(strategy_name, leg_role)` was designed for the case where a role transitions cleanly from one instrument to the next (PG-2a's "roll overlap" comment) and, lacking an `instrument_key` to disambiguate, falls back to "most recent `entry_date` wins" with a WARNING log as the only signal. `_compute_overlay_leg_totals()`, `_leg_entry_basis()`, and `_position_qty()` all call it role-only, never per-instrument — they were written assuming (correctly, until BUG-031's underlying condition) exactly one open position per overlay role at a time. BUG-031 is *why* two positions are simultaneously open (the live monitor never saw `STRATEGY_OVERLAY` positions to close the old leg on roll) — this bug is a distinct, *downstream* defect: even once BUG-031 is fixed and future rolls close old legs promptly, this reporting-layer gap remains latent and will silently reproduce the same P&L drop the next time any overlay role legitimately has two open positions even briefly (e.g. a same-day roll that closes-then-reopens isn't atomic at the snapshot-cron's granularity). The per-role (not per-instrument) shape of `paper_leg_snapshots` and `_OVERLAY_ROLES` more broadly assumes single-position-per-role throughout this file, which this bug is the first confirmed case of that assumption breaking in production.
 
-**Suggested fix:** not yet scoped in detail — needs a decision before implementation, mirroring BUG-030's B030.1 pattern:
-- Option (a): change `_compute_overlay_leg_totals()`/`_leg_entry_basis()`/`_position_qty()` to sum across *all* open positions matching a `leg_role` (via `store.get_positions()` filtered by role, not `get_position()`'s single-match API) — correct for the "role can legitimately hold >1 open instrument" case, but changes the shape of `paper_leg_snapshots` from one-row-per-role to needing either a wider aggregate or a schema change to key by `(leg_role, instrument_key)`.
-- Option (b): treat >1 open position under one overlay role as a hard error / `GateViolation` at the cron level (fail loud, matching REVIEW.md's "don't return None to signal failure" spirit) rather than silently aggregating or dropping — forces the duplicate to be resolved (manually or via BUG-031's fix) before P&L reporting continues, at the cost of the daily snapshot going missing entirely until resolved.
-- Either way: a regression test simulating two open positions under one `leg_role` and asserting the resulting P&L reflects *both* (option a) or refuses to silently proceed (option b) — the current test suite has no coverage of `get_position`'s ambiguous-match branch being exercised from the overlay P&L path at all, which is exactly the class of gap that let this ship unnoticed for 4+ days.
-- Given this touches live overlay P&L reporting (same shape as BUG-028/BUG-030), likely qualifies for the same council-checkpoint bar (`docs/council/README.md`'s three-condition check).
+**Suggested fix — resolved by council 2026-08-24** (`docs/council/2026-08-24_bug032-ambiguous-match-aggregation-vs-hard-fail.md`, unanimous chairman ruling; full detail in `DECISIONS.md`):
+hybrid — aggregate correctly across all open instruments per role (was Option a), alert loudly on
+the invariant break (deduplicated OFF→ON), never hard-fail (Option b rejected as standalone: PP3's
+"no unprotected day" rule deliberately holds two puts on roll day, so `GateViolation` would create
+a systematic blackout on every routine roll, not just BUG-031's stuck state), and do **not** widen
+`paper_leg_snapshots`' primary key (downstream consumers all expect one role-level row; a
+per-instrument companion table is a separate future story if ever needed).
 
-**Related:** BUG-031 (root cause of *why* two `overlay_pp` positions are simultaneously open — this bug is the downstream reporting-layer consequence, distinct and independently fixable); BUG-030 (same overlay-reporting file/pipeline, different defect — leg-role grouping vs. position resolution); discovered as a side effect of BUG-030's B030.4 backfill (`docs/archive/bugs/bugs.md`).
+**Implementation progress:**
+- Gather `store.get_positions(STRATEGY_OVERLAY)` once, group by `leg_role`; `_compute_overlay_leg_totals`/`_leg_entry_basis`/`_position_qty` consume the grouped representation instead of independently calling `get_position()`.
+- Per-instrument LTP fetch + P&L calc, summed at role level — never a blended cost basis/LTP. `paper_leg_snapshots.ltp` must be `NULL` when `n > 1` (not the newest leg's LTP — that's the exact misrepresentation that hid this bug in the first place).
+- `get_position()` itself is unchanged (stays PG-2a) — this was a call-site bug, not a store-API bug.
+- Anomaly alert: structured log `overlay_pnl.multi_instrument_role` + non-fatal Telegram, first-detection-only (dedup), WARNING for same-day transient / ERROR after N days stuck, recovery log on return to `n ≤ 1`.
+- Failure semantics: a missing LTP for one instrument fails that role loudly (ERROR + Telegram), never a silent partial aggregate; unrelated roles/tracks continue regardless.
+- Expect (and log explicitly) a step discontinuity in `overlay_pp`'s `pnl_1d_*` on the first post-fix cron run — the correction of the 4+ day understatement, not a market move.
+- 13-item regression checklist specified in the council ruling (aggregate-not-newest-only, per-instrument LTP fetch verified, no blended cost/LTP anywhere, realized P&L not double-counted, `ltp is None` when `n>1`, SNAP-5 invariant holds, alert dedup/recovery, single-position regression, unrelated-role continuation, etc.) — B032.3 should implement all 13, not a subset.
+- B032.4 (historical backfill) is confirmed a separate follow-up story, not a precondition for shipping the live fix.
+
+**Implementation complete (2026-08-24):** `_compute_overlay_leg_totals()`, `_leg_entry_basis()`,
+`_position_qty()` rewritten per the ruling; new helpers `_overlay_positions_by_role()`,
+`_overlay_multi_instrument_streak_days()`, `_check_overlay_multi_instrument_alert()` added.
+13 tests added to `tests/unit/paper/test_paper_3track_snapshot.py` covering the council's full
+regression checklist — Animesh confirmed all pass locally. A general-purpose-agent code review
+(the `code-reviewer` substitute per `docs/bugs/prompt.md` step 5, mandatory for financial-logic
+changes) against the diff found and fixed one real regression before commit: the anomaly
+alert's structured log lines were incorrectly gated on `notifier is not None`, meaning the
+entire BUG-032 alerting mechanism would go silent (no log, no Telegram) whenever Telegram
+credentials are unset in production — reproducing BUG-032's own "silent failure" shape one
+level up, in the fix meant to prevent it. Fixed: logging now always runs; only the
+`notifier.send()` call is conditional. A 14th regression test
+(`test_multi_instrument_alert_without_notifier_does_not_crash`) locks this in. The same review
+also surfaced a second, **pre-existing** (not introduced by this fix) latent issue in
+`_compute_overlay_pnl_snapshots`'s `prev_mark_value` calculation — logged separately as BUG-036
+rather than fixed inline (touches `pnl_1d_pct` display math with no dedicated test coverage,
+out of scope for this fix's time budget). Commit blocked on the sandbox `.git/index.lock`
+issue affecting this whole session (see `docs/bugs/task.md` B032.6) — code is written and
+tested, not yet committed.
+
+**Related:** BUG-031 (root cause of *why* two `overlay_pp` positions are simultaneously open — this bug is the downstream reporting-layer consequence, distinct and independently fixable); BUG-030 (same overlay-reporting file/pipeline, different defect — leg-role grouping vs. position resolution); BUG-036 (pre-existing `prev_mark_value` staleness, surfaced during this bug's code review); discovered as a side effect of BUG-030's B030.4 backfill (`docs/archive/bugs/bugs.md`).
+
+---
+
+## BUG-036 — `_compute_overlay_pnl_snapshots`'s `prev_mark_value` blends today's live quantity with yesterday's LTP, understating/overstating `pnl_1d_pct`'s denominator
+
+| Field | Value |
+|---|---|
+| Severity | **MEDIUM** — display/percentage-only defect. `pnl_1d_abs`/`total_pnl` (the absolute rupee figures) are computed additively and are unaffected; only `pnl_1d_pct`'s denominator is wrong, and only on days quantity changed since the prior snapshot. Pre-existing, not introduced by BUG-032's fix — merely surfaced by that fix's code review. |
+| Status | 🔴 Open — found 2026-08-24, not yet fixed. |
+| Discovered | 2026-08-24, during the mandatory code-reviewer pass on the BUG-032 fix (`docs/bugs/task.md` B032.5). |
+| Location | `scripts/strategies/three_track/paper_3track_snapshot.py::_compute_overlay_pnl_snapshots`, the `prev_mark_value` computation (search `BUG-036` — comment added in place). Feeds off `_position_qty()`, which by design returns *today's* live net quantity. |
+
+**Symptom:** `prev_mark_value = Σ_r _mark_value(prev_by_role[r].ltp, _position_qty(store, STRATEGY_OVERLAY, r))` pairs yesterday's snapshot's `ltp` with today's current `_position_qty()` — not the quantity that was actually open as of that prior snapshot's date. Two distinct manifestations: (1) when yesterday's snapshot was a BUG-032 multi-instrument aggregate, `prev_by_role[r].ltp` is `NULL` by design, so that role contributes `0` to the denominator for one day (understates `pnl_1d_pct`'s denominator); (2) in the ordinary single-instrument case, if quantity changed between yesterday and today (a partial close or add), the denominator blends today's size with yesterday's price — an apples-to-oranges figure with no correctness guard, either direction.
+
+**Root cause:** `PaperStore` does not retain historical per-day open quantity — `paper_leg_snapshots` stores P&L and `ltp` but not `net_qty` — so `_position_qty()` (necessarily) can only report the *current* quantity, and this call site was written assuming quantity is stable day-over-day, which is not guaranteed for any role that can partially close/add (all overlay roles, by design).
+
+**Suggested fix:** not yet scoped. Likely needs either (a) a `net_qty` field added to `PaperLegSnapshot`/`paper_leg_snapshots` (schema addition, not a re-key — the BUG-032 council ruling only rejected re-keying by instrument, this is orthogonal), so `prev_mark_value` can use the *historical* quantity instead of `_position_qty()`'s current one, or (b) accept the imprecision as a known limitation of a percentage-only display field and just document it more prominently (e.g. a UI/digest caveat) rather than fix the underlying data model. Needs a decision before implementation — feels like a small, mechanical schema addition rather than a council-worthy question, but flag for confirmation given `paper_leg_snapshots` was just explicitly *not* re-keyed for BUG-032 and any further schema touch there deserves a second look.
+
+**Related:** BUG-032 (this bug's `prev_mark_value` call site sits inside BUG-032's fixed block; surfaced during that fix's mandatory code review, not introduced by it).
+
+---
+
+## BUG-035 — `CCOverlayV1._record_close_trade()`/`PPOverlayV1._record_close_trade()` never call `PaperStore.mark_trade_closed()`; every fully-closed overlay leg's opening trade row stays `state='OPEN'` forever
+
+| Field | Value |
+|---|---|
+| Severity | **HIGH** — not a P&L-value defect (net_qty math is unaffected), but `mark_trade_closed()`'s own docstring says its purpose is to "prevent the position from re-appearing in signal evaluation on the next tick"; if any live code path gates signal evaluation or position listing on `paper_trades.state`, a flat (net-zero) leg with a stale `state='OPEN'` row risks being treated as still-live. Plausibly the same failure shape as BUG-031 (monitor not seeing a leg as closed) — needs tracing before ruling that out. |
+| Status | 🔴 Open — found 2026-08-24, not yet fixed. |
+| Discovered | 2026-08-24, while investigating BUG-032: querying `paper_trades` for `leg_role='overlay_pp'` showed both `NSE_FO|61604` (BUY 65 @ 58.85 on 2026-08-11, SELL 65 @ 4.85 on 2026-08-24 — net 0) and `NSE_FO|74009` (BUY 65+65 on 08-20/08-21, SELL 130 @ 83.85 on 2026-08-24 — net 0) still showing `state='OPEN'` on every row despite both positions being fully flat. Traced `PaperStore.mark_trade_closed()` (`src/paper/store.py:625-649`) — the only function in the codebase that transitions a trade row to `CLOSED` — via `trace_path(direction=inbound)`: **zero callers** anywhere in `src/` or `scripts/`, only its own unit tests (`tests/unit/paper/test_store.py`) invoke it. Confirmed both overlay close paths independently omit the call: `CCOverlayV1._record_close_trade()` (`src/strategy/cc_overlay_v1.py:292-334`) and `PPOverlayV1._record_close_trade()` (`src/strategy/pp_overlay_v1.py:304-346`) both build a closing `PaperTrade` and call `self._store.record_trade(trade)` — neither ever calls `mark_trade_closed()` afterward, despite `mark_trade_closed()`'s docstring explicitly describing itself as the step that runs "after a close trade has been successfully recorded." `CollarOverlayV1`'s close path not yet checked — likely same pattern, needs confirming. |
+| Location | `src/strategy/cc_overlay_v1.py:292-334`, `src/strategy/pp_overlay_v1.py:304-346` (both `_record_close_trade`); `src/paper/store.py:625-649` (`mark_trade_closed`, the orphaned target). |
+
+**Symptom:** every overlay leg (CC/PP, and likely Collar) that gets closed via `apply_action`'s close path leaves its original opening `paper_trades` row permanently `state='OPEN'`, even after a closing SELL/BUY trade brings `net_qty` to 0. `get_positions()`/`get_position()` compute net_qty correctly regardless of `state` (they sum quantities, they don't filter by state), so this has *not* been masking BUG-032's symptom — but anything else in the codebase that filters `paper_trades` or `paper_strategies`-adjacent queries by `state='OPEN'` to decide what's "still open" would see these as live positions indefinitely.
+
+**Root cause:** `mark_trade_closed()` was added (see its docstring/tests) as the intended state-transition step following a successful close-trade write, but was never wired into either overlay strategy's `_record_close_trade()`. The two methods are structurally identical (build `PaperTrade`, call `record_trade()`, log) and both independently missed the same follow-up call — this reads as the call being designed but the integration step dropped, not a logic error within either method.
+
+**Suggested fix:** add `self._store.mark_trade_closed(pos.strategy_name, pos.leg_role, pos.instrument_key)` immediately after the `record_trade(trade)` call in both `_record_close_trade()` methods (and `CollarOverlayV1`'s equivalent, once confirmed). Backfill: the two existing stale rows (`paper_trades` ids 213, 214, `overlay_pp`) need a one-time `mark_trade_closed()` call or equivalent UPDATE once the live DB lock situation allows it — do not hand-edit `state` via raw SQL outside the store method, to keep the state-machine's `WHERE state IN ('OPEN','DEFENDED')` guard as the single source of truth for what's a legal transition. Needs a regression test asserting `_record_close_trade()` results in `state='CLOSED'` on the opening row — current test suite exercises `record_trade()` and `mark_trade_closed()` separately but nothing asserts the two are wired together end-to-end, which is exactly the class of gap that let this ship unnoticed.
+
+**Related:** discovered investigating BUG-032 (`overlay_pp` ambiguous-match); potentially overlaps BUG-031 (live monitor not seeing overlay positions to close) if anything downstream gates on `state` — needs tracing to confirm or rule out before assuming independence.
 
 ---
 

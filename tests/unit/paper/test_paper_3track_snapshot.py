@@ -28,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 import scripts.strategies.three_track.paper_3track_snapshot as snap_mod
 from src.models.portfolio import TradeAction
 from src.paper._display import hedge_verdict as _hedge_verdict
+from src.paper.constants import STRATEGY_OVERLAY
 from src.paper.models import PaperLegSnapshot, PaperTrade
 from src.paper.store import PaperStore
 from src.paper.track_snapshot import TrackGreeks, TrackPnL, TrackSnapshot
@@ -461,3 +462,292 @@ async def test_run_ltp_fetch_includes_both_roll_overlap_instruments(
     fetched_keys = set(fake_broker.get_ltp.call_args.args[0])
     assert _OLD_KEY in fetched_keys
     assert _NEW_KEY in fetched_keys
+
+
+# ── BUG-032: _compute_overlay_leg_totals ambiguous-match aggregation ───────────
+#
+# Council ruling 2026-08-24 (docs/council/2026-08-24_bug032-ambiguous-match-
+# aggregation-vs-hard-fail.md): aggregate per-instrument P&L across all open
+# positions per role, alert loudly (deduplicated) on the invariant break,
+# never hard-fail, ltp=NULL on the snapshot row when a role is multi-
+# instrument. Covers the council's 13-item regression checklist.
+
+_KEY_A = "NSE_FO|61604"
+_KEY_B = "NSE_FO|74009"
+_D0 = date(2026, 8, 11)
+_D1 = date(2026, 8, 20)
+_D2 = date(2026, 8, 21)
+_SNAP = date(2026, 8, 24)
+
+
+def _overlay_store(tmp_path: Path) -> PaperStore:
+    return PaperStore(tmp_path / "overlay_bug032.db")
+
+
+def _overlay_trade(
+    role: str,
+    instrument_key: str,
+    action: TradeAction,
+    qty: int,
+    price: str,
+    trade_date: date,
+) -> PaperTrade:
+    return PaperTrade(
+        strategy_name=STRATEGY_OVERLAY,
+        leg_role=role,
+        instrument_key=instrument_key,
+        trade_date=trade_date,
+        action=action,
+        quantity=qty,
+        price=Decimal(price),
+    )
+
+
+def _fake_broker(ltp_by_key: dict[str, str]) -> MagicMock:
+    broker = MagicMock()
+    broker.get_ltp = AsyncMock(return_value=ltp_by_key)
+    return broker
+
+
+class _FakeNotifier:
+    """Records every message instead of hitting the network."""
+
+    def __init__(self) -> None:
+        self.messages: list[str] = []
+
+    async def send(self, msg: str) -> None:
+        self.messages.append(msg)
+
+
+def _seed_two_open_instruments(store: PaperStore) -> None:
+    """The real BUG-032 shape: old leg never closed, new leg opened same role."""
+    store.record_trade(_overlay_trade("overlay_pp", _KEY_A, TradeAction.BUY, 65, "58.85", _D0))
+    store.record_trade(_overlay_trade("overlay_pp", _KEY_B, TradeAction.BUY, 65, "94.20", _D1))
+    store.record_trade(_overlay_trade("overlay_pp", _KEY_B, TradeAction.BUY, 65, "91.80", _D2))
+
+
+# 1 & 2 & 4: aggregate, not newest-only; older leg's P&L included; no blending.
+
+
+@pytest.mark.asyncio
+async def test_multi_instrument_aggregates_both_legs_not_newest_only(tmp_path: Path) -> None:
+    store = _overlay_store(tmp_path)
+    _seed_two_open_instruments(store)
+    broker = _fake_broker({_KEY_A: "60.00", _KEY_B: "95.00"})
+
+    totals = await snap_mod._compute_overlay_leg_totals(store, broker, _SNAP)
+
+    # Instrument A: net_qty=65, avg_cost=58.85, ltp=60.00 -> (60.00-58.85)*65 = 74.75
+    # Instrument B: net_qty=130, avg_cost=93.00 (weighted 94.20/91.80), ltp=95.00
+    #   -> (95.00-93.00)*130 = 260.00
+    # Aggregate: 74.75 + 260.00 = 334.75 -- never the newest-only 260.00.
+    unrealized, realized, total, ltp = totals["overlay_pp"]
+    assert unrealized == Decimal("334.75")
+    assert realized == Decimal("0")
+    assert total == Decimal("334.75")
+    assert ltp is None  # 7: NULL, not a blended/newest-leg LTP
+
+
+# 3: every instrument key triggers a broker LTP fetch.
+
+
+@pytest.mark.asyncio
+async def test_multi_instrument_fetches_ltp_for_every_open_key(tmp_path: Path) -> None:
+    store = _overlay_store(tmp_path)
+    _seed_two_open_instruments(store)
+    broker = _fake_broker({_KEY_A: "60.00", _KEY_B: "95.00"})
+
+    await snap_mod._compute_overlay_leg_totals(store, broker, _SNAP)
+
+    assert broker.get_ltp.call_count == 1
+    fetched = set(broker.get_ltp.call_args.args[0])
+    assert _KEY_A in fetched
+    assert _KEY_B in fetched
+
+
+# 5: realized P&L computed once at role scope, never duplicated per instrument.
+
+
+@pytest.mark.asyncio
+async def test_multi_instrument_realized_pnl_not_duplicated(tmp_path: Path) -> None:
+    store = _overlay_store(tmp_path)
+    # Instrument A: partial close (contributes realized, stays open).
+    store.record_trade(_overlay_trade("overlay_pp", _KEY_A, TradeAction.BUY, 100, "50.00", _D0))
+    store.record_trade(_overlay_trade("overlay_pp", _KEY_A, TradeAction.SELL, 40, "60.00", _D1))
+    # Instrument B: fully open, different instrument, same role.
+    store.record_trade(_overlay_trade("overlay_pp", _KEY_B, TradeAction.BUY, 65, "90.00", _D2))
+    broker = _fake_broker({_KEY_A: "65.00", _KEY_B: "92.00"})
+
+    totals = await snap_mod._compute_overlay_leg_totals(store, broker, _SNAP)
+
+    trades = store.get_trades(STRATEGY_OVERLAY)
+    expected_realized = snap_mod._compute_realized_pnl_by_leg(trades)["overlay_pp"]
+    # A broken per-instrument loop calling _compute_realized_pnl_by_leg once per
+    # matched position would double this (2 open instruments under the role).
+    assert totals["overlay_pp"][1] == expected_realized
+
+
+# 6: aggregate entry basis and quantity denominators include both positions.
+
+
+def test_leg_entry_basis_sums_across_open_instruments(tmp_path: Path) -> None:
+    store = _overlay_store(tmp_path)
+    _seed_two_open_instruments(store)
+
+    basis = snap_mod._leg_entry_basis(store, STRATEGY_OVERLAY, "overlay_pp")
+
+    # A: 58.85*65 = 3825.25 ; B: 93.00*130 = 12090.00 (weighted avg_cost) -> sum
+    assert basis == Decimal("58.85") * 65 + Decimal("93.00") * 130
+
+
+def test_position_qty_sums_across_open_instruments(tmp_path: Path) -> None:
+    store = _overlay_store(tmp_path)
+    _seed_two_open_instruments(store)
+
+    qty = snap_mod._position_qty(store, STRATEGY_OVERLAY, "overlay_pp")
+
+    assert qty == 65 + 130
+
+
+# 8: total_pnl == unrealized_pnl + realized_pnl holds on the written row.
+
+
+@pytest.mark.asyncio
+async def test_multi_instrument_snapshot_write_satisfies_total_pnl_invariant(
+    tmp_path: Path,
+) -> None:
+    store = _overlay_store(tmp_path)
+    _seed_two_open_instruments(store)
+    broker = _fake_broker({_KEY_A: "60.00", _KEY_B: "95.00"})
+
+    totals = await snap_mod._compute_overlay_leg_totals(store, broker, _SNAP)
+    # Must not raise (store.record_leg_snapshot enforces the invariant).
+    snap_mod._save_overlay_leg_snapshots(store, totals, _SNAP)
+
+    saved = store.get_leg_snapshot(STRATEGY_OVERLAY, "overlay_pp", _SNAP)
+    assert saved is not None
+    assert saved.total_pnl == saved.unrealized_pnl + saved.realized_pnl
+    assert saved.ltp is None
+
+
+# Code-review finding (2026-08-24): the anomaly check must not go fully
+# silent (no log, no crash) when Telegram credentials are unset in prod —
+# only the notifier.send() call is conditional, never the logging path.
+
+
+@pytest.mark.asyncio
+async def test_multi_instrument_alert_without_notifier_does_not_crash(tmp_path: Path) -> None:
+    store = _overlay_store(tmp_path)
+    _seed_two_open_instruments(store)
+    broker = _fake_broker({_KEY_A: "60.00", _KEY_B: "95.00"})
+
+    # notifier omitted entirely (defaults to None) -- must still compute and
+    # return correct totals rather than raising on the alert-check path.
+    totals = await snap_mod._compute_overlay_leg_totals(store, broker, _SNAP)
+
+    assert totals["overlay_pp"][0] == Decimal("334.75")
+
+
+# 11 & 13: missing LTP for one instrument fails that role loud (omitted, not
+# partial); unrelated roles still persist.
+
+
+@pytest.mark.asyncio
+async def test_multi_instrument_missing_ltp_omits_role_not_partial(tmp_path: Path) -> None:
+    store = _overlay_store(tmp_path)
+    _seed_two_open_instruments(store)
+    # A second, unrelated, single-instrument role that must be unaffected.
+    store.record_trade(
+        _overlay_trade("overlay_cc", "NSE_FO|99999", TradeAction.SELL, 65, "40.00", _D0)
+    )
+    # LTP missing for _KEY_A -- only _KEY_B and the unrelated role priced.
+    broker = _fake_broker({_KEY_B: "95.00", "NSE_FO|99999": "35.00"})
+    notifier = _FakeNotifier()
+
+    totals = await snap_mod._compute_overlay_leg_totals(store, broker, _SNAP, notifier)
+
+    assert "overlay_pp" not in totals  # fail loud: omitted, not a partial aggregate
+    assert "overlay_cc" in totals  # unrelated role unaffected
+    assert any("ERROR" in m and "overlay_pp" in m for m in notifier.messages)
+
+
+# 12: single-position role retains exactly current (pre-fix) behavior.
+
+
+@pytest.mark.asyncio
+async def test_single_instrument_role_unchanged(tmp_path: Path) -> None:
+    store = _overlay_store(tmp_path)
+    store.record_trade(_overlay_trade("overlay_pp", _KEY_A, TradeAction.BUY, 65, "58.85", _D0))
+    broker = _fake_broker({_KEY_A: "60.00"})
+
+    totals = await snap_mod._compute_overlay_leg_totals(store, broker, _SNAP)
+
+    unrealized, realized, total, ltp = totals["overlay_pp"]
+    assert unrealized == (Decimal("60.00") - Decimal("58.85")) * 65
+    assert realized == Decimal("0")
+    assert total == unrealized
+    assert ltp == Decimal("60.00")  # real LTP, unchanged from pre-fix behavior
+
+
+# 9 & 10: deduplicated anomaly alert -- fires on transition in, suppressed
+# while the streak persists, escalates at the threshold, clears on recovery.
+
+
+@pytest.mark.asyncio
+async def test_multi_instrument_alert_fires_once_then_dedups(tmp_path: Path) -> None:
+    store = _overlay_store(tmp_path)
+    _seed_two_open_instruments(store)
+    broker = _fake_broker({_KEY_A: "60.00", _KEY_B: "95.00"})
+
+    day1 = date(2026, 8, 24)
+    day2 = date(2026, 8, 25)
+    day3 = date(2026, 8, 26)
+
+    # Day 1: first transition into n>1 -- alert fires.
+    notifier1 = _FakeNotifier()
+    totals1 = await snap_mod._compute_overlay_leg_totals(store, broker, day1, notifier1)
+    snap_mod._save_overlay_leg_snapshots(store, totals1, day1)
+    assert len(notifier1.messages) == 1
+    assert "WARNING" in notifier1.messages[0]
+
+    # Day 2: streak continues (2nd day) -- below escalation threshold, dedup.
+    notifier2 = _FakeNotifier()
+    totals2 = await snap_mod._compute_overlay_leg_totals(store, broker, day2, notifier2)
+    snap_mod._save_overlay_leg_snapshots(store, totals2, day2)
+    assert notifier2.messages == []
+
+    # Day 3: streak hits _MULTI_INSTRUMENT_ESCALATION_DAYS (3) -- escalates.
+    notifier3 = _FakeNotifier()
+    await snap_mod._compute_overlay_leg_totals(store, broker, day3, notifier3)
+    assert len(notifier3.messages) == 1
+    assert "ERROR" in notifier3.messages[0]
+
+
+@pytest.mark.asyncio
+async def test_multi_instrument_alert_clears_on_recovery(tmp_path: Path) -> None:
+    store = _overlay_store(tmp_path)
+    prev_date = date(2026, 8, 23)
+    today = date(2026, 8, 24)
+
+    # Simulate yesterday's snapshot having been a multi-instrument aggregate
+    # (ltp=None is the BUG-032 write-time marker for that state).
+    store.record_leg_snapshot(
+        PaperLegSnapshot(
+            strategy_name=STRATEGY_OVERLAY,
+            leg_role="overlay_pp",
+            snapshot_date=prev_date,
+            unrealized_pnl=Decimal("100"),
+            realized_pnl=Decimal("0"),
+            total_pnl=Decimal("100"),
+            ltp=None,
+        )
+    )
+    # Today: only one instrument open under the role -- recovered.
+    store.record_trade(_overlay_trade("overlay_pp", _KEY_A, TradeAction.BUY, 65, "58.85", _D0))
+    broker = _fake_broker({_KEY_A: "60.00"})
+    notifier = _FakeNotifier()
+
+    await snap_mod._compute_overlay_leg_totals(store, broker, today, notifier)
+
+    assert len(notifier.messages) == 1
+    assert "back to a single open instrument" in notifier.messages[0]

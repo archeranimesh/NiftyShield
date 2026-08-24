@@ -42,6 +42,7 @@ import argparse
 import asyncio
 import calendar
 import re
+from collections import defaultdict
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
@@ -101,6 +102,16 @@ _SCRIPT_NAME = "scripts.strategies.three_track.paper_3track_snapshot"
 logger = structlog.get_logger(_SCRIPT_NAME)
 
 _CSP_STRATEGY = "paper_csp_nifty_v1"
+
+# BUG-032 (2026-08-24, council ruling): consecutive days a leg_role stays
+# multi-instrument (>1 open position under one role) before the anomaly
+# alert escalates from WARNING to ERROR. The council mandated *that* severity
+# escalates on a stuck multi-day state but did not pin a specific N; 3 is a
+# judgment call made here — long enough that a same-day roll overlap (e.g.
+# PP3's intentional two-put window) never escalates, short enough that a
+# genuinely stuck state (like the 2026-08-20 BUG-031 incident) escalates
+# well before a full trading week passes.
+_MULTI_INSTRUMENT_ESCALATION_DAYS = 3
 
 # leg_role → option type (CE/PE) for chain lookups
 _OVERLAY_OPTION_TYPE: dict[str, str] = {
@@ -1134,7 +1145,14 @@ def _overlay_type_groups(present_roles: set[str]) -> dict[str, list[str]]:
 
 
 def _leg_entry_basis(store: PaperStore, track_name: str, role: str) -> Decimal | None:
-    """Entry cost/credit basis for one leg, or None if no open position.
+    """Entry cost/credit basis for one leg-role, or None if no open position.
+
+    BUG-032 (2026-08-24, council ruling): resolved via ``get_positions()``
+    filtered by ``role``, summed across every open instrument under that
+    role — never via ``get_position()``'s single-match API, which silently
+    drops all but the most-recent position when a role holds >1 open
+    instrument (the exact defect BUG-032 fixes). Hard invariant: sum each
+    instrument's own basis, never blend cost bases across instruments first.
 
     A short leg (e.g. CC's sold call, net_qty < 0) has no BUY trades, so
     ``avg_cost`` is zero — the real basis is the credit received, tracked
@@ -1143,11 +1161,14 @@ def _leg_entry_basis(store: PaperStore, track_name: str, role: str) -> Decimal |
     do. Picking the wrong field for a short leg would silently zero out its
     denominator and produce a spurious 0% inception return.
     """
-    pos = store.get_position(track_name, role)
-    if pos is None or pos.net_qty == 0:
+    matches = [p for p in store.get_positions(track_name) if p.leg_role == role]
+    if not matches:
         return None
-    per_unit = pos.avg_sell_price if pos.net_qty < 0 else pos.avg_cost
-    return per_unit * abs(pos.net_qty)
+    total = Decimal("0")
+    for pos in matches:
+        per_unit = pos.avg_sell_price if pos.net_qty < 0 else pos.avg_cost
+        total += per_unit * abs(pos.net_qty)
+    return total if total else None
 
 
 def _compute_overlay_pnl_snapshots(
@@ -1211,6 +1232,28 @@ def _compute_overlay_pnl_snapshots(
             pnl_1d_abs = pnl_inception_abs - sum(
                 (prev_by_role[r].total_pnl for r in roles if r in prev_by_role), Decimal("0")
             )
+            # KNOWN GAP (found in BUG-032's 2026-08-24 code review, logged as
+            # BUG-036 — pre-existing, not introduced by the BUG-032 fix):
+            # _position_qty() returns TODAY's live quantity, not the quantity
+            # that was actually open as of prev_by_role[r]'s snapshot date.
+            # Two distinct symptoms: (1) when yesterday's snapshot was a
+            # multi-instrument aggregate, prev_by_role[r].ltp is NULL by
+            # design (a single LTP would misrepresent >1 open instrument) —
+            # _mark_value then returns None and that role contributes 0 to
+            # prev_mark_value, understating the pnl_1d_pct denominator for
+            # one day; (2) even in the ordinary single-instrument case, if
+            # quantity changed between yesterday and today (partial close/
+            # add), this blends today's size with yesterday's price — an
+            # apples-to-oranges denominator, understating or overstating
+            # pnl_1d_pct with no correctness guard. The ruling's ideal fix
+            # for (1) — Σ_i ltp_i × abs(qty_i) from yesterday's per-instrument
+            # marks — needs the per-instrument companion table the council
+            # explicitly deferred as a separate follow-up story; (2) needs
+            # the store to retain historical per-day quantity, which it does
+            # not today. Both accepted as a known, documented gap (BUG-036)
+            # rather than solved here — this touches pnl_1d_pct display math
+            # with no dedicated test coverage, not appropriate to patch
+            # under this fix's time budget.
             prev_mark_value = sum(
                 (
                     _mark_value(prev_by_role[r].ltp, _position_qty(store, STRATEGY_OVERLAY, r))
@@ -1237,10 +1280,120 @@ def _compute_overlay_pnl_snapshots(
     return results
 
 
+def _overlay_positions_by_role(
+    store: PaperStore, strategy_name: str
+) -> dict[str, list[PaperPosition]]:
+    """Group a strategy's open positions by leg_role.
+
+    BUG-032 (2026-08-24): unlike ``get_position(strategy_name, leg_role)``,
+    this never silently drops a position when a role holds >1 open
+    instrument — every open ``(leg_role, instrument_key)`` pair from
+    ``get_positions()`` (PG-1, flat pairs already excluded) is represented.
+    """
+    by_role: dict[str, list[PaperPosition]] = defaultdict(list)
+    for pos in store.get_positions(strategy_name):
+        by_role[pos.leg_role].append(pos)
+    return dict(by_role)
+
+
+def _overlay_multi_instrument_streak_days(
+    store: PaperStore, role: str, snap_date: date, max_lookback: int = 30
+) -> int:
+    """Count consecutive prior days this role's snapshot was multi-instrument.
+
+    A multi-instrument day is marked by ``paper_leg_snapshots.ltp is None``
+    (BUG-032's write-time contract: a single LTP for >1 open instrument would
+    misrepresent the aggregate, so the field is NULL exactly when a role held
+    more than one open position that day). Walks backward through the actual
+    snapshot chain (via ``get_prev_leg_snapshot``, so weekends/holidays with
+    no snapshot row are skipped correctly) until a single-instrument or
+    missing snapshot breaks the streak, or ``max_lookback`` is reached.
+    """
+    streak = 0
+    cursor = snap_date
+    for _ in range(max_lookback):
+        prev = store.get_prev_leg_snapshot(STRATEGY_OVERLAY, role, cursor)
+        if prev is None or prev.ltp is not None:
+            break
+        streak += 1
+        cursor = prev.snapshot_date
+    return streak
+
+
+async def _check_overlay_multi_instrument_alert(
+    store: PaperStore,
+    role: str,
+    snap_date: date,
+    n: int,
+    notifier: TelegramNotifier | None,
+) -> None:
+    """Fire/dedup the BUG-032 anomaly alert for a role holding >1 open instrument.
+
+    Council ruling (2026-08-24): alert on the first day a role transitions
+    into ``n > 1`` (WARNING) and again when the streak crosses
+    ``_MULTI_INSTRUMENT_ESCALATION_DAYS`` (bumped to ERROR) — never re-fire
+    Telegram on every subsequent run while the condition persists, though
+    every multi-instrument day still gets a structured log line. Logs (and
+    Telegrams) a recovery message the first day the role returns to ``n <= 1``
+    after a multi-instrument streak.
+
+    Logging always runs regardless of ``notifier`` — only the Telegram send
+    is conditional on it. A code-reviewer pass on this fix (2026-08-24) found
+    the original version gated the *entire* check (including the structured
+    log lines) on ``notifier is not None``, which meant the anomaly went
+    completely silent — no log, no alert — whenever Telegram credentials were
+    unset in production. That would have reproduced BUG-032's own "silent
+    failure" shape one level up, in the fix meant to prevent it.
+    """
+    prev = store.get_prev_leg_snapshot(STRATEGY_OVERLAY, role, snap_date)
+    was_multi = prev is not None and prev.ltp is None
+
+    if n <= 1:
+        if was_multi:
+            logger.info("overlay_pnl.multi_instrument_role_recovered", leg_role=role)
+            if notifier is not None:
+                try:
+                    await notifier.send(
+                        f"✅ overlay {role}: back to a single open instrument — "
+                        f"P&L snapshot resumed normal (BUG-032)."
+                    )
+                # Intentional: notification failure must not crash the snapshot.
+                except Exception as exc:
+                    logger.warning("overlay_leg_totals.telegram_failed", error=str(exc))
+        return
+
+    streak_before = _overlay_multi_instrument_streak_days(store, role, snap_date)
+    today_streak = streak_before + 1
+    escalated = today_streak >= _MULTI_INSTRUMENT_ESCALATION_DAYS
+
+    logger.warning(
+        "overlay_pnl.multi_instrument_role",
+        leg_role=role,
+        open_instrument_count=n,
+        streak_days=today_streak,
+        severity="ERROR" if escalated else "WARNING",
+    )
+
+    if notifier is not None and (
+        streak_before == 0 or today_streak == _MULTI_INSTRUMENT_ESCALATION_DAYS
+    ):
+        icon = "🚨 *ERROR*" if escalated else "⚠️ *WARNING*"
+        try:
+            await notifier.send(
+                f"{icon} overlay {role}: {n} open instruments under one role for "
+                f"{today_streak} day(s) — aggregating P&L across all of them, LTP "
+                f"shown as N/A on the snapshot row. See BUG-032."
+            )
+        # Intentional: notification failure must not crash the snapshot.
+        except Exception as exc:
+            logger.warning("overlay_leg_totals.telegram_failed", error=str(exc))
+
+
 async def _compute_overlay_leg_totals(
     store: PaperStore,
     broker: Any,
     snap_date: date,
+    notifier: TelegramNotifier | None = None,
 ) -> dict[str, tuple[Decimal, Decimal, Decimal, Decimal | None]]:
     """Compute today's per-leg-role P&L for the standalone overlay book.
 
@@ -1252,15 +1405,39 @@ async def _compute_overlay_leg_totals(
     gated on ``save``) and to populate the dry-run preview summary row
     (``_overlay_summary_row``, always).
 
+    BUG-032 (2026-08-24, council ruling): resolved via ``get_positions()``
+    grouped by role rather than ``get_position()``'s single-match API, which
+    silently dropped all but the most-recently-opened position when a role
+    held >1 open instrument. When a role holds exactly one open instrument,
+    behavior is unchanged. When a role holds more than one:
+
+    - Each instrument's unrealized P&L is computed independently against its
+      own LTP and then summed — cost bases/LTPs across different strikes or
+      expiries are never blended into one average (no tradeable meaning).
+    - The snapshot's ``ltp`` field is ``None`` — a single LTP for a
+      multi-instrument aggregate would misrepresent the book (the exact
+      misrepresentation that hid this bug for 4+ days originally).
+    - If any open instrument's LTP is unavailable, that role's snapshot is
+      omitted entirely today (fail loud, not a silent partial aggregate) —
+      an ERROR log + Telegram alert fires, and unrelated roles still persist.
+    - A deduplicated anomaly alert (``_check_overlay_multi_instrument_alert``)
+      fires on the transition into/out of the multi-instrument state, not on
+      every cron run while it persists.
+
     Args:
         store: PaperStore instance.
         broker: BrokerClient (or dry-run mock) for the LTP fetch.
         snap_date: Date of this snapshot.
+        notifier: Optional TelegramNotifier for the BUG-032 anomaly alert.
+            None suppresses the alert (log lines still fire) — used by
+            dry-run/preview callers that don't want Telegram side effects.
 
     Returns:
         Mapping of leg_role -> (unrealized_pnl, realized_pnl, total_pnl, ltp).
         Empty dict if ``STRATEGY_OVERLAY`` has never had a trade recorded —
         distinguishes "overlay book never entered" from "entered, now flat."
+        A role can be absent even when trades exist for it, if it is
+        currently multi-instrument with a missing LTP (see above).
     """
     trades = store.get_trades(STRATEGY_OVERLAY)
     if not trades:
@@ -1268,13 +1445,16 @@ async def _compute_overlay_leg_totals(
 
     leg_roles = sorted({t.leg_role for t in trades})
     realized_by_leg = _compute_realized_pnl_by_leg(trades)
-    positions = {role: store.get_position(STRATEGY_OVERLAY, role) for role in leg_roles}
+    positions_by_role = _overlay_positions_by_role(store, STRATEGY_OVERLAY)
 
-    open_keys = [
-        p.instrument_key
-        for p in positions.values()
-        if p is not None and p.net_qty != 0 and p.instrument_key
-    ]
+    open_keys = sorted(
+        {
+            pos.instrument_key
+            for matches in positions_by_role.values()
+            for pos in matches
+            if pos.instrument_key
+        }
+    )
     ltp_map: dict[str, Decimal] = {}
     if open_keys:
         try:
@@ -1286,9 +1466,15 @@ async def _compute_overlay_leg_totals(
 
     totals: dict[str, tuple[Decimal, Decimal, Decimal, Decimal | None]] = {}
     for role in leg_roles:
-        pos = positions[role]
-        overlay_ltp = ltp_map.get(pos.instrument_key) if pos else None
-        if pos is not None and pos.net_qty != 0:
+        matches = positions_by_role.get(role, [])
+        realized = realized_by_leg.get(role, Decimal("0"))
+        n = len(matches)
+
+        if n == 0:
+            totals[role] = (Decimal("0"), realized, realized, None)
+        elif n == 1:
+            pos = matches[0]
+            overlay_ltp = ltp_map.get(pos.instrument_key) if pos.instrument_key else None
             if overlay_ltp is not None:
                 unrealized = _compute_leg_unrealized_pnl(pos, overlay_ltp)
             else:
@@ -1298,10 +1484,41 @@ async def _compute_overlay_leg_totals(
                     leg_role=role,
                 )
                 unrealized = Decimal("0")
+            totals[role] = (unrealized, realized, unrealized + realized, overlay_ltp)
         else:
-            unrealized = Decimal("0")
-        realized = realized_by_leg.get(role, Decimal("0"))
-        totals[role] = (unrealized, realized, unrealized + realized, overlay_ltp)
+            # BUG-032: role holds >1 open instrument. Value each
+            # independently and sum — never blend cost bases/LTPs.
+            missing_keys = [p.instrument_key for p in matches if p.instrument_key not in ltp_map]
+            if missing_keys:
+                logger.error(
+                    "overlay_leg_totals.multi_instrument_ltp_missing",
+                    leg_role=role,
+                    missing_instrument_keys=missing_keys,
+                )
+                if notifier is not None:
+                    try:
+                        await notifier.send(
+                            f"🚨 *ERROR* overlay {role}: {n} open instruments, missing LTP "
+                            f"for {missing_keys} — P&L snapshot skipped for this role today "
+                            f"(BUG-032, fail-loud, not a partial aggregate)."
+                        )
+                    # Intentional: notification failure must not crash the snapshot.
+                    except Exception as exc:
+                        logger.warning("overlay_leg_totals.telegram_failed", error=str(exc))
+                # Council ruling: do not write a partial aggregate for a
+                # multi-instrument role with an unpriced leg — omit it
+                # entirely today rather than reporting an incomplete number.
+                continue
+            unrealized = sum(
+                (_compute_leg_unrealized_pnl(p, ltp_map[p.instrument_key]) for p in matches),
+                Decimal("0"),
+            )
+            totals[role] = (unrealized, realized, unrealized + realized, None)
+
+        # Runs regardless of `notifier` — logging must not go silent just
+        # because Telegram credentials are unset (code-review finding,
+        # 2026-08-24; see _check_overlay_multi_instrument_alert docstring).
+        await _check_overlay_multi_instrument_alert(store, role, snap_date, n, notifier)
 
     return totals
 
@@ -1371,9 +1588,15 @@ def _overlay_summary_row(
 
 
 def _position_qty(store: PaperStore, track_name: str, role: str) -> int:
-    """Net quantity for a leg, or 0 if no position exists."""
-    pos = store.get_position(track_name, role)
-    return pos.net_qty if pos is not None else 0
+    """Net quantity for a leg-role, summed across every open instrument.
+
+    BUG-032 (2026-08-24, council ruling): sum, not pick-one — resolved via
+    ``get_positions()`` filtered by ``role`` rather than ``get_position()``'s
+    single-match API, so a role holding >1 open instrument contributes its
+    full combined quantity instead of only the most-recently-opened leg's.
+    0 if no open position exists.
+    """
+    return sum(p.net_qty for p in store.get_positions(track_name) if p.leg_role == role)
 
 
 def _compute_spot_comparison_snapshot(
@@ -1760,7 +1983,7 @@ async def _run(args: argparse.Namespace) -> None:
     # BUG-028 (2026-08-10): the overlay book (STRATEGY_OVERLAY) is its own
     # strategy, independent of which tracks were selected via --tracks —
     # always computed once here, not per-track inside the loop above.
-    overlay_totals = await _compute_overlay_leg_totals(store, broker, snap_date)
+    overlay_totals = await _compute_overlay_leg_totals(store, broker, snap_date, notifier)
 
     if save:
         # 4th synthetic series: Nifty spot, same fields/denominators as the

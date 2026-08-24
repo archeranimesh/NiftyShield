@@ -5,6 +5,42 @@
 
 ---
 
+**BUG-032 — overlay ambiguous-match resolved: aggregate + loud alert, no hard-fail, no schema
+re-key (2026-08-24, council ruling — `docs/council/2026-08-24_bug032-ambiguous-match-aggregation-vs-hard-fail.md`, unanimous):**
+`_compute_overlay_leg_totals()`/`_leg_entry_basis()`/`_position_qty()` (`paper_3track_snapshot.py`)
+called `PaperStore.get_position(strategy_name, leg_role)` with no `instrument_key`; when a role
+held >1 open position (e.g. `overlay_pp`'s stuck `NSE_FO|61604`/`NSE_FO|74009` overlap since
+2026-08-20, BUG-031's downstream consequence), `get_position`'s PG-2a fallback silently picked
+the most-recent-`entry_date` position and dropped the other's P&L. Two options were on the table:
+aggregate across all open positions per role, or hard-fail (`GateViolation`) on ambiguity.
+
+**Ruling: hybrid, not either option standalone.** Aggregate correctly (Position A) — sum
+per-instrument P&L, never blend cost bases/LTPs across strikes — **and** alert loudly on the
+invariant break (deduplicated: fire once on OFF→ON, log recovery on return to `n ≤ 1`, severity
+escalates WARNING→ERROR after N days stuck). **Reject hard-fail as standalone**: PP3's
+"no unprotected day" rule *deliberately* holds two puts on roll day, so `GateViolation` would
+create a systematic reporting blackout on every routine roll, not just BUG-031's stuck state —
+"fail closed when state is unknown" (the `_open_pp_dte` precedent above) applies to writes that
+change exposure, not to reads that describe it. **Reject re-keying `paper_leg_snapshots`** to
+`(leg_role, instrument_key)` — downstream consumers all expect one role-level row; a companion
+per-instrument table is a separate future story if per-instrument historical auditability is
+ever needed, not part of this fix. `get_position()` itself is unchanged (stays PG-2a; this was a
+call-site bug in the snapshot script, not a store-API bug) — close/roll paths still need a single
+concrete `instrument_key`.
+
+**Hard invariants for implementation:** never average cost bases/LTPs before computing P&L (sum
+independently-computed per-instrument P&L instead); `paper_leg_snapshots.ltp` is `NULL` (not the
+newest leg's LTP) when `n > 1` — a single LTP for a multi-instrument aggregate misrepresents the
+book, which is exactly what made the 2026-08-21 `92.5 / -65.00` row look plausible while hiding
+the dropped leg; entry basis sums `Σ_i abs(qty_i × cost_i)`, quantity sums `Σ_i net_qty_i`;
+`total_pnl == unrealized_pnl + realized_pnl` (SNAP-5) must still hold on the aggregated row; a
+missing LTP for one instrument fails that role loudly rather than writing a silent partial
+aggregate. Full failure-semantics table, 13-item regression checklist, and historical-backfill
+guidance in the council ruling. Resolves `docs/bugs/task.md` B032.1; unblocks B032.2 (fix
+implementation) and B032.4 (backfill, own follow-up story — do not block the live fix on it).
+
+---
+
 **`_open_pp_dte` failure semantics — `None` must never mean "unknown", only "flat" (2026-08-20, Animesh):**
 The 2026-08-13 fix (below) resolved the *how* of expiry parsing but left the *failure contract*
 unchanged: `_open_pp_dte()` returned `None` both when zero `overlay_pp` rows exist (genuinely
