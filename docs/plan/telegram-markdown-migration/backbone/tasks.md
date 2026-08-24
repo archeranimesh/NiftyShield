@@ -13,7 +13,8 @@
 
 ---
 
-- [ ] **MD-1** — Add `escape_markdown()` / `mdcode()` helpers to `src/notifications/` + tests
+- [x] **MD-1** — Add `escape_markdown()` / `mdcode()` helpers to `src/notifications/` + tests
+      | SHA: 786e8096698721401a7d3e16039138c9014ce7e6
       | Owner: Claude | Model: Sonnet | Review: code-reviewer (not financial-logic tier) —
       foundational correctness (Unicode/empty-string edge cases) warrants inline judgment over
       pure mechanical delegation
