@@ -123,6 +123,17 @@ Full forensic log (SHAs, bug numbers, root-cause detail) moved to
 add new entries there going forward, or start a fresh dated section here if this file's
 Session Log grows large again.
 
+### 2026-08-24 Session Log (BUG-025 scoping — checklist added, no fix yet)
+- **BUG-025** (`roll_ic_legs` open-only write shape / `PROFIT_LOCK_ZONE2` state-ordering,
+  MC-3b review follow-ups): scoped the two deferred findings into independent fixes — W1: guard
+  `roll_ic_legs` to fail-closed (return `[]`) when `open_legs` is non-empty but `to_close` is
+  empty, instead of writing an orphan leg; W2: move `PROFIT_LOCK_ZONE2`'s
+  `set_profit_lock_state(zone2_lock_executed=True)` + Telegram notification in
+  `IronCondorV2.apply_action` from before `roll_ic_legs` to after, gated on a non-empty result,
+  closing the state/reality divergence window if the roll fails. Added `docs/bugs/task.md`
+  B025.2-B025.6 (fix W1, fix W2, tests, mandatory review, commit+close) and a matching scoping
+  note in `docs/bugs/bugs.md`. No code change yet — ready to pick up next session.
+
 ### 2026-08-24 Session Log (BUG-019 live-vs-EOD P&L diff — investigation, no fix)
 - **BUG-019** (live-tick vs. EOD-snapshot P&L disparity investigation): ran the diff the
   diagnostic's own "Next step" called for, across the 5 trading days now logged
