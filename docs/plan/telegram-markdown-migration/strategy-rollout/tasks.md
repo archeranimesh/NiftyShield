@@ -185,6 +185,23 @@
       | Owner: Antigravity | Model: n/a | Review: none — verbatim reuse of ROLL-10's builder,
       about as mechanical as this epic gets. **Must stay sequential with ROLL-15** (same file);
       also real-sequence after ROLL-10 (reuses its output).
-- [ ] **ROLL-5** — Docs close | Blocked by: ROLL-4, ROLL-6, ROLL-7, ROLL-8, ROLL-9, ROLL-10, ROLL-11, ROLL-12, ROLL-13, ROLL-14, ROLL-15, ROLL-16
-      | Owner: Claude | Model: Sonnet | Review: none — synthesis/aggregation across 12 prior
+- [ ] **ROLL-17** — IC entry confirmation (`paper_ic_entry.py` + `paper_ic_entry_v2.py`)
+      shared content model — **DESIGN INCOMPLETE, not spec-locked like other ROLL tasks**;
+      6 open decisions listed in `stories.md` (LegRow reuse vs. separate model, union-of-fields
+      vs. per-template, `(hedge)` label mechanism, module scope, parse_mode alignment, and
+      #6: field-formatter registry must call `FMT-1`/`FMT-2`'s `format_greek()`/`format_money()`
+      for value-level formatting rather than re-implementing it — IC-only scope applies to the
+      leg *model* only, not to number formatting, which stays epic-wide via `formatting-rules/`)
+      must be closed via a `message-format-workshop.md` session before implementation starts;
+      surfaced 2026-08-19 (Animesh noticed v1/v2 message drift, then asked why the story is
+      IC-only rather than all strategies — answered in `stories.md` and cross-referenced into
+      `ROLL-13`/`ROLL-14`'s specs: IC's hedge/wing/mode leg vocabulary doesn't generalize to
+      3-track's per-track shape without guessing, but value-level formatting does and must not
+      be duplicated) | Blocked by: `backbone/` + `formatting-rules/` complete (same soft deps as
+      other ROLL tasks), plus its own open design decisions above (harder gate than the soft
+      dep — do not start on backbone/formatting-rules completion alone)
+      | Owner: TBD (design session first) | Model: TBD | Review: TBD — depends on which
+      decision is picked for open decision #1; revisit routing once design closes.
+- [ ] **ROLL-5** — Docs close | Blocked by: ROLL-4, ROLL-6, ROLL-7, ROLL-8, ROLL-9, ROLL-10, ROLL-11, ROLL-12, ROLL-13, ROLL-14, ROLL-15, ROLL-16, ROLL-17
+      | Owner: Claude | Model: Sonnet | Review: none — synthesis/aggregation across 13 prior
       tasks needs accurate summarization, not high-stakes judgment; Opus not warranted here

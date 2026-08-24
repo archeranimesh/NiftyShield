@@ -1474,6 +1474,17 @@ distinct messages — this spec covers the entry-bootstrap half only (7a). The o
 half (7b, `paper_3track_overlay_entry.py:1410`) stays queued as TODO.md item 7's second half,
 not yet run through the workshop.
 
+**Cross-reference (added 2026-08-19, does not change this task's spec):** `ROLL-17` (IC entry
+v1/v2 content model, currently design-incomplete) is building a leg-data-model pattern
+(`ICEntryLeg`/`ICEntryMessage`, renderer-owns-defaults-with-per-field-overrides) for IC
+specifically, not a generic model — IC's hedge/wing/mode vocabulary doesn't fit this message's
+per-track (spot/futures/proxy) shape. Once `ROLL-17` ships, skim its renderer pattern (not its
+fields) before writing this task's own message-construction code — if the same
+defaults-plus-override shape turns out to fit here too (e.g. a `TrackLeg` with `qty`/`price`/
+`delta`, optional per-field overrides), reuse the *pattern*, don't force-fit IC's dataclass. Do
+not block this task on `ROLL-17` — it has its own open design decisions and no hard dependency
+runs in either direction.
+
 **Confirmed real source:** `scripts/strategies/three_track/paper_3track_entry.py::main`,
 ~line 940 (confirmed via `search_graph` + `get_code_snippet`, not the TODO.md grep excerpt
 alone). Fires once, at bootstrap, when one or more of {spot, futures, proxy} tracks are
@@ -1599,6 +1610,11 @@ half, TODO.md). Item 7 originally covered two call sites (entry bootstrap + over
 bootstrap); split into two workshop sessions on read (Animesh's decision, 2026-08-11) since
 they're structurally distinct messages — this spec covers the overlay-bootstrap half (7b).
 The entry-bootstrap half (7a) is `ROLL-13`.
+
+**Cross-reference (added 2026-08-19, does not change this task's spec):** same note as
+`ROLL-13` above — check `ROLL-17`'s renderer pattern (defaults-plus-per-field-overrides) once it
+ships, reuse the pattern if it fits this message's per-overlay-type leg shape, don't adopt its
+IC-specific dataclass wholesale. No hard dependency either direction.
 
 **Confirmed real source:** `scripts/strategies/three_track/paper_3track_overlay_entry.py::main`,
 ~line 1410 (confirmed via `search_graph` + `get_code_snippet`, not the TODO.md grep excerpt
@@ -1965,10 +1981,204 @@ search_graph("TrackSnapshot")   # confirm consecutive_days plumbing status (ROLL
 
 ---
 
+## ROLL-17 — IC Entry Confirmation: Shared Content Model for V1/V2 (design incomplete — do not implement from this spec alone)
+
+**Status: DRAFT.** Unlike every other `ROLL-N` entry in this file, this one is **not** a
+confirmed-format port of a workshop session. It was raised by Animesh 2026-08-19 after noticing
+the two IC entry confirmation messages (`paper_ic_entry.py` "✅ IC Entry" and
+`paper_ic_entry_v2.py` "✅ IC V2 Entry") are built as two independent, hand-rolled f-strings that
+have drifted apart in both content and layout. Several design decisions below are marked
+**OPEN** — a `message-format-workshop.md` session (or a council call, see the note at the end)
+must close them before this becomes a real implementation task. Do not pick up this task from
+`tasks.md` and start writing code against it as-is.
+
+**Confirmed via the graph, not assumed (2026-08-19):**
+- `paper_ic_entry.py::run()` (lines 230-705) builds its success message inline around line 785:
+  header `✅ IC Entry — {expiry_type} ({config.strategy_name})`, then `Mode: {mode}` (standalone/
+  concurrent), then `IVR:`/`DTE:`/`Nifty:`, then one line per leg using
+  `format_option_label('NIFTY', strike, 'PE'/'CE', expiry_str)` for the instrument string, short
+  legs showing `δ=... mid=₹...`, long (hedge) legs showing `(hedge) mid=₹...` with **no delta**,
+  then `Net credit: ₹{net_credit:.2f}/lot`. This same template renders both the weekly and
+  monthly variants — `args.expiry_type` is only interpolated as a literal string in the header
+  and to select `CONFIGS[args.expiry_type]`; there is no branch in the message-building code
+  itself. So today there are two *scripts* producing three *messages seen in practice*
+  (weekly/monthly from v1, plus v2 monthly), but really only two distinct *templates*.
+- `paper_ic_entry_v2.py::run()` (lines 293-691) builds its own success message inline around
+  line 706: header `✅ IC V2 Entry — {expiry_type} ({strategy_name})`, **no `Mode:` line at all**,
+  then `IVR:`/`DTE:`/`Nifty:`, then one line per leg using a bare `{int(strike)}PE`/`{int(strike)}CE`
+  (does **not** call `format_option_label()` — no expiry shown in the leg line), short legs
+  showing `δ=... mid=₹...` (same shape as v1), long (wing) legs showing `δ=... width={N}pts`
+  with **no mid price** and no `(hedge)` label, then the same `Net credit:` line.
+- `src/notifications/CLAUDE.md`'s "Instrument Label Formatting" section already mandates
+  `format_option_label()`/`format_leg_label()` for any prose leg mention. v2's bare
+  `{int(strike)}PE` is a **live violation of an existing documented invariant**, not merely an
+  inconsistency with v1 — this is not a new rule being proposed, it's an existing rule not being
+  followed.
+- Both scripts' messages already reach Telegram through `TelegramGateway`/`TelegramNotifier`
+  (`build_notifier()`), so the transport layer is already shared. The divergence is entirely in
+  the content string each script constructs *before* handing it to the notifier — this task
+  never needs to touch `TelegramGateway` itself.
+- This is **independent of and should land before** the `backbone`/`formatting-rules` escaping
+  work reaches these two call sites. If content unification happens first, the MarkdownV2
+  escaping pass (whichever `ROLL-N` eventually covers these two messages — none currently does,
+  see below) only has to be written once, against one shared renderer's output, instead of twice
+  against two divergent templates.
+- **Not currently in scope of any other `ROLL-N` task.** Grepped this file and `tasks.md` for
+  `paper_ic_entry`, `paper_ic_entry_v2`, and "iron condor" — no hits outside `ROLL-1` (IC EOD
+  audit, a different message: the end-of-day position report) and `ROLL-2` (IC monthly
+  comparison report, also different). Neither touches the entry confirmation message.
+
+**Proposed direction (Animesh, 2026-08-19), confirmed as the shape to design around:** a shared
+`src/notifications/` module owns *how* each field type displays (a strike, a delta, an LTP/mid, a
+wing width, the mode line) via sensible defaults; each strategy script supplies only the data it
+actually has (unpopulated fields render nothing, not a placeholder), and may override the default
+formatter for a specific field on a specific call when it genuinely needs to. Sketch, not final:
+
+```python
+# src/notifications/ic_entry_message.py  (path/name itself is OPEN — see below)
+
+DEFAULT_FIELD_FORMATTERS: dict[str, Callable[[Any], str]] = {
+    "delta":             lambda v: f"δ={abs(v):.3f}",
+    "mid":               lambda v: f"mid=₹{v:.2f}",
+    "wing_width_points": lambda v: f"width={v:.0f}pts",
+    "mode":              lambda v: f"Mode: {v}",
+    "ivr":               lambda v: f"IVR: {v:.2f}",
+    "dte":               lambda v: f"DTE: {v}",
+    "spot":              lambda v: f"Nifty: {v:,.0f}",
+    "net_credit":        lambda v: f"Net credit: ₹{v:.2f}/lot",
+}
+
+@dataclass
+class ICEntryLeg:
+    role: str
+    action: Literal["BUY", "SELL"]
+    instrument_key: str
+    strike: Decimal
+    option_type: Literal["PE", "CE"]
+    expiry: date
+    is_hedge: bool = False
+    delta: Decimal | None = None
+    mid: Decimal | None = None
+    wing_width_points: Decimal | None = None
+    overrides: dict[str, Callable[[Any], str]] = field(default_factory=dict)
+
+@dataclass
+class ICEntryMessage:
+    strategy_name: str
+    expiry_type: str
+    mode: str | None = None      # None -> Mode line omitted entirely (v2's case)
+    ivr: float | None = None
+    dte: int | None = None
+    spot: Decimal | None = None
+    net_credit: Decimal | None = None
+    legs: list[ICEntryLeg] = field(default_factory=list)
+
+def format_ic_entry_message(msg: ICEntryMessage) -> str: ...
+```
+
+**OPEN design decisions — must be resolved (workshop session or council) before implementation:**
+
+1. **Reuse `FMT-3`'s `LegRow`/`build_leg_table()`, or is this a genuinely separate model?**
+   `formatting-rules/stories.md` FMT-3 already stubs a `LegRow` dataclass (badge, instrument, Δ,
+   LTP, entry) for a *fenced-code-block leg table* — a different visual shape (columnar table)
+   from the current IC entry message's prose-per-leg-line style. Does ROLL-17 (a) adopt
+   `build_leg_table()`/`LegRow` as-is once `FMT-3` ships, meaning the IC entry confirmation
+   becomes a table (a real layout change, not just a content-model refactor); (b) extend
+   `LegRow` with the extra fields this message needs (`is_hedge`, `wing_width_points`) and keep
+   the prose-line rendering separately; or (c) treat `ICEntryLeg`/`ICEntryMessage` as a distinct
+   model with no relationship to `LegRow`, accepting two parallel leg-shaped dataclasses in
+   `src/notifications/`. Not decided. Whoever runs the workshop session for this must read
+   `FMT-3`'s full stub first and make this call explicitly, not by default.
+2. **Union-of-fields vs. per-template field selection.** Today v1 shows hedge legs' mid but not
+   delta; v2 shows wing legs' delta and width but not mid. Should the unified renderer show the
+   union (delta **and** mid **and** width on every leg, wherever resolvable) or should each
+   strategy keep choosing a subset via which fields it populates? Union is strictly more
+   information for a fast-moving market read but is a real *content* decision (what a trader sees
+   during entry), not just a formatting one — needs Animesh's sign-off either way, not an
+   engineering default.
+3. **`is_hedge` label rendering.** Is `(hedge)` a fixed prefix the renderer emits automatically
+   whenever `is_hedge=True` (matches v1's current text), or does a strategy opt into that label
+   via `overrides` like any other field? Affects whether v2's wing legs could ever also say
+   `(hedge)` without a code change to the renderer itself.
+4. **Module scope: IC-only or a general `trade_entry_message.py`?** IC-only ships faster and
+   doesn't risk guessing at a shape that doesn't fit CSP/covered-call messaging, which this task
+   has not looked at. A general module is more work now for a payoff not yet demonstrated to be
+   needed. Lean IC-only for this task; note the possibility of generalizing later rather than
+   deciding it here.
+5. **`parse_mode` alignment.** This module must render through `mdcode()`/`escape_markdown()`
+   (once `backbone/` MD-1 ships) and `formatting-rules/`'s `format_money`/`format_greek` etc.
+   (once `FMT-1`/`FMT-2` ship) rather than the raw `₹`/f-string literals sketched above — the
+   sketch above is illustrative only and pre-dates those helpers landing. **Do not implement this
+   task before `backbone/` and `formatting-rules/` ship**, same soft dependency every other
+   `ROLL-N` task carries, but stated explicitly here because the sketch above would otherwise
+   read as if it's meant to bypass those helpers.
+6. **`DEFAULT_FIELD_FORMATTERS` must not duplicate `FMT-1`/`FMT-2`'s value formatters.** Raised
+   2026-08-19 (Animesh asked why this story is IC-only rather than covering every strategy —
+   answer: it's IC-only at the *leg-model* level because IC's hedge/wing/mode vocabulary doesn't
+   generalize to other strategies' shapes without guessing, see the module-scope note under open
+   decision #4; but the *value-level* formatting inside that model — how a delta prints, how
+   money prints, how a strike prints — is not IC-specific at all, and `formatting-rules/` already
+   owns it epic-wide). Concretely: `ic_entry_message.py`'s field-formatter registry entries for
+   `"delta"` and `"mid"`/money values must call `FMT-2`'s `format_greek()`/`format_money()`
+   directly, not re-implement `f"δ={abs(v):.3f}"`/`f"mid=₹{v:.2f}"` as shown in the illustrative
+   sketch above — that sketch pre-dates `FMT-2` and must not ship as real code once `FMT-2` has.
+   Only genuinely IC-specific display concepts (the `Mode:` line, `(hedge)`/`width=Npts` leg
+   trailers) belong in this module's own formatter registry; anything that's just "how does a
+   number of this type look" belongs in `formatting-rules/` and should be imported, not
+   duplicated. `ROLL-13`/`ROLL-14` (3-track entry messages, cross-referenced above) carry the
+   same constraint — same reason.
+
+**Files to change (once design is closed — not yet, this is still a spec draft):**
+- New: `src/notifications/ic_entry_message.py` (or generalized name/location per open decision
+  #4) — `ICEntryLeg`, `ICEntryMessage`, `format_ic_entry_message()`
+- `scripts/strategies/ic/paper_ic_entry.py` — replace the inline f-string success message
+  (~line 785) with construction of `ICEntryMessage`/`ICEntryLeg` from data it already resolves at
+  Step 8-10, then a call to `format_ic_entry_message()`
+- `scripts/strategies/ic/paper_ic_entry_v2.py` — same, replacing the inline f-string at ~line 706
+- `src/notifications/CLAUDE.md` — add a section documenting this as a second canonical
+  message-construction pattern alongside the existing `_format_combined_summary()`/`<pre>` one,
+  once it ships
+- Test files: `tests/unit/notifications/test_ic_entry_message.py` (new), plus updates to
+  whichever existing test modules cover `paper_ic_entry.py`/`paper_ic_entry_v2.py`'s message
+  construction (confirm via `search_graph` before assuming a path)
+
+**Tests (once design is closed):**
+- Happy path: a full 4-leg `ICEntryMessage` with all fields populated renders every expected
+  line, in order
+- `mode=None` → no `Mode:` line emitted (proves v2's case works without special-casing in the
+  caller)
+- A leg with `mid=None, wing_width_points=<value>` renders `width=` and omits `mid=`; a leg with
+  `mid=<value>, wing_width_points=None` renders the reverse — proves the "only render what's
+  populated" contract
+- `overrides` on a single field wins over `DEFAULT_FIELD_FORMATTERS` for that field only, other
+  fields on the same leg still use defaults
+- Regression: every leg line calls `format_option_label()` (or its MarkdownV2-safe successor),
+  never a bare `{strike}{option_type}` string — this is the specific bug being fixed, assert it
+  directly rather than only checking the final rendered string
+- No network in tests, per root `CLAUDE.md` Python Standards — construct `ICEntryMessage` objects
+  directly, do not run either script end-to-end
+
+**Not yet committed.** This story stays in `tasks.md` as unchecked until a workshop session (or
+Animesh directly) closes the 5 OPEN decisions above. Per `docs/council/README.md`'s three-condition
+test, this is borderline council-worthy — it's a load-bearing module-boundary decision with
+long-lived lock-in (condition 1, and it fits the `data_architecture` template by name), but
+weak on condition 2 (no materially different P&L/architectural outcome between the options,
+just UX/maintainability) and condition 3 (single-discipline: software architecture, not
+cross-disciplinary in the sense the council is designed for). Recommendation: don't spend a full
+council call on the whole design; if anything, submit only open decision #1 (`LegRow` reuse vs.
+separate model) as a narrow `data_architecture` question, since that's the one choice with real
+long-lived lock-in risk if picked wrong. The other four are Animesh-preference calls, not
+council material.
+
+**Commit (docs only, this session):** `docs(telegram-markdown-migration): add ROLL-17 draft — IC entry v1/v2 content model (design open)`
+
+---
+
 ## ROLL-5 — Docs Close
 
 **Blocked by:** ROLL-4, ROLL-6, ROLL-7, ROLL-8, ROLL-9, ROLL-10, ROLL-11, ROLL-12, ROLL-13,
-ROLL-14, ROLL-15 (updated 2026-08-11 to add ROLL-15 — see `tasks.md`).
+ROLL-14, ROLL-15, ROLL-16, ROLL-17 (updated 2026-08-19 to add ROLL-17 — see `tasks.md`; note
+`ROLL-16` was already a hard dependency per `tasks.md` but missing from this line until now).
 
 **Files to change (targeted `Edit`, never `Write`):**
 - `CONTEXT.md` — note the completed migration across all message types

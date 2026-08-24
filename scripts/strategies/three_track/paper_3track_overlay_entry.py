@@ -546,6 +546,26 @@ def auto_collar_bootstrap(
     return cfg, violation
 
 
+class OpenPPPositionUnresolvable(Exception):
+    """Raised when ``overlay_pp`` rows are open but none of their DTEs resolve.
+
+    BUG (2026-08-13, recurred 2026-08-20, both found by Animesh): the original
+    implementation returned ``None`` for this case, which is *identical* to
+    "no open position at all" from ``main()``'s point of view — so any
+    resolution failure (regex miss, BOD-lookup miss, a DB read error) was
+    silently treated as "flat" and ``auto_pp_bootstrap`` re-entered a brand
+    new put on top of the still-open one. Confirmed live twice: 2026-08-11 +
+    2026-08-12 (BOD-lookup miss on a numeric key), and again 2026-08-20 with
+    no warning logged at all (the DB query itself returned nothing for the
+    live cron invocation, cause not yet isolated — see TODOS.md).
+
+    This is a risk-management gate for a real options-selling system:
+    "I don't know" must never be allowed to look like "nothing is open".
+    Callers MUST treat this exception the same as "hard-abort, don't
+    bootstrap" — never catch-and-fall-through. See DECISIONS.md 2026-08-20.
+    """
+
+
 def _open_pp_dte(db_path: Path, bod_path: Path) -> int | None:
     """Return the DTE of the currently open overlay_pp position, or None if flat.
 
@@ -572,9 +592,15 @@ def _open_pp_dte(db_path: Path, bod_path: Path) -> int | None:
 
     Returns:
         Minimum DTE (calendar days) across any open ``overlay_pp`` rows, or
-        None if no such row is open. Un-parseable instrument keys are
-        skipped with a WARNING (never raise — a gate helper must not crash
-        the entry run over one bad row).
+        None **only** when the query genuinely finds zero open rows — the
+        true "flat" case.
+
+    Raises:
+        OpenPPPositionUnresolvable: the position query itself failed, or
+            one or more open rows exist but none of their expiries could be
+            resolved (unparseable key, BOD-lookup miss, BOD load failure).
+            An open position whose state we can't read is never silently
+            treated as "flat" — see the exception's docstring.
     """
     import sqlite3
 
@@ -596,8 +622,8 @@ def _open_pp_dte(db_path: Path, bod_path: Path) -> int | None:
         rows = cur.fetchall()
         conn.close()
     except Exception as exc:  # noqa: BLE001
-        logger.warning("open_pp_dte.query_failed", error=str(exc))
-        return None
+        logger.error("open_pp_dte.query_failed", error=str(exc))
+        raise OpenPPPositionUnresolvable(f"paper_trades query failed: {exc}") from exc
 
     if not rows:
         return None
@@ -618,8 +644,16 @@ def _open_pp_dte(db_path: Path, bod_path: Path) -> int | None:
     # other). Identical root cause/fix pattern to BUG-018/BUG-012
     # (src/strategy/ic_nifty_v2.py::_parse_expiry/_find_leg) -- this
     # function was never swept into that fix. See DECISIONS.md 2026-08-13.
+    #
+    # 2026-08-20: that fix only changed the *resolution* path, not the
+    # *failure semantics* — an unresolvable row still fell through to
+    # ``return None`` (see below), which is exactly what let the bug recur.
+    # Now every per-row failure is still logged individually below, but if
+    # *none* of the open rows resolve, that's raised as
+    # OpenPPPositionUnresolvable instead of returned as None.
     lookup: InstrumentLookup | None = None
     dtes: list[int] = []
+    unresolved_keys: list[str] = []
     for instrument_key, _net_qty in rows:
         m = _PP_EXPIRY_RE.search(instrument_key)
         if m:
@@ -627,6 +661,7 @@ def _open_pp_dte(db_path: Path, bod_path: Path) -> int | None:
                 expiry = datetime.strptime(m.group(1).upper(), "%d%b%Y").date()
             except ValueError:
                 logger.warning("open_pp_dte.expiry_unparseable", instrument_key=instrument_key)
+                unresolved_keys.append(instrument_key)
                 continue
             dtes.append((expiry - today).days)
             continue
@@ -638,6 +673,7 @@ def _open_pp_dte(db_path: Path, bod_path: Path) -> int | None:
                 logger.warning(
                     "open_pp_dte.bod_load_failed", instrument_key=instrument_key, error=str(exc)
                 )
+                unresolved_keys.append(instrument_key)
                 continue
 
         inst = lookup.get_by_key(instrument_key)
@@ -648,11 +684,19 @@ def _open_pp_dte(db_path: Path, bod_path: Path) -> int | None:
                 instrument_key=instrument_key,
                 reason="not_found_in_bod" if inst is None else "no_expiry_field",
             )
+            unresolved_keys.append(instrument_key)
             continue
         dtes.append((date.fromisoformat(expiry_str) - today).days)
 
     if not dtes:
-        return None
+        logger.error(
+            "open_pp_dte.all_rows_unresolvable",
+            open_row_count=len(rows),
+            unresolved_keys=unresolved_keys,
+        )
+        raise OpenPPPositionUnresolvable(
+            f"{len(rows)} open overlay_pp row(s) exist but none resolved a DTE: {unresolved_keys}"
+        )
     return min(dtes)
 
 
@@ -1352,7 +1396,23 @@ def main() -> None:
         # --no-dry-run unblocked 2026-08-03: PP1 (delta ladder) and PP2 (delta-
         # targeted entry, monthly cadence decision) have both landed — see
         # docs/plan/3track-consolidation/tasks.md PP2/PP3.
-        open_dte = _open_pp_dte(args.db_path, args.bod_path)
+        try:
+            open_dte = _open_pp_dte(args.db_path, args.bod_path)
+        except OpenPPPositionUnresolvable as exc:
+            # Fail safe, not fail open: an overlay_pp position exists but we
+            # can't tell its DTE (or couldn't even query for one) is NOT the
+            # same as "flat", and must never fall through to bootstrap — see
+            # OpenPPPositionUnresolvable's docstring and DECISIONS.md
+            # 2026-08-20.
+            logger.error("auto_pp.open_position_unresolvable", error=str(exc))
+            print(
+                f"ERROR: overlay_pp appears open but its DTE could not be "
+                f"resolved — refusing to bootstrap a duplicate position. "
+                f"{exc} Check logs.",
+                file=sys.stderr,
+            )
+            _alert_bootstrap_failure("PP", "logs/pp_entry.log")
+            sys.exit(1)
         if open_dte is not None and open_dte > _PP_ROLL_DTE_THRESHOLD:
             logger.info("auto_pp.fresh_position_open", dte=open_dte)
             print(

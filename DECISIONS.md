@@ -5,6 +5,30 @@
 
 ---
 
+**`_open_pp_dte` failure semantics — `None` must never mean "unknown", only "flat" (2026-08-20, Animesh):**
+The 2026-08-13 fix (below) resolved the *how* of expiry parsing but left the *failure contract*
+unchanged: `_open_pp_dte()` returned `None` both when zero `overlay_pp` rows exist (genuinely
+flat) and when one or more rows exist but their expiry can't be resolved (DB query exception,
+regex miss, BOD-lookup miss). `main()`'s `--auto-pp` gate treats `None` as "nothing to do, go
+bootstrap" either way, so any resolution failure on a real open position was silently
+indistinguishable from having no position — and duplicated it again on 2026-08-20 (`NSE_FO|61604`
+2026-08-11 still `OPEN`, `NSE_FO|74009` 2026-08-20 freshly inserted, zero `paper_exit_events` rows
+for either; no `open_pp_dte.*` warning even logged this time, so the exact trigger for *this*
+occurrence — `--db-path` mismatch vs. a WAL-visibility race — is still open, see TODOS.md).
+
+Decision: `_open_pp_dte` now raises `OpenPPPositionUnresolvable` instead of returning `None` for
+every "can't determine state" case; `None` means exclusively "the query found zero open rows."
+`main()` catches the exception and hard-aborts (exit 1, Telegram alert) rather than falling
+through to `auto_pp_bootstrap`. General principle for this codebase going forward: a gate that
+exists to prevent a duplicate/unsafe action must treat "I don't know the current state" as
+"assume worst case, block" — never collapse it into the same return value as "state confirmed
+safe." Any future gate helper with this shape (existence-check + sub-decision requiring
+richer state) should split the two the same way: a robust existence check that fails closed, and
+a separate resolution step whose failure is distinguishable from "nothing to resolve."
+See TODOS.md 2026-08-20 for the manual DB reconciliation still needed on the two open legs.
+
+---
+
 **`_open_pp_dte` numeric-instrument-key blindness — PP auto-entry duplicate-position bug (2026-08-13, Animesh):**
 `_open_pp_dte()` (`scripts/strategies/three_track/paper_3track_overlay_entry.py`) exists solely
 to answer "is there already a fresh open `overlay_pp` position" so `main()`'s auto-entry gate can

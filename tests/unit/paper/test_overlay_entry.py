@@ -956,6 +956,47 @@ def test_auto_pp_bootstrap_failure_exits_1(tmp_path, capsys):
         assert "auto-PP bootstrap failed" in captured.err
 
 
+def test_auto_pp_aborts_hard_when_open_position_unresolvable(tmp_path, capsys):
+    """The core fix, 2026-08-20: when _open_pp_dte can't tell whether an open
+    overlay_pp position is fresh or due for roll (OpenPPPositionUnresolvable),
+    main() must hard-abort (exit 1, alert) and NEVER fall through to
+    auto_pp_bootstrap -- that fallthrough is exactly what produced the live
+    duplicate (NSE_FO|61604 2026-08-11 + NSE_FO|74009 2026-08-20, neither
+    closing the other). Reported by Animesh."""
+    from scripts.strategies.three_track.paper_3track_overlay_entry import (
+        OpenPPPositionUnresolvable,
+        main,
+    )
+
+    test_args = [
+        "paper_3track_overlay_entry.py",
+        "--auto-pp",
+        "--db-path",
+        str(tmp_path / "test.sqlite"),
+    ]
+
+    with (
+        patch("sys.argv", test_args),
+        patch("scripts.strategies.three_track.paper_3track_overlay_entry._open_pp_dte") as mock_dte,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.auto_pp_bootstrap"
+        ) as mock_bootstrap,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry._alert_bootstrap_failure"
+        ) as mock_alert,
+    ):
+        mock_dte.side_effect = OpenPPPositionUnresolvable("2 open rows, none resolved")
+
+        with pytest.raises(SystemExit) as excinfo:
+            main()
+
+        assert excinfo.value.code == 1
+        mock_bootstrap.assert_not_called()
+        mock_alert.assert_called_once()
+        captured = capsys.readouterr()
+        assert "refusing to bootstrap a duplicate" in captured.err
+
+
 def test_auto_pp_gate_violation_persisted(tmp_path, capsys):
     """A logged IVR gate violation from auto_pp_bootstrap is persisted via
     PaperStore.record_gate_violation — the log-only-gates contract (PP3,
@@ -1171,14 +1212,22 @@ def test_open_pp_dte_resolves_numeric_key_via_bod_fallback(tmp_path):
     mock_lookup.get_by_key.assert_called_once_with(key)
 
 
-def test_open_pp_dte_numeric_key_not_in_bod_returns_none_not_crash(tmp_path):
-    """A numeric key absent from the BOD file (stale BOD) logs a WARNING and
-    is skipped, not raised -- a gate helper must not crash the entry run.
+def test_open_pp_dte_numeric_key_not_in_bod_raises_not_none(tmp_path):
+    """A numeric key absent from the BOD file (stale BOD) is a genuinely open
+    position whose DTE we can't read -- this must raise
+    OpenPPPositionUnresolvable, NOT return None (which main() would read as
+    "flat, go ahead and bootstrap"). Regression test for the 2026-08-20 bug:
+    the pre-fix version returned None here, which is indistinguishable from
+    "no position at all" and let auto_pp_bootstrap silently duplicate the
+    still-open position.
     """
     import sqlite3
     from unittest.mock import MagicMock, patch
 
-    from scripts.strategies.three_track.paper_3track_overlay_entry import _open_pp_dte
+    from scripts.strategies.three_track.paper_3track_overlay_entry import (
+        OpenPPPositionUnresolvable,
+        _open_pp_dte,
+    )
     from src.paper.constants import STRATEGY_OVERLAY
 
     key = "NSE_FO|99999999"
@@ -1207,9 +1256,25 @@ def test_open_pp_dte_numeric_key_not_in_bod_returns_none_not_crash(tmp_path):
         mock_lookup_cls.from_file.return_value = mock_lookup
         mock_lookup.get_by_key.return_value = None
 
-        result = _open_pp_dte(db_path, tmp_path / "bod.json.gz")
+        with pytest.raises(OpenPPPositionUnresolvable, match=key):
+            _open_pp_dte(db_path, tmp_path / "bod.json.gz")
 
-    assert result is None
+
+def test_open_pp_dte_query_failure_raises_not_none(tmp_path):
+    """A DB read failure while checking for an open position must raise, not
+    return None -- "I don't know if a position is open" is not "flat".
+    Regression test for the same 2026-08-20 bug class: the pre-fix version
+    logged a WARNING and returned None on any query exception.
+    """
+    from scripts.strategies.three_track.paper_3track_overlay_entry import (
+        OpenPPPositionUnresolvable,
+        _open_pp_dte,
+    )
+
+    missing_db = tmp_path / "does_not_exist" / "test.sqlite"  # unopenable dir
+
+    with pytest.raises(OpenPPPositionUnresolvable):
+        _open_pp_dte(missing_db, tmp_path / "bod.json.gz")
 
 
 # ── Collar3b: --auto-collar bootstrap ───────────────────────────────────────
