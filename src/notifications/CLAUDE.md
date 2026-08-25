@@ -41,13 +41,15 @@ if notifier:
   it itself — see "Escaping Helpers (mandatory)" below. This is a deliberate design choice (not
   an oversight): auto-escaping inside `send()` would double-escape callers who already wrap a
   value in `mdcode()`.
-
-```python
-# Canonical message structure
-text = f"<pre>{summary_string}</pre>"
-```
-
-The `_format_combined_summary()` function in `daily_snapshot.py` produces the summary string. `send()` wraps it in `<pre>` tags before sending.
+- **No wrapping.** `send()` posts `text` exactly as authored — it does not wrap the body in
+  `<pre>`, a code fence, or anything else. A caller that wants a monospace block emits its own
+  ```` ``` ```` fence. (This paragraph previously described an HTML `<pre>` wrap that
+  `TelegramNotifier.send()` performed under the old parse_mode; that wrap was removed with the
+  MarkdownV2 migration and the description was left behind — corrected 2026-08-25, FMT-1.)
+- **Value formatting:** how a money figure, Greek, strike, percentage, expiry, or fenced table is
+  rendered is not this module's call to make ad hoc — see **`FORMATTING.md`** (project root) for
+  the canonical per-parameter-type rules, the context-override registry, and the
+  formatter-returns-unescaped contract that pairs with the escaping helpers below.
 
 ---
 

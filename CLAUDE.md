@@ -57,6 +57,7 @@ Module tree (file-level descriptions): **`CONTEXT_TREE.md`** — load only when 
 - Authoring or reviewing any task/story/spec mentioning expiry, DTE, or calendar logic → also read `REFERENCES.md` (expiry day changed Thursday→Tuesday, April 2026)
 - Adding a new entrypoint script, adding/editing any `logger.*()` call, or touching `src/utils/logging.py` → also read `LOGGING.md` (project root) — canonical logging standard; see `BUG-010` in `docs/bugs/bugs.md` for why it exists
 - Building or editing any Telegram/notification message text (strategy close/roll/entry alerts, gate-violation alerts) → also read `src/notifications/CLAUDE.md` §"Instrument Label Formatting" — canonical instrument-label formatting rule
+- Formatting any value into a Telegram message (money, Greeks, strikes, percentages, expiries, or any fenced monospace table) → also read `FORMATTING.md` (project root) — canonical per-parameter-type formatting standard, including the escaping-boundary contract
 
 ## Python Standards (new module checklist)
 
@@ -303,6 +304,7 @@ Never use a lower-ranked response to contradict Stage 3.
 | Session close / protocol audit | `.claude/skills/session-close/SKILL.md` |
 | Python review checklist | `REVIEW.md` |
 | Logging standard (entrypoint rule, line shape, event naming) | `LOGGING.md` |
+| Telegram value/table formatting standard (decimals, alignment, sign display) | `FORMATTING.md` |
 | Bug registry (confirmed defects) | `docs/bugs/bugs.md` |
 | Backtest → paper → live pipeline plan | `BACKTEST_PLAN.md` |
 | Council trigger criteria + workflow | `docs/council/README.md` |
