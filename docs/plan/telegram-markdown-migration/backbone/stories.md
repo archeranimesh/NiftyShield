@@ -274,24 +274,26 @@ original code-graph sweep (README.md's "Confirmed real callers" list, 2026-08-07
 This task closes that smaller set — pure escaping safety, not a format migration, same contract
 as MD-3/MD-4.
 
-**Files to change:**
-- `scripts/pre_market_brief.py` — both `gateway.send_plain_message()` calls (~L144, ~L197)
-- `scripts/strategies/ic/paper_ic_entry.py` — `_gate_alert` (~L255)
-- `scripts/strategies/ic/paper_ic_entry_v2.py` — `_gate_alert` (~L313)
-- `src/strategy/auto_close.py` — `auto_close_overlay` (~L235), `evaluate_pp_reentry_eod` (~L404)
-- `src/strategy/overlay_closer.py` — `close_collar_all` (~L268), `monetize_collar_put` (~L328,
-  ~L392)
+**Split 2026-08-25 (Animesh's request):** too many unrelated files for one session — split into
+three independently-completable sub-tasks below, each with its own commit/review/baseline-update
+cycle. `tasks.md`'s `MD-7` line is now an umbrella; work the `MD-7.1`/`MD-7.2`/`MD-7.3` entries.
 
-**Before any code:** the graph was stale relative to the working tree as of MD-6 (confirmed via
-`detect_changes` reporting no drift while `search_graph`/`get_code_snippet` still missed real
-`src/notifications/markdown.py` symbols) — re-verify graph freshness first; if still stale, fall
-back to `git log` → `grep`/`sed -n` → `Read` per the folder `prompt.md`'s escalation order, same
-as MD-6 had to. For each method: read the current f-string/format-string in full (not just
-`{placeholder}` locations) — per the story-level note at the top of this file, MarkdownV2
+**`scripts/dev/send_test_telegram.py:65` — confirmed out of scope (2026-08-25, Animesh):** it's a
+manual dev/debug utility invoked ad hoc by whoever's testing, not a cron or strategy event path —
+excluded from all three sub-tasks below. Its reason string in MD-6's `_BASELINE_UNESCAPED` should
+read as a deliberate won't-fix, not an open gap — update it in whichever sub-task lands first
+(see each sub-task's baseline-maintenance note).
+
+**Before any code (all sub-tasks):** the graph was stale relative to the working tree as of MD-6
+(confirmed via `detect_changes` reporting no drift while `search_graph`/`get_code_snippet` still
+missed real `src/notifications/markdown.py` symbols) — re-verify graph freshness first; if still
+stale, fall back to `git log` → `grep`/`sed -n` → `Read` per the folder `prompt.md`'s escalation
+order, same as MD-6 had to. For each method: read the current f-string/format-string in full (not
+just `{placeholder}` locations) — per the story-level note at the top of this file, MarkdownV2
 reserves ordinary prose punctuation, not just markup characters, so static template text needs
 the same audit as MD-3/MD-4 gave their files.
 
-**What to change, per method:** same two-pass treatment as MD-3/MD-4 —
+**What to change, per method (all sub-tasks):** same two-pass treatment as MD-3/MD-4 —
 1. Every dynamic value interpolated into the message text gets `mdcode()` (identifiers) or
    `escape_markdown()` (free-form prose).
 2. The static template text itself gets checked for literal `.`/`(`/`)`/`-`/`!` and other
@@ -300,24 +302,55 @@ the same audit as MD-3/MD-4 gave their files.
 Do NOT change message wording/structure — that's `strategy-rollout/`'s job if any of these ever
 get a ROLL-N format pass. This task is purely: make the existing text safe under MarkdownV2.
 
-**Scope call needed before starting:** `scripts/dev/send_test_telegram.py:65` is a manual
-dev/debug utility (human-triggered, run directly by whoever's testing, not by a cron or strategy
-event) — confirm with Animesh whether it's in scope for this task or should instead get a
-documented won't-fix reason added to MD-6's `_BASELINE_UNESCAPED` (lower urgency given the low
-blast radius). Do not silently drop it from tracking either way — one or the other, recorded.
+**Tests (all sub-tasks):** one test per method proving an underscore-bearing dynamic value (e.g.
+a strategy_id fixture matching the real convention) survives `mdcode()`/`escape_markdown()`
+wrapping in the constructed message — same pattern as MD-3/MD-4.
 
-**Tests:** one test per method proving an underscore-bearing dynamic value (e.g. a strategy_id
-fixture matching the real convention) survives `mdcode()`/`escape_markdown()` wrapping in the
-constructed message — same pattern as MD-3/MD-4.
-
-**Baseline maintenance (mandatory, not optional):** remove each fixed call site's entry from
+**Baseline maintenance (mandatory, all sub-tasks):** remove each fixed call site's entry from
 `_BASELINE_UNESCAPED` in `tests/unit/notifications/test_escaping_guard.py` in the *same commit*
 as its fix — `test_baseline_entries_are_still_unescaped` and
 `test_baseline_has_no_duplicate_or_unused_entries` will fail otherwise (that file's own
-maintenance contract, see its module docstring). If `send_test_telegram.py` is scoped out per
-the call above, update its baseline entry's reason string instead of removing it.
+maintenance contract, see its module docstring).
 
-**Commit:** `fix(notifications): escape dynamic values in call sites surfaced by MD-6's guard`
+---
+
+### MD-7.1 — `scripts/pre_market_brief.py`
+
+**Files to change:** `scripts/pre_market_brief.py` — both `gateway.send_plain_message()` calls
+(~L144, ~L197).
+
+**Commit:** `fix(scripts): escape dynamic values in pre_market_brief Telegram sends`
+
+---
+
+### MD-7.2 — IC entry `_gate_alert` paths
+
+**Files to change:**
+- `scripts/strategies/ic/paper_ic_entry.py` — `_gate_alert` (~L255)
+- `scripts/strategies/ic/paper_ic_entry_v2.py` — `_gate_alert` (~L313)
+
+Both are a separate code path from the `send_notification()` calls MD-4.2 already escaped in
+these same two files — confirm the two paths don't share a text-building helper before assuming
+identical treatment.
+
+**Commit:** `fix(scripts): escape dynamic values in IC entry _gate_alert notifications`
+
+---
+
+### MD-7.3 — `auto_close.py` + `overlay_closer.py` close/monetize paths
+
+**Files to change:**
+- `src/strategy/auto_close.py` — `auto_close_overlay` (~L235), `evaluate_pp_reentry_eod` (~L404)
+  — both outside MD-3's `_send_close_notification`-only scope
+- `src/strategy/overlay_closer.py` — `close_collar_all` (~L268), `monetize_collar_put` (~L328,
+  ~L392)
+
+**Financial-logic commit note:** run real `@code-reviewer` (Opus) against `git diff HEAD` before
+committing — root `CLAUDE.md`'s AutoTrigger table requires it for close/monetize paths on live
+overlay strategies, the same tier as MD-3's audit, even though this task only touches escaping,
+not P&L computation.
+
+**Commit:** `fix(strategy): escape dynamic values in auto_close/overlay_closer notifications`
 
 ---
 

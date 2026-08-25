@@ -182,7 +182,11 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
     (
         "scripts/dev/send_test_telegram.py",
         65,
-    ): "untracked gap - manual dev/debug utility, never named in this epic",
+    ): (
+        "won't-fix (confirmed 2026-08-25, Animesh) - manual dev/debug utility invoked ad hoc "
+        "by whoever's testing, not a cron or strategy event path; deliberately excluded from "
+        "MD-7.1/MD-7.2/MD-7.3"
+    ),
     ("scripts/eod_summary.py", 114): "ROLL-6 - format confirmed, real code not yet migrated",
     ("scripts/healthcheck.py", 254): "ROLL-11 - format confirmed, real code not yet migrated",
     ("scripts/portfolio/daily_snapshot.py", 739): (
