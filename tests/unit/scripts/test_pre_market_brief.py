@@ -22,6 +22,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
+from unittest.mock import AsyncMock, patch  # noqa: E402
+
 from scripts.pre_market_brief import _compute_unrealized_with_fallback  # noqa: E402
 from src.paper.models import PaperLegSnapshot, PaperPosition  # noqa: E402
 from src.paper.store import PaperStore  # noqa: E402
@@ -137,9 +139,7 @@ async def test_futures_leg_no_snapshot_and_no_ltp_reports_zero(
 async def test_non_futures_leg_uses_live_ltp_unaffected(store: PaperStore) -> None:
     """A short put with genuine pre-market LTP is priced normally — no fallback."""
     broker = _StubBroker({_PE_KEY: Decimal("80")})
-    unrealized = await _compute_unrealized_with_fallback(
-        store, broker, _STRATEGY, [_pe_position()]
-    )
+    unrealized = await _compute_unrealized_with_fallback(store, broker, _STRATEGY, [_pe_position()])
     # Short leg: (avg_sell_price - ltp) * abs(net_qty) = (120 - 80) * 75
     assert unrealized == Decimal("3000")
 
@@ -165,3 +165,55 @@ async def test_mixed_futures_and_option_legs_combine_correctly(
         store, broker, _STRATEGY, [_fut_position(), _pe_position()]
     )
     assert unrealized == Decimal("1000.00") + Decimal("3000")
+
+
+@pytest.mark.asyncio
+async def test_main_escapes_markdown_in_telegram_message(tmp_path: Path) -> None:
+    """Ensure dynamic values and static punctuation are properly escaped for MarkdownV2."""
+    with (
+        patch("scripts.pre_market_brief.settings.telegram_bot_token", "dummy"),
+        patch("scripts.pre_market_brief.settings.telegram_chat_id", "dummy"),
+        patch("scripts.pre_market_brief.settings.db_path", str(tmp_path / "test.db")),
+        patch("scripts.pre_market_brief.settings.upstox_env", "test"),
+        patch("scripts.pre_market_brief.create_client"),
+        patch("scripts.pre_market_brief.get_current_ivr", return_value=0.532),
+        patch("scripts.pre_market_brief.PaperStore") as mock_store_cls,
+        patch(
+            "scripts.pre_market_brief._compute_unrealized_with_fallback",
+            return_value=Decimal("123.45"),
+        ),
+        patch(
+            "scripts.pre_market_brief.TelegramGateway.send_plain_message", new_callable=AsyncMock
+        ) as mock_send,
+    ):
+        mock_store = mock_store_cls.return_value
+        mock_store.get_strategy_names.return_value = ["paper_nifty_futures_v1_under_score"]
+
+        pos = PaperPosition(
+            strategy_name="paper_nifty_futures_v1_under_score",
+            leg_role="test",
+            net_qty=1,
+            avg_cost=Decimal("0"),
+            avg_sell_price=Decimal("0"),
+            instrument_key="123",
+            option_type="CE",
+        )
+        mock_store.get_positions.return_value = [pos]
+        mock_send.return_value = True
+
+        from scripts.pre_market_brief import main
+
+        await main()
+
+        mock_send.assert_called_once()
+        msg = mock_send.call_args[0][0]
+
+        assert r"`paper_nifty_futures_v1_under_score`" in msg, (
+            "Strategy name should be mdcode escaped"
+        )
+        assert r"₹\+123\.45" in msg, "P&L should be backslash escaped"
+        assert r"53\.2\%" in msg or r"53\.2%" in msg, "IVR should be backslash escaped"
+        assert r"\-" in msg, "Date should have hyphens escaped"
+        assert r"<\b\>" in msg or r"<b\>" in msg, (
+            "Literal HTML should be escaped (due to > being reserved)"
+        )

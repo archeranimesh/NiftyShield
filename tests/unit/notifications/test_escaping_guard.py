@@ -198,14 +198,6 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "scripts/position_health_check.py",
         135,
     ): "ROLL-12 - format confirmed, real code not yet migrated",
-    (
-        "scripts/pre_market_brief.py",
-        144,
-    ): "untracked gap - not named in any MD-*/ROLL-* task or TODO.md queue",
-    (
-        "scripts/pre_market_brief.py",
-        197,
-    ): "untracked gap - not named in any MD-*/ROLL-* task or TODO.md queue",
     ("scripts/strategies/ic/paper_ic_entry.py", 255): (
         "untracked gap - _gate_alert's direct .send() is a separate path from the "
         "send_notification() calls MD-4.2 escaped in this file"

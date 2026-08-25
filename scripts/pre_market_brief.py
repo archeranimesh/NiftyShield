@@ -27,6 +27,7 @@ from src.backtest.vix_ingest import load_vix_series  # noqa: E402
 from src.client.factory import create_client  # noqa: E402
 from src.client.protocol import BrokerClient  # noqa: E402
 from src.config import settings  # noqa: E402
+from src.notifications.markdown import escape_markdown, mdcode  # noqa: E402
 from src.notifications.telegram_gateway import TelegramGateway  # noqa: E402
 from src.paper.models import PaperPosition  # noqa: E402
 from src.paper.store import PaperStore  # noqa: E402
@@ -137,7 +138,7 @@ async def main() -> int:
     strategy_names = await asyncio.to_thread(store.get_strategy_names)
     if not strategy_names:
         logger.info("No paper strategies with trades found in database.")
-        msg = (
+        msg = escape_markdown(
             "☀️ <b>NiftyShield Pre-Market Brief</b>\n"
             + "No active paper trading strategies found in database."
         )
@@ -150,9 +151,9 @@ async def main() -> int:
     ivr_text = f"{ivr_val * 100:.1f}%" if ivr_val is not None else "N/A"
 
     msg_lines = [
-        "☀️ <b>NiftyShield Pre-Market Brief</b>",
-        f"Date: {date.today().isoformat()}",
-        f"India VIX IVR: {ivr_text}",
+        escape_markdown("☀️ <b>NiftyShield Pre-Market Brief</b>"),
+        escape_markdown(f"Date: {date.today().isoformat()}"),
+        escape_markdown(f"India VIX IVR: {ivr_text}"),
         "",
     ]
 
@@ -166,9 +167,7 @@ async def main() -> int:
 
         has_open_positions = True
         try:
-            unrealized = await _compute_unrealized_with_fallback(
-                store, broker, name, open_legs
-            )
+            unrealized = await _compute_unrealized_with_fallback(store, broker, name, open_legs)
         except Exception as e:
             # Intentional: Isolate P&L calculation failures per strategy
             logger.warning(
@@ -180,15 +179,15 @@ async def main() -> int:
 
         msg_lines.extend(
             [
-                f"🔹 <b>{name}</b>",
-                f"  Legs: {len(open_legs)}",
-                f"  Unrealized P&L: ₹{float(unrealized):+,.2f}",
+                escape_markdown("🔹 <b>") + mdcode(name) + escape_markdown("</b>"),
+                escape_markdown(f"  Legs: {len(open_legs)}"),
+                escape_markdown(f"  Unrealized P&L: ₹{float(unrealized):+,.2f}"),
                 "",
             ]
         )
 
     if not has_open_positions:
-        no_pos_msg = "No active open positions across paper trading strategies."
+        no_pos_msg = escape_markdown("No active open positions across paper trading strategies.")
         msg_lines.append(no_pos_msg)
 
     full_message = "\n".join(msg_lines)
