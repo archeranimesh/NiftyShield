@@ -1525,7 +1525,7 @@ async def _compute_overlay_leg_totals(
             totals[role] = (unrealized, realized, unrealized + realized, None, net_qty)
 
         # Runs regardless of `notifier` — logging must not go silent just
-        # because Telegram credentials were unset (code-review finding,
+        # because Telegram credentials are unset (code-review finding,
         # 2026-08-24; see _check_overlay_multi_instrument_alert docstring).
         await _check_overlay_multi_instrument_alert(store, role, snap_date, n, notifier)
 
@@ -1831,7 +1831,7 @@ def _build_recovery_digest(snap: ProtectionRecoverySnapshot) -> str:
         if snap.best_overlay:
             lines.append(
                 escape_markdown(
-                    f"\nBest: {_RECOVERY_OVERLAY_LABELS[snap.best_overlay]}"
+                    f"Best: {_RECOVERY_OVERLAY_LABELS[snap.best_overlay]}"
                 )
             )
     else:

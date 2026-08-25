@@ -135,7 +135,7 @@ async def test_no_active_variants(
     )
     await _run(args)
     mock_telegram.send_notification.assert_called_once_with(
-        "IC EOD: no open positions across all expiry types."
+        "IC EOD: no open positions across all expiry types\\."
     )
 
 
@@ -186,7 +186,7 @@ async def test_one_variant_active(
     assert "Short Put" in call_arg
     assert "P&L: combined" in call_arg
     # because DTE 0 <= dte_warn 21
-    assert "Today's signals: DTE_WARN" in call_arg
+    assert "Today's signals: DTE\\_WARN" in call_arg
 
 
 @pytest.mark.asyncio
@@ -280,7 +280,7 @@ async def test_intraday_acted_event(
         await _run(args)
 
     call_arg = mock_telegram.send_notification.call_args[0][0]
-    expected = "Intraday actions: PROFIT_TARGET → CLOSE_FULL executed at 11:42"
+    expected = "Intraday actions: PROFIT\\_TARGET → CLOSE\\_FULL executed at 11:42"
     assert expected in call_arg
 
 
@@ -336,7 +336,7 @@ async def test_unresolved_action_signal_at_eod(
 
     call_arg = mock_telegram.send_notification.call_args[0][0]
     assert "⚠️  Unresolved ACTION signals:" in call_arg
-    expected = "TIME_STOP 🔴  DTE 14 — position should have been closed today"
+    expected = "TIME\\_STOP 🔴  DTE 14 — position should have been closed today"
     assert expected in call_arg
 
 
@@ -383,7 +383,7 @@ async def test_dte_warning_noted(
         await _run(args)
 
     call_arg = mock_telegram.send_notification.call_args[0][0]
-    assert "Today's signals: DTE_WARN ℹ️" in call_arg
+    assert "Today's signals: DTE\\_WARN ℹ️" in call_arg
 
 
 @pytest.mark.asyncio
@@ -694,7 +694,7 @@ async def test_v2_monthly_included_in_audit(
 
     assert mock_telegram.send_notification.call_count == 1
     call_arg = mock_telegram.send_notification.call_args[0][0]
-    assert "📋 IC EOD Audit — monthly (paper_ic_nifty_v2_monthly)" in call_arg
+    assert "📋 IC EOD Audit — monthly \\(paper\\_ic\\_nifty\\_v2\\_monthly\\)" in call_arg
     mock_v2_class.assert_called_once()
 
 @pytest.mark.asyncio
@@ -712,7 +712,7 @@ async def test_v2_no_position_skipped(
     await _run(args)
     mock_v2_class.assert_not_called()
     mock_telegram.send_notification.assert_called_once_with(
-        "IC EOD: no open positions across all expiry types."
+        "IC EOD: no open positions across all expiry types\\."
     )
 
 @pytest.mark.asyncio
@@ -758,7 +758,7 @@ async def test_v1_loop_unchanged(
 
     assert mock_telegram.send_notification.call_count == 1
     call_arg = mock_telegram.send_notification.call_args[0][0]
-    assert "📋 IC EOD Audit — monthly (paper_ic_nifty_v1_monthly)" in call_arg
+    assert "📋 IC EOD Audit — monthly \\(paper\\_ic\\_nifty\\_v1\\_monthly\\)" in call_arg
     mock_v2_class.assert_not_called()
 
 
@@ -1021,7 +1021,7 @@ async def test_process_variant_unresolvable_key_falls_back_no_expiry_found(
         )
 
     assert report is not None
-    assert "Error: Expiry date could not be parsed from positions." in report
+    assert "Error: Expiry date could not be parsed from positions\\." in report
     events = [entry["event"] for entry in logs]
     assert "ic_snapshot.no_expiry_found" in events
 

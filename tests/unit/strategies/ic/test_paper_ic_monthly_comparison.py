@@ -78,8 +78,8 @@ def test_comparison_report_format():
     assert "V1 Monthly" in report
     assert "V2 Monthly" in report
     assert "Zone 2 ✓" in report
-    assert "1 rolls + 1 locks" in report
-    assert "Edge so far:  V2 +₹1,500 vs V1" in report
+    assert "1 rolls \\+ 1 locks" in report
+    assert "Edge so far:  V2 \\+₹1,500 vs V1" in report
 
 
 def test_comparison_report_one_missing():
@@ -121,7 +121,7 @@ def test_comparison_report_one_missing():
     # V1 total: 1500 + 7500 = 9000
     # V2 total: 2500 + 0 = 2500
     # V2 - V1 = -6500
-    assert "Edge so far:  V1 +₹6,500 vs V2" in report
+    assert "Edge so far:  V1 \\+₹6,500 vs V2" in report
 
 
 def test_edge_calculation():
@@ -157,7 +157,7 @@ def test_edge_calculation():
     )
 
     report = build_comparison_report(v1, v2, date(2026, 6, 27))
-    assert "Edge so far:  V2 +₹50 vs V1" in report
+    assert "Edge so far:  V2 \\+₹50 vs V1" in report
 
 
 @pytest.mark.asyncio
@@ -381,24 +381,25 @@ def test_comparison_report_long_label_no_collision():
     header_line = next(line for line in lines if "V1 Monthly" in line)
     row_labels = [
         "Entry credit", "Captured", "Short put Δ", "Short call Δ", "DTE",
-        "Unrealized P&L", "Realized (month)", "Profit-lock zone", "Adjustments",
+        "Unrealized P&L", "Realized \\(month\\)", "Profit\\-lock zone", "Adjustments",
         "Signals today",
     ]
     data_lines = [
         line for line in lines if any(line.startswith(label) for label in row_labels)
     ]
     for line in data_lines:
-        assert len(line) == len(header_line), f"misaligned row: {line!r}"
+        assert len(line.replace('\\', '')) == len(header_line.replace('\\', '')), f"misaligned row: {line!r}"
 
     # Values must be right-aligned under their header, not glued to the label.
-    v1_col_start = header_line.index("V1 Monthly")
+    v1_col_start = header_line.replace('\\', '').index("V1 Monthly")
     for line in data_lines:
         # every data row is "label + value1 + gap + value2", so the char right
         # before the V1 header's start column must be part of the label's
         # trailing padding (space) unless the value itself is exactly as wide
         # as the column — either way there must be no label/value collision,
         # verified by round-tripping the known cell values below.
-        assert line[v1_col_start - 1] == " " or v1_col_start == 0
+        clean_line = line.replace('\\', '')
+        assert clean_line[v1_col_start - 1] == " " or v1_col_start == 0
 
 
 def test_column_width_derived_not_hand_counted():
@@ -444,7 +445,7 @@ def test_column_width_derived_not_hand_counted():
     lines = report.splitlines()
     header_line = next(line for line in lines if "V1 Monthly" in line)
     realized_line = next(line for line in lines if line.startswith("Realized"))
-    assert len(realized_line) == len(header_line)
+    assert len(realized_line.replace('\\', '')) == len(header_line.replace('\\', ''))
     assert "₹123,456" in realized_line
 
 

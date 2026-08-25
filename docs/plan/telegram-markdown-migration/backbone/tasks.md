@@ -39,26 +39,70 @@
       currently open in production: every existing caller's dynamic values are unescaped
       against MarkdownV2.** MD-3 and MD-4 are next up and should be treated as urgent, not
       routine backlog — pick them up before anything else in this epic or elsewhere.
-- [ ] **MD-3** — Audit + fix strategy close/roll notifications (7 classes) for unescaped dynamic
+- [x] **MD-3** (62d0172) — Audit + fix strategy close/roll notifications (7 classes) for unescaped dynamic
       values | Blocked by: MD-2
       | Owner: Antigravity | Model: n/a | Review: **real @code-reviewer, Opus — mandatory**
       (financial-logic close-notification paths per AutoTrigger table). Mechanical per-class
       audit-and-fix with a fully unambiguous spec — good Antigravity fit — but the Opus gate
       applies regardless of implementer.
-- [ ] **MD-4** — Audit + fix reporting scripts + `send_approval_request` for unescaped dynamic
-      values | Blocked by: MD-2
-      | **Split by risk:**
-      — `paper_ic_snapshot.py`, `paper_ic_monthly_comparison.py`, `_build_recovery_digest`:
-      Owner: Antigravity | Model: n/a | Review: code-reviewer — mechanical escaping pass, no
-      auth/judgment
-      — `TelegramGateway.send_approval_request`: Owner: Claude | Model: Sonnet | Review:
-      **real @code-reviewer, Opus — mandatory** — auth-sensitive interactive-keyboard path,
-      requires live coordination-check against `telegram-approval-auth-fix` before touching;
-      real-time judgment, not delegate-and-forget
+- [ ] **MD-4** — Umbrella: audit + fix all remaining unescaped `TelegramGateway` surfaces
+      (reporting, entry, gateway parse_mode, approval-request) | Blocked by: MD-2 | Split into
+      MD-4.1 / MD-4.2 / MD-4.3 below (2026-08-25) — track completion on the sub-tasks, not this
+      line; check this box only once all three are done.
+      | **Scope expanded 2026-08-25 (Animesh, explicit decision — not Antigravity-initiated):**
+      original scope was the 3 reporting builders only. Cowork review (Claude) surfaced that
+      `TelegramGateway.send_notification` was still hardcoded to `parse_mode: HTML` — escaping
+      dynamic values in the 3 reporting builders without migrating the gateway itself would have
+      corrupted output (literal backslashes rendered, since HTML mode never strips MarkdownV2
+      escaping). Further review found `send_notification` is also called from
+      `paper_ic_entry.py` and `paper_ic_entry_v2.py` (entry-signal alerts) — migrating the
+      gateway's parse_mode without escaping those two callers in the same sitting would recreate
+      MD-2's live-risk-window bug for entry notifications. Animesh chose to fold the gateway
+      migration and both entry scripts into MD-4 rather than spin off a blocking sub-task.
+
+- [x] **MD-4.1** (Commit: cd1e554) — Flip `TelegramGateway.send_notification` from `parse_mode: HTML` to
+      `MarkdownV2` (`src/notifications/telegram_gateway.py`) | Blocked by: MD-2
+      | **Owner: ANTIGRAVITY** | Model: n/a | Review: code-reviewer — mechanical, but touches a
+      shared gateway method with 5 live call sites (3 reporting scripts in MD-4.2 + 2 entry
+      scripts in MD-4.2); the reviewer must verify all 5 callers are escaped and land in the
+      **same commit/sitting** as MD-4.2 — landing MD-4.1 alone reopens the exact live-risk-window
+      bug called out on MD-2 (unescaped dynamic values sent through a parser that now enforces
+      reserved characters). Do not merge MD-4.1 without MD-4.2 ready to follow immediately.
+      | Tests: `tests/unit/notifications/test_telegram_gateway.py`
+
+- [x] **MD-4.2** (Commit: cd1e554) — Apply `escape_markdown`/`mdcode` to all dynamic values + static punctuation
+      in the 5 reporting/entry scripts that call `TelegramGateway.send_notification` | Blocked
+      by: MD-4.1 (must land together, see note above)
+      | **Owner: ANTIGRAVITY** | Model: n/a | Review: code-reviewer — mechanical escaping pass,
+      no auth/judgment
+      | Files:
+      — `paper_ic_snapshot.py` (`process_variant`, `get_action_taken`)
+      — `paper_ic_monthly_comparison.py` (`build_comparison_report` + `fmt_*` helpers)
+      — `paper_3track_snapshot.py` (`_build_recovery_digest` only — other `notifier.send()` call
+      sites in that file are explicitly out of scope, tracked separately, not closed by this)
+      — `paper_ic_entry.py` (entry-signal notifications, ~L743/~L806)
+      — `paper_ic_entry_v2.py` (entry-signal notifications, ~L663/~L725)
+      | Tests: `tests/unit/strategies/ic/test_paper_ic_snapshot.py`,
+      `tests/unit/strategies/ic/test_paper_ic_monthly_comparison.py`,
+      `tests/unit/scripts/test_paper_3track_protection_recovery.py`,
+      `tests/unit/strategies/ic/test_paper_ic_entry.py`,
+      `tests/unit/strategies/ic/test_paper_ic_entry_v2.py`
+
+- [ ] **MD-4.3** — Escape `TelegramGateway.send_approval_request` for unescaped dynamic values
+      | Blocked by: MD-2 (independent of MD-4.1/MD-4.2 — different method, different
+      `parse_mode` already on its own line, not touched by the send_notification migration)
+      | **Owner: CLAUDE** | Model: Sonnet | Review: **real @code-reviewer, Opus — mandatory** —
+      auth-sensitive interactive-keyboard path, requires live coordination-check against
+      `telegram-approval-auth-fix` before touching; real-time judgment, not delegate-and-forget.
+      **Unaffected by the MD-4.1/4.2 scope expansion** — `send_approval_request` already
+      hardcodes its own `parse_mode: HTML` independently of `send_notification` and is not
+      touched by those two sub-tasks.
+      | Tests: TBD at implementation time (coordination-check with `telegram-approval-auth-fix`
+      may dictate test shape)
 - [ ] **MD-6** — Add a static-scan escaping guard: a test that walks `src/`/`scripts/` for
       `notifier.send(`/`send_plain_message(` call sites and asserts every interpolated dynamic
       value passed through `escape_markdown()`/`mdcode()` somewhere upstream | Blocked by:
-      MD-3, MD-4
+      MD-3, MD-4.1, MD-4.2, MD-4.3
       | Owner: Claude | Model: Sonnet | Review: code-reviewer — design judgment on what counts
       as "escaped" (AST-based vs. regex call-site detection, false-positive handling).
       **Sequencing note (corrected 2026-08-12):** an earlier session proposed sequencing this
@@ -70,6 +114,6 @@
       `formatting-rules/`'s and `strategy-rollout/`'s new call sites, since `backbone/` must be
       fully complete before either of those can start regardless.
 - [ ] **MD-5** — Docs close: `src/notifications/CLAUDE.md`, `DECISIONS.md`, `CONTEXT.md`,
-      `TODOS.md` | Blocked by: MD-3, MD-4, MD-6
+      `TODOS.md` | Blocked by: MD-3, MD-4.1, MD-4.2, MD-4.3, MD-6
       | Owner: Antigravity | Model: n/a | Review: none (docs only) — also document MD-6's guard
       contract in `src/notifications/CLAUDE.md` alongside the escaping-helper rule

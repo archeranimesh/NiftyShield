@@ -33,7 +33,7 @@ from scripts.strategies.ic.ic_entry_gates import (
 from src.backtest.ivr import compute_ivr
 from src.backtest.vix_ingest import fetch_vix_latest, load_vix_series
 from src.client.upstox_live import UpstoxLiveClient
-from src.client.upstox_market import UpstoxMarketClient, parse_upstox_option_chain
+from src.client.upstox_market import UpstoxMarketClient
 from src.config import settings
 from src.instruments.lookup import InstrumentLookup, format_option_label
 from src.instruments.strike_selector import (
@@ -42,8 +42,7 @@ from src.instruments.strike_selector import (
     rank_strikes,
 )
 from src.intraday.market_store import IntradayMarketStore
-from src.market_calendar.holidays import is_trading_day
-from src.notifications.markdown import escape_markdown, mdcode
+from src.notifications.markdown import escape_markdown
 from src.notifications.telegram import build_notifier
 from src.notifications.telegram_gateway import TelegramGateway
 from src.paper.constants import (
@@ -743,10 +742,8 @@ async def run() -> None:
                     db_path=str(args.db_path),
                 )
                 await tg.send_notification(
-                    escape_markdown(f"⚠️ IC Entry — {args.expiry_type} (")
-                    + mdcode(config.strategy_name)
-                    + escape_markdown(
-                        f")\n"
+                    escape_markdown(
+                        f"⚠️ IC Entry — {args.expiry_type} ({config.strategy_name})\n"
                         f"{detail}\n"
                         f"Check logs immediately."
                     )
@@ -788,24 +785,20 @@ async def run() -> None:
 
         # Step 13: Telegram notification — only reached once all 4 legs are
         # confirmed present in the DB.
-        msg = (
-            escape_markdown(f"✅ IC Entry — {args.expiry_type} (")
-            + mdcode(config.strategy_name)
-            + escape_markdown(
-                f")\n"
-                f"Mode: {mode}\n"
-                f"IVR: {ivr:.2f}  DTE: {dte}  Nifty: {nifty_spot:,.0f}\n\n"
-                f"Short Put  {format_option_label('NIFTY', short_put['strike'], 'PE', expiry_str)}  "
-                f"δ={abs(short_put['delta']):.3f}  mid=₹{short_put['mid']:.2f}\n"
-                f"Long Put   {format_option_label('NIFTY', long_put_strike, 'PE', expiry_str)}   "
-                f"(hedge)  mid=₹{long_put['mid']:.2f}\n"
-                f"Short Call {format_option_label('NIFTY', short_call['strike'], 'CE', expiry_str)} "
-                f"δ={abs(short_call['delta']):.3f}  mid=₹{short_call['mid']:.2f}\n"
-                f"Long Call  {format_option_label('NIFTY', long_call_strike, 'CE', expiry_str)}  "
-                f"(hedge)  mid=₹{long_call['mid']:.2f}\n\n"
-                f"Net credit: ₹{net_credit:.2f}/lot  "
-                f"(₹{net_credit * LOT_SIZE:,.0f} for {LOT_SIZE} units)"
-            )
+        msg = escape_markdown(
+            f"✅ IC Entry — {args.expiry_type} ({config.strategy_name})\n"
+            f"Mode: {mode}\n"
+            f"IVR: {ivr:.2f}  DTE: {dte}  Nifty: {nifty_spot:,.0f}\n\n"
+            f"Short Put  {format_option_label('NIFTY', short_put['strike'], 'PE', expiry_str)}  "
+            f"δ={abs(short_put['delta']):.3f}  mid=₹{short_put['mid']:.2f}\n"
+            f"Long Put   {format_option_label('NIFTY', long_put_strike, 'PE', expiry_str)}   "
+            f"(hedge)  mid=₹{long_put['mid']:.2f}\n"
+            f"Short Call {format_option_label('NIFTY', short_call['strike'], 'CE', expiry_str)} "
+            f"δ={abs(short_call['delta']):.3f}  mid=₹{short_call['mid']:.2f}\n"
+            f"Long Call  {format_option_label('NIFTY', long_call_strike, 'CE', expiry_str)}  "
+            f"(hedge)  mid=₹{long_call['mid']:.2f}\n\n"
+            f"Net credit: ₹{net_credit:.2f}/lot  "
+            f"(₹{net_credit * LOT_SIZE:,.0f} for {LOT_SIZE} units)"
         )
         try:
             tg = TelegramGateway(

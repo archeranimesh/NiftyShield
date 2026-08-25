@@ -363,7 +363,7 @@ async def test_entry_preview_message_shows_long_leg_mid(
     assert "Long Call" in sent_msg
     for line in sent_msg.splitlines():
         if line.strip().startswith("Long Put") or line.strip().startswith("Long Call"):
-            assert "mid=₹" in line
+            assert "mid\\=₹" in line
 
 
 @pytest.mark.asyncio

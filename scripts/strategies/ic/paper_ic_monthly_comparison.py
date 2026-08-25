@@ -299,37 +299,35 @@ def build_comparison_report(v1: ICMonthlyStats, v2: ICMonthlyStats, report_date:
     """Build a Telegram-formatted plain-text comparison table."""
 
     def fmt_pts(v: Decimal | None) -> str:
-        return escape_markdown(f"₹{v:,.0f}") if v is not None else escape_markdown("N/A")
+        return f"₹{v:,.0f}" if v is not None else "N/A"
 
     def fmt_pct(v: Decimal | None) -> str:
-        return (
-            escape_markdown(f"{int(round(v * 100))}%") if v is not None else escape_markdown("N/A")
-        )
+        return f"{int(round(v * 100))}%" if v is not None else "N/A"
 
     def fmt_delta(v: Decimal | None) -> str:
-        return escape_markdown(f"{v:.2f}") if v is not None else escape_markdown("N/A")
+        return f"{v:.2f}" if v is not None else "N/A"
 
     def fmt_dte(v: int | None) -> str:
-        return escape_markdown(str(v)) if v is not None else escape_markdown("N/A")
+        return str(v) if v is not None else "N/A"
 
     def fmt_pnl(v: Decimal) -> str:
-        return escape_markdown(f"₹{v:,.0f}")
+        return f"₹{v:,.0f}"
 
     def fmt_zone(z: int, is_v2: bool) -> str:
         if not is_v2:
-            return escape_markdown("N/A")
-        return escape_markdown(f"Zone {z} ✓") if z > 0 else escape_markdown("None")
+            return "N/A"
+        return f"Zone {z} ✓" if z > 0 else "None"
 
     def fmt_adj(v1_stat: bool, rolls: int, locks: int) -> str:
         if v1_stat:
-            return escape_markdown(f"{rolls} rolls")
+            return f"{rolls} rolls"
         else:
-            return escape_markdown(f"{rolls} rolls + {locks} locks")
+            return f"{rolls} rolls + {locks} locks"
 
     def fmt_sigs(sigs: list[str]) -> str:
         if not sigs:
-            return escape_markdown("—")
-        return escape_markdown(", ".join(sigs))
+            return "—"
+        return ", ".join(sigs)
 
     # Edge calculation
     v1_total = v1.realized_pnl_month + v1.unrealized_pnl
@@ -354,7 +352,7 @@ def build_comparison_report(v1: ICMonthlyStats, v2: ICMonthlyStats, report_date:
     v2_open = v2.has_open_position
 
     def safe_col(val: str, is_open: bool) -> str:
-        return val if is_open else escape_markdown("No open position")
+        return val if is_open else "No open position"
 
     # TGFMT-1: dynamic label/column widths, right-aligned value columns.
     # Previous implementation hand-counted literal spaces per label to hit a
@@ -415,8 +413,9 @@ def build_comparison_report(v1: ICMonthlyStats, v2: ICMonthlyStats, report_date:
     ]
     for label, v1_cell, v2_cell in rows:
         lines.append(
-            escape_markdown(f"{label:<{label_width}}")
-            + f"{v1_cell:>{col1_width}}  {v2_cell:>{col2_width}}"
+            escape_markdown(
+                f"{label:<{label_width}}{v1_cell:>{col1_width}}  {v2_cell:>{col2_width}}"
+            )
         )
     lines += ["", edge_line]
 

@@ -51,7 +51,7 @@ from src.instruments.strike_selector import (
     filter_strikes_by_delta,
     rank_strikes,
 )
-from src.notifications.markdown import escape_markdown, mdcode
+from src.notifications.markdown import escape_markdown
 from src.notifications.telegram import build_notifier
 from src.notifications.telegram_gateway import TelegramGateway
 from src.paper.constants import (
@@ -662,10 +662,8 @@ async def run() -> None:
                     db_path=str(args.db_path),
                 )
                 await tg.send_notification(
-                    escape_markdown(f"⚠️ IC V2 Entry — {args.expiry_type} (")
-                    + mdcode(strategy_name)
-                    + escape_markdown(
-                        f")\n"
+                    escape_markdown(
+                        f"⚠️ IC V2 Entry — {args.expiry_type} ({strategy_name})\n"
                         f"{detail}\n"
                         f"Check logs immediately."
                     )
@@ -707,23 +705,19 @@ async def run() -> None:
         # confirmed present in the DB.
         wing_width_put = abs(short_put["strike"] - long_put["strike"])
         wing_width_call = abs(long_call["strike"] - short_call["strike"])
-        msg = (
-            escape_markdown(f"✅ IC V2 Entry — {args.expiry_type} (")
-            + mdcode(strategy_name)
-            + escape_markdown(
-                f")\n"
-                f"IVR: {ivr:.2f}  DTE: {dte}  Nifty: {nifty_spot:,.0f}\n\n"
-                f"Short Put  {int(short_put['strike'])}PE  "
-                f"δ={abs(short_put['delta']):.3f}  mid=₹{short_put['mid']:.2f}\n"
-                f"Long Put   {int(long_put['strike'])}PE   "
-                f"δ={abs(long_put['delta']):.3f}  width={wing_width_put:.0f}pts\n"
-                f"Short Call {int(short_call['strike'])}CE "
-                f"δ={abs(short_call['delta']):.3f}  mid=₹{short_call['mid']:.2f}\n"
-                f"Long Call  {int(long_call['strike'])}CE  "
-                f"δ={abs(long_call['delta']):.3f}  width={wing_width_call:.0f}pts\n\n"
-                f"Net credit: ₹{net_credit:.2f}/lot  "
-                f"(₹{net_credit * LOT_SIZE:,.0f} for {LOT_SIZE} units)"
-            )
+        msg = escape_markdown(
+            f"✅ IC V2 Entry — {args.expiry_type} ({strategy_name})\n"
+            f"IVR: {ivr:.2f}  DTE: {dte}  Nifty: {nifty_spot:,.0f}\n\n"
+            f"Short Put  {int(short_put['strike'])}PE  "
+            f"δ={abs(short_put['delta']):.3f}  mid=₹{short_put['mid']:.2f}\n"
+            f"Long Put   {int(long_put['strike'])}PE   "
+            f"δ={abs(long_put['delta']):.3f}  width={wing_width_put:.0f}pts\n"
+            f"Short Call {int(short_call['strike'])}CE "
+            f"δ={abs(short_call['delta']):.3f}  mid=₹{short_call['mid']:.2f}\n"
+            f"Long Call  {int(long_call['strike'])}CE  "
+            f"δ={abs(long_call['delta']):.3f}  width={wing_width_call:.0f}pts\n\n"
+            f"Net credit: ₹{net_credit:.2f}/lot  "
+            f"(₹{net_credit * LOT_SIZE:,.0f} for {LOT_SIZE} units)"
         )
         try:
             tg = TelegramGateway(

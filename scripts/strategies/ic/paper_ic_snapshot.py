@@ -28,7 +28,7 @@ from src.client.factory import create_client
 from src.client.upstox_market import parse_upstox_option_chain
 from src.config import settings
 from src.instruments.lookup import InstrumentLookup, parse_expiry
-from src.notifications.markdown import escape_markdown, mdcode
+from src.notifications.markdown import escape_markdown
 from src.notifications.telegram_gateway import TelegramGateway
 from src.paper.constants import DEFAULT_BOD_PATH, DEFAULT_DB_PATH, LOT_SIZE
 from src.paper.store import PaperStore
@@ -185,12 +185,9 @@ async def process_variant(
             "ic_snapshot.no_expiry_found",
             strategy=config.strategy_name,
         )
-        return (
-            escape_markdown(f"📋 IC EOD Audit — {expiry_type} (")
-            + mdcode(config.strategy_name)
-            + escape_markdown(
-                ")\nError: Expiry date could not be parsed from positions."
-            )
+        return escape_markdown(
+            f"📋 IC EOD Audit — {expiry_type} ({config.strategy_name})\n"
+            f"Error: Expiry date could not be parsed from positions."
         )
 
     dte = (expiry - snap_date).days
@@ -209,12 +206,9 @@ async def process_variant(
             expiry=expiry.isoformat(),
             error=str(exc),
         )
-        return (
-            escape_markdown(f"📋 IC EOD Audit — {expiry_type} (")
-            + mdcode(config.strategy_name)
-            + escape_markdown(
-                ")\nError: Failed to fetch live option chain."
-            )
+        return escape_markdown(
+            f"📋 IC EOD Audit — {expiry_type} ({config.strategy_name})\n"
+            f"Error: Failed to fetch live option chain."
         )
 
     # Fetch Nifty spot and VIX LTP
@@ -237,12 +231,9 @@ async def process_variant(
             strategy=config.strategy_name,
             error=str(exc),
         )
-        return (
-            escape_markdown(f"📋 IC EOD Audit — {expiry_type} (")
-            + mdcode(config.strategy_name)
-            + escape_markdown(
-                ")\nError: Signal evaluation failed."
-            )
+        return escape_markdown(
+            f"📋 IC EOD Audit — {expiry_type} ({config.strategy_name})\n"
+            f"Error: Signal evaluation failed."
         )
 
     # IVR
@@ -389,19 +380,15 @@ async def process_variant(
     else:
         intraday_str = "none"
 
-    report = (
-        escape_markdown(f"📋 IC EOD Audit — {expiry_type} (")
-        + mdcode(config.strategy_name)
-        + escape_markdown(
-            f")\n"
-            f"DTE: {dte}  |  Nifty: {nifty_spot:,.0f}  |  IVR: {ivr_str}\n\n"
-            f"Position:\n"
-            f"{position_block}\n\n"
-            f"{pnl_line}\n"
-            f"{roi_line}\n\n"
-            f"Today's signals: {sigs_str}\n"
-            f"Intraday actions: {intraday_str}"
-        )
+    report = escape_markdown(
+        f"📋 IC EOD Audit — {expiry_type} ({config.strategy_name})\n"
+        f"DTE: {dte}  |  Nifty: {nifty_spot:,.0f}  |  IVR: {ivr_str}\n\n"
+        f"Position:\n"
+        f"{position_block}\n\n"
+        f"{pnl_line}\n"
+        f"{roi_line}\n\n"
+        f"Today's signals: {sigs_str}\n"
+        f"Intraday actions: {intraday_str}"
     )
 
     # Append unresolved ACTION signals if present in events
@@ -492,11 +479,9 @@ async def _run(args: argparse.Namespace) -> None:
                 variant_version="v1",
             )
             reports.append(
-                escape_markdown(f"📋 IC EOD Audit — {expiry_type} (")
-                + mdcode(config.strategy_name)
-                + escape_markdown(
-                    ")\nError: Snapshot generation failed due to "
-                    "unexpected error."
+                escape_markdown(
+                    f"📋 IC EOD Audit — {expiry_type} ({config.strategy_name})\n"
+                    f"Error: Snapshot generation failed due to unexpected error."
                 )
             )
 
@@ -521,9 +506,10 @@ async def _run(args: argparse.Namespace) -> None:
                 variant_version="v2",
             )
             reports.append(
-                escape_markdown(f"📋 IC EOD Audit — {expiry_type} (")
-                + mdcode(config.strategy_name)
-                + escape_markdown(")\nError: Snapshot failed.")
+                escape_markdown(
+                    f"📋 IC EOD Audit — {expiry_type} ({config.strategy_name})\n"
+                    f"Error: Snapshot failed."
+                )
             )
 
     if not has_any_positions:
