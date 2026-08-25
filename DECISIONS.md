@@ -2231,3 +2231,45 @@ session narrative.
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty
 - Expired instruments via Upstox — blocked (paid). NSE F&O Bhavcopy is the adopted alternative (free)
 - Liquidity buffer rule + OI-based margin haircut — deferred to Phase 2 `src/risk/` expansion
+
+## 2026-08-25 — Telegram Markdown migration closed (MD-1 through MD-7.3)
+
+**Decision:** `TelegramNotifier.send()` and `TelegramGateway.send_notification` /
+`send_approval_request` now all send `parse_mode: MarkdownV2` (migrated off `HTML`). `send()`
+does not auto-escape — every caller is responsible for escaping dynamic values via
+`mdcode()`/`escape_markdown()` (`src/notifications/markdown.py`, MD-1). A static-scan guard test
+(`tests/unit/notifications/test_escaping_guard.py`, MD-6, SHA `ce95bbd`) now fails any new
+`.send()`/`.send_plain_message()`/`.send_notification()` call site that interpolates an
+unescaped dynamic value, with a `_BASELINE_UNESCAPED` allowlist for the one confirmed
+permanent won't-fix (`scripts/dev/send_test_telegram.py` — manual dev/debug utility).
+
+**Why:** the pre-migration `HTML` parse_mode with no escaping discipline let unescaped dynamic
+values (the `DELTA_WARN` bug class) reach Telegram's parser and cause silent 400s, swallowed by
+the non-fatal send contract — notifications (including delta-neutral close/roll alerts) could
+stop arriving with no error surfaced anywhere.
+
+**Sequencing:** MD-2 (flip `TelegramNotifier.send()` to MarkdownV2) intentionally landed alone
+per Animesh's explicit choice to keep the one-task-per-session protocol rather than bundle
+MD-3/MD-4 into the same sitting — this left a documented live-risk window (every existing
+caller's dynamic values unescaped against MarkdownV2's reserved-character set) open in
+production between 2026-08-18 and the MD-3/MD-4 audit-and-fix landing. MD-4 was expanded
+mid-epic (2026-08-25, Animesh) to also cover `TelegramGateway.send_notification`'s own
+HTML→MarkdownV2 flip (MD-4.1) plus its 5 live callers (MD-4.2) after Cowork review found the
+gateway itself was still hardcoded to HTML — escaping dynamic values without migrating the
+gateway would have corrupted output (literal backslashes rendered under HTML). MD-6's guard
+test was deliberately sequenced *after* MD-3/MD-4 completed, not right after MD-2, so it starts
+from an already-escaped baseline rather than immediately failing against known gaps. MD-6 then
+surfaced further unescaped call sites with no prior task covering them, closed as MD-7.1
+(`pre_market_brief.py`, SHA `39993bf`), MD-7.2 (IC entry `_gate_alert` paths, SHA `adfae40`),
+and MD-7.3 (`auto_close.py`/`overlay_closer.py`, SHA `04b469d`).
+
+**Known limitations, not fixed by this epic (tracked in `docs/bugs/bugs.md`):**
+- **BUG-038:** `OverlayCloser`'s 3 `notifier.send()` calls are unawaited coroutines against an
+  `async def` method — those alerts have likely never reached Telegram in production. Surfaced
+  during MD-7.3's review; pre-existing, not introduced by that diff; not fixed (escaping-only
+  scope).
+- `escape_markdown()` does not escape literal backslashes in dynamic values — pre-existing gap
+  in the MD-1 helper, also surfaced during MD-7.3's review, also not fixed (same reason).
+
+**Ref:** `docs/plan/telegram-markdown-migration/backbone/tasks.md` (MD-1…MD-7.3, all checked
+2026-08-25 except MD-5 itself, this docs-close task).

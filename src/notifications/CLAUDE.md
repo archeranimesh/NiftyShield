@@ -31,8 +31,16 @@ if notifier:
 ## Message Format
 
 - **Transport:** Raw `aiohttp` POST to the Telegram Bot API `sendMessage` endpoint.
-- **`parse_mode`:** `HTML` (not Markdown — Telegram's Markdown v1 is fragile with special chars).
-- **Body format:** `<pre>` block for monospace alignment on mobile.
+- **`parse_mode`:** `MarkdownV2` (migrated from HTML — `docs/plan/telegram-markdown-migration/`,
+  MD-1 through MD-7.3, completed 2026-08-25). `TelegramNotifier.send()`
+  (`src/notifications/telegram.py`) and `TelegramGateway.send_notification` /
+  `send_approval_request` (`src/notifications/telegram_gateway.py`) all send `parse_mode:
+  MarkdownV2`.
+- **`send()` does NOT auto-escape.** Every caller that interpolates a dynamic value, or writes
+  static template prose containing MarkdownV2-reserved punctuation, is responsible for escaping
+  it itself — see "Escaping Helpers (mandatory)" below. This is a deliberate design choice (not
+  an oversight): auto-escaping inside `send()` would double-escape callers who already wrap a
+  value in `mdcode()`.
 
 ```python
 # Canonical message structure
@@ -40,6 +48,53 @@ text = f"<pre>{summary_string}</pre>"
 ```
 
 The `_format_combined_summary()` function in `daily_snapshot.py` produces the summary string. `send()` wraps it in `<pre>` tags before sending.
+
+---
+
+## Escaping Helpers (mandatory) — `src/notifications/markdown.py`
+
+MarkdownV2 reserves 18 characters outside a code span: `` _*[]()~`>#+-=|{}.! ``. Any of these
+appearing unescaped in plain text either opens an unintended formatting entity or causes the
+send to be rejected outright with a 400 ("can't parse entities") — silently swallowed by the
+non-fatal `send()` contract above, so a bad message doesn't crash the caller, it just never
+arrives. This was the original `DELTA_WARN` bug class that motivated the whole migration
+(`docs/plan/telegram-markdown-migration/`).
+
+Two helpers, both in `src/notifications/markdown.py`:
+
+- **`mdcode(value: str) -> str`** — wraps a dynamic value as an inline code span
+  (`` `value` ``). Preferred for anything that's conceptually an identifier (strategy_id, signal
+  code, instrument key, error message) — Telegram never parses entities inside a code span, so
+  any reserved character inside is inert regardless of count/balance. Falls back to
+  `escape_markdown()` internally if `value` itself contains a literal backtick or backslash
+  (nesting code spans isn't possible).
+- **`escape_markdown(text: str) -> str`** — backslash-escapes every reserved character.
+  Use for free-form prose that must render visually plain (not code-styled), and for static
+  template punctuation (MarkdownV2's reserved set includes `.`, `(`, `)`, `-` — ordinary prose
+  punctuation, not just markup characters, so hand-written template strings need this too, not
+  only interpolated values).
+
+**Known limitation (not fixed, tracked in `docs/bugs/bugs.md` BUG-038):** `escape_markdown()`
+does not escape literal backslashes in the input text — pre-existing gap in the MD-1 helper,
+surfaced during MD-7.3's review, out of scope for that escaping-only task.
+
+**Guard test:** `tests/unit/notifications/test_escaping_guard.py` (added MD-6, SHA `ce95bbd`)
+statically walks `src/`/`scripts/` for `notifier.send(`/`send_plain_message(`/
+`send_notification(` call sites and asserts every interpolated dynamic value is escaped via
+`escape_markdown()`/`mdcode()` somewhere upstream. Pre-existing unescaped call sites that
+predate the guard are tracked individually in its `_BASELINE_UNESCAPED` allowlist with a reason
+string per entry — do not add a new entry to silence a newly-introduced unescaped call site;
+fix the call site instead. Remove a call site's baseline entry in the same commit that fixes it
+(`test_baseline_entries_are_still_unescaped` / `test_baseline_has_no_duplicate_or_unused_entries`
+enforce this). Confirmed permanent won't-fix baseline entry: `scripts/dev/send_test_telegram.py`
+(manual dev/debug utility, not a cron or strategy event path — Animesh, 2026-08-25).
+
+All currently-known production call sites were audited and fixed under this epic (MD-3, MD-4.1–
+4.3, MD-7.1–7.3): strategy close/roll notifications, the three reporting builders, both IC
+entry-signal scripts (`send_notification` + `_gate_alert` paths), `pre_market_brief.py`,
+`auto_close.py`, and `overlay_closer.py`. Any new `.send()`/`.send_plain_message()`/
+`.send_notification()` call site added after 2026-08-25 is caught by the guard test at commit
+time, not audited retroactively.
 
 ---
 
