@@ -99,7 +99,7 @@
       touched by those two sub-tasks.
       | Tests: TBD at implementation time (coordination-check with `telegram-approval-auth-fix`
       may dictate test shape)
-- [ ] **MD-6** — Add a static-scan escaping guard: a test that walks `src/`/`scripts/` for
+- [x] **MD-6** (SHA: ce95bbd) — Add a static-scan escaping guard: a test that walks `src/`/`scripts/` for
       `notifier.send(`/`send_plain_message(` call sites and asserts every interpolated dynamic
       value passed through `escape_markdown()`/`mdcode()` somewhere upstream | Blocked by:
       MD-3, MD-4.1, MD-4.2, MD-4.3
