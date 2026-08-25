@@ -4,6 +4,7 @@ import pytest
 
 from src.notifications.formatting import (
     LegRow,
+    alert_emoji,
     build_kv_table,
     build_leg_table,
     build_side_by_side_kv_table,
@@ -11,6 +12,7 @@ from src.notifications.formatting import (
     format_money,
     format_pct,
     format_strike,
+    pnl_emoji,
 )
 
 
@@ -149,3 +151,34 @@ def test_build_leg_table_single_leg():
 def test_build_leg_table_raises_on_empty_legs():
     with pytest.raises(ValueError, match="build_leg_table requires at least one leg"):
         build_leg_table([])
+
+
+def test_pnl_emoji_positive():
+    assert pnl_emoji(Decimal("3.52")) == "\u2705"
+
+
+def test_pnl_emoji_negative():
+    assert pnl_emoji(Decimal("-3.52")) == "\U0001f53b"
+
+
+def test_pnl_emoji_zero():
+    assert pnl_emoji(Decimal("0")) == "\u2796"
+
+
+def test_alert_emoji_empty_list():
+    assert alert_emoji([]) == "\U0001f7e2"
+
+
+def test_alert_emoji_single_signal():
+    assert alert_emoji(["DELTA_WARN"]) == "\u26a0\ufe0f"
+
+
+def test_alert_emoji_multiple_signals():
+    assert alert_emoji(["DELTA_WARN", "TIME_STOP"]) == "\u26a0\ufe0f"
+
+
+def test_alert_emoji_not_substring_matched():
+    # A signal code without "WARN" in it must still trigger the warning
+    # emoji -- alert_emoji is presence-based, never a substring match on
+    # the signal code name (see FMT-1b's rejected design).
+    assert alert_emoji(["GAMMA_RISK_ACTION"]) == "\u26a0\ufe0f"

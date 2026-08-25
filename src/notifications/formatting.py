@@ -64,6 +64,36 @@ def format_pct(value: float) -> str:
     return f"{value:.1f}%"
 
 
+def pnl_emoji(amount: Decimal) -> str:
+    """Presence/sign-based P&L indicator, not a severity tier (FMT-1b, FORMATTING.md §10).
+
+    >0 -> '\u2705', <0 -> '\U0001f53b', ==0 -> '\u2796'. Deliberately does NOT
+    substring-match a signal code name (e.g. `if "WARN" in signal`) -- that
+    couples display logic to a naming convention that is not guaranteed
+    stable (a future code like GAMMA_RISK_ACTION would not contain "WARN"
+    but would be a worse severity than one that does).
+    """
+    if amount > 0:
+        return "\u2705"
+    if amount < 0:
+        return "\U0001f53b"
+    return "\u2796"
+
+
+def alert_emoji(signals: list[str]) -> str:
+    """Presence-based alert indicator (FMT-1b, FORMATTING.md §10).
+
+    Empty list -> '\U0001f7e2', non-empty -> '\u26a0\ufe0f'. A real three-tier
+    severity indicator (info/warn/action) needs `ExitSignalResult.severity`
+    threaded through from `ExitSignalEngine` into the caller's data shape --
+    not available yet at any current call site. Do not fake a third tier by
+    substring-matching the signal code name; flag it explicitly if a future
+    caller needs real severity rather than silently downgrading to
+    presence-only forever.
+    """
+    return "\U0001f7e2" if not signals else "\u26a0\ufe0f"
+
+
 @dataclass(frozen=True)
 class LegRow:
     """One row of input for build_leg_table.
