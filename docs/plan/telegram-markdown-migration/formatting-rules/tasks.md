@@ -19,7 +19,7 @@
       (`FMT-2`/`FMT-3`) and roughly half of `strategy-rollout/` inherits its decisions. A mistake
       here propagates silently through ~16 `ROLL-*` tasks. Worth the stronger model on the
       spec-writing pass itself, not just at the code-review gate.
-- [ ] **FMT-1f** — Document the signed-money override (`format_money(value, signed=True)`) +
+- [x] **FMT-1f** — Document the signed-money override (`format_money(value, signed=True)`) +
       Contango/Backwardation (futures roll) vs. Debit/Credit (option-premium roll) spread
       labels — docs only, no code (implementation lands with whichever `ROLL-*` task promotes
       these into real code) | Blocked by: FMT-1 | **Added 2026-08-25 — fully specced in
@@ -29,24 +29,24 @@
       were not, they need this task to land in real docs.**
       | Owner: Claude | Model: Sonnet | Review: none — bundle with FMT-1b/1c/1d/1e per the epic
       improvement notes
-- [ ] **FMT-1b** — Add `pnl_emoji`/`alert_emoji` dynamic status-emoji helpers + tests
+- [x] **FMT-1b** — Add `pnl_emoji`/`alert_emoji` dynamic status-emoji helpers + tests
       (presence/sign-based, not substring-matched — see stories.md for the rejected design) |
       Blocked by: FMT-1, `backbone/` MD-1
       | Owner: Claude | Model: Sonnet | Review: none — bundle this session with FMT-1c/1d/1e
       (see epic improvement notes); each has an explicit implementation-time judgment call, not
       Antigravity material
-- [ ] **FMT-1c** — Add IC EOD audit timeframe color/emoji header + hashtag
+- [x] **FMT-1c** — Add IC EOD audit timeframe color/emoji header + hashtag
       (`weekly`/`monthly`/`leaps`/`yearly` × V1/V2 — color+emoji encode timeframe only, version
       is a separate text badge; hashtag must not be code-span-wrapped) | Blocked by: FMT-1,
       `backbone/` MD-1 — file location (IC-specific vs. `src/notifications/formatting.py`) is an
       implementation-time judgment call, see stories.md
       | Owner: Claude | Model: Sonnet | Review: none — bundle with FMT-1b/1d/1e
-- [ ] **FMT-1d** — Document the multi-strategy summary table money exception (signed integer,
+- [x] **FMT-1d** — Document the multi-strategy summary table money exception (signed integer,
       no `₹` per cell, zero-as-`-`) + `Flt`/`Bkd` terminology + bucket-grouping/totals-first
       table convention — docs only, no code (implementation lands with `ROLL-6`'s table
       builder) | Blocked by: FMT-1
       | Owner: Claude | Model: Sonnet | Review: none — bundle with FMT-1b/1c/1e
-- [ ] **FMT-1e** — Document the monospace-table emoji-presentation-glyph risk (extends FMT-3's
+- [x] **FMT-1e** — Document the monospace-table emoji-presentation-glyph risk (extends FMT-3's
       emoji-breaks-alignment warning to any Unicode symbol with an emoji-presentation variant,
       not just literal emoji — e.g. `▶` renders double-width on Telegram even inside a fence) —
       docs only, no code | Blocked by: FMT-1

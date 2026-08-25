@@ -86,6 +86,24 @@ kept and nothing is stripped.
 > Both need updating when ROLL-1's real port lands. Not changed here — FMT-1 is docs-only and
 > ROLL-1 is another task's scope.
 
+### 3a. Spread labels — futures roll vs. option-premium roll (FMT-1f)
+
+Two distinct label sets for the same underlying computation (`open_price - close_price`), applied
+to two different leg types. **Do not swap them** — "Contango"/"Backwardation" is futures-curve
+terminology and does not describe an option premium difference between two expiries of the same
+strike (confirmed correction, `ROLL-9` workshop session, 2026-08-10).
+
+| Leg type | Positive spread | Negative spread | Zero spread | Example |
+|---|---|---|---|---|
+| Futures calendar roll (`base_futures`-style only) | `Contango` (far-month price > near-month) | `Backwardation` (far < near) | `Flat` | `43.25 pts (Contango)` |
+| Option-premium roll (same strike, different expiry) | `Debit` (farther expiry costs more to roll into) | `Credit` (costs less) | `Flat` | `25.62 pts (Debit)` |
+
+Both use the signed-money override (`format_money(value, signed=True)`, §3) for the points figure
+itself when rendered in money terms; the label is appended text, not a formatter return value —
+compute it at the call site from the same spread sign, do not add a third formatter for it.
+
+---
+
 ---
 
 ## 4. Missing, unresolved, and zero are three different things
@@ -99,12 +117,16 @@ kept and nothing is stripped.
 Collapsing "unresolved" into "not applicable" is how a silent data-fetch failure gets read as a
 deliberate blank. Keep them apart.
 
-**Open conflict — FMT-1d.** FMT-1d renders *zero* as `-` inside the multi-strategy summary table,
-which collides with `-` meaning *not applicable* above. Inside any table adopting that convention,
-an unresolved value must render `N/A` and a not-applicable value must not appear in that column at
-all — otherwise one glyph carries two meanings in one column. FMT-1d's spec does not currently say
-this; whoever implements it resolves it explicitly rather than picking whichever is convenient at
-the call site.
+**Resolved 2026-08-25 — FMT-1d's zero-as-`-`.** FMT-1d renders *zero* as `-` inside the
+multi-strategy summary table (§12), which on its face collides with `-` meaning *not applicable*
+above. Resolution: the two meanings never coexist in the same column. Every numeric column in the
+multi-strategy summary table is a real measured quantity for every row it applies to (P&L, deltas
+booked) — no cell in that table is ever "not applicable" for a bucket/strategy that has a row at
+all. So inside that table specifically, `-` means zero and only zero; an unresolved fetch failure
+still renders `N/A`, never `-`. Outside that table, `-` keeps its original not-applicable meaning.
+A future table that needs both zero and not-applicable in the same column may not reuse `-` for
+zero — pick a distinct glyph (e.g. bare `0`) and document the exception in that table's own
+docstring rather than overloading `-` again.
 
 ---
 
@@ -164,10 +186,16 @@ identically to a literal emoji. Confirmed data points so far:
 | `Δ` U+0394 | in use as a fenced column header since ROLL-1 (2026-08-07); no break observed |
 | `₹` U+20B9 | only ever used *outside* a fence. Width inside one is **unverified** — FMT-1d drops it from cells for width budget, not for safety. Do not assume. |
 
-Note for FMT-1e: its rule as drafted is "only plain ASCII inside a fence", which would outlaw the
-`Δ` header already shipped in ROLL-1's confirmed layout. FMT-1e should either carve `Δ` out
-explicitly after an on-device check, or change ROLL-1's header — not leave the contradiction
-standing.
+**Resolved 2026-08-25 — `Δ` carve-out.** FMT-1e's rule as originally drafted ("only plain ASCII
+inside a fence") would have outlawed the `Δ` column header already shipped in ROLL-1's confirmed
+layout. The table two rows up already recorded the on-device result: `Δ` U+0394 (GREEK CAPITAL
+LETTER DELTA) has been in production use since 2026-08-07 with **no alignment break observed** —
+it does not carry the emoji-presentation variant that broke `▶`. FMT-1e's rule is therefore not
+"plain ASCII only" but **"plain ASCII, plus any symbol individually confirmed safe on-device and
+listed in the table above"** — `Δ` is the first (and so far only) confirmed exception. Do not
+extend the exception list from reasoning by analogy (e.g. assuming another Greek-alphabet
+character is safe because `Δ` is); every new symbol needs its own on-device confirmation before
+it goes inside a fence, the same way `▶` was tested and rejected.
 
 ---
 
@@ -214,7 +242,109 @@ next builder.
 
 ---
 
-## 10. Changing this file
+## 10. Dynamic status emojis (FMT-1b)
+
+Two small presence/sign-based helpers — **not** substring-matched against signal codes (an earlier
+external proposal suggested `if "WARN" in signal: ...`; rejected, because it couples display logic
+to a naming convention that is not guaranteed stable — a future code like `GAMMA_RISK_ACTION`
+would not contain `"WARN"` but would be a worse severity than one that does).
+
+```python
+def pnl_emoji(amount: Decimal) -> str:
+    """>0 -> '✅', <0 -> '🔻', ==0 -> '➖'."""
+
+def alert_emoji(signals: list[str]) -> str:
+    """Empty list -> '🟢', non-empty -> '⚠️'."""
+```
+
+**Deferred, not resolved:** a real three-tier severity indicator (🟢 info / ⚠️ warn / 🚨 action)
+needs `ExitSignalResult.severity` threaded through from `ExitSignalEngine` into whatever builds the
+message — the data shape that currently calls `alert_emoji` does not carry that field yet. Do not
+fake a third tier by substring-matching the signal code name; flag it explicitly if a future
+implementation finds the severity value unavailable, rather than silently downgrading to
+presence-only forever.
+
+Location: `src/notifications/formatting.py`, alongside FMT-2's other formatters (specified, not
+yet real code).
+
+---
+
+## 11. Timeframe color/emoji header + hashtag (FMT-1c)
+
+Scoped to the IC EOD audit message family (five variants — V1 weekly/monthly/leaps/yearly + V2
+monthly — that were visually near-identical running side by side, real alert-fatigue risk).
+
+**Design decision — color/emoji encode TIMEFRAME only, never version.** An earlier external
+proposal assigned one of four colors to "v2 monthly" specifically — i.e. encoding version, not
+timeframe, for that one case. Rejected: conflates two independent axes onto one visual channel and
+does not scale (V2 is explicitly scoped "Phase 1, monthly only" per `src/strategy/ic_expiry_config_v2.py`,
+implying more phases later — a new color would be needed for each). Color+emoji stays a pure
+timeframe indicator; version is a separate, orthogonal text badge in the bold title.
+
+| Timeframe | Color | Emoji | Rationale |
+|---|---|---|---|
+| Weekly | 🟡 | ⚡ | Fastest-moving, highest gamma risk, needs the most frequent attention. |
+| Monthly | 🔵 | 📅 | Standard calendar-cycle expiry — the "default" tier, calmest color. |
+| Leaps | 🟢 | 🔭 | Long-dated (46–200 DTE per `ICExpiryConfig`), low day-to-day maintenance. |
+| Yearly | 🟠 | 🌌 | Longest horizon (201–420 DTE) — distinct from Leaps, not reused/blended. |
+
+**Version badge:** `V1` is implicit (no badge — matches the convention that the common case stays
+visually quiet); any non-`V1` version appends an escaped `\(V2\)`-style badge to the bold title.
+
+**Hashtag:** `#IC_{Timeframe}_{Version}` (e.g. `#IC_Weekly_V1`, `#IC_Monthly_V2`) — `Leaps` renders
+`LEAPS` in the hashtag (conventional acronym capitalization), all other timeframes title-case.
+**Must NOT be wrapped in a code span** — Telegram parses no entities, including its own
+auto-detected hashtags, inside `` ` ``/``` ``` ```; an earlier draft showed it inside backticks,
+which would have silently made it non-tappable while looking correct in a screenshot. Confirmed
+working on-device 2026-08-07: MarkdownV2-escaping the `#`/`_` in the hashtag's source text does not
+prevent Telegram's hashtag auto-detection from firing on the de-escaped rendered text. The existing
+`` `{strategy_id}` `` code-span line stays a *separate* line below the title — it serves exact-string
+copy/grep for audit trails, a different job than the hashtag's tap-to-filter.
+
+**Confirmed header shape** (2 lines; MarkdownV2 source shown with escaping, renders as bold text +
+a live hashtag + a monospace code span):
+
+```
+🔵 📅 *IC EOD Audit — Monthly \(V2\)* \| \#IC\_Monthly\_V2
+`paper_ic_nifty_v2_monthly`
+```
+
+**Location — implementation-time judgment call, not yet made:** this is IC-specific (timeframe
+naming, `STRATEGY_IC_*` variants), so it likely does **not** belong in the strategy-agnostic
+`src/notifications/formatting.py` alongside FMT-2/FMT-3 — more likely a `_build_header()` /
+`TIMEFRAME_META` colocated with `process_variant()` in `scripts/strategies/ic/paper_ic_snapshot.py`.
+Whoever promotes this from scratch must flag the decision explicitly in the implementation commit
+either way, not default silently.
+
+---
+
+## 12. Multi-strategy summary table — terminology and layout (FMT-1d)
+
+Extends the §5 registry entry (money as signed integer, no `₹` per cell, zero as `-` — see §4 for
+the resolved zero/not-applicable boundary). Two further conventions confirmed for this table:
+
+**`Flt`/`Bkd` terminology.** Column headers for unrealized/realized P&L reuse `ROLL-2`'s existing
+"Flt P&L (M)" / "Bkd P&L (I)" vocabulary (floating / booked), rendered `FLT`/`BKD` all-caps in this
+table's header — not a new abbreviation. Any future message showing unrealized/realized P&L side by
+side defaults to `Flt`/`Bkd` for consistency rather than re-deriving its own short forms.
+
+**Bucket grouping, totals-first.** When a multi-strategy table's rows fall into natural groups (this
+message's Track/IC/Overlay/CSP), each group's subtotal row renders **above** its member rows,
+prefixed `"> BUCKET NAME TOTAL"` (all caps, never abbreviated to "TOT"). This is a deliberate
+scan-speed trade-off — optimizes for "which bucket needs attention" at a glance, at the cost of the
+more familiar components-then-sum order. Confirmed intentional for *this* message specifically (a
+daily glance, not a reconciliation document) — do not assume it generalizes to other tables in this
+epic without asking. Member row labels must not repeat the bucket name (e.g. `V1 Wkly`, not
+`IC V1 Wkly`, inside the `IC` bucket) — the bucket's own total row already establishes context and
+doubles as the section label, so no separate `-- BUCKET --` header row is needed. A double rule
+(`====`) separates the table header from the first bucket; a single rule (`----`) separates buckets
+from each other.
+
+Promotion target: `strategy-rollout/` ROLL-6's table builder.
+
+---
+
+## 13. Changing this file
 
 Prefer adding a row to editing one. Changing an existing rule invalidates every already-confirmed
 `ROLL-*` message that used it — name the affected ones in the commit body, the way §3's expiry
