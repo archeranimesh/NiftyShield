@@ -127,7 +127,7 @@
       (`tests/unit/notifications/test_escaping_guard.py`) — reason string updated to record the
       explicit decision, not fixed by any MD-7.x sub-task.
 
-- [ ] **MD-7.1** — `scripts/pre_market_brief.py` — both `gateway.send_plain_message()` calls
+- [x] **MD-7.1** (SHA: 39993bf) — `scripts/pre_market_brief.py` — both `gateway.send_plain_message()` calls
       (~L144, ~L197) | Blocked by: MD-6
       | Owner: Antigravity | Model: n/a | Review: code-reviewer — single file, mechanical
       escaping pass, no auth/judgment
