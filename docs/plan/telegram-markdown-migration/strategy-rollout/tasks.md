@@ -57,7 +57,7 @@
           V2-badge + hashtag-not-in-code-span) | Blocked by: ROLL-1a (imports nothing from it
           directly, but sequenced after so both prereqs land before the port) | Owner: Claude |
           Model: Sonnet | Review: none
-    - [x] **ROLL-1c** — The actual ROLL-1 port: rewrite `process_variant()`'s report construction
+    - [x] **ROLL-1c** (SHA: f605b92) — The actual ROLL-1 port: rewrite `process_variant()`'s report construction
           to the new bold/table MarkdownV2 format using `ROLL-1a`'s emoji helpers, `ROLL-1b`'s
           header, and the already-shipped `build_leg_table`/`format_money`/`format_greek`/
           `format_strike`/`format_pct` (FMT-2/FMT-3) — full spec in `stories.md` ROLL-1 | Blocked
