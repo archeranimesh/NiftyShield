@@ -26,6 +26,7 @@ import aiohttp
 import structlog
 
 from src.db import connect
+from src.notifications.markdown import escape_markdown
 from src.notifications.telegram import TelegramNotifier
 from src.strategy.protocol import SignalEvent
 
@@ -100,7 +101,9 @@ class TelegramGateway:
             event: Signal that triggered the request.  Must carry
                 ``valid_actions`` in its payload (list of action_type strings).
             context_str: Plain-text context block from
-                ``strategy.describe_context()``; rendered in a <pre> block.
+                ``strategy.describe_context()``; escaped and rendered as plain
+                MarkdownV2 text (not a code block — arbitrary strategy context
+                may contain backticks, which would break a fenced span).
 
         Returns:
             Telegram message_id on success, None on any failure.
@@ -113,16 +116,16 @@ class TelegramGateway:
             )
             return None
         header = (
-            f"<b>⚡ Action required — {event.event_type}</b>\n"
-            f"Severity: {event.severity}\n"
-            f"{event.description}\n\n"
-            f"<pre>{context_str[:400]}</pre>"
+            f"*⚡ Action required — {escape_markdown(event.event_type)}*\n"
+            f"Severity: {escape_markdown(event.severity)}\n"
+            f"{escape_markdown(event.description)}\n\n"
+            f"{escape_markdown(context_str[:400])}"
         )
         keyboard = _build_keyboard(valid_actions)
         payload: dict = {
             "chat_id": self._chat_id,
             "text": header,
-            "parse_mode": "HTML",
+            "parse_mode": "MarkdownV2",
             "reply_markup": {"inline_keyboard": keyboard},
         }
         try:

@@ -50,14 +50,19 @@ def _make_http_mock(resp_data: dict, status: int = 200) -> MagicMock:
     return mock_session
 
 
-def _make_signal_event(valid_actions: list[str] | None = None) -> object:
+def _make_signal_event(
+    valid_actions: list[str] | None = None,
+    event_type: str = "TIME_STOP",
+    severity: str = "ACTION",
+    description: str = "Test signal",
+) -> object:
     """Return a minimal SignalEvent with optional valid_actions payload."""
     from src.strategy.protocol import SignalEvent
 
     return SignalEvent(
-        event_type="TIME_STOP",
-        severity="ACTION",
-        description="Test signal",
+        event_type=event_type,
+        severity=severity,
+        description=description,
         payload={"valid_actions": valid_actions if valid_actions is not None else ["CLOSE_FULL"]},
     )
 
@@ -208,6 +213,66 @@ async def test_send_approval_request_returns_none_on_http_exception() -> None:
             context_str="context",
         )
     assert result is None
+
+
+async def test_send_approval_request_uses_markdown_v2_parse_mode() -> None:
+    """ClientSession for sendMessage in send_approval_request must use parse_mode MarkdownV2."""
+    gw = _make_gateway()
+    mock_session = _make_http_mock({"ok": True, "result": {"message_id": 1}})
+    with patch(
+        "src.notifications.telegram_gateway.aiohttp.ClientSession",
+        return_value=mock_session,
+    ):
+        await gw.send_approval_request(
+            event=_make_signal_event(),
+            context_str="context",
+        )
+    payload = mock_session.post.call_args[1]["json"]
+    assert payload["parse_mode"] == "MarkdownV2"
+
+
+async def test_send_approval_request_escapes_reserved_characters() -> None:
+    """Dynamic event fields containing MarkdownV2 reserved chars survive escaped, not raw."""
+    gw = _make_gateway()
+    mock_session = _make_http_mock({"ok": True, "result": {"message_id": 1}})
+    with patch(
+        "src.notifications.telegram_gateway.aiohttp.ClientSession",
+        return_value=mock_session,
+    ):
+        await gw.send_approval_request(
+            event=_make_signal_event(
+                event_type="DELTA_STOP(final)",
+                description="delta breach_v2 at 0.40 (final)",
+            ),
+            context_str="context",
+        )
+    payload = mock_session.post.call_args[1]["json"]
+    text = payload["text"]
+    assert "DELTA_STOP(final)" not in text
+    assert r"DELTA\_STOP\(final\)" in text
+    assert "delta breach_v2 at 0.40 (final)" not in text
+    assert r"delta breach\_v2 at 0\.40 \(final\)" in text
+
+
+async def test_send_approval_request_escapes_backtick_in_context_str() -> None:
+    """A stray backtick in context_str must not break the message or open a code span."""
+    gw = _make_gateway()
+    mock_session = _make_http_mock({"ok": True, "result": {"message_id": 1}})
+    context_with_backtick = "leg=`NSE_FO|65900` credit=120.5"
+    with patch(
+        "src.notifications.telegram_gateway.aiohttp.ClientSession",
+        return_value=mock_session,
+    ):
+        result = await gw.send_approval_request(
+            event=_make_signal_event(),
+            context_str=context_with_backtick,
+        )
+    assert result == 1
+    payload = mock_session.post.call_args[1]["json"]
+    text = payload["text"]
+    # The raw backtick must not survive unescaped — it must be backslash-escaped.
+    assert "`NSE_FO" not in text
+    assert r"\`NSE\_FO\|65900\`" in text
 
 
 async def test_send_approval_request_returns_none_on_empty_valid_actions() -> None:
