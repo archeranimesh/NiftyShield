@@ -32,6 +32,10 @@ def test_format_strike_happy_path():
 def test_format_strike_edge_zero():
     assert format_strike(0) == "0"
 
+def test_format_strike_raises_value_error_on_fractional():
+    with pytest.raises(ValueError, match="format_strike requires an integer or whole-number float"):
+        format_strike(23000.5)
+
 def test_format_pct_happy_path_whole():
     assert format_pct(4.0) == "4%"
 

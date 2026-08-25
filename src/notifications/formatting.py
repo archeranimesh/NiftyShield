@@ -48,7 +48,9 @@ def format_strike(value: float | int) -> str:
     23000.0 -> "23000". Reuse format_option_label's existing strike convention
     (src/instruments/lookup.py) rather than inventing a new one.
     """
-    return str(int(value)) if float(value).is_integer() else str(value)
+    if not float(value).is_integer():
+        raise ValueError(f"format_strike requires an integer or whole-number float, got {value}")
+    return str(int(value))
 
 
 def format_pct(value: float) -> str:
