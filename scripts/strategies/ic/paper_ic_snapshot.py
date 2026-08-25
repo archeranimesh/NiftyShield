@@ -28,6 +28,7 @@ from src.client.factory import create_client
 from src.client.upstox_market import parse_upstox_option_chain
 from src.config import settings
 from src.instruments.lookup import InstrumentLookup, parse_expiry
+from src.notifications.markdown import escape_markdown, mdcode
 from src.notifications.telegram_gateway import TelegramGateway
 from src.paper.constants import DEFAULT_BOD_PATH, DEFAULT_DB_PATH, LOT_SIZE
 from src.paper.store import PaperStore
@@ -185,8 +186,11 @@ async def process_variant(
             strategy=config.strategy_name,
         )
         return (
-            f"📋 IC EOD Audit — {expiry_type} ({config.strategy_name})\n"
-            f"Error: Expiry date could not be parsed from positions."
+            escape_markdown(f"📋 IC EOD Audit — {expiry_type} (")
+            + mdcode(config.strategy_name)
+            + escape_markdown(
+                ")\nError: Expiry date could not be parsed from positions."
+            )
         )
 
     dte = (expiry - snap_date).days
@@ -206,8 +210,11 @@ async def process_variant(
             error=str(exc),
         )
         return (
-            f"📋 IC EOD Audit — {expiry_type} ({config.strategy_name})\n"
-            f"Error: Failed to fetch live option chain."
+            escape_markdown(f"📋 IC EOD Audit — {expiry_type} (")
+            + mdcode(config.strategy_name)
+            + escape_markdown(
+                ")\nError: Failed to fetch live option chain."
+            )
         )
 
     # Fetch Nifty spot and VIX LTP
@@ -231,8 +238,11 @@ async def process_variant(
             error=str(exc),
         )
         return (
-            f"📋 IC EOD Audit — {expiry_type} ({config.strategy_name})\n"
-            f"Error: Signal evaluation failed."
+            escape_markdown(f"📋 IC EOD Audit — {expiry_type} (")
+            + mdcode(config.strategy_name)
+            + escape_markdown(
+                ")\nError: Signal evaluation failed."
+            )
         )
 
     # IVR
@@ -380,14 +390,18 @@ async def process_variant(
         intraday_str = "none"
 
     report = (
-        f"📋 IC EOD Audit — {expiry_type} ({config.strategy_name})\n"
-        f"DTE: {dte}  |  Nifty: {nifty_spot:,.0f}  |  IVR: {ivr_str}\n\n"
-        f"Position:\n"
-        f"{position_block}\n\n"
-        f"{pnl_line}\n"
-        f"{roi_line}\n\n"
-        f"Today's signals: {sigs_str}\n"
-        f"Intraday actions: {intraday_str}"
+        escape_markdown(f"📋 IC EOD Audit — {expiry_type} (")
+        + mdcode(config.strategy_name)
+        + escape_markdown(
+            f")\n"
+            f"DTE: {dte}  |  Nifty: {nifty_spot:,.0f}  |  IVR: {ivr_str}\n\n"
+            f"Position:\n"
+            f"{position_block}\n\n"
+            f"{pnl_line}\n"
+            f"{roi_line}\n\n"
+            f"Today's signals: {sigs_str}\n"
+            f"Intraday actions: {intraday_str}"
+        )
     )
 
     # Append unresolved ACTION signals if present in events
@@ -395,9 +409,9 @@ async def process_variant(
     if unresolved:
         unresolved_lines = []
         for e in unresolved:
-            unresolved_lines.append(f"  {e.event_type} 🔴  {e.description}")
+            unresolved_lines.append(escape_markdown(f"  {e.event_type} 🔴  {e.description}"))
         sig_join = "\n".join(unresolved_lines)
-        report += f"\n\n⚠️  Unresolved ACTION signals:\n{sig_join}"
+        report += escape_markdown(f"\n\n⚠️  Unresolved ACTION signals:\n") + sig_join
 
     return report
 
@@ -478,9 +492,12 @@ async def _run(args: argparse.Namespace) -> None:
                 variant_version="v1",
             )
             reports.append(
-                f"📋 IC EOD Audit — {expiry_type} ({config.strategy_name})\n"
-                f"Error: Snapshot generation failed due to "
-                f"unexpected error."
+                escape_markdown(f"📋 IC EOD Audit — {expiry_type} (")
+                + mdcode(config.strategy_name)
+                + escape_markdown(
+                    ")\nError: Snapshot generation failed due to "
+                    "unexpected error."
+                )
             )
 
     for expiry_type, config in CONFIGS_V2.items():
@@ -503,11 +520,15 @@ async def _run(args: argparse.Namespace) -> None:
                 error=str(exc),
                 variant_version="v2",
             )
-            reports.append(f"📋 IC EOD Audit — {expiry_type} ({config.strategy_name})\nError: Snapshot failed.")
+            reports.append(
+                escape_markdown(f"📋 IC EOD Audit — {expiry_type} (")
+                + mdcode(config.strategy_name)
+                + escape_markdown(")\nError: Snapshot failed.")
+            )
 
     if not has_any_positions:
-        msg = "IC EOD: no open positions across all expiry types."
-        print(msg)
+        msg = escape_markdown("IC EOD: no open positions across all expiry types.")
+        print("IC EOD: no open positions across all expiry types.")
         if notifier and save:
             logger.info(
                 "ic_snapshot.report_sent",

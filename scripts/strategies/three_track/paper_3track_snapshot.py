@@ -54,6 +54,7 @@ from src.config import settings
 from src.instruments.lookup import InstrumentLookup, parse_expiry
 from src.market_calendar.holidays import is_trading_day
 from src.models.options import OptionChain
+from src.notifications.markdown import escape_markdown
 from src.notifications.telegram import TelegramNotifier
 from src.paper._display import (
     BASE_LABELS,
@@ -1524,7 +1525,7 @@ async def _compute_overlay_leg_totals(
             totals[role] = (unrealized, realized, unrealized + realized, None, net_qty)
 
         # Runs regardless of `notifier` — logging must not go silent just
-        # because Telegram credentials are unset (code-review finding,
+        # because Telegram credentials were unset (code-review finding,
         # 2026-08-24; see _check_overlay_multi_instrument_alert docstring).
         await _check_overlay_multi_instrument_alert(store, role, snap_date, n, notifier)
 
@@ -1812,8 +1813,8 @@ def _build_recovery_digest(snap: ProtectionRecoverySnapshot) -> str:
 
     date_str = snap.snapshot_date.strftime("%d %b")
     lines = [
-        f"\U0001f4ca NiftyBees vs overlays — {date_str}",
-        f"NiftyBees: {snap.niftybees_pnl_1d:+.0f}",
+        escape_markdown(f"📊 NiftyBees vs overlays — {date_str}"),
+        escape_markdown(f"NiftyBees: {snap.niftybees_pnl_1d:+.0f}"),
     ]
 
     is_red = snap.niftybees_pnl_1d < 0
@@ -1823,20 +1824,24 @@ def _build_recovery_digest(snap: ProtectionRecoverySnapshot) -> str:
         for overlay_type, pnl in ordered:
             pct = (pnl / denom) * 100 if denom else Decimal("0")
             label = _RECOVERY_OVERLAY_LABELS[overlay_type]
-            lines.append(f"  {label:<6} {pnl:+.0f} ({pct:.0f}%)")
+            lines.append(escape_markdown(f"  {label:<6} {pnl:+.0f} ({pct:.0f}%)"))
         for overlay_type in missing:
             label = _RECOVERY_OVERLAY_LABELS[overlay_type]
-            lines.append(f"  {label:<6} No data")
+            lines.append(escape_markdown(f"  {label:<6} No data"))
         if snap.best_overlay:
-            lines.append(f"Best: {_RECOVERY_OVERLAY_LABELS[snap.best_overlay]}")
+            lines.append(
+                escape_markdown(
+                    f"\nBest: {_RECOVERY_OVERLAY_LABELS[snap.best_overlay]}"
+                )
+            )
     else:
         ordered = sorted(known.items(), key=lambda kv: kv[1], reverse=True)
         for overlay_type, pnl in ordered:
             label = _RECOVERY_OVERLAY_LABELS[overlay_type]
-            lines.append(f"  {label:<6} {pnl:+.0f}")
+            lines.append(escape_markdown(f"  {label:<6} {pnl:+.0f}"))
         for overlay_type in missing:
             label = _RECOVERY_OVERLAY_LABELS[overlay_type]
-            lines.append(f"  {label:<6} No data")
+            lines.append(escape_markdown(f"  {label:<6} No data"))
 
     return "\n".join(lines)
 

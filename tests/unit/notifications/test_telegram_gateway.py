@@ -402,3 +402,16 @@ async def test_send_notification_session_has_timeout() -> None:
     timeout = kwargs.get("timeout")
     assert isinstance(timeout, aiohttp.ClientTimeout)
     assert timeout.total == 10
+
+
+async def test_send_notification_uses_markdown_v2_parse_mode() -> None:
+    """ClientSession for sendMessage in send_notification must use parse_mode MarkdownV2."""
+    gw = _make_gateway()
+    mock_session = _make_http_mock({"ok": True})
+    with patch(
+        "src.notifications.telegram_gateway.aiohttp.ClientSession",
+        return_value=mock_session,
+    ):
+        await gw.send_notification("hello")
+    payload = mock_session.post.call_args[1]["json"]
+    assert payload["parse_mode"] == "MarkdownV2"

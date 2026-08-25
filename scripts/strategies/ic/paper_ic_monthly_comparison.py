@@ -22,6 +22,7 @@ from src.client.factory import create_client
 from src.client.upstox_market import parse_upstox_option_chain
 from src.config import settings
 from src.instruments.lookup import InstrumentLookup, parse_expiry
+from src.notifications.markdown import escape_markdown
 from src.notifications.telegram_gateway import TelegramGateway
 from src.paper.constants import DEFAULT_BOD_PATH, DEFAULT_DB_PATH
 from src.paper.store import PaperStore
@@ -298,35 +299,37 @@ def build_comparison_report(v1: ICMonthlyStats, v2: ICMonthlyStats, report_date:
     """Build a Telegram-formatted plain-text comparison table."""
 
     def fmt_pts(v: Decimal | None) -> str:
-        return f"₹{v:,.0f}" if v is not None else "N/A"
+        return escape_markdown(f"₹{v:,.0f}") if v is not None else escape_markdown("N/A")
 
     def fmt_pct(v: Decimal | None) -> str:
-        return f"{int(round(v * 100))}%" if v is not None else "N/A"
+        return (
+            escape_markdown(f"{int(round(v * 100))}%") if v is not None else escape_markdown("N/A")
+        )
 
     def fmt_delta(v: Decimal | None) -> str:
-        return f"{v:.2f}" if v is not None else "N/A"
+        return escape_markdown(f"{v:.2f}") if v is not None else escape_markdown("N/A")
 
     def fmt_dte(v: int | None) -> str:
-        return str(v) if v is not None else "N/A"
+        return escape_markdown(str(v)) if v is not None else escape_markdown("N/A")
 
     def fmt_pnl(v: Decimal) -> str:
-        return f"₹{v:,.0f}"
+        return escape_markdown(f"₹{v:,.0f}")
 
     def fmt_zone(z: int, is_v2: bool) -> str:
         if not is_v2:
-            return "N/A"
-        return f"Zone {z} ✓" if z > 0 else "None"
+            return escape_markdown("N/A")
+        return escape_markdown(f"Zone {z} ✓") if z > 0 else escape_markdown("None")
 
     def fmt_adj(v1_stat: bool, rolls: int, locks: int) -> str:
         if v1_stat:
-            return f"{rolls} rolls"
+            return escape_markdown(f"{rolls} rolls")
         else:
-            return f"{rolls} rolls + {locks} locks"
+            return escape_markdown(f"{rolls} rolls + {locks} locks")
 
     def fmt_sigs(sigs: list[str]) -> str:
         if not sigs:
-            return "—"
-        return ", ".join(sigs)
+            return escape_markdown("—")
+        return escape_markdown(", ".join(sigs))
 
     # Edge calculation
     v1_total = v1.realized_pnl_month + v1.unrealized_pnl
@@ -334,11 +337,11 @@ def build_comparison_report(v1: ICMonthlyStats, v2: ICMonthlyStats, report_date:
     edge_diff = v2_total - v1_total
 
     if edge_diff > 0:
-        edge_line = f"Edge so far:  V2 +₹{edge_diff:,.0f} vs V1"
+        edge_line = escape_markdown(f"Edge so far:  V2 +₹{edge_diff:,.0f} vs V1")
     elif edge_diff < 0:
-        edge_line = f"Edge so far:  V1 +₹{-edge_diff:,.0f} vs V2"
+        edge_line = escape_markdown(f"Edge so far:  V1 +₹{-edge_diff:,.0f} vs V2")
     else:
-        edge_line = "Edge so far:  Tied"
+        edge_line = escape_markdown("Edge so far:  Tied")
 
     # Handle missing positions gracefully. Driven by has_open_position (set
     # from the real store.get_positions() result in build_stats), not by
@@ -351,7 +354,7 @@ def build_comparison_report(v1: ICMonthlyStats, v2: ICMonthlyStats, report_date:
     v2_open = v2.has_open_position
 
     def safe_col(val: str, is_open: bool) -> str:
-        return val if is_open else "No open position"
+        return val if is_open else escape_markdown("No open position")
 
     # TGFMT-1: dynamic label/column widths, right-aligned value columns.
     # Previous implementation hand-counted literal spaces per label to hit a
@@ -362,21 +365,39 @@ def build_comparison_report(v1: ICMonthlyStats, v2: ICMonthlyStats, report_date:
     # max(len(...)), never a hand-typed literal — correct by construction
     # for any row/label set.
     rows: list[tuple[str, str, str]] = [
-        ("Entry credit", safe_col(fmt_pts(v1.entry_credit_pts), v1_open),
-         safe_col(fmt_pts(v2.entry_credit_pts), v2_open)),
-        ("Captured", safe_col(fmt_pct(v1.captured_fraction), v1_open),
-         safe_col(fmt_pct(v2.captured_fraction), v2_open)),
-        ("Short put Δ", safe_col(fmt_delta(v1.short_put_delta), v1_open),
-         safe_col(fmt_delta(v2.short_put_delta), v2_open)),
-        ("Short call Δ", safe_col(fmt_delta(v1.short_call_delta), v1_open),
-         safe_col(fmt_delta(v2.short_call_delta), v2_open)),
+        (
+            "Entry credit",
+            safe_col(fmt_pts(v1.entry_credit_pts), v1_open),
+            safe_col(fmt_pts(v2.entry_credit_pts), v2_open),
+        ),
+        (
+            "Captured",
+            safe_col(fmt_pct(v1.captured_fraction), v1_open),
+            safe_col(fmt_pct(v2.captured_fraction), v2_open),
+        ),
+        (
+            "Short put Δ",
+            safe_col(fmt_delta(v1.short_put_delta), v1_open),
+            safe_col(fmt_delta(v2.short_put_delta), v2_open),
+        ),
+        (
+            "Short call Δ",
+            safe_col(fmt_delta(v1.short_call_delta), v1_open),
+            safe_col(fmt_delta(v2.short_call_delta), v2_open),
+        ),
         ("DTE", safe_col(fmt_dte(v1.dte), v1_open), safe_col(fmt_dte(v2.dte), v2_open)),
         ("Unrealized P&L", fmt_pnl(v1.unrealized_pnl), fmt_pnl(v2.unrealized_pnl)),
         ("Realized (month)", fmt_pnl(v1.realized_pnl_month), fmt_pnl(v2.realized_pnl_month)),
-        ("Profit-lock zone", safe_col(fmt_zone(v1.profit_lock_zone, False), v1_open),
-         safe_col(fmt_zone(v2.profit_lock_zone, True), v2_open)),
-        ("Adjustments", safe_col(fmt_adj(True, v1.roll_count, v1.lock_count), v1_open),
-         safe_col(fmt_adj(False, v2.roll_count, v2.lock_count), v2_open)),
+        (
+            "Profit-lock zone",
+            safe_col(fmt_zone(v1.profit_lock_zone, False), v1_open),
+            safe_col(fmt_zone(v2.profit_lock_zone, True), v2_open),
+        ),
+        (
+            "Adjustments",
+            safe_col(fmt_adj(True, v1.roll_count, v1.lock_count), v1_open),
+            safe_col(fmt_adj(False, v2.roll_count, v2.lock_count), v2_open),
+        ),
         ("Signals today", fmt_sigs(v1.signals_fired_today), fmt_sigs(v2.signals_fired_today)),
     ]
 
@@ -385,13 +406,18 @@ def build_comparison_report(v1: ICMonthlyStats, v2: ICMonthlyStats, report_date:
     col2_width = max(len("V2 Monthly"), max(len(r[2]) for r in rows))
 
     lines = [
-        f"📊 IC Monthly Comparison — {report_date.isoformat()}",
+        escape_markdown(f"📊 IC Monthly Comparison — {report_date.isoformat()}"),
         "",
-        f"{'':<{label_width}}{'V1 Monthly':>{col1_width}}  {'V2 Monthly':>{col2_width}}",
-        "─" * (label_width + col1_width + col2_width + 2),
+        escape_markdown(
+            f"{'':<{label_width}}{'V1 Monthly':>{col1_width}}  {'V2 Monthly':>{col2_width}}"
+        ),
+        escape_markdown("─" * (label_width + col1_width + col2_width + 2)),
     ]
     for label, v1_cell, v2_cell in rows:
-        lines.append(f"{label:<{label_width}}{v1_cell:>{col1_width}}  {v2_cell:>{col2_width}}")
+        lines.append(
+            escape_markdown(f"{label:<{label_width}}")
+            + f"{v1_cell:>{col1_width}}  {v2_cell:>{col2_width}}"
+        )
     lines += ["", edge_line]
 
     return "\n".join(lines)

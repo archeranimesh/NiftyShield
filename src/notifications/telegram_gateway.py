@@ -202,15 +202,15 @@ class TelegramGateway:
             logger.warning("Timeout scanner error: %s", exc)
 
     async def send_notification(self, message: str) -> None:
-        """Send plain HTML informational message; no keyboard. Non-fatal.
+        """Send plain MarkdownV2 informational message; no keyboard. Non-fatal.
 
         Args:
-            message: HTML formatted message.
+            message: MarkdownV2 formatted message.
         """
         payload = {
             "chat_id": self._chat_id,
             "text": message,
-            "parse_mode": "HTML",
+            "parse_mode": "MarkdownV2",
         }
         try:
             async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
