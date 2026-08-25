@@ -19,6 +19,16 @@
       (`FMT-2`/`FMT-3`) and roughly half of `strategy-rollout/` inherits its decisions. A mistake
       here propagates silently through ~16 `ROLL-*` tasks. Worth the stronger model on the
       spec-writing pass itself, not just at the code-review gate.
+- [ ] **FMT-1f** — Document the signed-money override (`format_money(value, signed=True)`) +
+      Contango/Backwardation (futures roll) vs. Debit/Credit (option-premium roll) spread
+      labels — docs only, no code (implementation lands with whichever `ROLL-*` task promotes
+      these into real code) | Blocked by: FMT-1 | **Added 2026-08-25 — fully specced in
+      `stories.md` since the `ROLL-9` workshop session (2026-08-10) but had no line here, so the
+      first-unchecked-box protocol could never reach it; the `format_money(signed=True)` row
+      was folded into `FORMATTING.md` §3 as part of FMT-1's session, the two spread-label rows
+      were not, they need this task to land in real docs.**
+      | Owner: Claude | Model: Sonnet | Review: none — bundle with FMT-1b/1c/1d/1e per the epic
+      improvement notes
 - [ ] **FMT-1b** — Add `pnl_emoji`/`alert_emoji` dynamic status-emoji helpers + tests
       (presence/sign-based, not substring-matched — see stories.md for the rejected design) |
       Blocked by: FMT-1, `backbone/` MD-1

@@ -2,6 +2,18 @@
 
 > One task per session. Find the first unchecked item in `tasks.md`. That is your only task.
 
+> **FMT-1 shipped 2026-08-25 as root `FORMATTING.md`** (SHA `c252bf3`), not a
+> `src/notifications/CLAUDE.md` section — see that file's §10 before adding or changing any
+> formatting rule. It governs every task below: FMT-1b/1c's emoji/header helpers, FMT-1d/1e/1f's
+> table and spread-label rules, and FMT-2/FMT-3's real formatter/table-builder code all read
+> against it, not against the table below (which is FMT-1's original draft, superseded where the
+> two disagree — `FORMATTING.md` §3 carries the corrections, including the expiry format and the
+> money-example fix; §8 is the separate audit of all 14 scratch-script formatters against it).
+> Notably, `FORMATTING.md` §4 flags FMT-1d's zero-as-`-` as colliding with
+> `-` meaning "not applicable" elsewhere, and §7 flags FMT-1e's ASCII-only-in-fences rule as
+> currently outlawing the `Δ` header ROLL-1 already ships — resolve both when implementing those
+> tasks, don't carry the conflict forward silently.
+
 ---
 
 ## FMT-1 — Formatting Spec (decimals, alignment, sign display)
@@ -11,6 +23,13 @@ section in `src/notifications/CLAUDE.md` or a standalone `FORMATTING.md` at repo
 which during the task by checking whether `src/notifications/CLAUDE.md` is already long enough
 that a standalone file reads better; either is acceptable, just pick one and be consistent with
 the rest of this epic's docs).
+
+**Resolved 2026-08-25:** shipped as root `FORMATTING.md` — `src/notifications/CLAUDE.md` was
+already carrying the transport/escaping contract at 130 lines, and a repo-root file mirrors how
+`LOGGING.md` is discovered (a `CLAUDE.md` pointer + a `docs/plan/` prompt-time check), not a
+section nested inside a module doc most `ROLL-*`/`FMT-*` sessions never open. See
+`FORMATTING.md` itself for the full spec — the table immediately below is FMT-1's original
+draft and is superseded wherever it disagrees with that file.
 
 **Rules** (derived from what was actually validated interactively in
 `scratch/2026-08-07_ic_eod_audit_telegram_format.py` across several rounds of user feedback —
