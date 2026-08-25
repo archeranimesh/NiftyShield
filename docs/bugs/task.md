@@ -24,6 +24,26 @@
 > BUG-036 closed 2026-08-24 (SHA `d40c3a1`, backfill applied same day) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 > BUG-035 closed 2026-08-24 (SHA `0ecd86b`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
+## BUG-038 — `OverlayCloser`'s three `self._notifier.send()` calls are unawaited (never sent)
+
+- [ ] **B038.1** — `trace_path` both methods' callers (`close_collar_all`,
+  `monetize_collar_put`) to confirm no caller already runs inside an event
+  loop before picking sync-vs-async fix.
+- [ ] **B038.2** — Fix: make both methods `async def` + `await` the send (or
+  a sync-dispatch wrapper if callers require sync). Update callers.
+- [ ] **B038.3** — Add a repro test using a `TelegramNotifier`-shaped
+  (async-`send`) test double, not the current sync `MockNotifier`/`notifier`
+  fixture, so this class of bug is caught in future.
+- [ ] **B038.4** — Separately: repro-test `escape_markdown()` against a
+  literal backslash in the input (see `bugs.md` BUG-038 note) — scope a
+  fix in `src/notifications/markdown.py` if confirmed, coordinate with
+  `docs/plan/telegram-markdown-migration/` MD-6's baseline if it touches
+  escaped call sites.
+- [ ] **B038.5** — Review: real `code-reviewer` (mandatory — financial-logic
+  notification paths).
+- [ ] **B038.6** — Commit, update `bugs.md` BUG-038 status to ✅ Fixed + SHA,
+  update `TODOS.md`.
+
 ## BUG-037 — `mark_trade_closed()` also never wired into CSP/IC v1/v2 close paths (54 stale flat legs)
 
 - [x] **B037.1** — Trace `close_csp_leg`/`close_ic_legs`/`roll_ic_legs` (and

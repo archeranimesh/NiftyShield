@@ -479,8 +479,13 @@ async def test_auto_close_overlay_collar_write_failure_sends_failed_not_closed(
 
     notifier.send.assert_called_once()
     msg = notifier.send.call_args[0][0]
-    assert "AUTO-CLOSE FAILED" in msg
+    assert "AUTO\\-CLOSE FAILED" in msg  # MarkdownV2-escaped hyphen
     assert "COLLAR CLOSED" not in msg
+    # MD-7.3: strategy_name ("paper_nifty_futures") is underscore-bearing —
+    # mdcode() must survive it intact inside a code span rather than
+    # opening/closing spurious _italic_ entities under MarkdownV2.
+    assert "`paper_nifty_futures`" in msg
+    assert "`overlay_collar_call`" in msg
 
 
 @pytest.mark.asyncio
@@ -513,7 +518,7 @@ async def test_evaluate_pp_reentry_eligible(
     # Re-entry should be flagged as ELIGIBLE and send notification
     notifier.send.assert_called_once()
     msg = notifier.send.call_args[0][0]
-    assert "PP RE-ENTRY ELIGIBLE" in msg
+    assert "PP RE\\-ENTRY ELIGIBLE" in msg  # MarkdownV2-escaped hyphen
     assert "standalone overlay" in msg
 
 
@@ -629,6 +634,6 @@ async def test_evaluate_pp_reentry_realized_pnl_reads_overlay_book_only(
 
     notifier.send.assert_called_once()
     msg = notifier.send.call_args[0][0]
-    assert "₹+325" in msg
+    assert "₹\\+325" in msg  # MarkdownV2-escaped '+'
     assert "₹-5,000" not in msg
     assert "₹-4,675" not in msg  # would be the (wrong) summed figure

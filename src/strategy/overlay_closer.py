@@ -16,6 +16,7 @@ import structlog
 from src.instruments.lookup import InstrumentLookup
 from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
+from src.notifications.markdown import escape_markdown, mdcode
 from src.paper.constants import DEFAULT_BOD_PATH
 from src.paper.models import ExitSignal, PaperPosition, PaperTrade, TradeAction
 
@@ -266,7 +267,8 @@ class OverlayCloser:
                 log.error("collar_close_all.write_failed", error=str(e))
                 if self._notifier:
                     self._notifier.send(
-                        f"Collar close failed: could not write close trades. Error: {e}"
+                        f"{escape_markdown('Collar close failed: could not write close trades. Error:')} "
+                        f"{escape_markdown(str(e))}"
                     )
                 return False
 
@@ -326,8 +328,9 @@ class OverlayCloser:
             )
             if self._notifier:
                 self._notifier.send(
-                    f"Collar monetize aborted for {strategy_name}: "
-                    "put leg is flat but call leg is open — incomplete collar structure."
+                    f"{escape_markdown('Collar monetize aborted for')} {mdcode(strategy_name)}"
+                    f"{escape_markdown(':')} "
+                    f"{escape_markdown('put leg is flat but call leg is open — incomplete collar structure.')}"
                 )
             return
 
@@ -390,7 +393,8 @@ class OverlayCloser:
                 log.error("collar_put_monetize.write_failed", error=str(e))
                 if self._notifier:
                     self._notifier.send(
-                        f"Collar monetize failed: could not write close trades. Error: {e}"
+                        f"{escape_markdown('Collar monetize failed: could not write close trades. Error:')} "
+                        f"{escape_markdown(str(e))}"
                     )
                 return
 

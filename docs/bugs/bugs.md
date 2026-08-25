@@ -25,6 +25,25 @@
 
 ---
 
+## BUG-038 — `OverlayCloser`'s three `self._notifier.send()` calls are unawaited coroutines (never actually sent)
+
+| Field | Value |
+|---|---|
+| Severity | **High** — silent notification loss on financial-logic paths (collar close/monetize write failures, incomplete-collar abort) |
+| Status | 🔴 Open |
+| Discovered | 2026-08-25, incidentally — general-purpose code-reviewer-persona pass on `docs/plan/telegram-markdown-migration/` MD-7.3's diff (`src/strategy/overlay_closer.py`) flagged it as unverifiable from the diff alone; confirmed by reading `src/notifications/telegram.py::TelegramNotifier.send` (`async def send`) against the three call sites in `overlay_closer.py` (`close_collar_all` ~L269, `monetize_collar_put` ~L330/~L395), all in **synchronous** methods calling `self._notifier.send(...)` with no `await` and no `asyncio.run(...)`/`create_task(...)` wrapper |
+| Location | `src/strategy/overlay_closer.py::OverlayCloser.close_collar_all`, `OverlayCloser.monetize_collar_put` |
+
+**Root cause (not yet fixed — out of MD-7.3's scope, which is escaping only):** `TelegramNotifier.send()` is `async def`. Calling it without `await` from a sync method constructs a coroutine object and immediately discards it — Python schedules nothing, so the message is never sent. No exception is raised (matches the non-fatal contract's outward behavior), so this fails completely silently; the only surfacing symptom is a `RuntimeWarning: coroutine 'TelegramNotifier.send' was never awaited` if warnings are enabled, which is not part of the normal cron/strategy logging path. Net effect: the "Collar close failed", "Collar monetize aborted", and "Collar monetize failed" alerts — all three fire on a paths where a human needs to intervene (DB write failure leaving legs open, or an incomplete collar structure) — have likely never reached Telegram in production.
+
+**Why this wasn't caught by MD-7.3's tests:** the test suite's `MockNotifier`/`notifier` test double used in `tests/unit/strategy/test_overlay_closer.py` implements `send()` as a plain synchronous method (appends to `sent_messages`), so calling it unawaited works correctly in tests — the mock doesn't reproduce the real notifier's `async def` signature, masking the bug.
+
+**Scope note:** MD-7.3 only changed message *content* (added `escape_markdown()`/`mdcode()` wrapping) — it did not touch these call sites' `await`/no-`await` structure, so this predates that task and is not a regression it introduced. Filed here rather than fixed inline to keep MD-7.3's diff scoped to escaping only, per its story spec ("Do NOT change message wording/structure").
+
+**Also surfaced in the same review, not yet independently confirmed:** `src/notifications/markdown.py::escape_markdown`'s `MARKDOWNV2_RESERVED` set (`_*[]()~\`>#+-=|{}.!`) does not include the backslash character itself. A dynamic value containing a literal `\` (e.g. a Windows-style path or a regex/JSON error message inside `str(exc)`) would pass through unescaped, potentially producing a malformed MarkdownV2 escape sequence and a 400 from Telegram — silently swallowed by the non-fatal send contract. Needs a repro test (`escape_markdown("C:\\foo")` or similar) before scoping a fix; likely belongs in a follow-up to `MD-1`/`MD-6` rather than this bug, since it's in the shared helper, not `overlay_closer.py`/`auto_close.py` specifically.
+
+**Fix (not yet scoped):** either make `close_collar_all`/`monetize_collar_put` `async def` and `await self._notifier.send(...)` (matches `auto_close.py`'s pattern), or wrap the send in `asyncio.create_task(...)`/a sync-dispatch helper if these methods must stay synchronous for their other callers. Needs a graph trace (`trace_path`) of both methods' callers before picking an approach — check whether any caller already runs inside an event loop.
+
 ## BUG-019 — Investigation: does every strategy show a live-tick vs. EOD-snapshot P&L disparity, not just `paper_ic_nifty_v2_monthly`?
 
 | Field | Value |

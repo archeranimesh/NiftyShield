@@ -113,7 +113,7 @@
       and then protects every `send()` call site added afterward — including all of
       `formatting-rules/`'s and `strategy-rollout/`'s new call sites, since `backbone/` must be
       fully complete before either of those can start regardless.
-- [ ] **MD-7** — Umbrella: escape gaps `MD-6`'s guard surfaced but no prior MD-*/ROLL-*
+- [x] **MD-7** — Umbrella: escape gaps `MD-6`'s guard surfaced but no prior MD-*/ROLL-*
       task named | Blocked by: MD-6 | Split into MD-7.1 / MD-7.2 / MD-7.3 below (2026-08-25,
       split at Animesh's request — too many unrelated files for one session) — track completion
       on the sub-tasks, not this line; check this box only once all three are done.
@@ -141,14 +141,22 @@
       | Tests: `tests/unit/strategies/ic/test_paper_ic_entry.py`,
       `tests/unit/strategies/ic/test_paper_ic_entry_v2.py`
 
-- [ ] **MD-7.3** — `src/strategy/auto_close.py` (`auto_close_overlay` ~L235,
+- [x] **MD-7.3** (SHA: <pending>) — `src/strategy/auto_close.py` (`auto_close_overlay` ~L235,
       `evaluate_pp_reentry_eod` ~L404, both outside MD-3's `_send_close_notification`-only scope)
       and `src/strategy/overlay_closer.py` (`close_collar_all` ~L268, `monetize_collar_put`
       ~L328/~L392) | Blocked by: MD-6
       | Owner: Claude | Model: Sonnet | Review: **real @code-reviewer, Opus — mandatory** —
       close/monetize paths for live overlay strategies, same financial-logic tier as MD-3's
       close-notification audit per root `CLAUDE.md`'s AutoTrigger table, even though this task
-      is escaping-only and doesn't touch P&L computation itself
+      is escaping-only and doesn't touch P&L computation itself.
+      **Review note (2026-08-25):** this Cowork session cannot spawn `.claude/agents/code-reviewer.md`
+      directly (same structural limitation as `docs/bugs/task.md` BUG-037's B037.6) — substituted a
+      `general-purpose` agent loaded with the full code-reviewer persona + REVIEW.md checklist,
+      reviewing the isolated diff. 0 CRITICAL/ERROR, 2 WARNING — both investigated post-review and
+      logged as new pre-existing findings (BUG-038: `OverlayCloser`'s 3 `notifier.send()` calls are
+      unawaited against an `async def` method, likely never delivered; a note on `escape_markdown()`
+      not escaping literal backslashes), not defects in this diff. Neither fixed here (out of this
+      task's escaping-only scope) — see `docs/bugs/bugs.md` BUG-038.
       | Tests: `tests/unit/strategy/test_auto_close.py`, `tests/unit/strategy/test_overlay_closer.py`
 
 **All three MD-7.x sub-tasks:** same two-pass escaping treatment as MD-3/MD-4 (dynamic values

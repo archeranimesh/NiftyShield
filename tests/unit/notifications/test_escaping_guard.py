@@ -247,18 +247,7 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "_build_recovery_digest() (MD-4.2 scope) but this guard only inspects the "
         "immediate enclosing function (_run), not callees"
     ),
-    (
-        "src/strategy/auto_close.py",
-        235,
-    ): "untracked gap - auto_close_overlay's .send() is outside MD-3's _send_close_notification-only scope",
-    (
-        "src/strategy/auto_close.py",
-        404,
-    ): "untracked gap - evaluate_pp_reentry_eod's .send() is outside MD-3's _send_close_notification-only scope",
     ("src/strategy/monitor.py", 367): "ROLL-8 - format confirmed, real code not yet migrated",
-    ("src/strategy/overlay_closer.py", 268): "untracked gap - not named in any MD-*/ROLL-* task",
-    ("src/strategy/overlay_closer.py", 328): "untracked gap - not named in any MD-*/ROLL-* task",
-    ("src/strategy/overlay_closer.py", 392): "untracked gap - not named in any MD-*/ROLL-* task",
     ("src/strategy/reentry_mixin.py", 210): "ROLL-7 - format confirmed, real code not yet migrated",
 }
 
@@ -328,7 +317,7 @@ def test_baseline_has_no_duplicate_or_unused_entries():
 @pytest.mark.parametrize(
     "file_rel, line",
     [
-        ("src/strategy/auto_close.py", 345),
+        ("src/strategy/auto_close.py", 347),
         ("src/strategy/cc_overlay_v1.py", 381),
         ("src/strategy/pp_overlay_v1.py", 394),
         ("src/strategy/collar_overlay_v1.py", 600),

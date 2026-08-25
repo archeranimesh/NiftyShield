@@ -597,3 +597,7 @@ def test_monetize_collar_put_aborts_when_put_leg_missing(
     pos = store.get_position("paper_collar_v1", "overlay_collar_call")
     assert pos.net_qty == -65
     assert any("Collar monetize aborted" in m for m in notifier.sent_messages)
+    # MD-7.3: strategy_name ("paper_collar_v1") is underscore-bearing —
+    # mdcode() must survive it intact inside a code span rather than
+    # opening/closing spurious _italic_ entities under MarkdownV2.
+    assert any("`paper_collar_v1`" in m for m in notifier.sent_messages)

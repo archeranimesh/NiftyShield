@@ -233,10 +233,12 @@ async def auto_close_overlay(
         if notifier is not None:
             try:
                 await notifier.send(
-                    f"⚠️ AUTO-CLOSE FAILED — {strategy_name} / {leg_role}\n"
-                    f"Signal: {exit_signal}  Event: {event_id}\n"
-                    f"Error: {exc}\n"
-                    f"Close manually via paper_cc_roll.py or record_paper_trade.py"
+                    f"{escape_markdown('⚠️ AUTO-CLOSE FAILED — ')}{mdcode(strategy_name)}"
+                    f"{escape_markdown(' / ')}{mdcode(leg_role)}\n"
+                    f"{escape_markdown('Signal: ')}{mdcode(exit_signal)}"
+                    f"{escape_markdown('  Event: ')}{mdcode(str(event_id))}\n"
+                    f"{escape_markdown('Error: ')}{escape_markdown(str(exc))}\n"
+                    f"{escape_markdown('Close manually via paper_cc_roll.py or record_paper_trade.py')}"
                 )
             except Exception:
                 pass
@@ -394,12 +396,15 @@ async def evaluate_pp_reentry_eod(
         if passed and notifier is not None:
             # Realized P&L from the standalone overlay book
             realized_pnl = get_strategy_realized_pnl(store, STRATEGY_OVERLAY)
+            ivr_str = escape_markdown(f"{ivr:.2f}")
+            realized_pnl_str = escape_markdown(f"{realized_pnl:+,.0f}")
             msg = (
-                f"🟢 PP RE-ENTRY ELIGIBLE — standalone overlay\n"
-                f"IVR    : {ivr:.2f} (passes reentry threshold)\n"
-                f"Status : No open PP → ELIGIBLE\n"
-                f"Action : Run find_overlay_strikes.py --overlay-type pp to initiate manually\n"
-                f"Overlay P&L (total realized): ₹{realized_pnl:+,.0f}"
+                f"{escape_markdown('🟢 PP RE-ENTRY ELIGIBLE — standalone overlay')}\n"
+                f"{escape_markdown('IVR    : ')}{ivr_str} "
+                f"{escape_markdown('(passes reentry threshold)')}\n"
+                f"{escape_markdown('Status : No open PP → ELIGIBLE')}\n"
+                f"{escape_markdown('Action : Run find_overlay_strikes.py --overlay-type pp to initiate manually')}\n"
+                f"{escape_markdown('Overlay P&L (total realized): ₹')}{realized_pnl_str}"
             )
             await notifier.send(msg)
     except Exception as exc:
