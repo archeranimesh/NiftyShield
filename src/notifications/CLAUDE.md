@@ -100,6 +100,56 @@ time, not audited retroactively.
 
 ---
 
+## Value Formatting & Table Builders — `src/notifications/formatting.py`
+
+Canonical per-parameter-type rules live in root **`FORMATTING.md`** — this section is the
+module-level pointer to the code that implements them (formatting-rules epic, FMT-1..FMT-4,
+`docs/plan/telegram-markdown-migration/formatting-rules/`).
+
+**Value formatters** (all return plain, unescaped text — callers still run the result through
+`mdcode()`/`escape_markdown()` per the contract above before interpolating into a `send()` call):
+
+- **`format_money(value: Decimal) -> str`** — 2dp, comma thousands, `₹` prefix, sign before `₹`
+  on negatives. Rejects `float` with `TypeError` — never silently coerces. `Decimal("82628")` ->
+  `"₹82,628.00"`, `Decimal("-11.08")` -> `"-₹11.08"`.
+- **`format_greek(value: float | None, *, width: int | None = None) -> str`** — 2dp, always
+  signed, `"-"` placeholder for `None` (not-applicable, not zero). `0.28` -> `"+0.28"`. `width`
+  right-aligns for `build_leg_table`'s reuse.
+- **`format_strike(value: float | int) -> str`** — integer string, no decimal, no thousands
+  separator (an identifier, not a quantity). Raises `ValueError` on a non-whole-number input.
+- **`format_pct(value: float) -> str`** — 1dp; whole-number inputs print bare (`4` -> `"4%"`,
+  not `"4.0%"`). `value` is a plain percentage number, `4` means 4%, not `0.04`.
+
+**Table builders** (all wrap in a caller-supplied ` ```fenced block``` ` — none of these add
+the fence themselves, so they stay reusable for plain console output too):
+
+- **`build_kv_table(title, rows: list[tuple[str, str]]) -> str`** — bordered two-column
+  label/value table. Width is always computed from the actual content
+  (`max(len(x) for x in ...)`), never a hand-counted constant — this is the exact bug class
+  that broke `build_comparison_report()`'s original fixed 20-char budget (see
+  `formatting-rules/prompt.md`). Raises `ValueError` on empty `rows` — a titled table with
+  nothing to show is a caller bug, not a valid empty table.
+- **`build_side_by_side_kv_table(title_a, rows_a, title_b, rows_b) -> str`** — two `build_kv_table`
+  outputs joined with `" | "`, shorter side blank-padded to stay aligned when row counts differ
+  (the real Snapshot/P&L comparison case). Built on top of `build_kv_table` rather than
+  reimplementing its width/border logic.
+- **`build_leg_table(legs: list[LegRow]) -> str`** — position table: `[S]`/`[B]` badge (from
+  whether `LegRow.role` starts with `"Short"`/`"Long"`), instrument, Δ, LTP, entry. LTP/Entry
+  columns use a local 1dp format, **not** `format_money`'s 2dp — a locked-in exception (see
+  `FORMATTING.md` §3) to fit numeric columns on a narrow mobile screen inside a fenced block; do
+  not "fix" this into a `format_money()` call. Raises `ValueError` on empty `legs`.
+- **`LegRow`** (frozen dataclass) — one input row for `build_leg_table`: `role`, `instrument`
+  (pre-formatted, e.g. `"23000 PE"`), `delta: float | None`, `ltp: float`, `entry: float | None`.
+
+**Known risk, not yet guarded in code:** any Unicode symbol with an emoji-presentation variant
+(not just literal emoji) renders double-width on Telegram even inside a monospace fence and can
+break column alignment — e.g. `▶`. Extends the emoji-breaks-alignment warning above from
+literal emoji to that wider glyph class. See `FORMATTING.md` (FMT-1e).
+
+Tests: `tests/unit/notifications/test_formatting.py`.
+
+---
+
 ## Instrument Label Formatting
 
 Any Telegram or log message that names an option leg in prose must use

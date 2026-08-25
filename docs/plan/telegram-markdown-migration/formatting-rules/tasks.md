@@ -61,6 +61,6 @@
       | Owner: Claude | Model: Sonnet | Review: none, but keep a human/Claude judgment pass on
       width computation — this is where the original hand-counted-width bug lived
       (`build_comparison_report()`), don't fully delegate the alignment logic
-- [ ] **FMT-4** — Docs close: `src/notifications/CLAUDE.md`, `CONTEXT.md`, `TODOS.md` |
+- [x] **FMT-4** — Docs close: `src/notifications/CLAUDE.md`, `CONTEXT.md`, `TODOS.md` |
       Blocked by: FMT-3
       | Owner: Antigravity | Model: n/a | Review: none (docs only)
