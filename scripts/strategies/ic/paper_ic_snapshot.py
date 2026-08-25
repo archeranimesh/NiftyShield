@@ -29,7 +29,7 @@ from src.client.upstox_market import parse_upstox_option_chain
 from src.config import settings
 from src.instruments.lookup import InstrumentLookup, parse_expiry
 from src.notifications.formatting import format_greek
-from src.notifications.markdown import escape_markdown
+from src.notifications.markdown import escape_markdown, mdcode
 from src.notifications.telegram_gateway import TelegramGateway
 from src.paper.constants import DEFAULT_BOD_PATH, DEFAULT_DB_PATH, LOT_SIZE
 from src.paper.store import PaperStore
@@ -153,6 +153,83 @@ def compute_net_greek(values: list[Decimal | None]) -> Decimal | None:
     if any(v is None for v in values):
         return None
     return sum(values, Decimal("0"))
+
+
+# FMT-1c (FORMATTING.md §11): color/emoji encode TIMEFRAME only, never
+# version -- keeps the scheme scalable to any number of strategy versions
+# sharing one timeframe (CONFIGS_V2 is explicitly "Phase 1, monthly only"
+# per src/strategy/ic_expiry_config_v2.py, implying more phases later).
+# Version is rendered separately as a text badge in the bold title.
+_TIMEFRAME_META: dict[str, dict[str, str]] = {
+    "weekly": {"color": "\U0001f7e1", "tf_emoji": "\u26a1", "title": "Weekly", "tag": "Weekly"},
+    "monthly": {
+        "color": "\U0001f535",
+        "tf_emoji": "\U0001f4c5",
+        "title": "Monthly",
+        "tag": "Monthly",
+    },
+    "leaps": {
+        "color": "\U0001f7e2",
+        "tf_emoji": "\U0001f52d",
+        "title": "Leaps",
+        "tag": "LEAPS",
+    },
+    "yearly": {
+        "color": "\U0001f7e0",
+        "tf_emoji": "\U0001f30c",
+        "title": "Yearly",
+        "tag": "Yearly",
+    },
+}
+
+# strategy_name embeds the version directly (paper_ic_nifty_v1_weekly,
+# paper_ic_nifty_v2_monthly, ...) -- parsed rather than threaded through
+# process_variant() as a separate param, since it's already the single
+# source of truth callers construct from CONFIGS/CONFIGS_V2.
+_VERSION_RE = re.compile(r"_v(\d+)_")
+
+
+def _resolve_version(strategy_name: str) -> str:
+    """Extract the "V<n>" version badge from a strategy_name, default "V1"."""
+    m = _VERSION_RE.search(strategy_name)
+    return f"V{m.group(1)}" if m else "V1"
+
+
+def build_header(expiry_type: str, strategy_name: str) -> tuple[str, str]:
+    """Build the two FMT-1c color-coded header lines for one IC variant.
+
+    Args:
+        expiry_type: One of "weekly"/"monthly"/"leaps"/"yearly" (the same
+            key process_variant() already iterates CONFIGS/CONFIGS_V2 by).
+        strategy_name: e.g. "paper_ic_nifty_v2_monthly" -- version is parsed
+            from this rather than passed separately.
+
+    Returns:
+        (title_line, id_line):
+            title_line: "{color} {tf_emoji} *IC EOD Audit -- {Timeframe}[ \\(V2\\)]* \\| {hashtag}"
+            id_line: "`{strategy_name}`" -- kept as a separate line below the
+                title on purpose. The hashtag (native Telegram tap-to-filter)
+                and the code-span strategy id (exact-string copy/grep for
+                audit trails) serve different jobs; collapsing them into one
+                loses one of the two. The hashtag must NOT be code-span
+                wrapped -- Telegram does not parse entities, including its
+                own auto-detected hashtags, inside a code span/fence.
+    """
+    tf = _TIMEFRAME_META[expiry_type]
+    version = _resolve_version(strategy_name)
+
+    version_suffix = f" \\({escape_markdown(version)}\\)" if version != "V1" else ""
+    title = f"IC EOD Audit — {tf['title']}"
+
+    hashtag_raw = f"#IC_{tf['tag']}_{version}"
+    hashtag = escape_markdown(hashtag_raw)  # escapes both # and _
+
+    title_line = (
+        f"{tf['color']} {tf['tf_emoji']} *{escape_markdown(title)}{version_suffix}* "
+        f"\\| {hashtag}"
+    )
+    id_line = mdcode(strategy_name)
+    return title_line, id_line
 
 
 async def process_variant(

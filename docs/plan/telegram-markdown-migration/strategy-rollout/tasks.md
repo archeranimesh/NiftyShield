@@ -45,12 +45,12 @@
       commit bb95a54 was docs-only), so ROLL-1 as originally scoped silently depended on two
       un-shipped prerequisites. Splitting makes each piece its own traceable commit instead of
       bundling the prereq promotion invisibly inside the ROLL-1 port commit.**
-    - [x] **ROLL-1a** — Promote FMT-1b: add `pnl_emoji`/`alert_emoji` to
+    - [x] **ROLL-1a** (SHA: b05587b) — Promote FMT-1b: add `pnl_emoji`/`alert_emoji` to
           `src/notifications/formatting.py` + tests in `tests/unit/notifications/test_formatting.py`
           (presence/sign-based per FORMATTING.md §10, ported from
           `scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py`) | Blocked by: none (FMT-1b spec
           already final) | Owner: Claude | Model: Sonnet | Review: none
-    - [ ] **ROLL-1b** — Promote FMT-1c: add `build_header()` + `_TIMEFRAME_META`/`VARIANT_META` to
+    - [x] **ROLL-1b** — Promote FMT-1c: add `build_header()` + `_TIMEFRAME_META`/`VARIANT_META` to
           `scripts/strategies/ic/paper_ic_snapshot.py` (colocated with `process_variant`, per
           FORMATTING.md §11's location judgment call) + tests in
           `tests/unit/strategies/ic/test_paper_ic_snapshot.py` (one per timeframe + V1-implicit/

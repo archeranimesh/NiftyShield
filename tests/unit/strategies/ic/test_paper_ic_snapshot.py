@@ -13,7 +13,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import structlog.testing
 
-from scripts.strategies.ic.paper_ic_snapshot import _run, format_leg_label, process_variant
+from scripts.strategies.ic.paper_ic_snapshot import (
+    _run,
+    build_header,
+    format_leg_label,
+    process_variant,
+)
 from src.paper.models import PaperPosition
 from src.strategy.ic_expiry_config import CONFIGS
 from src.strategy.ic_expiry_config_v2 import CONFIGS_V2
@@ -1335,3 +1340,67 @@ def test_format_leg_label_bod_lookup_raises_falls_back_to_raw() -> None:
     assert label == "NSE_FO|63930"
     events = [entry["event"] for entry in logs]
     assert "ic_snapshot.leg_label_bod_lookup_failed" in events
+
+
+# --- ROLL-1b: FMT-1c timeframe color/emoji header + hashtag ---------------
+
+
+@pytest.mark.parametrize(
+    ("expiry_type", "strategy_name", "expected_color", "expected_emoji", "expected_tag"),
+    [
+        ("weekly", "paper_ic_nifty_v1_weekly", "\U0001f7e1", "\u26a1", "Weekly"),
+        ("monthly", "paper_ic_nifty_v1_monthly", "\U0001f535", "\U0001f4c5", "Monthly"),
+        ("leaps", "paper_ic_nifty_v1_leaps", "\U0001f7e2", "\U0001f52d", "LEAPS"),
+        ("yearly", "paper_ic_nifty_v1_yearly", "\U0001f7e0", "\U0001f30c", "Yearly"),
+    ],
+)
+def test_build_header_timeframe_color_emoji_hashtag(
+    expiry_type: str,
+    strategy_name: str,
+    expected_color: str,
+    expected_emoji: str,
+    expected_tag: str,
+) -> None:
+    """Each of V1's four timeframes gets its own confirmed color/emoji/hashtag."""
+    title_line, id_line = build_header(expiry_type, strategy_name)
+
+    assert title_line.startswith(f"{expected_color} {expected_emoji} *")
+    assert f"\\#IC\\_{expected_tag}\\_V1" in title_line
+    assert id_line == f"`{strategy_name}`"
+
+
+def test_build_header_v1_is_implicit_no_version_badge() -> None:
+    """V1 gets no text badge in the title -- the common case stays visually quiet."""
+    title_line, _ = build_header("monthly", "paper_ic_nifty_v1_monthly")
+
+    assert "\\(V1\\)" not in title_line
+    assert "V1" not in title_line.split("|")[0]
+
+
+def test_build_header_v2_gets_version_badge() -> None:
+    """Any non-V1 version appends an escaped text badge to the bold title."""
+    title_line, id_line = build_header("monthly", "paper_ic_nifty_v2_monthly")
+
+    assert "\\(V2\\)" in title_line
+    assert "\\#IC\\_Monthly\\_V2" in title_line
+    assert id_line == "`paper_ic_nifty_v2_monthly`"
+
+
+def test_build_header_hashtag_not_wrapped_in_code_span() -> None:
+    """The hashtag must sit unwrapped on the title line -- Telegram parses no
+    entities, including its own auto-detected hashtags, inside a code span/fence,
+    so wrapping it in backticks would silently kill tap-to-filter."""
+    title_line, _ = build_header("weekly", "paper_ic_nifty_v1_weekly")
+
+    hashtag_start = title_line.index("\\#IC")
+    # No backtick between the hashtag's start and the end of the line.
+    assert "`" not in title_line[hashtag_start:]
+
+
+def test_build_header_strategy_id_kept_as_separate_code_span_line() -> None:
+    """The `{strategy_id}` code-span line is separate from the hashtag -- they
+    serve different jobs (exact-string audit copy vs. tap-to-filter)."""
+    title_line, id_line = build_header("monthly", "paper_ic_nifty_v1_monthly")
+
+    assert "`paper_ic_nifty_v1_monthly`" not in title_line
+    assert id_line == "`paper_ic_nifty_v1_monthly`"
