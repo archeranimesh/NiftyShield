@@ -28,7 +28,16 @@ from src.client.factory import create_client
 from src.client.upstox_market import parse_upstox_option_chain
 from src.config import settings
 from src.instruments.lookup import InstrumentLookup, parse_expiry
-from src.notifications.formatting import format_greek
+from src.notifications.formatting import (
+    LegRow,
+    alert_emoji,
+    build_leg_table,
+    format_expiry,
+    format_greek,
+    format_money,
+    format_pct,
+    pnl_emoji,
+)
 from src.notifications.markdown import escape_markdown, mdcode
 from src.notifications.telegram_gateway import TelegramGateway
 from src.paper.constants import DEFAULT_BOD_PATH, DEFAULT_DB_PATH, LOT_SIZE
@@ -71,27 +80,21 @@ def parse_key_details(instrument_key: str) -> tuple[str, str]:
     return "", ""
 
 
-def format_leg_label(
-    instrument_key: str, lookup: InstrumentLookup, expiry: date
-) -> str:
-    """Build a human-readable leg label for the EOD report, e.g. "NIFTY 22900 PE 28 JUL 26".
+def _resolve_strike_and_type(
+    instrument_key: str, lookup: InstrumentLookup
+) -> tuple[str, str]:
+    """Resolve (strike, CE/PE) for one leg, regex-first then BOD fallback.
 
     Tries the fast regex parse first (``parse_key_details``); real Upstox
     keys are numeric-only (e.g. ``NSE_FO|63930``) and never match, so those
     fall back to a BOD instrument-master lookup for ``strike_price``, same
-    fallback already used by ``IronCondorV1/V2._find_leg`` (BUG-012).
-    ``expiry`` is passed in rather than re-resolved per leg since the
-    variant's expiry is already known from the earlier reverse-lookup pass
-    in ``process_variant`` and is identical for every leg of one IC.
-
-    Args:
-        instrument_key: Position's Upstox instrument key.
-        lookup: Offline BOD instrument master.
-        expiry: The IC variant's resolved expiry date.
+    fallback already used by ``IronCondorV1/V2._find_leg`` (BUG-012). Shared
+    by ``format_leg_label`` (prose label) and ``process_variant``'s leg-table
+    ``instrument`` column (bare "{strike} {type}") so both resolve identically.
 
     Returns:
-        Formatted label, or the raw ``instrument_key`` when neither the
-        regex nor the BOD lookup can resolve a strike/option type.
+        ("", "") when neither the regex nor the BOD lookup can resolve a
+        strike/option type -- callers fall back to the raw instrument_key.
     """
     strike_num, opt_type = parse_key_details(instrument_key)
     if not strike_num:
@@ -114,10 +117,30 @@ def format_leg_label(
                     else str(strike_decimal)
                 )
                 opt_type = resolved_type
+    return strike_num, opt_type
 
+
+def format_leg_label(
+    instrument_key: str, lookup: InstrumentLookup, expiry: date
+) -> str:
+    """Build a human-readable leg label for the EOD report, e.g. "NIFTY 22900 PE 28 JUL 26".
+
+    ``expiry`` is passed in rather than re-resolved per leg since the
+    variant's expiry is already known from the earlier reverse-lookup pass
+    in ``process_variant`` and is identical for every leg of one IC.
+
+    Args:
+        instrument_key: Position's Upstox instrument key.
+        lookup: Offline BOD instrument master.
+        expiry: The IC variant's resolved expiry date.
+
+    Returns:
+        Formatted label, or the raw ``instrument_key`` when neither the
+        regex nor the BOD lookup can resolve a strike/option type.
+    """
+    strike_num, opt_type = _resolve_strike_and_type(instrument_key, lookup)
     if not strike_num:
         return instrument_key
-
     return f"NIFTY {strike_num} {opt_type} {expiry.strftime('%d %b %y').upper()}"
 
 
@@ -330,21 +353,21 @@ async def process_variant(
     # IVR
     ivr_str = ic._compute_ivr_str().split(": ")[1]
 
-    # Build position lines
+    # Build the fenced leg table + collect Greeks for Net Δ/θ.
     role_order = [
         "short_put",
         "long_put_hedge",
         "short_call",
         "long_call_hedge",
     ]
-    role_labels = {
-        "short_put": "Short Put  ",
-        "long_put_hedge": "Long Put   ",
-        "short_call": "Short Call ",
-        "long_call_hedge": "Long Call  ",
+    role_display = {
+        "short_put": "Short Put",
+        "long_put_hedge": "Long Put",
+        "short_call": "Short Call",
+        "long_call_hedge": "Long Call",
     }
 
-    pos_lines = []
+    leg_rows: list[LegRow] = []
     leg_deltas: list[Decimal | None] = []
     leg_thetas: list[Decimal | None] = []
     for role in role_order:
@@ -353,10 +376,8 @@ async def process_variant(
             continue
 
         opt_leg = ic._find_leg(chain, pos.instrument_key)
-        strike_suffix = format_leg_label(pos.instrument_key, lookup, expiry)
-
-        ltp_val = opt_leg.ltp if opt_leg is not None else None
-        ltp_str = f"LTP=₹{ltp_val:.2f}" if ltp_val is not None else "LTP=N/A"
+        strike_num, opt_type = _resolve_strike_and_type(pos.instrument_key, lookup)
+        instrument_str = f"{strike_num} {opt_type}" if strike_num else pos.instrument_key
 
         # Capture delta/theta for all four roles (not just the shorts) so
         # Net Δ/θ below reflects the whole condor, not just the short legs.
@@ -368,43 +389,57 @@ async def process_variant(
         leg_deltas.append(delta_val)
         leg_thetas.append(theta_val)
 
-        if role in ["short_put", "short_call"]:
-            delta_str = f"δ={format_greek(delta_val)}"
-            entry_val = pos.avg_sell_price
-            entry_str = f"(entry ₹{entry_val:.2f})"
-            pos_lines.append(
-                f"  {role_labels[role]} {strike_suffix}  "
-                f"{delta_str}  {ltp_str}  {entry_str}"
+        if opt_leg is None or opt_leg.ltp is None:
+            # build_leg_table's LTP column is a mandatory float (FMT-3), no
+            # None branch -- a leg whose live price can't be resolved is
+            # omitted from the table rather than faked as a placeholder
+            # zero (would misrepresent a real price as genuinely nil). Its
+            # delta/theta still count toward Net Δ/θ's incomplete state
+            # above. Flagged as a known simplification, not solved here --
+            # extending build_leg_table's contract is FMT-3's scope, not
+            # ROLL-1c's.
+            logger.warning(
+                "ic_snapshot.leg_ltp_unresolved",
+                strategy=config.strategy_name,
+                leg_role=role,
+                instrument_key=pos.instrument_key,
             )
-        else:
-            label = role_labels[role]
-            pos_lines.append(
-                f"  {label} {strike_suffix}  {ltp_str}"
-            )
+            continue
 
-    position_block = "\n".join(pos_lines)
+        entry_val = pos.avg_sell_price if role in ("short_put", "short_call") else None
+        leg_rows.append(
+            LegRow(
+                role=role_display[role],
+                instrument=instrument_str,
+                delta=float(delta_val) if delta_val is not None else None,
+                ltp=float(opt_leg.ltp),
+                entry=float(entry_val) if entry_val is not None else None,
+            )
+        )
+
+    if not leg_rows:
+        logger.error(
+            "ic_snapshot.no_leg_prices_resolved",
+            strategy=config.strategy_name,
+        )
+        return escape_markdown(
+            f"📋 IC EOD Audit — {expiry_type} ({config.strategy_name})\n"
+            f"Error: No leg prices could be resolved from the live chain."
+        )
 
     # Net Δ/θ across all resolved legs -- None (incomplete) if ANY leg's
     # value is missing, never a partial sum that looks complete.
     net_delta = compute_net_greek(leg_deltas)
     net_theta = compute_net_greek(leg_thetas)
-    net_delta_str = format_greek(net_delta) if net_delta is not None else "N/A"
-    net_theta_str = format_greek(net_theta) if net_theta is not None else "N/A"
+    net_delta_str = (
+        escape_markdown(format_greek(float(net_delta))) if net_delta is not None else "incomplete"
+    )
+    net_theta_str = (
+        escape_markdown(format_greek(float(net_theta))) if net_theta is not None else "incomplete"
+    )
 
     # Combined mark / entry credit
     combined_mark, entry_credit = ic._compute_combined_pnl(chain, ic_positions)
-    if combined_mark is not None and entry_credit > Decimal("0"):
-        captured_pct = (entry_credit - combined_mark) / entry_credit
-        pct_val = int(round(captured_pct * 100))
-        pnl_line = (
-            f"P&L: combined mark ₹{combined_mark:.2f} vs "
-            f"entry credit ₹{entry_credit:.2f} → {pct_val}% captured so far"
-        )
-    else:
-        pnl_line = (
-            f"P&L: combined mark N/A vs "
-            f"entry credit ₹{entry_credit:.2f} → N/A% captured so far"
-        )
 
     # ROI on margin — divides total ₹ P&L by the final_margin captured once at
     # entry (see MarginSnapshot docstring). entry_date is shared across every
@@ -412,42 +447,37 @@ async def process_variant(
     # Absent for cycles opened before this feature existed, or where the
     # margin-calculator call failed non-fatally at entry time.
     entry_date = ic_positions[0].entry_date
-    roi_line = "ROI on margin: N/A (no margin snapshot for this entry)"
+    margin_snapshot = None
     if entry_date is not None:
         margin_snapshot = store.get_margin_snapshot(config.strategy_name, entry_date)
-        if margin_snapshot is not None and margin_snapshot.final_margin > Decimal("0"):
-            if combined_mark is not None:
-                total_pnl_rupees = (entry_credit - combined_mark) * LOT_SIZE
-                roi_pct = (total_pnl_rupees / margin_snapshot.final_margin) * Decimal("100")
-                roi_line = (
-                    f"ROI on margin: ₹{total_pnl_rupees:,.0f} / "
-                    f"₹{margin_snapshot.final_margin:,.0f} margin → {roi_pct:.1f}%"
-                )
-            else:
-                roi_line = (
-                    f"ROI on margin: N/A (no live mark) — "
-                    f"margin blocked ₹{margin_snapshot.final_margin:,.0f}"
-                )
 
-    # Signals
-    sig_strs = []
-    for ev in events:
-        emoji = "ℹ️"
-        if ev.severity == "ACTION":
-            emoji = "🔴"
-        elif ev.severity in ["WARN", "WARNING"]:
-            emoji = "⚠️"
-        sig_strs.append(f"{ev.event_type} {emoji}")
+    roi_amount: Decimal | None = None
+    roi_pct: Decimal | None = None
+    if (
+        margin_snapshot is not None
+        and margin_snapshot.final_margin > Decimal("0")
+        and combined_mark is not None
+    ):
+        roi_amount = (entry_credit - combined_mark) * LOT_SIZE
+        roi_pct = (roi_amount / margin_snapshot.final_margin) * Decimal("100")
 
-    # Add DTE_WARN if DTE <= config.dte_warn and not already in sigs
+    margin_str = (
+        escape_markdown(format_money(margin_snapshot.final_margin))
+        if margin_snapshot is not None
+        else "N/A"
+    )
+
+    # Signals -- FMT-1b's alert_emoji is presence-based on this same list;
+    # DTE_WARN synthesized the same way the old plain-text format did.
+    signal_codes = [ev.event_type for ev in events]
     dte_warn_threshold = getattr(config, "dte_warn", -1)
-    has_dte_warn = any(s.startswith("DTE_WARN") for s in sig_strs)
-    if dte <= dte_warn_threshold and not has_dte_warn:
-        sig_strs.append("DTE_WARN ℹ️")
+    if dte <= dte_warn_threshold and not any(s == "DTE_WARN" for s in signal_codes):
+        signal_codes.append("DTE_WARN")
+    alert_value = ", ".join(mdcode(s) for s in signal_codes) if signal_codes else "None"
 
-    sigs_str = ", ".join(sig_strs) if sig_strs else "none"
-
-    # Intraday acted events
+    # Intraday acted events -- each rendered as `action` \(signal at HH:MM\),
+    # condensing the old "signal → action executed at time" sentence into
+    # the Actions line without losing which signal triggered which action.
     acted_events = []
     with sqlite3.connect(store.db_path) as conn:
         conn.row_factory = sqlite3.Row
@@ -463,10 +493,9 @@ async def process_variant(
                 acted_events.append(row)
 
     if acted_events:
-        intraday_lines = []
+        action_parts = []
         for row in acted_events:
             action_taken = get_action_taken(row)
-            # Parse execution time from event_time
             time_str = "11:42"
             try:
                 dt = datetime.fromisoformat(row["event_time"])
@@ -477,36 +506,61 @@ async def process_variant(
                     and len(row["event_time"]) >= 16
                 ):
                     time_str = row["event_time"][11:16]
-            intraday_lines.append(
-                f"{row['exit_signal']} → {action_taken} "
-                f"executed at {time_str}"
-            )
-        intraday_str = ", ".join(intraday_lines)
+            note = escape_markdown(f"{row['exit_signal']} at {time_str}")
+            action_parts.append(f"{mdcode(action_taken)} \\({note}\\)")
+        actions_value = ", ".join(action_parts)
     else:
-        intraday_str = "none"
+        actions_value = "None"
 
-    report = escape_markdown(
-        f"📋 IC EOD Audit — {expiry_type} ({config.strategy_name})\n"
-        f"DTE: {dte}  |  Nifty: {nifty_spot:,.0f}  |  IVR: {ivr_str}\n"
-        f"Net Δ: {net_delta_str}  |  Net θ: {net_theta_str}\n\n"
-        f"Position:\n"
-        f"{position_block}\n\n"
-        f"{pnl_line}\n"
-        f"{roi_line}\n\n"
-        f"Today's signals: {sigs_str}\n"
-        f"Intraday actions: {intraday_str}"
-    )
+    # captured_credit's sign drives pnl_emoji; "flat" icon doubles as the
+    # unresolved-mark sentinel (pnl_emoji has no dedicated "unknown" state).
+    pnl_icon = pnl_emoji(entry_credit - combined_mark) if combined_mark is not None else "➖"
+    alert_icon = alert_emoji(signal_codes)
 
-    # Append unresolved ACTION signals if present in events
-    unresolved = [e for e in events if e.severity == "ACTION"]
-    if unresolved:
-        unresolved_lines = []
-        for e in unresolved:
-            unresolved_lines.append(escape_markdown(f"  {e.event_type} 🔴  {e.description}"))
-        sig_join = "\n".join(unresolved_lines)
-        report += escape_markdown("\n\n⚠️  Unresolved ACTION signals:\n") + sig_join
+    credit_str = escape_markdown(format_money(entry_credit))
+    if combined_mark is not None:
+        mark_str = escape_markdown(format_money(combined_mark))
+    else:
+        mark_str = "N/A"
 
-    return report
+    if combined_mark is not None and entry_credit > Decimal("0"):
+        captured_credit = entry_credit - combined_mark
+        captured_pct = float((captured_credit / entry_credit) * 100)
+        captured_line = (
+            f"{pnl_icon} *Captured:* {escape_markdown(format_money(captured_credit))} "
+            f"\\({escape_markdown(format_pct(captured_pct))}\\)"
+        )
+    else:
+        captured_line = f"{pnl_icon} *Captured:* N/A"
+
+    if roi_amount is not None and roi_pct is not None:
+        roi_segment = (
+            f"*ROI:* {escape_markdown(format_pct(float(roi_pct)))} "
+            f"\\({escape_markdown(format_money(roi_amount))}\\)"
+        )
+    else:
+        roi_segment = "*ROI:* N/A"
+
+    title_line, id_line = build_header(expiry_type, config.strategy_name)
+    expiry_str = escape_markdown(format_expiry(expiry))
+    nifty_str = escape_markdown(f"{nifty_spot:,.0f}")
+    ivr_display = escape_markdown(ivr_str)
+
+    lines = [
+        title_line,
+        id_line,
+        f"*Expiry:* {expiry_str} \\| *DTE:* {dte} \\| *Nifty:* {nifty_str}",
+        f"*IVR:* {ivr_display} \\| *Net Δ:* {net_delta_str} \\| *Net θ:* {net_theta_str}",
+        "```",
+        build_leg_table(leg_rows),
+        "```",
+        f"💰 *Credit:* {credit_str} ➡️ *Mark:* {mark_str}",
+        f"{captured_line} \\| {roi_segment}",
+        f"🏦 *Margin:* {margin_str}",
+        f"{alert_icon} *Alert:* {alert_value}",
+        f"⚙️ *Actions:* {actions_value}",
+    ]
+    return "\n".join(lines)
 
 
 async def _run(args: argparse.Namespace) -> None:

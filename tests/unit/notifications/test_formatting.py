@@ -1,3 +1,4 @@
+from datetime import date
 from decimal import Decimal
 
 import pytest
@@ -8,6 +9,7 @@ from src.notifications.formatting import (
     build_kv_table,
     build_leg_table,
     build_side_by_side_kv_table,
+    format_expiry,
     format_greek,
     format_money,
     format_pct,
@@ -182,3 +184,11 @@ def test_alert_emoji_not_substring_matched():
     # emoji -- alert_emoji is presence-based, never a substring match on
     # the signal code name (see FMT-1b's rejected design).
     assert alert_emoji(["GAMMA_RISK_ACTION"]) == "\u26a0\ufe0f"
+
+
+def test_format_expiry_uppercase_leading_zero_kept():
+    assert format_expiry(date(2026, 8, 25)) == "25 AUG 26"
+
+
+def test_format_expiry_single_digit_day_keeps_leading_zero():
+    assert format_expiry(date(2026, 7, 7)) == "07 JUL 26"

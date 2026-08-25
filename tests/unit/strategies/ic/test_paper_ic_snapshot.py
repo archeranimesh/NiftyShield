@@ -187,12 +187,13 @@ async def test_one_variant_active(
 
     assert mock_telegram.send_notification.call_count == 1
     call_arg = mock_telegram.send_notification.call_args[0][0]
-    assert "📋 IC EOD Audit — monthly" in call_arg
-    assert "DTE: 0" in call_arg
-    assert "Short Put" in call_arg
-    assert "P&L: combined" in call_arg
+    assert "IC EOD Audit — Monthly" in call_arg
+    assert "\\#IC\\_Monthly\\_V1" in call_arg
+    assert "*DTE:* 0" in call_arg
+    assert "[S] 24000 PE" in call_arg  # short_put leg row in the fenced table
+    assert "*Captured:*" in call_arg
     # because DTE 0 <= dte_warn 21
-    assert "Today's signals: DTE\\_WARN" in call_arg
+    assert "`DTE_WARN`" in call_arg  # mdcode() code spans are inert -- no escaping inside
 
 
 def _four_leg_positions(strategy_name: str) -> list[PaperPosition]:
@@ -306,9 +307,9 @@ async def test_net_greeks_all_four_legs_resolve(
     # Whole report is escape_markdown()'d as one string, so '.', '+', '|'
     # all come back backslash-escaped in the sent text.
     # Net Delta: -0.23 - 0.06 + 0.25 + 0.05 = +0.01
-    assert "Net Δ: \\+0\\.01" in call_arg
+    assert "*Net Δ:* \\+0\\.01" in call_arg
     # Net Theta: 4.10 - 0.85 + 3.90 - 0.70 = +6.45
-    assert "Net θ: \\+6\\.45" in call_arg
+    assert "*Net θ:* \\+6\\.45" in call_arg
 
 
 @pytest.mark.asyncio
@@ -363,8 +364,8 @@ async def test_net_greeks_incomplete_when_one_leg_missing(
         await _run(args)
 
     call_arg = mock_telegram.send_notification.call_args[0][0]
-    assert "Net Δ: N/A" in call_arg
-    assert "Net θ: N/A" in call_arg
+    assert "*Net Δ:* incomplete" in call_arg
+    assert "*Net θ:* incomplete" in call_arg
 
 
 @pytest.mark.asyncio
@@ -416,15 +417,16 @@ async def test_short_leg_none_delta_shows_placeholder_not_zero(
         await _run(args)
 
     call_arg = mock_telegram.send_notification.call_args[0][0]
-    # '=' and '-' are both MarkdownV2-reserved, escaped by the
-    # whole-string escape_markdown() pass, so the None-placeholder
-    # round-trips as \=\-.
-    assert "δ\\=\\-" in call_arg
+    # The leg table lives inside a fenced ``` block -- MarkdownV2 parses no
+    # entities there, so it is NOT escape_markdown()'d; the None-placeholder
+    # from format_greek(None) is a bare "-", not an escaped sequence.
+    leg_line = next(ln for ln in call_arg.splitlines() if "24000 PE" in ln)
+    assert leg_line.split()[3] == "-"
     # If the old `else 0.0` fallback ever came back, this would render as
-    # the escaped "δ\=0\.00" instead of the placeholder above.
-    assert "δ\\=0\\.00" not in call_arg
-    assert "Net Δ: N/A" in call_arg
-    assert "Net θ: N/A" in call_arg
+    # "+0.00" in that same column instead of the placeholder above.
+    assert "+0.00" not in leg_line
+    assert "*Net Δ:* incomplete" in call_arg
+    assert "*Net θ:* incomplete" in call_arg
 
 
 @pytest.mark.asyncio
@@ -518,7 +520,7 @@ async def test_intraday_acted_event(
         await _run(args)
 
     call_arg = mock_telegram.send_notification.call_args[0][0]
-    expected = "Intraday actions: PROFIT\\_TARGET → CLOSE\\_FULL executed at 11:42"
+    expected = "`CLOSE_FULL` \\(PROFIT\\_TARGET at 11:42\\)"
     assert expected in call_arg
 
 
@@ -573,9 +575,11 @@ async def test_unresolved_action_signal_at_eod(
         await _run(args)
 
     call_arg = mock_telegram.send_notification.call_args[0][0]
-    assert "⚠️  Unresolved ACTION signals:" in call_arg
-    expected = "TIME\\_STOP 🔴  DTE 14 — position should have been closed today"
-    assert expected in call_arg
+    # New format condenses signal display into the single Alert line
+    # (presence-based alert_emoji + mdcode()'d signal codes) rather than a
+    # separate "Unresolved ACTION signals" block with the full description
+    # text -- per-signal severity/description detail is deferred (FMT-1b).
+    assert "⚠️ *Alert:* `TIME_STOP`" in call_arg
 
 
 @pytest.mark.asyncio
@@ -621,7 +625,7 @@ async def test_dte_warning_noted(
         await _run(args)
 
     call_arg = mock_telegram.send_notification.call_args[0][0]
-    assert "Today's signals: DTE\\_WARN ℹ️" in call_arg
+    assert "⚠️ *Alert:* `DTE_WARN`" in call_arg
 
 
 @pytest.mark.asyncio
@@ -693,7 +697,7 @@ async def test_chain_fetch_fails_for_one_variant(
     ]
     assert any("Error: Failed to fetch live option chain" in c for c in calls)
     assert any(
-        "📋 IC EOD Audit — monthly" in c and "Error" not in c
+        "IC EOD Audit — Monthly" in c and "Error" not in c
         for c in calls
     )
 
@@ -766,7 +770,7 @@ async def test_check_signals_raises_for_one_variant(
     ]
     assert any("Error: Signal evaluation failed" in c for c in calls)
     assert any(
-        "📋 IC EOD Audit — monthly" in c and "Error" not in c
+        "IC EOD Audit — Monthly" in c and "Error" not in c
         for c in calls
     )
 
@@ -823,7 +827,11 @@ class _ReversedSignatureStrategy:
         return "IVR: 0.42"
 
     def _find_leg(self, chain, instrument_key):
-        return None
+        leg = MagicMock()
+        leg.ltp = Decimal("50.0")
+        leg.delta = Decimal("-0.20")
+        leg.theta = Decimal("-1.00")
+        return leg
 
     def _compute_combined_pnl(self, chain, positions):
         return (None, Decimal("100.0"))
@@ -886,7 +894,7 @@ async def test_process_variant_binds_constructor_args_by_keyword(mock_lookup):
 
     assert report is not None
     assert "Error" not in report
-    assert "📋 IC EOD Audit — monthly" in report
+    assert "IC EOD Audit — Monthly" in report
 
 
 
@@ -933,7 +941,8 @@ async def test_v2_monthly_included_in_audit(
 
     assert mock_telegram.send_notification.call_count == 1
     call_arg = mock_telegram.send_notification.call_args[0][0]
-    assert "📋 IC EOD Audit — monthly \\(paper\\_ic\\_nifty\\_v2\\_monthly\\)" in call_arg
+    assert "IC EOD Audit — Monthly \\(V2\\)" in call_arg
+    assert "`paper_ic_nifty_v2_monthly`" in call_arg
     mock_v2_class.assert_called_once()
 
 @pytest.mark.asyncio
@@ -997,7 +1006,9 @@ async def test_v1_loop_unchanged(
 
     assert mock_telegram.send_notification.call_count == 1
     call_arg = mock_telegram.send_notification.call_args[0][0]
-    assert "📋 IC EOD Audit — monthly \\(paper\\_ic\\_nifty\\_v1\\_monthly\\)" in call_arg
+    assert "IC EOD Audit — Monthly" in call_arg
+    assert "\\(V2\\)" not in call_arg  # V1 stays unbadged
+    assert "`paper_ic_nifty_v1_monthly`" in call_arg
     mock_v2_class.assert_not_called()
 
 
@@ -1218,7 +1229,7 @@ async def test_process_variant_resolves_expiry_via_numeric_instrument_key(
     lookup.get_by_key.assert_called_with("NSE_FO|63930")
     assert report is not None
     assert "Error: Expiry date could not be parsed" not in report
-    assert "DTE: 0" in report
+    assert "*DTE:* 0" in report
 
 
 @pytest.mark.asyncio

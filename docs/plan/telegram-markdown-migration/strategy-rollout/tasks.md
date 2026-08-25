@@ -33,7 +33,7 @@
       a new defect; matches the never-partial-sum reference implementation in
       `scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py` verbatim). Not fixed here — flagged
       as a fast-follow label-clarification candidate, not a blocker.
-- [ ] **ROLL-1** — Migrate IC EOD audit (`scripts/strategies/ic/paper_ic_snapshot.py`) to the
+- [x] **ROLL-1** — Migrate IC EOD audit (`scripts/strategies/ic/paper_ic_snapshot.py`) to the
       new format, including the FMT-1c timeframe color/emoji/hashtag header (all 5 active
       variants: V1 weekly/monthly/leaps/yearly + V2 monthly) | Blocked by: `backbone/` +
       `formatting-rules/` complete (data sources: `ROLL-0` for Net Δ/θ, `FMT-1c` for the header —
@@ -57,7 +57,7 @@
           V2-badge + hashtag-not-in-code-span) | Blocked by: ROLL-1a (imports nothing from it
           directly, but sequenced after so both prereqs land before the port) | Owner: Claude |
           Model: Sonnet | Review: none
-    - [ ] **ROLL-1c** — The actual ROLL-1 port: rewrite `process_variant()`'s report construction
+    - [x] **ROLL-1c** — The actual ROLL-1 port: rewrite `process_variant()`'s report construction
           to the new bold/table MarkdownV2 format using `ROLL-1a`'s emoji helpers, `ROLL-1b`'s
           header, and the already-shipped `build_leg_table`/`format_money`/`format_greek`/
           `format_strike`/`format_pct` (FMT-2/FMT-3) — full spec in `stories.md` ROLL-1 | Blocked

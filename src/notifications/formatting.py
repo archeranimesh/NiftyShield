@@ -1,6 +1,7 @@
 """Value formatters for notifications."""
 
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal
 
 
@@ -62,6 +63,21 @@ def format_pct(value: float) -> str:
     if float(value).is_integer():
         return f"{int(value)}%"
     return f"{value:.1f}%"
+
+
+def format_expiry(value: date) -> str:
+    """`%d %b %y`, uppercase, leading zero kept (FMT-1, FORMATTING.md §3).
+
+    25 AUG 26 / 07 JUL 26. Matches the shipped `format_option_label()`
+    (`src/instruments/lookup.py`, TL-1) rather than the earlier
+    title-case-plus-lstrip("0") draft (`scratch/2026-08-07_ic_eod_audit_v2_
+    telegram_format.py::format_expiry`) -- a variable-width day field
+    misaligns any fenced column carrying an expiry, and two renderings of
+    the same date inside one message reads as a bug to the recipient.
+    `%-d` stays banned (platform-dependent); moot here since nothing is
+    stripped.
+    """
+    return value.strftime("%d %b %y").upper()
 
 
 def pnl_emoji(amount: Decimal) -> str:
