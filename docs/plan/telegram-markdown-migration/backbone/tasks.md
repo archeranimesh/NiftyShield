@@ -166,7 +166,7 @@ call site's entry from MD-6's `_BASELINE_UNESCAPED` in the same commit as its fi
 in `tests/unit/notifications/test_escaping_guard.py` will fail otherwise, per that file's
 maintenance contract.
 
-- [x] **MD-5** — Docs close: `src/notifications/CLAUDE.md`, `DECISIONS.md`, `CONTEXT.md`,
+- [x] **MD-5** (SHA: 57c1c3c) — Docs close: `src/notifications/CLAUDE.md`, `DECISIONS.md`, `CONTEXT.md`,
       `TODOS.md` | Blocked by: MD-3, MD-4.1, MD-4.2, MD-4.3, MD-6, MD-7.1, MD-7.2, MD-7.3
       | Owner: Antigravity | Model: n/a | Review: none (docs only) — also document MD-6's guard
       contract and MD-7.1/MD-7.2/MD-7.3's fixes in `src/notifications/CLAUDE.md` alongside the escaping-helper rule
