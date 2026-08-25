@@ -51,9 +51,9 @@
       not just literal emoji — e.g. `▶` renders double-width on Telegram even inside a fence) —
       docs only, no code | Blocked by: FMT-1
       | Owner: Claude | Model: Sonnet | Review: none — bundle with FMT-1b/1c/1d
-- [ ] **FMT-2** — Add `src/notifications/formatting.py` value formatters
+- [x] **FMT-2** — Add `src/notifications/formatting.py` value formatters
       (`format_money`, `format_greek`, `format_strike`, `format_pct`) + tests |
-      Blocked by: FMT-1, `backbone/` MD-1
+      Blocked by: FMT-1, `backbone/` MD-1 | SHA: 166531b
       | Owner: Antigravity | Model: n/a | Review: none — clean formatter functions, exhaustive
       spec, mechanical
 - [ ] **FMT-3** — Add table-builder helpers (`build_kv_table`, `build_side_by_side_kv_table`,
