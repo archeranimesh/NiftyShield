@@ -112,6 +112,7 @@ def mock_ic_class():
         leg = MagicMock()
         leg.ltp = Decimal("50.0")
         leg.delta = Decimal("0.10")
+        leg.theta = Decimal("-1.20")
         ic_inst._find_leg.return_value = leg
         ic_inst._compute_combined_pnl.return_value = (
             Decimal("100.0"),
@@ -187,6 +188,238 @@ async def test_one_variant_active(
     assert "P&L: combined" in call_arg
     # because DTE 0 <= dte_warn 21
     assert "Today's signals: DTE\\_WARN" in call_arg
+
+
+def _four_leg_positions(strategy_name: str) -> list[PaperPosition]:
+    """Build one PaperPosition per IC role, distinct instrument_keys per leg.
+
+    Shared by the ROLL-0 Net Delta/Theta tests below so each can drive
+    `_find_leg` with a per-instrument_key dict instead of one fixed leg
+    mock shared across all four roles.
+    """
+    return [
+        PaperPosition(
+            strategy_name=strategy_name,
+            leg_role="short_put",
+            net_qty=-1,
+            avg_cost=Decimal("0.0"),
+            avg_sell_price=Decimal("80.0"),
+            instrument_key="NSE_FO|NIFTY26JUN202624000PE",
+            entry_date=date(2026, 6, 1),
+        ),
+        PaperPosition(
+            strategy_name=strategy_name,
+            leg_role="long_put_hedge",
+            net_qty=1,
+            avg_cost=Decimal("20.0"),
+            avg_sell_price=Decimal("0.0"),
+            instrument_key="NSE_FO|NIFTY26JUN202623500PE",
+            entry_date=date(2026, 6, 1),
+        ),
+        PaperPosition(
+            strategy_name=strategy_name,
+            leg_role="short_call",
+            net_qty=-1,
+            avg_cost=Decimal("0.0"),
+            avg_sell_price=Decimal("75.0"),
+            instrument_key="NSE_FO|NIFTY26JUN202625000CE",
+            entry_date=date(2026, 6, 1),
+        ),
+        PaperPosition(
+            strategy_name=strategy_name,
+            leg_role="long_call_hedge",
+            net_qty=1,
+            avg_cost=Decimal("18.0"),
+            avg_sell_price=Decimal("0.0"),
+            instrument_key="NSE_FO|NIFTY26JUN202625500CE",
+            entry_date=date(2026, 6, 1),
+        ),
+    ]
+
+
+def _make_leg(ltp: str, delta, theta) -> MagicMock:
+    leg = MagicMock()
+    leg.ltp = Decimal(ltp)
+    leg.delta = delta
+    leg.theta = theta
+    return leg
+
+
+@pytest.mark.asyncio
+async def test_net_greeks_all_four_legs_resolve(
+    mock_store,
+    mock_telegram,
+    mock_create_client,
+    mock_parse_chain,
+    mock_ic_class,
+):
+    """ROLL-0 happy path: all four legs resolve real delta/theta from the
+    chain -> Net Delta/Net Theta print the correct sums, including the two
+    long legs (non-zero, not all-zero, so this would fail if the long-leg
+    extraction were silently dropped as it was pre-ROLL-0).
+    """
+    monthly_name = CONFIGS["monthly"].strategy_name
+    positions = _four_leg_positions(monthly_name)
+    mock_store.get_positions.side_effect = (
+        lambda name: positions if name == monthly_name else []
+    )
+
+    legs_by_key = {
+        "NSE_FO|NIFTY26JUN202624000PE": _make_leg(
+            "88.95", Decimal("-0.23"), Decimal("4.10")
+        ),
+        "NSE_FO|NIFTY26JUN202623500PE": _make_leg(
+            "18.05", Decimal("-0.06"), Decimal("-0.85")
+        ),
+        "NSE_FO|NIFTY26JUN202625000CE": _make_leg(
+            "80.10", Decimal("0.25"), Decimal("3.90")
+        ),
+        "NSE_FO|NIFTY26JUN202625500CE": _make_leg(
+            "16.40", Decimal("0.05"), Decimal("-0.70")
+        ),
+    }
+    mock_ic_class._find_leg.side_effect = (
+        lambda chain, instrument_key: legs_by_key.get(instrument_key)
+    )
+
+    args = argparse.Namespace(
+        date=date(2026, 6, 26),
+        dry_run=False,
+        db_path="dummy.db",
+        bod_path="dummy.json",
+    )
+
+    with patch("sqlite3.connect") as mock_conn:
+        mock_cursor = MagicMock()
+        mock_cursor.fetchall.return_value = []
+        exe = mock_conn.return_value.__enter__.return_value.execute
+        exe.return_value = mock_cursor
+
+        await _run(args)
+
+    call_arg = mock_telegram.send_notification.call_args[0][0]
+    # Whole report is escape_markdown()'d as one string, so '.', '+', '|'
+    # all come back backslash-escaped in the sent text.
+    # Net Delta: -0.23 - 0.06 + 0.25 + 0.05 = +0.01
+    assert "Net Δ: \\+0\\.01" in call_arg
+    # Net Theta: 4.10 - 0.85 + 3.90 - 0.70 = +6.45
+    assert "Net θ: \\+6\\.45" in call_arg
+
+
+@pytest.mark.asyncio
+async def test_net_greeks_incomplete_when_one_leg_missing(
+    mock_store,
+    mock_telegram,
+    mock_create_client,
+    mock_parse_chain,
+    mock_ic_class,
+):
+    """ROLL-0 edge case: one leg's chain lookup misses (opt_leg is None)
+    within an otherwise successful chain fetch -> Net Delta/Net Theta both
+    print the incomplete (N/A) state, not a partial sum over the other
+    three legs.
+    """
+    monthly_name = CONFIGS["monthly"].strategy_name
+    positions = _four_leg_positions(monthly_name)
+    mock_store.get_positions.side_effect = (
+        lambda name: positions if name == monthly_name else []
+    )
+
+    # long_put_hedge's key resolves to None -- a real chain-lookup miss,
+    # not a leg with a genuinely-zero Greek.
+    legs_by_key = {
+        "NSE_FO|NIFTY26JUN202624000PE": _make_leg(
+            "88.95", Decimal("-0.23"), Decimal("4.10")
+        ),
+        "NSE_FO|NIFTY26JUN202625000CE": _make_leg(
+            "80.10", Decimal("0.25"), Decimal("3.90")
+        ),
+        "NSE_FO|NIFTY26JUN202625500CE": _make_leg(
+            "16.40", Decimal("0.05"), Decimal("-0.70")
+        ),
+    }
+    mock_ic_class._find_leg.side_effect = (
+        lambda chain, instrument_key: legs_by_key.get(instrument_key)
+    )
+
+    args = argparse.Namespace(
+        date=date(2026, 6, 26),
+        dry_run=False,
+        db_path="dummy.db",
+        bod_path="dummy.json",
+    )
+
+    with patch("sqlite3.connect") as mock_conn:
+        mock_cursor = MagicMock()
+        mock_cursor.fetchall.return_value = []
+        exe = mock_conn.return_value.__enter__.return_value.execute
+        exe.return_value = mock_cursor
+
+        await _run(args)
+
+    call_arg = mock_telegram.send_notification.call_args[0][0]
+    assert "Net Δ: N/A" in call_arg
+    assert "Net θ: N/A" in call_arg
+
+
+@pytest.mark.asyncio
+async def test_short_leg_none_delta_shows_placeholder_not_zero(
+    mock_store,
+    mock_telegram,
+    mock_create_client,
+    mock_parse_chain,
+    mock_ic_class,
+):
+    """Regression: a short leg's opt_leg.delta is None (real chain-lookup
+    miss on the delta field specifically, opt_leg itself resolved) ->
+    per-leg display shows the '-' None-placeholder, not '0.00' -- proves
+    the old `else 0.0` fallback is actually gone, not just papered over by
+    the new Net Delta line.
+    """
+    monthly_name = CONFIGS["monthly"].strategy_name
+    positions = [
+        PaperPosition(
+            strategy_name=monthly_name,
+            leg_role="short_put",
+            net_qty=-1,
+            avg_cost=Decimal("0.0"),
+            avg_sell_price=Decimal("80.0"),
+            instrument_key="NSE_FO|NIFTY26JUN202624000PE",
+            entry_date=date(2026, 6, 1),
+        )
+    ]
+    mock_store.get_positions.side_effect = (
+        lambda name: positions if name == monthly_name else []
+    )
+
+    leg = _make_leg("88.95", None, None)
+    mock_ic_class._find_leg.return_value = leg
+
+    args = argparse.Namespace(
+        date=date(2026, 6, 26),
+        dry_run=False,
+        db_path="dummy.db",
+        bod_path="dummy.json",
+    )
+
+    with patch("sqlite3.connect") as mock_conn:
+        mock_cursor = MagicMock()
+        mock_cursor.fetchall.return_value = []
+        exe = mock_conn.return_value.__enter__.return_value.execute
+        exe.return_value = mock_cursor
+
+        await _run(args)
+
+    call_arg = mock_telegram.send_notification.call_args[0][0]
+    # '=' and '-' are both MarkdownV2-reserved, escaped by the
+    # whole-string escape_markdown() pass, so the None-placeholder
+    # round-trips as \=\-.
+    assert "δ\\=\\-" in call_arg
+    # If the old `else 0.0` fallback ever came back, this would render as
+    # the escaped "δ\=0\.00" instead of the placeholder above.
+    assert "δ\\=0\\.00" not in call_arg
+    assert "Net Δ: N/A" in call_arg
+    assert "Net θ: N/A" in call_arg
 
 
 @pytest.mark.asyncio
@@ -544,6 +777,7 @@ def mock_v2_class():
         leg = MagicMock()
         leg.ltp = Decimal("50.0")
         leg.delta = Decimal("0.10")
+        leg.theta = Decimal("-1.20")
         ic_inst._find_leg.return_value = leg
         ic_inst._compute_combined_pnl.return_value = (
             Decimal("100.0"),

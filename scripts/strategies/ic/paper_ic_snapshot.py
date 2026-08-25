@@ -28,6 +28,7 @@ from src.client.factory import create_client
 from src.client.upstox_market import parse_upstox_option_chain
 from src.config import settings
 from src.instruments.lookup import InstrumentLookup, parse_expiry
+from src.notifications.formatting import format_greek
 from src.notifications.markdown import escape_markdown
 from src.notifications.telegram_gateway import TelegramGateway
 from src.paper.constants import DEFAULT_BOD_PATH, DEFAULT_DB_PATH, LOT_SIZE
@@ -139,6 +140,19 @@ def get_action_taken(row: dict[str, Any]) -> str:
     elif sig == "ROLL_WING":
         return "ROLL_WING"
     return "CLOSE_FULL"
+
+
+def compute_net_greek(values: list[Decimal | None]) -> Decimal | None:
+    """Sum a Greek across all legs, or None if ANY leg is missing it.
+
+    Deliberately does NOT sum only the legs that happen to have a value --
+    a partial sum labeled "Net" would look complete while silently
+    excluding real (non-zero) contributions from whichever legs are
+    missing data.
+    """
+    if any(v is None for v in values):
+        return None
+    return sum(values, Decimal("0"))
 
 
 async def process_variant(
@@ -254,6 +268,8 @@ async def process_variant(
     }
 
     pos_lines = []
+    leg_deltas: list[Decimal | None] = []
+    leg_thetas: list[Decimal | None] = []
     for role in role_order:
         pos = next((p for p in ic_positions if p.leg_role == role), None)
         if pos is None:
@@ -265,13 +281,18 @@ async def process_variant(
         ltp_val = opt_leg.ltp if opt_leg is not None else None
         ltp_str = f"LTP=₹{ltp_val:.2f}" if ltp_val is not None else "LTP=N/A"
 
+        # Capture delta/theta for all four roles (not just the shorts) so
+        # Net Δ/θ below reflects the whole condor, not just the short legs.
+        # None on any resolution miss -- never defaulted to 0.0, which would
+        # conflate "delta could not be resolved" with "delta is genuinely
+        # zero" (see ROLL-0 spec).
+        delta_val = opt_leg.delta if opt_leg is not None else None
+        theta_val = opt_leg.theta if opt_leg is not None else None
+        leg_deltas.append(delta_val)
+        leg_thetas.append(theta_val)
+
         if role in ["short_put", "short_call"]:
-            delta_val = (
-                opt_leg.delta
-                if (opt_leg is not None and opt_leg.delta is not None)
-                else 0.0
-            )
-            delta_str = f"δ={delta_val:.2f}"
+            delta_str = f"δ={format_greek(delta_val)}"
             entry_val = pos.avg_sell_price
             entry_str = f"(entry ₹{entry_val:.2f})"
             pos_lines.append(
@@ -285,6 +306,13 @@ async def process_variant(
             )
 
     position_block = "\n".join(pos_lines)
+
+    # Net Δ/θ across all resolved legs -- None (incomplete) if ANY leg's
+    # value is missing, never a partial sum that looks complete.
+    net_delta = compute_net_greek(leg_deltas)
+    net_theta = compute_net_greek(leg_thetas)
+    net_delta_str = format_greek(net_delta) if net_delta is not None else "N/A"
+    net_theta_str = format_greek(net_theta) if net_theta is not None else "N/A"
 
     # Combined mark / entry credit
     combined_mark, entry_credit = ic._compute_combined_pnl(chain, ic_positions)
@@ -382,7 +410,8 @@ async def process_variant(
 
     report = escape_markdown(
         f"📋 IC EOD Audit — {expiry_type} ({config.strategy_name})\n"
-        f"DTE: {dte}  |  Nifty: {nifty_spot:,.0f}  |  IVR: {ivr_str}\n\n"
+        f"DTE: {dte}  |  Nifty: {nifty_spot:,.0f}  |  IVR: {ivr_str}\n"
+        f"Net Δ: {net_delta_str}  |  Net θ: {net_theta_str}\n\n"
         f"Position:\n"
         f"{position_block}\n\n"
         f"{pnl_line}\n"
@@ -398,7 +427,7 @@ async def process_variant(
         for e in unresolved:
             unresolved_lines.append(escape_markdown(f"  {e.event_type} 🔴  {e.description}"))
         sig_join = "\n".join(unresolved_lines)
-        report += escape_markdown(f"\n\n⚠️  Unresolved ACTION signals:\n") + sig_join
+        report += escape_markdown("\n\n⚠️  Unresolved ACTION signals:\n") + sig_join
 
     return report
 
