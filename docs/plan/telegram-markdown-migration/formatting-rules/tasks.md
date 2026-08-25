@@ -12,8 +12,8 @@
 
 ---
 
-- [ ] **FMT-1** — Write the decimal/alignment formatting spec (per-parameter-type rules) —
-      docs only, no code | Blocked by: none
+- [x] **FMT-1** — Write the decimal/alignment formatting spec (per-parameter-type rules) —
+      docs only, no code | Blocked by: none | SHA: c252bf3 — shipped as root `FORMATTING.md`
       | Owner: Claude | Model: **Opus (design review recommended before finalizing)** |
       Review: n/a — this is the highest-leverage doc in the epic; every downstream formatter
       (`FMT-2`/`FMT-3`) and roughly half of `strategy-rollout/` inherits its decisions. A mistake
