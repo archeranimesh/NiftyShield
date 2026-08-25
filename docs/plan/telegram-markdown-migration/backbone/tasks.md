@@ -141,7 +141,7 @@
       | Tests: `tests/unit/strategies/ic/test_paper_ic_entry.py`,
       `tests/unit/strategies/ic/test_paper_ic_entry_v2.py`
 
-- [x] **MD-7.3** (SHA: <pending>) — `src/strategy/auto_close.py` (`auto_close_overlay` ~L235,
+- [x] **MD-7.3** (SHA: 04b469d) — `src/strategy/auto_close.py` (`auto_close_overlay` ~L235,
       `evaluate_pp_reentry_eod` ~L404, both outside MD-3's `_send_close_notification`-only scope)
       and `src/strategy/overlay_closer.py` (`close_collar_all` ~L268, `monetize_collar_put`
       ~L328/~L392) | Blocked by: MD-6
