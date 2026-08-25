@@ -33,6 +33,7 @@ import structlog
 from src.instruments.lookup import InstrumentLookup
 from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
+from src.notifications.markdown import escape_markdown, mdcode
 from src.paper.constants import DEFAULT_BOD_PATH
 from src.paper.models import PaperPosition, PaperTrade
 from src.strategy import roll_utils
@@ -597,7 +598,7 @@ class IronCondorV1:
             positions: All open paper positions.
 
         Returns:
-            Multi-line plain-text context string; no HTML markup.
+            Multi-line plain-text context string; no Markdown markup.
         """
         ic_positions = [p for p in positions if p.strategy_name == self.strategy_name]
         expiry = next((self._parse_expiry(p.instrument_key) for p in ic_positions), None)
@@ -756,7 +757,7 @@ class IronCondorV1:
         triggering_signal: str,
         closed_trades: list[PaperTrade],
     ) -> None:
-        """Send a plain HTML close-confirmation notification. Non-fatal.
+        """Send a plain MarkdownV2 close-confirmation notification. Non-fatal.
 
         Args:
             action_type: The ApprovedAction.action_type that was executed
@@ -773,7 +774,10 @@ class IronCondorV1:
             # no notification needed for a no-op.
             return
         legs_text = "\n".join(
-            f"  {t.leg_role}: {t.action.value} {t.quantity} @ {t.price}" for t in closed_trades
+            f"  {escape_markdown(t.leg_role)}: "
+            f"{escape_markdown(t.action.value)} {t.quantity} "
+            f"@ {escape_markdown(str(t.price))}"
+            for t in closed_trades
         )
         if self._store is None:
             # Known, not exceptional: this instance was constructed without a
@@ -799,10 +803,10 @@ class IronCondorV1:
                 log.warning("ic_nifty_v1.net_pnl_calc_failed", error=str(exc))
                 pnl_text = ""
         text = (
-            f"✅ <b>IC closed — {triggering_signal}</b>\n"
-            f"Strategy: <code>{self.strategy_name}</code>\n"
-            f"Action: {action_type}\n"
-            f"{pnl_text}"
+            f"✅ *IC closed — {escape_markdown(triggering_signal)}*\n"
+            f"Strategy: {mdcode(self.strategy_name)}\n"
+            f"Action: {escape_markdown(action_type)}\n"
+            f"{escape_markdown(pnl_text)}"
             f"{legs_text}"
         )
         try:

@@ -754,7 +754,8 @@ def test_apply_action_close_full_auto_execute_sends_close_notification() -> None
 
     notifier.send_notification.assert_called_once()
     (message,), _ = notifier.send_notification.call_args
-    assert "LOSS_STOP" in message
+    assert "LOSS\\_STOP" in message
+    assert "short\\\\_put" not in message
     assert _STRATEGY_NAME in message
 
 

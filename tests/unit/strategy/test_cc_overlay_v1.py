@@ -736,3 +736,26 @@ def test_check_signals_evaluates_real_overlay_cc_leg_role() -> None:
     pos = _make_position(avg_sell_price="80", leg_role="overlay_cc")
     events = _run(strategy.check_signals(chain, [pos]))
     assert any(e.event_type == "PROFIT_TARGET" and e.severity == "ACTION" for e in events)
+
+
+def test_apply_action_close_cc_escapes_signal_name() -> None:
+    """Verify that signal_name with underscores is properly escaped."""
+    from unittest.mock import AsyncMock
+
+    notifier = AsyncMock()
+    strategy = CCOverlayV1(notifier=notifier)
+    pos = _make_position()
+    action = ApprovedAction(
+        action_type="CLOSE_CC",
+        legs_to_close=[LegClose(leg_role="short_call")],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+        metadata={"triggering_signal": "PROFIT_TARGET_CC"},
+    )
+    _run(strategy.apply_action([pos], action))
+
+    notifier.send_notification.assert_called_once()
+    msg = notifier.send_notification.call_args[0][0]
+    assert "CLOSE" in msg
+    assert "PROFIT\\_TARGET\\_CC" in msg

@@ -45,6 +45,7 @@ from src.instruments.lookup import InstrumentLookup
 from src.instruments.lookup import parse_expiry as _parse_expiry_epoch
 from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
+from src.notifications.markdown import escape_markdown, mdcode
 from src.paper.constants import DEFAULT_BOD_PATH
 from src.paper.models import PaperPosition, PaperTrade
 from src.strategy import roll_utils
@@ -1977,7 +1978,7 @@ class IronCondorV2:
             positions: All open paper positions.
 
         Returns:
-            Multi-line plain-text context string; no HTML markup.
+            Multi-line plain-text context string; no Markdown markup.
         """
         ic_positions = [p for p in positions if p.strategy_name == self.strategy_name]
         expiry = next(
@@ -2187,7 +2188,7 @@ class IronCondorV2:
         triggering_signal: str,
         closed_trades: list[PaperTrade],
     ) -> None:
-        """Send a plain HTML close-confirmation notification. Non-fatal.
+        """Send a plain MarkdownV2 close-confirmation notification. Non-fatal.
 
         Mirrors IronCondorV1._send_close_notification and the existing
         _send_profit_lock_notification pattern already used here for Zone 2.
@@ -2206,7 +2207,10 @@ class IronCondorV2:
         if not closed_trades:
             return
         legs_text = "\n".join(
-            f"  {t.leg_role}: {t.action.value} {t.quantity} @ {t.price}" for t in closed_trades
+            f"  {escape_markdown(t.leg_role)}: "
+            f"{escape_markdown(t.action.value)} {t.quantity} "
+            f"@ {escape_markdown(str(t.price))}"
+            for t in closed_trades
         )
         try:
             # Deferred import: src.paper.tracker -> src.paper.store ->
@@ -2221,10 +2225,10 @@ class IronCondorV2:
             log.warning("ic_nifty_v2.net_pnl_calc_failed", error=str(exc))
             pnl_text = ""
         text = (
-            f"✅ <b>IC V2 closed — {triggering_signal}</b>\n"
-            f"Strategy: <code>{self.strategy_name}</code>\n"
-            f"Action: {action_type}\n"
-            f"{pnl_text}"
+            f"✅ *IC V2 closed — {escape_markdown(triggering_signal)}*\n"
+            f"Strategy: {mdcode(self.strategy_name)}\n"
+            f"Action: {escape_markdown(action_type)}\n"
+            f"{escape_markdown(pnl_text)}"
             f"{legs_text}"
         )
         try:
@@ -2599,7 +2603,7 @@ class IronCondorV2:
                 net debit, guaranteed floor fraction, and DTE.
 
         Returns:
-            HTML-formatted Telegram message string.
+            MarkdownV2-formatted Telegram message string.
         """
         captured_pct = float(Decimal(meta.get("captured_fraction", "0"))) * 100
         net_debit = meta.get("net_debit_pts", "?")
@@ -2614,15 +2618,15 @@ class IronCondorV2:
         new_call_w = meta.get("new_call_width_pts", "?")
         dte = meta.get("dte", "?")
         return (
-            f"🔒 <b>IC V2 Profit-Lock Executed — Zone 2</b>\n"
-            f"Strategy: {self.strategy_name}\n"
-            f"Captured: {captured_pct:.1f}% of entry credit\n"
+            f"🔒 *IC V2 Profit\\-Lock Executed — Zone 2*\n"
+            f"Strategy: {mdcode(self.strategy_name)}\n"
+            f"Captured: {escape_markdown(f'{captured_pct:.1f}')}% of entry credit\n"
             f"Action: Long wings rolled inward\n"
-            f"  PUT:  → {new_put_strike}PE (width {new_put_w} pts)\n"
-            f"  CALL: → {new_call_strike}CE (width {new_call_w} pts)\n"
-            f"Net debit: {net_debit} pts\n"
-            f"Floor locked: ≥{floor_pct:.0f}% guaranteed\n"
-            f"DTE: {dte}"
+            f"  PUT:  → {escape_markdown(str(new_put_strike))}PE \\(width {escape_markdown(str(new_put_w))} pts\\)\n"
+            f"  CALL: → {escape_markdown(str(new_call_strike))}CE \\(width {escape_markdown(str(new_call_w))} pts\\)\n"
+            f"Net debit: {escape_markdown(str(net_debit))} pts\n"
+            f"Floor locked: ≥{escape_markdown(f'{floor_pct:.0f}')}% guaranteed\n"
+            f"DTE: {escape_markdown(str(dte))}"
         )
 
     # ── Private helpers (V2-specific) ─────────────────────────────────────────

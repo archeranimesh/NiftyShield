@@ -43,6 +43,7 @@ from src.config import settings
 from src.instruments.lookup import InstrumentLookup
 from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
+from src.notifications.markdown import escape_markdown, mdcode
 from src.paper.constants import DEFAULT_BOD_PATH
 from src.paper.models import PaperPosition, TradeState
 from src.strategy.csp_roll_executor import close_csp_leg, open_new_csp_leg, roll_down_and_out
@@ -321,7 +322,7 @@ class CSPNiftyV1(ReEntryMixin):
             positions: All open paper positions.
 
         Returns:
-            Multi-line plain-text context string; no HTML markup.
+            Multi-line plain-text context string; no Markdown markup.
         """
         short_puts = [
             p for p in positions if p.strategy_name == self.strategy_name and p.net_qty < 0
@@ -460,11 +461,14 @@ class CSPNiftyV1(ReEntryMixin):
 
         if action.action_type == "CLOSE_AND_WAIT":
             await self._close_leg(short_put, today)
+            meta = action.metadata or {}
+            sig = escape_markdown(meta.get("triggering_signal", "CLOSE_AND_WAIT"))
+            state_msg = escape_markdown("RE_ENTRY_PENDING — no new position opened.")
             await self._send_notification(
-                f"⛔ <b>CSP closed — waiting</b>\n"
-                f"Signal: {(action.metadata or {}).get('triggering_signal', 'CLOSE_AND_WAIT')}\n"
-                f"Instrument: <code>{short_put.instrument_key}</code>\n"
-                f"State → RE_ENTRY_PENDING — no new position opened."
+                f"⛔ *CSP closed — waiting*\n"
+                f"Signal: {sig}\n"
+                f"Instrument: {mdcode(short_put.instrument_key)}\n"
+                f"State → {state_msg}"
             )
             return remaining
 
@@ -553,8 +557,9 @@ class CSPNiftyV1(ReEntryMixin):
         except Exception as exc:
             log.error("csp_nifty_v1._open_new.failed", error=str(exc))
             await self._send_notification(
-                f"⚠️ <b>CSP open_new failed</b>\nError: {exc}\n"
-                f"Manual entry required via <code>record_paper_trade.py</code>"
+                f"⚠️ *{escape_markdown('CSP open_new failed')}*\n"
+                f"Error: {escape_markdown(str(exc))}\n"
+                f"Manual entry required via {mdcode('record_paper_trade.py')}"
             )
         return positions
 
@@ -599,16 +604,17 @@ class CSPNiftyV1(ReEntryMixin):
                 result.new_instrument_key,
             )
             await self._send_notification(
-                f"🔄 <b>CSP rolled down-and-out</b>\n"
-                f"Closed: <code>{short_put.instrument_key}</code>\n"
-                f"Opened: <code>{result.new_instrument_key}</code>\n"
-                f"New credit: {result.new_price}"
+                f"🔄 *{escape_markdown('CSP rolled down-and-out')}*\n"
+                f"Closed: {mdcode(short_put.instrument_key)}\n"
+                f"Opened: {mdcode(result.new_instrument_key)}\n"
+                f"New credit: {escape_markdown(str(result.new_price))}"
             )
         except Exception as exc:
             log.error("csp_nifty_v1._roll_down.failed", error=str(exc))
             await self._send_notification(
-                f"⚠️ <b>CSP roll_down_and_out failed</b>\nError: {exc}\n"
-                f"Position may be open — check immediately."
+                f"⚠️ *{escape_markdown('CSP roll_down_and_out failed')}*\n"
+                f"Error: {escape_markdown(str(exc))}\n"
+                f"{escape_markdown('Position may be open — check immediately.')}"
             )
         return remaining
 
@@ -625,13 +631,14 @@ class CSPNiftyV1(ReEntryMixin):
             trade_id=0,
         )
         await self._send_notification(
-            f"✅ <b>CSP closed — {triggering}</b>\n"
-            f"Instrument: <code>{closed_pos.instrument_key}</code>\n"
-            f"New position opened.  Re-entry eligibility check written to paper_exit_events."
+            f"✅ *CSP closed — {escape_markdown(triggering)}*\n"
+            f"Instrument: {mdcode(closed_pos.instrument_key)}\n"
+            f"{escape_markdown('New position opened.  Re-entry eligibility check written ')} "
+            f"{escape_markdown('to paper_exit_events.')}"
         )
 
     async def _send_notification(self, message: str) -> None:
-        """Send a plain HTML notification; non-fatal if notifier is absent."""
+        """Send a plain MarkdownV2 notification; non-fatal if notifier is absent."""
         if self._notifier is None:
             return
         try:

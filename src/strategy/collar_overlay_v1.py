@@ -18,6 +18,7 @@ from src.instruments.lookup import InstrumentLookup, format_leg_label
 from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
 from src.models.portfolio import TradeAction
+from src.notifications.markdown import escape_markdown, mdcode
 from src.paper.constants import DEFAULT_BOD_PATH, STRATEGY_OVERLAY
 from src.paper.models import PaperPosition, PaperTrade
 from src.strategy._price_utils import find_option_leg, resolve_option_expiry
@@ -587,10 +588,10 @@ class CollarOverlayV1(ReEntryMixin):
         if self._notifier is None:
             return
         msg = (
-            f"⚠️ <b>Collar: REENTRY FAILED ({triggering_signal})</b>\n"
-            f"Position closed but automated reentry could not complete.\n"
-            f"Reason: {exc}\n"
-            f"Action required: enter the Collar manually."
+            f"⚠️ *Collar: REENTRY FAILED \\({escape_markdown(triggering_signal)}\\)*\n"
+            f"{escape_markdown('Position closed but automated reentry could not complete.')}\n"
+            f"Reason: {escape_markdown(str(exc))}\n"
+            f"{escape_markdown('Action required: enter the Collar manually.')}"
         )
         try:
             if hasattr(self._notifier, "send_notification"):
@@ -642,7 +643,7 @@ class CollarOverlayV1(ReEntryMixin):
         put_pos: PaperPosition | None,
         action: ApprovedAction,
     ) -> None:
-        """Send HTML notification for closed Collar legs. Non-fatal."""
+        """Send MarkdownV2 notification for closed Collar legs. Non-fatal."""
         if self._notifier is None:
             return
 
@@ -700,13 +701,22 @@ class CollarOverlayV1(ReEntryMixin):
 
             pnl_prefix = "~" if (call_pos is not None or put_pos is not None) else ""
 
+            call_entry_str = escape_markdown(f"{call_entry:.2f}")
+            put_entry_str = escape_markdown(f"{put_entry:.2f}")
+            call_dte_str = escape_markdown(str(call_dte))
+            net_pnl_str = escape_markdown(f"{pnl_prefix}₹{net_pnl:+,.0f}")
+
             msg = (
-                f"✅ <b>Collar: CLOSE ({triggering_signal or 'MANUAL'})</b>\n"
-                f"📤 Short Call: {call_key} @ {call_exit_str}\n"
-                f"   Entry ₹{call_entry:.2f} · Delta {call_delta_str} · DTE {call_dte}\n"
-                f"📤 Long Put: {put_key} @ {put_exit_str}\n"
-                f"   Entry ₹{put_entry:.2f}\n"
-                f"Net P&amp;L: <b>{pnl_prefix}₹{net_pnl:+,.0f}</b>"
+                f"✅ *Collar: CLOSE "
+                f"\\({escape_markdown(triggering_signal or 'MANUAL')}\\)*\n"
+                f"📤 Short Call: {mdcode(call_key)} @ "
+                f"{escape_markdown(call_exit_str)}\n"
+                f"   Entry ₹{call_entry_str} · Delta "
+                f"{escape_markdown(call_delta_str)} · DTE {call_dte_str}\n"
+                f"📤 Long Put: {mdcode(put_key)} @ "
+                f"{escape_markdown(put_exit_str)}\n"
+                f"   Entry ₹{put_entry_str}\n"
+                f"Net P&L: *{net_pnl_str}*"
             )
 
             if hasattr(self._notifier, "send_notification"):

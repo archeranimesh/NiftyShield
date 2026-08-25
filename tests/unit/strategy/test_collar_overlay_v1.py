@@ -965,3 +965,32 @@ def test_dte_review_still_prefers_regex_when_both_resolvable() -> None:
         and e.payload.get("auto_execute") is True
         for e in events
     )
+
+
+def test_apply_action_close_collar_escapes_triggering_signal() -> None:
+    """Verify that triggering_signal with underscores is properly escaped."""
+    from unittest.mock import AsyncMock
+
+    mock_store = MagicMock()
+    mock_notifier = AsyncMock()
+    lookup = _FakeLookup({})
+    strategy = CollarOverlayV1(store=mock_store, notifier=mock_notifier, instrument_lookup=lookup)
+
+    call_pos = _make_short_call_position(instrument_key="NSE_FO|65900", avg_sell_price="80")
+    put_pos = _make_long_put_position(instrument_key="NSE_FO|65901", avg_cost="50")
+    action = ApprovedAction(
+        action_type="CLOSE_COLLAR",
+        legs_to_close=[
+            LegClose(leg_role="overlay_collar_call"),
+            LegClose(leg_role="overlay_collar_put"),
+        ],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+        metadata={"triggering_signal": "MANUAL_CLOSE"},
+    )
+    _run(strategy.apply_action([call_pos, put_pos], action))
+
+    mock_notifier.send_notification.assert_called_once()
+    msg = mock_notifier.send_notification.call_args[0][0]
+    assert "MANUAL\\_CLOSE" in msg

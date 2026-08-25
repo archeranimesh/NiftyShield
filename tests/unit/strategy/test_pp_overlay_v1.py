@@ -195,7 +195,7 @@ def test_apply_action_monetize_pp() -> None:
     strategy._check_reentry.assert_awaited_once()
     mock_notifier.send_notification.assert_called_once()
     msg = mock_notifier.send_notification.call_args[0][0]
-    assert "💰 <b>PP: MONETIZE_PP</b>" in msg
+    assert "💰 *PP: MONETIZE\\_PP*" in msg
     assert "NIFTY 23000 PE" in msg
     assert key not in msg
 
@@ -242,7 +242,7 @@ def test_apply_action_roll_pp() -> None:
     # Rolling shouldn't trigger check_reentry
     strategy._check_reentry.assert_not_called()
     mock_notifier.send_notification.assert_called_once()
-    assert "🔄 <b>PP: ROLL_PP</b>" in mock_notifier.send_notification.call_args[0][0]
+    assert "🔄 *PP: ROLL\\_PP*" in mock_notifier.send_notification.call_args[0][0]
 
 
 def test_apply_action_invalid_raises() -> None:
@@ -296,7 +296,7 @@ def test_apply_action_send_plain_message_fallback() -> None:
     result = _run(strategy.apply_action([pos], action))
     assert len(result) == 0
     mock_notifier.send_plain_message.assert_called_once()
-    assert "🔄 <b>PP: ROLL_PP</b>" in mock_notifier.send_plain_message.call_args[0][0]
+    assert "🔄 *PP: ROLL\\_PP*" in mock_notifier.send_plain_message.call_args[0][0]
 
 
 def test_apply_action_notifier_missing_methods_non_fatal() -> None:

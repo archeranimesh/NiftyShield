@@ -18,6 +18,7 @@ from src.instruments.lookup import InstrumentLookup, format_leg_label
 from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
 from src.models.portfolio import TradeAction
+from src.notifications.markdown import escape_markdown, mdcode
 from src.paper.constants import DEFAULT_BOD_PATH, STRATEGY_OVERLAY
 from src.paper.models import PaperPosition, PaperTrade
 from src.strategy._price_utils import find_option_leg, resolve_option_expiry
@@ -345,7 +346,7 @@ class PPOverlayV1(ReEntryMixin):
         pos: PaperPosition | None,
         action: ApprovedAction,
     ) -> None:
-        """Send HTML notification for closed PP leg. Non-fatal."""
+        """Send MarkdownV2 notification for closed PP leg. Non-fatal."""
         if pos is None or self._notifier is None:
             return
 
@@ -375,10 +376,16 @@ class PPOverlayV1(ReEntryMixin):
             lookup = self._resolve_instrument_lookup()
             label = format_leg_label(pos.instrument_key, lookup) if lookup else pos.instrument_key
 
+            exit_price_str = escape_markdown(f"{exit_price:.2f}")
+            entry_debit_str = escape_markdown(f"{entry_debit:.2f}")
+            delta_str = escape_markdown(f"{delta:.3f}")
+            dte_str = escape_markdown(str(dte))
+
             msg = (
-                f"{emoji} <b>PP: {action_name}</b>\n"
-                f"📤 Closed: {label} @ ₹{exit_price:.2f}\n"
-                f"   Entry ₹{entry_debit:.2f} · Delta {delta:.3f} · DTE {dte}"
+                f"{emoji} *PP: {escape_markdown(action_name)}*\n"
+                f"📤 Closed: {mdcode(label)} @ ₹{exit_price_str}\n"
+                f"   Entry ₹{entry_debit_str} · Delta {delta_str} "
+                f"· DTE {dte_str}"
             )
             if self._notifier is not None:
                 if hasattr(self._notifier, "send_notification"):

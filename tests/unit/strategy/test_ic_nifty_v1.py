@@ -997,9 +997,10 @@ def test_apply_action_close_full_auto_execute_sends_close_notification() -> None
 
     notifier.send_notification.assert_called_once()
     (message,), _ = notifier.send_notification.call_args
-    assert "PROFIT_TARGET" in message
+    assert "PROFIT\\_TARGET" in message
     assert _STRATEGY in message
-    assert "short_put" in message
+    assert "short\\_put" in message
+    assert "short\\\\_put" not in message  # guard against double-escaping
 
 
 def test_apply_action_no_notifier_does_not_raise() -> None:

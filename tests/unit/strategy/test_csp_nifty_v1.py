@@ -1235,3 +1235,34 @@ def test_find_put_leg_returns_none_for_numeric_key_no_fallback() -> None:
         "Expected None for numeric key with no parseable strike, "
         "got a chain leg — scan fallback was not removed"
     )
+
+
+def test_apply_action_close_and_wait_escapes_signal() -> None:
+    """Verify that triggering_signal with underscores is properly escaped."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from src.strategy.csp_nifty_v1 import CSPNiftyV1
+
+    broker_mock = AsyncMock()
+    broker_mock.get_ltp.return_value = {"NSE_FO|NIFTY23000PE": "100.0"}
+    store_mock = MagicMock()
+    notifier_mock = AsyncMock()
+
+    strategy = CSPNiftyV1(broker=broker_mock, store=store_mock, notifier=notifier_mock)
+
+    pos = _make_position()
+
+    action = ApprovedAction(
+        action_type="CLOSE_AND_WAIT",
+        legs_to_close=[LegClose(leg_role="short_put")],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+        metadata={"triggering_signal": "CLOSE_WAIT_TEST"},
+    )
+
+    _run(strategy.apply_action([pos], action))
+
+    notifier_mock.send_notification.assert_called_once()
+    msg = notifier_mock.send_notification.call_args[0][0]
+    assert "CLOSE\\_WAIT\\_TEST" in msg

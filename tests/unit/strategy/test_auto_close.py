@@ -353,8 +353,9 @@ async def test_auto_close_overlay_collar_put_pnl_uses_preclose_qty(
     assert "COLLAR CLOSED" in msg
     # Put leg lost ~(26.15-141.90)*65 = -7,523.75 -> displayed as -7,524.
     # Before the fix this rendered as "→ ₹-0".
-    assert "₹-7,524" in msg
-    assert "₹-0\n" not in msg
+    assert "₹\\-7,524" in msg
+    assert "paper\\_nifty\\_futures" in msg
+    assert "₹\\-0\n" not in msg
 
 
 @pytest.mark.asyncio
