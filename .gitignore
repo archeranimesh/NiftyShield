@@ -33,3 +33,4 @@ htmlcov/
 .hypothesis/
 .pipcache/
 .pylibs/
+.ci_tools/
