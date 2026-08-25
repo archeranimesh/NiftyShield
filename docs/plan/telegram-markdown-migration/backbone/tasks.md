@@ -45,7 +45,7 @@
       (financial-logic close-notification paths per AutoTrigger table). Mechanical per-class
       audit-and-fix with a fully unambiguous spec — good Antigravity fit — but the Opus gate
       applies regardless of implementer.
-- [ ] **MD-4** — Umbrella: audit + fix all remaining unescaped `TelegramGateway` surfaces
+- [x] **MD-4** — Umbrella: audit + fix all remaining unescaped `TelegramGateway` surfaces
       (reporting, entry, gateway parse_mode, approval-request) | Blocked by: MD-2 | Split into
       MD-4.1 / MD-4.2 / MD-4.3 below (2026-08-25) — track completion on the sub-tasks, not this
       line; check this box only once all three are done.
@@ -88,7 +88,7 @@
       `tests/unit/strategies/ic/test_paper_ic_entry.py`,
       `tests/unit/strategies/ic/test_paper_ic_entry_v2.py`
 
-- [ ] **MD-4.3** — Escape `TelegramGateway.send_approval_request` for unescaped dynamic values
+- [x] **MD-4.3** (Commit: aa58f44) — Escape `TelegramGateway.send_approval_request` for unescaped dynamic values
       | Blocked by: MD-2 (independent of MD-4.1/MD-4.2 — different method, different
       `parse_mode` already on its own line, not touched by the send_notification migration)
       | **Owner: CLAUDE** | Model: Sonnet | Review: **real @code-reviewer, Opus — mandatory** —

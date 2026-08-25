@@ -130,6 +130,10 @@ Full forensic log (SHAs, bug numbers, root-cause detail) moved to
 add new entries there going forward, or start a fresh dated section here if this file's
 Session Log grows large again.
 
+### 2026-08-25 Session Log
+- **MD-3**: Escaped dynamic values and static template punctuation in strategy close/roll notification methods across 7 classes (`auto_close`, `cc_overlay_v1`, `collar_overlay_v1`, `csp_nifty_v1`, `ic_nifty_v1`, `ic_nifty_v2`, `pp_overlay_v1`) to prevent Telegram 400 errors under MarkdownV2. Added 4 regression tests and updated formatting to adhere exactly to the new parse_mode. Committed SHA `62d0172`.
+- **MD-4.3**: Migrated `TelegramGateway.send_approval_request` (the interactive approval-keyboard path) from `parse_mode: HTML` to `MarkdownV2` — `<b>` header converted to `*bold*`, `<pre>` context block replaced with `escape_markdown()`-escaped plain text (not a code fence, since `context_str` is arbitrary strategy prose that can contain backticks), all four dynamic fields (`event_type`/`severity`/`description`/`context_str`) escaped. Closes the MD-4 umbrella (MD-4.1/4.2/4.3 all done). Auth guard (`_handle_callback`) confirmed untouched — out of scope for this task. Real `@code-reviewer`-persona review via a general-purpose subagent (this Cowork session cannot spawn the named `.claude/agents/code-reviewer.md` type — see B037.6 precedent) found 0 CRITICAL/ERROR, 2 WARNINGs pre-existing in `escape_markdown()` itself (backslash not in the reserved set; truncate-before-escape sizing) — filed as follow-ups, not blocking. 3 new regression tests (parse_mode, reserved-char escaping, backtick-in-context_str). Committed SHA `aa58f44`.
+
 ### 2026-08-24 Session Log (BUG-037 B037.3/B037.4 committed, B037.5/B037.6 outstanding)
 - **BUG-037**: wired `store.mark_trade_closed()` into the CSP/IC/3track roll-close paths
   BUG-035's original fix missed — `close_csp_leg`, `close_ic_legs`, `roll_ic_legs`
@@ -1174,3 +1178,4 @@ Session Log grows large again.
 - **Phase B**: Updated `CCOverlayV1` reentry triggers to include `LOSS_STOP` and `DELTA_STOP`.
 - **Phase C**: Automated CC entry bootstrap via `--auto-cc` in `paper_3track_overlay_entry.py`. Added IVR/DTE gates and integrated strike selection using `CC_DELTA_CANDIDATES`.
 - **Fix**: Aligned auto CC bootstrap's IVR check source with ReEntryMixin by using last ingested Parquet point instead of live API fetch, averting gate evaluation mismatch and masking of fetch failures.
+- 2026-08-25: Migrated TelegramGateway.send_notification to MarkdownV2 and escaped all 5 caller sites (MD-4.1 & MD-4.2, commit cd1e554)
