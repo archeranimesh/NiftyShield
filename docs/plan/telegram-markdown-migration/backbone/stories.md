@@ -262,6 +262,65 @@ confirm this explicitly rather than assuming — read the current implementation
 
 ---
 
+## MD-7 — Audit + Fix: Gaps Surfaced by MD-6's Guard
+
+**Context:** MD-6's static-scan guard (`tests/unit/notifications/test_escaping_guard.py`) found
+29 unescaped `.send()`/`.send_plain_message()` call sites when it first ran (2026-08-25). Most
+are `strategy-rollout/` messages already format-confirmed but not yet implemented in real code
+(tracked via their ROLL-N reason in the guard's `_BASELINE_UNESCAPED`) — those stay baselined
+until their ROLL-* task lands, not this task's job. A smaller set were never named in *any*
+prior MD-*/ROLL-* task or `TODO.md` queue entry — real production call sites this epic's
+original code-graph sweep (README.md's "Confirmed real callers" list, 2026-08-07) simply missed.
+This task closes that smaller set — pure escaping safety, not a format migration, same contract
+as MD-3/MD-4.
+
+**Files to change:**
+- `scripts/pre_market_brief.py` — both `gateway.send_plain_message()` calls (~L144, ~L197)
+- `scripts/strategies/ic/paper_ic_entry.py` — `_gate_alert` (~L255)
+- `scripts/strategies/ic/paper_ic_entry_v2.py` — `_gate_alert` (~L313)
+- `src/strategy/auto_close.py` — `auto_close_overlay` (~L235), `evaluate_pp_reentry_eod` (~L404)
+- `src/strategy/overlay_closer.py` — `close_collar_all` (~L268), `monetize_collar_put` (~L328,
+  ~L392)
+
+**Before any code:** the graph was stale relative to the working tree as of MD-6 (confirmed via
+`detect_changes` reporting no drift while `search_graph`/`get_code_snippet` still missed real
+`src/notifications/markdown.py` symbols) — re-verify graph freshness first; if still stale, fall
+back to `git log` → `grep`/`sed -n` → `Read` per the folder `prompt.md`'s escalation order, same
+as MD-6 had to. For each method: read the current f-string/format-string in full (not just
+`{placeholder}` locations) — per the story-level note at the top of this file, MarkdownV2
+reserves ordinary prose punctuation, not just markup characters, so static template text needs
+the same audit as MD-3/MD-4 gave their files.
+
+**What to change, per method:** same two-pass treatment as MD-3/MD-4 —
+1. Every dynamic value interpolated into the message text gets `mdcode()` (identifiers) or
+   `escape_markdown()` (free-form prose).
+2. The static template text itself gets checked for literal `.`/`(`/`)`/`-`/`!` and other
+   `MARKDOWNV2_RESERVED` characters appearing as ordinary prose punctuation.
+
+Do NOT change message wording/structure — that's `strategy-rollout/`'s job if any of these ever
+get a ROLL-N format pass. This task is purely: make the existing text safe under MarkdownV2.
+
+**Scope call needed before starting:** `scripts/dev/send_test_telegram.py:65` is a manual
+dev/debug utility (human-triggered, run directly by whoever's testing, not by a cron or strategy
+event) — confirm with Animesh whether it's in scope for this task or should instead get a
+documented won't-fix reason added to MD-6's `_BASELINE_UNESCAPED` (lower urgency given the low
+blast radius). Do not silently drop it from tracking either way — one or the other, recorded.
+
+**Tests:** one test per method proving an underscore-bearing dynamic value (e.g. a strategy_id
+fixture matching the real convention) survives `mdcode()`/`escape_markdown()` wrapping in the
+constructed message — same pattern as MD-3/MD-4.
+
+**Baseline maintenance (mandatory, not optional):** remove each fixed call site's entry from
+`_BASELINE_UNESCAPED` in `tests/unit/notifications/test_escaping_guard.py` in the *same commit*
+as its fix — `test_baseline_entries_are_still_unescaped` and
+`test_baseline_has_no_duplicate_or_unused_entries` will fail otherwise (that file's own
+maintenance contract, see its module docstring). If `send_test_telegram.py` is scoped out per
+the call above, update its baseline entry's reason string instead of removing it.
+
+**Commit:** `fix(notifications): escape dynamic values in call sites surfaced by MD-6's guard`
+
+---
+
 ## MD-5 — Docs Close
 
 **Files to change (targeted `Edit`, never `Write`):**

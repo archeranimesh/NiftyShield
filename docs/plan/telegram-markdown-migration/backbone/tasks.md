@@ -113,7 +113,40 @@
       and then protects every `send()` call site added afterward — including all of
       `formatting-rules/`'s and `strategy-rollout/`'s new call sites, since `backbone/` must be
       fully complete before either of those can start regardless.
+- [ ] **MD-7** — Audit + fix: escaping gaps `MD-6`'s guard surfaced but no prior MD-*/ROLL-*
+      task named | Blocked by: MD-6
+      | Owner: Claude | Model: Sonnet | Review: code-reviewer — mixed-stakes set (production
+      alert paths + one dev-only utility), needs judgment on which gaps warrant `escape_markdown`/
+      `mdcode` vs. a documented won't-fix in MD-6's baseline, not pure mechanical delegation.
+      **Live-risk framing (same class as MD-2/MD-3/MD-4):** all but one of these are unescaped
+      dynamic values in `.send()`/`.send_plain_message()` calls that are live in production today,
+      not hypothetical future call sites — same DELTA_WARN failure shape (silent 400, swallowed by
+      the non-fatal send contract) sitting unaddressed in currently-running code paths.
+      | Files:
+      — `scripts/pre_market_brief.py` (both `gateway.send_plain_message()` calls, ~L144/~L197)
+      — `scripts/strategies/ic/paper_ic_entry.py` (`_gate_alert`, ~L255) — separate path from the
+        `send_notification()` calls MD-4.2 already escaped in this file
+      — `scripts/strategies/ic/paper_ic_entry_v2.py` (`_gate_alert`, ~L313) — same as above
+      — `src/strategy/auto_close.py` (`auto_close_overlay` ~L235, `evaluate_pp_reentry_eod` ~L404)
+        — outside MD-3's `_send_close_notification`-only scope
+      — `src/strategy/overlay_closer.py` (`close_collar_all` ~L268, `monetize_collar_put` ~L328,
+        ~L392) — not named in any prior MD-*/ROLL-* task
+      **Before starting:** re-confirm `scripts/dev/send_test_telegram.py:65` — a manual dev/debug
+      utility, human-triggered, low blast radius. Get an explicit call from Animesh on whether it's
+      in scope for this task or should instead be moved to a documented won't-fix reason in MD-6's
+      `_BASELINE_UNESCAPED` (`tests/unit/notifications/test_escaping_guard.py`) — do not silently
+      drop it either way.
+      **Tests:** same pattern as MD-3/MD-4 — one test per method proving an underscore-bearing
+      dynamic value survives `mdcode()`/`escape_markdown()` wrapping in the constructed message.
+      Remove each fixed call site's entry from MD-6's `_BASELINE_UNESCAPED` in the same commit —
+      `test_baseline_entries_are_still_unescaped`/`test_baseline_has_no_duplicate_or_unused_entries`
+      will fail otherwise, per that file's maintenance contract.
+      | Tests: `tests/unit/scripts/test_pre_market_brief.py`,
+      `tests/unit/strategies/ic/test_paper_ic_entry.py`,
+      `tests/unit/strategies/ic/test_paper_ic_entry_v2.py`, `tests/unit/strategy/test_auto_close.py`,
+      `tests/unit/strategy/test_overlay_closer.py`,
+      `tests/unit/notifications/test_escaping_guard.py` (baseline shrinkage)
 - [ ] **MD-5** — Docs close: `src/notifications/CLAUDE.md`, `DECISIONS.md`, `CONTEXT.md`,
-      `TODOS.md` | Blocked by: MD-3, MD-4.1, MD-4.2, MD-4.3, MD-6
+      `TODOS.md` | Blocked by: MD-3, MD-4.1, MD-4.2, MD-4.3, MD-6, MD-7
       | Owner: Antigravity | Model: n/a | Review: none (docs only) — also document MD-6's guard
-      contract in `src/notifications/CLAUDE.md` alongside the escaping-helper rule
+      contract and MD-7's fixes in `src/notifications/CLAUDE.md` alongside the escaping-helper rule
