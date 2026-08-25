@@ -133,8 +133,8 @@
       escaping pass, no auth/judgment
       | Tests: `tests/unit/scripts/test_pre_market_brief.py`
 
-- [ ] **MD-7.2** — `_gate_alert` in `scripts/strategies/ic/paper_ic_entry.py` (~L255) and
-      `paper_ic_entry_v2.py` (~L313) — separate path from the `send_notification()` calls MD-4.2
+- [x] **MD-7.2** — `_gate_alert` in `scripts/strategies/ic/paper_ic_entry.py` (~L255) and
+      `scripts/strategies/ic/paper_ic_entry_v2.py` (~L313) | SHA `6e66f7f` — separate path from the `send_notification()` calls MD-4.2
       already escaped in these two files | Blocked by: MD-6
       | Owner: Antigravity | Model: n/a | Review: code-reviewer — mechanical, same pattern
       MD-4.2 already applied elsewhere in both files

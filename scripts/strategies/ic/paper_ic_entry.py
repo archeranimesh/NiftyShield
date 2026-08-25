@@ -251,6 +251,7 @@ async def run() -> None:
         """
         if _tg is None:
             return
+        msg = escape_markdown(msg)
         try:
             asyncio.get_running_loop().create_task(_tg.send(msg))
         except Exception:  # noqa: BLE001

@@ -1081,3 +1081,34 @@ async def test_chain_fetch_failure_logs_structured_error(
     assert excinfo.value.code == 1
     events = [entry["event"] for entry in logs]
     assert "ic_entry.chain_fetch_failed" in events
+
+
+@pytest.mark.asyncio
+async def test_gate_alert_blanket_escaping():
+    """Prove that _gate_alert blankets the entire assembled message with escape_markdown,
+    ensuring underscore-bearing dynamic values survive without crashing Telegram."""
+    from unittest.mock import AsyncMock, patch, MagicMock
+    with (
+        patch("scripts.strategies.ic.paper_ic_entry_v2.build_notifier") as mock_build_notifier,
+        patch("scripts.strategies.ic.paper_ic_entry_v2.PaperStore") as mock_store_cls,
+        patch("sys.argv", ["scripts/strategies/ic/paper_ic_entry_v2.py", "--expiry-type", "monthly", "--db-path", "dummy.db"]),
+    ):
+        mock_notifier = AsyncMock()
+        mock_build_notifier.return_value = mock_notifier
+        
+        mock_store = mock_store_cls.return_value
+        pos = MagicMock()
+        pos.net_qty = 1
+        mock_store.get_positions.return_value = [pos]
+
+        with pytest.raises(SystemExit) as exc:
+            from scripts.strategies.ic.paper_ic_entry_v2 import run
+            await run()
+            
+        assert exc.value.code == 1
+        
+        mock_notifier.send.assert_called_once()
+        sent_msg = mock_notifier.send.call_args[0][0]
+        
+        # The dynamic value is the strategy name: paper_ic_nifty_v2_monthly
+        assert "paper\\_ic\\_nifty\\_v2\\_monthly" in sent_msg
