@@ -56,7 +56,7 @@
       Blocked by: FMT-1, `backbone/` MD-1 | SHA: 166531b
       | Owner: Antigravity | Model: n/a | Review: none — clean formatter functions, exhaustive
       spec, mechanical
-- [ ] **FMT-3** — Add table-builder helpers (`build_kv_table`, `build_side_by_side_kv_table`,
+- [x] **FMT-3** (SHA: 17cbeb6) — Add table-builder helpers (`build_kv_table`, `build_side_by_side_kv_table`,
       `build_leg_table`) to the same module + tests | Blocked by: FMT-2
       | Owner: Claude | Model: Sonnet | Review: none, but keep a human/Claude judgment pass on
       width computation — this is where the original hand-counted-width bug lived
