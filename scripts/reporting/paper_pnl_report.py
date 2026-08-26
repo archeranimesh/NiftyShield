@@ -24,6 +24,24 @@ Design notes (see SNAP-1/SNAP-4 findings for full rationale):
   falling back to the latest row directly when the strategy opened mid-month). This is a
   narrower window than "since inception" so a mid-window cycle reset is a real but rarer
   edge case, not handled in this first pass — flagged here rather than silently ignored.
+
+  **ROLL-2b (2026-08-26) — knowingly accepted, not an oversight.** ``realized_this_month``
+  still reads ``paper_nav_snapshots.realized_pnl``, the same column ``realized_since_inception``
+  is deliberately routed *away* from above. A cycle reset landing inside the current month
+  makes the ``latest - baseline`` diff meaningless. Fixing it means sourcing the month window
+  from the ``paper_trades`` ledger too (sum trades with ``trade_date >= month_start``).
+  Explicitly deferred rather than fixed, so the asymmetry is recorded instead of silent —
+  decision made by Animesh at ROLL-2b's reconciliation gate. Do not "fix" this incidentally
+  inside an unrelated change; it needs its own task and its own review.
+
+- **Row selection is uniform (ROLL-2b, 2026-08-26).** Every aggregate reads the latest
+  snapshot row *at or before* ``as_of`` — never exact equality on that date. A holiday, or a
+  run before the 15:36 ``paper_snapshot`` cron, therefore reports the last real mark rather
+  than a false zero for some fields and a real value for others. Before ROLL-2b the IC
+  monthly comparison's two local helpers disagreed on this (``snapshot_date = ?`` for
+  unrealized vs. ``snapshot_date <= ? ORDER BY DESC LIMIT 1`` for realized), which made its
+  ``Flt (I)``/``Flt (M)`` pair diverge for a reason unrelated to the mid-month-entry case
+  those figures exist to expose. Do not reintroduce the exact-equality read.
 """
 
 from __future__ import annotations
@@ -81,6 +99,13 @@ class PnLReport:
         realized_this_month: Realized P&L change within the current calendar month.
         unrealized_since_inception: Latest snapshot's unrealized_pnl (mark-to-market of
             currently open positions).
+        unrealized_this_month: Unrealized P&L *change* within the current calendar month —
+            latest snapshot's unrealized_pnl minus the last row strictly before the month
+            started, falling back to the latest value directly when the strategy opened
+            mid-month. NOT generally equal to `unrealized_since_inception`: the two coincide
+            only when the position carried zero unrealized P&L at month start (i.e. wasn't
+            open before the 1st). Added for ROLL-2b so the IC monthly comparison's `Flt (M)`
+            row has a real source instead of a second parallel P&L layer.
     """
 
     strategy_name: str
@@ -89,6 +114,7 @@ class PnLReport:
     realized_since_inception: Decimal
     realized_this_month: Decimal
     unrealized_since_inception: Decimal
+    unrealized_this_month: Decimal
 
 
 def build_pnl_report(
@@ -104,17 +130,24 @@ def build_pnl_report(
     Args:
         store: PaperStore instance to read from.
         strategy_name: Paper strategy to report on.
-        as_of: Date to treat as "today" for the current-month window. Defaults to
-            `date.today()`. Exposed as a param so tests don't depend on wall-clock time.
+        as_of: Date to treat as "today" for the current-month window AND as the upper
+            bound on every snapshot row read. Defaults to `date.today()`. Exposed as a
+            param so tests don't depend on wall-clock time.
 
     Returns:
         PnLReport. `has_data=False` with all-zero aggregates when the strategy has no
-        `paper_nav_snapshots` rows yet.
+        `paper_nav_snapshots` rows at or before `as_of`.
     """
-    snapshots = store.get_nav_snapshots(strategy_name)
+    as_of = as_of or date.today()
+
+    # ROLL-2b: `as_of` bounds every read, not just the month baseline. Before this, the
+    # "latest" row was `snapshots[-1]` unconditionally, so a report built for a past date
+    # silently mixed a historical month window with today's mark. Filtering once here keeps
+    # `daily_series` and every aggregate on one consistent as-of view.
+    snapshots = [s for s in store.get_nav_snapshots(strategy_name) if s.snapshot_date <= as_of]
 
     if not snapshots:
-        logger.warning("paper_pnl_report.no_snapshots", strategy=strategy_name)
+        logger.warning("paper_pnl_report.no_snapshots", strategy=strategy_name, as_of=as_of)
         return PnLReport(
             strategy_name=strategy_name,
             has_data=False,
@@ -122,6 +155,7 @@ def build_pnl_report(
             realized_since_inception=Decimal("0"),
             realized_this_month=Decimal("0"),
             unrealized_since_inception=Decimal("0"),
+            unrealized_this_month=Decimal("0"),
         )
 
     daily_series = [
@@ -133,7 +167,6 @@ def build_pnl_report(
     ]
 
     latest = snapshots[-1]
-    as_of = as_of or date.today()
     month_start = as_of.replace(day=1)
 
     baseline = None
@@ -146,6 +179,13 @@ def build_pnl_report(
     realized_this_month = (
         latest.realized_pnl - baseline.realized_pnl if baseline is not None else latest.realized_pnl
     )
+    # Same baseline row, same fallback, different column — so `Flt (M)` and `Bkd (M)` can
+    # never disagree about which snapshot rows they were computed from.
+    unrealized_this_month = (
+        latest.unrealized_pnl - baseline.unrealized_pnl
+        if baseline is not None
+        else latest.unrealized_pnl
+    )
 
     realized_since_inception = get_strategy_realized_pnl(store, strategy_name)
 
@@ -156,6 +196,7 @@ def build_pnl_report(
         realized_since_inception=realized_since_inception,
         realized_this_month=realized_this_month,
         unrealized_since_inception=latest.unrealized_pnl,
+        unrealized_this_month=unrealized_this_month,
     )
 
 
@@ -181,6 +222,7 @@ def _report_to_text(report: PnLReport) -> str:
         f"  Realized since inception:   {report.realized_since_inception:+,.2f}",
         f"  Realized this month:        {report.realized_this_month:+,.2f}",
         f"  Unrealized since inception: {report.unrealized_since_inception:+,.2f}",
+        f"  Unrealized this month:      {report.unrealized_this_month:+,.2f}",
         f"  Daily points: {len(report.daily_series)}"
         f" ({report.daily_series[0].snapshot_date} → {report.daily_series[-1].snapshot_date})",
     ]
