@@ -15,7 +15,7 @@ from __future__ import annotations
 import asyncio
 from datetime import date, timedelta
 from decimal import Decimal
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from structlog.testing import capture_logs
@@ -964,19 +964,18 @@ def test_apply_action_close_full_auto_execute_without_broker_skips_persist_no_ra
     assert result == []
 
 
-def test_apply_action_close_full_auto_execute_sends_close_notification() -> None:
-    """BUG-013 (2026-07-20): auto-execute CLOSE_FULL must confirm via Telegram.
-
-    IronCondorV1 accepted a notifier but never called it — every auto-close
-    was silent, unlike CSP/CC/Collar/PP. See docs/bugs/bugs.md BUG-013.
-    """
+@patch("src.paper.tracker.get_strategy_realized_pnl")
+def test_apply_action_close_full_auto_execute_sends_close_notification(mock_pnl) -> None:
+    """Happy path — closes 4 legs, builds proper MarkdownV2 message."""
     from unittest.mock import AsyncMock, MagicMock
 
-    from src.client.protocol import BrokerClient
+    from src.client.upstox import UpstoxLiveClient
     from src.paper.store import PaperStore
 
-    broker = MagicMock(spec=BrokerClient)
-    broker.get_ltp = AsyncMock(
+    mock_pnl.return_value = Decimal("-1234.50")
+
+    broker = MagicMock(spec=UpstoxLiveClient)
+    broker.get_ltp_sync = MagicMock(
         return_value={
             _SHORT_PUT_KEY: Decimal("7.70"),
             _LONG_PUT_KEY: Decimal("3.95"),

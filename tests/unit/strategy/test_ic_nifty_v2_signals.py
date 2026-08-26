@@ -710,22 +710,19 @@ def test_apply_action_close_full_auto_execute_persists_all_legs() -> None:
     assert result == []
 
 
-def test_apply_action_close_full_auto_execute_sends_close_notification() -> None:
-    """BUG-013 (2026-07-20): CLOSE_FULL must confirm via Telegram.
-
-    Previously only PROFIT_LOCK_ZONE2 (a rare partial roll) sent a
-    notification — the far more common full-close path was silent. See
-    docs/bugs/bugs.md BUG-013.
-    """
+@patch("src.paper.tracker.get_strategy_realized_pnl")
+def test_apply_action_close_full_auto_execute_sends_close_notification(mock_pnl) -> None:
+    """LOSS_STOP auto-execute sends a MarkdownV2 confirmation."""
     import asyncio
+    from unittest.mock import AsyncMock, MagicMock
 
-    from src.client.protocol import BrokerClient
+    from src.client.upstox import UpstoxLiveClient
     from src.paper.store import PaperStore
 
-    broker = MagicMock(spec=BrokerClient)
-    from unittest.mock import AsyncMock
+    mock_pnl.return_value = Decimal("-5432.10")
 
-    broker.get_ltp = AsyncMock(
+    broker = MagicMock(spec=UpstoxLiveClient)
+    broker.get_ltp_sync = MagicMock(
         return_value={
             _key("23900", "PE"): Decimal("30.00"),
             _key("23200", "PE"): Decimal("2.00"),
@@ -758,6 +755,7 @@ def test_apply_action_close_full_auto_execute_sends_close_notification() -> None
     assert "short\\\\_put" not in message
     assert _STRATEGY_NAME in message
     assert r"₹30\.00" in message
+    assert r"Net P&L: \-₹5,432\.10" in message
 
 
 def test_apply_action_close_full_auto_execute_without_broker_skips_persist_no_raise() -> None:
