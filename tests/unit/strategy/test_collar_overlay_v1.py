@@ -892,6 +892,10 @@ def test_apply_action_close_collar_notification_uses_formatted_labels() -> None:
     assert "NIFTY 21500 PE 07 JUL 26" in msg
     assert "NSE_FO|65900" not in msg
     assert "NSE_FO|65901" not in msg
+    assert "30\\.00" in msg
+    assert "80\\.00" in msg
+    assert "\\~₹50\\.00" in msg
+    assert "\\+₹3,250\\.00" in msg
 
 
 def test_apply_action_close_collar_notification_falls_back_when_unresolvable() -> None:

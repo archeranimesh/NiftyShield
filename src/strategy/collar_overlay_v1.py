@@ -18,6 +18,7 @@ from src.instruments.lookup import InstrumentLookup, format_leg_label
 from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
 from src.models.portfolio import TradeAction
+from src.notifications.formatting import format_greek, format_money
 from src.notifications.markdown import escape_markdown, mdcode
 from src.paper.constants import DEFAULT_BOD_PATH, STRATEGY_OVERLAY
 from src.paper.models import PaperPosition, PaperTrade
@@ -664,20 +665,20 @@ class CollarOverlayV1(ReEntryMixin):
                 if metadata.get("mark") is not None
                 else call_entry
             )
-            call_exit_str = (
-                f"₹{call_exit:.2f}" if metadata.get("mark") is not None else f"~₹{call_entry:.2f}"
+            call_exit_fmt = format_money(call_exit)
+            call_exit_str = escape_markdown(
+                call_exit_fmt if metadata.get("mark") is not None else f"~{call_exit_fmt}"
             )
 
             call_delta_val = metadata.get("delta")
-            call_delta_str = (
-                f"{Decimal(str(call_delta_val)):.3f}" if call_delta_val is not None else "N/A"
-            )
+            call_delta = float(call_delta_val) if call_delta_val is not None else None
+            call_delta_str = escape_markdown(format_greek(call_delta))
 
             call_dte = 0
             call_dte_raw = metadata.get("dte")
             if call_dte_raw is not None:
                 try:
-                    call_dte = int(float(call_dte_raw))
+                    call_dte = int(call_dte_raw)
                 except (ValueError, TypeError):
                     pass
             elif call_pos:
@@ -691,7 +692,8 @@ class CollarOverlayV1(ReEntryMixin):
             )
             put_entry = put_pos.avg_cost if put_pos else Decimal("0")
             put_exit = put_entry
-            put_exit_str = f"~₹{put_exit:.2f}" if put_pos else f"₹{put_exit:.2f}"
+            put_exit_fmt = format_money(put_exit)
+            put_exit_str = escape_markdown(f"~{put_exit_fmt}" if put_pos else put_exit_fmt)
 
             call_pnl = (
                 (call_entry - call_exit) * abs(call_pos.net_qty) if call_pos else Decimal("0")
@@ -701,21 +703,20 @@ class CollarOverlayV1(ReEntryMixin):
 
             pnl_prefix = "~" if (call_pos is not None or put_pos is not None) else ""
 
-            call_entry_str = escape_markdown(f"{call_entry:.2f}")
-            put_entry_str = escape_markdown(f"{put_entry:.2f}")
+            call_entry_str = escape_markdown(format_money(call_entry))
+            put_entry_str = escape_markdown(format_money(put_entry))
             call_dte_str = escape_markdown(str(call_dte))
-            net_pnl_str = escape_markdown(f"{pnl_prefix}₹{net_pnl:+,.0f}")
+            if net_pnl > 0:
+                net_pnl_str = escape_markdown(f"{pnl_prefix}+{format_money(net_pnl)}")
+            else:
+                net_pnl_str = escape_markdown(f"{pnl_prefix}{format_money(net_pnl)}")
 
             msg = (
-                f"✅ *Collar: CLOSE "
-                f"\\({escape_markdown(triggering_signal or 'MANUAL')}\\)*\n"
-                f"📤 Short Call: {mdcode(call_key)} @ "
-                f"{escape_markdown(call_exit_str)}\n"
-                f"   Entry ₹{call_entry_str} · Delta "
-                f"{escape_markdown(call_delta_str)} · DTE {call_dte_str}\n"
-                f"📤 Long Put: {mdcode(put_key)} @ "
-                f"{escape_markdown(put_exit_str)}\n"
-                f"   Entry ₹{put_entry_str}\n"
+                f"✅ *Collar closed — {escape_markdown(triggering_signal or 'MANUAL')}*\n"
+                f"📤 Short Call: {mdcode(call_key)} @ {call_exit_str}\n"
+                f"   Entry {call_entry_str} · Delta {call_delta_str} · DTE {call_dte_str}\n"
+                f"📤 Long Put: {mdcode(put_key)} @ {put_exit_str}\n"
+                f"   Entry {put_entry_str}\n"
                 f"Net P&L: *{net_pnl_str}*"
             )
 
