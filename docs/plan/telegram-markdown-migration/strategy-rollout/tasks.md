@@ -106,7 +106,7 @@
           result. If either glyph renders double-width, `max(len(...))` is the wrong width function
           and this builder needs a display-width helper — that is a design input to ROLL-2a, not a
           post-hoc fix to it.
-    - [ ] **ROLL-2b** — P&L sourcing: `Bkd (I)` + `Flt (M)`. **Reconciliation gate CLOSED
+    - [x] **ROLL-2b** — P&L sourcing: `Bkd (I)` + `Flt (M)`. **Reconciliation gate CLOSED
           2026-08-26 (Cowork session, Animesh decided all three) — split into ROLL-2b-i /
           ROLL-2b-ii below; track completion on the sub-tasks, check this box only once both
           are done.** Decisions, binding on both sub-tasks — do not re-litigate:
@@ -134,7 +134,7 @@
           | Files: `scripts/reporting/paper_pnl_report.py`,
           `tests/unit/reporting/test_paper_pnl_report.py` (2 files → Claude per root
           `CLAUDE.md` Step 3b)
-    - [ ] **ROLL-2b-ii** — Consume it: `ICMonthlyStats` += `inception_realized_pnl`,
+    - [x] **ROLL-2b-ii** (SHA: d2741fb) — Consume it: `ICMonthlyStats` += `inception_realized_pnl`,
           `unrealized_pnl_month_change`; `build_stats()` calls `build_pnl_report(store,
           strategy_name, as_of=today)` once and drops both local helpers | Blocked by: ROLL-2b-i
           | Owner: Claude | Model: Sonnet | Review: **real @code-reviewer, Opus — mandatory**
