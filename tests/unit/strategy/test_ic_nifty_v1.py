@@ -1001,6 +1001,7 @@ def test_apply_action_close_full_auto_execute_sends_close_notification() -> None
     assert _STRATEGY in message
     assert "short\\_put" in message
     assert "short\\\\_put" not in message  # guard against double-escaping
+    assert r"₹7\.70" in message
 
 
 def test_apply_action_no_notifier_does_not_raise() -> None:
@@ -1067,6 +1068,7 @@ def test_send_close_notification_no_store_skips_pnl_without_raising() -> None:
     notifier.send_notification.assert_called_once()
     (message,), _ = notifier.send_notification.call_args
     assert "Net P&L" not in message
+    assert r"₹7\.70" in message
     assert any(log.get("event") == "ic_nifty_v1.net_pnl_calc_skipped_no_store" for log in logs)
 
 

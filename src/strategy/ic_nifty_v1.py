@@ -33,6 +33,7 @@ import structlog
 from src.instruments.lookup import InstrumentLookup
 from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
+from src.notifications.formatting import format_money
 from src.notifications.markdown import escape_markdown, mdcode
 from src.paper.constants import DEFAULT_BOD_PATH
 from src.paper.models import PaperPosition, PaperTrade
@@ -776,7 +777,7 @@ class IronCondorV1:
         legs_text = "\n".join(
             f"  {escape_markdown(t.leg_role)}: "
             f"{escape_markdown(t.action.value)} {t.quantity} "
-            f"@ {escape_markdown(str(t.price))}"
+            f"@ {escape_markdown(format_money(t.price))}"
             for t in closed_trades
         )
         if self._store is None:
@@ -798,7 +799,7 @@ class IronCondorV1:
                 from src.paper.tracker import get_strategy_realized_pnl
 
                 net_pnl = get_strategy_realized_pnl(self._store, self.strategy_name)
-                pnl_text = f"Net P&L: ₹{net_pnl:,.2f}\n"
+                pnl_text = f"Net P&L: {format_money(net_pnl)}\n"
             except Exception as exc:
                 log.warning("ic_nifty_v1.net_pnl_calc_failed", error=str(exc))
                 pnl_text = ""
