@@ -178,7 +178,7 @@
       independent rollback/test cycles, same pattern as MD-4's split) — track completion on the
       sub-tasks, not this line; check this box only once all three are done.
 
-- [ ] **ROLL-3.1** — CSP family: migrate close/roll notifications | Blocked by: ROLL-2
+- [x] **ROLL-3.1** — CSP family: migrate close/roll notifications | Blocked by: ROLL-2 | SHA: 297e573
       | Owner: Antigravity | Model: n/a | Review: **real @code-reviewer, Opus — mandatory**
       — same shape as MD-3, mechanical once ROLL-2's format is locked, financial-logic gate
       still applies
