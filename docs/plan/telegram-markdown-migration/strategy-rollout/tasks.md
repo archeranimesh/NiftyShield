@@ -172,7 +172,7 @@
           | Owner: Antigravity | Model: n/a | Review: **real @code-reviewer, Opus — mandatory** —
           mechanical once 2a/2b land, but it renders P&L values, so the financial-logic gate
           applies here as well as on 2b.
-- [ ] **ROLL-3** — Umbrella: migrate strategy close/roll notifications (7 classes, same list
+- [x] **ROLL-3** — Umbrella: migrate strategy close/roll notifications (7 classes, same list
       as backbone MD-3) to the new format where it adds value | Blocked by: ROLL-2 | Split into
       ROLL-3.1 / ROLL-3.2 / ROLL-3.3 below (2026-08-26, Animesh — split by strategy family for
       independent rollback/test cycles, same pattern as MD-4's split) — track completion on the
@@ -193,7 +193,7 @@
       | Files: `src/strategy/ic_nifty_v1.py`, `src/strategy/ic_nifty_v2.py`
       | Tests: `tests/unit/strategy/test_ic_nifty_v1.py`, `tests/unit/strategy/test_ic_nifty_v2.py`
 
-- [ ] **ROLL-3.3** — Overlay family: migrate close/roll notifications | Blocked by: ROLL-2
+- [x] **ROLL-3.3** — Overlay family: migrate close/roll notifications | Blocked by: ROLL-2 | Phase A (CC) SHA: 12d766b, Phase B (Collar) SHA: da41e3d, Phase C (PP) SHA: 00604bc, Phase D (auto_close) SHA: 1ca5b68
       | Owner: Antigravity | Model: n/a | Review: **real @code-reviewer, Opus — mandatory**
       — same shape as MD-3, mechanical once ROLL-2's format is locked, financial-logic gate
       still applies. `auto_close.py` kept in this group (not split further) because
