@@ -710,19 +710,22 @@ def test_apply_action_close_full_auto_execute_persists_all_legs() -> None:
     assert result == []
 
 
-@patch("src.paper.tracker.get_strategy_realized_pnl")
-def test_apply_action_close_full_auto_execute_sends_close_notification(mock_pnl) -> None:
-    """LOSS_STOP auto-execute sends a MarkdownV2 confirmation."""
-    import asyncio
-    from unittest.mock import AsyncMock, MagicMock
+def test_apply_action_close_full_auto_execute_sends_close_notification() -> None:
+    """BUG-013 (2026-07-20): CLOSE_FULL must confirm via Telegram.
 
-    from src.client.upstox import UpstoxLiveClient
+    Previously only PROFIT_LOCK_ZONE2 (a rare partial roll) sent a
+    notification — the far more common full-close path was silent. See
+    docs/bugs/bugs.md BUG-013.
+    """
+    import asyncio
+
+    from src.client.protocol import BrokerClient
     from src.paper.store import PaperStore
 
-    mock_pnl.return_value = Decimal("-5432.10")
+    broker = MagicMock(spec=BrokerClient)
+    from unittest.mock import AsyncMock
 
-    broker = MagicMock(spec=UpstoxLiveClient)
-    broker.get_ltp_sync = MagicMock(
+    broker.get_ltp = AsyncMock(
         return_value={
             _key("23900", "PE"): Decimal("30.00"),
             _key("23200", "PE"): Decimal("2.00"),
@@ -747,7 +750,9 @@ def test_apply_action_close_full_auto_execute_sends_close_notification(mock_pnl)
         metadata={"auto_selected": True, "event_type": "LOSS_STOP"},
     )
 
-    asyncio.run(strategy.apply_action(positions, action))
+    with patch("src.paper.tracker.get_strategy_realized_pnl") as mock_pnl:
+        mock_pnl.return_value = Decimal("-5432.10")
+        asyncio.run(strategy.apply_action(positions, action))
 
     notifier.send_notification.assert_called_once()
     (message,), _ = notifier.send_notification.call_args

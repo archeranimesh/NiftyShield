@@ -15,7 +15,7 @@ from __future__ import annotations
 import asyncio
 from datetime import date, timedelta
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from structlog.testing import capture_logs
@@ -964,18 +964,19 @@ def test_apply_action_close_full_auto_execute_without_broker_skips_persist_no_ra
     assert result == []
 
 
-@patch("src.paper.tracker.get_strategy_realized_pnl")
-def test_apply_action_close_full_auto_execute_sends_close_notification(mock_pnl) -> None:
-    """Happy path — closes 4 legs, builds proper MarkdownV2 message."""
-    from unittest.mock import AsyncMock, MagicMock
+def test_apply_action_close_full_auto_execute_sends_close_notification() -> None:
+    """BUG-013 (2026-07-20): auto-execute CLOSE_FULL must confirm via Telegram.
 
-    from src.client.upstox import UpstoxLiveClient
+    IronCondorV1 accepted a notifier but never called it — every auto-close
+    was silent, unlike CSP/CC/Collar/PP. See docs/bugs/bugs.md BUG-013.
+    """
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from src.client.protocol import BrokerClient
     from src.paper.store import PaperStore
 
-    mock_pnl.return_value = Decimal("-1234.50")
-
-    broker = MagicMock(spec=UpstoxLiveClient)
-    broker.get_ltp_sync = MagicMock(
+    broker = MagicMock(spec=BrokerClient)
+    broker.get_ltp = AsyncMock(
         return_value={
             _SHORT_PUT_KEY: Decimal("7.70"),
             _LONG_PUT_KEY: Decimal("3.95"),
@@ -992,7 +993,9 @@ def test_apply_action_close_full_auto_execute_sends_close_notification(mock_pnl)
     positions = _make_ic_positions()
     action = _make_auto_close_action("CLOSE_FULL", event_type="PROFIT_TARGET")
 
-    asyncio.run(strat.apply_action(positions, action))
+    with patch("src.paper.tracker.get_strategy_realized_pnl") as mock_pnl:
+        mock_pnl.return_value = Decimal("-1234.50")
+        asyncio.run(strat.apply_action(positions, action))
 
     notifier.send_notification.assert_called_once()
     (message,), _ = notifier.send_notification.call_args
@@ -1001,6 +1004,7 @@ def test_apply_action_close_full_auto_execute_sends_close_notification(mock_pnl)
     assert "short\\_put" in message
     assert "short\\\\_put" not in message  # guard against double-escaping
     assert r"₹7\.70" in message
+    assert r"Net P&L: \-₹1,234\.50" in message
 
 
 def test_apply_action_no_notifier_does_not_raise() -> None:
