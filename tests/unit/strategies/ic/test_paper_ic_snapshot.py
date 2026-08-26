@@ -72,11 +72,13 @@ def mock_store():
 def mock_telegram():
     """Mock TelegramGateway."""
     target = "scripts.strategies.ic.paper_ic_snapshot.TelegramGateway"
-    with patch(target) as mock_cls:
-        inst = MagicMock()
-        inst.send_notification = AsyncMock()
-        mock_cls.return_value = inst
-        yield inst
+    with patch(target) as mock_cls, \
+         patch("scripts.strategies.ic.paper_ic_snapshot.settings.telegram_bot_token", "dummy"), \
+         patch("scripts.strategies.ic.paper_ic_snapshot.settings.telegram_chat_id", "dummy"):
+        notifier = MagicMock()
+        notifier.send_notification = AsyncMock()
+        mock_cls.return_value = notifier
+        yield notifier
 
 
 @pytest.fixture
