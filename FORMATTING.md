@@ -184,7 +184,8 @@ identically to a literal emoji. Confirmed data points so far:
 |---|---|
 | `▶` U+25B6 | **breaks alignment** — renders with its emoji-presentation glyph. Use `>`. |
 | `Δ` U+0394 | in use as a fenced column header since ROLL-1 (2026-08-07); no break observed |
-| `₹` U+20B9 | only ever used *outside* a fence. Width inside one is **unverified** — FMT-1d drops it from cells for width budget, not for safety. Do not assume. |
+| `₹` U+20B9 | **confirmed safe, 2026-08-26 (ROLL-2a blocking pre-check, live `--send` via `scratch/2026-08-07_ic_monthly_comparison_telegram_format.py`)** — renders single-width inside a fence, alignment holds. Safe to use inside a fence going forward. |
+| `🔴` U+1F534 | **breaks alignment**, same on-device check as `₹` above, 2026-08-26 — renders double-width, same failure shape as `▶`. Do not put a literal `🔴` inside a fenced column without a display-width-aware builder (see `build_compare_table`, `src/notifications/formatting.py`). |
 
 **Resolved 2026-08-25 — `Δ` carve-out.** FMT-1e's rule as originally drafted ("only plain ASCII
 inside a fence") would have outlawed the `Δ` column header already shipped in ROLL-1's confirmed
@@ -196,6 +197,20 @@ listed in the table above"** — `Δ` is the first (and so far only) confirmed e
 extend the exception list from reasoning by analogy (e.g. assuming another Greek-alphabet
 character is safe because `Δ` is); every new symbol needs its own on-device confirmation before
 it goes inside a fence, the same way `▶` was tested and rejected.
+
+**Resolved 2026-08-26 — `₹` confirmed, `🔴` rejected (ROLL-2a blocking pre-check).** ROLL-2's
+Legs row (`n/4` with a `🔴` suffix when `n < 4`) and its `₹`-in-a-fence layout could not proceed
+until both glyphs were individually checked, per the no-analogy rule above. A one-off `--send`
+(`scratch/2026-08-07_ic_monthly_comparison_telegram_format.py`, patched with a fabricated `3/4
+🔴` Legs row for this check only) put both in the same fenced message: `₹` held alignment, `🔴`
+did not. `₹` U+20B9 joins `Δ` as a second confirmed-narrow exception; `🔴` U+1F534 joins `▶` as a
+confirmed-wide rejection. `src/notifications/formatting.py::build_compare_table` (ROLL-2a) is the
+first table builder in this codebase to compute column width via display width rather than
+`len()` — `_char_display_width` treats ASCII and the confirmed-narrow set (`Δ`, `₹`) as width 1
+and **everything else, including any future unconfirmed symbol, as width 2 by default** — a
+fail-safe default per this section's no-exception-by-analogy rule, not a placeholder. Any new
+table builder that needs to put a non-ASCII, non-confirmed symbol inside a fence should reuse
+`_char_display_width`/`_display_width` rather than re-deriving its own width logic.
 
 ---
 

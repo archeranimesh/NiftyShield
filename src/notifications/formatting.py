@@ -241,3 +241,108 @@ def build_leg_table(legs: list[LegRow]) -> str:
             f"{entry_str:>{widths['entry']}}"
         )
     return "\n".join(lines)
+
+
+# --- ROLL-2a: display-width-aware comparison table (FMT-3 promotion of
+# scratch/2026-08-07_ic_monthly_comparison_telegram_format.py's
+# build_compare_table, see FORMATTING.md §7 and strategy-rollout/stories.md
+# ROLL-2a) ---
+
+_CONFIRMED_NARROW_NON_ASCII = {
+    "\u0394",  # Δ — confirmed no alignment break since ROLL-1 (2026-08-07), FORMATTING.md §7
+    "\u20b9",  # ₹ — confirmed no alignment break, on-device check 2026-08-26 (ROLL-2a pre-check)
+}
+
+
+def _char_display_width(ch: str) -> int:
+    """1 for ASCII and individually-confirmed-safe non-ASCII symbols, 2 otherwise.
+
+    FMT-1e (FORMATTING.md §7): a symbol with a Unicode emoji-presentation
+    variant renders double-width inside a Telegram fence and breaks
+    len()-based alignment — confirmed for `▶` and, on-device 2026-08-26
+    (ROLL-2a's blocking pre-check), for `🔴`. §7 explicitly forbids
+    extending the safe list by analogy, so any character NOT in
+    `_CONFIRMED_NARROW_NON_ASCII` is treated as width-2 (fail-safe wide)
+    rather than assumed narrow — a deliberate default, not a placeholder
+    pending future confirmation of more characters.
+    """
+    if ord(ch) < 128:
+        return 1
+    if ch in _CONFIRMED_NARROW_NON_ASCII:
+        return 1
+    return 2
+
+
+def _display_width(s: str) -> int:
+    """Sum of _char_display_width over every character in s."""
+    return sum(_char_display_width(ch) for ch in s)
+
+
+def _pad_display(s: str, width: int, *, align: str) -> str:
+    """Pad s to `width` display columns (not characters), left or right.
+
+    `align` is `"<"` (left, pad trails) or `">"` (right, pad leads) —
+    mirrors str.format's alignment specifiers, since format specs
+    themselves pad by character count and would misalign a cell holding
+    a width-2 glyph.
+    """
+    pad = max(0, width - _display_width(s))
+    if align == "<":
+        return s + " " * pad
+    return " " * pad + s
+
+
+def build_compare_table(groups: list[list[tuple[str, str, str]]], columns: tuple[str, str]) -> str:
+    """Fenced-code-block-ready comparison table, one or more row groups
+    separated by a dashed rule (FMT-3 promotion of the scratch reference
+    implementation confirmed 2026-08-07 for ROLL-2's IC monthly comparison
+    message — see strategy-rollout/stories.md ROLL-2a).
+
+    Args:
+        groups: list of row-groups; each row is (label, v1_str, v2_str).
+            Every group and the overall groups list must be non-empty —
+            a comparison table with a header and nothing else is a caller
+            bug, not a valid empty table (same convention as build_kv_table).
+        columns: the two column headers (e.g. ("V1", "V2")).
+
+    Width is computed via `_display_width` (max across ALL rows in ALL
+    groups), never `len()` and never a hand-counted constant — `len()`
+    alone is the exact bug class FMT-3's stories.md flags from
+    `build_comparison_report()`'s pre-fix history (hand-counted 20-char
+    budget), and would additionally misalign any row holding a
+    double-width glyph (see `_char_display_width`) — e.g. ROLL-2c's Legs
+    row's `🔴` suffix.
+
+    Caller wraps the return value in a ```fenced block``` — this function
+    does not add the fence itself, same convention as build_leg_table.
+    """
+    if not groups:
+        raise ValueError("build_compare_table requires at least one group")
+    if any(not group for group in groups):
+        raise ValueError("build_compare_table groups must each be non-empty")
+
+    all_rows = [row for group in groups for row in group]
+
+    label_w = max(_display_width("Metric"), *(_display_width(r[0]) for r in all_rows))
+    v1_w = max(_display_width(columns[0]), *(_display_width(r[1]) for r in all_rows))
+    v2_w = max(_display_width(columns[1]), *(_display_width(r[2]) for r in all_rows))
+
+    header = (
+        f"{_pad_display('Metric', label_w, align='<')} "
+        f"{_pad_display(columns[0], v1_w, align='>')} "
+        f"{_pad_display(columns[1], v2_w, align='>')}"
+    )
+    rule = "-" * _display_width(header)
+
+    lines = [header, rule]
+    for i, group in enumerate(groups):
+        for label, v1, v2 in group:
+            lines.append(
+                f"{_pad_display(label, label_w, align='<')} "
+                f"{_pad_display(v1, v1_w, align='>')} "
+                f"{_pad_display(v2, v2_w, align='>')}"
+            )
+        if i < len(groups) - 1:
+            lines.append(rule)
+    lines.append(rule)
+    return "\n".join(lines)

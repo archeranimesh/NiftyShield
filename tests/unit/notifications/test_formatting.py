@@ -6,6 +6,7 @@ import pytest
 from src.notifications.formatting import (
     LegRow,
     alert_emoji,
+    build_compare_table,
     build_kv_table,
     build_leg_table,
     build_side_by_side_kv_table,
@@ -192,3 +193,74 @@ def test_format_expiry_uppercase_leading_zero_kept():
 
 def test_format_expiry_single_digit_day_keeps_leading_zero():
     assert format_expiry(date(2026, 7, 7)) == "07 JUL 26"
+
+
+def test_build_compare_table_happy_path_single_group():
+    table = build_compare_table([[("DTE", "18", "18")]], ("V1", "V2"))
+    assert table == "Metric V1 V2\n------------\nDTE    18 18\n------------"
+
+
+def test_build_compare_table_multiple_groups_dashed_rule_between():
+    groups = [
+        [("DTE", "18", "18"), ("Credit", "₹87", "₹129")],
+        [("Lock Zone", "N/A", "None")],
+    ]
+    table = build_compare_table(groups, ("V1", "V2"))
+    lines = table.split("\n")
+    # header, rule, 2 rows, rule (between groups), 1 row, rule (final)
+    assert lines[0] == "Metric     V1   V2"
+    assert lines[1] == lines[4] == lines[-1]  # every rule line is identical
+    assert lines[1] == "-" * len(lines[0])
+    assert lines[-2] == "Lock Zone N/A None"
+
+
+def test_build_compare_table_empty_groups_raises():
+    with pytest.raises(ValueError, match="at least one group"):
+        build_compare_table([], ("V1", "V2"))
+
+
+def test_build_compare_table_empty_group_raises():
+    with pytest.raises(ValueError, match="must each be non-empty"):
+        build_compare_table([[]], ("V1", "V2"))
+
+
+def test_build_compare_table_confirmed_narrow_glyphs_no_extra_padding():
+    # ₹ (rupee) and Δ (delta) are individually confirmed narrow
+    # (FORMATTING.md §7) -- they must not inflate column width the way an
+    # unconfirmed non-ASCII character would. Column widths here are driven
+    # entirely by plain-ASCII cells ("Credit"/"Put Δ" at 6 chars, "-0.03"/
+    # "-0.23" at 5 chars) -- ₹87/₹129 fit inside that budget with room to
+    # spare, confirming they cost only 1 display column each, not 2.
+    table = build_compare_table(
+        [[("Credit", "₹87", "₹129"), ("Put Δ", "-0.03", "-0.23")]], ("V1", "V2")
+    )
+    header, rule, credit_row, delta_row, _ = table.split("\n")
+    assert header == "Metric    V1    V2"
+    assert credit_row == "Credit   ₹87  ₹129"
+    assert delta_row == "Put Δ  -0.03 -0.23"
+
+
+def test_build_compare_table_unconfirmed_wide_glyph_gets_extra_column_width():
+    # 🔴 is NOT in the confirmed-narrow set (confirmed to render
+    # double-width on-device, 2026-08-26 ROLL-2a pre-check) -- the V1
+    # column must widen to 6 display columns (len("3/4 🔴") == 5
+    # characters but 6 display columns), not 5. If width were computed via
+    # len() instead of _display_width, v1_w would be 5, not 6, and the
+    # column would render one display-column too narrow on Telegram.
+    table = build_compare_table([[("Legs", "3/4 🔴", "4/4")]], ("V1", "V2"))
+    assert table == ("Metric     V1  V2\n-----------------\nLegs   3/4 🔴 4/4\n-----------------")
+
+
+def test_build_compare_table_wide_glyph_row_display_width_matches_header():
+    # The real regression this exists to catch: every rendered line must
+    # occupy the same number of DISPLAY columns as the header/rule, even
+    # when a row's CHARACTER count differs because of a double-width
+    # glyph -- len()-based alignment (the pre-ROLL-2a bug shape) would
+    # make this row one display column short.
+    from src.notifications.formatting import _display_width
+
+    table = build_compare_table([[("Legs", "3/4 🔴", "4/4"), ("DTE", "18", "18")]], ("V1", "V2"))
+    lines = table.split("\n")
+    header_width = _display_width(lines[0])
+    for line in lines:
+        assert _display_width(line) == header_width
