@@ -125,7 +125,7 @@
           are closed by the decisions above; what remains is contract plumbing. The
           `@code-reviewer` gate is unchanged and still applies to both sub-tasks.
           | Blocked by: none (independent of ROLL-2a)
-    - [ ] **ROLL-2b-i** — Contract change: add `unrealized_this_month` to `PnLReport`, bound
+    - [x] **ROLL-2b-i** (SHA: e59abb9 | split docs: b566cee) — Contract change: add `unrealized_this_month` to `PnLReport`, bound
           every snapshot read by `as_of` (was `snapshots[-1]` unconditionally), record decision
           (3) in the module docstring | Blocked by: none — nothing consumes the new field yet,
           so this lands safely alone (no live-risk window)
