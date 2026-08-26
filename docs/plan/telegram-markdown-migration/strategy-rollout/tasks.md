@@ -106,11 +106,49 @@
           result. If either glyph renders double-width, `max(len(...))` is the wrong width function
           and this builder needs a display-width helper — that is a design input to ROLL-2a, not a
           post-hoc fix to it.
-    - [ ] **ROLL-2b** — P&L sourcing: `Bkd (I)` + `Flt (M)` (`ICMonthlyStats` fields + whichever
-          computation layer the reconciliation below picks) + their tests | Blocked by: none
-          (independent of ROLL-2a) | Owner: Claude | Model: **Opus** | Review: **real
-          @code-reviewer, Opus — mandatory** — the parent task's P&L-adjacent gate travels here.
-          **Spec drift found 2026-08-26, reconcile before writing code** (full detail in
+    - [ ] **ROLL-2b** — P&L sourcing: `Bkd (I)` + `Flt (M)`. **Reconciliation gate CLOSED
+          2026-08-26 (Cowork session, Animesh decided all three) — split into ROLL-2b-i /
+          ROLL-2b-ii below; track completion on the sub-tasks, check this box only once both
+          are done.** Decisions, binding on both sub-tasks — do not re-litigate:
+          **(1) Consume, don't duplicate.** Extend `PnLReport`/`build_pnl_report`
+          (`scripts/reporting/paper_pnl_report.py`) with `unrealized_this_month` and have the
+          IC comparison consume one report object; delete the local `_get_monthly_realized_pnl`
+          /`_get_unrealized_pnl` raw-`sqlite3` helpers. No promotion into `src/reporting/` this
+          task — script-to-script import accepted.
+          **(2) Uniform row selection: latest snapshot row at or before `as_of`, for every
+          aggregate.** Never exact equality on the date. This is what stops `Flt (I)` and
+          `Flt (M)` diverging on a holiday or a pre-15:36-cron run.
+          **(3) `Bkd (M)` cycle-reset gap: knowingly accepted, recorded not fixed.** It keeps
+          reading `paper_nav_snapshots.realized_pnl` while `Bkd (I)` is routed off it. Recorded
+          in `paper_pnl_report.py`'s module docstring. Its own task if it is ever fixed.
+          **Model re-routed Opus → Sonnet:** the five open judgment calls that justified Opus
+          are closed by the decisions above; what remains is contract plumbing. The
+          `@code-reviewer` gate is unchanged and still applies to both sub-tasks.
+          | Blocked by: none (independent of ROLL-2a)
+    - [ ] **ROLL-2b-i** — Contract change: add `unrealized_this_month` to `PnLReport`, bound
+          every snapshot read by `as_of` (was `snapshots[-1]` unconditionally), record decision
+          (3) in the module docstring | Blocked by: none — nothing consumes the new field yet,
+          so this lands safely alone (no live-risk window)
+          | Owner: Claude | Model: Sonnet | Review: **real @code-reviewer, Opus — mandatory** —
+          the parent's P&L-adjacent gate travels here
+          | Files: `scripts/reporting/paper_pnl_report.py`,
+          `tests/unit/reporting/test_paper_pnl_report.py` (2 files → Claude per root
+          `CLAUDE.md` Step 3b)
+    - [ ] **ROLL-2b-ii** — Consume it: `ICMonthlyStats` += `inception_realized_pnl`,
+          `unrealized_pnl_month_change`; `build_stats()` calls `build_pnl_report(store,
+          strategy_name, as_of=today)` once and drops both local helpers | Blocked by: ROLL-2b-i
+          | Owner: Claude | Model: Sonnet | Review: **real @code-reviewer, Opus — mandatory**
+          | Files: `scripts/strategies/ic/paper_ic_monthly_comparison.py`,
+          `tests/unit/strategies/ic/test_paper_ic_monthly_comparison.py`
+          **Routing note:** 2 files → Claude by Step 3b's file-count rule, but mechanical
+          against a locked contract → Antigravity by Step 3b's nature rule. The rule does not
+          resolve it; routed Claude on file count (Animesh, 2026-08-26). Re-route to Antigravity
+          freely if convenient — the contract is locked, nothing here is a judgment call.
+          Deliberately NOT folded into ROLL-2c despite touching the same two files: that would
+          put P&L sourcing back inside a port commit, which is exactly what the 2026-08-26
+          review split ROLL-2 to prevent.
+          **Spec drift found 2026-08-26 — RESOLVED by ROLL-2b's three decisions above; kept
+          here as the record of what was wrong and why** (full detail in
           `stories.md`): (1) SNAP-4 already shipped
           `scripts/reporting/paper_pnl_report.py::build_pnl_report()` -> `PnLReport`, a pure tested
           function already computing `realized_since_inception` (= `Bkd (I)`, via
@@ -123,6 +161,8 @@
           cycle-resetting column SNAP-1 flags and ROLL-2 corrects `Bkd (I)` away from — fix it or
           record it as accepted, don't leave it silent. `get_strategy_realized_pnl(store,
           strategy_name) -> Decimal` confirmed unchanged 2026-08-26.
+          Resolution: (1) -> decision (1) consume `PnLReport`; (2) -> decision (2) uniform
+          latest-row-at-or-before-`as_of`; (3) -> decision (3) recorded as accepted.
     - [ ] **ROLL-2c** — The port itself: `build_comparison_report()` -> one fenced row-groups table
           via ROLL-2a's builder + MarkdownV2 `parse_mode`; Legs row (`len(open_pos)` threaded
           through `build_stats()` into `ICMonthlyStats.open_leg_count`, rendered `n/4` with a `🔴`
