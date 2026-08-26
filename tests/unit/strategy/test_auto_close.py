@@ -489,6 +489,183 @@ async def test_auto_close_overlay_collar_write_failure_sends_failed_not_closed(
 
 
 @pytest.mark.asyncio
+async def test_auto_close_overlay_pp_profit_target(
+    store: PaperStore, simulator: PaperFillSimulator, chain: OptionChain
+) -> None:
+    store.record_trade(
+        PaperTrade(
+            strategy_name="paper_nifty_overlay",
+            leg_role="overlay_pp",
+            instrument_key="NSE_FO|NIFTY23000PE",
+            trade_date=date.today(),
+            action=TradeAction.BUY,
+            quantity=65,
+            price=Decimal("50.0"),
+            is_paper=True,
+        )
+    )
+    event_id = store.create_exit_event(
+        strategy_name="paper_nifty_overlay",
+        leg_name="overlay_pp",
+        trade_id="NSE_FO|NIFTY23000PE",
+        event_time=datetime.now(timezone.utc),
+        detected_by="EOD",
+        exit_signal=ExitSignal.PROFIT_TARGET,
+        severity="ACTION",
+        entry_price=Decimal("50.0"),
+    )
+
+    notifier = AsyncMock()
+
+    option_leg = OptionLeg(
+        instrument_key="NSE_FO|NIFTY23000PE",
+        option_type="PE",
+        strike_price=Decimal("23000.0"),
+        ltp=Decimal("100.0"),
+        delta=Decimal("-0.25"),
+        bid=Decimal("99.5"),
+        ask=Decimal("100.5"),
+        oi=1000,
+        volume=500,
+        gamma=Decimal("0.001"),
+        theta=Decimal("-5.0"),
+        vega=Decimal("10.0"),
+        iv=Decimal("15.0"),
+        strike=Decimal("23000.0"),
+    )
+    chain.strikes[Decimal("23000.0")] = OptionChainStrike(ce=None, pe=option_leg)
+
+    pos = store.get_position("paper_nifty_overlay", "overlay_pp")
+    assert pos.net_qty == 65
+
+    lookup = MagicMock()
+    lookup.get_by_key.return_value = {
+        "instrument_type": "PE",
+        "strike_price": 23000,
+        "expiry": "2026-06-25",
+        "underlying_symbol": "NIFTY",
+    }
+
+    with patch(
+        "src.paper.chain_utils.find_chain_leg",
+        return_value=option_leg,
+    ):
+        success = await auto_close_overlay(
+            store=store,
+            simulator=simulator,
+            pos=pos,
+            event_id=event_id,
+            chain=chain,
+            notifier=notifier,
+            lookup=lookup,
+            vix=15.0,
+            exit_signal="PROFIT_TARGET",
+        )
+
+    assert success is True
+    event = store.get_exit_event(event_id)
+    assert event["status"] == "ACTED"
+    assert store.get_position("paper_nifty_overlay", "overlay_pp").net_qty == 0
+
+    await asyncio.sleep(0.1)
+    notifier.send.assert_called_once()
+    msg = notifier.send.call_args[0][0]
+    assert "*PP closed" in msg
+    assert "NIFTY 23000 PE 25 JUN 26" in msg
+    # Flipped P&L check: (100 - 50) * 65 = 3250
+    assert "\\+₹3,250\\.00" in msg
+
+
+@pytest.mark.asyncio
+async def test_auto_close_overlay_pp_crash_monetize(
+    store: PaperStore, simulator: PaperFillSimulator, chain: OptionChain
+) -> None:
+    store.record_trade(
+        PaperTrade(
+            strategy_name="paper_nifty_overlay",
+            leg_role="overlay_pp",
+            instrument_key="NSE_FO|NIFTY23000PE",
+            trade_date=date.today(),
+            action=TradeAction.BUY,
+            quantity=65,
+            price=Decimal("50.0"),
+            is_paper=True,
+        )
+    )
+    event_id = store.create_exit_event(
+        strategy_name="paper_nifty_overlay",
+        leg_name="overlay_pp",
+        trade_id="NSE_FO|NIFTY23000PE",
+        event_time=datetime.now(timezone.utc),
+        detected_by="EOD",
+        exit_signal=ExitSignal.CRASH_MONETIZE,
+        severity="ACTION",
+        entry_price=Decimal("50.0"),
+    )
+
+    notifier = AsyncMock()
+
+    option_leg = OptionLeg(
+        instrument_key="NSE_FO|NIFTY23000PE",
+        option_type="PE",
+        strike_price=Decimal("23000.0"),
+        ltp=Decimal("200.0"),
+        delta=Decimal("-0.85"),
+        bid=Decimal("199.5"),
+        ask=Decimal("200.5"),
+        oi=1000,
+        volume=500,
+        gamma=Decimal("0.001"),
+        theta=Decimal("-5.0"),
+        vega=Decimal("10.0"),
+        iv=Decimal("15.0"),
+        strike=Decimal("23000.0"),
+    )
+    chain.strikes[Decimal("23000.0")] = OptionChainStrike(ce=None, pe=option_leg)
+
+    pos = store.get_position("paper_nifty_overlay", "overlay_pp")
+    assert pos.net_qty == 65
+
+    lookup = MagicMock()
+    lookup.get_by_key.return_value = {
+        "instrument_type": "PE",
+        "strike_price": 23000,
+        "expiry": "2026-06-25",
+        "underlying_symbol": "NIFTY",
+    }
+
+    with patch(
+        "src.paper.chain_utils.find_chain_leg",
+        return_value=option_leg,
+    ):
+        success = await auto_close_overlay(
+            store=store,
+            simulator=simulator,
+            pos=pos,
+            event_id=event_id,
+            chain=chain,
+            notifier=notifier,
+            lookup=lookup,
+            vix=15.0,
+            exit_signal="CRASH_MONETIZE",
+        )
+
+    assert success is True
+    event = store.get_exit_event(event_id)
+    assert event["status"] == "ACTED"
+    assert store.get_position("paper_nifty_overlay", "overlay_pp").net_qty == 0
+
+    await asyncio.sleep(0.1)
+    notifier.send.assert_called_once()
+    msg = notifier.send.call_args[0][0]
+    assert "*PP crash monetized" in msg
+    assert "RE\\_ENTRY\\_PENDING" in msg
+    assert "delta \\-0\\.85" in msg
+    # Flipped P&L check: (200 - 50) * 65 = 9750
+    assert "\\+₹9,750\\.00" in msg
+
+
+@pytest.mark.asyncio
 async def test_evaluate_pp_reentry_eligible(
     store: PaperStore, simulator: PaperFillSimulator, chain: OptionChain
 ) -> None:
