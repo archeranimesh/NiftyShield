@@ -18,6 +18,7 @@ from src.instruments.lookup import InstrumentLookup, format_leg_label
 from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
 from src.models.portfolio import TradeAction
+from src.notifications.formatting import format_greek, format_money
 from src.notifications.markdown import escape_markdown, mdcode
 from src.paper.constants import DEFAULT_BOD_PATH, STRATEGY_OVERLAY
 from src.paper.models import PaperPosition, PaperTrade
@@ -358,7 +359,7 @@ class PPOverlayV1(ReEntryMixin):
                 else pos.avg_cost
             )
             delta_raw = metadata.get("delta")
-            delta = float(delta_raw) if delta_raw is not None else 0.0
+            delta = float(delta_raw) if delta_raw is not None else None
 
             expiry = self._parse_expiry(pos.instrument_key)
             dte = (expiry - market_today()).days if expiry is not None else 0
@@ -376,15 +377,15 @@ class PPOverlayV1(ReEntryMixin):
             lookup = self._resolve_instrument_lookup()
             label = format_leg_label(pos.instrument_key, lookup) if lookup else pos.instrument_key
 
-            exit_price_str = escape_markdown(f"{exit_price:.2f}")
-            entry_debit_str = escape_markdown(f"{entry_debit:.2f}")
-            delta_str = escape_markdown(f"{delta:.3f}")
+            exit_price_str = escape_markdown(format_money(exit_price))
+            entry_debit_str = escape_markdown(format_money(entry_debit))
+            delta_str = escape_markdown(format_greek(delta))
             dte_str = escape_markdown(str(dte))
 
             msg = (
                 f"{emoji} *PP: {escape_markdown(action_name)}*\n"
-                f"📤 Closed: {mdcode(label)} @ ₹{exit_price_str}\n"
-                f"   Entry ₹{entry_debit_str} · Delta {delta_str} "
+                f"📤 Closed: {mdcode(label)} @ {exit_price_str}\n"
+                f"   Entry {entry_debit_str} · Delta {delta_str} "
                 f"· DTE {dte_str}"
             )
             if self._notifier is not None:

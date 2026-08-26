@@ -318,7 +318,7 @@ def test_baseline_has_no_duplicate_or_unused_entries():
     [
         ("src/strategy/auto_close.py", 347),
         ("src/strategy/cc_overlay_v1.py", 382),
-        ("src/strategy/pp_overlay_v1.py", 394),
+        ("src/strategy/pp_overlay_v1.py", 395),
         ("src/strategy/collar_overlay_v1.py", 601),
         ("src/strategy/collar_overlay_v1.py", 603),
         ("src/strategy/collar_overlay_v1.py", 726),

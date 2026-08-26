@@ -198,6 +198,9 @@ def test_apply_action_monetize_pp() -> None:
     assert "💰 *PP: MONETIZE\\_PP*" in msg
     assert "NIFTY 23000 PE" in msg
     assert key not in msg
+    assert "80\\.00" in msg
+    assert "Entry ₹80\\.00" in msg
+    assert "Delta \\-" in msg
 
 
 def test_apply_action_monetize_pp_notification_falls_back_when_unresolvable() -> None:
