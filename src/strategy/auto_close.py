@@ -14,6 +14,7 @@ from src.backtest.ivr import compute_ivr
 from src.backtest.vix_ingest import load_vix_series
 from src.instruments.lookup import format_leg_label
 from src.models.options import OptionChain
+from src.notifications.formatting import format_greek, format_money
 from src.notifications.markdown import escape_markdown, mdcode
 from src.paper.models import PaperPosition
 
@@ -272,76 +273,87 @@ async def _send_close_notification(
 
     try:
         realized_pnl = get_strategy_realized_pnl(store, strategy_name)
+
+        def _fmt_pnl(val: float) -> str:
+            v = Decimal(str(val))
+            if v > 0:
+                return escape_markdown(f"+{format_money(v)}")
+            return escape_markdown(format_money(v))
+
+        realized_pnl_str = _fmt_pnl(realized_pnl)
+
         if is_collar:
             # Collar format
             call_leg = legs[0]
             put_leg = legs[1]
             net_pnl = call_leg["pnl"] + put_leg["pnl"]
 
-            c_exit = escape_markdown(f"{call_leg['exit']:.2f}")
-            c_entry = escape_markdown(f"(entry ₹{call_leg['entry']:.2f})")
-            c_pnl = escape_markdown(f"{call_leg['pnl']:+,.0f}")
-            p_exit = escape_markdown(f"{put_leg['exit']:.2f}")
-            p_entry = escape_markdown(f"(entry ₹{put_leg['entry']:.2f})")
-            p_pnl = escape_markdown(f"{put_leg['pnl']:+,.0f}")
-            net_pnl_str = escape_markdown(f"{net_pnl:+,.0f}")
-            realized_pnl_str = escape_markdown(f"{realized_pnl:+,.0f}")
+            c_exit = escape_markdown(format_money(Decimal(str(call_leg["exit"]))))
+            c_entry = escape_markdown(f"(entry {format_money(Decimal(str(call_leg['entry'])))})")
+            c_pnl = _fmt_pnl(call_leg["pnl"])
+
+            p_exit = escape_markdown(format_money(Decimal(str(put_leg["exit"]))))
+            p_entry = escape_markdown(f"(entry {format_money(Decimal(str(put_leg['entry'])))})")
+            p_pnl = _fmt_pnl(put_leg["pnl"])
+
+            net_pnl_str = _fmt_pnl(net_pnl)
 
             msg = (
-                f"✅ COLLAR CLOSED — {escape_markdown(strategy_name)}\n"
-                f"Short Call: {mdcode(_label(call_leg['key']))} "
-                f"@ ₹{c_exit}  {c_entry}  → ₹{c_pnl}\n"
-                f"Long Put:   {mdcode(_label(put_leg['key']))} "
-                f"@ ₹{p_exit}  {p_entry}  → ₹{p_pnl}\n"
+                f"✅ *Collar closed — {escape_markdown(strategy_name)}*\n"
+                f"📤 Short Call: {mdcode(_label(call_leg['key']))} "
+                f"@ {c_exit}  {c_entry}  → {c_pnl}\n"
+                f"📤 Long Put:   {mdcode(_label(put_leg['key']))} "
+                f"@ {p_exit}  {p_entry}  → {p_pnl}\n"
                 f"Signal    : {escape_markdown(exit_signal)}\n"
-                f"Net P&L   : ₹{net_pnl_str}  "
+                f"Net P&L   : {net_pnl_str}  "
                 f"{escape_markdown('(call + put combined)')}\n"
                 f"Overlay P&L {escape_markdown('(total realized)')}: "
-                f"₹{realized_pnl_str}"
+                f"{realized_pnl_str}"
             )
         else:
             leg = legs[0]
-            l_exit = escape_markdown(f"{leg['exit']:.2f}")
-            l_entry = escape_markdown(f"(entry ₹{leg['entry']:.2f})")
-            l_pnl = escape_markdown(f"{leg['pnl']:+,.0f}")
-            realized_pnl_str = escape_markdown(f"{realized_pnl:+,.0f}")
+            l_exit = escape_markdown(format_money(Decimal(str(leg["exit"]))))
+            l_entry = escape_markdown(f"(entry {format_money(Decimal(str(leg['entry'])))})")
+            l_pnl = _fmt_pnl(leg["pnl"])
 
             if leg["role"] == "overlay_cc":
                 msg = (
-                    f"✅ CC CLOSED — {escape_markdown(strategy_name)}\n"
-                    f"📤 {mdcode(_label(leg['key']))} @ ₹{l_exit}  "
+                    f"✅ *CC closed — {escape_markdown(strategy_name)}*\n"
+                    f"📤 {mdcode(_label(leg['key']))} @ {l_exit}  "
                     f"{l_entry}\n"
                     f"Signal : {escape_markdown(exit_signal)}\n"
-                    f"Leg P&L: ₹{l_pnl}\n"
+                    f"Leg P&L: {l_pnl}\n"
                     f"Overlay P&L {escape_markdown('(total realized)')}: "
-                    f"₹{realized_pnl_str}"
+                    f"{realized_pnl_str}"
                 )
             else:  # overlay_pp
                 if exit_signal == "CRASH_MONETIZE":
-                    l_delta = escape_markdown(f"(delta {leg['delta']:.3f})")
+                    delta_val = leg.get("delta")
+                    delta = float(delta_val) if delta_val is not None else None
+                    l_delta = escape_markdown(f"(delta {format_greek(delta)})")
                     msg = (
-                        f"💰 PP CRASH MONETIZED — "
-                        f"{escape_markdown(strategy_name)}\n"
-                        f"📤 {mdcode(_label(leg['key']))} @ ₹{l_exit}  "
+                        f"💰 *PP crash monetized — "
+                        f"{escape_markdown(strategy_name)}*\n"
+                        f"📤 {mdcode(_label(leg['key']))} @ {l_exit}  "
                         f"{l_entry}\n"
                         f"Signal : {escape_markdown('CRASH_MONETIZE')}  "
                         f"{l_delta}\n"
-                        f"Leg P&L: ₹{l_pnl}\n"
+                        f"Leg P&L: {l_pnl}\n"
                         f"State  : → {escape_markdown('RE_ENTRY_PENDING')} "
                         f"{escape_markdown('(monitoring IVR ≤ 0.60, ')}"
                         f"{escape_markdown('DTE ≥ 14)')}\n"
                         f"Overlay P&L {escape_markdown('(total realized)')}: "
-                        f"₹{realized_pnl_str}"
+                        f"{realized_pnl_str}"
                     )
                 else:  # PROFIT_TARGET / ROLL_ELIGIBLE
                     msg = (
-                        f"✅ PP CLOSED — {escape_markdown(strategy_name)}\n"
-                        f"📤 {mdcode(_label(leg['key']))} @ ₹{l_exit}  "
+                        f"✅ *PP closed — {escape_markdown(strategy_name)}*\n"
+                        f"📤 {mdcode(_label(leg['key']))} @ {l_exit}  "
                         f"{l_entry}\n"
                         f"Signal : {escape_markdown(exit_signal)}\n"
-                        f"Leg P&L: ₹{l_pnl}\n"
+                        f"Leg P&L: {l_pnl}\n"
                         f"Overlay P&L {escape_markdown('(total realized)')}: "
-                        f"₹{realized_pnl_str}"
+                        f"{realized_pnl_str}"
                     )
 
         await notifier.send(msg)
@@ -397,14 +409,20 @@ async def evaluate_pp_reentry_eod(
             # Realized P&L from the standalone overlay book
             realized_pnl = get_strategy_realized_pnl(store, STRATEGY_OVERLAY)
             ivr_str = escape_markdown(f"{ivr:.2f}")
-            realized_pnl_str = escape_markdown(f"{realized_pnl:+,.0f}")
+
+            v = Decimal(str(realized_pnl))
+            if v > 0:
+                realized_pnl_str = escape_markdown(f"+{format_money(v)}")
+            else:
+                realized_pnl_str = escape_markdown(format_money(v))
+
             msg = (
                 f"{escape_markdown('🟢 PP RE-ENTRY ELIGIBLE — standalone overlay')}\n"
                 f"{escape_markdown('IVR    : ')}{ivr_str} "
                 f"{escape_markdown('(passes reentry threshold)')}\n"
                 f"{escape_markdown('Status : No open PP → ELIGIBLE')}\n"
                 f"{escape_markdown('Action : Run find_overlay_strikes.py --overlay-type pp to initiate manually')}\n"
-                f"{escape_markdown('Overlay P&L (total realized): ₹')}{realized_pnl_str}"
+                f"Overlay P&L {escape_markdown('(total realized)')}: {realized_pnl_str}"
             )
             await notifier.send(msg)
     except Exception as exc:

@@ -316,7 +316,7 @@ def test_baseline_has_no_duplicate_or_unused_entries():
 @pytest.mark.parametrize(
     "file_rel, line",
     [
-        ("src/strategy/auto_close.py", 347),
+        ("src/strategy/auto_close.py", 360),
         ("src/strategy/cc_overlay_v1.py", 382),
         ("src/strategy/pp_overlay_v1.py", 395),
         ("src/strategy/collar_overlay_v1.py", 601),

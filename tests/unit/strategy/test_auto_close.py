@@ -156,7 +156,7 @@ async def test_auto_close_overlay_cc_profit_target(
     await asyncio.sleep(0.1)
     notifier.send.assert_called_once()
     msg = notifier.send.call_args[0][0]
-    assert "CC CLOSED" in msg
+    assert "*CC closed" in msg
     assert "NIFTY 23000 CE 25 JUN 26" in msg
     assert "NSE_FO|NIFTY23000CE" not in msg
 
@@ -248,7 +248,7 @@ async def test_auto_close_overlay_collar_put_pnl_uses_preclose_qty(
     net_qty already flattened to 0. auto_close_overlay() must snapshot the
     put leg's qty/entry *before* invoking close_collar_all(), matching what
     it already does for the call leg via the pre-close `pos` parameter.
-    Bug found analyzing a real Telegram COLLAR CLOSED message that showed
+    Bug found analyzing a real Telegram *Collar closed message that showed
     the put leg's realized loss as "₹-0".
     """
     call_key = "NSE_FO|NIFTY65900CE"
@@ -350,12 +350,12 @@ async def test_auto_close_overlay_collar_put_pnl_uses_preclose_qty(
 
     notifier.send.assert_called_once()
     msg = notifier.send.call_args[0][0]
-    assert "COLLAR CLOSED" in msg
-    # Put leg lost ~(26.15-141.90)*65 = -7,523.75 -> displayed as -7,524.
+    assert "*Collar closed" in msg
+    # Put leg lost ~(26.15-141.90)*65 = -7,523.75 -> displayed as -7,523.75.
     # Before the fix this rendered as "→ ₹-0".
-    assert "₹\\-7,524" in msg
+    assert "\\-₹7,523\\.75" in msg
     assert "paper\\_nifty\\_futures" in msg
-    assert "₹\\-0\n" not in msg
+    assert "₹0\\.00\n" not in msg
 
 
 @pytest.mark.asyncio
@@ -368,7 +368,7 @@ async def test_auto_close_overlay_collar_write_failure_sends_failed_not_closed(
     failure internally (log + notify via its own always-None notifier) and
     returned None either way. auto_close_overlay() never checked a return
     value, so it unconditionally proceeded to compute pre-close P&L and send
-    a plausible-looking "COLLAR CLOSED" message even though the DB write
+    a plausible-looking "*Collar closed" message even though the DB write
     failed and both legs were still open. This is worse than the ₹-0 bug it
     replaced: a real-looking loss for a close that never happened.
     """
@@ -480,7 +480,7 @@ async def test_auto_close_overlay_collar_write_failure_sends_failed_not_closed(
     notifier.send.assert_called_once()
     msg = notifier.send.call_args[0][0]
     assert "AUTO\\-CLOSE FAILED" in msg  # MarkdownV2-escaped hyphen
-    assert "COLLAR CLOSED" not in msg
+    assert "*Collar closed" not in msg
     # MD-7.3: strategy_name ("paper_nifty_futures") is underscore-bearing —
     # mdcode() must survive it intact inside a code span rather than
     # opening/closing spurious _italic_ entities under MarkdownV2.
@@ -634,6 +634,6 @@ async def test_evaluate_pp_reentry_realized_pnl_reads_overlay_book_only(
 
     notifier.send.assert_called_once()
     msg = notifier.send.call_args[0][0]
-    assert "₹\\+325" in msg  # MarkdownV2-escaped '+'
-    assert "₹-5,000" not in msg
-    assert "₹-4,675" not in msg  # would be the (wrong) summed figure
+    assert "\\+₹325\\.00" in msg  # MarkdownV2-escaped '+'
+    assert "\\-₹5,000\\.00" not in msg
+    assert "\\-₹4,675\\.00" not in msg  # would be the (wrong) summed figure
