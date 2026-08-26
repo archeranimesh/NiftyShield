@@ -425,16 +425,26 @@ def test_comparison_report_long_label_no_collision():
 
     # Values must be right-aligned under their header, not glued to the label.
     # We must measure display width to find the column start
+    header_clean = header_line.replace("\\", "")
+    v1_col_start_idx = header_clean.index("V1 Monthly")
+    v1_col_start = _display_width(header_clean[:v1_col_start_idx])
+
+    def char_at_visual_col(s: str, col: int) -> str:
+        current_col = 0
+        for char in s:
+            width = _display_width(char)
+            if current_col <= col < current_col + width:
+                return char
+            current_col += width
+        return ""
+
     for line in data_lines:
         clean_line = line.replace("\\", "")
-        # The character index corresponding to the display width `v1_col_start` minus 1
-        # It's easier to just check that the string has a space at the correct visual column,
-        # but since string index != visual column when emojis are present, let's just ensure
-        # the label and the first value are separated by spaces.
-        # As long as there is a sequence of 2+ spaces before the value, it's not colliding.
-        import re
-
-        assert re.search(r" {2,}", clean_line) is not None, f"possible collision in {clean_line!r}"
+        # The visual column right before the V1 header's start must be part of the label's
+        # trailing padding (space) or the value's leading padding, ensuring no collision.
+        assert char_at_visual_col(clean_line, v1_col_start - 1) == " " or v1_col_start == 0, (
+            f"possible collision in {clean_line!r}"
+        )
 
 
 def test_column_width_derived_not_hand_counted():
