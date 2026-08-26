@@ -757,6 +757,7 @@ def test_apply_action_close_full_auto_execute_sends_close_notification() -> None
     assert "LOSS\\_STOP" in message
     assert "short\\\\_put" not in message
     assert _STRATEGY_NAME in message
+    assert r"₹30\.00" in message
 
 
 def test_apply_action_close_full_auto_execute_without_broker_skips_persist_no_raise() -> None:
