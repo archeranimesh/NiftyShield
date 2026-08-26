@@ -198,7 +198,6 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "scripts/position_health_check.py",
         135,
     ): "ROLL-12 - format confirmed, real code not yet migrated",
-
     (
         "scripts/strategies/three_track/paper_3track_entry.py",
         940,
@@ -318,7 +317,7 @@ def test_baseline_has_no_duplicate_or_unused_entries():
     "file_rel, line",
     [
         ("src/strategy/auto_close.py", 347),
-        ("src/strategy/cc_overlay_v1.py", 381),
+        ("src/strategy/cc_overlay_v1.py", 382),
         ("src/strategy/pp_overlay_v1.py", 394),
         ("src/strategy/collar_overlay_v1.py", 600),
         ("src/strategy/collar_overlay_v1.py", 602),

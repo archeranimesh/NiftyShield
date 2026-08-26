@@ -643,6 +643,9 @@ def test_apply_action_close_cc_notification_uses_formatted_label() -> None:
     msg = mock_notifier.send_notification.call_args[0][0]
     assert "NIFTY 24000 CE 07 JUL 26" in msg
     assert "NSE_FO|65900" not in msg
+    assert "24\\.00" in msg
+    assert "80\\.00" in msg
+    assert "\\+0\\.20" in msg
 
 
 def test_apply_action_close_cc_notification_falls_back_when_unresolvable() -> None:
@@ -757,5 +760,5 @@ def test_apply_action_close_cc_escapes_signal_name() -> None:
 
     notifier.send_notification.assert_called_once()
     msg = notifier.send_notification.call_args[0][0]
-    assert "CLOSE" in msg
+    assert "closed" in msg
     assert "PROFIT\\_TARGET\\_CC" in msg
