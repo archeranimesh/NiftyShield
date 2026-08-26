@@ -63,7 +63,7 @@
           `format_strike`/`format_pct` (FMT-2/FMT-3) — full spec in `stories.md` ROLL-1 | Blocked
           by: ROLL-1a, ROLL-1b | Owner: Claude | Model: Sonnet | Review: none — 5-variant header
           rendering across timeframe/version combos needs real formatting judgment, not delegation
-- [ ] **ROLL-2** — Migrate IC monthly comparison report
+- [x] **ROLL-2** — Migrate IC monthly comparison report
       (`scripts/strategies/ic/paper_ic_monthly_comparison.py`) to a single fenced comparison
       table; adds Legs row (`open_pos`, already available), Bkd P&L (I) (via
       `get_strategy_realized_pnl()` — NOT `paper_nav_snapshots.realized_pnl`'s raw row, which
@@ -163,7 +163,7 @@
           strategy_name) -> Decimal` confirmed unchanged 2026-08-26.
           Resolution: (1) -> decision (1) consume `PnLReport`; (2) -> decision (2) uniform
           latest-row-at-or-before-`as_of`; (3) -> decision (3) recorded as accepted.
-    - [ ] **ROLL-2c** — The port itself: `build_comparison_report()` -> one fenced row-groups table
+    - [x] **ROLL-2c** (SHA: a2fbe31) — The port itself: `build_comparison_report()` -> one fenced row-groups table
           via ROLL-2a's builder + MarkdownV2 `parse_mode`; Legs row (`len(open_pos)` threaded
           through `build_stats()` into `ICMonthlyStats.open_leg_count`, rendered `n/4` with a `🔴`
           suffix when `n < 4` — `open_pos` confirmed still `build_stats()`'s first line,
