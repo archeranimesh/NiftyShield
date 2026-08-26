@@ -43,6 +43,7 @@ from src.config import settings
 from src.instruments.lookup import InstrumentLookup
 from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
+from src.notifications.formatting import format_money
 from src.notifications.markdown import escape_markdown, mdcode
 from src.paper.constants import DEFAULT_BOD_PATH
 from src.paper.models import PaperPosition, TradeState
@@ -607,7 +608,7 @@ class CSPNiftyV1(ReEntryMixin):
                 f"🔄 *{escape_markdown('CSP rolled down-and-out')}*\n"
                 f"Closed: {mdcode(short_put.instrument_key)}\n"
                 f"Opened: {mdcode(result.new_instrument_key)}\n"
-                f"New credit: {escape_markdown(str(result.new_price))}"
+                f"New credit: {escape_markdown(format_money(result.new_price))}"
             )
         except Exception as exc:
             log.error("csp_nifty_v1._roll_down.failed", error=str(exc))
@@ -633,7 +634,7 @@ class CSPNiftyV1(ReEntryMixin):
         await self._send_notification(
             f"✅ *CSP closed — {escape_markdown(triggering)}*\n"
             f"Instrument: {mdcode(closed_pos.instrument_key)}\n"
-            f"{escape_markdown('New position opened.  Re-entry eligibility check written ')} "
+            f"{escape_markdown('New position opened.  Re-entry eligibility check written')} "
             f"{escape_markdown('to paper_exit_events.')}"
         )
 

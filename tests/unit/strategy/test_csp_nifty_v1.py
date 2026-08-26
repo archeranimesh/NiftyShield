@@ -1266,3 +1266,98 @@ def test_apply_action_close_and_wait_escapes_signal() -> None:
     notifier_mock.send_notification.assert_called_once()
     msg = notifier_mock.send_notification.call_args[0][0]
     assert "CLOSE\\_WAIT\\_TEST" in msg
+
+
+@patch("src.instruments.lookup.InstrumentLookup.from_file")
+def test_roll_down_notification_format(mock_lookup: MagicMock) -> None:
+    """Verify that _roll_down produces correct Markdown formatting using format_money."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from src.strategy.csp_nifty_v1 import CSPNiftyV1
+
+    broker_mock = AsyncMock()
+    store_mock = MagicMock()
+    notifier_mock = AsyncMock()
+
+    strategy = CSPNiftyV1(broker=broker_mock, store=store_mock, notifier=notifier_mock)
+    pos = _make_position()
+
+    with patch("src.strategy.csp_nifty_v1.roll_down_and_out", new_callable=AsyncMock) as mock_roll:
+        mock_result = MagicMock()
+        mock_result.new_instrument_key = "NSE_FO|NIFTY_NEW"
+        mock_result.new_price = Decimal("123.45")
+        mock_roll.return_value = mock_result
+
+        _run(strategy._roll_down(short_put=pos, remaining=[], today=date.today()))
+
+    notifier_mock.send_notification.assert_called_once()
+    msg = notifier_mock.send_notification.call_args[0][0]
+
+    assert r"🔄 *CSP rolled down\-and\-out*" in msg
+    assert f"Closed: `{pos.instrument_key}`" in msg
+    assert r"Opened: `NSE_FO|NIFTY_NEW`" in msg
+    assert r"New credit: ₹123\.45" in msg
+
+
+@patch("src.instruments.lookup.InstrumentLookup.from_file")
+def test_open_new_error_notification_format(mock_lookup: MagicMock) -> None:
+    """Verify that _open_new formats error messages correctly when open_new_csp_leg fails."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from src.strategy.csp_nifty_v1 import CSPNiftyV1
+
+    broker_mock = AsyncMock()
+    store_mock = MagicMock()
+    notifier_mock = AsyncMock()
+
+    strategy = CSPNiftyV1(broker=broker_mock, store=store_mock, notifier=notifier_mock)
+    pos = _make_position()
+
+    with patch("src.strategy.csp_nifty_v1.open_new_csp_leg", new_callable=AsyncMock) as mock_open:
+        mock_open.side_effect = Exception("Test_Error_123")
+
+        _run(strategy._open_new(positions=[pos], today=date.today()))
+
+    notifier_mock.send_notification.assert_called_once()
+    msg = notifier_mock.send_notification.call_args[0][0]
+
+    assert r"⚠️ *CSP open\_new failed*" in msg
+    assert r"Error: Test\_Error\_123" in msg
+    assert r"Manual entry required via `record_paper_trade.py`" in msg
+
+
+def test_reentry_notification_format() -> None:
+    """Verify that _reentry_notification formats the close confirmation correctly."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from src.strategy.csp_nifty_v1 import CSPNiftyV1
+    from src.strategy.protocol import ApprovedAction, LegClose
+
+    broker_mock = AsyncMock()
+    store_mock = MagicMock()
+    notifier_mock = AsyncMock()
+
+    strategy = CSPNiftyV1(broker=broker_mock, store=store_mock, notifier=notifier_mock)
+    pos = _make_position()
+
+    action = ApprovedAction(
+        action_type="CLOSE_AND_WAIT",
+        legs_to_close=[LegClose(leg_role="short_put")],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+        metadata={"triggering_signal": "TEST_TRIGGER_123"},
+    )
+
+    with patch.object(strategy, "_check_reentry", new_callable=AsyncMock):
+        _run(strategy._reentry_notification(closed_pos=pos, action=action))
+
+    notifier_mock.send_notification.assert_called_once()
+    msg = notifier_mock.send_notification.call_args[0][0]
+
+    assert r"✅ *CSP closed — TEST\_TRIGGER\_123*" in msg
+    assert f"Instrument: `{pos.instrument_key}`" in msg
+    assert (
+        r"New position opened\.  Re\-entry eligibility check written to paper\_exit\_events\."
+        in msg
+    )
