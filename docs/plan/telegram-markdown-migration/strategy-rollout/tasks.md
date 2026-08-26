@@ -185,7 +185,7 @@
       | Files: `src/strategy/csp_nifty_v1.py`
       | Tests: `tests/unit/strategy/test_csp_nifty_v1.py`
 
-- [ ] **ROLL-3.2** — IC family: migrate close/roll notifications | Blocked by: ROLL-2 | Phase A (V1) SHA: 76f311a
+- [x] **ROLL-3.2** — IC family: migrate close/roll notifications | Blocked by: ROLL-2 | Phase A (V1) SHA: 76f311a, Phase B (V2) SHA: e032e28
       | Owner: Antigravity | Model: n/a | Review: **real @code-reviewer, Opus — mandatory**
       — same shape as MD-3, mechanical once ROLL-2's format is locked, financial-logic gate
       still applies. v1/v2 kept together — they already share message shape per ROLL-2's
