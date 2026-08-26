@@ -7,7 +7,7 @@
 **Related files:** [MISSION.md](MISSION.md) — immutable mission + grounding principles | [DECISIONS.md](DECISIONS.md) | [REFERENCES.md](REFERENCES.md) | [TODOS.md](TODOS.md) | [PLANNER.md](PLANNER.md) | [BACKTEST_PLAN.md](BACKTEST_PLAN.md) — Phase 0 active tasks only (~300 lines) | [BACKTEST_PLAN_PHASE1.md](BACKTEST_PLAN_PHASE1.md) — Phase 1+ tasks (load only after Phase 0.8 gate) | [LITERATURE.md](LITERATURE.md) — concept reference (Kelly, Sharpe, meta-labeling) | [LOGGING.md](LOGGING.md) — logging standard | [docs/plan/](docs/plan/) — one story file per task | [INSTRUCTION.md](INSTRUCTION.md)
 ---
 
-## Current State (as of 2026-05-25)
+## Current State (as of 2026-08-26)
 
 ### What Exists (committed and working)
 
@@ -76,7 +76,6 @@ Scripts (under `scripts/` structured into functional axis):
 ### What Does NOT Exist Yet
 
 - `src/execution/`, `src/streaming/` — empty (planned per BACKTEST_PLAN.md Phase 1–2)
-- `src/gamma/` script logic (`gamma_daily_watch.py`) — planned for Phase A next (scaffolding and store implemented in Task B1)
 - PT-S2 Signal Pipeline (`src/strategy/signal_pipeline.py`) — blocked on signals story + OpenRouter API key
 
 ### Live Data
@@ -140,7 +139,7 @@ Strategy leg tables (instrument keys, entry prices, quantities, protected MF por
 
 ## Test Coverage
 
-- **Total: ~1559 tests** (includes CH-9b hypothesis property tests: 19 @given tests across `test_ivr_hypothesis.py`, `test_delta_hypothesis.py`, `test_pnl_hypothesis.py`) (paper module: 92 tests across Phases A–D all passing; 6 new expiry-candidate tests in `tests/unit/instruments/test_expiry_candidates.py`; strategy module exit-signals additions: `test_exit_signals.py` 20 tests, `test_cc_overlay_v1.py` 11, `test_pp_overlay_v1.py` 10, `test_collar_overlay_v1.py` 11, `test_overlay_closer.py` 10, `test_csp_nifty_v1.py` 29; pre-existing failures in `test_upstox_live.py` + `test_mock_client.py` — `pytest-asyncio` not installed in sandbox, not code regressions)
+- **Total: ~2982 tests** (2980 passed, 2 skipped — live `pytest tests/unit/` run, 2026-08-26 md-cleanup reorg). Per-module breakdown below is a historical snapshot, not re-verified this pass. Earlier snapshot included CH-9b hypothesis property tests: 19 @given tests across `test_ivr_hypothesis.py`, `test_delta_hypothesis.py`, `test_pnl_hypothesis.py`) (paper module: 92 tests across Phases A–D all passing; 6 new expiry-candidate tests in `tests/unit/instruments/test_expiry_candidates.py`; strategy module exit-signals additions: `test_exit_signals.py` 20 tests, `test_cc_overlay_v1.py` 11, `test_pp_overlay_v1.py` 10, `test_collar_overlay_v1.py` 11, `test_overlay_closer.py` 10, `test_csp_nifty_v1.py` 29; pre-existing failures in `test_upstox_live.py` + `test_mock_client.py` — `pytest-asyncio` not installed in sandbox, not code regressions)
 - Run: `python -m pytest tests/unit/`
 - Auth tests: `tests/unit/auth/` (64 tests — Nuvama login + verify, Dhan login + verify)
 - MF tests: `tests/unit/mf/` (127 tests)

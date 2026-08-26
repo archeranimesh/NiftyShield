@@ -75,34 +75,46 @@ NiftyShield/
 │   │   ├── upstox_market.py   # Analytics Token market data (legacy)
 │   │   ├── mock_client.py     # Stateful offline mock
 │   │   └── factory.py         # Composition root (sole concrete importer)
-│   ├── models/            # Shared Pydantic models (portfolio + mf)
+│   ├── models/            # Shared Pydantic models (option chain, portfolio, mf)
 │   ├── portfolio/         # Strategy P&L, daily snapshots, trade ledger
 │   ├── paper/             # Paper trading — PaperTrade, PaperStore, PaperTracker
+│   ├── strategy/          # Paper-backbone strategies — CSP/CC/PP/Collar/Iron Condor V1+V2, StrategyMonitor, exit-signal engine
+│   ├── risk/              # Portfolio delta gating — PortfolioDeltaTracker, entry gate
+│   ├── backtest/          # IVR, VIX ingestion, EOD/intraday chain Parquet writer+reader
+│   ├── gamma/             # Near-Expiry Gamma Buy — chain snapshot model + store
+│   ├── council/           # LLM Council client (RapidCouncil) — stage-1 fan-out + chairman synthesis
 │   ├── mf/                # MF transaction ledger, AMFI NAV fetcher
 │   ├── dhan/              # Dhan equity/bond holdings + Upstox LTP enrichment
 │   ├── nuvama/            # Nuvama bond holdings + options P&L
-│   ├── instruments/       # Offline BOD instrument fuzzy lookup
+│   ├── instruments/       # BOD instrument lookup, expiry/strike resolution
 │   ├── market_calendar/   # NSE holiday calendar (YAML-backed, fail-open)
-│   ├── notifications/     # Telegram notifier (non-fatal, HTML parse_mode)
-│   ├── utils/             # Number formatting, config helpers
+│   ├── notifications/     # Telegram notifier (non-fatal, MarkdownV2 parse_mode)
+│   ├── intraday/          # Intraday monitoring orchestration (Dhan + Nuvama)
+│   ├── utils/             # Structured logging, number formatting, config helpers
+│   ├── config.py          # Settings singleton (pydantic-settings) — import, never os.getenv
 │   ├── db.py              # Shared SQLite context manager (WAL, FK, Row factory)
-│   ├── strategy/          # [empty — planned Phase 2 Track A]
-│   ├── execution/         # [empty — planned Q3 2026 post static IP]
-│   ├── backtest/          # [empty — planned Phase 1 Q4 2026]
-│   └── risk/              # [empty — planned Q3 2026]
+│   ├── execution/         # [empty — planned Phase 1–2, see BACKTEST_PLAN.md]
+│   └── streaming/         # [empty — planned Phase 1–2, see BACKTEST_PLAN.md]
 ├── scripts/
-│   ├── daily_snapshot.py          # Main EOD cron (15:45 IST, Mon–Fri)
-│   ├── morning_nav.py             # Pre-market AMFI NAV fetch (09:15 IST)
-│   ├── nuvama_intraday_tracker.py # 5-min M2M/Spot bounds (*/5 09:00–15:00)
-│   ├── record_trade.py            # CLI: insert a live trade row
-│   ├── record_paper_trade.py      # CLI: insert a paper trade row (paper_ prefix)
-│   ├── paper_snapshot.py          # Standalone paper mark-to-market
-│   ├── validate_strategy_spec.py  # Validates docs/strategies/*.md required sections
-│   ├── roll_leg.py                # CLI: atomic close + open for expiry rolls
-│   ├── ask_council.py             # CLI: submit questions to llm-council (online or offline)
-│   └── seed_*.py                  # One-time DB seeding scripts
+│   ├── pipeline/          # EOD/intraday chain snapshot, gamma watch, bhavcopy bootstrap
+│   ├── lookup/            # Strike-by-delta finder, instrument BOD lookup
+│   ├── record/            # Paper/live trade recording CLIs
+│   ├── strategies/        # Per-strategy entry/roll/snapshot scripts (csp/, ic/, three_track/, cc_calibration/)
+│   ├── portfolio/         # Live portfolio P&L crons (daily_snapshot, morning_nav, paper_snapshot, roll_leg, backup_db)
+│   ├── intraday/          # Intraday tracker crons (Dhan + Nuvama)
+│   ├── reporting/         # Paper P&L report builder
+│   ├── seed/              # One-time DB seed scripts
+│   ├── council/           # ask_council.py CLI + templates
+│   ├── dev/               # Diagnostics, one-off migrations, backfills
+│   ├── cron/              # Cron line references
+│   ├── healthcheck.py           # Dead man's switch for EOD cron validation
+│   ├── monitor_daemon.py        # StrategyMonitor daemon main loop
+│   ├── position_health_check.py # Roll-overdue / unmapped-asset alert cron
+│   ├── pre_market_brief.py      # Pre-market summary cron
+│   ├── eod_summary.py           # EOD P&L summary cron
+│   └── start_monitor.py / stop_monitor.py  # Daemon launcher / shutdown
 ├── tests/
-│   ├── unit/              # ~1010 offline tests (default — no network)
+│   ├── unit/              # ~2980 offline tests (default — no network, no real tokens)
 │   └── fixtures/          # Recorded API responses (JSON)
 ├── data/
 │   └── portfolio/         # portfolio.sqlite (live DB — gitignored)
@@ -110,7 +122,8 @@ NiftyShield/
 │   ├── plan/              # Per-story task files + swing/investment research pipelines
 │   ├── strategies/        # Strategy spec documents (csp_nifty_v1.md, etc.)
 │   ├── council/           # Council decision files + README workflow
-│   └── archive/           # Completed plans, archived TODOs, old agents
+│   ├── bugs/              # Open defect tracker (bugs.md / task.md / prompt.md)
+│   └── archive/           # Completed plans, archived TODOs, old agents, closed bugs
 ├── .env.example
 ├── requirements.txt
 ├── requirements-dev.txt
@@ -630,12 +643,12 @@ All backtesting runs **fully offline** against local Parquet/SQLite stores. No A
 - [x] CSP v1 strategy spec — `docs/strategies/csp_nifty_v1.md` (Nifty 50 index options, R1–R7)
 - [x] NiftyShield integrated strategy spec — `docs/strategies/niftyshield_integrated_v1.md`
 - [x] `find_strike_by_delta.py` — live chain → |delta| filter → strike/IV/key table + `--dry-run` record_paper_trade commands (2026-05-03)
-- [ ] Historical data pipeline (active + expired instruments)
-- [ ] Backtesting engine (`src/backtest/`) — Q4 2026
-- [ ] Strategy engine (`src/strategy/`) — Q3 2026
-- [ ] Delta-neutral adjustment + risk manager (`src/risk/`) — Q3 2026
+- [x] Historical data pipeline — VIX ingestion (`src/backtest/vix_ingest.py`) + EOD/intraday option chain Parquet writer/reader (`src/backtest/chain_writer.py`/`chain_reader.py`)
+- [x] Backtest analytics module (`src/backtest/`) — IVR computation, chain data pipeline (the full multi-phase backtest engine — portfolio construction, live promotion — remains in progress, see `BACKTEST_PLAN_PHASE1.md`, **P0**)
+- [x] Strategy engine (`src/strategy/`) — CSP/CC/PP/Collar overlays, Iron Condor V1+V2, `StrategyMonitor`, exit-signal engine; paper-trading backbone live since 2026-07
+- [x] Portfolio delta risk manager (`src/risk/`) — `PortfolioDeltaTracker`, entry gate, warning/cap thresholds
 - [ ] Order execution engine (`src/execution/`) — blocked (static IP)
-- [ ] Websocket streaming + replay (`src/streaming/`) — Q3 2026
+- [ ] Websocket streaming + replay (`src/streaming/`) — Phase 1–2, see `BACKTEST_PLAN.md`
 
 ---
 
