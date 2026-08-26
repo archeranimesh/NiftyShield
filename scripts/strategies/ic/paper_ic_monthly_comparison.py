@@ -23,6 +23,7 @@ from src.client.factory import create_client
 from src.client.upstox_market import parse_upstox_option_chain
 from src.config import settings
 from src.instruments.lookup import InstrumentLookup, parse_expiry
+from src.notifications.formatting import build_compare_table
 from src.notifications.markdown import escape_markdown
 from src.notifications.telegram_gateway import TelegramGateway
 from src.paper.constants import DEFAULT_BOD_PATH, DEFAULT_DB_PATH
@@ -314,6 +315,9 @@ def build_comparison_report(v1: ICMonthlyStats, v2: ICMonthlyStats, report_date:
             return "—"
         return ", ".join(sigs)
 
+    def fmt_legs(n: int) -> str:
+        return f"{n}/4🔴" if n < 4 else f"{n}/4"
+
     # Edge calculation
     v1_total = v1.realized_pnl_month + v1.unrealized_pnl
     v2_total = v2.realized_pnl_month + v2.unrealized_pnl
@@ -339,72 +343,64 @@ def build_comparison_report(v1: ICMonthlyStats, v2: ICMonthlyStats, report_date:
     def safe_col(val: str, is_open: bool) -> str:
         return val if is_open else "No open position"
 
-    # TGFMT-1: dynamic label/column widths, right-aligned value columns.
-    # Previous implementation hand-counted literal spaces per label to hit a
-    # fixed budget plus fixed :<15 value-column widths — both broke silently
-    # the moment a label/value exceeded what was counted by hand at write
-    # time (reproduced live with long labels colliding into the value
-    # column). Widths below are always derived from actual content via
-    # max(len(...)), never a hand-typed literal — correct by construction
-    # for any row/label set.
-    rows: list[tuple[str, str, str]] = [
-        (
-            "Entry credit",
-            safe_col(fmt_pts(v1.entry_credit_pts), v1_open),
-            safe_col(fmt_pts(v2.entry_credit_pts), v2_open),
-        ),
-        (
-            "Captured",
-            safe_col(fmt_pct(v1.captured_fraction), v1_open),
-            safe_col(fmt_pct(v2.captured_fraction), v2_open),
-        ),
-        (
-            "Short put Δ",
-            safe_col(fmt_delta(v1.short_put_delta), v1_open),
-            safe_col(fmt_delta(v2.short_put_delta), v2_open),
-        ),
-        (
-            "Short call Δ",
-            safe_col(fmt_delta(v1.short_call_delta), v1_open),
-            safe_col(fmt_delta(v2.short_call_delta), v2_open),
-        ),
-        ("DTE", safe_col(fmt_dte(v1.dte), v1_open), safe_col(fmt_dte(v2.dte), v2_open)),
-        ("Unrealized P&L", fmt_pnl(v1.unrealized_pnl), fmt_pnl(v2.unrealized_pnl)),
-        ("Realized (month)", fmt_pnl(v1.realized_pnl_month), fmt_pnl(v2.realized_pnl_month)),
-        (
-            "Profit-lock zone",
-            safe_col(fmt_zone(v1.profit_lock_zone, False), v1_open),
-            safe_col(fmt_zone(v2.profit_lock_zone, True), v2_open),
-        ),
-        (
-            "Adjustments",
-            safe_col(fmt_adj(True, v1.roll_count, v1.lock_count), v1_open),
-            safe_col(fmt_adj(False, v2.roll_count, v2.lock_count), v2_open),
-        ),
-        ("Signals today", fmt_sigs(v1.signals_fired_today), fmt_sigs(v2.signals_fired_today)),
+    groups: list[list[tuple[str, str, str]]] = [
+        [
+            (
+                "Entry credit",
+                safe_col(fmt_pts(v1.entry_credit_pts), v1_open),
+                safe_col(fmt_pts(v2.entry_credit_pts), v2_open),
+            ),
+            (
+                "Captured",
+                safe_col(fmt_pct(v1.captured_fraction), v1_open),
+                safe_col(fmt_pct(v2.captured_fraction), v2_open),
+            ),
+            (
+                "Short put Δ",
+                safe_col(fmt_delta(v1.short_put_delta), v1_open),
+                safe_col(fmt_delta(v2.short_put_delta), v2_open),
+            ),
+            (
+                "Short call Δ",
+                safe_col(fmt_delta(v1.short_call_delta), v1_open),
+                safe_col(fmt_delta(v2.short_call_delta), v2_open),
+            ),
+            ("DTE", safe_col(fmt_dte(v1.dte), v1_open), safe_col(fmt_dte(v2.dte), v2_open)),
+        ],
+        [
+            (
+                "Legs",
+                safe_col(fmt_legs(v1.open_leg_count), v1_open),
+                safe_col(fmt_legs(v2.open_leg_count), v2_open),
+            ),
+            (
+                "Flt P&L (M)",
+                fmt_pnl(v1.unrealized_pnl_month_change),
+                fmt_pnl(v2.unrealized_pnl_month_change),
+            ),
+            ("Bkd P&L (M)", fmt_pnl(v1.realized_pnl_month), fmt_pnl(v2.realized_pnl_month)),
+            ("Flt P&L (I)", fmt_pnl(v1.unrealized_pnl), fmt_pnl(v2.unrealized_pnl)),
+            ("Bkd P&L (I)", fmt_pnl(v1.inception_realized_pnl), fmt_pnl(v2.inception_realized_pnl)),
+        ],
+        [
+            (
+                "Lock Zone",
+                safe_col(fmt_zone(v1.profit_lock_zone, False), v1_open),
+                safe_col(fmt_zone(v2.profit_lock_zone, True), v2_open),
+            ),
+            (
+                "Adjustments",
+                safe_col(fmt_adj(True, v1.roll_count, v1.lock_count), v1_open),
+                safe_col(fmt_adj(False, v2.roll_count, v2.lock_count), v2_open),
+            ),
+            ("Signals", fmt_sigs(v1.signals_fired_today), fmt_sigs(v2.signals_fired_today)),
+        ],
     ]
 
-    label_width = max(len(r[0]) for r in rows) + 1  # +1 gap before the columns start
-    col1_width = max(len("V1 Monthly"), max(len(r[1]) for r in rows))
-    col2_width = max(len("V2 Monthly"), max(len(r[2]) for r in rows))
+    header = escape_markdown(f"📊 IC Monthly Comparison — {report_date.isoformat()}")
+    table = build_compare_table(groups, ("V1 Monthly", "V2 Monthly"))
 
-    lines = [
-        escape_markdown(f"📊 IC Monthly Comparison — {report_date.isoformat()}"),
-        "",
-        escape_markdown(
-            f"{'':<{label_width}}{'V1 Monthly':>{col1_width}}  {'V2 Monthly':>{col2_width}}"
-        ),
-        escape_markdown("─" * (label_width + col1_width + col2_width + 2)),
-    ]
-    for label, v1_cell, v2_cell in rows:
-        lines.append(
-            escape_markdown(
-                f"{label:<{label_width}}{v1_cell:>{col1_width}}  {v2_cell:>{col2_width}}"
-            )
-        )
-    lines += ["", edge_line]
-
-    return "\n".join(lines)
+    return f"{header}\n\n```\n{table}\n```\n\n{edge_line}"
 
 
 async def _run(args: argparse.Namespace) -> None:
