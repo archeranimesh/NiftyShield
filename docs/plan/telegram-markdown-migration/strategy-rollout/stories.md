@@ -284,6 +284,84 @@ originally scoped: port the already-correct alignment logic to use
 `formatting-rules/`'s `build_side_by_side_kv_table` (for consistency with every other message
 in this epic) and add Markdown bold/parse_mode — not fix a bug that no longer exists.
 
+**Design review 2026-08-26 (Cowork session) — ROLL-2 split into ROLL-2a/2b/2c.** Three of this
+spec's claims were re-checked against current code via `search_graph`/`get_code_snippet` rather
+than taken from the spec text. Two held, two new problems surfaced:
+
+*Held.* `get_strategy_realized_pnl(store, strategy_name) -> Decimal` (`src/paper/tracker.py:113`)
+is unchanged and still delegates to `_compute_realized_pnl`, which sums `store.get_trades()` —
+the `paper_trades` ledger, exactly as this spec claims. `build_stats()` still computes
+`open_pos = [p for p in positions if p.net_qty != 0]` as its first line, so the Legs row really
+is zero new queries.
+
+*Problem 1 — the table builder does not exist outside `scratch/`.* `build_compare_table` lives
+only in `scratch/2026-08-07_ic_monthly_comparison_telegram_format.py:126`. FMT-3 shipped
+`build_kv_table`/`build_side_by_side_kv_table`/`build_leg_table` into
+`src/notifications/formatting.py` and used `build_compare_table` as a *design reference* without
+porting it (TODOS.md's FMT-3 entry says so explicitly). So this task as originally scoped hides a
+formatting-layer addition inside a strategy-rollout port commit — structurally identical to what
+ROLL-1 hid with FMT-1b/FMT-1c, which is why ROLL-1 was split. **ROLL-2a** is that promotion.
+
+*Problem 2 — FMT-1e vs. this task's confirmed layout, unresolved.* `FORMATTING.md` §7 was
+tightened on 2026-08-25, *after* this layout was confirmed on 2026-08-07: the rule is now "plain
+ASCII inside a fence, plus any symbol individually confirmed safe on-device and listed in §7's
+table," with `Δ` U+0394 the only confirmed exception and `₹` U+20B9 explicitly marked
+**unverified**. This task's confirmed block puts `₹` inside the fence, and the new Legs row wants
+a `🔴` suffix inside the fence — a literal emoji, which §7 has no exception for and which is the
+exact class of glyph that broke `▶`. §7 also forbids extending the exception list by analogy.
+This is a **blocking pre-check on ROLL-2a**, not a ROLL-2c rendering detail: if either glyph
+renders double-width, `max(len(...))` is the wrong width function and the promoted builder needs
+a display-width helper from the start. Resolution path is the one §7 mandates — one live `--send`
+check by Animesh, then update §7's table. Note the 2026-08-07 on-device confirmation arguably
+already settles `₹` (the layout shipped with `₹` inside the fence and read correctly); `🔴` in the
+Legs row was **not** in that confirmed block and has no confirmation at all.
+
+*Problem 3 — SNAP-4 already computes three of the four P&L fields.* Since this spec was written,
+SNAP-4 shipped `scripts/reporting/paper_pnl_report.py::build_pnl_report(store, strategy_name,
+as_of=None) -> PnLReport` — a pure, tested, importable function whose fields are
+`realized_since_inception` (via `get_strategy_realized_pnl`, i.e. exactly this spec's corrected
+`Bkd (I)`), `realized_this_month` (`Bkd (M)`), and `unrealized_since_inception` (`Flt (I)`).
+Only `Flt (M)` is missing. Following this spec literally would build a second, parallel P&L layer
+inside the IC script (raw `sqlite3.connect` reads) alongside a reporting layer that already
+computes the same three quantities from `store.get_nav_snapshots()`. **This is ROLL-2b's first
+decision:** add `unrealized_this_month` to `PnLReport` and have the IC comparison consume one
+report object, or keep the local helpers and consciously accept the duplication. (Note
+`paper_pnl_report.py` currently lives under `scripts/reporting/`, not `src/`, so the "consume it"
+option implies a script-to-script import or a promotion into `src/reporting/` — that cost is part
+of the decision, not a reason to skip it.)
+
+*Problem 4 — `Flt (I)` and `Flt (M)` would read different snapshot rows.* `_get_unrealized_pnl`
+queries `WHERE strategy_name = ? AND snapshot_date = ?` — **exact equality on today**. Whereas
+`_get_monthly_realized_pnl`, the pattern this spec tells the implementer to mirror, queries
+`snapshot_date <= ? ORDER BY snapshot_date DESC LIMIT 1`. Mirroring it blindly means that on any
+day with no snapshot row — a holiday, or the comparison running before the 15:36 `paper_snapshot`
+cron — `Flt (I)` reports `₹0` while `Flt (M)` reports a real non-zero delta off the last available
+row. The two would then differ for a reason that has nothing to do with the mid-month-entry case
+this spec's mandatory `test_flt_month_differs_from_flt_inception` is designed to catch, and the
+test would still pass. ROLL-2b must pick one row-selection convention for both.
+
+*Problem 5 — `Bkd (M)` is left on the column this task corrects `Bkd (I)` away from.* The spec
+correctly moves `Bkd (I)` off `paper_nav_snapshots.realized_pnl` because SNAP-1 found that column
+resets on a full open->close->reopen cycle. `Bkd (M)` (`_get_monthly_realized_pnl`) still reads
+that column, and a reset landing *inside* the current month makes `curr - prev` meaningless.
+SNAP-4 documents the identical gap in `realized_this_month` as a known first-pass limitation.
+ROLL-2b should either fix it or record it in-line as knowingly accepted — shipping a report where
+`Bkd (I)` is cycle-safe and `Bkd (M)` silently isn't, with no note, is worse than either.
+
+*Review-gate routing.* The parent's `real @code-reviewer, Opus — mandatory` gate travels with
+**ROLL-2b and ROLL-2c**, not ROLL-2a: 2a is a pure string-formatting helper with no P&L values in
+it. Unlike MD-4.1/MD-4.2 the three sub-tasks do **not** need to land in one sitting — 2a adds an
+unreferenced helper, 2b adds fields nothing renders yet, and only 2c changes what Telegram sends,
+so no sub-task opens a live-risk window alone.
+
+*Owner split.* ROLL-2a: Claude/Sonnet (FMT-3's standing note says don't delegate width
+computation — this is the TGFMT-1 bug's code path). ROLL-2b: Claude/Opus (five open judgment
+calls above, all P&L-correctness). ROLL-2c: Antigravity (once 2a and 2b land, the port is
+mechanical wiring against a locked format and a fully-enumerated test list) — but keep the
+code-reviewer gate on it because it renders P&L.
+
+---
+
 **Confirmed message structure (2026-08-07, `message-format-workshop.md` session) — reference
 implementation `scratch/2026-08-07_ic_monthly_comparison_telegram_format.py`:**
 

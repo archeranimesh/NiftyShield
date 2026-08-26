@@ -75,6 +75,63 @@
       Review: **real @code-reviewer, Opus — mandatory**. The Bkd/Flt P&L sourcing distinction
       is explicitly flagged as easy to get wrong (must differ from Flt(I)) — the one task in
       this epic worth a second opinion before implementation, not just at the commit gate.
+      **Split into 3 independently-tracked/committed sub-tasks (2026-08-26, Cowork design-review
+      session) — same shape as ROLL-1's split. `build_compare_table`, the row-groups fenced-table
+      builder this task's confirmed layout requires, exists ONLY in
+      `scratch/2026-08-07_ic_monthly_comparison_telegram_format.py` and was never promoted to
+      `src/notifications/formatting.py` (confirmed via `search_graph` 2026-08-26 — FMT-3 shipped
+      `build_kv_table`/`build_side_by_side_kv_table`/`build_leg_table` and used
+      `build_compare_table` only as a design reference, see TODOS.md's FMT-3 entry). A
+      formatting-layer addition riding invisibly inside a strategy-rollout port commit is exactly
+      the ROLL-1a/1b shape. Second reason: the P&L sourcing half has real open questions (see
+      `stories.md`'s 2026-08-26 design-review block) that must not gate the mechanical
+      Legs-row/table plumbing.**
+      **Not a must-land-together group** — unlike MD-4.1/MD-4.2, no sub-task here opens a
+      live-risk window on its own: ROLL-2a adds an unreferenced new helper, ROLL-2b adds fields
+      nothing renders yet, and only ROLL-2c changes what Telegram actually sends. Each may land as
+      its own commit.
+    - [ ] **ROLL-2a** — Promote `build_compare_table` into `src/notifications/formatting.py`
+          (generic row-groups builder over `list[list[tuple[label, v1, v2]]]`, dashed rule between
+          groups, every width via `max(len(...))` and never a hand-counted constant) + tests in
+          `tests/unit/notifications/test_formatting.py` | Blocked by: none
+          | Owner: Claude | Model: Sonnet | Review: none — but per FMT-3's standing note, do not
+          delegate the width computation: this is the exact code path the TGFMT-1
+          hand-counted-width bug lived in.
+          **Blocking pre-check for Animesh before implementation** — the builder's width contract
+          depends on whether cells may hold non-ASCII. `FORMATTING.md` §7 (FMT-1e) records `₹`
+          U+20B9 inside a fence as **unverified** and lists `Δ` U+0394 as the only confirmed
+          exception; ROLL-2's confirmed 2026-08-07 layout puts `₹` inside the fence, and the new
+          Legs row wants a `🔴` suffix inside the fence, which no on-device confirmation covers at
+          all. Needs one live `--send` check, then `FORMATTING.md` §7's table updated with the
+          result. If either glyph renders double-width, `max(len(...))` is the wrong width function
+          and this builder needs a display-width helper — that is a design input to ROLL-2a, not a
+          post-hoc fix to it.
+    - [ ] **ROLL-2b** — P&L sourcing: `Bkd (I)` + `Flt (M)` (`ICMonthlyStats` fields + whichever
+          computation layer the reconciliation below picks) + their tests | Blocked by: none
+          (independent of ROLL-2a) | Owner: Claude | Model: **Opus** | Review: **real
+          @code-reviewer, Opus — mandatory** — the parent task's P&L-adjacent gate travels here.
+          **Spec drift found 2026-08-26, reconcile before writing code** (full detail in
+          `stories.md`): (1) SNAP-4 already shipped
+          `scripts/reporting/paper_pnl_report.py::build_pnl_report()` -> `PnLReport`, a pure tested
+          function already computing `realized_since_inception` (= `Bkd (I)`, via
+          `get_strategy_realized_pnl`), `realized_this_month` (= `Bkd (M)`) and
+          `unrealized_since_inception` (= `Flt (I)`); ROLL-2's spec predates it and re-derives all
+          three locally. (2) `_get_unrealized_pnl` queries `snapshot_date = today` (exact equality)
+          while `_get_monthly_realized_pnl` queries `snapshot_date <= today ORDER BY DESC LIMIT 1`
+          — mirroring the latter blindly makes `Flt (I)` and `Flt (M)` read different rows on any
+          day with no snapshot. (3) `Bkd (M)` stays on `paper_nav_snapshots.realized_pnl`, the same
+          cycle-resetting column SNAP-1 flags and ROLL-2 corrects `Bkd (I)` away from — fix it or
+          record it as accepted, don't leave it silent. `get_strategy_realized_pnl(store,
+          strategy_name) -> Decimal` confirmed unchanged 2026-08-26.
+    - [ ] **ROLL-2c** — The port itself: `build_comparison_report()` -> one fenced row-groups table
+          via ROLL-2a's builder + MarkdownV2 `parse_mode`; Legs row (`len(open_pos)` threaded
+          through `build_stats()` into `ICMonthlyStats.open_leg_count`, rendered `n/4` with a `🔴`
+          suffix when `n < 4` — `open_pos` confirmed still `build_stats()`'s first line,
+          2026-08-26); render ROLL-2b's `Bkd (I)`/`Flt (M)`; all tests listed in `stories.md`
+          | Blocked by: ROLL-2a, ROLL-2b
+          | Owner: Antigravity | Model: n/a | Review: **real @code-reviewer, Opus — mandatory** —
+          mechanical once 2a/2b land, but it renders P&L values, so the financial-logic gate
+          applies here as well as on 2b.
 - [ ] **ROLL-3** — Migrate strategy close/roll notifications (7 classes, same list as
       backbone MD-3) to the new format where it adds value | Blocked by: ROLL-2
       | Owner: Antigravity | Model: n/a | Review: **real @code-reviewer, Opus — mandatory**
