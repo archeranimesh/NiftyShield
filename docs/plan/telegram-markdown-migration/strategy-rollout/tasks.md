@@ -172,14 +172,44 @@
           | Owner: Antigravity | Model: n/a | Review: **real @code-reviewer, Opus — mandatory** —
           mechanical once 2a/2b land, but it renders P&L values, so the financial-logic gate
           applies here as well as on 2b.
-- [ ] **ROLL-3** — Migrate strategy close/roll notifications (7 classes, same list as
-      backbone MD-3) to the new format where it adds value | Blocked by: ROLL-2
+- [ ] **ROLL-3** — Umbrella: migrate strategy close/roll notifications (7 classes, same list
+      as backbone MD-3) to the new format where it adds value | Blocked by: ROLL-2 | Split into
+      ROLL-3.1 / ROLL-3.2 / ROLL-3.3 below (2026-08-26, Animesh — split by strategy family for
+      independent rollback/test cycles, same pattern as MD-4's split) — track completion on the
+      sub-tasks, not this line; check this box only once all three are done.
+
+- [ ] **ROLL-3.1** — CSP family: migrate close/roll notifications | Blocked by: ROLL-2
       | Owner: Antigravity | Model: n/a | Review: **real @code-reviewer, Opus — mandatory**
-      — same shape as MD-3, mechanical per-class once ROLL-2's format is locked, financial-logic
-      gate still applies
+      — same shape as MD-3, mechanical once ROLL-2's format is locked, financial-logic gate
+      still applies
+      | Files: `src/strategy/csp_nifty_v1.py`
+      | Tests: `tests/unit/strategy/test_csp_nifty_v1.py`
+
+- [ ] **ROLL-3.2** — IC family: migrate close/roll notifications | Blocked by: ROLL-2
+      | Owner: Antigravity | Model: n/a | Review: **real @code-reviewer, Opus — mandatory**
+      — same shape as MD-3, mechanical once ROLL-2's format is locked, financial-logic gate
+      still applies. v1/v2 kept together — they already share message shape per ROLL-2's
+      precedent.
+      | Files: `src/strategy/ic_nifty_v1.py`, `src/strategy/ic_nifty_v2.py`
+      | Tests: `tests/unit/strategy/test_ic_nifty_v1.py`, `tests/unit/strategy/test_ic_nifty_v2.py`
+
+- [ ] **ROLL-3.3** — Overlay family: migrate close/roll notifications | Blocked by: ROLL-2
+      | Owner: Antigravity | Model: n/a | Review: **real @code-reviewer, Opus — mandatory**
+      — same shape as MD-3, mechanical once ROLL-2's format is locked, financial-logic gate
+      still applies. `auto_close.py` kept in this group (not split further) because
+      `auto_close_overlay` is the shared generic close-notification path for all three overlay
+      strategies (called from `paper_3track_snapshot._run`'s exit-signal dispatcher) — migrating
+      a single overlay file's own roll-notification method without the shared close path in the
+      same sitting would leave that strategy's close/roll messages in inconsistent formats
+      mid-task.
+      | Files: `src/strategy/cc_overlay_v1.py`, `src/strategy/collar_overlay_v1.py`,
+      `src/strategy/pp_overlay_v1.py`, `src/strategy/auto_close.py`
+      | Tests: `tests/unit/strategy/test_cc_overlay_v1.py`,
+      `tests/unit/strategy/test_collar_overlay_v1.py`, `tests/unit/strategy/test_pp_overlay_v1.py`,
+      `tests/unit/strategy/test_auto_close.py`
 - [ ] **ROLL-4** — Migrate approval-request message formatting
       (`TelegramGateway.send_approval_request`) — coordinate with
-      `telegram-approval-auth-fix` first | Blocked by: ROLL-3
+      `telegram-approval-auth-fix` first | Blocked by: ROLL-3.1, ROLL-3.2, ROLL-3.3
       | Owner: Claude | Model: Sonnet | Review: **real @code-reviewer, Opus — mandatory** —
       auth + interactive keyboard, explicit coordination-check requirement, no delegate-and-forget
 - [ ] **ROLL-6** — Migrate EOD Paper Summary (`scripts/eod_summary.py`) to

@@ -495,14 +495,17 @@ port. Add, specifically:
 
 ---
 
-## ROLL-3 — Strategy Close/Roll Notifications
+## ROLL-3 — Strategy Close/Roll Notifications (umbrella)
 
-**Files to change:** same 7 files as `backbone/` MD-3 —
-`src/strategy/auto_close.py`, `csp_nifty_v1.py`, `cc_overlay_v1.py`, `collar_overlay_v1.py`,
-`ic_nifty_v1.py`, `ic_nifty_v2.py`, `pp_overlay_v1.py`.
+**Split 2026-08-26 (Animesh)** into `ROLL-3.1` (CSP), `ROLL-3.2` (IC v1/v2), `ROLL-3.3`
+(Overlay: CC/Collar/PP + `auto_close.py`) — by strategy family, so a bad diff on one family
+rolls back and re-tests independently instead of the whole 7-file change moving as one unit.
+Same rationale as `backbone/` MD-4's split into MD-4.1/4.2/4.3. This umbrella section only
+carries the rules shared by all three sub-tasks; see each sub-task's own section below for its
+specific file list.
 
-**Scope judgment call, per method — decide, don't force a table everywhere:** these messages
-are typically single-position-event summaries (one leg closed, one roll executed), not
+**Shared scope judgment call, per method — decide, don't force a table everywhere:** these
+messages are typically single-position-event summaries (one leg closed, one roll executed), not
 multi-row tables like the EOD audit. Read each method's current message text before deciding
 whether it benefits from `build_kv_table` (e.g. a close event with several P&L figures) or just
 needs bold headers + `mdcode()`-wrapped identifiers with no table structure at all (e.g. a
@@ -511,15 +514,56 @@ the tooling now exists — match the format to what the message actually needs, 
 `formatting-rules/`'s value formatters (`format_money`, `format_greek`, etc.) regardless of
 whether a table is used.
 
-**Tests:** update each strategy's existing close/roll-notification tests to assert the new
-message structure. Since `MD-3` already added underscore-survival regression tests at the
-escaping layer, these tests can focus on visual/structural correctness (bold markers present,
-correct formatter used per value type) rather than re-proving the escaping itself.
+**Shared test approach:** update each strategy's existing close/roll-notification tests to
+assert the new message structure. Since `MD-3` already added underscore-survival regression
+tests at the escaping layer, these tests can focus on visual/structural correctness (bold
+markers present, correct formatter used per value type) rather than re-proving the escaping
+itself.
 
-**Commit:** `feat(strategy): migrate close/roll notifications to Markdown formatting` (one
-commit per strategy file is also acceptable given 7 files touched — use judgment per
-`CLAUDE.md`'s "typical phase boundaries" guidance; do not bundle all 7 into a single unreviewable
-diff if the changes turn out to be substantial per file)
+---
+
+## ROLL-3.1 — Strategy Close/Roll Notifications: CSP
+
+**Files to change:** `src/strategy/csp_nifty_v1.py`.
+
+Apply the umbrella's shared scope-judgment call and test approach above.
+
+**Commit:** `feat(strategy): migrate CSP close/roll notifications to Markdown formatting`
+
+---
+
+## ROLL-3.2 — Strategy Close/Roll Notifications: IC
+
+**Files to change:** `src/strategy/ic_nifty_v1.py`, `src/strategy/ic_nifty_v2.py`. Kept
+together — v1/v2 already share message shape per `ROLL-2`'s precedent, so migrating them apart
+would risk the two formats drifting.
+
+Apply the umbrella's shared scope-judgment call and test approach above.
+
+**Commit:** `feat(strategy): migrate IC close/roll notifications to Markdown formatting`
+
+---
+
+## ROLL-3.3 — Strategy Close/Roll Notifications: Overlay (CC/Collar/PP + auto_close)
+
+**Files to change:** `src/strategy/cc_overlay_v1.py`, `src/strategy/collar_overlay_v1.py`,
+`src/strategy/pp_overlay_v1.py`, `src/strategy/auto_close.py`.
+
+**Why `auto_close.py` is not split out on its own:** `auto_close_overlay()` is the shared
+generic close-notification path for all three overlay strategies, invoked from
+`paper_3track_snapshot._run`'s exit-signal dispatcher — it is not strategy-specific. Migrating
+one overlay file's own roll-notification method without also touching this shared close path in
+the same sitting would leave that strategy's close and roll messages in inconsistent formats
+mid-task. Each overlay class also carries its own `_send_close_notification` method (e.g.
+`CCOverlayV1._send_close_notification`) distinct from the generic `auto_close.py` path — verify
+which path a given message actually goes through before migrating it.
+
+Apply the umbrella's shared scope-judgment call and test approach above.
+
+**Commit:** `feat(strategy): migrate overlay close/roll notifications to Markdown formatting`
+(one commit per file is also acceptable given 4 files touched — use judgment per `CLAUDE.md`'s
+"typical phase boundaries" guidance; do not bundle all 4 into a single unreviewable diff if the
+changes turn out to be substantial per file)
 
 ---
 

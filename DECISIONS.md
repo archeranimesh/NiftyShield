@@ -2273,3 +2273,30 @@ and MD-7.3 (`auto_close.py`/`overlay_closer.py`, SHA `04b469d`).
 
 **Ref:** `docs/plan/telegram-markdown-migration/backbone/tasks.md` (MD-1…MD-7.3, all checked
 2026-08-25 except MD-5 itself, this docs-close task).
+
+## 2026-08-26 — ROLL-3 split by strategy family (CSP / IC / Overlay)
+
+`strategy-rollout/tasks.md`'s `ROLL-3` ("migrate strategy close/roll notifications, 7 classes")
+split into `ROLL-3.1` (CSP: `csp_nifty_v1.py`), `ROLL-3.2` (IC: `ic_nifty_v1.py` +
+`ic_nifty_v2.py`), `ROLL-3.3` (Overlay: `cc_overlay_v1.py`, `collar_overlay_v1.py`,
+`pp_overlay_v1.py`, `auto_close.py`). Requested by Animesh for independent rollback and
+complete test cycles per family instead of one unreviewable 7-file diff — same rationale as
+`backbone/` MD-4's split into MD-4.1/4.2/4.3 (see entry above).
+
+**Grouping rationale:** by strategy family rather than strictly one-file-one-task.
+`auto_close.py` is kept inside the Overlay group, not split out on its own — `auto_close_overlay()`
+is the shared generic close-notification path for all three overlay strategies (called from
+`paper_3track_snapshot._run`'s exit-signal dispatcher), confirmed via the code graph
+(`trace_path` inbound on `auto_close_overlay`). Migrating one overlay strategy's own
+roll-notification method without also touching this shared close path in the same sitting would
+leave that strategy's close/roll messages in inconsistent formats mid-task. IC v1/v2 kept
+together per `ROLL-2`'s precedent of treating them as one message-shape family.
+
+`ROLL-3` itself becomes an umbrella line, checked only once all three sub-tasks are done — same
+pattern as MD-4. `ROLL-4`'s `Blocked by` updated from `ROLL-3` to `ROLL-3.1, ROLL-3.2, ROLL-3.3`.
+Owner/Model/Review annotations (`Antigravity | n/a | real @code-reviewer, Opus — mandatory`)
+carried forward unchanged to each sub-task — the financial-logic gate applies per sub-task, not
+once at the end.
+
+**Ref:** `docs/plan/telegram-markdown-migration/strategy-rollout/tasks.md` (ROLL-3, ROLL-3.1,
+ROLL-3.2, ROLL-3.3), `strategy-rollout/stories.md` (same sections).
