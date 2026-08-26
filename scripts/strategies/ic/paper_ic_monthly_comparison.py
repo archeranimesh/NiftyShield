@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 # Add project root to sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 
+from scripts.reporting.paper_pnl_report import build_pnl_report
 from src.client.factory import create_client
 from src.client.upstox_market import parse_upstox_option_chain
 from src.config import settings
@@ -56,29 +57,11 @@ class ICMonthlyStats:
     roll_count: int
     lock_count: int
     has_open_position: bool = False
-
-
-def _get_monthly_realized_pnl(store: PaperStore, strategy_name: str, today: date) -> Decimal:
-    start_of_month = date(today.year, today.month, 1)
-    with sqlite3.connect(store.db_path) as conn:
-        conn.row_factory = sqlite3.Row
-        curr_row = conn.execute(
-            """SELECT realized_pnl FROM paper_nav_snapshots
-               WHERE strategy_name = ? AND snapshot_date <= ?
-               ORDER BY snapshot_date DESC LIMIT 1""",
-            (strategy_name, today.isoformat()),
-        ).fetchone()
-
-        prev_row = conn.execute(
-            """SELECT realized_pnl FROM paper_nav_snapshots
-               WHERE strategy_name = ? AND snapshot_date < ?
-               ORDER BY snapshot_date DESC LIMIT 1""",
-            (strategy_name, start_of_month.isoformat()),
-        ).fetchone()
-
-        curr_val = Decimal(curr_row["realized_pnl"]) if curr_row else Decimal("0")
-        prev_val = Decimal(prev_row["realized_pnl"]) if prev_row else Decimal("0")
-        return curr_val - prev_val
+    # ROLL-2b-ii: sourced from build_pnl_report()'s PnLReport, not a local
+    # sqlite helper -- see decisions (1)/(2) in strategy-rollout/tasks.md ROLL-2b.
+    open_leg_count: int = 0
+    inception_realized_pnl: Decimal = Decimal("0")
+    unrealized_pnl_month_change: Decimal = Decimal("0")
 
 
 def _get_cycle_start_date(store: PaperStore, strategy_name: str) -> str | None:
@@ -138,18 +121,6 @@ def _get_signals_today(store: PaperStore, strategy_name: str, today: date) -> li
         return out
 
 
-def _get_unrealized_pnl(store: PaperStore, strategy_name: str, today: date) -> Decimal:
-    with sqlite3.connect(store.db_path) as conn:
-        conn.row_factory = sqlite3.Row
-        row = conn.execute(
-            """SELECT unrealized_pnl FROM paper_nav_snapshots
-               WHERE strategy_name = ? AND snapshot_date = ?
-               LIMIT 1""",
-            (strategy_name, today.isoformat()),
-        ).fetchone()
-        return Decimal(row["unrealized_pnl"]) if row else Decimal("0")
-
-
 def _get_profit_lock_zone(store: PaperStore, strategy_name: str) -> int:
     try:
         state = store.get_profit_lock_state(strategy_name)
@@ -173,8 +144,16 @@ async def build_stats(
     positions = store.get_positions(strategy_name)
     open_pos = [p for p in positions if p.net_qty != 0]
 
-    realized_month = _get_monthly_realized_pnl(store, strategy_name, today)
-    unrealized = _get_unrealized_pnl(store, strategy_name, today)
+    # ROLL-2b-ii: consume PnLReport instead of two local sqlite helpers
+    # (_get_monthly_realized_pnl / _get_unrealized_pnl, both removed) --
+    # decision (1) in strategy-rollout/tasks.md ROLL-2b. realized_pnl_month
+    # and unrealized_pnl keep their pre-existing meaning (Bkd (M) / Flt (I));
+    # inception_realized_pnl and unrealized_pnl_month_change are new.
+    pnl_report = build_pnl_report(store, strategy_name, as_of=today)
+    realized_month = pnl_report.realized_this_month
+    unrealized = pnl_report.unrealized_since_inception
+    inception_realized_pnl = pnl_report.realized_since_inception
+    unrealized_pnl_month_change = pnl_report.unrealized_this_month
     signals_today = _get_signals_today(store, strategy_name, today)
     cycle_start = _get_cycle_start_date(store, strategy_name)
     roll_count, lock_count = _get_adjustment_count(store, strategy_name, cycle_start)
@@ -196,6 +175,9 @@ async def build_stats(
             roll_count=0,
             lock_count=0,
             has_open_position=False,
+            open_leg_count=len(open_pos),
+            inception_realized_pnl=inception_realized_pnl,
+            unrealized_pnl_month_change=unrealized_pnl_month_change,
         )
 
     ic = strategy_cls(broker, store, None, config)
@@ -292,6 +274,9 @@ async def build_stats(
         roll_count=roll_count,
         lock_count=lock_count,
         has_open_position=True,
+        open_leg_count=len(open_pos),
+        inception_realized_pnl=inception_realized_pnl,
+        unrealized_pnl_month_change=unrealized_pnl_month_change,
     )
 
 
