@@ -90,7 +90,7 @@
       live-risk window on its own: ROLL-2a adds an unreferenced new helper, ROLL-2b adds fields
       nothing renders yet, and only ROLL-2c changes what Telegram actually sends. Each may land as
       its own commit.
-    - [ ] **ROLL-2a** — Promote `build_compare_table` into `src/notifications/formatting.py`
+    - [x] **ROLL-2a** (SHA: 3cec4e1) — Promote `build_compare_table` into `src/notifications/formatting.py`
           (generic row-groups builder over `list[list[tuple[label, v1, v2]]]`, dashed rule between
           groups, every width via `max(len(...))` and never a hand-counted constant) + tests in
           `tests/unit/notifications/test_formatting.py` | Blocked by: none
