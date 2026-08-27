@@ -1,4 +1,5 @@
 ---
+name: greeks-analyst
 model: claude-sonnet-4-6
 description: NiftyShield Greeks capture — OptionChain model design, Greeks extraction, fixture-driven analysis
 ---
