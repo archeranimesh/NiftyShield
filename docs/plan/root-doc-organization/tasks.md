@@ -10,7 +10,7 @@ Phase 6 comes last (encodes final state).
   Old prose archived verbatim → `docs/archive/CONTEXT_WHAT_EXISTS_2026-08.md`; `CONTEXT_TREE.md`
   enriched with the missing structural facts (`overlay_coverage.py`, `notifications/formatting.py`,
   Developer + Research tooling sections). Note: `CONTEXT_TREE.md` still has pre-existing >200-char
-  lines — full re-wrap deferred to RDO-5/RDO-6 (RDO-1 DoD gates `CONTEXT.md` only). | SHA: PENDING
+  lines — full re-wrap deferred to RDO-5/RDO-6 (RDO-1 DoD gates `CONTEXT.md` only). | SHA: fd1bd0b
 - [ ] **RDO-2** — AGENTS.md decision + action. **Blocked:** ask Animesh — does any non-Claude
   tool read `AGENTS.md` here? Then delete-and-migrate, or collapse to a <20-line pointer.
 - [ ] **RDO-3** — Create `docs/archive/DECISIONS_ARCHIVE_2026H1.md`, move pre-2026-06-01
