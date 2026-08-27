@@ -74,6 +74,34 @@ this file's Session Log grows large again.
 
 ### 2026-08-27
 
+- **Root state-doc staleness — round 2 of workflow token-optimization.** Problem: root state
+  docs (`CONTEXT.md`, `TODOS.md`, `DECISIONS.md`, `PLANNER.md`, `DB_REGISTRY.md`, …) rot because
+  the only thing forcing an update is `CLAUDE.md` Step 5a — a checklist line, no enforcement,
+  no signal. Three levers: surface / enforce / shrink.
+  - **[x] #1 — surface (done, SHA pending).** New repo hook `.claude/hooks/state_doc_freshness.sh`
+    wired as `SessionStart` in `.claude/settings.json`. Counts `src/`|`scripts/` commits since
+    each state doc last changed; prints a one-line flag for any doc over its threshold
+    (`CONTEXT.md`/`TODOS.md` 15, `CONTEXT_TREE.md`/`DB_REGISTRY.md`/`docs/plan/README.md` 35,
+    `DECISIONS.md`/`PLANNER.md`/`README.md` 40). Zero-maintenance — uses git last-touch, no
+    stamp lines in the docs. Informational, always `exit 0`. Tune thresholds after a week if
+    it's noisy (`DB_REGISTRY.md` currently trips at 36/35 despite a 2-day-old edit).
+  - **[ ] #2 — enforce (next session).** New repo hook `.claude/hooks/doc_update_gate.sh`,
+    PreToolUse matcher `Bash`, detects `git commit`. If `git diff --cached --name-only` has
+    `^(src|scripts)/.*\.py$` but none of `TODOS.md`/`CONTEXT.md`/`DECISIONS.md`/
+    `docs/plan/README.md` → remind on stderr. **v1 `exit 0` (advisory)**; escape hatch
+    `[skip-docs]` in the commit message → silent. Flip to `exit 2` (blocking) only after a
+    week of observing the false-positive rate (pure refactors, multi-commit phases). Repo.
+    Commit: `feat(hooks): remind when a code commit omits state-doc updates`.
+  - **[ ] #3 — shrink (next session, 2 commits).** (a) `TODOS.md` session log → keep open work
+    + last ~5 entries, point older history at `git log --oneline` (the `Why:` lines already
+    carry intent). `CONTEXT.md` test-count → replace the hard `~NNN` with a `pytest -q` pointer
+    (stale the instant a test is added; it's in the ~2.6k/session auto-load). Commit:
+    `docs(root): replace derivable test-count + old session log with pointers`.
+    (b) `DECISIONS.md` (336 KB / 2302 lines) → archive pre-2026 entries to
+    `docs/archive/DECISIONS_pre2026.md`, leave root as 2026-onward + a one-line topic index.
+    Commit: `docs(root): archive pre-2026 DECISIONS entries`. Repo, docs-only, no code-reviewer.
+  - **[ ] #4 — deferred.** `/schedule` a weekly cloud routine running the `md-cleanup` skill.
+    Hold until #1–#3 have run 2 weeks — the SessionStart flag may make manual cadence enough.
 - **Workflow token-optimization** (plan: `~/.claude/plans/this-session-is-for-federated-goose.md`)
   — cut fixed per-session scaffolding cost (~5k tokens on a typical implementation session).
   Changes:
