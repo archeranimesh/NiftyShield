@@ -43,7 +43,7 @@ See `prompt.md` for the skill design.
   Quick-reference row added. RDO-6 already named `.claude/skills/work/SKILL.md` in its re-sync
   scope (added by the RDO-12 triage) — no edit needed; RDO-6 itself is still unshipped.
 
-- [x] **SEP-4** — End-to-end check + close. | Owner: Claude | Model: claude-sonnet-5 | SHA: <pending>
+- [x] **SEP-4** — End-to-end check + close. | Owner: Claude | Model: claude-sonnet-5 | SHA: 42eabb2
   1. One real session: `/work` → Feature → pick item 1 of the 5 → confirm the correct
      `prompt.md` + first unchecked task load and `CLAUDE.md` Step 2b begins.
   2. Repeat for the Bug branch.
