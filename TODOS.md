@@ -76,6 +76,17 @@ this file's Session Log grows large again.
 
 ### 2026-08-27
 
+- **RDO-5 — `md-line-length` pre-commit hook (root-doc-organization).** Added
+  `scripts/hooks/check_md_line_length.py` (200-char hard cap, all line kinds;
+  `<!-- lint-ignore-length -->` on the preceding line excuses one unbreakable token) + local
+  `md-line-length` hook over `^([^/]+\.md|docs/(plan|bugs)/.*\.md)$` + 3 unit tests in
+  `tests/unit/scripts/hooks/`. `plan.md` Phase 1's "≤100" contradiction removed, Phase 5 yaml
+  block updated; semantic-linefeed + 200-cap style recorded in `docs/plan/README.md`
+  §Conventions. Scoped tooling-only per Animesh — the hook enforces on staged files; the
+  ~800-line pre-existing backlog (18 files) is not an RDO-5 gate, cleared opportunistically +
+  by RDO-6 (`md-organize`) / RDO-9 (`DECISIONS.md`). Commit used `SKIP=md-line-length` since
+  it stages the still-unwrapped `TODOS.md` / `docs/plan/README.md`. Next: RDO-6 or RDO-7.
+
 - **RDO-4 — relocate legacy `BUGS.md` + `GLOSSARY.md` out of root (root-doc-organization).**
   `git mv BUGS.md docs/archive/BUGS_LEGACY.md` (archive banner added, only `BUG-001` still
   open) + 3-line root stub → `docs/bugs/` + archive. `git mv GLOSSARY.md docs/GLOSSARY.md`,

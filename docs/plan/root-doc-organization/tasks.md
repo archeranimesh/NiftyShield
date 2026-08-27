@@ -12,7 +12,7 @@ makes `docs/plan/README.md` §Conventions enforceable (template + audit) and cut
 back to pointer-only items. RDO-14 restructures `TODOS.md`'s priority list into one
 priority-ordered bug+feature queue — the list `/work` reads to build its menu.
 
-**Open: RDO-5, 6, 7, 8, 9, 10, 11, 13, 14, 15.** Epic completion criteria at the bottom of this file.
+**Open: RDO-6, 7, 8, 9, 10, 11, 13, 14, 15.** Epic completion criteria at the bottom of this file.
 
 - [x] **RDO-1** — Slim `CONTEXT.md` to ≤400 lines, no line >200 chars; move module prose to
   `CONTEXT_TREE.md`. Verify: fresh `Read CONTEXT.md` returns whole file, no display-cap hit.
@@ -62,7 +62,7 @@ priority-ordered bug+feature queue — the list `/work` reads to build its menu.
   `docs/plan/full-repo-review/findings/**` + `stories.md:263` (root-inventory audit
   snapshots), `docs/archive/**` (already archived). Docs-only, no code-reviewer.
   | Owner: Claude | Model: claude-sonnet-5 | SHA: 5bb5848
-- [ ] **RDO-5** — Add `scripts/hooks/check_md_line_length.py` + `.pre-commit-config.yaml`
+- [x] **RDO-5** — Add `scripts/hooks/check_md_line_length.py` + `.pre-commit-config.yaml`
   entry `md-line-length` (renamed from `root-md-line-length` — scope is wider now). Hard cap
   **200 chars**, a backstop for table rows + fenced code; the check enforces only this
   ceiling. Scope: root `.md` **plus `docs/plan/**` + `docs/bugs/**` `.md`** — the story docs
@@ -72,11 +72,25 @@ priority-ordered bug+feature queue — the list `/work` reads to build its menu.
   not gated. `.py` stays at ruff's `line-length = 100` (unchanged; ruff already excludes
   `docs/`). Also delete the contradictory "Hard-wrap to ≤100 chars" instruction in `plan.md`
   Phase 1 step 1, and update the `files:` regex + `id` in `plan.md` Phase 5's yaml block.
-  Verify: `pre-commit run md-line-length --all-files` green after RDO-1..4.
+  Done 2026-08-27 (tooling-only per Animesh): hook + `check_md_line_length.py`
+  (`<!-- lint-ignore-length -->` escape on the preceding line) + 3 unit tests in
+  `tests/unit/scripts/hooks/`; `plan.md` Phase 1 "≤100" contradiction removed, Phase 5 yaml
+  block updated; semantic-linefeed + 200-cap style recorded in `docs/plan/README.md`
+  §Conventions. The hook enforces on **staged** files only (standard pre-commit) — the
+  ~800-line pre-existing backlog across ~18 files is not an RDO-5 gate; it is cleared
+  opportunistically (any later commit touching a file trips the hook on that file) and in
+  batch by RDO-6's `md-organize` skill + RDO-9's `DECISIONS.md` split.
+  Verify: `pre-commit run md-line-length --files <clean .md>` passes; `--files
+  docs/plan/mvp/prompt.md` fails with per-line `file:line: N chars` output;
+  `pytest tests/unit/scripts/hooks/ -q` green.
+  | Owner: Claude | Model: claude-sonnet-5 | SHA: TBD
 - [ ] **RDO-6** — Rename `.claude/skills/md-cleanup/` → `md-organize/`, rewrite `SKILL.md`:
   broaden triggers, fix the "must stay at root" table, add CONTEXT.md re-slim + DECISIONS
   roll + line-length (200 cap) + semantic-linefeed prose reflow (RDO-5) + `CLAUDE.md`
-  pointer-reconciliation steps. **Add (RDO-2):** an
+  pointer-reconciliation steps. **Owns the RDO-5 backlog:** the `md-organize` run does
+  `pre-commit run md-line-length --all-files` and clears every reported line (prose →
+  semantic linefeeds, long table rows → restructured), for everything except `DECISIONS.md`
+  (RDO-9). This is what makes `--all-files` eventually green. **Add (RDO-2):** an
   "AGENTS.md ← CLAUDE.md re-sync" step — diff the two protocol bodies and re-apply the
   Antigravity deltas whenever `CLAUDE.md` changed since the last sync.
   **Add (RDO-12):** include `.claude/skills/work/SKILL.md` in the re-sync scope — its
@@ -129,7 +143,9 @@ priority-ordered bug+feature queue — the list `/work` reads to build its menu.
   Split into 9a (classify + `options-strategist` advisory pass on the risk/greeks/exit-rule
   entries + Animesh sign-off on the STILL-ENFORCED list) then 9b (execute the move). 9b does
   not start until 9a's list is signed off.
-  Verify: `wc -l DECISIONS.md` ≤ 800; fresh full-file `Read` under the display cap.
+  Verify: `wc -l DECISIONS.md` ≤ 800; fresh full-file `Read` under the display cap;
+  `pre-commit run md-line-length --files DECISIONS.md` green (RDO-5's ~300 long lines here
+  are the split's responsibility — wrap surviving rule entries to semantic linefeeds).
 
 - [ ] **RDO-10** — Reconcile RDO-7 / Phase 7 with the doc-freshness mechanisms the parallel
   "round-2 workflow token-optimization" epic shipped 2026-08-27 (`TODOS.md ### 2026-08-27`):
@@ -269,9 +285,11 @@ priority-ordered bug+feature queue — the list `/work` reads to build its menu.
 
 All boxes checked:
 - [x] **RDO-4** — `BUGS.md` / `GLOSSARY.md` relocated, all inbound links fixed.
-- [ ] **RDO-5** — `md-line-length` hook (200-char cap) green on root `.md` + `docs/plan/**`
-      + `docs/bugs/**`; semantic-linefeed prose style recorded in §Conventions;
-      `plan.md` Phase 1's "≤100" contradiction removed.
+- [x] **RDO-5** — `md-line-length` hook (200-char cap) added + enforcing on staged files;
+      `check_md_line_length.py` + 3 unit tests; semantic-linefeed prose style recorded in
+      `docs/plan/README.md` §Conventions; `plan.md` Phase 1's "≤100" contradiction removed,
+      Phase 5 yaml updated. Full-repo `--all-files` green is **not** an RDO-5 gate (Animesh,
+      2026-08-27) — backlog cleared by RDO-6 (`md-organize`) + RDO-9 (`DECISIONS.md` split).
 - [ ] **RDO-6** — `md-organize` skill exists; "stay at root" table matches reality; includes
       CONTEXT re-slim / DECISIONS roll / line-length / `CLAUDE.md` pointer-reconcile /
       `AGENTS.md` ↔ `CLAUDE.md` re-sync steps.

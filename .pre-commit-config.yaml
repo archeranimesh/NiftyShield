@@ -31,6 +31,13 @@ repos:
         files: ^(src|scripts)/
         types: [python]
 
+      - id: md-line-length
+        name: "markdown lines must be <=200 chars (root + docs/plan + docs/bugs)"
+        language: system
+        entry: python scripts/hooks/check_md_line_length.py
+        files: '^([^/]+\.md|docs/(plan|bugs)/.*\.md)$'
+        pass_filenames: true
+
   - repo: https://github.com/Yelp/detect-secrets
     rev: v1.5.0
     hooks:

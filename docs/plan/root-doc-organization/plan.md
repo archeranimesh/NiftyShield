@@ -37,8 +37,9 @@ duplicates the stated purpose of `CONTEXT_TREE.md` ("Module tree — file-level 
 **Changes:**
 
 1. `CONTEXT_TREE.md` — for each module bullet currently in `CONTEXT.md` "What Exists", merge
-   any detail not already present into the matching `CONTEXT_TREE.md` entry. Hard-wrap to
-   ≤100 chars. This is the new home for "what each module does".
+   any detail not already present into the matching `CONTEXT_TREE.md` entry. This is the new
+   home for "what each module does". (Line style: semantic linefeeds, 200-char backstop — see
+   RDO-5 and `docs/plan/README.md` §Conventions.)
 2. `CONTEXT.md` "What Exists" — replace the prose bullets with a flat one-line-per-module
    list: `` `src/strategy/` — paper-backbone strategy layer → CONTEXT_TREE.md`` . Target the
    whole section ≤ 25 lines.
@@ -119,23 +120,25 @@ Update inbound links: `grep -rn 'BUGS.md\|GLOSSARY.md' *.md docs/ .claude/` and 
 Add to `.pre-commit-config.yaml`:
 
 ```yaml
-- id: root-md-line-length
-  name: root markdown line length (<=200)
-  entry: python scripts/hooks/check_root_md_line_length.py
+- id: md-line-length
+  name: "markdown lines must be <=200 chars (root + docs/plan + docs/bugs)"
+  entry: python scripts/hooks/check_md_line_length.py
   language: system
-  files: '^[^/]+\.md$'
+  files: '^([^/]+\.md|docs/(plan|bugs)/.*\.md)$'
   pass_filenames: true
 ```
 
-`scripts/hooks/check_root_md_line_length.py` — ~15 lines: for each passed file, fail if any
-line > 200 chars, print `file:line: NNN chars`. Skip fenced code blocks and table rows?
-No — table rows are the main offender in `CONTEXT.md`; keep them short instead. Allow an
-inline `<!-- lint-ignore-length -->` on the preceding line for the rare legit case (a base64
-blob, a long URL).
+`scripts/hooks/check_md_line_length.py` — for each passed file, fail if any line > 200 chars,
+print `file:line: NNN chars`. Skip fenced code blocks and table rows? No — table rows are the
+main offender; keep them short instead. Allow an inline `<!-- lint-ignore-length -->` on the
+preceding line for the rare legit case (a base64 blob, a long URL).
 
-**Verify:** `pre-commit run root-md-line-length --all-files` passes after Phases 1–4.
+**Verify:** `pre-commit run md-line-length --files <a clean .md>` passes and `--files <a
+long .md>` fails. Full `--all-files` green is not an RDO-5 gate — the ~800-line pre-existing
+backlog is cleared opportunistically (the hook fires on any file a later commit touches) and
+in batch by RDO-6's `md-organize` skill + RDO-9's `DECISIONS.md` split.
 
-**Commit:** `chore(hooks): add root markdown line-length guard`
+**Commit:** `chore(hooks): add md-line-length pre-commit guard`
 
 ---
 
@@ -152,7 +155,8 @@ Rename `.claude/skills/md-cleanup/` → `.claude/skills/md-organize/` and rewrit
   `REVIEW.md`, `LOGGING.md`, `FORMATTING.md`, `INSTRUCTION.md`, `suggestions.md`.
 - **Add steps:** (a) CONTEXT.md line-length + length check and re-slim if regressed;
   (b) DECISIONS.md — roll any entry older than 6 months into the current-year archive,
-  refresh the index; (c) run `pre-commit run root-md-line-length --all-files`;
+  refresh the index; (c) run `pre-commit run md-line-length --all-files` and clear any
+  reported backlog (semantic-linefeed reflow for prose, restructure long table rows);
   (d) reconcile every `also read X.md` line in `CLAUDE.md` against files that actually exist.
 - Keep existing TODOS.md / CONTEXT.md date / README structure steps.
 
