@@ -85,13 +85,14 @@ this file's Session Log grows large again.
     `DECISIONS.md`/`PLANNER.md`/`README.md` 40). Zero-maintenance — uses git last-touch, no
     stamp lines in the docs. Informational, always `exit 0`. Tune thresholds after a week if
     it's noisy (`DB_REGISTRY.md` currently trips at 36/35 despite a 2-day-old edit).
-  - **[ ] #2 — enforce (next session).** New repo hook `.claude/hooks/doc_update_gate.sh`,
+  - **[x] #2 — enforce (done, SHA 7dae8e3).** New repo hook `.claude/hooks/doc_update_gate.sh`,
     PreToolUse matcher `Bash`, detects `git commit`. If `git diff --cached --name-only` has
     `^(src|scripts)/.*\.py$` but none of `TODOS.md`/`CONTEXT.md`/`DECISIONS.md`/
     `docs/plan/README.md` → remind on stderr. **v1 `exit 0` (advisory)**; escape hatch
-    `[skip-docs]` in the commit message → silent. Flip to `exit 2` (blocking) only after a
-    week of observing the false-positive rate (pure refactors, multi-commit phases). Repo.
-    Commit: `feat(hooks): remind when a code commit omits state-doc updates`.
+    `[skip-docs]` in the commit message → silent; `--amend`/`--dry-run` and tests-only diffs
+    skipped. Flip to `exit 2` (blocking) only after a week of observing the false-positive
+    rate (pure refactors, multi-commit phases). Repo. Smoke-tested: reminder fires,
+    `[skip-docs]` suppresses, staged `TODOS.md` suppresses, tests-only diff silent.
   - **[ ] #3 — shrink (next session, 2 commits).** (a) `TODOS.md` session log → keep open work
     + last ~5 entries, point older history at `git log --oneline` (the `Why:` lines already
     carry intent). `CONTEXT.md` test-count → replace the hard `~NNN` with a `pytest -q` pointer
