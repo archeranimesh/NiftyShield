@@ -22,7 +22,7 @@ Phase 6 comes last (encodes final state).
   corrected "Antigravity Reference" section (current env vars, BrokerClient composition-root,
   Decimal/TEXT + UTC invariants, pointer to `ANTIGRAVITY.md`). Long-line wrap deferred to
   RDO-5/6 (mirror stays line-for-line with the un-wrapped `CLAUDE.md`; wrap both together).
-  Docs-only, no code-reviewer. | SHA: &lt;pending&gt;
+  Docs-only, no code-reviewer. | SHA: 5c25742
 - [ ] **RDO-3** — Create `docs/archive/DECISIONS_ARCHIVE_2026H1.md`, move pre-2026-06-01
   entries, add date-descending `## Index` to root `DECISIONS.md`. Verify: ≤800 lines,
   inbound `DECISIONS.md#` anchors still resolve or are redirected in the index.
