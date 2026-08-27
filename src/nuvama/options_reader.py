@@ -21,8 +21,16 @@ def parse_options_positions(raw_response: str) -> list[NuvamaOptionPosition]:
     """Parse NetPosition() JSON and return a list of NuvamaOptionPosition objects."""
     data = json.loads(raw_response)
 
+    resp = data.get("resp")
+    if not isinstance(resp, dict):
+        # Nuvama returns {"resp": ""} when the F&O position book is empty
+        # (no open or same-day-closed options positions). This is a normal
+        # flat-book state, not an error — Holdings() still works on the same session.
+        logger.info("NetPosition() returned non-dict resp=%r. No options positions.", resp)
+        return []
+
     try:
-        raw_records = data["resp"]["data"]["pos"]
+        raw_records = resp["data"]["pos"]
     except KeyError:
         logger.warning("NetPosition() response missing 'resp.data.pos'. Returning empty list.")
         return []

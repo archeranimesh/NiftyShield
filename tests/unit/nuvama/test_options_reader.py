@@ -8,11 +8,8 @@ import json
 from datetime import date
 from decimal import Decimal
 
-import pytest
-
 from src.nuvama.models import NuvamaOptionPosition
 from src.nuvama.options_reader import build_options_summary, parse_options_positions
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -166,9 +163,7 @@ class TestParseOptionsPositions:
 
     def test_instrument_name_strips_quotes(self):
         """Apostrophes in source fields (e.g. stk_prc="23'000") are removed."""
-        positions = parse_options_positions(
-            _wrap([_rec(stk_prc="23'000")])
-        )
+        positions = parse_options_positions(_wrap([_rec(stk_prc="23'000")]))
         assert "'" not in positions[0].instrument_name
 
     # ------------------------------------------------------------------
@@ -178,6 +173,16 @@ class TestParseOptionsPositions:
     def test_missing_pos_key_returns_empty(self):
         raw = json.dumps({"resp": {"data": {}}})
         assert parse_options_positions(raw) == []
+
+    def test_empty_resp_string_returns_empty(self):
+        # Nuvama's flat-book response: {"resp": ""} with a valid session.
+        assert parse_options_positions(json.dumps({"resp": ""})) == []
+
+    def test_null_resp_returns_empty(self):
+        assert parse_options_positions(json.dumps({"resp": None})) == []
+
+    def test_missing_resp_key_returns_empty(self):
+        assert parse_options_positions(json.dumps({"error": "oops"})) == []
 
     def test_missing_trd_sym_skips_record(self):
         bad = _rec()
@@ -270,8 +275,6 @@ class TestBuildOptionsSummary:
     def test_net_pnl_excludes_cumulative(self):
         """net_pnl = unrealized + today's realized only; cumulative must NOT contribute."""
         positions = [_pos("A", unrealized="1000", realized="300")]
-        summary = build_options_summary(
-            positions, date(2026, 4, 21), {"A": Decimal("5000")}
-        )
+        summary = build_options_summary(positions, date(2026, 4, 21), {"A": Decimal("5000")})
         # 1000 + 300 = 1300; NOT 1000 + 300 + 5000
         assert summary.net_pnl == Decimal("1300")
