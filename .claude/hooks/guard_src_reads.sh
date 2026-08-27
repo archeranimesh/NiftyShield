@@ -7,6 +7,10 @@
 # This hook warns only. The assistant must decide whether to proceed.
 # Legitimate uses (e.g. Read needed to satisfy Edit's precondition after a graph
 # lookup) are expected — the reminder is friction, not a wall.
+#
+# The full decision tree is emitted once per session; after that a one-liner,
+# so a session that reads many src/ files does not re-pay ~180 tokens each time.
+# PPID = Claude Code process PID, unique per session.
 
 set -euo pipefail
 
@@ -21,7 +25,13 @@ print(data.get('tool_input', {}).get('file_path', ''))
 
 # Only warn for src/ or scripts/ paths
 if echo "$FILE_PATH" | grep -qE '/(src|scripts)/'; then
-    cat <<'EOF'
+    GATE=/tmp/niftyshield-guard-$PPID
+    find /tmp -name 'niftyshield-guard-*' -mtime +1 -delete 2>/dev/null || true
+    if [ -f "$GATE" ]; then
+        echo "⛔ graph-before-Read still applies — see CLAUDE.md Rule 0."
+    else
+        touch "$GATE"
+        cat <<'EOF'
 ⛔ PROTOCOL REMINDER — Read on src/ or scripts/ detected.
 
 Decision tree (CLAUDE.md §Step 1):
@@ -35,6 +45,7 @@ If you are calling Read solely to satisfy the Edit tool precondition after alrea
 inspecting the target lines via bash, that is a legitimate use — proceed.
 Otherwise, replace this Read with a graph call.
 EOF
+    fi
 fi
 
 # Always exit 0 — warn only, never block.

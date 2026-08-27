@@ -2,6 +2,10 @@
 # UserPromptSubmit hook — inject protocol checklist for implementation tasks only.
 # Skips general queries, explanations, and read-only analysis requests.
 #
+# The full checklist is injected once per session; subsequent task-shaped prompts
+# get a one-line pointer instead, so a multi-task session does not re-pay ~240
+# tokens every turn. PPID = Claude Code process PID, unique per session.
+#
 # Exit 0 always. stdout is injected as context before the AI processes the prompt.
 
 set -euo pipefail
@@ -27,9 +31,21 @@ if echo "$PROMPT" | grep -qiE "$QUERY_PATTERN"; then
     exit 0
 fi
 
-# Inject only if it looks like a task
-if echo "$PROMPT" | grep -qiE "$TASK_PATTERN"; then
-    cat <<'CHECKLIST'
+# Not a task — nothing to inject
+if ! echo "$PROMPT" | grep -qiE "$TASK_PATTERN"; then
+    exit 0
+fi
+
+GATE=/tmp/niftyshield-task-protocol-$PPID
+find /tmp -name 'niftyshield-task-protocol-*' -mtime +1 -delete 2>/dev/null || true
+
+if [ -f "$GATE" ]; then
+    echo "⚙️  TASK PROTOCOL active — CLAUDE.md Steps 0–5 (prompt score → council check → plan + go-ahead → routing → tests → close). AutoTrigger: test-runner after edits, code-reviewer before commit, greeks-analyst on src/paper|option-chain|Greeks."
+    exit 0
+fi
+
+touch "$GATE"
+cat <<'CHECKLIST'
 ⚙️  TASK PROTOCOL — complete these steps before writing any code or editing any file:
 
 1. PROMPT SCORE — does the request name: specific files? phase/story? tests required? DoD?
@@ -53,6 +69,5 @@ AutoTrigger agents (Claude path only — not optional):
    code-reviewer → before every commit (blocking: CRITICAL/ERROR must resolve)
    greeks-analyst → any change to src/paper/, option chain, or delta/gamma fields
 CHECKLIST
-fi
 
 exit 0
