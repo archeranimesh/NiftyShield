@@ -26,6 +26,14 @@ fabricate two fields the mockup showed but the real data never supplied:
    paper_nav_snapshots.realized_pnl's cumulative-inception value, which
    was never supplied. Both render as "N/A" here, not guessed numbers.
 
+**2026-08-26 addition — ROLL-2a blocking pre-check (FMT-1e/FORMATTING.md §7):**
+`build_message()` below now also renders a fabricated Legs row (`3/4 🔴`)
+purely to put the 🔴 glyph inside the same fenced block as `₹`, so a single
+`--send` confirms both glyphs FORMATTING.md §7 lists as unverified/unconfirmed for
+this table's layout, in one message. The `3/4` figure is NOT real leg data (still not
+wired for this probe) — ignore the count, only the glyph rendering (single- vs
+double-width, does it break the dashed rule's alignment) matters for this check.
+
 Read-only w.r.t. the DB — makes zero DB calls. Sends a real Telegram
 message (counts against the configured message budget) when run as
 __main__ with --send.
@@ -53,6 +61,7 @@ from src.config import settings  # noqa: E402
 data = {
     "as_of": "2026-08-07",
     "columns": ["V1", "V2"],
+    "legs_glyph_check": ("3/4 🔴", "4/4"),  # FABRICATED — glyph-check only, see docstring
     "dte": (18, 18),
     "credit": (Decimal("87"), Decimal("129")),
     "captured_pct": (4.0, 3.0),
@@ -168,6 +177,7 @@ def build_message(d: dict) -> str:
 
     groups = [
         [
+            ("Legs", d["legs_glyph_check"][0], d["legs_glyph_check"][1]),
             ("DTE", str(d["dte"][0]), str(d["dte"][1])),
             (
                 "Credit",
