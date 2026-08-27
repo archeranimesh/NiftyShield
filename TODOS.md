@@ -106,9 +106,16 @@ this file's Session Log grows large again.
     Live Strategy Monitoring, src/ Model Placement Rule) to
     `docs/archive/DECISIONS_pre-2026-07.md` behind a one-line index; 336 KB → 330 KB,
     2302 → 2203 lines. **Follow-up:** the real DECISIONS.md shrink needs a *semantic* split
-    (still-enforced rule vs completed-work log), not a date archive — its own session.
+    (still-enforced rule vs completed-work log), not a date archive — filed as **RDO-9** in
+    `docs/plan/root-doc-organization/tasks.md`.
   - **[ ] #4 — deferred.** `/schedule` a weekly cloud routine running the `md-cleanup` skill.
     Hold until #1–#3 have run 2 weeks — the SessionStart flag may make manual cadence enough.
+    Conflicts with `root-doc-organization` Phase 7's "no unattended doc writes" — resolution
+    tracked as **RDO-10**.
+  - **Pending work from this session filed into `docs/plan/root-doc-organization/`:** RDO-3
+    annotated (date-cutoff unworkable, partial 7bbfaff recorded); **RDO-9** added (DECISIONS
+    semantic split); **RDO-10** added (reconcile RDO-7 with the #1/#2 hooks + #4). `plan.md`
+    inventory + Phase 3 and `docs/plan/README.md` status refreshed.
 - **Workflow token-optimization** (plan: `~/.claude/plans/this-session-is-for-federated-goose.md`)
   — cut fixed per-session scaffolding cost (~5k tokens on a typical implementation session).
   Changes:

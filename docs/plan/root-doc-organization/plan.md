@@ -4,8 +4,8 @@ Current root inventory (2026-08-27), largest first by bytes:
 
 | File | Bytes | Lines | Loaded when | Action |
 |---|---|---|---|---|
-| `DECISIONS.md` | 336K | 2,302 | structural changes | **Archive pre-2026H2, add index** |
-| `CONTEXT.md` | 81K | 156 | **every session** | **Slim to ≤400 lines, wrap long lines** |
+| `DECISIONS.md` | 330K | 2,203 | structural changes | RDO-3 partial done (7bbfaff); real shrink = **RDO-9 semantic split** |
+| `CONTEXT.md` | 10K | 159 | **every session** | RDO-1 done (fd1bd0b) — was 81K/156 |
 | `CONTEXT_TREE.md` | 42K | 296 | new modules / survey | Receives module prose from CONTEXT.md |
 | `README.md` | 34K | 744 | public overview | Trim overlap with MISSION.md |
 | `LITERATURE.md` | 35K | 512 | analytics/ML phases | Keep as-is (well-scoped) |
@@ -84,17 +84,20 @@ Environment Variables). The two protocol halves have already drifted (`CLAUDE.md
 
 ## Phase 3 — DECISIONS.md archive + index
 
-1. Create `docs/archive/DECISIONS_ARCHIVE_2026H1.md` with the standard archive header.
-2. Move every decision entry dated before 2026-06-01 into it, preserving order.
-3. `DECISIONS.md` root — add a `## Index` table at the top: `| Date | Topic | One-line |`
-   for every remaining entry, newest first. Add a pointer line to the archive.
-4. Target root `DECISIONS.md` ≤ 800 lines.
+> **Revised 2026-08-27.** The date-cutoff below is unworkable: `DECISIONS.md` has no entry
+> older than 2026-04-01, it is grouped thematically rather than chronologically, and
+> 2026-04/05 and 2026-06/07/08 entries are interleaved inside several sections. A partial
+> lift of 5 fully-historical self-contained sections landed as `7bbfaff`
+> (`docs/archive/DECISIONS_pre-2026-07.md`). The real shrink is a **semantic split** —
+> see **RDO-9** in `tasks.md`. Steps 1–4 here are kept only as the record of the abandoned
+> approach.
 
-**Verify:** `wc -l DECISIONS.md` ≤ 800; every archived entry's anchor still resolves from
-its old inbound links (grep repo for `DECISIONS.md#` references, fix or leave a redirect
-note in the index).
+1. ~~Create `docs/archive/DECISIONS_ARCHIVE_2026H1.md` with the standard archive header.~~
+2. ~~Move every decision entry dated before 2026-06-01 into it, preserving order.~~
+3. ~~`DECISIONS.md` root — add a `## Index` table at the top.~~
+4. ~~Target root `DECISIONS.md` ≤ 800 lines.~~ (target carried forward to RDO-9)
 
-**Commit:** `docs(decisions): archive pre-2026H2 entries, add date index`
+**Commit:** ~~`docs(decisions): archive pre-2026H2 entries, add date index`~~ (done: `7bbfaff`)
 
 ---
 

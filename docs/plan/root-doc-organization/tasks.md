@@ -1,8 +1,10 @@
 # Root doc organization — tasks
 
 Work top-down. Each phase = one commit. See `plan.md` for the file-by-file detail.
-RDO-1 and RDO-2 are done. RDO-3, 4, 5, 7, 8 are independent. RDO-6 comes last (encodes
+RDO-1 and RDO-2 are done. RDO-4, 5, 7, 8 are independent. RDO-6 comes last (encodes
 final state). RDO-8 was spun out of the RDO-2 audit and feeds RDO-5/RDO-6.
+RDO-3's date-cutoff approach was found unworkable 2026-08-27 — **superseded by RDO-9**.
+RDO-10 reconciles RDO-7 with the freshness hooks a parallel epic shipped the same day.
 
 - [x] **RDO-1** — Slim `CONTEXT.md` to ≤400 lines, no line >200 chars; move module prose to
   `CONTEXT_TREE.md`. Verify: fresh `Read CONTEXT.md` returns whole file, no display-cap hit.
@@ -27,9 +29,16 @@ final state). RDO-8 was spun out of the RDO-2 audit and feeds RDO-5/RDO-6.
   hand-maintained env table, and a restated exception list — all → pointers; added async
   conventions Antigravity can't see from the global `~/.claude/CLAUDE.md`. Open items the
   audit surfaced → **RDO-8**. Docs-only, no code-reviewer. | SHA: 5c25742
-- [ ] **RDO-3** — Create `docs/archive/DECISIONS_ARCHIVE_2026H1.md`, move pre-2026-06-01
-  entries, add date-descending `## Index` to root `DECISIONS.md`. Verify: ≤800 lines,
-  inbound `DECISIONS.md#` anchors still resolve or are redirected in the index.
+- [~] **RDO-3** — ~~Create `docs/archive/DECISIONS_ARCHIVE_2026H1.md`, move pre-2026-06-01
+  entries, add date-descending `## Index`.~~ **Unworkable as specified (2026-08-27).**
+  `DECISIONS.md` has no pre-2026 entries (earliest 2026-04-01), so "trailing 6 months" is the
+  whole file; it is grouped by thematic `##` sections, not by date, with 2026-04/05 and
+  2026-06/07/08 entries interleaved paragraph-by-paragraph inside several sections; and some
+  historical-looking sections carry undated still-enforced rules (`§7.3` risk caps, `NT-2`
+  Futures+CC block). Partial done — 5 fully-historical self-contained sections lifted to
+  `docs/archive/DECISIONS_pre-2026-07.md` behind a one-line index (336 KB → 330 KB,
+  2302 → 2203 lines; `PLANNER.md` + `BACKTEST_PLAN_PHASE1.md` cross-refs repointed). | SHA: 7bbfaff
+  Remaining shrink → **RDO-9** (semantic split, not date).
 - [ ] **RDO-4** — Move `BUGS.md` → `docs/archive/BUGS_LEGACY.md` (3-line stub at root);
   move `GLOSSARY.md` → `docs/GLOSSARY.md` (no stub, add `CLAUDE.md` Quick-reference row).
   Fix all inbound links.
@@ -71,6 +80,47 @@ final state). RDO-8 was spun out of the RDO-2 audit and feeds RDO-5/RDO-6.
      standalone `## Rules for any review or handoff` section in `AGENTS.md`. Either lift
      `CLAUDE.md` to the same structure or document the delta in the RDO-6 re-sync step so the
      diff stays predictable.
+
+- [ ] **RDO-9** — DECISIONS.md **semantic split** (replaces RDO-3's dead date-cutoff).
+  Root `DECISIONS.md` is big because it is append-only and verbose inside a ~4-month window,
+  not because it is old — a date archive can't shrink it. Split by *kind* instead:
+  1. Classify every remaining entry as **STILL-ENFORCED RULE** (a constraint code or process
+     obeys today) or **COMPLETED-WORK LOG** (records that a change landed + why; value is
+     historical). Keep the thematic `##` grouping.
+  2. Move the COMPLETED-WORK-LOG entries to `docs/archive/DECISIONS_worklog_2026.md`, same
+     headers, newest-first within each; leave the one-line topic index in root (extend the
+     `## Archived — pre-2026-07 reference sections` block RDO-3 started).
+  3. Root `DECISIONS.md` keeps only STILL-ENFORCED RULES + the index. Undated rule sections
+     (`§7.3` risk caps, `## Developer Tooling`'s `NT-2` block) stay. Target ≤ 800 lines.
+  4. Verify inbound `DECISIONS.md` / `DECISIONS.md#` refs repo-wide still resolve or are
+     redirected in the index.
+  **Council/advisory:** archiving an entry that is actually load-bearing is the failure mode.
+  Split into 9a (classify + `options-strategist` advisory pass on the risk/greeks/exit-rule
+  entries + Animesh sign-off on the STILL-ENFORCED list) then 9b (execute the move). 9b does
+  not start until 9a's list is signed off.
+  Verify: `wc -l DECISIONS.md` ≤ 800; fresh full-file `Read` under the display cap.
+
+- [ ] **RDO-10** — Reconcile RDO-7 / Phase 7 with the doc-freshness mechanisms the parallel
+  "round-2 workflow token-optimization" epic shipped 2026-08-27 (`TODOS.md ### 2026-08-27`):
+  - `758dd6b` — `.claude/hooks/state_doc_freshness.sh`, `SessionStart`: per-state-doc flag
+    when `src/`|`scripts/` commits since its last change exceed a threshold. Informational.
+  - `7dae8e3` — `.claude/hooks/doc_update_gate.sh`, `PreToolUse`/`Bash` on `git commit`:
+    stderr reminder when a `.py` commit under `src/`|`scripts/` stages no state-doc change.
+    Advisory now; slated to flip to `exit 2` after a week's false-positive observation.
+  - `TODOS.md #4` (deferred) — `/schedule` a weekly `md-cleanup` cloud routine, which Phase 7
+    explicitly rejected ("unattended writes to source-of-truth docs is the wrong risk trade").
+  Task:
+  1. Decide if RDO-7's session-close `DOC STALENESS` report is still wanted on top of the
+     SessionStart hook, or redundant. If kept, scope it to what the hook can't see (per-entry
+     `CONTEXT_TREE.md` / `docs/plan/README.md` gaps, not per-file commit counts).
+  2. Add both shipped hooks to this epic's inventory (`plan.md` table) and to RDO-6's
+     `md-organize` re-sync scope.
+  3. Resolve `#4` against Phase 7's "no unattended doc writes" — drop it, or narrow to a
+     read-only Telegram staleness report (Phase 7 said that would be acceptable).
+  4. `md-cleanup` vs RDO-6's planned `md-organize` rename — `#4` still references the old
+     name; pick the final name once, here.
+  5. Tune `state_doc_freshness.sh` thresholds — `DB_REGISTRY.md` trips at 36/35 with a
+     2-day-old edit (known false positive).
 
 ## After each task
 Tick the box, append `| SHA: <sha>`, update `docs/plan/README.md` status column for this
