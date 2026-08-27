@@ -3,9 +3,9 @@
 Work top-down. Docs + `.claude/` only — no code-reviewer, no test-runner.
 See `prompt.md` for the skill design.
 
-**Open: SEP-1, 2, 3, 4.**
+**Open: SEP-2, 3, 4.**
 
-- [ ] **SEP-1** — Author `.claude/skills/work/SKILL.md`.
+- [x] **SEP-1** — Author `.claude/skills/work/SKILL.md`. | Owner: Claude | Model: claude-sonnet-5 | SHA: pending
   1. Trigger phrases: "work", "start work", "pick up a task", "/work". Front-matter + a
      one-screen body.
   2. Step A — skip-through detection (message already names a story / bug / RDO id) vs
@@ -46,7 +46,7 @@ See `prompt.md` for the skill design.
 
 ## Epic done when
 
-- [ ] **SEP-1** — `/work` skill authored, both branches functional, skip-through works.
+- [x] **SEP-1** — `/work` skill authored, both branches functional, skip-through works.
 - [ ] **SEP-2** — `CLAUDE.md` points at `/work`; load-hint duplication removed.
 - [ ] **SEP-3** — `AGENTS.md` mirrors; `md-organize` re-sync scope names the skill.
 - [ ] **SEP-4** — both branches demonstrated end-to-end in one session.

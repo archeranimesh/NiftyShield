@@ -133,6 +133,16 @@ this file's Session Log grows large again.
   200-char hard cap, semantic-linefeed prose style (one sentence/clause per line), check
   extended to `docs/plan/**` + `docs/bugs/**`, `.py` unchanged at ruff 100. Further
   suggestions still pending. Docs-only; commit deferred to the single end-of-triage commit.
+- **SEP-1 — `/work` session entry-point skill (RDO-12).** Authored `.claude/skills/work/SKILL.md`
+  — manual skill (triggers "work" / "start work" / "pick up a task" / "/work"), Step A
+  skip-through (message names a story/bug/RDO id → jump to branch, else `AskUserQuestion`
+  Feature/Bug), Feature branch presents the first 5 of `TODOS.md` "Priority-Ordered Open Work"
+  and loads the picked story's `prompt.md` + `*_tasks.md` first unchecked task + `CONTEXT.md`,
+  Bug branch lists open `docs/bugs/` entries (`🔴`/`🟡`) and loads the entry + `task.md` lines
+  + first unchecked. Front-end to the existing protocol — composes with `task_protocol.sh`,
+  hands to `CLAUDE.md` Step 2b. House style matched to `session-close` / `commit`. Docs +
+  `.claude/` only — no code-reviewer/test-runner. SEP-2 (`CLAUDE.md` reconciliation) and
+  SEP-3/4 are later sessions.
 - **Workflow token-optimization** (plan: `~/.claude/plans/this-session-is-for-federated-goose.md`)
   — cut fixed per-session scaffolding cost (~5k tokens on a typical implementation session).
   Changes:
