@@ -83,7 +83,7 @@ priority-ordered bug+feature queue — the list `/work` reads to build its menu.
   Verify: `pre-commit run md-line-length --files <clean .md>` passes; `--files
   docs/plan/mvp/prompt.md` fails with per-line `file:line: N chars` output;
   `pytest tests/unit/scripts/hooks/ -q` green.
-  | Owner: Claude | Model: claude-sonnet-5 | SHA: TBD
+  | Owner: Claude | Model: claude-sonnet-5 | SHA: 7c78799
 - [ ] **RDO-6** — Rename `.claude/skills/md-cleanup/` → `md-organize/`, rewrite `SKILL.md`:
   broaden triggers, fix the "must stay at root" table, add CONTEXT.md re-slim + DECISIONS
   roll + line-length (200 cap) + semantic-linefeed prose reflow (RDO-5) + `CLAUDE.md`
