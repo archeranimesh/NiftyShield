@@ -354,6 +354,7 @@ Never use a lower-ranked response to contradict Stage 3.
 | Logging standard (entrypoint rule, line shape, event naming) | `LOGGING.md` |
 | Telegram value/table formatting standard (decimals, alignment, sign display) | `FORMATTING.md` |
 | Bug registry (confirmed defects) | `docs/bugs/bugs.md` |
+| Domain glossary (options terms, strategy names, conventions) | `docs/GLOSSARY.md` |
 | Backtest → paper → live pipeline plan | `BACKTEST_PLAN.md` |
 | Council trigger criteria + workflow | `docs/council/README.md` |
 | Completed council decisions | `docs/council/YYYY-MM-DD_<topic>.md` |

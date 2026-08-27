@@ -1,6 +1,6 @@
 # NiftyShield — TODOs
 
-> Open work only. Completed items: [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md) | Known defects: [BUGS.md](BUGS.md)
+> Open work only. Completed items: [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md) | Known defects: [docs/bugs/](docs/bugs/)
 > Related: [CONTEXT.md](CONTEXT.md) | [DECISIONS.md](DECISIONS.md) | [PLANNER.md](PLANNER.md) | [BACKTEST_PLAN.md](BACKTEST_PLAN.md) | [BACKTEST_PLAN_PHASE1.md](BACKTEST_PLAN_PHASE1.md)
 
 ---
@@ -14,7 +14,7 @@ story on this list. Do not jump between stories mid-sequence; the ordering below
 `docs/archive/TODOS_ARCHIVE.md`.
 
 1. [x] **session-entry-point — unified `/work` entry point** (2026-08-27) — `docs/plan/session-entry-point/tasks.md`. **Epic complete 2026-08-27** (SEP-1..4): `/work` skill authored, `CLAUDE.md` + `AGENTS.md` point at it, both branches demonstrated end-to-end. `/work` now routes task sessions off this list.
-2. [ ] **root-doc-organization — root `.md` cleanup + doc-maintenance automation** (2026-08-27) — `docs/plan/root-doc-organization/tasks.md`, starting at **RDO-4**. Includes **RDO-14** — restructure this section into a single priority-ordered queue covering both `docs/plan/` stories and `docs/bugs/` open entries.
+2. [ ] **root-doc-organization — root `.md` cleanup + doc-maintenance automation** (2026-08-27) — `docs/plan/root-doc-organization/tasks.md`, starting at **RDO-5**. Includes **RDO-14** — restructure this section into a single priority-ordered queue covering both `docs/plan/` stories and `docs/bugs/` open entries.
 3. [ ] **BUG-030 — `_overlay_type_groups` elif-precedence drops `overlay_cc` leg when `overlay_collar_put` also present same-day** (found 2026-08-13, open) — the "NiftyBees vs overlays" digest's `CC No data` line and an understated `Collar` P&L figure both trace to `paper_3track_snapshot.py::_overlay_type_groups()` checking `has_put` before `has_cc` in its `elif` chain, silently orphaning the `overlay_cc` leg from every group whenever `overlay_collar_put` is also present. Orthogonal to BUG-028 (namespace fix, already closed) — this is a leg-role grouping defect BUG-028's four phases never touched. See `docs/bugs/bugs.md` BUG-030, `docs/bugs/task.md` B030.1–B030.6, starting at **B030.1** (entry-side tagging question, blocks the grouping fix).
 9. [ ] **IC yearly-expiry residual risk** (2026-07-23) — `docs/plan/ic-yearly-expiry-fix/tasks.md`, starting at **WG-1** (persist per-leg Greeks for weekly expiry bucket; YE-1..YE-4 superseded/already fixed live, see DECISIONS.md BUG-015).
 10. [ ] **Greeks Black-Scholes fallback** (2026-07-23) — `docs/plan/greeks-bs-fallback/tasks.md`, starting at **GF-1** (read-only audit scope).
@@ -75,6 +75,15 @@ history above). Add new entries there going forward, or start a fresh dated sect
 this file's Session Log grows large again.
 
 ### 2026-08-27
+
+- **RDO-4 — relocate legacy `BUGS.md` + `GLOSSARY.md` out of root (root-doc-organization).**
+  `git mv BUGS.md docs/archive/BUGS_LEGACY.md` (archive banner added, only `BUG-001` still
+  open) + 3-line root stub → `docs/bugs/` + archive. `git mv GLOSSARY.md docs/GLOSSARY.md`,
+  no stub, `docs/GLOSSARY.md` Quick-reference row added to `CLAUDE.md` and `AGENTS.md`
+  (mirror). Live inbound links repointed: `TODOS.md` header, `docs/plan/README.md` intro,
+  `docs/bugs/bugs.md` relationship note. Historical mentions (`DECISIONS.md` 2026-07-02
+  entry, `dev-foundation` CH-3 records, full-repo-review audit snapshots) left as accurate
+  records. Docs-only. Next: RDO-5 (`md-line-length` pre-commit hook).
 
 - **SEP-4 — end-to-end check + close (session-entry-point epic complete).** Ran both `/work`
   branches in one session. **Feature branch** demonstrated live: invoked as

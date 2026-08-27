@@ -12,7 +12,7 @@ makes `docs/plan/README.md` §Conventions enforceable (template + audit) and cut
 back to pointer-only items. RDO-14 restructures `TODOS.md`'s priority list into one
 priority-ordered bug+feature queue — the list `/work` reads to build its menu.
 
-**Open: RDO-4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14.** Epic completion criteria at the bottom of this file.
+**Open: RDO-5, 6, 7, 8, 9, 10, 11, 13, 14, 15.** Epic completion criteria at the bottom of this file.
 
 - [x] **RDO-1** — Slim `CONTEXT.md` to ≤400 lines, no line >200 chars; move module prose to
   `CONTEXT_TREE.md`. Verify: fresh `Read CONTEXT.md` returns whole file, no display-cap hit.
@@ -48,9 +48,20 @@ priority-ordered bug+feature queue — the list `/work` reads to build its menu.
   2302 → 2203 lines; `PLANNER.md` + `BACKTEST_PLAN_PHASE1.md` cross-refs repointed). | SHA: 7bbfaff
   **Status: closed as partial — no further work on RDO-3 itself.** Remaining shrink is a
   different approach entirely, tracked as **RDO-9**.
-- [ ] **RDO-4** — Move `BUGS.md` → `docs/archive/BUGS_LEGACY.md` (3-line stub at root);
+- [x] **RDO-4** — Move `BUGS.md` → `docs/archive/BUGS_LEGACY.md` (3-line stub at root);
   move `GLOSSARY.md` → `docs/GLOSSARY.md` (no stub, add `CLAUDE.md` Quick-reference row).
   Fix all inbound links.
+  Done 2026-08-27: `git mv` both (history preserved). Root `BUGS.md` stub → `docs/bugs/` +
+  archive. Archive banner added to `BUGS_LEGACY.md`; its two `docs/bugs/` links repointed
+  `../bugs/`. Glossary Quick-ref row added to `CLAUDE.md` **and** `AGENTS.md` (mirror
+  invariant). Live links fixed: `TODOS.md:3` (`[BUGS.md]` → `[docs/bugs/]`),
+  `docs/plan/README.md:6` (`../../BUGS.md` → `../archive/BUGS_LEGACY.md`), `docs/bugs/bugs.md`
+  "Relationship to root `BUGS.md`" note rewritten to point at the archive. Historical
+  references left as accurate records of past state: `DECISIONS.md:738` (dated 2026-07-02
+  decision, prose not a link), `docs/plan/dev-foundation/**` (CH-3 completed-story records),
+  `docs/plan/full-repo-review/findings/**` + `stories.md:263` (root-inventory audit
+  snapshots), `docs/archive/**` (already archived). Docs-only, no code-reviewer.
+  | Owner: Claude | Model: claude-sonnet-5 | SHA: PENDING
 - [ ] **RDO-5** — Add `scripts/hooks/check_md_line_length.py` + `.pre-commit-config.yaml`
   entry `md-line-length` (renamed from `root-md-line-length` — scope is wider now). Hard cap
   **200 chars**, a backstop for table rows + fenced code; the check enforces only this
@@ -257,7 +268,7 @@ priority-ordered bug+feature queue — the list `/work` reads to build its menu.
 ## Epic done when
 
 All boxes checked:
-- [ ] **RDO-4** — `BUGS.md` / `GLOSSARY.md` relocated, all inbound links fixed.
+- [x] **RDO-4** — `BUGS.md` / `GLOSSARY.md` relocated, all inbound links fixed.
 - [ ] **RDO-5** — `md-line-length` hook (200-char cap) green on root `.md` + `docs/plan/**`
       + `docs/bugs/**`; semantic-linefeed prose style recorded in §Conventions;
       `plan.md` Phase 1's "≤100" contradiction removed.

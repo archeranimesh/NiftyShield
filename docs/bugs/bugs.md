@@ -7,12 +7,14 @@
 > **Scope:** confirmed defects in live/shipped code (paper trading, cron scripts, live
 > gates) — not unimplemented spec items, those are `docs/plan/` story tasks.
 >
-> **Relationship to root `BUGS.md`:** a bug registry already existed at the repo root
+> **Relationship to the legacy registry:** a flat bug registry existed at the repo root
 > (`BUGS.md`, single open entry `BUG-001` — `daily_snapshot.py` backfill gap, unrelated,
-> low severity). This folder is the canonical home for *new* entries going forward; root
-> `BUGS.md` is not migrated, it stays until `BUG-001` is fixed and deleted per its own
-> convention. ID numbering is one shared sequence across both files — this registry
-> starts at `BUG-002`.
+> low severity). It was relocated to
+> [`docs/archive/BUGS_LEGACY.md`](../archive/BUGS_LEGACY.md) on 2026-08-27 (RDO-4), with a
+> stub left at the repo root. This folder is the canonical home for *all* entries going
+> forward; `BUG-001` stays in the archive file until it is fixed and deleted per its own
+> convention. ID numbering is one shared sequence across both — this registry starts at
+> `BUG-002`.
 >
 > **This file holds only open work — the `stories.md` equivalent for `docs/bugs/task.md`'s
 > checklist.** `docs/bugs/task.md` is the lean checkbox list; every entry here has the full
