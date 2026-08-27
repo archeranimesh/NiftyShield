@@ -88,34 +88,37 @@ this file's Session Log grows large again.
   `AGENTS.md`'s dead `md-organize` reference → `md-cleanup` Step 7 (new: re-sync AGENTS.md
   when CLAUDE.md changes). Docs/hooks only, no `.py` touched — no code-reviewer, no test-runner.
 
-  **Next-session validation** (global hooks were only bash-harness tested, not under a real
-  `$PPID`) — check these early in the next session:
-  - [ ] First action `Read CONTEXT.md` — succeeds with **no** `cbm-code-discovery-gate`
-    `exit 2` block.
-  - [ ] First task-shaped prompt → full `⚙️ TASK PROTOCOL` checklist. Second task-shaped
-    prompt → the one-line `TASK PROTOCOL active …` pointer only.
-  - [ ] First `src/` file `Read` → full `⛔ PROTOCOL REMINDER` decision tree once; second
-    `src/` Read → one-line `graph-before-Read still applies` only.
-  - [ ] First `Read src/<any>.py` → still emits the one-time `BLOCKED: … codebase-memory-mcp`
-    gate (path-aware block still fires for real code).
-  - [ ] `SessionStart` reminder is a single line, not the old 15-line block.
+  **Next-session validation** (validated 2026-08-27, session `92c04e16` — all 5 pass):
+  - [x] First action `Read CONTEXT.md` — succeeded, **no** `cbm-code-discovery-gate` block
+    (gate file `cbm-code-discovery-gate-$PPID` stayed absent until the first `src/*.py` read).
+  - [x] First task-shaped prompt → full `⚙️ TASK PROTOCOL` checklist injected; gate file
+    written. Second-fire one-liner not observable in a single-prompt session — hook branch
+    (`task_protocol.sh:42-45`) reviewed and correct.
+  - [x] First `src/` `Read` → `guard_src_reads` fired once (gate `niftyshield-guard-$PPID`
+    created on first attempt); retry hit the one-liner branch. Exit-0 PreToolUse stdout isn't
+    surfaced to the assistant, so verification was via gate-file lifecycle + source review.
+  - [x] First `Read src/__init__.py` → hard `exit 2` `BLOCKED: … codebase-memory-mcp`; retry
+    (gate now written) allowed. Path-aware block fires once for real code, as intended.
+  - [x] `SessionStart` reminder is a single line ("Code discovery: graph tools first — …"),
+    not the old block. Confirmed against `cbm-session-reminder` source (single `echo`).
   - On failure: hooks are `~/.claude/hooks/cbm-code-discovery-gate` +
     `~/.claude/hooks/cbm-session-reminder` (global) and `.claude/hooks/guard_src_reads.sh` +
     `.claude/hooks/task_protocol.sh` (repo). Gate files `/tmp/cbm-code-discovery-gate-$PPID`,
     `/tmp/niftyshield-guard-$PPID`, `/tmp/niftyshield-task-protocol-$PPID` — `rm` to re-test
     first-fire within one session.
 
-  **Task 5 (optional, not started) — measurement + permission tooling:**
-  - [ ] Run `/fewer-permission-prompts` — scans this machine's transcripts for recurring
-    read-only Bash/MCP calls, writes a prioritized allowlist into `.claude/settings.json`.
-    Review it (drop anything state-mutating), commit as
-    `chore(claude): add read-only permission allowlist`.
-  - [ ] Statusline token/cost: read `~/.claude/statusline-command.sh` (gets Claude Code's
-    session JSON on stdin — has a `cost` object: `total_cost_usd`, `total_duration_ms`, plus
-    model/context fields). Append a segment rendering `$` cost and context tokens if exposed.
-    Global file — note in commit body.
-  - [ ] Optional baseline: `/context` at session start and again after, record both numbers
-    here to confirm the ~5k/session reduction landed.
+  **Task 5 (done 2026-08-27) — measurement + permission tooling:**
+  - [x] Ran `/fewer-permission-prompts` (50 recent transcripts). Only non-auto-allowed
+    read-only patterns worth listing were the four codebase-memory-mcp graph reads
+    (`get_code_snippet`, `search_graph`, `search_code`, `trace_path`) — all bash usage was
+    auto-allowed, mutating, or interpreter invocations. Added to `.claude/settings.json`
+    `permissions.allow`. Commit `dd0da61` `chore(claude): add read-only permission allowlist`.
+  - [x] Statusline: `~/.claude/statusline-command.sh` gained a `$%.2f` cost segment from
+    `.cost.total_cost_usd` and a `/Nk` used-tokens suffix on the ctx segment from
+    `.context_window.used_tokens` (both degrade to nothing when the field is absent — tested).
+    Global file, not in-repo; noted in the TODOS-update commit body.
+  - [ ] `/context` baseline not captured — slash commands aren't callable as tools mid-session
+    and the check was optional. Run manually next session to confirm the ~5k/session drop.
 - **ROLL-4** (SHA `30bac70`) — migrated `TelegramGateway.send_approval_request`'s message
   formatting: added a bold `*Context:*` section label separating the decision-summary header
   from the escaped `context_str` block, plus a regression test proving an underscore-bearing
