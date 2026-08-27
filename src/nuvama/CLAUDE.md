@@ -39,6 +39,15 @@ This typo is in **`src/dhan/positions.py`**, not in this module. Dhan's
 `/v2/fundlimit` API response uses `availabelBalance` (missing an `l`).
 It is mapped explicitly in `parse_fund_limit()`.
 
+## `NetPosition()` empty-book shape
+
+When the F&O position book is flat (no open or same-day-closed options
+positions), Nuvama returns `{"resp": ""}` — `resp` is an **empty string**,
+not the usual `{"data": {"pos": [...]}}` dict. `parse_options_positions()`
+guards for a non-dict `resp` and returns `[]`. This is a normal state, not
+an auth failure — `Holdings()` still works on the same session. Broke the
+intraday tracker for a full day on 2026-08-26 before the guard was added.
+
 ## Decimal invariant
 
 All monetary fields (`avg_price`, `ltp`, `pnl`, etc.) use `Decimal`,

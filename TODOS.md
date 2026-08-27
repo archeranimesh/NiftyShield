@@ -81,3 +81,11 @@ this file's Session Log grows large again.
   `telegram-approval-auth-fix/tasks.md` confirmed clean (only T1, already shipped). Real
   `@code-reviewer` (Opus persona) ran clean: 0 CRITICAL/ERROR/WARNING. See
   `docs/plan/telegram-markdown-migration/strategy-rollout/tasks.md`.
+- **nuvama empty-book crash** (SHA `3b9b57f`) — `parse_options_positions()` assumed
+  `NetPosition()`'s `resp` was always a dict; Nuvama returns `{"resp": ""}` for a flat F&O
+  book, so the intraday tracker crashed with `TypeError` every 5 min all of 2026-08-26.
+  Confirmed session was valid via live `Holdings()` probe. Added a non-dict `resp` guard
+  → return `[]` + INFO log; 3 tests (empty-string / null / missing-key resp). Quirk
+  documented in `src/nuvama/CLAUDE.md`. `@code-reviewer` clean (0 CRITICAL/ERROR).
+  Also caught the same laptop-sleep gap this morning: pre_market_brief / start_monitor /
+  morning_nav missed at 09:00–09:15, re-run manually.
