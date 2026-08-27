@@ -3,7 +3,7 @@
 Work top-down. Docs + `.claude/` only — no code-reviewer, no test-runner.
 See `prompt.md` for the skill design.
 
-**Open: SEP-3, 4.**
+**Open: SEP-4.**
 
 - [x] **SEP-1** — Author `.claude/skills/work/SKILL.md`. | Owner: Claude | Model: claude-sonnet-5 | SHA: 08b74a4
   1. Trigger phrases: "work", "start work", "pick up a task", "/work". Front-matter + a
@@ -30,13 +30,18 @@ See `prompt.md` for the skill design.
   Done: both duplicated load-hint lines collapsed into one `/work` pointer line; leading
   `/work` block added to Step 1; Quick-reference row added.
 
-- [ ] **SEP-3** — `AGENTS.md` mirror + `md-organize` scope.
+- [x] **SEP-3** — `AGENTS.md` mirror + `md-organize` scope. | Owner: Claude | Model: claude-sonnet-5 | SHA: __PENDING__
   1. Apply the SEP-2 change to `AGENTS.md` with the Antigravity adjustment (no `/work` skill
      access — state the manual equivalent: read `TODOS.md` first-5 or `docs/bugs/`, then
      follow the handoff protocol).
   2. RDO-6 (`root-doc-organization`) — add `.claude/skills/work/SKILL.md` to the `md-organize`
      re-sync scope. If RDO-6 already shipped, edit `md-organize/SKILL.md` directly.
   Verify: `AGENTS.md` and `CLAUDE.md` Step 1 read parallel; RDO-6 names the skill.
+  Done: `AGENTS.md` gains a `/work` delta bullet + an Antigravity-adjusted routing block in
+  Step 1 (manual `TODOS.md` first-5 / `docs/bugs/` routing → handoff protocol); the old
+  "new feature" + "specific story" load-hint lines collapsed into one manual-routing pointer;
+  Quick-reference row added. RDO-6 already named `.claude/skills/work/SKILL.md` in its re-sync
+  scope (added by the RDO-12 triage) — no edit needed; RDO-6 itself is still unshipped.
 
 - [ ] **SEP-4** — End-to-end check + close.
   1. One real session: `/work` → Feature → pick item 1 of the 5 → confirm the correct
@@ -50,7 +55,7 @@ See `prompt.md` for the skill design.
 
 - [x] **SEP-1** — `/work` skill authored, both branches functional, skip-through works.
 - [x] **SEP-2** — `CLAUDE.md` points at `/work`; load-hint duplication removed.
-- [ ] **SEP-3** — `AGENTS.md` mirrors; `md-organize` re-sync scope names the skill.
+- [x] **SEP-3** — `AGENTS.md` mirrors; `md-organize` re-sync scope names the skill.
 - [ ] **SEP-4** — both branches demonstrated end-to-end in one session.
 
 ## After each task

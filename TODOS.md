@@ -13,7 +13,7 @@ story on this list. Do not jump between stories mid-sequence; the ordering below
 *which story to pick up next*, once the current one is done. Completed items are in
 `docs/archive/TODOS_ARCHIVE.md`.
 
-1. [ ] **session-entry-point — unified `/work` entry point** (2026-08-27) — `docs/plan/session-entry-point/tasks.md`, starting at **SEP-3** (`AGENTS.md` mirror + `md-organize` scope; SEP-2 `CLAUDE.md` reconciliation shipped 2026-08-27). Top priority: `/work` routes task sessions off this list, so the skill must be sound before it is useful.
+1. [ ] **session-entry-point — unified `/work` entry point** (2026-08-27) — `docs/plan/session-entry-point/tasks.md`, starting at **SEP-4** (end-to-end check + close; SEP-2 `CLAUDE.md` + SEP-3 `AGENTS.md` reconciliation shipped 2026-08-27). Top priority: `/work` routes task sessions off this list, so the skill must be sound before it is useful.
 2. [ ] **root-doc-organization — root `.md` cleanup + doc-maintenance automation** (2026-08-27) — `docs/plan/root-doc-organization/tasks.md`, starting at **RDO-4**. Includes **RDO-14** — restructure this section into a single priority-ordered queue covering both `docs/plan/` stories and `docs/bugs/` open entries.
 3. [ ] **BUG-030 — `_overlay_type_groups` elif-precedence drops `overlay_cc` leg when `overlay_collar_put` also present same-day** (found 2026-08-13, open) — the "NiftyBees vs overlays" digest's `CC No data` line and an understated `Collar` P&L figure both trace to `paper_3track_snapshot.py::_overlay_type_groups()` checking `has_put` before `has_cc` in its `elif` chain, silently orphaning the `overlay_cc` leg from every group whenever `overlay_collar_put` is also present. Orthogonal to BUG-028 (namespace fix, already closed) — this is a leg-role grouping defect BUG-028's four phases never touched. See `docs/bugs/bugs.md` BUG-030, `docs/bugs/task.md` B030.1–B030.6, starting at **B030.1** (entry-side tagging question, blocks the grouping fix).
 9. [ ] **IC yearly-expiry residual risk** (2026-07-23) — `docs/plan/ic-yearly-expiry-fix/tasks.md`, starting at **WG-1** (persist per-leg Greeks for weekly expiry bucket; YE-1..YE-4 superseded/already fixed live, see DECISIONS.md BUG-015).
@@ -75,6 +75,16 @@ history above). Add new entries there going forward, or start a fresh dated sect
 this file's Session Log grows large again.
 
 ### 2026-08-27
+
+- **SEP-3 — `AGENTS.md` mirror (session-entry-point).** Applied the SEP-2 `CLAUDE.md` Step 1
+  change to `AGENTS.md` with the Antigravity adjustment: new `/work` delta bullet in the
+  header deltas list; Step 1 gains a routing block stating the manual equivalent (no `/work`
+  skill — take the feature target off `TODOS.md` "Priority-Ordered Open Work" first-5, or the
+  bug off `docs/bugs/`, then follow the handoff protocol into Step 2b); the "new feature" +
+  "specific story" load-hint lines collapsed into one manual-routing pointer; Quick-reference
+  row added. RDO-6's `md-organize` re-sync scope already names `.claude/skills/work/SKILL.md`
+  (RDO-12 triage) — no edit needed; RDO-6 itself still unshipped. Docs-only. Next: SEP-4
+  (end-to-end check of both `/work` branches in one session + close).
 
 - **SEP-2 — `CLAUDE.md` reconciliation (session-entry-point).** `/work` is now the documented
   start-of-task entry point in `CLAUDE.md`: leading `/work` block added to Step 1; the two

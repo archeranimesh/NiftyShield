@@ -18,6 +18,8 @@
 > - `run_command` runs in an isolated `bash -c`; no shell inheritance, no persisted cwd,
 >   `.env` not auto-loaded, state-mutating commands block for approval — see `ANTIGRAVITY.md`
 >   §"Environment & Safety Rules".
+> - No `/work` skill. Where `CLAUDE.md` says "invoke `/work`", do the feature/bug routing by
+>   hand — see Step 1 below.
 
 ---
 
@@ -56,6 +58,13 @@ Token math: `SELECT *` on a 15-row × 20-column table ≈ 300 tokens that persis
 
 ## Step 1 — Read CONTEXT.md first
 
+**Task-shaped session: route to feature / bug and load the right prompt before any code.**
+Antigravity has no `/work` skill — do the routing by hand: for a feature, take the next target
+off `TODOS.md` "Priority-Ordered Open Work" (the first 5 items are priority-ordered); for a
+bug, take it from `docs/bugs/` (`bugs.md` registry + `task.md` checklist). Load the story/bug
+`prompt.md` + first unchecked task + `CONTEXT.md`, then follow the handoff protocol into
+Step 2b below. Open-ended discussion needs no routing.
+
 Read `CONTEXT.md` before writing any code. State `CONTEXT.md ✓` in your first response.
 Do not rely on chat history — CONTEXT.md is the single source of truth.
 Module tree (file-level descriptions): **`CONTEXT_TREE.md`** — load only when adding new modules or doing a full codebase survey.
@@ -64,11 +73,10 @@ Module tree (file-level descriptions): **`CONTEXT_TREE.md`** — load only when 
 - Adding/changing module architecture → also read `DECISIONS.md` + `CONTEXT_TREE.md`
 - Touching instrument keys, AMFI codes, market data → also read `REFERENCES.md`
 - Writing to `portfolio.sqlite`, adding a new table, or unsure which table already holds data you're looking for → also read `DB_REGISTRY.md` **first** (before assuming a table is empty/missing — see its 2026-08-07 note on `paper_nav_snapshots` vs. `paper_leg_snapshots`)
-- Starting a new feature → also read `TODOS.md` + `PLANNER.md`
 - Phase 0 backtest / paper trading / strategy / `src/paper/` / `src/risk/` work → also read `BACKTEST_PLAN.md` (Phase 0 only — ~300 lines)
 - Phase 1+ work (only after Phase 0.8 gate passes) → also read `BACKTEST_PLAN_PHASE1.md`
 - Implementing a metric / ratio / ML technique → also read `LITERATURE.md` entry for the cited LIT code
-- Working a specific story → load ONLY that story file + `CONTEXT.md` + the module `CLAUDE.md`
+- Starting a feature or picking up a story → manual routing (no `/work`): `TODOS.md` "Priority-Ordered Open Work" first-5 → the story's `prompt.md` / `*_tasks.md` / first unchecked task + `CONTEXT.md`; add `PLANNER.md` when multi-sprint roadmap context is needed
 - Working inside `src/<module>/` → read that module's `CLAUDE.md` explicitly (autoload covers only this root file)
 - Reviewing or building on Antigravity's own prior work → also read `ANTIGRAVITY.md`
 - Authoring or reviewing any task/story/spec mentioning expiry, DTE, or calendar logic → also read `REFERENCES.md` (expiry day changed Thursday→Tuesday, April 2026)
@@ -325,6 +333,7 @@ Never use a lower-ranked response to contradict Stage 3.
 
 | What | Where |
 |---|---|
+| Start-of-task routing (feature / bug → load prompt) | manual — `TODOS.md` first-5 or `docs/bugs/` (the `/work` skill is Claude-only) |
 | Graph project ID | `Users-abhadra-myWork-myCode-python-NiftyShield` |
 | Project state | `CONTEXT.md` |
 | Architecture decisions | `DECISIONS.md` |
