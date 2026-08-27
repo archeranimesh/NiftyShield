@@ -74,6 +74,19 @@ this file's Session Log grows large again.
 
 ### 2026-08-27
 
+- **Workflow token-optimization** (plan: `~/.claude/plans/this-session-is-for-federated-goose.md`)
+  — cut fixed per-session scaffolding cost (~5k tokens on a typical implementation session).
+  Changes:
+  (1) `~/.claude/hooks/cbm-code-discovery-gate` (global, not in repo) made path-aware — the
+  once-per-session block now fires only for real code targets (`.py` under `src/`|`scripts/`,
+  or a Grep/Glob scoped there), not for the first markdown/config Read of every session;
+  (2) `.claude/hooks/guard_src_reads.sh` — full graph decision tree once per session, one-liner
+  after; (3) `.claude/hooks/task_protocol.sh` — full checklist once per session, one-liner on
+  later task prompts; (4) `~/.claude/hooks/cbm-session-reminder` (global) slimmed to one line
+  (harness already injects the full reminder); (5) `CLAUDE.md` + `AGENTS.md` — stripped dated
+  failure anecdotes, deduped the AI-Collaboration section against Step 3b/AutoTrigger; fixed
+  `AGENTS.md`'s dead `md-organize` reference → `md-cleanup` Step 7 (new: re-sync AGENTS.md
+  when CLAUDE.md changes). Docs/hooks only, no `.py` touched — no code-reviewer, no test-runner.
 - **ROLL-4** (SHA `30bac70`) — migrated `TelegramGateway.send_approval_request`'s message
   formatting: added a bold `*Context:*` section label separating the decision-summary header
   from the escaped `context_str` block, plus a regression test proving an underscore-bearing

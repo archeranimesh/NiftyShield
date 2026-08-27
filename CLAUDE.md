@@ -172,7 +172,7 @@ get_code_snippet("<ModelClassName>")   # exact field list, required vs optional,
 search_graph("<EnumName>")             # every enum used in the helper — get all members
 ```
 
-Concrete failures this prevents (from 2026-04-25 session):
+Concrete failures this prevents:
 - `Direction.SHORT` → does not exist; members are `BUY` / `SELL`
 - `entry_date` → required field on `Leg`; omitting it raises `ValidationError` at collection
 
@@ -233,7 +233,7 @@ git commit -m "<message>"
 git log --oneline -1   # confirm SHA appears — this is the proof of completion
 ```
 
-Providing the commit message to the user and stopping is a recurring failure mode (2026-04-24, 2026-04-25). The commit is the last mandatory action of every phase. Do not hand off to the user to run it.
+Providing the commit message to the user and stopping is a recurring failure mode. The commit is the last mandatory action of every phase. Do not hand off to the user to run it.
 
 Typical phase boundaries (each gets its own commit):
 - Model → Store → Tracker/orchestration → Formatting / pure helpers
@@ -324,14 +324,17 @@ Never use a lower-ranked response to contradict Stage 3.
 
 ## AI Collaboration — Antigravity and human review
 
-This project uses two AI agents. Claude (you) handles planning, graph queries, council decisions, and the mandatory `@code-reviewer` gate. Antigravity handles autonomous multi-file implementation, TDD loops, and commit execution.
+Claude plans, runs graph queries, owns council decisions, and runs the mandatory
+`@code-reviewer` gate. Antigravity does autonomous multi-file implementation, TDD loops, and
+commit execution — its operating rules (and its `multi_replace_file_content` / `write_to_file`
+edit tools) are in `ANTIGRAVITY.md`.
 
-**What this means for Claude:**
-- Antigravity may have authored uncommitted or recently committed code. When reviewing it, run the real `@code-reviewer` agent against `git diff HEAD` — Antigravity's own review is persona-based and approximate.
-- Antigravity follows `ANTIGRAVITY.md` (project root). Its file-editing tools differ from Claude's: it uses `multi_replace_file_content` where Claude uses `Edit`, and `write_to_file` only for new files.
-- The workflow division (who does what, in which phase) is in `docs/antigravity/ai_collaboration_plan.md`.
-- Council decisions are always Claude's responsibility. Antigravity does not trigger the council.
-- Job-type → surface/model routing (BACKTEST_PLAN phase, council-gated decision, mechanical logging fix, golden-test authoring, cron debugging, full-repo review): see `docs/plan/full-repo-review/findings/FR-8_practitioner-devex.md`.
+Antigravity may have authored uncommitted or recently committed code. Review it with the real
+`@code-reviewer` agent against `git diff HEAD` — its own persona review is approximate and
+does not load `REVIEW.md`.
+
+- Workflow division by phase: `docs/antigravity/ai_collaboration_plan.md`
+- Job-type → surface/model routing: `docs/plan/full-repo-review/findings/FR-8_practitioner-devex.md`
 
 **Rules for any review — Claude reviewing Antigravity's work, `code-reviewer` runs, or human handoffs** (promoted from the full-repo-review epic's prompt, per that epic's FR-1 finding that these three generalize beyond the epic itself — see `docs/plan/full-repo-review/findings/FR-1_protocol-reviewer.md` Step 5):
 1. **Rate severity by mission impact, not by finding volume.** Severity is tied to actual business impact (does this expose capital, does this cost a real decision-quality point) — not to how many findings make a review look thorough. A padded list of INFO-level nitpicks is as useless as a review that rubber-stamps everything.

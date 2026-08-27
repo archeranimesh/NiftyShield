@@ -4,7 +4,8 @@
 > Every step is mandatory.
 >
 > **This file mirrors `CLAUDE.md`** — the two are kept equivalent on purpose. `CLAUDE.md` is
-> the canonical copy; when it changes, this file is re-synced (see the `md-organize` skill).
+> the canonical copy; when it changes, this file is re-synced (see the `md-cleanup` skill,
+> Step 7).
 > `ANTIGRAVITY.md` holds the tool-level operating rules specific to Antigravity (file-edit
 > tools, isolated shell, approval gates) — read it too.
 >
@@ -190,7 +191,7 @@ get_code_snippet("<ModelClassName>")   # exact field list, required vs optional,
 search_graph("<EnumName>")             # every enum used in the helper — get all members
 ```
 
-Concrete failures this prevents (from 2026-04-25 session):
+Concrete failures this prevents:
 - `Direction.SHORT` → does not exist; members are `BUY` / `SELL`
 - `entry_date` → required field on `Leg`; omitting it raises `ValidationError` at collection
 
@@ -248,7 +249,7 @@ git commit -m "<message>"
 git log --oneline -1   # confirm SHA appears — this is the proof of completion
 ```
 
-Providing the commit message to the user and stopping is a recurring failure mode (2026-04-24, 2026-04-25). The commit is the last mandatory action of every phase. Do not hand off to the user to run it.
+Providing the commit message to the user and stopping is a recurring failure mode. The commit is the last mandatory action of every phase. Do not hand off to the user to run it.
 
 Typical phase boundaries (each gets its own commit):
 - Model → Store → Tracker/orchestration → Formatting / pure helpers

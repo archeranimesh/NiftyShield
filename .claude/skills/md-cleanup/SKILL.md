@@ -124,6 +124,25 @@ Ref: none
 
 ---
 
+## Step 7 — Re-sync AGENTS.md (only if CLAUDE.md changed this cleanup)
+
+`AGENTS.md` is Antigravity's autoload protocol and a deliberate standalone mirror of
+`CLAUDE.md` (`CLAUDE.md` is canonical). Claude Code does **not** auto-load `AGENTS.md` — it is
+a maintenance cost, not a Claude token cost — but Antigravity reads it every session, so drift
+is a real defect.
+
+If `CLAUDE.md` was edited above:
+
+1. Re-apply each `CLAUDE.md` edit to the matching passage in `AGENTS.md`.
+2. Preserve the intentional deltas: the "Antigravity autoload" / "Antigravity deltas" header
+   block, and every `Edit` → `multi_replace_file_content` / `write_to_file` and
+   "emit the await-signal instead of spawning `@agent`" wording.
+3. Confirm the only differences are those deltas:
+   `diff <(sed 's/[[:space:]]*$//' CLAUDE.md) <(sed 's/[[:space:]]*$//' AGENTS.md)`
+4. Fold the `AGENTS.md` change into the same Step 6 commit.
+
+---
+
 ## Quick Checklist
 
 - [ ] `TODOS.md` has zero `✅ DONE` markers
@@ -134,4 +153,5 @@ Ref: none
 - [ ] `README.md` project structure matches actual `src/` and `scripts/`
 - [ ] `README.md` roadmap checkboxes are accurate
 - [ ] No `*.prompt.md` or completed-task plan files at root
+- [ ] If `CLAUDE.md` changed: `AGENTS.md` re-synced (Step 7), `diff` shows only Antigravity deltas
 - [ ] Commit made in project format
