@@ -3,7 +3,7 @@
 Work top-down. Docs + `.claude/` only — no code-reviewer, no test-runner.
 See `prompt.md` for the skill design.
 
-**Open: SEP-2, 3, 4.**
+**Open: SEP-3, 4.**
 
 - [x] **SEP-1** — Author `.claude/skills/work/SKILL.md`. | Owner: Claude | Model: claude-sonnet-5 | SHA: 08b74a4
   1. Trigger phrases: "work", "start work", "pick up a task", "/work". Front-matter + a
@@ -19,7 +19,7 @@ See `prompt.md` for the skill design.
      `task_protocol.sh`.
   Verify: invoke `/work` in a scratch session — both branches reach a loaded prompt.
 
-- [ ] **SEP-2** — `CLAUDE.md` reconciliation.
+- [x] **SEP-2** — `CLAUDE.md` reconciliation. | Owner: Claude | Model: claude-sonnet-5 | SHA: <pending>
   1. Step 1 — add a leading line: "Task-shaped session: invoke `/work` to route to
      feature / bug and load the right prompt."
   2. Remove the now-duplicated "Starting a new feature → also read `TODOS.md` + `PLANNER.md`"
@@ -27,6 +27,8 @@ See `prompt.md` for the skill design.
      `CLAUDE.md`" lines (they live in the skill now) — or reduce each to a pointer.
   3. Quick-reference table — add a `/work` row.
   Verify: `grep -n 'work' CLAUDE.md` shows the pointer; no load-hint duplication remains.
+  Done: both duplicated load-hint lines collapsed into one `/work` pointer line; leading
+  `/work` block added to Step 1; Quick-reference row added.
 
 - [ ] **SEP-3** — `AGENTS.md` mirror + `md-organize` scope.
   1. Apply the SEP-2 change to `AGENTS.md` with the Antigravity adjustment (no `/work` skill
@@ -47,7 +49,7 @@ See `prompt.md` for the skill design.
 ## Epic done when
 
 - [x] **SEP-1** — `/work` skill authored, both branches functional, skip-through works.
-- [ ] **SEP-2** — `CLAUDE.md` points at `/work`; load-hint duplication removed.
+- [x] **SEP-2** — `CLAUDE.md` points at `/work`; load-hint duplication removed.
 - [ ] **SEP-3** — `AGENTS.md` mirrors; `md-organize` re-sync scope names the skill.
 - [ ] **SEP-4** — both branches demonstrated end-to-end in one session.
 
