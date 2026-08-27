@@ -114,7 +114,7 @@ Also provides the India VIX series required by the CSP R3 IVR filter (tasks 1.7 
 
 **Data cost: ₹7,999/year of historical data. Recommended first purchase: 2022–2024 (3 years, ₹24K). Extend to earlier years after quality validation gate passes.**
 
-**Why TrueData dump, not Bhavcopy:** Bhavcopy (task 1.3) is EOD-only — it cannot tell you if the 50% profit target or delta stop triggered intraday. TrueData's historical dump provides 1-minute OHLCV+OI for every active NIFTY option contract, enabling realistic intraday exit simulation. This is the same data used for 1-min charting in Amibroker/Excel; the format is plain CSV and Python-readable despite that vendor framing. See `DECISIONS.md → TrueData Historical Dump (2026-05-09)`.
+**Why TrueData dump, not Bhavcopy:** Bhavcopy (task 1.3) is EOD-only — it cannot tell you if the 50% profit target or delta stop triggered intraday. TrueData's historical dump provides 1-minute OHLCV+OI for every active NIFTY option contract, enabling realistic intraday exit simulation. This is the same data used for 1-min charting in Amibroker/Excel; the format is plain CSV and Python-readable despite that vendor framing. See `docs/archive/DECISIONS_pre-2026-07.md → TrueData Historical Dump (2026-05-09)`.
 
 > **Start this task only after TrueData confirms payment and delivers the zip files. Estimated delivery: 3–4 business days after payment.**
 
