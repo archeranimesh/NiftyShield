@@ -109,7 +109,7 @@ this file's Session Log grows large again.
   "400 tests / 3 implementations") with a trimmed "Antigravity Reference" — Decimal/TEXT + UTC
   + async invariants inline, everything else (env vars, BrokerClient impl table, exception
   hierarchy) as pointers to `src/config.py` / `src/client/CLAUDE.md` / `ANTIGRAVITY.md` to
-  avoid re-drift. (Follow-up SHA `<pending2>`: audit pass caught that the first draft named a
+  avoid re-drift. (Follow-up SHA `5a9c4f5`: audit pass caught that the first draft named a
   non-existent `UpstoxSandboxClient` and carried a hand-maintained env table — both replaced
   with pointers; added the async-model conventions Antigravity can't see from the global
   `~/.claude/CLAUDE.md`.) Long-line wrap deferred to RDO-5/6 so
