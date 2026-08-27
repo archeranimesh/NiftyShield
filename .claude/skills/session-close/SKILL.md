@@ -142,6 +142,45 @@ If the session was clean: state "No suggestions — session followed protocol." 
 
 ---
 
+## Step 4b — Rank into `suggestions.md` (repo root)
+
+Every suggestion from Step 4 is a candidate row in `suggestions.md` at the repo root — a
+running, cross-session tally of which inefficiency patterns actually recur, so the count is a
+"how many times would fixing this have helped" ranking, not a one-off printout that gets
+forgotten next session.
+
+1. Read `suggestions.md` if it exists (create it with the header below if not).
+2. For each Step 4 suggestion, decide whether it matches an **existing row's `Slug`** — same
+   root cause, not just similar wording (e.g. "ran pytest inline" and "skipped test-runner
+   agent" are the same slug, `pytest-inlined-not-test-runner`). Match on meaning, not string
+   equality; the slug column exists precisely so this judgment call only has to be made once
+   per pattern, then it's a deterministic key.
+3. **Match found:** increment `Count`, update `Last seen` to today's date, leave `Slug` and
+   `Suggestion` text untouched (do not rephrase an existing row just because this session's
+   wording differs slightly).
+4. **No match:** append a new row, `Count = 1`, `First seen = Last seen = today`, a new
+   kebab-case `Slug` that names the root cause (not the symptom).
+5. Re-sort the table by `Count` descending, ties broken by most recent `Last seen`.
+6. Write the file back. Never hand-edit `Count` outside this procedure.
+
+**File format:**
+
+```markdown
+# Session Efficiency Suggestions — Ranked by Recurrence
+
+> Maintained by `.claude/skills/session-close/SKILL.md` Step 4b. `Count` = number of sessions
+> where this exact root cause recurred, i.e. how many times fixing it would have helped — not
+> a bug tracker. Sorted by `Count` descending. Do not hand-edit `Count`; the skill owns it.
+
+| Count | Slug | Suggestion | Category | First seen | Last seen | Example |
+|---|---|---|---|---|---|---|
+| N | kebab-case-root-cause | One-sentence action | token-efficiency | YYYY-MM-DD | YYYY-MM-DD | task/session ref |
+```
+
+If Step 4 produced no suggestions (clean session), do not touch `suggestions.md` at all.
+
+---
+
 ## Step 5 — Produce the final report block
 
 Output this compact block. One screen maximum.
@@ -172,6 +211,9 @@ SUGGESTIONS
   [SUGGESTION] <category>: <action>
     Why it matters: ...
     Next session trigger: ...
+    suggestions.md: <new row | incremented "<slug>" to N>
+
+  Top recurring (suggestions.md): <slug> ×<count>, <slug> ×<count>
 
 COMMIT
   SHA: <hash — or "no commit this session">

@@ -238,6 +238,15 @@ Providing the commit message to the user and stopping is a recurring failure mod
 Typical phase boundaries (each gets its own commit):
 - Model → Store → Tracker/orchestration → Formatting / pure helpers
 
+**5d — Session efficiency close-out (mandatory, runs after 5c, before Stop):**
+Spawn a `fork` subagent with the prompt: "Invoke `.claude/skills/session-close/SKILL.md`
+against this session, then report the compact block back." Do not run the skill inline —
+the audit is a side-artifact for the user, not something the task itself needs, so keep it
+out of the task's own context budget (forking is free here: it shares this session's prompt
+cache and needs no re-briefing). Relay the fork's compact report to the user as the final
+message of the turn. This step is never a "legitimate skip" — a read-only/query-only session
+still closes with a trivial clean report, per the skill's own Step 5 fallback.
+
 ---
 
 ## Council Decision Protocol
