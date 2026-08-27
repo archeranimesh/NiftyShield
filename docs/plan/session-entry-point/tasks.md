@@ -30,7 +30,7 @@ See `prompt.md` for the skill design.
   Done: both duplicated load-hint lines collapsed into one `/work` pointer line; leading
   `/work` block added to Step 1; Quick-reference row added.
 
-- [x] **SEP-3** — `AGENTS.md` mirror + `md-organize` scope. | Owner: Claude | Model: claude-sonnet-5 | SHA: __PENDING__
+- [x] **SEP-3** — `AGENTS.md` mirror + `md-organize` scope. | Owner: Claude | Model: claude-sonnet-5 | SHA: 4168b75
   1. Apply the SEP-2 change to `AGENTS.md` with the Antigravity adjustment (no `/work` skill
      access — state the manual equivalent: read `TODOS.md` first-5 or `docs/bugs/`, then
      follow the handoff protocol).
