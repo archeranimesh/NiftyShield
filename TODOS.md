@@ -89,3 +89,12 @@ this file's Session Log grows large again.
   documented in `src/nuvama/CLAUDE.md`. `@code-reviewer` clean (0 CRITICAL/ERROR).
   Also caught the same laptop-sleep gap this morning: pre_market_brief / start_monitor /
   morning_nav missed at 09:00–09:15, re-run manually.
+- **RDO-1** (`root-doc-organization`) — slimmed `CONTEXT.md` 81K→10K bytes / 156→159 lines,
+  every line now ≤200 chars, full-file `Read` no longer breaks the 25K display cap
+  (~2.6K tokens/session vs ~20K). The run-on "What Exists" prose (one line was 18,740 chars)
+  was archived verbatim to `docs/archive/CONTEXT_WHAT_EXISTS_2026-08.md` and replaced with a
+  one-line-per-package list pointing to `CONTEXT_TREE.md` / `DECISIONS.md`. `CONTEXT_TREE.md`
+  gained the genuinely-missing structural facts (`overlay_coverage.py`,
+  `notifications/formatting.py`, a "Developer tooling" + "Research tooling" section). Verbose
+  stale "Test Coverage" per-module breakdown also archived; root copy is now count + last-green
+  date. Docs-only, no `src/` change, no code-reviewer. RDO-2..7 not started.

@@ -44,6 +44,7 @@ src/
 │   ├── summary.py            # Pure computation (AR-4/5): _etf_current_value, _etf_cost_basis, _build_prev_prices, _compute_prev_mf_pnl, _compute_strategy_pnl_from_prices, _build_portfolio_summary. No I/O. TYPE_CHECKING guards replace object|None params; all 14 # type: ignore[union-attr] suppressions removed (AR-5). _build_portfolio_summary computes only cross-source aggregates (total_value/invested/pnl/day_delta) and passes source summary objects directly into PortfolioSummary — no dead intermediate extraction variables.
 │   ├── formatting.py         # Pure formatting (AR-4): _format_protection_stats, _format_combined_summary. Depends on summary.py + PortfolioSummary. No I/O. All double-guards (if summary.dhan else Decimal("0") nested inside if summary.dhan_available blocks) removed — source object guaranteed non-None inside its available check by @property construction. mf_pnl guards retained (mf_available not checked before inline mf_pnl access).
 │   ├── service.py            # SnapshotServiceProtocol (Protocol) + SnapshotService (concrete). persist_snapshots(strategy_name, strategy, snap_date, prices, greeks_map, underlying_price) builds DailySnapshot list and calls store.record_snapshots_bulk(). Auto-persists trade-only legs via store.ensure_leg() when leg.id is None. PortfolioTracker accepts SnapshotServiceProtocol for constructor injection.
+│   ├── overlay_coverage.py   # async compute_overlay_coverage(store, broker, lookup, track_namespace, snapshot_date) -> OverlayCoverage. Query-time overlay-coverage ratio for one 3-track track = overlay delta-equivalent exposure / track's own effective Nifty-point exposure. Never resizes qty across tracks (capital parity, not exposure parity). coverage_pct=None for a flat track. Nothing persisted. See DECISIONS.md 2026-08-10 BUG-028.
 │   └── strategies/
 │       ├── __init__.py       # ALL_STRATEGIES registry
 │       └── finideas/
@@ -124,6 +125,7 @@ src/
 │   ├── CLAUDE.md             # Module context: non-fatal contract, build_notifier() → None, HTML parse_mode
 │   ├── __init__.py           # Package marker.
 │   ├── protocol.py           # NotifierProtocol — abstracts the notification sink for testability
+│   ├── formatting.py         # Per-parameter-type value formatters (money / greek / strike / pct / expiry) + monospace table builders for Telegram messages. Canonical rules: FORMATTING.md (root) + src/notifications/CLAUDE.md §"Instrument Label Formatting".
 │   ├── telegram.py           # TelegramNotifier: fire-and-forget sendMessage via raw requests (HTML parse_mode, <pre> block). build_notifier() returns None when env vars absent. send() never raises — catches Exception broadly, logs WARNING, returns False.
 │   └── telegram_gateway.py   # TelegramGateway: council-free approval request dispatch + inbound callback polling + auth guard (chat-ID allowlist) + timeout scan for stale pending approvals
 ├── nuvama/
@@ -294,3 +296,24 @@ tests/
     └── amfi/
         └── nav_slice.txt     # Realistic AMFI flat file slice: 11 valid schemes with correct AMFI codes, N.A. line, malformed line
 ```
+
+---
+
+## Developer tooling (repo root)
+
+| File | Purpose |
+|---|---|
+| `pyproject.toml` | Project metadata + all dev deps (`pytest`, `ruff`, `mypy`, `pre-commit`, `vulture`, `hypothesis`). |
+| `Makefile` | `test` (parallel `-n auto`), `test-serial` (no `randomly`, for debugging), `coverage`, lint targets. |
+| `.pre-commit-config.yaml` | Hooks: `ruff` (lint+fix), `ruff-format`, `mypy` (scoped), `no-script-main-logger`, and (RDO-5) `root-md-line-length`. |
+| `.github/workflows/ci.yml` | GitHub Actions CI — push/PR to `main`, matrix Python 3.10+. |
+| `scripts/dev/install_hooks.sh` | Installs pre-commit + post-commit hook in one command. |
+| `scripts/dev/post_commit_hook.sh` | Post-commit: echoes graph re-index reminder when `src/` or `scripts/` changed. |
+| `docs/plan/dev-foundation/dx-foundation/mypy_baseline.md` | Per-module mypy error counts at the DX-3 baseline. |
+
+## Research tooling (docs/)
+
+| File | Purpose |
+|---|---|
+| `docs/strategies/regime_probe.pine` | Pine Script v6 sensor script (not a trading strategy) — emits a structured regime read. See DECISIONS.md. |
+| `docs/archive/tv_mcp_testing_framework.md` | 7-phase capability probe for the `tradesdontlie/tradingview-mcp` server. |
