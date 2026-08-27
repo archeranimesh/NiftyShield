@@ -78,7 +78,7 @@ this file's Session Log grows large again.
   docs (`CONTEXT.md`, `TODOS.md`, `DECISIONS.md`, `PLANNER.md`, `DB_REGISTRY.md`, …) rot because
   the only thing forcing an update is `CLAUDE.md` Step 5a — a checklist line, no enforcement,
   no signal. Three levers: surface / enforce / shrink.
-  - **[x] #1 — surface (done, SHA pending).** New repo hook `.claude/hooks/state_doc_freshness.sh`
+  - **[x] #1 — surface (done, SHA 758dd6b).** New repo hook `.claude/hooks/state_doc_freshness.sh`
     wired as `SessionStart` in `.claude/settings.json`. Counts `src/`|`scripts/` commits since
     each state doc last changed; prints a one-line flag for any doc over its threshold
     (`CONTEXT.md`/`TODOS.md` 15, `CONTEXT_TREE.md`/`DB_REGISTRY.md`/`docs/plan/README.md` 35,
@@ -93,14 +93,20 @@ this file's Session Log grows large again.
     skipped. Flip to `exit 2` (blocking) only after a week of observing the false-positive
     rate (pure refactors, multi-commit phases). Repo. Smoke-tested: reminder fires,
     `[skip-docs]` suppresses, staged `TODOS.md` suppresses, tests-only diff silent.
-  - **[ ] #3 — shrink (next session, 2 commits).** (a) `TODOS.md` session log → keep open work
-    + last ~5 entries, point older history at `git log --oneline` (the `Why:` lines already
-    carry intent). `CONTEXT.md` test-count → replace the hard `~NNN` with a `pytest -q` pointer
-    (stale the instant a test is added; it's in the ~2.6k/session auto-load). Commit:
-    `docs(root): replace derivable test-count + old session log with pointers`.
-    (b) `DECISIONS.md` (336 KB / 2302 lines) → archive pre-2026 entries to
-    `docs/archive/DECISIONS_pre2026.md`, leave root as 2026-onward + a one-line topic index.
-    Commit: `docs(root): archive pre-2026 DECISIONS entries`. Repo, docs-only, no code-reviewer.
+  - **[x] #3 — shrink (done, SHAs 089fb91 + 7bbfaff).**
+    (a) `089fb91` — `CONTEXT.md` test-count → `pytest -q | tail -1` pointer; `TODOS.md`
+    session log trimmed to the two still-active threads, the four completed SHA-referenced
+    entries (ROLL-4, nuvama, RDO-1, RDO-2) moved verbatim to `docs/archive/TODOS_ARCHIVE.md`.
+    (b) `7bbfaff` — **scope deviation, confirmed with Animesh:** `DECISIONS.md` has *no*
+    pre-2026 entries (earliest is 2026-04-01) and its 2026-04/05 entries are interleaved with
+    2026-06/07/08 ones inside shared thematic sections (`## Process`, `## Strategy & Research
+    Decisions`, …), so a date-cutoff archive isn't cleanly possible. Instead lifted the 5
+    fully-historical, self-contained sections with no still-enforced rule
+    (TradingView MCP Regime Probe, Backtest Data Source Decision, TrueData Historical Dump,
+    Live Strategy Monitoring, src/ Model Placement Rule) to
+    `docs/archive/DECISIONS_pre-2026-07.md` behind a one-line index; 336 KB → 330 KB,
+    2302 → 2203 lines. **Follow-up:** the real DECISIONS.md shrink needs a *semantic* split
+    (still-enforced rule vs completed-work log), not a date archive — its own session.
   - **[ ] #4 — deferred.** `/schedule` a weekly cloud routine running the `md-cleanup` skill.
     Hold until #1–#3 have run 2 weeks — the SessionStart flag may make manual cadence enough.
 - **Workflow token-optimization** (plan: `~/.claude/plans/this-session-is-for-federated-goose.md`)
