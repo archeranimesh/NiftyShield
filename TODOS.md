@@ -98,3 +98,16 @@ this file's Session Log grows large again.
   `notifications/formatting.py`, a "Developer tooling" + "Research tooling" section). Verbose
   stale "Test Coverage" per-module breakdown also archived; root copy is now count + last-green
   date. Docs-only, no `src/` change, no code-reviewer. RDO-2..7 not started.
+- **RDO-2** (`root-doc-organization`) — Animesh confirmed Antigravity autoloads `AGENTS.md` by
+  name, so it stays a full standalone protocol equivalent to `CLAUDE.md` (not deleted, not a
+  stub). Rewrote it as a faithful Antigravity-adjusted mirror of the current `CLAUDE.md`:
+  agent identity Codex→Antigravity, dead `.Codex/skills/…` paths → `.claude/…`, module refs
+  fixed to `CLAUDE.md`; added the ~6 sections `CLAUDE.md` gained since the fork (scripts
+  logging standard + `no-script-main-logger`, Step 2b authoritative-mechanism, Step 3b
+  independence note, full Quick-reference rows, `docs/plan/README.md` in 5a, Step 5d,
+  review-rules trio); replaced the 120-line stale "Imported Claude Cowork" appendix (said
+  "400 tests / 3 implementations") with a trimmed "Antigravity Reference" (current env vars
+  from `.env.example`, BrokerClient composition-root, Decimal/TEXT + UTC invariants, pointer
+  to `ANTIGRAVITY.md` for shell/edit-tool specifics). Long-line wrap deferred to RDO-5/6 so
+  the mirror stays line-for-line with the still-unwrapped `CLAUDE.md`. Added an
+  "AGENTS.md ← CLAUDE.md re-sync" step to RDO-6's scope. Docs-only, no code-reviewer.
