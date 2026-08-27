@@ -106,8 +106,12 @@ this file's Session Log grows large again.
   logging standard + `no-script-main-logger`, Step 2b authoritative-mechanism, Step 3b
   independence note, full Quick-reference rows, `docs/plan/README.md` in 5a, Step 5d,
   review-rules trio); replaced the 120-line stale "Imported Claude Cowork" appendix (said
-  "400 tests / 3 implementations") with a trimmed "Antigravity Reference" (current env vars
-  from `.env.example`, BrokerClient composition-root, Decimal/TEXT + UTC invariants, pointer
-  to `ANTIGRAVITY.md` for shell/edit-tool specifics). Long-line wrap deferred to RDO-5/6 so
+  "400 tests / 3 implementations") with a trimmed "Antigravity Reference" — Decimal/TEXT + UTC
+  + async invariants inline, everything else (env vars, BrokerClient impl table, exception
+  hierarchy) as pointers to `src/config.py` / `src/client/CLAUDE.md` / `ANTIGRAVITY.md` to
+  avoid re-drift. (Follow-up SHA `<pending2>`: audit pass caught that the first draft named a
+  non-existent `UpstoxSandboxClient` and carried a hand-maintained env table — both replaced
+  with pointers; added the async-model conventions Antigravity can't see from the global
+  `~/.claude/CLAUDE.md`.) Long-line wrap deferred to RDO-5/6 so
   the mirror stays line-for-line with the still-unwrapped `CLAUDE.md`. Added an
   "AGENTS.md ← CLAUDE.md re-sync" step to RDO-6's scope. Docs-only, no code-reviewer.

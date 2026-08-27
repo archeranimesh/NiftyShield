@@ -388,8 +388,9 @@ Also present on disk (read when working there): `src/paper/CLAUDE.md`, `src/nuva
 
 ## Antigravity Reference (supplementary)
 
-Non-protocol facts that were historically appended to this file. `CONTEXT.md` /
-`DECISIONS.md` / `REFERENCES.md` are authoritative; this is a quick pointer only.
+Stable, load-bearing conventions worth having inline in an autoloaded file. Everything else
+is a pointer — `CONTEXT.md` / `DECISIONS.md` / `REFERENCES.md` / the module `CLAUDE.md` files
+are authoritative and must not be restated here (restating invites drift).
 
 **Decimal invariant.** All monetary fields are `Decimal`, never `float`. SQLite stores
 monetary values as `TEXT`; read back with `Decimal(row["col"])`. A `float` here is silent
@@ -398,32 +399,29 @@ corruption — no exception, just wrong numbers.
 **Timestamps** stored as UTC, converted to IST at the display layer only. Historical candles:
 Parquet, partitioned by instrument + date.
 
-**BrokerClient protocol.** All modules depend on the `BrokerClient` protocol
-(`src/client/protocol.py`), never on a concrete implementation. Constructor injection only.
-`src/client/factory.py` is the sole composition root — the only file in `src/` that imports
-`UpstoxLiveClient`, `UpstoxSandboxClient`, or `MockBrokerClient` directly. Four
-implementations total; order execution + portfolio reads are blocked (static IP / daily
-token) and raise `NotImplementedError` with an explanatory message.
+**Async.** `asyncio` is the primary concurrency model; never mix it with blocking calls in a
+hot path. CPU-bound work (backtesting, Greeks) → `ProcessPoolExecutor` dispatched from the
+event loop. Every coroutine has explicit timeout handling.
 
-**Exception hierarchy** rooted at `BrokerError` — see `src/client/exceptions.py`. Retryable:
-`RateLimitError`, `DataFetchError`. Terminal (do not retry): `OrderRejectedError`,
-`InstrumentNotFoundError`.
+**BrokerClient protocol.** Modules depend only on `src.client.protocol.BrokerClient` (or a
+narrow sub-protocol), injected via the constructor. `src/client/factory.py` is the only file
+in `src/` that imports a concrete client (`UpstoxLiveClient`, `MockBrokerClient`) directly —
+`create_client(env)` wires `prod`/`sandbox` → `UpstoxLiveClient` (different token), `test` →
+`MockBrokerClient`. Blocked methods (order exec, portfolio reads, historical candles) raise
+`NotImplementedError`. Full implementation table + exception hierarchy (`BrokerError` root):
+`src/client/CLAUDE.md`.
 
-**Environment variables** (full list + examples in `.env.example`):
+**Environment / config.** `src/config.py` `Settings(BaseSettings)` declares every env var;
+`.env.example` has the annotated list. `run_command` does not auto-load `.env`. Always set
+`UPSTOX_ENV` explicitly (default it to `test`). Two-token constraint: `UPSTOX_ANALYTICS_TOKEN`
+(long-lived, market data) vs `UPSTOX_ACCESS_TOKEN` (daily OAuth, portfolio reads — not yet
+wired) — see `src/client/CLAUDE.md`.
 
-| Variable | Description |
-|---|---|
-| `UPSTOX_API_KEY` / `UPSTOX_API_SECRET` / `UPSTOX_REDIRECT_URI` | Upstox OAuth app credentials |
-| `UPSTOX_MOBILE` / `UPSTOX_PIN` / `UPSTOX_TOTP_SECRET` | Upstox automated-login inputs |
-| `UPSTOX_ANALYTICS_TOKEN` | Long-lived Analytics Token for market data |
-| `UPSTOX_ENV` | `prod` / `sandbox` / `test` — selects the client implementation (default `test`) |
-| `UPSTOX_DEBUG` | `1` = verbose request/response logging |
-| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | Telegram bot token + chat ID for cron notifications |
-| `NUVAMA_API_KEY` / `NUVAMA_API_SECRET` | Nuvama APIConnect credentials |
-| `DHAN_CLIENT_ID` | Dhan client ID (manual-token auth flow) |
-
-**Shell / DB safety.** `run_command` is isolated (no `.zshrc`, no persisted cwd), `.env` is
-not auto-loaded, always set `UPSTOX_ENV` explicitly, and any write to
-`data/portfolio/portfolio.sqlite` must be flagged to Animesh before proposing — never
-auto-run `daily_snapshot.py` / `record_trade.py` / `seed_*.py`. Full rules in
+**Shell / DB safety.** `run_command` is isolated (no `.zshrc`, no persisted cwd), and any
+write to `data/portfolio/portfolio.sqlite` must be flagged to Animesh before proposing —
+never auto-run `daily_snapshot.py` / `record_trade.py` / `seed_*.py`. Full rules in
 `ANTIGRAVITY.md` §"Environment & Safety Rules".
+
+**One finding per session.** When a handover prompt points at a story file, implement only
+its first unchecked item, then record + stop — full protocol in `ANTIGRAVITY.md` §"Story File
+Execution Protocol" and §"Phase Completion Output".
