@@ -118,6 +118,21 @@ this file's Session Log grows large again.
     advisory hooks to blocking — review on/after 2026-09-03) added; `tasks.md` gained an
     "Epic done when" checklist including an end-to-end loop-closure test. `plan.md` + README
     refreshed.
+- **Workflow-suggestion triage → new `session-entry-point` story.** Triaging a batch of
+  workflow-improvement suggestions into `root-doc-organization`. #1 — unified session entry
+  point — spun into its own story `docs/plan/session-entry-point/` (SEP-1..4: manual `/work`
+  skill, Feature/Bug routing, Feature branch offers the first 5 of `TODOS.md` "Priority-Ordered
+  Open Work", Bug branch offers open `docs/bugs/` entries) + **RDO-12** pointer row in
+  `root-doc-organization/tasks.md`. Decided: manual invocation only, no SessionStart hook.
+  #2 — convention enforcement — filed as **RDO-13**: `docs/plan/README.md` §Conventions made
+  canonical + self-contained (drop the dead `docs/archive/plan/README.md` pointer),
+  `docs/plan/_TEMPLATE/` + `check_story_structure.py` audit (into `md-organize`, not
+  pre-commit), ticked `tasks.md` lines carry `| Owner | Model | SHA |`, `TODOS.md` cut to
+  pointer-only items (no inline detail, no mirrored checkboxes, delete the line on story
+  completion). #3 — MD line width — folded into **RDO-5** (scope edit, not a new item):
+  200-char hard cap, semantic-linefeed prose style (one sentence/clause per line), check
+  extended to `docs/plan/**` + `docs/bugs/**`, `.py` unchanged at ruff 100. Further
+  suggestions still pending. Docs-only; commit deferred to the single end-of-triage commit.
 - **Workflow token-optimization** (plan: `~/.claude/plans/this-session-is-for-federated-goose.md`)
   — cut fixed per-session scaffolding cost (~5k tokens on a typical implementation session).
   Changes:

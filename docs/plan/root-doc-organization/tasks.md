@@ -3,11 +3,15 @@
 Work top-down. Each phase = one commit. See `plan.md` for the file-by-file detail.
 RDO-1 and RDO-2 are done. RDO-3 is closed as a partial (remainder → RDO-9); it is not a
 blocker. RDO-4, 5, 7, 8, 11 are independent. RDO-6 comes last (encodes final state). RDO-8
-was spun out of the RDO-2 audit and feeds RDO-5/RDO-6. RDO-9 replaces RDO-3's unworkable
-date cutoff. RDO-10 reconciles RDO-7 with the freshness hooks a parallel epic shipped the
-same day; RDO-11 decides whether those hooks become blocking.
+was spun out of the RDO-2 audit and feeds RDO-5/RDO-6. RDO-5 expanded 2026-08-27 — covers
+`docs/plan/**` + `docs/bugs/**` and defines the semantic-linefeed prose style. RDO-9
+replaces RDO-3's unworkable date cutoff. RDO-10 reconciles RDO-7 with the freshness hooks a parallel epic shipped the
+same day; RDO-11 decides whether those hooks become blocking. RDO-12 spins the unified
+`/work` session entry point into its own story (`docs/plan/session-entry-point/`). RDO-13
+makes `docs/plan/README.md` §Conventions enforceable (template + audit) and cuts `TODOS.md`
+back to pointer-only items.
 
-**Open: RDO-4, 5, 6, 7, 8, 9, 10, 11.** Epic completion criteria at the bottom of this file.
+**Open: RDO-4, 5, 6, 7, 8, 9, 10, 11, 12, 13.** Epic completion criteria at the bottom of this file.
 
 - [x] **RDO-1** — Slim `CONTEXT.md` to ≤400 lines, no line >200 chars; move module prose to
   `CONTEXT_TREE.md`. Verify: fresh `Read CONTEXT.md` returns whole file, no display-cap hit.
@@ -46,14 +50,25 @@ same day; RDO-11 decides whether those hooks become blocking.
 - [ ] **RDO-4** — Move `BUGS.md` → `docs/archive/BUGS_LEGACY.md` (3-line stub at root);
   move `GLOSSARY.md` → `docs/GLOSSARY.md` (no stub, add `CLAUDE.md` Quick-reference row).
   Fix all inbound links.
-- [ ] **RDO-5** — Add `scripts/hooks/check_root_md_line_length.py` + `.pre-commit-config.yaml`
-  entry `root-md-line-length`. Verify: `pre-commit run root-md-line-length --all-files` green
-  after RDO-1..4.
+- [ ] **RDO-5** — Add `scripts/hooks/check_md_line_length.py` + `.pre-commit-config.yaml`
+  entry `md-line-length` (renamed from `root-md-line-length` — scope is wider now). Hard cap
+  **200 chars**, a backstop for table rows + fenced code; the check enforces only this
+  ceiling. Scope: root `.md` **plus `docs/plan/**` + `docs/bugs/**` `.md`** — the story docs
+  hand-wrapped at ~90 cols are the main offenders, not the root files.
+  **Prose style (decided 2026-08-27, recorded in RDO-13 §Conventions): semantic linefeeds**
+  — one sentence/clause per line, no fixed-width hand-wrap for prose; ~120 is a soft target,
+  not gated. `.py` stays at ruff's `line-length = 100` (unchanged; ruff already excludes
+  `docs/`). Also delete the contradictory "Hard-wrap to ≤100 chars" instruction in `plan.md`
+  Phase 1 step 1, and update the `files:` regex + `id` in `plan.md` Phase 5's yaml block.
+  Verify: `pre-commit run md-line-length --all-files` green after RDO-1..4.
 - [ ] **RDO-6** — Rename `.claude/skills/md-cleanup/` → `md-organize/`, rewrite `SKILL.md`:
   broaden triggers, fix the "must stay at root" table, add CONTEXT.md re-slim + DECISIONS
-  roll + line-length + `CLAUDE.md` pointer-reconciliation steps. **Add (RDO-2):** an
+  roll + line-length (200 cap) + semantic-linefeed prose reflow (RDO-5) + `CLAUDE.md`
+  pointer-reconciliation steps. **Add (RDO-2):** an
   "AGENTS.md ← CLAUDE.md re-sync" step — diff the two protocol bodies and re-apply the
   Antigravity deltas whenever `CLAUDE.md` changed since the last sync.
+  **Add (RDO-12):** include `.claude/skills/work/SKILL.md` in the re-sync scope — its
+  Feature/Bug routing text duplicates `CLAUDE.md` Step 1 and must not drift.
 - [ ] **RDO-7** — Add report-only `DOC STALENESS` section to
   `.claude/skills/session-close/SKILL.md` (Option A in `plan.md`). Report only — no
   unattended commits.
@@ -140,12 +155,58 @@ same day; RDO-11 decides whether those hooks become blocking.
      RULE entry in `DECISIONS.md`, so the hook contract is documented, not only coded.
   Depends on RDO-10 #5 for the threshold values; otherwise independent.
 
+- [ ] **RDO-12** — Unified session entry point (`/work` skill). Spun out of the 2026-08-27
+  workflow-suggestion triage; full spec in `docs/plan/session-entry-point/` (SEP-1..4).
+  1. Manual `/work` skill routes a task-shaped session to **Feature** (first 5 of `TODOS.md`
+     "Priority-Ordered Open Work") or **Bug** (`docs/bugs/` open entries), then loads that
+     prompt + first unchecked task + `CONTEXT.md` and hands to `CLAUDE.md` Step 2b.
+  2. `CLAUDE.md` Step 1 + `AGENTS.md` point at `/work`; the scattered per-work-type load
+     hints collapse into the skill (one source of truth).
+  3. Feeds RDO-6 — `md-organize` re-sync scope gains `.claude/skills/work/SKILL.md`.
+  No SessionStart hook — manual invocation only (decided 2026-08-27).
+  Verify: `/work` in a real session reaches a loaded prompt on both branches; see
+  `docs/plan/session-entry-point/tasks.md` "Epic done when".
+
+- [ ] **RDO-13** — `docs/plan/` + `TODOS.md` convention enforcement. From the 2026-08-27
+  workflow-suggestion triage. `docs/plan/README.md` §Conventions is the single source of
+  truth; `docs/archive/plan/README.md` §Conventions is dead (old per-story-file scheme) —
+  delete the "Full conventions" pointer to it.
+  1. **Canonical story-folder spec.** Rewrite `docs/plan/README.md` §Conventions to fix the
+     exact file set — `prompt.md` + `tasks.md` required, `stories.md` + `spec.md` optional;
+     no `<slug>_` filename prefix. Add `docs/plan/_TEMPLATE/` (copyable skeleton). Record the
+     MD wrapping style here too — semantic linefeeds, 200-char backstop (see RDO-5).
+  2. **Task-line format.** Every `tasks.md` checkbox, when completed, carries
+     `| Owner: <Claude|Antigravity|Animesh> | Model: <model|n/a> | SHA: <sha>` — records the
+     Step 3b routing outcome + the commit per task (Model = implementing model when
+     Owner=Claude, `n/a` otherwise — confirm during build). Document in the same §Conventions
+     block and in `CLAUDE.md` "After each task".
+  3. **`check_story_structure.py`.** `scripts/hooks/` script: every non-archived
+     `docs/plan/*/` folder has the required files; flags stray/empty folders (sweeps the
+     empty `monitor-and-close-hardening/` + `paper-ic-daily-snapshot/`). Wired into RDO-6's
+     `md-organize` as a periodic audit step — not pre-commit (folders churn ~monthly).
+     Optional: pre-commit on added folders only (`git diff --diff-filter=A`).
+  4. **`TODOS.md` hygiene rule.** Priority-list items are pointer-only: title + story/bug
+     path + next task + one-line why. No inline multi-paragraph detail (items 14/22/29 are
+     the current offenders — retrofit). Task-level progress is marked ONLY in the story's
+     `tasks.md` / `docs/bugs/task.md`, never mirrored into `TODOS.md`. When a story/bug is
+     fully done, its `TODOS.md` line is deleted (moved to `docs/archive/TODOS_ARCHIVE.md`),
+     not just ticked. Add a header pointer in `TODOS.md` to `docs/plan/` + `docs/bugs/` as
+     the task-tracking homes. Encode in `CLAUDE.md` §Step 5a + the `session-close` /
+     `md-organize` skills.
+  5. Grandfather existing folders — the audit lists offenders; retrofit opportunistically,
+     not in one big bang.
+  Feeds RDO-6 (audit step) and RDO-12 (clean first-5 `TODOS.md` items). Independent otherwise.
+  Verify: `_TEMPLATE/` exists; `check_story_structure.py` green after retrofit; a freshly
+  ticked `tasks.md` task shows the `Owner|Model|SHA` tail; `docs/plan/README.md` §Conventions
+  is self-contained (no archive pointer).
+
 ## Epic done when
 
 All boxes checked:
 - [ ] **RDO-4** — `BUGS.md` / `GLOSSARY.md` relocated, all inbound links fixed.
-- [ ] **RDO-5** — `root-md-line-length` pre-commit hook green on every root `.md`
-      (`CONTEXT_TREE.md` long lines from RDO-1 cleared here).
+- [ ] **RDO-5** — `md-line-length` hook (200-char cap) green on root `.md` + `docs/plan/**`
+      + `docs/bugs/**`; semantic-linefeed prose style recorded in §Conventions;
+      `plan.md` Phase 1's "≤100" contradiction removed.
 - [ ] **RDO-6** — `md-organize` skill exists; "stay at root" table matches reality; includes
       CONTEXT re-slim / DECISIONS roll / line-length / `CLAUDE.md` pointer-reconcile /
       `AGENTS.md` ↔ `CLAUDE.md` re-sync steps.
@@ -157,6 +218,11 @@ All boxes checked:
 - [ ] **RDO-10** — both hooks in `plan.md` inventory + RDO-6 re-sync scope; `#4` resolved;
       final skill name picked.
 - [ ] **RDO-11** — hook enforcement decision made and recorded in `DECISIONS.md`.
+- [ ] **RDO-12** — `/work` skill exists and routes Feature/Bug; `CLAUDE.md` + `AGENTS.md`
+      point at it; see `docs/plan/session-entry-point/` "Epic done when".
+- [ ] **RDO-13** — `docs/plan/README.md` §Conventions is canonical + self-contained;
+      `_TEMPLATE/` + `check_story_structure.py` exist; ticked task lines carry
+      `Owner|Model|SHA`; `TODOS.md` pointer-only rule encoded; empty story folders swept.
 - [ ] **`prompt.md` DoD rewritten** to the delivered design — drop the dead pre-2026H1
       date-cutoff line, state the hook + semantic-split reality.
 - [ ] **Loop-closure check** — one real session, start to finish, confirms the mechanism
