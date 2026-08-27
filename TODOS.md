@@ -117,8 +117,15 @@ this file's Session Log grows large again.
     `.cost.total_cost_usd` and a `/Nk` used-tokens suffix on the ctx segment from
     `.context_window.used_tokens` (both degrade to nothing when the field is absent — tested).
     Global file, not in-repo; noted in the TODOS-update commit body.
-  - [ ] `/context` baseline not captured — slash commands aren't callable as tools mid-session
-    and the check was optional. Run manually next session to confirm the ~5k/session drop.
+  - [x] `/context` snapshot (Animesh ran it manually, session `92c04e16`, ~9% used, 94.8k/1M):
+    fixed scaffolding now — system prompt 3k, system tools 18.6k, memory files 10k
+    (`CLAUDE.md` 8.3k + `~/.claude/CLAUDE.md` 1.6k + `MEMORY.md` 0.1k), skills 2.8k, custom
+    agents 0.24k. Messages grew 60.9k→65.3k across the session. A clean cross-session
+    before/after for the ~5k hook-reinjection saving isn't recoverable from one session — the
+    saving is in per-turn message growth, not a static category; the once-per-session gate
+    files (`task_protocol`, `guard_src_reads`, `cbm-code-discovery-gate`) were all confirmed
+    single-fire above, which is the mechanism that delivers it. `logs/context.log` not
+    written (`/context &> file` is client-side, redirect is inert; `logs/` is gitignored).
 - **ROLL-4** (SHA `30bac70`) — migrated `TelegramGateway.send_approval_request`'s message
   formatting: added a bold `*Context:*` section label separating the decision-summary header
   from the escaped `context_str` block, plus a regression test proving an underscore-bearing
