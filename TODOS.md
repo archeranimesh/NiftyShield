@@ -87,6 +87,35 @@ this file's Session Log grows large again.
   failure anecdotes, deduped the AI-Collaboration section against Step 3b/AutoTrigger; fixed
   `AGENTS.md`'s dead `md-organize` reference → `md-cleanup` Step 7 (new: re-sync AGENTS.md
   when CLAUDE.md changes). Docs/hooks only, no `.py` touched — no code-reviewer, no test-runner.
+
+  **Next-session validation** (global hooks were only bash-harness tested, not under a real
+  `$PPID`) — check these early in the next session:
+  - [ ] First action `Read CONTEXT.md` — succeeds with **no** `cbm-code-discovery-gate`
+    `exit 2` block.
+  - [ ] First task-shaped prompt → full `⚙️ TASK PROTOCOL` checklist. Second task-shaped
+    prompt → the one-line `TASK PROTOCOL active …` pointer only.
+  - [ ] First `src/` file `Read` → full `⛔ PROTOCOL REMINDER` decision tree once; second
+    `src/` Read → one-line `graph-before-Read still applies` only.
+  - [ ] First `Read src/<any>.py` → still emits the one-time `BLOCKED: … codebase-memory-mcp`
+    gate (path-aware block still fires for real code).
+  - [ ] `SessionStart` reminder is a single line, not the old 15-line block.
+  - On failure: hooks are `~/.claude/hooks/cbm-code-discovery-gate` +
+    `~/.claude/hooks/cbm-session-reminder` (global) and `.claude/hooks/guard_src_reads.sh` +
+    `.claude/hooks/task_protocol.sh` (repo). Gate files `/tmp/cbm-code-discovery-gate-$PPID`,
+    `/tmp/niftyshield-guard-$PPID`, `/tmp/niftyshield-task-protocol-$PPID` — `rm` to re-test
+    first-fire within one session.
+
+  **Task 5 (optional, not started) — measurement + permission tooling:**
+  - [ ] Run `/fewer-permission-prompts` — scans this machine's transcripts for recurring
+    read-only Bash/MCP calls, writes a prioritized allowlist into `.claude/settings.json`.
+    Review it (drop anything state-mutating), commit as
+    `chore(claude): add read-only permission allowlist`.
+  - [ ] Statusline token/cost: read `~/.claude/statusline-command.sh` (gets Claude Code's
+    session JSON on stdin — has a `cost` object: `total_cost_usd`, `total_duration_ms`, plus
+    model/context fields). Append a segment rendering `$` cost and context tokens if exposed.
+    Global file — note in commit body.
+  - [ ] Optional baseline: `/context` at session start and again after, record both numbers
+    here to confirm the ~5k/session reduction landed.
 - **ROLL-4** (SHA `30bac70`) — migrated `TelegramGateway.send_approval_request`'s message
   formatting: added a bold `*Context:*` section label separating the decision-summary header
   from the escaped `context_str` block, plus a regression test proving an underscore-bearing
