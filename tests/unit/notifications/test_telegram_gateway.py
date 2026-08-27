@@ -275,6 +275,30 @@ async def test_send_approval_request_escapes_backtick_in_context_str() -> None:
     assert r"\`NSE\_FO\|65900\`" in text
 
 
+async def test_send_approval_request_strategy_id_with_underscore_survives() -> None:
+    """A strategy_id/instrument label with an underscore in context_str must render
+    as literal text, not silently open/break a MarkdownV2 italic entity (same
+    regression-test pattern as ROLL-1's DELTA_WARN-class coverage)."""
+    gw = _make_gateway()
+    mock_session = _make_http_mock({"ok": True, "result": {"message_id": 1}})
+    context_with_ids = "Strategy: paper_ic_nifty_v2_monthly\nLeg: NIFTY_25AUG_24500_CE"
+    with patch(
+        "src.notifications.telegram_gateway.aiohttp.ClientSession",
+        return_value=mock_session,
+    ):
+        result = await gw.send_approval_request(
+            event=_make_signal_event(),
+            context_str=context_with_ids,
+        )
+    assert result == 1
+    payload = mock_session.post.call_args[1]["json"]
+    text = payload["text"]
+    assert "paper_ic_nifty_v2_monthly" not in text
+    assert r"paper\_ic\_nifty\_v2\_monthly" in text
+    assert "NIFTY_25AUG_24500_CE" not in text
+    assert r"NIFTY\_25AUG\_24500\_CE" in text
+
+
 async def test_send_approval_request_returns_none_on_empty_valid_actions() -> None:
     """Missing/empty valid_actions → return None without posting to Telegram."""
     gw = _make_gateway()

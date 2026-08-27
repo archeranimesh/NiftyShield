@@ -119,6 +119,7 @@ class TelegramGateway:
             f"*⚡ Action required — {escape_markdown(event.event_type)}*\n"
             f"Severity: {escape_markdown(event.severity)}\n"
             f"{escape_markdown(event.description)}\n\n"
+            f"*Context:*\n"
             f"{escape_markdown(context_str[:400])}"
         )
         keyboard = _build_keyboard(valid_actions)
