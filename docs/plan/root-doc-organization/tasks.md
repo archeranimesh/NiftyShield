@@ -61,7 +61,7 @@ priority-ordered bug+feature queue — the list `/work` reads to build its menu.
   decision, prose not a link), `docs/plan/dev-foundation/**` (CH-3 completed-story records),
   `docs/plan/full-repo-review/findings/**` + `stories.md:263` (root-inventory audit
   snapshots), `docs/archive/**` (already archived). Docs-only, no code-reviewer.
-  | Owner: Claude | Model: claude-sonnet-5 | SHA: PENDING
+  | Owner: Claude | Model: claude-sonnet-5 | SHA: 5bb5848
 - [ ] **RDO-5** — Add `scripts/hooks/check_md_line_length.py` + `.pre-commit-config.yaml`
   entry `md-line-length` (renamed from `root-md-line-length` — scope is wider now). Hard cap
   **200 chars**, a backstop for table rows + fenced code; the check enforces only this
