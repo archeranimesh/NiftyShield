@@ -5,7 +5,7 @@ See `prompt.md` for the skill design.
 
 **Open: SEP-2, 3, 4.**
 
-- [x] **SEP-1** — Author `.claude/skills/work/SKILL.md`. | Owner: Claude | Model: claude-sonnet-5 | SHA: pending
+- [x] **SEP-1** — Author `.claude/skills/work/SKILL.md`. | Owner: Claude | Model: claude-sonnet-5 | SHA: 08b74a4
   1. Trigger phrases: "work", "start work", "pick up a task", "/work". Front-matter + a
      one-screen body.
   2. Step A — skip-through detection (message already names a story / bug / RDO id) vs
