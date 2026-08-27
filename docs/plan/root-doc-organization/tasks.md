@@ -222,6 +222,35 @@ priority-ordered bug+feature queue — the list `/work` reads to build its menu.
   `docs/plan/*/` or `docs/bugs/` path; no superseded items; bugs and features interleaved by
   priority.
 
+- [ ] **RDO-15** — Same-id checkbox duplication audit + drift guard. From the 2026-08-27
+  observation that `docs/plan/session-entry-point/tasks.md` (and by pattern most story
+  `tasks.md`) tracks each task id with **two** checkboxes — one in the working task list, one
+  in the trailing `## Epic done when` summary — plus a third state signal in
+  `docs/plan/README.md` and any `stories.md` DoD box. Ticking one and forgetting the others
+  silently desyncs; a reader/agent can then treat a stale box as authoritative. Same class as
+  `TODOS.md` mirroring (RDO-13 §4) and `AGENTS.md` ↔ `CLAUDE.md` divergence (RDO-8 #5) —
+  duplicated state with no reconciliation.
+  1. **Sweep.** Script (extend RDO-13's `check_story_structure.py`, or a sibling
+     `check_checkbox_consistency.py`): for every non-archived `docs/plan/*/tasks.md` and
+     `docs/bugs/task.md`, parse `- [ ] / - [x] **<ID>**` lines, group by `<ID>`, flag any id
+     whose checkbox state is not identical across all its occurrences in the file.
+  2. **Decide the model per file.** Either (a) one checkbox per id — the working list is the
+     sole source of truth, the `Epic done when` block becomes an unchecked *criteria* list
+     (prose, no `- [ ]`), or (b) keep the summary but mark it "mirror — do not hand-edit" and
+     have the script enforce equality. Pick one convention, record it in
+     `docs/plan/README.md` §Conventions, retrofit `_TEMPLATE/`.
+  3. **Cross-file.** `tasks.md` id-state vs `docs/plan/README.md` "next task" column vs
+     `stories.md` DoD box — document which is canonical (tasks.md) and that the others are
+     derived; the sweep script warns on `README.md` "next task" pointing at an already-ticked
+     id.
+  4. Wire the check into RDO-6's `md-organize` periodic audit (same cadence as
+     `check_story_structure.py`), not pre-commit.
+  5. Grandfather — the sweep lists offenders; retrofit opportunistically. Fix
+     `session-entry-point/tasks.md` as the worked example.
+  Feeds RDO-6 (audit step) and RDO-13 (shares the checker script + §Conventions block).
+  Verify: the sweep script runs clean across `docs/plan/**` + `docs/bugs/` after retrofit;
+  §Conventions names the one-checkbox-per-id convention; `_TEMPLATE/tasks.md` follows it.
+
 ## Epic done when
 
 All boxes checked:
@@ -247,6 +276,9 @@ All boxes checked:
       `Owner|Model|SHA`; `TODOS.md` pointer-only rule encoded; empty story folders swept.
 - [ ] **RDO-14** — `TODOS.md` priority list is one `1..N` contiguous bug+feature queue;
       no superseded/duplicate items; internal cross-refs use folder names not item numbers.
+- [ ] **RDO-15** — checkbox-consistency sweep script runs clean across `docs/plan/**` +
+      `docs/bugs/`; one-checkbox-per-id convention recorded in §Conventions + `_TEMPLATE/`;
+      `session-entry-point/tasks.md` retrofitted as the worked example.
 - [ ] **`prompt.md` DoD rewritten** to the delivered design — drop the dead pre-2026H1
       date-cutoff line, state the hook + semantic-split reality.
 - [ ] **Loop-closure check** — one real session, start to finish, confirms the mechanism

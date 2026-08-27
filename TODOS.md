@@ -83,6 +83,13 @@ this file's Session Log grows large again.
   Quick-reference table gains a `/work` row. Docs-only. Next: SEP-3 (`AGENTS.md` mirror +
   `md-organize` re-sync scope).
 
+- **RDO-15 filed (root-doc-organization).** Animesh flagged that story `tasks.md` files track
+  each task id with two checkboxes — the working list and the trailing `## Epic done when`
+  block (`session-entry-point/tasks.md` SEP-2 is the worked example) — plus a third state
+  signal in `docs/plan/README.md`; ticking one and missing the others silently desyncs. RDO-15
+  adds a checkbox-consistency sweep (extends RDO-13's `check_story_structure.py`), picks a
+  one-checkbox-per-id convention, and retrofits. Docs-only.
+
 - **`/work` priority-source fix.** `/work`'s Feature branch reads `TODOS.md` "Priority-Ordered
   Open Work", which had rotted (broken numbering `0e.`→`9.`, item 14 duplicated, `TGFMT-2..9`
   listed though superseded). Decided with Animesh: `TODOS.md` stays the canonical global
