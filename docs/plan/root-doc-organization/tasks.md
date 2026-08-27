@@ -12,7 +12,7 @@ makes `docs/plan/README.md` §Conventions enforceable (template + audit) and cut
 back to pointer-only items. RDO-14 restructures `TODOS.md`'s priority list into one
 priority-ordered bug+feature queue — the list `/work` reads to build its menu.
 
-**Open: RDO-6, 7, 8, 9, 10, 11, 13, 14, 15.** Epic completion criteria at the bottom of this file.
+**Open: RDO-6, 7, 9, 10, 11, 13, 14, 15.** Epic completion criteria at the bottom of this file.
 
 - [x] **RDO-1** — Slim `CONTEXT.md` to ≤400 lines, no line >200 chars; move module prose to
   `CONTEXT_TREE.md`. Verify: fresh `Read CONTEXT.md` returns whole file, no display-cap hit.
@@ -95,12 +95,28 @@ priority-ordered bug+feature queue — the list `/work` reads to build its menu.
   Antigravity deltas whenever `CLAUDE.md` changed since the last sync.
   **Add (RDO-12):** include `.claude/skills/work/SKILL.md` in the re-sync scope — its
   Feature/Bug routing text duplicates `CLAUDE.md` Step 1 and must not drift.
+  **Add (RDO-8):** `.agents/skills/` (kept — Antigravity autoloads it) is a drifted mirror of
+  `.claude/skills/` with stale `.Codex/` paths + "Codex" identity language from `16821d6`;
+  bring it into the re-sync scope and re-point it to `.claude/` on the first `md-organize` run.
+  (`.codex/` was deleted in RDO-8 — dead, nothing read it.)
 - [ ] **RDO-7** — Add report-only `DOC STALENESS` section to
   `.claude/skills/session-close/SKILL.md` (Option A in `plan.md`). Report only — no
   unattended commits.
-- [ ] **RDO-8** — Protocol-doc consistency cleanup (surfaced by the RDO-2 audit,
+- [x] **RDO-8** — Protocol-doc consistency cleanup (surfaced by the RDO-2 audit,
   2026-08-27). Independent of RDO-3..7; can be done in any order. Each bullet is a small
   targeted fix — one commit for the lot is fine since they are all protocol/doc consistency.
+  Done 2026-08-27: (1) `ANTIGRAVITY.md` step 2 docs/config-only bullet aligned to "skip
+  `code-reviewer` entirely" — matches `CLAUDE.md` / `AGENTS.md` 5c. (2) `.codex/` deleted
+  (`git rm -r` — dead, only self-referenced by its own `hooks.json`); `.agents/` kept per
+  Animesh (Antigravity autoloads it) → added to RDO-6's re-sync scope with a note about its
+  stale `.Codex/` refs. (3) `src/paper/` `src/nuvama/` `src/gamma/` rows added to the module
+  table in both `CLAUDE.md` and `AGENTS.md`; `AGENTS.md`'s "Also present on disk" note folded
+  into the table so the two match line-for-line. (4) `src/client/CLAUDE.md` heading + the
+  `src/client/` module-table row in both files reworded to "implementations (2 built + 1
+  variant + 1 planned)". (5) `CLAUDE.md`'s embedded "Rules for any review" lifted into a
+  standalone `## Rules for any review or handoff` section matching `AGENTS.md`; both bodies
+  set to identical full text. Docs/config-only, no code-reviewer.
+  | Owner: Claude | Model: claude-sonnet-5 | SHA: <pending>
   1. **Docs-only commit gate conflict.** `ANTIGRAVITY.md` §"Commit Protocol" step 2 requires a
      `code-reviewer.md` + `REVIEW.md` persona review even for a docs/config-only commit;
      `CLAUDE.md` 5c and `AGENTS.md` 5c both say docs-only → skip `code-reviewer` entirely.
@@ -295,7 +311,7 @@ All boxes checked:
       `AGENTS.md` ↔ `CLAUDE.md` re-sync steps.
 - [ ] **RDO-7** — session-close `DOC STALENESS` report added, or explicitly dropped as
       redundant per RDO-10 #1.
-- [ ] **RDO-8** — all 5 protocol-doc consistency fixes landed.
+- [x] **RDO-8** — all 5 protocol-doc consistency fixes landed. Done 2026-08-27 (SHA `<pending>`).
 - [ ] **RDO-9** — `DECISIONS.md` ≤ 800 lines; work-log entries split to
       `docs/archive/DECISIONS_worklog_2026.md`; 9a STILL-ENFORCED list signed off by Animesh.
 - [ ] **RDO-10** — both hooks in `plan.md` inventory + RDO-6 re-sync scope; `#4` resolved;

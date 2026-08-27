@@ -20,7 +20,7 @@ from src.client.upstox_live import UpstoxLiveClient
 
 ---
 
-## Four Implementations
+## Implementations (2 built + 1 variant + 1 planned)
 
 | Class | File | When Used | Network |
 |---|---|---|---|

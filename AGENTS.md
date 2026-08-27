@@ -315,12 +315,13 @@ Never use a lower-ranked response to contradict Stage 3.
 
 ## Rules for any review or handoff
 
-(Promoted from the full-repo-review epic per its FR-1 finding that these generalize —
-`docs/plan/full-repo-review/findings/FR-1_protocol-reviewer.md` Step 5.)
+(Promoted from the full-repo-review epic per its FR-1 finding that these three generalize
+beyond the epic itself — `docs/plan/full-repo-review/findings/FR-1_protocol-reviewer.md` Step 5.)
 
 1. **Rate severity by mission impact, not by finding volume.** Severity is tied to actual
    business impact (does this expose capital, does this cost a real decision-quality point) —
-   not to how many findings make a review look thorough.
+   not to how many findings make a review look thorough. A padded list of INFO-level nitpicks
+   is as useless as a review that rubber-stamps everything.
 2. **Verify your own citations before asserting them.** Before citing a file, line, or
    DECISIONS.md entry as "live" or "current," check it against the repo — do not trust a
    prior pass or your own memory of the codebase.
@@ -388,12 +389,12 @@ multi-file implementation, TDD loops, and commit execution.
 |---|---|
 | `src/portfolio/` | Leg/Trade distinction, Decimal invariant, `apply_trade_positions()`, strategy_name constraint |
 | `src/mf/` | Transaction ledger model, AMFI source, Decimal TEXT invariant, MFHolding location |
-| `src/client/` | BrokerClient protocol rule, 4 implementations, blocked methods, two-token constraint |
+| `src/client/` | BrokerClient protocol rule, implementations (2 built + 1 variant + 1 planned), blocked methods, two-token constraint |
 | `src/notifications/` | Non-fatal contract, `build_notifier()` → None, HTML parse_mode |
 | `src/dhan/` | LTP via Upstox batch, two-phase fetch, classification config, double-count prevention |
-
-Also present on disk (read when working there): `src/paper/CLAUDE.md`, `src/nuvama/CLAUDE.md`,
-`src/gamma/CLAUDE.md`.
+| `src/paper/` | Paper-trading engine — `PaperStore` tables, `PaperTracker` P&L, fill simulator, `TradeState` enum |
+| `src/nuvama/` | Bonds + options readers (pure parse + aggregate), `NuvamaStore` SQL-layer aggregation |
+| `src/gamma/` | Near-Expiry Gamma Buy scaffolding — frozen models + `GammaStore` |
 
 ---
 

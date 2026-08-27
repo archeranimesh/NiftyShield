@@ -343,10 +343,22 @@ does not load `REVIEW.md`.
 - Workflow division by phase: `docs/antigravity/ai_collaboration_plan.md`
 - Job-type → surface/model routing: `docs/plan/full-repo-review/findings/FR-8_practitioner-devex.md`
 
-**Rules for any review — Claude reviewing Antigravity's work, `code-reviewer` runs, or human handoffs** (promoted from the full-repo-review epic's prompt, per that epic's FR-1 finding that these three generalize beyond the epic itself — see `docs/plan/full-repo-review/findings/FR-1_protocol-reviewer.md` Step 5):
-1. **Rate severity by mission impact, not by finding volume.** Severity is tied to actual business impact (does this expose capital, does this cost a real decision-quality point) — not to how many findings make a review look thorough. A padded list of INFO-level nitpicks is as useless as a review that rubber-stamps everything.
-2. **Verify your own citations before asserting them.** Before citing a file, line, or DECISIONS.md entry as "live" or "current," check it against the repo — do not trust a prior pass or your own memory of the codebase.
-3. **Every review or handoff states at least one perspective it did not cover** — write "none identified" explicitly if genuinely nothing comes to mind; never omit the section.
+---
+
+## Rules for any review or handoff
+
+(Promoted from the full-repo-review epic per its FR-1 finding that these three generalize
+beyond the epic itself — `docs/plan/full-repo-review/findings/FR-1_protocol-reviewer.md` Step 5.)
+
+1. **Rate severity by mission impact, not by finding volume.** Severity is tied to actual
+   business impact (does this expose capital, does this cost a real decision-quality point) —
+   not to how many findings make a review look thorough. A padded list of INFO-level nitpicks
+   is as useless as a review that rubber-stamps everything.
+2. **Verify your own citations before asserting them.** Before citing a file, line, or
+   DECISIONS.md entry as "live" or "current," check it against the repo — do not trust a
+   prior pass or your own memory of the codebase.
+3. **Every review or handoff states at least one perspective it did not cover** — write
+   "none identified" explicitly if genuinely nothing comes to mind; never omit the section.
 
 ---
 
@@ -356,6 +368,9 @@ does not load `REVIEW.md`.
 |---|---|
 | `src/portfolio/` | Leg/Trade distinction, Decimal invariant, `apply_trade_positions()`, strategy_name constraint |
 | `src/mf/` | Transaction ledger model, AMFI source, Decimal TEXT invariant, MFHolding location |
-| `src/client/` | BrokerClient protocol rule, 4 implementations, blocked methods, two-token constraint |
+| `src/client/` | BrokerClient protocol rule, implementations (2 built + 1 variant + 1 planned), blocked methods, two-token constraint |
 | `src/notifications/` | Non-fatal contract, `build_notifier()` → None, HTML parse_mode |
 | `src/dhan/` | LTP via Upstox batch, two-phase fetch, classification config, double-count prevention |
+| `src/paper/` | Paper-trading engine — `PaperStore` tables, `PaperTracker` P&L, fill simulator, `TradeState` enum |
+| `src/nuvama/` | Bonds + options readers (pure parse + aggregate), `NuvamaStore` SQL-layer aggregation |
+| `src/gamma/` | Near-Expiry Gamma Buy scaffolding — frozen models + `GammaStore` |

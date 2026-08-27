@@ -76,6 +76,19 @@ this file's Session Log grows large again.
 
 ### 2026-08-27
 
+- **RDO-8 — protocol-doc consistency cleanup (root-doc-organization).** 5 fixes, one
+  docs/config-only commit: (1) `ANTIGRAVITY.md` step 2 docs/config-only bullet aligned to
+  "skip `code-reviewer` entirely" (was: adopt persona + evaluate) — now matches `CLAUDE.md` /
+  `AGENTS.md` 5c. (2) `git rm -r .codex/` (dead scaffolding from `16821d6`, only
+  self-referenced); `.agents/` kept per Animesh (Antigravity autoloads it), added to RDO-6's
+  re-sync scope with a note re its stale `.Codex/` refs. (3) `src/paper/` `src/nuvama/`
+  `src/gamma/` rows added to the module table in `CLAUDE.md` + `AGENTS.md`; `AGENTS.md`'s
+  "Also present on disk" note folded in so the two match. (4) `src/client/CLAUDE.md` heading
+  + `src/client/` row in both module tables reworded "implementations (2 built + 1 variant +
+  1 planned)". (5) `CLAUDE.md`'s embedded "Rules for any review" lifted to a standalone
+  `## Rules for any review or handoff` section matching `AGENTS.md`; both bodies set identical.
+  Next: RDO-6, RDO-7, or RDO-9.
+
 - **RDO-5 — `md-line-length` pre-commit hook (root-doc-organization).** Added
   `scripts/hooks/check_md_line_length.py` (200-char hard cap, all line kinds;
   `<!-- lint-ignore-length -->` on the preceding line excuses one unbreakable token) + local
