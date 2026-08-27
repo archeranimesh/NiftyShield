@@ -116,7 +116,7 @@ priority-ordered bug+feature queue — the list `/work` reads to build its menu.
   variant + 1 planned)". (5) `CLAUDE.md`'s embedded "Rules for any review" lifted into a
   standalone `## Rules for any review or handoff` section matching `AGENTS.md`; both bodies
   set to identical full text. Docs/config-only, no code-reviewer.
-  | Owner: Claude | Model: claude-sonnet-5 | SHA: <pending>
+  | Owner: Claude | Model: claude-sonnet-5 | SHA: bf26d81
   1. **Docs-only commit gate conflict.** `ANTIGRAVITY.md` §"Commit Protocol" step 2 requires a
      `code-reviewer.md` + `REVIEW.md` persona review even for a docs/config-only commit;
      `CLAUDE.md` 5c and `AGENTS.md` 5c both say docs-only → skip `code-reviewer` entirely.
@@ -311,7 +311,7 @@ All boxes checked:
       `AGENTS.md` ↔ `CLAUDE.md` re-sync steps.
 - [ ] **RDO-7** — session-close `DOC STALENESS` report added, or explicitly dropped as
       redundant per RDO-10 #1.
-- [x] **RDO-8** — all 5 protocol-doc consistency fixes landed. Done 2026-08-27 (SHA `<pending>`).
+- [x] **RDO-8** — all 5 protocol-doc consistency fixes landed. Done 2026-08-27 (SHA `bf26d81`).
 - [ ] **RDO-9** — `DECISIONS.md` ≤ 800 lines; work-log entries split to
       `docs/archive/DECISIONS_worklog_2026.md`; 9a STILL-ENFORCED list signed off by Animesh.
 - [ ] **RDO-10** — both hooks in `plan.md` inventory + RDO-6 re-sync scope; `#4` resolved;
