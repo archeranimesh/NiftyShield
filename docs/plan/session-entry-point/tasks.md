@@ -3,7 +3,7 @@
 Work top-down. Docs + `.claude/` only — no code-reviewer, no test-runner.
 See `prompt.md` for the skill design.
 
-**Open: SEP-4.**
+**Epic complete — all tasks shipped 2026-08-27.**
 
 - [x] **SEP-1** — Author `.claude/skills/work/SKILL.md`. | Owner: Claude | Model: claude-sonnet-5 | SHA: 08b74a4
   1. Trigger phrases: "work", "start work", "pick up a task", "/work". Front-matter + a
@@ -43,20 +43,26 @@ See `prompt.md` for the skill design.
   Quick-reference row added. RDO-6 already named `.claude/skills/work/SKILL.md` in its re-sync
   scope (added by the RDO-12 triage) — no edit needed; RDO-6 itself is still unshipped.
 
-- [ ] **SEP-4** — End-to-end check + close.
+- [x] **SEP-4** — End-to-end check + close. | Owner: Claude | Model: claude-sonnet-5 | SHA: <pending>
   1. One real session: `/work` → Feature → pick item 1 of the 5 → confirm the correct
      `prompt.md` + first unchecked task load and `CLAUDE.md` Step 2b begins.
   2. Repeat for the Bug branch.
   3. Update `docs/plan/README.md` status, `TODOS.md` session log, tick RDO-12 in
      `root-doc-organization/tasks.md`.
   Verify: both branches demonstrated in one session-log entry.
+  Done: this session — invoked as `/work on SEP-4 in session-entry-point`. Feature branch
+  demonstrated live (skip-through detection → `session-entry-point` (TODOS item 1) →
+  `prompt.md` + `tasks.md` loaded → SEP-4 identified as first unchecked → `CONTEXT.md` read →
+  Step 2b). Bug branch demonstrated via routing dry-run: open entries BUG-038 (first unchecked
+  B038.1) + BUG-037 (B037.6); BUG-019 listed as diagnostic-only/not-actionable. RDO-12 ticked
+  in `root-doc-organization/tasks.md`; `docs/plan/README.md` row flipped to ✅ Done.
 
 ## Epic done when
 
 - [x] **SEP-1** — `/work` skill authored, both branches functional, skip-through works.
 - [x] **SEP-2** — `CLAUDE.md` points at `/work`; load-hint duplication removed.
 - [x] **SEP-3** — `AGENTS.md` mirrors; `md-organize` re-sync scope names the skill.
-- [ ] **SEP-4** — both branches demonstrated end-to-end in one session.
+- [x] **SEP-4** — both branches demonstrated end-to-end in one session.
 
 ## After each task
 Tick the box, append `| SHA: <sha>`, update `docs/plan/README.md` + `TODOS.md` session log.

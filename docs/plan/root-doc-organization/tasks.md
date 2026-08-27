@@ -156,8 +156,11 @@ priority-ordered bug+feature queue — the list `/work` reads to build its menu.
      RULE entry in `DECISIONS.md`, so the hook contract is documented, not only coded.
   Depends on RDO-10 #5 for the threshold values; otherwise independent.
 
-- [ ] **RDO-12** — Unified session entry point (`/work` skill). Spun out of the 2026-08-27
+- [x] **RDO-12** — Unified session entry point (`/work` skill). Spun out of the 2026-08-27
   workflow-suggestion triage; full spec in `docs/plan/session-entry-point/` (SEP-1..4).
+  **Closed 2026-08-27** — `session-entry-point` epic complete (SEP-1..4); both `/work`
+  branches demonstrated end-to-end. `md-organize` re-sync scope already named the skill
+  (RDO-12 triage into RDO-6).
   1. Manual `/work` skill routes a task-shaped session to **Feature** (first 5 of `TODOS.md`
      "Priority-Ordered Open Work") or **Bug** (`docs/bugs/` open entries), then loads that
      prompt + first unchecked task + `CONTEXT.md` and hands to `CLAUDE.md` Step 2b.
@@ -269,8 +272,9 @@ All boxes checked:
 - [ ] **RDO-10** — both hooks in `plan.md` inventory + RDO-6 re-sync scope; `#4` resolved;
       final skill name picked.
 - [ ] **RDO-11** — hook enforcement decision made and recorded in `DECISIONS.md`.
-- [ ] **RDO-12** — `/work` skill exists and routes Feature/Bug; `CLAUDE.md` + `AGENTS.md`
-      point at it; see `docs/plan/session-entry-point/` "Epic done when".
+- [x] **RDO-12** — `/work` skill exists and routes Feature/Bug; `CLAUDE.md` + `AGENTS.md`
+      point at it; see `docs/plan/session-entry-point/` "Epic done when". Closed 2026-08-27 —
+      `session-entry-point` epic (SEP-1..4) complete; both branches demonstrated end-to-end.
 - [ ] **RDO-13** — `docs/plan/README.md` §Conventions is canonical + self-contained;
       `_TEMPLATE/` + `check_story_structure.py` exist; ticked task lines carry
       `Owner|Model|SHA`; `TODOS.md` pointer-only rule encoded; empty story folders swept.
