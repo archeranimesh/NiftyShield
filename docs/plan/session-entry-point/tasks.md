@@ -19,7 +19,7 @@ See `prompt.md` for the skill design.
      `task_protocol.sh`.
   Verify: invoke `/work` in a scratch session — both branches reach a loaded prompt.
 
-- [x] **SEP-2** — `CLAUDE.md` reconciliation. | Owner: Claude | Model: claude-sonnet-5 | SHA: <pending>
+- [x] **SEP-2** — `CLAUDE.md` reconciliation. | Owner: Claude | Model: claude-sonnet-5 | SHA: 774b8b9
   1. Step 1 — add a leading line: "Task-shaped session: invoke `/work` to route to
      feature / bug and load the right prompt."
   2. Remove the now-duplicated "Starting a new feature → also read `TODOS.md` + `PLANNER.md`"
