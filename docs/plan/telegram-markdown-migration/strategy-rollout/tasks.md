@@ -207,7 +207,7 @@
       | Tests: `tests/unit/strategy/test_cc_overlay_v1.py`,
       `tests/unit/strategy/test_collar_overlay_v1.py`, `tests/unit/strategy/test_pp_overlay_v1.py`,
       `tests/unit/strategy/test_auto_close.py`
-- [ ] **ROLL-4** — Migrate approval-request message formatting
+- [x] **ROLL-4** (SHA: 30bac70) — Migrate approval-request message formatting
       (`TelegramGateway.send_approval_request`) — coordinate with
       `telegram-approval-auth-fix` first | Blocked by: ROLL-3.1, ROLL-3.2, ROLL-3.3
       | Owner: Claude | Model: Sonnet | Review: **real @code-reviewer, Opus — mandatory** —

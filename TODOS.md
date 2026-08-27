@@ -71,3 +71,13 @@ Full forensic log (SHAs, bug numbers, root-cause detail) moved to
 2026-08-26 reorg (everything from 2026-08-01 through 2026-08-26, plus item 29's inline design
 history above). Add new entries there going forward, or start a fresh dated section here if
 this file's Session Log grows large again.
+
+### 2026-08-27
+
+- **ROLL-4** (SHA `30bac70`) — migrated `TelegramGateway.send_approval_request`'s message
+  formatting: added a bold `*Context:*` section label separating the decision-summary header
+  from the escaped `context_str` block, plus a regression test proving an underscore-bearing
+  strategy_id/instrument label in the approval body survives escaped. Coordination check against
+  `telegram-approval-auth-fix/tasks.md` confirmed clean (only T1, already shipped). Real
+  `@code-reviewer` (Opus persona) ran clean: 0 CRITICAL/ERROR/WARNING. See
+  `docs/plan/telegram-markdown-migration/strategy-rollout/tasks.md`.
