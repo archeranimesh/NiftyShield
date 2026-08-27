@@ -155,44 +155,7 @@ this file's Session Log grows large again.
     files (`task_protocol`, `guard_src_reads`, `cbm-code-discovery-gate`) were all confirmed
     single-fire above, which is the mechanism that delivers it. `logs/context.log` not
     written (`/context &> file` is client-side, redirect is inert; `logs/` is gitignored).
-- **ROLL-4** (SHA `30bac70`) — migrated `TelegramGateway.send_approval_request`'s message
-  formatting: added a bold `*Context:*` section label separating the decision-summary header
-  from the escaped `context_str` block, plus a regression test proving an underscore-bearing
-  strategy_id/instrument label in the approval body survives escaped. Coordination check against
-  `telegram-approval-auth-fix/tasks.md` confirmed clean (only T1, already shipped). Real
-  `@code-reviewer` (Opus persona) ran clean: 0 CRITICAL/ERROR/WARNING. See
-  `docs/plan/telegram-markdown-migration/strategy-rollout/tasks.md`.
-- **nuvama empty-book crash** (SHA `3b9b57f`) — `parse_options_positions()` assumed
-  `NetPosition()`'s `resp` was always a dict; Nuvama returns `{"resp": ""}` for a flat F&O
-  book, so the intraday tracker crashed with `TypeError` every 5 min all of 2026-08-26.
-  Confirmed session was valid via live `Holdings()` probe. Added a non-dict `resp` guard
-  → return `[]` + INFO log; 3 tests (empty-string / null / missing-key resp). Quirk
-  documented in `src/nuvama/CLAUDE.md`. `@code-reviewer` clean (0 CRITICAL/ERROR).
-  Also caught the same laptop-sleep gap this morning: pre_market_brief / start_monitor /
-  morning_nav missed at 09:00–09:15, re-run manually.
-- **RDO-1** (`root-doc-organization`) — slimmed `CONTEXT.md` 81K→10K bytes / 156→159 lines,
-  every line now ≤200 chars, full-file `Read` no longer breaks the 25K display cap
-  (~2.6K tokens/session vs ~20K). The run-on "What Exists" prose (one line was 18,740 chars)
-  was archived verbatim to `docs/archive/CONTEXT_WHAT_EXISTS_2026-08.md` and replaced with a
-  one-line-per-package list pointing to `CONTEXT_TREE.md` / `DECISIONS.md`. `CONTEXT_TREE.md`
-  gained the genuinely-missing structural facts (`overlay_coverage.py`,
-  `notifications/formatting.py`, a "Developer tooling" + "Research tooling" section). Verbose
-  stale "Test Coverage" per-module breakdown also archived; root copy is now count + last-green
-  date. Docs-only, no `src/` change, no code-reviewer. RDO-2..7 not started.
-- **RDO-2** (`root-doc-organization`) — Animesh confirmed Antigravity autoloads `AGENTS.md` by
-  name, so it stays a full standalone protocol equivalent to `CLAUDE.md` (not deleted, not a
-  stub). Rewrote it as a faithful Antigravity-adjusted mirror of the current `CLAUDE.md`:
-  agent identity Codex→Antigravity, dead `.Codex/skills/…` paths → `.claude/…`, module refs
-  fixed to `CLAUDE.md`; added the ~6 sections `CLAUDE.md` gained since the fork (scripts
-  logging standard + `no-script-main-logger`, Step 2b authoritative-mechanism, Step 3b
-  independence note, full Quick-reference rows, `docs/plan/README.md` in 5a, Step 5d,
-  review-rules trio); replaced the 120-line stale "Imported Claude Cowork" appendix (said
-  "400 tests / 3 implementations") with a trimmed "Antigravity Reference" — Decimal/TEXT + UTC
-  + async invariants inline, everything else (env vars, BrokerClient impl table, exception
-  hierarchy) as pointers to `src/config.py` / `src/client/CLAUDE.md` / `ANTIGRAVITY.md` to
-  avoid re-drift. (Follow-up SHA `5a9c4f5`: audit pass caught that the first draft named a
-  non-existent `UpstoxSandboxClient` and carried a hand-maintained env table — both replaced
-  with pointers; added the async-model conventions Antigravity can't see from the global
-  `~/.claude/CLAUDE.md`.) Long-line wrap deferred to RDO-5/6 so
-  the mirror stays line-for-line with the still-unwrapped `CLAUDE.md`. Added an
-  "AGENTS.md ← CLAUDE.md re-sync" step to RDO-6's scope. Docs-only, no code-reviewer.
+- Earlier 2026-08-27 entries — **ROLL-4** (`30bac70`), **nuvama empty-book crash** (`3b9b57f`),
+  **RDO-1**, **RDO-2** — moved verbatim to
+  [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md) (2026-08-27 section).
+  `git log --oneline` carries the sequence, each commit's `Why:` line the intent.

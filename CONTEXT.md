@@ -147,7 +147,7 @@ Strategy leg tables (instrument keys, entry prices, quantities, protected MF por
 
 ## Test Coverage
 
-- **~2982 tests, last green 2026-08-26** (2980 passed, 2 skipped — `python -m pytest tests/unit/`).
+- Test count: run `python -m pytest tests/unit/ --tb=no -q | tail -1` (last green 2026-08-26).
 - Per-module breakdown (last snapshot, not re-verified every pass):
   **[docs/archive/CONTEXT_WHAT_EXISTS_2026-08.md](docs/archive/CONTEXT_WHAT_EXISTS_2026-08.md)**
   §"Test Coverage".
