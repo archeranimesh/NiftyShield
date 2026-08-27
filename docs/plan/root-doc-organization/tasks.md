@@ -9,9 +9,10 @@ replaces RDO-3's unworkable date cutoff. RDO-10 reconciles RDO-7 with the freshn
 same day; RDO-11 decides whether those hooks become blocking. RDO-12 spins the unified
 `/work` session entry point into its own story (`docs/plan/session-entry-point/`). RDO-13
 makes `docs/plan/README.md` §Conventions enforceable (template + audit) and cuts `TODOS.md`
-back to pointer-only items.
+back to pointer-only items. RDO-14 restructures `TODOS.md`'s priority list into one
+priority-ordered bug+feature queue — the list `/work` reads to build its menu.
 
-**Open: RDO-4, 5, 6, 7, 8, 9, 10, 11, 12, 13.** Epic completion criteria at the bottom of this file.
+**Open: RDO-4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14.** Epic completion criteria at the bottom of this file.
 
 - [x] **RDO-1** — Slim `CONTEXT.md` to ≤400 lines, no line >200 chars; move module prose to
   `CONTEXT_TREE.md`. Verify: fresh `Read CONTEXT.md` returns whole file, no display-cap hit.
@@ -200,6 +201,27 @@ back to pointer-only items.
   ticked `tasks.md` task shows the `Owner|Model|SHA` tail; `docs/plan/README.md` §Conventions
   is self-contained (no archive pointer).
 
+- [ ] **RDO-14** — Restructure `TODOS.md` "Priority-Ordered Open Work" into one unified,
+  priority-ordered queue covering **both** `docs/plan/` stories and `docs/bugs/` open entries.
+  Today it is feature-only with rotted numbering (`0e.` then jumps to `9.`, item 14 listed
+  twice, `TGFMT-2..9` still present though superseded by item 29); bugs are absent except
+  BUG-030 wedged in as `0e`/`3`. This is the list `/work` (SEP) reads to build its first-5
+  menu, so its incoherence is a live problem, not cosmetic.
+  1. Single contiguous `1..N` numbering. Each item pointer-only per RDO-13 §4 — title,
+     `docs/plan/<story>/` or `docs/bugs/` path, next unchecked task id, one-line why; no
+     inline multi-paragraph detail.
+  2. Interleave bugs and features by actual priority — one queue, not two sections.
+  3. Drop superseded / duplicate entries; replace the internal `"Blocked by item N"`
+     number-refs with story-folder names so they stop rotting on every renumber.
+  4. Coordinate with SEP: once the queue is unified, `/work`'s separate Feature / Bug branches
+     can collapse to a single "top N of the queue" presentation — file a follow-up SEP task in
+     `docs/plan/session-entry-point/`; do not rework the skill here.
+  Feeds RDO-12 (a coherent first-5). Best done right after RDO-13 §4's pointer-only rule is
+  written, so both land consistent.
+  Verify: `TODOS.md` priority list is `1..N` contiguous; every item resolves to a live
+  `docs/plan/*/` or `docs/bugs/` path; no superseded items; bugs and features interleaved by
+  priority.
+
 ## Epic done when
 
 All boxes checked:
@@ -223,6 +245,8 @@ All boxes checked:
 - [ ] **RDO-13** — `docs/plan/README.md` §Conventions is canonical + self-contained;
       `_TEMPLATE/` + `check_story_structure.py` exist; ticked task lines carry
       `Owner|Model|SHA`; `TODOS.md` pointer-only rule encoded; empty story folders swept.
+- [ ] **RDO-14** — `TODOS.md` priority list is one `1..N` contiguous bug+feature queue;
+      no superseded/duplicate items; internal cross-refs use folder names not item numbers.
 - [ ] **`prompt.md` DoD rewritten** to the delivered design — drop the dead pre-2026H1
       date-cutoff line, state the hook + semantic-split reality.
 - [ ] **Loop-closure check** — one real session, start to finish, confirms the mechanism

@@ -13,7 +13,9 @@ story on this list. Do not jump between stories mid-sequence; the ordering below
 *which story to pick up next*, once the current one is done. Completed items are in
 `docs/archive/TODOS_ARCHIVE.md`.
 
-0e. [ ] **BUG-030 — `_overlay_type_groups` elif-precedence drops `overlay_cc` leg when `overlay_collar_put` also present same-day** (found 2026-08-13, open) — the "NiftyBees vs overlays" digest's `CC No data` line and an understated `Collar` P&L figure both trace to `paper_3track_snapshot.py::_overlay_type_groups()` checking `has_put` before `has_cc` in its `elif` chain, silently orphaning the `overlay_cc` leg from every group whenever `overlay_collar_put` is also present. Orthogonal to BUG-028 (namespace fix, already closed) — this is a leg-role grouping defect BUG-028's four phases never touched. See `docs/bugs/bugs.md` BUG-030, `docs/bugs/task.md` B030.1–B030.6, starting at **B030.1** (entry-side tagging question, blocks the grouping fix).
+1. [ ] **session-entry-point — unified `/work` entry point** (2026-08-27) — `docs/plan/session-entry-point/tasks.md`, starting at **SEP-2** (`CLAUDE.md` reconciliation). Top priority: `/work` routes task sessions off this list, so the skill must be sound before it is useful.
+2. [ ] **root-doc-organization — root `.md` cleanup + doc-maintenance automation** (2026-08-27) — `docs/plan/root-doc-organization/tasks.md`, starting at **RDO-4**. Includes **RDO-14** — restructure this section into a single priority-ordered queue covering both `docs/plan/` stories and `docs/bugs/` open entries.
+3. [ ] **BUG-030 — `_overlay_type_groups` elif-precedence drops `overlay_cc` leg when `overlay_collar_put` also present same-day** (found 2026-08-13, open) — the "NiftyBees vs overlays" digest's `CC No data` line and an understated `Collar` P&L figure both trace to `paper_3track_snapshot.py::_overlay_type_groups()` checking `has_put` before `has_cc` in its `elif` chain, silently orphaning the `overlay_cc` leg from every group whenever `overlay_collar_put` is also present. Orthogonal to BUG-028 (namespace fix, already closed) — this is a leg-role grouping defect BUG-028's four phases never touched. See `docs/bugs/bugs.md` BUG-030, `docs/bugs/task.md` B030.1–B030.6, starting at **B030.1** (entry-side tagging question, blocks the grouping fix).
 9. [ ] **IC yearly-expiry residual risk** (2026-07-23) — `docs/plan/ic-yearly-expiry-fix/tasks.md`, starting at **WG-1** (persist per-leg Greeks for weekly expiry bucket; YE-1..YE-4 superseded/already fixed live, see DECISIONS.md BUG-015).
 10. [ ] **Greeks Black-Scholes fallback** (2026-07-23) — `docs/plan/greeks-bs-fallback/tasks.md`, starting at **GF-1** (read-only audit scope).
 11. [ ] **MVP: Multi-bagger Value Picks Tracker** — `docs/plan/mvp/tasks.md`, starting at **M1.1**. Independent — does not block any other story on this list.
@@ -73,6 +75,14 @@ history above). Add new entries there going forward, or start a fresh dated sect
 this file's Session Log grows large again.
 
 ### 2026-08-27
+
+- **`/work` priority-source fix.** `/work`'s Feature branch reads `TODOS.md` "Priority-Ordered
+  Open Work", which had rotted (broken numbering `0e.`→`9.`, item 14 duplicated, `TGFMT-2..9`
+  listed though superseded). Decided with Animesh: `TODOS.md` stays the canonical global
+  priority file and must order **both** bugs and features. Quick fix now — prepended
+  `session-entry-point` (item 1) and `root-doc-organization` (item 2), renumbered the old `0e.`
+  BUG-030 entry to `3.`. Full restructure into one unified bug+feature queue filed as
+  **RDO-14** in `docs/plan/root-doc-organization/tasks.md`. Docs-only.
 
 - **Root state-doc staleness — round 2 of workflow token-optimization.** Problem: root state
   docs (`CONTEXT.md`, `TODOS.md`, `DECISIONS.md`, `PLANNER.md`, `DB_REGISTRY.md`, …) rot because
