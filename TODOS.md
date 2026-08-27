@@ -113,9 +113,11 @@ this file's Session Log grows large again.
     Conflicts with `root-doc-organization` Phase 7's "no unattended doc writes" — resolution
     tracked as **RDO-10**.
   - **Pending work from this session filed into `docs/plan/root-doc-organization/`:** RDO-3
-    annotated (date-cutoff unworkable, partial 7bbfaff recorded); **RDO-9** added (DECISIONS
-    semantic split); **RDO-10** added (reconcile RDO-7 with the #1/#2 hooks + #4). `plan.md`
-    inventory + Phase 3 and `docs/plan/README.md` status refreshed.
+    closed-partial (date-cutoff unworkable, 7bbfaff recorded); **RDO-9** (DECISIONS semantic
+    split), **RDO-10** (reconcile RDO-7 with the #1/#2 hooks + #4), **RDO-11** (graduate the
+    advisory hooks to blocking — review on/after 2026-09-03) added; `tasks.md` gained an
+    "Epic done when" checklist including an end-to-end loop-closure test. `plan.md` + README
+    refreshed.
 - **Workflow token-optimization** (plan: `~/.claude/plans/this-session-is-for-federated-goose.md`)
   — cut fixed per-session scaffolding cost (~5k tokens on a typical implementation session).
   Changes:

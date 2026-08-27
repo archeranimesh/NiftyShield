@@ -1,10 +1,13 @@
 # Root doc organization — tasks
 
 Work top-down. Each phase = one commit. See `plan.md` for the file-by-file detail.
-RDO-1 and RDO-2 are done. RDO-4, 5, 7, 8 are independent. RDO-6 comes last (encodes
-final state). RDO-8 was spun out of the RDO-2 audit and feeds RDO-5/RDO-6.
-RDO-3's date-cutoff approach was found unworkable 2026-08-27 — **superseded by RDO-9**.
-RDO-10 reconciles RDO-7 with the freshness hooks a parallel epic shipped the same day.
+RDO-1 and RDO-2 are done. RDO-3 is closed as a partial (remainder → RDO-9); it is not a
+blocker. RDO-4, 5, 7, 8, 11 are independent. RDO-6 comes last (encodes final state). RDO-8
+was spun out of the RDO-2 audit and feeds RDO-5/RDO-6. RDO-9 replaces RDO-3's unworkable
+date cutoff. RDO-10 reconciles RDO-7 with the freshness hooks a parallel epic shipped the
+same day; RDO-11 decides whether those hooks become blocking.
+
+**Open: RDO-4, 5, 6, 7, 8, 9, 10, 11.** Epic completion criteria at the bottom of this file.
 
 - [x] **RDO-1** — Slim `CONTEXT.md` to ≤400 lines, no line >200 chars; move module prose to
   `CONTEXT_TREE.md`. Verify: fresh `Read CONTEXT.md` returns whole file, no display-cap hit.
@@ -38,7 +41,8 @@ RDO-10 reconciles RDO-7 with the freshness hooks a parallel epic shipped the sam
   Futures+CC block). Partial done — 5 fully-historical self-contained sections lifted to
   `docs/archive/DECISIONS_pre-2026-07.md` behind a one-line index (336 KB → 330 KB,
   2302 → 2203 lines; `PLANNER.md` + `BACKTEST_PLAN_PHASE1.md` cross-refs repointed). | SHA: 7bbfaff
-  Remaining shrink → **RDO-9** (semantic split, not date).
+  **Status: closed as partial — no further work on RDO-3 itself.** Remaining shrink is a
+  different approach entirely, tracked as **RDO-9**.
 - [ ] **RDO-4** — Move `BUGS.md` → `docs/archive/BUGS_LEGACY.md` (3-line stub at root);
   move `GLOSSARY.md` → `docs/GLOSSARY.md` (no stub, add `CLAUDE.md` Quick-reference row).
   Fix all inbound links.
@@ -121,6 +125,47 @@ RDO-10 reconciles RDO-7 with the freshness hooks a parallel epic shipped the sam
      name; pick the final name once, here.
   5. Tune `state_doc_freshness.sh` thresholds — `DB_REGISTRY.md` trips at 36/35 with a
      2-day-old edit (known false positive).
+
+- [ ] **RDO-11** — Graduate the advisory doc-freshness hooks to enforcing. Observation
+  window opened 2026-08-27; **first review on/after 2026-09-03.**
+  1. `doc_update_gate.sh` (`7dae8e3`) — review ~1 week of firings: grep `git log` for
+     `[skip-docs]` escapes and for `.py`-under-`src/`|`scripts/` commits where the reminder
+     was a false positive (pure refactor, mid-phase multi-commit work). If the false-positive
+     rate is tolerable, flip `exit 0` → `exit 2` (blocking) and document the `[skip-docs]`
+     escape in `CLAUDE.md` 5c + `AGENTS.md` 5c. If not, tighten the staged-file match or keep
+     it advisory and re-review after another week.
+  2. `state_doc_freshness.sh` (`758dd6b`) — apply RDO-10 #5's threshold tuning, then confirm
+     the flag is signal not noise across 3–4 real sessions.
+  3. Record the final behaviour (blocking / advisory / tuned thresholds) as a STILL-ENFORCED
+     RULE entry in `DECISIONS.md`, so the hook contract is documented, not only coded.
+  Depends on RDO-10 #5 for the threshold values; otherwise independent.
+
+## Epic done when
+
+All boxes checked:
+- [ ] **RDO-4** — `BUGS.md` / `GLOSSARY.md` relocated, all inbound links fixed.
+- [ ] **RDO-5** — `root-md-line-length` pre-commit hook green on every root `.md`
+      (`CONTEXT_TREE.md` long lines from RDO-1 cleared here).
+- [ ] **RDO-6** — `md-organize` skill exists; "stay at root" table matches reality; includes
+      CONTEXT re-slim / DECISIONS roll / line-length / `CLAUDE.md` pointer-reconcile /
+      `AGENTS.md` ↔ `CLAUDE.md` re-sync steps.
+- [ ] **RDO-7** — session-close `DOC STALENESS` report added, or explicitly dropped as
+      redundant per RDO-10 #1.
+- [ ] **RDO-8** — all 5 protocol-doc consistency fixes landed.
+- [ ] **RDO-9** — `DECISIONS.md` ≤ 800 lines; work-log entries split to
+      `docs/archive/DECISIONS_worklog_2026.md`; 9a STILL-ENFORCED list signed off by Animesh.
+- [ ] **RDO-10** — both hooks in `plan.md` inventory + RDO-6 re-sync scope; `#4` resolved;
+      final skill name picked.
+- [ ] **RDO-11** — hook enforcement decision made and recorded in `DECISIONS.md`.
+- [ ] **`prompt.md` DoD rewritten** to the delivered design — drop the dead pre-2026H1
+      date-cutoff line, state the hook + semantic-split reality.
+- [ ] **Loop-closure check** — one real session, start to finish, confirms the mechanism
+      works end to end: a state doc goes stale under code churn → `state_doc_freshness.sh`
+      flags it at SessionStart → the flag is acted on (Step 5a or `md-organize`) → the flag
+      clears the next session. This is the actual test of "the docs preserve their state,"
+      not any individual hook.
+
+RDO-1, RDO-2 done. RDO-3 closed as partial (remainder = RDO-9).
 
 ## After each task
 Tick the box, append `| SHA: <sha>`, update `docs/plan/README.md` status column for this
