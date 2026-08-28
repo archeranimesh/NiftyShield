@@ -316,7 +316,7 @@ RDO-15 adds the checkbox-consistency sweep + the one-checkbox-per-id convention 
   reflowed to semantic linefeeds — the RDO-13-deferred backlog for this file).
   | Owner: Claude | Model: claude-sonnet-5 | SHA: e7cecab
 
-- [ ] **RDO-15** — Same-id checkbox duplication audit + drift guard. From the 2026-08-27
+- [x] **RDO-15** — Same-id checkbox duplication audit + drift guard. From the 2026-08-27
   observation that `docs/plan/session-entry-point/tasks.md` (and by pattern most story
   `tasks.md`) tracks each task id with **two** checkboxes — one in the working task list, one
   in the trailing `## Epic done when` summary — plus a third state signal in
@@ -344,6 +344,17 @@ RDO-15 adds the checkbox-consistency sweep + the one-checkbox-per-id convention 
   Feeds RDO-6 (audit step) and RDO-13 (shares the checker script + §Conventions block).
   Verify: the sweep script runs clean across `docs/plan/**` + `docs/bugs/` after retrofit;
   §Conventions names the one-checkbox-per-id convention; `_TEMPLATE/tasks.md` follows it.
+  **Done 2026-08-28 (Claude).** Chose convention (a) — Animesh delegated the call
+  ("you recommend"): `## Epic done when` blocks are prose acceptance criteria, no
+  checkboxes, so drift is structurally impossible (same principle as RDO-13 §4's no-mirror
+  rule for `TODOS.md`). Sibling script `check_checkbox_consistency.py` (not an extension of
+  `check_story_structure.py` — different file-vs-folder scope + exit semantics). §3 `stories.md`
+  DoD box: documented as a derived mirror, not swept. Retrofit was trivial — only 2 files
+  used the mirror (this one + `session-entry-point`), zero pre-existing state-drift. The
+  `session-entry-point` worked-example copy went to `docs/archive/plan/` in the same session
+  (epic was done, awaiting only this). Non-task item "loop-closure check" promoted to RDO-16.
+  Wired into `md-cleanup/SKILL.md` Step 5c (RDO-6 inherits it as `md-organize`).
+  | Owner: Claude | Model: claude-sonnet-5 | SHA: 5e48451
 
 - [ ] **RDO-16** — Loop-closure check: one real session, start to finish, confirms the
   doc-freshness mechanism works end to end — a state doc goes stale under code churn →

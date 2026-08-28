@@ -26,7 +26,7 @@ Bugs are **not** here — see `## Open Bugs`.
 Cross-references use folder names, never list positions, so renumbering can't rot them.
 
 1. **root-doc-organization** — `docs/plan/root-doc-organization/` — next **RDO-6**
-   (`md-organize` skill rewrite; encodes final state, comes last). RDO-7/10/11/15 also open.
+   (`md-organize` skill rewrite; encodes final state, comes last). RDO-7/10/11/16 also open.
    Root `.md` token-efficiency cleanup + doc-maintenance automation.
 2. **IC yearly-expiry residual risk** — `docs/plan/ic-yearly-expiry-fix/` — next **WG-1**
    (persist per-leg Greeks for the weekly-expiry bucket).
@@ -151,6 +151,22 @@ history above). Add new entries there going forward, or start a fresh dated sect
 this file's Session Log grows large again.
 
 ### 2026-08-28
+
+- **RDO-15 — checkbox-consistency sweep + one-box convention (root-doc-organization).**
+  2 commits. `5e48451`: new `scripts/hooks/check_checkbox_consistency.py` (+ 11 tests) —
+  sweeps `docs/plan/**/tasks.md` + `docs/bugs/task.md` for a checkbox inside an `## Epic done
+  when` block, same-id state drift in one file, and a README `next:` marker on an already-done
+  id; `--all` + path modes, runs in the `md-cleanup`/`md-organize` audit (Step 5c), not
+  pre-commit. Convention (a) chosen (Animesh delegated) — `## Epic done when` blocks are now
+  prose acceptance criteria, no checkboxes; working-list `tasks.md` state is the sole source,
+  drift structurally impossible (same principle as RDO-13 §4). Sibling script, not an
+  extension of `check_story_structure.py`. Retrofit trivial — only 2 files used the mirror
+  (`root-doc-organization`, `session-entry-point`), zero pre-existing drift; `_TEMPLATE/` +
+  `docs/plan/README.md` §"Checkbox consistency" updated. Id-less "loop-closure check" item
+  promoted to task **RDO-16**. `code-reviewer`: 0 CRITICAL/ERROR, 4 WARNING all fixed
+  (README slug regex underscore gap, `task.md` dir-glob, EXCLUDED filter style, test hints).
+  `session-entry-point` epic archived to `docs/archive/plan/` in the same session (was done,
+  awaiting only this worked-example use).
 
 - **RDO-9 — `DECISIONS.md` semantic split (root-doc-organization).** 3 commits.
   9a: full-file classification (2203 lines) + `options-strategist` advisory pass +
