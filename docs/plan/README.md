@@ -59,12 +59,12 @@ Risk delta gate (done) + Near-Expiry Gamma Buy `gamma_daily_watch.py`.
 **`variance-gate/`** · ⬜ Not started · next: **VG0** (CSP v1 spec reconciliation)
 CSP v1 Phase 0.8 deployment gate — spec reconciliation + gate criteria A–D.
 
-**`root-doc-organization/`** · 🔄 In progress · next: **RDO-9** (DECISIONS.md semantic split)
+**`root-doc-organization/`** · 🔄 In progress · next: **RDO-6** (`md-organize` skill rewrite)
 Token-efficiency cleanup of the ~22 root `.md` files + doc-maintenance automation.
 Docs + tooling only. RDO-1..15 + an "Epic done when" checklist in `tasks.md`.
-RDO-1/2/4/5/8/12/13/14 shipped, RDO-3 closed-partial; RDO-6/7/9/10/11/15 open.
-RDO-14 (2026-08-28) split `TODOS.md` into `## Feature Backlog` + `## Open Bugs` and added
-the §Conventions *Completion → archive* rule.
+RDO-1/2/4/5/8/9/12/13/14 shipped, RDO-3 closed-partial; RDO-6/7/10/11/15 open.
+RDO-9 (2026-08-28) semantic-split `DECISIONS.md`: 2203 → 972 lines / ~84K → ~22K tokens;
+completed-work log → `docs/archive/DECISIONS_worklog_2026.md`, 8 stale rule entries fixed.
 
 **`session-entry-point/`** · ✅ Done 2026-08-27 (SEP-1..4)
 Unified manual `/work` skill — routes a task session to Feature or Bug, loads the right

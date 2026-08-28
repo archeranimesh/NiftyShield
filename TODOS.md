@@ -25,8 +25,8 @@ story here; this list only decides *which story is next*.
 Bugs are **not** here — see `## Open Bugs`.
 Cross-references use folder names, never list positions, so renumbering can't rot them.
 
-1. **root-doc-organization** — `docs/plan/root-doc-organization/` — next **RDO-9**
-   (DECISIONS.md semantic split; RDO-6 encodes final state and comes last).
+1. **root-doc-organization** — `docs/plan/root-doc-organization/` — next **RDO-6**
+   (`md-organize` skill rewrite; encodes final state, comes last). RDO-7/10/11/15 also open.
    Root `.md` token-efficiency cleanup + doc-maintenance automation.
 2. **IC yearly-expiry residual risk** — `docs/plan/ic-yearly-expiry-fix/` — next **WG-1**
    (persist per-leg Greeks for the weekly-expiry bucket).
@@ -151,6 +151,25 @@ history above). Add new entries there going forward, or start a fresh dated sect
 this file's Session Log grows large again.
 
 ### 2026-08-28
+
+- **RDO-9 — `DECISIONS.md` semantic split (root-doc-organization).** 3 commits.
+  9a: full-file classification (2203 lines) + `options-strategist` advisory pass +
+  Animesh sign-off — scratch artifact `rdo9a_classification.md`. The file was big because
+  it is append-only and verbose inside a ~4-month window, not old — so split by *kind*:
+  9b `344f3a7` moved every completed-work-log entry (the chronological "fixed X, why" stream,
+  `## Process`, the dated `## BUG-*` sections, the delivered NSE Bhavcopy UDiFF spec, the
+  Telegram-MD sequencing narrative) → `docs/archive/DECISIONS_worklog_2026.md`; lifted 11
+  still-enforced rule fragments into a new `## Risk, Delta & Entry Gates` section + existing
+  sections; fixed 8 stale rule entries the 9a `options-strategist` pass caught (CSP/CC profit
+  target is 30% retention not 50%, CSP delta stop 0.40 not 0.45, CC DTE_REVIEW is ACTION not
+  WARN per EC-5, CC re-entry allow-list, CSP time-stop DTE guard from EC-4, Notifications
+  HTML→MarkdownV2, §7.3 IC-judged-in-isolation); merged the duplicate `## Market Calendar`
+  and `## Developer Tooling` headers. 9b `2fb5c5b` wrapped the file to semantic linefeeds,
+  `md-line-length` green, Strategy & Research table → bulleted index. Result: 2203 → 972
+  lines, ~84K → ~22K tokens, fresh full-file `Read` succeeds. **DoD deviation:** "≤ 800
+  lines" conflicts with the same DoD's semantic-linefeed requirement — flagged to Animesh;
+  token count is the metric that holds. Docs-only, no code-reviewer. `prompt.md` DoD +
+  `docs/plan/README.md` row updated; RDO-9 + `prompt.md`-DoD-rewrite epic-done boxes ticked.
 
 - **RDO-14 — `TODOS.md` restructure (root-doc-organization).** Design changed with Animesh:
   *not* one unified queue — two separate pointer-only lists, `## Feature Backlog` (`1..N`

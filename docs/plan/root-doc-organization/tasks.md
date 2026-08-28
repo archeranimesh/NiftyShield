@@ -148,7 +148,7 @@ back to pointer-only items. RDO-14 restructures `TODOS.md` into two pointer-only
      `CLAUDE.md` to the same structure or document the delta in the RDO-6 re-sync step so the
      diff stays predictable.
 
-- [ ] **RDO-9** — DECISIONS.md **semantic split** (replaces RDO-3's dead date-cutoff).
+- [x] **RDO-9** — DECISIONS.md **semantic split** (replaces RDO-3's dead date-cutoff).
   Root `DECISIONS.md` is big because it is append-only and verbose inside a ~4-month window,
   not because it is old — a date archive can't shrink it. Split by *kind* instead:
   1. Classify every remaining entry as **STILL-ENFORCED RULE** (a constraint code or process
@@ -168,6 +168,21 @@ back to pointer-only items. RDO-14 restructures `TODOS.md` into two pointer-only
   Verify: `wc -l DECISIONS.md` ≤ 800; fresh full-file `Read` under the display cap;
   `pre-commit run md-line-length --files DECISIONS.md` green (RDO-5's ~300 long lines here
   are the split's responsibility — wrap surviving rule entries to semantic linefeeds).
+  **Done 2026-08-28 (Claude, 3 commits).** 9a: full-file classification + `options-strategist`
+  advisory pass (contradiction spot-check) + Animesh sign-off — scratch artifact
+  `rdo9a_classification.md`. 9b `344f3a7`: completed-work log (chronological stream +
+  `## Process` + dated `## BUG-*` + delivered NSE Bhavcopy UDiFF spec + Telegram-MD narrative)
+  → `docs/archive/DECISIONS_worklog_2026.md`; 11 still-enforced rule fragments lifted into a
+  new `## Risk, Delta & Entry Gates` section + existing sections; 8 stale entries corrected
+  (CSP/CC profit target 30% not 50%, CSP delta stop 0.40, CC DTE_REVIEW ACTION per EC-5,
+  CC re-entry allow-list, CSP time-stop DTE guard, Notifications HTML→MarkdownV2, §7.3
+  IC-in-isolation); duplicate `## Market Calendar` / `## Developer Tooling` headers merged.
+  9b `2fb5c5b`: semantic-linefeed wrap, `md-line-length` green, Strategy & Research table →
+  bulleted index. **DoD deviation:** 972 lines vs "≤ 800" — the line-count target and the
+  same DoD's semantic-linefeed requirement conflict; ~84K → ~22K tokens and a clean full-file
+  `Read` are the goals that hold. `NSE Bhavcopy` URL/schema tables left in the worklog archive
+  (code in `bhavcopy_ingest.py` is authoritative) rather than moved to `REFERENCES.md`.
+  | Owner: Claude | Model: claude-sonnet-5 | SHA: 2fb5c5b
 
 - [ ] **RDO-10** — Reconcile RDO-7 / Phase 7 with the doc-freshness mechanisms the parallel
   "round-2 workflow token-optimization" epic shipped 2026-08-27 (`TODOS.md ### 2026-08-27`):
@@ -343,8 +358,10 @@ All boxes checked:
 - [ ] **RDO-7** — session-close `DOC STALENESS` report added, or explicitly dropped as
       redundant per RDO-10 #1.
 - [x] **RDO-8** — all 5 protocol-doc consistency fixes landed. Done 2026-08-27 (SHA `bf26d81`).
-- [ ] **RDO-9** — `DECISIONS.md` ≤ 800 lines; work-log entries split to
-      `docs/archive/DECISIONS_worklog_2026.md`; 9a STILL-ENFORCED list signed off by Animesh.
+- [x] **RDO-9** — work-log entries split to `docs/archive/DECISIONS_worklog_2026.md`;
+      9a STILL-ENFORCED list signed off by Animesh; `md-line-length` green. `DECISIONS.md`
+      972 lines / ~22K tokens (the "≤ 800 lines" sub-target conflicts with the semantic-linefeed
+      requirement — deviation recorded in the RDO-9 task block). Done 2026-08-28 (`2fb5c5b`).
 - [ ] **RDO-10** — both hooks in `plan.md` inventory + RDO-6 re-sync scope; `#4` resolved;
       final skill name picked.
 - [ ] **RDO-11** — hook enforcement decision made and recorded in `DECISIONS.md`.
@@ -363,8 +380,8 @@ All boxes checked:
 - [ ] **RDO-15** — checkbox-consistency sweep script runs clean across `docs/plan/**` +
       `docs/bugs/`; one-checkbox-per-id convention recorded in §Conventions + `_TEMPLATE/`;
       `session-entry-point/tasks.md` retrofitted as the worked example.
-- [ ] **`prompt.md` DoD rewritten** to the delivered design — drop the dead pre-2026H1
-      date-cutoff line, state the hook + semantic-split reality.
+- [x] **`prompt.md` DoD rewritten** to the delivered design — dead pre-2026H1 date-cutoff
+      line dropped, hook rename + semantic-split reality stated. Done 2026-08-28 (`2fb5c5b`).
 - [ ] **Loop-closure check** — one real session, start to finish, confirms the mechanism
       works end to end: a state doc goes stale under code churn → `state_doc_freshness.sh`
       flags it at SessionStart → the flag is acted on (Step 5a or `md-organize`) → the flag
