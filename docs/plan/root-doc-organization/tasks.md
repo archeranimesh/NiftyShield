@@ -14,7 +14,7 @@ back to pointer-only items. RDO-14 restructures `TODOS.md` into two pointer-only
 RDO-15 adds the checkbox-consistency sweep + the one-checkbox-per-id convention (prose
 `## Epic done when` blocks); RDO-16 is the epic loop-closure check promoted from that block.
 
-**Open: RDO-6, 7, 10, 11, 15, 16.** Epic completion criteria at the bottom of this file.
+**Open: RDO-6, 7, 11, 16.** Epic completion criteria at the bottom of this file.
 
 - [x] **RDO-1** — Slim `CONTEXT.md` to ≤400 lines, no line >200 chars; move module prose to
   `CONTEXT_TREE.md`. Verify: fresh `Read CONTEXT.md` returns whole file, no display-cap hit.
@@ -105,11 +105,21 @@ RDO-15 adds the checkbox-consistency sweep + the one-checkbox-per-id convention 
   Step 5a pointer to `docs/plan/README.md` §Conventions for the `| Owner | Model | SHA`
   task-line format + the `TODOS.md` pointer-only rule. Deferred from RDO-13 because staging
   either file pre-wrap trips `md-line-length` on its whole pre-existing backlog.
-  Also add `scripts/hooks/check_story_structure.py --all` as a periodic audit step (RDO-13 §3)
-  and pick the final `md-cleanup` → `md-organize` name (coordinate with RDO-10 #4).
+  Also add `scripts/hooks/check_story_structure.py --all` as a periodic audit step (RDO-13 §3).
+  Final name is **`md-organize`** (settled in RDO-10 #4) — do the `md-cleanup` → `md-organize`
+  rename and update the ~6 by-name references (`session-close/SKILL.md`, `CLAUDE.md`,
+  `AGENTS.md`, `TODOS.md`, `plan.md`, `docs/plan/README.md`).
+  **Add (RDO-10):** a step that verifies the two shipped doc-freshness hooks
+  (`.claude/hooks/state_doc_freshness.sh`, `.claude/hooks/doc_update_gate.sh`) still have
+  hard-coded doc lists matching `CLAUDE.md` §Step 5a — flag any drift, do not auto-edit.
 - [ ] **RDO-7** — Add report-only `DOC STALENESS` section to
-  `.claude/skills/session-close/SKILL.md` (Option A in `plan.md`). Report only — no
-  unattended commits.
+  `.claude/skills/session-close/SKILL.md`. Report only — no unattended commits.
+  **Scope narrowed by RDO-10 #1:** *not* the per-file src-commit counts from `plan.md`
+  Option A — `state_doc_freshness.sh` (SessionStart) and `doc_update_gate.sh` (PreToolUse)
+  already own that. RDO-7 reports only the *content gaps* neither hook can see:
+  (a) a `src/<module>/` directory added this session with no matching `CONTEXT_TREE.md` row;
+  (b) a story whose `src/` / `scripts/` code was touched this session but whose
+  `docs/plan/README.md` status column was not advanced in the same window.
 - [x] **RDO-8** — Protocol-doc consistency cleanup (surfaced by the RDO-2 audit,
   2026-08-27). Independent of RDO-3..7; can be done in any order. Each bullet is a small
   targeted fix — one commit for the lot is fine since they are all protocol/doc consistency.
@@ -186,7 +196,7 @@ RDO-15 adds the checkbox-consistency sweep + the one-checkbox-per-id convention 
   (code in `bhavcopy_ingest.py` is authoritative) rather than moved to `REFERENCES.md`.
   | Owner: Claude | Model: claude-sonnet-5 | SHA: 2fb5c5b
 
-- [ ] **RDO-10** — Reconcile RDO-7 / Phase 7 with the doc-freshness mechanisms the parallel
+- [x] **RDO-10** — Reconcile RDO-7 / Phase 7 with the doc-freshness mechanisms the parallel
   "round-2 workflow token-optimization" epic shipped 2026-08-27 (`TODOS.md ### 2026-08-27`):
   - `758dd6b` — `.claude/hooks/state_doc_freshness.sh`, `SessionStart`: per-state-doc flag
     when `src/`|`scripts/` commits since its last change exceed a threshold. Informational.
@@ -207,6 +217,29 @@ RDO-15 adds the checkbox-consistency sweep + the one-checkbox-per-id convention 
      name; pick the final name once, here.
   5. Tune `state_doc_freshness.sh` thresholds — `DB_REGISTRY.md` trips at 36/35 with a
      2-day-old edit (known false positive).
+  **Done 2026-08-28 (Claude, decisions with Animesh).**
+  1. RDO-7 **kept, narrowed.** The two hooks own "docs behind code" (commit-count proxy);
+     RDO-7's session-close report is re-scoped to the *content gaps* neither hook can see —
+     a new `src/<module>/` with no `CONTEXT_TREE.md` row, and a story whose code was touched
+     this session but whose `docs/plan/README.md` status column was not advanced. Report-only,
+     no per-file commit counts (the SessionStart hook already does those). RDO-7 task text
+     below updated to this scope.
+  2. Both hooks added to `plan.md` Phase 7 inventory; RDO-6 gains an "Add (RDO-10)" clause to
+     verify the two hooks' hard-coded doc lists still match `CLAUDE.md` §Step 5a on each
+     `md-organize` run.
+  3. `TODOS.md #4` (weekly cloud routine) — **narrowed to a future read-only Telegram
+     staleness digest**, explicitly out of scope for this epic (Phase 7 already flagged a
+     read-only Telegram report as an acceptable later add-on; the unattended-write cron stays
+     rejected). No new task filed — it is a post-epic add-on, recorded here and in `plan.md`
+     Phase 7.
+  4. Final skill name: **`md-organize`** (confirmed — matches `plan.md` Phase 6 + the RDO-6
+     title). RDO-6 does the rename + updates the ~6 by-name references.
+  5. `state_doc_freshness.sh` thresholds tuned: `CONTEXT_TREE.md` 35→60, `DB_REGISTRY.md`
+     35→60, `README.md` 40→60 (all three change only on new modules / tables / public-surface
+     shifts, so a src-commit count is a poor proxy). `CONTEXT.md` / `TODOS.md` (15) and
+     `docs/plan/README.md` (35) / `DECISIONS.md` / `PLANNER.md` (40) unchanged. RDO-11 #2
+     confirms these are signal-not-noise across 3–4 sessions.
+  | Owner: Claude | Model: claude-sonnet-5 | SHA: <pending>
 
 - [ ] **RDO-11** — Graduate the advisory doc-freshness hooks to enforcing. Observation
   window opened 2026-08-27; **first review on/after 2026-09-03.**
@@ -377,13 +410,17 @@ per-task status lives only in the working list above (`tasks.md` is the single s
 - **RDO-6** — `md-organize` skill exists; "stay at root" table matches reality; includes
   CONTEXT re-slim / DECISIONS roll / line-length / `CLAUDE.md` pointer-reconcile /
   `AGENTS.md` ↔ `CLAUDE.md` re-sync steps.
-- **RDO-7** — session-close `DOC STALENESS` report added, or explicitly dropped as redundant
-  per RDO-10 #1.
+- **RDO-7** — session-close `DOC STALENESS` report added, scoped by RDO-10 #1 to the content
+  gaps the two freshness hooks can't see (missing `CONTEXT_TREE.md` row for a new module;
+  `docs/plan/README.md` status not advanced for a story touched this session) — not the
+  per-file src-commit counts.
 - **RDO-8** — all 5 protocol-doc consistency fixes landed (SHA `bf26d81`).
 - **RDO-9** — work-log entries split to `docs/archive/DECISIONS_worklog_2026.md`; 9a
   STILL-ENFORCED list signed off by Animesh; `md-line-length` green (SHA `2fb5c5b`).
-- **RDO-10** — both hooks in `plan.md` inventory + RDO-6 re-sync scope; `#4` resolved; final
-  skill name picked.
+- **RDO-10** — both hooks in `plan.md` Phase 7 inventory + a RDO-6 verification step; `#4`
+  narrowed to a future read-only Telegram staleness digest (out of epic scope); `md-organize`
+  name settled; `state_doc_freshness.sh` thresholds tuned (`CONTEXT_TREE.md` / `DB_REGISTRY.md`
+  / `README.md` → 60). SHA `<pending>`.
 - **RDO-11** — hook enforcement decision made and recorded in `DECISIONS.md`.
 - **RDO-12** — `/work` skill exists and routes Feature/Bug; `CLAUDE.md` + `AGENTS.md` point
   at it; `session-entry-point` epic (SEP-1..4) complete.

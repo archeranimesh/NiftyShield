@@ -62,9 +62,10 @@ CSP v1 Phase 0.8 deployment gate — spec reconciliation + gate criteria A–D.
 **`root-doc-organization/`** · 🔄 In progress · next: **RDO-6** (`md-organize` skill rewrite)
 Token-efficiency cleanup of the ~22 root `.md` files + doc-maintenance automation.
 Docs + tooling only. RDO-1..16 + an acceptance-criteria list in `tasks.md`.
-RDO-1/2/4/5/8/9/12/13/14/15 shipped, RDO-3 closed-partial; RDO-6/7/10/11/16 open.
-RDO-15 (2026-08-28): `check_checkbox_consistency.py` sweep + one-checkbox-per-id convention
-(`## Epic done when` blocks are prose criteria, no boxes); loop-closure check → new RDO-16.
+RDO-1/2/4/5/8/9/10/12/13/14/15 shipped, RDO-3 closed-partial; RDO-6/7/11/16 open.
+RDO-10 (2026-08-28): reconciled RDO-7/Phase 7 with the two shipped doc-freshness hooks —
+RDO-7 narrowed to content gaps only, `md-organize` name settled, `#4` → future read-only
+Telegram digest, `state_doc_freshness.sh` thresholds tuned.
 
 **`session-entry-point/`** · ✅ Archived 2026-08-28 → `docs/archive/plan/session-entry-point/`
 Unified manual `/work` skill (SEP-1..4) — routes a task session to Feature or Bug, loads the

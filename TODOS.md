@@ -152,6 +152,22 @@ this file's Session Log grows large again.
 
 ### 2026-08-28
 
+- **RDO-10 — reconcile RDO-7 / Phase 7 with the shipped doc-freshness hooks
+  (root-doc-organization).** Docs + one hook edit, 1 commit. Decisions with Animesh:
+  (1) RDO-7 **kept but narrowed** — `state_doc_freshness.sh` (SessionStart) +
+  `doc_update_gate.sh` (PreToolUse) already own the per-file "docs behind code" signal, so the
+  session-close report is re-scoped to the content gaps neither hook sees (new `src/<module>/`
+  with no `CONTEXT_TREE.md` row; story code touched this session but `docs/plan/README.md`
+  status not advanced). (2) `TODOS.md #4` (weekly cloud routine) **narrowed to a future
+  read-only Telegram staleness digest**, out of epic scope — unattended-write cron stays
+  rejected. (3) Skill name settled: **`md-organize`** (RDO-6 does the rename + ~6 by-name
+  ref updates). (4) `state_doc_freshness.sh` thresholds tuned — `CONTEXT_TREE.md` /
+  `DB_REGISTRY.md` / `README.md` 35-40 → 60 (all three change only on new modules / tables /
+  public-surface shifts; DB_REGISTRY was the known 36/35 false positive). RDO-6 gains a step
+  to verify the two hooks' hard-coded doc lists still match `CLAUDE.md` §Step 5a. `plan.md`
+  Phase 7 + `tasks.md` RDO-6/7/10 + `## Epic done when` + `docs/plan/README.md` row updated.
+  Open in the epic now: RDO-6, 7, 11, 16. Docs/tooling-only, no code-reviewer.
+
 - **RDO-15 — checkbox-consistency sweep + one-box convention (root-doc-organization).**
   2 commits. `5e48451`: new `scripts/hooks/check_checkbox_consistency.py` (+ 11 tests) —
   sweeps `docs/plan/**/tasks.md` + `docs/bugs/task.md` for a checkbox inside an `## Epic done

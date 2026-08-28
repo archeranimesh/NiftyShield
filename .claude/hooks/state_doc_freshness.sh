@@ -14,16 +14,19 @@ set -uo pipefail
 
 git rev-parse --git-dir >/dev/null 2>&1 || exit 0
 
-# file:threshold — src/|scripts/ commits since the doc's last change that trip the flag
+# file:threshold — src/|scripts/ commits since the doc's last change that trip the flag.
+# Thresholds tuned per how often the doc legitimately changes: CONTEXT.md / TODOS.md every
+# session (tight); CONTEXT_TREE.md / DB_REGISTRY.md / README.md only on new modules / tables /
+# public-surface shifts (loose — RDO-10 #5 raised these from 35/40 to kill false positives).
 DOCS="
 CONTEXT.md:15
 TODOS.md:15
-CONTEXT_TREE.md:35
-DB_REGISTRY.md:35
 docs/plan/README.md:35
 DECISIONS.md:40
 PLANNER.md:40
-README.md:40
+CONTEXT_TREE.md:60
+DB_REGISTRY.md:60
+README.md:60
 "
 
 now=$(date +%s)
