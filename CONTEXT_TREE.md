@@ -305,7 +305,7 @@ tests/
 |---|---|
 | `pyproject.toml` | Project metadata + all dev deps (`pytest`, `ruff`, `mypy`, `pre-commit`, `vulture`, `hypothesis`). |
 | `Makefile` | `test` (parallel `-n auto`), `test-serial` (no `randomly`, for debugging), `coverage`, lint targets. |
-| `.pre-commit-config.yaml` | Hooks: `ruff` (lint+fix), `ruff-format`, `mypy` (scoped), `no-script-main-logger`, and (RDO-5) `root-md-line-length`. |
+| `.pre-commit-config.yaml` | Hooks: `ruff` (lint+fix), `ruff-format`, `mypy` (scoped), `no-script-main-logger`, `no-bare-logging`, `md-line-length` (RDO-5, 200-char cap on root/`docs/plan`/`docs/bugs` `.md`), `check-story-structure` (RDO-13, newly-added `docs/plan` story folders), `detect-secrets`. |
 | `.github/workflows/ci.yml` | GitHub Actions CI — push/PR to `main`, matrix Python 3.10+. |
 | `scripts/dev/install_hooks.sh` | Installs pre-commit + post-commit hook in one command. |
 | `scripts/dev/post_commit_hook.sh` | Post-commit: echoes graph re-index reminder when `src/` or `scripts/` changed. |
