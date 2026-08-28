@@ -18,13 +18,15 @@
 
 ## Session start protocol
 
-> Antigravity: find the first unchecked `- [ ]` line in `risk_gamma_tasks.md`. That is your only task.
+> Antigravity: find the first unchecked `- [ ]` line in `tasks.md`. That is your only task.
 > Do not look at any other unchecked item. One task. Complete it fully. Stop.
 
 1. Read this file + `CONTEXT.md` + `src/gamma/CLAUDE.md` (if present).
-2. Check `risk_gamma_tasks.md` — first unchecked item only.
-3. For each task: read story spec in `risk_gamma_stories.md` before writing any code.
-4. After task: tick `risk_gamma_tasks.md`, append `| SHA: <sha>`, add one line to `TODOS.md`.
+2. Check `tasks.md` — first unchecked item only.
+3. For each task: read story spec in `stories.md` before writing any code.
+4. After task: tick `tasks.md`, append the completion tail
+   `| Owner: <Claude|Antigravity|Animesh> | Model: <model-id|n/a> | SHA: <sha>`, add one line
+   to `TODOS.md`. See `docs/plan/README.md` §Conventions.
 
 ---
 

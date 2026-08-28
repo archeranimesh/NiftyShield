@@ -1,8 +1,10 @@
 # risk-gamma-phase-a — Story Specs
 
-> One task per session. Find the first unchecked item in `risk_gamma_tasks.md`. That is your only task.
+> One task per session. Find the first unchecked item in `tasks.md`. That is your only task.
 > Full implementation rules in `CLAUDE.md` and `REVIEW.md`.
-> After each task: tick `risk_gamma_tasks.md`, append `| SHA: <sha>`, add one line to `TODOS.md`.
+> After each task: tick `tasks.md`, append the completion tail
+> `| Owner: <Claude|Antigravity|Animesh> | Model: <model-id|n/a> | SHA: <sha>`, add one line to
+> `TODOS.md`. See `docs/plan/README.md` §Conventions.
 
 ---
 
