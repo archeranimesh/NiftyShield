@@ -69,10 +69,15 @@ For every step below, mark one of:
 - Step 3 was skipped — implementation started immediately after CONTEXT.md read with no plan stated
 - SHA was not confirmed after commit (commit skill Step 5c skipped)
 - CONTEXT.md was not updated after new files or modules were added
-- a `TODOS.md` "Priority-Ordered Open Work" item was left with multi-paragraph detail or
-  per-task progress instead of a pointer (title + path + next task + one-line why) — see
-  `docs/plan/README.md` §Conventions
+- a `TODOS.md` `## Feature Backlog` / `## Open Bugs` item was left with multi-paragraph
+  detail or per-task progress instead of a pointer (title + path + next task + one-line why),
+  or bug priority/status was mirrored into `## Open Bugs` — see `docs/plan/README.md`
+  §Conventions
 - a completed `tasks.md` checkbox is missing its `| Owner: … | Model: … | SHA: …` tail
+- a story / bug finished this session (every `tasks.md` / `docs/bugs/task.md` box ticked,
+  `## Epic done when` fully checked) but was **not archived** in the same commit — folder
+  still under `docs/plan/` or `docs/bugs/`, line still in `TODOS.md`, README row not
+  collapsed to a pointer. See §Conventions *Completion → archive*.
 
 ---
 

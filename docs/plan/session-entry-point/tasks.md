@@ -5,6 +5,13 @@ See `prompt.md` for the skill design.
 
 **Epic complete — all tasks shipped 2026-08-27.**
 
+**Post-epic (2026-08-28, from `root-doc-organization` RDO-14):** `/work` keeps its two
+branches. RDO-14 §4 had floated collapsing Feature/Bug into one "top N of a unified queue"
+menu; Animesh decided against it — `TODOS.md` now carries two separate lists
+(`## Feature Backlog`, `## Open Bugs`) and the Feature/Bug fork stays. No skill change.
+This folder is archived to `docs/archive/plan/session-entry-point/` only after RDO-15
+finishes using `tasks.md` here as its worked example.
+
 - [x] **SEP-1** — Author `.claude/skills/work/SKILL.md`. | Owner: Claude | Model: claude-sonnet-5 | SHA: 08b74a4
   1. Trigger phrases: "work", "start work", "pick up a task", "/work". Front-matter + a
      one-screen body.

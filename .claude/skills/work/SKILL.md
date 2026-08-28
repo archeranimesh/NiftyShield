@@ -41,7 +41,7 @@ Otherwise, `AskUserQuestion`:
 
 ## Feature branch
 
-1. Read `TODOS.md` → `## Priority-Ordered Open Work`.
+1. Read `TODOS.md` → `## Feature Backlog`.
 2. Present the **first 5** list items verbatim — for each: the list number, the title, the
    named next task (e.g. "starting at **GF-1**"), and the story path (`docs/plan/<story>/`).
    Do not re-order, summarise, or skip items; the list is already story-by-story priority

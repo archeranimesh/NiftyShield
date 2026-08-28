@@ -2,7 +2,7 @@
 
 **Status:** Not started. Gated on the Phase 0.8 variance-gate (see `BACKTEST_PLAN.md` — CSP v1
 paper-trading gate, criteria A–D). This story exists so Phase 1 has a `docs/plan/` entry like
-every other story in `TODOS.md`'s Priority-Ordered Open Work list — it is a thin index, **not**
+every other story in `TODOS.md`'s `## Feature Backlog` — it is a thin index, **not**
 a duplicate of the task detail.
 
 **Canonical spec (edit here, not in this file):** [`BACKTEST_PLAN_PHASE1.md`](../../../BACKTEST_PLAN_PHASE1.md)

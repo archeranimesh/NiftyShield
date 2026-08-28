@@ -26,7 +26,7 @@ P3: Greeks/parity validation (council-gated), golden tests, suppression hygiene.
 Priority + dependencies in the epic's own `README.md`.
 `telegram-approval-auth-fix/` already shipped (SHA `5cafc3c`).
 
-**`telegram-markdown-migration/`** · 🔄 In progress — `strategy-rollout/` through ROLL-3
+**`telegram-markdown-migration/`** · 🔄 In progress — `strategy-rollout/` next: **ROLL-6**
 Switch all Telegram messaging to `parse_mode=MarkdownV2` via three sequenced sub-stories:
 `backbone/` (parse-mode switch + escaping audit — closed),
 `formatting-rules/` (value/table spec → `FORMATTING.md` — closed),
@@ -59,10 +59,12 @@ Risk delta gate (done) + Near-Expiry Gamma Buy `gamma_daily_watch.py`.
 **`variance-gate/`** · ⬜ Not started · next: **VG0** (CSP v1 spec reconciliation)
 CSP v1 Phase 0.8 deployment gate — spec reconciliation + gate criteria A–D.
 
-**`root-doc-organization/`** · 🔄 In progress · next: **RDO-14** (unify TODOS.md priority queue)
+**`root-doc-organization/`** · 🔄 In progress · next: **RDO-9** (DECISIONS.md semantic split)
 Token-efficiency cleanup of the ~22 root `.md` files + doc-maintenance automation.
 Docs + tooling only. RDO-1..15 + an "Epic done when" checklist in `tasks.md`.
-RDO-1/2/4/5/8/12/13 shipped, RDO-3 closed-partial; RDO-6/7/9/10/11/14/15 open.
+RDO-1/2/4/5/8/12/13/14 shipped, RDO-3 closed-partial; RDO-6/7/9/10/11/15 open.
+RDO-14 (2026-08-28) split `TODOS.md` into `## Feature Backlog` + `## Open Bugs` and added
+the §Conventions *Completion → archive* rule.
 
 **`session-entry-point/`** · ✅ Done 2026-08-27 (SEP-1..4)
 Unified manual `/work` skill — routes a task session to Feature or Bug, loads the right
@@ -187,12 +189,36 @@ Everything else is derived and must not be hand-edited to disagree with it:
 
 ### `TODOS.md` hygiene
 
-`TODOS.md` "Priority-Ordered Open Work" items are **pointer-only**: title, the
-`docs/plan/<slug>/` or `docs/bugs/` path, the next unchecked task id, and a one-line why.
+`TODOS.md` carries two separate pointer-only lists — `## Feature Backlog` (`docs/plan/`
+stories) and `## Open Bugs` (`docs/bugs/` defects). `/work` routes to one or the other.
+Each item is **pointer-only**: title, the `docs/plan/<slug>/` or `docs/bugs/` path, the next
+unchecked task id, and a one-line why.
 No inline multi-paragraph detail, no per-task progress — that lives only in the story's
 `tasks.md` / `docs/bugs/task.md`.
-When a story or bug is fully done its `TODOS.md` line is **deleted** (moved to
-`docs/archive/TODOS_ARCHIVE.md`), not just ticked.
+Cross-references between items use folder names, never list positions.
+The `## Open Bugs` snapshot is not authoritative — `docs/bugs/bugs.md` is; never encode bug
+priority or status in `TODOS.md`.
+On completion, a line is removed, not just ticked — see *Completion → archive*.
+
+### Completion → archive
+
+A story or bug is **done** when every `- [ ]` in its `tasks.md` / `docs/bugs/task.md` is
+ticked and its `## Epic done when` block (if present) is fully checked.
+As soon as that holds, do all of the following in the same commit — never leave a done
+story half-archived:
+
+1. **Story:** `git mv docs/plan/<slug>/ docs/archive/plan/<slug>/`
+   (bug: `git mv docs/bugs/<slug>/ docs/archive/bugs/<slug>/`, or fold the `bugs.md` entry
+   into `docs/archive/bugs/bugs.md` and mark it `[MOVED]` at the original location).
+2. **`TODOS.md`:** delete the item's line from `## Feature Backlog` / `## Open Bugs` and
+   append it to `docs/archive/TODOS_ARCHIVE.md` under a dated heading.
+3. **This file:** collapse the story's entry under `## Active Epics` to a one-line
+   `✅ Archived → docs/archive/plan/<slug>/` pointer.
+4. **`bugs.md`:** flip the status cell to `✅ Fixed` with the closing SHA before the entry
+   moves.
+
+The `md-organize` skill's periodic audit and the `session-close` skill both check for done
+stories that were not archived; do not rely on that — archive at completion.
 
 ### Markdown line style (RDO-5, decided 2026-08-27)
 
@@ -213,6 +239,6 @@ It runs pre-commit on newly-added folders only; the full repo-wide sweep is part
 
 ### Status transitions
 
-`⬜ Not started` → `🔄 In progress` → `✅ Done`.
-A `✅` story stays listed until archived; on archive, its folder content moves to
-`docs/archive/plan/<slug>/` and the row keeps a one-line pointer there.
+`⬜ Not started` → `🔄 In progress` → `✅ Done` → `✅ Archived`.
+A `✅ Done` story stays listed until archived; archival is not optional and not deferred —
+it happens in the completion commit per *Completion → archive* above.

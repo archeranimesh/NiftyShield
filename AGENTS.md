@@ -60,8 +60,9 @@ Token math: `SELECT *` on a 15-row × 20-column table ≈ 300 tokens that persis
 
 **Task-shaped session: route to feature / bug and load the right prompt before any code.**
 Antigravity has no `/work` skill — do the routing by hand: for a feature, take the next target
-off `TODOS.md` "Priority-Ordered Open Work" (the first 5 items are priority-ordered); for a
-bug, take it from `docs/bugs/` (`bugs.md` registry + `task.md` checklist). Load the story/bug
+off `TODOS.md` `## Feature Backlog` (priority-ordered `1..N`); for a
+bug, take it from `TODOS.md` `## Open Bugs` → `docs/bugs/` (`bugs.md` registry + `task.md`
+checklist). Load the story/bug
 `prompt.md` + first unchecked task + `CONTEXT.md`, then follow the handoff protocol into
 Step 2b below. Open-ended discussion needs no routing.
 
@@ -76,7 +77,7 @@ Module tree (file-level descriptions): **`CONTEXT_TREE.md`** — load only when 
 - Phase 0 backtest / paper trading / strategy / `src/paper/` / `src/risk/` work → also read `BACKTEST_PLAN.md` (Phase 0 only — ~300 lines)
 - Phase 1+ work (only after Phase 0.8 gate passes) → also read `BACKTEST_PLAN_PHASE1.md`
 - Implementing a metric / ratio / ML technique → also read `LITERATURE.md` entry for the cited LIT code
-- Starting a feature or picking up a story → manual routing (no `/work`): `TODOS.md` "Priority-Ordered Open Work" first-5 → the story's `prompt.md` / `*_tasks.md` / first unchecked task + `CONTEXT.md`; add `PLANNER.md` when multi-sprint roadmap context is needed
+- Starting a feature or picking up a story → manual routing (no `/work`): `TODOS.md` `## Feature Backlog` first-5 → the story's `prompt.md` / `*_tasks.md` / first unchecked task + `CONTEXT.md`; add `PLANNER.md` when multi-sprint roadmap context is needed
 - Working inside `src/<module>/` → read that module's `CLAUDE.md` explicitly (autoload covers only this root file)
 - Reviewing or building on Antigravity's own prior work → also read `ANTIGRAVITY.md`
 - Authoring or reviewing any task/story/spec mentioning expiry, DTE, or calendar logic → also read `REFERENCES.md` (expiry day changed Thursday→Tuesday, April 2026)

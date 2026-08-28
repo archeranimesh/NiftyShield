@@ -119,11 +119,14 @@ epic (holds story sub-folders). Act on what it reports:
   (do not mass-rename).
 - **missing files** — the folder is a stub; flesh it out from `docs/plan/_TEMPLATE/` or remove it.
 
-Then confirm `TODOS.md` "Priority-Ordered Open Work" items are still **pointer-only**: title,
-the `docs/plan/<slug>/` or `docs/bugs/` path, the next unchecked task id, one line of why.
-Multi-paragraph detail or per-task progress in a priority item is a hygiene violation — move it
-into the story's own `tasks.md` and cut the `TODOS.md` line back to a pointer. Full rules:
-`docs/plan/README.md` §Conventions.
+Then confirm `TODOS.md` `## Feature Backlog` + `## Open Bugs` items are still **pointer-only**:
+title, the `docs/plan/<slug>/` or `docs/bugs/` path, the next unchecked task id, one line of
+why. Multi-paragraph detail or per-task progress in an item is a hygiene violation — move it
+into the story's own `tasks.md` and cut the `TODOS.md` line back to a pointer. Bug priority /
+status must never be encoded in `## Open Bugs` — `docs/bugs/bugs.md` is canonical.
+Also check for any story/bug with all `tasks.md` boxes ticked that was not archived — if
+found, do the *Completion → archive* move (folder → `docs/archive/`, `TODOS.md` line →
+`TODOS_ARCHIVE.md`, README row → pointer). Full rules: `docs/plan/README.md` §Conventions.
 
 ---
 

@@ -38,8 +38,8 @@ of `docs/plan/signals-eval-core/` needing reconciliation** — the root doc expl
 Track A → `signals-eval-core` stories SE3.x, Track B → SE4.x, shared validation → SE5–SE6. The
 `2.S*`/`2.I*` codes here are a phase-sequencing overlay; the actual implementation checklist is
 `signals-eval-core/tasks.md`'s SE-prefixed codes. **Do not build a separate task list for
-2.S0–2.S7/2.I0–2.I5** — track progress via `docs/plan/signals-eval-core/tasks.md` (already item
-17 in `TODOS.md`'s Priority-Ordered Open Work) instead.
+2.S0–2.S7/2.I0–2.I5** — track progress via `docs/plan/signals-eval-core/tasks.md` (in
+`TODOS.md`'s `## Feature Backlog`) instead.
 
 *(Correction: an earlier pass through this repo's docs flagged this as an "unresolved duplicate
 needing reconciliation" — that was wrong. Re-reading `BACKTEST_PLAN_PHASE1.md` line 678 directly

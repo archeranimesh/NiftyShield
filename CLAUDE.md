@@ -41,7 +41,7 @@ Token math: `SELECT *` on a 15-row × 20-column table ≈ 300 tokens that persis
 
 **Task-shaped session: invoke `/work` to route to feature / bug and load the right prompt.**
 `/work` (`.claude/skills/work/SKILL.md`) is the documented start-of-task entry point — it
-picks the target off `TODOS.md` "Priority-Ordered Open Work" (feature) or `docs/bugs/` (bug),
+picks the target off `TODOS.md` `## Feature Backlog` (feature) or `docs/bugs/` (bug),
 loads the story/bug prompt + first unchecked task + `CONTEXT.md`, then hands to Step 2b below.
 Open-ended discussion needs no `/work`.
 

@@ -4,49 +4,120 @@
 > Related: [CONTEXT.md](CONTEXT.md) | [DECISIONS.md](DECISIONS.md) | [PLANNER.md](PLANNER.md) | [BACKTEST_PLAN.md](BACKTEST_PLAN.md) | [BACKTEST_PLAN_PHASE1.md](BACKTEST_PLAN_PHASE1.md)
 >
 > **Task tracking lives in the story folders.** Per-task state is in each story's
-> `docs/plan/<slug>/tasks.md` or `docs/bugs/task.md`. The priority list below is
-> **pointers only** — title, path, next unchecked task, one-line why. Full rules:
-> [`docs/plan/README.md`](docs/plan/README.md) §Conventions. (Full retrofit: RDO-14.)
+> `docs/plan/<slug>/tasks.md` or `docs/bugs/task.md`. The lists below are **pointers only**
+> — title, path, next unchecked task, one-line why. Full rules:
+> [`docs/plan/README.md`](docs/plan/README.md) §Conventions.
+>
+> Two separate lists: **`## Feature Backlog`** (forward spec work, `docs/plan/`) and
+> **`## Open Bugs`** (defects in shipped code, `docs/bugs/`). `/work` routes to one or the
+> other. When a story or bug is fully done its line here is **deleted** (moved to
+> [`docs/archive/TODOS_ARCHIVE.md`](docs/archive/TODOS_ARCHIVE.md)) and its folder moved to
+> `docs/archive/plan/<slug>/` — see §Conventions → *Completion → archive*.
 
 ---
 
-## Priority-Ordered Open Work
+## Feature Backlog — Priority Ordered
 
-This list is ordered **story-by-story, not task-by-task**. Each story's tasks in its own
-`tasks.md` are a sequence — finish a story's remaining tasks in order before starting the next
-story on this list. Do not jump between stories mid-sequence; the ordering below only decides
-*which story to pick up next*, once the current one is done. Completed items are in
-`docs/archive/TODOS_ARCHIVE.md`.
+Forward spec work only — one `docs/plan/` story per line, pointer-only (title · folder ·
+next unchecked task · one-line why).
+Ordered **story-by-story**: finish a story's `tasks.md` in sequence before starting the next
+story here; this list only decides *which story is next*.
+Bugs are **not** here — see `## Open Bugs`.
+Cross-references use folder names, never list positions, so renumbering can't rot them.
 
-1. [x] **session-entry-point — unified `/work` entry point** (2026-08-27) — `docs/plan/session-entry-point/tasks.md`. **Epic complete 2026-08-27** (SEP-1..4): `/work` skill authored, `CLAUDE.md` + `AGENTS.md` point at it, both branches demonstrated end-to-end. `/work` now routes task sessions off this list.
-2. [ ] **root-doc-organization** — root `.md` cleanup + doc-maintenance automation — `docs/plan/root-doc-organization/tasks.md`, next: **RDO-14** (unify this priority list into one bug+feature queue).
-3. [ ] **BUG-030 — `_overlay_type_groups` elif-precedence drops `overlay_cc` leg when `overlay_collar_put` also present same-day** (found 2026-08-13, open) — the "NiftyBees vs overlays" digest's `CC No data` line and an understated `Collar` P&L figure both trace to `paper_3track_snapshot.py::_overlay_type_groups()` checking `has_put` before `has_cc` in its `elif` chain, silently orphaning the `overlay_cc` leg from every group whenever `overlay_collar_put` is also present. Orthogonal to BUG-028 (namespace fix, already closed) — this is a leg-role grouping defect BUG-028's four phases never touched. See `docs/bugs/bugs.md` BUG-030, `docs/bugs/task.md` B030.1–B030.6, starting at **B030.1** (entry-side tagging question, blocks the grouping fix).
-9. [ ] **IC yearly-expiry residual risk** (2026-07-23) — `docs/plan/ic-yearly-expiry-fix/tasks.md`, starting at **WG-1** (persist per-leg Greeks for weekly expiry bucket; YE-1..YE-4 superseded/already fixed live, see DECISIONS.md BUG-015).
-10. [ ] **Greeks Black-Scholes fallback** (2026-07-23) — `docs/plan/greeks-bs-fallback/tasks.md`, starting at **GF-1** (read-only audit scope).
-11. [ ] **MVP: Multi-bagger Value Picks Tracker** — `docs/plan/mvp/tasks.md`, starting at **M1.1**. Independent — does not block any other story on this list.
-12. [ ] **Variance gate — CSP v1 deployment gate observation** (2026-07-07) — `docs/plan/variance-gate/variance_gate_tasks.md`, starting at **VG0** (spec reconciliation; remaining tasks are human checkpoints, not build tasks).
-13. [ ] **Options Income strategy** (2026-06-03) — `docs/plan/options_income/options_income_tasks.md`, starting at **S0** (data audit).
-14. [ ] **Telegram IC comparison formatting** (2026-08-07) — `docs/plan/telegram-ic-comparison-formatting/tasks.md`. **TGFMT-1 closed 2026-08-07:** `build_comparison_report()`'s hand-counted fixed-width columns replaced with dynamically computed label/column widths (right-aligned values), porting the approach proven live in `scratch/2026-08-07_telegram_ic_comparison_format_repro.py`. 2 new regression tests (long-label collision, large-value width). 14/14 tests in `tests/unit/strategies/ic/test_paper_ic_monthly_comparison.py` green; wider `tests/unit/` run shows only pre-existing unrelated failures (missing `pandas`/`pyarrow`/`duckdb` in the throwaway `/tmp/pydeps` sandbox install, same class noted in TL-1/BUG-026 sessions). **TGFMT-2..9 superseded 2026-08-07 by item 29 below** — do not pick these up; TGFMT-1 stays as shipped history, its two feature asks (Legs row, Bkd/Flt month-inception split) carried forward into item 29's ROLL-2.
-14. [ ] **Backtest Engine** — `docs/plan/backtest-engine/{phase1,phase2,phase3,phase4}/`. Mirrors `BACKTEST_PLAN_PHASE1.md`'s full structure (root doc is canonical; these dirs are thin status pointers). Work through phases **in order** — each phase's GATE task blocks the next phase dir entirely, so this is really 4 sub-stories chained, not 1:
-    - **Phase 1** (Aug–Dec 2026 target) — `docs/plan/backtest-engine/phase1/tasks.md`. Gated on the Phase 0.8 variance gate (item 12 above). Starts at **1.3a**/**1.4** (parallel), through **1.12**. Blocks items 15/16 below.
-    - **Phase 2** (CSP live + IC paper, ~6mo) — `docs/plan/backtest-engine/phase2/tasks.md`. Gated on Phase 1's **1.12**. Starts at **2.1**. Note: the Parallel Research Tracks named inside this phase in the root doc are tracked via `signals-eval-core` (item 16), not a separate task list here.
-    - **Phase 3** (IC live + third strategy + portfolio construction, ~12mo) — `docs/plan/backtest-engine/phase3/tasks.md`. Gated on Phase 2's **2.7**. Starts at **3.1**.
-    - **Phase 4** (basket maturity + Finideas evaluation, 2028–2030) — `docs/plan/backtest-engine/phase4/tasks.md`. Gated on Phase 3's **3.6**. Starts at **4.1** (Owner: Animesh — capital-allocation decision, not a Cowork task).
-15. [ ] **backtest-eval-core: `BacktestStore` + `src/analytics/`** — `docs/plan/backtest-eval-core/tasks.md`, starting at **B1.1**. Blocked by item 14 (tasks 1.3 + 1.4) — do not start until those land.
-16. [ ] **signals-eval-core: regime engine + signal generators + validation** — `docs/plan/signals-eval-core/tasks.md`, starting at **SE1.1**. Blocked by item 15 + item 14's 1.12 gate. Covers both Track A (swing) and Track B (investment) pipelines — SE1–SE8 in full.
-17. [ ] **signals: multi-LLM daily signal pipeline** — `docs/plan/signals/signals_tasks.md`, starting at **S1.1**.
-18. [ ] **risk-gamma-phase-a** — Track B Near-Expiry Gamma Buy strategy — `docs/plan/risk-gamma-phase-a/`, next: **B2.2** (chain fetch + field computation; Track A + B1/B2.1 shipped).
-19. [ ] **greeks-parity-validation** (P3, gated on council) — `docs/plan/full-repo-review-followups/greeks-parity-validation/tasks.md`, starting at T1. **Do not implement directly** — requires an `options-strategist`/`greeks-analyst` council consult first (tolerance-band decision).
-20. [ ] **paper-pnl-golden-tests** (P3) — `docs/plan/full-repo-review-followups/paper-pnl-golden-tests/tasks.md`, starting at T1 — add exact-value golden assertions for `_compute_leg_unrealized_pnl`.
-21. [ ] **suppression-hygiene-triage** (P3) — `docs/plan/full-repo-review-followups/suppression-hygiene-triage/tasks.md`, starting at T1 — REVIEW.md carve-out for self-describing `# noqa` codes.
-22. [ ] **Broker abstraction** (LOW priority) — multi-broker parser/adapter layer so data fetching can migrate to Dhan or Kite without touching storage. Storage format (Parquet, SQLite, model field names) is frozen — only fetch + parse changes. Full story: `docs/plan/broker-abstraction/`. 16 tasks (BA-0 → BA-15), starting at **BA-0** (probe scripts + decision matrix). BA-14/BA-15 blocked until `src/execution/` (item 24's OE-1) exists. Do not start until Phase 0.8 gate clears.
-23. [ ] **Historical data abstraction** (LOW priority) — `HistoricalCandleFetcher` protocol so VIX and OHLC fetching can switch between Upstox, Dhan, Kite, and NSE CSV without touching storage. Currently `vix_ingest.py` has Upstox URLs hardcoded with sync `requests`; `get_historical_candles` on `BrokerClient` raises `NotImplementedError`. 11 tasks HD-0→HD-10, starting at **HD-0** (cost-bounded probe scripts). HD-6 (Dhan)/HD-7 (Kite ₹2000/month) conditional on HD-0 decision matrix. Do not start until Phase 0.8 gate clears.
-24. [ ] **Phase 2 — Research Pipelines & Integrations** (2027+) — `docs/plan/phase2-integrations/tasks.md`, starting at **PV-1** (P&L Visualization — not gated, can be pulled forward independently). **ZK-1**/**OE-1**/**PT-1** are gated per their own stated reasons (Kite Connect priority, static IP, defer-until-touched) — see the story file. Does not include the Swing/Investment signal pipelines — those are item 17 above.
-25. [ ] **Technical Debt** (opportunistic — not sequential) — `docs/plan/technical-debt/tasks.md` (**DEBT-3/5/6a/6b/6c/7**). Do not pick these up on their own; each fires only when its named file/module is already being touched for another story's task. See `prompt.md` for the exact trigger per item and why this one breaks the "finish in sequence" rule the rest of this list follows.
-26. [ ] **Fix dead IC EOD report query** (2026-08-05) — fix `scripts/strategies/ic/paper_ic_snapshot.py`'s "Intraday actions" query which was identified as dead code during the DT-3a audit.
-27. [ ] **Chain delta/decay analysis** (2026-08-06) — `docs/plan/chain-decay-analysis/tasks.md`, starting at **CDA-1**. Exploratory/read-only, independent — does not block or get blocked by anything else on this list. Monthly bucket only (yearly excluded, see item 11's GF-1 findings).
-28. [ ] **Entry event filter R4** (2026-07-27, bumped down 2026-08-06) — `docs/plan/entry-event-filter/tasks.md`, starting at **EF-1** (EF-0 done; ES12 dependency already shipped, SHA b86925a — no longer blocking). **Not compulsory — good-to-have.** Soft-warning only (logged, non-blocking, mirrors `GateViolation`); does not gate sizing or entry the way items 4/13 do, and event-day risk is not yet live-capital exposure at the current backtest/paper stage (item 14). `events.yaml`'s election-date leg has no natural refresh trigger and will need ad-hoc upkeep — revisit once entries run fully unattended on live capital (post item 14 Phase 2), at which point also reconsider hard-block instead of log-only.
-29. [ ] **Telegram Markdown migration** (2026-08-07, in progress) — `docs/plan/telegram-markdown-migration/`. Migrates all Telegram messaging to `parse_mode=MarkdownV2` via three sequenced sub-stories: `backbone/` (parse-mode switch + escaping audit — closed), `formatting-rules/` (value/table formatting spec — closed, see `FORMATTING.md`), `strategy-rollout/` (per-message-family migration, in progress — through ROLL-3 as of 2026-08-26, next unchecked task per `strategy-rollout/tasks.md`; the former 0g–0l progress markers were archived along with the rest of this file's closed-item backlog in the 2026-08-26 reorg). **Supersedes item 14's TGFMT-2..9.** Full session-by-session design history (ROLL-0 through ROLL-17, format-workshop decisions, FMT-1 sub-rules a-f) archived to `docs/archive/TODOS_ARCHIVE.md` (2026-08-26 reorg) — the epic's own `README.md`/`stories.md`/`tasks.md` are the live spec; this line is a pointer, not the source of truth.
+1. **root-doc-organization** — `docs/plan/root-doc-organization/` — next **RDO-9**
+   (DECISIONS.md semantic split; RDO-6 encodes final state and comes last).
+   Root `.md` token-efficiency cleanup + doc-maintenance automation.
+2. **IC yearly-expiry residual risk** — `docs/plan/ic-yearly-expiry-fix/` — next **WG-1**
+   (persist per-leg Greeks for the weekly-expiry bucket).
+   YE-1..YE-4 superseded / already fixed live — see DECISIONS.md BUG-015.
+3. **Greeks Black-Scholes fallback** — `docs/plan/greeks-bs-fallback/` — next **GF-1**
+   (read-only audit scope).
+4. **Telegram Markdown migration** — `docs/plan/telegram-markdown-migration/` — next
+   **ROLL-6** (`strategy-rollout/`, migrate EOD Paper Summary).
+   `backbone/` + `formatting-rules/` sub-stories closed.
+   Supersedes the retired `telegram-ic-comparison-formatting/` — TGFMT-1 shipped, TGFMT-2..9
+   folded here; its Legs-row + Bkd/Flt inception-split asks live in `strategy-rollout/` ROLL-2.
+5. **MVP: Multi-bagger Value Picks Tracker** — `docs/plan/mvp/` — next **M1.1**.
+   Independent — blocks nothing.
+6. **Variance gate — CSP v1 deployment gate observation** — `docs/plan/variance-gate/` —
+   next **VG0** (spec reconciliation; the remaining tasks are human checkpoints, not build
+   tasks).
+7. **Options Income strategy** — `docs/plan/options_income/` — next **S0** (data audit).
+8. **Backtest Engine** — `docs/plan/backtest-engine/` (`phase1..4/`) — next **1.3a / 1.4**
+   (parallel, `phase1/`).
+   Four chained phases; each phase's GATE task blocks the next dir. Gated on `variance-gate`.
+   `BACKTEST_PLAN_PHASE1.md` is the canonical spec; the phase dirs are thin status pointers.
+9. **backtest-eval-core** — `docs/plan/backtest-eval-core/` — next **B1.1**.
+   Blocked until `backtest-engine` tasks 1.3 + 1.4 land.
+10. **signals-eval-core** — `docs/plan/signals-eval-core/` — next **SE1.1**.
+    Blocked until `backtest-eval-core` + `backtest-engine` 1.12.
+    Covers Track A (swing) + Track B (investment), SE1–SE8.
+11. **signals: multi-LLM daily signal pipeline** — `docs/plan/signals/` — next **S1.1**.
+12. **risk-gamma-phase-a** — `docs/plan/risk-gamma-phase-a/` — next **B2.2**
+    (chain fetch + field computation). Track A + B1 / B2.1 shipped.
+13. **greeks-parity-validation** —
+    `docs/plan/full-repo-review-followups/greeks-parity-validation/` — next **T1**.
+    P3, council-gated: do not implement directly — needs an `options-strategist` /
+    `greeks-analyst` consult first (tolerance-band decision).
+14. **paper-pnl-golden-tests** —
+    `docs/plan/full-repo-review-followups/paper-pnl-golden-tests/` — next **T1**
+    (exact-value golden assertions for `_compute_leg_unrealized_pnl`). P3.
+15. **suppression-hygiene-triage** —
+    `docs/plan/full-repo-review-followups/suppression-hygiene-triage/` — next **T1**
+    (REVIEW.md carve-out for self-describing `# noqa` codes). P3.
+16. **Fix dead IC EOD report query** — `scripts/strategies/ic/paper_ic_snapshot.py`
+    (no story folder) — the "Intraday actions" query is dead code, found in the DT-3a audit.
+17. **Chain delta/decay analysis** — `docs/plan/chain-decay-analysis/` — next **CDA-1**.
+    Exploratory / read-only, independent.
+    Monthly bucket only (yearly excluded — see `greeks-bs-fallback` GF-1 findings).
+18. **Entry event filter R4** — `docs/plan/entry-event-filter/` — next **EF-1**.
+    Good-to-have, not compulsory; soft-warning only (logged, non-blocking, mirrors
+    `GateViolation`). `events.yaml` needs ad-hoc upkeep.
+    Revisit once entries run unattended on live capital (post `backtest-engine` Phase 2), and
+    reconsider hard-block then.
+19. **Broker abstraction** — `docs/plan/broker-abstraction/` — next **BA-0**
+    (probe scripts + decision matrix).
+    LOW priority; storage format frozen, only fetch + parse change.
+    BA-14 / BA-15 blocked until `src/execution/` (`phase2-integrations` OE-1) exists.
+    Do not start until the Phase 0.8 gate clears.
+20. **Historical data abstraction** — `docs/plan/historical-data-abstraction/` — next
+    **HD-0** (cost-bounded probe scripts). LOW priority.
+    `HistoricalCandleFetcher` protocol so VIX + OHLC fetching can switch brokers without
+    touching storage. HD-6 / HD-7 conditional on the HD-0 decision matrix.
+    Do not start until the Phase 0.8 gate clears.
+21. **Phase 2 — Research Pipelines & Integrations** — `docs/plan/phase2-integrations/` —
+    next **PV-1** (P&L visualization — not gated, can be pulled forward).
+    ZK-1 / OE-1 / PT-1 gated per the story file. 2027+.
+    Excludes the swing / investment signal pipelines — those are `signals`.
+22. **Technical Debt** — `docs/plan/technical-debt/` — DEBT-3 / 5 / 6a / 6b / 6c / 7.
+    Opportunistic, **not sequential** — each item fires only when its named file / module is
+    already being touched for another story's task. See `prompt.md` for the per-item trigger.
+
+## Open Bugs
+
+Confirmed defects in shipped code live in **[`docs/bugs/`](docs/bugs/)** — registry
+`bugs.md` (status `🔴 Open` → `🟡 Fix in progress` → `✅ Fixed`), tasks `docs/bugs/task.md`.
+`/work` → Bug branch reads those files directly; it does **not** read this file.
+**Do not mirror bug priority or status here** — `bugs.md` is the single source of truth.
+
+Snapshot (authoritative list: `bugs.md`) —
+
+- **BUG-030** — `_overlay_type_groups` elif-precedence orphans the `overlay_cc` leg when
+  `overlay_collar_put` is also present same-day.
+  Next: **B030.1** (entry-side tagging question, blocks the grouping fix).
+- **BUG-037** — `mark_trade_closed()` never wired into CSP / IC v1 / v2 close paths;
+  54 stale flat legs found live.
+  Next: **B037.6** (`code-reviewer` on the B037.3 / B037.4 fix).
+- **BUG-038** — `OverlayCloser`'s three `self._notifier.send()` calls are unawaited
+  coroutines (never actually sent).
+  Next: **B038.1** (`trace_path` the three send methods).
+- **BUG-019** — diagnostic-only, not actionable (awaiting a live trading day's data before a
+  fix is scoped).
+
+Feature-vs-bug priority is chosen at session start via `/work`. A bug urgent enough to
+pre-empt all feature work should be raised with Animesh directly — it is not expressed by
+reordering either list.
 
 **Before build queue starts on paper-backbone-dependent stories** — verify prerequisites:
 ```bash
@@ -59,8 +130,8 @@ search_graph("CCOverlayV1")       # must return zero results
 
 ## Animesh-only: Stockmock Calibration Backtests
 
-Prerequisite for item 15 (`docs/plan/backtest-engine/phase1/tasks.md` task **1.1**, which itself
-feeds task 1.7's `CSPConfig`). Stockmock UI — no code required.
+Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` task **1.1**,
+which itself feeds task 1.7's `CSPConfig`). Stockmock UI — no code required.
 
 - [ ] COVID crash (Feb–Apr 2020) — strikes hit, premium, max M2M loss, breach frequency
 - [ ] IL&FS crisis (Sep–Oct 2018) — same metrics
@@ -80,6 +151,19 @@ history above). Add new entries there going forward, or start a fresh dated sect
 this file's Session Log grows large again.
 
 ### 2026-08-28
+
+- **RDO-14 — `TODOS.md` restructure (root-doc-organization).** Design changed with Animesh:
+  *not* one unified queue — two separate pointer-only lists, `## Feature Backlog` (`1..N`
+  contiguous, `docs/plan/` stories) and `## Open Bugs` (non-authoritative snapshot + pointer
+  to `docs/bugs/`), matching `/work`'s existing Feature/Bug fork. Dropped: completed
+  `session-entry-point`, superseded `telegram-ic-comparison-formatting`, the duplicate
+  "item 14", all `TGFMT-2..9` refs. Every internal `"item N"` cross-ref → story-folder name.
+  Whole file reflowed to semantic linefeeds (RDO-13-deferred backlog for this file — no
+  `SKIP=md-line-length` needed now). Added per Animesh: `docs/plan/README.md` §Conventions
+  gains a *Completion → archive* subsection (story folder → `docs/archive/plan/`, `TODOS.md`
+  line → `TODOS_ARCHIVE.md`, README row → pointer, all one commit) + `session-close` Step 5b
+  "done-but-not-archived" check. `/work` branch-collapse (RDO-14 §4) explicitly declined;
+  recorded in `session-entry-point/tasks.md`. Docs-only.
 
 - **RDO-13 — docs/plan + TODOS.md convention enforcement (root-doc-organization).** 3 commits.
   13a `0712b49`: `docs/plan/README.md` §Conventions rewritten canonical + self-contained

@@ -9,10 +9,10 @@ replaces RDO-3's unworkable date cutoff. RDO-10 reconciles RDO-7 with the freshn
 same day; RDO-11 decides whether those hooks become blocking. RDO-12 spins the unified
 `/work` session entry point into its own story (`docs/plan/session-entry-point/`). RDO-13
 makes `docs/plan/README.md` §Conventions enforceable (template + audit) and cuts `TODOS.md`
-back to pointer-only items. RDO-14 restructures `TODOS.md`'s priority list into one
-priority-ordered bug+feature queue — the list `/work` reads to build its menu.
+back to pointer-only items. RDO-14 restructures `TODOS.md` into two pointer-only lists
+(`## Feature Backlog` + `## Open Bugs`) and adds the §Conventions *Completion → archive* rule.
 
-**Open: RDO-6, 7, 9, 10, 11, 14, 15.** Epic completion criteria at the bottom of this file.
+**Open: RDO-6, 7, 9, 10, 11, 15.** Epic completion criteria at the bottom of this file.
 
 - [x] **RDO-1** — Slim `CONTEXT.md` to ≤400 lines, no line >200 chars; move module prose to
   `CONTEXT_TREE.md`. Verify: fresh `Read CONTEXT.md` returns whole file, no display-cap hit.
@@ -270,26 +270,34 @@ priority-ordered bug+feature queue — the list `/work` reads to build its menu.
   RDO-14 (any `TODOS.md` edit forces the full reflow anyway).
   | Owner: Claude | Model: claude-sonnet-5 | SHA: 3c50826
 
-- [ ] **RDO-14** — Restructure `TODOS.md` "Priority-Ordered Open Work" into one unified,
-  priority-ordered queue covering **both** `docs/plan/` stories and `docs/bugs/` open entries.
+- [x] **RDO-14** — Restructure `TODOS.md` "Priority-Ordered Open Work".
   Today it is feature-only with rotted numbering (`0e.` then jumps to `9.`, item 14 listed
   twice, `TGFMT-2..9` still present though superseded by item 29); bugs are absent except
   BUG-030 wedged in as `0e`/`3`. This is the list `/work` (SEP) reads to build its first-5
   menu, so its incoherence is a live problem, not cosmetic.
-  1. Single contiguous `1..N` numbering. Each item pointer-only per RDO-13 §4 — title,
-     `docs/plan/<story>/` or `docs/bugs/` path, next unchecked task id, one-line why; no
-     inline multi-paragraph detail.
-  2. Interleave bugs and features by actual priority — one queue, not two sections.
-  3. Drop superseded / duplicate entries; replace the internal `"Blocked by item N"`
-     number-refs with story-folder names so they stop rotting on every renumber.
-  4. Coordinate with SEP: once the queue is unified, `/work`'s separate Feature / Bug branches
-     can collapse to a single "top N of the queue" presentation — file a follow-up SEP task in
-     `docs/plan/session-entry-point/`; do not rework the skill here.
-  Feeds RDO-12 (a coherent first-5). Best done right after RDO-13 §4's pointer-only rule is
-  written, so both land consistent.
-  Verify: `TODOS.md` priority list is `1..N` contiguous; every item resolves to a live
-  `docs/plan/*/` or `docs/bugs/` path; no superseded items; bugs and features interleaved by
-  priority.
+  **Design changed 2026-08-28 (Animesh):** *not* one unified queue — two separate lists,
+  `## Feature Backlog` (`docs/plan/`) and `## Open Bugs` (`docs/bugs/`), matching `/work`'s
+  existing Feature/Bug fork. Bugs are not re-listed with their own priority — `bugs.md` stays
+  the single source of truth; `## Open Bugs` is a non-authoritative snapshot + pointer.
+  1. `## Feature Backlog` — single contiguous `1..N`, pointer-only per RDO-13 §4 (title,
+     `docs/plan/<slug>/` path, next unchecked task id, one-line why). Done.
+  2. ~~Interleave bugs and features~~ — superseded by the two-list design above.
+  3. Dropped: completed `session-entry-point` (item 1), superseded
+     `telegram-ic-comparison-formatting` (TGFMT-1 shipped, 2..9 folded into
+     `telegram-markdown-migration`), the duplicate "item 14", all `TGFMT-2..9` refs.
+     Every internal `"item N"` / `"items 15/16"` / `"item 24's OE-1"` ref replaced with the
+     story-folder name.
+  4. `/work` branch-collapse — **not doing it.** The two-workflow (Feature vs Bug) split is
+     deliberate; recorded in `docs/plan/session-entry-point/tasks.md`. §4 closed.
+  5. **Added (Animesh):** completion → archive is now one explicit `docs/plan/README.md`
+     §Conventions subsection — when every task is done, the story folder moves to
+     `docs/archive/plan/<slug>/`, the `TODOS.md` line moves to `docs/archive/TODOS_ARCHIVE.md`,
+     and the README row collapses to a pointer, all in the same commit. `session-close` Step
+     5b gains a "done-but-not-archived" check.
+  Verify: `TODOS.md` `## Feature Backlog` is `1..N` contiguous; every item resolves to a live
+  `docs/plan/*/` or `scripts/` path; no superseded items; `md-line-length` clean (whole file
+  reflowed to semantic linefeeds — the RDO-13-deferred backlog for this file).
+  | Owner: Claude | Model: claude-sonnet-5 | SHA: <this commit>
 
 - [ ] **RDO-15** — Same-id checkbox duplication audit + drift guard. From the 2026-08-27
   observation that `docs/plan/session-entry-point/tasks.md` (and by pattern most story
@@ -348,8 +356,10 @@ All boxes checked:
       `Owner|Model|SHA`; `TODOS.md` pointer-only rule encoded; empty story folders swept.
       Done 2026-08-28 (13a `0712b49`, 13b `a0d255d`, 13c). CLAUDE.md/AGENTS.md 5a pointer
       folded into RDO-6; `TODOS.md` items 14/22/29 retrofit stays with RDO-14.
-- [ ] **RDO-14** — `TODOS.md` priority list is one `1..N` contiguous bug+feature queue;
-      no superseded/duplicate items; internal cross-refs use folder names not item numbers.
+- [x] **RDO-14** — `TODOS.md` split into `## Feature Backlog` (`1..N` contiguous, pointer-only)
+      + `## Open Bugs` (snapshot + pointer to `docs/bugs/`); no superseded/duplicate items;
+      cross-refs use folder names. §Conventions *Completion → archive* rule added; whole file
+      reflowed to semantic linefeeds. Done 2026-08-28 (Claude, `<this commit>`).
 - [ ] **RDO-15** — checkbox-consistency sweep script runs clean across `docs/plan/**` +
       `docs/bugs/`; one-checkbox-per-id convention recorded in §Conventions + `_TEMPLATE/`;
       `session-entry-point/tasks.md` retrofitted as the worked example.

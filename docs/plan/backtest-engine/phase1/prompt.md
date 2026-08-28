@@ -3,7 +3,7 @@ Read `CONTEXT.md` and state `CONTEXT.md ✓` before doing anything else.
 **Gate check first — this is not a normal story:** confirm the Phase 0.8 variance gate has
 passed (`BACKTEST_PLAN.md` — CSP v1 paper-trading gate, criteria A–D) before picking up any task
 below. If the gate has not passed, stop here — do not start any 1.x task. Check `TODOS.md`'s
-Priority-Ordered Open Work item 13 (variance-gate story) for current gate status.
+`## Feature Backlog` (variance-gate story) for current gate status.
 
 Once the gate has passed: read `docs/plan/backtest-engine/phase1/tasks.md` and find the first
 unchecked box. That is your **only task** for this session. Do not look at any other unchecked
