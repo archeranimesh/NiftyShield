@@ -268,7 +268,7 @@ priority-ordered bug+feature queue — the list `/work` reads to build its menu.
   canonical home (§1) and is complete; RDO-6 adds the one-line CLAUDE.md/AGENTS.md pointer
   when it wraps + re-syncs those files. Retrofit of `TODOS.md` items 14/22/29 stays with
   RDO-14 (any `TODOS.md` edit forces the full reflow anyway).
-  | Owner: Claude | Model: claude-sonnet-5 | SHA: &lt;13c — recorded in follow-up&gt;
+  | Owner: Claude | Model: claude-sonnet-5 | SHA: 3c50826
 
 - [ ] **RDO-14** — Restructure `TODOS.md` "Priority-Ordered Open Work" into one unified,
   priority-ordered queue covering **both** `docs/plan/` stories and `docs/bugs/` open entries.
