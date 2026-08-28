@@ -259,7 +259,7 @@ back to pointer-only items. RDO-14 restructures `TODOS.md` into two pointer-only
   13b `a0d255d` — `scripts/hooks/check_story_structure.py` (story-vs-epic detection; `--all`
   audit / `--staged-added` pre-commit / path modes; legacy `*_tasks.md` warning) + 11 tests
   + `.pre-commit-config.yaml` wiring; two empty stray folders removed.
-  13c `<this commit>` — structure-audit + pointer-only steps added to `md-cleanup` +
+  13c `3c50826` — structure-audit + pointer-only steps added to `md-cleanup` +
   `session-close` skills; `TODOS.md` header pointer + pointer-only note.
   **Deferred to RDO-6** (item 3 add + this task's §2): the `CLAUDE.md` / `AGENTS.md` Step 5a
   pointer to the task-line format. Both files carry ~13 pre-existing >200-char lines RDO-2
@@ -297,7 +297,7 @@ back to pointer-only items. RDO-14 restructures `TODOS.md` into two pointer-only
   Verify: `TODOS.md` `## Feature Backlog` is `1..N` contiguous; every item resolves to a live
   `docs/plan/*/` or `scripts/` path; no superseded items; `md-line-length` clean (whole file
   reflowed to semantic linefeeds — the RDO-13-deferred backlog for this file).
-  | Owner: Claude | Model: claude-sonnet-5 | SHA: <this commit>
+  | Owner: Claude | Model: claude-sonnet-5 | SHA: e7cecab
 
 - [ ] **RDO-15** — Same-id checkbox duplication audit + drift guard. From the 2026-08-27
   observation that `docs/plan/session-entry-point/tasks.md` (and by pattern most story
@@ -359,7 +359,7 @@ All boxes checked:
 - [x] **RDO-14** — `TODOS.md` split into `## Feature Backlog` (`1..N` contiguous, pointer-only)
       + `## Open Bugs` (snapshot + pointer to `docs/bugs/`); no superseded/duplicate items;
       cross-refs use folder names. §Conventions *Completion → archive* rule added; whole file
-      reflowed to semantic linefeeds. Done 2026-08-28 (Claude, `<this commit>`).
+      reflowed to semantic linefeeds. Done 2026-08-28 (Claude, `e7cecab`).
 - [ ] **RDO-15** — checkbox-consistency sweep script runs clean across `docs/plan/**` +
       `docs/bugs/`; one-checkbox-per-id convention recorded in §Conventions + `_TEMPLATE/`;
       `session-entry-point/tasks.md` retrofitted as the worked example.
