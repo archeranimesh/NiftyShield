@@ -130,6 +130,17 @@ found, do the *Completion → archive* move (folder → `docs/archive/`, `TODOS.
 
 ---
 
+## Step 5c — checkbox-consistency sweep
+
+Run: `python scripts/hooks/check_checkbox_consistency.py --all`
+
+Every task id carries exactly one checkbox (the working-list line); `## Epic done when`
+blocks are prose acceptance criteria with no `- [ ]`. Fix each reported file — strip the
+summary-block checkbox, reconcile a drifted id to the working-list state, or repoint a stale
+README `next:` marker. Full rule: `docs/plan/README.md` §"Checkbox consistency".
+
+---
+
 ## Step 6 — Commit
 
 ```

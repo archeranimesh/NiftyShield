@@ -15,11 +15,12 @@ see `stories.md` (if present) for per-task implementation detail.
 
 ## Epic done when
 
-<!-- Mirror of the working list above — one line per task id. Do not hand-edit this to
-disagree with the boxes above; tasks.md working list is canonical. -->
+<!-- Acceptance criteria — prose, NO `- [ ]` / `- [x]` checkboxes (RDO-15, convention a).
+Per-task status lives only in the working list above; this list is verified at epic close.
+`check_checkbox_consistency.py` flags any `- [ ]` / `- [x]` **ID** line placed here. -->
 
-- [ ] **<ID-1>** — <one-line done criterion>
-- [ ] **<ID-2>** — <one-line done criterion>
+- **<ID-1>** — <one-line done criterion>
+- **<ID-2>** — <one-line done criterion>
 
 ## After each task
 
