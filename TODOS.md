@@ -2,6 +2,11 @@
 
 > Open work only. Completed items: [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md) | Known defects: [docs/bugs/](docs/bugs/)
 > Related: [CONTEXT.md](CONTEXT.md) | [DECISIONS.md](DECISIONS.md) | [PLANNER.md](PLANNER.md) | [BACKTEST_PLAN.md](BACKTEST_PLAN.md) | [BACKTEST_PLAN_PHASE1.md](BACKTEST_PLAN_PHASE1.md)
+>
+> **Task tracking lives in the story folders.** Per-task state is in each story's
+> `docs/plan/<slug>/tasks.md` or `docs/bugs/task.md`. The priority list below is
+> **pointers only** — title, path, next unchecked task, one-line why. Full rules:
+> [`docs/plan/README.md`](docs/plan/README.md) §Conventions. (Full retrofit: RDO-14.)
 
 ---
 
@@ -14,7 +19,7 @@ story on this list. Do not jump between stories mid-sequence; the ordering below
 `docs/archive/TODOS_ARCHIVE.md`.
 
 1. [x] **session-entry-point — unified `/work` entry point** (2026-08-27) — `docs/plan/session-entry-point/tasks.md`. **Epic complete 2026-08-27** (SEP-1..4): `/work` skill authored, `CLAUDE.md` + `AGENTS.md` point at it, both branches demonstrated end-to-end. `/work` now routes task sessions off this list.
-2. [ ] **root-doc-organization — root `.md` cleanup + doc-maintenance automation** (2026-08-27) — `docs/plan/root-doc-organization/tasks.md`, starting at **RDO-5**. Includes **RDO-14** — restructure this section into a single priority-ordered queue covering both `docs/plan/` stories and `docs/bugs/` open entries.
+2. [ ] **root-doc-organization** — root `.md` cleanup + doc-maintenance automation — `docs/plan/root-doc-organization/tasks.md`, next: **RDO-14** (unify this priority list into one bug+feature queue).
 3. [ ] **BUG-030 — `_overlay_type_groups` elif-precedence drops `overlay_cc` leg when `overlay_collar_put` also present same-day** (found 2026-08-13, open) — the "NiftyBees vs overlays" digest's `CC No data` line and an understated `Collar` P&L figure both trace to `paper_3track_snapshot.py::_overlay_type_groups()` checking `has_put` before `has_cc` in its `elif` chain, silently orphaning the `overlay_cc` leg from every group whenever `overlay_collar_put` is also present. Orthogonal to BUG-028 (namespace fix, already closed) — this is a leg-role grouping defect BUG-028's four phases never touched. See `docs/bugs/bugs.md` BUG-030, `docs/bugs/task.md` B030.1–B030.6, starting at **B030.1** (entry-side tagging question, blocks the grouping fix).
 9. [ ] **IC yearly-expiry residual risk** (2026-07-23) — `docs/plan/ic-yearly-expiry-fix/tasks.md`, starting at **WG-1** (persist per-leg Greeks for weekly expiry bucket; YE-1..YE-4 superseded/already fixed live, see DECISIONS.md BUG-015).
 10. [ ] **Greeks Black-Scholes fallback** (2026-07-23) — `docs/plan/greeks-bs-fallback/tasks.md`, starting at **GF-1** (read-only audit scope).
@@ -73,6 +78,19 @@ Full forensic log (SHAs, bug numbers, root-cause detail) moved to
 2026-08-26 reorg (everything from 2026-08-01 through 2026-08-26, plus item 29's inline design
 history above). Add new entries there going forward, or start a fresh dated section here if
 this file's Session Log grows large again.
+
+### 2026-08-28
+
+- **RDO-13 — docs/plan + TODOS.md convention enforcement (root-doc-organization).** 3 commits.
+  13a `0712b49`: `docs/plan/README.md` §Conventions rewritten canonical + self-contained
+  (archive pointer dropped), all 17 pre-existing >200-char story rows reflowed into compact
+  status entries, `docs/plan/_TEMPLATE/{prompt,tasks}.md` added. 13b `a0d255d`:
+  `scripts/hooks/check_story_structure.py` + 11 tests + pre-commit wiring (story-vs-epic
+  detection; `--all` audit / `--staged-added` pre-commit / path modes); two empty stray
+  folders removed. 13c: structure-audit + pointer-only steps in `md-cleanup` / `session-close`
+  skills; this header pointer. `CLAUDE.md`/`AGENTS.md` 5a pointer deferred to RDO-6 (mirror
+  long-line wrap); `TODOS.md` items 14/22/29 retrofit stays RDO-14. Committed with
+  `SKIP=md-line-length` — this file carries the pre-existing backlog; the change adds none.
 
 ### 2026-08-27
 

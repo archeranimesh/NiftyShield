@@ -107,6 +107,26 @@ mv .claude/agents/<task-specific>.md docs/archive/
 
 ---
 
+## Step 5b — `docs/plan/` structure audit
+
+Run: `python scripts/hooks/check_story_structure.py --all`
+
+Every non-archived `docs/plan/*/` folder must be a story (`prompt.md` + `tasks.md`) or an
+epic (holds story sub-folders). Act on what it reports:
+
+- **empty folder** — the story shipped and was archived; `rmdir` it.
+- **legacy `*_tasks.md`** — rename to bare `tasks.md` when you are already touching that story
+  (do not mass-rename).
+- **missing files** — the folder is a stub; flesh it out from `docs/plan/_TEMPLATE/` or remove it.
+
+Then confirm `TODOS.md` "Priority-Ordered Open Work" items are still **pointer-only**: title,
+the `docs/plan/<slug>/` or `docs/bugs/` path, the next unchecked task id, one line of why.
+Multi-paragraph detail or per-task progress in a priority item is a hygiene violation — move it
+into the story's own `tasks.md` and cut the `TODOS.md` line back to a pointer. Full rules:
+`docs/plan/README.md` §Conventions.
+
+---
+
 ## Step 6 — Commit
 
 ```

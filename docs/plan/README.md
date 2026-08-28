@@ -59,10 +59,10 @@ Risk delta gate (done) + Near-Expiry Gamma Buy `gamma_daily_watch.py`.
 **`variance-gate/`** · ⬜ Not started · next: **VG0** (CSP v1 spec reconciliation)
 CSP v1 Phase 0.8 deployment gate — spec reconciliation + gate criteria A–D.
 
-**`root-doc-organization/`** · 🔄 In progress · next: **RDO-13** (folder conventions + `_TEMPLATE/` + audit)
+**`root-doc-organization/`** · 🔄 In progress · next: **RDO-14** (unify TODOS.md priority queue)
 Token-efficiency cleanup of the ~22 root `.md` files + doc-maintenance automation.
 Docs + tooling only. RDO-1..15 + an "Epic done when" checklist in `tasks.md`.
-RDO-1/2/4/5/8/12 shipped, RDO-3 closed-partial; RDO-6/7/9/10/11/13/14/15 open.
+RDO-1/2/4/5/8/12/13 shipped, RDO-3 closed-partial; RDO-6/7/9/10/11/14/15 open.
 
 **`session-entry-point/`** · ✅ Done 2026-08-27 (SEP-1..4)
 Unified manual `/work` skill — routes a task session to Feature or Bug, loads the right

@@ -69,6 +69,10 @@ For every step below, mark one of:
 - Step 3 was skipped — implementation started immediately after CONTEXT.md read with no plan stated
 - SHA was not confirmed after commit (commit skill Step 5c skipped)
 - CONTEXT.md was not updated after new files or modules were added
+- a `TODOS.md` "Priority-Ordered Open Work" item was left with multi-paragraph detail or
+  per-task progress instead of a pointer (title + path + next task + one-line why) — see
+  `docs/plan/README.md` §Conventions
+- a completed `tasks.md` checkbox is missing its `| Owner: … | Model: … | SHA: …` tail
 
 ---
 

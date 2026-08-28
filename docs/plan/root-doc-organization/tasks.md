@@ -12,7 +12,7 @@ makes `docs/plan/README.md` §Conventions enforceable (template + audit) and cut
 back to pointer-only items. RDO-14 restructures `TODOS.md`'s priority list into one
 priority-ordered bug+feature queue — the list `/work` reads to build its menu.
 
-**Open: RDO-6, 7, 9, 10, 11, 13, 14, 15.** Epic completion criteria at the bottom of this file.
+**Open: RDO-6, 7, 9, 10, 11, 14, 15.** Epic completion criteria at the bottom of this file.
 
 - [x] **RDO-1** — Slim `CONTEXT.md` to ≤400 lines, no line >200 chars; move module prose to
   `CONTEXT_TREE.md`. Verify: fresh `Read CONTEXT.md` returns whole file, no display-cap hit.
@@ -99,6 +99,12 @@ priority-ordered bug+feature queue — the list `/work` reads to build its menu.
   `.claude/skills/` with stale `.Codex/` paths + "Codex" identity language from `16821d6`;
   bring it into the re-sync scope and re-point it to `.claude/` on the first `md-organize` run.
   (`.codex/` was deleted in RDO-8 — dead, nothing read it.)
+  **Add (RDO-13):** while wrapping `CLAUDE.md` + `AGENTS.md` long lines, also add a one-line
+  Step 5a pointer to `docs/plan/README.md` §Conventions for the `| Owner | Model | SHA`
+  task-line format + the `TODOS.md` pointer-only rule. Deferred from RDO-13 because staging
+  either file pre-wrap trips `md-line-length` on its whole pre-existing backlog.
+  Also add `scripts/hooks/check_story_structure.py --all` as a periodic audit step (RDO-13 §3)
+  and pick the final `md-cleanup` → `md-organize` name (coordinate with RDO-10 #4).
 - [ ] **RDO-7** — Add report-only `DOC STALENESS` section to
   `.claude/skills/session-close/SKILL.md` (Option A in `plan.md`). Report only — no
   unattended commits.
@@ -214,7 +220,7 @@ priority-ordered bug+feature queue — the list `/work` reads to build its menu.
   Verify: `/work` in a real session reaches a loaded prompt on both branches; see
   `docs/plan/session-entry-point/tasks.md` "Epic done when".
 
-- [ ] **RDO-13** — `docs/plan/` + `TODOS.md` convention enforcement. From the 2026-08-27
+- [x] **RDO-13** — `docs/plan/` + `TODOS.md` convention enforcement. From the 2026-08-27
   workflow-suggestion triage. `docs/plan/README.md` §Conventions is the single source of
   truth; `docs/archive/plan/README.md` §Conventions is dead (old per-story-file scheme) —
   delete the "Full conventions" pointer to it.
@@ -246,6 +252,23 @@ priority-ordered bug+feature queue — the list `/work` reads to build its menu.
   Verify: `_TEMPLATE/` exists; `check_story_structure.py` green after retrofit; a freshly
   ticked `tasks.md` task shows the `Owner|Model|SHA` tail; `docs/plan/README.md` §Conventions
   is self-contained (no archive pointer).
+  **Done 2026-08-28 (Claude, 3 commits):**
+  13a `0712b49` — `docs/plan/README.md` §Conventions rewritten canonical + self-contained
+  (archive pointer removed), all 17 pre-existing >200-char table rows reflowed into compact
+  per-story status entries, `docs/plan/_TEMPLATE/{prompt,tasks}.md` added.
+  13b `a0d255d` — `scripts/hooks/check_story_structure.py` (story-vs-epic detection; `--all`
+  audit / `--staged-added` pre-commit / path modes; legacy `*_tasks.md` warning) + 11 tests
+  + `.pre-commit-config.yaml` wiring; two empty stray folders removed.
+  13c `<this commit>` — structure-audit + pointer-only steps added to `md-cleanup` +
+  `session-close` skills; `TODOS.md` header pointer + pointer-only note.
+  **Deferred to RDO-6** (item 3 add + this task's §2): the `CLAUDE.md` / `AGENTS.md` Step 5a
+  pointer to the task-line format. Both files carry ~13 pre-existing >200-char lines RDO-2
+  deferred wrapping to RDO-6; staging either trips `md-line-length` on the whole backlog, and
+  RDO-2 mandates wrapping the two mirrors together. `docs/plan/README.md` §Conventions is the
+  canonical home (§1) and is complete; RDO-6 adds the one-line CLAUDE.md/AGENTS.md pointer
+  when it wraps + re-syncs those files. Retrofit of `TODOS.md` items 14/22/29 stays with
+  RDO-14 (any `TODOS.md` edit forces the full reflow anyway).
+  | Owner: Claude | Model: claude-sonnet-5 | SHA: &lt;13c — recorded in follow-up&gt;
 
 - [ ] **RDO-14** — Restructure `TODOS.md` "Priority-Ordered Open Work" into one unified,
   priority-ordered queue covering **both** `docs/plan/` stories and `docs/bugs/` open entries.
@@ -320,9 +343,11 @@ All boxes checked:
 - [x] **RDO-12** — `/work` skill exists and routes Feature/Bug; `CLAUDE.md` + `AGENTS.md`
       point at it; see `docs/plan/session-entry-point/` "Epic done when". Closed 2026-08-27 —
       `session-entry-point` epic (SEP-1..4) complete; both branches demonstrated end-to-end.
-- [ ] **RDO-13** — `docs/plan/README.md` §Conventions is canonical + self-contained;
+- [x] **RDO-13** — `docs/plan/README.md` §Conventions is canonical + self-contained;
       `_TEMPLATE/` + `check_story_structure.py` exist; ticked task lines carry
       `Owner|Model|SHA`; `TODOS.md` pointer-only rule encoded; empty story folders swept.
+      Done 2026-08-28 (13a `0712b49`, 13b `a0d255d`, 13c). CLAUDE.md/AGENTS.md 5a pointer
+      folded into RDO-6; `TODOS.md` items 14/22/29 retrofit stays with RDO-14.
 - [ ] **RDO-14** — `TODOS.md` priority list is one `1..N` contiguous bug+feature queue;
       no superseded/duplicate items; internal cross-refs use folder names not item numbers.
 - [ ] **RDO-15** — checkbox-consistency sweep script runs clean across `docs/plan/**` +
