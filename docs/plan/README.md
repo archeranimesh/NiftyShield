@@ -66,9 +66,9 @@ RDO-1/2/4/5/8/9/12/13/14/15 shipped, RDO-3 closed-partial; RDO-6/7/10/11/16 open
 RDO-15 (2026-08-28): `check_checkbox_consistency.py` sweep + one-checkbox-per-id convention
 (`## Epic done when` blocks are prose criteria, no boxes); loop-closure check → new RDO-16.
 
-**`session-entry-point/`** · ✅ Done 2026-08-27 (SEP-1..4)
-Unified manual `/work` skill — routes a task session to Feature or Bug, loads the right
-prompt + first unchecked task, hands to `CLAUDE.md` Step 2b.
+**`session-entry-point/`** · ✅ Archived 2026-08-28 → `docs/archive/plan/session-entry-point/`
+Unified manual `/work` skill (SEP-1..4) — routes a task session to Feature or Bug, loads the
+right prompt + first unchecked task, hands to `CLAUDE.md` Step 2b.
 
 **`paper-backbone/`** · ✅ Shipped/Archived
 Strategy Monitor daemon + pluggable strategy backbone (`src/strategy/`, `TelegramGateway`).
