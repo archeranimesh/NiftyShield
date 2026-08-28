@@ -6,42 +6,126 @@
 > folder conventions, separate registry. See also the archived legacy registry
 > [`BUGS_LEGACY.md`](../archive/BUGS_LEGACY.md) (superseded).
 
+The **status** and **next** markers below are a *summary* of each story's `tasks.md`.
+`tasks.md` is canonical; if they disagree, `tasks.md` wins and this file is stale.
+Format per entry: `**\`folder/\`** · <status> · next: **<task id>**` then a short blurb.
+
 ---
 
 ## Active Epics
 
-| Folder | What it covers | Status |
-|--------|---------------|--------|
-| `dev-foundation/` | Engineering excellence epic — tooling, CI, code health (3 sub-stories) | ✅ Shipped/Archived |
-| `full-repo-review-followups/` | 9 stories spawned from the full-repo-review epic's FR-7 Chairman Synthesis (7 CRITICAL + 2 selected ERROR findings, all independently re-verified) — P0: portfolio P&L fix, DB backup cron; P1: docs staleness, Telegram auth fix; P2: CLAUDE.md/REVIEW.md reconciliation, logging migration; P3: Greeks/parity validation (council-gated), golden tests, suppression hygiene. Priority order and dependencies in the epic's own `README.md`. Note: `telegram-approval-auth-fix/` sub-story already shipped (SHA `5cafc3c`, confirmed 2026-08-07) — this top-level line is stale on that point, check sub-story `tasks.md` files individually. | ⬜ Not started — start with the P0 folders |
-| `telegram-markdown-migration/` | Switch `TelegramNotifier` from HTML+`<pre>` to Markdown parse_mode globally (real bold + copyable fenced tables in the same message, impossible under HTML per 2026-08-07 prototyping); 3 sub-stories: `backbone/` (parse-mode switch + escape every existing caller's dynamic values), `formatting-rules/` (decimal/alignment spec + reusable table helpers), `strategy-rollout/` (migrate each message family, IC audit first, approval requests last — coordinates with `telegram-approval-auth-fix/`). Supersedes `telegram-ic-comparison-formatting/` TGFMT-2..9 (below). Origin: `scratch/2026-08-07_ic_eod_audit_telegram_format.py`. | ⬜ Not started — start with `backbone/` |
-| `telegram-ic-comparison-formatting/` | Fixed `build_comparison_report()`'s hand-counted-width alignment bug (TGFMT-1, shipped). Remaining tasks (TGFMT-2..9: generalized `format_table()` helper, retrofit to `auto_close.py` + others, CLAUDE.md standard) **superseded 2026-08-07** by `telegram-markdown-migration/` — see that folder's README for how. Two still-open feature asks (Legs row, Bkd/Flt month-inception split) carried forward into `telegram-markdown-migration/strategy-rollout/` ROLL-2, not dropped. | 🔄 TGFMT-1 shipped; rest superseded |
-| `3track-consolidation/` (archived) | Overlay (CC/PP/Collar) retired on Futures/Proxy, live only on NiftyBees; base-leg-only daily comparison snapshot (+ Nifty spot as 4th series); automated base-leg rolling (Futures/DITM); full unattended automation (`NiftyTrackComparisonV1.auto_execute=True`, one-time bootstrap entry, Telegram on every trade event); CC/PP/Collar delta-based strike-selection + automated entry sub-threads | All tasks complete (S0–S9, CC1–CC5, PP1–PP5, Collar1–Collar3b) — ✅ Shipped/Archived 2026-08-04, see `docs/archive/plan/3track-consolidation/` |
+**`dev-foundation/`** · ✅ Shipped/Archived
+Engineering-excellence epic — tooling, CI, code health (3 sub-stories).
+
+**`full-repo-review-followups/`** · ⬜ Not started — start with the P0 folders
+9 stories from the full-repo-review FR-7 synthesis (7 CRITICAL + 2 ERROR).
+P0: portfolio P&L fix, DB backup cron.
+P1: docs staleness, Telegram auth fix.
+P2: CLAUDE.md/REVIEW.md reconcile, logging migration.
+P3: Greeks/parity validation (council-gated), golden tests, suppression hygiene.
+Priority + dependencies in the epic's own `README.md`.
+`telegram-approval-auth-fix/` already shipped (SHA `5cafc3c`).
+
+**`telegram-markdown-migration/`** · 🔄 In progress — `strategy-rollout/` through ROLL-3
+Switch all Telegram messaging to `parse_mode=MarkdownV2` via three sequenced sub-stories:
+`backbone/` (parse-mode switch + escaping audit — closed),
+`formatting-rules/` (value/table spec → `FORMATTING.md` — closed),
+`strategy-rollout/` (per-message-family migration — in progress).
+Supersedes `telegram-ic-comparison-formatting/` TGFMT-2..9.
+
+**`telegram-ic-comparison-formatting/`** · 🔄 TGFMT-1 shipped; rest superseded
+TGFMT-1 fixed `build_comparison_report()`'s hand-counted-width alignment bug.
+TGFMT-2..9 superseded 2026-08-07 by `telegram-markdown-migration/`.
+The two still-open feature asks (Legs row, Bkd/Flt month-inception split) carried into
+`strategy-rollout/` ROLL-2.
+
+**`3track-consolidation/`** · ✅ Shipped/Archived 2026-08-04 → `docs/archive/plan/3track-consolidation/`
+Overlay (CC/PP/Collar) retired on Futures/Proxy, live only on NiftyBees; base-leg-only daily
+comparison snapshot; automated base-leg rolling; full unattended automation.
 
 ---
 
 ## Active Stories
 
-| Folder | What it covers | Next task | Status |
-|--------|---------------|-----------|--------|
-| `eod-pt-summary/` | Cross-strategy paper-trade EOD report: open positions, closed-today, strategy-wise P&L/Ann.%-on-margin — 3 separate Telegram messages, MarkdownV2. Iterated live in `scratch/2026-08-13_eod_pt_summary.py` (confirmed with Animesh); promotion to tested `src/` + real cron is gated on a coordination decision vs. `scripts/eod_summary.py` / `scripts/reporting/paper_pnl_report.py`. | PT-1 — document the confirmed 3-message spec | ⬜ Not started |
-| `risk-gamma-phase-a/` | Risk delta gate (done) + Near-Expiry Gamma Buy `gamma_daily_watch.py` | B2.2 — chain fetch + field computation | 🔄 In progress |
-| `variance-gate/` | CSP v1 Phase 0.8 deployment gate — spec reconciliation + gate criteria A–D | VG0 — CSP v1 spec reconciliation | ⬜ Not started |
-| `root-doc-organization/` | Token-efficiency cleanup of the ~22 root `.md` files + maintenance automation: slim `CONTEXT.md` (done), re-sync `AGENTS.md` to `CLAUDE.md` (done), shrink `DECISIONS.md`, line-length pre-commit guard, `md-organize` on-demand skill, doc-staleness automation. Docs+tooling only, no `src/` behavior change. RDO-1..11 + an "Epic done when" checklist in `tasks.md`. | RDO-6 / RDO-9 (DECISIONS semantic split) | 🔄 In progress — RDO-1 (CONTEXT.md 81K→10K) + RDO-2 (AGENTS.md re-sync) shipped 2026-08-27; RDO-4 (legacy `BUGS.md` → `docs/archive/BUGS_LEGACY.md` + stub, `GLOSSARY.md` → `docs/GLOSSARY.md`, inbound links fixed) shipped 2026-08-27; RDO-5 (`md-line-length` 200-cap pre-commit hook + `check_md_line_length.py` + tests; enforces on staged files, backlog deferred to RDO-6/RDO-9) shipped 2026-08-27; RDO-8 (protocol-doc consistency: `ANTIGRAVITY.md` docs-only commit gate aligned to skip `code-reviewer`; dead `.codex/` removed, `.agents/` kept + moved into RDO-6 re-sync scope; `src/paper`/`nuvama`/`gamma` rows added to the module table in `CLAUDE.md` + `AGENTS.md`; `src/client` "Four Implementations" → "2 built + 1 variant + 1 planned"; `CLAUDE.md` review-rules lifted to a standalone section matching `AGENTS.md`) shipped 2026-08-27; RDO-3 closed-partial (7bbfaff — 5 historical sections → `docs/archive/DECISIONS_pre-2026-07.md`), date-cutoff unworkable → **RDO-9** semantic split; **RDO-10** reconciles RDO-7 with the SessionStart freshness hook + commit gate a parallel epic shipped 2026-08-27; **RDO-11** decides whether those hooks become blocking (review on/after 2026-09-03); **RDO-12** spins out a unified `/work` session entry point (`docs/plan/session-entry-point/`); **RDO-13** enforces `docs/plan/` folder conventions (`_TEMPLATE/` + audit, task lines carry `Owner\|Model\|SHA`) + `TODOS.md` pointer-only hygiene; **RDO-5** expanded to cover `docs/plan`/`docs/bugs` `.md` + a semantic-linefeed prose style (200-char cap); **RDO-14** (2026-08-27) restructures `TODOS.md` into one `1..N` bug+feature priority queue — the list `/work` reads; **RDO-15** (2026-08-27) audits same-id checkbox duplication (working list vs `Epic done when` vs `README.md` status) + adds a consistency-sweep script; RDO-6, RDO-7, RDO-9..11 + RDO-13..15 open |
-| `session-entry-point/` | Unified manual `/work` skill — routes a task session to Feature (first 5 of `TODOS.md` priority list) or Bug (`docs/bugs/` open entries), loads the right prompt + first unchecked task, hands to `CLAUDE.md` Step 2b. Docs + `.claude/` only. Spun out of `root-doc-organization` RDO-12. | — (epic complete) | ✅ Done 2026-08-27 — SEP-1 (`.claude/skills/work/SKILL.md`); SEP-2 (`CLAUDE.md` Step 1 + Quick-ref point at `/work`, load-hint duplication removed); SEP-3 (`AGENTS.md` mirrors — `/work` delta bullet + Antigravity-adjusted routing block; RDO-6 already names the skill); SEP-4 (both branches demonstrated end-to-end this session). Feeds `root-doc-organization` RDO-12. |
-| `paper-backbone/` | Strategy Monitor daemon + pluggable strategy backbone (`src/strategy/`, `TelegramGateway`) | All tasks complete | ✅ Shipped/Archived |
-| `mvp/` | Multi-bagger Value Picks Tracker (`src/mvp/`, `scripts/mvp.py`, `scripts/mvp_watch.py`) | M1 — models + store | ⬜ Not started |
-| `council-refactor/` | Remove `RapidCouncil` from daemon approval path; fix `send_approval_request` signature bug; add deterministic backtestable roll rules (`evaluate_roll_csp`, `evaluate_roll_overlay`) to `ExitSignalEngine` | All tasks complete | ✅ Shipped/Archived |
-| `ic-nifty-v2/` | IronCondorV2: 25Δ/22Δ high-delta IC with 10Δ wings, partial-roll adjustment, DTE-tiered exit — 6 code stories + docs close | All tasks complete | ✅ Shipped/Archived |
-| `paper-exit-codification/` (archived) | Codify q11+q12 council rulings: TIME_STOP/DTE_REVIEW priority fix in `evaluate_cc`; StrategyMonitor observability logs | All tasks complete | ✅ Shipped/Archived 2026-08-04, see `docs/archive/plan/paper-exit-codification/` |
-| `telegram-leg-labels/` (archived) | Replace raw Upstox instrument keys in Telegram prose messages with human-readable `NIFTY 22000 CE 07 JUL 26` labels; CLI command lines stay untouched | All tasks complete (TL-1..TL-5) | ✅ Shipped/Archived 2026-08-07, see `docs/archive/plan/telegram-leg-labels/` |
-| `ic-yearly-expiry-fix/` | Fix `InstrumentLookup.get_expiry_candidates()`'s `"yearly"` label — currently matches June or December whichever clears a 201–420 DTE band, causing IC V1's yearly bucket to resolve June 2027 instead of December 2026 on 2026-07-08; per Animesh, NSE Nifty's annual contract is always December's last Tuesday | YE-1..YE-4 superseded 2026-07-22 by a separately-triggered fix matching the same spec (see DECISIONS.md BUG-015); WG-1 (weekly Greeks snapshot gap) still open | 🔄 Partially superseded — WG-1 open |
-| `greeks-bs-fallback/` | Upstox returns all-zero `option_greeks` (delta/gamma/theta/vega/iv) for far-dated NIFTY contracts (confirmed 2026-07-22 for the Dec 2026 yearly bucket, DTE 160; re-confirmed persistent 2026-08-06) despite the chain having real, liquid `ltp`/`bid`/`ask`/`oi`/`volume` — a data gap, not illiquidity. Blocks all delta-based IC entry for the yearly bucket. Per Animesh's decision: compute Greeks ourselves (BS pricer + Newton-Raphson IV solver from mid price) rather than fall back to a cruder points/percentage-OTM heuristic. | GF-1 — monthly + quarterly confirmed clean (both to be used as GF-5 validation ground truth); weekly still unaudited (not yet in capture pipeline); 3 open modeling decisions (risk-free rate, DTE convention, delta tolerance) still need Animesh's call | 🔄 Partially scoped |
-| `chain-decay-analysis/` | Empirical check: does intraday option premium move track delta (+gamma/theta/vega decomposition), or is there a persistent residual — and which strikes/moneyness bands decay faster than theta alone predicts. Uses existing 5-min intraday chain Parquet (`data/historical/option_chain/intraday/`, capturing since 2026-06-01). Monthly bucket only — yearly excluded (zero-Greeks defect, see `greeks-bs-fallback/`), quarterly deferred to a later pass. | CDA-1 — paired-snapshot reader | ⬜ Not started |
-| `full-repo-review/` | One-time multi-model, multi-persona review of design docs, source, tests, the AI-collaboration prompting protocol, and which surface (Claude Code / Cowork / Antigravity) to use per job type — Opus/Fable/Sonnet assigned per task by capability, not cost, validated by a Fable-vs-Opus pilot before the Fable tasks run; output is a synthesized findings folder + spawned follow-up story stubs | FR-1..FR-9 complete — see `full-repo-review-followups/` epic above | ✅ Complete |
-| `ic-time-stop-dte-tiering/` (archived) | Council-ruled fix (`docs/council/2026-08-05_ic-time-stop-dte-tiering.md`): `ic_expiry_config.py`'s per-bucket `time_stop_dte`/`dte_warn` de-tiered from entry-DTE-scaled values to a uniform terminal rule (`time_stop_dte=7`/`dte_warn=14` for monthly/leaps/yearly, weekly unchanged); paired with forward-only counterfactual DTE-mark logging on `paper_exit_events` for a post-6-monthly-cycle review | All tasks complete (DT-1..DT-4) | ✅ Shipped/Archived 2026-08-05, see `docs/archive/plan/ic-time-stop-dte-tiering/` |
-| `monitor-and-close-hardening/` (archived) | StrategyMonitor tick-loop observability + auto-close leg-resolution hardening: dedupe `expiry_unresolved` double-logging (MC-1); audit exit-signal gating degradation window (MC-2, no fix needed); resolve `ROLL_WING`/`PROFIT_LOCK_ZONE2` replacement-leg `instrument_key` via BOD instead of a fabricated key (MC-3a/BUG-023) and persist the close+open atomically (MC-3b/IC-CLOSE-2); route CC/PP/Collar leg finders through the shared BOD-fallback utility (MC-4); resolve IC V2 entry-leg `instrument_key` via BOD (MC-6/BUG-024) | All tasks complete (MC-1, MC-2, MC-3a, MC-3b, MC-4, MC-6, MC-5) | ✅ Shipped/Archived 2026-08-06, see `docs/archive/plan/monitor-and-close-hardening/` |
-| `paper-ic-daily-snapshot/` (archived) | IC daily P&L snapshot wiring: confirmed `realized_pnl`/`unrealized_pnl` semantics (SNAP-1); scoped out redundant leg-snapshot wiring — `paper_nav_snapshots` already sufficient (SNAP-2); audited CSP/CC/PP/Collar for the same gap, found none (SNAP-3, surfaced BUG-026 separately); built `scripts/reporting/paper_pnl_report.py` + `build_pnl_report()` (SNAP-4); fixed `paper_nav_snapshots.total_pnl` invariant violation from overlay dedup + backfilled 42 rows (SNAP-5) | All tasks complete (SNAP-1..SNAP-5) | ✅ Shipped/Archived 2026-08-07, see `docs/archive/plan/paper-ic-daily-snapshot/` |
+**`eod-pt-summary/`** · ⬜ Not started · next: **PT-1** (document the 3-message spec)
+Cross-strategy paper-trade EOD report (open, closed-today, strategy-wise P&L / Ann.%-on-margin)
+as 3 MarkdownV2 Telegram messages.
+Promotion to `src/` + cron is gated on a coordination decision vs `scripts/eod_summary.py` /
+`scripts/reporting/paper_pnl_report.py`.
+
+**`risk-gamma-phase-a/`** · 🔄 In progress · next: **B2.2** (chain fetch + field computation)
+Risk delta gate (done) + Near-Expiry Gamma Buy `gamma_daily_watch.py`.
+
+**`variance-gate/`** · ⬜ Not started · next: **VG0** (CSP v1 spec reconciliation)
+CSP v1 Phase 0.8 deployment gate — spec reconciliation + gate criteria A–D.
+
+**`root-doc-organization/`** · 🔄 In progress · next: **RDO-13** (folder conventions + `_TEMPLATE/` + audit)
+Token-efficiency cleanup of the ~22 root `.md` files + doc-maintenance automation.
+Docs + tooling only. RDO-1..15 + an "Epic done when" checklist in `tasks.md`.
+RDO-1/2/4/5/8/12 shipped, RDO-3 closed-partial; RDO-6/7/9/10/11/13/14/15 open.
+
+**`session-entry-point/`** · ✅ Done 2026-08-27 (SEP-1..4)
+Unified manual `/work` skill — routes a task session to Feature or Bug, loads the right
+prompt + first unchecked task, hands to `CLAUDE.md` Step 2b.
+
+**`paper-backbone/`** · ✅ Shipped/Archived
+Strategy Monitor daemon + pluggable strategy backbone (`src/strategy/`, `TelegramGateway`).
+
+**`mvp/`** · ⬜ Not started · next: **M1** (models + store)
+Multi-bagger Value Picks Tracker (`src/mvp/`, `scripts/mvp.py`, `scripts/mvp_watch.py`).
+
+**`council-refactor/`** · ✅ Shipped/Archived
+Remove `RapidCouncil` from the daemon approval path; fix `send_approval_request` signature
+bug; add deterministic backtestable roll rules to `ExitSignalEngine`.
+
+**`ic-nifty-v2/`** · ✅ Shipped/Archived
+IronCondorV2 — 25Δ/22Δ high-delta IC with 10Δ wings, partial-roll adjustment, DTE-tiered exit.
+
+**`paper-exit-codification/`** · ✅ Shipped/Archived 2026-08-04 → `docs/archive/plan/paper-exit-codification/`
+Codify q11+q12 council rulings: TIME_STOP/DTE_REVIEW priority fix in `evaluate_cc`;
+StrategyMonitor observability logs.
+
+**`telegram-leg-labels/`** · ✅ Shipped/Archived 2026-08-07 (TL-1..5) → `docs/archive/plan/telegram-leg-labels/`
+Replace raw Upstox instrument keys in Telegram prose with human-readable
+`NIFTY 22000 CE 07 JUL 26` labels; CLI command lines untouched.
+
+**`ic-yearly-expiry-fix/`** · 🔄 Partially superseded · next: **WG-1** (weekly-bucket Greeks snapshot gap)
+Fix `InstrumentLookup.get_expiry_candidates()`'s `"yearly"` label resolving June instead of
+December — NSE Nifty's annual contract is always December's last Tuesday.
+YE-1..4 superseded 2026-07-22 (DECISIONS.md BUG-015); WG-1 open.
+
+**`greeks-bs-fallback/`** · 🔄 Partially scoped · next: **GF-1** (audit scope)
+Upstox returns all-zero `option_greeks` for far-dated NIFTY contracts despite liquid
+`ltp`/`bid`/`ask`/`oi` — a data gap, not illiquidity.
+Blocks delta-based IC entry for the yearly bucket.
+Decision: compute Greeks ourselves (BS pricer + Newton-Raphson IV solver), not a cruder
+OTM heuristic.
+3 modeling decisions (risk-free rate, DTE convention, delta tolerance) still need Animesh.
+
+**`chain-decay-analysis/`** · ⬜ Not started · next: **CDA-1** (paired-snapshot reader)
+Empirical check: does intraday option premium move track delta (+ gamma/theta/vega
+decomposition), or is there a persistent residual — and which moneyness bands decay faster
+than theta alone predicts.
+Existing 5-min intraday chain Parquet. Monthly bucket only.
+
+**`full-repo-review/`** · ✅ Complete — see `full-repo-review-followups/`
+One-time multi-model, multi-persona review of design docs, source, tests, the
+AI-collaboration protocol, and per-job-type surface routing (FR-1..9).
+
+**`ic-time-stop-dte-tiering/`** · ✅ Shipped/Archived 2026-08-05 (DT-1..4) → `docs/archive/plan/ic-time-stop-dte-tiering/`
+Council-ruled fix (`docs/council/2026-08-05_...`): de-tier per-bucket
+`time_stop_dte`/`dte_warn` to a uniform terminal rule; forward-only counterfactual DTE-mark
+logging on `paper_exit_events`.
+
+**`monitor-and-close-hardening/`** · ✅ Shipped/Archived 2026-08-06 → `docs/archive/plan/monitor-and-close-hardening/`
+StrategyMonitor tick-loop observability + auto-close leg-resolution hardening — dedupe
+`expiry_unresolved` logging, BOD-resolve replacement-leg keys, atomic close+open, shared
+BOD-fallback finder (MC-1..MC-6).
+
+**`paper-ic-daily-snapshot/`** · ✅ Shipped/Archived 2026-08-07 → `docs/archive/plan/paper-ic-daily-snapshot/`
+IC daily P&L snapshot wiring (SNAP-1..5): confirmed realized/unrealized semantics, built
+`scripts/reporting/paper_pnl_report.py`, fixed `paper_nav_snapshots.total_pnl` invariant +
+backfilled 42 rows.
 
 ---
 
@@ -55,19 +139,80 @@
 
 ---
 
-## Conventions (summary)
+## Conventions
 
-Each story folder contains:
-- `prompt.md` — what the story covers, session start protocol, task overview
-- `*_tasks.md` — checklist; find the first unchecked item and do only that
-- `*_stories.md` — detailed implementation spec per task
-- `*_schema.md` or `*_spec.md` — data models / spec (where applicable)
+This section is canonical and self-contained — there is no pointer to
+`docs/archive/plan/README.md` (that file documents the retired one-file-per-task scheme and
+is dead for convention purposes).
 
-**Markdown line style (RDO-5, decided 2026-08-27).** Prose uses *semantic linefeeds* — one
-sentence or clause per line; no fixed-width hand-wrap. ~120 chars is a soft target, not
-gated. A hard 200-char ceiling applies to every line kind (prose, table rows, fenced code)
-and is enforced by the `md-line-length` pre-commit hook over root `.md` + `docs/plan/**` +
+### Story-folder file set
+
+A story folder is `docs/plan/<slug>/` where `<slug>` is kebab-case — no date prefix, and no
+`<slug>_` prefix on the files inside it.
+Copy `docs/plan/_TEMPLATE/` to start a new one.
+
+| File | Required | Purpose |
+|------|----------|---------|
+| `prompt.md` | yes | Why the story exists, session-start load hints, task overview |
+| `tasks.md` | yes | The working checklist — find the first unchecked `- [ ]` and do only that |
+| `stories.md` | optional | Per-task implementation spec / DoD detail |
+| `spec.md` / `schema.md` | optional | Data models, wire formats, gate criteria |
+| `plan.md` | optional | File-by-file change plan for a large multi-phase story |
+
+Legacy folders may still carry `<name>_tasks.md` / `<name>_stories.md` — do not mass-rename
+them; new folders use the bare names above.
+
+### Completed-task line format
+
+When a `tasks.md` checkbox is ticked, append this tail to the task line:
+
+```
+| Owner: <Claude|Antigravity|Animesh> | Model: <model-id|n/a> | SHA: <commit-sha>
+```
+
+`Owner` records the `CLAUDE.md` Step 3b routing outcome.
+`Model` is the implementing model id when `Owner=Claude` (e.g. `claude-sonnet-5`), `n/a`
+otherwise.
+`SHA` is the commit that closed the task.
+One line per task — never mirror task state into `TODOS.md`.
+
+### Canonical state vs derived state
+
+`tasks.md` checkbox state is the single source of truth for task progress.
+Everything else is derived and must not be hand-edited to disagree with it:
+
+- this file's per-story status / next marker — a summary of the story's `tasks.md`
+- a `stories.md` DoD checkbox — mirrors its `tasks.md` task
+- a trailing `## Epic done when` block in `tasks.md` — mirrors the working list above it
+
+### `TODOS.md` hygiene
+
+`TODOS.md` "Priority-Ordered Open Work" items are **pointer-only**: title, the
+`docs/plan/<slug>/` or `docs/bugs/` path, the next unchecked task id, and a one-line why.
+No inline multi-paragraph detail, no per-task progress — that lives only in the story's
+`tasks.md` / `docs/bugs/task.md`.
+When a story or bug is fully done its `TODOS.md` line is **deleted** (moved to
+`docs/archive/TODOS_ARCHIVE.md`), not just ticked.
+
+### Markdown line style (RDO-5, decided 2026-08-27)
+
+Prose uses *semantic linefeeds* — one sentence or clause per line; no fixed-width hand-wrap.
+~120 chars is a soft target, not gated.
+A hard 200-char ceiling applies to every line kind (prose, table rows, fenced code) and is
+enforced by the `md-line-length` pre-commit hook over root `.md` + `docs/plan/**` +
 `docs/bugs/**`; `<!-- lint-ignore-length -->` on the preceding line excuses an unbreakable
-token. `.py` stays at ruff's `line-length = 100` (ruff already excludes `docs/`).
+token.
+`.py` stays at ruff's `line-length = 100` (ruff already excludes `docs/`).
 
-Full conventions (naming, status transitions, maintenance rules): `docs/archive/plan/README.md`.
+### Structure audit
+
+`scripts/hooks/check_story_structure.py` checks that every non-archived `docs/plan/*/` folder
+has `prompt.md` + `tasks.md`, and flags stray or empty folders.
+It runs pre-commit on newly-added folders only; the full repo-wide sweep is part of the
+`md-organize` skill's periodic audit, since folders churn only ~monthly.
+
+### Status transitions
+
+`⬜ Not started` → `🔄 In progress` → `✅ Done`.
+A `✅` story stays listed until archived; on archive, its folder content moves to
+`docs/archive/plan/<slug>/` and the row keeps a one-line pointer there.
