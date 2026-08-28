@@ -239,7 +239,7 @@ RDO-15 adds the checkbox-consistency sweep + the one-checkbox-per-id convention 
      shifts, so a src-commit count is a poor proxy). `CONTEXT.md` / `TODOS.md` (15) and
      `docs/plan/README.md` (35) / `DECISIONS.md` / `PLANNER.md` (40) unchanged. RDO-11 #2
      confirms these are signal-not-noise across 3–4 sessions.
-  | Owner: Claude | Model: claude-sonnet-5 | SHA: <pending>
+  | Owner: Claude | Model: claude-sonnet-5 | SHA: a4431ec
 
 - [ ] **RDO-11** — Graduate the advisory doc-freshness hooks to enforcing. Observation
   window opened 2026-08-27; **first review on/after 2026-09-03.**
@@ -420,7 +420,7 @@ per-task status lives only in the working list above (`tasks.md` is the single s
 - **RDO-10** — both hooks in `plan.md` Phase 7 inventory + a RDO-6 verification step; `#4`
   narrowed to a future read-only Telegram staleness digest (out of epic scope); `md-organize`
   name settled; `state_doc_freshness.sh` thresholds tuned (`CONTEXT_TREE.md` / `DB_REGISTRY.md`
-  / `README.md` → 60). SHA `<pending>`.
+  / `README.md` → 60). SHA `a4431ec`.
 - **RDO-11** — hook enforcement decision made and recorded in `DECISIONS.md`.
 - **RDO-12** — `/work` skill exists and routes Feature/Bug; `CLAUDE.md` + `AGENTS.md` point
   at it; `session-entry-point` epic (SEP-1..4) complete.
