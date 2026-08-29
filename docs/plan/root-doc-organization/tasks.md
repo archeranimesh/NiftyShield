@@ -4,8 +4,9 @@ Token-efficiency cleanup of the ~22 root `.md` files, doc-maintenance automation
 `prompt.md` says why the story exists; `stories.md` carries the per-task spec — a full forward spec for the open tasks and a short as-built digest for each shipped one; `plan.md` keeps the original
 file-by-file root inventory (D6 extra file). Work top-down: the first unchecked `- [ ]` line is the task. Each task is one commit plus a follow-up that records its SHA and ticks the box.
 
-**Open: RDO-16 (next, after RDO-6 — shipped), RDO-17.8 (Owner: Animesh), RDO-11 (date-gated ≥ 2026-09-03).** RDO-17.5 (`5508e41`) + RDO-17.6 (`cf46ff4`) shipped the two POC full conversions; RDO-17.7
-§A shipped the fill-to-≤200 *guidance* inside RDO-17.5 (`7d28d16`), then RDO-17.7 swept both POC folders to that style in full; RDO-17.8 (was 17.7 §B) is the remaining legacy-folder rule.
+**Open: RDO-16 (next, after RDO-6 — shipped), RDO-11 (date-gated ≥ 2026-09-03), RDO-17.8 (decided — pending close).** RDO-17.5 (`5508e41`) + RDO-17.6 (`cf46ff4`) shipped the two POC full conversions;
+RDO-17.7 §A shipped the fill-to-≤200 *guidance* inside RDO-17.5 (`7d28d16`), then RDO-17.7 swept both POC folders to that style in full; RDO-17.8 (the legacy-folder rule) is decided — batch-convert
+everything — and now lives as the `docs/plan/doc-format-migration/` epic.
 
 ## Tasks
 
@@ -32,7 +33,7 @@ file-by-file root inventory (D6 extra file). Work top-down: the first unchecked 
 - [x] **RDO-17.5** — full-convert root-doc-organization/ — every task line canonical, stories.md covers all tasks | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 5508e41
 - [x] **RDO-17.6** — full-convert telegram-markdown-migration/ to the canonical epic format (router, Stories table) | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: cf46ff4
 - [x] **RDO-17.7** — sweep both POC folders to fill-to-≤200 in full; add reusable `scripts/dev/reflow_md.py` + tests | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 526e431
-- [ ] **RDO-17.8** — legacy-folder conversion rule (was 17.7 §B): cadence, effort ceiling, grandfathering for ~25 folders | Owner: Animesh | Model: n/a | Review: none | SHA: <—>
+- [ ] **RDO-17.8** — legacy-folder rule (was 17.7 §B): decided — batch-convert all; execution is the `doc-format-migration/` epic | Owner: Animesh | Model: n/a | Review: none | SHA: <—>
 
 ## Story done when
 
@@ -58,8 +59,8 @@ Acceptance criteria — prose, no checkboxes (RDO-15 convention a). Verified at 
 - **RDO-16** — the loop-closure check passes: a stale doc is flagged at SessionStart, acted on, and the flag clears the next session (see the working-list task).
 - **RDO-17** — §Conventions defines the flat-story vs epic-with-sub-stories shapes, the 3-file story set, the conditional schema.md, and the Owner|Model|Review|SHA task line; _TEMPLATE/ has story/ +
   epic/ variants; both structure hooks enforce it (legacy folders grandfathered pre-commit); /work walks an epic's sub-stories in order; root-doc-organization/ (17.5) and telegram-markdown-migration/
-  (17.6) are fully converted; RDO-17.7 retires the semantic-linefeed style for fill-to-≤200 (guidance + `scripts/dev/reflow_md.py` + a full sweep of both POC folders), RDO-17.8 records the remaining
-  legacy-folder rule.
+  (17.6) are fully converted; RDO-17.7 retires the semantic-linefeed style for fill-to-≤200 (guidance + `scripts/dev/reflow_md.py` + a full sweep of both POC folders); RDO-17.8 decided the
+  legacy-folder rule (batch-convert all) → the `doc-format-migration/` epic.
 - **prompt.md** — DoD rewritten to the delivered design: the dead pre-2026H1 date-cutoff line dropped, the hook rename + semantic-split reality stated (done in 2fb5c5b), realigned to
   _TEMPLATE/story/prompt.md by RDO-17.5.
 

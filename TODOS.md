@@ -25,74 +25,80 @@ story here; this list only decides *which story is next*.
 Bugs are **not** here — see `## Open Bugs`.
 Cross-references use folder names, never list positions, so renumbering can't rot them.
 
-1. **root-doc-organization** — `docs/plan/root-doc-organization/` — next **RDO-16**
+1. **doc-format-migration** — `docs/plan/doc-format-migration/` — next **DFM-1**
+   (`plan-folders/`: enumerate + tier every non-archived `docs/plan/` folder A/B/C/D).
+   Epic: `plan-folders/` (batch-convert legacy folders) → `repo-wide-reflow/` (fill-to-≤200
+   every other `.md`) → `enforcement/` (repo-wide hooks + CI `--all` gate + `/new-story`
+   scaffold). Answers RDO-17.8. Built on `reflow_md.py` (RDO-17.7).
+2. **root-doc-organization** — `docs/plan/root-doc-organization/` — next **RDO-16**
    (loop-closure check — one real session confirms the doc-freshness mechanism end to end).
-   RDO-17.8 (Animesh — legacy-folder conversion rule), RDO-11 (≥ 2026-09-03) also open.
-   RDO-17.1..17.7 shipped (17.7 swept both POC folders to fill-to-≤200 + added reflow_md.py).
+   RDO-11 (≥ 2026-09-03) also open.
+   RDO-17.1..17.7 shipped; 17.8 decided (batch-convert all → the `doc-format-migration/` epic),
+   pending close. 17.7 swept both POC folders + added `reflow_md.py`.
    Root `.md` token-efficiency cleanup + doc-maintenance automation.
-2. **IC yearly-expiry residual risk** — `docs/plan/ic-yearly-expiry-fix/` — next **WG-1**
+3. **IC yearly-expiry residual risk** — `docs/plan/ic-yearly-expiry-fix/` — next **WG-1**
    (persist per-leg Greeks for the weekly-expiry bucket).
    YE-1..YE-4 superseded / already fixed live — see DECISIONS.md BUG-015.
-3. **Greeks Black-Scholes fallback** — `docs/plan/greeks-bs-fallback/` — next **GF-1**
+4. **Greeks Black-Scholes fallback** — `docs/plan/greeks-bs-fallback/` — next **GF-1**
    (read-only audit scope).
-4. **Telegram Markdown migration** — `docs/plan/telegram-markdown-migration/` — next
+5. **Telegram Markdown migration** — `docs/plan/telegram-markdown-migration/` — next
    **ROLL-6** (`strategy-rollout/`, migrate EOD Paper Summary).
    `backbone/` + `formatting-rules/` sub-stories closed.
    Supersedes the retired `telegram-ic-comparison-formatting/` — TGFMT-1 shipped, TGFMT-2..9
    folded here; its Legs-row + Bkd/Flt inception-split asks live in `strategy-rollout/` ROLL-2.
-5. **MVP: Multi-bagger Value Picks Tracker** — `docs/plan/mvp/` — next **M1.1**.
+6. **MVP: Multi-bagger Value Picks Tracker** — `docs/plan/mvp/` — next **M1.1**.
    Independent — blocks nothing.
-6. **Variance gate — CSP v1 deployment gate observation** — `docs/plan/variance-gate/` —
+7. **Variance gate — CSP v1 deployment gate observation** — `docs/plan/variance-gate/` —
    next **VG0** (spec reconciliation; the remaining tasks are human checkpoints, not build
    tasks).
-7. **Options Income strategy** — `docs/plan/options_income/` — next **S0** (data audit).
-8. **Backtest Engine** — `docs/plan/backtest-engine/` (`phase1..4/`) — next **1.3a / 1.4**
+8. **Options Income strategy** — `docs/plan/options_income/` — next **S0** (data audit).
+9. **Backtest Engine** — `docs/plan/backtest-engine/` (`phase1..4/`) — next **1.3a / 1.4**
    (parallel, `phase1/`).
    Four chained phases; each phase's GATE task blocks the next dir. Gated on `variance-gate`.
    `BACKTEST_PLAN_PHASE1.md` is the canonical spec; the phase dirs are thin status pointers.
-9. **backtest-eval-core** — `docs/plan/backtest-eval-core/` — next **B1.1**.
+10. **backtest-eval-core** — `docs/plan/backtest-eval-core/` — next **B1.1**.
    Blocked until `backtest-engine` tasks 1.3 + 1.4 land.
-10. **signals-eval-core** — `docs/plan/signals-eval-core/` — next **SE1.1**.
+11. **signals-eval-core** — `docs/plan/signals-eval-core/` — next **SE1.1**.
     Blocked until `backtest-eval-core` + `backtest-engine` 1.12.
     Covers Track A (swing) + Track B (investment), SE1–SE8.
-11. **signals: multi-LLM daily signal pipeline** — `docs/plan/signals/` — next **S1.1**.
-12. **risk-gamma-phase-a** — `docs/plan/risk-gamma-phase-a/` — next **B2.2**
+12. **signals: multi-LLM daily signal pipeline** — `docs/plan/signals/` — next **S1.1**.
+13. **risk-gamma-phase-a** — `docs/plan/risk-gamma-phase-a/` — next **B2.2**
     (chain fetch + field computation). Track A + B1 / B2.1 shipped.
-13. **greeks-parity-validation** —
+14. **greeks-parity-validation** —
     `docs/plan/full-repo-review-followups/greeks-parity-validation/` — next **T1**.
     P3, council-gated: do not implement directly — needs an `options-strategist` /
     `greeks-analyst` consult first (tolerance-band decision).
-14. **paper-pnl-golden-tests** —
+15. **paper-pnl-golden-tests** —
     `docs/plan/full-repo-review-followups/paper-pnl-golden-tests/` — next **T1**
     (exact-value golden assertions for `_compute_leg_unrealized_pnl`). P3.
-15. **suppression-hygiene-triage** —
+16. **suppression-hygiene-triage** —
     `docs/plan/full-repo-review-followups/suppression-hygiene-triage/` — next **T1**
     (REVIEW.md carve-out for self-describing `# noqa` codes). P3.
-16. **Fix dead IC EOD report query** — `scripts/strategies/ic/paper_ic_snapshot.py`
+17. **Fix dead IC EOD report query** — `scripts/strategies/ic/paper_ic_snapshot.py`
     (no story folder) — the "Intraday actions" query is dead code, found in the DT-3a audit.
-17. **Chain delta/decay analysis** — `docs/plan/chain-decay-analysis/` — next **CDA-1**.
+18. **Chain delta/decay analysis** — `docs/plan/chain-decay-analysis/` — next **CDA-1**.
     Exploratory / read-only, independent.
     Monthly bucket only (yearly excluded — see `greeks-bs-fallback` GF-1 findings).
-18. **Entry event filter R4** — `docs/plan/entry-event-filter/` — next **EF-1**.
+19. **Entry event filter R4** — `docs/plan/entry-event-filter/` — next **EF-1**.
     Good-to-have, not compulsory; soft-warning only (logged, non-blocking, mirrors
     `GateViolation`). `events.yaml` needs ad-hoc upkeep.
     Revisit once entries run unattended on live capital (post `backtest-engine` Phase 2), and
     reconsider hard-block then.
-19. **Broker abstraction** — `docs/plan/broker-abstraction/` — next **BA-0**
+20. **Broker abstraction** — `docs/plan/broker-abstraction/` — next **BA-0**
     (probe scripts + decision matrix).
     LOW priority; storage format frozen, only fetch + parse change.
     BA-14 / BA-15 blocked until `src/execution/` (`phase2-integrations` OE-1) exists.
     Do not start until the Phase 0.8 gate clears.
-20. **Historical data abstraction** — `docs/plan/historical-data-abstraction/` — next
+21. **Historical data abstraction** — `docs/plan/historical-data-abstraction/` — next
     **HD-0** (cost-bounded probe scripts). LOW priority.
     `HistoricalCandleFetcher` protocol so VIX + OHLC fetching can switch brokers without
     touching storage. HD-6 / HD-7 conditional on the HD-0 decision matrix.
     Do not start until the Phase 0.8 gate clears.
-21. **Phase 2 — Research Pipelines & Integrations** — `docs/plan/phase2-integrations/` —
+22. **Phase 2 — Research Pipelines & Integrations** — `docs/plan/phase2-integrations/` —
     next **PV-1** (P&L visualization — not gated, can be pulled forward).
     ZK-1 / OE-1 / PT-1 gated per the story file. 2027+.
     Excludes the swing / investment signal pipelines — those are `signals`.
-22. **Technical Debt** — `docs/plan/technical-debt/` — DEBT-3 / 5 / 6a / 6b / 6c / 7.
+23. **Technical Debt** — `docs/plan/technical-debt/` — DEBT-3 / 5 / 6a / 6b / 6c / 7.
     Opportunistic, **not sequential** — each item fires only when its named file / module is
     already being touched for another story's task. See `prompt.md` for the per-item trigger.
 
@@ -154,6 +160,21 @@ this file's Session Log grows large again.
 
 ### 2026-08-29
 
+- **doc-format-migration epic created — answers RDO-17.8 (Owner: Animesh).** Animesh decided
+  the legacy-folder rule: batch-convert every `docs/plan/` folder now (not on-touch), tiered
+  A/B/C/D by folder state, `git log --follow` trusted for shipped SHAs, no permanent
+  grandfathering (fully-shipped folders archive instead). Plus a scope expansion: reflow every
+  other `.md` in the repo (not just `docs/plan/`) to fill-to-≤200, and make the format
+  self-enforcing. New epic `docs/plan/doc-format-migration/` with three sub-stories:
+  `plan-folders/` (DFM-1 tier → DFM-2 tier-A full → DFM-3 tier-B light → DFM-4 tier-C reflow),
+  `repo-wide-reflow/` (DFM-5, everything outside `plan/` + `archive/` + `_TEMPLATE/`),
+  `enforcement/` (DFM-6 widen `md-line-length` repo-wide · DFM-7 `check_story_structure`
+  gates modified folders · DFM-8 wire `check_checkbox_consistency` pre-commit · DFM-9 CI
+  `docs-format` `--all` job · DFM-10 `scripts/dev/new_plan_folder.py` + `/new-story` skill).
+  11 doc files, all four doc hooks clean. RDO-17.8 left `[ ]` in `root-doc-organization/` with
+  the decision recorded in its line + `stories.md` digest (closes in the follow-up commit
+  per the two-commit convention); `docs/plan/README.md` + `TODOS.md` backlog updated (epic
+  added at #1, list renumbered 2..23).
 - **RDO-17.7 — sweep both POC folders to fill-to-≤200 + add reflow_md.py (root-doc-organization).**
   Scope revised with Animesh: RDO-17.7 is not just the §A guidance (shipped in `7d28d16`) — it
   also applies that style to `root-doc-organization/` and `telegram-markdown-migration/` in full,

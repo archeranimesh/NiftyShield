@@ -5,10 +5,10 @@
 
 This is a docs + tooling story throughout — no `.py` under `src/`. Code touched: hook scripts under `scripts/dev/hooks/` (RDO-5, RDO-13, RDO-15, RDO-17.2) and `scripts/dev/reflow_md.py` + its tests
 (RDO-17.7) — all `Review: code-reviewer`; every other task is `Review: none`. Everything in this story was owned and implemented by Claude on `claude-sonnet-5` — no Antigravity or Animesh
-implementation in its history (RDO-17.8 is the first Animesh-owned line, and it is a decision, not an implementation).
+implementation in its history (RDO-17.8 is the only Animesh-owned line — a decision, now made, whose execution is the `doc-format-migration/` epic).
 
-The **open** tasks (RDO-11, RDO-16, RDO-17.8) carry a full forward spec below. The **shipped** tasks carry a 2–4 line as-built digest — what changed, the key deviation, the closing SHA — reconstructed
-from the (now collapsed) inline `tasks.md` notes plus the `TODOS.md` Session Log. For full forensic detail on a shipped task, read its Session Log entry or `git show <sha>`.
+The **open** tasks (RDO-11, RDO-16) carry a full forward spec below. The **shipped** tasks — RDO-17.8 included, as a decision record — carry a 2–4 line as-built digest reconstructed from the (now
+collapsed) inline `tasks.md` notes plus the `TODOS.md` Session Log. For full forensic detail on a shipped task, read its Session Log entry or `git show <sha>`.
 
 ---
 
@@ -56,19 +56,6 @@ The end-to-end test of "the docs preserve their state" — not any individual ho
 If any link breaks (flag never fires, threshold wrong, `md-organize` doesn't touch the flagged doc, flag persists after the fix), file the gap as a new RDO task and leave RDO-16 open.
 
 **Commit:** `docs(plan): close RDO-16 — doc-freshness loop verified end to end`
-
-### RDO-17.8 — legacy-folder conversion rule (Owner: Animesh)
-
-Was RDO-17.7 §B. Now that all three of RDO-17.5, RDO-17.6 and RDO-17.7 have landed — the two POC folders are fully in canonical format *and* fill-to-≤200 style, and `scripts/dev/reflow_md.py` exists
-as the reusable engine — decide the rule for the remaining ~25 legacy `docs/plan/` folders:
-
-1. **Cadence** — convert-on-next-touch (piggyback on whatever commit next edits the folder) vs. a scheduled batch pass.
-2. **Per-folder effort ceiling** — how much structural reconstruction (SHAs, Owner/Model/Review backfill) is worth doing before a folder is left as-is.
-3. **Old-SHA reconstruction risk** — how much to trust the `git show`-reconstructed task-line tails on folders whose work shipped months ago.
-4. **Permanent grandfathering** — whether fully-shipped / archived-adjacent folders simply stay in legacy format forever.
-
-The `reflow_md.py` half (fill-to-≤200) is mechanical and low-risk on any folder; the structural half (canonical `prompt.md` / `tasks.md` / `stories.md`) is the part this decision gates. Output: a
-§Conventions subsection + a `DECISIONS.md` entry. No code.
 
 ---
 
@@ -173,7 +160,14 @@ This `stories.md` rewritten to cover every task — forward spec for the open on
 ### RDO-17.7 §A — fill-to-≤200 markdown line style (SHA `7d28d16`, shipped inside RDO-17.5)
 Retires RDO-5's "semantic linefeeds" guidance: prose now fills each line to the last word boundary before 200 chars; the `md-line-length` hook (200-char cap) stays the only gated rule. Changed the
 *guidance* only — `docs/plan/README.md` §"Markdown line style", both `_TEMPLATE/` sets, `.claude/skills/md-organize/SKILL.md` + its `.agents/` mirror, and the one-line `INSTRUCTION.md` description.
-The RDO-17.7 line below then applied that style to both POC folders in full; RDO-17.8 carries the remaining legacy-folder conversion rule (Owner: Animesh).
+The RDO-17.7 line below then applied that style to both POC folders in full; RDO-17.8 (below) is the legacy-folder conversion decision.
+
+### RDO-17.8 — legacy-folder conversion rule (Owner: Animesh) — decided 2026-08-29
+
+Was RDO-17.7 §B. Animesh's call: **batch-convert every legacy `docs/plan/` folder now** (not convert-on-touch), tiered A/B/C/D by how live each folder is, `git log --follow` trusted for shipped SHAs,
+no permanent grandfathering — a fully-shipped folder is archived, not left legacy. Plus: make the format self-enforcing (widen the doc hooks repo-wide, add a CI `--all` gate, add new-folder
+scaffolding) so the question never recurs. Execution is the **`docs/plan/doc-format-migration/`** epic (`plan-folders/` → `repo-wide-reflow/` → `enforcement/`); its `README.md` is authoritative from
+here. This line is only the decision record.
 
 ### RDO-17.7 — sweep both POC folders to fill-to-≤200 (SHA `526e431`)
 Added `scripts/dev/reflow_md.py` — a reusable whitespace-only paragraph reflow engine (`--check` / in-place; fenced code, tables, headings and nested list/quote structure left verbatim; a wrapped line

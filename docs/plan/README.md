@@ -14,6 +14,14 @@ Format per entry: `**\`folder/\`** · <status> · next: **<task id>**` then a sh
 
 ## Active Epics
 
+**`doc-format-migration/`** · ⬜ Not started — start with `plan-folders/` **DFM-1**
+Batch-converts every legacy `docs/plan/` folder to the canonical format and reflows every
+other `.md` in the repo to fill-to-≤200, then hardens the hooks + adds a CI `--all` gate so
+new docs cannot drift. Three sub-stories: `plan-folders/` (tiered A/B/C/D conversion) →
+`repo-wide-reflow/` (everything outside `plan/` and `archive/`) → `enforcement/` (repo-wide
+hooks, CI job, `new_plan_folder.py` + `/new-story` scaffold).
+Answers `root-doc-organization/` RDO-17.8; built on `reflow_md.py` (RDO-17.7, `526e431`).
+
 **`dev-foundation/`** · ✅ Shipped/Archived
 Engineering-excellence epic — tooling, CI, code health (3 sub-stories).
 
@@ -62,11 +70,13 @@ Risk delta gate (done) + Near-Expiry Gamma Buy `gamma_daily_watch.py`.
 CSP v1 Phase 0.8 deployment gate — spec reconciliation + gate criteria A–D.
 
 **`root-doc-organization/`** · 🔄 In progress · next: **RDO-16** (loop-closure check — one real
-session confirms the doc-freshness mechanism end to end; RDO-11 also open, date-gated ≥ 2026-09-03; RDO-17.8 is Owner: Animesh)
+session confirms the doc-freshness mechanism end to end; RDO-11 also open, date-gated ≥ 2026-09-03)
 Token-efficiency cleanup of the ~22 root `.md` files + doc-maintenance automation.
 Docs + tooling only. RDO-1..17 + an acceptance-criteria list in `tasks.md`.
 RDO-1/2/4/5/6/7/8/9/10/12/13/14/15 + RDO-17.1..17.7 shipped, RDO-3 closed-partial;
-RDO-17.8, RDO-16, RDO-11 open.
+RDO-16, RDO-11 open; RDO-17.8 decided (pending close).
+RDO-17.8 (2026-08-29): legacy-folder rule decided — batch-convert all; execution moved to the
+new `doc-format-migration/` epic (above).
 RDO-17.7 (2026-08-29): swept `root-doc-organization/` + `telegram-markdown-migration/` (all 16 `.md`)
 to fill-to-≤200; added reusable `scripts/dev/reflow_md.py` + 10 tests. Whitespace-only — zero word
 changes. RDO-17.7 §B → **RDO-17.8** (legacy-folder conversion rule, Owner: Animesh). `526e431`.
@@ -347,7 +357,8 @@ The hard **200-char ceiling** is the only gated rule. It applies to every line k
 `scripts/dev/reflow_md.py` is the reusable engine that does the fill: `python -m scripts.dev.reflow_md <path>` rewrites in place, `--check` reports. It only re-wraps whitespace — a
 `git diff --word-diff` of a reflow shows zero word changes — and leaves fenced code, tables, headings and nested list/quote structure verbatim.
 The two RDO-17.5 / RDO-17.6 POC folders — `root-doc-organization/` and `telegram-markdown-migration/` — were swept to fill-to-≤200 in full at RDO-17.7 (2026-08-29) and are the reference
-exemplars. Every other legacy `docs/plan/` folder still reflows opportunistically when a commit next touches it — no big-bang pass — until RDO-17.8 sets the batch-vs-on-touch rule for them.
+exemplars. RDO-17.8 then decided the rule for every other legacy `docs/plan/` folder — batch-convert all of them, executed in the `doc-format-migration/` epic — so this is now migration in
+progress, not opportunistic-on-touch.
 
 ### Structure audit
 
