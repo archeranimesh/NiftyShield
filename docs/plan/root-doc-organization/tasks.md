@@ -28,7 +28,7 @@ original file-by-file root inventory (D6 extra file). Work top-down: the first u
 - [x] **RDO-17.2** — rework both structure hooks for the RDO-17.1 shapes + the 5-field tail check + hook unit tests | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: fe280bd
 - [x] **RDO-17.3** — /work epic-descent steps + epic router template; propagate | Review: into 3 skills + CLAUDE.md 5a | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 28d0d9c
 - [x] **RDO-17.4** — partial structural retrofit of both validation folders — superseded by RDO-17.5 / RDO-17.6 | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 35d9f42
-- [ ] **RDO-17.5** — full-convert root-doc-organization/ — every task line canonical, stories.md covers all tasks | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <—>
+- [x] **RDO-17.5** — full-convert root-doc-organization/ — every task line canonical, stories.md covers all tasks | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 5508e41
 - [ ] **RDO-17.6** — full-convert telegram-markdown-migration/ to the canonical epic format (router, Stories table) | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <—>
 - [ ] **RDO-17.7** — §A fill-to-≤200 line style (shipped in RDO-17.5, 7d28d16); §B legacy-folder conversion rule (open) | Owner: Animesh | Model: n/a | Review: none | SHA: <—>
 

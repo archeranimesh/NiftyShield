@@ -158,7 +158,7 @@ Brought `root-doc-organization/` (added `stories.md` for open tasks only; `| Rev
 (dropped `.DS_Store`; archived the exhausted `TODO.md` + `missing-message-workshop-prompt.md`; `README.md` repointed) into *structural* conformance, grandfathering the shipped task lines.
 Both hooks `--all` went 14 → 12 warnings. **Superseded 2026-08-29** by RDO-17.5 / 17.6 (full conversion).
 
-### RDO-17.5 — full-convert root-doc-organization/ (SHA — set on the closing commit)
+### RDO-17.5 — full-convert root-doc-organization/ (SHA `5508e41`)
 Every `tasks.md` line collapsed to one canonical line with the 5-field tail (shipped lines keep their real SHA + `[x]`; `Owner` / `Model` / `Review` reconstructed from the inline notes +
 `git show`). This `stories.md` rewritten to cover every task — forward spec for the open ones, this digest set for the shipped ones. `prompt.md` realigned to `_TEMPLATE/story/prompt.md`.
 `plan.md` kept unchanged (D6). Also executes **RDO-17.7 §A** — see below. Both hooks `--all` clean of any `root-doc-organization/` finding afterward.
