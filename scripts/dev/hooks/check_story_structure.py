@@ -35,7 +35,7 @@ from pathlib import Path
 REQUIRED_PROMPT = "prompt.md"
 EXCLUDED = {"_TEMPLATE"}
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]  # scripts/dev/hooks/ → repo root
 PLAN_DIR = REPO_ROOT / "docs" / "plan"
 
 DDL_RE = re.compile(r"\b(?:CREATE|ALTER)\s+TABLE\b", re.IGNORECASE)

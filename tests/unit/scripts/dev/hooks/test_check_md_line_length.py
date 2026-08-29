@@ -1,6 +1,6 @@
-"""Unit tests for scripts/hooks/check_md_line_length.py."""
+"""Unit tests for scripts/dev/hooks/check_md_line_length.py."""
 
-from scripts.hooks.check_md_line_length import IGNORE_MARKER, MAX_LEN, main
+from scripts.dev.hooks.check_md_line_length import IGNORE_MARKER, MAX_LEN, main
 
 
 def _write(tmp_path, name, lines):

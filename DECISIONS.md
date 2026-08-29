@@ -56,6 +56,21 @@ Baseline error counts in `docs/plan/dev-foundation/dx-foundation/mypy_baseline.m
 **pre-commit scoped to client/paper only for mypy (2026-05-29, DX-4):** mypy hook in `.pre-commit-config.yaml` uses `files: ^src/(client|paper)/` to match DX-3 strictness boundaries.
 Expanding the hook to other modules is gated on fixing their baseline errors first.
 
+**`scripts/dev/hooks/` vs `.claude/hooks/` (2026-08-29):** two unrelated hook systems, kept apart on purpose.
+`.claude/hooks/` holds Claude Code **harness-event** scripts — shell, advisory (`exit 0`),
+wired in `.claude/settings.json` (SessionStart / UserPromptSubmit / PreToolUse).
+They fire only inside a Claude Code session and cannot block anything.
+`scripts/dev/hooks/` holds **repo-integrity check programs** — Python, unit-tested
+(`tests/unit/scripts/dev/hooks/`), invoked by the `pre-commit` framework and the
+`md-organize` skill's `--all` audit (`check_md_line_length.py`, `check_story_structure.py`,
+`check_checkbox_consistency.py`).
+They run for every developer and in CI regardless of editor, and block the commit on failure.
+Because they are not Claude-specific they do not belong under `.claude/`; they sit under the
+existing `scripts/dev/` tooling axis (which also holds `install_hooks.sh` /
+`post_commit_hook.sh`).
+Relocated from a top-level `scripts/hooks/`, which predated and never fit the 2026-05-29
+`scripts/` functional-axis restructure (source: this session, RDO-17.2 follow-up).
+
 **`paper_track_snapshot.py` status (2026-05-31, SR5):** `paper_track_snapshot.py` is confirmed superseded by `paper_3track_snapshot.py` as the canonical EOD cron snapshot script.
 It has been moved to `scripts/dev/paper_track_snapshot.py` to be preserved purely for backward-compatible operator use (ad-hoc runs) and is excluded from `crontab`.
 

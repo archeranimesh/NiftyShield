@@ -276,7 +276,7 @@ An acceptance item with no matching task id (e.g. a whole-epic "loop-closure ver
 check) is real work: give it a task id in the working list, don't leave it as a bare bullet
 here.
 Nothing mirrors task state, so nothing can drift.
-`scripts/hooks/check_checkbox_consistency.py` sweeps every `docs/plan/**/tasks.md` (plus
+`scripts/dev/hooks/check_checkbox_consistency.py` sweeps every `docs/plan/**/tasks.md` (plus
 legacy `*_tasks.md`) and `docs/bugs/task.md` for: a checkbox inside a summary block
 (`## Epic done when` / `## Story done when` / `## Definition of done` / …), the same id with
 disagreeing state in one file, a README `next:` marker pointing at an already-done id, and —
@@ -334,7 +334,7 @@ token.
 
 ### Structure audit
 
-`scripts/hooks/check_story_structure.py` checks every non-archived `docs/plan/*/` folder:
+`scripts/dev/hooks/check_story_structure.py` checks every non-archived `docs/plan/*/` folder:
 a flat story folder has `prompt.md` + `tasks.md` + `stories.md`; an epic root has
 `prompt.md` + `README.md` and at least one conforming sub-story.
 It also flags stray or empty folders, a missing `schema.md` against DDL in
@@ -342,7 +342,7 @@ It also flags stray or empty folders, a missing `schema.md` against DDL in
 It runs pre-commit on newly-added folders only — legacy shapes are grandfathered, so the
 repo-wide `--all` sweep warns but does not fail; the full sweep is part of the
 `md-organize` skill's periodic audit, since folders churn only ~monthly.
-`scripts/hooks/check_checkbox_consistency.py` (see §"Checkbox consistency") is the companion
+`scripts/dev/hooks/check_checkbox_consistency.py` (see §"Checkbox consistency") is the companion
 sweep for task-state drift and task-line-tail shape; it runs alongside it in the same audit,
 also not pre-commit.
 

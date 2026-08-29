@@ -157,7 +157,7 @@ baseline` precedents in the log).
 
 ## Step 5b — `docs/plan/` structure audit
 
-Run: `python scripts/hooks/check_story_structure.py --all`
+Run: `python scripts/dev/hooks/check_story_structure.py --all`
 
 Every non-archived `docs/plan/*/` folder must be a story (`prompt.md` + `tasks.md`) or an
 epic (holds story sub-folders). Act on what it reports:
@@ -176,7 +176,7 @@ found, do the *Completion → archive* move (folder → `docs/archive/plan/`, `T
 
 ## Step 5c — Checkbox-consistency sweep
 
-Run: `python scripts/hooks/check_checkbox_consistency.py --all`
+Run: `python scripts/dev/hooks/check_checkbox_consistency.py --all`
 
 Every task id carries exactly one checkbox (the working-list line); `## Epic done when`
 blocks are prose acceptance criteria with no `- [ ]` (RDO-15 convention a). Fix each reported

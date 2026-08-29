@@ -34,7 +34,7 @@ import re
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]  # scripts/dev/hooks/ → repo root
 PLAN_DIR = REPO_ROOT / "docs" / "plan"
 BUGS_TASK = REPO_ROOT / "docs" / "bugs" / "task.md"
 PLAN_README = PLAN_DIR / "README.md"

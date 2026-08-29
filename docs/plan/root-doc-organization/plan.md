@@ -122,13 +122,13 @@ Add to `.pre-commit-config.yaml`:
 ```yaml
 - id: md-line-length
   name: "markdown lines must be <=200 chars (root + docs/plan + docs/bugs)"
-  entry: python scripts/hooks/check_md_line_length.py
+  entry: python scripts/dev/hooks/check_md_line_length.py
   language: system
   files: '^([^/]+\.md|docs/(plan|bugs)/.*\.md)$'
   pass_filenames: true
 ```
 
-`scripts/hooks/check_md_line_length.py` — for each passed file, fail if any line > 200 chars,
+`scripts/dev/hooks/check_md_line_length.py` — for each passed file, fail if any line > 200 chars,
 print `file:line: NNN chars`. Skip fenced code blocks and table rows? No — table rows are the
 main offender; keep them short instead. Allow an inline `<!-- lint-ignore-length -->` on the
 preceding line for the rare legit case (a base64 blob, a long URL).

@@ -1,8 +1,8 @@
-"""Unit tests for scripts/hooks/check_story_structure.py."""
+"""Unit tests for scripts/dev/hooks/check_story_structure.py."""
 
 import pytest
 
-from scripts.hooks import check_story_structure as css
+from scripts.dev.hooks import check_story_structure as css
 
 
 def _story(folder, *, prompt=True, tasks="tasks.md", stories="stories.md", extra=None):

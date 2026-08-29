@@ -314,8 +314,13 @@ scripts/
 │   ├── __init__.py       # Package marker
 │   ├── ask_council.py
 │   └── council_templates/
-├── dev/                  # diagnostics, smoke tests, one-off migrations
+├── dev/                  # diagnostics, smoke tests, one-off migrations, repo-integrity hooks
 │   ├── __init__.py       # Package marker
+│   ├── hooks/            # repo-integrity check programs (pre-commit + md-organize audit; NOT .claude/hooks/ — see DECISIONS.md)
+│   │   ├── __init__.py
+│   │   ├── check_md_line_length.py       # pre-commit `md-line-length` — fail any .md line > 200 chars
+│   │   ├── check_story_structure.py      # pre-commit `check-story-structure` + `--all` audit — docs/plan story/epic folder shape
+│   │   └── check_checkbox_consistency.py # `--all` audit only (md-organize skill) — tasks.md checkbox + task-line-tail consistency
 │   ├── send_test_telegram.py # Smoke-test script. Reads TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID from .env, sends a sample P&L message. Exit code 0/1. Run before first cron to verify credentials.
 │   ├── validate_strategy_spec.py # strategy spec linter.
 │   ├── probe_nuvama_schema.py # Diagnostic script (not production). Dumps all rmsHdg fields from live Holdings() response.

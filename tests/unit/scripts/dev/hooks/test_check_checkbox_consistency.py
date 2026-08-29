@@ -1,10 +1,10 @@
-"""Unit tests for scripts/hooks/check_checkbox_consistency.py."""
+"""Unit tests for scripts/dev/hooks/check_checkbox_consistency.py."""
 
 from pathlib import Path
 
 import pytest
 
-from scripts.hooks import check_checkbox_consistency as ccc
+from scripts.dev.hooks import check_checkbox_consistency as ccc
 
 CLEAN_TASKS = """\
 # Demo — tasks
