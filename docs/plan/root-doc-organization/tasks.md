@@ -4,9 +4,9 @@ Token-efficiency cleanup of the ~22 root `.md` files, doc-maintenance automation
 `prompt.md` says why the story exists; `stories.md` carries the per-task spec — a full forward spec for the open tasks and a short as-built digest for each shipped one; `plan.md` keeps the original
 file-by-file root inventory (D6 extra file). Work top-down: the first unchecked `- [ ]` line is the task. Each task is one commit plus a follow-up that records its SHA and ticks the box.
 
-**Open: RDO-16 (next, after RDO-6 — shipped), RDO-11 (date-gated ≥ 2026-09-03), RDO-17.8 (decided — pending close).** RDO-17.5 (`5508e41`) + RDO-17.6 (`cf46ff4`) shipped the two POC full conversions;
-RDO-17.7 §A shipped the fill-to-≤200 *guidance* inside RDO-17.5 (`7d28d16`), then RDO-17.7 swept both POC folders to that style in full; RDO-17.8 (the legacy-folder rule) is decided — batch-convert
-everything — and now lives as the `docs/plan/doc-format-migration/` epic.
+**Open: RDO-16 (next, after RDO-6 — shipped), RDO-11 (date-gated ≥ 2026-09-03).** RDO-17.5 (`5508e41`) + RDO-17.6 (`cf46ff4`) shipped the two POC full conversions; RDO-17.7 §A shipped the fill-to-≤200
+*guidance* inside RDO-17.5 (`7d28d16`), then RDO-17.7 swept both POC folders to that style in full; RDO-17.8 (`0be92a1`) recorded the legacy-folder decision — batch-convert everything — now the
+`docs/plan/doc-format-migration/` epic.
 
 ## Tasks
 
@@ -33,7 +33,7 @@ everything — and now lives as the `docs/plan/doc-format-migration/` epic.
 - [x] **RDO-17.5** — full-convert root-doc-organization/ — every task line canonical, stories.md covers all tasks | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 5508e41
 - [x] **RDO-17.6** — full-convert telegram-markdown-migration/ to the canonical epic format (router, Stories table) | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: cf46ff4
 - [x] **RDO-17.7** — sweep both POC folders to fill-to-≤200 in full; add reusable `scripts/dev/reflow_md.py` + tests | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 526e431
-- [ ] **RDO-17.8** — legacy-folder rule (was 17.7 §B): decided — batch-convert all; execution is the `doc-format-migration/` epic | Owner: Animesh | Model: n/a | Review: none | SHA: <—>
+- [x] **RDO-17.8** — legacy-folder rule (was 17.7 §B): decided — batch-convert all; execution is the `doc-format-migration/` epic | Owner: Animesh | Model: n/a | Review: none | SHA: 0be92a1
 
 ## Story done when
 

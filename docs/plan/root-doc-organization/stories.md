@@ -162,7 +162,7 @@ Retires RDO-5's "semantic linefeeds" guidance: prose now fills each line to the 
 *guidance* only — `docs/plan/README.md` §"Markdown line style", both `_TEMPLATE/` sets, `.claude/skills/md-organize/SKILL.md` + its `.agents/` mirror, and the one-line `INSTRUCTION.md` description.
 The RDO-17.7 line below then applied that style to both POC folders in full; RDO-17.8 (below) is the legacy-folder conversion decision.
 
-### RDO-17.8 — legacy-folder conversion rule (Owner: Animesh) — decided 2026-08-29
+### RDO-17.8 — legacy-folder conversion rule (Owner: Animesh) — decided 2026-08-29 (SHA `0be92a1`)
 
 Was RDO-17.7 §B. Animesh's call: **batch-convert every legacy `docs/plan/` folder now** (not convert-on-touch), tiered A/B/C/D by how live each folder is, `git log --follow` trusted for shipped SHAs,
 no permanent grandfathering — a fully-shipped folder is archived, not left legacy. Plus: make the format self-enforcing (widen the doc hooks repo-wide, add a CI `--all` gate, add new-folder
