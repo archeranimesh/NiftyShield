@@ -153,6 +153,12 @@ this file's Session Log grows large again.
 
 ### 2026-08-29
 
+- **RDO-17.1 — `docs/plan/` story/epic format spec + templates (root-doc-organization).**
+  `7b6d05f`, docs-only. `docs/plan/README.md` §Conventions rewritten: single-story flat vs
+  epic-with-sub-stories (no `stories/` layer), `stories.md` now required, `schema.md`
+  conditional-required checklist, extra-files rule, 5-field `| Owner | Model | Review | SHA`
+  task line. `_TEMPLATE/` split into `story/` + `epic/` variants. First of 4 RDO-17
+  sub-tasks; 17.2 (hooks) next.
 - **RDO-6 + RDO-7 — `md-organize` skill + doc-staleness check (root-doc-organization).**
   4 commits, docs/tooling only. RDO-7 (`d24f15d`): `session-close/SKILL.md` Step 3e —
   report-only content-gap check (new module w/o `CONTEXT_TREE.md` row; story code touched but

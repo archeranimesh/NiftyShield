@@ -434,9 +434,9 @@ backstop); every `tasks.md` line carries `| Owner | Model | Review | SHA`; `/wor
 epic-descent logic. Grandfather the ~25 legacy folders; retrofit `root-doc-organization/` +
 `telegram-markdown-migration/` now as the worked examples.
 
-- [ ] **RDO-17.1** — Rewrite `docs/plan/README.md` §Conventions (folder shapes, 3-file story
+- [x] **RDO-17.1** — Rewrite `docs/plan/README.md` §Conventions (folder shapes, 3-file story
   set, epic-folder set, `schema.md` checklist, extra-files rule, 5-field task line) +
-  restructure `docs/plan/_TEMPLATE/` into `story/` + `epic/` templates. | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <—>
+  restructure `docs/plan/_TEMPLATE/` into `story/` + `epic/` templates. | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 7b6d05f
 - [ ] **RDO-17.2** — `check_story_structure.py` (3-file story, epic root = `prompt.md` +
   `README.md`, `schema.md` warn-backstop, extra-file checks, legacy shapes grandfathered
   under `--all`) + `check_checkbox_consistency.py` (`| Owner | Model | Review | SHA` tail
