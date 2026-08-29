@@ -25,9 +25,10 @@ story here; this list only decides *which story is next*.
 Bugs are **not** here — see `## Open Bugs`.
 Cross-references use folder names, never list positions, so renumbering can't rot them.
 
-1. **root-doc-organization** — `docs/plan/root-doc-organization/` — next **RDO-16**
-   (doc-freshness loop-closure check). RDO-17 (story/epic format standardization) shipped;
-   RDO-11 date-gated (≥ 2026-09-03).
+1. **root-doc-organization** — `docs/plan/root-doc-organization/` — next **RDO-17.5**
+   (full-convert this folder to the canonical format). RDO-17.6 (convert
+   `telegram-markdown-migration/`), RDO-17.7 (Animesh to define), RDO-16, RDO-11
+   (≥ 2026-09-03) also open. RDO-17.1..17.4 shipped.
    Root `.md` token-efficiency cleanup + doc-maintenance automation.
 2. **IC yearly-expiry residual risk** — `docs/plan/ic-yearly-expiry-fix/` — next **WG-1**
    (persist per-leg Greeks for the weekly-expiry bucket).
@@ -153,6 +154,21 @@ this file's Session Log grows large again.
 
 ### 2026-08-29
 
+- **RDO-17.5/17.6/17.7 filed — scope revision (root-doc-organization).** `4d5611a`,
+  docs-only, task definitions only (no conversion executed). Animesh: RDO-17.4's partial
+  retrofit — grandfather the shipped task lines — is **superseded** for the two validation
+  folders. **RDO-17.5** fully converts `root-doc-organization/` (every `tasks.md` line to a
+  one-liner + 4-field tail, shipped lines keep their real SHA; `stories.md` rewritten to
+  cover every task — forward spec for open, 2–4 line as-built digest for shipped; `prompt.md`
+  realigned to `_TEMPLATE/story/`). **RDO-17.6** does the same for the
+  `telegram-markdown-migration/` epic (router `prompt.md`, `README.md` Stories status table,
+  all 3 sub-stories' `prompt.md` + `tasks.md`; resolves `ROLL-1a/1b/1c` nested checkboxes
+  vs one-checkbox-per-id). How cleanly the two POC conversions go calibrates whether/how the
+  other ~25 legacy folders convert — **RDO-17.7** (Animesh) records that rule afterward.
+  `tasks.md` RDO-17 intro + `## Story done when` bullet + `stories.md` (17.5/17.6 specs,
+  17.7 placeholder) + `docs/plan/README.md` blurb updated. Both hooks `--all` green.
+  `~/.claude/plans/woolly-honking-tarjan.md` now stale (grandfather framing) — Animesh owns
+  the plan-doc update.
 - **RDO-17.4 — retrofit the two format-validation folders (root-doc-organization).**
   `35d9f42` (impl) + close commit, docs-only. `root-doc-organization/` (single flat story):
   added `stories.md` covering only the open tasks (RDO-11, RDO-16, RDO-17.4 — shipped-task
@@ -164,8 +180,8 @@ this file's Session Log grows large again.
   `docs/archive/plan/telegram-markdown-migration/` with archive banners; `README.md`
   repointed + one-line completion pointer added; `message-format-workshop.md` stays live at
   the epic root. `check_story_structure.py --all` 14 → 12 warnings (both validation-folder
-  findings gone), `check_checkbox_consistency.py --all` green, 42 hook tests green. RDO-17
-  (17.1–17.4) fully shipped; epic now: RDO-16 (next), RDO-11 (≥ 2026-09-03).
+  findings gone), `check_checkbox_consistency.py --all` green, 42 hook tests green. RDO-17.1–17.4
+  shipped (17.4 superseded same day — see the RDO-17.5/17.6/17.7 entry above).
   `28d0d9c` (impl) + close commit, docs/skills only. `.claude/skills/work/SKILL.md` Feature
   branch now classifies flat-story vs epic-root: epic path reads the router `prompt.md` +
   `README.md`, walks the fixed story order (README Stories table) to the first sub-story with
