@@ -25,8 +25,8 @@ story here; this list only decides *which story is next*.
 Bugs are **not** here — see `## Open Bugs`.
 Cross-references use folder names, never list positions, so renumbering can't rot them.
 
-1. **root-doc-organization** — `docs/plan/root-doc-organization/` — next **RDO-17.3**
-   (`docs/plan/` story/epic format standardization — RDO-17.1/17.2 shipped). RDO-16
+1. **root-doc-organization** — `docs/plan/root-doc-organization/` — next **RDO-17.4**
+   (`docs/plan/` story/epic format standardization — RDO-17.1/17.2/17.3 shipped). RDO-16
    (loop-closure) and RDO-11 (≥ 2026-09-03) also open.
    Root `.md` token-efficiency cleanup + doc-maintenance automation.
 2. **IC yearly-expiry residual risk** — `docs/plan/ic-yearly-expiry-fix/` — next **WG-1**
@@ -153,6 +153,20 @@ this file's Session Log grows large again.
 
 ### 2026-08-29
 
+- **RDO-17.3 — `/work` epic descent + `| Review:` propagation (root-doc-organization).**
+  `28d0d9c` (impl) + close commit, docs/skills only. `.claude/skills/work/SKILL.md` Feature
+  branch now classifies flat-story vs epic-root: epic path reads the router `prompt.md` +
+  `README.md`, walks the fixed story order (README Stories table) to the first sub-story with
+  an unchecked `- [ ]`, loads its `prompt.md` + `stories.md` (+ `schema.md`) + first unchecked
+  task; step 7 reports `Owner/Model/Review` and halts on owner mismatch. `| Review:` field
+  added to the Step 5a task-line convention in `CLAUDE.md` + `AGENTS.md` and to the
+  `session-close` violation check (legacy 3-field tails grandfathered); `md-organize`
+  structure-audit note restated to the RDO-17 flat-story / epic-root file sets;
+  `_TEMPLATE/epic/prompt.md` router Step 1 pins story order to the README table.
+  `commit/SKILL.md` carries no task-line tail — untouched. Both structure hooks `--all`
+  green; dry-run `/work` on `telegram-markdown-migration/` walks `backbone/` +
+  `formatting-rules/` (all checked) → lands on `strategy-rollout/` ROLL-6. 17.4 (retrofit the
+  two validation folders) next.
 - **RDO-17.2 — story/epic structure + checkbox hooks (root-doc-organization).**
   `fe280bd`, tooling + docs. `check_story_structure.py`: `Finding(level, message)`; story
   folders now require `stories.md`, epic roots require `prompt.md` + `README.md`, `schema.md`

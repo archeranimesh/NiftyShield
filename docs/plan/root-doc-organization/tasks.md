@@ -16,7 +16,7 @@ back to pointer-only items. RDO-14 restructures `TODOS.md` into two pointer-only
 RDO-15 adds the checkbox-consistency sweep + the one-checkbox-per-id convention (prose
 `## Epic done when` blocks); RDO-16 is the epic loop-closure check promoted from that block.
 
-**Open: RDO-17.3 → RDO-17.4 (next), RDO-16 (after RDO-6), RDO-11 (≥ 2026-09-03).**
+**Open: RDO-17.4 (next), RDO-16 (after RDO-6), RDO-11 (≥ 2026-09-03).**
 Epic completion criteria at the bottom of this file.
 
 - [x] **RDO-1** — Slim `CONTEXT.md` to ≤400 lines, no line >200 chars; move module prose to
@@ -441,10 +441,11 @@ epic-descent logic. Grandfather the ~25 legacy folders; retrofit `root-doc-organ
   `README.md`, `schema.md` warn-backstop, extra-file checks, legacy shapes grandfathered
   under `--all`) + `check_checkbox_consistency.py` (`| Owner | Model | Review | SHA` tail
   shape; `SHA: —` iff unchecked) + `SUMMARY_RE` gains `story done when` + hook unit tests. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: fe280bd
-- [ ] **RDO-17.3** — `.claude/skills/work/SKILL.md` epic-descent steps + finalize the epic
+- [x] **RDO-17.3** — `.claude/skills/work/SKILL.md` epic-descent steps + finalize the epic
   router body in `_TEMPLATE/epic/prompt.md`; propagate the `| Review:` field into
-  `commit` / `session-close` / `md-organize` skills + `CLAUDE.md` §Step 5a + the `AGENTS.md`
-  mirror. | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <—>
+  `session-close` / `md-organize` skills + `CLAUDE.md` §Step 5a + the `AGENTS.md`
+  mirror (`commit/SKILL.md` carries no task-line tail — nothing to change there).
+  | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 28d0d9c
 - [ ] **RDO-17.4** — Retrofit `root-doc-organization/` (add `stories.md` for open tasks,
   `| Review:` on open lines, `## Epic done when` → `## Story done when`) and
   `telegram-markdown-migration/` (`.DS_Store`, archive `TODO.md` + `missing-message-workshop-prompt.md`,
