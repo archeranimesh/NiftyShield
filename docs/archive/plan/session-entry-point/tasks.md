@@ -66,10 +66,13 @@ finishes using `tasks.md` here as its worked example.
 
 ## Epic done when
 
-- [x] **SEP-1** — `/work` skill authored, both branches functional, skip-through works.
-- [x] **SEP-2** — `CLAUDE.md` points at `/work`; load-hint duplication removed.
-- [x] **SEP-3** — `AGENTS.md` mirrors; `md-organize` re-sync scope names the skill.
-- [x] **SEP-4** — both branches demonstrated end-to-end in one session.
+Acceptance criteria — prose, no checkboxes (RDO-15 convention a). All met; epic shipped
+2026-08-27. Per-task status is in the working list above.
+
+- **SEP-1** — `/work` skill authored, both branches functional, skip-through works.
+- **SEP-2** — `CLAUDE.md` points at `/work`; load-hint duplication removed.
+- **SEP-3** — `AGENTS.md` mirrors; `md-organize` re-sync scope names the skill.
+- **SEP-4** — both branches demonstrated end-to-end in one session.
 
 ## After each task
 Tick the box, append `| SHA: <sha>`, update `docs/plan/README.md` + `TODOS.md` session log.

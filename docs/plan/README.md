@@ -59,16 +59,17 @@ Risk delta gate (done) + Near-Expiry Gamma Buy `gamma_daily_watch.py`.
 **`variance-gate/`** · ⬜ Not started · next: **VG0** (CSP v1 spec reconciliation)
 CSP v1 Phase 0.8 deployment gate — spec reconciliation + gate criteria A–D.
 
-**`root-doc-organization/`** · 🔄 In progress · next: **RDO-9** (DECISIONS.md semantic split)
+**`root-doc-organization/`** · 🔄 In progress · next: **RDO-6** (`md-organize` skill rewrite)
 Token-efficiency cleanup of the ~22 root `.md` files + doc-maintenance automation.
-Docs + tooling only. RDO-1..15 + an "Epic done when" checklist in `tasks.md`.
-RDO-1/2/4/5/8/12/13/14 shipped, RDO-3 closed-partial; RDO-6/7/9/10/11/15 open.
-RDO-14 (2026-08-28) split `TODOS.md` into `## Feature Backlog` + `## Open Bugs` and added
-the §Conventions *Completion → archive* rule.
+Docs + tooling only. RDO-1..16 + an acceptance-criteria list in `tasks.md`.
+RDO-1/2/4/5/8/9/10/12/13/14/15 shipped, RDO-3 closed-partial; RDO-6/7/11/16 open.
+RDO-10 (2026-08-28): reconciled RDO-7/Phase 7 with the two shipped doc-freshness hooks —
+RDO-7 narrowed to content gaps only, `md-organize` name settled, `#4` → future read-only
+Telegram digest, `state_doc_freshness.sh` thresholds tuned.
 
-**`session-entry-point/`** · ✅ Done 2026-08-27 (SEP-1..4)
-Unified manual `/work` skill — routes a task session to Feature or Bug, loads the right
-prompt + first unchecked task, hands to `CLAUDE.md` Step 2b.
+**`session-entry-point/`** · ✅ Archived 2026-08-28 → `docs/archive/plan/session-entry-point/`
+Unified manual `/work` skill (SEP-1..4) — routes a task session to Feature or Bug, loads the
+right prompt + first unchecked task, hands to `CLAUDE.md` Step 2b.
 
 **`paper-backbone/`** · ✅ Shipped/Archived
 Strategy Monitor daemon + pluggable strategy backbone (`src/strategy/`, `TelegramGateway`).
@@ -185,7 +186,24 @@ Everything else is derived and must not be hand-edited to disagree with it:
 
 - this file's per-story status / next marker — a summary of the story's `tasks.md`
 - a `stories.md` DoD checkbox — mirrors its `tasks.md` task
-- a trailing `## Epic done when` block in `tasks.md` — mirrors the working list above it
+
+### Checkbox consistency (RDO-15)
+
+Every task id carries **exactly one** checkbox — the `- [ ]` / `- [x]` line in the working
+list.
+A trailing `## Epic done when` block is an **acceptance-criteria list in prose** — bold id,
+one-line criterion, **no `- [ ]` checkboxes** — verified at epic close, not tracked
+incrementally.
+An acceptance item with no matching task id (e.g. a whole-epic "loop-closure verified"
+check) is real work: give it a task id in the working list, don't leave it as a bare bullet
+here.
+Nothing mirrors task state, so nothing can drift.
+`scripts/hooks/check_checkbox_consistency.py` sweeps every `docs/plan/**/tasks.md` (plus
+legacy `*_tasks.md`) and `docs/bugs/task.md` for: a checkbox inside a summary block, the
+same id with disagreeing state in one file, and a README `next:` marker pointing at an
+already-done id.
+It runs in the `md-organize` skill's periodic audit — not pre-commit (task files churn far
+faster than the audit needs to).
 
 ### `TODOS.md` hygiene
 
@@ -236,6 +254,8 @@ token.
 has `prompt.md` + `tasks.md`, and flags stray or empty folders.
 It runs pre-commit on newly-added folders only; the full repo-wide sweep is part of the
 `md-organize` skill's periodic audit, since folders churn only ~monthly.
+`scripts/hooks/check_checkbox_consistency.py` (see §"Checkbox consistency") is the companion
+sweep for task-state drift; it runs alongside it in the same audit, also not pre-commit.
 
 ### Status transitions
 

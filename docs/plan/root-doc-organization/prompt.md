@@ -40,11 +40,15 @@ under `.claude/`.
 ## Definition of done
 
 - `CONTEXT.md` ≤ 400 lines, no line > 200 chars, session-start cost ≈ 6K tokens.
-- `AGENTS.md` is a thin pointer to `CLAUDE.md` (or deleted if no non-Claude tool needs it —
-  confirm with Animesh first).
-- `DECISIONS.md` root copy holds only decisions from the trailing 6 months + an index;
-  older content in `docs/archive/DECISIONS_ARCHIVE_2026H1.md`.
-- Pre-commit hook `root-md-line-length` fails any staged root `.md` with a line > 200 chars.
+- `AGENTS.md` stays a full standalone protocol mirror of `CLAUDE.md` (RDO-2, 2026-08-27 —
+  Antigravity autoloads it by name; do not stub or delete).
+- `DECISIONS.md` root copy holds only **still-enforced rules + index blocks** (RDO-9 semantic
+  split — the file is verbose inside a 4-month window, not old, so a date cutoff can't shrink
+  it); every "fixed X, why" completed-work-log entry lives in
+  `docs/archive/DECISIONS_worklog_2026.md`. Target: fresh full-file `Read` under the display
+  cap (≈ 22K tokens, was ≈ 84K).
+- Pre-commit hook `md-line-length` (RDO-5, renamed from `root-md-line-length` — scope widened
+  to `docs/plan/**` + `docs/bugs/**`) fails any staged `.md` with a line > 200 chars.
 - `md-organize` skill exists and its "must stay at root" table matches reality.
 - Either the session-close fork or a dedicated `doc-sync` fork reports doc staleness against
   `git log` for the session. Report-only — no unattended commits.

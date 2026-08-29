@@ -5,6 +5,16 @@
 
 ---
 
+## 2026-08-28 — `session-entry-point` epic archived
+
+SEP-1..4 shipped 2026-08-27 (unified manual `/work` skill). The folder was held in
+`docs/plan/` one extra day so `root-doc-organization` RDO-15 could use its `tasks.md` as the
+checkbox-convention worked example; archived to `docs/archive/plan/session-entry-point/` once
+that was done. No `TODOS.md` Feature Backlog line to move — RDO-14 had already dropped it.
+Per-task detail and SHAs are in the archived `tasks.md`.
+
+---
+
 ## 2026-08-27 — Session Log entries moved from TODOS.md (round-2 token-opt #3a)
 
 `TODOS.md`'s `### 2026-08-27` section had grown past ~5 entries. The four completed,

@@ -166,6 +166,21 @@ Rename `.claude/skills/md-cleanup/` → `.claude/skills/md-organize/` and rewrit
 
 ## Phase 7 — Daily staleness report (report-only automation)
 
+> **Revised 2026-08-28 (RDO-10).** A parallel epic shipped two doc-freshness mechanisms on
+> 2026-08-27, before this phase was built:
+> - `758dd6b` — `.claude/hooks/state_doc_freshness.sh` (`SessionStart`): per-state-doc flag
+>   when `src/`|`scripts/` commits since the doc's last change exceed a per-doc threshold.
+>   Informational, always `exit 0`. Thresholds tuned in RDO-10 #5
+>   (`CONTEXT_TREE.md` / `DB_REGISTRY.md` / `README.md` → 60).
+> - `7dae8e3` — `.claude/hooks/doc_update_gate.sh` (`PreToolUse`/`Bash` on `git commit`):
+>   stderr reminder when a `.py` commit under `src/`|`scripts/` stages no Step-5a state doc.
+>   Advisory (`exit 0`); RDO-11 decides whether it flips to `exit 2`.
+>
+> These two own the per-file "docs behind code" signal. **Option A below is therefore
+> narrowed** (RDO-7): the session-close report covers only the *content gaps* neither hook
+> can see — see RDO-7 in `tasks.md`. The nightly-cron idea (`TODOS.md #4`) is narrowed to a
+> future *read-only* Telegram staleness digest, out of scope for this epic.
+
 The user's ask was "a sub-agent that keeps these docs latest after each day of work."
 A subagent cannot self-schedule. Two safe hooks:
 
@@ -185,8 +200,9 @@ isolated context. Slightly more moving parts; pick this only if the session-clos
 already crowded.
 
 **Not doing:** a nightly cron cloud agent that edits + commits docs unattended. Unattended
-writes to source-of-truth docs is the wrong risk trade. A nightly *read-only* report to
-Telegram would be acceptable as a later add-on but is out of scope here.
+writes to source-of-truth docs is the wrong risk trade. A nightly *read-only* Telegram
+staleness digest is the sanctioned form of `TODOS.md #4` (RDO-10 #3) — acceptable as a
+post-epic add-on, not built here.
 
 **Commit:** `chore(session-close): add report-only doc staleness check`
 

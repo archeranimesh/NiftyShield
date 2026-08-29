@@ -25,8 +25,8 @@ story here; this list only decides *which story is next*.
 Bugs are **not** here — see `## Open Bugs`.
 Cross-references use folder names, never list positions, so renumbering can't rot them.
 
-1. **root-doc-organization** — `docs/plan/root-doc-organization/` — next **RDO-9**
-   (DECISIONS.md semantic split; RDO-6 encodes final state and comes last).
+1. **root-doc-organization** — `docs/plan/root-doc-organization/` — next **RDO-6**
+   (`md-organize` skill rewrite; encodes final state, comes last). RDO-7/10/11/16 also open.
    Root `.md` token-efficiency cleanup + doc-maintenance automation.
 2. **IC yearly-expiry residual risk** — `docs/plan/ic-yearly-expiry-fix/` — next **WG-1**
    (persist per-leg Greeks for the weekly-expiry bucket).
@@ -151,6 +151,57 @@ history above). Add new entries there going forward, or start a fresh dated sect
 this file's Session Log grows large again.
 
 ### 2026-08-28
+
+- **RDO-10 — reconcile RDO-7 / Phase 7 with the shipped doc-freshness hooks
+  (root-doc-organization).** Docs + one hook edit, 1 commit. Decisions with Animesh:
+  (1) RDO-7 **kept but narrowed** — `state_doc_freshness.sh` (SessionStart) +
+  `doc_update_gate.sh` (PreToolUse) already own the per-file "docs behind code" signal, so the
+  session-close report is re-scoped to the content gaps neither hook sees (new `src/<module>/`
+  with no `CONTEXT_TREE.md` row; story code touched this session but `docs/plan/README.md`
+  status not advanced). (2) `TODOS.md #4` (weekly cloud routine) **narrowed to a future
+  read-only Telegram staleness digest**, out of epic scope — unattended-write cron stays
+  rejected. (3) Skill name settled: **`md-organize`** (RDO-6 does the rename + ~6 by-name
+  ref updates). (4) `state_doc_freshness.sh` thresholds tuned — `CONTEXT_TREE.md` /
+  `DB_REGISTRY.md` / `README.md` 35-40 → 60 (all three change only on new modules / tables /
+  public-surface shifts; DB_REGISTRY was the known 36/35 false positive). RDO-6 gains a step
+  to verify the two hooks' hard-coded doc lists still match `CLAUDE.md` §Step 5a. `plan.md`
+  Phase 7 + `tasks.md` RDO-6/7/10 + `## Epic done when` + `docs/plan/README.md` row updated.
+  Open in the epic now: RDO-6, 7, 11, 16. Docs/tooling-only, no code-reviewer.
+
+- **RDO-15 — checkbox-consistency sweep + one-box convention (root-doc-organization).**
+  2 commits. `5e48451`: new `scripts/hooks/check_checkbox_consistency.py` (+ 11 tests) —
+  sweeps `docs/plan/**/tasks.md` + `docs/bugs/task.md` for a checkbox inside an `## Epic done
+  when` block, same-id state drift in one file, and a README `next:` marker on an already-done
+  id; `--all` + path modes, runs in the `md-cleanup`/`md-organize` audit (Step 5c), not
+  pre-commit. Convention (a) chosen (Animesh delegated) — `## Epic done when` blocks are now
+  prose acceptance criteria, no checkboxes; working-list `tasks.md` state is the sole source,
+  drift structurally impossible (same principle as RDO-13 §4). Sibling script, not an
+  extension of `check_story_structure.py`. Retrofit trivial — only 2 files used the mirror
+  (`root-doc-organization`, `session-entry-point`), zero pre-existing drift; `_TEMPLATE/` +
+  `docs/plan/README.md` §"Checkbox consistency" updated. Id-less "loop-closure check" item
+  promoted to task **RDO-16**. `code-reviewer`: 0 CRITICAL/ERROR, 4 WARNING all fixed
+  (README slug regex underscore gap, `task.md` dir-glob, EXCLUDED filter style, test hints).
+  `session-entry-point` epic archived to `docs/archive/plan/` in the same session (was done,
+  awaiting only this worked-example use).
+
+- **RDO-9 — `DECISIONS.md` semantic split (root-doc-organization).** 3 commits.
+  9a: full-file classification (2203 lines) + `options-strategist` advisory pass +
+  Animesh sign-off — scratch artifact `rdo9a_classification.md`. The file was big because
+  it is append-only and verbose inside a ~4-month window, not old — so split by *kind*:
+  9b `344f3a7` moved every completed-work-log entry (the chronological "fixed X, why" stream,
+  `## Process`, the dated `## BUG-*` sections, the delivered NSE Bhavcopy UDiFF spec, the
+  Telegram-MD sequencing narrative) → `docs/archive/DECISIONS_worklog_2026.md`; lifted 11
+  still-enforced rule fragments into a new `## Risk, Delta & Entry Gates` section + existing
+  sections; fixed 8 stale rule entries the 9a `options-strategist` pass caught (CSP/CC profit
+  target is 30% retention not 50%, CSP delta stop 0.40 not 0.45, CC DTE_REVIEW is ACTION not
+  WARN per EC-5, CC re-entry allow-list, CSP time-stop DTE guard from EC-4, Notifications
+  HTML→MarkdownV2, §7.3 IC-judged-in-isolation); merged the duplicate `## Market Calendar`
+  and `## Developer Tooling` headers. 9b `2fb5c5b` wrapped the file to semantic linefeeds,
+  `md-line-length` green, Strategy & Research table → bulleted index. Result: 2203 → 972
+  lines, ~84K → ~22K tokens, fresh full-file `Read` succeeds. **DoD deviation:** "≤ 800
+  lines" conflicts with the same DoD's semantic-linefeed requirement — flagged to Animesh;
+  token count is the metric that holds. Docs-only, no code-reviewer. `prompt.md` DoD +
+  `docs/plan/README.md` row updated; RDO-9 + `prompt.md`-DoD-rewrite epic-done boxes ticked.
 
 - **RDO-14 — `TODOS.md` restructure (root-doc-organization).** Design changed with Animesh:
   *not* one unified queue — two separate pointer-only lists, `## Feature Backlog` (`1..N`
