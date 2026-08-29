@@ -381,7 +381,7 @@ BrokerClient) is touched.
 updates CONTEXT.md date + test count,
 syncs README.md project structure and roadmap checkboxes,
 relocates stale plan/prompt files out of root,
-reflows prose to semantic linefeeds (200-char cap),
+reflows prose to fill each line to ≤200 chars,
 and reconciles the `CLAUDE.md` / `AGENTS.md` / `.agents/` / `work` protocol mirrors.
 
 `prompt-refine` — scores your prompt on 8 dimensions (named files, phase, tests, DoD,

@@ -13,8 +13,8 @@ One task per session. Complete it fully. Stop.
 
 ## Why this story exists
 
-<!-- 1–3 short paragraphs, semantic linefeeds. The problem, the trigger, the decision that
-scoped it. A reader should understand why this exists without opening any other file. -->
+<!-- 1–3 short paragraphs, prose lines filled to ≤200 chars. The problem, the trigger, the
+decision that scoped it. A reader should understand why this exists without opening any other file. -->
 
 ## Scope guard
 

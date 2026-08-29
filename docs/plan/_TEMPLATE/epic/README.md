@@ -7,7 +7,7 @@
 
 ## Why this epic exists
 
-<!-- The problem, the trigger, the origin (session / review / council). Semantic linefeeds. -->
+<!-- The problem, the trigger, the origin (session / review / council). Prose lines filled to ≤200 chars. -->
 
 ## Scope decisions
 

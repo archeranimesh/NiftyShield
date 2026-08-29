@@ -14,7 +14,7 @@
 Keeps the project root to markdown that carries _live, session-relevant context_. Completed
 work, one-off plans, and reusable tool prompts get archived or moved — nothing useful is
 deleted, only relocated with a pointer stub where another doc links to it. It also enforces
-the line-style convention (semantic linefeeds, 200-char ceiling) and keeps `CLAUDE.md` /
+the line-style convention (prose filled to ≤200 chars per line) and keeps `CLAUDE.md` /
 `AGENTS.md` / `.agents/` / `.claude/skills/work/` in sync.
 
 This is an on-demand maintenance pass, not a per-session step. Folders and root docs churn
@@ -113,7 +113,7 @@ split). Completed-work-log entries ("fixed X, why") live in
 2. Roll any archive entry older than ~6 months into the current-year archive file if a new
    year has started; refresh the one-line topic index in root.
 3. `pre-commit run md-line-length --files DECISIONS.md` must stay green — wrap any surviving
-   rule entry to semantic linefeeds.
+   rule entry to fill-to-≤200.
 
 ---
 
@@ -132,16 +132,18 @@ top open item.
 
 The convention (`docs/plan/README.md` §Conventions → "Markdown line style", RDO-5):
 
-- Prose uses **semantic linefeeds** — one sentence or clause per line; no fixed-width
-  hand-wrap; ~120 chars is a soft target.
-- A hard **200-char ceiling** on every line kind (prose, table rows, fenced code), enforced
-  by the `md-line-length` pre-commit hook over root `.md` + `docs/plan/**` + `docs/bugs/**`.
+- Prose fills each line to the last word boundary before 200 chars — do not break early at
+  a sentence or clause, and do not hand-wrap to a fixed narrow width. (The earlier
+  "semantic linefeeds" one-clause-per-line style is retired — RDO-17.7 §A.)
+- The hard **200-char ceiling** on every line kind (prose, table rows, fenced code) is the
+  only gated rule, enforced by the `md-line-length` pre-commit hook over root `.md` +
+  `docs/plan/**` + `docs/bugs/**`.
 - `<!-- lint-ignore-length -->` on the immediately-preceding line excuses one unbreakable
   token (a long URL, a base64 blob).
 
 Run `pre-commit run md-line-length --all-files` and clear every reported line:
 
-- Prose → break at sentence, then clause boundaries.
+- Prose → rewrap so each line fills to just under 200 chars.
 - Long table rows → shorten cells, or lift a long parenthetical into a sentence below the
   table. Never drop a column or a fact.
 - Fenced code → shorten, or mark with `<!-- lint-ignore-length -->`.
@@ -221,7 +223,7 @@ What:
 - TODOS.md: archive done stories/session-log entries → docs/archive/
 - docs/archive/…: relocated items
 - CONTEXT.md / DECISIONS.md / README.md: re-slim, roll, sync as needed
-- <files>: semantic-linefeed reflow to clear md-line-length
+- <files>: fill-to-≤200 reflow to clear md-line-length
 - .secrets.baseline: line-number refresh
 Ref: none
 ```

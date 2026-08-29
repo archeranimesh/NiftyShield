@@ -326,15 +326,14 @@ story half-archived:
 The `md-organize` skill's periodic audit and the `session-close` skill both check for done
 stories that were not archived; do not rely on that — archive at completion.
 
-### Markdown line style (RDO-5, decided 2026-08-27)
+### Markdown line style (RDO-5; fill-to-≤200 per RDO-17.7 §A, 2026-08-29)
 
-Prose uses *semantic linefeeds* — one sentence or clause per line; no fixed-width hand-wrap.
-~120 chars is a soft target, not gated.
-A hard 200-char ceiling applies to every line kind (prose, table rows, fenced code) and is
-enforced by the `md-line-length` pre-commit hook over root `.md` + `docs/plan/**` +
-`docs/bugs/**`; `<!-- lint-ignore-length -->` on the preceding line excuses an unbreakable
-token.
+Prose fills each line to the last word boundary before 200 chars — do not break early at a sentence or clause end, and do not hand-wrap to a fixed narrow width. The earlier "semantic
+linefeeds" guidance (one sentence or clause per line) is **retired**: the mid-line wrap near ~110 chars it produced was harder to read in source, not easier, and it made diffs noisier.
+The hard **200-char ceiling** is the only gated rule. It applies to every line kind (prose, table rows, fenced code) and is enforced by the `md-line-length` pre-commit hook over root
+`.md` + `docs/plan/**` + `docs/bugs/**`; `<!-- lint-ignore-length -->` on the immediately-preceding line excuses one unbreakable token (a long URL, a base64 blob).
 `.py` stays at ruff's `line-length = 100` (ruff already excludes `docs/`).
+Existing docs reflow to fill-to-200 opportunistically when a commit next touches them — no big-bang pass (the same rule RDO-5 used to clear its own backlog).
 
 ### Structure audit
 
