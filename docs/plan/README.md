@@ -59,10 +59,15 @@ Risk delta gate (done) + Near-Expiry Gamma Buy `gamma_daily_watch.py`.
 **`variance-gate/`** · ⬜ Not started · next: **VG0** (CSP v1 spec reconciliation)
 CSP v1 Phase 0.8 deployment gate — spec reconciliation + gate criteria A–D.
 
-**`root-doc-organization/`** · 🔄 In progress · next: **RDO-6** (`md-organize` skill rewrite)
+**`root-doc-organization/`** · 🔄 In progress · next: **RDO-16** (loop-closure check; RDO-11
+runs on its own clock ≥ 2026-09-03)
 Token-efficiency cleanup of the ~22 root `.md` files + doc-maintenance automation.
 Docs + tooling only. RDO-1..16 + an acceptance-criteria list in `tasks.md`.
-RDO-1/2/4/5/8/9/10/12/13/14/15 shipped, RDO-3 closed-partial; RDO-6/7/11/16 open.
+RDO-1/2/4/5/6/7/8/9/10/12/13/14/15 shipped, RDO-3 closed-partial; RDO-11/16 open.
+RDO-6 (2026-08-29): `md-cleanup` → `md-organize` skill rewrite; `.agents/` mirror re-synced;
+`CLAUDE.md`/`AGENTS.md` long-line wrap + Step 5a task-line pointer; whole-repo
+`md-line-length` backlog (~700 lines / ~70 files) cleared, `--all-files` green.
+RDO-7 (2026-08-29): `session-close` gains a report-only `DOC STALENESS` content-gap check.
 RDO-10 (2026-08-28): reconciled RDO-7/Phase 7 with the two shipped doc-freshness hooks —
 RDO-7 narrowed to content gaps only, `md-organize` name settled, `#4` → future read-only
 Telegram digest, `state_doc_freshness.sh` thresholds tuned.

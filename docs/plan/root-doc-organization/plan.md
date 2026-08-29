@@ -142,7 +142,7 @@ in batch by RDO-6's `md-organize` skill + RDO-9's `DECISIONS.md` split.
 
 ---
 
-## Phase 6 — `md-organize` skill (on-demand maintenance)
+## Phase 6 — `md-organize` skill (on-demand maintenance) — ✅ done 2026-08-29 (RDO-6, `3eb3834`)
 
 Rename `.claude/skills/md-cleanup/` → `.claude/skills/md-organize/` and rewrite `SKILL.md`:
 
@@ -164,7 +164,7 @@ Rename `.claude/skills/md-cleanup/` → `.claude/skills/md-organize/` and rewrit
 
 ---
 
-## Phase 7 — Daily staleness report (report-only automation)
+## Phase 7 — Daily staleness report (report-only automation) — ✅ done 2026-08-29 (RDO-7, `d24f15d`)
 
 > **Revised 2026-08-28 (RDO-10).** A parallel epic shipped two doc-freshness mechanisms on
 > 2026-08-27, before this phase was built:

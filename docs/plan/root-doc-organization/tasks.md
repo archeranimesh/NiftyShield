@@ -2,9 +2,9 @@
 
 Work top-down. Each phase = one commit. See `plan.md` for the file-by-file detail.
 RDO-1 and RDO-2 are done. RDO-3 is closed as a partial (remainder → RDO-9); it is not a
-blocker. RDO-4, 5, 8 are independent. RDO-7 feeds RDO-6 (the skill reconciles against it);
-RDO-6 must land before RDO-16 (the loop-closure test exercises `md-organize`); RDO-11 is
-time-gated to its observation window (≥ 2026-09-03) and runs on its own clock. RDO-8
+blocker. RDO-4, 5, 8 are independent. RDO-6 + RDO-7 shipped 2026-08-29. RDO-16 (the
+loop-closure test that exercises `md-organize`) can now run; RDO-11 is time-gated to its
+observation window (≥ 2026-09-03) and runs on its own clock. RDO-8
 was spun out of the RDO-2 audit and feeds RDO-5/RDO-6. RDO-5 expanded 2026-08-27 — covers
 `docs/plan/**` + `docs/bugs/**` and defines the semantic-linefeed prose style. RDO-9
 replaces RDO-3's unworkable date cutoff. RDO-10 reconciles RDO-7 with the freshness hooks a parallel epic shipped the
@@ -89,7 +89,7 @@ bottom of this file.
   docs/plan/mvp/prompt.md` fails with per-line `file:line: N chars` output;
   `pytest tests/unit/scripts/hooks/ -q` green.
   | Owner: Claude | Model: claude-sonnet-5 | SHA: 7c78799
-- [ ] **RDO-6** — Rename `.claude/skills/md-cleanup/` → `md-organize/`, rewrite `SKILL.md`:
+- [x] **RDO-6** — Rename `.claude/skills/md-cleanup/` → `md-organize/`, rewrite `SKILL.md`:
   broaden triggers, fix the "must stay at root" table, add CONTEXT.md re-slim + DECISIONS
   roll + line-length (200 cap) + semantic-linefeed prose reflow (RDO-5) + `CLAUDE.md`
   pointer-reconciliation steps. **Owns the RDO-5 backlog:** the `md-organize` run does
@@ -115,6 +115,23 @@ bottom of this file.
   **Add (RDO-10):** a step that verifies the two shipped doc-freshness hooks
   (`.claude/hooks/state_doc_freshness.sh`, `.claude/hooks/doc_update_gate.sh`) still have
   hard-coded doc lists matching `CLAUDE.md` §Step 5a — flag any drift, do not auto-edit.
+  **Done 2026-08-29 (Claude, 3 commits + RDO-7's).** `a8fc782`: `git mv md-cleanup →
+  md-organize` + full `SKILL.md` rewrite (19-file root table; steps for CONTEXT re-slim,
+  DECISIONS roll, repo-wide `md-line-length` sweep, `CLAUDE.md` `also read` reconciliation,
+  `check_story_structure`/`check_checkbox_consistency` audits, RDO-10 hook-drift check;
+  Step 7 mirror re-sync = `AGENTS.md` + `.agents/skills/` + `work/SKILL.md`). `.agents/skills/`
+  re-synced wholesale from `.claude/skills/` — `work/` added, `md-cleanup` → `md-organize`,
+  every "Codex"/`​.Codex/` ref gone (agent files were dead per RDO-8). `CLAUDE.md` + `AGENTS.md`
+  11 over-200 lines each → semantic linefeeds; RDO-13 Step 5a task-line pointer added to both.
+  `ANTIGRAVITY.md` + `INSTRUCTION.md` pre-existing long-line backlog wrapped. `3eb3834`:
+  the RDO-5 backlog — ~700 over-200 lines across ~70 files (root refs + `docs/plan/**` +
+  `docs/bugs/bugs.md`) reflowed by 5 parallel subagents; `pre-commit run md-line-length
+  --all-files` green. `suggestions.md` exempted (wide fixed-column table, `SKIP=md-line-length`
+  — noted in `md-organize` Step 5a). `DECISIONS.md` was already clean (RDO-9). **Deviation:**
+  FR-7 synthesis + FR-0 recommendation tables were dense enough that rows became `### N`
+  subsections rather than reflowed table rows — row numbers preserved, all cell text retained,
+  `FR-7 row N` references still resolve.
+  | Owner: Claude | Model: claude-sonnet-5 | SHA: 3eb3834
 - [x] **RDO-7** — Add report-only `DOC STALENESS` section to
   `.claude/skills/session-close/SKILL.md`. Report only — no unattended commits.
   **Scope narrowed by RDO-10 #1:** *not* the per-file src-commit counts from `plan.md`
@@ -127,7 +144,7 @@ bottom of this file.
   `session-close/SKILL.md` (report-only, both checks (a)/(b), explicit "do not re-report the
   hook's src-commit counts, do not commit any fix"); `Doc staleness:` line added to the
   Step 5 report block.
-  | Owner: Claude | Model: claude-sonnet-5 | SHA: `<pending>`
+  | Owner: Claude | Model: claude-sonnet-5 | SHA: d24f15d
 - [x] **RDO-8** — Protocol-doc consistency cleanup (surfaced by the RDO-2 audit,
   2026-08-27). Independent of RDO-3..7; can be done in any order. Each bullet is a small
   targeted fix — one commit for the lot is fine since they are all protocol/doc consistency.

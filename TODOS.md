@@ -25,8 +25,8 @@ story here; this list only decides *which story is next*.
 Bugs are **not** here — see `## Open Bugs`.
 Cross-references use folder names, never list positions, so renumbering can't rot them.
 
-1. **root-doc-organization** — `docs/plan/root-doc-organization/` — next **RDO-6**
-   (`md-organize` skill rewrite; encodes final state, comes last). RDO-7/10/11/16 also open.
+1. **root-doc-organization** — `docs/plan/root-doc-organization/` — next **RDO-16**
+   (loop-closure check). RDO-11 also open but time-gated to ≥ 2026-09-03.
    Root `.md` token-efficiency cleanup + doc-maintenance automation.
 2. **IC yearly-expiry residual risk** — `docs/plan/ic-yearly-expiry-fix/` — next **WG-1**
    (persist per-leg Greeks for the weekly-expiry bucket).
@@ -149,6 +149,22 @@ Full forensic log (SHAs, bug numbers, root-cause detail) moved to
 2026-08-26 reorg (everything from 2026-08-01 through 2026-08-26, plus item 29's inline design
 history above). Add new entries there going forward, or start a fresh dated section here if
 this file's Session Log grows large again.
+
+### 2026-08-29
+
+- **RDO-6 + RDO-7 — `md-organize` skill + doc-staleness check (root-doc-organization).**
+  4 commits, docs/tooling only. RDO-7 (`d24f15d`): `session-close/SKILL.md` Step 3e —
+  report-only content-gap check (new module w/o `CONTEXT_TREE.md` row; story code touched but
+  `docs/plan/README.md` status not advanced). RDO-6: `.claude/skills/md-cleanup` → `md-organize`
+  with a rewritten `SKILL.md` (real 19-file root table; CONTEXT re-slim / DECISIONS roll /
+  repo-wide `md-line-length` sweep / `CLAUDE.md` pointer reconcile / story-structure +
+  checkbox audits / RDO-10 hook-drift check / Step 7 mirror re-sync). `.agents/skills/`
+  re-synced wholesale from `.claude/skills/` (added `work/`, dropped all "Codex" refs).
+  `CLAUDE.md` + `AGENTS.md` 11 long lines each wrapped; Step 5a task-line pointer added
+  (RDO-13 deferred). Whole-repo `md-line-length` backlog cleared — ~700 lines across ~70
+  files reflowed to semantic linefeeds via 5 parallel subagents; `--all-files` now green
+  (`suggestions.md` excepted — wide table, `SKIP=md-line-length`). Epic now: RDO-11
+  (≥ 2026-09-03) + RDO-16 (loop-closure) open.
 
 ### 2026-08-28
 
