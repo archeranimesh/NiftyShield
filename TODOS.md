@@ -25,9 +25,9 @@ story here; this list only decides *which story is next*.
 Bugs are **not** here — see `## Open Bugs`.
 Cross-references use folder names, never list positions, so renumbering can't rot them.
 
-1. **root-doc-organization** — `docs/plan/root-doc-organization/` — next **RDO-17.4**
-   (`docs/plan/` story/epic format standardization — RDO-17.1/17.2/17.3 shipped). RDO-16
-   (loop-closure) and RDO-11 (≥ 2026-09-03) also open.
+1. **root-doc-organization** — `docs/plan/root-doc-organization/` — next **RDO-16**
+   (doc-freshness loop-closure check). RDO-17 (story/epic format standardization) shipped;
+   RDO-11 date-gated (≥ 2026-09-03).
    Root `.md` token-efficiency cleanup + doc-maintenance automation.
 2. **IC yearly-expiry residual risk** — `docs/plan/ic-yearly-expiry-fix/` — next **WG-1**
    (persist per-leg Greeks for the weekly-expiry bucket).
@@ -153,7 +153,19 @@ this file's Session Log grows large again.
 
 ### 2026-08-29
 
-- **RDO-17.3 — `/work` epic descent + `| Review:` propagation (root-doc-organization).**
+- **RDO-17.4 — retrofit the two format-validation folders (root-doc-organization).**
+  `35d9f42` (impl) + close commit, docs-only. `root-doc-organization/` (single flat story):
+  added `stories.md` covering only the open tasks (RDO-11, RDO-16, RDO-17.4 — shipped-task
+  detail stays inline in `tasks.md` history); added the `| Owner | Model | Review | SHA`
+  tail to the two open lines; `## Epic done when` → `## Story done when` + two adjacent prose
+  fixes. `telegram-markdown-migration/` (epic): dropped untracked `.DS_Store`; `git mv`
+  the exhausted missing-messages queue (`TODO.md` + `missing-message-workshop-prompt.md`,
+  all 10 items written back as `strategy-rollout/` ROLL-7..ROLL-16) →
+  `docs/archive/plan/telegram-markdown-migration/` with archive banners; `README.md`
+  repointed + one-line completion pointer added; `message-format-workshop.md` stays live at
+  the epic root. `check_story_structure.py --all` 14 → 12 warnings (both validation-folder
+  findings gone), `check_checkbox_consistency.py --all` green, 42 hook tests green. RDO-17
+  (17.1–17.4) fully shipped; epic now: RDO-16 (next), RDO-11 (≥ 2026-09-03).
   `28d0d9c` (impl) + close commit, docs/skills only. `.claude/skills/work/SKILL.md` Feature
   branch now classifies flat-story vs epic-root: epic path reads the router `prompt.md` +
   `README.md`, walks the fixed story order (README Stories table) to the first sub-story with

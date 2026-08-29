@@ -448,10 +448,10 @@ epic-descent logic. Grandfather the ~25 legacy folders; retrofit `root-doc-organ
   `session-close` / `md-organize` skills + `CLAUDE.md` §Step 5a + the `AGENTS.md`
   mirror (`commit/SKILL.md` carries no task-line tail — nothing to change there).
   | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 28d0d9c
-- [ ] **RDO-17.4** — Retrofit `root-doc-organization/` (add `stories.md` for open tasks,
+- [x] **RDO-17.4** — Retrofit `root-doc-organization/` (add `stories.md` for open tasks,
   `| Review:` on open lines, `## Epic done when` → `## Story done when`) and
   `telegram-markdown-migration/` (`.DS_Store`, archive `TODO.md` + `missing-message-workshop-prompt.md`,
-  `README.md` pointer). Both hooks `--all` green. | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <—>
+  `README.md` pointer). Both hooks `--all` green. | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 35d9f42
 
 ## Story done when
 
