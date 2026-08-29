@@ -28,10 +28,12 @@ Priority + dependencies in the epic's own `README.md`.
 
 **`telegram-markdown-migration/`** · 🔄 In progress — `strategy-rollout/` next: **ROLL-6**
 Switch all Telegram messaging to `parse_mode=MarkdownV2` via three sequenced sub-stories:
-`backbone/` (parse-mode switch + escaping audit — closed),
-`formatting-rules/` (value/table spec → `FORMATTING.md` — closed),
+`backbone/` (parse-mode switch + escaping audit — closed, `57c1c3c`),
+`formatting-rules/` (value/table spec → `FORMATTING.md` — closed, `75cc123`),
 `strategy-rollout/` (per-message-family migration — in progress).
 Supersedes `telegram-ic-comparison-formatting/` TGFMT-2..9.
+Converted to the canonical epic format (router + Stories table, canonical task lines,
+As-built digests) by `root-doc-organization/` RDO-17.6 (2026-08-29, `cf46ff4`).
 
 **`telegram-ic-comparison-formatting/`** · 🔄 TGFMT-1 shipped; rest superseded
 TGFMT-1 fixed `build_comparison_report()`'s hand-counted-width alignment bug.
@@ -59,12 +61,16 @@ Risk delta gate (done) + Near-Expiry Gamma Buy `gamma_daily_watch.py`.
 **`variance-gate/`** · ⬜ Not started · next: **VG0** (CSP v1 spec reconciliation)
 CSP v1 Phase 0.8 deployment gate — spec reconciliation + gate criteria A–D.
 
-**`root-doc-organization/`** · 🔄 In progress · next: **RDO-17.6** (full-convert
-`telegram-markdown-migration/` to the canonical epic format; RDO-16 / RDO-11 also open, RDO-11 date-gated ≥ 2026-09-03; RDO-17.7 §B is Owner: Animesh)
+**`root-doc-organization/`** · 🔄 In progress · next: **RDO-16** (loop-closure check — one real
+session confirms the doc-freshness mechanism end to end; RDO-11 also open, date-gated ≥ 2026-09-03; RDO-17.7 §B is Owner: Animesh)
 Token-efficiency cleanup of the ~22 root `.md` files + doc-maintenance automation.
 Docs + tooling only. RDO-1..17 + an acceptance-criteria list in `tasks.md`.
-RDO-1/2/4/5/6/7/8/9/10/12/13/14/15 + RDO-17.1..17.5 shipped, RDO-3 closed-partial;
-RDO-17.6, RDO-17.7 §B, RDO-16, RDO-11 open.
+RDO-1/2/4/5/6/7/8/9/10/12/13/14/15 + RDO-17.1..17.6 shipped, RDO-3 closed-partial;
+RDO-17.7 §B, RDO-16, RDO-11 open.
+RDO-17.6 (2026-08-29): full-converted `telegram-markdown-migration/` — the epic POC (after 17.5's
+flat-story POC). Root `README.md` → `_TEMPLATE/epic/` shape (Stories table w/ Status + Closing SHA);
+`prompt.md` → epic router; all 3 sub-stories' `tasks.md` → canonical one-liner task lines,
+forensic detail folded into `stories.md` As-built paragraphs. `cf46ff4`.
 RDO-17.5 (2026-08-29): full-converted `root-doc-organization/` to the canonical format — every
 task line a one-liner with the 5-field tail, `stories.md` covering every task, `prompt.md`
 realigned to `_TEMPLATE/story/`; folded in RDO-17.7 §A (retire semantic linefeeds for fill-to-≤200).

@@ -25,9 +25,9 @@ story here; this list only decides *which story is next*.
 Bugs are **not** here — see `## Open Bugs`.
 Cross-references use folder names, never list positions, so renumbering can't rot them.
 
-1. **root-doc-organization** — `docs/plan/root-doc-organization/` — next **RDO-17.6**
-   (full-convert `telegram-markdown-migration/` to the canonical epic format). RDO-17.7 §B
-   (Animesh), RDO-16, RDO-11 (≥ 2026-09-03) also open. RDO-17.1..17.5 shipped, RDO-17.7 §A
+1. **root-doc-organization** — `docs/plan/root-doc-organization/` — next **RDO-16**
+   (loop-closure check — one real session confirms the doc-freshness mechanism end to end).
+   RDO-17.7 §B (Animesh), RDO-11 (≥ 2026-09-03) also open. RDO-17.1..17.6 shipped, RDO-17.7 §A
    shipped inside 17.5.
    Root `.md` token-efficiency cleanup + doc-maintenance automation.
 2. **IC yearly-expiry residual risk** — `docs/plan/ic-yearly-expiry-fix/` — next **WG-1**
@@ -154,6 +154,20 @@ this file's Session Log grows large again.
 
 ### 2026-08-29
 
+- **RDO-17.6 — full-convert telegram-markdown-migration/ to canonical epic format (root-doc-organization).**
+  Two commits, docs-only. Commit 1 (`cf46ff4`): root `README.md` → `_TEMPLATE/epic/` shape
+  (Why / Scope decisions / Stories table w/ Status + Closing SHA / Cross-cutting constraints /
+  Supersession / Epic done when); root `prompt.md` → epic router (fixed story list + Step 1–4);
+  all 3 sub-stories (`backbone/`, `formatting-rules/`, `strategy-rollout/`): `prompt.md` →
+  `_TEMPLATE/story/` headers, every `tasks.md` line → one canonical `| Owner | Model | Review |
+  SHA` line (umbrellas keep their checkbox w/ a bare `| SHA:` legacy tail; `Model` → `claude-*`
+  ids), forensic detail folded into per-task `stories.md` **As-built** paragraphs (Animesh chose
+  fold-into-section over a decision-log appendix, and keep-umbrella-checkbox). MD-6 + MD-4.1/4.2/4.3
+  gained new `stories.md` spec subsections. Deviation from RDO-17.5: the sub-story `stories.md`
+  files already covered every task, so no rewrite — only As-built additions. Commit 2:
+  tick RDO-17.6 + SHA, `stories.md` digest, `docs/plan/README.md` (both entries), this log.
+  `md-line-length` + both structure hooks + `check_checkbox_consistency` clean of any
+  `telegram-markdown-migration/` finding; 3026 unit tests green.
 - **RDO-17.7 §A + RDO-17.5 — full-convert root-doc-organization/ (root-doc-organization).**
   Two commits, docs + tooling only. Commit 1 (`7d28d16`, RDO-17.7 §A): retired the
   "semantic linefeeds" guidance for fill-to-≤200 — `docs/plan/README.md` §"Markdown line

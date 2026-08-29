@@ -4,7 +4,8 @@ Token-efficiency cleanup of the ~22 root `.md` files, doc-maintenance automation
 `prompt.md` says why the story exists; `stories.md` carries the per-task spec — a full forward spec for the open tasks and a short as-built digest for each shipped one; `plan.md` keeps the
 original file-by-file root inventory (D6 extra file). Work top-down: the first unchecked `- [ ]` line is the task. Each task is one commit plus a follow-up that records its SHA and ticks the box.
 
-**Open: RDO-17.6 (next), RDO-17.7 §B (Owner: Animesh), RDO-16 (after RDO-6), RDO-11 (date-gated ≥ 2026-09-03).** RDO-17.5 lands with this rewrite; RDO-17.7 §A shipped inside it (`7d28d16`).
+**Open: RDO-16 (next, after RDO-6 — shipped), RDO-17.7 §B (Owner: Animesh), RDO-11 (date-gated ≥ 2026-09-03).**
+RDO-17.5 (`5508e41`) + RDO-17.6 (`cf46ff4`) shipped the two POC full conversions; RDO-17.7 §A shipped inside RDO-17.5 (`7d28d16`).
 
 ## Tasks
 
@@ -29,7 +30,7 @@ original file-by-file root inventory (D6 extra file). Work top-down: the first u
 - [x] **RDO-17.3** — /work epic-descent steps + epic router template; propagate | Review: into 3 skills + CLAUDE.md 5a | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 28d0d9c
 - [x] **RDO-17.4** — partial structural retrofit of both validation folders — superseded by RDO-17.5 / RDO-17.6 | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 35d9f42
 - [x] **RDO-17.5** — full-convert root-doc-organization/ — every task line canonical, stories.md covers all tasks | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 5508e41
-- [ ] **RDO-17.6** — full-convert telegram-markdown-migration/ to the canonical epic format (router, Stories table) | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <—>
+- [x] **RDO-17.6** — full-convert telegram-markdown-migration/ to the canonical epic format (router, Stories table) | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: cf46ff4
 - [ ] **RDO-17.7** — §A fill-to-≤200 line style (shipped in RDO-17.5, 7d28d16); §B legacy-folder conversion rule (open) | Owner: Animesh | Model: n/a | Review: none | SHA: <—>
 
 ## Story done when

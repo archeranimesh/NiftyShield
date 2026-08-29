@@ -168,6 +168,17 @@ Retires RDO-5's "semantic linefeeds" guidance: prose now fills each line to the 
 Changed the *guidance* only — `docs/plan/README.md` §"Markdown line style", both `_TEMPLATE/` sets, `.claude/skills/md-organize/SKILL.md` + its `.agents/` mirror, and the one-line
 `INSTRUCTION.md` description. Existing docs reflow opportunistically on next touch — no big-bang pass. §B (the legacy-folder conversion rule) stays open, Owner: Animesh.
 
+### RDO-17.6 — full-convert telegram-markdown-migration/ (SHA `cf46ff4`)
+The second POC full conversion — an **epic** this time, not a flat story. Root `README.md` restructured to `_TEMPLATE/epic/README.md`: `## Why this epic exists` / `## Scope decisions` /
+`## Stories` (table with Status + Closing-SHA columns) / `## Cross-cutting constraints` / `## Supersession / coordination` / `## Epic done when`. Root `prompt.md` realigned to the epic router
+template (explicit fixed story list + Step 1–4). All three sub-story folders (`backbone/`, `formatting-rules/`, `strategy-rollout/`): `prompt.md` → `_TEMPLATE/story/` headers; every `tasks.md`
+line collapsed to one canonical `| Owner | Model | Review | SHA` line (umbrella lines — MD-4/MD-7/ROLL-1/ROLL-2/ROLL-2b/ROLL-3 — keep their checkbox with a bare `| SHA:` legacy tail the
+checkbox hook grandfathers; `Model` normalised to `claude-sonnet-5` / `claude-opus-5` / `n/a`, `Review` to the bare gate token). Per Animesh's answers this session: forensic detail (split
+rationales, live-risk windows, spec-drift records, reviewer-substitution notes) folded into each task's `stories.md` spec section as an **As-built** paragraph — MD-6 and MD-4.1/4.2/4.3 gained
+new spec subsections since `stories.md` had none. Deviation from RDO-17.5: `telegram-markdown-migration/*/stories.md` already covered every task, so no `stories.md` rewrite was needed — only
+As-built additions. Both structure hooks + `check_checkbox_consistency` + `md-line-length` clean of any `telegram-markdown-migration/` finding afterward (`--all` still shows only the ~12
+pre-existing legacy warnings elsewhere). `message-format-workshop.md` kept as a D6 extra file (reusable prompt, no checkboxes).
+
 ---
 
 ## Perspectives not covered
