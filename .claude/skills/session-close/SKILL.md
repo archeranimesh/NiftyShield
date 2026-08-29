@@ -130,6 +130,33 @@ Avoidable re-reads: N
   - CONTEXT.md re-read mid-session (already loaded at Step 1)
 ```
 
+### 3e — Doc staleness (content gaps)
+
+Report-only. This covers the two staleness signals the doc-freshness hooks
+(`state_doc_freshness.sh` at SessionStart, `doc_update_gate.sh` on `git commit`) structurally
+cannot see — they proxy "docs behind code" by a src-commit count; they do not read content.
+Do **not** re-report per-file src-commit counts here (the SessionStart hook already does).
+Do **not** commit any doc fix — the operator decides.
+
+Check, for this session only:
+
+- **(a) New module, no tree row.** For every `src/<module>/` directory created this session
+  (`git log --diff-filter=A --name-only` since the session's first commit, or a new dir under
+  `src/` in the working tree), confirm a matching row exists in `CONTEXT_TREE.md`. Flag each
+  missing one.
+- **(b) Story code touched, status not advanced.** For every `docs/plan/<story>/` whose
+  `src/` or `scripts/` code was edited this session, confirm the story's row in
+  `docs/plan/README.md` had its status column moved this session (or is already `✅ Done`).
+  Flag a story whose code moved but whose README status did not.
+
+```
+Doc staleness: N
+  - src/newmod/ added this session, no CONTEXT_TREE.md row
+  - docs/plan/foo-story/ code edited, docs/plan/README.md status still ⬜ Not started
+```
+
+If both checks are clean, print `Doc staleness: 0`.
+
 ---
 
 ## Step 4 — Improvement suggestions
@@ -212,6 +239,7 @@ TOKEN EFFICIENCY
   Rule 0 violations:  <count>  (~<N> avoidable tokens)
   Rule 1 violations:  <count>  (~<N> avoidable tokens)
   Avoidable re-reads: <count>  (~<N> avoidable tokens)
+  Doc staleness:      <count>  (content gaps — see 3e; report-only)
   AutoTrigger gaps:   <count> agent(s) inlined instead of spawned
 
   Estimated avoidable token load: ~<total> tokens this session

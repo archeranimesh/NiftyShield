@@ -2,7 +2,9 @@
 
 Work top-down. Each phase = one commit. See `plan.md` for the file-by-file detail.
 RDO-1 and RDO-2 are done. RDO-3 is closed as a partial (remainder → RDO-9); it is not a
-blocker. RDO-4, 5, 7, 8, 11 are independent. RDO-6 comes last (encodes final state). RDO-8
+blocker. RDO-4, 5, 8 are independent. RDO-7 feeds RDO-6 (the skill reconciles against it);
+RDO-6 must land before RDO-16 (the loop-closure test exercises `md-organize`); RDO-11 is
+time-gated to its observation window (≥ 2026-09-03) and runs on its own clock. RDO-8
 was spun out of the RDO-2 audit and feeds RDO-5/RDO-6. RDO-5 expanded 2026-08-27 — covers
 `docs/plan/**` + `docs/bugs/**` and defines the semantic-linefeed prose style. RDO-9
 replaces RDO-3's unworkable date cutoff. RDO-10 reconciles RDO-7 with the freshness hooks a parallel epic shipped the
@@ -14,7 +16,8 @@ back to pointer-only items. RDO-14 restructures `TODOS.md` into two pointer-only
 RDO-15 adds the checkbox-consistency sweep + the one-checkbox-per-id convention (prose
 `## Epic done when` blocks); RDO-16 is the epic loop-closure check promoted from that block.
 
-**Open: RDO-6, 7, 11, 16.** Epic completion criteria at the bottom of this file.
+**Open: RDO-11 (≥ 2026-09-03), RDO-16 (after RDO-6).** Epic completion criteria at the
+bottom of this file.
 
 - [x] **RDO-1** — Slim `CONTEXT.md` to ≤400 lines, no line >200 chars; move module prose to
   `CONTEXT_TREE.md`. Verify: fresh `Read CONTEXT.md` returns whole file, no display-cap hit.
@@ -112,7 +115,7 @@ RDO-15 adds the checkbox-consistency sweep + the one-checkbox-per-id convention 
   **Add (RDO-10):** a step that verifies the two shipped doc-freshness hooks
   (`.claude/hooks/state_doc_freshness.sh`, `.claude/hooks/doc_update_gate.sh`) still have
   hard-coded doc lists matching `CLAUDE.md` §Step 5a — flag any drift, do not auto-edit.
-- [ ] **RDO-7** — Add report-only `DOC STALENESS` section to
+- [x] **RDO-7** — Add report-only `DOC STALENESS` section to
   `.claude/skills/session-close/SKILL.md`. Report only — no unattended commits.
   **Scope narrowed by RDO-10 #1:** *not* the per-file src-commit counts from `plan.md`
   Option A — `state_doc_freshness.sh` (SessionStart) and `doc_update_gate.sh` (PreToolUse)
@@ -120,6 +123,11 @@ RDO-15 adds the checkbox-consistency sweep + the one-checkbox-per-id convention 
   (a) a `src/<module>/` directory added this session with no matching `CONTEXT_TREE.md` row;
   (b) a story whose `src/` / `scripts/` code was touched this session but whose
   `docs/plan/README.md` status column was not advanced in the same window.
+  **Done 2026-08-29 (Claude).** Added as `Step 3e — Doc staleness (content gaps)` in
+  `session-close/SKILL.md` (report-only, both checks (a)/(b), explicit "do not re-report the
+  hook's src-commit counts, do not commit any fix"); `Doc staleness:` line added to the
+  Step 5 report block.
+  | Owner: Claude | Model: claude-sonnet-5 | SHA: `<pending>`
 - [x] **RDO-8** — Protocol-doc consistency cleanup (surfaced by the RDO-2 audit,
   2026-08-27). Independent of RDO-3..7; can be done in any order. Each bullet is a small
   targeted fix — one commit for the lot is fine since they are all protocol/doc consistency.
