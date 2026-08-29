@@ -25,9 +25,9 @@ story here; this list only decides *which story is next*.
 Bugs are **not** here — see `## Open Bugs`.
 Cross-references use folder names, never list positions, so renumbering can't rot them.
 
-1. **root-doc-organization** — `docs/plan/root-doc-organization/` — next **RDO-17.2**
-   (`docs/plan/` story/epic format standardization — RDO-17.1 shipped). RDO-16 (loop-closure)
-   and RDO-11 (≥ 2026-09-03) also open.
+1. **root-doc-organization** — `docs/plan/root-doc-organization/` — next **RDO-17.3**
+   (`docs/plan/` story/epic format standardization — RDO-17.1/17.2 shipped). RDO-16
+   (loop-closure) and RDO-11 (≥ 2026-09-03) also open.
    Root `.md` token-efficiency cleanup + doc-maintenance automation.
 2. **IC yearly-expiry residual risk** — `docs/plan/ic-yearly-expiry-fix/` — next **WG-1**
    (persist per-leg Greeks for the weekly-expiry bucket).
