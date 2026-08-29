@@ -116,6 +116,11 @@ implementation needs a variants list of its own.
 
 **Commit:** `feat(ic): capture long-leg delta/theta and net position Greeks in EOD audit`
 
+**As-built (SHA `f9e551e`):** Owner Claude / Sonnet. `Review: greeks-analyst` — mandatory for any delta/theta field change. This Cowork session could not spawn `.claude/agents/greeks-analyst.md`
+directly (same structural limitation as MD-7.3 / BUG-037 B037.6) — substituted a `general-purpose` agent loaded with the greeks-analyst persona. Verdict PASS with one documented WARNING: Net Δ sums
+raw per-option delta with no short/long position-direction sign flip — a pre-existing convention this diff extends, matching the never-partial-sum reference in
+`scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py`. Not fixed here — flagged as a fast-follow label-clarification candidate, not a blocker.
+
 ---
 
 ## ROLL-1 — IC EOD Audit
@@ -271,6 +276,15 @@ correctly per variant (right timeframe in, right header out), via one test per o
 active variants, not re-verify the color/emoji table.
 
 **Commit:** `feat(ic): migrate EOD audit message to Markdown table format`
+
+**As-built — split into ROLL-1a / ROLL-1b / ROLL-1c (2026-08-25).** FMT-1b and FMT-1c were specced in `FORMATTING.md` §10/§11 but never promoted to code (`bb95a54` was docs-only), so ROLL-1 as
+originally scoped silently depended on two un-shipped prerequisites. Splitting made each piece its own traceable commit. All three Owner Claude / Sonnet, `Review: none`.
+- **ROLL-1a (SHA `b05587b`)** — promote FMT-1b: `pnl_emoji` / `alert_emoji` into `src/notifications/formatting.py` + tests (presence/sign-based per `FORMATTING.md` §10, ported from the v2 scratch
+  script).
+- **ROLL-1b (SHA `94dba89`)** — promote FMT-1c: `build_header()` + `_TIMEFRAME_META` / `VARIANT_META` colocated in `scripts/strategies/ic/paper_ic_snapshot.py` (per §11's location judgment call) +
+  per-timeframe / V1-implicit / V2-badge / hashtag-not-in-code-span tests.
+- **ROLL-1c (SHA `f605b92`)** — the actual port: `process_variant()`'s report construction rewritten to the bold/table MarkdownV2 format using ROLL-1a's emoji helpers, ROLL-1b's header, and the
+  shipped `build_leg_table` / `format_money` / `format_greek` / `format_strike` / `format_pct`.
 
 ---
 
@@ -493,6 +507,20 @@ port. Add, specifically:
 
 **Commit:** `feat(ic): comparison report Markdown migration + Legs row + Bkd/Flt month split`
 
+**As-built — split into ROLL-2a / ROLL-2b (→ 2b-i / 2b-ii) / ROLL-2c per the 2026-08-26 design review above.**
+- **ROLL-2a (SHA `3cec4e1`)** — Owner Claude / Sonnet, `Review: none` (width computation not delegated — TGFMT-1's bug path). Promoted `build_compare_table` into `src/notifications/formatting.py`
+  (generic row-groups builder over `list[list[tuple[label, v1, v2]]]`, dashed rule between groups, every width via `max(len(...))`), with a display-width helper after the Animesh `--send` pre-check
+  resolved the `₹` / `🔴`-in-fence question.
+- **ROLL-2b** — reconciliation gate CLOSED 2026-08-26 (Animesh decided all three: (1) consume `PnLReport`, don't duplicate; (2) uniform row selection — latest snapshot at or before `as_of`, never
+  exact date equality; (3) `Bkd (M)` cycle-reset gap knowingly accepted, recorded in `paper_pnl_report.py`'s module docstring). Model re-routed Opus → Sonnet once the judgment calls closed. Split
+  into:
+  - **ROLL-2b-i (SHA `e59abb9`, split docs `b566cee`)** — contract change: `unrealized_this_month` added to `PnLReport`, every snapshot read bounded by `as_of`, decision (3) recorded. `Review`: real
+    `@code-reviewer` (Opus).
+  - **ROLL-2b-ii (SHA `d2741fb`)** — consume it: `ICMonthlyStats` += `inception_realized_pnl` / `unrealized_pnl_month_change`; `build_stats()` calls `build_pnl_report(...)` once and drops both local
+    `sqlite3` helpers. `Review`: real `@code-reviewer` (Opus). Routed Claude on file count (2 files) though mechanical against a locked contract.
+- **ROLL-2c (SHA `a2fbe31`)** — Owner Antigravity, `Review`: real `@code-reviewer` (Opus) — renders P&L. The port itself: `build_comparison_report()` → one fenced row-groups table via ROLL-2a's
+  builder + MarkdownV2; Legs row (`len(open_pos)` → `ICMonthlyStats.open_leg_count`, rendered `n/4` with a `🔴` suffix when `n < 4`); renders ROLL-2b's `Bkd (I)` / `Flt (M)`.
+
 ---
 
 ## ROLL-3 — Strategy Close/Roll Notifications (umbrella)
@@ -530,6 +558,8 @@ Apply the umbrella's shared scope-judgment call and test approach above.
 
 **Commit:** `feat(strategy): migrate CSP close/roll notifications to Markdown formatting`
 
+**As-built (SHA `297e573`):** Owner Antigravity, `Review`: real `@code-reviewer` (Opus) — financial-logic close-notification path.
+
 ---
 
 ## ROLL-3.2 — Strategy Close/Roll Notifications: IC
@@ -541,6 +571,8 @@ would risk the two formats drifting.
 Apply the umbrella's shared scope-judgment call and test approach above.
 
 **Commit:** `feat(strategy): migrate IC close/roll notifications to Markdown formatting`
+
+**As-built:** Owner Antigravity, `Review`: real `@code-reviewer` (Opus). Landed in two phases — Phase A (V1) SHA `76f311a`, Phase B (V2) SHA `e032e28`.
 
 ---
 
@@ -564,6 +596,9 @@ Apply the umbrella's shared scope-judgment call and test approach above.
 (one commit per file is also acceptable given 4 files touched — use judgment per `CLAUDE.md`'s
 "typical phase boundaries" guidance; do not bundle all 4 into a single unreviewable diff if the
 changes turn out to be substantial per file)
+
+**As-built:** Owner Antigravity, `Review`: real `@code-reviewer` (Opus). Landed in four phases — Phase A (CC) SHA `12d766b`, Phase B (Collar) SHA `da41e3d`, Phase C (PP) SHA `00604bc`, Phase D
+(`auto_close`) SHA `1ca5b68`.
 
 ---
 
@@ -590,6 +625,9 @@ tests must still pass; add a test proving a strategy_id or instrument label with
 in the approval message body survives correctly (same regression-test pattern as ROLL-1).
 
 **Commit:** `feat(notifications): migrate approval request message to Markdown formatting`
+
+**As-built (SHA `30bac70`):** Owner Claude / Sonnet, `Review`: real `@code-reviewer` (Opus) — auth + interactive keyboard. The `telegram-approval-auth-fix` coordination-check confirmed its only task
+(T1) was already shipped (`5cafc3c`), so no race.
 
 ---
 

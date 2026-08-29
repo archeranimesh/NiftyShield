@@ -144,6 +144,10 @@ the epic actually exercised via a real `--send` round trip):**
 
 **Commit:** `feat(notifications): MarkdownV2 escaping helpers for Telegram migration`
 
+**As-built (SHA `786e8096`):** Owner Claude / Sonnet. `Review: code-reviewer` — deliberately not the financial-logic tier, but foundational-correctness edge cases
+(Unicode, empty string) warrant inline judgment over pure mechanical delegation. The 2026-08-11 `ROLL-13` addendum cases (non-reserved-Unicode passthrough, realistic `qty=480`-shaped `=` fragment)
+were added to this module's tests then, not at MD-1 time.
+
 ---
 
 ## MD-2 — Switch `TelegramNotifier.send()` to MarkdownV2 parse_mode
@@ -180,6 +184,11 @@ before/after the payload construction) is unchanged.
   test for the original bug this whole epic started from
 
 **Commit:** `refactor(notifications): TelegramNotifier.send uses MarkdownV2 parse_mode`
+
+**As-built (SHA `721daf9`):** Owner Claude / Sonnet, `Review: code-reviewer` (touches the non-fatal send contract — verified by hand, not just spec-following). **MD-2 landed alone**, not bundled
+with MD-3/MD-4 as the epic README's live-risk-window constraint asks — Animesh explicitly chose the one-task-per-session protocol over bundling (asked and confirmed at session start), fully aware
+that this opened the window: from `721daf9` until MD-3/MD-4 landed, every existing caller's dynamic values were unescaped against MarkdownV2's reserved set in production. MD-3 and MD-4 were treated
+as urgent, not routine backlog, and picked up next.
 
 ---
 
@@ -232,6 +241,9 @@ strategy-file change, and these are the close-notification paths for every live 
 
 **Commit:** `fix(strategy): escape dynamic values in close notifications for Markdown parse_mode`
 
+**As-built (SHA `62d0172`):** Owner Antigravity — mechanical per-class audit-and-fix with a fully unambiguous spec — but `Review: code-reviewer` was the **real `@code-reviewer` (Opus)** gate against
+`git diff HEAD`, mandatory regardless of implementer because these are the close-notification paths for every live strategy (financial-logic tier per the root `CLAUDE.md` AutoTrigger table).
+
 ---
 
 ## MD-4 — Audit + Fix: Reporting Scripts + Approval Requests
@@ -261,6 +273,45 @@ button text/data is unaffected (buttons aren't part of the Markdown-parsed messa
 confirm this explicitly rather than assuming — read the current implementation first).
 
 **Commit:** `fix(notifications): escape dynamic values in reporting scripts and approval requests`
+
+**As-built — split + scope expansion (2026-08-25, Animesh, explicit decision — not Antigravity-initiated).** `tasks.md`'s `MD-4` line is an umbrella; the work landed as `MD-4.1` / `MD-4.2` /
+`MD-4.3` below. Original scope was the 3 reporting builders only. A Cowork review (Claude) surfaced that `TelegramGateway.send_notification` was still hardcoded to `parse_mode: HTML` — escaping
+dynamic values in the 3 reporting builders without migrating the gateway itself would have corrupted output (literal backslashes rendered, since HTML mode never strips MarkdownV2 escaping). Further
+review found `send_notification` is also called from `paper_ic_entry.py` and `paper_ic_entry_v2.py` (entry-signal alerts) — migrating the gateway's parse_mode without escaping those two callers in
+the same sitting would recreate MD-2's live-risk-window bug for entry notifications. Animesh chose to fold the gateway migration and both entry scripts into MD-4 rather than spin off a blocking
+sub-task.
+
+### MD-4.1 — flip `TelegramGateway.send_notification` HTML → MarkdownV2
+
+`src/notifications/telegram_gateway.py`. **As-built (commit `cd1e554`):** Owner Antigravity, `Review: code-reviewer`. Touches a shared gateway method with 5 live call sites (3 reporting scripts + 2
+entry scripts, all in MD-4.2) — the reviewer had to verify all 5 callers are escaped and land in the **same commit** as MD-4.2. Landing MD-4.1 alone reopens the exact MD-2 live-risk-window bug.
+Tests: `tests/unit/notifications/test_telegram_gateway.py`.
+
+### MD-4.2 — escape the 5 reporting/entry scripts that call `send_notification`
+
+**As-built (commit `cd1e554`, same commit as MD-4.1):** Owner Antigravity, `Review: code-reviewer` — mechanical escaping pass, no auth/judgment. Files: `paper_ic_snapshot.py` (`process_variant`,
+`get_action_taken`); `paper_ic_monthly_comparison.py` (`build_comparison_report` + `fmt_*` helpers); `paper_3track_snapshot.py` (`_build_recovery_digest` **only** — the other `notifier.send()` sites
+in that file are out of scope, tracked separately); `paper_ic_entry.py` (~L743/~L806); `paper_ic_entry_v2.py` (~L663/~L725). Tests: the matching `test_*` file for each.
+
+### MD-4.3 — escape `TelegramGateway.send_approval_request`
+
+**As-built (commit `aa58f44`):** Owner Claude / Sonnet, `Review: code-reviewer` was the **real `@code-reviewer` (Opus)** gate — auth-sensitive interactive-keyboard path, required a live
+coordination-check against `telegram-approval-auth-fix` before touching. Independent of MD-4.1/4.2 — `send_approval_request` already hardcodes its own `parse_mode: HTML` separately from
+`send_notification` and was untouched by that migration, so the MD-4.1/4.2 scope expansion did not affect it.
+
+---
+
+## MD-6 — Static-Scan Escaping Guard
+
+**As-built (SHA `ce95bbd`):** Owner Claude / Sonnet, `Review: code-reviewer` — design judgment on what counts as "escaped" (AST-based vs. regex call-site detection, false-positive handling). Adds
+`tests/unit/notifications/test_escaping_guard.py`: a test that walks `src/` / `scripts/` for `notifier.send(` / `send_plain_message(` call sites and asserts every interpolated dynamic value passed
+through `escape_markdown()` / `mdcode()` somewhere upstream, plus `test_baseline_entries_are_still_unescaped` / `test_baseline_has_no_duplicate_or_unused_entries` guarding the `_BASELINE_UNESCAPED`
+won't-fix / not-yet-migrated list. **Sequencing (corrected 2026-08-12):** an earlier session proposed landing this right after MD-2. That was wrong — MD-3/MD-4 are the audit-and-fix pass that
+actually escapes the currently-unescaped call sites; a guard introduced before they land fails against the codebase it is meant to protect. Correct position is after both audits complete, so the
+guard starts from a clean baseline and then protects every `send()` call site added by `formatting-rules/` and `strategy-rollout/`.
+
+**Contract for downstream tasks:** every `strategy-rollout/` / `formatting-rules/` task that adds or fixes a `send()` call site removes that site's `_BASELINE_UNESCAPED` entry in the same commit, or
+the two baseline tests fail. `scripts/dev/send_test_telegram.py:65` is a documented permanent won't-fix in that list (manual dev/debug utility, not a cron or strategy path — Animesh, 2026-08-25).
 
 ---
 
@@ -323,6 +374,8 @@ maintenance contract, see its module docstring).
 
 **Commit:** `fix(scripts): escape dynamic values in pre_market_brief Telegram sends`
 
+**As-built (SHA `39993bf`):** Owner Antigravity, `Review: code-reviewer` — single file, mechanical.
+
 ---
 
 ### MD-7.2 — IC entry `_gate_alert` paths
@@ -336,6 +389,9 @@ these same two files — confirm the two paths don't share a text-building helpe
 identical treatment.
 
 **Commit:** `fix(scripts): escape dynamic values in IC entry _gate_alert notifications`
+
+**As-built (SHA `adfae40`):** Owner Antigravity, `Review: code-reviewer` — `_gate_alert` is a separate path from the `send_notification()` calls MD-4.2 already escaped in these two files; same
+mechanical pattern.
 
 ---
 
@@ -353,6 +409,12 @@ overlay strategies, the same tier as MD-3's audit, even though this task only to
 not P&L computation.
 
 **Commit:** `fix(strategy): escape dynamic values in auto_close/overlay_closer notifications`
+
+**As-built (SHA `04b469d`):** Owner Claude / Sonnet. `Review` was the real `@code-reviewer` (Opus) tier — close/monetize paths for live overlay strategies, same financial-logic tier as MD-3 even
+though the change is escaping-only. This Cowork session could not spawn `.claude/agents/code-reviewer.md` directly (same structural limitation as BUG-037 B037.6) — substituted a `general-purpose`
+agent loaded with the full code-reviewer persona + `REVIEW.md` checklist against the isolated diff. 0 CRITICAL/ERROR, 2 WARNING — both investigated post-review and logged as pre-existing findings,
+not defects in this diff: **BUG-038** (`OverlayCloser`'s 3 `notifier.send()` calls are unawaited against an `async def` method, likely never delivered) and a note that `escape_markdown()` does not
+escape literal backslashes. Neither fixed here (out of this task's escaping-only scope) — see `docs/bugs/bugs.md` BUG-038.
 
 ---
 
@@ -376,3 +438,6 @@ No code in this task. Verify `python -m pytest tests/unit/ --tb=no -q` still gre
 unaffected by docs-only changes, but confirm per protocol).
 
 **Commit:** `docs(notifications): record Markdown parse-mode migration decision`
+
+**As-built (SHA `57c1c3c`):** Owner Antigravity, `Review: none` (docs only). Also documented MD-6's guard contract and the MD-7.1/7.2/7.3 fixes in `src/notifications/CLAUDE.md` alongside the
+escaping-helper rule. This is the closing task of the `backbone/` story.

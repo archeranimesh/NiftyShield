@@ -1,66 +1,51 @@
-# Telegram Markdown Migration — Formatting Rules — Task Checklist
+# Telegram Markdown Migration — Formatting Rules — tasks
 
-> Find the first unchecked `- [ ]` line. That is your only task for this session.
-> Tick the box and append `| SHA: <sha>` when done. Add one line to `TODOS.md`.
-> Full story spec for each task: `docs/plan/telegram-markdown-migration/formatting-rules/stories.md`.
+Work top-down. Find the first unchecked `- [ ]` and do only that task.
+Each task = one commit. See `prompt.md` for why the story exists; see `stories.md` for the
+per-task spec — each shipped line carries an **As-built** paragraph there.
 
-> **Routing (added 2026-08-12, Cowork design-review session):** `Owner` is who implements —
-> `Claude` for judgment-call/exploratory work, `Antigravity` for mechanical multi-file work with
-> an unambiguous spec. `Model` is the model the owner should run at. `Review` is the mandatory
-> gate per root `CLAUDE.md`'s Agent AutoTrigger table. Routing is a recommendation to
-> re-confirm at session start, not a hard override of the AutoTrigger table.
+**Open: none — `formatting-rules/` is complete (closing SHA `75cc123`). FMT-1 shipped as root
+`FORMATTING.md` (`c252bf3`) — read it before adding or changing any formatting rule.**
 
----
+> **Routing:** `Owner` = who implements (`Claude` = judgment-call, `Antigravity` = mechanical
+> with an unambiguous spec). `Model` = model the owner ran at. `Review` = the AutoTrigger gate
+> per root `CLAUDE.md`.
 
-- [x] **FMT-1** — Write the decimal/alignment formatting spec (per-parameter-type rules) —
-      docs only, no code | Blocked by: none | SHA: c252bf3 — shipped as root `FORMATTING.md`
-      | Owner: Claude | Model: **Opus (design review recommended before finalizing)** |
-      Review: n/a — this is the highest-leverage doc in the epic; every downstream formatter
-      (`FMT-2`/`FMT-3`) and roughly half of `strategy-rollout/` inherits its decisions. A mistake
-      here propagates silently through ~16 `ROLL-*` tasks. Worth the stronger model on the
-      spec-writing pass itself, not just at the code-review gate.
-- [x] **FMT-1f** — Document the signed-money override (`format_money(value, signed=True)`) +
-      Contango/Backwardation (futures roll) vs. Debit/Credit (option-premium roll) spread
-      labels — docs only, no code (implementation lands with whichever `ROLL-*` task promotes
-      these into real code) | Blocked by: FMT-1 | **Added 2026-08-25 — fully specced in
-      `stories.md` since the `ROLL-9` workshop session (2026-08-10) but had no line here, so the
-      first-unchecked-box protocol could never reach it; the `format_money(signed=True)` row
-      was folded into `FORMATTING.md` §3 as part of FMT-1's session, the two spread-label rows
-      were not, they need this task to land in real docs.**
-      | Owner: Claude | Model: Sonnet | Review: none — bundle with FMT-1b/1c/1d/1e per the epic
-      improvement notes
-- [x] **FMT-1b** — Add `pnl_emoji`/`alert_emoji` dynamic status-emoji helpers + tests
-      (presence/sign-based, not substring-matched — see stories.md for the rejected design) |
-      Blocked by: FMT-1, `backbone/` MD-1
-      | Owner: Claude | Model: Sonnet | Review: none — bundle this session with FMT-1c/1d/1e
-      (see epic improvement notes); each has an explicit implementation-time judgment call, not
-      Antigravity material
-- [x] **FMT-1c** — Add IC EOD audit timeframe color/emoji header + hashtag
-      (`weekly`/`monthly`/`leaps`/`yearly` × V1/V2 — color+emoji encode timeframe only, version
-      is a separate text badge; hashtag must not be code-span-wrapped) | Blocked by: FMT-1,
-      `backbone/` MD-1 — file location (IC-specific vs. `src/notifications/formatting.py`) is an
-      implementation-time judgment call, see stories.md
-      | Owner: Claude | Model: Sonnet | Review: none — bundle with FMT-1b/1d/1e
-- [x] **FMT-1d** — Document the multi-strategy summary table money exception (signed integer,
-      no `₹` per cell, zero-as-`-`) + `Flt`/`Bkd` terminology + bucket-grouping/totals-first
-      table convention — docs only, no code (implementation lands with `ROLL-6`'s table
-      builder) | Blocked by: FMT-1
-      | Owner: Claude | Model: Sonnet | Review: none — bundle with FMT-1b/1c/1e
-- [x] **FMT-1e** — Document the monospace-table emoji-presentation-glyph risk (extends FMT-3's
-      emoji-breaks-alignment warning to any Unicode symbol with an emoji-presentation variant,
-      not just literal emoji — e.g. `▶` renders double-width on Telegram even inside a fence) —
-      docs only, no code | Blocked by: FMT-1
-      | Owner: Claude | Model: Sonnet | Review: none — bundle with FMT-1b/1c/1d
-- [x] **FMT-2** — Add `src/notifications/formatting.py` value formatters
-      (`format_money`, `format_greek`, `format_strike`, `format_pct`) + tests |
-      Blocked by: FMT-1, `backbone/` MD-1 | SHA: 166531b
-      | Owner: Antigravity | Model: n/a | Review: none — clean formatter functions, exhaustive
-      spec, mechanical
-- [x] **FMT-3** (SHA: 17cbeb6) — Add table-builder helpers (`build_kv_table`, `build_side_by_side_kv_table`,
-      `build_leg_table`) to the same module + tests | Blocked by: FMT-2
-      | Owner: Claude | Model: Sonnet | Review: none, but keep a human/Claude judgment pass on
-      width computation — this is where the original hand-counted-width bug lived
-      (`build_comparison_report()`), don't fully delegate the alignment logic
-- [x] **FMT-4** (SHA: 75cc123) — Docs close: `src/notifications/CLAUDE.md`, `CONTEXT.md`, `TODOS.md` |
-      Blocked by: FMT-3
-      | Owner: Antigravity | Model: n/a | Review: none (docs only)
+## Tasks
+
+- [x] **FMT-1** — Per-parameter-type decimal / alignment / sign spec (money, strikes, Greeks, %, expiry) — docs only, shipped as root `FORMATTING.md` | Owner: Claude | Model: claude-opus-5 |
+      Review: none | SHA: c252bf3
+- [x] **FMT-1f** — Spec `format_money(signed=True)` + Contango/Backwardation vs. Debit/Credit spread labels — docs only | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: bb95a54
+- [x] **FMT-1b** — Spec `pnl_emoji` / `alert_emoji` status helpers (presence/sign-based) — docs only; code promoted in ROLL-1a | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: bb95a54
+- [x] **FMT-1c** — Spec the IC EOD audit timeframe color/emoji header + `#IC_{Timeframe}_{Version}` hashtag — docs only; code promoted in ROLL-1b | Owner: Claude | Model: claude-sonnet-5 | Review:
+      none | SHA: bb95a54
+- [x] **FMT-1d** — Spec the multi-strategy summary-table money exception + `Flt`/`Bkd` terminology + bucket-grouping / totals-first convention — docs only | Owner: Claude | Model: claude-sonnet-5
+      | Review: none | SHA: bb95a54
+- [x] **FMT-1e** — Spec the monospace-table emoji-presentation-glyph risk (double-width inside a fence) — docs only | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: bb95a54
+- [x] **FMT-2** — `src/notifications/formatting.py` value formatters (`format_money`, `format_greek`, `format_strike`, `format_pct`) + tests | Owner: Antigravity | Model: n/a | Review: none | SHA:
+      166531b
+- [x] **FMT-3** — Table-builder helpers (`build_kv_table`, `build_side_by_side_kv_table`, `build_leg_table`) + tests; widths from content, never a constant | Owner: Claude | Model: claude-sonnet-5
+      | Review: none | SHA: 17cbeb6
+- [x] **FMT-4** — Docs close: `src/notifications/CLAUDE.md`, `CONTEXT.md`, `TODOS.md` | Owner: Antigravity | Model: n/a | Review: none | SHA: 75cc123
+
+## Story done when
+
+Acceptance criteria — prose, no checkboxes. Verified at story close.
+
+- **FMT-1** — root `FORMATTING.md` states the per-parameter-type decimal / alignment /
+  sign-display rules and the expiry format; it governs every downstream formatter.
+- **FMT-1b–1f** — the dynamic status-emoji, timeframe-header, summary-table money-exception,
+  emoji-presentation-glyph, and signed-money / spread-label rules are recorded in
+  `FORMATTING.md` (§§ 3, 4, 7, 10, 11).
+- **FMT-2** — `format_money` / `format_greek` / `format_strike` / `format_pct` exist in
+  `src/notifications/formatting.py` with happy-path + edge-case tests; `format_money` rejects
+  `float`.
+- **FMT-3** — the three table builders exist in the same module with every column width from
+  `max(len(...))`, `build_leg_table`'s 1dp LTP/Entry exception documented in its own docstring,
+  and mismatched-row-count / single-leg / empty-input tests.
+- **FMT-4** — `src/notifications/CLAUDE.md` and `CONTEXT.md` record the `formatting.py` module.
+
+## After each task
+
+Set `SHA:` to the real commit SHA on the task line and tick the box. Update the epic
+`README.md` **Stories** table status column and add one line to `TODOS.md` Session Log.

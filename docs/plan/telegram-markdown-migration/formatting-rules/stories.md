@@ -77,7 +77,15 @@ not invented fresh; confirm against that script's final version):
 
 **Commit:** `docs(notifications): Telegram message formatting spec`
 
+**As-built (SHA `c252bf3`, tick `52728f9`):** Owner Claude, written on **Opus** per the epic improvement-backlog's FMT-1 design-gate treatment (highest-leverage doc — every downstream formatter and
+~half of `strategy-rollout/` inherits its decisions). `Review: none` (docs only). Shipped as root `FORMATTING.md`.
+
 ---
+
+**As-built for FMT-1b / FMT-1c / FMT-1d / FMT-1e / FMT-1f (docs tasks):** all five landed together in **`bb95a54`** (`docs(notifications): bundle FMT-1b/1c/1d/1e/1f into FORMATTING.md`), Owner
+Claude / Sonnet, `Review: none` — session-count housekeeping per the epic improvement backlog. FMT-1f had no `tasks.md` line until `4aecc89` even though it was fully specced from the `ROLL-9`
+workshop (2026-08-10), so the first-unchecked-box protocol could never reach it — the line was added retroactively. The *code* promotion of FMT-1b (`pnl_emoji` / `alert_emoji`) and FMT-1c
+(`build_header` / `_TIMEFRAME_META`) happened later, in `strategy-rollout/` ROLL-1a (`b05587b`) and ROLL-1b (`94dba89`) respectively — the FMT-1b/1c lines here cover the spec only.
 
 ## FMT-1f — Signed Money Override + Curve/Premium Spread Labels (confirmed 2026-08-10,
 `ROLL-9` workshop session)
@@ -390,6 +398,8 @@ def format_pct(value: float) -> str:
 
 **Commit:** `feat(notifications): value formatters for Telegram messages`
 
+**As-built (SHA `166531b`):** Owner Antigravity, `Review: none` — clean formatter functions, exhaustive spec, mechanical.
+
 ---
 
 ## FMT-3 — Table-Builder Helpers
@@ -458,6 +468,10 @@ budget, which broke the first time a label was longer than counted. Every width 
 
 **Commit:** `feat(notifications): table-builder helpers for Telegram messages`
 
+**As-built (SHA `17cbeb6`):** Owner Claude / Sonnet, `Review: none` but with a kept human/Claude judgment pass on width computation — this is the code path the original `build_comparison_report()`
+hand-counted-width bug (TGFMT-1) lived in. Shipped `build_kv_table` / `build_side_by_side_kv_table` / `build_leg_table`; `build_compare_table` was used only as a design reference here and promoted
+later in `strategy-rollout/` ROLL-2a (`3cec4e1`).
+
 ---
 
 ## FMT-4 — Docs Close
@@ -468,3 +482,5 @@ budget, which broke the first time a label was longer than counted. Every width 
 - `TODOS.md` — session log entry
 
 **Commit:** `docs(notifications): record formatting-rules module`
+
+**As-built (SHA `75cc123`):** Owner Antigravity, `Review: none` (docs only). Closing task of the `formatting-rules/` story.
