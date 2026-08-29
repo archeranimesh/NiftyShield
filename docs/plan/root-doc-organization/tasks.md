@@ -467,7 +467,9 @@ define once 17.5/17.6 land.
   their real SHA + `[x]`, Owner/Model/Review reconstructed from the inline notes + git);
   `stories.md` rewritten to cover every task — forward spec for the open ones, 2–4 line
   as-built digest for the shipped ones; `prompt.md` realigned to `_TEMPLATE/story/prompt.md`;
-  `plan.md` kept (D6). Both hooks `--all` green afterward. Supersedes RDO-17.4's grandfather
+  `plan.md` kept (D6). Also executes RDO-17.7 §A — all rewritten files authored fill-to-≤200,
+  and the §"Markdown line style" + `_TEMPLATE/` + `md-organize` wording changed off
+  semantic-linefeeds. Both hooks `--all` green afterward. Supersedes RDO-17.4's grandfather
   scope for this folder. | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <—>
 - [ ] **RDO-17.6** — Full-convert `telegram-markdown-migration/` to the canonical epic
   format: epic `prompt.md` to the `_TEMPLATE/epic/` router body; `README.md` gains the
@@ -476,8 +478,12 @@ define once 17.5/17.6 land.
   `(SHA: …)` → tail, `| Blocked by:` folded in, `ROLL-1a/1b/1c` nested sub-checkboxes
   resolved against one-checkbox-per-id). Both hooks `--all` green afterward. Supersedes
   RDO-17.4's grandfather scope for this folder. | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <—>
-- [ ] **RDO-17.7** — TBD — Animesh to define once RDO-17.5 / RDO-17.6 land (likely: roll the
-  POC outcome into a rule for converting the remaining ~25 legacy folders). | Owner: Animesh | Model: n/a | Review: none | SHA: <—>
+- [ ] **RDO-17.7** — Convention updates surfaced by the POC. §A (finalized 2026-08-29): drop
+  RDO-5's semantic-linefeed guidance — Markdown prose fills each line to the last word
+  boundary before 200; the `md-line-length` hook stays the only enforced rule; update
+  §"Markdown line style" + `_TEMPLATE/` + `md-organize`. §A executes inside RDO-17.5. §B
+  (open, Animesh): the rule for converting the remaining ~25 legacy folders, decided after
+  17.5/17.6. Spec in `stories.md` §RDO-17.7. | Owner: Animesh | Model: n/a | Review: none | SHA: <—>
 
 ## Story done when
 
@@ -520,7 +526,8 @@ per-task status lives only in the working list above (`tasks.md` is the single s
   both structure hooks enforce it (legacy folders grandfathered pre-commit); `/work` walks an
   epic's sub-stories in order; `root-doc-organization/` (17.5) and
   `telegram-markdown-migration/` (17.6) are **fully** converted — every task line canonical,
-  `stories.md` covering all tasks, hooks `--all` clean of both folders' findings. RDO-17.7
+  `stories.md` covering all tasks, hooks `--all` clean of both folders' findings. RDO-17.7 §A
+  swaps the Markdown line style to fill-to-≤200 (semantic-linefeed guidance retired); §B
   records the rule for converting the remaining legacy folders.
 - `prompt.md` DoD rewritten to the delivered design — dead pre-2026H1 date-cutoff line
   dropped, hook rename + semantic-split reality stated (done in `2fb5c5b`).

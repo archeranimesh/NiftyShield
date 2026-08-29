@@ -169,6 +169,13 @@ this file's Session Log grows large again.
   17.7 placeholder) + `docs/plan/README.md` blurb updated. Both hooks `--all` green.
   `~/.claude/plans/woolly-honking-tarjan.md` now stale (grandfather framing) — Animesh owns
   the plan-doc update.
+  **Follow-up (same day):** RDO-17.7 given real scope. §A (finalized, Animesh): retire
+  RDO-5's semantic-linefeed guidance — Markdown prose now fills each line to the last word
+  boundary before 200 (the `md-line-length` hook stays the only enforced rule); the mid-line
+  ~110-char wrap was hard to read. §A executes inside RDO-17.5 (all rewritten files authored
+  fill-to-200; §"Markdown line style" + `_TEMPLATE/` + `md-organize` wording changed). §B
+  (open, Animesh): the ~25-legacy-folder conversion rule, decided after 17.5/17.6. `tasks.md`
+  RDO-17.5/17.7 lines + `## Story done when` + `stories.md` §RDO-17.5/§RDO-17.7 updated.
 - **RDO-17.4 — retrofit the two format-validation folders (root-doc-organization).**
   `35d9f42` (impl) + close commit, docs-only. `root-doc-organization/` (single flat story):
   added `stories.md` covering only the open tasks (RDO-11, RDO-16, RDO-17.4 — shipped-task

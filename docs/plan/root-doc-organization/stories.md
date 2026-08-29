@@ -102,7 +102,12 @@ folders (see below).
 ## RDO-17.5 — full-convert `root-doc-organization/` to the canonical format
 
 The POC conversion of the harder of the two validation folders. If this converts cleanly and
-bounded, the same recipe scales to the other ~25 legacy flat-story folders (RDO-17.7).
+bounded, the same recipe scales to the other ~25 legacy flat-story folders (RDO-17.7 part B).
+
+**Also executes RDO-17.7 part A** (the fill-to-≤200 line-wrap convention): all files this
+task rewrites — `tasks.md`, `stories.md`, `prompt.md` — are authored fill-to-200, and this
+task lands the §"Markdown line style" + `_TEMPLATE/` + `md-organize` wording changes listed
+under RDO-17.7 §A.
 
 **Files to change:**
 - `tasks.md` — rewrite every task line (RDO-1..RDO-17.7) to a single canonical line:
@@ -181,11 +186,27 @@ and lands on the first open `ROLL-*`; 42 hook tests green.
 
 ---
 
-## RDO-17.7 — TBD (Animesh to define)
+## RDO-17.7 — convention updates surfaced by the POC + legacy-folder conversion rule
 
-Placeholder. Animesh defines the scope once RDO-17.5 / RDO-17.6 land — expected to be the
-rule / recipe for converting the remaining ~25 legacy `docs/plan/` folders, informed by how
-cleanly the two POC conversions went (effort per folder, reconstruction risk for old SHAs,
-whether it is worth doing at all vs. leaving them grandfathered until next touch).
+Two parts. Part A is finalized now; part B waits for RDO-17.5 / RDO-17.6.
 
-**Owner: Animesh. No spec until 17.5/17.6 are done.**
+### A — Markdown line-wrap style: fill to ≤ 200, not semantic linefeeds (FINALIZED 2026-08-29, Animesh)
+
+Prose wraps at the **last word boundary before 200 chars** — fill each line, do not break early at a clause. The mid-line wrap near ~110 chars that RDO-5's "semantic linefeeds" guidance
+produced is hard to read in source. `.py` is unchanged (ruff `line-length = 100`); the 200-char `md-line-length` hook is unchanged — always the only enforced rule. What changes is the *guidance*:
+
+- `docs/plan/README.md` §"Markdown line style (RDO-5…)" — replace "semantic linefeeds / one sentence or clause per line" with "fill each line to the last word boundary before 200; the
+  `md-line-length` hook is the enforced ceiling." Keep the 200 cap, the `<!-- lint-ignore-length -->` escape, and the `.py` note.
+- `docs/plan/_TEMPLATE/story/*` + `_TEMPLATE/epic/*` — reflow the template bodies to fill-to-200 and drop any "semantic linefeed" instruction in the HTML comments.
+- `.claude/skills/md-organize/SKILL.md` — wherever it says "reflow to semantic linefeeds", say "reflow to fill-to-200".
+- Applies to every new `.md` under the hook's scope (root + `docs/plan/**` + `docs/bugs/**`). Existing docs reflow
+  opportunistically on next touch — no big-bang pass (the rule RDO-5 used for its own backlog).
+
+RDO-17.5 is the first worked example: its rewritten `tasks.md` (one-liners, already ≤ 200) and `stories.md` are authored fill-to-200.
+
+### B — legacy-folder conversion rule (open — Animesh defines after 17.5/17.6)
+
+Once the two POC conversions land, decide the rule for the remaining ~25 legacy `docs/plan/` folders: convert-on-next-touch vs. a scheduled batch, the per-folder effort ceiling, reconstruction
+risk for old SHAs, and whether some folders stay grandfathered permanently.
+
+**Owner: Animesh for part B. Part A is Claude, folded into RDO-17.5's execution.**
