@@ -47,16 +47,37 @@ Otherwise, `AskUserQuestion`:
    Do not re-order, summarise, or skip items; the list is already story-by-story priority
    ordered.
 3. Operator picks one (or confirms the pre-selected story from Step A).
-4. Load, for the chosen story:
+4. Classify the chosen folder (`docs/plan/README.md` §Conventions "Folder shapes"):
+   - **Flat single-story folder** — has its own `tasks.md` (or legacy `<name>_tasks.md`).
+   - **Epic root** — `prompt.md` + `README.md`, **no root `tasks.md`**; one sub-folder per
+     story directly under it.
+   Legacy epics with `phaseN/` or `stories/<ID>.md` sub-layers are handled the same way as
+   an epic root — the sub-folder holding the first unchecked box is the active story.
+5. Load context for the classified shape:
+
+   **Flat story:**
    - `docs/plan/<story>/prompt.md` (design / why the story exists)
-   - the story's `*_tasks.md` (`tasks.md` or `<name>_tasks.md`) — identify the **first
-     unchecked `- [ ]` task**; that is the session's task
-   - the story's `*_stories.md` if present (DoD detail)
-5. Also read `CONTEXT.md` (authoritative codebase state — always required before code).
-6. State: the chosen story, the first unchecked task id + text, and any load hints the
+   - the story's `*_tasks.md` — identify the **first unchecked `- [ ]` task**; that is the
+     session's task
+   - the story's `*_stories.md` if present (spec / DoD detail)
+   - the story's `schema.md` if present (DB-touching stories only)
+
+   **Epic:**
+   - `docs/plan/<epic>/prompt.md` (the router) + `README.md` (shared brief — story order,
+     scope decisions, cross-cutting constraints)
+   - walk the story list **in the fixed order the router states**; the active story is the
+     first one whose `<epic>/<story>/tasks.md` still has an unchecked `- [ ]`. Do not skip
+     ahead even if a later story looks more urgent.
+   - for that story: its `prompt.md` + `stories.md` (+ `schema.md` if present), and the
+     **first unchecked `- [ ]` task** in its `tasks.md` — that is the session's task
+   - if every sub-story `tasks.md` is fully checked, the epic is complete — say so and stop.
+6. Also read `CONTEXT.md` (authoritative codebase state — always required before code).
+7. State: the chosen story (and parent epic if any), the first unchecked task id + text,
+   its `| Owner | Model | Review |` values from the task line, and any load hints the
    story's `prompt.md` calls for (module `CLAUDE.md`, `DECISIONS.md`, `REFERENCES.md`,
-   `BACKTEST_PLAN.md`, `LITERATURE.md` entries).
-7. Hand off to `CLAUDE.md` Step 2b — council checkpoint, then Step 3 plan + go-ahead, then
+   `BACKTEST_PLAN.md`, `LITERATURE.md` entries). If `Owner` is not this session's agent,
+   stop and report — do not implement someone else's routed task.
+8. Hand off to `CLAUDE.md` Step 2b — council checkpoint, then Step 3 plan + go-ahead, then
    the normal protocol. AutoTrigger agents fire per the `CLAUDE.md` table as implementation
    proceeds.
 

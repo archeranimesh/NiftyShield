@@ -73,7 +73,8 @@ For every step below, mark one of:
   detail or per-task progress instead of a pointer (title + path + next task + one-line why),
   or bug priority/status was mirrored into `## Open Bugs` — see `docs/plan/README.md`
   §Conventions
-- a completed `tasks.md` checkbox is missing its `| Owner: … | Model: … | SHA: …` tail
+- a completed `tasks.md` checkbox is missing its `| Owner: … | Model: … | Review: … | SHA: …`
+  tail (legacy `| Owner | Model | SHA` lines with no `Review:` are grandfathered — skip)
 - a story / bug finished this session (every `tasks.md` / `docs/bugs/task.md` box ticked,
   `## Epic done when` fully checked) but was **not archived** in the same commit — folder
   still under `docs/plan/` or `docs/bugs/`, line still in `TODOS.md`, README row not

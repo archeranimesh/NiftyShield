@@ -161,8 +161,10 @@ baseline` precedents in the log).
 
 Run: `python scripts/dev/hooks/check_story_structure.py --all`
 
-Every non-archived `docs/plan/*/` folder must be a story (`prompt.md` + `tasks.md`) or an
-epic (holds story sub-folders). Act on what it reports:
+Every non-archived `docs/plan/*/` folder must be a flat story (`prompt.md` + `tasks.md` +
+`stories.md`, plus `schema.md` iff it touches the DB) or an epic root (`prompt.md` router +
+`README.md`, one story sub-folder each). Legacy shapes are grandfathered — the hook warns,
+does not block. Act on what it reports:
 
 - **empty folder** — the story shipped and was archived; `rmdir` it.
 - **legacy `*_tasks.md`** — rename to bare `tasks.md` only when you are already touching that

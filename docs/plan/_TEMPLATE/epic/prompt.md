@@ -15,7 +15,8 @@ constraints this router's logic depends on.
 
 ## Step 1 — find the next task
 
-Story order is fixed:
+Story order is fixed — it is the row order of the **Stories** table in this folder's
+`README.md`. Keep this list identical to that table:
 
 1. `<story-a>/` — <one line>
 2. `<story-b>/` — <one line>   (blocked by: `<story-a>` complete)

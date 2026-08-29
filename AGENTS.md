@@ -269,8 +269,9 @@ A phase is not complete until all three are done. Never move to the next phase m
   `docs/plan/full-repo-review/findings/FR-7_synthesis.md`)
 - The relevant `src/<module>/CLAUDE.md` if module invariants changed
 - Task-line + list conventions: a completed `tasks.md` checkbox carries a
-  `| Owner: … | Model: … | SHA: …` tail; `TODOS.md` backlog items stay pointer-only. Full
-  rules in `docs/plan/README.md` §Conventions.
+  `| Owner: … | Model: … | Review: … | SHA: …` tail (`Owner`/`Model`/`Review` set at
+  authoring time, `SHA` on the closing commit); `TODOS.md` backlog items stay pointer-only.
+  Full rules in `docs/plan/README.md` §Conventions.
 
 **5b — Verify tests green:**
 - Run `python -m pytest tests/unit/ --tb=no -q` — all must pass before committing.
