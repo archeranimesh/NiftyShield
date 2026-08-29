@@ -43,21 +43,34 @@ Reason: these files carry cumulative state (session logs, architecture decisions
 
 ## Non-Negotiable Code Constraints
 
-**Decimal invariant.** All monetary fields must be `Decimal`, never `float`. SQLite stores monetary values as TEXT. Always read back with `Decimal(row["col"])`. A `float` here is silent corruption — it will not raise an exception, it will just produce wrong numbers.
+**Decimal invariant.** All monetary fields must be `Decimal`, never `float`.
+SQLite stores monetary values as TEXT; always read back with `Decimal(row["col"])`.
+A `float` here is silent corruption — it will not raise an exception, it will just produce
+wrong numbers.
 
-**BrokerClient protocol.** Never import `UpstoxLiveClient`, `MockBrokerClient`, `UpstoxSandboxClient`, or any concrete broker implementation outside `src/client/factory.py`. All modules depend on the `BrokerClient` protocol (`src/client/protocol.py`) only. Constructor injection only.
+**BrokerClient protocol.** Never import `UpstoxLiveClient`, `MockBrokerClient`,
+`UpstoxSandboxClient`, or any concrete broker implementation outside `src/client/factory.py`.
+All modules depend on the `BrokerClient` protocol (`src/client/protocol.py`) only.
+Constructor injection only.
 
-**`__init__.py` required.** Every new package directory under `src/`, `scripts/`, or `tests/` must include an `__init__.py`. Without it, `codebase-memory-mcp` silently skips the entire directory — functions become invisible to the graph.
+**`__init__.py` required.** Every new package directory under `src/`, `scripts/`, or
+`tests/` must include an `__init__.py`. Without it, `codebase-memory-mcp` silently skips the
+entire directory — functions become invisible to the graph.
 
-**Type hints and docstrings.** All public functions require type hints on every parameter and return value. Google-style docstrings on all public functions and classes.
+**Type hints and docstrings.** All public functions require type hints on every parameter and
+return value. Google-style docstrings on all public functions and classes.
 
-**Test constraints.** No network calls in unit tests. Use `MockBrokerClient`. Sandbox tests are opt-in (`@pytest.mark.sandbox`). CI runs offline tests only. Every public function needs one happy-path test and one error/edge-case test.
+**Test constraints.** No network calls in unit tests. Use `MockBrokerClient`. Sandbox tests
+are opt-in (`@pytest.mark.sandbox`). CI runs offline tests only. Every public function needs
+one happy-path test and one error/edge-case test.
 
 ---
 
 ## Environment & Safety Rules
 
-**Isolated shell — no environment inheritance.** `run_command` executes as an isolated `bash -c` process. It does not inherit `.zshrc` exports, custom aliases, or any variables from your interactive shell session.
+**Isolated shell — no environment inheritance.** `run_command` executes as an isolated
+`bash -c` process. It does not inherit `.zshrc` exports, custom aliases, or any variables
+from your interactive shell session.
 
 **`.env` is not auto-loaded.** Python scripts that use `python-dotenv` will load `.env` automatically. Scripts that do not must have required variables prepended explicitly.
 
@@ -71,11 +84,18 @@ UPSTOX_ENV=test python scripts/daily_snapshot.py
 python scripts/daily_snapshot.py
 ```
 
-**Live DB is a destructive target.** Any `run_command` that writes to `data/portfolio/portfolio.sqlite` — including `daily_snapshot.py`, `record_trade.py`, `seed_*.py` — must be flagged to Animesh before proposing. Never auto-run these.
+**Live DB is a destructive target.** Any `run_command` that writes to
+`data/portfolio/portfolio.sqlite` — including `daily_snapshot.py`, `record_trade.py`,
+`seed_*.py` — must be flagged to Animesh before proposing. Never auto-run these.
 
-**State-mutating commands require approval.** `run_command` will block and wait for explicit UI approval before executing `git add`, `git commit`, `git push`, DB writes, or any network call. This is a system-level gate — do not attempt to work around it.
+**State-mutating commands require approval.** `run_command` will block and wait for explicit
+UI approval before executing `git add`, `git commit`, `git push`, DB writes, or any network
+call. This is a system-level gate — do not attempt to work around it.
 
-**`run_command` does not persist working directory.** Each call executes as a fresh `bash -c` process starting at the repo root. A `cd` in one call has no effect on the next. Use absolute paths in all commands, or chain the directory change and the execution in a single call (e.g., `cd /abs/path && python -m pytest`).
+**`run_command` does not persist working directory.** Each call executes as a fresh `bash -c`
+process starting at the repo root. A `cd` in one call has no effect on the next. Use absolute
+paths in all commands, or chain the directory change and the execution in a single call
+(e.g., `cd /abs/path && python -m pytest`).
 
 ---
 
@@ -124,13 +144,18 @@ Execute in this exact order. A written-out commit message is not a commit — th
 Use this protocol whenever a handover prompt points to a story file (e.g. `docs/plan/story_audit_remediation.md`) and asks you to work the next unchecked item.
 
 **One finding. No exceptions.**
-Find the first `- [ ]` line in the story file. That is your only task. Do not look at any other unchecked item. Do not batch, combine, or preview adjacent findings regardless of how trivial they appear.
+Find the first `- [ ]` line in the story file. That is your only task. Do not look at any
+other unchecked item. Do not batch, combine, or preview adjacent findings regardless of how
+trivial they appear.
 
 **Pre-implementation gate — state before writing any code:**
 > "I am implementing finding [N] — `<one-line description>`. Files that will change: `<list>`. Tests in: `<test file>`."
 Do not write a single line of code until this statement is made.
 
-**Implementation:** Follow all rules in `CLAUDE.md` and `REVIEW.md`. Every public function touched needs one happy-path test and one error/edge-case test. Before writing any test helper that constructs a domain model, run `get_code_snippet('<ModelClassName>')` to get the exact current field list — never construct models from memory.
+**Implementation:** Follow all rules in `CLAUDE.md` and `REVIEW.md`. Every public function
+touched needs one happy-path test and one error/edge-case test. Before writing any test
+helper that constructs a domain model, run `get_code_snippet('<ModelClassName>')` to get the
+exact current field list — never construct models from memory.
 
 **Test gate — blocking:**
 After implementation, before touching anything else, run:
@@ -139,7 +164,9 @@ python -m pytest tests/unit/ --tb=no -q
 ```
 All tests must be green. Fix failures before proceeding. Do not skip this step.
 
-**Commit:** Follow the commit format in `.claude/skills/commit/SKILL.md`. Execute the commit — do not draft it. The `Why:` line must reference the audit finding number and link to the review file. Run `git log --oneline -1` and copy the SHA.
+**Commit:** Follow the commit format in `.claude/skills/commit/SKILL.md`. Execute the commit —
+do not draft it. The `Why:` line must reference the audit finding number and link to the
+review file. Run `git log --oneline -1` and copy the SHA.
 
 **Record and stop:**
 1. Re-read the story file (`view_file: <story_file>`) — do not rely on working memory for the current checkbox state.

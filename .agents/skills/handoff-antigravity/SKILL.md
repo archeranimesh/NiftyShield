@@ -44,10 +44,10 @@ Read and extract (do not paste in full — extract only what's relevant to the t
 
 ## Step 2 — Compose the handoff prompt
 
-### ⚠️ Codex authoring rule — context brief, not implementation spec
+### ⚠️ Claude authoring rule — context brief, not implementation spec
 
 The handoff prompt is a **context injection**, not a step-by-step recipe.
-Codex resolves design decisions and provides constraints. Antigravity derives
+Claude resolves design decisions and provides constraints. Antigravity derives
 the implementation plan from that context. If the prompt contains:
 - exact function signatures with full bodies
 - line-by-line implementation instructions
@@ -76,7 +76,7 @@ Before writing any code or test:
 3. Stop. Do not write any code until Animesh replies with "proceed" or equivalent.
 
 If your plan deviates from the PHASES block (different files, different approach),
-state the deviation explicitly so Animesh can relay it to Codex for resolution.
+state the deviation explicitly so Animesh can relay it to Claude for resolution.
 
 PHASES
 <list phase names — files touched (names only, no code), commit message per phase>
@@ -123,7 +123,7 @@ Before committing, check the diff against these Python hygiene rules:
 - zip without strict=True on mismatched-length sequences
 - copy.copy() on nested mutables — use copy.deepcopy()
 For financial logic commits (Decimal, P&L, BrokerClient): stop and ask Animesh to
-run the real @code-reviewer via Codex. Do not approximate with persona adoption.
+run the real @code-reviewer via Claude. Do not approximate with persona adoption.
 
 DOD
 - [ ] Tests pass: python -m pytest tests/unit/ --tb=no -q (all green)
@@ -135,15 +135,15 @@ DOD
 - [ ] PHASE COMPLETE block emitted after every phase before starting the next
 
 QUALITY_GATES
-Antigravity runs these gates using its own tooling — not Codex's sub-agents.
+Antigravity runs these gates using its own tooling — not Claude's sub-agents.
 
-Test gate (replaces Codex's test-runner agent):
+Test gate (replaces Claude's test-runner agent):
   run_command: python -m pytest tests/unit/ --tb=no -q
   All tests must pass before proceeding to review. If failures exist, fix them first.
 
-Review gate (replaces Codex's code-reviewer agent) — two tiers:
+Review gate (replaces Claude's code-reviewer agent) — two tiers:
   NON-FINANCIAL code (tooling, config, scripts with no monetary logic):
-    view_file: .Codex/agents/code-reviewer.md
+    view_file: .claude/agents/code-reviewer.md
     view_file: REVIEW.md
     Adopt both as persona. Evaluate git diff HEAD against all rules in both files.
     Resolve CRITICAL/ERROR before committing. WARNING may be deferred with a note.
@@ -151,11 +151,11 @@ Review gate (replaces Codex's code-reviewer agent) — two tiers:
   FINANCIAL logic (any change touching Decimal fields, P&L, Greeks, BrokerClient,
     src/paper/, src/portfolio/, src/mf/, src/client/):
     STOP. Do not commit. Tell Animesh: "This commit touches financial logic.
-    Please ask Codex to run the real @code-reviewer agent against git diff HEAD
-    before I proceed." Wait for Codex's verdict before continuing.
+    Please ask Claude to run the real @code-reviewer agent against git diff HEAD
+    before I proceed." Wait for Claude's verdict before continuing.
 
 STOP_CONDITIONS
-Stop mid-implementation and surface to Animesh (who relays to Codex) when:
+Stop mid-implementation and surface to Animesh (who relays to Claude) when:
   - A design decision arises that isn't resolved by CONTEXT.md, DECISIONS.md, or the graph
     (e.g. two valid approaches with different P&L or architectural consequences)
   - A required symbol or model field is missing from the codebase and needs a new design decision
@@ -163,7 +163,7 @@ Stop mid-implementation and surface to Animesh (who relays to Codex) when:
 
 Do NOT stop for: implementation style choices, naming decisions, minor refactors.
 When stopping, include in the relay message: what the ambiguity is, the two options
-you considered, and which you would pick if forced. Codex resolves it and you continue.
+you considered, and which you would pick if forced. Claude resolves it and you continue.
 
 PHASE_COMPLETION_OUTPUT
 At end of phase, produce this block:

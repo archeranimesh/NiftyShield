@@ -44,7 +44,7 @@ For every step below, mark one of:
 | 2 | Scope confirmed (files named, or asked if not) | | |
 | 2b | Council checkpoint evaluated | | |
 | 3 | Plan stated in one sentence + go-ahead received | | |
-| 3b | Routing decision made: Codex vs Antigravity | | |
+| 3b | Routing decision made: Claude vs Antigravity | | |
 | 4 | Tests written (happy path + edge case per public fn) | | |
 | 4-TR | `@test-runner` spawned (not inline pytest) | | |
 | 4-CR | `@code-reviewer` spawned before commit | | |
@@ -58,7 +58,7 @@ For every step below, mark one of:
 
 **Mark LEGITIMATE SKIP when:**
 - Session was a query or read-only task (steps 2–5 don't apply to any of it)
-- Step 3b: single-file Codex task where routing was unambiguous
+- Step 3b: single-file Claude task where routing was unambiguous
 - Step 2b: no load-bearing design decision involved (most mechanical implementation tasks)
 - Step 4-GA / 4-RV: those modules were not touched this session
 
@@ -69,6 +69,15 @@ For every step below, mark one of:
 - Step 3 was skipped — implementation started immediately after CONTEXT.md read with no plan stated
 - SHA was not confirmed after commit (commit skill Step 5c skipped)
 - CONTEXT.md was not updated after new files or modules were added
+- a `TODOS.md` `## Feature Backlog` / `## Open Bugs` item was left with multi-paragraph
+  detail or per-task progress instead of a pointer (title + path + next task + one-line why),
+  or bug priority/status was mirrored into `## Open Bugs` — see `docs/plan/README.md`
+  §Conventions
+- a completed `tasks.md` checkbox is missing its `| Owner: … | Model: … | SHA: …` tail
+- a story / bug finished this session (every `tasks.md` / `docs/bugs/task.md` box ticked,
+  `## Epic done when` fully checked) but was **not archived** in the same commit — folder
+  still under `docs/plan/` or `docs/bugs/`, line still in `TODOS.md`, README row not
+  collapsed to a pointer. See §Conventions *Completion → archive*.
 
 ---
 
@@ -121,6 +130,33 @@ Avoidable re-reads: N
   - CONTEXT.md re-read mid-session (already loaded at Step 1)
 ```
 
+### 3e — Doc staleness (content gaps)
+
+Report-only. This covers the two staleness signals the doc-freshness hooks
+(`state_doc_freshness.sh` at SessionStart, `doc_update_gate.sh` on `git commit`) structurally
+cannot see — they proxy "docs behind code" by a src-commit count; they do not read content.
+Do **not** re-report per-file src-commit counts here (the SessionStart hook already does).
+Do **not** commit any doc fix — the operator decides.
+
+Check, for this session only:
+
+- **(a) New module, no tree row.** For every `src/<module>/` directory created this session
+  (`git log --diff-filter=A --name-only` since the session's first commit, or a new dir under
+  `src/` in the working tree), confirm a matching row exists in `CONTEXT_TREE.md`. Flag each
+  missing one.
+- **(b) Story code touched, status not advanced.** For every `docs/plan/<story>/` whose
+  `src/` or `scripts/` code was edited this session, confirm the story's row in
+  `docs/plan/README.md` had its status column moved this session (or is already `✅ Done`).
+  Flag a story whose code moved but whose README status did not.
+
+```
+Doc staleness: N
+  - src/newmod/ added this session, no CONTEXT_TREE.md row
+  - docs/plan/foo-story/ code edited, docs/plan/README.md status still ⬜ Not started
+```
+
+If both checks are clean, print `Doc staleness: 0`.
+
 ---
 
 ## Step 4 — Improvement suggestions
@@ -139,6 +175,45 @@ Format each suggestion as:
 Categories: `token-efficiency` | `protocol-compliance` | `agent-routing` | `commit-hygiene`
 
 If the session was clean: state "No suggestions — session followed protocol." and stop.
+
+---
+
+## Step 4b — Rank into `suggestions.md` (repo root)
+
+Every suggestion from Step 4 is a candidate row in `suggestions.md` at the repo root — a
+running, cross-session tally of which inefficiency patterns actually recur, so the count is a
+"how many times would fixing this have helped" ranking, not a one-off printout that gets
+forgotten next session.
+
+1. Read `suggestions.md` if it exists (create it with the header below if not).
+2. For each Step 4 suggestion, decide whether it matches an **existing row's `Slug`** — same
+   root cause, not just similar wording (e.g. "ran pytest inline" and "skipped test-runner
+   agent" are the same slug, `pytest-inlined-not-test-runner`). Match on meaning, not string
+   equality; the slug column exists precisely so this judgment call only has to be made once
+   per pattern, then it's a deterministic key.
+3. **Match found:** increment `Count`, update `Last seen` to today's date, leave `Slug` and
+   `Suggestion` text untouched (do not rephrase an existing row just because this session's
+   wording differs slightly).
+4. **No match:** append a new row, `Count = 1`, `First seen = Last seen = today`, a new
+   kebab-case `Slug` that names the root cause (not the symptom).
+5. Re-sort the table by `Count` descending, ties broken by most recent `Last seen`.
+6. Write the file back. Never hand-edit `Count` outside this procedure.
+
+**File format:**
+
+```markdown
+# Session Efficiency Suggestions — Ranked by Recurrence
+
+> Maintained by `.claude/skills/session-close/SKILL.md` Step 4b. `Count` = number of sessions
+> where this exact root cause recurred, i.e. how many times fixing it would have helped — not
+> a bug tracker. Sorted by `Count` descending. Do not hand-edit `Count`; the skill owns it.
+
+| Count | Slug | Suggestion | Category | First seen | Last seen | Example |
+|---|---|---|---|---|---|---|
+| N | kebab-case-root-cause | One-sentence action | token-efficiency | YYYY-MM-DD | YYYY-MM-DD | task/session ref |
+```
+
+If Step 4 produced no suggestions (clean session), do not touch `suggestions.md` at all.
 
 ---
 
@@ -164,6 +239,7 @@ TOKEN EFFICIENCY
   Rule 0 violations:  <count>  (~<N> avoidable tokens)
   Rule 1 violations:  <count>  (~<N> avoidable tokens)
   Avoidable re-reads: <count>  (~<N> avoidable tokens)
+  Doc staleness:      <count>  (content gaps — see 3e; report-only)
   AutoTrigger gaps:   <count> agent(s) inlined instead of spawned
 
   Estimated avoidable token load: ~<total> tokens this session
@@ -172,6 +248,9 @@ SUGGESTIONS
   [SUGGESTION] <category>: <action>
     Why it matters: ...
     Next session trigger: ...
+    suggestions.md: <new row | incremented "<slug>" to N>
+
+  Top recurring (suggestions.md): <slug> ×<count>, <slug> ×<count>
 
 COMMIT
   SHA: <hash — or "no commit this session">

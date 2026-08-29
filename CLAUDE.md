@@ -11,7 +11,12 @@ A hook will fire and remind you. It will not block — the decision is yours —
 graph when it can answer the question wastes tokens and violates this protocol.
 
 **Decision tree — run in order before any source file touch:**
-0. "Why does this look like this?" / "What changed recently?" → `git log --oneline -10 <file>` (~20 tokens). The `Why:` line in each commit encodes intent — often answers the question without reading any code at all. `git show <sha>` for full diff. `git log --oneline -20` for recent session history. **Run this before the graph for any question about intent or recent change.**
+0. "Why does this look like this?" / "What changed recently?" →
+   `git log --oneline -10 <file>` (~20 tokens).
+   The `Why:` line in each commit encodes intent — often answers the question without reading
+   any code at all.
+   `git show <sha>` for full diff; `git log --oneline -20` for recent session history.
+   **Run this before the graph for any question about intent or recent change.**
 1. Need a symbol/function? → `search_graph(query=...)` or `get_code_snippet(qualified_name)`
 2. Need callers/callees? → `trace_path(function_name)`
 3. Need a grep? → `search_code(pattern)`
@@ -24,7 +29,10 @@ graph when it can answer the question wastes tokens and violates this protocol.
 
 ## ⛔ Rule 1 — Bash Output Discipline
 
-Any bash command that **reads data** (DB query, log file, test run) must pre-aggregate or filter before output reaches Claude context. Raw result sets are appended to the context window and carried for every subsequent tool call — aggregate at the source, not after.
+Any bash command that **reads data** (DB query, log file, test run) must pre-aggregate or
+filter before output reaches Claude context.
+Raw result sets are appended to the context window and carried for every subsequent tool
+call — aggregate at the source, not after.
 
 | Query type | Required pattern |
 |---|---|
@@ -33,7 +41,10 @@ Any bash command that **reads data** (DB query, log file, test run) must pre-agg
 | Test runs | `pytest --tb=no -q` for pass/fail; full `-v` only when debugging a specific failure |
 | Log reads | `tail -20 logs/snapshot.log` or `grep ERROR` — never `cat` |
 
-Token math: `SELECT *` on a 15-row × 20-column table ≈ 300 tokens that persist all session. A `GROUP BY / SUM` summary row ≈ 15 tokens. Reference implementation: `get_cumulative_realized_pnl` — SQL-layer aggregation returning a compact `dict`.
+Token math: `SELECT *` on a 15-row × 20-column table ≈ 300 tokens that persist all session;
+a `GROUP BY / SUM` summary row ≈ 15 tokens.
+Reference implementation: `get_cumulative_realized_pnl` — SQL-layer aggregation returning a
+compact `dict`.
 
 ---
 
@@ -52,17 +63,28 @@ Module tree (file-level descriptions): **`CONTEXT_TREE.md`** — load only when 
 **Load additional files when relevant:**
 - Adding/changing module architecture → also read `DECISIONS.md` + `CONTEXT_TREE.md`
 - Touching instrument keys, AMFI codes, market data → also read `REFERENCES.md`
-- Writing to `portfolio.sqlite`, adding a new table, or unsure which table already holds data you're looking for → also read `DB_REGISTRY.md` **first** (before assuming a table is empty/missing — see its 2026-08-07 note on `paper_nav_snapshots` vs. `paper_leg_snapshots`)
+- Writing to `portfolio.sqlite`, adding a new table, or unsure which table already holds the
+  data you're looking for → also read `DB_REGISTRY.md` **first**
+  (before assuming a table is empty/missing — see its 2026-08-07 note on `paper_nav_snapshots`
+  vs. `paper_leg_snapshots`)
 - Phase 0 backtest / paper trading / strategy / `src/paper/` / `src/risk/` work → also read `BACKTEST_PLAN.md` (Phase 0 only — ~300 lines)
 - Phase 1+ work (only after Phase 0.8 gate passes) → also read `BACKTEST_PLAN_PHASE1.md`
 - Implementing a metric / ratio / ML technique → also read `LITERATURE.md` entry for the cited LIT code
-- Starting a feature or picking up a story → `/work` (Feature branch) loads `TODOS.md` + the story's `prompt.md` / `*_tasks.md` / first unchecked task + `CONTEXT.md`; add `PLANNER.md` when multi-sprint roadmap context is needed
+- Starting a feature or picking up a story → `/work` (Feature branch) loads `TODOS.md` + the
+  story's `prompt.md` / `*_tasks.md` / first unchecked task + `CONTEXT.md`;
+  add `PLANNER.md` when multi-sprint roadmap context is needed
 - Working inside `src/<module>/` → that module's `CLAUDE.md` loads automatically
 - Reviewing or building on Antigravity's work → also read `ANTIGRAVITY.md`
 - Authoring or reviewing any task/story/spec mentioning expiry, DTE, or calendar logic → also read `REFERENCES.md` (expiry day changed Thursday→Tuesday, April 2026)
-- Adding a new entrypoint script, adding/editing any `logger.*()` call, or touching `src/utils/logging.py` → also read `LOGGING.md` (project root) — canonical logging standard; see `BUG-010` in `docs/bugs/bugs.md` for why it exists
-- Building or editing any Telegram/notification message text (strategy close/roll/entry alerts, gate-violation alerts) → also read `src/notifications/CLAUDE.md` §"Instrument Label Formatting" — canonical instrument-label formatting rule
-- Formatting any value into a Telegram message (money, Greeks, strikes, percentages, expiries, or any fenced monospace table) → also read `FORMATTING.md` (project root) — canonical per-parameter-type formatting standard, including the escaping-boundary contract
+- Adding a new entrypoint script, adding/editing any `logger.*()` call, or touching
+  `src/utils/logging.py` → also read `LOGGING.md` (project root) — canonical logging standard;
+  see `BUG-010` in `docs/bugs/bugs.md` for why it exists
+- Building or editing any Telegram/notification message text (strategy close/roll/entry
+  alerts, gate-violation alerts) → also read `src/notifications/CLAUDE.md`
+  §"Instrument Label Formatting" — canonical instrument-label formatting rule
+- Formatting any value into a Telegram message (money, Greeks, strikes, percentages,
+  expiries, or any fenced monospace table) → also read `FORMATTING.md` (project root) —
+  canonical per-parameter-type formatting standard, including the escaping-boundary contract
 
 ## Python Standards (new module checklist)
 
@@ -168,7 +190,10 @@ Every public function needs: one happy-path test + one error/edge-case test. No 
 
 **⛔ Before writing any test helper that constructs a domain model (Pydantic / dataclass):**
 
-Never write a `_make_*` / `build_*` / fixture helper from memory. Domain models evolve — required fields are added, enums are renamed, validators change. Writing from memory produces helpers that fail at collection time, wasting two round-trips to diagnose errors you introduced yourself.
+Never write a `_make_*` / `build_*` / fixture helper from memory.
+Domain models evolve — required fields are added, enums are renamed, validators change.
+Writing from memory produces helpers that fail at collection time, wasting two round-trips to
+diagnose errors you introduced yourself.
 
 Mandatory pre-step — run these before opening the test file:
 
@@ -219,14 +244,22 @@ A phase is not complete until all three are done. Never move to the next phase m
 - `CONTEXT.md` — "What Exists" module tree if new files added
 - `DECISIONS.md` — any new architecture decisions
 - `TODOS.md` — mark completed items, add session log entry
-- `docs/plan/README.md` — status column for the story/epic just touched (root cause of the epic going stale is this file not being in this list — see FR-7 row 15, `docs/plan/full-repo-review/findings/FR-7_synthesis.md`)
+- `docs/plan/README.md` — status column for the story/epic just touched (root cause of the
+  epic going stale is this file not being in this list — see FR-7 row 15,
+  `docs/plan/full-repo-review/findings/FR-7_synthesis.md`)
 - The relevant `src/<module>/CLAUDE.md` if module invariants changed
+- Task-line + list conventions: a completed `tasks.md` checkbox carries a
+  `| Owner: … | Model: … | SHA: …` tail; `TODOS.md` backlog items stay pointer-only. Full
+  rules in `docs/plan/README.md` §Conventions.
 
 **5b — Verify tests green:**
 - Run `python -m pytest tests/unit/ --tb=no -q` — all must pass before committing.
 
 **5c — Commit** (format in `.claude/skills/commit/SKILL.md`):
-- Code changes: any commit touching `.py` files under `src/`, `scripts/`, or `tests/` (ANTIGRAVITY.md's precise scope for "code"). Run the `code-reviewer` agent against `git diff HEAD`. Address any `CRITICAL` or `ERROR` findings before committing. `WARNING` may be deferred with a documented reason.
+- Code changes: any commit touching `.py` files under `src/`, `scripts/`, or `tests/`
+  (ANTIGRAVITY.md's precise scope for "code"). Run the `code-reviewer` agent against
+  `git diff HEAD`. Address any `CRITICAL` or `ERROR` findings before committing. `WARNING`
+  may be deferred with a documented reason.
 - Docs / config only: no `.py` files under `src/`, `scripts/`, or `tests/` in the diff — skip code-reviewer. Commit immediately after 5a.
 - **Never bundle changes from separate phases into one commit.**
 
