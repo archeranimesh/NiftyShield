@@ -59,13 +59,15 @@ Risk delta gate (done) + Near-Expiry Gamma Buy `gamma_daily_watch.py`.
 **`variance-gate/`** · ⬜ Not started · next: **VG0** (CSP v1 spec reconciliation)
 CSP v1 Phase 0.8 deployment gate — spec reconciliation + gate criteria A–D.
 
-**`root-doc-organization/`** · 🔄 In progress · next: **RDO-17.5** (full-convert
-`root-doc-organization/` to the canonical format; RDO-16 / RDO-11 also open, RDO-11 date-gated
-≥ 2026-09-03)
+**`root-doc-organization/`** · 🔄 In progress · next: **RDO-17.6** (full-convert
+`telegram-markdown-migration/` to the canonical epic format; RDO-16 / RDO-11 also open, RDO-11 date-gated ≥ 2026-09-03; RDO-17.7 §B is Owner: Animesh)
 Token-efficiency cleanup of the ~22 root `.md` files + doc-maintenance automation.
 Docs + tooling only. RDO-1..17 + an acceptance-criteria list in `tasks.md`.
-RDO-1/2/4/5/6/7/8/9/10/12/13/14/15 + RDO-17.1..17.4 shipped, RDO-3 closed-partial;
-RDO-17.5/17.6/17.7, RDO-16, RDO-11 open.
+RDO-1/2/4/5/6/7/8/9/10/12/13/14/15 + RDO-17.1..17.5 shipped, RDO-3 closed-partial;
+RDO-17.6, RDO-17.7 §B, RDO-16, RDO-11 open.
+RDO-17.5 (2026-08-29): full-converted `root-doc-organization/` to the canonical format — every
+task line a one-liner with the 5-field tail, `stories.md` covering every task, `prompt.md`
+realigned to `_TEMPLATE/story/`; folded in RDO-17.7 §A (retire semantic linefeeds for fill-to-≤200).
 RDO-17 (2026-08-29): standardized the `docs/plan/` story & epic folder format —
 flat single-story vs epic-with-sub-stories, required `stories.md`, conditional `schema.md`,
 `| Owner | Model | Review | SHA` task line, `/work` epic descent; `_TEMPLATE/` gets

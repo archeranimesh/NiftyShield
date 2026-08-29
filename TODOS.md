@@ -25,10 +25,10 @@ story here; this list only decides *which story is next*.
 Bugs are **not** here — see `## Open Bugs`.
 Cross-references use folder names, never list positions, so renumbering can't rot them.
 
-1. **root-doc-organization** — `docs/plan/root-doc-organization/` — next **RDO-17.5**
-   (full-convert this folder to the canonical format). RDO-17.6 (convert
-   `telegram-markdown-migration/`), RDO-17.7 (Animesh to define), RDO-16, RDO-11
-   (≥ 2026-09-03) also open. RDO-17.1..17.4 shipped.
+1. **root-doc-organization** — `docs/plan/root-doc-organization/` — next **RDO-17.6**
+   (full-convert `telegram-markdown-migration/` to the canonical epic format). RDO-17.7 §B
+   (Animesh), RDO-16, RDO-11 (≥ 2026-09-03) also open. RDO-17.1..17.5 shipped, RDO-17.7 §A
+   shipped inside 17.5.
    Root `.md` token-efficiency cleanup + doc-maintenance automation.
 2. **IC yearly-expiry residual risk** — `docs/plan/ic-yearly-expiry-fix/` — next **WG-1**
    (persist per-leg Greeks for the weekly-expiry bucket).
@@ -154,6 +154,19 @@ this file's Session Log grows large again.
 
 ### 2026-08-29
 
+- **RDO-17.7 §A + RDO-17.5 — full-convert root-doc-organization/ (root-doc-organization).**
+  Two commits, docs + tooling only. Commit 1 (`7d28d16`, RDO-17.7 §A): retired the
+  "semantic linefeeds" guidance for fill-to-≤200 — `docs/plan/README.md` §"Markdown line
+  style", both `_TEMPLATE/` sets, `md-organize/SKILL.md` + its `.agents/` mirror, and the
+  `INSTRUCTION.md` one-liner. Commit 2 (RDO-17.5): every `root-doc-organization/tasks.md`
+  line collapsed to one canonical line with the `| Owner | Model | Review | SHA` tail
+  (shipped lines keep their real SHA + `[x]`; `Review: code-reviewer` for RDO-5/13/15/17.2
+  which touched `scripts/*.py`, `none` otherwise; RDO-3 → `[x]` closed-partial; RDO-12 SHA
+  `42eabb2`); `stories.md` rewritten to cover every task — forward spec for RDO-11/RDO-16,
+  a 2–4 line as-built digest for each shipped one; `prompt.md` realigned to
+  `_TEMPLATE/story/prompt.md`; `plan.md` kept unchanged. `docs/plan/README.md` status entry
+  advanced (next → RDO-17.6). Both structure hooks `--all` clean of any
+  `root-doc-organization/` finding; 42 hook tests green; `check_checkbox_consistency` clean.
 - **RDO-17.5/17.6/17.7 filed — scope revision (root-doc-organization).** `4d5611a`,
   docs-only, task definitions only (no conversion executed). Animesh: RDO-17.4's partial
   retrofit — grandfather the shipped task lines — is **superseded** for the two validation
