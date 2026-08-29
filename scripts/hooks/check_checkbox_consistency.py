@@ -8,12 +8,18 @@ can drift.
 Checks, over every non-archived ``docs/plan/**/tasks.md`` (plus legacy ``*_tasks.md``)
 and ``docs/bugs/task.md``:
 
-1. no ``- [ ] **ID**`` / ``- [x] **ID**`` line inside a summary block
-   (``## Epic done when`` / ``## Definition of done`` / ``## Done when`` / ``## Acceptance``);
+1. no ``- [ ] **ID**`` / ``- [x] **ID**`` line inside a summary block (``## Epic done when``
+   / ``## Story done when`` / ``## Definition of done`` / ``## Done when`` / ``## Acceptance``);
 2. defensive — the same ``**ID**`` never appears with disagreeing checkbox state
    anywhere in one file (catches a re-introduced mirror);
 3. cross-file — ``docs/plan/README.md`` ``next: **<id>**`` must not name an id that is
-   already ``- [x]`` in that story's ``tasks.md``.
+   already ``- [x]`` in that story's ``tasks.md``;
+4. task-line tail — a working-list line that carries the ``| Review:`` field (i.e. is on
+   the post-RDO-17.1 format) must have a well-formed ``| Owner: … | Model: … | Review: … |
+   SHA: …`` tail with ``Review`` one of ``code-reviewer`` / ``greeks-analyst`` /
+   ``roll-validator`` / ``none``, and ``SHA`` a placeholder (``—`` / ``<—>``) iff the box is
+   unchecked, a real 7–40 hex SHA iff it is ticked. Legacy ``| Owner | Model | SHA`` and
+   bare ``| SHA`` lines are grandfathered and skipped.
 
 Modes:
     --all         audit everything (used by the md-organize skill); exits 1 on any finding
@@ -35,9 +41,25 @@ PLAN_README = PLAN_DIR / "README.md"
 EXCLUDED = {"_TEMPLATE"}
 
 HEADER_RE = re.compile(r"^(#+)\s+\S")
-SUMMARY_RE = re.compile(r"^(#+)\s+(epic done when|definition of done|done when|acceptance)", re.I)
+SUMMARY_RE = re.compile(
+    r"^(#+)\s+(epic done when|story done when|definition of done|done when|acceptance)", re.I
+)
 CHECKBOX_RE = re.compile(r"^\s*-\s*\[([ xX~])\]\s*\*\*([^*]+?)\*\*")
 README_ENTRY_RE = re.compile(r"\*\*`([a-z0-9_-]+)/`\*\*.*?next:\s*\*\*([A-Za-z0-9._-]+)\*\*", re.I)
+
+# The canonical post-RDO-17.1 tail: `| Owner: X | Model: Y | Review: <token> | SHA: <w>`
+# ending the line, with Review a bare token immediately before `| SHA:`. Legacy tails
+# (`| Owner | Model | SHA` with no Review, or a prose-laden `| Review: <sentence>`) do not
+# match and are grandfathered — skipped, not flagged.
+TAIL_RE = re.compile(
+    r"\|\s*Owner:\s*[^|]+?\s*"
+    r"\|\s*Model:\s*[^|]+?\s*"
+    r"\|\s*Review:\s*(?P<review>[A-Za-z][\w-]*)\s*"
+    r"\|\s*SHA:\s*(?P<sha>\S+?)\s*$"
+)
+REVIEW_VALUES = {"code-reviewer", "greeks-analyst", "roll-validator", "none"}
+SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
+PLACEHOLDER_SHA = {"—", "<—>", "–", "-", "tbd", "TBD"}
 
 
 def _rel(path: Path) -> str:
@@ -54,16 +76,50 @@ def _norm_state(raw: str) -> str:
     return "x" if low == "x" else ("~" if low == "~" else " ")
 
 
-def check_file(path: Path) -> list[str]:
-    """Return one message per checkbox-consistency problem in ``path``; empty if clean."""
-    lines = path.read_text(encoding="utf-8").splitlines()
+def _check_task_tail(path: Path, lineno: int, task_id: str, state: str, joined: str) -> list[str]:
+    """Validate the canonical ``| Owner | Model | Review | SHA`` tail of one working-list line.
+
+    Only lines whose tail matches :data:`TAIL_RE` exactly are on the post-RDO-17.1 format;
+    legacy tails (``| Owner | Model | SHA`` with no ``Review``, prose-laden ``| Review:``)
+    are grandfathered and skipped.
+    """
+    match = TAIL_RE.search(joined)
+    if match is None:
+        return []
     findings: list[str] = []
+    review = match.group("review").strip()
+    if review not in REVIEW_VALUES:
+        findings.append(
+            f"{_rel(path)}:{lineno}: '{task_id}' Review: '{review}' is not one of "
+            f"{sorted(REVIEW_VALUES)} (§Task-line format)"
+        )
+    sha = match.group("sha").strip().strip("`")
+    if state == "x" and not SHA_RE.match(sha):
+        findings.append(
+            f"{_rel(path)}:{lineno}: '{task_id}' is ticked but SHA is '{sha}' — set the real "
+            "commit SHA when ticking the box (§Task-line format)"
+        )
+    if state != "x" and sha not in PLACEHOLDER_SHA:
+        findings.append(
+            f"{_rel(path)}:{lineno}: '{task_id}' is unchecked but SHA is '{sha}' — an open "
+            "task's SHA must be the placeholder '—' (§Task-line format)"
+        )
+    return findings
+
+
+def _task_entries(lines: list[str]) -> list[tuple[int, str, str, str, bool]]:
+    """Split ``lines`` into working-list entries.
+
+    Each entry is ``(lineno, task_id, state, joined_text, in_summary)`` where ``state`` is
+    ``x`` / ``~`` / ``' '`` and ``joined_text`` folds the checkbox line and its indented
+    continuation lines (up to the next blank line or checkbox) into one string.
+    """
+    entries: list[tuple[int, str, str, str, bool]] = []
     in_summary = False
     summary_level = 0
-    id_states: dict[str, set[str]] = {}
-    id_line: dict[str, int] = {}
-
-    for idx, line in enumerate(lines, 1):
+    i = 0
+    while i < len(lines):
+        line = lines[i]
         header = HEADER_RE.match(line)
         if header:
             if SUMMARY_RE.match(line):
@@ -73,16 +129,49 @@ def check_file(path: Path) -> list[str]:
 
         box = CHECKBOX_RE.match(line)
         if not box:
+            i += 1
             continue
-        task_id = box.group(2).strip()
+
+        buf = [line]
+        j = i + 1
+        while (
+            j < len(lines)
+            and lines[j].strip()
+            and not CHECKBOX_RE.match(lines[j])
+            and lines[j][:1] in (" ", "\t")
+        ):
+            buf.append(lines[j])
+            j += 1
+        entries.append(
+            (
+                i + 1,
+                box.group(2).strip(),
+                _norm_state(box.group(1)),
+                " ".join(s.strip() for s in buf),
+                in_summary,
+            )
+        )
+        i = j
+    return entries
+
+
+def check_file(path: Path) -> list[str]:
+    """Return one message per checkbox-consistency problem in ``path``; empty if clean."""
+    lines = path.read_text(encoding="utf-8").splitlines()
+    findings: list[str] = []
+    id_states: dict[str, set[str]] = {}
+    id_line: dict[str, int] = {}
+
+    for lineno, task_id, state, joined, in_summary in _task_entries(lines):
         if in_summary:
             findings.append(
-                f"{_rel(path)}:{idx}: '{task_id}' checkbox inside a summary block — "
-                "'## Epic done when' must be prose criteria, no `- [ ]` (RDO-15)"
+                f"{_rel(path)}:{lineno}: '{task_id}' checkbox inside a summary block — "
+                "'## Story done when' / '## Epic done when' must be prose criteria, no `- [ ]` (RDO-15)"
             )
             continue
-        id_states.setdefault(task_id, set()).add(_norm_state(box.group(1)))
-        id_line.setdefault(task_id, idx)
+        id_states.setdefault(task_id, set()).add(state)
+        id_line.setdefault(task_id, lineno)
+        findings.extend(_check_task_tail(path, lineno, task_id, state, joined))
 
     for task_id, states in id_states.items():
         if len(states) > 1:

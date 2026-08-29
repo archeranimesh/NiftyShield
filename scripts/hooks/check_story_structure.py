@@ -1,22 +1,35 @@
-"""Check ``docs/plan/`` story-folder structure. See ``docs/plan/README.md`` §Conventions.
+"""Check ``docs/plan/`` story/epic folder structure. See ``docs/plan/README.md`` §Conventions.
 
-A *story folder* has ``prompt.md`` plus ``tasks.md`` (or a legacy ``*_tasks.md``).
-An *epic folder* has no task file of its own but contains at least one story sub-folder.
-Anything else under ``docs/plan/`` — an empty folder, or a non-empty folder that is
-neither a story nor an epic — is a problem.
+Shapes enforced:
+
+* **Story folder** — ``prompt.md`` + ``tasks.md`` (or legacy ``*_tasks.md``) + ``stories.md``.
+* **Epic folder** — ``prompt.md`` (router) + ``README.md`` at the root, plus at least one
+  story sub-folder directly under it. The epic root carries no task file of its own.
+
+Findings carry a level:
+
+* ``error`` — empty / stray folder, a folder that is neither a story nor an epic, a tracked
+  non-``.md`` file in a plan folder. Fails every mode.
+* ``warn``  — a missing ``stories.md`` / ``README.md`` / ``prompt.md``, a legacy
+  ``*_tasks.md`` name, ``CREATE``/``ALTER TABLE`` DDL with no sibling ``schema.md``, an extra
+  ``.md`` that holds task checkboxes. Legacy shapes are grandfathered: warnings pass
+  ``--all`` but block ``--staged-added`` and path mode.
 
 Modes:
     --all            audit every folder under docs/plan/ (used by the md-organize skill);
-                     exits 1 only on empty/stray folders, warnings alone exit 0
+                     exits 1 only on ``error`` findings — warnings pass
     --staged-added   check only folders newly added in the current commit (pre-commit);
-                     exits 1 on any problem
-    <paths...>       check the folders those paths belong to (manual / tests)
+                     exits 1 on any finding (warnings included)
+    <paths...>       check the folders those paths belong to (manual / tests); any finding
+                     exits 1
 """
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 REQUIRED_PROMPT = "prompt.md"
@@ -24,6 +37,21 @@ EXCLUDED = {"_TEMPLATE"}
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PLAN_DIR = REPO_ROOT / "docs" / "plan"
+
+DDL_RE = re.compile(r"\b(?:CREATE|ALTER)\s+TABLE\b", re.IGNORECASE)
+CHECKBOX_LINE_RE = re.compile(r"^\s*-\s*\[[ xX~]\]\s")
+
+# .md files that legitimately live in a story / epic folder (§Story-folder file set,
+# §Epic-folder file set, §Extra files). Anything else is an "extra .md".
+KNOWN_MD = {"prompt.md", "tasks.md", "stories.md", "schema.md", "README.md", "plan.md", "spec.md"}
+
+
+@dataclass(frozen=True)
+class Finding:
+    """One structural problem with a plan folder."""
+
+    level: str  # "error" | "warn"
+    message: str
 
 
 def _rel(path: Path) -> str:
@@ -37,6 +65,11 @@ def _rel(path: Path) -> str:
 def _has_task_file(folder: Path) -> bool:
     """True if the folder carries ``tasks.md`` or a legacy ``*_tasks.md``."""
     return (folder / "tasks.md").is_file() or any(folder.glob("*_tasks.md"))
+
+
+def _has_stories_file(folder: Path) -> bool:
+    """True if the folder carries ``stories.md`` or a legacy ``*_stories.md``."""
+    return (folder / "stories.md").is_file() or any(folder.glob("*_stories.md"))
 
 
 def _entries(folder: Path) -> list[Path]:
@@ -57,23 +90,128 @@ def is_epic_folder(folder: Path, _depth: int = 0) -> bool:
     return any(is_story_folder(d) or is_epic_folder(d, _depth + 1) for d in subdirs)
 
 
-def check_folder(folder: Path) -> list[str]:
-    """Return one message per problem with ``folder``; empty list if clean."""
+def _story_subfolders(folder: Path) -> list[Path]:
+    """Direct sub-folders of ``folder`` that are themselves story folders."""
+    return [d for d in _entries(folder) if d.is_dir() and is_story_folder(d)]
+
+
+def _text_of(folder: Path, name: str) -> str:
+    """Contents of ``folder/name`` if it exists, else empty string."""
+    target = folder / name
+    return target.read_text(encoding="utf-8") if target.is_file() else ""
+
+
+def _is_legacy_named(name: str) -> bool:
+    """A legacy ``<slug>_tasks.md`` / ``<slug>_stories.md`` name (grandfathered)."""
+    return name.endswith("_tasks.md") or name.endswith("_stories.md")
+
+
+def _extra_file_findings(folder: Path) -> list[Finding]:
+    """D6 extra-files rule — no tracked non-``.md`` file, no extra ``.md`` with checkboxes."""
+    findings: list[Finding] = []
+    for entry in _entries(folder):
+        if entry.is_dir():
+            continue
+        name = entry.name
+        if not (name.endswith(".md") or name.endswith(".md.example")):
+            findings.append(
+                Finding("error", f"{_rel(entry)}: non-.md file in a plan folder — see §Extra files")
+            )
+            continue
+        if name in KNOWN_MD or _is_legacy_named(name):
+            continue
+        if any(
+            CHECKBOX_LINE_RE.match(line) for line in entry.read_text(encoding="utf-8").splitlines()
+        ):
+            findings.append(
+                Finding(
+                    "warn",
+                    f"{_rel(entry)}: extra .md carries task checkboxes — move them to tasks.md "
+                    "(§Extra files)",
+                )
+            )
+    return findings
+
+
+def _schema_backstop(folder: Path) -> list[Finding]:
+    """Warn when a folder's stories.md / prompt.md has DDL and no sibling schema.md."""
+    if (folder / "schema.md").is_file():
+        return []
+    blob = _text_of(folder, "stories.md") + "\n" + _text_of(folder, REQUIRED_PROMPT)
+    blob += "\n" + "\n".join(p.read_text(encoding="utf-8") for p in folder.glob("*_stories.md"))
+    if DDL_RE.search(blob):
+        return [
+            Finding(
+                "warn",
+                f"{_rel(folder)}/: CREATE/ALTER TABLE in stories.md/prompt.md but no schema.md — "
+                "see §When a story needs schema.md",
+            )
+        ]
+    return []
+
+
+def _check_story(folder: Path) -> list[Finding]:
+    """Structural checks for a leaf story folder (flat or epic sub-story)."""
+    findings: list[Finding] = []
+    if not (folder / "tasks.md").is_file() and any(folder.glob("*_tasks.md")):
+        findings.append(
+            Finding(
+                "warn",
+                f"{_rel(folder)}/: legacy '*_tasks.md' name — rename to tasks.md when next touched",
+            )
+        )
+    if not _has_stories_file(folder):
+        findings.append(
+            Finding("warn", f"{_rel(folder)}/: missing stories.md — see §Story-folder file set")
+        )
+    findings.extend(_schema_backstop(folder))
+    findings.extend(_extra_file_findings(folder))
+    return findings
+
+
+def _check_epic(folder: Path) -> list[Finding]:
+    """Structural checks for an epic root and each of its story sub-folders."""
+    findings: list[Finding] = []
+    for name in (REQUIRED_PROMPT, "README.md"):
+        if not (folder / name).is_file():
+            findings.append(
+                Finding(
+                    "warn", f"{_rel(folder)}/: epic root missing {name} — see §Epic-folder file set"
+                )
+            )
+    # The epic root is bound by the D6 extra-files rule too (its only shared reference
+    # files are checkbox-free); the schema.md backstop applies to sub-stories, not here.
+    findings.extend(_extra_file_findings(folder))
+    for story in _story_subfolders(folder):
+        findings.extend(_check_story(story))
+    return findings
+
+
+def check_folder(folder: Path) -> list[Finding]:
+    """Return one :class:`Finding` per problem with ``folder``; empty list if clean."""
     if not folder.is_dir():
         return []
     if not _entries(folder):
-        return [f"{_rel(folder)}/: empty folder — remove it, or add {REQUIRED_PROMPT} + tasks.md"]
-    if is_story_folder(folder) or is_epic_folder(folder):
-        problems = []
-        if not (folder / "tasks.md").is_file() and any(folder.glob("*_tasks.md")):
-            problems.append(
-                f"{_rel(folder)}/: legacy '*_tasks.md' name — rename to tasks.md when next touched"
+        return [
+            Finding(
+                "error",
+                f"{_rel(folder)}/: empty folder — remove it, or add {REQUIRED_PROMPT} + tasks.md + stories.md",
             )
-        return problems
+        ]
+    if is_epic_folder(folder):
+        return _check_epic(folder)
+    if is_story_folder(folder):
+        return _check_story(folder)
     missing = [] if (folder / REQUIRED_PROMPT).is_file() else [REQUIRED_PROMPT]
     if not _has_task_file(folder):
         missing.append("tasks.md")
-    return [f"{_rel(folder)}/: not a story or epic folder — missing {', '.join(missing)}"]
+    if not _has_stories_file(folder):
+        missing.append("stories.md")
+    return [
+        Finding(
+            "error", f"{_rel(folder)}/: not a story or epic folder — missing {', '.join(missing)}"
+        )
+    ]
 
 
 def _folders_for_paths(paths: list[str]) -> list[Path]:
@@ -121,17 +259,23 @@ def main(argv: list[str]) -> int:
     else:
         folders = _folders_for_paths(argv)
 
-    problems: list[str] = []
+    findings: list[Finding] = []
     for folder in folders:
-        problems.extend(check_folder(folder))
-    for message in problems:
-        print(message)
-    if not problems:
+        findings.extend(check_folder(folder))
+    for finding in findings:
+        print(f"{finding.level.upper()}: {finding.message}")
+    if not findings:
         return 0
-    print(f"\n{len(problems)} story-folder issue(s). See docs/plan/README.md §Conventions.")
-    # In audit mode only an empty/stray folder is a hard failure; naming warnings pass.
-    if audit and all("legacy '*_tasks.md'" in m for m in problems):
-        return 0
+
+    errors = [f for f in findings if f.level == "error"]
+    print(
+        f"\n{len(findings)} story-folder issue(s) "
+        f"({len(errors)} error, {len(findings) - len(errors)} warn). "
+        "See docs/plan/README.md §Conventions."
+    )
+    # --all grandfathers legacy shapes: warnings pass, only errors fail.
+    if audit:
+        return 1 if errors else 0
     return 1
 
 
