@@ -16,7 +16,8 @@ back to pointer-only items. RDO-14 restructures `TODOS.md` into two pointer-only
 RDO-15 adds the checkbox-consistency sweep + the one-checkbox-per-id convention (prose
 `## Epic done when` blocks); RDO-16 is the epic loop-closure check promoted from that block.
 
-**Open: RDO-16 (after RDO-6), RDO-11 (≥ 2026-09-03).**
+**Open: RDO-17.5 (next), RDO-17.6, RDO-17.7 (Animesh to define), RDO-16 (after RDO-6),
+RDO-11 (≥ 2026-09-03).**
 Story completion criteria at the bottom of this file.
 
 - [x] **RDO-1** — Slim `CONTEXT.md` to ≤400 lines, no line >200 chars; move module prose to
@@ -426,15 +427,24 @@ Story completion criteria at the bottom of this file.
 
 ### RDO-17 — standardize the `docs/plan/` story & epic format
 
-One goal, four sub-tasks (`RDO-17.1`–`17.4`), one commit each, closed together. Full plan:
+One goal, seven sub-tasks (`RDO-17.1`–`17.7`), one commit each. Full plan:
 `~/.claude/plans/woolly-honking-tarjan.md`. Docs + tooling only. Decisions with Animesh
 (2026-08-29): single story → flat folder like `risk-gamma-phase-a/`; 2+ related stories →
 epic like `telegram-markdown-migration/` with a router `prompt.md` + `README.md` + sub-story
 folders directly under the root (no `stories/` layer); `stories.md` required; `schema.md`
 required only when the story changes DB schema (planning-time judgment + a warn-only hook
 backstop); every `tasks.md` line carries `| Owner | Model | Review | SHA`; `/work` gets real
-epic-descent logic. Grandfather the ~25 legacy folders; retrofit `root-doc-organization/` +
-`telegram-markdown-migration/` now as the worked examples.
+epic-descent logic. The ~25 legacy folders stay grandfathered pre-commit.
+
+**Scope revision (2026-08-29, Animesh).** RDO-17.4's partial retrofit — grandfather the
+shipped task lines, only open lines get the full tail — is **superseded** for the two
+validation folders. RDO-17.5 (`root-doc-organization/`) and RDO-17.6
+(`telegram-markdown-migration/`) fully convert both folders to the canonical format,
+shipped task lines included, as a proof-of-concept: how cleanly these two convert
+calibrates whether and how the other ~25 legacy folders get the same treatment. Shipped
+tasks keep their real SHA; their inline completion prose collapses to a one-line `tasks.md`
+entry plus a 2–4 line as-built digest in `stories.md`. RDO-17.7 is a follow-up Animesh will
+define once 17.5/17.6 land.
 
 - [x] **RDO-17.1** — Rewrite `docs/plan/README.md` §Conventions (folder shapes, 3-file story
   set, epic-folder set, `schema.md` checklist, extra-files rule, 5-field task line) +
@@ -452,6 +462,22 @@ epic-descent logic. Grandfather the ~25 legacy folders; retrofit `root-doc-organ
   `| Review:` on open lines, `## Epic done when` → `## Story done when`) and
   `telegram-markdown-migration/` (`.DS_Store`, archive `TODO.md` + `missing-message-workshop-prompt.md`,
   `README.md` pointer). Both hooks `--all` green. | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 35d9f42
+- [ ] **RDO-17.5** — Full-convert `root-doc-organization/` to the canonical format: every
+  `tasks.md` line to a one-liner + `| Owner | Model | Review | SHA` tail (shipped lines keep
+  their real SHA + `[x]`, Owner/Model/Review reconstructed from the inline notes + git);
+  `stories.md` rewritten to cover every task — forward spec for the open ones, 2–4 line
+  as-built digest for the shipped ones; `prompt.md` realigned to `_TEMPLATE/story/prompt.md`;
+  `plan.md` kept (D6). Both hooks `--all` green afterward. Supersedes RDO-17.4's grandfather
+  scope for this folder. | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <—>
+- [ ] **RDO-17.6** — Full-convert `telegram-markdown-migration/` to the canonical epic
+  format: epic `prompt.md` to the `_TEMPLATE/epic/` router body; `README.md` gains the
+  ordered Stories table with a status column (⬜ / 🔄 / ✅ + closing SHA) + per-story
+  dependency; all three sub-stories' `prompt.md` + `tasks.md` to canonical form (inline
+  `(SHA: …)` → tail, `| Blocked by:` folded in, `ROLL-1a/1b/1c` nested sub-checkboxes
+  resolved against one-checkbox-per-id). Both hooks `--all` green afterward. Supersedes
+  RDO-17.4's grandfather scope for this folder. | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <—>
+- [ ] **RDO-17.7** — TBD — Animesh to define once RDO-17.5 / RDO-17.6 land (likely: roll the
+  POC outcome into a rule for converting the remaining ~25 legacy folders). | Owner: Animesh | Model: n/a | Review: none | SHA: <—>
 
 ## Story done when
 
@@ -491,8 +517,11 @@ per-task status lives only in the working list above (`tasks.md` is the single s
 - **RDO-17** — `docs/plan/README.md` §Conventions defines the single-story-flat vs
   epic-with-sub-stories shapes, the 3-file story set, the conditional `schema.md`, and the
   `| Owner | Model | Review | SHA` task line; `_TEMPLATE/` has `story/` + `epic/` variants;
-  both structure hooks enforce it (legacy folders grandfathered); `/work` walks an epic's
-  sub-stories in order; `root-doc-organization/` + `telegram-markdown-migration/` conform.
+  both structure hooks enforce it (legacy folders grandfathered pre-commit); `/work` walks an
+  epic's sub-stories in order; `root-doc-organization/` (17.5) and
+  `telegram-markdown-migration/` (17.6) are **fully** converted — every task line canonical,
+  `stories.md` covering all tasks, hooks `--all` clean of both folders' findings. RDO-17.7
+  records the rule for converting the remaining legacy folders.
 - `prompt.md` DoD rewritten to the delivered design — dead pre-2026H1 date-cutoff line
   dropped, hook rename + semantic-split reality stated (done in `2fb5c5b`).
 

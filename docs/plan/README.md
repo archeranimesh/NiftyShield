@@ -59,16 +59,19 @@ Risk delta gate (done) + Near-Expiry Gamma Buy `gamma_daily_watch.py`.
 **`variance-gate/`** · ⬜ Not started · next: **VG0** (CSP v1 spec reconciliation)
 CSP v1 Phase 0.8 deployment gate — spec reconciliation + gate criteria A–D.
 
-**`root-doc-organization/`** · 🔄 In progress · next: **RDO-16** (doc-freshness loop-closure
-check; RDO-11 is date-gated ≥ 2026-09-03)
+**`root-doc-organization/`** · 🔄 In progress · next: **RDO-17.5** (full-convert
+`root-doc-organization/` to the canonical format; RDO-16 / RDO-11 also open, RDO-11 date-gated
+≥ 2026-09-03)
 Token-efficiency cleanup of the ~22 root `.md` files + doc-maintenance automation.
 Docs + tooling only. RDO-1..17 + an acceptance-criteria list in `tasks.md`.
-RDO-1/2/4/5/6/7/8/9/10/12/13/14/15/17 shipped, RDO-3 closed-partial; RDO-11/16 open.
+RDO-1/2/4/5/6/7/8/9/10/12/13/14/15 + RDO-17.1..17.4 shipped, RDO-3 closed-partial;
+RDO-17.5/17.6/17.7, RDO-16, RDO-11 open.
 RDO-17 (2026-08-29): standardized the `docs/plan/` story & epic folder format —
 flat single-story vs epic-with-sub-stories, required `stories.md`, conditional `schema.md`,
 `| Owner | Model | Review | SHA` task line, `/work` epic descent; `_TEMPLATE/` gets
-`story/` + `epic/` variants. 17.4 retrofitted `root-doc-organization/` +
-`telegram-markdown-migration/` as the worked examples.
+`story/` + `epic/` variants. 17.4 did a partial retrofit of the two validation folders;
+17.5/17.6 supersede it with a full POC conversion (shipped task lines included) to calibrate
+converting the remaining ~25 legacy folders.
 RDO-6 (2026-08-29): `md-cleanup` → `md-organize` skill rewrite; `.agents/` mirror re-synced;
 `CLAUDE.md`/`AGENTS.md` long-line wrap + Step 5a task-line pointer; whole-repo
 `md-line-length` backlog (~700 lines / ~70 files) cleared, `--all-files` green.
