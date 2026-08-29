@@ -69,7 +69,7 @@ RDO-1/2/4/5/6/7/8/9/10/12/13/14/15 + RDO-17.1..17.7 shipped, RDO-3 closed-partia
 RDO-17.8, RDO-16, RDO-11 open.
 RDO-17.7 (2026-08-29): swept `root-doc-organization/` + `telegram-markdown-migration/` (all 16 `.md`)
 to fill-to-≤200; added reusable `scripts/dev/reflow_md.py` + 10 tests. Whitespace-only — zero word
-changes. RDO-17.7 §B → **RDO-17.8** (legacy-folder conversion rule, Owner: Animesh). `<—>`.
+changes. RDO-17.7 §B → **RDO-17.8** (legacy-folder conversion rule, Owner: Animesh). `526e431`.
 RDO-17.6 (2026-08-29): full-converted `telegram-markdown-migration/` — the epic POC (after 17.5's
 flat-story POC). Root `README.md` → `_TEMPLATE/epic/` shape (Stories table w/ Status + Closing SHA);
 `prompt.md` → epic router; all 3 sub-stories' `tasks.md` → canonical one-liner task lines,

@@ -175,7 +175,7 @@ Retires RDO-5's "semantic linefeeds" guidance: prose now fills each line to the 
 *guidance* only — `docs/plan/README.md` §"Markdown line style", both `_TEMPLATE/` sets, `.claude/skills/md-organize/SKILL.md` + its `.agents/` mirror, and the one-line `INSTRUCTION.md` description.
 The RDO-17.7 line below then applied that style to both POC folders in full; RDO-17.8 carries the remaining legacy-folder conversion rule (Owner: Animesh).
 
-### RDO-17.7 — sweep both POC folders to fill-to-≤200 (SHA `<—>`)
+### RDO-17.7 — sweep both POC folders to fill-to-≤200 (SHA `526e431`)
 Added `scripts/dev/reflow_md.py` — a reusable whitespace-only paragraph reflow engine (`--check` / in-place; fenced code, tables, headings and nested list/quote structure left verbatim; a wrapped line
 is never left starting with a bare list-marker token) + `tests/unit/scripts/dev/test_reflow_md.py` (10 tests). Ran it over every `.md` in `root-doc-organization/` and `telegram-markdown-migration/`
 (D6 extras `plan.md` and `message-format-workshop.md` included) — 16 files reflowed, `md-line-length` clean, `git diff --word-diff` shows zero word changes (only interior blockquote `> ` markers

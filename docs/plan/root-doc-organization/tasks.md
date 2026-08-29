@@ -31,7 +31,7 @@ file-by-file root inventory (D6 extra file). Work top-down: the first unchecked 
 - [x] **RDO-17.4** — partial structural retrofit of both validation folders — superseded by RDO-17.5 / RDO-17.6 | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 35d9f42
 - [x] **RDO-17.5** — full-convert root-doc-organization/ — every task line canonical, stories.md covers all tasks | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 5508e41
 - [x] **RDO-17.6** — full-convert telegram-markdown-migration/ to the canonical epic format (router, Stories table) | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: cf46ff4
-- [ ] **RDO-17.7** — sweep both POC folders to fill-to-≤200 in full; add reusable `scripts/dev/reflow_md.py` + tests | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: <—>
+- [x] **RDO-17.7** — sweep both POC folders to fill-to-≤200 in full; add reusable `scripts/dev/reflow_md.py` + tests | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 526e431
 - [ ] **RDO-17.8** — legacy-folder conversion rule (was 17.7 §B): cadence, effort ceiling, grandfathering for ~25 folders | Owner: Animesh | Model: n/a | Review: none | SHA: <—>
 
 ## Story done when
