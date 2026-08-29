@@ -363,11 +363,47 @@ claim as "Fable alone justifies its premium over Opus alone."
 
 ## 4. Per-task recommendation table
 
-| Task | Task shape | Recommendation | Reasoning tied to this diff |
-|---|---|---|---|
-| **FR-1** (Protocol Reviewer) | Same shape as this pilot's payload, verbatim | **Downgrade to Opus.** | This *is* the FR-1 task. The diff directly shows Opus produced the most consequential single finding (F2) and did more empirical verification (git-author-count check) at comparable or lower cost, while Fable's unique catches (council folder taxonomy, Thursday docstring) are real but narrower in blast radius than F2. Extrapolation confidence: **high** — this is a direct test, not an analogy. |
-| **FR-3** (Systems Architect — cross-document architecture/provenance synthesis over `docs/archive/`, ~144 files, DECISIONS.md-to-council-source tracing) | Different cognitive demand: much larger document corpus (144 archive files vs. ~15 here), deeper provenance-tracing (does a current decision still match its cited archived source) rather than internal-consistency-of-current-docs | **Keep Fable — do not extrapolate from this pilot with high confidence.** | This pilot's payload was ~15 files with light cross-referencing; FR-3 explicitly must hold a much larger document graph in mind at once and trace provenance across an order of magnitude more files. Fable's *only* two unique catches in this pilot (2b.4, 2b.5) were both exactly this genre of cross-document reference-chain tracing, which is weak evidence *in Fable's favor* for FR-3's specific demand, but the sample size (2 findings, one document graph) is too thin to be confident. State explicitly: **cannot extrapolate confidently from an FR-1-shaped test to FR-3's provenance-and-scale demand** — this is a genuine limitation of this pilot, not a hedge. Default to keeping Fable per the epic's own stated fallback ("if FR-0 can't extrapolate confidently, treat default-to-Fable as the safer choice"). |
-| **FR-7** (Chairman — synthesis-of-synthesis over FR-1..FR-6's six findings documents plus their closing missing-persona blocks) | Different cognitive demand again: not reviewing the repo, reviewing *other reviews* — cross-referencing six documents' worth of findings for convergence/duplication, and weighing closing-block self-reports | **Keep Fable — do not extrapolate from this pilot with high confidence.** | Same limitation as FR-3, arguably stronger: this pilot never tested a model reading *another model's output* and synthesizing across it — it tested two models independently reading the *same primary-source* repo. FR-7's actual demand (read six findings docs, deduplicate, weigh self-reported gaps) is structurally closer to FR-1/FR-3's long-horizon-synthesis profile than to Opus's demonstrated strength in this pilot (empirical verification against primary repo state — there is no "primary repo state" to verify in FR-7, only other models' prose). Flagging explicitly, per the epic's own instruction: FR-0's recommendation for FR-7 is **low-confidence** and defaults to keeping Fable rather than downgrading on thin evidence. |
+Per-task recommendation, each as a task shape, a recommendation, and the reasoning tied to this diff.
+
+### **FR-1** (Protocol Reviewer)
+
+**Task shape:** Same shape as this pilot's payload, verbatim
+
+**Recommendation:** **Downgrade to Opus.**
+
+**Reasoning tied to this diff:** This *is* the FR-1 task.
+The diff directly shows Opus produced the most consequential single finding (F2)
+and did more empirical verification (git-author-count check) at comparable or lower cost, while Fable's unique catches (council folder taxonomy, Thursday docstring) are real
+but narrower in blast radius than F2. Extrapolation confidence: **high** — this is a direct test, not an analogy.
+
+### **FR-3** (Systems Architect — cross-document architecture/provenance synthesis over `docs/archive/`, ~144 files, DECISIONS.md-to-council-source tracing)
+
+**Task shape:** Different cognitive demand:
+much larger document corpus (144 archive files vs. ~15 here), deeper provenance-tracing (does a current decision still match its cited archived source) rather than internal-consistency-of-current-docs
+
+**Recommendation:** **Keep Fable — do not extrapolate from this pilot with high confidence.**
+
+**Reasoning tied to this diff:** This pilot's payload was ~15 files with light cross-referencing;
+FR-3 explicitly must hold a much larger document graph in mind at once and trace provenance across an order of magnitude more files.
+Fable's *only* two unique catches in this pilot (2b.4, 2b.5) were both exactly this genre of cross-document reference-chain tracing,
+which is weak evidence *in Fable's favor* for FR-3's specific demand, but the sample size (2 findings, one document graph) is too thin to be confident.
+State explicitly: **cannot extrapolate confidently from an FR-1-shaped test to FR-3's provenance-and-scale demand** — this is a genuine limitation of this pilot, not a hedge.
+Default to keeping Fable per the epic's own stated fallback ("if FR-0 can't extrapolate confidently, treat default-to-Fable as the safer choice").
+
+### **FR-7** (Chairman — synthesis-of-synthesis over FR-1..FR-6's six findings documents plus their closing missing-persona blocks)
+
+**Task shape:** Different cognitive demand again: not reviewing the repo, reviewing *other reviews* —
+cross-referencing six documents' worth of findings for convergence/duplication, and weighing closing-block self-reports
+
+**Recommendation:** **Keep Fable — do not extrapolate from this pilot with high confidence.**
+
+**Reasoning tied to this diff:** Same limitation as FR-3, arguably stronger: this pilot never tested a model reading *another model's output* and synthesizing across it —
+it tested two models independently reading the *same primary-source* repo.
+FR-7's actual demand (read six findings docs, deduplicate,
+weigh self-reported gaps) is structurally closer to FR-1/FR-3's long-horizon-synthesis profile than to Opus's demonstrated strength in this pilot (empirical verification against primary repo state —
+there is no "primary repo state" to verify in FR-7, only other models' prose).
+Flagging explicitly, per the epic's own instruction: FR-0's recommendation for FR-7 is **low-confidence** and defaults to keeping Fable rather than downgrading on thin evidence.
+
 
 ---
 

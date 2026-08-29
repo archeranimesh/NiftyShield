@@ -2,7 +2,8 @@
 
 > Find the first unchecked box below. That is the only task for this session.
 
-- [ ] **T1** — **Do not implement directly.** First step is a council/quant consultation (`options-strategist` / `greeks-analyst` per CLAUDE.md's Council Decision Protocol) to decide: (a) tolerance bands for a put-c
+- [ ] **T1** — **Do not implement directly.** First step is a council/quant consultation (`options-strategist` / `greeks-analyst` per CLAUDE.md's Council Decision Protocol) to decide:
+  (a) tolerance bands for a put-c
 
 ---
 

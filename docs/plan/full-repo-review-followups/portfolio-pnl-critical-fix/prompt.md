@@ -7,9 +7,19 @@ Complete it fully. Stop.
 Synthesis), FR-7 row 1 (CRITICAL) — FR-2 F1, F2. Independently re-verified against the live repo before this story was
 created — see FR-9's commit message for the verification method.
 
-Reconciliation against the live `finideas_ilts` position surfaced two accounting bugs: `src/portfolio/store.py::get_position()` returns `average_price = Decimal("0")` whenever `buy_qty == 0` (short-first legs — sell-only trades never populate `buy_value`/`buy_qty`), and `src/portfolio/tracker.py::apply_trade_positions()` drops legs with zero net quantity as "fully closed" with no realized-P&L capture anywhere in the function. Both confirmed live: ₹52,318.50 of booked profit was invisible; open short PE P&L was wrong in sign and magnitude. `src/paper/tracker.py` already has a working reference implementation (`_compute_realized_pnl_by_leg`, `_compute_realized_pnl`) that `src/portfolio/` should mirror.
+Reconciliation against the live `finideas_ilts` position surfaced two accounting bugs:
+`src/portfolio/store.py::get_position()` returns `average_price = Decimal("0")` whenever `buy_qty == 0` (short-first legs —
+sell-only trades never populate `buy_value`/`buy_qty`),
+and `src/portfolio/tracker.py::apply_trade_positions()` drops legs with zero net quantity as "fully closed" with no realized-P&L capture anywhere in the function.
+Both confirmed live: ₹52,318.50 of booked profit was invisible; open short PE P&L was wrong in sign and magnitude.
+`src/paper/tracker.py` already has a working reference implementation (`_compute_realized_pnl_by_leg`, `_compute_realized_pnl`) that `src/portfolio/` should mirror.
 
-**Surface & Model: Claude Code, Opus for implementation, real `@code-reviewer` mandatory.** Not an Antigravity handoff despite touching only 4 files: mirroring `src/paper/tracker.py`'s realized-P&L pattern onto `src/portfolio/`'s different data model (`Position`/`Strategy`, no `PaperTrade` equivalent) is an inline judgment call, not a mechanical port — Step 3b's "single/2-file task where judgment calls are likely" spirit applies even at 4 files here. This is also a financial-logic commit (P&L, real capital) — per CLAUDE.md's AutoTrigger rules and FR-1's F-C1, the real `@code-reviewer` gate cannot be satisfied by Antigravity in-process, so routing here through Antigravity would just bounce back to Claude Code for the gate anyway.
+**Surface & Model: Claude Code, Opus for implementation, real `@code-reviewer` mandatory.** Not an Antigravity handoff despite touching only 4 files:
+mirroring `src/paper/tracker.py`'s realized-P&L pattern onto `src/portfolio/`'s different data model (`Position`/`Strategy`,
+no `PaperTrade` equivalent) is an inline judgment call, not a mechanical port — Step 3b's "single/2-file task where judgment calls are likely" spirit applies even at 4 files here.
+This is also a financial-logic commit (P&L, real capital) —
+per CLAUDE.md's AutoTrigger rules
+and FR-1's F-C1, the real `@code-reviewer` gate cannot be satisfied by Antigravity in-process, so routing here through Antigravity would just bounce back to Claude Code for the gate anyway.
 
 **Pre-implementation gate:** State in one sentence which task, which files, which test file.
 Do not write any code until this plan is stated.
@@ -29,7 +39,8 @@ a `_make_*`/`build_*` fixture helper from memory.
 `python -m pytest tests/unit/ --tb=no -q`
 All must be green before committing.
 
-**Financial logic commit — real `@code-reviewer` subagent mandatory** per CLAUDE.md's Agent AutoTrigger Rules (this touches P&L / Decimal / broker-adjacent paths). Resolve any CRITICAL/ERROR finding before committing.
+**Financial logic commit — real `@code-reviewer` subagent mandatory** per CLAUDE.md's Agent AutoTrigger Rules (this touches P&L / Decimal / broker-adjacent paths).
+Resolve any CRITICAL/ERROR finding before committing.
 
 **Commit:** Use format from `.claude/skills/commit/SKILL.md`. Execute the commit — do not
 draft it.

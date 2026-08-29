@@ -2,7 +2,8 @@
 
 > Find the first unchecked box below. That is the only task for this session.
 
-- [x] **T1** — Fix `get_position()` in `src/portfolio/store.py` to use the weighted SELL price as `average_price` when `buy_qty == 0` (short-first leg), matching the BUY-side weighted-average logic already used when — | SHA: 63c857a
+- [x] **T1** — Fix `get_position()` in `src/portfolio/store.py` to use the weighted SELL price as `average_price` when `buy_qty == 0` (short-first leg),
+  matching the BUY-side weighted-average logic already used when — | SHA: 63c857a
 
 ---
 

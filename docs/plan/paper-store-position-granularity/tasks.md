@@ -8,20 +8,45 @@
 
 - [x] **PG-1** — Fix `PaperStore.get_positions()` to group by `(strategy_name, leg_role, instrument_key)` + update `PaperPosition` model + tests | SHA: c89b0d8
 - [x] **PG-2** — Audit complete (2026-07-25). Split into independently implementable sub-tasks below — do not implement as one task.
-- [x] **PG-2a** — `PaperStore.get_position()`: add `instrument_key: str | None = None` param; filter by it when given, else pick most-recent `entry_date` among leg_role matches and log a WARNING on ambiguity. Files: `src/paper/store.py`, `tests/unit/paper/test_store.py`. | SHA: a83d83e
-- [x] **PG-2b** — `scripts/strategies/three_track/paper_3track_snapshot.py::_run`: replace the `[store.get_position(track_name, r) for r in leg_roles]` loop with a direct `store.get_positions(track_name)` call so LTP fetch doesn't silently drop one instrument's leg during a roll overlap. Independent of PG-2a. | SHA: 11d6587
-- [x] **PG-2c** — `scripts/portfolio/paper_snapshot.py::_run`: `most_recent_trade_per_leg` dict keyed by `leg_role` only drops notes from the other instrument under the same leg role during a roll. Re-key by `(leg_role, instrument_key)`. Independent of PG-2a. | SHA: 7248ec6
-- [x] **PG-2d** — `scripts/record/record_paper_trade.py::main`: final position-summary `get_position(strategy, leg_role)` call should pass the already-known `instrument_key` explicitly. Depends on PG-2a landing first (needs the new param). | SHA: 553080f
-- [x] **PG-2e** — `scripts/strategies/ic/paper_ic_entry.py::run`: post-entry verification loop's `get_position(config.strategy_name, role)` call should pass `instrument_key=key` explicitly. Depends on PG-2a landing first. | SHA: c316f08
+- [x] **PG-2a** — `PaperStore.get_position()`: add `instrument_key: str | None = None` param; filter by it when given, else pick most-recent `entry_date` among leg_role matches
+and log a WARNING on ambiguity. Files: `src/paper/store.py`, `tests/unit/paper/test_store.py`. | SHA: a83d83e
+- [x] **PG-2b** — `scripts/strategies/three_track/paper_3track_snapshot.py::_run`: replace the `[store.get_position(track_name, r) for r in leg_roles]` loop
+  with a direct `store.get_positions(track_name)` call so LTP fetch doesn't silently drop one instrument's leg during a roll overlap. Independent of PG-2a. | SHA: 11d6587
+- [x] **PG-2c** — `scripts/portfolio/paper_snapshot.py::_run`: `most_recent_trade_per_leg` dict keyed by `leg_role` only drops notes from the other instrument under the same leg role during a roll.
+Re-key by `(leg_role, instrument_key)`. Independent of PG-2a. | SHA: 7248ec6
+- [x] **PG-2d** — `scripts/record/record_paper_trade.py::main`: final position-summary `get_position(strategy, leg_role)` call should pass the already-known `instrument_key` explicitly.
+Depends on PG-2a landing first (needs the new param). | SHA: 553080f
+- [x] **PG-2e** — `scripts/strategies/ic/paper_ic_entry.py::run`: post-entry verification loop's `get_position(config.strategy_name, role)` call should pass `instrument_key=key` explicitly.
+Depends on PG-2a landing first. | SHA: c316f08
 - [x] **PG-3** — Docs close: TODOS.md session log entry, DECISIONS.md entry, CONTEXT.md model tree update — no code | SHA: 5a13bbb
-- [x] **PG-4** — Scoping audit complete (2026-07-27). Too large for one session (protocol.py + executor.py + 7 strategy files + tests, 64 in-degree on `ApprovedAction`). Split into independently implementable sub-tasks below — do not implement as one task.
+- [x] **PG-4** — Scoping audit complete (2026-07-27). Too large for one session (protocol.py + executor.py + 7 strategy files + tests, 64 in-degree on `ApprovedAction`).
+Split into independently implementable sub-tasks below — do not implement as one task.
 
-- [x] **PG-4a** — Add `LegClose` frozen dataclass (`leg_role: str`, `instrument_key: str | None = None`) to `src/strategy/protocol.py`; change `ApprovedAction.legs_to_close` type from `list[str]` to `list[LegClose]`. Update `PaperExecutor.apply()` to call `get_position(strategy_name, leg.leg_role, instrument_key=leg.instrument_key)`. Mechanically update every existing construction site (all 7 strategies + their tests) to wrap bare leg_role strings as `LegClose(leg_role=r)` — pure syntax transform, no `instrument_key` populated yet, zero behavior change. Foundational — must land first; safe on its own since no caller supplies `instrument_key` until PG-4b–h land. Files: `src/strategy/protocol.py`, `src/strategy/executor.py`, `tests/unit/strategy/test_executor.py`, `tests/unit/strategy/test_protocol.py`, and a mechanical touch of every `src/strategy/*_v1.py` + `ic_nifty_v1.py`/`ic_nifty_v2.py` construction site + their tests. Also touched (not listed in the original scope but real construction/consumption sites found via `search_code`): `src/strategy/monitor.py`, `src/council/rapid.py`, `tests/unit/council/test_rapid_council.py`. `CollarOverlayV1` does not construct `ApprovedAction` directly (goes through `OverlayCloser`) — no change needed there. No `code-reviewer` subagent available on this surface (Cowork); self-reviewed via full grep sweep for remaining bare-string `legs_to_close` sites — none found. **Flagged for human review** per protocol's Antigravity-unavailable fallback. | SHA: 47764c4
-- [x] **PG-4b** — `CSPNiftyV1`: populate `instrument_key` on `LegClose` from the resolved position in `apply_action`. Depends on PG-4a. Files: `src/strategy/csp_nifty_v1.py`, `tests/unit/strategy/test_csp_nifty_v1.py`. Note: `CSPNiftyV1` itself never constructs `ApprovedAction`/`LegClose` (built generically by `StrategyMonitor._dispatch_signal`, out of this task's file scope) — the applicable fix is in `apply_action`'s `ROLL` branch, which previously matched `legs_to_close` by `leg_role` only and would drop *every* position sharing that role during a roll overlap. Added `_leg_close_matches()` helper: matches on `instrument_key` when the `LegClose` supplies one (falls back to `leg_role`-only when `None`, preserving prior behavior). Test-only sandbox note: `pytest` unavailable in this Cowork sandbox (disk quota exhausted, pre-existing per CONTEXT.md) — change verified by manual trace against existing + new test fixtures, not a live pytest run; flagged for human verification. | SHA: 60132cf
+- [x] **PG-4a** — Add `LegClose` frozen dataclass (`leg_role: str`, `instrument_key: str | None = None`) to `src/strategy/protocol.py`;
+change `ApprovedAction.legs_to_close` type from `list[str]` to `list[LegClose]`. Update `PaperExecutor.apply()` to call `get_position(strategy_name, leg.leg_role, instrument_key=leg.instrument_key)`.
+Mechanically update every existing construction site (all 7 strategies + their tests) to wrap bare leg_role strings as `LegClose(leg_role=r)`
+— pure syntax transform, no `instrument_key` populated yet, zero behavior change. Foundational — must land first; safe on its own since no caller supplies `instrument_key` until PG-4b–h land.
+Files: `src/strategy/protocol.py`, `src/strategy/executor.py`, `tests/unit/strategy/test_executor.py`, `tests/unit/strategy/test_protocol.py`,
+and a mechanical touch of every `src/strategy/*_v1.py` + `ic_nifty_v1.py`/`ic_nifty_v2.py` construction site + their tests.
+Also touched (not listed in the original scope but real construction/consumption sites found via `search_code`): `src/strategy/monitor.py`,
+`src/council/rapid.py`, `tests/unit/council/test_rapid_council.py`. `CollarOverlayV1` does not construct `ApprovedAction` directly (goes through `OverlayCloser`)
+— no change needed there. No `code-reviewer` subagent available on this surface (Cowork); self-reviewed via full grep sweep for remaining bare-string `legs_to_close` sites
+— none found. **Flagged for human review** per protocol's Antigravity-unavailable fallback. | SHA: 47764c4
+- [x] **PG-4b** — `CSPNiftyV1`: populate `instrument_key` on `LegClose` from the resolved position in `apply_action`. Depends on PG-4a.
+Files: `src/strategy/csp_nifty_v1.py`, `tests/unit/strategy/test_csp_nifty_v1.py`. Note:
+`CSPNiftyV1` itself never constructs `ApprovedAction`/`LegClose` (built generically by `StrategyMonitor._dispatch_signal`, out of this task's file scope)
+— the applicable fix is in `apply_action`'s `ROLL` branch, which previously matched `legs_to_close` by `leg_role` only and would drop *every* position sharing that role during a roll overlap.
+Added `_leg_close_matches()` helper: matches on `instrument_key` when the `LegClose` supplies one (falls back to `leg_role`-only when `None`, preserving prior behavior).
+Test-only sandbox note: `pytest` unavailable in this Cowork sandbox (disk quota exhausted, pre-existing per CONTEXT.md) — change verified by manual trace against existing + new test fixtures,
+not a live pytest run; flagged for human verification. | SHA: 60132cf
 - [x] **PG-4c** — `CCOverlayV1`: same fix. Depends on PG-4a. Independent of PG-4b. Files: `src/strategy/cc_overlay_v1.py`, `tests/unit/strategy/test_cc_overlay_v1.py`. | SHA: 6b45996
 - [x] **PG-4d** — `PPOverlayV1`: same fix. Depends on PG-4a. Independent of PG-4b/c. Files: `src/strategy/pp_overlay_v1.py`, `tests/unit/strategy/test_pp_overlay_v1.py`. | SHA: 7a0d4f9
 - [x] **PG-4e** — `CollarOverlayV1`: same fix. Depends on PG-4a. Independent of PG-4b/c/d. Files: `src/strategy/collar_overlay_v1.py`, `tests/unit/strategy/test_collar_overlay_v1.py`. | SHA: 0e83df4
-- [x] **PG-4f** — `IronCondorV1`: same fix. Depends on PG-4a. Independent of PG-4b/c/d/e. Files: `src/strategy/ic_nifty_v1.py`, `tests/unit/strategy/test_ic_nifty_v1.py`. `pytest tests/unit/strategy/test_ic_nifty_v1.py` confirmed green on live host (2026-07-27). Committed on live host — sandbox `.git/index.lock` blocked commit from this session, same class of limitation as PG-4b/c. | SHA: 90d1c32
+- [x] **PG-4f** — `IronCondorV1`: same fix. Depends on PG-4a. Independent of PG-4b/c/d/e. Files: `src/strategy/ic_nifty_v1.py`,
+`tests/unit/strategy/test_ic_nifty_v1.py`. `pytest tests/unit/strategy/test_ic_nifty_v1.py` confirmed green on live host (2026-07-27).
+Committed on live host — sandbox `.git/index.lock` blocked commit from this session, same class of limitation as PG-4b/c. | SHA: 90d1c32
 - [x] **PG-4g** — `IronCondorV2`: same fix. Depends on PG-4a. Independent of PG-4b–f. Files: `src/strategy/ic_nifty_v2.py`, `tests/unit/strategy/test_ic_nifty_v2.py`. | SHA: 3b658f4
-- [x] **PG-4h** — `NiftyTrackComparisonV1`: same fix. Depends on PG-4a. Independent of PG-4b–g. Files: `src/strategy/nifty_track_comparison_v1.py`, `tests/unit/strategy/test_nifty_track_comparison_v1.py`. | SHA: a0c57ab
-- [x] **PG-4i** — Docs close: TODOS.md session log entry, DECISIONS.md entry, CONTEXT.md `ApprovedAction`/`PaperExecutor` description update — no code. Run only after PG-4a through PG-4h (or whichever subset lands) are complete.
+- [x] **PG-4h** — `NiftyTrackComparisonV1`: same fix. Depends on PG-4a. Independent of PG-4b–g. Files: `src/strategy/nifty_track_comparison_v1.py`,
+`tests/unit/strategy/test_nifty_track_comparison_v1.py`. | SHA: a0c57ab
+- [x] **PG-4i** — Docs close: TODOS.md session log entry, DECISIONS.md entry, CONTEXT.md `ApprovedAction`/`PaperExecutor` description update
+— no code. Run only after PG-4a through PG-4h (or whichever subset lands) are complete.

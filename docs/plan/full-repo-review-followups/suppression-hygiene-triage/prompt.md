@@ -7,9 +7,14 @@ Complete it fully. Stop.
 Synthesis), FR-7 row 10 (ERROR, downgraded from FR-4's CRITICAL per FR-7 divergence D2) — FR-4 §3, §4. Independently re-verified against the live repo before this story was
 created — see FR-9's commit message for the verification method.
 
-26/26 `# type: ignore` and 80/89 `# noqa` suppressions lack the explanatory comment REVIEW.md's meta-rule mandates; 2 literal `assert`s exist in `src/` (G6 violation); 183 `except Exception` sites are only partially audited (10+ confirmed bare, no intent comment). FR-4 rated this CRITICAL per the letter of the rule; FR-7's chairman downgrades to ERROR because most bare `E402`/`F401` codes are self-describing and the load-bearing fix is a REVIEW.md policy carve-out, not 100+ mechanical comment additions — triage, not blanket-fix.
+26/26 `# type: ignore` and 80/89 `# noqa` suppressions lack the explanatory comment REVIEW.md's meta-rule mandates;
+2 literal `assert`s exist in `src/` (G6 violation); 183 `except Exception` sites are only partially audited (10+ confirmed bare, no intent comment).
+FR-4 rated this CRITICAL per the letter of the rule;
+FR-7's chairman downgrades to ERROR because most bare `E402`/`F401` codes are self-describing and the load-bearing fix is a REVIEW.md policy carve-out, not 100+ mechanical comment additions —
+triage, not blanket-fix.
 
-**Surface & Model: Claude Code, Sonnet.** This is a policy-wording proposal (which REVIEW.md suppression codes are self-describing enough to carve out) — interpretive, not mechanical; Antigravity has no mechanism for the judgment call of deciding a carve-out boundary, only for executing one already decided.
+**Surface & Model: Claude Code, Sonnet.** This is a policy-wording proposal (which REVIEW.md suppression codes are self-describing enough to carve out) — interpretive, not mechanical;
+Antigravity has no mechanism for the judgment call of deciding a carve-out boundary, only for executing one already decided.
 
 **Pre-implementation gate:** State in one sentence which task, which files, which test file.
 Do not write any code until this plan is stated.

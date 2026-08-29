@@ -19,15 +19,27 @@ the real test), not a default-to-Antigravity assumption. Full reasoning for each
 
 | Tier | Folder | Source (FR-7 row) | Why this tier | Surface | Model |
 |---|---|---|---|---|---|
-| **P0 — real capital, fix now** | `portfolio-pnl-critical-fix/` | row 1 (CRITICAL) | Live P&L is wrong today — ₹52,318.50 confirmed invisible, open short P&L wrong sign/magnitude. | Claude Code | Opus + mandatory real `@code-reviewer` |
-| **P0 — real capital, fix now** | `sqlite-backup-cron/` | row 2 (CRITICAL) | Zero backup for the single store of record; one bad write away from unrecoverable loss. | Antigravity | N/A / Sonnet for review |
-| **P1 — actively misdirecting sessions** | `docs-navigation-and-staleness/` | rows 3, 8, 14 (CRITICAL + ERROR) | Stale status table + dead links (incl. the *source of record* for live exit thresholds) send agents to the wrong place today. | Antigravity | N/A / Sonnet for review |
-| **P1 — live security gap** | `telegram-approval-auth-fix/` | row 9 (ERROR) | OR-vs-AND callback bug lets any group-chat member approve real trades; small fix, real exposure. | Claude Code | Sonnet, escalate Opus if guard semantics unclear |
-| **P2 — protocol correctness, blocks clean new-code writes** | `protocol-standards-reconciliation/` | rows 4, 5, 11 (CRITICAL + ERROR) | Compliant agents currently get blocked by a compliant reviewer either way (broad-catch / assert / AutoTrigger contradictions). | Claude Code | Opus (editing the protocol docs themselves) |
-| **P2 — mechanical, unblocks Antigravity handoff** | `logging-migration-completion/` | row 7 (CRITICAL) | 21 bare loggers + 24 script entrypoints; good Antigravity candidate once P0/P1 land. | Antigravity | N/A / Sonnet for review |
-| **P3 — needs a council consult before code** | `greeks-parity-validation/` | row 6 (CRITICAL, contested — D1) | Do not implement directly: gated on an `options-strategist`/`greeks-analyst` tolerance-band decision first. | Claude Code only | Opus for the council consult |
-| **P3 — test hardening** | `paper-pnl-golden-tests/` | row 13 (ERROR) | Mitigated one layer up already (`test_tracker.py`); real but not urgent. | Claude Code | Sonnet (needs a graph query mid-implementation) |
-| **P3 — docs triage** | `suppression-hygiene-triage/` | row 10 (ERROR, downgraded from FR-4's CRITICAL — D2) | Policy carve-out, not a code fix; no live consequence identified. | Claude Code | Sonnet (policy-wording judgment call) |
+| **P0 — real capital, fix now** | `portfolio-pnl-critical-fix/` | row 1 (CRITICAL) | Live P&L wrong today | Claude Code | Opus + mandatory real `@code-reviewer` |
+| **P0 — real capital, fix now** | `sqlite-backup-cron/` | row 2 (CRITICAL) | No backup of the store of record | Antigravity | N/A / Sonnet for review |
+| **P1 — actively misdirecting sessions** | `docs-navigation-and-staleness/` | rows 3, 8, 14 (CRITICAL + ERROR) | Stale status table + dead links | Antigravity | N/A / Sonnet for review |
+| **P1 — live security gap** | `telegram-approval-auth-fix/` | row 9 (ERROR) | Any group-chat member can approve trades | Claude Code | Sonnet, escalate Opus if guard semantics unclear |
+| **P2 — protocol correctness** | `protocol-standards-reconciliation/` | rows 4, 5, 11 (CRITICAL + ERROR) | Reviewer blocks compliant code | Claude Code | Opus (edits the protocol docs) |
+| **P2 — mechanical, unblocks Antigravity handoff** | `logging-migration-completion/` | row 7 (CRITICAL) | 21 bare loggers + 24 script entrypoints | Antigravity | N/A / Sonnet for review |
+| **P3 — needs a council consult before code** | `greeks-parity-validation/` | row 6 (CRITICAL, contested — D1) | Contested — quant decision needed first | Claude Code only | Opus for the consult |
+| **P3 — test hardening** | `paper-pnl-golden-tests/` | row 13 (ERROR) | Already mitigated one layer up | Claude Code | Sonnet (needs a graph query mid-implementation) |
+| **P3 — docs triage** | `suppression-hygiene-triage/` | row 10 (ERROR, downgraded from FR-4's CRITICAL — D2) | Policy carve-out, not a code fix | Claude Code | Sonnet (policy-wording judgment call) |
+
+### Why each tier (expanded)
+
+- `portfolio-pnl-critical-fix/` — Live P&L is wrong today: ₹52,318.50 confirmed invisible, open short P&L wrong sign/magnitude.
+- `sqlite-backup-cron/` — Zero backup for the single store of record; one bad write away from unrecoverable loss.
+- `docs-navigation-and-staleness/` — Stale status table + dead links (incl. the *source of record* for live exit thresholds) send agents to the wrong place today.
+- `telegram-approval-auth-fix/` — OR-vs-AND callback bug lets any group-chat member approve real trades; small fix, real exposure.
+- `protocol-standards-reconciliation/` — Compliant agents currently get blocked by a compliant reviewer either way (broad-catch / assert / AutoTrigger contradictions).
+- `logging-migration-completion/` — 21 bare loggers + 24 script entrypoints; good Antigravity candidate once P0/P1 land.
+- `greeks-parity-validation/` — Do not implement directly: gated on an `options-strategist`/`greeks-analyst` tolerance-band decision first.
+- `paper-pnl-golden-tests/` — Mitigated one layer up already (`test_tracker.py`); real but not urgent.
+- `suppression-hygiene-triage/` — Policy carve-out, not a code fix; no live consequence identified.
 
 **4 of 9 are Antigravity handoffs** (`sqlite-backup-cron`, `docs-navigation-and-staleness`,
 `logging-migration-completion`, plus none others — greeks/telegram/suppression/golden-tests/portfolio-pnl

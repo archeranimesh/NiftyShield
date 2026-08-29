@@ -114,7 +114,8 @@ Pydantic `model_config`, `@validator`, `@field_validator`, and `@model_validator
 
 ### 3c — Protocol/ABC implementations (structural subtyping)
 
-`BrokerClient` and related protocols use structural subtyping. Implementations satisfy the protocol without inheritance, so call sites type-check against the protocol, not the concrete class. Vulture sees the methods as unbound.
+`BrokerClient` and related protocols use structural subtyping. Implementations satisfy the protocol without inheritance,
+so call sites type-check against the protocol, not the concrete class. Vulture sees the methods as unbound.
 
 | File | Symbols |
 |---|---|
@@ -134,7 +135,8 @@ Pydantic `model_config`, `@validator`, `@field_validator`, and `@model_validator
 
 ### 3f — SQLite `row_factory` attribute assignments
 
-`connection.row_factory = sqlite3.Row` is a Python attribute assignment on the connection object. Vulture flags the attribute name as unused because it sees no read of `row_factory` on a Python object it tracks.
+`connection.row_factory = sqlite3.Row` is a Python attribute assignment on the connection object. Vulture flags the attribute name as unused
+because it sees no read of `row_factory` on a Python object it tracks.
 
 | File | Line |
 |---|---|
@@ -216,6 +218,7 @@ the "Needs Investigation" items.
 
 1. **Immediate (low risk):** Delete the 10 "Safe to Delete" items in a single commit.
 2. **Verify then delete:** Audit the 3 private helpers in §2a — confirm not called via `getattr` or dynamic dispatch. Then delete.
-3. **Store API audit (§2b):** Cross-check store methods against the script that owns them (`mf/tracker.py` owns `mf/store.py`, etc.). Methods with test coverage but no production caller are candidates for deletion if the script logic is genuinely complete.
+3. **Store API audit (§2b):** Cross-check store methods against the script that owns them (`mf/tracker.py` owns `mf/store.py`, etc.).
+Methods with test coverage but no production caller are candidates for deletion if the script logic is genuinely complete.
 4. **Scaffolding (§2c):** Leave `GammaStore` and `ChainReader` intact — they are Phase 1 targets.
 5. **Whitelist:** Create `vulture_whitelist.py` after §2 audit is done, then add `vulture` to the `Makefile` `dead-code` target.

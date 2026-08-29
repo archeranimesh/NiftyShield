@@ -2,7 +2,9 @@
 
 **Options selling automation on NiftyBees ETF, powered by Upstox API.**
 
-NiftyShield is a systematic options trading engine built on a leveraged capital structure — FD-backed Overdraft facility funding NiftyBees ETF purchases (pledged for margin) and ILTS allocation, generating two parallel income streams from one pool of borrowed capital.
+NiftyShield is a systematic options trading engine built on a leveraged capital structure —
+FD-backed Overdraft facility funding NiftyBees ETF purchases (pledged for margin) and ILTS allocation,
+generating two parallel income streams from one pool of borrowed capital.
 
 ---
 
@@ -184,7 +186,8 @@ Confirms Upstox API connectivity by fetching your account profile.
 
 ### Nuvama Login (one-time)
 
-NiftyShield tracks your Nuvama bond and gold bond holdings for margin and portfolio visibility. Nuvama uses a `request_id` redirect flow — run this once and the session persists indefinitely in a local settings file.
+NiftyShield tracks your Nuvama bond and gold bond holdings for margin and portfolio visibility.
+Nuvama uses a `request_id` redirect flow — run this once and the session persists indefinitely in a local settings file.
 
 **Prerequisites:** Add these to your `.env`:
 
@@ -200,7 +203,10 @@ NUVAMA_SETTINGS_FILE=data/nuvama/settings.json
 python -m src.auth.nuvama_login
 ```
 
-Opens your browser to the Nuvama login page. After authenticating, you'll be redirected to a URL containing a `request_id` token. Paste the full redirect URL (or just the token) at the prompt. The session is saved to `NUVAMA_SETTINGS_FILE` — no daily re-auth required.
+Opens your browser to the Nuvama login page.
+After authenticating, you'll be redirected to a URL containing a `request_id` token.
+Paste the full redirect URL (or just the token) at the prompt.
+The session is saved to `NUVAMA_SETTINGS_FILE` — no daily re-auth required.
 
 **Verify:**
 
@@ -230,7 +236,9 @@ NiftyShield automatically tracks Nuvama options positional M2M Highs/Lows and ca
 ```bash
 */5 9-15 * * 1-5 cd /path/to/NiftyShield && .venv/bin/python -m scripts.nuvama_intraday_tracker
 ```
-The tracker efficiently polls Nuvama + Upstox and permanently persists the 30-day bounding history (M2M max/min + Spot bounds) directly localized inside `portfolio.sqlite` to be naturally utilized during Daily Snapshots.
+The tracker efficiently polls Nuvama + Upstox
+and permanently persists the 30-day bounding history (M2M max/min + Spot bounds) directly localized inside `portfolio.sqlite`
+to be naturally utilized during Daily Snapshots.
 
 
 ### EOD Option Chain Snapshot (Cron)
@@ -259,7 +267,10 @@ Output path: `data/offline/chain_snapshots_5min/{year}/{month}/{day}/upstox_{HHM
 
 ### Database Backup and Retention (Cron)
 
-Creates an online backup of the live WAL-mode portfolio database and prunes older backups (retains newest 30 daily and 12 monthly backups). The backup destination is determined by `BACKUP_DIR` in `.env` (defaults to `/var/backups/niftyshield`), ensuring backups are physically isolated from the repo mount.
+Creates an online backup of the live WAL-mode portfolio database
+and prunes older backups (retains newest 30 daily and 12 monthly backups).
+The backup destination is determined by `BACKUP_DIR` in `.env` (defaults to `/var/backups/niftyshield`),
+ensuring backups are physically isolated from the repo mount.
 
 ```bash
 # Online DB backup — 4:00 PM IST, Mon–Fri
@@ -286,7 +297,10 @@ Find it: login to [web.dhan.co](https://web.dhan.co) → Profile icon (top-right
 python -m src.auth.dhan_login
 ```
 
-Opens your browser to Dhan web portal. Navigate to Profile → "Access DhanHQ APIs" → "Generate Access Token". Fill in App Name (e.g. `NiftyShield`), keep Token validity at 24h. Copy the generated token and paste it at the prompt.
+Opens your browser to Dhan web portal.
+Navigate to Profile → "Access DhanHQ APIs" → "Generate Access Token".
+Fill in App Name (e.g. `NiftyShield`), keep Token validity at 24h.
+Copy the generated token and paste it at the prompt.
 
 **Verify:**
 
@@ -324,7 +338,10 @@ This will:
 
 ## Trade Ledger
 
-NiftyShield tracks every physical trade execution in a `trades` table — separate from the strategy leg definitions in `ilts.py` / `finrakshak.py`. This enables accurate weighted-average cost basis across multiple entries, a full audit trail for option rolls, and position queries without touching strategy files.
+NiftyShield tracks every physical trade execution in a `trades` table — separate from the strategy leg definitions in `ilts.py` / `finrakshak.py`.
+This enables accurate weighted-average cost basis across multiple entries,
+a full audit trail for option rolls,
+and position queries without touching strategy files.
 
 The two systems run in parallel: `Leg.entry_price` continues to drive `daily_snapshot.py` P&L until an explicit switch is made. The trade ledger grows independently.
 
@@ -460,7 +477,7 @@ Fetching option chain: NSE_INDEX|Nifty 50  expiry=2026-05-29 …
 
   Nifty 50  expiry: 2026-05-29  |  spot: ₹24,250.00
   SIDE    STRIKE    DELTA    IV%      LTP      MID      BID      ASK        OI  KEY
-  ────────────────────────────────────────────────────────────────────────────────────────
+  ──────────────────────────────────────────────────────────────────────────────────
   CE      25000    +0.2851   12.43    85.50    85.25    85.00    85.50    124500  NSE_FO|41200
   CE      25100    +0.2310   11.87    65.25    65.38    65.25    65.50     98200  NSE_FO|41210
   PE      23500   -0.2976   12.18    80.50    80.25    80.00    80.50    156800  NSE_FO|41300
@@ -507,7 +524,8 @@ python scripts/record_paper_trade.py \
     --price 65.63
 ```
 
-Price defaults to `(bid + ask) / 2`; falls back to LTP when the spread is zero. `--leg` is auto-inferred from `--option-type` + `--action` when omitted (`PE + SELL → short_put`, `CE + SELL → short_call`, etc.).
+Price defaults to `(bid + ask) / 2`; falls back to LTP when the spread is zero.
+`--leg` is auto-inferred from `--option-type` + `--action` when omitted (`PE + SELL → short_put`, `CE + SELL → short_call`, etc.).
 
 All flags:
 
@@ -643,8 +661,10 @@ All backtesting runs **fully offline** against local Parquet/SQLite stores. No A
 - [x] CSP v1 strategy spec — `docs/strategies/csp_nifty_v1.md` (Nifty 50 index options, R1–R7)
 - [x] NiftyShield integrated strategy spec — `docs/strategies/niftyshield_integrated_v1.md`
 - [x] `find_strike_by_delta.py` — live chain → |delta| filter → strike/IV/key table + `--dry-run` record_paper_trade commands (2026-05-03)
-- [x] Historical data pipeline — VIX ingestion (`src/backtest/vix_ingest.py`) + EOD/intraday option chain Parquet writer/reader (`src/backtest/chain_writer.py`/`chain_reader.py`)
-- [x] Backtest analytics module (`src/backtest/`) — IVR computation, chain data pipeline (the full multi-phase backtest engine — portfolio construction, live promotion — remains in progress, see `BACKTEST_PLAN_PHASE1.md`, **P0**)
+- [x] Historical data pipeline — VIX ingestion (`src/backtest/vix_ingest.py`) + EOD/intraday option chain
+  Parquet writer/reader (`src/backtest/chain_writer.py`/`chain_reader.py`)
+- [x] Backtest analytics module (`src/backtest/`) — IVR computation, chain data pipeline
+  (the full multi-phase backtest engine — portfolio construction, live promotion — remains in progress, see `BACKTEST_PLAN_PHASE1.md`, **P0**)
 - [x] Strategy engine (`src/strategy/`) — CSP/CC/PP/Collar overlays, Iron Condor V1+V2, `StrategyMonitor`, exit-signal engine; paper-trading backbone live since 2026-07
 - [x] Portfolio delta risk manager (`src/risk/`) — `PortfolioDeltaTracker`, entry gate, warning/cap thresholds
 - [ ] Order execution engine (`src/execution/`) — blocked (static IP)
@@ -663,32 +683,38 @@ All backtesting runs **fully offline** against local Parquet/SQLite stores. No A
 
 ## Disclaimer
 
-This project is for personal use and educational purposes. Options trading involves significant risk of loss. Past performance of any strategy does not guarantee future results. Always do your own analysis before placing trades.
+This project is for personal use and educational purposes.
+Options trading involves significant risk of loss.
+Past performance of any strategy does not guarantee future results.
+Always do your own analysis before placing trades.
 
 ---
 
 ## Reference Documents (for AI assistants and contributors)
 
-The project root contains a set of markdown files that serve as structured context for both AI coding assistants and human contributors. `CLAUDE.md` defines exactly when each file should be loaded.
+The project root contains a set of markdown files that serve as structured context for both AI coding assistants and human contributors.
+`CLAUDE.md` defines exactly when each file should be loaded.
 
 ### Always load at the start of every session
 
 | File | Purpose |
 |---|---|
-| [`CLAUDE.md`](CLAUDE.md) | AI pre-task protocol — mandatory 6-step workflow: read context → confirm scope → plan → test → update docs → commit. Loaded automatically at session start. |
-| [`CONTEXT.md`](CONTEXT.md) | **Single source of truth** for codebase state — full module tree, what exists vs. what doesn't, live DB state, test coverage counts, and active constraints. Read before writing any code. |
+| [`CLAUDE.md`](CLAUDE.md) | Mandatory 6-step AI pre-task workflow: read context → confirm scope → plan → test → update docs → commit. Auto-loaded at session start. |
+| [`CONTEXT.md`](CONTEXT.md) | **Single source of truth** for codebase state — module tree, what exists vs. what doesn't, live DB state, test counts, active constraints. Read before writing code. |
 
 ### Load when relevant
 
 | File | When to load | Purpose |
 |---|---|---|
-| [`DECISIONS.md`](DECISIONS.md) | Adding or changing module architecture | Architecture decisions with rationale and tradeoffs — why specific design choices were made and what alternatives were rejected. |
+| [`DECISIONS.md`](DECISIONS.md) | Adding or changing module architecture | Architecture decisions with rationale and tradeoffs — why choices were made, what alternatives were rejected. |
 | [`REFERENCES.md`](REFERENCES.md) | Touching instrument keys, AMFI codes, or market data | Instrument keys, AMFI scheme codes, API quirks, token lifetimes, exact DB column names. |
-| [`TODOS.md`](TODOS.md) | Starting a new feature | Two-in-one: open action items (priority-tiered P0→P5 from architecture review) + chronological session log. Mark items done and add a log entry after each session. |
+| [`TODOS.md`](TODOS.md) | Starting a new feature | Two-in-one: priority-tiered (P0→P5) open action items + chronological session log. Mark items done and add a log entry each session. |
 | [`PLANNER.md`](PLANNER.md) | Starting a new feature | Multi-sprint feature roadmap — where the next task fits in the overall sequence. |
-| [`BACKTEST_PLAN.md`](BACKTEST_PLAN.md) | Any backtest, paper trading, or strategy research task | Phased backtesting → paper trading → live execution pipeline plan. Read before any Phase 0–4 work. **Renders as an interactive card-format widget** — say "show me the plan" to get the visual view. |
-| [`LITERATURE.md`](LITERATURE.md) | Implementing a quantitative metric, ratio, or ML technique | Concept reference for Kelly Criterion, Sharpe ratio, meta-labeling, Greeks. Each entry carries a `LIT-N` code referenced in code comments and TODOs. |
-| [`REVIEW.md`](REVIEW.md) | Before every commit (via `code-reviewer` agent) | Python code review checklist — subtle bug patterns (Part I), Pythonic idioms (Part II), and Google Style Guide mandatory rules G1–G8: no `@staticmethod`, 80-char line limit, `%`-style logger calls, etc. (Part III). |
+| [`BACKTEST_PLAN.md`](BACKTEST_PLAN.md) | Any backtest, paper trading, or strategy research task | Phased backtesting → paper trading → live execution pipeline plan. Read before any Phase 0–4 work. |
+| [`LITERATURE.md`](LITERATURE.md) | Implementing a metric or ML technique | Concept reference — Kelly, Sharpe, meta-labeling, Greeks; each carries a `LIT-N` code cited in comments and TODOs. |
+| [`REVIEW.md`](REVIEW.md) | Before every commit (`code-reviewer` agent) | Python review checklist — bug patterns (Part I), Pythonic idioms (Part II), Google Style rules G1–G8 (Part III). |
+
+`BACKTEST_PLAN.md` renders as an interactive card-format widget — say "show me the plan" to get the visual view.
 
 ### Quick reference — when to read what
 
@@ -711,19 +737,19 @@ NiftyShield has pre-configured skills and agents you invoke by saying a phrase t
 
 | Skill | Say this | What happens |
 |---|---|---|
-| **plan view** | "show me the plan" · "render the backtest plan" · "what's the current plan status" | Reads `BACKTEST_PLAN.md` and renders the full phased plan as an interactive card-format widget — coloured task cards (Code / Strategy / Operational), done/pending state from `[x]` checkboxes, time estimates, owner badges, and gate rows. Any session that reads the file will render in this format automatically. |
-| **md-cleanup** | "clean up the markdown" or "archive completed TODOs" | Archives all ✅ DONE items from TODOS.md, trims session log, updates CONTEXT.md date + test count, syncs README structure, commits. Full checklist in `.claude/skills/md-cleanup/SKILL.md`. |
-| **commit** | "generate a commit message" | Produces a commit in the project-standard format (`type(scope): subject` + `Why:` + `What:` + `Ref:`). Full format spec in `.claude/skills/commit/SKILL.md`. |
+| **plan view** | "show me the plan" · "plan status" | Renders `BACKTEST_PLAN.md` as an interactive card widget — task cards, `[x]` state, badges, gate rows. Auto-renders on file read. |
+| **md-organize** | "organize the markdown" · "archive TODOs" | Archives done stories + old log entries, syncs docs, reflows prose, reconciles the `CLAUDE.md` / `AGENTS.md` mirrors, commits. |
+| **commit** | "generate a commit message" | Produces a commit in the project format (`type(scope): subject` + `Why:` + `What:` + `Ref:`). Full spec in `.claude/skills/commit/SKILL.md`. |
 
 ### Agents (specialist sub-tasks)
 
 | Agent | Model | Say this | What it does |
 |---|---|---|---|
-| **code-reviewer** | Opus | "Run the code-reviewer agent on `src/portfolio/`" | Checks Decimal invariants, BrokerClient protocol compliance, type hints, async correctness, and the REVIEW.md Python hygiene checklist. Returns CRITICAL / ERROR / WARNING findings with file + line. Use before every merge on monetary or async code. |
-| **test-runner** | Haiku | "Run the test-runner agent" | Runs `python -m pytest tests/unit/` and reports pass/fail count plus any failures. Fast and cheap — use after every code change before committing. |
-| **greeks-analyst** | Sonnet | "Use the greeks-analyst agent to design the OptionChain model" | Inspects the real fixture at `tests/fixtures/responses/nifty_chain_2026-04-07.json`, proposes extensions or analysis on the `OptionChain` Pydantic model and `_extract_greeks_from_chain()`. Greeks capture shipped 2026-04-25 — use for future Greeks-related analysis. |
-| **roll-validator** | Opus | "Use the roll-validator agent before I roll [leg]" | Validates pre-roll net position, Trade model integrity for both close and open legs, atomicity of the SQLite transaction, and instrument key correctness. Returns SAFE TO ROLL or DO NOT ROLL verdict. Use before every expiry roll — treats it as a real P&L event. |
-| **options-strategist** | Opus | "Use the options-strategist agent to size a short strangle for [expiry]" | Designs IC or short strangle legs (strike selection by delta, max credit/loss, margin estimate, net delta). Also does delta-neutral portfolio analysis and rebalance signal generation. All output is advisory until `src/execution/` is live. |
+| **code-reviewer** | Opus | "Run code-reviewer on `src/portfolio/`" | Checks Decimal invariants, BrokerClient protocol, type hints, async, REVIEW.md hygiene; flags CRITICAL / ERROR / WARNING. |
+| **test-runner** | Haiku | "Run the test-runner agent" | Runs `python -m pytest tests/unit/`, reports pass/fail count + any failures. Use after every code change before committing. |
+| **greeks-analyst** | Sonnet | "Design/extend the OptionChain model" | Inspects the `nifty_chain_2026-04-07.json` fixture, proposes changes to `OptionChain` and `_extract_greeks_from_chain()`. |
+| **roll-validator** | Opus | "Validate before I roll [leg]" | Validates pre-roll net position, Trade model integrity, txn atomicity, instrument keys; returns SAFE TO ROLL / DO NOT ROLL. |
+| **options-strategist** | Opus | "Size a short strangle for [expiry]" | Designs IC / strangle legs by delta; delta-neutral analysis, rebalance signals. Advisory until execution is live. |
 
 ### When to reach for which
 
@@ -733,7 +759,7 @@ About to commit              →  commit skill
 Expiry is approaching        →  roll-validator before touching the DB
 Greeks / OptionChain work    →  greeks-analyst
 Strategy design question     →  options-strategist
-TODOS getting messy          →  md-cleanup skill
+TODOS getting messy          →  md-organize skill
 Check plan / what's next     →  "show me the plan"  (card-format widget)
 ```
 

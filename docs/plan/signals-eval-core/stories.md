@@ -799,7 +799,8 @@ class PointsBacktesterConfig:
 - Trade P&L: `(exit_price − entry_price) × direction_sign − 2 × slippage_points`.
 - `BacktestResult` frozen dataclass: `run_id, total_trades, win_rate, avg_pnl_points, max_dd_points, calmar_ratio`.
 
-**Donchian pass criteria (must document in test):** trade count 15–25/year, win rate 35–50%, profit factor >1.3. Tests do not validate these thresholds (too few synthetic bars for reliable stats), but the test docstring notes them as the Phase 2.S3a gate.
+**Donchian pass criteria (must document in test):** trade count 15–25/year, win rate 35–50%, profit factor >1.3. Tests do not validate these thresholds (too few synthetic bars for reliable stats),
+but the test docstring notes them as the Phase 2.S3a gate.
 
 **Tests (`tests/unit/backtest/test_points_bt.py`):**
 - Empty signals list → `BacktestResult` with zero trades, no error.

@@ -120,7 +120,9 @@ def mdcode(value: str) -> str:
   the underscore case that started this epic
 - `test_mdcode_wraps_in_backticks` — `"DELTA_WARN"` → `` "`DELTA_WARN`" ``
 - `test_mdcode_falls_back_when_value_contains_backtick` — value with `` ` `` → uses `escape_markdown()` path, asserted via output shape not containing an unescaped/nested backtick pair
-- `test_mdcode_empty_string` — edge case, returns `` "``" `` (empty code span) — confirm this doesn't itself confuse Telegram's parser (documented assumption if not verified against live API in this task; flag for manual confirmation during MD-4's real-message testing if any caller can produce an empty value)
+- `test_mdcode_empty_string` — edge case, returns `` "``" `` (empty code span)
+— confirm this doesn't itself confuse Telegram's parser (documented assumption if not verified against live API in this task;
+flag for manual confirmation during MD-4's real-message testing if any caller can produce an empty value)
 
 **Addendum (2026-08-11, `ROLL-13` workshop session — two live-caught escaping bugs, both
 missed by every prior scratch script's print-only testing since this was the first message in

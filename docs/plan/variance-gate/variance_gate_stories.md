@@ -46,7 +46,8 @@ gate criterion is evaluated.
 ### Technical notes
 
 - Read `docs/strategies/csp_nifty_v1.md` in full before editing — do not patch blindly.
-- Use `grep -n "lot size\|50 units\|65 units\|time stop\|21 DTE\|R3\|R4\|event filter\|200.DMA" docs/strategies/csp_nifty_v1.md BACKTEST_PLAN.md` to locate every occurrence before deciding canonical form.
+- Use `grep -n "lot size\|50 units\|65 units\|time stop\|21 DTE\|R3\|R4\|event filter\|200.DMA" docs/strategies/csp_nifty_v1.md BACKTEST_PLAN.md`
+  to locate every occurrence before deciding canonical form.
 - Docs-only commit: skip `test-runner` agent. `code-reviewer` is still required (docs review).
 - Do not change strategy parameters (delta target, IVR thresholds, stop levels) — reconcile naming and definitions only.
 

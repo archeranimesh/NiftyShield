@@ -4,7 +4,13 @@
 
 ## T1
 
-Rewrite `docs/plan/README.md`'s status table rows for `dev-foundation`, `council-refactor`, `paper-backbone`, `ic-nifty-v2` against `docs/archive/plan/` + `DECISIONS.md` (targeted Edit only). Fix `docs/council/README.md`'s taxonomy section to the actual `docs/archive/council/{strategy,risk,research,data_architecture,misc}/` structure and its Archived Decisions tables to include the missing `data_architecture/` entries and the 2026-06-26 q11/q12 decisions. Fix the two dead links: `docs/plan/variance-gate/prompt.md:18` → `docs/archive/council/risk/2026-05-02_...`; `DECISIONS.md` lines 397-407 → the correct `docs/archive/council/strategy/2026-06-26_...` revised path (verify against the newer `paper-exit-codification/prompt.md`, which already points at the correct path). Remove the stale `src/nuvama/CLAUDE.md` "doesn't exist yet" line from CONTEXT.md. Docs-only — no test gate, but grep-verify no other doc still references the dead paths after the edit.
+Rewrite `docs/plan/README.md`'s status table rows for `dev-foundation`, `council-refactor`, `paper-backbone`, `ic-nifty-v2` against `docs/archive/plan/` + `DECISIONS.md` (targeted Edit only).
+Fix `docs/council/README.md`'s taxonomy section to the actual `docs/archive/council/{strategy,risk,research,data_architecture,misc}/` structure
+and its Archived Decisions tables to include the missing `data_architecture/` entries and the 2026-06-26 q11/q12 decisions.
+Fix the two dead links: `docs/plan/variance-gate/prompt.md:18` → `docs/archive/council/risk/2026-05-02_...`;
+`DECISIONS.md` lines 397-407 → the correct `docs/archive/council/strategy/2026-06-26_...` revised path (verify against the newer `paper-exit-codification/prompt.md`,
+which already points at the correct path). Remove the stale `src/nuvama/CLAUDE.md` "doesn't exist yet" line from CONTEXT.md.
+Docs-only — no test gate, but grep-verify no other doc still references the dead paths after the edit.
 
 **Files touched:** `docs/plan/README.md`, `docs/council/README.md`, `DECISIONS.md`, `CONTEXT.md`
 

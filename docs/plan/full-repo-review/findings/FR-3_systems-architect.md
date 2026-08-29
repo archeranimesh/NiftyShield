@@ -31,12 +31,16 @@ for the findings below; flagging as a gap in "Missing persona" section.
 
 | Fact domain | Authoritative doc | Docs that restate/depend on it (drift risk) |
 |---|---|---|
-| Module tree / what exists | `CONTEXT.md` (summary) + `CONTEXT_TREE.md` (full) | `docs/plan/README.md` status table (independently tracks the same "what's built" fact and, per §2 below, has drifted badly) |
+| Module tree / what exists | `CONTEXT.md` (summary) + `CONTEXT_TREE.md` (full) | `docs/plan/README.md` status table (independently tracks the same "what's built" fact; per §2, has drifted badly) |
 | Architecture decisions / council rulings | `DECISIONS.md` | Module `CLAUDE.md` files (should cite, several do); `docs/plan/*/prompt.md` files (some cite, inconsistently) |
 | Instrument keys / AMFI codes | `REFERENCES.md` | Not independently re-stated elsewhere in sampled scope — no drift risk observed |
-| Story status (not-started/in-progress/done) | `docs/plan/README.md` (top-level) + each story's own `*_tasks.md` (per-task truth) | These two are supposed to be kept in sync manually; §2 shows the top-level table has fallen far behind the per-story checklists and the archive itself |
-| Council decision provenance | `docs/archive/council/{strategy,risk,data_architecture,misc}/` (actual files) | `docs/council/README.md`'s own stated taxonomy (`docs/council/archive/{strategy,risk,research}/`) — this is itself now a second, incorrect source of "where do decisions live" |
-| Phase 0.8 gate criteria | `BACKTEST_PLAN.md` (current, revised text) | `docs/archive/council/risk/2026-05-02_variance-gate-regime-completeness.md` (origin); `DECISIONS.md → Variance Gate` (summary) — checked consistent, see §5 |
+| Story status (not-started/in-progress/done) | `docs/plan/README.md` (top-level) + each story's own `*_tasks.md` (per-task truth) | Kept in sync by hand; §2 shows this table has drifted — see [†] |
+| Council decision provenance | `docs/archive/council/{strategy,risk,data_architecture,misc}/` (actual files) | `docs/council/README.md`'s own stated taxonomy is a second, incorrect source — see [‡] |
+| Phase 0.8 gate criteria | `BACKTEST_PLAN.md` (current, revised text) | Origin + `DECISIONS.md → Variance Gate` summary — checked consistent, see §5 and [§] |
+
+- **[†]** Story status: the two ledgers are kept in sync by hand; §2 shows the top-level `docs/plan/README.md` table has fallen far behind the per-story checklists and the archive itself.
+- **[‡]** Council provenance: `docs/council/README.md`'s own stated taxonomy is `docs/council/archive/{strategy,risk,research}/` — itself now a second, incorrect source of "where do decisions live".
+- **[§]** Phase 0.8 gate: origin is `docs/archive/council/risk/2026-05-02_variance-gate-regime-completeness.md`; `DECISIONS.md → Variance Gate` is the summary.
 
 **Structural observation:** there are effectively two independent "is X built yet" ledgers —
 `CONTEXT.md`'s prose description of `src/` and `docs/plan/README.md`'s status table — and only
@@ -158,11 +162,27 @@ is a faithful, non-drifted representation of the chairman's Stage 3 synthesis.
 
 | # | `DECISIONS.md` entry | Cited source | Verdict |
 |---|---|---|---|
-| 1 | Paper delta source architecture (B002.4) | `docs/council/2026-07-02_paper-delta-source-architecture.md` | **Accurate.** Module boundary (b), signature change, and fallback policy all match the chairman's Stage 3 Summary Table and Fallback Policy sections verbatim in substance. See F4 for the one minor nuance. |
-| 2 | Iron Condor V2 Core Design (council q10) | `docs/archive/council/strategy/2026-06-26_ic-v2-core-design.md` | **Accurate.** Entry deltas (0.25/0.22/0.03), wing floors (monthly ₹15/weekly ₹10/5Δ floor), roll-debit cap (≤50% of credit), max 1 roll/side/cycle, and the DTE≤3 CLOSE_FULL-both-sides rule all match Decisions 1–4 in the archive file exactly, including the archive's explicit "Yes, CLOSE_FULL not challenged-side-only" answer for the profitable-side question. |
-| 3 | IC V2 Profit-Lock Adjustment (council q13) | `docs/archive/council/strategy/2026-06-27_ic-v2-profit-lock-adjustment.md` | **Accurate.** Zone 1/2/3 mechanics, the `max(W,W)+D_cum+D_lock+K ≤ 0.75×C₀` (Zone 2) and `≤0.35×C₀` (Zone 3) floor formulas, the 18–20Δ wing-roll target, D3-interaction precedence rule, and the 25%-of-credit debit cap all check out against the archive's derivation section line-for-line. |
-| 4 | Multi-strategy portfolio risk allocation (10 binding rules, referenced via `src/risk/` thresholds in `CONTEXT.md`) | `docs/archive/council/risk/2026-05-02_multi-strategy-portfolio-risk-allocation.md` | **Accurate.** `DECISIONS.md`'s "+1.0 lot (warning +0.75)" options-only and "+2.0 lots (warning +1.5)" combined caps match the archive's Rules 2/3 exactly, and both match the live `PortfolioDeltaTracker` constructor thresholds described in `CONTEXT.md`. Three-way consistency (archive → DECISIONS → running code) — no drift anywhere in this chain. |
-| 5 | Variance Gate — Phase 0.8 Deployment Tiers | `docs/archive/council/risk/2026-05-02_variance-gate-regime-completeness.md` | **Accurate, and additionally verified propagated downstream** (see §6/F6 — `BACKTEST_PLAN.md` was actually updated with the revised A–D criteria per the council's own Implementation Sequencing instruction, with an explicit `> Council decision 2026-05-02: Gate criteria revised` annotation). This is the one sampled entry where the full provenance chain — origin council file → `DECISIONS.md` → dependent plan doc — was checked end-to-end and found clean. |
+| 1 | Paper delta source architecture (B002.4) | `docs/council/2026-07-02_paper-delta-source-architecture.md` | **Accurate.** — detail 1 |
+| 2 | Iron Condor V2 Core Design (council q10) | `docs/archive/council/strategy/2026-06-26_ic-v2-core-design.md` | **Accurate.** — detail 2 |
+| 3 | IC V2 Profit-Lock Adjustment (council q13) | `docs/archive/council/strategy/2026-06-27_ic-v2-profit-lock-adjustment.md` | **Accurate.** — detail 3 |
+| 4 | Multi-strategy portfolio risk allocation (10 binding rules) | `docs/archive/council/risk/2026-05-02_multi-strategy-portfolio-risk-allocation.md` | **Accurate.** — detail 4 |
+| 5 | Variance Gate — Phase 0.8 Deployment Tiers | `docs/archive/council/risk/2026-05-02_variance-gate-regime-completeness.md` | **Accurate; also verified propagated downstream.** — detail 5 |
+
+**Verdict detail (by #):**
+
+1. Module boundary (b), signature change, and fallback policy all match the chairman's Stage 3 Summary Table and Fallback Policy sections verbatim in substance. See F4 for the one minor nuance.
+2. Entry deltas (0.25/0.22/0.03), wing floors (monthly ₹15/weekly ₹10/5Δ floor), roll-debit cap (≤50% of credit), max 1 roll/side/cycle,
+   and the DTE≤3 CLOSE_FULL-both-sides rule all match Decisions 1–4 in the archive file exactly,
+   including the archive's explicit "Yes, CLOSE_FULL not challenged-side-only" answer for the profitable-side question.
+3. Zone 1/2/3 mechanics, the `max(W,W)+D_cum+D_lock+K ≤ 0.75×C₀` (Zone 2)
+   and `≤0.35×C₀` (Zone 3) floor formulas, the 18–20Δ wing-roll target, D3-interaction precedence rule,
+   and the 25%-of-credit debit cap all check out against the archive's derivation section line-for-line.
+4. `DECISIONS.md`'s "+1.0 lot (warning +0.75)" options-only and "+2.0 lots (warning +1.5)" combined caps match the archive's Rules 2/3 exactly,
+   and both match the live `PortfolioDeltaTracker` constructor thresholds described in `CONTEXT.md`. Three-way consistency (archive → DECISIONS → running code) — no drift anywhere in this chain.
+5. See §6/F6 —
+   `BACKTEST_PLAN.md` was actually updated with the revised A–D criteria per the council's own Implementation Sequencing instruction,
+   with an explicit `> Council decision 2026-05-02: Gate criteria revised` annotation.
+   This is the one sampled entry where the full provenance chain — origin council file → `DECISIONS.md` → dependent plan doc — was checked end-to-end and found clean.
 
 **Provenance verdict:** across the 5 sampled entries (deliberately including the ones most likely to
 show drift — the newest, most complex, most cross-referenced rulings), **no paraphrase drift and no
@@ -254,15 +274,26 @@ otherwise apt for what each side does — the fix is documentation, not renaming
 
 | ID | Severity | Finding |
 |---|---|---|
-| F1 | **CRITICAL** | `docs/plan/README.md` Active Epics/Stories table stale for `dev-foundation`, `council-refactor`, `paper-backbone`, `ic-nifty-v2` — all shown "not started" despite being shipped and (for 3 of 4) already archived out of `docs/plan/` entirely |
+| F1 | **CRITICAL** | `docs/plan/README.md` Active Epics/Stories table comprehensively stale for 4 shipped items — see [F1] below |
 | F2 | ERROR | `CONTEXT.md` "What Does NOT Exist Yet" — `src/nuvama/CLAUDE.md` claim stale (confirmed, seed issue) |
 | F3 | WARNING | `RapidCouncil`/`SignalAggregator` duplication documented in `DECISIONS.md` but not cross-referenced from `docs/plan/signals/`'s own story files |
 | F4 | INFO | Minor undercount ("2 of 4" vs. 2 full + 1 partial dissent) in the paper-delta-source provenance summary — doesn't change the operative ruling |
-| F5 | (folded into F1) | `docs/council/README.md`'s stated archive taxonomy (`docs/council/archive/{strategy,risk,research}/`) is stale — actual location is `docs/archive/council/{strategy,risk,data_architecture,misc}/` (2 extra categories never documented); confirmed dead downstream link: `docs/plan/variance-gate/prompt.md:18` points to `docs/council/2026-05-02_variance-gate-regime-completeness.md`, which does not exist (real path: `docs/archive/council/risk/...`) |
+| F5 | (folded into F1) | `docs/council/README.md`'s stated archive taxonomy is stale, with a confirmed dead downstream link — see [F5] below |
 | F6 | INFO | Blocked/Later Stories blockers all still hold; `signals/`'s blocker table should eventually also point at the F3 duplication |
 | F7 | WARNING | `BACKTEST_PLAN_PHASE1.md` line 556 vs. 558 — internal self-contradiction on whether 1.3a is "done" (task-shipped vs. gate-verified ambiguity) |
 | F8 | WARNING | `src/strategy/` vs. `scripts/strategies/` — real but not yet-exercised ambiguity; recommend `CONTEXT_TREE.md` note, no rename |
-| F9 | WARNING | `src/intraday/`↔`scripts/intraday/` and `src/council/`↔`scripts/council/` — identical (not just singular/plural) names across trees, arguably higher risk than the seed pair; recommend `CONTEXT_TREE.md` notes, no rename |
+| F9 | WARNING | `src/intraday/`↔`scripts/intraday/` and `src/council/`↔`scripts/council/` exact-name collisions — see [F9] below |
+
+**[F1]** `docs/plan/README.md` Active Epics/Stories table stale for `dev-foundation`, `council-refactor`, `paper-backbone`, `ic-nifty-v2` —
+all shown "not started" despite being shipped and (for 3 of 4) already archived out of `docs/plan/` entirely.
+
+**[F5]** `docs/council/README.md`'s stated archive taxonomy (`docs/council/archive/{strategy,risk,research}/`) is stale —
+actual location is `docs/archive/council/{strategy,risk,data_architecture,misc}/` (2 extra categories never documented);
+confirmed dead downstream link:
+`docs/plan/variance-gate/prompt.md:18` points to `docs/council/2026-05-02_variance-gate-regime-completeness.md`, which does not exist (real path: `docs/archive/council/risk/...`).
+
+**[F9]** `src/intraday/`↔`scripts/intraday/` and `src/council/`↔`scripts/council/` — identical (not just singular/plural) names across trees, arguably higher risk than the seed pair;
+recommend `CONTEXT_TREE.md` notes, no rename.
 
 **Provenance check (§5) came back clean across all 5 sampled entries** — the one negative result worth
 stating plainly: this review did not find `DECISIONS.md` itself to be untrustworthy. The risk is

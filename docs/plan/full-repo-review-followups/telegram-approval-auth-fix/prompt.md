@@ -7,9 +7,12 @@ Complete it fully. Stop.
 Synthesis), FR-7 row 9 (ERROR) — FR-6 S-2. Independently re-verified against the live repo before this story was
 created — see FR-9's commit message for the verification method.
 
-The Telegram callback auth guard for approving/rejecting real trading decisions uses OR logic where it should use AND — any member of a group chat the bot is ever added to could approve/reject real trading decisions. Currently masked only by 1:1-DM topology living in the deployer's head, not enforced in code.
+The Telegram callback auth guard for approving/rejecting real trading decisions uses OR logic where it should use AND —
+any member of a group chat the bot is ever added to could approve/reject real trading decisions. Currently masked only by 1:1-DM topology living in the deployer's head, not enforced in code.
 
-**Surface & Model: Claude Code, Sonnet (escalate to Opus if the guard's identity semantics are unclear from the surrounding code).** Small (2 files) but not purely mechanical — verifying *which* identity check is actually correct here (sender vs. chat membership) is a real security judgment call, not a search-and-replace; Step 3b's "single/2-file task where inline judgment calls are likely" criterion routes this to Claude, not Antigravity, despite the small diff size.
+**Surface & Model: Claude Code, Sonnet (escalate to Opus if the guard's identity semantics are unclear from the surrounding code).** Small (2 files) but not purely mechanical —
+verifying *which* identity check is actually correct here (sender vs. chat membership) is a real security judgment call, not a search-and-replace;
+Step 3b's "single/2-file task where inline judgment calls are likely" criterion routes this to Claude, not Antigravity, despite the small diff size.
 
 **Pre-implementation gate:** State in one sentence which task, which files, which test file.
 Do not write any code until this plan is stated.
@@ -29,7 +32,8 @@ a `_make_*`/`build_*` fixture helper from memory.
 `python -m pytest tests/unit/ --tb=no -q`
 All must be green before committing.
 
-**Financial logic commit — real `@code-reviewer` subagent mandatory** per CLAUDE.md's Agent AutoTrigger Rules (this touches P&L / Decimal / broker-adjacent paths). Resolve any CRITICAL/ERROR finding before committing.
+**Financial logic commit — real `@code-reviewer` subagent mandatory** per CLAUDE.md's Agent AutoTrigger Rules (this touches P&L / Decimal / broker-adjacent paths).
+Resolve any CRITICAL/ERROR finding before committing.
 
 **Commit:** Use format from `.claude/skills/commit/SKILL.md`. Execute the commit — do not
 draft it.

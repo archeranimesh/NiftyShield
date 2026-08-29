@@ -27,4 +27,5 @@
 > Do not bundle into the same session/commit as the YE tasks above. Full spec:
 > `docs/plan/ic-yearly-expiry-fix/stories.md` — "Separate concern — weekly-expiry Greeks snapshot gap".
 
-- [ ] **WG-1** — Persist per-leg Greeks for the weekly expiry bucket (option-chain snapshot pipeline currently archives monthly/quarterly/yearly only, not weekly — root cause of an unresolvable DELTA_WARN discrepancy on 2026-07-08)
+- [ ] **WG-1** — Persist per-leg Greeks for the weekly expiry bucket
+  (option-chain snapshot pipeline currently archives monthly/quarterly/yearly only, not weekly — root cause of an unresolvable DELTA_WARN discrepancy on 2026-07-08)

@@ -33,18 +33,39 @@
 |---|---|
 | Severity | **High** — silent notification loss on financial-logic paths (collar close/monetize write failures, incomplete-collar abort) |
 | Status | 🔴 Open |
-| Discovered | 2026-08-25, incidentally — general-purpose code-reviewer-persona pass on `docs/plan/telegram-markdown-migration/` MD-7.3's diff (`src/strategy/overlay_closer.py`) flagged it as unverifiable from the diff alone; confirmed by reading `src/notifications/telegram.py::TelegramNotifier.send` (`async def send`) against the three call sites in `overlay_closer.py` (`close_collar_all` ~L269, `monetize_collar_put` ~L330/~L395), all in **synchronous** methods calling `self._notifier.send(...)` with no `await` and no `asyncio.run(...)`/`create_task(...)` wrapper |
+| Discovered | 2026-08-25, incidentally — see **Discovery** below the table |
 | Location | `src/strategy/overlay_closer.py::OverlayCloser.close_collar_all`, `OverlayCloser.monetize_collar_put` |
 
-**Root cause (not yet fixed — out of MD-7.3's scope, which is escaping only):** `TelegramNotifier.send()` is `async def`. Calling it without `await` from a sync method constructs a coroutine object and immediately discards it — Python schedules nothing, so the message is never sent. No exception is raised (matches the non-fatal contract's outward behavior), so this fails completely silently; the only surfacing symptom is a `RuntimeWarning: coroutine 'TelegramNotifier.send' was never awaited` if warnings are enabled, which is not part of the normal cron/strategy logging path. Net effect: the "Collar close failed", "Collar monetize aborted", and "Collar monetize failed" alerts — all three fire on a paths where a human needs to intervene (DB write failure leaving legs open, or an incomplete collar structure) — have likely never reached Telegram in production.
+**Discovery:** general-purpose code-reviewer-persona pass on `docs/plan/telegram-markdown-migration/` MD-7.3's diff (`src/strategy/overlay_closer.py`) flagged it as unverifiable from the diff alone;
+confirmed by reading `src/notifications/telegram.py::TelegramNotifier.send` (`async def send`) against the three call sites in `overlay_closer.py`
+(`close_collar_all` ~L269, `monetize_collar_put` ~L330/~L395), all in **synchronous** methods calling `self._notifier.send(...)` with no `await` and no `asyncio.run(...)`/`create_task(...)` wrapper
 
-**Why this wasn't caught by MD-7.3's tests:** the test suite's `MockNotifier`/`notifier` test double used in `tests/unit/strategy/test_overlay_closer.py` implements `send()` as a plain synchronous method (appends to `sent_messages`), so calling it unawaited works correctly in tests — the mock doesn't reproduce the real notifier's `async def` signature, masking the bug.
+**Root cause (not yet fixed — out of MD-7.3's scope, which is escaping only):** `TelegramNotifier.send()` is `async def`.
+Calling it without `await` from a sync method constructs a coroutine object and immediately discards it — Python schedules nothing,
+so the message is never sent. No exception is raised (matches the non-fatal contract's outward behavior), so this fails completely silently;
+the only surfacing symptom is a `RuntimeWarning: coroutine 'TelegramNotifier.send' was never awaited` if warnings are enabled,
+which is not part of the normal cron/strategy logging path. Net effect: the "Collar close failed", "Collar monetize aborted",
+and "Collar monetize failed" alerts — all three fire on a paths where a human needs to intervene (DB write failure leaving legs open, or an incomplete collar structure)
+— have likely never reached Telegram in production.
 
-**Scope note:** MD-7.3 only changed message *content* (added `escape_markdown()`/`mdcode()` wrapping) — it did not touch these call sites' `await`/no-`await` structure, so this predates that task and is not a regression it introduced. Filed here rather than fixed inline to keep MD-7.3's diff scoped to escaping only, per its story spec ("Do NOT change message wording/structure").
+**Why this wasn't caught by MD-7.3's tests:** the test suite's `MockNotifier`/`notifier` test double used in `tests/unit/strategy/test_overlay_closer.py`
+implements `send()` as a plain synchronous method (appends to `sent_messages`),
+so calling it unawaited works correctly in tests — the mock doesn't reproduce the real notifier's `async def` signature, masking the bug.
 
-**Also surfaced in the same review, not yet independently confirmed:** `src/notifications/markdown.py::escape_markdown`'s `MARKDOWNV2_RESERVED` set (`_*[]()~\`>#+-=|{}.!`) does not include the backslash character itself. A dynamic value containing a literal `\` (e.g. a Windows-style path or a regex/JSON error message inside `str(exc)`) would pass through unescaped, potentially producing a malformed MarkdownV2 escape sequence and a 400 from Telegram — silently swallowed by the non-fatal send contract. Needs a repro test (`escape_markdown("C:\\foo")` or similar) before scoping a fix; likely belongs in a follow-up to `MD-1`/`MD-6` rather than this bug, since it's in the shared helper, not `overlay_closer.py`/`auto_close.py` specifically.
+**Scope note:** MD-7.3 only changed message *content* (added `escape_markdown()`/`mdcode()` wrapping) — it did not touch these call sites' `await`/no-`await` structure,
+so this predates that task and is not a regression it introduced. Filed here rather than fixed inline to keep MD-7.3's diff scoped to escaping only,
+per its story spec ("Do NOT change message wording/structure").
 
-**Fix (not yet scoped):** either make `close_collar_all`/`monetize_collar_put` `async def` and `await self._notifier.send(...)` (matches `auto_close.py`'s pattern), or wrap the send in `asyncio.create_task(...)`/a sync-dispatch helper if these methods must stay synchronous for their other callers. Needs a graph trace (`trace_path`) of both methods' callers before picking an approach — check whether any caller already runs inside an event loop.
+**Also surfaced in the same review, not yet independently confirmed:**
+`src/notifications/markdown.py::escape_markdown`'s `MARKDOWNV2_RESERVED` set (`_*[]()~\`>#+-=|{}.!`) does not include the backslash character itself.
+A dynamic value containing a literal `\` (e.g. a Windows-style path or a regex/JSON error message inside `str(exc)`) would pass through unescaped,
+potentially producing a malformed MarkdownV2 escape sequence and a 400 from Telegram — silently swallowed by the non-fatal send contract.
+Needs a repro test (`escape_markdown("C:\\foo")` or similar) before scoping a fix;
+likely belongs in a follow-up to `MD-1`/`MD-6` rather than this bug, since it's in the shared helper, not `overlay_closer.py`/`auto_close.py` specifically.
+
+**Fix (not yet scoped):** either make `close_collar_all`/`monetize_collar_put` `async def` and `await self._notifier.send(...)` (matches `auto_close.py`'s pattern),
+or wrap the send in `asyncio.create_task(...)`/a sync-dispatch helper if these methods must stay synchronous for their other callers.
+Needs a graph trace (`trace_path`) of both methods' callers before picking an approach — check whether any caller already runs inside an event loop.
 
 ## BUG-019 — Investigation: does every strategy show a live-tick vs. EOD-snapshot P&L disparity, not just `paper_ic_nifty_v2_monthly`?
 
@@ -52,23 +73,47 @@
 |---|---|
 | Severity | **Under investigation** — not yet confirmed as a bug beyond the BUG-018 case; diagnostic instrumentation added to gather evidence across all strategies |
 | Status | 🔍 Diagnostics added and committed (2026-07-23, SHA `f7177b6`), awaiting a live trading day's data before any fix is scoped |
-| Discovered | 2026-07-23, as a direct generalisation of BUG-018 — Animesh: "can we have some debugs added to check for all the strategy what is the PNL at 15:30 and what does the snapshot measure, i believe there is a disparency" |
+| Discovered | 2026-07-23, as a direct generalisation of BUG-018 — see **Discovery** below the table |
 | Location | `src/strategy/monitor.py::StrategyMonitor` |
 
-**Hypothesis being tested:** BUG-018 showed `paper_ic_nifty_v2_monthly`'s own internal P&L computation (`_compute_combined_pnl` inside `check_signals`) never ran at all (silently short-circuited before reaching it) — so the "disparity" there was actually "the live side computed nothing," not "the two sides computed different numbers using the same inputs." Now that BUG-018 is fixed, Animesh suspects a *broader* disparity may exist across all strategies between what the live monitor tick sees intraday (specifically near close, ~15:30) and what `paper_snapshot.py`'s EOD cron records a few minutes later (~15:35-15:36). This could be: (a) a genuine last-minute market move between the last tick and the EOD read (not a bug), (b) a real computation/staleness bug independent of BUG-018, or (c) nothing — the two readings may in fact agree once V2 is no longer blind.
+**Discovery:** Animesh: "can we have some debugs added to check for all the strategy what is the PNL at 15:30 and what does the snapshot measure, i believe there is a disparency"
 
-**Instrumentation added (2026-07-23):** `StrategyMonitor._log_live_pnl_diag()`, called at the end of every `_tick()`. Restricted to the 15:20-15:30 IST window (not every ~90s tick all day, to avoid adding a `get_ltp` batch call per strategy on every tick). For every registered strategy with at least one open leg (`net_qty != 0`), it calls `PaperTracker.compute_pnl(strategy_name)` — the *exact same function* `paper_snapshot.py`'s EOD cron calls, not an approximation — and logs `strategy_monitor.live_pnl_diag` with `unrealized_pnl`/`realized_pnl`/`total_pnl`/`time`. Because it's the identical function, any gap between this tick's reading (~15:20-15:30) and the EOD snapshot's own log line (`Recorded paper NAV snapshot for '<strategy>' ... total_pnl=X`, ~15:35-15:36) is a genuine timing/staleness disparity, not a methodology difference — the two sides can be diffed directly.
+**Hypothesis being tested:** BUG-018 showed `paper_ic_nifty_v2_monthly`'s own internal P&L computation (`_compute_combined_pnl` inside `check_signals`) never ran at all
+(silently short-circuited before reaching it) — so the "disparity" there was actually "the live side computed nothing," not "the two sides computed different numbers using the same inputs."
+Now that BUG-018 is fixed, Animesh suspects a *broader* disparity may exist across all strategies between what the live monitor tick sees intraday (specifically near close, ~15:30)
+and what `paper_snapshot.py`'s EOD cron records a few minutes later (~15:35-15:36).
+This could be: (a) a genuine last-minute market move between the last tick and the EOD read (not a bug), (b) a real computation/staleness bug independent of BUG-018,
+or (c) nothing — the two readings may in fact agree once V2 is no longer blind.
 
-**Tests:** `tests/unit/strategy/test_strategy_monitor.py` — `test_live_pnl_diag_logged_inside_close_window`, `test_live_pnl_diag_skipped_outside_window`, `test_live_pnl_diag_skipped_when_strategy_flat`, `test_live_pnl_diag_swallows_compute_pnl_exception`, `test_live_pnl_diag_skipped_when_compute_pnl_returns_none`, `test_live_pnl_diag_window_boundaries` (parametrized, added after code review — see below). **Not run in-sandbox** (same disk-quota limitation as BUG-018) — verified via `py_compile` only, pending live-host `pytest` run.
+**Instrumentation added (2026-07-23):** `StrategyMonitor._log_live_pnl_diag()`, called at the end of every `_tick()`.
+Restricted to the 15:20-15:30 IST window (not every ~90s tick all day, to avoid adding a `get_ltp` batch call per strategy on every tick).
+For every registered strategy with at least one open leg (`net_qty != 0`), it calls `PaperTracker.compute_pnl(strategy_name)`
+— the *exact same function* `paper_snapshot.py`'s EOD cron calls, not an approximation — and logs `strategy_monitor.live_pnl_diag` with `unrealized_pnl`/`realized_pnl`/`total_pnl`/`time`.
+Because it's the identical function, any gap between this tick's reading (~15:20-15:30)
+and the EOD snapshot's own log line (`Recorded paper NAV snapshot for '<strategy>' ... total_pnl=X`, ~15:35-15:36) is a genuine timing/staleness disparity,
+not a methodology difference — the two sides can be diffed directly.
 
-**Code review (2026-07-23):** general-purpose agent loaded `.claude/agents/code-reviewer.md` + `REVIEW.md` directly and reviewed the scoped diff. 1 CRITICAL, 2 WARNING, 1 INFO — all resolved before commit:
-- **CRITICAL** (REVIEW.md G5): `except Exception:` in `_log_live_pnl_diag` lacked the required inline `# Intentional: ...` comment (the docstring rationale doesn't satisfy the rule as written). Fixed: added inline comment on the `except` line.
-- **WARNING**: the diag call was awaited *before* `_write_heartbeat`, so a slow/hanging `get_ltp` inside the comparison window could delay heartbeat freshness — a real (if narrow) production effect for something meant to be a pure side-channel. Fixed: reordered so `_write_heartbeat` runs first, diag call moved after.
-- **WARNING**: the original tests covered only one clearly-inside (15:25) and one clearly-outside (11:00) time, leaving the inclusive `_PNL_DIAG_WINDOW_START`/`_MARKET_CLOSE` boundaries (15:20, 15:30) and the just-outside minutes (15:19, 15:31) unasserted — exactly where off-by-one errors hide. Fixed: added `test_live_pnl_diag_window_boundaries` (parametrized, 4 cases).
-- **INFO**: mocking `monitor._tracker` post-construction (rather than mocking broker/store) verified as a reasonable unit-test strategy — the real `PaperTracker(store, broker)` wiring still runs in `__init__` via `_make_monitor`, no integration gap hidden. No action needed.
+**Tests:** `tests/unit/strategy/test_strategy_monitor.py` — `test_live_pnl_diag_logged_inside_close_window`, `test_live_pnl_diag_skipped_outside_window`,
+`test_live_pnl_diag_skipped_when_strategy_flat`, `test_live_pnl_diag_swallows_compute_pnl_exception`, `test_live_pnl_diag_skipped_when_compute_pnl_returns_none`,
+`test_live_pnl_diag_window_boundaries` (parametrized, added after code review — see below). **Not run in-sandbox** (same disk-quota limitation as BUG-018)
+— verified via `py_compile` only, pending live-host `pytest` run.
+
+**Code review (2026-07-23):** general-purpose agent loaded `.claude/agents/code-reviewer.md` + `REVIEW.md` directly and reviewed the scoped diff. 1 CRITICAL,
+2 WARNING, 1 INFO — all resolved before commit:
+- **CRITICAL** (REVIEW.md G5): `except Exception:` in `_log_live_pnl_diag` lacked the required inline `# Intentional: ...` comment (the docstring rationale doesn't satisfy the rule as written).
+Fixed: added inline comment on the `except` line.
+- **WARNING**: the diag call was awaited *before* `_write_heartbeat`, so a slow/hanging `get_ltp` inside the comparison window could delay heartbeat freshness
+— a real (if narrow) production effect for something meant to be a pure side-channel. Fixed: reordered so `_write_heartbeat` runs first, diag call moved after.
+- **WARNING**: the original tests covered only one clearly-inside (15:25) and one clearly-outside (11:00) time, leaving the inclusive `_PNL_DIAG_WINDOW_START`/`_MARKET_CLOSE` boundaries (15:20, 15:30)
+and the just-outside minutes (15:19, 15:31) unasserted — exactly where off-by-one errors hide. Fixed: added `test_live_pnl_diag_window_boundaries` (parametrized, 4 cases).
+- **INFO**: mocking `monitor._tracker` post-construction (rather than mocking broker/store) verified as a reasonable unit-test strategy
+— the real `PaperTracker(store, broker)` wiring still runs in `__init__` via `_make_monitor`, no integration gap hidden. No action needed.
 Decimal correctness (`str(unrealized)` etc., no float leakage) and the `PaperTracker(store, broker)`/`BrokerClient`-satisfies-`MarketDataProvider` wiring both verified clean.
 
-**Next step:** after the next trading day, grep `logs/monitor_daemon.log` for `strategy_monitor.live_pnl_diag` (per strategy, 15:20-15:30 entries) and `logs/paper_snapshot.log` for `Recorded paper NAV snapshot` (same day), diff the last live reading against the EOD figure for every strategy. If a real gap shows up beyond what a few minutes of market movement could plausibly explain, escalate to a proper BUG-0XX with root-cause investigation; if not, remove this diagnostic (same 2026-07-24-style cleanup as BUG-018's temp logs, timeline TBD based on how many days of data are needed).
+**Next step:** after the next trading day, grep `logs/monitor_daemon.log` for `strategy_monitor.live_pnl_diag` (per strategy, 15:20-15:30 entries)
+and `logs/paper_snapshot.log` for `Recorded paper NAV snapshot` (same day), diff the last live reading against the EOD figure for every strategy.
+If a real gap shows up beyond what a few minutes of market movement could plausibly explain, escalate to a proper BUG-0XX with root-cause investigation;
+if not, remove this diagnostic (same 2026-07-24-style cleanup as BUG-018's temp logs, timeline TBD based on how many days of data are needed).
 
 **Committed:** SHA `f7177b6`.
 
@@ -123,18 +168,51 @@ protocol doesn't pick B019.1 up next.
 
 | Field | Value |
 |---|---|
-| Severity | **MEDIUM** — same category as BUG-035: `paper_trades.state` staleness on already-flat legs, not a live P&L/Greeks defect. Currently inert per BUG-035's B035.1 trace (flat legs, `net_qty == 0`, never appear in `get_positions()`'s output, so `check_signals` never re-evaluates them regardless of their stale `state`) — but the wiring gap is real and wider than BUG-035 scoped. |
+| Severity | **MEDIUM** — see **Severity detail** below the table |
 | Status | 🔴 Open — found 2026-08-24, not yet fixed. |
-| Discovered | 2026-08-24, while validating BUG-035's generalized backfill script (`scripts/dev/backfill_mark_trade_closed_overlay.py --dry-run`) against the live DB — a scan for any `(strategy_name, leg_role, instrument_key)` that's flat but still `state IN ('OPEN','DEFENDED')` returned 54 rows, not the 2 BUG-035 already fixed. |
-| Location | `src/strategy/csp_roll_executor.py::close_csp_leg` (CSP), `src/strategy/ic_close_executor.py::close_ic_legs`/`roll_ic_legs` (IC v1/v2); likely also `scripts/strategies/three_track/paper_3track_roll.py`'s futures/proxy roll-close writes (unconfirmed, see Suggested fix). |
+| Discovered | 2026-08-24 — see **Discovery** below the table |
+| Location | `src/strategy/csp_roll_executor.py::close_csp_leg` (CSP), `src/strategy/ic_close_executor.py::close_ic_legs`/`roll_ic_legs` (IC v1/v2) — see **Location detail** below the table |
 
-**Symptom:** 54 `(strategy_name, leg_role, instrument_key)` tuples are fully flat (BUY quantity − SELL quantity == 0) but still carry `state IN ('OPEN','DEFENDED')` on every row. Breakdown: 5 `paper_csp_nifty_v1` short_put legs, 46 across `paper_ic_nifty_v1_weekly`/`monthly`/`leaps` and `paper_ic_nifty_v2_monthly` (short_call/short_put/long_call_hedge/long_put_hedge), 1 `paper_nifty_futures` base_futures leg, 1 `paper_nifty_proxy` base_ditm_call leg, and 1 more `paper_nifty_overlay`/`overlay_pp` leg (`NSE_FO|74046`) that BUG-035's original two-row backfill missed because it only looked at the two instrument keys named in that bug's discovery query, not the whole table.
+**Severity detail:** same category as BUG-035: `paper_trades.state` staleness on already-flat legs, not a live P&L/Greeks defect.
+Currently inert per BUG-035's B035.1 trace (flat legs, `net_qty == 0`, never appear in `get_positions()`'s output, so `check_signals` never re-evaluates them regardless of their stale `state`)
+— but the wiring gap is real and wider than BUG-035 scoped.
 
-**Root cause:** Same shape as BUG-035 — `PaperStore.mark_trade_closed()` was never wired into the CSP or IC close/roll paths either. Confirmed via direct grep (not the codebase graph — see note below): `csp_roll_executor.py::close_csp_leg()` (used by `CSPNiftyV1.apply_action`'s `CLOSE_AND_ROLL`/`CLOSE_AND_WAIT`/`ROLL_DOWN_AND_OUT` branches) calls `store.record_trade(close_trade)` and nothing else. `ic_close_executor.py::close_ic_legs()`/`roll_ic_legs()` (used by both `IronCondorV1` and `IronCondorV2`'s `apply_action` for `CLOSE_FULL`/`CLOSE_CALL_SPREAD`/`CLOSE_PUT_SPREAD` and roll actions) call `store.record_trades(trades)` and nothing else. Neither ever calls `mark_trade_closed()`.
+**Discovery:** while validating BUG-035's generalized backfill script (`scripts/dev/backfill_mark_trade_closed_overlay.py --dry-run`) against the live DB
+— a scan for any `(strategy_name, leg_role, instrument_key)` that's flat but still `state IN ('OPEN','DEFENDED')` returned 54 rows, not the 2 BUG-035 already fixed.
 
-**Graph-index correction (important for future sessions):** BUG-035's B035.1 trace used `codebase-memory-mcp`'s `trace_path(direction=inbound)` and reported **zero callers** for both `get_trade_state()` and `mark_trade_defended()` project-wide. That was wrong — a direct `grep -rn` found real callers of both in `src/strategy/csp_nifty_v1.py` (`get_trade_state()` at line 203, feeding `evaluate_delta_breach_csp`'s OPEN-vs-DEFENDED state-aware branching per `CONTEXT.md`'s own documented behavior; `mark_trade_defended()` at line 596, in the `ROLL_DOWN_AND_OUT` flow). The graph's CALLS-edge index for this repo appears stale for at least these two symbols. This doesn't change B035.1's practical conclusion — CSP's `check_signals` only reaches `get_trade_state()` for positions `get_positions()` returns, which excludes flat (`net_qty == 0`) legs entirely, so the 54 stale rows found here (all flat) still don't affect any live signal evaluation today — but the graph result itself should not be trusted as a sole source for "zero callers" claims going forward; grep or `query_graph`'s raw CALLS-edge scan should corroborate before stating a symbol is orphaned.
+**Location detail:** likely also `scripts/strategies/three_track/paper_3track_roll.py`'s futures/proxy roll-close writes (unconfirmed, see Suggested fix).
 
-**Suggested fix:** Mirror BUG-035's fix shape — add `store.mark_trade_closed(...)` (or, if a roll only partially closes down to a nonzero size, the appropriate state transition) at each close write site above, gated on the write actually flattening the position. Before implementing, trace `close_csp_leg`/`close_ic_legs`/`roll_ic_legs` call sites for any place a *partial* close/roll can leave `net_qty != 0` — unlike BUG-035's overlay legs (always full closes), CSP's `ROLL_DOWN_AND_OUT` and IC's spread-only closes are explicitly partial at the strategy level, so `mark_trade_closed()` must only fire on the specific leg's own row, using the per-leg trade being written (not a whole-strategy flatten check), same pattern already validated in BUG-035's `OverlayCloser` fix. `paper_3track_roll.py`'s futures/proxy roll-close path needs its own trace (not yet done) before assuming the identical fix applies. Backfill: `scripts/dev/backfill_mark_trade_closed_overlay.py` (built for BUG-035, generalized to scan the whole table rather than hardcoding instrument keys) already covers all 54 rows found here — safe to run once the root-cause fix lands, since its discovery query only targets rows that are *already* flat (no partial-close risk).
+**Symptom:** 54 `(strategy_name, leg_role, instrument_key)` tuples are fully flat (BUY quantity − SELL quantity == 0) but still carry `state IN ('OPEN','DEFENDED')` on every row.
+Breakdown: 5 `paper_csp_nifty_v1` short_put legs, 46 across `paper_ic_nifty_v1_weekly`/`monthly`/`leaps` and `paper_ic_nifty_v2_monthly` (short_call/short_put/long_call_hedge/long_put_hedge),
+1 `paper_nifty_futures` base_futures leg, 1 `paper_nifty_proxy` base_ditm_call leg, and 1 more `paper_nifty_overlay`/`overlay_pp` leg (`NSE_FO|74046`) that BUG-035's original two-row backfill missed
+because it only looked at the two instrument keys named in that bug's discovery query, not the whole table.
+
+**Root cause:** Same shape as BUG-035 — `PaperStore.mark_trade_closed()` was never wired into the CSP or IC close/roll paths either.
+Confirmed via direct grep (not the codebase graph — see note below):
+`csp_roll_executor.py::close_csp_leg()` (used by `CSPNiftyV1.apply_action`'s `CLOSE_AND_ROLL`/`CLOSE_AND_WAIT`/`ROLL_DOWN_AND_OUT` branches) calls `store.record_trade(close_trade)`
+and nothing else.
+`ic_close_executor.py::close_ic_legs()`/`roll_ic_legs()` (used by both `IronCondorV1` and `IronCondorV2`'s `apply_action` for `CLOSE_FULL`/`CLOSE_CALL_SPREAD`/`CLOSE_PUT_SPREAD` and roll actions)
+call `store.record_trades(trades)` and nothing else. Neither ever calls `mark_trade_closed()`.
+
+**Graph-index correction (important for future sessions):** BUG-035's B035.1 trace used `codebase-memory-mcp`'s `trace_path(direction=inbound)`
+and reported **zero callers** for both `get_trade_state()` and `mark_trade_defended()` project-wide. That was wrong
+— a direct `grep -rn` found real callers of both in `src/strategy/csp_nifty_v1.py` (`get_trade_state()` at line 203,
+feeding `evaluate_delta_breach_csp`'s OPEN-vs-DEFENDED state-aware branching per `CONTEXT.md`'s own documented behavior;
+`mark_trade_defended()` at line 596, in the `ROLL_DOWN_AND_OUT` flow).
+The graph's CALLS-edge index for this repo appears stale for at least these two symbols.
+This doesn't change B035.1's practical conclusion — CSP's `check_signals` only reaches `get_trade_state()` for positions `get_positions()` returns,
+which excludes flat (`net_qty == 0`) legs entirely, so the 54 stale rows found here (all flat) still don't affect any live signal evaluation today —
+but the graph result itself should not be trusted as a sole source for "zero callers" claims going forward;
+grep or `query_graph`'s raw CALLS-edge scan should corroborate before stating a symbol is orphaned.
+
+**Suggested fix:** Mirror BUG-035's fix shape
+— add `store.mark_trade_closed(...)` (or, if a roll only partially closes down to a nonzero size, the appropriate state transition) at each close write site above,
+gated on the write actually flattening the position. Before implementing, trace `close_csp_leg`/`close_ic_legs`/`roll_ic_legs` call sites for any place a *partial* close/roll can leave `net_qty != 0`
+— unlike BUG-035's overlay legs (always full closes), CSP's `ROLL_DOWN_AND_OUT` and IC's spread-only closes are explicitly partial at the strategy level,
+so `mark_trade_closed()` must only fire on the specific leg's own row, using the per-leg trade being written (not a whole-strategy flatten check),
+same pattern already validated in BUG-035's `OverlayCloser` fix. `paper_3track_roll.py`'s futures/proxy roll-close path needs its own trace (not yet done) before assuming the identical fix applies.
+Backfill: `scripts/dev/backfill_mark_trade_closed_overlay.py` (built for BUG-035, generalized to scan the whole table rather than hardcoding instrument keys) already covers all 54 rows found here
+— safe to run once the root-cause fix lands, since its discovery query only targets rows that are *already* flat (no partial-close risk).
 
 **Related:** BUG-035 (identical bug shape, different call sites — CC/PP/Collar there, CSP/IC here); this bug's discovery came directly out of validating BUG-035's backfill script.
 

@@ -36,7 +36,8 @@ All four must pass before Phase 1 begins.
 
 ### B — Exit-Path Validation
 
-Each exit mechanism must be validated at least once through **either** live paper occurrence **or** deterministic historical replay using the same strategy logic, data schema, cost model, and P&L attribution code.
+Each exit mechanism must be validated at least once through **either** live paper occurrence **or** deterministic historical replay using the same strategy logic,
+data schema, cost model, and P&L attribution code.
 
 | Exit Type | Validation Requirement |
 |---|---|
@@ -44,7 +45,9 @@ Each exit mechanism must be validated at least once through **either** live pape
 | Time stop (21-day) | Live paper preferred; historical replay acceptable |
 | Delta/mark stop | Live paper required before Tier 2 scaling; replay acceptable for Tier 1 pilot |
 
-**What "historical replay" means:** Run the production paper-trade code against a known historical stress episode (e.g., COVID week of 2020-03-16, IL&FS week of 2018-09-21) injected into the staging environment. This validates that the monitoring daemon correctly identifies the trigger condition, queues the exit, and records P&L — without waiting for the market to crash.
+**What "historical replay" means:** Run the production paper-trade code against a known historical stress episode
+(e.g., COVID week of 2020-03-16, IL&FS week of 2018-09-21) injected into the staging environment.
+This validates that the monitoring daemon correctly identifies the trigger condition, queues the exit, and records P&L — without waiting for the market to crash.
 
 Do not build the replay harness until Phase 1 backtest data pipeline (task 1.3) is live. See `TODOS.md → Define historical replay harness`.
 
@@ -68,9 +71,11 @@ If the market does not naturally provide any of these within 9 calendar months, 
 > 1. The full 8-year backtest distribution
 > 2. A regime-matched subset (filter backtest for cycles with IVR/vol conditions matching the paper period)
 
-The global comparison alone is insufficient: 6 calm paper cycles compared against an 8-year distribution including COVID and IL&FS produces a spurious variance flag not because the system is broken, but because the paper sample is drawn from a non-stationary subset.
+The global comparison alone is insufficient: 6 calm paper cycles compared against an 8-year distribution including COVID
+and IL&FS produces a spurious variance flag not because the system is broken, but because the paper sample is drawn from a non-stationary subset.
 
-**Z-score role:** This is a **drift smoke test only**, not statistical proof. At N≈6, `|Z| ≤ 1.5` has <40% power to detect realistic operational drift (0.25–0.75 SD mean degradation). A pass means "no gross mismatch detected yet." It unlocks **Tier 1 limited pilot only**.
+**Z-score role:** This is a **drift smoke test only**, not statistical proof. At N≈6, `|Z| ≤ 1.5` has <40% power to detect realistic operational drift (0.25–0.75 SD mean degradation).
+A pass means "no gross mismatch detected yet." It unlocks **Tier 1 limited pilot only**.
 
 See Task 1.11 in `BACKTEST_PLAN.md` for computation methodology.
 

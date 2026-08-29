@@ -212,7 +212,10 @@ the TGFMT-1 fix into a shared helper and retrofit the other sites.
 | `scripts/strategies/three_track/paper_3track_overlay_entry.py` | trade-log table | broken | TGFMT-7 |
 | `scripts/strategies/three_track/paper_3track_entry.py` | strike-candidate table | broken | TGFMT-7 |
 | `scripts/dev/paper_track_snapshot.py` | pnl-line builder | broken | TGFMT-7 |
-| `src/strategy/collar_overlay_v1.py` / `cc_overlay_v1.py` / `pp_overlay_v1.py`, `paper_3track_roll.py`, `overlay_closer.py`, `position_health_check.py`, `healthcheck.py`, `paper_ic_entry_v2.py` | various | prose only, no column alignment | out of scope — nothing to fix |
+| _(8 more files — see note below the table)_ | various | prose only, no column alignment | out of scope — nothing to fix |
+
+Out-of-scope files (prose only, no column alignment, nothing to fix):
+`src/strategy/collar_overlay_v1.py` / `cc_overlay_v1.py` / `pp_overlay_v1.py`, `paper_3track_roll.py`, `overlay_closer.py`, `position_health_check.py`, `healthcheck.py`, `paper_ic_entry_v2.py`
 
 ---
 

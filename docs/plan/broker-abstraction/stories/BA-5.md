@@ -82,7 +82,8 @@ upstox_env: Literal["prod", "sandbox", "test", "dhan"] = "test"
 2. **Upstox test env:** `upstox_env="test"` → also returns `UpstoxMarketDataParser`.
 3. **Dhan selection:** `upstox_env="dhan"` with injected mock adapter → returns `DhanMarketDataParser`.
 4. **Unknown env:** `upstox_env="unknown_broker"` → raises `ValueError`.
-5. **Smoke test — Dhan parse:** with `upstox_env="dhan"`, injected `DhanInstrumentKeyAdapter` using fixture CSV, and Dhan chain fixture → `build_market_data_parser().parse_option_chain(fixture)` returns valid `OptionChain` with correct strike count.
+5. **Smoke test — Dhan parse:** with `upstox_env="dhan"`, injected `DhanInstrumentKeyAdapter` using fixture CSV,
+and Dhan chain fixture → `build_market_data_parser().parse_option_chain(fixture)` returns valid `OptionChain` with correct strike count.
 6. **Protocol conformance:** returned parser from both `"prod"` and `"dhan"` paths satisfies `isinstance(..., MarketDataParser)`.
 
 All tests use injected settings — no live API calls, no filesystem access except fixture CSV.

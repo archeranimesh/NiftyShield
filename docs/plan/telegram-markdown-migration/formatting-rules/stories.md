@@ -35,18 +35,43 @@ draft and is superseded wherever it disagrees with that file.
 `scratch/2026-08-07_ic_eod_audit_telegram_format.py` across several rounds of user feedback —
 not invented fresh; confirm against that script's final version):
 
-| Parameter type | Format | Example | Rationale |
-|---|---|---|---|
-| Money (premium, credit, margin, P&L) — `format_money` default | `Decimal`, 2dp, `,` thousands sep, `₹` prefix | `₹86.68`, `₹82,628` | Project invariant: monetary fields are always `Decimal`, never `float` (`CLAUDE.md` Data Layer rule). Margin happens to always be whole rupees in practice but format as 2dp for consistency, not a special case. |
-| Strike price | Integer, no decimal | `23000` | Strikes are always whole numbers on NSE; a trailing `.0` is visual noise (same rule `format_option_label` already applies in `src/instruments/lookup.py`, TL-1 — reuse that convention, don't reinvent it). |
-| Greeks (delta; extend to gamma/theta/vega when those appear in a message) | 2dp, always signed (`+`/`-`), `-` placeholder when not applicable to a leg (e.g. long legs with no delta figure in the source data) | `+0.28`, `-0.03`, `-` | Matches existing Greeks-analyst convention in trading vocabulary; explicit sign disambiguates short/long-side delta at a glance. |
-| LTP / Entry — `format_money` default (2dp) | 2dp | `₹9.30` | Matches money default everywhere `format_money` is used directly (kv tables, prose lines). |
-| LTP / Entry — **inside `build_leg_table` specifically** | 1dp, locked-in exception | `9.3` | **Resolved 2026-08-07** (confirmed with Animesh): 1dp is a deliberate width-saving override for this one table, not a silent inconsistency — narrow mobile screens can't afford 2dp across 4 numeric columns plus a Δ column in a fenced code block. `build_leg_table` must document this explicitly in its own docstring as an override of `format_money`'s default, not call `format_money` for these two columns — use a local 1dp format instead. Every other caller of LTP/Entry (e.g. a future single-leg close notification, `strategy-rollout/` ROLL-3) uses the 2dp default unless it has the same mobile-table width constraint. |
-| DTE, Open legs, quantities | Integer | `18`, `4` | Whole units, no formatting needed. |
-| IVR | 2dp, unitless | `0.16` | Matches how it's already displayed in existing option-chain analysis. |
-| Percentages (Captured %, ROI %) | 1dp; whole numbers print with no trailing `.0` | `3%`, `2.7%`, `0.2%` | One decimal is enough precision for a percentage-of-credit figure; 2dp reads as false precision on numbers this small. Resolves the ambiguity FMT-2's original docstring flagged ("4" -> "4%" vs "4.0%") — whole-number inputs print bare, fractional inputs get 1dp. Confirmed via `format_pct` in `scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py`. |
-| Money — negative values (loss states) | Sign BEFORE the `₹` symbol, not after | `-₹11.08`, not `₹-11.08` | **Added 2026-08-07** (ROLL-1 scratch iteration, `scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py`). A naive `f"₹{value:,.2f}"` puts Python's sign after the literal `₹` prefix for negative `Decimal`s, which reads wrong typographically. FMT-1's original table only had positive examples, so this case was unspecified — worth locking in now, before any message actually shows a loss state, so FMT-2's real `format_money` doesn't ship the naive version and need a follow-up fix. |
-| Expiry date — `format_expiry` | `dd Mon yy`, no leading zero on day | `25 Aug 26`, `5 Aug 26` | **Added 2026-08-07** (ROLL-1, `scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py`) — expiry was previously resolved (for DTE) but never displayed anywhere. `strftime("%d %b %y").lstrip("0")`, not `%-d` (platform-dependent, fails on some Windows builds). Source is the `expiry` date object `process_variant()` already resolves via the BOD instrument lookup — DTE is derived FROM it, so never reconstruct expiry from DTE in the real implementation. |
+| Parameter type | Format | Example |
+|---|---|---|
+| Money (premium, credit, margin, P&L) — `format_money` default | `Decimal`, 2dp, `,` thousands sep, `₹` prefix | `₹86.68`, `₹82,628` |
+| Strike price | Integer, no decimal | `23000` |
+| Greeks (delta; extend to gamma/theta/vega when those appear in a message) | 2dp, always signed (`+`/`-`), `-` placeholder when not applicable to a leg | `+0.28`, `-0.03`, `-` |
+| LTP / Entry — `format_money` default (2dp) | 2dp | `₹9.30` |
+| LTP / Entry — **inside `build_leg_table` specifically** | 1dp, locked-in exception | `9.3` |
+| DTE, Open legs, quantities | Integer | `18`, `4` |
+| IVR | 2dp, unitless | `0.16` |
+| Percentages (Captured %, ROI %) | 1dp; whole numbers print with no trailing `.0` | `3%`, `2.7%`, `0.2%` |
+| Money — negative values (loss states) | Sign BEFORE the `₹` symbol, not after | `-₹11.08`, not `₹-11.08` |
+| Expiry date — `format_expiry` | `dd Mon yy`, no leading zero on day | `25 Aug 26`, `5 Aug 26` |
+
+**Rationale (per row above):**
+- **Money (premium, credit, margin, P&L) — `format_money` default:** Project invariant: monetary fields are always `Decimal`, never `float` (`CLAUDE.md` Data Layer rule).
+  Margin happens to always be whole rupees in practice but format as 2dp for consistency, not a special case.
+- **Strike price:** Strikes are always whole numbers on NSE; a trailing `.0` is visual noise (same rule `format_option_label` already applies in `src/instruments/lookup.py`, TL-1
+  — reuse that convention, don't reinvent it).
+- **Greeks (delta; extend to gamma/theta/vega when those appear in a message):** Matches existing Greeks-analyst convention in trading vocabulary;
+  explicit sign disambiguates short/long-side delta at a glance.
+  The `-` placeholder is used when delta is not applicable to a leg (e.g. long legs with no delta figure in the source data).
+- **LTP / Entry — `format_money` default (2dp):** Matches money default everywhere `format_money` is used directly (kv tables, prose lines).
+- **LTP / Entry — inside `build_leg_table` specifically:** **Resolved 2026-08-07** (confirmed with Animesh): 1dp is a deliberate width-saving override for this one table,
+  not a silent inconsistency — narrow mobile screens can't afford 2dp across 4 numeric columns plus a Δ column in a fenced code block.
+  `build_leg_table` must document this explicitly in its own docstring as an override of `format_money`'s default, not call `format_money` for these two columns — use a local 1dp format instead.
+  Every other caller of LTP/Entry (e.g. a future single-leg close notification, `strategy-rollout/` ROLL-3) uses the 2dp default unless it has the same mobile-table width constraint.
+- **DTE, Open legs, quantities:** Whole units, no formatting needed.
+- **IVR:** Matches how it's already displayed in existing option-chain analysis.
+- **Percentages (Captured %, ROI %):** One decimal is enough precision for a percentage-of-credit figure; 2dp reads as false precision on numbers this small.
+  Resolves the ambiguity FMT-2's original docstring flagged ("4" -> "4%" vs "4.0%") — whole-number inputs print bare, fractional inputs get 1dp.
+  Confirmed via `format_pct` in `scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py`.
+- **Money — negative values (loss states):** **Added 2026-08-07** (ROLL-1 scratch iteration, `scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py`).
+  A naive `f"₹{value:,.2f}"` puts Python's sign after the literal `₹` prefix for negative `Decimal`s, which reads wrong typographically. FMT-1's original table only had positive examples,
+  so this case was unspecified — worth locking in now, before any message actually shows a loss state, so FMT-2's real `format_money` doesn't ship the naive version and need a follow-up fix.
+- **Expiry date — `format_expiry`:** **Added 2026-08-07** (ROLL-1, `scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py`) — expiry was previously resolved (for DTE) but never displayed anywhere.
+  `strftime("%d %b %y").lstrip("0")`, not `%-d` (platform-dependent, fails on some Windows builds).
+  Source is the `expiry` date object `process_variant()` already resolves via the BOD instrument lookup — DTE is derived FROM it, so never reconstruct expiry from DTE in the real implementation.
 
 **Tests:** none — docs-only task.
 
@@ -60,11 +85,21 @@ not invented fresh; confirm against that script's final version):
 **Not in the original FMT-1 table.** Surfaced during the three-track base-leg roll notification
 workshop (`message-format-workshop.md`, `scratch/2026-08-10_3track_roll_notification_format.py`).
 
-| Parameter type | Format | Example | Rationale |
-|---|---|---|---|
-| Money — explicit-positive-sign override | `format_money(value, signed=True)`: leading `+` on positive values, same before-`₹` negative-sign rule otherwise | `+₹7,812.50`, `-₹393.00` | `format_money`'s existing default only distinguishes negative (no sign shown on positive). A P&L line specifically needs the sign unambiguous in both directions at a glance — implement as a `signed: bool = False` kwarg (default preserves every existing caller), not a second formatter function. |
-| Futures calendar spread | `Contango` (far\-month price > near\-month price) / `Backwardation` (far < near) / `Flat` (equal) | `43.25 pts (Contango)` | Standard futures calendar-spread usage — same curve-slope concept as spot-vs-future, applied between two futures expiries. **Scoped to `base_futures`-style rolls only** — do not apply to an option-premium spread, see next row. |
-| Option-premium roll spread (same strike, different expiry) | `Debit` (farther expiry costs more to roll into) / `Credit` (costs less) / `Flat` (equal) | `25.62 pts (Debit)` | "Contango"/"Backwardation" is futures-curve terminology and does not describe an option premium difference between two expiries of the same strike — confirmed correction, `ROLL-9` session. Uses the same spread magnitude (`open_price - close_price`) as the futures row, just a different sign-to-label mapping and a different applicable leg type. |
+| Parameter type | Format | Example |
+|---|---|---|
+| Money — explicit-positive-sign override | `format_money(value, signed=True)`: leading `+` on positive values, same before-`₹` negative-sign rule otherwise | `+₹7,812.50`, `-₹393.00` |
+| Futures calendar spread | `Contango` (far\-month price > near\-month price) / `Backwardation` (far < near) / `Flat` (equal) | `43.25 pts (Contango)` |
+| Option-premium roll spread (same strike, different expiry) | `Debit` (farther expiry costs more to roll into) / `Credit` (costs less) / `Flat` (equal) | `25.62 pts (Debit)` |
+
+**Rationale (per row above):**
+- **Money — explicit-positive-sign override:** `format_money`'s existing default only distinguishes negative (no sign shown on positive).
+  A P&L line specifically needs the sign unambiguous in both directions at a glance — implement as a `signed: bool = False` kwarg (default preserves every existing caller),
+  not a second formatter function.
+- **Futures calendar spread:** Standard futures calendar-spread usage — same curve-slope concept as spot-vs-future, applied between two futures expiries. **Scoped to `base_futures`-style rolls only**
+  — do not apply to an option-premium spread, see next row.
+- **Option-premium roll spread (same strike, different expiry):** "Contango"/"Backwardation" is futures-curve terminology
+  and does not describe an option premium difference between two expiries of the same strike — confirmed correction, `ROLL-9` session.
+  Uses the same spread magnitude (`open_price - close_price`) as the futures row, just a different sign-to-label mapping and a different applicable leg type.
 
 **Tests:** none — docs-only task (implementation tests land with whichever `ROLL-*` task
 promotes these into real code).
@@ -80,10 +115,17 @@ promotes these into real code).
 class of override `build_leg_table`'s 1dp exception already established (FMT-1's LTP/Entry row),
 applied to money instead of decimal precision.
 
-| Context | Format | Example | Rationale |
-|---|---|---|---|
-| Money inside a **multi-strategy summary table** (8+ rows, 3+ numeric columns) | Signed integer, comma thousands sep, **no `₹` prefix per cell** | `+11,024`, `-1,169` | `format_money`'s 2dp + `₹`-per-cell default does not fit 12 strategy rows × 3 numeric columns in a fixed-width monospace block under Telegram's mobile line-wrap limit. `₹` appears exactly once, on the message's Net P&L summary line, not per table cell. |
-| Zero values inside the same table | Bare `-` (accounting-dash convention) | `-` | **Revised 2026-08-08 (v2)** — v1 rendered zero as bare `0`; changed to `-` to reduce visual noise from strategies/legs that haven't booked or marked anything yet. Sign is otherwise always shown for non-zero values. |
+| Context | Format | Example |
+|---|---|---|
+| Money inside a **multi-strategy summary table** (8+ rows, 3+ numeric columns) | Signed integer, comma thousands sep, **no `₹` prefix per cell** | `+11,024`, `-1,169` |
+| Zero values inside the same table | Bare `-` (accounting-dash convention) | `-` |
+
+**Rationale (per row above):**
+- **Money inside a multi-strategy summary table (8+ rows, 3+ numeric columns):** `format_money`'s 2dp + `₹`-per-cell default does not fit 12 strategy rows × 3 numeric columns
+  in a fixed-width monospace block under Telegram's mobile line-wrap limit.
+  `₹` appears exactly once, on the message's Net P&L summary line, not per table cell.
+- **Zero values inside the same table:** **Revised 2026-08-08 (v2)** — v1 rendered zero as bare `0`;
+  changed to `-` to reduce visual noise from strategies/legs that haven't booked or marked anything yet. Sign is otherwise always shown for non-zero values.
 
 This is a table-specific override, not a general relaxation of the Decimal/2dp money rule —
 `format_money`'s 2dp default with `₹` prefix still applies everywhere else (kv tables, prose

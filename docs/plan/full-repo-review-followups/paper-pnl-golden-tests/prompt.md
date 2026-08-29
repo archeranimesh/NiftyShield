@@ -7,9 +7,13 @@ Complete it fully. Stop.
 Synthesis), FR-7 row 13 (ERROR) — FR-5 PNL-1. Independently re-verified against the live repo before this story was
 created — see FR-9's commit message for the verification method.
 
-`_compute_leg_unrealized_pnl`'s targeted property-test file (`tests/unit/test_pnl_hypothesis.py`) has no golden (exact-value) assertion — only property-based (magnitude-preserving) tests, which pass even for a sign-flip bug. Currently mitigated one layer up by golden tests in `test_tracker.py`, but the unit closest to the math is not self-verifying.
+`_compute_leg_unrealized_pnl`'s targeted property-test file (`tests/unit/test_pnl_hypothesis.py`) has no golden (exact-value) assertion —
+only property-based (magnitude-preserving) tests, which pass even for a sign-flip bug.
+Currently mitigated one layer up by golden tests in `test_tracker.py`, but the unit closest to the math is not self-verifying.
 
-**Surface & Model: Claude Code, Sonnet.** Requires `get_code_snippet('_compute_leg_unrealized_pnl')` mid-implementation to confirm the exact signature and sign convention before writing the fixture — Step 3b's explicit third Claude-routing criterion ("any task requiring graph queries mid-implementation to resolve ambiguity"). A cold Antigravity handoff has no live graph-MCP session to run that query against.
+**Surface & Model: Claude Code, Sonnet.** Requires `get_code_snippet('_compute_leg_unrealized_pnl')` mid-implementation to confirm the exact signature and sign convention before writing the fixture —
+Step 3b's explicit third Claude-routing criterion ("any task requiring graph queries mid-implementation to resolve ambiguity").
+A cold Antigravity handoff has no live graph-MCP session to run that query against.
 
 **Pre-implementation gate:** State in one sentence which task, which files, which test file.
 Do not write any code until this plan is stated.

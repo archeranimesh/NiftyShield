@@ -1,4 +1,5 @@
-Read `CONTEXT.md` and state `CONTEXT.md ✓` before doing anything else. Then read `docs/plan/paper-store-position-granularity/tasks.md` and find the first unchecked box. That is your **only task** for this session. Do not look at any other unchecked item. One task. Complete it fully. Stop.
+Read `CONTEXT.md` and state `CONTEXT.md ✓` before doing anything else. Then read `docs/plan/paper-store-position-granularity/tasks.md`
+and find the first unchecked box. That is your **only task** for this session. Do not look at any other unchecked item. One task. Complete it fully. Stop.
 
 **Story spec:** Read the matching story in `docs/plan/paper-store-position-granularity/stories.md` for the full spec.
 

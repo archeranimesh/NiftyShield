@@ -308,12 +308,14 @@ repo-hygiene call, not one, so leaving as WARNING/Sonnet-resolvable pending conf
 |---|---|---|---|
 | F10 | ERROR | Docs-archive | `docs/council/README.md` is the only doc attempting to describe `docs/archive/`'s shape, and covers 1 of 12 top-level entries (incompletely) — sharpens FR-3's F5 |
 | F10a | WARNING | Code | `src/portfolio/` ↔ `scripts/portfolio/` exact-name collision — new pairing FR-3 didn't enumerate; same risk class as F8/F9, arguably higher stakes (P&L critical path) |
-| F11 | WARNING | Docs-archive | `ic-e2e/`, `ic-full/`, `ic-multi-expiry/`, `ic-nifty-v2/` are a 4-member pattern of pre-convention top-level archive entries, not an isolated `ic-nifty-v2` placement mistake |
-| F12 | INFO | Docs-archive | `docs/archive/plan/`'s 9 loose files split into 3 documented-pre-convention (no drift) + 6 truly-undocumented (real drift, narrower scope than FR-3/seed implied — `variance_gate.md` is referenced, so 7 not 8 lack any mention) |
+| F11 | WARNING | Docs-archive | `ic-e2e/`, `ic-full/`, `ic-multi-expiry/`, `ic-nifty-v2/` are a 4-member pattern of pre-convention top-level archive dirs, not an isolated `ic-nifty-v2` misplacement |
+| F12 | INFO | Docs-archive | `docs/archive/plan/`'s 9 loose files split into 3 documented-pre-convention (no drift) + 6 truly-undocumented (real drift, narrower than FR-3/seed implied) |
 | F13 | INFO | Docs-active/Config | No referenced-but-missing directories found — `pyproject.toml` `testpaths`, `data/` inline paths in `CONTEXT.md` all check out |
 | F14 | WARNING | Config-and-data | `data/`'s 6-subtree structure has zero coverage in `CONTEXT_TREE.md` despite that file's stated purpose |
 | F15 | WARNING | Docs-active | `config/`, `docs/instructions/`, `docs/viz/` — undocumented, unlinked-from-root-docs directories with real (not dead) content |
 | F16 | WARNING | Config-and-data | `scratch/` tracked in git (including committed diff files) while functionally identical `tmp/` is gitignored — inconsistent VCS treatment of the same workflow |
+
+F12 detail: FR-3/seed implied 8 loose files lack any mention; `variance_gate.md` is referenced, so the real count is 7.
 
 **Confirmed still holding from FR-3:** F8 (`src/strategy/` vs `scripts/strategies/`) and F9
 (`src/intraday/`↔`scripts/intraday/`, `src/council/`↔`scripts/council/`) — no new evidence found

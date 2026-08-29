@@ -11,7 +11,8 @@ produce the structured handoff prompt containing the four mandatory elements
 2. **Objective** — one sentence, drawn from the first unchecked box in `tasks.md`.
 3. **Pointers** — explicit file paths / graph queries from this story's `stories.md`. Do not
    rely on Antigravity to discover scope on its own.
-4. **Boundaries** — Do not touch `data/portfolio/portfolio.sqlite` itself except through the read-only `.backup` API — no writes, no schema changes. Do not touch any file outside `scripts/portfolio/` and its test file.
+4. **Boundaries** — Do not touch `data/portfolio/portfolio.sqlite` itself except through the read-only `.backup` API — no writes, no schema changes.
+   Do not touch any file outside `scripts/portfolio/` and its test file.
 
 Then stop. Do not proceed to implementation.
 
@@ -27,9 +28,13 @@ rather than re-handing to Antigravity (FR-1 F-C1: Antigravity cannot spawn those
 Synthesis), FR-7 row 2 (CRITICAL) — FR-6 S-4. Independently re-verified against the live repo before this story was
 created — see FR-9's commit message for the verification method.
 
-No backup mechanism of any kind exists for `data/portfolio/portfolio.sqlite` — the single store of record for all trade history, paper P&L, approvals, and risk state. Confirmed: no `backup` reference anywhere in `scripts/`, no crontab entry, no doc. The DB also sits on a FUSE-artifact-littered mount, raising torn-copy risk for any naive `cp`-based backup.
+No backup mechanism of any kind exists for `data/portfolio/portfolio.sqlite` — the single store of record for all trade history, paper P&L, approvals, and risk state.
+Confirmed: no `backup` reference anywhere in `scripts/`, no crontab entry, no doc. The DB also sits on a FUSE-artifact-littered mount, raising torn-copy risk for any naive `cp`-based backup.
 
-**Surface & Model: Antigravity (handoff via the `handoff-antigravity` skill); Claude Code / Sonnet for the review half.** Textbook Step 3b Antigravity case — new script, mechanical once scoped (`sqlite3.Connection.backup()` + retention pruning), non-ambiguous spec, no real-time design decisions. Claude verifies SHA + test count per Step 3b before closing the phase.
+**Surface & Model: Antigravity (handoff via the `handoff-antigravity` skill);
+Claude Code / Sonnet for the review half.** Textbook Step 3b Antigravity case —
+new script, mechanical once scoped (`sqlite3.Connection.backup()` + retention pruning), non-ambiguous spec, no real-time design decisions.
+Claude verifies SHA + test count per Step 3b before closing the phase.
 
 **Story spec:** Read the matching story in `docs/plan/full-repo-review-followups/sqlite-backup-cron/stories.md` for the full spec.
 

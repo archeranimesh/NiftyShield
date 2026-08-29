@@ -1,6 +1,7 @@
 # Python Code Review Guidelines
 
-A consolidated reference covering subtle bug detection, clean code principles, and Pythonic idioms. Organized in two parts: **Part I** focuses on catching bugs; **Part II** focuses on structural quality and idiomatic Python.
+A consolidated reference covering subtle bug detection, clean code principles, and Pythonic idioms.
+Organized in two parts: **Part I** focuses on catching bugs; **Part II** focuses on structural quality and idiomatic Python.
 
 ---
 
@@ -225,7 +226,8 @@ cursor.execute("SELECT * FROM users WHERE name = ?", (name,))
 subprocess.run(["convert", filename], check=True)
 ```
 
-**Rule:** Any f-string or `%`-format feeding into SQL, shell commands, file paths, or `eval`/`exec` is a critical defect. Use parameterized queries, `subprocess` with argument lists, `pathlib` for paths.
+**Rule:** Any f-string or `%`-format feeding into SQL, shell commands, file paths, or `eval`/`exec` is a critical defect.
+Use parameterized queries, `subprocess` with argument lists, `pathlib` for paths.
 
 ---
 
@@ -360,7 +362,8 @@ def create_order(*, user_id, amount, currency, notify=True):
 
 ### Classes: Don't Fight Python's Object Model
 
-A class is justified when it has both state *and* behavior that are inseparable, or when you need to implement a protocol. If a class has only `__init__` and one other method, it's probably a function with a config object.
+A class is justified when it has both state *and* behavior that are inseparable, or when you need to implement a protocol.
+If a class has only `__init__` and one other method, it's probably a function with a config object.
 
 **Properties over getters/setters:**
 
@@ -575,7 +578,8 @@ def fetch_option_chain(symbol: str, expiry: date) -> OptionChain:
 ### Module and Package Structure: The Import Is the API
 
 - Prefix internal symbols with `_` or control exports via `__all__` in `__init__.py`.
-- Circular imports are a *structural* problem, not an import problem. Fixing them with `import` inside functions is a workaround, not a solution — it usually means two modules that should be one, or a shared dependency that should be a third module.
+- Circular imports are a *structural* problem, not an import problem.
+  Fixing them with `import` inside functions is a workaround, not a solution — it usually means two modules that should be one, or a shared dependency that should be a third module.
 
 ```python
 # __init__.py — explicit public API
@@ -586,7 +590,9 @@ __all__ = ["BrokerClient", "OrderValidationError", "fetch_option_chain"]
 
 ## Part III: Google Python Style Guide — Mandatory Rules for New Code
 
-These rules apply to **all new code** written in this repository. Violations in existing code are tracked as tech debt (TD-1 through TD-7 in `TODOS.md`) and will be cleaned up incrementally. For new code there is no grace period — flag these as `CRITICAL` during review.
+These rules apply to **all new code** written in this repository.
+Violations in existing code are tracked as tech debt (TD-1 through TD-7 in `TODOS.md`) and will be cleaned up incrementally.
+For new code there is no grace period — flag these as `CRITICAL` during review.
 
 ---
 
@@ -606,7 +612,9 @@ def _parse_row(row: dict) -> Foo:
     return Foo(id=row["id"])
 ```
 
-**Rule:** Any `@staticmethod` in new code is a `CRITICAL` finding. The method is not using `self` or `cls`, so it has no reason to live inside the class. Move it to module scope with a `_` prefix to preserve the "private" intent.
+**Rule:** Any `@staticmethod` in new code is a `CRITICAL` finding.
+The method is not using `self` or `cls`, so it has no reason to live inside the class.
+Move it to module scope with a `_` prefix to preserve the "private" intent.
 
 ---
 
@@ -627,7 +635,9 @@ result = some_function(
 )
 ```
 
-**Rule:** New code lines must not exceed 80 characters. The sole exception is URLs in comments that cannot be shortened — put them on their own line with a `# ` prefix so the URL itself does not pad the line count. Flag any new line > 80 chars during review.
+**Rule:** New code lines must not exceed 80 characters.
+The sole exception is URLs in comments that cannot be shortened — put them on their own line with a `# ` prefix so the URL itself does not pad the line count.
+Flag any new line > 80 chars during review.
 
 ---
 
@@ -701,9 +711,11 @@ except Exception as e:  # Intentional: isolate all upstream failures at service 
     return None
 ```
 
-**Rule:** `except Exception` or bare `except` without an inline comment stating it is an *intentional isolation point* is a `CRITICAL` finding. The comment must explain *why* a broad catch is correct here, not just restate the catch.
+**Rule:** `except Exception` or bare `except` without an inline comment stating it is an *intentional isolation point* is a `CRITICAL` finding.
+The comment must explain *why* a broad catch is correct here, not just restate the catch.
 
-Module docs that mandate a broad catch as a design requirement (`src/notifications/CLAUDE.md`, `src/dhan/CLAUDE.md`, `src/nuvama/CLAUDE.md`, `src/mf/CLAUDE.md`) now cite this rule inline — the design requirement and this rule are not in tension: the catch is allowed, the missing intent comment is what's `CRITICAL`.
+Module docs that mandate a broad catch as a design requirement (`src/notifications/CLAUDE.md`, `src/dhan/CLAUDE.md`, `src/nuvama/CLAUDE.md`, `src/mf/CLAUDE.md`) now cite this rule inline —
+the design requirement and this rule are not in tension: the catch is allowed, the missing intent comment is what's `CRITICAL`.
 
 ---
 
@@ -724,15 +736,20 @@ def withdraw(amount: Decimal) -> None:
     ...
 ```
 
-**Rule:** `assert` is only permitted in `tests/` directories. In `src/` and `scripts/`, raise the appropriate exception from the `BrokerError` hierarchy or a built-in (`ValueError`, `TypeError`). Any `assert` outside `tests/` is a `CRITICAL` finding.
+**Rule:** `assert` is only permitted in `tests/` directories.
+In `src/` and `scripts/`, raise the appropriate exception from the `BrokerError` hierarchy or a built-in (`ValueError`, `TypeError`).
+Any `assert` outside `tests/` is a `CRITICAL` finding.
 
-`src/paper/CLAUDE.md`'s `total_pnl` invariant description was reworded to match this rule exactly ("raises `ValueError` on mismatch", never literal `assert`) — the invariant was always enforced via `ValueError` in code; only the doc's loose "asserts" wording was corrected.
+`src/paper/CLAUDE.md`'s `total_pnl` invariant description was reworded to match this rule exactly ("raises `ValueError` on mismatch", never literal `assert`) —
+the invariant was always enforced via `ValueError` in code; only the doc's loose "asserts" wording was corrected.
 
 ---
 
 ### G7. Logger Calls Must Use `%`-Style Formatting (§3.10.1)
 
-f-strings are evaluated eagerly even when the log level is disabled. %-style arguments are passed lazily and never evaluated if the message is filtered out. The Google style guide explicitly mandates `%`-style for logger calls.
+f-strings are evaluated eagerly even when the log level is disabled.
+%-style arguments are passed lazily and never evaluated if the message is filtered out.
+The Google style guide explicitly mandates `%`-style for logger calls.
 
 ```python
 # Wrong — f-string in logger call
@@ -775,18 +792,24 @@ import pydantic
 from src.client.protocol import BrokerClient
 ```
 
-**Rule:** Any import block that violates the group order or lacks blank-line separation between groups is an `ERROR` finding. Within each group, `import X` lines come before `from X import Y` lines, and both are alphabetically sorted.
+**Rule:** Any import block that violates the group order or lacks blank-line separation between groups is an `ERROR` finding.
+Within each group, `import X` lines come before `from X import Y` lines, and both are alphabetically sorted.
 
 ---
 
 ### Meta-Rule: Scope of Part III
 
-Part III applies at the **diff level** — only lines introduced or modified in the current PR are subject to these rules. Do not apply them retroactively to unchanged lines in the same file; that belongs to the TD-1 through TD-7 tech debt backlog in `TODOS.md`.
+Part III applies at the **diff level** — only lines introduced or modified in the current PR are subject to these rules.
+Do not apply them retroactively to unchanged lines in the same file; that belongs to the TD-1 through TD-7 tech debt backlog in `TODOS.md`.
 
 ---
 
 ## The Underlying Principle
 
-Pythonic code and clean code converge on the same goal: **code that communicates intent so clearly that bugs have nowhere to hide.** A bug can only persist undetected in code that is ambiguous, overly complex, or poorly named. Every rule above is a different attack on the same problem — reducing the gap between what the code *says* and what it *does*.
+Pythonic code and clean code converge on the same goal: **code that communicates intent so clearly that bugs have nowhere to hide.**
+A bug can only persist undetected in code that is ambiguous, overly complex, or poorly named.
+Every rule above is a different attack on the same problem — reducing the gap between what the code *says* and what it *does*.
 
-The Zen connection is real but indirect: *"Explicit is better than implicit," "Errors should never pass silently," "In the face of ambiguity, refuse the temptation to guess"* — these are all anti-patterns that manifest as the bugs catalogued above. The Zen tells you *what* good code looks like; this document tells you *where* the gaps between intention and execution hide.
+The Zen connection is real but indirect: *"Explicit is better than implicit," "Errors should never pass silently," "In the face of ambiguity, refuse the temptation to guess"* —
+these are all anti-patterns that manifest as the bugs catalogued above.
+The Zen tells you *what* good code looks like; this document tells you *where* the gaps between intention and execution hide.

@@ -46,10 +46,12 @@ means a single thing. In practice they differ materially for this repo:
 |---|---|---|
 | Filesystem access | Direct, local, no mount translation | Sandboxed shell; bash paths differ from tool paths (mount translation) |
 | Hooks (`.claude/hooks/*`) | Supported — Rule 0's PreToolUse hook fires | Not supported — no hook enforcement, Rule 0 becomes purely self-attested (compounds **FR-1 F-W1**) |
-| Subagents | `.claude/agents/*` spawn natively in the same environment | Subagent model overrides available (`fable`/`opus`/`sonnet`) via the `Agent` tool, but each spawn is a cold context — no shared session state |
+| Subagents | `.claude/agents/*` spawn natively in the same environment | Subagent model overrides (`fable`/`opus`/`sonnet`) via `Agent`; each spawn is cold, no shared session state |
 | Task/todo tracking | Ad hoc (TODOS.md, story files) | Native task-list widget (`TaskCreate`/`TaskUpdate`) — visible progress UI |
 | Skills | N/A (skills are a Cowork/plugin concept) | First-class — docx/xlsx/pptx/pdf output skills, nse-option-chain domain skill |
-| Best for | Long, stateful, hook-enforced sessions where Rule 0 needs to actually block, not just remind | Bounded audits/reviews with a deliverable (a review file, a spreadsheet, a multi-persona sweep), or work needing a specific model tier per subagent |
+| Best for | Long, stateful sessions where Rule 0 must actually block, not just remind | Bounded audits/reviews with a concrete deliverable, or work needing a per-subagent model tier |
+
+For Cowork, "hook-enforced" does not apply (hooks are unsupported) and "a concrete deliverable" means a review file, a spreadsheet, or a multi-persona sweep.
 
 **Practical rule:** if the task depends on the PreToolUse hook actually firing (i.e., you are
 trusting Rule 0 to be enforced rather than self-narrated), use Claude Code — Cowork cannot enforce

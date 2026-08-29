@@ -330,8 +330,8 @@ retitled to cover Claude-to-human review too.
 
 | ID | Severity | Finding | Fix owner |
 |---|---|---|---|
-| F-C1 | **CRITICAL** | AutoTrigger "blocking, not optional" is unsatisfiable on the Antigravity surface; no escape hatch in root CLAUDE.md; tied to the documented commit-not-executed failure mode | root CLAUDE.md |
-| F-C2 | **CRITICAL** | Module CLAUDE.md docs (notifications/dhan/nuvama/mf broad-catch; paper "asserts") license patterns REVIEW.md §G5/§G6 flag CRITICAL for new code, without stating the escape valve | module CLAUDE.md ×5 |
+| F-C1 | **CRITICAL** | AutoTrigger "blocking, not optional" is unsatisfiable on Antigravity; no escape hatch in root CLAUDE.md; tied to the commit-not-executed failure mode | root CLAUDE.md |
+| F-C2 | **CRITICAL** | Module docs (notifications/dhan/nuvama/mf broad-catch; paper "asserts") license patterns §G5/§G6 flags CRITICAL for new code, no escape valve stated | module CLAUDE.md ×5 |
 | F-E1 | ERROR | Step 3 vs. Step 3b routing gap for ≤2-file tasks | root CLAUDE.md |
 | F-E2 | ERROR | options-strategist / Step 2b described three non-identical ways across three docs, none authoritative | root CLAUDE.md + Antigravity doc |
 | F-E3 | ERROR | "code" undefined at code-reviewer trigger boundary (root looser than ANTIGRAVITY.md) | root CLAUDE.md |

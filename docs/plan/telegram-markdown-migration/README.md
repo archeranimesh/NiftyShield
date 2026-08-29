@@ -57,9 +57,16 @@ message looks yet.
 
 | Tier | Folder | What it does | Depends on |
 |---|---|---|---|
-| **P0 — transport change, must land first** | `backbone/` | Switch `TelegramNotifier.send()` from HTML+`<pre>` to Markdown parse_mode; audit + fix every existing caller's dynamic-value interpolation so nothing silently 400s post-switch | none |
-| **P1 — reusable formatting layer** | `formatting-rules/` | Canonical decimal/alignment spec per parameter type (money, Greeks, strikes, %); promote the scratch script's table-builder helpers into real tested `src/notifications/` code | `backbone/` (needs the escaping helper it defines) |
-| **P2 — actual message migrations, staged by risk** | `strategy-rollout/` | Migrate each message family to the new bold/table format, IC audit first (lowest stakes, already prototyped) through approval requests last (highest stakes, coordinate with `telegram-approval-auth-fix`) | `backbone/` + `formatting-rules/` |
+| **P0 — transport change, must land first** | `backbone/` | Transport switch to Markdown parse_mode + caller audit (full text below) | none |
+| **P1 — reusable formatting layer** | `formatting-rules/` | Canonical formatting spec + tested table-builder helpers (full text below) | `backbone/` (needs the escaping helper it defines) |
+| **P2 — actual message migrations, staged by risk** | `strategy-rollout/` | Migrate message families to bold/table format, staged by risk (full text below) | `backbone/` + `formatting-rules/` |
+
+**What it does, in full:**
+- `backbone/` — Switch `TelegramNotifier.send()` from HTML+`<pre>` to Markdown parse_mode; audit + fix every existing caller's dynamic-value interpolation so nothing silently 400s post-switch
+- `formatting-rules/` — Canonical decimal/alignment spec per parameter type (money, Greeks, strikes, %);
+  promote the scratch script's table-builder helpers into real tested `src/notifications/` code
+- `strategy-rollout/` — Migrate each message family to the new bold/table format,
+  IC audit first (lowest stakes, already prototyped) through approval requests last (highest stakes, coordinate with `telegram-approval-auth-fix`)
 
 Do not start `formatting-rules/` before `backbone/`'s escaping helper exists — every formatting
 helper that interpolates a dynamic value needs it. Do not start `strategy-rollout/` before both

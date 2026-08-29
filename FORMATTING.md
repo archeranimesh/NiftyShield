@@ -143,7 +143,7 @@ format — never `format_money(...)`'s output with the `₹` stripped or the dec
 | Multi-strategy summary table (8+ rows, 3+ numeric cols) | signed integer, no `₹` per cell, zero as `-` | FMT-1d | specified, not yet real code |
 | IC V1-vs-V2 monthly comparison table | money at **0dp** with `₹`, `N/A` for `None` | `scratch/2026-08-07_ic_monthly_comparison_telegram_format.py` | **unregistered — reconcile at ROLL-2** |
 | EOD PT summary table | money at 2dp, no `₹` | `scratch/2026-08-13_eod_pt_summary.py` | **unregistered — reconcile at PT-1's ROLL task** |
-| Daily-snapshot waterfall | `k` abbreviation for \|value\| ≥ 1000 (`-3k`) | `scratch/2026-08-08_daily_snapshot_waterfall_format.py` | **unregistered — no ROLL task; format decision deferred 2026-08-11** |
+| Daily-snapshot waterfall | `k` abbreviation for \|value\| ≥ 1000 (`-3k`) | `scratch/2026-08-08_daily_snapshot_waterfall_format.py` | **unregistered — no ROLL task; deferred 2026-08-11** |
 
 ---
 
@@ -184,8 +184,12 @@ identically to a literal emoji. Confirmed data points so far:
 |---|---|
 | `▶` U+25B6 | **breaks alignment** — renders with its emoji-presentation glyph. Use `>`. |
 | `Δ` U+0394 | in use as a fenced column header since ROLL-1 (2026-08-07); no break observed |
-| `₹` U+20B9 | **confirmed safe, 2026-08-26 (ROLL-2a blocking pre-check, live `--send` via `scratch/2026-08-07_ic_monthly_comparison_telegram_format.py`)** — renders single-width inside a fence, alignment holds. Safe to use inside a fence going forward. |
-| `🔴` U+1F534 | **breaks alignment**, same on-device check as `₹` above, 2026-08-26 — renders double-width, same failure shape as `▶`. Do not put a literal `🔴` inside a fenced column without a display-width-aware builder (see `build_compare_table`, `src/notifications/formatting.py`). |
+| `₹` U+20B9 | **confirmed safe, 2026-08-26** — renders single-width inside a fence, alignment holds. See note below. |
+| `🔴` U+1F534 | **breaks alignment**, 2026-08-26 — renders double-width, same failure shape as `▶`. See note below. |
+
+- `₹` check: ROLL-2a blocking pre-check, live `--send` via `scratch/2026-08-07_ic_monthly_comparison_telegram_format.py`. Safe to use inside a fence going forward.
+- `🔴` check: same on-device check as `₹` above, 2026-08-26.
+- Do not put a literal `🔴` inside a fenced column without a display-width-aware builder (see `build_compare_table`, `src/notifications/formatting.py`).
 
 **Resolved 2026-08-25 — `Δ` carve-out.** FMT-1e's rule as originally drafted ("only plain ASCII
 inside a fence") would have outlawed the `Δ` column header already shipped in ROLL-1's confirmed

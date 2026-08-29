@@ -193,7 +193,8 @@
       | Files: `src/strategy/ic_nifty_v1.py`, `src/strategy/ic_nifty_v2.py`
       | Tests: `tests/unit/strategy/test_ic_nifty_v1.py`, `tests/unit/strategy/test_ic_nifty_v2.py`
 
-- [x] **ROLL-3.3** — Overlay family: migrate close/roll notifications | Blocked by: ROLL-2 | Phase A (CC) SHA: 12d766b, Phase B (Collar) SHA: da41e3d, Phase C (PP) SHA: 00604bc, Phase D (auto_close) SHA: 1ca5b68
+- [x] **ROLL-3.3** — Overlay family: migrate close/roll notifications | Blocked by: ROLL-2 | Phase A (CC) SHA: 12d766b, Phase B (Collar) SHA: da41e3d,
+Phase C (PP) SHA: 00604bc, Phase D (auto_close) SHA: 1ca5b68
       | Owner: Antigravity | Model: n/a | Review: **real @code-reviewer, Opus — mandatory**
       — same shape as MD-3, mechanical once ROLL-2's format is locked, financial-logic gate
       still applies. `auto_close.py` kept in this group (not split further) because

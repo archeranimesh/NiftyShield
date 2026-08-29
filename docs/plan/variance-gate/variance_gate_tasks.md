@@ -9,13 +9,15 @@
 
 ## Phase VG0 — Spec Reconciliation (prerequisite — unblocks everything)
 
-- [ ] **VG0** — Resolve 4 open mismatches in `docs/strategies/csp_nifty_v1.md`: lot size (65 vs 50), time stop (calendar days vs DTE remaining), R-number naming, R4 definition. Update spec to be internally consistent and aligned with `BACKTEST_PLAN.md`.
+- [ ] **VG0** — Resolve 4 open mismatches in `docs/strategies/csp_nifty_v1.md`: lot size (65 vs 50), time stop (calendar days vs DTE remaining),
+R-number naming, R4 definition. Update spec to be internally consistent and aligned with `BACKTEST_PLAN.md`.
 
 ---
 
 ## Phase VG1 — Tier 0.5 Operational Review
 
-- [ ] **VG1** — Run Tier 0.5 two-cycle checklist: confirm strike selection, bid/ask recording, P&L reconciliation, NiftyBees collateral inclusion, R3/R4 skip logic. Document findings in `docs/strategies/csp_nifty_v1.md` → "Tier 0.5 Review" section.
+- [ ] **VG1** — Run Tier 0.5 two-cycle checklist: confirm strike selection, bid/ask recording, P&L reconciliation, NiftyBees collateral inclusion,
+R3/R4 skip logic. Document findings in `docs/strategies/csp_nifty_v1.md` → "Tier 0.5 Review" section.
 
 ---
 
@@ -32,7 +34,8 @@
 
 *At least ONE of the three criteria must be satisfied (live or replay). Replay requires the Phase 1 harness — do not build until task 1.3a data pipeline is live.*
 
-- [ ] **VG3.C** — Gate C met: one of (a) ≥1 cycle with IVR > 50 at entry, (b) ≥1 holding window with ≥5% Nifty intraday peak-to-trough decline, (c) ≥1 cycle where short-put delta ≤ −0.35 before any exit fires. Record which criterion was satisfied and how.
+- [ ] **VG3.C** — Gate C met: one of (a) ≥1 cycle with IVR > 50 at entry, (b) ≥1 holding window with ≥5% Nifty intraday peak-to-trough decline,
+(c) ≥1 cycle where short-put delta ≤ −0.35 before any exit fires. Record which criterion was satisfied and how.
 
 ---
 

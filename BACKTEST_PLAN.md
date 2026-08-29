@@ -14,13 +14,28 @@
 
 ## Guiding Principles (read before starting any task)
 
-1. **Paper trade before you backtest a strategy you've never run.** A backtest on an unfamiliar strategy is a simulation of an idealised world. Running the strategy on paper first, logging real decisions, then calibrating the backtest against that reality, is how you build a measurement instrument that can be trusted.
-2. **One strategy at a time.** Running five strategies in parallel backtests is parameter optimisation dressed up as research. Ship one, run it for 6 months, only then start the next.
-3. **Backtest → paper → re-backtest over the paper window → variance check → live.** This is the full loop. Skipping the re-backtest step is where retail traders fool themselves.
+1. **Paper trade before you backtest a strategy you've never run.**
+   A backtest on an unfamiliar strategy is a simulation of an idealised world.
+   Running the strategy on paper first, logging real decisions, then calibrating the backtest against that reality,
+   is how you build a measurement instrument that can be trusted.
+2. **One strategy at a time.**
+   Running five strategies in parallel backtests is parameter optimisation dressed up as research.
+   Ship one, run it for 6 months, only then start the next.
+3. **Backtest → paper → re-backtest over the paper window → variance check → live.**
+   This is the full loop. Skipping the re-backtest step is where retail traders fool themselves.
 4. **Define kill criteria and variance thresholds before deploying.** Writing them down after the fact is self-deception.
-5. **Finideas (ILTS + FinRakshak) stays running.** Current capital deployment (~₹10L) continues as-is. NiftyShield tracks it; this plan does not replace or backtest it. Evaluate Finideas separately (Phase 4) after ≥2 years of tracked realised P&L is available.
-6. **Every code phase must end with:** (a) full `python -m pytest tests/unit/` green, (b) `code-reviewer` agent clean on the diff, (c) `CONTEXT.md` + `DECISIONS.md` + `TODOS.md` updated, (d) a commit in the project's `<type>(<scope>): ...` format.
-7. **codebase-memory-mcp first, Read second.** When navigating existing code, use `search_graph`, `trace_path`, `get_code_snippet` before opening source files. This is repo protocol (`CLAUDE.md` Step 1). Re-index after adding new packages.
+5. **Finideas (ILTS + FinRakshak) stays running.**
+   Current capital deployment (~₹10L) continues as-is.
+   NiftyShield tracks it; this plan does not replace or backtest it.
+   Evaluate Finideas separately (Phase 4) after ≥2 years of tracked realised P&L is available.
+6. **Every code phase must end with:**
+   (a) full `python -m pytest tests/unit/` green,
+   (b) `code-reviewer` agent clean on the diff,
+   (c) `CONTEXT.md` + `DECISIONS.md` + `TODOS.md` updated,
+   (d) a commit in the project's `<type>(<scope>): ...` format.
+7. **codebase-memory-mcp first, Read second.**
+   When navigating existing code, use `search_graph`, `trace_path`, `get_code_snippet` before opening source files.
+   This is repo protocol (`CLAUDE.md` Step 1). Re-index after adding new packages.
 
 ---
 
@@ -73,7 +88,9 @@
 
 **Owner: Animesh. Not for Cowork.**
 
-- [ ] Each month at entry date: before entry, run the `docs/strategies/regime_probe.pine` script on NIFTY 1D **and** 1W via the TV MCP (Codex). Record `regime_code` and `vix_level` from both timeframes in the paper trade note field. If 1W `regime_code ≥ 2` (Volatile-Ranging or Volatile-Trending), document the conflict — this is regime completeness data for Phase 0.8 Gate criterion C.
+- [ ] Each month at entry date: before entry, run the `docs/strategies/regime_probe.pine` script on NIFTY 1D **and** 1W via the TV MCP (Codex).
+      Record `regime_code` and `vix_level` from both timeframes in the paper trade note field.
+      If 1W `regime_code ≥ 2` (Volatile-Ranging or Volatile-Trending), document the conflict — this is regime completeness data for Phase 0.8 Gate criterion C.
 - [ ] Each month at entry date: observe live option chain, decide strike (22-delta target per `csp_nifty_v1.md`). Log via `record_paper_trade.py` with mid price − 0.25 INR slippage haircut.
 - [ ] Exit triggers: monitor daily via `daily_snapshot.py`. When profit target / time stop / loss stop hits, log exit.
 - [ ] Never override the spec in real time. If urge to override: log it in `TODOS.md` with reason, then follow spec anyway.
@@ -112,7 +129,8 @@
 **Owner: Cowork. Source: `docs/council/2026-05-02_multi-strategy-portfolio-risk-allocation.md` §7.3.**
 
 - [ ] `src/risk/__init__.py` — package stub.
-- [ ] `src/risk/models.py` — `PortfolioDelta` frozen dataclass: `options_delta_lots: Decimal`, `niftybees_delta_lots: Decimal`, `total_delta_lots: Decimal`, `warning_breached: bool`, `cap_breached: bool`, `as_of: datetime`.
+- [ ] `src/risk/models.py` — `PortfolioDelta` frozen dataclass:
+      `options_delta_lots: Decimal`, `niftybees_delta_lots: Decimal`, `total_delta_lots: Decimal`, `warning_breached: bool`, `cap_breached: bool`, `as_of: datetime`.
 - [ ] `src/risk/delta_tracker.py` — `PortfolioDeltaTracker`:
   - `aggregate_delta(paper_positions: list[PaperPosition], nifty_spot: Decimal, lot_size: int) → PortfolioDelta`
   - Options-only cap: +1.0 lots (warning +0.75). Options + NiftyBees cap: +2.0 lots (warning +1.5). Constants parameterised.
@@ -134,9 +152,12 @@ All of the following must be true before loading `BACKTEST_PLAN_PHASE1.md`.
 
 **CSP v1 paper trading gate — all four criteria (A–D) must pass:**
 
-- [ ] **(A) Minimum paper sample:** ≥6 executed paper CSP cycles **and** ≥9 calendar months of entry-decision observation (whichever comes later). Cycles skipped by R3/R4/event filters count as filter-validation observations.
+- [ ] **(A) Minimum paper sample:** ≥6 executed paper CSP cycles **and** ≥9 calendar months of entry-decision observation (whichever comes later).
+      Cycles skipped by R3/R4/event filters count as filter-validation observations.
 
-  **IVR NULL exception:** IVR NULL for Cycles 1 and 2 — accepted data gap; criterion A satisfied from Cycle 3 onward. Cycle 1 (id=14, 2026-05-11): pipeline not live yet. Cycle 2 (id=32, 2026-05-28): 0/252 days VIX history blocked computation.
+  **IVR NULL exception:** IVR NULL for Cycles 1 and 2 — accepted data gap; criterion A satisfied from Cycle 3 onward.
+  Cycle 1 (id=14, 2026-05-11): pipeline not live yet.
+  Cycle 2 (id=32, 2026-05-28): 0/252 days VIX history blocked computation.
 
 - [ ] **(B) Exit-path validation:** Each exit mechanism validated at least once via live paper or deterministic historical replay:
 
@@ -154,11 +175,19 @@ All of the following must be true before loading `BACKTEST_PLAN_PHASE1.md`.
   | Drawdown stress | ≥1 holding window with ≥5% Nifty intraday peak-to-trough decline |
   | Delta pressure | ≥1 cycle where short-put delta reaches ≤ −0.35 before any exit fires |
 
-  **Regime logging tool:** Use `docs/strategies/regime_probe.pine` via TV MCP (Codex) at each paper trade entry to record the 1D + 1W regime snapshot. The `regime_code` and `vix_level` fields from both timeframes must be captured in the paper trade note. This creates the empirical regime log needed for criterion D's regime-matched Z-score. If 1W `regime_code ≥ 2` at entry, that cycle is tagged as "entered in volatile regime" — a distinct bucket for criterion D analysis.
+  **Regime logging tool:** Use `docs/strategies/regime_probe.pine` via TV MCP (Codex) at each paper trade entry to record the 1D + 1W regime snapshot.
+  The `regime_code` and `vix_level` fields from both timeframes must be captured in the paper trade note.
+  This creates the empirical regime log needed for criterion D's regime-matched Z-score.
+  If 1W `regime_code ≥ 2` at entry, that cycle is tagged as "entered in volatile regime" — a distinct bucket for criterion D analysis.
 
 - [ ] **(D) Regime-matched Z-score:** Paper vs backtest `|Z| ≤ 1.5` on **both** the full 8-year backtest distribution **and** a regime-matched subset. See `BACKTEST_PLAN_PHASE1.md` task 1.11.
 
-- [x] **Spec consistency resolved** (Task 3b, 2026-05-28): lot size confirmed 65 units (revision history in §Position Sizing); time stop defined as 21 calendar days from entry date (§Exit Rules R1); R-number scheme canonical R1–R7; R4 confirmed as event filter (Budget / RBI MPC / election-result day) — no 200-DMA trend filter. Gate references `docs/strategies/csp_nifty_v1.md` as sole canonical spec.
+- [x] **Spec consistency resolved** (Task 3b, 2026-05-28):
+      lot size confirmed 65 units (revision history in §Position Sizing);
+      time stop defined as 21 calendar days from entry date (§Exit Rules R1);
+      R-number scheme canonical R1–R7;
+      R4 confirmed as event filter (Budget / RBI MPC / election-result day) — no 200-DMA trend filter.
+      Gate references `docs/strategies/csp_nifty_v1.md` as sole canonical spec.
 
 - [ ] `docs/strategies/csp_nifty_v1.md` exists and passes the validator (0.7).
 - [ ] `docs/strategies/niftyshield_integrated_v1.md` exists and passes the validator (0.4a).
@@ -221,5 +250,7 @@ Unresolved decisions only. Cowork: do not guess — surface and wait.
 
 - **Phase 2.2:** Is static IP provisioned by the time CSP is ready to go live? If not, plan for manual order placement + `record_trade.py` ledger capture.
 - **Phase 4.1:** What's the acceptable "Finideas is worth its fee" spread vs benchmark?
-- **Phase 3.2 vs Track A swing strategies — UNRESOLVED:** Calendar spread (§3.2 in Phase 1 plan) vs Track A graduates (Donchian, ORB, Gap Fade). Decision required before Phase 3 begins: does the calendar spread replace a failing swing strategy, or become a fourth strategy (triggering the one-per-year rule)?
-- **Phase 1.6a open question:** Should `bhavcopy_ingest.py` (task 1.3) also parse `FUTIDX NIFTY` rows, or should task 1.6a derive futures prices at query time? Resolve before starting 1.6a implementation.
+- **Phase 3.2 vs Track A swing strategies — UNRESOLVED:** Calendar spread (§3.2 in Phase 1 plan) vs Track A graduates (Donchian, ORB, Gap Fade).
+  Decision required before Phase 3 begins: does the calendar spread replace a failing swing strategy, or become a fourth strategy (triggering the one-per-year rule)?
+- **Phase 1.6a open question:** Should `bhavcopy_ingest.py` (task 1.3) also parse `FUTIDX NIFTY` rows, or should task 1.6a derive futures prices at query time?
+  Resolve before starting 1.6a implementation.

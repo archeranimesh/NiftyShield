@@ -45,7 +45,8 @@ class BacktestRun:
     created_at: str       # ISO datetime UTC
 ```
 
-`git_sha` capture helper: `_capture_git_sha() → str` — runs `git rev-parse HEAD` via `subprocess.run`, returns the SHA string. On failure (not a git repo, git not installed) returns `"unknown"`. This is the only place subprocess is used; it is acceptable here.
+`git_sha` capture helper: `_capture_git_sha() → str` — runs `git rev-parse HEAD` via `subprocess.run`, returns the SHA string.
+On failure (not a git repo, git not installed) returns `"unknown"`. This is the only place subprocess is used; it is acceptable here.
 
 **Tests (`tests/unit/backtest/test_backtest_store.py`):**
 - `init_db()` called twice → no error (idempotent).
@@ -231,7 +232,9 @@ All functions accept `trades: list[Any]` where each element has at minimum:
 - `.action: str` — `'BUY'` or `'SELL'`
 - `.quantity: int`
 
-For P&L computation, a "trade" in this context is a **closed round-trip** represented as a single value (Decimal). The caller is responsible for pairing entries and exits and computing the net P&L per closed trade before passing to these functions. Functions that take `trades` accept `list[Decimal]` (per-trade P&L values), not raw trade records. Document this clearly.
+For P&L computation, a "trade" in this context is a **closed round-trip** represented as a single value (Decimal). The caller is responsible for pairing entries
+and exits and computing the net P&L per closed trade before passing to these functions. Functions that take `trades` accept `list[Decimal]` (per-trade P&L values),
+not raw trade records. Document this clearly.
 
 ```python
 def total_pnl(trades: list[Decimal]) -> Decimal:
@@ -380,7 +383,8 @@ def deflated_sharpe_ratio(
     correcting for num_trials experiments. LIT-08."""
 ```
 
-**Decimal ↔ float boundary rule:** Convert `Decimal → float` only at the numpy/scipy call site, and convert back immediately after. One-line comment `# Decimal → float for numpy` at every boundary crossing.
+**Decimal ↔ float boundary rule:** Convert `Decimal → float` only at the numpy/scipy call site, and convert back immediately after.
+One-line comment `# Decimal → float for numpy` at every boundary crossing.
 
 **Tests (`tests/unit/analytics/test_ratios.py`):**
 - `sharpe_ratio([Decimal('0.01')] * 252, risk_free_rate=Decimal('0'))` → positive value, not None.
@@ -389,7 +393,9 @@ def deflated_sharpe_ratio(
 - `sortino_ratio` with all positive returns (no downside) → `None` (zero downside dev).
 - `calmar_ratio` with flat returns (no drawdown) → `None`.
 - `ulcer_index([Decimal('0')] * 10)` → `Decimal('0')`.
-- **Pinned PSR:** Using López de Prado Ch. 14 example — replicate to within 1e-4. Pin the exact input series and expected output as a constant in the test. If you cannot locate the published example, use: `returns = [Decimal('0.001')] * 50 + [Decimal('-0.0005')] * 10`, `benchmark_sharpe = Decimal('1.0')`, `periods_per_year = 252` — assert result is in (0, 1) and document the computed value.
+- **Pinned PSR:** Using López de Prado Ch. 14 example — replicate to within 1e-4. Pin the exact input series and expected output as a constant in the test.
+If you cannot locate the published example, use: `returns = [Decimal('0.001')] * 50 + [Decimal('-0.0005')] * 10`, `benchmark_sharpe = Decimal('1.0')`,
+`periods_per_year = 252` — assert result is in (0, 1) and document the computed value.
 - **Pinned DSR:** Same Ch. 14 sourcing requirement. Pin exact inputs and expected value to within 1e-4.
 - `probabilistic_sharpe_ratio` with very large positive returns vs low benchmark → close to 1.0.
 - `deflated_sharpe_ratio` with `num_trials=1` degenerates to PSR (values should be close).
@@ -542,7 +548,8 @@ def probability_of_drawdown(
 - **Pinned Kelly (Thorp):** `kelly_fraction(Decimal('0.6'), Decimal('1'))` → `Decimal('0.20')` exactly. This is the biased coin (60% win, even money payoff). Non-negotiable.
 - `kelly_fraction` with no edge (win_rate=0.4, win_loss_ratio=1) → `Decimal('0')` (negative Kelly clamped to 0).
 - `fractional_kelly(Decimal('0.6'), Decimal('1'), Decimal('0.25'))` → `Decimal('0.05')`.
-- **Pinned Optimal f (Vince):** Use Vince's trade sequence from *The Mathematics of Money Management* Ch. 1: `[-1, 1, 1, 1, -1, 1, 1, -1, 1, 1]` (scaled to [-1, 1]). Expected optimal_f is approximately 0.25. Assert result is in [0.20, 0.30] (allow tolerance for step-search resolution).
+- **Pinned Optimal f (Vince):** Use Vince's trade sequence from *The Mathematics of Money Management* Ch. 1: `[-1, 1, 1, 1, -1, 1, 1, -1, 1, 1]` (scaled to [-1, 1]).
+Expected optimal_f is approximately 0.25. Assert result is in [0.20, 0.30] (allow tolerance for step-search resolution).
 - `optimal_f([])` → `Decimal('0')`.
 - `optimal_f([100, 200, 50])` → `Decimal('0')` (no losses, undefined).
 - `risk_of_ruin` with very high win_rate and low fraction → result close to 0.
@@ -777,7 +784,8 @@ def compare_reports(
 
 `BacktestStore.record_metrics_from_report(self, run_id: str, report: StrategyReport) → None`:
 Iterates over every numeric field in `StrategyReport` and calls `record_metric` for each.
-Field-to-metric name mapping: use the dataclass field name as the `metric_name` (e.g. `"sharpe_ratio"`, `"max_drawdown_pct"`). Skips `markdown_summary`, `strategy_name`, `start_date`, `end_date` (non-metric fields). None values are stored as the string `"None"`. `Decimal('Infinity')` is stored as `"Infinity"`.
+Field-to-metric name mapping: use the dataclass field name as the `metric_name` (e.g. `"sharpe_ratio"`, `"max_drawdown_pct"`).
+Skips `markdown_summary`, `strategy_name`, `start_date`, `end_date` (non-metric fields). None values are stored as the string `"None"`. `Decimal('Infinity')` is stored as `"Infinity"`.
 
 `scripts/analyze_strategy.py` — CLI with three mutually exclusive modes:
 
@@ -796,7 +804,8 @@ Each mode:
 
 DB path: `data/portfolio/portfolio.sqlite`.
 
-For `--live` and `--paper`: the relevant tables are `trades` and `paper_trades` respectively. Map the trade records to `list[Decimal]` (per-trade P&L) and daily return series. For the initial version, a simple implementation is acceptable — daily P&L from the snapshot table if available, otherwise approximated from trade prices.
+For `--live` and `--paper`: the relevant tables are `trades` and `paper_trades` respectively. Map the trade records to `list[Decimal]` (per-trade P&L)
+and daily return series. For the initial version, a simple implementation is acceptable — daily P&L from the snapshot table if available, otherwise approximated from trade prices.
 
 **Tests (add to `tests/unit/backtest/test_backtest_store.py`):**
 - `record_metrics_from_report` with a `StrategyReport` → `get_all_metrics` returns dict with at least `sharpe_ratio`, `profit_factor`, `max_drawdown_pct` keys.
