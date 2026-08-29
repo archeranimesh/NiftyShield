@@ -59,8 +59,8 @@ Risk delta gate (done) + Near-Expiry Gamma Buy `gamma_daily_watch.py`.
 **`variance-gate/`** · ⬜ Not started · next: **VG0** (CSP v1 spec reconciliation)
 CSP v1 Phase 0.8 deployment gate — spec reconciliation + gate criteria A–D.
 
-**`root-doc-organization/`** · 🔄 In progress · next: **RDO-17.1** (`docs/plan/` story/epic
-format standardization — 4 sub-tasks; RDO-16 loop-closure and RDO-11 ≥ 2026-09-03 also open)
+**`root-doc-organization/`** · 🔄 In progress · next: **RDO-17.2** (`docs/plan/` story/epic
+format standardization — RDO-17.1 shipped; RDO-16 loop-closure and RDO-11 ≥ 2026-09-03 also open)
 Token-efficiency cleanup of the ~22 root `.md` files + doc-maintenance automation.
 Docs + tooling only. RDO-1..17 + an acceptance-criteria list in `tasks.md`.
 RDO-1/2/4/5/6/7/8/9/10/12/13/14/15 shipped, RDO-3 closed-partial; RDO-11/16/17 open.
@@ -277,10 +277,14 @@ check) is real work: give it a task id in the working list, don't leave it as a 
 here.
 Nothing mirrors task state, so nothing can drift.
 `scripts/hooks/check_checkbox_consistency.py` sweeps every `docs/plan/**/tasks.md` (plus
-legacy `*_tasks.md`) and `docs/bugs/task.md` for: a checkbox inside a summary block, the
-same id with disagreeing state in one file, a README `next:` marker pointing at an
-already-done id, and a task line whose `| Owner | Model | Review | SHA` tail is malformed or
-whose `SHA` disagrees with the checkbox state (`—` iff unchecked, a real SHA iff ticked).
+legacy `*_tasks.md`) and `docs/bugs/task.md` for: a checkbox inside a summary block
+(`## Epic done when` / `## Story done when` / `## Definition of done` / …), the same id with
+disagreeing state in one file, a README `next:` marker pointing at an already-done id, and —
+on any line carrying the canonical `| Owner: … | Model: … | Review: … | SHA: …` tail — a
+`Review` value that is not a known gate name (`code-reviewer` / `greeks-analyst` /
+`roll-validator` / `none`) or a `SHA` that disagrees with the checkbox state (`—` / `<—>`
+iff unchecked, a real 7–40 hex SHA iff ticked). Legacy tails (`| Owner | Model | SHA` with
+no `Review`, or a prose-laden `| Review:`) are grandfathered — skipped, not flagged.
 It runs in the `md-organize` skill's periodic audit — not pre-commit (task files churn far
 faster than the audit needs to).
 

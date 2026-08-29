@@ -16,7 +16,7 @@ back to pointer-only items. RDO-14 restructures `TODOS.md` into two pointer-only
 RDO-15 adds the checkbox-consistency sweep + the one-checkbox-per-id convention (prose
 `## Epic done when` blocks); RDO-16 is the epic loop-closure check promoted from that block.
 
-**Open: RDO-17.1 → RDO-17.4 (next), RDO-16 (after RDO-6), RDO-11 (≥ 2026-09-03).**
+**Open: RDO-17.3 → RDO-17.4 (next), RDO-16 (after RDO-6), RDO-11 (≥ 2026-09-03).**
 Epic completion criteria at the bottom of this file.
 
 - [x] **RDO-1** — Slim `CONTEXT.md` to ≤400 lines, no line >200 chars; move module prose to
@@ -437,10 +437,10 @@ epic-descent logic. Grandfather the ~25 legacy folders; retrofit `root-doc-organ
 - [x] **RDO-17.1** — Rewrite `docs/plan/README.md` §Conventions (folder shapes, 3-file story
   set, epic-folder set, `schema.md` checklist, extra-files rule, 5-field task line) +
   restructure `docs/plan/_TEMPLATE/` into `story/` + `epic/` templates. | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 7b6d05f
-- [ ] **RDO-17.2** — `check_story_structure.py` (3-file story, epic root = `prompt.md` +
+- [x] **RDO-17.2** — `check_story_structure.py` (3-file story, epic root = `prompt.md` +
   `README.md`, `schema.md` warn-backstop, extra-file checks, legacy shapes grandfathered
   under `--all`) + `check_checkbox_consistency.py` (`| Owner | Model | Review | SHA` tail
-  shape; `SHA: —` iff unchecked) + `SUMMARY_RE` gains `story done when` + hook unit tests. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: <—>
+  shape; `SHA: —` iff unchecked) + `SUMMARY_RE` gains `story done when` + hook unit tests. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: fe280bd
 - [ ] **RDO-17.3** — `.claude/skills/work/SKILL.md` epic-descent steps + finalize the epic
   router body in `_TEMPLATE/epic/prompt.md`; propagate the `| Review:` field into
   `commit` / `session-close` / `md-organize` skills + `CLAUDE.md` §Step 5a + the `AGENTS.md`
