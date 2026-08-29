@@ -1,5 +1,10 @@
 # Missing-Message Workshop — Reusable Prompt
 
+> **ARCHIVED 2026-08-29 (RDO-17.4).** The `TODO.md` queue this prompt drove is exhausted
+> (all 10 items confirmed and written back as `strategy-rollout/` `ROLL-7..ROLL-16`).
+> For iterating any *other* Telegram message's format, use the still-live
+> `message-format-workshop.md` at the epic root — this file is kept for history only.
+
 > Paste this whole file's content (or point Claude at this file path) to run the next queued
 > message from `docs/plan/telegram-markdown-migration/TODO.md` through the format workshop.
 > Repeatable — run once per session, same "first unchecked box" protocol as `tasks.md`.

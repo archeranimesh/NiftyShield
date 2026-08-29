@@ -16,8 +16,8 @@ back to pointer-only items. RDO-14 restructures `TODOS.md` into two pointer-only
 RDO-15 adds the checkbox-consistency sweep + the one-checkbox-per-id convention (prose
 `## Epic done when` blocks); RDO-16 is the epic loop-closure check promoted from that block.
 
-**Open: RDO-17.4 (next), RDO-16 (after RDO-6), RDO-11 (≥ 2026-09-03).**
-Epic completion criteria at the bottom of this file.
+**Open: RDO-16 (after RDO-6), RDO-11 (≥ 2026-09-03).**
+Story completion criteria at the bottom of this file.
 
 - [x] **RDO-1** — Slim `CONTEXT.md` to ≤400 lines, no line >200 chars; move module prose to
   `CONTEXT_TREE.md`. Verify: fresh `Read CONTEXT.md` returns whole file, no display-cap hit.
@@ -279,6 +279,7 @@ Epic completion criteria at the bottom of this file.
   3. Record the final behaviour (blocking / advisory / tuned thresholds) as a STILL-ENFORCED
      RULE entry in `DECISIONS.md`, so the hook contract is documented, not only coded.
   Depends on RDO-10 #5 for the threshold values; otherwise independent.
+  | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <—>
 
 - [x] **RDO-12** — Unified session entry point (`/work` skill). Spun out of the 2026-08-27
   workflow-suggestion triage; full spec in `docs/plan/session-entry-point/` (SEP-1..4).
@@ -421,6 +422,7 @@ Epic completion criteria at the bottom of this file.
   preserve their state," not any individual hook.
   Promoted from an id-less line in `## Epic done when` by RDO-15 (convention a — the
   acceptance list no longer carries checkbox state, so genuinely-open work needs a task id).
+  | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <—>
 
 ### RDO-17 — standardize the `docs/plan/` story & epic format
 
@@ -451,9 +453,9 @@ epic-descent logic. Grandfather the ~25 legacy folders; retrofit `root-doc-organ
   `telegram-markdown-migration/` (`.DS_Store`, archive `TODO.md` + `missing-message-workshop-prompt.md`,
   `README.md` pointer). Both hooks `--all` green. | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <—>
 
-## Epic done when
+## Story done when
 
-Acceptance criteria — prose, no checkboxes (RDO-15 convention a). Verified at epic close;
+Acceptance criteria — prose, no checkboxes (RDO-15 convention a). Verified at story close;
 per-task status lives only in the working list above (`tasks.md` is the single source of truth).
 
 - **RDO-4** — `BUGS.md` / `GLOSSARY.md` relocated, all inbound links fixed.

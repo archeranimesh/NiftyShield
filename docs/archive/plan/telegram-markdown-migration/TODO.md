@@ -1,5 +1,12 @@
 # Telegram Markdown Migration — Missing Messages
 
+> **ARCHIVED 2026-08-29 (RDO-17.4).** The queue below (items 1–10) is exhausted — every
+> message format was confirmed on-device and written back as `strategy-rollout/`
+> `ROLL-7..ROLL-16`. Items 5 and 7b show `| SHA: —` only because their write-back commit SHA
+> was not recorded; their `ROLL-11` / `ROLL-14` specs and scratch scripts are committed.
+> Kept for history. `message-format-workshop.md` (the reusable per-message workshop prompt)
+> stays live at the epic root.
+
 > Compiled 2026-08-08 (Cowork session). Cross-checked against `backbone/tasks.md` and
 > `strategy-rollout/tasks.md` (both fully unchecked as of this writing — nothing in the epic
 > has landed yet). This file lists Telegram-sending call sites that are **not** named in any

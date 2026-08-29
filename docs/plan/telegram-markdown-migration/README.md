@@ -36,7 +36,8 @@ characters in its dynamic content. Confirmed real callers via the code graph (no
 - ~~`scripts/reporting/paper_pnl_report.py`~~ — **removed 2026-08-12, miscategorized.** It is
   CLI-only (stdout, `--json`/plain-text), no `TelegramNotifier`/`TelegramGateway` call exists
   anywhere in its history (single commit `04687f1`, SNAP-4). It was never a real confirmed
-  caller despite being listed as one above — see `TODO.md`'s "Correction (2026-08-12)" section.
+  caller despite being listed as one above — see the "Correction (2026-08-12)" section in the
+  archived `../../archive/plan/telegram-markdown-migration/TODO.md`.
 
 **Added 2026-08-08 (message-format-workshop.md session, EOD Paper Summary):**
 `scripts/eod_summary.py` was missing from the confirmed-callers list above — it sends the daily
@@ -145,6 +146,13 @@ picking up any of the four; do not assume listed order is execution order.
 ---
 
 ## Message-by-message format iteration
+
+**Missing-messages queue — completed and archived (2026-08-29, RDO-17.4).** The one-time gap
+list of un-migrated Telegram call sites (`TODO.md` + `missing-message-workshop-prompt.md`)
+was worked through 2026-08-08..11 — all 10 items confirmed on-device and written back as
+`strategy-rollout/` `ROLL-7..ROLL-16`. Both files now live in
+`../../archive/plan/telegram-markdown-migration/`. The reusable per-message workshop prompt
+below stays live for iterating any *other* message.
 
 `message-format-workshop.md` (this directory) is a **reusable** prompt, not tied to one task —
 use it every time you want to iterate a specific Telegram message's format live (paste a
