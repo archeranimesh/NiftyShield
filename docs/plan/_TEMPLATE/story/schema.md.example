@@ -1,0 +1,47 @@
+<!-- Rename to `schema.md` and keep it ONLY if this story changes DB schema — see
+docs/plan/README.md §Conventions "When a story needs schema.md". If the story does not
+touch DB schema, delete this file. `stories.md` must point here ("use the exact schema in
+schema.md"); never inline CREATE TABLE in stories.md. -->
+
+# <Story title> — database schema
+
+<N> table(s) added to / changed in `data/portfolio/portfolio.sqlite` (single shared DB via
+`src/db.py`).
+All Decimal fields stored as `TEXT`, read back via `Decimal(row["col"])`.
+All timestamps stored as UTC ISO strings.
+Created by `<StoreClass>.init_db()` — idempotent `CREATE TABLE IF NOT EXISTS`; there is no
+migration-file mechanism.
+
+---
+
+```sql
+-- <one-line purpose>. Written by <writer>; read by <readers>.
+CREATE TABLE IF NOT EXISTS <table_name> (
+    <col>            TEXT PRIMARY KEY,     -- <meaning / format>
+    <col>            TEXT NOT NULL,        -- Decimal as TEXT
+    <col>            REAL,                 -- NULL when <condition>
+    created_at       TEXT NOT NULL,        -- UTC ISO, when the row was written
+    UNIQUE (<grain columns>)
+);
+
+CREATE INDEX IF NOT EXISTS idx_<table>_<cols>
+    ON <table_name> (<cols>);
+```
+
+## DB_REGISTRY.md row to add
+
+Add this row to the correct section of `DB_REGISTRY.md` (Daily-write / event-write /
+reference) in the task that lands the DDL — the registry going stale is the failure mode
+this section exists to prevent.
+
+| Table | Writer (method → script) | Cadence | Grain | Purpose |
+|---|---|---|---|---|
+| `<table_name>` | `<StoreClass>.record_<x>()` → `<script.py>` | `<cron | on-demand | one-shot>` | `(<grain columns>)` | <one line> |
+
+<!-- If the row needs detail that does not fit a cell, add a lettered "Note" below the
+table, matching the existing DB_REGISTRY.md convention. -->
+
+## Existing tables reused (no shape change)
+
+<!-- List any existing tables this story writes to or reads without altering — so a reviewer
+knows the DDL above is the complete set of changes. -->

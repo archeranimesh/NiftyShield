@@ -16,8 +16,8 @@ back to pointer-only items. RDO-14 restructures `TODOS.md` into two pointer-only
 RDO-15 adds the checkbox-consistency sweep + the one-checkbox-per-id convention (prose
 `## Epic done when` blocks); RDO-16 is the epic loop-closure check promoted from that block.
 
-**Open: RDO-11 (≥ 2026-09-03), RDO-16 (after RDO-6).** Epic completion criteria at the
-bottom of this file.
+**Open: RDO-17.1 → RDO-17.4 (next), RDO-16 (after RDO-6), RDO-11 (≥ 2026-09-03).**
+Epic completion criteria at the bottom of this file.
 
 - [x] **RDO-1** — Slim `CONTEXT.md` to ≤400 lines, no line >200 chars; move module prose to
   `CONTEXT_TREE.md`. Verify: fresh `Read CONTEXT.md` returns whole file, no display-cap hit.
@@ -422,6 +422,34 @@ bottom of this file.
   Promoted from an id-less line in `## Epic done when` by RDO-15 (convention a — the
   acceptance list no longer carries checkbox state, so genuinely-open work needs a task id).
 
+### RDO-17 — standardize the `docs/plan/` story & epic format
+
+One goal, four sub-tasks (`RDO-17.1`–`17.4`), one commit each, closed together. Full plan:
+`~/.claude/plans/woolly-honking-tarjan.md`. Docs + tooling only. Decisions with Animesh
+(2026-08-29): single story → flat folder like `risk-gamma-phase-a/`; 2+ related stories →
+epic like `telegram-markdown-migration/` with a router `prompt.md` + `README.md` + sub-story
+folders directly under the root (no `stories/` layer); `stories.md` required; `schema.md`
+required only when the story changes DB schema (planning-time judgment + a warn-only hook
+backstop); every `tasks.md` line carries `| Owner | Model | Review | SHA`; `/work` gets real
+epic-descent logic. Grandfather the ~25 legacy folders; retrofit `root-doc-organization/` +
+`telegram-markdown-migration/` now as the worked examples.
+
+- [ ] **RDO-17.1** — Rewrite `docs/plan/README.md` §Conventions (folder shapes, 3-file story
+  set, epic-folder set, `schema.md` checklist, extra-files rule, 5-field task line) +
+  restructure `docs/plan/_TEMPLATE/` into `story/` + `epic/` templates. | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <—>
+- [ ] **RDO-17.2** — `check_story_structure.py` (3-file story, epic root = `prompt.md` +
+  `README.md`, `schema.md` warn-backstop, extra-file checks, legacy shapes grandfathered
+  under `--all`) + `check_checkbox_consistency.py` (`| Owner | Model | Review | SHA` tail
+  shape; `SHA: —` iff unchecked) + `SUMMARY_RE` gains `story done when` + hook unit tests. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: <—>
+- [ ] **RDO-17.3** — `.claude/skills/work/SKILL.md` epic-descent steps + finalize the epic
+  router body in `_TEMPLATE/epic/prompt.md`; propagate the `| Review:` field into
+  `commit` / `session-close` / `md-organize` skills + `CLAUDE.md` §Step 5a + the `AGENTS.md`
+  mirror. | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <—>
+- [ ] **RDO-17.4** — Retrofit `root-doc-organization/` (add `stories.md` for open tasks,
+  `| Review:` on open lines, `## Epic done when` → `## Story done when`) and
+  `telegram-markdown-migration/` (`.DS_Store`, archive `TODO.md` + `missing-message-workshop-prompt.md`,
+  `README.md` pointer). Both hooks `--all` green. | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <—>
+
 ## Epic done when
 
 Acceptance criteria — prose, no checkboxes (RDO-15 convention a). Verified at epic close;
@@ -457,11 +485,18 @@ per-task status lives only in the working list above (`tasks.md` is the single s
   `docs/bugs/`; one-checkbox-per-id convention recorded in §Conventions + `_TEMPLATE/`;
   `session-entry-point/tasks.md` retrofitted as the worked example.
 - **RDO-16** — loop-closure check passes (see the working-list task).
+- **RDO-17** — `docs/plan/README.md` §Conventions defines the single-story-flat vs
+  epic-with-sub-stories shapes, the 3-file story set, the conditional `schema.md`, and the
+  `| Owner | Model | Review | SHA` task line; `_TEMPLATE/` has `story/` + `epic/` variants;
+  both structure hooks enforce it (legacy folders grandfathered); `/work` walks an epic's
+  sub-stories in order; `root-doc-organization/` + `telegram-markdown-migration/` conform.
 - `prompt.md` DoD rewritten to the delivered design — dead pre-2026H1 date-cutoff line
   dropped, hook rename + semantic-split reality stated (done in `2fb5c5b`).
 
 RDO-1, RDO-2 done. RDO-3 closed as partial (remainder = RDO-9).
 
 ## After each task
-Tick the box, append `| SHA: <sha>`, update `docs/plan/README.md` status column for this
+Set `SHA:` on the task line to the real commit SHA and tick the box (RDO-1..16 used a
+trailing `| SHA: <sha>`; RDO-17.x onward use the full `| Owner | Model | Review | SHA` tail
+per `docs/plan/README.md` §Conventions). Update `docs/plan/README.md` status column for this
 story, add one line to `TODOS.md` Session Log.

@@ -59,11 +59,15 @@ Risk delta gate (done) + Near-Expiry Gamma Buy `gamma_daily_watch.py`.
 **`variance-gate/`** · ⬜ Not started · next: **VG0** (CSP v1 spec reconciliation)
 CSP v1 Phase 0.8 deployment gate — spec reconciliation + gate criteria A–D.
 
-**`root-doc-organization/`** · 🔄 In progress · next: **RDO-16** (loop-closure check; RDO-11
-runs on its own clock ≥ 2026-09-03)
+**`root-doc-organization/`** · 🔄 In progress · next: **RDO-17.1** (`docs/plan/` story/epic
+format standardization — 4 sub-tasks; RDO-16 loop-closure and RDO-11 ≥ 2026-09-03 also open)
 Token-efficiency cleanup of the ~22 root `.md` files + doc-maintenance automation.
-Docs + tooling only. RDO-1..16 + an acceptance-criteria list in `tasks.md`.
-RDO-1/2/4/5/6/7/8/9/10/12/13/14/15 shipped, RDO-3 closed-partial; RDO-11/16 open.
+Docs + tooling only. RDO-1..17 + an acceptance-criteria list in `tasks.md`.
+RDO-1/2/4/5/6/7/8/9/10/12/13/14/15 shipped, RDO-3 closed-partial; RDO-11/16/17 open.
+RDO-17 (in progress): standardize the `docs/plan/` story & epic folder format —
+flat single-story vs epic-with-sub-stories, required `stories.md`, conditional `schema.md`,
+`| Owner | Model | Review | SHA` task line, `/work` epic descent; `_TEMPLATE/` gets
+`story/` + `epic/` variants.
 RDO-6 (2026-08-29): `md-cleanup` → `md-organize` skill rewrite; `.agents/` mirror re-synced;
 `CLAUDE.md`/`AGENTS.md` long-line wrap + Step 5a task-line pointer; whole-repo
 `md-line-length` backlog (~700 lines / ~70 files) cleared, `--all-files` green.
@@ -153,36 +157,105 @@ This section is canonical and self-contained — there is no pointer to
 `docs/archive/plan/README.md` (that file documents the retired one-file-per-task scheme and
 is dead for convention purposes).
 
+### Folder shapes — size to scope
+
+Work under `docs/plan/` takes one of two shapes.
+
+- **Single story** — one coherent goal, however many tasks.
+  A flat folder `docs/plan/<slug>/` (`<slug>` kebab-case — no date prefix, no `<slug>_`
+  filename prefix). `risk-gamma-phase-a/` is the model.
+  Start it by copying `docs/plan/_TEMPLATE/story/`.
+- **Epic** — two or more related stories shipped together.
+  `docs/plan/<slug>/` with a router `prompt.md` + `README.md` at the root and one sub-story
+  folder per story **directly under it** — `docs/plan/<slug>/<story-slug>/`, no `stories/`
+  layer. `telegram-markdown-migration/` is the model.
+  Start it by copying `docs/plan/_TEMPLATE/epic/`.
+
+A single story that grows a second story is promoted: create `<slug>/<story-a>/` and
+`<slug>/<story-b>/`, move the original three files into `<story-a>/`, add the root
+`prompt.md` router + `README.md`.
+
 ### Story-folder file set
 
-A story folder is `docs/plan/<slug>/` where `<slug>` is kebab-case — no date prefix, and no
-`<slug>_` prefix on the files inside it.
-Copy `docs/plan/_TEMPLATE/` to start a new one.
+Applies to a flat single-story folder and to each epic sub-story folder.
 
 | File | Required | Purpose |
 |------|----------|---------|
-| `prompt.md` | yes | Why the story exists, session-start load hints, task overview |
-| `tasks.md` | yes | The working checklist — find the first unchecked `- [ ]` and do only that |
-| `stories.md` | optional | Per-task implementation spec / DoD detail |
-| `spec.md` / `schema.md` | optional | Data models, wire formats, gate criteria |
-| `plan.md` | optional | File-by-file change plan for a large multi-phase story |
+| `prompt.md` | yes | Session entry point — first-unchecked-box protocol, hard constraints, test gate, load hints. Loaded by `/work` on selection. |
+| `tasks.md` | yes | The working checklist — first unchecked `- [ ]` is the task. One line per task (format below). |
+| `stories.md` | yes | Complete per-task spec — files, "before any code" graph queries, what to implement, tests, commit message. Self-contained. |
+| `schema.md` | conditional — see *When a story needs `schema.md`* | DDL + the `DB_REGISTRY.md` row, when the story changes DB schema. |
+| `plan.md` / `spec.md` | optional | File-by-file plan / wire formats / gate criteria for a large story — no task checkboxes (see *Extra files*). |
 
-Legacy folders may still carry `<name>_tasks.md` / `<name>_stories.md` — do not mass-rename
-them; new folders use the bare names above.
+Legacy folders may still carry `<name>_tasks.md` / `<name>_stories.md`, a `stories/<ID>.md`
+one-file-per-story layout, or `phaseN/` sub-folders — do not mass-rename; each converts to
+the shape above on its next substantive touch.
 
-### Completed-task line format
+### Epic-folder file set
 
-When a `tasks.md` checkbox is ticked, append this tail to the task line:
+The epic root carries **only what is common to every sub-story** — never task checkboxes.
+
+| File | Required | Purpose |
+|------|----------|---------|
+| `prompt.md` | yes | The **router** — `/work` loads this, not a sub-story `prompt.md`. See *Epic router* below. |
+| `README.md` | yes | The shared brief — see *Epic README* below. |
+
+**Epic router (`prompt.md`)** — states the fixed story order; walks each sub-story's
+`tasks.md` for the first unchecked `- [ ]`; confirms that task line's `Owner` / `Model` /
+`Review`; hands to that sub-story's own `prompt.md` + `stories.md`.
+One task per session, then stop.
+
+**Epic README** — why the epic exists, the scope decisions (and with whom), the ordered
+story list with a status column (⬜ / 🔄 / ✅ + closing SHA) and per-story dependency, the
+cross-cutting constraints every sub-story must honour, supersession / coordination notes.
+A fact needed by only one story belongs in that story's files.
+
+### When a story needs `schema.md`
+
+Decide at planning time, while writing `stories.md`. A story needs a `schema.md` iff a task:
+
+- adds a table (`CREATE TABLE`);
+- adds / renames / drops a column, or changes a column's type or constraint;
+- introduces a new `*Store` class with its own `init_db()` DDL;
+- adds a contract index (query-critical, not incidental);
+- changes how a stored value is encoded in a way a future reader must know — a new enum
+  value in a `TEXT` column, a units change, a new composite-key format.
+
+It is **not** needed when the story only reads existing tables, writes rows into existing
+tables with no shape change, or is pure computation / formatting / notification /
+script-wiring.
+
+DDL lives in `schema.md`, never inline in `stories.md` — `stories.md` points to it ("use
+the exact schema from `schema.md`"). `schema.md` **must** also state the `DB_REGISTRY.md`
+row to add. `check_story_structure.py` warns (does not block) when a `stories.md` /
+`prompt.md` contains `CREATE TABLE` / `ALTER TABLE` and the folder has no `schema.md`.
+
+### Extra files
+
+A story or epic folder may carry additional `.md` files beyond the sets above **only** when
+the file is shared reference material used by more than one task — a reusable prompt, a
+`plan.md`, a `spec.md`, a research note — **and** it contains no `- [ ]` / `- [x]` task
+checkboxes. Anything with tracked checkboxes is a task list and belongs in a story folder's
+`tasks.md`. OS / editor cruft (`.DS_Store`, `*.swp`) is removed — it is already
+`.gitignore`d. `check_story_structure.py` flags a tracked non-`.md` file in a plan folder,
+and an extra `.md` that contains checkbox lines.
+
+### Task-line format
+
+Every `tasks.md` line is a single `- [ ]` checkbox carrying five `|`-separated fields:
 
 ```
-| Owner: <Claude|Antigravity|Animesh> | Model: <model-id|n/a> | SHA: <commit-sha>
+- [ ] **<ID>** — <one-line description> | Owner: <Claude|Antigravity|Animesh> | Model: <model-id|n/a> | Review: <code-reviewer|greeks-analyst|roll-validator|none> | SHA: <—>
 ```
 
-`Owner` records the `CLAUDE.md` Step 3b routing outcome.
+`Owner`, `Model`, and `Review` are filled **when the story is authored** — they record the
+`CLAUDE.md` Step 3b routing decision and which AutoTrigger sub-agent gates that task's
+commit.
 `Model` is the implementing model id when `Owner=Claude` (e.g. `claude-sonnet-5`), `n/a`
 otherwise.
-`SHA` is the commit that closed the task.
-One line per task — never mirror task state into `TODOS.md`.
+`Review` is `none` for docs-only tasks.
+`SHA` is `—` until the task's commit lands; then set it to the real SHA and tick the box.
+One line per task — never mirror task state into `TODOS.md` or a `stories.md` DoD box.
 
 ### Canonical state vs derived state
 
@@ -196,17 +269,18 @@ Everything else is derived and must not be hand-edited to disagree with it:
 
 Every task id carries **exactly one** checkbox — the `- [ ]` / `- [x]` line in the working
 list.
-A trailing `## Epic done when` block is an **acceptance-criteria list in prose** — bold id,
-one-line criterion, **no `- [ ]` checkboxes** — verified at epic close, not tracked
-incrementally.
+A trailing `## Epic done when` (epic) / `## Story done when` (single story) block is an
+**acceptance-criteria list in prose** — bold id, one-line criterion, **no `- [ ]`
+checkboxes** — verified at close, not tracked incrementally.
 An acceptance item with no matching task id (e.g. a whole-epic "loop-closure verified"
 check) is real work: give it a task id in the working list, don't leave it as a bare bullet
 here.
 Nothing mirrors task state, so nothing can drift.
 `scripts/hooks/check_checkbox_consistency.py` sweeps every `docs/plan/**/tasks.md` (plus
 legacy `*_tasks.md`) and `docs/bugs/task.md` for: a checkbox inside a summary block, the
-same id with disagreeing state in one file, and a README `next:` marker pointing at an
-already-done id.
+same id with disagreeing state in one file, a README `next:` marker pointing at an
+already-done id, and a task line whose `| Owner | Model | Review | SHA` tail is malformed or
+whose `SHA` disagrees with the checkbox state (`—` iff unchecked, a real SHA iff ticked).
 It runs in the `md-organize` skill's periodic audit — not pre-commit (task files churn far
 faster than the audit needs to).
 
@@ -226,7 +300,8 @@ On completion, a line is removed, not just ticked — see *Completion → archiv
 ### Completion → archive
 
 A story or bug is **done** when every `- [ ]` in its `tasks.md` / `docs/bugs/task.md` is
-ticked and its `## Epic done when` block (if present) is fully checked.
+ticked and its `## Epic done when` / `## Story done when` acceptance block (if present) is
+satisfied.
 As soon as that holds, do all of the following in the same commit — never leave a done
 story half-archived:
 
@@ -255,12 +330,17 @@ token.
 
 ### Structure audit
 
-`scripts/hooks/check_story_structure.py` checks that every non-archived `docs/plan/*/` folder
-has `prompt.md` + `tasks.md`, and flags stray or empty folders.
-It runs pre-commit on newly-added folders only; the full repo-wide sweep is part of the
+`scripts/hooks/check_story_structure.py` checks every non-archived `docs/plan/*/` folder:
+a flat story folder has `prompt.md` + `tasks.md` + `stories.md`; an epic root has
+`prompt.md` + `README.md` and at least one conforming sub-story.
+It also flags stray or empty folders, a missing `schema.md` against DDL in
+`stories.md` / `prompt.md` (warning), and disallowed extra files (see *Extra files*).
+It runs pre-commit on newly-added folders only — legacy shapes are grandfathered, so the
+repo-wide `--all` sweep warns but does not fail; the full sweep is part of the
 `md-organize` skill's periodic audit, since folders churn only ~monthly.
 `scripts/hooks/check_checkbox_consistency.py` (see §"Checkbox consistency") is the companion
-sweep for task-state drift; it runs alongside it in the same audit, also not pre-commit.
+sweep for task-state drift and task-line-tail shape; it runs alongside it in the same audit,
+also not pre-commit.
 
 ### Status transitions
 
