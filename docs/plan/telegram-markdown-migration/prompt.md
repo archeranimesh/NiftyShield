@@ -1,8 +1,7 @@
 # Telegram Markdown Migration — prompt (router)
 
-Central entry point for this epic. `/work` loads this file, **not** a sub-story `prompt.md`.
-Read `CONTEXT.md` and state `CONTEXT.md ✓` before anything else, then follow the steps below to find and run exactly one task. Do not skip to a folder-level `prompt.md` directly — this file picks
-the right one for you.
+Central entry point for this epic. `/work` loads this file, **not** a sub-story `prompt.md`. Read `CONTEXT.md` and state `CONTEXT.md ✓` before anything else, then follow the steps below to find and
+run exactly one task. Do not skip to a folder-level `prompt.md` directly — this file picks the right one for you.
 
 **Origin:** `README.md` in this folder — the epic index. Read it if you have not this session; it carries the scope decisions, the ordered story list, the cross-cutting constraints (non-fatal send
 contract, the escape-every-dynamic-value rule, the MD-2 live-risk window), the supersession / coordination notes, and the Improvement backlog this router's logic draws from.
@@ -47,7 +46,7 @@ Then read the matching task's full spec in that folder's `stories.md`.
 
 ## Step 4 — implement, verify, record
 
-Follow the sub-story `prompt.md`'s protocol exactly: implement, run the test gate, run the `Review` gate if flagged, commit via `.claude/skills/commit/SKILL.md` (execute the commit, do not draft
-it), set `SHA:` on the task line + tick the box, update this epic's `README.md` **Stories** table status column, add one line to `TODOS.md`.
+Follow the sub-story `prompt.md`'s protocol exactly: implement, run the test gate, run the `Review` gate if flagged, commit via `.claude/skills/commit/SKILL.md` (execute the commit, do not draft it),
+set `SHA:` on the task line + tick the box, update this epic's `README.md` **Stories** table status column, add one line to `TODOS.md`.
 
 **Stop.** One task per session — do not proceed to the next unchecked item in this folder or any other, even if it looks like a quick follow-on.

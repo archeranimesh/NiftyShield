@@ -2,17 +2,15 @@
 
 > The canonical per-parameter-type formatting spec (`FORMATTING.md`) and the tested value / table-builder helpers in `src/notifications/formatting.py` that every `strategy-rollout/` message reuses.
 
-Read `CONTEXT.md` and state `CONTEXT.md ✓` before anything else.
-Then read `tasks.md`, find the first unchecked `- [ ]`, and do **only** that task.
-Read that task's full spec in `stories.md` (same task id) before writing any code.
-One task per session. Complete it fully. Stop.
+Read `CONTEXT.md` and state `CONTEXT.md ✓` before anything else. Then read `tasks.md`, find the first unchecked `- [ ]`, and do **only** that task. Read that task's full spec in `stories.md` (same
+task id) before writing any code. One task per session. Complete it fully. Stop.
 
 ## Why this story exists
 
-The scratch prototypes built ad hoc formatters (`_kv_table`, `_side_by_side_kv`, `_leg_table`, money / Greek / strike / percent helpers) through several rounds of on-device feedback. Without a
-single canonical spec and one tested implementation, every `strategy-rollout/` message would re-derive its own decimal precision, sign display, and column-width logic — which is exactly how the
-original `build_comparison_report()` hand-counted-width bug (TGFMT-1) happened. FMT-1 writes the spec (root `FORMATTING.md`); FMT-2/FMT-3 promote the scratch helpers into
-`src/notifications/formatting.py` with content-derived widths; FMT-1b–1f capture the emoji / header / summary-table rules that surfaced during later workshop sessions.
+The scratch prototypes built ad hoc formatters (`_kv_table`, `_side_by_side_kv`, `_leg_table`, money / Greek / strike / percent helpers) through several rounds of on-device feedback. Without a single
+canonical spec and one tested implementation, every `strategy-rollout/` message would re-derive its own decimal precision, sign display, and column-width logic — which is exactly how the original
+`build_comparison_report()` hand-counted-width bug (TGFMT-1) happened. FMT-1 writes the spec (root `FORMATTING.md`); FMT-2/FMT-3 promote the scratch helpers into `src/notifications/formatting.py` with
+content-derived widths; FMT-1b–1f capture the emoji / header / summary-table rules that surfaced during later workshop sessions.
 
 ## Scope guard
 

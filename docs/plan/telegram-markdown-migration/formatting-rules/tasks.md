@@ -1,15 +1,12 @@
 # Telegram Markdown Migration — Formatting Rules — tasks
 
-Work top-down. Find the first unchecked `- [ ]` and do only that task.
-Each task = one commit. See `prompt.md` for why the story exists; see `stories.md` for the
-per-task spec — each shipped line carries an **As-built** paragraph there.
+Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit. See `prompt.md` for why the story exists; see `stories.md` for the per-task spec — each shipped line
+carries an **As-built** paragraph there.
 
-**Open: none — `formatting-rules/` is complete (closing SHA `75cc123`). FMT-1 shipped as root
-`FORMATTING.md` (`c252bf3`) — read it before adding or changing any formatting rule.**
+**Open: none — `formatting-rules/` is complete (closing SHA `75cc123`). FMT-1 shipped as root `FORMATTING.md` (`c252bf3`) — read it before adding or changing any formatting rule.**
 
-> **Routing:** `Owner` = who implements (`Claude` = judgment-call, `Antigravity` = mechanical
-> with an unambiguous spec). `Model` = model the owner ran at. `Review` = the AutoTrigger gate
-> per root `CLAUDE.md`.
+> **Routing:** `Owner` = who implements (`Claude` = judgment-call, `Antigravity` = mechanical with an unambiguous spec). `Model` = model the owner ran at. `Review` = the AutoTrigger gate per root
+> `CLAUDE.md`.
 
 ## Tasks
 
@@ -32,20 +29,14 @@ per-task spec — each shipped line carries an **As-built** paragraph there.
 
 Acceptance criteria — prose, no checkboxes. Verified at story close.
 
-- **FMT-1** — root `FORMATTING.md` states the per-parameter-type decimal / alignment /
-  sign-display rules and the expiry format; it governs every downstream formatter.
-- **FMT-1b–1f** — the dynamic status-emoji, timeframe-header, summary-table money-exception,
-  emoji-presentation-glyph, and signed-money / spread-label rules are recorded in
-  `FORMATTING.md` (§§ 3, 4, 7, 10, 11).
-- **FMT-2** — `format_money` / `format_greek` / `format_strike` / `format_pct` exist in
-  `src/notifications/formatting.py` with happy-path + edge-case tests; `format_money` rejects
-  `float`.
-- **FMT-3** — the three table builders exist in the same module with every column width from
-  `max(len(...))`, `build_leg_table`'s 1dp LTP/Entry exception documented in its own docstring,
-  and mismatched-row-count / single-leg / empty-input tests.
+- **FMT-1** — root `FORMATTING.md` states the per-parameter-type decimal / alignment / sign-display rules and the expiry format; it governs every downstream formatter.
+- **FMT-1b–1f** — the dynamic status-emoji, timeframe-header, summary-table money-exception, emoji-presentation-glyph, and signed-money / spread-label rules are recorded in `FORMATTING.md` (§§ 3, 4,
+  7, 10, 11).
+- **FMT-2** — `format_money` / `format_greek` / `format_strike` / `format_pct` exist in `src/notifications/formatting.py` with happy-path + edge-case tests; `format_money` rejects `float`.
+- **FMT-3** — the three table builders exist in the same module with every column width from `max(len(...))`, `build_leg_table`'s 1dp LTP/Entry exception documented in its own docstring, and
+  mismatched-row-count / single-leg / empty-input tests.
 - **FMT-4** — `src/notifications/CLAUDE.md` and `CONTEXT.md` record the `formatting.py` module.
 
 ## After each task
 
-Set `SHA:` to the real commit SHA on the task line and tick the box. Update the epic
-`README.md` **Stories** table status column and add one line to `TODOS.md` Session Log.
+Set `SHA:` to the real commit SHA on the task line and tick the box. Update the epic `README.md` **Stories** table status column and add one line to `TODOS.md` Session Log.

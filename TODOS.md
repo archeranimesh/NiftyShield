@@ -27,8 +27,8 @@ Cross-references use folder names, never list positions, so renumbering can't ro
 
 1. **root-doc-organization** — `docs/plan/root-doc-organization/` — next **RDO-16**
    (loop-closure check — one real session confirms the doc-freshness mechanism end to end).
-   RDO-17.7 §B (Animesh), RDO-11 (≥ 2026-09-03) also open. RDO-17.1..17.6 shipped, RDO-17.7 §A
-   shipped inside 17.5.
+   RDO-17.8 (Animesh — legacy-folder conversion rule), RDO-11 (≥ 2026-09-03) also open.
+   RDO-17.1..17.7 shipped (17.7 swept both POC folders to fill-to-≤200 + added reflow_md.py).
    Root `.md` token-efficiency cleanup + doc-maintenance automation.
 2. **IC yearly-expiry residual risk** — `docs/plan/ic-yearly-expiry-fix/` — next **WG-1**
    (persist per-leg Greeks for the weekly-expiry bucket).
@@ -154,6 +154,20 @@ this file's Session Log grows large again.
 
 ### 2026-08-29
 
+- **RDO-17.7 — sweep both POC folders to fill-to-≤200 + add reflow_md.py (root-doc-organization).**
+  Scope revised with Animesh: RDO-17.7 is not just the §A guidance (shipped in `7d28d16`) — it
+  also applies that style to `root-doc-organization/` and `telegram-markdown-migration/` in full,
+  since those are the RDO-17.5/17.6 exemplars. New `scripts/dev/reflow_md.py` — reusable
+  whitespace-only paragraph reflow (`--check`/in-place; code fences, tables, headings, nested
+  list/quote structure verbatim; never leaves a wrapped line starting with a bare list marker) —
+  + `tests/unit/scripts/dev/test_reflow_md.py` (10 tests). Ran over all 16 `.md` in both folders
+  (D6 extras included): `md-line-length` clean, `git diff --word-diff` zero word changes (only
+  interior blockquote `> ` markers consolidate on rewrap). Also fixed the stale "semantic
+  linefeeds" line in `check_md_line_length.py`'s docstring; `docs/plan/README.md` §"Markdown line
+  style" now names the two swept exemplars and points the rest at RDO-17.8. Commit 2: SHA + box.
+  RDO-17.7 §B renamed to **RDO-17.8** (Owner: Animesh, still open) — the do-not-touch reusable
+  tool now exists, so the decision is purely cadence / effort-ceiling / grandfathering for the
+  other ~25 legacy folders.
 - **RDO-17.6 — full-convert telegram-markdown-migration/ to canonical epic format (root-doc-organization).**
   Two commits, docs-only. Commit 1 (`cf46ff4`): root `README.md` → `_TEMPLATE/epic/` shape
   (Why / Scope decisions / Stories table w/ Status + Closing SHA / Cross-cutting constraints /

@@ -62,11 +62,14 @@ Risk delta gate (done) + Near-Expiry Gamma Buy `gamma_daily_watch.py`.
 CSP v1 Phase 0.8 deployment gate — spec reconciliation + gate criteria A–D.
 
 **`root-doc-organization/`** · 🔄 In progress · next: **RDO-16** (loop-closure check — one real
-session confirms the doc-freshness mechanism end to end; RDO-11 also open, date-gated ≥ 2026-09-03; RDO-17.7 §B is Owner: Animesh)
+session confirms the doc-freshness mechanism end to end; RDO-11 also open, date-gated ≥ 2026-09-03; RDO-17.8 is Owner: Animesh)
 Token-efficiency cleanup of the ~22 root `.md` files + doc-maintenance automation.
 Docs + tooling only. RDO-1..17 + an acceptance-criteria list in `tasks.md`.
-RDO-1/2/4/5/6/7/8/9/10/12/13/14/15 + RDO-17.1..17.6 shipped, RDO-3 closed-partial;
-RDO-17.7 §B, RDO-16, RDO-11 open.
+RDO-1/2/4/5/6/7/8/9/10/12/13/14/15 + RDO-17.1..17.7 shipped, RDO-3 closed-partial;
+RDO-17.8, RDO-16, RDO-11 open.
+RDO-17.7 (2026-08-29): swept `root-doc-organization/` + `telegram-markdown-migration/` (all 16 `.md`)
+to fill-to-≤200; added reusable `scripts/dev/reflow_md.py` + 10 tests. Whitespace-only — zero word
+changes. RDO-17.7 §B → **RDO-17.8** (legacy-folder conversion rule, Owner: Animesh). `<—>`.
 RDO-17.6 (2026-08-29): full-converted `telegram-markdown-migration/` — the epic POC (after 17.5's
 flat-story POC). Root `README.md` → `_TEMPLATE/epic/` shape (Stories table w/ Status + Closing SHA);
 `prompt.md` → epic router; all 3 sub-stories' `tasks.md` → canonical one-liner task lines,
@@ -341,7 +344,10 @@ linefeeds" guidance (one sentence or clause per line) is **retired**: the mid-li
 The hard **200-char ceiling** is the only gated rule. It applies to every line kind (prose, table rows, fenced code) and is enforced by the `md-line-length` pre-commit hook over root
 `.md` + `docs/plan/**` + `docs/bugs/**`; `<!-- lint-ignore-length -->` on the immediately-preceding line excuses one unbreakable token (a long URL, a base64 blob).
 `.py` stays at ruff's `line-length = 100` (ruff already excludes `docs/`).
-Existing docs reflow to fill-to-200 opportunistically when a commit next touches them — no big-bang pass (the same rule RDO-5 used to clear its own backlog).
+`scripts/dev/reflow_md.py` is the reusable engine that does the fill: `python -m scripts.dev.reflow_md <path>` rewrites in place, `--check` reports. It only re-wraps whitespace — a
+`git diff --word-diff` of a reflow shows zero word changes — and leaves fenced code, tables, headings and nested list/quote structure verbatim.
+The two RDO-17.5 / RDO-17.6 POC folders — `root-doc-organization/` and `telegram-markdown-migration/` — were swept to fill-to-≤200 in full at RDO-17.7 (2026-08-29) and are the reference
+exemplars. Every other legacy `docs/plan/` folder still reflows opportunistically when a commit next touches it — no big-bang pass — until RDO-17.8 sets the batch-vs-on-touch rule for them.
 
 ### Structure audit
 

@@ -6,23 +6,23 @@
 
 ## Why this epic exists
 
-Spawned from a Cowork session (2026-08-07) prototyping a nicer IC EOD audit Telegram message. The prototype (`scratch/2026-08-07_ic_eod_audit_telegram_format.py`) proved Markdown parse_mode gets
-real bold **and** a copyable fenced code block in the same message — something HTML parse_mode cannot do (nested `<b>` inside `<pre>` is not reliably rendered by Telegram's HTML parser; see that
-script's module docstring for the full elimination trail across HTML / plain / raw-HTML attempts). That prototype also surfaced a real bug class: a lone `_` in dynamic text (`DELTA_WARN`) opens an
-unclosed `_italic_` entity in Markdown and 400s the send — silently, since `TelegramNotifier.send()` swallows exceptions by contract (non-fatal notifications).
+Spawned from a Cowork session (2026-08-07) prototyping a nicer IC EOD audit Telegram message. The prototype (`scratch/2026-08-07_ic_eod_audit_telegram_format.py`) proved Markdown parse_mode gets real
+bold **and** a copyable fenced code block in the same message — something HTML parse_mode cannot do (nested `<b>` inside `<pre>` is not reliably rendered by Telegram's HTML parser; see that script's
+module docstring for the full elimination trail across HTML / plain / raw-HTML attempts). That prototype also surfaced a real bug class: a lone `_` in dynamic text (`DELTA_WARN`) opens an unclosed
+`_italic_` entity in Markdown and 400s the send — silently, since `TelegramNotifier.send()` swallows exceptions by contract (non-fatal notifications).
 
 **Revised 2026-08-07 — target is `parse_mode=MarkdownV2`, not legacy `Markdown` v1.** The prototype used legacy Markdown; `backbone/stories.md`'s MD-2 spec explains the switch. MarkdownV2's larger
 reserved-character set removes the "smart" entity-pairing ambiguity that caused the `DELTA_WARN` bug in the first place, and it is Telegram's actively-recommended mode. This also widens `backbone/`
-MD-3/MD-4's audit-and-fix pass: MarkdownV2 reserves ordinary prose punctuation (`.` `(` `)` `-` `!`) in addition to markup characters, so static message *templates* need escaping too, not just
-dynamic values.
+MD-3/MD-4's audit-and-fix pass: MarkdownV2 reserves ordinary prose punctuation (`.` `(` `)` `-` `!`) in addition to markup characters, so static message *templates* need escaping too, not just dynamic
+values.
 
 ## Scope decisions
 
 **Replace `TelegramNotifier`'s default parse mode globally — not an opt-in second method** (confirmed with Animesh, 2026-08-07). This is the higher-blast-radius option: every existing caller of
 `send_plain_message()` / `TelegramNotifier.send()` was written for HTML + `<pre>` (auto-escaped, wrapped) and has never been audited for Markdown special characters in its dynamic content.
 
-**All Telegram messages migrate, not just IC** (confirmed with Animesh). `strategy-rollout/` sequences the actual format migration by risk tier; `backbone/` only changes the transport (parse mode)
-and makes existing plain-text messages safe under it — it does not change how any message looks yet.
+**All Telegram messages migrate, not just IC** (confirmed with Animesh). `strategy-rollout/` sequences the actual format migration by risk tier; `backbone/` only changes the transport (parse mode) and
+makes existing plain-text messages safe under it — it does not change how any message looks yet.
 
 Confirmed real callers, via the code graph (not assumed):
 
@@ -86,10 +86,9 @@ through 2026-08-08..11 — all 10 items confirmed on-device and written back as 
 Four process / design improvements identified during a plan review, sequenced by urgency — not listed order. Each has a model recommendation for the owning agent. Re-read this section before picking
 up any of the four; do not assume listed order is execution order.
 
-1. **MD-6 (task) — static-scan escaping guard.** Owner: Claude, Model: Sonnet. Closes the only real correctness gap of the four: `backbone/`'s escaping discipline was hand-maintained with no
-   compiler / CI check — the same failure shape as the original `DELTA_WARN` bug. A test walks `src/` / `scripts/` for `notifier.send(` / `send_plain_message(` call sites and asserts every
-   interpolated value passed through the escaping helpers somewhere upstream. Resequenced to land right after MD-2, not after MD-5, so it catches mistakes as they are introduced. **Status: done
-   (SHA `ce95bbd`).**
+1. **MD-6 (task) — static-scan escaping guard.** Owner: Claude, Model: Sonnet. Closes the only real correctness gap of the four: `backbone/`'s escaping discipline was hand-maintained with no compiler
+   / CI check — the same failure shape as the original `DELTA_WARN` bug. A test walks `src/` / `scripts/` for `notifier.send(` / `send_plain_message(` call sites and asserts every interpolated value
+   passed through the escaping helpers somewhere upstream. Resequenced to land right after MD-2, not after MD-5, so it catches mistakes as they are introduced. **Status: done (SHA `ce95bbd`).**
 2. **FMT-1 design-gate treatment.** Owner: Claude, Model: Opus (for the spec-writing pass itself, not just a post-hoc review). FMT-1 is the highest-leverage doc in the epic — every downstream
    formatter and roughly half of `strategy-rollout/` inherits its decisions — so it gets the stronger model at write-time. **Status: done (SHA `c252bf3`, shipped as root `FORMATTING.md`).**
 3. **ROLL-7–16 parallelization restructure.** Owner: Claude, Model: Sonnet. `ROLL-7` through `ROLL-16` are each blocked only on "`backbone/` + `formatting-rules/` complete," not on each other
@@ -111,7 +110,7 @@ up any of the four; do not assume listed order is execution order.
 
 ## Conventions
 
-Same as `docs/plan/README.md` §Conventions. This is an epic root: `prompt.md` here is the **router** (`/work` loads it, not a sub-story `prompt.md`) and picks P0 `backbone/` → P1 `formatting-rules/`
-→ P2 `strategy-rollout/`, first unchecked box, with the Owner / Model / Review routing check built in. Each sub-story folder carries `prompt.md` (session entry point), `tasks.md`
-(first-unchecked-box protocol, one canonical `| Owner | Model | Review | SHA` line per task), and `stories.md` (per-task implementation spec). `message-format-workshop.md` is a shared reusable
-prompt (no task checkboxes) used across `strategy-rollout/` tasks.
+Same as `docs/plan/README.md` §Conventions. This is an epic root: `prompt.md` here is the **router** (`/work` loads it, not a sub-story `prompt.md`) and picks P0 `backbone/` → P1 `formatting-rules/` →
+P2 `strategy-rollout/`, first unchecked box, with the Owner / Model / Review routing check built in. Each sub-story folder carries `prompt.md` (session entry point), `tasks.md` (first-unchecked-box
+protocol, one canonical `| Owner | Model | Review | SHA` line per task), and `stories.md` (per-task implementation spec). `message-format-workshop.md` is a shared reusable prompt (no task checkboxes)
+used across `strategy-rollout/` tasks.

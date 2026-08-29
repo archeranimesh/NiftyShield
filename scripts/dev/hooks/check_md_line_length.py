@@ -2,9 +2,9 @@
 
 Enforced by the ``md-line-length`` pre-commit hook over root ``.md`` files plus
 everything under ``docs/plan/`` and ``docs/bugs/``. 200 is a hard ceiling for
-every line kind — prose, table rows, fenced code — not a prose-wrap target
-(prose uses semantic linefeeds; see ``docs/plan/README.md`` §Conventions and
-``docs/plan/root-doc-organization/`` RDO-5).
+every line kind — prose, table rows, fenced code. Prose is *filled* to just
+under this cap (fill-to-≤200 style; see ``docs/plan/README.md`` §"Markdown line
+style" and ``scripts/dev/reflow_md.py``), not hand-wrapped narrower.
 
 Put ``<!-- lint-ignore-length -->`` on the line immediately before a line that
 legitimately must run long (a base64 blob, an unbreakable URL) to suppress it.

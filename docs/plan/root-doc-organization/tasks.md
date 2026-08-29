@@ -1,11 +1,11 @@
 # Root doc organization — tasks
 
 Token-efficiency cleanup of the ~22 root `.md` files, doc-maintenance automation, and the `docs/plan/` story-format standardization (RDO-17). Docs + tooling only — no `src/` behaviour change.
-`prompt.md` says why the story exists; `stories.md` carries the per-task spec — a full forward spec for the open tasks and a short as-built digest for each shipped one; `plan.md` keeps the
-original file-by-file root inventory (D6 extra file). Work top-down: the first unchecked `- [ ]` line is the task. Each task is one commit plus a follow-up that records its SHA and ticks the box.
+`prompt.md` says why the story exists; `stories.md` carries the per-task spec — a full forward spec for the open tasks and a short as-built digest for each shipped one; `plan.md` keeps the original
+file-by-file root inventory (D6 extra file). Work top-down: the first unchecked `- [ ]` line is the task. Each task is one commit plus a follow-up that records its SHA and ticks the box.
 
-**Open: RDO-16 (next, after RDO-6 — shipped), RDO-17.7 §B (Owner: Animesh), RDO-11 (date-gated ≥ 2026-09-03).**
-RDO-17.5 (`5508e41`) + RDO-17.6 (`cf46ff4`) shipped the two POC full conversions; RDO-17.7 §A shipped inside RDO-17.5 (`7d28d16`).
+**Open: RDO-16 (next, after RDO-6 — shipped), RDO-17.8 (Owner: Animesh), RDO-11 (date-gated ≥ 2026-09-03).** RDO-17.5 (`5508e41`) + RDO-17.6 (`cf46ff4`) shipped the two POC full conversions; RDO-17.7
+§A shipped the fill-to-≤200 *guidance* inside RDO-17.5 (`7d28d16`), then RDO-17.7 swept both POC folders to that style in full; RDO-17.8 (was 17.7 §B) is the remaining legacy-folder rule.
 
 ## Tasks
 
@@ -31,7 +31,8 @@ RDO-17.5 (`5508e41`) + RDO-17.6 (`cf46ff4`) shipped the two POC full conversions
 - [x] **RDO-17.4** — partial structural retrofit of both validation folders — superseded by RDO-17.5 / RDO-17.6 | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 35d9f42
 - [x] **RDO-17.5** — full-convert root-doc-organization/ — every task line canonical, stories.md covers all tasks | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 5508e41
 - [x] **RDO-17.6** — full-convert telegram-markdown-migration/ to the canonical epic format (router, Stories table) | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: cf46ff4
-- [ ] **RDO-17.7** — §A fill-to-≤200 line style (shipped in RDO-17.5, 7d28d16); §B legacy-folder conversion rule (open) | Owner: Animesh | Model: n/a | Review: none | SHA: <—>
+- [ ] **RDO-17.7** — sweep both POC folders to fill-to-≤200 in full; add reusable `scripts/dev/reflow_md.py` + tests | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: <—>
+- [ ] **RDO-17.8** — legacy-folder conversion rule (was 17.7 §B): cadence, effort ceiling, grandfathering for ~25 folders | Owner: Animesh | Model: n/a | Review: none | SHA: <—>
 
 ## Story done when
 
@@ -42,10 +43,10 @@ Acceptance criteria — prose, no checkboxes (RDO-15 convention a). Verified at 
 - **RDO-3** — closed as a partial; the 5 self-contained historical sections are archived and the real DECISIONS.md shrink is carried by RDO-9.
 - **RDO-4** — BUGS.md and GLOSSARY.md relocated out of root, stub left where linked, all inbound links fixed.
 - **RDO-5** — md-line-length hook (200-char cap) added and enforcing on staged files, with check_md_line_length.py + unit tests; repo-wide --all-files green is not an RDO-5 gate.
-- **RDO-6** — md-organize skill exists; the "stay at root" table matches reality; it carries the CONTEXT re-slim / DECISIONS roll / line-length sweep /
-  CLAUDE.md pointer-reconcile / mirror re-sync steps.
-- **RDO-7** — the session-close DOC STALENESS report is added, scoped to the content gaps the two freshness hooks cannot see (missing CONTEXT_TREE.md row
-  for a new module; a story's README status not advanced).
+- **RDO-6** — md-organize skill exists; the "stay at root" table matches reality; it carries the CONTEXT re-slim / DECISIONS roll / line-length sweep / CLAUDE.md pointer-reconcile / mirror re-sync
+  steps.
+- **RDO-7** — the session-close DOC STALENESS report is added, scoped to the content gaps the two freshness hooks cannot see (missing CONTEXT_TREE.md row for a new module; a story's README status not
+  advanced).
 - **RDO-8** — all 5 protocol-doc consistency fixes landed (SHA bf26d81).
 - **RDO-9** — completed-work-log entries split to docs/archive/DECISIONS_worklog_2026.md; the 9a still-enforced list signed off by Animesh; md-line-length green (SHA 2fb5c5b).
 - **RDO-10** — both hooks are in plan.md Phase 7 inventory with an RDO-6 verification step; #4 narrowed to a future read-only Telegram digest; md-organize name settled; thresholds tuned (SHA a4431ec).
@@ -55,17 +56,17 @@ Acceptance criteria — prose, no checkboxes (RDO-15 convention a). Verified at 
 - **RDO-14** — TODOS.md is split into pointer-only ## Feature Backlog + ## Open Bugs; the §Conventions Completion→archive rule is added; the file reflowed (SHA e7cecab).
 - **RDO-15** — check_checkbox_consistency.py runs clean across docs/plan/** + docs/bugs/; the one-checkbox-per-id convention is recorded in §Conventions + _TEMPLATE/.
 - **RDO-16** — the loop-closure check passes: a stale doc is flagged at SessionStart, acted on, and the flag clears the next session (see the working-list task).
-- **RDO-17** — §Conventions defines the flat-story vs epic-with-sub-stories shapes, the 3-file story set, the conditional schema.md, and the
-  Owner|Model|Review|SHA task line; _TEMPLATE/ has story/ + epic/ variants; both structure hooks enforce it (legacy folders grandfathered pre-commit);
-  /work walks an epic's sub-stories in order; root-doc-organization/ (17.5) and telegram-markdown-migration/ (17.6) are fully converted; RDO-17.7 §A
-  retires the semantic-linefeed style for fill-to-≤200, §B records the legacy-folder rule.
-- **prompt.md** — DoD rewritten to the delivered design: the dead pre-2026H1 date-cutoff line dropped, the hook rename + semantic-split reality stated
-  (done in 2fb5c5b), realigned to _TEMPLATE/story/prompt.md by RDO-17.5.
+- **RDO-17** — §Conventions defines the flat-story vs epic-with-sub-stories shapes, the 3-file story set, the conditional schema.md, and the Owner|Model|Review|SHA task line; _TEMPLATE/ has story/ +
+  epic/ variants; both structure hooks enforce it (legacy folders grandfathered pre-commit); /work walks an epic's sub-stories in order; root-doc-organization/ (17.5) and telegram-markdown-migration/
+  (17.6) are fully converted; RDO-17.7 retires the semantic-linefeed style for fill-to-≤200 (guidance + `scripts/dev/reflow_md.py` + a full sweep of both POC folders), RDO-17.8 records the remaining
+  legacy-folder rule.
+- **prompt.md** — DoD rewritten to the delivered design: the dead pre-2026H1 date-cutoff line dropped, the hook rename + semantic-split reality stated (done in 2fb5c5b), realigned to
+  _TEMPLATE/story/prompt.md by RDO-17.5.
 
 RDO-1, RDO-2 done. RDO-3 closed as partial (remainder = RDO-9).
 
 ## After each task
 
 Set `SHA:` on the task line to the real commit SHA and tick the box (the RDO-17.x tail is the full `| Owner | Model | Review | SHA` per `docs/plan/README.md` §Conventions). Update the
-`docs/plan/README.md` status entry for this story and add one line to the `TODOS.md` Session Log. When the whole story is done, follow §Conventions
-*Completion → archive* — do not leave it half-archived.
+`docs/plan/README.md` status entry for this story and add one line to the `TODOS.md` Session Log. When the whole story is done, follow §Conventions *Completion → archive* — do not leave it
+half-archived.

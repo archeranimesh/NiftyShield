@@ -30,19 +30,15 @@ Current root inventory (2026-08-27), largest first by bytes:
 
 ## Phase 1 — CONTEXT.md slim (highest value, ~14K tokens/session saved)
 
-**Problem:** the "What Exists (committed and working)" section (lines 12–75) is written as
-~15 run-on bullets, each a full paragraph on one logical line. Line 27 is 18,740 chars. This
-duplicates the stated purpose of `CONTEXT_TREE.md` ("Module tree — file-level descriptions").
+**Problem:** the "What Exists (committed and working)" section (lines 12–75) is written as ~15 run-on bullets, each a full paragraph on one logical line. Line 27 is 18,740 chars. This duplicates the
+stated purpose of `CONTEXT_TREE.md` ("Module tree — file-level descriptions").
 
 **Changes:**
 
-1. `CONTEXT_TREE.md` — for each module bullet currently in `CONTEXT.md` "What Exists", merge
-   any detail not already present into the matching `CONTEXT_TREE.md` entry. This is the new
-   home for "what each module does". (Line style: semantic linefeeds, 200-char backstop — see
-   RDO-5 and `docs/plan/README.md` §Conventions.)
-2. `CONTEXT.md` "What Exists" — replace the prose bullets with a flat one-line-per-module
-   list: `` `src/strategy/` — paper-backbone strategy layer → CONTEXT_TREE.md`` . Target the
-   whole section ≤ 25 lines.
+1. `CONTEXT_TREE.md` — for each module bullet currently in `CONTEXT.md` "What Exists", merge any detail not already present into the matching `CONTEXT_TREE.md` entry. This is the new home for "what
+   each module does". (Line style: semantic linefeeds, 200-char backstop — see RDO-5 and `docs/plan/README.md` §Conventions.)
+2. `CONTEXT.md` "What Exists" — replace the prose bullets with a flat one-line-per-module list: `` `src/strategy/` — paper-backbone strategy layer → CONTEXT_TREE.md`` . Target the whole section ≤ 25
+   lines.
 3. `CONTEXT.md` — keep these sections at root, trim each to essentials:
    - `## Current State (as of DATE)` — date + 3–4 line status paragraph
    - `## What Does NOT Exist Yet` — bullet list, one line each
@@ -55,8 +51,7 @@ duplicates the stated purpose of `CONTEXT_TREE.md` ("Module tree — file-level 
    - `## Session Log` — last 5 entries, pointer to archive
 4. Hard-wrap every remaining line in `CONTEXT.md` to ≤ 200 chars.
 
-**Verify:** `wc -l CONTEXT.md` ≤ 400; `awk '{print length}' CONTEXT.md | sort -rn | head -1`
-≤ 200; a fresh `Read CONTEXT.md` returns the whole file without hitting the display cap.
+**Verify:** `wc -l CONTEXT.md` ≤ 400; `awk '{print length}' CONTEXT.md | sort -rn | head -1` ≤ 200; a fresh `Read CONTEXT.md` returns the whole file without hitting the display cap.
 
 **Commit:** `docs(context): slim CONTEXT.md to always-load core, move module prose to tree`
 
@@ -64,20 +59,13 @@ duplicates the stated purpose of `CONTEXT_TREE.md` ("Module tree — file-level 
 
 ## Phase 2 — AGENTS.md / CLAUDE.md dedup
 
-`AGENTS.md` header structure is `CLAUDE.md` + an appended "Imported Claude Cowork project
-instructions" block (Project Overview / Async Model / Data Layer / BrokerClient / … /
-Environment Variables). The two protocol halves have already drifted (`CLAUDE.md` has a
-"Logging standard (scripts/)" section `AGENTS.md` lacks; section titles differ).
+`AGENTS.md` header structure is `CLAUDE.md` + an appended "Imported Claude Cowork project instructions" block (Project Overview / Async Model / Data Layer / BrokerClient / … / Environment Variables).
+The two protocol halves have already drifted (`CLAUDE.md` has a "Logging standard (scripts/)" section `AGENTS.md` lacks; section titles differ).
 
-**Decision needed from Animesh:** does any non-Claude tool (opencode, Cursor, Aider, …) read
-`AGENTS.md` in this repo? 
-- **If no:** delete `AGENTS.md`; move the unique "Imported Claude Cowork" appendix content
-  that isn't already in `CLAUDE.md` or a module `CLAUDE.md` into `DECISIONS.md` or the
-  relevant module doc.
-- **If yes:** replace `AGENTS.md` body with a 5-line pointer: "Protocol is defined in
-  `CLAUDE.md`. This file exists only for tools that look for `AGENTS.md` by name and is a
-  verbatim pointer — do not add content here." Add a pre-commit check that `AGENTS.md`
-  stays under 20 lines.
+**Decision needed from Animesh:** does any non-Claude tool (opencode, Cursor, Aider, …) read `AGENTS.md` in this repo?
+- **If no:** delete `AGENTS.md`; move the unique "Imported Claude Cowork" appendix content that isn't already in `CLAUDE.md` or a module `CLAUDE.md` into `DECISIONS.md` or the relevant module doc.
+- **If yes:** replace `AGENTS.md` body with a 5-line pointer: "Protocol is defined in `CLAUDE.md`. This file exists only for tools that look for `AGENTS.md` by name and is a verbatim pointer — do not
+  add content here." Add a pre-commit check that `AGENTS.md` stays under 20 lines.
 
 **Commit:** `docs(protocol): collapse AGENTS.md into CLAUDE.md pointer` (or `remove AGENTS.md`)
 
@@ -85,13 +73,9 @@ Environment Variables). The two protocol halves have already drifted (`CLAUDE.md
 
 ## Phase 3 — DECISIONS.md archive + index
 
-> **Revised 2026-08-27.** The date-cutoff below is unworkable: `DECISIONS.md` has no entry
-> older than 2026-04-01, it is grouped thematically rather than chronologically, and
-> 2026-04/05 and 2026-06/07/08 entries are interleaved inside several sections. A partial
-> lift of 5 fully-historical self-contained sections landed as `7bbfaff`
-> (`docs/archive/DECISIONS_pre-2026-07.md`). The real shrink is a **semantic split** —
-> see **RDO-9** in `tasks.md`. Steps 1–4 here are kept only as the record of the abandoned
-> approach.
+> **Revised 2026-08-27.** The date-cutoff below is unworkable: `DECISIONS.md` has no entry older than 2026-04-01, it is grouped thematically rather than chronologically, and 2026-04/05 and
+> 2026-06/07/08 entries are interleaved inside several sections. A partial lift of 5 fully-historical self-contained sections landed as `7bbfaff` (`docs/archive/DECISIONS_pre-2026-07.md`). The real
+> shrink is a **semantic split** — see **RDO-9** in `tasks.md`. Steps 1–4 here are kept only as the record of the abandoned approach.
 
 1. ~~Create `docs/archive/DECISIONS_ARCHIVE_2026H1.md` with the standard archive header.~~
 2. ~~Move every decision entry dated before 2026-06-01 into it, preserving order.~~
@@ -128,15 +112,11 @@ Add to `.pre-commit-config.yaml`:
   pass_filenames: true
 ```
 
-`scripts/dev/hooks/check_md_line_length.py` — for each passed file, fail if any line > 200 chars,
-print `file:line: NNN chars`. Skip fenced code blocks and table rows? No — table rows are the
-main offender; keep them short instead. Allow an inline `<!-- lint-ignore-length -->` on the
-preceding line for the rare legit case (a base64 blob, a long URL).
+`scripts/dev/hooks/check_md_line_length.py` — for each passed file, fail if any line > 200 chars, print `file:line: NNN chars`. Skip fenced code blocks and table rows? No — table rows are the main
+offender; keep them short instead. Allow an inline `<!-- lint-ignore-length -->` on the preceding line for the rare legit case (a base64 blob, a long URL).
 
-**Verify:** `pre-commit run md-line-length --files <a clean .md>` passes and `--files <a
-long .md>` fails. Full `--all-files` green is not an RDO-5 gate — the ~800-line pre-existing
-backlog is cleared opportunistically (the hook fires on any file a later commit touches) and
-in batch by RDO-6's `md-organize` skill + RDO-9's `DECISIONS.md` split.
+**Verify:** `pre-commit run md-line-length --files <a clean .md>` passes and `--files <a long .md>` fails. Full `--all-files` green is not an RDO-5 gate — the ~800-line pre-existing backlog is cleared
+opportunistically (the hook fires on any file a later commit touches) and in batch by RDO-6's `md-organize` skill + RDO-9's `DECISIONS.md` split.
 
 **Commit:** `chore(hooks): add md-line-length pre-commit guard`
 
@@ -146,18 +126,13 @@ in batch by RDO-6's `md-organize` skill + RDO-9's `DECISIONS.md` split.
 
 Rename `.claude/skills/md-cleanup/` → `.claude/skills/md-organize/` and rewrite `SKILL.md`:
 
-- **Trigger phrases:** "organize the markdown", "optimize the docs", "clean up the markdown",
-  "do a markdown cleanup", "archive completed TODOs".
-- **Fix the stale "must stay at root" table** — current version lists 12 files; real list
-  after this story is: `CLAUDE.md`, `AGENTS.md` (stub), `CONTEXT.md`, `CONTEXT_TREE.md`,
-  `DECISIONS.md`, `README.md`, `MISSION.md`, `PLANNER.md`, `TODOS.md`, `REFERENCES.md`,
-  `DB_REGISTRY.md`, `BACKTEST_PLAN.md`, `BACKTEST_PLAN_PHASE1.md`, `LITERATURE.md`,
-  `REVIEW.md`, `LOGGING.md`, `FORMATTING.md`, `INSTRUCTION.md`, `suggestions.md`.
-- **Add steps:** (a) CONTEXT.md line-length + length check and re-slim if regressed;
-  (b) DECISIONS.md — roll any entry older than 6 months into the current-year archive,
-  refresh the index; (c) run `pre-commit run md-line-length --all-files` and clear any
-  reported backlog (semantic-linefeed reflow for prose, restructure long table rows);
-  (d) reconcile every `also read X.md` line in `CLAUDE.md` against files that actually exist.
+- **Trigger phrases:** "organize the markdown", "optimize the docs", "clean up the markdown", "do a markdown cleanup", "archive completed TODOs".
+- **Fix the stale "must stay at root" table** — current version lists 12 files; real list after this story is: `CLAUDE.md`, `AGENTS.md` (stub), `CONTEXT.md`, `CONTEXT_TREE.md`, `DECISIONS.md`,
+  `README.md`, `MISSION.md`, `PLANNER.md`, `TODOS.md`, `REFERENCES.md`, `DB_REGISTRY.md`, `BACKTEST_PLAN.md`, `BACKTEST_PLAN_PHASE1.md`, `LITERATURE.md`, `REVIEW.md`, `LOGGING.md`, `FORMATTING.md`,
+  `INSTRUCTION.md`, `suggestions.md`.
+- **Add steps:** (a) CONTEXT.md line-length + length check and re-slim if regressed; (b) DECISIONS.md — roll any entry older than 6 months into the current-year archive, refresh the index; (c) run
+  `pre-commit run md-line-length --all-files` and clear any reported backlog (semantic-linefeed reflow for prose, restructure long table rows); (d) reconcile every `also read X.md` line in `CLAUDE.md`
+  against files that actually exist.
 - Keep existing TODOS.md / CONTEXT.md date / README structure steps.
 
 **Commit:** `chore(skills): replace md-cleanup with md-organize, fix root-file table`
@@ -181,28 +156,19 @@ Rename `.claude/skills/md-cleanup/` → `.claude/skills/md-organize/` and rewrit
 > can see — see RDO-7 in `tasks.md`. The nightly-cron idea (`TODOS.md #4`) is narrowed to a
 > future *read-only* Telegram staleness digest, out of scope for this epic.
 
-The user's ask was "a sub-agent that keeps these docs latest after each day of work."
-A subagent cannot self-schedule. Two safe hooks:
+The user's ask was "a sub-agent that keeps these docs latest after each day of work." A subagent cannot self-schedule. Two safe hooks:
 
-**Option A (recommended) — extend session-close.** `CLAUDE.md` Step 5d already spawns a
-`fork` at end of session. Add a `doc-sync` section to `.claude/skills/session-close/SKILL.md`:
+**Option A (recommended) — extend session-close.** `CLAUDE.md` Step 5d already spawns a `fork` at end of session. Add a `doc-sync` section to `.claude/skills/session-close/SKILL.md`:
 
 - `git log --oneline --since="00:00"` (or since last session-close marker)
-- For each file touched today under `src/` / `scripts/`, check whether `CONTEXT.md`,
-  `CONTEXT_TREE.md`, `TODOS.md`, or `docs/plan/README.md` was also modified in the same
-  window.
-- Emit a `DOC STALENESS` block in the session-close report: "src/foo/bar.py changed 3× today,
-  no CONTEXT_TREE.md entry updated" — **report only**, the operator decides.
+- For each file touched today under `src/` / `scripts/`, check whether `CONTEXT.md`, `CONTEXT_TREE.md`, `TODOS.md`, or `docs/plan/README.md` was also modified in the same window.
+- Emit a `DOC STALENESS` block in the session-close report: "src/foo/bar.py changed 3× today, no CONTEXT_TREE.md entry updated" — **report only**, the operator decides.
 
-**Option B — dedicated `doc-sync` fork agent.** New `.claude/agents/doc-sync.md` (Haiku),
-spawned by session-close Step 5d alongside the efficiency audit. Same logic as Option A,
-isolated context. Slightly more moving parts; pick this only if the session-close report is
-already crowded.
+**Option B — dedicated `doc-sync` fork agent.** New `.claude/agents/doc-sync.md` (Haiku), spawned by session-close Step 5d alongside the efficiency audit. Same logic as Option A, isolated context.
+Slightly more moving parts; pick this only if the session-close report is already crowded.
 
-**Not doing:** a nightly cron cloud agent that edits + commits docs unattended. Unattended
-writes to source-of-truth docs is the wrong risk trade. A nightly *read-only* Telegram
-staleness digest is the sanctioned form of `TODOS.md #4` (RDO-10 #3) — acceptable as a
-post-epic add-on, not built here.
+**Not doing:** a nightly cron cloud agent that edits + commits docs unattended. Unattended writes to source-of-truth docs is the wrong risk trade. A nightly *read-only* Telegram staleness digest is
+the sanctioned form of `TODOS.md #4` (RDO-10 #3) — acceptable as a post-epic add-on, not built here.
 
 **Commit:** `chore(session-close): add report-only doc staleness check`
 
@@ -210,10 +176,8 @@ post-epic add-on, not built here.
 
 ## Phasing / commit boundaries
 
-Phases 1–7 each get their own commit. 1, 3, 4, 5 are independent and can be done in any
-order or parallel. Phase 2 is blocked on the Animesh decision (delete vs stub AGENTS.md).
-Phase 6 should come after 1–5 land so the skill encodes the final state. Phase 7 is
-independent.
+Phases 1–7 each get their own commit. 1, 3, 4, 5 are independent and can be done in any order or parallel. Phase 2 is blocked on the Animesh decision (delete vs stub AGENTS.md). Phase 6 should come
+after 1–5 land so the skill encodes the final state. Phase 7 is independent.
 
 ## Estimated token impact
 
@@ -225,10 +189,7 @@ independent.
 
 ## Perspectives not covered
 
-- **Merge conflict cost during the transition** — Phases 1 and 3 rewrite large sections of
-  files that Antigravity and other sessions edit frequently (`CONTEXT.md`, `DECISIONS.md`).
-  Land them on a quiet day, in one sitting, and warn any parallel session. Not analyzed:
-  whether to freeze doc edits repo-wide during the cutover.
-- **Whether `INSTRUCTION.md` should exist at all** — it is human-facing and overlaps
-  `CLAUDE.md` + `.claude/` definitions heavily. This plan only trims it; a case could be
-  made to fold it into `README.md`. Deferred.
+- **Merge conflict cost during the transition** — Phases 1 and 3 rewrite large sections of files that Antigravity and other sessions edit frequently (`CONTEXT.md`, `DECISIONS.md`). Land them on a
+  quiet day, in one sitting, and warn any parallel session. Not analyzed: whether to freeze doc edits repo-wide during the cutover.
+- **Whether `INSTRUCTION.md` should exist at all** — it is human-facing and overlaps `CLAUDE.md` + `.claude/` definitions heavily. This plan only trims it; a case could be made to fold it into
+  `README.md`. Deferred.

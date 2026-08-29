@@ -1,27 +1,17 @@
 # Telegram Markdown Migration — Strategy Rollout — tasks
 
-Work top-down. Find the first unchecked `- [ ]` and do only that task.
-Each task = one commit. See `prompt.md` for why the story exists; see `stories.md` for the
-per-task spec — every shipped line carries an **As-built** paragraph there (split history,
-review-gate detail, phase SHAs); every open line has a full forward spec including its
-confirmed message block and exact test list.
+Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit. See `prompt.md` for why the story exists; see `stories.md` for the per-task spec — every shipped line
+carries an **As-built** paragraph there (split history, review-gate detail, phase SHAs); every open line has a full forward spec including its confirmed message block and exact test list.
 
-Sequenced by risk: informational messages first, live position-event notifications next,
-auth-sensitive interactive messages last.
+Sequenced by risk: informational messages first, live position-event notifications next, auth-sensitive interactive messages last.
 
-**Open: ROLL-6 (next), ROLL-7, ROLL-8, ROLL-9, ROLL-10, ROLL-11, ROLL-12, ROLL-13, ROLL-14,
-ROLL-15, ROLL-16, ROLL-17, ROLL-5.**
+**Open: ROLL-6 (next), ROLL-7, ROLL-8, ROLL-9, ROLL-10, ROLL-11, ROLL-12, ROLL-13, ROLL-14, ROLL-15, ROLL-16, ROLL-17, ROLL-5.**
 
-> **Routing:** `Owner` = who implements (`Claude` = judgment-call, `Antigravity` = mechanical
-> with an unambiguous spec). `Model` = model the owner runs at. `Review` = the AutoTrigger
-> gate; where `stories.md` says "real `@code-reviewer`, Opus" the real subagent is mandatory,
-> not a persona approximation (financial-logic close-notification / P&L-rendering paths).
->
-> **Blocked by:** ROLL-1 needs `backbone/` + `formatting-rules/` fully complete (both are);
-> ROLL-0 is independent. ROLL-6..ROLL-16 each depend only on `backbone/` + `formatting-rules/`,
-> not on each other — **except** ROLL-15 → ROLL-16 (both touch `paper_3track_snapshot.py`,
-> ROLL-15 first) and ROLL-8 / ROLL-12 (need ROLL-7's label tables). ROLL-16 also real-sequences
-> after ROLL-10. Parallel sessions coordinate before claiming a ROLL-7..16 task.
+> **Routing:** `Owner` = who implements (`Claude` = judgment-call, `Antigravity` = mechanical with an unambiguous spec). `Model` = model the owner runs at. `Review` = the AutoTrigger gate; where
+> `stories.md` says "real `@code-reviewer`, Opus" the real subagent is mandatory, not a persona approximation (financial-logic close-notification / P&L-rendering paths). **Blocked by:** ROLL-1 needs
+> `backbone/` + `formatting-rules/` fully complete (both are); ROLL-0 is independent. ROLL-6..ROLL-16 each depend only on `backbone/` + `formatting-rules/`, not on each other — **except** ROLL-15 →
+> ROLL-16 (both touch `paper_3track_snapshot.py`, ROLL-15 first) and ROLL-8 / ROLL-12 (need ROLL-7's label tables). ROLL-16 also real-sequences after ROLL-10. Parallel sessions coordinate before
+> claiming a ROLL-7..16 task.
 
 ## Tasks
 
@@ -76,35 +66,24 @@ ROLL-15, ROLL-16, ROLL-17, ROLL-5.**
 
 ## Story done when
 
-Acceptance criteria — prose, no checkboxes. Verified at story close; per-task status lives
-only in the working list above.
+Acceptance criteria — prose, no checkboxes. Verified at story close; per-task status lives only in the working list above.
 
-- **ROLL-0** — `process_variant()` captures delta + theta for all four IC legs (`None` on any
-  miss, never `0.0`), computes Net Δ / Net θ with the never-silently-partial rule, and prints
-  the line in the current plain-text report.
-- **ROLL-1** — the IC EOD audit renders in the confirmed bold/fenced-table MarkdownV2 format
-  with the FMT-1c timeframe header + hashtag across all 5 active variants, using the shared
-  FMT-2/FMT-3 formatters and `backbone/`'s escaping helpers.
-- **ROLL-2** — the IC monthly comparison renders as one fenced row-groups table via the
-  promoted `build_compare_table`, with the Legs row, `Bkd (I)` from `get_strategy_realized_pnl()`,
-  and `Flt (M)` distinct from `Flt (I)`; the mandatory `Flt (M) != Flt (I)` test passes.
-- **ROLL-3** — all 7 strategy close/roll notification paths render in the new format where it
-  adds value (per-message judgment, not a forced table); real `@code-reviewer` ran per family.
-- **ROLL-4** — the approval-request message body is formatted with the shared helpers, callback
-  buttons verified unaffected, the `telegram-approval-auth-fix` coordination-check done.
-- **ROLL-6** — `scripts/eod_summary.py` sends via `TelegramNotifier.send()` + MarkdownV2 in the
-  confirmed 4-bucket totals-first format, `Bkd` sourced since-inception.
-- **ROLL-7..ROLL-16** — each of the ten missing-message call sites renders in its confirmed
-  MarkdownV2 format with a live-confirmed reference and passing tests; the shared label tables
-  exist and are reused, not re-derived.
-- **ROLL-17** — the IC entry confirmation design is closed via a workshop session (6 open
-  decisions resolved), then implemented against a live-confirmed reference; value-level
-  formatting reuses `FMT-1` / `FMT-2`.
+- **ROLL-0** — `process_variant()` captures delta + theta for all four IC legs (`None` on any miss, never `0.0`), computes Net Δ / Net θ with the never-silently-partial rule, and prints the line in
+  the current plain-text report.
+- **ROLL-1** — the IC EOD audit renders in the confirmed bold/fenced-table MarkdownV2 format with the FMT-1c timeframe header + hashtag across all 5 active variants, using the shared FMT-2/FMT-3
+  formatters and `backbone/`'s escaping helpers.
+- **ROLL-2** — the IC monthly comparison renders as one fenced row-groups table via the promoted `build_compare_table`, with the Legs row, `Bkd (I)` from `get_strategy_realized_pnl()`, and `Flt (M)`
+  distinct from `Flt (I)`; the mandatory `Flt (M) != Flt (I)` test passes.
+- **ROLL-3** — all 7 strategy close/roll notification paths render in the new format where it adds value (per-message judgment, not a forced table); real `@code-reviewer` ran per family.
+- **ROLL-4** — the approval-request message body is formatted with the shared helpers, callback buttons verified unaffected, the `telegram-approval-auth-fix` coordination-check done.
+- **ROLL-6** — `scripts/eod_summary.py` sends via `TelegramNotifier.send()` + MarkdownV2 in the confirmed 4-bucket totals-first format, `Bkd` sourced since-inception.
+- **ROLL-7..ROLL-16** — each of the ten missing-message call sites renders in its confirmed MarkdownV2 format with a live-confirmed reference and passing tests; the shared label tables exist and are
+  reused, not re-derived.
+- **ROLL-17** — the IC entry confirmation design is closed via a workshop session (6 open decisions resolved), then implemented against a live-confirmed reference; value-level formatting reuses
+  `FMT-1` / `FMT-2`.
 - **ROLL-5** — the docs-close task records the final state of every migrated message family.
 
 ## After each task
 
-Set `SHA:` to the real commit SHA on the task line and tick the box. Update the epic
-`README.md` **Stories** table status column (`strategy-rollout/` row) and add one line to
-`TODOS.md` Session Log. When every box is ticked, follow `docs/plan/README.md` §Conventions
-*Completion → archive* for the whole epic.
+Set `SHA:` to the real commit SHA on the task line and tick the box. Update the epic `README.md` **Stories** table status column (`strategy-rollout/` row) and add one line to `TODOS.md` Session Log.
+When every box is ticked, follow `docs/plan/README.md` §Conventions *Completion → archive* for the whole epic.

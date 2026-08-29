@@ -2,17 +2,15 @@
 
 > Switch the Telegram transport to `parse_mode=MarkdownV2` and make every existing caller's message text safe under it — no format changes yet.
 
-Read `CONTEXT.md` and state `CONTEXT.md ✓` before anything else.
-Then read `tasks.md`, find the first unchecked `- [ ]`, and do **only** that task.
-Read that task's full spec in `stories.md` (same task id) before writing any code.
-One task per session. Complete it fully. Stop.
+Read `CONTEXT.md` and state `CONTEXT.md ✓` before anything else. Then read `tasks.md`, find the first unchecked `- [ ]`, and do **only** that task. Read that task's full spec in `stories.md` (same
+task id) before writing any code. One task per session. Complete it fully. Stop.
 
 ## Why this story exists
 
-`TelegramNotifier.send()` currently HTML-escapes and `<pre>`-wraps everything, which makes real bold + copyable fenced tables impossible — the entire point of the epic. Removing that safety net
-(MD-2) means every caller that interpolates a dynamic value is now responsible for making it MarkdownV2-safe. MD-1 provides the `escape_markdown()` / `mdcode()` helpers; MD-3/MD-4/MD-7 apply them
-everywhere they are currently missing; MD-6 adds a static-scan guard so new call sites cannot regress silently. The original `DELTA_WARN` bug (a lone `_` opening an unclosed italic entity and
-400-ing the send) is the failure mode this story exists to eliminate structurally.
+`TelegramNotifier.send()` currently HTML-escapes and `<pre>`-wraps everything, which makes real bold + copyable fenced tables impossible — the entire point of the epic. Removing that safety net (MD-2)
+means every caller that interpolates a dynamic value is now responsible for making it MarkdownV2-safe. MD-1 provides the `escape_markdown()` / `mdcode()` helpers; MD-3/MD-4/MD-7 apply them everywhere
+they are currently missing; MD-6 adds a static-scan guard so new call sites cannot regress silently. The original `DELTA_WARN` bug (a lone `_` opening an unclosed italic entity and 400-ing the send)
+is the failure mode this story exists to eliminate structurally.
 
 ## Scope guard
 

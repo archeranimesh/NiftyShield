@@ -3,17 +3,15 @@
 > Migrate each Telegram message family to the confirmed bold / table MarkdownV2 format, staged by risk — informational messages first, live position-event notifications next, auth-sensitive
 > interactive messages last.
 
-Read `CONTEXT.md` and state `CONTEXT.md ✓` before anything else.
-Then read `tasks.md`, find the first unchecked `- [ ]`, and do **only** that task.
-Read that task's full spec in `stories.md` (same task id) before writing any code.
-One task per session. Complete it fully. Stop.
+Read `CONTEXT.md` and state `CONTEXT.md ✓` before anything else. Then read `tasks.md`, find the first unchecked `- [ ]`, and do **only** that task. Read that task's full spec in `stories.md` (same
+task id) before writing any code. One task per session. Complete it fully. Stop.
 
 ## Why this story exists
 
 `backbone/` made the transport MarkdownV2-safe without changing how any message looks; `formatting-rules/` built the shared spec and helpers. This story is the actual visual migration — each message
 family gets its confirmed layout wired in using `src/notifications/formatting.py`'s formatters and table builders. The order is deliberate: a wrong-looking IC EOD audit costs a re-read; a broken
-approval-request keyboard could block a real trade decision, so that goes last with a coordination check. Every message format is confirmed on-device via a `message-format-workshop.md` scratch
-script before it is written into `stories.md` — never author a final format directly.
+approval-request keyboard could block a real trade decision, so that goes last with a coordination check. Every message format is confirmed on-device via a `message-format-workshop.md` scratch script
+before it is written into `stories.md` — never author a final format directly.
 
 ## Scope guard
 
