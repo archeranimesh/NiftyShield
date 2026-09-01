@@ -160,6 +160,16 @@ this file's Session Log grows large again.
 
 ### 2026-09-01
 
+- **ROLL-6 shipped — EOD Paper Summary migrated to MarkdownV2 bucketed table.** SHA `2471f01`.
+  `scripts/eod_summary.py` was still emitting raw HTML `<b>` through the MarkdownV2 transport
+  (silently 400'ing since MD-4.1) and reading `Bkd` from `paper_nav_snapshots.realized_pnl`
+  (zeroes on a reopen cycle). Now: `build_eod_summary_message()` renders the confirmed 4-bucket
+  totals-first table; `Bkd` from `get_strategy_realized_pnl()`; figures quantized to whole
+  rupees before summation so the table foots exactly. Promoted `build_strategy_table` /
+  `format_summary_money` / `StrategyPnLRow` to `src/notifications/formatting.py` (FMT-1d §12).
+  Real `@code-reviewer` clean (0 CRITICAL/ERROR); full suite 3051 passed. `strategy-rollout/`
+  next: ROLL-7.
+
 - **BUG-039 fixed — daily_snapshot Telegram P&L summary silently stopped since 2026-08-25.**
   Animesh reported not receiving the daily 15:45 message since 24 Aug. Root cause: `721daf9`
   (2026-08-24 23:00) switched `TelegramNotifier.send()` to `parse_mode=MarkdownV2`, but

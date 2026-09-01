@@ -536,6 +536,22 @@ search_graph("build_leg_table") # confirm FMT-3's promoted table-builder pattern
 
 **Commit:** `feat(scripts): migrate EOD paper summary to MarkdownV2 + bucketed Flt/Bkd table`
 
+**As-built (SHA `2471f01`, 2026-09-01, Claude / claude-sonnet-5, real `@code-reviewer` clean —
+0 CRITICAL/0 ERROR):** shipped as specified. `build_strategy_table` + `format_summary_money` +
+`StrategyPnLRow` promoted to `src/notifications/formatting.py`; `_STRATEGY_META` (id → bucket +
+label) and `_BUCKET_ORDER` stayed `scripts/eod_summary.py`-local (message-specific). Sent via
+`build_notifier()` + `TelegramNotifier.send()` (matches `healthcheck.py`). Two deviations from
+the scratch reference, both deliberate: (1) column widths are content-derived (`max(len(...))`,
+Design decision #5) rather than the scratch's hand-picked `num_col = 9` — marginally tighter
+than the on-device screenshot, not re-confirmed live; (2) each strategy's Flt/Bkd is quantized
+to whole rupees *before* summation so member cells, bucket subtotals and the Net P&L line foot
+exactly (raw-Decimal sums rounded independently drifted ±₹1; the net-sums-all-buckets test
+enforces the fix). The MD-6 escaping-guard baseline entry for `eod_summary.py` was
+kept (not removed) as a heuristic-limitation note: the message is fully escaped inside
+`build_eod_summary_message()`, but the guard only inspects the immediate enclosing function
+(`main`), same shape as the `paper_3track_snapshot.py:2030` entry. 8 tests in
+`tests/unit/scripts/test_eod_summary.py`.
+
 ---
 
 ## ROLL-7 — Re-entry Blocked/Eligible Notice
