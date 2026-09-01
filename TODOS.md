@@ -160,6 +160,16 @@ this file's Session Log grows large again.
 
 ### 2026-09-01
 
+- **`token-efficiency/` epic authored.** New 3-story epic under `docs/plan/token-efficiency/`
+  (`measurement/` → `fixed-overhead/` → `suggestions-sweep/`, ~13 tasks). Spawned from a token
+  audit Animesh asked for after the ROLL-7 session: ~740K tokens for a ~440-line task, of
+  which the `session-close` fork alone was ~285K (a fork clones the whole conversation).
+  Targets: skill-ify the ~400-line resident `CLAUDE.md`, run `session-close` as a
+  transcript-reading subagent, strip MCP fingerprint bloat, and clear the ~35-row
+  `suggestions.md` backlog — which is write-only today (`reread-file` at Count 13,
+  `pytest-inlined` at 7, nothing ever escalates). Cross-cutting rule: every fix quotes a real
+  before/after number from a new `token_audit.py`. Plan docs only; no code yet.
+
 - **ROLL-7 shipped — re-entry blocked/eligible notice migrated to MarkdownV2 kv-line format.**
   SHA `cad8074`. `ReEntryMixin._check_reentry`'s three gates + two structural-failure paths
   now emit `(short_reason, detail)` pairs instead of one prose string (`_ivr_passes` signature

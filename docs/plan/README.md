@@ -14,6 +14,14 @@ Format per entry: `**\`folder/\`** · <status> · next: **<task id>**` then a sh
 
 ## Active Epics
 
+**`token-efficiency/`** · ⬜ Not started — start with `measurement/` **MEAS-1**
+Cut the per-session token cost of running NiftyShield through Claude Code. Three sub-stories:
+`measurement/` (`token_audit.py` + a baseline every later task measures against) →
+`fixed-overhead/` (skill-ify `CLAUDE.md`, trim module `CLAUDE.md` files, take `session-close`
+off the context-cloning fork, strip MCP result bloat) → `suggestions-sweep/` (cluster and
+fix/enforce/accept every `suggestions.md` row; make Step 4b self-draining).
+Spawned from the 2026-09-01 ROLL-7 token audit (~740K tokens for one ~440-line task).
+
 **`doc-format-migration/`** · ⬜ Not started — start with `plan-folders/` **DFM-1**
 Batch-converts every legacy `docs/plan/` folder to the canonical format and reflows every
 other `.md` in the repo to fill-to-≤200, then hardens the hooks + adds a CI `--all` gate so
