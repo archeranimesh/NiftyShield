@@ -160,6 +160,17 @@ this file's Session Log grows large again.
 
 ### 2026-09-01
 
+- **ROLL-7 shipped — re-entry blocked/eligible notice migrated to MarkdownV2 kv-line format.**
+  SHA `cad8074`. `ReEntryMixin._check_reentry`'s three gates + two structural-failure paths
+  now emit `(short_reason, detail)` pairs instead of one prose string (`_ivr_passes` signature
+  widened to a 3-tuple; base + `PPOverlayV1` override + `auto_close.py` caller updated). New
+  `STRATEGY_LABELS` / `LEG_ROLE_LABELS` + `strategy_label()` / `leg_role_label()` (unmapped →
+  `ValueError`) in `src/notifications/formatting.py` — kept separate from `eod_summary.py`'s
+  `_STRATEGY_META`; consolidation flagged. `notes` column flattened via `_block_notes()`. MD-6
+  guard baseline entry for `reentry_mixin.py` removed (now escaped in-scope). Real
+  `@code-reviewer` run despite `Review: none` (touches production gate logic); full suite 3065
+  passed. `strategy-rollout/` next: ROLL-8.
+
 - **ROLL-6 shipped — EOD Paper Summary migrated to MarkdownV2 bucketed table.** SHA `2471f01`.
   `scripts/eod_summary.py` was still emitting raw HTML `<b>` through the MarkdownV2 transport
   (silently 400'ing since MD-4.1) and reading `Bkd` from `paper_nav_snapshots.realized_pnl`

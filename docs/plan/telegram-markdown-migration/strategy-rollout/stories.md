@@ -640,6 +640,34 @@ search_graph("_DISPLAY_NAME")                       # ROLL-6's table, if it has 
 
 **Commit:** `feat(strategy): migrate re-entry notice to Markdown kv-line format`
 
+**As-built (SHA `cad8074`, 2026-09-01, Claude / claude-sonnet-5, real `@code-reviewer`
+run despite `Review: none` — the change touches `_check_reentry` gate-reason construction,
+production logic):** shipped as specified. `STRATEGY_LABELS` (12 ids, fuller-form) +
+`LEG_ROLE_LABELS` + `strategy_label()` / `leg_role_label()` (unmapped → `ValueError`) landed
+in `src/notifications/formatting.py`, NOT colocated. `STRATEGY_LABELS` is deliberately kept
+separate from `scripts/eod_summary.py`'s `_STRATEGY_META` (ROLL-6's narrow-column
+abbreviations) — the `id -> {short, long}` consolidation is flagged, not done. The three gates
+(DTE / IVR / open-position) plus the two structural-failure paths in `_check_reentry` now each
+produce a `(short_reason, detail)` pair; `_ivr_passes` had its signature widened to
+`tuple[bool, str, str | None]` (base + `PPOverlayV1` override + `auto_close.py:406`'s
+standalone caller all updated) rather than string-splitting its prose. `paper_exit_events.notes`
+is the flattened `"<short> (<detail>)"` form via `_block_notes()` — no downstream parser, em-dash
+prose gone. Two deviations from the scratch reference, both because its test data was wrong: (1)
+`LEG_ROLE_LABELS` maps the 4 leg_roles actually reachable as `reentry_leg_role` (`short_put` /
+`covered_call` / `overlay_collar_call` / `protective_put`), verified against each subclass body
+— the scratch's 6-entry set was guessed and included roles that are never re-entry legs; (2)
+CC/Collar/PP all carry `strategy_name == STRATEGY_OVERLAY` (`"paper_nifty_overlay"`) at
+runtime, not the granular `paper_covered_call_v1` etc. the scratch assumed, so the headline
+label resolves through a small `reentry_mixin`-local `_reentry_headline_label(strategy_name,
+leg_role)` that maps the overlay umbrella id via leg_role (label text sourced from
+`STRATEGY_LABELS`, no duplication) and passes every other id straight to `strategy_label()`.
+Without this the overlay re-entry notice would have raised `ValueError` into the strategy tick
+loop in production — the old code's `f"{self.strategy_name} ..."` had tolerated the umbrella id. MD-6 escaping-guard baseline entry for
+`reentry_mixin.py` removed (message now escaped in-scope). `DummyStrategy` test fixture
+switched to real CSP identifiers so the label lookups resolve. 13 new/updated tests in
+`tests/unit/strategy/test_reentry_mixin.py` + 4 in `tests/unit/notifications/test_formatting.py`;
+`test_csp_nifty_v1.py` / `test_auto_close.py` open-position + `_ivr_passes` assertions updated.
+
 ---
 
 ## ROLL-8 — Generic Strategy WARN Event Alert
