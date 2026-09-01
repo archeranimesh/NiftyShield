@@ -158,6 +158,22 @@ Full forensic log (SHAs, bug numbers, root-cause detail) moved to
 history above). Add new entries there going forward, or start a fresh dated section here if
 this file's Session Log grows large again.
 
+### 2026-09-01
+
+- **BUG-039 fixed — daily_snapshot Telegram P&L summary silently stopped since 2026-08-25.**
+  Animesh reported not receiving the daily 15:45 message since 24 Aug. Root cause: `721daf9`
+  (2026-08-24 23:00) switched `TelegramNotifier.send()` to `parse_mode=MarkdownV2`, but
+  `daily_snapshot.py`'s summary text (`_format_combined_summary` + `src/dhan/positions.py`'s
+  `format_options_section`) was never migrated to escape its output — a known, documented gap
+  (`test_escaping_guard.py`'s `_BASELINE_UNESCAPED` entry for that exact call site). Every
+  unescaped `-`/`()`/`.`/`+`/`|` in the P&L waterfall 400'd the send on every trading day since.
+  Fix: `escape_markdown(summary_text)` at the `notifier.send()` call site — verified no
+  intentional MarkdownV2 entities in the message, so whole-string escaping is behaviorally
+  equivalent to per-value escaping and matches `FORMATTING.md` §6's call-site boundary.
+  Removed the stale baseline entry per its maintenance contract. code-reviewer clean (0
+  CRITICAL/ERROR/WARNING); full suite 3042 passed. SHA `2cb67ce`. Full detail: `docs/bugs/bugs.md`
+  BUG-039.
+
 ### 2026-08-29
 
 - **doc-format-migration epic created — answers RDO-17.8 (Owner: Animesh).** Animesh decided

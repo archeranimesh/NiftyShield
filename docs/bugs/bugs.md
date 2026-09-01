@@ -67,6 +67,66 @@ likely belongs in a follow-up to `MD-1`/`MD-6` rather than this bug, since it's 
 or wrap the send in `asyncio.create_task(...)`/a sync-dispatch helper if these methods must stay synchronous for their other callers.
 Needs a graph trace (`trace_path`) of both methods' callers before picking an approach — check whether any caller already runs inside an event loop.
 
+---
+
+## BUG-039 — `daily_snapshot.py`'s Telegram P&L summary silently stopped sending after 2026-08-24 (unescaped MarkdownV2)
+
+| Field | Value |
+|---|---|
+| Severity | **High** — the daily 15:45 portfolio P&L notification (waterfall + Hedge/FinRakshak + Dhan Options block) has not reached Telegram on any trading day since 2026-08-25 |
+| Status | ✅ Fixed — SHA `2cb67ce` |
+| Discovered | 2026-09-01, user reported not receiving the daily message since 24 Aug |
+| Location | `scripts/portfolio/daily_snapshot.py::_async_main` (live-run Telegram send block, was line 739) |
+
+**Root cause:** commit `721daf9` (Mon 2026-08-24 23:00:53) changed `TelegramNotifier.send()`
+(`src/notifications/telegram.py`) from `parse_mode="HTML"` to `parse_mode="MarkdownV2"`
+unconditionally, with every caller now responsible for escaping MarkdownV2-reserved characters
+(`escape_markdown()`/`mdcode()`) or Telegram rejects the send with a 400 ("can't parse
+entities") — swallowed silently by `send()`'s non-fatal contract. That commit landed *after*
+2026-08-24's 15:45 cron run (which is why that day's message arrived fine, under the old HTML
+mode) — the very next scheduled send, 2026-08-25 15:45, was the first under MarkdownV2.
+
+`daily_snapshot.py`'s summary text (built by `_format_combined_summary` in the same file plus
+`format_options_section` in `src/dhan/positions.py`) was never migrated to escape its output —
+confirmed via `grep` for `escape_markdown`/`mdcode` in both files: zero hits. The message is
+inherently full of MarkdownV2-reserved punctuation that's structural to a P&L report: `-`
+(every negative figure), `()` (percentages), `.` (decimals), `+` (signed values), `|`
+(separators). This call site was already a known, documented gap —
+`tests/unit/notifications/test_escaping_guard.py`'s `_BASELINE_UNESCAPED` dict carried
+`("scripts/portfolio/daily_snapshot.py", 739)` with the note *"untracked gap — TODO.md item 9
+kept current format as-is (2026-08-11 decision); MD-4's file list never actually included this
+file despite that note flagging it for re-check"* — i.e. the `telegram-markdown-migration`
+epic's ROLL-*/MD-* series migrated the strategy/alert callers but never reached this one.
+
+**Corroborating evidence:** `logs/snapshot.log` doesn't capture this far into the script's run
+on any date (a separate, unrelated stdout-buffering gap, present on both good and bad days —
+not investigated further since it wasn't needed for root cause). But a sibling script,
+`scripts/eod_summary.py` (different sender class, `TelegramGateway`, different message —
+**not** the one the user was missing), shows the identical failure signature starting the same
+day and continuing daily through 2026-09-01:
+```
+2026-08-25 15:42:05 [WARNING] [src] [notifications] [telegram] Telegram notification failed: 400, message='Bad Request'
+2026-08-25 15:42:05 [WARNING] [scripts] [eod_summary] Failed to send EOD summary via Telegram.
+```
+That's a separate regression in `TelegramGateway`'s own (apparently incomplete) MarkdownV2
+migration (`cd1e554`) — same day boundary, same root rollout, not fixed by this bug (filed here
+only as corroborating evidence of the timing; out of this bug's scope).
+
+**Fix:** wrap `summary_text` in `escape_markdown()` right at the `notifier.send()` call site in
+`daily_snapshot.py`, rather than threading escaping through every f-string in the two builder
+functions. Verified the message contains zero intentional MarkdownV2 entities (no `*bold*`/
+`_italic_` anywhere in either builder), so escaping the whole assembled string is behaviorally
+equivalent to escaping each interpolated value individually — and per `FORMATTING.md` §6
+("escaping happens at the call site, never inside a formatter") this is a legitimate call site.
+Manually verified `escape_markdown()` leaves emoji, box-drawing characters, digits, commas,
+`₹`, `%`, and whitespace untouched, so the rendered message is visually identical to the
+2026-08-24 version the user has as reference. Removed the now-stale `_BASELINE_UNESCAPED` entry
+for this call site in the same commit, per that test file's own maintenance contract.
+
+**Not in scope:** `TelegramGateway`'s parallel `eod_summary.py` regression (see above) — a
+separate message, separate sender class, separate root cause within the same escaping
+migration; would need its own investigation.
+
 ## BUG-019 — Investigation: does every strategy show a live-tick vs. EOD-snapshot P&L disparity, not just `paper_ic_nifty_v2_monthly`?
 
 | Field | Value |
