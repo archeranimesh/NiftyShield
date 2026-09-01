@@ -140,7 +140,7 @@ format — never `format_money(...)`'s output with the `₹` stripped or the dec
 | Context | What changes | Spec | Status |
 |---|---|---|---|
 | `build_leg_table` LTP/Entry columns | 1dp, no `₹` | FMT-1 (locked 2026-08-07) | specified, not yet real code |
-| Multi-strategy summary table (8+ rows, 3+ numeric cols) | signed integer, no `₹` per cell, zero as `-` | FMT-1d | specified, not yet real code |
+| Multi-strategy summary table (8+ rows, 3+ numeric cols) | signed integer, no `₹` per cell, zero as `-` | FMT-1d | `format_summary_money` + `build_strategy_table` (ROLL-6) |
 | IC V1-vs-V2 monthly comparison table | money at **0dp** with `₹`, `N/A` for `None` | `scratch/2026-08-07_ic_monthly_comparison_telegram_format.py` | **unregistered — reconcile at ROLL-2** |
 | EOD PT summary table | money at 2dp, no `₹` | `scratch/2026-08-13_eod_pt_summary.py` | **unregistered — reconcile at PT-1's ROLL task** |
 | Daily-snapshot waterfall | `k` abbreviation for \|value\| ≥ 1000 (`-3k`) | `scratch/2026-08-08_daily_snapshot_waterfall_format.py` | **unregistered — no ROLL task; deferred 2026-08-11** |
@@ -230,7 +230,7 @@ Every formatter defined in `scratch/*_format.py` as of this date, checked agains
 | `2026-08-07_ic_eod_audit_v2` | `format_money`, `format_greek`, `format_strike`, `format_pct` | none | — |
 | `2026-08-07_ic_eod_audit_v2` | `format_chg_pct` | none — matches §3's fenced-column percent rule | — |
 | `2026-08-07_ic_eod_audit_v2` | `format_expiry` | title case + `lstrip("0")` — superseded by §3 | ROLL-1 |
-| `2026-08-08_eod_paper_summary` | `_fmt_table_money` | registered override (FMT-1d) | FMT-1d |
+| `2026-08-08_eod_paper_summary` | `_fmt_table_money` | registered override (FMT-1d) | ROLL-6 — promoted as `format_summary_money` |
 | `2026-08-08_daily_snapshot_waterfall` | `_fmt_k` | `k` abbreviation, unregistered | §5 — no owning task |
 | `2026-08-10_3track_roll_notification` | `format_money(signed=)` | none — adopted into §3 (FMT-1f) | — |
 | `2026-08-10` / `2026-08-11` proxy-delta alerts | `_fmt_greek` | none | — |
@@ -359,7 +359,11 @@ doubles as the section label, so no separate `-- BUCKET --` header row is needed
 (`====`) separates the table header from the first bucket; a single rule (`----`) separates buckets
 from each other.
 
-Promotion target: `strategy-rollout/` ROLL-6's table builder.
+Promoted (ROLL-6): `src/notifications/formatting.py::build_strategy_table(rows, bucket_order)` +
+`format_summary_money` + the `StrategyPnLRow` input dataclass. Column widths are content-derived
+(`max(len(...))`, Design decision #5) — marginally tighter than the on-device-confirmed screenshot,
+which had extra padding. Callers round each strategy's figures to whole rupees **before** summation
+so member cells, bucket subtotals, and any Net line all foot exactly (`scripts/eod_summary.py`).
 
 ---
 

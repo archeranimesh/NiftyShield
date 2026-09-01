@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 
 def format_money(value: Decimal) -> str:
@@ -345,4 +345,130 @@ def build_compare_table(groups: list[list[tuple[str, str, str]]], columns: tuple
         if i < len(groups) - 1:
             lines.append(rule)
     lines.append(rule)
+    return "\n".join(lines)
+
+
+# --- ROLL-6: multi-strategy summary table (FMT-1d, FORMATTING.md §§ 5 / 12 —
+# promotion of scratch/2026-08-08_eod_paper_summary_format.py's build_strategy_table
+# and format_summary_money) ---
+
+
+@dataclass(frozen=True)
+class StrategyPnLRow:
+    """One strategy's floating / booked P&L for build_strategy_table (FMT-1d, §12).
+
+    label: display label, bucket-prefix-free (e.g. "V1 Wkly", not "IC V1 Wkly") —
+        the bucket's own total row already establishes context (§12).
+    bucket: bucket this row belongs to; must be present in build_strategy_table's
+        `bucket_order` argument or the call raises ValueError (a strategy with no
+        bucket assignment must fail loudly, not silently drop from the summary).
+    floating: unrealized (mark-to-market) P&L.
+    booked: realized P&L — since-inception, cycle-safe (the caller must source this
+        from get_strategy_realized_pnl(), not paper_nav_snapshots.realized_pnl's
+        latest row, which resets to 0 on an open->close->reopen cycle).
+    """
+
+    label: str
+    bucket: str
+    floating: Decimal
+    booked: Decimal
+
+
+def format_summary_money(value: Decimal) -> str:
+    """Signed integer, comma thousands, no `₹` — multi-strategy summary cell (FMT-1d).
+
+    A §5 registered context override of the §3 money default (2dp, `₹` prefix):
+    the fenced table's width budget forces integer, symbol-free cells. Its own
+    local format — never `format_money()`'s output with the `₹` stripped or the
+    decimals re-rounded (§5 rule c).
+
+    Zero renders as `-` (§4's resolved zero / not-applicable boundary: inside this
+    table `-` means a real measured zero and only that; an unresolved fetch still
+    renders `N/A` upstream, never reaches here as `-`).
+    """
+    rounded = int(value.to_integral_value(rounding=ROUND_HALF_UP))
+    if rounded == 0:
+        return "-"
+    sign = "+" if rounded > 0 else "-"
+    return f"{sign}{abs(rounded):,}"
+
+
+def build_strategy_table(rows: list[StrategyPnLRow], bucket_order: list[str]) -> str:
+    """Fenced-code-block-ready multi-strategy P&L table, bucketed, totals-first (FMT-1d §12).
+
+    Layout: `STRATEGY | FLT | BKD | TOTAL`. Rows are grouped by bucket in
+    `bucket_order`; each bucket's subtotal row (`"> BUCKET TOTAL"`, all caps,
+    never abbreviated) renders ABOVE its member rows — a deliberate scan-speed
+    trade-off for a daily-glance message, not a pattern to generalize (§12). A
+    double rule (`====`) separates the header from the first bucket; a single rule
+    (`----`) separates buckets from each other. Buckets with no members present in
+    `rows` are skipped entirely (no empty section).
+
+    Every column width is computed from the actual rendered content
+    (`max(len(...))`), never a hand-counted constant — same discipline as
+    build_leg_table / build_compare_table (Design decision #5, ROLL-6 spec).
+
+    Args:
+        rows: one StrategyPnLRow per strategy with a figure to show. Must be
+            non-empty. A row whose `bucket` is not in `bucket_order` raises
+            ValueError — an unmapped strategy must fail loudly at build time.
+        bucket_order: bucket names, rendered top to bottom.
+
+    Caller wraps the return value in a ```fenced block``` — this function does
+    not add the fence itself, same convention as the other builders here.
+    """
+    if not rows:
+        raise ValueError("build_strategy_table requires at least one row")
+    unknown = sorted({r.bucket for r in rows} - set(bucket_order))
+    if unknown:
+        raise ValueError(f"build_strategy_table: bucket(s) not in bucket_order: {unknown}")
+
+    present_buckets = [b for b in bucket_order if any(r.bucket == b for r in rows)]
+
+    def _cells(flt: Decimal, bkd: Decimal) -> tuple[str, str, str]:
+        return format_summary_money(flt), format_summary_money(bkd), format_summary_money(flt + bkd)
+
+    member_labels: list[str] = []
+    total_labels: list[str] = []
+    num_values: list[str] = []
+    for bucket in present_buckets:
+        members = [r for r in rows if r.bucket == bucket]
+        total_labels.append(f"> {bucket.upper()} TOTAL")
+        num_values.extend(
+            _cells(
+                sum((m.floating for m in members), Decimal("0")),
+                sum((m.booked for m in members), Decimal("0")),
+            )
+        )
+        for m in members:
+            member_labels.append(f" {m.label}")
+            num_values.extend(_cells(m.floating, m.booked))
+
+    name_col = max(len("STRATEGY"), *(len(x) for x in member_labels + total_labels))
+    num_col = max(len("TOTAL"), *(len(v) for v in num_values))
+
+    def _line(label: str, flt: Decimal, bkd: Decimal) -> str:
+        c_flt, c_bkd, c_tot = _cells(flt, bkd)
+        return f"{label:<{name_col}}|{c_flt:>{num_col}} |{c_bkd:>{num_col}} |{c_tot:>{num_col}}"
+
+    header = (
+        f"{'STRATEGY':<{name_col}}|{'FLT':>{num_col}} |{'BKD':>{num_col}} |{'TOTAL':>{num_col}}"
+    )
+    double_rule = f"{'=' * name_col}|{'=' * (num_col + 1)}|{'=' * (num_col + 1)}|{'=' * num_col}"
+    single_rule = f"{'-' * name_col}|{'-' * (num_col + 1)}|{'-' * (num_col + 1)}|{'-' * num_col}"
+
+    lines = [header, double_rule]
+    for i, bucket in enumerate(present_buckets):
+        if i > 0:
+            lines.append(single_rule)
+        members = [r for r in rows if r.bucket == bucket]
+        lines.append(
+            _line(
+                f"> {bucket.upper()} TOTAL",
+                sum((m.floating for m in members), Decimal("0")),
+                sum((m.booked for m in members), Decimal("0")),
+            )
+        )
+        for m in members:
+            lines.append(_line(f" {m.label}", m.floating, m.booked))
     return "\n".join(lines)
