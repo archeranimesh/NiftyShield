@@ -731,12 +731,18 @@ async def _async_main(snap_date: date, db_path: Path, dhan_trade_count: int = 0)
 
         # ── Telegram notification (non-fatal, skipped if env vars absent) ─
         # summary_text already contains the status header, hedge section, and
-        # the Dhan Options (Intraday) block appended above.
+        # the Dhan Options (Intraday) block appended above. TelegramNotifier.send()
+        # uses parse_mode=MarkdownV2 (721daf9) and does not auto-escape — this
+        # message has no intentional MarkdownV2 entities (no bold/italic), so
+        # escaping the whole assembled string at this call site is equivalent to
+        # escaping each interpolated value and simpler than threading escaping
+        # through every f-string in _format_combined_summary/format_options_section.
+        from src.notifications.markdown import escape_markdown
         from src.notifications.telegram import build_notifier
 
         notifier = build_notifier()
         if notifier:
-            if not await notifier.send(summary_text):
+            if not await notifier.send(escape_markdown(summary_text)):
                 print("  WARNING: Telegram notification failed (see logs).")
         else:
             logger.debug(

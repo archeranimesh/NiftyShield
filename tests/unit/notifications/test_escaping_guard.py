@@ -189,11 +189,6 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
     ),
     ("scripts/eod_summary.py", 114): "ROLL-6 - format confirmed, real code not yet migrated",
     ("scripts/healthcheck.py", 254): "ROLL-11 - format confirmed, real code not yet migrated",
-    ("scripts/portfolio/daily_snapshot.py", 739): (
-        "untracked gap - TODO.md item 9 kept current format as-is (2026-08-11 decision); "
-        "MD-4's file list never actually included this file despite that note flagging it "
-        "for re-check"
-    ),
     (
         "scripts/position_health_check.py",
         135,
