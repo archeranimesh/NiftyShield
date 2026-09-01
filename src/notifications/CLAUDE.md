@@ -146,6 +146,19 @@ the fence themselves, so they stay reusable for plain console output too):
 break column alignment — e.g. `▶`. Extends the emoji-breaks-alignment warning above from
 literal emoji to that wider glyph class. See `FORMATTING.md` (FMT-1e).
 
+**Display-label lookups** (ROLL-7, `docs/plan/telegram-markdown-migration/strategy-rollout/`):
+
+- **`STRATEGY_LABELS` / `strategy_label(strategy_id) -> str`** — fuller-form human label for a
+  raw `strategy_id` headline (`"paper_csp_nifty_v1"` -> `"CSP V1"`). Unmapped id raises
+  `ValueError` — never falls back to the raw id. **Separate from** `scripts/eod_summary.py`'s
+  `_STRATEGY_META` (narrow fenced-column abbreviations); the `id -> {short, long}`
+  consolidation is flagged, not done.
+- **`LEG_ROLE_LABELS` / `leg_role_label(leg_role) -> str`** — explicit `leg_role` -> label
+  (`"covered_call"` -> `"Covered Call"`), not `.title()`. Unmapped role raises `ValueError`.
+  Scoped to the roles reachable as `ReEntryMixin.reentry_leg_role`; extend the dict when a new
+  caller needs a role. (The `STRATEGY_OVERLAY` umbrella id — shared by CC/Collar/PP at runtime
+  — is resolved via leg_role by `reentry_mixin._reentry_headline_label`, not here.)
+
 Tests: `tests/unit/notifications/test_formatting.py`.
 
 ---
