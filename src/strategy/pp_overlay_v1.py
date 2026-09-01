@@ -101,15 +101,22 @@ class PPOverlayV1(ReEntryMixin):
                 return None
         return self._instrument_lookup
 
-    def _ivr_passes(self, ivr: float) -> tuple[bool, str]:
+    def _ivr_passes(self, ivr: float) -> tuple[bool, str, str | None]:
         """Verify if the IVR passes the strategy criteria.
 
         Overridden for PP (long premium): blocks when IVR is too high (above threshold)
         to avoid buying protection when volatility is already elevated.
+
+        Returns the structured ``(passed, short_reason, detail)`` pair (ROLL-7) —
+        see ``ReEntryMixin._ivr_passes``.
         """
         if ivr > self.reentry_ivr_threshold:
-            return False, f"IVR={ivr:.2f} > {self.reentry_ivr_threshold:.2f} — high vol, skip cycle"
-        return True, ""
+            return (
+                False,
+                f"IVR={ivr:.2f} > {self.reentry_ivr_threshold:.2f}",
+                "High vol, skip cycle",
+            )
+        return True, "", None
 
     def _reentry_position_active(self, p: PaperPosition) -> bool:
         # Checks against the set LONG_PUT_ROLES to be robust to role variations

@@ -560,7 +560,7 @@ def test_r5_blocked_when_short_put_already_open(tmp_path: Path) -> None:
     events = store.get_open_exit_events(strategy_name="paper_csp_nifty_v1")
     blocked = [e for e in events if e["exit_signal"] == "R5_REENTRY_BLOCKED"]
     assert blocked
-    assert "open position" in blocked[0]["notes"]
+    assert blocked[0]["notes"] == "Position already active"
 
 
 # ── Integration: apply_action(PROFIT_TARGET) ─────────────────────────────────

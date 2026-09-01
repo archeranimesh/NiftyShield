@@ -248,7 +248,6 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "immediate enclosing function (_run), not callees"
     ),
     ("src/strategy/monitor.py", 367): "ROLL-8 - format confirmed, real code not yet migrated",
-    ("src/strategy/reentry_mixin.py", 210): "ROLL-7 - format confirmed, real code not yet migrated",
 }
 
 
@@ -319,7 +318,7 @@ def test_baseline_has_no_duplicate_or_unused_entries():
     [
         ("src/strategy/auto_close.py", 359),
         ("src/strategy/cc_overlay_v1.py", 382),
-        ("src/strategy/pp_overlay_v1.py", 395),
+        ("src/strategy/pp_overlay_v1.py", 402),
         ("src/strategy/collar_overlay_v1.py", 601),
         ("src/strategy/collar_overlay_v1.py", 603),
         ("src/strategy/collar_overlay_v1.py", 726),

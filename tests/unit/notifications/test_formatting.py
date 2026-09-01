@@ -15,7 +15,9 @@ from src.notifications.formatting import (
     format_money,
     format_pct,
     format_strike,
+    leg_role_label,
     pnl_emoji,
+    strategy_label,
 )
 
 
@@ -264,3 +266,26 @@ def test_build_compare_table_wide_glyph_row_display_width_matches_header():
     header_width = _display_width(lines[0])
     for line in lines:
         assert _display_width(line) == header_width
+
+
+# --- ROLL-7: display-label lookups ---
+
+
+def test_strategy_label_happy_path():
+    assert strategy_label("paper_csp_nifty_v1") == "CSP V1"
+    assert strategy_label("paper_ic_nifty_v2_monthly") == "IC V2 Monthly"
+
+
+def test_strategy_label_unmapped_raises():
+    with pytest.raises(ValueError, match="paper_made_up"):
+        strategy_label("paper_made_up")
+
+
+def test_leg_role_label_happy_path():
+    assert leg_role_label("short_put") == "Short Put"
+    assert leg_role_label("covered_call") == "Covered Call"
+
+
+def test_leg_role_label_unmapped_raises():
+    with pytest.raises(ValueError, match="nonsense_role"):
+        leg_role_label("nonsense_role")

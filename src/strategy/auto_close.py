@@ -403,7 +403,7 @@ async def evaluate_pp_reentry_eod(
             return
 
         pp_strategy = PPOverlayV1(store=store, notifier=notifier, vix_data_dir=vix_data_dir)
-        passed, _ = pp_strategy._ivr_passes(ivr)
+        passed, _, _ = pp_strategy._ivr_passes(ivr)
 
         if passed and notifier is not None:
             # Realized P&L from the standalone overlay book

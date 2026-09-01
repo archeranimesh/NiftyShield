@@ -472,3 +472,64 @@ def build_strategy_table(rows: list[StrategyPnLRow], bucket_order: list[str]) ->
         for m in members:
             lines.append(_line(f" {m.label}", m.floating, m.booked))
     return "\n".join(lines)
+
+
+# --- ROLL-7: display labels for standalone message headlines
+# (docs/plan/telegram-markdown-migration/strategy-rollout/stories.md ROLL-7;
+# reference scratch/2026-08-08_reentry_notice_format.py) ---
+
+# strategy_id -> fuller-form human label. DELIBERATELY SEPARATE from
+# scripts/eod_summary.py's _STRATEGY_META, whose labels ("V1 Mth", "Fut") are
+# sized for a narrow fenced-table column and read badly as a standalone headline
+# ("RE-ENTRY BLOCKED: V1 Mth"). Same 12 strategy_ids, longer text. The
+# "id -> {short, long}" consolidation of the two tables is flagged, not done
+# (ROLL-7 spec).
+STRATEGY_LABELS: dict[str, str] = {
+    "paper_nifty_futures": "Futures Track",
+    "paper_nifty_proxy": "Proxy Track",
+    "paper_nifty_spot": "Spot Track",
+    "paper_ic_nifty_v1_weekly": "IC V1 Weekly",
+    "paper_ic_nifty_v1_monthly": "IC V1 Monthly",
+    "paper_ic_nifty_v1_leaps": "IC V1 Leaps",
+    "paper_ic_nifty_v1_yearly": "IC V1 Yearly",
+    "paper_ic_nifty_v2_monthly": "IC V2 Monthly",
+    "paper_collar_v1": "Collar V1",
+    "paper_covered_call_v1": "Covered Call V1",
+    "paper_protective_put_v1": "Protective Put V1",
+    "paper_csp_nifty_v1": "CSP V1",
+}
+
+# leg_role -> display label. Explicit dict, not `.title()` — `"covered_call".title()`
+# is "Covered Call" by luck, but the CC/PP acronym cases this epic handles elsewhere
+# (FMT-1c badges, ROLL-6 CC/PP names) need curated text. Scoped to the values
+# actually reachable as `ReEntryMixin.reentry_leg_role` across the four subclasses
+# (CSPNiftyV1 / CCOverlayV1 / CollarOverlayV1 / PPOverlayV1) — verified against
+# each class body, NOT the guessed set in the scratch reference. Downstream
+# reusers (ROLL-8, ROLL-12) extend this dict for the roles they render.
+LEG_ROLE_LABELS: dict[str, str] = {
+    "short_put": "Short Put",
+    "covered_call": "Covered Call",
+    "overlay_collar_call": "Collar Call",
+    "protective_put": "Protective Put",
+}
+
+
+def strategy_label(strategy_id: str) -> str:
+    """Fuller-form headline label for a raw strategy_id.
+
+    Unmapped id raises ValueError — never silently falls back to the raw id or
+    drops the caller's message (same loud-failure contract as
+    build_strategy_table's bucket check).
+    """
+    try:
+        return STRATEGY_LABELS[strategy_id]
+    except KeyError:
+        raise ValueError(f"no display label mapped for strategy_id={strategy_id!r}") from None
+
+
+def leg_role_label(leg_role: str) -> str:
+    """Display label for a leg_role. Unmapped role raises ValueError."""
+    try:
+        return LEG_ROLE_LABELS[leg_role]
+    except KeyError:
+        raise ValueError(f"no display label mapped for leg_role={leg_role!r}") from None
