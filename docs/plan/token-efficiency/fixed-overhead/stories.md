@@ -275,7 +275,7 @@ still produces the block; that run is the after measurement.
 
 **Commit:** `refactor(session-close): read transcript by path, drop the context fork`
 
-**As-built (SHA `<pending>`):** `CLAUDE.md` §5d and its `AGENTS.md` mirror now spawn a fresh
+**As-built (SHA `03d991f`):** `CLAUDE.md` §5d and its `AGENTS.md` mirror now spawn a fresh
 `general-purpose` subagent with the transcript path, never `fork`. `SKILL.md` (and its
 `.agents/` mirror) Step 1 rewritten to extract the action log via bounded `jq` over the
 transcript + `git log`, not conversation recall; a new §3c-2 folds `token_audit.py` into the

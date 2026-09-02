@@ -15,7 +15,7 @@ delta needs `token_audit.py`).
 - [x] **FIX-2** — Audit `src/*/CLAUDE.md` sizes; trim the 2–3 largest — deep detail to module docstrings or a `NOTES.md`, invariants + contracts stay resident |
       Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: ce45719
 - [x] **FIX-3** — Redesign `session-close` skill to run as a transcript-reading subagent (reads the JSONL by path, no `fork` context clone); As-built records the measured per-session saving |
-      Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <pending>
+      Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 03d991f
 - [ ] **FIX-4** — Strip `fp`/`sp`/`bt` fingerprint fields from `codebase-memory-mcp` `get_code_snippet` / `search_graph` results via a thin wrapper; file the upstream issue |
       Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: <—>
 
