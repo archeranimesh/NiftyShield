@@ -51,9 +51,82 @@ imported a path that moved, plus `check_md_line_length` at commit.
 
 **Commit:** `refactor(protocol): move CLAUDE.md reference material to a skill`
 
-**As-built (SHA `<—>`):** _record: resident `CLAUDE.md` line count before/after, the
-`project_docs` token bucket before/after (per-turn), the resident/moved split actually
-chosen, and confirmation the council-trigger path still fires._
+**As-built (SHA `<pending>`):**
+
+**Measured delta.** `project_docs` bucket (`token_audit.py`, session `3dcf60ee`): **12,554 →
+9,556 tokens, −2,998 (−23.9%)**. The bucket is a deterministic `chars/4` estimate over the
+on-disk `CLAUDE.md` + `AGENTS.md` + `MEMORY.md`, so it is the same number in every session and
+the before/after is noise-free (verified identical at 12,554 across sessions `ed6e79b9`,
+`2202a6bc`, `3dcf60ee` before the change).
+
+| File | Lines before | Lines after | Chars before | Chars after |
+|---|--:|--:|--:|--:|
+| `CLAUDE.md` | 409 | 309 | 22,907 | 16,805 |
+| `AGENTS.md` | 474 | 377 | 27,149 | 21,153 |
+| `.claude/skills/protocol-reference/SKILL.md` | — | 196 | — | 10,296 |
+
+**Target missed, stated honestly.** The plan set a ≤200-line target for the resident
+`CLAUDE.md`; the delivered file is 309. The 200 figure was a pre-work estimate made before
+auditing what the story's own spec marks "stays resident" — Rule 0, Rule 1, the Steps 0–5
+skeleton, the AutoTrigger table, Python Standards and the Logging standard together account
+for ~270 lines on their own. Reaching 200 would have required dropping one of those, i.e. a
+real gate, which the story's hard constraints forbid. 309 is the floor without a gate loss.
+
+**Deliberate non-optimisation.** The file keeps its existing ~95-char wrap rather than being
+reflowed to fill-to-200. Reflowing would have cut the line count to roughly half with **zero**
+token saving — the line-count metric would have looked far better while the actual cost stayed
+flat. Line counts here are therefore directly comparable to the before figures.
+
+**Resident / moved split actually chosen.** Moved to the skill, as five numbered sections:
+§1 Council Decision Protocol, §2 Quick reference, §3 AI Collaboration (incl. the four handoff
+elements and Phase Completion Output verification, which were previously only in FR-8),
+§4 Rules for any review or handoff, §5 Module `CLAUDE.md` index. Stayed resident: Rule 0,
+Rule 1, Step 1 (its conditional-load list converted from bullets to a table), Python
+Standards, Logging standard, Steps 2/2b/3/3b/4/5a–5d, the AutoTrigger table. Step 3b's
+prose "when to choose" bullets became a two-row table; the long-form rationale under Steps 1,
+2b, 3b, 4, 5 was compressed, not relocated.
+
+**No gate dropped — verified mechanically.** Every backtick-quoted `.md` / `.py` / path
+reference in the pre-change `CLAUDE.md` was checked against (new `CLAUDE.md` + skill). Four
+did not match: `prompt.md` and `*_tasks.md` (generic filenames from the `/work` prose, not
+paths — `work/SKILL.md` carries the real routing), the `#when-to-trigger-the-council` anchor
+(dropped deliberately — the three-condition check is now stated verbatim resident and is the
+sole source of truth, so pointing at the anchor would undercut it), and the FR-7 citation in
+Step 5a, which **was** a real loss and has been restored in both files. Section-header audit:
+all twelve pre-Step-5 sections resident, four reference sections in the skill, none missing.
+
+**Council-trigger path fires — three independent routes.** (1) Step 2b carries an explicit
+imperative: "Reading a council file that already exists is a separate mandatory gate — invoke
+`protocol-reference` §1 before acting on any `docs/council/` output." (2) The resident
+reference table is followed by "**§1 is a gate, not a lookup**". (3) The skill registered in
+the session's skill listing on creation, with trigger phrases "council file", "council
+decision", "read the council output". Note for future skill work: this repo's `SKILL.md` files
+carry **no YAML frontmatter** — discovery is by H1 plus the resident pointer, so the resident
+imperative is load-bearing and must not be trimmed away later.
+
+**Skill-load trade is net positive — confirmed, not assumed** (the `prompt.md` "Perspectives
+not covered" item required this). The skill costs 2,574 tokens when loaded, once, and only in
+sessions that reference a council file or need a quick-reference lookup. A session that never
+loads it saves the full 2,998. A session that loads it once still nets +424 on the first turn
+alone and keeps saving on every turn after, since the resident set is re-read each turn while
+the skill is not. Positive in both cases.
+
+**Scope addition beyond the spec.** `md-organize` Step 7 documents three protocol mirrors, not
+one. The new skill was therefore also mirrored to `.agents/skills/protocol-reference/SKILL.md`
+(byte-identical) — without it, `AGENTS.md`'s pointer would dangle on the Antigravity surface
+and the "no gate dropped" constraint would hold for Claude but not Antigravity. Confirmed the
+repo convention that `AGENTS.md` and `.agents/skills/**` reference `.claude/` paths, and
+normalised an initial mistake where this task wrote `.agents/` paths into `AGENTS.md`.
+`.claude/skills/work/SKILL.md` (the third mirror) needed no change — Step 1's routing
+semantics are unchanged.
+
+**Gates run.** `python -m pytest tests/unit/ --tb=no -q` → 3074 passed, 2 skipped.
+`pre-commit run md-line-length --files CLAUDE.md AGENTS.md` → Passed (longest line 190 in
+both; four over-length lines introduced during the rewrite were fixed by shortening table
+cells and lifting the `DB_REGISTRY.md` detail into a sentence below the table, per
+`md-organize` §5a — no fact dropped). Structural mirror diff of section headers shows only the
+three intended deltas: the H1 suffix, the reference-section heading (Antigravity has no
+skill-invocation mechanism), and the `Antigravity Reference (supplementary)` section.
 
 ---
 
