@@ -4,14 +4,14 @@ Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task
 See `prompt.md` for why the story exists and its hard constraints; see `stories.md` for the
 per-task implementation spec. Every task's As-built records a measured token delta.
 
-**Open: FIX-1 (next), FIX-2, FIX-3, FIX-4.**
+**Open: FIX-2 (next), FIX-3, FIX-4.**
 
 FIX-1..FIX-4 are independent of each other — the `prompt.md` order is a suggested sequence,
 not a hard dependency. Do not start any before `measurement/` is complete (the As-built
 delta needs `token_audit.py`).
 
-- [ ] **FIX-1** — Skill-ify `CLAUDE.md` — reference tables + Council Protocol + AI-collab prose to a `protocol-reference` skill; resident keeps the load-bearing protocol; mirror `AGENTS.md` |
-      Owner: Claude | Model: claude-opus-5 | Review: none | SHA: <—>
+- [x] **FIX-1** — Skill-ify `CLAUDE.md` — reference tables + Council Protocol + AI-collab prose to a `protocol-reference` skill; resident keeps the load-bearing protocol; mirror `AGENTS.md` |
+      Owner: Claude | Model: claude-opus-5 | Review: none | SHA: 41ac31e
 - [ ] **FIX-2** — Audit `src/*/CLAUDE.md` sizes; trim the 2–3 largest — deep detail to module docstrings or a `NOTES.md`, invariants + contracts stay resident |
       Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <—>
 - [ ] **FIX-3** — Redesign `session-close` skill to run as a transcript-reading subagent (reads the JSONL by path, no `fork` context clone); As-built records the measured per-session saving |

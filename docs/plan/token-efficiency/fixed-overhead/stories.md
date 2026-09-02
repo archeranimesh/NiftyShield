@@ -51,7 +51,7 @@ imported a path that moved, plus `check_md_line_length` at commit.
 
 **Commit:** `refactor(protocol): move CLAUDE.md reference material to a skill`
 
-**As-built (SHA `<pending>`):**
+**As-built (SHA `41ac31e`):**
 
 **Measured delta.** `project_docs` bucket (`token_audit.py`, session `3dcf60ee`): **12,554 →
 9,556 tokens, −2,998 (−23.9%)**. The bucket is a deterministic `chars/4` estimate over the

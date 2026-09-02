@@ -177,6 +177,20 @@ this file's Session Log grows large again.
   (median 32K). Names the targets for `fixed-overhead/` (FIX-3 session-close fork, FIX-1
   `CLAUDE.md` restructure) and `suggestions-sweep/`. `measurement/` story complete — epic
   router advances to `fixed-overhead/`.
+- **FIX-1 shipped — resident `CLAUDE.md` reference material moved to a `protocol-reference`
+  skill.** SHA `41ac31e`. `project_docs` bucket **12,554 → 9,556 tokens, −2,998 (−23.9%)**
+  measured with `token_audit.py`. `CLAUDE.md` 409→309 lines, `AGENTS.md` 474→377, re-mirrored
+  with its Antigravity deltas intact. Moved to the skill as five numbered sections: Council
+  Decision Protocol, Quick reference, AI Collaboration, review/handoff rules, module
+  `CLAUDE.md` index. Rule 0/1, Steps 0–5, the AutoTrigger table, Python + Logging standards
+  stay resident. No gate dropped — verified by matching every path reference in the old file
+  against (new file + skill); the one real loss found, an FR-7 citation in Step 5a, was
+  restored. Council-trigger path fires via three routes (Step 2b imperative, resident "§1 is
+  a gate" line, skill trigger phrases) — this repo's `SKILL.md` files have no YAML
+  frontmatter, so the resident pointer is load-bearing. Skill also mirrored to
+  `.agents/skills/` per `md-organize` Step 7, a scope addition FIX-1's spec had missed.
+  The ≤200-line target set at plan time was **not** met (309) — reaching it would have meant
+  dropping a gate; see the As-built. Next: FIX-2 (trim heaviest `src/*/CLAUDE.md`).
 
 ### 2026-09-01
 
