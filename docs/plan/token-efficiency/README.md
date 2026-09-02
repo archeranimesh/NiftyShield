@@ -31,6 +31,52 @@ Count 7 across a month of sessions, and nothing ever converts a high-count slug 
 remediation work. It also never proposes structural fixes, because it only pattern-matches
 turn-by-turn actions, not fixed overhead.
 
+## Baseline
+
+Measured with `scripts/dev/token_audit.py` (MEAS-1, commit `79effcd`) over five recent
+sessions spanning the range the epic cares about — a code+docs task with full subagent
+fan-out, a plain code+docs story, a query-only diagnostic session, and two `/work` docs
+restructures. All figures are account-side tokens (main loop + subagent-internal), rounded
+to the nearest thousand.
+
+| Bucket | `3dcf60ee` ROLL-7 | `5b1c99ee` TG-story | `d5d36b77` diag-only | `1c878711` RDO-17.7 | `724f9ef6` RDO-17.6 | Median |
+|---|--:|--:|--:|--:|--:|--:|
+| `subagent_internal` | 386K | 367K | 248K | 815K | 337K | 367K |
+| `assistant_text` | 281K | 153K | 102K | 299K | 225K | 225K |
+| `tool_results:Read` | 45K | 32K | <1K | 12K | 67K | 32K |
+| `tool_results:Bash` | 27K | 24K | 32K | 35K | 14K | 27K |
+| `system_prompt` (first-turn cache write) | 43K | 42K | — | 44K | 43K | 43K |
+| `project_docs` (`CLAUDE.md`+`AGENTS.md`+`MEMORY.md`, on-disk est.) | 13K | 13K | 13K | 13K | 13K | 13K |
+| `subagent_reports` | 3K | 3K | 2K | 5K | 1K | 3K |
+| **TOTAL** | **807K** | **658K** | **397K** | **1,229K** | **703K** | **703K** |
+
+Sessions: `3dcf60ee` / `5b1c99ee` / `d5d36b77` — 2026-09-01; `1c878711` / `724f9ef6` —
+2026-08-29. `token_audit.py` counts `system_prompt` and `project_docs` as the one-time
+first-turn cache write, not the reduced-rate re-read every subsequent turn — so a long
+session's true resident-doc cost is higher than the row shows, and the `d5d36b77` dash is a
+resumed session with no first-turn write of its own.
+
+### Largest avoidable items
+
+**Mandatory subagent fan-out is the dominant cost** — `subagent_internal` is the biggest
+bucket in every session (median 367K, ~50% of the median session), and the `session-close`
+fork is the worst single offender because a `fork` clones the entire conversation: in the
+ROLL-7 session that started this epic the hand audit put the whole task at ~740K account-side
+with the `session-close` fork alone ~285K of it. `fixed-overhead/` FIX-3 (run `session-close`
+as a path-reading subagent, not a fork) and a review of how often `test-runner` re-fires
+attack this row directly.
+
+**`assistant_text` (median 225K) is inflated by re-derivation** — re-reading files already in
+context (`reread-file-already-in-context` at Count 13 in `suggestions.md`), re-stating
+codebase state that `CONTEXT.md` already carries, and verbose turn-by-turn narration.
+`suggestions-sweep/` owns this.
+
+**`tool_results:Read` (median 32K, up to 67K) is whole-file reads that Rule 0 already bans** —
+graph queries and `sed` ranges would cut most of it; `fixed-overhead/` and the Rule 0 hook
+tuning in `suggestions-sweep/` share it. The resident-doc buckets (`system_prompt` +
+`project_docs`, ~55K first-turn and re-read every turn after) are the target of the
+aggressive `CLAUDE.md` restructure in `fixed-overhead/` FIX-1.
+
 ## Scope decisions
 
 Confirmed with Animesh, 2026-09-01:
@@ -50,7 +96,7 @@ Confirmed with Animesh, 2026-09-01:
 
 | Story | Purpose | Status | Depends on | Closing SHA |
 |---|---|---|---|---|
-| `measurement/` | `token_audit.py` — attribute a session's tokens by bucket; establish the baseline every later task measures against | 🔄 In progress (MEAS-1 done) | — | 79effcd |
+| `measurement/` | `token_audit.py` — attribute a session's tokens by bucket; establish the baseline every later task measures against | ✅ Done | — | 79effcd |
 | `fixed-overhead/` | Skill-ify `CLAUDE.md`, trim module `CLAUDE.md` files, redesign `session-close` off the fork, strip MCP result bloat | ⬜ Not started | `measurement/` | — |
 | `suggestions-sweep/` | Cluster all ~40 `suggestions.md` rows; fix / enforce / accept each; make Step 4b self-draining | ⬜ Not started | `measurement/` | — |
 

@@ -169,6 +169,14 @@ this file's Session Log grows large again.
   `usage.output_tokens`). Compact table + `--json`. 7 tests, fixture transcript, no network.
   `code-reviewer` clean (0 CRITICAL/ERROR). Next: MEAS-2 — run it on 4–5 real sessions and
   write the epic `README.md` Baseline section.
+- **MEAS-2 shipped — token-efficiency Baseline section in the epic `README.md`.** Ran
+  `token_audit.py` over five sessions (ROLL-7 `3dcf60ee`, TG-story `5b1c99ee`, diagnostic
+  `d5d36b77`, RDO-17.7 `1c878711`, RDO-17.6 `724f9ef6`). Median session ≈ 703K account-side
+  tokens; `subagent_internal` is the largest bucket every time (median 367K, ~50%), then
+  `assistant_text` (median 225K, inflated by re-derivation), then whole-file `Read` results
+  (median 32K). Names the targets for `fixed-overhead/` (FIX-3 session-close fork, FIX-1
+  `CLAUDE.md` restructure) and `suggestions-sweep/`. `measurement/` story complete — epic
+  router advances to `fixed-overhead/`.
 
 ### 2026-09-01
 
