@@ -50,6 +50,7 @@ src/
 │                             #   Upstox parser: parse_upstox_option_chain() in src/client/upstox_market.py. Dhan parser not implemented.
 ├── portfolio/
 │   ├── CLAUDE.md             # Module context: Leg/Trade distinction, Decimal invariant, apply_trade_positions() overlay, strategy_name constraint
+│   ├── NOTES.md              # Reference detail relocated out of CLAUDE.md (FIX-2): overlay_coverage.py rationale, apply_trade_positions call sites, models/registry enumeration. Not auto-loaded.
 │   ├── store.py              # SQLite: strategies, legs, daily_snapshots, trades.
 │                             #   Trades methods: record_trade (idempotent), get_trades (strategy/leg filter, date ASC), get_position (net qty + weighted avg buy price),
 │                             #   get_all_positions_for_strategy (all leg_roles → (net_qty, avg_price, instrument_key)),
@@ -176,6 +177,7 @@ src/
 │                             #   search() uses ranked exact>prefix>fuzzy scoring via _score_query()/_best_score() (rapidfuzz; difflib fallback). min_score param added.
 ├── notifications/
 │   ├── CLAUDE.md             # Module context: non-fatal contract, build_notifier() → None, HTML parse_mode
+│   ├── NOTES.md              # Reference detail relocated out of CLAUDE.md (FIX-2): MarkdownV2 migration history, guard-test allowlist mechanics, formatter signatures. Not auto-loaded.
 │   ├── __init__.py           # Package marker.
 │   ├── protocol.py           # NotifierProtocol — abstracts the notification sink for testability
 │   ├── formatting.py         # Per-parameter-type value formatters (money / greek / strike / pct / expiry) + monospace table builders for Telegram messages.
@@ -216,6 +218,7 @@ src/
 ├── db.py                     # Shared SQLite context manager — WAL mode, row_factory, FK enforcement, auto commit/rollback.
 └── client/
     ├── CLAUDE.md             # Module context: BrokerClient protocol rule, 4 implementations, active constraints
+    ├── NOTES.md              # Reference detail relocated out of CLAUDE.md (FIX-2): implementations table, sub-protocol method split, MockBrokerClient setup API. Not auto-loaded.
     ├── exceptions.py         # Custom exception hierarchy: BrokerError → AuthenticationError, RateLimitError, DataFetchError (→ LTPFetchError), OrderRejectedError (→ InsufficientMarginError),
                               #   InstrumentNotFoundError.
     ├── protocol.py           # BrokerClient + MarketStream protocols. Sub-protocols: MarketDataProvider, OrderExecutor, PortfolioReader.

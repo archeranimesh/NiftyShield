@@ -162,8 +162,80 @@ at commit.
 **Commit:** `refactor(<module>): slim CLAUDE.md to invariants, relocate detail`
 (one commit per module if they are done in separate sessions — never bundle).
 
-**As-built (SHA `<—>`):** _record: per-file line count before/after, the auto-inject token
-saving per directory-touch, and where each moved block landed._
+**As-built (SHA `ce45719`):**
+
+**Targets were picked by measurement, and the spec's guess was half wrong.** `stories.md`
+predicted `notifications` / `paper` / `client`; `wc -c` puts `portfolio` second and `paper`
+fourth, so the three trimmed are **`notifications`, `portfolio`, `client`**. `paper` (980 tok)
+was left alone — its content is almost entirely invariants (the `paper_` prefix guard, the
+Decimal-as-TEXT rule, the `total_pnl` write-time check), with nothing worth relocating.
+
+**Measurement method.** `token_audit.py` deliberately excludes module `CLAUDE.md` from its
+`project_docs` bucket — its own docstring says detecting which module files fired for a given
+session would need per-turn tool-argument inspection the tool does not do. So the before/after
+here is that tool's own estimator (`_estimate_tokens`, chars/4) applied directly to each file.
+That is the same arithmetic `project_docs` uses, just pointed at the module files, and it is
+the only honest source for this figure short of extending the tool.
+
+| File | Before | After | Δ | Lines |
+|---|--:|--:|--:|---|
+| `src/notifications/CLAUDE.md` | 3,086 | 1,998 | **−1,088** | 195 → 140 |
+| `src/portfolio/CLAUDE.md` | 1,112 | 930 | **−182** | 83 → 76 |
+| `src/client/CLAUDE.md` | 1,062 | 877 | **−185** | 100 → 80 |
+| **Total auto-injected** | **5,260** | **3,805** | **−1,455 (−28%)** | 378 → 296 |
+
+**Per-directory-touch saving.** A module `CLAUDE.md` is injected the first time a session
+touches that directory and is then resident in the prefix for every subsequent turn. So the
+saving is per-turn, not per-session: a `src/notifications/` session drops **1,088 tokens off
+every turn after the first touch**, `src/portfolio/` 182, `src/client/` 185. A session touching
+all three saves 1,455/turn. Against the epic Baseline's ~55K first-turn resident-doc figure
+(`system_prompt` + `project_docs`), that is ~2.6% for the three-module case and ~2% for the
+common `src/notifications/` case — small next to `subagent_internal`, but paid on every turn of
+every session in the module, which is exactly the cost class this story targets.
+
+**Total on-disk text went up slightly, and that is the intended trade.** The three new
+`NOTES.md` files are 1,782 / 459 / 506 tokens; adding their headers and pointers means
+`notifications` now holds 3,780 tokens across two files where it held 3,086 in one. Nothing was
+deleted — the relocation is the whole point, and only the `CLAUDE.md` half is paid per turn.
+
+**Where each moved block landed** (all to a new non-auto-loaded `NOTES.md` in the same
+directory, each leaving a one-line pointer in `CLAUDE.md`):
+
+- `src/notifications/NOTES.md` — the MarkdownV2 migration history and the stale `<pre>`-wrap
+  correction note; the `DELTA_WARN` origin of the escaping bug class; the full
+  `_BASELINE_UNESCAPED` allowlist mechanics and the MD-3/4/7 audited-call-site paragraph; the
+  four value formatters and three table builders with full signatures, examples and rationale;
+  the emoji-presentation-variant alignment risk; `STRATEGY_LABELS` / `LEG_ROLE_LABELS`; the
+  `telegram-leg-labels` origin line.
+- `src/portfolio/NOTES.md` — why `overlay_coverage.py` sits in this directory; the
+  `apply_trade_positions()` call-site list; the `models.py` field enumeration and the strategy
+  registry (both `CONTEXT_TREE.md`-shaped material).
+- `src/client/NOTES.md` — the implementations table; the per-sub-protocol method split; the
+  `MockBrokerClient` setup API code block; the `upstox_market.py` legacy narration.
+
+**What deliberately stayed resident.** Every invariant and every contract a caller must not
+break, verbatim — this was relocation, not a rewrite. `notifications`: the non-fatal `send()`
+contract including the REVIEW.md G5 inline-comment rule (`REVIEW.md` line 717 cites this file
+by name), `build_notifier()` returning `None`, `TELEGRAM_MESSAGE_BUDGET`, the no-auto-escape
+boundary, both escaping helpers, BUG-038's known gap, the guard test's "fix the call site, do
+not add a baseline entry" rule, the formatter-returns-unescaped contract, the `build_leg_table`
+1dp locked-in exception, and the whole Instrument Label Formatting section. `portfolio`: the
+Decimal-as-TEXT invariant, the `trades.strategy_name` silent-failure constraint, the
+`apply_trade_positions` behaviour contract, `ensure_leg`, `store.py`'s SELL-prices-excluded
+rule. `client`: the no-concrete-imports-outside-`factory.py` cardinal rule, the blocked-methods
+table, the exception hierarchy with its retryable/terminal split, the two-token constraint.
+
+**Cross-references verified, none dangling.** All section headers were kept, so
+`§"Instrument Label Formatting"` (root `CLAUDE.md` line 80, `AGENTS.md` line 104,
+`CONTEXT_TREE.md` line 182) and `§"Value Formatting & Table Builders"` still resolve;
+`FORMATTING.md` lines 15/172, `REVIEW.md` line 717 and `AGENTS.md` lines 362/368 all point at
+sections that survived. Unlike FIX-1, no `.agents/` mirror work was needed — module docs have
+no `src/*/AGENTS.md` counterpart, and `.agents/` carries only skill mirrors.
+
+**Gates run.** `python -m pytest tests/unit/ --tb=no -q` → 3074 passed, 2 skipped (proves no
+import referenced a moved path). `md-line-length` does not cover `src/**` (it is scoped to root
++ `docs/plan` + `docs/bugs`), and the pre-commit run confirmed it skipped; no `.py` in the diff,
+so `code-reviewer` was correctly not triggered — the task line is `Review: none`.
 
 ---
 

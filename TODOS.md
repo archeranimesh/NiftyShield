@@ -191,6 +191,20 @@ this file's Session Log grows large again.
   `.agents/skills/` per `md-organize` Step 7, a scope addition FIX-1's spec had missed.
   The ≤200-line target set at plan time was **not** met (309) — reaching it would have meant
   dropping a gate; see the As-built. Next: FIX-2 (trim heaviest `src/*/CLAUDE.md`).
+- **FIX-2 shipped — the three heaviest module `CLAUDE.md` files trimmed to invariants.** SHA
+  `ce45719`. Auto-injected total **5,260 → 3,805 tokens, −1,455 (−28%)**: `notifications`
+  3,086→1,998, `portfolio` 1,112→930, `client` 1,062→877 (chars/4, `token_audit.py`'s own
+  estimator — the tool excludes module `CLAUDE.md` from `project_docs` by design, so it cannot
+  report this bucket itself). Measurement overruled the spec's guess: `portfolio` is second,
+  not `paper` (980, left alone — near-pure invariants). Relocated detail to a new
+  non-auto-loaded `NOTES.md` per module: MarkdownV2 migration history, guard-test allowlist
+  mechanics, full formatter/table-builder signatures, `apply_trade_positions` call sites,
+  models/registry enumeration, implementations table, `MockBrokerClient` setup API. No
+  invariant reworded and no section header dropped, so `§"Instrument Label Formatting"`
+  (`CLAUDE.md`, `AGENTS.md`, `CONTEXT_TREE.md`) and the `FORMATTING.md` / `REVIEW.md` citations
+  still resolve. Saving is per-turn once a session touches the directory, not per-session. No
+  `.agents/` mirror needed — module docs have no `AGENTS.md` counterpart. 3074 passed,
+  2 skipped. Next: FIX-3 (`session-close` off the `fork`).
 
 ### 2026-09-01
 
