@@ -50,7 +50,7 @@ Confirmed with Animesh, 2026-09-01:
 
 | Story | Purpose | Status | Depends on | Closing SHA |
 |---|---|---|---|---|
-| `measurement/` | `token_audit.py` — attribute a session's tokens by bucket; establish the baseline every later task measures against | ⬜ Not started | — | — |
+| `measurement/` | `token_audit.py` — attribute a session's tokens by bucket; establish the baseline every later task measures against | 🔄 In progress (MEAS-1 done) | — | 79effcd |
 | `fixed-overhead/` | Skill-ify `CLAUDE.md`, trim module `CLAUDE.md` files, redesign `session-close` off the fork, strip MCP result bloat | ⬜ Not started | `measurement/` | — |
 | `suggestions-sweep/` | Cluster all ~40 `suggestions.md` rows; fix / enforce / accept each; make Step 4b self-draining | ⬜ Not started | `measurement/` | — |
 

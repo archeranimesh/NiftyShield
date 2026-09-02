@@ -158,6 +158,18 @@ Full forensic log (SHAs, bug numbers, root-cause detail) moved to
 history above). Add new entries there going forward, or start a fresh dated section here if
 this file's Session Log grows large again.
 
+### 2026-09-02
+
+- **MEAS-1 shipped — `scripts/dev/token_audit.py` session token-attribution tool.** SHA
+  `79effcd`. Parses a session transcript JSONL and buckets its tokens: `system_prompt` (real,
+  first-turn `cache_creation_input_tokens`), `project_docs` (estimated, chars/4 over current
+  `CLAUDE.md`+`AGENTS.md`+`MEMORY.md`), `tool_results:<tool>` (estimated, chars/4 per matched
+  `tool_result`), `subagent_reports` (estimated, chars/4 over `<result>` text) and
+  `subagent_internal` (real, `<subagent_tokens>`) kept separate, `assistant_text` (real,
+  `usage.output_tokens`). Compact table + `--json`. 7 tests, fixture transcript, no network.
+  `code-reviewer` clean (0 CRITICAL/ERROR). Next: MEAS-2 — run it on 4–5 real sessions and
+  write the epic `README.md` Baseline section.
+
 ### 2026-09-01
 
 - **`token-efficiency/` epic authored.** New 3-story epic under `docs/plan/token-efficiency/`

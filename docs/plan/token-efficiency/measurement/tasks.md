@@ -4,10 +4,10 @@ Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task
 See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec.
 
-**Open: MEAS-1 (next), MEAS-2.**
+**Open: MEAS-2 (next).**
 
-- [ ] **MEAS-1** — `scripts/dev/token_audit.py` — attribute a session transcript's tokens by bucket; compact table + `--json` output (bucket list in `stories.md`) |
-      Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: <—>
+- [x] **MEAS-1** — `scripts/dev/token_audit.py` — attribute a session transcript's tokens by bucket; compact table + `--json` output (bucket list in `stories.md`) |
+      Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 79effcd
 - [ ] **MEAS-2** — run `token_audit.py` on 4–5 recent sessions; write the epic `README.md` "Baseline" section — per-bucket numbers + the 2–3 largest avoidable items |
       Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <—>
 
