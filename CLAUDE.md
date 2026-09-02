@@ -273,13 +273,17 @@ git log --oneline -1   # confirm SHA appears — this is the proof of completion
 Providing the commit message to the user and stopping is a recurring failure mode. The commit
 is the last mandatory action of every phase. Do not hand off to the user to run it.
 
-**5d — Session efficiency close-out (mandatory, runs after 5c, before Stop):** spawn a `fork`
-subagent with the prompt: "Invoke `.claude/skills/session-close/SKILL.md` against this
-session, then report the compact block back." Do not run the skill inline — the audit is a
-side-artifact for the user, not something the task itself needs, so keep it out of the task's
-own context budget. Relay the fork's compact report to the user as the final message of the
-turn. This step is never a "legitimate skip" — a read-only/query-only session still closes
-with a trivial clean report, per the skill's own Step 5 fallback.
+**5d — Session efficiency close-out (mandatory, runs after 5c, before Stop):** spawn a fresh
+`general-purpose` subagent (never `fork` — a fork clones the whole conversation, which made
+this step itself the single largest token cost of a session) with the prompt: "Invoke
+`.claude/skills/session-close/SKILL.md` against the transcript at `<absolute path to this
+session's own .jsonl under ~/.claude/projects/…>`, then report the compact block back." The
+subagent reads that file by path — it does not inherit this conversation. Do not run the
+skill inline — the audit is a side-artifact for the user, not something the task itself
+needs, so keep it out of the task's own context budget. Relay the subagent's compact report
+to the user as the final message of the turn. This step is never a "legitimate skip" — a
+read-only/query-only session still closes with a trivial clean report, per the skill's own
+Step 5 fallback.
 
 ---
 

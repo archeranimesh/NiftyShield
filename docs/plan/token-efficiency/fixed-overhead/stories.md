@@ -275,9 +275,21 @@ still produces the block; that run is the after measurement.
 
 **Commit:** `refactor(session-close): read transcript by path, drop the context fork`
 
-**As-built (SHA `<—>`):** _record: the close-out's token cost before (fork) vs. after
-(transcript-reading subagent), on a matched before/after session pair; confirm the compact
-block content is unchanged._
+**As-built (SHA `<pending>`):** `CLAUDE.md` §5d and its `AGENTS.md` mirror now spawn a fresh
+`general-purpose` subagent with the transcript path, never `fork`. `SKILL.md` (and its
+`.agents/` mirror) Step 1 rewritten to extract the action log via bounded `jq` over the
+transcript + `git log`, not conversation recall; a new §3c-2 folds `token_audit.py` into the
+TOKEN EFFICIENCY section so its numbers are real per-bucket figures, not chars/4 estimates.
+
+Measured on session `ed6e79b9` (194KB transcript, docs-only FIX-2 task): the original
+`fork`-based close-out cost **116,375** `subagent_internal` tokens (61% of that session's
+191,235-token total). Running the redesigned skill as a fresh subagent against the same
+transcript path cost **52,523** total tokens (10 tool uses: `jq` action-log extraction,
+`git log`, `token_audit.py`, analysis) — a **~55% drop**, and the compact block it produced
+matches the format and content of the original. The fork's median cost across 9 recent
+sessions was ~254K (range 116K–380K); the saving scales further on longer sessions since a
+`fork` clones the whole conversation while the redesigned skill's cost is bounded by
+extraction, not conversation length.
 
 ---
 

@@ -158,6 +158,11 @@ Full forensic log (SHAs, bug numbers, root-cause detail) moved to
 history above). Add new entries there going forward, or start a fresh dated section here if
 this file's Session Log grows large again.
 
+- **2026-09-02** — `docs/plan/token-efficiency/fixed-overhead/` FIX-3: `session-close` now
+  runs as a fresh `general-purpose` subagent reading the transcript by path, never a `fork`
+  clone. Measured ~55% drop (116,375 → 52,523 tokens) on a matched session; fork's median
+  cost across 9 sessions was ~254K. SHA: `<pending>`.
+
 ### 2026-09-02
 
 - **MEAS-1 shipped — `scripts/dev/token_audit.py` session token-attribution tool.** SHA

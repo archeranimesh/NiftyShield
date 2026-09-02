@@ -300,7 +300,9 @@ Providing the commit message to the user and stopping is a recurring failure mod
 is the last mandatory action of every phase. Do not hand off to the user to run it.
 
 **5d — Session efficiency close-out:** the `session-close` skill's audit runs at end of
-session. Under Claude this is a `fork` subagent; Antigravity cannot fork — run
+session. Under Claude this is a fresh `general-purpose` subagent handed this session's own
+transcript path — never `fork`, which clones the whole conversation and made this step the
+single largest token cost of a session. Antigravity cannot spawn that subagent either — run
 `.claude/skills/session-close/SKILL.md` inline and report its compact block, or hand to Claude
 to run it. This step is never a "legitimate skip" — a read-only/query-only session still
 closes with a trivial clean report, per the skill's own Step 5 fallback. See `ANTIGRAVITY.md`

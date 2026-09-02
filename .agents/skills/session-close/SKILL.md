@@ -5,25 +5,38 @@
 >
 > Goal: honest self-audit. Not a trophy — a diagnostic. Steps skipped need accurate labels,
 > not post-hoc rationalization. The report is only useful if violations are called violations.
+>
+> **Runs on a transcript, not "this conversation."** The invoking prompt supplies an
+> absolute path to a session's `.jsonl` transcript under `~/.claude/projects/…`. This skill
+> never inherits the session it audits — it is invoked as a fresh subagent (`general-purpose`,
+> never `fork`) so the audit's own cost stays a bounded extraction against a file, not a full
+> context clone. If no transcript path was given, ask for one; do not guess.
 
 ---
 
-## Step 1 — Reconstruct the session's action log
+## Step 1 — Build the session's action log from the transcript
 
-Before scoring, build a factual list of what happened this session by recalling:
-
-- Which files were `Read` (especially `src/` and `scripts/` paths)
-- Which graph tools fired (`search_graph`, `get_code_snippet`, `trace_path`, `search_code`)
-- Which bash commands ran (look for `pytest`, `git commit`, `git add`, `SELECT`)
-- Which subagents were spawned (`@test-runner`, `@code-reviewer`, `@greeks-analyst`, `@roll-validator`)
-- Which skills were invoked (`commit`, `prompt-refine`, `handoff-antigravity`)
-- Whether a commit was made (`git log --oneline -1` was run and SHA confirmed)
-
-Do not reconstruct from memory alone — confirm the latest commit via bash:
+Extract, don't reconstruct — read only what each check below needs, never the whole
+transcript. `T` = the transcript path.
 
 ```bash
-git -C /path/to/repo log --oneline -5
+# tool calls in invocation order: tool name + a short arg summary
+jq -r 'select(.type=="assistant") | .message.content[]? | select(.type=="tool_use") |
+  "\(.name)\t\((.input.file_path // .input.qualified_name // .input.query //
+  .input.pattern // .input.subagent_type // .input.skill //
+  (.input.command|tostring))[0:120])"' "$T"
+
+# latest commit (confirms Step 5c, gives the SHA for the report)
+git -C <repo> log --oneline -5
 ```
+
+From the tool-call list, derive: which files were `Read` (especially `src/`/`scripts/`
+paths) and whether a graph tool (`search_graph`, `get_code_snippet`, `trace_path`,
+`search_code`) preceded each; which bash commands ran (`pytest`, `git commit`, `git add`,
+`SELECT`); which subagents were spawned (`@test-runner`, `@code-reviewer`,
+`@greeks-analyst`, `@roll-validator`); which skills were invoked (`commit`, `prompt-refine`,
+`handoff-antigravity`). This list is the sole source of truth for Steps 2–3 — do not fall
+back to inference about what "probably" happened.
 
 ---
 
@@ -73,7 +86,8 @@ For every step below, mark one of:
   detail or per-task progress instead of a pointer (title + path + next task + one-line why),
   or bug priority/status was mirrored into `## Open Bugs` — see `docs/plan/README.md`
   §Conventions
-- a completed `tasks.md` checkbox is missing its `| Owner: … | Model: … | SHA: …` tail
+- a completed `tasks.md` checkbox is missing its `| Owner: … | Model: … | Review: … | SHA: …`
+  tail (legacy `| Owner | Model | SHA` lines with no `Review:` are grandfathered — skip)
 - a story / bug finished this session (every `tasks.md` / `docs/bugs/task.md` box ticked,
   `## Epic done when` fully checked) but was **not archived** in the same commit — folder
   still under `docs/plan/` or `docs/bugs/`, line still in `TODOS.md`, README row not
@@ -119,6 +133,20 @@ Agents inlined:   pytest run inline [yes/no] | review inlined [yes/no]
 
 Note: inlining an agent does not save tokens — the diff or test output is still processed.
 It only forfeits the isolation guarantee and blocking gate semantics. No upside.
+
+### 3c-2 — Real per-bucket numbers (`token_audit.py`)
+
+Run the audit tool against the same transcript to replace estimates with real, per-bucket
+figures for this session's TOKEN EFFICIENCY block:
+
+```bash
+python -m scripts.dev.token_audit "$T"
+```
+
+Use its `subagent_internal` figure (attributable to each spawned subagent, including this
+close-out's own prior runs if any) and `assistant_text` as the real numbers backing 3a/3b/3d
+instead of the chars/4 heuristics those sections describe — quote the tool's numbers when
+available, fall back to the heuristic only for a transcript the tool cannot parse.
 
 ### 3d — Avoidable re-reads
 

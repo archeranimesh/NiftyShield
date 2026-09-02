@@ -97,7 +97,7 @@ Confirmed with Animesh, 2026-09-01:
 | Story | Purpose | Status | Depends on | Closing SHA |
 |---|---|---|---|---|
 | `measurement/` | `token_audit.py` — attribute a session's tokens by bucket; establish the baseline every later task measures against | ✅ Done | — | a0dfa38 |
-| `fixed-overhead/` | Skill-ify `CLAUDE.md`, trim module `CLAUDE.md` files, redesign `session-close` off the fork, strip MCP result bloat | 🔄 FIX-1, FIX-2 done, FIX-3 next | `measurement/` | — |
+| `fixed-overhead/` | Skill-ify `CLAUDE.md`, trim module `CLAUDE.md` files, redesign `session-close` off the fork, strip MCP result bloat | 🔄 FIX-1..3 done, FIX-4 next | `measurement/` | — |
 | `suggestions-sweep/` | Cluster all ~40 `suggestions.md` rows; fix / enforce / accept each; make Step 4b self-draining | ⬜ Not started | `measurement/` | — |
 
 Status: ⬜ Not started · 🔄 In progress · ✅ Done. This column is the epic's progress view —
