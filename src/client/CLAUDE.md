@@ -1,6 +1,9 @@
 # src/client — Module Context
 
 > Auto-loaded when working inside `src/client/`. Read this before touching any file here.
+> Invariants and caller contracts only — the implementations table, the sub-protocol method
+> split, and the `MockBrokerClient` setup API live in **`NOTES.md`** (same directory, not
+> auto-loaded).
 
 ---
 
@@ -18,18 +21,7 @@ def __init__(self, client: BrokerClient) -> None: ...
 from src.client.upstox_live import UpstoxLiveClient
 ```
 
----
-
-## Implementations (2 built + 1 variant + 1 planned)
-
-| Class | File | When Used | Network |
-|---|---|---|---|
-| `UpstoxLiveClient` | `upstox_live.py` | Production + manual dev testing | Yes — live Upstox APIs |
-| `UpstoxLiveClient` (sandbox token) | `upstox_live.py` | Pre-deploy integration tests | Yes — Upstox sandbox |
-| `MockBrokerClient` | `mock_client.py` | Unit tests, offline dev, CI, **all order testing** | **No** — fully offline |
-| *(ReplayMarketStream)* | *(not yet built)* | Strategy testing with recorded tick feeds | No |
-
-`create_client(env)` in `factory.py` selects the implementation: `"prod"` → `UpstoxLiveClient(UPSTOX_ANALYTICS_TOKEN)`, `"sandbox"` → `UpstoxLiveClient(UPSTOX_SANDBOX_TOKEN)`, `"test"` → `MockBrokerClient`.
+`create_client(env)` in `factory.py` selects the implementation: `"prod"` → `UpstoxLiveClient(UPSTOX_ANALYTICS_TOKEN)`, `"sandbox"` → `UpstoxLiveClient(UPSTOX_SANDBOX_TOKEN)`, `"test"` → `MockBrokerClient`. Which implementation to reach for when: `NOTES.md`.
 
 ---
 
@@ -49,25 +41,13 @@ Blocked methods raise `NotImplementedError` with an explanatory message via `_ra
 
 ## Sub-Protocols (ISP)
 
-Three narrow sub-protocols in `protocol.py`:
-- `MarketDataProvider` — `get_ltp`, `get_option_chain` (used by tracker/signals)
-- `OrderExecutor` — `place_order`, `modify_order`, `cancel_order` (execution layer)
-- `PortfolioReader` — `get_positions`, `get_holdings`, `get_margins`
-
-`BrokerClient` is flat (not inheriting from sub-protocols) so its full method list is readable in one place. Python structural typing — any class satisfying all 10 `BrokerClient` methods automatically satisfies all three sub-protocols.
+Three narrow sub-protocols in `protocol.py` — `MarketDataProvider`, `OrderExecutor`, `PortfolioReader`. Depend on the narrowest one that covers your use. `BrokerClient` is flat (not inheriting from them) so its full method list is readable in one place; structural typing means any class satisfying all 10 `BrokerClient` methods satisfies all three. Per-protocol method lists: `NOTES.md`.
 
 ---
 
-## `MockBrokerClient` Setup API
+## `MockBrokerClient`
 
-For tests, after constructing `MockBrokerClient(fixtures_dir=...)`:
-```python
-mock.set_price("NSE_EQ|INE...", Decimal("100.50"))
-mock.set_margin(Decimal("500000"))
-mock.simulate_error("place_order", RateLimitError("mock rate limit"))  # one-shot
-mock.reset()  # clears orders/positions/error queue; preserves _price_map
-```
-Missing fixtures log `WARNING` and return `None`/`[]`/`{}` — never raises.
+Offline test double — `set_price` / `set_margin` / `simulate_error` / `reset` setup API in `NOTES.md`. Missing fixtures log `WARNING` and return `None`/`[]`/`{}` — never raises.
 
 ---
 
@@ -90,7 +70,7 @@ BrokerError
 
 ## `upstox_market.py` — Legacy Module
 
-Sync `requests` client built before the `BrokerClient` abstraction. Violates the DI rule. Currently wrapped inside `UpstoxLiveClient` — no other consumer should import it. Do not add new dependents on `UpstoxMarketClient` directly.
+Pre-abstraction sync `requests` client, wrapped inside `UpstoxLiveClient`. Violates the DI rule. Do not add new dependents on `UpstoxMarketClient` directly.
 
 ---
 

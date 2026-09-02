@@ -1,18 +1,17 @@
 # src/portfolio — Module Context
 
 > Auto-loaded when working inside `src/portfolio/`. Read this before touching any file here.
+> Invariants and caller contracts only — wiring lists, model/registry enumerations, and
+> rationale live in **`NOTES.md`** (same directory, not auto-loaded).
 
 ---
 
 ## Note: `overlay_coverage.py` is a different domain than the rest of this directory
 
 Everything else below (`Leg`/`Trade`/`Strategy`, `PortfolioTracker`, `apply_trade_positions()`)
-belongs to the **live** finideas/finrakshak portfolio system. `overlay_coverage.py` (added S3r,
-2026-07-29) is **paper-trading** code — it reads `PaperStore`/`PaperPosition` from `src/paper/`,
-not this module's `store.py`/`models.py`. It lives here only because the story called for a
-query-time join comparable in spirit to `PortfolioTracker`'s per-strategy joins; it shares no
-types, tables, or constraints with the rest of this file. Do not assume the Decimal/Leg/Trade
-conventions below apply to it — see `src/paper/CLAUDE.md` instead.
+belongs to the **live** finideas/finrakshak portfolio system. `overlay_coverage.py` is
+**paper-trading** code. Do not assume the Decimal/Leg/Trade conventions below apply to it —
+see `src/paper/CLAUDE.md` instead, and `NOTES.md` for why it sits in this directory.
 
 ---
 
@@ -40,10 +39,8 @@ apply_trade_positions(strategy: Strategy, positions: dict[str, tuple[int, Decima
 - Drops legs whose net qty is zero (closed positions)
 - Returns a new `Strategy` — never mutates the original
 
-**Where it's wired:**
-- `PortfolioTracker._get_overlaid_strategy()` / `_get_all_overlaid_strategies()` — private helpers called internally before every `compute_pnl`, `record_daily_snapshot`, `record_all_strategies`.
-- `daily_snapshot.py _async_main()` and `_historical_main()` — both call it via `apply_trade_positions()` after `get_all_strategies()`.
-- Callers do **not** need to apply it manually for tracker paths — the overlay is internalized.
+Callers do **not** need to apply it manually for tracker paths — the overlay is internalized.
+Full call-site list: `NOTES.md`.
 
 ### Trade-only legs and `ensure_leg()`
 When `record_daily_snapshot` encounters a leg with `id is None` (e.g. LIQUIDBEES appended by overlay), it calls `store.ensure_leg(strategy_name, leg)` to upsert and obtain a DB id. Idempotent — safe to call multiple times.
@@ -71,13 +68,9 @@ python -m scripts.record_trade --strategy finideas_ilts ...
 - `get_position(strategy_name, leg_role)` — returns `(net_qty, avg_buy_price)`. SELL prices excluded from average — only BUY prices matter for cost basis.
 - `get_all_positions_for_strategy(strategy_name)` — returns `dict[leg_role, (net_qty, avg_price, instrument_key)]`
 
-## Models in `models.py`
-- `Leg`, `Strategy`, `DailySnapshot`, `Trade`, `TradeAction` — all here
-- `Trade` is `frozen=True` with validators: `qty > 0`, `price > 0`
-- P&L methods accept `float | Decimal`, always return `Decimal`
-- `PortfolioSummary` frozen dataclass — carries combined totals + four day-delta fields (all `Decimal | None`)
+## Models and Strategy Registry
 
-## Strategy Registry
-- `src/portfolio/strategies/__init__.py` — `ALL_STRATEGIES` list
-- `src/portfolio/strategies/finideas/ilts.py` — `ILTS` (4 legs: EBBETF0431 + 3 Nifty options)
-- `src/portfolio/strategies/finideas/finrakshak.py` — `FinRakshak` (1 leg: protective put)
+`models.py` holds `Leg`, `Strategy`, `DailySnapshot`, `Trade`, `TradeAction`, `PortfolioSummary`;
+`Trade` is `frozen=True` with `qty > 0` / `price > 0` validators, and P&L methods accept
+`float | Decimal` but always return `Decimal`. Registry (`strategies/`) and the per-model field
+lists: `NOTES.md`.
