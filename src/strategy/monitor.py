@@ -365,16 +365,26 @@ class StrategyMonitor:
                 strategy.strategy_name, event.event_type, leg_role, expiry_str
             )
             if not already_active:
-                event_headline = escape_markdown(event.event_type.replace("_", " "))
-                strat_label = escape_markdown(strategy_label(strategy.strategy_name))
-                description = escape_markdown(event.description)
+                try:
+                    event_headline = escape_markdown(event.event_type.replace("_", " "))
+                    strat_label = escape_markdown(strategy_label(strategy.strategy_name))
+                    description = escape_markdown(event.description)
 
-                lines = [f"⚠️ {event_headline} \\- {strat_label}"]
-                if leg_role:
-                    lines.append(f"Leg: {escape_markdown(leg_role_label(leg_role))}")
-                lines.append(description)
+                    lines = [f"⚠️ {event_headline} \\- {strat_label}"]
+                    if leg_role:
+                        lines.append(f"Leg: {escape_markdown(leg_role_label(leg_role))}")
+                    lines.append(description)
 
-                text = "\n".join(lines)
+                    text = "\n".join(lines)
+                except ValueError as e:
+                    log.warning(
+                        "strategy_monitor.unmapped_label_fallback",
+                        error=str(e),
+                        strategy_name=strategy.strategy_name,
+                        leg_role=leg_role,
+                    )
+                    text = f"[{strategy.strategy_name}] {event.event_type}: {event.description}"
+
                 await self._notifier.send_plain_message(text)
                 if warn_fired is not None:
                     self._store.set_warn_active(

@@ -1357,8 +1357,8 @@ async def test_event_alert_escapes_underscore_description() -> None:
 
 
 @pytest.mark.asyncio
-async def test_event_alert_unmapped_strategy_raises() -> None:
-    """Unmapped strategy_name -> ValueError (loud failure)."""
+async def test_event_alert_unmapped_strategy_falls_back() -> None:
+    """Unmapped strategy_name -> falls back to raw format without raising."""
     event = SignalEvent(
         event_type="DELTA_BREACH",
         severity="WARN",
@@ -1378,11 +1378,17 @@ async def test_event_alert_unmapped_strategy_raises() -> None:
             "src.strategy.monitor.datetime",
             **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
         ),
-        pytest.raises(
-            ValueError, match="no display label mapped for strategy_id='unknown_strategy_xyz'"
-        ),
+        capture_logs() as logs,
     ):
         await monitor._tick()
+
+    notifier.send_plain_message.assert_called_once()
+    text = notifier.send_plain_message.call_args.args[0]
+    assert text == "[unknown_strategy_xyz] DELTA_BREACH: delta breach"
+    fallback_logs = [
+        e for e in logs if e.get("event") == "strategy_monitor.unmapped_label_fallback"
+    ]
+    assert len(fallback_logs) == 1
 
 
 @pytest.mark.asyncio
@@ -1476,6 +1482,45 @@ async def test_event_alert_reference_scenarios() -> None:
         "base\\_ditm\\_call delta 0\\.61 < 0\\.65"
     )
     assert text == expected
+
+
+@pytest.mark.asyncio
+async def test_event_alert_real_strategy_names_survive_without_raise() -> None:
+    """Production strategy names run through the WARN path without raising.
+    Validates STRATEGY_LABELS mapping coverage."""
+    real_names = [
+        "paper_nifty_3track_v1",
+        "paper_nifty_overlay",
+        "paper_ic_nifty_v2_weekly",
+        "paper_ic_nifty_v2_leaps",
+        "paper_ic_nifty_v2_yearly",
+    ]
+
+    for name in real_names:
+        event = SignalEvent(
+            event_type="DUMMY_WARN", severity="WARN", description="test", payload={}
+        )
+        strategy = MockStrategy()
+        strategy.strategy_name = name
+        strategy.check_signals = AsyncMock(return_value=[event])
+
+        store = _make_store()
+        notifier = _make_notifier()
+        monitor = _make_monitor(store=store, notifier=notifier, strategies=[strategy])
+
+        with (
+            patch("src.strategy.monitor.is_trading_day", return_value=True),
+            patch(
+                "src.strategy.monitor.datetime",
+                **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
+            ),
+        ):
+            await monitor._tick()  # Must not raise
+
+        notifier.send_plain_message.assert_called_once()
+        text = notifier.send_plain_message.call_args.args[0]
+        # Must use the new mapped format, not the raw fallback
+        assert text.startswith("⚠️ DUMMY WARN \\- ")
 
 
 # ---------------------------------------------------------------------------
