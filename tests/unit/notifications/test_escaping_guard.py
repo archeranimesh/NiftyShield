@@ -206,7 +206,7 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
     ),
     (
         "scripts/position_health_check.py",
-        135,
+        151,
     ): "ROLL-12 - format confirmed, real code not yet migrated",
     (
         "scripts/strategies/three_track/paper_3track_entry.py",

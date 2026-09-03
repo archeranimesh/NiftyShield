@@ -80,8 +80,8 @@ def test_run_position_checks_flags_roll_overdue(db_path: Path) -> None:
 
     assert has_issue is True
     assert len(findings) == 1
-    assert "ROLL_OVERDUE" in findings[0]
-    assert _OPEN_KEY in findings[0]
+    assert findings[0].finding_type == "roll_overdue"
+    assert findings[0].instrument_key == _OPEN_KEY
 
 
 def test_run_position_checks_flags_unresolved_instrument(db_path: Path) -> None:
@@ -93,7 +93,7 @@ def test_run_position_checks_flags_unresolved_instrument(db_path: Path) -> None:
 
     assert has_issue is True
     assert len(findings) == 1
-    assert "UNRESOLVED_INSTRUMENT" in findings[0]
+    assert findings[0].finding_type == "unresolved_instrument"
 
 
 def test_run_position_checks_skips_closed_legs(db_path: Path) -> None:

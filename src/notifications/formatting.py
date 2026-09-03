@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
+from typing import Literal
 
 
 def format_money(value: Decimal, *, signed: bool = False) -> str:
@@ -572,3 +573,34 @@ def strategy_short_label(strategy_id: str) -> str:
         return STRATEGY_SHORT_LABELS[strategy_id]
     except KeyError:
         raise ValueError(f"no short label mapped for strategy_id={strategy_id!r}") from None
+
+
+FindingType = Literal["roll_overdue", "unresolved_instrument"]
+
+
+@dataclass(frozen=True)
+class PositionFinding:
+    """Structured equivalent of one entry in a position health check.
+
+    finding_type: "roll_overdue" or "unresolved_instrument".
+    strategy_name: Strategy identifier (e.g. "paper_csp_nifty_v1").
+    leg_role: Role of the leg in the strategy (e.g. "short_put").
+    instrument_key: Raw broker key.
+    net_qty: Open quantity (signed, negative means short).
+    expiry_str: Expiry date string (YYYY-MM-DD), if applicable.
+    days_overdue: Days past expiry, if applicable.
+    underlying_symbol: Underlying token symbol, if resolved.
+    strike_price: Strike price, if resolved.
+    instrument_type: e.g. "CE", "PE", "FUT", if resolved.
+    """
+
+    finding_type: FindingType
+    strategy_name: str
+    leg_role: str
+    instrument_key: str
+    net_qty: int
+    expiry_str: str | None = None
+    days_overdue: int | None = None
+    underlying_symbol: str | None = None
+    strike_price: float | None = None
+    instrument_type: str | None = None

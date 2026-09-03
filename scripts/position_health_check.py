@@ -36,6 +36,7 @@ import structlog
 
 from src.config import settings
 from src.instruments.lookup import InstrumentLookup, parse_expiry
+from src.notifications.formatting import PositionFinding
 from src.notifications.telegram import build_notifier
 from src.paper.constants import DEFAULT_BOD_PATH
 from src.paper.store import PaperStore
@@ -47,7 +48,7 @@ logger = structlog.get_logger(_SCRIPT_NAME)
 
 def run_position_checks(
     store: PaperStore, lookup: InstrumentLookup, today: date
-) -> tuple[bool, list[str]]:
+) -> tuple[bool, list[PositionFinding]]:
     """Scan every open leg across every strategy for roll/resolution staleness.
 
     Args:
@@ -60,7 +61,7 @@ def run_position_checks(
         clean pass — never returns raw position rows, only pre-aggregated
         finding strings (Rule 1).
     """
-    findings: list[str] = []
+    findings: list[PositionFinding] = []
 
     for strategy_name in store.get_strategy_names():
         for position in store.get_positions(strategy_name):
@@ -70,8 +71,13 @@ def run_position_checks(
             inst = lookup.get_by_key(position.instrument_key)
             if inst is None:
                 findings.append(
-                    f"❌ UNRESOLVED_INSTRUMENT: {strategy_name}/{position.leg_role} "
-                    f"key={position.instrument_key} net_qty={position.net_qty}"
+                    PositionFinding(
+                        finding_type="unresolved_instrument",
+                        strategy_name=strategy_name,
+                        leg_role=position.leg_role,
+                        instrument_key=position.instrument_key,
+                        net_qty=position.net_qty,
+                    )
                 )
                 continue
 
@@ -83,9 +89,18 @@ def run_position_checks(
             if expiry_date < today:
                 days_overdue = (today - expiry_date).days
                 findings.append(
-                    f"❌ ROLL_OVERDUE: {strategy_name}/{position.leg_role} "
-                    f"key={position.instrument_key} expiry={expiry_str} "
-                    f"({days_overdue}d overdue) net_qty={position.net_qty}"
+                    PositionFinding(
+                        finding_type="roll_overdue",
+                        strategy_name=strategy_name,
+                        leg_role=position.leg_role,
+                        instrument_key=position.instrument_key,
+                        net_qty=position.net_qty,
+                        expiry_str=expiry_str,
+                        days_overdue=days_overdue,
+                        underlying_symbol=inst.get("underlying_symbol"),
+                        strike_price=inst.get("strike"),
+                        instrument_type=inst.get("instrument_type"),
+                    )
                 )
 
     return bool(findings), findings
@@ -125,7 +140,7 @@ async def main() -> int:
     has_issue, findings = run_position_checks(store, lookup, today)
 
     if has_issue:
-        alert_body = "\n".join(findings)
+        alert_body = "\n".join(str(f) for f in findings)
         alert_msg = f"⚠️ NiftyShield Position Health — {today.isoformat()}\n{alert_body}"
 
         logger.warning("position_health_check_failed", finding_count=len(findings))
