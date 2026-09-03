@@ -162,6 +162,10 @@ this file's Session Log grows large again.
   runs as a fresh `general-purpose` subagent reading the transcript by path, never a `fork`
   clone. Measured ~55% drop (116,375 → 52,523 tokens) on a matched session; fork's median
   cost across 9 sessions was ~254K. SHA: `03d991f`.
+- **2026-09-03** — `docs/plan/token-efficiency/fixed-overhead/` FIX-4 (closes the story):
+  `scripts/dev/graph_snippet.py` wraps `get_code_snippet` to strip the unused `fp`/`sp`/`bt`
+  fields — ~244 tok/call (−20%), ~730–2,200 tok/code-session. Rule 0 points at it. Upstream
+  compact-mode issue owed (agent classifier-blocked from filing). SHA: `1b64d4a`.
 
 ### 2026-09-02
 

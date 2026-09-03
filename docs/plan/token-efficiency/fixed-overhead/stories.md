@@ -323,7 +323,7 @@ extraction, not conversation length.
 
 **Commit:** `chore(graph): strip unused fingerprint fields from MCP snippet results`
 
-**As-built (SHA `<pending>`):**
+**As-built (SHA `1b64d4a`):**
 
 **Only `get_code_snippet` is affected.** A captured `search_graph` result carries none of
 `fp` / `sp` / `bt` — it returns `name` / `qualified_name` / `label` / `file_path` /

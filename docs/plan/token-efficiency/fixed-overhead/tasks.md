@@ -4,7 +4,7 @@ Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task
 See `prompt.md` for why the story exists and its hard constraints; see `stories.md` for the
 per-task implementation spec. Every task's As-built records a measured token delta.
 
-**Open: FIX-4 (next).**
+**Story complete — FIX-1..FIX-4 all closed.**
 
 FIX-1..FIX-4 are independent of each other — the `prompt.md` order is a suggested sequence,
 not a hard dependency. Do not start any before `measurement/` is complete (the As-built
@@ -16,8 +16,8 @@ delta needs `token_audit.py`).
       Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: ce45719
 - [x] **FIX-3** — Redesign `session-close` skill to run as a transcript-reading subagent (reads the JSONL by path, no `fork` context clone); As-built records the measured per-session saving |
       Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 03d991f
-- [ ] **FIX-4** — Strip `fp`/`sp`/`bt` fingerprint fields from `codebase-memory-mcp` `get_code_snippet` / `search_graph` results via a thin wrapper; file the upstream issue |
-      Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: <—>
+- [x] **FIX-4** — Strip `fp`/`sp`/`bt` fingerprint fields from `codebase-memory-mcp` `get_code_snippet` / `search_graph` results via a thin wrapper; file the upstream issue |
+      Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 1b64d4a
 
 ## Story done when
 
