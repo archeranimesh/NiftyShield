@@ -42,7 +42,7 @@ Cross-references use folder names, never list positions, so renumbering can't ro
 4. **Greeks Black-Scholes fallback** — `docs/plan/greeks-bs-fallback/` — next **GF-1**
    (read-only audit scope).
 5. **Telegram Markdown migration** — `docs/plan/telegram-markdown-migration/` — next
-   **ROLL-6** (`strategy-rollout/`, migrate EOD Paper Summary).
+   **ROLL-11** (`strategy-rollout/`, migrate System Healthcheck alert).
    `backbone/` + `formatting-rules/` sub-stories closed.
    Supersedes the retired `telegram-ic-comparison-formatting/` — TGFMT-1 shipped, TGFMT-2..9
    folded here; its Legs-row + Bkd/Flt inception-split asks live in `strategy-rollout/` ROLL-2.
@@ -736,3 +736,7 @@ this file's Session Log grows large again.
   MarkdownV2 two-layout format + closed-leg realized P&L; promoted
   `format_money(signed=)` + `STRATEGY_SHORT_LABELS` into `formatting.py`. `strategy-rollout/`
   next: ROLL-10.
+- [2026-09-03] ROLL-10 shipped (`a94eef3`) — proxy delta CRITICAL alert (dev 3-track
+  snapshot) → confirmed 3-line MarkdownV2 block; `escape_markdown()` over the signed delta +
+  verbatim `proxy_delta_alert`; plumbed `TrackSnapshot.consecutive_days` for a future
+  structured layout. `strategy-rollout/` next: ROLL-11.
