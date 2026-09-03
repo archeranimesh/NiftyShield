@@ -170,12 +170,12 @@ this file's Session Log grows large again.
   `suggestions.md` rows into 7 groups (6 rows added since story authoring folded in) with a
   fix / enforce / accept outcome each — 23 land a structural fix or hook/preflight enforce,
   17 accepted with a reason. Cluster map in the SWEEP-1 As-built; ownership matches the
-  SWEEP-2..SWEEP-7 split. Docs-only. SHA: `<pending>`.
+  SWEEP-2..SWEEP-7 split. Docs-only. SHA: `622465c`.
 - **2026-09-03** — `docs/plan/token-efficiency/suggestions-sweep/` SWEEP-2: two warn-only
   `PreToolUse` hooks — `check_repeat_read.py` (2nd `Read` of an unedited path) and
   `check_wide_grep.py` (unscoped `grep`/`sed`/`awk` over an >800-line file / unfiltered
   recursive grep), 56 tests. Rule 0 + Rule 1 pointer lines in `CLAUDE.md`/`AGENTS.md`; two
-  fix-by-text lines in `/work`. Cluster-1's 12 rows closed. SHA: `<pending>`.
+  fix-by-text lines in `/work`. Cluster-1's 12 rows closed. SHA: `68683cb`.
 - **2026-09-03** — `docs/plan/token-efficiency/suggestions-sweep/` SWEEP-3: warn-only
   `PreToolUse(Bash)` hook `check_inline_full_suite.py` nudges `@test-runner` for a bare
   main-session `pytest tests/unit/` run, 12 tests. `test-runner` AutoTrigger cadence amended

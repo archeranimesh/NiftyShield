@@ -55,7 +55,7 @@ this story was authored.
 
 **Commit:** `docs(plan): cluster the suggestions.md backlog for the sweep`
 
-**As-built (SHA `<pending>` — backfilled next doc-touch per `sha-recorded-via-second-commit`):**
+**As-built (SHA `622465c`):**
 
 **40 rows** clustered (`suggestions.md` lines 9–48), each into exactly one of 7 clusters. No
 row resisted clustering. Six rows added since this story was authored are folded in below and
@@ -82,7 +82,7 @@ when it happens · **accept** = stays model-discipline, reason given.
 | skill-file-path-assumed-global | 1 | accept | skills are repo-local `.claude/skills/`; fold a line into `/work` (spec-directed) |
 | heredoc-rewrite-echoes-whole-file-back `[new]` | 1 | accept | prefer targeted `sed -i`/`python3` replace over `cat > file <<EOF`; edit-technique discipline, reinforce in SWEEP-2 text |
 
-**Closed by SWEEP-2 (SHA `<pending>`):** all 12 rows. `enforce` — `reread-file-already-in-context`,
+**Closed by SWEEP-2 (SHA `68683cb`):** all 12 rows. `enforce` — `reread-file-already-in-context`,
 `wide-grep-dump-then-page` (new hooks `check_repeat_read.py` / `check_wide_grep.py`, warn-only).
 `enforce` deferred to SWEEP-4 — `md-hook-backlog-not-checked-before-edit` (staged md-line-length
 in `commit_preflight.py`). `fix`-by-text — `clarify-questions-before-context-gather` +
@@ -211,7 +211,7 @@ crosses Count 5.
 
 **Commit:** `feat(hooks): warn on repeat reads and unscoped wide greps`
 
-**As-built (SHA `<pending>`):** Two warn-only `PreToolUse` hooks landed:
+**As-built (SHA `68683cb`):** Two warn-only `PreToolUse` hooks landed:
 `scripts/dev/hooks/check_repeat_read.py` (+ `.claude/hooks/repeat_read.sh`, registered on
 `Read|Edit|Write`) tracks read paths in a PID-scoped `/tmp` file and warns on a 2nd `Read` with
 no intervening `Edit`/`Write`; `scripts/dev/hooks/check_wide_grep.py` (+
