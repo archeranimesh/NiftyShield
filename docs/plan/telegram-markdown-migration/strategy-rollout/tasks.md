@@ -5,7 +5,7 @@ carries an **As-built** paragraph there (split history, review-gate detail, phas
 
 Sequenced by risk: informational messages first, live position-event notifications next, auth-sensitive interactive messages last.
 
-**Open: ROLL-8 (next), ROLL-9, ROLL-10, ROLL-11, ROLL-12, ROLL-13, ROLL-14, ROLL-15, ROLL-16, ROLL-17, ROLL-5.**
+**Open: ROLL-9 (next), ROLL-10, ROLL-11, ROLL-12, ROLL-13, ROLL-14, ROLL-15, ROLL-16, ROLL-17, ROLL-5.**
 
 > **Routing:** `Owner` = who implements (`Claude` = judgment-call, `Antigravity` = mechanical with an unambiguous spec). `Model` = model the owner runs at. `Review` = the AutoTrigger gate; where
 > `stories.md` says "real `@code-reviewer`, Opus" the real subagent is mandatory, not a persona approximation (financial-logic close-notification / P&L-rendering paths). **Blocked by:** ROLL-1 needs
@@ -42,8 +42,8 @@ Sequenced by risk: informational messages first, live position-event notificatio
       claude-sonnet-5 | Review: code-reviewer | SHA: 2471f01
 - [x] **ROLL-7** — Migrate re-entry blocked/eligible notice (`ReEntryMixin._check_reentry`); refactor `blocked_reason` → `(short_reason, detail)` + new `STRATEGY_LABELS` / `LEG_ROLE_LABELS` |
       Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: cad8074
-- [ ] **ROLL-8** — Migrate generic strategy WARN alert (`StrategyMonitor._route_event` WARN branch) → compact cause→effect format; reuses ROLL-7's tables, fixed `⚠️` | Owner: Antigravity | Model:
-      n/a | Review: none | SHA: <—>
+- [x] **ROLL-8** — Migrate generic strategy WARN alert (`StrategyMonitor._route_event` WARN branch) → compact cause→effect format; reuses ROLL-7's tables, fixed `⚠️` | Owner: Antigravity | Model:
+      n/a | Review: none | SHA: d6b6476
 - [ ] **ROLL-9** — Migrate three-track base-leg roll notification (`paper_3track_roll._notify_roll`) → two leg-role layouts + closed-leg realized P&L | Owner: Claude | Model: claude-sonnet-5 |
       Review: code-reviewer | SHA: <—>
 - [ ] **ROLL-10** — Migrate Proxy Delta CRITICAL alert (`paper_track_snapshot.py::main` CRITICAL branch) → 3-line emoji format; expose `TrackSnapshot.consecutive_days` | Owner: Claude | Model:

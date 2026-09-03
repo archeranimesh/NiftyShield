@@ -730,3 +730,4 @@ this file's Session Log grows large again.
   **RDO-1**, **RDO-2** — moved verbatim to
   [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md) (2026-08-27 section).
   `git log --oneline` carries the sequence, each commit's `Why:` line the intent.
+- [2026-09-03] migrated ROLL-8 WARN event alert format (d6b6476)

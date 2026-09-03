@@ -40,7 +40,7 @@ P3: Greeks/parity validation (council-gated), golden tests, suppression hygiene.
 Priority + dependencies in the epic's own `README.md`.
 `telegram-approval-auth-fix/` already shipped (SHA `5cafc3c`).
 
-**`telegram-markdown-migration/`** · 🔄 In progress — `strategy-rollout/` next: **ROLL-8** (ROLL-7 shipped `cad8074`)
+**`telegram-markdown-migration/`** · 🔄 In progress — `strategy-rollout/` next: **ROLL-9** (ROLL-7 shipped `cad8074`)
 Switch all Telegram messaging to `parse_mode=MarkdownV2` via three sequenced sub-stories:
 `backbone/` (parse-mode switch + escaping audit — closed, `57c1c3c`),
 `formatting-rules/` (value/table spec → `FORMATTING.md` — closed, `75cc123`),
