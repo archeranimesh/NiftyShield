@@ -59,7 +59,7 @@ For every step below, mark one of:
 | 3 | Plan stated in one sentence + go-ahead received | | |
 | 3b | Routing decision made: Claude vs Antigravity | | |
 | 4 | Tests written (happy path + edge case per public fn) | | |
-| 4-TR | `@test-runner` spawned (not inline pytest) | | |
+| 4-TR | `@test-runner` spawned once before commit (not inline full suite) | | |
 | 4-CR | `@code-reviewer` spawned before commit | | |
 | 4-GA | `@greeks-analyst` spawned (if `src/paper/` or Greeks touched) | | |
 | 4-RV | `@roll-validator` spawned (if roll logic touched) | | |
@@ -77,7 +77,8 @@ For every step below, mark one of:
 
 **Mark VIOLATION when:**
 - A `src/` file was `Read` without a prior graph query for the same symbol
-- pytest was run inline via bash instead of spawning `@test-runner`
+- the full unit suite was run inline via bash instead of spawning `@test-runner` for the
+  once-per-task green run (a narrow scoped `pytest <dir>` mid-dev is fine)
 - Commit was made without spawning `@code-reviewer` on financial logic, or without persona adoption + `REVIEW.md` on non-financial logic
 - Step 3 was skipped — implementation started immediately after CONTEXT.md read with no plan stated
 - SHA was not confirmed after commit (commit skill Step 5c skipped)
@@ -301,7 +302,7 @@ If no violations and no token issues: output "Clean session." and omit empty sec
 | 3 | Plan + go-ahead | Any implementation task |
 | 3b | Routing decision | Any implementation task |
 | 4 | Tests written | Any new or changed public function |
-| 4-TR | test-runner spawned | Any code file edited |
+| 4-TR | test-runner spawned once before commit | Any code file edited |
 | 4-CR | code-reviewer spawned | Any commit touching code |
 | 4-GA | greeks-analyst spawned | `src/paper/`, option chain, or Greeks fields touched |
 | 4-RV | roll-validator spawned | Roll logic or `scripts/roll_leg.py` touched |

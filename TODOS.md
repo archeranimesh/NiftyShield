@@ -176,6 +176,11 @@ this file's Session Log grows large again.
   `check_wide_grep.py` (unscoped `grep`/`sed`/`awk` over an >800-line file / unfiltered
   recursive grep), 56 tests. Rule 0 + Rule 1 pointer lines in `CLAUDE.md`/`AGENTS.md`; two
   fix-by-text lines in `/work`. Cluster-1's 12 rows closed. SHA: `<pending>`.
+- **2026-09-03** — `docs/plan/token-efficiency/suggestions-sweep/` SWEEP-3: warn-only
+  `PreToolUse(Bash)` hook `check_inline_full_suite.py` nudges `@test-runner` for a bare
+  main-session `pytest tests/unit/` run, 12 tests. `test-runner` AutoTrigger cadence amended
+  to "once per task before `code-reviewer` / the commit — not per-edit" in
+  `CLAUDE.md`/`AGENTS.md`/`session-close`. Cluster-2's 2 rows closed. SHA: `<pending>`.
 
 ### 2026-09-02
 

@@ -99,6 +99,13 @@ discipline. `accept` (batch-your-reads model discipline, no clean hook) —
 | pytest-inlined-not-test-runner | 9 | enforce | `check_inline_full_suite.py` nudges `@test-runner`; AutoTrigger cadence amended to "once before commit" |
 | full-suite-run-for-docs-only-change | 1 | enforce | same hook — for a docs/tooling change it points at the targeted hook-test dir |
 
+**Closed by SWEEP-3 (SHA `<pending>`):** both rows. `check_inline_full_suite.py` +
+`.claude/hooks/inline_full_suite.sh` (registered on `Bash`) warn-only when the main session
+runs a bare `pytest tests/unit/` with no `-k`/`-m`/path/node-id narrowing, and point a
+docs/tooling change at the targeted dir. AutoTrigger `test-runner` row amended in `CLAUDE.md`
++ `AGENTS.md` to "once per task, before `code-reviewer` / the commit — not per-edit";
+`session-close` checklist rows 4-TR updated to match.
+
 ### Cluster 3 — Commit flow & pre-commit → SWEEP-4 (12 rows)
 
 | Slug | Count | Outcome | Note |
@@ -264,8 +271,30 @@ real measurement.
 
 **Commit:** `feat(hooks): nudge test-runner for inline full-suite pytest`
 
-**As-built (SHA `<—>`):** _record: the AutoTrigger cadence before/after, and an estimate of
-`test-runner` spawns saved per multi-edit task × ~30K each._
+**As-built (SHA `<pending>`):** New warn-only `PreToolUse(Bash)` hook
+`scripts/dev/hooks/check_inline_full_suite.py` (+ `.claude/hooks/inline_full_suite.sh`,
+registered in `.claude/settings.json`) fires when a command runs `pytest` / `python -m pytest`
+against `tests/unit` / `tests/` / no path, with no `-k` / `-m` / specific file / `::` node id
+/ `--lf` narrowing (`./`-prefixed paths normalised) — message points at `@test-runner` and,
+for a docs/tooling change, at the targeted dir. Exit 0 always. 14 tests in
+`tests/unit/scripts/dev/hooks/test_check_inline_full_suite.py`. The hook has no reliable
+main-vs-subagent signal, so a `@test-runner` subagent's own full-suite run also sees the line
+— harmless warn-only noise, noted here.
+
+AutoTrigger cadence — **before:** "`test-runner` (Haiku) | After any code file is edited,
+before code-reviewer" (read as per-edit — the ROLL-7 session spawned it 3× as the diff grew).
+**After:** "Once per task, after code files are edited and before `code-reviewer` / the commit
+— not per-edit", with a paragraph making "one authoritative green run per task" explicit.
+Mirrored in `CLAUDE.md`, `AGENTS.md`, and the `session-close` checklist (rows 4-TR + the
+VIOLATION rule).
+
+Measured delta: baseline (epic `README.md`) — `subagent_internal` median 367K/session;
+`pytest-inlined-not-test-runner` Count 9. The ROLL-7 audit attributes ~99K to 3 `test-runner`
+spawns (~33K each). Collapsing to one spawn per task saves ~2 × 33K ≈ **66K account-side per
+multi-edit task** that previously re-ran the agent per edit; on single-edit tasks the cadence
+change is a no-op. The inline-run hook itself is warn-only, so its realised saving depends on
+the model heeding it (routing the run into the Haiku subagent instead of the main loop) — the
+epic's post-hook `token_audit.py` re-run (Perspectives not covered) is the real measurement.
 
 ---
 

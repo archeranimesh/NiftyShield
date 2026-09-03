@@ -65,6 +65,10 @@
           {
             "type": "command",
             "command": ".claude/hooks/wide_grep.sh"
+          },
+          {
+            "type": "command",
+            "command": ".claude/hooks/inline_full_suite.sh"
           }
         ]
       }

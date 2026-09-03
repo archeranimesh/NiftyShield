@@ -253,7 +253,7 @@ real agent run nor a human review having occurred.
 
 | Agent | Trigger condition | Blocking? |
 |---|---|---|
-| `test-runner` (Haiku) | After any code file is edited, before code-reviewer | **Yes** — must pass before proceeding |
+| `test-runner` (Haiku) | Once per task, after code files are edited and before `code-reviewer` / the commit — not per-edit | **Yes** — must pass before proceeding |
 | `code-reviewer` (Opus) | Before every commit touching code | **Yes** — CRITICAL/ERROR findings must resolve |
 | `greeks-analyst` (Sonnet) | Any change to `src/paper/`, option chain parsing, or delta/gamma fields | **Yes** |
 | `roll-validator` (Opus) | Any change to roll logic or `scripts/roll_leg.py` invocation | **Yes** |
@@ -262,6 +262,11 @@ real agent run nor a human review having occurred.
 **"Blocking"** means the next protocol step does not proceed until the review returns clean.
 For `code-reviewer`: any `CRITICAL` or `ERROR` finding must be resolved; `WARNING` may be
 deferred with a documented reason in the commit message.
+
+`test-runner` runs **once** — one authoritative green run per task, spawned when the edits are
+done, not after each intermediate edit. Running `pytest tests/unit/` inline in the main
+session instead of spawning the agent is flagged by `inline_full_suite.sh` (warn-only). For a
+docs/tooling-only change, gate on the targeted test dir rather than the full suite.
 
 **Financial logic commits** (Greeks, P&L, Decimal paths, BrokerClient boundaries): a real
 `@code-reviewer` subagent run by a Claude session is mandatory — a persona approximation is
