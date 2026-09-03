@@ -1073,6 +1073,19 @@ get_code_snippet("test_run_checks_all_pass")   # confirm existing test's assumpt
 
 **Commit:** `feat(scripts): migrate healthcheck alert to Markdown grouped status format`
 
+**As-built (SHA `1336b93`, 2026-09-03, Claude / claude-sonnet-5, `Review: none` — not a financial-logic path).** Shipped as specced with two deviations, both within the spec's own
+"colocate-then-promote" latitude:
+
+- **6 checks, not 5.** The live `run_checks()` had gained a `paper_3track_snapshot` cron-crash check (BUG-029 / B029.5) after this spec was written. Folded into the same model —
+  `_check_3track_snapshot_cron()` now returns a `CheckResult` (label `3track Cron`) instead of `tuple[bool, str]`.
+- **`CheckResult` + `build_healthcheck_alert()` colocated in `scripts/healthcheck.py`**, not promoted to `src/notifications/formatting.py` — the `DEGRADED` / `🚨 ACTION REQUIRED` /
+  `✅ SYSTEMS NORMAL` grouped shape is entirely healthcheck-specific, nothing reusable for other families. `escape_markdown` imported from `src/notifications/markdown.py`.
+
+`run_checks()` return type is now `list[CheckResult]` (the `has_issue` bool dropped; `main()` derives it via `any(r.severity != "ok" ...)`). Status words: `MISSING` / `SKIPPED` / `STALE` /
+`ERROR` / `LOW` / `INACCESSIBLE` / `NO LOG` / `NO RUN` / `CRASHED`. Guard baseline entry moved to the new send line (`scripts/healthcheck.py:324`) with the standard "escaped inside the callee"
+reason, matching ROLL-6 / ROLL-9 / ROLL-10. 14 tests in `tests/unit/test_healthcheck.py` (8 new per the spec list, 6 updated for the return-type change); not exercised via a live `--send`
+round-trip — the reference script's format is carried as-confirmed.
+
 ---
 
 ## ROLL-12 — Position Health Check Alert

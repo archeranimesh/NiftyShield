@@ -740,3 +740,9 @@ this file's Session Log grows large again.
   snapshot) → confirmed 3-line MarkdownV2 block; `escape_markdown()` over the signed delta +
   verbatim `proxy_delta_alert`; plumbed `TrackSnapshot.consecutive_days` for a future
   structured layout. `strategy-rollout/` next: ROLL-11.
+- [2026-09-03] ROLL-11 shipped (`1336b93`) — system healthcheck alert (`healthcheck.py`) →
+  grouped severity-status MarkdownV2 block (`NIFTYSHIELD: DEGRADED` / `🚨 ACTION REQUIRED` /
+  `✅ SYSTEMS NORMAL`); refactored `run_checks()` → `list[CheckResult]` (frozen dataclass) and
+  `_check_3track_snapshot_cron()` → `CheckResult`, dropping the pre-formatted `✅/❌/⚠️`
+  strings; `build_healthcheck_alert()` colocated in `healthcheck.py`. 8 new tests, 6 updated.
+  `strategy-rollout/` next: ROLL-12.

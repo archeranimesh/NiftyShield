@@ -5,7 +5,7 @@ carries an **As-built** paragraph there (split history, review-gate detail, phas
 
 Sequenced by risk: informational messages first, live position-event notifications next, auth-sensitive interactive messages last.
 
-**Open: ROLL-11 (next), ROLL-12, ROLL-13, ROLL-14, ROLL-15, ROLL-16, ROLL-17, ROLL-5.**
+**Open: ROLL-12 (next), ROLL-13, ROLL-14, ROLL-15, ROLL-16, ROLL-17, ROLL-5.**
 
 > **Routing:** `Owner` = who implements (`Claude` = judgment-call, `Antigravity` = mechanical with an unambiguous spec). `Model` = model the owner runs at. `Review` = the AutoTrigger gate; where
 > `stories.md` says "real `@code-reviewer`, Opus" the real subagent is mandatory, not a persona approximation (financial-logic close-notification / P&L-rendering paths). **Blocked by:** ROLL-1 needs
@@ -48,8 +48,8 @@ Sequenced by risk: informational messages first, live position-event notificatio
       Review: code-reviewer | SHA: 1e270de
 - [x] **ROLL-10** — Migrate Proxy Delta CRITICAL alert (`paper_track_snapshot.py::main` CRITICAL branch) → 3-line emoji format; expose `TrackSnapshot.consecutive_days` | Owner: Claude | Model:
       claude-sonnet-5 | Review: none | SHA: a94eef3
-- [ ] **ROLL-11** — Migrate System Healthcheck alert (`healthcheck.py::main`) → grouped severity-status format; refactor `run_checks()` → structured `CheckResult` | Owner: Claude | Model:
-      claude-sonnet-5 | Review: none | SHA: <—>
+- [x] **ROLL-11** — Migrate System Healthcheck alert (`healthcheck.py::main`) → grouped severity-status format; refactor `run_checks()` → structured `CheckResult` | Owner: Claude | Model:
+      claude-sonnet-5 | Review: none | SHA: 1336b93
 - [ ] **ROLL-12** — Migrate Position Health check alert (`position_health_check.py::main`) → grouped-by-finding-type; refactor to `PositionFinding`, reuse ROLL-7's tables | Owner: Antigravity |
       Model: n/a | Review: none | SHA: <—>
 - [ ] **ROLL-13** — Migrate 3-track base entry bootstrap notification (`paper_3track_entry.py::main`) → per-leg emoji kv with resolved instrument labels | Owner: Antigravity | Model: n/a | Review:
