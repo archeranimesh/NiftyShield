@@ -22,7 +22,10 @@ graph when it can answer the question wastes tokens and violates this protocol.
    any code at all.
    `git show <sha>` for full diff; `git log --oneline -20` for recent session history.
    **Run this before the graph for any question about intent or recent change.**
-1. Need a symbol/function? → `search_graph(query=...)` or `get_code_snippet(qualified_name)`
+1. Need a symbol/function? → `search_graph(query=...)`, then
+   `bash python -m scripts.dev.graph_snippet <qualified_name>` — a thin wrapper that
+   strips the `fp`/`sp`/`bt` fingerprint fields (~244 tokens/call) the raw
+   `get_code_snippet` MCP tool returns unused (`--neighbors` and `--project` pass through).
 2. Need callers/callees? → `trace_path(function_name)`
 3. Need a grep? → `search_code(pattern)`
 4. Need a specific block? → `bash sed -n 'N,Mp' <file>` (cheaper than `Read` on the whole file)

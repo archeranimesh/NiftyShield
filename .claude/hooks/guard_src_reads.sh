@@ -35,7 +35,7 @@ if echo "$FILE_PATH" | grep -qE '/(src|scripts)/'; then
 ⛔ PROTOCOL REMINDER — Read on src/ or scripts/ detected.
 
 Decision tree (CLAUDE.md §Step 1):
-  1. Need a symbol/function?   → search_graph or get_code_snippet
+  1. Need a symbol/function?   → search_graph, then python -m scripts.dev.graph_snippet
   2. Need callers/callees?     → trace_path
   3. Need a grep?              → search_code
   4. Need a specific line?     → bash sed -n 'N,Mp' <file>  (cheaper than Read)

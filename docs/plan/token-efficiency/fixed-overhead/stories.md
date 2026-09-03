@@ -323,6 +323,45 @@ extraction, not conversation length.
 
 **Commit:** `chore(graph): strip unused fingerprint fields from MCP snippet results`
 
-**As-built (SHA `<—>`):** _record: tokens per call before/after, a typical per-session
-`get_code_snippet` + `search_graph` call count from the Baseline, the resulting per-session
-saving, and the upstream issue link._
+**As-built (SHA `<pending>`):**
+
+**Only `get_code_snippet` is affected.** A captured `search_graph` result carries none of
+`fp` / `sp` / `bt` — it returns `name` / `qualified_name` / `label` / `file_path` /
+`start_line` / `end_line` / `rank` only. So FIX-4 is a `get_code_snippet` fix; the `search_graph`
+half of the task title is a no-op, confirmed by inspection.
+
+**No server-side field filter exists.** `codebase-memory-mcp config` (v0.6.0) exposes only
+`auto_index` / `auto_index_limit`; `get_code_snippet`'s params are `qualified_name` /
+`project` / `include_neighbors`. So spec step 2 applies: a thin wrapper.
+
+**Measured per-call delta** (real `get_code_snippet` on
+`src.risk.delta_tracker.PortfolioDeltaTracker.aggregate_delta`, via the MCP CLI):
+
+| | chars | ~tokens |
+|---|--:|--:|
+| full result | 5,005 | 1,251 |
+| `fp` (512-char hex fingerprint) | 512 | 128 |
+| `bt` (identifier bag) | 382 | 95 |
+| `sp` (shape vector) | 54 | 13 |
+| **stripped result** | **4,027** | **1,006** |
+| **saving / call** | **978** | **~244 (−20%)** |
+
+**Per-session saving.** `get_code_snippet` calls in recent code-touching transcripts: `3dcf60ee`
+(ROLL-7) 3, `5b1c99ee` 5, `8b7e3dba` 9. At ~244 tok/call that is **~730–2,200 tokens per code
+session**, and — because each result stays in the context prefix — that saving is re-paid
+(at cache-read rate) on every subsequent turn, which is the fixed-overhead cost class this
+story targets. Docs-only sessions make 0–1 such calls and save nothing, as expected.
+
+**Wrapper shape chosen.** `scripts/dev/graph_snippet.py` — shells out to the server's own
+`codebase-memory-mcp cli get_code_snippet`, deletes the three keys via a pure
+`strip_fingerprint_fields()` helper, prints indented JSON on stdout. No structlog logger
+(stdout is the CLI output contract, matching `reflow_md.py`). `--neighbors` / `--project`
+pass through. Rule 0 step 1 in `CLAUDE.md` + `AGENTS.md` now points here; the raw MCP tool
+stays available. Tests: `tests/unit/scripts/dev/test_graph_snippet.py` — strips fields /
+preserves `source`+`signature`+`docstring`+`callers` / no-op when fields absent (3 tests,
+offline, the pure helper only).
+
+**Upstream issue.** Drafted against `github.com/DeusData/codebase-memory-mcp` requesting a
+`compact` / `fields` mode (body: the 244-tok/20% measurement + the workaround). Filing was
+blocked for the agent by the outward-action classifier — **owed: Animesh runs `gh issue
+create` or approves it; link to be appended here.**
