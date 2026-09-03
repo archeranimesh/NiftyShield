@@ -1384,7 +1384,7 @@ async def test_event_alert_unmapped_strategy_falls_back() -> None:
 
     notifier.send_plain_message.assert_called_once()
     text = notifier.send_plain_message.call_args.args[0]
-    assert text == "[unknown_strategy_xyz] DELTA_BREACH: delta breach"
+    assert text == "\\[unknown\\_strategy\\_xyz\\] DELTA\\_BREACH: delta breach"
     fallback_logs = [
         e for e in logs if e.get("event") == "strategy_monitor.unmapped_label_fallback"
     ]
