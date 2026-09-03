@@ -615,12 +615,15 @@ def _direction_and_qty(net_qty: int) -> tuple[str, int]:
 
 
 def _resolved_label(f: PositionFinding) -> str:
+    expiry_fmt = format_expiry(date.fromisoformat(f.expiry_str))
+
     if f.instrument_type == "FUT":
-        return f"{f.underlying_symbol} FUT"
+        return f"{f.underlying_symbol} FUT ({expiry_fmt})"
+
     label = format_option_label(
         f.underlying_symbol, f.strike_price, f.instrument_type, f.expiry_str
     )
-    return f"{f.underlying_symbol} {label.split()[1]} {f.instrument_type}"
+    return f"{label[:-10]} ({expiry_fmt})"
 
 
 def _unknown_token(instrument_key: str) -> str:
@@ -643,12 +646,9 @@ def build_position_health_message(findings: list[PositionFinding]) -> str:
             direction, qty = _direction_and_qty(f.net_qty)
             strat_label = escape_markdown(strategy_label(f.strategy_name))
             instrument = escape_markdown(_resolved_label(f))
-            expiry = escape_markdown(
-                f"({date.fromisoformat(f.expiry_str).strftime('%d %b %y').upper().lstrip('0')})"
-            )
             lines.append(
                 f"🚨 {f.days_overdue}d LATE: {escape_markdown('[')}{strat_label}"
-                f"{escape_markdown(']')} {direction} {qty}x {instrument} {expiry}"
+                f"{escape_markdown(']')} {direction} {qty}x {instrument}"
             )
         lines.append("")
 

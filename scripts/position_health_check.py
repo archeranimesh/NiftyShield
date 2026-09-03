@@ -98,7 +98,7 @@ def run_position_checks(
                         expiry_str=expiry_str,
                         days_overdue=days_overdue,
                         underlying_symbol=inst.get("underlying_symbol"),
-                        strike_price=inst.get("strike"),
+                        strike_price=inst.get("strike_price"),
                         instrument_type=inst.get("instrument_type"),
                     )
                 )

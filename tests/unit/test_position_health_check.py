@@ -114,3 +114,27 @@ def test_run_position_checks_skips_closed_legs(db_path: Path) -> None:
 
     assert has_issue is False
     assert findings == []
+
+
+def test_integration_run_and_build_with_real_keys(db_path: Path) -> None:
+    from src.notifications.formatting import build_position_health_message
+
+    store = PaperStore(db_path)
+    store.record_trade(_open_sell_trade())
+    lookup = FakeInstrumentLookup(
+        {
+            _OPEN_KEY: {
+                "instrument_type": "PE",
+                "expiry": "2026-06-30",
+                "strike_price": 24000.0,
+                "underlying_symbol": "NIFTY",
+            }
+        }
+    )
+
+    has_issue, findings = run_position_checks(store, lookup, _TODAY)
+
+    assert has_issue is True
+    # The builder will crash if finding lacks strike_price when formatting the label
+    msg = build_position_health_message(findings)
+    assert "NIFTY 24000 PE" in msg
