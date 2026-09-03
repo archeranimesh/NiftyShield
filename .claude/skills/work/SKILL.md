@@ -37,6 +37,13 @@ Otherwise, `AskUserQuestion`:
 - **Question:** "What are we working on?"
 - **Options:** `Feature` (a story under `docs/plan/`) · `Bug` (an entry in `docs/bugs/`)
 
+**Two discipline reminders for this skill:**
+
+- Read the task's target docs *before* the first clarifying question — one consolidated ask
+  covering direction and approach beats asking direction, reading, then asking approach.
+- Skills in this repo are project-local (`.claude/skills/<name>/SKILL.md` under the repo
+  root), never `~/.claude/`. `ls .claude/skills/` before guessing a path.
+
 ---
 
 ## Feature branch

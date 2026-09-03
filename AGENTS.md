@@ -56,6 +56,10 @@ graph when it can answer the question wastes tokens and violates this protocol.
 
 A full file read is the *first* tool only for: markdown files, TOML/YAML config, test fixtures.
 
+A second read of a path already read this session (with no intervening edit) is flagged by
+`.claude/hooks/repeat_read.sh` — edit the copy already in context, or use `get_code_snippet` /
+`sed -n 'N,Mp'` for a specific block.
+
 ---
 
 ## ⛔ Rule 1 — Bash Output Discipline
@@ -70,6 +74,7 @@ window and carried for every subsequent tool call — aggregate at the source, n
 | Diagnostic (which rows have null Greeks?) | Named columns + `LIMIT 10` — never full table dump |
 | Test runs | `pytest --tb=no -q` for pass/fail; full `-v` only when debugging a specific failure |
 | Log reads | `tail -20 logs/snapshot.log` or `grep ERROR` — never `cat` |
+| Discovery `grep`/`sed`/`awk` over a file | Scope with `-c` / `sed -n 'N,Mp'` / `--include` first — an unscoped match over an >800-line file writes a huge result file (`wide_grep.sh` warns) |
 
 Token math: `SELECT *` on a 15-row × 20-column table ≈ 300 tokens that persist all session; a
 `GROUP BY / SUM` summary row ≈ 15 tokens. Reference implementation:

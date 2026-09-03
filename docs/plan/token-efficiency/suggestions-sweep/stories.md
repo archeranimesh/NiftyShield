@@ -82,6 +82,16 @@ when it happens · **accept** = stays model-discipline, reason given.
 | skill-file-path-assumed-global | 1 | accept | skills are repo-local `.claude/skills/`; fold a line into `/work` (spec-directed) |
 | heredoc-rewrite-echoes-whole-file-back `[new]` | 1 | accept | prefer targeted `sed -i`/`python3` replace over `cat > file <<EOF`; edit-technique discipline, reinforce in SWEEP-2 text |
 
+**Closed by SWEEP-2 (SHA `<pending>`):** all 12 rows. `enforce` — `reread-file-already-in-context`,
+`wide-grep-dump-then-page` (new hooks `check_repeat_read.py` / `check_wide_grep.py`, warn-only).
+`enforce` deferred to SWEEP-4 — `md-hook-backlog-not-checked-before-edit` (staged md-line-length
+in `commit_preflight.py`). `fix`-by-text — `clarify-questions-before-context-gather` +
+`skill-file-path-assumed-global` folded into `/work`; `search-graph-broad-query-result-dump`,
+`graph-tools-unused-relied-on-grep` reinforced in the Rule 0 text; `heredoc-rewrite-echoes-whole-file-back`,
+`lint-hook-run-outside-configured-scope` noted here as edit-technique / check-the-`files:`-regex
+discipline. `accept` (batch-your-reads model discipline, no clean hook) —
+`sequential-single-file-section-reads`, `context-md-full-sequential-read`, `sequential-tasks-md-reads`.
+
 ### Cluster 2 — Test-run routing → SWEEP-3 (2 rows)
 
 | Slug | Count | Outcome | Note |
@@ -194,8 +204,29 @@ crosses Count 5.
 
 **Commit:** `feat(hooks): warn on repeat reads and unscoped wide greps`
 
-**As-built (SHA `<—>`):** _record: which cluster-1 rows are fix / enforce / accept, and
-(if measurable) the token drop on a session re-run where the hook would have fired._
+**As-built (SHA `<pending>`):** Two warn-only `PreToolUse` hooks landed:
+`scripts/dev/hooks/check_repeat_read.py` (+ `.claude/hooks/repeat_read.sh`, registered on
+`Read|Edit|Write`) tracks read paths in a PID-scoped `/tmp` file and warns on a 2nd `Read` with
+no intervening `Edit`/`Write`; `scripts/dev/hooks/check_wide_grep.py` (+
+`.claude/hooks/wide_grep.sh`, on `Bash`) warns on an unscoped `grep`/`sed`/`awk` over an
+>800-line file argument, or a recursive `grep` with no `--include`/`--exclude`. Both exit 0
+always. 56 tests in `tests/unit/scripts/dev/hooks/`. Rule 0 gains a repeat-Read pointer line,
+Rule 1's table a wide-grep row; `/work` gains the two `fix`-by-text lines.
+
+Cluster-1 outcomes: see the "Closed by SWEEP-2" block under the cluster map above — 5 enforce
+(2 here + `md-hook-backlog` deferred to SWEEP-4's preflight + the 2 hooks), 4 fix-by-text, 3
+accept.
+
+Measured delta: baseline (epic `README.md`, `token_audit.py` over 5 sessions) —
+`reread-file-already-in-context` cited in 6 of the last ~8 sessions with 2–5 redundant scoped
+Reads each; `tool_results:Read` median 32K/session, up to 67K. A redundant scoped Read of a
+~200-line source region ≈ 2.5–4K tokens; the repeat-Read hook firing on ~3 such Reads/session
+recovers ≈ 8–12K/session on the sessions where it fires. `wide-grep-dump-then-page` (Count 7):
+the two cited incidents wrote a 99KB and a ~2.5K-token result file — the second of which then
+cost a 25K-cap paging Read; catching one such grep/session ≈ 3–25K saved. Both are
+warn-only, so the realised saving depends on the model heeding the warning — the epic's
+"re-run `token_audit.py` on post-hook sessions" follow-up (Perspectives not covered) is the
+real measurement.
 
 ---
 

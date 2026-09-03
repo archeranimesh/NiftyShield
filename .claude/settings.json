@@ -35,6 +35,10 @@
           {
             "type": "command",
             "command": ".claude/hooks/guard_src_reads.sh"
+          },
+          {
+            "type": "command",
+            "command": ".claude/hooks/repeat_read.sh"
           }
         ]
       },
@@ -44,6 +48,10 @@
           {
             "type": "command",
             "command": ".claude/hooks/council_check.sh"
+          },
+          {
+            "type": "command",
+            "command": ".claude/hooks/repeat_read.sh"
           }
         ]
       },
@@ -53,6 +61,10 @@
           {
             "type": "command",
             "command": ".claude/hooks/doc_update_gate.sh"
+          },
+          {
+            "type": "command",
+            "command": ".claude/hooks/wide_grep.sh"
           }
         ]
       }
