@@ -1,63 +1,37 @@
 # NiftyShield — TODOs
 
-> Open work only. Completed items: [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md) | Known defects: [docs/bugs/](docs/bugs/)
-> Related: [CONTEXT.md](CONTEXT.md) | [DECISIONS.md](DECISIONS.md) | [PLANNER.md](PLANNER.md) | [BACKTEST_PLAN.md](BACKTEST_PLAN.md) | [BACKTEST_PLAN_PHASE1.md](BACKTEST_PLAN_PHASE1.md)
->
-> **Task tracking lives in the story folders.** Per-task state is in each story's
-> `docs/plan/<slug>/tasks.md` or `docs/bugs/task.md`. The lists below are **pointers only**
-> — title, path, next unchecked task, one-line why. Full rules:
-> [`docs/plan/README.md`](docs/plan/README.md) §Conventions.
->
-> Two separate lists: **`## Feature Backlog`** (forward spec work, `docs/plan/`) and
-> **`## Open Bugs`** (defects in shipped code, `docs/bugs/`). `/work` routes to one or the
-> other. When a story or bug is fully done its line here is **deleted** (moved to
-> [`docs/archive/TODOS_ARCHIVE.md`](docs/archive/TODOS_ARCHIVE.md)) and its folder moved to
-> `docs/archive/plan/<slug>/` — see §Conventions → *Completion → archive*.
+> Open work only. Completed items: [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md) | Known defects: [docs/bugs/](docs/bugs/) Related: [CONTEXT.md](CONTEXT.md) |
+> [DECISIONS.md](DECISIONS.md) | [PLANNER.md](PLANNER.md) | [BACKTEST_PLAN.md](BACKTEST_PLAN.md) | [BACKTEST_PLAN_PHASE1.md](BACKTEST_PLAN_PHASE1.md) **Task tracking lives in the story folders.**
+> Per-task state is in each story's `docs/plan/<slug>/tasks.md` or `docs/bugs/task.md`. The lists below are **pointers only** — title, path, next unchecked task, one-line why. Full rules:
+> [`docs/plan/README.md`](docs/plan/README.md) §Conventions. Two separate lists: **`## Feature Backlog`** (forward spec work, `docs/plan/`) and **`## Open Bugs`** (defects in shipped code,
+> `docs/bugs/`). `/work` routes to one or the other. When a story or bug is fully done its line here is **deleted** (moved to [`docs/archive/TODOS_ARCHIVE.md`](docs/archive/TODOS_ARCHIVE.md)) and its
+> folder moved to `docs/archive/plan/<slug>/` — see §Conventions → *Completion → archive*.
 
 ---
 
 ## Feature Backlog — Priority Ordered
 
-Forward spec work only — one `docs/plan/` story per line, pointer-only (title · folder ·
-next unchecked task · one-line why).
-Ordered **story-by-story**: finish a story's `tasks.md` in sequence before starting the next
-story here; this list only decides *which story is next*.
-Bugs are **not** here — see `## Open Bugs`.
-Cross-references use folder names, never list positions, so renumbering can't rot them.
+Forward spec work only — one `docs/plan/` story per line, pointer-only (title · folder · next unchecked task · one-line why). Ordered **story-by-story**: finish a story's `tasks.md` in sequence before
+starting the next story here; this list only decides *which story is next*. Bugs are **not** here — see `## Open Bugs`. Cross-references use folder names, never list positions, so renumbering can't
+rot them.
 
-1. **doc-format-migration** — `docs/plan/doc-format-migration/` — next **DFM-1**
-   (`plan-folders/`: enumerate + tier every non-archived `docs/plan/` folder A/B/C/D).
-   Epic: `plan-folders/` (batch-convert legacy folders) → `repo-wide-reflow/` (fill-to-≤200
-   every other `.md`) → `enforcement/` (repo-wide hooks + CI `--all` gate + `/new-story`
-   scaffold). Answers RDO-17.8. Built on `reflow_md.py` (RDO-17.7).
-2. **root-doc-organization** — `docs/plan/root-doc-organization/` — next **RDO-16**
-   (loop-closure check — one real session confirms the doc-freshness mechanism end to end).
-   RDO-11 (≥ 2026-09-03) also open.
-   RDO-17.1..17.7 shipped; 17.8 decided (batch-convert all → the `doc-format-migration/` epic),
-   pending close. 17.7 swept both POC folders + added `reflow_md.py`.
-   Root `.md` token-efficiency cleanup + doc-maintenance automation.
-3. **IC yearly-expiry residual risk** — `docs/plan/ic-yearly-expiry-fix/` — next **WG-1**
-   (persist per-leg Greeks for the weekly-expiry bucket).
-   YE-1..YE-4 superseded / already fixed live — see DECISIONS.md BUG-015.
-4. **Greeks Black-Scholes fallback** — `docs/plan/greeks-bs-fallback/` — next **GF-1**
-   (read-only audit scope).
-5. **Telegram Markdown migration** — `docs/plan/telegram-markdown-migration/` — next
-   **ROLL-11** (`strategy-rollout/`, migrate System Healthcheck alert).
-   `backbone/` + `formatting-rules/` sub-stories closed.
-   Supersedes the retired `telegram-ic-comparison-formatting/` — TGFMT-1 shipped, TGFMT-2..9
-   folded here; its Legs-row + Bkd/Flt inception-split asks live in `strategy-rollout/` ROLL-2.
-6. **MVP: Multi-bagger Value Picks Tracker** — `docs/plan/mvp/` — next **M1.1**.
-   Independent — blocks nothing.
-7. **Variance gate — CSP v1 deployment gate observation** — `docs/plan/variance-gate/` —
-   next **VG0** (spec reconciliation; the remaining tasks are human checkpoints, not build
-   tasks).
+1. **doc-format-migration** — `docs/plan/doc-format-migration/` — next **DFM-1** (`plan-folders/`: enumerate + tier every non-archived `docs/plan/` folder A/B/C/D). Epic: `plan-folders/`
+   (batch-convert legacy folders) → `repo-wide-reflow/` (fill-to-≤200 every other `.md`) → `enforcement/` (repo-wide hooks + CI `--all` gate + `/new-story` scaffold). Answers RDO-17.8. Built on
+   `reflow_md.py` (RDO-17.7).
+2. **root-doc-organization** — `docs/plan/root-doc-organization/` — next **RDO-16** (loop-closure check — one real session confirms the doc-freshness mechanism end to end). RDO-11 (≥ 2026-09-03) also
+   open. RDO-17.1..17.7 shipped; 17.8 decided (batch-convert all → the `doc-format-migration/` epic), pending close. 17.7 swept both POC folders + added `reflow_md.py`. Root `.md` token-efficiency
+   cleanup + doc-maintenance automation.
+3. **IC yearly-expiry residual risk** — `docs/plan/ic-yearly-expiry-fix/` — next **WG-1** (persist per-leg Greeks for the weekly-expiry bucket). YE-1..YE-4 superseded / already fixed live — see
+   DECISIONS.md BUG-015.
+4. **Greeks Black-Scholes fallback** — `docs/plan/greeks-bs-fallback/` — next **GF-1** (read-only audit scope).
+5. **Telegram Markdown migration** — `docs/plan/telegram-markdown-migration/` — next **ROLL-11** (`strategy-rollout/`, migrate System Healthcheck alert). `backbone/` + `formatting-rules/` sub-stories
+   closed. Supersedes the retired `telegram-ic-comparison-formatting/` — TGFMT-1 shipped, TGFMT-2..9 folded here; its Legs-row + Bkd/Flt inception-split asks live in `strategy-rollout/` ROLL-2.
+6. **MVP: Multi-bagger Value Picks Tracker** — `docs/plan/mvp/` — next **M1.1**. Independent — blocks nothing.
+7. **Variance gate — CSP v1 deployment gate observation** — `docs/plan/variance-gate/` — next **VG0** (spec reconciliation; the remaining tasks are human checkpoints, not build tasks).
 8. **Options Income strategy** — `docs/plan/options_income/` — next **S0** (data audit).
-9. **Backtest Engine** — `docs/plan/backtest-engine/` (`phase1..4/`) — next **1.3a / 1.4**
-   (parallel, `phase1/`).
-   Four chained phases; each phase's GATE task blocks the next dir. Gated on `variance-gate`.
-   `BACKTEST_PLAN_PHASE1.md` is the canonical spec; the phase dirs are thin status pointers.
-10. **backtest-eval-core** — `docs/plan/backtest-eval-core/` — next **B1.1**.
-   Blocked until `backtest-engine` tasks 1.3 + 1.4 land.
+9. **Backtest Engine** — `docs/plan/backtest-engine/` (`phase1..4/`) — next **1.3a / 1.4** (parallel, `phase1/`). Four chained phases; each phase's GATE task blocks the next dir. Gated on
+   `variance-gate`. `BACKTEST_PLAN_PHASE1.md` is the canonical spec; the phase dirs are thin status pointers.
+10. **backtest-eval-core** — `docs/plan/backtest-eval-core/` — next **B1.1**. Blocked until `backtest-engine` tasks 1.3 + 1.4 land.
 11. **signals-eval-core** — `docs/plan/signals-eval-core/` — next **SE1.1**.
     Blocked until `backtest-eval-core` + `backtest-engine` 1.12.
     Covers Track A (swing) + Track B (investment), SE1–SE8.
@@ -104,28 +78,18 @@ Cross-references use folder names, never list positions, so renumbering can't ro
 
 ## Open Bugs
 
-Confirmed defects in shipped code live in **[`docs/bugs/`](docs/bugs/)** — registry
-`bugs.md` (status `🔴 Open` → `🟡 Fix in progress` → `✅ Fixed`), tasks `docs/bugs/task.md`.
-`/work` → Bug branch reads those files directly; it does **not** read this file.
-**Do not mirror bug priority or status here** — `bugs.md` is the single source of truth.
+Confirmed defects in shipped code live in **[`docs/bugs/`](docs/bugs/)** — registry `bugs.md` (status `🔴 Open` → `🟡 Fix in progress` → `✅ Fixed`), tasks `docs/bugs/task.md`. `/work` → Bug branch reads
+those files directly; it does **not** read this file. **Do not mirror bug priority or status here** — `bugs.md` is the single source of truth.
 
 Snapshot (authoritative list: `bugs.md`) —
 
-- **BUG-030** — `_overlay_type_groups` elif-precedence orphans the `overlay_cc` leg when
-  `overlay_collar_put` is also present same-day.
-  Next: **B030.1** (entry-side tagging question, blocks the grouping fix).
-- **BUG-037** — `mark_trade_closed()` never wired into CSP / IC v1 / v2 close paths;
-  54 stale flat legs found live.
-  Next: **B037.6** (`code-reviewer` on the B037.3 / B037.4 fix).
-- **BUG-038** — `OverlayCloser`'s three `self._notifier.send()` calls are unawaited
-  coroutines (never actually sent).
-  Next: **B038.1** (`trace_path` the three send methods).
-- **BUG-019** — diagnostic-only, not actionable (awaiting a live trading day's data before a
-  fix is scoped).
+- **BUG-030** — `_overlay_type_groups` elif-precedence orphans the `overlay_cc` leg when `overlay_collar_put` is also present same-day. Next: **B030.1** (entry-side tagging question, blocks the
+  grouping fix).
+- **BUG-037** — `mark_trade_closed()` never wired into CSP / IC v1 / v2 close paths; 54 stale flat legs found live. Next: **B037.6** (`code-reviewer` on the B037.3 / B037.4 fix).
+- **BUG-038** — `OverlayCloser`'s three `self._notifier.send()` calls are unawaited coroutines (never actually sent). Next: **B038.1** (`trace_path` the three send methods).
+- **BUG-019** — diagnostic-only, not actionable (awaiting a live trading day's data before a fix is scoped).
 
-Feature-vs-bug priority is chosen at session start via `/work`. A bug urgent enough to
-pre-empt all feature work should be raised with Animesh directly — it is not expressed by
-reordering either list.
+Feature-vs-bug priority is chosen at session start via `/work`. A bug urgent enough to pre-empt all feature work should be raised with Animesh directly — it is not expressed by reordering either list.
 
 **Before build queue starts on paper-backbone-dependent stories** — verify prerequisites:
 ```bash
@@ -138,8 +102,7 @@ search_graph("CCOverlayV1")       # must return zero results
 
 ## Animesh-only: Stockmock Calibration Backtests
 
-Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` task **1.1**,
-which itself feeds task 1.7's `CSPConfig`). Stockmock UI — no code required.
+Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` task **1.1**, which itself feeds task 1.7's `CSPConfig`). Stockmock UI — no code required.
 
 - [ ] COVID crash (Feb–Apr 2020) — strikes hit, premium, max M2M loss, breach frequency
 - [ ] IL&FS crisis (Sep–Oct 2018) — same metrics
@@ -152,463 +115,246 @@ which itself feeds task 1.7's `CSPConfig`). Stockmock UI — no code required.
 
 ## Session Log
 
-Full forensic log (SHAs, bug numbers, root-cause detail) moved to
-[docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md) — most recently during the
-2026-08-26 reorg (everything from 2026-08-01 through 2026-08-26, plus item 29's inline design
-history above). Add new entries there going forward, or start a fresh dated section here if
-this file's Session Log grows large again.
+Full forensic log (SHAs, bug numbers, root-cause detail) moved to [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md) — most recently during the 2026-08-26 reorg (everything from 2026-08-01
+through 2026-08-26, plus item 29's inline design history above). Add new entries there going forward, or start a fresh dated section here if this file's Session Log grows large again.
 
-- **2026-09-02** — `docs/plan/token-efficiency/fixed-overhead/` FIX-3: `session-close` now
-  runs as a fresh `general-purpose` subagent reading the transcript by path, never a `fork`
-  clone. Measured ~55% drop (116,375 → 52,523 tokens) on a matched session; fork's median
-  cost across 9 sessions was ~254K. SHA: `03d991f`.
-- **2026-09-03** — `docs/plan/token-efficiency/fixed-overhead/` FIX-4 (closes the story):
-  `scripts/dev/graph_snippet.py` wraps `get_code_snippet` to strip the unused `fp`/`sp`/`bt`
-  fields — ~244 tok/call (−20%), ~730–2,200 tok/code-session. Rule 0 points at it. Upstream
-  compact-mode issue owed (agent classifier-blocked from filing). SHA: `1b64d4a`.
-- **2026-09-03** — `docs/plan/token-efficiency/suggestions-sweep/` SWEEP-1: clustered all 40
-  `suggestions.md` rows into 7 groups (6 rows added since story authoring folded in) with a
-  fix / enforce / accept outcome each — 23 land a structural fix or hook/preflight enforce,
-  17 accepted with a reason. Cluster map in the SWEEP-1 As-built; ownership matches the
-  SWEEP-2..SWEEP-7 split. Docs-only. SHA: `622465c`.
-- **2026-09-03** — `docs/plan/token-efficiency/suggestions-sweep/` SWEEP-2: two warn-only
-  `PreToolUse` hooks — `check_repeat_read.py` (2nd `Read` of an unedited path) and
-  `check_wide_grep.py` (unscoped `grep`/`sed`/`awk` over an >800-line file / unfiltered
-  recursive grep), 56 tests. Rule 0 + Rule 1 pointer lines in `CLAUDE.md`/`AGENTS.md`; two
-  fix-by-text lines in `/work`. Cluster-1's 12 rows closed. SHA: `68683cb`.
-- **2026-09-03** — `docs/plan/token-efficiency/suggestions-sweep/` SWEEP-3: warn-only
-  `PreToolUse(Bash)` hook `check_inline_full_suite.py` nudges `@test-runner` for a bare
-  main-session `pytest tests/unit/` run, 12 tests. `test-runner` AutoTrigger cadence amended
-  to "once per task before `code-reviewer` / the commit — not per-edit" in
-  `CLAUDE.md`/`AGENTS.md`/`session-close`. Cluster-2's 2 rows closed. SHA: `e325e86`.
-- **2026-09-03** — `docs/plan/token-efficiency/suggestions-sweep/` SWEEP-4:
-  `scripts/dev/commit_preflight.py` — CLI the `commit` skill runs (Step 1b) against the
-  staged set: staged-index vs. `--expect` (warn), `ruff format --check` + md-line-length on
-  staged files (blockers), next-marker incl. prose forms + SHA-placeholder (warn), 20 tests.
-  `<pending>` sanctioned as the ticked-box interim SHA (backfilled next commit, no swap-only
-  commit); `check_checkbox_consistency.py` + `docs/plan/README.md` §Task-line format updated
-  to match. Cluster-3's 12 rows closed (8 enforce, 3 fix, 3 accept). SHA: `<pending>`.
-- **2026-09-03** — `docs/plan/token-efficiency/suggestions-sweep/` SWEEP-5: new **Tool-call
-  param hygiene** section in `CLAUDE.md` + `AGENTS.md` (after AutoTrigger Rules) + a Rule 0
-  tool-list line — documents the `codebase-memory-mcp` `project=` / `index_repository`
-  `repo_path=` first-call rule, the `AskUserQuestion` plain-array / no-`preview` rule, and
-  the "never `ScheduleWakeup`-poll a spawned subagent" rule. Cluster-4's 3 rows closed
-  (enforce-by-doc). Docs-only, no tests. SHA: `2ae951c`.
-- **2026-09-03** — `docs/plan/token-efficiency/suggestions-sweep/` SWEEP-6: shell +
-  subagent-orchestration + protocol-discipline text fixes. `CLAUDE.md` / `AGENTS.md` gain a
-  **Shell mechanics** para (Rule 1), a consolidated plan-gate paragraph (Step 3), tightened
-  `CONTEXT.md ✓` / scope wording (Step 1), and a new **Step 3c — Before writing code**
-  (spec pre-step + parallel-subagent git rule); `handoff-antigravity` skill (+ `.agents/`
-  mirror) gains a routing-settled callout; `md-organize` Step 7 gains a mirror-path grep
-  line. Clusters 5 / 6 / 7 closed — 4 fix-by-text, 7 accept. Docs-only, no tests.
-  Backfilled SWEEP-4 SHA `2b85b84` and SWEEP-5 SHA `2ae951c` on the same commit. SHA: `<pending>`.
-- **2026-09-03** — `docs/plan/token-efficiency/suggestions-sweep/` SWEEP-7 (closes the story
-  and the epic): `session-close` Step 4b gains a drain step — a `suggestions.md` slug at
-  `Count >= 5` retires from the active table to a `standalone-actionable` `DEBT-*` line
-  (remediation exists) or an "Accepted / won't-fix" section (pure judgement). Seeded DEBT-8..
-  DEBT-12 for the five over-threshold slugs (`reread-file-already-in-context` 23,
-  `pytest-inlined-not-test-runner` 9, `wide-grep-dump-then-page` 7,
-  `sha-recorded-via-second-commit` 6, `authored-md-prose-over-200-cap` 5); removed all five
-  from `suggestions.md`. Backfilled SWEEP-6 SHA `938d929`. Docs-only. SHA: `2d896a9`.
-- **2026-09-03** — `token-efficiency` epic archived → `docs/archive/plan/token-efficiency/`
-  (all three stories shipped; closing SHA `2d896a9`). Backfilled the SWEEP-7 SHA, repointed
-  the `graph_snippet.py` + `portfolio`/`client`/`notifications` `NOTES.md` references at the
-  archive path, collapsed the `docs/plan/README.md` entry. See
-  `docs/archive/TODOS_ARCHIVE.md` 2026-09-03. Open follow-ups: DEBT-8..DEBT-12.
+- **2026-09-02** — `docs/plan/token-efficiency/fixed-overhead/` FIX-3: `session-close` now runs as a fresh `general-purpose` subagent reading the transcript by path, never a `fork` clone. Measured
+  ~55% drop (116,375 → 52,523 tokens) on a matched session; fork's median cost across 9 sessions was ~254K. SHA: `03d991f`.
+- **2026-09-03** — `docs/plan/token-efficiency/fixed-overhead/` FIX-4 (closes the story): `scripts/dev/graph_snippet.py` wraps `get_code_snippet` to strip the unused `fp`/`sp`/`bt` fields — ~244
+  tok/call (−20%), ~730–2,200 tok/code-session. Rule 0 points at it. Upstream compact-mode issue owed (agent classifier-blocked from filing). SHA: `1b64d4a`.
+- **2026-09-03** — `docs/plan/token-efficiency/suggestions-sweep/` SWEEP-1: clustered all 40 `suggestions.md` rows into 7 groups (6 rows added since story authoring folded in) with a fix / enforce /
+  accept outcome each — 23 land a structural fix or hook/preflight enforce, 17 accepted with a reason. Cluster map in the SWEEP-1 As-built; ownership matches the SWEEP-2..SWEEP-7 split. Docs-only.
+  SHA: `622465c`.
+- **2026-09-03** — `docs/plan/token-efficiency/suggestions-sweep/` SWEEP-2: two warn-only `PreToolUse` hooks — `check_repeat_read.py` (2nd `Read` of an unedited path) and `check_wide_grep.py`
+  (unscoped `grep`/`sed`/`awk` over an >800-line file / unfiltered recursive grep), 56 tests. Rule 0 + Rule 1 pointer lines in `CLAUDE.md`/`AGENTS.md`; two fix-by-text lines in `/work`. Cluster-1's 12
+  rows closed. SHA: `68683cb`.
+- **2026-09-03** — `docs/plan/token-efficiency/suggestions-sweep/` SWEEP-3: warn-only `PreToolUse(Bash)` hook `check_inline_full_suite.py` nudges `@test-runner` for a bare main-session `pytest
+  tests/unit/` run, 12 tests. `test-runner` AutoTrigger cadence amended to "once per task before `code-reviewer` / the commit — not per-edit" in `CLAUDE.md`/`AGENTS.md`/`session-close`. Cluster-2's 2
+  rows closed. SHA: `e325e86`.
+- **2026-09-03** — `docs/plan/token-efficiency/suggestions-sweep/` SWEEP-4: `scripts/dev/commit_preflight.py` — CLI the `commit` skill runs (Step 1b) against the staged set: staged-index vs.
+  `--expect` (warn), `ruff format --check` + md-line-length on staged files (blockers), next-marker incl. prose forms + SHA-placeholder (warn), 20 tests. `<pending>` sanctioned as the ticked-box
+  interim SHA (backfilled next commit, no swap-only commit); `check_checkbox_consistency.py` + `docs/plan/README.md` §Task-line format updated to match. Cluster-3's 12 rows closed (8 enforce, 3 fix, 3
+  accept). SHA: `<pending>`.
+- **2026-09-03** — `docs/plan/token-efficiency/suggestions-sweep/` SWEEP-5: new **Tool-call param hygiene** section in `CLAUDE.md` + `AGENTS.md` (after AutoTrigger Rules) + a Rule 0 tool-list line —
+  documents the `codebase-memory-mcp` `project=` / `index_repository` `repo_path=` first-call rule, the `AskUserQuestion` plain-array / no-`preview` rule, and the "never `ScheduleWakeup`-poll a
+  spawned subagent" rule. Cluster-4's 3 rows closed (enforce-by-doc). Docs-only, no tests. SHA: `2ae951c`.
+- **2026-09-03** — `docs/plan/token-efficiency/suggestions-sweep/` SWEEP-6: shell + subagent-orchestration + protocol-discipline text fixes. `CLAUDE.md` / `AGENTS.md` gain a **Shell mechanics** para
+  (Rule 1), a consolidated plan-gate paragraph (Step 3), tightened `CONTEXT.md ✓` / scope wording (Step 1), and a new **Step 3c — Before writing code** (spec pre-step + parallel-subagent git rule);
+  `handoff-antigravity` skill (+ `.agents/` mirror) gains a routing-settled callout; `md-organize` Step 7 gains a mirror-path grep line. Clusters 5 / 6 / 7 closed — 4 fix-by-text, 7 accept. Docs-only,
+  no tests. Backfilled SWEEP-4 SHA `2b85b84` and SWEEP-5 SHA `2ae951c` on the same commit. SHA: `<pending>`.
+- **2026-09-03** — `docs/plan/token-efficiency/suggestions-sweep/` SWEEP-7 (closes the story and the epic): `session-close` Step 4b gains a drain step — a `suggestions.md` slug at `Count >= 5` retires
+  from the active table to a `standalone-actionable` `DEBT-*` line (remediation exists) or an "Accepted / won't-fix" section (pure judgement). Seeded DEBT-8.. DEBT-12 for the five over-threshold slugs
+  (`reread-file-already-in-context` 23, `pytest-inlined-not-test-runner` 9, `wide-grep-dump-then-page` 7, `sha-recorded-via-second-commit` 6, `authored-md-prose-over-200-cap` 5); removed all five from
+  `suggestions.md`. Backfilled SWEEP-6 SHA `938d929`. Docs-only. SHA: `2d896a9`.
+- **2026-09-03** — `token-efficiency` epic archived → `docs/archive/plan/token-efficiency/` (all three stories shipped; closing SHA `2d896a9`). Backfilled the SWEEP-7 SHA, repointed the
+  `graph_snippet.py` + `portfolio`/`client`/`notifications` `NOTES.md` references at the archive path, collapsed the `docs/plan/README.md` entry. See `docs/archive/TODOS_ARCHIVE.md` 2026-09-03. Open
+  follow-ups: DEBT-8..DEBT-12.
 
 ### 2026-09-02
 
-- **MEAS-1 shipped — `scripts/dev/token_audit.py` session token-attribution tool.** SHA
-  `79effcd`. Parses a session transcript JSONL and buckets its tokens: `system_prompt` (real,
-  first-turn `cache_creation_input_tokens`), `project_docs` (estimated, chars/4 over current
-  `CLAUDE.md`+`AGENTS.md`+`MEMORY.md`), `tool_results:<tool>` (estimated, chars/4 per matched
-  `tool_result`), `subagent_reports` (estimated, chars/4 over `<result>` text) and
-  `subagent_internal` (real, `<subagent_tokens>`) kept separate, `assistant_text` (real,
-  `usage.output_tokens`). Compact table + `--json`. 7 tests, fixture transcript, no network.
-  `code-reviewer` clean (0 CRITICAL/ERROR). Next: MEAS-2 — run it on 4–5 real sessions and
-  write the epic `README.md` Baseline section.
-- **MEAS-2 shipped — token-efficiency Baseline section in the epic `README.md`.** Ran
-  `token_audit.py` over five sessions (ROLL-7 `3dcf60ee`, TG-story `5b1c99ee`, diagnostic
-  `d5d36b77`, RDO-17.7 `1c878711`, RDO-17.6 `724f9ef6`). Median session ≈ 703K account-side
-  tokens; `subagent_internal` is the largest bucket every time (median 367K, ~50%), then
-  `assistant_text` (median 225K, inflated by re-derivation), then whole-file `Read` results
-  (median 32K). Names the targets for `fixed-overhead/` (FIX-3 session-close fork, FIX-1
-  `CLAUDE.md` restructure) and `suggestions-sweep/`. `measurement/` story complete — epic
-  router advances to `fixed-overhead/`.
-- **FIX-1 shipped — resident `CLAUDE.md` reference material moved to a `protocol-reference`
-  skill.** SHA `41ac31e`. `project_docs` bucket **12,554 → 9,556 tokens, −2,998 (−23.9%)**
-  measured with `token_audit.py`. `CLAUDE.md` 409→309 lines, `AGENTS.md` 474→377, re-mirrored
-  with its Antigravity deltas intact. Moved to the skill as five numbered sections: Council
-  Decision Protocol, Quick reference, AI Collaboration, review/handoff rules, module
-  `CLAUDE.md` index. Rule 0/1, Steps 0–5, the AutoTrigger table, Python + Logging standards
-  stay resident. No gate dropped — verified by matching every path reference in the old file
-  against (new file + skill); the one real loss found, an FR-7 citation in Step 5a, was
-  restored. Council-trigger path fires via three routes (Step 2b imperative, resident "§1 is
-  a gate" line, skill trigger phrases) — this repo's `SKILL.md` files have no YAML
-  frontmatter, so the resident pointer is load-bearing. Skill also mirrored to
-  `.agents/skills/` per `md-organize` Step 7, a scope addition FIX-1's spec had missed.
-  The ≤200-line target set at plan time was **not** met (309) — reaching it would have meant
-  dropping a gate; see the As-built. Next: FIX-2 (trim heaviest `src/*/CLAUDE.md`).
-- **FIX-2 shipped — the three heaviest module `CLAUDE.md` files trimmed to invariants.** SHA
-  `ce45719`. Auto-injected total **5,260 → 3,805 tokens, −1,455 (−28%)**: `notifications`
-  3,086→1,998, `portfolio` 1,112→930, `client` 1,062→877 (chars/4, `token_audit.py`'s own
-  estimator — the tool excludes module `CLAUDE.md` from `project_docs` by design, so it cannot
-  report this bucket itself). Measurement overruled the spec's guess: `portfolio` is second,
-  not `paper` (980, left alone — near-pure invariants). Relocated detail to a new
-  non-auto-loaded `NOTES.md` per module: MarkdownV2 migration history, guard-test allowlist
-  mechanics, full formatter/table-builder signatures, `apply_trade_positions` call sites,
-  models/registry enumeration, implementations table, `MockBrokerClient` setup API. No
-  invariant reworded and no section header dropped, so `§"Instrument Label Formatting"`
-  (`CLAUDE.md`, `AGENTS.md`, `CONTEXT_TREE.md`) and the `FORMATTING.md` / `REVIEW.md` citations
-  still resolve. Saving is per-turn once a session touches the directory, not per-session. No
-  `.agents/` mirror needed — module docs have no `AGENTS.md` counterpart. 3074 passed,
-  2 skipped. Next: FIX-3 (`session-close` off the `fork`).
+- **MEAS-1 shipped — `scripts/dev/token_audit.py` session token-attribution tool.** SHA `79effcd`. Parses a session transcript JSONL and buckets its tokens: `system_prompt` (real, first-turn
+  `cache_creation_input_tokens`), `project_docs` (estimated, chars/4 over current `CLAUDE.md`+`AGENTS.md`+`MEMORY.md`), `tool_results:<tool>` (estimated, chars/4 per matched `tool_result`),
+  `subagent_reports` (estimated, chars/4 over `<result>` text) and `subagent_internal` (real, `<subagent_tokens>`) kept separate, `assistant_text` (real, `usage.output_tokens`). Compact table +
+  `--json`. 7 tests, fixture transcript, no network. `code-reviewer` clean (0 CRITICAL/ERROR). Next: MEAS-2 — run it on 4–5 real sessions and write the epic `README.md` Baseline section.
+- **MEAS-2 shipped — token-efficiency Baseline section in the epic `README.md`.** Ran `token_audit.py` over five sessions (ROLL-7 `3dcf60ee`, TG-story `5b1c99ee`, diagnostic `d5d36b77`, RDO-17.7
+  `1c878711`, RDO-17.6 `724f9ef6`). Median session ≈ 703K account-side tokens; `subagent_internal` is the largest bucket every time (median 367K, ~50%), then `assistant_text` (median 225K, inflated by
+  re-derivation), then whole-file `Read` results (median 32K). Names the targets for `fixed-overhead/` (FIX-3 session-close fork, FIX-1 `CLAUDE.md` restructure) and `suggestions-sweep/`.
+  `measurement/` story complete — epic router advances to `fixed-overhead/`.
+- **FIX-1 shipped — resident `CLAUDE.md` reference material moved to a `protocol-reference` skill.** SHA `41ac31e`. `project_docs` bucket **12,554 → 9,556 tokens, −2,998 (−23.9%)** measured with
+  `token_audit.py`. `CLAUDE.md` 409→309 lines, `AGENTS.md` 474→377, re-mirrored with its Antigravity deltas intact. Moved to the skill as five numbered sections: Council Decision Protocol, Quick
+  reference, AI Collaboration, review/handoff rules, module `CLAUDE.md` index. Rule 0/1, Steps 0–5, the AutoTrigger table, Python + Logging standards stay resident. No gate dropped — verified by
+  matching every path reference in the old file against (new file + skill); the one real loss found, an FR-7 citation in Step 5a, was restored. Council-trigger path fires via three routes (Step 2b
+  imperative, resident "§1 is a gate" line, skill trigger phrases) — this repo's `SKILL.md` files have no YAML frontmatter, so the resident pointer is load-bearing. Skill also mirrored to
+  `.agents/skills/` per `md-organize` Step 7, a scope addition FIX-1's spec had missed. The ≤200-line target set at plan time was **not** met (309) — reaching it would have meant dropping a gate; see
+  the As-built. Next: FIX-2 (trim heaviest `src/*/CLAUDE.md`).
+- **FIX-2 shipped — the three heaviest module `CLAUDE.md` files trimmed to invariants.** SHA `ce45719`. Auto-injected total **5,260 → 3,805 tokens, −1,455 (−28%)**: `notifications` 3,086→1,998,
+  `portfolio` 1,112→930, `client` 1,062→877 (chars/4, `token_audit.py`'s own estimator — the tool excludes module `CLAUDE.md` from `project_docs` by design, so it cannot report this bucket itself).
+  Measurement overruled the spec's guess: `portfolio` is second, not `paper` (980, left alone — near-pure invariants). Relocated detail to a new non-auto-loaded `NOTES.md` per module: MarkdownV2
+  migration history, guard-test allowlist mechanics, full formatter/table-builder signatures, `apply_trade_positions` call sites, models/registry enumeration, implementations table, `MockBrokerClient`
+  setup API. No invariant reworded and no section header dropped, so `§"Instrument Label Formatting"` (`CLAUDE.md`, `AGENTS.md`, `CONTEXT_TREE.md`) and the `FORMATTING.md` / `REVIEW.md` citations
+  still resolve. Saving is per-turn once a session touches the directory, not per-session. No `.agents/` mirror needed — module docs have no `AGENTS.md` counterpart. 3074 passed, 2 skipped. Next:
+  FIX-3 (`session-close` off the `fork`).
 
 ### 2026-09-01
 
-- **`token-efficiency/` epic authored.** New 3-story epic under `docs/plan/token-efficiency/`
-  (`measurement/` → `fixed-overhead/` → `suggestions-sweep/`, ~13 tasks). Spawned from a token
-  audit Animesh asked for after the ROLL-7 session: ~740K tokens for a ~440-line task, of
-  which the `session-close` fork alone was ~285K (a fork clones the whole conversation).
-  Targets: skill-ify the ~400-line resident `CLAUDE.md`, run `session-close` as a
-  transcript-reading subagent, strip MCP fingerprint bloat, and clear the ~35-row
-  `suggestions.md` backlog — which is write-only today (`reread-file` at Count 13,
-  `pytest-inlined` at 7, nothing ever escalates). Cross-cutting rule: every fix quotes a real
-  before/after number from a new `token_audit.py`. Plan docs only; no code yet.
+- **`token-efficiency/` epic authored.** New 3-story epic under `docs/plan/token-efficiency/` (`measurement/` → `fixed-overhead/` → `suggestions-sweep/`, ~13 tasks). Spawned from a token audit Animesh
+  asked for after the ROLL-7 session: ~740K tokens for a ~440-line task, of which the `session-close` fork alone was ~285K (a fork clones the whole conversation). Targets: skill-ify the ~400-line
+  resident `CLAUDE.md`, run `session-close` as a transcript-reading subagent, strip MCP fingerprint bloat, and clear the ~35-row `suggestions.md` backlog — which is write-only today (`reread-file` at
+  Count 13, `pytest-inlined` at 7, nothing ever escalates). Cross-cutting rule: every fix quotes a real before/after number from a new `token_audit.py`. Plan docs only; no code yet.
 
-- **ROLL-7 shipped — re-entry blocked/eligible notice migrated to MarkdownV2 kv-line format.**
-  SHA `cad8074`. `ReEntryMixin._check_reentry`'s three gates + two structural-failure paths
-  now emit `(short_reason, detail)` pairs instead of one prose string (`_ivr_passes` signature
-  widened to a 3-tuple; base + `PPOverlayV1` override + `auto_close.py` caller updated). New
-  `STRATEGY_LABELS` / `LEG_ROLE_LABELS` + `strategy_label()` / `leg_role_label()` (unmapped →
-  `ValueError`) in `src/notifications/formatting.py` — kept separate from `eod_summary.py`'s
-  `_STRATEGY_META`; consolidation flagged. `notes` column flattened via `_block_notes()`. MD-6
-  guard baseline entry for `reentry_mixin.py` removed (now escaped in-scope). Real
-  `@code-reviewer` run despite `Review: none` (touches production gate logic); full suite 3065
-  passed. `strategy-rollout/` next: ROLL-8.
+- **ROLL-7 shipped — re-entry blocked/eligible notice migrated to MarkdownV2 kv-line format.** SHA `cad8074`. `ReEntryMixin._check_reentry`'s three gates + two structural-failure paths now emit
+  `(short_reason, detail)` pairs instead of one prose string (`_ivr_passes` signature widened to a 3-tuple; base + `PPOverlayV1` override + `auto_close.py` caller updated). New `STRATEGY_LABELS` /
+  `LEG_ROLE_LABELS` + `strategy_label()` / `leg_role_label()` (unmapped → `ValueError`) in `src/notifications/formatting.py` — kept separate from `eod_summary.py`'s `_STRATEGY_META`; consolidation
+  flagged. `notes` column flattened via `_block_notes()`. MD-6 guard baseline entry for `reentry_mixin.py` removed (now escaped in-scope). Real `@code-reviewer` run despite `Review: none` (touches
+  production gate logic); full suite 3065 passed. `strategy-rollout/` next: ROLL-8.
 
-- **ROLL-6 shipped — EOD Paper Summary migrated to MarkdownV2 bucketed table.** SHA `2471f01`.
-  `scripts/eod_summary.py` was still emitting raw HTML `<b>` through the MarkdownV2 transport
-  (silently 400'ing since MD-4.1) and reading `Bkd` from `paper_nav_snapshots.realized_pnl`
-  (zeroes on a reopen cycle). Now: `build_eod_summary_message()` renders the confirmed 4-bucket
-  totals-first table; `Bkd` from `get_strategy_realized_pnl()`; figures quantized to whole
-  rupees before summation so the table foots exactly. Promoted `build_strategy_table` /
-  `format_summary_money` / `StrategyPnLRow` to `src/notifications/formatting.py` (FMT-1d §12).
-  Real `@code-reviewer` clean (0 CRITICAL/ERROR); full suite 3051 passed. `strategy-rollout/`
-  next: ROLL-7.
+- **ROLL-6 shipped — EOD Paper Summary migrated to MarkdownV2 bucketed table.** SHA `2471f01`. `scripts/eod_summary.py` was still emitting raw HTML `<b>` through the MarkdownV2 transport (silently
+  400'ing since MD-4.1) and reading `Bkd` from `paper_nav_snapshots.realized_pnl` (zeroes on a reopen cycle). Now: `build_eod_summary_message()` renders the confirmed 4-bucket totals-first table;
+  `Bkd` from `get_strategy_realized_pnl()`; figures quantized to whole rupees before summation so the table foots exactly. Promoted `build_strategy_table` / `format_summary_money` / `StrategyPnLRow`
+  to `src/notifications/formatting.py` (FMT-1d §12). Real `@code-reviewer` clean (0 CRITICAL/ERROR); full suite 3051 passed. `strategy-rollout/` next: ROLL-7.
 
-- **BUG-039 fixed — daily_snapshot Telegram P&L summary silently stopped since 2026-08-25.**
-  Animesh reported not receiving the daily 15:45 message since 24 Aug. Root cause: `721daf9`
-  (2026-08-24 23:00) switched `TelegramNotifier.send()` to `parse_mode=MarkdownV2`, but
-  `daily_snapshot.py`'s summary text (`_format_combined_summary` + `src/dhan/positions.py`'s
-  `format_options_section`) was never migrated to escape its output — a known, documented gap
-  (`test_escaping_guard.py`'s `_BASELINE_UNESCAPED` entry for that exact call site). Every
-  unescaped `-`/`()`/`.`/`+`/`|` in the P&L waterfall 400'd the send on every trading day since.
-  Fix: `escape_markdown(summary_text)` at the `notifier.send()` call site — verified no
-  intentional MarkdownV2 entities in the message, so whole-string escaping is behaviorally
-  equivalent to per-value escaping and matches `FORMATTING.md` §6's call-site boundary.
-  Removed the stale baseline entry per its maintenance contract. code-reviewer clean (0
-  CRITICAL/ERROR/WARNING); full suite 3042 passed. SHA `2cb67ce`. Full detail: `docs/bugs/bugs.md`
-  BUG-039.
+- **BUG-039 fixed — daily_snapshot Telegram P&L summary silently stopped since 2026-08-25.** Animesh reported not receiving the daily 15:45 message since 24 Aug. Root cause: `721daf9` (2026-08-24
+  23:00) switched `TelegramNotifier.send()` to `parse_mode=MarkdownV2`, but `daily_snapshot.py`'s summary text (`_format_combined_summary` + `src/dhan/positions.py`'s `format_options_section`) was
+  never migrated to escape its output — a known, documented gap (`test_escaping_guard.py`'s `_BASELINE_UNESCAPED` entry for that exact call site). Every unescaped `-`/`()`/`.`/`+`/`|` in the P&L
+  waterfall 400'd the send on every trading day since. Fix: `escape_markdown(summary_text)` at the `notifier.send()` call site — verified no intentional MarkdownV2 entities in the message, so
+  whole-string escaping is behaviorally equivalent to per-value escaping and matches `FORMATTING.md` §6's call-site boundary. Removed the stale baseline entry per its maintenance contract.
+  code-reviewer clean (0 CRITICAL/ERROR/WARNING); full suite 3042 passed. SHA `2cb67ce`. Full detail: `docs/bugs/bugs.md` BUG-039.
 
 ### 2026-08-29
 
-- **doc-format-migration epic created — answers RDO-17.8 (Owner: Animesh).** Animesh decided
-  the legacy-folder rule: batch-convert every `docs/plan/` folder now (not on-touch), tiered
-  A/B/C/D by folder state, `git log --follow` trusted for shipped SHAs, no permanent
-  grandfathering (fully-shipped folders archive instead). Plus a scope expansion: reflow every
-  other `.md` in the repo (not just `docs/plan/`) to fill-to-≤200, and make the format
-  self-enforcing. New epic `docs/plan/doc-format-migration/` with three sub-stories:
-  `plan-folders/` (DFM-1 tier → DFM-2 tier-A full → DFM-3 tier-B light → DFM-4 tier-C reflow),
-  `repo-wide-reflow/` (DFM-5, everything outside `plan/` + `archive/` + `_TEMPLATE/`),
-  `enforcement/` (DFM-6 widen `md-line-length` repo-wide · DFM-7 `check_story_structure`
-  gates modified folders · DFM-8 wire `check_checkbox_consistency` pre-commit · DFM-9 CI
-  `docs-format` `--all` job · DFM-10 `scripts/dev/new_plan_folder.py` + `/new-story` skill).
-  11 doc files, all four doc hooks clean. RDO-17.8 left `[ ]` in `root-doc-organization/` with
-  the decision recorded in its line + `stories.md` digest (closes in the follow-up commit
-  per the two-commit convention); `docs/plan/README.md` + `TODOS.md` backlog updated (epic
-  added at #1, list renumbered 2..23).
-- **RDO-17.7 — sweep both POC folders to fill-to-≤200 + add reflow_md.py (root-doc-organization).**
-  Scope revised with Animesh: RDO-17.7 is not just the §A guidance (shipped in `7d28d16`) — it
-  also applies that style to `root-doc-organization/` and `telegram-markdown-migration/` in full,
-  since those are the RDO-17.5/17.6 exemplars. New `scripts/dev/reflow_md.py` — reusable
-  whitespace-only paragraph reflow (`--check`/in-place; code fences, tables, headings, nested
-  list/quote structure verbatim; never leaves a wrapped line starting with a bare list marker) —
-  + `tests/unit/scripts/dev/test_reflow_md.py` (10 tests). Ran over all 16 `.md` in both folders
-  (D6 extras included): `md-line-length` clean, `git diff --word-diff` zero word changes (only
-  interior blockquote `> ` markers consolidate on rewrap). Also fixed the stale "semantic
-  linefeeds" line in `check_md_line_length.py`'s docstring; `docs/plan/README.md` §"Markdown line
-  style" now names the two swept exemplars and points the rest at RDO-17.8. Commit 2: SHA + box.
-  RDO-17.7 §B renamed to **RDO-17.8** (Owner: Animesh, still open) — the do-not-touch reusable
-  tool now exists, so the decision is purely cadence / effort-ceiling / grandfathering for the
-  other ~25 legacy folders.
-- **RDO-17.6 — full-convert telegram-markdown-migration/ to canonical epic format (root-doc-organization).**
-  Two commits, docs-only. Commit 1 (`cf46ff4`): root `README.md` → `_TEMPLATE/epic/` shape
-  (Why / Scope decisions / Stories table w/ Status + Closing SHA / Cross-cutting constraints /
-  Supersession / Epic done when); root `prompt.md` → epic router (fixed story list + Step 1–4);
-  all 3 sub-stories (`backbone/`, `formatting-rules/`, `strategy-rollout/`): `prompt.md` →
-  `_TEMPLATE/story/` headers, every `tasks.md` line → one canonical `| Owner | Model | Review |
-  SHA` line (umbrellas keep their checkbox w/ a bare `| SHA:` legacy tail; `Model` → `claude-*`
-  ids), forensic detail folded into per-task `stories.md` **As-built** paragraphs (Animesh chose
-  fold-into-section over a decision-log appendix, and keep-umbrella-checkbox). MD-6 + MD-4.1/4.2/4.3
-  gained new `stories.md` spec subsections. Deviation from RDO-17.5: the sub-story `stories.md`
-  files already covered every task, so no rewrite — only As-built additions. Commit 2:
-  tick RDO-17.6 + SHA, `stories.md` digest, `docs/plan/README.md` (both entries), this log.
-  `md-line-length` + both structure hooks + `check_checkbox_consistency` clean of any
-  `telegram-markdown-migration/` finding; 3026 unit tests green.
-- **RDO-17.7 §A + RDO-17.5 — full-convert root-doc-organization/ (root-doc-organization).**
-  Two commits, docs + tooling only. Commit 1 (`7d28d16`, RDO-17.7 §A): retired the
-  "semantic linefeeds" guidance for fill-to-≤200 — `docs/plan/README.md` §"Markdown line
-  style", both `_TEMPLATE/` sets, `md-organize/SKILL.md` + its `.agents/` mirror, and the
-  `INSTRUCTION.md` one-liner. Commit 2 (RDO-17.5): every `root-doc-organization/tasks.md`
-  line collapsed to one canonical line with the `| Owner | Model | Review | SHA` tail
-  (shipped lines keep their real SHA + `[x]`; `Review: code-reviewer` for RDO-5/13/15/17.2
-  which touched `scripts/*.py`, `none` otherwise; RDO-3 → `[x]` closed-partial; RDO-12 SHA
-  `42eabb2`); `stories.md` rewritten to cover every task — forward spec for RDO-11/RDO-16,
-  a 2–4 line as-built digest for each shipped one; `prompt.md` realigned to
-  `_TEMPLATE/story/prompt.md`; `plan.md` kept unchanged. `docs/plan/README.md` status entry
-  advanced (next → RDO-17.6). Both structure hooks `--all` clean of any
-  `root-doc-organization/` finding; 42 hook tests green; `check_checkbox_consistency` clean.
-- **RDO-17.5/17.6/17.7 filed — scope revision (root-doc-organization).** `4d5611a`,
-  docs-only, task definitions only (no conversion executed). Animesh: RDO-17.4's partial
-  retrofit — grandfather the shipped task lines — is **superseded** for the two validation
-  folders. **RDO-17.5** fully converts `root-doc-organization/` (every `tasks.md` line to a
-  one-liner + 4-field tail, shipped lines keep their real SHA; `stories.md` rewritten to
-  cover every task — forward spec for open, 2–4 line as-built digest for shipped; `prompt.md`
-  realigned to `_TEMPLATE/story/`). **RDO-17.6** does the same for the
-  `telegram-markdown-migration/` epic (router `prompt.md`, `README.md` Stories status table,
-  all 3 sub-stories' `prompt.md` + `tasks.md`; resolves `ROLL-1a/1b/1c` nested checkboxes
-  vs one-checkbox-per-id). How cleanly the two POC conversions go calibrates whether/how the
-  other ~25 legacy folders convert — **RDO-17.7** (Animesh) records that rule afterward.
-  `tasks.md` RDO-17 intro + `## Story done when` bullet + `stories.md` (17.5/17.6 specs,
-  17.7 placeholder) + `docs/plan/README.md` blurb updated. Both hooks `--all` green.
-  `~/.claude/plans/woolly-honking-tarjan.md` now stale (grandfather framing) — Animesh owns
-  the plan-doc update.
-  **Follow-up (same day):** RDO-17.7 given real scope. §A (finalized, Animesh): retire
-  RDO-5's semantic-linefeed guidance — Markdown prose now fills each line to the last word
-  boundary before 200 (the `md-line-length` hook stays the only enforced rule); the mid-line
-  ~110-char wrap was hard to read. §A executes inside RDO-17.5 (all rewritten files authored
-  fill-to-200; §"Markdown line style" + `_TEMPLATE/` + `md-organize` wording changed). §B
-  (open, Animesh): the ~25-legacy-folder conversion rule, decided after 17.5/17.6. `tasks.md`
-  RDO-17.5/17.7 lines + `## Story done when` + `stories.md` §RDO-17.5/§RDO-17.7 updated.
-- **RDO-17.4 — retrofit the two format-validation folders (root-doc-organization).**
-  `35d9f42` (impl) + close commit, docs-only. `root-doc-organization/` (single flat story):
-  added `stories.md` covering only the open tasks (RDO-11, RDO-16, RDO-17.4 — shipped-task
-  detail stays inline in `tasks.md` history); added the `| Owner | Model | Review | SHA`
-  tail to the two open lines; `## Epic done when` → `## Story done when` + two adjacent prose
-  fixes. `telegram-markdown-migration/` (epic): dropped untracked `.DS_Store`; `git mv`
-  the exhausted missing-messages queue (`TODO.md` + `missing-message-workshop-prompt.md`,
-  all 10 items written back as `strategy-rollout/` ROLL-7..ROLL-16) →
-  `docs/archive/plan/telegram-markdown-migration/` with archive banners; `README.md`
-  repointed + one-line completion pointer added; `message-format-workshop.md` stays live at
-  the epic root. `check_story_structure.py --all` 14 → 12 warnings (both validation-folder
-  findings gone), `check_checkbox_consistency.py --all` green, 42 hook tests green. RDO-17.1–17.4
-  shipped (17.4 superseded same day — see the RDO-17.5/17.6/17.7 entry above).
-  `28d0d9c` (impl) + close commit, docs/skills only. `.claude/skills/work/SKILL.md` Feature
-  branch now classifies flat-story vs epic-root: epic path reads the router `prompt.md` +
-  `README.md`, walks the fixed story order (README Stories table) to the first sub-story with
-  an unchecked `- [ ]`, loads its `prompt.md` + `stories.md` (+ `schema.md`) + first unchecked
-  task; step 7 reports `Owner/Model/Review` and halts on owner mismatch. `| Review:` field
-  added to the Step 5a task-line convention in `CLAUDE.md` + `AGENTS.md` and to the
-  `session-close` violation check (legacy 3-field tails grandfathered); `md-organize`
-  structure-audit note restated to the RDO-17 flat-story / epic-root file sets;
-  `_TEMPLATE/epic/prompt.md` router Step 1 pins story order to the README table.
-  `commit/SKILL.md` carries no task-line tail — untouched. Both structure hooks `--all`
-  green; dry-run `/work` on `telegram-markdown-migration/` walks `backbone/` +
-  `formatting-rules/` (all checked) → lands on `strategy-rollout/` ROLL-6. 17.4 (retrofit the
-  two validation folders) next.
-- **RDO-17.2 — story/epic structure + checkbox hooks (root-doc-organization).**
-  `fe280bd`, tooling + docs. `check_story_structure.py`: `Finding(level, message)`; story
-  folders now require `stories.md`, epic roots require `prompt.md` + `README.md`, `schema.md`
-  DDL backstop (warn), D6 extra-file checks; legacy shapes grandfathered — `--all` fails only
-  on `error`, `--staged-added` blocks on any finding. `check_checkbox_consistency.py`:
-  `SUMMARY_RE` gains `story done when`; canonical-tail check (Review value ∈ known gates;
-  `SHA: —`/`<—>` iff unchecked, hex iff ticked) over multi-line task entries, legacy tails
-  skipped. 40 hook tests (was 24). `docs/plan/README.md` §Checkbox-consistency wording +
-  stale `next:` pointer (RDO-17.1 → RDO-17.2) fixed. 17.3 (`/work` epic descent + skill
-  propagation) next.
-- **RDO-17.1 — `docs/plan/` story/epic format spec + templates (root-doc-organization).**
-  `7b6d05f`, docs-only. `docs/plan/README.md` §Conventions rewritten: single-story flat vs
-  epic-with-sub-stories (no `stories/` layer), `stories.md` now required, `schema.md`
-  conditional-required checklist, extra-files rule, 5-field `| Owner | Model | Review | SHA`
-  task line. `_TEMPLATE/` split into `story/` + `epic/` variants. First of 4 RDO-17
-  sub-tasks; 17.2 (hooks) next.
-- **RDO-6 + RDO-7 — `md-organize` skill + doc-staleness check (root-doc-organization).**
-  4 commits, docs/tooling only. RDO-7 (`d24f15d`): `session-close/SKILL.md` Step 3e —
-  report-only content-gap check (new module w/o `CONTEXT_TREE.md` row; story code touched but
-  `docs/plan/README.md` status not advanced). RDO-6: `.claude/skills/md-cleanup` → `md-organize`
-  with a rewritten `SKILL.md` (real 19-file root table; CONTEXT re-slim / DECISIONS roll /
-  repo-wide `md-line-length` sweep / `CLAUDE.md` pointer reconcile / story-structure +
-  checkbox audits / RDO-10 hook-drift check / Step 7 mirror re-sync). `.agents/skills/`
-  re-synced wholesale from `.claude/skills/` (added `work/`, dropped all "Codex" refs).
-  `CLAUDE.md` + `AGENTS.md` 11 long lines each wrapped; Step 5a task-line pointer added
-  (RDO-13 deferred). Whole-repo `md-line-length` backlog cleared — ~700 lines across ~70
-  files reflowed to semantic linefeeds via 5 parallel subagents; `--all-files` now green
-  (`suggestions.md` excepted — wide table, `SKIP=md-line-length`). Epic now: RDO-11
-  (≥ 2026-09-03) + RDO-16 (loop-closure) open.
+- **doc-format-migration epic created — answers RDO-17.8 (Owner: Animesh).** Animesh decided the legacy-folder rule: batch-convert every `docs/plan/` folder now (not on-touch), tiered A/B/C/D by
+  folder state, `git log --follow` trusted for shipped SHAs, no permanent grandfathering (fully-shipped folders archive instead). Plus a scope expansion: reflow every other `.md` in the repo (not just
+  `docs/plan/`) to fill-to-≤200, and make the format self-enforcing. New epic `docs/plan/doc-format-migration/` with three sub-stories: `plan-folders/` (DFM-1 tier → DFM-2 tier-A full → DFM-3 tier-B
+  light → DFM-4 tier-C reflow), `repo-wide-reflow/` (DFM-5, everything outside `plan/` + `archive/` + `_TEMPLATE/`), `enforcement/` (DFM-6 widen `md-line-length` repo-wide · DFM-7
+  `check_story_structure` gates modified folders · DFM-8 wire `check_checkbox_consistency` pre-commit · DFM-9 CI `docs-format` `--all` job · DFM-10 `scripts/dev/new_plan_folder.py` + `/new-story`
+  skill). 11 doc files, all four doc hooks clean. RDO-17.8 left `[ ]` in `root-doc-organization/` with the decision recorded in its line + `stories.md` digest (closes in the follow-up commit per the
+  two-commit convention); `docs/plan/README.md` + `TODOS.md` backlog updated (epic added at #1, list renumbered 2..23).
+- **RDO-17.7 — sweep both POC folders to fill-to-≤200 + add reflow_md.py (root-doc-organization).** Scope revised with Animesh: RDO-17.7 is not just the §A guidance (shipped in `7d28d16`) — it also
+  applies that style to `root-doc-organization/` and `telegram-markdown-migration/` in full, since those are the RDO-17.5/17.6 exemplars. New `scripts/dev/reflow_md.py` — reusable whitespace-only
+  paragraph reflow (`--check`/in-place; code fences, tables, headings, nested list/quote structure verbatim; never leaves a wrapped line starting with a bare list marker) —
+  + `tests/unit/scripts/dev/test_reflow_md.py` (10 tests). Ran over all 16 `.md` in both folders (D6 extras included): `md-line-length` clean, `git diff --word-diff` zero word changes (only interior
+    blockquote `> ` markers consolidate on rewrap). Also fixed the stale "semantic linefeeds" line in `check_md_line_length.py`'s docstring; `docs/plan/README.md` §"Markdown line style" now names the
+    two swept exemplars and points the rest at RDO-17.8. Commit 2: SHA + box. RDO-17.7 §B renamed to **RDO-17.8** (Owner: Animesh, still open) — the do-not-touch reusable tool now exists, so the
+    decision is purely cadence / effort-ceiling / grandfathering for the other ~25 legacy folders.
+- **RDO-17.6 — full-convert telegram-markdown-migration/ to canonical epic format (root-doc-organization).** Two commits, docs-only. Commit 1 (`cf46ff4`): root `README.md` → `_TEMPLATE/epic/` shape
+  (Why / Scope decisions / Stories table w/ Status + Closing SHA / Cross-cutting constraints / Supersession / Epic done when); root `prompt.md` → epic router (fixed story list + Step 1–4); all 3
+  sub-stories (`backbone/`, `formatting-rules/`, `strategy-rollout/`): `prompt.md` → `_TEMPLATE/story/` headers, every `tasks.md` line → one canonical `| Owner | Model | Review | SHA` line (umbrellas
+  keep their checkbox w/ a bare `| SHA:` legacy tail; `Model` → `claude-*` ids), forensic detail folded into per-task `stories.md` **As-built** paragraphs (Animesh chose fold-into-section over a
+  decision-log appendix, and keep-umbrella-checkbox). MD-6 + MD-4.1/4.2/4.3 gained new `stories.md` spec subsections. Deviation from RDO-17.5: the sub-story `stories.md` files already covered every
+  task, so no rewrite — only As-built additions. Commit 2: tick RDO-17.6 + SHA, `stories.md` digest, `docs/plan/README.md` (both entries), this log. `md-line-length` + both structure hooks +
+  `check_checkbox_consistency` clean of any `telegram-markdown-migration/` finding; 3026 unit tests green.
+- **RDO-17.7 §A + RDO-17.5 — full-convert root-doc-organization/ (root-doc-organization).** Two commits, docs + tooling only. Commit 1 (`7d28d16`, RDO-17.7 §A): retired the "semantic linefeeds"
+  guidance for fill-to-≤200 — `docs/plan/README.md` §"Markdown line style", both `_TEMPLATE/` sets, `md-organize/SKILL.md` + its `.agents/` mirror, and the `INSTRUCTION.md` one-liner. Commit 2
+  (RDO-17.5): every `root-doc-organization/tasks.md` line collapsed to one canonical line with the `| Owner | Model | Review | SHA` tail (shipped lines keep their real SHA + `[x]`; `Review:
+  code-reviewer` for RDO-5/13/15/17.2 which touched `scripts/*.py`, `none` otherwise; RDO-3 → `[x]` closed-partial; RDO-12 SHA `42eabb2`); `stories.md` rewritten to cover every task — forward spec for
+  RDO-11/RDO-16, a 2–4 line as-built digest for each shipped one; `prompt.md` realigned to `_TEMPLATE/story/prompt.md`; `plan.md` kept unchanged. `docs/plan/README.md` status entry advanced (next →
+  RDO-17.6). Both structure hooks `--all` clean of any `root-doc-organization/` finding; 42 hook tests green; `check_checkbox_consistency` clean.
+- **RDO-17.5/17.6/17.7 filed — scope revision (root-doc-organization).** `4d5611a`, docs-only, task definitions only (no conversion executed). Animesh: RDO-17.4's partial retrofit — grandfather the
+  shipped task lines — is **superseded** for the two validation folders. **RDO-17.5** fully converts `root-doc-organization/` (every `tasks.md` line to a one-liner + 4-field tail, shipped lines keep
+  their real SHA; `stories.md` rewritten to cover every task — forward spec for open, 2–4 line as-built digest for shipped; `prompt.md` realigned to `_TEMPLATE/story/`). **RDO-17.6** does the same for
+  the `telegram-markdown-migration/` epic (router `prompt.md`, `README.md` Stories status table, all 3 sub-stories' `prompt.md` + `tasks.md`; resolves `ROLL-1a/1b/1c` nested checkboxes vs
+  one-checkbox-per-id). How cleanly the two POC conversions go calibrates whether/how the other ~25 legacy folders convert — **RDO-17.7** (Animesh) records that rule afterward. `tasks.md` RDO-17
+  intro + `## Story done when` bullet + `stories.md` (17.5/17.6 specs, 17.7 placeholder) + `docs/plan/README.md` blurb updated. Both hooks `--all` green. `~/.claude/plans/woolly-honking-tarjan.md` now
+  stale (grandfather framing) — Animesh owns the plan-doc update. **Follow-up (same day):** RDO-17.7 given real scope. §A (finalized, Animesh): retire RDO-5's semantic-linefeed guidance — Markdown
+  prose now fills each line to the last word boundary before 200 (the `md-line-length` hook stays the only enforced rule); the mid-line ~110-char wrap was hard to read. §A executes inside RDO-17.5
+  (all rewritten files authored fill-to-200; §"Markdown line style" + `_TEMPLATE/` + `md-organize` wording changed). §B (open, Animesh): the ~25-legacy-folder conversion rule, decided after 17.5/17.6.
+  `tasks.md` RDO-17.5/17.7 lines + `## Story done when` + `stories.md` §RDO-17.5/§RDO-17.7 updated.
+- **RDO-17.4 — retrofit the two format-validation folders (root-doc-organization).** `35d9f42` (impl) + close commit, docs-only. `root-doc-organization/` (single flat story): added `stories.md`
+  covering only the open tasks (RDO-11, RDO-16, RDO-17.4 — shipped-task detail stays inline in `tasks.md` history); added the `| Owner | Model | Review | SHA` tail to the two open lines; `## Epic done
+  when` → `## Story done when` + two adjacent prose fixes. `telegram-markdown-migration/` (epic): dropped untracked `.DS_Store`; `git mv` the exhausted missing-messages queue (`TODO.md` +
+  `missing-message-workshop-prompt.md`, all 10 items written back as `strategy-rollout/` ROLL-7..ROLL-16) → `docs/archive/plan/telegram-markdown-migration/` with archive banners; `README.md`
+  repointed + one-line completion pointer added; `message-format-workshop.md` stays live at the epic root. `check_story_structure.py --all` 14 → 12 warnings (both validation-folder findings gone),
+  `check_checkbox_consistency.py --all` green, 42 hook tests green. RDO-17.1–17.4 shipped (17.4 superseded same day — see the RDO-17.5/17.6/17.7 entry above). `28d0d9c` (impl) + close commit,
+  docs/skills only. `.claude/skills/work/SKILL.md` Feature branch now classifies flat-story vs epic-root: epic path reads the router `prompt.md` + `README.md`, walks the fixed story order (README
+  Stories table) to the first sub-story with an unchecked `- [ ]`, loads its `prompt.md` + `stories.md` (+ `schema.md`) + first unchecked task; step 7 reports `Owner/Model/Review` and halts on owner
+  mismatch. `| Review:` field added to the Step 5a task-line convention in `CLAUDE.md` + `AGENTS.md` and to the `session-close` violation check (legacy 3-field tails grandfathered); `md-organize`
+  structure-audit note restated to the RDO-17 flat-story / epic-root file sets; `_TEMPLATE/epic/prompt.md` router Step 1 pins story order to the README table. `commit/SKILL.md` carries no task-line
+  tail — untouched. Both structure hooks `--all` green; dry-run `/work` on `telegram-markdown-migration/` walks `backbone/` + `formatting-rules/` (all checked) → lands on `strategy-rollout/` ROLL-6.
+  17.4 (retrofit the two validation folders) next.
+- **RDO-17.2 — story/epic structure + checkbox hooks (root-doc-organization).** `fe280bd`, tooling + docs. `check_story_structure.py`: `Finding(level, message)`; story folders now require
+  `stories.md`, epic roots require `prompt.md` + `README.md`, `schema.md` DDL backstop (warn), D6 extra-file checks; legacy shapes grandfathered — `--all` fails only on `error`, `--staged-added`
+  blocks on any finding. `check_checkbox_consistency.py`: `SUMMARY_RE` gains `story done when`; canonical-tail check (Review value ∈ known gates; `SHA: —`/`<—>` iff unchecked, hex iff ticked) over
+  multi-line task entries, legacy tails skipped. 40 hook tests (was 24). `docs/plan/README.md` §Checkbox-consistency wording + stale `next:` pointer (RDO-17.1 → RDO-17.2) fixed. 17.3 (`/work` epic
+  descent + skill propagation) next.
+- **RDO-17.1 — `docs/plan/` story/epic format spec + templates (root-doc-organization).** `7b6d05f`, docs-only. `docs/plan/README.md` §Conventions rewritten: single-story flat vs epic-with-sub-stories
+  (no `stories/` layer), `stories.md` now required, `schema.md` conditional-required checklist, extra-files rule, 5-field `| Owner | Model | Review | SHA` task line. `_TEMPLATE/` split into `story/` +
+  `epic/` variants. First of 4 RDO-17 sub-tasks; 17.2 (hooks) next.
+- **RDO-6 + RDO-7 — `md-organize` skill + doc-staleness check (root-doc-organization).** 4 commits, docs/tooling only. RDO-7 (`d24f15d`): `session-close/SKILL.md` Step 3e — report-only content-gap
+  check (new module w/o `CONTEXT_TREE.md` row; story code touched but `docs/plan/README.md` status not advanced). RDO-6: `.claude/skills/md-cleanup` → `md-organize` with a rewritten `SKILL.md` (real
+  19-file root table; CONTEXT re-slim / DECISIONS roll / repo-wide `md-line-length` sweep / `CLAUDE.md` pointer reconcile / story-structure + checkbox audits / RDO-10 hook-drift check / Step 7 mirror
+  re-sync). `.agents/skills/` re-synced wholesale from `.claude/skills/` (added `work/`, dropped all "Codex" refs). `CLAUDE.md` + `AGENTS.md` 11 long lines each wrapped; Step 5a task-line pointer
+  added (RDO-13 deferred). Whole-repo `md-line-length` backlog cleared — ~700 lines across ~70 files reflowed to semantic linefeeds via 5 parallel subagents; `--all-files` now green (`suggestions.md`
+  excepted — wide table, `SKIP=md-line-length`). Epic now: RDO-11 (≥ 2026-09-03) + RDO-16 (loop-closure) open.
 
 ### 2026-08-28
 
-- **RDO-10 — reconcile RDO-7 / Phase 7 with the shipped doc-freshness hooks
-  (root-doc-organization).** Docs + one hook edit, 1 commit. Decisions with Animesh:
-  (1) RDO-7 **kept but narrowed** — `state_doc_freshness.sh` (SessionStart) +
-  `doc_update_gate.sh` (PreToolUse) already own the per-file "docs behind code" signal, so the
-  session-close report is re-scoped to the content gaps neither hook sees (new `src/<module>/`
-  with no `CONTEXT_TREE.md` row; story code touched this session but `docs/plan/README.md`
-  status not advanced). (2) `TODOS.md #4` (weekly cloud routine) **narrowed to a future
-  read-only Telegram staleness digest**, out of epic scope — unattended-write cron stays
-  rejected. (3) Skill name settled: **`md-organize`** (RDO-6 does the rename + ~6 by-name
-  ref updates). (4) `state_doc_freshness.sh` thresholds tuned — `CONTEXT_TREE.md` /
-  `DB_REGISTRY.md` / `README.md` 35-40 → 60 (all three change only on new modules / tables /
-  public-surface shifts; DB_REGISTRY was the known 36/35 false positive). RDO-6 gains a step
-  to verify the two hooks' hard-coded doc lists still match `CLAUDE.md` §Step 5a. `plan.md`
-  Phase 7 + `tasks.md` RDO-6/7/10 + `## Epic done when` + `docs/plan/README.md` row updated.
-  Open in the epic now: RDO-6, 7, 11, 16. Docs/tooling-only, no code-reviewer.
+- **RDO-10 — reconcile RDO-7 / Phase 7 with the shipped doc-freshness hooks (root-doc-organization).** Docs + one hook edit, 1 commit. Decisions with Animesh: (1) RDO-7 **kept but narrowed** —
+  `state_doc_freshness.sh` (SessionStart) + `doc_update_gate.sh` (PreToolUse) already own the per-file "docs behind code" signal, so the session-close report is re-scoped to the content gaps neither
+  hook sees (new `src/<module>/` with no `CONTEXT_TREE.md` row; story code touched this session but `docs/plan/README.md` status not advanced). (2) `TODOS.md #4` (weekly cloud routine) **narrowed to a
+  future read-only Telegram staleness digest**, out of epic scope — unattended-write cron stays rejected. (3) Skill name settled: **`md-organize`** (RDO-6 does the rename + ~6 by-name ref updates).
+  (4) `state_doc_freshness.sh` thresholds tuned — `CONTEXT_TREE.md` / `DB_REGISTRY.md` / `README.md` 35-40 → 60 (all three change only on new modules / tables / public-surface shifts; DB_REGISTRY was
+  the known 36/35 false positive). RDO-6 gains a step to verify the two hooks' hard-coded doc lists still match `CLAUDE.md` §Step 5a. `plan.md` Phase 7 + `tasks.md` RDO-6/7/10 + `## Epic done when` +
+  `docs/plan/README.md` row updated. Open in the epic now: RDO-6, 7, 11, 16. Docs/tooling-only, no code-reviewer.
 
-- **RDO-15 — checkbox-consistency sweep + one-box convention (root-doc-organization).**
-  2 commits. `5e48451`: new `scripts/hooks/check_checkbox_consistency.py` (+ 11 tests) —
-  sweeps `docs/plan/**/tasks.md` + `docs/bugs/task.md` for a checkbox inside an `## Epic done
-  when` block, same-id state drift in one file, and a README `next:` marker on an already-done
-  id; `--all` + path modes, runs in the `md-cleanup`/`md-organize` audit (Step 5c), not
-  pre-commit. Convention (a) chosen (Animesh delegated) — `## Epic done when` blocks are now
-  prose acceptance criteria, no checkboxes; working-list `tasks.md` state is the sole source,
-  drift structurally impossible (same principle as RDO-13 §4). Sibling script, not an
-  extension of `check_story_structure.py`. Retrofit trivial — only 2 files used the mirror
-  (`root-doc-organization`, `session-entry-point`), zero pre-existing drift; `_TEMPLATE/` +
-  `docs/plan/README.md` §"Checkbox consistency" updated. Id-less "loop-closure check" item
-  promoted to task **RDO-16**. `code-reviewer`: 0 CRITICAL/ERROR, 4 WARNING all fixed
-  (README slug regex underscore gap, `task.md` dir-glob, EXCLUDED filter style, test hints).
-  `session-entry-point` epic archived to `docs/archive/plan/` in the same session (was done,
-  awaiting only this worked-example use).
+- **RDO-15 — checkbox-consistency sweep + one-box convention (root-doc-organization).** 2 commits. `5e48451`: new `scripts/hooks/check_checkbox_consistency.py` (+ 11 tests) — sweeps
+  `docs/plan/**/tasks.md` + `docs/bugs/task.md` for a checkbox inside an `## Epic done when` block, same-id state drift in one file, and a README `next:` marker on an already-done id; `--all` + path
+  modes, runs in the `md-cleanup`/`md-organize` audit (Step 5c), not pre-commit. Convention (a) chosen (Animesh delegated) — `## Epic done when` blocks are now prose acceptance criteria, no
+  checkboxes; working-list `tasks.md` state is the sole source, drift structurally impossible (same principle as RDO-13 §4). Sibling script, not an extension of `check_story_structure.py`. Retrofit
+  trivial — only 2 files used the mirror (`root-doc-organization`, `session-entry-point`), zero pre-existing drift; `_TEMPLATE/` + `docs/plan/README.md` §"Checkbox consistency" updated. Id-less
+  "loop-closure check" item promoted to task **RDO-16**. `code-reviewer`: 0 CRITICAL/ERROR, 4 WARNING all fixed (README slug regex underscore gap, `task.md` dir-glob, EXCLUDED filter style, test
+  hints). `session-entry-point` epic archived to `docs/archive/plan/` in the same session (was done, awaiting only this worked-example use).
 
-- **RDO-9 — `DECISIONS.md` semantic split (root-doc-organization).** 3 commits.
-  9a: full-file classification (2203 lines) + `options-strategist` advisory pass +
-  Animesh sign-off — scratch artifact `rdo9a_classification.md`. The file was big because
-  it is append-only and verbose inside a ~4-month window, not old — so split by *kind*:
-  9b `344f3a7` moved every completed-work-log entry (the chronological "fixed X, why" stream,
-  `## Process`, the dated `## BUG-*` sections, the delivered NSE Bhavcopy UDiFF spec, the
-  Telegram-MD sequencing narrative) → `docs/archive/DECISIONS_worklog_2026.md`; lifted 11
-  still-enforced rule fragments into a new `## Risk, Delta & Entry Gates` section + existing
-  sections; fixed 8 stale rule entries the 9a `options-strategist` pass caught (CSP/CC profit
-  target is 30% retention not 50%, CSP delta stop 0.40 not 0.45, CC DTE_REVIEW is ACTION not
-  WARN per EC-5, CC re-entry allow-list, CSP time-stop DTE guard from EC-4, Notifications
-  HTML→MarkdownV2, §7.3 IC-judged-in-isolation); merged the duplicate `## Market Calendar`
-  and `## Developer Tooling` headers. 9b `2fb5c5b` wrapped the file to semantic linefeeds,
-  `md-line-length` green, Strategy & Research table → bulleted index. Result: 2203 → 972
-  lines, ~84K → ~22K tokens, fresh full-file `Read` succeeds. **DoD deviation:** "≤ 800
-  lines" conflicts with the same DoD's semantic-linefeed requirement — flagged to Animesh;
-  token count is the metric that holds. Docs-only, no code-reviewer. `prompt.md` DoD +
-  `docs/plan/README.md` row updated; RDO-9 + `prompt.md`-DoD-rewrite epic-done boxes ticked.
+- **RDO-9 — `DECISIONS.md` semantic split (root-doc-organization).** 3 commits. 9a: full-file classification (2203 lines) + `options-strategist` advisory pass + Animesh sign-off — scratch artifact
+  `rdo9a_classification.md`. The file was big because it is append-only and verbose inside a ~4-month window, not old — so split by *kind*: 9b `344f3a7` moved every completed-work-log entry (the
+  chronological "fixed X, why" stream, `## Process`, the dated `## BUG-*` sections, the delivered NSE Bhavcopy UDiFF spec, the Telegram-MD sequencing narrative) →
+  `docs/archive/DECISIONS_worklog_2026.md`; lifted 11 still-enforced rule fragments into a new `## Risk, Delta & Entry Gates` section + existing sections; fixed 8 stale rule entries the 9a
+  `options-strategist` pass caught (CSP/CC profit target is 30% retention not 50%, CSP delta stop 0.40 not 0.45, CC DTE_REVIEW is ACTION not WARN per EC-5, CC re-entry allow-list, CSP time-stop DTE
+  guard from EC-4, Notifications HTML→MarkdownV2, §7.3 IC-judged-in-isolation); merged the duplicate `## Market Calendar` and `## Developer Tooling` headers. 9b `2fb5c5b` wrapped the file to semantic
+  linefeeds, `md-line-length` green, Strategy & Research table → bulleted index. Result: 2203 → 972 lines, ~84K → ~22K tokens, fresh full-file `Read` succeeds. **DoD deviation:** "≤ 800 lines"
+  conflicts with the same DoD's semantic-linefeed requirement — flagged to Animesh; token count is the metric that holds. Docs-only, no code-reviewer. `prompt.md` DoD + `docs/plan/README.md` row
+  updated; RDO-9 + `prompt.md`-DoD-rewrite epic-done boxes ticked.
 
-- **RDO-14 — `TODOS.md` restructure (root-doc-organization).** Design changed with Animesh:
-  *not* one unified queue — two separate pointer-only lists, `## Feature Backlog` (`1..N`
-  contiguous, `docs/plan/` stories) and `## Open Bugs` (non-authoritative snapshot + pointer
-  to `docs/bugs/`), matching `/work`'s existing Feature/Bug fork. Dropped: completed
-  `session-entry-point`, superseded `telegram-ic-comparison-formatting`, the duplicate
-  "item 14", all `TGFMT-2..9` refs. Every internal `"item N"` cross-ref → story-folder name.
-  Whole file reflowed to semantic linefeeds (RDO-13-deferred backlog for this file — no
-  `SKIP=md-line-length` needed now). Added per Animesh: `docs/plan/README.md` §Conventions
-  gains a *Completion → archive* subsection (story folder → `docs/archive/plan/`, `TODOS.md`
-  line → `TODOS_ARCHIVE.md`, README row → pointer, all one commit) + `session-close` Step 5b
-  "done-but-not-archived" check. `/work` branch-collapse (RDO-14 §4) explicitly declined;
-  recorded in `session-entry-point/tasks.md`. Docs-only.
+- **RDO-14 — `TODOS.md` restructure (root-doc-organization).** Design changed with Animesh: *not* one unified queue — two separate pointer-only lists, `## Feature Backlog` (`1..N` contiguous,
+  `docs/plan/` stories) and `## Open Bugs` (non-authoritative snapshot + pointer to `docs/bugs/`), matching `/work`'s existing Feature/Bug fork. Dropped: completed `session-entry-point`, superseded
+  `telegram-ic-comparison-formatting`, the duplicate "item 14", all `TGFMT-2..9` refs. Every internal `"item N"` cross-ref → story-folder name. Whole file reflowed to semantic linefeeds
+  (RDO-13-deferred backlog for this file — no `SKIP=md-line-length` needed now). Added per Animesh: `docs/plan/README.md` §Conventions gains a *Completion → archive* subsection (story folder →
+  `docs/archive/plan/`, `TODOS.md` line → `TODOS_ARCHIVE.md`, README row → pointer, all one commit) + `session-close` Step 5b "done-but-not-archived" check. `/work` branch-collapse (RDO-14 §4)
+  explicitly declined; recorded in `session-entry-point/tasks.md`. Docs-only.
 
-- **RDO-13 — docs/plan + TODOS.md convention enforcement (root-doc-organization).** 3 commits.
-  13a `0712b49`: `docs/plan/README.md` §Conventions rewritten canonical + self-contained
-  (archive pointer dropped), all 17 pre-existing >200-char story rows reflowed into compact
-  status entries, `docs/plan/_TEMPLATE/{prompt,tasks}.md` added. 13b `a0d255d`:
-  `scripts/hooks/check_story_structure.py` + 11 tests + pre-commit wiring (story-vs-epic
-  detection; `--all` audit / `--staged-added` pre-commit / path modes); two empty stray
-  folders removed. 13c: structure-audit + pointer-only steps in `md-cleanup` / `session-close`
-  skills; this header pointer. `CLAUDE.md`/`AGENTS.md` 5a pointer deferred to RDO-6 (mirror
-  long-line wrap); `TODOS.md` items 14/22/29 retrofit stays RDO-14. Committed with
-  `SKIP=md-line-length` — this file carries the pre-existing backlog; the change adds none.
+- **RDO-13 — docs/plan + TODOS.md convention enforcement (root-doc-organization).** 3 commits. 13a `0712b49`: `docs/plan/README.md` §Conventions rewritten canonical + self-contained (archive pointer
+  dropped), all 17 pre-existing >200-char story rows reflowed into compact status entries, `docs/plan/_TEMPLATE/{prompt,tasks}.md` added. 13b `a0d255d`: `scripts/hooks/check_story_structure.py` + 11
+  tests + pre-commit wiring (story-vs-epic detection; `--all` audit / `--staged-added` pre-commit / path modes); two empty stray folders removed. 13c: structure-audit + pointer-only steps in
+  `md-cleanup` / `session-close` skills; this header pointer. `CLAUDE.md`/`AGENTS.md` 5a pointer deferred to RDO-6 (mirror long-line wrap); `TODOS.md` items 14/22/29 retrofit stays RDO-14. Committed
+  with `SKIP=md-line-length` — this file carries the pre-existing backlog; the change adds none.
 
 ### 2026-08-27
 
-- **RDO-8 — protocol-doc consistency cleanup (root-doc-organization).** 5 fixes, one
-  docs/config-only commit: (1) `ANTIGRAVITY.md` step 2 docs/config-only bullet aligned to
-  "skip `code-reviewer` entirely" (was: adopt persona + evaluate) — now matches `CLAUDE.md` /
-  `AGENTS.md` 5c. (2) `git rm -r .codex/` (dead scaffolding from `16821d6`, only
-  self-referenced); `.agents/` kept per Animesh (Antigravity autoloads it), added to RDO-6's
-  re-sync scope with a note re its stale `.Codex/` refs. (3) `src/paper/` `src/nuvama/`
-  `src/gamma/` rows added to the module table in `CLAUDE.md` + `AGENTS.md`; `AGENTS.md`'s
-  "Also present on disk" note folded in so the two match. (4) `src/client/CLAUDE.md` heading
-  + `src/client/` row in both module tables reworded "implementations (2 built + 1 variant +
-  1 planned)". (5) `CLAUDE.md`'s embedded "Rules for any review" lifted to a standalone
-  `## Rules for any review or handoff` section matching `AGENTS.md`; both bodies set identical.
-  Next: RDO-6, RDO-7, or RDO-9.
+- **RDO-8 — protocol-doc consistency cleanup (root-doc-organization).** 5 fixes, one docs/config-only commit: (1) `ANTIGRAVITY.md` step 2 docs/config-only bullet aligned to "skip `code-reviewer`
+  entirely" (was: adopt persona + evaluate) — now matches `CLAUDE.md` / `AGENTS.md` 5c. (2) `git rm -r .codex/` (dead scaffolding from `16821d6`, only self-referenced); `.agents/` kept per Animesh
+  (Antigravity autoloads it), added to RDO-6's re-sync scope with a note re its stale `.Codex/` refs. (3) `src/paper/` `src/nuvama/` `src/gamma/` rows added to the module table in `CLAUDE.md` +
+  `AGENTS.md`; `AGENTS.md`'s "Also present on disk" note folded in so the two match. (4) `src/client/CLAUDE.md` heading
+  + `src/client/` row in both module tables reworded "implementations (2 built + 1 variant + 1 planned)". (5) `CLAUDE.md`'s embedded "Rules for any review" lifted to a standalone `## Rules for any
+    review or handoff` section matching `AGENTS.md`; both bodies set identical. Next: RDO-6, RDO-7, or RDO-9.
 
-- **RDO-5 — `md-line-length` pre-commit hook (root-doc-organization).** Added
-  `scripts/hooks/check_md_line_length.py` (200-char hard cap, all line kinds;
-  `<!-- lint-ignore-length -->` on the preceding line excuses one unbreakable token) + local
-  `md-line-length` hook over `^([^/]+\.md|docs/(plan|bugs)/.*\.md)$` + 3 unit tests in
-  `tests/unit/scripts/hooks/`. `plan.md` Phase 1's "≤100" contradiction removed, Phase 5 yaml
-  block updated; semantic-linefeed + 200-cap style recorded in `docs/plan/README.md`
-  §Conventions. Scoped tooling-only per Animesh — the hook enforces on staged files; the
-  ~800-line pre-existing backlog (18 files) is not an RDO-5 gate, cleared opportunistically +
-  by RDO-6 (`md-organize`) / RDO-9 (`DECISIONS.md`). Commit used `SKIP=md-line-length` since
-  it stages the still-unwrapped `TODOS.md` / `docs/plan/README.md`. Next: RDO-6 or RDO-7.
+- **RDO-5 — `md-line-length` pre-commit hook (root-doc-organization).** Added `scripts/hooks/check_md_line_length.py` (200-char hard cap, all line kinds; `<!-- lint-ignore-length -->` on the preceding
+  line excuses one unbreakable token) + local `md-line-length` hook over `^([^/]+\.md|docs/(plan|bugs)/.*\.md)$` + 3 unit tests in `tests/unit/scripts/hooks/`. `plan.md` Phase 1's "≤100" contradiction
+  removed, Phase 5 yaml block updated; semantic-linefeed + 200-cap style recorded in `docs/plan/README.md` §Conventions. Scoped tooling-only per Animesh — the hook enforces on staged files; the
+  ~800-line pre-existing backlog (18 files) is not an RDO-5 gate, cleared opportunistically + by RDO-6 (`md-organize`) / RDO-9 (`DECISIONS.md`). Commit used `SKIP=md-line-length` since it stages the
+  still-unwrapped `TODOS.md` / `docs/plan/README.md`. Next: RDO-6 or RDO-7.
 
-- **RDO-4 — relocate legacy `BUGS.md` + `GLOSSARY.md` out of root (root-doc-organization).**
-  `git mv BUGS.md docs/archive/BUGS_LEGACY.md` (archive banner added, only `BUG-001` still
-  open) + 3-line root stub → `docs/bugs/` + archive. `git mv GLOSSARY.md docs/GLOSSARY.md`,
-  no stub, `docs/GLOSSARY.md` Quick-reference row added to `CLAUDE.md` and `AGENTS.md`
-  (mirror). Live inbound links repointed: `TODOS.md` header, `docs/plan/README.md` intro,
-  `docs/bugs/bugs.md` relationship note. Historical mentions (`DECISIONS.md` 2026-07-02
-  entry, `dev-foundation` CH-3 records, full-repo-review audit snapshots) left as accurate
-  records. Docs-only. Next: RDO-5 (`md-line-length` pre-commit hook).
+- **RDO-4 — relocate legacy `BUGS.md` + `GLOSSARY.md` out of root (root-doc-organization).** `git mv BUGS.md docs/archive/BUGS_LEGACY.md` (archive banner added, only `BUG-001` still open) + 3-line
+  root stub → `docs/bugs/` + archive. `git mv GLOSSARY.md docs/GLOSSARY.md`, no stub, `docs/GLOSSARY.md` Quick-reference row added to `CLAUDE.md` and `AGENTS.md` (mirror). Live inbound links
+  repointed: `TODOS.md` header, `docs/plan/README.md` intro, `docs/bugs/bugs.md` relationship note. Historical mentions (`DECISIONS.md` 2026-07-02 entry, `dev-foundation` CH-3 records,
+  full-repo-review audit snapshots) left as accurate records. Docs-only. Next: RDO-5 (`md-line-length` pre-commit hook).
 
-- **SEP-4 — end-to-end check + close (session-entry-point epic complete).** Ran both `/work`
-  branches in one session. **Feature branch** demonstrated live: invoked as
-  `/work on SEP-4 in session-entry-point` → Step A skip-through detection matched the story id
-  → Feature branch pre-selected to `session-entry-point` (TODOS priority item 1) →
-  `prompt.md` + `tasks.md` loaded → SEP-4 identified as first unchecked `- [ ]` →
-  `CONTEXT.md` read → handed to `CLAUDE.md` Step 2b (council checkpoint: not warranted).
-  **Bug branch** demonstrated via routing dry-run: `docs/bugs/task.md` + `bugs.md` read, open
-  entries presented — BUG-038 (first unchecked B038.1, `trace_path` the two unawaited-send
-  methods) and BUG-037 (first unchecked B037.6, `code-reviewer` on the B037.3/B037.4 fix);
-  BUG-019 listed as diagnostic-only / not actionable. Both branches reach a loaded prompt.
-  Docs-only close: SEP-4 ticked (working list + "Epic done when"), `docs/plan/README.md` row
-  flipped to ✅ Done, RDO-12 ticked in `root-doc-organization/tasks.md` (both checkboxes),
-  priority item 1 ticked here. `session-entry-point` epic (SEP-1..4) fully shipped.
+- **SEP-4 — end-to-end check + close (session-entry-point epic complete).** Ran both `/work` branches in one session. **Feature branch** demonstrated live: invoked as `/work on SEP-4 in
+  session-entry-point` → Step A skip-through detection matched the story id → Feature branch pre-selected to `session-entry-point` (TODOS priority item 1) → `prompt.md` + `tasks.md` loaded → SEP-4
+  identified as first unchecked `- [ ]` → `CONTEXT.md` read → handed to `CLAUDE.md` Step 2b (council checkpoint: not warranted). **Bug branch** demonstrated via routing dry-run: `docs/bugs/task.md` +
+  `bugs.md` read, open entries presented — BUG-038 (first unchecked B038.1, `trace_path` the two unawaited-send methods) and BUG-037 (first unchecked B037.6, `code-reviewer` on the B037.3/B037.4 fix);
+  BUG-019 listed as diagnostic-only / not actionable. Both branches reach a loaded prompt. Docs-only close: SEP-4 ticked (working list + "Epic done when"), `docs/plan/README.md` row flipped to ✅ Done,
+  RDO-12 ticked in `root-doc-organization/tasks.md` (both checkboxes), priority item 1 ticked here. `session-entry-point` epic (SEP-1..4) fully shipped.
 
-- **SEP-3 — `AGENTS.md` mirror (session-entry-point).** Applied the SEP-2 `CLAUDE.md` Step 1
-  change to `AGENTS.md` with the Antigravity adjustment: new `/work` delta bullet in the
-  header deltas list; Step 1 gains a routing block stating the manual equivalent (no `/work`
-  skill — take the feature target off `TODOS.md` "Priority-Ordered Open Work" first-5, or the
-  bug off `docs/bugs/`, then follow the handoff protocol into Step 2b); the "new feature" +
-  "specific story" load-hint lines collapsed into one manual-routing pointer; Quick-reference
-  row added. RDO-6's `md-organize` re-sync scope already names `.claude/skills/work/SKILL.md`
-  (RDO-12 triage) — no edit needed; RDO-6 itself still unshipped. Docs-only. Next: SEP-4
-  (end-to-end check of both `/work` branches in one session + close).
+- **SEP-3 — `AGENTS.md` mirror (session-entry-point).** Applied the SEP-2 `CLAUDE.md` Step 1 change to `AGENTS.md` with the Antigravity adjustment: new `/work` delta bullet in the header deltas list;
+  Step 1 gains a routing block stating the manual equivalent (no `/work` skill — take the feature target off `TODOS.md` "Priority-Ordered Open Work" first-5, or the bug off `docs/bugs/`, then follow
+  the handoff protocol into Step 2b); the "new feature" + "specific story" load-hint lines collapsed into one manual-routing pointer; Quick-reference row added. RDO-6's `md-organize` re-sync scope
+  already names `.claude/skills/work/SKILL.md` (RDO-12 triage) — no edit needed; RDO-6 itself still unshipped. Docs-only. Next: SEP-4 (end-to-end check of both `/work` branches in one session +
+  close).
 
-- **SEP-2 — `CLAUDE.md` reconciliation (session-entry-point).** `/work` is now the documented
-  start-of-task entry point in `CLAUDE.md`: leading `/work` block added to Step 1; the two
-  duplicated load-hint lines ("Starting a new feature → `TODOS.md` + `PLANNER.md`", "Working a
-  specific story → load ONLY that story file …") collapsed into one `/work` pointer;
-  Quick-reference table gains a `/work` row. Docs-only. Next: SEP-3 (`AGENTS.md` mirror +
-  `md-organize` re-sync scope).
+- **SEP-2 — `CLAUDE.md` reconciliation (session-entry-point).** `/work` is now the documented start-of-task entry point in `CLAUDE.md`: leading `/work` block added to Step 1; the two duplicated
+  load-hint lines ("Starting a new feature → `TODOS.md` + `PLANNER.md`", "Working a specific story → load ONLY that story file …") collapsed into one `/work` pointer; Quick-reference table gains a
+  `/work` row. Docs-only. Next: SEP-3 (`AGENTS.md` mirror + `md-organize` re-sync scope).
 
-- **RDO-15 filed (root-doc-organization).** Animesh flagged that story `tasks.md` files track
-  each task id with two checkboxes — the working list and the trailing `## Epic done when`
-  block (`session-entry-point/tasks.md` SEP-2 is the worked example) — plus a third state
-  signal in `docs/plan/README.md`; ticking one and missing the others silently desyncs. RDO-15
-  adds a checkbox-consistency sweep (extends RDO-13's `check_story_structure.py`), picks a
-  one-checkbox-per-id convention, and retrofits. Docs-only.
+- **RDO-15 filed (root-doc-organization).** Animesh flagged that story `tasks.md` files track each task id with two checkboxes — the working list and the trailing `## Epic done when` block
+  (`session-entry-point/tasks.md` SEP-2 is the worked example) — plus a third state signal in `docs/plan/README.md`; ticking one and missing the others silently desyncs. RDO-15 adds a
+  checkbox-consistency sweep (extends RDO-13's `check_story_structure.py`), picks a one-checkbox-per-id convention, and retrofits. Docs-only.
 
-- **`/work` priority-source fix.** `/work`'s Feature branch reads `TODOS.md` "Priority-Ordered
-  Open Work", which had rotted (broken numbering `0e.`→`9.`, item 14 duplicated, `TGFMT-2..9`
-  listed though superseded). Decided with Animesh: `TODOS.md` stays the canonical global
-  priority file and must order **both** bugs and features. Quick fix now — prepended
-  `session-entry-point` (item 1) and `root-doc-organization` (item 2), renumbered the old `0e.`
-  BUG-030 entry to `3.`. Full restructure into one unified bug+feature queue filed as
-  **RDO-14** in `docs/plan/root-doc-organization/tasks.md`. Docs-only.
+- **`/work` priority-source fix.** `/work`'s Feature branch reads `TODOS.md` "Priority-Ordered Open Work", which had rotted (broken numbering `0e.`→`9.`, item 14 duplicated, `TGFMT-2..9` listed though
+  superseded). Decided with Animesh: `TODOS.md` stays the canonical global priority file and must order **both** bugs and features. Quick fix now — prepended `session-entry-point` (item 1) and
+  `root-doc-organization` (item 2), renumbered the old `0e.` BUG-030 entry to `3.`. Full restructure into one unified bug+feature queue filed as **RDO-14** in
+  `docs/plan/root-doc-organization/tasks.md`. Docs-only.
 
-- **Root state-doc staleness — round 2 of workflow token-optimization.** Problem: root state
-  docs (`CONTEXT.md`, `TODOS.md`, `DECISIONS.md`, `PLANNER.md`, `DB_REGISTRY.md`, …) rot because
-  the only thing forcing an update is `CLAUDE.md` Step 5a — a checklist line, no enforcement,
-  no signal. Three levers: surface / enforce / shrink.
+- **Root state-doc staleness — round 2 of workflow token-optimization.** Problem: root state docs (`CONTEXT.md`, `TODOS.md`, `DECISIONS.md`, `PLANNER.md`, `DB_REGISTRY.md`, …) rot because the only
+  thing forcing an update is `CLAUDE.md` Step 5a — a checklist line, no enforcement, no signal. Three levers: surface / enforce / shrink.
   - **[x] #1 — surface (done, SHA 758dd6b).** New repo hook `.claude/hooks/state_doc_freshness.sh`
     wired as `SessionStart` in `.claude/settings.json`. Counts `src/`|`scripts/` commits since
     each state doc last changed; prints a one-line flag for any doc over its threshold
@@ -649,46 +395,26 @@ this file's Session Log grows large again.
     advisory hooks to blocking — review on/after 2026-09-03) added; `tasks.md` gained an
     "Epic done when" checklist including an end-to-end loop-closure test. `plan.md` + README
     refreshed.
-- **Workflow-suggestion triage → new `session-entry-point` story.** Triaging a batch of
-  workflow-improvement suggestions into `root-doc-organization`. #1 — unified session entry
-  point — spun into its own story `docs/plan/session-entry-point/` (SEP-1..4: manual `/work`
-  skill, Feature/Bug routing, Feature branch offers the first 5 of `TODOS.md` "Priority-Ordered
-  Open Work", Bug branch offers open `docs/bugs/` entries) + **RDO-12** pointer row in
-  `root-doc-organization/tasks.md`. Decided: manual invocation only, no SessionStart hook.
-  #2 — convention enforcement — filed as **RDO-13**: `docs/plan/README.md` §Conventions made
-  canonical + self-contained (drop the dead `docs/archive/plan/README.md` pointer),
-  `docs/plan/_TEMPLATE/` + `check_story_structure.py` audit (into `md-organize`, not
-  pre-commit), ticked `tasks.md` lines carry `| Owner | Model | SHA |`, `TODOS.md` cut to
-  pointer-only items (no inline detail, no mirrored checkboxes, delete the line on story
-  completion). #3 — MD line width — folded into **RDO-5** (scope edit, not a new item):
-  200-char hard cap, semantic-linefeed prose style (one sentence/clause per line), check
-  extended to `docs/plan/**` + `docs/bugs/**`, `.py` unchanged at ruff 100. Further
-  suggestions still pending. Docs-only; commit deferred to the single end-of-triage commit.
-- **SEP-1 — `/work` session entry-point skill (RDO-12).** Authored `.claude/skills/work/SKILL.md`
-  — manual skill (triggers "work" / "start work" / "pick up a task" / "/work"), Step A
-  skip-through (message names a story/bug/RDO id → jump to branch, else `AskUserQuestion`
-  Feature/Bug), Feature branch presents the first 5 of `TODOS.md` "Priority-Ordered Open Work"
-  and loads the picked story's `prompt.md` + `*_tasks.md` first unchecked task + `CONTEXT.md`,
-  Bug branch lists open `docs/bugs/` entries (`🔴`/`🟡`) and loads the entry + `task.md` lines
-  + first unchecked. Front-end to the existing protocol — composes with `task_protocol.sh`,
-  hands to `CLAUDE.md` Step 2b. House style matched to `session-close` / `commit`. Docs +
-  `.claude/` only — no code-reviewer/test-runner. SEP-2 (`CLAUDE.md` reconciliation) and
-  SEP-3/4 are later sessions.
-- **Workflow token-optimization** (plan: `~/.claude/plans/this-session-is-for-federated-goose.md`)
-  — cut fixed per-session scaffolding cost (~5k tokens on a typical implementation session).
-  Changes:
-  (1) `~/.claude/hooks/cbm-code-discovery-gate` (global, not in repo) made path-aware — the
-  once-per-session block now fires only for real code targets (`.py` under `src/`|`scripts/`,
-  or a Grep/Glob scoped there), not for the first markdown/config Read of every session;
-  (2) `.claude/hooks/guard_src_reads.sh` — full graph decision tree once per session, one-liner
-  after; (3) `.claude/hooks/task_protocol.sh` — full checklist once per session, one-liner on
-  later task prompts; (4) `~/.claude/hooks/cbm-session-reminder` (global) slimmed to one line
-  (harness already injects the full reminder); (5) `CLAUDE.md` + `AGENTS.md` — stripped dated
-  failure anecdotes, deduped the AI-Collaboration section against Step 3b/AutoTrigger; fixed
-  `AGENTS.md`'s dead `md-organize` reference → `md-cleanup` Step 7 (new: re-sync AGENTS.md
-  when CLAUDE.md changes). Docs/hooks only, no `.py` touched — no code-reviewer, no test-runner.
+- **Workflow-suggestion triage → new `session-entry-point` story.** Triaging a batch of workflow-improvement suggestions into `root-doc-organization`. #1 — unified session entry point — spun into its
+  own story `docs/plan/session-entry-point/` (SEP-1..4: manual `/work` skill, Feature/Bug routing, Feature branch offers the first 5 of `TODOS.md` "Priority-Ordered Open Work", Bug branch offers open
+  `docs/bugs/` entries) + **RDO-12** pointer row in `root-doc-organization/tasks.md`. Decided: manual invocation only, no SessionStart hook. #2 — convention enforcement — filed as **RDO-13**:
+  `docs/plan/README.md` §Conventions made canonical + self-contained (drop the dead `docs/archive/plan/README.md` pointer), `docs/plan/_TEMPLATE/` + `check_story_structure.py` audit (into
+  `md-organize`, not pre-commit), ticked `tasks.md` lines carry `| Owner | Model | SHA |`, `TODOS.md` cut to pointer-only items (no inline detail, no mirrored checkboxes, delete the line on story
+  completion). #3 — MD line width — folded into **RDO-5** (scope edit, not a new item): 200-char hard cap, semantic-linefeed prose style (one sentence/clause per line), check extended to
+  `docs/plan/**` + `docs/bugs/**`, `.py` unchanged at ruff 100. Further suggestions still pending. Docs-only; commit deferred to the single end-of-triage commit.
+- **SEP-1 — `/work` session entry-point skill (RDO-12).** Authored `.claude/skills/work/SKILL.md` — manual skill (triggers "work" / "start work" / "pick up a task" / "/work"), Step A skip-through
+  (message names a story/bug/RDO id → jump to branch, else `AskUserQuestion` Feature/Bug), Feature branch presents the first 5 of `TODOS.md` "Priority-Ordered Open Work" and loads the picked story's
+  `prompt.md` + `*_tasks.md` first unchecked task + `CONTEXT.md`, Bug branch lists open `docs/bugs/` entries (`🔴`/`🟡`) and loads the entry + `task.md` lines
+  + first unchecked. Front-end to the existing protocol — composes with `task_protocol.sh`, hands to `CLAUDE.md` Step 2b. House style matched to `session-close` / `commit`. Docs + `.claude/` only — no
+    code-reviewer/test-runner. SEP-2 (`CLAUDE.md` reconciliation) and SEP-3/4 are later sessions.
+- **Workflow token-optimization** (plan: `~/.claude/plans/this-session-is-for-federated-goose.md`) — cut fixed per-session scaffolding cost (~5k tokens on a typical implementation session). Changes:
+  (1) `~/.claude/hooks/cbm-code-discovery-gate` (global, not in repo) made path-aware — the once-per-session block now fires only for real code targets (`.py` under `src/`|`scripts/`, or a Grep/Glob
+  scoped there), not for the first markdown/config Read of every session; (2) `.claude/hooks/guard_src_reads.sh` — full graph decision tree once per session, one-liner after; (3)
+  `.claude/hooks/task_protocol.sh` — full checklist once per session, one-liner on later task prompts; (4) `~/.claude/hooks/cbm-session-reminder` (global) slimmed to one line (harness already injects
+  the full reminder); (5) `CLAUDE.md` + `AGENTS.md` — stripped dated failure anecdotes, deduped the AI-Collaboration section against Step 3b/AutoTrigger; fixed `AGENTS.md`'s dead `md-organize`
+  reference → `md-cleanup` Step 7 (new: re-sync AGENTS.md when CLAUDE.md changes). Docs/hooks only, no `.py` touched — no code-reviewer, no test-runner.
 
-  **Next-session validation** (validated 2026-08-27, session `92c04e16` — all 5 pass):
+**Next-session validation** (validated 2026-08-27, session `92c04e16` — all 5 pass):
   - [x] First action `Read CONTEXT.md` — succeeded, **no** `cbm-code-discovery-gate` block
     (gate file `cbm-code-discovery-gate-$PPID` stayed absent until the first `src/*.py` read).
   - [x] First task-shaped prompt → full `⚙️ TASK PROTOCOL` checklist injected; gate file
@@ -707,7 +433,7 @@ this file's Session Log grows large again.
     `/tmp/niftyshield-guard-$PPID`, `/tmp/niftyshield-task-protocol-$PPID` — `rm` to re-test
     first-fire within one session.
 
-  **Task 5 (done 2026-08-27) — measurement + permission tooling:**
+**Task 5 (done 2026-08-27) — measurement + permission tooling:**
   - [x] Ran `/fewer-permission-prompts` (50 recent transcripts). Only non-auto-allowed
     read-only patterns worth listing were the four codebase-memory-mcp graph reads
     (`get_code_snippet`, `search_graph`, `search_code`, `trace_path`) — all bash usage was
@@ -726,23 +452,15 @@ this file's Session Log grows large again.
     files (`task_protocol`, `guard_src_reads`, `cbm-code-discovery-gate`) were all confirmed
     single-fire above, which is the mechanism that delivers it. `logs/context.log` not
     written (`/context &> file` is client-side, redirect is inert; `logs/` is gitignored).
-- Earlier 2026-08-27 entries — **ROLL-4** (`30bac70`), **nuvama empty-book crash** (`3b9b57f`),
-  **RDO-1**, **RDO-2** — moved verbatim to
-  [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md) (2026-08-27 section).
-  `git log --oneline` carries the sequence, each commit's `Why:` line the intent.
-- [2026-09-03] migrated ROLL-8 WARN event alert format (d6b6476 → 9159524 non-fatal
-  fix → 8f3a35a fallback escape → e8fb906 test fix)
-- [2026-09-03] ROLL-9 shipped (`1e270de`) — 3-track base-leg roll notification →
-  MarkdownV2 two-layout format + closed-leg realized P&L; promoted
-  `format_money(signed=)` + `STRATEGY_SHORT_LABELS` into `formatting.py`. `strategy-rollout/`
-  next: ROLL-10.
-- [2026-09-03] ROLL-10 shipped (`a94eef3`) — proxy delta CRITICAL alert (dev 3-track
-  snapshot) → confirmed 3-line MarkdownV2 block; `escape_markdown()` over the signed delta +
-  verbatim `proxy_delta_alert`; plumbed `TrackSnapshot.consecutive_days` for a future
-  structured layout. `strategy-rollout/` next: ROLL-11.
-- [2026-09-03] ROLL-11 shipped (`1336b93`) — system healthcheck alert (`healthcheck.py`) →
-  grouped severity-status MarkdownV2 block (`NIFTYSHIELD: DEGRADED` / `🚨 ACTION REQUIRED` /
-  `✅ SYSTEMS NORMAL`); refactored `run_checks()` → `list[CheckResult]` (frozen dataclass) and
-  `_check_3track_snapshot_cron()` → `CheckResult`, dropping the pre-formatted `✅/❌/⚠️`
-  strings; `build_healthcheck_alert()` colocated in `healthcheck.py`. 8 new tests, 6 updated.
-  `strategy-rollout/` next: ROLL-12.
+- Earlier 2026-08-27 entries — **ROLL-4** (`30bac70`), **nuvama empty-book crash** (`3b9b57f`), **RDO-1**, **RDO-2** — moved verbatim to [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md)
+  (2026-08-27 section). `git log --oneline` carries the sequence, each commit's `Why:` line the intent.
+- [2026-09-03] migrated ROLL-8 WARN event alert format (d6b6476 → 9159524 non-fatal fix → 8f3a35a fallback escape → e8fb906 test fix)
+- [2026-09-03] ROLL-9 shipped (`1e270de`) — 3-track base-leg roll notification → MarkdownV2 two-layout format + closed-leg realized P&L; promoted `format_money(signed=)` + `STRATEGY_SHORT_LABELS` into
+  `formatting.py`. `strategy-rollout/` next: ROLL-10.
+- [2026-09-03] ROLL-10 shipped (`a94eef3`) — proxy delta CRITICAL alert (dev 3-track snapshot) → confirmed 3-line MarkdownV2 block; `escape_markdown()` over the signed delta + verbatim
+  `proxy_delta_alert`; plumbed `TrackSnapshot.consecutive_days` for a future structured layout. `strategy-rollout/` next: ROLL-11.
+- [2026-09-03] ROLL-11 shipped (`1336b93`) — system healthcheck alert (`healthcheck.py`) → grouped severity-status MarkdownV2 block (`NIFTYSHIELD: DEGRADED` / `🚨 ACTION REQUIRED` / `✅ SYSTEMS
+  NORMAL`); refactored `run_checks()` → `list[CheckResult]` (frozen dataclass) and `_check_3track_snapshot_cron()` → `CheckResult`, dropping the pre-formatted `✅/❌/⚠️` strings;
+  `build_healthcheck_alert()` colocated in `healthcheck.py`. 8 new tests, 6 updated. `strategy-rollout/` next: ROLL-12.
+- [2026-09-03] ROLL-12 shipped (`b3bf77a`) — position health check alert (`position_health_check.py`) → MarkdownV2 grouped-by-finding-type format; refactored `run_position_checks()` →
+  `list[PositionFinding]` (frozen dataclass); colocated `build_position_health_message()` in `src/notifications/formatting.py`. `strategy-rollout/` next: ROLL-13.
