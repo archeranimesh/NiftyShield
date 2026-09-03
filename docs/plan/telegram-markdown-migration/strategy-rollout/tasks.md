@@ -43,7 +43,7 @@ Sequenced by risk: informational messages first, live position-event notificatio
 - [x] **ROLL-7** — Migrate re-entry blocked/eligible notice (`ReEntryMixin._check_reentry`); refactor `blocked_reason` → `(short_reason, detail)` + new `STRATEGY_LABELS` / `LEG_ROLE_LABELS` |
       Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: cad8074
 - [x] **ROLL-8** — Migrate generic strategy WARN alert (`StrategyMonitor._route_event` WARN branch) → compact cause→effect format; reuses ROLL-7's tables, fixed `⚠️` | Owner: Antigravity | Model:
-      n/a | Review: none | SHA: d6b6476
+      n/a | Review: none | SHA: 9159524
 - [ ] **ROLL-9** — Migrate three-track base-leg roll notification (`paper_3track_roll._notify_roll`) → two leg-role layouts + closed-leg realized P&L | Owner: Claude | Model: claude-sonnet-5 |
       Review: code-reviewer | SHA: <—>
 - [ ] **ROLL-10** — Migrate Proxy Delta CRITICAL alert (`paper_track_snapshot.py::main` CRITICAL branch) → 3-line emoji format; expose `TrackSnapshot.consecutive_days` | Owner: Claude | Model:

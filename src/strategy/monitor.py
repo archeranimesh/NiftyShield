@@ -383,7 +383,9 @@ class StrategyMonitor:
                         strategy_name=strategy.strategy_name,
                         leg_role=leg_role,
                     )
-                    text = f"[{strategy.strategy_name}] {event.event_type}: {event.description}"
+                    text = escape_markdown(
+                        f"[{strategy.strategy_name}] {event.event_type}: {event.description}"
+                    )
 
                 await self._notifier.send_plain_message(text)
                 if warn_fired is not None:
