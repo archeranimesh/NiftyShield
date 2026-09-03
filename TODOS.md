@@ -462,5 +462,5 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
 - [2026-09-03] ROLL-11 shipped (`1336b93`) — system healthcheck alert (`healthcheck.py`) → grouped severity-status MarkdownV2 block (`NIFTYSHIELD: DEGRADED` / `🚨 ACTION REQUIRED` / `✅ SYSTEMS
   NORMAL`); refactored `run_checks()` → `list[CheckResult]` (frozen dataclass) and `_check_3track_snapshot_cron()` → `CheckResult`, dropping the pre-formatted `✅/❌/⚠️` strings;
   `build_healthcheck_alert()` colocated in `healthcheck.py`. 8 new tests, 6 updated. `strategy-rollout/` next: ROLL-12.
-- [2026-09-03] ROLL-12 shipped (`b3bf77a`, `a083fba`) — position health check alert (`position_health_check.py`) → MarkdownV2 grouped-by-finding-type format; refactored `run_position_checks()` →
-  `list[PositionFinding]` (frozen dataclass); colocated `build_position_health_message()` in `src/notifications/formatting.py`. `strategy-rollout/` next: ROLL-13.
+- [2026-09-03] ROLL-12 shipped (`b3bf77a`, `a083fba`, `ecb7d0b`) — position health check alert (`position_health_check.py`) → MarkdownV2 grouped-by-finding-type format; refactored
+  `run_position_checks()` → `list[PositionFinding]` (frozen dataclass); colocated `build_position_health_message()` in `src/notifications/formatting.py`. `strategy-rollout/` next: ROLL-13.
