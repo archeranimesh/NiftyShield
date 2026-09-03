@@ -206,8 +206,12 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
     ),
     (
         "scripts/position_health_check.py",
-        151,
-    ): "ROLL-12 - format confirmed, real code not yet migrated",
+        149,
+    ): (
+        "heuristic limitation, not a real gap - ROLL-12 migrated this; the message is built "
+        "and fully escaped inside build_position_health_message(), but this guard only inspects "
+        "the immediate enclosing function (main)"
+    ),
     (
         "scripts/strategies/three_track/paper_3track_entry.py",
         940,

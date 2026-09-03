@@ -36,7 +36,7 @@ import structlog
 
 from src.config import settings
 from src.instruments.lookup import InstrumentLookup, parse_expiry
-from src.notifications.formatting import PositionFinding
+from src.notifications.formatting import PositionFinding, build_position_health_message
 from src.notifications.telegram import build_notifier
 from src.paper.constants import DEFAULT_BOD_PATH
 from src.paper.store import PaperStore
@@ -140,8 +140,7 @@ async def main() -> int:
     has_issue, findings = run_position_checks(store, lookup, today)
 
     if has_issue:
-        alert_body = "\n".join(str(f) for f in findings)
-        alert_msg = f"⚠️ NiftyShield Position Health — {today.isoformat()}\n{alert_body}"
+        alert_msg = build_position_health_message(findings)
 
         logger.warning("position_health_check_failed", finding_count=len(findings))
 

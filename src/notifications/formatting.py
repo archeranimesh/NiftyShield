@@ -5,6 +5,9 @@ from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Literal
 
+from src.instruments.lookup import format_option_label
+from src.notifications.markdown import escape_markdown
+
 
 def format_money(value: Decimal, *, signed: bool = False) -> str:
     """2dp, comma thousands, ₹ prefix, sign before ₹ on negatives.
@@ -604,3 +607,65 @@ class PositionFinding:
     underlying_symbol: str | None = None
     strike_price: float | None = None
     instrument_type: str | None = None
+
+
+def _direction_and_qty(net_qty: int) -> tuple[str, int]:
+    """(Short|Long, abs(qty))"""
+    return ("Short", -net_qty) if net_qty < 0 else ("Long", net_qty)
+
+
+def _resolved_label(f: PositionFinding) -> str:
+    if f.instrument_type == "FUT":
+        return f"{f.underlying_symbol} FUT"
+    label = format_option_label(
+        f.underlying_symbol, f.strike_price, f.instrument_type, f.expiry_str
+    )
+    return f"{f.underlying_symbol} {label.split()[1]} {f.instrument_type}"
+
+
+def _unknown_token(instrument_key: str) -> str:
+    return instrument_key.split("|", 1)[1] if "|" in instrument_key else instrument_key
+
+
+def build_position_health_message(findings: list[PositionFinding]) -> str:
+    lines = ["⚠️ NIFTYSHIELD: POSITION HEALTH", ""]
+
+    overdue = sorted(
+        (f for f in findings if f.finding_type == "roll_overdue"),
+        key=lambda f: f.days_overdue,
+        reverse=True,
+    )
+    unresolved = [f for f in findings if f.finding_type == "unresolved_instrument"]
+
+    if overdue:
+        lines.append(f"❌ ROLLS OVERDUE {escape_markdown(f'({len(overdue)})')}:")
+        for f in overdue:
+            direction, qty = _direction_and_qty(f.net_qty)
+            strat_label = escape_markdown(strategy_label(f.strategy_name))
+            instrument = escape_markdown(_resolved_label(f))
+            expiry = escape_markdown(
+                f"({date.fromisoformat(f.expiry_str).strftime('%d %b %y').upper().lstrip('0')})"
+            )
+            lines.append(
+                f"🚨 {f.days_overdue}d LATE: {escape_markdown('[')}{strat_label}"
+                f"{escape_markdown(']')} {direction} {qty}x {instrument} {expiry}"
+            )
+        lines.append("")
+
+    if unresolved:
+        lines.append(f"❓ UNMAPPED ASSET {escape_markdown(f'({len(unresolved)})')}:")
+        for f in unresolved:
+            direction, qty = _direction_and_qty(f.net_qty)
+            strat_label = escape_markdown(strategy_label(f.strategy_name))
+            token = escape_markdown(_unknown_token(f.instrument_key))
+            lines.append(
+                f"⚠️ {escape_markdown('[')}{strat_label}{escape_markdown(']')} "
+                f"{direction} {qty}x {escape_markdown('(')}Unknown Token: {token}"
+                f"{escape_markdown(')')}"
+            )
+        lines.append("")
+
+    while lines and lines[-1] == "":
+        lines.pop()
+
+    return "\n".join(lines)
