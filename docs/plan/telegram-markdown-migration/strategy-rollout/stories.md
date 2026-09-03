@@ -759,6 +759,25 @@ search_graph("STRATEGY_LABELS")                      # confirm whether ROLL-7's 
 
 ## ROLL-9 — Three-Track Base-Leg Roll Notification
 
+**As-built (SHA `1e270de`, 2026-09-03, Claude / claude-sonnet-5, real `@code-reviewer` (Opus)
+— 0 CRITICAL / 0 ERROR):** The spec's `_notify_roll` is now the inline notification block in
+`check_and_roll_leg` (`paper_3track_roll.py`) — re-verified via graph/sed. `expiry_date` and
+`next_inst` were confirmed still in local scope at the build point, as the audit assumed.
+Builder `build_roll_notification()` (module-level, testable) renders both confirmed layouts;
+`_futures_spread_label` / `_ditm_spread_label` / `_roll_pnl_emoji` are local helpers — the
+pnl-emoji palette (🟢/🔴/➖) is deliberately separate from `formatting.pnl_emoji()` (✅/🔻/➖)
+per the on-device confirmation, reconciliation flagged not done. `format_money(signed=True)`
+(FMT-1f, previously docs-only) and `STRATEGY_SHORT_LABELS` + `strategy_short_label()` were
+promoted into `src/notifications/formatting.py`. Spread points render unsigned via `abs()` per
+the locked scratch reference — FORMATTING.md §6's "signed-money override" wording is loose
+(points are not money); followed the on-device format. Message build moved inside the
+non-fatal `try/except` so a label-lookup miss cannot abort a completed roll. Item 6 (DITM
+gate-failure reason) stays out of scope — `⚠️ L-Gate: WARN` ships with no parenthetical,
+regression-tested. Tests: 7 scenario layouts + label/partial/escape/avg-cost-basis
+regressions in `test_paper_3track_roll.py`; `signed` + short-label tests in
+`test_formatting.py`; escaping-guard baseline entry moved to the new `send` line (heuristic
+limitation — escaping is inside the builder, same as `eod_summary.py:200`).
+
 **Not in the epic's original confirmed-callers list** — added via `missing-message-workshop-prompt.md`/`message-format-workshop.md` (queue item 3, `docs/plan/telegram-markdown-migration/TODO.md`).
 TODO.md's queue line ("Two lines, single position event") undersold the real message — the current pre-migration code is 6 lines, not 2.
 

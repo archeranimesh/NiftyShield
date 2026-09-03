@@ -732,3 +732,7 @@ this file's Session Log grows large again.
   `git log --oneline` carries the sequence, each commit's `Why:` line the intent.
 - [2026-09-03] migrated ROLL-8 WARN event alert format (d6b6476 → 9159524 non-fatal
   fix → 8f3a35a fallback escape → e8fb906 test fix)
+- [2026-09-03] ROLL-9 shipped (`1e270de`) — 3-track base-leg roll notification →
+  MarkdownV2 two-layout format + closed-leg realized P&L; promoted
+  `format_money(signed=)` + `STRATEGY_SHORT_LABELS` into `formatting.py`. `strategy-rollout/`
+  next: ROLL-10.

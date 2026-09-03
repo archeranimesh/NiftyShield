@@ -44,8 +44,8 @@ Sequenced by risk: informational messages first, live position-event notificatio
       Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: cad8074
 - [x] **ROLL-8** — Migrate generic strategy WARN alert (`StrategyMonitor._route_event` WARN branch) → compact cause→effect format; reuses ROLL-7's tables, fixed `⚠️` | Owner: Antigravity | Model:
       n/a | Review: none | SHA: e8fb906
-- [ ] **ROLL-9** — Migrate three-track base-leg roll notification (`paper_3track_roll._notify_roll`) → two leg-role layouts + closed-leg realized P&L | Owner: Claude | Model: claude-sonnet-5 |
-      Review: code-reviewer | SHA: <—>
+- [x] **ROLL-9** — Migrate three-track base-leg roll notification (`paper_3track_roll._notify_roll`) → two leg-role layouts + closed-leg realized P&L | Owner: Claude | Model: claude-sonnet-5 |
+      Review: code-reviewer | SHA: 1e270de
 - [ ] **ROLL-10** — Migrate Proxy Delta CRITICAL alert (`paper_track_snapshot.py::main` CRITICAL branch) → 3-line emoji format; expose `TrackSnapshot.consecutive_days` | Owner: Claude | Model:
       claude-sonnet-5 | Review: none | SHA: <—>
 - [ ] **ROLL-11** — Migrate System Healthcheck alert (`healthcheck.py::main`) → grouped severity-status format; refactor `run_checks()` → structured `CheckResult` | Owner: Claude | Model:

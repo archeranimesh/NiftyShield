@@ -104,8 +104,10 @@ and the rationale behind each rule: **`NOTES.md`**. The contracts that bind a ca
 - **`build_leg_table` LTP/Entry columns are 1dp, not `format_money`'s 2dp** — a locked-in
   exception (`FORMATTING.md` §3) to fit a narrow mobile screen. Do not "fix" it into a
   `format_money()` call.
-- **`strategy_label()` / `leg_role_label()` raise `ValueError` on an unmapped id** — never a
-  fallback to the raw id. Extend the dict when a new caller needs one.
+- **`strategy_label()` / `leg_role_label()` / `strategy_short_label()` raise `ValueError` on
+  an unmapped id** — never a fallback to the raw id. Extend the dict when a new caller needs
+  one. `strategy_short_label()` returns the compact all-caps header token (`PROXY` /
+  `FUTURES` / `SPOT`), distinct from `strategy_label()`'s fuller "Proxy Track" form.
 
 Tests: `tests/unit/notifications/test_formatting.py`.
 
