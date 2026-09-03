@@ -63,6 +63,7 @@ class TrackSnapshot:
     return_on_nee: Decimal
     proxy_delta_state: str | None = None
     proxy_delta_alert: str | None = None
+    consecutive_days: int | None = None
 
 
 def _compute_realized_pnl_by_leg(store: PaperStore, strategy_name: str) -> dict[str, Decimal]:
@@ -236,6 +237,7 @@ async def generate_track_snapshot(
 
     proxy_state = None
     proxy_alert = None
+    proxy_consecutive = None
     proxy_base_leg_delta = None
 
     fetched_chains: dict[str, OptionChain | None] = {}
@@ -277,6 +279,7 @@ async def generate_track_snapshot(
             proxy_base_leg_delta, snapshot_date
         )
         proxy_state = state_label
+        proxy_consecutive = consecutive
         if state_label == "CRITICAL":
             proxy_alert = f"CRITICAL (<0.40, day {consecutive} of 3+)"
         elif state_label == "WARNING":
@@ -309,4 +312,5 @@ async def generate_track_snapshot(
         return_on_nee=ret_on_nee,
         proxy_delta_state=proxy_state,
         proxy_delta_alert=proxy_alert,
+        consecutive_days=proxy_consecutive,
     )

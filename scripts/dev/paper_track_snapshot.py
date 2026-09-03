@@ -18,6 +18,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.client.upstox_market import UpstoxMarketClient
 from src.instruments.lookup import InstrumentLookup
+from src.notifications.formatting import format_greek
+from src.notifications.markdown import escape_markdown
 from src.notifications.telegram import TelegramNotifier
 from src.paper._display import BASE_LABELS
 from src.paper._display import fmt_decimal as _fmt
@@ -32,7 +34,7 @@ from src.paper.constants import (
 from src.paper.metrics import compute_nee
 from src.paper.proxy_monitor import ProxyDeltaMonitor
 from src.paper.store import PaperStore
-from src.paper.track_snapshot import TrackPnL, generate_track_snapshot
+from src.paper.track_snapshot import TrackPnL, TrackSnapshot, generate_track_snapshot
 
 _SCRIPT_NAME = "scripts.dev.paper_track_snapshot"
 logger = structlog.get_logger(_SCRIPT_NAME)
@@ -67,6 +69,32 @@ class MockBrokerClientDryRun:
 class MockNotifier:
     async def send(self, text):
         print(f"[MOCK TELEGRAM] {text}")
+
+
+def _build_proxy_critical_alert(snapshot: TrackSnapshot) -> str:
+    """Proxy Delta CRITICAL alert body, MarkdownV2-safe (ROLL-10).
+
+    Confirmed format (2026-08-10 workshop, ref
+    ``scratch/2026-08-10_proxy_delta_critical_alert_format.py``)::
+
+        🚨 CRITICAL: PROXY DELTA
+        📐 Current: <signed 2dp> 🔴
+        📉 Rule Breach: <proxy_delta_alert, verbatim>
+
+    ``proxy_delta_alert`` is rendered verbatim (escaped, never parsed) — the
+    threshold and day count are pre-baked into that one string by
+    ``generate_track_snapshot``. ``TrackSnapshot.consecutive_days`` is now
+    plumbed for a future structured layout but is not split out here.
+    """
+    delta_str = escape_markdown(format_greek(float(snapshot.greeks.net_delta)))
+    alert_str = escape_markdown(snapshot.proxy_delta_alert or "")
+    return "\n".join(
+        [
+            "🚨 CRITICAL: PROXY DELTA",
+            f"📐 Current: {delta_str} 🔴",
+            f"📉 Rule Breach: {alert_str}",
+        ]
+    )
 
 
 async def main() -> None:
@@ -164,9 +192,7 @@ async def main() -> None:
         if track_name == STRATEGY_PROXY and snapshot.proxy_delta_alert:
             print(f"  ALERT  : Proxy Delta State -> {snapshot.proxy_delta_alert}")
             if "CRITICAL" in snapshot.proxy_delta_alert:
-                await notifier.send(
-                    f"🚨 **CRITICAL**: Proxy Delta Monitor triggered: {snapshot.proxy_delta_alert}\nDelta: {snapshot.greeks.net_delta:.2f}"
-                )
+                await notifier.send(_build_proxy_critical_alert(snapshot))
 
     print("\n" + "-" * 75)
     print("Snapshot Generation Complete.")

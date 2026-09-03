@@ -175,10 +175,13 @@ def scan_call_sites() -> list[CallSite]:
 # task names (flagged "untracked gap" - worth a future task, not this one).
 # (file, line): reason
 _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
-    (
-        "scripts/dev/paper_track_snapshot.py",
-        167,
-    ): "ROLL-10 - format confirmed, real code not yet migrated",
+    ("scripts/dev/paper_track_snapshot.py", 195): (
+        "heuristic limitation, not a real gap - ROLL-10 migrated this (SHA on the task "
+        "line); the message is built and fully escaped inside _build_proxy_critical_alert() "
+        "(escape_markdown() on the signed delta and the proxy_delta_alert string), but this "
+        "guard only inspects the immediate enclosing function (main), not the builder it "
+        "calls - same shape as the scripts/eod_summary.py:200 entry"
+    ),
     (
         "scripts/dev/send_test_telegram.py",
         65,
