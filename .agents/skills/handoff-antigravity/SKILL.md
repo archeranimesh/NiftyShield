@@ -8,6 +8,13 @@
 
 ---
 
+**Before reading further:** confirm the Step 3b routing call is firmly "Antigravity". This
+skill's body (~1.5K tokens) is only useful once that decision is settled — loading it and then
+reversing to "Claude implements" (task turns out judgement-heavy, or the full file is already
+in context) is pure waste.
+
+---
+
 ## Step 1 — Gather the five content blocks
 
 Read and extract (do not paste in full — extract only what's relevant to the task):

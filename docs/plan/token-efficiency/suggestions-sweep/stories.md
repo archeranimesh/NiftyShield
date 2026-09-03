@@ -168,12 +168,26 @@ wrapper script was needed; all 3 are docs-only.
 | parallel-subagent-ran-git-stash | 1 | fix | parallel-spawn text forbids every index/stash-touching git command; counts via `awk`/`grep` only |
 | skill-loaded-then-abandoned | 1 | fix | Step 3b text: settle the Claude-vs-Antigravity routing call before invoking `handoff-antigravity` |
 
+**Closed by SWEEP-6 (SHA `<pending>`):** both rows, `fix`-by-text.
+`parallel-subagent-ran-git-stash` — new `CLAUDE.md` / `AGENTS.md` **Step 3c** forbids every
+index / stash-touching git command in a parallel-subagent spawn (not just `add` / `commit` /
+`stash`) and mandates `awk` / `grep` for line counts. `skill-loaded-then-abandoned` —
+`CLAUDE.md` Step 3b now leads with "settle this routing call firmly before invoking
+`handoff-antigravity`", and the skill itself gained a "Before reading further: confirm the
+routing call is Antigravity" callout (mirrored in `.agents/skills/`).
+
 ### Cluster 6 — Shell environment → SWEEP-6 (2 rows)
 
 | Slug | Count | Outcome | Note |
 |---|--:|---|---|
 | cd-in-compound-bash-command | 1 | fix | prominent `CLAUDE.md` rule — CWD persists across Bash calls; use absolute paths / `git -C` |
 | bash-isms-in-zsh-shell | 1 | fix | prominent "session shell is zsh" line — no `mapfile`/`readarray`, no `$var` word-split lists |
+
+**Closed by SWEEP-6 (SHA `<pending>`):** both rows, `fix`-by-text. A new **Shell mechanics**
+paragraph after Rule 1 in `CLAUDE.md` states: session shell is zsh (no `mapfile` / `readarray`,
+no `$var` word-split lists) and never `cd` in a compound Bash command — cwd persists across
+calls; use absolute paths / `git -C`. `AGENTS.md` carries the adapted delta (Antigravity's
+`run_command` is an isolated `bash -c` with no persisted cwd, not zsh).
 
 ### Cluster 7 — Protocol discipline, model judgement → SWEEP-6 (7 rows)
 
@@ -186,6 +200,18 @@ wrapper script was needed; all 3 are docs-only.
 | context-md-skipped-on-escalated-ops-task | 1 | accept | tighten Step 1 wording — Step 1 applies the moment code enters scope |
 | spec-prestep-skipped-source-not-read `[new]` | 1 | accept | run a task spec's "Before any code" source-read prestep — model discipline, noted in SWEEP-6 |
 | mirror-doc-path-convention-assumed `[new]` | 1 | accept | grep an existing mirror for the path convention before writing pointers into `AGENTS.md` — noted alongside the FIX-1 mirror rule |
+
+**Closed by SWEEP-6 (SHA `<pending>`):** all 7 rows, `accept` with the guidance consolidated,
+not left scattered. `plan-gate-skipped-on-prescriptive-prompt` + `scope-question-jumped-ahead`
++ `plan-file-count-grew-silently` — one consolidated paragraph appended to `CLAUDE.md` /
+`AGENTS.md` **Step 3**: a prescriptive prompt is not a go-ahead, scope only the first unstarted
+phase, re-flag when the file count grows past what was approved. `context-md-ack-not-stated` +
+`context-md-skipped-on-escalated-ops-task` — **Step 1** wording tightened ("state `CONTEXT.md
+✓` verbatim in your first user-facing response"; "applies the moment code enters scope").
+`spec-prestep-skipped-source-not-read` — new **Step 3c** "Before writing code" makes a spec's
+"Before any code" source-read pre-step mandatory. `mirror-doc-path-convention-assumed` — a line
+in the `md-organize` skill Step 7 (alongside the FIX-1 mirror re-sync rule): grep an existing
+mirror for the path convention before writing any path into `AGENTS.md` / `.agents/**`.
 
 ### Roll-up
 
@@ -488,8 +514,35 @@ reads them before the call. As with SWEEP-2..4 the realised saving is the epic's
 
 **Commit:** `docs(protocol): tighten shell, subagent, and plan-gate guidance`
 
-**As-built (SHA `<—>`):** _record: rows fixed vs. accepted, and the consolidated
-protocol-discipline paragraph's location._
+**As-built (SHA `<pending>`):** Docs-only, no tests, `Review: none`. 11 rows closed across
+clusters 5 / 6 / 7 — see the three "Closed by SWEEP-6" blocks in the cluster map above. **4
+`fix`-by-text** (`parallel-subagent-ran-git-stash`, `skill-loaded-then-abandoned`,
+`cd-in-compound-bash-command`, `bash-isms-in-zsh-shell`); **7 `accept`** with the guidance
+consolidated (`plan-gate-skipped-on-prescriptive-prompt`, `scope-question-jumped-ahead`,
+`plan-file-count-grew-silently`, `context-md-ack-not-stated`,
+`context-md-skipped-on-escalated-ops-task`, `spec-prestep-skipped-source-not-read`,
+`mirror-doc-path-convention-assumed`).
+
+Files touched: `CLAUDE.md` — **Shell mechanics** para after Rule 1; **Step 1** ack + scope
+wording; **Step 3** consolidated plan-gate paragraph; **Step 3b** handoff-routing lead-in;
+new **Step 3c — Before writing code** (spec pre-step + parallel-subagent git rule).
+`AGENTS.md` — all of the above mirrored, with the shell note adapted to Antigravity's isolated
+`bash -c`. `.claude/skills/handoff-antigravity/SKILL.md` (+ `.agents/` mirror) — "confirm the
+routing call is Antigravity before reading further" callout. `.claude/skills/md-organize/SKILL.md`
+Step 7 — grep-an-existing-mirror-for-the-path-convention line.
+
+The consolidated protocol-discipline guidance lives in three anchored spots by design (per the
+SWEEP-1 map): the plan-gate trio in **Step 3**, the CONTEXT.md-ack pair in **Step 1**, the
+source-read pre-step in the new **Step 3c**.
+
+Measured delta: **not measurable as a per-turn or per-session token cut** — every SWEEP-6 row
+is a `fix`-by-text or an `accept`, i.e. protocol-text clarification with no hook or preflight
+attached (the enforcement load was SWEEP-2 / SWEEP-3 / SWEEP-4). The avoided-waste ceiling per
+cited incident is small and one-off: a `git stash` recovery ≈ 2–4K, a `mapfile`-in-zsh retry
+≈ 1–2K × 2 runs, a `handoff-antigravity` load-then-reverse ≈ 1.5K, a missing `CONTEXT.md ✓`
+costs nothing in tokens (it is a traceability gap). Whether the tightened wording changes
+behaviour is the epic's post-change `token_audit.py` re-run (Perspectives not covered), not
+this task's DoD.
 
 ---
 

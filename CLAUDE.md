@@ -63,6 +63,12 @@ Token math: `SELECT *` on a 15-row × 20-column table ≈ 300 tokens that persis
 `GROUP BY / SUM` summary row ≈ 15 tokens. Reference implementation:
 `get_cumulative_realized_pnl` — SQL-layer aggregation returning a compact `dict`.
 
+**Shell mechanics.** The session shell is **zsh** — no bash-only builtins (`mapfile`,
+`readarray`), and never rely on `$var` word-splitting for newline lists (use `while read` /
+`xargs -0` / a one-shot Python filter). **Never put `cd` in a compound Bash command** — the
+working directory persists across Bash tool calls, so `cd sub && grep …` silently breaks the
+next relative-path call. Use absolute paths or `git -C <dir>` / `--` path args.
+
 ---
 
 ## Step 1 — Read CONTEXT.md first
@@ -73,8 +79,11 @@ picks the target off `TODOS.md` `## Feature Backlog` (feature) or `docs/bugs/` (
 the story/bug prompt + first unchecked task + `CONTEXT.md`, then hands to Step 2b below.
 Open-ended discussion needs no `/work`.
 
-Read `CONTEXT.md` before writing any code. State `CONTEXT.md ✓` in your first response.
-Do not rely on chat history — CONTEXT.md is the single source of truth.
+Read `CONTEXT.md` before writing any code. **State `CONTEXT.md ✓` verbatim in your first
+user-facing response** — reading the file without the visible acknowledgment leaves no record
+Step 1 ran. This step applies the moment code enters scope, not only at session start: an
+ops / diagnostic session that turns into a `src/` change stops and reads `CONTEXT.md` before
+the first edit. Do not rely on chat history — CONTEXT.md is the single source of truth.
 Module tree (file-level descriptions): **`CONTEXT_TREE.md`** — load only when adding new
 modules or doing a full codebase survey.
 
@@ -171,6 +180,13 @@ planning phase; never invoke the council mid-implementation.
 
 If the plan touches more than 2 files, wait for explicit go-ahead.
 
+State the one-sentence plan and the in-scope file list **even when the prompt is highly
+prescriptive** — a detailed assignment (files, commits, doc updates spelled out) is not an
+explicit go-ahead, and this gate still applies. On a multi-phase story, scope only the first
+unstarted phase — do not fold a later or blocked phase's decision into the opening gate. If
+the file count grows past what was approved mid-execution (a rename that breaks inbound
+references, a cascade), name the newly in-scope files in one line before touching them.
+
 ---
 
 ## Step 3b — Implementation routing (mandatory after go-ahead)
@@ -187,12 +203,29 @@ it just skips the Step 3 go-ahead wait.
 **Claude implements** → proceed to Step 4. AutoTrigger agents fire during and after
 implementation; Claude commits via the `commit` skill.
 
-**Antigravity implements** → invoke the `handoff-antigravity` skill now, produce the
-structured handoff prompt, and **stop**. Write no code. Antigravity runs its own protocol
-(TDD loop, persona review, commit) and returns a Phase Completion Output block. Claude then
-verifies the SHA matches `git log --oneline -1` and the test count meets DoD; if either fails,
-open a fix session with the failure details. Handoff-prompt requirements and the full
-verification checklist: `protocol-reference` §3.
+**Antigravity implements** → **settle this routing call firmly before invoking
+`handoff-antigravity`** — its `SKILL.md` body (~1.5K tokens) is only useful once the decision
+is "Antigravity"; loading it and then reversing to "Claude implements" is pure waste. Invoke
+the skill, produce the structured handoff prompt, and **stop**. Write no code. Antigravity
+runs its own protocol (TDD loop, persona review, commit) and returns a Phase Completion
+Output block. Claude then verifies the SHA matches `git log --oneline -1` and the test count
+meets DoD; if either fails, open a fix session with the failure details. Handoff-prompt
+requirements and the full verification checklist: `protocol-reference` §3.
+
+---
+
+## Step 3c — Before writing code
+
+A task spec's **"Before any code" pre-step is mandatory** — when it says read the target
+source, read it (via the graph per Rule 0). You cannot tell a load-bearing invariant from
+reference narration by a doc's wording alone; deciding which lines are frozen without the code
+open produces a wrong trim.
+
+**When spawning parallel file-editing subagents:** forbid every index / stash-touching git
+command explicitly — not just `add` / `commit` / `stash` but `git stash`, `git restore
+--staged`, anything that mutates the index — and tell each agent to compute before / after
+line counts with `awk` / `grep` only. One agent running `git stash` for a line count sweeps
+every other agent's concurrent edits into the stash.
 
 ---
 

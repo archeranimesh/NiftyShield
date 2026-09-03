@@ -246,6 +246,9 @@ Docs/config-only → skip `code-reviewer`. Run `pre-commit run --all-files` befo
    / `write_to_file` substitution, and the "emit the await-signal instead of spawning
    `@agent`" wording. Confirm only those deltas differ:
    `diff <(sed 's/[[:space:]]*$//' CLAUDE.md) <(sed 's/[[:space:]]*$//' AGENTS.md)`.
+   Before writing any file path into `AGENTS.md` or `.agents/**`, grep an existing mirror for
+   the convention first — this repo's mirrors reference `.claude/` paths, never their own
+   directory; assuming otherwise silently produces dangling pointers on the mirrored surface.
 2. **`.agents/skills/`** — a mirror of `.claude/skills/` that Antigravity autoloads. Keep the
    skill set and body text in sync with `.claude/skills/`; all paths point at `.claude/`
    (no `.Codex/` / "Codex" identity language — that scaffolding is dead, RDO-8).

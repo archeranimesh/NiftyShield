@@ -193,7 +193,15 @@ this file's Session Log grows large again.
   tool-list line — documents the `codebase-memory-mcp` `project=` / `index_repository`
   `repo_path=` first-call rule, the `AskUserQuestion` plain-array / no-`preview` rule, and
   the "never `ScheduleWakeup`-poll a spawned subagent" rule. Cluster-4's 3 rows closed
-  (enforce-by-doc). Docs-only, no tests. SHA: `<pending>`.
+  (enforce-by-doc). Docs-only, no tests. SHA: `2ae951c`.
+- **2026-09-03** — `docs/plan/token-efficiency/suggestions-sweep/` SWEEP-6: shell +
+  subagent-orchestration + protocol-discipline text fixes. `CLAUDE.md` / `AGENTS.md` gain a
+  **Shell mechanics** para (Rule 1), a consolidated plan-gate paragraph (Step 3), tightened
+  `CONTEXT.md ✓` / scope wording (Step 1), and a new **Step 3c — Before writing code**
+  (spec pre-step + parallel-subagent git rule); `handoff-antigravity` skill (+ `.agents/`
+  mirror) gains a routing-settled callout; `md-organize` Step 7 gains a mirror-path grep
+  line. Clusters 5 / 6 / 7 closed — 4 fix-by-text, 7 accept. Docs-only, no tests.
+  Backfilled SWEEP-4 SHA `2b85b84` and SWEEP-5 SHA `2ae951c` on the same commit. SHA: `<pending>`.
 
 ### 2026-09-02
 
