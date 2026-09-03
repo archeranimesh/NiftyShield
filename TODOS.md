@@ -166,6 +166,11 @@ this file's Session Log grows large again.
   `scripts/dev/graph_snippet.py` wraps `get_code_snippet` to strip the unused `fp`/`sp`/`bt`
   fields — ~244 tok/call (−20%), ~730–2,200 tok/code-session. Rule 0 points at it. Upstream
   compact-mode issue owed (agent classifier-blocked from filing). SHA: `1b64d4a`.
+- **2026-09-03** — `docs/plan/token-efficiency/suggestions-sweep/` SWEEP-1: clustered all 40
+  `suggestions.md` rows into 7 groups (6 rows added since story authoring folded in) with a
+  fix / enforce / accept outcome each — 23 land a structural fix or hook/preflight enforce,
+  17 accepted with a reason. Cluster map in the SWEEP-1 As-built; ownership matches the
+  SWEEP-2..SWEEP-7 split. Docs-only. SHA: `<pending>`.
 
 ### 2026-09-02
 

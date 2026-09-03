@@ -55,8 +55,100 @@ this story was authored.
 
 **Commit:** `docs(plan): cluster the suggestions.md backlog for the sweep`
 
-**As-built (SHA `<—>`):** _record: the final cluster table with per-row outcome, the total
-row count clustered, and any row that resisted clustering._
+**As-built (SHA `<pending>` — backfilled next doc-touch per `sha-recorded-via-second-commit`):**
+
+**40 rows** clustered (`suggestions.md` lines 9–48), each into exactly one of 7 clusters. No
+row resisted clustering. Six rows added since this story was authored are folded in below and
+flagged `[new]`: `sha-recorded-via-second-commit`, `next-marker-prose-evades-guard`,
+`spec-prestep-skipped-source-not-read`, `heredoc-rewrite-echoes-whole-file-back`,
+`py-authored-lines-over-ruff-cap`, `mirror-doc-path-convention-assumed`. Outcome legend:
+**fix** = mistake becomes structurally impossible · **enforce** = a hook / preflight warns
+when it happens · **accept** = stays model-discipline, reason given.
+
+### Cluster 1 — Read & discovery hygiene → SWEEP-2 (12 rows)
+
+| Slug | Count | Outcome | Note |
+|---|--:|---|---|
+| reread-file-already-in-context | 17 | enforce | `check_repeat_read.py` warns on a 2nd Read with no intervening Edit; Edit/Write prior-read gate case is a harness constraint (accept the residual) |
+| wide-grep-dump-then-page | 7 | enforce | `check_wide_grep.py` — unscoped grep/sed over an >800-line file |
+| sequential-single-file-section-reads | 4 | accept | batch-the-Reads discipline; no clean hook — one line into `/work` |
+| context-md-full-sequential-read | 2 | accept | grep-CONTEXT.md-first discipline; low recurrence, fold into `/work` text |
+| search-graph-broad-query-result-dump | 1 | accept | use a tight `qualified_name`; reinforce in Rule 0 graph-first text |
+| graph-tools-unused-relied-on-grep | 1 | accept | graph-before-grep; reinforce Rule 0 text |
+| sequential-tasks-md-reads | 1 | accept | parallel-batch candidate reads; one line into `/work` |
+| md-hook-backlog-not-checked-before-edit | 1 | enforce | staged md-line-length check in `commit_preflight.py` (SWEEP-4) surfaces the backlog |
+| lint-hook-run-outside-configured-scope | 1 | accept | check the `files:` regex first; rare, text note in SWEEP-2 |
+| clarify-questions-before-context-gather | 3 | accept | read target docs before the first ask; fold a line into `/work` (spec-directed) |
+| skill-file-path-assumed-global | 1 | accept | skills are repo-local `.claude/skills/`; fold a line into `/work` (spec-directed) |
+| heredoc-rewrite-echoes-whole-file-back `[new]` | 1 | accept | prefer targeted `sed -i`/`python3` replace over `cat > file <<EOF`; edit-technique discipline, reinforce in SWEEP-2 text |
+
+### Cluster 2 — Test-run routing → SWEEP-3 (2 rows)
+
+| Slug | Count | Outcome | Note |
+|---|--:|---|---|
+| pytest-inlined-not-test-runner | 9 | enforce | `check_inline_full_suite.py` nudges `@test-runner`; AutoTrigger cadence amended to "once before commit" |
+| full-suite-run-for-docs-only-change | 1 | enforce | same hook — for a docs/tooling change it points at the targeted hook-test dir |
+
+### Cluster 3 — Commit flow & pre-commit → SWEEP-4 (12 rows)
+
+| Slug | Count | Outcome | Note |
+|---|--:|---|---|
+| sha-recorded-via-second-commit `[new]` | 5 | fix + escalate | SWEEP-4 puts the `<pending>`-then-backfill policy in the `commit` skill (no swap-only commit); Count ≥ 5 → SWEEP-7 escalation |
+| authored-md-prose-over-200-cap | 4 | enforce | `commit_preflight.py` md-line-length on staged `.md`; un-reflowable task lines stay an accept |
+| staged-index-not-checked-before-commit | 2 | enforce | preflight staged-index sanity vs. the phase's expected paths |
+| next-marker-points-at-just-closed-task | 2 | enforce | preflight next-marker check — must point at an unchecked id |
+| next-marker-prose-evades-guard `[new]` | 1 | fix | preflight next-marker check matches prose forms ("next is **X**"), closing the `README_ENTRY_RE` blind spot |
+| line-coupled-baseline-set-before-code-frozen | 1 | accept | freeze the file, then set the `(file, line)` baseline once — sequencing discipline |
+| todos-pointer-not-synced-with-readme | 1 | enforce | preflight flags a `docs/plan/README.md` pointer move not mirrored in `TODOS.md` in the same staged set |
+| ruff-format-check-skipped-precommit-abort | 1 | enforce | preflight runs `ruff format --check` on staged `.py` |
+| py-authored-lines-over-ruff-cap `[new]` | 1 | enforce | same preflight `ruff` pass catches over-cap authored lines before the hook aborts |
+| precommit-all-files-mass-reformat | 1 | enforce | `commit` skill text: `pre-commit run --files $(…)`, never `--all-files` |
+| reflow-interleaved-with-edits | 1 | accept | run reflow once after all structural Edits — workflow advice a preflight cannot enforce (spec-directed) |
+| transform-script-iterated-not-prototyped | 1 | accept | prototype a bulk transform on a slice first — workflow advice (spec-directed) |
+
+### Cluster 4 — MCP & tool-call params → SWEEP-5 (3 rows)
+
+| Slug | Count | Outcome | Note |
+|---|--:|---|---|
+| codebase-mcp-missing-required-param | 3 | fix | Rule 0 tool list + `codebase-memory` skill state the `project` / `repo_path` first-call rule so the first call is correct |
+| askuserquestion-preview-json-parse-fail | 3 | enforce (by doc) | plain `questions` array, no `preview`/envelope — rule where a planning session reads it |
+| scheduleWakeup-poll-spawned-agent | 1 | enforce (by doc) | "harness re-invokes on subagent completion — do not poll" note |
+
+### Cluster 5 — Subagent orchestration → SWEEP-6 (2 rows)
+
+| Slug | Count | Outcome | Note |
+|---|--:|---|---|
+| parallel-subagent-ran-git-stash | 1 | fix | parallel-spawn text forbids every index/stash-touching git command; counts via `awk`/`grep` only |
+| skill-loaded-then-abandoned | 1 | fix | Step 3b text: settle the Claude-vs-Antigravity routing call before invoking `handoff-antigravity` |
+
+### Cluster 6 — Shell environment → SWEEP-6 (2 rows)
+
+| Slug | Count | Outcome | Note |
+|---|--:|---|---|
+| cd-in-compound-bash-command | 1 | fix | prominent `CLAUDE.md` rule — CWD persists across Bash calls; use absolute paths / `git -C` |
+| bash-isms-in-zsh-shell | 1 | fix | prominent "session shell is zsh" line — no `mapfile`/`readarray`, no `$var` word-split lists |
+
+### Cluster 7 — Protocol discipline, model judgement → SWEEP-6 (7 rows)
+
+| Slug | Count | Outcome | Note |
+|---|--:|---|---|
+| plan-gate-skipped-on-prescriptive-prompt | 2 | accept | model judgement; consolidate into one Step 3 paragraph — a prescriptive prompt is not a go-ahead |
+| scope-question-jumped-ahead | 1 | accept | model judgement; same consolidated Step 3 paragraph — scope the first unstarted phase only |
+| plan-file-count-grew-silently | 1 | accept | model judgement; same paragraph — re-flag when the file count grows past the approved plan |
+| context-md-ack-not-stated | 1 | accept | tighten Step 1 wording so "state `CONTEXT.md ✓`" is unmissable |
+| context-md-skipped-on-escalated-ops-task | 1 | accept | tighten Step 1 wording — Step 1 applies the moment code enters scope |
+| spec-prestep-skipped-source-not-read `[new]` | 1 | accept | run a task spec's "Before any code" source-read prestep — model discipline, noted in SWEEP-6 |
+| mirror-doc-path-convention-assumed `[new]` | 1 | accept | grep an existing mirror for the path convention before writing pointers into `AGENTS.md` — noted alongside the FIX-1 mirror rule |
+
+### Roll-up
+
+23 rows land a structural **fix** or a **hook/preflight enforce** (7 fix, 16 enforce);
+17 rows are **accept** with a stated reason — 12 of those are batch-your-reads / run-the-
+prestep / state-the-plan model-discipline items with no mechanical catch, the rest are
+workflow-sequencing advice a preflight structurally cannot verify. Cluster ownership matches
+the SWEEP-2..SWEEP-7 task split exactly; SWEEP-2/3/4 carry the enforcement load, SWEEP-5/6
+carry the doc fixes, SWEEP-7 drains `sha-recorded-via-second-commit` and any other slug that
+crosses Count 5.
 
 ---
 

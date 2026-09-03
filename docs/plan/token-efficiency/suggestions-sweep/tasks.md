@@ -4,14 +4,14 @@ Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task
 See `prompt.md` for why the story exists and its hard constraints; see `stories.md` for the
 per-task implementation spec.
 
-**Open: SWEEP-1 (next), SWEEP-2, SWEEP-3, SWEEP-4, SWEEP-5, SWEEP-6, SWEEP-7.**
+**Open: SWEEP-2 (next), SWEEP-3, SWEEP-4, SWEEP-5, SWEEP-6, SWEEP-7.** SWEEP-1 landed.
 
 SWEEP-1 must land first (it defines the clusters every later task closes). SWEEP-2..SWEEP-6
 are independent of each other. SWEEP-7 rebases onto `fixed-overhead/` FIX-3 — do it after
 FIX-3 has landed, or note in its commit that FIX-3 is still pending and a rebase is owed.
 
-- [ ] **SWEEP-1** — Cluster every `suggestions.md` row into ~7 groups; write the cluster map + each row's outcome (fix / enforce / accept + reason) into the SWEEP-1 As-built |
-      Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <—>
+- [x] **SWEEP-1** — Cluster every `suggestions.md` row into ~7 groups; write the cluster map + each row's outcome (fix / enforce / accept + reason) into the SWEEP-1 As-built |
+      Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <pending>
 - [ ] **SWEEP-2** — Read/discovery cluster: `PreToolUse` hooks — warn on a re-`Read` of an already-read path, and on wide unscoped `grep`/`sed` over a large file; reinforce graph-first text |
       Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: <—>
 - [ ] **SWEEP-3** — Test-run cluster: hook nudging `test-runner` for main-session full-suite `pytest`; amend the AutoTrigger cadence to once-before-commit |
