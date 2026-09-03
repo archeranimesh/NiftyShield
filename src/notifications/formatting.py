@@ -5,12 +5,19 @@ from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 
 
-def format_money(value: Decimal) -> str:
+def format_money(value: Decimal, *, signed: bool = False) -> str:
     """2dp, comma thousands, ₹ prefix, sign before ₹ on negatives.
 
     Never accepts float — a float argument must raise TypeError, not silently coerce.
     Decimal("82628") -> "₹82,628.00", Decimal("86.68") -> "₹86.68",
     Decimal("-11.08") -> "-₹11.08".
+
+    Args:
+        value: Monetary amount. Must be Decimal (or Decimal-coercible), never float.
+        signed: When True, prefix a leading '+' on positive values too (FMT-1f,
+            FORMATTING.md §3). Zero stays unsigned. Default False preserves every
+            existing caller — used by the P&L / spread lines where "up vs. down"
+            must be unambiguous at a glance.
     """
     if isinstance(value, float):
         raise TypeError("format_money requires Decimal, not float")
@@ -25,6 +32,8 @@ def format_money(value: Decimal) -> str:
 
     if is_negative:
         return f"-₹{formatted_num}"
+    if signed and value > 0:
+        return f"+₹{formatted_num}"
     return f"₹{formatted_num}"
 
 
@@ -544,3 +553,22 @@ def leg_role_label(leg_role: str) -> str:
         return LEG_ROLE_LABELS[leg_role]
     except KeyError:
         raise ValueError(f"no display label mapped for leg_role={leg_role!r}") from None
+
+
+# strategy_id -> short, all-caps header token. Distinct from STRATEGY_LABELS' fuller
+# "Proxy Track" form — used where a headline needs a compact identity token
+# (ROLL-9's DITM roll header: "🔄 ROLL: PROXY DITM CALL"). Scoped to the three-track
+# base strategies, the only ones today carrying a rollable base leg.
+STRATEGY_SHORT_LABELS: dict[str, str] = {
+    "paper_nifty_proxy": "PROXY",
+    "paper_nifty_futures": "FUTURES",
+    "paper_nifty_spot": "SPOT",
+}
+
+
+def strategy_short_label(strategy_id: str) -> str:
+    """Short all-caps header token for a raw strategy_id. Unmapped id raises ValueError."""
+    try:
+        return STRATEGY_SHORT_LABELS[strategy_id]
+    except KeyError:
+        raise ValueError(f"no short label mapped for strategy_id={strategy_id!r}") from None

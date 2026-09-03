@@ -66,6 +66,8 @@ from src.client.upstox_market import UpstoxMarketClient
 from src.instruments.lookup import InstrumentLookup
 from src.market_calendar.holidays import is_trading_day
 from src.models.portfolio import TradeAction
+from src.notifications.formatting import format_money, strategy_short_label
+from src.notifications.markdown import escape_markdown
 from src.notifications.telegram import TelegramNotifier, build_notifier
 from src.paper.constants import (
     DEFAULT_BOD_PATH,
@@ -178,6 +180,115 @@ def build_roll_trades(
         notes=f"S5 auto-roll: opened to replace {old_instrument_key}",
     )
     return close_trade, open_trade
+
+
+# ── Roll-notification message builder (MarkdownV2, ROLL-9) ─────────────────────
+# Two confirmed layouts, one per rollable leg role — reference implementation
+# scratch/2026-08-10_3track_roll_notification_format.py (locked on-device through
+# message-format-workshop.md, 2026-08-10). Static template punctuation ('[', ']',
+# '(', ')', '-') is escaped inline per the epic's escape-everything contract.
+
+
+def _roll_pnl_emoji(pnl: Decimal) -> str:
+    """🟢 / 🔴 / ➖ by sign. Deliberately a separate palette from
+    formatting.pnl_emoji() (✅/🔻/➖) — this message's on-device-confirmed layout
+    uses the green/red circles. Reconcile if the two ever need to converge."""
+    if pnl > 0:
+        return "🟢"
+    if pnl < 0:
+        return "🔴"
+    return "➖"
+
+
+def _futures_spread_label(spread: Decimal) -> str:
+    """Futures calendar-spread structure — base_futures only (FORMATTING.md §6)."""
+    if spread > 0:
+        return "Contango"
+    if spread < 0:
+        return "Backwardation"
+    return "Flat"
+
+
+def _ditm_spread_label(spread: Decimal) -> str:
+    """Option-premium roll cost — base_ditm_call only (FORMATTING.md §6): a
+    same-strike premium difference is not a futures curve, so never
+    Contango/Backwardation here."""
+    if spread > 0:
+        return "Debit"
+    if spread < 0:
+        return "Credit"
+    return "Flat"
+
+
+def build_roll_notification(
+    *,
+    leg_role: str,
+    strategy_name: str,
+    close_price: Decimal,
+    open_price: Decimal,
+    avg_cost: Decimal,
+    qty: int,
+    old_expiry: date,
+    new_expiry: date,
+    gate_passed: bool,
+    partial: bool,
+    strike: int | None = None,
+) -> str:
+    """Build the confirmed MarkdownV2 roll notification for one base-leg roll.
+
+    Closed-leg realized P&L uses ``avg_cost`` (the BUY-side weighted average) —
+    both rollable roles (``base_futures``/``base_ditm_call``) are always long
+    proxy/hedge positions, never sold short, so ``avg_sell_price`` would read 0.
+
+    Args:
+        leg_role: ``base_futures`` or ``base_ditm_call`` — selects the layout.
+        strategy_name: Raw strategy id (only the DITM header renders it, via
+            ``strategy_short_label``).
+        close_price: LTP of the expiring contract (the roll's SELL price).
+        open_price: LTP of the next-band contract (the roll's BUY price).
+        avg_cost: Weighted-average entry price of the closed leg.
+        qty: Absolute position quantity.
+        old_expiry: Expiry date of the expiring contract.
+        new_expiry: Expiry date of the next-band contract.
+        gate_passed: Liquidity-gate result (warn-only, never blocks a roll).
+        partial: True when only one of the two roll legs persisted — overrides
+            the gate line with a manual-verification warning.
+        strike: Option strike, DITM layout only. Ignored for ``base_futures``.
+
+    Returns:
+        A MarkdownV2 string ready to hand to ``TelegramNotifier.send()``.
+    """
+    pnl = (close_price - avg_cost) * qty
+    pnl_line = f"💰 P&L: {escape_markdown(format_money(pnl, signed=True))} {_roll_pnl_emoji(pnl)}"
+
+    spread = open_price - close_price
+    is_futures = leg_role == "base_futures"
+    label = _futures_spread_label(spread) if is_futures else _ditm_spread_label(spread)
+    spread_line = f"📐 Spread: {escape_markdown(f'{abs(spread):.2f}')} pts \\({label}\\)"
+
+    out_line = f"⬇️ OUT: {escape_markdown(format_money(close_price))}"
+    in_line = f"⬆️ IN: {escape_markdown(format_money(open_price))}"
+
+    if partial:
+        gate_line = "🚨 PARTIAL ROLL — VERIFY POSITIONS MANUALLY"
+    elif gate_passed:
+        gate_line = "✅ L\\-Gate: PASS"
+    else:
+        gate_line = "⚠️ L\\-Gate: WARN"
+
+    old_m = escape_markdown(old_expiry.strftime("%b").upper())
+    new_m = escape_markdown(new_expiry.strftime("%b").upper())
+
+    if is_futures:
+        header = [f"🔄 ROLL: NIFTY FUT \\[{old_m} ➡️ {new_m}\\]"]
+    else:
+        strike_txt = escape_markdown(str(strike)) if strike is not None else "?"
+        header = [
+            f"🔄 ROLL: {escape_markdown(strategy_short_label(strategy_name))} DITM CALL",
+            f"🎟️ \\[NIFTY {strike_txt} CE\\] {old_m} ➡️ {new_m}",
+        ]
+
+    return "\n".join([*header, pnl_line, spread_line, "", out_line, in_line, gate_line])
 
 
 # ── Orchestration (I/O — broker/store/notifier all injected for testability) ───
@@ -304,22 +415,27 @@ async def check_and_roll_leg(
         )
 
     if notifier:
-        status_line = (
-            "🚨 PARTIAL ROLL — VERIFY POSITIONS MANUALLY"
-            if partial
-            else f"Liquidity gate: {'✅ PASS' if gate_passed else '⚠️ WARN'}"
-        )
-        msg = (
-            f"🔄 BASE LEG ROLLED\n"
-            f"Strategy: {pos.strategy_name}\n"
-            f"Leg: {pos.leg_role}\n"
-            f"Closed: {pos.instrument_key} @ ₹{close_price}\n"
-            f"Opened: {next_key} @ ₹{open_price}\n"
-            f"{status_line}"
-        )
         try:
+            new_expiry = _get_expiry_date(next_key, instruments) or expiry_date
+            strike: int | None = None
+            if pos.leg_role == "base_ditm_call":
+                raw_strike = next_inst.get("strike_price")
+                strike = int(round(raw_strike)) if raw_strike is not None else None
+            msg = build_roll_notification(
+                leg_role=pos.leg_role,
+                strategy_name=pos.strategy_name,
+                close_price=close_price,
+                open_price=open_price,
+                avg_cost=pos.avg_cost,
+                qty=qty,
+                old_expiry=expiry_date,
+                new_expiry=new_expiry,
+                gate_passed=gate_passed,
+                partial=partial,
+                strike=strike,
+            )
             await notifier.send(msg)
-        except Exception as exc:  # non-fatal — notification failure never blocks the roll
+        except Exception as exc:  # non-fatal — message build / notify never blocks the roll
             logger.warning("paper_3track_roll.notify_failed", error=str(exc))
 
     return summary

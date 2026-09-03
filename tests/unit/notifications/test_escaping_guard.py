@@ -210,10 +210,13 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "scripts/strategies/three_track/paper_3track_overlay_entry.py",
         1547,
     ): "ROLL-14 - format confirmed, real code not yet migrated",
-    (
-        "scripts/strategies/three_track/paper_3track_roll.py",
-        321,
-    ): "ROLL-9 - format confirmed, real code not yet migrated",
+    ("scripts/strategies/three_track/paper_3track_roll.py", 437): (
+        "heuristic limitation, not a real gap - ROLL-9 migrated this (SHA on the task "
+        "line); the message is built and fully escaped inside build_roll_notification() "
+        "(escape_markdown() on every dynamic value + static punctuation), but this guard "
+        "only inspects the immediate enclosing function (check_and_roll_leg), not the "
+        "builder it calls - same shape as the scripts/eod_summary.py:200 entry"
+    ),
     (
         "scripts/strategies/three_track/paper_3track_snapshot.py",
         511,

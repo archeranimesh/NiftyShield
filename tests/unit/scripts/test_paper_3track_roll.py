@@ -283,7 +283,10 @@ async def test_roll_notifies_telegram_on_success(tmp_path: Path) -> None:
     notifier.send.assert_awaited_once()
     msg = notifier.send.await_args[0][0]
     assert "*" not in msg
-    assert "BASE LEG ROLLED" in msg
+    # ROLL-9: confirmed MarkdownV2 layout, not the old "BASE LEG ROLLED" kv lines.
+    assert msg.startswith("🔄 ROLL: NIFTY FUT \\[JUL ➡️ AUG\\]")
+    assert "💰 P&L: \\+₹5,000\\.00 🟢" in msg
+    assert "⚠️ L\\-Gate: WARN" in msg
 
 
 @pytest.mark.asyncio
@@ -536,3 +539,192 @@ async def test_niftytrackcomparisonv1_untouched() -> None:
 
     events = await strategy.check_signals(market=None, positions=[pos_fut])
     assert events == []
+
+
+# ── ROLL-9: build_roll_notification MarkdownV2 layout ───────────────────────────
+#
+# One test per confirmed scenario in the reference script
+# (scratch/2026-08-10_3track_roll_notification_format.py), asserting the exact
+# layout + escaping for its leg role, plus the label / partial / escape regressions
+# the epic carries forward.
+
+_AUG = date(2026, 8, 25)
+_SEP = date(2026, 9, 29)
+_OCT = date(2026, 10, 27)
+
+
+def _futures_msg(**over: object) -> str:
+    kw: dict = dict(
+        leg_role="base_futures",
+        strategy_name="paper_nifty_futures",
+        close_price=Decimal("24812.50"),
+        open_price=Decimal("24855.75"),
+        avg_cost=Decimal("24500.00"),
+        qty=25,
+        old_expiry=_AUG,
+        new_expiry=_SEP,
+        gate_passed=True,
+        partial=False,
+    )
+    kw.update(over)
+    return roll_mod.build_roll_notification(**kw)
+
+
+def _ditm_msg(**over: object) -> str:
+    kw: dict = dict(
+        leg_role="base_ditm_call",
+        strategy_name="paper_nifty_proxy",
+        close_price=Decimal("86.68"),
+        open_price=Decimal("112.30"),
+        avg_cost=Decimal("102.40"),
+        qty=25,
+        old_expiry=_AUG,
+        new_expiry=_SEP,
+        gate_passed=False,
+        partial=False,
+        strike=24000,
+    )
+    kw.update(over)
+    return roll_mod.build_roll_notification(**kw)
+
+
+def test_roll_notification_futures_clean_pass() -> None:
+    msg = _futures_msg()
+    assert msg == (
+        "🔄 ROLL: NIFTY FUT \\[AUG ➡️ SEP\\]\n"
+        "💰 P&L: \\+₹7,812\\.50 🟢\n"
+        "📐 Spread: 43\\.25 pts \\(Contango\\)\n"
+        "\n"
+        "⬇️ OUT: ₹24,812\\.50\n"
+        "⬆️ IN: ₹24,855\\.75\n"
+        "✅ L\\-Gate: PASS"
+    )
+
+
+def test_roll_notification_futures_loss_backwardation() -> None:
+    msg = _futures_msg(open_price=Decimal("24780.25"), avg_cost=Decimal("25100.00"))
+    assert "💰 P&L: \\-₹7,187\\.50 🔴" in msg
+    assert "📐 Spread: 32\\.25 pts \\(Backwardation\\)" in msg
+
+
+def test_roll_notification_futures_gate_warn() -> None:
+    assert "⚠️ L\\-Gate: WARN" in _futures_msg(gate_passed=False)
+
+
+def test_roll_notification_futures_partial_roll() -> None:
+    msg = _futures_msg(partial=True, gate_passed=True)
+    assert "🚨 PARTIAL ROLL — VERIFY POSITIONS MANUALLY" in msg
+    assert "L\\-Gate" not in msg
+
+
+def test_roll_notification_ditm_call_warn() -> None:
+    msg = _ditm_msg()
+    assert msg == (
+        "🔄 ROLL: PROXY DITM CALL\n"
+        "🎟️ \\[NIFTY 24000 CE\\] AUG ➡️ SEP\n"
+        "💰 P&L: \\-₹393\\.00 🔴\n"
+        "📐 Spread: 25\\.62 pts \\(Debit\\)\n"
+        "\n"
+        "⬇️ OUT: ₹86\\.68\n"
+        "⬆️ IN: ₹112\\.30\n"
+        "⚠️ L\\-Gate: WARN"
+    )
+
+
+def test_roll_notification_ditm_call_profit_credit() -> None:
+    msg = _ditm_msg(
+        close_price=Decimal("112.30"),
+        open_price=Decimal("86.68"),
+        avg_cost=Decimal("70.00"),
+        gate_passed=True,
+        old_expiry=_SEP,
+        new_expiry=_OCT,
+    )
+    assert "💰 P&L: \\+₹1,057\\.50 🟢" in msg
+    assert "📐 Spread: 25\\.62 pts \\(Credit\\)" in msg
+    assert "✅ L\\-Gate: PASS" in msg
+
+
+def test_roll_notification_ditm_call_partial_roll() -> None:
+    msg = _ditm_msg(partial=True, gate_passed=True)
+    assert "🚨 PARTIAL ROLL — VERIFY POSITIONS MANUALLY" in msg
+    assert "L\\-Gate" not in msg
+
+
+def test_futures_spread_label_contango_backwardation_flat() -> None:
+    assert roll_mod._futures_spread_label(Decimal("1")) == "Contango"
+    assert roll_mod._futures_spread_label(Decimal("-1")) == "Backwardation"
+    assert roll_mod._futures_spread_label(Decimal("0")) == "Flat"
+
+
+def test_ditm_spread_label_debit_credit_flat() -> None:
+    assert roll_mod._ditm_spread_label(Decimal("1")) == "Debit"
+    assert roll_mod._ditm_spread_label(Decimal("-1")) == "Credit"
+    assert roll_mod._ditm_spread_label(Decimal("0")) == "Flat"
+    # The two leg roles never share a label function.
+    assert roll_mod._futures_spread_label is not roll_mod._ditm_spread_label
+
+
+def test_ditm_gate_warn_has_no_reason_parenthetical() -> None:
+    """ROLL-9 item 6: a WARN-state DITM roll ships '⚠️ L-Gate: WARN' with no
+    parenthetical reason — check_ditm_liquidity_gate returns a bare bool, and a
+    future edit must not silently half-implement a gate-reason feature."""
+    msg = _ditm_msg(gate_passed=False)
+    gate_line = msg.splitlines()[-1]
+    assert gate_line == "⚠️ L\\-Gate: WARN"
+    assert "(" not in gate_line and "\\(" not in gate_line
+
+
+def test_roll_notification_escapes_underscore_strategy_name() -> None:
+    """Epic-wide regression: an identifier-shaped dynamic value with an
+    underscore must survive escaped. paper_nifty_proxy -> short label 'PROXY',
+    but a hypothetical unmapped id must raise rather than leak a raw underscore."""
+    # Mapped short label carries no underscore.
+    assert "PROXY" in _ditm_msg()
+    # Unmapped strategy id is a loud failure, never a raw-underscore leak.
+    with pytest.raises(ValueError):
+        _ditm_msg(strategy_name="paper_nifty_proxy_v99")
+
+
+def test_roll_notification_partial_overrides_gate_line() -> None:
+    """partial=True always produces the 🚨 line regardless of gate_passed, both roles."""
+    for builder in (_futures_msg, _ditm_msg):
+        for gate in (True, False):
+            msg = builder(partial=True, gate_passed=gate)
+            assert msg.splitlines()[-1] == "🚨 PARTIAL ROLL — VERIFY POSITIONS MANUALLY"
+
+
+@pytest.mark.asyncio
+async def test_roll_notification_pnl_uses_avg_cost_not_avg_sell_price(tmp_path: Path) -> None:
+    """Regression for the entry-basis: a PaperPosition with a non-zero
+    avg_sell_price must not leak into the closed-leg P&L — check_and_roll_leg
+    passes pos.avg_cost, and both rollable legs are always long."""
+    store = _make_store(tmp_path)
+    _seed_entry_trade(store)
+    lookup = _futures_lookup()
+    today = date(2026, 7, 29)
+
+    pos = PaperPosition(
+        strategy_name="paper_nifty_futures",
+        leg_role="base_futures",
+        net_qty=50,
+        avg_cost=Decimal("23000.0"),
+        avg_sell_price=Decimal("99999.0"),  # must be ignored
+        instrument_key="NSE_FO|NIFTY26JULFUT",
+    )
+    broker = MagicMock()
+    broker.get_ltp = AsyncMock(
+        return_value={
+            "NSE_FO|NIFTY26JULFUT": Decimal("23100.0"),
+            "NSE_FO|NIFTY26AUGFUT": Decimal("23150.0"),
+        }
+    )
+    notifier = MagicMock()
+    notifier.send = AsyncMock(return_value=True)
+
+    await roll_mod.check_and_roll_leg(
+        pos, lookup, store, broker, notifier=notifier, today=today, dry_run=False
+    )
+    msg = notifier.send.await_args[0][0]
+    # (23100 - 23000) * 50 = +5,000.00 — not driven by avg_sell_price.
+    assert "💰 P&L: \\+₹5,000\\.00 🟢" in msg

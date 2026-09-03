@@ -18,6 +18,7 @@ from src.notifications.formatting import (
     leg_role_label,
     pnl_emoji,
     strategy_label,
+    strategy_short_label,
 )
 
 
@@ -32,6 +33,15 @@ def test_format_money_edge_zero():
 def test_format_money_raises_type_error_on_float():
     with pytest.raises(TypeError, match="format_money requires Decimal, not float"):
         format_money(86.68)  # type: ignore
+
+
+def test_format_money_signed_forces_plus_on_positive():
+    assert format_money(Decimal("7812.50"), signed=True) == "+₹7,812.50"
+
+
+def test_format_money_signed_leaves_zero_and_negative_unchanged():
+    assert format_money(Decimal("0"), signed=True) == "₹0.00"
+    assert format_money(Decimal("-393"), signed=True) == "-₹393.00"
 
 
 def test_format_greek_happy_path_positive():
@@ -289,3 +299,13 @@ def test_leg_role_label_happy_path():
 def test_leg_role_label_unmapped_raises():
     with pytest.raises(ValueError, match="nonsense_role"):
         leg_role_label("nonsense_role")
+
+
+def test_strategy_short_label_happy_path():
+    assert strategy_short_label("paper_nifty_proxy") == "PROXY"
+    assert strategy_short_label("paper_nifty_futures") == "FUTURES"
+
+
+def test_strategy_short_label_unmapped_raises():
+    with pytest.raises(ValueError, match="paper_made_up"):
+        strategy_short_label("paper_made_up")
