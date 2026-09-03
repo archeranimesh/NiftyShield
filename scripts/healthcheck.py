@@ -20,8 +20,10 @@ import argparse
 import asyncio
 import shutil
 import sys
+from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
+from typing import Literal
 
 import structlog
 from dotenv import load_dotenv
@@ -38,13 +40,44 @@ from src.backtest.vix_ingest import load_vix_series  # noqa: E402
 from src.config import settings  # noqa: E402
 from src.db import connect  # noqa: E402
 from src.market_calendar.holidays import is_trading_day  # noqa: E402
+from src.notifications.markdown import escape_markdown  # noqa: E402
 from src.notifications.telegram import build_notifier  # noqa: E402
 from src.utils.logging import setup_logging  # noqa: E402
 
 logger = structlog.get_logger()
 
+Severity = Literal["ok", "warn", "critical"]
 
-def _check_3track_snapshot_cron(log_path: Path, target_date: date) -> tuple[bool, str]:
+_SEVERITY_EMOJI: dict[str, str] = {"ok": "✅", "warn": "⚠️", "critical": "❌"}
+
+
+@dataclass(frozen=True)
+class CheckResult:
+    """One healthcheck's structured outcome.
+
+    Replaces the pre-formatted ``✅/❌/⚠️``-prefixed strings ``run_checks()``
+    used to return. Re-parsing those back into ``(label, severity)`` for the
+    ROLL-11 grouped alert format would repeat the brittle-string-parsing
+    anti-pattern this epic already rejected in ROLL-7's ``blocked_reason``
+    split.
+
+    Attributes:
+        label: Human-readable check name (e.g. ``"Daily Snapshot"``) — no raw
+            snake_case keys, which also sidesteps escaping an underscore.
+        severity: ``"ok"`` / ``"warn"`` / ``"critical"``.
+        status_word: Compact all-caps state, only meaningful when
+            ``severity != "ok"`` (e.g. ``"MISSING"``, ``"LOW"``, ``"STALE"``).
+        detail: Optional context rendered parenthesised in the alert (e.g.
+            ``"Today"``, ``"450.2 MB"``, an exception string).
+    """
+
+    label: str
+    severity: Severity
+    status_word: str = ""
+    detail: str | None = None
+
+
+def _check_3track_snapshot_cron(log_path: Path, target_date: date) -> CheckResult:
     """Detect whether today's ``paper_3track_snapshot`` cron run crashed.
 
     ``logs/paper_snapshot.log`` is shared by two cron entries (see
@@ -63,10 +96,10 @@ def _check_3track_snapshot_cron(log_path: Path, target_date: date) -> tuple[bool
         target_date: Date to check the most recent run for.
 
     Returns:
-        Tuple of (has_issue, status_message).
+        A ``CheckResult`` labelled ``"3track Cron"``.
     """
     if not log_path.exists():
-        return True, "⚠️ 3track cron: log file not found"
+        return CheckResult("3track Cron", "warn", "NO LOG")
 
     date_prefix = target_date.isoformat()
     lines = log_path.read_text(errors="replace").splitlines()
@@ -84,18 +117,18 @@ def _check_3track_snapshot_cron(log_path: Path, target_date: date) -> tuple[bool
             break
 
     if last_start_idx is None:
-        return True, "⚠️ 3track cron: no run found in log for today"
+        return CheckResult("3track Cron", "warn", "NO RUN", "today")
 
     run_lines = lines[last_start_idx:end_idx]
     if any("Traceback (most recent call last)" in line for line in run_lines):
-        return True, "❌ 3track cron: Traceback in today's run"
+        return CheckResult("3track Cron", "critical", "CRASHED", "Traceback in today's run")
 
-    return False, "✅ 3track cron: ok"
+    return CheckResult("3track Cron", "ok")
 
 
 def run_checks(
     target_date: date, db_path: Path, vix_dir: Path, cron_log_path: Path
-) -> tuple[bool, list[str]]:
+) -> list[CheckResult]:
     """Execute all system health checks.
 
     Args:
@@ -105,16 +138,16 @@ def run_checks(
         cron_log_path: Path to the shared paper_snapshot cron log file.
 
     Returns:
-        Tuple of (has_failure_or_warning, list_of_status_messages).
+        One ``CheckResult`` per check, in check order. The caller derives the
+        overall state via ``any(r.severity != "ok" for r in results)``.
     """
-    has_issue = False
-    messages = []
+    results: list[CheckResult] = []
 
     # Check 1: DB Accessibility & Snapshot Recency
     try:
         with connect(db_path) as conn:
             conn.execute("SELECT 1").fetchone()
-            messages.append("✅ DB: accessible")
+            results.append(CheckResult("DB Access", "ok"))
 
             # Check 2: Snapshot recency (daily_snapshots) - Mandatory/Production data (❌ if missing)
             row_daily = conn.execute(
@@ -122,10 +155,9 @@ def run_checks(
                 (target_date.isoformat(),),
             ).fetchone()
             if row_daily:
-                messages.append("✅ daily_snapshots: ok")
+                results.append(CheckResult("Daily Snapshot", "ok"))
             else:
-                messages.append("❌ daily_snapshots: no row for today")
-                has_issue = True
+                results.append(CheckResult("Daily Snapshot", "critical", "MISSING", "Today"))
 
             # Check 3: Paper snapshot recency (paper_nav_snapshots) - Advisory/Paper-only data (⚠️ if missing)
             row_paper = conn.execute(
@@ -133,38 +165,33 @@ def run_checks(
                 (target_date.isoformat(),),
             ).fetchone()
             if row_paper:
-                messages.append("✅ paper_nav_snapshots: ok")
+                results.append(CheckResult("Paper NAV", "ok"))
             else:
-                messages.append("⚠️ paper_nav_snapshots: no row for today")
-                has_issue = True
+                results.append(CheckResult("Paper NAV", "warn", "MISSING", "Today"))
 
     except Exception as e:
-        has_issue = True
         logger.exception("Database access or query failed", error=str(e), db_path=str(db_path))
-        messages.append("❌ DB: inaccessible")
-        messages.append("❌ daily_snapshots: skip (DB error)")
-        messages.append("⚠️ paper_nav_snapshots: skip (DB error)")
+        results.append(CheckResult("DB Access", "critical", "INACCESSIBLE"))
+        results.append(CheckResult("Daily Snapshot", "critical", "SKIPPED", "DB error"))
+        results.append(CheckResult("Paper NAV", "warn", "SKIPPED", "DB error"))
 
     # Check 4: VIX data recency
     try:
         vix_series = load_vix_series(vix_dir)
         if vix_series.empty:
-            messages.append("⚠️ VIX data: missing")
-            has_issue = True
+            results.append(CheckResult("VIX Data", "warn", "MISSING"))
         else:
             latest_vix_date = vix_series.index[-1]
             if hasattr(latest_vix_date, "date"):
                 latest_vix_date = latest_vix_date.date()
             stale_days = (target_date - latest_vix_date).days
             if stale_days > 2:
-                messages.append(f"⚠️ VIX data: {stale_days} days stale")
-                has_issue = True
+                results.append(CheckResult("VIX Data", "warn", "STALE", f"{stale_days} days"))
             else:
-                messages.append("✅ VIX data: ok")
+                results.append(CheckResult("VIX Data", "ok"))
     except Exception as e:
         logger.exception("Failed to check VIX data recency", error=str(e))
-        messages.append(f"⚠️ VIX data: error ({str(e)})")
-        has_issue = True
+        results.append(CheckResult("VIX Data", "warn", "ERROR", str(e)))
 
     # Check 5: Disk space
     try:
@@ -172,22 +199,67 @@ def run_checks(
         total, used, free = shutil.disk_usage(str(target_dir))
         free_mb = free / (1024 * 1024)
         if free_mb < 500:
-            messages.append(f"⚠️ Disk space: {free_mb:.1f} MB free")
-            has_issue = True
+            results.append(CheckResult("Disk Space", "warn", "LOW", f"{free_mb:.1f} MB"))
         else:
-            messages.append("✅ Disk space: ok")
+            results.append(CheckResult("Disk Space", "ok"))
     except Exception as e:
         logger.exception("Failed to check disk space", error=str(e))
-        messages.append(f"⚠️ Disk space: error ({str(e)})")
-        has_issue = True
+        results.append(CheckResult("Disk Space", "warn", "ERROR", str(e)))
 
     # Check 6: 3track snapshot cron crash detection (BUG-029 / B029.5)
-    cron_issue, cron_msg = _check_3track_snapshot_cron(cron_log_path, target_date)
-    messages.append(cron_msg)
-    if cron_issue:
-        has_issue = True
+    results.append(_check_3track_snapshot_cron(cron_log_path, target_date))
 
-    return has_issue, messages
+    return results
+
+
+def build_healthcheck_alert(results: list[CheckResult], now: datetime | None = None) -> str:
+    """Render the System Healthcheck alert in the ROLL-11 grouped MarkdownV2 format.
+
+    Shape (confirmed 2026-08-10, ``message-format-workshop.md`` — reference
+    ``scratch/2026-08-10_healthcheck_alert_format.py``)::
+
+        ⚠️ NIFTYSHIELD: DEGRADED [HH:MM]
+
+        🚨 ACTION REQUIRED:
+        {emoji} {label}: {STATUS_WORD} ({detail})   ← one line per non-ok check
+
+        ✅ SYSTEMS NORMAL: {comma-joined ok labels}  ← omitted if no check is ok
+
+    Overall status word is a single fixed ``DEGRADED`` for any non-ok state —
+    there is no ``DOWN``/``CRITICAL`` overall tier (matches ``run_checks()``'s
+    boolean model; a tiered model would need its own design decision).
+
+    Only ever called when at least one check is non-ok (``main()`` guards on the
+    derived ``has_issue``), so an empty ACTION REQUIRED section is unreachable.
+
+    Args:
+        results: The full check list from ``run_checks()``.
+        now: Override for the headline timestamp (testing). Defaults to
+            ``datetime.now()``.
+
+    Returns:
+        A MarkdownV2-safe message body — every dynamic value and reserved
+        punctuation escaped via ``escape_markdown()``.
+    """
+    now = now or datetime.now()
+    lines = [f"⚠️ NIFTYSHIELD: DEGRADED {escape_markdown(f'[{now:%H:%M}]')}", ""]
+
+    lines.append("🚨 ACTION REQUIRED:")
+    for r in results:
+        if r.severity == "ok":
+            continue
+        tail = f" {escape_markdown(f'({r.detail})')}" if r.detail else ""
+        lines.append(
+            f"{_SEVERITY_EMOJI[r.severity]} {escape_markdown(r.label)}: "
+            f"{escape_markdown(r.status_word)}{tail}"
+        )
+
+    normal = [r.label for r in results if r.severity == "ok"]
+    if normal:
+        lines.append("")
+        lines.append(f"✅ SYSTEMS NORMAL: {escape_markdown(', '.join(normal))}")
+
+    return "\n".join(lines)
 
 
 async def main() -> int:
@@ -238,13 +310,11 @@ async def main() -> int:
         return 0
 
     logger.info("Running system health check", date=today.isoformat())
-    has_issue, messages = run_checks(today, args.db_path, args.vix_dir, args.cron_log_path)
+    results = run_checks(today, args.db_path, args.vix_dir, args.cron_log_path)
+    has_issue = any(r.severity != "ok" for r in results)
 
     if has_issue:
-        # Build status alert message
-        alert_body = "\n".join(messages)
-        now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-        alert_msg = f"⚠️ NiftyShield Healthcheck — {now_str} IST\n{alert_body}"
+        alert_msg = build_healthcheck_alert(results)
 
         logger.warning("System healthcheck failed or warned", alert=alert_msg)
 

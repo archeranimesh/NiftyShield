@@ -2,7 +2,7 @@
 
 import importlib
 import os
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -10,7 +10,16 @@ import pandas as pd
 import pytest
 
 import scripts.healthcheck as healthcheck_module
-from scripts.healthcheck import main, run_checks
+from scripts.healthcheck import (
+    CheckResult,
+    build_healthcheck_alert,
+    main,
+    run_checks,
+)
+
+
+def _by_label(results: list[CheckResult], label: str) -> CheckResult:
+    return next(r for r in results if r.label == label)
 
 
 @patch("scripts.healthcheck.connect")
@@ -40,15 +49,17 @@ def test_run_checks_all_pass(mock_disk, mock_load_vix, mock_connect, tmp_path) -
         "2026-05-31 15:36:03 [INFO] [scripts] [portfolio] [paper_snapshot] snapshot.starting\n"
     )
 
-    has_issue, messages = run_checks(today, Path("dummy.db"), Path("dummy_vix"), cron_log)
+    results = run_checks(today, Path("dummy.db"), Path("dummy_vix"), cron_log)
 
-    assert not has_issue
-    assert any("DB: accessible" in msg for msg in messages)
-    assert any("daily_snapshots: ok" in msg for msg in messages)
-    assert any("paper_nav_snapshots: ok" in msg for msg in messages)
-    assert any("VIX data: ok" in msg for msg in messages)
-    assert any("Disk space: ok" in msg for msg in messages)
-    assert any("3track cron: ok" in msg for msg in messages)
+    assert all(r.severity == "ok" for r in results)
+    assert {r.label for r in results} == {
+        "DB Access",
+        "Daily Snapshot",
+        "Paper NAV",
+        "VIX Data",
+        "Disk Space",
+        "3track Cron",
+    }
 
 
 @patch("scripts.healthcheck.connect")
@@ -73,12 +84,13 @@ def test_run_checks_missing_daily_snapshot(
         "[paper_3track_snapshot] snapshot.starting\n"
     )
 
-    has_issue, messages = run_checks(today, Path("dummy.db"), Path("dummy_vix"), cron_log)
+    results = run_checks(today, Path("dummy.db"), Path("dummy_vix"), cron_log)
 
-    assert has_issue
-    assert any("DB: accessible" in msg for msg in messages)
-    assert any("daily_snapshots: no row for today" in msg for msg in messages)
-    assert any("paper_nav_snapshots: ok" in msg for msg in messages)
+    assert _by_label(results, "DB Access").severity == "ok"
+    daily = _by_label(results, "Daily Snapshot")
+    assert daily.severity == "critical"
+    assert daily.status_word == "MISSING"
+    assert _by_label(results, "Paper NAV").severity == "ok"
 
 
 @patch("scripts.healthcheck.connect")
@@ -112,10 +124,11 @@ def test_run_checks_3track_cron_traceback(mock_disk, mock_load_vix, mock_connect
         "snapshot.recorded\n"
     )
 
-    has_issue, messages = run_checks(today, Path("dummy.db"), Path("dummy_vix"), cron_log)
+    results = run_checks(today, Path("dummy.db"), Path("dummy_vix"), cron_log)
 
-    assert has_issue
-    assert any("3track cron: Traceback" in msg for msg in messages)
+    cron = _by_label(results, "3track Cron")
+    assert cron.severity == "critical"
+    assert cron.status_word == "CRASHED"
 
 
 @patch("scripts.healthcheck.connect")
@@ -143,20 +156,21 @@ def test_run_checks_3track_cron_no_run_today(
         "[paper_3track_snapshot] snapshot.starting\n"
     )
 
-    has_issue, messages = run_checks(today, Path("dummy.db"), Path("dummy_vix"), cron_log)
+    results = run_checks(today, Path("dummy.db"), Path("dummy_vix"), cron_log)
 
-    assert has_issue
-    assert any("3track cron: no run found" in msg for msg in messages)
+    cron = _by_label(results, "3track Cron")
+    assert cron.severity == "warn"
+    assert cron.status_word == "NO RUN"
 
 
 def test_check_3track_snapshot_cron_missing_file(tmp_path) -> None:
     """Edge case: log file doesn't exist yet — must flag, not raise."""
     from scripts.healthcheck import _check_3track_snapshot_cron
 
-    has_issue, msg = _check_3track_snapshot_cron(tmp_path / "does_not_exist.log", date(2026, 8, 10))
+    result = _check_3track_snapshot_cron(tmp_path / "does_not_exist.log", date(2026, 8, 10))
 
-    assert has_issue
-    assert "log file not found" in msg
+    assert result.severity == "warn"
+    assert result.status_word == "NO LOG"
 
 
 @pytest.mark.asyncio
@@ -180,7 +194,10 @@ async def test_main_non_trading_day(mock_run_checks, mock_is_trading_day) -> Non
 async def test_main_success_flow(mock_build_notifier, mock_run_checks, mock_is_trading_day) -> None:
     """Test that main returns 0 when checks pass."""
     mock_is_trading_day.return_value = True
-    mock_run_checks.return_value = (False, ["✅ DB: accessible", "✅ daily_snapshots: ok"])
+    mock_run_checks.return_value = [
+        CheckResult("DB Access", "ok"),
+        CheckResult("Daily Snapshot", "ok"),
+    ]
 
     with patch("sys.argv", ["healthcheck.py"]):
         res = await main()
@@ -198,7 +215,9 @@ async def test_main_failure_alerts(
 ) -> None:
     """Test that main returns 1 and alerts on issue."""
     mock_is_trading_day.return_value = True
-    mock_run_checks.return_value = (True, ["❌ daily_snapshots: no row for today"])
+    mock_run_checks.return_value = [
+        CheckResult("Daily Snapshot", "critical", "MISSING", "Today"),
+    ]
 
     from unittest.mock import AsyncMock, MagicMock
 
@@ -211,7 +230,9 @@ async def test_main_failure_alerts(
         assert res == 1
 
     mock_notifier.send.assert_called_once()
-    assert "no row for today" in mock_notifier.send.call_args[0][0]
+    sent = mock_notifier.send.call_args[0][0]
+    assert "Daily Snapshot" in sent
+    assert "MISSING" in sent
 
 
 def _reload_healthcheck_without_touching_real_env() -> None:
@@ -296,3 +317,154 @@ def test_healthcheck_build_notifier_still_none_without_configured_env(monkeypatc
     monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
 
     assert healthcheck_module.build_notifier() is None
+
+
+# ── ROLL-11: grouped MarkdownV2 healthcheck alert ──────────────────────────────
+
+_NOON = datetime(2026, 8, 10, 12, 17)
+
+_SINGLE_ISSUE = [
+    CheckResult("DB Access", "ok"),
+    CheckResult("Daily Snapshot", "ok"),
+    CheckResult("Paper NAV", "ok"),
+    CheckResult("VIX Data", "warn", "STALE", "3 days"),
+    CheckResult("Disk Space", "ok"),
+    CheckResult("3track Cron", "ok"),
+]
+
+_MULTI_ISSUE = [
+    CheckResult("DB Access", "ok"),
+    CheckResult("Daily Snapshot", "critical", "MISSING", "Today"),
+    CheckResult("Paper NAV", "warn", "MISSING", "Today"),
+    CheckResult("VIX Data", "ok"),
+    CheckResult("Disk Space", "warn", "LOW", "450.2 MB"),
+    CheckResult("3track Cron", "ok"),
+]
+
+_DB_DOWN = [
+    CheckResult("DB Access", "critical", "INACCESSIBLE"),
+    CheckResult("Daily Snapshot", "critical", "SKIPPED", "DB error"),
+    CheckResult("Paper NAV", "warn", "SKIPPED", "DB error"),
+    CheckResult("VIX Data", "ok"),
+    CheckResult("Disk Space", "ok"),
+    CheckResult("3track Cron", "ok"),
+]
+
+
+def test_healthcheck_alert_single_issue() -> None:
+    """One warn check, the rest folded into the SYSTEMS NORMAL summary line."""
+    msg = build_healthcheck_alert(_SINGLE_ISSUE, now=_NOON)
+
+    assert msg == (
+        "⚠️ NIFTYSHIELD: DEGRADED \\[12:17\\]\n"
+        "\n"
+        "🚨 ACTION REQUIRED:\n"
+        "⚠️ VIX Data: STALE \\(3 days\\)\n"
+        "\n"
+        "✅ SYSTEMS NORMAL: DB Access, Daily Snapshot, Paper NAV, Disk Space, 3track Cron"
+    )
+
+
+def test_healthcheck_alert_multi_issue() -> None:
+    """Multiple issues, original check order preserved, passes summarised."""
+    msg = build_healthcheck_alert(_MULTI_ISSUE, now=_NOON)
+
+    assert msg == (
+        "⚠️ NIFTYSHIELD: DEGRADED \\[12:17\\]\n"
+        "\n"
+        "🚨 ACTION REQUIRED:\n"
+        "❌ Daily Snapshot: MISSING \\(Today\\)\n"
+        "⚠️ Paper NAV: MISSING \\(Today\\)\n"
+        "⚠️ Disk Space: LOW \\(450\\.2 MB\\)\n"
+        "\n"
+        "✅ SYSTEMS NORMAL: DB Access, VIX Data, 3track Cron"
+    )
+
+
+def test_healthcheck_alert_db_down() -> None:
+    """DB-inaccessible collapses checks 1-3 into critical/warn lines."""
+    msg = build_healthcheck_alert(_DB_DOWN, now=_NOON)
+
+    assert "❌ DB Access: INACCESSIBLE" in msg
+    assert "❌ Daily Snapshot: SKIPPED \\(DB error\\)" in msg
+    assert "⚠️ Paper NAV: SKIPPED \\(DB error\\)" in msg
+    assert "✅ SYSTEMS NORMAL: VIX Data, Disk Space, 3track Cron" in msg
+
+
+def test_healthcheck_normal_line_omitted_when_all_issues() -> None:
+    """Finding 6: no trailing SYSTEMS NORMAL line when no check is ok."""
+    all_bad = [
+        CheckResult("DB Access", "critical", "INACCESSIBLE"),
+        CheckResult("Daily Snapshot", "critical", "SKIPPED", "DB error"),
+        CheckResult("Paper NAV", "warn", "SKIPPED", "DB error"),
+        CheckResult("VIX Data", "warn", "MISSING"),
+        CheckResult("Disk Space", "warn", "LOW", "12.0 MB"),
+        CheckResult("3track Cron", "critical", "CRASHED", "Traceback in today's run"),
+    ]
+    msg = build_healthcheck_alert(all_bad, now=_NOON)
+
+    assert "SYSTEMS NORMAL" not in msg
+    assert not msg.endswith("\n")
+
+
+def test_healthcheck_escapes_exception_text_in_detail() -> None:
+    """Highest-risk field: a str(e) detail with . ( ) survives escaping."""
+    results = [
+        CheckResult("DB Access", "ok"),
+        CheckResult("Daily Snapshot", "ok"),
+        CheckResult("Paper NAV", "ok"),
+        CheckResult("VIX Data", "warn", "ERROR", "Connection refused: (errno 111)"),
+        CheckResult("Disk Space", "ok"),
+        CheckResult("3track Cron", "ok"),
+    ]
+    msg = build_healthcheck_alert(results, now=_NOON)
+
+    assert "\\(errno 111\\)" in msg
+    assert "(errno 111)" not in msg.replace("\\(errno 111\\)", "")
+
+
+def test_healthcheck_overall_status_always_degraded() -> None:
+    """Finding 4: a critical + warn mix still renders the single DEGRADED tier."""
+    mixed = [
+        CheckResult("DB Access", "ok"),
+        CheckResult("Daily Snapshot", "critical", "MISSING", "Today"),
+        CheckResult("VIX Data", "warn", "STALE", "5 days"),
+    ]
+    msg = build_healthcheck_alert(mixed, now=_NOON)
+
+    assert msg.startswith("⚠️ NIFTYSHIELD: DEGRADED ")
+    assert "DOWN" not in msg
+    assert "CRITICAL" not in msg
+
+
+@patch("scripts.healthcheck.connect")
+@patch("scripts.healthcheck.load_vix_series")
+@patch("scripts.healthcheck.shutil.disk_usage")
+def test_healthcheck_run_checks_returns_check_results(
+    mock_disk, mock_load_vix, mock_connect, tmp_path
+) -> None:
+    """Finding 2: run_checks() returns list[CheckResult], not pre-formatted strings."""
+    mock_conn = MagicMock()
+    mock_connect.return_value.__enter__.return_value = mock_conn
+    mock_conn.execute.return_value.fetchone.side_effect = [(1,), (1,), (1,)]
+
+    today = date(2026, 5, 31)
+    mock_load_vix.return_value = pd.Series([15.0], index=[today])
+    mock_disk.return_value = (1000 * 1024 * 1024, 200 * 1024 * 1024, 800 * 1024 * 1024)
+
+    cron_log = tmp_path / "paper_snapshot.log"
+    cron_log.write_text(
+        "2026-05-31 15:35:07 [INFO] [scripts] [strategies] [three_track] "
+        "[paper_3track_snapshot] snapshot.starting\n"
+    )
+
+    # Reference the class/function through the module object rather than the
+    # module-level `from` imports: the BUG-027 dotenv tests reload
+    # scripts.healthcheck, which rebinds its CheckResult to a fresh class object
+    # and would break a stale-import isinstance() check under randomized ordering.
+    results = healthcheck_module.run_checks(today, Path("dummy.db"), Path("dummy_vix"), cron_log)
+
+    assert isinstance(results, list)
+    assert results
+    assert all(isinstance(r, healthcheck_module.CheckResult) for r in results)
+    assert not any(isinstance(r, str) for r in results)

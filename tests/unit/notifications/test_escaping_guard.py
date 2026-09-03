@@ -197,7 +197,13 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "immediate enclosing function (main), not the builder it calls - same shape as the "
         "paper_3track_snapshot.py:2030 entry"
     ),
-    ("scripts/healthcheck.py", 254): "ROLL-11 - format confirmed, real code not yet migrated",
+    ("scripts/healthcheck.py", 324): (
+        "heuristic limitation, not a real gap - ROLL-11 migrated this (SHA on the task "
+        "line); the message is built and fully escaped inside build_healthcheck_alert() "
+        "(escape_markdown() on every label, status word, detail and the bracketed time), "
+        "but this guard only inspects the immediate enclosing function (main), not the "
+        "builder it calls - same shape as the scripts/eod_summary.py:200 entry"
+    ),
     (
         "scripts/position_health_check.py",
         135,
