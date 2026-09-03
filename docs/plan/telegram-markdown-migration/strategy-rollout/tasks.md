@@ -51,7 +51,7 @@ Sequenced by risk: informational messages first, live position-event notificatio
 - [x] **ROLL-11** — Migrate System Healthcheck alert (`healthcheck.py::main`) → grouped severity-status format; refactor `run_checks()` → structured `CheckResult` | Owner: Claude | Model:
       claude-sonnet-5 | Review: none | SHA: 1336b93
 - [x] **ROLL-12** — Migrate Position Health check alert (`position_health_check.py::main`) → grouped-by-finding-type; refactor to `PositionFinding`, reuse ROLL-7's tables | Owner: Antigravity |
-      Model: n/a | Review: none | SHA: b3bf77a
+      Model: n/a | Review: none | SHA: b3bf77a, a083fba
 - [ ] **ROLL-13** — Migrate 3-track base entry bootstrap notification (`paper_3track_entry.py::main`) → per-leg emoji kv with resolved instrument labels | Owner: Antigravity | Model: n/a | Review:
       code-reviewer | SHA: <—>
 - [ ] **ROLL-14** — Migrate 3-track overlay entry bootstrap notification (`paper_3track_overlay_entry.py::main`) → per-leg direction-coded kv, all 3 overlay types | Owner: Antigravity | Model: n/a
