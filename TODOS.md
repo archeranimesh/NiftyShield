@@ -188,6 +188,12 @@ this file's Session Log grows large again.
   `<pending>` sanctioned as the ticked-box interim SHA (backfilled next commit, no swap-only
   commit); `check_checkbox_consistency.py` + `docs/plan/README.md` §Task-line format updated
   to match. Cluster-3's 12 rows closed (8 enforce, 3 fix, 3 accept). SHA: `<pending>`.
+- **2026-09-03** — `docs/plan/token-efficiency/suggestions-sweep/` SWEEP-5: new **Tool-call
+  param hygiene** section in `CLAUDE.md` + `AGENTS.md` (after AutoTrigger Rules) + a Rule 0
+  tool-list line — documents the `codebase-memory-mcp` `project=` / `index_repository`
+  `repo_path=` first-call rule, the `AskUserQuestion` plain-array / no-`preview` rule, and
+  the "never `ScheduleWakeup`-poll a spawned subagent" rule. Cluster-4's 3 rows closed
+  (enforce-by-doc). Docs-only, no tests. SHA: `<pending>`.
 
 ### 2026-09-02
 

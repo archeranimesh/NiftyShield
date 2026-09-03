@@ -150,6 +150,17 @@ SWEEP-7 seeds it as a `technical-debt/` line. `fix`-by-text — `precommit-all-f
 | askuserquestion-preview-json-parse-fail | 3 | enforce (by doc) | plain `questions` array, no `preview`/envelope — rule where a planning session reads it |
 | scheduleWakeup-poll-spawned-agent | 1 | enforce (by doc) | "harness re-invokes on subagent completion — do not poll" note |
 
+**Closed by SWEEP-5 (SHA `<pending>`):** all 3 rows, `enforce`-by-doc. A new
+**Tool-call param hygiene** section in `CLAUDE.md` + `AGENTS.md` (after the AutoTrigger
+rules, before Step 5) states all three: the `codebase-memory-mcp` `project=` /
+`index_repository` `repo_path=` first-call rule (also pointed at from the Rule 0 tool list),
+the `AskUserQuestion` plain-`questions`-array / no-`preview` / no-`{"raw":…}` rule, and the
+`ScheduleWakeup` "never poll a spawned subagent — task-notification re-invokes you" rule.
+The in-repo `.claude/skills/codebase-memory/SKILL.md` named in the SWEEP-5 spec does not
+exist (that skill is plugin-provided, not repo-local), so the `project=` rule went to the
+Rule 0 tool list instead — same "session sees it before the first call" placement. No
+wrapper script was needed; all 3 are docs-only.
+
 ### Cluster 5 — Subagent orchestration → SWEEP-6 (2 rows)
 
 | Slug | Count | Outcome | Note |
@@ -412,8 +423,36 @@ measurement.
 
 **Commit:** `docs(skills): document MCP required params and tool-call param rules`
 
-**As-built (SHA `<—>`):** _record: rows closed; per-row this is an `enforce`-by-doc, not a
-hook — note if any recurred after and needs escalation._
+**As-built (SHA `<pending>`):** All 3 cluster-4 rows closed as `enforce`-by-doc — no hook, no
+wrapper. New **Tool-call param hygiene (MCP / AskUserQuestion / ScheduleWakeup)** section
+added to `CLAUDE.md` and mirrored in `AGENTS.md`, placed after the Agent AutoTrigger Rules
+and before Step 5 so a session reads it before making any of the three calls:
+
+- `codebase-mcp-missing-required-param` (Count 3) — the section + a new Rule 0 tool-list line
+  state that every raw `codebase-memory-mcp` call needs
+  `project=Users-abhadra-myWork-myCode-python-NiftyShield`, and `index_repository` also needs
+  `repo_path=<abs>`. Notes that `scripts.dev.graph_snippet` already defaults `--project` but a
+  direct MCP call does not — the RDO-15 / ROLL-7 failures were all direct calls.
+- `askuserquestion-preview-json-parse-fail` (Count 3) — rule: plain `questions` array, short
+  plain-string fields only, no `preview`, no `{"raw": <escaped json>}` envelope, no
+  multi-line / backtick / brace values.
+- `scheduleWakeup-poll-spawned-agent` (Count 1) — rule: never schedule a wake-up to poll a
+  spawned subagent; task-notification re-invokes on completion.
+
+The SWEEP-5 spec named `.claude/skills/codebase-memory/SKILL.md` as a target; that file is
+not in the repo (the `codebase-memory` skill is plugin-provided), so the `project=` rule
+went to the Rule 0 tool list — same placement intent (session sees it before the first
+call). Docs-only: no `Review: code-reviewer`, no tests.
+
+Measured delta: not a per-turn cut — an avoided-retry saving. Baseline (epic `README.md`) —
+each cited failure cost one full tool round trip plus the assistant's error-handling
+narration before the correct call: a rejected `codebase-memory-mcp` call ≈ 0.3–0.5K
+(rejection + retry), a failed `AskUserQuestion` JSON parse ≈ 1–2K (the whole question
+payload echoed back in the error, then re-sent), a `ScheduleWakeup` poll turn ≈ 3–6K (a full
+turn's per-turn hook + protocol re-injection for nothing). Across the 4 cited incidents in
+`suggestions.md` that is ≈ 6–12K of pure waste; the doc rules remove it on any session that
+reads them before the call. As with SWEEP-2..4 the realised saving is the epic's post-change
+`token_audit.py` re-run.
 
 ---
 

@@ -31,6 +31,12 @@ graph when it can answer the question wastes tokens and violates this protocol.
 4. Need a specific block? → `bash sed -n 'N,Mp' <file>` (cheaper than `Read` on the whole file)
 5. Still not enough? → `Read` is permitted — but **state why** the graph was insufficient.
 
+Every raw `codebase-memory-mcp` call (`search_graph`, `get_code_snippet`, `trace_path`,
+`query_graph`) needs `project=Users-abhadra-myWork-myCode-python-NiftyShield` — and
+`index_repository` also needs `repo_path=<abs repo path>`. Omitting it fails the call and
+costs a wasted round trip. `scripts.dev.graph_snippet` defaults `--project`; a raw MCP call
+does not. Full list: *Tool-call param hygiene* below.
+
 `Read` is the *first* tool only for: markdown files, TOML/YAML config, test fixtures.
 
 A second `Read` of a path already read this session (with no intervening `Edit`/`Write`) is
@@ -246,6 +252,24 @@ On surfaces that structurally cannot spawn `.claude/agents/*` (Antigravity, some
 contexts): emit the await-signal per `ANTIGRAVITY.md` and hand control to a human reviewer.
 That handoff satisfies the gate — it is human-completed, not skipped. The gate is violated
 only if the commit proceeds with neither a real agent run nor a human review having occurred.
+
+---
+
+## Tool-call param hygiene (MCP / AskUserQuestion / ScheduleWakeup)
+
+Three recurring tool-call mistakes, each costing a full retry or a wasted turn:
+
+- **`codebase-memory-mcp` first call** — pass `project=Users-abhadra-myWork-myCode-python-NiftyShield`
+  on every raw call, plus `repo_path=<abs repo path>` on `index_repository`. Omitting it
+  fails the call; the real call is then a second round trip. `scripts.dev.graph_snippet`
+  defaults `--project` — a direct MCP call does not.
+- **`AskUserQuestion`** — pass a plain `questions` array whose option/label/description fields
+  are short plain strings. No `preview` fields, no `{"raw": <escaped json>}` envelope, no
+  multi-line / backtick / brace content in a value — each has repeatedly failed the tool's
+  JSON parse and forced a full retry. Plain array, plain strings.
+- **`ScheduleWakeup`** — never schedule a wake-up to poll a subagent you spawned.
+  Harness-tracked work re-invokes you automatically via task-notification on completion;
+  polling burns a turn and reloads per-turn hook overhead for nothing. Just end the turn.
 
 ---
 
