@@ -1,7 +1,7 @@
 # src/client — Reference Notes
 
 > **Not auto-loaded.** Reference detail relocated out of `CLAUDE.md` (FIX-2,
-> `docs/plan/token-efficiency/fixed-overhead/`) so the auto-injected file carries only
+> `docs/archive/plan/token-efficiency/fixed-overhead/`) so the auto-injected file carries only
 > invariants and caller contracts.
 
 ---

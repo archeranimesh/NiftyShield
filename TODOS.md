@@ -209,8 +209,12 @@ this file's Session Log grows large again.
   DEBT-12 for the five over-threshold slugs (`reread-file-already-in-context` 23,
   `pytest-inlined-not-test-runner` 9, `wide-grep-dump-then-page` 7,
   `sha-recorded-via-second-commit` 6, `authored-md-prose-over-200-cap` 5); removed all five
-  from `suggestions.md`. Backfilled SWEEP-6 SHA `938d929`. Docs-only. `token-efficiency/`
-  epic now ready to archive. SHA: `<pending>`.
+  from `suggestions.md`. Backfilled SWEEP-6 SHA `938d929`. Docs-only. SHA: `2d896a9`.
+- **2026-09-03** — `token-efficiency` epic archived → `docs/archive/plan/token-efficiency/`
+  (all three stories shipped; closing SHA `2d896a9`). Backfilled the SWEEP-7 SHA, repointed
+  the `graph_snippet.py` + `portfolio`/`client`/`notifications` `NOTES.md` references at the
+  archive path, collapsed the `docs/plan/README.md` entry. See
+  `docs/archive/TODOS_ARCHIVE.md` 2026-09-03. Open follow-ups: DEBT-8..DEBT-12.
 
 ### 2026-09-02
 

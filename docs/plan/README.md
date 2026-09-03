@@ -14,13 +14,11 @@ Format per entry: `**\`folder/\`** · <status> · next: **<task id>**` then a sh
 
 ## Active Epics
 
-**`token-efficiency/`** · 🔄 In progress — `measurement/` + `fixed-overhead/` + `suggestions-sweep/` all done; epic ready to archive · next: **archive the epic**
-Cut the per-session token cost of running NiftyShield through Claude Code. Three sub-stories:
-`measurement/` (`token_audit.py` + a baseline every later task measures against) →
-`fixed-overhead/` (skill-ify `CLAUDE.md`, trim module `CLAUDE.md` files, take `session-close`
-off the context-cloning fork, strip MCP result bloat) → `suggestions-sweep/` (cluster and
-fix/enforce/accept every `suggestions.md` row; make Step 4b self-draining).
-Spawned from the 2026-09-01 ROLL-7 token audit (~740K tokens for one ~440-line task).
+**`token-efficiency/`** · ✅ Shipped/Archived 2026-09-03 → `docs/archive/plan/token-efficiency/`
+`measurement/` (MEAS-1..2) + `fixed-overhead/` (FIX-1..4) + `suggestions-sweep/` (SWEEP-1..7)
+all shipped. `token_audit.py`, the `CLAUDE.md`/`AGENTS.md` skill-ification, `session-close`
+off the fork, the SWEEP `PreToolUse` hooks + `commit_preflight.py`, and the Step 4b drain
+path (`Count >= 5` → `technical-debt/` DEBT-8..12) all landed. Closing SHA `2d896a9`.
 
 **`doc-format-migration/`** · ⬜ Not started — start with `plan-folders/` **DFM-1**
 Batch-converts every legacy `docs/plan/` folder to the canonical format and reflows every

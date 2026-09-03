@@ -582,7 +582,7 @@ this task's DoD.
 
 **Commit:** `refactor(session-close): escalate and retire high-count suggestion slugs`
 
-**As-built (SHA `<pending>`):** Rebased onto FIX-3 (`03d991f`) — confirmed: `session-close`
+**As-built (SHA `2d896a9`):** Rebased onto FIX-3 (`03d991f`) — confirmed: `session-close`
 `SKILL.md` already opens "Runs on a transcript, not 'this conversation'" and spawns a fresh
 `general-purpose` subagent, no `fork`; no rebase owed.
 

@@ -12,7 +12,7 @@ get_code_snippet``), drops those three keys, and prints the rest as indented
 JSON. Rule 0's "Need a symbol?" step points here instead of the raw MCP tool.
 
 The real fix belongs upstream (a compact/fields mode on the server); see the
-issue linked in ``docs/plan/token-efficiency/fixed-overhead/stories.md`` FIX-4.
+issue linked in ``docs/archive/plan/token-efficiency/fixed-overhead/stories.md`` FIX-4.
 
 ``print`` here is the CLI output contract (indented JSON on stdout), not a log
 line — so this script declares no structlog logger, matching ``reflow_md.py``.

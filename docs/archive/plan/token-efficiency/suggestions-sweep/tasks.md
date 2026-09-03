@@ -24,7 +24,7 @@ FIX-3 has landed, or note in its commit that FIX-3 is still pending and a rebase
 - [x] **SWEEP-6** — Shell + subagent-orchestration + residual protocol-discipline rows: targeted text fixes in `CLAUDE.md` and the relevant skills; the pure-judgement rows accepted with a reason |
       Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 938d929
 - [x] **SWEEP-7** — Rewrite `session-close` Step 4b: a `Count >= 5` slug escalates to a `technical-debt/` item or an accepted-row and leaves the active list; seed the over-threshold slugs |
-      Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <pending>
+      Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 2d896a9
 
 ## Story done when
 
