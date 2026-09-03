@@ -205,6 +205,17 @@ def test_canonical_tail_clean_file_has_no_findings(tmp_path):
     assert ccc.check_file(task_file) == []
 
 
+def test_ticked_task_with_pending_sha_is_clean(tmp_path):
+    """`- [x]` with `SHA: <pending>` is the sanctioned interim (SWEEP-4) — not flagged."""
+    body = (
+        "# t\n\n- [x] **D-1** — done. "
+        "| Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <pending>\n"
+    )
+    task_file = _write(tmp_path, "ticked-pending", body)
+
+    assert ccc.check_file(task_file) == []
+
+
 def test_ticked_task_with_placeholder_sha_is_flagged(tmp_path):
     """`- [x]` with `SHA: <—>` on a canonical tail is a state/SHA disagreement."""
     body = (

@@ -288,6 +288,10 @@ commit.
 otherwise.
 `Review` is `none` for docs-only tasks.
 `SHA` is `—` until the task's commit lands; then set it to the real SHA and tick the box.
+When a phase ticks its own box in the same commit, `SHA: <pending>` is the sanctioned
+interim — the real SHA is backfilled in the next commit's docs touch, never in a dedicated
+swap-only commit (`commit` skill Step 1b; `check_checkbox_consistency.py` allows `<pending>`
+on a ticked line).
 One line per task — never mirror task state into `TODOS.md` or a `stories.md` DoD box.
 
 ### Canonical state vs derived state
@@ -316,7 +320,8 @@ disagreeing state in one file, a README `next:` marker pointing at an already-do
 on any line carrying the canonical `| Owner: … | Model: … | Review: … | SHA: …` tail — a
 `Review` value that is not a known gate name (`code-reviewer` / `greeks-analyst` /
 `roll-validator` / `none`) or a `SHA` that disagrees with the checkbox state (`—` / `<—>`
-iff unchecked, a real 7–40 hex SHA iff ticked). Legacy tails (`| Owner | Model | SHA` with
+iff unchecked, a real 7–40 hex SHA — or the `<pending>` interim — iff ticked). Legacy tails
+(`| Owner | Model | SHA` with
 no `Review`, or a prose-laden `| Review:`) are grandfathered — skipped, not flagged.
 It runs in the `md-organize` skill's periodic audit — not pre-commit (task files churn far
 faster than the audit needs to).

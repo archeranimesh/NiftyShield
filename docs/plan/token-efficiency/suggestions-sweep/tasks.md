@@ -4,7 +4,7 @@ Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task
 See `prompt.md` for why the story exists and its hard constraints; see `stories.md` for the
 per-task implementation spec.
 
-**Open: SWEEP-4 (next), SWEEP-5, SWEEP-6, SWEEP-7.** SWEEP-1, SWEEP-2, SWEEP-3 landed.
+**Open: SWEEP-5 (next), SWEEP-6, SWEEP-7.** SWEEP-1..SWEEP-4 landed.
 
 SWEEP-1 must land first (it defines the clusters every later task closes). SWEEP-2..SWEEP-6
 are independent of each other. SWEEP-7 rebases onto `fixed-overhead/` FIX-3 — do it after
@@ -16,8 +16,8 @@ FIX-3 has landed, or note in its commit that FIX-3 is still pending and a rebase
       Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 68683cb
 - [x] **SWEEP-3** — Test-run cluster: hook nudging `test-runner` for main-session full-suite `pytest`; amend the AutoTrigger cadence to once-before-commit |
       Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: e325e86
-- [ ] **SWEEP-4** — Commit-flow cluster: `scripts/dev/commit_preflight.py` (staged-index, `ruff format --check`, md-line-length, next-marker, `<pending>`-SHA policy) wired into the `commit` skill |
-      Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: <—>
+- [x] **SWEEP-4** — Commit-flow cluster: `scripts/dev/commit_preflight.py` (staged-index, `ruff format --check`, md-line-length, next-marker, `<pending>`-SHA policy) wired into the `commit` skill |
+      Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: <pending>
 - [ ] **SWEEP-5** — MCP / tool-param cluster: document the `codebase-memory-mcp` required-params, the `AskUserQuestion` plain-array rule, and the "don't `ScheduleWakeup`-poll a spawned agent" rule |
       Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <—>
 - [ ] **SWEEP-6** — Shell + subagent-orchestration + residual protocol-discipline rows: targeted text fixes in `CLAUDE.md` and the relevant skills; the pure-judgement rows accepted with a reason |

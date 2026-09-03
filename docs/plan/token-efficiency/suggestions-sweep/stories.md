@@ -123,6 +123,25 @@ docs/tooling change at the targeted dir. AutoTrigger `test-runner` row amended i
 | reflow-interleaved-with-edits | 1 | accept | run reflow once after all structural Edits — workflow advice a preflight cannot enforce (spec-directed) |
 | transform-script-iterated-not-prototyped | 1 | accept | prototype a bulk transform on a slice first — workflow advice (spec-directed) |
 
+**Closed by SWEEP-4 (SHA `<pending>`):** all 12 rows. `enforce` (new
+`scripts/dev/commit_preflight.py`, run against the staged set in `commit` skill Step 1b) —
+`ruff-format-check-skipped-precommit-abort` + `py-authored-lines-over-ruff-cap` (one `ruff
+format --check` pass on staged `.py`), `authored-md-prose-over-200-cap` +
+`md-hook-backlog-not-checked-before-edit` (staged `.md` md-line-length, reusing
+`check_md_line_length.check_file`), `staged-index-not-checked-before-commit` (staged paths
+vs. `--expect` prefixes), `next-marker-points-at-just-closed-task` +
+`todos-pointer-not-synced-with-readme` (next-marker scan over staged `tasks.md` /
+`README.md` / `TODOS.md`). `fix` — `next-marker-prose-evades-guard` (the preflight check
+matches the prose forms `Open: X (next)` / `next is **X**` that `README_ENTRY_RE` in
+`check_checkbox_consistency.py` misses); `sha-recorded-via-second-commit` (the
+`<pending>`-then-backfill policy is now stated in `commit` skill Step 1b — no swap-only
+commit; also `enforce`d by the preflight's SHA-placeholder warning) — still Count ≥ 5, so
+SWEEP-7 seeds it as a `technical-debt/` line. `fix`-by-text — `precommit-all-files-mass-reformat`
+(`commit` skill Step 4 now says `pre-commit run --files …`, never `--all-files`). `accept`
+(workflow-sequencing advice a preflight structurally cannot verify) —
+`line-coupled-baseline-set-before-code-frozen`, `reflow-interleaved-with-edits`,
+`transform-script-iterated-not-prototyped`.
+
 ### Cluster 4 — MCP & tool-call params → SWEEP-5 (3 rows)
 
 | Slug | Count | Outcome | Note |
@@ -336,9 +355,33 @@ epic's post-hook `token_audit.py` re-run (Perspectives not covered) is the real 
 
 **Commit:** `feat(scripts): add commit_preflight.py and wire it into the commit skill`
 
-**As-built (SHA `<—>`):** _record: which cluster-3 rows each check closes, which are
-accepted, and the count of avoided re-stage / swap-only-commit cycles from a sample of recent
-sessions._
+**As-built (SHA `<pending>`):** `scripts/dev/commit_preflight.py` — a CLI (not a git hook)
+the `commit` skill runs in Step 1b against the staged set. Five checks: staged-index sanity
+vs. `--expect` prefixes (warn), `ruff format --check` on staged `.py` (blocker, exit 1),
+md-line-length on staged hook-covered `.md` (blocker, reuses
+`scripts/dev/hooks/check_md_line_length.check_file`), next-marker (warn — a box the staged
+diff ticks must not still be named `next:` / `next is **X**` / `X (next)` / `Open: X (next)`
+in any staged `tasks.md` / `README.md` / `TODOS.md`), SHA-placeholder (warn — a `[x]` task
+line still on `SHA: <—>`). Exit 1 only on a blocker; warnings are advisory, matching the
+`.claude/hooks/` warn-only contract. 20 tests in
+`tests/unit/scripts/dev/test_commit_preflight.py` (pure per-check functions + `main`
+wiring). `commit` skill Step 1b added (invocation + the blocker/warning legend + the
+`<pending>`-then-backfill SHA policy); Step 4 gains the `pre-commit run --files …` /
+never-`--all-files` line. Cluster-3 outcomes: see the "Closed by SWEEP-4" block above — 8
+enforce, 3 fix, 3 accept (the `sha-recorded-via-second-commit` row is both fixed here and
+handed to SWEEP-7 for the Count-≥-5 drain).
+
+Measured delta: this is a workflow-cycle saving, not a per-turn token cut. Baseline (epic
+`README.md`) — the commit-flow slugs recur ~1×/session between them; the dominant cost is
+`sha-recorded-via-second-commit` (Count 5), where a dedicated swap-only commit = one extra
+`git` round trip plus a `code-reviewer` re-run on the trivial diff (~30–40K account-side
+when the diff qualifies for review) and each `ruff-format`/`md-line-length` pre-commit abort
+= one re-stage cycle (~2–5K in re-run tool output + assistant narration). Catching both
+before the commit removes ≈ **30–45K on a session that would otherwise hit the swap-only +
+one abort path**; on a clean session the preflight is a single ~1s Bash call (~0.2K). As
+with the SWEEP-2/3 hooks the realised saving depends on the model acting on the warnings —
+the epic's post-hook `token_audit.py` re-run (Perspectives not covered) is the real
+measurement.
 
 ---
 

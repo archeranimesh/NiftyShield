@@ -18,7 +18,8 @@ and ``docs/bugs/task.md``:
    the post-RDO-17.1 format) must have a well-formed ``| Owner: … | Model: … | Review: … |
    SHA: …`` tail with ``Review`` one of ``code-reviewer`` / ``greeks-analyst`` /
    ``roll-validator`` / ``none``, and ``SHA`` a placeholder (``—`` / ``<—>``) iff the box is
-   unchecked, a real 7–40 hex SHA iff it is ticked. Legacy ``| Owner | Model | SHA`` and
+   unchecked, a real 7–40 hex SHA — or the ``<pending>`` interim (real SHA backfilled in the
+   next commit, SWEEP-4) — iff it is ticked. Legacy ``| Owner | Model | SHA`` and
    bare ``| SHA`` lines are grandfathered and skipped.
 
 Modes:
@@ -60,6 +61,7 @@ TAIL_RE = re.compile(
 REVIEW_VALUES = {"code-reviewer", "greeks-analyst", "roll-validator", "none"}
 SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
 PLACEHOLDER_SHA = {"—", "<—>", "–", "-", "tbd", "TBD"}
+PENDING_SHA = "<pending>"  # ticked box, real SHA backfilled in the next commit (SWEEP-4)
 
 
 def _rel(path: Path) -> str:
@@ -94,6 +96,8 @@ def _check_task_tail(path: Path, lineno: int, task_id: str, state: str, joined: 
             f"{sorted(REVIEW_VALUES)} (§Task-line format)"
         )
     sha = match.group("sha").strip().strip("`")
+    if state == "x" and sha == PENDING_SHA:
+        return findings  # interim: ticked, real SHA backfilled in the next commit (SWEEP-4)
     if state == "x" and not SHA_RE.match(sha):
         findings.append(
             f"{_rel(path)}:{lineno}: '{task_id}' is ticked but SHA is '{sha}' — set the real "

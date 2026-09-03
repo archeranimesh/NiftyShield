@@ -15,6 +15,28 @@ Scan for: Decimal violations, BrokerClient imports outside factory.py, missing t
 blocking calls in async paths. If the diff touches financial logic (Greeks, P&L, Decimal
 fields), stop and invoke the `@code-reviewer` subagent before proceeding.
 
+### Step 1b — commit preflight
+
+Stage the phase's files, then run the preflight against the staged set:
+
+```bash
+git -C /path/to/repo add <file1> <file2> ...
+python -m scripts.dev.commit_preflight --expect <dir-or-file> [--expect <…>]
+```
+
+Pass one `--expect` per directory/file the phase is allowed to touch. The preflight prints:
+
+- `✗` **blockers** (`ruff format --check` on staged `.py`, `md-line-length` on staged
+  `.md`) — it exits 1; fix these before committing, or the `pre-commit` hook aborts the
+  commit anyway.
+- `⚠` **warnings** (staged path outside `--expect`; a `next:` marker — prose forms
+  included — still naming a task this commit ticks; a `[x]` task line still on the `SHA:
+  <—>` placeholder) — advisory, exit 0; act on them or note why not.
+
+**SHA-placeholder policy:** when a phase ticks its own task box, set `SHA: <pending>` on
+that line now and backfill the real SHA in the **next** commit's docs touch — never make a
+dedicated swap-only commit just to record a SHA.
+
 ---
 
 ## Step 2 — Run the test suite
@@ -62,7 +84,9 @@ EOF
 )"
 ```
 
-Stage only the files for this phase. Never `git add -A` across phase boundaries.
+Stage only the files for this phase. Never `git add -A` across phase boundaries. If you
+run `pre-commit` by hand first, scope it — `pre-commit run --files $(git diff --cached
+--name-only)`, never `--all-files` (that reformats the whole tree into your diff).
 
 ---
 

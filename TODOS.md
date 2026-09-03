@@ -181,6 +181,13 @@ this file's Session Log grows large again.
   main-session `pytest tests/unit/` run, 12 tests. `test-runner` AutoTrigger cadence amended
   to "once per task before `code-reviewer` / the commit — not per-edit" in
   `CLAUDE.md`/`AGENTS.md`/`session-close`. Cluster-2's 2 rows closed. SHA: `e325e86`.
+- **2026-09-03** — `docs/plan/token-efficiency/suggestions-sweep/` SWEEP-4:
+  `scripts/dev/commit_preflight.py` — CLI the `commit` skill runs (Step 1b) against the
+  staged set: staged-index vs. `--expect` (warn), `ruff format --check` + md-line-length on
+  staged files (blockers), next-marker incl. prose forms + SHA-placeholder (warn), 20 tests.
+  `<pending>` sanctioned as the ticked-box interim SHA (backfilled next commit, no swap-only
+  commit); `check_checkbox_consistency.py` + `docs/plan/README.md` §Task-line format updated
+  to match. Cluster-3's 12 rows closed (8 enforce, 3 fix, 3 accept). SHA: `<pending>`.
 
 ### 2026-09-02
 
