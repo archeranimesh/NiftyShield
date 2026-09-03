@@ -32,6 +32,8 @@ from src.client.upstox_market import parse_upstox_option_chain
 from src.instruments.lookup import InstrumentLookup, parse_expiry
 from src.market_calendar.holidays import is_trading_day, market_today
 from src.models.options import OptionChain
+from src.notifications.formatting import leg_role_label, strategy_label
+from src.notifications.markdown import escape_markdown
 from src.notifications.protocol import NotifierProtocol
 from src.paper.models import PaperPosition
 
@@ -363,7 +365,16 @@ class StrategyMonitor:
                 strategy.strategy_name, event.event_type, leg_role, expiry_str
             )
             if not already_active:
-                text = f"[{strategy.strategy_name}] {event.event_type}: {event.description}"
+                event_headline = escape_markdown(event.event_type.replace("_", " "))
+                strat_label = escape_markdown(strategy_label(strategy.strategy_name))
+                description = escape_markdown(event.description)
+
+                lines = [f"⚠️ {event_headline} \\- {strat_label}"]
+                if leg_role:
+                    lines.append(f"Leg: {escape_markdown(leg_role_label(leg_role))}")
+                lines.append(description)
+
+                text = "\n".join(lines)
                 await self._notifier.send_plain_message(text)
                 if warn_fired is not None:
                     self._store.set_warn_active(

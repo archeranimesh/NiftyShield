@@ -198,6 +198,7 @@ async def test_tick_info_signal_no_telegram() -> None:
 async def test_tick_warn_signal_sends_plain_message() -> None:
     """WARN signal → notifier.send_plain_message called once."""
     strategy = MockStrategy()
+    strategy.strategy_name = "paper_ic_nifty_v1_monthly"
     warn_event = SignalEvent(
         event_type="DELTA_BREACH",
         severity="WARN",
@@ -269,6 +270,7 @@ async def test_tick_warn_signal_suppressed_when_already_active() -> None:
 async def test_tick_warn_signal_first_occurrence_marks_active() -> None:
     """First WARN occurrence (not yet active) → sends and marks active in store."""
     strategy = MockStrategy()
+    strategy.strategy_name = "paper_ic_nifty_v1_monthly"
     warn_event = SignalEvent(
         event_type="DELTA_WARN",
         severity="WARN",
@@ -1158,9 +1160,10 @@ async def test_tick_summary_signal_count_matches() -> None:
     )
 
     strategy_a = MockStrategy()
+    strategy_a.strategy_name = "paper_ic_nifty_v1_monthly"
     strategy_a.check_signals = AsyncMock(return_value=[info_event, warn_event])
     strategy_b = MockStrategy()
-    strategy_b.strategy_name = "paper_mock_strategy_b"
+    strategy_b.strategy_name = "paper_ic_nifty_v2_monthly"
     strategy_b.check_signals = AsyncMock(return_value=[info_event])
 
     store = _make_store()
@@ -1282,6 +1285,197 @@ async def test_tick_skips_cc_overlay_position_under_old_constant() -> None:
     spy.assert_called_once()
     _, called_positions = spy.call_args.args
     assert called_positions == []
+
+
+# ---------------------------------------------------------------------------
+# ROLL-8: Generic Strategy WARN Event Alerts
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_event_alert_headline_humanizes_event_type() -> None:
+    """event_type="ROLL_BASE_FIRST" renders as "ROLL BASE FIRST" (mechanical
+    replace, not a synonym dict)."""
+    event = SignalEvent(
+        event_type="ROLL_BASE_FIRST",
+        severity="WARN",
+        description="base_dte=8 <= 10",
+        payload={"leg_role": "overlay_cc"},
+    )
+    strategy = MockStrategy()
+    strategy.strategy_name = "paper_covered_call_v1"
+    strategy.check_signals = AsyncMock(return_value=[event])
+
+    store = _make_store()
+    notifier = _make_notifier()
+    monitor = _make_monitor(store=store, notifier=notifier, strategies=[strategy])
+
+    with (
+        patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch(
+            "src.strategy.monitor.datetime",
+            **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
+        ),
+    ):
+        await monitor._tick()
+
+    notifier.send_plain_message.assert_called_once()
+    text = notifier.send_plain_message.call_args.args[0]
+    assert text.startswith("⚠️ ROLL BASE FIRST \\- Covered Call V1\nLeg: Overlay CC\n")
+
+
+@pytest.mark.asyncio
+async def test_event_alert_escapes_underscore_description() -> None:
+    """description with an underscore survives escape_markdown correctly."""
+    event = SignalEvent(
+        event_type="DELTA_WARN",
+        severity="WARN",
+        description="signal_code=DELTA_WARN (the exact bug)",
+        payload={"leg_role": "short_put"},
+    )
+    strategy = MockStrategy()
+    strategy.strategy_name = "paper_csp_nifty_v1"
+    strategy.check_signals = AsyncMock(return_value=[event])
+    store = _make_store()
+    notifier = _make_notifier()
+    monitor = _make_monitor(store=store, notifier=notifier, strategies=[strategy])
+
+    with (
+        patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch(
+            "src.strategy.monitor.datetime",
+            **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
+        ),
+    ):
+        await monitor._tick()
+
+    text = notifier.send_plain_message.call_args.args[0]
+    expected = (
+        "⚠️ DELTA WARN \\- CSP V1\nLeg: Short Put\nsignal\\_code\\=DELTA\\_WARN \\(the exact bug\\)"
+    )
+    assert text == expected
+
+
+@pytest.mark.asyncio
+async def test_event_alert_unmapped_strategy_raises() -> None:
+    """Unmapped strategy_name -> ValueError (loud failure)."""
+    event = SignalEvent(
+        event_type="DELTA_BREACH",
+        severity="WARN",
+        description="delta breach",
+        payload={"leg_role": "short_put"},
+    )
+    strategy = MockStrategy()
+    strategy.strategy_name = "unknown_strategy_xyz"
+    strategy.check_signals = AsyncMock(return_value=[event])
+    store = _make_store()
+    notifier = _make_notifier()
+    monitor = _make_monitor(store=store, notifier=notifier, strategies=[strategy])
+
+    with (
+        patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch(
+            "src.strategy.monitor.datetime",
+            **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
+        ),
+        pytest.raises(
+            ValueError, match="no display label mapped for strategy_id='unknown_strategy_xyz'"
+        ),
+    ):
+        await monitor._tick()
+
+
+@pytest.mark.asyncio
+async def test_event_alert_omits_leg_line_when_absent() -> None:
+    """No leg_role -> no 'Leg:' line at all."""
+    event = SignalEvent(
+        event_type="TRACKING_ERROR_WARN",
+        severity="WARN",
+        description="tracking error 1.8% exceeds 1.5%",
+        payload={},
+    )
+    strategy = MockStrategy()
+    strategy.strategy_name = "paper_nifty_spot"
+    strategy.check_signals = AsyncMock(return_value=[event])
+    store = _make_store()
+    notifier = _make_notifier()
+    monitor = _make_monitor(store=store, notifier=notifier, strategies=[strategy])
+
+    with (
+        patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch(
+            "src.strategy.monitor.datetime",
+            **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
+        ),
+    ):
+        await monitor._tick()
+
+    text = notifier.send_plain_message.call_args.args[0]
+    expected = "⚠️ TRACKING ERROR WARN \\- Spot Track\ntracking error 1\\.8% exceeds 1\\.5%"
+    assert text == expected
+
+
+@pytest.mark.asyncio
+async def test_event_alert_severity_never_tiered() -> None:
+    """Two WARN events, different event_type, same leading emoji ⚠️."""
+    event1 = SignalEvent(event_type="DELTA_BREACH", severity="WARN", description="d1", payload={})
+    event2 = SignalEvent(event_type="DELTA_WARN", severity="WARN", description="d2", payload={})
+    strategy = MockStrategy()
+    strategy.strategy_name = "paper_ic_nifty_v1_monthly"
+    strategy.check_signals = AsyncMock(return_value=[event1, event2])
+    store = _make_store()
+    notifier = _make_notifier()
+    monitor = _make_monitor(store=store, notifier=notifier, strategies=[strategy])
+
+    with (
+        patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch(
+            "src.strategy.monitor.datetime",
+            **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
+        ),
+    ):
+        await monitor._tick()
+
+    assert notifier.send_plain_message.call_count == 2
+    msg1 = notifier.send_plain_message.call_args_list[0].args[0]
+    msg2 = notifier.send_plain_message.call_args_list[1].args[0]
+    assert msg1.startswith("⚠️ DELTA BREACH")
+    assert msg2.startswith("⚠️ DELTA WARN")
+
+
+@pytest.mark.asyncio
+async def test_event_alert_reference_scenarios() -> None:
+    """Additional scenarios: proxy_delta_warn."""
+    event1 = SignalEvent(
+        event_type="PROXY_DELTA_WARN",
+        severity="WARN",
+        description="base_ditm_call delta 0.61 < 0.65",
+        payload={"leg_role": "base_ditm_call"},
+    )
+    strategy1 = MockStrategy()
+    strategy1.strategy_name = "paper_nifty_proxy"
+    strategy1.check_signals = AsyncMock(return_value=[event1])
+
+    store = _make_store()
+    notifier = _make_notifier()
+    monitor = _make_monitor(store=store, notifier=notifier, strategies=[strategy1])
+
+    with (
+        patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch(
+            "src.strategy.monitor.datetime",
+            **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
+        ),
+    ):
+        await monitor._tick()
+
+    text = notifier.send_plain_message.call_args.args[0]
+    expected = (
+        "⚠️ PROXY DELTA WARN \\- Proxy Track\n"
+        "Leg: Base DITM Call\n"
+        "base\\_ditm\\_call delta 0\\.61 < 0\\.65"
+    )
+    assert text == expected
 
 
 # ---------------------------------------------------------------------------

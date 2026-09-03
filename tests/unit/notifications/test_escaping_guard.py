@@ -247,7 +247,6 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "_build_recovery_digest() (MD-4.2 scope) but this guard only inspects the "
         "immediate enclosing function (_run), not callees"
     ),
-    ("src/strategy/monitor.py", 367): "ROLL-8 - format confirmed, real code not yet migrated",
 }
 
 

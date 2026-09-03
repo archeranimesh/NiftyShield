@@ -508,9 +508,15 @@ STRATEGY_LABELS: dict[str, str] = {
 # reusers (ROLL-8, ROLL-12) extend this dict for the roles they render.
 LEG_ROLE_LABELS: dict[str, str] = {
     "short_put": "Short Put",
+    "short_call": "Short Call",
     "covered_call": "Covered Call",
+    "overlay_cc": "Overlay CC",
+    "overlay_pp": "Overlay PP",
     "overlay_collar_call": "Collar Call",
+    "overlay_collar_put": "Overlay Collar Put",
     "protective_put": "Protective Put",
+    "base_ditm_call": "Base DITM Call",
+    "base_futures": "Base Futures",
 }
 
 
