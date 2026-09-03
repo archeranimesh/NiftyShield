@@ -623,7 +623,7 @@ def _resolved_label(f: PositionFinding) -> str:
     label = format_option_label(
         f.underlying_symbol, f.strike_price, f.instrument_type, f.expiry_str
     )
-    return f"{label[:-10]} ({expiry_fmt})"
+    return label.replace(f" {expiry_fmt}", f" ({expiry_fmt})")
 
 
 def _unknown_token(instrument_key: str) -> str:

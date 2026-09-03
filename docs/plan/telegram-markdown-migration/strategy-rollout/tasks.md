@@ -5,7 +5,7 @@ carries an **As-built** paragraph there (split history, review-gate detail, phas
 
 Sequenced by risk: informational messages first, live position-event notifications next, auth-sensitive interactive messages last.
 
-**Open: ROLL-12 (next), ROLL-13, ROLL-14, ROLL-15, ROLL-16, ROLL-17, ROLL-5.**
+**Open: ROLL-13 (next), ROLL-14, ROLL-15, ROLL-16, ROLL-17, ROLL-5.**
 
 > **Routing:** `Owner` = who implements (`Claude` = judgment-call, `Antigravity` = mechanical with an unambiguous spec). `Model` = model the owner runs at. `Review` = the AutoTrigger gate; where
 > `stories.md` says "real `@code-reviewer`, Opus" the real subagent is mandatory, not a persona approximation (financial-logic close-notification / P&L-rendering paths). **Blocked by:** ROLL-1 needs
