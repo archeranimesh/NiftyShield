@@ -180,7 +180,7 @@ this file's Session Log grows large again.
   `PreToolUse(Bash)` hook `check_inline_full_suite.py` nudges `@test-runner` for a bare
   main-session `pytest tests/unit/` run, 12 tests. `test-runner` AutoTrigger cadence amended
   to "once per task before `code-reviewer` / the commit — not per-edit" in
-  `CLAUDE.md`/`AGENTS.md`/`session-close`. Cluster-2's 2 rows closed. SHA: `<pending>`.
+  `CLAUDE.md`/`AGENTS.md`/`session-close`. Cluster-2's 2 rows closed. SHA: `e325e86`.
 
 ### 2026-09-02
 

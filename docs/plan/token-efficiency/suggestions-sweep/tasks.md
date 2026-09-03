@@ -15,7 +15,7 @@ FIX-3 has landed, or note in its commit that FIX-3 is still pending and a rebase
 - [x] **SWEEP-2** — Read/discovery cluster: `PreToolUse` hooks — warn on a re-`Read` of an already-read path, and on wide unscoped `grep`/`sed` over a large file; reinforce graph-first text |
       Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: <pending>
 - [x] **SWEEP-3** — Test-run cluster: hook nudging `test-runner` for main-session full-suite `pytest`; amend the AutoTrigger cadence to once-before-commit |
-      Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: <pending>
+      Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: e325e86
 - [ ] **SWEEP-4** — Commit-flow cluster: `scripts/dev/commit_preflight.py` (staged-index, `ruff format --check`, md-line-length, next-marker, `<pending>`-SHA policy) wired into the `commit` skill |
       Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: <—>
 - [ ] **SWEEP-5** — MCP / tool-param cluster: document the `codebase-memory-mcp` required-params, the `AskUserQuestion` plain-array rule, and the "don't `ScheduleWakeup`-poll a spawned agent" rule |

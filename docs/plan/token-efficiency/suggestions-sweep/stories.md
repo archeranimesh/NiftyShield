@@ -99,7 +99,7 @@ discipline. `accept` (batch-your-reads model discipline, no clean hook) —
 | pytest-inlined-not-test-runner | 9 | enforce | `check_inline_full_suite.py` nudges `@test-runner`; AutoTrigger cadence amended to "once before commit" |
 | full-suite-run-for-docs-only-change | 1 | enforce | same hook — for a docs/tooling change it points at the targeted hook-test dir |
 
-**Closed by SWEEP-3 (SHA `<pending>`):** both rows. `check_inline_full_suite.py` +
+**Closed by SWEEP-3 (SHA `e325e86`):** both rows. `check_inline_full_suite.py` +
 `.claude/hooks/inline_full_suite.sh` (registered on `Bash`) warn-only when the main session
 runs a bare `pytest tests/unit/` with no `-k`/`-m`/path/node-id narrowing, and point a
 docs/tooling change at the targeted dir. AutoTrigger `test-runner` row amended in `CLAUDE.md`
@@ -271,7 +271,7 @@ real measurement.
 
 **Commit:** `feat(hooks): nudge test-runner for inline full-suite pytest`
 
-**As-built (SHA `<pending>`):** New warn-only `PreToolUse(Bash)` hook
+**As-built (SHA `e325e86`):** New warn-only `PreToolUse(Bash)` hook
 `scripts/dev/hooks/check_inline_full_suite.py` (+ `.claude/hooks/inline_full_suite.sh`,
 registered in `.claude/settings.json`) fires when a command runs `pytest` / `python -m pytest`
 against `tests/unit` / `tests/` / no path, with no `-k` / `-m` / specific file / `::` node id
