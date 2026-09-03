@@ -202,6 +202,15 @@ this file's Session Log grows large again.
   mirror) gains a routing-settled callout; `md-organize` Step 7 gains a mirror-path grep
   line. Clusters 5 / 6 / 7 closed — 4 fix-by-text, 7 accept. Docs-only, no tests.
   Backfilled SWEEP-4 SHA `2b85b84` and SWEEP-5 SHA `2ae951c` on the same commit. SHA: `<pending>`.
+- **2026-09-03** — `docs/plan/token-efficiency/suggestions-sweep/` SWEEP-7 (closes the story
+  and the epic): `session-close` Step 4b gains a drain step — a `suggestions.md` slug at
+  `Count >= 5` retires from the active table to a `standalone-actionable` `DEBT-*` line
+  (remediation exists) or an "Accepted / won't-fix" section (pure judgement). Seeded DEBT-8..
+  DEBT-12 for the five over-threshold slugs (`reread-file-already-in-context` 23,
+  `pytest-inlined-not-test-runner` 9, `wide-grep-dump-then-page` 7,
+  `sha-recorded-via-second-commit` 6, `authored-md-prose-over-200-cap` 5); removed all five
+  from `suggestions.md`. Backfilled SWEEP-6 SHA `938d929`. Docs-only. `token-efficiency/`
+  epic now ready to archive. SHA: `<pending>`.
 
 ### 2026-09-02
 

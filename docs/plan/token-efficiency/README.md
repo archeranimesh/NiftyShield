@@ -98,7 +98,7 @@ Confirmed with Animesh, 2026-09-01:
 |---|---|---|---|---|
 | `measurement/` | `token_audit.py` — attribute a session's tokens by bucket; establish the baseline every later task measures against | ✅ Done | — | a0dfa38 |
 | `fixed-overhead/` | Skill-ify `CLAUDE.md`, trim module `CLAUDE.md` files, redesign `session-close` off the fork, strip MCP result bloat | ✅ Done | `measurement/` | 1b64d4a |
-| `suggestions-sweep/` | Cluster all ~40 `suggestions.md` rows; fix / enforce / accept each; make Step 4b self-draining | 🔄 In progress | `measurement/` | SWEEP-1..6 done; SWEEP-7 open |
+| `suggestions-sweep/` | Cluster all ~40 `suggestions.md` rows; fix / enforce / accept each; make Step 4b self-draining | ✅ Done | `measurement/` | SWEEP-1..7 done — closing SHA `<pending>` |
 
 Status: ⬜ Not started · 🔄 In progress · ✅ Done. This column is the epic's progress view —
 per-task checkboxes live only in each sub-story's `tasks.md`.

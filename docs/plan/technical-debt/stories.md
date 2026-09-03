@@ -62,3 +62,42 @@ until runtime). **Trigger:** next time `daily_snapshot.py`'s dynamic-dispatch bl
 `dict[str, Callable]` built from direct imports) so unused-import suppressions are no longer
 needed and a renamed helper fails at import time, not at dispatch time. `trace_path` on the
 current dispatch function first to see every call site before restructuring.
+
+## DEBT-8..DEBT-12 — escalated `suggestions.md` slugs (`standalone-actionable`)
+
+Seeded by `token-efficiency` SWEEP-7 (2026-09-03) and, going forward, by `session-close`
+Step 4b whenever a `suggestions.md` slug crosses **Count 5**. Unlike every other item here
+these **may be their own commit** — they are proactive verification, not opportunistic
+cleanup. Each is a check on whether an already-landed remediation actually changed behaviour;
+the escalation retired the slug from the active `suggestions.md` table so it stops being
+re-logged each session.
+
+**Common procedure for DEBT-8 / -9 / -10 / -12:** run `token_audit.py` over the sessions
+logged since the cited remediation SHA and grep their `session-close` reports / `TODOS.md`
+Session Log for the slug. If it did **not** recur in 3+ such sessions, tick the box — the
+hook worked. If it recurred, do **not** re-seed a `DEBT-*` line: open a protocol/model
+discussion (the slug re-enters `suggestions.md` at Count 1 with an `Escalated:` prefix per
+Step 4b item 8) and record the outcome in `DECISIONS.md`.
+
+- **DEBT-8** — `reread-file-already-in-context` (Count 23). Remediation: SWEEP-2
+  `check_repeat_read.py` warn-only `PreToolUse(Read|Edit|Write)` hook (`68683cb`). Residual
+  known gap: the Edit/Write prior-read gate still forces a `Read` of a resident file — a
+  harness constraint the hook cannot close; note it in the verification, don't count it
+  against the hook.
+- **DEBT-9** — `pytest-inlined-not-test-runner` (Count 9). Remediation: SWEEP-3
+  `check_inline_full_suite.py` (`e325e86`) + the `test-runner` AutoTrigger cadence amended to
+  "once per task before `code-reviewer` / the commit".
+- **DEBT-10** — `wide-grep-dump-then-page` (Count 7). Remediation: SWEEP-2
+  `check_wide_grep.py` (`68683cb`).
+- **DEBT-11** — `sha-recorded-via-second-commit` (Count 6). **Not a hook-effectiveness
+  check — a protocol reconciliation.** The SWEEP-4 `commit` skill Step 1b policy ("land with
+  `SHA: <pending>`, backfill as the first edit of the next doc-touch, no swap-only commit")
+  contradicts the "one commit plus a follow-up" convention stated in some `tasks.md` folders
+  (flagged in the `suggestions.md` example for MEAS-2). Pick one policy, make it repo-wide
+  (update `docs/plan/README.md` §Conventions and any folder `tasks.md` that says otherwise),
+  record the decision in `DECISIONS.md`, then confirm `commit_preflight.py`'s SHA-placeholder
+  warning matches the chosen policy. This one is genuinely standalone — no trigger wait.
+- **DEBT-12** — `authored-md-prose-over-200-cap` (Count 5). Remediation: SWEEP-4
+  `commit_preflight.py` staged md-line-length check reusing
+  `check_md_line_length.check_file` (`2b85b84`). Un-reflowable long `tasks.md` lines remain
+  an accepted residual.

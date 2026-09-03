@@ -227,6 +227,16 @@ forgotten next session.
    kebab-case `Slug` that names the root cause (not the symptom).
 5. Re-sort the table by `Count` descending, ties broken by most recent `Last seen`.
 6. Write the file back. Never hand-edit `Count` outside this procedure.
+7. **Drain a recurring slug (see "Escalation" below).** After the re-sort, walk every row
+   with `Count >= 5` that is not already carrying an `Escalated:` prefix. Each one escalates
+   out of the active table this session — either to a `DEBT-*` line in
+   `docs/plan/technical-debt/` or to the "Accepted / won't-fix" section — per the rules
+   below. The row is then deleted from the active count-sorted table. This is the only
+   sanctioned way a row leaves the table; it is part of the skill procedure, not a hand-edit.
+8. If an already-escalated slug recurs, re-add it at `Count = 1` with the
+   `Escalated: <DEBT-N | accepted>` prefix on its `Suggestion` cell and, in the Step 5
+   report, flag it as a second recurrence — it now needs a protocol/model discussion, not a
+   fresh `DEBT-*` line.
 
 **File format:**
 
@@ -240,9 +250,38 @@ forgotten next session.
 | Count | Slug | Suggestion | Category | First seen | Last seen | Example |
 |---|---|---|---|---|---|---|
 | N | kebab-case-root-cause | One-sentence action | token-efficiency | YYYY-MM-DD | YYYY-MM-DD | task/session ref |
+
+## Accepted / won't-fix
+
+> Slugs that crossed Count 5 and were judged pure model discipline with no mechanical catch.
+> They stay logged here for reference but no longer accrue a count.
+
+| Slug | Reason it stays model discipline | Retired on |
+|---|---|---|
 ```
 
 If Step 4 produced no suggestions (clean session), do not touch `suggestions.md` at all.
+
+### Escalation — draining a `Count >= 5` slug
+
+**Threshold: 5.** A slug that has recurred across five sessions, each time logged and each
+time re-sorted to the top, has demonstrated the log alone will not fix it. Step 4b item 7
+retires it from the active table into one of two exits:
+
+- **A remediation already exists** (a hook, a preflight check, a protocol edit — the
+  `token-efficiency` epic shipped one for every slug over threshold as of 2026-09-03):
+  append a `DEBT-*` line to **both** `docs/plan/technical-debt/tasks.md` and its `stories.md`,
+  marked **standalone-actionable** — the documented exception to that folder's "never a
+  standalone commit" rule, because these are proactive, not opportunistic. The line reads:
+  "verify the `<SWEEP-N / fix>` remediation is effective; if this slug still recurs in 3
+  sessions logged after the remediation landed, escalate to a protocol/model discussion."
+- **It is genuinely model judgement with no mechanical catch** (e.g.
+  `plan-gate-skipped-on-prescriptive-prompt`): move the row verbatim into the
+  **"Accepted / won't-fix"** section of `suggestions.md` with a one-line reason and today's
+  date.
+
+Either way the row is deleted from the active count-sorted table (Step 4b item 7). Record
+every escalation in the Step 5 report's SUGGESTIONS block.
 
 ---
 
@@ -279,6 +318,7 @@ SUGGESTIONS
     Next session trigger: ...
     suggestions.md: <new row | incremented "<slug>" to N>
 
+  Escalated this session: <none | "<slug>" → DEBT-N | "<slug>" → accepted>
   Top recurring (suggestions.md): <slug> ×<count>, <slug> ×<count>
 
 COMMIT

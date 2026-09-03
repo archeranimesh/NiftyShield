@@ -123,7 +123,7 @@ docs/tooling change at the targeted dir. AutoTrigger `test-runner` row amended i
 | reflow-interleaved-with-edits | 1 | accept | run reflow once after all structural Edits — workflow advice a preflight cannot enforce (spec-directed) |
 | transform-script-iterated-not-prototyped | 1 | accept | prototype a bulk transform on a slice first — workflow advice (spec-directed) |
 
-**Closed by SWEEP-4 (SHA `<pending>`):** all 12 rows. `enforce` (new
+**Closed by SWEEP-4 (SHA `2b85b84`):** all 12 rows. `enforce` (new
 `scripts/dev/commit_preflight.py`, run against the staged set in `commit` skill Step 1b) —
 `ruff-format-check-skipped-precommit-abort` + `py-authored-lines-over-ruff-cap` (one `ruff
 format --check` pass on staged `.py`), `authored-md-prose-over-200-cap` +
@@ -150,7 +150,7 @@ SWEEP-7 seeds it as a `technical-debt/` line. `fix`-by-text — `precommit-all-f
 | askuserquestion-preview-json-parse-fail | 3 | enforce (by doc) | plain `questions` array, no `preview`/envelope — rule where a planning session reads it |
 | scheduleWakeup-poll-spawned-agent | 1 | enforce (by doc) | "harness re-invokes on subagent completion — do not poll" note |
 
-**Closed by SWEEP-5 (SHA `<pending>`):** all 3 rows, `enforce`-by-doc. A new
+**Closed by SWEEP-5 (SHA `2ae951c`):** all 3 rows, `enforce`-by-doc. A new
 **Tool-call param hygiene** section in `CLAUDE.md` + `AGENTS.md` (after the AutoTrigger
 rules, before Step 5) states all three: the `codebase-memory-mcp` `project=` /
 `index_repository` `repo_path=` first-call rule (also pointed at from the Rule 0 tool list),
@@ -168,7 +168,7 @@ wrapper script was needed; all 3 are docs-only.
 | parallel-subagent-ran-git-stash | 1 | fix | parallel-spawn text forbids every index/stash-touching git command; counts via `awk`/`grep` only |
 | skill-loaded-then-abandoned | 1 | fix | Step 3b text: settle the Claude-vs-Antigravity routing call before invoking `handoff-antigravity` |
 
-**Closed by SWEEP-6 (SHA `<pending>`):** both rows, `fix`-by-text.
+**Closed by SWEEP-6 (SHA `938d929`):** both rows, `fix`-by-text.
 `parallel-subagent-ran-git-stash` — new `CLAUDE.md` / `AGENTS.md` **Step 3c** forbids every
 index / stash-touching git command in a parallel-subagent spawn (not just `add` / `commit` /
 `stash`) and mandates `awk` / `grep` for line counts. `skill-loaded-then-abandoned` —
@@ -183,7 +183,7 @@ routing call is Antigravity" callout (mirrored in `.agents/skills/`).
 | cd-in-compound-bash-command | 1 | fix | prominent `CLAUDE.md` rule — CWD persists across Bash calls; use absolute paths / `git -C` |
 | bash-isms-in-zsh-shell | 1 | fix | prominent "session shell is zsh" line — no `mapfile`/`readarray`, no `$var` word-split lists |
 
-**Closed by SWEEP-6 (SHA `<pending>`):** both rows, `fix`-by-text. A new **Shell mechanics**
+**Closed by SWEEP-6 (SHA `938d929`):** both rows, `fix`-by-text. A new **Shell mechanics**
 paragraph after Rule 1 in `CLAUDE.md` states: session shell is zsh (no `mapfile` / `readarray`,
 no `$var` word-split lists) and never `cd` in a compound Bash command — cwd persists across
 calls; use absolute paths / `git -C`. `AGENTS.md` carries the adapted delta (Antigravity's
@@ -201,7 +201,7 @@ calls; use absolute paths / `git -C`. `AGENTS.md` carries the adapted delta (Ant
 | spec-prestep-skipped-source-not-read `[new]` | 1 | accept | run a task spec's "Before any code" source-read prestep — model discipline, noted in SWEEP-6 |
 | mirror-doc-path-convention-assumed `[new]` | 1 | accept | grep an existing mirror for the path convention before writing pointers into `AGENTS.md` — noted alongside the FIX-1 mirror rule |
 
-**Closed by SWEEP-6 (SHA `<pending>`):** all 7 rows, `accept` with the guidance consolidated,
+**Closed by SWEEP-6 (SHA `938d929`):** all 7 rows, `accept` with the guidance consolidated,
 not left scattered. `plan-gate-skipped-on-prescriptive-prompt` + `scope-question-jumped-ahead`
 + `plan-file-count-grew-silently` — one consolidated paragraph appended to `CLAUDE.md` /
 `AGENTS.md` **Step 3**: a prescriptive prompt is not a go-ahead, scope only the first unstarted
@@ -392,7 +392,7 @@ epic's post-hook `token_audit.py` re-run (Perspectives not covered) is the real 
 
 **Commit:** `feat(scripts): add commit_preflight.py and wire it into the commit skill`
 
-**As-built (SHA `<pending>`):** `scripts/dev/commit_preflight.py` — a CLI (not a git hook)
+**As-built (SHA `2b85b84`):** `scripts/dev/commit_preflight.py` — a CLI (not a git hook)
 the `commit` skill runs in Step 1b against the staged set. Five checks: staged-index sanity
 vs. `--expect` prefixes (warn), `ruff format --check` on staged `.py` (blocker, exit 1),
 md-line-length on staged hook-covered `.md` (blocker, reuses
@@ -449,7 +449,7 @@ measurement.
 
 **Commit:** `docs(skills): document MCP required params and tool-call param rules`
 
-**As-built (SHA `<pending>`):** All 3 cluster-4 rows closed as `enforce`-by-doc — no hook, no
+**As-built (SHA `2ae951c`):** All 3 cluster-4 rows closed as `enforce`-by-doc — no hook, no
 wrapper. New **Tool-call param hygiene (MCP / AskUserQuestion / ScheduleWakeup)** section
 added to `CLAUDE.md` and mirrored in `AGENTS.md`, placed after the Agent AutoTrigger Rules
 and before Step 5 so a session reads it before making any of the three calls:
@@ -514,7 +514,7 @@ reads them before the call. As with SWEEP-2..4 the realised saving is the epic's
 
 **Commit:** `docs(protocol): tighten shell, subagent, and plan-gate guidance`
 
-**As-built (SHA `<pending>`):** Docs-only, no tests, `Review: none`. 11 rows closed across
+**As-built (SHA `938d929`):** Docs-only, no tests, `Review: none`. 11 rows closed across
 clusters 5 / 6 / 7 — see the three "Closed by SWEEP-6" blocks in the cluster map above. **4
 `fix`-by-text** (`parallel-subagent-ran-git-stash`, `skill-loaded-then-abandoned`,
 `cd-in-compound-bash-command`, `bash-isms-in-zsh-shell`); **7 `accept`** with the guidance
@@ -582,5 +582,41 @@ this task's DoD.
 
 **Commit:** `refactor(session-close): escalate and retire high-count suggestion slugs`
 
-**As-built (SHA `<—>`):** _record: the threshold and exits chosen, the slugs seeded and
-where, and confirmation the change is rebased onto FIX-3._
+**As-built (SHA `<pending>`):** Rebased onto FIX-3 (`03d991f`) — confirmed: `session-close`
+`SKILL.md` already opens "Runs on a transcript, not 'this conversation'" and spawns a fresh
+`general-purpose` subagent, no `fork`; no rebase owed.
+
+**Threshold: 5** — a slug logged and re-sorted to the top across five sessions has proven the
+log alone will not fix it. **Two exits** (Step 4b item 7 + the new "### Escalation" block):
+(a) a remediation already exists → append a `standalone-actionable` `DEBT-*` line to
+`technical-debt/tasks.md` + `stories.md` ("verify the `<SWEEP-N>` fix is effective; re-escalate
+to a protocol/model discussion if it still recurs in 3 sessions logged after it landed"); or
+(b) pure model judgement → move the row verbatim to a new **"Accepted / won't-fix"** section
+of `suggestions.md`. Either way the row is deleted from the active count-sorted table. Item 8:
+a re-recurring escalated slug re-enters at `Count = 1` with an `Escalated:` prefix and goes
+straight to the discussion, not another `DEBT-*`. Step 5 report gains an "Escalated this
+session" line.
+
+**Seeded (all five current `Count >= 5` slugs — spec named 3, two more crossed threshold
+since):** `reread-file-already-in-context` (23) → DEBT-8, `pytest-inlined-not-test-runner` (9)
+→ DEBT-9, `wide-grep-dump-then-page` (7) → DEBT-10, `sha-recorded-via-second-commit` (6) →
+DEBT-11 (framed as the protocol reconciliation its own example text calls for, not a
+hook-effectiveness check), `authored-md-prose-over-200-cap` (5) → DEBT-12. All five removed
+from `suggestions.md`; header gains the drain-path note; "Accepted / won't-fix" section added
+(empty — all five had a landed remediation). `technical-debt/tasks.md` intro + `stories.md`
+document the `standalone-actionable` exception.
+
+Also backfilled the sanctioned `<pending>` SHAs per the SWEEP-4 policy (first doc-touch after
+those commits): SWEEP-4 `2b85b84`, SWEEP-5 `2ae951c`, SWEEP-6 `938d929` in this file's
+As-built blocks and the SWEEP-6 line in `tasks.md`.
+
+Measured delta: **not a per-turn or per-session token cut** — this is a process change to the
+feedback loop itself. The saving is second-order: `suggestions.md` stops re-logging (and
+re-sorting to the top, and re-narrating in every `session-close` report) a slug that five
+sessions have already proven recurrent — `reread-file-already-in-context` alone carried a
+~2.8K-token example cell that every close-out read and the skill re-sorted each session. Five
+rows retired ≈ 6–9K of `suggestions.md` bulk removed from every future `session-close`
+subagent's context, plus the end of the "log it again, change nothing" cycle the epic exists
+to break. Whether the seeded `DEBT-*` verifications show the SWEEP-2/3/4 hooks actually
+changed behaviour is the epic's post-change `token_audit.py` re-run (Perspectives not
+covered).

@@ -14,7 +14,7 @@ Format per entry: `**\`folder/\`** · <status> · next: **<task id>**` then a sh
 
 ## Active Epics
 
-**`token-efficiency/`** · 🔄 In progress — `measurement/` done, `fixed-overhead/` FIX-1+FIX-2 done · next: **FIX-3**
+**`token-efficiency/`** · 🔄 In progress — `measurement/` + `fixed-overhead/` + `suggestions-sweep/` all done; epic ready to archive · next: **archive the epic**
 Cut the per-session token cost of running NiftyShield through Claude Code. Three sub-stories:
 `measurement/` (`token_audit.py` + a baseline every later task measures against) →
 `fixed-overhead/` (skill-ify `CLAUDE.md`, trim module `CLAUDE.md` files, take `session-close`
