@@ -113,6 +113,22 @@ Tests: `tests/unit/notifications/test_formatting.py`.
 
 ---
 
+## Message Construction Patterns
+
+Two canonical shapes for building a full message body from a typed input, both reusable and
+transport-agnostic (return a string, never call `send()` themselves):
+
+- **`_format_combined_summary()`** (`src/portfolio/formatting.py`) — the portfolio EOD summary.
+- **`ic_entry_message.py`** — `ICEntryMessage` dataclass + `format_ic_entry_message()` renders
+  the IC entry confirmation (v1 and v2) as a headline + optional `*Mode:*` line + kv row +
+  fenced `build_leg_table()` block + net-credit line. Each dynamic value is
+  `escape_markdown()`'d individually; the fence is emitted literally. ROLL-17.
+
+A new multi-line message that interpolates several typed values follows this pattern — a
+builder function taking one dataclass — rather than a hand-rolled f-string at the call site.
+
+---
+
 ## Instrument Label Formatting
 
 Any Telegram or log message that names an option leg in prose must use

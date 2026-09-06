@@ -318,7 +318,8 @@ async def test_entry_preview_message_uses_readable_label(
     mock_subprocess,
     mock_telegram,
 ):
-    """Telegram preview message uses format_option_label, not raw '23800PE'."""
+    """Telegram entry confirmation renders the fenced leg table with spaced
+    instrument labels (ROLL-17), never a bare '23800PE'."""
     test_args = [
         "paper_ic_entry.py",
         "--expiry-type",
@@ -331,14 +332,14 @@ async def test_entry_preview_message_uses_readable_label(
         await run()
 
     sent_msg = mock_telegram.send_notification.call_args[0][0]
-    assert "NIFTY 23800 PE" in sent_msg
-    assert "NIFTY 24600 CE" in sent_msg
+    assert "[S] 23800 PE" in sent_msg
+    assert "[S] 24600 CE" in sent_msg
     assert "23800PE" not in sent_msg
     assert "24600CE" not in sent_msg
 
 
 @pytest.mark.asyncio
-async def test_entry_preview_message_shows_long_leg_mid(
+async def test_entry_preview_message_shows_long_leg_prices(
     mock_vix_data,
     mock_store,
     mock_lookup,
@@ -346,7 +347,8 @@ async def test_entry_preview_message_shows_long_leg_mid(
     mock_subprocess,
     mock_telegram,
 ):
-    """Long-leg (hedge) lines include the mid price, previously omitted."""
+    """Long-leg (hedge) rows carry LTP + Entry columns in the fenced table
+    (ROLL-17) — the hedge price was previously omitted entirely."""
     test_args = [
         "paper_ic_entry.py",
         "--expiry-type",
@@ -359,11 +361,11 @@ async def test_entry_preview_message_shows_long_leg_mid(
         await run()
 
     sent_msg = mock_telegram.send_notification.call_args[0][0]
-    assert "Long Put" in sent_msg
-    assert "Long Call" in sent_msg
-    for line in sent_msg.splitlines():
-        if line.strip().startswith("Long Put") or line.strip().startswith("Long Call"):
-            assert "mid\\=₹" in line
+    buy_rows = [ln for ln in sent_msg.splitlines() if ln.startswith("[B]")]
+    assert len(buy_rows) == 2
+    for line in buy_rows:
+        # badge, instrument (2 tokens), delta, ltp, entry — trailing numerics present
+        assert len(line.split()) >= 6
 
 
 @pytest.mark.asyncio
@@ -1404,7 +1406,7 @@ async def test_gate_alert_blanket_escaping():
     ):
         mock_notifier = AsyncMock()
         mock_build_notifier.return_value = mock_notifier
-        
+
         mock_store = mock_store_cls.return_value
         pos = MagicMock()
         pos.net_qty = 1
@@ -1412,11 +1414,11 @@ async def test_gate_alert_blanket_escaping():
 
         with pytest.raises(SystemExit) as exc:
             await run()
-            
+
         assert exc.value.code == 1
-        
+
         mock_notifier.send.assert_called_once()
         sent_msg = mock_notifier.send.call_args[0][0]
-        
+
         # The dynamic value is the strategy name: paper_ic_nifty_v1_monthly
         assert "paper\\_ic\\_nifty\\_v1\\_monthly" in sent_msg

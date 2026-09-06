@@ -35,13 +35,15 @@ from src.backtest.vix_ingest import fetch_vix_latest, load_vix_series
 from src.client.upstox_live import UpstoxLiveClient
 from src.client.upstox_market import UpstoxMarketClient
 from src.config import settings
-from src.instruments.lookup import InstrumentLookup, format_option_label
+from src.instruments.lookup import InstrumentLookup
 from src.instruments.strike_selector import (
     _apply_liquidity_gate,
     filter_strikes_by_delta,
     rank_strikes,
 )
 from src.intraday.market_store import IntradayMarketStore
+from src.notifications.formatting import LegRow
+from src.notifications.ic_entry_message import ICEntryMessage, format_ic_entry_message
 from src.notifications.markdown import escape_markdown
 from src.notifications.telegram import build_notifier
 from src.notifications.telegram_gateway import TelegramGateway
@@ -786,20 +788,33 @@ async def run() -> None:
 
         # Step 13: Telegram notification — only reached once all 4 legs are
         # confirmed present in the DB.
-        msg = escape_markdown(
-            f"✅ IC Entry — {args.expiry_type} ({config.strategy_name})\n"
-            f"Mode: {mode}\n"
-            f"IVR: {ivr:.2f}  DTE: {dte}  Nifty: {nifty_spot:,.0f}\n\n"
-            f"Short Put  {format_option_label('NIFTY', short_put['strike'], 'PE', expiry_str)}  "
-            f"δ={abs(short_put['delta']):.3f}  mid=₹{short_put['mid']:.2f}\n"
-            f"Long Put   {format_option_label('NIFTY', long_put_strike, 'PE', expiry_str)}   "
-            f"(hedge)  mid=₹{long_put['mid']:.2f}\n"
-            f"Short Call {format_option_label('NIFTY', short_call['strike'], 'CE', expiry_str)} "
-            f"δ={abs(short_call['delta']):.3f}  mid=₹{short_call['mid']:.2f}\n"
-            f"Long Call  {format_option_label('NIFTY', long_call_strike, 'CE', expiry_str)}  "
-            f"(hedge)  mid=₹{long_call['mid']:.2f}\n\n"
-            f"Net credit: ₹{net_credit:.2f}/lot  "
-            f"(₹{net_credit * LOT_SIZE:,.0f} for {LOT_SIZE} units)"
+        entry_legs = [
+            ("Short", short_put["strike"], "PE", short_put),
+            ("Long", long_put_strike, "PE", long_put),
+            ("Short", short_call["strike"], "CE", short_call),
+            ("Long", long_call_strike, "CE", long_call),
+        ]
+        msg = format_ic_entry_message(
+            ICEntryMessage(
+                strategy_name=config.strategy_name,
+                expiry_type=args.expiry_type,
+                expiry=expiry_date,
+                mode=mode,
+                ivr=ivr,
+                dte=dte,
+                spot=nifty_spot,
+                net_credit=net_credit,
+                legs=[
+                    LegRow(
+                        role=role,
+                        instrument=f"{int(strike)} {opt_type}",
+                        delta=leg["delta"],
+                        ltp=float(leg["mid"]),
+                        entry=float(leg["mid"]),
+                    )
+                    for role, strike, opt_type, leg in entry_legs
+                ],
+            )
         )
         try:
             tg = TelegramGateway(

@@ -51,6 +51,8 @@ from src.instruments.strike_selector import (
     filter_strikes_by_delta,
     rank_strikes,
 )
+from src.notifications.formatting import LegRow
+from src.notifications.ic_entry_message import ICEntryMessage, format_ic_entry_message
 from src.notifications.markdown import escape_markdown
 from src.notifications.telegram import build_notifier
 from src.notifications.telegram_gateway import TelegramGateway
@@ -704,21 +706,33 @@ async def run() -> None:
 
         # Step 12: Telegram notification — only reached once all 4 legs are
         # confirmed present in the DB.
-        wing_width_put = abs(short_put["strike"] - long_put["strike"])
-        wing_width_call = abs(long_call["strike"] - short_call["strike"])
-        msg = escape_markdown(
-            f"✅ IC V2 Entry — {args.expiry_type} ({strategy_name})\n"
-            f"IVR: {ivr:.2f}  DTE: {dte}  Nifty: {nifty_spot:,.0f}\n\n"
-            f"Short Put  {int(short_put['strike'])}PE  "
-            f"δ={abs(short_put['delta']):.3f}  mid=₹{short_put['mid']:.2f}\n"
-            f"Long Put   {int(long_put['strike'])}PE   "
-            f"δ={abs(long_put['delta']):.3f}  width={wing_width_put:.0f}pts\n"
-            f"Short Call {int(short_call['strike'])}CE "
-            f"δ={abs(short_call['delta']):.3f}  mid=₹{short_call['mid']:.2f}\n"
-            f"Long Call  {int(long_call['strike'])}CE  "
-            f"δ={abs(long_call['delta']):.3f}  width={wing_width_call:.0f}pts\n\n"
-            f"Net credit: ₹{net_credit:.2f}/lot  "
-            f"(₹{net_credit * LOT_SIZE:,.0f} for {LOT_SIZE} units)"
+        entry_legs = [
+            ("Short", short_put, "PE"),
+            ("Long", long_put, "PE"),
+            ("Short", short_call, "CE"),
+            ("Long", long_call, "CE"),
+        ]
+        msg = format_ic_entry_message(
+            ICEntryMessage(
+                strategy_name=strategy_name,
+                expiry_type=args.expiry_type,
+                expiry=date.fromisoformat(expiry_str),
+                mode=None,
+                ivr=ivr,
+                dte=dte,
+                spot=nifty_spot,
+                net_credit=net_credit,
+                legs=[
+                    LegRow(
+                        role=role,
+                        instrument=f"{int(leg['strike'])} {opt_type}",
+                        delta=leg["delta"],
+                        ltp=float(leg["mid"]),
+                        entry=float(leg["mid"]),
+                    )
+                    for role, leg, opt_type in entry_legs
+                ],
+            )
         )
         try:
             tg = TelegramGateway(
