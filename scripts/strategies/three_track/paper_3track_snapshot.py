@@ -54,6 +54,7 @@ from src.config import settings
 from src.instruments.lookup import InstrumentLookup, parse_expiry
 from src.market_calendar.holidays import is_trading_day
 from src.models.options import OptionChain
+from src.notifications.alerts import build_proxy_critical_alert
 from src.notifications.markdown import escape_markdown, mdcode
 from src.notifications.telegram import TelegramNotifier
 from src.paper._display import (
@@ -2009,10 +2010,8 @@ async def _run(args: argparse.Namespace) -> None:
 
         # Telegram critical alert
         if snapshot.proxy_delta_alert and "CRITICAL" in snapshot.proxy_delta_alert:
-            msg = (
-                f"🚨 *CRITICAL* Proxy Delta alert — {track_name}\n"
-                f"Delta: {snapshot.greeks.net_delta:.3f}\n"
-                f"Date: {snap_date}"
+            msg = build_proxy_critical_alert(
+                float(snapshot.greeks.net_delta), snapshot.proxy_delta_alert
             )
             if notifier:
                 try:

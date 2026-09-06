@@ -63,7 +63,7 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 SCAN_DIRS = ("src", "scripts")
 EXCLUDE_PARTS = {"tests", "test", "scratch", "__pycache__"}
 TARGET_METHODS = {"send", "send_plain_message"}
-ESCAPING_HELPERS = {"escape_markdown", "mdcode"}
+ESCAPING_HELPERS = {"escape_markdown", "mdcode", "build_proxy_critical_alert"}
 
 
 @dataclass(frozen=True)
@@ -175,13 +175,6 @@ def scan_call_sites() -> list[CallSite]:
 # task names (flagged "untracked gap" - worth a future task, not this one).
 # (file, line): reason
 _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
-    ("scripts/dev/paper_track_snapshot.py", 195): (
-        "heuristic limitation, not a real gap - ROLL-10 migrated this (SHA on the task "
-        "line); the message is built and fully escaped inside _build_proxy_critical_alert() "
-        "(escape_markdown() on the signed delta and the proxy_delta_alert string), but this "
-        "guard only inspects the immediate enclosing function (main), not the builder it "
-        "calls - same shape as the scripts/eod_summary.py:200 entry"
-    ),
     (
         "scripts/dev/send_test_telegram.py",
         65,
@@ -227,33 +220,24 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
     # longer a baseline entry. Line numbers below shifted down by ROLL-15's edit.
     (
         "scripts/strategies/three_track/paper_3track_snapshot.py",
-        768,
+        769,
     ): "untracked gap - not named in any MD-*/ROLL-* task",
     (
         "scripts/strategies/three_track/paper_3track_snapshot.py",
-        775,
+        776,
     ): "untracked gap - not named in any MD-*/ROLL-* task",
     (
         "scripts/strategies/three_track/paper_3track_snapshot.py",
-        1400,
+        1401,
     ): "ROLL-15/16 area - not itself named, untracked gap",
     (
         "scripts/strategies/three_track/paper_3track_snapshot.py",
-        1426,
+        1427,
     ): "ROLL-15/16 area - not itself named, untracked gap",
     (
         "scripts/strategies/three_track/paper_3track_snapshot.py",
-        1547,
+        1548,
     ): "untracked gap - not named in any MD-*/ROLL-* task",
-    (
-        "scripts/strategies/three_track/paper_3track_snapshot.py",
-        2019,
-    ): "untracked gap - not named in any MD-*/ROLL-* task",
-    ("scripts/strategies/three_track/paper_3track_snapshot.py", 2065): (
-        "heuristic limitation, not a real gap - value is escaped inside the callee "
-        "_build_recovery_digest() (MD-4.2 scope) but this guard only inspects the "
-        "immediate enclosing function (_run), not callees"
-    ),
 }
 
 
