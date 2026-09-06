@@ -1566,10 +1566,18 @@ search_graph("TrackSnapshot")   # confirm consecutive_days plumbing status (ROLL
 
 ## ROLL-17 — IC Entry Confirmation: unify v1/v2 onto one fenced-table renderer
 
-**Status: design CLOSED 2026-09-06** via a `message-format-workshop.md` session (Claude + Animesh). Reference implementation:
-`scratch/2026-09-06_ic_entry_confirmation_format.py` — a comparison script rendering today's two divergent f-strings against the confirmed unified format for a
-weekly (v1) and a monthly (v2) scenario. Not yet live-`--send`-confirmed on-device (Animesh waived the round — see *Perspectives not covered*). Implementation is a
-follow-on session.
+**Status: SHIPPED 2026-09-06 (SHA `26527c2`).** Design closed the same day via a `message-format-workshop.md` session (Claude + Animesh); reference
+implementation `scratch/2026-09-06_ic_entry_confirmation_format.py`. Not live-`--send`-confirmed on-device (Animesh waived the round — see *Perspectives not
+covered*).
+
+**As-built.** New `src/notifications/ic_entry_message.py` — `ICEntryMessage` dataclass (`strategy_name`, `expiry_type`, `expiry`, `ivr`, `dte`, `spot`,
+`net_credit`, `mode=None`, `legs`) + `format_ic_entry_message()`. The scratch renderer's workshop `*_mode` params were dropped (every question closed to one
+branch). Per the `@code-reviewer` (Opus) gate, `ivr`/`dte`/`spot`/`net_credit` are **required** fields, not `… | None` — `_kv_row` applies format specs that
+would `TypeError` on `None`, and both call sites always supply them. Headline bold via literal `*…*` + per-value `escape_markdown()` (the shipped ROLL-1
+`build_header` idiom), not the scratch's `_esc_bold` replace-hack. `paper_ic_entry.py` (`format_option_label` import dropped) and `paper_ic_entry_v2.py` both
+construct `ICEntryMessage` from vars already in scope at the success-notify step; v2's bare `{int(strike)}PE` is now `f"{int(strike)} {opt_type}"` inside the
+fenced `build_leg_table()`. Per-leg `entry` = `mid` at bootstrap (entry == LTP == mid). `src/notifications/CLAUDE.md` gained a "Message Construction Patterns"
+section. Tests: `tests/unit/notifications/test_ic_entry_message.py` (8) + two `test_paper_ic_entry.py` cases retargeted to the fenced-table format.
 
 **Why this task exists.** Raised by Animesh 2026-08-19: `paper_ic_entry.py` ("✅ IC Entry") and `paper_ic_entry_v2.py` ("✅ IC V2 Entry") each build their success
 message as an independent hand-rolled f-string, drifted apart in both content and layout — v1 has a `Mode:` line, v2 has none; v1 hedge legs show `(hedge) mid=₹…`

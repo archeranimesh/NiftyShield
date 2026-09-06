@@ -115,6 +115,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-06] ROLL-17 — unify IC entry v1/v2 onto `src/notifications/ic_entry_message.py` fenced-table renderer; v2's bare `{strike}PE` label violation fixed; `ivr`/`dte`/`spot`/`net_credit`
+  made required per `@code-reviewer` — 26527c2
 - [2026-09-06] ROLL-17 workshop — closed all design decisions for the IC entry v1/v2 unification: fenced `build_leg_table()` renderer, `[S]`/`[B]` badge, strike+PE/CE identity, entry price on all
   legs, `IVR DTE Nifty Exp` kv row, `Net credit: X/lot x65 = Y`, `IC v1/v2 Entry` headline. Spec in `strategy-rollout/stories.md`; ref
   `scratch/2026-09-06_ic_entry_confirmation_format.py`. Docs + scratch only — implementation is a follow-on session.
