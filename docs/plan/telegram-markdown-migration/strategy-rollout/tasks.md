@@ -5,7 +5,7 @@ carries an **As-built** paragraph there (split history, review-gate detail, phas
 
 Sequenced by risk: informational messages first, live position-event notifications next, auth-sensitive interactive messages last.
 
-**Open: ROLL-14 (next), ROLL-15, ROLL-16, ROLL-17, ROLL-5.**
+**Open: ROLL-15 (next), ROLL-16, ROLL-17, ROLL-5.**
 
 > **Routing:** `Owner` = who implements (`Claude` = judgment-call, `Antigravity` = mechanical with an unambiguous spec). `Model` = model the owner runs at. `Review` = the AutoTrigger gate; where
 > `stories.md` says "real `@code-reviewer`, Opus" the real subagent is mandatory, not a persona approximation (financial-logic close-notification / P&L-rendering paths). **Blocked by:** ROLL-1 needs
@@ -54,8 +54,8 @@ Sequenced by risk: informational messages first, live position-event notificatio
       Model: n/a | Review: none | SHA: b3bf77a, a083fba, ecb7d0b
 - [x] **ROLL-13** — Migrate 3-track base entry bootstrap notification (`paper_3track_entry.py::main`) → per-leg emoji kv with resolved instrument labels | Owner: Antigravity | Model: n/a | Review:
       code-reviewer | SHA: 7adf484
-- [ ] **ROLL-14** — Migrate 3-track overlay entry bootstrap notification (`paper_3track_overlay_entry.py::main`) → per-leg direction-coded kv, all 3 overlay types | Owner: Antigravity | Model: n/a
-      | Review: none | SHA: <—>
+- [x] **ROLL-14** — Migrate 3-track overlay entry bootstrap notification (`paper_3track_overlay_entry.py::main`) → per-leg direction-coded kv, all 3 overlay types | Owner: Antigravity | Model: n/a
+      | Review: none | SHA: 129d54e
 - [ ] **ROLL-15** — Migrate three-track base position expiry alert (`paper_3track_snapshot.py:487-501`) → compact summary; shell commands → structured `logger.info` | Owner: Antigravity | Model:
       n/a | Review: none | SHA: <—>
 - [ ] **ROLL-16** — Migrate production Proxy Delta CRITICAL alert (`paper_3track_snapshot._run` ~L1723) → ROLL-10's format verbatim; reuse its builder if possible | Owner: Antigravity | Model: n/a
