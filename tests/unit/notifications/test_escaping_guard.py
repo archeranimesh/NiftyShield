@@ -212,13 +212,9 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "and fully escaped inside build_position_health_message(), but this guard only inspects "
         "the immediate enclosing function (main)"
     ),
-    ("scripts/strategies/three_track/paper_3track_overlay_entry.py", 1307): (
+    ("scripts/strategies/three_track/paper_3track_overlay_entry.py", 1309): (
         "ROLL-14 - format confirmed, real code not yet migrated (bootstrap-failure alert)"
     ),
-    (
-        "scripts/strategies/three_track/paper_3track_overlay_entry.py",
-        1547,
-    ): "ROLL-14 - format confirmed, real code not yet migrated",
     ("scripts/strategies/three_track/paper_3track_roll.py", 437): (
         "heuristic limitation, not a real gap - ROLL-9 migrated this (SHA on the task "
         "line); the message is built and fully escaped inside build_roll_notification() "

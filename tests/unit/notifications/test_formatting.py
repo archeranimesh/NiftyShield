@@ -13,6 +13,7 @@ from src.notifications.formatting import (
     format_expiry,
     format_greek,
     format_money,
+    format_month,
     format_pct,
     format_strike,
     leg_role_label,
@@ -205,6 +206,14 @@ def test_format_expiry_uppercase_leading_zero_kept():
 
 def test_format_expiry_single_digit_day_keeps_leading_zero():
     assert format_expiry(date(2026, 7, 7)) == "07 JUL 26"
+
+
+def test_format_month_happy_path():
+    assert format_month(date(2026, 8, 25)) == "AUG"
+
+
+def test_format_month_edge_case():
+    assert format_month(date(2026, 1, 5)) == "JAN"
 
 
 def test_build_compare_table_happy_path_single_group():

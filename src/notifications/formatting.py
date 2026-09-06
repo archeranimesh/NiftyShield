@@ -93,6 +93,16 @@ def format_expiry(value: date) -> str:
     return value.strftime("%d %b %y").upper()
 
 
+def format_month(value: date) -> str:
+    """3-letter uppercase month string.
+
+    01 JAN 2026 -> "JAN", 25 AUG 2026 -> "AUG".
+    Mirrors `format_expiry` style but provides just the month for labels
+    that do not need the full date.
+    """
+    return value.strftime("%b").upper()
+
+
 def pnl_emoji(amount: Decimal) -> str:
     """Presence/sign-based P&L indicator, not a severity tier (FMT-1b, FORMATTING.md §10).
 
@@ -531,7 +541,7 @@ LEG_ROLE_LABELS: dict[str, str] = {
     "overlay_cc": "Overlay CC",
     "overlay_pp": "Overlay PP",
     "overlay_collar_call": "Collar Call",
-    "overlay_collar_put": "Overlay Collar Put",
+    "overlay_collar_put": "Collar Put",
     "protective_put": "Protective Put",
     "base_ditm_call": "Base DITM Call",
     "base_futures": "Base Futures",

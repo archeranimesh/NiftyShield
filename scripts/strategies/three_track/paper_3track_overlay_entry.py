@@ -80,6 +80,8 @@ from src.instruments.strike_selector import (
     rank_strikes,
 )
 from src.models.portfolio import TradeAction
+from src.notifications.formatting import format_money, format_month, leg_role_label
+from src.notifications.markdown import escape_markdown
 from src.notifications.telegram import build_notifier
 from src.paper.constants import (
     DEFAULT_BOD_PATH,
@@ -1534,13 +1536,30 @@ def main() -> None:
 
             notifier = build_notifier()
             if notifier:
-                lines = [f"🟢 OVERLAY ENTRY — {cfg.overlay_type.upper()} bootstrap"]
+                month = escape_markdown(format_month(date.fromisoformat(cfg.expiry)))
+                overlay_type = escape_markdown(cfg.overlay_type.upper())
+                lines = [f"📥 Overlay Entry — {overlay_type} Bootstrap"]
                 for ot in overlay_trades:
-                    lines.append(f"{ot.leg_role}: {ot.trade.instrument_key} @ ₹{ot.trade.price}")
-                if gate_violation is not None:
+                    label = escape_markdown(leg_role_label(ot.leg_role))
+                    if ot.leg_role in ("overlay_pp", "overlay_collar_put"):
+                        right, verb, marker = "PE", "Long", "🟢"
+                        strike = cfg.put_strike
+                    else:
+                        right, verb, marker = "CE", "Short", "🔴"
+                        strike = cfg.call_strike
+
+                    strike_str = escape_markdown(f"{strike:.0f}")
+                    price_str = escape_markdown(format_money(ot.trade.price))
                     lines.append(
-                        f"⚠ Gate logged: {gate_violation.gate_name} "
-                        f"(threshold={gate_violation.threshold}, actual={gate_violation.actual})"
+                        f"{marker} {label}: {verb} {cfg.lot_size}x NIFTY {month} {strike_str} {right} @ {price_str}"
+                    )
+
+                if gate_violation is not None:
+                    gate_name = escape_markdown(gate_violation.gate_name)
+                    threshold = escape_markdown(gate_violation.threshold)
+                    actual = escape_markdown(gate_violation.actual)
+                    lines.append(
+                        f"⚠️ Gate Logged: {gate_name} \\(threshold\\={threshold}, actual\\={actual}\\)"
                     )
                 msg = "\n".join(lines)
                 try:
