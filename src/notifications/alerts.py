@@ -1,3 +1,7 @@
+"""Shared Telegram message builders."""
+
+from __future__ import annotations
+
 from src.notifications.formatting import format_greek
 from src.notifications.markdown import escape_markdown
 

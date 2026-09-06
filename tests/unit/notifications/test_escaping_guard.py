@@ -63,7 +63,7 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 SCAN_DIRS = ("src", "scripts")
 EXCLUDE_PARTS = {"tests", "test", "scratch", "__pycache__"}
 TARGET_METHODS = {"send", "send_plain_message"}
-ESCAPING_HELPERS = {"escape_markdown", "mdcode", "build_proxy_critical_alert"}
+ESCAPING_HELPERS = {"escape_markdown", "mdcode"}
 
 
 @dataclass(frozen=True)
@@ -238,6 +238,17 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "scripts/strategies/three_track/paper_3track_snapshot.py",
         1548,
     ): "untracked gap - not named in any MD-*/ROLL-* task",
+    ("scripts/dev/paper_track_snapshot.py", 171): (
+        "value escaped inside callee build_proxy_critical_alert() — guard inspects enclosing function only"
+    ),
+    ("scripts/strategies/three_track/paper_3track_snapshot.py", 2018): (
+        "value escaped inside callee build_proxy_critical_alert() — guard inspects enclosing function only"
+    ),
+    ("scripts/strategies/three_track/paper_3track_snapshot.py", 2064): (
+        "heuristic limitation, not a real gap - value is escaped inside the callee "
+        "_build_recovery_digest() (MD-4.2 scope) but this guard only inspects the "
+        "immediate enclosing function (_run), not callees"
+    ),
 }
 
 
