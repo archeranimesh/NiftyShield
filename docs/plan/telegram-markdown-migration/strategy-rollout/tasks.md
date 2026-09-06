@@ -60,8 +60,8 @@ Sequenced by risk: informational messages first, live position-event notificatio
       n/a | Review: none | SHA: 3855f8f, 30c86ae
 - [x] **ROLL-16** — Migrate production Proxy Delta CRITICAL alert (`paper_3track_snapshot._run` ~L1723)
       → ROLL-10's format verbatim; reuse its builder if possible | Owner: Antigravity | Model: n/a | Review: none | SHA: e5efb8f, 35c17e5
-- [ ] **ROLL-17** — IC entry confirmation shared content model (`paper_ic_entry.py` + `_v2.py`) — **DESIGN INCOMPLETE**: 6 open decisions, workshop session first; Owner/Model/Review below
-      provisional | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: <—>
+- [ ] **ROLL-17** — Unify IC entry v1/v2 onto `src/notifications/ic_entry_message.py` fenced-table renderer (`paper_ic_entry.py` + `_v2.py`). Design CLOSED 2026-09-06 (workshop; ref
+      `scratch/2026-09-06_ic_entry_confirmation_format.py`) — full spec in `stories.md` | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: <—>
 - [ ] **ROLL-5** — Docs close: synthesis across all prior ROLL tasks | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <—>
 
 ## Story done when
@@ -79,8 +79,8 @@ Acceptance criteria — prose, no checkboxes. Verified at story close; per-task 
 - **ROLL-6** — `scripts/eod_summary.py` sends via `TelegramNotifier.send()` + MarkdownV2 in the confirmed 4-bucket totals-first format, `Bkd` sourced since-inception.
 - **ROLL-7..ROLL-16** — each of the ten missing-message call sites renders in its confirmed MarkdownV2 format with a live-confirmed reference and passing tests; the shared label tables exist and are
   reused, not re-derived.
-- **ROLL-17** — the IC entry confirmation design is closed via a workshop session (6 open decisions resolved), then implemented against a live-confirmed reference; value-level formatting reuses
-  `FMT-1` / `FMT-2`.
+- **ROLL-17** — design closed (workshop 2026-09-06, ref `scratch/2026-09-06_ic_entry_confirmation_format.py`); `src/notifications/ic_entry_message.py` renders both v1 and v2 IC entry confirmations as
+  one fenced `build_leg_table()` message, both scripts' inline f-strings replaced, the bare-`{strike}PE` invariant violation fixed, value formatting reused from `FMT-2`.
 - **ROLL-5** — the docs-close task records the final state of every migrated message family.
 
 ## After each task

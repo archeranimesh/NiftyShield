@@ -24,7 +24,8 @@ rot them.
 3. **IC yearly-expiry residual risk** — `docs/plan/ic-yearly-expiry-fix/` — next **WG-1** (persist per-leg Greeks for the weekly-expiry bucket). YE-1..YE-4 superseded / already fixed live — see
    DECISIONS.md BUG-015.
 4. **Greeks Black-Scholes fallback** — `docs/plan/greeks-bs-fallback/` — next **GF-1** (read-only audit scope).
-5. **Telegram Markdown migration** — `docs/plan/telegram-markdown-migration/` — next **ROLL-11** (`strategy-rollout/`, migrate System Healthcheck alert). `backbone/` + `formatting-rules/` sub-stories
+5. **Telegram Markdown migration** — `docs/plan/telegram-markdown-migration/` — next **ROLL-17** (`strategy-rollout/`, unify IC entry v1/v2 onto one fenced-table renderer; design CLOSED 2026-09-06 via
+   workshop, ref `scratch/2026-09-06_ic_entry_confirmation_format.py` — ready to implement), then ROLL-5 docs-close. `backbone/` + `formatting-rules/` sub-stories
    closed. Supersedes the retired `telegram-ic-comparison-formatting/` — TGFMT-1 shipped, TGFMT-2..9 folded here; its Legs-row + Bkd/Flt inception-split asks live in `strategy-rollout/` ROLL-2.
 6. **MVP: Multi-bagger Value Picks Tracker** — `docs/plan/mvp/` — next **M1.1**. Independent — blocks nothing.
 7. **Variance gate — CSP v1 deployment gate observation** — `docs/plan/variance-gate/` — next **VG0** (spec reconciliation; the remaining tasks are human checkpoints, not build tasks).
@@ -114,6 +115,9 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-06] ROLL-17 workshop — closed all design decisions for the IC entry v1/v2 unification: fenced `build_leg_table()` renderer, `[S]`/`[B]` badge, strike+PE/CE identity, entry price on all
+  legs, `IVR DTE Nifty Exp` kv row, `Net credit: X/lot x65 = Y`, `IC v1/v2 Entry` headline. Spec in `strategy-rollout/stories.md`; ref
+  `scratch/2026-09-06_ic_entry_confirmation_format.py`. Docs + scratch only — implementation is a follow-on session.
 - [2026-09-06] ROLL-16 — migrate production proxy delta CRITICAL alert to MarkdownV2 (shared `build_proxy_critical_alert`); guard-integrity follow-up — e5efb8f, 35c17e5
 - [2026-09-06] audit finding ROLL-15 — split base-expiry Telegram alert into summary + logged commands — 3855f8f
 
