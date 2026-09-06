@@ -107,6 +107,9 @@ def _fake_prices() -> MagicMock:
     prices.proxy_instrument_key = "NSE_FO|NIFTY23000CE26JUL"
     prices.proxy_price = Decimal("1200.0")
     prices.proxy_actual_delta = Decimal("0.90")
+    prices.proxy_strike = Decimal("23000")
+    prices.expiry = "2026-07-30"
+    prices.lot_size = 75
     return prices
 
 
@@ -125,6 +128,7 @@ def _run_main(
     extra_argv: list[str] | None = None,
     build_trades_mock: MagicMock | None = None,
     include_confirm: bool = True,
+    prices_override: MagicMock | None = None,
 ) -> MagicMock:
     bt_mock = build_trades_mock or MagicMock(return_value=[_fake_trade(n) for n in range(3)])
     sys_argv = ["paper_3track_entry.py"]
@@ -141,7 +145,7 @@ def _run_main(
         ),
         patch(
             "scripts.strategies.three_track.paper_3track_entry.fetch_live_prices",
-            return_value=_fake_prices(),
+            return_value=prices_override if prices_override is not None else _fake_prices(),
         ),
         patch(
             "scripts.strategies.three_track.paper_3track_entry.compute_gate_results",
@@ -187,19 +191,109 @@ def test_entry_trigger_does_not_refire_once_position_open() -> None:
     mock_store.record_trade.assert_not_called()
 
 
-def test_entry_notifies_telegram_on_success() -> None:
+@pytest.mark.parametrize(
+    "tracks_arg, expected_lines",
+    [
+        (
+            [],  # all three
+            [
+                "📥 Base Entry — 3\\-Track Bootstrap",
+                "📥 Spot: Long 5735x NIFTYBEES @ ₹250\\.00",
+                "📥 Futures: Long 75x NIFTY AUG FUT @ ₹23,100\\.00",
+                "📥 Proxy: Long 75x NIFTY JUL 23000 CE @ ₹1,200\\.00 \\(Δ\\=\\+0\\.90\\)",
+            ],
+        ),
+        (
+            ["--tracks", "futures"],
+            [
+                "📥 Base Entry — 3\\-Track Bootstrap",
+                "📥 Futures: Long 75x NIFTY AUG FUT @ ₹23,100\\.00",
+            ],
+        ),
+        (
+            ["--tracks", "proxy"],
+            [
+                "📥 Base Entry — 3\\-Track Bootstrap",
+                "📥 Proxy: Long 75x NIFTY JUL 23000 CE @ ₹1,200\\.00 \\(Δ\\=\\+0\\.90\\)",
+            ],
+        ),
+    ],
+)
+def test_entry_notifies_telegram_on_success_layout(
+    tracks_arg: list[str], expected_lines: list[str]
+) -> None:
     mock_store = MagicMock()
     mock_store.get_positions.return_value = []
     mock_store.record_trade.return_value = True
     mock_notifier = MagicMock()
     mock_notifier.send = AsyncMock(return_value=True)
 
-    _run_main(mock_store, mock_notifier=mock_notifier)
+    _run_main(mock_store, mock_notifier=mock_notifier, extra_argv=tracks_arg)
 
     mock_notifier.send.assert_awaited_once()
     msg = mock_notifier.send.await_args[0][0]
-    assert "BASE ENTRY" in msg
-    assert "*" not in msg  # no leftover markdown that TelegramNotifier.send() won't render
+
+    assert msg == "\n".join(expected_lines)
+
+
+def test_base_entry_all_reserved_chars_escaped() -> None:
+    from src.notifications.markdown import MARKDOWNV2_RESERVED
+
+    mock_store = MagicMock()
+    mock_store.get_positions.return_value = []
+    mock_store.record_trade.return_value = True
+    mock_notifier = MagicMock()
+    mock_notifier.send = AsyncMock(return_value=True)
+
+    prices = _fake_prices()
+    # inject worst-case values to force reserved chars
+    prices.niftybees_ltp = Decimal("-250.0")  # minus
+    prices.proxy_actual_delta = Decimal("-0.90")
+    prices.proxy_strike = Decimal("23000.5")  # point
+
+    _run_main(mock_store, mock_notifier=mock_notifier, prices_override=prices)
+
+    msg = mock_notifier.send.await_args[0][0]
+
+    # Assert every reserved char outside code span is escaped, and every backslash precedes a reserved char
+    i = 0
+    while i < len(msg):
+        ch = msg[i]
+        if ch == "\\":
+            assert i + 1 < len(msg), "Trailing backslash"
+            next_ch = msg[i + 1]
+            assert next_ch in MARKDOWNV2_RESERVED, f"Backslash escapes non-reserved char: {next_ch}"
+            i += 2
+        else:
+            assert ch not in MARKDOWNV2_RESERVED, (
+                f"Unescaped reserved char: {ch} at {msg[i - 10 : i + 10]}"
+            )
+            i += 1
+
+
+def test_base_entry_month_label_derivation() -> None:
+    from scripts.strategies.three_track.paper_3track_entry import _month_label
+
+    assert _month_label("2026-07-30") == "JUL"
+    assert _month_label("2026-12-31") == "DEC"
+    assert _month_label("2027-01-01") == "JAN"
+
+
+def test_base_entry_lot_size_shown_on_futures_and_proxy() -> None:
+    mock_store = MagicMock()
+    mock_store.get_positions.return_value = []
+    mock_store.record_trade.return_value = True
+    mock_notifier = MagicMock()
+    mock_notifier.send = AsyncMock(return_value=True)
+
+    prices = _fake_prices()
+    prices.lot_size = 123
+
+    _run_main(mock_store, mock_notifier=mock_notifier, prices_override=prices)
+
+    msg = mock_notifier.send.await_args[0][0]
+    assert "Futures: Long 123x" in msg
+    assert "Proxy: Long 123x" in msg
 
 
 def test_notification_failure_does_not_block_trade() -> None:

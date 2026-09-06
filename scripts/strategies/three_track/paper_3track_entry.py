@@ -52,6 +52,8 @@ load_dotenv()
 from src.client.upstox_market import UpstoxMarketClient
 from src.instruments.lookup import InstrumentLookup, parse_expiry
 from src.models.portfolio import TradeAction
+from src.notifications.formatting import format_money
+from src.notifications.markdown import escape_markdown
 from src.notifications.telegram import build_notifier
 from src.paper._display import BASE_LABELS
 from src.paper._utils import safe_float
@@ -712,6 +714,11 @@ def _has_open_base_positions(store: PaperStore) -> bool:
     return bool(_open_tracks(store))
 
 
+def _month_label(iso_date: str) -> str:
+    """Returns a 3-letter uppercase month label (e.g. 'DEC') from a YYYY-MM-DD string."""
+    return date.fromisoformat(iso_date).strftime("%b").upper()
+
+
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 
@@ -920,20 +927,25 @@ def main() -> None:
 
             notifier = build_notifier()
             if notifier:
-                lines = [
-                    f"🟢 BASE ENTRY — 3-Track bootstrap ({', '.join(sorted(tracks_to_enter))})"
-                ]
-                lines.append(f"Cycle: {args.cycle}")
+                lines = ["📥 Base Entry — 3\\-Track Bootstrap"]
                 if STRATEGY_SPOT in tracks_to_enter:
-                    lines.append(
-                        f"Spot: NIFTYBEES qty={prices.niftybees_qty} @ ₹{prices.niftybees_ltp}"
-                    )
+                    qty = escape_markdown(str(prices.niftybees_qty))
+                    ltp = escape_markdown(format_money(prices.niftybees_ltp))
+                    lines.append(f"📥 Spot: Long {qty}x NIFTYBEES @ {ltp}")
                 if STRATEGY_FUTURES in tracks_to_enter:
-                    lines.append(f"Futures: {prices.futures_key} @ ₹{prices.futures_price}")
+                    f_mth = escape_markdown(_month_label(futures_expiry))
+                    lot = escape_markdown(str(prices.lot_size))
+                    f_price = escape_markdown(format_money(prices.futures_price))
+                    lines.append(f"📥 Futures: Long {lot}x NIFTY {f_mth} FUT @ {f_price}")
                 if STRATEGY_PROXY in tracks_to_enter:
+                    p_mth = escape_markdown(_month_label(prices.expiry))
+                    p_strike = escape_markdown(f"{prices.proxy_strike:.0f}")
+                    p_price = escape_markdown(format_money(prices.proxy_price))
+                    p_delta = escape_markdown(f"{prices.proxy_actual_delta:+.2f}")
+                    lot = escape_markdown(str(prices.lot_size))
                     lines.append(
-                        f"Proxy: {prices.proxy_instrument_key} @ ₹{prices.proxy_price} "
-                        f"(δ={prices.proxy_actual_delta})"
+                        f"📥 Proxy: Long {lot}x NIFTY {p_mth} {p_strike} CE @ {p_price} "
+                        f"\\(Δ\\={p_delta}\\)"
                     )
                 msg = "\n".join(lines)
                 try:
