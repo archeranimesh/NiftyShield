@@ -114,6 +114,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-06] audit finding ROLL-15 — split base-expiry Telegram alert into summary + logged commands — 3855f8f
 
 Full forensic log (SHAs, bug numbers, root-cause detail) moved to [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md) — most recently during the 2026-08-26 reorg (everything from 2026-08-01
 through 2026-08-26, plus item 29's inline design history above). Add new entries there going forward, or start a fresh dated section here if this file's Session Log grows large again.
