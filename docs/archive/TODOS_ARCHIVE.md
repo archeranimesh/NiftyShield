@@ -5,6 +5,21 @@
 
 ---
 
+## 2026-09-06 — `telegram-ic-comparison-formatting` story archived
+
+Closed as superseded. **TGFMT-1** shipped as real history (SHA `a69d817`) — the dynamic
+label/column-width fix to `build_comparison_report()` that replaced hand-counted literal
+spacing. **TGFMT-2..9** were superseded 2026-08-07 by `telegram-markdown-migration/`, which
+absorbed the same goals (shared table-formatting helper, repo-wide builder retrofit, CLAUDE.md
+standard) under `parse_mode=MarkdownV2` rather than the HTML+`<pre>` alignment-only fix planned
+here. The two still-live feature asks salvaged from TGFMT-2/3 — the Legs row (`n/4`, 🔴 if < 4)
+and the `Bkd (M)`/`Bkd (I)`/`Flt (M)`/`Flt (I)` month-vs-inception P&L split with a genuine
+`_get_unrealized_pnl_month_change()` calc — were delivered in that epic as ROLL-2c (`a2fbe31`),
+backed by ROLL-2b-i/ii (`unrealized_this_month` on `PnLReport`, `e59abb9` / `d2741fb`). Not on
+`TODOS.md` Feature Backlog (predates the RDO-14 restructure). Archived to
+`docs/archive/plan/telegram-ic-comparison-formatting/`; `docs/plan/README.md` row collapsed to
+a pointer. Docs-only.
+
 ## 2026-09-06 — `telegram-markdown-migration` epic archived
 
 Every NiftyShield Telegram message moved to `parse_mode=MarkdownV2`, across three sequenced

@@ -112,6 +112,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-06] `telegram-ic-comparison-formatting/` — archived as superseded → `docs/archive/plan/telegram-ic-comparison-formatting/`. TGFMT-1 stays shipped history (`a69d817`); TGFMT-2..9 fully
+  absorbed by the now-archived `telegram-markdown-migration/` (Legs row + Bkd/Flt split landed as ROLL-2c `a2fbe31`). `docs/plan/README.md` row → pointer; detail in `TODOS_ARCHIVE.md`. Docs-only.
 - [2026-09-06] ROLL-5 — docs close: `telegram-markdown-migration/` epic complete and archived → `docs/archive/plan/telegram-markdown-migration/`. All three sub-stories done: `backbone/`
   (`57c1c3c`), `formatting-rules/` (`75cc123`), `strategy-rollout/` (ROLL-0..17). CONTEXT.md / DECISIONS.md / `docs/plan/README.md` updated; Feature Backlog item removed. Docs-only. SHA: b55773d
 - [2026-09-06] ROLL-17 — unify IC entry v1/v2 onto `src/notifications/ic_entry_message.py` fenced-table renderer; v2's bare `{strike}PE` label violation fixed; `ivr`/`dte`/`spot`/`net_credit`

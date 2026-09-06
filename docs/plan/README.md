@@ -45,11 +45,10 @@ All Telegram messaging switched to `parse_mode=MarkdownV2` across three sequence
 `formatting-rules/` (value/table spec → `FORMATTING.md`, `75cc123`), `strategy-rollout/` (per-message-family migration incl. ROLL-17 IC entry unify `26527c2`; docs close ROLL-5 `b55773d`).
 Superseded `telegram-ic-comparison-formatting/` TGFMT-2..9.
 
-**`telegram-ic-comparison-formatting/`** · 🔄 TGFMT-1 shipped; rest superseded
-TGFMT-1 fixed `build_comparison_report()`'s hand-counted-width alignment bug.
-TGFMT-2..9 superseded 2026-08-07 by `telegram-markdown-migration/`.
-The two still-open feature asks (Legs row, Bkd/Flt month-inception split) carried into
-`strategy-rollout/` ROLL-2.
+**`telegram-ic-comparison-formatting/`** · ✅ Archived 2026-09-06 → `docs/archive/plan/telegram-ic-comparison-formatting/`
+TGFMT-1 shipped (`a69d817`, `build_comparison_report()` dynamic-width fix).
+TGFMT-2..9 superseded by `telegram-markdown-migration/` (now itself archived) — the Legs row
+and Bkd/Flt month-inception split landed there as ROLL-2c.
 
 **`3track-consolidation/`** · ✅ Shipped/Archived 2026-08-04 → `docs/archive/plan/3track-consolidation/`
 Overlay (CC/PP/Collar) retired on Futures/Proxy, live only on NiftyBees; base-leg-only daily
