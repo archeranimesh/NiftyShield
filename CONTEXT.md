@@ -52,7 +52,8 @@ Top-level `src/` packages, one line each (detail → `CONTEXT_TREE.md`):
 - `src/intraday/` — `IntradayMarketStore`: broker-agnostic `intraday_market_snapshots` table, 30-day retention, stale-row guard.
 - `src/instruments/` — `DateAwareLotSizeResolver`, `strike_selector` (filter/gate/rank + `_apply_liquidity_gate`), offline BOD `lookup` (ranked fuzzy search, `get_expiry_candidates`).
 - `src/market_calendar/` — NSE holiday detection from version-controlled YAML: `is_trading_day`, `prev_trading_day` (fail-open).
-- `src/notifications/` — `NotifierProtocol`, `TelegramNotifier` (non-fatal, HTML `<pre>`),
+- `src/notifications/` — `NotifierProtocol`, `TelegramNotifier` (non-fatal, `parse_mode=MarkdownV2` — HTML `<pre>` migration
+  complete + archived 2026-09-06, `telegram-markdown-migration/` epic; every caller escapes via `markdown.py`),
   `TelegramGateway` (council-free approval dispatch + callback polling + chat-ID allowlist),
   `alerts.py` (shared Telegram message builders), `formatting.py` (per-type value formatters + table builders),
   `ic_entry_message.py` (IC entry confirmation renderer — v1/v2 unified, ROLL-17).

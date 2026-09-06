@@ -448,6 +448,10 @@ because this one call site's return value gates a real external side effect and 
 
 **Message format (MarkdownV2, migrated off HTML 2026-08-25, MD-1..MD-7.3):**
 `TelegramNotifier.send()` / `TelegramGateway.send_notification` / `send_approval_request` all send `parse_mode: MarkdownV2`.
+The `telegram-markdown-migration/` epic is **complete and archived** (2026-09-06, ROLL-5): `backbone/` switched the transport and audited every caller's escaping (`57c1c3c`),
+`formatting-rules/` built root `FORMATTING.md` + `src/notifications/formatting.py` value / table helpers (`75cc123`), and `strategy-rollout/` migrated every message
+family to the confirmed bold / fenced-table format — IC EOD audit, IC monthly comparison, close/roll for all 7 strategy classes, approval requests, EOD Paper Summary,
+the ten missing-message call sites (ROLL-7..16), and IC entry confirmation (ROLL-17, unified v1/v2 on `ic_entry_message.py`). Story folder: `docs/archive/plan/telegram-markdown-migration/`.
 `send()` does **not** auto-escape — every caller escapes dynamic values via `mdcode()` / `escape_markdown()` (`src/notifications/markdown.py`).
 The static-scan guard test `tests/unit/notifications/test_escaping_guard.py` fails any new
 `.send()` / `.send_plain_message()` / `.send_notification()` call site that interpolates an unescaped dynamic value

@@ -40,14 +40,10 @@ P3: Greeks/parity validation (council-gated), golden tests, suppression hygiene.
 Priority + dependencies in the epic's own `README.md`.
 `telegram-approval-auth-fix/` already shipped (SHA `5cafc3c`).
 
-**`telegram-markdown-migration/`** · 🔄 In progress — `strategy-rollout/` next: **ROLL-5** (docs close); ROLL-17 `26527c2` shipped
-Switch all Telegram messaging to `parse_mode=MarkdownV2` via three sequenced sub-stories:
-`backbone/` (parse-mode switch + escaping audit — closed, `57c1c3c`),
-`formatting-rules/` (value/table spec → `FORMATTING.md` — closed, `75cc123`),
-`strategy-rollout/` (per-message-family migration — in progress).
-Supersedes `telegram-ic-comparison-formatting/` TGFMT-2..9.
-Converted to the canonical epic format (router + Stories table, canonical task lines,
-As-built digests) by `root-doc-organization/` RDO-17.6 (2026-08-29, `cf46ff4`).
+**`telegram-markdown-migration/`** · ✅ Shipped/Archived 2026-09-06 → `docs/archive/plan/telegram-markdown-migration/`
+All Telegram messaging switched to `parse_mode=MarkdownV2` across three sequenced sub-stories: `backbone/` (parse-mode switch + escaping audit, `57c1c3c`),
+`formatting-rules/` (value/table spec → `FORMATTING.md`, `75cc123`), `strategy-rollout/` (per-message-family migration incl. ROLL-17 IC entry unify `26527c2`; docs close ROLL-5).
+Superseded `telegram-ic-comparison-formatting/` TGFMT-2..9.
 
 **`telegram-ic-comparison-formatting/`** · 🔄 TGFMT-1 shipped; rest superseded
 TGFMT-1 fixed `build_comparison_report()`'s hand-counted-width alignment bug.

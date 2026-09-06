@@ -5,6 +5,21 @@
 
 ---
 
+## 2026-09-06 — `telegram-markdown-migration` epic archived
+
+Every NiftyShield Telegram message moved to `parse_mode=MarkdownV2`, across three sequenced
+sub-stories: `backbone/` (transport switch + codebase-wide escaping audit + MD-6 static-scan
+guard, closing SHA `57c1c3c`), `formatting-rules/` (root `FORMATTING.md` per-type decimal /
+alignment / sign spec + `src/notifications/formatting.py` value + table helpers, `75cc123`),
+and `strategy-rollout/` (ROLL-0..ROLL-17 — IC EOD audit, IC monthly comparison, close/roll
+for all 7 strategy classes, approval requests, EOD Paper Summary, the ten missing-message
+call sites ROLL-7..16, and IC entry confirmation ROLL-17 unified onto
+`ic_entry_message.py`). ROLL-5 (this task) is the docs close. Archived to
+`docs/archive/plan/telegram-markdown-migration/`; per-task SHAs and As-built detail are in
+the archived `stories.md` files. Moved from `TODOS.md` Feature Backlog (was item 5). The two
+`scratch/2026-08-07_*` reference scripts are now historical — fully ported into `src/` /
+`scripts/`. Supersedes `telegram-ic-comparison-formatting/` TGFMT-2..9.
+
 ## 2026-09-03 — `token-efficiency` epic archived
 
 Three sub-stories shipped over 2026-09-01..09-03: `measurement/` (MEAS-1 `token_audit.py` +
