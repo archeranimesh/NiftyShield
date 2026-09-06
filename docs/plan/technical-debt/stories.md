@@ -101,3 +101,10 @@ Step 4b item 8) and record the outcome in `DECISIONS.md`.
   `commit_preflight.py` staged md-line-length check reusing
   `check_md_line_length.check_file` (`2b85b84`). Un-reflowable long `tasks.md` lines remain
   an accepted residual.
+- **DEBT-13** — `next-marker-points-at-just-closed-task` (Count 5). Remediation exists but is
+  ineffective for one shape: `check_checkbox_consistency.py`'s `README_ENTRY_RE` matches a
+  flat `<folder>/ … next: **ID**` row and flags a pointer at a done id, but an epic row in
+  `docs/plan/README.md` that carries a nested sub-story pointer (`strategy-rollout/ next:
+  **ROLL-14**` while `strategy-rollout/tasks.md` has ROLL-14 checked) passes `--all` clean.
+  Extend the guard to resolve the sub-story `tasks.md` for epic rows, then verify against the
+  ROLL-14 close (`eb782d0`, README:43 left at `next: **ROLL-14**`). Standalone — no trigger wait.
