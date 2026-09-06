@@ -54,7 +54,7 @@ Top-level `src/` packages, one line each (detail → `CONTEXT_TREE.md`):
 - `src/market_calendar/` — NSE holiday detection from version-controlled YAML: `is_trading_day`, `prev_trading_day` (fail-open).
 - `src/notifications/` — `NotifierProtocol`, `TelegramNotifier` (non-fatal, HTML `<pre>`),
   `TelegramGateway` (council-free approval dispatch + callback polling + chat-ID allowlist),
-  `formatting.py` (per-type value formatters + table builders).
+  `alerts.py` (shared Telegram message builders), `formatting.py` (per-type value formatters + table builders).
 - `src/backtest/` — offline research: `compute_ivr` (trailing 252-day VIX IVR), `vix_ingest` (NSE CSV + Upstox), `ChainWriter`/`ChainReader` (Parquet + DuckDB), bhavcopy ingest/loader.
 - `src/gamma/` — Near-Expiry Gamma Buy scaffolding: frozen models + `GammaStore`.
 - `src/council/` — AI council infra: `RapidCouncil` (parallel Stage-1 fan-out + chairman synthesis), request/response models.
