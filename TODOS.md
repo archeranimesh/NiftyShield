@@ -118,6 +118,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 Full forensic log (SHAs, bug numbers, root-cause detail) moved to [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md) — most recently during the 2026-08-26 reorg (everything from 2026-08-01
 through 2026-08-26, plus item 29's inline design history above). Add new entries there going forward, or start a fresh dated section here if this file's Session Log grows large again.
 
+- **2026-09-06** — `docs/plan/telegram-markdown-migration/strategy-rollout/` ROLL-13 shipped: 3-track base entry notification migrated to MarkdownV2 kv format. SHA: `7adf484`. Next: ROLL-14.
 - **2026-09-02** — `docs/plan/token-efficiency/fixed-overhead/` FIX-3: `session-close` now runs as a fresh `general-purpose` subagent reading the transcript by path, never a `fork` clone. Measured
   ~55% drop (116,375 → 52,523 tokens) on a matched session; fork's median cost across 9 sessions was ~254K. SHA: `03d991f`.
 - **2026-09-03** — `docs/plan/token-efficiency/fixed-overhead/` FIX-4 (closes the story): `scripts/dev/graph_snippet.py` wraps `get_code_snippet` to strip the unused `fp`/`sp`/`bt` fields — ~244
