@@ -110,7 +110,7 @@ async def test_check_base_expiry_alerts(tmp_path: Path) -> None:
 
     # 1. Base futures at 4 DTE (today=June 21, expiry=June 25 -> 4 DTE) -> Alert fires
     pos_fut = PaperPosition(
-        strategy_name="paper_nifty_futures",
+        strategy_name="paper_3track_nifty_v1",
         leg_role="base_futures",
         net_qty=50,
         avg_cost=Decimal("23000.0"),
@@ -120,7 +120,7 @@ async def test_check_base_expiry_alerts(tmp_path: Path) -> None:
 
     # 2. Base ditm call at 4 DTE -> Alert fires
     pos_ce = PaperPosition(
-        strategy_name="paper_nifty_proxy",
+        strategy_name="paper_3track_nifty_v1",
         leg_role="base_ditm_call",
         net_qty=50,
         avg_cost=Decimal("1000.0"),
@@ -130,7 +130,7 @@ async def test_check_base_expiry_alerts(tmp_path: Path) -> None:
 
     # 3. Base futures at 9 DTE -> No alert
     pos_fut_far = PaperPosition(
-        strategy_name="paper_nifty_futures",
+        strategy_name="paper_3track_nifty_v1",
         leg_role="base_futures",
         net_qty=50,
         avg_cost=Decimal("23000.0"),
@@ -169,8 +169,8 @@ async def test_check_base_expiry_alerts(tmp_path: Path) -> None:
     # Verify notifier was called twice
     assert notifier.send.call_count == 2
     calls = [c.args[0] for c in notifier.send.call_args_list]
-    assert any("base_futures" in c for c in calls)
-    assert any("base_ditm_call" in c for c in calls)
+    assert any("Base Futures" in c for c in calls)
+    assert any("Base DITM Call" in c for c in calls)
 
 
 @pytest.mark.asyncio
@@ -211,7 +211,7 @@ async def test_check_base_expiry_ditm_call_skips_weekly(tmp_path: Path) -> None:
     lookup = InstrumentLookup(instruments)
 
     pos_ce = PaperPosition(
-        strategy_name="paper_nifty_proxy",
+        strategy_name="paper_3track_nifty_v1",
         leg_role="base_ditm_call",
         net_qty=50,
         avg_cost=Decimal("1000.0"),
@@ -232,8 +232,9 @@ async def test_check_base_expiry_ditm_call_skips_weekly(tmp_path: Path) -> None:
 
     assert notifier.send.call_count == 1
     alert_msg = notifier.send.call_args[0][0]
-    assert "NSE_FO|NIFTY26JUL23000CE" in alert_msg
-    assert "NSE_FO|NIFTY26JUN30W23000CE" not in alert_msg
+    # Check for trading symbol instead of key, since key is no longer in message
+    assert "NIFTY JUL 23000 CE" in alert_msg
+    assert "NIFTY JUN30 23000 CE" not in alert_msg
 
 
 @pytest.mark.asyncio
@@ -250,7 +251,7 @@ async def test_check_base_expiry_idempotency(tmp_path: Path) -> None:
     ]
     lookup = InstrumentLookup(instruments)
     pos = PaperPosition(
-        strategy_name="paper_nifty_futures",
+        strategy_name="paper_3track_nifty_v1",
         leg_role="base_futures",
         net_qty=50,
         avg_cost=Decimal("23000.0"),
@@ -287,7 +288,7 @@ async def test_check_base_expiry_next_contract_not_found(tmp_path: Path) -> None
     ]
     lookup = InstrumentLookup(instruments)
     pos = PaperPosition(
-        strategy_name="paper_nifty_futures",
+        strategy_name="paper_3track_nifty_v1",
         leg_role="base_futures",
         net_qty=50,
         avg_cost=Decimal("23000.0"),
@@ -303,8 +304,8 @@ async def test_check_base_expiry_next_contract_not_found(tmp_path: Path) -> None
     assert len(store.get_open_exit_events()) == 1
     assert notifier.send.call_count == 1
     alert_msg = notifier.send.call_args[0][0]
-    assert "WARNING: BOD may be stale" in alert_msg
-    assert "<NEXT_CONTRACT_KEY>" in alert_msg
+    assert "System: ⚠️  BOD data potentially stale" in alert_msg
+    assert "<NEXT_CONTRACT_SYMBOL>" in alert_msg
 
 
 @pytest.mark.asyncio
@@ -321,7 +322,7 @@ async def test_check_base_expiry_notifier_failure(tmp_path: Path) -> None:
     ]
     lookup = InstrumentLookup(instruments)
     pos = PaperPosition(
-        strategy_name="paper_nifty_futures",
+        strategy_name="paper_3track_nifty_v1",
         leg_role="base_futures",
         net_qty=50,
         avg_cost=Decimal("23000.0"),
@@ -335,3 +336,69 @@ async def test_check_base_expiry_notifier_failure(tmp_path: Path) -> None:
     # Notifier raises -> event still written, does not propagate error
     await snap_mod._check_base_expiry([pos], lookup, today, store, notifier)
     assert len(store.get_open_exit_events()) == 1
+
+
+@pytest.mark.asyncio
+async def test_check_base_expiry_message_format_and_logging(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    store = _make_store(tmp_path)
+    today = date(2026, 6, 21)
+    instruments = [
+        {
+            "instrument_key": "NSE_FO|NIFTY26JUNFUT",
+            "underlying_symbol": "NIFTY",
+            "instrument_type": "FUT",
+            "expiry": "2026-06-25",
+            "trading_symbol": "NIFTY JUN FUT",
+        },
+        {
+            "instrument_key": "NSE_FO|NIFTY26JULFUT",
+            "underlying_symbol": "NIFTY",
+            "instrument_type": "FUT",
+            "expiry": "2026-07-30",
+            "trading_symbol": "NIFTY JUL FUT",
+        },
+    ]
+    lookup = InstrumentLookup(instruments)
+
+    pos_fut = PaperPosition(
+        strategy_name="paper_3track_nifty_v1",  # use the exact string that is mapped in STRATEGY_LABELS
+        leg_role="base_futures",
+        net_qty=50,
+        avg_cost=Decimal("23000.0"),
+        avg_sell_price=Decimal("0.0"),
+        instrument_key="NSE_FO|NIFTY26JUNFUT",
+    )
+
+    notifier = MagicMock()
+    notifier.send = AsyncMock()
+
+    from unittest.mock import patch
+
+    with patch.object(snap_mod.logger, "info") as mock_logger_info:
+        await snap_mod._check_base_expiry([pos_fut], lookup, today, store, notifier)
+
+    assert notifier.send.call_count == 1
+    alert_msg = notifier.send.call_args[0][0]
+
+    # Assert missing close_cmd/roll_cmd
+    assert "Settlement Close:" not in alert_msg
+    assert "python scripts/record/record_paper_trade.py" not in alert_msg
+
+    # Assert escaping sweep over static parens
+    assert "\\(4 DTE\\)" in alert_msg
+
+    # Assert logger fired
+    assert mock_logger_info.call_count >= 1
+    roll_cmd_calls = [
+        c
+        for c in mock_logger_info.call_args_list
+        if c.args and c.args[0] == "base_expiry.roll_commands"
+    ]
+    assert len(roll_cmd_calls) == 1
+    kwargs = roll_cmd_calls[0].kwargs
+    assert "close_cmd" in kwargs
+    assert "roll_cmd" in kwargs
+    assert kwargs["strategy_name"] == "paper_3track_nifty_v1"
+    assert kwargs["leg_role"] == "base_futures"

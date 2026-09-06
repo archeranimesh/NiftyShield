@@ -54,7 +54,7 @@ from src.config import settings
 from src.instruments.lookup import InstrumentLookup, parse_expiry
 from src.market_calendar.holidays import is_trading_day
 from src.models.options import OptionChain
-from src.notifications.markdown import escape_markdown
+from src.notifications.markdown import escape_markdown, mdcode
 from src.notifications.telegram import TelegramNotifier
 from src.paper._display import (
     BASE_LABELS,
@@ -372,6 +372,23 @@ def _get_expiry_date(instrument_key: str, instruments: InstrumentLookup) -> date
     return None
 
 
+STRATEGY_LABELS = {
+    "paper_3track_nifty_v1": "Paper 3-Track Nifty V1",
+}
+
+LEG_LABELS = {
+    "base_futures": "Base Futures",
+    "base_ditm_call": "Base DITM Call",
+}
+
+
+def _get_display_label(table: dict[str, str], key: str, table_name: str) -> str:
+    try:
+        return table[key]
+    except KeyError:
+        raise ValueError(f"no display mapping for {table_name}={key!r}") from None
+
+
 async def _check_base_expiry(
     positions: list[PaperPosition],
     instruments: InstrumentLookup,
@@ -422,10 +439,10 @@ async def _check_base_expiry(
             next_inst = instruments.get_next_contract_in_band(pos.instrument_key, today)
         else:
             next_inst = instruments.get_next_contract(pos.instrument_key)
-        warning_suffix = ""
+        warning_suffix = False
         if not next_inst:
             logger.warning("base_expiry.next_contract_not_found", instrument_key=pos.instrument_key)
-            warning_suffix = "\n\n⚠️ WARNING: BOD may be stale"
+            warning_suffix = True
             next_key = "<NEXT_CONTRACT_KEY>"
             next_symbol = "<NEXT_CONTRACT_SYMBOL>"
         else:
@@ -496,14 +513,36 @@ async def _check_base_expiry(
             else pos.instrument_key
         )
 
-        msg = (
-            f"⚠️ *BASE POSITION EXPIRY ALERT*\n"
-            f"Strategy: {pos.strategy_name}\n"
-            f"Leg: {pos.leg_role}\n"
-            f"Expiring Contract: {expiring_symbol} ({dte} DTE)\n"
-            f"Next Contract: {next_symbol} (Key: {next_key}){warning_suffix}\n\n"
-            f"Settlement Close:\n`{close_cmd}`\n\n"
-            f"Roll Open:\n`{roll_cmd}`"
+        strategy = escape_markdown(
+            _get_display_label(STRATEGY_LABELS, pos.strategy_name, "strategy_name")
+        )
+        leg = escape_markdown(_get_display_label(LEG_LABELS, pos.leg_role, "leg_role"))
+        dte_str = escape_markdown(str(dte))
+        qty = escape_markdown(str(abs(pos.net_qty)))
+        esc_expiring_symbol = mdcode(expiring_symbol)
+        esc_next_symbol = mdcode(next_symbol)
+
+        lines = [
+            f"🚨 *Base Position Expiry* — {strategy}",
+            f"Leg: {leg} \\({dte_str} DTE\\)",
+        ]
+        if warning_suffix:
+            lines.append("System: ⚠️  BOD data potentially stale")
+        lines.append("Action Required: Manual Roll")
+        lines.append(f"📤 Close: Long {qty}x {esc_expiring_symbol}")
+        lines.append(f"📥 Open: Long {qty}x {esc_next_symbol}")
+
+        msg = "\n".join(lines)
+
+        logger.info(
+            "base_expiry.roll_commands",
+            strategy_name=pos.strategy_name,
+            leg_role=pos.leg_role,
+            expiring_symbol=expiring_symbol,
+            next_symbol=next_symbol,
+            next_key=next_key,
+            close_cmd=close_cmd,
+            roll_cmd=roll_cmd,
         )
 
         if notifier:
@@ -1829,11 +1868,7 @@ def _build_recovery_digest(snap: ProtectionRecoverySnapshot) -> str:
             label = _RECOVERY_OVERLAY_LABELS[overlay_type]
             lines.append(escape_markdown(f"  {label:<6} No data"))
         if snap.best_overlay:
-            lines.append(
-                escape_markdown(
-                    f"Best: {_RECOVERY_OVERLAY_LABELS[snap.best_overlay]}"
-                )
-            )
+            lines.append(escape_markdown(f"Best: {_RECOVERY_OVERLAY_LABELS[snap.best_overlay]}"))
     else:
         ordered = sorted(known.items(), key=lambda kv: kv[1], reverse=True)
         for overlay_type, pnl in ordered:
