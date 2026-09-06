@@ -5,7 +5,7 @@ carries an **As-built** paragraph there (split history, review-gate detail, phas
 
 Sequenced by risk: informational messages first, live position-event notifications next, auth-sensitive interactive messages last.
 
-**Open: ROLL-16 (next), ROLL-17, ROLL-5.**
+**Open: ROLL-17 (next), ROLL-5.**
 
 > **Routing:** `Owner` = who implements (`Claude` = judgment-call, `Antigravity` = mechanical with an unambiguous spec). `Model` = model the owner runs at. `Review` = the AutoTrigger gate; where
 > `stories.md` says "real `@code-reviewer`, Opus" the real subagent is mandatory, not a persona approximation (financial-logic close-notification / P&L-rendering paths). **Blocked by:** ROLL-1 needs
@@ -59,7 +59,7 @@ Sequenced by risk: informational messages first, live position-event notificatio
 - [x] **ROLL-15** — Migrate three-track base position expiry alert (`paper_3track_snapshot.py:487-501`) → compact summary; shell commands → structured `logger.info` | Owner: Antigravity | Model:
       n/a | Review: none | SHA: 3855f8f, 30c86ae
 - [x] **ROLL-16** — Migrate production Proxy Delta CRITICAL alert (`paper_3track_snapshot._run` ~L1723)
-      → ROLL-10's format verbatim; reuse its builder if possible | Owner: Antigravity | Model: n/a | Review: none | SHA: e5efb8f
+      → ROLL-10's format verbatim; reuse its builder if possible | Owner: Antigravity | Model: n/a | Review: none | SHA: e5efb8f, 35c17e5
 - [ ] **ROLL-17** — IC entry confirmation shared content model (`paper_ic_entry.py` + `_v2.py`) — **DESIGN INCOMPLETE**: 6 open decisions, workshop session first; Owner/Model/Review below
       provisional | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: <—>
 - [ ] **ROLL-5** — Docs close: synthesis across all prior ROLL tasks | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <—>

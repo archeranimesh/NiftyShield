@@ -114,7 +114,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
-- [2026-09-06] audit finding ROLL-16 — migrate production proxy delta CRITICAL alert to MarkdownV2 — e5efb8f
+- [2026-09-06] ROLL-16 — migrate production proxy delta CRITICAL alert to MarkdownV2 (shared `build_proxy_critical_alert`); guard-integrity follow-up — e5efb8f, 35c17e5
 - [2026-09-06] audit finding ROLL-15 — split base-expiry Telegram alert into summary + logged commands — 3855f8f
 
 Full forensic log (SHAs, bug numbers, root-cause detail) moved to [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md) — most recently during the 2026-08-26 reorg (everything from 2026-08-01
