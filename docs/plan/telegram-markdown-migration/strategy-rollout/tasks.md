@@ -57,7 +57,7 @@ Sequenced by risk: informational messages first, live position-event notificatio
 - [x] **ROLL-14** — Migrate 3-track overlay entry bootstrap notification (`paper_3track_overlay_entry.py::main`) → per-leg direction-coded kv, all 3 overlay types | Owner: Antigravity | Model: n/a
       | Review: none | SHA: 129d54e
 - [x] **ROLL-15** — Migrate three-track base position expiry alert (`paper_3track_snapshot.py:487-501`) → compact summary; shell commands → structured `logger.info` | Owner: Antigravity | Model:
-      n/a | Review: none | SHA: 3855f8f
+      n/a | Review: none | SHA: 3855f8f, 30c86ae
 - [ ] **ROLL-16** — Migrate production Proxy Delta CRITICAL alert (`paper_3track_snapshot._run` ~L1723) → ROLL-10's format verbatim; reuse its builder if possible | Owner: Antigravity | Model: n/a
       | Review: none | SHA: <—>
 - [ ] **ROLL-17** — IC entry confirmation shared content model (`paper_ic_entry.py` + `_v2.py`) — **DESIGN INCOMPLETE**: 6 open decisions, workshop session first; Owner/Model/Review below
