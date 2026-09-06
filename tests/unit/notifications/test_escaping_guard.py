@@ -222,35 +222,34 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "only inspects the immediate enclosing function (check_and_roll_leg), not the "
         "builder it calls - same shape as the scripts/eod_summary.py:200 entry"
     ),
+    # base-expiry notifier.send (was line 511) - ROLL-15 (SHA 3855f8f) migrated it;
+    # msg is now fully escaped (escape_markdown/mdcode on every value), so it is no
+    # longer a baseline entry. Line numbers below shifted down by ROLL-15's edit.
     (
         "scripts/strategies/three_track/paper_3track_snapshot.py",
-        511,
+        768,
     ): "untracked gap - not named in any MD-*/ROLL-* task",
     (
         "scripts/strategies/three_track/paper_3track_snapshot.py",
-        729,
+        775,
     ): "untracked gap - not named in any MD-*/ROLL-* task",
     (
         "scripts/strategies/three_track/paper_3track_snapshot.py",
-        736,
-    ): "untracked gap - not named in any MD-*/ROLL-* task",
-    (
-        "scripts/strategies/three_track/paper_3track_snapshot.py",
-        1361,
+        1400,
     ): "ROLL-15/16 area - not itself named, untracked gap",
     (
         "scripts/strategies/three_track/paper_3track_snapshot.py",
-        1387,
+        1426,
     ): "ROLL-15/16 area - not itself named, untracked gap",
     (
         "scripts/strategies/three_track/paper_3track_snapshot.py",
-        1508,
+        1547,
     ): "untracked gap - not named in any MD-*/ROLL-* task",
     (
         "scripts/strategies/three_track/paper_3track_snapshot.py",
-        1984,
+        2019,
     ): "untracked gap - not named in any MD-*/ROLL-* task",
-    ("scripts/strategies/three_track/paper_3track_snapshot.py", 2030): (
+    ("scripts/strategies/three_track/paper_3track_snapshot.py", 2065): (
         "heuristic limitation, not a real gap - value is escaped inside the callee "
         "_build_recovery_digest() (MD-4.2 scope) but this guard only inspects the "
         "immediate enclosing function (_run), not callees"

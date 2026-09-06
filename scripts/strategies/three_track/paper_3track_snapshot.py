@@ -527,7 +527,7 @@ async def _check_base_expiry(
             f"Leg: {leg} \\({dte_str} DTE\\)",
         ]
         if warning_suffix:
-            lines.append("System: ⚠️  BOD data potentially stale")
+            lines.append("System: ⚠️ BOD data potentially stale")
         lines.append("Action Required: Manual Roll")
         lines.append(f"📤 Close: Long {qty}x {esc_expiring_symbol}")
         lines.append(f"📥 Open: Long {qty}x {esc_next_symbol}")

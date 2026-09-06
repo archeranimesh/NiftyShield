@@ -304,7 +304,7 @@ async def test_check_base_expiry_next_contract_not_found(tmp_path: Path) -> None
     assert len(store.get_open_exit_events()) == 1
     assert notifier.send.call_count == 1
     alert_msg = notifier.send.call_args[0][0]
-    assert "System: ⚠️  BOD data potentially stale" in alert_msg
+    assert "System: ⚠️ BOD data potentially stale" in alert_msg
     assert "<NEXT_CONTRACT_SYMBOL>" in alert_msg
 
 
