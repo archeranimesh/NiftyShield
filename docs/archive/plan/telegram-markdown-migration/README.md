@@ -44,7 +44,7 @@ Confirmed real callers, via the code graph (not assumed):
 |---|---|---|---|---|
 | `backbone/` | MarkdownV2 parse_mode switch + escape every existing caller's dynamic values so nothing silently 400s | ✅ Done | — | `57c1c3c` |
 | `formatting-rules/` | Canonical per-type decimal / alignment / sign spec (`FORMATTING.md`) + tested `formatting.py` value + table helpers | ✅ Done | `backbone/` | `75cc123` |
-| `strategy-rollout/` | Migrate each message family to the bold / table format, staged by risk (IC audit first, approval requests last) | ✅ Done | `backbone/` + `formatting-rules/` | ROLL-5 `<pending>` |
+| `strategy-rollout/` | Migrate each message family to the bold / table format, staged by risk (IC audit first, approval requests last) | ✅ Done | `backbone/` + `formatting-rules/` | ROLL-5 `b55773d` |
 
 Status: ⬜ Not started · 🔄 In progress · ✅ Done. This column is the epic's progress view — per-task checkboxes live only in each sub-story's `tasks.md`.
 

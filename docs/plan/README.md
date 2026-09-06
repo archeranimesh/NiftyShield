@@ -42,7 +42,7 @@ Priority + dependencies in the epic's own `README.md`.
 
 **`telegram-markdown-migration/`** · ✅ Shipped/Archived 2026-09-06 → `docs/archive/plan/telegram-markdown-migration/`
 All Telegram messaging switched to `parse_mode=MarkdownV2` across three sequenced sub-stories: `backbone/` (parse-mode switch + escaping audit, `57c1c3c`),
-`formatting-rules/` (value/table spec → `FORMATTING.md`, `75cc123`), `strategy-rollout/` (per-message-family migration incl. ROLL-17 IC entry unify `26527c2`; docs close ROLL-5).
+`formatting-rules/` (value/table spec → `FORMATTING.md`, `75cc123`), `strategy-rollout/` (per-message-family migration incl. ROLL-17 IC entry unify `26527c2`; docs close ROLL-5 `b55773d`).
 Superseded `telegram-ic-comparison-formatting/` TGFMT-2..9.
 
 **`telegram-ic-comparison-formatting/`** · 🔄 TGFMT-1 shipped; rest superseded

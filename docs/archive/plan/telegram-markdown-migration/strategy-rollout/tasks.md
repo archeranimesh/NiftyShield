@@ -62,7 +62,7 @@ Sequenced by risk: informational messages first, live position-event notificatio
       → ROLL-10's format verbatim; reuse its builder if possible | Owner: Antigravity | Model: n/a | Review: none | SHA: e5efb8f, 35c17e5
 - [x] **ROLL-17** — Unify IC entry v1/v2 onto `src/notifications/ic_entry_message.py` fenced-table renderer (`paper_ic_entry.py` + `_v2.py`). Design CLOSED 2026-09-06 (workshop; ref
       `scratch/2026-09-06_ic_entry_confirmation_format.py`) — full spec in `stories.md` | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 26527c2
-- [x] **ROLL-5** — Docs close: synthesis across all prior ROLL tasks | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <pending>
+- [x] **ROLL-5** — Docs close: synthesis across all prior ROLL tasks | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: b55773d
 
 ## Story done when
 
