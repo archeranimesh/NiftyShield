@@ -114,7 +114,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ## Session Log
 - [2026-09-06] `eod-pt-summary/` PT-1 — captured the confirmed 3-message Telegram-split spec (open positions / Closed Today / Strategy P&L·Ann.% on Margin) in `stories.md` as the reference for
   PT-2: full column/format derivation, CE/PE-last instrument label, the 3-Track + `STRATEGY_OVERLAY` strategy_name traps, no-`LOT_SIZE` P&L formula, MarkdownV2 fence + `_PART_EMOJI` map, non-fatal
-  send contract, CLI surface. Fixed a drift in the draft spec (message 3 is open-positions-only, not "open and/or closed"). Docs-only. SHA: pending
+  send contract, CLI surface. Fixed a drift in the draft spec (message 3 is open-positions-only, not "open and/or closed"). Docs-only. SHA: d1ae760
 - [2026-09-06] `telegram-ic-comparison-formatting/` — archived as superseded → `docs/archive/plan/telegram-ic-comparison-formatting/`. TGFMT-1 stays shipped history (`a69d817`); TGFMT-2..9 fully
   absorbed by the now-archived `telegram-markdown-migration/` (Legs row + Bkd/Flt split landed as ROLL-2c `a2fbe31`). `docs/plan/README.md` row → pointer; detail in `TODOS_ARCHIVE.md`. Docs-only.
 - [2026-09-06] ROLL-5 — docs close: `telegram-markdown-migration/` epic complete and archived → `docs/archive/plan/telegram-markdown-migration/`. All three sub-stories done: `backbone/`

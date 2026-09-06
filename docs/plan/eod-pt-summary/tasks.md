@@ -8,7 +8,7 @@
       `scratch/2026-08-13_eod_pt_summary.py` (`build_summary_parts()`, `_PART_EMOJI`,
       `_send_telegram_markdown()`). No behavior change — this task is about capturing the
       confirmed spec (column layout, CE/PE-last instrument label, per-message emoji headers,
-      MarkdownV2 fencing, non-fatal send contract) as the reference for PT-2. | SHA: pending
+      MarkdownV2 fencing, non-fatal send contract) as the reference for PT-2. | SHA: d1ae760
 - [ ] **PT-2** — Promote the scratch script's data-collection and rendering logic into tested
       `src/` code plus a real cron script (`scripts/eod_pt_summary.py`), after resolving the
       coordination question with Animesh on `scripts/eod_summary.py` /
