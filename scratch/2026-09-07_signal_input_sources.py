@@ -17,11 +17,13 @@ FINDINGS (2026-09-07):
                latency, trades 06:30 Mon–02:45 Sat. Fetcher: one get_ltp on the
                constant key.
 
-  usd_inr    — CONFIRMED (source). Upstox `GLOBAL_INDICATOR|USDINR` ("USD INR"),
-               same global master. Spot fx quote — 20s latency, trades ~24/7
-               (02:30 Sun–01:30 Sat). Cleaner than the NCD_FO currency futures
-               (which read 0.0 outside 09:00–17:00). Fetcher: one get_ltp on the
-               constant key. This run confirms the live LTP.
+  usd_inr    — OPEN. Upstox global master HAS `GLOBAL_INDICATOR|USDINR` ("USD INR",
+               20s latency, ~24/7) but LTP v3 returns 400 for it — the endpoint
+               serves `GLOBAL_INDEX` (GIFT Nifty works) but not `GLOBAL_INDICATOR`.
+               This run tries the other market-data endpoints the announcement
+               says accept these keys (full-quote v2/v3, ohlc v3, historical
+               candle). If none serve it → fall back to the NCD_FO USDINR monthly
+               future (live 09:00–17:00, so fine for the 09:15 cron).
 
   fii        — no broker API. Decision 2026-09-07: `fetch_fii_data` downloads
                the NSE FII derivative-statistics CSV each morning (T-1).
@@ -49,6 +51,7 @@ import sys
 import traceback
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # dated filename → no -m
 
@@ -108,6 +111,37 @@ async def probe_upstox() -> None:
                 print(f"    {key!r:28} -> {resp}")
             except Exception as exc:  # noqa: BLE001
                 print(f"    {key!r:28} -> {type(exc).__name__}: {exc}")
+
+    # GLOBAL_INDICATOR|USDINR is 400 on LTP v3. Try the other market-data
+    # endpoints the global-instruments announcement says accept these keys.
+    print("\n  [usd_inr — other endpoints for GLOBAL_INDICATOR|USDINR]")
+    session = client._market._session  # noqa: SLF001 — spike
+    probes = {
+        "full-quote v2": (
+            "https://api.upstox.com/v2/market-quote/quotes",
+            {"instrument_key": USD_INR_KEY},
+        ),
+        "full-quote v3": (
+            "https://api.upstox.com/v3/market-quote/quotes",
+            {"instrument_key": USD_INR_KEY},
+        ),
+        "ohlc v3 1d": (
+            "https://api.upstox.com/v3/market-quote/ohlc",
+            {"instrument_key": USD_INR_KEY, "interval": "1d"},
+        ),
+        "hist-candle v3": (
+            "https://api.upstox.com/v3/historical-candle/"
+            f"{quote(USD_INR_KEY, safe='')}/days/1/2026-09-05/2026-08-29",
+            None,
+        ),
+    }
+    for label, (url, params) in probes.items():
+        try:
+            r = session.get(url, params=params, timeout=10)
+            body = r.text[:300]
+            print(f"    {label:16} [{r.status_code}] {body}")
+        except Exception as exc:  # noqa: BLE001
+            print(f"    {label:16} -> {type(exc).__name__}: {exc}")
 
 
 def note_ruled_out() -> None:
