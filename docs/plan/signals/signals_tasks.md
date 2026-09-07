@@ -6,8 +6,10 @@
 
 ---
 
-- [x] **S1.1** — `src/signals/models.py`: Direction, TradeAction, MarketSnapshot, SignalResponse, DailySignal, SignalOutcome + tests | Owner: Antigravity | Model: antigravity | Review: persona | SHA: 8d295c6
-- [ ] **S1.2** — `src/signals/protocol.py` + `src/signals/prompt.py`: SignalProvider protocol + build_prompt pure function + tests
+- [x] **S1.1** — `src/signals/models.py`: Direction, TradeAction, MarketSnapshot, SignalResponse,
+  DailySignal, SignalOutcome + tests | Owner: Antigravity | Model: antigravity | Review: persona | SHA: 8d295c6
+- [x] **S1.2** — `src/signals/protocol.py` + `src/signals/prompt.py`: SignalProvider protocol +
+  build_prompt pure function + tests | Owner: Antigravity | Model: Gemini 3.1 Pro (Low) | Review: persona | SHA: 6ea9028
 - [ ] **S1.3** — `src/signals/aggregator.py`: SignalAggregator consensus + validation + confidence gate + tests
 - [ ] **S2.1** — `src/signals/store.py`: SignalStore init_db + write methods (record_snapshot, record_response, record_signal, record_outcome) + tests
 - [ ] **S2.2** — `src/signals/store.py`: SignalStore read methods (get_snapshot, get_signal, get_outcome, get_all_outcomes) + tests
