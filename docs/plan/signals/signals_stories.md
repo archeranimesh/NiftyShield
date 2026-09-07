@@ -828,18 +828,21 @@ fallbacks inside the helpers.
 `search_code("get_historical_candles")` in `src/client/`; `search_graph("DhanReader")` /
 `search_graph("NuvamaReader")` for the non-Upstox client surfaces; `get_code_snippet("DataFetchError")`.
 
-**Confirmed sources:** _(spike run 2026-09-07, prod Upstox token — `git show 7033a8d`)_
-- `gift_nifty` — **NO broker source.** Upstox `get_ltp` returns empty for
-  `NSE_INDEX|GIFT Nifty`, `NSE_INDEX|Gift Nifty 50`, `NSE_INDEX|SGX Nifty`; `NSE_IX|GIFT Nifty`
-  is a 400. GIFT Nifty trades on NSE IX (GIFT City) — not carried on Upstox/Dhan retail feeds.
-  Control keys work (`NSE_INDEX|India VIX` → 11.16, `NSE_INDEX|Nifty 50` → 23779.15), so the
-  probe path is sound — the instrument is genuinely absent. **DECISION NEEDED.**
-- `fii` — **NO broker API** (expected). NSE publishes FII derivative stats EOD as CSV only.
-  **DECISION NEEDED** — options in `scratch/2026-09-07_signal_input_sources.py`.
-- `usd_inr` — **not found yet.** Upstox `NSE_INDEX|USD INR` / `NCD_FO|USDINR` return empty;
-  `CDS_FO|USDINR` / `NSE_CD|USDINR` are 400. USDINR is a currency *future* — needs a real
-  contract token (current-month expiry) from the Upstox or Dhan instrument master, not a bare
-  symbol. Dhan scrip-master probe is the untried next step. **Partially blocked.**
+**Confirmed sources:** _(spike run 2026-09-07 + instrument-master debug — `git log scratch/2026-09-07_signal_input_sources.py`)_
+- `usd_inr` — **Upstox, `NCD_FO` currency futures.** USDINR is a currency FUTURE, not an index —
+  the first probe failed only on the bare symbol. `data/instruments/NSE.json.gz` carries 23 live
+  USDINR FUT contracts (`NCD_FO|<token>`). Fetcher: `InstrumentLookup.search("USDINR",
+  segment="NCD_FO", instrument_type="FUT")` → nearest expiry ≥ today → `client.get_ltp([key])`.
+  (Nearest-expiry future ≈ spot for a directional signal; weekly contracts exist so basis is tiny.)
+  Pending: one live `get_ltp` confirmation from the re-run spike.
+- `gift_nifty` — **NOT on Upstox.** Zero of 80,836 NSE instruments match "gift"/"sgx" (139
+  NSE_INDEX names, none is GIFT Nifty). It trades on NSE IX (GIFT City), a separate exchange.
+  Not a naming problem — the instrument is absent. Re-run spike also greps the Dhan scrip master.
+  If Dhan is empty too → **DECISION NEEDED**: drop the field, make it optional (`Decimal | None`),
+  or allow a single non-broker fetch (investing.com / moneycontrol pre-market).
+- `fii` — **no broker API.** Decision taken 2026-09-07: `fetch_fii_data` downloads the NSE FII
+  derivative-statistics CSV each morning (T-1 data); raises `DataFetchError` on download/parse
+  failure, caller decides whether to abort the run.
 
 **Tests:** `tests/unit/signals/test_market_inputs.py` — one happy-path + one failure test per
 function, all offline (mock broker / mock client responses). No network.
