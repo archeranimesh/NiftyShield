@@ -171,3 +171,63 @@ def test_record_outcome_replaces_on_same_date(store: SignalStore) -> None:
     rows = _rows(store, "SELECT pnl_per_lot FROM signal_outcomes")
     assert len(rows) == 1
     assert rows[0]["pnl_per_lot"] == "-300"
+
+
+def test_get_snapshot_round_trip_preserves_decimals(store: SignalStore) -> None:
+    store.record_snapshot(_snapshot())
+    got = store.get_snapshot(TRADE_DATE)
+    assert got == _snapshot()
+    assert got.nifty_spot == Decimal("24000.50")
+    assert got.option_chain.pcr_atm == Decimal("0.90")
+
+
+def test_get_snapshot_missing_date_returns_none(store: SignalStore) -> None:
+    assert store.get_snapshot(TRADE_DATE) is None
+
+
+def test_get_responses_count_and_provider(store: SignalStore) -> None:
+    store.record_response(_response("grok"))
+    store.record_response(_response("gpt4o"))
+    got = store.get_responses(TRADE_DATE)
+    assert [r.provider for r in got] == ["gpt4o", "grok"]
+    assert got[1].entry_premium_low == Decimal("80")
+
+
+def test_get_signal_populates_responses(store: SignalStore) -> None:
+    store.record_response(_response("grok"))
+    store.record_signal(_signal())
+    got = store.get_signal(TRADE_DATE)
+    assert got is not None
+    assert [r.provider for r in got.responses] == ["grok"]
+    assert got.consensus_confidence == Decimal("4.0")
+    assert got.agreeing_models == ["grok", "gemini"]
+
+
+def test_get_signal_missing_date_returns_none(store: SignalStore) -> None:
+    assert store.get_signal(TRADE_DATE) is None
+
+
+def test_get_outcome_deserialises_executed_bool(store: SignalStore) -> None:
+    store.record_outcome(_outcome(executed=False, pnl_per_lot=None))
+    got = store.get_outcome(TRADE_DATE)
+    assert got is not None
+    assert got.executed is False
+    assert got.pnl_per_lot is None
+    assert got.nifty_close == Decimal("24120.00")
+
+
+def test_get_all_outcomes_phase_filter(store: SignalStore) -> None:
+    store.record_outcome(_outcome())
+    other = _outcome().model_copy(
+        update={"trade_date": date(2026, 9, 8), "phase": "search_enabled"}
+    )
+    store.record_outcome(other)
+    got = store.get_all_outcomes(phase="openrouter_only")
+    assert [o.trade_date for o in got] == [TRADE_DATE]
+
+
+def test_get_all_outcomes_date_range_excludes_out_of_range(store: SignalStore) -> None:
+    for d in (date(2026, 9, 5), date(2026, 9, 7), date(2026, 9, 9)):
+        store.record_outcome(_outcome().model_copy(update={"trade_date": d}))
+    got = store.get_all_outcomes(from_date=date(2026, 9, 6), to_date=date(2026, 9, 8))
+    assert [o.trade_date for o in got] == [date(2026, 9, 7)]

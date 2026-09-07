@@ -8,7 +8,9 @@ every method opens its own short-lived connection via ``src.db.connect``.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+import sqlite3
+from datetime import date, datetime, timezone
+from decimal import Decimal
 from pathlib import Path
 
 from src.db import connect
@@ -82,6 +84,43 @@ def _utc_now_iso() -> str:
 def _opt_str(value: object | None) -> str | None:
     """Serialise an optional value to ``str``, preserving SQL ``NULL``."""
     return None if value is None else str(value)
+
+
+def _opt_decimal(value: str | None) -> Decimal | None:
+    """Parse an optional ``TEXT`` column back to ``Decimal``, preserving ``None``."""
+    return None if value is None else Decimal(value)
+
+
+def _response_from_row(row: sqlite3.Row) -> SignalResponse:
+    """Rebuild a ``SignalResponse`` from a ``signal_responses`` row."""
+    return SignalResponse(
+        trade_date=date.fromisoformat(row["trade_date"]),
+        provider=row["provider"],
+        direction=row["direction"],
+        confidence=row["confidence"],
+        recommended_strike=row["strike"],
+        entry_premium_low=Decimal(row["premium_low"]),
+        entry_premium_high=Decimal(row["premium_high"]),
+        key_reason=row["key_reason"],
+        key_risk=row["key_risk"],
+        raw_response=row["raw_response"],
+    )
+
+
+def _outcome_from_row(row: sqlite3.Row) -> SignalOutcome:
+    """Rebuild a ``SignalOutcome`` from a ``signal_outcomes`` row."""
+    return SignalOutcome(
+        trade_date=date.fromisoformat(row["trade_date"]),
+        trade_action=row["trade_action"],
+        recommended_strike=row["recommended_strike"],
+        entry_premium=_opt_decimal(row["entry_premium"]),
+        exit_premium=_opt_decimal(row["exit_premium"]),
+        pnl_per_lot=_opt_decimal(row["pnl_per_lot"]),
+        nifty_close=Decimal(row["nifty_close"]),
+        executed=bool(row["executed"]),
+        phase=row["phase"],
+        notes=row["notes"] or "",
+    )
 
 
 class SignalStore:
@@ -193,3 +232,102 @@ class SignalStore:
                     _utc_now_iso(),
                 ),
             )
+
+    def get_snapshot(self, trade_date: date) -> MarketSnapshot | None:
+        """Return the persisted ``MarketSnapshot`` for a day, or ``None``.
+
+        Args:
+            trade_date: The trading day to look up.
+        """
+        with connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT snapshot_json FROM signal_inputs WHERE trade_date = ?",
+                (trade_date.isoformat(),),
+            ).fetchone()
+        if row is None:
+            return None
+        return MarketSnapshot.model_validate_json(row["snapshot_json"])
+
+    def get_responses(self, trade_date: date) -> list[SignalResponse]:
+        """Return every stored provider response for a day, ordered by provider.
+
+        Args:
+            trade_date: The trading day to look up.
+        """
+        with connect(self.db_path) as conn:
+            rows = conn.execute(
+                "SELECT * FROM signal_responses WHERE trade_date = ? ORDER BY provider",
+                (trade_date.isoformat(),),
+            ).fetchall()
+        return [_response_from_row(row) for row in rows]
+
+    def get_signal(self, trade_date: date) -> DailySignal | None:
+        """Return the aggregated ``DailySignal`` for a day, or ``None``.
+
+        The ``responses`` list is repopulated from the ``signal_responses`` table.
+
+        Args:
+            trade_date: The trading day to look up.
+        """
+        with connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT * FROM daily_signals WHERE trade_date = ?",
+                (trade_date.isoformat(),),
+            ).fetchone()
+        if row is None:
+            return None
+        return DailySignal(
+            trade_date=date.fromisoformat(row["trade_date"]),
+            responses=self.get_responses(trade_date),
+            consensus_direction=row["consensus_direction"],
+            consensus_confidence=Decimal(row["consensus_confidence"]),
+            trade_action=row["trade_action"],
+            recommended_strike=row["recommended_strike"],
+            agreeing_models=json.loads(row["agreeing_models"]),
+            dissenting_models=json.loads(row["dissenting_models"]),
+        )
+
+    def get_outcome(self, trade_date: date) -> SignalOutcome | None:
+        """Return the recorded ``SignalOutcome`` for a day, or ``None``.
+
+        Args:
+            trade_date: The trading day to look up.
+        """
+        with connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT * FROM signal_outcomes WHERE trade_date = ?",
+                (trade_date.isoformat(),),
+            ).fetchone()
+        return None if row is None else _outcome_from_row(row)
+
+    def get_all_outcomes(
+        self,
+        from_date: date | None = None,
+        to_date: date | None = None,
+        phase: str | None = None,
+    ) -> list[SignalOutcome]:
+        """Return recorded outcomes, filtered and ordered by ``trade_date``.
+
+        Args:
+            from_date: Inclusive lower bound on ``trade_date``; unbounded if ``None``.
+            to_date: Inclusive upper bound on ``trade_date``; unbounded if ``None``.
+            phase: Restrict to a single pipeline phase; all phases if ``None``.
+        """
+        clauses: list[str] = []
+        params: list[str] = []
+        if from_date is not None:
+            clauses.append("trade_date >= ?")
+            params.append(from_date.isoformat())
+        if to_date is not None:
+            clauses.append("trade_date <= ?")
+            params.append(to_date.isoformat())
+        if phase is not None:
+            clauses.append("phase = ?")
+            params.append(phase)
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        with connect(self.db_path) as conn:
+            rows = conn.execute(
+                f"SELECT * FROM signal_outcomes{where} ORDER BY trade_date",
+                tuple(params),
+            ).fetchall()
+        return [_outcome_from_row(row) for row in rows]
