@@ -112,6 +112,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-07] signals/ S1.3 — added SignalAggregator: strike/confidence validation, direction voting, Decimal confidence gate, modal strike with ATM tie-break + 10 tests. SHA: 4c5e7e6
 - [2026-09-07] signals/ S1.2 — added SignalProvider protocol and build_prompt pure function with gpt4o, grok, and gemini suffixes + tests. SHA: 6ea9028
 - [2026-09-07] signals/ S1.1 — added signals data models, Direction, MarketSnapshot, SignalResponse, DailySignal, SignalOutcome. SHA: 8d295c6
 - [2026-09-07] `signals/` unblocked — moved out of `docs/plan/README.md` "Blocked / Later Stories" to an active parallel track (Feature Backlog #8, was
