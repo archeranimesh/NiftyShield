@@ -851,23 +851,39 @@ can pick this up cold from the recipe below.
   `PaperStore._resolve_instrument_lookup`), resolve the monthly key, `get_ltp` it, raise
   `DataFetchError` on no contract / empty LTP / value ≤ 0.
 
-**`fii` → NSE FII derivative-statistics CSV (no broker API — decided 2026-09-07).**
-- No broker exposes FII/DII index positioning. `fetch_fii_data` downloads the NSE
-  "FII derivative statistics" report for the previous trading day and parses it. This is a
-  first-party NSE data file (not an HTML scrape) — the one carve-out from the no-scrape rule.
-- URL shape: `https://archives.nseindia.com/content/nsccl/fii_stats_<DD-Mon-YYYY>.csv`
-  (date = previous trading day; use `src.market_calendar.prev_trading_day`). NSE may need a
-  browser-like `User-Agent` header — the implementer confirms against a live fetch.
-- The CSV has rows `INDEX FUTURES / INDEX OPTIONS / STOCK FUTURES / STOCK OPTIONS / TOTAL`
-  with buy/sell contract counts + amounts and open-interest columns. `FIIData` wants
-  `net_futures_cr` / `net_options_cr` (₹ cr, positive = net long index). **Open spec point
-  for the implementer:** decide day-flow (buy amt − sell amt) vs net open position
-  (open long − open short) from the INDEX FUTURES / INDEX OPTIONS rows — pin the exact
-  column mapping against a real downloaded file and record it here.
-- **Implementation:** `fetch_fii_data(broker) -> FIIData` (broker arg unused, kept for a
-  uniform signature) — download, parse, build `FIIData(net_futures_cr=Decimal(...),
-  net_options_cr=Decimal(...))`, raise `DataFetchError` on download / parse / missing-row
-  failure. Store amounts as `Decimal`, never `float`.
+**`fii` → NSE `fiidiiTradeReact` JSON — CASH-market net (spike-verified 2026-09-07).**
+- **The F&O positioning data is NOT available.** The participant-wise OI CSV
+  (`nsearchives.nseindia.com/content/nsccl/fao_participant_oi_<DD-Mon-YYYY>.csv`) and every
+  `fii_stats_*.csv` variant 404 for every recent date in this environment. Index-futures /
+  index-options net position cannot be sourced.
+- **What IS available:** `https://www.nseindia.com/api/fiidiiTradeReact` → JSON, plain
+  `User-Agent: Mozilla/5.0` header, no cookie priming needed. Returns the previous session's
+  **cash-market** FII/FPI and DII buy / sell / net values in ₹ cr:
+  ```json
+  [{"category":"DII","date":"07-Sep-2026","buyValue":"13154.13","sellValue":"12587.37","netValue":"566.76"},
+   {"category":"FII/FPI","date":"07-Sep-2026","buyValue":"9581.19","sellValue":"9301.06","netValue":"280.13"}]
+  ```
+  Two objects; `category` is `"FII/FPI"` and `"DII"`; `netValue` = buy − sell; all values are
+  strings → `Decimal(str(v))`. No date param (returns the latest published session regardless).
+- **⚠ MODEL CHANGE REQUIRED — decide before Step 2.** `FIIData` today is
+  `net_futures_cr` / `net_options_cr` (index F&O positioning), used only in
+  `src/signals/models.py:45-49,78` and `src/signals/prompt.py:65-66`. That data is
+  unreachable. Proposed redefine to match what's fetchable:
+  ```python
+  class FIIData(BaseModel, frozen=True):
+      """FII/DII cash-market net flows, previous session (NSE fiidiiTradeReact)."""
+      fii_cash_net_cr: Decimal   # positive = FII net buyer
+      dii_cash_net_cr: Decimal   # positive = DII net buyer
+  ```
+  and `prompt.py` §"FII Positioning (yesterday)" → "FII/DII Cash Flows (yesterday)" with the
+  two new fields. Arguably a better directional-sentiment signal than F&O positioning anyway.
+  This drags `models.py` + `prompt.py` + their tests into S5.2a's scope (or split as a tiny
+  S1.1-amendment task first — Animesh's call).
+- **Implementation:** `fetch_fii_data(broker) -> FIIData` (broker arg unused, uniform
+  signature) — GET the JSON, find the `FII/FPI` and `DII` rows, build
+  `FIIData(fii_cash_net_cr=Decimal(...), dii_cash_net_cr=Decimal(...))`, raise
+  `DataFetchError` on download / non-200 / missing-category / parse failure. `Decimal`, never
+  `float`.
 
 ### Step 2 — build `src/signals/market_inputs.py` + tests  ⬅ REMAINING WORK
 
@@ -890,10 +906,28 @@ whether to abort.
 function, all offline. Mock the broker (`get_ltp` returning a canned dict / raising); for
 `fetch_usd_inr` inject a small hand-built `InstrumentLookup(instruments=[...])` (a couple of
 USDINR FUT dicts) — do not read the real BOD file in tests; for `fetch_fii_data` monkeypatch
-`requests.get` with a canned CSV body + a 4xx case. **No network, no real BOD file.**
+`requests.get` with a canned `fiidiiTradeReact` JSON body + a non-200 / missing-category case.
+**No network, no real BOD file.**
 
 **Commit (two):** spike commits already landed (`chore(signals): …spike…`). Second:
 `feat(signals): market_inputs.py — gift_nifty / fii / usd_inr fetchers`.
+
+### MarketSnapshot field-coverage audit (2026-09-07 — "did we skip anything?")
+
+Every `MarketSnapshot` field is accounted for across S5.2a / S5.2b — nothing dropped:
+
+| field | source | task | spike status |
+|---|---|---|---|
+| `trade_date` | cron param | S5.2 | — |
+| `nifty_spot` | `get_ltp("NSE_INDEX\|Nifty 50")` | S5.2b | ✅ 23779.15 |
+| `prev_close/high/low` | Upstox daily candle | S5.2b | ⚠ see S5.2b note — `get_historical_candles` is `NotImplementedError` on the live client |
+| `gift_nifty` | `get_ltp("GLOBAL_INDEX\|SGX NIFTY")` | **S5.2a** | ✅ 23791.0 |
+| `india_vix` | `get_ltp("NSE_INDEX\|India VIX")` | S5.2b | ✅ 11.16 |
+| `vix_5d_trend` | computed from last 5 `signal_inputs` rows | S5.2b | — (needs 5 sessions of history) |
+| `usd_inr` | `get_ltp(<nearest-monthly NCD_FO USDINR FUT>)` | **S5.2a** | ✅ 94.57 |
+| `monthly_expiry` | calendar helper (Thu→Tue Apr-2026) | S5.2b | — |
+| `option_chain` | `get_option_chain` → `parse_upstox_option_chain` | S5.2b | `get_option_chain` delegates OK |
+| `fii` | NSE `fiidiiTradeReact` (cash) | **S5.2a** | ✅ but ⚠ model change (F&O data unreachable) |
 
 ---
 
@@ -916,7 +950,13 @@ async def assemble_market_snapshot(broker, *, store: SignalStore, trade_date: da
     """Assemble the full MarketSnapshot from live sources at ~09:10 IST."""
 ```
 - `nifty_spot`, `india_vix` — `broker.get_ltp([...])`
-- `prev_close` / `prev_high` / `prev_low` — `broker.get_historical_candles` (last completed daily candle)
+- `prev_close` / `prev_high` / `prev_low` — last completed daily candle. ⚠ **`UpstoxLiveClient.
+  get_historical_candles` raises `NotImplementedError`** (delegates to an unbuilt
+  `UpstoxMarketClient` sync fetcher). The S5.2a spike confirmed `GET
+  https://api.upstox.com/v3/market-quote/ohlc?instrument_key=NSE_INDEX|Nifty 50&interval=1d`
+  is a live endpoint (`UpstoxMarketClient.get_ohlc_sync` already wraps `V3_OHLC_URL`). S5.2b
+  must either surface `get_ohlc_sync` through the client or add the historical-candle fetcher —
+  pick one and note it here before coding.
 - `option_chain` — `broker.get_option_chain` → `parse_upstox_option_chain` → derive
   `OptionChainSummary` (atm_strike, atm_iv, iv_skew, pcr_total, pcr_atm, top 3 call/put OI)
 - `monthly_expiry` — computed (last Thursday of current month; note the Apr-2026 Thu→Tue

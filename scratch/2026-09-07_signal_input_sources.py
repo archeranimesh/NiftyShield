@@ -25,8 +25,10 @@ FINDINGS (2026-09-07):
                     month-end expiry resolution. This run also pulls its T-1
                     hist-candle close for an after-hours comparison with A.
 
-  fii        — no broker API. Decision 2026-09-07: `fetch_fii_data` downloads
-               the NSE FII derivative-statistics CSV each morning (T-1).
+  fii        — no broker API, and the F&O positioning CSV (participant-wise OI)
+               404s for every date. Only the CASH-market `fiidiiTradeReact` JSON
+               serves data: FII/FPI + DII buy/sell/net ₹ cr, previous session.
+               → `FIIData` must be redefined to cash net flows (see story §S5.2a).
 
 Run from repo root, venv active, with `UPSTOX_ANALYTICS_TOKEN` set. For B's live
 LTP, run during currency-market hours (09:00–17:00 IST):
@@ -175,16 +177,46 @@ async def probe_upstox() -> None:
         print(f"     hist-candle    -> {_hist_candle_latest_close(session, fkey)}")
 
 
+_NSE_FII_DII = "https://www.nseindia.com/api/fiidiiTradeReact"
+_NSE_FAO_PART_OI = "https://nsearchives.nseindia.com/content/nsccl/fao_participant_oi_{d}.csv"
+
+
+def probe_fii() -> None:
+    """FII/DII data probe.
+
+    Only the cash-market fiidiiTradeReact JSON serves data in this environment.
+    The F&O participant-wise OI CSV (index-futures / index-options net position)
+    404s for every recent date — that source is not available.
+    """
+    print("\n=== FII / DII ===")
+    s = requests.Session()
+    s.headers.update({"User-Agent": "Mozilla/5.0", "Accept": "application/json"})
+
+    print("  A. cash-market net (fiidiiTradeReact):")
+    try:
+        r = s.get(_NSE_FII_DII, timeout=15)
+        print(f"     [{r.status_code}] {r.text[:400]}")
+    except Exception as exc:  # noqa: BLE001
+        print(f"     {type(exc).__name__}: {exc}")
+
+    print("  B. F&O participant-wise OI CSV (index fut/opt positioning):")
+    for ds in ("05-Sep-2026", "04-Sep-2026", "03-Sep-2026"):
+        try:
+            r = s.get(_NSE_FAO_PART_OI.format(d=ds), timeout=15)
+            print(f"     {ds}: [{r.status_code}] len={len(r.text)}")
+        except Exception as exc:  # noqa: BLE001
+            print(f"     {ds}: {type(exc).__name__}: {exc}")
+
+
 def note_ruled_out() -> None:
     print("\n=== Ruled out / decided ===")
     print("  Dhan: GIFT Nifty is index id 5024 but marketfeed/ltp → 401 (paid Data API).")
     print("  Nuvama: no arbitrary quote endpoint wired.")
-    print("  fii: no broker API. fetch_fii_data downloads the NSE FII derivative-stats CSV")
-    print("       each morning (T-1); raises DataFetchError on failure.")
 
 
 async def main() -> None:
     await probe_upstox()
+    probe_fii()
     note_ruled_out()
     print("\n--- done. Update signals_stories.md §S5.2a 'Confirmed sources:' with this output ---")
 
