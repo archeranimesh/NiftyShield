@@ -17,7 +17,7 @@
   get_all_outcomes) + tests | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: fc4a8d4
 - [x] **S3.1** — `src/signals/providers/mock.py`: MockSignalProvider — deterministic, Protocol-compliant + tests | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: 1d5fbbd
 - [x] **S3.2** — `src/signals/providers/gpt4o.py`: GPT4oSignalProvider via OpenRouter + tests | SHA: 12ba97a
-- [ ] **S3.3** — `src/signals/providers/grok.py`: GrokSignalProvider — Phase 1 OpenRouter shim + Phase 2 xAI direct + tests
+- [x] **S3.3** — `src/signals/providers/grok.py`: GrokSignalProvider — Phase 1 OpenRouter shim + Phase 2 xAI direct + tests | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: PENDING
 - [ ] **S3.4** — `src/signals/providers/gemini.py`: GeminiSignalProvider — Phase 1 OpenRouter shim + Phase 2 Google AI SDK + tests
 - [ ] **S4.1** — `src/signals/factory.py`: build_providers — env-driven provider selection with safe fallback + tests
 - [ ] **S5.1** — `config/signals.toml` + `.env.example`: config + env vars (no tests)

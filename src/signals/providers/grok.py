@@ -1,0 +1,117 @@
+"""Grok :class:`SignalProvider` — Phase 1 OpenRouter shim, Phase 2 xAI direct."""
+
+import asyncio
+import json
+from decimal import Decimal, InvalidOperation
+from typing import Any
+
+import aiohttp
+
+from src.client.exceptions import DataFetchError
+
+from ..models import Direction, MarketSnapshot, SignalResponse
+from ..prompt import build_prompt
+
+_PROVIDER = "grok"
+
+_OPENROUTER = ("https://openrouter.ai/api/v1", "x-ai/grok-3")
+_XAI_DIRECT = ("https://api.x.ai/v1", "grok-3")
+
+
+class GrokSignalProvider:
+    """Call Grok and parse a structured signal.
+
+    Two operating modes selected by ``use_openrouter``:
+
+    - Phase 1 (``use_openrouter=True``, default): route through OpenRouter with
+      ``x-ai/grok-3``. No search capability — behaves like a plain model.
+    - Phase 2 (``use_openrouter=False``): xAI direct API with ``grok-3`` and a
+      ``"search": True`` request flag.
+    """
+
+    provider_name: str = _PROVIDER
+
+    def __init__(
+        self,
+        api_key: str,
+        use_openrouter: bool = True,
+        timeout: float = 30.0,
+    ) -> None:
+        """Configure the provider.
+
+        Args:
+            api_key: OpenRouter key (Phase 1) or xAI key (Phase 2).
+            use_openrouter: Route via OpenRouter when True, else xAI direct.
+            timeout: Total request timeout in seconds.
+        """
+        self._api_key = api_key
+        self._use_openrouter = use_openrouter
+        self._base_url, self._model = _OPENROUTER if use_openrouter else _XAI_DIRECT
+        self._timeout = aiohttp.ClientTimeout(total=timeout)
+
+    async def get_signal(self, snapshot: MarketSnapshot) -> SignalResponse:
+        """POST the snapshot prompt to the configured endpoint and parse the reply.
+
+        Args:
+            snapshot: Market snapshot to reason over.
+
+        Returns:
+            The parsed :class:`SignalResponse`.
+
+        Raises:
+            DataFetchError: On HTTP error, timeout, malformed envelope, or a
+                ``message.content`` body that is not valid signal JSON.
+        """
+        messages = build_prompt(snapshot, _PROVIDER)
+        payload: dict[str, Any] = {
+            "model": self._model,
+            "messages": messages,
+            "max_tokens": 512,
+            "temperature": 0,
+            "response_format": {"type": "json_object"},
+        }
+        if not self._use_openrouter:
+            payload["search"] = True
+        headers = {"Authorization": f"Bearer {self._api_key}"}
+        url = f"{self._base_url}/chat/completions"
+
+        try:
+            async with aiohttp.ClientSession(timeout=self._timeout) as session:
+                async with session.post(url, json=payload, headers=headers) as resp:
+                    resp.raise_for_status()
+                    envelope = await resp.json()
+        except aiohttp.ClientResponseError as e:
+            raise DataFetchError(f"{_PROVIDER}: HTTP {e.status}: {e}") from e
+        except aiohttp.ClientError as e:
+            raise DataFetchError(f"{_PROVIDER}: request failed: {e}") from e
+        except asyncio.TimeoutError as e:
+            raise DataFetchError(
+                f"{_PROVIDER}: request timed out after {self._timeout.total}s"
+            ) from e
+
+        return _parse_response(snapshot, envelope)
+
+
+def _parse_response(snapshot: MarketSnapshot, envelope: dict[str, Any]) -> SignalResponse:
+    """Extract ``choices[0].message.content`` and build a :class:`SignalResponse`."""
+    try:
+        content = envelope["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError) as e:
+        raise DataFetchError(f"{_PROVIDER}: unexpected response envelope: {e}") from e
+
+    try:
+        parsed = json.loads(content)
+        return SignalResponse(
+            trade_date=snapshot.trade_date,
+            provider=_PROVIDER,
+            direction=Direction(parsed["direction"]),
+            confidence=int(parsed["confidence"]),
+            recommended_strike=int(parsed["recommended_strike"]),
+            entry_premium_low=Decimal(str(parsed["entry_premium_low"])),
+            entry_premium_high=Decimal(str(parsed["entry_premium_high"])),
+            key_reason=str(parsed["key_reason"]),
+            key_risk=str(parsed["key_risk"]),
+            raw_response=content if isinstance(content, str) else json.dumps(content),
+        )
+    except (json.JSONDecodeError, KeyError, ValueError, TypeError, InvalidOperation) as e:
+        raise DataFetchError(f"{_PROVIDER}: could not parse signal JSON: {e}") from e

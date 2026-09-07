@@ -112,6 +112,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-07] signals/ S3.3 — added GrokSignalProvider: use_openrouter flag picks OpenRouter x-ai/grok-3 (P1) vs xAI direct grok-3 +search (P2); reuses gpt4o POST+parse + 8 tests. SHA: PENDING
 - [2026-09-07] signals/ S3.2 — added GPT4oSignalProvider: aiohttp POST to OpenRouter chat completions, parse JSON → SignalResponse, HTTP/timeout/parse failures → DataFetchError + 7 tests. SHA: 12ba97a
 - [2026-09-07] signals/ S3.1 — added MockSignalProvider: deterministic Protocol-compliant provider (fixed direction/confidence/strike_offset), never raises + 5 tests. SHA: 1d5fbbd
 - [2026-09-07] signals/ S2.2 — added SignalStore read methods: get_snapshot (model_validate_json), get_responses, get_signal
