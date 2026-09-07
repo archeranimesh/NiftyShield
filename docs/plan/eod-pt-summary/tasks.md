@@ -9,12 +9,12 @@
       `_send_telegram_markdown()`). No behavior change — this task is about capturing the
       confirmed spec (column layout, CE/PE-last instrument label, per-message emoji headers,
       MarkdownV2 fencing, non-fatal send contract) as the reference for PT-2. | SHA: d1ae760
-- [ ] **PT-2** — Promote the scratch script's data-collection and rendering logic into tested
-      `src/` code plus a real cron script (`scripts/eod_pt_summary.py`), after resolving the
-      coordination question with Animesh on `scripts/eod_summary.py` /
-      `scripts/reporting/paper_pnl_report.py` overlap (see `prompt.md` and this task's story for
-      the exact question to ask). Blocked on that answer — do not write `src/` code until
-      Animesh has confirmed how the three reports should coexist. | SHA: n/a
+- [x] **PT-2** — Promote the scratch script's data-collection and rendering logic into tested
+      `src/` code (`src/reporting/eod_pt_summary.py`) plus a real cron script
+      (`scripts/eod_pt_summary.py`). Coordination question resolved with Animesh 2026-09-07: the
+      new report runs **alongside** `scripts/eod_summary.py` (not a replacement);
+      `scripts/reporting/paper_pnl_report.py` is a no-cron/no-send analysis helper and is
+      untouched. See DECISIONS.md §P&L & Reporting. | SHA: <pending>
 - [ ] **PT-3** — Docs close: update `CONTEXT.md`/`DECISIONS.md`/`TODOS.md` per repo convention,
       add this epic's entry to `docs/plan/README.md` "Active Stories" (already added manually
       2026-08-13 — verify it's still accurate and mark this done), archive scratch script

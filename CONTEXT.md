@@ -57,6 +57,9 @@ Top-level `src/` packages, one line each (detail → `CONTEXT_TREE.md`):
   `TelegramGateway` (council-free approval dispatch + callback polling + chat-ID allowlist),
   `alerts.py` (shared Telegram message builders), `formatting.py` (per-type value formatters + table builders),
   `ic_entry_message.py` (IC entry confirmation renderer — v1/v2 unified, ROLL-17).
+- `src/reporting/` — promoted EOD report builders. `eod_pt_summary.py`: cross-strategy paper-trade summary as 1-3 MarkdownV2 Telegram messages (open positions /
+  closed-today / strategy P&L + Ann.% on margin), off live `PaperStore.get_positions()` + broker LTP. Runs alongside `scripts/eod_summary.py`, not a replacement
+  (PT-2, `docs/plan/eod-pt-summary/`).
 - `src/backtest/` — offline research: `compute_ivr` (trailing 252-day VIX IVR), `vix_ingest` (NSE CSV + Upstox), `ChainWriter`/`ChainReader` (Parquet + DuckDB), bhavcopy ingest/loader.
 - `src/gamma/` — Near-Expiry Gamma Buy scaffolding: frozen models + `GammaStore`.
 - `src/council/` — AI council infra: `RapidCouncil` (parallel Stage-1 fan-out + chairman synthesis), request/response models.
@@ -65,8 +68,8 @@ Top-level `src/` packages, one line each (detail → `CONTEXT_TREE.md`):
 
 Scripts (`scripts/`, organised by functional axis — `pipeline/`, `lookup/`, `record/`,
 `strategies/`, `portfolio/`, `intraday/`, `reporting/`, `seed/`, `council/`, `dev/`, plus
-top-level crons `healthcheck.py`, `eod_summary.py`, `pre_market_brief.py`,
-`monitor_daemon.py`): see `CONTEXT_TREE.md` §`scripts/`.
+top-level crons `healthcheck.py`, `eod_summary.py`, `eod_pt_summary.py`,
+`pre_market_brief.py`, `monitor_daemon.py`): see `CONTEXT_TREE.md` §`scripts/`.
 
 Developer + research tooling (`pyproject.toml`, `Makefile`, `.pre-commit-config.yaml`,
 `.github/workflows/ci.yml`, `docs/strategies/regime_probe.pine`): see `CONTEXT_TREE.md`

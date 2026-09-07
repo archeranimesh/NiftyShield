@@ -365,6 +365,14 @@ One canonical overlay row per `(STRATEGY_OVERLAY, overlay_type, snapshot_date)` 
 shared overlay P&L is never persisted once per base track; read-time track comparisons never write back into the snapshot tables.
 Missing overlay source data renders as `None` / "No data", never `Decimal("0")` — a zero is only emitted when observations genuinely exist and compute to zero.
 
+**EOD PT Summary coexists with `eod_summary.py` (2026-09-07, PT-2).** `src/reporting/eod_pt_summary.py` + `scripts/eod_pt_summary.py` (the rich per-leg
+cross-strategy report: open positions / closed-today / strategy P&L + Ann.% on margin, off live `PaperStore.get_positions()` + broker LTP) runs **alongside**
+`scripts/eod_summary.py` (the coarser `paper_nav_snapshots`-based Flt/Bkd digest), not as a replacement — Animesh's call. The two read different sources by design
+and may show different P&L for the same book (stored snapshot vs live mark); that is accepted. `scripts/reporting/paper_pnl_report.py` (SNAP-4, a print-only
+analysis helper consumed by `paper_ic_monthly_comparison.py`, no cron / no send) is unaffected. P&L uses no `LOT_SIZE` multiplier — `net_qty` is already the raw
+unit count; an earlier prototype's `* LOT_SIZE` inflated every non-equity row 65x. Retiring `eod_summary.py` in favour of the rich report is a possible later
+follow-up, not done here.
+
 **Nuvama intraday snapshots use DECIMAL column type (not TEXT).** The five-minute intraday table (`nuvama_intraday_snapshots`) stores `ltp`, `unrealized_pnl`,
 `realized_pnl_today` as `DECIMAL` and `nifty_spot` as `DECIMAL`. This intentionally deviates from the TEXT-for-Decimal rule —
 the read path in `get_intraday_extremes()` wraps every value in `Decimal(str(row[...]))` at the boundary, which absorbs any SQLite float representation.
