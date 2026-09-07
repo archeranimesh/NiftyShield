@@ -167,6 +167,11 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 Full forensic log (SHAs, bug numbers, root-cause detail) moved to [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md) — most recently during the 2026-08-26 reorg (everything from 2026-08-01
 through 2026-08-26, plus item 29's inline design history above). Add new entries there going forward, or start a fresh dated section here if this file's Session Log grows large again.
 
+- **2026-09-07** — `docs/plan/signals/` S1.1a shipped: `FIIData` redefined from index-F&O
+  positioning (`net_futures_cr`/`net_options_cr` — unreachable per S5.2a spike) to cash-market
+  net flows (`fii_cash_net_cr`/`dii_cash_net_cr`, NSE `fiidiiTradeReact`). `src/signals/models.py`
+  + `prompt.py` + 8 signals test files. Split out of S5.2a per Animesh. 77 signals tests green.
+  SHA: `<pending>`. Next: S5.2a (`market_inputs.py`).
 - **2026-09-06** — `docs/plan/telegram-markdown-migration/strategy-rollout/` ROLL-14 shipped: 3-track overlay entry
   bootstrap notification migrated to MarkdownV2 kv format. SHA: `129d54e`. Next: ROLL-15.
 - **2026-09-06** — `docs/plan/telegram-markdown-migration/strategy-rollout/` ROLL-13 shipped: 3-track base entry notification migrated to MarkdownV2 kv format. SHA: `7adf484`. Next: ROLL-14.

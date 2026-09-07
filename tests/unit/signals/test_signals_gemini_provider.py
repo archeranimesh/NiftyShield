@@ -47,8 +47,8 @@ def snapshot() -> MarketSnapshot:
             top_put_oi=[OILevel(strike=23900, oi=150000, oi_change=-2000)],
         ),
         fii=FIIData(
-            net_futures_cr=Decimal("1500.5"),
-            net_options_cr=Decimal("-500.0"),
+            fii_cash_net_cr=Decimal("1500.5"),
+            dii_cash_net_cr=Decimal("-500.0"),
         ),
     )
 

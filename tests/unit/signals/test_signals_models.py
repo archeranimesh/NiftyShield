@@ -48,8 +48,8 @@ def test_market_snapshot_round_trip():
             top_put_oi=[OILevel(strike=22000, oi=4500000, oi_change=-50000)],
         ),
         fii=FIIData(
-            net_futures_cr=Decimal("1500.00"),
-            net_options_cr=Decimal("-500.00"),
+            fii_cash_net_cr=Decimal("1500.00"),
+            dii_cash_net_cr=Decimal("-500.00"),
         ),
     )
 
@@ -59,7 +59,7 @@ def test_market_snapshot_round_trip():
     assert loaded == snapshot
     assert isinstance(loaded.nifty_spot, Decimal)
     assert isinstance(loaded.option_chain.atm_iv, Decimal)
-    assert isinstance(loaded.fii.net_futures_cr, Decimal)
+    assert isinstance(loaded.fii.fii_cash_net_cr, Decimal)
 
 
 def test_signal_response_construction():

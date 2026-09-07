@@ -14,7 +14,7 @@ SUFFIXES = {
     ),
     "gpt4o": (
         "Analyse the structured data above only. Do not search the web. "
-        "Pay particular attention to FII positioning and OI concentration as "
+        "Pay particular attention to FII/DII flows and OI concentration as "
         "resistance/support proxies."
     ),
 }
@@ -61,9 +61,9 @@ def build_prompt(snapshot: MarketSnapshot, provider_name: str) -> list[dict[str,
 - Top CALL OI: {top_call_oi_text}
 - Top PUT  OI: {top_put_oi_text}
 
-## FII Positioning (yesterday)
-- Index futures net: ₹{snapshot.fii.net_futures_cr:,.0f} cr  (positive = long)
-- Index options net: ₹{snapshot.fii.net_options_cr:,.0f} cr
+## FII/DII Cash Flows (yesterday)
+- FII cash net: ₹{snapshot.fii.fii_cash_net_cr:,.0f} cr  (positive = net buyer)
+- DII cash net: ₹{snapshot.fii.dii_cash_net_cr:,.0f} cr  (positive = net buyer)
 
 {provider_suffix}
 

@@ -43,10 +43,10 @@ class OptionChainSummary(BaseModel, frozen=True):
 
 
 class FIIData(BaseModel, frozen=True):
-    """FII index positioning as of previous session (NSE FII/DII CSV)."""
+    """FII/DII cash-market net flows, previous session (NSE fiidiiTradeReact)."""
 
-    net_futures_cr: Decimal  # positive = net long index futures (₹ cr)
-    net_options_cr: Decimal  # positive = net long index options (₹ cr)
+    fii_cash_net_cr: Decimal  # positive = FII net buyer in cash market (₹ cr)
+    dii_cash_net_cr: Decimal  # positive = DII net buyer in cash market (₹ cr)
 
 
 class MarketSnapshot(BaseModel, frozen=True):
@@ -61,7 +61,7 @@ class MarketSnapshot(BaseModel, frozen=True):
     - usd_inr             : NSE or public API
     - monthly_expiry      : computed (last Thursday of current month)
     - option_chain        : parsed Upstox option chain
-    - fii                 : NSE FII/DII CSV (T-1)
+    - fii                 : NSE fiidiiTradeReact cash-market net (T-1)
     """
 
     trade_date: date

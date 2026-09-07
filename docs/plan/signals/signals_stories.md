@@ -194,6 +194,44 @@ class SignalOutcome(BaseModel, frozen=True):
 
 ---
 
+## S1.1a — redefine `FIIData` as cash-market net flows
+
+**Why this exists:** The S5.2a source-discovery spike (2026-09-07) confirmed FII **index F&O
+positioning** data (`net_futures_cr` / `net_options_cr`) is unreachable in this environment —
+the participant-wise OI CSVs 404 for every recent date. Only FII/DII **cash-market** net flows
+are fetchable, via NSE `fiidiiTradeReact` JSON. Animesh's call: split the model change out of
+S5.2a as its own tiny task so `market_inputs.py` is built against a settled model.
+
+**Files to change:**
+- `src/signals/models.py` — `FIIData` fields + docstring; `MarketSnapshot` docstring `fii` source line
+- `src/signals/prompt.py` — §"FII Positioning (yesterday)" → "FII/DII Cash Flows (yesterday)";
+  gpt4o suffix "FII positioning" → "FII/DII flows"
+- `tests/unit/signals/test_signals_*.py` (8 files) — `FIIData(...)` constructor kwargs + the
+  `Decimal` round-trip assertion in `test_signals_models.py`
+
+**New shape:**
+```python
+class FIIData(BaseModel, frozen=True):
+    """FII/DII cash-market net flows, previous session (NSE fiidiiTradeReact)."""
+    fii_cash_net_cr: Decimal   # positive = FII net buyer in cash market (₹ cr)
+    dii_cash_net_cr: Decimal   # positive = DII net buyer in cash market (₹ cr)
+```
+
+**Prompt section:**
+```
+## FII/DII Cash Flows (yesterday)
+- FII cash net: ₹{fii_cash_net_cr:,.0f} cr  (positive = net buyer)
+- DII cash net: ₹{dii_cash_net_cr:,.0f} cr  (positive = net buyer)
+```
+
+**Tests:** the existing 8 signals test files already construct `FIIData` and (in
+`test_signals_models.py`) assert `Decimal` survives a `model_dump` / `model_validate`
+round-trip — update the kwarg names in place; no new test files.
+
+**Commit:** `refactor(signals): redefine FIIData as cash-market net flows`
+
+---
+
 ## S1.2 — `src/signals/protocol.py` + `src/signals/prompt.py`: provider protocol + prompt builder + tests
 
 **Files to change:**
@@ -865,6 +903,9 @@ can pick this up cold from the recipe below.
   ```
   Two objects; `category` is `"FII/FPI"` and `"DII"`; `netValue` = buy − sell; all values are
   strings → `Decimal(str(v))`. No date param (returns the latest published session regardless).
+- **✅ MODEL CHANGE DONE in S1.1a (2026-09-07).** `FIIData` is now
+  `fii_cash_net_cr` / `dii_cash_net_cr`; `prompt.py` section renamed. The note below is
+  retained as the rationale of record. Original text:
 - **⚠ MODEL CHANGE REQUIRED — decide before Step 2.** `FIIData` today is
   `net_futures_cr` / `net_options_cr` (index F&O positioning), used only in
   `src/signals/models.py:45-49,78` and `src/signals/prompt.py:65-66`. That data is
