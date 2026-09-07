@@ -25,13 +25,17 @@
   <!-- .env.example kept local-only: untracked + blanket-ignored by .gitignore `.env*`; edit applied on disk, not committed -->
 
 - [ ] **S5.2a** — source-discovery spike ✅ done (`scratch/2026-09-07_signal_input_sources.py`,
-  commits `c0208c9`..`735cb86`; all 3 sources confirmed — see `signals_stories.md` §S5.2a
-  "Confirmed sources"). **Remaining:** build `src/signals/market_inputs.py` (`fetch_gift_nifty`
-  → Upstox `GLOBAL_INDEX|SGX NIFTY`; `fetch_usd_inr` → nearest-monthly `NCD_FO` USDINR future;
-  `fetch_fii_data` → NSE FII derivative-stats CSV) + offline tests. Full recipe in the story
-  §Step 2. | Owner: Claude
-- [ ] **S5.2b** — `src/signals/snapshot.py`: `assemble_market_snapshot(broker)` — clean fields
-  (spot / VIX / prev-OHLC / option_chain / monthly_expiry / vix_5d_trend) + `market_inputs` calls + tests | Owner: Claude
+  commits `c0208c9`..`a60dc29`; all 3 sources confirmed + real FII file downloaded — see
+  `signals_stories.md` §S5.2a). **Remaining:** build `src/signals/market_inputs.py` —
+  `fetch_gift_nifty` → `get_ltp("GLOBAL_INDEX|SGX NIFTY")`; `fetch_usd_inr` → nearest-monthly
+  `NCD_FO` USDINR future via `get_ltp` + `InstrumentLookup`; `fetch_fii_data` → NSE
+  `fiidiiTradeReact` JSON (cash-market net) — + offline tests. **Decide first:** redefine
+  `FIIData` to `fii_cash_net_cr`/`dii_cash_net_cr` (F&O positioning data is unreachable —
+  §S5.2a). Full per-field recipe in the story §Step 2. | Owner: Claude
+- [ ] **S5.2b** — `src/signals/snapshot.py`: `assemble_market_snapshot` — the 7 non-S5.2a
+  `MarketSnapshot` fields. Prereq commit: add `BrokerClient.get_ohlc` (for `prev_*`) +
+  `SignalStore.get_recent_snapshots` (for `vix_5d_trend`). Full per-field fetch recipe +
+  `OptionChainSummary` derivation in `signals_stories.md` §S5.2b. | Owner: Claude
 - [ ] **S5.2** — `scripts/morning_signal.py`: 09:15 AM pipeline cron — pure wiring over
   `assemble_market_snapshot` + `build_providers` + aggregator + store + Telegram (no unit tests)
 - [ ] **S5.3** — `scripts/record_signal_outcome.py`: 03:00 PM outcome recorder (no unit tests)

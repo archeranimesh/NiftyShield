@@ -934,40 +934,81 @@ Every `MarketSnapshot` field is accounted for across S5.2a / S5.2b — nothing d
 ## S5.2b — `src/signals/snapshot.py`: `assemble_market_snapshot`
 
 **Files to change:**
-- `src/signals/snapshot.py` — new module
+- `src/signals/snapshot.py` — new module (the assembler)
+- `src/client/protocol.py` + `src/client/upstox_live.py` + `src/client/mock_client.py` — add
+  `get_ohlc(instruments, interval="1d")` (async wrapper over the existing
+  `UpstoxMarketClient.get_ohlc_sync`; Mock returns a canned dict) — needed for `prev_*`
+- `src/signals/store.py` — add `SignalStore.get_recent_snapshots(n)` — needed for `vix_5d_trend`
+- `src/signals/models.py` + `src/signals/prompt.py` — the `FIIData` redefine, **if** it was
+  deferred out of S5.2a (see S5.2a §fii)
 
-**Before any code:**
-`get_code_snippet("MarketSnapshot")` / `get_code_snippet("OptionChainSummary")` /
+This is bigger than one commit — split: (1) client `get_ohlc` + store `get_recent_snapshots`
+prereqs, (2) `snapshot.py` + tests.
+
+**Before any code (graph):**
+`get_code_snippet("MarketSnapshot")` · `get_code_snippet("OptionChainSummary")` ·
 `get_code_snippet("OILevel")` — target model shapes;
-`get_code_snippet("parse_upstox_option_chain")` — returns `OptionChain`; map its fields onto
-`OptionChainSummary`;
-`search_code("get_option_chain")` + `search_code("get_historical_candles")` in `src/client/`;
-`get_code_snippet("SignalStore.get_responses")` — no; use `signal_inputs` rows for `vix_5d_trend`.
+`get_code_snippet("parse_upstox_option_chain")` + `get_code_snippet("OptionChain")` — parser
+returns `OptionChain{underlying_spot, expiry, strikes: dict[Decimal, OptionChainStrike]}`;
+`get_code_snippet("OptionChainStrike")` for per-strike call/put legs (ltp/oi/iv/greeks);
+`get_code_snippet("InstrumentLookup.get_expiry_candidates")` — the monthly-expiry mechanism;
+`get_code_snippet("SignalStore")` — read API for the `vix_5d_trend` history.
 
 **What to implement:**
 ```python
 async def assemble_market_snapshot(broker, *, store: SignalStore, trade_date: date) -> MarketSnapshot:
     """Assemble the full MarketSnapshot from live sources at ~09:10 IST."""
 ```
-- `nifty_spot`, `india_vix` — `broker.get_ltp([...])`
-- `prev_close` / `prev_high` / `prev_low` — last completed daily candle. ⚠ **`UpstoxLiveClient.
-  get_historical_candles` raises `NotImplementedError`** (delegates to an unbuilt
-  `UpstoxMarketClient` sync fetcher). The S5.2a spike confirmed `GET
-  https://api.upstox.com/v3/market-quote/ohlc?instrument_key=NSE_INDEX|Nifty 50&interval=1d`
-  is a live endpoint (`UpstoxMarketClient.get_ohlc_sync` already wraps `V3_OHLC_URL`). S5.2b
-  must either surface `get_ohlc_sync` through the client or add the historical-candle fetcher —
-  pick one and note it here before coding.
-- `option_chain` — `broker.get_option_chain` → `parse_upstox_option_chain` → derive
-  `OptionChainSummary` (atm_strike, atm_iv, iv_skew, pcr_total, pcr_atm, top 3 call/put OI)
-- `monthly_expiry` — computed (last Thursday of current month; note the Apr-2026 Thu→Tue
-  change per `REFERENCES.md` — use the calendar helper, not a hard-coded weekday)
-- `vix_5d_trend` — last 5 `signal_inputs` snapshots → `"rising" | "falling" | "flat"`
-- `gift_nifty` / `fii` / `usd_inr` — `market_inputs` (S5.2a)
+
+Per-field fetch recipe (all 10 `MarketSnapshot` fields — S5.2a's three are imported here, the
+other seven are built in this task):
+
+- **`trade_date`** — the `trade_date` arg; the S5.2 cron passes `market_calendar.market_today()`.
+- **`nifty_spot`** — `(await broker.get_ltp(["NSE_INDEX|Nifty 50"]))["NSE_INDEX|Nifty 50"]`.
+  ✅ spike: 23779.15. Key per `REFERENCES.md` — never `"NIFTY"`.
+- **`india_vix`** — `(await broker.get_ltp(["NSE_INDEX|India VIX"]))[...]`. ✅ spike: 11.16.
+- **`prev_close` / `prev_high` / `prev_low`** — daily OHLC for `NSE_INDEX|Nifty 50`.
+  ⚠ `BrokerClient.get_historical_candles` raises `NotImplementedError`. But
+  `UpstoxMarketClient.get_ohlc_sync(["NSE_INDEX|Nifty 50"], "1d")` **is** live (wraps
+  `V3_OHLC_URL`), returning `{pipe_key: {ohlc: {open,high,low,close}, ...}}` via
+  `_remap_response`. Prereq: add `get_ohlc` to the `BrokerClient` protocol + `UpstoxLiveClient`
+  (async wrapper over `_market.get_ohlc_sync`) + a `MockBrokerClient` stub. Then read
+  `["ohlc"]["close" / "high" / "low"]` as `Decimal(str(...))`. At 09:10 the `"1d"` candle is
+  the previous session (today's isn't formed) — verify the exact key name against a live
+  response before locking.
+- **`gift_nifty`** — `market_inputs.fetch_gift_nifty(broker)` (S5.2a).
+- **`usd_inr`** — `market_inputs.fetch_usd_inr(broker)` (S5.2a).
+- **`fii`** — `market_inputs.fetch_fii_data(broker)` (S5.2a; + the `FIIData` redefine).
+- **`monthly_expiry`** — `InstrumentLookup.from_file(DEFAULT_BOD_PATH).get_expiry_candidates(
+  "NIFTY", trade_date, preference=["monthly"])[0][1]` → `date.fromisoformat(...)`. This helper
+  handles the Apr-2026 Thu→Tue move — **do not hand-roll last-Thursday**; the model docstring
+  that says "last Thursday" is stale.
+- **`option_chain`** — `raw = await broker.get_option_chain("NSE_INDEX|Nifty 50",
+  monthly_expiry.isoformat())` → `chain = parse_upstox_option_chain(raw)` → derive
+  `OptionChainSummary` (below).
+- **`vix_5d_trend`** — `signal_inputs` stores the whole `MarketSnapshot` as `snapshot_json`
+  keyed by `trade_date` (no per-column vix). Add `SignalStore.get_recent_snapshots(n=5)`
+  (`SELECT snapshot_json … ORDER BY trade_date DESC LIMIT ?`), pull `india_vix` from each,
+  order oldest→newest → `"rising"` if strictly increasing, `"falling"` if strictly decreasing,
+  else `"flat"`. Fallback `"flat"` when < 5 rows exist (bootstrap — first 5 sessions).
+
+**`OptionChainSummary` derivation from `OptionChain`:**
+- `atm_strike` — strike in `chain.strikes` nearest `nifty_spot`, as `int`
+- `atm_iv` — mean of the ATM strike's call + put `iv`
+- `iv_skew` — (first OTM call IV) − (first OTM put IV); positive = calls rich
+- `pcr_total` — Σ put OI / Σ call OI across all strikes
+- `pcr_atm` — put OI / call OI at the ATM strike
+- `top_call_oi` / `top_put_oi` — 3 strikes with the highest call (resp. put) OI, as
+  `OILevel{strike:int, oi:int, oi_change:int}` (`oi_change` vs previous day — if the Upstox
+  chain response has no prior-day OI field, set `0` and note it)
 
 **Tests:** `tests/unit/signals/test_snapshot.py` — happy path with a mock broker returning
-canned LTP / candles / chain; one error path (broker raises). Offline only.
+canned LTP / OHLC / option-chain dicts + a stub `SignalStore`; one error path (broker raises →
+propagates). Offline only, no real BOD file (inject `InstrumentLookup` or monkeypatch the
+expiry call).
 
-**Commit:** `feat(signals): snapshot.py — assemble_market_snapshot from live sources`
+**Commits:** `feat(client): add get_ohlc to BrokerClient + SignalStore.get_recent_snapshots`
+then `feat(signals): snapshot.py — assemble_market_snapshot from live sources`
 
 ---
 
