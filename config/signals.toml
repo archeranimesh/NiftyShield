@@ -1,0 +1,19 @@
+[signals]
+min_confidence_threshold = 3    # avg confidence of agreeing models to trigger trade_action
+consensus_required        = 2   # minimum models that must agree (out of 3)
+call_timeout_seconds      = 30  # per-provider asyncio timeout
+
+[signals.providers.grok]
+model    = "x-ai/grok-3"        # Phase 1: OpenRouter shim; Phase 2: "grok-3" direct
+search   = true                 # Phase 2 only; ignored in Phase 1 OpenRouter path
+max_tokens = 512
+
+[signals.providers.gpt4o]
+model    = "openai/gpt-4o"
+base_url = "https://openrouter.ai/api/v1"
+max_tokens = 512
+
+[signals.providers.gemini]
+model             = "google/gemini-2.0-flash"   # Phase 1: OpenRouter; Phase 2: "gemini-2.0-flash"
+search_grounding  = true                         # Phase 2 only
+max_tokens        = 512

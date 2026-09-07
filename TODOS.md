@@ -27,7 +27,7 @@ rot them.
 6. **Options Income strategy** — `docs/plan/options_income/` — next **S0** (data audit).
 7. **Backtest Engine** — `docs/plan/backtest-engine/` (`phase1..4/`) — next **1.3a / 1.4** (parallel, `phase1/`). Four chained phases; each phase's GATE task blocks the next dir. Gated on
    `variance-gate`. `BACKTEST_PLAN_PHASE1.md` is the canonical spec; the phase dirs are thin status pointers.
-8. **signals: multi-LLM daily signal pipeline** — `docs/plan/signals/` — next **S5.1**. Parallel track — self-contained `src/signals/` package, own SQLite tables, zero
+8. **signals: multi-LLM daily signal pipeline** — `docs/plan/signals/` — next **S5.2**. Parallel track — self-contained `src/signals/` package, own SQLite tables, zero
    `backtest-engine` / `backtest-eval-core` dependency; runs alongside item 7. `OPENROUTER_API_KEY` needed only for the live 09:15 cron (S5.2); S5.4 baseline stats to
    be reconciled with `backtest-eval-core` later. Unblocked from `signals-eval-core` 2026-09-07 (parallel-track decision).
 9. **backtest-eval-core** — `docs/plan/backtest-eval-core/` — next **B1.1**. Blocked until `backtest-engine` tasks 1.3 + 1.4 land.
@@ -112,6 +112,9 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-07] signals/ S5.1 — added config/signals.toml (thresholds + grok/gpt4o/gemini provider sub-tables)
+  and extended .env.example with signals pipeline block (OPENROUTER/XAI/GOOGLE_AI keys, SIGNAL_PROVIDERS,
+  SIGNAL_MIN_CONFIDENCE + Phase 1/2 token checklist). Docs/config-only, no tests. SHA: pending
 - [2026-09-07] signals/ S4.1 — added build_providers factory: canonical-order (grok,gpt4o,gemini) env-driven
   selection, UPSTOX_ENV=test + empty-result fallback to MockSignalProvider, missing key → WARN+skip + 7 tests. SHA: 417cb5f
 - [2026-09-07] signals/ S3.4 — added GeminiSignalProvider: Phase 1 OpenRouter google/gemini-2.0-flash HTTP shim,

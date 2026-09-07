@@ -21,7 +21,9 @@
 - [x] **S3.4** — `src/signals/providers/gemini.py`: GeminiSignalProvider — Phase 1 OpenRouter shim +
   Phase 2 Google AI SDK + tests | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: 41254dc
 - [x] **S4.1** — `src/signals/factory.py`: build_providers — env-driven provider selection with safe fallback + tests | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: 417cb5f
-- [ ] **S5.1** — `config/signals.toml` + `.env.example`: config + env vars (no tests)
+- [x] **S5.1** — `config/signals.toml` + `.env.example`: config + env vars (no tests) | Owner: Claude | Model: Sonnet 5 | Review: docs/config-only | SHA: pending
+  <!-- .env.example kept local-only: untracked + blanket-ignored by .gitignore `.env*`; edit applied on disk, not committed -->
+
 - [ ] **S5.2** — `scripts/morning_signal.py`: 09:15 AM pipeline cron (no unit tests)
 - [ ] **S5.3** — `scripts/record_signal_outcome.py`: 03:00 PM outcome recorder (no unit tests)
 - [ ] **S5.4** — `scripts/signal_report.py`: on-demand performance report with random baseline (no unit tests)
